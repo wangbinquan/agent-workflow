@@ -24,6 +24,7 @@ describe('RFC-224 execution identity failure taxonomy', () => {
   test('identity vocabulary is closed, unique, and composed into the task failure union once', () => {
     expect(EXECUTION_IDENTITY_FAILURE_CODES).toEqual([
       'execution-identity-untrusted-binary',
+      'execution-identity-containment-required',
       'execution-identity-sandbox-required',
       'execution-identity-project-config-unsupported',
       'execution-identity-plugin-unsupported',

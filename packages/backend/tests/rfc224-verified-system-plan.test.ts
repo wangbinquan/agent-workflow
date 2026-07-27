@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { buildVerifiedOpencodeSystemPlan } from '@/services/runtime/opencode/verifiedSystemPlan'
 import { VerifiedLaunchManifestSchema } from '@/services/runtime/opencode/verifiedManifest'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
-import { buildVerifiedOpencodePlan } from '@/services/runtime/opencode/verifiedPlanCore'
+import { ContainmentCoordinator, ContainmentProviderQualificationError } from '@/services/sandbox'
 
 const roots: string[] = []
 
@@ -30,39 +30,20 @@ describe('RFC-224 verified system plan', () => {
     const appHome = join(base, 'app-home')
     const storeRoot = join(base, 'store')
     const snapshotPath = join(base, 'seal', 'opencode')
-    let snapshotCalls = 0
-
-    await expect(
-      buildVerifiedOpencodePlan({
-        sandbox: {
-          mode: 'enforce',
-          status: { mechanism: 'bwrap', available: true, detail: null },
-          appHome,
-        },
+    const coordinator = new ContainmentCoordinator({
+      provider: {
+        mode: 'enforce',
+        status: { mechanism: 'bwrap', available: true, detail: null },
         appHome,
-        command: ['/official/opencode'],
-        storeRoot,
-        binaryPath: snapshotPath,
-        fffProbeRoot: join(base, 'fff-probe'),
-        dependencies: {
-          requireBwrap: async () => {
-            throw new ExecutionIdentityFailure('execution-identity-sandbox-required')
-          },
-          snapshotBinary: async ({ snapshotPath: requestedPath }) => {
-            snapshotCalls += 1
-            return {
-              resolvedPath: '/runtime/opencode',
-              snapshotPath: requestedPath,
-              digest: BUILD.digest,
-            }
-          },
-        },
-      }),
-    ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      },
+      qualifyBwrap: async () => {
+        throw new ContainmentProviderQualificationError('provider-trial-rejected')
+      },
     })
 
-    expect(snapshotCalls).toBe(0)
+    await expect(coordinator.admit('opencode-verified-v1')).rejects.toMatchObject({
+      code: 'execution-identity-containment-required',
+    })
     expect(await stat(storeRoot).catch(() => null)).toBeNull()
     expect(await stat(snapshotPath).catch(() => null)).toBeNull()
   })
@@ -85,15 +66,13 @@ describe('RFC-224 verified system plan', () => {
           runDir,
         },
         ['/bin/echo'],
-        {
-          getSandbox: () => null,
-        },
+        {},
       )
     } catch (caught) {
       error = caught
     }
     expect(error).toBeInstanceOf(ExecutionIdentityFailure)
-    expect((error as ExecutionIdentityFailure).code).toBe('execution-identity-sandbox-required')
+    expect((error as ExecutionIdentityFailure).code).toBe('execution-identity-containment-required')
     expect(await stat(runDir).catch(() => null)).toBeNull()
   })
 
@@ -103,6 +82,14 @@ describe('RFC-224 verified system plan', () => {
     const runDir = join(base, 'run')
     const appHome = join(base, 'app-home')
     await mkdir(worktreePath)
+    const containment = await new ContainmentCoordinator({
+      provider: {
+        mode: 'enforce',
+        status: { mechanism: 'bwrap', available: true, detail: null },
+        appHome,
+      },
+      qualifyBwrap: async () => '/usr/bin/bwrap',
+    }).admit('opencode-verified-v1')
 
     const plan = await buildVerifiedOpencodeSystemPlan(
       {
@@ -113,17 +100,12 @@ describe('RFC-224 verified system plan', () => {
         worktreePath,
         runDir,
         appHome,
+        containment,
       },
       ['/official/opencode'],
       {
-        getSandbox: () => ({
-          mode: 'enforce',
-          status: { mechanism: 'bwrap', available: true, detail: null },
-          appHome,
-        }),
         random: (size) => Buffer.alloc(size, 7),
         sourceEnv: { OPENAI_API_KEY: 'test-only-key' },
-        requireBwrap: async () => '/usr/bin/bwrap',
         snapshotBinary: async ({ snapshotPath }) => {
           await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
           await writeFile(snapshotPath, 'sealed official fixture', {

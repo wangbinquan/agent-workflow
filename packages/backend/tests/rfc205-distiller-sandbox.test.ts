@@ -8,36 +8,38 @@
 // MUTATION CHECK: drop the wrapSandbox call in defaultDistillerSpawn → the source
 // guard reds.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { setSandboxProvider, wrapSandbox } from '../src/services/sandbox'
+import { ContainmentCoordinator, wrapSandbox } from '../src/services/sandbox'
 import { distillerSandboxCtx } from '../src/services/memoryDistiller'
 
-afterEach(() => setSandboxProvider(null))
+async function containment(mode: 'enforce' | 'off', appHome: string) {
+  return new ContainmentCoordinator({
+    provider: {
+      mode,
+      status: { mechanism: 'seatbelt', available: true, detail: null },
+      appHome,
+    },
+    qualifySeatbelt: async () => {},
+  }).admit('runner-filesystem-v1')
+}
 
 describe('RFC-205 P0-4 — distiller spawn is sandboxed', () => {
-  test('ctx allows only the working dir + shadows appHome; no provider → undefined', () => {
+  test('ctx allows only the working dir + shadows appHome; no admission → undefined', async () => {
     expect(distillerSandboxCtx('/work/attempt')).toBeUndefined() // no provider set
-    setSandboxProvider({
-      mode: 'enforce',
-      status: { mechanism: 'seatbelt', available: true, detail: null },
-      appHome: '/home/aw',
+    const ctx = distillerSandboxCtx('/work/attempt', '/work/attempt', {
+      containment: await containment('enforce', '/home/aw'),
     })
-    const ctx = distillerSandboxCtx('/work/attempt')
     expect(ctx?.taskWorktrees).toEqual(['/work/attempt'])
     expect(ctx?.runDir).toBe('/work/attempt')
     expect(ctx?.appHome).toBe('/home/aw')
     expect(ctx?.mode).toBe('enforce')
   })
 
-  test('verified system store is an explicit RW sandbox subtree under shadowed appHome', () => {
-    setSandboxProvider({
-      mode: 'enforce',
-      status: { mechanism: 'seatbelt', available: true, detail: null },
-      appHome: '/home/aw',
-    })
+  test('verified system store is an explicit RW sandbox subtree under shadowed appHome', async () => {
     const ctx = distillerSandboxCtx('/work/attempt', '/work/run', {
+      containment: await containment('enforce', '/home/aw'),
       sessionStore: {
         root: '/home/aw/opencode-stores/system-ephemeral/invocation',
         dbPath: '/home/aw/opencode-stores/system-ephemeral/invocation/opencode.db',
@@ -51,27 +53,26 @@ describe('RFC-205 P0-4 — distiller spawn is sandboxed', () => {
     expect(ctx?.runDir).toBe('/work/run')
   })
 
-  test('wrapSandbox on the distiller ctx actually wraps the argv (enforce+seatbelt)', () => {
-    setSandboxProvider({
-      mode: 'enforce',
-      status: { mechanism: 'seatbelt', available: true, detail: null },
-      appHome: '/tmp',
-    })
-    const wrapped = wrapSandbox(['/bin/echo', 'hi'], distillerSandboxCtx('/tmp'))
+  test('wrapSandbox on the distiller ctx actually wraps the argv (enforce+seatbelt)', async () => {
+    const wrapped = wrapSandbox(
+      ['/bin/echo', 'hi'],
+      distillerSandboxCtx('/tmp', '/tmp', {
+        containment: await containment('enforce', '/tmp'),
+      }),
+    )
     expect(wrapped[0]).toBe('/usr/bin/sandbox-exec') // wrapped, not the raw cmd
     expect(wrapped).toContain('/bin/echo')
   })
 
-  test('off mode → wrapSandbox is a no-op (byte-identical spawn)', () => {
-    setSandboxProvider({
-      mode: 'off',
-      status: { mechanism: 'seatbelt', available: true, detail: null },
-      appHome: '/tmp',
-    })
-    expect(wrapSandbox(['/bin/echo', 'hi'], distillerSandboxCtx('/tmp'))).toEqual([
-      '/bin/echo',
-      'hi',
-    ])
+  test('off mode → wrapSandbox is a no-op (byte-identical spawn)', async () => {
+    expect(
+      wrapSandbox(
+        ['/bin/echo', 'hi'],
+        distillerSandboxCtx('/tmp', '/tmp', {
+          containment: await containment('off', '/tmp'),
+        }),
+      ),
+    ).toEqual(['/bin/echo', 'hi'])
   })
 
   // Source guard: defaultDistillerSpawn must route its argv through wrapSandbox
@@ -81,7 +82,7 @@ describe('RFC-205 P0-4 — distiller spawn is sandboxed', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'memoryDistiller.ts'),
       'utf-8',
     )
-    const wrapIdx = src.indexOf('const cmd = wrapSandbox(')
+    const wrapIdx = src.indexOf('const cmd = wrapSpawnPlanSandbox(')
     const spawnIdx = src.indexOf('child = Bun.spawn(')
     expect(wrapIdx).toBeGreaterThan(0)
     expect(spawnIdx).toBeGreaterThan(wrapIdx)

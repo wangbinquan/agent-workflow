@@ -4,44 +4,25 @@
 // hermetic store, containment capability, or filesystem-fallback proof.
 
 import { isAbsolute, resolve } from 'node:path'
-import { getSandboxProvider, type SandboxProvider } from '@/services/sandbox'
 import { prepareHermeticOpencodeLayout, type HermeticOpencodeLayout } from './hermetic'
 import { snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import type { inspectRuntimeOpencodeBinary, RuntimeOpencodeBinaryIdentity } from './runtimeBinary'
 import { materializeFffCapabilityProbe, type MaterializedFffCapabilityProbe } from './fffCapability'
-import { requireRootOwnedBwrap } from './sealedSubprocess'
 import { executionIdentityFailure } from './failure'
 import {
-  admitRuntimeContainment,
   type RuntimeChildProviderPlan,
   type RuntimeContainmentAdmission,
   type RuntimeContainmentReceipt,
 } from './containment'
 
-export interface VerifiedOpencodePlanBoundary {
-  sandbox?: SandboxProvider | null
-}
-
-/**
- * A read-only, shared fail-closed preflight. Callers use this before touching
- * any run/store path; `buildVerifiedOpencodePlan` repeats it at admission so a
- * future caller cannot accidentally omit the boundary.
- */
-export function assertVerifiedOpencodePlanBoundary(
-  input: VerifiedOpencodePlanBoundary = {},
-): RuntimeContainmentAdmission {
-  const sandbox = input.sandbox === undefined ? getSandboxProvider() : input.sandbox
-  return admitRuntimeContainment(sandbox)
-}
-
 export interface VerifiedOpencodePlanDependencies {
   inspectBinary?: typeof inspectRuntimeOpencodeBinary
   snapshotBinary?: typeof snapshotRuntimeOpencodeBinary
-  requireBwrap?: () => Promise<string>
 }
 
 export interface BuildVerifiedOpencodePlanInput {
-  sandbox?: SandboxProvider | null
+  /** The only containment fact. Core never probes or re-decides policy. */
+  admission: RuntimeContainmentAdmission
   appHome: string
   command: readonly string[]
   storeRoot: string
@@ -69,9 +50,7 @@ export interface VerifiedOpencodePlanCore {
 export async function buildVerifiedOpencodePlan(
   input: BuildVerifiedOpencodePlanInput,
 ): Promise<VerifiedOpencodePlanCore> {
-  const admission = assertVerifiedOpencodePlanBoundary({
-    ...(input.sandbox === undefined ? {} : { sandbox: input.sandbox }),
-  })
+  const admission = input.admission
   const { sandbox } = admission
   if (
     !isAbsolute(input.appHome) ||
@@ -89,13 +68,29 @@ export async function buildVerifiedOpencodePlan(
     return executionIdentityFailure('execution-identity-untrusted-binary')
   }
 
-  // Linux's stronger namespace capability admission stays serialized ahead of
-  // every filesystem mutation. Other providers own their own boot probe and
-  // reach this core only through the capability receipt above.
-  const bwrapPath =
-    admission.childProvider.providerId === 'linux-bwrap'
-      ? await (dependencies.requireBwrap ?? requireRootOwnedBwrap)()
-      : null
+  // The provider-owned exact qualification already selected this canonical
+  // child plan before any filesystem mutation. Core only materializes the FFF
+  // attestation for the selected Linux topology; it never re-opens PATH or
+  // changes the mode/topology decision.
+  let bwrapPath: string | null = null
+  if (admission.childProvider.providerId === 'linux-bwrap') {
+    const admittedPath =
+      typeof admission.childProvider.config === 'object' &&
+      admission.childProvider.config !== null &&
+      !Array.isArray(admission.childProvider.config) &&
+      typeof admission.childProvider.config.bwrapPath === 'string'
+        ? admission.childProvider.config.bwrapPath
+        : null
+    if (
+      admittedPath === null ||
+      !isAbsolute(admittedPath) ||
+      resolve(admittedPath) !== admittedPath
+    ) {
+      return executionIdentityFailure('execution-identity-bootstrap-failed')
+    }
+    // Outer and child layers consume this exact coordinator-qualified path.
+    bwrapPath = admittedPath
+  }
   const [layout, binaryIdentity] = await Promise.all([
     prepareHermeticOpencodeLayout(input.storeRoot),
     (dependencies.snapshotBinary ?? snapshotRuntimeOpencodeBinary)({

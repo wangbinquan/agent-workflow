@@ -87,6 +87,35 @@ describe('RFC-143 (B) 能力接口', () => {
     expect(cc.defaultBinary({} as never)).toEqual(['claude'])
   })
 
+  it('OpenCode 从冻结的 child surface 派生最小 containment profile', () => {
+    const profile = getRuntimeDriver('opencode').businessContainmentProfile
+    expect(profile).toBeFunction()
+    expect(
+      profile!({
+        agent: { permission: { bash: 'deny' } } as never,
+        mcps: [],
+      }),
+    ).toBe('runner-filesystem-v1')
+    expect(
+      profile!({
+        agent: { permission: { bash: 'allow' } } as never,
+        mcps: [],
+      }),
+    ).toBe('opencode-verified-v1')
+    expect(
+      profile!({
+        agent: { permission: { bash: 'deny' } } as never,
+        mcps: [{ type: 'local', enabled: true }] as never,
+      }),
+    ).toBe('opencode-verified-v1')
+    expect(
+      profile!({
+        agent: { permission: { bash: 'deny' } } as never,
+        mcps: [{ type: 'local', enabled: false }] as never,
+      }),
+    ).toBe('runner-filesystem-v1')
+  })
+
   it('claude listModels 是静态表、恒 cached、忽略 binary', async () => {
     const cc = getRuntimeDriver('claude-code')
     const r = await cc.listModels('ignored')
@@ -103,6 +132,7 @@ describe('RFC-143 (B) 能力接口', () => {
     const spawnCalls: string[] = []
     const mockDriver = {
       kind: 'opencode', // 借用已有 kind 满足 RuntimeKind union（真第三 kind 需 widen union）
+      containmentProfile: 'opencode-verified-v1',
       minVersion: '0.0.0',
       parseEvent: () => null,
       buildSpawn: async () => ({ cmd: ['mock'], env: {} }),

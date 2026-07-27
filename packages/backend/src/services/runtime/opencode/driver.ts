@@ -40,6 +40,12 @@ import { buildVerifiedOpencodeSystemPlan } from './verifiedSystemPlan'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
+  containmentProfile: 'opencode-verified-v1',
+  businessContainmentProfile: ({ agent, mcps }) =>
+    agent.permission.bash !== 'deny' ||
+    mcps.some((mcp) => mcp.enabled !== false && mcp.type === 'local')
+      ? 'opencode-verified-v1'
+      : 'runner-filesystem-v1',
   minVersion: null,
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)

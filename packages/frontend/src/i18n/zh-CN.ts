@@ -1047,6 +1047,9 @@ export interface Resources {
       enforceUnavailable: string
       warnDegraded: string
       lifetimeBestEffort: string
+      mismatchTitle: string
+      mismatchBody: string
+      applyConfigured: string
     }
   }
   onboarding: {
@@ -4930,6 +4933,10 @@ export const zhCN: Resources = {
         '隔离能力已降级。告警档位仍允许执行，但模型可触达的子进程可能访问宿主资源或网络。',
       lifetimeBestEffort:
         '当前 provider 已启用文件系统与网络隔离基线，但此平台对子孙进程生命周期的清理仅为尽力而为。',
+      mismatchTitle: '已保存模式与当前生效模式不一致',
+      mismatchBody:
+        '配置文件保存的是 {{configured}}，当前 daemon 仍使用 {{effective}}。可立即应用已保存模式，或重启 daemon。',
+      applyConfigured: '立即应用已保存模式',
     },
   },
   onboarding: {
@@ -6129,6 +6136,10 @@ export const zhCN: Resources = {
         '本次 OpenCode 运行要求平台隔离，但所需能力当前不可用。',
       'execution-identity-sandbox-required__hint':
         '请启用受支持的隔离 provider；也可显式选择「警告」或「关闭」接受降级运行。',
+      'execution-identity-containment-required':
+        '当前生效策略要求平台隔离，但本次运行未通过所需 capability 的精确资格检查。',
+      'execution-identity-containment-required__hint':
+        '请到「设置 → 运行时」查看生效档位与原因；若已保存「警告/关闭」，请立即应用该档位，或修复 provider 后重试。',
       'execution-identity-project-config-unsupported':
         '工作区含有无法安全隔离的 OpenCode 项目配置。',
       'execution-identity-project-config-unsupported__hint':
@@ -7767,6 +7778,10 @@ export const zhCN: Resources = {
     'execution-identity-sandbox-required': '$t(tasks.failure.execution-identity-sandbox-required)',
     'execution-identity-sandbox-required__hint':
       '$t(tasks.failure.execution-identity-sandbox-required__hint)',
+    'execution-identity-containment-required':
+      '$t(tasks.failure.execution-identity-containment-required)',
+    'execution-identity-containment-required__hint':
+      '$t(tasks.failure.execution-identity-containment-required__hint)',
     'execution-identity-project-config-unsupported':
       '$t(tasks.failure.execution-identity-project-config-unsupported)',
     'execution-identity-project-config-unsupported__hint':

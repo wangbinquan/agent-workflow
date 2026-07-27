@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { checkSandbox } from '@/cli/doctor'
 import type { ProbeDiagnostics, SandboxMode } from '@/services/sandbox/guidance'
+import { ContainmentProviderQualificationError } from '@/services/sandbox'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -29,6 +30,16 @@ function cfgMode(mode: SandboxMode): string {
 const diag: ProbeDiagnostics = { kind: 'exit', exitCode: 1, stderrSnippet: '' }
 /** probe sees `code` (0 → available). */
 const bounded = (code: number) => ({ spawn: async () => code, getDiag: () => diag })
+const exactAvailable = {
+  qualifyBwrapFilesystem: async () => '/usr/bin/bwrap',
+  qualifyBwrapFull: async () => undefined,
+}
+const exactUnavailable = {
+  qualifyBwrapFilesystem: async (): Promise<string> => {
+    throw new ContainmentProviderQualificationError('provider-not-found')
+  },
+  qualifyBwrapFull: async () => undefined,
+}
 
 describe('checkSandbox — the mode × available truth table (decision B)', () => {
   it('available → ok, whatever the mode', async () => {
@@ -37,6 +48,7 @@ describe('checkSandbox — the mode × available truth table (decision B)', () =
         platform: 'linux',
         configPath: cfgMode(mode),
         boundedSpawn: bounded(0),
+        ...exactAvailable,
       })
       expect(r).toMatchObject({ name: 'sandbox', ok: true })
     }
@@ -47,6 +59,7 @@ describe('checkSandbox — the mode × available truth table (decision B)', () =
       platform: 'linux',
       configPath: cfgMode('warn'),
       boundedSpawn: bounded(127),
+      ...exactUnavailable,
     })
     expect(r.ok).toBe(true)
     expect(r.message).toContain('agent-workflow sandbox')
@@ -57,8 +70,22 @@ describe('checkSandbox — the mode × available truth table (decision B)', () =
       platform: 'linux',
       configPath: cfgMode('off'),
       boundedSpawn: bounded(127),
+      ...exactUnavailable,
     })
     expect(r.ok).toBe(true)
+    expect(r.message).toContain('配置关闭')
+  })
+
+  it('off + available still reports that policy is disabled', async () => {
+    const r = await checkSandbox({
+      platform: 'linux',
+      configPath: cfgMode('off'),
+      boundedSpawn: bounded(0),
+      ...exactAvailable,
+    })
+    expect(r.ok).toBe(true)
+    expect(r.message).toContain('配置关闭')
+    expect(r.message).toContain('精确资格检查可用')
   })
 
   it('enforce + unavailable → FAIL (this is the only cell that reds doctor)', async () => {
@@ -66,9 +93,21 @@ describe('checkSandbox — the mode × available truth table (decision B)', () =
       platform: 'linux',
       configPath: cfgMode('enforce'),
       boundedSpawn: bounded(127),
+      ...exactUnavailable,
     })
     expect(r.ok).toBe(false)
-    expect(r.message).toContain('409')
+    expect(r.message).toContain('相关任务将被拒绝')
+  })
+
+  it('does not promote a weak green discovery trial into exact readiness', async () => {
+    const r = await checkSandbox({
+      platform: 'linux',
+      configPath: cfgMode('enforce'),
+      boundedSpawn: bounded(0),
+      ...exactUnavailable,
+    })
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('provider-not-found')
   })
 })
 
@@ -80,6 +119,7 @@ describe('checkSandbox — corrupt config must NOT reject (would truncate doctor
       platform: 'linux',
       configPath: path,
       boundedSpawn: bounded(127),
+      ...exactUnavailable,
     })
     expect(r.ok).toBe(true)
     expect(r.message).toContain('config 不可读')

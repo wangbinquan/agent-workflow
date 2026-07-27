@@ -155,6 +155,23 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     expect(signals).toEqual([])
   })
 
+  test('filesystem qualification proves only the outer boundary and omits network namespace demand', async () => {
+    let command: readonly string[] = []
+    await expect(
+      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+        trial: 'filesystem',
+        spawn: (value) => {
+          command = value
+          return capabilityProcess({ signals: [] })
+        },
+        timeout: () => new Promise(() => {}),
+      }),
+    ).resolves.toBe(ROOT_OWNED_EXECUTABLE)
+
+    expect(command).toContain('--unshare-pid')
+    expect(command).not.toContain('--unshare-net')
+  })
+
   test('uses an ownership-holding supervisor for the real capability process', async () => {
     await expect(requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE)).resolves.toBe(ROOT_OWNED_EXECUTABLE)
   })
@@ -261,7 +278,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
       expect(admissionSettled).toBe(false)
       resumeWrite?.()
       await expect(admission).rejects.toMatchObject({
-        code: 'execution-identity-sandbox-required',
+        code: 'execution-identity-containment-required',
       })
       expect(parentSignals).toEqual([])
       expect(interceptedChild).toBeDefined()
@@ -418,7 +435,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         timeout: () => new Promise(() => {}),
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(signals).toEqual([])
   })
@@ -431,13 +448,13 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
   })
 
   test('maps bwrap metadata lookup failure to sandbox-required', async () => {
     await expect(requireRootOwnedBwrap('/definitely-missing-rfc224-bwrap')).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
   })
 
@@ -487,7 +504,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
 
     try {
       await expect(requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE)).rejects.toMatchObject({
-        code: 'execution-identity-sandbox-required',
+        code: 'execution-identity-containment-required',
       })
       expect(supervisorPid).toBeNumber()
       await expectProcessGroupAbsent(supervisorPid!, group)
@@ -508,7 +525,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         timeout: () => new Promise(() => {}),
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(signals).toEqual([])
   })
@@ -529,7 +546,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(timeouts).toEqual([5_000])
     expect(signals).toEqual([])
@@ -581,7 +598,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     groupAlive = false
     settleExit(0)
     await expect(admission).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(signals).toEqual([])
   })
@@ -613,7 +630,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(timeouts[0]).toBe(5_000)
     expect(timeouts.slice(1)).toEqual([25])
@@ -647,7 +664,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(timeouts[0]).toBe(5_000)
     expect(timeouts.filter((value) => value === 25).length).toBeGreaterThan(10)
@@ -677,7 +694,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(timeouts[0]).toBe(5_000)
     expect(timeouts.filter((value) => value === 25)).toHaveLength(10)
@@ -707,7 +724,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(timeouts[0]).toBe(5_000)
     expect(timeouts.filter((value) => value === 25)).toHaveLength(10)
@@ -737,7 +754,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(timeouts[0]).toBe(5_000)
     expect(timeouts.filter((value) => value === 25)).toHaveLength(20)
@@ -763,7 +780,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
+      code: 'execution-identity-containment-required',
     })
     expect(timeouts[0]).toBe(5_000)
     expect(timeouts.filter((value) => value === 25)).toHaveLength(10)

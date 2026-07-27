@@ -267,7 +267,14 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       actor,
       existing.id,
       parsed.data,
-      buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
+      buildStartTaskDeps(
+        deps.db,
+        deps.configPath,
+        actor.user.id,
+        opencodeCmd,
+        deps.secretBox,
+        deps.containmentCoordinator,
+      ),
       uploads,
     )
     return c.json(task, 201)

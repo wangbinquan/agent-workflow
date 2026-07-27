@@ -72,6 +72,22 @@ export type RuntimeStatusEntry = z.infer<typeof RuntimeStatusEntrySchema>
  */
 export const SandboxStatusSchema = z.object({
   mode: z.enum(['enforce', 'warn', 'off']),
+  /** RFC-233 additive fields; `mode` remains the legacy effective alias. */
+  configuredMode: z.enum(['enforce', 'warn', 'off']).optional(),
+  effectiveMode: z.enum(['enforce', 'warn', 'off']).optional(),
+  restartRequired: z.boolean().optional(),
+  policyGeneration: z.number().int().nonnegative().optional(),
+  probeGeneration: z.number().int().nonnegative().nullable().optional(),
+  probeCheckedAt: z.number().int().nonnegative().nullable().optional(),
+  coordinatorBootId: z.string().min(1).optional(),
+  admissionGeneration: z.number().int().nonnegative().optional(),
+  probeState: z.enum(['ready', 'partial', 'unavailable']).optional(),
+  decision: z.enum(['contained', 'degraded', 'off', 'blocked']).optional(),
+  profileId: z.string().min(1).optional(),
+  requirementDigest: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .optional(),
   // RFC-227: provider ids are extensible (for example a future Windows Job
   // Object/AppContainer provider), not a Linux/macOS closed enum.
   mechanism: z.string().min(1).nullable(),
@@ -79,6 +95,7 @@ export const SandboxStatusSchema = z.object({
   providerId: z.string().min(1).nullable().optional(),
   capabilities: z.record(z.string().min(1), RuntimeCapabilityStrengthSchema).optional(),
   degradedReasons: z.array(z.string().min(1)).optional(),
+  reasonCodes: z.array(z.string().min(1)).optional(),
 })
 export type SandboxStatus = z.infer<typeof SandboxStatusSchema>
 

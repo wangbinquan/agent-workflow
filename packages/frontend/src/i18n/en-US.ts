@@ -950,6 +950,10 @@ export const enUS: Resources = {
         'Containment is degraded. Runs are permitted in Warn mode, but model-reachable child processes may access host resources or the network.',
       lifetimeBestEffort:
         'This provider enforces the filesystem and network baseline, but descendant lifetime cleanup is best effort on this platform.',
+      mismatchTitle: 'Saved and effective modes differ',
+      mismatchBody:
+        'Saved mode is {{configured}}, while this daemon is still using {{effective}}. Apply the saved mode now or restart the daemon.',
+      applyConfigured: 'Apply saved mode',
     },
   },
   onboarding: {
@@ -2232,6 +2236,10 @@ export const enUS: Resources = {
         'This OpenCode run requires platform containment, but the required capabilities are unavailable.',
       'execution-identity-sandbox-required__hint':
         'Enable a supported containment provider, or explicitly choose Warn/Off to accept a degraded run.',
+      'execution-identity-containment-required':
+        'The effective policy requires platform containment, but this run did not pass exact capability qualification.',
+      'execution-identity-containment-required__hint':
+        'Open Settings → Runtime to inspect the effective mode and reason. Apply the saved Warn/Off mode there, or repair the provider and retry.',
       'execution-identity-project-config-unsupported':
         'The workspace contains OpenCode project configuration that cannot be safely isolated.',
       'execution-identity-project-config-unsupported__hint':
@@ -4004,6 +4012,10 @@ export const enUS: Resources = {
     'execution-identity-sandbox-required': '$t(tasks.failure.execution-identity-sandbox-required)',
     'execution-identity-sandbox-required__hint':
       '$t(tasks.failure.execution-identity-sandbox-required__hint)',
+    'execution-identity-containment-required':
+      '$t(tasks.failure.execution-identity-containment-required)',
+    'execution-identity-containment-required__hint':
+      '$t(tasks.failure.execution-identity-containment-required__hint)',
     'execution-identity-project-config-unsupported':
       '$t(tasks.failure.execution-identity-project-config-unsupported)',
     'execution-identity-project-config-unsupported__hint':

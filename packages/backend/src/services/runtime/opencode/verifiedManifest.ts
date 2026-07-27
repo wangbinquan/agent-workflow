@@ -13,8 +13,9 @@ import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
 import { FffCapabilityProbeSchema } from './fffCapability'
 import { VerifiedInventoryPlanSchema } from './verifiedInventory'
 import { RuntimeChildProviderPlanSchema, RuntimeContainmentReceiptSchema } from './containment'
+import { containmentRequirementDigest } from '@/services/sandbox'
 
-export const VERIFIED_LAUNCH_MANIFEST_CODEC = 2 as const
+export const VERIFIED_LAUNCH_MANIFEST_CODEC = 4 as const
 export const MAX_VERIFIED_MANIFEST_BYTES = 4 * 1024 * 1024
 
 const AbsolutePathSchema = z
@@ -24,12 +25,52 @@ const AbsolutePathSchema = z
 const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/)
 const NonceSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/)
 const EnvSchema = z.record(z.string().refine((value) => !value.includes('\0')))
+const ContainmentCapabilityStrengthSchema = z.enum(['strong', 'best-effort', 'absent'])
+const ContainmentReasonCodeSchema = z.enum([
+  'platform-unsupported',
+  'provider-not-found',
+  'provider-path-not-canonical',
+  'provider-owner-unsafe',
+  'provider-mode-unsafe',
+  'provider-parent-unsafe',
+  'provider-trial-rejected',
+  'provider-trial-timeout',
+  'provider-lifecycle-unproven',
+  'provider-contract-invalid',
+  'provider-internal-error',
+  'required-capability-missing',
+])
+const ContainmentAdmissionReceiptSchema = z
+  .object({
+    coordinatorBootId: z.string().min(1).max(128),
+    admissionGeneration: z.number().int().positive(),
+    policyGeneration: z.number().int().positive(),
+    probeGeneration: z.number().int().positive().nullable(),
+    probeCheckedAt: z.number().int().nonnegative().nullable(),
+    providerId: z.string().min(1).max(128).nullable(),
+    profileId: z.enum(['runner-filesystem-v1', 'opencode-verified-v1']),
+    requirementDigest: Sha256Schema,
+    mode: z.enum(['enforce', 'warn', 'off']),
+    decision: z.enum(['contained', 'degraded', 'off']),
+    requiredCapabilities: z.array(z.string().min(1).max(128)).max(64),
+    capabilities: z.record(z.string().min(1).max(128), ContainmentCapabilityStrengthSchema),
+    reasonCodes: z.array(ContainmentReasonCodeSchema).max(32),
+    admittedAt: z.number().int().nonnegative(),
+  })
+  .strict()
 
 const VerifiedLaunchManifestCommonSchema = z.object({
   codec: z.literal(VERIFIED_LAUNCH_MANIFEST_CODEC),
   protocolCodec: z.literal(OPENCODE_DIRECT_PROTOCOL_CODEC),
   binaryPath: AbsolutePathSchema,
   binaryDigest: Sha256Schema,
+  containmentAdmission: ContainmentAdmissionReceiptSchema,
+  containmentTopology: z.enum([
+    'none',
+    'runner-outer',
+    'provider-child-only',
+    'runner-outer-and-child',
+  ]),
   containment: RuntimeContainmentReceiptSchema,
   childProvider: RuntimeChildProviderPlanSchema,
   worktreePath: AbsolutePathSchema,
@@ -86,6 +127,112 @@ const VerifiedSystemLaunchManifestSchema = VerifiedLaunchManifestCommonSchema.ex
 export const VerifiedLaunchManifestSchema = z
   .union([VerifiedBusinessLaunchManifestSchema, VerifiedSystemLaunchManifestSchema])
   .superRefine((value, ctx) => {
+    const admission = value.containmentAdmission
+    if (admission.requirementDigest !== containmentRequirementDigest(admission.profileId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['containmentAdmission', 'requirementDigest'],
+        message: 'containment requirement digest does not match the frozen profile',
+      })
+    }
+    if (
+      admission.mode !== value.containment.mode ||
+      admission.providerId !== value.containment.providerId ||
+      (admission.decision === 'contained') !== value.containment.available
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['containment'],
+        message: 'runtime containment projection must match the admission receipt',
+      })
+    }
+    const capabilityKeys = new Set([
+      ...Object.keys(admission.capabilities),
+      ...Object.keys(value.containment.capabilities),
+    ])
+    if (
+      [...capabilityKeys].some(
+        (capability) =>
+          admission.capabilities[capability] !== value.containment.capabilities[capability],
+      ) ||
+      admission.reasonCodes.length !== value.containment.degradedReasons.length ||
+      admission.reasonCodes.some(
+        (reason, index) => reason !== value.containment.degradedReasons[index],
+      )
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['containment'],
+        message: 'runtime containment evidence must match the admission receipt',
+      })
+    }
+    if (
+      (admission.probeGeneration === null) !== (admission.probeCheckedAt === null) ||
+      (admission.decision === 'off' && admission.providerId !== null) ||
+      (admission.decision !== 'off' && admission.probeGeneration === null)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['containmentAdmission', 'probeGeneration'],
+        message: 'probe evidence must match the admission decision',
+      })
+    }
+    if (
+      (admission.decision === 'off' &&
+        (admission.mode !== 'off' || value.containmentTopology !== 'none')) ||
+      (admission.decision === 'degraded' &&
+        (admission.mode !== 'warn' || value.containmentTopology !== 'none')) ||
+      (admission.decision === 'contained' && value.containmentTopology === 'none')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['containmentTopology'],
+        message: 'containment topology must match the admission decision',
+      })
+    }
+    const childTopology =
+      value.containmentTopology === 'provider-child-only' ||
+      value.containmentTopology === 'runner-outer-and-child'
+    if (childTopology !== (value.childProvider.providerId !== 'none')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['childProvider'],
+        message: 'child provider must match the admitted atomic topology',
+      })
+    }
+    if (
+      (admission.profileId === 'runner-filesystem-v1' && childTopology) ||
+      (admission.profileId === 'opencode-verified-v1' &&
+        admission.decision === 'contained' &&
+        !childTopology)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['containmentAdmission', 'profileId'],
+        message: 'profile demand and child topology disagree',
+      })
+    }
+    if (
+      (value.containment.mode === 'off' || !value.containment.available) &&
+      value.childProvider.providerId !== 'none'
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['childProvider'],
+        message: 'off/degraded containment requires the none child provider',
+      })
+    }
+    if (
+      value.childProvider.providerId !== 'none' &&
+      (value.containment.providerId !== value.childProvider.providerId ||
+        !value.containment.available)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['childProvider', 'providerId'],
+        message: 'child provider must match the qualified containment receipt',
+      })
+    }
     if (value.childProvider.providerId === 'linux-bwrap') {
       if (value.fffCapabilityCodec === undefined || value.fffProbe === undefined) {
         ctx.addIssue({

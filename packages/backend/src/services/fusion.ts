@@ -62,6 +62,7 @@ import {
   SKILL_MERGER_AGENT_ID,
   SKILL_MERGER_AGENT_NAME,
 } from '@/services/systemResources'
+import type { ContainmentCoordinator } from '@/services/sandbox'
 /** Reserved scaffolding dir inside the fusion worktree; never written to the skill. */
 const SCAFFOLD = '__fusion__'
 const MANIFEST_REL = `${SCAFFOLD}/result.json`
@@ -72,6 +73,7 @@ type FusionRow = typeof fusions.$inferSelect
 export interface FusionDeps {
   db: DbClient
   appHome: string
+  containmentCoordinator?: ContainmentCoordinator
   opencodeCmd?: string[]
   /** Run the scheduler inline (tests). Production leaves it to the daemon loop. */
   awaitScheduler?: boolean
@@ -561,6 +563,9 @@ export async function createFusion(
     const startDeps: StartTaskDeps = {
       db,
       appHome,
+      ...(deps.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: deps.containmentCoordinator }),
       actorUserId: actor.user.id,
       preCreatedWorktree: {
         taskId,
@@ -1503,6 +1508,9 @@ export async function rejectFusion(
       const startDeps: StartTaskDeps = {
         db,
         appHome,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
         actorUserId: actor.user.id,
         preCreatedWorktree: {
           taskId,

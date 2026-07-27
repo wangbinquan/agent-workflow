@@ -5,17 +5,20 @@
 // existing runner-path test in this suite runs without a provider and stayed
 // byte-green through the RFC — that IS the lock.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
-import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
+import { agents, lifecycleAlerts, runtimes, tasks, workflows } from '../src/db/schema'
 import { ulid } from 'ulid'
 import { createLogger } from '../src/util/log'
 import { alertSandboxDegradedOnce } from '../src/services/runner'
-import { setSandboxProvider } from '../src/services/sandbox'
+import {
+  ContainmentCoordinator,
+  ContainmentProviderQualificationError,
+} from '../src/services/sandbox'
 import { startTask } from '../src/services/task'
 import { DomainError } from '../src/util/errors'
 import { computeSandboxPolicy, renderSeatbeltProfile } from '../src/services/sandbox/policy'
@@ -23,8 +26,6 @@ import { probeSandboxMechanism } from '../src/services/sandbox/probe'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc205-int-test')
-
-afterEach(() => setSandboxProvider(null))
 
 describe('sandbox-degraded alert (warn + unavailable)', () => {
   test('exactly one OPEN alert per task across repeated spawns', async () => {
@@ -55,28 +56,119 @@ describe('sandbox-degraded alert (warn + unavailable)', () => {
 })
 
 describe('enforce launch gate', () => {
-  test('enforce + unavailable refuses at the door with sandbox-unavailable', async () => {
-    setSandboxProvider({
-      mode: 'enforce',
-      status: { mechanism: 'bwrap', available: false, detail: 'not installed' },
-      appHome: '/tmp/nope',
+  async function launchDeps(
+    containmentCoordinator: ContainmentCoordinator,
+    protocol: 'opencode' | 'claude-code' = 'opencode',
+    permission?: Record<string, string>,
+  ) {
+    const db = createInMemoryDb(MIGRATIONS)
+    const agentId = ulid()
+    const workflowId = ulid()
+    await db.insert(runtimes).values({
+      id: ulid(),
+      name: protocol,
+      protocol,
+      model: protocol === 'opencode' ? 'openai/gpt-5' : 'sonnet',
     })
-    // The gate sits at the very top of startTask — deps are never touched.
-    await expect(startTask({} as never, {} as never)).rejects.toMatchObject({
+    await db.insert(agents).values({
+      id: agentId,
+      name: 'agent',
+      runtime: protocol,
+      ...(permission === undefined ? {} : { permission: JSON.stringify(permission) }),
+    })
+    await db.insert(workflows).values({
+      id: workflowId,
+      name: 'workflow',
+      definition: JSON.stringify({
+        $schema_version: 1,
+        inputs: [],
+        nodes: [{ id: 'node', kind: 'agent-single', agentId, agentName: 'agent' }],
+        edges: [],
+      }),
+    })
+    return {
+      input: { workflowId } as never,
+      deps: { db, containmentCoordinator, defaultRuntime: protocol } as never,
+    }
+  }
+
+  test('enforce + unavailable refuses at the door with sandbox-unavailable', async () => {
+    const containmentCoordinator = new ContainmentCoordinator({
+      provider: {
+        mode: 'enforce',
+        status: { mechanism: 'bwrap', available: false, detail: 'not installed' },
+        appHome: '/tmp/nope',
+      },
+      qualifyBwrap: async () => {
+        throw new ContainmentProviderQualificationError('provider-not-found')
+      },
+    })
+    const launch = await launchDeps(containmentCoordinator)
+    await expect(startTask(launch.input, launch.deps)).rejects.toMatchObject({
       code: 'sandbox-unavailable',
     })
-    await expect(startTask({} as never, {} as never)).rejects.toBeInstanceOf(DomainError)
+    await expect(startTask(launch.input, launch.deps)).rejects.toBeInstanceOf(DomainError)
   })
 
   test('warn + unavailable does NOT block the gate (falls through to deps)', async () => {
-    setSandboxProvider({
-      mode: 'warn',
-      status: { mechanism: 'bwrap', available: false, detail: 'x' },
-      appHome: '/tmp/nope',
+    const containmentCoordinator = new ContainmentCoordinator({
+      provider: {
+        mode: 'warn',
+        status: { mechanism: 'bwrap', available: false, detail: 'x' },
+        appHome: '/tmp/nope',
+      },
+      qualifyBwrap: async () => {
+        throw new ContainmentProviderQualificationError('provider-not-found')
+      },
     })
-    // Falls past the gate and dies later on the empty deps — proving the gate
-    // itself let it through.
-    await expect(startTask({} as never, {} as never)).rejects.not.toMatchObject({
+    // Falls past the profile-aware gate and dies later in ordinary launch
+    // validation/materialization — proving warn itself did not block.
+    const launch = await launchDeps(containmentCoordinator)
+    await expect(startTask(launch.input, launch.deps)).rejects.not.toMatchObject({
+      code: 'sandbox-unavailable',
+    })
+  })
+
+  test('mixed capability proof does not let OpenCode hide behind a filesystem-only preview', async () => {
+    const containmentCoordinator = new ContainmentCoordinator({
+      provider: {
+        mode: 'enforce',
+        status: { mechanism: 'bwrap', available: true, detail: null },
+        appHome: '/tmp/nope',
+      },
+      qualifyBwrapFilesystem: async () => '/usr/bin/bwrap',
+      qualifyBwrapFull: async () => {
+        throw new ContainmentProviderQualificationError('provider-trial-rejected')
+      },
+    })
+
+    const claude = await launchDeps(containmentCoordinator, 'claude-code')
+    await expect(startTask(claude.input, claude.deps)).rejects.not.toMatchObject({
+      code: 'sandbox-unavailable',
+    })
+
+    const opencode = await launchDeps(containmentCoordinator, 'opencode')
+    await expect(startTask(opencode.input, opencode.deps)).rejects.toMatchObject({
+      code: 'sandbox-unavailable',
+      status: 409,
+    })
+  })
+
+  test('OpenCode with no model-controlled child only requires the filesystem profile', async () => {
+    const containmentCoordinator = new ContainmentCoordinator({
+      provider: {
+        mode: 'enforce',
+        status: { mechanism: 'bwrap', available: true, detail: null },
+        appHome: '/tmp/nope',
+      },
+      qualifyBwrapFilesystem: async () => '/usr/bin/bwrap',
+      qualifyBwrapFull: async () => {
+        throw new ContainmentProviderQualificationError('provider-trial-rejected')
+      },
+    })
+
+    const launch = await launchDeps(containmentCoordinator, 'opencode', { bash: 'deny' })
+    await expect(startTask(launch.input, launch.deps)).rejects.not.toMatchObject({
       code: 'sandbox-unavailable',
     })
   })

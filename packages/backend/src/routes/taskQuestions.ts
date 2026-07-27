@@ -171,6 +171,9 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
     const resumeDeps: Parameters<typeof resumeTask>[2] = {
       db: deps.db,
       appHome: Paths.root,
+      ...(deps.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: deps.containmentCoordinator }),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...resolveLaunchRuntimeConfig(deps.configPath),
     }

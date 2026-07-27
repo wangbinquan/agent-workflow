@@ -12,6 +12,7 @@ import { multiAuth } from '@/auth/session'
 import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
+import type { ContainmentCoordinator } from '@/services/sandbox'
 import { ForbiddenError } from '@/util/errors'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountAgentRoutes } from '@/routes/agents'
@@ -90,6 +91,8 @@ export interface AppDeps {
   dbVersion: number
   /** Drizzle DB client. */
   db: DbClient
+  /** RFC-233 daemon-scoped admission authority; production always supplies it. */
+  containmentCoordinator?: ContainmentCoordinator
   /**
    * RFC-036 — AES-256-GCM seal/unseal helper. Required only for the OIDC
    * routes (admin CRUD + login callback). Tests that do not exercise OIDC

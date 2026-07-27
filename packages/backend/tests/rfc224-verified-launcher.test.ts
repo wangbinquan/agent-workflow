@@ -36,6 +36,7 @@ import {
 } from '@/services/runtime/opencode/verifiedManifest'
 import { parseControlLine } from '@/services/runtime/opencode/controlProtocol'
 import type { OpencodeStoreLifecycleLock } from '@/services/runtime/opencode/storeHygiene'
+import { containmentRequirementDigest } from '@/services/sandbox'
 import type { InventorySnapshotCaptured } from '@agent-workflow/shared'
 
 const roots: string[] = []
@@ -119,10 +120,36 @@ function commonManifest(title: string) {
     },
   }
   return {
-    codec: 2 as const,
+    codec: 4 as const,
     protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
     binaryPath: '/private/rfc224/seal/opencode',
     binaryDigest: buildDigest,
+    containmentAdmission: {
+      coordinatorBootId: 'rfc224-test-boot',
+      admissionGeneration: 1,
+      policyGeneration: 1,
+      probeGeneration: 1,
+      probeCheckedAt: 1,
+      providerId: 'linux-bwrap',
+      profileId: 'opencode-verified-v1' as const,
+      requirementDigest: containmentRequirementDigest('opencode-verified-v1'),
+      mode: 'enforce' as const,
+      decision: 'contained' as const,
+      requiredCapabilities: [
+        'platformHomeIsolation',
+        'immutableArtifactView',
+        'modelChildNetworkDeny',
+      ],
+      capabilities: {
+        platformHomeIsolation: 'strong' as const,
+        immutableArtifactView: 'strong' as const,
+        modelChildNetworkDeny: 'strong' as const,
+        descendantLifetimeBound: 'strong' as const,
+      },
+      reasonCodes: [],
+      admittedAt: 1,
+    },
+    containmentTopology: 'runner-outer-and-child' as const,
     containment: {
       providerId: 'linux-bwrap',
       mode: 'enforce' as const,
@@ -651,6 +678,24 @@ describe('RFC-224 verified launcher manifest split', () => {
       VerifiedLaunchManifestSchema.parse({
         ...manifest,
         fffProbe: { ...manifest.fffProbe!, root: '/private/outside-run-root' },
+      }),
+    ).toThrow()
+    expect(() =>
+      VerifiedLaunchManifestSchema.parse({
+        ...manifest,
+        containmentAdmission: {
+          ...manifest.containmentAdmission,
+          capabilities: {
+            ...manifest.containmentAdmission.capabilities,
+            modelChildNetworkDeny: 'absent',
+          },
+        },
+      }),
+    ).toThrow()
+    expect(() =>
+      VerifiedLaunchManifestSchema.parse({
+        ...manifest,
+        containmentTopology: 'none',
       }),
     ).toThrow()
   })

@@ -73,6 +73,7 @@ import {
 import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import type { DbClient } from '@/db/client'
+import type { ContainmentCoordinator } from '@/services/sandbox'
 import {
   clarifyRounds,
   nodeRunEvents,
@@ -242,6 +243,8 @@ export interface RunTaskOptions {
   taskId: string
   db: DbClient
   appHome: string
+  /** One daemon-scoped admission authority, threaded to every runNode path. */
+  containmentCoordinator?: ContainmentCoordinator
   /** Override opencode binary command (tests inject mock-opencode). */
   opencodeCmd?: string[]
   log?: Logger
@@ -941,6 +944,9 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         mcps: injection.mcps,
         plugins: injection.plugins,
         appHome: opts.appHome,
+        ...(opts.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: opts.containmentCoordinator }),
         ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
         db,
         log,
@@ -1763,6 +1769,9 @@ async function maybeRunCommitPush(
           mcps: [],
           plugins: [],
           appHome: state.opts.appHome,
+          ...(state.opts.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: state.opts.containmentCoordinator }),
           db,
           log: log.child('commit'),
           gitUserName: task.gitUserName,
@@ -2648,6 +2657,9 @@ async function resolveMergeConflicts(
       mcps: [],
       plugins: [],
       appHome: state.opts.appHome,
+      ...(state.opts.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: state.opts.containmentCoordinator }),
       db,
       log: log.child('merge'),
       gitUserName: task.gitUserName,
@@ -3823,6 +3835,9 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           mcps,
           plugins,
           appHome: opts.appHome,
+          ...(opts.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: opts.containmentCoordinator }),
           ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
           db,
           log: log.child('run'),
@@ -5518,6 +5533,9 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       mcps: injection.mcps,
       plugins: injection.plugins,
       appHome: opts.appHome,
+      ...(opts.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: opts.containmentCoordinator }),
       ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
       ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
       db,
@@ -5941,6 +5959,9 @@ async function dispatchFanoutAggregatorAttempt(
       mcps: injection.mcps,
       plugins: injection.plugins,
       appHome: opts.appHome,
+      ...(opts.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: opts.containmentCoordinator }),
       ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
       db,
       log,

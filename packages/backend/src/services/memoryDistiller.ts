@@ -41,7 +41,12 @@ import {
 import type { DbClient } from '@/db/client'
 import { getRuntimeDriver } from '@/services/runtime'
 import type { RuntimeKind, SpawnPlan } from '@/services/runtime/types'
-import { getSandboxProvider, wrapSandbox, type SandboxCtx } from '@/services/sandbox'
+import {
+  wrapSpawnPlanSandbox,
+  type ContainmentCoordinator,
+  type PreparedContainmentPlan,
+  type SandboxCtx,
+} from '@/services/sandbox'
 import {
   clarifyRounds,
   docVersions,
@@ -236,6 +241,8 @@ export interface RunDistillOptions {
   sourceContextBudget?: SourceContextBudget
   /** RFC-200 deterministic test seam; production generates a fresh value per attempt. */
   envelopeNonce?: string
+  /** RFC-233 daemon-scoped admission authority. */
+  containmentCoordinator?: ContainmentCoordinator
 }
 
 export interface DistillerSpawnInput {
@@ -252,6 +259,8 @@ export interface DistillerSpawnInput {
   /** Tmp cwd allocated for this distill — no git side-effects. */
   cwd: string
   timeoutMs: number
+  /** One immutable admission; defaultDistillerSpawn never re-reads policy. */
+  containment?: PreparedContainmentPlan
 }
 
 export interface DistillerSpawnResult {
@@ -956,10 +965,10 @@ export async function validateAndPersistCandidate(
 export function distillerSandboxCtx(
   cwd: string,
   runDir = cwd,
-  plan?: Partial<Pick<SpawnPlan, 'readOnlySubtrees' | 'sessionStore'>>,
+  plan?: Partial<Pick<SpawnPlan, 'readOnlySubtrees' | 'sessionStore' | 'containment'>>,
 ): SandboxCtx | undefined {
-  const p = getSandboxProvider()
-  if (p === null) return undefined
+  const p = plan?.containment?.sandbox
+  if (p === undefined) return undefined
   return {
     mode: p.mode,
     status: p.status,
@@ -1123,25 +1132,40 @@ export async function defaultDistillerSpawn(
     mkdir(worktreeDir, { recursive: true, mode: 0o700 }),
     mkdir(runDir, { recursive: true, mode: 0o700 }),
   ])
-  const sandboxProvider = getSandboxProvider()
-  const plan = await driver.buildSpawn({
+  let plan = await driver.buildSpawn({
     agentName: DISTILLER_AGENT_NAME,
     systemPrompt: DISTILLER_SYSTEM_PROMPT,
     model: input.model,
     prompt: input.userPrompt,
     worktreePath: worktreeDir,
     runDir,
-    ...(sandboxProvider === null ? {} : { appHome: sandboxProvider.appHome }),
+    ...(input.containment === undefined
+      ? {}
+      : {
+          appHome: input.containment.sandbox.appHome,
+          containment: input.containment,
+        }),
     ...(input.runtimeBinary != null && input.runtimeBinary !== ''
       ? { runtimeBinary: input.runtimeBinary }
       : {}),
     bridgeCredentials: true,
   })
+  if (input.containment !== undefined) {
+    plan = {
+      ...plan,
+      containment: input.containment,
+      sandboxTopology: input.containment.spawnTopology,
+    }
+  }
   const wantStdin = plan.stdin?.mode === 'pipe'
   let child: Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'>
   try {
     // P0-4: wrap the spawn in the platform sandbox (no-op when no provider is set).
-    const cmd = wrapSandbox(plan.cmd, distillerSandboxCtx(worktreeDir, runDir, plan))
+    const cmd = wrapSpawnPlanSandbox(
+      plan.cmd,
+      distillerSandboxCtx(worktreeDir, runDir, plan),
+      plan.sandboxTopology,
+    )
     child = Bun.spawn({
       cmd,
       cwd: worktreeDir,
@@ -1323,6 +1347,10 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // inside spawnFn (defaultDistillerSpawn → getRuntimeDriver(protocol).buildSpawn);
   // runDistill only forwards the resolved (protocol, binary, model).
   const protocol: RuntimeKind = options.protocol ?? 'opencode'
+  const containment =
+    options.containmentCoordinator === undefined
+      ? undefined
+      : await options.containmentCoordinator.admit('runner-filesystem-v1')
   const cwd = await mkdtemp(join(tmpdir(), 'aw-distiller-'))
   let cleanup: (() => Promise<void>) | undefined
   let preserveCwd = false
@@ -1337,6 +1365,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
         envelopeNonce,
         cwd,
         timeoutMs,
+        ...(containment === undefined ? {} : { containment }),
       })
     } catch (error) {
       preserveCwd =

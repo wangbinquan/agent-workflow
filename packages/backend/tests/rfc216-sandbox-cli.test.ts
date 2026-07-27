@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { makeBoundedSpawn, sandboxCommand, type RawSpawn, type SpawnedProbe } from '@/cli/sandbox'
 import type { ProbeDiagnostics } from '@/services/sandbox/guidance'
+import { ContainmentProviderQualificationError } from '@/services/sandbox'
 
 const tmpDirs: string[] = []
 afterEach(() => {
@@ -30,6 +31,16 @@ const exitDiag = (c: number, stderr = ''): ProbeDiagnostics => ({
   exitCode: c,
   stderrSnippet: stderr,
 })
+const exactAvailable = {
+  qualifyBwrapFilesystem: async () => '/usr/bin/bwrap',
+  qualifyBwrapFull: async () => undefined,
+}
+const exactUnavailable = {
+  qualifyBwrapFilesystem: async (): Promise<string> => {
+    throw new ContainmentProviderQualificationError('provider-not-found')
+  },
+  qualifyBwrapFull: async () => undefined,
+}
 
 describe('sandboxCommand — argv fail-closed (P2#1)', () => {
   it('unknown flag → exit 2, never silently falls back', async () => {
@@ -58,6 +69,7 @@ describe('sandboxCommand — exit-code cells (Linux, injected deps)', () => {
       ...linux,
       which: () => '/usr/bin/bwrap',
       boundedSpawn: fakeBounded(0, exitDiag(0)),
+      ...exactAvailable,
     })
     expect(r.exitCode).toBe(0)
     expect(r.output).toContain('✅')
@@ -68,9 +80,22 @@ describe('sandboxCommand — exit-code cells (Linux, injected deps)', () => {
       ...linux,
       which: (b) => (b === 'apt-get' ? '/usr/bin/apt-get' : null),
       boundedSpawn: fakeBounded(127, { kind: 'error', message: 'ENOENT' }),
+      ...exactUnavailable,
     })
     expect(r.exitCode).toBe(1)
     expect(r.output).toContain('apt-get install -y bubblewrap')
+  })
+
+  it('weak discovery green + exact qualification red is reported unavailable', async () => {
+    const r = await sandboxCommand([], {
+      ...linux,
+      which: () => '/usr/bin/bwrap',
+      boundedSpawn: fakeBounded(0, exitDiag(0)),
+      ...exactUnavailable,
+    })
+    expect(r.exitCode).toBe(1)
+    expect(r.output).not.toContain('状态：✅')
+    expect(r.output).toContain('provider-not-found')
   })
 
   it('off + available → default 0, strict 1', async () => {
@@ -81,6 +106,7 @@ describe('sandboxCommand — exit-code cells (Linux, injected deps)', () => {
       platform: 'linux' as const,
       configPath: cfg,
       which: () => '/usr/bin/bwrap' as string,
+      ...exactAvailable,
     }
     expect(
       (await sandboxCommand([], { ...base, boundedSpawn: fakeBounded(0, exitDiag(0)) })).exitCode,
@@ -106,6 +132,7 @@ describe('sandboxCommand — configReadable axis (decision D)', () => {
       configPath: cfg,
       which: () => '/usr/bin/bwrap',
       boundedSpawn: fakeBounded(0, exitDiag(0)), // mechanism IS available
+      ...exactAvailable,
     })
     expect(r.exitCode).toBe(2)
     expect(r.output).toContain('config 不可读')
@@ -120,6 +147,7 @@ describe('sandboxCommand — configReadable axis (decision D)', () => {
       configPath: join(tmp(), 'absent.json'),
       which: () => null,
       boundedSpawn: fakeBounded(127, { kind: 'error', message: 'ENOENT' }),
+      ...exactUnavailable,
     })
     expect(r.exitCode).toBe(1)
   })

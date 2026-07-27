@@ -43,7 +43,7 @@ const PACKAGE_MANAGER_BIN: Record<PackageManager, string> = {
 
 export interface SandboxReportInput {
   platform: NodeJS.Platform
-  /** From `probeSandboxMechanism` — the mechanismAvailable axis. */
+  /** Exact profile qualification projected into the legacy mechanism shape. */
   status: SandboxStatus
   diag: ProbeDiagnostics
   /** Effective sandboxMode; assumed `warn` when config is unreadable. */
@@ -125,8 +125,8 @@ export function usernsHint(): string {
   ].join('\n')
 }
 
-const RESTART_HINT =
-  '装完 / 改完后需重启 daemon 生效（沙箱机制在开机时探测一次并缓存）：\n  agent-workflow stop && agent-workflow start'
+const REFRESH_HINT =
+  '安装 provider / 调整内核策略后，下一次任务准入会重新精确检查，无需重启 daemon。直接离线修改 sandboxMode 配置文件时才需重启；Settings 修改会热生效。'
 
 /**
  * Render the full report + compute the exit code. Pure: input → {text, exitCode}.
@@ -157,7 +157,7 @@ export function renderSandboxReport(input: SandboxReportInput): SandboxReport {
   }
 
   if (available) {
-    lines.push('状态：✅ 可用（已真实试跑）')
+    lines.push('状态：✅ 可用（已通过生产同级精确资格检查）')
     lines.push(`当前 sandboxMode：${mode}`)
     if (platform === 'darwin') lines.push('无需安装任何组件。')
   } else {
@@ -166,7 +166,7 @@ export function renderSandboxReport(input: SandboxReportInput): SandboxReport {
 
   if (!available && mode !== 'off') {
     lines.push('')
-    lines.push(RESTART_HINT)
+    lines.push(REFRESH_HINT)
   }
 
   if (mode === 'off') {

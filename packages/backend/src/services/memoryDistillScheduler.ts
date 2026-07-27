@@ -26,6 +26,7 @@ import {
   WorkgroupRuntimeConfigSchema,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import type { ContainmentCoordinator } from '@/services/sandbox'
 import { cachedRepos, memoryDistillJobs, tasks } from '@/db/schema'
 import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/memoryDistiller'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
@@ -240,6 +241,7 @@ export async function computeEligibleScopes(
 
 export interface DistillTickOptions {
   db: DbClient
+  containmentCoordinator?: ContainmentCoordinator
   /** Inject a fake spawn for tests; production uses defaultDistillerSpawn. */
   spawnFn?: DistillerSpawnFn
   /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
@@ -346,6 +348,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         runtimeBinary: rt.binaryPath,
         model: rt.model,
         sourceContextBudget: options.sourceContextBudget,
+        containmentCoordinator: options.containmentCoordinator,
       })
       await options.db
         .update(memoryDistillJobs)
@@ -403,6 +406,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
 
 export interface StartLoopOptions {
   db: DbClient
+  containmentCoordinator?: ContainmentCoordinator
   spawnFn?: DistillerSpawnFn
   /** Settings.memoryDistillerEnabled — when false, ticker is a no-op shell. */
   enabled?: boolean
@@ -461,6 +465,7 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
       defaultRuntime: options.defaultRuntime,
       model: options.model,
       sourceContextBudget: options.sourceContextBudget,
+      containmentCoordinator: options.containmentCoordinator,
     })
       .catch((err) => {
         log.warn('tick threw', { error: err instanceof Error ? err.message : String(err) })

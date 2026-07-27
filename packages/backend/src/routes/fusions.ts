@@ -42,6 +42,9 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
     return {
       db: deps.db,
       appHome: Paths.root,
+      ...(deps.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: deps.containmentCoordinator }),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(defaultPerNodeTimeoutMs !== undefined ? { defaultPerNodeTimeoutMs } : {}),
       ...(defaultNodeRetries !== undefined ? { defaultNodeRetries } : {}),

@@ -49,10 +49,12 @@ import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
 import {
   buildRunSandboxCtx,
-  getSandboxProvider,
+  ContainmentAdmissionAborted,
   sandboxActive,
   sandboxEnforceBlocked,
   wrapSpawnPlanSandbox,
+  type ContainmentCoordinator,
+  type PreparedContainmentPlan,
   type SandboxCtx,
 } from '@/services/sandbox'
 import { lifecycleAlerts } from '@/db/schema'
@@ -163,6 +165,8 @@ export async function alertSandboxDegradedOnce(
 
 export interface RunNodeOptions {
   taskId: string
+  /** Daemon-scoped RFC-233 admission source. Production always supplies it. */
+  containmentCoordinator?: ContainmentCoordinator
   /** RFC-205 — OS sandbox context. ABSENT (tests, sandboxMode=off, mechanism
    *  unavailable) means the spawn argv passes through untouched; the daemon
    *  (start.ts) assembles it for production runs. */
@@ -1035,6 +1039,74 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       : createHash('sha256').update(opencodeControlNonce).digest('hex')
   let opencodeResumeOwner: ReturnType<typeof getOpencodeSessionOwner>
   let controlState = createRunnerOpencodeControlState()
+  let preparedContainment: PreparedContainmentPlan | undefined
+
+  // RFC-233: qualify and decide exactly once, before the verified driver may
+  // touch its store/layout and before a resume lease is acquired. Every later
+  // layer receives this immutable result.
+  if (opts.containmentCoordinator !== undefined) {
+    try {
+      const containmentProfile =
+        driver.businessContainmentProfile?.({
+          agent: opts.agent,
+          mcps: opts.mcps ?? [],
+        }) ?? driver.containmentProfile
+      preparedContainment = await opts.containmentCoordinator.admit(containmentProfile, {
+        ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+      })
+    } catch (error) {
+      if (error instanceof ContainmentAdmissionAborted) {
+        const daemonShutdown = opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
+        const errorMessage = daemonShutdown
+          ? 'daemon-shutdown: node interrupted during containment admission'
+          : 'aborted by signal'
+        await setNodeRunStatus({
+          db: opts.db,
+          nodeRunId: opts.nodeRunId,
+          to: daemonShutdown ? 'interrupted' : 'canceled',
+          allowedFrom: ['running', 'pending'],
+          reason: 'containment-admission-aborted',
+          extra: { finishedAt: Date.now(), errorMessage },
+        })
+        return {
+          status: 'canceled',
+          exitCode: null,
+          outputs: {},
+          tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+          prompt,
+          errorMessage,
+        }
+      }
+      const failureCode =
+        executionIdentityFailureCodeOf(error) ?? 'execution-identity-containment-required'
+      log.warn('runtime-containment-blocked', {
+        nodeRunId: opts.nodeRunId,
+        runtime,
+        failureCode,
+      })
+      await setNodeRunStatus({
+        db: opts.db,
+        nodeRunId: opts.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['running', 'pending'],
+        reason: failureCode,
+        extra: {
+          finishedAt: Date.now(),
+          errorMessage: failureCode,
+          failureCode,
+        },
+      })
+      return {
+        status: 'failed',
+        exitCode: null,
+        outputs: {},
+        tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+        prompt,
+        errorMessage: failureCode,
+        failureCode,
+      }
+    }
+  }
 
   const releaseHeldLease = (): void => {
     const token = controlState.leaseToken
@@ -1163,7 +1235,18 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       ...(opts.testOnlyUnverifiedRuntime === undefined
         ? {}
         : { testOnlyUnverifiedRuntime: opts.testOnlyUnverifiedRuntime }),
+      ...(preparedContainment === undefined ? {} : { containment: preparedContainment }),
     })
+    if (preparedContainment !== undefined) {
+      plan = {
+        ...plan,
+        containment: preparedContainment,
+        // The coordinator owns topology. A runtime driver may materialize the
+        // provider child plan, but it cannot override which process layer is
+        // admitted to carry the platform boundary.
+        sandboxTopology: preparedContainment.spawnTopology,
+      }
+    }
   } catch (err) {
     // RFC-143 §6: a driver that fails to ASSEMBLE the spawn (system-prompt-file
     // write EACCES, config-dir prep failure) lands on the same failure mode as
@@ -1277,13 +1360,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // "the runtime received it but ignored it" without dumping the full config.
   // Names/counts only — never config bodies (env / headers may contain user
   // tokens; docs/OPENCODE_CONFIG.md §6).
-  // RFC-205: wrap at the LAST moment — plan.cmd stays pristine for
+  // RFC-205/RFC-233: wrap at the LAST moment — plan.cmd stays pristine for
   // spawnBinaryPath / version-registry / logs; only the argv handed to the OS
-  // gets the sandbox head. No ctx AND no daemon provider (tests, sandboxMode
-  // off) → identical to the pre-RFC-205 spawn.
+  // gets the admitted provider head. Tests may omit the coordinator; off and
+  // degraded plans deliberately project an inactive sandbox.
   const baseSandboxCtx =
     opts.sandbox ??
-    buildRunSandboxCtx(getSandboxProvider(), opts.taskId, opts.worktreePath, runRoot)
+    buildRunSandboxCtx(plan.containment?.sandbox ?? null, opts.taskId, opts.worktreePath, runRoot)
   const sandboxCtx =
     baseSandboxCtx === undefined
       ? undefined
@@ -1302,11 +1385,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             ]),
           ],
         }
-  const containmentDegradedReasons = Array.isArray(plan.diagnostics?.containmentDegradedReasons)
-    ? plan.diagnostics.containmentDegradedReasons.filter(
-        (value): value is string => typeof value === 'string',
-      )
-    : []
+  const containmentDegradedReasons =
+    plan.containment?.receipt.reasonCodes ??
+    (Array.isArray(plan.diagnostics?.containmentDegradedReasons)
+      ? plan.diagnostics.containmentDegradedReasons.filter(
+          (value): value is string => typeof value === 'string',
+        )
+      : [])
   if (
     sandboxCtx !== undefined &&
     sandboxCtx.mode === 'warn' &&
@@ -1333,6 +1418,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     sandboxed:
       sandboxActive(sandboxCtx) && (plan.sandboxTopology ?? 'runner-outer') === 'runner-outer',
     sandboxTopology: plan.sandboxTopology ?? 'runner-outer',
+    ...(plan.containment === undefined
+      ? {}
+      : {
+          containmentDecision: plan.containment.receipt.decision,
+          containmentAdmissionGeneration: plan.containment.receipt.admissionGeneration,
+          containmentPolicyGeneration: plan.containment.receipt.policyGeneration,
+          containmentProfileId: plan.containment.receipt.profileId,
+          containmentReasonCodes: plan.containment.receipt.reasonCodes,
+        }),
     ...(plan.diagnostics ?? {}),
   })
 
@@ -1347,7 +1441,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   if (sandboxEnforceBlocked(sandboxCtx)) {
     const detail = sandboxCtx?.status.detail
     const identityFailure =
-      opencodeControl === undefined ? undefined : ('execution-identity-sandbox-required' as const)
+      opencodeControl === undefined
+        ? undefined
+        : ('execution-identity-containment-required' as const)
     const errorMessage =
       identityFailure ??
       `sandbox mode is 'enforce' but the platform sandbox is unavailable` +

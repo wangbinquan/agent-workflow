@@ -51,6 +51,7 @@ describe('RFC-227 production source guard', () => {
   test('core admission consumes an open provider plan without an OS-name gate', () => {
     const core = source('packages/backend/src/services/runtime/opencode/verifiedPlanCore.ts')
     const containment = source('packages/backend/src/services/runtime/opencode/containment.ts')
+    const contract = source('packages/backend/src/services/sandbox/containmentContract.ts')
     const manifest = source('packages/backend/src/services/runtime/opencode/verifiedManifest.ts')
     const shared = source('packages/shared/src/schemas/runtime.ts')
 
@@ -61,7 +62,7 @@ describe('RFC-227 production source guard', () => {
     ] as const) {
       expect(text, name).not.toMatch(/process\.platform|platform\s*[!=]==?\s*['"]linux['"]/)
     }
-    expect(containment).toContain('providerId: z.string()')
+    expect(contract).toContain('providerId: z.string()')
     expect(manifest).toContain('childProvider: RuntimeChildProviderPlanSchema')
     expect(shared).toContain('mechanism: z.string().min(1).nullable()')
     expect(shared).not.toMatch(/mechanism:\s*z\.enum/)

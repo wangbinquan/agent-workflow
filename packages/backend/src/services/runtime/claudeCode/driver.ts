@@ -30,6 +30,7 @@ import { captureClaudeSessions } from './sessionCapture'
 
 export const claudeCodeDriver: RuntimeDriver = {
   kind: 'claude-code',
+  containmentProfile: 'runner-filesystem-v1',
   minVersion: MIN_CLAUDE_CODE_VERSION,
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)

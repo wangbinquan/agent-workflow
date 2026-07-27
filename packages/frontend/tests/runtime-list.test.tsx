@@ -321,7 +321,7 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
 
   test('persisted execution-identity failure renders actionable English copy without raw tokens', async () => {
     await i18n.changeLanguage('en-US')
-    const raw = 'execution-identity-sandbox-required RAW_BACKEND_SECRET'
+    const raw = 'execution-identity-containment-required RAW_BACKEND_SECRET'
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : (input as URL | Request).toString()
       if (url.includes('/api/runtime/models'))
@@ -341,7 +341,7 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
                 outcome: 'execution-identity-failed',
                 conforms: false,
                 detail: raw,
-                failureCode: 'execution-identity-sandbox-required',
+                failureCode: 'execution-identity-containment-required',
                 sawNonce: false,
                 sawEnvelope: false,
                 exitCode: 1,
@@ -361,16 +361,16 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(screen.queryByText('runtimes.smoke.execution-identity-failed')).toBeNull()
     expect(
       screen.getByText(
-        'This OpenCode run requires platform containment, but the required capabilities are unavailable.',
+        'The effective policy requires platform containment, but this run did not pass exact capability qualification.',
       ),
     ).toBeTruthy()
     expect(
       screen.getByText(
-        'Enable a supported containment provider, or explicitly choose Warn/Off to accept a degraded run.',
+        'Open Settings → Runtime to inspect the effective mode and reason. Apply the saved Warn/Off mode there, or repair the provider and retry.',
       ),
     ).toBeTruthy()
     expect(document.body.textContent).not.toContain(raw)
-    expect(document.body.textContent).not.toContain('execution-identity-sandbox-required')
+    expect(document.body.textContent).not.toContain('execution-identity-containment-required')
   })
 
   test('Test binary result renders actionable Chinese copy without raw tokens', async () => {

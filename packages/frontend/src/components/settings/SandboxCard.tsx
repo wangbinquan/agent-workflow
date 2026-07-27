@@ -49,16 +49,22 @@ export function SandboxCard() {
     staleTime: 30_000,
   })
   const sandbox = status.data?.sandbox
+  const configuredMode =
+    config.data?.sandboxMode ?? sandbox?.configuredMode ?? sandbox?.mode ?? 'warn'
+  const effectiveMode = sandbox?.effectiveMode ?? sandbox?.mode ?? configuredMode
   const degraded =
     sandbox !== undefined && (!sandbox.available || (sandbox.degradedReasons?.length ?? 0) > 0)
   const lifetimeBestEffort =
-    sandbox?.mode !== 'off' &&
+    effectiveMode !== 'off' &&
     sandbox?.available === true &&
     sandbox.capabilities?.descendantLifetimeBound === 'best-effort'
 
-  // config is the user's saved intent (authoritative for the control); the
-  // status block only fills the gap until the config cache resolves.
-  const mode: SandboxMode = config.data?.sandboxMode ?? sandbox?.mode ?? 'warn'
+  // The radio represents what new admissions use now. Config remains the saved
+  // intent and is shown separately when an out-of-process write created a
+  // configured/effective mismatch.
+  const mode: SandboxMode = effectiveMode
+  const mismatch =
+    sandbox !== undefined && (sandbox.restartRequired === true || configuredMode !== effectiveMode)
 
   const save = useMutation({
     mutationFn: (next: SandboxMode) => writeConfigPatch({ sandboxMode: next }),
@@ -82,7 +88,7 @@ export function SandboxCard() {
   const chip =
     sandbox === undefined
       ? null
-      : sandbox.mode === 'off'
+      : effectiveMode === 'off'
         ? { kind: 'neutral' as const, text: t('settings.sandbox.chipOff') }
         : sandbox.available && !degraded
           ? {
@@ -120,6 +126,30 @@ export function SandboxCard() {
           testidPrefix="sandbox-mode"
         />
       </Field>
+      {mismatch && (
+        <NoticeBanner
+          tone="warning"
+          size="compact"
+          className="stack-top--sm"
+          title={t('settings.sandbox.mismatchTitle')}
+          testid="sandbox-mode-mismatch"
+          action={
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={save.isPending}
+              onClick={() => save.mutate(configuredMode)}
+            >
+              {t('settings.sandbox.applyConfigured')}
+            </button>
+          }
+        >
+          {t('settings.sandbox.mismatchBody', {
+            configured: configuredMode,
+            effective: effectiveMode,
+          })}
+        </NoticeBanner>
+      )}
       {mode === 'enforce' && degraded && (
         <NoticeBanner
           tone="warning"

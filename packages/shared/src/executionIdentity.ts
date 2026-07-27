@@ -6,6 +6,8 @@
  */
 export const EXECUTION_IDENTITY_FAILURE_CODES = [
   'execution-identity-untrusted-binary',
+  'execution-identity-containment-required',
+  /** Legacy read compatibility; new containment admission writes the code above. */
   'execution-identity-sandbox-required',
   'execution-identity-project-config-unsupported',
   'execution-identity-plugin-unsupported',

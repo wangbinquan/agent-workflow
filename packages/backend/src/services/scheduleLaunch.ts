@@ -9,6 +9,7 @@
 // owner actor rebuilt by fireSchedule).
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { ContainmentCoordinator } from '@/services/sandbox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startAgentTask } from '@/services/agentLaunch'
@@ -26,10 +27,21 @@ import type {
  * launch deps live (so scheduled / manual launches match a manual UI launch)
  * and stamps `tasks.scheduled_task_id` for run-history attribution.
  */
-export function buildScheduleLaunch(db: DbClient, configPath: string): BuildScheduleLaunch {
+export function buildScheduleLaunch(
+  db: DbClient,
+  configPath: string,
+  containmentCoordinator?: ContainmentCoordinator,
+): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
     const deps = {
-      ...buildStartTaskDeps(db, configPath, ownerUserId, resolveOpencodeCmd(configPath)),
+      ...buildStartTaskDeps(
+        db,
+        configPath,
+        ownerUserId,
+        resolveOpencodeCmd(configPath),
+        undefined,
+        containmentCoordinator,
+      ),
       scheduledTaskId,
     }
     if (kind === 'agent') {

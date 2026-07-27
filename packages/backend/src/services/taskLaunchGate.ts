@@ -13,7 +13,10 @@ import type { DbClient } from '@/db/client'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { getWorkflow } from '@/services/workflow'
-import { assertAgentIdsExecutionPolicy } from '@/services/executionPolicy'
+import {
+  resolveAgentIdsExecutionPolicy,
+  type ResolvedAgentExecutionPolicy,
+} from '@/services/executionPolicy'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { loadWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 
@@ -58,11 +61,11 @@ export async function assertWorkflowExecutionPolicy(
   db: DbClient,
   definition: LaunchableWorkflow['definition'],
   defaultRuntime?: string | null,
-): Promise<void> {
+): Promise<ResolvedAgentExecutionPolicy[]> {
   const agentIds = (definition.nodes ?? []).flatMap((node) =>
     node.kind === 'agent-single' && typeof node.agentId === 'string' && node.agentId.length > 0
       ? [node.agentId]
       : [],
   )
-  await assertAgentIdsExecutionPolicy(db, agentIds, defaultRuntime)
+  return resolveAgentIdsExecutionPolicy(db, agentIds, defaultRuntime)
 }

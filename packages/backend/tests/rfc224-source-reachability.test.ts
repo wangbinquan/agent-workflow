@@ -151,7 +151,11 @@ describe('RFC-224 verified OpenCode source reachability', () => {
     expect(business).not.toMatch(/\bprepareHermeticOpencodeLayout\s*\(/)
     expect(system).not.toMatch(/\bprepareHermeticOpencodeLayout\s*\(/)
     expect(core).toContain('dependencies.snapshotBinary ?? snapshotRuntimeOpencodeBinary')
-    expect(core).toContain('requireRootOwnedBwrap')
+    // RFC-233: exact provider qualification moved ahead of the shared
+    // OpenCode builder. The core consumes the frozen admission and must never
+    // rediscover or requalify bwrap.
+    expect(core).toContain('admission: RuntimeContainmentAdmission')
+    expect(core).not.toContain('requireRootOwnedBwrap')
   })
 
   test('model and status diagnostics execute only a byte-frozen runtime snapshot', () => {
@@ -188,8 +192,7 @@ describe('RFC-224 verified OpenCode source reachability', () => {
 
     const schedule = source('services/scheduleLaunch.ts')
     expect(schedule).toContain("import { resolveOpencodeCmd } from '@/util/opencode'")
-    expect(schedule).toContain(
-      'buildStartTaskDeps(db, configPath, ownerUserId, resolveOpencodeCmd(configPath))',
-    )
+    expect(schedule).toContain('resolveOpencodeCmd(configPath),')
+    expect(schedule).toContain('containmentCoordinator,')
   })
 })

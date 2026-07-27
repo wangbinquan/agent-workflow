@@ -12,8 +12,8 @@ import { chmod, lstat, mkdir, open, readdir, readFile, realpath } from 'node:fs/
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
-import { ExecutionIdentityFailure, executionIdentityFailure } from './failure'
-import { requireRootOwnedBwrap, verifiedSelfCommand } from './sealedSubprocess'
+import { executionIdentityFailure } from './failure'
+import { verifiedSelfCommand } from './sealedSubprocess'
 
 const PROBE_BASENAME_RE = /^aw-fff-[0-9a-f]{32}\.txt$/
 const MAX_PROBE_OUTPUT_BYTES = 4 * 1024
@@ -1035,13 +1035,15 @@ export async function runFffCapabilityProbe(
   dependencies: FffCapabilityProbeDependencies = {},
 ): Promise<void> {
   const verifyArtifacts = dependencies.verifyArtifacts ?? verifyFffCapabilityProbeArtifacts
-  const requireBwrap = dependencies.requireBwrap ?? ((path) => requireRootOwnedBwrap(path))
+  // RFC-233: policy/provider admission already happened once in the daemon.
+  // This launcher-side proof verifies the frozen artifact/path and actual FFF
+  // behavior; it must not reopen PATH or run a second mode/topology decision.
+  const requireBwrap = dependencies.requireBwrap ?? (async (path: string) => path)
   const spawn = dependencies.spawn ?? defaultSpawn
   const timeout = dependencies.timeout ?? delay
   let child: FffCapabilityProbeProcess | undefined
   let directSettled = false
   let streamsSettled = false
-  let bwrapAdmissionFailure: ExecutionIdentityFailure | undefined
   try {
     if (
       !Number.isSafeInteger(input.timeoutMs) ||
@@ -1051,18 +1053,7 @@ export async function runFffCapabilityProbe(
       return executionIdentityFailure('execution-identity-bootstrap-failed')
     }
     await verifyArtifacts(input.runRoot, input.probe)
-    let admittedBwrapPath: string
-    try {
-      admittedBwrapPath = await requireBwrap(input.probe.bwrapPath)
-    } catch (error) {
-      if (
-        error instanceof ExecutionIdentityFailure &&
-        error.code === 'execution-identity-sandbox-required'
-      ) {
-        bwrapAdmissionFailure = error
-      }
-      throw error
-    }
+    const admittedBwrapPath = await requireBwrap(input.probe.bwrapPath)
     if (admittedBwrapPath !== input.probe.bwrapPath) {
       return executionIdentityFailure('execution-identity-bootstrap-failed')
     }
@@ -1118,7 +1109,6 @@ export async function runFffCapabilityProbe(
     await assertDirectory(paths.cacheBin, 0o500, [])
     await assertDirectory(paths.path, 0o500, [])
   } catch {
-    if (bwrapAdmissionFailure !== undefined) throw bwrapAdmissionFailure
     return executionIdentityFailure('execution-identity-bootstrap-failed')
   } finally {
     if (child !== undefined && (!directSettled || !streamsSettled || probeGroupAlive(child))) {

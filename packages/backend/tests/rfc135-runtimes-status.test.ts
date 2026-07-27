@@ -31,7 +31,10 @@ import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
 import { createUser } from '../src/services/users'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
-import { setSandboxProvider } from '../src/services/sandbox'
+import {
+  ContainmentCoordinator,
+  ContainmentProviderQualificationError,
+} from '../src/services/sandbox'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -121,8 +124,28 @@ interface StatusEntry {
   }
 }
 
-async function bodyOf(res: Response): Promise<{ runtimes: StatusEntry[] }> {
-  return (await res.json()) as { runtimes: StatusEntry[] }
+async function bodyOf(res: Response): Promise<{
+  runtimes: StatusEntry[]
+  sandbox?: {
+    configuredMode?: string
+    effectiveMode?: string
+    restartRequired?: boolean
+    profileId?: string
+    probeState?: string
+    reasonCodes?: string[]
+  }
+}> {
+  return (await res.json()) as {
+    runtimes: StatusEntry[]
+    sandbox?: {
+      configuredMode?: string
+      effectiveMode?: string
+      restartRequired?: boolean
+      profileId?: string
+      probeState?: string
+      reasonCodes?: string[]
+    }
+  }
 }
 
 describe('RFC-135 GET /api/runtimes/status', () => {
@@ -135,7 +158,6 @@ describe('RFC-135 GET /api/runtimes/status', () => {
 
   afterEach(() => {
     delete process.env[TIMEOUT_ENV]
-    setSandboxProvider(null)
     rmSync(h.tmp, { recursive: true, force: true })
   })
 
@@ -242,18 +264,31 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   })
 
   test('warn reports degraded but executable; enforce reports containment-blocked', async () => {
-    setSandboxProvider({
-      mode: 'warn',
-      status: {
-        mechanism: 'bwrap',
-        available: false,
-        detail: 'fixture unavailable',
+    const coordinator = new ContainmentCoordinator({
+      provider: {
+        mode: 'warn',
+        status: {
+          mechanism: 'bwrap',
+          available: false,
+          detail: 'fixture unavailable',
+        },
+        appHome: h.tmp,
       },
-      appHome: h.tmp,
+      qualifyBwrap: async () => {
+        throw new ContainmentProviderQualificationError('provider-trial-rejected')
+      },
     })
-    const warned = (await bodyOf(await req(h.app))).runtimes.find(
-      (runtime) => runtime.name === 'opencode',
-    )!
+    const statusApp = createApp({
+      token: TOKEN,
+      configPath: h.configPath,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db: h.db,
+      runtimeDiagnosticTestDependencies: FIXTURE_RUNTIME_DIAGNOSTICS,
+      containmentCoordinator: coordinator,
+    })
+    const warnedBody = await bodyOf(await req(statusApp))
+    const warned = warnedBody.runtimes.find((runtime) => runtime.name === 'opencode')!
     expect(warned).toMatchObject({
       ok: true,
       state: 'degraded',
@@ -262,29 +297,48 @@ describe('RFC-135 GET /api/runtimes/status', () => {
         mode: 'warn',
       },
     })
-    expect(warned.containment?.degradedReasons).toContain('containment-provider-unavailable')
-
-    setSandboxProvider({
-      mode: 'enforce',
-      status: {
-        mechanism: 'bwrap',
-        available: false,
-        detail: 'fixture unavailable',
-      },
-      appHome: h.tmp,
+    expect(warned.containment?.degradedReasons).toContain('provider-trial-rejected')
+    expect(warnedBody.sandbox).toMatchObject({
+      configuredMode: 'warn',
+      effectiveMode: 'warn',
+      restartRequired: false,
+      profileId: 'opencode-verified-v1',
+      probeState: 'unavailable',
+      reasonCodes: ['provider-trial-rejected', 'required-capability-missing'],
     })
-    expect(
-      (await bodyOf(await req(h.app))).runtimes.find((runtime) => runtime.name === 'opencode'),
-    ).toMatchObject({ ok: false, state: 'containment-blocked' })
+
+    coordinator.setMode('enforce')
+    const mismatched = await bodyOf(await req(statusApp))
+    expect(mismatched.runtimes.find((runtime) => runtime.name === 'opencode')).toMatchObject({
+      ok: false,
+      state: 'containment-blocked',
+    })
+    expect(mismatched.sandbox).toMatchObject({
+      configuredMode: 'warn',
+      effectiveMode: 'enforce',
+      restartRequired: true,
+    })
   })
 
   test('macOS Seatbelt is admitted and reports lifetime strength honestly', async () => {
-    setSandboxProvider({
-      mode: 'enforce',
-      status: { mechanism: 'seatbelt', available: true, detail: null },
-      appHome: h.tmp,
+    const coordinator = new ContainmentCoordinator({
+      provider: {
+        mode: 'enforce',
+        status: { mechanism: 'seatbelt', available: true, detail: null },
+        appHome: h.tmp,
+      },
+      qualifySeatbelt: async () => {},
     })
-    const opencode = (await bodyOf(await req(h.app))).runtimes.find(
+    const statusApp = createApp({
+      token: TOKEN,
+      configPath: h.configPath,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db: h.db,
+      runtimeDiagnosticTestDependencies: FIXTURE_RUNTIME_DIAGNOSTICS,
+      containmentCoordinator: coordinator,
+    })
+    const opencode = (await bodyOf(await req(statusApp))).runtimes.find(
       (runtime) => runtime.name === 'opencode',
     )!
     expect(opencode).toMatchObject({

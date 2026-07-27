@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE, type Agent, type Mcp } from '@agent-workflow/shared'
-import { setSandboxProvider } from '@/services/sandbox'
+import { ContainmentCoordinator, type PreparedContainmentPlan } from '@/services/sandbox'
 import { createLogger } from '@/util/log'
 import type { BusinessNodeSpawnContext } from '@/services/runtime/types'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
@@ -32,9 +32,10 @@ const roots: string[] = []
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
 const originalAuth = process.env.OPENCODE_AUTH_CONTENT
 const TEST_BINARY_DIGEST = 'f'.repeat(64)
+let activeContainment: PreparedContainmentPlan | undefined
 
 afterEach(async () => {
-  setSandboxProvider(null)
+  activeContainment = undefined
   Object.defineProperty(process, 'platform', platformDescriptor)
   if (originalAuth === undefined) delete process.env.OPENCODE_AUTH_CONTENT
   else process.env.OPENCODE_AUTH_CONTENT = originalAuth
@@ -141,11 +142,11 @@ function verifiedContext(input: {
     nodeId: 'node-1',
     opencodeControlNonce: input.nonceChar.repeat(32),
     opencodeLeaseNonceDigest: input.nonceChar.toLowerCase().repeat(64),
+    ...(activeContainment === undefined ? {} : { containment: activeContainment }),
   }
 }
 
 const PLAN_DEPENDENCIES: VerifiedBusinessPlanDependencies = {
-  requireBwrap: async () => '/usr/bin/bwrap',
   inspectBinary: async () => ({
     resolvedPath: '/runtime/opencode',
     digest: TEST_BINARY_DIGEST,
@@ -176,7 +177,7 @@ const PLAN_DEPENDENCIES: VerifiedBusinessPlanDependencies = {
   },
 }
 
-function activateVerifiedLinux(appHome: string): void {
+async function activateVerifiedLinux(appHome: string): Promise<void> {
   Object.defineProperty(process, 'platform', {
     ...platformDescriptor,
     value: 'linux',
@@ -184,14 +185,20 @@ function activateVerifiedLinux(appHome: string): void {
   process.env.OPENCODE_AUTH_CONTENT = JSON.stringify({
     openai: { type: 'api', key: 'test-only-key' },
   })
-  setSandboxProvider({
-    mode: 'enforce',
-    status: { mechanism: 'bwrap', available: true, detail: null },
-    appHome,
-  })
+  activeContainment = await new ContainmentCoordinator({
+    provider: {
+      mode: 'enforce',
+      status: { mechanism: 'bwrap', available: true, detail: null },
+      appHome,
+    },
+    qualifyBwrap: async () => '/usr/bin/bwrap',
+  }).admit('opencode-verified-v1')
 }
 
-function activateVerifiedMac(appHome: string): void {
+async function activateVerifiedMac(
+  appHome: string,
+  profile: 'runner-filesystem-v1' | 'opencode-verified-v1' = 'opencode-verified-v1',
+): Promise<void> {
   Object.defineProperty(process, 'platform', {
     ...platformDescriptor,
     value: 'darwin',
@@ -199,11 +206,14 @@ function activateVerifiedMac(appHome: string): void {
   process.env.OPENCODE_AUTH_CONTENT = JSON.stringify({
     openai: { type: 'api', key: 'test-only-key' },
   })
-  setSandboxProvider({
-    mode: 'enforce',
-    status: { mechanism: 'seatbelt', available: true, detail: null },
-    appHome,
-  })
+  activeContainment = await new ContainmentCoordinator({
+    provider: {
+      mode: 'enforce',
+      status: { mechanism: 'seatbelt', available: true, detail: null },
+      appHome,
+    },
+    qualifySeatbelt: async () => {},
+  }).admit(profile)
 }
 
 function ownerFromPlan(
@@ -254,7 +264,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
         .exitCode,
     ).toBe(0)
     const commonDir = await realpath(join(scratchRepo, '.git'))
-    activateVerifiedMac(appHome)
+    await activateVerifiedMac(appHome)
 
     const plan = await buildVerifiedOpencodeBusinessPlan(
       verifiedContext({
@@ -306,7 +316,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
     await mkdir(unrelatedRepo, { recursive: true })
     expect((await runGit(unrelatedRepo, ['init', '-q', '-b', 'main'])).exitCode).toBe(0)
     await writeFile(join(worktreePath, '.git'), `gitdir: ${join(unrelatedRepo, '.git')}\n`)
-    activateVerifiedMac(appHome)
+    await activateVerifiedMac(appHome)
 
     await expect(
       buildVerifiedOpencodeBusinessPlan(
@@ -337,7 +347,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
     await mkdir(dirname(executable), { recursive: true })
     await writeFile(executable, '#!/bin/sh\nexit 0\n', { mode: 0o500 })
     await chmod(executable, 0o500)
-    activateVerifiedMac(appHome)
+    await activateVerifiedMac(appHome)
 
     const plan = await buildVerifiedOpencodeBusinessPlan(
       verifiedContext({
@@ -372,7 +382,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
     const worktreePath = join(root, 'worktree')
     const runRoot = join(appHome, 'runs', 'task-1', 'run-bun')
     await mkdir(worktreePath, { recursive: true })
-    activateVerifiedMac(appHome)
+    await activateVerifiedMac(appHome)
 
     const plan = await buildVerifiedOpencodeBusinessPlan(
       verifiedContext({
@@ -422,7 +432,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
     const appHome = join(root, 'app')
     const worktreePath = join(root, 'worktree')
     await mkdir(worktreePath, { recursive: true })
-    activateVerifiedMac(appHome)
+    await activateVerifiedMac(appHome, 'runner-filesystem-v1')
 
     const plan = await buildVerifiedOpencodeBusinessPlan(
       verifiedContext({
@@ -466,18 +476,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
     const storeEntriesBefore = await readdir(storeRoot)
     const runModeBefore = (await lstat(runRoot)).mode & 0o777
 
-    Object.defineProperty(process, 'platform', {
-      ...platformDescriptor,
-      value: 'linux',
-    })
-    process.env.OPENCODE_AUTH_CONTENT = JSON.stringify({
-      openai: { type: 'api', key: 'test-only-key' },
-    })
-    setSandboxProvider({
-      mode: 'enforce',
-      status: { mechanism: 'bwrap', available: true, detail: null },
-      appHome,
-    })
+    await activateVerifiedLinux(appHome)
 
     const selectedModel: SelectedModel = {
       providerID: 'openai',
@@ -552,6 +551,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
       nodeId: 'node-1',
       opencodeControlNonce: 'n'.repeat(32),
       opencodeLeaseNonceDigest: 'a'.repeat(64),
+      containment: activeContainment!,
       opencodeResumeOwner: {
         sessionId: 'session-1',
         taskId: 'task-1',
@@ -597,7 +597,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
       await mkdir(dirname(executable), { recursive: true })
       await writeFile(executable, '#!/bin/sh\nexit 0\n', { mode: 0o500 })
       await chmod(executable, 0o500)
-      activateVerifiedLinux(appHome)
+      await activateVerifiedLinux(appHome)
       const mcp = localMcp({ executable })
 
       const fresh = await buildVerifiedOpencodeBusinessPlan(
@@ -658,7 +658,7 @@ describe('RFC-224 verified business-plan owner barrier', () => {
       await writeFile(path, '#!/bin/sh\nexit 0\n', { mode: 0o500 })
       await chmod(path, 0o500)
     }
-    activateVerifiedLinux(appHome)
+    await activateVerifiedLinux(appHome)
     const baseline = localMcp({ executable })
     const fresh = await buildVerifiedOpencodeBusinessPlan(
       verifiedContext({

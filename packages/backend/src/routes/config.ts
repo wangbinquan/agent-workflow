@@ -94,6 +94,10 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
       // valid display receipt, but can never leave a stale green one behind.
       await invalidateInheritedRuntimeProbeReceipts(deps.db, changedBinaryProtocols)
       const updated = applyConfigPatch(deps.configPath, body)
+      // RFC-233 linearization point: once this response can be observed, every
+      // future admission sees the saved mode generation. Existing immutable
+      // admissions are intentionally not rewritten.
+      deps.containmentCoordinator?.setMode(updated.sandboxMode)
       return c.json(updated)
     })
   })

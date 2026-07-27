@@ -1,7 +1,7 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { createSecretBox } from '@/auth/secretBox'
-import { setSandboxProvider } from '@/services/sandbox'
+import { createBuiltinContainmentCoordinator } from '@/services/containmentComposition'
 import { setPushCredentialResolver } from '@/services/gitCredential'
 import { getSandboxStatus } from '@/services/sandbox/probe'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
@@ -207,24 +207,39 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   }
 
-  // 4.5 — RFC-205: probe the OS sandbox mechanism once and install the daemon
-  // provider (mode from config). Soft like the claude probe: 'warn' (default)
-  // boots regardless and degrades loudly per task; 'enforce' makes task LAUNCH
-  // refuse while the daemon itself stays up (Settings must stay reachable to
-  // lower the mode).
-  {
-    const sandboxStatus = await getSandboxStatus()
-    setSandboxProvider({ mode: config.sandboxMode, status: sandboxStatus, appHome: Paths.root })
-    if (config.sandboxMode === 'off') {
-      log.info('sandbox off (config)', {})
-    } else if (sandboxStatus.available) {
-      log.info('sandbox mechanism ready', { mechanism: sandboxStatus.mechanism })
-    } else {
-      log.warn('sandbox mechanism UNAVAILABLE', {
-        mode: config.sandboxMode,
-        detail: sandboxStatus.detail,
-      })
-    }
+  // 4.5 — RFC-205/RFC-233: bounded boot discovery is diagnostic only. Install
+  // one daemon-scoped coordinator whose fresh, exact per-profile admission is
+  // authoritative. Startup always remains soft so Settings can repair/lower
+  // policy even when enforce will reject affected task spawns.
+  const sandboxStatus =
+    config.sandboxMode === 'off'
+      ? {
+          mechanism:
+            process.platform === 'linux'
+              ? ('bwrap' as const)
+              : process.platform === 'darwin'
+                ? ('seatbelt' as const)
+                : null,
+          available: false,
+          detail: 'containment disabled by config',
+        }
+      : await getSandboxStatus()
+  const containmentCoordinator = createBuiltinContainmentCoordinator({
+    mode: config.sandboxMode,
+    appHome: Paths.root,
+    discoveryStatus: sandboxStatus,
+  })
+  if (config.sandboxMode === 'off') {
+    log.info('containment off (config)', {})
+  } else if (sandboxStatus.available) {
+    log.info('containment provider discovered; exact qualification deferred to admission', {
+      mechanism: sandboxStatus.mechanism,
+    })
+  } else {
+    log.warn('containment discovery trial unavailable; exact admission remains authoritative', {
+      mode: config.sandboxMode,
+      detail: sandboxStatus.detail,
+    })
   }
 
   // 5. DB — open + apply migrations. dbVersion = number of SQL files in the
@@ -495,6 +510,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     dbVersion,
     db,
     secretBox,
+    containmentCoordinator,
   })
 
   const bindHost = opts.host ?? config.bindHost
@@ -619,6 +635,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // (default true); when false the handle is a no-op shell.
   const memoryDistillTicker = startMemoryDistillLoop({
     db,
+    containmentCoordinator,
     enabled: batchImportCfg.memoryDistillerEnabled !== false,
     // RFC-117: distiller runtime profile (per-feature name → default → deprecated model).
     runtimeName: batchImportCfg.memoryDistillRuntime ?? null,
@@ -684,7 +701,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const scheduledTaskTicker = startScheduledTaskLoop({
     db,
     loadConfig: () => loadConfig(Paths.config),
-    buildLaunch: buildScheduleLaunch(db, Paths.config),
+    buildLaunch: buildScheduleLaunch(db, Paths.config, containmentCoordinator),
   })
 
   // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
@@ -696,6 +713,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (config.autoResumeOnBoot) {
     const resumeDeps = {
       db,
+      containmentCoordinator,
       ...(config.opencodePath
         ? { opencodeCmd: markProductionOpencodeCommand([config.opencodePath]) }
         : {}),

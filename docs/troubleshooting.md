@@ -29,6 +29,13 @@ telemetry only, including non-semver output.
   containment guarantees; the UI and lifecycle alert state exactly what is
   missing.
 
+If the runtime probe is green but containment is blocked, trust the profile
+admission rather than the lightweight executable/discovery probe. Run
+`agent-workflow sandbox` for the exact reason code. If Settings already shows a
+saved Warn/Off value but the effective radio differs, use **Apply saved mode**;
+Settings writes take effect for subsequent admissions without restarting the
+daemon.
+
 Select a specific binary when PATH is not the intended one:
 
 ```bash

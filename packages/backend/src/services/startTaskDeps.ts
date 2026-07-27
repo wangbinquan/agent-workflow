@@ -10,6 +10,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import type { StartTaskDeps } from '@/services/task'
+import type { ContainmentCoordinator } from '@/services/sandbox'
 
 /**
  * RFC-048 — subagent live-capture cadence from live config (moved verbatim from
@@ -39,12 +40,15 @@ export function buildStartTaskDeps(
   opencodeCmd?: string[],
   /** RFC-204: needed to unseal a cached repo for a reuse-by-id launch. */
   secretBox?: SecretBox,
+  /** RFC-233 daemon-scoped containment admission authority. */
+  containmentCoordinator?: ContainmentCoordinator,
 ): StartTaskDeps {
   const subagentLiveCapture = resolveSubagentLiveCapture(configPath)
   return {
     db,
     actorUserId,
     ...(secretBox !== undefined ? { secretBox } : {}),
+    ...(containmentCoordinator !== undefined ? { containmentCoordinator } : {}),
     ...(opencodeCmd ? { opencodeCmd } : {}),
     ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
     // RFC-103 T2: commit&push + maxConcurrentNodes + per-node timeout floor.

@@ -197,7 +197,14 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       actor,
       existing.id,
       parsed.data,
-      buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd),
+      buildStartTaskDeps(
+        deps.db,
+        deps.configPath,
+        actor.user.id,
+        opencodeCmd,
+        undefined,
+        deps.containmentCoordinator,
+      ),
     )
     return c.json(task, 201)
   })

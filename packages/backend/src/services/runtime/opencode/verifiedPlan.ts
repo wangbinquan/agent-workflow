@@ -6,7 +6,6 @@ import { createHash, randomBytes } from 'node:crypto'
 import { chmod, lstat, mkdir, realpath, rm } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { BusinessNodeSpawnContext, SpawnPlan } from '../types'
-import { getSandboxProvider } from '@/services/sandbox'
 import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
@@ -32,7 +31,10 @@ import {
   sanitizeNetlessEnvironment,
   type NetlessSubprocessManifest,
 } from './sealedSubprocess'
-import type { RuntimeChildProviderPlan } from './containment'
+import {
+  runtimeContainmentAdmissionFromPrepared,
+  type RuntimeChildProviderPlan,
+} from './containment'
 import {
   businessOpencodeIdentityDigest,
   identityDigest,
@@ -55,7 +57,6 @@ import { runGit } from '@/util/git'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 import { buildVerifiedInventoryPlan } from './verifiedInventory'
 import {
-  assertVerifiedOpencodePlanBoundary,
   buildVerifiedOpencodePlan,
   type VerifiedOpencodePlanDependencies,
 } from './verifiedPlanCore'
@@ -457,9 +458,15 @@ export async function buildVerifiedOpencodeBusinessPlan(
   command: readonly string[],
   dependencies: VerifiedBusinessPlanDependencies = {},
 ): Promise<SpawnPlan> {
-  const { sandbox } = assertVerifiedOpencodePlanBoundary({
-    sandbox: getSandboxProvider(),
-  })
+  const preparedContainment =
+    ctx.containment ?? executionIdentityFailure('execution-identity-containment-required')
+  const admissionReceipt = preparedContainment.receipt
+  const admissionDecision = admissionReceipt.decision
+  if (admissionDecision === 'blocked') {
+    return executionIdentityFailure('execution-identity-bootstrap-failed')
+  }
+  const admission = runtimeContainmentAdmissionFromPrepared(preparedContainment)
+  const { sandbox } = admission
   if (ctx.dependents.length > 0) {
     return executionIdentityFailure('execution-identity-dependent-unsupported')
   }
@@ -683,7 +690,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
   let succeeded = false
   try {
     const core = await buildVerifiedOpencodePlan({
-      sandbox,
+      admission,
       appHome,
       command,
       storeRoot,
@@ -760,6 +767,14 @@ export async function buildVerifiedOpencodeBusinessPlan(
       protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
       binaryPath,
       binaryDigest: buildDigest,
+      containmentAdmission: {
+        ...admissionReceipt,
+        requiredCapabilities: [...admissionReceipt.requiredCapabilities],
+        capabilities: { ...admissionReceipt.capabilities },
+        reasonCodes: [...admissionReceipt.reasonCodes],
+        decision: admissionDecision,
+      },
+      containmentTopology: preparedContainment.topology,
       containment,
       childProvider,
       worktreePath: canonicalWorktree,
@@ -809,11 +824,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
       runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
     }
     await writeVerifiedLaunchManifest(manifestPath, manifest)
-    const sandboxTopology =
-      childProvider.providerId === 'macos-seatbelt' &&
-      (ctx.agent.permission.bash !== 'deny' || plannedMcp.localWrappers.length > 0)
-        ? 'provider-child-only'
-        : 'runner-outer'
+    const sandboxTopology = preparedContainment.spawnTopology
     succeeded = true
     return {
       cmd: verifiedLauncherCommand(manifestPath),

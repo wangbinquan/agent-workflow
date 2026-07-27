@@ -7,6 +7,13 @@
 
 import { z } from 'zod'
 import { parse, relative, sep } from 'node:path'
+import {
+  ContainmentJsonObjectSchema,
+  ContainmentJsonValueSchema,
+  type ContainmentJsonObject,
+  type ContainmentJsonPrimitive,
+  type ContainmentJsonValue,
+} from '@/services/sandbox/containmentContract'
 
 export const OPENCODE_DIRECT_PROTOCOL_CODEC = 'opencode-direct-v1' as const
 export const SESSION_INVENTORY_PAGE_SIZE = 100 as const
@@ -24,50 +31,11 @@ const nonEmptyString = z.string().min(1)
 const finite = z.number().finite()
 const nonNegativeInteger = z.number().int().nonnegative()
 
-export type JsonPrimitive = null | boolean | number | string
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
-export type JsonObject = { [key: string]: JsonValue }
-
-const POISON_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-
-function isJsonValue(value: unknown, seen: Set<object> = new Set()): value is JsonValue {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'boolean' ||
-    (typeof value === 'number' && Number.isFinite(value))
-  ) {
-    return true
-  }
-  if (typeof value !== 'object') return false
-  if (seen.has(value)) return false
-  seen.add(value)
-  if (Array.isArray(value)) {
-    const valid = value.every((entry) => isJsonValue(entry, seen))
-    seen.delete(value)
-    return valid
-  }
-  const proto = Object.getPrototypeOf(value)
-  if (proto !== Object.prototype && proto !== null) {
-    seen.delete(value)
-    return false
-  }
-  for (const [key, entry] of Object.entries(value)) {
-    if (POISON_KEYS.has(key) || !isJsonValue(entry, seen)) {
-      seen.delete(value)
-      return false
-    }
-  }
-  seen.delete(value)
-  return true
-}
-
-export const JsonValueSchema = z.custom<JsonValue>(isJsonValue, 'expected finite JSON value')
-export const JsonObjectSchema = z.custom<JsonObject>(
-  (value) =>
-    isJsonValue(value) && value !== null && !Array.isArray(value) && typeof value === 'object',
-  'expected plain JSON object',
-)
+export type JsonPrimitive = ContainmentJsonPrimitive
+export type JsonValue = ContainmentJsonValue
+export type JsonObject = ContainmentJsonObject
+export const JsonValueSchema = ContainmentJsonValueSchema
+export const JsonObjectSchema = ContainmentJsonObjectSchema
 
 export const MessageIdSchema = z.string().regex(MESSAGE_ID_RE)
 export const PartIdSchema = z.string().regex(PART_ID_RE)

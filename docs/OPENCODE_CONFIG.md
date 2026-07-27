@@ -126,7 +126,7 @@ child renderer；common manifest/schema 使用开放 string/JSON，不需要加�
 
 | mode      | provider baseline 完整 | provider 缺失/partial                                    |
 | --------- | ---------------------- | -------------------------------------------------------- |
-| `enforce` | contained execution    | 拒绝，`containment-blocked` / sandbox-required           |
+| `enforce` | contained execution    | 拒绝，稳定码 `execution-identity-containment-required`   |
 | `warn`    | contained execution    | 使用 `none` child provider 执行，状态 `degraded`，写告警 |
 | `off`     | 使用 `none`            | 使用 `none`；这是管理员显式接受的无 containment 策略     |
 

@@ -9,7 +9,6 @@ import { randomBytes } from 'node:crypto'
 import { chmod, lstat, mkdir, rm } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { SpawnPlan, SystemAgentSpawnContext } from '../types'
-import { getSandboxProvider, type SandboxProvider } from '@/services/sandbox'
 import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
@@ -33,16 +32,15 @@ import {
   type VerifiedLaunchManifest,
 } from './verifiedManifest'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
-import { assertVerifiedOpencodePlanBoundary, buildVerifiedOpencodePlan } from './verifiedPlanCore'
+import { buildVerifiedOpencodePlan } from './verifiedPlanCore'
+import { runtimeContainmentAdmissionFromPrepared } from './containment'
 
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30_000
 const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
 
 export interface VerifiedSystemPlanDependencies {
-  getSandbox?: () => SandboxProvider | null
   random?: (size: number) => Buffer
   snapshotBinary?: typeof snapshotRuntimeOpencodeBinary
-  requireBwrap?: () => Promise<string>
   sourceEnv?: Readonly<Record<string, string | undefined>>
 }
 
@@ -84,9 +82,15 @@ export async function buildVerifiedOpencodeSystemPlan(
   command: readonly string[],
   dependencies: VerifiedSystemPlanDependencies = {},
 ): Promise<SpawnPlan> {
-  const { sandbox } = assertVerifiedOpencodePlanBoundary({
-    sandbox: (dependencies.getSandbox ?? getSandboxProvider)(),
-  })
+  const preparedContainment =
+    ctx.containment ?? executionIdentityFailure('execution-identity-containment-required')
+  const admissionReceipt = preparedContainment.receipt
+  const admissionDecision = admissionReceipt.decision
+  if (admissionDecision === 'blocked') {
+    return executionIdentityFailure('execution-identity-bootstrap-failed')
+  }
+  const admission = runtimeContainmentAdmissionFromPrepared(preparedContainment)
+  const { sandbox } = admission
   if (
     !isAbsolute(ctx.worktreePath) ||
     !isAbsolute(ctx.runDir) ||
@@ -141,7 +145,7 @@ export async function buildVerifiedOpencodeSystemPlan(
 
   try {
     const core = await buildVerifiedOpencodePlan({
-      sandbox,
+      admission,
       appHome: ctx.appHome,
       command,
       storeRoot,
@@ -152,9 +156,6 @@ export async function buildVerifiedOpencodeSystemPlan(
         ...(dependencies.snapshotBinary === undefined
           ? {}
           : { snapshotBinary: dependencies.snapshotBinary }),
-        ...(dependencies.requireBwrap === undefined
-          ? {}
-          : { requireBwrap: dependencies.requireBwrap }),
       },
     })
     const { layout, binaryIdentity, containment, childProvider, fffCapability } = core
@@ -213,6 +214,14 @@ export async function buildVerifiedOpencodeSystemPlan(
       protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
       binaryPath,
       binaryDigest: binaryIdentity.digest,
+      containmentAdmission: {
+        ...admissionReceipt,
+        requiredCapabilities: [...admissionReceipt.requiredCapabilities],
+        capabilities: { ...admissionReceipt.capabilities },
+        reasonCodes: [...admissionReceipt.reasonCodes],
+        decision: admissionDecision,
+      },
+      containmentTopology: preparedContainment.topology,
       containment,
       childProvider,
       worktreePath: canonicalWorktree,
@@ -249,6 +258,7 @@ export async function buildVerifiedOpencodeSystemPlan(
       cmd: verifiedLauncherCommand(manifestPath),
       env: {},
       stdin: { mode: 'ignore' },
+      sandboxTopology: preparedContainment.spawnTopology,
       readOnlySubtrees: [sealRoot, ...layout.configRoots, ...core.readOnlySubtrees],
       sessionStore: {
         root: storeRoot,

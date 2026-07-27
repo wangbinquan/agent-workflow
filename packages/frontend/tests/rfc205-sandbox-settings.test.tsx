@@ -77,6 +77,13 @@ function mockFetch(opts: MockOptions): MockState {
         putCalls.push({ body })
         if (opts.putFails === true) return json({ code: 'bad', message: 'boom' }, 400)
         persistedMode = (body as { sandboxMode: 'enforce' | 'warn' | 'off' }).sandboxMode
+        opts.sandbox = {
+          ...opts.sandbox,
+          mode: persistedMode,
+          configuredMode: persistedMode,
+          effectiveMode: persistedMode,
+          restartRequired: false,
+        }
         return json({ ...DEFAULT_CONFIG, sandboxMode: persistedMode })
       }
       return json({})
@@ -135,7 +142,7 @@ describe('RFC-205 sandbox status chip', () => {
 })
 
 describe('RFC-205 sandboxMode segmented control', () => {
-  test('renders three radios; aria-checked follows config.sandboxMode', async () => {
+  test('renders three radios; aria-checked follows the effective daemon mode', async () => {
     mockFetch({
       sandbox: { mode: 'warn', mechanism: 'seatbelt', available: true },
       configSandboxMode: 'warn',
@@ -186,6 +193,38 @@ describe('RFC-205 sandboxMode segmented control', () => {
     await screen.findByTestId('sandbox-save-error')
     const warn = screen.getByRole('radio', { name: i18n.t('settings.sandbox.modeWarn') })
     expect(warn.getAttribute('aria-checked')).toBe('true')
+  })
+
+  test('configured/effective mismatch is explicit and can apply the saved mode immediately', async () => {
+    const state = mockFetch({
+      sandbox: {
+        mode: 'warn',
+        configuredMode: 'enforce',
+        effectiveMode: 'warn',
+        restartRequired: true,
+        mechanism: 'bwrap',
+        available: false,
+      },
+      configSandboxMode: 'enforce',
+    })
+    render(<SandboxCard />, { wrapper: wrap(newQc()) })
+
+    const mismatch = await screen.findByTestId('sandbox-mode-mismatch')
+    expect(mismatch.textContent).toContain(i18n.t('settings.sandbox.mismatchTitle'))
+    const warn = screen.getByRole('radio', { name: i18n.t('settings.sandbox.modeWarn') })
+    expect(warn.getAttribute('aria-checked')).toBe('true')
+
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('settings.sandbox.applyConfigured') }),
+    )
+    await waitFor(() => expect(state.putCalls[0]?.body).toEqual({ sandboxMode: 'enforce' }))
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('radio', { name: i18n.t('settings.sandbox.modeEnforce') })
+          .getAttribute('aria-checked'),
+      ).toBe('true'),
+    )
   })
 })
 

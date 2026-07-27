@@ -19,7 +19,12 @@ import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
 import type { SpawnPlan } from '@/services/runtime/types'
-import { getSandboxProvider, wrapSandbox, type SandboxCtx } from '@/services/sandbox'
+import {
+  wrapSpawnPlanSandbox,
+  type ContainmentCoordinator,
+  type PreparedContainmentPlan,
+  type SandboxCtx,
+} from '@/services/sandbox'
 import { createLogger, type Logger } from '@/util/log'
 import {
   isExecutionIdentityFailureCode,
@@ -65,6 +70,8 @@ export interface SmokeOptions {
   log?: Logger
   /** Explicit dependency-injection seam for legacy mock-binary tests. */
   testOnlyUnverifiedRuntime?: boolean
+  /** RFC-233 daemon-scoped admission authority. */
+  containmentCoordinator?: ContainmentCoordinator
 }
 
 const MAX_OUTPUT_BYTES = 256 * 1024
@@ -204,8 +211,8 @@ async function buildSmokePlan(
   bridgeCredentials: boolean,
   log: Logger,
   testOnlyUnverifiedRuntime: boolean,
+  containment: PreparedContainmentPlan | undefined,
 ): Promise<SpawnPlan> {
-  const provider = getSandboxProvider()
   return getRuntimeDriver(protocol).buildSpawn({
     agentName: 'aw-smoke',
     systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
@@ -213,7 +220,7 @@ async function buildSmokePlan(
     prompt,
     worktreePath: worktreeDir,
     runDir,
-    ...(provider === null ? {} : { appHome: provider.appHome }),
+    ...(containment === undefined ? {} : { appHome: containment.sandbox.appHome, containment }),
     runtimeBinary: binaryPath,
     bridgeCredentials,
     log,
@@ -226,8 +233,8 @@ export function smokeSandboxCtx(
   runDir: string,
   plan: SpawnPlan,
 ): SandboxCtx | undefined {
-  const provider = getSandboxProvider()
-  if (provider === null) return undefined
+  const provider = plan.containment?.sandbox
+  if (provider === undefined) return undefined
   return {
     mode: provider.mode,
     status: provider.status,
@@ -257,6 +264,24 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   const log = opts.log ?? createLogger('runtimeSmoke')
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const driver = getRuntimeDriver(opts.protocol)
+  let preparedContainment: PreparedContainmentPlan | undefined
+  if (opts.containmentCoordinator !== undefined) {
+    try {
+      // Smoke/system agents expose no model-controlled shell/MCP child.
+      preparedContainment = await opts.containmentCoordinator.admit('runner-filesystem-v1')
+    } catch (error) {
+      const failureCode = identityFailureCode(error) ?? 'execution-identity-containment-required'
+      return {
+        outcome: 'execution-identity-failed',
+        conforms: false,
+        detail: failureCode,
+        failureCode,
+        sawNonce: false,
+        sawEnvelope: false,
+        exitCode: null,
+      }
+    }
+  }
   const nonce = `awsmoke-${randomBytes(8).toString('hex')}`
   const prompt =
     `Output this exact token verbatim via your output protocol and nothing else: ${nonce}\n` +
@@ -291,7 +316,15 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
           opts.bridgeCredentials === true,
           log,
           opts.testOnlyUnverifiedRuntime === true,
+          preparedContainment,
         )
+        if (preparedContainment !== undefined) {
+          plan = {
+            ...plan,
+            containment: preparedContainment,
+            sandboxTopology: preparedContainment.spawnTopology,
+          }
+        }
       } catch (err) {
         const failureCode = identityFailureCode(err)
         if (failureCode !== null) {
@@ -317,7 +350,11 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
 
       try {
         child = Bun.spawn({
-          cmd: wrapSandbox(plan.cmd, smokeSandboxCtx(worktreeDir, runDir, plan)),
+          cmd: wrapSpawnPlanSandbox(
+            plan.cmd,
+            smokeSandboxCtx(worktreeDir, runDir, plan),
+            plan.sandboxTopology,
+          ),
           cwd: worktreeDir,
           env: plan.env,
           stdout: 'pipe',

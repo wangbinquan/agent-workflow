@@ -1,4 +1,4 @@
-# 运行时沙箱（RFC-205）
+# 运行时 containment（RFC-205 / RFC-233）
 
 agent 进程（opencode / claude-code）与 daemon 同 UID。没有 OS 边界时，一次提示注入
 就能让 agent 读走 `~/.agent-workflow/secret.key`（解开全部封存凭据）、`db.sqlite`、
@@ -16,6 +16,10 @@ agent 进程（opencode / claude-code）与 daemon 同 UID。没有 OS 边界时
 
 ## 2. FS 沙箱（`sandboxMode`）
 
+每次 spawn 先由 daemon-scoped `ContainmentCoordinator` 按明确 profile 做一次 fresh
+admission，再把同一份不可变 plan 传给 runner、OpenCode launcher 和 child renderer。弱
+discovery 只提供诊断，不能再把“bwrap 能启动”提升为“OpenCode 所需能力完整”。
+
 按 provider capability 包装 agent 进程：内置 provider 是 macOS `sandbox-exec`
 （Seatbelt，随系统自带）与 Linux `bwrap`（bubblewrap，需安装且允许非特权 user
 namespaces——探测以真实试跑为准）。OpenCode 核心不按 OS 名称准入，provider id 与能力
@@ -27,19 +31,22 @@ schema 是开放的；未来 Windows Job Object/AppContainer provider 可复用�
 
 `config.json` 的 `sandboxMode`（Settings→Runtime 可改）：
 
-| 档位           | 必要 capability 完整  | provider 缺失或 capability 不完整                          |
-| -------------- | --------------------- | ---------------------------------------------------------- |
-| `enforce`      | 包装运行              | **拒绝 OpenCode 执行**；daemon 与其它可用 runtime 照常运行 |
-| `warn`（默认） | 包装运行              | 无隔离降级运行 + 每任务一条 `sandbox-degraded` 告警        |
-| `off`          | 不启用 OS containment | 同左；这是管理员显式接受的策略，不会伪装成“安全执行”       |
+| 档位           | 必要 capability 完整  | provider 缺失或 capability 不完整                                             |
+| -------------- | --------------------- | ----------------------------------------------------------------------------- |
+| `enforce`      | 包装运行              | 仅拒绝需要该 profile 的执行，稳定码 `execution-identity-containment-required` |
+| `warn`（默认） | 包装运行              | 无隔离降级运行 + 每任务一条 `sandbox-degraded` 告警                           |
+| `off`          | 不启用 OS containment | 同左；这是管理员显式接受的策略，不会伪装成“安全执行”                          |
 
-状态可在 Settings→Runtime 查看 provider、capability、降级原因与档位；每次 spawn 的
-日志带 `sandboxed=true/false`。macOS Seatbelt 的文件系统/子进程网络基线为 strong，
+`warn` 资格失败的原子结果只能是 `none + degraded`，不会再进入 OpenCode core 后被第二套
+判据阻断。`off` 不启动 provider qualification。状态可在 Settings→Runtime 查看
+configured/effective mode、provider、profile、capability、reason code 和 probe/policy
+generation；每次 spawn 的日志带 admission generation 与 `sandboxed=true/false`。macOS
+Seatbelt 的文件系统/子进程网络基线为 strong，
 但对子孙进程生命周期的回收如实标为 best-effort；这不会再被误报成“只能在 Linux 运行”。
 
 ## 3. 自检：`agent-workflow sandbox`（RFC-216）
 
-一条**只读**子命令，回答「主机此刻的沙箱机制能不能用、不能用怎么修」。它**只探测、只
+一条**只读**子命令，回答「主机此刻能否满足 OpenCode 隔离 profile、不能用怎么修」。它**只探测、只
 打印**——绝不跑包管理器、绝不改 sysctl、**不写任何文件**（连读 config 都走只读路径，缺
 文件也不建目录/不落默认配置）。需要 root 的命令由它**打印**、你来执行；命令本身无需
 sudo、无需 daemon 在跑。
@@ -55,8 +62,9 @@ agent-workflow sandbox --help
   apt>dnf>pacman>apk>zypper 取 PATH 首命中，如实标注「检测到 PATH 上的包管理器」）。
 - **Linux 装了 bwrap 但试跑失败**：先给 `exit` 码 + stderr 证据，再**有条件**提示
   userns sysctl（⚠️ 放开会扩大全机攻击面，且为启发式推断、非确证）。
-- 装完 / 改完后**须重启 daemon** 生效——机制在开机时探测一次并缓存（`agent-workflow
-stop && agent-workflow start`）。
+- 安装 provider / 调整内核策略后，下一次任务 admission 会重新精确检查，**无需重启
+  daemon**。Settings 修改 `sandboxMode` 也会热生效；只有离线直接改配置文件时，运行中的
+  daemon 才需要重启以载入该 mode。
 
 退出码（可脚本化）：
 
@@ -68,7 +76,7 @@ stop && agent-workflow start`）。
 | config 不可读（损坏）    | 2    | 2                                   |
 | 参数错误（未知 flag 等） | 2    | 2                                   |
 
-`doctor` 也含一条只读沙箱检查项：仅 **`enforce` 且机制不可用**判 fail（镜像 launch 门），
+`doctor` 也含一条只读隔离检查项：仅 **`enforce` 且必要能力不可用**判 fail，
 `warn`/`off`/可用一律 informational——warn 机器缺 bwrap 不会让 `doctor` 变红。
 
 ## 已知限制

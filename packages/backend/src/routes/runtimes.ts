@@ -8,7 +8,6 @@ import type { Hono } from 'hono'
 import { z } from 'zod'
 import { isExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import { loadConfig } from '@/config'
-import { getSandboxProvider } from '@/services/sandbox'
 import type { AppDeps } from '@/server'
 import { actorOf } from '@/auth/actor'
 import { requireAdmin, requirePermission } from '@/auth/permissions'
@@ -30,7 +29,6 @@ import type { RuntimeKind } from '@/services/runtime'
 import { getRuntimeDriver } from '@/services/runtime'
 import { smokeRuntime as productionSmokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
 import { withRuntimeOpencodeSnapshot as productionRuntimeOpencodeSnapshot } from '@/services/runtime/opencode/runtimeBinary'
-import { inspectRuntimeContainment } from '@/services/runtime/opencode/containment'
 
 // RFC-143: derived from the DRIVERS registry (via RUNTIME_PROTOCOLS) rather than
 // a re-hardcoded literal enum — a new runtime kind is accepted automatically.
@@ -146,8 +144,8 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     const configured = cfg.defaultRuntime ?? 'opencode'
     const defaultName = rows.some((r) => r.name === configured) ? configured : 'opencode'
     const timeoutMs = statusProbeTimeoutMs()
-    const provider = getSandboxProvider()
-    const containment = inspectRuntimeContainment(provider)
+    const containmentPlan = await deps.containmentCoordinator?.observe('opencode-verified-v1')
+    const containment = containmentPlan?.runtimeReceipt ?? null
     const runtimes = await Promise.all(
       rows.map(async (row) => {
         const binary = resolveRuntimeBinary(row, cfg)
@@ -229,20 +227,45 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         }
       }),
     )
-    // RFC-205 D6 — sandbox availability + mode for the Settings chip. Provider
-    // is null before start.ts installs it (tests) → report config mode with
-    // unknown availability.
+    // Exact profile projection from the same coordinator used at spawn.
     const sandbox =
-      provider !== null
+      containmentPlan !== undefined
         ? {
-            mode: provider.mode,
-            mechanism: provider.status.mechanism,
-            available: provider.status.available,
+            mode: containmentPlan.receipt.mode,
+            effectiveMode: containmentPlan.receipt.mode,
+            configuredMode: cfg.sandboxMode,
+            restartRequired: cfg.sandboxMode !== containmentPlan.receipt.mode,
+            policyGeneration: containmentPlan.receipt.policyGeneration,
+            probeGeneration: containmentPlan.receipt.probeGeneration,
+            probeCheckedAt: containmentPlan.receipt.probeCheckedAt,
+            coordinatorBootId: containmentPlan.receipt.coordinatorBootId,
+            admissionGeneration: containmentPlan.receipt.admissionGeneration,
+            decision: containmentPlan.receipt.decision,
+            profileId: containmentPlan.receipt.profileId,
+            requirementDigest: containmentPlan.receipt.requirementDigest,
+            probeState:
+              containmentPlan.receipt.decision === 'contained'
+                ? ('ready' as const)
+                : Object.values(containmentPlan.receipt.capabilities).some(
+                      (strength) => strength === 'strong',
+                    )
+                  ? ('partial' as const)
+                  : ('unavailable' as const),
+            mechanism: containmentPlan.sandbox.status.mechanism,
+            available: containmentPlan.receipt.decision === 'contained',
             providerId: containment?.providerId ?? null,
             capabilities: containment?.capabilities ?? {},
             degradedReasons: containment?.degradedReasons ?? [],
+            reasonCodes: containmentPlan.receipt.reasonCodes,
           }
-        : { mode: cfg.sandboxMode, mechanism: null, available: false }
+        : {
+            mode: cfg.sandboxMode,
+            effectiveMode: cfg.sandboxMode,
+            configuredMode: cfg.sandboxMode,
+            restartRequired: false,
+            mechanism: null,
+            available: false,
+          }
     return c.json({ runtimes, sandbox })
   })
 
@@ -257,6 +280,9 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
       ...(body.model !== undefined ? { model: body.model } : {}),
       bridgeCredentials: true,
+      ...(deps.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: deps.containmentCoordinator }),
     })
     return c.json({ smoke: result })
   })
@@ -277,6 +303,9 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
         ...(typeof body.model === 'string' ? { model: body.model } : {}),
         bridgeCredentials: true,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
       })
     }
     let row = await createRuntime(
@@ -385,6 +414,9 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
       ...(row.model !== null ? { model: row.model } : {}),
       bridgeCredentials: true,
+      ...(deps.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: deps.containmentCoordinator }),
     })
     return withRuntimeProbeConfigFence(deps.configPath, async () => {
       // A row with binaryPath=NULL inherits the protocol path from config.json.

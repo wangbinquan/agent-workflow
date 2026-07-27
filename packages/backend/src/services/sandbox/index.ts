@@ -16,6 +16,33 @@ import {
 } from './policy'
 import type { SandboxStatus } from './probe'
 
+export {
+  CONTAINMENT_REQUIREMENT_PROFILES,
+  ContainmentAdmissionAborted,
+  ContainmentAdmissionError,
+  ContainmentCoordinator,
+  ContainmentProviderQualificationError,
+  containmentRequirementDigest,
+  type ContainmentAdmissionReceipt,
+  type ContainmentCapabilityStrength,
+  type ContainmentDecision,
+  type ContainmentReasonCode,
+  type ContainmentRequirementProfileId,
+  type ContainmentRuntimeProjection,
+  type ContainmentTopology,
+  type PreparedContainmentPlan,
+  type QualifiedContainmentProvider,
+} from './containmentCoordinator'
+export {
+  ContainmentJsonObjectSchema,
+  ContainmentJsonValueSchema,
+  PreparedChildContainmentPlanSchema,
+  type ContainmentJsonObject,
+  type ContainmentJsonPrimitive,
+  type ContainmentJsonValue,
+  type PreparedChildContainmentPlan,
+} from './containmentContract'
+
 export type SandboxMode = 'enforce' | 'warn' | 'off'
 export type SpawnSandboxTopology = 'runner-outer' | 'provider-child-only'
 
@@ -108,12 +135,6 @@ export function wrapSpawnPlanSandbox(
   return wrapSandbox(cmd, ctx)
 }
 
-// ---------------------------------------------------------------------------
-// Daemon-level provider: start.ts sets it once (config mode + boot probe);
-// the runner derives a per-run ctx from it. Tests never set it → every
-// existing spawn stays byte-identical (design D1).
-// ---------------------------------------------------------------------------
-
 export interface SandboxProvider {
   mode: SandboxMode
   status: SandboxStatus
@@ -130,16 +151,6 @@ export interface SandboxProvider {
   }
   /** Outer-process renderer for a provider not built into RFC-205. */
   wrapCommand?: (cmd: readonly string[], policy: SandboxPolicy) => string[]
-}
-
-let provider: SandboxProvider | null = null
-
-export function setSandboxProvider(p: SandboxProvider | null): void {
-  provider = p
-}
-
-export function getSandboxProvider(): SandboxProvider | null {
-  return provider
 }
 
 /**

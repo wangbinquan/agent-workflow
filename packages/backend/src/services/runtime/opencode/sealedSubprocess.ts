@@ -172,6 +172,34 @@ export interface RootOwnedBwrapCapabilityProcess {
 export interface RootOwnedBwrapDependencies {
   spawn?: (command: readonly string[]) => RootOwnedBwrapCapabilityProcess
   timeout?: (milliseconds: number) => Promise<void>
+  /**
+   * The filesystem profile proves the generic runner boundary without
+   * requiring a network namespace. The full profile additionally proves the
+   * model-controlled OpenCode child boundary.
+   */
+  trial?: 'filesystem' | 'full'
+  /** Stable, non-secret provider diagnosis for the RFC-233 coordinator. */
+  onFailure?: (reason: RootOwnedBwrapFailureReason) => void
+}
+
+export type RootOwnedBwrapFailureReason =
+  | 'provider-not-found'
+  | 'provider-path-not-canonical'
+  | 'provider-owner-unsafe'
+  | 'provider-mode-unsafe'
+  | 'provider-parent-unsafe'
+  | 'provider-trial-rejected'
+  | 'provider-trial-timeout'
+  | 'provider-lifecycle-unproven'
+  | 'provider-internal-error'
+
+export class RootOwnedBwrapQualificationError extends Error {
+  readonly code = 'execution-identity-containment-required' as const
+
+  constructor(readonly reason: RootOwnedBwrapFailureReason) {
+    super(reason)
+    this.name = 'RootOwnedBwrapQualificationError'
+  }
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -602,42 +630,84 @@ export async function requireRootOwnedBwrap(
   let resolvedPath: string | undefined
   let failed = false
   let cleanupFailed = false
+  let failureReason: RootOwnedBwrapFailureReason | undefined
+  const reject = (reason: RootOwnedBwrapFailureReason): never => {
+    failureReason ??= reason
+    throw new RootOwnedBwrapQualificationError(reason)
+  }
   try {
-    if (path === null || !isAbsolute(path)) {
-      executionIdentityFailure('execution-identity-sandbox-required')
+    if (path === null) {
+      reject('provider-not-found')
     }
-    const resolved = await realpath(path)
+    const candidatePath = path as string
+    if (
+      !isAbsolute(candidatePath) ||
+      resolve(candidatePath) !== candidatePath ||
+      candidatePath.includes('\0')
+    ) {
+      reject('provider-path-not-canonical')
+    }
+    let resolved = candidatePath
+    try {
+      resolved = await realpath(candidatePath)
+    } catch {
+      reject('provider-not-found')
+    }
     const before = await lstat(resolved)
     const metadata = await stat(resolved)
-    if (
-      before.isSymbolicLink() ||
-      !metadata.isFile() ||
-      metadata.uid !== 0 ||
-      !isSafeRootOwnedBwrapMode(metadata.mode)
-    ) {
-      executionIdentityFailure('execution-identity-sandbox-required')
+    if (before.isSymbolicLink() || !metadata.isFile() || metadata.uid !== 0) {
+      reject('provider-owner-unsafe')
     }
-    child = spawn([
-      resolved,
-      '--die-with-parent',
-      '--new-session',
-      '--unshare-net',
-      '--unshare-pid',
-      '--unshare-ipc',
-      '--unshare-uts',
-      '--ro-bind',
-      '/',
-      '/',
-      '--proc',
-      '/proc',
-      '--dev',
-      '/dev',
-      '--clearenv',
-      '--',
-      '/bin/true',
-    ])
+    if (!isSafeRootOwnedBwrapMode(metadata.mode)) {
+      reject('provider-mode-unsafe')
+    }
+    // Executing the canonical inode is insufficient if an untrusted same-uid
+    // process can replace any directory component between admission and spawn.
+    // Prove the whole canonical ancestor chain through `/`.
+    let parent = dirname(resolved)
+    for (;;) {
+      const parentBefore = await lstat(parent)
+      const parentMetadata = await stat(parent)
+      if (
+        parentBefore.isSymbolicLink() ||
+        !parentMetadata.isDirectory() ||
+        parentMetadata.uid !== 0 ||
+        (parentMetadata.mode & 0o022) !== 0
+      ) {
+        reject('provider-parent-unsafe')
+      }
+      if (parent === '/') break
+      const next = dirname(parent)
+      if (next === parent) reject('provider-parent-unsafe')
+      parent = next
+    }
+    try {
+      child = spawn([
+        resolved,
+        '--die-with-parent',
+        '--new-session',
+        ...(dependencies.trial === 'filesystem' ? [] : ['--unshare-net']),
+        '--unshare-pid',
+        '--unshare-ipc',
+        '--unshare-uts',
+        '--ro-bind',
+        '/',
+        '/',
+        '--proc',
+        '/proc',
+        '--dev',
+        '/dev',
+        '--clearenv',
+        '--',
+        '/bin/true',
+      ])
+    } catch {
+      reject('provider-trial-rejected')
+    }
+    if (child === undefined) reject('provider-trial-rejected')
+    const capabilityChild = child as RootOwnedBwrapCapabilityProcess
     const code = await Promise.race([
-      child.exited.then(
+      capabilityChild.exited.then(
         (value) => {
           exited = true
           return value
@@ -649,17 +719,25 @@ export async function requireRootOwnedBwrap(
       ),
       timeout(BWRAP_CAPABILITY_TIMEOUT_MS).then(() => null),
     ])
-    if (code !== 0 || rootOwnedBwrapGroupAlive(child)) {
-      executionIdentityFailure('execution-identity-sandbox-required')
+    if (code === null) {
+      reject('provider-trial-timeout')
+    }
+    if (code !== 0) {
+      reject('provider-trial-rejected')
+    }
+    if (rootOwnedBwrapGroupAlive(capabilityChild)) {
+      reject('provider-lifecycle-unproven')
     }
     resolvedPath = resolved
   } catch {
     failed = true
+    failureReason ??= 'provider-internal-error'
   } finally {
     if (child !== undefined && rootOwnedBwrapGroupAlive(child)) {
       if (exited) {
         // Never signal a numeric PGID after its direct leader has settled.
         cleanupFailed = true
+        failureReason = 'provider-lifecycle-unproven'
       } else if (!rootOwnedBwrapHasSignalOwnership(child, () => exited)) {
         // ACK release is outcome-unknown until the guardian/watchdog reaps the
         // real supervisor and latches PGID absence. Wait for that authority;
@@ -670,6 +748,7 @@ export async function requireRootOwnedBwrap(
           // A negative/invalid capability result is expected on this path.
         }
         cleanupFailed = rootOwnedBwrapGroupAlive(child)
+        if (cleanupFailed) failureReason = 'provider-lifecycle-unproven'
       } else {
         try {
           let stopped = await terminateRootOwnedBwrapCapability(child, () => exited, timeout)
@@ -682,14 +761,21 @@ export async function requireRootOwnedBwrap(
             stopped = !rootOwnedBwrapGroupAlive(child)
           }
           cleanupFailed = !stopped
+          if (cleanupFailed) failureReason = 'provider-lifecycle-unproven'
         } catch {
           cleanupFailed = true
+          failureReason = 'provider-lifecycle-unproven'
         }
       }
     }
   }
   if (failed || cleanupFailed || resolvedPath === undefined) {
-    return executionIdentityFailure('execution-identity-sandbox-required')
+    try {
+      dependencies.onFailure?.(failureReason ?? 'provider-internal-error')
+    } catch {
+      // Diagnosis callbacks cannot change the fail-closed security outcome.
+    }
+    throw new RootOwnedBwrapQualificationError(failureReason ?? 'provider-internal-error')
   }
   return resolvedPath
 }
@@ -958,7 +1044,7 @@ function renderNetlessInvocation(
   }
   const renderer = customNetlessRenderers.get(provider.providerId)
   if (renderer === undefined) {
-    return executionIdentityFailure('execution-identity-sandbox-required')
+    return executionIdentityFailure('execution-identity-bootstrap-failed')
   }
   const invocation = renderer(manifest, provider, passthroughArgs)
   if (

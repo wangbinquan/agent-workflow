@@ -1,19 +1,21 @@
 // RFC-216 — `agent-workflow sandbox`: a READ-ONLY sandbox preflight.
 //
-// It probes the OS sandbox mechanism (reusing RFC-205's probeSandboxMechanism)
-// and prints exactly what to install/fix — it NEVER runs a package manager,
-// NEVER touches sysctl, NEVER writes a file (config is read via readConfig, the
-// no-write variant — loadConfig would materialize ~/.agent-workflow/config.json
-// on a fresh box). The only process this command ever spawns is the probe
-// itself, wrapped in `boundedSpawn` so a hung/forking mechanism can't wedge or
-// leak (design §2/§6). Exit codes are the single truth table in guidance.ts.
+// It first performs RFC-205's bounded discovery for useful stderr/install
+// diagnostics, then asks RFC-233's production composition root for the exact
+// OpenCode profile qualification. It NEVER runs a package manager, NEVER
+// touches sysctl, and NEVER writes a file (config is read via readConfig, the
+// no-write variant). Discovery is bounded here; exact provider trials use their
+// production deadline + lifecycle supervisor. Exit codes are the single truth
+// table in guidance.ts.
 //
 // Effect boundary (read-only guard, design §6): this file imports no
 // node:child_process, uses no Bun.$/execSync/spawnSync/fs-write, and its single
-// `Bun.spawn` lives in `boundedSpawn`, which is only ever passed to
-// probeSandboxMechanism as its spawnFn.
+// `Bun.spawn` in this file lives in `boundedSpawn`, which is only ever passed to
+// diagnostic discovery. Exact qualification lives behind the shared production
+// composition root rather than being reimplemented in this command.
 
 import { readConfig } from '@/config'
+import { createBuiltinContainmentCoordinator } from '@/services/containmentComposition'
 import {
   detectPackageManager,
   renderSandboxReport,
@@ -22,6 +24,7 @@ import {
   type SandboxMode,
 } from '@/services/sandbox/guidance'
 import { probeSandboxMechanism, type ProbeSpawnFn } from '@/services/sandbox/probe'
+import type { ContainmentReasonCode } from '@/services/sandbox'
 import { killProcessTree } from '@/util/process'
 import { Paths } from '@/util/paths'
 
@@ -37,8 +40,8 @@ const STDERR_GRACE_MS = 1_000
 const USAGE = [
   'usage: agent-workflow sandbox [--require-available]',
   '',
-  '  Read-only sandbox preflight: probes the OS sandbox mechanism and prints how',
-  '  to install/fix it. Writes no files; runs no package manager or sysctl.',
+  '  Read-only containment preflight: runs production-equivalent qualification',
+  '  and prints how to install/fix it. Writes no files; changes no host policy.',
   '',
   '  --require-available   exit non-zero unless the sandbox is actually in effect',
   '                        (mode != off AND mechanism available) — for CI/provisioning',
@@ -194,6 +197,10 @@ export interface SandboxCommandDeps {
   boundedSpawn?: ReturnType<typeof makeBoundedSpawn>
   configPath?: string
   platform?: NodeJS.Platform
+  /** Exact provider seams used by hermetic tests; production uses built-ins. */
+  qualifyBwrapFilesystem?: () => Promise<string>
+  qualifyBwrapFull?: (canonicalPath: string) => Promise<void>
+  qualifySeatbelt?: () => Promise<void>
 }
 
 /**
@@ -234,10 +241,40 @@ export async function sandboxCommand(
     configError = (err as Error).message
   }
 
-  // Axis 2: mechanismAvailable — real trial run through the bounded spawn.
+  // Diagnostic discovery: this supplies actionable stderr/package hints only.
+  // It is deliberately not the readiness or admission oracle.
   const bounded = deps.boundedSpawn ?? makeBoundedSpawn()
-  const status = await probeSandboxMechanism(platform, bounded.spawn)
-  const diag = bounded.getDiag()
+  const discoveryStatus = await probeSandboxMechanism(platform, bounded.spawn)
+  let diag = bounded.getDiag()
+
+  // Explicit CLI invocation is a diagnostic refresh even when the configured
+  // mode is off. It does not mutate daemon policy or config, but it uses the
+  // exact provider qualification/profile that a verified OpenCode spawn uses.
+  const exactCoordinator = createBuiltinContainmentCoordinator({
+    mode: mode === 'off' ? 'warn' : mode,
+    appHome: Paths.root,
+    platform,
+    discoveryStatus,
+    ...(platform === 'linux' ? { bwrapPath: which('bwrap') ?? null } : {}),
+    ...(deps.qualifyBwrapFilesystem === undefined
+      ? {}
+      : { qualifyBwrapFilesystem: deps.qualifyBwrapFilesystem }),
+    ...(deps.qualifyBwrapFull === undefined ? {} : { qualifyBwrapFull: deps.qualifyBwrapFull }),
+    ...(deps.qualifySeatbelt === undefined ? {} : { qualifySeatbelt: deps.qualifySeatbelt }),
+  })
+  const exact = await exactCoordinator.preview('opencode-verified-v1')
+  const exactReasonCodes: readonly ContainmentReasonCode[] = exact.receipt.reasonCodes
+  const status = {
+    mechanism: discoveryStatus.mechanism,
+    available: exact.receipt.decision === 'contained',
+    detail: exactReasonCodes.length === 0 ? null : exactReasonCodes.join(','),
+  }
+  if (!status.available && discoveryStatus.available) {
+    diag = {
+      kind: 'error',
+      message: status.detail ?? 'exact provider qualification failed',
+    }
+  }
 
   const bwrapOnPath = platform === 'linux' ? has('bwrap') : false
   const packageManager: PackageManager | null =

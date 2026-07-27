@@ -498,7 +498,7 @@ describe('RFC-224 FFF capability execution proof', () => {
     }
   })
 
-  test('preserves only sandbox-required from the second bwrap capability admission', async () => {
+  test('treats frozen-provider drift as bootstrap failure without a second policy admission', async () => {
     const value = await fixture()
     let spawned = false
     const input = {
@@ -508,7 +508,7 @@ describe('RFC-224 FFF capability execution proof', () => {
       timeoutMs: 1_000,
     }
 
-    await expect(
+    await expectBootstrapFailure(
       runFffCapabilityProbe(input, {
         requireBwrap: async () => {
           throw new ExecutionIdentityFailure('execution-identity-sandbox-required')
@@ -518,9 +518,7 @@ describe('RFC-224 FFF capability execution proof', () => {
           return fakeProcess({ stdout: '' })
         },
       }),
-    ).rejects.toMatchObject({
-      code: 'execution-identity-sandbox-required',
-    })
+    )
     expect(spawned).toBe(false)
 
     await expectBootstrapFailure(

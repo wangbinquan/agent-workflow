@@ -61,7 +61,9 @@ import {
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
-import { getSandboxProvider } from '@/services/sandbox'
+import type { ContainmentCoordinator } from '@/services/sandbox'
+import { getRuntimeDriver } from '@/services/runtime'
+import { loadMcpsByIds } from '@/services/mcpClosure'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
 import { assertWorkflowExecutionPolicy } from '@/services/taskLaunchGate'
@@ -156,6 +158,8 @@ export interface StartTaskDeps {
    */
   secretBox?: SecretBox
   db: DbClient
+  /** Daemon-scoped RFC-233 admission authority. */
+  containmentCoordinator?: ContainmentCoordinator
   /** Override app home (tests). Defaults to `Paths.root`. */
   appHome?: string
   /** Default per-node timeout (ms). Defaults from settings; tests can pin. */
@@ -724,6 +728,7 @@ export function runtimeConfigOpts(
     | 'defaultPerNodeTimeoutMs'
     | 'defaultNodeRetries'
     | 'defaultRuntime'
+    | 'containmentCoordinator'
   >,
 ): Partial<RunTaskOptions> {
   return {
@@ -758,6 +763,9 @@ export function runtimeConfigOpts(
       ? { defaultNodeRetries: deps.defaultNodeRetries }
       : {}),
     ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
+    ...(deps.containmentCoordinator !== undefined
+      ? { containmentCoordinator: deps.containmentCoordinator }
+      : {}),
   }
 }
 
@@ -1332,28 +1340,6 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     taskRowCommitted: false,
   }
   try {
-    // RFC-205 D5 — enforce mode: when the OS sandbox mechanism is unavailable,
-    // refuse to launch at the door (a task that would silently run UNsandboxed
-    // is exactly what enforce promises never happens). warn/off never block.
-    // RFC-218 impl-gate P2-3: this gate must sit INSIDE the ownership try —
-    // multipart callers (workflow route / startAgentTask) materialize + write
-    // uploads BEFORE handing off, so throwing above the ownership composition
-    // leaked their worktree (and the materializingSpaces lease) on refusal.
-    const sandboxProvider = getSandboxProvider()
-    if (
-      sandboxProvider !== null &&
-      sandboxProvider.mode === 'enforce' &&
-      !sandboxProvider.status.available
-    ) {
-      throw new DomainError(
-        'sandbox-unavailable',
-        `sandboxMode=enforce but no OS sandbox mechanism is usable ` +
-          `(${sandboxProvider.status.detail ?? 'unknown'}); install it ` +
-          `(macOS: sandbox-exec ships with the OS; Linux: install bubblewrap) ` +
-          `or lower sandboxMode to 'warn'/'off' in Settings`,
-        409,
-      )
-    }
     return await startTaskImpl(input, deps, ownership)
   } catch (error) {
     if (!ownership.taskRowCommitted && ownership.cleanup !== null) {
@@ -1383,7 +1369,51 @@ async function startTaskImpl(
   // earlier, but internal startTask callers must not be able to bypass the
   // effective OpenCode model/plugin/dependent policy. This remains before
   // source resolution, cloning, worktree creation, or task-row writes.
-  await assertWorkflowExecutionPolicy(deps.db, workflow.definition, deps.defaultRuntime)
+  const resolvedAgents = await assertWorkflowExecutionPolicy(
+    deps.db,
+    workflow.definition,
+    deps.defaultRuntime,
+  )
+  // RFC-233: early UX preview is evaluated only after the same canonical
+  // agent-runtime resolution that dispatch freezes. Mixed-runtime workflows
+  // preview every distinct driver demand; final per-spawn admission remains
+  // fresh and authoritative.
+  if (deps.containmentCoordinator !== undefined) {
+    const requestedMcpIds = [...new Set(resolvedAgents.flatMap(({ agent }) => agent.mcp))]
+    const mcpsById = new Map(
+      (await loadMcpsByIds(deps.db, requestedMcpIds)).map((mcp) => [mcp.id, mcp]),
+    )
+    const profiles = [
+      ...new Set(
+        resolvedAgents.map(({ agent, runtime }) => {
+          const driver = getRuntimeDriver(runtime.protocol)
+          return (
+            driver.businessContainmentProfile?.({
+              agent,
+              mcps: agent.mcp.flatMap((id) => {
+                const mcp = mcpsById.get(id)
+                return mcp === undefined ? [] : [mcp]
+              }),
+            }) ?? driver.containmentProfile
+          )
+        }),
+      ),
+    ]
+    const previews = await Promise.all(
+      profiles.map((profile) => deps.containmentCoordinator!.preview(profile)),
+    )
+    const blocked = previews.find((preview) => preview.receipt.decision === 'blocked')
+    if (blocked !== undefined) {
+      throw new DomainError(
+        'sandbox-unavailable',
+        `sandboxMode=enforce but containment profile '${blocked.receipt.profileId}' is not qualified ` +
+          `(${blocked.receipt.reasonCodes.join(',') || 'unknown'}); install it ` +
+          `(macOS: sandbox-exec ships with the OS; Linux: install bubblewrap) ` +
+          `or lower sandboxMode to 'warn'/'off' in Settings`,
+        409,
+      )
+    }
+  }
 
   // RFC-175 (§2c): immediate-submit OCC guard for relaunch. When present, reject
   // if the workflow we're about to snapshot has a different `version` than the

@@ -393,6 +393,9 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       const resumeDepsAuto: Parameters<typeof resumeTask>[2] = {
         db: deps.db,
         appHome: Paths.root,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
         ...(opencodeCmdAuto ? { opencodeCmd: opencodeCmdAuto } : {}),
         ...resolveLaunchRuntimeConfig(deps.configPath),
       }

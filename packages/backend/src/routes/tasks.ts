@@ -245,6 +245,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       actor.user.id,
       opencodeCmd,
       deps.secretBox,
+      deps.containmentCoordinator,
     )
     await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId, startDeps.defaultRuntime)
     const task = await startTask(parsed.data, startDeps)
@@ -414,6 +415,9 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
     const task = await resumeTask(deps.db, c.req.param('id'), {
       db: deps.db,
+      ...(deps.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: deps.containmentCoordinator }),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       // RFC-103 T2: resume must thread commit&push + maxConcurrentNodes too.
@@ -498,6 +502,9 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       appHome: Paths.root,
       deps: {
         db: deps.db,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
         ...(opencodeCmd ? { opencodeCmd } : {}),
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
@@ -531,6 +538,9 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       appHome: Paths.root,
       deps: {
         db: deps.db,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
         ...(opencodeCmd ? { opencodeCmd } : {}),
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
@@ -562,6 +572,9 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       cascade,
       deps: {
         db: deps.db,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
         ...(opencodeCmd ? { opencodeCmd } : {}),
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-103 T2: retry must thread commit&push + maxConcurrentNodes too.
@@ -886,6 +899,9 @@ async function handleMultipartTaskStart(
     const task = await startTask(startInput, {
       db: deps.db,
       actorUserId: actor.user.id,
+      ...(deps.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: deps.containmentCoordinator }),
       ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
@@ -925,6 +941,9 @@ async function handleMultipartTaskStart(
     {
       db: deps.db,
       actorUserId: actor.user.id,
+      ...(deps.containmentCoordinator === undefined
+        ? {}
+        : { containmentCoordinator: deps.containmentCoordinator }),
       ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),

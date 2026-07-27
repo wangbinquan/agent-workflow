@@ -30,7 +30,11 @@ import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveC
 // so a VALUE import here would close a module-init cycle. RuntimeProfile is the
 // RFC-113 resolved param set threaded through BusinessNodeSpawnContext.
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
-import type { SpawnSandboxTopology } from '@/services/sandbox'
+import type {
+  ContainmentRequirementProfileId,
+  PreparedContainmentPlan,
+  SpawnSandboxTopology,
+} from '@/services/sandbox'
 
 export type RuntimeKind = 'opencode' | 'claude-code'
 
@@ -132,6 +136,11 @@ export interface SpawnPlan {
   cleanup?: () => void | Promise<void>
   /** Which process layer owns platform containment for this plan. */
   sandboxTopology?: SpawnSandboxTopology
+  /**
+   * RFC-233 daemon-only immutable admission. Runner/smoke/distiller consume
+   * this exact object instead of re-reading provider or mode globals.
+   */
+  containment?: PreparedContainmentPlan
   /** RFC-224 immutable runtime artifacts overlaid read-only by RFC-205. */
   readOnlySubtrees?: readonly string[]
   /** Explicit capture locator; consumers must not reopen the user's global DB. */
@@ -284,6 +293,8 @@ export interface SystemAgentSpawnContext {
   log?: Logger
   /** Explicit dependency-injection seam; production callers never set it. */
   testOnlyUnverifiedRuntime?: boolean
+  /** One pre-driver admission, frozen by the daemon coordinator. */
+  containment?: PreparedContainmentPlan
 }
 
 /**
@@ -394,6 +405,8 @@ export interface BusinessNodeSpawnContext {
   }
   /** Explicit dependency-injection seam; production callers never set it. */
   testOnlyUnverifiedRuntime?: boolean
+  /** One pre-driver admission, frozen by the daemon coordinator. */
+  containment?: PreparedContainmentPlan
 }
 
 /**
@@ -404,6 +417,15 @@ export interface BusinessNodeSpawnContext {
  */
 export interface RuntimeDriver {
   readonly kind: RuntimeKind
+  /** Conservative/default demand; the coordinator never infers from kind/OS. */
+  readonly containmentProfile: ContainmentRequirementProfileId
+  /**
+   * Business descriptor refinement from the exact frozen child surfaces.
+   * System callers use the filesystem-only profile directly.
+   */
+  businessContainmentProfile?(
+    input: Pick<BusinessNodeSpawnContext, 'agent' | 'mcps'>,
+  ): ContainmentRequirementProfileId
   /**
    * Optional protocol-specific minimum used only by runtimes that define a
    * semver gate. RFC-227 makes OpenCode behavior-qualified, so its value is
