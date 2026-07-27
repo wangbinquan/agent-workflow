@@ -70,6 +70,24 @@ async function createUserAndLogin(opts: {
   return { username: opts.username, userId: id, sessionToken, role: opts.role }
 }
 
+async function makeResourcePublic(resource: 'agents' | 'workflows', id: string): Promise<void> {
+  const res = await fetch(`${daemon.baseUrl}/api/${resource}/${id}/acl`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      visibility: 'public',
+      expectedResourceId: id,
+      expectedAclRevision: 0,
+    }),
+  })
+  if (!res.ok) {
+    throw new Error(`publish ${resource}/${id}: ${res.status} ${await res.text().catch(() => '')}`)
+  }
+}
+
 async function seedWorkflow(): Promise<{ workflowId: string; agentName: string }> {
   const headers = {
     Authorization: `Bearer ${daemon.token}`,
@@ -90,6 +108,7 @@ async function seedWorkflow(): Promise<{ workflowId: string; agentName: string }
     })
     if (!agentRes.ok) throw new Error(`seed agent: ${agentRes.status}`)
     seededCollabAgentId = ((await agentRes.json()) as { id: string }).id
+    await makeResourcePublic('agents', seededCollabAgentId)
   }
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
@@ -134,6 +153,7 @@ async function seedWorkflow(): Promise<{ workflowId: string; agentName: string }
   })
   if (!wfRes.ok) throw new Error(`seedWorkflow: ${wfRes.status}`)
   const { id } = (await wfRes.json()) as { id: string }
+  await makeResourcePublic('workflows', id)
   return { workflowId: id, agentName }
 }
 

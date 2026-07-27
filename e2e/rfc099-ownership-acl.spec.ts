@@ -70,6 +70,22 @@ async function primeAuth(context: BrowserContext, token: string): Promise<void> 
   )
 }
 
+async function makeAgentPublic(agentId: string, token: string): Promise<void> {
+  const res = await fetch(`${daemon.baseUrl}/api/agents/${agentId}/acl`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      visibility: 'public',
+      expectedResourceId: agentId,
+      expectedAclRevision: 0,
+    }),
+  })
+  expect(res.ok, await res.text().catch(() => '')).toBe(true)
+}
+
 async function expectAxeClean(page: Page, label: string, include?: string): Promise<void> {
   let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa'])
   if (include !== undefined) builder = builder.include(include)
@@ -129,6 +145,10 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   })
   expect(createAgent.ok).toBe(true)
   const { id: agentId } = (await createAgent.json()) as { id: string }
+  // RFC-231 makes canonical creates private. This ACL story intentionally
+  // starts from a shared resource so it can then prove public → private →
+  // granted visibility transitions.
+  await makeAgentPublic(agentId, alice.sessionToken)
 
   const aliceCtx = await browser.newContext()
   await primeAuth(aliceCtx, alice.sessionToken)
@@ -138,7 +158,7 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   await primeAuth(carolCtx, carol.sessionToken)
   const carolPage: Page = await carolCtx.newPage()
 
-  // (0) Default public: carol sees the agent in her list.
+  // (0) Explicitly public: carol sees the agent in her list.
   await carolPage.goto(`${daemon.baseUrl}/agents`)
   await expect(carolPage.getByRole('link', { name: AGENT_NAME }).first()).toBeVisible()
 

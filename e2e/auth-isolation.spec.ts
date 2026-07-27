@@ -125,7 +125,29 @@ interface WorkflowFixture {
   workflowId: string
 }
 
-/** Seed an agent + minimal linear workflow via daemon token (admin). */
+async function makeResourcePublic(
+  daemon: DaemonHandle,
+  resource: 'agents' | 'workflows',
+  id: string,
+): Promise<void> {
+  const res = await fetch(`${daemon.baseUrl}/api/${resource}/${id}/acl`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      visibility: 'public',
+      expectedResourceId: id,
+      expectedAclRevision: 0,
+    }),
+  })
+  if (!res.ok) {
+    throw new Error(`publish ${resource}/${id}: ${res.status} ${await res.text().catch(() => '')}`)
+  }
+}
+
+/** Seed an explicitly shared agent + workflow used by several task owners. */
 async function seedWorkflow(daemon: DaemonHandle): Promise<WorkflowFixture> {
   const headers = {
     Authorization: `Bearer ${daemon.token}`,
@@ -145,6 +167,7 @@ async function seedWorkflow(daemon: DaemonHandle): Promise<WorkflowFixture> {
   })
   if (!agentRes.ok) throw new Error(`seed agent: ${agentRes.status}`)
   const agent = (await agentRes.json()) as { id: string }
+  await makeResourcePublic(daemon, 'agents', agent.id)
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -188,6 +211,7 @@ async function seedWorkflow(daemon: DaemonHandle): Promise<WorkflowFixture> {
   })
   if (!wfRes.ok) throw new Error(`seed workflow: ${wfRes.status}`)
   const wf = (await wfRes.json()) as { id: string }
+  await makeResourcePublic(daemon, 'workflows', wf.id)
   return { agentName, workflowId: wf.id }
 }
 
