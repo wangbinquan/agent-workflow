@@ -81,7 +81,7 @@ describe('regular-user session token — admin-only endpoints all return 403', (
   })
 
   // RFC-099: resource writes are no longer admin-only at the route gate —
-  // any user may create the five ACL'd resource types (creator becomes
+  // any user may create the six ACL'd resource types (creator becomes
   // owner). The 403s these cases used to pin moved to per-row ownership
   // checks (rfc099-resource-routes.test.ts). The route gate now admits the
   // user, so an empty body gets a 422 validation error, NOT a 403.

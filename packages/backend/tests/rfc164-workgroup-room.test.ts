@@ -24,6 +24,7 @@ import { createSession } from '../src/auth/sessionStore'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
+  agents,
   nodeRuns,
   tasks,
   workflows,
@@ -78,21 +79,23 @@ function cfg(): WorkgroupRuntimeConfig {
 }
 
 async function seedAgent(db: DbClient, name: string): Promise<string> {
-  return (
-    await createAgent(db, {
-      name,
-      description: '',
-      outputs: ['result'],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: 'test agent',
-    })
-  ).id
+  const created = await createAgent(db, {
+    name,
+    description: '',
+    outputs: ['result'],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: 'test agent',
+  })
+  // Room fixtures are shared with the task owner. Keep that cross-actor
+  // visibility explicit now that canonical creates default to private.
+  await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, created.id))
+  return created.id
 }
 
 describe('RFC-164 room — resolveMentions', () => {

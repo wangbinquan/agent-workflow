@@ -48,7 +48,7 @@ import {
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
 import { realpathInside, realpathWriteInside, safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { discloseRefs } from './resourceAcl'
+import { assertInitialResourceOwner, discloseRefs, initialPrivateResourceAcl } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
 import {
   skillFilesAbs,
@@ -144,12 +144,17 @@ export async function createManagedSkill(
   db: DbClient,
   opts: SkillFsOptions,
   input: CreateManagedSkill,
-  aclOpts?: { ownerUserId?: string },
+  aclOpts?: { ownerUserId?: string; actor?: Actor | null },
 ): Promise<Skill> {
   return createManagedSkillWithFiles(
     db,
     opts,
-    { name: input.name, description: input.description, ownerUserId: aclOpts?.ownerUserId },
+    {
+      name: input.name,
+      description: input.description,
+      ownerUserId: aclOpts?.ownerUserId,
+      actor: aclOpts?.actor,
+    },
     (filesDir) => {
       const skillMd = stringifyFrontmatter({
         data: { name: input.name, description: input.description, ...input.frontmatterExtra },
@@ -177,7 +182,7 @@ export async function createManagedSkill(
 export async function createManagedSkillWithFiles(
   db: DbClient,
   opts: SkillFsOptions,
-  meta: { name: string; description: string; ownerUserId?: string },
+  meta: { name: string; description: string; ownerUserId?: string; actor?: Actor | null },
   produceFiles: (filesDir: string) => void,
   hooks: {
     /** Test-only fault seam after ready + db-committed, before op retirement. */
@@ -189,6 +194,8 @@ export async function createManagedSkillWithFiles(
   // different owner may use the same display name. The expression unique index
   // remains the racing-create guard before any files are written.
   const ownerUserId = meta.ownerUserId ?? null
+  assertInitialResourceOwner(meta.actor, ownerUserId)
+  const initialAcl = initialPrivateResourceAcl(ownerUserId)
   if (await isSkillNameOccupiedForOwner(db, meta.name, ownerUserId)) {
     throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
   }
@@ -209,9 +216,8 @@ export async function createManagedSkillWithFiles(
           description: meta.description,
           sourceKind: 'managed',
           managedPath: skillFilesRel(id),
-          // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-          ownerUserId,
-          visibility: 'public',
+          // RFC-231: every user-created resource starts private with ACL rev 0.
+          ...initialAcl,
           reservationState: 'reserving',
           createdAt: now,
           updatedAt: now,

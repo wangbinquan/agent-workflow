@@ -489,11 +489,117 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(screen.getByTestId('workflow-actions-dialog')).toBeTruthy()
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
     expect(screen.getByRole('button', { name: /导出 YAML|Export YAML/ })).toBeTruthy()
+    expect(screen.getByTestId('workflow-copy-action')).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('workflow-rename-button'))
     expect(screen.queryByTestId('workflow-actions-dialog')).toBeNull()
     expect(screen.getByTestId('workflow-rename-dialog')).toBeTruthy()
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  })
+
+  test('More → Copy sends only the exact saved revision and navigates to the private copy', async () => {
+    const created: WorkflowDetail = {
+      ...detail(),
+      id: 'wf-copy',
+      name: 'workflow-copy',
+      ownerUserId: 'u-copy',
+      visibility: 'private',
+    }
+    const post = vi.spyOn(api, 'post').mockResolvedValue(created)
+    const rendered = renderEditor(detail())
+    await flushEffects()
+
+    fireEvent.click(screen.getByTestId('workflow-more-actions'))
+    fireEvent.click(screen.getByTestId('workflow-copy-action'))
+    await flushEffects()
+
+    expect(post).toHaveBeenCalledWith(
+      '/api/workflows/wf-1/copy',
+      {
+        expectedVersion: 1,
+        expectedSnapshotHash: hash('a'),
+      },
+      expect.any(AbortSignal),
+    )
+    expect(rendered.router.state.location.pathname).toBe('/workflows/wf-copy')
+    expect(screen.getByTestId('created-workflow')).toBeTruthy()
+  })
+
+  test('dirty Copy saves the composite draft before copying that exact new revision', async () => {
+    const put = vi.spyOn(api, 'put').mockImplementation((_path, body) => {
+      const input = body as UpdateWorkflow
+      return Promise.resolve({
+        clientMutationId: input.clientMutationId,
+        requestedBaseVersion: input.expectedVersion,
+        revision: {
+          workflowId: 'wf-1',
+          version: 2,
+          snapshotHash: hash('b'),
+          updatedAt: 200,
+        },
+        snapshot: input.snapshot,
+        outcome: 'committed',
+      } satisfies SaveWorkflowReceipt) as never
+    })
+    const created: WorkflowDetail = {
+      ...detail(),
+      id: 'wf-copy',
+      name: 'saved-before-copy-copy',
+      ownerUserId: 'u-copy',
+      visibility: 'private',
+    }
+    const post = vi.spyOn(api, 'post').mockResolvedValue(created)
+    const rendered = renderEditor(detail())
+    await flushEffects()
+    renameLocal('saved-before-copy', 'exact copy sequence')
+
+    fireEvent.click(screen.getByTestId('workflow-more-actions'))
+    fireEvent.click(screen.getByTestId('workflow-copy-action'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(299)
+    })
+    await flushEffects()
+    expect(put).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    await vi.waitFor(() => {
+      expect(put).toHaveBeenCalledTimes(1)
+      expect(put.mock.calls[0]?.[1]).toMatchObject({
+        expectedVersion: 1,
+        snapshot: {
+          name: 'saved-before-copy',
+          description: 'exact copy sequence',
+        },
+      })
+      expect(post).toHaveBeenCalledWith(
+        '/api/workflows/wf-1/copy',
+        {
+          expectedVersion: 2,
+          expectedSnapshotHash: hash('b'),
+        },
+        expect.any(AbortSignal),
+      )
+    })
+    expect(put.mock.invocationCallOrder[0]).toBeLessThan(post.mock.invocationCallOrder[0]!)
+    expect(rendered.router.state.location.pathname).toBe('/workflows/wf-copy')
+  })
+
+  test('Copy failure stays visible inside the More actions dialog', async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(
+      new ApiError(409, 'workflow-copy-stale', 'workflow changed; reload before copying'),
+    )
+    renderEditor(detail())
+    await flushEffects()
+
+    fireEvent.click(screen.getByTestId('workflow-more-actions'))
+    fireEvent.click(screen.getByTestId('workflow-copy-action'))
+    await flushEffects()
+
+    expect(screen.getByTestId('workflow-actions-dialog')).toBeTruthy()
+    expect(screen.getByText('workflow changed; reload before copying')).toBeTruthy()
   })
 
   test('clean remote follow prunes a deleted inspector selection without history focus restore', async () => {

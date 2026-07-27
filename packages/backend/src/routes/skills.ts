@@ -77,8 +77,10 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
         issues: parsed.error.issues,
       })
     }
+    const actor = actorOf(c)
     const created = await createManagedSkill(deps.db, fsOpts, parsed.data, {
-      ownerUserId: actorOf(c).user.id,
+      ownerUserId: actor.user.id,
+      actor,
     })
     return c.json(created, 201)
   })

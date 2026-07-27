@@ -266,7 +266,10 @@ describe('RFC-225 workgroup revision fencing', () => {
   test('RFC-223 revalidates the current owner before an ordinary save', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const group = await createEmptyFixture(db, 'owner-fence', 'owner-a')
-    await db.update(workgroups).set({ ownerUserId: 'owner-b' }).where(eq(workgroups.id, group.id))
+    await db
+      .update(workgroups)
+      .set({ ownerUserId: 'owner-b', visibility: 'public' })
+      .where(eq(workgroups.id, group.id))
 
     await expect(
       saveWorkgroup(

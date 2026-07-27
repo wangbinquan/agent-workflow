@@ -283,6 +283,25 @@ function installFetch(
           },
         ])
       }
+      const copy = url.match(/\/api\/workgroups\/([^/]+)\/copy$/)
+      if (copy !== null && method === 'POST') {
+        const sourceId = decodeURIComponent(copy[1]!)
+        const source = state.workgroups.find((workgroup) => workgroup.id === sourceId)
+        if (source === undefined) return json({ code: 'workgroup-not-found' }, 404)
+        const copiedName = `${source.name}-copy`
+        const copied = wg(copiedName, {
+          ...source,
+          id: `${source.id}-copy`,
+          name: copiedName,
+          ownerUserId: 'current-user',
+          visibility: 'private',
+          version: 1,
+          createdAt: source.createdAt + 1,
+          updatedAt: source.updatedAt + 1,
+        })
+        state.workgroups.push(copied)
+        return json(copied, 201)
+      }
       const one = url.match(/\/api\/workgroups\/([^/]+)$/)
       if (one !== null) {
         const id = decodeURIComponent(one[1]!)
@@ -644,7 +663,81 @@ describe('/workgroups/$id — config editing', () => {
     fireEvent.click(screen.getByTestId('workgroup-more-actions'))
     expect(await screen.findByTestId('workgroup-actions-dialog')).toBeTruthy()
     expect(screen.getByTestId('workgroup-rename-button')).toBeTruthy()
+    expect(screen.getByTestId('workgroup-copy-action')).toBeTruthy()
     expect(screen.getByTestId('workgroup-delete-button')).toBeTruthy()
+  })
+
+  test('More → Copy posts the exact saved revision and opens the new private workgroup', async () => {
+    const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
+    installFetch(state)
+    await renderPage('/workgroups/wg_review-squad')
+    await screen.findByTestId('workgroup-draft-status')
+
+    fireEvent.click(screen.getByTestId('workgroup-more-actions'))
+    fireEvent.click(screen.getByTestId('workgroup-copy-action'))
+
+    await waitFor(() => {
+      expect(
+        state.calls.find(
+          (call) =>
+            call.method === 'POST' && call.url.endsWith('/api/workgroups/wg_review-squad/copy'),
+        ),
+      ).toBeTruthy()
+    })
+    const call = state.calls.find((entry) =>
+      entry.url.endsWith('/api/workgroups/wg_review-squad/copy'),
+    )
+    expect(call?.body).toEqual({
+      expectedVersion: 1,
+      expectedSnapshotHash: wg('review-squad').snapshotHash,
+    })
+    expect(await screen.findByRole('heading', { name: 'review-squad-copy' })).toBeTruthy()
+    expect(state.workgroups.at(-1)).toMatchObject({
+      ownerUserId: 'current-user',
+      visibility: 'private',
+      version: 1,
+    })
+  })
+
+  test('dirty Copy saves the draft before copying that exact new revision', async () => {
+    const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
+    installFetch(state)
+    await renderPage('/workgroups/wg_review-squad')
+    fireEvent.change(await screen.findByTestId('workgroup-field-instructions'), {
+      target: { value: 'saved before copy' },
+    })
+
+    fireEvent.click(screen.getByTestId('workgroup-more-actions'))
+    fireEvent.click(screen.getByTestId('workgroup-copy-action'))
+
+    await waitFor(() => {
+      expect(
+        state.calls.find(
+          (call) =>
+            call.method === 'POST' && call.url.endsWith('/api/workgroups/wg_review-squad/copy'),
+        ),
+      ).toBeTruthy()
+    })
+    const putIndex = state.calls.findIndex(
+      (call) => call.method === 'PUT' && call.url.endsWith('/api/workgroups/wg_review-squad'),
+    )
+    const postIndex = state.calls.findIndex(
+      (call) => call.method === 'POST' && call.url.endsWith('/api/workgroups/wg_review-squad/copy'),
+    )
+    const post = state.calls[postIndex]
+    expect(putIndex).toBeGreaterThanOrEqual(0)
+    expect(putIndex).toBeLessThan(postIndex)
+    expect(post?.body).toEqual({
+      expectedVersion: 2,
+      expectedSnapshotHash: state.workgroups[0]?.snapshotHash,
+    })
+    expect(state.workgroups.at(-1)).toMatchObject({
+      instructions: 'saved before copy',
+      ownerUserId: 'current-user',
+      visibility: 'private',
+      version: 1,
+    })
+    expect(await screen.findByRole('heading', { name: 'review-squad-copy' })).toBeTruthy()
   })
 
   test('initial retry recovers; stale refetch preserves the draft; param switch reseeds', async () => {
@@ -1166,6 +1259,8 @@ describe('RFC-164 /workgroups wiring', () => {
       'panelAria',
       'panelClose',
       'actionsTitle',
+      'copying',
+      'copyActionHint',
       'renameActionHint',
       'aclActionHint',
       'deleteActionHint',

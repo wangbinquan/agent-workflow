@@ -1,5 +1,5 @@
-// RFC-099 — shared permissions panel for the five ACL'd resource types
-// (agents / skills / mcps / plugins / workflows).
+// RFC-099/RFC-164 — shared permissions panel for the six ACL'd resource types
+// (agents / skills / mcps / plugins / workflows / workgroups).
 //
 // The ONE sanctioned entry point is AclDialogButton: a header button that
 // opens the panel inside a Dialog — every surface looks identical. The panel

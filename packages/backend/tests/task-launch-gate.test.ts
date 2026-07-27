@@ -85,6 +85,7 @@ describe('assertWorkflowLaunchable — shared launch gate (RFC-159 T2 parity)', 
 
   test('public non-builtin → returns the workflow (with parsed .definition.inputs)', async () => {
     const wf = await createWorkflow(db, { name: 'pub', description: '', definition: DEF })
+    await db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, wf.id))
     const got = await assertWorkflowLaunchable(db, actor('alice'), wf.id)
     expect(got.id).toBe(wf.id)
     expect(got.definition.inputs).toEqual([]) // multipart path reads .definition.inputs

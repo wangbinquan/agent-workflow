@@ -1,12 +1,14 @@
 // GET    /api/workflows               list
 // GET    /api/workflows/:id            one
 // POST   /api/workflows                create
+// POST   /api/workflows/:id/copy       exact-revision private copy
 // PUT    /api/workflows/:id            update (version+1)
 // DELETE /api/workflows/:id            delete (refuses when running task references)
 // POST   /api/workflows/:id/validate   exact-revision static validation receipt
 // GET    /api/workflows/:id/export     exact-revision YAML export
 
 import {
+  CopyWorkflowRequestSchema,
   CreateWorkflowSchema,
   DeleteWorkflowSchema,
   ImportWorkflowRequestSchema,
@@ -33,6 +35,7 @@ import {
   extractWorkflowAgentRefs,
 } from '@/services/resourceRefs'
 import {
+  copyWorkflow,
   createWorkflow,
   deleteWorkflow,
   getWorkflow,
@@ -98,6 +101,16 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       actor,
     })
     return c.json(created, 201)
+  })
+
+  app.post('/api/workflows/:id/copy', async (c) => {
+    const parsed = CopyWorkflowRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('workflow-copy-invalid', 'invalid workflow copy payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    return c.json(await copyWorkflow(deps.db, c.req.param('id'), parsed.data, actorOf(c)), 201)
   })
 
   app.put('/api/workflows/:id', async (c) => {

@@ -115,7 +115,7 @@ describe('RFC-225 workgroup broadcaster producers', () => {
     expect(contexts.at(-1)).toMatchObject({
       kind: 'workgroup.deleted-audience',
       workgroupId: created.id,
-      visibility: 'public',
+      visibility: 'private',
     })
   })
 })

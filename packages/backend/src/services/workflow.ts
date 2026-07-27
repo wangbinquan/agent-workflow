@@ -5,6 +5,7 @@
 // strict validation lands in P-2-01.
 
 import type {
+  CopyWorkflowRequest,
   CreateWorkflow,
   DeleteWorkflow,
   ResourceVisibility,
@@ -19,6 +20,7 @@ import type {
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
 import {
+  CopyWorkflowRequestSchema,
   DeleteWorkflowSchema,
   serializeWorkflowDefinitionStorageV1,
   serializeWorkflowEditableSnapshotV1,
@@ -48,7 +50,16 @@ import {
   extractWorkflowAgentRefs,
   resolveRefsUsableById,
 } from './resourceRefs'
-import { canViewResource, isResourceAdminActor, isResourceOwner } from './resourceAcl'
+import {
+  assertInitialResourceOwner,
+  canViewResource,
+  canViewResourceInTx,
+  initialBuiltinResourceAcl,
+  initialPrivateResourceAcl,
+  isResourceAdminActor,
+  isResourceOwner,
+} from './resourceAcl'
+import { nextResourceCopyName } from './resourceCopyName'
 import { assertNotBuiltin } from './systemResources'
 import { validateWorkflowById } from './workflow.validator'
 
@@ -129,6 +140,8 @@ export async function createWorkflow(
 ): Promise<WorkflowDetail> {
   const id = opts?.id ?? ulid()
   const now = Date.now()
+  const ownerUserId = opts?.ownerUserId ?? null
+  assertInitialResourceOwner(opts?.actor, ownerUserId)
   // Normalize incoming v1 → v2 (RFC-005) so new rows always land at the
   // latest schema version. Older clients can still post v1 — they get upgraded.
   const normalized = migrateDefinitionToLatest(input.definition)
@@ -149,36 +162,99 @@ export async function createWorkflow(
     assertRefsUsableInTx(tx, actor, [
       { type: 'agent', names: newAgentIds.filter((id) => fenceableAgentIds.has(id)) },
     ])
-    return tx
-      .insert(workflows)
-      .values({
-        id,
-        name: input.name,
-        description: input.description,
-        definition: serializeWorkflowDefinitionStorageV1(normalized),
-        version: 1,
-        // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-        ownerUserId: opts?.ownerUserId ?? null,
-        visibility: 'public',
-        // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
-        // never set via any HTTP path (CreateWorkflowSchema omits it).
-        builtin: opts?.builtin ?? false,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning()
-      .get()
+    return insertWorkflowInTx(tx, {
+      id,
+      name: input.name,
+      description: input.description,
+      definition: normalized,
+      ownerUserId,
+      builtin: opts?.builtin === true,
+      now,
+    })
   })
-  if (insertedRow === undefined) throw new Error('workflow insert returned no row')
   // RFC-199: the create response is derived from INSERT RETURNING. A post-insert
   // GET could race a later writer and falsely return somebody else's revision.
   const created = rowToWorkflowDetail(insertedRow)
-  workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-    type: 'workflow.created',
-    workflowId: created.id,
-    name: created.name,
-    version: created.version,
+  broadcastWorkflowCreated(created)
+  return created
+}
+
+/**
+ * RFC-231 exact-copy operation. Source visibility, revision, every reference,
+ * name allocation and target INSERT share one synchronous transaction.
+ */
+export async function copyWorkflow(
+  db: DbClient,
+  sourceId: string,
+  input: CopyWorkflowRequest,
+  actor: Actor,
+): Promise<WorkflowDetail> {
+  const parsed = CopyWorkflowRequestSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new ValidationError('workflow-copy-invalid', 'invalid workflow copy payload', {
+      issues: parsed.error.issues,
+    })
+  }
+
+  const inserted = dbTxSync(db, (tx) => {
+    // Gate only on ACL identity first: an invisible corrupt workflow must be
+    // indistinguishable from an absent one and must never reach JSON parsing.
+    const aclRow = tx
+      .select({
+        id: workflows.id,
+        ownerUserId: workflows.ownerUserId,
+        visibility: workflows.visibility,
+        builtin: workflows.builtin,
+      })
+      .from(workflows)
+      .where(eq(workflows.id, sourceId))
+      .get()
+    if (aclRow === undefined || !canViewResourceInTx(tx, actor, 'workflow', aclRow)) {
+      throwWorkflowNotFound(sourceId)
+    }
+    assertNotBuiltin('workflow', aclRow)
+
+    const currentRow = tx.select().from(workflows).where(eq(workflows.id, sourceId)).get()
+    if (currentRow === undefined) throwWorkflowNotFound(sourceId)
+    const source = rowToWorkflow(currentRow)
+    const currentRevision = workflowRevisionOf(source)
+    if (
+      parsed.data.expectedVersion !== currentRevision.version ||
+      parsed.data.expectedSnapshotHash !== currentRevision.snapshotHash
+    ) {
+      throw new ConflictError(
+        'workflow-copy-stale',
+        `workflow '${sourceId}' changed; reload before copying`,
+        { current: currentRevision },
+      )
+    }
+
+    assertCanonicalWorkflowAgentIds(source.definition)
+    assertRefsUsableInTx(tx, actor, [
+      { type: 'agent', names: [...extractWorkflowAgentRefs(source.definition)] },
+    ])
+
+    const occupiedNames = tx
+      .select({ name: workflows.name })
+      .from(workflows)
+      .where(eq(workflows.ownerUserId, actor.user.id))
+      .all()
+      .map((row) => row.name)
+    const name = nextResourceCopyName(source.name, occupiedNames, 'workflow')
+    WorkflowNameSchema.parse(name)
+    return insertWorkflowInTx(tx, {
+      id: ulid(),
+      name,
+      description: source.description,
+      definition: source.definition,
+      ownerUserId: actor.user.id,
+      builtin: false,
+      now: Date.now(),
+    })
   })
+
+  const created = rowToWorkflowDetail(inserted)
+  broadcastWorkflowCreated(created)
   return created
 }
 
@@ -524,6 +600,51 @@ export async function validateWorkflow(
 }
 
 // --- helpers ---
+
+function insertWorkflowInTx(
+  tx: DbTxSync,
+  input: {
+    id: string
+    name: string
+    description: string
+    definition: WorkflowDefinition
+    ownerUserId: string | null
+    builtin: boolean
+    now: number
+  },
+): WorkflowRow {
+  const initialAcl = input.builtin
+    ? initialBuiltinResourceAcl(input.ownerUserId)
+    : initialPrivateResourceAcl(input.ownerUserId)
+  const inserted = tx
+    .insert(workflows)
+    .values({
+      id: input.id,
+      name: input.name,
+      description: input.description,
+      definition: serializeWorkflowDefinitionStorageV1(input.definition),
+      version: 1,
+      // RFC-231: user resources are private; framework built-ins stay public.
+      ...initialAcl,
+      // RFC-104: built-in is internal-only and never accepted from HTTP.
+      builtin: input.builtin,
+      createdAt: input.now,
+      updatedAt: input.now,
+    })
+    .returning()
+    .get()
+  if (inserted === undefined) throw new Error('workflow insert returned no row')
+  return inserted
+}
+
+function broadcastWorkflowCreated(created: WorkflowDetail): void {
+  workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+    type: 'workflow.created',
+    workflowId: created.id,
+    name: created.name,
+    version: created.version,
+  })
+}
 
 function countReferencingTasksInTx(tx: DbTxSync, workflowId: string): number {
   return tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.workflowId, workflowId)).all()

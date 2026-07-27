@@ -364,7 +364,8 @@ describe('RFC-102 overwrite permission', () => {
   }
 
   test('visible non-owner overwrite is rejected with skill-overwrite-forbidden', async () => {
-    await seedAliceSkill('owned')
+    const target = await seedAliceSkill('owned')
+    h.db.update(skills).set({ visibility: 'public' }).where(eq(skills.id, target.id)).run()
     const buf = buildZip({ 'owned/SKILL.md': skillMd('owned', 'bob tries') })
     // Replaying another actor's preview cannot turn it into write authority.
     const stolenPreview = await previewOverwrite(h, ALICE, buf, 'owned')

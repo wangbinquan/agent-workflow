@@ -602,10 +602,12 @@ export function WorkflowEditorLoaded({
     inventorySignature,
   })
 
-  const exactActionRef = useRef<'validate' | 'export' | 'launch' | null>(null)
+  const exactActionRef = useRef<'validate' | 'export' | 'copy' | 'launch' | null>(null)
   const exactActionAbortRef = useRef<AbortController | null>(null)
   const [validatePending, setValidatePending] = useState(false)
   const [exportPending, setExportPending] = useState(false)
+  const [copyPending, setCopyPending] = useState(false)
+  const [copyActionError, setCopyActionError] = useState<unknown>(null)
   const [preparingLaunch, setPreparingLaunch] = useState(false)
   const [actionError, setActionError] = useState<unknown>(null)
   const draftStatusFocusRef = useRef<HTMLDivElement | null>(null)
@@ -731,6 +733,49 @@ export function WorkflowEditorLoaded({
       if (exactActionAbortRef.current === abort) exactActionAbortRef.current = null
       exactActionRef.current = null
       setExportPending(false)
+    }
+  }
+  const handleCopy = async (): Promise<void> => {
+    if (exactActionRef.current !== null) return
+    const abort = new AbortController()
+    const frozenRevision = controller.state.revision
+    exactActionRef.current = 'copy'
+    exactActionAbortRef.current = abort
+    setCopyPending(true)
+    setCopyActionError(null)
+    try {
+      const saved = await controller.ensureSaved({ signal: abort.signal })
+      if (saved.revision !== frozenRevision) {
+        throw new WorkflowActionRevisionChangedError(t('editor.actionDraftChanged'))
+      }
+      assertActionRevision(saved)
+      const created = await api.post<WorkflowDetail>(
+        `/api/workflows/${encodeURIComponent(workflowId)}/copy`,
+        {
+          expectedVersion: saved.server.version,
+          expectedSnapshotHash: saved.server.snapshotHash,
+        },
+        abort.signal,
+      )
+      qc.setQueryData(['workflows', created.id], created)
+      void qc.invalidateQueries({ queryKey: ['workflows'], exact: true })
+      setModalSurface('none')
+      unsafeNavigationRef.current = null
+      await navigate({ to: '/workflows/$id', params: { id: created.id } })
+    } catch (error) {
+      if (
+        (error instanceof WorkflowEnsureSavedError && error.reason === 'cancelled') ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        setCopyActionError(null)
+      } else {
+        if (error instanceof ApiError && error.code === 'workflow-copy-stale') onRefetch()
+        setCopyActionError(error)
+      }
+    } finally {
+      if (exactActionAbortRef.current === abort) exactActionAbortRef.current = null
+      exactActionRef.current = null
+      setCopyPending(false)
     }
   }
   const handleLaunch = async (): Promise<void> => {
@@ -1105,6 +1150,9 @@ export function WorkflowEditorLoaded({
           triggerRef={moreTriggerRef}
           data-testid="workflow-actions-dialog"
         >
+          {copyActionError !== null && copyActionError !== undefined && (
+            <ErrorBanner error={copyActionError} />
+          )}
           <div className="workflow-editor-action-list">
             <button
               type="button"
@@ -1117,6 +1165,22 @@ export function WorkflowEditorLoaded({
             >
               <strong>{exportPending ? t('editor.exporting') : t('editor.exportYaml')}</strong>
               <span>{t('editor.exportTitle')}</span>
+            </button>
+            <button
+              type="button"
+              className="workflow-editor-action-list__item"
+              disabled={
+                exactActionRef.current !== null ||
+                controller.state.phase === 'error' ||
+                controller.state.phase === 'conflict' ||
+                controller.state.phase === 'inaccessible' ||
+                controller.state.phase === 'deleted'
+              }
+              onClick={() => void handleCopy()}
+              data-testid="workflow-copy-action"
+            >
+              <strong>{copyPending ? t('editor.copying') : t('common.copy')}</strong>
+              <span>{t('editor.copyActionHint')}</span>
             </button>
             <button
               type="button"

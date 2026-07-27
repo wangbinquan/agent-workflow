@@ -43,7 +43,7 @@ describe('RFC-225 workgroup writer inventory', () => {
 
   test('member replacement writes cannot grow a second path', () => {
     expect(inventory(/\.insert\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
-      'services/workgroups.ts': 2,
+      'services/workgroups.ts': 1,
     })
     expect(inventory(/\.delete\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
       'services/workgroups.ts': 1,

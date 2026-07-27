@@ -17,7 +17,7 @@ import {
   McpSchema,
 } from '@agent-workflow/shared'
 import { eq, like } from 'drizzle-orm'
-import { discloseRefs } from './resourceAcl'
+import { assertInitialResourceOwner, discloseRefs, initialPrivateResourceAcl } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -44,9 +44,11 @@ export async function getMcpById(db: DbClient, id: string): Promise<Mcp | null> 
 export async function createMcp(
   db: DbClient,
   input: CreateMcp,
-  aclOpts?: { ownerUserId?: string },
+  aclOpts?: { ownerUserId?: string; actor?: Actor | null },
 ): Promise<Mcp> {
   const ownerUserId = aclOpts?.ownerUserId ?? null
+  assertInitialResourceOwner(aclOpts?.actor, ownerUserId)
+  const initialAcl = initialPrivateResourceAcl(ownerUserId)
   const occupied = await db
     .select({ id: mcps.id })
     .from(mcps)
@@ -71,9 +73,8 @@ export async function createMcp(
       type: input.type,
       config: JSON.stringify(input.config),
       enabled: input.enabled,
-      // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-      ownerUserId,
-      visibility: 'public',
+      // RFC-231: every user-created resource starts private with ACL rev 0.
+      ...initialAcl,
       createdAt: now,
       updatedAt: now,
     })

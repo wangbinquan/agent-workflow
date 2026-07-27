@@ -461,6 +461,8 @@ describe('RFC-223 ordinary reference final-transaction fences', () => {
       { name: 'raced-member', ...EMPTY_AGENT },
       { ownerUserId: 'target-owner' },
     )
+    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, baseAgent.id))
+    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, racedAgent.id))
     const createInput = CreateWorkgroupSchema.parse({
       name: 'create-race',
       description: '',

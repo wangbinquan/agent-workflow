@@ -183,6 +183,7 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
   await page.getByTestId('workgroup-more-actions').click()
   const actionsDialog = page.getByTestId('workgroup-actions-dialog')
   await expect(actionsDialog).toBeVisible()
+  await expect(actionsDialog.getByTestId('workgroup-copy-action')).toBeVisible()
   await expect(actionsDialog.getByTestId('workgroup-rename-button')).toBeVisible()
   await expect(actionsDialog.getByTestId('workgroup-acl-button')).toBeVisible()
   await expect(actionsDialog.getByTestId('workgroup-delete-button')).toBeVisible()
@@ -251,6 +252,7 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
 
   await page.getByTestId('workgroup-more-actions').click()
   await expect(actionsDialog).toBeVisible()
+  await expect(actionsDialog.getByTestId('workgroup-copy-action')).toBeVisible()
   await expect(actionsDialog.getByTestId('workgroup-delete-button')).toBeVisible()
   await expectAxeClean(page, '390px workgroup editor actions')
   await page.keyboard.press('Escape')
@@ -265,5 +267,30 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.getByTestId('workgroup-more-actions').click()
   await expectAxeClean(page, '390px dark workgroup editor actions')
+  const copyResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === `/api/workgroups/${workgroup.id}/copy`,
+  )
+  const copyAction = actionsDialog.getByTestId('workgroup-copy-action')
+  await copyAction.focus()
+  await page.keyboard.press('Enter')
+  const copyResponse = await copyResponsePromise
+  expect(copyResponse.status()).toBe(201)
+  const copied = (await copyResponse.json()) as {
+    id: string
+    name: string
+    instructions: string
+    version: number
+    visibility: string
+  }
+  expect(copied).toMatchObject({
+    name: `${WORKGROUP_NAME}-copy`,
+    instructions: 'Saved automatically by RFC-225',
+    version: 1,
+    visibility: 'private',
+  })
+  await expect(page).toHaveURL(`${daemon.baseUrl}/workgroups/${copied.id}`)
+  await expect(page.getByRole('heading', { name: copied.name, exact: true })).toBeVisible()
   await setDaemonTheme('light')
 })

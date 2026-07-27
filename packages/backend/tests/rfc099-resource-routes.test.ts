@@ -138,6 +138,25 @@ const AGENT_BODY = {
   runtime: VALID_OPENCODE_RUNTIME,
 }
 
+describe('RFC-231 — copy route payload validation', () => {
+  test('malformed workflow and workgroup copy requests return stable 422 codes', async () => {
+    const h = await buildHarness()
+    const cases = [
+      ['/api/workflows/missing/copy', 'workflow-copy-invalid'],
+      ['/api/workgroups/missing/copy', 'workgroup-copy-invalid'],
+    ] as const
+
+    for (const [path, code] of cases) {
+      const response = await req(h.app, h.alice.token, path, {
+        method: 'POST',
+        body: '{}',
+      })
+      expect(response.status).toBe(422)
+      expect(await response.json()).toMatchObject({ code })
+    }
+  })
+})
+
 describe('RFC-099 — agents route ACL', () => {
   let h: Harness
   beforeEach(async () => {
@@ -161,16 +180,16 @@ describe('RFC-099 — agents route ACL', () => {
     expect(res.status).toBe(200)
   }
 
-  // D18/D20 asymmetric defaults: the five ACL'd resource types default
-  // PUBLIC (this test); tasks default PRIVATE with no visibility switch
-  // (locked in tasks-visibility.test.ts). 2026-06-12 user adjustment.
-  test('user creates agent → becomes owner, default public, everyone sees it', async () => {
+  // RFC-231: every user ACL resource now defaults private; existing rows and
+  // the physical legacy DB fallback are unchanged.
+  test('user creates agent → becomes owner, defaults private, strangers cannot see it', async () => {
     const agentId = await createAgentAsAlice()
-    const detail = await req(h.app, h.bob.token, `/api/agents/${agentId}`)
+    const detail = await req(h.app, h.alice.token, `/api/agents/${agentId}`)
     expect(detail.status).toBe(200)
     const body = (await detail.json()) as { ownerUserId: string; visibility: string }
     expect(body.ownerUserId).toBe(h.alice.id)
-    expect(body.visibility).toBe('public')
+    expect(body.visibility).toBe('private')
+    expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(404)
   })
 
   test('private agent: stranger list-excluded + detail 404 byte-identical to missing', async () => {

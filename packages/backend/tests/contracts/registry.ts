@@ -272,6 +272,7 @@ export const ENDPOINTS: EndpointSpec[] = [
       schema: WorkflowDetailSchema,
     },
   },
+  { method: 'POST', path: '/api/workflows/:id/copy' },
   { method: 'PUT', path: '/api/workflows/:id' },
   { method: 'DELETE', path: '/api/workflows/:id' },
   {
@@ -344,6 +345,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     },
   },
   { method: 'POST', path: '/api/workgroups' },
+  { method: 'POST', path: '/api/workgroups/:id/copy' },
   { method: 'PUT', path: '/api/workgroups/:id' },
   { method: 'DELETE', path: '/api/workgroups/:id' },
   { method: 'POST', path: '/api/workgroups/:id/rename' },

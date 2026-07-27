@@ -83,11 +83,12 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     try {
+      const actor = actorOf(c)
       const created = await createPlugin(
         deps.db,
         parsed.data,
         {},
-        { ownerUserId: actorOf(c).user.id },
+        { ownerUserId: actor.user.id, actor },
       )
       return c.json(withPluginOperationConfigHash(created), 201)
     } catch (error) {

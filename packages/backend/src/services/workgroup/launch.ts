@@ -37,7 +37,7 @@ import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAge
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
-import { canViewResource } from '@/services/resourceAcl'
+import { canViewResource, initialBuiltinResourceAcl } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -146,6 +146,7 @@ export async function ensureWorkgroupHostWorkflow(db: DbClient): Promise<void> {
         nodes: [],
         edges: [],
       }),
+      ...initialBuiltinResourceAcl(null),
       builtin: true,
     })
     .onConflictDoNothing({ target: workflows.id })

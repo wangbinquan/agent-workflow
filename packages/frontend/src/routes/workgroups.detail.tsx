@@ -562,7 +562,7 @@ export function WorkgroupEditor(props: {
     },
   })
 
-  const copy = useMutation({
+  const saveCopy = useMutation({
     mutationFn: async () => {
       if (copyIntent === null) throw new Error('missing workgroup copy draft')
       return api.post<WorkgroupDetail>('/api/workgroups', {
@@ -580,6 +580,35 @@ export function WorkgroupEditor(props: {
     },
     onError: () => {
       busyRef.current = false
+    },
+  })
+
+  const copyResource = useMutation({
+    mutationFn: async () => {
+      const saved = await controller.ensureSaved()
+      if (!controller.isSavedDraftCurrent(saved)) {
+        throw new Error(t('editor.actionDraftChanged'))
+      }
+      return api.post<WorkgroupDetail>(
+        `/api/workgroups/${encodeURIComponent(props.resourceId)}/copy`,
+        {
+          expectedVersion: saved.server.version,
+          expectedSnapshotHash: saved.server.snapshotHash,
+        },
+      )
+    },
+    onSuccess: (created) => {
+      dirtyRef.current = null
+      busyRef.current = false
+      publishDetail(created)
+      setHeaderSurface(null)
+      void navigate({ to: '/workgroups/$id', params: { id: created.id } })
+    },
+    onError: (error) => {
+      busyRef.current = false
+      if (error instanceof ApiError && error.code === 'workgroup-copy-stale') {
+        void props.refetch()
+      }
     },
   })
 
@@ -614,7 +643,8 @@ export function WorkgroupEditor(props: {
     controller.state.phase === 'reconciling' ||
     del.isPending ||
     launch.isPending ||
-    copy.isPending
+    saveCopy.isPending ||
+    copyResource.isPending
   dirtyRef.current = unsafe ? props.resourceId : null
   busyRef.current = busy
   const deleteDisabled =
@@ -678,7 +708,7 @@ export function WorkgroupEditor(props: {
         }
       />
 
-      {[del.error, launch.error, copy.error]
+      {[del.error, launch.error, saveCopy.error]
         .filter((error) => error !== null && error !== undefined)
         .map((error, index) => (
           <ErrorBanner error={error} key={index} />
@@ -828,7 +858,35 @@ export function WorkgroupEditor(props: {
         triggerRef={moreTriggerRef}
         data-testid="workgroup-actions-dialog"
       >
+        {copyResource.error !== null && copyResource.error !== undefined && (
+          <ErrorBanner error={copyResource.error} />
+        )}
         <div className="workflow-editor-action-list">
+          <button
+            type="button"
+            className="workflow-editor-action-list__item"
+            disabled={
+              blockReason !== null ||
+              controller.state.transport === 'offline' ||
+              controller.state.phase === 'error' ||
+              controller.state.phase === 'conflict' ||
+              controller.state.phase === 'inaccessible' ||
+              controller.state.phase === 'deleted' ||
+              del.isPending ||
+              launch.isPending ||
+              saveCopy.isPending ||
+              copyResource.isPending
+            }
+            onClick={() => {
+              copyResource.reset()
+              busyRef.current = true
+              copyResource.mutate()
+            }}
+            data-testid="workgroup-copy-action"
+          >
+            <strong>{copyResource.isPending ? t('workgroups.copying') : t('common.copy')}</strong>
+            <span>{t('workgroups.copyActionHint')}</span>
+          </button>
           <button
             type="button"
             className="workflow-editor-action-list__item"
@@ -961,11 +1019,11 @@ export function WorkgroupEditor(props: {
           copyName.length <= 128 &&
           WORKGROUP_NAME_RE.test(copyName)
         }
-        pending={copy.isPending}
-        submitError={copy.error === null ? undefined : String(copy.error)}
+        pending={saveCopy.isPending}
+        submitError={saveCopy.error === null ? undefined : String(saveCopy.error)}
         onSave={() => {
           busyRef.current = true
-          copy.mutate()
+          saveCopy.mutate()
         }}
         triggerRef={copyTriggerRef}
       />

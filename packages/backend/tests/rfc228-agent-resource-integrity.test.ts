@@ -114,6 +114,7 @@ describe('RFC-228 Agent resource integrity', () => {
       },
       { ownerUserId: 'other-owner' },
     )
+    await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp.id))
     const root = await createAgent(db, agentInput('root', { mcp: [mcp.id] }))
 
     const visible = await getAgentResourceStatus(db, actor(), root)
@@ -139,21 +140,27 @@ describe('RFC-228 Agent resource integrity', () => {
   })
 
   test('workflow and workgroup launch reject a stale member closure before host/task creation', async () => {
+    const viewer = actor()
     await createRuntime(db, {
       name: VALID_RUNTIME,
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
     })
-    const mcp = await createMcp(db, {
-      name: 'required-mcp',
-      description: '',
-      type: 'local',
-      config: { command: ['required-mcp'] },
-      enabled: true,
-    })
+    const mcp = await createMcp(
+      db,
+      {
+        name: 'required-mcp',
+        description: '',
+        type: 'local',
+        config: { command: ['required-mcp'] },
+        enabled: true,
+      },
+      { ownerUserId: viewer.user.id, actor: viewer },
+    )
     const member = await createAgent(
       db,
       agentInput('member', { runtime: VALID_RUNTIME, mcp: [mcp.id] }),
+      { ownerUserId: viewer.user.id, actor: viewer },
     )
     const definition: CreateWorkflow['definition'] = {
       $schema_version: 4,
@@ -169,11 +176,15 @@ describe('RFC-228 Agent resource integrity', () => {
       ],
       edges: [],
     }
-    const workflow = await createWorkflow(db, {
-      name: 'resource-gated-workflow',
-      description: '',
-      definition,
-    })
+    const workflow = await createWorkflow(
+      db,
+      {
+        name: 'resource-gated-workflow',
+        description: '',
+        definition,
+      },
+      { ownerUserId: viewer.user.id, actor: viewer },
+    )
     const group = await createWorkgroup(
       db,
       CreateWorkgroupSchema.parse({
@@ -190,11 +201,12 @@ describe('RFC-228 Agent resource integrity', () => {
           },
         ],
       }),
+      { ownerUserId: viewer.user.id, actor: viewer },
     )
 
     await db.delete(mcps).where(eq(mcps.id, mcp.id))
 
-    await expect(assertWorkflowLaunchable(db, actor(), workflow.id)).rejects.toMatchObject({
+    await expect(assertWorkflowLaunchable(db, viewer, workflow.id)).rejects.toMatchObject({
       code: 'workflow-invalid',
       details: {
         issues: expect.arrayContaining([expect.objectContaining({ code: 'mcp-not-found' })]),
@@ -203,7 +215,7 @@ describe('RFC-228 Agent resource integrity', () => {
     await expect(
       startWorkgroupTask(
         db,
-        actor(),
+        viewer,
         group.id,
         { name: 'blocked run', goal: 'work', scratch: true },
         { db, appHome: '/unused-before-resource-gate', defaultRuntime: VALID_RUNTIME },

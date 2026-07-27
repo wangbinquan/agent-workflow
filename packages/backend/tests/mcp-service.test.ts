@@ -289,7 +289,7 @@ describe('services/mcp.ts reference cascade', () => {
 
     const refs = await findAgentsReferencingMcp(db, sentry.id)
     expect(refs).toEqual([
-      { id: expect.any(String), name: 'a-prod', ownerUserId: null, visibility: 'public' },
+      { id: expect.any(String), name: 'a-prod', ownerUserId: null, visibility: 'private' },
     ])
     // The other mcp's id resolves to its own consumer only.
     expect((await findAgentsReferencingMcp(db, staging.id)).map((r) => r.name)).toEqual([

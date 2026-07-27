@@ -251,7 +251,7 @@ export function buildDwActions(
         description: parsed.data.description ?? '',
         definition: generated.data,
       },
-      { ownerUserId: actor.user.id },
+      { ownerUserId: actor.user.id, actor },
     )
     return { id: created.id, name: created.name }
   }

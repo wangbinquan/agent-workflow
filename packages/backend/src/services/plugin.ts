@@ -22,7 +22,7 @@ import {
   type InstallResult,
 } from './pluginInstaller'
 import { pluginOperationCoordinator } from './resourceOperationCoordinator'
-import { discloseRefs } from './resourceAcl'
+import { assertInitialResourceOwner, discloseRefs, initialPrivateResourceAcl } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
@@ -64,12 +64,14 @@ export async function createPlugin(
   db: DbClient,
   input: CreatePluginInput,
   deps: PluginServiceDeps = {},
-  aclOpts?: { ownerUserId?: string },
+  aclOpts?: { ownerUserId?: string; actor?: Actor | null },
 ): Promise<Plugin> {
   const parsed = CreatePluginSchema.parse(input)
   PluginOptionsSchema.parse(parsed.options)
   const id = ulid()
   const ownerUserId = aclOpts?.ownerUserId ?? null
+  assertInitialResourceOwner(aclOpts?.actor, ownerUserId)
+  const initialAcl = initialPrivateResourceAcl(ownerUserId)
   return pluginOperationCoordinator.runExclusive(id, async () => {
     const occupied = await db
       .select({ id: plugins.id })
@@ -95,8 +97,8 @@ export async function createPlugin(
             cachedPath: prepared.cachedPath,
             resolvedVersion: prepared.resolvedVersion,
             installedAt: now,
-            ownerUserId,
-            visibility: 'public',
+            // RFC-231: every user-created resource starts private with ACL rev 0.
+            ...initialAcl,
             createdAt: now,
             updatedAt: now,
           })

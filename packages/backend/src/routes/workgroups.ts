@@ -2,6 +2,7 @@
 // GET    /api/workgroups                — list (ACL-filtered)
 // GET    /api/workgroups/:id            — one (invisible → 404, D1)
 // POST   /api/workgroups                — create (creator becomes owner)
+// POST   /api/workgroups/:id/copy       — exact-revision private copy
 // PUT    /api/workgroups/:id            — RFC-225 version-fenced full document save
 // DELETE /api/workgroups/:id            — RFC-225 version-fenced delete
 // POST   /api/workgroups/:id/rename     — fenced compatibility adapter
@@ -12,6 +13,7 @@
 // ids persisted.
 
 import {
+  CopyWorkgroupRequestSchema,
   CreateWorkgroupSchema,
   DeleteWorkgroupSchema,
   rejectRetiredStartTaskKeys,
@@ -25,6 +27,7 @@ import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { assertDeleteConfirm } from '@/services/deleteConfirm'
 import {
+  copyWorkgroup,
   createWorkgroup,
   deleteWorkgroup,
   getWorkgroupById,
@@ -101,6 +104,16 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       actor,
     })
     return c.json(created, 201)
+  })
+
+  app.post('/api/workgroups/:id/copy', async (c) => {
+    const parsed = CopyWorkgroupRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('workgroup-copy-invalid', 'invalid workgroup copy payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    return c.json(await copyWorkgroup(deps.db, c.req.param('id'), parsed.data, actorOf(c)), 201)
   })
 
   app.put('/api/workgroups/:id', async (c) => {

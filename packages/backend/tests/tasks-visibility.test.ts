@@ -2,8 +2,8 @@
 //
 // RFC-099 D20 (2026-06-12 用户调整要求): tasks are PRIVATE BY DEFAULT and
 // have no public/private switch — only owner + task users + admin ever see a
-// task, unlike the five ACL'd resource types whose D18 default is public
-// (locked in rfc099-resource-routes.test.ts). The "dave sees nothing" /
+// task. RFC-231 later made the six ACL resources private on supported create
+// paths too, but tasks still use this separate membership model. The "dave sees nothing" /
 // "outsider → 403" cases below are the D20 anchor; do not loosen them by
 // folding tasks into the D18 visibility model.
 //

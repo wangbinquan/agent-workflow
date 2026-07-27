@@ -128,11 +128,11 @@ async function seedResources(h: Harness): Promise<void> {
     expect(res.status).toBe(201)
     agentIds.set(name, ((await res.json()) as { id: string }).id)
   }
-  for (const name of ['priv-agent', 'granted-agent']) {
+  for (const name of ['pub-agent', 'planner-agent', 'coder-a']) {
     const res = await req(h.app, h.alice.token, `/api/agents/${agentIds.get(name)!}/acl`, {
       method: 'PUT',
       body: JSON.stringify({
-        visibility: 'private',
+        visibility: 'public',
         expectedResourceId: agentIds.get(name)!,
         expectedAclRevision: 0,
       }),
@@ -146,7 +146,7 @@ async function seedResources(h: Harness): Promise<void> {
         body: JSON.stringify({
           userIds: [h.bob.id],
           expectedResourceId: agentIds.get('granted-agent')!,
-          expectedAclRevision: 1,
+          expectedAclRevision: 0,
         }),
       })
     ).status,
@@ -164,20 +164,20 @@ async function seedResources(h: Harness): Promise<void> {
     expect(res.status).toBe(201)
     return ((await res.json()) as { id: string }).id
   }
-  await mkFlow('pub-flow')
-  const privFlowId = await mkFlow('priv-flow')
+  const pubFlowId = await mkFlow('pub-flow')
   expect(
     (
-      await req(h.app, h.alice.token, `/api/workflows/${privFlowId}/acl`, {
+      await req(h.app, h.alice.token, `/api/workflows/${pubFlowId}/acl`, {
         method: 'PUT',
         body: JSON.stringify({
-          visibility: 'private',
-          expectedResourceId: privFlowId,
+          visibility: 'public',
+          expectedResourceId: pubFlowId,
           expectedAclRevision: 0,
         }),
       })
     ).status,
   ).toBe(200)
+  const privFlowId = await mkFlow('priv-flow')
 
   const wgBody = (name: string) => ({
     name,
@@ -203,7 +203,7 @@ async function seedResources(h: Harness): Promise<void> {
       },
     ],
   })
-  let secretSquadId = ''
+  let publicSquadId = ''
   for (const name of ['pub-squad', 'secret-squad']) {
     const res = await req(h.app, h.alice.token, '/api/workgroups', {
       method: 'POST',
@@ -211,15 +211,15 @@ async function seedResources(h: Harness): Promise<void> {
     })
     expect(res.status).toBe(201)
     const id = ((await res.json()) as { id: string }).id
-    if (name === 'secret-squad') secretSquadId = id
+    if (name === 'pub-squad') publicSquadId = id
   }
   expect(
     (
-      await req(h.app, h.alice.token, `/api/workgroups/${secretSquadId}/acl`, {
+      await req(h.app, h.alice.token, `/api/workgroups/${publicSquadId}/acl`, {
         method: 'PUT',
         body: JSON.stringify({
-          visibility: 'private',
-          expectedResourceId: secretSquadId,
+          visibility: 'public',
+          expectedResourceId: publicSquadId,
           expectedAclRevision: 0,
         }),
       })

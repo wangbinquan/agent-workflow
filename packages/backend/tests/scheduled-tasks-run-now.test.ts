@@ -71,6 +71,9 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
     })
     bobId = bob.id
     const wf = await createWorkflow(db, { name: 'wf', description: '', definition: DEF })
+    // This suite specifically exercises later access revocation. Preserve that
+    // premise explicitly now that ordinary creates default to private.
+    await db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, wf.id))
     wfId = wf.id
   })
 
@@ -207,7 +210,11 @@ describe('RFC-159 T7 — run-now route gate', () => {
       role: 'admin',
       password: 'longEnoughPassword',
     })
-    const wf = await createWorkflow(db, { name: 'wf', description: '', definition: DEF })
+    const wf = await createWorkflow(
+      db,
+      { name: 'wf', description: '', definition: DEF },
+      { ownerUserId: bob.id, actor: actorFor(bob.id) },
+    )
     const created = await createScheduledTask(
       db,
       {

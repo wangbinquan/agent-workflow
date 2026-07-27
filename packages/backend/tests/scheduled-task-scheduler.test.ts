@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { StartTask } from '@agent-workflow/shared'
+import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { scheduledTasks, users, workflows } from '../src/db/schema'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
@@ -58,11 +59,18 @@ describe('RFC-159 scheduled-task scheduler', () => {
       password: 'longEnoughPassword',
     })
     ownerId = owner.id
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
-    })
+    const wf = await createWorkflow(
+      db,
+      {
+        name: 'wf',
+        description: '',
+        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+      },
+      {
+        ownerUserId: owner.id,
+        actor: buildActor({ user: owner, source: 'session' }),
+      },
+    )
     wfId = wf.id
   })
 

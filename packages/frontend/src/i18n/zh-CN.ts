@@ -1627,6 +1627,8 @@ export interface Resources {
     panelAria: string
     panelClose: string
     actionsTitle: string
+    copying: string
+    copyActionHint: string
     renameActionHint: string
     aclActionHint: string
     deleteActionHint: string
@@ -2256,6 +2258,8 @@ export interface Resources {
     exporting: string
     exportTitle: string
     actionsTitle: string
+    copying: string
+    copyActionHint: string
     renameActionHint: string
     aclActionHint: string
     deleteActionHint: string
@@ -5741,6 +5745,8 @@ export const zhCN: Resources = {
     panelAria: '上下文面板',
     panelClose: '关闭',
     actionsTitle: '工作组操作',
+    copying: '复制中…',
+    copyActionHint: '先完整保存当前草稿，再创建一个归你所有的私有副本。',
     renameActionHint: '修改工作组名称与描述。',
     aclActionHint: '查看可见性、成员与所有者。',
     deleteActionHint: '永久删除这个工作组。',
@@ -6449,6 +6455,8 @@ export const zhCN: Resources = {
     exporting: '导出中…',
     exportTitle: '下载为 YAML',
     actionsTitle: '工作流操作',
+    copying: '复制中…',
+    copyActionHint: '先完整保存当前草稿，再创建一个归你所有的私有副本。',
     renameActionHint: '修改工作流名称与描述。',
     aclActionHint: '查看可见性、成员与所有者。',
     deleteActionHint: '永久删除这个工作流。',

@@ -77,7 +77,7 @@ const USER_RESOURCE_READS: ReadonlyArray<Permission> = [
 ]
 
 // RFC-099: resource writes are no longer admin-only at the route gate — any
-// user may create the five ACL'd resource types (creator becomes owner) and
+// user may create the six ACL'd resource types (creator becomes owner) and
 // modify the ones they own. The per-row owner/grant check lives in
 // services/resourceAcl.ts; these points are only the coarse method gate.
 // repos:write stays admin-only (repos are out of the ACL model).

@@ -6,6 +6,7 @@
 // receipt. Launched tasks remain isolated by their frozen config snapshot.
 
 import type {
+  CopyWorkgroupRequest,
   CreateWorkgroup,
   DeleteWorkgroup,
   SaveWorkgroupReceipt,
@@ -19,12 +20,14 @@ import type {
   WorkgroupSnapshotHash,
 } from '@agent-workflow/shared'
 import {
+  CopyWorkgroupRequestSchema,
   DeleteWorkgroupSchema,
   QUARANTINED_SNAPSHOT_AGENT_ID,
   serializeWorkgroupEditableSnapshotV1,
   UpdateWorkgroupSchema,
   WG_CLARIFY_BUDGET_DEFAULT,
   WorkgroupDraftSnapshotSchema,
+  WorkgroupNameSchema,
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
@@ -46,8 +49,16 @@ import {
   workgroupsBroadcaster,
   type WorkgroupDeletedAudienceContext,
 } from '@/ws/broadcaster'
-import { discloseScheduleRefs } from './resourceAcl'
-import { canViewResource, isResourceAdminActor, isResourceOwner } from './resourceAcl'
+import {
+  assertInitialResourceOwner,
+  canViewResource,
+  canViewResourceInTx,
+  discloseScheduleRefs,
+  initialPrivateResourceAcl,
+  isResourceAdminActor,
+  isResourceOwner,
+} from './resourceAcl'
+import { nextResourceCopyName } from './resourceCopyName'
 import { assertNoMissingRefs, assertRefsUsableInTx, resolveRefsUsableById } from './resourceRefs'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
@@ -103,17 +114,21 @@ export async function createWorkgroup(
   const preparedAgents = await prepareAgentMembers(db, aclOpts?.actor ?? null, input.members, [])
   const groupId = ulid()
   const now = Date.now()
-  const memberValues = buildCreateMemberValues(groupId, input.members, now, preparedAgents)
-  const leaderMemberId = resolveLeaderMemberId(input, memberValues)
   const ownerUserId = aclOpts?.ownerUserId ?? null
+  assertInitialResourceOwner(aclOpts?.actor, ownerUserId)
 
   await aclOpts?.beforeWriteTransaction?.()
   let created: WorkgroupDetail
   try {
     created = dbTxSync(db, (tx) => {
-      assertRefsUsableInTx(tx, aclOpts?.actor ?? null, [
-        { type: 'agent', names: diffNewAgentMemberIds(null, input) },
-      ])
+      assertHumanMembersActiveInTx(tx, input.members)
+      const freshPreparedAgents = prepareAgentMembersInTx(tx, aclOpts?.actor ?? null, input.members)
+      const memberValues = buildCreateMemberValues(groupId, input.members, now, {
+        // Refresh display labels at the write linearization point. Retain the
+        // preflight map only as a defensive fallback for framework fixtures.
+        nameById: new Map([...preparedAgents.nameById, ...freshPreparedAgents.nameById]),
+      })
+      const leaderMemberId = resolveLeaderMemberId(input, memberValues)
       if (
         tx
           .select({ id: workgroups.id })
@@ -125,32 +140,14 @@ export async function createWorkgroup(
       ) {
         throw new ConflictError('workgroup-name-in-use', `workgroup '${input.name}' already exists`)
       }
-      const inserted = tx
-        .insert(workgroups)
-        .values({
-          id: groupId,
-          name: input.name,
-          description: input.description,
-          instructions: input.instructions,
-          mode: input.mode,
-          leaderMemberId,
-          shareOutputs: input.switches.shareOutputs,
-          directMessages: input.switches.directMessages,
-          blackboard: input.switches.blackboard,
-          maxRounds: input.maxRounds,
-          completionGate: input.completionGate,
-          clarifyBudget: input.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
-          fanOut: input.fanOut ?? false,
-          version: 1,
-          ownerUserId,
-          visibility: 'public',
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning()
-        .get()
-      if (inserted === undefined) throw new Error('workgroup insert returned no row')
-      for (const member of memberValues) tx.insert(workgroupMembers).values(member).run()
+      const inserted = insertWorkgroupInTx(tx, {
+        id: groupId,
+        document: input,
+        leaderMemberId,
+        ownerUserId,
+        now,
+      })
+      insertWorkgroupMembersInTx(tx, memberValues)
       const persistedMembers = tx
         .select()
         .from(workgroupMembers)
@@ -164,12 +161,106 @@ export async function createWorkgroup(
     }
     throw error
   }
-  workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
-    type: 'workgroup.created',
-    workgroupId: created.id,
-    name: created.name,
-    version: created.version,
-  })
+  broadcastWorkgroupCreated(created)
+  return created
+}
+
+/**
+ * RFC-231 exact-copy operation. Nothing editable comes from the client: the
+ * target is derived from one source revision inside the transaction.
+ */
+export async function copyWorkgroup(
+  db: DbClient,
+  sourceId: string,
+  input: CopyWorkgroupRequest,
+  actor: Actor,
+): Promise<WorkgroupDetail> {
+  const parsed = CopyWorkgroupRequestSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new ValidationError('workgroup-copy-invalid', 'invalid workgroup copy payload', {
+      issues: parsed.error.issues,
+    })
+  }
+
+  let created: WorkgroupDetail
+  try {
+    created = dbTxSync(db, (tx) => {
+      // Do not read roster rows until the actor passes the fresh ACL gate.
+      const aclRow = tx
+        .select({
+          id: workgroups.id,
+          ownerUserId: workgroups.ownerUserId,
+          visibility: workgroups.visibility,
+        })
+        .from(workgroups)
+        .where(eq(workgroups.id, sourceId))
+        .get()
+      if (aclRow === undefined || !canViewResourceInTx(tx, actor, 'workgroup', aclRow)) {
+        throwWorkgroupNotFound(sourceId)
+      }
+
+      const currentRow = tx.select().from(workgroups).where(eq(workgroups.id, sourceId)).get()
+      if (currentRow === undefined) throwWorkgroupNotFound(sourceId)
+      const currentMembers = tx
+        .select()
+        .from(workgroupMembers)
+        .where(eq(workgroupMembers.workgroupId, sourceId))
+        .all()
+      const source = rowToWorkgroup(currentRow, currentMembers)
+      const currentRevision = workgroupRevisionOf(source)
+      if (
+        parsed.data.expectedVersion !== currentRevision.version ||
+        parsed.data.expectedSnapshotHash !== currentRevision.snapshotHash
+      ) {
+        throw new ConflictError(
+          'workgroup-copy-stale',
+          `workgroup '${sourceId}' changed; reload before copying`,
+          { current: currentRevision },
+        )
+      }
+
+      const sourceSnapshot = workgroupDraftSnapshotOf(source)
+      assertHumanMembersActiveInTx(tx, sourceSnapshot.members)
+      const preparedAgents = prepareAgentMembersInTx(tx, actor, sourceSnapshot.members)
+      const occupiedNames = tx
+        .select({ name: workgroups.name })
+        .from(workgroups)
+        .where(eq(workgroups.ownerUserId, actor.user.id))
+        .all()
+        .map((row) => row.name)
+      const name = nextResourceCopyName(sourceSnapshot.name, occupiedNames, 'workgroup')
+      WorkgroupNameSchema.parse(name)
+      const snapshot = { ...sourceSnapshot, name }
+      const id = ulid()
+      const now = Date.now()
+      const memberValues = buildDraftMemberValues(id, snapshot.members, now, preparedAgents)
+      const leaderMemberId = resolveLeaderMemberId(snapshot, memberValues)
+      const inserted = insertWorkgroupInTx(tx, {
+        id,
+        document: snapshot,
+        leaderMemberId,
+        ownerUserId: actor.user.id,
+        now,
+      })
+      insertWorkgroupMembersInTx(tx, memberValues)
+      const persistedMembers = tx
+        .select()
+        .from(workgroupMembers)
+        .where(eq(workgroupMembers.workgroupId, id))
+        .all()
+      return workgroupToDetail(rowToWorkgroup(inserted, persistedMembers))
+    })
+  } catch (error) {
+    if (isOwnerNameUniqueViolation(error, 'workgroups', 'workgroups_owner_name_unique')) {
+      throw new ConflictError(
+        'workgroup-copy-name-conflict',
+        'the next copy name was claimed; try copying again',
+      )
+    }
+    throw error
+  }
+
+  broadcastWorkgroupCreated(created)
   return created
 }
 
@@ -307,7 +398,7 @@ export async function saveWorkgroup(
 
     if (replacementMembers !== null) {
       tx.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, id)).run()
-      for (const member of replacementMembers) tx.insert(workgroupMembers).values(member).run()
+      insertWorkgroupMembersInTx(tx, replacementMembers)
     }
     const returnedMembers = tx
       .select()
@@ -520,6 +611,73 @@ export function diffNewAgentMemberIds(
   ]
 }
 
+type WorkgroupInsertDocument = Pick<
+  CreateWorkgroup,
+  | 'name'
+  | 'description'
+  | 'instructions'
+  | 'mode'
+  | 'switches'
+  | 'maxRounds'
+  | 'completionGate'
+  | 'clarifyBudget'
+  | 'fanOut'
+>
+
+function insertWorkgroupInTx(
+  tx: DbTxSync,
+  input: {
+    id: string
+    document: WorkgroupInsertDocument
+    leaderMemberId: string | null
+    ownerUserId: string | null
+    now: number
+  },
+): WorkgroupRow {
+  const inserted = tx
+    .insert(workgroups)
+    .values({
+      id: input.id,
+      name: input.document.name,
+      description: input.document.description,
+      instructions: input.document.instructions,
+      mode: input.document.mode,
+      leaderMemberId: input.leaderMemberId,
+      shareOutputs: input.document.switches.shareOutputs,
+      directMessages: input.document.switches.directMessages,
+      blackboard: input.document.switches.blackboard,
+      maxRounds: input.document.maxRounds,
+      completionGate: input.document.completionGate,
+      clarifyBudget: input.document.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
+      fanOut: input.document.fanOut ?? false,
+      version: 1,
+      // RFC-231: every user-created resource starts private with ACL rev 0.
+      ...initialPrivateResourceAcl(input.ownerUserId),
+      createdAt: input.now,
+      updatedAt: input.now,
+    })
+    .returning()
+    .get()
+  if (inserted === undefined) throw new Error('workgroup insert returned no row')
+  return inserted
+}
+
+function insertWorkgroupMembersInTx(
+  tx: DbTxSync,
+  members: ReadonlyArray<typeof workgroupMembers.$inferInsert>,
+): void {
+  for (const member of members) tx.insert(workgroupMembers).values(member).run()
+}
+
+function broadcastWorkgroupCreated(created: WorkgroupDetail): void {
+  workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
+    type: 'workgroup.created',
+    workgroupId: created.id,
+    name: created.name,
+    version: created.version,
+  })
+}
+
 function normalizeWorkgroupSnapshot(snapshot: WorkgroupDraftSnapshot): WorkgroupDraftSnapshot {
   return WorkgroupDraftSnapshotSchema.parse({
     name: snapshot.name,
@@ -723,6 +881,37 @@ async function prepareAgentMembers(
   return { nameById }
 }
 
+function prepareAgentMembersInTx(
+  tx: DbTxSync,
+  actor: Actor | null,
+  members: ReadonlyArray<{ memberType: string; agentId?: string }>,
+): PreparedAgentMembers {
+  const ids = [
+    ...new Set(
+      members.flatMap((member) =>
+        member.memberType === 'agent' && member.agentId ? [member.agentId] : [],
+      ),
+    ),
+  ]
+  assertRefsUsableInTx(tx, actor, [{ type: 'agent', names: ids }])
+  const rows =
+    ids.length === 0
+      ? []
+      : tx
+          .select({ id: agents.id, name: agents.name })
+          .from(agents)
+          .where(inArray(agents.id, ids))
+          .all()
+  const nameById = new Map(rows.map((row) => [row.id, row.name]))
+  const missingIds = ids.filter((id) => !nameById.has(id))
+  if (missingIds.length > 0) {
+    throw new ValidationError('workgroup-member-agent-invalid', 'agent member id(s) do not exist', {
+      agentIds: missingIds,
+    })
+  }
+  return { nameById }
+}
+
 function buildCreateMemberValues(
   groupId: string,
   members: Readonly<CreateWorkgroup['members']>,
@@ -802,6 +991,32 @@ async function assertHumanMembersActive(
     .select({ id: users.id, status: users.status })
     .from(users)
     .where(inArray(users.id, ids))
+  const active = new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
+  const invalid = ids.filter((id) => !active.has(id))
+  if (invalid.length > 0) {
+    throw new ValidationError('workgroup-member-user-invalid', 'human member user(s) not active', {
+      userIds: invalid,
+    })
+  }
+}
+
+function assertHumanMembersActiveInTx(
+  tx: DbTxSync,
+  members: ReadonlyArray<{ memberType: string; userId?: string }>,
+): void {
+  const ids = [
+    ...new Set(
+      members.flatMap((member) =>
+        member.memberType === 'human' && member.userId ? [member.userId] : [],
+      ),
+    ),
+  ]
+  if (ids.length === 0) return
+  const rows = tx
+    .select({ id: users.id, status: users.status })
+    .from(users)
+    .where(inArray(users.id, ids))
+    .all()
   const active = new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
   const invalid = ids.filter((id) => !active.has(id))
   if (invalid.length > 0) {

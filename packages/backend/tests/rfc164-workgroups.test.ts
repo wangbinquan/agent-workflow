@@ -8,7 +8,7 @@
 //   - members full-replace semantics (ids regenerate; per-group displayName
 //     uniqueness — same displayName in two groups is fine);
 //   - human members must resolve to active users at save time;
-//   - RFC-099: creator-becomes-owner default public, private → list filtered
+//   - RFC-231: creator-becomes-owner default private → list filtered
 //     + identical 404 (D1), owner-only writes, D15 new-agent-ref usability
 //     gate on create AND update (grandfathered existing refs pass).
 
@@ -553,7 +553,7 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     )
   })
 
-  test('create → 201, creator becomes owner, default public; invalid body → 422', async () => {
+  test('create → 201, creator becomes owner, default private; invalid body → 422', async () => {
     const res = await req(alice.token, '/api/workgroups', {
       method: 'POST',
       body: JSON.stringify(groupInput()),
@@ -561,7 +561,7 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     expect(res.status).toBe(201)
     const body = (await res.json()) as { ownerUserId: string; visibility: string }
     expect(body.ownerUserId).toBe(alice.id)
-    expect(body.visibility).toBe('public')
+    expect(body.visibility).toBe('private')
 
     const bad = await req(alice.token, '/api/workgroups', {
       method: 'POST',
@@ -605,6 +605,14 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     })
     const created = (await createdResponse.json()) as WorkgroupDetail
     const group = await detail(alice.token, created.id)
+    await req(alice.token, `/api/workgroups/${created.id}/acl`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        userIds: [bob.id],
+        expectedResourceId: created.id,
+        expectedAclRevision: 0,
+      }),
+    })
     const forbidden = await req(bob.token, `/api/workgroups/${created.id}`, {
       method: 'PUT',
       body: saveBody(group),

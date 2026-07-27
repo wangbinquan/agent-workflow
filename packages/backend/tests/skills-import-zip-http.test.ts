@@ -154,7 +154,7 @@ describe('POST /api/skills/import-zip/parse', () => {
     expect(body.skills[0]!.conflict).toBe('managed')
     expect(body.skills[0]!.overwriteCandidates).toHaveLength(1)
     expect(body.skills[0]!.overwriteCandidates[0]).toMatchObject({
-      visibility: 'public',
+      visibility: 'private',
       expectedAclRevision: 0,
     })
     expect(body.skills[0]!.overwriteCandidates[0]!.skillId).toBeTruthy()

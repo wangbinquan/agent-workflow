@@ -431,8 +431,9 @@ export async function commitSkillZipBuffer(
           {
             name: targetName,
             description: candidate.description,
-            // RFC-099: the zip importer becomes owner; default 'public' (D18).
+            // RFC-231: the ZIP importer becomes owner and the new row is private.
             ownerUserId: aclOpts.actor.user.id,
+            actor: aclOpts.actor,
           },
           (filesDir) => writeCandidateFiles(filesDir, candidate, targetName),
         )

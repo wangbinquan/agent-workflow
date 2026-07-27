@@ -371,6 +371,15 @@ export const WorkgroupRevisionSchema = z
   .strict()
 export type WorkgroupRevision = z.infer<typeof WorkgroupRevisionSchema>
 
+/** RFC-231 — copy exactly one persisted source revision; content stays server-owned. */
+export const CopyWorkgroupRequestSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    expectedSnapshotHash: WorkgroupSnapshotHashSchema,
+  })
+  .strict()
+export type CopyWorkgroupRequest = z.infer<typeof CopyWorkgroupRequestSchema>
+
 /** Detail/create response. List rows deliberately need no eager hash. */
 export const WorkgroupDetailSchema = WorkgroupSchema.extend({
   snapshotHash: WorkgroupSnapshotHashSchema,

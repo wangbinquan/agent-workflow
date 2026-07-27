@@ -29,7 +29,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   initialDwState,
@@ -41,7 +41,7 @@ import { buildActor } from '../src/auth/actor'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { nodeRuns, runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
+import { agents, nodeRuns, runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
@@ -155,6 +155,13 @@ async function seedPoolAgents(db: DbClient): Promise<void> {
     outputs: ['code_result'],
     bodyMd: 'code',
   }).catch(() => undefined)
+  // These are suite-wide shared pool fixtures. RFC-231 makes canonical
+  // service creates private, so retain this test's historical cross-actor
+  // premise explicitly instead of relying on the old product default.
+  await db
+    .update(agents)
+    .set({ visibility: 'public' })
+    .where(inArray(agents.name, ['wg-planner', 'wg-coder']))
 }
 
 /**
@@ -1151,7 +1158,11 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     const body = (await res.json()) as { id: string; name: string }
     expect(body.name).toBe('saved-dw')
     const wf = (await db.select().from(workflows).where(eq(workflows.id, body.id)))[0]
-    expect(wf).toBeDefined()
+    expect(wf).toMatchObject({
+      ownerUserId: ownerId,
+      visibility: 'private',
+      aclRevision: 0,
+    })
     const savedDef = JSON.parse(wf?.definition ?? '{}') as { nodes?: Array<{ id: string }> }
     expect(savedDef.nodes?.map((n) => n.id)).toEqual(['p1'])
 

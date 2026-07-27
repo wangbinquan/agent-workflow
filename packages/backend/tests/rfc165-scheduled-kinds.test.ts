@@ -356,11 +356,15 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
   })
 
   test('K7 compat: create without launchKind defaults to workflow', async () => {
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] } as never,
-    })
+    const wf = await createWorkflow(
+      db,
+      {
+        name: 'wf',
+        description: '',
+        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] } as never,
+      },
+      { ownerUserId: ownerId, actor: actorFor(ownerId) },
+    )
     const created = await createScheduledTask(
       db,
       {
@@ -574,11 +578,15 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
         scopes: ['tasks:launch', 'workflows:read'],
       })
     ).token
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] } as never,
-    })
+    const wf = await createWorkflow(
+      db,
+      {
+        name: 'wf',
+        description: '',
+        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] } as never,
+      },
+      { ownerUserId: bob.id, actor: actorFor(bob.id) },
+    )
     wfId = wf.id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))

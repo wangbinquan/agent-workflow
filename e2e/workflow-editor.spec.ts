@@ -923,6 +923,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.getByTestId('workflow-more-actions').click()
     dialog = page.getByTestId('workflow-actions-dialog')
     await expect(dialog).toBeVisible()
+    await expect(dialog.getByTestId('workflow-copy-action')).toBeVisible()
     await expectEditorAxeClean(page, '390 editor More actions dialog')
     await dialog.getByTestId('workflow-rename-button').click()
     dialog = page.getByTestId('workflow-rename-dialog')
@@ -954,7 +955,33 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.reload()
     await expect(page.locator('.workflow-canvas')).toBeVisible()
     await page.getByTestId('workflow-more-actions').click()
+    dialog = page.getByTestId('workflow-actions-dialog')
     await expectEditorAxeClean(page, '390 dark editor More actions dialog')
+    const copyResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/api/workflows/${workflowId}/copy`,
+    )
+    const copyAction = dialog.getByTestId('workflow-copy-action')
+    await copyAction.focus()
+    await page.keyboard.press('Enter')
+    const copyResponse = await copyResponsePromise
+    expect(copyResponse.status()).toBe(201)
+    const copied = (await copyResponse.json()) as {
+      id: string
+      name: string
+      description: string
+      version: number
+      visibility: string
+    }
+    expect(copied).toMatchObject({
+      description: 'W2-3 fixture',
+      version: 1,
+      visibility: 'private',
+    })
+    expect(copied.name.endsWith('-copy')).toBe(true)
+    await expect(page).toHaveURL(`${daemon.baseUrl}/workflows/${copied.id}`)
+    await expect(page.getByRole('heading', { name: copied.name, exact: true })).toBeVisible()
 
     const light = await fetch(`${daemon.baseUrl}/api/config`, {
       method: 'PUT',

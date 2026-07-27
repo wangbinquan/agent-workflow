@@ -96,7 +96,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         issues: parsed.error.issues,
       })
     }
-    const created = await createMcp(deps.db, parsed.data, { ownerUserId: actorOf(c).user.id })
+    const actor = actorOf(c)
+    const created = await createMcp(deps.db, parsed.data, {
+      ownerUserId: actor.user.id,
+      actor,
+    })
     return c.json(withMcpOperationConfigHash(created), 201)
   })
 

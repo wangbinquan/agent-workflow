@@ -221,6 +221,7 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
     const depRes = await createAgentHttp(h, h.alice.token, { name: 'dep' })
     expect(depRes.status).toBe(201)
     const dep = (await depRes.json()) as AgentDto
+    await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
     const aRes = await createAgentHttp(h, h.bob.token, {
       name: 'consumer',
       dependsOn: [dep.id],
@@ -389,6 +390,7 @@ describe('RFC-223 PR-1 P2-1 — closure endpoint projects id refs to display NAM
       },
       { ownerUserId: h.alice.id },
     )
+    await h.db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp.id))
     await seedPlugin(h.db, 'PRIVATE_PLUGIN_ID', 'private-plugin-name', h.alice.id)
     const created = await createAgentHttp(h, h.bob.token, {
       name: 'visible-consumer',
@@ -437,6 +439,7 @@ describe('RFC-223 PR-1 P2-2 — closure never discloses an invisible dependency 
     // alice owns a PUBLIC agent `hidden-dep`; bob depends on it, then alice hides it.
     const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-dep' })
     const dep = (await depRes.json()) as AgentDto
+    await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
     const parentRes = await createAgentHttp(h, h.bob.token, {
       name: 'parent',
       dependsOn: [dep.id],
@@ -477,6 +480,7 @@ describe('RFC-223 PR-1 P2-2 — closure never discloses an invisible dependency 
   test('dangling refs behind a masked dependency are not re-exposed as missing rows', async () => {
     const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-corrupt-dep' })
     const dep = (await depRes.json()) as AgentDto
+    await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
     const parentRes = await createAgentHttp(h, h.bob.token, {
       name: 'parent-with-masked-child',
       dependsOn: [dep.id],
@@ -586,6 +590,7 @@ describe('RFC-223 PR-1 P1-2 — workgroup members share the same single-pass bin
   test('a public agent member is stored by resolved id', async () => {
     const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-public' })
     const dep = (await depRes.json()) as AgentDto
+    await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
     const res = await req(h.app, h.bob.token, '/api/workgroups', {
       method: 'POST',
       body: JSON.stringify({

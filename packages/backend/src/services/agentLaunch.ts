@@ -25,7 +25,7 @@ import {
   type Task,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { canViewResource } from '@/services/resourceAcl'
+import { canViewResource, initialBuiltinResourceAcl } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { getAgentById } from '@/services/agent'
 import {
@@ -79,6 +79,7 @@ export async function ensureAgentHostWorkflow(db: DbClient): Promise<void> {
         nodes: [],
         edges: [],
       }),
+      ...initialBuiltinResourceAcl(null),
       builtin: true,
     })
     .onConflictDoNothing({ target: workflows.id })

@@ -21,6 +21,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { TaskWsMessage } from '@agent-workflow/shared'
+import { buildActor, type Actor } from '../src/auth/actor'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import {
   agentHasClarifyChannel,
@@ -68,21 +69,23 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc164-engine-test')
 
 async function seedNamedAgent(db: DbClient, name: string): Promise<string> {
-  return (
-    await createAgent(db, {
-      name,
-      description: '',
-      outputs: [],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: name,
-    })
-  ).id
+  const created = await createAgent(db, {
+    name,
+    description: '',
+    outputs: [],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: name,
+  })
+  // Engine fixtures are intentionally reused across actor-backed launch
+  // scenarios. Preserve that cross-actor premise explicitly.
+  await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, created.id))
+  return created.id
 }
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
@@ -263,6 +266,7 @@ describe('RFC-164 engine — launch path', () => {
   let app: ReturnType<typeof createApp>
   let token: string
   let a1Id: string
+  let launchActor: Actor
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
@@ -280,9 +284,17 @@ describe('RFC-164 engine — launch path', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
+    launchActor = buildActor({ user: u, source: 'session' })
     token = (await createSession({ db, userId: u.id })).token
     a1Id = await seedNamedAgent(db, 'a1')
   })
+
+  function createOwnedWorkgroup(input: Parameters<typeof createWorkgroup>[1]) {
+    return createWorkgroup(db, input, {
+      ownerUserId: launchActor.user.id,
+      actor: launchActor,
+    })
+  }
 
   async function req(path: string, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers)
@@ -307,7 +319,7 @@ describe('RFC-164 engine — launch path', () => {
   })
 
   test('not launch-ready (leaderless lw) → 422 workgroup-not-ready with reasons', async () => {
-    const group = await createWorkgroup(db, {
+    const group = await createOwnedWorkgroup({
       name: 'no-leader',
       description: '',
       instructions: '',
@@ -333,7 +345,7 @@ describe('RFC-164 engine — launch path', () => {
   })
 
   test('RFC-225 exact handoff rejects a stale workgroup version before task materialization', async () => {
-    const group = await createWorkgroup(db, {
+    const group = await createOwnedWorkgroup({
       name: 'version-fenced',
       description: '',
       instructions: '',
@@ -370,7 +382,7 @@ describe('RFC-164 engine — launch path', () => {
 
   test('上线前加固：deleted roster agent blocks launch before task/host materialization', async () => {
     const deletedAgentId = await seedNamedAgent(db, 'deleted-agent')
-    const group = await createWorkgroup(db, {
+    const group = await createOwnedWorkgroup({
       name: 'dangling-agent',
       description: '',
       instructions: '',
@@ -407,7 +419,7 @@ describe('RFC-164 engine — launch path', () => {
   // (snapshot/dw stamp/engine entry) lives in rfc167-dynamic-workflow-engine
   // .test.ts; here we lock only that the old guard never fires again.
   test('dynamic_workflow launch passes the old PR-1 guard (RFC-167 撤守卫回归锁)', async () => {
-    const group = await createWorkgroup(db, {
+    const group = await createOwnedWorkgroup({
       name: 'dyn',
       description: '',
       instructions: '',
@@ -435,7 +447,7 @@ describe('RFC-164 engine — launch path', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
-    const group = await createWorkgroup(db, {
+    const group = await createOwnedWorkgroup({
       name: 'with-human',
       description: '',
       instructions: '',
@@ -486,7 +498,7 @@ describe('RFC-164 engine — launch path', () => {
   })
 
   test('invalid launch payload (no repo source) → 422 via StartTaskSchema single-sourcing', async () => {
-    const group = await createWorkgroup(db, {
+    const group = await createOwnedWorkgroup({
       name: 'ready-group',
       description: '',
       instructions: '',

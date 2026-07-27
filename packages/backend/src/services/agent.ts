@@ -34,8 +34,11 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
 import { agentRefFenceGroups, resolveAgentRefsUsable } from './agentRefs'
 import {
+  assertInitialResourceOwner,
   discloseRefsSync,
   discloseScheduleRefs,
+  initialBuiltinResourceAcl,
+  initialPrivateResourceAcl,
   isResourceAdminActor,
   listGrantedResourceIds,
 } from './resourceAcl'
@@ -88,6 +91,11 @@ export async function createAgent(
   },
 ): Promise<Agent> {
   const ownerUserId = opts?.ownerUserId ?? null
+  assertInitialResourceOwner(opts?.actor, ownerUserId)
+  const initialAcl =
+    opts?.builtin === true
+      ? initialBuiltinResourceAcl(ownerUserId)
+      : initialPrivateResourceAcl(ownerUserId)
   const existing = await db
     .select({ id: agents.id })
     .from(agents)
@@ -160,8 +168,8 @@ export async function createAgent(
   const candidate: Agent = {
     ...input,
     id,
-    ownerUserId,
-    visibility: 'public',
+    ownerUserId: initialAcl.ownerUserId,
+    visibility: initialAcl.visibility,
     ...(opts?.builtin !== undefined ? { builtin: opts.builtin } : {}),
     inputs: input.inputs ?? [],
     skills: skillRefs,
@@ -233,9 +241,8 @@ export async function createAgent(
           plugins: JSON.stringify(pluginIds),
           frontmatterExtra: JSON.stringify(fmExtra),
           bodyMd: input.bodyMd,
-          // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-          ownerUserId,
-          visibility: 'public',
+          // RFC-231: user resources are private; framework built-ins stay public.
+          ...initialAcl,
           // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
           // never set via any HTTP path (CreateAgentSchema omits it).
           builtin: opts?.builtin ?? false,

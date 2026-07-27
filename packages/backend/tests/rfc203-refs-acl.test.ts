@@ -194,7 +194,15 @@ describe('RFC-203 T6 引用披露 ACL', () => {
       config: { command: ['echo'] },
       enabled: true,
     })
-    await createAgent(db, { name: 'pub-user', ...AGENT_BASE, mcp: [mcp.id] })
+    const publicUser = await createAgent(db, {
+      name: 'pub-user',
+      ...AGENT_BASE,
+      mcp: [mcp.id],
+    })
+    await db
+      .update(agentsTable)
+      .set({ visibility: 'public' })
+      .where(eq(agentsTable.id, publicUser.id))
     // 他人私有代理也引用 m1
     await createAgent(db, { name: 'priv-user', ...AGENT_BASE, mcp: [mcp.id] })
     await db

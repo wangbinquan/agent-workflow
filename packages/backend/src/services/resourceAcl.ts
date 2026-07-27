@@ -34,7 +34,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { type DbTxSync, dbTxSync } from '@/db/txSync'
 import {
   agents,
   mcps,
@@ -62,6 +62,46 @@ export interface AclRow {
   /** RFC-104 — built-in marker; present on agent/workflow DTOs, absent (→ not
    *  built-in) on skill/mcp/plugin rows. Read by assertNotBuiltin. */
   builtin?: boolean | null
+}
+
+/** RFC-231 product default for every newly-created user ACL resource. */
+export const DEFAULT_USER_RESOURCE_VISIBILITY = 'private' as const
+
+export function initialPrivateResourceAcl(ownerUserId: string | null): {
+  ownerUserId: string | null
+  visibility: typeof DEFAULT_USER_RESOURCE_VISIBILITY
+  aclRevision: 0
+} {
+  return {
+    ownerUserId,
+    visibility: DEFAULT_USER_RESOURCE_VISIBILITY,
+    aclRevision: 0,
+  }
+}
+
+/** Framework-owned resources are deliberately discoverable and read-only. */
+export function initialBuiltinResourceAcl(ownerUserId: string | null): {
+  ownerUserId: string | null
+  visibility: 'public'
+  aclRevision: 0
+} {
+  return { ownerUserId, visibility: 'public', aclRevision: 0 }
+}
+
+/**
+ * Bind an actor-backed create to the authenticated principal. HTTP payloads
+ * never choose an owner; this assertion also rejects accidental ownerless
+ * private rows on an authenticated create path.
+ */
+export function assertInitialResourceOwner(
+  actor: Actor | null | undefined,
+  ownerUserId: string | null,
+): void {
+  if (actor === null || actor === undefined || ownerUserId === actor.user.id) return
+  throw new ValidationError(
+    'resource-owner-mismatch',
+    'resource owner must match the authenticated creator',
+  )
 }
 
 /** Drizzle table per ACL resource type — used by routes to share generic helpers. */
@@ -211,6 +251,31 @@ export async function canViewResource(
     )
     .limit(1)
   return rows.length > 0
+}
+
+/** Fresh synchronous visibility oracle for services already inside dbTxSync. */
+export function canViewResourceInTx(
+  tx: DbTxSync,
+  actor: Actor,
+  type: AclResourceType,
+  row: AclRow,
+): boolean {
+  if (isResourceAdminActor(actor)) return true
+  if ((row.visibility ?? 'public') === 'public') return true
+  if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
+  return (
+    tx
+      .select({ resourceId: resourceGrants.resourceId })
+      .from(resourceGrants)
+      .where(
+        and(
+          eq(resourceGrants.resourceType, type),
+          eq(resourceGrants.resourceId, row.id),
+          eq(resourceGrants.userId, actor.user.id),
+        ),
+      )
+      .get() !== undefined
+  )
 }
 
 /**
@@ -375,25 +440,9 @@ export async function updateResourceAcl(
     // Route authorization is only an early UX check. The row may have changed
     // owner/visibility/grants before this write transaction began, so the
     // transaction must authorize the actor again from its own fresh snapshot.
-    const hasFreshGrant =
-      !isResourceAdminActor(actor) &&
-      tx
-        .select({ resourceId: resourceGrants.resourceId })
-        .from(resourceGrants)
-        .where(
-          and(
-            eq(resourceGrants.resourceType, type),
-            eq(resourceGrants.resourceId, row.id),
-            eq(resourceGrants.userId, actor.user.id),
-          ),
-        )
-        .get() !== undefined
-    const freshVisible =
-      isResourceAdminActor(actor) ||
-      (cur.visibility ?? 'public') === 'public' ||
-      cur.ownerUserId === actor.user.id ||
-      hasFreshGrant
-    if (!freshVisible) throw new NotFoundError('not-found', `${type} not found`)
+    if (!canViewResourceInTx(tx, actor, type, { id: row.id, ...cur })) {
+      throw new NotFoundError('not-found', `${type} not found`)
+    }
 
     // Compare the mandatory immutable-id + revision fence only after the
     // fresh visibility check. A caller who lost visibility during the race

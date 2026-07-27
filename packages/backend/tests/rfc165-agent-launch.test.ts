@@ -406,6 +406,10 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     })
     adminToken = (await createSession({ db, userId: admin.id })).token
     soloId = (await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })).id
+    // The A9 permission matrix intentionally launches the same fixture from
+    // Bob's scoped PAT. Keep that cross-actor visibility explicit now that
+    // RFC-231 changes canonical creates to private.
+    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, soloId))
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 

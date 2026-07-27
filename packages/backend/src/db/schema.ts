@@ -72,11 +72,13 @@ export const agents = sqliteTable(
     // '__system__' sentinel — app-layer FK so daemon-only DBs stay valid).
     // visibility 'public' = every active user can view/use; 'private' = owner +
     // resource_grants rows only. Admins bypass both. Same pair on skills / mcps /
-    // plugins / workflows below.
+    // plugins / workflows below. The physical public default is retained only
+    // for legacy/raw-SQL compatibility; supported create services explicitly
+    // stamp RFC-231 private (or deliberate framework-builtin public).
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()
-      .default('public'),
+      .default('public'), // legacy storage fallback; not the product create default
     aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
     // RFC-104: framework-seeded built-in marker. Set ONLY by seedFusionResources
     // (the RFC-101 rows); never writable via any HTTP path (absent from
@@ -190,7 +192,7 @@ export const mcps = sqliteTable(
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()
-      .default('public'),
+      .default('public'), // legacy storage fallback; not the product create default
     aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
     schemaVersion: integer('schema_version').notNull().default(1),
     createdAt: integer('created_at')
@@ -239,7 +241,7 @@ export const plugins = sqliteTable(
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()
-      .default('public'),
+      .default('public'), // legacy storage fallback; not the product create default
     aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
     schemaVersion: integer('schema_version').notNull().default(1),
     createdAt: integer('created_at')
@@ -325,7 +327,7 @@ export const skills = sqliteTable(
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()
-      .default('public'),
+      .default('public'), // legacy storage fallback; not the product create default
     schemaVersion: integer('schema_version').notNull().default(1),
     // RFC-101: monotonic CONTENT version (distinct from schema_version, the
     // DB-migration version). Bumps on every write through commitSkillVersion;
@@ -468,7 +470,7 @@ export const workflows = sqliteTable('workflows', {
   ownerUserId: text('owner_user_id'),
   visibility: text('visibility', { enum: ['private', 'public'] })
     .notNull()
-    .default('public'),
+    .default('public'), // legacy storage fallback; not the product create default
   aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
   builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false), // RFC-104 (see agents)
   schemaVersion: integer('schema_version').notNull().default(1),
@@ -481,9 +483,10 @@ export const workflows = sqliteTable('workflows', {
 })
 
 // -----------------------------------------------------------------------------
-// RFC-099 resource_grants — one generic per-user grant table for all five
-// ACL'd resource types (agent / skill / mcp / plugin / workflow) instead of
-// five twin tables. A row = "this user can view + use this resource". Owner
+// RFC-099/RFC-164 resource_grants — one generic per-user grant table for all
+// six ACL'd resource types (agent / skill / mcp / plugin / workflow /
+// workgroup) instead of six twin tables. A row = "this user can view + use
+// this resource". Owner
 // and admins are NOT materialised here — canViewResource short-circuits them.
 // added_by/added_at are audit-only.
 // -----------------------------------------------------------------------------
@@ -549,7 +552,7 @@ export const workgroups = sqliteTable(
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()
-      .default('public'),
+      .default('public'), // legacy storage fallback; not the product create default
     aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
     schemaVersion: integer('schema_version').notNull().default(1),
     createdAt: integer('created_at')

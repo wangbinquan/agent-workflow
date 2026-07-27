@@ -513,6 +513,10 @@ export const WorkflowExactRevisionSchema = z
   .strict()
 export type WorkflowExactRevision = z.infer<typeof WorkflowExactRevisionSchema>
 
+/** RFC-231 — copy exactly one persisted source revision; content stays server-owned. */
+export const CopyWorkflowRequestSchema = WorkflowExactRevisionSchema
+export type CopyWorkflowRequest = z.infer<typeof CopyWorkflowRequestSchema>
+
 export const WorkflowValidationRequestSchema = WorkflowExactRevisionSchema
 export type WorkflowValidationRequest = z.infer<typeof WorkflowValidationRequestSchema>
 

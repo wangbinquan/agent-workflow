@@ -52,7 +52,11 @@ describe('RFC-159 scheduled-task CRUD', () => {
   let wfId = ''
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    const wf = await createWorkflow(db, { name: 'wf', description: '', definition: DEF })
+    const wf = await createWorkflow(
+      db,
+      { name: 'wf', description: '', definition: DEF },
+      { ownerUserId: 'alice', actor: actor('alice') },
+    )
     wfId = wf.id
   })
 
@@ -136,7 +140,11 @@ describe('RFC-159 scheduled-task CRUD', () => {
   })
 
   test('create: workflow with a REQUIRED upload input → scheduled-task-upload-required', async () => {
-    const up = await createWorkflow(db, { name: 'up', description: '', definition: UPLOAD_DEF })
+    const up = await createWorkflow(
+      db,
+      { name: 'up', description: '', definition: UPLOAD_DEF },
+      { ownerUserId: 'alice', actor: actor('alice') },
+    )
     let err: unknown
     try {
       await createScheduledTask(
@@ -158,11 +166,15 @@ describe('RFC-159 scheduled-task CRUD', () => {
   })
 
   test('create: missing required workflow input → workflow-inputs-invalid', async () => {
-    const required = await createWorkflow(db, {
-      name: 'required-input',
-      description: '',
-      definition: REQUIRED_TEXT_DEF,
-    })
+    const required = await createWorkflow(
+      db,
+      {
+        name: 'required-input',
+        description: '',
+        definition: REQUIRED_TEXT_DEF,
+      },
+      { ownerUserId: 'alice', actor: actor('alice') },
+    )
     let err: unknown
     try {
       await createScheduledTask(
