@@ -117,6 +117,20 @@ describe('RFC-159 — scheduled detail: edit task config entry', () => {
 })
 
 describe('RFC-165 — degraded schedule repair affordance (implementation-gate P2)', () => {
+  test('unreadable schedule spec hides the name-and-schedule editor instead of exposing a dead action', async () => {
+    installFetch({
+      ...SCHEDULE,
+      scheduleSpec: null,
+      migrationNeeded: true,
+      migrationError: { launchPayload: null, scheduleSpec: 'invalid-json' },
+    })
+    await renderDetail()
+
+    await screen.findByTestId('scheduled-degraded-banner')
+    expect(screen.queryByTestId('scheduled-edit')).toBeNull()
+    expect(screen.getByTestId('scheduled-edit-config')).toBeTruthy()
+  })
+
   test('degraded payload keeps the edit-config REPAIR entry + banner', async () => {
     installFetch({
       ...SCHEDULE,

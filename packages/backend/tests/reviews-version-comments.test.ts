@@ -352,12 +352,24 @@ describe('RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route', () 
   })
 
   test('404 — versionId from a different nodeRunId', async () => {
+    // Keep the parent run valid and visible so this exercises the version/run
+    // ownership fence rather than short-circuiting on an unknown run.
+    await s.db.insert(nodeRuns).values({
+      id: 'run_other',
+      taskId: s.taskId,
+      nodeId: 'rev_other',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'awaiting_review',
+    })
     const res = await app().fetch(
       new Request(`http://localhost/api/reviews/run_other/versions/dv_v1`, {
         headers: { Authorization: 'Bearer tok' },
       }),
     )
     expect(res.status).toBe(404)
+    expect(((await res.json()) as { code: string }).code).toBe('review-version-not-found')
   })
 
   test('404 — unknown versionId', async () => {
@@ -367,5 +379,6 @@ describe('RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route', () 
       }),
     )
     expect(res.status).toBe(404)
+    expect(((await res.json()) as { code: string }).code).toBe('review-version-not-found')
   })
 })

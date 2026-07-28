@@ -223,6 +223,44 @@ describe('RFC-120 T3 listTaskQuestions', () => {
     expect(list[0]!.answerSummary).toBeNull()
   })
 
+  // Regression: design/test-guard-audit-2026-07-21 identified that the task-question
+  // board was the only human-gate read model that did not hide terminal tasks. A dead
+  // task therefore kept actionable pending cards even though clarify/review inboxes had
+  // already filtered the same task. Filtering is read-only so failed/interrupted rows
+  // can reappear after resume, and the ledger remains intact for audit.
+  test('terminal tasks hide question cards without deleting them; resume makes them visible again', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    await seedRound(db, taskId, {
+      id: 'terminal-question',
+      kind: 'self',
+      askingNodeId: 'designer',
+      intermediaryNodeRunId: 'terminal-question-int',
+      questionsJson: JSON.stringify([Q('q1')]),
+      status: 'awaiting_human',
+    })
+
+    // The first board read happens only after the task is terminal. It must hide
+    // the actionable card while still lazily materializing the audit ledger.
+    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
+    expect(await listTaskQuestions(db, taskId)).toEqual([])
+    expect(
+      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
+    ).toHaveLength(1)
+
+    for (const status of ['failed', 'canceled', 'interrupted'] as const) {
+      await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+      expect(await listTaskQuestions(db, taskId), status).toEqual([])
+      expect(
+        await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
+        `${status} must preserve the audit ledger`,
+      ).toHaveLength(1)
+    }
+
+    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+    expect(await listTaskQuestions(db, taskId)).toHaveLength(1)
+  })
+
   test('reconcile idempotent — listing twice does not duplicate', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)

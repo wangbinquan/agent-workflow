@@ -330,6 +330,38 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     }
   }, 30_000)
 
+  test('POST /api/runtimes/:name/probe rejects a regular user before spawning diagnostics', async () => {
+    let smokeCalls = 0
+    const app = appWithSmoke(h, async () => {
+      smokeCalls++
+      return CONFORMING_SMOKE
+    })
+
+    const res = await reqAs(app, h.userToken, '/api/runtimes/opencode/probe', {
+      method: 'POST',
+    })
+    expect(res.status).toBe(403)
+    expect(smokeCalls).toBe(0)
+  })
+
+  test('POST /api/runtimes/:name/probe returns canonical 404 without probing an unknown runtime', async () => {
+    let smokeCalls = 0
+    const app = appWithSmoke(h, async () => {
+      smokeCalls++
+      return CONFORMING_SMOKE
+    })
+
+    const res = await reqAs(app, DAEMON_TOKEN, '/api/runtimes/missing-runtime/probe', {
+      method: 'POST',
+    })
+    expect(res.status).toBe(404)
+    expect((await res.json()) as Record<string, unknown>).toMatchObject({
+      ok: false,
+      code: 'runtime-not-found',
+    })
+    expect(smokeCalls).toBe(0)
+  })
+
   test('saved-runtime probe rejects a receipt after a concurrent execution-profile PUT', async () => {
     await createRuntime(h.db, {
       name: 'probe-profile-race',

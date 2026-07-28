@@ -149,7 +149,6 @@ const UNCOVERED_BASELINE: readonly string[] = [
   'invalid-filter',
   'members-invalid',
   'port-artifact-bad-item',
-  'reset-invalid',
   'retry-request-invalid',
   'user-invalid',
   'workflow-draft-validation-invalid',

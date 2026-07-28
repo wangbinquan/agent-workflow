@@ -223,6 +223,53 @@ describe('/api/users (admin only)', () => {
     expect(reenabled.status).toBe(200)
     expect(((await reenabled.json()) as { status: string }).status).toBe('active')
   })
+
+  test('reset-password rejects low privilege and invalid bodies before revoking sessions', async () => {
+    const carol = await createUser(h.db, {
+      username: 'carol',
+      displayName: 'Carol',
+      role: 'user',
+      password: 'oldLongEnoughPassword',
+    })
+    const oldSession = await createSession({ db: h.db, userId: carol.id })
+
+    const forbidden = await reqAs(h.app, h.bobToken, `/api/users/${carol.id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword: 'newLongEnoughPassword' }),
+    })
+    expect(forbidden.status).toBe(403)
+
+    const invalid = await reqAs(h.app, DAEMON_TOKEN, `/api/users/${carol.id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword: 'short' }),
+    })
+    expect(invalid.status).toBe(422)
+    expect(((await invalid.json()) as { code: string }).code).toBe('reset-invalid')
+
+    // Both rejected paths must be side-effect free: the user's existing session
+    // remains valid until an authorized, schema-valid reset wins.
+    expect((await reqAs(h.app, oldSession.token, '/api/auth/me')).status).toBe(200)
+
+    const reset = await reqAs(h.app, DAEMON_TOKEN, `/api/users/${carol.id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword: 'newLongEnoughPassword', force: true }),
+    })
+    expect(reset.status).toBe(200)
+    expect((await reqAs(h.app, oldSession.token, '/api/auth/me')).status).toBe(401)
+
+    const login = await h.app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: 'carol',
+        password: 'newLongEnoughPassword',
+      }),
+    })
+    expect(login.status).toBe(200)
+    expect((await login.json()) as Record<string, unknown>).toMatchObject({
+      mustChangePassword: true,
+    })
+  })
 })
 
 describe('/api/users/search — admin + user (public 5-field view)', () => {
@@ -271,5 +318,44 @@ describe('/api/users/search — admin + user (public 5-field view)', () => {
     const res = await reqAs(h.app, h.bobToken, `/api/users/search?q=a&excludeIds=${aliceId}`)
     const body = (await res.json()) as Array<{ id: string }>
     expect(body.some((r) => r.id === aliceId)).toBe(false)
+  })
+
+  test('lookup accepts a mixed batch but returns each known user once with public fields only', async () => {
+    const users = (await (await reqAs(h.app, DAEMON_TOKEN, '/api/users')).json()) as Array<{
+      id: string
+      username: string
+    }>
+    const alice = users.find((user) => user.username === 'alice')!
+
+    const res = await reqAs(h.app, h.bobToken, '/api/users/lookup', {
+      method: 'POST',
+      body: JSON.stringify({
+        ids: [alice.id, alice.id, '__system__', 'missing-user-id', 42, '', null],
+      }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Array<Record<string, unknown>>
+    expect(body).toHaveLength(1)
+    expect(body[0]?.id).toBe(alice.id)
+    expect(Object.keys(body[0] ?? {}).sort()).toEqual([
+      'displayName',
+      'id',
+      'role',
+      'status',
+      'username',
+    ])
+    expect(JSON.stringify(body)).not.toContain('email')
+    expect(JSON.stringify(body)).not.toContain('lastLoginAt')
+  })
+
+  test('lookup treats malformed or empty ids as an empty blind resolve', async () => {
+    for (const payload of [{}, { ids: 'alice' }, { ids: [null, 1, ''] }]) {
+      const res = await reqAs(h.app, h.bobToken, '/api/users/lookup', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual([])
+    }
   })
 })

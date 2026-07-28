@@ -1397,6 +1397,12 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   // the old `?? ''` wrapper bubbling).
   const inFlight = new Map<string, Promise<{ nodeId: string; result: OneNodeResult }>>()
   const dispatchedThisInvocation = new Set<string>()
+  // One top-level node can complete more than once in the same scope iteration:
+  // a fresh pending clarify/review rerun is deliberately redispatched below.
+  // Commit synthetics therefore need a trigger generation in addition to
+  // nodeId+iteration; otherwise Map.set overwrites the older live Promise and
+  // cancel/normal drain can return while that worktree writer still runs.
+  let nextCommitPushSequence = 0
   // RFC-092 (audit S-1): pending anchor rows already released this invocation.
   // A node in `dispatchedThisInvocation` re-dispatches when an out-of-band
   // rerun mints a FRESH pending row (mid-run clarify answer / review
@@ -1406,8 +1412,9 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   let firstFailureDetail: { summary: string; message: string; nodeId?: string } | undefined
 
   // RFC-098 B1: in-flight auto commit&push promises are keyed
-  // 'commitpush:<nodeId>:<iter>' — a NON-node key, so deriveFrontier's
-  // in-flight node set never matches a scope node and downstream dispatch is
+  // 'commitpush:<nodeId>:<iter>:<sequence>' — a unique NON-node key, so
+  // repeated same-node reruns cannot overwrite a still-live commit Promise;
+  // deriveFrontier's in-flight node set never matches a scope node, so dispatch is
   // not frozen while a commit session runs (the synchronous await here used
   // to freeze the whole dispatch loop, audit S-17 second half). Canceled
   // exits MUST drain them (their inner runNode holds the shared signal and
@@ -1546,13 +1553,14 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
     ) {
       const node = scopeNodeById.get(nodeId)
       if (node !== undefined) {
-        const syntheticKey = `commitpush:${nodeId}:${iteration}`
+        const syntheticKey = `commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`
         inFlight.set(
           syntheticKey,
           maybeRunCommitPush(state, node, iteration, log)
             .catch((err) => {
               log.warn('auto commit&push trigger failed (ignored)', {
                 nodeId,
+                syntheticKey,
                 error: err instanceof Error ? err.message : String(err),
               })
             })

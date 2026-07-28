@@ -29,6 +29,7 @@ import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 import {
   canReassign,
   deriveQuestionPhase,
+  isTerminalTaskStatus,
   isTurnEngineWorkgroupTask,
   reconcileDesiredEntries,
   resolveHandlerRun,
@@ -277,8 +278,22 @@ export async function listTaskQuestions(
   taskId: string,
   opts: { sourceNodeId?: string; phase?: TaskQuestionPhase } = {},
 ): Promise<TaskQuestionDTO[]> {
+  // Reconcile before the terminal read-model filter so a task whose first board
+  // read happens after completion still retains its historical audit ledger.
   const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
   for (const round of rounds) reconcileTaskQuestionsForRound(db, round)
+
+  // RFC-202's clarify/review inboxes hide every terminal task before projecting
+  // actionable human work. Keep the task-question board on the same read-side
+  // contract: done/canceled cards are dead, while failed/interrupted cards are
+  // temporarily hidden and reappear if the task resumes. The ledger itself is
+  // intentionally retained for audit/recovery.
+  const [task] = await db
+    .select({ status: tasks.status })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1)
+  if (task !== undefined && isTerminalTaskStatus(task.status)) return []
 
   const entries = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
   if (entries.length === 0) return []

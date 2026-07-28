@@ -16,6 +16,9 @@ const TEST_ROOTS = [
   resolve(REPO_ROOT, 'packages', 'backend', 'tests'),
   resolve(REPO_ROOT, 'packages', 'shared', 'tests'),
   resolve(REPO_ROOT, 'packages', 'frontend', 'tests'),
+  // Frontend keeps focused component regressions beside the feature source.
+  // They need the same no-only/no-silent-skip policy as tests/ and e2e/.
+  resolve(REPO_ROOT, 'packages', 'frontend', 'src'),
   resolve(REPO_ROOT, 'e2e'),
 ]
 const TEST_FILE_RE = /\.(?:test|spec)\.[cm]?[jt]sx?$/

@@ -7,8 +7,10 @@
 //   after every top-level node ok — the whole loop froze for the duration of
 //   the commit-agent opencode session (no new completions raced, no ready
 //   nodes dispatched). B1 mints the commit as a SYNTHETIC in-flight entry
-//   keyed 'commitpush:<nodeId>:<iter>' (a NON-node key, so deriveFrontier's
-//   in-flight set never freezes a real node) and the loop keeps racing.
+//   keyed 'commitpush:<nodeId>:<iter>:<sequence>' (a unique NON-node key, so
+//   deriveFrontier's in-flight set never freezes a real node and a fresh
+//   same-node rerun cannot overwrite an older commit promise) and the loop
+//   keeps racing.
 //
 //   Test 1 (non-blocking): with a SLOW commit session, the downstream ready
 //   node is spawned WHILE the commit session is still running —
@@ -42,8 +44,10 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // Runtime-generated shim opencode (per-test temp dir, not a shared fixture).
 // One shim plays all roles, keyed by --agent:
-//   'commit'  → sleep CP_COMMIT_DELAYS[callIndex] ms, emit commit_message.
-//   others    → sleep CP_DELAY_MS_FOR_<agent> ms, optionally write
+//   'commit'  → optionally wait for a release marker on call 0, then sleep
+//               CP_COMMIT_DELAYS[callIndex] ms and emit commit_message.
+//   others    → optionally wait for a release marker, sleep
+//               CP_DELAYS_FOR_<agent>[callIndex] / CP_DELAY_MS_FOR_<agent> ms, optionally write
 //               CP_WRITE_FILE_FOR_<agent> into cwd (= the task worktree),
 //               emit <port name="out">.
 // Every invocation appends {agent, callIndex, phase: start|end, t} to
@@ -89,15 +93,39 @@ if (agent === 'commit') {
       writeFileSync(join(stateDir, 'wait-timeout-commit-0'), waitForAgent)
     }
   }
+  const releaseMarker = process.env.CP_COMMIT_WAIT_FOR_RELEASE_MARKER ?? ''
+  if (n === 0 && releaseMarker !== '') {
+    const timeoutMs = Number(process.env.CP_COMMIT_WAIT_TIMEOUT_MS ?? '10000')
+    const deadline = Date.now() + (Number.isFinite(timeoutMs) ? timeoutMs : 10000)
+    const marker = join(stateDir, releaseMarker)
+    while (!existsSync(marker) && Date.now() < deadline) await Bun.sleep(10)
+    if (!existsSync(marker)) {
+      writeFileSync(join(stateDir, 'wait-timeout-commit-release-0'), releaseMarker)
+    }
+  }
   const delays = JSON.parse(process.env.CP_COMMIT_DELAYS ?? '[]')
   const d = Number(delays[n] ?? 0)
   if (Number.isFinite(d) && d > 0) await Bun.sleep(d)
   text = outputOpen + '<port name="commit_message">test: cp shim commit</port></workflow-output>'
 } else {
-  const d = Number(process.env['CP_DELAY_MS_FOR_' + agent] ?? '0')
+  const releaseMarker = process.env['CP_WAIT_FOR_RELEASE_FOR_' + agent] ?? ''
+  if (releaseMarker !== '') {
+    const timeoutMs = Number(process.env.CP_AGENT_WAIT_TIMEOUT_MS ?? '10000')
+    const deadline = Date.now() + (Number.isFinite(timeoutMs) ? timeoutMs : 10000)
+    const marker = join(stateDir, releaseMarker)
+    while (!existsSync(marker) && Date.now() < deadline) await Bun.sleep(10)
+    if (!existsSync(marker)) {
+      writeFileSync(join(stateDir, 'wait-timeout-' + agent + '-' + n), releaseMarker)
+    }
+  }
+  const delays = JSON.parse(process.env['CP_DELAYS_FOR_' + agent] ?? '[]')
+  const d = Number(delays[n] ?? process.env['CP_DELAY_MS_FOR_' + agent] ?? '0')
   if (Number.isFinite(d) && d > 0) await Bun.sleep(d)
   const wf = process.env['CP_WRITE_FILE_FOR_' + agent] ?? ''
-  if (wf !== '') writeFileSync(join(process.cwd(), wf), 'written by ' + agent + '\\n')
+  if (wf !== '') {
+    const suffix = process.env['CP_WRITE_CALL_INDEX_FOR_' + agent] === '1' ? ' call ' + n : ''
+    writeFileSync(join(process.cwd(), wf), 'written by ' + agent + suffix + '\\n')
+  }
   text = outputOpen + '<port name="out">done-' + agent + '</port></workflow-output>'
 }
 process.stdout.write(
@@ -243,6 +271,19 @@ function readTrace(stateDir: string): TraceEvent[] {
     .map((l) => JSON.parse(l) as TraceEvent)
 }
 
+async function waitFor(
+  predicate: () => boolean,
+  description: string,
+  timeoutMs = 10_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (predicate()) return
+    await Bun.sleep(20)
+  }
+  throw new Error(`timed out waiting for ${description}`)
+}
+
 describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, not a dispatch-loop freeze', () => {
   let h: Harness
   beforeEach(async () => {
@@ -383,14 +424,119 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     expect(['done', 'failed']).toContain(commitRow!.status)
   }, 20_000)
 
-  test("source guard: the synthetic key is non-node ('commitpush:<nodeId>:<iter>') and BOTH canceled exits drain before returning", () => {
+  test('same node rerun in one iteration keeps BOTH commit synthetics tracked until they settle', async () => {
+    const taskId = await seedTask(h)
+    const releaseCommit0 = 'release-commit-0'
+    const releaseN2 = 'release-n2'
+
+    let runSettled = false
+    const runP = withEnv(
+      {
+        CP_STATE_DIR: h.stateDir,
+        // The two n1 executions leave distinct canonical deltas, so each
+        // completion really reaches maybeRunCommitPush.
+        CP_WRITE_FILE_FOR_n1: 'change.txt',
+        CP_WRITE_CALL_INDEX_FOR_n1: '1',
+        CP_DELAYS_FOR_n1: JSON.stringify([0, 1000]),
+        // Hold commit call 0 open. n2 is a scheduler wake-up barrier: the test
+        // inserts the fresh pending n1 row before releasing n2, so the next
+        // deriveFrontier tick deterministically dispatches the rerun.
+        CP_COMMIT_WAIT_FOR_RELEASE_MARKER: releaseCommit0,
+        CP_COMMIT_WAIT_TIMEOUT_MS: '30000',
+        CP_WAIT_FOR_RELEASE_FOR_n2: releaseN2,
+        CP_AGENT_WAIT_TIMEOUT_MS: '30000',
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', h.shimPath],
+        }),
+    )
+    void runP.then(
+      () => {
+        runSettled = true
+      },
+      () => {
+        runSettled = true
+      },
+    )
+
+    let settledBeforeRelease: boolean | undefined
+    try {
+      await waitFor(() => {
+        const trace = readTrace(h.stateDir)
+        return (
+          trace.some(
+            (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex === 0 && e.phase === 'start',
+          ) && trace.some((e) => e.agent === 'n2' && e.phase === 'start')
+        )
+      }, 'first commit and n2 to start')
+
+      // Same node + same iteration, matching the real out-of-band clarify/review
+      // redispatch shape. The fresh row id is the one-shot release token.
+      await h.db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: 'n1',
+        status: 'pending',
+        retryIndex: 0,
+        iteration: 0,
+        rerunCause: 'clarify-answer',
+      })
+      writeFileSync(join(h.stateDir, releaseN2), 'go')
+
+      // n2's completion starts one independent commit, then the n1 rerun starts
+      // another commit under the SAME nodeId/iteration as held call 0. Wait until
+      // both later commit calls have settled while call 0 remains gated.
+      await waitFor(
+        () => {
+          const trace = readTrace(h.stateDir)
+          return (
+            trace.filter(
+              (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex > 0 && e.phase === 'end',
+            ).length >= 2
+          )
+        },
+        'two later commit sessions to settle',
+        20_000,
+      )
+      expect(
+        readTrace(h.stateDir).some(
+          (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex === 0 && e.phase === 'end',
+        ),
+      ).toBe(false)
+
+      // Headline oracle: runTask must still own/drain held call 0. With the old
+      // `commitpush:<nodeId>:<iteration>` key, the n1 rerun overwrites call 0 in
+      // the Map and runTask resolves here while that worktree writer is live.
+      await Bun.sleep(2000)
+      settledBeforeRelease = runSettled
+    } finally {
+      // Release every shim barrier even when an earlier oracle fails, then wait
+      // for the real subprocesses so a red run cannot leak a git writer.
+      writeFileSync(join(h.stateDir, releaseN2), 'go')
+      writeFileSync(join(h.stateDir, releaseCommit0), 'go')
+      await runP
+    }
+
+    expect(settledBeforeRelease).toBe(false)
+    expect(existsSync(join(h.stateDir, 'wait-timeout-commit-release-0'))).toBe(false)
+    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    expect(rows.filter((r) => r.status === 'running' || r.status === 'pending')).toEqual([])
+  }, 40_000)
+
+  test("source guard: the synthetic key is unique/non-node ('commitpush:<nodeId>:<iter>:<sequence>') and BOTH canceled exits drain before returning", () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf-8',
     )
     // Non-node key: a real node id can never collide with the prefix, so
     // deriveFrontier's in-flight set cannot freeze a scope node on it.
-    expect(src).toContain('`commitpush:${nodeId}:${iteration}`')
+    expect(src).toContain('`commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`')
+    // Diagnostics name the exact trigger generation whose promise failed.
+    expect(src).toMatch(/auto commit&push trigger failed \(ignored\)[\s\S]{0,180}syntheticKey/)
     // Revision #2: every canceled return inside the dispatch loop drains the
     // synthetics first. Two exits: loop-head aborted check + raced node
     // 'canceled' result.

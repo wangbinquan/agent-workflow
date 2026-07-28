@@ -93,14 +93,19 @@ function ScheduledDetailPage() {
         meta={scheduleSummary(s.scheduleSpec, lang)}
         actions={
           <>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setEditOpen(true)}
-              data-testid="scheduled-edit"
-            >
-              {t('scheduled.edit')}
-            </button>
+            {/* A degraded schedule has no parseable spec to seed ScheduleDialog.
+              Keep only the full-config repair entry instead of exposing a button
+              whose click cannot open anything. */}
+            {s.scheduleSpec !== null && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setEditOpen(true)}
+                data-testid="scheduled-edit"
+              >
+                {t('scheduled.edit')}
+              </button>
+            )}
             {/* RFC-159 → RFC-165: edit the FULL task config (any launch kind) in
               the /tasks/new wizard's editScheduled mode. A degraded payload
               still gets the entry — the wizard renders blank for repair and
