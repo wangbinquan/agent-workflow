@@ -1,0 +1,137 @@
+name: business-document-batch-compliance-publishing
+description: '真实文档交付：按文件并行合规审阅、汇总、批量成稿，再经人工驳回修订、逐文档批准和选择性发布。'
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: files
+      key: documents
+      label: 待审阅 Markdown 文档
+      required: true
+      minCount: 2
+      maxCount: 20
+      accept: '*.md'
+    - kind: text
+      key: compliance_policy
+      label: 合规政策与出版要求
+      required: true
+      maxLength: 4000
+  nodes:
+    - id: documents_input
+      kind: input
+      inputKey: documents
+      position: { x: 20, y: 130 }
+    - id: policy_input
+      kind: input
+      inputKey: compliance_policy
+      position: { x: 20, y: 330 }
+    - id: compliance_fanout
+      kind: wrapper-fanout
+      title: 逐文档并行合规审阅
+      nodeIds: [document_reviewer, compliance_aggregator]
+      inputs:
+        - name: documents
+          kind: list<path<md>>
+          isShardSource: true
+        - name: policy
+          kind: string
+      expectedShardCount: 20
+      position: { x: 240, y: 40 }
+      size: { width: 800, height: 450 }
+    - id: document_reviewer
+      kind: agent-single
+      agentName: business-document-reviewer
+      promptTemplate: |
+        BUSINESS_DOC_REVIEW
+        只审阅当前文档分片，核对来源声明、保留期限和对外表述。
+        document={{document}}
+        policy={{policy}}
+        shard={{__shard_key__}}
+      position: { x: 350, y: 160 }
+    - id: compliance_aggregator
+      kind: agent-single
+      agentName: business-compliance-aggregator
+      promptTemplate: |
+        BUSINESS_DOC_AGGREGATE
+        汇总所有文档的审阅证据，保留每个路径的结论并给出版者一份可执行清单。
+        findings={{findings}}
+      position: { x: 690, y: 160 }
+    - id: publisher
+      kind: agent-single
+      agentName: business-document-publisher
+      promptTemplate: |
+        BUSINESS_DOC_PUBLISH
+        根据合规汇总在工作树的 drafts/ 目录生成公告和合规核对表，并以多文档输出
+        交给人工逐篇审阅。首次草稿应保留可被人工指出的缺口；收到 Review Rejection
+        后必须结合 Prior Output 和驳回意见修订两个草稿。每篇文档都携带稳定且唯一的
+        business-publish-path 元数据，不提交、不推送。
+        compliance={{compliance_report}}
+        policy={{compliance_policy}}
+      position: { x: 1170, y: 180 }
+    - id: publication_review
+      kind: review
+      title: 人工逐文档出版审阅
+      description: 首轮驳回后由 publisher 修订；第二轮逐篇选择并批准最终文档集合。
+      inputSource: { nodeId: publisher, portName: documents }
+      rerunnableOnReject: [publisher]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 1490, y: 180 }
+    - id: publication_releaser
+      kind: agent-single
+      agentName: business-document-releaser
+      promptTemplate: |
+        BUSINESS_DOC_RELEASE
+        只按人工 Review 接受文档中的 business-publish-path 元数据，把对应草稿写入
+        published/ 目录，并输出实际发布路径。不得从标题猜测路径；未接受的文档即使
+        存在于 drafts/ 目录也不得物化到 published/。
+        accepted_documents={{accepted_documents}}
+      position: { x: 1800, y: 180 }
+    - id: publication_output
+      kind: output
+      ports:
+        - name: approved_documents
+          bind: { nodeId: publication_review, portName: accepted }
+        - name: published_paths
+          bind: { nodeId: publication_releaser, portName: published_paths }
+      position: { x: 2110, y: 180 }
+  edges:
+    - id: documents_to_fanout
+      source: { nodeId: documents_input, portName: documents }
+      target: { nodeId: compliance_fanout, portName: documents }
+    - id: policy_to_fanout
+      source: { nodeId: policy_input, portName: compliance_policy }
+      target: { nodeId: compliance_fanout, portName: policy }
+    - id: fanout_document_to_reviewer
+      boundary: wrapper-input
+      source: { nodeId: compliance_fanout, portName: documents }
+      target: { nodeId: document_reviewer, portName: document }
+    - id: fanout_policy_to_reviewer
+      boundary: wrapper-input
+      source: { nodeId: compliance_fanout, portName: policy }
+      target: { nodeId: document_reviewer, portName: policy }
+    - id: reviewer_to_aggregator
+      source: { nodeId: document_reviewer, portName: finding }
+      target: { nodeId: compliance_aggregator, portName: findings }
+    - id: aggregator_to_fanout
+      boundary: wrapper-output
+      source: { nodeId: compliance_aggregator, portName: report }
+      target: { nodeId: compliance_fanout, portName: compliance_report }
+    - id: fanout_to_publisher
+      source: { nodeId: compliance_fanout, portName: compliance_report }
+      target: { nodeId: publisher, portName: compliance_report }
+    - id: policy_to_publisher
+      source: { nodeId: policy_input, portName: compliance_policy }
+      target: { nodeId: publisher, portName: compliance_policy }
+    - id: publisher_to_review
+      source: { nodeId: publisher, portName: documents }
+      target: { nodeId: publication_review, portName: __review_input__ }
+    - id: review_to_releaser
+      source: { nodeId: publication_review, portName: accepted }
+      target: { nodeId: publication_releaser, portName: accepted_documents }
+    - id: review_to_output
+      source: { nodeId: publication_review, portName: accepted }
+      target: { nodeId: publication_output, portName: approved_documents }
+    - id: releaser_paths_to_output
+      source: { nodeId: publication_releaser, portName: published_paths }
+      target: { nodeId: publication_output, portName: published_paths }

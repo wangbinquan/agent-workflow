@@ -1,0 +1,176 @@
+name: business-defect-fix-controlled-release
+description: '真实缺陷修复：隔离工作树内经历两轮修复、审计和测试，全部 clean 后再进入人工发布批准。'
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: defect
+      label: 缺陷描述与复现条件
+      required: true
+      maxLength: 4000
+    - kind: text
+      key: release_policy
+      label: 发布约束
+      required: true
+      maxLength: 4000
+  nodes:
+    - id: defect_input
+      kind: input
+      inputKey: defect
+      position: { x: 20, y: 140 }
+    - id: policy_input
+      kind: input
+      inputKey: release_policy
+      position: { x: 20, y: 340 }
+    - id: repair_loop
+      kind: wrapper-loop
+      title: 每轮捕获 Git 差异，再并行审计与测试直到质量门 clean
+      nodeIds: [repair_git, code_audit, contract_tests, quality_gate]
+      maxIterations: 2
+      exitCondition:
+        kind: port-equals
+        nodeId: quality_gate
+        portName: quality_status
+        value: clean
+      outputBindings:
+        - name: quality_status
+          bind: { nodeId: quality_gate, portName: quality_status }
+        - name: quality_report
+          bind: { nodeId: quality_gate, portName: release_brief }
+        - name: changed_files
+          bind: { nodeId: repair_git, portName: git_diff }
+      position: { x: 230, y: 40 }
+      size: { width: 1280, height: 570 }
+    - id: repair_git
+      kind: wrapper-git
+      title: 捕获当前修复轮次的真实工作树差异
+      nodeIds: [fixer]
+      position: { x: 340, y: 120 }
+      size: { width: 420, height: 340 }
+    - id: fixer
+      kind: agent-single
+      agentName: business-fix-engineer
+      promptTemplate: |
+        BUSINESS_FIX_IMPLEMENT
+        在任务隔离工作树中修复结算金额计算缺陷，不提交、不推送。
+        第一轮先完成最小修复；第二轮必须读取上一轮质量门写入的
+        business-evidence/quality-gate.md，并结合其中的审计、测试失败证据和同一工作树
+        中保留的实现完成边界加固。每轮都更新实现与测试契约，并准确列出实际改动。
+        defect={{defect}}
+        policy={{release_policy}}
+        iteration={{__iteration__}}
+      position: { x: 430, y: 220 }
+    - id: code_audit
+      kind: agent-single
+      agentName: business-code-auditor
+      promptTemplate: |
+        BUSINESS_FIX_AUDIT
+        审阅工作树中的结算金额修复，检查金额取整、非法输入和回归边界。
+        changed_files={{changed_files}}
+        policy={{release_policy}}
+        iteration={{__iteration__}}
+      position: { x: 850, y: 140 }
+    - id: contract_tests
+      kind: agent-single
+      agentName: business-test-runner
+      promptTemplate: |
+        BUSINESS_FIX_TEST
+        根据工作树中的实现和测试契约执行确定性检查，失败时给出下一轮可执行的修复证据。
+        changed_files={{changed_files}}
+        defect={{defect}}
+        iteration={{__iteration__}}
+      position: { x: 850, y: 340 }
+    - id: quality_gate
+      kind: agent-single
+      agentName: business-quality-gate
+      promptTemplate: |
+        BUSINESS_FIX_QUALITY_GATE
+        只有代码审计 clean 且契约测试 passed 才允许发布；否则明确返回 needs-fix，
+        让 Loop 在同一工作树上进入下一轮。
+        audit_status={{audit_status}}
+        audit_report={{audit_report}}
+        test_status={{test_status}}
+        test_report={{test_report}}
+        iteration={{__iteration__}}
+        每轮都把以上状态和证据追加到 business-evidence/quality-gate.md，供下一轮修复
+        或最终发布核验；不提交、不推送。
+      position: { x: 1160, y: 240 }
+    - id: release_packet
+      kind: agent-single
+      agentName: business-release-preparer
+      promptTemplate: |
+        BUSINESS_FIX_RELEASE_PACKET
+        读取 business-evidence/quality-gate.md 中的两轮质量证据，把最终 Git 差异和
+        发布约束整理为人工可批准的发布包，明确列出变更文件、失败到通过的证据链和
+        “未执行 push”的边界。
+        changed_files={{changed_files}}
+        quality_report={{quality_report}}
+        policy={{release_policy}}
+      position: { x: 1640, y: 210 }
+    - id: release_review
+      kind: review
+      title: 人工发布批准
+      description: 质量门 clean 后，由发布负责人确认差异和证据；本用例不执行真实 push。
+      inputSource: { nodeId: release_packet, portName: release_brief }
+      rerunnableOnReject: [release_packet]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 1960, y: 210 }
+    - id: release_output
+      kind: output
+      ports:
+        - name: approved_release
+          bind: { nodeId: release_review, portName: approved_doc }
+        - name: changed_files
+          bind: { nodeId: repair_loop, portName: changed_files }
+      position: { x: 2260, y: 210 }
+  edges:
+    - id: defect_to_fixer
+      source: { nodeId: defect_input, portName: defect }
+      target: { nodeId: fixer, portName: defect }
+    - id: policy_to_fixer
+      source: { nodeId: policy_input, portName: release_policy }
+      target: { nodeId: fixer, portName: release_policy }
+    - id: git_to_audit
+      source: { nodeId: repair_git, portName: git_diff }
+      target: { nodeId: code_audit, portName: changed_files }
+    - id: policy_to_audit
+      source: { nodeId: policy_input, portName: release_policy }
+      target: { nodeId: code_audit, portName: release_policy }
+    - id: git_to_tests
+      source: { nodeId: repair_git, portName: git_diff }
+      target: { nodeId: contract_tests, portName: changed_files }
+    - id: defect_to_tests
+      source: { nodeId: defect_input, portName: defect }
+      target: { nodeId: contract_tests, portName: defect }
+    - id: audit_status_to_gate
+      source: { nodeId: code_audit, portName: audit_status }
+      target: { nodeId: quality_gate, portName: audit_status }
+    - id: audit_report_to_gate
+      source: { nodeId: code_audit, portName: audit_report }
+      target: { nodeId: quality_gate, portName: audit_report }
+    - id: test_status_to_gate
+      source: { nodeId: contract_tests, portName: test_status }
+      target: { nodeId: quality_gate, portName: test_status }
+    - id: test_report_to_gate
+      source: { nodeId: contract_tests, portName: test_report }
+      target: { nodeId: quality_gate, portName: test_report }
+    - id: loop_diff_to_release_packet
+      source: { nodeId: repair_loop, portName: changed_files }
+      target: { nodeId: release_packet, portName: changed_files }
+    - id: loop_quality_to_release_packet
+      source: { nodeId: repair_loop, portName: quality_report }
+      target: { nodeId: release_packet, portName: quality_report }
+    - id: policy_to_release_packet
+      source: { nodeId: policy_input, portName: release_policy }
+      target: { nodeId: release_packet, portName: release_policy }
+    - id: packet_to_review
+      source: { nodeId: release_packet, portName: release_brief }
+      target: { nodeId: release_review, portName: __review_input__ }
+    - id: review_to_output
+      source: { nodeId: release_review, portName: approved_doc }
+      target: { nodeId: release_output, portName: approved_release }
+    - id: loop_diff_to_output
+      source: { nodeId: repair_loop, portName: changed_files }
+      target: { nodeId: release_output, portName: changed_files }
