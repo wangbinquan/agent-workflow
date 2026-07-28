@@ -2377,13 +2377,13 @@ function CanvasInner({
         nodesConnectable={readOnly !== true}
         deleteKeyCode={readOnly === true ? null : deleteKeyCodes}
         multiSelectionKeyCode={['Shift', 'Meta']}
-        // Pan on middle / right button drag only. Left button is reserved
-        // for click selection on nodes / edges (RFC-003 EdgeInspector
-        // requires reachable edge clicks). Shift+drag lassos via xyflow
-        // default `selectionKeyCode='Shift'`. We deliberately do NOT enable
-        // `selectionOnDrag` — it intercepts every left click into a
-        // zero-distance lasso and silently swallows edge clicks.
-        panOnDrag={readOnly === true ? true : [1, 2]}
+        // Pan on left / middle / right drag over the empty pane. Node dragging
+        // and node / edge clicks still resolve on their child elements
+        // (RFC-003 EdgeInspector requires reachable edge clicks). Shift+drag
+        // lassos via xyflow default `selectionKeyCode='Shift'`. We deliberately
+        // do NOT enable `selectionOnDrag` — it intercepts every left click into
+        // a zero-distance lasso and silently swallows edge clicks.
+        panOnDrag={readOnly === true ? true : [0, 1, 2]}
         fitView
         minZoom={0.2}
         maxZoom={2}

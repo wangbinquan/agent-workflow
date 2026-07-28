@@ -128,6 +128,18 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
     expect(code).not.toMatch(/selectionOnDrag\s*=/)
   })
 
+  test('editable canvas accepts left-button pane dragging for panning', async () => {
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const here = path.dirname(new URL(import.meta.url).pathname)
+    const src = await fs.readFile(
+      path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
+      'utf8',
+    )
+    const code = src.replace(/^\s*\/\/.*$/gm, '')
+    expect(code).toMatch(/panOnDrag=\{readOnly === true \? true : \[0, 1, 2\]\}/)
+  })
+
   // Since the Shift+drag lasso is the only box-select path (the comment in
   // WorkflowCanvas explains why selectionOnDrag is unsafe), the gesture
   // must stay discoverable. Lock in the bottom-center hint chip + its
