@@ -246,28 +246,94 @@ export function scanForCredentialPatterns(value: unknown, basePointer = ''): Cre
 
 /** The carriers that must be sentinel-or-empty on INBOUND payloads. Returns
  *  pointers whose current value is a non-empty non-sentinel string. */
+// Codex impl-gate P1-2 — the IN direction reuses the SAME key net the OUT
+// projection masks with (symmetry is the point: what gets redacted on the way
+// out must come back as the sentinel, never as a literal).
+function escapePointer(segment: string): string {
+  return segment.replace(/~/g, '~0').replace(/\//g, '~1')
+}
+
 export function findNonSentinelSecretCarriers(op: {
   resourceType: string
   payload: unknown
 }): string[] {
   const out: string[] = []
-  if (op.resourceType !== 'mcp') return out
-  const p = op.payload as {
-    type?: string
-    config?: { env?: Record<string, string>; headers?: Record<string, string> }
-  }
-  const check = (rec: Record<string, string> | undefined, base: string) => {
-    if (!rec) return
-    for (const k of Object.keys(rec)) {
-      const v = rec[k]
-      if (v !== '' && v !== INTENT_SECRET_SENTINEL) {
-        out.push(`${base}/${k.replace(/~/g, '~0').replace(/\//g, '~1')}`)
+  const push = (pointer: string) => out.push(pointer)
+
+  // 1. MCP structural carriers (the original closed set).
+  if (op.resourceType === 'mcp') {
+    const p = op.payload as {
+      type?: string
+      config?: {
+        env?: Record<string, string>
+        headers?: Record<string, string>
+        command?: string[]
+        url?: string
+      }
+    }
+    const check = (rec: Record<string, string> | undefined, base: string) => {
+      if (!rec) return
+      for (const k of Object.keys(rec)) {
+        const v = rec[k]
+        if (v !== '' && v !== INTENT_SECRET_SENTINEL) push(`${base}/${escapePointer(k)}`)
+      }
+    }
+    if (p.type === 'local') {
+      check(p.config?.env, '/payload/config/env')
+      // argv[1:] mirrors the OUT projection: any non-sentinel value that
+      // LOOKS credential-bearing (--token=… / userinfo URL) is refused.
+      const argv = p.config?.command ?? []
+      for (let i = 1; i < argv.length; i++) {
+        const value = argv[i] ?? ''
+        if (value === INTENT_SECRET_SENTINEL) continue
+        if (
+          /--?(?:token|secret|password|passwd|api-?key|auth)[=]/i.test(value) ||
+          /\b[a-z][a-z0-9+.-]*:\/\/[^/\s@]+@/i.test(value)
+        ) {
+          push(`/payload/config/command/${i}`)
+        }
+      }
+    }
+    if (p.type === 'remote') {
+      check(p.config?.headers, '/payload/config/headers')
+      const url = p.config?.url
+      if (typeof url === 'string' && /\/\/[^/\s@]+@/.test(url)) {
+        push('/payload/config/url')
       }
     }
   }
-  if (p.type === 'local') check(p.config?.env, '/payload/config/env')
-  if (p.type === 'remote') check(p.config?.headers, '/payload/config/headers')
-  return out
+
+  // 2. Secret-named keys anywhere in the payload (plugin options, agent/skill
+  //    frontmatterExtra, workgroup free fields, …): string value must be the
+  //    sentinel or empty. Redaction markers are ALWAYS refused — a model
+  //    echoing `‹redacted›…` back as real config is a corruption, not a value.
+  const walk = (value: unknown, pointer: string): void => {
+    if (typeof value === 'string') {
+      if (value.includes(INTENT_REDACTED)) push(pointer)
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => walk(item, `${pointer}/${index}`))
+      return
+    }
+    if (typeof value === 'object' && value !== null) {
+      for (const [k, v] of Object.entries(value)) {
+        const child = `${pointer}/${escapePointer(k)}`
+        if (
+          typeof v === 'string' &&
+          SECRET_KEY_RE.test(k) &&
+          v !== '' &&
+          v !== INTENT_SECRET_SENTINEL
+        ) {
+          push(child)
+          continue
+        }
+        walk(v, child)
+      }
+    }
+  }
+  walk(op.payload, '/payload')
+  return [...new Set(out)]
 }
 
 /** Mask credential-shaped content inside free diagnostics text (stderr tails,

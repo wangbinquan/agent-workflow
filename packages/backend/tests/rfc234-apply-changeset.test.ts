@@ -506,6 +506,134 @@ describe('applyIntentChangeset', () => {
     expect((await db.select().from(intentApplyJournal)).length).toBe(0)
   })
 
+  // Codex impl-gate P0-1 — foreign-owner update MUST be copy-only. A mounted
+  // public agent owned by another user: 'modify' (the default) is refused with
+  // zero writes; an explicit 'copy' lands a NEW resource owned by the actor
+  // and never touches the original row.
+  test('foreign-owner update: modify forbidden, copy lands a new resource', async () => {
+    const foreignId = ulid()
+    const now = Date.now()
+    await db.insert(agents).values({
+      id: foreignId,
+      name: 'foreign-agent',
+      description: 'someone else owns this',
+      outputs: JSON.stringify(['out']),
+      ownerUserId: APPROVER,
+      visibility: 'public',
+      createdAt: now,
+      updatedAt: now,
+    } as typeof agents.$inferInsert)
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    const changeset = {
+      $schema_version: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          action: 'update',
+          resourceType: 'agent',
+          target: 'res#agent#1',
+          payload: {
+            name: 'foreign-agent',
+            description: 'hijacked',
+            outputs: ['out'],
+            bodyMd: 'mine now',
+          },
+        },
+      ],
+    }
+    const draft = installDraft(session.id, changeset, [
+      {
+        handle: 'res#agent#1',
+        resourceType: 'agent',
+        resourceId: foreignId,
+        root: true,
+        detail: true,
+        fence: { kind: 'agent', updatedAt: now, aclRevision: 0 },
+        dumpHash: 'x',
+      },
+    ])
+    await expect(
+      applyIntentChangeset(deps(), {
+        sessionId: session.id,
+        clientMutationId: ulid(),
+        ...draft,
+        decisions: [],
+      }),
+    ).rejects.toMatchObject({ code: 'intent-foreign-modify-forbidden' })
+    const untouched = db.select().from(agents).where(eq(agents.id, foreignId)).get()
+    expect(untouched?.description).toBe('someone else owns this')
+
+    const receipt = await applyIntentChangeset(deps(), {
+      sessionId: session.id,
+      clientMutationId: ulid(),
+      ...draft,
+      decisions: [
+        { opId: 'op-1', applyMode: 'copy', slots: [{ slotId: 'name:op-1', value: 'my-copy' }] },
+      ],
+    })
+    expect(receipt.applied[0]?.fromCopy).toBe(true)
+    const copied = db
+      .select()
+      .from(agents)
+      .where(eq(agents.id, receipt.applied[0]?.resourceId ?? ''))
+      .get()
+    expect(copied?.ownerUserId).toBe(OWNER)
+    expect(copied?.name).toBe('my-copy')
+    expect(db.select().from(agents).where(eq(agents.id, foreignId)).get()?.description).toBe(
+      'someone else owns this',
+    )
+  })
+
+  // Codex impl-gate P1-3 — a superseded (non-current) draft revision cannot
+  // commit even when its hash and epoch both still match.
+  test('superseded draft revision is refused at claim', async () => {
+    const existing = await seedAgent('existing-agent')
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    const draft = installDraft(
+      session.id,
+      fullBundle(existing.id, filePluginFixture()),
+      manifestWithAgent(existing.id, existing.updatedAt),
+    )
+    // A newer draft becomes current (same epoch — no rebase).
+    db.update(intentSessions)
+      .set({ currentDraftId: ulid() })
+      .where(eq(intentSessions.id, session.id))
+      .run()
+    await expect(
+      applyIntentChangeset(deps(), {
+        sessionId: session.id,
+        clientMutationId: ulid(),
+        ...draft,
+        decisions: happyDecisions,
+      }),
+    ).rejects.toMatchObject({ code: 'intent-draft-superseded' })
+    expect((await db.select().from(intentApplyJournal)).length).toBe(0)
+  })
+
+  // Codex impl-gate P1-5 — a server-issued finalName slot value must satisfy
+  // the per-type canonical grammar; arbitrary strings are refused.
+  test('finalName slot value is validated against the type grammar', async () => {
+    const existing = await seedAgent('existing-agent')
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    const draft = installDraft(
+      session.id,
+      fullBundle(existing.id, filePluginFixture()),
+      manifestWithAgent(existing.id, existing.updatedAt),
+    )
+    await expect(
+      applyIntentChangeset(deps(), {
+        sessionId: session.id,
+        clientMutationId: ulid(),
+        ...draft,
+        decisions: [
+          ...happyDecisions,
+          { opId: 'op-1', slots: [{ slotId: 'name:op-1', value: '../../evil name' }] },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'intent-slot-value-invalid' })
+    expect((await db.select().from(skills)).length).toBe(0)
+  })
+
   // Live-run regression (deepseek 2026-07-28): a payload that passes the
   // intent schema but fails the CANONICAL service schema (here: a workflow
   // definition whose edge lacks source/target — intent keeps edges loose)

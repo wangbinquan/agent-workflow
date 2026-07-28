@@ -287,6 +287,36 @@
     复验：**11/11 全 PASS**——C 亦全链贯通（update 精确 target res#agent#1、
     outputs=["findings","summary"] 保留+新增、真实行更新、provenance 记两次
     提交），确证 C 前次失败纯为模型输出上限而非链路缺陷。
+  **Codex 实现门（2026-07-28，pin 094f0f2f 分离 worktree）**：NOT-CLEAN，
+  1 P0 + 6 P1 + 5 P2，逐条裁决与落点：
+  - **P0-1 跨所有者 MCP 越权写入**（intent update 绕过标准路由的
+    `requireResourceOwner`）→ `copyOnlyTargetsFor`（DB 推导：他人/内置 owner、
+    以及 skill/plugin 未实现原地更新的类型）+ `resolveIntentBundle` 单一
+    choke point 强制 `applyMode:'copy'`，新错误码
+    `intent-foreign-modify-forbidden`；锁：他人 agent modify 被拒且原行零改
+    动、copy 落新资源 owner=操作者。
+  - **P1-1 claim 后无 lease**（prestage 窗口可被 rebase/mount 抢跑）→ 最终
+    事务内重新 CAS session（contextRevision/currentDraftId/inFlightTurnId）+
+    `assertNoUnsettledApply` 挡住所有 session 变更与新轮次（
+    `intent-apply-in-flight`）。
+  - **P1-2 密钥闭集 IN 向缺口** → `findNonSentinelSecretCarriers` 扩为
+    argv 凭据标志/URL userinfo/任意 secret-named 键（递归）+ 拒绝
+    `‹redacted›` 回写；MCP update 保留既有 oauth（intent schema 无该字段、
+    整体替换 config 会丢失）。
+  - **P1-3 同 epoch 旧 revision 可提交** → claim 要求
+    `session.currentDraftId === draft.id`（`intent-draft-superseded`）。
+  - **P1-4 fence 声明与实际不符** → 会话标题与**全部** dump 文件（mounted+
+    inventory）统一经 `fenceUntrusted(turn nonce)`；投毒回归锁断言攻击文本
+    只存在于 fence 内。
+  - **P1-5 finalName 绕过命名规范** → shared `validateFinalNameForType`
+    按类型复验槽位值（`intent-slot-value-invalid`）。
+  - **P1-6 / P2-3 / P2-2**：plugin generation 精确补偿、skill/plugin update
+    2PC、mount 审批前端流记为后续演进；当前按 Codex 建议先做成 copy-only
+    与 converger 安全化，避免静默失败。
+  - **P2-1 converger 误杀活跃 apply** → 进程内 active-set + 10 分钟最小年龄。
+  - **P2-4 admin retry/cancel 返回 422** → 统一 404 同形（并在测试里显式
+    命名 route-local `intent-session-not-found` 以过 error-code 守卫）。
+  修复后：backend 全量、shared 1472/0、frontend 5314/5314。
   **T14 门禁尾段两红如实闭环**：①rfc224-source-guard e2e stub 版本矩阵登记
   `stub-opencode-intent.sh: 'intent-build'`（守卫顺带校验其 --version echo 臂
   逐字）；②rfc212-revalidation-infrastructure 通道计数 8→9（intent-sessions

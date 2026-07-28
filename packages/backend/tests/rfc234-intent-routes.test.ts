@@ -319,6 +319,34 @@ describe('intent session routes', () => {
     expect(typeof adminRows[0]?.ownerUserId).toBe('string')
   })
 
+  // Codex impl-gate P2-4 — owner-only mutations keep the 404 shape for EVERY
+  // non-owner, including the system admin who may read the session.
+  test('retry/cancel keep the 404 shape for admin and manager alike', async () => {
+    const created = await req(ownerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'x' }),
+    })
+    const session = (await created.json()) as { id: string }
+    await pollDetail(
+      ownerToken,
+      session.id,
+      (d) => (d as { session: { inFlight: boolean } }).session.inFlight === false,
+    )
+    for (const token of [DAEMON_TOKEN, managerToken, strangerToken]) {
+      for (const path of ['retry', 'cancel-turn']) {
+        const res = await req(token, `/api/intent-sessions/${session.id}/${path}`, {
+          method: 'POST',
+        })
+        expect(res.status).toBe(404)
+        // Route-local code named here for route-error-code-coverage: these two
+        // owner-only mutations raise `intent-session-not-found` in the ROUTE
+        // (the read already succeeded for the admin), not in the service.
+        const body = (await res.json()) as { error?: { code?: string }; code?: string }
+        expect(body.error?.code ?? body.code).toBe('intent-session-not-found')
+      }
+    }
+  })
+
   // AC-11: the resource-side provenance annotation is scoped to session
   // viewers (creator + system admin). Everyone else — and every miss — gets
   // the SAME `[]` shape: no resource-existence oracle, no foreign-activity

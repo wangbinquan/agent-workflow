@@ -21,6 +21,7 @@ import {
   type CredentialFinding,
   type IntentChangeset,
   type IntentOp,
+  validateFinalNameForType,
 } from '@agent-workflow/shared'
 import { manifestByHandle, type IntentContextManifest, type IntentManifestEntry } from './manifest'
 
@@ -313,6 +314,14 @@ export function resolveIntentBundle(input: {
   decisions: IntentDecision[]
   /** Occupied names per type in the actor's namespace (name-conflict precheck). */
   occupiedNames: ReadonlyMap<AclResourceType, ReadonlySet<string>>
+  /**
+   * Codex impl-gate P0-1 — update targets the actor may NOT modify in place
+   * (foreign/builtin owner, or a type whose in-place update is unsupported).
+   * handle → human reason. The caller (applyChangeset / the detail route)
+   * derives this from the DB; enforcement lives HERE so every commit path
+   * shares one choke point: such an op MUST carry applyMode 'copy'.
+   */
+  copyOnlyTargets?: ReadonlyMap<string, string>
 }): ResolvedIntentBundle {
   const { manifest, changeset, decisions } = input
   const { slots, report } = deriveIntentSlots(manifest, changeset)
@@ -357,6 +366,19 @@ export function resolveIntentBundle(input: {
   }
 
   // ── final ids: creates mint now; copy decisions normalize update → create ──
+  const copyOnly = input.copyOnlyTargets ?? new Map<string, string>()
+  for (const op of changeset.ops) {
+    if (op.action !== 'update') continue
+    const reason = copyOnly.get(op.target)
+    if (reason !== undefined && decisionByOp.get(op.opId)?.applyMode !== 'copy') {
+      throw new ValidationError(
+        'intent-foreign-modify-forbidden',
+        `${op.opId}: ${op.target} cannot be modified in place (${reason}) — choose copy`,
+        { opId: op.opId, target: op.target, reason },
+      )
+    }
+  }
+
   const finalIdByRef = new Map<string, string>()
   const copiedHandles = new Map<string, string>() // handle → new id
   for (const op of changeset.ops) {
@@ -386,7 +408,17 @@ export function resolveIntentBundle(input: {
   const nameOf = (op: IntentChangeset['ops'][number]): string => {
     const custom = slotValues.get(`name:${op.opId}`)
     const base = (op.payload as { name: string }).name
-    return custom !== undefined && custom.length > 0 ? custom : base
+    if (custom === undefined || custom.length === 0) return base
+    // P1-5: the rename overlay lands AFTER schema parse — re-run the
+    // per-type name grammar so a slot value cannot bypass canonical rules.
+    const invalid = validateFinalNameForType(op.resourceType, custom)
+    if (invalid !== null) {
+      throw new ValidationError('intent-slot-value-invalid', `${op.opId}: finalName ${invalid}`, {
+        opId: op.opId,
+        slotId: `name:${op.opId}`,
+      })
+    }
+    return custom
   }
 
   const resolved: ResolvedIntentOp[] = []

@@ -84,7 +84,12 @@ export function renderHistory(turns: readonly IntentDocTurn[], nonce: string): s
 
 export function buildIntentDoc(input: IntentDocInput): string {
   const sections: string[] = []
-  sections.push(`# Intent session: ${input.sessionTitle}
+  // Codex impl-gate P1-4: the title is user-authored (derived from their first
+  // message) — it must be fenced like any other untrusted text, not spliced
+  // into the system-authored heading.
+  sections.push(`# Intent session
+
+${fenceUntrusted('session title', input.sessionTitle, input.envelopeNonce)}
 
 You are the intent builder for the agent-workflow platform. Working directory
 layout:

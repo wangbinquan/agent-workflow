@@ -41,7 +41,7 @@ import { requirePermission } from '@/auth/permissions'
 import type { AppDeps } from '@/server'
 import { loadConfig } from '@/config'
 import { intentApplyJournal, intentDrafts } from '@/db/schema'
-import { ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
@@ -345,7 +345,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
     if (session.ownerUserId !== actor.user.id) {
-      throw new ValidationError('intent-invalid', 'not retryable')
+      // Codex impl-gate P2-4: owner-only mutations keep the 404 shape — the
+      // admin read bypass must not leak a distinguishable 422 here.
+      throw new NotFoundError('intent-session-not-found', 'intent session not found')
     }
     void fireTurn(session.id, actor)
     return c.json({ ok: true }, 202)
@@ -355,8 +357,8 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
     if (session.ownerUserId !== actor.user.id) {
-      // Admin READ bypass never cancels another user's turn — 404 shape.
-      throw new ValidationError('intent-invalid', 'not cancellable')
+      // Admin READ bypass never cancels another user's turn — 404 shape (P2-4).
+      throw new NotFoundError('intent-session-not-found', 'intent session not found')
     }
     return c.json({ aborted: abortIntentTurn(session.id) })
   })

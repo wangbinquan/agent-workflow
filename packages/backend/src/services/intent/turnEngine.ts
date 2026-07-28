@@ -44,7 +44,12 @@ import type { ResolvedRuntime } from '@/services/runtimeRegistry'
 import { buildIntentDump } from './dumpBuilder'
 import { buildIntentDoc, type IntentDocTurn } from './intentDoc'
 import { validateDraftChangeset } from './resolveChangeset'
-import { sessionManifest, type IntentSessionRow, type IntentTurnRow } from './session'
+import {
+  assertNoUnsettledApply,
+  sessionManifest,
+  type IntentSessionRow,
+  type IntentTurnRow,
+} from './session'
 
 export const INTENT_BUILDER_AGENT_NAME = 'aw-intent-builder'
 export const INTENT_SCRATCH_DIRNAME = 'intent-scratch'
@@ -162,6 +167,8 @@ export async function runIntentTurn(
     if (session.inFlightTurnId !== null) {
       throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
     }
+    // P1-1: no new generation while a commit is between claim and settlement.
+    assertNoUnsettledApply(tx, input.sessionId)
     const budget = parseBudget(session)
     if (budget.generateRounds + budget.questionRounds >= deps.config.maxGenerateRounds) {
       throw new ConflictError(
@@ -304,6 +311,7 @@ export async function runIntentTurn(
       appHome: deps.appHome,
       mounts: roots,
       priorManifest: manifestBefore,
+      envelopeNonce,
     })
     // Persist the fresh manifest (fences captured now = the commit baseline
     // for whatever draft this turn produces).

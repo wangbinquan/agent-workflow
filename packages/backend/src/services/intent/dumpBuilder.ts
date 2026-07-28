@@ -32,6 +32,7 @@ import {
   serializeMcpDump,
   serializePluginDump,
   serializeWorkgroupDump,
+  fenceUntrusted,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -72,6 +73,13 @@ export interface IntentDumpInput {
   priorManifest?: IntentContextManifest
   /** Test seam; production uses INTENT_INVENTORY_CAP. */
   inventoryCap?: number
+  /**
+   * Codex impl-gate P1-4 — the turn's envelope nonce. Every dumped resource
+   * body is UNTRUSTED (another user's description, a skill's SKILL.md), so
+   * each file is wrapped in the same nonce fence INTENT.md history uses.
+   * Optional so unit tests can assert raw bodies; production always passes it.
+   */
+  envelopeNonce?: string
 }
 
 export interface IntentDumpResult {
@@ -199,7 +207,9 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   const cap = input.inventoryCap ?? INTENT_INVENTORY_CAP
   const catalog = await loadVisibleCatalog(db, actor)
   const alloc = createHandleAllocator(input.priorManifest)
-  const seedFiles: SystemAgentSeedFile[] = []
+  const nonce = input.envelopeNonce
+  const rawSeedFiles: SystemAgentSeedFile[] = []
+  const seedFiles = rawSeedFiles
   const manifest: IntentContextManifest = []
   const hiddenDependencies: Array<{ parentHandle: string; count: number }> = []
   const inventoryTruncated: Partial<Record<AclResourceType, number>> = {}
@@ -459,7 +469,22 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
     seedFiles.push({ path: `inventory/${type}s.md`, content: `${lines.join('\n')}\n` })
   }
 
-  return { manifest, seedFiles, hiddenDependencies, inventoryTruncated }
+  // One choke point: fence EVERY dumped body (mounted resources + inventory)
+  // with the turn nonce and its source label, so untrusted resource text can
+  // never be read as platform instructions (Codex impl-gate P1-4).
+  const fencedSeedFiles: SystemAgentSeedFile[] =
+    nonce === undefined
+      ? rawSeedFiles
+      : rawSeedFiles.map((file) => ({
+          path: file.path,
+          content: fenceUntrusted(file.path, file.content, nonce),
+        }))
+  return {
+    manifest,
+    seedFiles: fencedSeedFiles,
+    hiddenDependencies,
+    inventoryTruncated,
+  }
 }
 
 function summarizeInventoryRow(type: AclResourceType, id: string, catalog: VisibleCatalog): string {

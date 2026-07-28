@@ -186,6 +186,59 @@ describe('credential scanner (IN direction)', () => {
     ).toEqual([])
   })
 
+  // Codex impl-gate P1-2 — the IN direction must cover the same closed set the
+  // OUT projection redacts: argv credential flags / URL userinfo, plugin
+  // options and free-JSON secret-named keys, and it must refuse redaction
+  // markers being echoed back as real config.
+  test('IN carriers cover argv, url userinfo, secret-named keys and refuse markers', () => {
+    const argv = findNonSentinelSecretCarriers({
+      resourceType: 'mcp',
+      payload: {
+        type: 'local',
+        name: 'gh',
+        config: { command: ['npx', '--token=hunter2', 'https://u:p@host/x'] },
+      },
+    })
+    expect(argv).toContain('/payload/config/command/1')
+    expect(argv).toContain('/payload/config/command/2')
+
+    const url = findNonSentinelSecretCarriers({
+      resourceType: 'mcp',
+      payload: { type: 'remote', name: 'r', config: { url: 'https://user:pw@api.example.com/v1' } },
+    })
+    expect(url).toContain('/payload/config/url')
+
+    // Plugin options + agent frontmatterExtra: secret-named keys anywhere.
+    const plugin = findNonSentinelSecretCarriers({
+      resourceType: 'plugin',
+      payload: { name: 'p', spec: 'npm:x', options: { apiKey: 'hunter2' } },
+    })
+    expect(plugin).toContain('/payload/options/apiKey')
+    const agent = findNonSentinelSecretCarriers({
+      resourceType: 'agent',
+      payload: { name: 'a', frontmatterExtra: { nested: { authToken: 'hunter2' } } },
+    })
+    expect(agent).toContain('/payload/frontmatterExtra/nested/authToken')
+
+    // Sentinel and empty pass; a redaction marker echoed back is refused.
+    expect(
+      findNonSentinelSecretCarriers({
+        resourceType: 'mcp',
+        payload: {
+          type: 'local',
+          name: 'ok',
+          config: { command: ['npx'], env: { TOKEN: INTENT_SECRET_SENTINEL, EMPTY: '' } },
+        },
+      }),
+    ).toEqual([])
+    expect(
+      findNonSentinelSecretCarriers({
+        resourceType: 'agent',
+        payload: { name: 'a', bodyMd: `see ${INTENT_REDACTED}-arg-1` },
+      }),
+    ).toContain('/payload/bodyMd')
+  })
+
   test('maskDiagnosticsText scrubs stderr-style leaks', () => {
     const masked = maskDiagnosticsText(
       `fetch failed for https://u:${SECRET}@h.com/x?access_token=${SECRET} while running --token=${SECRET}`,

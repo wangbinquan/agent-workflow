@@ -613,6 +613,34 @@ export type IntentChangesetParseResult =
  * offending fields. Output is capped — INTENT.md replays these verbatim.
  */
 const MAX_CHANGESET_ERRORS = 12
+/**
+ * Codex impl-gate P1-5 — server-issued `finalName` slot values must satisfy
+ * the SAME grammar as the changeset's own name field for that resource type
+ * (the overlay happens AFTER schema parse, so without this a confirm-time
+ * rename could smuggle arbitrary strings past canonical validation).
+ * Returns null when valid, else the rejection message.
+ */
+export function validateFinalNameForType(
+  resourceType: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup',
+  value: string,
+): string | null {
+  if (resourceType === 'workflow' || resourceType === 'workgroup') {
+    if (value.length < 1 || value.length > 200) return 'name must be 1..200 characters'
+    // Control chars would break YAML/JSON round-trips and canvas labels; the
+    // codepoint scan avoids a control-char regex (eslint no-control-regex).
+    for (const ch of value) {
+      const code = ch.codePointAt(0) ?? 0
+      if (code < 0x20 || code === 0x7f) return 'name must not contain control characters'
+    }
+    return null
+  }
+  if (value.length < 1 || value.length > 128) return 'name must be 1..128 characters'
+  if (!AGENT_NAME_RE.test(value)) {
+    return 'name must start with [a-z0-9] and contain only [a-z0-9_-]'
+  }
+  return null
+}
+
 export function formatChangesetIssues(issues: readonly z.ZodIssue[]): string[] {
   const lines = expandIssues(issues, [])
   if (lines.length <= MAX_CHANGESET_ERRORS) return lines

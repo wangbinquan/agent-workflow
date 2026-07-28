@@ -100,7 +100,7 @@ import {
   type PreparedWorkgroupSave,
 } from '@/services/workgroups'
 import { assertRefsUsableInTx } from '@/services/resourceRefs'
-import { type IntentFence } from './manifest'
+import { type IntentContextManifest, type IntentFence, type IntentManifestEntry } from './manifest'
 import { resolveIntentBundle, type IntentDecision, type ResolvedIntentOp } from './resolveChangeset'
 import { sessionManifest } from './session'
 
@@ -120,6 +120,49 @@ export interface IntentApplyReceipt {
 type JournalArtifact =
   | { kind: 'plugin-install'; pluginId: string }
   | { kind: 'skill-stage'; skillId: string; opId: string; skillDir: string }
+
+/**
+ * Codex impl-gate P0-1/P2-3 — update targets the actor cannot modify in place:
+ *  - foreign or built-in owner (D-round1: 他人/内置仅副本) → copy-only;
+ *  - skill/plugin (in-place update pipeline not implemented yet) → copy-only.
+ * handle → reason. Shared by the apply preflight (enforced inside
+ * resolveIntentBundle) and the session-detail route (drives the commit UI).
+ */
+export async function copyOnlyTargetsFor(
+  db: DbClient,
+  actor: Actor,
+  manifest: IntentContextManifest,
+  changeset: {
+    ops: ReadonlyArray<{ action: string; resourceType: string; target?: string }>
+  },
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const byHandle = new Map(
+    manifest.map((entry): [string, IntentManifestEntry] => [entry.handle, entry]),
+  )
+  for (const op of changeset.ops) {
+    if (op.action !== 'update' || op.target === undefined) continue
+    if (op.resourceType === 'skill' || op.resourceType === 'plugin') {
+      out.set(op.target, 'in-place update for this resource type is not supported yet')
+      continue
+    }
+    const entry = byHandle.get(op.target)
+    if (entry === undefined) continue // unknown handle → draft validation owns it
+    const table = ACL_TABLES[entry.resourceType]
+    const row = (
+      await db
+        .select({ ownerUserId: table.ownerUserId })
+        .from(table)
+        .where(eq(table.id, entry.resourceId))
+        .limit(1)
+    )[0]
+    if (row === undefined) continue // vanished row → fence/stale owns it
+    if (row.ownerUserId !== actor.user.id) {
+      out.set(op.target, 'owned by another user or built-in')
+    }
+  }
+  return out
+}
 
 export interface ApplyIntentFaults {
   afterPluginInstall?: () => void
@@ -280,6 +323,16 @@ async function applyInner(
         'the session context moved since this draft was generated; rebase and regenerate',
       )
     }
+    // Codex impl-gate P1-3: the hash proves WHICH revision was confirmed, not
+    // that it is still the CURRENT one — a later turn in the same epoch mints
+    // a higher revision without bumping contextRevision. Refuse stale tabs.
+    if (session.currentDraftId !== draft.id) {
+      throw new ConflictError(
+        'intent-draft-superseded',
+        'a newer draft revision exists in this session; review and commit the latest draft',
+        { confirmedRevision: draft.revision },
+      )
+    }
     const now = Date.now()
     tx.insert(intentApplyJournal)
       .values({
@@ -322,6 +375,10 @@ async function applyInner(
     )
   }
 
+  // P2-1: the whole claim→settle window is registered so the converger can
+  // never mistake this process's own live apply for a crashed one.
+  ACTIVE_APPLY_JOURNALS.add(journalId)
+
   const artifacts: JournalArtifact[] = []
   const recordArtifact = (artifact: JournalArtifact): void => {
     artifacts.push(artifact)
@@ -356,11 +413,13 @@ async function applyInner(
     const manifest = sessionManifest(claim.session)
     const changeset = JSON.parse(claim.draft.changesetJson)
     const occupiedNames = await occupiedNamesFor(db, actor.user.id)
+    const copyOnlyTargets = await copyOnlyTargetsFor(db, actor, manifest, changeset)
     const bundle = resolveIntentBundle({
       manifest,
       changeset,
       decisions: input.decisions,
       occupiedNames,
+      copyOnlyTargets,
     })
     const pendingIds = new Set(
       bundle.ops.filter((o) => o.action === 'create').map((o) => o.resourceId),
@@ -490,11 +549,19 @@ async function applyInner(
             if (p.type !== existing.type) {
               throw new ValidationError('mcp-type-immutable', 'mcp type cannot change')
             }
+            // Codex impl-gate P1-2: the intent MCP schema carries no oauth
+            // block, and update replaces config WHOLE — carry the existing
+            // oauth forward or a remote MCP silently loses its auth.
+            const existingOauth = (existing.config as { oauth?: unknown }).oauth
+            const nextConfig =
+              existingOauth === undefined
+                ? p.config
+                : { ...(p.config as Record<string, unknown>), oauth: existingOauth }
             const set: PreparedMcpUpdate['set'] = {
               updatedAt: Math.max(Date.now(), existing.updatedAt + 1),
               description: p.description,
               enabled: p.enabled,
-              config: JSON.stringify(p.config),
+              config: JSON.stringify(nextConfig),
             }
             preparedOps.push({
               op,
@@ -629,6 +696,28 @@ async function applyInner(
         .run()
       if ((cas as unknown as { changes?: number }).changes !== 1) {
         throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
+      }
+
+      // Codex impl-gate P1-1: claim-time checks alone leave the prestage
+      // window (npm install / skill staging) open to rebase/mount/new drafts.
+      // Re-assert the session identity INSIDE the commit transaction so a
+      // moved epoch or superseded draft can never land, and the epoch bump
+      // below builds on the value we actually verified.
+      const sessionNow = tx
+        .select()
+        .from(intentSessions)
+        .where(eq(intentSessions.id, input.sessionId))
+        .get()
+      if (
+        sessionNow === undefined ||
+        sessionNow.contextRevision !== claim.session.contextRevision ||
+        sessionNow.currentDraftId !== claim.draft.id ||
+        sessionNow.inFlightTurnId !== null
+      ) {
+        throw new ConflictError(
+          'intent-baseline-stale',
+          'the session changed while the apply was staging; rebase and regenerate',
+        )
       }
 
       for (const item of preparedOps) {
@@ -804,6 +893,8 @@ async function applyInner(
     }
     settleFailed(error)
     throw error
+  } finally {
+    ACTIVE_APPLY_JOURNALS.delete(journalId)
   }
 }
 
@@ -829,6 +920,14 @@ function rollForwardCommitted(
 /** Boot/hourly convergence (design §9.5): sweep unsettled journal rows.
  *  prepared/applying → compensate recorded artifacts, mark failed;
  *  committed → replay the idempotent roll-forward. */
+/** P2-1 — journals this PROCESS is actively applying; the converger must
+ *  never treat them as crashed. Registered for the whole applyIntentChangeset
+ *  window (claim → settle). */
+const ACTIVE_APPLY_JOURNALS = new Set<string>()
+/** P2-1 — and a floor: never reap a journal younger than this (a slow npm
+ *  install crossing the hourly tick is an ACTIVE apply, not a crash). */
+const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
+
 export async function convergeIntentApplyJournal(
   db: DbClient,
   appHome: string,
@@ -838,9 +937,14 @@ export async function convergeIntentApplyJournal(
   let failed = 0
   let rolledForward = 0
   const rows = await db.select().from(intentApplyJournal)
+  const reapBefore = Date.now() - CONVERGE_MIN_AGE_MS
   for (const row of rows) {
     const artifacts = JSON.parse(row.preparedArtifactsJson) as JournalArtifact[]
     if (row.state === 'prepared' || row.state === 'applying') {
+      // P2-1: an apply this PROCESS is running, or one still fresh enough to
+      // be a slow install, is ACTIVE — reaping it would compensate a live
+      // transaction's prestage and then fail its journal CAS.
+      if (ACTIVE_APPLY_JOURNALS.has(row.id) || row.updatedAt > reapBefore) continue
       for (const artifact of [...artifacts].reverse()) {
         try {
           if (artifact.kind === 'skill-stage') {

@@ -15,7 +15,7 @@ import type { AclResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { intentProvenance, intentSessions, intentTurns } from '@/db/schema'
+import { intentApplyJournal, intentProvenance, intentSessions, intentTurns } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   ACL_TABLES,
@@ -176,6 +176,30 @@ export async function createIntentSession(
   })
 }
 
+/** Codex impl-gate P1-1 — while an apply is between claim and settlement
+ *  (prepared/applying), every session mutation is refused: a rebase or mount
+ *  racing the prestage window would otherwise be silently overwritten by the
+ *  final transaction's epoch bump. Works on the tx for same-connection reads. */
+export function assertNoUnsettledApply(
+  tx: { select: DbClient['select'] },
+  sessionId: string,
+): void {
+  const unsettled = (
+    tx
+      .select({ id: intentApplyJournal.id, state: intentApplyJournal.state })
+      .from(intentApplyJournal)
+      .where(eq(intentApplyJournal.sessionId, sessionId)) as unknown as {
+      all: () => Array<{ id: string; state: string }>
+    }
+  ).all()
+  if (unsettled.some((row) => row.state === 'prepared' || row.state === 'applying')) {
+    throw new ConflictError(
+      'intent-apply-in-flight',
+      'a commit is being applied for this session; wait for it to settle',
+    )
+  }
+}
+
 function assertWritable(actor: Actor, row: IntentSessionRow): void {
   if (row.ownerUserId !== actor.user.id) {
     // Admin READ bypass never extends to writes: same 404 shape as strangers.
@@ -207,6 +231,7 @@ export async function insertUserTurn(
     if (fresh.inFlightTurnId !== null) {
       throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
     }
+    assertNoUnsettledApply(tx, sessionId)
     const seq = fresh.turnSeq + 1
     tx.insert(intentTurns)
       .values({
@@ -262,6 +287,7 @@ export async function addIntentMount(
     if (fresh.inFlightTurnId !== null) {
       throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
     }
+    assertNoUnsettledApply(tx, sessionId)
     const manifest = JSON.parse(fresh.contextManifestJson) as IntentContextManifest
     const existing = manifestEntryFor(manifest, ref.resourceType, ref.resourceId)
     if (existing?.root === true) {
@@ -314,6 +340,7 @@ export async function removeIntentMount(
     if (fresh.inFlightTurnId !== null) {
       throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
     }
+    assertNoUnsettledApply(tx, sessionId)
     const manifest = JSON.parse(fresh.contextManifestJson) as IntentContextManifest
     const entry = manifest.find((e) => e.handle === handle)
     if (entry === undefined || !entry.root) {
@@ -351,6 +378,7 @@ export async function rebaseIntentSession(
     if (fresh.inFlightTurnId !== null) {
       throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
     }
+    assertNoUnsettledApply(tx, sessionId)
     const contextRevision = fresh.contextRevision + 1
     tx.update(intentSessions)
       .set({ contextRevision, updatedAt: now })
