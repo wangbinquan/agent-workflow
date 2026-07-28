@@ -18894,13 +18894,22 @@ button.status-chip {
 /* Keep every primary destination visible at the common 390x844 phone size.
    The rows retain their 44px tap target; only the oversized desktop group
    gutters are tightened so the final Memory row is not hidden behind the
-   pinned account/footer controls. */
+   pinned account/footer controls.
+   RFC-234 added an eighth primary destination (Intent Builder), which put the
+   Memory row 22px past the scroll region again — the group HEADERS give that
+   back (4 headers x 6px) plus the header/items gutter (4 x 2px), still without
+   touching any tap target. */
 .mobile-nav-dialog .sidebar__nav {
   gap: 0;
 }
 
 .mobile-nav-dialog .nav-group {
   padding: 0;
+  gap: 0;
+}
+
+.mobile-nav-dialog .nav-group__header {
+  padding: 2px 12px;
 }
 
 .mobile-nav-dialog .dialog__footer {
