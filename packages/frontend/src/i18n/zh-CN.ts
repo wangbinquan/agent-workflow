@@ -90,6 +90,7 @@ export interface Resources {
     namePlaceholder: string
     entryCreate: string
     entryModify: string
+    entryModifyHint: string
     provenanceBadge: string
     addMount: string
     addMountTitle: string
@@ -4247,6 +4248,7 @@ export const zhCN: Resources = {
     namePlaceholder: '新名称',
     entryCreate: '意图创建',
     entryModify: '意图修改',
+    entryModifyHint: '挂载本资源开启意图会话，AI 基于其现状提出修改。',
     provenanceBadge: '意图构建',
     addMount: '添加挂载',
     addMountTitle: '添加挂载',

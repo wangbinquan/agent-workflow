@@ -269,7 +269,7 @@ describe('resolveIntentBundle', () => {
             name: 'leaky',
             description: '',
             outputs: [],
-            bodyMd: 'use --token=ghp_AAAABBBBCCCCDDDDEEEEFFFF111122223333',
+            bodyMd: 'use --token=ghp_AAAABBBBCCCCDDDDEEEEFFFF111122223333', // gitleaks:allow — deliberate fake credential fixture
           },
         },
       ],

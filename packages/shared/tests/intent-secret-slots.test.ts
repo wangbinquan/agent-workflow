@@ -22,7 +22,7 @@ import {
   serializeWorkgroupDump,
 } from '../src/intent-dump-serialize'
 
-const SECRET = 'sk-live-AAAABBBBCCCCDDDDEEEEFFFF11112222'
+const SECRET = 'sk-live-AAAABBBBCCCCDDDDEEEEFFFF11112222' // gitleaks:allow — deliberate fake credential fixture
 
 describe('dump projections (OUT direction)', () => {
   test('mcp local: env values and argv[1:] fully redacted, argv[0] kept', () => {

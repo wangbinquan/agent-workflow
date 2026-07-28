@@ -18,7 +18,6 @@ import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
-import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { RenameDialog } from '@/components/RenameDialog'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
@@ -681,16 +680,11 @@ export function WorkgroupEditor(props: {
               </span>
             </span>
             <WorkgroupDraftStatusSummary state={controller.state} />
+            <IntentProvenanceBadge resourceType="workgroup" resourceId={props.initial.id} />
           </div>
         }
         actions={
           <>
-            <IntentProvenanceBadge resourceType="workgroup" resourceId={props.initial.id} />
-            <IntentEntryButton
-              variant="modify"
-              mount={{ resourceType: 'workgroup', resourceId: props.initial.id }}
-              data-testid="workgroup-intent-entry"
-            />
             <button
               type="button"
               className="btn btn--primary"
@@ -894,6 +888,25 @@ export function WorkgroupEditor(props: {
           >
             <strong>{copyResource.isPending ? t('workgroups.copying') : t('common.copy')}</strong>
             <span>{t('workgroups.copyActionHint')}</span>
+          </button>
+          <button
+            type="button"
+            className="workflow-editor-action-list__item"
+            onClick={() => {
+              setHeaderSurface(null)
+              void navigate({
+                to: '/intent',
+                search: {
+                  create: true,
+                  mountType: 'workgroup',
+                  mountId: props.initial.id,
+                },
+              })
+            }}
+            data-testid="workgroup-intent-entry"
+          >
+            <strong>{t('intent.entryModify')}</strong>
+            <span>{t('intent.entryModifyHint')}</span>
           </button>
           <button
             type="button"

@@ -91,6 +91,8 @@ export const enUS: Resources = {
     namePlaceholder: 'New name',
     entryCreate: 'Build via intent',
     entryModify: 'Modify via intent',
+    entryModifyHint:
+      'Opens an intent session with this resource mounted; the AI proposes changes from its current state.',
     provenanceBadge: 'Intent-built',
     addMount: 'Add mount',
     addMountTitle: 'Add mount',

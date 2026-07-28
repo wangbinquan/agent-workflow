@@ -29,7 +29,7 @@ import { manifestEntryFor } from '../src/services/intent/manifest'
 import { createManagedSkill } from '../src/services/skill'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
-const SECRET = 'ghp_AAAABBBBCCCCDDDDEEEEFFFF111122223333'
+const SECRET = 'ghp_AAAABBBBCCCCDDDDEEEEFFFF111122223333' // gitleaks:allow — deliberate fake credential fixture
 
 let db: DbClient
 let appHome: string
