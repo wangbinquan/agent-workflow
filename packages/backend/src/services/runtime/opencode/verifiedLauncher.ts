@@ -382,7 +382,8 @@ export function verifyPinnedSkillInventory(
     name: string
     description: string
     location: string
-    contentDigest: string
+    /** Allowlist of reviewed bodies (see PINNED_BUILTIN_SKILL). */
+    contentDigests: readonly string[]
   } = PINNED_BUILTIN_SKILL,
 ): void {
   if (!Array.isArray(value) || value.length !== 1) {
@@ -396,7 +397,7 @@ export function verifyPinnedSkillInventory(
     skill.description !== baseline.description ||
     skill.location !== baseline.location ||
     typeof skill.content !== 'string' ||
-    sha256(skill.content) !== baseline.contentDigest
+    !baseline.contentDigests.includes(sha256(skill.content))
   ) {
     return executionIdentityFailure('execution-identity-skill-mismatch')
   }

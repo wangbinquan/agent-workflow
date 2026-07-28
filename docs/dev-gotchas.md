@@ -58,6 +58,7 @@
 - **改 opencode argv 契约要同步两类桩**：TS fixtures **和** 6 个 `e2e/fixtures/*.sh` shell 桩（golden 只覆 TS）。跨 spec `code 3`/<1s/首 agent-node 红 = 桩契约失配。
 - **系统代理（非任务链）的 spawn 也必须走「烙印命令」seam**：e2e 二进制里 `markProductionOpencodeCommand` 编译为 no-op，业务路径靠「命令数组未 brand → legacy 测试 spawn」通过 shell 桩；系统路径若只拿 `runtimeBinary: string` 会在 e2e 里进 verified 计划直接 `execution-identity-auth-invalid`（verified 计划要 `opencode serve`+attest，shell 桩不会说 HTTP）。新系统代理一律传 `opencodeCmd: markProductionOpencodeCommand([binaryPath])`（生产 brand→verified 不变；e2e/unit 未 brand→legacy），见 `driver.ts buildSpawn` 的 `legacyTestPath` 与 rfc224-source-reachability 锁（RFC-234 事故）。
 - **macOS 下用 `mkdtemp(tmpdir())` 喂 `AGENT_WORKFLOW_HOME`/store 根会撞 verified 链路的反符号链接防线**：`/var`→`/private/var` 是符号链接，hermetic 布局的 `ensurePrivateDirectory` 逐级 lstat fail-closed（`execution-identity-store-unsafe`）。写真机/live 测试先 `realpath` 规范化（identity-preflight 套件的 `canonicalTmp` 即此意）；生产 `~/.agent-workflow` 无此问题。
+- **对 opencode 内置资产钉「单一字节 digest」= 给自己埋版本炸弹**：`PINNED_BUILTIN_SKILL` 曾钉死内置 skill 正文 digest，opencode 1.18.8 重写该正文（name/description/location 逐字未变）→ 生产 `verifyPinnedSkillInventory` 对该版本**每次 verified 运行**都 `execution-identity-skill-mismatch`（夜跑 `opencode latest` 腿先于用户拦到）。与 RFC-227 版本中立冲突。正解：身份字段仍逐字精确，正文改为**已审阅发行版 digest 白名单**（未知正文仍 fail-closed，新增条目=人工 diff 过）。判据：`latest` 腿红而钉版腿绿 ⇒ 上游漂移，不是本次改动。
 - **有界-spawn 定式**：`killProcessTree`（`process.kill(-pid)` 组杀）+ `detached:true` + 超时 SIGKILL + **finally 无条件组杀**（收 fork-then-exit 孙进程）+ 流式 capped reader（防 stderr 洪泛 OOM）。现 4+ 处（opencode/models/git/sandbox）= dedup 候选。
 
 ## 工作流提示与人工重跑
@@ -105,7 +106,7 @@
 
 ## dev-env / daemon
 
-- **`bun dev` 中编辑 `packages/backend/src/**` 触发 `--watch` 重启**，race 30s graceful-shutdown flock → daemon 常 **DOWN**（浏览器空白 + 503 + 误导「token 无权限」横幅），非崩溃；重启复活。纯前端编辑不掉。
+- **`bun dev` 中编辑 `packages/backend/src/**`触发`--watch` 重启**，race 30s graceful-shutdown flock → daemon 常 **DOWN\*\*（浏览器空白 + 503 + 误导「token 无权限」横幅），非崩溃；重启复活。纯前端编辑不掉。
 - **claude-code 运行时直连 Anthropic**：daemon 从普通 shell 起若缺 `HTTP(S)_PROXY` → 403 被 smoke 误报「缺鉴权」；报缺鉴权先查 daemon 代理再查凭据。
 - **claude code 在 uid 0 下 bypassPermissions 会 exit(1)** 除非 env `IS_SANDBOX==="1"`（精确字符串）；root 跑 daemon 时每次 claude-code-protocol 启动都需（`buildClaudeSpawn` 已 gate）。
 - **分离 worktree 里 symlink `node_modules`** 会把 `@agent-workflow/*` 解析回污染的 main → 假 typecheck 错；worktree 里 `bun install` 或信 CI。

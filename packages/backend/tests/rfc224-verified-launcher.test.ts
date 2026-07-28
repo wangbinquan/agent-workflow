@@ -25,6 +25,9 @@ import {
   launchVerifiedOpencodeManifest,
   runVerifiedOpencodeLauncher,
   verifyPinnedSkillInventory,
+} from '../src/services/runtime/opencode/verifiedLauncher'
+import { PINNED_BUILTIN_SKILL } from '../src/services/runtime/opencode/hermetic'
+import {
   verifySelectedProviderInventory,
   type VerifiedLauncherClient,
   type VerifiedLauncherDependencies,
@@ -738,16 +741,54 @@ describe('RFC-224 same-instance provider and skill gates', () => {
     )
   })
 
+  // 2026-07-28 — opencode 1.18.8 rewrote the built-in skill BODY while leaving
+  // name/description/location byte-identical. A single frozen digest made every
+  // verified run on that release fail closed (nightly `opencode latest` leg).
+  // The boundary now accepts a REVIEWED allowlist: known bodies pass, an
+  // unknown body still fails, and identity fields stay exact.
+  test('skill body allowlist accepts every reviewed release and nothing else', () => {
+    const oldBody = 'body as shipped by 1.18.3'
+    const newBody = 'body as shipped by 1.18.8'
+    const baseline = {
+      name: 'customize-opencode',
+      description: 'pinned',
+      location: '<built-in>',
+      contentDigests: [
+        createHash('sha256').update(newBody).digest('hex'),
+        createHash('sha256').update(oldBody).digest('hex'),
+      ] as readonly string[],
+    }
+    const entry = (content: string) => [
+      {
+        name: baseline.name,
+        description: baseline.description,
+        location: baseline.location,
+        content,
+      },
+    ]
+    expect(() => verifyPinnedSkillInventory(entry(oldBody), baseline)).not.toThrow()
+    expect(() => verifyPinnedSkillInventory(entry(newBody), baseline)).not.toThrow()
+    expect(() => verifyPinnedSkillInventory(entry('an unreviewed body'), baseline)).toThrow(
+      'execution-identity-skill-mismatch',
+    )
+    // Identity fields remain exact even when the body is allowlisted.
+    expect(() =>
+      verifyPinnedSkillInventory([{ ...entry(newBody)[0]!, name: 'sneaky-skill' }], baseline),
+    ).toThrow('execution-identity-skill-mismatch')
+    // And the production pin really does carry more than one reviewed body.
+    expect(PINNED_BUILTIN_SKILL.contentDigests.length).toBeGreaterThanOrEqual(2)
+  })
+
   test('skill inventory is exact and errors never include skill content', () => {
     const content = 'fixture built-in content'
     const baseline = {
       name: 'customize-opencode',
       description: 'pinned',
       location: '<built-in>',
-      contentDigest: createHash('sha256').update(content).digest('hex'),
+      contentDigests: [createHash('sha256').update(content).digest('hex')] as readonly string[],
     }
     expect(() =>
-      verifyPinnedSkillInventory([{ ...baseline, content, contentDigest: undefined }], baseline),
+      verifyPinnedSkillInventory([{ ...baseline, content, contentDigests: undefined }], baseline),
     ).toThrow()
     expect(() =>
       verifyPinnedSkillInventory(

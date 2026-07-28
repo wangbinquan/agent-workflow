@@ -12,7 +12,28 @@ export const PINNED_BUILTIN_SKILL = Object.freeze({
   description:
     "Use ONLY when the user is editing or creating opencode's own configuration: opencode.json, opencode.jsonc, files under .opencode/, or files under ~/.config/opencode/. Also use when creating or fixing opencode agents, subagents, skills, plugins, MCP servers, or permission rules. Do not use for the user's own application code, or for any project that is not configuring opencode itself.",
   location: '<built-in>',
-  contentDigest: '6d22eed007626b08113c19a8837e2327e0af0bd3e75bfda9c3bfa07cf122e3eb',
+  /**
+   * Known-verified bodies of the ONE built-in skill, newest first.
+   *
+   * Upstream edits this document between releases (1.18.8 rewrote it wholesale
+   * while leaving name/description/location byte-identical). A single frozen
+   * digest therefore contradicts RFC-227's version-neutral admission: every
+   * user on the newer release would fail `execution-identity-skill-mismatch`
+   * on EVERY verified run — the nightly `opencode latest` leg caught exactly
+   * that on 2026-07-28.
+   *
+   * The boundary is unchanged in kind: exactly one skill, exact key set, exact
+   * name/description/location, and a body whose bytes we have reviewed. An
+   * unknown body still fails closed — adding an entry here is a deliberate act
+   * that means "these bytes were diffed against the previous release".
+   */
+  contentDigests: Object.freeze([
+    // opencode 1.18.8 (verified 2026-07-28: body rewrite only; identity fields
+    // byte-identical to the 1.18.3 entry below).
+    'f83e8f42cd3f1422656a9725357b6dca24ee8af4582905d03da97ffb999db11e',
+    // opencode 1.17.x–1.18.4.
+    '6d22eed007626b08113c19a8837e2327e0af0bd3e75bfda9c3bfa07cf122e3eb',
+  ] as readonly string[]),
 })
 
 export const PINNED_BUNDLED_PROVIDER_NPM = new Set([
