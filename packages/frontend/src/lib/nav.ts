@@ -47,6 +47,9 @@ export const NAV_GROUPS: NavGroupEntry[] = [
       // RFC-164: workgroups are launched like workflows, so they live in
       // the same group.
       { to: '/workgroups', i18nKey: 'nav.workgroups', icon: 'workgroup' },
+      // RFC-234: the intent builder authors workflows/workgroups (and their
+      // agents/skills), so it lives beside them.
+      { to: '/intent', i18nKey: 'nav.intent', icon: 'workflow' },
     ],
   },
   {

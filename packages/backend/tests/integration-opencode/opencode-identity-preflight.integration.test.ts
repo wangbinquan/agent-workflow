@@ -1324,4 +1324,104 @@ describe.skipIf(!RUN_INTEGRATION)('RFC-227 real-binary no-LLM execution identity
       await rm(root, { recursive: true, force: true })
     }
   }, 60_000)
+
+  // RFC-234 design-gate P2-2 — real-binary qualification of the
+  // `intent-read-v1` system permission profile, no LLM spend. The controlled
+  // config flips EXACTLY read/grep/glob to allow (same key order as the
+  // all-deny tail); the REAL binary must attest that config back verbatim
+  // through the same execution-identity proof the production system plan
+  // uses. A binary that reorders, drops, or widens the permission object
+  // fails here before any model ever runs under it.
+  test('intent-read-v1 profile attests verbatim on the real binary', async () => {
+    const canonicalTmp = await realpath(tmpdir())
+    const root = await mkdtemp(join(canonicalTmp, 'aw-rfc234-intent-preflight-'))
+    const worktree = join(root, 'worktree')
+    const storeRoot = join(root, 'store')
+    await mkdir(worktree, { recursive: true, mode: 0o700 })
+    await writeFile(join(worktree, 'INTENT.md'), '# intent preflight fixture\n')
+
+    const layout = await prepareHermeticOpencodeLayout(storeRoot)
+    const controlledConfig = buildControlledOpencodeConfig({
+      name: 'aw-intent-builder',
+      prompt: 'RFC-234 intent-read-v1 no-LLM preflight',
+      description: 'RFC-234 intent-read-v1 no-LLM preflight',
+      model: `${PINNED_MODEL.providerID}/${PINNED_MODEL.modelID}`,
+      options: {},
+      userPermission: {},
+      toolOutputPattern: join(layout.xdgData, 'opencode', 'tool-output', '*'),
+      shellPath: '/bin/false',
+      allowShell: false,
+      mcp: {},
+      allowedReadOnlyTools: ['read', 'grep', 'glob'],
+    })
+    const auth = buildStrictProviderAuth(PINNED_MODEL.providerID, {
+      OPENAI_API_KEY: 'rfc234-local-schema-only-key',
+    })
+    const username = 'aw-rfc234-preflight'
+    const password = 'aw-rfc234-preflight-password'
+    const serverEnv = buildHermeticServerEnv({
+      layout,
+      providerID: PINNED_MODEL.providerID,
+      auth,
+      config: controlledConfig,
+      username,
+      password,
+      sourceEnv: {},
+    })
+    serverEnv.PWD = worktree
+
+    try {
+      await withRuntimeOpencodeSnapshot([OPENCODE_BIN], async (binaryPath) => {
+        const server = startServer(binaryPath, worktree, serverEnv)
+        try {
+          const port = await Promise.race([
+            server.port,
+            boundedDelay(10_000).then(() => {
+              throw new Error('intent preflight OpenCode listen timeout')
+            }),
+          ])
+          const client = new OpencodeDirectClient({
+            origin: `http://127.0.0.1:${port}`,
+            directory: worktree,
+            username,
+            password,
+            budgets: { maxJsonBytes: 4 * 1024 * 1024, requestTimeoutMs: 10_000 },
+          })
+          const effectiveConfig = await client.getConfig()
+          const agents = await client.getAgents()
+          const secondAgents = await client.getAgents()
+          const proof = verifyExecutionIdentity({
+            expectedInlineConfig: controlledConfig,
+            effectiveConfig,
+            agents,
+            secondAgents,
+            selectedAgentName: 'aw-intent-builder',
+            permissionHome: layout.home,
+          })
+          expect(proof.controlledAgentNames).toEqual(['aw-intent-builder'])
+          // Belt-and-braces readable lock on the attested AGENT permission
+          // object (the profile flips live on the agent, not the global
+          // baseline): read/grep/glob allow, write/exec surface deny, bash
+          // closed.
+          const permission = (
+            effectiveConfig as {
+              agent?: Record<string, { permission?: Record<string, unknown> }>
+            }
+          ).agent?.['aw-intent-builder']?.permission
+          expect(permission).toBeDefined()
+          for (const tool of ['read', 'grep', 'glob']) {
+            expect(permission?.[tool]).toBe('allow')
+          }
+          for (const tool of ['edit', 'write', 'bash', 'webfetch']) {
+            expect(permission?.[tool]).toBe('deny')
+          }
+        } finally {
+          await stopServer(server)
+        }
+      })
+    } finally {
+      await removeHermeticOpencodeLayout(storeRoot).catch(() => undefined)
+      await rm(root, { recursive: true, force: true })
+    }
+  }, 60_000)
 })

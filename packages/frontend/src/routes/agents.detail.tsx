@@ -33,6 +33,8 @@ import {
 import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
 import { useTour } from '@/components/tour/SpotlightTour'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { IntentEntryButton } from '@/components/IntentEntryButton'
+import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { validateAgentPortState } from '@/lib/agent-ports'
@@ -188,35 +190,43 @@ function AgentDetailPage() {
         }}
         errors={[save.error, del.error]}
         extra={
-          query.data?.builtin !== true &&
-          (resourceStatusQuery.data?.ok !== false ? (
-            <Link
-              to="/tasks/new"
-              // RFC-211 §12: while the onboarding tour is running, deep-link the
-              // wizard into its prefilled, ready-to-submit tour mode so the tour
-              // can complete build → run → result. Normal launches are untouched.
-              search={
-                tour.active?.tourId === 'first-task'
-                  ? { kind: 'agent', agentId: id, tour: 'first-task' }
-                  : { kind: 'agent', agentId: id }
-              }
-              className="btn"
-              data-testid="agent-launch-button"
-              data-tour="agent-launch"
-            >
-              {t('taskWizard.launchEntry')}
-            </Link>
-          ) : (
-            <button
-              type="button"
-              className="btn"
-              disabled
-              title={t('agentForm.resourceLaunchBlocked')}
-              data-testid="agent-launch-button"
-            >
-              {t('taskWizard.launchEntry')}
-            </button>
-          ))
+          <>
+            <IntentProvenanceBadge resourceType="agent" resourceId={id} />
+            <IntentEntryButton
+              variant="modify"
+              mount={{ resourceType: 'agent', resourceId: id }}
+              data-testid="agent-intent-entry"
+            />
+            {query.data?.builtin !== true &&
+              (resourceStatusQuery.data?.ok !== false ? (
+                <Link
+                  to="/tasks/new"
+                  // RFC-211 §12: while the onboarding tour is running, deep-link the
+                  // wizard into its prefilled, ready-to-submit tour mode so the tour
+                  // can complete build → run → result. Normal launches are untouched.
+                  search={
+                    tour.active?.tourId === 'first-task'
+                      ? { kind: 'agent', agentId: id, tour: 'first-task' }
+                      : { kind: 'agent', agentId: id }
+                  }
+                  className="btn"
+                  data-testid="agent-launch-button"
+                  data-tour="agent-launch"
+                >
+                  {t('taskWizard.launchEntry')}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled
+                  title={t('agentForm.resourceLaunchBlocked')}
+                  data-testid="agent-launch-button"
+                >
+                  {t('taskWizard.launchEntry')}
+                </button>
+              ))}
+          </>
         }
       />
       {jsonDraft !== undefined && (

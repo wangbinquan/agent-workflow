@@ -267,7 +267,21 @@ export type WorkflowWritePrincipal =
   | { kind: 'actor'; actor: Actor }
   | { kind: 'system'; reason: string }
 
-export async function updateWorkflow(
+/** RFC-234 (T6) — prepare/commit split of the workflow full-document save
+ *  (agent.ts precedent). `commitWorkflowSaveInTx` is the former dbTxSync body
+ *  verbatim modulo destructuring; updateWorkflow composes the halves. */
+export interface PreparedWorkflowSave {
+  id: string
+  principal: WorkflowWritePrincipal
+  parsed: { data: UpdateWorkflow }
+  normalizedSnapshot: ReturnType<typeof normalizeWorkflowSnapshot>
+  submittedBytes: string
+  definitionStorage: string
+  fenceableAgentIds: Set<string>
+  inTxGuard?: WorkflowWriteInTxGuard
+}
+
+export async function prepareWorkflowSave(
   db: DbClient,
   id: string,
   input: UpdateWorkflow,
@@ -277,7 +291,7 @@ export async function updateWorkflow(
     /** Deterministic race-test seam after ordinary preflight, before dbTxSync. */
     beforeWriteTransaction?: () => void | Promise<void>
   },
-): Promise<SaveWorkflowReceipt> {
+): Promise<PreparedWorkflowSave> {
   const parsed = UpdateWorkflowSchema.safeParse(input)
   if (!parsed.success) {
     throw new ValidationError('workflow-invalid', 'invalid workflow save payload', {
@@ -311,58 +325,61 @@ export async function updateWorkflow(
     assertNoMissingRefs(resolved.missing)
     fenceableAgentIds = new Set(resolved.byToken.values())
   }
-  await opts?.beforeWriteTransaction?.()
+  return {
+    id,
+    principal,
+    parsed: { data: parsed.data },
+    normalizedSnapshot,
+    submittedBytes,
+    definitionStorage,
+    fenceableAgentIds,
+    ...(opts?.inTxGuard === undefined ? {} : { inTxGuard: opts.inTxGuard }),
+  }
+}
 
-  const txResult = dbTxSync<{ receipt: SaveWorkflowReceipt; committed: boolean }>(db, (tx) => {
-    const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
-    if (currentRow === undefined) throwWorkflowNotFound(id)
+export function commitWorkflowSaveInTx(
+  tx: DbTxSync,
+  p: PreparedWorkflowSave,
+): { receipt: SaveWorkflowReceipt; committed: boolean } {
+  const {
+    id,
+    principal,
+    parsed,
+    normalizedSnapshot,
+    submittedBytes,
+    definitionStorage,
+    fenceableAgentIds,
+  } = p
+  const opts = { inTxGuard: p.inTxGuard }
+  const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
+  if (currentRow === undefined) throwWorkflowNotFound(id)
 
-    assertPrincipalCanWriteInTx(tx, principal, currentRow)
-    const current = rowToWorkflow(currentRow)
-    assertChangedWorkflowName(current.name, normalizedSnapshot.name)
+  assertPrincipalCanWriteInTx(tx, principal, currentRow)
+  const current = rowToWorkflow(currentRow)
+  assertChangedWorkflowName(current.name, normalizedSnapshot.name)
 
-    // Import reference selectors are initially resolved for preview/mapping,
-    // then re-read here from the transaction's fresh ACL snapshot. This must
-    // precede version/logical-no-op reconciliation: a response-loss retry may
-    // not report success after its selected reference became stale/invisible.
-    opts?.inTxGuard?.assert(tx)
-    const newAgentIds = diffNewNames(
-      extractWorkflowAgentRefs(current.definition),
-      extractWorkflowAgentRefs(normalizedSnapshot.definition),
-    ).filter((id) => fenceableAgentIds.has(id))
-    assertRefsUsableInTx(tx, principal.kind === 'actor' ? principal.actor : null, [
-      { type: 'agent', names: newAgentIds },
-    ])
+  // Import reference selectors are initially resolved for preview/mapping,
+  // then re-read here from the transaction's fresh ACL snapshot. This must
+  // precede version/logical-no-op reconciliation: a response-loss retry may
+  // not report success after its selected reference became stale/invisible.
+  opts?.inTxGuard?.assert(tx)
+  const newAgentIds = diffNewNames(
+    extractWorkflowAgentRefs(current.definition),
+    extractWorkflowAgentRefs(normalizedSnapshot.definition),
+  ).filter((id) => fenceableAgentIds.has(id))
+  assertRefsUsableInTx(tx, principal.kind === 'actor' ? principal.actor : null, [
+    { type: 'agent', names: newAgentIds },
+  ])
 
-    const currentSnapshot = workflowDraftSnapshotOf(current)
-    const currentBytes = serializeWorkflowEditableSnapshotV1(currentSnapshot)
-    const currentRevision = workflowRevisionOf(current)
-    const logicalSame = currentBytes === submittedBytes
+  const currentSnapshot = workflowDraftSnapshotOf(current)
+  const currentBytes = serializeWorkflowEditableSnapshotV1(currentSnapshot)
+  const currentRevision = workflowRevisionOf(current)
+  const logicalSame = currentBytes === submittedBytes
 
-    if (currentRow.version !== parsed.data.expectedVersion) {
-      // Response-loss reconciliation: a retry of the exact bytes already at
-      // the server succeeds without minting another revision or WS frame.
-      if (logicalSame) {
-        return {
-          receipt: {
-            clientMutationId: parsed.data.clientMutationId,
-            requestedBaseVersion: parsed.data.expectedVersion,
-            revision: currentRevision,
-            snapshot: normalizedSnapshot,
-            outcome: 'already-current',
-          },
-          committed: false,
-        }
-      }
-      throw new ConflictError(
-        'workflow-version-conflict',
-        `workflow '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
-        { current: currentRevision },
-      )
-    }
-
-    const physicalDefinitionCurrent = currentRow.definition === definitionStorage
-    if (logicalSame && physicalDefinitionCurrent) {
+  if (currentRow.version !== parsed.data.expectedVersion) {
+    // Response-loss reconciliation: a retry of the exact bytes already at
+    // the server succeeds without minting another revision or WS frame.
+    if (logicalSame) {
       return {
         receipt: {
           clientMutationId: parsed.data.clientMutationId,
@@ -374,40 +391,78 @@ export async function updateWorkflow(
         committed: false,
       }
     }
+    throw new ConflictError(
+      'workflow-version-conflict',
+      `workflow '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
+      { current: currentRevision },
+    )
+  }
 
-    const updatedAt = Date.now()
-    const returned = tx
-      .update(workflows)
-      .set({
-        name: normalizedSnapshot.name,
-        description: normalizedSnapshot.description,
-        definition: definitionStorage,
-        version: currentRow.version + 1,
-        updatedAt,
-      })
-      .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
-      .returning()
-      .get()
-    if (returned === undefined) {
-      // Defensive CAS-loss surface. In the synchronous SQLite transaction this
-      // should be unreachable, but never manufacture a success receipt.
-      throw new ConflictError('workflow-version-conflict', `workflow '${id}' changed; reload`, {
-        current: currentRevision,
-      })
-    }
-    const committed = rowToWorkflow(returned)
-    const revision = workflowRevisionOf(committed)
+  const physicalDefinitionCurrent = currentRow.definition === definitionStorage
+  if (logicalSame && physicalDefinitionCurrent) {
     return {
       receipt: {
         clientMutationId: parsed.data.clientMutationId,
         requestedBaseVersion: parsed.data.expectedVersion,
-        revision,
+        revision: currentRevision,
         snapshot: normalizedSnapshot,
-        outcome: 'committed',
+        outcome: 'already-current',
       },
-      committed: true,
+      committed: false,
     }
-  })
+  }
+
+  const updatedAt = Date.now()
+  const returned = tx
+    .update(workflows)
+    .set({
+      name: normalizedSnapshot.name,
+      description: normalizedSnapshot.description,
+      definition: definitionStorage,
+      version: currentRow.version + 1,
+      updatedAt,
+    })
+    .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
+    .returning()
+    .get()
+  if (returned === undefined) {
+    // Defensive CAS-loss surface. In the synchronous SQLite transaction this
+    // should be unreachable, but never manufacture a success receipt.
+    throw new ConflictError('workflow-version-conflict', `workflow '${id}' changed; reload`, {
+      current: currentRevision,
+    })
+  }
+  const committed = rowToWorkflow(returned)
+  const revision = workflowRevisionOf(committed)
+  return {
+    receipt: {
+      clientMutationId: parsed.data.clientMutationId,
+      requestedBaseVersion: parsed.data.expectedVersion,
+      revision,
+      snapshot: normalizedSnapshot,
+      outcome: 'committed',
+    },
+    committed: true,
+  }
+}
+
+export async function updateWorkflow(
+  db: DbClient,
+  id: string,
+  input: UpdateWorkflow,
+  principal: WorkflowWritePrincipal,
+  opts?: {
+    inTxGuard?: WorkflowWriteInTxGuard
+    /** Deterministic race-test seam after ordinary preflight, before dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+  },
+): Promise<SaveWorkflowReceipt> {
+  const prepared = await prepareWorkflowSave(db, id, input, principal, opts)
+  await opts?.beforeWriteTransaction?.()
+
+  const txResult = dbTxSync<{ receipt: SaveWorkflowReceipt; committed: boolean }>(db, (tx) =>
+    commitWorkflowSaveInTx(tx, prepared),
+  )
 
   if (txResult.committed) {
     workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
@@ -601,7 +656,10 @@ export async function validateWorkflow(
 
 // --- helpers ---
 
-function insertWorkflowInTx(
+/** RFC-234 (T6): exported for the intent apply pipeline (its big transaction
+ *  runs assertRefsUsableInTx + this core per created workflow, exactly like
+ *  createWorkflow's own composition above). */
+export function insertWorkflowInTx(
   tx: DbTxSync,
   input: {
     id: string
@@ -637,7 +695,7 @@ function insertWorkflowInTx(
   return inserted
 }
 
-function broadcastWorkflowCreated(created: WorkflowDetail): void {
+export function broadcastWorkflowCreated(created: WorkflowDetail): void {
   workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
     type: 'workflow.created',
     workflowId: created.id,
@@ -692,7 +750,7 @@ function rowToWorkflow(row: WorkflowRow): Workflow {
   }
 }
 
-function rowToWorkflowDetail(row: WorkflowRow): WorkflowDetail {
+export function rowToWorkflowDetail(row: WorkflowRow): WorkflowDetail {
   return workflowToDetail(rowToWorkflow(row))
 }
 

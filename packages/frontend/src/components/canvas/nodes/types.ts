@@ -14,7 +14,7 @@ export const INBOUND_HANDLE_ID = '__inbound__'
 /** Discriminated selection emitted by WorkflowCanvas.onSelect. RFC-003. */
 export type CanvasSelection = { kind: 'node'; id: string } | { kind: 'edge'; id: string }
 
-export type WorkflowCanvasSurface = 'editor' | 'task' | 'workgroup-preview'
+export type WorkflowCanvasSurface = 'editor' | 'task' | 'workgroup-preview' | 'intent-preview'
 
 export interface CanvasNodeData extends Record<string, unknown> {
   /** Explicit scope prevents editor-only authoring chrome leaking into runtime canvases. */

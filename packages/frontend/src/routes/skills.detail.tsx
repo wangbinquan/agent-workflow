@@ -13,6 +13,8 @@ import {
   type SplitBusyRelease,
 } from '@/components/split/splitDirty'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { IntentEntryButton } from '@/components/IntentEntryButton'
+import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
@@ -895,14 +897,22 @@ function SkillDetailPage() {
           disabled: del.isPending || aggregate.dirty || operationBusy || aggregate.outcomeUnknown,
         }}
         extra={
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setFuseOpen(true)}
-            disabled={aggregate.dirty || operationBusy || aggregate.outcomeUnknown}
-          >
-            {t('fusion.launchFromSkillButton')}
-          </button>
+          <>
+            <IntentProvenanceBadge resourceType="skill" resourceId={id} />
+            <IntentEntryButton
+              variant="modify"
+              mount={{ resourceType: 'skill', resourceId: id }}
+              data-testid="skill-intent-entry"
+            />
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setFuseOpen(true)}
+              disabled={aggregate.dirty || operationBusy || aggregate.outcomeUnknown}
+            >
+              {t('fusion.launchFromSkillButton')}
+            </button>
+          </>
         }
         errors={[saveError, del.error]}
       />

@@ -20,6 +20,9 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       ['/plugins', 'plugin'],
       ['/workflows', 'workflow'],
       ['/workgroups', 'workgroup'],
+      // RFC-234 — intent builder rides the workflow icon (it authors
+      // workflows/workgroups; no dedicated glyph yet).
+      ['/intent', 'workflow'],
       ['/tasks', 'task'],
       ['/scheduled', 'schedule'],
       ['/repos', 'repo'],

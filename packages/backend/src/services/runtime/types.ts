@@ -253,6 +253,27 @@ export interface SessionCaptureContext {
 }
 
 /**
+ * RFC-234 §1.1 — FROZEN system-agent permission profiles. NOT an arbitrary
+ * permission map: the closed enum is the entire expressible surface, so a
+ * bash/write/network allow simply has no spelling (Codex design-gate P0-1).
+ *
+ * - 'all-deny'        — the RFC-224 status quo: every tool denied. Default;
+ *                       distiller / smoke / commit-push are byte-unchanged.
+ * - 'intent-read-v1'  — read-only file tools (read/grep/glob) allowed inside
+ *                       the session cwd; everything else stays denied and
+ *                       `external_directory: {'*': 'deny'}` confines reads to
+ *                       the worktree. Qualified as part of the RFC-224
+ *                       behavior surface; only the opencode verified path
+ *                       implements it — other drivers must fail closed.
+ */
+export const SYSTEM_PERMISSION_PROFILES = ['all-deny', 'intent-read-v1'] as const
+export type SystemPermissionProfile = (typeof SYSTEM_PERMISSION_PROFILES)[number]
+
+export function isSystemPermissionProfile(v: unknown): v is SystemPermissionProfile {
+  return typeof v === 'string' && (SYSTEM_PERMISSION_PROFILES as readonly string[]).includes(v)
+}
+
+/**
  * RFC-117 — spawn inputs for a framework "system agent" (distiller / commit /
  * fusion-merger): one agent with a persona + model, NO skills / mcp / plugins /
  * inventory / inline-config mutation. Each driver's `buildSpawn` translates this
@@ -280,6 +301,16 @@ export interface SystemAgentSpawnContext {
    */
   appHome?: string
   /** Override the default binary head (`[runtimeBinary]` vs `['opencode']`/`['claude']`) — RFC-112 custom fork. */
+  /**
+   * RFC-234: production command head branded at the config boundary via
+   * `markProductionOpencodeCommand` — the SAME seam the business path uses.
+   * A branded command takes the verified system plan; an unbranded one (only
+   * possible in unit tests and the e2e binary, where branding is compiled to
+   * a no-op) takes the legacy test spawn. There is deliberately no string /
+   * env / config switch that can force the legacy path in production.
+   */
+  opencodeCmd?: readonly string[]
+
   runtimeBinary?: string
   /** RFC-026 clarify-rerun: resume a prior session. */
   resumeSessionId?: string
@@ -295,6 +326,13 @@ export interface SystemAgentSpawnContext {
   testOnlyUnverifiedRuntime?: boolean
   /** One pre-driver admission, frozen by the daemon coordinator. */
   containment?: PreparedContainmentPlan
+  /**
+   * RFC-234 §1.1 — frozen permission profile. Omitted → 'all-deny' (the
+   * RFC-224 status quo; every pre-RFC-234 caller is byte-unchanged). Only the
+   * opencode verified system path implements 'intent-read-v1'; drivers that
+   * cannot prove the profile MUST fail closed instead of degrading.
+   */
+  systemPermissionProfile?: SystemPermissionProfile
 }
 
 /**

@@ -58,6 +58,9 @@ export const PERMISSIONS = [
   'memory:write_feedback',
   // RFC-045 manual edit of candidate/approved/archived rows (admin only)
   'memory:edit',
+  // RFC-234 intent builder (every logged-in user; artifacts land private)
+  'intent:read',
+  'intent:write',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
@@ -109,6 +112,10 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
   'memory:archive',
   'memory:delete',
   'memory:edit',
+  // RFC-234 (D22): intent building is open to all users; per-session
+  // visibility (creator + system admin only) is enforced by the service.
+  'intent:read',
+  'intent:write',
 ]
 
 // RFC-222 — manager's extra route points over the user baseline. Row-level

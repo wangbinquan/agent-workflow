@@ -83,30 +83,15 @@ export async function createPlugin(
     }
     const prepared = await installPlugin(id, parsed.spec, installOpts(deps))
     try {
-      const now = Date.now()
-      return dbTxSync(db, (tx) => {
-        tx.insert(plugins)
-          .values({
-            id,
-            name: parsed.name,
-            spec: parsed.spec,
-            optionsJson: JSON.stringify(parsed.options),
-            description: parsed.description,
-            enabled: parsed.enabled,
-            sourceKind: prepared.sourceKind,
-            cachedPath: prepared.cachedPath,
-            resolvedVersion: prepared.resolvedVersion,
-            installedAt: now,
-            // RFC-231: every user-created resource starts private with ACL rev 0.
-            ...initialAcl,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .run()
-        const created = selectPluginRowById(tx, id)
-        if (created === null) throw new Error('plugin disappeared during create publication')
-        return rowToPlugin(created)
-      })
+      return dbTxSync(db, (tx) =>
+        commitPluginCreateInTx(tx, {
+          id,
+          parsed,
+          initialAcl,
+          install: prepared,
+          now: Date.now(),
+        }),
+      )
     } catch (error) {
       await cleanupInstallGeneration(prepared)
       if (isOwnerNameUniqueViolation(error, 'plugins', 'plugins_owner_name_unique')) {
@@ -115,6 +100,48 @@ export async function createPlugin(
       throw error
     }
   })
+}
+
+/** RFC-234 (T6) — the plugin create insert core. The npm/git install runs
+ *  BEFORE this (installPlugin — the intent pipeline's preinstall phase records
+ *  the generation in its journal first); a failed transaction is compensated
+ *  with cleanupInstallGeneration by the caller. */
+export interface PreparedPluginCreate {
+  id: string
+  parsed: {
+    name: string
+    spec: string
+    options: Record<string, unknown>
+    description: string
+    enabled: boolean
+  }
+  initialAcl: ReturnType<typeof initialPrivateResourceAcl>
+  install: InstallResult
+  now: number
+}
+
+export function commitPluginCreateInTx(tx: DbTxSync, p: PreparedPluginCreate): Plugin {
+  tx.insert(plugins)
+    .values({
+      id: p.id,
+      name: p.parsed.name,
+      spec: p.parsed.spec,
+      optionsJson: JSON.stringify(p.parsed.options),
+      description: p.parsed.description,
+      enabled: p.parsed.enabled,
+      sourceKind: p.install.sourceKind,
+      cachedPath: p.install.cachedPath,
+      resolvedVersion: p.install.resolvedVersion,
+      installedAt: p.now,
+      // RFC-231: every user-created resource starts private with ACL rev 0.
+      ...p.initialAcl,
+      createdAt: p.now,
+      updatedAt: p.now,
+    })
+    .run()
+  const created = selectPluginRowById(tx, p.id)
+  if (created === null) throw new Error('plugin disappeared during create publication')
+  return rowToPlugin(created)
 }
 
 export async function updatePlugin(
@@ -364,31 +391,37 @@ export async function collectPluginGenerationGarbage(
   })
 }
 
-function publishPluginUpdate(
-  db: DbClient,
+export type PluginPublishSet = Pick<
+  typeof plugins.$inferInsert,
+  | 'spec'
+  | 'optionsJson'
+  | 'description'
+  | 'enabled'
+  | 'sourceKind'
+  | 'cachedPath'
+  | 'resolvedVersion'
+  | 'installedAt'
+  | 'updatedAt'
+>
+
+/** RFC-234 (T6) — the update publish core: full-captured-row identity fence
+ *  (any concurrent change → resource-operation-stale), then atomic set. */
+export function commitPluginPublishInTx(
+  tx: DbTxSync,
   captured: PluginRow,
-  set: Pick<
-    typeof plugins.$inferInsert,
-    | 'spec'
-    | 'optionsJson'
-    | 'description'
-    | 'enabled'
-    | 'sourceKind'
-    | 'cachedPath'
-    | 'resolvedVersion'
-    | 'installedAt'
-    | 'updatedAt'
-  >,
+  set: PluginPublishSet,
 ): Plugin {
-  return dbTxSync(db, (tx) => {
-    const current = selectPluginRowById(tx, captured.id)
-    if (current === null || !samePluginRow(current, captured)) throw stalePluginError(captured.id)
-    const result = tx.update(plugins).set(set).where(fullPluginRowWhere(captured)).run()
-    if (changesOf(result) !== 1) throw stalePluginError(captured.id)
-    const published = selectPluginRowById(tx, captured.id)
-    if (published === null) throw new Error('plugin disappeared during generation publish')
-    return rowToPlugin(published)
-  })
+  const current = selectPluginRowById(tx, captured.id)
+  if (current === null || !samePluginRow(current, captured)) throw stalePluginError(captured.id)
+  const result = tx.update(plugins).set(set).where(fullPluginRowWhere(captured)).run()
+  if (changesOf(result) !== 1) throw stalePluginError(captured.id)
+  const published = selectPluginRowById(tx, captured.id)
+  if (published === null) throw new Error('plugin disappeared during generation publish')
+  return rowToPlugin(published)
+}
+
+function publishPluginUpdate(db: DbClient, captured: PluginRow, set: PluginPublishSet): Plugin {
+  return dbTxSync(db, (tx) => commitPluginPublishInTx(tx, captured, set))
 }
 
 async function requirePluginRow(db: DbClient, id: string): Promise<PluginRow> {

@@ -11,6 +11,8 @@ import type {
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { IntentEntryButton } from '@/components/IntentEntryButton'
+import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
@@ -526,6 +528,16 @@ function PluginDetailPage() {
           },
           disabled: del.isPending || save.isPending || operationBusy,
         }}
+        extra={
+          <>
+            <IntentProvenanceBadge resourceType="plugin" resourceId={id} />
+            <IntentEntryButton
+              variant="modify"
+              mount={{ resourceType: 'plugin', resourceId: id }}
+              data-testid="plugin-intent-entry"
+            />
+          </>
+        }
         errors={[save.error, del.error]}
       />
 

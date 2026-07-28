@@ -238,6 +238,22 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/skills/:id/versions/:v/content' },
   { method: 'POST', path: '/api/skills/:id/versions/:v/restore' },
 
+  // ---- intent sessions (RFC-234 intent builder) ----
+  { method: 'POST', path: '/api/intent-sessions' },
+  { method: 'GET', path: '/api/intent-sessions' },
+  { method: 'GET', path: '/api/intent-sessions/:id' },
+  { method: 'POST', path: '/api/intent-sessions/:id/messages' },
+  { method: 'POST', path: '/api/intent-sessions/:id/answers' },
+  { method: 'POST', path: '/api/intent-sessions/:id/mount-approvals' },
+  { method: 'POST', path: '/api/intent-sessions/:id/mounts' },
+  { method: 'DELETE', path: '/api/intent-sessions/:id/mounts/:handle' },
+  { method: 'POST', path: '/api/intent-sessions/:id/rebase' },
+  { method: 'POST', path: '/api/intent-sessions/:id/retry' },
+  { method: 'POST', path: '/api/intent-sessions/:id/cancel-turn' },
+  { method: 'POST', path: '/api/intent-sessions/:id/commit' },
+  { method: 'POST', path: '/api/intent-sessions/:id/archive' },
+  { method: 'POST', path: '/api/intent-sessions/:id/reopen' },
+  { method: 'GET', path: '/api/intent-provenance/:resourceType/:resourceId' },
   // ---- fusions (RFC-101 memory→skill fusion) ----
   { method: 'POST', path: '/api/fusions' },
   { method: 'GET', path: '/api/fusions' },

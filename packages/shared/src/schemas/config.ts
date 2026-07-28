@@ -216,6 +216,44 @@ export const ConfigSchema = z.object({
    * stays English and only a short trailing directive switches.
    */
   memoryDistillLang: LanguageSchema.optional(),
+
+  // --- RFC-234 intent builder (design §5) ---
+  /**
+   * RFC-234 — runtime profile NAME the intent-builder system agent runs on.
+   * Unlike the other internal agents this selection is FAIL-CLOSED on
+   * capability: only protocols that prove the 'intent-read-v1' permission
+   * profile are admitted (v1: opencode via the verified system path);
+   * routes/config.ts rejects anything else at save time. Unset → inherit
+   * `defaultRuntime` (which must itself qualify at launch time).
+   */
+  intentBuilderRuntime: z.string().min(1).optional(),
+  /** RFC-234 — output language of generated artifacts (prompts/descriptions).
+   *  Unset → mirror the user's intent input language. */
+  intentBuilderLang: LanguageSchema.optional(),
+  /** RFC-234 — per-turn generation timeout (ms). Default 600_000. */
+  intentBuilderTurnTimeoutMs: z.number().int().min(30_000).max(3_600_000).optional(),
+  /** RFC-234 — per-turn stdout cap (bytes). Default 8 MiB (= envelope parse
+   *  ceiling; schema-level changeset bounds sit far below — design §3.2). */
+  intentBuilderStdoutCapBytes: z
+    .number()
+    .int()
+    .min(256 * 1024)
+    .max(16 * 1024 * 1024)
+    .optional(),
+  /** RFC-234 — max generation turns per session. Default 50. */
+  intentBuilderMaxGenerateRounds: z.number().int().min(1).max(500).optional(),
+  /** RFC-234 — max question (clarify) turns per session. Default 5. */
+  intentBuilderMaxQuestionRounds: z.number().int().min(0).max(50).optional(),
+  /** RFC-234 — retention hours for failed-turn scratch dirs before GC. Default 24. */
+  intentBuilderScratchRetentionHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 14)
+    .optional(),
+  /** RFC-234 — admin instructions appended to the frozen system prompt
+   *  (naming conventions, style constraints). ≤8 KiB. */
+  intentBuilderExtraInstructions: z.string().max(8192).optional(),
   /**
    * Per-scope token budget for runtime memory inject (PR3). When the
    * sum of "- [scope] title — body" lines for a scope exceeds its
@@ -503,6 +541,29 @@ export const ConfigPatchSchema = ConfigSchema.partial()
     mergeAgentModel: z.string().min(1).nullable().optional(),
     memoryDistillLang: LanguageSchema.nullable().optional(),
     commitPushLang: LanguageSchema.nullable().optional(),
+    // RFC-234: the intent-builder settings card follows the same
+    // "null-in-patch = delete = inherit/default" contract for its selector
+    // and optional knobs (base ConfigSchema stays non-null).
+    intentBuilderRuntime: z.string().min(1).nullable().optional(),
+    intentBuilderLang: LanguageSchema.nullable().optional(),
+    intentBuilderTurnTimeoutMs: z.number().int().min(30_000).max(3_600_000).nullable().optional(),
+    intentBuilderStdoutCapBytes: z
+      .number()
+      .int()
+      .min(256 * 1024)
+      .max(16 * 1024 * 1024)
+      .nullable()
+      .optional(),
+    intentBuilderMaxGenerateRounds: z.number().int().min(1).max(500).nullable().optional(),
+    intentBuilderMaxQuestionRounds: z.number().int().min(0).max(50).nullable().optional(),
+    intentBuilderScratchRetentionHours: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 14)
+      .nullable()
+      .optional(),
+    intentBuilderExtraInstructions: z.string().max(8192).nullable().optional(),
   })
 export type ConfigPatch = z.infer<typeof ConfigPatchSchema>
 

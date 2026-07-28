@@ -391,6 +391,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       memoryDistillRuntime: cfg.memoryDistillRuntime,
       commitPushRuntime: cfg.commitPushRuntime,
       mergeAgentRuntime: cfg.mergeAgentRuntime,
+      intentBuilderRuntime: cfg.intentBuilderRuntime,
     })
     return c.json({ ok: true })
   })

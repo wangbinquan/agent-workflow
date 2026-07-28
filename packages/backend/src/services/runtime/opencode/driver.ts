@@ -28,7 +28,7 @@ import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
 import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
-import { probeOpencode } from '@/util/opencode'
+import { isProductionOpencodeCommand, probeOpencode } from '@/util/opencode'
 import { getOpencodeBinaryVersion } from '@/util/opencode-version-registry'
 import { listOpencodeModels } from '@/util/opencode-models'
 import { captureChildSessions } from '@/services/sessionCapture'
@@ -80,12 +80,21 @@ export const opencodeDriver: RuntimeDriver = {
   async buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan> {
     const envBin = process.env.AGENT_WORKFLOW_OPENCODE_BIN
     const head =
-      ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
-        ? [ctx.runtimeBinary]
-        : envBin != null && envBin !== ''
-          ? [envBin]
-          : ['opencode']
-    if (ctx.testOnlyUnverifiedRuntime !== true) {
+      ctx.opencodeCmd !== undefined && ctx.opencodeCmd.length > 0
+        ? [...ctx.opencodeCmd]
+        : ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
+          ? [ctx.runtimeBinary]
+          : envBin != null && envBin !== ''
+            ? [envBin]
+            : ['opencode']
+    // Same gate shape as usesLegacyTestOpencodePath (business path): an
+    // explicitly-flagged test run OR an unbranded injected command (unit
+    // tests / the e2e binary, where production branding is compiled out)
+    // takes the legacy spawn; everything else is the verified system plan.
+    const legacyTestPath =
+      ctx.testOnlyUnverifiedRuntime === true ||
+      (ctx.opencodeCmd !== undefined && !isProductionOpencodeCommand(ctx.opencodeCmd))
+    if (!legacyTestPath) {
       return buildVerifiedOpencodeSystemPlan(ctx, head)
     }
     const inlineConfig = {

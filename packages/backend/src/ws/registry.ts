@@ -37,6 +37,7 @@
 import type { ServerWebSocket } from 'bun'
 import { and, asc, eq, gt } from 'drizzle-orm'
 import type {
+  IntentSessionWsMessage,
   MemoryDistillJobWsMessage,
   ScheduledTaskWsMessage,
   MemoryWsMessage,
@@ -59,12 +60,14 @@ import {
   workgroups,
 } from '@/db/schema'
 import { canViewMemory } from '@/services/memory'
-import { canViewResource } from '@/services/resourceAcl'
+import { canAuditIntentSessions, canViewResource } from '@/services/resourceAcl'
 import { canViewTask } from '@/services/taskCollab'
 import { createLogger } from '@/util/log'
 import {
   MEMORY_CHANNEL,
   MEMORY_DISTILL_JOB_CHANNEL,
+  INTENT_SESSIONS_CHANNEL,
+  intentSessionsBroadcaster,
   SCHEDULED_TASK_CHANNEL,
   scheduledTaskBroadcaster,
   REPO_IMPORT_CHANNEL,
@@ -100,6 +103,7 @@ export interface ChannelParamsByKind {
   memories: { kind: 'memories' }
   'memory-distill-jobs': { kind: 'memory-distill-jobs' }
   'scheduled-tasks': { kind: 'scheduled-tasks' }
+  'intent-sessions': { kind: 'intent-sessions' }
 }
 
 export interface ChannelMessageByKind {
@@ -111,6 +115,7 @@ export interface ChannelMessageByKind {
   memories: MemoryWsMessage
   'memory-distill-jobs': MemoryDistillJobWsMessage
   'scheduled-tasks': ScheduledTaskWsMessage
+  'intent-sessions': IntentSessionWsMessage
 }
 
 /** Process-local metadata delivered beside frames; never part of JSON wire. */
@@ -123,6 +128,7 @@ export interface ChannelBroadcastContextByKind {
   memories: never
   'memory-distill-jobs': never
   'scheduled-tasks': never
+  'intent-sessions': never
 }
 
 export type WsChannelKind = keyof ChannelParamsByKind
@@ -735,6 +741,23 @@ export const WS_CHANNELS: WsChannelRegistry = {
     // lookup (unlike tasks-list) since the owner rides on the message.
     frameGate: async (ctx, msg) =>
       ctx.actor.permissions.has('tasks:read:all') || msg.ownerUserId === ctx.actor.user.id,
+  },
+  'intent-sessions': {
+    kind: 'intent-sessions',
+    // RFC-234: pure in-memory decision — creator or SYSTEM admin (D26: manager
+    // deliberately has no bypass; canAuditIntentSessions is the single source).
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'none', why: 'pure in-memory check on actor identity + ownerUserId' },
+      rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
+    },
+    helloName: () => 'intent-sessions',
+    pathRe: /^\/ws\/intent-sessions$/,
+    parse: () => ({ kind: 'intent-sessions' }),
+    broadcaster: intentSessionsBroadcaster,
+    channelKeyOf: () => INTENT_SESSIONS_CHANNEL,
+    frameGate: async (ctx, msg) =>
+      canAuditIntentSessions(ctx.actor) || msg.ownerUserId === ctx.actor.user.id,
   },
 }
 

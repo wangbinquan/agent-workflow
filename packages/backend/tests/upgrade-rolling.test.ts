@@ -324,7 +324,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-224 T14 bumped to 119 with 0119_rfc224_opencode_session_owners.
     // RFC-224 probe-receipt fence bumped to 120 with 0120_rfc224_runtime_probe_fence.
     // RFC-229 workgroup message trigger relation bumped to 122 with 0122.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(122)
+    // RFC-234 intent-builder five tables bumped to 123 with 0123.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(123)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

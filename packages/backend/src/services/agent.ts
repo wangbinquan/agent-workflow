@@ -76,7 +76,33 @@ export function snapshotNodeAgentWhere(node: unknown): SQL | null {
   return null
 }
 
-export async function createAgent(
+/**
+ * RFC-234 (T6) — prepare/commit split of the agent create path. `prepare` runs
+ * every pre-transaction validation/resolution (byte-identical to the former
+ * createAgent body); `commitAgentCreateInTx` is the former dbTxSync body. The
+ * public createAgent composes them, so standalone behavior is unchanged, while
+ * the intent apply pipeline can run MANY commits inside ONE transaction
+ * (bundle-internal refs pass assertRefsUsableInTx via same-connection
+ * uncommitted visibility).
+ */
+export interface PreparedAgentCreate {
+  id: string
+  input: CreateAgent
+  actor: Actor | null
+  builtin: boolean
+  initialAcl:
+    | ReturnType<typeof initialPrivateResourceAcl>
+    | ReturnType<typeof initialBuiltinResourceAcl>
+  fmExtra: Record<string, unknown>
+  mcpIds: string[]
+  pluginIds: string[]
+  dependsOnIds: string[]
+  skillRefs: AgentSkillRef[]
+  matchedManagedSkillIds: ReadonlySet<string>
+  now: number
+}
+
+export async function prepareAgentCreate(
   db: DbClient,
   input: CreateAgent,
   opts?: {
@@ -88,8 +114,19 @@ export async function createAgent(
     beforeWriteTransaction?: () => void | Promise<void>
     /** RFC-224 production save gate; framework seeders/tests may omit it. */
     executionPolicy?: { defaultRuntime?: string | null }
+    /**
+     * RFC-234 (T6): ids being CREATED in the same intent bundle. They have no
+     * rows yet, so the async existence validators skip them (their type
+     * correctness is guaranteed by the changeset's typed-ref validation and
+     * their EXISTENCE is enforced exactly at commit time —
+     * assertRefsUsableInTx sees them in-tx because the bundle transaction
+     * creates them earlier in topo order). When any pending ref is present the
+     * RFC-228 closure-integrity preflight is skipped for this candidate: the
+     * bundle constructs the closure itself and the in-tx fence stays exact.
+     */
+    pendingBundleIds?: ReadonlySet<string>
   },
-): Promise<Agent> {
+): Promise<PreparedAgentCreate> {
   const ownerUserId = opts?.ownerUserId ?? null
   assertInitialResourceOwner(opts?.actor, ownerUserId)
   const initialAcl =
@@ -132,17 +169,19 @@ export async function createAgent(
   // partially-validated rows never land in the DB. Keyed by id (RFC-223 PR-1);
   // pass the proposed name so a self-name dep (whose id doesn't exist yet) is
   // still caught as agent-dependency-self.
-  await validateDependsOn(db, id, dependsOnIds)
+  const pending = opts?.pendingBundleIds ?? new Set<string>()
+  const persistedOnly = (ids: readonly string[]): string[] => ids.filter((x) => !pending.has(x))
+  await validateDependsOn(db, id, persistedOnly(dependsOnIds))
 
   // RFC-028 save-time guard: every `mcp[]` entry must resolve to an existing
   // mcps row. Without this, agents save successfully but fail at runtime when
   // the scheduler tries to load the row (or worse, succeeds with a partial
   // closure that silently drops the missing reference).
-  await validateMcpReferences(db, mcpIds)
+  await validateMcpReferences(db, persistedOnly(mcpIds))
 
   // RFC-031: every entry in input.plugins must point at an existing + enabled
   // plugins row. Failure here surfaces as 422 plugin-not-found / -disabled.
-  await validatePluginReferences(db, pluginIds)
+  await validatePluginReferences(db, persistedOnly(pluginIds))
 
   // RFC-111 (Codex audit F6): a pinned runtime NAME must resolve to an existing
   // runtimes row. Without this, an agent.md import / API call can pin an unknown
@@ -180,7 +219,9 @@ export async function createAgent(
     createdAt: 0,
     updatedAt: 0,
   }
-  await assertAgentResourceIntegrity(db, [id], { overrides: [candidate] })
+  if (pending.size === 0) {
+    await assertAgentResourceIntegrity(db, [id], { overrides: [candidate] })
+  }
 
   const now = Date.now()
   // RFC-005: outputKinds is a sidecar map ported through `frontmatter_extra`
@@ -199,57 +240,91 @@ export async function createAgent(
   if (input.outputWrapperPortNames !== undefined) {
     fmExtra.outputWrapperPortNames = input.outputWrapperPortNames
   }
+  return {
+    id,
+    input,
+    actor: opts?.actor ?? null,
+    builtin: opts?.builtin ?? false,
+    initialAcl,
+    fmExtra,
+    mcpIds,
+    pluginIds,
+    dependsOnIds,
+    skillRefs,
+    matchedManagedSkillIds: resolved.matchedManagedSkillIds,
+    now,
+  }
+}
+
+/** The former createAgent dbTxSync body, verbatim modulo destructuring. */
+export function commitAgentCreateInTx(tx: DbTxSync, p: PreparedAgentCreate): void {
+  const { id, input, initialAcl, fmExtra, now, mcpIds, pluginIds, dependsOnIds, skillRefs } = p
+  // Every create ref is new. This is the authorization/existence
+  // linearization point; async validators in prepare remain preflight only.
+  assertRefsUsableInTx(
+    tx,
+    p.actor,
+    agentRefFenceGroups(
+      {
+        mcp: mcpIds,
+        plugins: pluginIds,
+        dependsOn: dependsOnIds,
+        skills: skillRefs,
+      },
+      undefined,
+      p.matchedManagedSkillIds,
+    ),
+  )
+  tx.insert(agents)
+    .values({
+      id,
+      name: input.name,
+      description: input.description,
+      outputs: JSON.stringify(input.outputs),
+      // RFC-166: declarative input ports (own column, symmetrical to outputs).
+      inputs: serializeInputs(input.inputs),
+      syncOutputsOnIterate: input.syncOutputsOnIterate,
+      runtime: input.runtime ?? null, // RFC-111
+      permission: JSON.stringify(input.permission),
+      // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
+      skills: serializeSkillRefs(skillRefs),
+      dependsOn: JSON.stringify(dependsOnIds),
+      mcp: JSON.stringify(mcpIds),
+      // RFC-031: plugin id array; T6 enforces existence + enabled at save
+      // time, T7 unions across the dependsOn closure at runner injection time.
+      plugins: JSON.stringify(pluginIds),
+      frontmatterExtra: JSON.stringify(fmExtra),
+      bodyMd: input.bodyMd,
+      // RFC-231: user resources are private; framework built-ins stay public.
+      ...initialAcl,
+      // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
+      // never set via any HTTP path (CreateAgentSchema omits it).
+      builtin: p.builtin,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run()
+}
+
+export async function createAgent(
+  db: DbClient,
+  input: CreateAgent,
+  opts?: {
+    ownerUserId?: string
+    builtin?: boolean
+    actor?: Actor | null
+    id?: string
+    /** Deterministic race-test seam after preflight, before the final dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+    /** RFC-224 production save gate; framework seeders/tests may omit it. */
+    executionPolicy?: { defaultRuntime?: string | null }
+  },
+): Promise<Agent> {
+  const prepared = await prepareAgentCreate(db, input, opts)
   await opts?.beforeWriteTransaction?.()
   try {
     dbTxSync(db, (tx) => {
-      // Every create ref is new. This is the authorization/existence
-      // linearization point; async validators above remain preflight only.
-      assertRefsUsableInTx(
-        tx,
-        opts?.actor ?? null,
-        agentRefFenceGroups(
-          {
-            mcp: mcpIds,
-            plugins: pluginIds,
-            dependsOn: dependsOnIds,
-            skills: skillRefs,
-          },
-          undefined,
-          resolved.matchedManagedSkillIds,
-        ),
-      )
-      tx.insert(agents)
-        .values({
-          id,
-          name: input.name,
-          description: input.description,
-          outputs: JSON.stringify(input.outputs),
-          // RFC-166: declarative input ports (own column, symmetrical to outputs).
-          // Normalize through the schema on write so the column is canonical (kind
-          // default applied, unknown keys stripped) even if a service-layer caller
-          // bypassed CreateAgentSchema's zod parse.
-          inputs: serializeInputs(input.inputs),
-          syncOutputsOnIterate: input.syncOutputsOnIterate,
-          runtime: input.runtime ?? null, // RFC-111
-          permission: JSON.stringify(input.permission),
-          // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
-          skills: serializeSkillRefs(skillRefs),
-          dependsOn: JSON.stringify(dependsOnIds),
-          mcp: JSON.stringify(mcpIds),
-          // RFC-031: plugin id array; T6 enforces existence + enabled at save
-          // time, T7 unions across the dependsOn closure at runner injection time.
-          plugins: JSON.stringify(pluginIds),
-          frontmatterExtra: JSON.stringify(fmExtra),
-          bodyMd: input.bodyMd,
-          // RFC-231: user resources are private; framework built-ins stay public.
-          ...initialAcl,
-          // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
-          // never set via any HTTP path (CreateAgentSchema omits it).
-          builtin: opts?.builtin ?? false,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      commitAgentCreateInTx(tx, prepared)
     })
   } catch (error) {
     if (isOwnerNameUniqueViolation(error, 'agents', 'agents_owner_name_unique')) {
@@ -257,13 +332,24 @@ export async function createAgent(
     }
     throw error
   }
-
-  const created = await getAgentById(db, id)
+  const created = await getAgentById(db, prepared.id)
   if (created === null) throw new Error('agent disappeared right after insert')
   return created
 }
 
-export async function updateAgent(
+export interface PreparedAgentUpdate {
+  id: string
+  actor: Actor | null | undefined
+  fence: { expectedUpdatedAt: number; expectedAclRevision: number } | undefined
+  set: Partial<typeof agents.$inferInsert>
+  mcpIds: string[] | undefined
+  pluginIds: string[] | undefined
+  dependsOnIds: string[] | undefined
+  skillRefs: AgentSkillRef[] | undefined
+  matchedManagedSkillIds: ReadonlySet<string>
+}
+
+export async function prepareAgentUpdate(
   db: DbClient,
   id: string,
   patch: UpdateAgent,
@@ -274,8 +360,10 @@ export async function updateAgent(
     beforeWriteTransaction?: () => void | Promise<void>
     /** RFC-224 production save gate; service-only maintenance callers may omit it. */
     executionPolicy?: { defaultRuntime?: string | null }
+    /** RFC-234 (T6): same-bundle pending ids — see prepareAgentCreate. */
+    pendingBundleIds?: ReadonlySet<string>
   },
-): Promise<Agent> {
+): Promise<PreparedAgentUpdate> {
   const existing = await getAgentById(db, id)
   if (existing === null) {
     throw new NotFoundError('agent-not-found', 'agent not found')
@@ -307,18 +395,20 @@ export async function updateAgent(
   // RFC-022 save-time guard — only when the caller actually patched dependsOn.
   // PATCH that doesn't touch the field keeps the existing closure validity.
   // Keyed by the agent's own id (RFC-223 PR-1) so a self-dep is caught by id.
+  const pending = hooks?.pendingBundleIds ?? new Set<string>()
+  const persistedOnly = (ids: readonly string[]): string[] => ids.filter((x) => !pending.has(x))
   if (dependsOnIds !== undefined) {
-    await validateDependsOn(db, existing.id, dependsOnIds)
+    await validateDependsOn(db, existing.id, persistedOnly(dependsOnIds))
   }
 
   // RFC-028 save-time guard — only when caller patched mcp.
   if (mcpIds !== undefined) {
-    await validateMcpReferences(db, mcpIds)
+    await validateMcpReferences(db, persistedOnly(mcpIds))
   }
 
   // RFC-031 save-time guard — only when caller patched plugins.
   if (pluginIds !== undefined) {
-    await validatePluginReferences(db, pluginIds)
+    await validatePluginReferences(db, persistedOnly(pluginIds))
   }
 
   // RFC-111 (Codex audit F6): same guard for a patched runtime pin — a NAME must
@@ -355,7 +445,9 @@ export async function updateAgent(
   }
   if (patch.runtime === null) delete candidate.runtime
   else if (patch.runtime !== undefined) candidate.runtime = patch.runtime
-  await assertAgentResourceIntegrity(db, [candidate.id], { overrides: [candidate] })
+  if (pending.size === 0) {
+    await assertAgentResourceIntegrity(db, [candidate.id], { overrides: [candidate] })
+  }
 
   const set: Partial<typeof agents.$inferInsert> = {}
   if (patch.description !== undefined) set.description = patch.description
@@ -434,41 +526,75 @@ export async function updateAgent(
   }
   if (patch.bodyMd !== undefined) set.bodyMd = patch.bodyMd
 
+  return {
+    id,
+    actor,
+    fence,
+    set,
+    mcpIds,
+    pluginIds,
+    dependsOnIds,
+    skillRefs,
+    matchedManagedSkillIds: resolvedRefs.matchedManagedSkillIds,
+  }
+}
+
+/** The former updateAgent dbTxSync body, verbatim modulo destructuring. */
+export function commitAgentUpdateInTx(tx: DbTxSync, p: PreparedAgentUpdate): void {
+  const { id, actor, fence, set, mcpIds, pluginIds, dependsOnIds, skillRefs } = p
+  const resolvedRefs = { matchedManagedSkillIds: p.matchedManagedSkillIds }
+  const revisionFenced = fence !== undefined && actor !== undefined && actor !== null
+  const currentRow = revisionFenced
+    ? requireAgentMutationRevision(tx, id, actor, fence)
+    : tx.select().from(agents).where(eq(agents.id, id)).get()
+  if (currentRow === undefined) {
+    throw new NotFoundError('agent-not-found', 'agent not found')
+  }
+  const current = rowToAgent(currentRow)
+  const nextRefs = {
+    mcp: mcpIds ?? current.mcp,
+    plugins: pluginIds ?? current.plugins,
+    dependsOn: dependsOnIds ?? current.dependsOn,
+    skills: skillRefs ?? current.skills,
+  }
+  // Diff against the row snapshot from THIS transaction. A lost grant on an
+  // unchanged ref remains grandfathered; only ids this write introduces are
+  // re-authorized and existence-fenced.
+  assertRefsUsableInTx(
+    tx,
+    actor ?? null,
+    agentRefFenceGroups(nextRefs, current, resolvedRefs.matchedManagedSkillIds),
+  )
+
+  set.updatedAt = Math.max(Date.now(), currentRow.updatedAt + 1)
+  const where = revisionFenced
+    ? and(
+        eq(agents.id, id),
+        eq(agents.updatedAt, fence.expectedUpdatedAt),
+        eq(agents.aclRevision, fence.expectedAclRevision),
+      )
+    : eq(agents.id, id)
+  const result = tx.update(agents).set(set).where(where).run()
+  if (revisionFenced && changesOf(result) !== 1) throw staleAgentError(id)
+}
+
+export async function updateAgent(
+  db: DbClient,
+  id: string,
+  patch: UpdateAgent,
+  actor?: Actor | null,
+  fence?: { expectedUpdatedAt: number; expectedAclRevision: number },
+  hooks?: {
+    /** Deterministic race-test seam after preflight, before the final dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+    /** RFC-224 production save gate; service-only maintenance callers may omit it. */
+    executionPolicy?: { defaultRuntime?: string | null }
+  },
+): Promise<Agent> {
+  const prepared = await prepareAgentUpdate(db, id, patch, actor, fence, hooks)
   await hooks?.beforeWriteTransaction?.()
   dbTxSync(db, (tx) => {
-    const revisionFenced = fence !== undefined && actor !== undefined && actor !== null
-    const currentRow = revisionFenced
-      ? requireAgentMutationRevision(tx, id, actor, fence)
-      : tx.select().from(agents).where(eq(agents.id, id)).get()
-    if (currentRow === undefined) {
-      throw new NotFoundError('agent-not-found', 'agent not found')
-    }
-    const current = rowToAgent(currentRow)
-    const nextRefs = {
-      mcp: mcpIds ?? current.mcp,
-      plugins: pluginIds ?? current.plugins,
-      dependsOn: dependsOnIds ?? current.dependsOn,
-      skills: skillRefs ?? current.skills,
-    }
-    // Diff against the row snapshot from THIS transaction. A lost grant on an
-    // unchanged ref remains grandfathered; only ids this write introduces are
-    // re-authorized and existence-fenced.
-    assertRefsUsableInTx(
-      tx,
-      actor ?? null,
-      agentRefFenceGroups(nextRefs, current, resolvedRefs.matchedManagedSkillIds),
-    )
-
-    set.updatedAt = Math.max(Date.now(), currentRow.updatedAt + 1)
-    const where = revisionFenced
-      ? and(
-          eq(agents.id, id),
-          eq(agents.updatedAt, fence.expectedUpdatedAt),
-          eq(agents.aclRevision, fence.expectedAclRevision),
-        )
-      : eq(agents.id, id)
-    const result = tx.update(agents).set(set).where(where).run()
-    if (revisionFenced && changesOf(result) !== 1) throw staleAgentError(id)
+    commitAgentUpdateInTx(tx, prepared)
   })
   const updated = await getAgentById(db, id)
   if (updated === null) throw new Error('agent disappeared after update')

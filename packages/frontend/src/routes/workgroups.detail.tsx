@@ -18,6 +18,8 @@ import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
+import { IntentEntryButton } from '@/components/IntentEntryButton'
+import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { RenameDialog } from '@/components/RenameDialog'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import {
@@ -683,6 +685,12 @@ export function WorkgroupEditor(props: {
         }
         actions={
           <>
+            <IntentProvenanceBadge resourceType="workgroup" resourceId={props.initial.id} />
+            <IntentEntryButton
+              variant="modify"
+              mount={{ resourceType: 'workgroup', resourceId: props.initial.id }}
+              data-testid="workgroup-intent-entry"
+            />
             <button
               type="button"
               className="btn btn--primary"

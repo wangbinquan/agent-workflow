@@ -2392,3 +2392,176 @@ export const opencodeSessionOwners = sqliteTable(
     ),
   }),
 )
+
+// -----------------------------------------------------------------------------
+// RFC-234 intent_sessions — intent-builder persistent sessions (design §2).
+// Visibility = creator + SYSTEM admin only (isAdminActor; manager has no bypass
+// — design-gate P1-8). `context_revision` is the monotonic context epoch: it
+// advances on mount change / rebase / approved disclosure / successful commit,
+// and every turn result is CAS'd against it (late results archive as error,
+// never install as the current draft — design-gate P0-3).
+// `context_manifest_json` lists EVERY resource actually dumped into the epoch
+// (mounted roots + dependency-closure members): [{handle, resourceType,
+// resourceId, fence, dumpHash}] (design-gate P1-2). Never enters any prompt.
+// -----------------------------------------------------------------------------
+export const intentSessions = sqliteTable(
+  'intent_sessions',
+  {
+    id: text('id').primaryKey(), // ULID
+    ownerUserId: text('owner_user_id').notNull(),
+    title: text('title').notNull().default(''),
+    status: text('status', { enum: ['active', 'archived'] })
+      .notNull()
+      .default('active'),
+    contextRevision: integer('context_revision').notNull().default(0),
+    contextManifestJson: text('context_manifest_json').notNull().default('[]'),
+    /** Current draft pointer (intent_drafts.id); NULL until first changeset. */
+    currentDraftId: text('current_draft_id'),
+    /** Single-flight gate: the in-flight agent turn id, NULL when idle. */
+    inFlightTurnId: text('in_flight_turn_id'),
+    turnSeq: integer('turn_seq').notNull().default(0),
+    commitSeq: integer('commit_seq').notNull().default(0),
+    /** {generateRounds, questionRounds} consumed counters (budget vs config). */
+    budgetJson: text('budget_json').notNull().default('{}'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    ownerIdx: index('idx_intent_sessions_owner').on(t.ownerUserId),
+    ownerStatusIdx: index('idx_intent_sessions_owner_status').on(t.ownerUserId, t.status),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-234 intent_turns — one row per conversation turn. Agent turns persist
+// `envelope_nonce` BEFORE spawn in the same tx that creates the row (the
+// emit/parse/audit single source — design-gate P2-1; a retry mints a NEW turn
+// with a NEW nonce). `context_revision` records the epoch the turn was
+// launched under. `scratch_retained` marks a kept failure scratch dir for the
+// hourly GC owner (design §1.2).
+// -----------------------------------------------------------------------------
+export const intentTurns = sqliteTable(
+  'intent_turns',
+  {
+    id: text('id').primaryKey(), // ULID
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intentSessions.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    role: text('role', { enum: ['user', 'agent'] }).notNull(),
+    kind: text('kind', {
+      // 'running' = agent turn minted (nonce persisted) but not yet settled;
+      // TS-level enum only (the SQLite column carries no CHECK), so this needs
+      // no migration change.
+      enum: ['message', 'answers', 'mount-approval', 'running', 'questions', 'changeset', 'error'],
+    }).notNull(),
+    contentJson: text('content_json').notNull().default('{}'),
+    contextRevision: integer('context_revision').notNull().default(0),
+    envelopeNonce: text('envelope_nonce'),
+    /** Agent turns: {runtime, model, durationMs, exitCode, failureCode?, stderrTail?}. */
+    runMetaJson: text('run_meta_json'),
+    scratchRetained: integer('scratch_retained', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    sessionSeqUnique: uniqueIndex('uniq_intent_turns_session_seq').on(t.sessionId, t.seq),
+    sessionIdx: index('idx_intent_turns_session').on(t.sessionId),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-234 intent_drafts — IMMUTABLE changeset revisions (design-gate P0-3 /
+// P1-5). The session's current draft is a pointer; "restore an older version"
+// mints a new revision copying the old body — history never mutates.
+// `draft_hash` = sha-256 of the canonical JSON (shared canonicalIntentJson);
+// commit must present the exact (revision, hash) pair the user confirmed.
+// -----------------------------------------------------------------------------
+export const intentDrafts = sqliteTable(
+  'intent_drafts',
+  {
+    id: text('id').primaryKey(), // ULID
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intentSessions.id, { onDelete: 'cascade' }),
+    revision: integer('revision').notNull(),
+    changesetJson: text('changeset_json').notNull(),
+    validationJson: text('validation_json').notNull().default('[]'),
+    draftHash: text('draft_hash').notNull(),
+    producedByTurnId: text('produced_by_turn_id'),
+    contextRevision: integer('context_revision').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    sessionRevisionUnique: uniqueIndex('uniq_intent_drafts_session_revision').on(
+      t.sessionId,
+      t.revision,
+    ),
+    sessionIdx: index('idx_intent_drafts_session').on(t.sessionId),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-234 intent_apply_journal — the bundle apply protocol (design-gate P0-5 /
+// P0-6). One row per commit ATTEMPT; UNIQUE(session_id, client_mutation_id)
+// makes replays idempotent (a duplicate request returns the stored receipt or
+// error, zero side effects). `prepared_artifacts_json` enumerates compensable
+// side effects (plugin generations/caches, skill staging ops) recorded BEFORE
+// they are created; boot/hourly recovery converges by `state`:
+//   prepared/applying → compensate artifacts, mark failed;
+//   committed         → replay idempotent roll-forward publishes.
+// Secret slot values are NEVER stored here — snapshots keep the sentinel.
+// -----------------------------------------------------------------------------
+export const intentApplyJournal = sqliteTable(
+  'intent_apply_journal',
+  {
+    id: text('id').primaryKey(), // ULID
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intentSessions.id, { onDelete: 'cascade' }),
+    clientMutationId: text('client_mutation_id').notNull(),
+    draftId: text('draft_id').notNull(),
+    draftHash: text('draft_hash').notNull(),
+    state: text('state', { enum: ['prepared', 'applying', 'committed', 'failed'] })
+      .notNull()
+      .default('prepared'),
+    preparedArtifactsJson: text('prepared_artifacts_json').notNull().default('[]'),
+    /** Success receipt: {commitSeq, applied:[{opId, resourceType, resourceId, ...}]}. */
+    receiptJson: text('receipt_json'),
+    error: text('error'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    mutationUnique: uniqueIndex('uniq_intent_apply_journal_mutation').on(
+      t.sessionId,
+      t.clientMutationId,
+    ),
+    sessionIdx: index('idx_intent_apply_journal_session').on(t.sessionId),
+    stateIdx: index('idx_intent_apply_journal_state').on(t.state),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-234 intent_provenance — resource-side "came from intent commit X" audit
+// (design §2). Read by detail pages ONLY when the viewer can see the session
+// (owner / system admin). Like RFC-099 attribution: NEVER enters any agent
+// prompt (grep-locked). `commit_id` references intent_apply_journal.id of the
+// committed attempt.
+// -----------------------------------------------------------------------------
+export const intentProvenance = sqliteTable(
+  'intent_provenance',
+  {
+    resourceType: text('resource_type', {
+      enum: ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup'],
+    }).notNull(),
+    resourceId: text('resource_id').notNull(),
+    commitId: text('commit_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.resourceType, t.resourceId, t.commitId] }),
+    resourceIdx: index('idx_intent_provenance_resource').on(t.resourceType, t.resourceId),
+    sessionIdx: index('idx_intent_provenance_session').on(t.sessionId),
+  }),
+)

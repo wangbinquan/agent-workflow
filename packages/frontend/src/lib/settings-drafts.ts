@@ -47,6 +47,15 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'memoryDistillLang',
     'mergeAgentRuntime',
     'mergeAgentModel',
+    // RFC-234 intent builder
+    'intentBuilderRuntime',
+    'intentBuilderLang',
+    'intentBuilderTurnTimeoutMs',
+    'intentBuilderStdoutCapBytes',
+    'intentBuilderMaxGenerateRounds',
+    'intentBuilderMaxQuestionRounds',
+    'intentBuilderScratchRetentionHours',
+    'intentBuilderExtraInstructions',
   ],
   limits: [
     'defaultPerTaskMaxDurationMs',

@@ -535,6 +535,15 @@ const DENIED_TOOLS = [
   'lsp',
 ] as const
 
+/**
+ * RFC-234 §1.1 — the ONLY tools a system profile may flip to allow. A closed
+ * subset of DENIED_TOOLS: read-only file access, nothing that writes, spawns,
+ * or reaches the network. Everything else in the deny tail is untouchable by
+ * construction (Codex design-gate P0-1 — no arbitrary permission pass-through).
+ */
+export const SYSTEM_READ_ONLY_TOOLS = ['read', 'grep', 'glob'] as const
+export type SystemReadOnlyTool = (typeof SYSTEM_READ_ONLY_TOOLS)[number]
+
 export interface BuildControlledAgentConfigInput {
   name: string
   prompt: string
@@ -549,6 +558,14 @@ export interface BuildControlledAgentConfigInput {
   shellPath: string
   allowShell: boolean
   mcp?: Record<string, IdentityJson>
+  /**
+   * RFC-234 §1.1 — read-only tools to ALLOW instead of deny. Must be members
+   * of SYSTEM_READ_ONLY_TOOLS; any other name is an identity failure, never a
+   * silent allow. The deny-tail KEY SET AND INSERTION ORDER are unchanged —
+   * only the values of the listed tools flip — so the ordered Agent.Info rule
+   * tail keeps its qualified shape.
+   */
+  allowedReadOnlyTools?: readonly SystemReadOnlyTool[]
 }
 
 /**
@@ -567,9 +584,17 @@ export function buildControlledOpencodeConfig(
   ) {
     return executionIdentityFailure('execution-identity-mismatch')
   }
+  const allowedReadOnly = new Set<string>(input.allowedReadOnlyTools ?? [])
+  for (const tool of allowedReadOnly) {
+    if (!(SYSTEM_READ_ONLY_TOOLS as readonly string[]).includes(tool)) {
+      return executionIdentityFailure('execution-identity-mismatch')
+    }
+  }
   const permission: Record<string, IdentityJson> = { ...(input.userPermission ?? {}) }
   permission.bash = input.allowShell ? 'allow' : 'deny'
-  for (const tool of DENIED_TOOLS) permission[tool] = 'deny'
+  for (const tool of DENIED_TOOLS) {
+    permission[tool] = allowedReadOnly.has(tool) ? 'allow' : 'deny'
+  }
   permission.external_directory = {
     [input.toolOutputPattern]: 'deny',
     '*': 'deny',

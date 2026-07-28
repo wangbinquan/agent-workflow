@@ -491,6 +491,8 @@ export interface RuntimeRefConfig {
   memoryDistillRuntime?: string | null
   commitPushRuntime?: string | null
   mergeAgentRuntime?: string | null
+  /** RFC-234 — intent-builder system agent selection. */
+  intentBuilderRuntime?: string | null
 }
 
 // --- CRUD ------------------------------------------------------------------
@@ -797,6 +799,7 @@ export async function deleteRuntime(
     if (refs.memoryDistillRuntime === name) configFields.push('config.memoryDistillRuntime')
     if (refs.commitPushRuntime === name) configFields.push('config.commitPushRuntime')
     if (refs.mergeAgentRuntime === name) configFields.push('config.mergeAgentRuntime')
+    if (refs.intentBuilderRuntime === name) configFields.push('config.intentBuilderRuntime')
     const refAgents = tx
       .select({ name: agents.name })
       .from(agents)

@@ -67,6 +67,9 @@ interface ExactAllowance {
 // same function produces an extra occurrence and fails the guard.
 const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/importRefs.ts\u001fbuildCandidateSnapshotsInTx\u001fNewExpression:375cd3c41fdf6552897b\u001f1\u001fportable-selector\u001fnew Set(typeSelectors.map((selector) => selector.name))',
+  // RFC-234: intent-bundle CREATE-name precheck; the authoritative guard is
+  // each type's owner-scoped unique index inside the apply transaction.
+  'collection-name-identity\u001fpackages/backend/src/services/intent/applyChangeset.ts\u001foccupiedNamesFor\u001fNewExpression:104c67a27a8bad8b6d97\u001f1\u001fowner-uniqueness\u001fnew Set(rows.map((r) => r.name.toLowerCase()))',
   'collection-name-identity\u001fpackages/backend/src/services/restore.ts\u001fhasFusionProvenanceSchema\u001fNewExpression:33997c70d15e0d15c945\u001f1\u001fschema-column\u001fnew Set( ( raw.query("SELECT name FROM pragma_table_info(\'memories\')").all() as Array<{ name: string }> ).map((column) => column.name), )',
   'collection-name-identity\u001fpackages/backend/src/services/restore.ts\u001fhasFusionProvenanceSchema\u001fNewExpression:590ef4bb2acf4b8f66f6\u001f1\u001fschema-column\u001fnew Set( ( raw.query("SELECT name FROM pragma_table_info(\'fusions\')").all() as Array<{ name: string }> ).map((column) => column.name), )',
   'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fCallExpression:a542d65f2cd58c9d735b\u001f1\u001fruntime-protocol\u001fresolvedParamsByAgent.set(opts.agent.name, opts.runtimeParams ?? EMPTY_RUNTIME_PROFILE)',
@@ -268,7 +271,7 @@ describe('RFC-223 T15 structural identity guard', () => {
   test('production source matches the exact reviewed fingerprint multiset', () => {
     const findings = scanProductionSources()
     expect(allowanceDiagnostics(findings, EXACT_ALLOWANCES)).toEqual([])
-    expect(findings.length).toBe(95)
+    expect(findings.length).toBe(96)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

@@ -41,6 +41,8 @@ import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountTaskQuestionRoutes } from '@/routes/taskQuestions'
 import { mountTaskClarifyDirectiveRoutes } from '@/routes/taskClarifyDirective'
 import { mountFusionRoutes } from '@/routes/fusions'
+import { mountIntentSessionRoutes } from '@/routes/intentSessions'
+import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
@@ -120,6 +122,10 @@ export interface AppDeps {
    * the default path always uses RFC-227's byte-frozen runtime snapshot.
    */
   runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticTestDependencies>
+  /** RFC-234 test seam: stub the intent turn's system-agent run. */
+  intentTestDependencies?: {
+    runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  }
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -259,6 +265,7 @@ export function createApp(deps: AppDeps): Hono {
   mountTaskQuestionRoutes(app, deps)
   mountTaskClarifyDirectiveRoutes(app, deps)
   mountFusionRoutes(app, deps)
+  mountIntentSessionRoutes(app, deps) // RFC-234
   mountMemoryRoutes(app, deps)
   mountMemoryDistillJobRoutes(app, deps)
   mountTaskFeedbackRoutes(app, deps)

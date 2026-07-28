@@ -84,8 +84,10 @@ export const MEMORY_CHANNEL: ChannelKey = 'memories'
 /** RFC-041: admin-only distill queue monitor. */
 export const MEMORY_DISTILL_JOB_CHANNEL: ChannelKey = 'memory-distill-jobs'
 export const SCHEDULED_TASK_CHANNEL: ChannelKey = 'scheduled-tasks' // RFC-159
+export const INTENT_SESSIONS_CHANNEL: ChannelKey = 'intent-sessions' // RFC-234
 
 import type {
+  IntentSessionWsMessage,
   MemoryDistillJobWsMessage,
   ScheduledTaskWsMessage,
   MemoryWsMessage,
@@ -136,6 +138,7 @@ export const repoImportsBroadcaster = new TypedBroadcaster<RepoImportWsMessage>(
 export const memoryBroadcaster = new TypedBroadcaster<MemoryWsMessage>()
 export const memoryDistillJobBroadcaster = new TypedBroadcaster<MemoryDistillJobWsMessage>()
 export const scheduledTaskBroadcaster = new TypedBroadcaster<ScheduledTaskWsMessage>() // RFC-159
+export const intentSessionsBroadcaster = new TypedBroadcaster<IntentSessionWsMessage>() // RFC-234
 
 /** Reset all broadcasters — only used in tests between cases. */
 export function resetBroadcastersForTests(): void {

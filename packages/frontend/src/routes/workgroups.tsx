@@ -27,6 +27,7 @@ import {
   workgroupLeaderDisplayName,
   type QuickCreateWorkgroupBody,
 } from '@/lib/workgroup-form'
+import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -183,7 +184,16 @@ function WorkgroupsPage() {
   return (
     <ResourceGalleryPage
       title={t('workgroups.title')}
-      headerActions={createAction}
+      headerActions={
+        <>
+          <IntentEntryButton
+            variant="create"
+            hint="workgroup"
+            data-testid="workgroups-intent-entry"
+          />
+          {createAction}
+        </>
+      }
       emptyAction={createAction}
       emptyIcon={WORKGROUP_ICON}
       items={items}

@@ -10,6 +10,7 @@ import { chmod, lstat, mkdir, rm } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { SpawnPlan, SystemAgentSpawnContext } from '../types'
 import {
+  SYSTEM_READ_ONLY_TOOLS,
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
   removeHermeticOpencodeLayout,
@@ -159,6 +160,13 @@ export async function buildVerifiedOpencodeSystemPlan(
       },
     })
     const { layout, binaryIdentity, containment, childProvider, fffCapability } = core
+    // RFC-234 §1.1 — materialize the frozen system permission profile. Unknown
+    // values are an identity failure (fail closed), and 'intent-read-v1' flips
+    // ONLY the closed read-only subset; bash stays denied via allowShell.
+    const profile = ctx.systemPermissionProfile ?? 'all-deny'
+    if (profile !== 'all-deny' && profile !== 'intent-read-v1') {
+      return executionIdentityFailure('execution-identity-mismatch')
+    }
     const controlledConfig = buildControlledOpencodeConfig({
       name: ctx.agentName,
       prompt: ctx.systemPrompt,
@@ -170,6 +178,7 @@ export async function buildVerifiedOpencodeSystemPlan(
       shellPath: '/bin/false',
       allowShell: false,
       mcp: {},
+      ...(profile === 'intent-read-v1' ? { allowedReadOnlyTools: SYSTEM_READ_ONLY_TOOLS } : {}),
     })
     const sourceEnv: Record<string, string | undefined> = {
       ...(dependencies.sourceEnv ?? process.env),

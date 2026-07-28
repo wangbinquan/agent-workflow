@@ -23,6 +23,8 @@ import { Route as skillDetailRoute } from '@/routes/skills.detail'
 import { Route as skillNewRoute } from '@/routes/skills.new'
 import { Route as tasksRoute } from '@/routes/tasks'
 import { TaskWizardRoute as taskWizardRoute } from '@/routes/tasks.new'
+import { Route as intentSessionsRoute } from '@/routes/intent'
+import { Route as intentSessionDetailRoute } from '@/routes/intent.detail'
 import { Route as scheduledRoute } from '@/routes/scheduled'
 import { Route as scheduledDetailRoute } from '@/routes/scheduled.$id'
 import { Route as taskDetailRoute } from '@/routes/tasks.detail'
@@ -107,6 +109,9 @@ const routeTree = rootRoute.addChildren([
   taskDetailRoute,
   tasksRoute,
   taskWizardRoute,
+  // RFC-234: '/intent/$sessionId' literal must precede '/intent'.
+  intentSessionDetailRoute,
+  intentSessionsRoute,
   // RFC-159: '/scheduled/$id' literal must precede '/scheduled'.
   scheduledDetailRoute,
   scheduledRoute,

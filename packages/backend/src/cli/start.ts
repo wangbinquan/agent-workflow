@@ -14,6 +14,8 @@ import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { createApp } from '@/server'
 import { startFusionReconcileLoop } from '@/services/fusion'
 import { startLimitsTicker } from '@/services/limits'
+import { convergeIntentApplyJournal } from '@/services/intent/applyChangeset'
+import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '@/services/intent/maintenance'
 import { reapOrphanRunsForStoreRecovery } from '@/services/orphans'
 import { autoResumeInterruptedTasks } from '@/services/autoResume'
 import { startAutoRepairLoop } from '@/services/autoRepair'
@@ -645,6 +647,36 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     // Undefined falls back to DEFAULT_SOURCE_CONTEXT_BUDGET inside runDistill.
     sourceContextBudget: batchImportCfg.memoryDistillSourceContext,
   })
+
+  // RFC-234 — intent-builder maintenance: settle turns orphaned by the previous
+  // daemon, converge unsettled apply-journal rows (compensate or roll forward),
+  // and sweep retained failure scratch dirs on an hourly cadence.
+  try {
+    const orphaned = recoverIntentTurnsOnBoot(db)
+    const converged = await convergeIntentApplyJournal(db, Paths.root)
+    if (orphaned > 0 || converged.failed > 0 || converged.rolledForward > 0) {
+      log.info('intent maintenance on boot', { orphaned, ...converged })
+    }
+  } catch (err) {
+    log.warn('intent boot maintenance failed', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+  const intentGcTimer = setInterval(
+    () => {
+      try {
+        const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24
+        sweepIntentScratch(db, Paths.root, retention)
+        void convergeIntentApplyJournal(db, Paths.root)
+      } catch (err) {
+        log.warn('intent hourly maintenance failed', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+    60 * 60 * 1000,
+  )
+  intentGcTimer.unref?.()
 
   // RFC-053 P-3 — lifecycle invariant scan. Boot-time scan (~5s after the
   // listener comes up) catches historic stuck tasks; hourly incremental

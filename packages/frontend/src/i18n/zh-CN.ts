@@ -10,7 +10,120 @@ export interface Resources {
     scrollStart: string
     scrollEnd: string
   }
+  intent: {
+    title: string
+    description: string
+    newSession: string
+    emptyTitle: string
+    emptyDescription: string
+    columnTitle: string
+    columnStatus: string
+    columnRounds: string
+    columnCommits: string
+    columnUpdated: string
+    statusRunning: string
+    statusArchived: string
+    statusActive: string
+    startBuilding: string
+    messageLabel: string
+    messageHint: string
+    messagePlaceholder: string
+    hintLabel: string
+    hintHint: string
+    hintPlaceholder: string
+    hintAuto: string
+    modifyTargetNote: string
+    timeline: string
+    roleUser: string
+    roleAgent: string
+    turnKind: {
+      message: string
+      answers: string
+      'mount-approval': string
+      running: string
+      questions: string
+      changeset: string
+      error: string
+    }
+    opCount: string
+    retryTurn: string
+    generating: string
+    answerQuestions: string
+    submitAnswers: string
+    mounts: string
+    unmount: string
+    draftTitle: string
+    draftStale: string
+    draftStaleNotice: string
+    blockingErrors: string
+    opCreate: string
+    opUpdate: string
+    openCommit: string
+    commits: string
+    commitState: {
+      prepared: string
+      applying: string
+      committed: string
+      failed: string
+    }
+    fromCopy: string
+    composerLabel: string
+    composerPlaceholder: string
+    send: string
+    cancelTurn: string
+    rebase: string
+    commitTitle: string
+    commitSubmit: string
+    applyModeTitle: string
+    applyModeHint: string
+    applyModify: string
+    applyCopy: string
+    secretsTitle: string
+    secretPlaceholder: string
+    waiversTitle: string
+    waiverLabel: string
+    humansTitle: string
+    humanLabel: string
+    humanHint: string
+    namesTitle: string
+    nameHint: string
+    namePlaceholder: string
+    entryCreate: string
+    entryModify: string
+    provenanceBadge: string
+    addMount: string
+    addMountTitle: string
+    addMountSubmit: string
+    addMountType: string
+    addMountResources: string
+    mountPickerLoading: string
+    mountPickerEmpty: string
+    mountPickerLoadFailed: string
+    mountPickerUnresolved: string
+    previewRawJson: string
+    previewSideSwitch: string
+    previewBefore: string
+    previewAfter: string
+    previewCanvasUnavailable: string
+    previewPromptDiff: string
+    previewMembers: string
+    previewLeader: string
+    previewHumanPlaceholder: string
+    previewBodyDiff: string
+    previewFiles: string
+    previewScriptBadge: string
+    previewBeforeUnavailable: string
+    resourceType: {
+      agent: string
+      skill: string
+      mcp: string
+      plugin: string
+      workflow: string
+      workgroup: string
+    }
+  }
   nav: {
+    intent: string
     agents: string
     skills: string
     mcps: string
@@ -923,6 +1036,19 @@ export interface Resources {
       memoryHint: string
       mergeTitle: string
       mergeHint: string
+      intentTitle: string
+      intentHint: string
+      intentRuntime: string
+      intentRuntimeHint: string
+      intentLang: string
+      intentLangHint: string
+      intentLangDefault: string
+      intentTimeout: string
+      intentTimeoutHint: string
+      intentRounds: string
+      intentRoundsHint: string
+      intentExtra: string
+      intentExtraHint: string
       fusionTitle: string
       fusionHint: string
       fusionRuntime: string
@@ -4041,6 +4167,118 @@ export const zhCN: Resources = {
     scrollStart: '向前查看更多分区',
     scrollEnd: '向后查看更多分区',
   },
+  intent: {
+    title: '意图构建',
+    description: '用自然语言描述目标，AI 生成/修改工作流、工作组、代理与技能，确认后落库。',
+    newSession: '新建意图会话',
+    emptyTitle: '还没有意图会话',
+    emptyDescription: '描述你的工作目标，让 AI 为你编排所需的全部资源。',
+    columnTitle: '标题',
+    columnStatus: '状态',
+    columnRounds: '轮次',
+    columnCommits: '提交',
+    columnUpdated: '更新时间',
+    statusRunning: '生成中',
+    statusArchived: '已归档',
+    statusActive: '进行中',
+    startBuilding: '开始构建',
+    messageLabel: '工作目标',
+    messageHint: '描述目标与过程，越具体越好；AI 拿不准时会反问澄清。',
+    messagePlaceholder: '例：我要一个"先实现、再按文件分片审计、最后修复"的流水线……',
+    hintLabel: '产物类型（可选）',
+    hintHint: '选择目标产物类型；「自动判断」由 AI 依据意图自行决定。',
+    hintPlaceholder: '工作流 / 工作组 / 代理 / 技能',
+    hintAuto: '自动判断',
+    modifyTargetNote: '修改目标：{{type}}（已挂载到本会话，AI 将直接基于它给出变更）',
+    timeline: '会话记录',
+    roleUser: '我',
+    roleAgent: '构建 Agent',
+    turnKind: {
+      message: '消息',
+      answers: '回答',
+      'mount-approval': '挂载批准',
+      running: '生成中',
+      questions: '反问',
+      changeset: '变更集',
+      error: '错误',
+    },
+    opCount: '{{count}} 项变更',
+    retryTurn: '重试本轮',
+    generating: '正在生成……',
+    answerQuestions: '回答澄清问题',
+    submitAnswers: '提交回答并继续生成',
+    mounts: '已挂载元素',
+    unmount: '取消挂载',
+    draftTitle: '草稿变更集（第 {{revision}} 版）',
+    draftStale: '已过期',
+    draftStaleNotice: '会话上下文已变化，此草稿不可提交；发送新消息重新生成。',
+    blockingErrors: '{{count}} 个阻断性校验错误，需 AI 修复后才能提交。',
+    opCreate: '新增',
+    opUpdate: '修改',
+    openCommit: '确认并提交…',
+    commits: '历次提交',
+    commitState: {
+      prepared: '准备中',
+      applying: '应用中',
+      committed: '已提交',
+      failed: '失败',
+    },
+    fromCopy: '副本',
+    composerLabel: '继续调整',
+    composerPlaceholder: '继续描述想要的调整……',
+    send: '发送',
+    cancelTurn: '取消生成',
+    rebase: '拉取新基线',
+    commitTitle: '确认提交变更集',
+    commitSubmit: '提交入库',
+    applyModeTitle: '修改方式',
+    applyModeHint: '直接修改原件，或复制为新的私有元素。',
+    applyModify: '直接修改',
+    applyCopy: '新增副本',
+    secretsTitle: '补填密钥',
+    secretPlaceholder: '在此输入真实密钥（不会进入 AI 上下文）',
+    waiversTitle: '疑似凭据豁免',
+    waiverLabel: '我确认这不是真实凭据：',
+    humansTitle: '人类成员绑定',
+    humanLabel: '占位成员「{{name}}」',
+    humanHint: '绑定平台用户，或留空以移除该成员。',
+    namesTitle: '命名调整（可选）',
+    nameHint: '留空使用 AI 提议的名称。',
+    namePlaceholder: '新名称',
+    entryCreate: '意图创建',
+    entryModify: '意图修改',
+    provenanceBadge: '意图构建',
+    addMount: '添加挂载',
+    addMountTitle: '添加挂载',
+    addMountSubmit: '挂载',
+    addMountType: '资源类型',
+    addMountResources: '选择资源',
+    mountPickerLoading: '加载中…',
+    mountPickerEmpty: '没有可选资源',
+    mountPickerLoadFailed: '资源列表加载失败',
+    mountPickerUnresolved: '解析中…',
+    previewRawJson: '原始 JSON',
+    previewSideSwitch: '前后对比',
+    previewBefore: '修改前',
+    previewAfter: '修改后',
+    previewCanvasUnavailable: '画布预览不可用（定义未通过本地校验），请查看原始 JSON。',
+    previewPromptDiff: '节点提示词变更',
+    previewMembers: '成员（{{count}}）',
+    previewLeader: '组长',
+    previewHumanPlaceholder: '人类占位',
+    previewBodyDiff: '正文对比',
+    previewFiles: '文件（{{count}}）',
+    previewScriptBadge: '脚本',
+    previewBeforeUnavailable: '修改前内容不可用（目标未挂载）。',
+    resourceType: {
+      agent: '代理',
+      skill: '技能',
+      mcp: 'MCP',
+      plugin: '插件',
+      workflow: '工作流',
+      workgroup: '工作组',
+    },
+  },
   nav: {
     agents: '代理',
     skills: '技能',
@@ -4050,6 +4288,7 @@ export const zhCN: Resources = {
     workgroups: '工作组',
     tasks: '任务',
     scheduled: '定时任务',
+    intent: '意图构建',
     reviews: '评审',
     clarify: '反问',
     repos: '远端仓',
@@ -4795,6 +5034,20 @@ export const zhCN: Resources = {
       memoryHint: '从任务产物提炼长期记忆候选的内置 agent（RFC-041）。',
       mergeTitle: '合并冲突解决',
       mergeHint: '按节点隔离合并回主干、遇真实三方冲突时解决冲突的内置 agent（RFC-130）。',
+      intentTitle: '意图构建',
+      intentHint:
+        '把自然语言目标转成工作流/工作组/代理/技能变更集的内置 agent（RFC-234）；仅限 opencode 运行时（只读工具 profile 需其证明）。',
+      intentRuntime: '意图构建运行时',
+      intentRuntimeHint: '仅可选 opencode 协议的运行时；留空继承全局默认（同样须为 opencode）。',
+      intentLang: '产物语言',
+      intentLangHint: '生成的 prompt/描述所用语言；默认跟随使用者输入语言。',
+      intentLangDefault: '跟随输入',
+      intentTimeout: '单轮超时（ms）',
+      intentTimeoutHint: '每轮生成的最长时长；默认 600000。',
+      intentRounds: '会话轮数上限',
+      intentRoundsHint: '单个会话允许的生成轮数上限；默认 50。',
+      intentExtra: '追加指令',
+      intentExtraHint: '叠加在平台内置系统 prompt 之上的团队约定（如命名规范）；≤8KB。',
       fusionTitle: '技能融合',
       fusionHint:
         '把多个技能融合成一个的内置 aw-skill-merger agent（RFC-101）；运行时写在该 agent 行上，点“保存”与其余内置 agent 一并写入。',

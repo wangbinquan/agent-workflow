@@ -13,6 +13,8 @@ export * from './schemas/operationRevision'
 export * from './schemas/permission'
 export * from './schemas/repo'
 export * from './schemas/resourceAcl'
+export * from './schemas/intentChangeset' // RFC-234
+export * from './schemas/intentSession' // RFC-234
 export * from './schemas/importRef'
 export * from './schemas/review'
 export * from './schemas/runtime'
@@ -43,6 +45,9 @@ export * from './git-url'
 export * from './prompt'
 export * from './promptFencing' // RFC-200
 export * from './agent-md'
+export * from './agent-md-serialize' // RFC-234
+export * from './intentSecretSlots' // RFC-234
+export * from './intent-dump-serialize' // RFC-234
 export * from './skill-md'
 export * from './skill-zip'
 export * from './outputKinds'

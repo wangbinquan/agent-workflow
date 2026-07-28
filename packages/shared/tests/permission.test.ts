@@ -17,9 +17,9 @@ import {
 } from '../src/schemas/permission'
 
 describe('PERMISSIONS catalog', () => {
-  test('contains the documented 34 entries', () => {
-    // RFC-222 added tasks:delete (33 → 34).
-    expect(PERMISSIONS.length).toBe(34)
+  test('contains the documented 36 entries', () => {
+    // RFC-222 added tasks:delete (33 → 34); RFC-234 added intent:read/write (→ 36).
+    expect(PERMISSIONS.length).toBe(36)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -30,7 +30,7 @@ describe('PERMISSIONS catalog', () => {
     expect(ROLE_PERMISSIONS.admin.length).toBe(PERMISSIONS.length)
   })
 
-  test('user role contains exactly the documented baseline (23 entries)', () => {
+  test('user role contains exactly the documented baseline (25 entries)', () => {
     const expected: Permission[] = [
       'agents:read',
       'skills:read',
@@ -59,6 +59,9 @@ describe('PERMISSIONS catalog', () => {
       'memory:archive',
       'memory:delete',
       'memory:edit',
+      // RFC-234 — intent builder is open to every logged-in user (D22)
+      'intent:read',
+      'intent:write',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
   })

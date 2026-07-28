@@ -412,6 +412,36 @@ export const ScheduledTaskWsMessageSchema = z.discriminatedUnion('type', [
 ])
 export type ScheduledTaskWsMessage = z.infer<typeof ScheduledTaskWsMessageSchema>
 
+// RFC-234 — intent-session stream. `ownerUserId` rides on every frame so the
+// per-frame gate filters to creator + SYSTEM admin (no manager bypass, D26)
+// without a DB lookup. Frames are invalidation signals; payloads stay in HTTP.
+export const IntentSessionWsMessageSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('intent.turn.started'),
+    sessionId: z.string(),
+    turnId: z.string(),
+    ownerUserId: z.string(),
+  }),
+  z.object({
+    type: z.literal('intent.turn.finished'),
+    sessionId: z.string(),
+    turnId: z.string(),
+    ownerUserId: z.string(),
+  }),
+  z.object({
+    type: z.literal('intent.session.updated'),
+    sessionId: z.string(),
+    ownerUserId: z.string(),
+  }),
+  z.object({
+    type: z.literal('intent.apply.committed'),
+    sessionId: z.string(),
+    journalId: z.string(),
+    ownerUserId: z.string(),
+  }),
+])
+export type IntentSessionWsMessage = z.infer<typeof IntentSessionWsMessageSchema>
+
 // -----------------------------------------------------------------------------
 // Server → client control frames common to every channel.
 // -----------------------------------------------------------------------------
@@ -448,4 +478,6 @@ export const WS_PATHS = {
   memoryDistillJobs: '/ws/memory-distill-jobs',
   /** RFC-159 — scheduled-task list stream (per-frame owner/admin filtered). */
   scheduledTasks: '/ws/scheduled-tasks',
+  /** RFC-234 — intent-session stream (creator + system admin only). */
+  intentSessions: '/ws/intent-sessions',
 } as const

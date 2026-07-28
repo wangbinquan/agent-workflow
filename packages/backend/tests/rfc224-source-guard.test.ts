@@ -21,6 +21,8 @@ const E2E_STUB_VERSIONS: Readonly<Record<string, string>> = Object.freeze({
   'stub-opencode-clarify.sh': '1.17.9',
   'stub-opencode-commit.sh': '999.0.0',
   'stub-opencode-cross-clarify.sh': '1.18.4',
+  // RFC-234: intent-builder e2e stub — telemetry stays deliberately non-semver.
+  'stub-opencode-intent.sh': 'intent-build',
   'stub-opencode-slow.sh': '0.9.0',
   'stub-opencode-workflow-matrix.sh': 'workflow-matrix',
   'stub-opencode.sh': 'custom-build',
@@ -275,6 +277,7 @@ describe('RFC-224 release platform source guard', () => {
       'stub-opencode-clarify.sh',
       'stub-opencode-commit.sh',
       'stub-opencode-cross-clarify.sh',
+      'stub-opencode-intent.sh',
       'stub-opencode-slow.sh',
       'stub-opencode-workflow-matrix.sh',
       'stub-opencode.sh',

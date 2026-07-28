@@ -71,6 +71,24 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
           }),
         )
       }
+      // RFC-234 §1.1 — the intent builder is FAIL-CLOSED on runtime capability:
+      // only protocols that prove the 'intent-read-v1' system permission
+      // profile are admissible (v1: opencode via the verified system path). An
+      // explicit selection of any other protocol is rejected HERE, at save
+      // time — there is no "configured but degraded at run time" path.
+      if (nextConfig.intentBuilderRuntime !== undefined) {
+        const resolved = await resolveInternalAgentRuntime(deps.db, {
+          runtimeName: nextConfig.intentBuilderRuntime,
+          defaultRuntime: nextConfig.defaultRuntime,
+        })
+        assertResolvedExecutionPolicy(resolved)
+        if (resolved.protocol !== 'opencode') {
+          throw new ValidationError(
+            'intent-runtime-unsupported',
+            `runtime '${nextConfig.intentBuilderRuntime}' (protocol '${resolved.protocol}') cannot enforce the intent-read-v1 permission profile; select an opencode runtime`,
+          )
+        }
+      }
       // Switching the effective default is a fan-out policy change. Every agent
       // that inherits it is checked before the config file is written.
       if (nextConfig.defaultRuntime !== currentConfig.defaultRuntime) {

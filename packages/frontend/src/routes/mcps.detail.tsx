@@ -18,6 +18,8 @@ import {
   type SplitBusyRelease,
 } from '@/components/split/splitDirty'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { IntentEntryButton } from '@/components/IntentEntryButton'
+import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { McpFields } from '@/components/McpFields'
@@ -195,6 +197,16 @@ function McpDetailPage() {
           },
           disabled: del.isPending || save.isPending,
         }}
+        extra={
+          <>
+            <IntentProvenanceBadge resourceType="mcp" resourceId={id} />
+            <IntentEntryButton
+              variant="modify"
+              mount={{ resourceType: 'mcp', resourceId: id }}
+              data-testid="mcp-intent-entry"
+            />
+          </>
+        }
         errors={[save.error, del.error]}
       />
 

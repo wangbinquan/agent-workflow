@@ -38,7 +38,7 @@ import { skills } from '@/db/schema'
 import { commitSkillVersion } from '@/services/skillVersion'
 import { isSkillAvailableThisBoot } from '@/services/skillBootVerify'
 import { tokenToVersionFence } from '@/services/skillToken'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
   abandonOperation,
   advancePhase,
@@ -261,10 +261,7 @@ export async function createManagedSkillWithFiles(
     dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
 
     // ④ db-committed: flip to 'ready' — the skill becomes visible now, atomically.
-    dbTxSync(db, (tx) => {
-      tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id)).run()
-      advancePhase(tx, opId, 'db-committed')
-    })
+    dbTxSync(db, (tx) => commitSkillReadyInTx(tx, { skillId: id, opId }))
     committed = true
     hooks.__afterDbCommitForTest?.()
     dbTxSync(db, (tx) => finishOperation(tx, opId))
@@ -298,6 +295,110 @@ export async function createManagedSkillWithFiles(
   const created = await getSkillById(db, id)
   if (created === null) throw new Error('skill disappeared right after reserve')
   return created
+}
+
+/** RFC-234 (T6) — the create pipeline's step-④ core, exported so the intent
+ *  apply transaction can flip MANY pre-staged skills visible atomically with
+ *  the rest of the bundle (steps ①-③ run in the pipeline's pre-stage phase via
+ *  stageManagedSkill; finishOperation/compensation stay with the caller). */
+export function commitSkillReadyInTx(tx: DbTxSync, p: { skillId: string; opId: string }): void {
+  tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, p.skillId)).run()
+  advancePhase(tx, p.opId, 'db-committed')
+}
+
+/** RFC-234 (T6) — steps ①-③ of createManagedSkillWithFiles as a standalone
+ *  pre-stage: reserve (invisible row + op lock) → produce files → archive v1.
+ *  The skill stays INVISIBLE until commitSkillReadyInTx runs. On throw the
+ *  stage is already compensated (same rollback as the create path). */
+export async function stageManagedSkill(
+  db: DbClient,
+  opts: SkillFsOptions,
+  meta: {
+    name: string
+    description: string
+    ownerUserId?: string
+    actor?: Actor | null
+    /** RFC-234: pre-minted bundle id so same-bundle refs resolve before insert. */
+    id?: string
+  },
+  produceFiles: (filesDir: string) => void,
+): Promise<{ skillId: string; opId: string; skillDir: string }> {
+  const ownerUserId = meta.ownerUserId ?? null
+  assertInitialResourceOwner(meta.actor, ownerUserId)
+  const initialAcl = initialPrivateResourceAcl(ownerUserId)
+  if (await isSkillNameOccupiedForOwner(db, meta.name, ownerUserId)) {
+    throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
+  }
+  const id = meta.id ?? ulid()
+  const now = Date.now()
+  let opId: string
+  try {
+    opId = dbTxSync(db, (tx) => {
+      tx.insert(skills)
+        .values({
+          id,
+          name: meta.name,
+          description: meta.description,
+          sourceKind: 'managed',
+          managedPath: skillFilesRel(id),
+          ...initialAcl,
+          reservationState: 'reserving',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      return beginOperation(tx, {
+        skillId: id,
+        kind: 'reserve',
+        ownerUserId: ownerUserId ?? undefined,
+        preconditionJson: JSON.stringify({ skillId: id }),
+      })
+    })
+  } catch (err) {
+    if (
+      /skills_owner_name_unique|UNIQUE constraint failed:? *skills\.(?:owner_user_id|name)/i.test(
+        err instanceof Error ? err.message : '',
+      )
+    ) {
+      throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
+    }
+    throw err
+  }
+  const skillDir = skillRootAbs(opts.appHome, id)
+  try {
+    const filesDir = join(skillDir, 'files')
+    mkdirSync(filesDir, { recursive: true })
+    produceFiles(filesDir)
+    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
+    commitSkillVersion(db, opts, id, () => {}, {
+      source: 'initial',
+      authorUserId: ownerUserId,
+      skipOp: true,
+    })
+    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
+    return { skillId: id, opId, skillDir }
+  } catch (err) {
+    compensateManagedSkillStage(db, { skillId: id, opId, skillDir })
+    throw err
+  }
+}
+
+/** RFC-234 (T6) — discard a staged-but-never-published skill (bundle failure /
+ *  boot convergence): files best-effort, then row + op in one tx (RFC-208
+ *  ordering: a stranded lock is worse than a leftover dir). */
+export function compensateManagedSkillStage(
+  db: DbClient,
+  p: { skillId: string; opId: string; skillDir: string },
+): void {
+  try {
+    rmSync(p.skillDir, { recursive: true, force: true })
+  } catch {
+    /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
+  }
+  dbTxSync(db, (tx) => {
+    tx.delete(skills).where(eq(skills.id, p.skillId)).run()
+    abandonOperation(tx, p.opId)
+  })
 }
 
 // --- delete ---

@@ -39,7 +39,7 @@ import { Dialog } from '@/components/Dialog'
 import { Segmented } from '@/components/Segmented'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
+import { TextArea, Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
@@ -1360,6 +1360,77 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               value={state.mergeAgentRuntime}
               ariaLabel={t('settingsForm.mergeAgentRuntime')}
               onChange={(v) => setState({ ...state, mergeAgentRuntime: v, mergeAgentModel: null })}
+            />
+          </Field>
+        </AgentCard>
+
+        <AgentCard
+          title={t('settings.systemAgents.intentTitle')}
+          hint={t('settings.systemAgents.intentHint')}
+        >
+          <Field
+            label={t('settings.systemAgents.intentRuntime')}
+            hint={t('settings.systemAgents.intentRuntimeHint')}
+          >
+            <RuntimeSelect
+              value={state.intentBuilderRuntime}
+              ariaLabel={t('settings.systemAgents.intentRuntime')}
+              onChange={(v) => setState({ ...state, intentBuilderRuntime: v })}
+            />
+          </Field>
+          <Field
+            label={t('settings.systemAgents.intentLang')}
+            hint={t('settings.systemAgents.intentLangHint')}
+          >
+            <Select<'' | NonNullable<Config['intentBuilderLang']>>
+              data-testid="settings-intent-lang-select"
+              ariaLabel={t('settings.systemAgents.intentLang')}
+              value={state.intentBuilderLang ?? ''}
+              onChange={(v) => setState({ ...state, intentBuilderLang: v === '' ? null : v })}
+              options={[
+                { value: '', label: t('settings.systemAgents.intentLangDefault') },
+                { value: 'en-US', label: t('settings.memoryDistillLangEnUS') },
+                { value: 'zh-CN', label: t('settings.memoryDistillLangZhCN') },
+              ]}
+            />
+          </Field>
+          <div className="form-grid form-grid--cols-2">
+            <Field
+              label={t('settings.systemAgents.intentTimeout')}
+              hint={t('settings.systemAgents.intentTimeoutHint')}
+            >
+              <NumberInput
+                value={state.intentBuilderTurnTimeoutMs ?? undefined}
+                onChange={(v) => setState({ ...state, intentBuilderTurnTimeoutMs: v })}
+                min={30000}
+                max={3600000}
+                placeholder="600000"
+              />
+            </Field>
+            <Field
+              label={t('settings.systemAgents.intentRounds')}
+              hint={t('settings.systemAgents.intentRoundsHint')}
+            >
+              <NumberInput
+                value={state.intentBuilderMaxGenerateRounds ?? undefined}
+                onChange={(v) => setState({ ...state, intentBuilderMaxGenerateRounds: v })}
+                min={1}
+                max={500}
+                placeholder="50"
+              />
+            </Field>
+          </div>
+          <Field
+            label={t('settings.systemAgents.intentExtra')}
+            hint={t('settings.systemAgents.intentExtraHint')}
+          >
+            <TextArea
+              value={state.intentBuilderExtraInstructions ?? ''}
+              onChange={(v: string) =>
+                setState({ ...state, intentBuilderExtraInstructions: v === '' ? null : v })
+              }
+              rows={3}
+              monospace
             />
           </Field>
         </AgentCard>

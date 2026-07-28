@@ -91,7 +91,16 @@ describe('RFC-224 verified OpenCode source reachability', () => {
     ])
 
     const driver = source('services/runtime/opencode/driver.ts')
-    expect(driver).toContain('if (ctx.testOnlyUnverifiedRuntime !== true) {')
+    // RFC-234: the system gate mirrors the business `usesLegacyTestOpencodePath`
+    // shape — explicit test flag OR an UNBRANDED injected command (branding is
+    // compiled out only in unit tests / the e2e binary; production commands are
+    // marked at the config boundary, so this cannot widen a production escape).
+    expect(driver).toContain('const legacyTestPath =')
+    expect(driver).toContain('ctx.testOnlyUnverifiedRuntime === true ||')
+    expect(driver).toContain(
+      '(ctx.opencodeCmd !== undefined && !isProductionOpencodeCommand(ctx.opencodeCmd))',
+    )
+    expect(driver).toContain('if (!legacyTestPath) {')
     expect(driver).toContain('return buildVerifiedOpencodeSystemPlan(ctx, head)')
     expect(driver).toContain('if (!usesLegacyTestOpencodePath(ctx)) {')
     expect(driver).toContain(
@@ -107,6 +116,10 @@ describe('RFC-224 verified OpenCode source reachability', () => {
       'services/runtime/opencode/verifiedPlan.ts',
       'services/runtime/types.ts',
       'services/runtimeSmoke.ts',
+      // RFC-234: runSystemAgent forwards the seam flag exactly like
+      // runtimeSmoke (mock-binary tests only; production callers never set it —
+      // the intent turn engine does not reference the seam at all).
+      'services/systemAgentRun.ts',
     ])
   })
 

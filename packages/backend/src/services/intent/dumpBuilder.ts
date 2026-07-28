@@ -1,0 +1,488 @@
+// RFC-234 §4 (T4) — the working-directory dump builder.
+//
+// One epoch = one call: given the actor's explicit mounts, produce
+//   inventory/{type}.md        six visible-inventory summaries (handles, capped
+//                              with EXPLICIT truncation notes — never silent)
+//   mounted/res.{type}.{n}.*   full dumps of mounted roots + their dependency
+//                              closure (BFS, ACL-filtered; invisible members
+//                              surface as counted hidden-dependency notes, no
+//                              name leak)
+// plus the context manifest (handles ↔ ids ↔ fences — server-side only).
+//
+// Identity isolation and secret redaction are structural: every document goes
+// through the shared whitelist serializers (agent-md-serialize /
+// intent-dump-serialize) and the closed secret projections; this module never
+// copies owner/user/grant fields at all. Locked by
+// tests/rfc234-dump-builder.test.ts poisoned fixtures.
+
+import { createHash } from 'node:crypto'
+import { stringify as stringifyYaml } from 'yaml'
+import type {
+  AclResourceType,
+  Agent,
+  AgentSkillSelector,
+  Mcp,
+  Plugin,
+  Workflow,
+  Workgroup,
+} from '@agent-workflow/shared'
+import {
+  maskFreeJsonSecrets,
+  serializeAgentMarkdown,
+  serializeMcpDump,
+  serializePluginDump,
+  serializeWorkgroupDump,
+} from '@agent-workflow/shared'
+import type { Actor } from '@/auth/actor'
+import type { DbClient } from '@/db/client'
+import { listAgents } from '@/services/agent'
+import { listMcps } from '@/services/mcp'
+import { listPlugins } from '@/services/plugin'
+import { listSkills, listSkillFiles, readSkillContent, readSkillFile } from '@/services/skill'
+import { listWorkflows } from '@/services/workflow'
+import { listWorkgroups } from '@/services/workgroups'
+import { filterVisibleRows } from '@/services/resourceAcl'
+import type { SystemAgentSeedFile } from '@/services/systemAgentRun'
+import {
+  allocateHandle,
+  buildAgentFence,
+  buildMcpFence,
+  buildPluginFence,
+  buildSkillFence,
+  buildWorkflowFence,
+  buildWorkgroupFence,
+  createHandleAllocator,
+  type IntentContextManifest,
+} from './manifest'
+
+export const INTENT_INVENTORY_CAP = 500
+const SKILL_DUMP_FILE_CAP_BYTES = 128 * 1024
+
+export interface IntentMountRef {
+  resourceType: AclResourceType
+  resourceId: string
+}
+
+export interface IntentDumpInput {
+  db: DbClient
+  actor: Actor
+  appHome: string
+  mounts: readonly IntentMountRef[]
+  /** Prior epoch's manifest — reused so handles stay stable across rebases. */
+  priorManifest?: IntentContextManifest
+  /** Test seam; production uses INTENT_INVENTORY_CAP. */
+  inventoryCap?: number
+}
+
+export interface IntentDumpResult {
+  manifest: IntentContextManifest
+  seedFiles: SystemAgentSeedFile[]
+  /** parentHandle → number of ACL-invisible closure members (no names). */
+  hiddenDependencies: Array<{ parentHandle: string; count: number }>
+  /** type → dropped row count when the inventory cap truncated the summary. */
+  inventoryTruncated: Partial<Record<AclResourceType, number>>
+}
+
+const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex')
+
+/** `res#agent#3` → `res.agent.3` (filesystem-safe dump basename). */
+export function handleBasename(handle: string): string {
+  return handle.replace(/#/g, '.')
+}
+
+function firstLine(text: string, cap = 160): string {
+  const line = text.split('\n', 1)[0] ?? ''
+  return line.length > cap ? `${line.slice(0, cap)}…` : line
+}
+
+interface VisibleCatalog {
+  agents: Map<string, Agent>
+  skills: Map<string, { id: string; name: string; description: string }>
+  mcps: Map<string, Mcp>
+  plugins: Map<string, Plugin>
+  workflows: Map<string, Workflow>
+  workgroups: Map<string, Workgroup>
+}
+
+async function loadVisibleCatalog(db: DbClient, actor: Actor): Promise<VisibleCatalog> {
+  const [agents, skills, mcps, plugins, workflows, workgroups] = await Promise.all([
+    listAgents(db).then((rows) => filterVisibleRows(db, actor, 'agent', rows)),
+    listSkills(db).then((rows) => filterVisibleRows(db, actor, 'skill', rows)),
+    listMcps(db).then((rows) => filterVisibleRows(db, actor, 'mcp', rows)),
+    listPlugins(db).then((rows) => filterVisibleRows(db, actor, 'plugin', rows)),
+    listWorkflows(db).then((rows) => filterVisibleRows(db, actor, 'workflow', rows)),
+    listWorkgroups(db).then((rows) => filterVisibleRows(db, actor, 'workgroup', rows)),
+  ])
+  return {
+    agents: new Map(agents.map((a) => [a.id, a])),
+    skills: new Map(skills.map((s) => [s.id, s])),
+    mcps: new Map(mcps.map((m) => [m.id, m])),
+    plugins: new Map(plugins.map((p) => [p.id, p])),
+    workflows: new Map(workflows.map((w) => [w.id, w])),
+    workgroups: new Map(workgroups.map((w) => [w.id, w])),
+  }
+}
+
+/** BFS the dependency closure of one mounted root. Returns VISIBLE members
+ *  (typed ids) + the count of invisible ones (no identity recorded). */
+function expandClosure(
+  root: IntentMountRef,
+  catalog: VisibleCatalog,
+): { members: IntentMountRef[]; hiddenCount: number } {
+  const members: IntentMountRef[] = []
+  const seen = new Set<string>([`${root.resourceType}:${root.resourceId}`])
+  let hiddenCount = 0
+  const queue: IntentMountRef[] = [root]
+
+  const push = (resourceType: AclResourceType, resourceId: string): void => {
+    const key = `${resourceType}:${resourceId}`
+    if (seen.has(key)) return
+    seen.add(key)
+    const visible =
+      resourceType === 'agent'
+        ? catalog.agents.has(resourceId)
+        : resourceType === 'skill'
+          ? catalog.skills.has(resourceId)
+          : resourceType === 'mcp'
+            ? catalog.mcps.has(resourceId)
+            : resourceType === 'plugin'
+              ? catalog.plugins.has(resourceId)
+              : resourceType === 'workflow'
+                ? catalog.workflows.has(resourceId)
+                : catalog.workgroups.has(resourceId)
+    if (!visible) {
+      hiddenCount += 1
+      return
+    }
+    const ref = { resourceType, resourceId }
+    members.push(ref)
+    queue.push(ref)
+  }
+
+  while (queue.length > 0) {
+    const cur = queue.shift() as IntentMountRef
+    if (cur.resourceType === 'agent') {
+      const agent = catalog.agents.get(cur.resourceId)
+      if (agent === undefined) continue
+      for (const dep of agent.dependsOn) push('agent', dep)
+      for (const m of agent.mcp) push('mcp', m)
+      for (const p of agent.plugins) push('plugin', p)
+      for (const s of agent.skills) {
+        if (s.kind === 'managed') push('skill', s.skillId)
+      }
+    } else if (cur.resourceType === 'workflow') {
+      const wf = catalog.workflows.get(cur.resourceId)
+      if (wf === undefined) continue
+      for (const node of (wf.definition as { nodes?: Array<Record<string, unknown>> }).nodes ??
+        []) {
+        if (node.kind !== 'agent-single') continue
+        if (typeof node.agentId === 'string' && node.agentId.length > 0) {
+          push('agent', node.agentId)
+        }
+      }
+    } else if (cur.resourceType === 'workgroup') {
+      const wg = catalog.workgroups.get(cur.resourceId)
+      if (wg === undefined) continue
+      for (const member of wg.members) {
+        if (member.memberType === 'agent' && member.agentId != null && member.agentId !== '') {
+          push('agent', member.agentId)
+        }
+      }
+    }
+    // skill / mcp / plugin are closure leaves.
+  }
+  return { members, hiddenCount }
+}
+
+export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDumpResult> {
+  const { db, actor } = input
+  const cap = input.inventoryCap ?? INTENT_INVENTORY_CAP
+  const catalog = await loadVisibleCatalog(db, actor)
+  const alloc = createHandleAllocator(input.priorManifest)
+  const seedFiles: SystemAgentSeedFile[] = []
+  const manifest: IntentContextManifest = []
+  const hiddenDependencies: Array<{ parentHandle: string; count: number }> = []
+  const inventoryTruncated: Partial<Record<AclResourceType, number>> = {}
+
+  // ── resolve mounted roots (must be visible; caller pre-validates, we fail
+  // closed anyway) + closure ──
+  const detailRefs = new Map<string, { ref: IntentMountRef; root: boolean }>()
+  for (const mount of input.mounts) {
+    const rootKey = `${mount.resourceType}:${mount.resourceId}`
+    const rootVisible = expandClosure(mount, catalog)
+    const rootInCatalog =
+      mount.resourceType === 'agent'
+        ? catalog.agents.has(mount.resourceId)
+        : mount.resourceType === 'skill'
+          ? catalog.skills.has(mount.resourceId)
+          : mount.resourceType === 'mcp'
+            ? catalog.mcps.has(mount.resourceId)
+            : mount.resourceType === 'plugin'
+              ? catalog.plugins.has(mount.resourceId)
+              : mount.resourceType === 'workflow'
+                ? catalog.workflows.has(mount.resourceId)
+                : catalog.workgroups.has(mount.resourceId)
+    if (!rootInCatalog) {
+      throw new Error(`mounted resource is not visible: ${mount.resourceType}`)
+    }
+    const existing = detailRefs.get(rootKey)
+    detailRefs.set(rootKey, { ref: mount, root: true, ...(existing?.root ? { root: true } : {}) })
+    for (const member of rootVisible.members) {
+      const key = `${member.resourceType}:${member.resourceId}`
+      if (!detailRefs.has(key)) detailRefs.set(key, { ref: member, root: false })
+    }
+    if (rootVisible.hiddenCount > 0) {
+      const parentHandle = allocateHandle(alloc, mount.resourceType, mount.resourceId)
+      hiddenDependencies.push({ parentHandle, count: rootVisible.hiddenCount })
+    }
+  }
+
+  // ── allocate handles: detail refs first (stable numbering for dumped docs),
+  // then the whole visible inventory (referenceable summaries) ──
+  for (const { ref } of detailRefs.values()) {
+    allocateHandle(alloc, ref.resourceType, ref.resourceId)
+  }
+  const inventoryLists: Array<[AclResourceType, Array<{ id: string; name: string }>]> = [
+    ['agent', [...catalog.agents.values()]],
+    ['skill', [...catalog.skills.values()]],
+    ['mcp', [...catalog.mcps.values()]],
+    ['plugin', [...catalog.plugins.values()]],
+    ['workflow', [...catalog.workflows.values()]],
+    ['workgroup', [...catalog.workgroups.values()]],
+  ]
+  for (const [type, rows] of inventoryLists) {
+    for (const row of [...rows].sort((a, b) => a.name.localeCompare(b.name)).slice(0, cap)) {
+      allocateHandle(alloc, type, row.id)
+    }
+  }
+
+  const handleFor = (type: AclResourceType, id: string): string => allocateHandle(alloc, type, id)
+
+  // ── mounted/ dumps ──
+  for (const { ref, root } of detailRefs.values()) {
+    const handle = handleFor(ref.resourceType, ref.resourceId)
+    const base = `mounted/${handleBasename(handle)}`
+    const entryBase = {
+      handle,
+      resourceType: ref.resourceType,
+      resourceId: ref.resourceId,
+      root,
+      detail: true as const,
+    }
+    if (ref.resourceType === 'agent') {
+      const agent = catalog.agents.get(ref.resourceId)
+      if (agent === undefined) continue
+      const skills: Array<AgentSkillSelector | string> = agent.skills.map((s) =>
+        s.kind === 'managed'
+          ? catalog.skills.has(s.skillId)
+            ? handleFor('skill', s.skillId)
+            : 'hidden-dependency'
+          : ({ kind: 'project', name: s.name } as AgentSkillSelector),
+      )
+      const doc = serializeAgentMarkdown({
+        name: agent.name,
+        description: agent.description,
+        ...(Object.keys(agent.permission).length > 0 ? { permission: agent.permission } : {}),
+        skills: skills as AgentSkillSelector[] | string[],
+        dependsOn: agent.dependsOn.map((id) =>
+          catalog.agents.has(id) ? handleFor('agent', id) : 'hidden-dependency',
+        ),
+        mcp: agent.mcp.map((id) =>
+          catalog.mcps.has(id) ? handleFor('mcp', id) : 'hidden-dependency',
+        ),
+        plugins: agent.plugins.map((id) =>
+          catalog.plugins.has(id) ? handleFor('plugin', id) : 'hidden-dependency',
+        ),
+        ...(agent.inputs !== undefined && agent.inputs.length > 0 ? { inputs: agent.inputs } : {}),
+        outputs: agent.outputs,
+        ...(agent.outputKinds !== undefined ? { outputKinds: agent.outputKinds } : {}),
+        ...(agent.role !== undefined ? { role: agent.role } : {}),
+        ...(agent.outputWrapperPortNames !== undefined
+          ? { outputWrapperPortNames: agent.outputWrapperPortNames }
+          : {}),
+        ...(agent.runtime !== undefined ? { runtime: agent.runtime } : {}),
+        ...(Object.keys(agent.frontmatterExtra).length > 0
+          ? { frontmatterExtra: maskFreeJsonSecrets(agent.frontmatterExtra) }
+          : {}),
+        bodyMd: agent.bodyMd,
+      })
+      seedFiles.push({ path: `${base}.md`, content: doc })
+      manifest.push({ ...entryBase, fence: buildAgentFence(agent), dumpHash: sha256(doc) })
+    } else if (ref.resourceType === 'skill') {
+      const content = await readSkillContent(db, { appHome: input.appHome }, ref.resourceId)
+      const fmExtra = maskFreeJsonSecrets(content.frontmatterExtra)
+      const skillMd = `---\n${stringifyYaml(
+        {
+          name: content.name,
+          description: content.description,
+          ...(Object.keys(fmExtra).length > 0 ? fmExtra : {}),
+        },
+        { lineWidth: 0 },
+      )}---\n\n${content.bodyMd}\n`
+      seedFiles.push({ path: `${base}/SKILL.md`, content: skillMd })
+      let treeHash = skillMd
+      const nodes = await listSkillFiles(db, { appHome: input.appHome }, ref.resourceId)
+      for (const node of nodes) {
+        if (node.type !== 'file') continue
+        if (node.path === 'SKILL.md') continue
+        if ((node.size ?? 0) > SKILL_DUMP_FILE_CAP_BYTES) {
+          seedFiles.push({
+            path: `${base}/files/${node.path}.omitted.md`,
+            content: `File omitted from dump: ${node.path} exceeds ${SKILL_DUMP_FILE_CAP_BYTES} bytes.\n`,
+          })
+          continue
+        }
+        const fileContent = await readSkillFile(
+          db,
+          { appHome: input.appHome },
+          ref.resourceId,
+          node.path,
+        )
+        seedFiles.push({ path: `${base}/files/${node.path}`, content: fileContent })
+        treeHash += `\n--- ${node.path} ---\n${fileContent}`
+      }
+      manifest.push({
+        ...entryBase,
+        fence: buildSkillFence({
+          id: ref.resourceId,
+          ...(content.token === undefined ? {} : { token: content.token }),
+        }),
+        dumpHash: sha256(treeHash),
+      })
+    } else if (ref.resourceType === 'mcp') {
+      const mcp = catalog.mcps.get(ref.resourceId)
+      if (mcp === undefined) continue
+      const doc = serializeMcpDump({
+        handle,
+        type: mcp.type,
+        name: mcp.name,
+        description: mcp.description,
+        enabled: mcp.enabled,
+        config: mcp.config as Record<string, unknown>,
+      })
+      seedFiles.push({ path: `${base}.yaml`, content: doc })
+      manifest.push({ ...entryBase, fence: buildMcpFence(mcp), dumpHash: sha256(doc) })
+    } else if (ref.resourceType === 'plugin') {
+      const plugin = catalog.plugins.get(ref.resourceId)
+      if (plugin === undefined) continue
+      const doc = serializePluginDump({
+        handle,
+        name: plugin.name,
+        spec: plugin.spec,
+        description: plugin.description,
+        enabled: plugin.enabled,
+        options: plugin.options,
+      })
+      seedFiles.push({ path: `${base}.yaml`, content: doc })
+      manifest.push({ ...entryBase, fence: buildPluginFence(plugin), dumpHash: sha256(doc) })
+    } else if (ref.resourceType === 'workflow') {
+      const wf = catalog.workflows.get(ref.resourceId)
+      if (wf === undefined) continue
+      const def = wf.definition as { nodes?: Array<Record<string, unknown>> }
+      const transformed = {
+        ...(wf.definition as Record<string, unknown>),
+        nodes: (def.nodes ?? []).map((node) => {
+          if (node.kind !== 'agent-single') return node
+          const { agentId, agentName: _agentName, ...rest } = node
+          return typeof agentId === 'string' && catalog.agents.has(agentId)
+            ? { ...rest, agentRef: handleFor('agent', agentId) }
+            : { ...rest, agentRefHidden: true }
+        }),
+      }
+      const doc = stringifyYaml(
+        { handle, name: wf.name, description: wf.description, definition: transformed },
+        { lineWidth: 0 },
+      )
+      seedFiles.push({ path: `${base}.yaml`, content: doc })
+      manifest.push({ ...entryBase, fence: buildWorkflowFence(wf), dumpHash: sha256(doc) })
+    } else {
+      const wg = catalog.workgroups.get(ref.resourceId)
+      if (wg === undefined) continue
+      const leader = wg.members.find((m) => m.id === wg.leaderMemberId)
+      const doc = serializeWorkgroupDump({
+        handle,
+        name: wg.name,
+        description: wg.description,
+        instructions: wg.instructions,
+        mode: wg.mode,
+        ...(leader === undefined ? {} : { leaderDisplayName: leader.displayName }),
+        switches: wg.switches,
+        maxRounds: wg.maxRounds,
+        completionGate: wg.completionGate,
+        ...(wg.clarifyBudget === undefined ? {} : { clarifyBudget: wg.clarifyBudget }),
+        ...(wg.fanOut === undefined ? {} : { fanOut: wg.fanOut }),
+        members: wg.members.map((m) =>
+          m.memberType === 'agent'
+            ? {
+                memberType: 'agent' as const,
+                ...(m.agentId != null && catalog.agents.has(m.agentId)
+                  ? { agentHandle: handleFor('agent', m.agentId) }
+                  : {}),
+                displayName: m.displayName,
+                roleDesc: m.roleDesc,
+              }
+            : { memberType: 'human' as const, displayName: m.displayName, roleDesc: m.roleDesc },
+        ),
+      })
+      seedFiles.push({ path: `${base}.yaml`, content: doc })
+      manifest.push({ ...entryBase, fence: buildWorkgroupFence(wg), dumpHash: sha256(doc) })
+    }
+  }
+
+  // ── inventory/ summaries + summary manifest entries ──
+  const detailKeys = new Set(manifest.map((e) => `${e.resourceType}:${e.resourceId}`))
+  for (const [type, rows] of inventoryLists) {
+    const sorted = [...rows].sort((a, b) => a.name.localeCompare(b.name))
+    const kept = sorted.slice(0, cap)
+    const dropped = sorted.length - kept.length
+    if (dropped > 0) inventoryTruncated[type] = dropped
+    const lines: string[] = [
+      `# ${type} inventory (${sorted.length} visible${dropped > 0 ? `; TRUNCATED — ${dropped} more not listed, ask the user to mount what you need` : ''})`,
+      '',
+    ]
+    for (const row of kept) {
+      const handle = handleFor(type, row.id)
+      const summary = summarizeInventoryRow(type, row.id, catalog)
+      lines.push(`- ${handle} \`${row.name}\`${summary === '' ? '' : ` — ${summary}`}`)
+      const key = `${type}:${row.id}`
+      if (!detailKeys.has(key)) {
+        manifest.push({
+          handle,
+          resourceType: type,
+          resourceId: row.id,
+          root: false,
+          detail: false,
+        })
+        detailKeys.add(key)
+      }
+    }
+    seedFiles.push({ path: `inventory/${type}s.md`, content: `${lines.join('\n')}\n` })
+  }
+
+  return { manifest, seedFiles, hiddenDependencies, inventoryTruncated }
+}
+
+function summarizeInventoryRow(type: AclResourceType, id: string, catalog: VisibleCatalog): string {
+  if (type === 'agent') {
+    const a = catalog.agents.get(id)
+    if (a === undefined) return ''
+    const ports = a.outputs.length > 0 ? ` [outputs: ${a.outputs.join(', ')}]` : ''
+    return `${firstLine(a.description)}${ports}`
+  }
+  if (type === 'skill') return firstLine(catalog.skills.get(id)?.description ?? '')
+  if (type === 'mcp') {
+    const m = catalog.mcps.get(id)
+    return m === undefined ? '' : `${firstLine(m.description)} [${m.type}]`
+  }
+  if (type === 'plugin') return firstLine(catalog.plugins.get(id)?.description ?? '')
+  if (type === 'workflow') {
+    const w = catalog.workflows.get(id)
+    if (w === undefined) return ''
+    const nodeCount = (w.definition as { nodes?: unknown[] }).nodes?.length ?? 0
+    return `${firstLine(w.description)} [${nodeCount} nodes]`
+  }
+  const wg = catalog.workgroups.get(id)
+  return wg === undefined
+    ? ''
+    : `${firstLine(wg.description)} [${wg.mode}, ${wg.members.length} members]`
+}

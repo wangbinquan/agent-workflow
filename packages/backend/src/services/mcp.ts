@@ -41,11 +41,22 @@ export async function getMcpById(db: DbClient, id: string): Promise<Mcp | null> 
   return row ? rowToMcp(row) : null
 }
 
-export async function createMcp(
+/** RFC-234 (T6) — prepare/commit split (agent.ts precedent): `prepare` = the
+ *  former pre-insert validation, `commitMcpCreateInTx` = the former insert,
+ *  createMcp composes them. The intent apply pipeline runs many commits inside
+ *  ONE transaction. */
+export interface PreparedMcpCreate {
+  id: string
+  input: CreateMcp
+  initialAcl: ReturnType<typeof initialPrivateResourceAcl>
+  now: number
+}
+
+export async function prepareMcpCreate(
   db: DbClient,
   input: CreateMcp,
   aclOpts?: { ownerUserId?: string; actor?: Actor | null },
-): Promise<Mcp> {
+): Promise<PreparedMcpCreate> {
   const ownerUserId = aclOpts?.ownerUserId ?? null
   assertInitialResourceOwner(aclOpts?.actor, ownerUserId)
   const initialAcl = initialPrivateResourceAcl(ownerUserId)
@@ -63,20 +74,35 @@ export async function createMcp(
   // service caller bypasses the route and passes a hand-built object.
   validateConfigForType(input.type, input.config)
 
-  const id = ulid()
-  const now = Date.now()
-  try {
-    await db.insert(mcps).values({
-      id,
-      name: input.name,
-      description: input.description,
-      type: input.type,
-      config: JSON.stringify(input.config),
-      enabled: input.enabled,
+  return { id: ulid(), input, initialAcl, now: Date.now() }
+}
+
+export function commitMcpCreateInTx(tx: DbTxSync, p: PreparedMcpCreate): void {
+  tx.insert(mcps)
+    .values({
+      id: p.id,
+      name: p.input.name,
+      description: p.input.description,
+      type: p.input.type,
+      config: JSON.stringify(p.input.config),
+      enabled: p.input.enabled,
       // RFC-231: every user-created resource starts private with ACL rev 0.
-      ...initialAcl,
-      createdAt: now,
-      updatedAt: now,
+      ...p.initialAcl,
+      createdAt: p.now,
+      updatedAt: p.now,
+    })
+    .run()
+}
+
+export async function createMcp(
+  db: DbClient,
+  input: CreateMcp,
+  aclOpts?: { ownerUserId?: string; actor?: Actor | null },
+): Promise<Mcp> {
+  const prepared = await prepareMcpCreate(db, input, aclOpts)
+  try {
+    dbTxSync(db, (tx) => {
+      commitMcpCreateInTx(tx, prepared)
     })
   } catch (error) {
     if (isOwnerNameUniqueViolation(error, 'mcps', 'mcps_owner_name_unique')) {
@@ -84,7 +110,7 @@ export async function createMcp(
     }
     throw error
   }
-  const created = await getMcpById(db, id)
+  const created = await getMcpById(db, prepared.id)
   if (created === null) throw new Error('mcp disappeared right after insert')
   return created
 }
@@ -131,10 +157,38 @@ export async function updateMcp(
   if (canonicalJson(nextConfig) !== canonicalJson(existing.config))
     set.config = JSON.stringify(nextConfig)
 
-  await db.update(mcps).set(set).where(eq(mcps.id, existing.id))
+  dbTxSync(db, (tx) => {
+    commitMcpUpdateInTx(tx, { id: existing.id, set })
+  })
   const updated = await getMcpById(db, existing.id)
   if (updated === null) throw new Error('mcp disappeared after update')
   return updated
+}
+
+/** RFC-234 (T6) — the update write core. `expectedConfigHash` is the intent
+ *  pipeline's manifest fence (design §7): when present, the row's CURRENT
+ *  config hash is compared inside the transaction and a mismatch is the same
+ *  `resource-operation-stale` conflict the delete path throws. updateMcp's
+ *  standalone path passes no fence (its OCC lives at the route coordinator). */
+export interface PreparedMcpUpdate {
+  id: string
+  set: Partial<typeof mcps.$inferInsert>
+  expectedConfigHash?: string
+}
+
+export function commitMcpUpdateInTx(tx: DbTxSync, p: PreparedMcpUpdate): void {
+  const row = tx.select().from(mcps).where(eq(mcps.id, p.id)).get()
+  if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
+  if (p.expectedConfigHash !== undefined) {
+    const currentConfigHash = mcpOperationConfigHashOf(rowToMcp(row))
+    if (currentConfigHash !== p.expectedConfigHash) {
+      throw new ConflictError('resource-operation-stale', 'the MCP changed; reload before saving', {
+        expectedConfigHash: p.expectedConfigHash,
+        currentConfigHash,
+      })
+    }
+  }
+  tx.update(mcps).set(p.set).where(eq(mcps.id, p.id)).run()
 }
 
 export async function deleteMcp(

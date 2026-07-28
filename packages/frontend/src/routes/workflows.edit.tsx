@@ -46,6 +46,8 @@ import { Dialog } from '@/components/Dialog'
 import { LoadingState } from '@/components/LoadingState'
 import { ManagedLiveRegionProvider } from '@/components/ManagedLiveRegion'
 import { PageHeader } from '@/components/PageHeader'
+import { IntentEntryButton } from '@/components/IntentEntryButton'
+import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { QuickCreateDialog } from '@/components/QuickCreateDialog'
 import { RenameDialog } from '@/components/RenameDialog'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
@@ -870,6 +872,13 @@ export function WorkflowEditorLoaded({
 
   const headerActions = (
     <>
+      <IntentProvenanceBadge resourceType="workflow" resourceId={workflowId} />
+      <IntentEntryButton
+        variant="modify"
+        size="sm"
+        mount={{ resourceType: 'workflow', resourceId: workflowId }}
+        data-testid="workflow-intent-entry"
+      />
       {/* With the palette rail visible (wide) the sidebar IS the add-step
         entry, so the header button only renders when the rail is absent —
         there it is the sole free-insert entry (390 mobile e2e locks this;

@@ -48,6 +48,15 @@ describe('RFC-201 Settings draft registry', () => {
       'memoryDistillLang',
       'mergeAgentRuntime',
       'mergeAgentModel',
+      // RFC-234 intent-builder system agent (T12 settings card).
+      'intentBuilderRuntime',
+      'intentBuilderLang',
+      'intentBuilderTurnTimeoutMs',
+      'intentBuilderStdoutCapBytes',
+      'intentBuilderMaxGenerateRounds',
+      'intentBuilderMaxQuestionRounds',
+      'intentBuilderScratchRetentionHours',
+      'intentBuilderExtraInstructions',
     ])
   })
 

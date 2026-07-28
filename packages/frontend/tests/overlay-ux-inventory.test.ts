@@ -166,6 +166,12 @@ const OVERLAY_CALLSITES = {
   'components/memory/MemoryDialogShell.tsx': { family: 'memory-and-fusion', count: 1 },
   'routes/fusions.detail.tsx': { family: 'memory-and-fusion', count: 1 },
 
+  // RFC-234 intent builder — create-session dialog + slot-driven commit dialog
+  // + add-mount dialog (T11).
+  'routes/intent.tsx': { family: 'workflow-authoring', count: 1 },
+  'routes/intent.detail.tsx': { family: 'workflow-authoring', count: 1 },
+  'components/IntentMountDialog.tsx': { family: 'workflow-authoring', count: 1 },
+
   'components/workgroup/DynamicWorkflowPanel.tsx': { family: 'workgroup', count: 2 },
   'components/workgroup/WorkgroupMemberCards.tsx': { family: 'workgroup', count: 2 },
   'components/workgroup/WorkgroupDraftStatus.tsx': { family: 'workgroup', count: 2 },

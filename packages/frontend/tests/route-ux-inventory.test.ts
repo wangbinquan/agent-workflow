@@ -560,6 +560,18 @@ export const ROUTE_UX_INVENTORY = {
     owners: [rendered('scheduled-list-inline.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/scheduled.tsx', primitive: 'PageHeader' },
   },
+  // RFC-234 intent builder.
+  '@/routes/intent#Route': {
+    surface: '/intent',
+    classification: 'standard',
+    owners: [rendered('intent-list-inline.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/intent.tsx', primitive: 'PageHeader' },
+  },
+  '@/routes/intent.detail#Route': {
+    surface: '/intent/$sessionId',
+    classification: 'specialized',
+    owners: [rendered('intent-detail-inline.test.tsx')],
+  },
   '@/routes/reviews.detail#Route': {
     surface: '/reviews/$nodeRunId',
     classification: 'specialized',

@@ -31,6 +31,7 @@ import {
 import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/ResourceGalleryPage'
 import { WORKFLOW_ICON } from '@/components/icons/resourceIcons'
 import { buildQuickCreateWorkflowPayload } from '@/lib/workflow-form'
+import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { Route as RootRoute } from './__root'
 
 export interface WorkflowsSearch extends Record<string, unknown> {
@@ -240,6 +241,11 @@ function WorkflowsPage() {
       headerActions={
         <>
           {importActions}
+          <IntentEntryButton
+            variant="create"
+            hint="workflow"
+            data-testid="workflows-intent-entry"
+          />
           {createAction}
         </>
       }

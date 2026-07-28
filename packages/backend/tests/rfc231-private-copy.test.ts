@@ -264,7 +264,10 @@ describe('RFC-231 private create invariant', () => {
   test('production writer inventory stays classified as user-private or builtin-public', async () => {
     const expectedInserts: Record<string, Record<string, number>> = {
       agents: { 'services/agent.ts': 1 },
-      skills: { 'services/skill.ts': 1 },
+      // RFC-234: stageManagedSkill (intent-bundle pre-stage) is a second
+      // reserve-writer in skill.ts — same invisible-until-ready pipeline, same
+      // initialPrivateResourceAcl stamp as createManagedSkillWithFiles.
+      skills: { 'services/skill.ts': 2 },
       mcps: { 'services/mcp.ts': 1 },
       plugins: { 'services/plugin.ts': 1 },
       workflows: {

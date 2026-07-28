@@ -77,6 +77,14 @@ export const claudeCodeDriver: RuntimeDriver = {
   // --model, prompt → stdin (buildClaudeSpawn already returns stdin:pipe). No
   // skills/mcp/subagents for a framework system agent.
   async buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan> {
+    // RFC-234 §1.1 — this driver cannot prove ANY narrowed tool profile (it
+    // runs with bypassed permissions and an inherited environment), so a
+    // non-default profile fails closed instead of silently widening.
+    if (ctx.systemPermissionProfile !== undefined && ctx.systemPermissionProfile !== 'all-deny') {
+      throw new Error(
+        `claude-code runtime cannot enforce system permission profile '${ctx.systemPermissionProfile}'`,
+      )
+    }
     return buildClaudeSpawn({
       ...(ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
         ? { claudeCmd: [ctx.runtimeBinary] }

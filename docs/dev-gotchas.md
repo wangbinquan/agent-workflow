@@ -56,6 +56,8 @@
 - **1.18 移除 `--dangerously-skip-permissions` 改 `--auto`**：按探测版本选拼写（`resolveAutoApproveFlag`）；失败形态=stderr 纯 usage + exit1；垃圾版本串须 `extractVersion` 归一化。
 - **OpenCode 是可选 runtime，不是 daemon boot gate（RFC-226）**：启动不得解析/执行 `opencode --version`，`/health.opencodeVersion` 为 null；版本门后移到 runtime status/Test/models/doctor 与实际使用，不合格 runtime 自身失败，daemon/其它 runtime 继续可用。
 - **改 opencode argv 契约要同步两类桩**：TS fixtures **和** 6 个 `e2e/fixtures/*.sh` shell 桩（golden 只覆 TS）。跨 spec `code 3`/<1s/首 agent-node 红 = 桩契约失配。
+- **系统代理（非任务链）的 spawn 也必须走「烙印命令」seam**：e2e 二进制里 `markProductionOpencodeCommand` 编译为 no-op，业务路径靠「命令数组未 brand → legacy 测试 spawn」通过 shell 桩；系统路径若只拿 `runtimeBinary: string` 会在 e2e 里进 verified 计划直接 `execution-identity-auth-invalid`（verified 计划要 `opencode serve`+attest，shell 桩不会说 HTTP）。新系统代理一律传 `opencodeCmd: markProductionOpencodeCommand([binaryPath])`（生产 brand→verified 不变；e2e/unit 未 brand→legacy），见 `driver.ts buildSpawn` 的 `legacyTestPath` 与 rfc224-source-reachability 锁（RFC-234 事故）。
+- **macOS 下用 `mkdtemp(tmpdir())` 喂 `AGENT_WORKFLOW_HOME`/store 根会撞 verified 链路的反符号链接防线**：`/var`→`/private/var` 是符号链接，hermetic 布局的 `ensurePrivateDirectory` 逐级 lstat fail-closed（`execution-identity-store-unsafe`）。写真机/live 测试先 `realpath` 规范化（identity-preflight 套件的 `canonicalTmp` 即此意）；生产 `~/.agent-workflow` 无此问题。
 - **有界-spawn 定式**：`killProcessTree`（`process.kill(-pid)` 组杀）+ `detached:true` + 超时 SIGKILL + **finally 无条件组杀**（收 fork-then-exit 孙进程）+ 流式 capped reader（防 stderr 洪泛 OOM）。现 4+ 处（opencode/models/git/sandbox）= dedup 候选。
 
 ## 工作流提示与人工重跑

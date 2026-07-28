@@ -131,6 +131,15 @@ export function isAdminActor(actor: Actor): boolean {
   return actor.user.role === 'admin'
 }
 
+/** RFC-234 D26 (design-gate P1-8) — intent-session audit bypass is SYSTEM
+ *  admin only. Managers are resource-domain admins (isResourceAdminActor) and
+ *  deliberately get NO bypass here: an intent session holds the creator's raw
+ *  conversational intent, not a shared resource. Lives in this file so the
+ *  RFC-222 G-1 single-source guard keeps every admin-identity predicate home. */
+export function canAuditIntentSessions(actor: Actor): boolean {
+  return isAdminActor(actor)
+}
+
 /** RFC-222 — resource-domain admin identity (admin ∪ manager). Every row-level
  *  ACL bypass in this file and its callers keys off THIS, not isAdminActor.
  *  Derived from the shared single-source predicate. */
