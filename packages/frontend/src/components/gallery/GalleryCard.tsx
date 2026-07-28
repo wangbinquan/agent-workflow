@@ -31,7 +31,7 @@ interface GalleryCardItemBase {
   searchText?: string
   /** Italic fallback rendered when `subtitle` is absent (i18n'd by the page). */
   subtitleFallback: string
-  /** Title-row badges (ResourceBadges / chips), assembled by the page. */
+  /** Access metadata row (ResourceBadges / chips), assembled by the page. */
   badges?: ReactNode
   /** Meta chips row (version / node count / mode / members …). */
   meta?: ReactNode
@@ -130,10 +130,10 @@ export function GalleryCard({ item }: { item: GalleryCardItem }): ReactElement {
             >
               {item.title}
             </Link>
-            {item.badges != null && item.badges !== false && (
-              <span className="gallery-card__badges chip-row">{item.badges}</span>
-            )}
           </div>
+          {item.badges != null && item.badges !== false && (
+            <div className="gallery-card__badges chip-row">{item.badges}</div>
+          )}
         </div>
       </div>
       {hasSubtitle ? (

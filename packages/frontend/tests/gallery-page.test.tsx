@@ -7,7 +7,8 @@
 //      churn); filtered-to-nothing shows the compact no-matches state, NOT the
 //      list-empty state.
 //   2. Cards: whole-card stretched link + separate「启动」link (sibling <a>s,
-//      never nested), description fallback, meta chips.
+//      never nested), description fallback, meta chips; owner/access badges
+//      have their own row so the resource title cannot squeeze them away.
 //   3. /workflows assembly: vN + node-count chips from the definition the
 //      list API already returns; launch deep-links the wizard preselected.
 //   4. Source locks (gallery-callsite): both gallery pages compose
@@ -424,6 +425,54 @@ describe('ResourceGalleryPage shell', () => {
     expect(card.textContent).toContain('Workgroup')
     expect(card.textContent).toContain('Add an agent to launch')
     expect(screen.queryByTestId('card-squad-launch')).toBeNull()
+  })
+
+  // Regression: owner used to share `.gallery-card__title` with the resource
+  // name, so even ordinary display names collapsed to an ellipsis on 320px
+  // cards. Keep access metadata on its own row and wrap pathological names.
+  test('owner/access badges have an independent row and do not ellipsize the owner', async () => {
+    renderWithRouter(
+      () => (
+        <ResourceGalleryPage
+          title="Things"
+          headerActions={null}
+          items={[
+            item({
+              title: 'a-resource-name-that-needs-the-title-width',
+              badges: (
+                <>
+                  <span className="chip chip--tight">Private</span>
+                  <span className="muted data-table__owner">
+                    owner-with-a-long-display-name-that-must-remain-visible
+                  </span>
+                </>
+              ),
+            }),
+          ]}
+          isLoading={false}
+          error={null}
+          searchPlaceholder="Search…"
+          emptyListText="No things yet."
+          emptyTestid="things-empty"
+        />
+      ),
+      '/gallery',
+    )
+
+    const card = await screen.findByTestId('card-alpha')
+    const identity = card.querySelector('.gallery-card__identity')
+    const title = card.querySelector('.gallery-card__title')
+    const badges = card.querySelector('.gallery-card__badges')
+    expect(identity?.children).toHaveLength(3)
+    expect(identity?.lastElementChild).toBe(badges)
+    expect(title?.contains(badges)).toBe(false)
+
+    const css = readSrc('styles.css')
+    const ownerRule =
+      css.match(/\.gallery-card__badges \.data-table__owner\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(ownerRule).toMatch(/white-space:\s*normal/)
+    expect(ownerRule).toMatch(/overflow-wrap:\s*anywhere/)
+    expect(ownerRule).not.toContain('text-overflow: ellipsis')
   })
 
   test('card CSS keeps the full-card link continuous and keyboard/motion friendly', () => {

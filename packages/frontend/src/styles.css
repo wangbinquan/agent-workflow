@@ -17879,26 +17879,33 @@ button.status-chip {
   border-radius: var(--radius-lg);
 }
 
-/* Badges may shrink (128-char owner display names must not blow the 300px
-   track) — the inner owner badge ellipsizes (实现门 P2). */
+/* Access metadata has its own row below the resource name. It must not compete
+   with the title for horizontal space — that made even ordinary owner display
+   names collapse to an ellipsis on the 320px gallery track. */
 .gallery-card__badges {
-  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
   min-width: 0;
-  overflow: hidden;
 }
 
-/* Keep compact visibility labels intact while the surrounding badge group
-   yields space to long resource names / owner labels. CJK can otherwise break
-   between any two glyphs, turning 「私有」into a two-line pill on narrow cards. */
+/* Keep compact visibility labels intact. CJK can otherwise break between any
+   two glyphs, turning 「私有」into a two-line pill on narrow cards. */
 .gallery-card__badges > .chip {
   flex-shrink: 0;
   white-space: nowrap;
 }
 
+/* Owner names are user-defined (up to 128 chars). The dedicated row makes the
+   common case fully visible; pathological unbroken values wrap inside the
+   card instead of overflowing or being silently truncated. */
 .gallery-card__badges .data-table__owner {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .gallery-card__desc {
