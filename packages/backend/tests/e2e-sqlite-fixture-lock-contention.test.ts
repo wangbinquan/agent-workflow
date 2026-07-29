@@ -42,10 +42,11 @@ import { runSqlite } from '../../../e2e/command'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
-/** How long the competing writer keeps the write lock. Long enough that a
- * zero-timeout CLI cannot possibly win the race, short enough to stay well
- * inside the case deadline. */
-const HOLD_MS = 1_200
+/** How long the competing writer keeps the write lock. The real discriminator
+ * below is throw-vs-return, not wall clock; this window only has to be wide
+ * enough that the lock is still demonstrably held when `runSqlite` starts, with
+ * slack for a loaded CI runner between the ready marker and that call. */
+const HOLD_MS = 1_500
 
 /** Separate PROCESS on purpose: `execFileSync` blocks this thread, so an
  * in-process holder could never release the lock while `runSqlite` waits. */
@@ -114,15 +115,21 @@ describe('e2e sqlite fixture boundary under lock contention', () => {
       runSqlite(dbPath, "INSERT INTO fixture_rows (id) VALUES ('fixture');")
       const waitedMs = Date.now() - startedAt
 
-      // It must have BLOCKED on the holder, not squeezed in before it.
-      expect(waitedMs).toBeGreaterThan(100)
+      // Vacuity guard: proves the lock really was still held, so a green run
+      // cannot come from the holder having released early. A zero-timeout CLI
+      // returns in single-digit ms, so the threshold sits far from both sides.
+      expect(waitedMs).toBeGreaterThan(200)
     } finally {
       await holder.exited
     }
 
     expect(holder.exitCode).toBe(0)
 
-    const verify = new Database(dbPath, { readonly: true })
+    // Read-write on purpose: two processes closing at once can lose the
+    // close-time checkpoint and leave `-wal` behind, and a READONLY connection
+    // cannot create the `-shm` it would then need — that surfaced as a
+    // SQLITE_CANTOPEN flake on the macOS runner (CI run 30453546995).
+    const verify = new Database(dbPath)
     const ids = verify
       .query<{ id: string }, []>('SELECT id FROM fixture_rows ORDER BY id;')
       .all()
