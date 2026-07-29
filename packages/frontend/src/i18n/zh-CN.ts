@@ -103,6 +103,47 @@ export interface Resources {
     mountPickerUnresolved: string
     previewRawJson: string
     previewSideSwitch: string
+    executionTitle: string
+    executionEvents: string
+    executionState: {
+      live: string
+      complete: string
+      truncated: string
+      incomplete: string
+    }
+    executionTruncatedNotice: string
+    executionIncompleteNotice: string
+    createLead: string
+    draftSafety: string
+    examplesLabel: string
+    exampleWorkflow: string
+    exampleWorkgroup: string
+    exampleAgent: string
+    recentSessions: string
+    recentSessionsHint: string
+    roundsCount: string
+    commitsCount: string
+    reviewWorkspace: string
+    draftPendingTitle: string
+    draftPendingDescription: string
+    journey: {
+      ariaLabel: string
+      goal: string
+      generate: string
+      review: string
+      apply: string
+      state: {
+        generating: string
+        clarifying: string
+        'review-ready': string
+        'review-blocked': string
+        applying: string
+        applied: string
+        error: string
+        'idle-active': string
+        archived: string
+      }
+    }
     previewBefore: string
     previewAfter: string
     previewCanvasUnavailable: string
@@ -4261,6 +4302,47 @@ export const zhCN: Resources = {
     mountPickerUnresolved: '解析中…',
     previewRawJson: '原始 JSON',
     previewSideSwitch: '前后对比',
+    executionTitle: '执行过程',
+    executionEvents: '{{count}} 条事件',
+    executionState: {
+      live: '实时',
+      complete: '完整',
+      truncated: '已截断',
+      incomplete: '记录不完整',
+    },
+    executionTruncatedNotice: '执行事件已达到保存上限；生成结果仍可正常复核与提交。',
+    executionIncompleteNotice: '部分执行记录未能保存；这不会改变本轮业务结果。',
+    createLead: '从目标开始，不必先决定要建哪些资源。',
+    draftSafety: '只生成草稿；复核提交前不会修改任何资源',
+    examplesLabel: '目标示例',
+    exampleWorkflow: '构建一个“实现 → 按文件审计 → 修复”的工作流',
+    exampleWorkgroup: '组建一个会分工、汇总并向我确认的工作组',
+    exampleAgent: '创建一个专注安全审计、输出结构化发现的 Agent',
+    recentSessions: '最近会话',
+    recentSessionsHint: '继续上次构建，或查看已经生成和提交的版本。',
+    roundsCount: '{{count}} 轮',
+    commitsCount: '{{count}} 次提交',
+    reviewWorkspace: '草稿复核区',
+    draftPendingTitle: '草稿复核',
+    draftPendingDescription: '生成完成后，变更预览与校验结果会出现在这里；确认提交前不会修改资源。',
+    journey: {
+      ariaLabel: '意图构建进度',
+      goal: '目标',
+      generate: '生成',
+      review: '复核',
+      apply: '应用',
+      state: {
+        generating: '正在生成草稿',
+        clarifying: '等待你的回答',
+        'review-ready': '草稿已就绪，请复核',
+        'review-blocked': '草稿需要先修正',
+        applying: '正在应用变更',
+        applied: '本轮已提交，可继续调整',
+        error: '本轮遇到错误，请在会话中处理',
+        'idle-active': '输入下一条目标开始新一轮',
+        archived: '会话已归档，只读',
+      },
+    },
     previewBefore: '修改前',
     previewAfter: '修改后',
     previewCanvasUnavailable: '画布预览不可用（定义未通过本地校验），请查看原始 JSON。',

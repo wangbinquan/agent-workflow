@@ -7,36 +7,44 @@ import { z } from 'zod'
 
 const ToolStatusSchema = z.enum(['pending', 'running', 'completed', 'error'])
 
-const UserMessageSchema = z.object({
-  kind: z.literal('user'),
-  text: z.string(),
-  ts: z.number().int(),
-})
+const UserMessageSchema = z
+  .object({
+    kind: z.literal('user'),
+    text: z.string(),
+    ts: z.number().int(),
+  })
+  .strict()
 
-const AssistantTextSchema = z.object({
-  kind: z.literal('assistant-text'),
-  text: z.string(),
-  ts: z.number().int(),
-  messageId: z.string().nullable(),
-})
+const AssistantTextSchema = z
+  .object({
+    kind: z.literal('assistant-text'),
+    text: z.string(),
+    ts: z.number().int(),
+    messageId: z.string().nullable(),
+  })
+  .strict()
 
-const AssistantReasoningSchema = z.object({
-  kind: z.literal('assistant-reasoning'),
-  text: z.string(),
-  ts: z.number().int(),
-  messageId: z.string().nullable(),
-})
+const AssistantReasoningSchema = z
+  .object({
+    kind: z.literal('assistant-reasoning'),
+    text: z.string(),
+    ts: z.number().int(),
+    messageId: z.string().nullable(),
+  })
+  .strict()
 
-const ToolCallSchema = z.object({
-  kind: z.literal('tool-call'),
-  toolName: z.string(),
-  callId: z.string(),
-  status: ToolStatusSchema,
-  input: z.unknown(),
-  output: z.string().nullable(),
-  ts: z.number().int(),
-  messageId: z.string().nullable(),
-})
+const ToolCallSchema = z
+  .object({
+    kind: z.literal('tool-call'),
+    toolName: z.string(),
+    callId: z.string(),
+    status: ToolStatusSchema,
+    input: z.unknown(),
+    output: z.string().nullable(),
+    ts: z.number().int(),
+    messageId: z.string().nullable(),
+  })
+  .strict()
 
 interface SubagentCallShape {
   kind: 'subagent-call'
@@ -70,45 +78,51 @@ interface SessionTreeShape {
 }
 
 export const SessionTreeSchema: z.ZodType<SessionTreeShape> = z.lazy(() =>
-  z.object({
-    sessionId: z.string(),
-    parentSessionId: z.string().nullable(),
-    agentName: z.string().nullable(),
-    // z.union (not discriminatedUnion) because SubagentCallSchema is
-    // recursive via z.lazy and discriminatedUnion can't introspect .shape
-    // through a lazy wrapper.
-    messages: z.array(
-      z.union([
-        UserMessageSchema,
-        AssistantTextSchema,
-        AssistantReasoningSchema,
-        ToolCallSchema,
-        SubagentCallSchema,
-      ]),
-    ),
-    captureComplete: z.boolean(),
-  }),
+  z
+    .object({
+      sessionId: z.string(),
+      parentSessionId: z.string().nullable(),
+      agentName: z.string().nullable(),
+      // z.union (not discriminatedUnion) because SubagentCallSchema is
+      // recursive via z.lazy and discriminatedUnion can't introspect .shape
+      // through a lazy wrapper.
+      messages: z.array(
+        z.union([
+          UserMessageSchema,
+          AssistantTextSchema,
+          AssistantReasoningSchema,
+          ToolCallSchema,
+          SubagentCallSchema,
+        ]),
+      ),
+      captureComplete: z.boolean(),
+    })
+    .strict(),
 )
 
 const SubagentCallSchema: z.ZodType<SubagentCallShape> = z.lazy(() =>
-  z.object({
-    kind: z.literal('subagent-call'),
-    toolName: z.string(),
-    callId: z.string(),
-    status: ToolStatusSchema,
-    input: z.unknown(),
-    output: z.string().nullable(),
-    ts: z.number().int(),
-    messageId: z.string().nullable(),
-    childSessionId: z.string().nullable(),
-    child: SessionTreeSchema.nullable(),
-    childOutputFallback: z.string().nullable(),
-    childAgentName: z.string().nullable(),
-  }),
+  z
+    .object({
+      kind: z.literal('subagent-call'),
+      toolName: z.string(),
+      callId: z.string(),
+      status: ToolStatusSchema,
+      input: z.unknown(),
+      output: z.string().nullable(),
+      ts: z.number().int(),
+      messageId: z.string().nullable(),
+      childSessionId: z.string().nullable(),
+      child: SessionTreeSchema.nullable(),
+      childOutputFallback: z.string().nullable(),
+      childAgentName: z.string().nullable(),
+    })
+    .strict(),
 )
 
-export const SessionViewResponseSchema = z.object({
-  tree: SessionTreeSchema,
-})
+export const SessionViewResponseSchema = z
+  .object({
+    tree: SessionTreeSchema,
+  })
+  .strict()
 
 export type SessionViewResponse = z.infer<typeof SessionViewResponseSchema>

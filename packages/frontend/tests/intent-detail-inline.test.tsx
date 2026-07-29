@@ -1,5 +1,5 @@
 // RFC-234 (T8) — /intent/$sessionId locks:
-//   1. Pending questions render as segmented choices; submit POSTs answers.
+//   1. Pending questions render as native radio/checkbox choices; submit POSTs answers.
 //   2. A draft with blocking errors disables commit; a stale draft shows the
 //      rebase notice and disables commit.
 //   3. A clean draft opens the commit dialog; secret slots gate the submit;
@@ -56,6 +56,7 @@ function detailFixture(overrides: Partial<IntentSessionDetail> = {}): IntentSess
         content: { message: 'build it' },
         contextRevision: 0,
         runMeta: null,
+        execution: null,
         createdAt: 1,
       },
     ],
@@ -145,6 +146,78 @@ async function renderPage() {
 }
 
 describe('RFC-234 /intent/$sessionId', () => {
+  test('latest running turn opens the shared Session renderer and loads execution events', async () => {
+    const detail = detailFixture({
+      session: {
+        ...detailFixture().session,
+        inFlight: true,
+        turnSeq: 2,
+      },
+      turns: [
+        {
+          id: 'T1',
+          seq: 1,
+          role: 'user',
+          kind: 'message',
+          content: { message: 'build it' },
+          contextRevision: 0,
+          runMeta: null,
+          execution: null,
+          createdAt: 1,
+        },
+        {
+          id: 'T2',
+          seq: 2,
+          role: 'agent',
+          kind: 'running',
+          content: {},
+          contextRevision: 0,
+          runMeta: null,
+          execution: {
+            captureState: 'live',
+            lastEventSeq: 1,
+            eventBytes: 128,
+            rootSessionId: 'runtime-root',
+            incompleteReason: null,
+          },
+          createdAt: 2,
+        },
+      ],
+    })
+    const calls: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
+      const url = req.toString()
+      calls.push(url)
+      const payload = url.includes('/turns/T2/session')
+        ? {
+            tree: {
+              sessionId: 'runtime-root',
+              parentSessionId: null,
+              agentName: 'aw-intent-builder',
+              captureComplete: true,
+              messages: [
+                {
+                  kind: 'assistant-text',
+                  text: 'Inspecting the mounted workflow',
+                  ts: 2,
+                  messageId: 'M1',
+                },
+              ],
+            },
+          }
+        : detail
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    await renderPage()
+    await screen.findByText('Inspecting the mounted workflow')
+    expect(screen.getByTestId('intent-turn-session-T2')).toBeTruthy()
+    expect(calls.some((url) => url.includes('/turns/T2/session'))).toBe(true)
+  })
+
   test('pending questions answer via segmented choices and POST', async () => {
     const rec = installFetch(
       detailFixture({
@@ -157,6 +230,7 @@ describe('RFC-234 /intent/$sessionId', () => {
             content: { message: 'build it' },
             contextRevision: 0,
             runMeta: null,
+            execution: null,
             createdAt: 1,
           },
           {
@@ -177,6 +251,7 @@ describe('RFC-234 /intent/$sessionId', () => {
             },
             contextRevision: 0,
             runMeta: null,
+            execution: null,
             createdAt: 2,
           },
         ],

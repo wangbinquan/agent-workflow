@@ -41,6 +41,7 @@ import {
 } from '@/services/systemAgentRun'
 import { markProductionOpencodeCommand } from '@/util/opencode'
 import type { ResolvedRuntime } from '@/services/runtimeRegistry'
+import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
 import { buildIntentDoc, type IntentDocTurn } from './intentDoc'
 import { validateDraftChangeset } from './resolveChangeset'
@@ -85,7 +86,12 @@ export interface RunIntentTurnDeps {
   /** Test seam — defaults to runSystemAgent. */
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   /** WS seam (T7 wires the broadcaster); default noop. */
-  onSessionEvent?: (event: { type: string; sessionId: string; turnId?: string }) => void
+  onSessionEvent?: (event: {
+    type: string
+    sessionId: string
+    turnId?: string
+    eventSeq?: number
+  }) => void
   log?: Logger
 }
 
@@ -187,6 +193,9 @@ export async function runIntentTurn(
         contentJson: '{}',
         contextRevision: session.contextRevision,
         envelopeNonce,
+        captureState: 'live',
+        captureLastEventSeq: 0,
+        captureEventBytes: 0,
         createdAt: now,
       })
       .run()
@@ -201,6 +210,30 @@ export async function runIntentTurn(
   const launchRevision = minted.session.contextRevision
   const controller = new AbortController()
   liveTurnAborts.set(input.sessionId, controller)
+  const sessionEventSink = new IntentTurnSessionEventSink(deps.db, turnId, (eventSeq) => {
+    deps.onSessionEvent?.({
+      type: 'intent.turn.execution.updated',
+      sessionId: input.sessionId,
+      turnId,
+      eventSeq,
+    })
+  })
+  const markSessionCapture = async (
+    state: 'complete' | 'incomplete',
+    reason?: 'post-exit-flush-timeout',
+  ): Promise<void> => {
+    try {
+      await sessionEventSink.markTerminal(state, reason)
+    } catch (error) {
+      // Session capture is auxiliary evidence. Never replace a valid Intent
+      // questions/changeset/error outcome with an observation write failure.
+      log.warn('intent-turn-session-terminal-write-failed', {
+        sessionId: input.sessionId,
+        turnId,
+        err: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
 
   const settle = (
     kind: 'questions' | 'changeset' | 'error',
@@ -432,11 +465,16 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         timeoutMs: deps.config.timeoutMs,
         maxEventTextBytes: deps.config.stdoutCapBytes,
         abortSignal: controller.signal,
+        eventSink: sessionEventSink,
         log,
       })
     } finally {
       releaseSlot()
     }
+    await markSessionCapture(
+      result.status === 'unreaped' ? 'incomplete' : 'complete',
+      result.status === 'unreaped' ? 'post-exit-flush-timeout' : undefined,
+    )
 
     const runMeta = {
       runtime: deps.config.runtime.name,
@@ -584,6 +622,7 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       },
     )
   } catch (err) {
+    await markSessionCapture('complete')
     log.error('intent-turn-crashed', {
       sessionId: input.sessionId,
       turnId,

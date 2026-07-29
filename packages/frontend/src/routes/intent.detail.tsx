@@ -6,7 +6,7 @@
 
 import type { IntentSessionDetail, IntentSlotDto, UserPublic } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, useNavigate } from '@tanstack/react-router'
+import { createRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -15,7 +15,9 @@ import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { IntentMountDialog } from '@/components/IntentMountDialog'
+import { IntentJourneyProgress } from '@/components/intent/IntentJourneyProgress'
 import { IntentOpPreview } from '@/components/intent/IntentOpPreview'
+import { IntentTurnSession } from '@/components/intent/IntentTurnSession'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
@@ -46,7 +48,6 @@ function ulidLike(): string {
 function IntentSessionDetailPage() {
   const { t } = useTranslation()
   const { sessionId } = Route.useParams()
-  const navigate = useNavigate()
   const qc = useQueryClient()
   useIntentSessionsWs()
 
@@ -113,6 +114,10 @@ function IntentSessionDetailPage() {
           multiSelect: boolean
         }>) ?? [])
       : []
+  const latestRunningTurnId =
+    lastAgentTurn?.kind === 'running' && lastAgentTurn.execution?.captureState === 'live'
+      ? lastAgentTurn.id
+      : null
 
   if (detailQuery.isLoading) return <LoadingState />
   if (detailQuery.isError) return <ErrorBanner error={detailQuery.error} />
@@ -131,7 +136,7 @@ function IntentSessionDetailPage() {
   )
 
   return (
-    <div className="page">
+    <div className="page intent-session-page">
       <PageHeader
         title={detail.session.title}
         headingLevel={1}
@@ -167,219 +172,276 @@ function IntentSessionDetailPage() {
         }
       />
 
-      <div className="page__section">
-        <h2>{t('intent.timeline')}</h2>
-        {detail.turns.map((turn) => (
-          <div key={turn.id} className="card" data-testid={`intent-turn-${turn.kind}`}>
-            <div className="card__meta">
-              <span>
-                {turn.role === 'user' ? t('intent.roleUser') : t('intent.roleAgent')} ·{' '}
-                {t(`intent.turnKind.${turn.kind}`)}
-              </span>
-              <RelativeTime ts={turn.createdAt} />
-            </div>
-            {turn.kind === 'message' ? <p>{String(turn.content.message ?? '')}</p> : null}
-            {turn.kind === 'answers' ? (
-              <pre className="mono">{JSON.stringify(turn.content.answers, null, 2)}</pre>
-            ) : null}
-            {turn.kind === 'changeset' ? (
-              <p>
-                {String(turn.content.summary ?? '')}{' '}
-                <StatusChip kind="info" size="sm">
-                  {t('intent.opCount', { count: Number(turn.content.opCount ?? 0) })}
-                </StatusChip>
-              </p>
-            ) : null}
-            {turn.kind === 'questions' ? <p>{String(turn.content.summary ?? '')}</p> : null}
-            {turn.kind === 'error' ? (
-              <div>
-                <StatusChip kind="danger">{String(turn.content.code ?? 'error')}</StatusChip>{' '}
-                <button
-                  type="button"
-                  className="btn btn--xs"
-                  onClick={() => retryTurn.mutate()}
-                  disabled={detail.session.inFlight}
-                >
-                  {t('intent.retryTurn')}
-                </button>
+      <IntentJourneyProgress detail={detail} />
+
+      <div className="intent-session__workspace">
+        <div className="intent-session__conversation">
+          <div className="page__section intent-session__timeline">
+            <h2>{t('intent.timeline')}</h2>
+            {detail.turns.map((turn) => (
+              <div
+                key={turn.id}
+                className={`card intent-turn-card intent-turn-card--${turn.role}`}
+                data-testid={`intent-turn-${turn.kind}`}
+              >
+                <div className="card__meta">
+                  <span>
+                    {turn.role === 'user' ? t('intent.roleUser') : t('intent.roleAgent')} ·{' '}
+                    {t(`intent.turnKind.${turn.kind}`)}
+                  </span>
+                  <RelativeTime ts={turn.createdAt} />
+                </div>
+                {turn.kind === 'message' ? <p>{String(turn.content.message ?? '')}</p> : null}
+                {turn.kind === 'answers' ? (
+                  <pre className="mono">{JSON.stringify(turn.content.answers, null, 2)}</pre>
+                ) : null}
+                {turn.kind === 'changeset' ? (
+                  <p>
+                    {String(turn.content.summary ?? '')}{' '}
+                    <StatusChip kind="info" size="sm">
+                      {t('intent.opCount', { count: Number(turn.content.opCount ?? 0) })}
+                    </StatusChip>
+                  </p>
+                ) : null}
+                {turn.kind === 'questions' ? <p>{String(turn.content.summary ?? '')}</p> : null}
+                {turn.kind === 'error' ? (
+                  <div>
+                    <StatusChip kind="danger">{String(turn.content.code ?? 'error')}</StatusChip>{' '}
+                    <button
+                      type="button"
+                      className="btn btn--xs"
+                      onClick={() => retryTurn.mutate()}
+                      disabled={detail.session.inFlight}
+                    >
+                      {t('intent.retryTurn')}
+                    </button>
+                  </div>
+                ) : null}
+                {turn.role === 'agent' ? (
+                  <IntentTurnSession
+                    sessionId={sessionId}
+                    turn={turn}
+                    defaultOpen={turn.id === latestRunningTurnId}
+                  />
+                ) : null}
               </div>
-            ) : null}
-          </div>
-        ))}
-        {detail.session.inFlight ? <LoadingState label={t('intent.generating')} /> : null}
-      </div>
-
-      {pendingQuestions.length > 0 && !detail.session.inFlight ? (
-        <div className="page__section" data-testid="intent-questions">
-          <h2>{t('intent.answerQuestions')}</h2>
-          {pendingQuestions.map((question) => (
-            <Field key={question.id} label={question.question} required>
-              <Segmented
-                ariaLabel={question.question}
-                value={answers[question.id]?.[0] ?? ''}
-                onChange={(picked) => setAnswers((prev) => ({ ...prev, [question.id]: [picked] }))}
-                options={question.options.map((option) => ({ value: option, label: option }))}
-              />
-            </Field>
-          ))}
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={
-              sendAnswers.isPending ||
-              pendingQuestions.some((question) => (answers[question.id]?.length ?? 0) === 0)
-            }
-            onClick={() => sendAnswers.mutate()}
-          >
-            {t('intent.submitAnswers')}
-          </button>
-        </div>
-      ) : null}
-
-      <div className="page__section">
-        <h2>{t('intent.mounts')}</h2>
-        {detail.mounts.length > 0 ? (
-          <ul>
-            {detail.mounts.map((mount) => (
-              <li key={mount.handle}>
-                <code>{mount.handle}</code> · {t(`intent.resourceType.${mount.resourceType}`)}{' '}
-                <button
-                  type="button"
-                  className="btn btn--xs"
-                  onClick={() => unmount.mutate(mount.handle)}
-                  disabled={detail.session.inFlight}
-                >
-                  {t('intent.unmount')}
-                </button>
-              </li>
             ))}
-          </ul>
-        ) : null}
-        <button
-          type="button"
-          className="btn btn--sm"
-          data-testid="intent-add-mount"
-          onClick={() => setMountOpen(true)}
-          disabled={detail.session.inFlight || detail.session.status === 'archived'}
-        >
-          {t('intent.addMount')}
-        </button>
-        <IntentMountDialog
-          open={mountOpen}
-          onClose={() => setMountOpen(false)}
-          sessionId={sessionId}
-          mounted={detail.mounts}
-          onAdded={() => void invalidate()}
-        />
-      </div>
+            {detail.session.inFlight ? <LoadingState label={t('intent.generating')} /> : null}
+          </div>
 
-      {draft !== null ? (
-        <div className="page__section" data-testid="intent-draft">
-          <h2>
-            {t('intent.draftTitle', { revision: draft.revision })}{' '}
-            {draft.stale ? <StatusChip kind="warn">{t('intent.draftStale')}</StatusChip> : null}
-          </h2>
-          {draft.stale ? (
-            <NoticeBanner tone="warning">{t('intent.draftStaleNotice')}</NoticeBanner>
+          {pendingQuestions.length > 0 && !detail.session.inFlight ? (
+            <div className="page__section intent-session__questions" data-testid="intent-questions">
+              <h2>{t('intent.answerQuestions')}</h2>
+              {pendingQuestions.map((question) => (
+                <Field key={question.id} label={question.question} required group>
+                  <div
+                    className="intent-question-options"
+                    role="group"
+                    aria-label={question.question}
+                  >
+                    {question.options.map((option) => {
+                      const picked = answers[question.id] ?? []
+                      const checked = picked.includes(option)
+                      return (
+                        <label key={option} className="intent-question-option">
+                          <input
+                            type={question.multiSelect ? 'checkbox' : 'radio'}
+                            name={`intent-question-${question.id}`}
+                            value={option}
+                            checked={checked}
+                            onChange={() =>
+                              setAnswers((prev) => ({
+                                ...prev,
+                                [question.id]: question.multiSelect
+                                  ? question.options.filter((candidate) =>
+                                      candidate === option ? !checked : picked.includes(candidate),
+                                    )
+                                  : [option],
+                              }))
+                            }
+                          />
+                          <span>{option}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </Field>
+              ))}
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={
+                  sendAnswers.isPending ||
+                  pendingQuestions.some((question) => (answers[question.id]?.length ?? 0) === 0)
+                }
+                onClick={() => sendAnswers.mutate()}
+              >
+                {t('intent.submitAnswers')}
+              </button>
+            </div>
           ) : null}
-          {draft.validation.errors.length > 0 ? (
-            <NoticeBanner tone="error">
-              <p>{t('intent.blockingErrors', { count: draft.validation.errors.length })}</p>
+
+          <div className="page__section intent-session__mounts">
+            <h2>{t('intent.mounts')}</h2>
+            {detail.mounts.length > 0 ? (
               <ul>
-                {draft.validation.errors.slice(0, 10).map((error) => (
-                  <li key={error}>{error}</li>
+                {detail.mounts.map((mount) => (
+                  <li key={mount.handle}>
+                    <code>{mount.handle}</code> · {t(`intent.resourceType.${mount.resourceType}`)}{' '}
+                    <button
+                      type="button"
+                      className="btn btn--xs"
+                      onClick={() => unmount.mutate(mount.handle)}
+                      disabled={detail.session.inFlight}
+                    >
+                      {t('intent.unmount')}
+                    </button>
+                  </li>
                 ))}
               </ul>
-            </NoticeBanner>
-          ) : null}
-          {draftOps.map((op) => (
-            <div key={String(op.opId)} className="card" data-testid="intent-op-card">
-              <div className="card__meta">
-                <StatusChip kind={op.action === 'create' ? 'success' : 'info'} size="sm">
-                  {op.action === 'create' ? t('intent.opCreate') : t('intent.opUpdate')}
-                </StatusChip>{' '}
-                <strong>{t(`intent.resourceType.${String(op.resourceType)}`)}</strong> ·{' '}
-                {String((op.payload as { name?: string } | undefined)?.name ?? '')}
-              </div>
-              <IntentOpPreview
-                op={op}
-                mounts={detail.mounts}
-                bundleNames={bundleNames}
-                opErrors={draft.validation.errors.filter((error) =>
-                  error.startsWith(`${String(op.opId)}:`),
-                )}
-              />
-            </div>
-          ))}
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={draft.stale || draft.validation.errors.length > 0 || detail.session.inFlight}
-            onClick={() => setCommitOpen(true)}
-            data-testid="intent-open-commit"
-          >
-            {t('intent.openCommit')}
-          </button>
-        </div>
-      ) : null}
-
-      {detail.commits.length > 0 ? (
-        <div className="page__section">
-          <h2>{t('intent.commits')}</h2>
-          {detail.commits.map((commit) => (
-            <div key={commit.journalId} className="card">
-              <div className="card__meta">
-                <StatusChip
-                  kind={
-                    commit.state === 'committed'
-                      ? 'success'
-                      : commit.state === 'failed'
-                        ? 'danger'
-                        : 'info'
-                  }
-                >
-                  {t(`intent.commitState.${commit.state}`)}
-                </StatusChip>
-                <RelativeTime ts={commit.createdAt} />
-              </div>
-              {commit.receipt !== null ? (
-                <ul>
-                  {commit.receipt.applied.map((item) => (
-                    <li key={item.opId}>
-                      {t(`intent.resourceType.${item.resourceType}`)} · {item.name}
-                      {item.fromCopy ? ` (${t('intent.fromCopy')})` : ''}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {commit.error !== null ? <p className="mono">{commit.error}</p> : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {detail.session.status === 'active' ? (
-        <div className="page__section">
-          <Field label={t('intent.composerLabel')}>
-            <TextArea
-              value={message}
-              onChange={setMessage}
-              rows={3}
-              placeholder={t('intent.composerPlaceholder')}
-              data-testid="intent-composer"
+            ) : null}
+            <button
+              type="button"
+              className="btn btn--sm"
+              data-testid="intent-add-mount"
+              onClick={() => setMountOpen(true)}
+              disabled={detail.session.inFlight || detail.session.status === 'archived'}
+            >
+              {t('intent.addMount')}
+            </button>
+            <IntentMountDialog
+              open={mountOpen}
+              onClose={() => setMountOpen(false)}
+              sessionId={sessionId}
+              mounted={detail.mounts}
+              onAdded={() => void invalidate()}
             />
-          </Field>
-          {sendMessage.isError ? <ErrorBanner error={sendMessage.error} /> : null}
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={message.trim() === '' || sendMessage.isPending || detail.session.inFlight}
-            onClick={() => sendMessage.mutate()}
-          >
-            {t('intent.send')}
-          </button>
+          </div>
+
+          {detail.session.status === 'active' ? (
+            <div className="page__section intent-session__composer">
+              <Field label={t('intent.composerLabel')}>
+                <TextArea
+                  value={message}
+                  onChange={setMessage}
+                  rows={3}
+                  placeholder={t('intent.composerPlaceholder')}
+                  data-testid="intent-composer"
+                />
+              </Field>
+              {sendMessage.isError ? <ErrorBanner error={sendMessage.error} /> : null}
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={message.trim() === '' || sendMessage.isPending || detail.session.inFlight}
+                onClick={() => sendMessage.mutate()}
+              >
+                {t('intent.send')}
+              </button>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+
+        <aside className="intent-session__review" aria-label={t('intent.reviewWorkspace')}>
+          {draft === null ? (
+            <div className="page__section intent-session__draft-empty">
+              <span className="intent-session__draft-empty-mark" aria-hidden="true">
+                ✦
+              </span>
+              <div>
+                <h2>{t('intent.draftPendingTitle')}</h2>
+                <p>{t('intent.draftPendingDescription')}</p>
+              </div>
+            </div>
+          ) : null}
+          {draft !== null ? (
+            <div className="page__section intent-session__draft" data-testid="intent-draft">
+              <h2>
+                {t('intent.draftTitle', { revision: draft.revision })}{' '}
+                {draft.stale ? <StatusChip kind="warn">{t('intent.draftStale')}</StatusChip> : null}
+              </h2>
+              {draft.stale ? (
+                <NoticeBanner tone="warning">{t('intent.draftStaleNotice')}</NoticeBanner>
+              ) : null}
+              {draft.validation.errors.length > 0 ? (
+                <NoticeBanner tone="error">
+                  <p>{t('intent.blockingErrors', { count: draft.validation.errors.length })}</p>
+                  <ul>
+                    {draft.validation.errors.slice(0, 10).map((error) => (
+                      <li key={error}>{error}</li>
+                    ))}
+                  </ul>
+                </NoticeBanner>
+              ) : null}
+              {draftOps.map((op) => (
+                <div key={String(op.opId)} className="card" data-testid="intent-op-card">
+                  <div className="card__meta">
+                    <StatusChip kind={op.action === 'create' ? 'success' : 'info'} size="sm">
+                      {op.action === 'create' ? t('intent.opCreate') : t('intent.opUpdate')}
+                    </StatusChip>{' '}
+                    <strong>{t(`intent.resourceType.${String(op.resourceType)}`)}</strong> ·{' '}
+                    {String((op.payload as { name?: string } | undefined)?.name ?? '')}
+                  </div>
+                  <IntentOpPreview
+                    op={op}
+                    mounts={detail.mounts}
+                    bundleNames={bundleNames}
+                    opErrors={draft.validation.errors.filter((error) =>
+                      error.startsWith(`${String(op.opId)}:`),
+                    )}
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={
+                  draft.stale || draft.validation.errors.length > 0 || detail.session.inFlight
+                }
+                onClick={() => setCommitOpen(true)}
+                data-testid="intent-open-commit"
+              >
+                {t('intent.openCommit')}
+              </button>
+            </div>
+          ) : null}
+
+          {detail.commits.length > 0 ? (
+            <div className="page__section intent-session__commits">
+              <h2>{t('intent.commits')}</h2>
+              {detail.commits.map((commit) => (
+                <div key={commit.journalId} className="card">
+                  <div className="card__meta">
+                    <StatusChip
+                      kind={
+                        commit.state === 'committed'
+                          ? 'success'
+                          : commit.state === 'failed'
+                            ? 'danger'
+                            : 'info'
+                      }
+                    >
+                      {t(`intent.commitState.${commit.state}`)}
+                    </StatusChip>
+                    <RelativeTime ts={commit.createdAt} />
+                  </div>
+                  {commit.receipt !== null ? (
+                    <ul>
+                      {commit.receipt.applied.map((item) => (
+                        <li key={item.opId}>
+                          {t(`intent.resourceType.${item.resourceType}`)} · {item.name}
+                          {item.fromCopy ? ` (${t('intent.fromCopy')})` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {commit.error !== null ? <p className="mono">{commit.error}</p> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </aside>
+      </div>
 
       {draft !== null ? (
         <CommitDialog
@@ -396,7 +458,6 @@ function IntentSessionDetailPage() {
           }}
         />
       ) : null}
-      <span style={{ display: 'none' }}>{String(navigate !== undefined)}</span>
     </div>
   )
 }

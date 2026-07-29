@@ -429,6 +429,13 @@ export const IntentSessionWsMessageSchema = z.discriminatedUnion('type', [
     ownerUserId: z.string(),
   }),
   z.object({
+    type: z.literal('intent.turn.execution.updated'),
+    sessionId: z.string(),
+    turnId: z.string(),
+    eventSeq: z.number().int().min(0),
+    ownerUserId: z.string(),
+  }),
+  z.object({
     type: z.literal('intent.session.updated'),
     sessionId: z.string(),
     ownerUserId: z.string(),

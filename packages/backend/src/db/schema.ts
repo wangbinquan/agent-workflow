@@ -2460,12 +2460,62 @@ export const intentTurns = sqliteTable(
     envelopeNonce: text('envelope_nonce'),
     /** Agent turns: {runtime, model, durationMs, exitCode, failureCode?, stderrTail?}. */
     runMetaJson: text('run_meta_json'),
+    /**
+     * RFC-235: independently-settled execution capture. NULL for user turns
+     * and legacy agent turns; new agent turns start at `live`. Capture
+     * failures never change the turn's business kind/result.
+     */
+    captureState: text('capture_state', {
+      enum: ['live', 'complete', 'truncated', 'incomplete'],
+    }),
+    captureLastEventSeq: integer('capture_last_event_seq').notNull().default(0),
+    captureEventBytes: integer('capture_event_bytes').notNull().default(0),
+    captureRootSessionId: text('capture_root_session_id'),
+    captureIncompleteReason: text('capture_incomplete_reason', {
+      enum: ['stream-persist-failed', 'child-capture-failed', 'post-exit-flush-timeout'],
+    }),
     scratchRetained: integer('scratch_retained', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(),
   },
   (t) => ({
     sessionSeqUnique: uniqueIndex('uniq_intent_turns_session_seq').on(t.sessionId, t.seq),
     sessionIdx: index('idx_intent_turns_session').on(t.sessionId),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-235 intent_turn_events — normalized runtime events for one Intent agent
+// turn. Kept separate from node_run_events: Intent turns are not task node
+// runs, and manufacturing a node_run FK would contaminate task lifecycle and
+// metrics. `event_seq` is allocated under the owning turn's short transaction;
+// runtime part ids provide exact live/post-run dedupe when available.
+// -----------------------------------------------------------------------------
+export const intentTurnEvents = sqliteTable(
+  'intent_turn_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    turnId: text('turn_id')
+      .notNull()
+      .references(() => intentTurns.id, { onDelete: 'cascade' }),
+    eventSeq: integer('event_seq').notNull(),
+    ts: integer('ts').notNull(),
+    kind: text('kind').notNull(),
+    payload: text('payload').notNull(),
+    sessionId: text('session_id'),
+    parentSessionId: text('parent_session_id'),
+    source: text('source', {
+      enum: ['stream', 'live-child', 'post-run-child'],
+    }).notNull(),
+    externalEventId: text('external_event_id'),
+  },
+  (t) => ({
+    turnSeqUnique: uniqueIndex('uniq_intent_turn_events_turn_seq').on(t.turnId, t.eventSeq),
+    externalEventUnique: uniqueIndex('uniq_intent_turn_events_external').on(
+      t.turnId,
+      t.source,
+      t.externalEventId,
+    ),
+    turnIdx: index('idx_intent_turn_events_turn').on(t.turnId, t.eventSeq),
   }),
 )
 

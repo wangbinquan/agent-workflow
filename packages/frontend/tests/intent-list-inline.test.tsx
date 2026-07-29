@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -115,7 +115,6 @@ describe('RFC-234 /intent list', () => {
     const rec = installFetch([])
     await renderPage()
     await screen.findByText(enUS.intent.emptyTitle)
-    fireEvent.click(screen.getAllByRole('button', { name: enUS.intent.newSession })[0]!)
     const start = await screen.findByRole('button', { name: enUS.intent.startBuilding })
     expect((start as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByTestId('intent-create-message'), {
@@ -138,20 +137,21 @@ describe('RFC-234 /intent list', () => {
   test('create shows the type dropdown; modify entry hides it and mounts the target', async () => {
     installFetch([])
     await renderPage('/intent?create=true')
-    // Dialog auto-opened via search; the artifact-type Select shows Auto.
-    await screen.findByRole('button', { name: enUS.intent.startBuilding })
-    expect(screen.getByText(enUS.intent.hintAuto)).toBeTruthy()
-    expect(screen.queryByTestId('intent-modify-target')).toBeNull()
+    // Dialog auto-opened via search; the shared composer shows Auto.
+    const createDialog = await screen.findByRole('dialog')
+    expect(within(createDialog).getByText(enUS.intent.hintAuto)).toBeTruthy()
+    expect(within(createDialog).queryByTestId('intent-modify-target')).toBeNull()
     cleanup()
 
     const rec = installFetch([])
     await renderPage('/intent?create=true&mountType=agent&mountId=A1')
-    await screen.findByTestId('intent-modify-target')
-    expect(screen.queryByText(enUS.intent.hintAuto)).toBeNull()
-    fireEvent.change(screen.getByTestId('intent-create-message'), {
+    const modifyDialog = await screen.findByRole('dialog')
+    await within(modifyDialog).findByTestId('intent-modify-target')
+    expect(within(modifyDialog).queryByText(enUS.intent.hintAuto)).toBeNull()
+    fireEvent.change(within(modifyDialog).getByTestId('intent-create-message'), {
       target: { value: 'tweak the auditor' },
     })
-    fireEvent.click(screen.getByRole('button', { name: enUS.intent.startBuilding }))
+    fireEvent.click(within(modifyDialog).getByRole('button', { name: enUS.intent.startBuilding }))
     await waitFor(() => {
       const post = rec.calls.find(
         (call) => call.method === 'POST' && call.url.endsWith('/api/intent-sessions'),

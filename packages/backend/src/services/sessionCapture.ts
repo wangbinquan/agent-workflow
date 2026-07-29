@@ -30,6 +30,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { DbClient } from '../db/client'
 import { nodeRunEvents, nodeRuns } from '../db/schema'
 import { createLogger, type Logger } from '@/util/log'
+import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 import {
   walkOpencodeSessions,
   type OpencodeMessageRow,
@@ -106,6 +107,8 @@ export interface TranscodedEvent {
   ts: number
   kind: 'text' | 'tool_use' | 'reasoning' | 'step_start' | 'step_finish'
   payload: string
+  /** Runtime part identity used by generic sinks for live/post-run dedupe. */
+  externalEventId: string
 }
 
 /**
@@ -162,9 +165,106 @@ export function transcodeOpencodeRowsToEvents(input: {
       part: { id: p.id, ...part },
       timestamp: p.time_created,
     }
-    out.push({ ts: p.time_created, kind, payload: JSON.stringify(envelope) })
+    out.push({
+      ts: p.time_created,
+      kind,
+      payload: JSON.stringify(envelope),
+      externalEventId: p.id,
+    })
   }
   return out
+}
+
+export interface CaptureOpencodeSessionsToSinkOptions {
+  rootSessionId: string
+  sink: SystemAgentEventSinkV1
+  log?: Logger
+  /** Exact private OpenCode DB from the spawn plan; tests may override. */
+  opencodeDbPath?: string
+}
+
+/**
+ * Generic OpenCode descendant capture used by non-task system agents. It
+ * shares the exact SQLite walk/transcoder with node runs, but leaves storage
+ * ownership to the caller's sink.
+ */
+export async function captureOpencodeSessionsToSink(
+  opts: CaptureOpencodeSessionsToSinkOptions,
+): Promise<CaptureChildSessionsResult> {
+  const log = opts.log ?? createLogger('sessionCapture')
+  const dbPath = opts.opencodeDbPath ?? resolveOpencodeDbPath()
+  const markFailed = async (reason: string): Promise<void> => {
+    try {
+      await opts.sink.append({
+        ts: Date.now(),
+        kind: 'subagent_capture_failed',
+        payload: JSON.stringify({ sessionID: opts.rootSessionId, reason }),
+        sessionId: opts.rootSessionId,
+        parentSessionId: null,
+        source: 'post-run-child',
+      })
+    } catch {
+      // The outer sink terminal marker/log remains the final fallback.
+    }
+  }
+
+  if (!existsSync(dbPath)) {
+    log.warn('opencode-db-not-found', { rootSessionId: opts.rootSessionId })
+    await markFailed('opencode-db-not-found')
+    return {
+      capturedSessionIds: [],
+      insertedEventRows: 0,
+      failed: true,
+      failureReason: 'opencode-db-not-found',
+    }
+  }
+
+  let opencodeDb: Database | null = null
+  try {
+    opencodeDb = new Database(dbPath, { readonly: true })
+    const captured: string[] = []
+    let insertedRows = 0
+    for (const { session: sess, messages, parts } of walkOpencodeSessions(
+      opencodeDb,
+      opts.rootSessionId,
+      { includeRoot: false },
+    )) {
+      captured.push(sess.id)
+      const events = transcodeOpencodeRowsToEvents({ sessionId: sess.id, messages, parts })
+      for (const event of events) {
+        await opts.sink.append({
+          ts: event.ts,
+          kind: event.kind,
+          payload: event.payload,
+          sessionId: sess.id,
+          parentSessionId: sess.parent_id,
+          source: 'post-run-child',
+          externalEventId: event.externalEventId,
+        })
+        insertedRows++
+      }
+    }
+    return { capturedSessionIds: captured, insertedEventRows: insertedRows, failed: false }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    log.warn('opencode-session-sink-capture-failed', {
+      rootSessionId: opts.rootSessionId,
+      err: reason,
+    })
+    await markFailed('child-capture-failed')
+    return {
+      capturedSessionIds: [],
+      insertedEventRows: 0,
+      failed: true,
+      failureReason: reason,
+    }
+  } finally {
+    try {
+      opencodeDb?.close()
+    } catch {
+      // Read-only close failure is auxiliary; terminal capture state handles it.
+    }
+  }
 }
 
 /**

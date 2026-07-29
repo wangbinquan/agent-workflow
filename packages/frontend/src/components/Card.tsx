@@ -37,6 +37,8 @@ export interface CardProps {
    * Same class chain and slots; omit for the classic div card.
    */
   to?: LinkProps['to']
+  /** Router path params for link cards (e.g. `/intent/$sessionId`). */
+  params?: LinkProps['params']
   /** Router search params for the link root (e.g. `/memory` deep-link tab). */
   search?: LinkProps['search']
   /** Semantic root for non-link cards. Link roots always take precedence. */
@@ -86,6 +88,7 @@ export function Card(props: CardProps): ReactElement {
     return (
       <Link
         to={props.to}
+        params={props.params}
         search={props.search}
         className={classes.join(' ')}
         data-testid={props['data-testid']}

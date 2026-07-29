@@ -18,6 +18,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { assertSafeSeedPath, runSystemAgent } from '../src/services/systemAgentRun'
+import type { SystemAgentEventSinkV1 } from '../src/services/sessionEventSink'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -158,6 +159,36 @@ describe('runSystemAgent', () => {
     expect(r.status).toBe('exit-nonzero')
     expect(r.stderrTail).not.toContain('sk-live-AAAABBBBCCCCDDDDEEEEFFFF11112222')
     expect(r.stderrTail).toContain('api.example.com')
+  })
+
+  test('ordered event sink observes stdout/stderr and settles independently', async () => {
+    process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
+    process.env.MOCK_OPENCODE_STDERR = 'runtime diagnostic'
+    const events: Array<Parameters<SystemAgentEventSinkV1['append']>[0]> = []
+    const roots: string[] = []
+    const terminals: string[] = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async (event) => {
+        events.push(event)
+      },
+      setRootSessionId: async (sessionId) => {
+        roots.push(sessionId)
+      },
+      markTerminal: async (state) => {
+        terminals.push(state)
+      },
+    }
+    const scratchParent = scratchParentDir()
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParent, wrapperFor(MOCK_OPENCODE)),
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(events.some((event) => event.kind === 'text' && event.source === 'stream')).toBe(true)
+    expect(events.some((event) => event.kind === 'stderr' && event.source === 'stream')).toBe(true)
+    expect(roots).toEqual([])
+    expect(terminals).toEqual(['complete'])
   })
 
   // RFC-234 e2e seam: an UNBRANDED opencodeCmd rides the same legacy escape

@@ -5,20 +5,17 @@
 // reachable from the Session view.
 
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { NodeRun, SessionViewResponse } from '@agent-workflow/shared'
+import type { NodeRun } from '@agent-workflow/shared'
 import { isAgentNodeKind } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { isFanoutParentRun, sortNodeRunsForPromptHistory } from '@/lib/node-prompt'
-import { ConversationFlow } from './ConversationFlow'
 import { InjectedMemoriesCard } from './InjectedMemoriesCard'
-import { LoadingState } from '@/components/LoadingState'
 import { RuntimeInventorySection } from '@/components/inventory/RuntimeInventorySection'
 import { Select, type SelectOption } from '@/components/Select'
 import { clarifyRoundForRun, displayRetryForRun, formatIterationLabel } from '@/lib/node-history'
 import { nodeRunStatusToKind } from '@/lib/noderun-status'
-import { ErrorBanner } from '@/components/ErrorBanner'
+import { SessionConversationPanel } from './SessionConversationPanel'
 
 interface Props {
   taskId: string
@@ -266,20 +263,16 @@ export function groupStartTime(group: AttemptGroup): number {
 }
 
 function SessionBody({ taskId, nodeRunId }: { taskId: string; nodeRunId: string }) {
-  const { t } = useTranslation()
-  const query = useQuery<SessionViewResponse>({
-    queryKey: ['tasks', taskId, 'node-runs', nodeRunId, 'session'],
-    queryFn: ({ signal }) =>
-      api.get(
-        `/api/tasks/${encodeURIComponent(taskId)}/node-runs/${encodeURIComponent(nodeRunId)}/session`,
-        undefined,
-        signal,
-      ),
-  })
-  if (query.isLoading) return <LoadingState size="compact" />
-  if (query.error !== null && query.error !== undefined) {
-    return <ErrorBanner error={query.error} message={t('session.loadError')} />
-  }
-  if (query.data === undefined) return null
-  return <ConversationFlow tree={query.data.tree} />
+  return (
+    <SessionConversationPanel
+      queryKey={['tasks', taskId, 'node-runs', nodeRunId, 'session']}
+      load={(signal) =>
+        api.get(
+          `/api/tasks/${encodeURIComponent(taskId)}/node-runs/${encodeURIComponent(nodeRunId)}/session`,
+          undefined,
+          signal,
+        )
+      }
+    />
+  )
 }

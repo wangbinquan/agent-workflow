@@ -7,11 +7,14 @@ import { useWsInvalidation, type WsInvalidationRules } from './useWsInvalidation
 export const INTENT_QUERY_KEYS = {
   list: ['intent-sessions', 'list'] as const,
   detail: (id: string) => ['intent-sessions', 'detail', id] as const,
+  turnSession: (sessionId: string, turnId: string) =>
+    ['intent-sessions', 'detail', sessionId, 'turns', turnId, 'session'] as const,
 }
 
 const RULES: WsInvalidationRules<IntentSessionWsMessage> = {
   'intent.turn.started': (m) => [INTENT_QUERY_KEYS.list, INTENT_QUERY_KEYS.detail(m.sessionId)],
   'intent.turn.finished': (m) => [INTENT_QUERY_KEYS.list, INTENT_QUERY_KEYS.detail(m.sessionId)],
+  'intent.turn.execution.updated': (m) => [INTENT_QUERY_KEYS.turnSession(m.sessionId, m.turnId)],
   'intent.session.updated': (m) => [INTENT_QUERY_KEYS.list, INTENT_QUERY_KEYS.detail(m.sessionId)],
   'intent.apply.committed': (m) => [
     INTENT_QUERY_KEYS.list,

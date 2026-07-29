@@ -212,6 +212,41 @@ describe('intent session routes', () => {
     expect(list.some((s) => s.id === session.id)).toBe(false)
   })
 
+  test('turn Session view reuses owner/admin read scope; user turns are typed 410', async () => {
+    const created = await req(ownerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'show the execution' }),
+    })
+    const session = (await created.json()) as { id: string }
+    const detail = (await pollDetail(
+      ownerToken,
+      session.id,
+      (d) => (d as { session: { inFlight: boolean } }).session.inFlight === false,
+    )) as {
+      turns: Array<{
+        id: string
+        role: 'user' | 'agent'
+        execution: { captureState: string } | null
+      }>
+    }
+    const agentTurn = detail.turns.find((turn) => turn.role === 'agent')
+    const userTurn = detail.turns.find((turn) => turn.role === 'user')
+    expect(agentTurn?.execution?.captureState).toBe('complete')
+    expect(userTurn?.execution).toBeNull()
+
+    const path = `/api/intent-sessions/${session.id}/turns/${agentTurn?.id ?? ''}/session`
+    expect((await req(ownerToken, path)).status).toBe(200)
+    expect((await req(DAEMON_TOKEN, path)).status).toBe(200)
+    expect((await req(strangerToken, path)).status).toBe(404)
+    expect((await req(managerToken, path)).status).toBe(404)
+
+    const userPath = `/api/intent-sessions/${session.id}/turns/${userTurn?.id ?? ''}/session`
+    const userResponse = await req(ownerToken, userPath)
+    expect(userResponse.status).toBe(410)
+    const body = (await userResponse.json()) as { error?: { code?: string }; code?: string }
+    expect(body.error?.code ?? body.code).toBe('intent-turn-session-not-applicable')
+  })
+
   test('in-flight 409 + malformed payloads name their error codes', async () => {
     const created = await req(ownerToken, '/api/intent-sessions', {
       method: 'POST',

@@ -242,6 +242,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/intent-sessions' },
   { method: 'GET', path: '/api/intent-sessions' },
   { method: 'GET', path: '/api/intent-sessions/:id' },
+  { method: 'GET', path: '/api/intent-sessions/:id/turns/:turnId/session' },
   { method: 'POST', path: '/api/intent-sessions/:id/messages' },
   { method: 'POST', path: '/api/intent-sessions/:id/answers' },
   { method: 'POST', path: '/api/intent-sessions/:id/mount-approvals' },

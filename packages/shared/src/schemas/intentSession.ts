@@ -109,24 +109,41 @@ export const IntentSessionSummarySchema = z.object({
 })
 export type IntentSessionSummary = z.infer<typeof IntentSessionSummarySchema>
 
-export const IntentTurnDtoSchema = z.object({
-  id: z.string(),
-  seq: z.number().int(),
-  role: z.enum(['user', 'agent']),
-  kind: z.enum([
-    'message',
-    'answers',
-    'mount-approval',
-    'running',
-    'questions',
-    'changeset',
-    'error',
-  ]),
-  content: z.record(z.string(), z.unknown()),
-  contextRevision: z.number().int(),
-  runMeta: z.record(z.string(), z.unknown()).nullable(),
-  createdAt: z.number().int(),
-})
+export const IntentTurnExecutionDtoSchema = z
+  .object({
+    captureState: z.enum(['live', 'complete', 'truncated', 'incomplete']),
+    lastEventSeq: z.number().int().min(0),
+    eventBytes: z.number().int().min(0),
+    rootSessionId: z.string().nullable(),
+    incompleteReason: z
+      .enum(['stream-persist-failed', 'child-capture-failed', 'post-exit-flush-timeout'])
+      .nullable(),
+  })
+  .strict()
+export type IntentTurnExecutionDto = z.infer<typeof IntentTurnExecutionDtoSchema>
+
+export const IntentTurnDtoSchema = z
+  .object({
+    id: z.string(),
+    seq: z.number().int(),
+    role: z.enum(['user', 'agent']),
+    kind: z.enum([
+      'message',
+      'answers',
+      'mount-approval',
+      'running',
+      'questions',
+      'changeset',
+      'error',
+    ]),
+    content: z.record(z.string(), z.unknown()),
+    contextRevision: z.number().int(),
+    runMeta: z.record(z.string(), z.unknown()).nullable(),
+    /** Null for user/legacy turns; populated from reservation for new agent turns. */
+    execution: IntentTurnExecutionDtoSchema.nullable(),
+    createdAt: z.number().int(),
+  })
+  .strict()
 export type IntentTurnDto = z.infer<typeof IntentTurnDtoSchema>
 
 export const IntentSlotDtoSchema = z.discriminatedUnion('kind', [

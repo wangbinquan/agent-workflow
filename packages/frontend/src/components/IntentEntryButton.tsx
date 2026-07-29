@@ -12,7 +12,7 @@ import type { ReactElement } from 'react'
 export interface IntentEntryButtonProps {
   variant: 'create' | 'modify'
   /** Artifact hint for the create dialog (e.g. 'workflow'). */
-  hint?: string
+  hint?: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
   /** Modify variant: the element the new session should mount. */
   mount?: {
     resourceType: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'

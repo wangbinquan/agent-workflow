@@ -3,6 +3,8 @@
 //   POST   /api/intent-sessions                       create + first turn
 //   GET    /api/intent-sessions?status=&all=1         list (own; admin audit)
 //   GET    /api/intent-sessions/:id                   detail (turns/draft/slots/commits)
+//   GET    /api/intent-sessions/:id/turns/:turnId/session
+//                                                       shared SessionTree view
 //   POST   /api/intent-sessions/:id/messages          user message → next turn
 //   POST   /api/intent-sessions/:id/answers           answers → next turn
 //   POST   /api/intent-sessions/:id/mount-approvals   approve/reject agent suggestions
@@ -52,6 +54,7 @@ import {
   resolveIntentTurnConfig,
   runIntentTurn,
 } from '@/services/intent/turnEngine'
+import { getIntentTurnSession, projectIntentTurnExecution } from '@/services/intent/turnSession'
 import {
   addIntentMount,
   createIntentSession,
@@ -106,6 +109,45 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
   const appHome = Paths.root
 
   async function fireTurn(sessionId: string, actor: Actor): Promise<void> {
+    const EXECUTION_BROADCAST_THROTTLE_MS = 500
+    let lastExecutionBroadcastAt = 0
+    let pendingExecution: { sessionId: string; turnId: string; eventSeq: number } | undefined
+    let executionTimer: ReturnType<typeof setTimeout> | undefined
+    const flushExecution = (): void => {
+      if (pendingExecution === undefined) return
+      const event = pendingExecution
+      pendingExecution = undefined
+      lastExecutionBroadcastAt = Date.now()
+      intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
+        type: 'intent.turn.execution.updated',
+        sessionId: event.sessionId,
+        turnId: event.turnId,
+        eventSeq: event.eventSeq,
+        ownerUserId: actor.user.id,
+      })
+    }
+    const queueExecution = (event: {
+      sessionId: string
+      turnId: string
+      eventSeq: number
+    }): void => {
+      if (pendingExecution === undefined || event.eventSeq >= pendingExecution.eventSeq) {
+        pendingExecution = event
+      }
+      const remaining = EXECUTION_BROADCAST_THROTTLE_MS - (Date.now() - lastExecutionBroadcastAt)
+      if (remaining <= 0) {
+        if (executionTimer !== undefined) clearTimeout(executionTimer)
+        executionTimer = undefined
+        flushExecution()
+        return
+      }
+      if (executionTimer !== undefined) return
+      executionTimer = setTimeout(() => {
+        executionTimer = undefined
+        flushExecution()
+      }, remaining)
+      executionTimer.unref?.()
+    }
     try {
       const cfg = loadConfig(deps.configPath)
       const config = await resolveIntentTurnConfig(deps.db, cfg)
@@ -115,7 +157,20 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
           appHome,
           config,
           onSessionEvent: (event) => {
+            if (
+              event.type === 'intent.turn.execution.updated' &&
+              event.turnId !== undefined &&
+              event.eventSeq !== undefined
+            ) {
+              queueExecution({
+                sessionId: event.sessionId,
+                turnId: event.turnId,
+                eventSeq: event.eventSeq,
+              })
+              return
+            }
             if (event.type === 'intent.turn.started' || event.type === 'intent.turn.finished') {
+              if (event.type === 'intent.turn.finished') flushExecution()
               intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
                 type: event.type,
                 sessionId: event.sessionId,
@@ -140,6 +195,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         sessionId,
         err: err instanceof Error ? err.message : String(err),
       })
+    } finally {
+      if (executionTimer !== undefined) clearTimeout(executionTimer)
+      flushExecution()
     }
   }
 
@@ -191,6 +249,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       content: parseJsonRecord(t.contentJson),
       contextRevision: t.contextRevision,
       runMeta: t.runMetaJson === null ? null : parseJsonRecord(t.runMetaJson),
+      execution: projectIntentTurnExecution(t),
       createdAt: t.createdAt,
     }))
     let currentDraft: IntentDraftDto | null = null
@@ -254,6 +313,12 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
       commits,
     }
     return c.json(detail)
+  })
+
+  app.get('/api/intent-sessions/:id/turns/:turnId/session', read, async (c) => {
+    const actor = actorOf(c)
+    const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
+    return c.json(await getIntentTurnSession(deps.db, session.id, c.req.param('turnId')))
   })
 
   app.post('/api/intent-sessions/:id/messages', write, async (c) => {

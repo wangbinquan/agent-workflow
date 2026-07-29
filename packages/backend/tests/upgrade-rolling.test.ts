@@ -233,7 +233,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 120 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 124 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -325,7 +325,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-224 probe-receipt fence bumped to 120 with 0120_rfc224_runtime_probe_fence.
     // RFC-229 workgroup message trigger relation bumped to 122 with 0122.
     // RFC-234 intent-builder five tables bumped to 123 with 0123.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(123)
+    // RFC-235 intent-turn Session capture bumped to 124 with 0124.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(124)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

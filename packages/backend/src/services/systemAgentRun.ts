@@ -40,6 +40,11 @@ import {
   type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { parseExecutionIdentityFailureOutput } from '@/services/runtime/opencode/failure'
+import { captureOpencodeSessionsToSink } from '@/services/sessionCapture'
+import type {
+  SessionCaptureIncompleteReason,
+  SystemAgentEventSinkV1,
+} from '@/services/sessionEventSink'
 
 const DEFAULT_TIMEOUT_MS = 600_000
 const DEFAULT_MAX_EVENT_TEXT_BYTES = 8 * 1024 * 1024
@@ -74,6 +79,8 @@ export interface SystemAgentRunOptions {
   timeoutMs?: number
   maxEventTextBytes?: number
   abortSignal?: AbortSignal
+  /** RFC-235: auxiliary ordered Session event capture; never gates business output. */
+  eventSink?: SystemAgentEventSinkV1
   bridgeCredentials?: boolean
   log?: Logger
   /** Explicit dependency-injection seam for legacy mock-binary tests. */
@@ -291,6 +298,56 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   let cancelDrains: (() => Promise<void>) | null = null
   let onAbort: (() => void) | null = null
   let result: SystemAgentRunResult | undefined
+  let sinkTerminal = false
+  let sinkFailed = false
+
+  const markSinkTerminal = async (
+    state: 'complete' | 'incomplete',
+    reason?: SessionCaptureIncompleteReason,
+  ): Promise<void> => {
+    if (opts.eventSink === undefined || sinkTerminal) return
+    sinkTerminal = true
+    try {
+      await opts.eventSink.markTerminal(state, reason)
+    } catch (error) {
+      log.warn('system-agent-session-terminal-persist-failed', {
+        feature: opts.feature,
+        err: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  const failSink = async (
+    reason: SessionCaptureIncompleteReason,
+    error: unknown,
+  ): Promise<void> => {
+    if (!sinkFailed) {
+      sinkFailed = true
+      log.warn('system-agent-session-event-persist-failed', {
+        feature: opts.feature,
+        reason,
+        err: error instanceof Error ? error.message : String(error),
+      })
+    }
+    await markSinkTerminal('incomplete', reason)
+  }
+  const appendSink = async (
+    event: Parameters<SystemAgentEventSinkV1['append']>[0],
+  ): Promise<void> => {
+    if (opts.eventSink === undefined || sinkFailed) return
+    try {
+      await opts.eventSink.append(event)
+    } catch (error) {
+      await failSink('stream-persist-failed', error)
+    }
+  }
+  const setSinkRoot = async (sessionId: string): Promise<void> => {
+    if (opts.eventSink === undefined || sinkFailed) return
+    try {
+      await opts.eventSink.setRootSessionId(sessionId)
+    } catch (error) {
+      await failSink('stream-persist-failed', error)
+    }
+  }
 
   try {
     result = await (async (): Promise<SystemAgentRunResult> => {
@@ -411,7 +468,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
 
       const readStream = async (
         stream: ReadableStream<Uint8Array> | undefined,
-        onLine: (line: string) => void,
+        onLine: (line: string) => void | Promise<void>,
       ): Promise<void> => {
         if (stream === undefined) return
         const reader = stream.getReader()
@@ -427,10 +484,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
             while ((nl = buf.indexOf('\n')) >= 0) {
               const line = buf.slice(0, nl)
               buf = buf.slice(nl + 1)
-              if (line.length > 0) onLine(line)
+              if (line.length > 0) await onLine(line)
             }
           }
-          if (buf.length > 0) onLine(buf)
+          if (buf.length > 0) await onLine(buf)
         } catch {
           /* stream closed under us (kill) */
         } finally {
@@ -451,19 +508,48 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
 
       const drainAll = Promise.all([
-        readStream(child.stdout as ReadableStream<Uint8Array> | undefined, (line) => {
+        readStream(child.stdout as ReadableStream<Uint8Array> | undefined, async (line) => {
           const ev = driver.parseEvent(line)
-          if (ev === null) return
-          if (ev.sessionId !== undefined && sessionId === undefined) sessionId = ev.sessionId
+          if (ev === null) {
+            await appendSink({
+              ts: Date.now(),
+              kind: 'text',
+              payload: line,
+              sessionId: sessionId ?? null,
+              parentSessionId: null,
+              source: 'stream',
+            })
+            return
+          }
+          if (ev.sessionId !== undefined && sessionId === undefined) {
+            sessionId = ev.sessionId
+            await setSinkRoot(ev.sessionId)
+          }
           if (typeof ev.text === 'string' && ev.text.length > 0) {
             if (eventTextBytes < maxEventTextBytes) {
               eventText += ev.text
               eventTextBytes += ev.text.length
             }
           }
+          await appendSink({
+            ts: ev.timestamp ?? Date.now(),
+            kind: ev.kind,
+            payload: ev.rawLine,
+            sessionId: ev.sessionId ?? sessionId ?? null,
+            parentSessionId: null,
+            source: 'stream',
+          })
         }),
-        readStream(child.stderr as ReadableStream<Uint8Array> | undefined, (line) => {
+        readStream(child.stderr as ReadableStream<Uint8Array> | undefined, async (line) => {
           if (stderrText.length < STDERR_TAIL_CAP) stderrText += line + '\n'
+          await appendSink({
+            ts: Date.now(),
+            kind: 'stderr',
+            payload: maskDiagnosticsText(line),
+            sessionId: sessionId ?? null,
+            parentSessionId: null,
+            source: 'stream',
+          })
         }),
       ])
 
@@ -507,12 +593,26 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           ? parseExecutionIdentityFailureOutput(stderrText)
           : null
       if (launcherFailure !== null) {
+        await markSinkTerminal('complete')
         return fail('identity-failed', {
           failureCode: launcherFailure,
           exitCode,
           stderrTail,
         })
       }
+
+      if (opts.eventSink !== undefined && sessionId !== undefined && driver.kind === 'opencode') {
+        const captured = await captureOpencodeSessionsToSink({
+          rootSessionId: sessionId,
+          sink: opts.eventSink,
+          log,
+          ...(plan.sessionStore === undefined ? {} : { opencodeDbPath: plan.sessionStore.dbPath }),
+        })
+        if (captured.failed) {
+          await failSink('child-capture-failed', captured.failureReason)
+        }
+      }
+      if (!sinkFailed) await markSinkTerminal('complete')
 
       const base = {
         exitCode,
@@ -529,6 +629,12 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       return { status: 'ok', ...base }
     })()
   } finally {
+    if (!sinkTerminal) {
+      await markSinkTerminal(
+        result?.status === 'unreaped' ? 'incomplete' : 'complete',
+        result?.status === 'unreaped' ? 'post-exit-flush-timeout' : undefined,
+      )
+    }
     if (timer !== null) clearTimeout(timer)
     if (sigkillTimer !== null) clearTimeout(sigkillTimer)
     if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
