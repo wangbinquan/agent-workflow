@@ -144,6 +144,7 @@ async function renderPage() {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  return qc
 }
 
 describe('RFC-234 /intent/$sessionId', () => {
@@ -218,6 +219,101 @@ describe('RFC-234 /intent/$sessionId', () => {
     expect(screen.getByTestId('intent-turn-session-T2')).toBeTruthy()
     expect(screen.getByText(enUS.intent.executionTruncatedNotice)).toBeTruthy()
     expect(calls.some((url) => url.includes('/turns/T2/session'))).toBe(true)
+  })
+
+  test('terminal detail cursor forces one final Session refetch without WebSocket', async () => {
+    const runningTurn: IntentSessionDetail['turns'][number] = {
+      id: 'T2',
+      seq: 2,
+      role: 'agent',
+      kind: 'running',
+      content: {},
+      contextRevision: 0,
+      runMeta: null,
+      execution: {
+        captureState: 'live',
+        lastEventSeq: 1,
+        eventBytes: 64,
+        rootSessionId: 'runtime-root',
+        incompleteReason: null,
+      },
+      createdAt: 2,
+    }
+    let currentDetail = detailFixture({
+      session: { ...detailFixture().session, inFlight: true, turnSeq: 2 },
+      turns: [detailFixture().turns[0]!, runningTurn],
+    })
+    let sessionCalls = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
+      const url = req.toString()
+      const payload = url.includes('/turns/T2/session')
+        ? {
+            tree: {
+              sessionId: 'runtime-root',
+              parentSessionId: null,
+              agentName: 'aw-intent-builder',
+              captureComplete: sessionCalls > 0,
+              messages:
+                sessionCalls++ === 0
+                  ? [
+                      {
+                        kind: 'assistant-text',
+                        text: 'first evidence',
+                        ts: 2,
+                        messageId: 'M1',
+                      },
+                    ]
+                  : [
+                      {
+                        kind: 'assistant-text',
+                        text: 'first evidence',
+                        ts: 2,
+                        messageId: 'M1',
+                      },
+                      {
+                        kind: 'assistant-text',
+                        text: 'final evidence',
+                        ts: 3,
+                        messageId: 'M2',
+                      },
+                    ],
+            },
+          }
+        : currentDetail
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const qc = await renderPage()
+    await screen.findByText('first evidence')
+    expect(screen.queryByText('final evidence')).toBeNull()
+
+    currentDetail = detailFixture({
+      session: { ...currentDetail.session, inFlight: false },
+      turns: [
+        currentDetail.turns[0]!,
+        {
+          ...runningTurn,
+          kind: 'changeset',
+          content: { summary: 'done', opCount: 1 },
+          execution: {
+            ...runningTurn.execution!,
+            captureState: 'complete',
+            lastEventSeq: 2,
+            eventBytes: 128,
+          },
+        },
+      ],
+    })
+    await qc.refetchQueries({
+      queryKey: ['intent-sessions', 'detail', 'S1'],
+      exact: true,
+    })
+
+    await screen.findByText('final evidence')
+    expect(sessionCalls).toBeGreaterThanOrEqual(2)
   })
 
   test('journey ignores a failed commit that belongs to an older draft', () => {

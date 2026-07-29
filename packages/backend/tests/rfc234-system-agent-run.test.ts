@@ -218,6 +218,33 @@ describe('runSystemAgent', () => {
     expect(terminals).toEqual([{ state: 'incomplete', reason: 'post-exit-flush-timeout' }])
   }, 10_000)
 
+  test('transient terminal failure retries the remembered incomplete state', async () => {
+    process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
+    const terminals: Array<{ state: string; reason?: string }> = []
+    let terminalAttempts = 0
+    const sink: SystemAgentEventSinkV1 = {
+      append: async () => {
+        throw new Error('transient append failure')
+      },
+      setRootSessionId: async () => {},
+      markTerminal: async (state, reason) => {
+        terminalAttempts += 1
+        terminals.push({ state, ...(reason === undefined ? {} : { reason }) })
+        if (terminalAttempts === 1) throw new Error('transient terminal failure')
+      },
+    }
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParentDir(), wrapperFor(MOCK_OPENCODE)),
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(terminals).toEqual([
+      { state: 'incomplete', reason: 'stream-persist-failed' },
+      { state: 'incomplete', reason: 'stream-persist-failed' },
+    ])
+  })
+
   // RFC-234 e2e seam: an UNBRANDED opencodeCmd rides the same legacy escape
   // the business path has (only reachable from tests / the e2e binary where
   // production branding is compiled out); a BRANDED command without the

@@ -376,6 +376,42 @@ describe('runIntentTurn', () => {
     )
   })
 
+  test('a failed incomplete write cannot be repainted complete by the outer retry', async () => {
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    const originalTransaction = db.transaction.bind(db)
+    const outcome = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun(async (opts, nonce) => {
+          let failOnce = true
+          db.transaction = ((...args: Parameters<DbClient['transaction']>) => {
+            if (failOnce) {
+              failOnce = false
+              throw new Error('transient sqlite failure')
+            }
+            return originalTransaction(...args)
+          }) as DbClient['transaction']
+          try {
+            await expect(
+              opts.eventSink?.markTerminal('incomplete', 'stream-persist-failed'),
+            ).rejects.toThrow('transient sqlite failure')
+          } finally {
+            db.transaction = originalTransaction
+          }
+          return okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET }))
+        }),
+      },
+      { sessionId: session.id, actor },
+    )
+
+    const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId)))[0]
+    expect(outcome.kind).toBe('changeset')
+    expect(turn?.captureState).toBe('incomplete')
+    expect(turn?.captureIncompleteReason).toBe('stream-persist-failed')
+  })
+
   // Live-run regression (deepseek, 2026-07-28): the shared protocol block fed
   // with all four ports rendered a combined example → models emitted changeset
   // AND questions together → every turn errored intent-ports-exclusive. Lock

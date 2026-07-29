@@ -50,6 +50,18 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
   private tail: Promise<void> = Promise.resolve()
   /** Once capture settles/caps, later observations bypass SQLite entirely. */
   private stopped = false
+  /**
+   * Remember the strongest requested terminal state before touching SQLite.
+   * If that write fails transiently, a later generic complete retry must not
+   * erase the fact that this process already observed truncated evidence or a
+   * capture failure.
+   */
+  private terminalIntent:
+    | {
+        state: SessionCaptureTerminalState
+        reason?: SessionCaptureIncompleteReason
+      }
+    | undefined
 
   constructor(
     private readonly db: DbClient,
@@ -175,6 +187,7 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
     state: SessionCaptureTerminalState,
     reason?: SessionCaptureIncompleteReason,
   ): Promise<void> {
+    const terminal = this.rememberTerminalIntent(state, reason)
     return this.enqueue(() => {
       const eventSeq = dbTxSync(this.db, (tx) => {
         const turn = tx
@@ -193,9 +206,9 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
         }
         tx.update(intentTurns)
           .set({
-            captureState: state,
+            captureState: terminal.state,
             captureIncompleteReason:
-              state === 'incomplete' ? (reason ?? 'stream-persist-failed') : null,
+              terminal.state === 'incomplete' ? (terminal.reason ?? 'stream-persist-failed') : null,
           })
           .where(eq(intentTurns.id, this.turnId))
           .run()
@@ -204,6 +217,24 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
       this.stopped = true
       this.notify(eventSeq)
     })
+  }
+
+  private rememberTerminalIntent(
+    state: SessionCaptureTerminalState,
+    reason?: SessionCaptureIncompleteReason,
+  ): { state: SessionCaptureTerminalState; reason?: SessionCaptureIncompleteReason } {
+    const current = this.terminalIntent
+    const rank = (value: SessionCaptureTerminalState): number =>
+      value === 'incomplete' ? 2 : value === 'truncated' ? 1 : 0
+    if (current === undefined || rank(state) > rank(current.state)) {
+      const next = {
+        state,
+        ...(state === 'incomplete' && reason !== undefined ? { reason } : {}),
+      }
+      this.terminalIntent = next
+      return next
+    }
+    return current
   }
 
   private enqueue(work: () => void): Promise<void> {

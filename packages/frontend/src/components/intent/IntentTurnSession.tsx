@@ -1,5 +1,6 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { IntentTurnDto } from '@agent-workflow/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { INTENT_QUERY_KEYS } from '@/hooks/useIntentSessionsWs'
@@ -13,9 +14,33 @@ export function IntentTurnSession(props: {
   defaultOpen: boolean
 }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const execution = props.turn.execution
   const [open, setOpen] = useState(props.defaultOpen)
+  const previousCaptureCursor = useRef<string | null>(null)
   const contentId = useId()
+
+  useEffect(() => {
+    if (execution === null) {
+      previousCaptureCursor.current = null
+      return
+    }
+    const cursor = `${execution.captureState}:${execution.lastEventSeq}`
+    const previous = previousCaptureCursor.current
+    previousCaptureCursor.current = cursor
+    if (!open || previous === null || previous === cursor) return
+
+    // The detail query and this Session query have independent 1.5s fallback
+    // polls. If detail observes terminal first, pollMs becomes false on this
+    // render; force one cursor-driven fetch so the final event batch cannot be
+    // stranded in cache until a reload.
+    void queryClient.refetchQueries({
+      queryKey: INTENT_QUERY_KEYS.turnSession(props.sessionId, props.turn.id),
+      exact: true,
+      type: 'active',
+    })
+  }, [execution, open, props.sessionId, props.turn.id, queryClient])
+
   if (execution === null) return null
 
   const chipKind =

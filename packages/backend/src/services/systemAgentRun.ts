@@ -300,15 +300,29 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   let result: SystemAgentRunResult | undefined
   let sinkTerminal = false
   let sinkFailed = false
+  let sinkFailureReason: SessionCaptureIncompleteReason | undefined
+  let sinkTerminalIntent:
+    | { state: 'complete' | 'incomplete'; reason?: SessionCaptureIncompleteReason }
+    | undefined
 
   const markSinkTerminal = async (
     state: 'complete' | 'incomplete',
     reason?: SessionCaptureIncompleteReason,
   ): Promise<void> => {
     if (opts.eventSink === undefined || sinkTerminal) return
-    sinkTerminal = true
+    if (
+      sinkTerminalIntent === undefined ||
+      (state === 'incomplete' && sinkTerminalIntent.state === 'complete')
+    ) {
+      sinkTerminalIntent = {
+        state,
+        ...(state === 'incomplete' && reason !== undefined ? { reason } : {}),
+      }
+    }
+    const terminal = sinkTerminalIntent
     try {
-      await opts.eventSink.markTerminal(state, reason)
+      await opts.eventSink.markTerminal(terminal.state, terminal.reason)
+      sinkTerminal = true
     } catch (error) {
       log.warn('system-agent-session-terminal-persist-failed', {
         feature: opts.feature,
@@ -322,6 +336,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   ): Promise<void> => {
     if (!sinkFailed) {
       sinkFailed = true
+      sinkFailureReason = reason
       log.warn('system-agent-session-event-persist-failed', {
         feature: opts.feature,
         reason,
@@ -639,8 +654,12 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   } finally {
     if (!sinkTerminal) {
       await markSinkTerminal(
-        result?.status === 'unreaped' ? 'incomplete' : 'complete',
-        result?.status === 'unreaped' ? 'post-exit-flush-timeout' : undefined,
+        sinkFailed || result?.status === 'unreaped' ? 'incomplete' : 'complete',
+        sinkFailed
+          ? sinkFailureReason
+          : result?.status === 'unreaped'
+            ? 'post-exit-flush-timeout'
+            : undefined,
       )
     }
     if (timer !== null) clearTimeout(timer)
