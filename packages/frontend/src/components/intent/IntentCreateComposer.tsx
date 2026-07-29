@@ -1,4 +1,5 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { INTENT_MESSAGE_MAX, type IntentSessionSummary } from '@agent-workflow/shared'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -24,8 +25,11 @@ export function IntentCreateComposer(props: {
   mount?: { resourceType: ArtifactHint; resourceId: string }
   onCreated: (session: IntentSessionSummary) => void
   onCancel?: () => void
+  /** Dialog variant: portal the stateful actions into Dialog's pinned footer. */
+  footerTarget?: HTMLElement | null
 }) {
   const { t } = useTranslation()
+  const formId = useId()
   const [message, setMessage] = useState('')
   const [hint, setHint] = useState<ArtifactHintChoice>(props.initialHint ?? 'auto')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -82,9 +86,37 @@ export function IntentCreateComposer(props: {
       icon: WORKGROUP_ICON,
     },
   ]
+  const footer = (
+    <div className="intent-create__footer">
+      <span className="intent-create__safety">
+        <span aria-hidden="true">✓</span> {t('intent.draftSafety')}
+      </span>
+      <div className="intent-create__actions">
+        {props.onCancel !== undefined ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={createSession.isPending}
+            onClick={props.onCancel}
+          >
+            {t('common.cancel')}
+          </button>
+        ) : null}
+        <button
+          type="submit"
+          form={formId}
+          className="btn btn--primary"
+          disabled={message.trim() === '' || createSession.isPending}
+        >
+          {createSession.isPending ? t('common.creating') : t('intent.startBuilding')}
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <form
+      id={formId}
       className={`intent-create intent-create--${props.variant}`}
       onSubmit={submit}
       data-testid={`intent-create-${props.variant}`}
@@ -150,30 +182,10 @@ export function IntentCreateComposer(props: {
           </span>
         </div>
       )}
-      <div className="intent-create__footer">
-        <span className="intent-create__safety">
-          <span aria-hidden="true">✓</span> {t('intent.draftSafety')}
-        </span>
-        <div className="intent-create__actions">
-          {props.onCancel !== undefined ? (
-            <button
-              type="button"
-              className="btn"
-              disabled={createSession.isPending}
-              onClick={props.onCancel}
-            >
-              {t('common.cancel')}
-            </button>
-          ) : null}
-          <button
-            type="submit"
-            className="btn btn--primary"
-            disabled={message.trim() === '' || createSession.isPending}
-          >
-            {createSession.isPending ? t('common.creating') : t('intent.startBuilding')}
-          </button>
-        </div>
-      </div>
+      {props.footerTarget === undefined ? footer : null}
+      {props.footerTarget !== undefined && props.footerTarget !== null
+        ? createPortal(footer, props.footerTarget)
+        : null}
     </form>
   )
 }

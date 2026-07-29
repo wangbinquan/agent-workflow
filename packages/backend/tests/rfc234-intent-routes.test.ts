@@ -149,6 +149,7 @@ describe('intent session routes', () => {
       session: { inFlight: boolean; currentDraftRevision: number }
       turns: Array<{ kind: string }>
       currentDraft: {
+        id: string
         revision: number
         draftHash: string
         stale: boolean
@@ -176,6 +177,12 @@ describe('intent session routes', () => {
       applied: Array<{ resourceId: string; name: string }>
     }
     expect(receipt.applied.length).toBe(1)
+    const settledDetail = (await (
+      await req(ownerToken, `/api/intent-sessions/${session.id}`)
+    ).json()) as {
+      commits: Array<{ draftId: string }>
+    }
+    expect(settledDetail.commits[0]?.draftId).toBe(detail.currentDraft.id)
     const agentRow = db
       .select()
       .from(agents)

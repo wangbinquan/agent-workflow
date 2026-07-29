@@ -141,6 +141,12 @@ describe('RFC-234 /intent list', () => {
     const createDialog = await screen.findByRole('dialog')
     expect(within(createDialog).getByText(enUS.intent.hintAuto)).toBeTruthy()
     expect(within(createDialog).queryByTestId('intent-modify-target')).toBeNull()
+    const pinnedFooter = within(createDialog).getByTestId('intent-create-dialog-footer')
+    const pinnedStart = within(pinnedFooter).getByRole('button', {
+      name: enUS.intent.startBuilding,
+    }) as HTMLButtonElement
+    expect(createDialog.querySelector('.dialog__body')?.contains(pinnedStart)).toBe(false)
+    expect(pinnedStart.form).toBe(within(createDialog).getByTestId('intent-create-dialog'))
     cleanup()
 
     const rec = installFetch([])

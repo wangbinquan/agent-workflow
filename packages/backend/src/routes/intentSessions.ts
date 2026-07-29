@@ -286,6 +286,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
         .where(eq(intentApplyJournal.sessionId, session.id))
     ).map((row) => ({
       journalId: row.id,
+      draftId: row.draftId,
       state: row.state,
       receipt:
         row.receiptJson === null

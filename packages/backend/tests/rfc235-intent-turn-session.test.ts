@@ -118,5 +118,17 @@ describe('RFC-235 Intent turn Session capture', () => {
     expect(db.select().from(intentTurnEvents).all()).toEqual([])
     const response = await getIntentTurnSession(db, 'session-1', 'turn-cap')
     expect(response.tree.captureComplete).toBe(false)
+
+    // The sink remembers the cap locally: later observations do not even open
+    // another transaction against the now-gone turn.
+    db.delete(intentTurns).where(eq(intentTurns.id, 'turn-cap')).run()
+    await sink.append({
+      ts: 3,
+      kind: 'text',
+      payload: 'ignored after cap',
+      sessionId: null,
+      parentSessionId: null,
+      source: 'stream',
+    })
   })
 })

@@ -41,7 +41,7 @@ export function deriveIntentJourneyState(detail: IntentSessionDetail): IntentJou
       if (detail.currentDraft.stale || detail.currentDraft.validation.errors.length > 0) {
         return { kind: 'review-blocked', step: 2, completedThrough: 1 }
       }
-      if (latestCommit?.state === 'failed') {
+      if (latestCommit?.state === 'failed' && latestCommit.draftId === detail.currentDraft.id) {
         return { kind: 'error', step: 3, completedThrough: 2 }
       }
       return { kind: 'review-ready', step: 2, completedThrough: 1 }

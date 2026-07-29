@@ -30,6 +30,14 @@ function wrapperFor(mockFile: string): string {
   return wrapper
 }
 
+function wrapperHoldingStdoutOpen(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'aw-sysrun-bin-'))
+  const wrapper = join(dir, 'mock-runtime')
+  writeFileSync(wrapper, '#!/bin/sh\n(sleep 3; echo late-evidence) &\nexit 0\n')
+  chmodSync(wrapper, 0o755)
+  return wrapper
+}
+
 const SET_ENV_KEYS = [
   'MOCK_OPENCODE_ECHO_PROMPT',
   'MOCK_OPENCODE_EMIT_SESSION_ID',
@@ -190,6 +198,25 @@ describe('runSystemAgent', () => {
     expect(roots).toEqual([])
     expect(terminals).toEqual(['complete'])
   })
+
+  test('inherited pipe timeout settles capture incomplete without changing business result', async () => {
+    const terminals: Array<{ state: string; reason?: string }> = []
+    const sink: SystemAgentEventSinkV1 = {
+      append: async () => {},
+      setRootSessionId: async () => {},
+      markTerminal: async (state, reason) => {
+        terminals.push({ state, ...(reason === undefined ? {} : { reason }) })
+      },
+    }
+    const scratchParent = scratchParentDir()
+    const result = await runSystemAgent({
+      ...baseOpts(scratchParent, wrapperHoldingStdoutOpen()),
+      eventSink: sink,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(terminals).toEqual([{ state: 'incomplete', reason: 'post-exit-flush-timeout' }])
+  }, 10_000)
 
   // RFC-234 e2e seam: an UNBRANDED opencodeCmd rides the same legacy escape
   // the business path has (only reachable from tests / the e2e binary where

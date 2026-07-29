@@ -236,6 +236,7 @@ export const IntentSessionDetailSchema = z.object({
   commits: z.array(
     z.object({
       journalId: z.string(),
+      draftId: z.string(),
       state: z.enum(['prepared', 'applying', 'committed', 'failed']),
       receipt: IntentApplyReceiptSchema.nullable(),
       error: z.string().nullable(),

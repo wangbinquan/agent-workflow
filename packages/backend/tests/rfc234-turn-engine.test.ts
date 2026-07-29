@@ -455,6 +455,7 @@ describe('maintenance', () => {
       kind: 'running',
       contentJson: '{}',
       contextRevision: 0,
+      captureState: 'live',
       createdAt: Date.now(),
     } as typeof intentTurns.$inferInsert)
     await db
@@ -466,10 +467,38 @@ describe('maintenance', () => {
     const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
     expect(turn?.kind).toBe('error')
     expect(JSON.parse(turn?.contentJson ?? '{}').code).toBe('intent-run-daemon-restart')
+    expect(turn?.captureState).toBe('incomplete')
+    expect(turn?.captureIncompleteReason).toBe('post-exit-flush-timeout')
     expect(
       (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
         ?.inFlightTurnId,
     ).toBeNull()
+  })
+
+  test('boot recovery preserves an already-settled capture state', async () => {
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    const turnId = ulid()
+    await db.insert(intentTurns).values({
+      id: turnId,
+      sessionId: session.id,
+      seq: 2,
+      role: 'agent',
+      kind: 'running',
+      contentJson: '{}',
+      contextRevision: 0,
+      captureState: 'truncated',
+      createdAt: Date.now(),
+    })
+    await db
+      .update(intentSessions)
+      .set({ inFlightTurnId: turnId, turnSeq: 2 })
+      .where(eq(intentSessions.id, session.id))
+
+    expect(recoverIntentTurnsOnBoot(db)).toBe(1)
+    const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
+    expect(turn?.kind).toBe('error')
+    expect(turn?.captureState).toBe('truncated')
+    expect(turn?.captureIncompleteReason).toBeNull()
   })
 
   test('scratch GC: terminal+old removed, running kept, fresh kept', async () => {

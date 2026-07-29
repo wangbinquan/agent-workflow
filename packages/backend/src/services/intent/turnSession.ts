@@ -48,6 +48,8 @@ export function projectIntentTurnExecution(
  */
 export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
   private tail: Promise<void> = Promise.resolve()
+  /** Once capture settles/caps, later observations bypass SQLite entirely. */
+  private stopped = false
 
   constructor(
     private readonly db: DbClient,
@@ -56,8 +58,10 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
   ) {}
 
   append(event: Parameters<SystemAgentEventSinkV1['append']>[0]): Promise<void> {
+    if (this.stopped) return Promise.resolve()
     return this.enqueue(() => {
-      const nextEventSeq = dbTxSync(this.db, (tx) => {
+      if (this.stopped) return
+      const result = dbTxSync(this.db, (tx) => {
         const turn = tx
           .select({
             captureState: intentTurns.captureState,
@@ -70,7 +74,9 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
         if (turn === undefined || turn.captureState === null) {
           throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
         }
-        if (turn.captureState !== 'live') return turn.lastEventSeq
+        if (turn.captureState !== 'live') {
+          return { eventSeq: turn.lastEventSeq, stop: true }
+        }
 
         if (event.externalEventId !== undefined) {
           const duplicate = tx
@@ -84,7 +90,7 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
               ),
             )
             .get()
-          if (duplicate !== undefined) return turn.lastEventSeq
+          if (duplicate !== undefined) return { eventSeq: turn.lastEventSeq, stop: false }
         }
 
         const payloadBytes = Buffer.byteLength(event.payload, 'utf8')
@@ -96,7 +102,7 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
             .set({ captureState: 'truncated', captureIncompleteReason: null })
             .where(eq(intentTurns.id, this.turnId))
             .run()
-          return turn.lastEventSeq
+          return { eventSeq: turn.lastEventSeq, stop: true }
         }
 
         const eventSeq = turn.lastEventSeq + 1
@@ -122,9 +128,10 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
           })
           .where(eq(intentTurns.id, this.turnId))
           .run()
-        return eventSeq
+        return { eventSeq, stop: false }
       })
-      this.notify(nextEventSeq)
+      if (result.stop) this.stopped = true
+      this.notify(result.eventSeq)
     })
   }
 
@@ -194,6 +201,7 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
           .run()
         return turn.lastEventSeq
       })
+      this.stopped = true
       this.notify(eventSeq)
     })
   }

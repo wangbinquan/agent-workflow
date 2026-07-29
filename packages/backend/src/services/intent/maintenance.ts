@@ -25,11 +25,25 @@ export function recoverIntentTurnsOnBoot(
       .all()
     for (const session of orphaned) {
       const turnId = session.inFlightTurnId as string
+      const turn = tx
+        .select({ captureState: intentTurns.captureState })
+        .from(intentTurns)
+        .where(eq(intentTurns.id, turnId))
+        .get()
       tx.update(intentTurns)
         .set({
           kind: 'error',
           contentJson: JSON.stringify({ code: 'intent-run-daemon-restart' }),
           scratchRetained: true,
+          // A process restart cannot prove that the stream and post-run store
+          // flush completed. Only an actually-live capture is downgraded:
+          // already-settled complete/truncated/incomplete evidence is immutable.
+          ...(turn?.captureState === 'live'
+            ? {
+                captureState: 'incomplete' as const,
+                captureIncompleteReason: 'post-exit-flush-timeout' as const,
+              }
+            : {}),
         })
         .where(eq(intentTurns.id, turnId))
         .run()

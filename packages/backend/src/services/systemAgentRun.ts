@@ -579,13 +579,16 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         reapDeadlineTimer = null
       }
       // Bounded post-exit flush — an inherited-pipe grandchild must not wedge.
-      await Promise.race([
-        drainAll,
-        new Promise<void>((resolveRace) => {
-          const g = setTimeout(resolveRace, 2_000)
-          g.unref?.()
-        }),
-      ])
+      // A timeout is evidence loss, not successful completion: stop the readers
+      // before settling the capture so no late append can race its terminal row.
+      const drainsFlushed = await settlesWithin(drainAll, CHILD_REAP_DEADLINE_MS)
+      if (!drainsFlushed) {
+        await settlesWithin(cancelDrains(), CHILD_REAP_DEADLINE_MS)
+        await failSink(
+          'post-exit-flush-timeout',
+          new Error('stdout/stderr did not reach EOF after child exit'),
+        )
+      }
 
       const stderrTail = maskDiagnosticsText(stderrText.slice(0, STDERR_TAIL_CAP))
       const launcherFailure =
@@ -601,7 +604,12 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         })
       }
 
-      if (opts.eventSink !== undefined && sessionId !== undefined && driver.kind === 'opencode') {
+      if (
+        !sinkFailed &&
+        opts.eventSink !== undefined &&
+        sessionId !== undefined &&
+        driver.kind === 'opencode'
+      ) {
         const captured = await captureOpencodeSessionsToSink({
           rootSessionId: sessionId,
           sink: opts.eventSink,

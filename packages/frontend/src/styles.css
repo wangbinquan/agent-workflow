@@ -19126,6 +19126,16 @@ button.status-chip {
   border-top: 1px solid var(--border);
 }
 
+.intent-create-dialog__footer-target {
+  width: 100%;
+  min-width: 0;
+}
+
+.intent-create-dialog__footer-target .intent-create__footer {
+  padding-top: 0;
+  border-top: 0;
+}
+
 .intent-create__safety {
   display: inline-flex;
   align-items: center;

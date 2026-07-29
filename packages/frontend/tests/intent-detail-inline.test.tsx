@@ -18,6 +18,7 @@ import {
   Outlet,
 } from '@tanstack/react-router'
 import type { IntentSessionDetail } from '@agent-workflow/shared'
+import { deriveIntentJourneyState } from '../src/components/intent/IntentJourneyProgress'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
@@ -146,7 +147,7 @@ async function renderPage() {
 }
 
 describe('RFC-234 /intent/$sessionId', () => {
-  test('latest running turn opens the shared Session renderer and loads execution events', async () => {
+  test('latest running turn stays open when capture truncates and loads the shared renderer', async () => {
     const detail = detailFixture({
       session: {
         ...detailFixture().session,
@@ -174,7 +175,7 @@ describe('RFC-234 /intent/$sessionId', () => {
           contextRevision: 0,
           runMeta: null,
           execution: {
-            captureState: 'live',
+            captureState: 'truncated',
             lastEventSeq: 1,
             eventBytes: 128,
             rootSessionId: 'runtime-root',
@@ -215,7 +216,31 @@ describe('RFC-234 /intent/$sessionId', () => {
     await renderPage()
     await screen.findByText('Inspecting the mounted workflow')
     expect(screen.getByTestId('intent-turn-session-T2')).toBeTruthy()
+    expect(screen.getByText(enUS.intent.executionTruncatedNotice)).toBeTruthy()
     expect(calls.some((url) => url.includes('/turns/T2/session'))).toBe(true)
+  })
+
+  test('journey ignores a failed commit that belongs to an older draft', () => {
+    const currentDraft = { ...CLEAN_DRAFT, id: 'D2' }
+    const oldFailure = {
+      journalId: 'J1',
+      draftId: 'D1',
+      state: 'failed' as const,
+      receipt: null,
+      error: 'old failure',
+      createdAt: 3,
+    }
+    expect(
+      deriveIntentJourneyState(detailFixture({ currentDraft, commits: [oldFailure] })).kind,
+    ).toBe('review-ready')
+    expect(
+      deriveIntentJourneyState(
+        detailFixture({
+          currentDraft,
+          commits: [{ ...oldFailure, draftId: currentDraft.id }],
+        }),
+      ).kind,
+    ).toBe('error')
   })
 
   test('pending questions answer via segmented choices and POST', async () => {

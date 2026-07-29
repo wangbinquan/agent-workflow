@@ -114,10 +114,7 @@ function IntentSessionDetailPage() {
           multiSelect: boolean
         }>) ?? [])
       : []
-  const latestRunningTurnId =
-    lastAgentTurn?.kind === 'running' && lastAgentTurn.execution?.captureState === 'live'
-      ? lastAgentTurn.id
-      : null
+  const latestRunningTurnId = lastAgentTurn?.kind === 'running' ? lastAgentTurn.id : null
 
   if (detailQuery.isLoading) return <LoadingState />
   if (detailQuery.isError) return <ErrorBanner error={detailQuery.error} />
