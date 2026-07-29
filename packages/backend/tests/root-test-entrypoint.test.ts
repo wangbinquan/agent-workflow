@@ -135,6 +135,13 @@ function occurrenceCount(source: string, marker: string): number {
   return source.split(marker).length - 1
 }
 
+/** Numeric literal of a `const NAME = 12_345` declaration in the e2e helper. */
+function e2eCommandConstant(name: string): number {
+  const literal = e2eCommandHelper.match(new RegExp(`const ${name} = ([\\d_]+)`))?.[1]
+  if (literal === undefined) throw new Error(`Missing ${name} in e2e/command.ts`)
+  return Number(literal.replaceAll('_', ''))
+}
+
 describe('repository test entrypoint', () => {
   test('every Actions workflow pins the exact Bun release declared by packageManager', () => {
     const expectedVersion = pkg.packageManager?.match(/^bun@(\d+\.\d+\.\d+)$/)?.[1]
@@ -338,6 +345,14 @@ describe('repository test entrypoint', () => {
     expect(e2eCommandHelper).toContain("execFileSync('git'")
     expect(e2eCommandHelper).toContain("execFileSync('sqlite3'")
     expect(e2eCommandHelper).toContain('timeout: COMMAND_TIMEOUT_MS')
+    // Fixture SQL races the live daemon for the write lock; the CLI defaults to
+    // busy_timeout = 0. Behaviour is locked by
+    // e2e-sqlite-fixture-lock-contention.test.ts — this only pins that the
+    // timeout stays inside the command deadline so a wedge is still bounded.
+    expect(e2eCommandHelper).toContain('PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};')
+    expect(e2eCommandConstant('SQLITE_BUSY_TIMEOUT_MS')).toBeLessThan(
+      e2eCommandConstant('COMMAND_TIMEOUT_MS'),
+    )
     expect(e2eCommandHelper).toContain("GIT_TERMINAL_PROMPT: '0'")
     expect(e2eCommandHelper).toContain("GCM_INTERACTIVE: 'never'")
     expect(e2eCommandHelper).toContain("'commit.gpgsign=false'")

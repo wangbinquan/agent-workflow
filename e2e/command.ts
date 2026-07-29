@@ -9,6 +9,15 @@ import { execFileSync } from 'node:child_process'
 
 const COMMAND_TIMEOUT_MS = 15_000
 
+// Fixture SQL runs against the DB file of a LIVE daemon, which holds the same
+// file in WAL with `PRAGMA busy_timeout = 5000` (packages/backend/src/db/client.ts).
+// The `sqlite3` CLI defaults to busy_timeout = 0, so before this every daemon
+// write that overlapped a fixture write failed the shard instantly with
+// "stepping, database is locked (5)" (nightly e2e-webkit run 30440683412).
+// Kept under COMMAND_TIMEOUT_MS so a genuinely wedged writer still surfaces as
+// our own deadline rather than a SIGTERM with no SQLite diagnosis.
+const SQLITE_BUSY_TIMEOUT_MS = 10_000
+
 function nonInteractiveGitEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -61,7 +70,11 @@ export function cloneBareGitRepo(sourcePath: string, destinationPath: string): v
 }
 
 export function runSqlite(dbPath: string, sql: string): void {
-  execFileSync('sqlite3', [dbPath, sql], {
+  // Prepended rather than passed as `-cmd .timeout`: the pragma is ordered
+  // with the caller's own statements on the same connection, so a caller that
+  // opens an explicit transaction (`BEGIN IMMEDIATE`) still acquires its write
+  // lock under this timeout. Statement grouping stays the caller's choice.
+  execFileSync('sqlite3', [dbPath, `PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};\n${sql}`], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: COMMAND_TIMEOUT_MS,

@@ -18,6 +18,7 @@
 - **`e2e/` 在 workspace typecheck 之外**：删/改 wire 字段能过所有本地门却红 Playwright CI；推前 grep `e2e/` 找该字段（inline response 类型 + 断言都要改）。
 - **CI 根 `bun test` 只跑 backend**（bunfig `root=packages/backend/tests`）；shared 测试单独跑且含一个**已知陈旧** `memory-schema` 红（RFC-101 `fused`，在 CI 之外）——忽略它，别「修」他人代码。
 - **本机 `protocol.file.allow=always` 掩盖 submodule CI 红**：`file://` submodule 测试本机恒绿、CI 恒红；测试须自注入 `GIT_CONFIG_GLOBAL`，复现用 `GIT_CONFIG_GLOBAL=/dev/null bun test <单文件>`。
+- **`sqlite3` CLI 默认 `busy_timeout=0`，直写运行中 daemon 的 DB 必炸**：e2e 用 `sqlite3` 往活着的 daemon 的 `db.sqlite` 里种状态（`e2e/command.ts:runSqlite`，diagnose-repair / lifecycle-diagnose / rfc229 / business-workgroup 都在用）。daemon 侧有 `PRAGMA busy_timeout = 5000`（`db/client.ts`）会等写锁，**CLI 侧不等**——只要 daemon 那一刻在写，fixture 立刻 `Error: stepping, database is locked (5)`，表现为「随机某个 shard 红、重试还红」（nightly e2e-webkit run 30440683412：`diagnose-repair` 的 `afterEach` 清理撞上刚点下去的 repair 写）。**测试进程直连生产 DB 文件一律显式设 busy_timeout**，且要小于命令自身的超时，否则 wedge 时拿到的是 SIGTERM 而不是 SQLite 诊断。注意 WAL 不救这一类：WAL 只解耦读写，写-写仍然互斥。
 - **源码里裸 `0x00` 让 grep/rg 静默跳过整文件**（却过 tsc/prettier/eslint/build/tests）；`file` / `tr -cd '\000'` 检测，改回 `\x00`；守卫 `no-nul-bytes-in-source`（注释里的字面量也会踩）。
 
 ## git / 多人协作（共享工作树）
