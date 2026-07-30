@@ -1,4 +1,4 @@
-# RFC-240 — 技术设计（v6,设计门五轮修订后）
+# RFC-240 — 技术设计（v7,设计门六轮修订后）
 
 ## 接口契约
 
@@ -89,12 +89,17 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    (b) 任一侧任一 body 行 cell 数超过声明列数时整对放弃——GFM 截断超列
    cell,单表内 marker 不可见(一轮 P1)。放弃 = 返回 null,现行为呈现。
 2b. **进场即原子化**(设计门三轮 P1 时机闭合):对两侧每个 body cell 的
-   inner,先以局部 allocator 依次原子化 inline code(升级版
-   `INLINE_CODE_RE`)、**行内图片**(`![label](url)`,约束同链接,`!` 前
-   反斜杠奇偶判定——设计门五轮 P1:图片若被 link 正则从 `[` 处劈开会
-   还原成字面 `!` + 链接,排除又会让 marker 落进 `image.url` 被单侧化;
-   独立原子类按整体 del/ins 呈现)、行内链接、行内数学式(`$...$`,
-   单行、内容无 `$`,两端非空白;数学式纳保护集是三轮 P1:marker 落入 `inlineMath.value`
+   inner,先以局部 allocator 依次原子化:**第 0 步转义对**
+   (`\` + CommonMark 可转义标点,单原子——设计门六轮 P1:cell diff 的
+   marker 若落在 `\` 与 `|` 之间,转义失效、remark-gfm 把该 pipe 当列
+   边界,列数爆炸 marker 跨 cell;转义对成原子后 diff 永不拆散它,且
+   后续各类 opener 无需再做反斜杠奇偶判定——被转义的 opener 已被吞进
+   转义原子,五轮的奇偶规则由此整体简化),随后 inline code(升级版
+   `INLINE_CODE_RE`)、**行内图片**(`![label](url)`,约束同链接;
+   设计门五轮 P1:图片若被 link 正则从 `[` 处劈开会还原成字面 `!` +
+   链接,排除又会让 marker 落进 `image.url` 被单侧化;独立原子类按整体
+   del/ins 呈现)、行内链接、行内数学式(`$...$`,单行、内容无 `$`,
+   两端非空白;数学式纳保护集是三轮 P1:marker 落入 `inlineMath.value`
    会被 `resolveMarkedString` 单侧化,零可见高亮)。三类 opener 的转义
    判定统一用**反斜杠奇偶**(与 `splitTableCells` 同规则,四轮 P1):
    奇数个前导反斜杠 = 字面文本不原子化(`\$x$`、`\[x](u)`),偶数个 =
@@ -132,6 +137,10 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    - 每对 cell:逐字节相等 → 原样;不等 → lead/tail 空白外置,inner
      词级 diff(`tokenizeForWordDiff` + `diffArrays` +
      `trimCommonAffixes`),del/ins 段分别包 marker,context 原样。
+     **非空 ↔ 空 cell**(设计门六轮 P1):一侧 inner 为空时,空侧以单
+     空格 marker 色块呈现(`{D}old{d}{I} {i}` / `{D} {d}{I}new{i}`),
+     保证红旧绿新两侧都可见——否则空侧零 token、`remarkDiffMarkers`
+     还会丢弃无 children 的 marker,只剩单侧高亮。
      **定界符触碰即整 cell 降级**(四轮 P1,五轮 P1 扩展):若 diff 的
      **任一** del/ins token 含 emphasis/删除线定界字符(`*`/`_`/`~`),
      该 cell 整体降级为「旧 inner 整红 + 新 inner 整绿」(marker 包完整
@@ -141,8 +150,8 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
      (`**old**`→`*new*` 渲染成绿斜体 new + 字面红 `old**`)。代价:
      cell 正文含字面 `*`/`_`/`~` 且同 cell 另有文字变更时也整 cell
      红绿——合法渲染,仅粒度变粗,可接受。
-   - **原子化在 §2b 已完成**(code → link → math 顺序;link 的 label /
-     math 的内容里含先前原子的 ph 时允许嵌套)。词级 diff 后**函数内
+   - **原子化在 §2b 已完成**(转义对 → code → image → link → math 顺序;
+     link 的 label / math 的内容里含先前原子的 ph 时允许嵌套)。词级 diff 后**函数内
      循环还原至不动点**:反复替换已发放码点直到 merged 无任何已发放
      码点或达迭代上限(= 发放数);嵌套原子(如 label 含 code span 的
      链接)由循环自然解开——这是设计门三轮 P1 的修订,单趟还原会把
@@ -225,8 +234,10 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    其余 cell 零 span;无裸 `|`。
 2. 多 cell / 多行修改互不串扰;CJK cell;inline code cell(含「双反引
    号定界、内容有单反引号」的多反引号形态,code span 结构完整);转义
-   奇偶:`\\` 后 code span 原子化生效、`\$x$`/`\[x](u)` 字面文本不被
-   误原子化(四轮 P1);**定界符-only 与混合变更**(`**same**`→`*same*`
+   原子:`\\` 后 code span 原子化生效、`\$x$`/`\[x](u)` 字面文本不被
+   误原子化(四轮 P1,v7 起由转义对原子化承担);**cell 含 `\|` 时的
+   变更** → 转义对不被 marker 劈开、列数不变、高亮可见(六轮 P1);
+   **非空↔空 cell 配对变更** → 红旧 + 绿色块两侧可见(六轮 P1);**定界符-only 与混合变更**(`**same**`→`*same*`
    与 `**old**`→`*new*`)→ cell 整体旧红+新绿、emphasis 结构两侧都
    保留(四轮 + 五轮 P1);**图片 cell**(`![x](old.png)`→
    `![x](new.png)`)→ 旧图红 + 新图绿、image 结构完整(五轮 P1);
@@ -273,6 +284,11 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 
 ## 设计门记录
 
+- 六轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 2 P1 / 1 P2;
+  主链、阈值、tie-break、顺序、pad、末端还原全部再确认干净):折入本
+  v7——转义对(`\X`)为 §2b 第 0 原子类(marker 不再劈开 `\|`,五轮的
+  opener 奇偶规则整体简化掉)、非空↔空配对 cell 的空侧单空格色块、
+  §5/T2 的原子顺序与定界符降级规则文本同步。
 - 五轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 2 P1 / 2 P2;
   主链连续第三轮零新 finding):全部折入本 v6——定界符降级触发条件从
   「全部变更 token 为标点」扩为「任一变更 token 含 `*`/`_`/`~`」(混合

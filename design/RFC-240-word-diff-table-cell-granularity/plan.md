@@ -14,14 +14,17 @@
   `restorePairedTables` 单趟替换 context-ph → merged。依赖:无。
 
 - **RFC-240-T2 intraTableDiff + 共享原语**(v4)
-  §0 cell 计数/规范骨架 → §2 GFM 等价守卫(表头≠分隔符 cell 数、超列
-  → 整对回退)→ §2b 进场逐 cell 原子化(code→link→math,允许嵌套)→
-  行级精确 LCS → 单 run 内相似度配对(Dice **≥0.5**,基于原子化后内容
-  token = trim 后丢空白与纯标点/符号;候选序 `(score↓, |i-j|↑, i, j)`
-  贪心;输出 = 先未配对 DEL(旧序)后新序)→ 配对行 cell zip
-  (max-cell 规范骨架,短侧空格占位)+ cell 内词级 diff → **循环还原至
-  不动点**(嵌套原子解开;残留 = 真 bug → fail-safe 整对回退,
-  `_internal` 注入桩可测)→ 未配对行整行 DEL/INS(空 cell 色块占位)。
+  §0 cell 计数/规范骨架(含来源侧缩进、无首/尾 pipe 端不剥哑段、零
+  cell 行合成色块)→ §2 GFM 等价守卫(表头≠分隔符 cell 数、超列 →
+  整对回退)→ §2b 进场逐 cell 原子化(**转义对→code→image→link→math**,
+  允许嵌套)→ 行级精确 LCS → 单 run 内相似度配对(Dice **≥0.5**,基于
+  原子化后内容 token = trim 后丢空白与纯标点/符号;候选序
+  `(score↓, |i-j|↑, i, j)` 贪心;输出 = 先未配对 DEL(旧序)后新序)→
+  配对行 cell zip(max-cell 规范骨架,短侧空格占位)+ cell 内词级 diff
+  (**任一变更 token 含 `*`/`_`/`~` → 整 cell 旧红+新绿降级;非空↔空
+  cell 空侧单空格色块**)→ **循环还原至不动点**(嵌套原子解开;残留 =
+  真 bug → fail-safe 整对回退,`_internal` 注入桩可测)→ 未配对行整行
+  DEL/INS(空 cell 色块占位)。
   pair-ph 按「左内容+右内容」内容寻址保证唯一。共享原语:
   `splitTableCells`(反斜杠奇偶)替换两处 cell 切分;`INLINE_CODE_RE`
   多反引号升级(全局生效,proposal 已列显式例外)。依赖:T1。
