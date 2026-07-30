@@ -396,24 +396,37 @@ const LIST_LINE_RE = /^[ \t]*(?:>[ \t]?)*(?:[-*+]|\d+\.)[ \t]+/
  */
 function findSetextBlocks(text: string): LineBlock[] {
   const lines = text.split('\n')
-  const isPlainTitleLine = (l: string): boolean =>
-    l.trim().length > 0 &&
-    !HAS_PLACEHOLDER_RE.test(l) &&
-    FENCE_RE.exec(l) === null &&
-    !TABLE_ROW_RE.test(l) &&
-    !THEMATIC_BREAK_RE.test(l) &&
-    !SETEXT_UNDERLINE_RE.test(l) &&
-    !/^ {0,3}(?:#{1,6}[ \t]|>)/.test(l) &&
-    !LIST_LINE_RE.test(l)
+  const stripQuote = (l: string): { prefix: string; rest: string } => {
+    const prefix = QUOTE_PREFIX_RE.exec(l)?.[0] ?? ''
+    return { prefix, rest: l.slice(prefix.length) }
+  }
+  // 剥引用前缀后的题行判定。blockquote 内的 setext（`> Title\n> ===`）同样
+  // 原子化（Codex 四轮 P2）：题行须与下划线共享**逐字相同**的引用前缀，
+  // 否则不认（前缀不一致的松散写法保持既有行为）。
+  const isPlainTitleRest = (rest: string): boolean =>
+    rest.trim().length > 0 &&
+    !HAS_PLACEHOLDER_RE.test(rest) &&
+    FENCE_RE.exec(rest) === null &&
+    !TABLE_ROW_RE.test(rest) &&
+    !THEMATIC_BREAK_RE.test(rest) &&
+    !SETEXT_UNDERLINE_RE.test(rest) &&
+    !/^ {0,3}#{1,6}[ \t]/.test(rest) &&
+    !/^ {0,3}>/.test(rest) &&
+    !LIST_LINE_RE.test(rest)
   const blocks: LineBlock[] = []
   let i = 0
   while (i < lines.length) {
-    if (!SETEXT_UNDERLINE_RE.test(lines[i] ?? '') || i === 0) {
+    const u = stripQuote(lines[i] ?? '')
+    if (i === 0 || !SETEXT_UNDERLINE_RE.test(u.rest)) {
       i++
       continue
     }
     let start = i
-    while (start > 0 && isPlainTitleLine(lines[start - 1] ?? '')) start--
+    while (start > 0) {
+      const t = stripQuote(lines[start - 1] ?? '')
+      if (t.prefix !== u.prefix || !isPlainTitleRest(t.rest)) break
+      start--
+    }
     if (start === i || (blocks.length > 0 && start <= blocks[blocks.length - 1]!.end)) {
       i++
       continue
@@ -698,7 +711,7 @@ function computeLineChanges(left: string, right: string): Change[] {
     return replaceLineBlocks(
       text,
       setexts,
-      setexts.map((b) => alloc.alloc('setext', b.content, false) ?? b.content),
+      setexts.map((b) => alloc.alloc('setext', b.content, true) ?? b.content),
     )
   }
   const raw = diffLines(
@@ -825,6 +838,100 @@ export function extractMarkedView(line: string, keep: 'ins' | 'del'): string {
     }
   }
   return out
+}
+
+const isSepShaped = (l: string): boolean => l.includes('|') && TABLE_SEP_RE.test(l)
+
+const hasDelMarker = (l: string): boolean => l.includes(MARKERS.DEL_OPEN)
+const hasInsMarker = (l: string): boolean => l.includes(MARKERS.INS_OPEN)
+
+/**
+ * 表段兜底重建（Codex 四轮 P2）：diff 层结构键折叠在"两张表互换结构键"
+ * 这类重排场景下有盲区——两侧键集合相等、零折叠，diffLines 仍会把不同表
+ * 的行对齐进同一段，merged 里出现畸形表段（表头不在分隔符上方 → GFM 降
+ * 级段落、裸 `|`）。此处只处理折叠漏网的畸形段：按单侧视图重建为"旧表
+ * DEL + 空行 + 新表 INS"。归边规则规避了三轮否决的旧版信息丢失：无
+ * marker 行（context 行、全空 cell 行、字面 `| --- |` body 行）进两侧；
+ * 裸分隔符行只在"某侧恰好积累了 1 行（紧跟该侧表头）"时作为该侧结构分
+ * 隔符，否则按 body 行进两侧。
+ *
+ * 畸形判定（保守，避免误伤合法单表）：run[1] 不是分隔符形状，或存在
+ * "紧跟 marker 行之后"的额外分隔符形状行（第二张表头的分隔符）。字面
+ * `| --- |` body 行紧跟裸行 / 分隔符时不触发。
+ */
+function repairMergedTableRuns(merged: string): string {
+  ANY_MARKER_RE.lastIndex = 0
+  if (!ANY_MARKER_RE.test(merged)) return merged
+  const lines = merged.split('\n')
+  const out: string[] = []
+  let fenceMarker = ''
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]!
+    const fenceMatch = FENCE_RE.exec(line)
+    if (fenceMarker !== '') {
+      out.push(line)
+      if (fenceMatch !== null && (fenceMatch[2] ?? '').startsWith(fenceMarker)) fenceMarker = ''
+      i++
+      continue
+    }
+    if (fenceMatch !== null) {
+      out.push(line)
+      fenceMarker = fenceMatch[2] ?? ''
+      i++
+      continue
+    }
+    if (!TABLE_ROW_RE.test(line)) {
+      out.push(line)
+      i++
+      continue
+    }
+    let j = i
+    while (j < lines.length && TABLE_ROW_RE.test(lines[j]!)) j++
+    out.push(...normalizeTableRun(lines.slice(i, j)))
+    i = j
+  }
+  return out.join('\n')
+}
+
+/** repairMergedTableRuns 的单段处理；合法段 / 无 marker 段原样返回。 */
+function normalizeTableRun(run: string[]): string[] {
+  ANY_MARKER_RE.lastIndex = 0
+  if (run.length < 2 || !ANY_MARKER_RE.test(run.join('\n'))) return run
+  const marked = run.map((l) => hasDelMarker(l) || hasInsMarker(l))
+  let malformed = !isSepShaped(run[1]!)
+  for (let k = 2; k < run.length && !malformed; k++) {
+    if (isSepShaped(run[k]!) && marked[k - 1] === true) malformed = true
+  }
+  if (!malformed) return run
+  const del: string[] = []
+  const ins: string[] = []
+  for (const l of run) {
+    const d = hasDelMarker(l)
+    const n = hasInsMarker(l)
+    if (!d && !n) {
+      if (isSepShaped(l) && (del.length === 1 || ins.length === 1)) {
+        if (del.length === 1) del.push(l)
+        if (ins.length === 1) ins.push(l)
+      } else {
+        del.push(l)
+        ins.push(l)
+      }
+      continue
+    }
+    if (d) del.push(extractMarkedView(l, 'del'))
+    if (n) ins.push(extractMarkedView(l, 'ins'))
+  }
+  // 任一侧拼不出「表头 + 分隔符」的最小结构就放弃重建，宁可保留原样也
+  // 不产出更碎的输出。
+  if (del.length < 2 || ins.length < 2 || !isSepShaped(del[1]!) || !isSepShaped(ins[1]!)) {
+    return run
+  }
+  return [
+    wrapLines(del.join('\n'), MARKERS.DEL_OPEN, MARKERS.DEL_CLOSE),
+    '',
+    wrapLines(ins.join('\n'), MARKERS.INS_OPEN, MARKERS.INS_CLOSE),
+  ]
 }
 
 /**
@@ -971,7 +1078,7 @@ export function buildMergedMarkdown(
     .join(separator)
     .replaceAll(MARKERS.INS_OPEN + MARKERS.INS_CLOSE, '')
     .replaceAll(MARKERS.DEL_OPEN + MARKERS.DEL_CLOSE, '')
-  return repairBrokenLinePrefixes(merged)
+  return repairBrokenLinePrefixes(repairMergedTableRuns(merged))
 }
 
 // 仅供测试与 DiffView 内部复用。
@@ -985,12 +1092,13 @@ export const _internal = {
   // 占位符原子化：供测试锁定 pretreat / restore 行为。
   findTableBlocks,
   findFencedBlocks,
-  findSetextBlocks,
   pretreatWordAtoms,
   restoreAtoms,
   PlaceholderAllocator,
   trimCommonAffixes,
   tableStructureKey,
+  repairMergedTableRuns,
+  findSetextBlocks,
   repairBrokenLinePrefixes,
   extractMarkedView,
   isPrefixInterrupted,

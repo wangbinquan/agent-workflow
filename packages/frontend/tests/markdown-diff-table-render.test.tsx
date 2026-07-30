@@ -391,6 +391,35 @@ describe('孤立 `===` 行按普通文本标记（Codex 三轮 P1）', () => {
   })
 })
 
+// Codex 实现门四轮（2026-07-30）2 P2 回归：结构键集合折叠在"两表互换结构
+// 键"时零折叠（键集合两侧相等），畸形段须由 merged 层兜底重建接住；
+// blockquote 内 setext 标题须同引用前缀整块原子化。
+describe('表结构折叠盲区兜底（Codex 四轮 P2）', () => {
+  test('line：两表互换结构键 → 每节旧表 + 新表，无裸 `|`', () => {
+    const l =
+      '## S1\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n## S2\n\n| x | y |\n| --- | --- |\n| 3 | 4 |\n'
+    const r =
+      '## S1\n\n| x | y |\n| --- | --- |\n| 5 | 6 |\n\n## S2\n\n| a | b |\n| --- | --- |\n| 7 | 8 |\n'
+    const { container } = render(<MarkdownDiffView left={l} right={r} granularity="line" />)
+    expect(container.querySelectorAll('table').length).toBe(4)
+    expect(pipeLeak(container)).toBe(false)
+    expect(container.querySelectorAll('h2').length).toBe(2)
+  })
+})
+
+describe('blockquote 内 setext 标题（Codex 四轮 P2）', () => {
+  test('word：`> Title` 补 `> ===` 标题化 → 红引用段落 + 绿引用 <h1>', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'> Title\n'} right={'> Title\n> ===\n'} granularity="word" />,
+    )
+    const h1 = container.querySelector('blockquote h1')
+    expect(h1).not.toBeNull()
+    expect(h1?.querySelector('.diff-ins')?.textContent).toBe('Title')
+    expect(container.querySelector('.diff-del')?.textContent).toBe('Title')
+    expect(container.textContent ?? '').not.toContain('=')
+  })
+})
+
 describe('identical 输入不变量（checkbox / setext / 引用内 checkbox 原子化不破坏无变更路径）', () => {
   const doc = [
     '# T',
@@ -420,5 +449,11 @@ describe('identical 输入不变量（checkbox / setext / 引用内 checkbox 原
     const tricky = '| a |\n| --- |\n| 1 |\n===\n\n```\nc\n```\n===\nmore\n'
     expect(buildMergedMarkdown(tricky, tricky, 'word')).toBe(tricky)
     expect(buildMergedMarkdown(tricky, tricky, 'line')).toBe(tricky)
+  })
+
+  test('引用内 setext + 表格的 identical 输入逐字节还原（Codex 四轮）', () => {
+    const doc = '> T\n> ===\n\n| a |\n| --- |\n| 1 |\n'
+    expect(buildMergedMarkdown(doc, doc, 'word')).toBe(doc)
+    expect(buildMergedMarkdown(doc, doc, 'line')).toBe(doc)
   })
 })
