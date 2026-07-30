@@ -1109,11 +1109,11 @@ export function AppearanceTab({ config }: TabProps) {
   )
 }
 
-// RFC-156 — the config.json keys the three config-driven internal agents own. One
+// RFC-156/234 — the config.json keys the four config-driven internal agents own. One
 // source for the useTabState slice AND the "did any config field change?" check
 // (so a fusion-only save can skip the config PUT — Codex impl-gate P2c).
 // RFC-156 — each internal agent renders as a bordered <Card> (shared RFC-124
-// primitive) so the blocks read as four DISTINCT panels instead of blending into
+// primitive) so the blocks read as five DISTINCT panels instead of blending into
 // one scroll. Header = title + one-line role hint; `children` = that agent's
 // fields (kept in a `.form-section__body` for the 16px field rhythm).
 function AgentCard({
@@ -1126,11 +1126,11 @@ function AgentCard({
   children: React.ReactNode
 }) {
   return (
-    <Card className="system-agent-card">
-      <div>
-        <div className="form-section__title">{title}</div>
-        <p className="settings-hint settings-hint--tight">{hint}</p>
-      </div>
+    <Card
+      className="system-agent-card"
+      title={title}
+      header={<p className="settings-hint settings-hint--tight">{hint}</p>}
+    >
       <div className="form-section__body">{children}</div>
     </Card>
   )
@@ -1138,10 +1138,10 @@ function AgentCard({
 
 // RFC-156 — "System agents" tab. One card per internal framework agent, each a
 // "runtime selector + that agent's run-config":
-//   • commit-push / memory distiller / merge-conflict resolver persist to
+//   • commit-push / memory distiller / merge-conflict resolver / intent builder persist to
 //     config.json (a single ConfigPatch PUT);
 //   • skill-fusion persists to the aw-skill-merger agent ROW (a runtime-only PUT).
-// The ONE Save button at the bottom flushes BOTH — so it saves all four internal
+// The ONE Save button at the bottom flushes BOTH — so it saves all five internal
 // agents, not just the config ones. The fusion agent-row PATCH only fires when
 // its runtime actually changed (untouched → no redundant write). Absorbed the
 // commit-push block from Limits + the whole former Memory tab (distiller runtime

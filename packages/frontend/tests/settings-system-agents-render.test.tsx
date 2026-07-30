@@ -130,6 +130,28 @@ function clickSave() {
   })
 }
 
+describe('SystemAgentsTab — card title hierarchy', () => {
+  test('renders every system-agent section title as the shared bold card heading', () => {
+    mockFetch()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<SystemAgentsTab config={mkConfig()} />, { wrapper: wrap(qc) })
+
+    for (const key of [
+      'settings.systemAgents.commitPushTitle',
+      'settings.systemAgents.memoryTitle',
+      'settings.systemAgents.mergeTitle',
+      'settings.systemAgents.intentTitle',
+      'settings.systemAgents.fusionTitle',
+    ] as const) {
+      expect(
+        screen
+          .getByRole('heading', { name: i18n.t(key), level: 3 })
+          .classList.contains('card__title'),
+      ).toBe(true)
+    }
+  })
+})
+
 describe('RFC-156 SystemAgentsTab — config edit → config PUT (D6), fusion left alone', () => {
   test('picking a merge runtime + Save PUTs mergeAgentRuntime with mergeAgentModel:null and no agent PATCH', async () => {
     const rec = mockFetch()
