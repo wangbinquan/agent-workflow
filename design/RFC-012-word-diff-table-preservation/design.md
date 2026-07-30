@@ -166,3 +166,31 @@ return restoreTablePlaceholders(raw, pre.lookup)
 - 不动 `DiffView.tsx`（公共 prop 不变）。
 - 不引入新 css class（已有 `diff-ins` / `diff-del` 足够）。
 - 不为 cell 级 word-diff 留接口（参考 §备选 C / D；未来若需要，再立 RFC）。
+
+## 勘误：repairBrokenLinePrefixes 误拆表格行（2026-07-30 修复）
+
+本 RFC 落地后，RFC-010 管线在 2026-07-16 新增了 `repairBrokenLinePrefixes`
+（行首结构前缀被 marker 打断时把行拆成 DEL 行 + INS 行）。该修复对
+`wrapTableRowCells` 产出的表格行存在系统性误报：整行 DEL/INS 的表格行的
+"空侧视图"（如 `|  |  |`）经 `LEADING_BLOCK_PREFIX_RE` 的 `\|\s*` 分支得到
+比 marker 前物理前缀（`| `）更长的前缀，`isPrefixInterrupted` 因此把每个带
+marker 的表格行判为"被打断"，拆成"原行 + 空行 + `|  |  |`"三段——表格被
+空行撕碎、`|---|` 与空 cell 行重组成两列空表、其余行降级为带裸 `|` 的段落。
+word / line / block 三档全部命中；本 RFC 的 merged 字符串层断言（`includes`
+形式）锁不住该回归，浏览器实测才暴露。
+
+修复（`markdownDiff.ts`）：
+
+1. `repairBrokenLinePrefixes` 跳过表格行（剥 blockquote 前缀后按
+   `TABLE_ROW_RE` 判定）——表格行的 marker 由 `wrapTableRowCells` 严格放在
+   cell 内部，行首 `|` 骨架不可能被真正打断，修复在此类行上只会造成破坏。
+2. `wrapLines` 的结构行 skip（表分隔符 / thematic break）改为剥引用前缀后
+   判定，blockquote 内表格 / hr 获得与顶层同等保护；新增 setext `===`
+   下划线 skip（marker 落入会让标题降级、裸 `===` 可见）。
+3. 顺带修复同类格式问题：GFM task list checkbox（`[x]`/`[ ]`）在 word 路径
+   原子化并并入 `LEADING_BLOCK_PREFIX_RE`（勾选态切换此前因"del `x` + 空白
+   ins 不包 marker"退化为 `[x ]` 字面量），切换现呈现为两条完整 task 行。
+
+回归锁定：`packages/frontend/tests/markdown-diff-table-render.test.tsx`
+（渲染级——以 `<table>`/`<input type=checkbox>`/`<h1>` 等渲染产物 + 无裸
+`|` 泄漏为准，替代字符串 `includes` 断言的盲区）。

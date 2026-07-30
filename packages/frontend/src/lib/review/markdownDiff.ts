@@ -27,6 +27,15 @@
 //   5. 入口 sanitize 剥掉文档自带的 U+E000–U+E00F（marker 隔离带）；占位
 //      符分配避让文档中已出现的 U+E010–U+EFFF 字符；输出前清理空 marker
 //      对（渲染成零宽色块的来源）。
+//
+// 2026-07-30 表格 diff 碎裂修复（评审页实测：变更落在表格内时三档全烂）：
+//   repairBrokenLinePrefixes 对 wrapTableRowCells 产出的表格行误报"前缀
+//   被打断"——整行 DEL/INS 的空侧视图（`|  |  |`）的 `\|\s*` 前缀比 marker
+//   前的物理前缀（`| `）长——把每个带 marker 的行拆成"行 + 空行 + `|  |  |`"，
+//   整张表随之碎成带裸 `|` 的段落。现表格行（含 blockquote 内）跳过拆行
+//   修复；wrapLines 的结构 skip（表分隔符 / hr）改为剥引用前缀后判定并新增
+//   setext `===` 下划线 skip；task list checkbox（`- [x] `）并入行首结构
+//   前缀，勾选态切换由拆行修复呈现为完整的 DEL 项 + INS 项。
 
 import { diffArrays, diffLines, type Change } from 'diff'
 
@@ -48,11 +57,14 @@ const ANY_MARKER_RE = /[\uE000-\uE003]/g
 const SANITIZE_RE = /[\uE000-\uE00F]/g
 
 /**
- * 行首结构性 markdown 前缀（heading / list / blockquote / table cell 起手 |）。
+ * 行首结构性 markdown 前缀（heading / list / blockquote / table cell 起手 |，
+ * 以及 GFM task list 的 `[x] ` / `[ ] ` checkbox——它必须紧贴 li 内容起点，
+ * marker 夹在中间会让 checkbox 降级成字面 `[x]` 文本）。
  * marker 不能落在这些字符之前，否则 markdown 解析失败。我们把 marker 推到
  * 前缀之后。
  */
-const LEADING_BLOCK_PREFIX_RE = /^(\s*(?:>+\s*)*(?:[-*+]\s+|#{1,6}\s+|\d+\.\s+|\|\s*)?)([\s\S]*)$/
+const LEADING_BLOCK_PREFIX_RE =
+  /^(\s*(?:>+\s*)*(?:[-*+]\s+(?:\[[ xX]\]\s+)?|#{1,6}\s+|\d+\.\s+(?:\[[ xX]\]\s+)?|\|\s*)?)([\s\S]*)$/
 
 /** 判断一行是否完全空白（含纯 marker，剥掉后为空）。 */
 function isBlank(line: string): boolean {
@@ -95,28 +107,41 @@ function wrapLines(value: string, open: string, close: string): string {
       wrapped.push(line)
       continue
     }
+    // 结构行判定统一剥掉 blockquote 前缀后做（`> | a |` 的表格骨架、
+    // `> |---|` 的分隔符与顶层同规则）；无引用前缀时 rest === line，
+    // 行为与旧实现一致。
+    const quotePrefix = QUOTE_PREFIX_RE.exec(line)?.[0] ?? ''
+    const rest = line.slice(quotePrefix.length)
     // RFC-012：markdown 表格分隔符行（`|---|---|`）不能携带任何 PUA marker，
     // 否则 GFM 表分隔符正则匹配失败、整张表降级为段落。整张表已在 word 路径
     // 上由占位符保证为单一 ins/del/unchanged change，分隔行不带 marker
     // 不会丢失 diff 语义（颜色仍由 header/body 行的 marker 提供）。
     // 额外要求行内含 `|`：裸 `-`（如列表符被删）也匹配 TABLE_SEP_RE，
     // 漏包 marker 会让它变成无归属的 context 字符，行首修复拆不出正确视图。
-    if (line.includes('|') && TABLE_SEP_RE.test(line)) {
+    if (rest.includes('|') && TABLE_SEP_RE.test(rest)) {
       wrapped.push(line)
       continue
     }
     // thematic break（--- / *** / ___）不包 marker：包了会让行首变成 PUA、
     // hr 降级成可见的裸 "---" 文本（乱码感）。hr 本身无文字可高亮，跳过。
-    if (THEMATIC_BREAK_RE.test(line)) {
+    if (THEMATIC_BREAK_RE.test(rest)) {
       wrapped.push(line)
       continue
     }
-    if (TABLE_ROW_RE.test(line)) {
+    // setext 标题下划线（`===`）同理不包：PUA 落进去后不再被识别为下划线，
+    // 上一行标题降级成段落、裸 `===` 直接可见。下划线无文字可高亮；标题
+    // 文本行自身照常包 marker，高亮不丢。（`---` 形式的 setext H2 已被
+    // thematic break 分支覆盖。）
+    if (SETEXT_UNDERLINE_RE.test(rest)) {
+      wrapped.push(line)
+      continue
+    }
+    if (TABLE_ROW_RE.test(rest)) {
       // RFC-012：表格 header / body 行（不是 separator）按 cell 逐个包 marker。
       // 一行内的 open/close 不能跨 `|`——markdown 解析时 `|` 是单元格边界，
       // 跨界的 open 与 close 落在不同 `<td>` 里、remarkDiffMarkers 看到的
       // 各自是孤儿 marker，统统被吞，diff 高亮消失。逐 cell 包就避免了。
-      wrapped.push(wrapTableRowCells(line, open, close))
+      wrapped.push(quotePrefix + wrapTableRowCells(rest, open, close))
       continue
     }
     const m = LEADING_BLOCK_PREFIX_RE.exec(line)
@@ -154,6 +179,10 @@ function wrapTableRowCells(line: string, open: string, close: string): string {
 const TABLE_ROW_RE = /^ {0,3}\|/
 const TABLE_SEP_RE = /^ {0,3}\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/
 const THEMATIC_BREAK_RE = /^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/
+/** setext 标题下划线（`=` 行）。CommonMark 允许单个 `=`。 */
+const SETEXT_UNDERLINE_RE = /^ {0,3}=+[ \t]*$/
+/** 行首 blockquote 前缀（`> ` / 嵌套 `> > `），供结构行判定剥壳复用。 */
+const QUOTE_PREFIX_RE = /^ {0,3}(?:>[ \t]?)+/
 // 占位符用 U+E010–U+EFFF 区间（与 MARKERS 的 U+E000–U+E003 留 12 字隔离带），
 // 每个原子块分配 1 个 codepoint；同类同内容的块共用同一占位符（内容寻址），
 // 这样"未变化的块"在 jsdiff 看来是同一 token，天然对齐成 unchanged。
@@ -303,6 +332,10 @@ function replaceLineBlocks(text: string, blocks: LineBlock[], replacements: stri
 // 误原子化会让 marker 把转义符一起包进去、渲染出裸的 `\`）。
 const INLINE_CODE_RE = /(?<!\\)(`+)(?!`)([^`\n]+?)\1(?!`)/g
 
+// GFM task list checkbox（`- [x] ` / `1. [ ] `，含 blockquote 内）。只认
+// 行首列表符之后紧跟的一个 `[ ]`/`[x]`/`[X]`，避免把正文里的 `[x]` 误伤。
+const TASK_CHECKBOX_RE = /^([ \t]*(?:>[ \t]?)*(?:[-*+]|\d+\.)[ \t]+)\[([ xX])\](?=[ \t]|$)/gm
+
 /**
  * word 路径专属：把 left / right 中的 fenced code block、markdown 表格、
  * inline code span 依次替换成单 codepoint 占位符。占位符是 jsdiff 眼中的
@@ -330,7 +363,17 @@ function pretreatWordAtoms(
       tables,
       tables.map((b) => alloc.alloc('table', b.content, true) ?? b.content),
     )
-    return out.replace(INLINE_CODE_RE, (m) => alloc.alloc('inline', m, false) ?? m)
+    out = out.replace(INLINE_CODE_RE, (m) => alloc.alloc('inline', m, false) ?? m)
+    // task checkbox 原子化：`[`/`x`/`]` 逐 token diff 时，勾选态切换会产生
+    // "del `x` + ins 空格"——空白 change 不包 marker（isBlank skip），空格
+    // 沦为无归属 context，del 视图残留 `[x ]` 字面量、checkbox 渲染丢失。
+    // 原子化后切换呈现为 `[x]`→`[ ]` 整体 DEL+INS，行首修复再把它拆成两条
+    // 各自完整的 task 行（旧勾选态红、新勾选态绿）。
+    return out.replace(
+      TASK_CHECKBOX_RE,
+      (_m, pre: string, state: string) =>
+        pre + (alloc.alloc('todo', '[' + state + ']', false) ?? '[' + state + ']'),
+    )
   }
   return { l: protect(left), r: protect(right), lookup: alloc.lookup }
 }
@@ -650,6 +693,16 @@ function repairBrokenLinePrefixes(merged: string): string {
     }
     ANY_MARKER_RE.lastIndex = 0
     if (!ANY_MARKER_RE.test(line)) {
+      out.push(line)
+      continue
+    }
+    // 表格行（含 blockquote 内的）不做拆行修复：wrapTableRowCells 把 marker
+    // 严格放在 cell 内部，行首 `|` 骨架不可能被 marker 真正打断；而整行
+    // DEL/INS 行的"空侧视图"（`|  |  |`）的 `\|\s*` 前缀比 marker 前的物理
+    // 前缀（`| `）长，isPrefixInterrupted 会误报，把每个带 marker 的表格行
+    // 拆成"行 + 空行 + `|  |  |`"——整张表碎成带裸 `|` 的段落（2026-07-30
+    // 评审页表格 diff 全烂的根因）。
+    if (TABLE_ROW_RE.test(line.slice((QUOTE_PREFIX_RE.exec(line)?.[0] ?? '').length))) {
       out.push(line)
       continue
     }
