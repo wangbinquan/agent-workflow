@@ -30,19 +30,25 @@ const TABLE_R = ['# Doc', '', '| col | val |', '| --- | --- |', '| a | 9 |', '| 
 const pipeLeak = (el: HTMLElement) => (el.textContent ?? '').includes('|')
 
 describe('表格 diff 渲染（cell 改动）', () => {
-  test('word：旧表整表 DEL + 新表整表 INS，两张表都正常渲染', () => {
+  // RFC-240 有意更新（plan.md §既有断言的有意更新）：同结构键的 word 档
+  // cell 修改从「旧表整表 DEL + 新表整表 INS 两张表」升级为「单表 +
+  // 变化 cell 内联红旧绿新」。结构变化（异键）仍保持两张表，见下方
+  // 结构折叠相关 describe。
+  test('word：同结构键 cell 修改 → 单表，仅变化 cell 内联红旧绿新', () => {
     const { container } = render(
       <MarkdownDiffView left={TABLE_L} right={TABLE_R} granularity="word" />,
     )
     const tables = container.querySelectorAll('table')
-    expect(tables.length).toBe(2)
+    expect(tables.length).toBe(1)
     expect(pipeLeak(container)).toBe(false)
-    // 第一张全 del、第二张全 ins；cell 文本完整
-    expect(tables[0]?.querySelectorAll('.diff-del').length).toBeGreaterThan(0)
-    expect(tables[0]?.querySelectorAll('.diff-ins').length).toBe(0)
-    expect(tables[1]?.querySelectorAll('.diff-ins').length).toBeGreaterThan(0)
-    expect(tables[1]?.textContent).toContain('9')
-    expect(tables[0]?.textContent).toContain('1')
+    const changedCell = Array.from(tables[0]?.querySelectorAll('td') ?? []).find(
+      (td) => td.querySelector('.diff-del') !== null,
+    )
+    expect(changedCell?.querySelector('.diff-del')?.textContent).toBe('1')
+    expect(changedCell?.querySelector('.diff-ins')?.textContent).toBe('9')
+    // 其余 cell 零 diff span
+    const spans = tables[0]?.querySelectorAll('.diff-del, .diff-ins') ?? []
+    expect(spans.length).toBe(2)
   })
 
   test('line：单张表内 DEL 行 + INS 行相邻呈现', () => {
