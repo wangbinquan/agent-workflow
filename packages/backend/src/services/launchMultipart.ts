@@ -24,8 +24,22 @@ import {
 import type { WorkspaceCleanupReport } from '@/services/task'
 import { DomainError, ValidationError } from '@/util/errors'
 
-/** Match `files[<key>][]` field names; allowed keys mirror WorkflowInput.key. */
-const UPLOAD_FIELD_RE = /^files\[([A-Za-z0-9_-]+)\]\[\]$/
+const UPLOAD_FIELD_PREFIX = 'files['
+const UPLOAD_FIELD_SUFFIX = '][]'
+
+/**
+ * Decode the `files[<key>][]` envelope without narrowing `<key>` to ASCII.
+ * WorkflowInput.key accepts every non-empty Unicode string; exact membership
+ * against the target's declared upload inputs is checked before bytes are
+ * buffered, so the multipart transport must preserve that key verbatim.
+ */
+function parseUploadFieldName(fieldName: string): string | undefined {
+  if (!fieldName.startsWith(UPLOAD_FIELD_PREFIX) || !fieldName.endsWith(UPLOAD_FIELD_SUFFIX)) {
+    return undefined
+  }
+  const inputKey = fieldName.slice(UPLOAD_FIELD_PREFIX.length, -UPLOAD_FIELD_SUFFIX.length)
+  return inputKey.length > 0 ? inputKey : undefined
+}
 
 /**
  * A bound-but-not-yet-buffered file part. Bytes are copied out of the form
@@ -87,8 +101,8 @@ export async function parseMultipartLaunch(req: Request): Promise<ParsedMultipar
   const entries = form.entries() as unknown as Iterable<[string, string | File]>
   for (const [fieldName, value] of entries) {
     if (fieldName === 'payload') continue
-    const m = UPLOAD_FIELD_RE.exec(fieldName)
-    if (m === null) {
+    const inputKey = parseUploadFieldName(fieldName)
+    if (inputKey === undefined) {
       throw new ValidationError(
         'task-multipart-unknown-field',
         `unexpected multipart field '${fieldName}'; expected 'payload' or 'files[<key>][]'`,
@@ -105,7 +119,7 @@ export async function parseMultipartLaunch(req: Request): Promise<ParsedMultipar
     // `undefined`, NOT ''. Treat both empty and missing names as unnamed so we
     // don't hand a non-string filename to sanitizeFilename.
     parts.push({
-      inputKey: m[1]!,
+      inputKey,
       filename: value.name ? value.name : 'upload.bin',
       declaredMime: value.type,
       blob: value,

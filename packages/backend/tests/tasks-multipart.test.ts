@@ -3,6 +3,8 @@
 // the paths into inputs[uploadKey], (b) missing/extra fields are rejected
 // before any task row is created, (c) workflow-not-found preempts uploads,
 // (d) limit / accept rejections propagate as ValidationError.
+// Regression (2026-07-30): workflow input keys are Unicode strings; the
+// multipart field parser must not reintroduce an ASCII-only key restriction.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
@@ -101,7 +103,7 @@ interface Harness {
   workflowId: string
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(uploadKey = 'refs'): Promise<Harness> {
   const tmp = makeTempDir('aw-multipart-')
   // Pin app home so worktrees / config land under tmp, not the real user dir.
   process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
@@ -142,7 +144,7 @@ async function buildHarness(): Promise<Harness> {
         { kind: 'text', key: 'topic', label: 'topic' },
         {
           kind: 'upload',
-          key: 'refs',
+          key: uploadKey,
           label: 'Reference materials',
           targetDir: 'inputs/refs',
           minCount: 0,
@@ -151,7 +153,7 @@ async function buildHarness(): Promise<Harness> {
       ],
       nodes: [
         { id: 'in_topic', kind: 'input', inputKey: 'topic' },
-        { id: 'in_refs', kind: 'input', inputKey: 'refs' },
+        { id: 'in_refs', kind: 'input', inputKey: uploadKey },
         {
           id: 'reader',
           kind: 'agent-single',
@@ -168,7 +170,7 @@ async function buildHarness(): Promise<Harness> {
         },
         {
           id: 'e2',
-          source: { nodeId: 'in_refs', portName: 'refs' },
+          source: { nodeId: 'in_refs', portName: uploadKey },
           target: { nodeId: 'reader', portName: 'refs' },
         },
       ],
@@ -243,6 +245,30 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
     expect(body.inputs.topic).toBe('orders')
   })
 
+  test('Unicode input key survives multipart launch and upload materialization', async () => {
+    const inputKey = 'function设计文档'
+    const h = await buildHarness(inputKey)
+    const fd = buildFormData(
+      {
+        workflowId: h.workflowId,
+        name: 'unicode-input-key',
+        repoUrl: pathToFileURL(h.repoPath).href,
+        ref: 'main',
+        inputs: { topic: 'orders', [inputKey]: '' },
+      },
+      [[inputKey, '设计.md', '# 设计']],
+    )
+
+    const res = await postMultipart(h.app, '/api/tasks', fd)
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as {
+      worktreePath: string
+      inputs: Record<string, string>
+    }
+    expect(body.inputs[inputKey]).toBe('inputs/refs/设计.md')
+    expect(readFileSync(join(body.worktreePath, 'inputs/refs/设计.md'), 'utf8')).toBe('# 设计')
+  })
+
   // Regression: a file part with an empty filename ("filename=\"\"" in the
   // multipart Content-Disposition — e.g. a drag-dropped Blob the browser never
   // named) is parsed by bun as a File whose `.name` is `undefined`, not ''. The
@@ -301,6 +327,25 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
       [],
     )
     fd.append('strayField', 'oops')
+    const res = await postMultipart(h.app, '/api/tasks', fd)
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { code: string }
+    expect(body.code).toBe('task-multipart-unknown-field')
+  })
+
+  test('empty multipart input key remains invalid → 422', async () => {
+    const h = await buildHarness()
+    const fd = buildFormData(
+      {
+        workflowId: h.workflowId,
+        name: 'fixture-task',
+        repoUrl: pathToFileURL(h.repoPath).href,
+        ref: 'main',
+        inputs: { topic: 'x', refs: '' },
+      },
+      [],
+    )
+    fd.append('files[][]', new Blob(['x']), 'x.txt')
     const res = await postMultipart(h.app, '/api/tasks', fd)
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }

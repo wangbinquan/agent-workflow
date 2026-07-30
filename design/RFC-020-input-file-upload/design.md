@@ -134,7 +134,10 @@ multipart 分支自己 call `materializeWorktree` → `applyUploadsToWorktree` �
 | `payload`                     | ✅   | `application/json`，反序列化为 `StartTask`（`inputs[uploadKey]` 可空字符串） |
 | `files[<inputKey>][]`         | 条件 | 任意 `upload` 类型 input 的二进制文件，0..N 条；前端按 input 单独的 `<input multiple>` 收集 |
 
-字段名约束：`<inputKey>` 只允许 `[A-Za-z0-9_-]+`（与 `WorkflowInputSchema.key` 现有 zod 一致），其它名称 → 整请求 400。
+字段名约束：`<inputKey>` 与 `WorkflowInputSchema.key` 一致，按原字符串值保留任意非空
+Unicode 字符串。multipart 解析器只剥离固定的 `files[` / `][]` envelope；随后必须在读取文件
+字节前，按 exact key 校验它属于目标工作流声明的 upload input。空 key、畸形 envelope 或未声明
+key 仍拒绝整次请求。
 
 ## 3. 前端
 
