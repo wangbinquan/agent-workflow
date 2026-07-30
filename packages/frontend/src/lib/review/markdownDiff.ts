@@ -40,8 +40,11 @@
 //   与物理行边界对齐的行（word 片段的 `=`/`---` 增删否则被静默吞掉）；
 //   前缀即变更本体时整行入 marker（纯引用前缀完整行除外——`>` 空续行必须
 //   保持裸行）；setext 标题块在 word/line 路径整块原子化（仅加删下划线
-//   不再隐身）；line 模式表头 / 列数变化由 repairMergedTableRuns 重建为
-//   旧表 DEL + 新表 INS；checkbox 原子化排除缩进代码块。
+//   不再隐身）；line 模式表头 / 列数 / 对齐变化按结构键（表头 + 分隔符）
+//   在 diff 层选择性整表折叠、呈现为旧表 DEL + 新表 INS（merged 层重建因
+//   分隔符行无 marker 归属信息丢失而不可行，三轮后删除）；checkbox 原子化
+//   排除缩进代码块；孤立 `===` 行按普通文本标记；占位符成员判定改用非
+//   global 正则（`/g` 的 .test() lastIndex 残留会让左右扫描互相污染）。
 
 import { diffArrays, diffLines, type Change } from 'diff'
 
@@ -154,8 +157,11 @@ function wrapLines(
       // setext 标题下划线（`===`）同理不包：PUA 落进去后不再被识别为下划线，
       // 上一行标题降级成段落、裸 `===` 直接可见。下划线无文字可高亮；标题
       // 文本行自身照常包 marker，高亮不丢。（`---` 形式的 setext H2 已被
-      // thematic break 分支覆盖。）
-      if (SETEXT_UNDERLINE_RE.test(rest)) {
+      // thematic break 分支覆盖。）仅当 value 内上一行非空才算下划线：孤立
+      // 的 `===`（文档开头 / 空行之后）是普通段落文本，放行会让该行的增删
+      // 完全隐身（Codex 三轮 P1）。setext 原子化保证真下划线总与题行同
+      // value，本判定不会漏掉合法标题。
+      if (SETEXT_UNDERLINE_RE.test(rest) && idx > 0 && !isBlank(lines[idx - 1] ?? '')) {
         wrapped.push(line)
         continue
       }
@@ -228,6 +234,9 @@ const QUOTE_PREFIX_RE = /^ {0,3}(?:>[ \t]?)+/
 const PLACEHOLDER_BASE = 0xe010
 const PLACEHOLDER_END = 0xefff
 const PLACEHOLDER_RE = /[\uE010-\uEFFF]/g
+/** \u6210\u5458\u5224\u5B9A\u7528\u975E global \u7248\u672C\uFF1A`/g` \u6B63\u5219\u7684 `.test()` \u4F1A\u6B8B\u7559 `lastIndex`\uFF0C
+ *  \u5DE6\u53F3\u4E24\u4FA7\u626B\u63CF\u4E92\u76F8\u6C61\u67D3\uFF0Cidentical \u8F93\u5165\u4E5F\u53EF\u80FD\u6F0F\u68C0\u5360\u4F4D\u7B26\uFF08Codex \u4E09\u8F6E P1\uFF09\u3002 */
+const HAS_PLACEHOLDER_RE = /[\uE010-\uEFFF]/
 
 interface AtomEntry {
   content: string
@@ -389,7 +398,7 @@ function findSetextBlocks(text: string): LineBlock[] {
   const lines = text.split('\n')
   const isPlainTitleLine = (l: string): boolean =>
     l.trim().length > 0 &&
-    !PLACEHOLDER_RE.test(l) &&
+    !HAS_PLACEHOLDER_RE.test(l) &&
     FENCE_RE.exec(l) === null &&
     !TABLE_ROW_RE.test(l) &&
     !THEMATIC_BREAK_RE.test(l) &&
@@ -638,6 +647,11 @@ function ensureTrailingNewline(s: string): string {
   return s.length === 0 || s.endsWith('\n') ? s : s + '\n'
 }
 
+/** 表格结构键：表头 + 分隔符两行。对侧存在同键表 ⇒ 结构未变。 */
+function tableStructureKey(content: string): string {
+  return content.split('\n').slice(0, 2).join('\n')
+}
+
 /**
  * line 模式的 change 计算：先把每个 fenced code block 折叠成单行占位符再
  * diffLines。否则"fence 内部改一行"会 emit 只含 code 内容行的 change，
@@ -646,25 +660,51 @@ function ensureTrailingNewline(s: string): string {
  * 整块 DEL + 整块 INS（restore 后由 wrapLines 的 fence 状态机保持干净）。
  * setext 标题块同折（Codex 二轮 P1）：否则"给既有段落补 `===`"只 emit
  * 下划线一行、被结构 skip 放行，标题化完全无高亮。
+ *
+ * 表格按结构键（表头 + 分隔符）**选择性**折叠（Codex 三轮 P1/P2）：对侧
+ * 没有同键表的表整块折叠 → 表头改名 / 列数 / 对齐变化呈现为"旧表 DEL +
+ * 新表 INS"，各带自己的分隔符，空 cell 行与 `| --- |` 字面 body 行原样
+ * 保留；同键表不折叠，保持单表内行级增删改。merged 层面的表段重建（旧
+ * repairMergedTableRuns）因分隔符行不携带 marker、归属信息在合并时已经
+ * 丢失而无法做对，故在 diff 层解决。identical 输入两侧键全等 → 零折叠 →
+ * 逐字节还原不变量保持。
  */
 function computeLineChanges(left: string, right: string): Change[] {
   const alloc = new PlaceholderAllocator([left, right])
-  const fold = (text: string): string => {
+  const foldFences = (text: string): string => {
     const fences = findFencedBlocks(text)
-    let out = replaceLineBlocks(
+    return replaceLineBlocks(
       text,
       fences,
       fences.map((b) => alloc.alloc('fence', b.content, false) ?? b.content),
     )
-    const setexts = findSetextBlocks(out)
-    out = replaceLineBlocks(
-      out,
+  }
+  const l0 = foldFences(left)
+  const r0 = foldFences(right)
+  const keysOf = (text: string): Set<string> =>
+    new Set(findTableBlocks(text).map((b) => tableStructureKey(b.content)))
+  const foldStructChangedTables = (text: string, otherKeys: Set<string>): string => {
+    const tables = findTableBlocks(text).filter((b) => !otherKeys.has(tableStructureKey(b.content)))
+    return replaceLineBlocks(
+      text,
+      tables,
+      tables.map((b) => alloc.alloc('table', b.content, true) ?? b.content),
+    )
+  }
+  const l1 = foldStructChangedTables(l0, keysOf(r0))
+  const r1 = foldStructChangedTables(r0, keysOf(l0))
+  const foldSetext = (text: string): string => {
+    const setexts = findSetextBlocks(text)
+    return replaceLineBlocks(
+      text,
       setexts,
       setexts.map((b) => alloc.alloc('setext', b.content, false) ?? b.content),
     )
-    return out
   }
-  const raw = diffLines(ensureTrailingNewline(fold(left)), ensureTrailingNewline(fold(right)))
+  const raw = diffLines(
+    ensureTrailingNewline(foldSetext(l1)),
+    ensureTrailingNewline(foldSetext(r1)),
+  )
   return restoreAtoms(raw, alloc.lookup)
 }
 
@@ -785,92 +825,6 @@ export function extractMarkedView(line: string, keep: 'ins' | 'del'): string {
     }
   }
   return out
-}
-
-const TABLE_SEP_LINE = (l: string): boolean => l.includes('|') && TABLE_SEP_RE.test(l)
-
-/** cell 剥掉 `|` 与空白后是否还有内容（区分真实行与"空侧视图" `|  |  |`）。 */
-function hasTableCellContent(view: string): boolean {
-  return view.replace(/[|\s]/g, '').length > 0
-}
-
-/**
- * line 模式表格结构变更修复（Codex 二轮 P1）：diffLines 把"表头改名 /
- * 列数变化"emit 成相邻的 DEL 行 + INS 行，而表格行不做拆行修复后它们会
- * 留在同一条 GFM 表里——第二行不是分隔符时整表降级为段落；旧表头 + 旧
- * 分隔符打头时新表头被当 body 行、超出旧列数的 cell 被 GFM 直接丢弃。
- * 修法：对 merged 里"带 marker 且结构不合法"（分隔符行数量 ≠ 1 或位置
- * ≠ 第二行）的顶层表格连续段，按单侧视图重建成"旧表整表 DEL + 空行 +
- * 新表整表 INS"（与 word / block 模式的整表呈现一致）。合法段（普通行级
- * 增删改）与无 marker 段原样保留——后者同时保住 identical 输入逐字节
- * 还原的不变量。
- */
-function repairMergedTableRuns(merged: string): string {
-  ANY_MARKER_RE.lastIndex = 0
-  if (!ANY_MARKER_RE.test(merged)) return merged
-  const lines = merged.split('\n')
-  const out: string[] = []
-  let fenceMarker = ''
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]!
-    const fenceMatch = FENCE_RE.exec(line)
-    if (fenceMarker !== '') {
-      out.push(line)
-      if (fenceMatch !== null && (fenceMatch[2] ?? '').startsWith(fenceMarker)) fenceMarker = ''
-      i++
-      continue
-    }
-    if (fenceMatch !== null) {
-      out.push(line)
-      fenceMarker = fenceMatch[2] ?? ''
-      i++
-      continue
-    }
-    if (!TABLE_ROW_RE.test(line)) {
-      out.push(line)
-      i++
-      continue
-    }
-    let j = i
-    while (j < lines.length && TABLE_ROW_RE.test(lines[j]!)) j++
-    out.push(...normalizeTableRun(lines.slice(i, j)))
-    i = j
-  }
-  return out.join('\n')
-}
-
-/** repairMergedTableRuns 的单段处理：合法 / 无 marker 段原样返回，结构
- *  不合法段按单侧视图重建。分隔符行不带 marker、无法直接归边，按"紧跟
- *  本侧表头（已积累 1 行）"归属；空侧视图行（全空 cell）丢弃。 */
-function normalizeTableRun(run: string[]): string[] {
-  ANY_MARKER_RE.lastIndex = 0
-  if (!ANY_MARKER_RE.test(run.join('\n'))) return run
-  const sepIdx: number[] = []
-  for (let k = 0; k < run.length; k++) {
-    if (TABLE_SEP_LINE(run[k]!)) sepIdx.push(k)
-  }
-  if (sepIdx.length === 0) return run
-  if (sepIdx.length === 1 && sepIdx[0] === 1) return run
-  const del: string[] = []
-  const ins: string[] = []
-  for (const l of run) {
-    if (TABLE_SEP_LINE(l)) {
-      if (del.length === 1) del.push(l)
-      if (ins.length === 1) ins.push(l)
-      continue
-    }
-    const dv = extractMarkedView(l, 'del')
-    const iv = extractMarkedView(l, 'ins')
-    if (hasTableCellContent(dv)) del.push(dv)
-    if (hasTableCellContent(iv)) ins.push(iv)
-  }
-  if (del.length === 0 || ins.length === 0) return run
-  return [
-    wrapLines(del.join('\n'), MARKERS.DEL_OPEN, MARKERS.DEL_CLOSE),
-    '',
-    wrapLines(ins.join('\n'), MARKERS.INS_OPEN, MARKERS.INS_CLOSE),
-  ]
 }
 
 /**
@@ -1017,7 +971,7 @@ export function buildMergedMarkdown(
     .join(separator)
     .replaceAll(MARKERS.INS_OPEN + MARKERS.INS_CLOSE, '')
     .replaceAll(MARKERS.DEL_OPEN + MARKERS.DEL_CLOSE, '')
-  return repairBrokenLinePrefixes(repairMergedTableRuns(merged))
+  return repairBrokenLinePrefixes(merged)
 }
 
 // 仅供测试与 DiffView 内部复用。
@@ -1036,7 +990,7 @@ export const _internal = {
   restoreAtoms,
   PlaceholderAllocator,
   trimCommonAffixes,
-  repairMergedTableRuns,
+  tableStructureKey,
   repairBrokenLinePrefixes,
   extractMarkedView,
   isPrefixInterrupted,

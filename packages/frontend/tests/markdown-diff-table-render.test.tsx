@@ -333,6 +333,64 @@ describe('缩进代码块不做 checkbox 原子化（Codex 二轮 P2）', () => 
   })
 })
 
+// Codex 实现门三轮（2026-07-30）3 P1 + 2 P2 回归：表结构变化改为 diff 层
+// 按结构键（表头 + 分隔符）选择性整表折叠——merged 层重建因分隔符行不带
+// marker、归属信息已丢失而不可行（对齐变化丢新分隔符、空 cell 行 / 字面
+// `| --- |` body 行被吞）；孤立 `===` 是普通文本必须标记；占位符成员判定
+// 不得用带 `/g` 的 .test()（lastIndex 残留让左右扫描互相污染）。
+describe('line 模式表结构折叠精确性（Codex 三轮）', () => {
+  test('对齐变化 + 行编辑 → 两张表各带自己的分隔符（新对齐生效）', () => {
+    const l = '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
+    const r = '| a | b |\n| :-- | --: |\n| 1 | 9 |\n'
+    const { container } = render(<MarkdownDiffView left={l} right={r} granularity="line" />)
+    const tables = container.querySelectorAll('table')
+    expect(tables.length).toBe(2)
+    // 旧表无对齐，新表 th 带 text-align（remark-gfm 按分隔符生成）
+    const oldTh = tables[0]?.querySelector('th')
+    const newTh = tables[1]?.querySelector('th')
+    expect(oldTh?.getAttribute('style') ?? '').not.toContain('text-align')
+    expect(newTh?.getAttribute('style') ?? '').toContain('text-align')
+  })
+
+  test('列数变化时全空 cell 的 body 行两侧都保留', () => {
+    const l = '| a | b |\n| --- | --- |\n|   |   |\n| 1 | 2 |\n'
+    const r = '| a | b | c |\n| --- | --- | --- |\n|   |   |   |\n| 1 | 2 | 3 |\n'
+    const { container } = render(<MarkdownDiffView left={l} right={r} granularity="line" />)
+    const tables = container.querySelectorAll('table')
+    expect(tables.length).toBe(2)
+    expect(tables[0]?.querySelectorAll('tbody tr').length).toBe(2)
+    expect(tables[1]?.querySelectorAll('tbody tr').length).toBe(2)
+  })
+
+  test('字面 `| --- | --- |` body 行不被当结构分隔符：行编辑保持单表', () => {
+    const l = '| a | b |\n| --- | --- |\n| --- | --- |\n| 1 | 2 |\n'
+    const r = '| a | b |\n| --- | --- |\n| --- | --- |\n| 1 | 9 |\n'
+    const { container } = render(<MarkdownDiffView left={l} right={r} granularity="line" />)
+    const tables = container.querySelectorAll('table')
+    expect(tables.length).toBe(1)
+    // dash body 行 + DEL 行 + INS 行
+    expect(tables[0]?.querySelectorAll('tbody tr').length).toBe(3)
+    expect(pipeLeak(container)).toBe(false)
+  })
+})
+
+describe('孤立 `===` 行按普通文本标记（Codex 三轮 P1）', () => {
+  test('word：文档尾插入孤立 `===` → 绿标可见，不渲染成标题', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'x\n'} right={'x\n\n===\n'} granularity="word" />,
+    )
+    expect(container.querySelector('.diff-ins')?.textContent).toBe('===')
+    expect(container.querySelector('h1')).toBeNull()
+  })
+
+  test('word：删除孤立 `===` → 红标可见', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'x\n\n===\n'} right={'x\n'} granularity="word" />,
+    )
+    expect(container.querySelector('.diff-del')?.textContent).toBe('===')
+  })
+})
+
 describe('identical 输入不变量（checkbox / setext / 引用内 checkbox 原子化不破坏无变更路径）', () => {
   const doc = [
     '# T',
@@ -356,5 +414,11 @@ describe('identical 输入不变量（checkbox / setext / 引用内 checkbox 原
     expect(buildMergedMarkdown(doc, doc, 'word')).toBe(doc)
     expect(buildMergedMarkdown(doc, doc, 'line')).toBe(doc)
     expect(buildMergedMarkdown(doc, doc, 'block').trim()).toBe(doc.trim())
+  })
+
+  test('原子块紧邻 `===` 的 identical 输入不受 /g/ lastIndex 污染（Codex 三轮 P1）', () => {
+    const tricky = '| a |\n| --- |\n| 1 |\n===\n\n```\nc\n```\n===\nmore\n'
+    expect(buildMergedMarkdown(tricky, tricky, 'word')).toBe(tricky)
+    expect(buildMergedMarkdown(tricky, tricky, 'line')).toBe(tricky)
   })
 })
