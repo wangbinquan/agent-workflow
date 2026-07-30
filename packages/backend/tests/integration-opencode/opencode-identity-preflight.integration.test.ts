@@ -52,10 +52,16 @@ const ORPHAN_READY_TIMEOUT_MS = 5_000
 const ORPHAN_STOP_GRACE_MS = 250
 const ORPHAN_REAP_TIMEOUT_MS = 2_000
 const ORPHAN_HARD_TIMEOUT_MS = 25_000
+// The fixture owns a 25s monotonic cleanup deadline. Keep bun:test outside
+// that boundary so an assertion/phase timeout still reaches the process-group
+// cleanup path instead of abandoning a live supervisor at the default 5s.
+const ORPHAN_TEST_TIMEOUT_MS = ORPHAN_HARD_TIMEOUT_MS + 5_000
 const ORPHAN_WATCHDOG_SECONDS = 20
 const ORPHAN_STOP_POLL_MS = 20
 const SERVER_SUPERVISOR_WATCHDOG_SECONDS = 45
 const NANOSECONDS_PER_MILLISECOND = 1_000_000n
+const SELF_EXIT_BEFORE_FREEZE_TEST_NAME =
+  'rejects a target that self-exits after ARMED but before the TERM freeze lease'
 
 async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
   const canonicalTmp = await realpath(tmpdir())
@@ -1089,110 +1095,116 @@ describe('RFC-224 Linux cancellation oracle protocol', () => {
     )
   })
 
-  test('rejects a target that self-exits after ARMED but before the TERM freeze lease', async () => {
-    const nonce = randomUUID()
-    const hardDeadline = monotonicDeadline(ORPHAN_HARD_TIMEOUT_MS)
-    const child = Bun.spawn({
-      cmd: [
-        '/usr/bin/python3',
-        '-c',
-        BWRAP_CANCELLATION_SUPERVISOR_SCRIPT,
-        nonce,
-        String(ORPHAN_WATCHDOG_SECONDS),
-        '/usr/bin/python3',
-        '-c',
-        SELF_EXIT_AFTER_ARM_SCRIPT,
-        nonce,
-      ],
-      cwd: '/',
-      env: {},
-      stdin: 'pipe',
-      stdout: 'pipe',
-      stderr: 'ignore',
-      detached: true,
-    })
-    const output = observeDoubleForkOutput(child.stdout, nonce, child.pid)
-    let leaderReaped = false
-    let groupExited = false
-    const exited = child.exited.then(
-      (code) => {
-        leaderReaped = true
-        return code
-      },
-      (error: unknown) => {
-        leaderReaped = true
-        throw error
-      },
-    )
-    void exited.catch(() => undefined)
-
-    let primaryFailure: { error: unknown } | null = null
-    try {
-      await waitUntilDeadline(
-        output.ready,
-        phaseDeadline(hardDeadline, ORPHAN_READY_TIMEOUT_MS),
-        'self-exit oracle fixture readiness timed out',
+  test(
+    SELF_EXIT_BEFORE_FREEZE_TEST_NAME,
+    async () => {
+      const nonce = randomUUID()
+      const hardDeadline = monotonicDeadline(ORPHAN_HARD_TIMEOUT_MS)
+      const child = Bun.spawn({
+        cmd: [
+          '/usr/bin/python3',
+          '-c',
+          BWRAP_CANCELLATION_SUPERVISOR_SCRIPT,
+          nonce,
+          String(ORPHAN_WATCHDOG_SECONDS),
+          '/usr/bin/python3',
+          '-c',
+          SELF_EXIT_AFTER_ARM_SCRIPT,
+          nonce,
+        ],
+        cwd: '/',
+        env: {},
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'ignore',
+        detached: true,
+      })
+      const output = observeDoubleForkOutput(child.stdout, nonce, child.pid)
+      let leaderReaped = false
+      let groupExited = false
+      const exited = child.exited.then(
+        (code) => {
+          leaderReaped = true
+          return code
+        },
+        (error: unknown) => {
+          leaderReaped = true
+          throw error
+        },
       )
-      await child.stdin.write(`RFC224_CTL ${nonce} ARM\n`)
-      await child.stdin.flush()
-      await waitUntilDeadline(
-        output.armed,
-        phaseDeadline(hardDeadline, ORPHAN_READY_TIMEOUT_MS),
-        'self-exit oracle fixture arming timed out',
-      )
+      void exited.catch(() => undefined)
 
-      // The anchor concurrently waits the exact unreaped child and emits the
-      // failure frame itself. No wall-clock delay or host PID observation is
-      // allowed to stand in for this causal kernel outcome.
-      await expect(
-        waitUntilDeadline(
-          output.frozen,
+      let primaryFailure: { error: unknown } | null = null
+      try {
+        await waitUntilDeadline(
+          output.ready,
           phaseDeadline(hardDeadline, ORPHAN_READY_TIMEOUT_MS),
-          'self-exit oracle fixture did not reject before freeze',
-        ),
-      ).rejects.toThrow('supervisor failure')
-      expect(output.failure()?.message).toContain('TARGET_EXIT PRETERM')
-      await expect(exited).resolves.toBe(137)
-      expect(await settlesBy(output.closed, hardDeadline)).toBe(true)
-      expect(processGroupAlive(child.pid)).toBe(false)
-      groupExited = true
-    } catch (error) {
-      primaryFailure = { error }
-    }
+          'self-exit oracle fixture readiness timed out',
+        )
+        await child.stdin.write(`RFC224_CTL ${nonce} ARM\n`)
+        await child.stdin.flush()
+        await waitUntilDeadline(
+          output.armed,
+          phaseDeadline(hardDeadline, ORPHAN_READY_TIMEOUT_MS),
+          'self-exit oracle fixture arming timed out',
+        )
 
-    try {
-      await child.stdin.end()
-    } catch {
-      // The expected supervisor SIGKILL closes the control pipe first.
-    }
-    let cleanupFailure: { error: unknown } | null = null
-    try {
-      if (!leaderReaped) {
-        const stopped = await stopOwnedProcessGroup({
-          groupLeaderPid: child.pid,
-          childExited: () => leaderReaped,
-          hardDeadline,
-        })
-        leaderReaped = stopped.leaderReaped
-        groupExited ||= stopped.groupExited
+        // The anchor concurrently waits the exact unreaped child and emits the
+        // failure frame itself. No wall-clock delay or host PID observation is
+        // allowed to stand in for this causal kernel outcome.
+        await expect(
+          waitUntilDeadline(
+            output.frozen,
+            phaseDeadline(hardDeadline, ORPHAN_READY_TIMEOUT_MS),
+            'self-exit oracle fixture did not reject before freeze',
+          ),
+        ).rejects.toThrow('supervisor failure')
+        expect(output.failure()?.message).toContain('TARGET_EXIT PRETERM')
+        await expect(exited).resolves.toBe(137)
+        expect(await settlesBy(output.closed, hardDeadline)).toBe(true)
+        expect(processGroupAlive(child.pid)).toBe(false)
+        groupExited = true
+      } catch (error) {
+        primaryFailure = { error }
       }
-      if (!leaderReaped || !groupExited) {
-        cleanupFailure = {
-          error: new Error('self-exit oracle fixture cleanup did not reap its owned process group'),
-        }
-      }
-      if (!(await settlesBy(output.closed, hardDeadline))) {
-        cleanupFailure ??= {
-          error: new Error('self-exit oracle fixture output did not close'),
-        }
-      }
-    } catch (error) {
-      cleanupFailure = { error }
-    }
 
-    if (cleanupFailure !== null) throw cleanupFailure.error
-    if (primaryFailure !== null) throw primaryFailure.error
-  })
+      try {
+        await child.stdin.end()
+      } catch {
+        // The expected supervisor SIGKILL closes the control pipe first.
+      }
+      let cleanupFailure: { error: unknown } | null = null
+      try {
+        if (!leaderReaped) {
+          const stopped = await stopOwnedProcessGroup({
+            groupLeaderPid: child.pid,
+            childExited: () => leaderReaped,
+            hardDeadline,
+          })
+          leaderReaped = stopped.leaderReaped
+          groupExited ||= stopped.groupExited
+        }
+        if (!leaderReaped || !groupExited) {
+          cleanupFailure = {
+            error: new Error(
+              'self-exit oracle fixture cleanup did not reap its owned process group',
+            ),
+          }
+        }
+        if (!(await settlesBy(output.closed, hardDeadline))) {
+          cleanupFailure ??= {
+            error: new Error('self-exit oracle fixture output did not close'),
+          }
+        }
+      } catch (error) {
+        cleanupFailure = { error }
+      }
+
+      if (cleanupFailure !== null) throw cleanupFailure.error
+      if (primaryFailure !== null) throw primaryFailure.error
+    },
+    ORPHAN_TEST_TIMEOUT_MS,
+  )
 })
 
 describe.skipIf(!RUN_INTEGRATION)('RFC-227 real-binary no-LLM execution identity', () => {
