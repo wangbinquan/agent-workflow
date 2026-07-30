@@ -104,6 +104,8 @@
 - **LAN http = 非安全上下文**：`crypto.subtle`/`navigator.clipboard`/`randomUUID` 皆 `undefined`；「保存卡死/复制无效」先敲 `window.isSecureContext`（防线 `lib/sha256.ts`+`lib/clipboard.ts`+守卫）。
 - **改 `tasks.status.*` 文案的两把暗锁**：zh 域禁「等待人工」子串（`node-run-duration-no-manual-marker` 守卫按 `JSON.stringify(tasks)` 子串扫）；en `awaiting_human` 被 `e2e/task-lifecycle-states.spec.ts` 锁死 `'Awaiting input'`。
 - **`.tabs--segment` 换行兜底只在 `.auth-page` 域**；RFC-219 picker 分类条须横向滚动+箭头（全局化曾双层红）。
+- **markdown/结构化文本的管线改动必须锁「渲染级」断言**（`render` + `<table>`/`<input>`/`<h1>` 等 DOM 产物 + 无字面 `|`/`===` 泄漏），不能只锁中间字符串 `includes`：评审页 diff 表格碎裂期间字符串层测试全绿、浏览器已烂（2026-07-30 修复的盲区；正例 `markdown-diff-table-render.test.tsx`）。
+- **带 `/g` 的正则严禁做 `.test()`/`.exec()` 成员判定**：`lastIndex` 跨调用残留，同一输入间歇性漏匹配（markdownDiff identical 输入曾产生假 diff）。成员判定用非 global 兄弟正则或 `String.match`；已有 `ANY_MARKER_RE.lastIndex = 0` 手动复位的写法是次选。
 
 ## dev-env / daemon
 
