@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { IntentOpPreview, isScriptPath } from '../src/components/intent/IntentOpPreview'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { enUS } from '../src/i18n/en-US'
@@ -117,7 +117,7 @@ describe('RFC-234 IntentOpPreview', () => {
     )
   })
 
-  test('workflow op renders intent-preview canvas; invalid definition degrades', () => {
+  test('workflow op renders a graph summary and opens a large read-only canvas preview', () => {
     renderPreview({
       opId: 'op-3',
       action: 'create',
@@ -133,9 +133,21 @@ describe('RFC-234 IntentOpPreview', () => {
         },
       },
     })
+    expect(screen.getByTestId('intent-preview-workflow')).toBeTruthy()
+    expect(screen.getByText(enUS.intent.previewWorkflowGraph)).toBeTruthy()
+    expect(screen.getByText(enUS.intent.previewNodeCount.replace('{{count}}', '1'))).toBeTruthy()
+    expect(screen.getByText(enUS.intent.previewEdgeCount.replace('{{count}}', '0'))).toBeTruthy()
     expect(screen.getByTestId('intent-preview-canvas')).toBeTruthy()
-    cleanup()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: enUS.intent.previewOpenCanvas,
+      }),
+    )
+    expect(screen.getByTestId('intent-preview-canvas-dialog')).toBeTruthy()
+    expect(screen.getByTestId('intent-preview-canvas-expanded')).toBeTruthy()
+  })
 
+  test('invalid workflow definition degrades to the raw payload', () => {
     renderPreview({
       opId: 'op-4',
       action: 'create',
@@ -145,5 +157,7 @@ describe('RFC-234 IntentOpPreview', () => {
     })
     expect(screen.getByText(enUS.intent.previewCanvasUnavailable)).toBeTruthy()
     expect(screen.getByText(enUS.intent.previewRawJson)).toBeTruthy()
+    expect(screen.queryByTestId('intent-preview-workflow')).toBeNull()
+    cleanup()
   })
 })

@@ -444,8 +444,21 @@ describe('RFC-234 /intent/$sessionId', () => {
     await renderPage()
 
     const buildWorkspace = await screen.findByTestId('intent-build-workspace')
+    const journey = screen.getByRole('region', {
+      name: enUS.intent.journey.ariaLabel,
+    })
     const reviewWorkspace = screen.getByTestId('intent-review-workspace')
 
+    expect(within(journey).getAllByRole('listitem')).toHaveLength(4)
+    expect(journey.querySelector('[aria-current="step"]')?.textContent).toContain(
+      enUS.intent.journey.review,
+    )
+    expect(screen.getByTestId('intent-journey-state').textContent).toContain('Step 3 of 4')
+    expect(screen.getByTestId('intent-journey-state').textContent).toContain(
+      enUS.intent.journey.state['review-ready'],
+    )
+    expect(screen.getByTestId('intent-stage-status').textContent).toContain('Step 3/4 · Review')
+    expect(screen.queryByText('Active')).toBeNull()
     expect(buildWorkspace.tagName).toBe('SECTION')
     expect(buildWorkspace.getAttribute('aria-labelledby')).toBe('intent-conversation-heading')
     expect(

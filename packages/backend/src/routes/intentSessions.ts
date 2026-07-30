@@ -87,7 +87,7 @@ function parseJsonRecord(text: string): Record<string, unknown> {
 }
 
 function sessionSummary(
-  row: IntentSessionRow,
+  row: IntentSessionRow & { currentDraftRevision?: number | null },
   opts: { includeOwner: boolean },
 ): IntentSessionSummary {
   return {
@@ -98,7 +98,7 @@ function sessionSummary(
     turnSeq: row.turnSeq,
     commitSeq: row.commitSeq,
     inFlight: row.inFlightTurnId !== null,
-    currentDraftRevision: null, // filled by detail; list keeps it cheap
+    currentDraftRevision: row.currentDraftRevision ?? null,
     ...(opts.includeOwner ? { ownerUserId: row.ownerUserId } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

@@ -7,6 +7,7 @@ import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { RelativeTime } from '@/components/RelativeTime'
 import { StatusChip } from '@/components/StatusChip'
+import { deriveIntentSummaryJourneyState, IntentStageStatus } from './IntentJourneyProgress'
 
 export function IntentSessionList(props: {
   sessions: IntentSessionSummary[] | undefined
@@ -37,35 +38,37 @@ export function IntentSessionList(props: {
       ) : null}
       {props.sessions !== undefined && props.sessions.length > 0 ? (
         <ul className="intent-recent__grid">
-          {props.sessions.map((session) => (
-            <li key={session.id}>
-              <Card
-                to="/intent/$sessionId"
-                params={{ sessionId: session.id }}
-                interactive
-                highlighted={session.inFlight}
-                className="intent-session-card"
-                title={<span title={session.title}>{session.title}</span>}
-                actions={
-                  session.inFlight ? (
-                    <StatusChip kind="info" withDot>
-                      {t('intent.statusRunning')}
-                    </StatusChip>
-                  ) : session.status === 'archived' ? (
-                    <StatusChip kind="neutral">{t('intent.statusArchived')}</StatusChip>
-                  ) : (
-                    <StatusChip kind="success">{t('intent.statusActive')}</StatusChip>
-                  )
-                }
-              >
-                <div className="intent-session-card__meta">
-                  <span>{t('intent.roundsCount', { count: session.turnSeq })}</span>
-                  <span>{t('intent.commitsCount', { count: session.commitSeq })}</span>
-                  <RelativeTime ts={session.updatedAt} />
-                </div>
-              </Card>
-            </li>
-          ))}
+          {props.sessions.map((session) => {
+            const journeyState = deriveIntentSummaryJourneyState(session)
+            return (
+              <li key={session.id}>
+                <Card
+                  to="/intent/$sessionId"
+                  params={{ sessionId: session.id }}
+                  interactive
+                  highlighted={session.inFlight}
+                  className="intent-session-card"
+                  title={<span title={session.title}>{session.title}</span>}
+                  actions={
+                    session.status === 'archived' ? (
+                      <StatusChip kind="neutral">{t('intent.statusArchived')}</StatusChip>
+                    ) : (
+                      <IntentStageStatus
+                        state={journeyState}
+                        data-testid={`intent-stage-status-${session.id}`}
+                      />
+                    )
+                  }
+                >
+                  <div className="intent-session-card__meta">
+                    <span>{t('intent.roundsCount', { count: session.turnSeq })}</span>
+                    <span>{t('intent.commitsCount', { count: session.commitSeq })}</span>
+                    <RelativeTime ts={session.updatedAt} />
+                  </div>
+                </Card>
+              </li>
+            )
+          })}
         </ul>
       ) : null}
     </section>

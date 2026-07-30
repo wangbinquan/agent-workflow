@@ -21,11 +21,12 @@
 // schema rejects each fall back to a text note + raw JSON.
 
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState, type ReactElement } from 'react'
+import { useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, WorkflowDefinition, WorkflowDetail } from '@agent-workflow/shared'
 import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { Dialog } from '@/components/Dialog'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { DiffView } from '@/components/review/DiffView'
 import { NoticeBanner } from '@/components/NoticeBanner'
@@ -153,6 +154,8 @@ function WorkflowOpPreview(props: {
 }) {
   const { t } = useTranslation()
   const [side, setSide] = useState<'before' | 'after'>('after')
+  const [canvasOpen, setCanvasOpen] = useState(false)
+  const canvasTriggerRef = useRef<HTMLButtonElement | null>(null)
   const agentsQuery = useQuery<Agent[]>({
     queryKey: ['agents'],
     queryFn: () => api.get('/api/agents'),
@@ -215,7 +218,7 @@ function WorkflowOpPreview(props: {
   }, [before, after])
 
   return (
-    <div>
+    <div className="intent-workflow-preview-shell">
       {props.action === 'update' && before !== undefined ? (
         <Segmented
           ariaLabel={t('intent.previewSideSwitch')}
@@ -228,13 +231,60 @@ function WorkflowOpPreview(props: {
         />
       ) : null}
       {shown !== null ? (
-        <div className="canvas-frame canvas-frame--task" data-testid="intent-preview-canvas">
-          <WorkflowCanvas
-            surface="intent-preview"
-            definition={shown}
-            agents={agentsQuery.data ?? []}
-            readOnly
-          />
+        <div className="intent-workflow-preview" data-testid="intent-preview-workflow">
+          <header className="intent-workflow-preview__header">
+            <div>
+              <h4>{t('intent.previewWorkflowGraph')}</h4>
+              <p className="intent-workflow-preview__metrics">
+                <span>{t('intent.previewNodeCount', { count: shown.nodes.length })}</span>
+                <span aria-hidden="true">·</span>
+                <span>{t('intent.previewEdgeCount', { count: shown.edges.length })}</span>
+              </p>
+            </div>
+            <button
+              ref={canvasTriggerRef}
+              type="button"
+              className="btn btn--sm"
+              aria-haspopup="dialog"
+              onClick={() => setCanvasOpen(true)}
+            >
+              {t('intent.previewOpenCanvas')}
+            </button>
+          </header>
+          <div
+            className="canvas-frame intent-workflow-preview__canvas"
+            data-testid="intent-preview-canvas"
+          >
+            <WorkflowCanvas
+              surface="intent-preview"
+              definition={shown}
+              agents={agentsQuery.data ?? []}
+              readOnly
+            />
+          </div>
+          <p className="intent-workflow-preview__hint">{t('intent.previewCanvasHint')}</p>
+          <Dialog
+            open={canvasOpen}
+            onClose={() => setCanvasOpen(false)}
+            title={t('intent.previewCanvasDialogTitle')}
+            size="lg"
+            panelClassName="intent-workflow-preview-dialog"
+            triggerRef={canvasTriggerRef}
+            data-testid="intent-preview-canvas-dialog"
+          >
+            <p className="intent-workflow-preview__dialog-hint">{t('intent.previewCanvasHint')}</p>
+            <div
+              className="canvas-frame intent-workflow-preview__canvas intent-workflow-preview__canvas--expanded"
+              data-testid="intent-preview-canvas-expanded"
+            >
+              <WorkflowCanvas
+                surface="intent-preview"
+                definition={shown}
+                agents={agentsQuery.data ?? []}
+                readOnly
+              />
+            </div>
+          </Dialog>
         </div>
       ) : (
         <p className="muted">{t('intent.previewCanvasUnavailable')}</p>

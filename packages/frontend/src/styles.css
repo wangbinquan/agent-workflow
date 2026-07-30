@@ -19319,6 +19319,10 @@ button.status-chip {
   color: var(--success-fg);
 }
 
+.intent-journey__step--done:not(:last-child)::after {
+  background: var(--success-border);
+}
+
 .intent-journey__step--current .intent-journey__marker {
   border-color: var(--accent);
   background: var(--accent-fill);
@@ -19332,18 +19336,44 @@ button.status-chip {
   color: var(--warn-fg);
 }
 
+.intent-journey__step--blocked {
+  color: var(--warn-fg);
+}
+
 .intent-journey__summary {
+  display: grid;
+  gap: 1px;
   margin: 0;
   padding: 0 0 0 var(--space-4);
   border-left: 1px solid var(--border);
+  min-width: 0;
+}
+
+.intent-journey__summary-kicker {
   color: var(--muted);
-  font-size: var(--font-sm);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
   line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.intent-journey__summary-stage {
+  color: var(--text);
+  font-size: var(--font-sm);
+  line-height: 1.4;
+}
+
+.intent-journey__summary-detail {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .intent-session__workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  grid-template-columns: minmax(320px, 0.9fr) minmax(480px, 1.1fr);
   gap: clamp(var(--space-4), 2vw, var(--space-5));
   align-items: start;
 }
@@ -19681,6 +19711,78 @@ button.status-chip {
   overflow-wrap: anywhere;
 }
 
+.intent-op-preview,
+.intent-workflow-preview-shell,
+.intent-workflow-preview {
+  min-width: 0;
+}
+
+.intent-workflow-preview-shell,
+.intent-workflow-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.intent-workflow-preview__header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.intent-workflow-preview__header > div {
+  min-width: 0;
+}
+
+.intent-workflow-preview__header h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-md);
+  line-height: 1.4;
+}
+
+.intent-workflow-preview__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.intent-workflow-preview__canvas {
+  width: 100%;
+  height: clamp(22rem, 48vh, 34rem);
+  min-height: 22rem;
+  background: color-mix(in srgb, var(--border) 9%, var(--panel));
+}
+
+.intent-workflow-preview__hint,
+.intent-workflow-preview__dialog-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.45;
+}
+
+.dialog__panel.intent-workflow-preview-dialog {
+  width: min(calc(100vw - 48px), 1120px);
+  height: min(820px, calc(100dvh - 48px));
+  max-height: calc(100dvh - 48px);
+}
+
+.intent-workflow-preview-dialog .dialog__body {
+  overflow: hidden;
+}
+
+.intent-workflow-preview__canvas--expanded {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+}
+
 .intent-session__draft-actions {
   display: flex;
   padding-top: var(--space-3);
@@ -19779,6 +19881,21 @@ button.status-chip {
     padding: var(--space-3);
   }
 
+  .intent-workflow-preview__canvas {
+    height: 18rem;
+    min-height: 18rem;
+  }
+
+  .intent-workflow-preview__canvas .react-flow__minimap {
+    display: none;
+  }
+
+  .dialog__panel.intent-workflow-preview-dialog {
+    width: 100%;
+    height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+
   .intent-turn-card {
     max-width: 100%;
   }
@@ -19814,5 +19931,14 @@ button.status-chip {
   .intent-session-page,
   .intent-page {
     min-width: 0;
+  }
+
+  .intent-workflow-preview__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .intent-workflow-preview__header .btn {
+    width: 100%;
   }
 }

@@ -36,8 +36,17 @@ if [ -z "$envelope_nonce" ]; then
 fi
 
 output_open='<workflow-output nonce=\"'"$envelope_nonce"'\">'
-changeset='{\"$schema_version\":1,\"ops\":[{\"opId\":\"op-1\",\"action\":\"create\",\"resourceType\":\"agent\",\"tempRef\":\"$new:e2e-auditor\",\"payload\":{\"name\":\"e2e-auditor\",\"description\":\"audits code for e2e\",\"outputs\":[\"findings\"],\"bodyMd\":\"You audit.\"}}]}'
-envelope="$output_open"'\n  <port name=\"summary\">stub intent build: one auditor agent</port>\n  <port name=\"changeset\">'"$changeset"'</port>\n</workflow-output>'
+case "${STUB_INTENT_VARIANT:-agent}" in
+  workflow)
+    changeset='{\"$schema_version\":1,\"ops\":[{\"opId\":\"op-1\",\"action\":\"create\",\"resourceType\":\"agent\",\"tempRef\":\"$new:e2e-workflow-worker\",\"payload\":{\"name\":\"e2e-workflow-worker\",\"description\":\"handles and reviews workflow requests\",\"outputs\":[\"draft\",\"answer\"],\"bodyMd\":\"Complete the requested work.\"}},{\"opId\":\"op-2\",\"action\":\"create\",\"resourceType\":\"workflow\",\"tempRef\":\"$new:e2e-workflow\",\"payload\":{\"name\":\"e2e-workflow-preview\",\"description\":\"workflow graph preview fixture\",\"definition\":{\"$schema_version\":4,\"inputs\":[],\"nodes\":[{\"id\":\"worker\",\"kind\":\"agent-single\",\"agentRef\":\"$new:e2e-workflow-worker\",\"promptTemplate\":\"Produce a draft.\",\"position\":{\"x\":20,\"y\":120}},{\"id\":\"reviewer\",\"kind\":\"agent-single\",\"agentRef\":\"$new:e2e-workflow-worker\",\"promptTemplate\":\"Review the draft: {{draft}}\",\"position\":{\"x\":320,\"y\":120}},{\"id\":\"final_output\",\"kind\":\"output\",\"ports\":[{\"name\":\"answer\",\"bind\":{\"nodeId\":\"reviewer\",\"portName\":\"answer\"}}],\"position\":{\"x\":640,\"y\":120}}],\"edges\":[{\"id\":\"worker_to_reviewer\",\"source\":{\"nodeId\":\"worker\",\"portName\":\"draft\"},\"target\":{\"nodeId\":\"reviewer\",\"portName\":\"draft\"}},{\"id\":\"reviewer_to_output\",\"source\":{\"nodeId\":\"reviewer\",\"portName\":\"answer\"},\"target\":{\"nodeId\":\"final_output\",\"portName\":\"answer\"}}]}}}]}'
+    summary='stub intent build: workflow preview'
+    ;;
+  *)
+    changeset='{\"$schema_version\":1,\"ops\":[{\"opId\":\"op-1\",\"action\":\"create\",\"resourceType\":\"agent\",\"tempRef\":\"$new:e2e-auditor\",\"payload\":{\"name\":\"e2e-auditor\",\"description\":\"audits code for e2e\",\"outputs\":[\"findings\"],\"bodyMd\":\"You audit.\"}}]}'
+    summary='stub intent build: one auditor agent'
+    ;;
+esac
+envelope="$output_open"'\n  <port name=\"summary\">'"$summary"'</port>\n  <port name=\"changeset\">'"$changeset"'</port>\n</workflow-output>'
 
 printf '{"type":"text","timestamp":0,"part":{"type":"text","text":"%s"}}\n' "$envelope"
 exit 0

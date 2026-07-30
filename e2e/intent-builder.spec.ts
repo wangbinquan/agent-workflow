@@ -1,14 +1,15 @@
 // RFC-234 (T13) — intent-builder e2e over the stubbed runtime.
 //
-// stub-opencode-intent.sh echoes the RFC-200 nonce and answers every turn
-// with a fixed changeset (one agent-create op, `$new:e2e-auditor`), so this
-// spec exercises the REAL chain end to end — session create → system-agent
-// turn → envelope parse → draft mint → commit pipeline → resource lands —
-// with only the model swapped out:
+// The intent stubs echo the RFC-200 nonce and answer with deterministic agent
+// or workflow changesets, so this spec exercises the REAL chain end to end —
+// session create → system-agent turn → envelope parse → draft mint → commit
+// pipeline → resource lands — with only the model swapped out:
 //   US-1  create session → draft panel (op card + rich preview) → commit →
 //         agent exists via API and shows the provenance badge on its detail.
 //   US-6  modify entry on the created agent's detail page → new session
 //         pre-mounts it (res#agent#1 listed in the mounts section).
+//   Workflow draft → four-step journey → shared canvas preview → expanded
+//         dialog → responsive 390px layout without horizontal overflow.
 //   Plus the RFC standard sweeps: axe (wcag2a/aa, critical+serious) on
 //   /intent list + detail, and a 390×844 dark-mode render sanity.
 
@@ -20,6 +21,7 @@ import { startDaemon, type DaemonHandle } from './harness'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const stubIntent = resolve(here, 'fixtures', 'stub-opencode-intent.sh')
+const stubIntentWorkflow = resolve(here, 'fixtures', 'intent-workflow-opencode.sh')
 
 let daemon: DaemonHandle
 
@@ -30,20 +32,24 @@ test.afterAll(async () => {
   await daemon.stop()
 })
 
-async function authPage(page: Page): Promise<void> {
+async function authPage(page: Page, targetDaemon: DaemonHandle = daemon): Promise<void> {
   await page.addInitScript(
     ([baseUrl, token]) => {
       window.localStorage.setItem('agent-workflow.baseUrl', baseUrl)
       window.localStorage.setItem('agent-workflow.token', token)
       window.localStorage.setItem('aw-language', 'en-US')
     },
-    [daemon.baseUrl, daemon.token] as const,
+    [targetDaemon.baseUrl, targetDaemon.token] as const,
   )
 }
 
 /** Create a session through the UI and wait until the draft panel appears. */
-async function createSessionAndAwaitDraft(page: Page, message: string): Promise<void> {
-  await page.goto(`${daemon.baseUrl}/intent`)
+async function createSessionAndAwaitDraft(
+  page: Page,
+  message: string,
+  targetDaemon: DaemonHandle = daemon,
+): Promise<void> {
+  await page.goto(`${targetDaemon.baseUrl}/intent`)
   const inlineComposer = page.getByTestId('intent-create-inline')
   await inlineComposer.getByTestId('intent-create-message').fill(message)
   await inlineComposer.getByRole('button', { name: 'Start building' }).click()
@@ -115,6 +121,75 @@ test('US-6: modify entry pre-mounts the target resource in a new session', async
   await page.waitForURL(/\/intent\/[0-9A-Z]+/i)
   // The prefilled mount landed: the mounts section lists the agent handle.
   await expect(page.getByText('res#agent#1')).toBeVisible({ timeout: 30_000 })
+})
+
+test('workflow draft makes the node graph a primary, expandable review surface', async ({
+  page,
+}) => {
+  const workflowDaemon = await startDaemon({ stubOpencode: stubIntentWorkflow })
+  try {
+    await authPage(page, workflowDaemon)
+    await createSessionAndAwaitDraft(page, 'build a request-to-worker workflow', workflowDaemon)
+
+    const build = page.getByTestId('intent-build-workspace')
+    const review = page.getByTestId('intent-review-workspace')
+    const workflowPreview = page.getByTestId('intent-preview-workflow')
+    const inlineCanvas = page.getByTestId('intent-preview-canvas')
+    await expect(page.getByTestId('intent-stage-status')).toContainText('Step 3/4 · Review')
+    await expect(page.getByText('Active', { exact: true })).toHaveCount(0)
+    await expect(workflowPreview).toBeVisible()
+    await expect(page.getByText('3 nodes')).toBeVisible()
+    await expect(page.getByText('2 edges')).toBeVisible()
+
+    const desktopGeometry = await page.evaluate(() => {
+      const build = document.querySelector<HTMLElement>('[data-testid="intent-build-workspace"]')
+      const review = document.querySelector<HTMLElement>('[data-testid="intent-review-workspace"]')
+      const canvas = document.querySelector<HTMLElement>('[data-testid="intent-preview-canvas"]')
+      if (build === null || review === null || canvas === null) return null
+      return {
+        buildWidth: build.getBoundingClientRect().width,
+        reviewWidth: review.getBoundingClientRect().width,
+        canvasHeight: canvas.getBoundingClientRect().height,
+        canvasWidth: canvas.getBoundingClientRect().width,
+      }
+    })
+    expect(desktopGeometry).not.toBeNull()
+    expect(desktopGeometry!.reviewWidth).toBeGreaterThan(desktopGeometry!.buildWidth)
+    expect(desktopGeometry!.canvasWidth).toBeGreaterThan(440)
+    expect(desktopGeometry!.canvasHeight).toBeGreaterThanOrEqual(350)
+
+    await page.getByRole('button', { name: 'Open large preview' }).click()
+    const dialog = page.getByTestId('intent-preview-canvas-dialog')
+    await expect(dialog).toBeVisible()
+    await expect(page.getByTestId('intent-preview-canvas-expanded')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Close' }).click()
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(build).toBeVisible()
+    await expect(review).toBeVisible()
+    await expect(inlineCanvas).toBeVisible()
+    const mobileGeometry = await page.evaluate(() => {
+      const content = document.querySelector<HTMLElement>('.content')
+      const build = document.querySelector<HTMLElement>('[data-testid="intent-build-workspace"]')
+      const review = document.querySelector<HTMLElement>('[data-testid="intent-review-workspace"]')
+      const canvas = document.querySelector<HTMLElement>('[data-testid="intent-preview-canvas"]')
+      if (content === null || build === null || review === null || canvas === null) return null
+      const buildRect = build.getBoundingClientRect()
+      const reviewRect = review.getBoundingClientRect()
+      return {
+        hasHorizontalOverflow: content.scrollWidth > content.clientWidth,
+        reviewFollowsBuild: reviewRect.top >= buildRect.bottom,
+        canvasFitsReview: canvas.getBoundingClientRect().width <= reviewRect.width,
+      }
+    })
+    expect(mobileGeometry).toEqual({
+      hasHorizontalOverflow: false,
+      reviewFollowsBuild: true,
+      canvasFitsReview: true,
+    })
+  } finally {
+    await workflowDaemon.stop()
+  }
 })
 
 test('a11y + mobile dark: /intent list and session detail', async ({ page }) => {

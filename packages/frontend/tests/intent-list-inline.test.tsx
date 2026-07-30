@@ -1,5 +1,5 @@
 // RFC-234 (T8) — /intent list locks:
-//   1. Sessions render with title + status chip (inFlight → generating).
+//   1. Sessions render with title + one of the four business-stage chips.
 //   2. The create dialog POSTs {message, hint?} and navigates to the detail.
 //   3. Start button disabled until a non-empty message exists.
 
@@ -114,13 +114,32 @@ async function renderPage(initialEntry: string | string[] = '/intent', initialIn
 }
 
 describe('RFC-234 /intent list', () => {
-  test('rows render with status chips; in-flight shows generating', async () => {
-    installFetch([session('a'), session('b', { inFlight: true })])
+  test('rows replace generic running/active chips with the four business stages', async () => {
+    installFetch([
+      session('goal', { turnSeq: 0 }),
+      session('generate', { inFlight: true }),
+      session('clarifying'),
+      session('review', { currentDraftRevision: 2 }),
+      session('apply', { commitSeq: 1 }),
+    ])
     await renderPage()
-    await screen.findByText('goal-a')
-    expect(screen.getByText('goal-b')).toBeTruthy()
-    expect(screen.getByText(enUS.intent.statusRunning)).toBeTruthy()
-    expect(screen.getByText(enUS.intent.statusActive)).toBeTruthy()
+    await screen.findByText('goal-goal')
+
+    expect(screen.getByTestId('intent-stage-status-goal').textContent).toContain('Step 1/4 · Goal')
+    expect(screen.getByTestId('intent-stage-status-generate').textContent).toContain(
+      'Step 2/4 · Generate',
+    )
+    expect(screen.getByTestId('intent-stage-status-clarifying').textContent).toContain(
+      'Step 2/4 · Generate',
+    )
+    expect(screen.getByTestId('intent-stage-status-review').textContent).toContain(
+      'Step 3/4 · Review',
+    )
+    expect(screen.getByTestId('intent-stage-status-apply').textContent).toContain(
+      'Step 4/4 · Apply',
+    )
+    expect(screen.queryByText('Generating')).toBeNull()
+    expect(screen.queryByText('Active')).toBeNull()
   })
 
   test('create dialog gates on message, POSTs and navigates to the detail', async () => {

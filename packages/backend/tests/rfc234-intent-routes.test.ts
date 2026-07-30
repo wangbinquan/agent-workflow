@@ -163,6 +163,14 @@ describe('intent session routes', () => {
     expect(detail.currentDraft.validation.errors).toEqual([])
     expect(detail.currentDraft.slots.some((s) => s.slotId === 'name:op-1')).toBe(true)
 
+    const listed = (await (await req(ownerToken, '/api/intent-sessions')).json()) as Array<{
+      id: string
+      currentDraftRevision: number | null
+    }>
+    expect(listed.find((item) => item.id === session.id)?.currentDraftRevision).toBe(
+      detail.currentDraft.revision,
+    )
+
     const commit = await req(ownerToken, `/api/intent-sessions/${session.id}/commit`, {
       method: 'POST',
       body: JSON.stringify({

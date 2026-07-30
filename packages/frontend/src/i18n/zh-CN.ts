@@ -21,9 +21,7 @@ export interface Resources {
     columnRounds: string
     columnCommits: string
     columnUpdated: string
-    statusRunning: string
     statusArchived: string
-    statusActive: string
     startBuilding: string
     messageLabel: string
     messageHint: string
@@ -129,6 +127,8 @@ export interface Resources {
     draftPendingDescription: string
     journey: {
       ariaLabel: string
+      currentStage: string
+      stageStatus: string
       goal: string
       generate: string
       review: string
@@ -147,6 +147,12 @@ export interface Resources {
     }
     previewBefore: string
     previewAfter: string
+    previewWorkflowGraph: string
+    previewNodeCount: string
+    previewEdgeCount: string
+    previewOpenCanvas: string
+    previewCanvasDialogTitle: string
+    previewCanvasHint: string
     previewCanvasUnavailable: string
     previewPromptDiff: string
     previewMembers: string
@@ -4223,9 +4229,7 @@ export const zhCN: Resources = {
     columnRounds: '轮次',
     columnCommits: '提交',
     columnUpdated: '更新时间',
-    statusRunning: '生成中',
     statusArchived: '已归档',
-    statusActive: '进行中',
     startBuilding: '开始构建',
     messageLabel: '工作目标',
     messageHint: '描述目标与过程，越具体越好；AI 拿不准时会反问澄清。',
@@ -4331,6 +4335,8 @@ export const zhCN: Resources = {
     draftPendingDescription: '生成完成后，变更预览与校验结果会出现在这里；确认提交前不会修改资源。',
     journey: {
       ariaLabel: '意图构建进度',
+      currentStage: '第 {{current}}/{{total}} 步',
+      stageStatus: '第 {{current}}/{{total}} 步 · {{stage}}',
       goal: '目标',
       generate: '生成',
       review: '复核',
@@ -4349,6 +4355,12 @@ export const zhCN: Resources = {
     },
     previewBefore: '修改前',
     previewAfter: '修改后',
+    previewWorkflowGraph: '工作流节点图',
+    previewNodeCount: '{{count}} 个节点',
+    previewEdgeCount: '{{count}} 条连接',
+    previewOpenCanvas: '查看大图',
+    previewCanvasDialogTitle: '工作流节点图预览',
+    previewCanvasHint: '拖动画布查看完整结构，使用左下角控件缩放或适应窗口。',
     previewCanvasUnavailable: '画布预览不可用（定义未通过本地校验），请查看原始 JSON。',
     previewPromptDiff: '节点提示词变更',
     previewMembers: '成员（{{count}}）',

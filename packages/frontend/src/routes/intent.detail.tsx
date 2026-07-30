@@ -16,7 +16,11 @@ import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { IntentMountDialog } from '@/components/IntentMountDialog'
-import { IntentJourneyProgress } from '@/components/intent/IntentJourneyProgress'
+import {
+  deriveIntentJourneyState,
+  IntentJourneyProgress,
+  IntentStageStatus,
+} from '@/components/intent/IntentJourneyProgress'
 import { IntentOpPreview } from '@/components/intent/IntentOpPreview'
 import { IntentTurnSession } from '@/components/intent/IntentTurnSession'
 import { LoadingState } from '@/components/LoadingState'
@@ -114,6 +118,7 @@ function IntentSessionDetailPage() {
   if (detailQuery.isError) return <ErrorBanner error={detailQuery.error} />
   if (detail === undefined) return null
   const draft = detail.currentDraft
+  const journeyState = deriveIntentJourneyState(detail)
   const draftOps =
     draft === null ? [] : ((draft.changeset as { ops?: Array<Record<string, unknown>> }).ops ?? [])
   // tempRef → proposed name, so previews can label bundle-internal references.
@@ -133,16 +138,10 @@ function IntentSessionDetailPage() {
         title={detail.session.title}
         headingLevel={1}
         meta={
-          detail.session.inFlight ? (
-            <StatusChip kind="info" withDot>
-              {t('intent.statusRunning')}
-            </StatusChip>
+          detail.session.status === 'archived' ? (
+            <StatusChip kind="neutral">{t('intent.statusArchived')}</StatusChip>
           ) : (
-            <StatusChip kind={detail.session.status === 'archived' ? 'neutral' : 'success'}>
-              {detail.session.status === 'archived'
-                ? t('intent.statusArchived')
-                : t('intent.statusActive')}
-            </StatusChip>
+            <IntentStageStatus state={journeyState} data-testid="intent-stage-status" />
           )
         }
         actions={

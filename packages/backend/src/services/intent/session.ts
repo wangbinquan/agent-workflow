@@ -15,7 +15,13 @@ import type { AclResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { intentApplyJournal, intentProvenance, intentSessions, intentTurns } from '@/db/schema'
+import {
+  intentApplyJournal,
+  intentDrafts,
+  intentProvenance,
+  intentSessions,
+  intentTurns,
+} from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   ACL_TABLES,
@@ -31,6 +37,9 @@ import {
 } from './manifest'
 
 export type IntentSessionRow = typeof intentSessions.$inferSelect
+export type IntentSessionListRow = IntentSessionRow & {
+  currentDraftRevision: number | null
+}
 export type IntentTurnRow = typeof intentTurns.$inferSelect
 
 const TITLE_CAP = 80
@@ -62,11 +71,15 @@ export async function listIntentSessionsForActor(
   db: DbClient,
   actor: Actor,
   opts: { status?: 'active' | 'archived'; all?: boolean } = {},
-): Promise<IntentSessionRow[]> {
+): Promise<IntentSessionListRow[]> {
   const wantAll = opts.all === true && canAuditIntentSessions(actor)
   const rows = await db
-    .select()
+    .select({
+      session: intentSessions,
+      currentDraftRevision: intentDrafts.revision,
+    })
     .from(intentSessions)
+    .leftJoin(intentDrafts, eq(intentSessions.currentDraftId, intentDrafts.id))
     .where(
       wantAll
         ? opts.status === undefined
@@ -80,7 +93,10 @@ export async function listIntentSessionsForActor(
             ),
     )
     .orderBy(desc(intentSessions.updatedAt))
-  return rows
+  return rows.map(({ session, currentDraftRevision }) => ({
+    ...session,
+    currentDraftRevision,
+  }))
 }
 
 export async function listIntentTurns(db: DbClient, sessionId: string): Promise<IntentTurnRow[]> {
