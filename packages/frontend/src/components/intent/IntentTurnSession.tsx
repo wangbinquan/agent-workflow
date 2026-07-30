@@ -88,6 +88,7 @@ export function IntentTurnSession(props: {
               )
             }
             pollMs={execution.captureState === 'live' ? 1500 : false}
+            refetchOnMount="always"
             className="intent-turn-session__flow"
           />
         </div>

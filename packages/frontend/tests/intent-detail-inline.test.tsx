@@ -125,8 +125,15 @@ function installFetch(detail: IntentSessionDetail): Recorded {
   return rec
 }
 
-async function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+async function renderPage(opts: { staleTime?: number } = {}) {
+  const qc = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        ...(opts.staleTime === undefined ? {} : { staleTime: opts.staleTime }),
+      },
+    },
+  })
   const mod = await import('../src/routes/intent.detail')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const detailRoute = createRoute({
@@ -314,6 +321,99 @@ describe('RFC-234 /intent/$sessionId', () => {
 
     await screen.findByText('final evidence')
     expect(sessionCalls).toBeGreaterThanOrEqual(2)
+  })
+
+  test('reopening a terminal Session bypasses fresh cache and fetches final evidence', async () => {
+    const runningTurn: IntentSessionDetail['turns'][number] = {
+      id: 'T2',
+      seq: 2,
+      role: 'agent',
+      kind: 'running',
+      content: {},
+      contextRevision: 0,
+      runMeta: null,
+      execution: {
+        captureState: 'live',
+        lastEventSeq: 1,
+        eventBytes: 64,
+        rootSessionId: 'runtime-root',
+        incompleteReason: null,
+      },
+      createdAt: 2,
+    }
+    let currentDetail = detailFixture({
+      session: { ...detailFixture().session, inFlight: true, turnSeq: 2 },
+      turns: [detailFixture().turns[0]!, runningTurn],
+    })
+    let sessionCalls = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
+      const url = req.toString()
+      const payload = url.includes('/turns/T2/session')
+        ? {
+            tree: {
+              sessionId: 'runtime-root',
+              parentSessionId: null,
+              agentName: 'aw-intent-builder',
+              captureComplete: !currentDetail.session.inFlight,
+              messages: [
+                {
+                  kind: 'assistant-text',
+                  text: 'cached evidence',
+                  ts: 2,
+                  messageId: 'M1',
+                },
+                ...(!currentDetail.session.inFlight
+                  ? [
+                      {
+                        kind: 'assistant-text' as const,
+                        text: 'evidence after reopen',
+                        ts: 3,
+                        messageId: 'M2',
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          }
+        : currentDetail
+      if (url.includes('/turns/T2/session')) sessionCalls++
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const qc = await renderPage({ staleTime: 5_000 })
+    await screen.findByText('cached evidence')
+    fireEvent.click(screen.getByRole('button', { name: /Execution/ }))
+
+    currentDetail = detailFixture({
+      session: { ...currentDetail.session, inFlight: false },
+      turns: [
+        currentDetail.turns[0]!,
+        {
+          ...runningTurn,
+          kind: 'changeset',
+          content: { summary: 'done', opCount: 1 },
+          execution: {
+            ...runningTurn.execution!,
+            captureState: 'complete',
+            lastEventSeq: 2,
+            eventBytes: 128,
+          },
+        },
+      ],
+    })
+    await qc.refetchQueries({
+      queryKey: ['intent-sessions', 'detail', 'S1'],
+      exact: true,
+    })
+    expect(screen.queryByText('evidence after reopen')).toBeNull()
+
+    const callsBeforeReopen = sessionCalls
+    fireEvent.click(screen.getByRole('button', { name: /Execution/ }))
+    await screen.findByText('evidence after reopen')
+    expect(sessionCalls).toBeGreaterThan(callsBeforeReopen)
   })
 
   test('journey ignores a failed commit that belongs to an older draft', () => {

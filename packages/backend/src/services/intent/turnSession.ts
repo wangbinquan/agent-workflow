@@ -22,6 +22,7 @@ export const INTENT_TURN_EVENT_BYTE_LIMIT = 8 * 1024 * 1024
 
 type IntentTurnExecutionRow = Pick<
   typeof intentTurns.$inferSelect,
+  | 'kind'
   | 'captureState'
   | 'captureLastEventSeq'
   | 'captureEventBytes'
@@ -29,16 +30,30 @@ type IntentTurnExecutionRow = Pick<
   | 'captureIncompleteReason'
 >
 
+function effectiveCaptureState(
+  row: Pick<typeof intentTurns.$inferSelect, 'kind' | 'captureState'>,
+): IntentTurnExecutionDto['captureState'] | null {
+  // Capture is auxiliary, so a transient failure may prevent every terminal
+  // marker while the following business settlement still succeeds. Once the
+  // turn itself is terminal, an unresolved live marker means incomplete
+  // evidence—not an execution that is still running.
+  return row.captureState === 'live' && row.kind !== 'running' ? 'incomplete' : row.captureState
+}
+
 export function projectIntentTurnExecution(
   row: IntentTurnExecutionRow,
 ): IntentTurnExecutionDto | null {
-  if (row.captureState === null) return null
+  const captureState = effectiveCaptureState(row)
+  if (captureState === null) return null
   return {
-    captureState: row.captureState,
+    captureState,
     lastEventSeq: row.captureLastEventSeq,
     eventBytes: row.captureEventBytes,
     rootSessionId: row.captureRootSessionId,
-    incompleteReason: row.captureIncompleteReason,
+    incompleteReason:
+      captureState === 'incomplete' && row.captureIncompleteReason === null
+        ? 'stream-persist-failed'
+        : row.captureIncompleteReason,
   }
 }
 
@@ -262,6 +277,7 @@ export async function getIntentTurnSession(
       id: intentTurns.id,
       sessionId: intentTurns.sessionId,
       role: intentTurns.role,
+      kind: intentTurns.kind,
       createdAt: intentTurns.createdAt,
       captureState: intentTurns.captureState,
       rootSessionId: intentTurns.captureRootSessionId,
@@ -310,8 +326,9 @@ export async function getIntentTurnSession(
     primaryAgentName: 'aw-intent-builder',
     events,
   })
+  const captureState = effectiveCaptureState(turn)
   const tree =
-    turn.captureState === 'complete' || turn.captureState === 'live'
+    captureState === 'complete' || captureState === 'live'
       ? parsed
       : { ...parsed, captureComplete: false }
   return SessionViewResponseSchema.parse({ tree })

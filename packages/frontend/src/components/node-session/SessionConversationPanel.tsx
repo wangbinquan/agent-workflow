@@ -9,6 +9,7 @@ export interface SessionConversationPanelProps {
   queryKey: readonly unknown[]
   load: (signal: AbortSignal) => Promise<unknown>
   pollMs?: number | false
+  refetchOnMount?: boolean | 'always'
   className?: string
 }
 
@@ -23,6 +24,7 @@ export function SessionConversationPanel(props: SessionConversationPanelProps) {
     queryKey: props.queryKey,
     queryFn: ({ signal }) => props.load(signal),
     refetchInterval: props.pollMs ?? false,
+    refetchOnMount: props.refetchOnMount,
   })
   if (query.isLoading) return <LoadingState size="compact" />
   if (query.error !== null && query.error !== undefined) {

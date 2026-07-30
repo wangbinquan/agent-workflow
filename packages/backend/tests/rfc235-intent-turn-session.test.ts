@@ -7,6 +7,7 @@ import {
   INTENT_TURN_EVENT_BYTE_LIMIT,
   IntentTurnSessionEventSink,
   getIntentTurnSession,
+  projectIntentTurnExecution,
 } from '../src/services/intent/turnSession'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -130,5 +131,28 @@ describe('RFC-235 Intent turn Session capture', () => {
       parentSessionId: null,
       source: 'stream',
     })
+  })
+
+  test('terminal business turn derives an unresolved live capture as incomplete', async () => {
+    const db = seedAgentTurn('turn-terminal-live')
+    db.update(intentTurns)
+      .set({
+        kind: 'changeset',
+        contentJson: JSON.stringify({ summary: 'done', opCount: 1 }),
+      })
+      .where(eq(intentTurns.id, 'turn-terminal-live'))
+      .run()
+
+    const turn = db.select().from(intentTurns).where(eq(intentTurns.id, 'turn-terminal-live')).get()
+    expect(turn).toBeDefined()
+    expect(projectIntentTurnExecution(turn!)).toEqual({
+      captureState: 'incomplete',
+      lastEventSeq: 0,
+      eventBytes: 0,
+      rootSessionId: null,
+      incompleteReason: 'stream-persist-failed',
+    })
+    const response = await getIntentTurnSession(db, 'session-1', 'turn-terminal-live')
+    expect(response.tree.captureComplete).toBe(false)
   })
 })
