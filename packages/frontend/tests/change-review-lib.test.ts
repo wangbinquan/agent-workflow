@@ -260,7 +260,7 @@ describe('buildDiffSegments (impl-gate P2: bodies must stay with their hunk)', (
     const hunks = parseHunks(lines)
     const segments = buildDiffSegments(lines, hunks)
     expect(segments).toEqual([
-      { start: 0, end: 2, hunk: hunks[0] === undefined ? null : null, ...{ hunk: null } },
+      { start: 0, end: 2, hunk: null },
       { start: 2, end: 5, hunk: hunks[0] },
       { start: 5, end: 8, hunk: hunks[1] },
     ])

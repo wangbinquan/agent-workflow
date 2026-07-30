@@ -190,6 +190,26 @@ export function ChangeReviewPanel({
     [changeGroups, entries, entryByKey],
   )
 
+  // Structural keys of every file in the currently-selected file's group
+  // (graph group-focus). Hook order: MUST live above the early returns
+  // (react-hooks/rules-of-hooks — caught by CI after the impl-gate batch).
+  const selectedGroupKeys = useMemo(() => {
+    const currentKey = selectedKey ?? fileOrder[0]
+    if (currentKey === undefined || currentKey === null) return null
+    const group = changeGroups.find((g) =>
+      g.files.some(
+        (f) =>
+          (f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`) === currentKey,
+      ),
+    )
+    if (group === undefined) return null
+    return new Set(
+      group.files.map((f) =>
+        f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`,
+      ),
+    )
+  }, [changeGroups, selectedKey, fileOrder])
+
   // ---- keyboard on the sidebar tablist ----
   const tabRefs = useRef(new Map<string, HTMLButtonElement>())
   const selectFile = useCallback((key: string) => {
@@ -264,23 +284,6 @@ export function ChangeReviewPanel({
   }
 
   const selected = entryByKey.get(selectedKey ?? '') ?? entryByKey.get(fileOrder[0] ?? '')
-  // Structural keys of every file in the selected file's group (graph focus).
-  const selectedGroupKeys = useMemo(() => {
-    if (selected === undefined) return null
-    const group = changeGroups.find((g) =>
-      g.files.some(
-        (f) =>
-          (f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`) ===
-          selected.key,
-      ),
-    )
-    if (group === undefined) return null
-    return new Set(
-      group.files.map((f) =>
-        f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`,
-      ),
-    )
-  }, [changeGroups, selected])
   const drillAvailable = structural.data !== undefined
   const summary = structural.data?.summary
 
