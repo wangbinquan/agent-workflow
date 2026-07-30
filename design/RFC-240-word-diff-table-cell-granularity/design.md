@@ -1,4 +1,4 @@
-# RFC-240 — 技术设计（v10,设计门九轮修订后）
+# RFC-240 — 技术设计（v11,设计门十轮修订后）
 
 ## 接口契约
 
@@ -164,13 +164,21 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
      尖括号 autolink/HTML/数学/实体语法征兆),**或匹配 GFM 字面
      autolink 模式**(`https?://`、`www.`、email 形态 `x@y.z`——字符级
      白名单覆盖不了 `.`/`@`,八轮 P1)→ 整 cell 降级。
-     **降级段的词法隔离垫片**(设计门九轮 P1):降级输出的每个 marker
-     段,内容以非空白字符结尾时在 close marker **之内**垫一个空格
-     (`{D}old {d}{I}new {i}` 形态)——GFM 字面 autolink 词法只在空白处
-     停下,PUA close marker 是非空白、会被吸进链接节点,造成旧新 URL
-     拼接进同一 href、红标丢失;垫片让链接在空格处闭合、整段红/绿包裹
-     link 节点,href 两侧各自完整。垫片空格在着色 span 内,渲染无害;
-     cell 前后空白本就在 marker 外,GFM cell trim 语义不受影响。这把「保护集外
+     **降级段的词法隔离垫片与呈现契约**(设计门九轮 P1,十轮 P1 修正
+     契约):降级输出的每个 marker 段,内容以非空白字符结尾时在 close
+     marker **之内**垫一个空格(`{D}old {d}{I}new {i}` 形态)。垫片防
+     的是「文本后随 URL」形态(`{D}x https://old{d}`——URL 左边界干净
+     会 linkify 并把非空白的 close marker 吸进 href,与后段拼接);而
+     URL 顶在段首时,open marker 紧邻已让 micromark 的
+     previousWww/previousProtocol 边界检查失败、两侧都不 linkify。因此
+     字面 autolink cell 的**呈现契约**是:红色旧文本 + 绿色新文本、
+     **禁止任何拼接 href / 单侧 href**;link 节点不保证生成(与今日
+     整表 DEL/INS 路径对字面 autolink 的行为一致,非新回归)。检测模式
+     **大小写不敏感**(`/https?:\/\//i`、`/www\./i`、email 同——
+     micromark 对协议与 `www` 均大小写宽容,大小写敏感检测会被
+     `HTTPS://` 绕过降级,marker 落入 link、红旧文本指向新 href,
+     设计门十轮 P2)。垫片空格在着色 span 内,渲染无害;cell 前后空白
+     本就在 marker 外,GFM cell trim 语义不受影响。这把「保护集外
      语法继承现状」从枚举承诺变成结构保证——marker 不可能落进任何
      remark 节点 value(七轮 P1:html.value / 嵌套括号 link.url 在
      cell 细化下会被单侧化,是相对现状的新回归,枚举式保护集堵不完)。
@@ -285,11 +293,12 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    (原子化时机语义,三轮 P1);**超限 run**(候选 > 50×50)→ 整行
    DEL+INS、渲染合法且耗时有界(八轮 P1);**行数守卫**(>500 行)→
    行 LCS 之前整对回退(九轮 P1,用行数构造锁定不做真 5000 行压测);
-   **字面 autolink cell**(email `foo@old.com`→`foo@new.com` 与
-   `https://old`→`https://new`、`www.` 形态)→ 整 cell 红绿,**两侧
-   link/mailto 节点结构完整、href 各自精确**(不得拼接;九轮 P1 垫片
-   DOM 锁定);**pair 键单射**:构造含 NUL 的同键表组不串表(八轮
-   P2)。
+   **字面 autolink cell**(email、`https://`、`www.`、大写变体
+   `HTTPS://`,含「文本后随 URL」形态)→ 红旧文本 + 绿新文本可见,
+   **DOM 中不存在拼接 href / 红旧文本指向新 href 的 link**(十轮 P1
+   呈现契约;link 节点不要求生成);**行数守卫源码序锁**(守卫先于
+   `diffArrays`,十轮 P1);**pair 键单射**:构造含 NUL 的同键表组不
+   串表(八轮 P2)。
 5. 超列行 → 整对回退现行为(两张表)。
 6. 同键表前插同键新表(左 `[A,B]` 右 `[X,A,B]`)→ A、B 保持 context,
    仅 X 整绿(阶段 1 内容寻址保障)。
@@ -321,6 +330,12 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 
 ## 设计门记录
 
+- 十轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 2 P1 / 1 P2;
+  **零机制级新缺陷**,三条均为测试契约/措辞精度):折入本 v11——字面
+  autolink 呈现契约改为「红旧+绿新纯文本、禁止拼接/单侧 href,link
+  节点不保证」(open marker 相邻使两侧都不 linkify,与今日整表路径
+  一致;垫片保留用于「文本后随 URL」形态防拼接);检测大小写不敏感;
+  行数守卫「先于 LCS」以仓库惯例的源码序锁固定。
 - 九轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 2 P1;其余全部
   类别零新 finding):折入本 v10——降级段 close marker 内垫空格阻断
   GFM autolink 词法吸收(否则裸 URL 拼接进同一 href、红标丢失);行数
