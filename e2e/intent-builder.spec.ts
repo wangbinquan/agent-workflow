@@ -44,9 +44,9 @@ async function authPage(page: Page): Promise<void> {
 /** Create a session through the UI and wait until the draft panel appears. */
 async function createSessionAndAwaitDraft(page: Page, message: string): Promise<void> {
   await page.goto(`${daemon.baseUrl}/intent`)
-  await page.getByRole('button', { name: 'New intent session' }).first().click()
-  await page.getByTestId('intent-create-message').fill(message)
-  await page.getByRole('button', { name: 'Start building' }).click()
+  const inlineComposer = page.getByTestId('intent-create-inline')
+  await inlineComposer.getByTestId('intent-create-message').fill(message)
+  await inlineComposer.getByRole('button', { name: 'Start building' }).click()
   // Post-create navigation lands on /intent/:id; the 1.5s refetch loop keeps
   // polling while the stubbed turn runs.
   await page.waitForURL(/\/intent\/[0-9A-Z]+/i)
@@ -108,8 +108,10 @@ test('US-6: modify entry pre-mounts the target resource in a new session', async
   await page.goto(`${daemon.baseUrl}/agents/${auditor.id}`)
   await page.getByTestId('agent-intent-entry').click()
   await page.waitForURL(/\/intent\?/)
-  await page.getByTestId('intent-create-message').fill('rename the auditor outputs')
-  await page.getByRole('button', { name: 'Start building' }).click()
+  const dialog = page.getByRole('dialog')
+  const dialogComposer = dialog.getByTestId('intent-create-dialog')
+  await dialogComposer.getByTestId('intent-create-message').fill('rename the auditor outputs')
+  await dialog.getByRole('button', { name: 'Start building' }).click()
   await page.waitForURL(/\/intent\/[0-9A-Z]+/i)
   // The prefilled mount landed: the mounts section lists the agent handle.
   await expect(page.getByText('res#agent#1')).toBeVisible({ timeout: 30_000 })
