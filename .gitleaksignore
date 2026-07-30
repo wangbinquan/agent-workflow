@@ -5,3 +5,5 @@
 094f0f2f55ab34e626178c20ebdcc24507cf5c7f:packages/shared/tests/intent-secret-slots.test.ts:generic-api-key:25
 094f0f2f55ab34e626178c20ebdcc24507cf5c7f:packages/backend/tests/rfc234-resolve-bundle.test.ts:github-pat:272
 094f0f2f55ab34e626178c20ebdcc24507cf5c7f:packages/backend/tests/rfc234-dump-builder.test.ts:github-pat:32
+c95836accef7f4b6bef2a3e2933b815ad85fde13:packages/backend/tests/rfc234-system-agent-run.test.ts:generic-api-key:224
+c95836accef7f4b6bef2a3e2933b815ad85fde13:packages/backend/tests/session-capture-sqlite.test.ts:generic-api-key:316

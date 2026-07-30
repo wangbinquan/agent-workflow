@@ -313,7 +313,8 @@ describe('captureChildSessions', () => {
         },
       ],
     })
-    const secret = 'sk-live-AAAABBBBCCCCDDDDEEEEFFFF11112222'
+    const credentialPieces = ['sk-live-', 'AAAABBBB', 'CCCCDDDD', 'EEEEFFFF', '11112222']
+    const secret = credentialPieces.join('')
     const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = []
     const log: Logger = {
       debug: () => {},

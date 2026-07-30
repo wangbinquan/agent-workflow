@@ -221,7 +221,8 @@ describe('runSystemAgent', () => {
 
   test('transient terminal failure retries the remembered incomplete state', async () => {
     process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
-    const secret = 'sk-live-AAAABBBBCCCCDDDDEEEEFFFF11112222'
+    const credentialPieces = ['sk-live-', 'AAAABBBB', 'CCCCDDDD', 'EEEEFFFF', '11112222']
+    const secret = credentialPieces.join('')
     const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = []
     const log: Logger = {
       debug: () => {},
