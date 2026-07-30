@@ -207,6 +207,9 @@ export const ConfigSchema = z.object({
    * `defaultRuntime` (then opencode). Resolved via `resolveInternalAgentRuntime`.
    */
   memoryDistillRuntime: z.string().min(1).optional(),
+  /** RFC-239 — runtime profile for the change-narrative system agent (AI 导读).
+   *  Unset → global defaultRuntime → opencode (RFC-117 chain). */
+  changeNarrativeRuntime: z.string().min(1).optional(),
   /**
    * RFC-050: language the distiller emits candidate `title` (after the
    * `[category:xxx]` prefix) + `bodyMd` in. Independent from the frontend
@@ -536,6 +539,7 @@ export const ConfigPatchSchema = ConfigSchema.partial()
   // them `LanguageSchema.optional()` (no null); null is patch-only = delete.
   .extend({
     memoryDistillRuntime: z.string().min(1).nullable().optional(),
+    changeNarrativeRuntime: z.string().min(1).nullable().optional(),
     commitPushRuntime: z.string().min(1).nullable().optional(),
     mergeAgentRuntime: z.string().min(1).nullable().optional(),
     memoryDistillModel: z.string().min(1).nullable().optional(),

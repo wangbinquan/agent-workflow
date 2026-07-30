@@ -18,7 +18,7 @@ import { eq } from 'drizzle-orm'
 import { computeSummary, type StructuralDiff, type Task } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { taskCollaborators, tasks, workflows } from '../src/db/schema'
+import { runtimes, taskCollaborators, tasks, workflows } from '../src/db/schema'
 import { createUser } from '../src/services/users'
 import { getTask } from '../src/services/task'
 import { parseNumstatZ, runGit } from '../src/util/git'
@@ -319,6 +319,32 @@ describe('triggerChangeNarrative', () => {
     await triggerChangeNarrative(deps(db, runFn), w.task, w.owner)
     await new Promise((r) => setTimeout(r, 80))
     expect(existsSync(join(home, 'structural-diffs', w.task.id))).toBe(false)
+  })
+
+  test('RFC-239 config: deps.runtimeName selects the per-feature runtime row', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const w = await seedWorld(db)
+    await db.insert(runtimes).values({
+      id: 'rt-narr',
+      name: 'narr-claude',
+      protocol: 'claude-code',
+      binaryPath: null,
+      model: 'claude-sonnet-5',
+    })
+    let seen: { protocol?: string; model?: string | null } = {}
+    const runFn: ChangeNarrativeDeps['runFn'] = async (opts) => {
+      seen = { protocol: opts.protocol, model: opts.model ?? null }
+      return okRun(GOOD_OUTPUT)
+    }
+    await triggerChangeNarrative(
+      { db, runFn, runtimeName: 'narr-claude', defaultRuntime: null },
+      w.task,
+      w.owner,
+    )
+    await new Promise((r) => setTimeout(r, 80))
+    expect(seen.protocol).toBe('claude-code')
+    expect(seen.model).toBe('claude-sonnet-5')
+    expect((await getChangeNarrativeStatus(w.task.id))?.status).toBe('ready')
   })
 
   test('nothing to narrate → 409', async () => {

@@ -48,6 +48,8 @@ describe('RFC-201 Settings draft registry', () => {
       'memoryDistillLang',
       'mergeAgentRuntime',
       'mergeAgentModel',
+      // RFC-239 change narrative (AI 导读)
+      'changeNarrativeRuntime',
       // RFC-234 intent-builder system agent (T12 settings card).
       'intentBuilderRuntime',
       'intentBuilderLang',

@@ -47,6 +47,8 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'memoryDistillLang',
     'mergeAgentRuntime',
     'mergeAgentModel',
+    // RFC-239 change narrative (AI 导读)
+    'changeNarrativeRuntime',
     // RFC-234 intent builder
     'intentBuilderRuntime',
     'intentBuilderLang',

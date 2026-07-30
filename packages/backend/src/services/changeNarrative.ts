@@ -306,6 +306,10 @@ export function extractJsonObject(text: string): unknown | null {
 
 export interface ChangeNarrativeDeps {
   db: DbClient
+  /** RFC-239 — per-feature runtime selection (config.changeNarrativeRuntime);
+   *  unset falls through defaultRuntime → opencode (RFC-117 chain). */
+  runtimeName?: string | null
+  defaultRuntime?: string | null
   containmentCoordinator?: ContainmentCoordinator
   /** Test seam — production omits it and gets the real runSystemAgent. */
   runFn?: (opts: Parameters<typeof runSystemAgent>[0]) => Promise<SystemAgentRunResult>
@@ -393,7 +397,10 @@ async function runGeneration(
   task: Task,
   input: NarrativeInput,
 ): Promise<void> {
-  const runtime = await resolveInternalAgentRuntime(deps.db, {})
+  const runtime = await resolveInternalAgentRuntime(deps.db, {
+    runtimeName: deps.runtimeName ?? null,
+    defaultRuntime: deps.defaultRuntime ?? null,
+  })
   const runFn = deps.runFn ?? runSystemAgent
   const result = await runFn({
     feature: 'change-narrative',

@@ -39,6 +39,14 @@ describe('settings.tsx — RFC-117 commit&push runtime config', () => {
 })
 
 describe('settings.tsx — RFC-117 memory-distill runtime config', () => {
+  test('persists changeNarrativeRuntime in the System agents tab draft slice (RFC-239)', () => {
+    expect(SETTINGS_DRAFTS).toContain("'changeNarrativeRuntime'")
+    expect(SETTINGS).toMatch(/state\.changeNarrativeRuntime/)
+    expect(SETTINGS).toContain("t('settings.changeNarrativeRuntimeLabel')")
+    expect(ZH).toMatch(/changeNarrativeRuntimeLabel:\s*'/)
+    expect(EN).toMatch(/changeNarrativeRuntimeLabel:\s*'/)
+  })
+
   test('persists memoryDistillRuntime in the System agents tab draft slice', () => {
     expect(SETTINGS_DRAFTS).toContain("'memoryDistillRuntime'")
     expect(SETTINGS).toMatch(/state\.memoryDistillRuntime/)

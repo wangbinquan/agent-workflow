@@ -1122,6 +1122,8 @@ export interface Resources {
     memoryDistillModelHint: string
     memoryDistillRuntimeLabel: string
     memoryDistillRuntimeHint: string
+    changeNarrativeRuntimeLabel: string
+    changeNarrativeRuntimeHint: string
     runtimeInherit: string
     // RFC-156 — "System agents" tab: per-card titles + one-line role hints for the
     // internal framework agents, plus the fusion card's own runtime field.
@@ -1132,6 +1134,8 @@ export interface Resources {
       memoryHint: string
       mergeTitle: string
       mergeHint: string
+      narrativeTitle: string
+      narrativeHint: string
       intentTitle: string
       intentHint: string
       intentRuntime: string
@@ -5211,6 +5215,9 @@ export const zhCN: Resources = {
     memoryDistillRuntimeHint:
       '记忆提炼运行的运行时 profile，其 model 及其它参数都来自该 profile；留空则继承全局默认运行时。',
     runtimeInherit: '继承（全局默认）',
+    changeNarrativeRuntimeLabel: '变更导读运行时',
+    changeNarrativeRuntimeHint:
+      '任务「结构变更」页签生成 AI 导读所用的运行时 profile；留空则继承全局默认运行时。',
     systemAgents: {
       commitPushTitle: '提交推送',
       commitPushHint: '自动提交时生成 commit message、修复被拒推送的内置 agent（RFC-075）。',
@@ -5218,6 +5225,8 @@ export const zhCN: Resources = {
       memoryHint: '从任务产物提炼长期记忆候选的内置 agent（RFC-041）。',
       mergeTitle: '合并冲突解决',
       mergeHint: '按节点隔离合并回主干、遇真实三方冲突时解决冲突的内置 agent（RFC-130）。',
+      narrativeTitle: '变更导读',
+      narrativeHint: '为任务代码变更生成总述、分组一句话与推荐阅读顺序的内置 agent（RFC-239）。',
       intentTitle: '意图构建',
       intentHint:
         '把自然语言目标转成工作流/工作组/代理/技能变更集的内置 agent（RFC-234）；需选择能实施只读构建 profile 的运行时。',

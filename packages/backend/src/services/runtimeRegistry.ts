@@ -497,6 +497,8 @@ export interface RuntimeRefConfig {
   mergeAgentRuntime?: string | null
   /** RFC-234 — intent-builder system agent selection. */
   intentBuilderRuntime?: string | null
+  /** RFC-239 — change-narrative (AI 导读) system agent selection. */
+  changeNarrativeRuntime?: string | null
 }
 
 // --- CRUD ------------------------------------------------------------------
@@ -837,6 +839,7 @@ export async function deleteRuntime(
     if (refs.commitPushRuntime === name) configFields.push('config.commitPushRuntime')
     if (refs.mergeAgentRuntime === name) configFields.push('config.mergeAgentRuntime')
     if (refs.intentBuilderRuntime === name) configFields.push('config.intentBuilderRuntime')
+    if (refs.changeNarrativeRuntime === name) configFields.push('config.changeNarrativeRuntime')
     const refAgents = tx
       .select({ name: agents.name })
       .from(agents)

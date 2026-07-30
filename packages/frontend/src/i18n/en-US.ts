@@ -963,6 +963,9 @@ export const enUS: Resources = {
     memoryDistillRuntimeHint:
       'Runtime profile the memory distiller runs on; its model and other params come from the profile. Leave empty to inherit the global default runtime.',
     runtimeInherit: 'Inherit (global default)',
+    changeNarrativeRuntimeLabel: 'Change-narrative runtime',
+    changeNarrativeRuntimeHint:
+      "Runtime profile used when generating the AI walkthrough on a task's Structural changes tab; empty inherits the global default runtime.",
     systemAgents: {
       commitPushTitle: 'Commit & push',
       commitPushHint:
@@ -973,6 +976,9 @@ export const enUS: Resources = {
       mergeTitle: 'Merge-conflict resolver',
       mergeHint:
         'Built-in agent that resolves real 3-way conflicts during isolated per-node merge-back (RFC-130).',
+      narrativeTitle: 'Change walkthrough',
+      narrativeHint:
+        'Built-in agent that writes the overview, per-group sentences and reading order for a task change (RFC-239).',
       intentTitle: 'Intent builder',
       intentHint:
         'Turns natural-language goals into workflow/workgroup/agent/skill changesets (RFC-234); requires a runtime whose driver enforces the read-only build profile.',

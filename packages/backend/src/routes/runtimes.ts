@@ -408,6 +408,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       commitPushRuntime: cfg.commitPushRuntime,
       mergeAgentRuntime: cfg.mergeAgentRuntime,
       intentBuilderRuntime: cfg.intentBuilderRuntime,
+      changeNarrativeRuntime: cfg.changeNarrativeRuntime,
     })
     await runtimeTests.reconcileDurableIntents()
     return c.json({ ok: true })

@@ -1365,6 +1365,22 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
         </AgentCard>
 
         <AgentCard
+          title={t('settings.systemAgents.narrativeTitle')}
+          hint={t('settings.systemAgents.narrativeHint')}
+        >
+          <Field
+            label={t('settings.changeNarrativeRuntimeLabel')}
+            hint={t('settings.changeNarrativeRuntimeHint')}
+          >
+            <RuntimeSelect
+              value={state.changeNarrativeRuntime}
+              ariaLabel={t('settings.changeNarrativeRuntimeLabel')}
+              onChange={(v) => setState({ ...state, changeNarrativeRuntime: v })}
+            />
+          </Field>
+        </AgentCard>
+
+        <AgentCard
           title={t('settings.systemAgents.mergeTitle')}
           hint={t('settings.systemAgents.mergeHint')}
         >

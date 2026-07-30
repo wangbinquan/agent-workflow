@@ -356,9 +356,12 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     if (task === null) {
       throw new NotFoundError('task-not-found', `task '${id}' not found`)
     }
+    const narrativeCfg = loadConfig(deps.configPath)
     const state = await triggerChangeNarrative(
       {
         db: deps.db,
+        runtimeName: narrativeCfg.changeNarrativeRuntime ?? null,
+        defaultRuntime: narrativeCfg.defaultRuntime ?? null,
         ...(deps.containmentCoordinator === undefined
           ? {}
           : { containmentCoordinator: deps.containmentCoordinator }),

@@ -87,6 +87,11 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
           deprecatedModel: nextConfig.memoryDistillModel,
         },
         {
+          // RFC-239 — change-narrative has no legacy model field.
+          runtimeName: nextConfig.changeNarrativeRuntime,
+          deprecatedModel: undefined,
+        },
+        {
           runtimeName: nextConfig.commitPushRuntime,
           deprecatedModel: nextConfig.commitPushModel,
         },
