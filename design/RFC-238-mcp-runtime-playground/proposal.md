@@ -1,6 +1,6 @@
 # RFC-238 · MCP 运行时多轮测试对话框
 
-- 状态：Implementation v1（设计门与用户实施批准均已通过；核心链路已落地，强化项待完成）
+- 状态：Done（2026-07-30；实现、验证与实现门均已完成）
 - 日期：2026-07-30
 - 关联：RFC-028（MCP 管理）、RFC-030（MCP 接口探测）、RFC-111/112/113/143/154
   （RuntimeDriver 与运行时 profile）、RFC-224/227/233（执行身份与 containment）、
@@ -260,3 +260,24 @@ MCP 自身 `timeoutMs` 仍只控制单次 MCP request；它不替代单轮 10 �
 13. 中英文、desktop light/dark、390px、键盘 focus trap/restore、axe 与真实 daemon
     两轮 MCP fixture E2E 通过。
 14. 设计门、实现门及仓库 typecheck/lint/test/format/depcheck/binary gates 全部通过。
+
+## 8. 交付结果
+
+- MCP 详情“工具与探测”页签已提供“使用运行时测试”Dialog；Claude Code 与 OpenCode
+  均可在自身 enabled runtime profile 声明 `mcp-test-v1` 时出现在选择器中。前后端均按
+  driver capability 失败关闭，不按 protocol 字符串猜测支持情况。
+- 两种 runtime 都只挂载当前已保存 MCP，并使用 runtime-native new/resume 延续多轮上下文；
+  OpenCode 使用独立 verified owner/lease/control-ACK plan，Claude Code 使用预分配 session id
+  与严格 one-MCP config。运行记录统一由 `SessionConversationPanel` 渲染。
+- 会话在 turn 终态后闲置 10 分钟自动结束；单轮另有从接纳起计算的 10 分钟 hard deadline。
+  “取消当前轮次”“立即结束测试”和普通关闭 Dialog 三种动作保持独立。
+- durable session/turn/event/create receipt、owner/admin 私有 ACL、create/message 幂等、
+  single-flight/idle CAS、private WS locator + polling fallback、graceful shutdown、boot recovery、
+  periodic reconciliation/cleanup/receipt GC、capture limits 与 quarantine 均已接通。
+- 本地交付门：Backend `7696 pass / 26 skip / 0 fail`（938 files，26403 expects）；
+  Shared `1531 pass / 0 fail`（146 files，3994 expects）；Frontend `5375 pass / 0 fail`
+  （661 files）。typecheck、lint、format、depcheck、双 binary build/version smoke 均通过。
+- 真实进程 Claude Code + stateful fixture MCP 两轮原生 resume E2E 通过；浏览器 E2E 覆盖
+  Claude Code/OpenCode 双选择、失败态、desktop/dark、390px、focus trap/restore 与 axe。
+  OpenCode 的 one-MCP、owner/lease/control ACK、new/resume 与身份一致性由 driver/service
+  集成测试覆盖。Codex 实现门为 `P0=0 / P1=0 / P2=0`。
