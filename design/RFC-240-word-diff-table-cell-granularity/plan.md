@@ -16,7 +16,8 @@
 - **RFC-240-T2 intraTableDiff + 共享原语**(v4)
   §0 cell 计数/规范骨架(含来源侧缩进、无首/尾 pipe 端不剥哑段、零
   cell 行合成色块)→ §2 GFM 等价/规模守卫(表头≠分隔符 cell 数、超列、任一侧 body 行数
-  >500 → 整对回退,行数守卫先于行 LCS)→ §2b 进场逐 cell 原子化(**code→转义对→image→link→math**,code opener 奇偶,
+  >500 → 整对回退,行数守卫先于行 LCS 且源码序锁;cell >500 token 或
+  累计预算 10⁶ 超限 → 整 cell 降级)→ §2b 进场逐 cell 原子化(**code→转义对→image→link→math**,code opener 奇偶,
   允许嵌套)→ 行级精确 LCS → 单 run 内相似度配对(Dice **≥0.5**,基于
   原子化后内容 token = trim 后丢空白与纯标点/符号;候选序
   `(score↓, |i-j|↑, i, j)` 贪心;输出 = 先未配对 DEL(旧序)后新序)→
