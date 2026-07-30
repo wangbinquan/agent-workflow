@@ -133,6 +133,7 @@ export function DrilldownOverlay({
   taskId,
   callRoot,
   currentFileKey,
+  currentGroupKeys,
   onOpenCallChain,
   onJumpToFile,
 }: {
@@ -143,17 +144,27 @@ export function DrilldownOverlay({
   callRoot: CallChainRoot | null
   /** Structural key (`label/rel` or `rel`) of the sidebar's current file. */
   currentFileKey: string | null
+  /** Structural keys of the selected file's whole group (graph group-focus,
+   *  impl-gate P2 — design §4 promises all/group/file). */
+  currentGroupKeys?: ReadonlySet<string> | null
   onOpenCallChain?: (root: CallChainRoot) => void
   onJumpToFile?: (filePath: string) => void
 }) {
   const { t } = useTranslation()
-  const [focus, setFocus] = useState<'all' | 'file'>('all')
+  const [focus, setFocus] = useState<'all' | 'group' | 'file'>('all')
   // Graph focus filter (design §4): feed StructuralGraph a file-subset of the
   // diff. Pure pre-filter — the graph model itself is untouched.
   const graphData = useMemo<StructuralDiff | undefined>(() => {
     if (data === undefined) return undefined
-    if (kind !== 'graph' || focus === 'all' || currentFileKey === null) return data
-    const files = data.files.filter((f) => f.filePath === currentFileKey)
+    if (kind !== 'graph' || focus === 'all') return data
+    const keepKeys =
+      focus === 'group'
+        ? (currentGroupKeys ?? (currentFileKey === null ? null : new Set([currentFileKey])))
+        : currentFileKey === null
+          ? null
+          : new Set([currentFileKey])
+    if (keepKeys === null) return data
+    const files = data.files.filter((f) => keepKeys.has(f.filePath))
     const keep = new Set(files.map((f) => f.filePath))
     return {
       ...data,
@@ -168,7 +179,7 @@ export function DrilldownOverlay({
         return f !== null && keep.has(f)
       }),
     }
-  }, [data, kind, focus, currentFileKey])
+  }, [data, kind, focus, currentFileKey, currentGroupKeys])
 
   if (kind === null || data === undefined) return null
   return (
@@ -177,11 +188,14 @@ export function DrilldownOverlay({
         {kind === 'graph' && (
           <>
             {currentFileKey !== null && (
-              <Segmented<'all' | 'file'>
+              <Segmented<'all' | 'group' | 'file'>
                 value={focus}
                 onChange={setFocus}
                 options={[
                   { value: 'all', label: t('tasks.changesDrillFocusAll') },
+                  ...(currentGroupKeys != null && currentGroupKeys.size > 1
+                    ? [{ value: 'group' as const, label: t('tasks.changesDrillFocusGroup') }]
+                    : []),
                   { value: 'file', label: t('tasks.changesDrillFocusFile') },
                 ]}
                 ariaLabel={t('tasks.changesDrillFocusLabel')}

@@ -2349,6 +2349,7 @@ export interface Resources {
     changesDrillDeps: string
     changesDrillFocusAll: string
     changesDrillFocusFile: string
+    changesDrillFocusGroup: string
     changesDrillFocusLabel: string
     changesNarrativeGenerate: string
     changesNarrativeGenerating: string
@@ -6821,6 +6822,7 @@ export const zhCN: Resources = {
     changesDrillDeps: '依赖变更',
     changesDrillFocusAll: '全部',
     changesDrillFocusFile: '当前文件',
+    changesDrillFocusGroup: '当前组',
     changesDrillFocusLabel: '图聚焦',
     changesNarrativeGenerate: '生成 AI 导读',
     changesNarrativeGenerating: 'AI 导读生成中…',

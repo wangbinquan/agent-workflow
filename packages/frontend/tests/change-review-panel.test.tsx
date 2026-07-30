@@ -306,6 +306,33 @@ describe('ChangeReviewPanel — survives-GC fallback', () => {
   })
 })
 
+describe('ChangeReviewPanel — impl-gate P2 regressions', () => {
+  test('Space on a group header folds the group instead of toggling viewed', () => {
+    renderPanel({ structuralData: structural(), storageKey: 'T-SPACE' })
+    const header = screen.getAllByTestId('change-group')[0]
+    const headerButton = within(header as HTMLElement).getByRole('button', { expanded: true })
+    headerButton.focus()
+    // dispatch ON the header so the event bubbles into the tablist handler
+    fireEvent.keyDown(headerButton, { key: ' ' })
+    const progress = screen.getByTestId('diff-viewed-progress')
+    expect(progress.textContent).toMatch(/^0|已看 0/)
+  })
+
+  test('call-chain drill button stays hidden until a ⎇ picked a root', () => {
+    renderPanel({ structuralData: structural() })
+    const drillButtons = screen
+      .queryAllByRole('button', { name: /调用链|call chain/i })
+      .filter((el) => el.classList.contains('btn'))
+    expect(drillButtons).toHaveLength(0)
+  })
+
+  test('group headers surface the change magnitude (± lines)', () => {
+    renderPanel({ structuralData: structural() })
+    const header = screen.getAllByTestId('change-group')[0]
+    expect((header as HTMLElement).textContent).toMatch(/\+\d/)
+  })
+})
+
 describe('RFC-239 legacy tab URL redirect', () => {
   test('worktree-diff / worktree-structure normalize to changes; junk drops', () => {
     expect(validateTaskDetailSearch({ tab: 'worktree-diff' })).toEqual({ tab: 'changes' })

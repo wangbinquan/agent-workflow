@@ -17,6 +17,7 @@ import { splitByRepo } from '@/components/DiffViewer'
 import { Select } from '@/components/Select'
 import { Segmented } from '@/components/Segmented'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { tabDomIds } from '@/components/TabBar'
 import { loadViewed, saveViewed, toggleViewed, viewedProgress } from '@/lib/diffViewed'
@@ -34,6 +35,7 @@ interface StructuralQueryState {
   data: StructuralDiff | undefined
   error: unknown
   isLoading: boolean
+  refetch?: () => void
 }
 
 export interface ChangeReviewScopeOption {
@@ -224,7 +226,11 @@ export function ChangeReviewPanel({
           break
         case ' ':
         case 'Spacebar': {
-          if ((e.target as HTMLElement).tagName === 'INPUT') break
+          const target = e.target as HTMLElement
+          if (target.tagName === 'INPUT') break
+          // Group headers are buttons too — Space must ACTIVATE them (fold),
+          // not toggle the selected file's viewed state (impl-gate P2).
+          if (target.closest('.changes__group-header') !== null) break
           e.preventDefault()
           const cur = entryByKey.get(selectedKey ?? fileOrder[0] ?? '')
           if (cur !== undefined) markViewed(cur.viewedKey)
@@ -258,6 +264,23 @@ export function ChangeReviewPanel({
   }
 
   const selected = entryByKey.get(selectedKey ?? '') ?? entryByKey.get(fileOrder[0] ?? '')
+  // Structural keys of every file in the selected file's group (graph focus).
+  const selectedGroupKeys = useMemo(() => {
+    if (selected === undefined) return null
+    const group = changeGroups.find((g) =>
+      g.files.some(
+        (f) =>
+          (f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`) ===
+          selected.key,
+      ),
+    )
+    if (group === undefined) return null
+    return new Set(
+      group.files.map((f) =>
+        f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`,
+      ),
+    )
+  }, [changeGroups, selected])
   const drillAvailable = structural.data !== undefined
   const summary = structural.data?.summary
 
@@ -304,7 +327,9 @@ export function ChangeReviewPanel({
                 {t('tasks.changesDrillImpact')}
               </button>
             )}
-            {structural.data?.callChainAvailable === true && (
+            {structural.data?.callChainAvailable === true && callRoot !== null && (
+              // Only after a symbol's ⎇ picked a root — a rootless dialog has
+              // nothing but "pick a method" and no picker (impl-gate P2).
               <button type="button" className="btn btn--xs" onClick={() => setDrill('callchain')}>
                 {t('tasks.changesDrillCallChain')}
               </button>
@@ -317,11 +342,20 @@ export function ChangeReviewPanel({
           </div>
         )}
       </div>
-      {structural.error != null && structural.data === undefined && (
-        <div className="changes__banner" role="status">
-          {t('tasks.changesStructuralUnavailable')}
-        </div>
-      )}
+      {structural.error != null &&
+        (structural.data === undefined ? (
+          <div className="changes__banner" role="status">
+            {t('tasks.changesStructuralUnavailable')}
+          </div>
+        ) : (
+          // Polling keeps the previous structural response on a failed
+          // refetch; without this the panel silently pairs a fresh text diff
+          // with stale annotations (impl-gate P2).
+          <ErrorBanner
+            error={structural.error}
+            {...(structural.refetch === undefined ? {} : { onRetry: structural.refetch })}
+          />
+        ))}
       <ChangeNarrativeCard
         taskId={taskId}
         status={narrative.data}
@@ -391,6 +425,29 @@ export function ChangeReviewPanel({
                     )}
                     <span className="changes__group-count">
                       {t('tasks.changesGroupCount', { files: g.stats.files, viewed: groupViewed })}
+                    </span>
+                    <span className="changes__group-magnitude">
+                      {g.stats.lines.added + g.stats.lines.removed > 0 ? (
+                        <>
+                          {g.stats.lines.added > 0 && (
+                            <span className="structure__delta structure__delta--added">
+                              +{g.stats.lines.added}
+                            </span>
+                          )}
+                          {g.stats.lines.removed > 0 && (
+                            <span className="structure__delta structure__delta--removed">
+                              −{g.stats.lines.removed}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="structure__delta">
+                          {g.stats.symbolCounts.added +
+                            g.stats.symbolCounts.modified +
+                            g.stats.symbolCounts.removed +
+                            g.stats.symbolCounts.renamed}
+                        </span>
+                      )}
                     </span>
                     <span className="changes__weight" aria-hidden="true">
                       <span
@@ -495,6 +552,7 @@ export function ChangeReviewPanel({
         taskId={taskId}
         callRoot={callRoot}
         currentFileKey={selected?.key ?? null}
+        currentGroupKeys={selectedGroupKeys}
         onOpenCallChain={openCallChain}
         onJumpToFile={jumpToFile}
       />

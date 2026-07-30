@@ -19,6 +19,7 @@ import { splitByRepo } from '../src/components/DiffViewer'
 import {
   blockTextStats,
   buildChangeEntries,
+  buildDiffSegments,
   parseHunks,
   toGroupEntries,
 } from '../src/lib/changeReview'
@@ -240,5 +241,56 @@ describe('symbolAtLine', () => {
     expect(symbolAtLine([outer, inner], 'new', 15)).toBe(inner)
     expect(symbolAtLine([outer, inner], 'new', 40)).toBe(outer)
     expect(symbolAtLine([outer, inner], 'new', 99)).toBeNull()
+  })
+})
+
+// impl-gate P2 regressions
+describe('buildDiffSegments (impl-gate P2: bodies must stay with their hunk)', () => {
+  test('two hunks → preamble + one segment per hunk spanning through the next header', () => {
+    const lines = [
+      'diff --git a/f b/f', // 0
+      'index 1..2', // 1
+      '@@ -1,1 +1,1 @@', // 2
+      '-a', // 3
+      '+b', // 4
+      '@@ -9,1 +9,1 @@', // 5
+      '-c', // 6
+      '+d', // 7
+    ]
+    const hunks = parseHunks(lines)
+    const segments = buildDiffSegments(lines, hunks)
+    expect(segments).toEqual([
+      { start: 0, end: 2, hunk: hunks[0] === undefined ? null : null, ...{ hunk: null } },
+      { start: 2, end: 5, hunk: hunks[0] },
+      { start: 5, end: 8, hunk: hunks[1] },
+    ])
+    // every hunk body line lives inside its own hunk's segment
+    expect(segments[1]?.start).toBe(2)
+    expect(segments[1]?.end).toBe(5)
+  })
+
+  test('no hunks → one null segment covering the whole block', () => {
+    expect(buildDiffSegments(['x', 'y'], [])).toEqual([{ start: 0, end: 2, hunk: null }])
+  })
+})
+
+describe('buildChangeEntries — structural-only multi-repo identity (impl-gate P2)', () => {
+  test("fromRef='multi' keeps label/rel keys split when the text diff is gone", () => {
+    const structural = structuralWith([
+      {
+        filePath: 'alpha/src/x.ts',
+        lang: 'typescript',
+        status: 'ok',
+        edges: [],
+        impact: [],
+        changes: [
+          { changeType: 'added', kind: 'method', after: node('X.m', { file: 'alpha/src/x.ts' }) },
+        ],
+      },
+    ])
+    const entries = buildChangeEntries(splitByRepo(''), { ...structural, fromRef: 'multi' })
+    expect(entries[0]?.repoLabel).toBe('alpha')
+    expect(entries[0]?.filePath).toBe('src/x.ts')
+    expect(entries[0]?.viewedKey).toBe('alpha::src/x.ts')
   })
 })

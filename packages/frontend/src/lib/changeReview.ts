@@ -43,6 +43,40 @@ export function parseHunks(lines: readonly string[]): HunkInfo[] {
   return out
 }
 
+/** Split a block's lines into render segments: one preamble (diff --git /
+ *  index headers, hunk=null) followed by ONE segment per hunk spanning its
+ *  `@@` header through the line before the next header (impl-gate P2: the
+ *  first cut produced empty hunk segments and dropped every body into a
+ *  null segment, breaking owner badges and scroll targets). */
+export interface DiffSegment {
+  start: number
+  end: number
+  hunk: HunkInfo | null
+}
+
+export function buildDiffSegments(
+  lines: readonly string[],
+  hunks: readonly HunkInfo[],
+): DiffSegment[] {
+  if (hunks.length === 0) return [{ start: 0, end: lines.length, hunk: null }]
+  const segments: DiffSegment[] = []
+  const first = hunks[0]
+  if (first !== undefined && first.headerIndex > 0) {
+    segments.push({ start: 0, end: first.headerIndex, hunk: null })
+  }
+  for (let i = 0; i < hunks.length; i++) {
+    const h = hunks[i]
+    if (h === undefined) continue
+    const next = hunks[i + 1]
+    segments.push({
+      start: h.headerIndex,
+      end: next === undefined ? lines.length : next.headerIndex,
+      hunk: h,
+    })
+  }
+  return segments
+}
+
 /** ±line counts from a block's hunk body lines (excludes headers). */
 export function blockTextStats(lines: readonly string[]): { added: number; removed: number } {
   let added = 0
@@ -114,7 +148,12 @@ export function buildChangeEntries(
   groups: readonly RepoGroup[],
   structural: StructuralDiff | undefined,
 ): ChangeFileEntry[] {
-  const multiRepo = groups.some((g) => g.repo !== null)
+  // Multi-repo identity must survive the text diff being unavailable (GC'd
+  // worktree, structural-only fallback): the merged structural artifact stamps
+  // fromRef='multi', so canonical `label/rel` keys keep their repo split
+  // (impl-gate P2 — treating them as single-repo paths lost grouping AND made
+  // file-content requests target the wrong repo with an invalid path).
+  const multiRepo = groups.some((g) => g.repo !== null) || structural?.fromRef === 'multi'
   const structuralByKey = new Map<string, FileStructuralDiff>()
   const manifestPaths = new Set<string>()
   if (structural !== undefined) {

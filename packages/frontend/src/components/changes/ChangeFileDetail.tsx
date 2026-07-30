@@ -12,9 +12,11 @@ import { classifyBreaking, explainChange, type Severity } from '@agent-workflow/
 import { api } from '@/api/client'
 import { DiffFileBody } from '@/components/DiffViewer'
 import { MarkdownDiffView } from '@/components/review/MarkdownDiffView'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { Segmented } from '@/components/Segmented'
 import { badgeClass, badgeSymbol, diffSignatureTokens, type SigToken } from '@/lib/structureView'
 import { hunkForSymbol, symbolForHunk } from '@/lib/hunkSymbolMap'
+import { buildDiffSegments } from '@/lib/changeReview'
 import type { ChangeFileEntry, HunkInfo } from '@/lib/changeReview'
 import type { CallChainRoot } from '@/components/structure/CallChainView'
 
@@ -131,13 +133,19 @@ function SymbolRow({
   hunks,
   onJumpToHunk,
   onOpenCallChain,
+  focused,
 }: {
   change: SymbolChange
   hunks: readonly HunkInfo[]
   onJumpToHunk: (hunk: HunkInfo) => void
   onOpenCallChain?: (root: CallChainRoot) => void
+  focused?: boolean
 }) {
   const { t } = useTranslation()
+  const rowRef = useRef<HTMLLIElement | null>(null)
+  useEffect(() => {
+    if (focused === true) rowRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [focused])
   const node = change.after ?? change.before
   const verdict = classifyBreaking(change)
   // added+safe explanations are pure tautology ("新增 method x") — drop them
@@ -196,7 +204,10 @@ function SymbolRow({
     </>
   )
   return (
-    <li className="structure__symbol">
+    <li
+      ref={rowRef}
+      className={`structure__symbol${focused === true ? ' structure__symbol--focused' : ''}`}
+    >
       {target !== null ? (
         <button
           type="button"
@@ -230,10 +241,13 @@ function SymbolOutline({
   entry,
   onJumpToHunk,
   onOpenCallChain,
+  focusQualifiedName,
 }: {
   entry: ChangeFileEntry
   onJumpToHunk: (hunk: HunkInfo) => void
   onOpenCallChain?: (root: CallChainRoot) => void
+  /** Reverse jump: outline row to highlight + scroll into view. */
+  focusQualifiedName?: string | null
 }) {
   const { t } = useTranslation()
   const f = entry.structural
@@ -285,6 +299,7 @@ function SymbolOutline({
                   change={c}
                   hunks={entry.hunks}
                   onJumpToHunk={onJumpToHunk}
+                  focused={(c.after ?? c.before)?.qualifiedName === focusQualifiedName}
                 />
               ))}
             </ul>
@@ -322,6 +337,10 @@ function SymbolOutline({
                   hunks={entry.hunks}
                   onJumpToHunk={onJumpToHunk}
                   onOpenCallChain={onOpenCallChain}
+                  focused={
+                    (g.containerChange.after ?? g.containerChange.before)?.qualifiedName ===
+                    focusQualifiedName
+                  }
                 />
               </ul>
             )}
@@ -334,6 +353,7 @@ function SymbolOutline({
                     hunks={entry.hunks}
                     onJumpToHunk={onJumpToHunk}
                     onOpenCallChain={onOpenCallChain}
+                    focused={(c.after ?? c.before)?.qualifiedName === focusQualifiedName}
                   />
                 ))}
               </ul>
@@ -351,10 +371,14 @@ function AnnotatedDiff({
   entry,
   focusHunk,
   scrollRef,
+  onOwnerClick,
 }: {
   entry: ChangeFileEntry
   focusHunk: HunkInfo | null
   scrollRef: React.RefObject<HTMLDivElement | null>
+  /** Reverse jump (impl-gate P2): click a hunk's owner → highlight + scroll
+   *  the matching outline row. */
+  onOwnerClick?: (qualifiedName: string) => void
 }) {
   const { t } = useTranslation()
   const changes = useMemo(() => entry.structural?.changes ?? [], [entry.structural?.changes])
@@ -391,23 +415,7 @@ function AnnotatedDiff({
     return <div className="changes__outline-note muted">{t('tasks.changesTextUnavailable')}</div>
   }
   const lines = entry.block.lines
-  // Segment block lines at hunk headers; the preamble (diff --git/index) stays
-  // as segment 0 with no badge.
-  const segments: Array<{ start: number; end: number; hunk: HunkInfo | null }> = []
-  let prev = 0
-  for (const h of entry.hunks) {
-    if (h.headerIndex > prev) segments.push({ start: prev, end: h.headerIndex, hunk: null })
-    prev = h.headerIndex
-    segments.push({ start: h.headerIndex, end: -1, hunk: h })
-  }
-  if (segments.length === 0) segments.push({ start: 0, end: lines.length, hunk: null })
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i]
-    if (seg !== undefined && seg.end === -1) {
-      const next = segments[i + 1]
-      seg.end = next === undefined ? lines.length : next.start
-    }
-  }
+  const segments = buildDiffSegments(lines, entry.hunks)
   return (
     <div className="changes__diff" onScroll={onScroll} ref={scrollRef}>
       {currentSymbol !== null && (
@@ -430,9 +438,14 @@ function AnnotatedDiff({
             }}
           >
             {ownerNode !== undefined && (
-              <div className="changes__hunk-owner" title={ownerNode.qualifiedName}>
+              <button
+                type="button"
+                className="changes__hunk-owner"
+                title={ownerNode.qualifiedName}
+                onClick={() => onOwnerClick?.(ownerNode.qualifiedName)}
+              >
                 {ownerNode.qualifiedName}
-              </div>
+              </button>
             )}
             <pre className="diff__body">
               {lines.slice(seg.start, seg.end).map((line, j) => (
@@ -474,6 +487,10 @@ export function ChangeFileDetail({
   const { t } = useTranslation()
   const [docView, setDocView] = useState<'rendered' | 'text'>('rendered')
   const [pendingFocus, setPendingFocus] = useState<HunkInfo | null>(focusHunk)
+  // Reverse jump target (impl-gate P2): qualifiedName of the outline row to
+  // highlight after clicking a hunk's owner badge.
+  const [outlineFocus, setOutlineFocus] = useState<string | null>(null)
+  useEffect(() => setOutlineFocus(null), [entry.key])
   const scrollRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => setPendingFocus(focusHunk), [focusHunk])
   useEffect(() => setDocView('rendered'), [entry.key])
@@ -557,6 +574,7 @@ export function ChangeFileDetail({
         entry={entry}
         onJumpToHunk={(h) => setPendingFocus(h)}
         onOpenCallChain={onOpenCallChain}
+        focusQualifiedName={outlineFocus}
       />
       {wantRendered && !renderedFailed ? (
         renderedReady ? (
@@ -571,12 +589,24 @@ export function ChangeFileDetail({
       ) : (
         <>
           {wantRendered && renderedFailed && (
-            <div className="changes__outline-note muted">{t('tasks.changesDocFallback')}</div>
+            <ErrorBanner
+              error={baseContent.error ?? worktreeContent.error}
+              onRetry={() => {
+                void baseContent.refetch()
+                void worktreeContent.refetch()
+              }}
+            />
           )}
           {entry.block !== undefined && entry.hunks.length === 0 ? (
             <DiffFileBody block={entry.block} />
           ) : (
-            <AnnotatedDiff entry={entry} focusHunk={pendingFocus} scrollRef={scrollRef} />
+            <AnnotatedDiff
+              key={entry.key} // fresh scroll + sticky state per file (impl-gate P2)
+              entry={entry}
+              focusHunk={pendingFocus}
+              scrollRef={scrollRef}
+              onOwnerClick={(qn) => setOutlineFocus(qn)}
+            />
           )}
         </>
       )}

@@ -2707,6 +2707,7 @@ export const enUS: Resources = {
     changesDrillDeps: 'Dependency changes',
     changesDrillFocusAll: 'All',
     changesDrillFocusFile: 'Current file',
+    changesDrillFocusGroup: 'Current group',
     changesDrillFocusLabel: 'Graph focus',
     changesNarrativeGenerate: 'Generate AI walkthrough',
     changesNarrativeGenerating: 'Generating the AI walkthrough…',
