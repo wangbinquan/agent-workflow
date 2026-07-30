@@ -440,6 +440,25 @@ describe('引用内 fence 与 setext 互斥（Codex 五轮 P2）', () => {
     expect(buildMergedMarkdown(QF, QF, 'word')).toBe(QF)
     expect(buildMergedMarkdown(QF, QF, 'line')).toBe(QF)
   })
+
+  // Codex 六轮 P2：`~~~js` 是 fence 内容不是闭合（闭合只允许尾随空白）；
+  // 引用容器结束时未闭合 fence 隐式关闭。两者失真都会让后续 setext 化
+  // 失去原子化、漏出字面 `===`。
+  test('word：fence 内 `~~~js` 不误判闭合，后续 setext 化仍可见', () => {
+    const l = '> ~~~\n> ~~~js\n> ~~~\n\nT\n'
+    const r = '> ~~~\n> ~~~js\n> ~~~\n\nT\n===\n'
+    const { container } = render(<MarkdownDiffView left={l} right={r} granularity="word" />)
+    expect(container.querySelector('h1')?.querySelector('.diff-ins')?.textContent).toBe('T')
+    expect(container.textContent ?? '').not.toContain('===')
+  })
+
+  test('word：未闭合引用 fence 随引用结束隐式关闭，后续 setext 化仍可见', () => {
+    const l = '> ~~~\n> code\n\nTitle\n'
+    const r = '> ~~~\n> code\n\nTitle\n===\n'
+    const { container } = render(<MarkdownDiffView left={l} right={r} granularity="word" />)
+    expect(container.querySelector('h1')?.querySelector('.diff-ins')?.textContent).toBe('Title')
+    expect(container.querySelector('.diff-del')?.textContent).toBe('Title')
+  })
 })
 
 describe('表段兜底重建取舍锁定（Codex 五轮 P2）', () => {

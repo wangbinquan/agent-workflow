@@ -281,3 +281,13 @@ marker 仍靠 remarkDiffMarkers 的 value 剥离兜底渲染单侧；如需与 f
    `| --- |` body 行的单行编辑被放大为整表 DEL+INS（合法渲染、只是啰
    嗦）；收益：整表搬移 / 互换不退化成裸 `|` 段落汤。两侧行为均有渲染级
    测试锁定（`markdown-diff-table-render.test.tsx` 共 42 用例）。
+
+### 实现门六轮跟进（同日，尾声）
+
+六轮 findings 仅剩五轮新增 fence 状态机自身的 CommonMark 保真度（2 P2，
+已修）：闭合 fence 只允许尾随空白（`~~~js` 是内容不是闭合）；引用容器结
+束（空行或引用深度回落）时未闭合 fence 隐式关闭。两者失真都会让其后的
+setext 化失去原子化、漏出字面 `===`。自四轮起 findings 严格收敛于上一轮
+自身的修复面，实现门在此收口；遗留的已知限制（缩进代码块 / 引用内 fence
+不做整块原子化，靠 remarkDiffMarkers value 剥离兜底渲染单侧）已在上文
+与源码注释登记。

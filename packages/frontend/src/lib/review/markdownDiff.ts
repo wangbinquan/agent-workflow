@@ -417,18 +417,36 @@ function findSetextBlocks(text: string): LineBlock[] {
   // fence 状态机：fence 内（含 fence 行自身）不允许作下划线或题行，否则
   // 引用 code 里的 `foo\n===` 会被当 setext 原子化、渲染出赝品 <h1>
   // （Codex 五轮 P2）。顶层 fence 此时已是占位符行，不会误触发。
+  // 状态机保真（Codex 六轮 P2）：关 fence 行只允许尾随空白（`~~~js` 是
+  // 内容不是闭合）；引用容器结束（空行或引用深度回落）时未闭合 fence 隐
+  // 式关闭，之后的段落 / setext 恢复正常识别。
   const inFence: boolean[] = new Array<boolean>(lines.length).fill(false)
   {
-    let fenceMarker = ''
-    for (let k = 0; k < lines.length; k++) {
-      const rest = stripQuote(lines[k] ?? '').rest
+    const quoteDepth = (prefix: string): number => (prefix.match(/>/g) ?? []).length
+    const isFenceClose = (rest: string, marker: string): boolean => {
       const fm = FENCE_RE.exec(rest)
+      if (fm === null || !(fm[2] ?? '').startsWith(marker)) return false
+      return rest.slice((fm[1] ?? '').length + (fm[2] ?? '').length).trim().length === 0
+    }
+    let fenceMarker = ''
+    let fenceDepth = 0
+    for (let k = 0; k < lines.length; k++) {
+      const raw = lines[k] ?? ''
+      const { prefix, rest } = stripQuote(raw)
       if (fenceMarker !== '') {
-        inFence[k] = true
-        if (fm !== null && (fm[2] ?? '').startsWith(fenceMarker)) fenceMarker = ''
-      } else if (fm !== null) {
+        if (fenceDepth > 0 && (raw.trim().length === 0 || quoteDepth(prefix) < fenceDepth)) {
+          fenceMarker = ''
+        } else {
+          inFence[k] = true
+          if (isFenceClose(rest, fenceMarker)) fenceMarker = ''
+          continue
+        }
+      }
+      const fm = FENCE_RE.exec(rest)
+      if (fm !== null) {
         inFence[k] = true
         fenceMarker = fm[2] ?? ''
+        fenceDepth = quoteDepth(prefix)
       }
     }
   }
