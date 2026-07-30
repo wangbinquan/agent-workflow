@@ -130,7 +130,10 @@ jobs:
       # runner's quarter of the files. Coverage is instrumented only on ubuntu.
       - name: Test backend (ubuntu shard — with coverage)
         if: matrix.os == 'ubuntu-latest'
-        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4 --coverage --coverage-reporter=text --coverage-reporter=lcov
+        # Codecov consumes lcov. The redundant text table is large enough to
+        # make Bun's stdout writer fail with WriteFailed on otherwise-green
+        # shards, so keep the machine-readable report only.
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4 --coverage --coverage-reporter=lcov
         env:
           # Real-git-clone (file:// + recursive submodules) and external MCP-spawn
           # integration suites are gated behind RUN_GIT_NETWORK so local `bun test`

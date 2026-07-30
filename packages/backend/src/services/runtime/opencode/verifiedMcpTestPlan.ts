@@ -35,6 +35,7 @@ import {
   type VerifiedOpencodePlanDependencies,
 } from './verifiedPlanCore'
 import { runtimeContainmentAdmissionFromPrepared } from './containment'
+import { removeSealedTree } from './sealedInputs'
 
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30_000
 const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
@@ -381,6 +382,10 @@ export async function buildVerifiedOpencodeMcpTestPlan(
       },
       cleanup: async () => {
         await assertOpencodeStoreUnlocked(core.layout.sessionDbPath)
+        await rm(manifestPath, { force: true }).catch(() => {})
+        await rm(ackPath, { force: true }).catch(() => {})
+        await removeSealedTree(fffProbeRoot).catch(() => {})
+        await removeSealedTree(sealRoot).catch(() => {})
         await rm(ctx.runDir, { recursive: true, force: true })
       },
     }
@@ -388,6 +393,8 @@ export async function buildVerifiedOpencodeMcpTestPlan(
     if (!succeeded) {
       await rm(manifestPath, { force: true }).catch(() => {})
       await rm(ackPath, { force: true }).catch(() => {})
+      await removeSealedTree(fffProbeRoot).catch(() => {})
+      await removeSealedTree(sealRoot).catch(() => {})
       await rm(ctx.runDir, { recursive: true, force: true }).catch(() => {})
     }
   }

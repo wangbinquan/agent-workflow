@@ -280,6 +280,9 @@ describe('RFC-238 runtime MCP-only spawn plans', () => {
 
     await resumed.cleanup?.()
     await first.cleanup?.()
+    expect(existsSync(resumedContext.runDir)).toBe(false)
+    expect(existsSync(firstContext.runDir)).toBe(false)
+    expect(existsSync(firstContext.sessionStoreRoot)).toBe(true)
   })
 
   test('Claude keeps MCP secrets out of argv and separates first session from resume', async () => {

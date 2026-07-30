@@ -175,10 +175,11 @@ describe('repository test entrypoint', () => {
     // CI shards the backend suite across runners: each shard is an isolated VM,
     // which is why sharding is safe where `bun test --parallel` deadlocks on the
     // single-instance daemon flock. Both legs keep --isolate --randomize; the
-    // ubuntu shards additionally instrument coverage. The local gate
-    // (backendPkg.scripts.test, asserted above) stays unsharded.
+    // ubuntu shards additionally instrument coverage and emit the lcov report
+    // consumed by Codecov. The local gate (backendPkg.scripts.test, asserted
+    // above) stays unsharded.
     expect(ciWorkflow).toContain(
-      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/4 --coverage --coverage-reporter=text --coverage-reporter=lcov`,
+      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/4 --coverage --coverage-reporter=lcov`,
     )
     expect(ciWorkflow).toContain(
       `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/4\n`,
