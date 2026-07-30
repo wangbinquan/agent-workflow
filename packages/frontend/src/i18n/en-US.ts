@@ -2719,7 +2719,8 @@ export const enUS: Resources = {
     changesImportsAggregated: 'Import changes ({{n}})',
     changesContainerCollapsed: '{{n}} members',
     changesPureMove: 'Moved from {{from}} with no content change.',
-    changesTextUnavailable: 'The text diff is unavailable (truncated); structural info only.',
+    changesTextUnavailable:
+      'The text diff is unavailable (worktree pruned or truncated); structural info only.',
     changesDocRendered: 'Rendered',
     changesDocText: 'Text',
     changesDocViewLabel: 'Document view',

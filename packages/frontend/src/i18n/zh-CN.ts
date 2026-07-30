@@ -6833,7 +6833,7 @@ export const zhCN: Resources = {
     changesImportsAggregated: '导入变更({{n}})',
     changesContainerCollapsed: '{{n}} 个成员',
     changesPureMove: '文件自 {{from}} 移动,内容未修改。',
-    changesTextUnavailable: '文本 diff 因截断不可用,以下为结构信息。',
+    changesTextUnavailable: '文本 diff 不可用(工作区已回收或超出截断上限),以下为结构信息。',
     changesDocRendered: '渲染',
     changesDocText: '文本',
     changesDocViewLabel: '文档视图',

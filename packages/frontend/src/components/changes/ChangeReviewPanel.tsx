@@ -236,7 +236,12 @@ export function ChangeReviewPanel({
   )
 
   // ---- empty / error states ----
-  if (diff === undefined) return <LoadingState size="compact" label={t('tasks.diffLoading')} />
+  // The text diff is the primary line, but a GC'd worktree 410s it while the
+  // structural artifact may still exist on disk (its whole point: survive GC).
+  // Render from the structural side alone in that case instead of dead-ending.
+  if (diff === undefined && structural.data === undefined) {
+    return <LoadingState size="compact" label={t('tasks.diffLoading')} />
+  }
   if (entries.length === 0) {
     const hint = structural.data?.emptyHint
     return (

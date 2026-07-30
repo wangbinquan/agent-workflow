@@ -148,15 +148,14 @@ function renderPanel(
     structuralData?: StructuralDiff
     structuralError?: unknown
     storageKey?: string
-  } = {},
-) {
+  } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
       <ChangeReviewPanel
         taskId="t1"
         storageKey={opts.storageKey}
-        diff={opts.diff ?? taskDiff(DIFF_TEXT)}
+        diff={'diff' in opts ? opts.diff : taskDiff(DIFF_TEXT)}
         diffTruncated={false}
         structural={{
           data: opts.structuralData,
@@ -291,6 +290,18 @@ describe('ChangeReviewPanel — drilldown gating + narrative states', () => {
   test('narrative starts in the button state (404 → generate CTA)', async () => {
     renderPanel({ structuralData: structural() })
     expect(await screen.findByRole('button', { name: /生成 AI 导读|Generate AI/ })).toBeTruthy()
+  })
+})
+
+describe('ChangeReviewPanel — survives-GC fallback', () => {
+  test('text diff missing (410) but structural data present → renders structural-only entries', () => {
+    renderPanel({ diff: undefined, structuralData: structural() })
+    // the structural-only entry appears in the sidebar; its detail pane notes
+    // the missing text diff instead of dead-ending on a loading state
+    const tab = screen.getAllByRole('tab').find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    expect(tab).toBeTruthy()
+    expect(screen.getByTestId('symbol-outline')).toBeTruthy()
+    expect(screen.getByText(/文本 diff|text diff/i)).toBeTruthy()
   })
 })
 

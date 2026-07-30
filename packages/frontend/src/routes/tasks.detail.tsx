@@ -1058,7 +1058,30 @@ function TaskDetailPage() {
               ) : diff.isLoading ? (
                 <LoadingState size="compact" label={t('tasks.loadingDiff')} />
               ) : diff.error !== null && diff.error !== undefined ? (
-                <ErrorBanner error={diff.error} onRetry={() => void diff.refetch()} />
+                // A GC'd worktree 410s the text diff while the persisted
+                // structural artifact may still exist — render from it so the
+                // survives-GC guarantee carries into the merged pane.
+                <>
+                  <ErrorBanner error={diff.error} onRetry={() => void diff.refetch()} />
+                  {structuralDiff.data !== undefined && (
+                    <ChangeReviewPanel
+                      taskId={tk.id}
+                      storageKey={tk.id}
+                      diff={undefined}
+                      diffTruncated={false}
+                      structural={{
+                        data: structuralDiff.data,
+                        error: structuralDiff.error,
+                        isLoading: structuralDiff.isLoading,
+                      }}
+                      scopeValue={effectiveStructScope}
+                      scopeOptions={[{ value: 'task', label: t('tasks.structScopeTask') }]}
+                      onScopeChange={setStructScope}
+                      engineMode={engineMode}
+                      onEngineChange={setEngineMode}
+                    />
+                  )}
+                </>
               ) : null}
             </section>
           )}

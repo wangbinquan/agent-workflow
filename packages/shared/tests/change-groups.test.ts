@@ -200,3 +200,39 @@ describe('buildChangeGroups — ordering, weights, severity, multi-repo', () => 
     expect(groups[0]?.weight).toBeGreaterThan(0)
   })
 })
+
+// RFC-239 field finding (snake showcase task): a single-package project put
+// every file under src/snakegame/, so first-segment grouping produced ONE
+// giant group. The common directory prefix must be stripped before grouping,
+// and a fully-shared directory names the group after its last segment.
+describe('buildChangeGroups — common-prefix stripping', () => {
+  const entry = (filePath: string): ChangeGroupEntry => ({
+    filePath,
+    kind: 'code',
+    pureMove: false,
+    severity: { breaking: 0, risky: 0 },
+    textStats: { added: 5, removed: 0 },
+  })
+
+  test('deep shared chain groups at the first DIVERGING segment', () => {
+    const groups = buildChangeGroups([
+      entry('src/snakegame/core/Engine.java'),
+      entry('src/snakegame/core/State.java'),
+      entry('src/snakegame/ui/Renderer.java'),
+      entry('src/snakegame/ui/Menu.java'),
+      entry('src/snakegame/entity/Snake.java'),
+    ])
+    expect(groups.map((g) => g.title).sort()).toEqual(['core', 'entity', 'ui'])
+  })
+
+  test('a fully-shared directory names the single group after its last segment', () => {
+    const groups = buildChangeGroups([
+      entry('src/ui/a.ts'),
+      entry('src/ui/b.ts'),
+      entry('src/ui/c.ts'),
+      entry('src/ui/d.ts'),
+      entry('src/ui/e.ts'),
+    ])
+    expect(groups.map((g) => g.key)).toEqual(['mod:ui'])
+  })
+})

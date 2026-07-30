@@ -101,6 +101,26 @@ function countTotal(c: ChangeCount): number {
   return c.added + c.modified + c.removed + c.renamed
 }
 
+/** Longest common DIRECTORY prefix (as segments) across the given paths.
+ *  `src` prefixes participate like any other segment; a lone file contributes
+ *  its dir chain. Empty when paths diverge at the first segment. */
+function commonDirPrefix(paths: readonly string[]): string[] {
+  let prefix: string[] | null = null
+  for (const p of paths) {
+    const dirs = p.split('/').filter((x) => x !== '')
+    dirs.pop() // drop the basename
+    if (prefix === null) {
+      prefix = dirs
+      continue
+    }
+    let i = 0
+    while (i < prefix.length && i < dirs.length && prefix[i] === dirs[i]) i++
+    prefix = prefix.slice(0, i)
+    if (prefix.length === 0) break
+  }
+  return prefix ?? []
+}
+
 /** Module segment of a code file: first directory segment after stripping ONE
  *  leading `src` (conservative — only `src`, per design §1.3). Root files map
  *  to `(root)`. */
@@ -202,9 +222,23 @@ function groupOneRepo(entries: ChangeGroupEntry[], useLines: boolean): RawGroup[
   if (code.length > 0 && code.length <= SINGLE_CODE_GROUP_MAX) {
     raw.push({ keySuffix: 'code', title: 'code', category: 'code', files: code })
   } else if (code.length > 0) {
+    // Single-package projects put every file under one shared directory chain
+    // (e.g. src/snakegame/…) — a naive first-segment split then yields ONE
+    // giant group. Strip the COMMON directory prefix across the repo's code
+    // files first, so grouping happens at the first segment that actually
+    // differs (core/ui/entity…).
+    const commonPrefix = commonDirPrefix(code.map((e) => e.filePath))
+    // When every file sits in the common directory ITSELF, stripping it fully
+    // would leave only basenames — name the group after the last common
+    // segment instead of the meaningless '(root)'.
+    const prefixFallbackSeg =
+      commonPrefix.length > 0 ? (commonPrefix[commonPrefix.length - 1] ?? null) : null
     const bySeg = new Map<string, ChangeGroupEntry[]>()
     for (const e of code) {
-      const seg = moduleSegment(e.filePath)
+      const rel =
+        commonPrefix.length > 0 ? e.filePath.slice(commonPrefix.join('/').length + 1) : e.filePath
+      let seg = moduleSegment(rel)
+      if (seg === ROOT_MODULE_SEG && prefixFallbackSeg !== null) seg = prefixFallbackSeg
       const arr = bySeg.get(seg)
       if (arr === undefined) bySeg.set(seg, [e])
       else arr.push(e)
