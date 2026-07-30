@@ -196,7 +196,7 @@ export function buildInlineConfig(
  * Undefined fields are stripped so the resulting JSON does not include `null`
  * values that opencode's Effect Schema would reject.
  */
-function buildInlineMcpEntry(m: Mcp): Record<string, unknown> {
+export function buildInlineMcpEntry(m: Mcp): Record<string, unknown> {
   const entry: Record<string, unknown> = { type: m.type, enabled: m.enabled }
   if (m.type === 'local') {
     entry.command = m.config.command

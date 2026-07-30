@@ -24,11 +24,12 @@
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
-import type { SpawnPlan, SystemPermissionProfile } from '@/services/runtime/types'
+import type { RuntimeDriver, SpawnPlan, SystemPermissionProfile } from '@/services/runtime/types'
 import {
   wrapSpawnPlanSandbox,
+  type ContainmentRequirementProfileId,
   type ContainmentCoordinator,
   type PreparedContainmentPlan,
   type SandboxCtx,
@@ -40,7 +41,6 @@ import {
   type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { parseExecutionIdentityFailureOutput } from '@/services/runtime/opencode/failure'
-import { captureOpencodeSessionsToSink } from '@/services/sessionCapture'
 import type {
   SessionCaptureIncompleteReason,
   SystemAgentEventSinkV1,
@@ -48,6 +48,7 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 600_000
 const DEFAULT_MAX_EVENT_TEXT_BYTES = 8 * 1024 * 1024
+const DEFAULT_MAX_RAW_FRAME_BYTES = 2 * 1024 * 1024
 const STDERR_TAIL_CAP = 8 * 1024
 const CHILD_TERM_GRACE_MS = 2_000
 const CHILD_REAP_DEADLINE_MS = 2_000
@@ -67,6 +68,13 @@ export interface SystemAgentRunOptions {
   protocol: RuntimeKind
   /** Resolved runtime binary; null/undefined → driver default head. */
   runtimeBinary?: string | null
+  /**
+   * RFC-237 (P1-2) — RFC-154 config-dir profile of the selected runtime row
+   * (env-var name + leaf), forwarded to the driver so custom claude forks land
+   * in the private per-run dir. Omitted → protocol defaults.
+   */
+  configDirEnv?: string | null
+  configDirName?: string | null
   model?: string | null
   seedFiles?: readonly SystemAgentSeedFile[]
   systemPermissionProfile?: SystemPermissionProfile
@@ -78,6 +86,8 @@ export interface SystemAgentRunOptions {
   scratchName?: string
   timeoutMs?: number
   maxEventTextBytes?: number
+  /** Maximum UTF-8 bytes retained for one stdout/stderr frame. */
+  maxRawFrameBytes?: number
   abortSignal?: AbortSignal
   /** RFC-235: auxiliary ordered Session event capture; never gates business output. */
   eventSink?: SystemAgentEventSinkV1
@@ -87,6 +97,44 @@ export interface SystemAgentRunOptions {
   testOnlyUnverifiedRuntime?: boolean
   /** Branded production command head (see SystemAgentSpawnContext.opencodeCmd). */
   opencodeCmd?: readonly string[]
+  /**
+   * RFC-238: closed product adapters may supply a driver-owned plan without
+   * widening SystemAgentSpawnContext. Existing system-agent callers omit this
+   * and remain byte-for-byte on driver.buildSpawn.
+   */
+  buildPlan?: (ctx: {
+    driver: RuntimeDriver
+    worktreePath: string
+    runDir: string
+    containment?: PreparedContainmentPlan
+    log: Logger
+  }) => Promise<SpawnPlan>
+  /** Capability-specific admission profile; defaults to runner-filesystem-v1. */
+  containmentProfile?: ContainmentRequirementProfileId
+  /**
+   * Called after spawn and before piped stdin is delivered. A failure triggers
+   * the normal TERM→KILL→reap barrier and no successful result is returned.
+   */
+  onSpawned?: (receipt: {
+    pid: number | null
+    spawnedAt: number
+    spawnBinaryPath: string
+    rawCommandDigest: string
+    spawnCommandDigest: string
+  }) => void | Promise<void>
+  /**
+   * Verified persistent launchers emit a private marker on stderr and wait for
+   * an ACK before prompting. Product adapters consume it here; consumed frames
+   * never enter user-visible stderr/events.
+   */
+  onControlLine?: (input: {
+    line: string
+    control: Exclude<NonNullable<SpawnPlan['control']>, { kind: 'none' }>
+  }) => Promise<
+    { kind: 'stderr'; line: string } | { kind: 'session-ready'; sessionId: string }
+  >
+  /** Session-owned scratch survives successful turns; end/idle removes it. */
+  retainScratchOnSuccess?: boolean
 }
 
 export type SystemAgentRunStatus =
@@ -95,6 +143,10 @@ export type SystemAgentRunStatus =
   | 'timeout'
   | 'aborted'
   | 'exit-nonzero'
+  /** RFC-237 (P2-4): clean exit but the runtime reported a terminal
+   *  application error (claude `result` with `is_error:true` — auth/API
+   *  failures that previously masqueraded as a missing envelope). */
+  | 'result-error'
   | 'identity-failed'
   | 'unreaped'
 
@@ -107,6 +159,8 @@ export interface SystemAgentRunResult {
   stderrTail: string
   durationMs: number
   failureCode?: ExecutionIdentityFailureCode
+  /** RFC-237 (P2-4): masked terminal error text for `status: 'result-error'`. */
+  resultError?: string
   capturedSessionId?: string
   scratchDir: string
   /** True when the scratch dir was deliberately kept (failure diagnosis / GC). */
@@ -232,6 +286,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   const log = opts.log ?? createLogger('systemAgentRun')
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const maxEventTextBytes = opts.maxEventTextBytes ?? DEFAULT_MAX_EVENT_TEXT_BYTES
+  const maxRawFrameBytes = opts.maxRawFrameBytes ?? DEFAULT_MAX_RAW_FRAME_BYTES
   const startedAt = Date.now()
   const driver = getRuntimeDriver(opts.protocol)
 
@@ -260,7 +315,9 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     try {
       // System agents expose no model-controlled shell/MCP child — including
       // 'intent-read-v1', whose only additions are in-process read tools.
-      preparedContainment = await opts.containmentCoordinator.admit('runner-filesystem-v1')
+      preparedContainment = await opts.containmentCoordinator.admit(
+        opts.containmentProfile ?? 'runner-filesystem-v1',
+      )
     } catch (error) {
       const failureCode = identityFailureCode(error) ?? 'execution-identity-containment-required'
       return fail('identity-failed', { failureCode })
@@ -367,29 +424,49 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   try {
     result = await (async (): Promise<SystemAgentRunResult> => {
       try {
-        plan = await driver.buildSpawn({
-          agentName: opts.agentName,
-          systemPrompt: opts.systemPrompt,
-          ...(opts.model != null && opts.model !== '' ? { model: opts.model } : {}),
-          prompt: opts.prompt,
-          worktreePath: worktreeDir,
-          runDir,
-          ...(preparedContainment === undefined
-            ? {}
-            : { appHome: preparedContainment.sandbox.appHome, containment: preparedContainment }),
-          ...(opts.runtimeBinary != null && opts.runtimeBinary !== ''
-            ? { runtimeBinary: opts.runtimeBinary }
-            : {}),
-          ...(opts.bridgeCredentials !== undefined
-            ? { bridgeCredentials: opts.bridgeCredentials }
-            : {}),
-          log,
-          ...(opts.testOnlyUnverifiedRuntime === true ? { testOnlyUnverifiedRuntime: true } : {}),
-          ...(opts.opencodeCmd === undefined ? {} : { opencodeCmd: opts.opencodeCmd }),
-          ...(opts.systemPermissionProfile === undefined
-            ? {}
-            : { systemPermissionProfile: opts.systemPermissionProfile }),
-        })
+        plan =
+          opts.buildPlan !== undefined
+            ? await opts.buildPlan({
+                driver,
+                worktreePath: worktreeDir,
+                runDir,
+                ...(preparedContainment === undefined ? {} : { containment: preparedContainment }),
+                log,
+              })
+            : await driver.buildSpawn({
+                agentName: opts.agentName,
+                systemPrompt: opts.systemPrompt,
+                ...(opts.model != null && opts.model !== '' ? { model: opts.model } : {}),
+                prompt: opts.prompt,
+                worktreePath: worktreeDir,
+                runDir,
+                ...(preparedContainment === undefined
+                  ? {}
+                  : {
+                      appHome: preparedContainment.sandbox.appHome,
+                      containment: preparedContainment,
+                    }),
+                ...(opts.runtimeBinary != null && opts.runtimeBinary !== ''
+                  ? { runtimeBinary: opts.runtimeBinary }
+                  : {}),
+                ...(opts.configDirEnv != null && opts.configDirEnv !== ''
+                  ? { configDirEnv: opts.configDirEnv }
+                  : {}),
+                ...(opts.configDirName != null && opts.configDirName !== ''
+                  ? { configDirName: opts.configDirName }
+                  : {}),
+                ...(opts.bridgeCredentials !== undefined
+                  ? { bridgeCredentials: opts.bridgeCredentials }
+                  : {}),
+                log,
+                ...(opts.testOnlyUnverifiedRuntime === true
+                  ? { testOnlyUnverifiedRuntime: true }
+                  : {}),
+                ...(opts.opencodeCmd === undefined ? {} : { opencodeCmd: opts.opencodeCmd }),
+                ...(opts.systemPermissionProfile === undefined
+                  ? {}
+                  : { systemPermissionProfile: opts.systemPermissionProfile }),
+              })
         if (preparedContainment !== undefined) {
           plan = {
             ...plan,
@@ -408,12 +485,14 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
 
       try {
+        await plan.preSpawnVerify?.()
+        const spawnCmd = wrapSpawnPlanSandbox(
+          plan.cmd,
+          systemSandboxCtx(worktreeDir, runDir, plan),
+          plan.sandboxTopology,
+        )
         child = Bun.spawn({
-          cmd: wrapSpawnPlanSandbox(
-            plan.cmd,
-            systemSandboxCtx(worktreeDir, runDir, plan),
-            plan.sandboxTopology,
-          ),
+          cmd: spawnCmd,
           cwd: worktreeDir,
           env: plan.env,
           stdout: 'pipe',
@@ -421,7 +500,24 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           stdin: plan.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
           detached: true,
         })
+        if (opts.onSpawned !== undefined) {
+          const rawCommandDigest = createHash('sha256')
+            .update(JSON.stringify(plan.cmd))
+            .digest('hex')
+          await opts.onSpawned({
+            pid: typeof child.pid === 'number' ? child.pid : null,
+            spawnedAt: Date.now(),
+            spawnBinaryPath: plan.cmd[0] ?? '',
+            rawCommandDigest,
+            spawnCommandDigest: createHash('sha256').update(JSON.stringify(spawnCmd)).digest('hex'),
+          })
+        }
       } catch (err) {
+        // RFC-237 (P1-3): a preSpawnVerify seal-mutation rejection carries an
+        // execution-identity code — surface it as identity-failed, not as a
+        // generic start failure.
+        const failureCode = identityFailureCode(err)
+        if (failureCode !== null) return fail('identity-failed', { failureCode })
         return fail('spawn-failed', {
           stderrTail: maskDiagnosticsText(
             `binary failed to start: ${err instanceof Error ? err.message : String(err)}`,
@@ -438,7 +534,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
 
       const liveChild = child
+      let terminating = false
       const escalate = (): void => {
+        if (terminating) return
+        terminating = true
         killGroup(liveChild, 'SIGTERM')
         sigkillTimer = setTimeout(() => {
           killGroup(liveChild, 'SIGKILL')
@@ -476,36 +575,80 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       let eventText = ''
       let eventTextBytes = 0
       let stderrText = ''
+      // RFC-237 (P2-4): terminal application error reported on a clean-exit
+      // stdout line (claude `result` is_error). Last one wins.
+      let resultError: string | undefined
       const activeReaders = new Set<{
         cancel: () => Promise<void> | void
         releaseLock?: () => void
       }>()
 
+      class LineHandlerError {
+        constructor(readonly cause: unknown) {}
+      }
       const readStream = async (
         stream: ReadableStream<Uint8Array> | undefined,
         onLine: (line: string) => void | Promise<void>,
+        onOverflow: () => void | Promise<void>,
       ): Promise<void> => {
         if (stream === undefined) return
         const reader = stream.getReader()
         activeReaders.add(reader)
-        const decoder = new TextDecoder()
-        let buf = ''
+        const decoder = new TextDecoder('utf-8', { fatal: true })
+        let buffered = Buffer.alloc(0)
+        let dropping = false
         try {
           for (;;) {
             const { done, value } = await reader.read()
             if (done) break
-            buf += decoder.decode(value, { stream: true })
-            let nl: number
-            while ((nl = buf.indexOf('\n')) >= 0) {
-              const line = buf.slice(0, nl)
-              buf = buf.slice(nl + 1)
-              if (line.length > 0) await onLine(line)
+            let chunk = Buffer.from(value)
+            while (chunk.byteLength > 0) {
+              const newline = chunk.indexOf(0x0a)
+              const segment = newline < 0 ? chunk : chunk.subarray(0, newline)
+              if (!dropping) {
+                if (buffered.byteLength + segment.byteLength > maxRawFrameBytes) {
+                  buffered = Buffer.alloc(0)
+                  dropping = true
+                  try {
+                    await onOverflow()
+                  } catch (error) {
+                    throw new LineHandlerError(error)
+                  }
+                } else if (segment.byteLength > 0) {
+                  buffered = Buffer.concat([buffered, segment])
+                }
+              }
+              if (newline < 0) break
+              if (!dropping && buffered.byteLength > 0) {
+                let line: string
+                try {
+                  line = decoder.decode(buffered)
+                } catch (error) {
+                  throw new LineHandlerError(error)
+                }
+                try {
+                  await onLine(line.endsWith('\r') ? line.slice(0, -1) : line)
+                } catch (error) {
+                  throw new LineHandlerError(error)
+                }
+              }
+              buffered = Buffer.alloc(0)
+              dropping = false
+              chunk = chunk.subarray(newline + 1)
             }
           }
-          if (buf.length > 0) await onLine(buf)
-        } catch {
+          if (!dropping && buffered.byteLength > 0) {
+            try {
+              await onLine(decoder.decode(buffered))
+            } catch (error) {
+              throw new LineHandlerError(error)
+            }
+          }
+        } catch (error) {
+          if (error instanceof LineHandlerError) throw error.cause
           /* stream closed under us (kill) */
         } finally {
+          buffered.fill(0)
           activeReaders.delete(reader)
           reader.releaseLock()
         }
@@ -523,50 +666,90 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
 
       const drainAll = Promise.all([
-        readStream(child.stdout as ReadableStream<Uint8Array> | undefined, async (line) => {
-          const ev = driver.parseEvent(line)
-          if (ev === null) {
+        readStream(
+          child.stdout as ReadableStream<Uint8Array> | undefined,
+          async (line) => {
+            const terminalError = driver.parseTerminalResultError?.(line)
+            if (terminalError != null) resultError = terminalError
+            const ev = driver.parseEvent(line)
+            if (ev === null) {
+              await appendSink({
+                ts: Date.now(),
+                kind: 'text',
+                payload: line,
+                sessionId: sessionId ?? null,
+                parentSessionId: null,
+                source: 'stream',
+              })
+              return
+            }
+            if (ev.sessionId !== undefined && sessionId === undefined) {
+              sessionId = ev.sessionId
+              await setSinkRoot(ev.sessionId)
+            }
+            if (typeof ev.text === 'string' && ev.text.length > 0) {
+              const bytes = Buffer.byteLength(ev.text, 'utf8')
+              if (eventTextBytes + bytes <= maxEventTextBytes) {
+                eventText += ev.text
+                eventTextBytes += bytes
+              }
+            }
+            await appendSink({
+              ts: ev.timestamp ?? Date.now(),
+              kind: ev.kind,
+              payload: ev.rawLine,
+              sessionId: ev.sessionId ?? sessionId ?? null,
+              parentSessionId: null,
+              source: 'stream',
+            })
+          },
+          () =>
+            failSink(
+              'stream-frame-limit-exceeded',
+              new Error('stdout frame exceeded the configured byte limit'),
+            ),
+        ),
+        readStream(
+          child.stderr as ReadableStream<Uint8Array> | undefined,
+          async (line) => {
+            const control = plan.control
+            if (
+              opts.onControlLine !== undefined &&
+              control !== undefined &&
+              control.kind !== 'none'
+            ) {
+              const handled = await opts.onControlLine({ line, control })
+              if (handled.kind === 'session-ready') {
+                if (sessionId !== undefined && sessionId !== handled.sessionId) {
+                  throw new Error('runtime control/session stream id mismatch')
+                }
+                sessionId = handled.sessionId
+                await setSinkRoot(handled.sessionId)
+                return
+              }
+              line = handled.line
+            }
+            const remaining = STDERR_TAIL_CAP - Buffer.byteLength(stderrText, 'utf8')
+            if (remaining > 0) {
+              stderrText += Buffer.from(`${line}\n`, 'utf8').subarray(0, remaining).toString('utf8')
+            }
             await appendSink({
               ts: Date.now(),
-              kind: 'text',
-              payload: line,
+              kind: 'stderr',
+              payload: maskDiagnosticsText(line),
               sessionId: sessionId ?? null,
               parentSessionId: null,
               source: 'stream',
             })
-            return
-          }
-          if (ev.sessionId !== undefined && sessionId === undefined) {
-            sessionId = ev.sessionId
-            await setSinkRoot(ev.sessionId)
-          }
-          if (typeof ev.text === 'string' && ev.text.length > 0) {
-            if (eventTextBytes < maxEventTextBytes) {
-              eventText += ev.text
-              eventTextBytes += ev.text.length
-            }
-          }
-          await appendSink({
-            ts: ev.timestamp ?? Date.now(),
-            kind: ev.kind,
-            payload: ev.rawLine,
-            sessionId: ev.sessionId ?? sessionId ?? null,
-            parentSessionId: null,
-            source: 'stream',
-          })
-        }),
-        readStream(child.stderr as ReadableStream<Uint8Array> | undefined, async (line) => {
-          if (stderrText.length < STDERR_TAIL_CAP) stderrText += line + '\n'
-          await appendSink({
-            ts: Date.now(),
-            kind: 'stderr',
-            payload: maskDiagnosticsText(line),
-            sessionId: sessionId ?? null,
-            parentSessionId: null,
-            source: 'stream',
-          })
-        }),
+          },
+          () =>
+            failSink(
+              'stream-frame-limit-exceeded',
+              new Error('stderr frame exceeded the configured byte limit'),
+            ),
+        ),
       ])
+      void drainAll.catch(() => escalate())
 
       const exitOutcome = await Promise.race([
         child.exited.then(
@@ -619,17 +802,22 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         })
       }
 
+      // RFC-237 — post-exit child-session sweep is a driver capability now
+      // (opencode: private-store SQLite walk; claude omits it — the full main
+      // session already streamed through parseEvent into the sink).
       if (
         !sinkFailed &&
         opts.eventSink !== undefined &&
         sessionId !== undefined &&
-        driver.kind === 'opencode'
+        driver.captureSessionsToSink !== undefined
       ) {
-        const captured = await captureOpencodeSessionsToSink({
+        const captured = await driver.captureSessionsToSink({
           rootSessionId: sessionId,
           sink: opts.eventSink,
           log,
-          ...(plan.sessionStore === undefined ? {} : { opencodeDbPath: plan.sessionStore.dbPath }),
+          ...(plan.sessionStore === undefined
+            ? {}
+            : { sessionStoreDbPath: plan.sessionStore.dbPath }),
         })
         if (captured.failed) {
           await failSink('child-capture-failed', captured.failureReason)
@@ -649,6 +837,20 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       if (aborted) return { status: 'aborted', ...base }
       if (timedOut) return { status: 'timeout', ...base }
       if (exitCode !== 0) return { status: 'exit-nonzero', ...base }
+      // RFC-237 (P2-4): clean exit but a terminal is_error result — fail the
+      // run with the masked error text instead of letting the caller chase a
+      // phantom missing envelope. Impl-gate P2: the text must reach the
+      // caller's PERSISTED diagnostics — stderr is commonly empty in this
+      // shape, so it doubles as the stderr tail when there was none.
+      if (resultError !== undefined) {
+        const masked = maskDiagnosticsText(resultError).slice(0, STDERR_TAIL_CAP)
+        return {
+          status: 'result-error',
+          ...base,
+          ...(base.stderrTail.length === 0 ? { stderrTail: masked } : {}),
+          resultError: masked,
+        }
+      }
       return { status: 'ok', ...base }
     })()
   } finally {
@@ -672,7 +874,8 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     }
     const spawnedChild = child as Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> | null
     const preparedPlan = plan as SpawnPlan | null
-    const wantScratchRemoved = result !== undefined && result.status === 'ok'
+    const wantScratchRemoved =
+      result !== undefined && result.status === 'ok' && opts.retainScratchOnSuccess !== true
     const finalized = await finalizeSystemAgentAttempt({
       child: spawnedChild,
       childReaped,
@@ -691,7 +894,11 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       })
     } else if (result !== undefined) {
       result = { ...result, scratchRetained: !finalized.scratchRemoved }
-      if (result.status === 'ok' && !finalized.scratchRemoved) {
+      if (
+        result.status === 'ok' &&
+        !finalized.scratchRemoved &&
+        opts.retainScratchOnSuccess !== true
+      ) {
         // Cleanup barrier failed on a success path: surface it — the store may
         // still be locked; retaining scratch is deliberate (recovery + GC).
         log.warn('system-agent-scratch-retained', {

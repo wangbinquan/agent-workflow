@@ -41,6 +41,9 @@ const runtime = {
   protocol: 'opencode',
   binaryPath: null,
   model: 'anthropic/claude-sonnet-5',
+  // RFC-237: the engine threads the resolved config-dir profile into the
+  // system-agent run (P1-2), so the mock carries the real resolved shape.
+  configDir: { env: 'OPENCODE_CONFIG_DIR', name: '.opencode' },
 } as unknown as ResolvedRuntime
 
 const config = (over: Partial<IntentTurnConfig> = {}): IntentTurnConfig => ({
@@ -661,5 +664,44 @@ describe('maintenance', () => {
     expect(left.has('fresh-terminal')).toBe(true)
     expect(left.has(terminalTurn)).toBe(false)
     expect(left.has('orphan-unknown')).toBe(false)
+  })
+})
+
+// RFC-237 — the engine admits a claude-code runtime (capability gate) and
+// threads protocol / configDir / the frozen 'intent-read-v1' profile into the
+// system-agent run unchanged; the changeset settle path is protocol-blind.
+describe('RFC-237 claude-code intent turn', () => {
+  test('claude runtime: turn settles a changeset; run opts carry profile + configDir', async () => {
+    const claudeRuntime = {
+      name: 'claude-code',
+      protocol: 'claude-code',
+      binaryPath: '/opt/claude/bin/claude',
+      model: 'anthropic/claude-sonnet-5',
+      configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
+    } as unknown as ResolvedRuntime
+    const { session } = await createIntentSession(db, actor, { message: '构建一个审计 agent' })
+    let seen: SystemAgentRunOptions | undefined
+    const outcome = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config({ runtime: claudeRuntime }),
+        runFn: scriptedRun((opts, nonce) => {
+          seen = opts
+          return okResult(
+            envelope(nonce, { summary: 'built one agent', changeset: MINIMAL_CHANGESET }),
+          )
+        }),
+      },
+      { sessionId: session.id, actor },
+    )
+    expect(outcome.kind).toBe('changeset')
+    expect(seen?.protocol).toBe('claude-code')
+    expect(seen?.runtimeBinary).toBe('/opt/claude/bin/claude')
+    expect(seen?.systemPermissionProfile).toBe('intent-read-v1')
+    expect(seen?.configDirEnv).toBe('CLAUDE_CONFIG_DIR')
+    expect(seen?.configDirName).toBe('.claude')
+    const drafts = await db.select().from(intentDrafts)
+    expect(drafts.length).toBe(1)
   })
 })

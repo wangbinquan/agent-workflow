@@ -449,6 +449,44 @@ export interface Resources {
         codeMcpDisabled: string
       }
     }
+    runtimeTest: {
+      open: string
+      title: string
+      warningTitle: string
+      warningBody: string
+      loading: string
+      runtime: string
+      runtimeSummary: string
+      runtimeLoadError: string
+      runtimeUnavailable: string
+      idleCountdown: string
+      firstMessage: string
+      nextMessage: string
+      messagePlaceholder: string
+      start: string
+      starting: string
+      saveAndStart: string
+      useSaved: string
+      send: string
+      sending: string
+      cancelTurn: string
+      canceling: string
+      endNow: string
+      endConfirmTitle: string
+      endConfirmBody: string
+      endingHint: string
+      endedHint: string
+      dirtyBasis: string
+      activeUsesSaved: string
+      draftChangedDuringSave: string
+      status: {
+        new: string
+        running: string
+        idle: string
+        ending: string
+        ended: string
+      }
+    }
   }
   plugins: {
     title: string
@@ -1089,6 +1127,7 @@ export interface Resources {
       intentHint: string
       intentRuntime: string
       intentRuntimeHint: string
+      intentRuntimeClaudeNote: string
       intentLang: string
       intentLangHint: string
       intentLangDefault: string
@@ -5136,9 +5175,12 @@ export const zhCN: Resources = {
       mergeHint: '按节点隔离合并回主干、遇真实三方冲突时解决冲突的内置 agent（RFC-130）。',
       intentTitle: '意图构建',
       intentHint:
-        '把自然语言目标转成工作流/工作组/代理/技能变更集的内置 agent（RFC-234）；仅限 opencode 运行时（只读工具 profile 需其证明）。',
+        '把自然语言目标转成工作流/工作组/代理/技能变更集的内置 agent（RFC-234）；需选择能实施只读构建 profile 的运行时。',
       intentRuntime: '意图构建运行时',
-      intentRuntimeHint: '仅可选 opencode 协议的运行时；留空继承全局默认（同样须为 opencode）。',
+      intentRuntimeHint:
+        '仅可选能实施只读意图构建 profile 的运行时；留空继承全局默认（默认值同样须满足）。',
+      intentRuntimeClaudeNote:
+        'Claude Code 通过声明式 CLI 权限实施只读（封印二进制 + 工具白名单）；与 opencode 不同：启动后无配置验证（attestation）。',
       intentLang: '产物语言',
       intentLangHint: '生成的 prompt/描述所用语言；默认跟随使用者输入语言。',
       intentLangDefault: '跟随输入',
@@ -5934,6 +5976,46 @@ export const zhCN: Resources = {
         codePartial: '部分清单不可用（服务端未实现该方法），其它接口仍可用。',
         codeInternalError: '探测出现未预期错误。',
         codeMcpDisabled: '该 MCP 已被禁用，需先在编辑页启用。',
+      },
+    },
+    runtimeTest: {
+      open: '使用运行时测试',
+      title: 'MCP 运行时测试',
+      warningTitle: '将执行真实 MCP 调用',
+      warningBody:
+        '运行时只挂载当前 MCP，但调用仍可能产生真实读写或外部副作用。关闭此对话框不会停止测试会话。',
+      loading: '正在恢复测试会话…',
+      runtime: '运行时',
+      runtimeSummary: '运行时：{{runtime}}',
+      runtimeLoadError: '无法加载支持 MCP 测试的运行时。',
+      runtimeUnavailable: '当前没有已启用且支持 MCP 测试的运行时。',
+      idleCountdown: '空闲会话将在 {{time}} 后自动结束',
+      firstMessage: '第一条测试消息',
+      nextMessage: '继续对话',
+      messagePlaceholder: '例如：列出你提供的工具，并调用一个只读工具验证返回结果。',
+      start: '开始测试',
+      starting: '正在启动…',
+      saveAndStart: '保存并开始',
+      useSaved: '使用已保存版本',
+      send: '发送',
+      sending: '发送中…',
+      cancelTurn: '取消当前轮次',
+      canceling: '正在取消…',
+      endNow: '立即结束测试',
+      endConfirmTitle: '立即结束 MCP 测试？',
+      endConfirmBody:
+        '当前轮次会被终止，运行时进程与私有会话目录会被回收。此操作不同于仅关闭对话框。',
+      endingHint: '正在终止运行时并回收会话状态；可以关闭对话框，后台会继续完成。',
+      endedHint: '本次测试已结束。历史执行过程仍可查看，也可以从下方开始一条新测试。',
+      dirtyBasis: '当前表单有未保存改动。可先保存并开始，或明确使用已保存版本。',
+      activeUsesSaved: '当前会话固定使用启动时的已保存配置；未保存改动不会进入该会话。',
+      draftChangedDuringSave: '保存期间表单又发生了修改；未启动测试，请确认后重试。',
+      status: {
+        new: '新测试',
+        running: '轮次执行中',
+        idle: '等待下一条消息',
+        ending: '正在结束',
+        ended: '已结束',
       },
     },
   },

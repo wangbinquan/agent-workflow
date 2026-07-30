@@ -18,22 +18,53 @@ import type {
   SystemAgentSpawnContext,
   ListModelsOpts,
 } from '../types'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
-import { parseEvent } from './events'
+import { parseEvent, parseResultError } from './events'
 import { buildClaudeSpawn } from './spawn'
 import { toClaudeAgents, toClaudeMcpConfig } from './inject'
 import { pickRuntimeHead } from '../head'
 import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
+import { snapshotRuntimeBinary, verifyRuntimeBinarySnapshot } from '../binarySnapshot'
+import { buildClaudeMcpTestSpawn } from './mcpTest'
 
 export const claudeCodeDriver: RuntimeDriver = {
   kind: 'claude-code',
   containmentProfile: 'runner-filesystem-v1',
+  mcpTest: {
+    codec: 'mcp-test-v1',
+    defaultConfigDir: DEFAULT_CONFIG_DIR_PROFILE['claude-code'],
+    bridgeCredentials: true,
+    sessionOwnerReceipt: null,
+    createNativeSessionId: randomUUID,
+    sessionReference: ({ turnSeq, nativeSessionId }) => {
+      if (nativeSessionId === null) throw new Error('mcp-test-native-session-missing')
+      return turnSeq === 1 ? { nativeSessionId } : { resumeSessionId: nativeSessionId }
+    },
+    sessionStoreDbPath: () => null,
+    containmentProfile: ({ mcp }) =>
+      mcp.type === 'local' ? 'opencode-verified-v1' : 'runner-filesystem-v1',
+    buildSpawn: buildClaudeMcpTestSpawn,
+  },
+  // RFC-237 — this driver can materialize the read-only intent profile as a
+  // declared-control spawn (sealed binary + `--tools` load-set pruning +
+  // dontAsk; design §2). Admission gates consult this set; anything not
+  // declared here still fails closed in buildSpawn below.
+  narrowedSystemPermissionProfiles: ['intent-read-v1'],
   minVersion: MIN_CLAUDE_CODE_VERSION,
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
+  },
+  // RFC-237 (design-gate P2-4) — surface a clean-exit terminal `is_error`
+  // result (auth/API failure) so systemAgentRun can fail the run instead of
+  // letting it masquerade as a missing envelope.
+  parseTerminalResultError(line: string): string | null {
+    const parsed = parseResultError(line)
+    if (parsed === null || !parsed.isError) return null
+    return parsed.message.length > 0 ? parsed.message : 'claude reported a terminal error result'
   },
   // RFC-143 — capability methods. PR-1 delegates to the existing free functions.
   defaultBinary(config: RuntimeBinaryConfig): string[] {
@@ -76,32 +107,67 @@ export const claudeCodeDriver: RuntimeDriver = {
   // RFC-117 — system-agent spawn. Persona → --append-system-prompt-file, model →
   // --model, prompt → stdin (buildClaudeSpawn already returns stdin:pipe). No
   // skills/mcp/subagents for a framework system agent.
+  //
+  // RFC-234 §1.1 / RFC-237 §1.3 — a narrowed profile is admissible ONLY when
+  // this driver declares it; 'intent-read-v1' takes the declared-control branch
+  // below, everything else undeclared fails closed instead of silently widening.
   async buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan> {
-    // RFC-234 §1.1 — this driver cannot prove ANY narrowed tool profile (it
-    // runs with bypassed permissions and an inherited environment), so a
-    // non-default profile fails closed instead of silently widening.
-    if (ctx.systemPermissionProfile !== undefined && ctx.systemPermissionProfile !== 'all-deny') {
-      throw new Error(
-        `claude-code runtime cannot enforce system permission profile '${ctx.systemPermissionProfile}'`,
-      )
+    const profile = ctx.systemPermissionProfile
+    if (
+      profile !== undefined &&
+      profile !== 'all-deny' &&
+      !claudeCodeDriver.narrowedSystemPermissionProfiles.includes(profile)
+    ) {
+      throw new Error(`claude-code runtime cannot enforce system permission profile '${profile}'`)
     }
-    return buildClaudeSpawn({
-      ...(ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
-        ? { claudeCmd: [ctx.runtimeBinary] }
-        : {}),
+    const readOnlyIntent = profile === 'intent-read-v1'
+    const sourceHead =
+      ctx.runtimeBinary != null && ctx.runtimeBinary !== '' ? [ctx.runtimeBinary] : undefined
+    // RFC-237 design §2.4 — the declared-control branch executes ONLY a private
+    // byte-frozen copy (same TOCTOU fence as opencode, shared module). The
+    // explicit test seam skips the seal exactly like opencode's legacy test
+    // spawn; production callers never set it.
+    let claudeCmd = sourceHead
+    let preSpawnVerify: (() => Promise<void>) | undefined
+    if (readOnlyIntent && ctx.testOnlyUnverifiedRuntime !== true) {
+      const sealPath = join(ctx.runDir, 'bin', 'claude-sealed')
+      const identity = await snapshotRuntimeBinary({
+        command: sourceHead ?? ['claude'],
+        snapshotPath: sealPath,
+      })
+      claudeCmd = [sealPath]
+      // Design-gate P1-3: re-verify at the spawn boundary (systemAgentRun
+      // awaits this immediately before Bun.spawn).
+      preSpawnVerify = () => verifyRuntimeBinarySnapshot(sealPath, identity.digest)
+    }
+    // Design-gate P1-1 — bridge decision internalized for the declared-control
+    // branch (same shape as buildBusinessSpawn: absent test seam = real run →
+    // bridge; mock tests never touch the keychain). An explicit caller value
+    // still wins. Legacy branch keeps the caller-provided passthrough.
+    const bridgeCredentials = readOnlyIntent
+      ? (ctx.bridgeCredentials ?? ctx.testOnlyUnverifiedRuntime !== true)
+      : ctx.bridgeCredentials
+    const plan = buildClaudeSpawn({
+      ...(claudeCmd !== undefined ? { claudeCmd } : {}),
       prompt: ctx.prompt,
       systemPromptText: ctx.systemPrompt,
       ...(ctx.model != null && ctx.model !== '' ? { model: ctx.model } : {}),
       attemptDir: ctx.runDir,
+      // Design-gate P1-2: RFC-154 custom config-dir profile of the selected
+      // runtime row; omitted → protocol defaults (pre-RFC-237 byte-unchanged).
+      ...(ctx.configDirEnv !== undefined ? { configDirEnv: ctx.configDirEnv } : {}),
+      ...(ctx.configDirName !== undefined ? { configDirName: ctx.configDirName } : {}),
       worktreePath: ctx.worktreePath,
       ...(ctx.resumeSessionId != null && ctx.resumeSessionId !== ''
         ? { resumeSessionId: ctx.resumeSessionId }
         : {}),
-      ...(ctx.bridgeCredentials != null ? { bridgeCredentials: ctx.bridgeCredentials } : {}),
+      ...(bridgeCredentials != null ? { bridgeCredentials } : {}),
       gitUserName: ctx.gitUserName ?? null,
       gitUserEmail: ctx.gitUserEmail ?? null,
+      ...(profile !== undefined ? { systemPermissionProfile: profile } : {}),
       ...(ctx.log !== undefined ? { log: ctx.log } : {}),
     })
+    return preSpawnVerify === undefined ? plan : { ...plan, preSpawnVerify }
   },
   // RFC-143 PR-4 — business-node spawn (was the claude branch of runner.ts:828).
   // system-prompt-file (persona + RFC-041 memory weave) + RFC-111 PR-C MCP /

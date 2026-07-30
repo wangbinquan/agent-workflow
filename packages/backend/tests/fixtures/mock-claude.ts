@@ -143,5 +143,8 @@ emit({
 const delay = Number(env.MOCK_CLAUDE_DELAY_MS ?? '0')
 if (Number.isFinite(delay) && delay > 0) await Bun.sleep(delay)
 
-const exitCode = isError ? 1 : Number(env.MOCK_CLAUDE_EXIT_CODE ?? '0')
+// RFC-237 (P2-4): an EXPLICIT MOCK_CLAUDE_EXIT_CODE wins even when is_error is
+// set, so tests can reproduce claude's clean-exit-but-terminal-error shape
+// (auth/API failures with exit 0). Unset keeps the historical default (1).
+const exitCode = Number(env.MOCK_CLAUDE_EXIT_CODE ?? (isError ? '1' : '0'))
 process.exit(Number.isFinite(exitCode) ? exitCode : 0)

@@ -975,10 +975,12 @@ export const enUS: Resources = {
         'Built-in agent that resolves real 3-way conflicts during isolated per-node merge-back (RFC-130).',
       intentTitle: 'Intent builder',
       intentHint:
-        'Turns natural-language goals into workflow/workgroup/agent/skill changesets (RFC-234); opencode runtimes only (the read-only tool profile requires it).',
+        'Turns natural-language goals into workflow/workgroup/agent/skill changesets (RFC-234); requires a runtime whose driver enforces the read-only build profile.',
       intentRuntime: 'Intent builder runtime',
       intentRuntimeHint:
-        'Only opencode-protocol runtimes are admissible; empty inherits the global default (which must also be opencode).',
+        'Only runtimes that can enforce the read-only intent profile are admissible; empty inherits the global default (which must also qualify).',
+      intentRuntimeClaudeNote:
+        'Claude Code enforces the read-only profile via declared CLI permissions (sealed binary + tool allow-list); unlike opencode there is no post-launch config attestation.',
       intentLang: 'Artifact language',
       intentLangHint:
         'Language for generated prompts/descriptions; defaults to mirroring the user input.',
@@ -1823,6 +1825,52 @@ export const enUS: Resources = {
           'Some list endpoints are missing on the server side; the rest of the inventory is still usable.',
         codeInternalError: 'Unexpected probe error.',
         codeMcpDisabled: 'MCP is disabled; enable it from its edit page first.',
+      },
+    },
+    runtimeTest: {
+      open: 'Test with runtime',
+      title: 'MCP runtime test',
+      warningTitle: 'This can make real MCP calls',
+      warningBody:
+        'The runtime mounts only this MCP, but calls can still read, write, or cause external side effects. Closing this dialog does not stop the test session.',
+      loading: 'Restoring the test session…',
+      runtime: 'Runtime',
+      runtimeSummary: 'Runtime: {{runtime}}',
+      runtimeLoadError: 'Could not load a runtime that supports MCP testing.',
+      runtimeUnavailable: 'No enabled runtime currently supports MCP testing.',
+      idleCountdown: 'Idle session ends automatically in {{time}}',
+      firstMessage: 'First test message',
+      nextMessage: 'Continue the conversation',
+      messagePlaceholder:
+        'For example: list the tools you provide, then call one read-only tool and verify its response.',
+      start: 'Start test',
+      starting: 'Starting…',
+      saveAndStart: 'Save and start',
+      useSaved: 'Use saved version',
+      send: 'Send',
+      sending: 'Sending…',
+      cancelTurn: 'Cancel current turn',
+      canceling: 'Canceling…',
+      endNow: 'End test now',
+      endConfirmTitle: 'End the MCP test now?',
+      endConfirmBody:
+        'The current turn will be terminated and the runtime process and private session store will be reclaimed. This is different from simply closing the dialog.',
+      endingHint:
+        'The runtime is stopping and session state is being reclaimed. You can close the dialog while cleanup continues.',
+      endedHint:
+        'This test has ended. Its execution history remains readable, and you can start a new test below.',
+      dirtyBasis:
+        'The form has unsaved changes. Save and start, or explicitly use the saved version.',
+      activeUsesSaved:
+        'This session is pinned to the saved configuration used at launch. Unsaved edits are not part of it.',
+      draftChangedDuringSave:
+        'The form changed again while saving. No test was started; review the changes and retry.',
+      status: {
+        new: 'New test',
+        running: 'Turn running',
+        idle: 'Waiting for next message',
+        ending: 'Ending',
+        ended: 'Ended',
       },
     },
   },

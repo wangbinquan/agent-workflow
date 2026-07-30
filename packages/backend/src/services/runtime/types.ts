@@ -134,6 +134,14 @@ export interface SpawnPlan {
   env: Record<string, string>
   stdin?: { mode: 'ignore' } | { mode: 'pipe'; data: string }
   cleanup?: () => void | Promise<void>
+  /**
+   * RFC-237 (design-gate P1-3) — spawn-boundary re-verification. When set, the
+   * spawner MUST await it immediately before process start; a throw aborts the
+   * launch (execution-identity failure codes flow through unchanged). Used by
+   * the claude-code sealed-binary path to shrink the seal→exec TOCTOU window;
+   * opencode omits it (its re-verify already runs inside the launcher).
+   */
+  preSpawnVerify?: () => Promise<void>
   /** Which process layer owns platform containment for this plan. */
   sandboxTopology?: SpawnSandboxTopology
   /**
@@ -165,6 +173,27 @@ export interface SpawnPlan {
         sessionContractDigest: string
         sessionStoreKey: string
         createdNodeRunId: string
+      }
+    | {
+        /**
+         * RFC-238: the playground has its own durable owner table. The wire
+         * marker remains the verified launcher's closed session-ready frame,
+         * but no task/node identity is manufactured for this branch.
+         */
+        kind: 'opencode-mcp-test'
+        mode: 'new' | 'resume'
+        nonce: string
+        leaseNonceDigest: string
+        ackPath: string
+        testSessionId: string
+        turnId: string
+        createdTurnId: string
+        expectedSessionId?: string
+        identityDigest: string
+        runtimeBinaryDigest: string
+        protocolCodec: string
+        sessionContractDigest: string
+        sessionStoreKey: string
       }
   /**
    * RFC-143 §4.4 — spawn-assembly facts the runner's `spawning agent runtime`
@@ -257,14 +286,23 @@ export interface SessionCaptureContext {
  * permission map: the closed enum is the entire expressible surface, so a
  * bash/write/network allow simply has no spelling (Codex design-gate P0-1).
  *
- * - 'all-deny'        — the RFC-224 status quo: every tool denied. Default;
- *                       distiller / smoke / commit-push are byte-unchanged.
- * - 'intent-read-v1'  — read-only file tools (read/grep/glob) allowed inside
- *                       the session cwd; everything else stays denied and
- *                       `external_directory: {'*': 'deny'}` confines reads to
- *                       the worktree. Qualified as part of the RFC-224
- *                       behavior surface; only the opencode verified path
- *                       implements it — other drivers must fail closed.
+ * Per-driver materialization facts (RFC-237 — recorded honestly, not implied):
+ *
+ * - 'all-deny'        — opencode: the verified system plan denies every tool
+ *                       (RFC-224 status quo). claude-code: ACCEPTED but runs
+ *                       with the RFC-117 legacy semantics (bypassPermissions,
+ *                       no tool gate) — a pre-existing gap kept byte-unchanged
+ *                       here; narrowing it would shift the distiller/smoke
+ *                       diagnostic surface and is deferred (design §1.3).
+ * - 'intent-read-v1'  — read-only file access confined to the session cwd.
+ *                       opencode: verified plan allows read/grep/glob with
+ *                       `external_directory: {'*': 'deny'}`. claude-code:
+ *                       declared-control spawn — sealed binary + `--tools
+ *                       Read,Grep,Glob` load-set pruning + dontAsk (outside-cwd
+ *                       reads verified denied hands-on, RFC-237 design §2.1).
+ *
+ * Admission gates consult `RuntimeDriver.narrowedSystemPermissionProfiles`; a
+ * driver that does not declare a narrowed profile MUST fail closed on it.
  */
 export const SYSTEM_PERMISSION_PROFILES = ['all-deny', 'intent-read-v1'] as const
 export type SystemPermissionProfile = (typeof SYSTEM_PERMISSION_PROFILES)[number]
@@ -312,6 +350,15 @@ export interface SystemAgentSpawnContext {
   opencodeCmd?: readonly string[]
 
   runtimeBinary?: string
+  /**
+   * RFC-237 (design-gate P1-2) — RFC-154 config-dir profile of the SELECTED
+   * runtime row (env-var name + leaf), threaded so a custom claude fork that
+   * changed its discovery surface still lands in the private per-run dir.
+   * Omitted → protocol defaults (every pre-RFC-237 caller unchanged; opencode
+   * ignores both).
+   */
+  configDirEnv?: string
+  configDirName?: string
   /** RFC-026 clarify-rerun: resume a prior session. */
   resumeSessionId?: string
   /** RFC-111 D16: bridge subscription credential into the relocated claude config dir (real claude runs only; opencode ignores). */
@@ -448,6 +495,103 @@ export interface BusinessNodeSpawnContext {
 }
 
 /**
+ * RFC-238 — closed spawn context for the MCP runtime playground. It cannot
+ * express skills, plugins, repositories, dependent agents, memory, inventory,
+ * or arbitrary permission maps: a capable driver receives exactly one MCP and
+ * must expose only that MCP's tool namespace.
+ */
+export interface McpTestSpawnContext {
+  sessionId: string
+  turnId: string
+  agentName: string
+  systemPrompt: string
+  prompt: string
+  /** Frozen, exact-one-MCP material prepared by the product layer. */
+  executionMaterial: McpTestExecutionMaterial
+  model?: string | null
+  worktreePath: string
+  /** Logical-session root; stable across turns. */
+  sessionRoot: string
+  /** Persistent native session store; stable across turns. */
+  sessionStoreRoot: string
+  /** Per-turn private root; manifests/seals/configs are removed after reap. */
+  runDir: string
+  appHome: string
+  configDir: RuntimeConfigDirProfile
+  runtimeBinary?: string | null
+  /** First-turn native id where the protocol supports preallocation (Claude). */
+  nativeSessionId?: string
+  /** Later turns resume this exact id. Mutually exclusive with nativeSessionId. */
+  resumeSessionId?: string
+  bridgeCredentials?: boolean
+  log: Logger
+  containment?: PreparedContainmentPlan
+  opencodeControl?:
+    | {
+        kind: 'new'
+        nonce: string
+        leaseNonceDigest: string
+        createdTurnId: string
+      }
+    | {
+        kind: 'resume'
+        nonce: string
+        leaseNonceDigest: string
+        createdTurnId: string
+        expectedSessionId: string
+        expectedProjectId: string
+        expectedIdentityDigest: string
+        expectedRuntimeBinaryDigest: string
+        expectedSessionContractDigest: string
+        expectedSessionStoreKey: string
+        expectedProtocolCodec: string
+      }
+}
+
+export interface McpTestExecutionMaterial {
+  readonly codec: 'mcp-test-execution-material-v1'
+  readonly mcpId: string
+  readonly runtimeKey: string
+  readonly type: 'local' | 'remote'
+  /** Secret-bearing values are present only in this in-memory frozen projection. */
+  readonly opencodeEntry: Readonly<Record<string, unknown>>
+  readonly claudeEntry: Readonly<Record<string, unknown>>
+  /** Domain-separated digest excludes credential values and per-turn paths. */
+  readonly executionDigest: string
+  /** Exact local executable bytes, or the canonical remote transport descriptor. */
+  readonly rawCommandDigest: string
+  /** Private material root owned by this turn. */
+  readonly root: string
+}
+
+export interface McpTestPlanIdentityReceipt {
+  readonly codec: 'mcp-test-plan-identity-v1'
+  readonly runtimeBinaryDigest: string
+  readonly mcpExecutionDigest: string
+  readonly sessionContractDigest: string
+  readonly rawCommandDigest: string
+}
+
+export interface McpTestSpawnPlan extends SpawnPlan {
+  readonly identity: McpTestPlanIdentityReceipt
+}
+
+export interface RuntimeMcpTestCapabilityV1 {
+  readonly codec: 'mcp-test-v1'
+  readonly defaultConfigDir: RuntimeConfigDirProfile
+  readonly bridgeCredentials: boolean
+  readonly sessionOwnerReceipt: 'opencode-session-v1' | null
+  createNativeSessionId(): string | null
+  sessionReference(input: {
+    turnSeq: number
+    nativeSessionId: string | null
+  }): Pick<McpTestSpawnContext, 'nativeSessionId' | 'resumeSessionId'>
+  sessionStoreDbPath(runDir: string): string | null
+  containmentProfile(input: { mcp: Mcp }): ContainmentRequirementProfileId
+  buildSpawn(ctx: McpTestSpawnContext): Promise<McpTestSpawnPlan>
+}
+
+/**
  * A pluggable agent runtime. RFC-143: a complete capability object — new runtime
  * = register a driver in DRIVERS + implement this interface, zero call-site edits.
  * `buildBusinessSpawn` + optional `readInventory?`/`startLiveCapture?` land in
@@ -457,6 +601,15 @@ export interface RuntimeDriver {
   readonly kind: RuntimeKind
   /** Conservative/default demand; the coordinator never infers from kind/OS. */
   readonly containmentProfile: ContainmentRequirementProfileId
+  /**
+   * RFC-237 — narrowed system-permission profiles this driver can MATERIALIZE
+   * (turn into an enforced spawn shape) beyond the 'all-deny' default.
+   * Admission gates (config save / intent turn launch) consult this set
+   * instead of discriminating on protocol literals; an undeclared profile
+   * stays fail-closed. 'all-deny' is deliberately NOT part of this set — its
+   * per-driver semantics are documented on SYSTEM_PERMISSION_PROFILES.
+   */
+  readonly narrowedSystemPermissionProfiles: readonly Exclude<SystemPermissionProfile, 'all-deny'>[]
   /**
    * Business descriptor refinement from the exact frozen child surfaces.
    * System callers use the filesystem-only profile directly.
@@ -515,6 +668,60 @@ export interface RuntimeDriver {
    *  (was an UNCONDITIONAL start, spinning uselessly on claude runs — the
    *  RFC-143 空转 bug). claude omits this → runner uses NOOP_HANDLE. */
   startLiveCapture?(ctx: LivePollOptions): LivePollerHandle
+
+  /**
+   * RFC-238 — explicit, fail-closed MCP playground support. Registry rows whose
+   * protocol driver omits this capability never appear in the playground
+   * picker and cannot be selected through the API.
+   */
+  readonly mcpTest?: RuntimeMcpTestCapabilityV1
+
+  /** RFC-237 — post-exit child-session sweep into a SYSTEM-AGENT event sink
+   *  (was the `driver.kind === 'opencode'` branch in systemAgentRun.ts).
+   *  opencode: private-store SQLite sweep. claude omits this — a system-agent
+   *  spawn has no subagents (`--agents` never passed) and the full main
+   *  session already streams through `parseEvent` into the sink. */
+  captureSessionsToSink?(
+    ctx: SystemAgentSessionSweepContext,
+  ): Promise<SystemAgentSessionSweepOutcome>
+
+  /** RFC-237 (design-gate P2-4) — detect a TERMINAL application error carried
+   *  by a clean-exit stdout line (claude: `result` event with
+   *  `is_error:true`). Returns the raw error text (caller masks) or null.
+   *  Runtimes without such a dialect omit the method. */
+  parseTerminalResultError?(line: string): string | null
+}
+
+/** RFC-237 — inputs for `captureSessionsToSink?`. The sink slice is structural
+ *  (sessionEventSink.ts imports from this module, so the nominal
+ *  `SystemAgentEventSinkV1` cannot be named here without an import cycle);
+ *  its `append` parameter shape is copied verbatim and checked structurally. */
+export interface SystemAgentSessionSweepContext {
+  rootSessionId: string
+  sink: {
+    append(event: {
+      ts: number
+      kind: NormalizedEventKind | 'text' | 'stderr' | 'subagent_capture_failed'
+      payload: string
+      sessionId: string | null
+      parentSessionId: string | null
+      source: 'stream' | 'live-child' | 'post-run-child'
+      externalEventId?: string
+    }): Promise<void>
+    setRootSessionId(sessionId: string): Promise<void>
+    markTerminal(
+      state: 'complete' | 'truncated' | 'incomplete',
+      reason?: 'stream-persist-failed' | 'child-capture-failed' | 'post-exit-flush-timeout',
+    ): Promise<void>
+  }
+  log: Logger
+  /** Explicit private store DB path (plan.sessionStore.dbPath); omitted → protocol default. */
+  sessionStoreDbPath?: string
+}
+
+export interface SystemAgentSessionSweepOutcome {
+  failed: boolean
+  failureReason?: unknown
 }
 
 /** Inputs for `readInventory` — the per-run config dir + the node kind (the

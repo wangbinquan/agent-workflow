@@ -16,10 +16,11 @@ import type {
   RuntimeProbe,
   SessionCaptureContext,
   SpawnPlan,
+  SystemAgentSessionSweepContext,
   SystemAgentSpawnContext,
   ListModelsOpts,
 } from '../types'
-import type { InventorySnapshot } from '@agent-workflow/shared'
+import { DEFAULT_CONFIG_DIR_PROFILE, type InventorySnapshot } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -31,16 +32,33 @@ import { stageSkills } from '../stageSkills'
 import { isProductionOpencodeCommand, probeOpencode } from '@/util/opencode'
 import { getOpencodeBinaryVersion } from '@/util/opencode-version-registry'
 import { listOpencodeModels } from '@/util/opencode-models'
-import { captureChildSessions } from '@/services/sessionCapture'
+import { captureChildSessions, captureOpencodeSessionsToSink } from '@/services/sessionCapture'
 import { readSnapshotFromRunDir } from '@/services/inventory'
 import { startLiveSubagentCapture } from '@/services/subagentLiveCapture'
 import { materializeInventoryPlugin } from '@/opencode-plugin'
 import { buildVerifiedOpencodeBusinessPlan, usesLegacyTestOpencodePath } from './verifiedPlan'
 import { buildVerifiedOpencodeSystemPlan } from './verifiedSystemPlan'
+import { buildOpencodeMcpTestSpawn } from './mcpTest'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
   containmentProfile: 'opencode-verified-v1',
+  // RFC-237 — the verified system plan materializes the read-only intent
+  // profile (verifiedSystemPlan.ts: read/grep/glob + external-directory deny).
+  narrowedSystemPermissionProfiles: ['intent-read-v1'],
+  mcpTest: {
+    codec: 'mcp-test-v1',
+    defaultConfigDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
+    bridgeCredentials: false,
+    sessionOwnerReceipt: 'opencode-session-v1',
+    createNativeSessionId: () => null,
+    sessionReference: ({ nativeSessionId }) =>
+      nativeSessionId === null ? {} : { resumeSessionId: nativeSessionId },
+    sessionStoreDbPath: (runDir) => join(runDir, 'xdg-data', 'opencode', 'opencode.db'),
+    containmentProfile: ({ mcp }) =>
+      mcp.type === 'local' ? 'opencode-verified-v1' : 'runner-filesystem-v1',
+    buildSpawn: buildOpencodeMcpTestSpawn,
+  },
   businessContainmentProfile: ({ agent, mcps }) =>
     agent.permission.bash !== 'deny' ||
     mcps.some((mcp) => mcp.enabled !== false && mcp.type === 'local')
@@ -250,5 +268,15 @@ export const opencodeDriver: RuntimeDriver = {
   },
   startLiveCapture(ctx: LivePollOptions): LivePollerHandle {
     return startLiveSubagentCapture(ctx)
+  },
+  // RFC-237 — post-exit child-session sweep for SYSTEM agents (moved verbatim
+  // from the `driver.kind === 'opencode'` branch in systemAgentRun.ts).
+  async captureSessionsToSink(ctx: SystemAgentSessionSweepContext) {
+    return captureOpencodeSessionsToSink({
+      rootSessionId: ctx.rootSessionId,
+      sink: ctx.sink,
+      log: ctx.log,
+      ...(ctx.sessionStoreDbPath === undefined ? {} : { opencodeDbPath: ctx.sessionStoreDbPath }),
+    })
   },
 }

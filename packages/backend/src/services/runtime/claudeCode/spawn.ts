@@ -21,7 +21,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { createLogger, type Logger } from '@/util/log'
-import type { SpawnPlan } from '../types'
+import type { SpawnPlan, SystemPermissionProfile } from '../types'
 import { type ClaudeSkillInjection, prepareClaudeConfigDir } from './config'
 
 export interface ClaudeSpawnContext {
@@ -62,8 +62,63 @@ export interface ClaudeSpawnContext {
    * (mock-claude) leave it false so CI never touches the keychain.
    */
   bridgeCredentials?: boolean
+  /**
+   * RFC-237 — frozen system-permission profile. 'intent-read-v1' switches the
+   * argv/env assembly to the declared-control read-only shape (design §2.2-2.3):
+   * `--tools Read,Grep,Glob` load-set pruning + dontAsk + strict-mcp +
+   * `--setting-sources ""` + `--disable-slash-commands`, controlled env
+   * (internal-marker stripping + hardening injections, NO IS_SANDBOX).
+   * Omitted / 'all-deny' → the legacy bypass shape, byte-unchanged.
+   */
+  systemPermissionProfile?: SystemPermissionProfile
   log?: Logger
 }
+
+/**
+ * RFC-237 design §2.3 — internal Claude Code runtime markers that must never
+ * leak into a declared-control child: the child would mistake itself for a
+ * nested/resumed session or inherit the parent's exec path / IDE transport
+ * (same closed list multica's claude backend strips, verified against 2.1.220).
+ * `IS_SANDBOX` is stripped too (design-gate P2-2): the read-only branch is not
+ * bypassPermissions, so the root-gate assertion must be ABSENT — an inherited
+ * value would falsely brand the child as sandboxed. The user-facing
+ * `CLAUDE_CODE_*` config namespace (GIT_BASH_PATH, USE_BEDROCK, …) passes
+ * through untouched — users set those deliberately.
+ */
+const CLAUDE_INTERNAL_ENV_MARKERS = new Set([
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CLAUDE_CODE_EXECPATH',
+  'CLAUDE_CODE_SESSION_ID',
+  'CLAUDE_CODE_SSE_PORT',
+  'IS_SANDBOX',
+])
+
+/** RFC-237 design §2.3 — inherit-minus-blacklist (NOT an allowlist: the auth
+ *  variable families — ANTHROPIC_*, CLAUDE_CODE_OAUTH_TOKEN, AWS_* and
+ *  GOOGLE_*, proxies — are open-ended and an allowlist would break them). */
+export function claudeControlledInheritEnv(
+  source: NodeJS.ProcessEnv | Record<string, string | undefined>,
+): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined) continue
+    if (CLAUDE_INTERNAL_ENV_MARKERS.has(key)) continue
+    if (key.startsWith('CLAUDECODE_')) continue
+    env[key] = value
+  }
+  return env
+}
+
+/** RFC-237 design §2.3 — hardening injections for the declared-control branch:
+ *  no auto-update, no telemetry/error reporting, no nonessential traffic.
+ *  Spread AFTER the inherited env so a daemon-level opt-in cannot re-enable. */
+const CLAUDE_READONLY_HARDENING_ENV = Object.freeze({
+  DISABLE_AUTOUPDATER: '1',
+  DISABLE_TELEMETRY: '1',
+  DISABLE_ERROR_REPORTING: '1',
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+})
 
 /**
  * claude's root/sudo gate: `--permission-mode bypassPermissions` (and
@@ -95,15 +150,38 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   writeFileSync(systemPromptFile, ctx.systemPromptText)
 
   const head = ctx.claudeCmd ?? ['claude']
+  const readOnlyIntent = ctx.systemPermissionProfile === 'intent-read-v1'
   const cmd = [
     ...head,
     '-p',
     '--output-format',
     'stream-json',
     '--verbose',
-    // multica-proven non-interactive form; V6 to re-confirm vs --dangerously-skip-permissions.
-    '--permission-mode',
-    'bypassPermissions',
+    ...(readOnlyIntent
+      ? [
+          // RFC-237 design §2.2 (hands-on verified on 2.1.220): --tools prunes
+          // the LOADED tool set (init echoes exactly these three; Write returns
+          // "No such tool available" and the run continues; Bash is invisible);
+          // dontAsk is the permission-layer backstop — outside-cwd reads are
+          // auto-denied (design §2.1 #11-13), in-cwd reads auto-allowed, no
+          // interactive hang possible. strict-mcp with NO --mcp-config → zero
+          // MCP servers; --setting-sources "" cuts user/project/local settings;
+          // --disable-slash-commands is defense-in-depth against config-dir
+          // skill loading. NOT bypassPermissions — and therefore no IS_SANDBOX.
+          '--permission-mode',
+          'dontAsk',
+          '--tools',
+          'Read,Grep,Glob',
+          '--strict-mcp-config',
+          '--setting-sources',
+          '',
+          '--disable-slash-commands',
+        ]
+      : [
+          // multica-proven non-interactive form; V6 to re-confirm vs --dangerously-skip-permissions.
+          '--permission-mode',
+          'bypassPermissions',
+        ]),
   ]
   if (ctx.model !== undefined && ctx.model.length > 0) cmd.push('--model', ctx.model)
   cmd.push('--append-system-prompt-file', systemPromptFile)
@@ -122,7 +200,12 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
 
   const configDirEnv = ctx.configDirEnv ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env
   const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
+    // RFC-237 design §2.3: the declared-control branch inherits minus the
+    // internal-marker blacklist (incl. IS_SANDBOX); the legacy branch keeps the
+    // full-inherit shape byte-unchanged.
+    ...(readOnlyIntent
+      ? claudeControlledInheritEnv(process.env)
+      : (process.env as Record<string, string>)),
     // opencode needed PWD=cwd; Claude Code resolves the project slug from cwd too,
     // and we keep PWD aligned so the transcript project dir matches the worktree.
     PWD: ctx.worktreePath,
@@ -131,9 +214,11 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
     // inherited env and is orthogonal to this dir.)
     // RFC-154: key is configurable (custom forks); default = CLAUDE_CONFIG_DIR.
     [configDirEnv]: configDir,
-    // Spread LAST so a root daemon's injected IS_SANDBOX=1 also wins over an
-    // inherited IS_SANDBOX=0 (claude's gate wants the exact string '1').
-    ...claudeSandboxEnv(process.getuid?.()),
+    // Spread LAST: legacy branch — a root daemon's injected IS_SANDBOX=1 wins
+    // over an inherited IS_SANDBOX=0 (claude's gate wants the exact '1');
+    // read-only branch — hardening injections win over any daemon-level opt-in
+    // (and IS_SANDBOX stays absent: not bypassPermissions, no root gate).
+    ...(readOnlyIntent ? CLAUDE_READONLY_HARDENING_ENV : claudeSandboxEnv(process.getuid?.())),
   }
   // RFC-154 (Codex impl-gate P2): with a CUSTOM key, scrub the protocol default
   // inherited from the daemon's own environment — otherwise the child carries

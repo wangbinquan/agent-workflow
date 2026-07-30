@@ -1,0 +1,140 @@
+// RFC-238 — Claude Code's dedicated MCP-only playground plan.
+//
+// This is intentionally separate from buildClaudeSpawn: business/system
+// callers retain their historical argv, while this capability uses dontAsk,
+// an empty built-in tool set, one private MCP config file, and a session-scoped
+// config directory that survives between turns.
+
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
+import type { McpTestSpawnContext, McpTestSpawnPlan } from '../types'
+import { prepareClaudeConfigDir } from './config'
+import { claudeControlledInheritEnv } from './spawn'
+import { snapshotRuntimeBinary, verifyRuntimeBinarySnapshot } from '../binarySnapshot'
+import { identityDigest } from '../opencode/executionIdentity'
+
+const HARDENING_ENV = Object.freeze({
+  DISABLE_AUTOUPDATER: '1',
+  DISABLE_TELEMETRY: '1',
+  DISABLE_ERROR_REPORTING: '1',
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+})
+
+export async function buildClaudeMcpTestSpawn(
+  ctx: McpTestSpawnContext,
+): Promise<McpTestSpawnPlan> {
+  if (ctx.nativeSessionId !== undefined && ctx.resumeSessionId !== undefined) {
+    throw new Error('mcp-test-native-session-conflict')
+  }
+  const configDir = join(ctx.sessionRoot, ctx.configDir.name)
+  mkdirSync(ctx.runDir, { recursive: true, mode: 0o700 })
+  prepareClaudeConfigDir(configDir, [], ctx.log, ctx.bridgeCredentials === true)
+
+  const systemPromptFile = join(ctx.runDir, `system-${ctx.turnId}.md`)
+  writeFileSync(systemPromptFile, ctx.systemPrompt, { mode: 0o600 })
+
+  const mcpConfig = {
+    mcpServers: {
+      [ctx.executionMaterial.runtimeKey]: ctx.executionMaterial.claudeEntry,
+    },
+  }
+  const mcpConfigFile = join(ctx.executionMaterial.root, 'claude-mcp-config.json')
+  // Secrets stay out of argv/process listings: Claude receives only this
+  // daemon-private path.
+  writeFileSync(mcpConfigFile, JSON.stringify(mcpConfig), { mode: 0o600 })
+
+  const sourceHead =
+    ctx.runtimeBinary !== undefined && ctx.runtimeBinary !== null && ctx.runtimeBinary !== ''
+      ? [ctx.runtimeBinary]
+      : ['claude']
+  const sealedBinary = join(ctx.runDir, 'runtime-bin', 'claude')
+  const binaryIdentity = await snapshotRuntimeBinary({
+    command: sourceHead,
+    snapshotPath: sealedBinary,
+  })
+  const cmd = [
+    sealedBinary,
+    '-p',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--permission-mode',
+    'dontAsk',
+    '--tools',
+    '',
+    '--mcp-config',
+    mcpConfigFile,
+    '--strict-mcp-config',
+    '--setting-sources',
+    '',
+    '--disable-slash-commands',
+    '--allowedTools',
+    `mcp__${ctx.executionMaterial.runtimeKey}__*`,
+  ]
+  if (ctx.model !== undefined && ctx.model !== null && ctx.model !== '') {
+    cmd.push('--model', ctx.model)
+  }
+  cmd.push('--append-system-prompt-file', systemPromptFile)
+  if (ctx.nativeSessionId !== undefined && ctx.nativeSessionId !== '') {
+    cmd.push('--session-id', ctx.nativeSessionId)
+  } else if (ctx.resumeSessionId !== undefined && ctx.resumeSessionId !== '') {
+    cmd.push('--resume', ctx.resumeSessionId)
+  }
+
+  const configDirEnv = ctx.configDir.env ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env
+  const env: Record<string, string> = {
+    ...claudeControlledInheritEnv(process.env),
+    PWD: ctx.worktreePath,
+    [configDirEnv]: configDir,
+    ...HARDENING_ENV,
+  }
+  if (configDirEnv !== DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env) {
+    delete env[DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env]
+  }
+
+  const sessionContractDigest = identityDigest({
+    codec: 1,
+    protocol: 'claude-code',
+    sessionId: ctx.sessionId,
+    runtimeSessionId: ctx.nativeSessionId ?? ctx.resumeSessionId ?? null,
+    agentName: ctx.agentName,
+    model: ctx.model ?? null,
+    worktreePath: ctx.worktreePath,
+    configDir: {
+      env: configDirEnv,
+      name: ctx.configDir.name,
+    },
+    mcpExecutionDigest: ctx.executionMaterial.executionDigest,
+  })
+
+  return {
+    cmd,
+    env,
+    stdin: { mode: 'pipe', data: ctx.prompt },
+    containment: ctx.containment,
+    preSpawnVerify: () =>
+      verifyRuntimeBinarySnapshot(sealedBinary, binaryIdentity.digest),
+    identity: {
+      codec: 'mcp-test-plan-identity-v1',
+      runtimeBinaryDigest: binaryIdentity.digest,
+      mcpExecutionDigest: ctx.executionMaterial.executionDigest,
+      sessionContractDigest,
+      rawCommandDigest: identityDigest({
+        codec: 1,
+        protocol: 'claude-code',
+        runtimeBinaryDigest: binaryIdentity.digest,
+      }),
+    },
+    diagnostics: {
+      mcpTestCodec: 'mcp-test-v1',
+      mcpCount: 1,
+      mcpKeys: [ctx.executionMaterial.runtimeKey],
+      nativeSessionMode: ctx.resumeSessionId === undefined ? 'new' : 'resume',
+    },
+    cleanup: async () => {
+      await rm(ctx.runDir, { recursive: true, force: true })
+    },
+  }
+}

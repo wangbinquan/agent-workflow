@@ -20,6 +20,7 @@ export * from './schemas/review'
 export * from './schemas/runtime'
 export * from './schemas/mcp'
 export * from './schemas/mcpProbe'
+export * from './schemas/mcpRuntimeTest' // RFC-238
 export * from './schemas/fusion'
 export * from './schemas/memory'
 export * from './schemas/plugin'

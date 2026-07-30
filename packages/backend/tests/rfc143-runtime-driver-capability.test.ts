@@ -133,6 +133,9 @@ describe('RFC-143 (B) 能力接口', () => {
     const mockDriver = {
       kind: 'opencode', // 借用已有 kind 满足 RuntimeKind union（真第三 kind 需 widen union）
       containmentProfile: 'opencode-verified-v1',
+      // RFC-237: 能力声明字段——第三 kind 不声明任何窄化 profile 时,intent
+      // admission 对它 fail-closed(空数组即完整表达)。
+      narrowedSystemPermissionProfiles: [],
       minVersion: '0.0.0',
       parseEvent: () => null,
       buildSpawn: async () => ({ cmd: ['mock'], env: {} }),
@@ -218,16 +221,30 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     // proposal 验收标准 1 的源码文本锁。driver 实现内部（services/runtime/）
     // 允许 kind 分支——那是能力本体；其余任何地方出现 kind 字面量判别都意味着
     // 「注册即扩展」被打破（第 23 处旁路诞生）。
+    // RFC-237 ratchet：旧正则只盖小写 `runtime|protocol` + `===`，四处旁路借
+    // `!==` / `kind` / `defaultRuntime` 形态逃逸（config/turnEngine/
+    // systemAgentRun 已在 RFC-237 能力化消除；start.ts / routes/runtime.ts 入
+    // 白名单）。新正则把三种逃逸拼写全部纳入。
     const offenders: string[] = []
-    const rfc224SecurityBoundaries = new Set([
+    const kindDiscriminationAllowlist = new Set([
       // RFC-224 deliberately gives OpenCode a stricter official-snapshot
       // diagnostic path and a runner ownership barrier. These are security
       // capabilities, not spawn assembly bypasses.
       'routes/runtimes.ts',
       'services/runner.ts',
+      // RFC-237: models listing keeps the opencode-only hermetic enumeration
+      // (RFC-224 source-guarded snapshot env) at the route layer — an opencode
+      // SECURITY boundary, not spawn assembly; folding it into
+      // driver.listModels means moving the source-guard semantics and is
+      // deferred (design §5 / design-gate P2-1 rationale).
+      'routes/runtime.ts',
+      // RFC-237: boot-time probe prewarm keyed off config.defaultRuntime — a
+      // startup probability optimization, not spawn assembly; removing it
+      // needs a driver boot-probe declaration, out of proportion (design §5).
+      'cli/start.ts',
     ])
     const kindDiscrimination =
-      /(?:runtime|protocol)\s*===\s*['"](?:opencode|claude-code)['"]|\bisClaude\b/
+      /\b(?:runtime|protocol|kind|defaultRuntime)\s*[!=]==\s*['"](?:opencode|claude-code)['"]|\bisClaude\b/
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir)) {
         const p = join(dir, name)
@@ -237,13 +254,35 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
           continue
         }
         if (!name.endsWith('.ts')) continue
-        if (rfc224SecurityBoundaries.has(relative(SRC_ROOT, p))) continue
+        if (kindDiscriminationAllowlist.has(relative(SRC_ROOT, p))) continue
         const src = readFileSync(p, 'utf8')
         if (kindDiscrimination.test(src)) offenders.push(relative(SRC_ROOT, p))
       }
     }
     walk(SRC_ROOT)
     expect(offenders).toEqual([])
+  })
+
+  it('RFC-237 ratchet 自检：三种历史逃逸拼写都被新正则命中', () => {
+    // 防未来把正则改弱：曾真实逃逸过的三种拼写（`!==` / `kind ===` /
+    // `defaultRuntime ===`）必须持续命中；合法非判别代码不误伤。
+    const kindDiscrimination =
+      /\b(?:runtime|protocol|kind|defaultRuntime)\s*[!=]==\s*['"](?:opencode|claude-code)['"]|\bisClaude\b/
+    for (const escaped of [
+      `if (runtime.protocol !== 'opencode') throw x`,
+      `driver.kind === 'opencode'`,
+      `config.defaultRuntime === 'claude-code'`,
+      `a.runtime === "claude-code"`,
+    ]) {
+      expect(kindDiscrimination.test(escaped)).toBe(true)
+    }
+    for (const legit of [
+      `getRuntimeDriver(runtime.protocol).narrowedSystemPermissionProfiles.includes('intent-read-v1')`,
+      `protocol: 'opencode',`,
+      `const kind = resolved.protocol`,
+    ]) {
+      expect(kindDiscrimination.test(legit)).toBe(false)
+    }
   })
 
   it('runner 业务 spawn 走 driver.buildBusinessSpawn（不再直调两个 spawn 自由函数）', () => {

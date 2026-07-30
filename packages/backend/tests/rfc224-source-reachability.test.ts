@@ -87,6 +87,11 @@ describe('RFC-224 verified OpenCode source reachability', () => {
       .map(({ path }) => path)
     expect(callOrDefinition).toEqual([
       'services/runtime/opencode/driver.ts',
+      // RFC-238 (co-landed with RFC-237): the MCP-test playground builds its
+      // probe argv on the legacy spawn assembler. Registered here explicitly;
+      // its verified-path posture is owned and re-confirmed by the RFC-238
+      // close-out.
+      'services/runtime/opencode/mcpTest.ts',
       'services/runtime/opencode/spawn.ts',
     ])
 
@@ -112,6 +117,10 @@ describe('RFC-224 verified OpenCode source reachability', () => {
       .map(({ path }) => path)
     expect(seamFiles).toEqual([
       'services/runner.ts',
+      // RFC-237: the claude declared-control branch skips its binary seal
+      // behind the SAME explicit seam (mock-binary tests only; production
+      // callers never set it), mirroring opencode's legacy-spawn gate.
+      'services/runtime/claudeCode/driver.ts',
       'services/runtime/opencode/driver.ts',
       'services/runtime/opencode/verifiedPlan.ts',
       'services/runtime/types.ts',
@@ -157,8 +166,15 @@ describe('RFC-224 verified OpenCode source reachability', () => {
       'services/runtime/opencode/fffCapability.ts',
       'services/runtime/opencode/verifiedPlanCore.ts',
     ])
-    expect(callSites(/\bsnapshotRuntimeOpencodeBinary\s*\(/)).toEqual([
-      'services/runtime/opencode/runtimeBinary.ts',
+    // RFC-237: the seal implementation moved VERBATIM to the runtime-neutral
+    // binarySnapshot module (runtimeBinary.ts is a legacy-name re-export). The
+    // legacy spelling has ZERO direct call sites; the neutral spelling is
+    // callable only from the shared implementation itself and the claude
+    // declared-control seal.
+    expect(callSites(/\bsnapshotRuntimeOpencodeBinary\s*\(/)).toEqual([])
+    expect(callSites(/\bsnapshotRuntimeBinary\s*\(/)).toEqual([
+      'services/runtime/binarySnapshot.ts',
+      'services/runtime/claudeCode/driver.ts',
     ])
 
     expect(business).not.toMatch(/\bprepareHermeticOpencodeLayout\s*\(/)
@@ -188,10 +204,16 @@ describe('RFC-224 verified OpenCode source reachability', () => {
     expect(status).toContain(": 'execution-identity-untrusted-binary'")
     expect(status).toContain('incompatibleReason: code')
 
+    // RFC-237: the snapshot-then-verify-then-execute discipline lives in the
+    // runtime-neutral module now; the opencode file keeps the legacy names as
+    // aliases and delegates its diagnostic helper to the shared one.
+    const binarySnapshot = source('services/runtime/binarySnapshot.ts')
+    expect(binarySnapshot).toContain('await snapshotRuntimeBinary({ command, snapshotPath })')
+    expect(binarySnapshot).toContain('await verifyRuntimeBinarySnapshot(snapshotPath')
+    expect(binarySnapshot).toContain('return await callback(snapshotPath, identity)')
     const runtimeBinary = source('services/runtime/opencode/runtimeBinary.ts')
-    expect(runtimeBinary).toContain('await snapshotRuntimeOpencodeBinary({')
-    expect(runtimeBinary).toContain('await verifyRuntimeOpencodeSnapshot(snapshotPath')
-    expect(runtimeBinary).toContain('return await callback(snapshotPath, identity)')
+    expect(runtimeBinary).toContain('snapshotRuntimeBinary as snapshotRuntimeOpencodeBinary')
+    expect(runtimeBinary).toContain("withRuntimeBinarySnapshot(command, callback, 'opencode')")
   })
 
   test('config-derived launch heads keep their production provenance brand', () => {

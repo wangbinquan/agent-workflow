@@ -181,15 +181,23 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
   // helper must be spread AFTER the static env keys, so a root daemon's
   // injected '1' overrides an inherited IS_SANDBOX=0 instead of losing to it.
   // (RFC-154: the config-dir env key became computed — the anchor tracks the
-  // new form `[ctx.configDirEnv ?? ...]: configDir` instead of the old literal.)
+  // new form `[ctx.configDirEnv ?? ...]: configDir` instead of the old literal.
+  // RFC-237: the tail spread became a ternary — legacy branch keeps
+  // claudeSandboxEnv, the declared-control branch injects hardening instead;
+  // BOTH must sit after the config-dir key, so the anchor now tracks the
+  // ternary spelling.)
   test('source: claudeSandboxEnv spread after the config-dir env key (override precedence)', () => {
     const src = readFileSync(
       join(import.meta.dir, '../src/services/runtime/claudeCode/spawn.ts'),
       'utf-8',
     )
     const anchor = src.indexOf(']: configDir')
-    const spread = src.indexOf('...claudeSandboxEnv(process.getuid?.())')
+    const spread = src.indexOf(': claudeSandboxEnv(process.getuid?.())')
     expect(anchor).toBeGreaterThan(-1)
     expect(spread).toBeGreaterThan(anchor)
+    // And the declared-control branch's hardening injection sits after the
+    // config-dir key too (same override-precedence guarantee).
+    const hardening = src.indexOf('? CLAUDE_READONLY_HARDENING_ENV')
+    expect(hardening).toBeGreaterThan(anchor)
   })
 })

@@ -121,17 +121,24 @@ describe('RFC-234 system permission profiles', () => {
     }
   })
 
-  test('claude-code driver fails closed on non-default profiles', async () => {
+  test('claude-code driver fails closed on UNDECLARED narrowed profiles', async () => {
+    // RFC-237 flipped 'intent-read-v1' from rejected to materialized (the
+    // declared-control branch — argv/env/seal locked in
+    // rfc237-claude-intent-readonly-spawn.test.ts). The fail-closed contract
+    // survives for anything the driver does NOT declare.
     const ctx = {
       agentName: 'aw-intent-builder',
       systemPrompt: 'p',
       prompt: 'u',
       worktreePath: '/tmp/wt',
       runDir: '/tmp/run',
-      systemPermissionProfile: 'intent-read-v1' as const,
+      systemPermissionProfile: 'not-a-declared-profile' as never,
     }
     await expect(claudeCodeDriver.buildSpawn(ctx)).rejects.toThrow(
-      /cannot enforce system permission profile 'intent-read-v1'/,
+      /cannot enforce system permission profile 'not-a-declared-profile'/,
     )
+    // And the declaration set is exactly the reviewed one — a driver-side
+    // widening shows up here before any admission gate sees it.
+    expect(claudeCodeDriver.narrowedSystemPermissionProfiles).toEqual(['intent-read-v1'])
   })
 })

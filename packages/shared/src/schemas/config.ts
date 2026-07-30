@@ -221,10 +221,12 @@ export const ConfigSchema = z.object({
   /**
    * RFC-234 — runtime profile NAME the intent-builder system agent runs on.
    * Unlike the other internal agents this selection is FAIL-CLOSED on
-   * capability: only protocols that prove the 'intent-read-v1' permission
-   * profile are admitted (v1: opencode via the verified system path);
-   * routes/config.ts rejects anything else at save time. Unset → inherit
-   * `defaultRuntime` (which must itself qualify at launch time).
+   * capability: only runtimes whose driver declares the 'intent-read-v1'
+   * narrowed permission profile are admitted (RFC-237 — opencode via the
+   * verified system path; claude-code via the declared-control sealed spawn);
+   * routes/config.ts rejects anything else at save time, including the
+   * inherited default when this is unset and defaultRuntime changes. Unset →
+   * inherit `defaultRuntime` (re-checked at launch time).
    */
   intentBuilderRuntime: z.string().min(1).optional(),
   /** RFC-234 — output language of generated artifacts (prompts/descriptions).

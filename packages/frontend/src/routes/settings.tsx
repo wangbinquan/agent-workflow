@@ -46,6 +46,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
 import { RuntimeSelect } from '@/components/RuntimeSelect'
+import { useRuntimesList } from '@/hooks/useRuntimesList'
 import { SandboxCard } from '@/components/settings/SandboxCard'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
@@ -1174,6 +1175,20 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
   // edit to commit/memory/merge (Codex impl-gate P2c).
   const configDirty = draft.dirty
 
+  // RFC-237 — the intent builder admits claude-code now. When the EFFECTIVE
+  // runtime (explicit pick, else the inherited defaultRuntime, mirroring the
+  // backend three-step fallback) resolves to the claude-code protocol, surface
+  // the enforcement difference (declared CLI control + sealed binary, no
+  // opencode-style post-launch attestation) right on the card.
+  const { selectableRuntimes } = useRuntimesList(state.intentBuilderRuntime)
+  const effectiveIntentRuntimeName =
+    (state.intentBuilderRuntime ?? '') !== ''
+      ? (state.intentBuilderRuntime ?? '')
+      : (config.defaultRuntime ?? '')
+  const intentRuntimeIsClaude =
+    selectableRuntimes.find((r) => r.name === effectiveIntentRuntimeName)?.protocol ===
+    'claude-code'
+
   const combinedEditState: SectionFormProps['editState'] = {
     dirty: configDirty || fusionDirty,
     validity: draft.validity,
@@ -1379,6 +1394,14 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               onChange={(v) => setState({ ...state, intentBuilderRuntime: v })}
             />
           </Field>
+          {intentRuntimeIsClaude && (
+            <p
+              className="settings-hint settings-hint--tight"
+              data-testid="intent-runtime-claude-note"
+            >
+              {t('settings.systemAgents.intentRuntimeClaudeNote')}
+            </p>
+          )}
           <Field
             label={t('settings.systemAgents.intentLang')}
             hint={t('settings.systemAgents.intentLangHint')}

@@ -19,6 +19,26 @@ import {
   assertResolvedExecutionPolicy,
 } from '@/services/executionPolicy'
 import { listAgents } from '@/services/agent'
+import { getRuntimeDriver } from '@/services/runtime'
+
+/** RFC-237 — the intent builder admits only runtimes whose driver declares the
+ *  'intent-read-v1' narrowed profile (capability gate, not a protocol-literal
+ *  gate). `inherited` switches the message for the defaultRuntime-inheritance
+ *  path (design-gate P2-3). */
+function assertIntentRuntimeCapability(
+  resolved: { name: string; protocol: Parameters<typeof getRuntimeDriver>[0] },
+  selection: string,
+  inherited: boolean,
+): void {
+  const driver = getRuntimeDriver(resolved.protocol)
+  if (driver.narrowedSystemPermissionProfiles.includes('intent-read-v1')) return
+  throw new ValidationError(
+    'intent-runtime-unsupported',
+    inherited
+      ? `the intent builder inherits defaultRuntime '${selection}' (protocol '${resolved.protocol}'), which cannot enforce the intent-read-v1 permission profile; pick a default whose driver declares it or set intentBuilderRuntime explicitly`
+      : `runtime '${selection}' (protocol '${resolved.protocol}') cannot enforce the intent-read-v1 permission profile; select a runtime whose driver declares it`,
+  )
+}
 
 export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/config', (c) => {
@@ -71,23 +91,36 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
           }),
         )
       }
-      // RFC-234 §1.1 — the intent builder is FAIL-CLOSED on runtime capability:
-      // only protocols that prove the 'intent-read-v1' system permission
-      // profile are admissible (v1: opencode via the verified system path). An
-      // explicit selection of any other protocol is rejected HERE, at save
-      // time — there is no "configured but degraded at run time" path.
+      // RFC-234 §1.1 / RFC-237 — the intent builder is FAIL-CLOSED on runtime
+      // capability: only runtimes whose driver declares the 'intent-read-v1'
+      // narrowed profile are admissible. An explicit selection of anything
+      // else is rejected HERE, at save time — there is no "configured but
+      // degraded at run time" path.
       if (nextConfig.intentBuilderRuntime !== undefined) {
         const resolved = await resolveInternalAgentRuntime(deps.db, {
           runtimeName: nextConfig.intentBuilderRuntime,
           defaultRuntime: nextConfig.defaultRuntime,
         })
         assertResolvedExecutionPolicy(resolved)
-        if (resolved.protocol !== 'opencode') {
-          throw new ValidationError(
-            'intent-runtime-unsupported',
-            `runtime '${nextConfig.intentBuilderRuntime}' (protocol '${resolved.protocol}') cannot enforce the intent-read-v1 permission profile; select an opencode runtime`,
-          )
-        }
+        assertIntentRuntimeCapability(resolved, nextConfig.intentBuilderRuntime, false)
+      } else if (
+        typeof body === 'object' &&
+        body !== null &&
+        ('intentBuilderRuntime' in body || 'defaultRuntime' in body)
+      ) {
+        // RFC-237 (design-gate P2-3 + impl-gate P2) — the intent builder
+        // inherits the default when unset; validate the EFFECTIVE inherited
+        // runtime on EVERY patch that can change that inheritance: switching
+        // defaultRuntime AND clearing the intentBuilderRuntime override (the
+        // clear path leaves defaultRuntime untouched, so a default-change-only
+        // check would persist an unlaunchable inherited config). Unrelated
+        // patches skip the resolve so a legacy-bad stored default cannot block
+        // orthogonal settings.
+        const inherited = await resolveInternalAgentRuntime(deps.db, {
+          runtimeName: null,
+          defaultRuntime: nextConfig.defaultRuntime,
+        })
+        assertIntentRuntimeCapability(inherited, nextConfig.defaultRuntime ?? inherited.name, true)
       }
       // Switching the effective default is a fan-out policy change. Every agent
       // that inherits it is checked before the config file is written.

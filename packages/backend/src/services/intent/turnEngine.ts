@@ -450,8 +450,16 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         prompt,
         protocol: deps.config.runtime.protocol,
         runtimeBinary: deps.config.runtime.binaryPath,
+        // RFC-237 (P1-2): RFC-154 config-dir profile of the selected runtime
+        // row (folded over the protocol default by resolveInternalAgentRuntime)
+        // — a custom claude fork that changed its discovery surface still lands
+        // in the private per-run dir. opencode ignores both fields.
+        configDirEnv: deps.config.runtime.configDir.env,
+        configDirName: deps.config.runtime.configDir.name,
         // Brand the configured head as a production command (no-op in the e2e
         // binary → legacy stub path; real brand in production → verified plan).
+        // The brand seam is consumed only by the opencode driver; branding a
+        // claude head is a pure no-op, which keeps this call protocol-blind.
         ...(deps.config.runtime.binaryPath != null && deps.config.runtime.binaryPath !== ''
           ? { opencodeCmd: markProductionOpencodeCommand([deps.config.runtime.binaryPath]) }
           : {}),
@@ -485,6 +493,10 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       status: result.status,
       ...(result.failureCode === undefined ? {} : { failureCode: result.failureCode }),
       ...(result.stderrTail === '' ? {} : { stderrTail: result.stderrTail }),
+      // RFC-237 impl-gate P2 — the terminal claude is_error text (masked in
+      // runSystemAgent) persists with the turn so "Not logged in"-class causes
+      // are actionable, not just `intent-run-result-error`.
+      ...(result.resultError === undefined ? {} : { resultError: result.resultError }),
     }
     if (result.status !== 'ok') {
       return settle(
@@ -648,8 +660,9 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
 
 /** Resolve the per-turn runtime + knobs from config.json (design §5).
  *  FAIL-CLOSED twice: the save-time gate in routes/config.ts rejects
- *  non-opencode selections, and this launch-time re-check refuses to spawn if
- *  a legacy/hand-edited config slipped one through. */
+ *  selections whose driver does not declare the 'intent-read-v1' narrowed
+ *  profile (RFC-237 capability gate), and this launch-time re-check refuses to
+ *  spawn if a legacy/hand-edited config slipped one through. */
 export async function resolveIntentTurnConfig(
   db: DbClient,
   cfg: {
@@ -664,11 +677,16 @@ export async function resolveIntentTurnConfig(
   },
 ): Promise<IntentTurnConfig> {
   const { resolveInternalAgentRuntime } = await import('@/services/runtimeRegistry')
+  const { getRuntimeDriver } = await import('@/services/runtime')
   const runtime = await resolveInternalAgentRuntime(db, {
     runtimeName: cfg.intentBuilderRuntime ?? null,
     defaultRuntime: cfg.defaultRuntime ?? null,
   })
-  if (runtime.protocol !== 'opencode') {
+  // RFC-237: capability gate, not a protocol-literal gate — a driver that does
+  // not declare 'intent-read-v1' stays fail-closed exactly like before.
+  if (
+    !getRuntimeDriver(runtime.protocol).narrowedSystemPermissionProfiles.includes('intent-read-v1')
+  ) {
     throw new ConflictError(
       'intent-runtime-unsupported',
       `runtime '${runtime.name}' (protocol '${runtime.protocol}') cannot enforce intent-read-v1`,
