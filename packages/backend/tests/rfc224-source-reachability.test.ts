@@ -87,11 +87,6 @@ describe('RFC-224 verified OpenCode source reachability', () => {
       .map(({ path }) => path)
     expect(callOrDefinition).toEqual([
       'services/runtime/opencode/driver.ts',
-      // RFC-238 (co-landed with RFC-237): the MCP-test playground builds its
-      // probe argv on the legacy spawn assembler. Registered here explicitly;
-      // its verified-path posture is owned and re-confirmed by the RFC-238
-      // close-out.
-      'services/runtime/opencode/mcpTest.ts',
       'services/runtime/opencode/spawn.ts',
     ])
 
@@ -154,6 +149,7 @@ describe('RFC-224 verified OpenCode source reachability', () => {
     const callSites = (pattern: RegExp) =>
       files.filter(({ text }) => pattern.test(text)).map(({ path }) => path)
     expect(callSites(/\bbuildVerifiedOpencodePlan\s*\(/)).toEqual([
+      'services/runtime/opencode/verifiedMcpTestPlan.ts',
       'services/runtime/opencode/verifiedPlan.ts',
       'services/runtime/opencode/verifiedPlanCore.ts',
       'services/runtime/opencode/verifiedSystemPlan.ts',
@@ -175,6 +171,8 @@ describe('RFC-224 verified OpenCode source reachability', () => {
     expect(callSites(/\bsnapshotRuntimeBinary\s*\(/)).toEqual([
       'services/runtime/binarySnapshot.ts',
       'services/runtime/claudeCode/driver.ts',
+      'services/runtime/claudeCode/mcpTest.ts',
+      'services/runtime/mcpTestExecutionMaterial.ts',
     ])
 
     expect(business).not.toMatch(/\bprepareHermeticOpencodeLayout\s*\(/)

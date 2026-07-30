@@ -509,6 +509,11 @@ export interface McpTestSpawnContext {
   /** Frozen, exact-one-MCP material prepared by the product layer. */
   executionMaterial: McpTestExecutionMaterial
   model?: string | null
+  /** Runtime-profile generation controls; OpenCode materializes these exactly. */
+  variant?: string | null
+  temperature?: number | null
+  steps?: number | null
+  maxSteps?: number | null
   worktreePath: string
   /** Logical-session root; stable across turns. */
   sessionRoot: string
@@ -562,6 +567,8 @@ export interface McpTestExecutionMaterial {
   readonly rawCommandDigest: string
   /** Private material root owned by this turn. */
   readonly root: string
+  /** Re-prove sealed local executable/wrapper bytes immediately before spawn. */
+  readonly preSpawnVerify: () => Promise<void>
 }
 
 export interface McpTestPlanIdentityReceipt {

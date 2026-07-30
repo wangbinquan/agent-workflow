@@ -116,7 +116,12 @@ export const IntentTurnExecutionDtoSchema = z
     eventBytes: z.number().int().min(0),
     rootSessionId: z.string().nullable(),
     incompleteReason: z
-      .enum(['stream-persist-failed', 'child-capture-failed', 'post-exit-flush-timeout'])
+      .enum([
+        'stream-persist-failed',
+        'stream-frame-limit-exceeded',
+        'child-capture-failed',
+        'post-exit-flush-timeout',
+      ])
       .nullable(),
   })
   .strict()

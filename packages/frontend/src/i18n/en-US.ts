@@ -1863,8 +1863,18 @@ export const enUS: Resources = {
         'The form has unsaved changes. Save and start, or explicitly use the saved version.',
       activeUsesSaved:
         'This session is pinned to the saved configuration used at launch. Unsaved edits are not part of it.',
+      receiptReplaced:
+        'That start request already ran, but its history was replaced by a newer test. The latest test is shown instead; no request was repeated.',
       draftChangedDuringSave:
         'The form changed again while saving. No test was started; review the changes and retry.',
+      turnOutcome: {
+        failed: 'The last turn failed',
+        canceled: 'The last turn was canceled',
+        timedOut: 'The last turn timed out',
+        interrupted: 'The last turn was interrupted',
+        diagnostic: 'Diagnostic code: {{code}}',
+        noDiagnostic: 'The runtime did not report a diagnostic code.',
+      },
       status: {
         new: 'New test',
         running: 'Turn running',

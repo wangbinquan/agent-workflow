@@ -2394,6 +2394,461 @@ export const opencodeSessionOwners = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// RFC-238 — private, multi-turn MCP runtime playground state.
+//
+// A logical test session owns one runtime-native conversation and accepts at
+// most one turn at a time. Closing the UI never mutates these rows; only an
+// accepted message clears the idle deadline, and turn settlement reinstates the
+// 10-minute deadline. MCP/user FKs are RESTRICT so destructive resource
+// mutations must first cross the process-reap + store-cleanup barrier.
+// -----------------------------------------------------------------------------
+export const mcpRuntimeTestSessions = sqliteTable(
+  'mcp_runtime_test_sessions',
+  {
+    id: text('id').primaryKey(),
+    mcpId: text('mcp_id')
+      .notNull()
+      .references(() => mcps.id, { onDelete: 'restrict' }),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    clientCreateId: text('client_create_id').notNull(),
+    clientCreateDigest: text('client_create_digest').notNull(),
+    status: text('status', { enum: ['active', 'ending', 'ended'] }).notNull(),
+    endReason: text('end_reason', {
+      enum: [
+        'user',
+        'idle-timeout',
+        'mcp-deleted',
+        'mcp-disabled',
+        'mcp-config-changed',
+        'access-revoked',
+        'runtime-disabled',
+        'runtime-deleted',
+        'runtime-profile-changed',
+        'runtime-identity-changed',
+        'capture-truncated',
+        'capture-incomplete',
+        'session-unusable',
+      ],
+    }),
+    mcpConfigHash: text('mcp_config_hash').notNull(),
+    runtimeRowId: text('runtime_row_id').notNull(),
+    runtimeName: text('runtime_name').notNull(),
+    runtimeProtocol: text('runtime_protocol', {
+      enum: ['opencode', 'claude-code'],
+    }).notNull(),
+    /** Secret-free frozen runtime profile used for resume drift checks. */
+    runtimeSnapshotJson: text('runtime_snapshot_json').notNull(),
+    runtimeFingerprint: text('runtime_fingerprint').notNull(),
+    /** Internal-only exact executable path; never projected to the API. */
+    runtimeBinaryPath: text('runtime_binary_path').notNull(),
+    runtimeBinaryDigest: text('runtime_binary_digest'),
+    mcpExecutionDigest: text('mcp_execution_digest'),
+    sessionContractDigest: text('session_contract_digest'),
+    runtimeSessionId: text('runtime_session_id'),
+    nativeSessionState: text('native_session_state', {
+      enum: ['pending', 'ready', 'unusable'],
+    })
+      .notNull()
+      .default('pending'),
+    inFlightTurnId: text('in_flight_turn_id'),
+    turnSeq: integer('turn_seq').notNull().default(0),
+    sessionVersion: integer('session_version').notNull().default(0),
+    idleDeadlineAt: integer('idle_deadline_at'),
+    continuationBlockedReason: text('continuation_blocked_reason', {
+      enum: [
+        'mcp-config-changed',
+        'runtime-profile-changed',
+        'runtime-identity-changed',
+        'mcp-execution-changed',
+        'capture-truncated',
+        'capture-incomplete',
+        'session-root-mismatch',
+        'session-store-missing',
+      ],
+    }),
+    scratchRoot: text('scratch_root').notNull(),
+    sessionStoreRoot: text('session_store_root').notNull(),
+    sessionStoreDbPath: text('session_store_db_path'),
+    cleanupState: text('cleanup_state', {
+      enum: ['not-started', 'pending', 'complete', 'quarantined'],
+    })
+      .notNull()
+      .default('not-started'),
+    cleanupErrorCode: text('cleanup_error_code'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    endedAt: integer('ended_at'),
+  },
+  (t) => ({
+    ownerMcpLiveUnique: uniqueIndex('uniq_mcp_runtime_test_sessions_owner_mcp_live')
+      .on(t.mcpId, t.ownerUserId)
+      .where(sql`${t.status} IN ('active', 'ending')`),
+    createUnique: uniqueIndex('uniq_mcp_runtime_test_sessions_create').on(
+      t.mcpId,
+      t.ownerUserId,
+      t.clientCreateId,
+    ),
+    ownerMcpUpdatedIdx: index('idx_mcp_runtime_test_sessions_owner_mcp_updated').on(
+      t.ownerUserId,
+      t.mcpId,
+      t.updatedAt,
+    ),
+    idleIdx: index('idx_mcp_runtime_test_sessions_idle').on(t.status, t.idleDeadlineAt),
+    statusShape: check(
+      'mcp_runtime_test_sessions_status_shape',
+      sql`(
+        (
+          ${t.status} = 'active'
+          AND ${t.endReason} IS NULL
+          AND ${t.endedAt} IS NULL
+          AND (
+            (${t.inFlightTurnId} IS NOT NULL AND ${t.idleDeadlineAt} IS NULL)
+            OR
+            (
+              ${t.inFlightTurnId} IS NULL
+              AND ${t.idleDeadlineAt} IS NOT NULL
+              AND ${t.nativeSessionState} = 'ready'
+              AND ${t.continuationBlockedReason} IS NULL
+            )
+          )
+        )
+        OR
+        (
+          ${t.status} = 'ending'
+          AND ${t.endReason} IS NOT NULL
+          AND ${t.endedAt} IS NULL
+          AND ${t.idleDeadlineAt} IS NULL
+        )
+        OR
+        (
+          ${t.status} = 'ended'
+          AND ${t.endReason} IS NOT NULL
+          AND ${t.endedAt} IS NOT NULL
+          AND ${t.inFlightTurnId} IS NULL
+          AND ${t.idleDeadlineAt} IS NULL
+        )
+      )`,
+    ),
+    hashShape: check(
+      'mcp_runtime_test_sessions_hash_shape',
+      sql`length(${t.clientCreateDigest}) = 64
+        AND ${t.clientCreateDigest} NOT GLOB '*[^0-9a-f]*'
+        AND length(${t.mcpConfigHash}) = 64
+        AND ${t.mcpConfigHash} NOT GLOB '*[^0-9a-f]*'
+        AND length(${t.runtimeFingerprint}) = 64
+        AND ${t.runtimeFingerprint} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    enumShape: check(
+      'mcp_runtime_test_sessions_enum_shape',
+      sql`${t.status} IN ('active', 'ending', 'ended')
+        AND ${t.runtimeProtocol} IN ('opencode', 'claude-code')
+        AND ${t.nativeSessionState} IN ('pending', 'ready', 'unusable')
+        AND ${t.cleanupState} IN ('not-started', 'pending', 'complete', 'quarantined')
+        AND (
+          ${t.endReason} IS NULL
+          OR ${t.endReason} IN (
+            'user', 'idle-timeout', 'mcp-deleted', 'mcp-disabled',
+            'mcp-config-changed', 'access-revoked', 'runtime-disabled',
+            'runtime-deleted', 'runtime-profile-changed',
+            'runtime-identity-changed', 'capture-truncated',
+            'capture-incomplete', 'session-unusable'
+          )
+        )
+        AND (
+          ${t.continuationBlockedReason} IS NULL
+          OR ${t.continuationBlockedReason} IN (
+            'mcp-config-changed', 'runtime-profile-changed',
+            'runtime-identity-changed', 'mcp-execution-changed',
+            'capture-truncated', 'capture-incomplete',
+            'session-root-mismatch', 'session-store-missing'
+          )
+        )
+        AND ${t.turnSeq} >= 0
+        AND ${t.sessionVersion} >= 0`,
+    ),
+    digestShape: check(
+      'mcp_runtime_test_sessions_digest_shape',
+      sql`(
+        (
+          ${t.runtimeBinaryDigest} IS NULL
+          AND ${t.mcpExecutionDigest} IS NULL
+          AND ${t.sessionContractDigest} IS NULL
+        )
+        OR
+        (
+          ${t.runtimeBinaryDigest} IS NOT NULL
+          AND ${t.mcpExecutionDigest} IS NOT NULL
+          AND ${t.sessionContractDigest} IS NOT NULL
+          AND length(${t.runtimeBinaryDigest}) = 64
+          AND ${t.runtimeBinaryDigest} NOT GLOB '*[^0-9a-f]*'
+          AND length(${t.mcpExecutionDigest}) = 64
+          AND ${t.mcpExecutionDigest} NOT GLOB '*[^0-9a-f]*'
+          AND length(${t.sessionContractDigest}) = 64
+          AND ${t.sessionContractDigest} NOT GLOB '*[^0-9a-f]*'
+        )
+      )`,
+    ),
+  }),
+)
+
+export const mcpRuntimeTestTurns = sqliteTable(
+  'mcp_runtime_test_turns',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => mcpRuntimeTestSessions.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    clientMessageId: text('client_message_id').notNull(),
+    promptText: text('prompt_text').notNull(),
+    status: text('status', {
+      enum: ['queued', 'running', 'succeeded', 'failed', 'canceled', 'timed_out', 'interrupted'],
+    }).notNull(),
+    hardDeadlineAt: integer('hard_deadline_at').notNull(),
+    captureState: text('capture_state', {
+      enum: ['live', 'complete', 'truncated', 'incomplete'],
+    })
+      .notNull()
+      .default('live'),
+    captureIncompleteReason: text('capture_incomplete_reason'),
+    captureFirstEventSeq: integer('capture_first_event_seq'),
+    captureLastEventSeq: integer('capture_last_event_seq').notNull().default(0),
+    captureEventBytes: integer('capture_event_bytes').notNull().default(0),
+    cancelRequestedAt: integer('cancel_requested_at'),
+    pid: integer('pid'),
+    spawnedAt: integer('spawned_at'),
+    spawnBinaryPath: text('spawn_binary_path'),
+    rawCommandDigest: text('raw_command_digest'),
+    spawnCommandDigest: text('spawn_command_digest'),
+    exitCode: integer('exit_code'),
+    failureCode: text('failure_code'),
+    stderrTail: text('stderr_tail'),
+    durationMs: integer('duration_ms'),
+    startedAt: integer('started_at'),
+    finishedAt: integer('finished_at'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    sessionSeqUnique: uniqueIndex('uniq_mcp_runtime_test_turns_session_seq').on(t.sessionId, t.seq),
+    messageUnique: uniqueIndex('uniq_mcp_runtime_test_turns_message').on(
+      t.sessionId,
+      t.clientMessageId,
+    ),
+    sessionIdx: index('idx_mcp_runtime_test_turns_session').on(t.sessionId, t.seq),
+    statusIdx: index('idx_mcp_runtime_test_turns_status').on(t.status, t.hardDeadlineAt),
+    enumShape: check(
+      'mcp_runtime_test_turns_enum_shape',
+      sql`${t.status} IN (
+          'queued', 'running', 'succeeded', 'failed',
+          'canceled', 'timed_out', 'interrupted'
+        )
+        AND ${t.captureState} IN ('live', 'complete', 'truncated', 'incomplete')
+        AND (
+          ${t.captureIncompleteReason} IS NULL
+          OR ${t.captureIncompleteReason} IN (
+            'stream-persist-failed', 'stream-frame-limit-exceeded',
+            'child-capture-failed', 'post-exit-flush-timeout'
+          )
+        )`,
+    ),
+    counterShape: check(
+      'mcp_runtime_test_turns_counter_shape',
+      sql`${t.seq} > 0
+        AND ${t.hardDeadlineAt} >= ${t.createdAt}
+        AND ${t.captureLastEventSeq} >= 0
+        AND ${t.captureEventBytes} >= 0
+        AND (${t.captureFirstEventSeq} IS NULL OR ${t.captureFirstEventSeq} > 0)
+        AND (${t.durationMs} IS NULL OR ${t.durationMs} >= 0)`,
+    ),
+    lifecycleShape: check(
+      'mcp_runtime_test_turns_lifecycle_shape',
+      sql`(
+          ${t.status} = 'queued'
+          AND ${t.startedAt} IS NULL
+          AND ${t.finishedAt} IS NULL
+        )
+        OR (
+          ${t.status} = 'running'
+          AND ${t.startedAt} IS NOT NULL
+          AND ${t.finishedAt} IS NULL
+        )
+        OR (
+          ${t.status} IN (
+            'succeeded', 'failed', 'canceled', 'timed_out', 'interrupted'
+          )
+          AND ${t.finishedAt} IS NOT NULL
+        )`,
+    ),
+    digestShape: check(
+      'mcp_runtime_test_turns_digest_shape',
+      sql`(
+          ${t.rawCommandDigest} IS NULL
+          OR (
+            length(${t.rawCommandDigest}) = 64
+            AND ${t.rawCommandDigest} NOT GLOB '*[^0-9a-f]*'
+          )
+        )
+        AND (
+          (
+            ${t.spawnedAt} IS NULL
+            AND ${t.spawnBinaryPath} IS NULL
+            AND ${t.spawnCommandDigest} IS NULL
+          )
+          OR
+          (
+            ${t.spawnedAt} IS NOT NULL
+            AND ${t.spawnBinaryPath} IS NOT NULL
+            AND ${t.spawnCommandDigest} IS NOT NULL
+            AND length(${t.spawnCommandDigest}) = 64
+            AND ${t.spawnCommandDigest} NOT GLOB '*[^0-9a-f]*'
+          )
+        )`,
+    ),
+  }),
+)
+
+export const mcpRuntimeTestEvents = sqliteTable(
+  'mcp_runtime_test_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    testSessionId: text('test_session_id')
+      .notNull()
+      .references(() => mcpRuntimeTestSessions.id, { onDelete: 'cascade' }),
+    firstSeenTurnId: text('first_seen_turn_id').notNull(),
+    eventSeq: integer('event_seq').notNull(),
+    ts: integer('ts').notNull(),
+    kind: text('kind').notNull(),
+    payload: text('payload').notNull(),
+    sessionId: text('session_id'),
+    parentSessionId: text('parent_session_id'),
+    source: text('source', {
+      enum: ['stream', 'live-child', 'post-run-child'],
+    }).notNull(),
+    externalEventKey: text('external_event_key'),
+  },
+  (t) => ({
+    sessionSeqUnique: uniqueIndex('uniq_mcp_runtime_test_events_session_seq').on(
+      t.testSessionId,
+      t.eventSeq,
+    ),
+    externalUnique: uniqueIndex('uniq_mcp_runtime_test_events_external')
+      .on(t.testSessionId, t.externalEventKey)
+      .where(sql`${t.externalEventKey} IS NOT NULL`),
+    sessionIdx: index('idx_mcp_runtime_test_events_session').on(t.testSessionId, t.eventSeq),
+    shape: check(
+      'mcp_runtime_test_events_shape',
+      sql`${t.eventSeq} > 0
+        AND ${t.ts} >= 0
+        AND ${t.source} IN ('stream', 'live-child', 'post-run-child')
+        AND (
+          ${t.externalEventKey} IS NULL
+          OR (
+            length(${t.externalEventKey}) = 64
+            AND ${t.externalEventKey} NOT GLOB '*[^0-9a-f]*'
+          )
+        )`,
+    ),
+  }),
+)
+
+export const mcpRuntimeTestCreateReceipts = sqliteTable(
+  'mcp_runtime_test_create_receipts',
+  {
+    mcpId: text('mcp_id')
+      .notNull()
+      .references(() => mcps.id, { onDelete: 'restrict' }),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    clientCreateId: text('client_create_id').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    sessionId: text('session_id').notNull(),
+    acceptedTurnId: text('accepted_turn_id').notNull(),
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.mcpId, t.ownerUserId, t.clientCreateId] }),
+    expiryIdx: index('idx_mcp_runtime_test_create_receipts_expiry').on(t.expiresAt),
+    shape: check(
+      'mcp_runtime_test_create_receipts_shape',
+      sql`length(${t.requestDigest}) = 64
+        AND ${t.requestDigest} NOT GLOB '*[^0-9a-f]*'
+        AND ${t.createdAt} >= 0
+        AND ${t.expiresAt} > ${t.createdAt}`,
+    ),
+  }),
+)
+
+// OpenCode playground ownership deliberately does not reuse the task/business
+// owner table: a test session is not a Task or NodeRun.
+export const opencodeMcpTestSessionOwners = sqliteTable(
+  'opencode_mcp_test_session_owners',
+  {
+    runtimeSessionId: text('runtime_session_id').primaryKey(),
+    testSessionId: text('test_session_id')
+      .notNull()
+      .references(() => mcpRuntimeTestSessions.id, { onDelete: 'restrict' }),
+    createdTurnId: text('created_turn_id')
+      .notNull()
+      .references(() => mcpRuntimeTestTurns.id, { onDelete: 'restrict' }),
+    currentTurnId: text('current_turn_id')
+      .notNull()
+      .references(() => mcpRuntimeTestTurns.id, { onDelete: 'restrict' }),
+    identityDigest: text('identity_digest').notNull(),
+    runtimeBinaryDigest: text('runtime_binary_digest').notNull(),
+    sessionContractDigest: text('session_contract_digest').notNull(),
+    sessionStoreKey: text('session_store_key').notNull(),
+    projectId: text('project_id').notNull(),
+    protocolCodec: text('protocol_codec').notNull(),
+    reportedVersion: text('reported_version'),
+    leaseTurnId: text('lease_turn_id').references(() => mcpRuntimeTestTurns.id, {
+      onDelete: 'restrict',
+    }),
+    leaseAcquiredAt: integer('lease_acquired_at'),
+    leaseNonceDigest: text('lease_nonce_digest'),
+  },
+  (t) => ({
+    testSessionUnique: uniqueIndex('uniq_opencode_mcp_test_owners_session').on(t.testSessionId),
+    storeUnique: uniqueIndex('uniq_opencode_mcp_test_owners_store_key').on(t.sessionStoreKey),
+    leaseAllOrNone: check(
+      'opencode_mcp_test_owners_lease_all_or_none',
+      sql`(
+        (
+          ${t.leaseTurnId} IS NULL
+          AND ${t.leaseAcquiredAt} IS NULL
+          AND ${t.leaseNonceDigest} IS NULL
+        )
+        OR
+        (
+          ${t.leaseTurnId} IS NOT NULL
+          AND ${t.leaseAcquiredAt} IS NOT NULL
+          AND ${t.leaseNonceDigest} IS NOT NULL
+        )
+      )`,
+    ),
+    digestShape: check(
+      'opencode_mcp_test_owners_digest_shape',
+      sql`length(${t.identityDigest}) = 64
+        AND ${t.identityDigest} NOT GLOB '*[^0-9a-f]*'
+        AND length(${t.runtimeBinaryDigest}) = 64
+        AND ${t.runtimeBinaryDigest} NOT GLOB '*[^0-9a-f]*'
+        AND length(${t.sessionContractDigest}) = 64
+        AND ${t.sessionContractDigest} NOT GLOB '*[^0-9a-f]*'
+        AND (
+          ${t.leaseNonceDigest} IS NULL
+          OR (
+            length(${t.leaseNonceDigest}) = 64
+            AND ${t.leaseNonceDigest} NOT GLOB '*[^0-9a-f]*'
+          )
+        )`,
+    ),
+  }),
+)
+
+// -----------------------------------------------------------------------------
 // RFC-234 intent_sessions — intent-builder persistent sessions (design §2).
 // Visibility = creator + SYSTEM admin only (isAdminActor; manager has no bypass
 // — design-gate P1-8). `context_revision` is the monotonic context epoch: it
@@ -2472,7 +2927,12 @@ export const intentTurns = sqliteTable(
     captureEventBytes: integer('capture_event_bytes').notNull().default(0),
     captureRootSessionId: text('capture_root_session_id'),
     captureIncompleteReason: text('capture_incomplete_reason', {
-      enum: ['stream-persist-failed', 'child-capture-failed', 'post-exit-flush-timeout'],
+      enum: [
+        'stream-persist-failed',
+        'stream-frame-limit-exceeded',
+        'child-capture-failed',
+        'post-exit-flush-timeout',
+      ],
     }),
     scratchRetained: integer('scratch_retained', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(),

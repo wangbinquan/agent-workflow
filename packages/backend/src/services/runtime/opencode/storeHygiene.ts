@@ -93,6 +93,12 @@ export interface OpencodeStoreServerBinding {
         kind: 'system-ephemeral'
         invocationId: string
       }
+    | {
+        kind: 'mcp-test'
+        mode: 'new' | 'resume'
+        testSessionId: string
+        turnId: string
+      }
 }
 
 export interface AbandonedOpencodeStoreLock {
@@ -276,6 +282,27 @@ function parseLockPayload(raw: string): StoreLockPayload {
       parsedScope = {
         kind: 'system-ephemeral',
         invocationId: scope.invocationId,
+      }
+    } else if (scope.kind === 'mcp-test') {
+      if (
+        Object.keys(scope).sort().join(',') !== 'kind,mode,testSessionId,turnId' ||
+        (scope.mode !== 'new' && scope.mode !== 'resume') ||
+        typeof scope.testSessionId !== 'string' ||
+        scope.testSessionId.length === 0 ||
+        scope.testSessionId.length > 256 ||
+        scope.testSessionId.includes('\0') ||
+        typeof scope.turnId !== 'string' ||
+        scope.turnId.length === 0 ||
+        scope.turnId.length > 256 ||
+        scope.turnId.includes('\0')
+      ) {
+        unsafe()
+      }
+      parsedScope = {
+        kind: 'mcp-test',
+        mode: scope.mode,
+        testSessionId: scope.testSessionId,
+        turnId: scope.turnId,
       }
     } else {
       unsafe()

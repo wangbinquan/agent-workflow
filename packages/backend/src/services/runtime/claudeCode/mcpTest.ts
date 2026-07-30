@@ -5,7 +5,8 @@
 // an empty built-in tool set, one private MCP config file, and a session-scoped
 // config directory that survives between turns.
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
@@ -22,13 +23,11 @@ const HARDENING_ENV = Object.freeze({
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
 })
 
-export async function buildClaudeMcpTestSpawn(
-  ctx: McpTestSpawnContext,
-): Promise<McpTestSpawnPlan> {
+export async function buildClaudeMcpTestSpawn(ctx: McpTestSpawnContext): Promise<McpTestSpawnPlan> {
   if (ctx.nativeSessionId !== undefined && ctx.resumeSessionId !== undefined) {
     throw new Error('mcp-test-native-session-conflict')
   }
-  const configDir = join(ctx.sessionRoot, ctx.configDir.name)
+  const configDir = ctx.sessionStoreRoot
   mkdirSync(ctx.runDir, { recursive: true, mode: 0o700 })
   prepareClaudeConfigDir(configDir, [], ctx.log, ctx.bridgeCredentials === true)
 
@@ -43,7 +42,9 @@ export async function buildClaudeMcpTestSpawn(
   const mcpConfigFile = join(ctx.executionMaterial.root, 'claude-mcp-config.json')
   // Secrets stay out of argv/process listings: Claude receives only this
   // daemon-private path.
-  writeFileSync(mcpConfigFile, JSON.stringify(mcpConfig), { mode: 0o600 })
+  const mcpConfigJson = JSON.stringify(mcpConfig)
+  writeFileSync(mcpConfigFile, mcpConfigJson, { mode: 0o600 })
+  const mcpConfigDigest = createHash('sha256').update(mcpConfigJson).digest('hex')
 
   const sourceHead =
     ctx.runtimeBinary !== undefined && ctx.runtimeBinary !== null && ctx.runtimeBinary !== ''
@@ -105,6 +106,7 @@ export async function buildClaudeMcpTestSpawn(
     configDir: {
       env: configDirEnv,
       name: ctx.configDir.name,
+      root: configDir,
     },
     mcpExecutionDigest: ctx.executionMaterial.executionDigest,
   })
@@ -114,8 +116,19 @@ export async function buildClaudeMcpTestSpawn(
     env,
     stdin: { mode: 'pipe', data: ctx.prompt },
     containment: ctx.containment,
-    preSpawnVerify: () =>
-      verifyRuntimeBinarySnapshot(sealedBinary, binaryIdentity.digest),
+    preSpawnVerify: async () => {
+      await ctx.executionMaterial.preSpawnVerify()
+      await verifyRuntimeBinarySnapshot(sealedBinary, binaryIdentity.digest)
+      const metadata = statSync(mcpConfigFile)
+      const digest = createHash('sha256').update(readFileSync(mcpConfigFile)).digest('hex')
+      if (
+        !metadata.isFile() ||
+        (process.platform !== 'win32' && (metadata.mode & 0o777) !== 0o600) ||
+        digest !== mcpConfigDigest
+      ) {
+        throw new Error('mcp-test-config-changed-before-spawn')
+      }
+    },
     identity: {
       codec: 'mcp-test-plan-identity-v1',
       runtimeBinaryDigest: binaryIdentity.digest,

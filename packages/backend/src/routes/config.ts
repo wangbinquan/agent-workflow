@@ -20,6 +20,8 @@ import {
 } from '@/services/executionPolicy'
 import { listAgents } from '@/services/agent'
 import { getRuntimeDriver } from '@/services/runtime'
+import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import { Paths } from '@/util/paths'
 
 /** RFC-237 — the intent builder admits only runtimes whose driver declares the
  *  'intent-read-v1' narrowed profile (capability gate, not a protocol-literal
@@ -41,6 +43,15 @@ function assertIntentRuntimeCapability(
 }
 
 export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
+  const runtimeTests = getMcpRuntimeTestService({
+    db: deps.db,
+    configPath: deps.configPath,
+    appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
+    containmentCoordinator: deps.containmentCoordinator,
+    runFn: deps.mcpRuntimeTestDependencies?.runFn,
+    now: deps.mcpRuntimeTestDependencies?.now,
+    capacity: deps.mcpRuntimeTestDependencies?.capacity,
+  })
   app.get('/api/config', (c) => {
     const cfg = loadConfig(deps.configPath)
     return c.json(cfg)
@@ -145,6 +156,7 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
       // valid display receipt, but can never leave a stale green one behind.
       await invalidateInheritedRuntimeProbeReceipts(deps.db, changedBinaryProtocols)
       const updated = applyConfigPatch(deps.configPath, body)
+      await runtimeTests.reconcileDurableIntents()
       // RFC-233 linearization point: once this response can be observed, every
       // future admission sees the saved mode generation. Existing immutable
       // admissions are intentionally not rewritten.

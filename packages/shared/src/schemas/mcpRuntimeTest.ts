@@ -153,6 +153,9 @@ export const McpRuntimeTestCancelRequestSchema = z
   .strict()
 export type McpRuntimeTestCancelRequest = z.infer<typeof McpRuntimeTestCancelRequestSchema>
 
+export const McpRuntimeTestEndRequestSchema = z.object({}).strict()
+export type McpRuntimeTestEndRequest = z.infer<typeof McpRuntimeTestEndRequestSchema>
+
 export const McpRuntimeTestMutationReceiptSchema = z
   .object({
     session: McpRuntimeTestSessionDtoSchema,

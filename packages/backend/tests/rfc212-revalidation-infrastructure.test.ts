@@ -217,9 +217,8 @@ describe('RFC-212 T4 — every channel declares its revalidation strategy (AC-5)
   const kinds = Object.keys(WS_CHANNELS) as WsChannelKind[]
 
   test('the registry is non-empty and every kind is present', () => {
-    // 8 → 9: RFC-234 added 'intent-sessions' (creator/admin frameGate; pure
-    // in-memory revalidation — declaration checked by the tests below).
-    expect(kinds.length).toBe(9)
+    // RFC-238 adds the private MCP runtime-test locator channel.
+    expect(kinds.length).toBe(10)
     for (const kind of kinds) expect(WS_CHANNELS[kind].kind).toBe(kind)
   })
 

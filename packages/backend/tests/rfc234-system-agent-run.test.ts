@@ -156,6 +156,29 @@ describe('runSystemAgent', () => {
     expect(r.exitCode).toBeNull()
   })
 
+  test('plan cleanup failure is an identity failure even when scratch is intentionally retained', async () => {
+    const scratchParent = scratchParentDir()
+    const r = await runSystemAgent({
+      ...baseOpts(scratchParent, '/bin/sh'),
+      scratchName: 'turn-cleanup-failure',
+      retainScratchOnSuccess: true,
+      buildPlan: async () => ({
+        cmd: ['/bin/sh', '-c', 'exit 0'],
+        env: { PATH: '/usr/bin:/bin' },
+        stdin: { mode: 'ignore' },
+        cleanup: async () => {
+          throw new Error('store remained locked')
+        },
+      }),
+    })
+    expect(r).toMatchObject({
+      status: 'identity-failed',
+      failureCode: 'execution-identity-store-unsafe',
+      scratchRetained: true,
+    })
+    expect(existsSync(join(scratchParent, 'turn-cleanup-failure'))).toBe(true)
+  })
+
   test('stderr tail is credential-masked', async () => {
     process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
     process.env.MOCK_OPENCODE_EXIT_CODE = '1'

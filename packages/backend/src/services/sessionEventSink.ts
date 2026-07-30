@@ -4,6 +4,7 @@ export type SessionEventSource = 'stream' | 'live-child' | 'post-run-child'
 export type SessionCaptureTerminalState = 'complete' | 'truncated' | 'incomplete'
 export type SessionCaptureIncompleteReason =
   | 'stream-persist-failed'
+  | 'stream-frame-limit-exceeded'
   | 'child-capture-failed'
   | 'post-exit-flush-timeout'
 

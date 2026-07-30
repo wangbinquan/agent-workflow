@@ -14,6 +14,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import type { DbTxSync } from '@/db/txSync'
 import {
   canViewResource,
   getResourceAcl,
@@ -43,6 +44,19 @@ export interface AclEndpointConfig {
     loadById: (db: AppDeps['db'], resourceId: string) => Promise<AclRow | null>
     nextUpdatedAt?: (row: AclRow) => Promise<number>
   }
+  /** Post-commit resource-specific lifecycle invalidation hook. */
+  afterUpdate?: (resourceId: string) => void | Promise<void>
+  /** Durable resource-specific invalidation committed atomically with the ACL write. */
+  afterWriteInTx?: (
+    tx: DbTxSync,
+    change: {
+      resourceId: string
+      ownerUserId: string | null
+      visibility: 'public' | 'private'
+      grantedUserIds: ReadonlySet<string>
+      now: number
+    },
+  ) => void
 }
 
 export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConfig): void {
@@ -79,7 +93,10 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
       // RFC-104: built-ins are read-only. This runs on the in-lock fresh row.
       assertNotBuiltin(cfg.type, fresh)
       const updatedAt = await cfg.coordinator?.nextUpdatedAt?.(fresh)
-      return updateResourceAcl(deps.db, actor, cfg.type, fresh, parsed.data, { updatedAt })
+      return updateResourceAcl(deps.db, actor, cfg.type, fresh, parsed.data, {
+        updatedAt,
+        afterWriteInTx: cfg.afterWriteInTx,
+      })
     }
     const result =
       cfg.coordinator === undefined
@@ -91,6 +108,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
             }
             return updateFresh(fresh)
           })
+    await cfg.afterUpdate?.(row.id)
     if (cfg.type === 'workflow') {
       // Lets connected /ws/workflows clients re-fetch AND lets the WS server
       // invalidate its per-connection visibility cache for this workflow.

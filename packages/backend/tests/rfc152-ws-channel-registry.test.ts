@@ -23,6 +23,8 @@ import { createInMemoryDb } from '../src/db/client'
 import {
   MEMORY_CHANNEL,
   MEMORY_DISTILL_JOB_CHANNEL,
+  MCP_RUNTIME_TESTS_CHANNEL,
+  mcpRuntimeTestsBroadcaster,
   REPO_IMPORT_CHANNEL,
   SCHEDULED_TASK_CHANNEL,
   TASK_CHANNEL,
@@ -91,10 +93,11 @@ const ALL_KINDS: WsChannelKind[] = [
   'memory-distill-jobs',
   'scheduled-tasks', // RFC-159
   'intent-sessions', // RFC-234
+  'mcp-runtime-tests', // RFC-238
 ]
 
 describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
-  test('registry keys are exactly the nine channels (and WS_CHANNEL_KINDS mirrors them)', () => {
+  test('registry keys are exactly the ten channels (and WS_CHANNEL_KINDS mirrors them)', () => {
     expect(Object.keys(WS_CHANNELS).sort()).toEqual([...ALL_KINDS].sort())
     expect([...WS_CHANNEL_KINDS].sort()).toEqual([...ALL_KINDS].sort())
     for (const kind of ALL_KINDS) {
@@ -147,6 +150,14 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
       SCHEDULED_TASK_CHANNEL,
     )
     expect(SCHEDULED_TASK_CHANNEL).toBe('scheduled-tasks')
+    // MCP runtime tests
+    expect(WS_CHANNELS['mcp-runtime-tests'].helloName({ kind: 'mcp-runtime-tests' })).toBe(
+      'mcp-runtime-tests',
+    )
+    expect(WS_CHANNELS['mcp-runtime-tests'].channelKeyOf({ kind: 'mcp-runtime-tests' })).toBe(
+      MCP_RUNTIME_TESTS_CHANNEL,
+    )
+    expect(MCP_RUNTIME_TESTS_CHANNEL).toBe('mcp-runtime-tests')
   })
 
   test('the three auth forms are NOT flattened (D1): gates sit exactly where they did', () => {
@@ -159,6 +170,8 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS.workgroups.frameGate).toBeDefined()
     expect(WS_CHANNELS.memories.frameGate).toBeDefined()
     expect(WS_CHANNELS['scheduled-tasks'].frameGate).toBeDefined()
+    expect(WS_CHANNELS['intent-sessions'].frameGate).toBeDefined()
+    expect(WS_CHANNELS['mcp-runtime-tests'].frameGate).toBeDefined()
     // (c) token-only.
     expect(WS_CHANNELS['repo-import'].upgradeGate).toBeUndefined()
     expect(WS_CHANNELS['repo-import'].frameGate).toBeUndefined()
@@ -180,6 +193,8 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS['repo-import'].adminShortCircuit).not.toBe(true)
     expect(WS_CHANNELS['memory-distill-jobs'].adminShortCircuit).not.toBe(true)
     expect(WS_CHANNELS['scheduled-tasks'].adminShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS['intent-sessions'].adminShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS['mcp-runtime-tests'].adminShortCircuit).not.toBe(true)
     // onOpenExtra (replay) only on task.
     expect(WS_CHANNELS.task.onOpenExtra).toBeDefined()
     for (const kind of ALL_KINDS.filter((k) => k !== 'task')) {
@@ -202,6 +217,8 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(parse('/ws/memories')).toEqual({ kind: 'memories' })
     expect(parse('/ws/memory-distill-jobs')).toEqual({ kind: 'memory-distill-jobs' })
     expect(parse('/ws/scheduled-tasks')).toEqual({ kind: 'scheduled-tasks' })
+    expect(parse('/ws/intent-sessions')).toEqual({ kind: 'intent-sessions' })
+    expect(parse('/ws/mcp-runtime-tests')).toEqual({ kind: 'mcp-runtime-tests' })
     // Unknown channels stay null (server maps to 404 ws-unknown-channel).
     expect(parse('/ws/bogus')).toBeNull()
     expect(parse('/ws/tasks/')).toBeNull()
@@ -218,6 +235,8 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
       ['/ws/memories', 'memories'],
       ['/ws/memory-distill-jobs', 'memory-distill-jobs'],
       ['/ws/scheduled-tasks', 'scheduled-tasks'],
+      ['/ws/intent-sessions', 'intent-sessions'],
+      ['/ws/mcp-runtime-tests', 'mcp-runtime-tests'],
     ]
     for (const [path, expected] of samples) {
       const matching = ALL_KINDS.filter((k) => WS_CHANNELS[k].pathRe.test(path))
@@ -262,6 +281,8 @@ describe('RFC-152 — upgrade gates (registry semantics == pre-registry branches
     expect(await checkUpgradeGate(db, actor, { kind: 'workgroups' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'memories' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'scheduled-tasks' })).toBe(true)
+    expect(await checkUpgradeGate(db, actor, { kind: 'intent-sessions' })).toBe(true)
+    expect(await checkUpgradeGate(db, actor, { kind: 'mcp-runtime-tests' })).toBe(true)
   })
 })
 
@@ -402,5 +423,36 @@ describe('RFC-152 — gatedSubscribe pipeline (admin short-circuit → frameGate
       { type: 'hello', channel: 'probe' },
       { type: 'ok', n: 3 },
     ])
+  })
+
+  test('MCP runtime-test locator reaches only its owner; admin audit still requires an exact id', async () => {
+    const owner = makeFakeWs(makeActor('user', 'owner-1'))
+    const stranger = makeFakeWs(makeActor('user', 'stranger-1'))
+    const admin = makeFakeWs(makeActor('admin', 'admin-1'))
+    for (const target of [owner, stranger, admin]) {
+      gatedSubscribe(target.ws, WS_CHANNELS['mcp-runtime-tests'], { kind: 'mcp-runtime-tests' }, db)
+    }
+    const locator = {
+      type: 'mcp-runtime-test.updated',
+      sessionId: 'session-1',
+      sessionVersion: 2,
+      inFlightTurnId: 'turn-1',
+      turnStatus: 'running',
+      eventCursor: 3,
+      captureState: 'live',
+    } as const
+    mcpRuntimeTestsBroadcaster.broadcast(MCP_RUNTIME_TESTS_CHANNEL, locator, {
+      kind: 'mcp-runtime-test-owner',
+      ownerUserId: 'owner-1',
+    })
+    await flush()
+
+    expect(owner.sent).toEqual([{ type: 'hello', channel: 'mcp-runtime-tests' }, locator])
+    expect(admin.sent).toEqual([{ type: 'hello', channel: 'mcp-runtime-tests' }])
+    expect(stranger.sent).toEqual([{ type: 'hello', channel: 'mcp-runtime-tests' }])
+    expect(JSON.stringify(owner.sent)).not.toContain('owner-1')
+    owner.ws.data.unsubscribe()
+    stranger.ws.data.unsubscribe()
+    admin.ws.data.unsubscribe()
   })
 })

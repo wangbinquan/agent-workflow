@@ -85,9 +85,11 @@ export const MEMORY_CHANNEL: ChannelKey = 'memories'
 export const MEMORY_DISTILL_JOB_CHANNEL: ChannelKey = 'memory-distill-jobs'
 export const SCHEDULED_TASK_CHANNEL: ChannelKey = 'scheduled-tasks' // RFC-159
 export const INTENT_SESSIONS_CHANNEL: ChannelKey = 'intent-sessions' // RFC-234
+export const MCP_RUNTIME_TESTS_CHANNEL: ChannelKey = 'mcp-runtime-tests' // RFC-238
 
 import type {
   IntentSessionWsMessage,
+  McpRuntimeTestWsMessage,
   MemoryDistillJobWsMessage,
   ScheduledTaskWsMessage,
   MemoryWsMessage,
@@ -124,6 +126,12 @@ export interface WorkgroupDeletedAudienceContext {
 
 export type WorkgroupsBroadcastContext = WorkgroupDeletedAudienceContext
 
+/** Owner identity is authorization metadata and is never serialized on wire. */
+export interface McpRuntimeTestBroadcastContext {
+  kind: 'mcp-runtime-test-owner'
+  ownerUserId: string
+}
+
 export const taskBroadcaster = new TypedBroadcaster<TaskWsMessage>()
 export const tasksListBroadcaster = new TypedBroadcaster<TasksListWsMessage>()
 export const workflowsBroadcaster = new TypedBroadcaster<
@@ -139,6 +147,10 @@ export const memoryBroadcaster = new TypedBroadcaster<MemoryWsMessage>()
 export const memoryDistillJobBroadcaster = new TypedBroadcaster<MemoryDistillJobWsMessage>()
 export const scheduledTaskBroadcaster = new TypedBroadcaster<ScheduledTaskWsMessage>() // RFC-159
 export const intentSessionsBroadcaster = new TypedBroadcaster<IntentSessionWsMessage>() // RFC-234
+export const mcpRuntimeTestsBroadcaster = new TypedBroadcaster<
+  McpRuntimeTestWsMessage,
+  McpRuntimeTestBroadcastContext
+>() // RFC-238
 
 /** Reset all broadcasters — only used in tests between cases. */
 export function resetBroadcastersForTests(): void {

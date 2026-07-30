@@ -17,11 +17,15 @@ interface Props {
   /** RFC-156: disable the picker while its source value is still loading / failed
    *  to load, so a not-yet-resolved value can't be mistaken for "Inherit". */
   disabled?: boolean
+  /** RFC-238: restrict to runtimes explicitly declaring the playground codec. */
+  requireCapability?: 'mcp-test-v1'
 }
 
-export function RuntimeSelect({ value, onChange, ariaLabel, disabled }: Props) {
+export function RuntimeSelect({ value, onChange, ariaLabel, disabled, requireCapability }: Props) {
   const { t } = useTranslation()
-  const { selectableRuntimes, claudeEnabled } = useRuntimesList(value)
+  const { selectableRuntimes, claudeEnabled, isLoading, isError } = useRuntimesList(value, {
+    requireCapability,
+  })
   // Fallback options when the registry hasn't loaded / is empty — the two
   // built-in protocol names (claude hidden when disabled), mirroring AgentForm.
   const fallback = claudeEnabled
@@ -34,13 +38,17 @@ export function RuntimeSelect({ value, onChange, ariaLabel, disabled }: Props) {
     <Select<string>
       value={value ?? ''}
       ariaLabel={ariaLabel}
-      disabled={disabled}
+      disabled={disabled || (requireCapability !== undefined && (isLoading || isError))}
       onChange={(v) => onChange(v === '' ? null : v)}
       options={[
-        { value: '', label: t('settings.runtimeInherit') },
+        ...(requireCapability === undefined
+          ? [{ value: '', label: t('settings.runtimeInherit') }]
+          : []),
         ...(selectableRuntimes.length > 0
           ? selectableRuntimes.map((r) => ({ value: r.name, label: r.name }))
-          : fallback),
+          : requireCapability === undefined
+            ? fallback
+            : []),
       ]}
     />
   )

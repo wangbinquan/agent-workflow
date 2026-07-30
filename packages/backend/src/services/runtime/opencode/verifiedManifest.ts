@@ -77,7 +77,7 @@ const VerifiedLaunchManifestCommonSchema = z.object({
   runRoot: AbsolutePathSchema,
   sessionDbPath: AbsolutePathSchema,
   sessionStoreKey: z.string().min(1).max(256),
-  storeKind: z.enum(['business', 'system-ephemeral']),
+  storeKind: z.enum(['business', 'mcp-test', 'system-ephemeral']),
   serverEnv: EnvSchema,
   expectedConfig: JsonValueSchema,
   selectedAgent: z.string().min(1).max(256),
@@ -124,8 +124,26 @@ const VerifiedSystemLaunchManifestSchema = VerifiedLaunchManifestCommonSchema.ex
   invocationId: z.string().min(1).max(256),
 }).strict()
 
+const VerifiedMcpTestLaunchManifestSchema = VerifiedLaunchManifestCommonSchema.extend({
+  storeKind: z.literal('mcp-test'),
+  mode: z.enum(['new', 'resume']),
+  testSessionId: z.string().min(1).max(256),
+  createdTurnId: z.string().min(1).max(256),
+  turnId: z.string().min(1).max(256),
+  expectedSessionId: z.string().optional(),
+  expectedProjectId: z.string().min(1).max(256).optional(),
+  controlAckPath: AbsolutePathSchema,
+  leaseNonce: NonceSchema,
+  leaseNonceDigest: Sha256Schema,
+  mcpExecutionDigest: Sha256Schema,
+}).strict()
+
 export const VerifiedLaunchManifestSchema = z
-  .union([VerifiedBusinessLaunchManifestSchema, VerifiedSystemLaunchManifestSchema])
+  .union([
+    VerifiedBusinessLaunchManifestSchema,
+    VerifiedMcpTestLaunchManifestSchema,
+    VerifiedSystemLaunchManifestSchema,
+  ])
   .superRefine((value, ctx) => {
     const admission = value.containmentAdmission
     if (admission.requirementDigest !== containmentRequirementDigest(admission.profileId)) {
@@ -263,7 +281,7 @@ export const VerifiedLaunchManifestSchema = z
         })
       }
     }
-    if (value.storeKind !== 'business') return
+    if (value.storeKind === 'system-ephemeral') return
     if (value.mode === 'resume') {
       if (value.expectedSessionId === undefined) {
         ctx.addIssue({ code: 'custom', path: ['expectedSessionId'], message: 'required' })

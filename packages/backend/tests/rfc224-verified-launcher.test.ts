@@ -267,6 +267,42 @@ function resumeManifest(): VerifiedLaunchManifest {
   })
 }
 
+function mcpTestManifest(mode: 'new' | 'resume' = 'new'): VerifiedLaunchManifest {
+  const leaseNonce = 'M'.repeat(43)
+  const testSessionId = 'mcp-test-session-1'
+  const turnId = mode === 'new' ? 'mcp-test-turn-1' : 'mcp-test-turn-2'
+  const mcpExecutionDigest = 'f'.repeat(64)
+  const common = commonManifest(`agent-workflow:rfc238:mcp-test:${testSessionId}`)
+  return VerifiedLaunchManifestSchema.parse({
+    ...common,
+    identityDigest: identityDigest({
+      codec: 1,
+      storeKind: 'mcp-test',
+      testSessionId,
+      sessionStoreKey: common.sessionStoreKey,
+      agent: common.selectedAgent,
+      model: common.selectedModel,
+      binaryDigest: common.binaryDigest,
+      mcpExecutionDigest,
+    }),
+    storeKind: 'mcp-test',
+    mode,
+    testSessionId,
+    createdTurnId: 'mcp-test-turn-1',
+    turnId,
+    ...(mode === 'resume'
+      ? {
+          expectedSessionId: sessionID,
+          expectedProjectId: 'project-1',
+        }
+      : {}),
+    controlAckPath: '/private/rfc224/run/mcp-test-control.ack',
+    leaseNonce,
+    leaseNonceDigest: createHash('sha256').update(leaseNonce).digest('hex'),
+    mcpExecutionDigest,
+  })
+}
+
 function session(title: string): SessionInfo {
   return {
     id: sessionID,
@@ -910,6 +946,65 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
     })
     expect(stderr[0]).not.toContain(manifest.leaseNonce)
     expect(harness.removed).toEqual([])
+  })
+
+  test('MCP playground new and resume runs wait for exact control ACK before model access', async () => {
+    for (const mode of ['new', 'resume'] as const) {
+      const manifest = mcpTestManifest(mode)
+      if (manifest.storeKind !== 'mcp-test') throw new Error('fixture narrowing failed')
+      const client =
+        mode === 'new'
+          ? new FakeClient(manifest.sessionTitle)
+          : new FakeResumeClient(manifest.sessionTitle)
+      const ackCalls: Array<{ path: string; nonce: string; modelStarted: boolean }> = []
+      const harness = dependencies(manifest, client, {
+        readAck: async (path, nonce) => {
+          ackCalls.push({
+            path,
+            nonce,
+            modelStarted:
+              client.calls.includes('subscribe') ||
+              client.calls.includes('post-async') ||
+              client.calls.includes('post-sync'),
+          })
+          return { decision: 'ok', nonce }
+        },
+      })
+      const stderr: string[] = []
+      harness.deps.writeStdout = () => undefined
+      harness.deps.writeStderr = (value) => stderr.push(value)
+
+      await launchVerifiedOpencodeManifest(manifest, harness.deps)
+
+      expect(ackCalls).toEqual([
+        {
+          path: manifest.controlAckPath,
+          nonce: manifest.leaseNonce,
+          modelStarted: false,
+        },
+      ])
+      const marker = parseControlLine(stderr[0]!.trimEnd())
+      expect(marker).toMatchObject({
+        kind: 'session-ready',
+        marker: {
+          kind: mode,
+          sessionId: sessionID,
+          projectId: 'project-1',
+          nodeRunId: manifest.turnId,
+          leaseNonceDigest: manifest.leaseNonceDigest,
+        },
+      })
+      expect(stderr[0]).not.toContain(manifest.leaseNonce)
+      expect(client.calls).toContain('subscribe')
+      expect(client.calls).toContain('post-async')
+      expect(client.calls.includes('create')).toBe(mode === 'new')
+      expect(client.calls.includes('inventory')).toBe(mode === 'resume')
+      expect(harness.scrubKinds).toEqual([
+        mode === 'new' ? 'fresh' : 'existing',
+        mode === 'new' ? 'fresh' : 'existing',
+      ])
+      expect(harness.server.signals).toEqual(['SIGTERM'])
+    }
   })
 
   test('business inventory is written after the complete same-instance gate and before session creation', async () => {

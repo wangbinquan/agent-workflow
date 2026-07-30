@@ -417,7 +417,19 @@ export async function updateResourceAcl(
   type: AclResourceType,
   row: AclRow,
   body: UpdateResourceAclBody,
-  opts: { updatedAt?: number } = {},
+  opts: {
+    updatedAt?: number
+    afterWriteInTx?: (
+      tx: DbTxSync,
+      change: {
+        resourceId: string
+        ownerUserId: string | null
+        visibility: ResourceVisibility
+        grantedUserIds: ReadonlySet<string>
+        now: number
+      },
+    ) => void
+  } = {},
 ): Promise<ResourceAcl> {
   await requireResourceOwner(db, actor, type, row)
 
@@ -576,6 +588,13 @@ export async function updateResourceAcl(
         )
         .run()
     }
+    opts.afterWriteInTx?.(tx, {
+      resourceId: row.id,
+      ownerUserId: nextOwner,
+      visibility: nextVisibility,
+      grantedUserIds: new Set(nextGrantIds),
+      now,
+    })
     return { id: row.id, ownerUserId: nextOwner, visibility: nextVisibility }
   })
 

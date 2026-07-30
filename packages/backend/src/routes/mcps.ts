@@ -16,6 +16,10 @@ import {
   CreateMcpSchema,
   DeleteMcpSchema,
   McpOperationRequestSchema,
+  McpRuntimeTestCancelRequestSchema,
+  McpRuntimeTestCreateRequestSchema,
+  McpRuntimeTestEndRequestSchema,
+  McpRuntimeTestMessageRequestSchema,
   RenameMcpRequestSchema,
   UpdateMcpRequestSchema,
   type Mcp,
@@ -36,6 +40,12 @@ import { getProbeByMcpId, listProbes, upsertProbe } from '@/services/mcpProbeSto
 import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
+import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import {
+  deletePreparedMcpRuntimeTestsInTx,
+  transitionMcpAclRuntimeTestsInTx,
+} from '@/services/mcpRuntimeTestTransitions'
+import { Paths } from '@/util/paths'
 
 const log = createLogger('mcps-routes')
 
@@ -47,6 +57,15 @@ export function __setProbeOptionsForTesting(opts: ProbeOptions | undefined): voi
 }
 
 export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
+  const runtimeTests = getMcpRuntimeTestService({
+    db: deps.db,
+    configPath: deps.configPath,
+    appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
+    containmentCoordinator: deps.containmentCoordinator,
+    runFn: deps.mcpRuntimeTestDependencies?.runFn,
+    now: deps.mcpRuntimeTestDependencies?.now,
+    capacity: deps.mcpRuntimeTestDependencies?.capacity,
+  })
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleMcp(actor: Actor, id: string): Promise<Mcp> {
     const mcp = await getMcpById(deps.db, id)
@@ -88,6 +107,106 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     return c.json(withMcpOperationConfigHash(await loadVisibleMcp(actorOf(c), c.req.param('id'))))
   })
 
+  // RFC-238 — private multi-turn runtime playground. Dialog dismiss never
+  // reaches a mutating endpoint; only message/cancel/end change lifecycle.
+  app.get('/api/mcps/:id/runtime-test-session', async (c) => {
+    const actor = actorOf(c)
+    const mcpId = c.req.param('id')
+    const session = await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+      const mcp = await loadVisibleMcp(actor, mcpId)
+      return runtimeTests.latest(actor, mcp.id)
+    })
+    return session === null ? c.body(null, 204) : c.json(session)
+  })
+
+  app.post('/api/mcps/:id/runtime-test-sessions', async (c) => {
+    const parsed = McpRuntimeTestCreateRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    const actor = actorOf(c)
+    const resolved = await loadVisibleMcp(actor, c.req.param('id'))
+    const receipt = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+      const fresh = await loadVisibleMcp(actor, resolved.id)
+      return runtimeTests.create(actor, fresh, parsed.data)
+    })
+    return c.json(receipt, 202)
+  })
+
+  app.get('/api/mcps/:id/runtime-test-sessions/:sessionId', async (c) => {
+    const actor = actorOf(c)
+    const mcpId = c.req.param('id')
+    return c.json(
+      await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+        const mcp = await loadVisibleMcp(actor, mcpId)
+        return runtimeTests.get(actor, mcp.id, c.req.param('sessionId'))
+      }),
+    )
+  })
+
+  app.post('/api/mcps/:id/runtime-test-sessions/:sessionId/messages', async (c) => {
+    const parsed = McpRuntimeTestMessageRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test message', {
+        issues: parsed.error.issues,
+      })
+    }
+    const actor = actorOf(c)
+    const resolved = await loadVisibleMcp(actor, c.req.param('id'))
+    const receipt = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+      const fresh = await loadVisibleMcp(actor, resolved.id)
+      return runtimeTests.message(actor, fresh, c.req.param('sessionId'), parsed.data)
+    })
+    return c.json(receipt, 202)
+  })
+
+  app.post('/api/mcps/:id/runtime-test-sessions/:sessionId/cancel-turn', async (c) => {
+    const parsed = McpRuntimeTestCancelRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test cancel payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    const actor = actorOf(c)
+    const mcpId = c.req.param('id')
+    return c.json(
+      await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+        const mcp = await loadVisibleMcp(actor, mcpId)
+        return runtimeTests.cancel(actor, mcp.id, c.req.param('sessionId'), parsed.data)
+      }),
+    )
+  })
+
+  app.post('/api/mcps/:id/runtime-test-sessions/:sessionId/end', async (c) => {
+    const parsed = McpRuntimeTestEndRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test end payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    const actor = actorOf(c)
+    const mcpId = c.req.param('id')
+    return c.json(
+      await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+        const mcp = await loadVisibleMcp(actor, mcpId)
+        return runtimeTests.end(actor, mcp.id, c.req.param('sessionId'))
+      }),
+    )
+  })
+
+  app.get('/api/mcps/:id/runtime-test-sessions/:sessionId/session', async (c) => {
+    const actor = actorOf(c)
+    const mcpId = c.req.param('id')
+    return c.json(
+      await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+        const mcp = await loadVisibleMcp(actor, mcpId)
+        return runtimeTests.sessionView(actor, mcp.id, c.req.param('sessionId'))
+      }),
+    )
+  })
+
   app.post('/api/mcps', async (c) => {
     const body = await safeJson(c.req.raw)
     const parsed = CreateMcpSchema.safeParse(body)
@@ -125,6 +244,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         updatedAt: await nextMutationTimestamp(fresh),
       })
     })
+    await runtimeTests.reconcileDurableIntents()
     return c.json(withMcpOperationConfigHash(updated))
   })
 
@@ -147,7 +267,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       // RFC-222 (D5, N-6): confirm against the FRESH name inside the exclusive
       // section, so a concurrent rename is caught as a mismatch.
       assertDeleteConfirm(parsed.data, fresh.name, 'mcp')
-      await deleteMcp(deps.db, fresh.id, actor, { existing: fresh })
+      await runtimeTests.prepareMcpDelete(fresh.id)
+      await deleteMcp(deps.db, fresh.id, actor, {
+        existing: fresh,
+        beforeDeleteInTx: (tx) => deletePreparedMcpRuntimeTestsInTx(tx, fresh.id),
+      })
     })
     return c.body(null, 204)
   })
@@ -173,6 +297,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         updatedAt: await nextMutationTimestamp(fresh),
       })
     })
+    await runtimeTests.reconcileDurableIntents()
     return c.json(withMcpOperationConfigHash(renamed))
   })
 
@@ -310,6 +435,15 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         return nextMutationTimestamp(mcp)
       },
     },
+    afterWriteInTx: (tx, change) =>
+      transitionMcpAclRuntimeTestsInTx(tx, {
+        mcpId: change.resourceId,
+        ownerUserId: change.ownerUserId,
+        visibility: change.visibility,
+        grantedUserIds: change.grantedUserIds,
+        now: change.now,
+      }),
+    afterUpdate: () => runtimeTests.reconcileDurableIntents(),
   })
 }
 

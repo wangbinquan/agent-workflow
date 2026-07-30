@@ -14,7 +14,7 @@ import { parseWsChannel, WS_CHANNELS, type WsChannelKind } from '../src/ws/regis
 const parse = (path: string) => parseWsChannel(new URL(path, 'http://daemon.test'))
 
 describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
-  test('WS_PATHS key set is exactly the nine channels (bijection lock)', () => {
+  test('WS_PATHS key set is exactly the ten channels (bijection lock)', () => {
     expect(Object.keys(WS_PATHS).sort()).toEqual(
       // RFC-159 added `scheduledTasks`; RFC-234 added `intentSessions`.
       [
@@ -27,6 +27,7 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
         'memoryDistillJobs',
         'scheduledTasks',
         'intentSessions',
+        'mcpRuntimeTests',
       ].sort(),
     )
   })
@@ -49,6 +50,8 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
     expect(parse(WS_PATHS.memories)).toEqual({ kind: 'memories' })
     expect(parse(WS_PATHS.memoryDistillJobs)).toEqual({ kind: 'memory-distill-jobs' })
     expect(parse(WS_PATHS.scheduledTasks)).toEqual({ kind: 'scheduled-tasks' })
+    expect(parse(WS_PATHS.intentSessions)).toEqual({ kind: 'intent-sessions' })
+    expect(parse(WS_PATHS.mcpRuntimeTests)).toEqual({ kind: 'mcp-runtime-tests' })
   })
 
   test('repoImport(batchId) — parses back with %-decoding', () => {
@@ -66,6 +69,8 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
       [WS_PATHS.memories, 'memories'],
       [WS_PATHS.memoryDistillJobs, 'memory-distill-jobs'],
       [WS_PATHS.scheduledTasks, 'scheduled-tasks'],
+      [WS_PATHS.intentSessions, 'intent-sessions'],
+      [WS_PATHS.mcpRuntimeTests, 'mcp-runtime-tests'],
     ]
     const kinds = Object.keys(WS_CHANNELS) as WsChannelKind[]
     for (const [path, expected] of samples) {

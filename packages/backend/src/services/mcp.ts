@@ -24,6 +24,7 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { agents, mcps } from '@/db/schema'
 import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
+import { transitionMcpRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
@@ -189,13 +190,22 @@ export function commitMcpUpdateInTx(tx: DbTxSync, p: PreparedMcpUpdate): void {
     }
   }
   tx.update(mcps).set(p.set).where(eq(mcps.id, p.id)).run()
+  transitionMcpRuntimeTestsInTx(tx, {
+    mcpId: p.id,
+    reason: (p.set.enabled ?? row.enabled) ? 'mcp-config-changed' : 'mcp-disabled',
+    now: typeof p.set.updatedAt === 'number' ? p.set.updatedAt : Date.now(),
+  })
 }
 
 export async function deleteMcp(
   db: DbClient,
   id: string,
   actor: Actor,
-  opts: { existing?: Mcp; beforeDeleteTx?: () => Promise<void> } = {},
+  opts: {
+    existing?: Mcp
+    beforeDeleteTx?: () => Promise<void>
+    beforeDeleteInTx?: (tx: DbTxSync) => void
+  } = {},
 ): Promise<void> {
   const existing = opts.existing ?? (await getMcpById(db, id))
   if (existing === null || existing.id !== id) {
@@ -239,6 +249,7 @@ export async function deleteMcp(
     }
     const refs = findAgentsReferencingMcpInTx(tx, existing.id)
     if (refs.length > 0) return refs
+    opts.beforeDeleteInTx?.(tx)
     tx.delete(mcps).where(eq(mcps.id, existing.id)).run()
     return [] as ReferencingAgentRow[]
   })
@@ -262,6 +273,7 @@ export async function renameMcp(
     throw new NotFoundError('mcp-not-found', 'mcp not found')
   }
   if (input.newName === existing.name) return existing
+  const updatedAt = opts.updatedAt ?? Math.max(Date.now(), existing.updatedAt + 1)
 
   // RFC-223 (PR-1 / D7): agents.mcp stores the mcp ID, which is stable across a
   // rename — so there is NO cascade to perform. Just rename the row. (This
@@ -290,10 +302,15 @@ export async function renameMcp(
       tx.update(mcps)
         .set({
           name: input.newName,
-          updatedAt: opts.updatedAt ?? Math.max(Date.now(), existing.updatedAt + 1),
+          updatedAt,
         })
         .where(eq(mcps.id, existing.id))
         .run()
+      transitionMcpRuntimeTestsInTx(tx, {
+        mcpId: existing.id,
+        reason: 'mcp-config-changed',
+        now: updatedAt,
+      })
     })
   } catch (error) {
     if (isOwnerNameUniqueViolation(error, 'mcps', 'mcps_owner_name_unique')) {

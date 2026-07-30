@@ -23,6 +23,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import type { SplitBusyRelease } from '@/components/split/splitDirty'
 import { useMcpProbe, useProbeMcpMutation } from '@/lib/mcp-probe-query'
 import { probeFreshness } from '@/lib/probe-freshness'
+import { McpRuntimeTestDialog } from './McpRuntimeTestDialog'
 
 export interface McpInventoryPanelProps {
   mcpId: string
@@ -33,6 +34,8 @@ export interface McpInventoryPanelProps {
   saving?: boolean
   /** Persist the captured draft and return the exact PUT receipt hash. */
   onSaveForProbe?: () => Promise<string | null>
+  /** Persist the captured draft for an MCP runtime test. */
+  onSaveForRuntimeTest?: () => Promise<string | null>
   beginBusy?: () => SplitBusyRelease
 }
 
@@ -153,6 +156,14 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
               })}
           {persistedProbe !== null && ` · ${formatLatency(persistedProbe.latencyMs, t)}`}
         </span>
+        <McpRuntimeTestDialog
+          mcpId={props.mcpId}
+          operationConfigHash={props.operationConfigHash}
+          dirty={props.dirty}
+          saving={props.saving}
+          onSaveForRuntimeTest={props.onSaveForRuntimeTest}
+          beginBusy={props.beginBusy}
+        />
       </header>
 
       <FeedbackStack variant="section">

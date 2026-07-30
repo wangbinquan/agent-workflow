@@ -27,6 +27,10 @@ import { RUNTIME_KINDS } from '@/services/runtime'
 import { createLogger } from '@/util/log'
 import { evictOpencodeModelsCache } from '@/util/opencode-models'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
+import {
+  transitionInheritedRuntimeTestsInTx,
+  transitionRuntimeTestsInTx,
+} from '@/services/mcpRuntimeTestTransitions'
 
 const log = createLogger('runtimeRegistry')
 
@@ -612,7 +616,8 @@ export async function updateRuntime(
     const nextModel = input.model !== undefined ? (profile.model ?? null) : row.model
     assertRuntimeProfilePolicy(row.protocol, nextModel)
   }
-  const patch: Record<string, unknown> = { updatedAt: Date.now(), ...profile }
+  const now = Date.now()
+  const patch: Record<string, unknown> = { updatedAt: now, ...profile }
   let executionProfileChanged =
     (profile.model !== undefined && profile.model !== row.model) ||
     (profile.variant !== undefined && profile.variant !== row.variant) ||
@@ -643,7 +648,16 @@ export async function updateRuntime(
   // Internal callers may deliberately persist a fresh receipt in the same
   // update; an explicit value wins over invalidation.
   if (input.lastProbeJson !== undefined) patch.lastProbeJson = input.lastProbeJson
-  await db.update(runtimes).set(patch).where(eq(runtimes.name, name))
+  dbTxSync(db, (tx) => {
+    tx.update(runtimes).set(patch).where(eq(runtimes.name, name)).run()
+    if (executionProfileChanged) {
+      transitionRuntimeTestsInTx(tx, {
+        runtimeName: name,
+        reason: 'runtime-profile-changed',
+        now,
+      })
+    }
+  })
   const updated = await getRuntime(db, name)
   if (updated === null) throw new Error('runtime update vanished')
   // RFC-114 P3-6: a changed binary makes any cached `<binary> models` stale —
@@ -713,16 +727,21 @@ export async function invalidateInheritedRuntimeProbeReceipts(
   protocols: readonly RuntimeProtocol[],
 ): Promise<number> {
   if (protocols.length === 0) return 0
-  const updated = await db
-    .update(runtimes)
-    .set({
-      probeFence: sql`${runtimes.probeFence} + 1`,
-      lastProbeJson: null,
-      updatedAt: Date.now(),
-    })
-    .where(and(inArray(runtimes.protocol, [...protocols]), isNull(runtimes.binaryPath)))
-    .returning({ id: runtimes.id })
-  return updated.length
+  const now = Date.now()
+  return dbTxSync(db, (tx) => {
+    const updated = tx
+      .update(runtimes)
+      .set({
+        probeFence: sql`${runtimes.probeFence} + 1`,
+        lastProbeJson: null,
+        updatedAt: now,
+      })
+      .where(and(inArray(runtimes.protocol, [...protocols]), isNull(runtimes.binaryPath)))
+      .returning({ id: runtimes.id })
+      .all()
+    transitionInheritedRuntimeTestsInTx(tx, { protocols, now })
+    return updated.length
+  })
 }
 
 /**
@@ -740,16 +759,34 @@ export async function setRuntimeEnabled(
   enabled: boolean,
   defaultRuntimeName: string | null | undefined,
 ): Promise<RuntimeRow> {
-  const row = await getRuntime(db, name)
-  if (row === null) throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
-  if (!enabled && name === (defaultRuntimeName ?? 'opencode')) {
-    throw new ConflictError(
-      'runtime-default-cannot-disable',
-      `runtime '${name}' is the effective default and cannot be disabled; change the default first`,
-    )
+  const now = Date.now()
+  const changed = dbTxSync(db, (tx) => {
+    const row = tx.select().from(runtimes).where(eq(runtimes.name, name)).get()
+    if (row === undefined) {
+      throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
+    }
+    if (!enabled && name === (defaultRuntimeName ?? 'opencode')) {
+      throw new ConflictError(
+        'runtime-default-cannot-disable',
+        `runtime '${name}' is the effective default and cannot be disabled; change the default first`,
+      )
+    }
+    if (row.enabled === enabled) return false
+    tx.update(runtimes).set({ enabled, updatedAt: now }).where(eq(runtimes.name, name)).run()
+    if (!enabled) {
+      transitionRuntimeTestsInTx(tx, {
+        runtimeName: name,
+        reason: 'runtime-disabled',
+        now,
+      })
+    }
+    return true
+  })
+  if (!changed) {
+    const unchanged = await getRuntime(db, name)
+    if (unchanged === null) throw new Error('runtime enabled-toggle vanished')
+    return unchanged
   }
-  if (row.enabled === enabled) return row // no-op
-  await db.update(runtimes).set({ enabled, updatedAt: Date.now() }).where(eq(runtimes.name, name))
   const updated = await getRuntime(db, name)
   if (updated === null) throw new Error('runtime enabled-toggle vanished')
   return updated
@@ -812,6 +849,11 @@ export async function deleteRuntime(
         `runtime '${name}' is in use by ${by.join(', ')}; re-point them first`,
       )
     }
+    transitionRuntimeTestsInTx(tx, {
+      runtimeName: name,
+      reason: 'runtime-deleted',
+      now: Date.now(),
+    })
     tx.delete(runtimes).where(eq(runtimes.name, name)).run()
     binaryPath = row.binaryPath
   })

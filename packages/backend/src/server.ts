@@ -126,6 +126,13 @@ export interface AppDeps {
   intentTestDependencies?: {
     runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   }
+  /** RFC-238 test seams; production uses the real runtime runner and app home. */
+  mcpRuntimeTestDependencies?: {
+    runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+    now?: () => number
+    appHome?: string
+    capacity?: number
+  }
 }
 
 export function createApp(deps: AppDeps): Hono {

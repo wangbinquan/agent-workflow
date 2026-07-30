@@ -433,13 +433,24 @@ function verifyManifestDigests(manifest: VerifiedLaunchManifest): void {
           binaryDigest: manifest.binaryDigest,
           sealRoot: join(manifest.runRoot, 'opencode-identity-seal'),
         })
-      : identityDigest({
-          codec: 1,
-          config: manifest.expectedConfig,
-          agent: manifest.selectedAgent,
-          model: manifest.selectedModel,
-          binaryDigest: manifest.binaryDigest,
-        })
+      : manifest.storeKind === 'mcp-test'
+        ? identityDigest({
+            codec: 1,
+            storeKind: 'mcp-test',
+            testSessionId: manifest.testSessionId,
+            sessionStoreKey: manifest.sessionStoreKey,
+            agent: manifest.selectedAgent,
+            model: manifest.selectedModel,
+            binaryDigest: manifest.binaryDigest,
+            mcpExecutionDigest: manifest.mcpExecutionDigest,
+          })
+        : identityDigest({
+            codec: 1,
+            config: manifest.expectedConfig,
+            agent: manifest.selectedAgent,
+            model: manifest.selectedModel,
+            binaryDigest: manifest.binaryDigest,
+          })
   if (
     expectedIdentity !== manifest.identityDigest ||
     identityDigest(expectedSessionContract(manifest)) !== manifest.sessionContractDigest
@@ -447,7 +458,7 @@ function verifyManifestDigests(manifest: VerifiedLaunchManifest): void {
     return executionIdentityFailure('execution-identity-mismatch')
   }
   if (
-    manifest.storeKind === 'business' &&
+    manifest.storeKind !== 'system-ephemeral' &&
     sha256(manifest.leaseNonce) !== manifest.leaseNonceDigest
   ) {
     return executionIdentityFailure('execution-identity-control-failed')
@@ -632,7 +643,7 @@ async function guardedByServer<T>(
 }
 
 async function waitForControlAck(
-  manifest: Extract<VerifiedLaunchManifest, { storeKind: 'business' }>,
+  manifest: Exclude<VerifiedLaunchManifest, { storeKind: 'system-ephemeral' }>,
   input: {
     signal?: AbortSignal
     now: () => number
@@ -1042,7 +1053,7 @@ export async function launchVerifiedOpencodeManifest(
   try {
     lock = await acquireStoreLock(
       manifest.sessionDbPath,
-      manifest.storeKind === 'business' ? manifest.leaseNonce : undefined,
+      manifest.storeKind === 'system-ephemeral' ? undefined : manifest.leaseNonce,
     )
     await scrubStore({
       dbPath: manifest.sessionDbPath,
@@ -1081,10 +1092,17 @@ export async function launchVerifiedOpencodeManifest(
               mode: manifest.mode,
               nodeRunId: manifest.nodeRunId,
             }
-          : {
-              kind: 'system-ephemeral',
-              invocationId: manifest.invocationId,
-            },
+          : manifest.storeKind === 'mcp-test'
+            ? {
+                kind: 'mcp-test',
+                mode: manifest.mode,
+                testSessionId: manifest.testSessionId,
+                turnId: manifest.turnId,
+              }
+            : {
+                kind: 'system-ephemeral',
+                invocationId: manifest.invocationId,
+              },
     })
     stdoutMonitor = monitorServerStdout(child.stdout)
     stderrPump = drainServerStderr(child.stderr)
@@ -1152,7 +1170,7 @@ export async function launchVerifiedOpencodeManifest(
             ) {
               return executionIdentityFailure('execution-identity-session-mismatch')
             }
-            if (manifest.storeKind === 'business') {
+            if (manifest.storeKind !== 'system-ephemeral') {
               writeStderr(
                 `${buildSessionReadyMarker({
                   kind: manifest.mode,
@@ -1161,7 +1179,8 @@ export async function launchVerifiedOpencodeManifest(
                   reportedVersion: session.version,
                   binaryDigest: manifest.binaryDigest,
                   protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
-                  nodeRunId: manifest.nodeRunId,
+                  nodeRunId:
+                    manifest.storeKind === 'business' ? manifest.nodeRunId : manifest.turnId,
                   leaseNonceDigest: manifest.leaseNonceDigest,
                 })}\n`,
               )

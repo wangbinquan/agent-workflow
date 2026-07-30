@@ -124,7 +124,7 @@ function McpDetailPage() {
     save.mutate({ snapshot: form, release: beginBusy(id) })
   }
 
-  async function saveForProbe(): Promise<string | null> {
+  async function saveForOperation(draftChangedMessage: string): Promise<string | null> {
     const snapshot = formRef.current
     if (snapshot === undefined || save.isPending || del.isPending) return null
     const built = buildCreatePayload(snapshot)
@@ -135,9 +135,17 @@ function McpDetailPage() {
     setErrors({})
     const receipt = await save.mutateAsync({ snapshot, release: beginBusy(id) })
     if (stableStringify(formRef.current) !== stableStringify(snapshot)) {
-      throw new Error(t('mcps.probe.draftChangedDuringSave'))
+      throw new Error(draftChangedMessage)
     }
     return receipt.operationConfigHash
+  }
+
+  function saveForProbe(): Promise<string | null> {
+    return saveForOperation(t('mcps.probe.draftChangedDuringSave'))
+  }
+
+  function saveForRuntimeTest(): Promise<string | null> {
+    return saveForOperation(t('mcps.runtimeTest.draftChangedDuringSave'))
   }
 
   const del = useMutation({
@@ -253,6 +261,7 @@ function McpDetailPage() {
                   dirty={dirty}
                   saving={save.isPending}
                   onSaveForProbe={saveForProbe}
+                  onSaveForRuntimeTest={saveForRuntimeTest}
                   beginBusy={() => beginBusy(id)}
                 />
               ),

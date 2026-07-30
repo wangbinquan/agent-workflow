@@ -29,6 +29,8 @@ import type { RuntimeKind } from '@/services/runtime'
 import { getRuntimeDriver } from '@/services/runtime'
 import { smokeRuntime as productionSmokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
 import { withRuntimeOpencodeSnapshot as productionRuntimeOpencodeSnapshot } from '@/services/runtime/opencode/runtimeBinary'
+import { getMcpRuntimeTestService, isRuntimeMcpTestEligible } from '@/services/mcpRuntimeTest'
+import { Paths } from '@/util/paths'
 
 // RFC-143: derived from the DRIVERS registry (via RUNTIME_PROTOCOLS) rather than
 // a re-hardcoded literal enum — a new runtime kind is accepted automatically.
@@ -109,6 +111,15 @@ function statusProbeTimeoutMs(): number {
 }
 
 export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
+  const runtimeTests = getMcpRuntimeTestService({
+    db: deps.db,
+    configPath: deps.configPath,
+    appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
+    containmentCoordinator: deps.containmentCoordinator,
+    runFn: deps.mcpRuntimeTestDependencies?.runFn,
+    now: deps.mcpRuntimeTestDependencies?.now,
+    capacity: deps.mcpRuntimeTestDependencies?.capacity,
+  })
   const withRuntimeOpencodeSnapshot =
     deps.runtimeDiagnosticTestDependencies?.withRuntimeOpencodeSnapshot ??
     productionRuntimeOpencodeSnapshot
@@ -120,9 +131,12 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     const rows = await listRuntimes(deps.db)
     const cfg = loadConfig(deps.configPath)
     return c.json({
-      runtimes: rows.map((row) =>
-        runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
-      ),
+      runtimes: rows.map((row) => ({
+        ...runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
+        capabilities: {
+          mcpRuntimeTestV1: isRuntimeMcpTestEligible(row),
+        },
+      })),
     })
   })
 
@@ -361,6 +375,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       },
       { enforceExecutionPolicy: true },
     )
+    await runtimeTests.reconcileDurableIntents()
     const cfg = loadConfig(deps.configPath)
     return c.json({
       runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
@@ -376,6 +391,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     const body = parseBody(EnabledBody, await c.req.json().catch(() => ({})))
     const cfg = loadConfig(deps.configPath)
     const row = await setRuntimeEnabled(deps.db, name, body.enabled, cfg.defaultRuntime)
+    await runtimeTests.reconcileDurableIntents()
     return c.json({
       runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
     })
@@ -393,6 +409,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       mergeAgentRuntime: cfg.mergeAgentRuntime,
       intentBuilderRuntime: cfg.intentBuilderRuntime,
     })
+    await runtimeTests.reconcileDurableIntents()
     return c.json({ ok: true })
   })
 

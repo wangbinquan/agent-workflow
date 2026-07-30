@@ -38,6 +38,7 @@ import type { ServerWebSocket } from 'bun'
 import { and, asc, eq, gt } from 'drizzle-orm'
 import type {
   IntentSessionWsMessage,
+  McpRuntimeTestWsMessage,
   MemoryDistillJobWsMessage,
   ScheduledTaskWsMessage,
   MemoryWsMessage,
@@ -68,6 +69,8 @@ import {
   MEMORY_DISTILL_JOB_CHANNEL,
   INTENT_SESSIONS_CHANNEL,
   intentSessionsBroadcaster,
+  MCP_RUNTIME_TESTS_CHANNEL,
+  mcpRuntimeTestsBroadcaster,
   SCHEDULED_TASK_CHANNEL,
   scheduledTaskBroadcaster,
   REPO_IMPORT_CHANNEL,
@@ -84,6 +87,7 @@ import {
   workflowsBroadcaster,
   type WorkgroupsBroadcastContext,
   type WorkflowsBroadcastContext,
+  type McpRuntimeTestBroadcastContext,
 } from './broadcaster'
 
 const log = createLogger('ws.registry')
@@ -104,6 +108,7 @@ export interface ChannelParamsByKind {
   'memory-distill-jobs': { kind: 'memory-distill-jobs' }
   'scheduled-tasks': { kind: 'scheduled-tasks' }
   'intent-sessions': { kind: 'intent-sessions' }
+  'mcp-runtime-tests': { kind: 'mcp-runtime-tests' }
 }
 
 export interface ChannelMessageByKind {
@@ -116,6 +121,7 @@ export interface ChannelMessageByKind {
   'memory-distill-jobs': MemoryDistillJobWsMessage
   'scheduled-tasks': ScheduledTaskWsMessage
   'intent-sessions': IntentSessionWsMessage
+  'mcp-runtime-tests': McpRuntimeTestWsMessage
 }
 
 /** Process-local metadata delivered beside frames; never part of JSON wire. */
@@ -129,6 +135,7 @@ export interface ChannelBroadcastContextByKind {
   'memory-distill-jobs': never
   'scheduled-tasks': never
   'intent-sessions': never
+  'mcp-runtime-tests': McpRuntimeTestBroadcastContext
 }
 
 export type WsChannelKind = keyof ChannelParamsByKind
@@ -758,6 +765,25 @@ export const WS_CHANNELS: WsChannelRegistry = {
     channelKeyOf: () => INTENT_SESSIONS_CHANNEL,
     frameGate: async (ctx, msg) =>
       canAuditIntentSessions(ctx.actor) || msg.ownerUserId === ctx.actor.user.id,
+  },
+  'mcp-runtime-tests': {
+    kind: 'mcp-runtime-tests',
+    revalidation: {
+      refreshActor: true,
+      cache: {
+        kind: 'none',
+        why: 'pure in-memory check on actor identity and broadcast owner context',
+      },
+      rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
+    },
+    helloName: () => 'mcp-runtime-tests',
+    pathRe: /^\/ws\/mcp-runtime-tests$/,
+    parse: () => ({ kind: 'mcp-runtime-tests' }),
+    broadcaster: mcpRuntimeTestsBroadcaster,
+    channelKeyOf: () => MCP_RUNTIME_TESTS_CHANNEL,
+    frameGate: async (ctx, _msg, deliveryContext) =>
+      deliveryContext?.kind === 'mcp-runtime-test-owner' &&
+      deliveryContext.ownerUserId === ctx.actor.user.id,
   },
 }
 

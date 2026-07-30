@@ -14,6 +14,14 @@ import { api } from '@/api/client'
 export interface SelectableRuntime {
   name: string
   protocol: string
+  isDefault?: boolean
+}
+
+export interface RuntimeListOptions {
+  /** RFC-238: fail-closed capability filter; no built-in-name fallback. */
+  requireCapability?: 'mcp-test-v1'
+  /** Defer registry I/O while a lazy surface (such as a closed Dialog) is hidden. */
+  enabled?: boolean
 }
 
 /**
@@ -21,22 +29,45 @@ export interface SelectableRuntime {
  * already-selected `currentValue`, so an existing pin is never hidden — RFC-118
  * D6). Mirrors the AgentForm picker logic.
  */
-export function useRuntimesList(currentValue?: string | null): {
+export function useRuntimesList(
+  currentValue?: string | null,
+  options: RuntimeListOptions = {},
+): {
   selectableRuntimes: SelectableRuntime[]
   claudeEnabled: boolean
   isLoading: boolean
+  isError: boolean
 } {
   const runtimesQuery = useQuery<{
-    runtimes: Array<{ name: string; protocol: string; enabled: boolean }>
+    runtimes: Array<{
+      name: string
+      protocol: string
+      enabled: boolean
+      isDefault?: boolean
+      capabilities?: { mcpRuntimeTestV1?: boolean }
+    }>
   }>({
     queryKey: ['runtimes'],
     queryFn: ({ signal }) => api.get('/api/runtimes', undefined, signal),
     staleTime: 30_000,
+    enabled: options.enabled ?? true,
   })
   const registered = runtimesQuery.data?.runtimes ?? []
   const claudeEnabled = hasEnabledClaudeRuntime(registered)
-  const selectableRuntimes = filterSelectableRuntimes(registered, currentValue)
-  return { selectableRuntimes, claudeEnabled, isLoading: runtimesQuery.isLoading }
+  const capabilityFiltered =
+    options.requireCapability === 'mcp-test-v1'
+      ? registered.filter((runtime) => runtime.capabilities?.mcpRuntimeTestV1 === true)
+      : registered
+  const selectableRuntimes = filterSelectableRuntimes(
+    capabilityFiltered,
+    options.requireCapability === undefined ? currentValue : null,
+  )
+  return {
+    selectableRuntimes,
+    claudeEnabled,
+    isLoading: runtimesQuery.isLoading,
+    isError: runtimesQuery.isError,
+  }
 }
 
 /** True when the registry offers at least one enabled claude-protocol runtime —
@@ -54,10 +85,19 @@ export function hasEnabledClaudeRuntime(
  * own `enabled` flag; there is no blanket claude gate any more.
  */
 export function filterSelectableRuntimes(
-  registered: ReadonlyArray<{ name: string; protocol: string; enabled: boolean }>,
+  registered: ReadonlyArray<{
+    name: string
+    protocol: string
+    enabled: boolean
+    isDefault?: boolean
+  }>,
   currentValue: string | null | undefined,
 ): SelectableRuntime[] {
   return registered
     .filter((r) => r.enabled || r.name === currentValue)
-    .map((r) => ({ name: r.name, protocol: r.protocol }))
+    .map((r) => ({
+      name: r.name,
+      protocol: r.protocol,
+      ...(r.isDefault === undefined ? {} : { isDefault: r.isDefault }),
+    }))
 }

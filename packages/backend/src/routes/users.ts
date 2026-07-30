@@ -20,8 +20,19 @@ import {
 } from '@/services/users'
 import { isOidcManagedUser, listOidcManagedUserIds } from '@/services/accountAuthPolicy'
 import { NotFoundError, ValidationError } from '@/util/errors'
+import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import { Paths } from '@/util/paths'
 
 export function mountUserRoutes(app: Hono, deps: AppDeps): void {
+  const runtimeTests = getMcpRuntimeTestService({
+    db: deps.db,
+    configPath: deps.configPath,
+    appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
+    containmentCoordinator: deps.containmentCoordinator,
+    runFn: deps.mcpRuntimeTestDependencies?.runFn,
+    now: deps.mcpRuntimeTestDependencies?.now,
+    capacity: deps.mcpRuntimeTestDependencies?.capacity,
+  })
   // /api/users/search — admin + user (users:search permission). MUST come
   // before /api/users so the literal wins over the catch-all admin gate.
   app.get('/api/users/search', requirePermission('users:search'), async (c) => {
@@ -88,11 +99,14 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       Date.now(),
       actorOf(c).user.id,
     )
+    if (parsed.data.status === 'disabled') await runtimeTests.reconcileDurableIntents()
     return c.json(materializePublicAdminView(updated, await isOidcManagedUser(deps.db, updated.id)))
   })
 
   app.delete('/api/users/:id', requirePermission('users:write'), async (c) => {
-    await disableUser(deps.db, c.req.param('id'), Date.now(), actorOf(c).user.id)
+    const userId = c.req.param('id')
+    await disableUser(deps.db, userId, Date.now(), actorOf(c).user.id)
+    await runtimeTests.reconcileDurableIntents()
     return c.json({ ok: true, code: 'user-deletion-soft' })
   })
 

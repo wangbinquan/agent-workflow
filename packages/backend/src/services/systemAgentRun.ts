@@ -119,7 +119,7 @@ export interface SystemAgentRunOptions {
     pid: number | null
     spawnedAt: number
     spawnBinaryPath: string
-    rawCommandDigest: string
+    rawCommandDigest?: string
     spawnCommandDigest: string
   }) => void | Promise<void>
   /**
@@ -130,9 +130,7 @@ export interface SystemAgentRunOptions {
   onControlLine?: (input: {
     line: string
     control: Exclude<NonNullable<SpawnPlan['control']>, { kind: 'none' }>
-  }) => Promise<
-    { kind: 'stderr'; line: string } | { kind: 'session-ready'; sessionId: string }
-  >
+  }) => Promise<{ kind: 'stderr'; line: string } | { kind: 'session-ready'; sessionId: string }>
   /** Session-owned scratch survives successful turns; end/idle removes it. */
   retainScratchOnSuccess?: boolean
 }
@@ -248,7 +246,7 @@ async function finalizeSystemAgentAttempt(input: {
   removeScratch: () => void
   terminationAlreadyExhausted: boolean
   wantScratchRemoved: boolean
-}): Promise<{ reaped: boolean; scratchRemoved: boolean }> {
+}): Promise<{ reaped: boolean; cleanupSucceeded: boolean; scratchRemoved: boolean }> {
   let reaped = input.child === null || input.childReaped
   if (input.child !== null) {
     if (!reaped && !input.terminationAlreadyExhausted) {
@@ -265,21 +263,23 @@ async function finalizeSystemAgentAttempt(input: {
     }
     if (!reaped) {
       input.child.unref?.()
-      return { reaped: false, scratchRemoved: false }
+      return { reaped: false, cleanupSucceeded: false, scratchRemoved: false }
     }
   }
   try {
     await input.cleanup?.()
   } catch {
-    return { reaped: true, scratchRemoved: false }
+    return { reaped: true, cleanupSucceeded: false, scratchRemoved: false }
   }
-  if (!input.wantScratchRemoved) return { reaped: true, scratchRemoved: false }
+  if (!input.wantScratchRemoved) {
+    return { reaped: true, cleanupSucceeded: true, scratchRemoved: false }
+  }
   try {
     input.removeScratch()
   } catch {
-    return { reaped: true, scratchRemoved: false }
+    return { reaped: true, cleanupSucceeded: true, scratchRemoved: false }
   }
-  return { reaped: true, scratchRemoved: true }
+  return { reaped: true, cleanupSucceeded: true, scratchRemoved: true }
 }
 
 export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> {
@@ -534,6 +534,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
 
       const liveChild = child
+      const activePlan = plan as SpawnPlan
       let terminating = false
       const escalate = (): void => {
         if (terminating) return
@@ -712,7 +713,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         readStream(
           child.stderr as ReadableStream<Uint8Array> | undefined,
           async (line) => {
-            const control = plan.control
+            const control = activePlan.control
             if (
               opts.onControlLine !== undefined &&
               control !== undefined &&
@@ -892,6 +893,13 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         failureCode: 'execution-identity-store-unsafe',
         scratchRetained: true,
       })
+    } else if (!finalized.cleanupSucceeded) {
+      result = {
+        ...(result ?? fail('identity-failed')),
+        status: 'identity-failed',
+        failureCode: 'execution-identity-store-unsafe',
+        scratchRetained: true,
+      }
     } else if (result !== undefined) {
       result = { ...result, scratchRetained: !finalized.scratchRemoved }
       if (

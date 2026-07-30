@@ -478,7 +478,16 @@ export interface Resources {
       endedHint: string
       dirtyBasis: string
       activeUsesSaved: string
+      receiptReplaced: string
       draftChangedDuringSave: string
+      turnOutcome: {
+        failed: string
+        canceled: string
+        timedOut: string
+        interrupted: string
+        diagnostic: string
+        noDiagnostic: string
+      }
       status: {
         new: string
         running: string
@@ -6009,7 +6018,17 @@ export const zhCN: Resources = {
       endedHint: '本次测试已结束。历史执行过程仍可查看，也可以从下方开始一条新测试。',
       dirtyBasis: '当前表单有未保存改动。可先保存并开始，或明确使用已保存版本。',
       activeUsesSaved: '当前会话固定使用启动时的已保存配置；未保存改动不会进入该会话。',
+      receiptReplaced:
+        '该启动请求已执行，但记录已被后续测试替代；现已显示最新测试，系统没有重复发送原请求。',
       draftChangedDuringSave: '保存期间表单又发生了修改；未启动测试，请确认后重试。',
+      turnOutcome: {
+        failed: '上一轮执行失败',
+        canceled: '上一轮已取消',
+        timedOut: '上一轮执行超时',
+        interrupted: '上一轮执行被中断',
+        diagnostic: '诊断代码：{{code}}',
+        noDiagnostic: '运行时未返回诊断代码。',
+      },
       status: {
         new: '新测试',
         running: '轮次执行中',

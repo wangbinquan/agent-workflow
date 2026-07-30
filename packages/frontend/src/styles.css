@@ -12136,7 +12136,10 @@ mark.comment-anchor[data-active='true'] {
 }
 .session-block__ts {
   font-size: 11px;
-  opacity: 0.5;
+  /* Keep timestamps secondary without alpha-blending them below WCAG AA on
+     tinted Session blocks in dark mode. Both theme variants of --muted are
+     contrast-checked foreground tokens. */
+  color: var(--muted);
   margin-left: auto;
 }
 .session-block__body {
@@ -12475,6 +12478,65 @@ mark.comment-anchor[data-active='true'] {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   word-break: break-word;
   color: var(--text);
+}
+
+/* RFC-238 — MCP runtime playground. Dialog chrome/input/button styling comes
+   from shared primitives; these rules only establish the conversation layout. */
+.mcp-runtime-test.dialog__panel {
+  height: min(820px, calc(100dvh - 32px));
+}
+.mcp-runtime-test .dialog__body {
+  display: flex;
+  min-height: 0;
+}
+.mcp-runtime-test__body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.mcp-runtime-test__status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.mcp-runtime-test__conversation {
+  flex: 1 1 280px;
+  min-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  padding: var(--space-3);
+}
+.mcp-runtime-test__footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: var(--space-2);
+}
+.mcp-runtime-test__footer-spacer {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 520px) {
+  .mcp-runtime-test.dialog__panel {
+    height: calc(100dvh - 16px);
+  }
+  .mcp-runtime-test__footer {
+    align-items: stretch;
+  }
+  .mcp-runtime-test__footer-spacer {
+    display: none;
+  }
+  .mcp-runtime-test__footer > .btn {
+    min-height: 44px;
+    flex: 1 1 calc(50% - var(--space-2));
+  }
 }
 
 /* RFC-029: Runtime Inventory section rendered at the top of the Session

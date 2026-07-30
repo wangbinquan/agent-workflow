@@ -12,6 +12,7 @@ import { BatchImportRowSchema } from './repoBatchImport'
 import { MemorySummarySchema } from './memory'
 import { WorkflowMutationIdSchema, WorkflowSnapshotHashSchema } from './workflow'
 import { WorkgroupMutationIdSchema, WorkgroupSnapshotHashSchema } from './workgroup'
+import { McpRuntimeTestCaptureStateSchema, McpRuntimeTestTurnStatusSchema } from './mcpRuntimeTest'
 
 // -----------------------------------------------------------------------------
 // /ws/tasks/{taskId}
@@ -449,6 +450,22 @@ export const IntentSessionWsMessageSchema = z.discriminatedUnion('type', [
 ])
 export type IntentSessionWsMessage = z.infer<typeof IntentSessionWsMessageSchema>
 
+// RFC-238 — private MCP runtime-test locator stream. Transcript/tool payloads
+// remain on owner-gated REST endpoints; this frame only tells the client which
+// durable projection/cursor to refresh.
+export const McpRuntimeTestWsMessageSchema = z
+  .object({
+    type: z.literal('mcp-runtime-test.updated'),
+    sessionId: z.string().min(1).max(128),
+    sessionVersion: z.number().int().nonnegative(),
+    inFlightTurnId: z.string().min(1).max(128).nullable(),
+    turnStatus: McpRuntimeTestTurnStatusSchema.nullable(),
+    eventCursor: z.number().int().nonnegative(),
+    captureState: McpRuntimeTestCaptureStateSchema.nullable(),
+  })
+  .strict()
+export type McpRuntimeTestWsMessage = z.infer<typeof McpRuntimeTestWsMessageSchema>
+
 // -----------------------------------------------------------------------------
 // Server → client control frames common to every channel.
 // -----------------------------------------------------------------------------
@@ -487,4 +504,6 @@ export const WS_PATHS = {
   scheduledTasks: '/ws/scheduled-tasks',
   /** RFC-234 — intent-session stream (creator + system admin only). */
   intentSessions: '/ws/intent-sessions',
+  /** RFC-238 — MCP runtime-test locator stream (creator only). */
+  mcpRuntimeTests: '/ws/mcp-runtime-tests',
 } as const

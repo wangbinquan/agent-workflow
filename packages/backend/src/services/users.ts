@@ -14,10 +14,12 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import { hashPassword } from '@/auth/passwords'
 import { revokeAllSessionsForUser } from '@/auth/sessionStore'
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import { users } from '@/db/schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { isOidcManagedUser, writeLocalPasswordIfUnmanaged } from '@/services/accountAuthPolicy'
 import { triggerRevalidation } from '@/ws/revalidationHook'
+import { transitionOwnerRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 
 export type UserRow = typeof users.$inferSelect
 
@@ -158,7 +160,10 @@ export async function disableUser(
   if (row.role === 'admin' && (await countOtherActiveAdmins(db, id)) === 0) {
     throw new ValidationError('last-admin-protection', 'cannot disable the last active admin user')
   }
-  await db.update(users).set({ status: 'disabled', updatedAt: now }).where(eq(users.id, id))
+  dbTxSync(db, (tx) => {
+    tx.update(users).set({ status: 'disabled', updatedAt: now }).where(eq(users.id, id)).run()
+    transitionOwnerRuntimeTestsInTx(tx, id, now)
+  })
   await revokeAllSessionsForUser(db, id, now)
   // RFC-212 — revokeAllSessionsForUser already fires a trigger, but disable also
   // narrows anything a still-live PAT could see; make the intent explicit.
@@ -241,7 +246,12 @@ export async function patchUser(
   if (patch.forcePasswordChange !== undefined) {
     updates.forcePasswordChange = patch.forcePasswordChange
   }
-  await db.update(users).set(updates).where(eq(users.id, id))
+  dbTxSync(db, (tx) => {
+    tx.update(users).set(updates).where(eq(users.id, id)).run()
+    if (patch.status === 'disabled' && row.status !== 'disabled') {
+      transitionOwnerRuntimeTestsInTx(tx, id, now)
+    }
+  })
   // RFC-212 — patchUser writes BOTH role and status (users.ts is the Web UI's
   // demote AND disable path). Trigger unconditionally so neither branch can be
   // forgotten — a per-branch trigger is exactly the omission the audit warned of.

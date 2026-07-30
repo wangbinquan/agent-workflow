@@ -40,6 +40,7 @@ import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
 import { startStuckTaskDetectorLoop } from '@/services/stuckTaskDetector'
 import { startBatchImportGc } from '@/services/repoBatchImport'
 import { startPluginGenerationGc } from '@/services/pluginGenerationGc'
+import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import {
   setMemoryDistillLangProvider,
@@ -500,6 +501,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     return row.url !== '' ? row.url : null
   })
 
+  // RFC-238 — complete boot recovery before accepting a playground request.
+  // The routes resolve the same DB-keyed daemon singleton.
+  const mcpRuntimeTests = getMcpRuntimeTestService({
+    db,
+    configPath: Paths.config,
+    appHome: Paths.root,
+    containmentCoordinator,
+  })
+  await mcpRuntimeTests.start()
+
   // 7. HTTP server.
   const app = createApp({
     token,
@@ -816,7 +827,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     server.stop(true)
     try {
       const { gracefulShutdown } = await import('@/services/shutdown')
-      await gracefulShutdown(db, 30_000)
+      await Promise.all([mcpRuntimeTests.shutdown(30_000), gracefulShutdown(db, 30_000)])
     } catch (err) {
       log.warn('graceful shutdown error', {
         error: err instanceof Error ? err.message : String(err),
