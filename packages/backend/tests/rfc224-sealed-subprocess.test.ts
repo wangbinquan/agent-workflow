@@ -182,6 +182,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     const parentSignals: NodeJS.Signals[] = []
     let interceptedChild: ReturnType<typeof Bun.spawn> | undefined
     let resumeWrite: (() => void) | undefined
+    let writeDeadline: ReturnType<typeof setTimeout> | undefined
     let resolveWriteEntered!: () => void
     let resolveTrialTimeout!: () => void
     const writeEntered = new Promise<void>((resolvePromise) => {
@@ -255,21 +256,33 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
       return realKill(pid, signal)
     }) as typeof process.kill
 
-    const admission = requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
-      timeout: (milliseconds) => (milliseconds === 5_000 ? trialTimeout : Bun.sleep(milliseconds)),
-    })
-    let admissionSettled = false
-    void admission.then(
-      () => {
-        admissionSettled = true
-      },
-      () => {
-        admissionSettled = true
-      },
-    )
-
     try {
-      await writeEntered
+      const admission = requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+        timeout: (milliseconds) =>
+          milliseconds === 5_000 ? trialTimeout : Bun.sleep(milliseconds),
+      })
+      let admissionSettled = false
+      void admission.then(
+        () => {
+          admissionSettled = true
+        },
+        () => {
+          admissionSettled = true
+        },
+      )
+
+      await Promise.race([
+        writeEntered,
+        new Promise<never>((_, reject) => {
+          // The production capability timeout is the injected logical promise
+          // above. This separate bound only gives a coverage-loaded CI runner
+          // enough time to start the real TypeScript supervisor process.
+          writeDeadline = setTimeout(
+            () => reject(new Error('capability supervisor did not reach its ACK write')),
+            12_000,
+          )
+        }),
+      ])
       // The trial timeout wins while the ACK write is still blocked before its
       // first byte. The host must already have handed signaling authority to
       // the supervisor guardian, so it can only await that release.
@@ -285,6 +298,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
       const group = { absent: false }
       await expectProcessGroupAbsent(interceptedChild!.pid, group)
     } finally {
+      if (writeDeadline !== undefined) clearTimeout(writeDeadline)
       resumeWrite?.()
       process.kill = realKill
       Bun.spawn = realSpawn
@@ -292,7 +306,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         await closeSupervisorControl(interceptedChild)
       }
     }
-  })
+  }, 30_000)
 
   test('supervisor control EOF kills its still-owned process group', async () => {
     const mainPath = resolve(import.meta.dir, '../src/main.ts')
