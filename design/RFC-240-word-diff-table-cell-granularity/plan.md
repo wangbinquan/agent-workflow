@@ -24,13 +24,14 @@
   配对行 cell zip(max-cell 规范骨架,短侧空格占位)+ cell 内词级 diff
   (**结构性白名单:残留含 `` ` ``/`[`/`]`/`<`/`>`/`$`/`&` 或字面
   autolink 模式或变更 token 含 `*`/`_`/`~` → 整 cell 旧红+新绿降级,
-  降级段 close marker 内垫空格阻断 autolink 词法;非空↔空 cell 空侧
-  单空格色块**)→ **循环还原至不动点**(嵌套原子解开;残留 =
+  降级段 open/close **双侧**垫空格(恢复 `_` emphasis 与 autolink
+  左边界、防 close 侧 href 拼接);非空↔空 cell 空侧单空格色块**)→ **循环还原至不动点**(嵌套原子解开;残留 =
   真 bug → fail-safe 整对回退,`_internal` 注入桩可测)→ 未配对行整行
   DEL/INS(空 cell 色块占位)。
   pair-ph 按「左内容+右内容」内容寻址保证唯一。共享原语:
   `splitTableCells`(反斜杠奇偶)替换两处 cell 切分;`INLINE_CODE_RE`
-  多反引号升级(全局生效,proposal 已列显式例外)。依赖:T1。
+  多反引号升级;`trimCommonAffixes` 字素簇安全回退(IVS/ZWJ/组合标记)
+  (均全局生效,proposal 已列显式例外)。依赖:T1。
 
 - **RFC-240-T3 测试**
   新增 `markdown-diff-table-cell.test.tsx`(渲染级,design §测试策略
