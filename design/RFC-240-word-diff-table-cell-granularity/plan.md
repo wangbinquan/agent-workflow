@@ -17,8 +17,8 @@
 
 - **RFC-240-T3 测试**
   新增 `markdown-diff-table-cell.test.tsx`(渲染级,design §测试策略 1-10)
-  + `markdown-diff-table-word.test.ts` 补 merged 字符串层锁 + 11 的源码层
-  防误伤锁。依赖:T2。
+  - `markdown-diff-table-word.test.ts` 补 merged 字符串层锁 + 11 的源码层
+    防误伤锁。依赖:T2。
 
 - **RFC-240-T4 文档同步**
   RFC-012 design.md 勘误区追加"C′ 落地"交叉引用(方案 A 的整表退化取舍

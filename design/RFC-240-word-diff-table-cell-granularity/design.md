@@ -69,15 +69,15 @@ PUA marker)不经过 `wrapLines`(context 值原样直拼),marker 直达渲染层
 
 ## 与现有模块的耦合点
 
-| 模块 | 关系 |
-| --- | --- |
-| `findTableBlocks` / `tableStructureKey` | 复用,零改动(顶层表边界不变) |
-| `PlaceholderAllocator` | 复用两处:全局(配对占位符)+ intraTableDiff 局部(cell 内 code) |
-| `restoreAtoms` | 零改动;依赖其"context 原样还原"语义 |
-| `wrapLines` / `wrapTableRowCells` | 未配对行包 marker 复用;merged 表不经过 wrapLines |
-| `repairBrokenLinePrefixes` | 表行跳过(既有),merged 表安全通过 |
-| `repairMergedTableRuns` | merged 表 run 形态 = 单 sep 于第 2 行 → 判定 clean,不触碰 |
-| line / block 路径 | 零改动 |
+| 模块                                    | 关系                                                         |
+| --------------------------------------- | ------------------------------------------------------------ |
+| `findTableBlocks` / `tableStructureKey` | 复用,零改动(顶层表边界不变)                                  |
+| `PlaceholderAllocator`                  | 复用两处:全局(配对占位符)+ intraTableDiff 局部(cell 内 code) |
+| `restoreAtoms`                          | 零改动;依赖其"context 原样还原"语义                          |
+| `wrapLines` / `wrapTableRowCells`       | 未配对行包 marker 复用;merged 表不经过 wrapLines             |
+| `repairBrokenLinePrefixes`              | 表行跳过(既有),merged 表安全通过                             |
+| `repairMergedTableRuns`                 | merged 表 run 形态 = 单 sep 于第 2 行 → 判定 clean,不触碰    |
+| line / block 路径                       | 零改动                                                       |
 
 ## 失败模式
 
