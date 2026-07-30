@@ -1,4 +1,4 @@
-# RFC-240 — 技术设计（v4，设计门三轮修订后）
+# RFC-240 — 技术设计（v5，设计门四轮修订后）
 
 ## 接口契约
 
@@ -68,12 +68,17 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 输入:同结构键的左右两份表文本。输出:单份含 marker 的表文本(merged),
 或 null(放弃细化,调用方走未配对整表路径)。
 
-0. **cell 计数与骨架定义**(设计门三轮 P1):cell 列表 =
-   `splitTableCells(row)` 的 parts **剥去首哑段**(行首 `|` 之前的空白
-   段;本 RFC 范围内行必以 `|` 起头)**与尾哑段**(行以未转义 `|` 结尾
-   时其后的空白段)。变更行(merged / 整行 DEL / 整行 INS)一律以
-   **规范骨架**输出:`| cell₁ | cell₂ | … |`(首尾 pipe 齐全,cell 之间
-   单 `|`);cell 内自身的 lead/tail 空白保留,补位 cell 为单空格。
+0. **cell 计数与骨架定义**(设计门三轮 P1,四轮 P1 补缩进):cell 列表 =
+   `splitTableCells(row)` 的 parts **剥去首哑段**(行首缩进 + `|` 之前
+   的空白段;`TABLE_ROW_RE` 允许 0–3 空格缩进)**与尾哑段**(行以未转义
+   `|` 结尾时其后的空白段)。变更行(merged / 整行 DEL / 整行 INS)以
+   **规范骨架**输出:`indent + | cell₁ | cell₂ | … |`(首尾 pipe 齐全,
+   cell 之间单 `|`),其中 **indent = 该行来源侧的原始行首空白**
+   (merged / INS 行取新侧、DEL 行取旧侧)——列表容器内 2–3 空格缩进的
+   表,变更行若被规范到 0 列会脱离容器、解析成裸管道段落(四轮 P1)。
+   cell 内自身的 lead/tail 空白保留,补位 cell 为单空格。**零 cell 行**
+   (裸 `|`,首尾哑段剥后为空)在 DEL/INS 时合成单个「空格 + marker
+   色块」cell(`| {M} {m} |` 形态),保证增删可见(四轮 P2)。
    context 行永远原样,不规范化。
 1. **表头 + 分隔符**:结构键相同 ⇒ 逐字节一致,原样输出。
 2. **GFM 等价与列数守卫**:(a) 表头 cell 数 ≠ 分隔符 cell 数时整对放弃
@@ -84,7 +89,10 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    inner,先以局部 allocator 依次原子化 inline code(升级版
    `INLINE_CODE_RE`)、行内链接、行内数学式(`$...$`,单行、内容无 `$`,
    两端非空白;数学式纳保护集是三轮 P1:marker 落入 `inlineMath.value`
-   会被 `resolveMarkedString` 单侧化,零可见高亮)。**行相似度与 cell
+   会被 `resolveMarkedString` 单侧化,零可见高亮)。三类 opener 的转义
+   判定统一用**反斜杠奇偶**(与 `splitTableCells` 同规则,四轮 P1):
+   奇数个前导反斜杠 = 字面文本不原子化(`\$x$`、`\[x](u)`),偶数个 =
+   有效定界(`\\` 后的 code span 照常原子化)。**行相似度与 cell
    diff 都在原子化后的文本上进行**;原子 token(PUA,Co 类)按内容
    token 计入 Dice——相同 code/链接/公式提升相似度是期望行为,变更的
    原子两侧 ph 不同、贡献 0。
@@ -118,6 +126,12 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    - 每对 cell:逐字节相等 → 原样;不等 → lead/tail 空白外置,inner
      词级 diff(`tokenizeForWordDiff` + `diffArrays` +
      `trimCommonAffixes`),del/ins 段分别包 marker,context 原样。
+     **定界符-only 降级**(四轮 P1):若 diff 的全部 del/ins token 都是
+     标点/符号类(`/^[\p{P}\p{S}]+$/u`,如 `**same**`→`*same*` 只变
+     `*`),marker 会落进 emphasis 定界符、被 remark 解析拆散进空子树、
+     `remarkDiffMarkers` 状态机摊平后零可见高亮且丢格式。此时该 cell
+     整体降级为「旧 inner 整红 + 新 inner 整绿」(marker 包完整 span,
+     emphasis 结构与高亮都保留)。
    - **原子化在 §2b 已完成**(code → link → math 顺序;link 的 label /
      math 的内容里含先前原子的 ph 时允许嵌套)。词级 diff 后**函数内
      循环还原至不动点**:反复替换已发放码点直到 merged 无任何已发放
@@ -201,10 +215,16 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 1. 单 cell 修改 → 恰 1 张表;变更 cell 同含 `.diff-del`+`.diff-ins`;
    其余 cell 零 span;无裸 `|`。
 2. 多 cell / 多行修改互不串扰;CJK cell;inline code cell(含「双反引
-   号定界、内容有单反引号」的多反引号形态,code span 结构完整)。
+   号定界、内容有单反引号」的多反引号形态,code span 结构完整);转义
+   奇偶:`\\` 后 code span 原子化生效、`\$x$`/`\[x](u)` 字面文本不被
+   误原子化(四轮 P1);**定界符-only 变更**(`**same**`→`*same*`)→
+   cell 整体旧红+新绿、emphasis 结构保留(四轮 P1);**列表容器内缩进
+   表**(`- item` 下 2 空格缩进表)cell 修改 → 单表保持在容器内、无
+   裸 `|`(四轮 P1)。
 3. 行增/删 → 单表内整行绿/红(源码中存在的 cell 全包 marker);**全空
-   cell 行**增删 → 色块占位可见;**短行**(cell 数少于声明列)增删 →
-   存在的 cell 绿/红,隐式补齐列无 marker(骨架语义锁定)。
+   cell 行**增删 → 色块占位可见;**零 cell 裸 `|` 行**增删 → 合成色块
+   cell 可见(四轮 P2);**短行**(cell 数少于声明列)增删 → 存在的
+   cell 绿/红,隐式补齐列无 marker(骨架语义锁定)。
 4. 相似度配对:编辑行与原行配对;无关行不硬配——含纯标点包装
    (`**甲**` vs `**乙**`)与空白支配两个反例(阈值 0.5 用内容 token
    复算锁定);重排+编辑 run 的输出顺序锁定(先 DEL 后新序);
@@ -241,6 +261,11 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 
 ## 设计门记录
 
+- 四轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 3 P1 / 1 P2;
+  配对/占位符主链连续第二轮零新 finding):全部折入本 v5——规范骨架
+  保留来源侧原始缩进(列表容器内表不脱容器)、三类原子 opener 统一
+  反斜杠奇偶、定界符-only 变更整 cell 红绿降级(emphasis 不再被吞)、
+  零 cell 裸 `|` 行合成色块 cell。
 - 三轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 6 P1 / 1 P2;
   评审确认核心主链——tie-break / 输出顺序 / pad 时机 / context-ph 绕过
   后处理——已闭合):全部折入本 v4——identical 措辞对齐既有语义(#15)、
