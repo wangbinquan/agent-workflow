@@ -120,8 +120,6 @@ const EXACT_ALLOWANCE_ROWS = [
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fBinaryExpression:1b704a7eef75f83fad16\u001f1\u001fruntime-protocol\u001fmcpMap[m.name] = buildInlineMcpEntry(m)',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fBinaryExpression:a27576c85b1ba417ea2d\u001f1\u001fruntime-protocol\u001fmap[dep.name] = buildInlineAgentEntry(dep, paramsByAgent.get(dep.name))',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fComputedPropertyName:a2e3850c47204f0d2b3c\u001f1\u001fruntime-protocol\u001f[agent.name]',
-  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/mcpTest.ts\u001fbuildOpencodeMcpTestSpawn\u001fComputedPropertyName:1dd3c1d538187edad66f\u001f1\u001fopencode-protocol\u001f[ctx.mcp.name]',
-  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/mcpTest.ts\u001fbuildOpencodeMcpTestSpawn\u001fComputedPropertyName:efd90113b17bce420ca3\u001f1\u001fopencode-protocol\u001f[ctx.agentName]',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/sealedSubprocess.ts\u001fsanitizeNetlessEnvironment\u001fBinaryExpression:d0b6cf3d8e4f97cf166b\u001f1\u001fenvironment-variable\u001foutput[name] = value',
   "frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fplanMcpConfig\u001fBinaryExpression:a00eae65c26271a9d7bf\u001f1\u001fopencode-protocol\u001fresult[mcp.name] = { type: 'remote', enabled: true, url: mcp.config.url, ...(mcp.config.headers === undefined ? {} : { headers: mcp.config.headers }), ...(mcp.config.oauth === undefined ? {} : { oauth: mcp.config.oauth }), ...(mcp.config.ti",
   "frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fplanMcpConfig\u001fBinaryExpression:dbcbde9861f2f01a98e2\u001f1\u001fopencode-protocol\u001fresult[mcp.name] = { type: 'local', enabled: true, command: [wrapperPath], ...(mcp.config.timeoutMs === undefined ? {} : { timeout: mcp.config.timeoutMs }), }",
@@ -273,7 +271,7 @@ describe('RFC-223 T15 structural identity guard', () => {
   test('production source matches the exact reviewed fingerprint multiset', () => {
     const findings = scanProductionSources()
     expect(allowanceDiagnostics(findings, EXACT_ALLOWANCES)).toEqual([])
-    expect(findings.length).toBe(98)
+    expect(findings.length).toBe(96)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

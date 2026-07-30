@@ -134,8 +134,9 @@ interface ResolvedTestRuntime {
 }
 
 export function isRuntimeMcpTestEligible(row: Pick<RuntimeRow, 'protocol' | 'model'>): boolean {
-  if (getRuntimeDriver(row.protocol).mcpTest === undefined) return false
-  if (row.protocol !== 'opencode') return true
+  const capability = getRuntimeDriver(row.protocol).mcpTest
+  if (capability === undefined) return false
+  if (capability.sessionOwnerReceipt === null) return true
   const model = row.model
   if (typeof model !== 'string' || model.includes('\0')) return false
   const slash = model.indexOf('/')
@@ -733,7 +734,7 @@ export class McpRuntimeTestService {
     const scratchRoot = join(this.deps.appHome, 'mcp-runtime-tests', sessionId)
     const runtimeSessionId = runtime.capability.createNativeSessionId()
     const sessionStoreRoot =
-      runtime.row.protocol === 'opencode'
+      runtime.capability.sessionOwnerReceipt !== null
         ? opencodeMcpTestSessionStore({
             appHome: this.deps.appHome,
             sessionId,
@@ -1701,7 +1702,7 @@ export class McpRuntimeTestService {
       )
       if (!['not-alive', 'killed'].includes(outcome)) continue
       const owner = getMcpRuntimeTestOwner(this.deps.db, session.id)
-      if (!(await this.recoverOpencodeStoreAfterReap(session, turn, owner))) continue
+      if (!(await this.recoverOwnerStoreAfterReap(session, turn, owner))) continue
 
       const recovered = dbTxSync(this.deps.db, (tx) => {
         const currentSession = tx
@@ -1966,12 +1967,14 @@ export class McpRuntimeTestService {
     }
   }
 
-  private async recoverOpencodeStoreAfterReap(
+  private async recoverOwnerStoreAfterReap(
     session: SessionRow,
     turn: TurnRow,
     owner: ReturnType<typeof getMcpRuntimeTestOwner>,
   ): Promise<boolean> {
-    if (session.runtimeProtocol !== 'opencode') return true
+    const capability = getRuntimeDriver(session.runtimeProtocol).mcpTest
+    if (capability === undefined) return false
+    if (capability.sessionOwnerReceipt === null) return true
     if (session.sessionStoreDbPath === null) return false
     try {
       const abandoned = await inspectAbandonedOpencodeStoreLock(session.sessionStoreDbPath)
@@ -2043,6 +2046,8 @@ export class McpRuntimeTestService {
       .where(inArray(mcpRuntimeTestSessions.status, ['active', 'ending']))
       .all()
     for (const session of sessions) {
+      const capability = getRuntimeDriver(session.runtimeProtocol).mcpTest
+      const hasOwnerReceipt = capability?.sessionOwnerReceipt != null
       if (session.inFlightTurnId === null) {
         if (session.status === 'ending') await this.finishEndingSession(session.id)
         continue
@@ -2070,7 +2075,7 @@ export class McpRuntimeTestService {
       const queuedWithoutChild = turn?.status === 'queued' && turn.pid === null
       const storeRecovered =
         turn !== undefined && childReapProven
-          ? await this.recoverOpencodeStoreAfterReap(session, turn, owner)
+          ? await this.recoverOwnerStoreAfterReap(session, turn, owner)
           : queuedWithoutChild
       const quarantine =
         reapOutcome === 'missing-turn' ||
@@ -2081,15 +2086,12 @@ export class McpRuntimeTestService {
         !storeRecovered
       const captureComplete =
         queuedWithoutChild || (turn !== undefined && turn.captureState === 'complete')
-      const storePresent =
-        session.runtimeProtocol === 'opencode'
-          ? existsSync(session.sessionStoreRoot)
-          : existsSync(session.scratchRoot)
-      const ownerProven =
-        session.runtimeProtocol !== 'opencode' ||
-        this.deps.runFn !== undefined ||
-        owner !== undefined
+      const storePresent = hasOwnerReceipt
+        ? existsSync(session.sessionStoreRoot)
+        : existsSync(session.scratchRoot)
+      const ownerProven = !hasOwnerReceipt || this.deps.runFn !== undefined || owner !== undefined
       const resumable =
+        capability !== undefined &&
         !quarantine &&
         session.status === 'active' &&
         canResumeNativeSession(session) &&
@@ -2503,7 +2505,7 @@ export class McpRuntimeTestService {
     let opencodeControl:
       | NonNullable<Parameters<RuntimeMcpTestCapabilityV1['buildSpawn']>[0]['opencodeControl']>
       | undefined
-    if (session.runtimeProtocol === 'opencode' && this.deps.runFn === undefined) {
+    if (runtime.capability.sessionOwnerReceipt !== null && this.deps.runFn === undefined) {
       try {
         resumeOwner = getMcpRuntimeTestOwner(this.deps.db, session.id)
         if (turn.seq === 1) {
@@ -3134,16 +3136,18 @@ export class McpRuntimeTestService {
     const owner = getMcpRuntimeTestOwner(this.deps.db, sessionId)
     const storeBase = resolve(join(this.deps.appHome, 'opencode-stores', 'mcp-test'))
     const storeTarget = resolve(row.sessionStoreRoot)
-    const externalStore = row.runtimeProtocol === 'opencode'
+    const capability = getRuntimeDriver(row.runtimeProtocol).mcpTest
+    const externalStore = capability?.sessionOwnerReceipt != null
     const safeStore =
-      !externalStore ||
-      (dirname(storeTarget) === storeBase &&
-        storeTarget !== storeBase &&
-        storeTarget ===
-          opencodeMcpTestSessionStore({
-            appHome: this.deps.appHome,
-            sessionId,
-          }).root)
+      capability !== undefined &&
+      (!externalStore ||
+        (dirname(storeTarget) === storeBase &&
+          storeTarget !== storeBase &&
+          storeTarget ===
+            opencodeMcpTestSessionStore({
+              appHome: this.deps.appHome,
+              sessionId,
+            }).root))
     let cleanupState: SessionRow['cleanupState'] = alreadyQuarantined ? 'quarantined' : 'complete'
     let cleanupErrorCode: string | null = alreadyQuarantined ? row.cleanupErrorCode : null
     if (alreadyQuarantined) {

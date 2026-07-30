@@ -111,6 +111,7 @@ describe('RFC-224 verified OpenCode source reachability', () => {
       .filter(({ text }) => text.includes('testOnlyUnverifiedRuntime'))
       .map(({ path }) => path)
     expect(seamFiles).toEqual([
+      'services/changeNarrative.ts',
       'services/runner.ts',
       // RFC-237: the claude declared-control branch skips its binary seal
       // behind the SAME explicit seam (mock-binary tests only; production

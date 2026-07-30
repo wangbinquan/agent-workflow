@@ -176,7 +176,7 @@ describe('API contract registry coverage', () => {
     // mode is silent completeness. Keep the set of blind spots explicit and
     // frozen; a new computed-path mount must either use a literal or teach
     // discoverRoutes() how to reconstruct it.
-    const known = ['resourceAcl.ts:53 app.get(p…)', 'resourceAcl.ts:63 app.put(p…)']
+    const known = ['resourceAcl.ts:65 app.get(p…)', 'resourceAcl.ts:75 app.put(p…)']
     expect(discoverNonLiteralMounts().sort()).toEqual(known.sort())
   })
 
