@@ -1,4 +1,4 @@
-# RFC-240 — 技术设计（v13,设计门十二轮修订后）
+# RFC-240 — 技术设计（v14,设计门十三轮修订后;设计门收口)
 
 ## 接口契约
 
@@ -151,9 +151,14 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
      骨架 = max(旧侧, 新侧) cell 数**、按 §0 规范骨架输出:每个 zip 出
      的 cell 占一格,被删的尾列内容不丢、新增尾列可见(二轮 P2 +
      三轮 P1 的骨架规范)。
-   - 每对 cell:逐字节相等 → 原样;不等 → lead/tail 空白外置,inner
-     词级 diff(`tokenizeForWordDiff` + `diffArrays` +
-     `trimCommonAffixes`),del/ins 段分别包 marker,context 原样。
+   - 每对 cell:逐字节相等 → 原样;不等 → lead/tail 空白外置。执行词
+     级 diff 前依次判定(数值即 §2(d) 的规范值,写入本节作为算法正文,
+     十三轮 P1 编辑位):(i) 任一侧原子化后内容 token 数 > **500** →
+     整 cell 降级,不消费预算;(ii) `used + lenL×lenR > 10⁶`(lenL/
+     lenR 同上,`used` 初值 0,按行输出序、行内自左向右累计)→ 整
+     cell 降级,不消费;(iii) 通过则 `used += lenL×lenR`,inner 词级
+     diff(`tokenizeForWordDiff` + `diffArrays` + `trimCommonAffixes`),
+     del/ins 段分别包 marker,context 原样。
      **非空 ↔ 空 cell**(设计门六轮 P1):一侧 inner 为空时,空侧以单
      空格 marker 色块呈现(`{D}old{d}{I} {i}` / `{D} {d}{I}new{i}`),
      保证红旧绿新两侧都可见——否则空侧零 token、`remarkDiffMarkers`
@@ -211,14 +216,19 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 
 ## 共享原语(顺带修正的既有缺陷,全局受益;**有意的全局行为增量**)
 
-0. **`trimCommonAffixes` 字素簇安全回退**(设计门十二轮 P1):现实现的
-   公共前后缀提取只保护 surrogate pair;边界落在「基字 + 变体选择符
-   (U+FE00–FE0F / U+E0100–E01EF)/ ZWJ(U+200D)/ 组合标记
-   (`\p{M}`)」之间时会把基字提成 context、把选择符单独放进红绿
-   span——选择符不能跨元素作用,`葛󠄀`→`葛󠄁` 这类变更两侧字形与有效
-   高亮全丢。修法:前缀在分歧点、后缀在边界点若紧邻上述 extend 类
-   字符则整字素回退。该缺陷今日正文词 diff 同样命中,修复全局受益;
-   补 IVS 与 ZWJ emoji 定向回归(cell 内 + 正文各一)。
+0. **词级管线字素簇安全**(设计门十二轮 P1,十三轮 P1 补全):extend
+   类字符集 = 变体选择符(U+FE00–FE0F / U+E0100–E01EF)、ZWJ
+   (U+200D)、组合标记(`\p{M}`)、**emoji modifier
+   (U+1F3FB–1F3FF)**。两处修法:(a) `trimCommonAffixes` 公共前后缀
+   边界紧邻 extend 类字符时整字素回退(现实现只保护 surrogate pair,
+   `葛󠄀`→`葛󠄁`、`👍🏻`→`👍🏽` 会把基字提成 context、把选择符/modifier 单独
+   放进红绿 span,两侧字形与有效高亮全丢);(b) **`FALLBACK_TOKEN_RE`
+   extend 黏合**——无 `Intl.Segmenter` 的退路 tokenizer 每个备选分支
+   追加 extend 类字符尾缀,基字与 extend 永远同 token(否则 token 级
+   已拆散,`diffArrays` 先把基字 emit 成 context,(a) 收不回来;
+   Segmenter 主路径按字素分词、天然安全)。该缺陷今日正文词 diff 同样
+   命中,修复全局受益;补 IVS、ZWJ emoji、emoji modifier 定向回归
+   (cell 内 + 正文;fallback 路径用 stub Segmenter=null 强制)。
 
 以下两项是既有缺陷修复,按仓库「面向代码最合理」准则**全局生效**,不为
 本 RFC 单独 fork 一份 cell 专用变体。它们构成对「结构变化保持现行为 /
@@ -344,6 +354,17 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 
 ## 设计门记录
 
+- 十三轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,3 P1 + 1 P2;**设计门
+  就此收口**):两条编辑位(预算/cell 守卫数值移入 §5 算法正文;plan
+  的 pair 键补长度前缀)与一条部分成立(fallback tokenizer extend
+  黏合 + emoji modifier 入 extend 集)折入本 v14;**P1-2 按算术驳回**
+  ——其构造(480 个 500×500 cell diff)声称"累计 10⁶ 不过限",但预算
+  是乘积和 Σ(lenL×lenR),每个此类 cell 消费 2.5×10⁵,预算在 ~4 个
+  cell 后耗尽、其余全部整 cell 降级,二次工作量被界定在 ~10⁶ 步;
+  Dice 阶段 ≤ 11,520 候选 × ≤1,000 token ≈ 1.15×10⁷ 线性操作,数十
+  毫秒级。收口理由:核心机制自三轮起零变化,四~十三轮 findings 单调
+  收窄(机制 → 边界 → 契约措辞 → 编辑位),本轮已出现评审算术错误,
+  信号达噪声底;继续迭代的期望收益低于成本。
 - 十二轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 3 P1):折入本
   v13——`trimCommonAffixes` 字素簇安全回退(IVS/ZWJ/组合标记,既有
   共享原语真 bug、全局受益);累计预算钉死可执行语义(原子化后 token、

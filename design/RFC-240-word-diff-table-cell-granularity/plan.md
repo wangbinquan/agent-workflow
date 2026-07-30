@@ -28,7 +28,8 @@
   左边界、防 close 侧 href 拼接);非空↔空 cell 空侧单空格色块**)→ **循环还原至不动点**(嵌套原子解开;残留 =
   真 bug → fail-safe 整对回退,`_internal` 注入桩可测)→ 未配对行整行
   DEL/INS(空 cell 色块占位)。
-  pair-ph 按「左内容+右内容」内容寻址保证唯一。共享原语:
+  pair-ph 按「'tablepair\0' + 左内容字符长度 + '\0' + 左内容 + 右内容」
+  内容寻址(长度前缀保单射,表内容可含 NUL)。共享原语:
   `splitTableCells`(反斜杠奇偶)替换两处 cell 切分;`INLINE_CODE_RE`
   多反引号升级;`trimCommonAffixes` 字素簇安全回退(IVS/ZWJ/组合标记)
   (均全局生效,proposal 已列显式例外)。依赖:T1。
