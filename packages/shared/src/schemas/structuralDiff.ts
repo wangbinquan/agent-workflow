@@ -243,6 +243,10 @@ export const fileStructuralDiffSchema = z.object({
   filePath: z.string(),
   lang: fileLangSchema,
   status: fileAnalysisStatusSchema,
+  /** RFC-239 — file-level rename: the pre-rename path when git detected R
+   *  (`--find-renames`). Old persisted JSON predates the field and must keep
+   *  parsing, so it stays optional with no default. */
+  renamedFrom: z.string().optional(),
   changes: z.array(symbolChangeSchema).default([]),
   edges: z.array(symbolEdgeSchema).default([]),
   /** Within-file blast-radius: callers of this file's changed methods. The
@@ -347,6 +351,14 @@ export const structuralDiffSchema = z.object({
    *  lazily per method via GET /call-targets, not embedded here. Optional so older
    *  responses + non-task scopes parse; the UI treats undefined as false. */
   callChainAvailable: z.boolean().optional(),
+  /** RFC-239 — canonical content digest (backend-computed, pre-grouping file
+   *  manifest incl. per-file symbol identities). The ONLY comparison peer is
+   *  ChangeNarrative.inputDigest — the frontend never recomputes it. */
+  contentDigest: z.string().optional(),
+  /** RFC-239 — why `files` is empty when it is (differentiated empty states):
+   *  'scratch-space' = task ran in a scratch space with no git-visible change;
+   *  'no-changes' = a real repo task that modified nothing. */
+  emptyHint: z.enum(['scratch-space', 'no-changes']).optional(),
   summary: structuralDiffSummarySchema,
 })
 export type StructuralDiff = z.infer<typeof structuralDiffSchema>

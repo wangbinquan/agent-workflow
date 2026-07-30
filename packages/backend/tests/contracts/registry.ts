@@ -191,6 +191,13 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/mcps/probes' },
   { method: 'GET', path: '/api/mcps/:id/probe' },
   { method: 'POST', path: '/api/mcps/:id/probe' },
+  { method: 'GET', path: '/api/mcps/:id/runtime-test-session' },
+  { method: 'POST', path: '/api/mcps/:id/runtime-test-sessions' },
+  { method: 'GET', path: '/api/mcps/:id/runtime-test-sessions/:sessionId' },
+  { method: 'POST', path: '/api/mcps/:id/runtime-test-sessions/:sessionId/messages' },
+  { method: 'POST', path: '/api/mcps/:id/runtime-test-sessions/:sessionId/cancel-turn' },
+  { method: 'POST', path: '/api/mcps/:id/runtime-test-sessions/:sessionId/end' },
+  { method: 'GET', path: '/api/mcps/:id/runtime-test-sessions/:sessionId/session' },
 
   // ---- plugins (RFC-031) ----
   {
@@ -439,6 +446,10 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'DELETE', path: '/api/scheduled-tasks/:id' },
   { method: 'POST', path: '/api/scheduled-tasks/:id/run-now' },
   { method: 'GET', path: '/api/tasks/:id/structural-diff' },
+  // RFC-239 — unified structural-change view
+  { method: 'GET', path: '/api/tasks/:id/file-content' },
+  { method: 'GET', path: '/api/tasks/:id/change-narrative' },
+  { method: 'POST', path: '/api/tasks/:id/change-narrative' },
   { method: 'GET', path: '/api/tasks/:id/call-targets' },
   { method: 'GET', path: '/api/tasks/:id/node-runs' },
   { method: 'GET', path: '/api/tasks/:id/node-runs/:nodeRunId/events' },

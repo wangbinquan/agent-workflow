@@ -58,6 +58,8 @@ import {
   syncTaskWorkflow,
 } from '@/services/task'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
+import { getTaskFileContent } from '@/services/worktreeFileContent'
+import { getChangeNarrativeStatus, triggerChangeNarrative } from '@/services/changeNarrative'
 import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
 import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
 import { structuralScopeSchema } from '@agent-workflow/shared'
@@ -326,6 +328,69 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         deepCfg: mode === 'deep' ? resolveStructuralDeepConfig(deps.configPath) : undefined,
       }),
     )
+  })
+
+  // RFC-239 §3.2 — AI change narrative. GET follows the task-visibility
+  // middleware (read = can see the task); POST additionally requires the
+  // member gate (owner / collaborator / admin) inside the service. 404 body
+  // means "not generated yet" — the frontend's button state.
+  app.get('/api/tasks/:id/change-narrative', async (c) => {
+    const scope = c.req.query('scope') ?? 'task'
+    if (scope !== 'task') {
+      throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
+    }
+    const status = await getChangeNarrativeStatus(c.req.param('id'))
+    if (status === null) {
+      throw new NotFoundError('narrative-not-found', 'no narrative generated for this task yet')
+    }
+    return c.json(status)
+  })
+  app.post('/api/tasks/:id/change-narrative', async (c) => {
+    const body = (await safeJson(c.req.raw)) as { scope?: string } | null
+    const scope = body?.scope ?? 'task'
+    if (scope !== 'task') {
+      throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
+    }
+    const id = c.req.param('id')
+    const task = await getTask(deps.db, id)
+    if (task === null) {
+      throw new NotFoundError('task-not-found', `task '${id}' not found`)
+    }
+    const state = await triggerChangeNarrative(
+      {
+        db: deps.db,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
+      },
+      task,
+      actorOf(c),
+    )
+    return c.json(state, 202)
+  })
+
+  // RFC-239 §3.5 — full-text file content (base|worktree side) for the
+  // markdown rendered-diff view. Both sides answer a missing file with
+  // 200 {exists:false}; a renamed file's base side is read via `basePath`
+  // (the caller passes the structural diff's renamedFrom). Behind the same
+  // /api/tasks/:id visibility middleware as every other task read.
+  app.get('/api/tasks/:id/file-content', async (c) => {
+    const side = c.req.query('side')
+    if (side !== 'base' && side !== 'worktree') {
+      throw new ValidationError(
+        'file-content-side-invalid',
+        `side query param must be 'base' or 'worktree'`,
+      )
+    }
+    const q: Parameters<typeof getTaskFileContent>[2] = {
+      path: c.req.query('path') ?? '',
+      side,
+    }
+    const basePath = c.req.query('basePath')
+    if (basePath !== undefined && basePath !== '') q.basePath = basePath
+    const repo = c.req.query('repo')
+    if (repo !== undefined && repo !== '') q.repo = repo
+    return c.json(await getTaskFileContent(deps.db, c.req.param('id'), q))
   })
 
   // RFC-085 — lazy call-chain expansion: direct callees of one method (method+

@@ -26,13 +26,19 @@ import { ecosystemForManifest } from './deps/manifests'
 
 export type BlobReader = (path: string) => Promise<string | null>
 
+/** A changed file: bare path, or `{ path, oldPath }` when git detected a rename
+ *  (RFC-239) — the old side is then read from `oldPath` and the produced
+ *  FileStructuralDiff carries `renamedFrom`, so symbol diffs compare real
+ *  old/new content instead of reporting delete+recreate. */
+export type ChangedFileInput = string | { path: string; oldPath?: string }
+
 export async function assembleStructuralDiff(opts: {
   taskId: string
   scope: StructuralScope
   nodeRunId?: string
   fromRef: string
   toRef: string
-  changedFiles: string[]
+  changedFiles: ChangedFileInput[]
   readOld: BlobReader
   readNew: BlobReader
   engine?: Engine
@@ -46,13 +52,19 @@ export async function assembleStructuralDiff(opts: {
     newContent: string | null
   }> = []
 
-  for (const path of opts.changedFiles) {
+  for (const input of opts.changedFiles) {
+    const path = typeof input === 'string' ? input : input.path
+    const oldPath = typeof input === 'string' ? undefined : input.oldPath
     const isCode = resolveLang(path) !== null
     const isManifest = ecosystemForManifest(path) !== null
     if (!isCode && !isManifest) continue
-    const [oldText, newText] = await Promise.all([opts.readOld(path), opts.readNew(path)])
+    const [oldText, newText] = await Promise.all([
+      opts.readOld(oldPath ?? path),
+      opts.readNew(path),
+    ])
     if (isCode) {
-      files.push(await analyzeFile({ filePath: path, oldText, newText }))
+      const analyzed = await analyzeFile({ filePath: path, oldText, newText })
+      files.push(oldPath === undefined ? analyzed : { ...analyzed, renamedFrom: oldPath })
     }
     if (isManifest) {
       manifestInputs.push({ filePath: path, oldContent: oldText, newContent: newText })
@@ -181,6 +193,7 @@ function prefixFile(label: string, f: FileStructuralDiff): FileStructuralDiff {
   return {
     ...f,
     filePath: prefixPath(label, f.filePath),
+    renamedFrom: f.renamedFrom !== undefined ? prefixPath(label, f.renamedFrom) : undefined,
     changes: f.changes.map((c) => prefixChange(label, c)),
     edges: f.edges.map((e) => ({
       ...e,

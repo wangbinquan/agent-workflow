@@ -1169,10 +1169,14 @@ async function checkoutWorkingBranch(opts: {
  * `parseDiff()` in `util/diffSplit.ts` can shard.
  */
 export async function gitDiffSnapshot(worktreePath: string, fromCommit: string): Promise<string> {
+  // RFC-239 — `--find-renames` is explicit (not left to the host's
+  // `diff.renames` default) so the textual diff's `rename from/to` headers and
+  // the structural enumeration's R entries agree on every machine.
   const tracked = await runGit(worktreePath, [
     '-c',
     'core.quotepath=false',
     'diff',
+    '--find-renames',
     fromCommit,
     '--',
   ])
@@ -1484,6 +1488,260 @@ export async function gitChangedFilesBetween(
     .split('\n')
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
+}
+
+// ---------------------------------------------------------------------------
+// RFC-239 — typed change enumeration with rename detection.
+//
+// A SEPARATE API on purpose: `gitChangedFiles`/`gitChangedFilesBetween` return
+// `string[]` that callers (scheduler fan-out, wrapper progress) consume as
+// literal blob paths — changing their shape or letting `--find-renames` fold a
+// delete+add pair into one entry would silently change those consumers. The
+// structural-diff pipeline alone migrates to the typed entries.
+// ---------------------------------------------------------------------------
+
+export interface ChangedFileEntry {
+  /** Current (new-side) repo-relative path. */
+  path: string
+  /** Pre-rename path when git detected a rename (`status === 'R'`). */
+  oldPath?: string
+  /** A=added, M=modified, D=deleted, R=renamed, T=typechange (consumed with M
+   *  semantics downstream). Unmerged (`U`) entries never appear — they are
+   *  dropped into `skippedUnmerged`; unknown future letters degrade to M. */
+  status: 'A' | 'M' | 'D' | 'R' | 'T'
+}
+
+export interface ParsedNameStatus {
+  entries: ChangedFileEntry[]
+  /** Paths of unmerged (`U`) records — a task worktree should never have these;
+   *  callers log and skip rather than analyze half-merged content. */
+  skippedUnmerged: string[]
+  /** Raw status letters we did not recognize and consumed as M (fail-open to
+   *  the most conservative interpretation, per RFC-239 design §3.1). */
+  unknownStatuses: string[]
+}
+
+/**
+ * Parse `git diff --name-status -z` output. The `-z` stream is a flat
+ * NUL-separated token list: `STATUS NUL path NUL` for single-path records and
+ * `R<score> NUL old NUL new NUL` (also `C<score>`) for two-path records. NO
+ * trimming — with `-z` git does not munge paths, and leading/trailing
+ * whitespace in a filename is legal. Exported for unit tests.
+ */
+export function parseNameStatusZ(stdout: string): ParsedNameStatus {
+  const tokens = stdout.split('\0')
+  // A trailing NUL leaves one empty final token; drop only that.
+  if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop()
+  const entries: ChangedFileEntry[] = []
+  const skippedUnmerged: string[] = []
+  const unknownStatuses: string[] = []
+  let i = 0
+  while (i < tokens.length) {
+    const status = tokens[i] ?? ''
+    const letter = status.charAt(0)
+    if (letter === 'R' || letter === 'C') {
+      const oldPath = tokens[i + 1]
+      const newPath = tokens[i + 2]
+      i += 3
+      if (oldPath === undefined || newPath === undefined) break // truncated tail
+      if (letter === 'R') entries.push({ path: newPath, oldPath, status: 'R' })
+      // C (copy): the new path IS a new file; the source is unchanged. Consume
+      // as an add and drop the source path.
+      else entries.push({ path: newPath, status: 'A' })
+      continue
+    }
+    const path = tokens[i + 1]
+    i += 2
+    if (path === undefined) break
+    if (letter === 'A' || letter === 'M' || letter === 'D' || letter === 'T') {
+      entries.push({ path, status: letter })
+    } else if (letter === 'U') {
+      skippedUnmerged.push(path)
+    } else {
+      unknownStatuses.push(status)
+      entries.push({ path, status: 'M' })
+    }
+  }
+  return { entries, skippedUnmerged, unknownStatuses }
+}
+
+async function runNameStatusZ(
+  worktreePath: string,
+  refArgs: string[],
+  errorCode: string,
+  log?: Logger,
+): Promise<ParsedNameStatus> {
+  const r = await runGit(worktreePath, [
+    '-c',
+    'core.quotepath=false',
+    'diff',
+    '--name-status',
+    '-z',
+    '--find-renames',
+    ...refArgs,
+    '--',
+  ])
+  if (r.exitCode !== 0) {
+    throw new DomainError(errorCode, diffFailureMessage(worktreePath, r.stderr), 500)
+  }
+  const parsed = parseNameStatusZ(r.stdout)
+  if (parsed.skippedUnmerged.length > 0 || parsed.unknownStatuses.length > 0) {
+    log?.warn('name-status enumeration skipped/degraded entries', {
+      worktreePath,
+      skippedUnmerged: parsed.skippedUnmerged.length,
+      unknownStatuses: parsed.unknownStatuses,
+    })
+  }
+  return parsed
+}
+
+/**
+ * RFC-239 — typed tracked+untracked change enumeration against the live
+ * worktree, with rename detection. Untracked files are always `A` (git cannot
+ * rename-track them). Submodule paths expand the same way `gitChangedFiles`
+ * does; expanded inner files carry `M` (the analyzer's old/new readers settle
+ * actual add/remove per file).
+ */
+export async function gitChangedEntries(
+  worktreePath: string,
+  fromCommit: string,
+  log?: Logger,
+): Promise<ChangedFileEntry[]> {
+  const parsed = await runNameStatusZ(worktreePath, [fromCommit], 'worktree-diff-failed', log)
+  const untracked = await runGit(worktreePath, [
+    '-c',
+    'core.quotepath=false',
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '-z',
+  ])
+  const out: ChangedFileEntry[] = []
+  const seen = new Set<string>()
+  for (const e of parsed.entries) {
+    if (seen.has(e.path)) continue
+    seen.add(e.path)
+    if (e.status === 'R') {
+      out.push(e) // a rename is never a submodule dir
+      continue
+    }
+    const expanded = await expandSubmodulePaths(worktreePath, fromCommit, [e.path])
+    if (expanded.length === 1 && expanded[0] === e.path) out.push(e)
+    else for (const inner of expanded) out.push({ path: inner, status: 'M' })
+  }
+  for (const raw of untracked.stdout.split('\0')) {
+    if (raw === '' || seen.has(raw)) continue
+    seen.add(raw)
+    out.push({ path: raw, status: 'A' })
+  }
+  return out
+}
+
+/**
+ * RFC-239 §3.6 — per-file ±line counts for the narrative's group weights. The
+ * backend has no unified-diff parser (that lives in the frontend), so numstat
+ * is its line-count source. `-z` again: rename records arrive as
+ * `added\tremoved\t\0old\0new\0`; binary files report `-\t-` and are skipped
+ * (no line notion). Exported for unit tests.
+ */
+export function parseNumstatZ(stdout: string): Map<string, { added: number; removed: number }> {
+  const out = new Map<string, { added: number; removed: number }>()
+  const tokens = stdout.split('\0')
+  if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop()
+  let i = 0
+  while (i < tokens.length) {
+    const rec = tokens[i] ?? ''
+    const parts = rec.split('\t')
+    const added = Number(parts[0])
+    const removed = Number(parts[1])
+    const inlinePath = parts[2]
+    if (inlinePath !== undefined && inlinePath !== '') {
+      i += 1
+      if (Number.isFinite(added) && Number.isFinite(removed)) {
+        out.set(inlinePath, { added, removed })
+      }
+      continue
+    }
+    // rename record: counts token with empty path, then old + new path tokens
+    const newPath = tokens[i + 2]
+    i += 3
+    if (newPath === undefined) break
+    if (Number.isFinite(added) && Number.isFinite(removed)) {
+      out.set(newPath, { added, removed })
+    }
+  }
+  return out
+}
+
+/** Tracked+untracked per-file line stats vs `fromCommit` (rename-aware, keyed
+ *  by the NEW path). Untracked files count as all-added via `--no-index`
+ *  (mirrors gitDiffSnapshot's per-file pattern). Best-effort: enumeration
+ *  failures skip the file rather than throwing. */
+export async function gitDiffNumstat(
+  worktreePath: string,
+  fromCommit: string,
+): Promise<Map<string, { added: number; removed: number }>> {
+  const tracked = await runGit(worktreePath, [
+    '-c',
+    'core.quotepath=false',
+    'diff',
+    '--numstat',
+    '-z',
+    '--find-renames',
+    fromCommit,
+    '--',
+  ])
+  const out =
+    tracked.exitCode === 0
+      ? parseNumstatZ(tracked.stdout)
+      : new Map<string, { added: number; removed: number }>()
+  const untracked = await runGit(worktreePath, [
+    '-c',
+    'core.quotepath=false',
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '-z',
+  ])
+  if (untracked.exitCode === 0) {
+    for (const name of untracked.stdout.split('\0')) {
+      if (name === '' || out.has(name)) continue
+      const one = await runGit(worktreePath, [
+        '-c',
+        'core.quotepath=false',
+        'diff',
+        '--no-index',
+        '--numstat',
+        '-z',
+        '--',
+        '/dev/null',
+        name,
+      ])
+      if (one.exitCode > 1) continue
+      for (const [p, stats] of parseNumstatZ(one.stdout)) {
+        // --no-index reports the literal argument path; normalize to repo-relative.
+        out.set(p.endsWith(name) ? name : p, stats)
+      }
+    }
+  }
+  return out
+}
+
+/** RFC-239 — typed two-ref change enumeration (node/wrapper snapshot pairs),
+ *  with rename detection. */
+export async function gitChangedEntriesBetween(
+  worktreePath: string,
+  fromRef: string,
+  toRef: string,
+  log?: Logger,
+): Promise<ChangedFileEntry[]> {
+  const parsed = await runNameStatusZ(
+    worktreePath,
+    [fromRef, toRef],
+    'structural-diff-refs-failed',
+    log,
+  )
+  return parsed.entries
 }
 
 /**

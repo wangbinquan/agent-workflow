@@ -62,6 +62,7 @@ import {
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
+import { canonicalRepoLabels } from '@/services/repoLabels'
 import type { ContainmentCoordinator } from '@/services/sandbox'
 import { getRuntimeDriver } from '@/services/runtime'
 import { loadMcpsByIds } from '@/services/mcpClosure'
@@ -3670,10 +3671,16 @@ export async function getTaskDiff(db: DbClient, taskId: string): Promise<TaskDif
   }
   let out = ''
   let truncated = false
+  // RFC-239 — canonical labels over the FULL repo list (single source with the
+  // structural diff's `label/` prefixes; before this, the fallback here was the
+  // full repoPath while the structural side used basename, so the frontend
+  // could never join the two sides for fallback-labeled repos).
+  const repoLabels = canonicalRepoLabels(task.repos)
+  const labelOf = new Map(task.repos.map((r, i) => [r, repoLabels[i] ?? 'repo']))
   for (const repo of usable) {
     const oneRaw = await gitDiffSnapshot(repo.worktreePath, repo.baseCommit as string)
     if (oneRaw === '') continue
-    const header = `# === Repo: ${repo.worktreeDirName || repo.repoPath} ===\n`
+    const header = `# === Repo: ${labelOf.get(repo) ?? 'repo'} ===\n`
     const remaining = TASK_DIFF_MAX_BYTES - out.length
     if (remaining <= 0) {
       truncated = true

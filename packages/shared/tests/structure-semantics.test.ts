@@ -3,7 +3,7 @@
 // and the walkthrough top-N. These back the "look at the dangerous ones first"
 // review affordance for AI-authored changes.
 
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'bun:test'
 import type { SymbolChange, SymbolNode } from '@agent-workflow/shared'
 import {
   classifyBreaking,
@@ -11,7 +11,7 @@ import {
   orderAndFilterChanges,
   walkthroughItems,
   severityCounts,
-} from '../src/lib/structureSemantics'
+} from '../src/structureSemantics'
 
 function node(
   qn: string,
@@ -240,5 +240,37 @@ describe('walkthroughItems + severityCounts', () => {
 
   test('severityCounts tallies every severity', () => {
     expect(severityCounts(files)).toEqual({ breaking: 1, risky: 1, safe: 1 })
+  })
+})
+
+// RFC-239 (design gate 3rd-round P1-N2) — the shared zero-dependency
+// signatureTokensRemoved must stay ORDER-SENSITIVE, equivalent to the old
+// diffWordsWithSpace-based "before row has removed tokens" predicate. A
+// multiset-difference implementation would return false for parameter
+// reorders / duplicate-token swaps and silently downgrade breaking verdicts.
+import { signatureTokensRemoved } from '../src/structureSemantics'
+
+describe('RFC-239 signatureTokensRemoved (order-sensitive LCS)', () => {
+  test('dropped parameter → true', () => {
+    expect(signatureTokensRemoved('(a: number, b: string): void', '(a: number): void')).toBe(true)
+  })
+  test('purely additive parameter → false (nothing removed)', () => {
+    expect(signatureTokensRemoved('(a: number): void', '(a: number, b?: string): void')).toBe(false)
+  })
+  test('parameter REORDER keeps the multiset but is still a removal', () => {
+    expect(
+      signatureTokensRemoved('(a: number, b: string): void', '(b: string, a: number): void'),
+    ).toBe(true)
+  })
+  test('duplicate-token swap keeps the multiset but is still a removal', () => {
+    expect(signatureTokensRemoved('f(x, y, x)', 'f(y, x, x)')).toBe(true)
+  })
+  test('identical / empty sides → false (mirrors diffSignatureTokens null)', () => {
+    expect(signatureTokensRemoved('(a: T): void', '(a: T): void')).toBe(false)
+    expect(signatureTokensRemoved(undefined, '(a: T): void')).toBe(false)
+    expect(signatureTokensRemoved('(a: T): void', '')).toBe(false)
+  })
+  test('type change on an existing param → true (old type token removed)', () => {
+    expect(signatureTokensRemoved('(a: number): void', '(a: string): void')).toBe(true)
   })
 })

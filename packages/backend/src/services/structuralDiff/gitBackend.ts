@@ -6,7 +6,12 @@
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { gitChangedFiles, gitChangedFilesBetween, gitGrepFiles, readBlobAtRef } from '@/util/git'
+import {
+  gitChangedEntries,
+  gitChangedEntriesBetween,
+  gitGrepFiles,
+  readBlobAtRef,
+} from '@/util/git'
 import { assembleStructuralDiff } from './assemble'
 import { resolveLang } from './lang/grammars'
 import { hasExtraction } from './lang/queries'
@@ -38,7 +43,10 @@ export async function computeFromWorktree(opts: {
   worktreePath: string
   fromRef: string
 }): Promise<StructuralDiff> {
-  const changedFiles = await gitChangedFiles(opts.worktreePath, opts.fromRef)
+  // RFC-239 — typed enumeration: renames arrive as ONE entry whose old side is
+  // read from `oldPath`, so a moved file diffs its real content instead of
+  // reporting delete+recreate.
+  const changedFiles = await gitChangedEntries(opts.worktreePath, opts.fromRef)
   const readOld = (p: string): Promise<string | null> =>
     readBlobAtRef(opts.worktreePath, opts.fromRef, p)
   const readNew = async (p: string): Promise<string | null> => {
@@ -72,7 +80,7 @@ export async function computeBetweenRefs(opts: {
   fromRef: string
   toRef: string
 }): Promise<StructuralDiff> {
-  const changedFiles = await gitChangedFilesBetween(opts.worktreePath, opts.fromRef, opts.toRef)
+  const changedFiles = await gitChangedEntriesBetween(opts.worktreePath, opts.fromRef, opts.toRef)
   const readOld = (p: string): Promise<string | null> =>
     readBlobAtRef(opts.worktreePath, opts.fromRef, p)
   const readNew = (p: string): Promise<string | null> =>

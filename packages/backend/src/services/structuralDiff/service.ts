@@ -9,7 +9,6 @@
 // not yet wired and returns a typed 'structural-scope-unsupported'.
 
 import { existsSync } from 'node:fs'
-import { basename } from 'node:path'
 import { asc, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
@@ -17,8 +16,10 @@ import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { isGitWorkTree } from '@/util/git'
 import { computeSummary, type StructuralDiff, type StructuralScope } from '@agent-workflow/shared'
 import { getTask } from '@/services/task'
+import { canonicalRepoLabels } from '@/services/repoLabels'
 import { WrapperProgressSchema } from '@/services/wrapperProgress'
 import { computeFromWorktree, computeBetweenRefs } from './gitBackend'
+import { computeContentDigest } from './digest'
 import { mergeStructuralDiffs } from './assemble'
 import { resolveNodeScope, perRepoNodeRuns } from './refSelect'
 import { readStoredDiff, writeStoredDiff, isTerminalTaskStatus } from './store'
@@ -89,7 +90,7 @@ export async function getTaskStructuralDiff(
       // and 500; `isGitWorkTree` collapses it to the same 410 as the textual
       // diff tab).
       const stored = await readStoredDiff(taskId, 'task')
-      if (stored !== null) return stored
+      if (stored !== null) return withContentDigest(stored)
       throw new DomainError(
         'task-worktree-missing',
         `worktree '${task.worktreePath}' is unavailable (missing or no longer a git repository); cannot compute structural diff`,
@@ -97,8 +98,18 @@ export async function getTaskStructuralDiff(
       )
     }
     const baseCommit = task.baseCommit
-    const diff = await withDeep(deepOpts, task.worktreePath, () =>
-      computeFromWorktree({ taskId, scope, worktreePath: task.worktreePath, fromRef: baseCommit }),
+    const diff = withContentDigest(
+      withEmptyHint(
+        await withDeep(deepOpts, task.worktreePath, () =>
+          computeFromWorktree({
+            taskId,
+            scope,
+            worktreePath: task.worktreePath,
+            fromRef: baseCommit,
+          }),
+        ),
+        task.spaceKind,
+      ),
     )
     // Persist the BASELINE for terminal tasks so the view survives a later
     // worktree GC. Never persist a deep request's result (deep is on-demand).
@@ -109,7 +120,7 @@ export async function getTaskStructuralDiff(
   // Multi-repo: merge per-repo diffs, labeling files by repo dir.
   if (!existsSync(task.worktreePath)) {
     const stored = await readStoredDiff(taskId, 'task')
-    if (stored !== null) return stored
+    if (stored !== null) return withContentDigest(stored)
     throw new DomainError(
       'task-worktree-missing',
       `worktree '${task.worktreePath}' does not exist; cannot compute structural diff`,
@@ -130,6 +141,11 @@ export async function getTaskStructuralDiff(
       409,
     )
   }
+  // RFC-239 — canonical labels are computed over the FULL repo list so the
+  // text-diff markers and these structural prefixes agree per repo even when
+  // the two paths filter different usable subsets.
+  const allLabels = canonicalRepoLabels(task.repos)
+  const labelOf = new Map(task.repos.map((r, i) => [r, allLabels[i] ?? 'repo']))
   const parts: Array<{ label: string; diff: StructuralDiff }> = []
   for (const repo of usable) {
     const diff = await computeFromWorktree({
@@ -138,21 +154,44 @@ export async function getTaskStructuralDiff(
       worktreePath: repo.worktreePath,
       fromRef: repo.baseCommit as string,
     })
-    parts.push({ label: repo.worktreeDirName || basename(repo.repoPath), diff })
+    parts.push({ label: labelOf.get(repo) ?? 'repo', diff })
   }
-  const merged = mergeStructuralDiffs(
-    {
-      scope,
-      taskId,
-      fromRef: 'multi',
-      toRef: 'WORKTREE',
-      engine: 'baseline',
-      status: usable.length === task.repos.length ? 'ok' : 'partial',
-    },
-    parts,
+  const merged = withContentDigest(
+    withEmptyHint(
+      mergeStructuralDiffs(
+        {
+          scope,
+          taskId,
+          fromRef: 'multi',
+          toRef: 'WORKTREE',
+          engine: 'baseline',
+          status: usable.length === task.repos.length ? 'ok' : 'partial',
+        },
+        parts,
+      ),
+      task.spaceKind,
+    ),
   )
   if (isTerminalTaskStatus(task.status)) void writeStoredDiff(merged)
   return merged
+}
+
+/** RFC-239 — differentiate the "nothing here" states: a scratch-space task with
+ *  no git-visible change reads very differently from a repo task that modified
+ *  nothing (the former confused users into thinking the analysis broke). Only
+ *  stamped when the diff is genuinely empty. */
+function withEmptyHint(diff: StructuralDiff, spaceKind: string): StructuralDiff {
+  if (diff.files.length > 0 || diff.dependencyChanges.length > 0) return diff
+  return { ...diff, emptyHint: spaceKind === 'scratch' ? 'scratch-space' : 'no-changes' }
+}
+
+/** RFC-239 §3.6 — stamp the canonical content digest on every task-scope
+ *  response (live or stored; pre-RFC-239 stored artifacts get it backfilled on
+ *  read). The narrative freezes the digest it generated from; the frontend only
+ *  ever compares those two backend-computed values. */
+function withContentDigest(diff: StructuralDiff): StructuralDiff {
+  if (diff.contentDigest !== undefined) return diff
+  return { ...diff, contentDigest: computeContentDigest(diff) }
 }
 
 type ResolvedTask = NonNullable<Awaited<ReturnType<typeof getTask>>>
@@ -196,7 +235,8 @@ async function getNodeStructuralDiff(
     const parts: Array<{ label: string; diff: StructuralDiff }> = []
     let hadSnapshot = false
     let hadError = false
-    for (const repo of task.repos) {
+    const nodeLabels = canonicalRepoLabels(task.repos)
+    for (const [repoIdx, repo] of task.repos.entries()) {
       const res = resolveNodeScope(perRepoNodeRuns(rows, repo.worktreeDirName), nodeRunId)
       if (res.kind !== 'between' && res.kind !== 'to-worktree') continue // node didn't write this repo
       hadSnapshot = true
@@ -204,7 +244,7 @@ async function getNodeStructuralDiff(
         hadError = true
         continue
       }
-      const label = repo.worktreeDirName || basename(repo.repoPath)
+      const label = nodeLabels[repoIdx] ?? 'repo'
       try {
         const diff = await withDeep(deepOpts, repo.worktreePath, () =>
           res.kind === 'between'
