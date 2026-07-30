@@ -194,3 +194,19 @@ word / line / block 三档全部命中；本 RFC 的 merged 字符串层断言�
 回归锁定：`packages/frontend/tests/markdown-diff-table-render.test.tsx`
 （渲染级——以 `<table>`/`<input type=checkbox>`/`<h1>` 等渲染产物 + 无裸
 `|` 泄漏为准，替代字符串 `includes` 断言的盲区）。
+
+### 实现门跟进（同日）
+
+Codex 实现门抓到 2 个 P1，均已修复并锁渲染级回归：
+
+1. **结构行判定作用于 word 片段**：`wrapLines` 在 word 模式收到的是 diff
+   片段而非完整物理行，新增的 setext `=` skip（以及既有的 hr / 表分隔符
+   skip）会把 `a=b`→`a==b` 这类普通等号增删当成结构行跳过——不包 marker、
+   删除侧以 context 形态残留旧文本。修复：`buildMergedMarkdown` 计算每个
+   change 首 / 末行是否与物理行边界对齐并传入 `wrapLines`，结构行判定
+   （fence / 表分隔符 / hr / setext / 表格行）只作用于两端完整的行。
+2. **前缀即变更本体时高亮隐身**：checkbox 并入前缀正则后，`foo`→`- [x] foo`
+   的 ins 片段恰为 `- [x] `，前缀外置 + 空 body + 空 marker 对清理让整行
+   无任何高亮。修复：body 为空时整行入 marker，交给
+   `repairBrokenLinePrefixes` 拆成完整 DEL 行 + INS 行（红旧段落 + 绿新
+   task 项）；普通 `- ` 列表化的同形旧洞一并修复。

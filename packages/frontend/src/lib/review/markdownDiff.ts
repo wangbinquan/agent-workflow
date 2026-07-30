@@ -83,13 +83,29 @@ const FENCE_RE = /^(\s*)(`{3,}|~{3,})/
  *     fence；落在 fence 内部又只是 code 文本内的 PUA 字符（remark 不会
  *     把它转成 hast `<span>`）—— 两种情况都没意义。旧 / 新代码块以正常
  *     prose 在前后渲染，reviewer 可以直接对比。
+ *
+ * word 模式的 value 是 diff 片段而非完整物理行：首行可能起于行中、末行
+ * 可能止于行中（Codex 实现门 P1）。firstComplete / lastComplete 标记首 /
+ * 末行是否与物理行边界对齐；结构行判定（fence / 表分隔符 / hr / setext /
+ * 表格行）只作用于两端都完整的行——否则 `a=b`→`a==b` 的 `=` 片段会被当
+ * setext 下划线跳过不包 marker，删除侧还会以 context 形态残留旧文本。
+ * 行首前缀外置只要求"起于行首"（idx>0 或 firstComplete）。
  */
-function wrapLines(value: string, open: string, close: string): string {
+function wrapLines(
+  value: string,
+  open: string,
+  close: string,
+  firstComplete = true,
+  lastComplete = true,
+): string {
   if (value.length === 0) return ''
   const lines = value.split('\n')
   const wrapped: string[] = []
   let fenceMarker = ''
-  for (const line of lines) {
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx]!
+    const startsLine = idx > 0 || firstComplete
+    const complete = startsLine && (idx < lines.length - 1 || lastComplete)
     const fenceMatch = FENCE_RE.exec(line)
     if (fenceMarker !== '') {
       wrapped.push(line)
@@ -98,7 +114,7 @@ function wrapLines(value: string, open: string, close: string): string {
       }
       continue
     }
-    if (fenceMatch !== null) {
+    if (complete && fenceMatch !== null) {
       wrapped.push(line)
       fenceMarker = fenceMatch[2] ?? ''
       continue
@@ -112,41 +128,51 @@ function wrapLines(value: string, open: string, close: string): string {
     // 行为与旧实现一致。
     const quotePrefix = QUOTE_PREFIX_RE.exec(line)?.[0] ?? ''
     const rest = line.slice(quotePrefix.length)
-    // RFC-012：markdown 表格分隔符行（`|---|---|`）不能携带任何 PUA marker，
-    // 否则 GFM 表分隔符正则匹配失败、整张表降级为段落。整张表已在 word 路径
-    // 上由占位符保证为单一 ins/del/unchanged change，分隔行不带 marker
-    // 不会丢失 diff 语义（颜色仍由 header/body 行的 marker 提供）。
-    // 额外要求行内含 `|`：裸 `-`（如列表符被删）也匹配 TABLE_SEP_RE，
-    // 漏包 marker 会让它变成无归属的 context 字符，行首修复拆不出正确视图。
-    if (rest.includes('|') && TABLE_SEP_RE.test(rest)) {
-      wrapped.push(line)
-      continue
+    if (complete) {
+      // RFC-012：markdown 表格分隔符行（`|---|---|`）不能携带任何 PUA marker，
+      // 否则 GFM 表分隔符正则匹配失败、整张表降级为段落。整张表已在 word 路径
+      // 上由占位符保证为单一 ins/del/unchanged change，分隔行不带 marker
+      // 不会丢失 diff 语义（颜色仍由 header/body 行的 marker 提供）。
+      // 额外要求行内含 `|`：裸 `-`（如列表符被删）也匹配 TABLE_SEP_RE，
+      // 漏包 marker 会让它变成无归属的 context 字符，行首修复拆不出正确视图。
+      if (rest.includes('|') && TABLE_SEP_RE.test(rest)) {
+        wrapped.push(line)
+        continue
+      }
+      // thematic break（--- / *** / ___）不包 marker：包了会让行首变成 PUA、
+      // hr 降级成可见的裸 "---" 文本（乱码感）。hr 本身无文字可高亮，跳过。
+      if (THEMATIC_BREAK_RE.test(rest)) {
+        wrapped.push(line)
+        continue
+      }
+      // setext 标题下划线（`===`）同理不包：PUA 落进去后不再被识别为下划线，
+      // 上一行标题降级成段落、裸 `===` 直接可见。下划线无文字可高亮；标题
+      // 文本行自身照常包 marker，高亮不丢。（`---` 形式的 setext H2 已被
+      // thematic break 分支覆盖。）
+      if (SETEXT_UNDERLINE_RE.test(rest)) {
+        wrapped.push(line)
+        continue
+      }
+      if (TABLE_ROW_RE.test(rest)) {
+        // RFC-012：表格 header / body 行（不是 separator）按 cell 逐个包 marker。
+        // 一行内的 open/close 不能跨 `|`——markdown 解析时 `|` 是单元格边界，
+        // 跨界的 open 与 close 落在不同 `<td>` 里、remarkDiffMarkers 看到的
+        // 各自是孤儿 marker，统统被吞，diff 高亮消失。逐 cell 包就避免了。
+        wrapped.push(quotePrefix + wrapTableRowCells(rest, open, close))
+        continue
+      }
     }
-    // thematic break（--- / *** / ___）不包 marker：包了会让行首变成 PUA、
-    // hr 降级成可见的裸 "---" 文本（乱码感）。hr 本身无文字可高亮，跳过。
-    if (THEMATIC_BREAK_RE.test(rest)) {
-      wrapped.push(line)
-      continue
-    }
-    // setext 标题下划线（`===`）同理不包：PUA 落进去后不再被识别为下划线，
-    // 上一行标题降级成段落、裸 `===` 直接可见。下划线无文字可高亮；标题
-    // 文本行自身照常包 marker，高亮不丢。（`---` 形式的 setext H2 已被
-    // thematic break 分支覆盖。）
-    if (SETEXT_UNDERLINE_RE.test(rest)) {
-      wrapped.push(line)
-      continue
-    }
-    if (TABLE_ROW_RE.test(rest)) {
-      // RFC-012：表格 header / body 行（不是 separator）按 cell 逐个包 marker。
-      // 一行内的 open/close 不能跨 `|`——markdown 解析时 `|` 是单元格边界，
-      // 跨界的 open 与 close 落在不同 `<td>` 里、remarkDiffMarkers 看到的
-      // 各自是孤儿 marker，统统被吞，diff 高亮消失。逐 cell 包就避免了。
-      wrapped.push(quotePrefix + wrapTableRowCells(rest, open, close))
-      continue
-    }
-    const m = LEADING_BLOCK_PREFIX_RE.exec(line)
+    const m = startsLine ? LEADING_BLOCK_PREFIX_RE.exec(line) : null
     const prefix = m?.[1] ?? ''
     const body = m?.[2] ?? line
+    // 前缀即变更本体（body 为空，如段落 → task 化时 ins 片段恰为
+    // `- [x] `）：外置前缀会让空 marker 对被清理、整行无任何高亮（Codex
+    // 实现门 P1）。改为整行入 marker，交给 repairBrokenLinePrefixes 拆成
+    // 完整的 DEL 行 + INS 行呈现。
+    if (body.length === 0) {
+      wrapped.push(open + line + close)
+      continue
+    }
     wrapped.push(prefix + open + body + close)
   }
   return wrapped.join('\n')
@@ -766,14 +792,40 @@ export function buildMergedMarkdown(
   // 必须有 \n\n 才能维持段落边界；word/line 模式下相邻 change 直接拼接。
   const separator = granularity === 'block' ? '\n\n' : ''
   const parts: string[] = []
-  for (const c of changes) {
+  // word 模式（separator=''）下 change 是任意片段，须为 wrapLines 计算
+  // 首 / 末行是否与物理行边界对齐：首行完整 ⇔ 前一段以 \n 结尾（或文档
+  // 起点）；末行完整 ⇔ 下一非空段以 \n 开头（或文档终点）。line 模式的
+  // value 恒以 \n 结尾、block 模式有 \n\n separator，两者天然全完整。
+  let atLineStart = true
+  for (let i = 0; i < changes.length; i++) {
+    const c = changes[i]!
+    if (c.value.length === 0) continue
+    let firstComplete = true
+    let lastComplete = true
+    if (separator === '') {
+      let nextVal = ''
+      for (let j = i + 1; j < changes.length; j++) {
+        const v = changes[j]!.value
+        if (v.length > 0) {
+          nextVal = v
+          break
+        }
+      }
+      firstComplete = atLineStart
+      lastComplete = nextVal === '' || nextVal.startsWith('\n')
+    }
     if (c.added === true) {
-      parts.push(wrapLines(c.value, MARKERS.INS_OPEN, MARKERS.INS_CLOSE))
+      parts.push(
+        wrapLines(c.value, MARKERS.INS_OPEN, MARKERS.INS_CLOSE, firstComplete, lastComplete),
+      )
     } else if (c.removed === true) {
-      parts.push(wrapLines(c.value, MARKERS.DEL_OPEN, MARKERS.DEL_CLOSE))
+      parts.push(
+        wrapLines(c.value, MARKERS.DEL_OPEN, MARKERS.DEL_CLOSE, firstComplete, lastComplete),
+      )
     } else {
       parts.push(c.value)
     }
+    atLineStart = c.value.endsWith('\n')
   }
   // 空 marker 对（如"只剩前缀的行"包出的 open+close 相邻）渲染成零宽
   // 色块，先清掉再做行首修复。

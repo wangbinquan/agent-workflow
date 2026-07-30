@@ -165,6 +165,69 @@ describe('task list checkbox', () => {
   })
 })
 
+// Codex 实现门（2026-07-30）2 P1 回归：结构行判定不得作用于 word 模式的
+// 行中片段（否则普通 `=`/`---` 增删被静默跳过、删除侧以 context 残留旧文
+// 本）；"变更恰为行首前缀本体"（段落 ↔ task/list 化）必须整行入 marker 并
+// 由行首修复拆行呈现，不得因空 body + 空 marker 对清理而完全无高亮。
+describe('word 片段不误判结构行（Codex 实现门 P1）', () => {
+  test('行中 `=` 插入 → 正常绿标，不被当 setext 下划线吞掉', () => {
+    const { container } = render(<MarkdownDiffView left="a=b" right="a==b" granularity="word" />)
+    const ins = container.querySelector('.diff-ins')
+    expect(ins?.textContent).toBe('=')
+    expect(container.querySelector('.diff-del')).toBeNull()
+  })
+
+  test('行中 `=` 删除 → 红标呈现，旧文本不以 context 形态残留', () => {
+    const { container } = render(
+      <MarkdownDiffView left="x === y" right="x == y" granularity="word" />,
+    )
+    const del = container.querySelector('.diff-del')
+    expect(del?.textContent).toBe('=')
+  })
+
+  test('行中 `---` 删除 → 红标呈现，不被当 thematic break 吞掉', () => {
+    const { container } = render(<MarkdownDiffView left="x --- y" right="x y" granularity="word" />)
+    expect(container.querySelector('.diff-del')?.textContent).toContain('---')
+    expect(container.querySelector('hr')).toBeNull()
+  })
+
+  test('真实 hr 插入（独立完整行）仍渲染 <hr>', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'a\n'} right={'a\n\n---\n\nb\n'} granularity="word" />,
+    )
+    expect(container.querySelector('hr')).not.toBeNull()
+    expect(container.querySelector('.diff-ins')?.textContent).toBe('b')
+  })
+
+  test('段落 → task 化：红段落 + 绿 task 项，变更不隐身', () => {
+    const { container } = render(
+      <MarkdownDiffView left="foo" right="- [x] foo" granularity="word" />,
+    )
+    expect(container.querySelector('.diff-del')?.textContent).toBe('foo')
+    const li = container.querySelector('li')
+    expect(li?.querySelector('input[type="checkbox"]')).not.toBeNull()
+    expect(li?.querySelector('.diff-ins')?.textContent).toBe('foo')
+  })
+
+  test('task → 段落化：红 task 项 + 绿段落', () => {
+    const { container } = render(
+      <MarkdownDiffView left="- [x] foo" right="foo" granularity="word" />,
+    )
+    const li = container.querySelector('li')
+    expect(li?.querySelector('input[type="checkbox"]')).not.toBeNull()
+    expect(li?.querySelector('.diff-del')?.textContent).toBe('foo')
+    expect(container.querySelector('.diff-ins')?.textContent).toBe('foo')
+  })
+
+  test('普通列表化（`- ` 前缀即变更本体）同样不隐身', () => {
+    const { container } = render(
+      <MarkdownDiffView left="item text" right="- item text" granularity="word" />,
+    )
+    expect(container.querySelector('.diff-del')?.textContent).toBe('item text')
+    expect(container.querySelector('li')?.querySelector('.diff-ins')).not.toBeNull()
+  })
+})
+
 describe('identical 输入不变量（checkbox / setext / 引用内 checkbox 原子化不破坏无变更路径）', () => {
   const doc = [
     '# T',
