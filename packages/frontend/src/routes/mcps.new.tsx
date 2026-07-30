@@ -11,6 +11,7 @@ import type { CreateMcp, Mcp } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { McpFields } from '@/components/McpFields'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { PageHeader } from '@/components/PageHeader'
 import {
   NEW_CARD_KEY,
@@ -80,7 +81,11 @@ function McpCreatePage() {
           </button>
         }
       />
-      {create.error !== null && create.error !== undefined && <ErrorBanner error={create.error} />}
+      <FeedbackStack variant="section">
+        {create.error !== null && create.error !== undefined && (
+          <ErrorBanner error={create.error} />
+        )}
+      </FeedbackStack>
       <div className="split__detail-body">
         <McpFields value={form} onChange={setForm} errors={errors} />
       </div>

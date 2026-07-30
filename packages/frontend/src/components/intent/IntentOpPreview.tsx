@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next'
 import type { Agent, WorkflowDefinition, WorkflowDetail } from '@agent-workflow/shared'
 import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { DiffView } from '@/components/review/DiffView'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { Segmented } from '@/components/Segmented'
@@ -100,15 +101,17 @@ export function IntentOpPreview(props: IntentOpPreviewProps): ReactElement {
 
   return (
     <div className="intent-op-preview">
-      {props.opErrors.length > 0 ? (
-        <NoticeBanner tone="error">
-          <ul>
-            {props.opErrors.map((error) => (
-              <li key={error}>{error}</li>
-            ))}
-          </ul>
-        </NoticeBanner>
-      ) : null}
+      <FeedbackStack variant="section">
+        {props.opErrors.length > 0 ? (
+          <NoticeBanner tone="error">
+            <ul>
+              {props.opErrors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          </NoticeBanner>
+        ) : null}
+      </FeedbackStack>
       {resourceType === 'workflow' ? (
         <WorkflowOpPreview
           op={props.op}

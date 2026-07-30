@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next'
 import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { PageHeader } from '@/components/PageHeader'
 
 export interface DetailHeaderActionsProps {
@@ -130,9 +131,11 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
         }}
         onClose={() => setConfirmOpen(false)}
       />
-      {present.map((e, i) => (
-        <ErrorBanner error={e} key={i} />
-      ))}
+      <FeedbackStack variant="section">
+        {present.map((e, i) => (
+          <ErrorBanner error={e} key={i} />
+        ))}
+      </FeedbackStack>
     </>
   )
 }

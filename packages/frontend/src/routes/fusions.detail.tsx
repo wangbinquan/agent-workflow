@@ -13,6 +13,7 @@ import { ConfirmButton } from '@/components/ConfirmButton'
 import { Dialog } from '@/components/Dialog'
 import { DiffViewer } from '@/components/DiffViewer'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { Field, TextArea } from '@/components/Form'
 import { MemoryReviewItem } from '@/components/fusion/MemoryReviewItem'
 import { LoadingState } from '@/components/LoadingState'
@@ -136,26 +137,28 @@ function FusionDetailPage() {
         }
       />
 
-      {fusion.error ? (
-        <ErrorBanner error={fusion.error} onRetry={() => void fusion.refetch()} />
-      ) : null}
-      {approve.error ? <ErrorBanner error={approve.error} /> : null}
-      {cancel.error ? <ErrorBanner error={cancel.error} /> : null}
+      <FeedbackStack variant="section">
+        {fusion.error ? (
+          <ErrorBanner error={fusion.error} onRetry={() => void fusion.refetch()} />
+        ) : null}
+        {approve.error ? <ErrorBanner error={approve.error} /> : null}
+        {cancel.error ? <ErrorBanner error={cancel.error} /> : null}
 
-      {isActive && (
-        <NoticeBanner
-          tone="info"
-          action={
-            f.currentTaskId !== null ? (
-              <Link className="btn btn--sm" to="/clarify">
-                {t('fusion.clarifyLink')}
-              </Link>
-            ) : undefined
-          }
-        >
-          {t('fusion.runningHint')}
-        </NoticeBanner>
-      )}
+        {isActive && (
+          <NoticeBanner
+            tone="info"
+            action={
+              f.currentTaskId !== null ? (
+                <Link className="btn btn--sm" to="/clarify">
+                  {t('fusion.clarifyLink')}
+                </Link>
+              ) : undefined
+            }
+          >
+            {t('fusion.runningHint')}
+          </NoticeBanner>
+        )}
+      </FeedbackStack>
 
       {f.status === 'failed' && f.error !== null && (
         <section className="page__section">

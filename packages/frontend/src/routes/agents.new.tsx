@@ -33,6 +33,7 @@ import {
 import { AgentImportDialog } from '@/components/AgentImportDialog'
 import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { PageHeader } from '@/components/PageHeader'
 import {
   NEW_CARD_KEY,
@@ -195,7 +196,11 @@ function AgentCreatePage() {
           onNavigate={setActiveTab}
         />
       )}
-      {create.error !== null && create.error !== undefined && <ErrorBanner error={create.error} />}
+      <FeedbackStack variant="section">
+        {create.error !== null && create.error !== undefined && (
+          <ErrorBanner error={create.error} />
+        )}
+      </FeedbackStack>
       <AgentForm
         value={draft}
         onChange={setDraft}

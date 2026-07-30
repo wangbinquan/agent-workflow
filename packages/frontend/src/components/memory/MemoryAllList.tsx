@@ -20,6 +20,7 @@ import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { Segmented } from '@/components/Segmented'
 import { sortByRecency } from '@/lib/memory'
@@ -234,7 +235,9 @@ function renderBody(args: BodyArgs) {
 
   return (
     <>
-      {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
+      <FeedbackStack variant="section">
+        {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
+      </FeedbackStack>
       {rows.length === 0 ? (
         <EmptyState
           title={t(

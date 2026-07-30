@@ -3027,6 +3027,17 @@ code {
   color: var(--notice-fg);
 }
 
+.feedback-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.feedback-stack--section {
+  margin-bottom: var(--space-4);
+}
+
 .notice-banner--comfortable {
   padding: var(--space-3) var(--space-4);
 }
@@ -12984,10 +12995,6 @@ mark.comment-anchor[data-active='true'] {
 /* ---------- RFC-041 PR4: platform memory + task feedback ---------- */
 
 .page--memory .page__header {
-  margin-bottom: var(--space-4);
-}
-
-.memory-section-notice {
   margin-bottom: var(--space-4);
 }
 

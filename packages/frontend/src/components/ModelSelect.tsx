@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 import type { OpencodeModel, RuntimeModelsResponse } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { TextInput } from '@/components/Form'
 import { Select, type SelectOption } from '@/components/Select'
 import { resolveApiError } from '@/i18n/errors'
@@ -114,7 +115,9 @@ export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName
           onChange={(v) => onChange(v === '' ? undefined : v)}
           placeholder="anthropic/claude-sonnet-4-6"
         />
-        <ErrorBanner error={modelLoadDisplayError(list.error)} testid="model-select-load-error" />
+        <FeedbackStack className="stack-top--sm">
+          <ErrorBanner error={modelLoadDisplayError(list.error)} testid="model-select-load-error" />
+        </FeedbackStack>
       </div>
     )
   }
@@ -178,12 +181,14 @@ export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName
           />
         </div>
       )}
-      {refresh.error !== null && refresh.error !== undefined && (
-        <ErrorBanner
-          error={modelLoadDisplayError(refresh.error)}
-          testid="model-select-refresh-error"
-        />
-      )}
+      <FeedbackStack className="stack-top--sm">
+        {refresh.error !== null && refresh.error !== undefined && (
+          <ErrorBanner
+            error={modelLoadDisplayError(refresh.error)}
+            testid="model-select-refresh-error"
+          />
+        )}
+      </FeedbackStack>
     </div>
   )
 }

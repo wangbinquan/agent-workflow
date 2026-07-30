@@ -61,12 +61,16 @@ describe('DetailHeaderActions', () => {
     expect(header!.querySelector('h2.page__title')?.textContent).toBe('My resource')
     expect(header!.querySelector('.page__heading')).not.toBeNull()
     expect(header!.querySelector('.page__actions')).not.toBeNull()
-    // The error banner is NOT inside the flex header — it renders as a
-    // sibling right after it, so long messages get their own full-width row.
+    // The error banner is NOT inside the flex header — it renders in the
+    // shared feedback stack right after it, so long messages get a full-width
+    // row and the edit form receives the standard section spacing.
     expect(header!.querySelector('.error-box')).toBeNull()
     const banner = document.querySelector('.error-box')
     expect(banner).not.toBeNull()
-    expect(banner!.previousElementSibling).toBe(header)
+    const feedbackStack = banner!.parentElement
+    expect(feedbackStack?.classList.contains('feedback-stack')).toBe(true)
+    expect(feedbackStack?.classList.contains('feedback-stack--section')).toBe(true)
+    expect(feedbackStack?.previousElementSibling).toBe(header)
     // Unmapped code → localized fallback title; the raw diagnostic survives
     // in the collapsible detail block instead of leaking as the title.
     expect(banner!.textContent).toContain('boom happened')
@@ -83,6 +87,7 @@ describe('DetailHeaderActions', () => {
     )
     const banners = [...document.querySelectorAll('.error-box')]
     expect(banners.length).toBe(2)
+    expect(banners[0]?.parentElement).toBe(banners[1]?.parentElement)
     expect(banners[0]?.textContent).toContain('first failure')
     expect(banners[1]?.textContent).toContain('second failure')
   })
@@ -97,6 +102,7 @@ describe('DetailHeaderActions', () => {
       />,
     )
     expect(document.querySelector('.error-box')).toBeNull()
+    expect(document.querySelector('.feedback-stack')).toBeNull()
   })
 
   // RFC-203 T5a — the reason this shell moved off the string shell: a

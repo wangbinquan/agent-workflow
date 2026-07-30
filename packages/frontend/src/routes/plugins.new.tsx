@@ -11,6 +11,7 @@ import type { CreatePlugin, PluginOperationResource } from '@agent-workflow/shar
 import { api } from '@/api/client'
 import { PluginFields, focusFirstPluginFieldError } from '@/components/PluginFields'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { PageHeader } from '@/components/PageHeader'
 import {
   NEW_CARD_KEY,
@@ -85,7 +86,11 @@ function PluginCreatePage() {
           </button>
         }
       />
-      {create.error !== null && create.error !== undefined && <ErrorBanner error={create.error} />}
+      <FeedbackStack variant="section">
+        {create.error !== null && create.error !== undefined && (
+          <ErrorBanner error={create.error} />
+        )}
+      </FeedbackStack>
       <div className="split__detail-body">
         <PluginFields value={form} onChange={setForm} errors={errors} />
       </div>

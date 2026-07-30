@@ -14,6 +14,7 @@ import { MemoryDistillJobsTable } from '@/components/memory/MemoryDistillJobsTab
 import { MemoryFusionList } from '@/components/memory/MemoryFusionList'
 import { MemoryNewDialog } from '@/components/memory/MemoryNewDialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
@@ -164,12 +165,14 @@ function MemoryPage() {
         )
       ) : (
         <>
-          {actorError && <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />}
-          {showUnavailableNotice && (
-            <NoticeBanner tone="info" size="compact" className="memory-section-notice">
-              {t('memory.sectionUnavailable')}
-            </NoticeBanner>
-          )}
+          <FeedbackStack variant="section">
+            {actorError && <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />}
+            {showUnavailableNotice && (
+              <NoticeBanner tone="info" size="compact">
+                {t('memory.sectionUnavailable')}
+              </NoticeBanner>
+            )}
+          </FeedbackStack>
           <MemorySections
             tab={tab}
             isAdmin={isAdmin}

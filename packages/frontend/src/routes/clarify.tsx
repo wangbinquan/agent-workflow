@@ -18,6 +18,7 @@ import type { ClarifyRoundSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { Segmented } from '@/components/Segmented'
@@ -196,9 +197,11 @@ export function ClarifyListPage() {
         />
       </div>
       {list.isLoading && <LoadingState />}
-      {list.error !== null && list.error !== undefined && (
-        <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
-      )}
+      <FeedbackStack variant="section">
+        {list.error !== null && list.error !== undefined && (
+          <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
+        )}
+      </FeedbackStack>
       {list.data !== undefined && list.data.length === 0 && (
         <EmptyState
           title={t('clarify.list.empty')}

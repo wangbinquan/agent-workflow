@@ -21,6 +21,7 @@ import { api } from '@/api/client'
 import { decisionChipKind } from '@/lib/review/decisionChip'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { PageHeader } from '@/components/PageHeader'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
@@ -103,9 +104,11 @@ export function ReviewsListPage() {
         />
       </div>
       {list.isLoading && <LoadingState data-testid="reviews-loading" />}
-      {list.error !== null && list.error !== undefined && (
-        <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
-      )}
+      <FeedbackStack variant="section">
+        {list.error !== null && list.error !== undefined && (
+          <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
+        )}
+      </FeedbackStack>
       {list.data !== undefined && list.data.length === 0 && (
         <EmptyState
           title={t('reviews.emptyList')}

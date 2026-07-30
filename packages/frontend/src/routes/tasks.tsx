@@ -23,6 +23,7 @@ import { TASK_STATUS } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
@@ -207,9 +208,11 @@ function TasksPage() {
       </div>
 
       {isLoading && <LoadingState data-testid="tasks-loading" />}
-      {error !== null && error !== undefined && (
-        <ErrorBanner error={error} onRetry={() => void refetch()} />
-      )}
+      <FeedbackStack variant="section">
+        {error !== null && error !== undefined && (
+          <ErrorBanner error={error} onRetry={() => void refetch()} />
+        )}
+      </FeedbackStack>
       {isInitialEmpty && (
         <EmptyState
           title={t('tasks.emptyList')}

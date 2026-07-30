@@ -37,6 +37,7 @@ import {
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
@@ -1136,104 +1137,106 @@ function TaskWizardPage() {
     <div className="page task-wizard" data-testid="task-wizard">
       <PageHeader title={pageTitle} />
 
-      {isEdit && scheduleQ.isError && (
-        <div data-testid="wizard-schedule-stale-error">
-          <ErrorBanner error={scheduleQ.error} onRetry={() => void scheduleQ.refetch()} />
-        </div>
-      )}
+      <FeedbackStack variant="section">
+        {isEdit && scheduleQ.isError && (
+          <div data-testid="wizard-schedule-stale-error">
+            <ErrorBanner error={scheduleQ.error} onRetry={() => void scheduleQ.refetch()} />
+          </div>
+        )}
 
-      {seedFailed && (
-        <NoticeBanner tone="warning" size="compact" className="info-box--muted">
-          <span data-testid="wizard-seed-degraded">{t('taskWizard.degradedBanner')}</span>
-        </NoticeBanner>
-      )}
-
-      {relaunchError && (
-        <div data-testid="wizard-relaunch-error">
-          <ErrorBanner
-            error={relaunchErrorQ?.error}
-            onRetry={() => void relaunchErrorQ?.refetch()}
-          />
-        </div>
-      )}
-
-      {kind === 'workflow' && activeWorkflowVersionMismatch !== null && (
-        <div data-testid="wizard-workflow-version-mismatch">
-          <NoticeBanner
-            tone="warning"
-            title={t('taskWizard.workflowVersionMismatchTitle')}
-            action={
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() => void recoverWorkflowVersion()}
-                data-testid="wizard-workflow-version-recover"
-              >
-                {t(
-                  search.workflowVersion !== undefined
-                    ? 'taskWizard.workflowVersionReturnToEditor'
-                    : 'taskWizard.workflowVersionUseLatest',
-                )}
-              </button>
-            }
-          >
-            {t('taskWizard.workflowVersionMismatchBody', {
-              expected: activeWorkflowVersionMismatch.expected,
-              current: activeWorkflowVersionMismatch.current,
-            })}
+        {seedFailed && (
+          <NoticeBanner tone="warning" size="compact" className="info-box--muted">
+            <span data-testid="wizard-seed-degraded">{t('taskWizard.degradedBanner')}</span>
           </NoticeBanner>
-        </div>
-      )}
+        )}
 
-      {startWorkflowVersionMismatch && (
-        <div data-testid="wizard-workflow-submit-version-error">
-          <ErrorBanner
-            error={start.error}
-            message={t('taskWizard.workflowLaunchVersionMismatchBody')}
-            action={
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() => void recoverWorkflowVersion()}
-                data-testid="wizard-workflow-submit-version-recover"
-              >
-                {t(
-                  search.workflowVersion !== undefined
-                    ? 'taskWizard.workflowVersionReturnToEditor'
-                    : 'taskWizard.workflowVersionUseLatest',
-                )}
-              </button>
-            }
-          />
-        </div>
-      )}
-
-      {kind === 'workflow' && (search.schedule === true || isEdit) && (
-        <div data-testid="wizard-scheduled-workflow-policy">
-          <NoticeBanner
-            tone="info"
-            size="compact"
-            title={t('taskWizard.scheduledWorkflowLatestTitle')}
-          >
-            {t('taskWizard.scheduledWorkflowLatestBody')}
-          </NoticeBanner>
-        </div>
-      )}
-
-      {/* RFC-203 PR-2 实现门 P1：workflow/agent 启动失败改走富横幅——launch 的
-          workflow-invalid 带 details.issues（节点/边定位），字符串壳会把它们
-          全部丢掉，只剩一句「工作流内容不合法」。放在版本冲突横幅的同一正文
-          区（同类失败的既有先例）；workgroup 分支保留 footer 的专用友好文案
-          （workgroupLaunchErrorMessage）。 */}
-      {kind !== 'workgroup' &&
-        ((start.error !== null && start.error !== undefined && !startWorkflowVersionMismatch) ||
-          (saveConfig.error !== null && saveConfig.error !== undefined)) && (
-          <div data-testid="wizard-submit-error">
+        {relaunchError && (
+          <div data-testid="wizard-relaunch-error">
             <ErrorBanner
-              error={workflowTaskCreationDisplayError(start.error ?? saveConfig.error)}
+              error={relaunchErrorQ?.error}
+              onRetry={() => void relaunchErrorQ?.refetch()}
             />
           </div>
         )}
+
+        {kind === 'workflow' && activeWorkflowVersionMismatch !== null && (
+          <div data-testid="wizard-workflow-version-mismatch">
+            <NoticeBanner
+              tone="warning"
+              title={t('taskWizard.workflowVersionMismatchTitle')}
+              action={
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => void recoverWorkflowVersion()}
+                  data-testid="wizard-workflow-version-recover"
+                >
+                  {t(
+                    search.workflowVersion !== undefined
+                      ? 'taskWizard.workflowVersionReturnToEditor'
+                      : 'taskWizard.workflowVersionUseLatest',
+                  )}
+                </button>
+              }
+            >
+              {t('taskWizard.workflowVersionMismatchBody', {
+                expected: activeWorkflowVersionMismatch.expected,
+                current: activeWorkflowVersionMismatch.current,
+              })}
+            </NoticeBanner>
+          </div>
+        )}
+
+        {startWorkflowVersionMismatch && (
+          <div data-testid="wizard-workflow-submit-version-error">
+            <ErrorBanner
+              error={start.error}
+              message={t('taskWizard.workflowLaunchVersionMismatchBody')}
+              action={
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => void recoverWorkflowVersion()}
+                  data-testid="wizard-workflow-submit-version-recover"
+                >
+                  {t(
+                    search.workflowVersion !== undefined
+                      ? 'taskWizard.workflowVersionReturnToEditor'
+                      : 'taskWizard.workflowVersionUseLatest',
+                  )}
+                </button>
+              }
+            />
+          </div>
+        )}
+
+        {kind === 'workflow' && (search.schedule === true || isEdit) && (
+          <div data-testid="wizard-scheduled-workflow-policy">
+            <NoticeBanner
+              tone="info"
+              size="compact"
+              title={t('taskWizard.scheduledWorkflowLatestTitle')}
+            >
+              {t('taskWizard.scheduledWorkflowLatestBody')}
+            </NoticeBanner>
+          </div>
+        )}
+
+        {/* RFC-203 PR-2 实现门 P1：workflow/agent 启动失败改走富横幅——launch 的
+            workflow-invalid 带 details.issues（节点/边定位），字符串壳会把它们
+            全部丢掉，只剩一句「工作流内容不合法」。放在版本冲突横幅的同一正文
+            区（同类失败的既有先例）；workgroup 分支保留 footer 的专用友好文案
+            （workgroupLaunchErrorMessage）。 */}
+        {kind !== 'workgroup' &&
+          ((start.error !== null && start.error !== undefined && !startWorkflowVersionMismatch) ||
+            (saveConfig.error !== null && saveConfig.error !== undefined)) && (
+            <div data-testid="wizard-submit-error">
+              <ErrorBanner
+                error={workflowTaskCreationDisplayError(start.error ?? saveConfig.error)}
+              />
+            </div>
+          )}
+      </FeedbackStack>
 
       <Stepper
         steps={steps}

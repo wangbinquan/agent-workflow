@@ -31,6 +31,7 @@ import type {
 import { api, type ApiError } from '@/api/client'
 import { AttributionChip } from '@/components/AttributionChip'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
@@ -688,25 +689,27 @@ export function ClarifyDetailPage() {
         </p>
       </PageHeader>
 
-      {session.error !== null && session.error !== undefined && (
-        <ErrorBanner error={session.error} onRetry={() => void session.refetch()} />
-      )}
+      <FeedbackStack variant="section">
+        {session.error !== null && session.error !== undefined && (
+          <ErrorBanner error={session.error} onRetry={() => void session.refetch()} />
+        )}
 
-      {peers.error !== null && peers.error !== undefined && (
-        <ErrorBanner error={peers.error} onRetry={() => void peers.refetch()} />
-      )}
+        {peers.error !== null && peers.error !== undefined && (
+          <ErrorBanner error={peers.error} onRetry={() => void peers.refetch()} />
+        )}
 
-      {truncationWarnings !== undefined && truncationWarnings.length > 0 && (
-        <div data-testid="clarify-truncation-warning">
-          <NoticeBanner tone="warning">
-            {truncationWarnings.map((w) => (
-              <div key={w.code}>
-                [{w.code}] {w.detail}
-              </div>
-            ))}
-          </NoticeBanner>
-        </div>
-      )}
+        {truncationWarnings !== undefined && truncationWarnings.length > 0 && (
+          <div data-testid="clarify-truncation-warning">
+            <NoticeBanner tone="warning">
+              {truncationWarnings.map((w) => (
+                <div key={w.code}>
+                  [{w.code}] {w.detail}
+                </div>
+              ))}
+            </NoticeBanner>
+          </div>
+        )}
+      </FeedbackStack>
 
       {!isCross && shardPeers.length > 0 && (
         <section className="clarify-shard-switcher" data-testid="clarify-shard-switcher">
@@ -736,76 +739,78 @@ export function ClarifyDetailPage() {
         </section>
       )}
 
-      {/* RFC-202 T8: answers sealed, but the follow-up task resume failed. */}
-      {resumeWarning !== null && (
-        <NoticeBanner tone="warning" size="compact" className="clarify-resume-failed">
-          {t('common.resumeFailedAfterSubmit', { code: resumeWarning.code })}
-        </NoticeBanner>
-      )}
+      <FeedbackStack variant="section">
+        {/* RFC-202 T8: answers sealed, but the follow-up task resume failed. */}
+        {resumeWarning !== null && (
+          <NoticeBanner tone="warning" size="compact" className="clarify-resume-failed">
+            {t('common.resumeFailedAfterSubmit', { code: resumeWarning.code })}
+          </NoticeBanner>
+        )}
 
-      {/* RFC-056: multi-source waiting banner — appears after this
+        {/* RFC-056: multi-source waiting banner — appears after this
           cross-clarify has been answered but sibling cross-clarify nodes
           targeting the same designer are still awaiting. Sources its data
           either from the just-submitted response (crossWaiting state) or
           from the peers query. */}
-      {isCross &&
-        (crossWaiting !== null || crossPeers.length > 0) &&
-        (() => {
-          const pending = crossWaiting?.pending ?? crossPeers.map((p) => p.intermediaryNodeId)
-          const pendingPeers = crossPeers.filter((p) => pending.includes(p.intermediaryNodeId))
-          if (pending.length === 0) return null
-          return (
-            <div data-testid="cross-clarify-multi-source-banner">
-              <NoticeBanner tone="info" size="compact">
-                <div>{t('crossClarify.multiSourceBanner', { remaining: pending.length })}</div>
-                {pendingPeers.length > 0 && (
-                  <ul>
-                    {pendingPeers.map((p) => (
-                      <li key={p.id}>
-                        <Link
-                          to="/clarify/$nodeRunId"
-                          params={{ nodeRunId: p.intermediaryNodeRunId }}
-                          className="link"
-                          data-testid={`cross-clarify-multi-source-link-${p.intermediaryNodeId}`}
-                        >
-                          {/* 用户 2026-07-02: 显示节点名（testid 保持原 id 以稳定测试锚点）。 */}
-                          {t('crossClarify.multiSourcePendingLinkLabel')}:{' '}
-                          {nodeName(p.intermediaryNodeId)}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </NoticeBanner>
-            </div>
-          )
-        })()}
+        {isCross &&
+          (crossWaiting !== null || crossPeers.length > 0) &&
+          (() => {
+            const pending = crossWaiting?.pending ?? crossPeers.map((p) => p.intermediaryNodeId)
+            const pendingPeers = crossPeers.filter((p) => pending.includes(p.intermediaryNodeId))
+            if (pending.length === 0) return null
+            return (
+              <div data-testid="cross-clarify-multi-source-banner">
+                <NoticeBanner tone="info" size="compact">
+                  <div>{t('crossClarify.multiSourceBanner', { remaining: pending.length })}</div>
+                  {pendingPeers.length > 0 && (
+                    <ul>
+                      {pendingPeers.map((p) => (
+                        <li key={p.id}>
+                          <Link
+                            to="/clarify/$nodeRunId"
+                            params={{ nodeRunId: p.intermediaryNodeRunId }}
+                            className="link"
+                            data-testid={`cross-clarify-multi-source-link-${p.intermediaryNodeId}`}
+                          >
+                            {/* 用户 2026-07-02: 显示节点名（testid 保持原 id 以稳定测试锚点）。 */}
+                            {t('crossClarify.multiSourcePendingLinkLabel')}:{' '}
+                            {nodeName(p.intermediaryNodeId)}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </NoticeBanner>
+              </div>
+            )
+          })()}
 
-      {/* RFC-202 T6: a sealed round (task-terminal sweep or workgroup
+        {/* RFC-202 T6: a sealed round (task-terminal sweep or workgroup
           autonomous dismissal) needs a human-readable reason — the old page
           rendered a bare read-only form whose footer still claimed the draft
           was safely saved. Copy branches on the owning task's status. */}
-      {/* RFC-217 T9: terminatedAs is the normalized terminal discriminator —
+        {/* RFC-217 T9: terminatedAs is the normalized terminal discriminator —
           non-null exactly for the {canceled, abandoned} pair. */}
-      {s.terminatedAs !== null &&
-        (() => {
-          // Codex impl-gate P2: branch on the TRANSITION-TIME cause the
-          // backend recorded (sealedCause), never the task's mutable current
-          // status — a canceled-then-retried task would otherwise relabel its
-          // historical round as an autonomous dismissal (and vice versa).
-          const cause = s.sealedCause
-          const copy =
-            cause !== undefined && cause.startsWith('task-')
-              ? t('clarify.roundSealedByTaskTerminal')
-              : cause === 'wg-clarify-disabled'
-                ? t('clarify.roundDismissedNoHuman')
-                : t('clarify.detail.roundSealedFooter')
-          return (
-            <NoticeBanner tone="info" size="compact" className="clarify-round-sealed">
-              {copy}
-            </NoticeBanner>
-          )
-        })()}
+        {s.terminatedAs !== null &&
+          (() => {
+            // Codex impl-gate P2: branch on the TRANSITION-TIME cause the
+            // backend recorded (sealedCause), never the task's mutable current
+            // status — a canceled-then-retried task would otherwise relabel its
+            // historical round as an autonomous dismissal (and vice versa).
+            const cause = s.sealedCause
+            const copy =
+              cause !== undefined && cause.startsWith('task-')
+                ? t('clarify.roundSealedByTaskTerminal')
+                : cause === 'wg-clarify-disabled'
+                  ? t('clarify.roundDismissedNoHuman')
+                  : t('clarify.detail.roundSealedFooter')
+            return (
+              <NoticeBanner tone="info" size="compact" className="clarify-round-sealed">
+                {copy}
+              </NoticeBanner>
+            )
+          })()}
+      </FeedbackStack>
 
       {/* RFC-056: abandoned chip — surfaces when the session was answered
           but its parent task failed before the designer consumed the

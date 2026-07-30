@@ -17,6 +17,7 @@ import { api } from '@/api/client'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
@@ -220,15 +221,17 @@ export function UsersPage(
         />
       ) : (
         <>
-          {notice !== null && (
-            <NoticeBanner
-              tone="success"
-              size="compact"
-              dismiss={{ label: t('common.close'), onDismiss: () => setNotice(null) }}
-            >
-              {t(`users.notice.${notice}`)}
-            </NoticeBanner>
-          )}
+          <FeedbackStack variant="section">
+            {notice !== null && (
+              <NoticeBanner
+                tone="success"
+                size="compact"
+                dismiss={{ label: t('common.close'), onDismiss: () => setNotice(null) }}
+              >
+                {t(`users.notice.${notice}`)}
+              </NoticeBanner>
+            )}
+          </FeedbackStack>
           <QueryState
             query={list}
             data={list.data ?? null}

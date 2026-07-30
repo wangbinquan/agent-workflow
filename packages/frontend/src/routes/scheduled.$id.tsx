@@ -9,6 +9,7 @@ import { api, type ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
@@ -147,35 +148,37 @@ function ScheduledDetailPage() {
         }
       />
 
-      {detailQ.error != null && (
-        <ErrorBanner error={detailQ.error} onRetry={() => void detailQ.refetch()} />
-      )}
+      <FeedbackStack variant="section">
+        {detailQ.error != null && (
+          <ErrorBanner error={detailQ.error} onRetry={() => void detailQ.refetch()} />
+        )}
 
-      {/* RFC-165: degraded/legacy rows surface the repair guidance + the
-          per-field parse reason so the user knows WHAT to fix. */}
-      {(s.launchPayload === null || s.scheduleSpec === null) && (
-        <NoticeBanner tone="warning" size="compact" className="info-box--muted">
-          <div data-testid="scheduled-degraded-banner">
-            <div>{t('scheduled.degradedBanner')}</div>
-            {s.migrationError?.launchPayload != null && (
-              <div className="muted">{s.migrationError.launchPayload}</div>
-            )}
-            {s.migrationError?.scheduleSpec != null && (
-              <div className="muted">{s.migrationError.scheduleSpec}</div>
-            )}
+        {/* RFC-165: degraded/legacy rows surface the repair guidance + the
+            per-field parse reason so the user knows WHAT to fix. */}
+        {(s.launchPayload === null || s.scheduleSpec === null) && (
+          <NoticeBanner tone="warning" size="compact" className="info-box--muted">
+            <div data-testid="scheduled-degraded-banner">
+              <div>{t('scheduled.degradedBanner')}</div>
+              {s.migrationError?.launchPayload != null && (
+                <div className="muted">{s.migrationError.launchPayload}</div>
+              )}
+              {s.migrationError?.scheduleSpec != null && (
+                <div className="muted">{s.migrationError.scheduleSpec}</div>
+              )}
+            </div>
+          </NoticeBanner>
+        )}
+
+        {/* Mutation errors render on their own row below the header — never squeezed
+            into the top-right action cluster (mirrors DetailHeaderActions). */}
+        {runNow.error != null && (
+          <div data-testid="scheduled-run-now-error">
+            <ErrorBanner error={runNow.error} />
           </div>
-        </NoticeBanner>
-      )}
-
-      {/* Mutation errors render on their own row below the header — never squeezed
-          into the top-right action cluster (mirrors DetailHeaderActions). */}
-      {runNow.error != null && (
-        <div data-testid="scheduled-run-now-error">
-          <ErrorBanner error={runNow.error} />
-        </div>
-      )}
-      {toggle.error != null && <ErrorBanner error={toggle.error} />}
-      {del.error != null && <ErrorBanner error={del.error} />}
+        )}
+        {toggle.error != null && <ErrorBanner error={toggle.error} />}
+        {del.error != null && <ErrorBanner error={del.error} />}
+      </FeedbackStack>
 
       <section className="page__section">
         <dl className="detail-grid">
@@ -207,9 +210,11 @@ function ScheduledDetailPage() {
       <section className="page__section">
         <h2>{t('scheduled.runHistory')}</h2>
         {historyQ.isLoading && <LoadingState size="compact" />}
-        {historyQ.error !== null && historyQ.error !== undefined && (
-          <ErrorBanner error={historyQ.error} onRetry={() => void historyQ.refetch()} />
-        )}
+        <FeedbackStack variant="section">
+          {historyQ.error !== null && historyQ.error !== undefined && (
+            <ErrorBanner error={historyQ.error} onRetry={() => void historyQ.refetch()} />
+          )}
+        </FeedbackStack>
         {historyQ.data !== undefined && historyQ.data.length === 0 && (
           <EmptyState size="compact" title={t('scheduled.noRuns')} />
         )}

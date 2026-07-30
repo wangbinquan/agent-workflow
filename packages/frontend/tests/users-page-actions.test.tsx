@@ -300,6 +300,30 @@ describe('/users responsive directory actions', () => {
     expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({ status: 'active' })
   })
 
+  // User-reported regression (2026-07-30): the transient success banner used
+  // to touch the directory search toolbar because QueryState renders a
+  // fragment and the page itself does not provide sibling spacing.
+  test('keeps transient success feedback separated from the directory filters', async () => {
+    installFetch(route)
+    renderPage()
+    fireEvent.click(await screen.findByTestId('user-manage-u-dave'))
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Enable' }),
+    )
+    const confirm = await screen.findByRole('dialog', { name: /Enable Dave/ })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Enable' }))
+
+    const noticeText = await screen.findByText(enUS.users.notice.enabled)
+    const banner = noticeText.closest('.notice-banner')
+    const feedbackStack = banner?.parentElement
+    expect(feedbackStack?.classList.contains('feedback-stack')).toBe(true)
+    expect(feedbackStack?.classList.contains('feedback-stack--section')).toBe(true)
+    expect(feedbackStack?.nextElementSibling?.classList.contains('user-directory')).toBe(true)
+    expect(
+      feedbackStack?.nextElementSibling?.querySelector('.user-directory__toolbar'),
+    ).not.toBeNull()
+  })
+
   test('search and status filters retain the toolbar and expose a clear path', async () => {
     installFetch(route)
     renderPage()

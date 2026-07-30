@@ -17,6 +17,7 @@ import { Dialog } from '@/components/Dialog'
 import { DiffViewer } from '@/components/DiffViewer'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { TableViewport } from '@/components/TableViewport'
 
@@ -109,12 +110,14 @@ export function SkillVersionHistory({
         <EmptyState size="compact" title={t('skills.versionsEmpty')} />
       ) : (
         <>
-          {versions.error !== null && versions.error !== undefined && (
-            <ErrorBanner error={versions.error} onRetry={() => void versions.refetch()} />
-          )}
-          {restore.error !== null && restore.error !== undefined && (
-            <ErrorBanner error={restore.error} />
-          )}
+          <FeedbackStack variant="section">
+            {versions.error !== null && versions.error !== undefined && (
+              <ErrorBanner error={versions.error} onRetry={() => void versions.refetch()} />
+            )}
+            {restore.error !== null && restore.error !== undefined && (
+              <ErrorBanner error={restore.error} />
+            )}
+          </FeedbackStack>
           <TableViewport label={t('skills.versionsSection')} minWidth="lg">
             <table className="data-table data-table--compact">
               <tbody>

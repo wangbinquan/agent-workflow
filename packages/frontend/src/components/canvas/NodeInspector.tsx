@@ -20,6 +20,7 @@ import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TabBar, tabDomIds, type TabDef } from '@/components/TabBar'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { computePorts } from './WorkflowCanvas'
 import { nodeTitle } from './nodeTitle'
 import { PromptPreview } from './PromptPreview'
@@ -251,11 +252,13 @@ export function NodeInspector({
           </dd>
         </dl>
       </details>
-      {transitionNotice !== null && (
-        <NoticeBanner tone="warning" size="compact">
-          {transitionNotice}
-        </NoticeBanner>
-      )}
+      <FeedbackStack variant="section">
+        {transitionNotice !== null && (
+          <NoticeBanner tone="warning" size="compact">
+            {transitionNotice}
+          </NoticeBanner>
+        )}
+      </FeedbackStack>
       <TabBar<Tab>
         variant="inspector"
         tabs={inspectorTabs}

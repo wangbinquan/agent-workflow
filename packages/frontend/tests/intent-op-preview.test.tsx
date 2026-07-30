@@ -97,6 +97,26 @@ describe('RFC-234 IntentOpPreview', () => {
     expect(screen.getByText('审计员')).toBeTruthy()
   })
 
+  test('keeps op validation feedback separated from the rich preview', () => {
+    renderPreview(
+      {
+        opId: 'op-validation',
+        action: 'create',
+        resourceType: 'skill',
+        tempRef: '$new:sk',
+        payload: { name: 'sk', description: '', bodyMd: '', files: [] },
+      },
+      ['Name is required'],
+    )
+
+    const banner = screen.getByText('Name is required').closest('.notice-banner')
+    expect(banner?.parentElement?.classList.contains('feedback-stack')).toBe(true)
+    expect(banner?.parentElement?.classList.contains('feedback-stack--section')).toBe(true)
+    expect(banner?.parentElement?.nextElementSibling).toBe(
+      screen.getByTestId('intent-preview-skill'),
+    )
+  })
+
   test('workflow op renders intent-preview canvas; invalid definition degrades', () => {
     renderPreview({
       opId: 'op-3',

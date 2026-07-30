@@ -21,6 +21,7 @@ import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { McpFields } from '@/components/McpFields'
 import { McpInventoryPanel } from '@/components/mcps/McpInventoryPanel'
@@ -210,9 +211,11 @@ function McpDetailPage() {
         errors={[save.error, del.error]}
       />
 
-      {query.error !== null && query.error !== undefined && (
-        <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-      )}
+      <FeedbackStack variant="section">
+        {query.error !== null && query.error !== undefined && (
+          <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
+        )}
+      </FeedbackStack>
 
       <div className="agent-form">
         <TabBar

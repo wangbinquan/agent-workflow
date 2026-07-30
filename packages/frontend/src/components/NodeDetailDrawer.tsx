@@ -38,6 +38,7 @@ import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import { parseRfc026Event } from '@/lib/rfc026-events'
 import { parseRfc031Event } from '@/lib/rfc031-events'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 
 interface Props {
   taskId: string
@@ -204,7 +205,9 @@ export function NodeDetailDrawer({
           </label>
         </div>
       )}
-      {retry.error !== null && retry.error !== undefined && <ErrorBanner error={retry.error} />}
+      <FeedbackStack variant="section" className="stack-top--sm">
+        {retry.error !== null && retry.error !== undefined && <ErrorBanner error={retry.error} />}
+      </FeedbackStack>
       {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
         {tabs.map(({ key }) => {
@@ -527,7 +530,9 @@ function EventsTab({
         ))}
       </div>
       {query.isLoading && <LoadingState size="compact" />}
-      {query.error !== null && query.error !== undefined && <ErrorBanner error={query.error} />}
+      <FeedbackStack variant="section" className="stack-top--sm">
+        {query.error !== null && query.error !== undefined && <ErrorBanner error={query.error} />}
+      </FeedbackStack>
       {visible.length === 0 && !query.isLoading && (
         <div className="muted">{t('nodeDrawer.noEventsMatch')}</div>
       )}

@@ -17,6 +17,7 @@ import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { Field, TextInput } from '@/components/Form'
 import { FuseDialog } from '@/components/fusion/FuseDialog'
 import { LoadingState } from '@/components/LoadingState'
@@ -917,42 +918,44 @@ function SkillDetailPage() {
         errors={[saveError, del.error]}
       />
 
-      {(meta.error !== null && meta.error !== undefined) ||
-      (content.error !== null && content.error !== undefined) ? (
-        <ErrorBanner error={meta.error ?? content.error} onRetry={retryDetail} />
-      ) : null}
+      <FeedbackStack variant="section">
+        {(meta.error !== null && meta.error !== undefined) ||
+        (content.error !== null && content.error !== undefined) ? (
+          <ErrorBanner error={meta.error ?? content.error} onRetry={retryDetail} />
+        ) : null}
 
-      {aggregate.outcomeUnknown && (
-        <NoticeBanner
-          tone="warning"
-          size="compact"
-          title={t('skills.saveOutcomeUnknown')}
-          action={
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => void handleRecheck()}
-              disabled={rechecking}
-            >
-              {rechecking ? t('skills.recheckingOutcome') : t('skills.recheckOutcome')}
-            </button>
-          }
-        >
-          {t('skills.saveOutcomeUnknownDescription')}
-        </NoticeBanner>
-      )}
-      {!aggregate.outcomeUnknown && aggregate.stale && (
-        <NoticeBanner tone="warning" size="compact">
-          {t('skills.saveStaleWarning')}
-        </NoticeBanner>
-      )}
-      {saveSummary !== null && (
-        <NoticeBanner tone={saveSummary.remaining === 0 ? 'success' : 'warning'} size="compact">
-          {saveSummary.remaining === 0
-            ? t('skills.saveAllComplete', { count: saveSummary.saved })
-            : t('skills.savePartial', saveSummary)}
-        </NoticeBanner>
-      )}
+        {aggregate.outcomeUnknown && (
+          <NoticeBanner
+            tone="warning"
+            size="compact"
+            title={t('skills.saveOutcomeUnknown')}
+            action={
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => void handleRecheck()}
+                disabled={rechecking}
+              >
+                {rechecking ? t('skills.recheckingOutcome') : t('skills.recheckOutcome')}
+              </button>
+            }
+          >
+            {t('skills.saveOutcomeUnknownDescription')}
+          </NoticeBanner>
+        )}
+        {!aggregate.outcomeUnknown && aggregate.stale && (
+          <NoticeBanner tone="warning" size="compact">
+            {t('skills.saveStaleWarning')}
+          </NoticeBanner>
+        )}
+        {saveSummary !== null && (
+          <NoticeBanner tone={saveSummary.remaining === 0 ? 'success' : 'warning'} size="compact">
+            {saveSummary.remaining === 0
+              ? t('skills.saveAllComplete', { count: saveSummary.saved })
+              : t('skills.savePartial', saveSummary)}
+          </NoticeBanner>
+        )}
+      </FeedbackStack>
 
       <div className="agent-form">
         <TabBar

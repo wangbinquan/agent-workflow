@@ -113,4 +113,14 @@ describe('shared control density and feedback rhythm', () => {
     expect(status).toContain('display: grid')
     expect(status).toContain('gap: var(--space-2)')
   })
+
+  test('shared feedback stacks separate banners from each other and from following content', () => {
+    const stack = rule('.feedback-stack')
+    expect(stack).toContain('display: flex')
+    expect(stack).toContain('flex-direction: column')
+    expect(stack).toContain('gap: var(--space-2)')
+
+    const section = rule('.feedback-stack--section')
+    expect(section).toContain('margin-bottom: var(--space-4)')
+  })
 })

@@ -16,6 +16,7 @@ import { AclPanel } from '@/components/AclPanel'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
@@ -710,17 +711,19 @@ export function WorkgroupEditor(props: {
         }
       />
 
-      {[del.error, launch.error, saveCopy.error]
-        .filter((error) => error !== null && error !== undefined)
-        .map((error, index) => (
-          <ErrorBanner error={error} key={index} />
-        ))}
+      <FeedbackStack variant="section">
+        {[del.error, launch.error, saveCopy.error]
+          .filter((error) => error !== null && error !== undefined)
+          .map((error, index) => (
+            <ErrorBanner error={error} key={index} />
+          ))}
 
-      {props.queryError !== null &&
-        props.queryError !== undefined &&
-        !isAccessLoss(props.queryError) && (
-          <ErrorBanner error={props.queryError} onRetry={() => void props.refetch()} />
-        )}
+        {props.queryError !== null &&
+          props.queryError !== undefined &&
+          !isAccessLoss(props.queryError) && (
+            <ErrorBanner error={props.queryError} onRetry={() => void props.refetch()} />
+          )}
+      </FeedbackStack>
 
       <div className="workgroup-editor-status-stack" data-testid="workgroup-status-stack">
         {workgroupDraftHasNotice(controller.state) && (

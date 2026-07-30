@@ -159,5 +159,13 @@ describe('McpInventoryPanel', () => {
     expect(screen.getByTestId('mcp-probe-status-unknown')).toBeTruthy()
     expect(screen.getAllByText('The saved probe result is out of date.')).toHaveLength(2)
     expect(screen.queryByTestId('mcp-tool-row-query')).toBeNull()
+    const staleBanner = screen
+      .getAllByText('The saved probe result is out of date.')[0]
+      ?.closest('.notice-banner')
+    expect(staleBanner?.parentElement?.classList.contains('feedback-stack')).toBe(true)
+    expect(staleBanner?.parentElement?.classList.contains('feedback-stack--section')).toBe(true)
+    expect(staleBanner?.parentElement?.nextElementSibling).toBe(
+      screen.getByTestId('mcp-probe-expired'),
+    )
   })
 })

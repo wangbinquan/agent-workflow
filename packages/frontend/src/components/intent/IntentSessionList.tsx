@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Card } from '@/components/Card'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { RelativeTime } from '@/components/RelativeTime'
 import { StatusChip } from '@/components/StatusChip'
@@ -22,9 +23,11 @@ export function IntentSessionList(props: {
         </div>
       </div>
       {props.loading ? <LoadingState size="compact" /> : null}
-      {props.error !== null && props.error !== undefined ? (
-        <ErrorBanner error={props.error} />
-      ) : null}
+      <FeedbackStack variant="section">
+        {props.error !== null && props.error !== undefined ? (
+          <ErrorBanner error={props.error} />
+        ) : null}
+      </FeedbackStack>
       {props.sessions !== undefined && props.sessions.length === 0 ? (
         <EmptyState
           size="compact"

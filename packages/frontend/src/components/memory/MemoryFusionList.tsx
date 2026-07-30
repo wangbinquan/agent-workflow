@@ -16,6 +16,7 @@ import type { Fusion } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 
 export function MemoryFusionList() {
@@ -44,11 +45,13 @@ export function MemoryFusionList() {
   if (rows.length === 0) {
     return (
       <>
-        {fusionsError && (
-          <div data-testid="memory-fusion-error">
-            <ErrorBanner error={fusions.error} onRetry={() => void fusions.refetch()} />
-          </div>
-        )}
+        <FeedbackStack variant="section">
+          {fusionsError && (
+            <div data-testid="memory-fusion-error">
+              <ErrorBanner error={fusions.error} onRetry={() => void fusions.refetch()} />
+            </div>
+          )}
+        </FeedbackStack>
         <EmptyState
           title={t('memory.fusion.empty')}
           description={t('memory.fusion.emptyDescription')}
@@ -60,11 +63,13 @@ export function MemoryFusionList() {
 
   return (
     <>
-      {fusionsError && (
-        <div data-testid="memory-fusion-error">
-          <ErrorBanner error={fusions.error} onRetry={() => void fusions.refetch()} />
-        </div>
-      )}
+      <FeedbackStack variant="section">
+        {fusionsError && (
+          <div data-testid="memory-fusion-error">
+            <ErrorBanner error={fusions.error} onRetry={() => void fusions.refetch()} />
+          </div>
+        )}
+      </FeedbackStack>
       <ul className="memory-fusion-list" data-testid="memory-fusion-list">
         {rows.map((f) => {
           // Prefer the agent-declared incorporated set once it lands; fall back

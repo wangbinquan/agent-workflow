@@ -12,6 +12,7 @@ import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { MemoryConflictCompareDialog } from './MemoryConflictCompareDialog'
 import { MemoryEditDialog } from './MemoryEditDialog'
@@ -69,9 +70,11 @@ export function MemoryApprovalQueue() {
   if (rows.length === 0) {
     return (
       <>
-        {candidatesError && (
-          <ErrorBanner error={candidates.error} onRetry={() => void candidates.refetch()} />
-        )}
+        <FeedbackStack variant="section">
+          {candidatesError && (
+            <ErrorBanner error={candidates.error} onRetry={() => void candidates.refetch()} />
+          )}
+        </FeedbackStack>
         <EmptyState
           title={t('memory.emptyStates.candidates')}
           description={t('memory.emptyStates.candidatesDescription')}

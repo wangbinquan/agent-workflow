@@ -15,6 +15,7 @@ import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PluginFields, focusFirstPluginFieldError } from '@/components/PluginFields'
@@ -541,9 +542,11 @@ function PluginDetailPage() {
         errors={[save.error, del.error]}
       />
 
-      {query.error !== null && query.error !== undefined && (
-        <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-      )}
+      <FeedbackStack variant="section">
+        {query.error !== null && query.error !== undefined && (
+          <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
+        )}
+      </FeedbackStack>
 
       <div className="agent-form">
         <TabBar

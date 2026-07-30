@@ -17,6 +17,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
@@ -109,12 +110,14 @@ export function ResourceGalleryPage(props: ResourceGalleryPageProps): ReactEleme
   return (
     <div className="page page--gallery">
       <PageHeader title={props.title} actions={headerActions} />
-      {hasNotice && props.notice}
+      <FeedbackStack variant="section">
+        {hasNotice && props.notice}
+        {props.error !== null && props.error !== undefined && (
+          <ErrorBanner error={props.error} onRetry={props.onRetry} />
+        )}
+      </FeedbackStack>
 
       {props.isLoading && <LoadingState data-testid={props.loadingTestid} />}
-      {props.error !== null && props.error !== undefined && (
-        <ErrorBanner error={props.error} onRetry={props.onRetry} />
-      )}
       {isGenuineEmpty && (
         <EmptyState
           title={props.emptyListText}

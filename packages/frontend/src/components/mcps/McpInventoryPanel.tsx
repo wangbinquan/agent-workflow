@@ -16,6 +16,7 @@ import type { TFunction } from 'i18next'
 import type { McpProbe, McpToolInfo } from '@agent-workflow/shared'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { McpProbeStatusChip, type McpProbeUiStatus } from '@/components/McpProbeStatusChip'
 import { NoticeBanner } from '@/components/NoticeBanner'
@@ -154,17 +155,19 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
         </span>
       </header>
 
-      {preparationError !== null && <ErrorBanner error={preparationError} />}
-      {probeMut.resultStale && (
-        <NoticeBanner tone="warning" size="compact">
-          {t('mcps.probe.resultStale')}
-        </NoticeBanner>
-      )}
-      {persistedProbeExpired && !probeMut.resultStale && (
-        <NoticeBanner tone="warning" size="compact">
-          {t('mcps.probe.savedResultExpired')}
-        </NoticeBanner>
-      )}
+      <FeedbackStack variant="section">
+        {preparationError !== null && <ErrorBanner error={preparationError} />}
+        {probeMut.resultStale && (
+          <NoticeBanner tone="warning" size="compact">
+            {t('mcps.probe.resultStale')}
+          </NoticeBanner>
+        )}
+        {persistedProbeExpired && !probeMut.resultStale && (
+          <NoticeBanner tone="warning" size="compact">
+            {t('mcps.probe.savedResultExpired')}
+          </NoticeBanner>
+        )}
+      </FeedbackStack>
       {isProbing ? (
         <LoadingState label={t('mcps.probe.btnRunning')} data-testid="mcp-probe-running" />
       ) : probeMut.error !== null ? (

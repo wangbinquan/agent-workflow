@@ -36,6 +36,7 @@ import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { validateAgentPortState } from '@/lib/agent-ports'
 import { Route as agentsRoute } from './agents'
@@ -245,9 +246,11 @@ function AgentDetailPage() {
           onNavigate={setActiveTab}
         />
       )}
-      {draft !== undefined && query.error !== null && query.error !== undefined && (
-        <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-      )}
+      <FeedbackStack variant="section">
+        {draft !== undefined && query.error !== null && query.error !== undefined && (
+          <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
+        )}
+      </FeedbackStack>
       <AgentForm
         value={draft ?? emptyAgent()}
         onChange={setDraft}

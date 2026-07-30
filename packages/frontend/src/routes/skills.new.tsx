@@ -14,6 +14,7 @@ import { SKILL_NAME_RE } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { ImportZipPanel, type ImportZipPanelHandle } from '@/components/skills/ImportZipPanel'
 import { PageHeader } from '@/components/PageHeader'
 import {
@@ -195,9 +196,11 @@ function SkillCreatePage() {
                     />
                   </Field>
                 </div>
-                {create.error !== null && create.error !== undefined && (
-                  <ErrorBanner error={create.error} />
-                )}
+                <FeedbackStack className="stack-top--sm">
+                  {create.error !== null && create.error !== undefined && (
+                    <ErrorBanner error={create.error} />
+                  )}
+                </FeedbackStack>
               </>
             ),
           },

@@ -3,6 +3,7 @@ import type { IntentTurnDto } from '@agent-workflow/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { INTENT_QUERY_KEYS } from '@/hooks/useIntentSessionsWs'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { StatusChip } from '@/components/StatusChip'
@@ -72,12 +73,14 @@ export function IntentTurnSession(props: {
       </button>
       {open ? (
         <div id={contentId} className="intent-turn-session__content">
-          {execution.captureState === 'truncated' ? (
-            <NoticeBanner tone="warning">{t('intent.executionTruncatedNotice')}</NoticeBanner>
-          ) : null}
-          {execution.captureState === 'incomplete' ? (
-            <NoticeBanner tone="warning">{t('intent.executionIncompleteNotice')}</NoticeBanner>
-          ) : null}
+          <FeedbackStack variant="section">
+            {execution.captureState === 'truncated' ? (
+              <NoticeBanner tone="warning">{t('intent.executionTruncatedNotice')}</NoticeBanner>
+            ) : null}
+            {execution.captureState === 'incomplete' ? (
+              <NoticeBanner tone="warning">{t('intent.executionIncompleteNotice')}</NoticeBanner>
+            ) : null}
+          </FeedbackStack>
           <SessionConversationPanel
             queryKey={INTENT_QUERY_KEYS.turnSession(props.sessionId, props.turn.id)}
             load={(signal) =>

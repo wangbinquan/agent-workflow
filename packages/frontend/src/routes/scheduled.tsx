@@ -22,6 +22,7 @@ import { api, type ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { Switch } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
@@ -97,11 +98,13 @@ function ScheduledPage() {
       />
 
       {isLoading && <LoadingState data-testid="scheduled-loading" />}
-      {error !== null && error !== undefined && (
-        <ErrorBanner error={error} onRetry={() => void refetch()} />
-      )}
-      {toggle.error != null && <ErrorBanner error={toggle.error} />}
-      {runNow.error != null && <ErrorBanner error={runNow.error} />}
+      <FeedbackStack variant="section">
+        {error !== null && error !== undefined && (
+          <ErrorBanner error={error} onRetry={() => void refetch()} />
+        )}
+        {toggle.error != null && <ErrorBanner error={toggle.error} />}
+        {runNow.error != null && <ErrorBanner error={runNow.error} />}
+      </FeedbackStack>
       {isInitialEmpty && (
         <EmptyState
           title={t('scheduled.empty')}

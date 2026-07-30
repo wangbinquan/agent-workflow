@@ -39,6 +39,7 @@ import { Dialog } from '@/components/Dialog'
 import { Segmented } from '@/components/Segmented'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { TextArea, Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
@@ -1542,12 +1543,14 @@ function RenderingTab({ config }: TabProps) {
             ? t('settings.renderingTestRunning')
             : t('settings.renderingTestButton')}
         </button>
-        {testState.kind === 'success' && (
-          <NoticeBanner tone="success" size="compact">
-            {testState.msg}
-          </NoticeBanner>
-        )}
-        {testState.kind === 'failure' && <ErrorBanner error={testState.msg} />}
+        <FeedbackStack className="stack-top--sm">
+          {testState.kind === 'success' && (
+            <NoticeBanner tone="success" size="compact">
+              {testState.msg}
+            </NoticeBanner>
+          )}
+          {testState.kind === 'failure' && <ErrorBanner error={testState.msg} />}
+        </FeedbackStack>
       </div>
     </SectionForm>
   )
@@ -1702,7 +1705,9 @@ function AuthenticationTab() {
                   : t('settings.auth.bootstrapRetired')}
               </StatusChip>
             </div>
-            {updateLoginPolicy.error !== null && <ErrorBanner error={updateLoginPolicy.error} />}
+            <FeedbackStack className="stack-top--sm">
+              {updateLoginPolicy.error !== null && <ErrorBanner error={updateLoginPolicy.error} />}
+            </FeedbackStack>
           </div>
         )}
       </Card>
