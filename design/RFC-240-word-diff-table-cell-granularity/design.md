@@ -1,4 +1,4 @@
-# RFC-240 — 技术设计（v5，设计门四轮修订后）
+# RFC-240 — 技术设计（v6,设计门五轮修订后）
 
 ## 接口契约
 
@@ -70,8 +70,11 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 
 0. **cell 计数与骨架定义**(设计门三轮 P1,四轮 P1 补缩进):cell 列表 =
    `splitTableCells(row)` 的 parts **剥去首哑段**(行首缩进 + `|` 之前
-   的空白段;`TABLE_ROW_RE` 允许 0–3 空格缩进)**与尾哑段**(行以未转义
-   `|` 结尾时其后的空白段)。变更行(merged / 整行 DEL / 整行 INS)以
+   的空白段)**与尾哑段**(行以未转义 `|` 结尾时其后的空白段)。哑段剥除
+   **仅当该端存在未转义 pipe**:行(尤其分隔符行)允许无首/尾 pipe
+   (`---|---` 是 GFM 与 `TABLE_SEP_RE` 都接受的合法分隔行),此时该端
+   首/尾 part 是真实 cell,不得剥除(设计门五轮 P2);声明列数按同规则
+   计数。`TABLE_ROW_RE` 允许 0–3 空格缩进。变更行(merged / 整行 DEL / 整行 INS)以
    **规范骨架**输出:`indent + | cell₁ | cell₂ | … |`(首尾 pipe 齐全,
    cell 之间单 `|`),其中 **indent = 该行来源侧的原始行首空白**
    (merged / INS 行取新侧、DEL 行取旧侧)——列表容器内 2–3 空格缩进的
@@ -87,8 +90,11 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    cell,单表内 marker 不可见(一轮 P1)。放弃 = 返回 null,现行为呈现。
 2b. **进场即原子化**(设计门三轮 P1 时机闭合):对两侧每个 body cell 的
    inner,先以局部 allocator 依次原子化 inline code(升级版
-   `INLINE_CODE_RE`)、行内链接、行内数学式(`$...$`,单行、内容无 `$`,
-   两端非空白;数学式纳保护集是三轮 P1:marker 落入 `inlineMath.value`
+   `INLINE_CODE_RE`)、**行内图片**(`![label](url)`,约束同链接,`!` 前
+   反斜杠奇偶判定——设计门五轮 P1:图片若被 link 正则从 `[` 处劈开会
+   还原成字面 `!` + 链接,排除又会让 marker 落进 `image.url` 被单侧化;
+   独立原子类按整体 del/ins 呈现)、行内链接、行内数学式(`$...$`,
+   单行、内容无 `$`,两端非空白;数学式纳保护集是三轮 P1:marker 落入 `inlineMath.value`
    会被 `resolveMarkedString` 单侧化,零可见高亮)。三类 opener 的转义
    判定统一用**反斜杠奇偶**(与 `splitTableCells` 同规则,四轮 P1):
    奇数个前导反斜杠 = 字面文本不原子化(`\$x$`、`\[x](u)`),偶数个 =
@@ -126,12 +132,15 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    - 每对 cell:逐字节相等 → 原样;不等 → lead/tail 空白外置,inner
      词级 diff(`tokenizeForWordDiff` + `diffArrays` +
      `trimCommonAffixes`),del/ins 段分别包 marker,context 原样。
-     **定界符-only 降级**(四轮 P1):若 diff 的全部 del/ins token 都是
-     标点/符号类(`/^[\p{P}\p{S}]+$/u`,如 `**same**`→`*same*` 只变
-     `*`),marker 会落进 emphasis 定界符、被 remark 解析拆散进空子树、
-     `remarkDiffMarkers` 状态机摊平后零可见高亮且丢格式。此时该 cell
-     整体降级为「旧 inner 整红 + 新 inner 整绿」(marker 包完整 span,
-     emphasis 结构与高亮都保留)。
+     **定界符触碰即整 cell 降级**(四轮 P1,五轮 P1 扩展):若 diff 的
+     **任一** del/ins token 含 emphasis/删除线定界字符(`*`/`_`/`~`),
+     该 cell 整体降级为「旧 inner 整红 + 新 inner 整绿」(marker 包完整
+     span,emphasis 结构与高亮都保留)。仅 token 级包 marker 会让
+     remark 在 marker 插件之前解析定界符、把 marker 拆散进空子树,轻则
+     零可见高亮(`**same**`→`*same*`),重则旧侧格式碎裂
+     (`**old**`→`*new*` 渲染成绿斜体 new + 字面红 `old**`)。代价:
+     cell 正文含字面 `*`/`_`/`~` 且同 cell 另有文字变更时也整 cell
+     红绿——合法渲染,仅粒度变粗,可接受。
    - **原子化在 §2b 已完成**(code → link → math 顺序;link 的 label /
      math 的内容里含先前原子的 ph 时允许嵌套)。词级 diff 后**函数内
      循环还原至不动点**:反复替换已发放码点直到 merged 无任何已发放
@@ -217,10 +226,13 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 2. 多 cell / 多行修改互不串扰;CJK cell;inline code cell(含「双反引
    号定界、内容有单反引号」的多反引号形态,code span 结构完整);转义
    奇偶:`\\` 后 code span 原子化生效、`\$x$`/`\[x](u)` 字面文本不被
-   误原子化(四轮 P1);**定界符-only 变更**(`**same**`→`*same*`)→
-   cell 整体旧红+新绿、emphasis 结构保留(四轮 P1);**列表容器内缩进
-   表**(`- item` 下 2 空格缩进表)cell 修改 → 单表保持在容器内、无
-   裸 `|`(四轮 P1)。
+   误原子化(四轮 P1);**定界符-only 与混合变更**(`**same**`→`*same*`
+   与 `**old**`→`*new*`)→ cell 整体旧红+新绿、emphasis 结构两侧都
+   保留(四轮 + 五轮 P1);**图片 cell**(`![x](old.png)`→
+   `![x](new.png)`)→ 旧图红 + 新图绿、image 结构完整(五轮 P1);
+   **列表容器内缩进表**cell 修改 → 单表保持在容器内、无裸 `|`
+   (四轮 P1);**无首 pipe 分隔行**的表 → cell 计数正确、仍走细化
+   (五轮 P2)。
 3. 行增/删 → 单表内整行绿/红(源码中存在的 cell 全包 marker);**全空
    cell 行**增删 → 色块占位可见;**零 cell 裸 `|` 行**增删 → 合成色块
    cell 可见(四轮 P2);**短行**(cell 数少于声明列)增删 → 存在的
@@ -261,6 +273,12 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 
 ## 设计门记录
 
+- 五轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 2 P1 / 2 P2;
+  主链连续第三轮零新 finding):全部折入本 v6——定界符降级触发条件从
+  「全部变更 token 为标点」扩为「任一变更 token 含 `*`/`_`/`~`」(混合
+  变更不再碎裂 emphasis)、图片独立原子类(code→image→link→math)、
+  哑段剥除限定「该端存在未转义 pipe」(无首 pipe 分隔行计数正确)、
+  proposal/plan 的 identical 验收措辞与 design #15 对齐。
 - 四轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 3 P1 / 1 P2;
   配对/占位符主链连续第二轮零新 finding):全部折入本 v5——规范骨架
   保留来源侧原始缩进(列表容器内表不脱容器)、三类原子 opener 统一

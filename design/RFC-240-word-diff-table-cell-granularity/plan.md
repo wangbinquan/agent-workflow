@@ -52,7 +52,8 @@
 - [ ] 既有 diff 相关测试:除上节列明的**同键 word 档**断言按新语义有意
       更新外,其余(结构变化 / 行块档 / 正文 / identical / 兜底)零改动
       零回归。
-- [ ] identical 逐字节还原不变量全档保持。
+- [ ] identical 不变量按 design §测试策略 #15 的既有同形语义保持
+      (word/line 逐字节于换行结尾输入;block 规范化等价)。
 - [ ] `bun run typecheck && bun run lint && bun run test && bun run format:check`
       全绿;push 后按 exact-SHA 查 CI。
 - [ ] Codex 实现门跑净(0 open P0/P1;P2 修复或书面取舍)。
