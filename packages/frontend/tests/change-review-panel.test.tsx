@@ -148,7 +148,8 @@ function renderPanel(
     structuralData?: StructuralDiff
     structuralError?: unknown
     storageKey?: string
-  } = {}) {
+  } = {},
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
