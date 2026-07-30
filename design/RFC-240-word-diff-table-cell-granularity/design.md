@@ -1,4 +1,4 @@
-# RFC-240 — 技术设计（v7,设计门六轮修订后）
+# RFC-240 — 技术设计（v8,设计门七轮修订后）
 
 ## 接口契约
 
@@ -89,13 +89,15 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
    (b) 任一侧任一 body 行 cell 数超过声明列数时整对放弃——GFM 截断超列
    cell,单表内 marker 不可见(一轮 P1)。放弃 = 返回 null,现行为呈现。
 2b. **进场即原子化**(设计门三轮 P1 时机闭合):对两侧每个 body cell 的
-   inner,先以局部 allocator 依次原子化:**第 0 步转义对**
-   (`\` + CommonMark 可转义标点,单原子——设计门六轮 P1:cell diff 的
-   marker 若落在 `\` 与 `|` 之间,转义失效、remark-gfm 把该 pipe 当列
-   边界,列数爆炸 marker 跨 cell;转义对成原子后 diff 永不拆散它,且
-   后续各类 opener 无需再做反斜杠奇偶判定——被转义的 opener 已被吞进
-   转义原子,五轮的奇偶规则由此整体简化),随后 inline code(升级版
-   `INLINE_CODE_RE`)、**行内图片**(`![label](url)`,约束同链接;
+   inner,先以局部 allocator 依次原子化:**inline code 最先**(升级版
+   `INLINE_CODE_RE`,其 opening 反引号 run 单独做前导反斜杠奇偶判定
+   ——code span **内部**反斜杠是 CommonMark 字面量,不做转义处理;若让
+   转义对先行,内容以 `\` 结尾的合法 code span 的闭合反引号会被吞进
+   转义原子、span 原子化失败,marker 落进 `inlineCode.value` 被单侧化,
+   设计门七轮 P1);**随后转义对**(`\` + CommonMark 可转义标点,单
+   原子——六轮 P1:marker 落在 `\` 与 `|` 之间会让转义失效、列数爆炸;
+   转义对成原子后 diff 永不拆散它,且 image/link/math 的 opener 不再
+   需要奇偶判定——被转义的 opener 已被吞进转义原子);再**行内图片**(`![label](url)`,约束同链接;
    设计门五轮 P1:图片若被 link 正则从 `[` 处劈开会还原成字面 `!` +
    链接,排除又会让 marker 落进 `image.url` 被单侧化;独立原子类按整体
    del/ins 呈现)、行内链接、行内数学式(`$...$`,单行、内容无 `$`,
@@ -141,16 +143,23 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
      空格 marker 色块呈现(`{D}old{d}{I} {i}` / `{D} {d}{I}new{i}`),
      保证红旧绿新两侧都可见——否则空侧零 token、`remarkDiffMarkers`
      还会丢弃无 children 的 marker,只剩单侧高亮。
-     **定界符触碰即整 cell 降级**(四轮 P1,五轮 P1 扩展):若 diff 的
-     **任一** del/ins token 含 emphasis/删除线定界字符(`*`/`_`/`~`),
-     该 cell 整体降级为「旧 inner 整红 + 新 inner 整绿」(marker 包完整
-     span,emphasis 结构与高亮都保留)。仅 token 级包 marker 会让
-     remark 在 marker 插件之前解析定界符、把 marker 拆散进空子树,轻则
-     零可见高亮(`**same**`→`*same*`),重则旧侧格式碎裂
-     (`**old**`→`*new*` 渲染成绿斜体 new + 字面红 `old**`)。代价:
-     cell 正文含字面 `*`/`_`/`~` 且同 cell 另有文字变更时也整 cell
-     红绿——合法渲染,仅粒度变粗,可接受。
-   - **原子化在 §2b 已完成**(转义对 → code → image → link → math 顺序;
+     **整 cell 降级的两条结构性规则**(四轮/五轮 P1,七轮 P1 收束为
+     终态白名单):词级细化只允许发生在「纯文本 + 受保护原子」的 cell
+     上,否则整 cell 降级为「旧 inner 整红 + 新 inner 整绿」(marker 包
+     完整 span,一切行内结构与高亮保留;与今日整表呈现同粒度,永不劣于
+     现状):
+     (a) **残留语法字符降级**:原子化后的任一侧残留文本仍含
+     `` ` ``/`[`/`]`/`<`/`>`/`$`/`&` 之一(未被消费的 code/链接/图片/
+     autolink/HTML/数学/实体语法征兆)→ 整 cell 降级。这把「保护集外
+     语法继承现状」从枚举承诺变成结构保证——marker 不可能落进任何
+     remark 节点 value(七轮 P1:html.value / 嵌套括号 link.url 在
+     cell 细化下会被单侧化,是相对现状的新回归,枚举式保护集堵不完)。
+     (b) **定界符触碰降级**:diff 的任一 del/ins token 含 emphasis/
+     删除线定界字符(`*`/`_`/`~`)→ 整 cell 降级(仅 token 级包 marker
+     会被 remark 拆散进空子树:轻则零高亮 `**same**`→`*same*`,重则
+     格式碎裂 `**old**`→`*new*`)。
+     代价:cell 含字面语法字符时粒度变粗为整 cell——合法渲染,可接受。
+   - **原子化在 §2b 已完成**(code → 转义对 → image → link → math 顺序;
      link 的 label / math 的内容里含先前原子的 ph 时允许嵌套)。词级 diff 后**函数内
      循环还原至不动点**:反复替换已发放码点直到 merged 无任何已发放
      码点或达迭代上限(= 发放数);嵌套原子(如 label 含 code span 的
@@ -233,8 +242,10 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 1. 单 cell 修改 → 恰 1 张表;变更 cell 同含 `.diff-del`+`.diff-ins`;
    其余 cell 零 span;无裸 `|`。
 2. 多 cell / 多行修改互不串扰;CJK cell;inline code cell(含「双反引
-   号定界、内容有单反引号」的多反引号形态,code span 结构完整);转义
-   原子:`\\` 后 code span 原子化生效、`\$x$`/`\[x](u)` 字面文本不被
+   号定界、内容有单反引号」形态与「内容以 `\` 结尾」形态,code span
+   结构完整、高亮可见——七轮 P1 顺序锁定);**残留语法降级**:含
+   raw HTML span / 嵌套括号 URL / 实体的 cell 变更 → 整 cell 旧红+新绿
+   (七轮 P1 白名单锁定);转义原子:`\\` 后 code span 原子化生效、`\$x$`/`\[x](u)` 字面文本不被
    误原子化(四轮 P1,v7 起由转义对原子化承担);**cell 含 `\|` 时的
    变更** → 转义对不被 marker 劈开、列数不变、高亮可见(六轮 P1);
    **非空↔空 cell 配对变更** → 红旧 + 绿色块两侧可见(六轮 P1);**定界符-only 与混合变更**(`**same**`→`*same*`
@@ -284,6 +295,14 @@ context **跳过**(保留 ph 到最后);现有普通条目行为不变。
 
 ## 设计门记录
 
+- 七轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 2 P1;主链与全部
+  机制参数连续多轮零新 finding,余项收敛于 cell 内保护边界):折入本
+  v8——原子化顺序改为 code 最先(code 内反斜杠是字面量,转义对先行会吞
+  合法 code span 的闭合反引号)、code opener 单独奇偶;「保护集外继承
+  现状」修正为**结构性白名单**:残留语法字符(`` ` ``/`[`/`]`/`<`/`>`/
+  `$`/`&`)或变更 token 含 `*`/`_`/`~` → 整 cell 旧红+新绿降级,词级
+  细化仅限纯文本+受保护原子的 cell,marker 从结构上不可能落进 remark
+  节点 value,枚举式打地鼠就此终结。
 - 六轮(2026-07-31,exec 直驱,`NEEDS_REVISION`,0 P0 / 2 P1 / 1 P2;
   主链、阈值、tie-break、顺序、pad、末端还原全部再确认干净):折入本
   v7——转义对(`\X`)为 §2b 第 0 原子类(marker 不再劈开 `\|`,五轮的
