@@ -1026,7 +1026,7 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
     'node-runs',
     'outputs',
     'artifacts',
-    'worktree-diff',
+    'changes',
     'worktree-files',
     'task-questions',
     'feedback',

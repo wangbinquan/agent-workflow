@@ -62,9 +62,10 @@ function makeCapabilityTask(overrides: Partial<Task> = {}): Task {
 }
 
 describe('TAB_ORDER', () => {
-  test('is the canonical 8-tab order from the RFC (RFC-083 inserted worktree-structure)', () => {
-    // RFC-065 added `worktree-files` between `outputs` and `worktree-diff`.
-    // RFC-083 added `worktree-structure` immediately after `worktree-diff`.
+  test('is the canonical 8-tab order (RFC-239 merged diff+structure into changes)', () => {
+    // RFC-065 added `worktree-files` between `outputs` and the diff pane.
+    // RFC-239 merged `worktree-diff` + `worktree-structure` into ONE
+    // `changes` tab (legacy URL values redirect in validateTaskDetailSearch).
     // `feedback` remains last as the RFC-041 reflective tab.
     expect(TAB_ORDER).toEqual([
       'workflow-status',
@@ -73,24 +74,21 @@ describe('TAB_ORDER', () => {
       'details',
       'outputs',
       'worktree-files',
-      'worktree-diff',
-      'worktree-structure',
+      'changes',
       'feedback',
     ])
   })
 
   test('is readonly (frozen at the type level — defense against accidental sort)', () => {
-    expect(TAB_ORDER).toHaveLength(9)
+    expect(TAB_ORDER).toHaveLength(8)
   })
 
-  test('worktree-structure sits immediately after worktree-diff', () => {
+  test('changes sits immediately after worktree-files (RFC-239)', () => {
     const outIdx = TAB_ORDER.indexOf('outputs')
     const filesIdx = TAB_ORDER.indexOf('worktree-files')
-    const diffIdx = TAB_ORDER.indexOf('worktree-diff')
-    const structIdx = TAB_ORDER.indexOf('worktree-structure')
+    const changesIdx = TAB_ORDER.indexOf('changes')
     expect(filesIdx).toBe(outIdx + 1)
-    expect(diffIdx).toBe(filesIdx + 1)
-    expect(structIdx).toBe(diffIdx + 1)
+    expect(changesIdx).toBe(filesIdx + 1)
   })
 })
 
@@ -103,8 +101,7 @@ describe('availableTabs', () => {
       'details',
       'outputs',
       'worktree-files',
-      'worktree-diff',
-      'worktree-structure',
+      'changes',
       'feedback',
     ])
   })
@@ -117,8 +114,7 @@ describe('availableTabs', () => {
       'node-runs',
       'details',
       'worktree-files',
-      'worktree-diff',
-      'worktree-structure',
+      'changes',
       'feedback',
     ])
     expect(tabs.includes('outputs' as never)).toBe(false)
@@ -149,8 +145,7 @@ describe('availableTabs', () => {
       'chatroom',
       'task-questions',
       'worktree-files',
-      'worktree-diff',
-      'worktree-structure',
+      'changes',
       'details',
     ])
   })
@@ -172,8 +167,7 @@ describe('RFC-201 task detail capabilities and page-section groups', () => {
     expect(capabilities).toMatchObject({
       outputs: false,
       worktreeFiles: false,
-      worktreeDiff: false,
-      worktreeStructure: false,
+      changes: false,
       questions: true,
       feedback: false,
     })
@@ -227,8 +221,7 @@ describe('RFC-201 task detail capabilities and page-section groups', () => {
       plainRelated,
     )
     expect(capabilities.worktreeFiles).toBe(true)
-    expect(capabilities.worktreeDiff).toBe(true)
-    expect(capabilities.worktreeStructure).toBe(true)
+    expect(capabilities.changes).toBe(true)
   })
 
   test('room shape exposes exactly orchestration or chatroom after stable classification', () => {
@@ -259,23 +252,16 @@ describe('RFC-201 task detail capabilities and page-section groups', () => {
       makeCapabilityTask({ workgroupId: 'wg' }),
       plainRelated,
     )
-    expect(withWorktree).toMatchObject({ worktreeFiles: true, worktreeDiff: true })
+    expect(withWorktree).toMatchObject({ worktreeFiles: true, changes: true })
     expect(
       availableTabs({ hasOutputs: true, isWorkgroup: true, capabilities: withWorktree }),
-    ).toEqual([
-      'chatroom',
-      'task-questions',
-      'worktree-files',
-      'worktree-diff',
-      'worktree-structure',
-      'details',
-    ])
+    ).toEqual(['chatroom', 'task-questions', 'worktree-files', 'changes', 'details'])
 
     const withoutWorktree = deriveTaskDetailCapabilities(
       makeCapabilityTask({ workgroupId: 'wg', worktreePath: '', baseCommit: null }),
       plainRelated,
     )
-    expect(withoutWorktree).toMatchObject({ worktreeFiles: false, worktreeDiff: false })
+    expect(withoutWorktree).toMatchObject({ worktreeFiles: false, changes: false })
     expect(
       availableTabs({ hasOutputs: true, isWorkgroup: true, capabilities: withoutWorktree }),
     ).toEqual(['chatroom', 'task-questions', 'details'])
@@ -292,7 +278,7 @@ describe('RFC-201 task detail capabilities and page-section groups', () => {
       { key: 'execution', items: ['node-runs'] },
       {
         key: 'artifacts',
-        items: ['outputs', 'worktree-files', 'worktree-diff', 'worktree-structure'],
+        items: ['outputs', 'worktree-files', 'changes'],
       },
       { key: 'collaboration', items: ['task-questions', 'feedback'] },
     ])

@@ -118,6 +118,8 @@ const OVERLAY_CALLSITES = {
   'components/skills/ImportZipPanel.tsx': { family: 'resource-management', count: 1 },
   'routes/repos.tsx': { family: 'resource-management', count: 1 },
 
+  // RFC-239: the changes pane's deep views (graph/impact/call-chain/deps) overlay.
+  'components/changes/DrilldownOverlay.tsx': { family: 'task-execution', count: 1 },
   'components/canvas/WorkflowCanvas.tsx': { family: 'workflow-authoring', count: 1 },
   'components/workflow-editor/ConnectionDialog.tsx': {
     family: 'workflow-authoring',

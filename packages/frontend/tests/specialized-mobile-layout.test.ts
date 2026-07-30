@@ -43,7 +43,7 @@ describe('RFC-198 specialized mobile layouts', () => {
       CSS.indexOf('/* ---- RFC-198 responsive application shell ---- */', start),
     )
 
-    expect(block).toMatch(/\.worktree-diff,\s*\.structure__tree\s*\{\s*flex-direction: column;/)
+    expect(block).toMatch(/\.changes__body\s*\{\s*flex-direction: column;/)
     expect(block).toMatch(/\.workgroup-room__main\s*\{\s*min-height: 32rem;/)
     expect(block).toMatch(/\.review-multidoc__pane\s*\{\s*min-height: 28rem;/)
     expect(block).toMatch(/\.wizard-summary__row\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/)

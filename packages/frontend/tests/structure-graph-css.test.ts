@@ -10,8 +10,11 @@ import path from 'node:path'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const css = readFileSync(path.resolve(here, '../src/styles.css'), 'utf8')
 
-// the card rules region
-const cardCss = css.slice(css.indexOf('.sg-card {'), css.indexOf('.structure-graph-wrap {'))
+// the card rules region. Anchors are line-start matches: RFC-239 added a
+// `.changes__drill-graph .structure-graph-wrap` compound whose tail is a
+// substring of the bare selector, so bare indexOf() would land there and
+// invert the slice.
+const cardCss = css.slice(css.indexOf('\n.sg-card {'), css.indexOf('\n.structure-graph-wrap {'))
 // the graph container rule
 const graphCss = css.slice(
   css.indexOf('.structure-graph {'),
@@ -25,7 +28,7 @@ describe('structure-graph handle hit area', () => {
   test('graph handles do not intercept clicks (pointer-events: none)', () => {
     const rule = css.slice(
       css.indexOf('.structure-graph .react-flow__handle {'),
-      css.indexOf('.structure-graph-wrap {'),
+      css.indexOf('\n.structure-graph-wrap {'),
     )
     expect(rule).toMatch(/pointer-events:\s*none/)
   })

@@ -137,10 +137,10 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
         .locator('.page-section-nav__group-trigger')
         .filter({ hasText: 'Artifacts' })
         .click()
-      await page.locator('[data-task-detail-section-link="worktree-diff"]').click()
+      await page.locator('[data-task-detail-section-link="changes"]').click()
     }
-    await expect(page).toHaveURL(/(?:\?|&)tab=worktree-diff(?:&|$)/)
-    await expect(page.locator('[data-task-detail-section="worktree-diff"]')).toBeVisible()
+    await expect(page).toHaveURL(/(?:\?|&)tab=changes(?:&|$)/)
+    await expect(page.locator('[data-task-detail-section="changes"]')).toBeVisible()
   })
 
   // RFC-218: an agent that DECLARES input ports launches through a port form —

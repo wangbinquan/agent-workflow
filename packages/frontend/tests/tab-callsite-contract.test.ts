@@ -181,8 +181,8 @@ const FILTER_SEGMENTED_CALLSITES = [
 
 const VERTICAL_TRUE_TAB_CALLSITES = {
   'components/TaskOutputPanel.tsx': { tablist: 1, tab: 1 },
-  'components/WorktreeDiffPanel.tsx': { tablist: 1, tab: 1 },
-  'components/structure/StructuralDiffView.tsx': { tablist: 1, tab: 1 },
+  // RFC-239: the merged changes panel owns the former diff/structure tablists.
+  'components/changes/ChangeReviewPanel.tsx': { tablist: 1, tab: 1 },
 } as const
 
 describe('RFC-198 true-tab callsite contract', () => {

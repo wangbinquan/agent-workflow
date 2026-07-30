@@ -1,7 +1,7 @@
 // RFC-164 PR-4 — tab-set contrast lock for workgroup tasks.
 //
 // Group tasks get a FIXED tab set (chatroom default-first + task-questions +
-// worktree-structure + details) that hides the workflow-status canvas and
+// changes + details) that hides the workflow-status canvas and
 // outputs; every non-workgroup shape stays item-by-item identical to the
 // pre-RFC-164 lists (the golden lock — a refactor that leaks 'chatroom' into
 // normal tasks or drops a legacy tab goes red here).
@@ -26,23 +26,21 @@ describe('availableTabs — workgroup tasks', () => {
       'chatroom',
       'task-questions',
       'worktree-files',
-      'worktree-diff',
-      'worktree-structure',
+      'changes',
       'details',
     ])
   })
 
   // 2026-07-20 regression lock (user report: 「工作组的执行界面的产物里也要增加工作目录和
   // 工作目录 diff 的能力，因为 agent 会写文件，现在没地方下载文件」). RFC-164 PR-4 shipped this
-  // set with `worktree-structure` as the 产物 group's ONLY leaf, so a group's members could
+  // set with the structure view as the 产物 group's ONLY leaf, so a group's members could
   // write files nobody could browse or download. Re-dropping either leaf reds this test.
   test('the 产物 group exposes browse + textual diff, not just the structural overlay', () => {
     const tabs = availableTabs({ hasOutputs: false, isWorkgroup: true })
     expect(tabs).toContain('worktree-files')
-    expect(tabs).toContain('worktree-diff')
+    expect(tabs).toContain('changes')
     // Wire-order within the group mirrors TAB_ORDER: browse → text diff → structure.
-    expect(tabs.indexOf('worktree-files')).toBeLessThan(tabs.indexOf('worktree-diff'))
-    expect(tabs.indexOf('worktree-diff')).toBeLessThan(tabs.indexOf('worktree-structure'))
+    expect(tabs.indexOf('worktree-files')).toBeLessThan(tabs.indexOf('changes'))
   })
 
   test('outputs stays hidden for group tasks even if the snapshot declared ports', () => {
@@ -68,8 +66,7 @@ describe('availableTabs — non-workgroup tasks stay item-by-item unchanged', ()
     'details',
     'outputs',
     'worktree-files',
-    'worktree-diff',
-    'worktree-structure',
+    'changes',
     'feedback',
   ]
 

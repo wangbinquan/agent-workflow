@@ -40,7 +40,8 @@ describe('TaskDetailPage page-section structure', () => {
     expect(SRC).toMatch(/onRetry=\{\(\) => void task\.refetch\(\)\}/)
     expect(SRC).toMatch(/onRetry=\{\(\) => void nodeRuns\.refetch\(\)\}/)
     expect(SRC).toMatch(/onRetry=\{\(\) => void diff\.refetch\(\)\}/)
-    expect(SRC).toMatch(/onRetry=\{\(\) => void structuralDiff\.refetch\(\)\}/)
+    // RFC-239: a structural failure only degrades the merged pane (banner);
+    // its 6s polling self-heals, so no dedicated structural retry button.
     expect(SRC).toContain("tab === 'workflow-status' || tab === 'node-runs' || tab === 'outputs'")
     expect(SRC).toContain(
       'nodeRunsConsumerActive && nodeRuns.data === undefined && nodeRuns.isLoading',
@@ -56,15 +57,8 @@ describe('TaskDetailPage page-section structure', () => {
   })
 
   test('renders six panes keyed by `hidden={tab !== ...}` (one per TaskDetailTab)', () => {
-    const tabs = [
-      'workflow-status',
-      'node-runs',
-      'details',
-      'outputs',
-      'worktree-diff',
-      'worktree-structure',
-      'feedback',
-    ]
+    // RFC-239 merged worktree-diff + worktree-structure into one changes pane.
+    const tabs = ['workflow-status', 'node-runs', 'details', 'outputs', 'changes', 'feedback']
     for (const k of tabs) {
       expect(SRC).toMatch(new RegExp(`hidden=\\{tab !== '${k}'\\}`))
     }
@@ -94,11 +88,13 @@ describe('TaskDetailPage page-section structure', () => {
     expect(SRC).toMatch(/canOfferFailedJump\(tabs\) && \(/)
   })
 
-  test('uses WorktreeDiffPanel (not the legacy DiffViewer) on the diff pane', () => {
-    expect(SRC).toMatch(/<WorktreeDiffPanel\b/)
+  test('uses ChangeReviewPanel (RFC-239 merged pane) — legacy panels are gone', () => {
+    expect(SRC).toMatch(/<ChangeReviewPanel\b/)
     expect(SRC).not.toMatch(/<DiffViewer\b/)
+    expect(SRC).not.toMatch(/<WorktreeDiffPanel\b/)
+    expect(SRC).not.toMatch(/<StructuralDiffView\b/)
     expect(SRC).toMatch(
-      /taskSectionProps\(t, 'worktree-diff'\)[\s\S]*?className="task-detail__pane task-detail__pane--worktree-diff"/,
+      /taskSectionProps\(t, 'changes'\)[\s\S]*?className="task-detail__pane task-detail__pane--changes"/,
     )
   })
 
@@ -109,8 +105,7 @@ describe('TaskDetailPage page-section structure', () => {
       'tabDetails',
       'tabOutputs',
       'tabWorktreeFiles',
-      'tabWorktreeDiff',
-      'tabWorktreeStructure',
+      'tabChanges',
       'tabFeedback',
     ]) {
       expect(SRC).toMatch(new RegExp(`'tasks\\.${key}'`))
@@ -126,8 +121,9 @@ describe('TaskDetailPage page-section structure', () => {
     // isWorkgroup — see rfc164-workgroup-tabs.test.ts for its wiring locks).
     // RFC-167 PR-3 added the dw-orchestration pane (dynamic-workflow confirm
     // gate; content gated on isDynamicWorkgroup).
+    // RFC-239: the diff + structure panes merged into one changes pane (11→10).
     const paneCount = (SRC.match(/className="task-detail__pane(?:\s[^"]*)?"/g) ?? []).length
-    expect(paneCount).toBe(11)
+    expect(paneCount).toBe(10)
     expect(SRC.match(/className="task-detail__panes"/g)?.length).toBe(1)
   })
 
@@ -145,7 +141,6 @@ describe('TaskDetailPage page-section structure', () => {
     expect(SRC).toMatch(/onSelectCompact=\{\(next\) => navigateTaskTab\(next\)\}/)
     expect(SRC).toMatch(/search=\{\(previous\) => withTaskDetailTab\(previous, key\)\}/)
     expect(SRC).toMatch(/navigateTaskTab\('task-questions'\)/)
-    expect(SRC).toMatch(/navigateTaskTab\('worktree-diff'\)/)
   })
 
   test('navigation owns aria-current and every panel is an accessible section, not a tabpanel', () => {
@@ -156,12 +151,9 @@ describe('TaskDetailPage page-section structure', () => {
     expect(SRC).not.toMatch(/taskTabPanelProps/)
   })
 
-  test('diff and structure queries/panels share the multi-repo capability oracle', () => {
-    expect(SRC).toMatch(/enabled: tab === 'worktree-diff' && taskCapabilities\.worktreeDiff/)
-    expect(SRC).toMatch(
-      /enabled: tab === 'worktree-structure' && taskCapabilities\.worktreeStructure/,
-    )
-    expect(SRC).not.toMatch(/tab === 'worktree-structure'[\s\S]{0,160}task\.data\.baseCommit/)
+  test('diff and structure queries share the merged changes capability oracle (RFC-239)', () => {
+    expect(SRC).toMatch(/enabled: tab === 'changes' && taskCapabilities\.changes/)
+    expect(SRC).not.toMatch(/tab === 'changes'[\s\S]{0,160}task\.data\.baseCommit/)
     expect(SRC).not.toMatch(/tk\.baseCommit === null/)
   })
 
@@ -181,7 +173,7 @@ describe('TaskDetailPage i18n key coverage', () => {
     expect(zh).toMatch(/tabNodeRuns:\s*'/)
     expect(zh).toMatch(/tabDetails:\s*'/)
     expect(zh).toMatch(/tabOutputs:\s*'/)
-    expect(zh).toMatch(/tabWorktreeDiff:\s*'/)
+    expect(zh).toMatch(/tabChanges:\s*'/)
     expect(zh).toMatch(/tabFeedback:\s*'/)
   })
 
@@ -191,7 +183,7 @@ describe('TaskDetailPage i18n key coverage', () => {
     expect(en).toMatch(/tabNodeRuns:\s*'/)
     expect(en).toMatch(/tabDetails:\s*'/)
     expect(en).toMatch(/tabOutputs:\s*'/)
-    expect(en).toMatch(/tabWorktreeDiff:\s*'/)
+    expect(en).toMatch(/tabChanges:\s*'/)
     expect(en).toMatch(/tabFeedback:\s*'/)
   })
 })

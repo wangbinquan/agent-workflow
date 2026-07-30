@@ -2330,8 +2330,43 @@ export interface Resources {
     tabDetails: string
     tabOutputs: string
     tabWorktreeFiles: string
-    tabWorktreeDiff: string
-    tabWorktreeStructure: string
+    tabChanges: string
+    changesEmptyScratch: string
+    changesEmptyNoChanges: string
+    changesStructuralUnavailable: string
+    changesGroupCode: string
+    changesGroupMiscCode: string
+    changesGroupDeps: string
+    changesGroupDocs: string
+    changesGroupConfig: string
+    changesGroupMoves: string
+    changesGroupOther: string
+    changesGroupCount: string
+    changesSummaryLine: string
+    changesDrillGraph: string
+    changesDrillImpact: string
+    changesDrillCallChain: string
+    changesDrillDeps: string
+    changesDrillFocusAll: string
+    changesDrillFocusFile: string
+    changesDrillFocusLabel: string
+    changesNarrativeGenerate: string
+    changesNarrativeGenerating: string
+    changesNarrativeFailed: string
+    changesNarrativeRetry: string
+    changesNarrativeRegenerate: string
+    changesNarrativeStale: string
+    changesRenamedFrom: string
+    changesJumpToHunk: string
+    changesImportsAggregated: string
+    changesContainerCollapsed: string
+    changesPureMove: string
+    changesTextUnavailable: string
+    changesDocRendered: string
+    changesDocText: string
+    changesDocViewLabel: string
+    changesDocLoading: string
+    changesDocFallback: string
     sectionNavLabel: string
     sectionGroupOverview: string
     sectionGroupExecution: string
@@ -6766,8 +6801,44 @@ export const zhCN: Resources = {
     tabDetails: '详细信息',
     tabOutputs: '输出',
     tabWorktreeFiles: '工作目录',
-    tabWorktreeDiff: '工作目录 diff',
-    tabWorktreeStructure: '结构',
+    tabChanges: '结构变更',
+    changesEmptyScratch:
+      '该任务运行于临时空间,未产生 git 可识别的文件变更;产物请查看「输出」页签。',
+    changesEmptyNoChanges: '本次任务未修改任何文件。',
+    changesStructuralUnavailable: '结构分析不可用,以下仅按文本 diff 呈现。',
+    changesGroupCode: '代码',
+    changesGroupMiscCode: '其他代码',
+    changesGroupDeps: '依赖',
+    changesGroupDocs: '文档',
+    changesGroupConfig: '配置',
+    changesGroupMoves: '搬移',
+    changesGroupOther: '其他',
+    changesGroupCount: '{{viewed}}/{{files}}',
+    changesSummaryLine: '{{files}} 文件 · {{methods}} 方法变更',
+    changesDrillGraph: '关系图',
+    changesDrillImpact: '影响面',
+    changesDrillCallChain: '调用链',
+    changesDrillDeps: '依赖变更',
+    changesDrillFocusAll: '全部',
+    changesDrillFocusFile: '当前文件',
+    changesDrillFocusLabel: '图聚焦',
+    changesNarrativeGenerate: '生成 AI 导读',
+    changesNarrativeGenerating: 'AI 导读生成中…',
+    changesNarrativeFailed: 'AI 导读生成失败。',
+    changesNarrativeRetry: '重试',
+    changesNarrativeRegenerate: '重新生成',
+    changesNarrativeStale: '导读基于旧版变更。',
+    changesRenamedFrom: '原 {{from}}',
+    changesJumpToHunk: '跳转到对应改动',
+    changesImportsAggregated: '导入变更({{n}})',
+    changesContainerCollapsed: '{{n}} 个成员',
+    changesPureMove: '文件自 {{from}} 移动,内容未修改。',
+    changesTextUnavailable: '文本 diff 因截断不可用,以下为结构信息。',
+    changesDocRendered: '渲染',
+    changesDocText: '文本',
+    changesDocViewLabel: '文档视图',
+    changesDocLoading: '加载文档内容…',
+    changesDocFallback: '渲染视图不可用,已退回文本 diff。',
     sectionNavLabel: '任务分区',
     sectionGroupOverview: '概览',
     sectionGroupExecution: '执行',

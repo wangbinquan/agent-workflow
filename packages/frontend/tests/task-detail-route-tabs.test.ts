@@ -24,8 +24,7 @@ describe('task-detail search syntax', () => {
       'details',
       'outputs',
       'worktree-files',
-      'worktree-diff',
-      'worktree-structure',
+      'changes',
       'feedback',
       'task-questions',
       'chatroom',
@@ -103,9 +102,9 @@ describe('resolveTaskDetailTabs — plain tasks', () => {
       hasOutputs: true,
       isWorkgroup: false,
       room: pendingRoom,
-      searchTab: 'worktree-diff',
+      searchTab: 'changes',
     })
-    expect(result).toMatchObject({ tab: 'worktree-diff', canonicalize: false })
+    expect(result).toMatchObject({ tab: 'changes', canonicalize: false })
   })
 
   test('outputs deep link falls back when the frozen snapshot declares no outputs', () => {
@@ -124,8 +123,7 @@ describe('resolveTaskDetailTabs — plain tasks', () => {
     const baseCapabilities = {
       outputs: false,
       worktreeFiles: false,
-      worktreeDiff: false,
-      worktreeStructure: false,
+      changes: false,
       orchestration: false,
       chatroom: false,
       questions: true,
@@ -138,19 +136,19 @@ describe('resolveTaskDetailTabs — plain tasks', () => {
         capabilities: baseCapabilities,
         isWorkgroup: false,
         room: pendingRoom,
-        searchTab: 'worktree-diff',
+        searchTab: 'changes',
       }),
     ).toMatchObject({ tab: 'workflow-status', canonicalize: true })
     expect(
       resolveTaskDetailTabs({
         taskLoaded: true,
         hasOutputs: false,
-        capabilities: { ...baseCapabilities, worktreeDiff: true, worktreeStructure: true },
+        capabilities: { ...baseCapabilities, changes: true },
         isWorkgroup: false,
         room: pendingRoom,
-        searchTab: 'worktree-diff',
+        searchTab: 'changes',
       }),
-    ).toMatchObject({ tab: 'worktree-diff', canonicalize: false })
+    ).toMatchObject({ tab: 'changes', canonicalize: false })
   })
 })
 

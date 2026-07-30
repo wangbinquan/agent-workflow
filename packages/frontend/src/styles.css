@@ -11112,181 +11112,398 @@ mark.comment-anchor[data-active='true'] {
  * pane as an inline-size container and let the diff react to its REAL width.
  * This avoids the sharp 900px shell-breakpoint cliff where the code column
  * used to collapse to roughly 390px even though the page was still desktop. */
-.task-detail__pane--worktree-diff {
-  container: worktree-diff-pane / inline-size;
-}
-
-/* ---- RFC-021: worktree diff vertical file tabs ---- */
-
-.worktree-diff {
-  display: flex;
-  flex-direction: row;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  gap: 8px;
-}
-
-.worktree-diff__files {
-  /* Keep the tree readable without permanently taking 280px from the primary
-   * diff surface. At laptop / split-window widths the rail yields down to
-   * 220px; on roomy desktops it tops out at the established 280px. */
-  flex: 0 1 clamp(220px, 24%, 280px);
+/* ---------------------------------------------------------------------------
+ * RFC-239 — unified structural-change view (.changes namespace).
+ * Mirrors the compact tool-panel look of the former .worktree-diff /
+ * .structure panes (12px mono file rows, diff palette tokens) so the merged
+ * pane doesn't read as a different product.
+ * ------------------------------------------------------------------------- */
+.changes {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  height: 100%;
   min-height: 0;
-  overflow-y: auto;
-  /* Give the file list a proper sidebar-like panel so it visually
-   * fills the column even when only a handful of files changed.
-   * Without this the column was technically 100% height but with just
-   * a 1px right border + transparent background, leaving a 600px+
-   * void below the last file tab that read as "the box isn't full
-   * height". */
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px;
 }
-
-.worktree-diff__tablist {
+.changes__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.changes__toolbar-label {
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+.changes__toolbar-spacer {
+  margin-left: auto;
+}
+.changes__summary-line {
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+.changes__drill-buttons {
+  display: flex;
+  gap: 6px;
+}
+.changes__banner {
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: var(--font-xs);
+}
+.changes__narrative {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.changes__narrative--idle,
+.changes__narrative--generating {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+.changes__narrative-overview {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.changes__narrative-order {
+  margin: 0;
+  padding-left: 18px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 0;
-  /* scroll the file list — without this, many files get flex-shrunk to a
-     sliver and the names render vertically clipped */
-  overflow-y: auto;
+  font-size: 11px;
 }
-
-/* RFC-021 (Q5) — each file is a row: a "viewed" checkbox + the selectable tab.
- * The ROW is the flex-column child now, so it carries the no-crush guard. */
-.worktree-diff__file-row {
+.changes__narrative-ref {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.changes__narrative-ref:hover {
+  text-decoration: underline;
+}
+.changes__narrative-why {
+  color: var(--muted);
+  margin-left: 6px;
+}
+.changes__narrative-error {
+  color: var(--danger);
+  font-size: var(--font-xs);
+}
+.changes__narrative-stale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+.changes__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+}
+.changes__sidebar {
+  flex: 0 0 300px;
+  min-width: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.changes__truncated {
+  margin: 6px;
+}
+.changes__progress {
+  padding: 6px 8px;
+  font-size: var(--font-xs);
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.changes__tablist {
+  display: flex;
+  flex-direction: column;
+}
+.changes__group-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 0;
-  /* never let the column flex crush a row below its text height */
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+.changes__group-header:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.changes__group-fold {
+  color: var(--muted);
+  width: 12px;
+}
+.changes__group-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.changes__group-count {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: var(--font-xs);
+}
+.changes__weight {
+  flex: 1;
+  min-width: 24px;
+  max-width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  overflow: hidden;
+  margin-left: auto;
+}
+.changes__weight-bar {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--accent) 75%, transparent);
+  border-radius: 2px;
+}
+.changes__group-sentence {
+  padding: 2px 8px 6px 26px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.changes__sev-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.changes__sev-dot--breaking {
+  background: color-mix(in srgb, var(--danger) 85%, transparent);
+}
+.changes__sev-dot--risky {
+  background: #d99100;
+}
+.changes__file-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  /* refuse to shrink below text height (see worktree-diff-tablist-scroll lock) */
   flex-shrink: 0;
 }
-.worktree-diff__viewed {
-  flex: none;
-  cursor: pointer;
-  margin: 0;
+.changes__file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.worktree-diff__file-tab {
-  text-align: left;
+.changes__file-row--viewed .changes__file-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.changes__viewed {
+  flex: none;
+}
+.changes__file-tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: none;
   border: 1px solid transparent;
-  color: var(--text);
-  padding: 6px 8px;
   border-radius: 4px;
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 3px 6px;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* fill the row width beside the checkbox; min-width:0 lets the path ellipsis */
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.worktree-diff__progress {
-  font-size: 11px;
-  color: var(--muted);
-  margin: 0 0 4px 2px;
-}
-
-/* RFC-066 multi-repo — per-repo section heading in the file column. Only
- * rendered for multi-repo tasks (single-repo diffs carry no marker, so no
- * heading). Sticky so the repo name stays visible while scrolling a long file
- * list; flex-shrink:0 keeps it from being crushed like the file rows. */
-.worktree-diff__repo {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  flex-shrink: 0;
-  margin: 8px 0 2px;
-  padding: 2px 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.worktree-diff__repo:first-child {
-  margin-top: 0;
-}
-
-/* RFC-091 — directory header rows in the file tree (mirrors .structure__tree-dir
- * so the worktree diff and structural views look identical). Non-interactive;
- * files render below them as indented .worktree-diff__file-row tabs. */
-.worktree-diff__tree-dir {
-  flex-shrink: 0;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
 }
-
-.worktree-diff__file-tab:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+.changes__file-tab:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
-
-.worktree-diff__file-tab--active,
-.worktree-diff__file-tab[aria-selected='true'] {
+.changes__file-tab--active,
+.changes__file-tab[aria-selected='true'] {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: var(--accent);
   color: var(--accent);
 }
-
-/* RFC-021 (Q5) — a checked-off file reads as "done" (declared AFTER the base
- * `.worktree-diff__file-tab` rule so single-selector CSS lookups resolve the
- * base rule first). */
-.worktree-diff__file-row--viewed .worktree-diff__file-tab {
-  opacity: 0.55;
+.changes__file-stats {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  font-size: var(--font-xs);
 }
-
-.worktree-diff__truncated {
-  margin-bottom: 4px;
-}
-
-.worktree-diff__body {
+.changes__main {
   flex: 1;
   min-width: 0;
-  min-height: 0;
-  /* Lay the inner .diff__file card out as a flex column that fills the
-   * full right column. The outer container itself has hidden overflow —
-   * scrolling happens inside the file body's <pre>, which lets the
-   * header stay pinned at the top of the column. */
-  display: flex;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.changes__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+.changes__file-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.changes__file-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.changes__file-renamed {
+  font-size: var(--font-xs);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.changes__outline {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  max-height: 40%;
+  overflow-y: auto;
+  flex: none;
+}
+.changes__outline-note {
+  font-size: var(--font-xs);
+}
+.changes__outline-imports {
+  margin-bottom: 4px;
+}
+.changes__outline-fold {
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.changes__outline-count {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: var(--font-xs);
+}
+.changes__diff {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.changes__sticky-symbol {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(2px);
+  border-bottom: 1px solid var(--border);
+  padding: 3px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.changes__hunk-owner {
+  padding: 2px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.changes__hunk--focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.changes__doc-toggle {
+  margin-left: auto;
+}
+.changes__md {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.changes__drill {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 420px;
+}
+.changes__drill-graph {
+  flex: 1;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+.changes__drill-graph .structure-graph-wrap {
+  flex: 1;
+  min-height: 400px;
+}
+.changes__impact-caller {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+}
+.changes__impact-caller:hover {
+  text-decoration: underline;
 }
 
-/* Every file keeps a tabpanel in the DOM so aria-controls always resolves.
- * Author CSS overrides the browser's built-in [hidden] rule, so the flex
- * declaration above would otherwise lay out every inactive panel and squeeze
- * the selected diff into a sliver. Only the active panel may consume space. */
-.worktree-diff__body[hidden] {
-  display: none;
+.task-detail__pane--changes {
+  container: changes-pane / inline-size;
 }
 
-/* Inside the worktree-diff body, the legacy .diff__file card is forced
+/* Inside the changes main column, the legacy .diff__file card is forced
  * to grow to the full available height (instead of intrinsic sizing)
  * and its <pre> body drops its 480px max-height cap so a long diff fills
  * the column with its own scrollbar. */
-.worktree-diff__body > .diff__file {
+.changes__main .diff__file {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -11297,7 +11514,7 @@ mark.comment-anchor[data-active='true'] {
   min-height: 0;
 }
 
-.worktree-diff__body > .diff__file > .diff__body {
+.changes__main .diff__file > .diff__body {
   flex: 1;
   min-height: 0;
   max-height: none;
@@ -11305,15 +11522,14 @@ mark.comment-anchor[data-active='true'] {
 }
 
 /* Keep at least a readable code column. Once the pane itself cannot provide
- * ~640px for hunks beside the file rail, move the rail above the diff. The
- * active file then receives the pane's full width; the rail stays compact and
- * independently scrollable instead of pushing the code frame into a sliver. */
-@container worktree-diff-pane (max-width: 880px) {
-  .worktree-diff {
+ * ~640px for hunks beside the sidebar, move the sidebar above the diff. The
+ * active file then receives the pane's full width; the sidebar stays compact
+ * and independently scrollable instead of pushing the code into a sliver. */
+@container changes-pane (max-width: 880px) {
+  .changes__body {
     flex-direction: column;
   }
-
-  .worktree-diff__files {
+  .changes__sidebar {
     flex: 0 0 auto;
     width: 100%;
     max-height: 12rem;
@@ -14345,63 +14561,12 @@ mark.comment-anchor[data-active='true'] {
   color: var(--danger);
   font-size: var(--font-xs);
 }
-
-/* RFC-083 — structural (semantic) diff view. */
-.structure-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  height: 100%;
-  min-height: 0;
-}
-.structure-pane__scope {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-.structure-pane__scope-label {
-  font-size: var(--font-xs);
-  color: var(--muted, #6b7280);
-}
 .structure {
   display: flex;
   flex-direction: column;
   gap: 6px;
   height: 100%;
   min-height: 0;
-}
-.structure__banner {
-  background: var(--warn-bg);
-  border: 1px solid var(--warn-border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: var(--font-xs);
-}
-.structure__cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.structure__card {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: var(--font-xs);
-}
-.structure__card-count {
-  font-weight: 600;
-}
-.structure__card-label {
-  color: var(--muted, #6b7280);
-}
-.structure__card-counts {
-  display: inline-flex;
-  gap: 6px;
 }
 .structure__delta {
   font-variant-numeric: tabular-nums;
@@ -14663,13 +14828,6 @@ mark.comment-anchor[data-active='true'] {
 .structure__badge--renamed {
   color: var(--accent);
 }
-.structure__detail {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
 /* RFC-083 #6 — per-method body line delta (+added / −removed) */
 .structure__body-delta {
   display: inline-flex;
@@ -14682,15 +14840,6 @@ mark.comment-anchor[data-active='true'] {
 }
 .structure__body-delta-del {
   color: var(--diff-del-fg, #f85149);
-}
-.structure__view-toggle {
-  align-self: flex-start;
-}
-/* impact, when shown as a view, fills the remaining height + scrolls (long) */
-.structure__impact-view {
-  flex: 1;
-  min-height: 240px;
-  overflow: auto;
 }
 /* RFC-083 PR-F — read-only class-collaboration diagram */
 .structure-graph {
@@ -15044,76 +15193,6 @@ mark.comment-anchor[data-active='true'] {
   padding: 24px;
   text-align: center;
 }
-.structure__tree {
-  display: flex;
-  flex-direction: row;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
-.structure__files {
-  flex: 0 0 280px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 0;
-  overflow-y: auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px;
-}
-.structure__tablist {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: 0;
-  /* same fix as worktree-diff: scroll instead of letting the flex-shrink
-     cascade crush rows to a sliver when a task has many files */
-  overflow-y: auto;
-}
-.structure__file-tab {
-  text-align: left;
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text);
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.structure__file-tab:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-.structure__file-tab--active,
-.structure__file-tab[aria-selected='true'] {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.structure__file-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* directory / package header rows in the file tree */
-.structure__tree-dir {
-  flex-shrink: 0;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .structure__chip {
   flex: 0 0 auto;
   font-size: 10px;
@@ -15121,16 +15200,6 @@ mark.comment-anchor[data-active='true'] {
   border-radius: 8px;
   background: color-mix(in srgb, #d99100 18%, transparent);
   color: #d99100;
-}
-.structure__body {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  background: var(--bg);
 }
 .structure__group {
   margin-bottom: 8px;
@@ -15169,10 +15238,6 @@ mark.comment-anchor[data-active='true'] {
 .structure__tag {
   font-size: 11px;
   color: var(--muted, #6b7280);
-}
-.structure__muted {
-  font-size: var(--font-xs);
-  padding: 8px;
 }
 
 /* RFC-083 (Q1) — before→after signature comparison: two monospace rows under
@@ -15234,94 +15299,6 @@ mark.comment-anchor[data-active='true'] {
   font-size: 11px;
   color: var(--muted);
   line-height: 1.4;
-}
-.structure__toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 8px 0;
-}
-.structure__toolbar-label {
-  font-size: 11px;
-  color: var(--muted);
-}
-.structure__sev-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  cursor: pointer;
-}
-.structure__card--breaking {
-  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-.structure__card--breaking .structure__card-count {
-  color: var(--danger);
-}
-.structure__card--breaking:hover {
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
-}
-.structure__walkthrough {
-  margin: 0 0 12px 0;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--danger);
-  border-radius: 8px;
-  padding: 8px 12px;
-  background: var(--panel);
-}
-.structure__walkthrough-header {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-.structure__walkthrough-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.structure__walkthrough-jump,
-.structure__walkthrough-static {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font: inherit;
-  color: var(--text);
-}
-.structure__walkthrough-jump {
-  cursor: pointer;
-}
-.structure__walkthrough-jump:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-.structure__walkthrough-name {
-  font-weight: 600;
-  font-size: 12px;
-  flex: none;
-}
-.structure__walkthrough-explain {
-  font-size: 11px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.structure__walkthrough-more {
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 4px;
 }
 
 /* ---- RFC-099: ownership ACL panel + user picker + attribution chips ---- */
@@ -18616,6 +18593,10 @@ button.status-chip {
    order so every control remains reachable without page-level horizontal
    scrolling. */
 @media (max-width: 720px) {
+  .changes__body {
+    flex-direction: column;
+  }
+
   .file-tree,
   .task-canvas-layout--with-drawer,
   .task-outputs-panel,
@@ -18631,8 +18612,7 @@ button.status-chip {
   .task-outputs-panel__list,
   .worktree-files-panel__tree,
   .review-multidoc__list,
-  .worktree-diff__files,
-  .structure__files {
+  .changes__sidebar {
     max-height: 14rem;
   }
 
@@ -18748,8 +18728,7 @@ button.status-chip {
   .file-tree__editor,
   .task-outputs-panel__detail,
   .worktree-files-panel__preview,
-  .worktree-diff__body,
-  .structure__body {
+  .changes__main {
     min-height: 22rem;
   }
 
@@ -18770,17 +18749,6 @@ button.status-chip {
     border-bottom: 1px solid var(--border);
     padding-right: 0;
     padding-bottom: var(--space-2);
-  }
-
-  .worktree-diff,
-  .structure__tree {
-    flex-direction: column;
-  }
-
-  .worktree-diff__files,
-  .structure__files {
-    flex: 0 0 auto;
-    width: 100%;
   }
 
   .review-multidoc__body {

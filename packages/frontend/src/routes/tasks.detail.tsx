@@ -42,13 +42,10 @@ import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
 import { Dialog } from '@/components/Dialog'
 import { SessionTab } from '@/components/node-session/SessionTab'
 import { collectPorts, TaskOutputPanel } from '@/components/TaskOutputPanel'
-import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
 import { ShaRange } from '@/components/ShaRange'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
-import { WorktreeDiffPanel } from '@/components/WorktreeDiffPanel'
-import { StructuralDiffView } from '@/components/structure/StructuralDiffView'
-import { Select } from '@/components/Select'
+import { ChangeReviewPanel } from '@/components/changes/ChangeReviewPanel'
 import { WorktreeFilesPanel } from '@/components/WorktreeFilesPanel'
 import {
   classifyCanceled,
@@ -155,8 +152,6 @@ function TaskDetailPage() {
   // RFC-083: engine — 'baseline' (always available) or 'deep' (external SCIP
   // indexer; auto-falls back to baseline when unavailable).
   const [engineMode, setEngineMode] = useState<'baseline' | 'deep'>('baseline')
-  // RFC-083: text↔structure cross-nav — file to focus when jumping to the diff.
-  const [diffFocusFile, setDiffFocusFile] = useState<string | null>(null)
   // Same shape as the editor route: the drawer ✕ must drive xyflow's
   // selection clear, otherwise the underlying node stays highlighted and
   // a re-click on it is swallowed by xyflow's `handleNodeClick`. See
@@ -289,8 +284,7 @@ function TaskDetailPage() {
       ? {
           outputs: false,
           worktreeFiles: false,
-          worktreeDiff: false,
-          worktreeStructure: false,
+          changes: false,
           orchestration: false,
           chatroom: false,
           questions: false,
@@ -346,15 +340,14 @@ function TaskDetailPage() {
       api.get(`/api/tasks/${encodeURIComponent(id)}/diff`, undefined, signal),
     // One oracle owns both navigation and fetching. Multi-repo tasks often
     // have top-level baseCommit=null while repos[] still contain usable shards.
-    enabled: tab === 'worktree-diff' && taskCapabilities.worktreeDiff,
+    enabled: tab === 'changes' && taskCapabilities.changes,
     refetchInterval: (q) =>
       isTerminal(task.data?.status) && q.state.data !== undefined ? false : 6000,
     retry: false,
   })
-  // Backend node/wrapper structural scopes are single-repo only. Keep the
-  // whole-task scope selected for multi-repo tasks instead of offering a leaf
-  // that deterministically returns 422.
-  const effectiveStructScope = task.data?.repoCount === 1 ? structScope : 'task'
+  // RFC-239 (AC-9): node scope is offered for multi-repo tasks too — the
+  // backend has supported multi-repo node pairing since RFC-089 P3.
+  const effectiveStructScope = structScope
 
   // RFC-083 — structural (semantic) diff for the task scope. It shares the
   // exact multi-repo capability gate with its navigation leaf and panel.
@@ -375,10 +368,10 @@ function TaskDetailPage() {
         signal,
       )
     },
-    // Only when the Structure tab is open: the analysis is expensive (git grep +
+    // Only when the changes tab is open: the analysis is expensive (git grep +
     // tree-sitter parse), and the scope <Select> must not mount into the DOM on
     // other tabs (else a page-wide `[role=combobox]` locator grabs it).
-    enabled: tab === 'worktree-structure' && taskCapabilities.worktreeStructure,
+    enabled: tab === 'changes' && taskCapabilities.changes,
     refetchInterval: (q) =>
       isTerminal(task.data?.status) && q.state.data !== undefined ? false : 6000,
     retry: false,
@@ -1024,22 +1017,42 @@ function TaskDetailPage() {
             </section>
           )}
 
-          {taskCapabilities.worktreeDiff && (
+          {/* RFC-239 — the unified structural-change view (replaces the former
+            worktree-diff + worktree-structure panes). Content renders only when
+            the tab is active: keeps the analysis lazy and keeps a page-wide
+            `[role=combobox]` locator from grabbing the hidden scope picker. */}
+          {taskCapabilities.changes && (
             <section
-              {...taskSectionProps(t, 'worktree-diff')}
-              className="task-detail__pane task-detail__pane--worktree-diff"
-              hidden={tab !== 'worktree-diff'}
+              {...taskSectionProps(t, 'changes')}
+              className="task-detail__pane task-detail__pane--changes"
+              hidden={tab !== 'changes'}
             >
-              {diff.data !== undefined ? (
+              {tab !== 'changes' ? null : diff.data !== undefined ? (
                 <>
                   {diff.error !== null && diff.error !== undefined && (
                     <ErrorBanner error={diff.error} onRetry={() => void diff.refetch()} />
                   )}
-                  <WorktreeDiffPanel
-                    diff={diff.data.diff}
-                    truncated={diff.data.truncated}
-                    focusFilePath={diffFocusFile}
+                  <ChangeReviewPanel
+                    taskId={tk.id}
                     storageKey={tk.id}
+                    diff={diff.data}
+                    diffTruncated={diff.data.truncated === true}
+                    structural={{
+                      data: structuralDiff.data,
+                      error: structuralDiff.error,
+                      isLoading: structuralDiff.isLoading,
+                    }}
+                    scopeValue={effectiveStructScope}
+                    scopeOptions={[
+                      { value: 'task', label: t('tasks.structScopeTask') },
+                      ...(nodeRuns.data?.runs ?? []).map((r) => ({
+                        value: `node:${r.id}`,
+                        label: `${r.nodeId} · ${r.status}`,
+                      })),
+                    ]}
+                    onScopeChange={setStructScope}
+                    engineMode={engineMode}
+                    onEngineChange={setEngineMode}
                   />
                 </>
               ) : diff.isLoading ? (
@@ -1047,81 +1060,6 @@ function TaskDetailPage() {
               ) : diff.error !== null && diff.error !== undefined ? (
                 <ErrorBanner error={diff.error} onRetry={() => void diff.refetch()} />
               ) : null}
-            </section>
-          )}
-
-          {/* RFC-083 — structural (semantic) diff overlay for the textual diff.
-            Content (incl. the scope <Select>) renders only when this tab is
-            active: keeps the expensive analysis lazy and keeps a page-wide
-            `[role=combobox]` locator from grabbing the hidden scope picker. */}
-          {taskCapabilities.worktreeStructure && (
-            <section
-              {...taskSectionProps(t, 'worktree-structure')}
-              className="task-detail__pane"
-              hidden={tab !== 'worktree-structure'}
-            >
-              {tab !== 'worktree-structure' ? null : (
-                <div className="structure-pane">
-                  <div className="structure-pane__scope">
-                    <span className="structure-pane__scope-label">
-                      {t('tasks.structScopeLabel')}
-                    </span>
-                    <Select
-                      ariaLabel={t('tasks.structScopeLabel')}
-                      value={effectiveStructScope}
-                      onChange={setStructScope}
-                      options={[
-                        { value: 'task', label: t('tasks.structScopeTask') },
-                        ...(tk.repoCount === 1
-                          ? (nodeRuns.data?.runs ?? []).map((r) => ({
-                              value: `node:${r.id}`,
-                              label: `${r.nodeId} · ${r.status}`,
-                            }))
-                          : []),
-                      ]}
-                    />
-                    <span className="structure-pane__scope-label">
-                      {t('tasks.structEngineLabel')}
-                    </span>
-                    <Segmented<'baseline' | 'deep'>
-                      value={engineMode}
-                      onChange={setEngineMode}
-                      options={(['baseline', 'deep'] as const).map((m) => ({
-                        value: m,
-                        label:
-                          m === 'baseline'
-                            ? t('tasks.structEngineBaseline')
-                            : t('tasks.structEngineDeep'),
-                      }))}
-                      ariaLabel={t('tasks.structEngineLabel')}
-                    />
-                  </div>
-                  {structuralDiff.data !== undefined ? (
-                    <>
-                      {structuralDiff.error !== null && structuralDiff.error !== undefined && (
-                        <ErrorBanner
-                          error={structuralDiff.error}
-                          onRetry={() => void structuralDiff.refetch()}
-                        />
-                      )}
-                      <StructuralDiffView
-                        data={structuralDiff.data}
-                        onJumpToHunk={(anchor) => {
-                          setDiffFocusFile(anchor.filePath)
-                          navigateTaskTab('worktree-diff')
-                        }}
-                      />
-                    </>
-                  ) : structuralDiff.isLoading ? (
-                    <LoadingState size="compact" label={t('tasks.loadingDiff')} />
-                  ) : structuralDiff.error !== null && structuralDiff.error !== undefined ? (
-                    <ErrorBanner
-                      error={structuralDiff.error}
-                      onRetry={() => void structuralDiff.refetch()}
-                    />
-                  ) : null}
-                </div>
-              )}
             </section>
           )}
 
@@ -1192,10 +1130,8 @@ function tabLabel(t: (key: string) => string, k: TaskDetailTab): string {
       return t('tasks.tabOutputs')
     case 'worktree-files':
       return t('tasks.tabWorktreeFiles')
-    case 'worktree-diff':
-      return t('tasks.tabWorktreeDiff')
-    case 'worktree-structure':
-      return t('tasks.tabWorktreeStructure')
+    case 'changes':
+      return t('tasks.tabChanges')
     case 'feedback':
       return t('tasks.tabFeedback')
     case 'task-questions':

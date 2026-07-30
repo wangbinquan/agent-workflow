@@ -26,6 +26,15 @@ export interface TaskDetailSearch extends Record<string, unknown> {
   tab?: TaskDetailTab
 }
 
+/** RFC-239 — pre-merge tab values live in old deep links / bookmarks. Both
+ *  panes merged into 'changes'; normalize at the URL boundary so the rest of
+ *  the page never sees a legacy value (the canonicalize replace then rewrites
+ *  the URL to the new value). */
+const LEGACY_TAB_ALIASES: Readonly<Record<string, TaskDetailTab>> = {
+  'worktree-diff': 'changes',
+  'worktree-structure': 'changes',
+}
+
 /** Syntax-only route validation. Availability is async and belongs below. */
 export function isTaskDetailTab(value: unknown): value is TaskDetailTab {
   return typeof value === 'string' && TASK_DETAIL_TAB_SET.has(value)
@@ -34,7 +43,11 @@ export function isTaskDetailTab(value: unknown): value is TaskDetailTab {
 /** Preserve unrelated search payload while dropping only an invalid tab. */
 export function validateTaskDetailSearch(raw: Record<string, unknown>): TaskDetailSearch {
   const { tab: _invalidOrReplacedTab, ...rest } = raw
-  return isTaskDetailTab(raw.tab) ? { ...rest, tab: raw.tab } : rest
+  const aliased =
+    typeof raw.tab === 'string' && raw.tab in LEGACY_TAB_ALIASES
+      ? LEGACY_TAB_ALIASES[raw.tab]
+      : raw.tab
+  return isTaskDetailTab(aliased) ? { ...rest, tab: aliased } : rest
 }
 
 /** Functional-search updater shared by push and canonical replace navigation. */

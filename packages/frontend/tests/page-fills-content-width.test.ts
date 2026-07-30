@@ -64,8 +64,7 @@ describe('pages fill the full content width', () => {
       '.page--wide',
       '.page--split',
       '.task-detail__workspace',
-      '.worktree-diff',
-      '.structure__tree',
+      '.changes__body',
       '.data-table',
     ]
     for (const selector of workspaceSelectors) {

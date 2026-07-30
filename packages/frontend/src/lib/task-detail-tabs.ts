@@ -13,8 +13,9 @@ export type TaskDetailTab =
   | 'details'
   | 'outputs'
   | 'worktree-files'
-  | 'worktree-diff'
-  | 'worktree-structure'
+  // RFC-239 — the unified structural-change view: replaces the former
+  // 'worktree-diff' + 'worktree-structure' pair (legacy URL values redirect).
+  | 'changes'
   | 'feedback'
   // RFC-120: task question list / 任务中心 board.
   | 'task-questions'
@@ -30,8 +31,9 @@ export type TaskDetailGroup = 'overview' | 'execution' | 'artifacts' | 'collabor
 export interface TaskDetailCapabilities {
   outputs: boolean
   worktreeFiles: boolean
-  worktreeDiff: boolean
-  worktreeStructure: boolean
+  /** RFC-239 — the unified change view needs a usable diff projection; the
+   *  structural overlay degrades in-panel when its own API fails. */
+  changes: boolean
   orchestration: boolean
   chatroom: boolean
   questions: boolean
@@ -70,7 +72,7 @@ export interface TaskDetailNavigation {
 export const TASK_DETAIL_GROUP_TABS: Readonly<Record<TaskDetailGroup, readonly TaskDetailTab[]>> = {
   overview: ['workflow-status', 'details', 'dw-orchestration'],
   execution: ['node-runs'],
-  artifacts: ['outputs', 'worktree-files', 'worktree-diff', 'worktree-structure'],
+  artifacts: ['outputs', 'worktree-files', 'changes'],
   collaboration: ['task-questions', 'feedback', 'chatroom'],
 }
 
@@ -129,8 +131,7 @@ export function deriveTaskDetailCapabilities(
   return {
     outputs: relatedData.hasOutputs,
     worktreeFiles: hasWorktreeProjection,
-    worktreeDiff: hasDiffProjection,
-    worktreeStructure: hasDiffProjection,
+    changes: hasDiffProjection,
     orchestration: stableRoom && relatedData.room.mode === 'dynamic-workflow',
     chatroom: stableRoom && relatedData.room.mode === 'turn-engine',
     questions: relatedData.canReadQuestions,
@@ -176,9 +177,9 @@ export const TAB_ORDER: readonly TaskDetailTab[] = [
   'details',
   'outputs',
   'worktree-files',
-  'worktree-diff',
-  // RFC-083: structural-diff overlay, immediately after the textual diff.
-  'worktree-structure',
+  // RFC-239: the unified structural-change view (was worktree-diff +
+  // worktree-structure; legacy URL tab values redirect here).
+  'changes',
   'feedback',
 ] as const
 
@@ -206,8 +207,7 @@ export const WORKGROUP_TAB_ORDER: readonly TaskDetailTab[] = [
   'chatroom',
   'task-questions',
   'worktree-files',
-  'worktree-diff',
-  'worktree-structure',
+  'changes',
   'details',
 ] as const
 
@@ -227,8 +227,7 @@ export const DYNAMIC_WORKGROUP_TAB_ORDER: readonly TaskDetailTab[] = [
   'details',
   'outputs',
   'worktree-files',
-  'worktree-diff',
-  'worktree-structure',
+  'changes',
   'feedback',
 ] as const
 
@@ -259,8 +258,7 @@ export function availableTabs(opts: {
     ({
       outputs: opts.hasOutputs,
       worktreeFiles: true,
-      worktreeDiff: true,
-      worktreeStructure: true,
+      changes: true,
       orchestration: opts.isDynamicWorkgroup === true,
       chatroom: opts.isWorkgroup === true && opts.isDynamicWorkgroup !== true,
       questions: true,
@@ -272,10 +270,8 @@ export function availableTabs(opts: {
         return capabilities.outputs
       case 'worktree-files':
         return capabilities.worktreeFiles
-      case 'worktree-diff':
-        return capabilities.worktreeDiff
-      case 'worktree-structure':
-        return capabilities.worktreeStructure
+      case 'changes':
+        return capabilities.changes
       case 'dw-orchestration':
         return capabilities.orchestration
       case 'chatroom':

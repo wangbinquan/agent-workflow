@@ -77,8 +77,8 @@ vi.mock('@/components/TaskOutputPanel', () => ({
 vi.mock('@/components/WorktreeFilesPanel', () => ({
   WorktreeFilesPanel: () => <div data-testid="worktree-files-stub" />,
 }))
-vi.mock('@/components/WorktreeDiffPanel', () => ({
-  WorktreeDiffPanel: () => <div data-testid="worktree-diff-stub" />,
+vi.mock('@/components/changes/ChangeReviewPanel', () => ({
+  ChangeReviewPanel: () => <div data-testid="change-review-stub" />,
 }))
 vi.mock('@/components/structure/StructuralDiffView', () => ({
   StructuralDiffView: () => <div data-testid="structural-diff-stub" />,
@@ -316,7 +316,7 @@ afterEach(() => {
 describe('/tasks/$id rendered URL-backed panels', () => {
   test('no-worktree task filters artifact leaves and replaces an old diff deep link', async () => {
     installFetch(() => undefined)
-    const { router } = renderTaskRoute('/tasks/no-worktree?tab=worktree-diff&focus=keep', [
+    const { router } = renderTaskRoute('/tasks/no-worktree?tab=changes&focus=keep', [
       task('no-worktree'),
     ])
 
@@ -324,8 +324,7 @@ describe('/tasks/$id rendered URL-backed panels', () => {
       expect(router.state.location.search).toEqual({ tab: 'workflow-status', focus: 'keep' })
       expectActivePanel('workflow-status')
     })
-    expect(document.getElementById('task-detail-section-worktree-diff')).toBeNull()
-    expect(document.getElementById('task-detail-section-worktree-structure')).toBeNull()
+    expect(document.getElementById('task-detail-section-changes')).toBeNull()
     expect(document.getElementById('task-detail-section-worktree-files')).toBeNull()
   })
 
@@ -368,13 +367,14 @@ describe('/tasks/$id rendered URL-backed panels', () => {
         },
       ],
     })
+    // legacy tab value in an old deep link normalizes to the merged pane
     const { router } = renderTaskRoute('/tasks/multi?tab=worktree-diff&focus=keep', [multi])
 
     await waitFor(() => {
-      expect(router.state.location.search).toEqual({ tab: 'worktree-diff', focus: 'keep' })
-      expectActivePanel('worktree-diff')
+      expect(router.state.location.search).toEqual({ tab: 'changes', focus: 'keep' })
+      expectActivePanel('changes')
     })
-    expect(screen.getByTestId('worktree-diff-stub')).toBeTruthy()
+    expect(screen.getByTestId('change-review-stub')).toBeTruthy()
   })
 
   test('feedback leaf follows memory:read and unavailable deep links canonicalize', async () => {
@@ -505,12 +505,12 @@ describe('/tasks/$id rendered URL-backed panels', () => {
     })
     expect(screen.getByTestId('worktree-files-stub')).toBeTruthy()
 
-    fireEvent.click(sectionDestination('worktree-diff'))
+    fireEvent.click(sectionDestination('changes'))
     await waitFor(() => {
-      expect(router.state.location.search).toEqual({ tab: 'worktree-diff' })
-      expectActivePanel('worktree-diff')
+      expect(router.state.location.search).toEqual({ tab: 'changes' })
+      expectActivePanel('changes')
     })
-    expect(screen.getByTestId('worktree-diff-stub')).toBeTruthy()
+    expect(screen.getByTestId('change-review-stub')).toBeTruthy()
     // The chat room stays the group's default view — this widens the artifacts
     // group, it does not demote the room.
     expect(document.getElementById('task-detail-section-chatroom')).not.toBeNull()
@@ -578,11 +578,11 @@ describe('/tasks/$id rendered URL-backed panels', () => {
     installFetch(() => undefined)
     const plain = task('plain', { worktreePath: '/worktree/plain', baseCommit: 'abc123' })
     const crew = task('crew', { workgroupId: 'wg_crew', workgroupName: 'Crew' })
-    const { router } = renderTaskRoute('/tasks/plain?tab=worktree-diff&focus=keep', [plain, crew], {
+    const { router } = renderTaskRoute('/tasks/plain?tab=changes&focus=keep', [plain, crew], {
       room: turnRoom('crew'),
     })
 
-    await waitFor(() => expectActivePanel('worktree-diff'))
+    await waitFor(() => expectActivePanel('changes'))
     await router.navigate({
       to: '/tasks/$id',
       params: { id: 'crew' },

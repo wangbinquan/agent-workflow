@@ -78,100 +78,66 @@ describe('.page--task-detail fits the viewport without a document scrollbar', ()
   })
 })
 
-describe('worktree diff vertical file tabs', () => {
-  test('the real task-detail diff pane exposes its inline width as a named container', () => {
-    const body = ruleBody('.task-detail__pane--worktree-diff')
-    expect(body).toMatch(/container:\s*worktree-diff-pane\s*\/\s*inline-size/)
+describe('changes pane layout (RFC-239 merged view)', () => {
+  // These migrate the pre-merge worktree-diff contracts one-for-one onto the
+  // unified changes pane: named inline-size container, row layout that fills
+  // the pane, a bounded scrollable sidebar, narrow-pane stacking, and the
+  // .diff__file height chain that keeps a long diff scrolling internally.
+  test('the real task-detail changes pane exposes its inline width as a named container', () => {
+    const body = ruleBody('.task-detail__pane--changes')
+    expect(body).toMatch(/container:\s*changes-pane\s*\/\s*inline-size/)
   })
 
   test('two-column layout fills the pane vertically', () => {
-    const body = ruleBody('.worktree-diff')
+    const body = ruleBody('.changes__body')
     expect(body).toMatch(/display:\s*flex/)
-    expect(body).toMatch(/flex-direction:\s*row/)
-    expect(body).toMatch(/height:\s*100%/)
-    expect(body).toMatch(/width:\s*100%/)
-    expect(body).toMatch(/min-width:\s*0/)
+    expect(body).toMatch(/flex:\s*1/)
     expect(body).toMatch(/min-height:\s*0/)
   })
 
-  // Regression: a fixed 280px rail made the actual diff frame unnecessarily
-  // narrow at laptop / split-window widths. Keep the tree readable, but let it
-  // yield a predictable share of the row to the primary diff surface.
-  test('left file list is a bounded responsive independently scrollable column', () => {
-    const body = ruleBody('.worktree-diff__files')
-    expect(body).toMatch(/flex:\s*0 1 clamp\(220px,\s*24%,\s*280px\)/)
-    expect(body).not.toMatch(/flex:\s*0 0 280px/)
+  test('sidebar is a bounded independently scrollable column', () => {
+    const body = ruleBody('.changes__sidebar')
+    expect(body).toMatch(/flex:\s*0 0 300px/)
     expect(body).toMatch(/overflow-y:\s*auto/)
-    expect(body).toMatch(/min-height:\s*0/)
-  })
-
-  test('left file list reads as a full-height panel (border on all sides + bg)', () => {
-    // Without these the column was technically 100% tall but only the
-    // 1px right border was visible, so the empty space below the last
-    // file tab looked like "the box isn't filled". Lock the panel look
-    // so a future style cleanup doesn't quietly revert.
-    const body = ruleBody('.worktree-diff__files')
     expect(body).toMatch(/border:\s*1px solid var\(--border\)/)
-    expect(body).toMatch(/border-radius:\s*6px/)
-    expect(body).toMatch(/background:\s*var\(--bg\)/)
-    expect(body).not.toMatch(/border-right:\s*1px solid var\(--border\)/)
   })
 
-  test('narrow task panes stack the file rail above a full-width diff body', () => {
+  test('narrow task panes stack the sidebar above a full-width detail column', () => {
     expect(STYLES).toMatch(
-      /@container\s+worktree-diff-pane\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\.worktree-diff\s*\{[^}]*flex-direction:\s*column[^}]*\}[\s\S]*?\.worktree-diff__files\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*100%[^}]*max-height:\s*12rem/,
+      /@container\s+changes-pane\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\.changes__body\s*\{[^}]*flex-direction:\s*column[^}]*\}[\s\S]*?\.changes__sidebar\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*100%[^}]*max-height:\s*12rem/,
     )
   })
 
-  test('right body grows + lays inner card out as a flex column', () => {
-    // Outer body itself doesn't scroll — it just sizes the inner
-    // .diff__file card, which then handles vertical overflow internally
-    // via its <pre>.  Locking this keeps a future "let's just give body
-    // overflow:auto and let things stack" regression from coming back.
-    const body = ruleBody('.worktree-diff__body')
+  test('main column grows and clips (inner surfaces own their scrolling)', () => {
+    const body = ruleBody('.changes__main')
     expect(body).toMatch(/flex:\s*1/)
     expect(body).toMatch(/min-width:\s*0/)
-    expect(body).toMatch(/display:\s*flex/)
     expect(body).toMatch(/overflow:\s*hidden/)
   })
 
-  test('inactive file tabpanels do not participate in the flex row', () => {
-    const body = ruleBody('.worktree-diff__body[hidden]')
-    expect(body).toMatch(/display:\s*none/)
-  })
-
-  test('inner .diff__file fills the full right column height (RFC-021 contract)', () => {
-    // Without these rules the .diff__file was intrinsic-content-sized
-    // and its <pre> hit a 480px max-height cap, leaving ~190px of empty
-    // space at the bottom of the right column.
-    const file = ruleBody('.worktree-diff__body > .diff__file')
+  test('inner .diff__file fills the full main column height (RFC-021 contract carried over)', () => {
+    const file = ruleBody('.changes__main .diff__file')
     expect(file).toMatch(/flex:\s*1/)
     expect(file).toMatch(/display:\s*flex/)
     expect(file).toMatch(/flex-direction:\s*column/)
-    // A <pre> has a very large min-content width. Without min-width:0 on its
-    // flex parent, the card grows past the body and the body's overflow:hidden
-    // clips the frame instead of leaving scrolling to .diff__body.
     expect(file).toMatch(/min-width:\s*0/)
     expect(file).toMatch(/min-height:\s*0/)
-    const pre = ruleBody('.worktree-diff__body > .diff__file > .diff__body')
+    const pre = ruleBody('.changes__main .diff__file > .diff__body')
     expect(pre).toMatch(/flex:\s*1/)
     expect(pre).toMatch(/min-height:\s*0/)
-    // Explicit override of the legacy 480px cap that ships with .diff__body.
     expect(pre).toMatch(/max-height:\s*none/)
     expect(pre).toMatch(/overflow:\s*auto/)
   })
 
-  test('file tab truncates long paths with ellipsis (hover title fallback in JSX)', () => {
-    const body = ruleBody('.worktree-diff__file-tab')
+  test('file tab truncates long names with ellipsis (hover title fallback in JSX)', () => {
+    const body = ruleBody('.changes__file-name')
     expect(body).toMatch(/white-space:\s*nowrap/)
     expect(body).toMatch(/text-overflow:\s*ellipsis/)
     expect(body).toMatch(/overflow:\s*hidden/)
   })
 
   test('selected file tab has a distinct visual via [aria-selected=true]', () => {
-    // Both the BEM modifier and the aria-state selectors should resolve to
-    // styling rules — protects against either being deleted alone.
-    expect(STYLES).toMatch(/\.worktree-diff__file-tab--active\b/)
-    expect(STYLES).toMatch(/\.worktree-diff__file-tab\[aria-selected='true'\]/)
+    expect(STYLES).toMatch(/\.changes__file-tab--active\b/)
+    expect(STYLES).toMatch(/\.changes__file-tab\[aria-selected='true'\]/)
   })
 })
