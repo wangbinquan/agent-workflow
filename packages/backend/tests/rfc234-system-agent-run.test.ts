@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { assertSafeSeedPath, runSystemAgent } from '../src/services/systemAgentRun'
 import type { SystemAgentEventSinkV1 } from '../src/services/sessionEventSink'
+import type { Logger } from '../src/util/log'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -220,22 +221,34 @@ describe('runSystemAgent', () => {
 
   test('transient terminal failure retries the remembered incomplete state', async () => {
     process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
+    const secret = 'sk-live-AAAABBBBCCCCDDDDEEEEFFFF11112222'
+    const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = []
+    const log: Logger = {
+      debug: () => {},
+      info: () => {},
+      warn: (message, fields) => warnings.push({ message, fields }),
+      error: () => {},
+      child: () => log,
+    }
     const terminals: Array<{ state: string; reason?: string }> = []
     let terminalAttempts = 0
     const sink: SystemAgentEventSinkV1 = {
       append: async () => {
-        throw new Error('transient append failure')
+        throw new Error(`transient append failure https://u:${secret}@api.example.com/x`)
       },
       setRootSessionId: async () => {},
       markTerminal: async (state, reason) => {
         terminalAttempts += 1
         terminals.push({ state, ...(reason === undefined ? {} : { reason }) })
-        if (terminalAttempts === 1) throw new Error('transient terminal failure')
+        if (terminalAttempts === 1) {
+          throw new Error(`transient terminal failure https://u:${secret}@api.example.com/x`)
+        }
       },
     }
     const result = await runSystemAgent({
       ...baseOpts(scratchParentDir(), wrapperFor(MOCK_OPENCODE)),
       eventSink: sink,
+      log,
     })
 
     expect(result.status).toBe('ok')
@@ -243,6 +256,8 @@ describe('runSystemAgent', () => {
       { state: 'incomplete', reason: 'stream-persist-failed' },
       { state: 'incomplete', reason: 'stream-persist-failed' },
     ])
+    expect(JSON.stringify(warnings)).not.toContain(secret)
+    expect(JSON.stringify(warnings)).toContain('‹redacted›')
   })
 
   // RFC-234 e2e seam: an UNBRANDED opencodeCmd rides the same legacy escape

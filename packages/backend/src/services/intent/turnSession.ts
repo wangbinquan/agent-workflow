@@ -214,9 +214,13 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
           .where(eq(intentTurns.id, this.turnId))
           .get()
         if (turn === undefined || turn.captureState === null) return 0
-        // Truncation/incompleteness is evidence and may not be painted over by
-        // a later generic "complete" call from a test seam or outer adapter.
-        if (turn.captureState === 'truncated' || turn.captureState === 'incomplete') {
+        // Terminal evidence is monotonic: complete cannot repaint truncation,
+        // while a later observed persistence/lifecycle failure is stronger
+        // than truncation and must retain its explicit incomplete reason.
+        if (
+          turn.captureState === 'incomplete' ||
+          (turn.captureState === 'truncated' && terminal.state !== 'incomplete')
+        ) {
           return turn.lastEventSeq
         }
         tx.update(intentTurns)

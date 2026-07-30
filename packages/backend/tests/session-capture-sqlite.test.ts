@@ -11,7 +11,12 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { captureChildSessions, resolveOpencodeDbPath } from '../src/services/sessionCapture'
+import {
+  captureChildSessions,
+  captureOpencodeSessionsToSink,
+  resolveOpencodeDbPath,
+} from '../src/services/sessionCapture'
+import type { Logger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -289,6 +294,51 @@ describe('captureChildSessions', () => {
     expect(result.failed).toBe(true)
     const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
     expect(rows.some((r) => r.kind === 'subagent_capture_failed')).toBe(true)
+  })
+
+  test('generic sink capture masks credential-shaped persistence failures', async () => {
+    const opencodeDb = buildOpencodeDb({
+      sessions: [
+        { id: 'root', parent_id: null, agent: 'root' },
+        { id: 'child', parent_id: 'root', agent: 'child' },
+      ],
+      messages: [{ id: 'm1', session_id: 'child', time_created: 1, data: '{}' }],
+      parts: [
+        {
+          id: 'p1',
+          message_id: 'm1',
+          session_id: 'child',
+          time_created: 1,
+          data: '{"type":"text","text":"child output"}',
+        },
+      ],
+    })
+    const secret = 'sk-live-AAAABBBBCCCCDDDDEEEEFFFF11112222'
+    const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = []
+    const log: Logger = {
+      debug: () => {},
+      info: () => {},
+      warn: (message, fields) => warnings.push({ message, fields }),
+      error: () => {},
+      child: () => log,
+    }
+    const result = await captureOpencodeSessionsToSink({
+      rootSessionId: 'root',
+      opencodeDbPath: opencodeDb,
+      log,
+      sink: {
+        append: async () => {
+          throw new Error(`capture failed https://u:${secret}@api.example.com/x`)
+        },
+        setRootSessionId: async () => {},
+        markTerminal: async () => {},
+      },
+    })
+
+    expect(result.failed).toBe(true)
+    expect(result.failureReason).not.toContain(secret)
+    expect(JSON.stringify(warnings)).not.toContain(secret)
+    expect(JSON.stringify(warnings)).toContain('‹redacted›')
   })
 
   test('cycle in session.parent_id (root → A → root) is bounded by visited set', async () => {

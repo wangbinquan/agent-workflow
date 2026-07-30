@@ -26,6 +26,7 @@ import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { DbClient } from '../db/client'
 import { nodeRunEvents, nodeRuns } from '../db/schema'
@@ -246,7 +247,7 @@ export async function captureOpencodeSessionsToSink(
     }
     return { capturedSessionIds: captured, insertedEventRows: insertedRows, failed: false }
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
+    const reason = maskDiagnosticsText(error instanceof Error ? error.message : String(error))
     log.warn('opencode-session-sink-capture-failed', {
       rootSessionId: opts.rootSessionId,
       err: reason,

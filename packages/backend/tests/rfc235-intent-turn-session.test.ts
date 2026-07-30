@@ -120,6 +120,31 @@ describe('RFC-235 Intent turn Session capture', () => {
     const response = await getIntentTurnSession(db, 'session-1', 'turn-cap')
     expect(response.tree.captureComplete).toBe(false)
 
+    // A generic successful terminal call cannot repaint the cap, but a later
+    // observed lifecycle/persistence failure is stronger and keeps its reason.
+    await sink.markTerminal('complete')
+    expect(
+      db
+        .select({ captureState: intentTurns.captureState })
+        .from(intentTurns)
+        .where(eq(intentTurns.id, 'turn-cap'))
+        .get(),
+    ).toEqual({ captureState: 'truncated' })
+    await sink.markTerminal('incomplete', 'post-exit-flush-timeout')
+    expect(
+      db
+        .select({
+          captureState: intentTurns.captureState,
+          reason: intentTurns.captureIncompleteReason,
+        })
+        .from(intentTurns)
+        .where(eq(intentTurns.id, 'turn-cap'))
+        .get(),
+    ).toEqual({
+      captureState: 'incomplete',
+      reason: 'post-exit-flush-timeout',
+    })
+
     // The sink remembers the cap locally: later observations do not even open
     // another transaction against the now-gone turn.
     db.delete(intentTurns).where(eq(intentTurns.id, 'turn-cap')).run()

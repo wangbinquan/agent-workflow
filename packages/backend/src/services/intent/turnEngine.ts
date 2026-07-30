@@ -21,6 +21,7 @@ import {
   IntentMountRequestsSchema,
   IntentQuestionsSchema,
   buildProtocolBlock,
+  maskDiagnosticsText,
   parseIntentChangeset,
   type IntentQuestion,
 } from '@agent-workflow/shared'
@@ -230,7 +231,7 @@ export async function runIntentTurn(
       log.warn('intent-turn-session-terminal-write-failed', {
         sessionId: input.sessionId,
         turnId,
-        err: error instanceof Error ? error.message : String(error),
+        err: maskDiagnosticsText(error instanceof Error ? error.message : String(error)),
       })
     }
   }

@@ -326,7 +326,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     } catch (error) {
       log.warn('system-agent-session-terminal-persist-failed', {
         feature: opts.feature,
-        err: error instanceof Error ? error.message : String(error),
+        err: maskDiagnosticsText(error instanceof Error ? error.message : String(error)),
       })
     }
   }
@@ -340,7 +340,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       log.warn('system-agent-session-event-persist-failed', {
         feature: opts.feature,
         reason,
-        err: error instanceof Error ? error.message : String(error),
+        err: maskDiagnosticsText(error instanceof Error ? error.message : String(error)),
       })
     }
     await markSinkTerminal('incomplete', reason)
