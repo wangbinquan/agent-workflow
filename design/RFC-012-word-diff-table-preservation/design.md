@@ -210,3 +210,27 @@ Codex 实现门抓到 2 个 P1，均已修复并锁渲染级回归：
    无任何高亮。修复：body 为空时整行入 marker，交给
    `repairBrokenLinePrefixes` 拆成完整 DEL 行 + INS 行（红旧段落 + 绿新
    task 项）；普通 `- ` 列表化的同形旧洞一并修复。
+
+### 实现门二轮跟进（同日）
+
+二轮复核再抓 3 P1 + 1 P2，均已修复：
+
+1. **line 模式表结构变化撕表 / 丢列**：表头改名或列数变化时 diffLines 的
+   DEL/INS 行留在同一 GFM 表里——第二行不是分隔符则整表降级段落；旧分隔符
+   打头则新表头被当 body 行、超出旧列数的 cell 被 GFM 丢弃。新增
+   `repairMergedTableRuns`：merged 中带 marker 且分隔符数量 / 位置不合法的
+   顶层表段按单侧视图重建为"旧表 DEL + 新表 INS"（与 word/block 一致）；
+   合法段（普通行级增删改）与无 marker 段原样保留。
+2. **仅加删 setext 下划线的结构变化隐身**：`B`→`B\n===` 只 emit 下划线一行
+   change、被结构 skip 放行，标题化全无高亮。word/line 路径把 setext 标题
+   块（题行 + `=` 下划线）整块原子化，呈现为旧段落 DEL + 新标题 INS；
+   题行不吸收占位符行防嵌套原子。
+3. **引用空续行 `>` 被前缀本体规则误包**：完整出现的纯 blockquote 前缀行
+   保持裸行（包 marker 会渲染字面绿 `>` 并撕开引用段落）；不完整 `> `
+   片段（引用化）仍整行入 marker 由拆行修复呈现。
+4. **checkbox 原子化误伤缩进代码块**（P2）：行首 ≥4 空格 / 含 tab 且上一
+   条非空行不是列表行时按缩进代码处理、不原子化；嵌套 task 正常。
+
+已知限制：缩进代码块本身从未原子化（自 RFC-010 起），其内部 word diff 的
+marker 仍靠 remarkDiffMarkers 的 value 剥离兜底渲染单侧；如需与 fence 同
+级的保护，另立 issue。

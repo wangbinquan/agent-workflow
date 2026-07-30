@@ -228,6 +228,111 @@ describe('word 片段不误判结构行（Codex 实现门 P1）', () => {
   })
 })
 
+// Codex 实现门二轮（2026-07-30）3 P1 + 1 P2 回归：line 模式表结构变化须
+// 重建为旧表 + 新表（否则新列 cell 被 GFM 丢弃）；仅加删 setext 下划线的
+// 结构变化不得隐身；引用空续行 `>` 保持裸行；缩进代码块里的 `[x]` 不做
+// checkbox 原子化。
+describe('line 模式表结构变化重建（Codex 二轮 P1）', () => {
+  const T2 = '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
+
+  test('列数变化 → 旧表 + 新表两张，全部 cell 保留', () => {
+    const T3 = '| a | b | c |\n| --- | --- | --- |\n| 1 | 2 | 3 |\n'
+    const { container } = render(<MarkdownDiffView left={T2} right={T3} granularity="line" />)
+    const tables = container.querySelectorAll('table')
+    expect(tables.length).toBe(2)
+    expect(pipeLeak(container)).toBe(false)
+    // 新增第三列的 cell 不被 GFM 丢弃
+    expect(tables[1]?.textContent).toContain('c')
+    expect(tables[1]?.textContent).toContain('3')
+    expect(tables[0]?.querySelectorAll('.diff-del').length).toBeGreaterThan(0)
+    expect(tables[1]?.querySelectorAll('.diff-ins').length).toBeGreaterThan(0)
+  })
+
+  test('表头改名 → 旧表 + 新表两张（第二行必须是分隔符才成表）', () => {
+    const TH = '| x | y |\n| --- | --- |\n| 1 | 2 |\n'
+    const { container } = render(<MarkdownDiffView left={T2} right={TH} granularity="line" />)
+    const tables = container.querySelectorAll('table')
+    expect(tables.length).toBe(2)
+    expect(pipeLeak(container)).toBe(false)
+    expect(tables[0]?.querySelector('th')?.textContent).toBe('a')
+    expect(tables[1]?.querySelector('th')?.textContent).toBe('x')
+  })
+
+  test('body 行编辑仍保持单表（重建只针对结构不合法段）', () => {
+    const TB = '| a | b |\n| --- | --- |\n| 1 | 9 |\n'
+    const { container } = render(<MarkdownDiffView left={T2} right={TB} granularity="line" />)
+    expect(container.querySelectorAll('table').length).toBe(1)
+    expect(pipeLeak(container)).toBe(false)
+  })
+})
+
+describe('setext 结构变化可见（Codex 二轮 P1）', () => {
+  test('word：既有段落补 `===` 标题化 → 红段落 + 绿 <h1>', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'A\n\nB\n'} right={'A\n\nB\n===\n'} granularity="word" />,
+    )
+    expect(container.querySelector('.diff-del')?.textContent).toBe('B')
+    const h1 = container.querySelector('h1')
+    expect(h1?.querySelector('.diff-ins')?.textContent).toBe('B')
+    expect(container.textContent ?? '').not.toContain('=')
+  })
+
+  test('word：去掉 `===` 下划线 → 红 <h1> + 绿段落', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'A\n\nB\n===\n'} right={'A\n\nB\n'} granularity="word" />,
+    )
+    expect(container.querySelector('h1')?.querySelector('.diff-del')).not.toBeNull()
+    expect(container.querySelector('.diff-ins')?.textContent).toBe('B')
+  })
+
+  test('line：标题化同样可见', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'A\n\nB\n'} right={'A\n\nB\n===\n'} granularity="line" />,
+    )
+    expect(container.querySelector('.diff-del')?.textContent).toBe('B')
+    expect(container.querySelector('h1')?.querySelector('.diff-ins')).not.toBeNull()
+  })
+})
+
+describe('引用段落增删（Codex 二轮 P1）', () => {
+  test('word：整段引用（含 `>` 空续行）新增 → 两段绿引用，无字面 `>` 泄漏', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'x\n'} right={'x\n\n> a\n>\n> b\n'} granularity="word" />,
+    )
+    const bq = container.querySelector('blockquote')
+    expect(bq).not.toBeNull()
+    expect(bq?.querySelectorAll('p').length).toBe(2)
+    expect(container.textContent ?? '').not.toContain('>')
+    expect(bq?.querySelectorAll('.diff-ins').length).toBe(2)
+  })
+})
+
+describe('缩进代码块不做 checkbox 原子化（Codex 二轮 P2）', () => {
+  test('word：4 空格缩进代码里的 `[x]` 切换 → 仍是代码块，不渲染 checkbox', () => {
+    const { container } = render(
+      <MarkdownDiffView
+        left={'p\n\n    - [x] code\n'}
+        right={'p\n\n    - [ ] code\n'}
+        granularity="word"
+      />,
+    )
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull()
+    expect(container.querySelector('pre code')).not.toBeNull()
+  })
+
+  test('word：嵌套 task（合法缩进）仍原子化，checkbox 正常', () => {
+    const { container } = render(
+      <MarkdownDiffView
+        left={'- top\n  - [x] sub\n'}
+        right={'- top\n  - [ ] sub\n'}
+        granularity="word"
+      />,
+    )
+    expect(container.querySelectorAll('input[type="checkbox"]').length).toBeGreaterThanOrEqual(2)
+    expect(container.textContent ?? '').not.toContain('[')
+  })
+})
+
 describe('identical 输入不变量（checkbox / setext / 引用内 checkbox 原子化不破坏无变更路径）', () => {
   const doc = [
     '# T',

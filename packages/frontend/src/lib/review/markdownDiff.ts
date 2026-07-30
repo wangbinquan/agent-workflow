@@ -36,6 +36,12 @@
 //   修复；wrapLines 的结构 skip（表分隔符 / hr）改为剥引用前缀后判定并新增
 //   setext `===` 下划线 skip；task list checkbox（`- [x] `）并入行首结构
 //   前缀，勾选态切换由拆行修复呈现为完整的 DEL 项 + INS 项。
+//   实现门跟进（同日两轮，5 P1 + 1 P2）：结构行 skip 与前缀外置只作用于
+//   与物理行边界对齐的行（word 片段的 `=`/`---` 增删否则被静默吞掉）；
+//   前缀即变更本体时整行入 marker（纯引用前缀完整行除外——`>` 空续行必须
+//   保持裸行）；setext 标题块在 word/line 路径整块原子化（仅加删下划线
+//   不再隐身）；line 模式表头 / 列数变化由 repairMergedTableRuns 重建为
+//   旧表 DEL + 新表 INS；checkbox 原子化排除缩进代码块。
 
 import { diffArrays, diffLines, type Change } from 'diff'
 
@@ -169,7 +175,14 @@ function wrapLines(
     // `- [x] `）：外置前缀会让空 marker 对被清理、整行无任何高亮（Codex
     // 实现门 P1）。改为整行入 marker，交给 repairBrokenLinePrefixes 拆成
     // 完整的 DEL 行 + INS 行呈现。
+    // 例外（Codex 二轮 P1）：完整出现的纯 blockquote 前缀行（`>` 空续行）
+    // 保持裸行——包 marker 会渲染出字面高亮 `>` 并把 `> a\n>\n> b` 撕成
+    // 一个段落；不完整的 `> ` 片段（引用化前缀新增）仍整行入 marker。
     if (body.length === 0) {
+      if (complete && prefix.replace(/[>\s]/g, '').length === 0) {
+        wrapped.push(line)
+        continue
+      }
       wrapped.push(open + line + close)
       continue
     }
@@ -360,16 +373,88 @@ const INLINE_CODE_RE = /(?<!\\)(`+)(?!`)([^`\n]+?)\1(?!`)/g
 
 // GFM task list checkbox（`- [x] ` / `1. [ ] `，含 blockquote 内）。只认
 // 行首列表符之后紧跟的一个 `[ ]`/`[x]`/`[X]`，避免把正文里的 `[x]` 误伤。
-const TASK_CHECKBOX_RE = /^([ \t]*(?:>[ \t]?)*(?:[-*+]|\d+\.)[ \t]+)\[([ xX])\](?=[ \t]|$)/gm
+const TASK_CHECKBOX_RE = /^([ \t]*(?:>[ \t]?)*(?:[-*+]|\d+\.)[ \t]+)\[([ xX])\](?=[ \t]|$)/
+const LIST_LINE_RE = /^[ \t]*(?:>[ \t]?)*(?:[-*+]|\d+\.)[ \t]+/
+
+/**
+ * 找出 text 中所有 setext 标题块（段落行 run + `=` 下划线；`---` 形式的
+ * H2 与 hr 歧义大，维持既有 thematic break 处理不atomize）。若不整块
+ * 原子化，"给既有段落补 `===` 下划线"这类结构变更会因下划线单独成
+ * change、被 wrapLines 结构 skip 放行而完全无高亮（Codex 二轮 P1）。
+ * 题行 run：连续的非空、非结构（fence / 表 / hr / ATX / 引用 / 列表 /
+ * 下划线自身）、且不含已分配占位符的行（占位符行入题会造成嵌套原子，
+ * restoreAtoms 单趟 replace 解不开嵌套、PUA 直接漏到输出）。
+ */
+function findSetextBlocks(text: string): LineBlock[] {
+  const lines = text.split('\n')
+  const isPlainTitleLine = (l: string): boolean =>
+    l.trim().length > 0 &&
+    !PLACEHOLDER_RE.test(l) &&
+    FENCE_RE.exec(l) === null &&
+    !TABLE_ROW_RE.test(l) &&
+    !THEMATIC_BREAK_RE.test(l) &&
+    !SETEXT_UNDERLINE_RE.test(l) &&
+    !/^ {0,3}(?:#{1,6}[ \t]|>)/.test(l) &&
+    !LIST_LINE_RE.test(l)
+  const blocks: LineBlock[] = []
+  let i = 0
+  while (i < lines.length) {
+    if (!SETEXT_UNDERLINE_RE.test(lines[i] ?? '') || i === 0) {
+      i++
+      continue
+    }
+    let start = i
+    while (start > 0 && isPlainTitleLine(lines[start - 1] ?? '')) start--
+    if (start === i || (blocks.length > 0 && start <= blocks[blocks.length - 1]!.end)) {
+      i++
+      continue
+    }
+    blocks.push({ start, end: i, content: lines.slice(start, i + 1).join('\n') })
+    i++
+  }
+  return blocks
+}
+
+/**
+ * checkbox 原子化的逐行扫描。P2（Codex 二轮）：行首 ≥4 空格（或含 tab）
+ * 且上一条非空行不是列表行时，该行是缩进代码块而非 task 项，原子化会让
+ * 代码块 diff 被行首修复错拆出赝品 `- [x]` 行；嵌套 task（前面有列表行）
+ * 缩进合法，照常原子化。
+ */
+function protectTaskCheckboxes(
+  text: string,
+  allocInline: (kind: string, content: string) => string | null,
+): string {
+  const lines = text.split('\n')
+  let prevNonBlankIsList = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    if (line.trim().length === 0) continue
+    const m = TASK_CHECKBOX_RE.exec(line)
+    if (m !== null) {
+      const leading = /^[ \t]*/.exec(line)?.[0] ?? ''
+      const indentedCode = (leading.includes('\t') || leading.length >= 4) && !prevNonBlankIsList
+      if (!indentedCode) {
+        const pre = m[1] ?? ''
+        const box = '[' + (m[2] ?? ' ') + ']'
+        lines[i] = pre + (allocInline('todo', box) ?? box) + line.slice(pre.length + box.length)
+      }
+    }
+    prevNonBlankIsList = LIST_LINE_RE.test(line)
+  }
+  return lines.join('\n')
+}
 
 /**
  * word 路径专属：把 left / right 中的 fenced code block、markdown 表格、
- * inline code span 依次替换成单 codepoint 占位符。占位符是 jsdiff 眼中的
- * 原子 token——整块要么 unchanged、要么 ins、要么 del，不会内部碎裂，
- * marker 也就永远不会落进 code / 表分隔符里（乱码根因）。
+ * setext 标题块、inline code span、task checkbox 依次替换成单 codepoint
+ * 占位符。占位符是 jsdiff 眼中的原子 token——整块要么 unchanged、要么
+ * ins、要么 del，不会内部碎裂，marker 也就永远不会落进 code / 表分隔符
+ * 里（乱码根因）。
  *
- * 顺序敏感：先 fence（fence 内的 `|` 行不能当表）、再表格、最后 inline
- * code（表格 cell 内的反引号已随表抽走）。
+ * 顺序敏感：先 fence（fence 内的 `|` / `===` 行不能当表 / 标题）、再表格、
+ * 再 setext（题行不吸收占位符行，防嵌套原子）、最后 inline code 与
+ * checkbox（表格 cell / 题行内的反引号已随块抽走）。
  */
 function pretreatWordAtoms(
   left: string,
@@ -389,17 +474,21 @@ function pretreatWordAtoms(
       tables,
       tables.map((b) => alloc.alloc('table', b.content, true) ?? b.content),
     )
+    // setext 标题块（题行 + `===`）整块原子化：下划线增删才能呈现为
+    // "旧段落 DEL + 新标题 INS"而不是无高亮的静默结构变化。
+    const setexts = findSetextBlocks(out)
+    out = replaceLineBlocks(
+      out,
+      setexts,
+      setexts.map((b) => alloc.alloc('setext', b.content, true) ?? b.content),
+    )
     out = out.replace(INLINE_CODE_RE, (m) => alloc.alloc('inline', m, false) ?? m)
     // task checkbox 原子化：`[`/`x`/`]` 逐 token diff 时，勾选态切换会产生
     // "del `x` + ins 空格"——空白 change 不包 marker（isBlank skip），空格
     // 沦为无归属 context，del 视图残留 `[x ]` 字面量、checkbox 渲染丢失。
     // 原子化后切换呈现为 `[x]`→`[ ]` 整体 DEL+INS，行首修复再把它拆成两条
     // 各自完整的 task 行（旧勾选态红、新勾选态绿）。
-    return out.replace(
-      TASK_CHECKBOX_RE,
-      (_m, pre: string, state: string) =>
-        pre + (alloc.alloc('todo', '[' + state + ']', false) ?? '[' + state + ']'),
-    )
+    return protectTaskCheckboxes(out, (kind, content) => alloc.alloc(kind, content, false))
   }
   return { l: protect(left), r: protect(right), lookup: alloc.lookup }
 }
@@ -555,16 +644,25 @@ function ensureTrailingNewline(s: string): string {
  * wrapLines 看不到 fence 头、误把 marker 包进 code 文本（乱码根因之一）。
  * 折叠后整块作为一行参与对齐：内容相同 → 同占位符 → unchanged；不同 →
  * 整块 DEL + 整块 INS（restore 后由 wrapLines 的 fence 状态机保持干净）。
+ * setext 标题块同折（Codex 二轮 P1）：否则"给既有段落补 `===`"只 emit
+ * 下划线一行、被结构 skip 放行，标题化完全无高亮。
  */
 function computeLineChanges(left: string, right: string): Change[] {
   const alloc = new PlaceholderAllocator([left, right])
   const fold = (text: string): string => {
     const fences = findFencedBlocks(text)
-    return replaceLineBlocks(
+    let out = replaceLineBlocks(
       text,
       fences,
       fences.map((b) => alloc.alloc('fence', b.content, false) ?? b.content),
     )
+    const setexts = findSetextBlocks(out)
+    out = replaceLineBlocks(
+      out,
+      setexts,
+      setexts.map((b) => alloc.alloc('setext', b.content, false) ?? b.content),
+    )
+    return out
   }
   const raw = diffLines(ensureTrailingNewline(fold(left)), ensureTrailingNewline(fold(right)))
   return restoreAtoms(raw, alloc.lookup)
@@ -687,6 +785,92 @@ export function extractMarkedView(line: string, keep: 'ins' | 'del'): string {
     }
   }
   return out
+}
+
+const TABLE_SEP_LINE = (l: string): boolean => l.includes('|') && TABLE_SEP_RE.test(l)
+
+/** cell 剥掉 `|` 与空白后是否还有内容（区分真实行与"空侧视图" `|  |  |`）。 */
+function hasTableCellContent(view: string): boolean {
+  return view.replace(/[|\s]/g, '').length > 0
+}
+
+/**
+ * line 模式表格结构变更修复（Codex 二轮 P1）：diffLines 把"表头改名 /
+ * 列数变化"emit 成相邻的 DEL 行 + INS 行，而表格行不做拆行修复后它们会
+ * 留在同一条 GFM 表里——第二行不是分隔符时整表降级为段落；旧表头 + 旧
+ * 分隔符打头时新表头被当 body 行、超出旧列数的 cell 被 GFM 直接丢弃。
+ * 修法：对 merged 里"带 marker 且结构不合法"（分隔符行数量 ≠ 1 或位置
+ * ≠ 第二行）的顶层表格连续段，按单侧视图重建成"旧表整表 DEL + 空行 +
+ * 新表整表 INS"（与 word / block 模式的整表呈现一致）。合法段（普通行级
+ * 增删改）与无 marker 段原样保留——后者同时保住 identical 输入逐字节
+ * 还原的不变量。
+ */
+function repairMergedTableRuns(merged: string): string {
+  ANY_MARKER_RE.lastIndex = 0
+  if (!ANY_MARKER_RE.test(merged)) return merged
+  const lines = merged.split('\n')
+  const out: string[] = []
+  let fenceMarker = ''
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]!
+    const fenceMatch = FENCE_RE.exec(line)
+    if (fenceMarker !== '') {
+      out.push(line)
+      if (fenceMatch !== null && (fenceMatch[2] ?? '').startsWith(fenceMarker)) fenceMarker = ''
+      i++
+      continue
+    }
+    if (fenceMatch !== null) {
+      out.push(line)
+      fenceMarker = fenceMatch[2] ?? ''
+      i++
+      continue
+    }
+    if (!TABLE_ROW_RE.test(line)) {
+      out.push(line)
+      i++
+      continue
+    }
+    let j = i
+    while (j < lines.length && TABLE_ROW_RE.test(lines[j]!)) j++
+    out.push(...normalizeTableRun(lines.slice(i, j)))
+    i = j
+  }
+  return out.join('\n')
+}
+
+/** repairMergedTableRuns 的单段处理：合法 / 无 marker 段原样返回，结构
+ *  不合法段按单侧视图重建。分隔符行不带 marker、无法直接归边，按"紧跟
+ *  本侧表头（已积累 1 行）"归属；空侧视图行（全空 cell）丢弃。 */
+function normalizeTableRun(run: string[]): string[] {
+  ANY_MARKER_RE.lastIndex = 0
+  if (!ANY_MARKER_RE.test(run.join('\n'))) return run
+  const sepIdx: number[] = []
+  for (let k = 0; k < run.length; k++) {
+    if (TABLE_SEP_LINE(run[k]!)) sepIdx.push(k)
+  }
+  if (sepIdx.length === 0) return run
+  if (sepIdx.length === 1 && sepIdx[0] === 1) return run
+  const del: string[] = []
+  const ins: string[] = []
+  for (const l of run) {
+    if (TABLE_SEP_LINE(l)) {
+      if (del.length === 1) del.push(l)
+      if (ins.length === 1) ins.push(l)
+      continue
+    }
+    const dv = extractMarkedView(l, 'del')
+    const iv = extractMarkedView(l, 'ins')
+    if (hasTableCellContent(dv)) del.push(dv)
+    if (hasTableCellContent(iv)) ins.push(iv)
+  }
+  if (del.length === 0 || ins.length === 0) return run
+  return [
+    wrapLines(del.join('\n'), MARKERS.DEL_OPEN, MARKERS.DEL_CLOSE),
+    '',
+    wrapLines(ins.join('\n'), MARKERS.INS_OPEN, MARKERS.INS_CLOSE),
+  ]
 }
 
 /**
@@ -828,12 +1012,12 @@ export function buildMergedMarkdown(
     atLineStart = c.value.endsWith('\n')
   }
   // 空 marker 对（如"只剩前缀的行"包出的 open+close 相邻）渲染成零宽
-  // 色块，先清掉再做行首修复。
+  // 色块，先清掉再做表格结构修复与行首修复。
   const merged = parts
     .join(separator)
     .replaceAll(MARKERS.INS_OPEN + MARKERS.INS_CLOSE, '')
     .replaceAll(MARKERS.DEL_OPEN + MARKERS.DEL_CLOSE, '')
-  return repairBrokenLinePrefixes(merged)
+  return repairBrokenLinePrefixes(repairMergedTableRuns(merged))
 }
 
 // 仅供测试与 DiffView 内部复用。
@@ -847,10 +1031,12 @@ export const _internal = {
   // 占位符原子化：供测试锁定 pretreat / restore 行为。
   findTableBlocks,
   findFencedBlocks,
+  findSetextBlocks,
   pretreatWordAtoms,
   restoreAtoms,
   PlaceholderAllocator,
   trimCommonAffixes,
+  repairMergedTableRuns,
   repairBrokenLinePrefixes,
   extractMarkedView,
   isPrefixInterrupted,
