@@ -14,9 +14,46 @@ import {
   sanitizeNetlessEnvironment,
   type NetlessSubprocessManifest,
   type RootOwnedBwrapCapabilityProcess,
+  type RootOwnedBwrapDependencies,
+  type RootOwnedBwrapPathDependencies,
 } from '@/services/runtime/opencode/sealedSubprocess'
 
 const ROOT_OWNED_EXECUTABLE = '/usr/bin/true'
+const TEST_ROOT_OWNED_PATHS = new Set([ROOT_OWNED_EXECUTABLE, '/usr/bin', '/usr', '/'])
+
+function testRootOwnedPathMetadata(path: string) {
+  if (!TEST_ROOT_OWNED_PATHS.has(path)) {
+    throw new Error(`unexpected root-owned test path: ${path}`)
+  }
+  const executable = path === ROOT_OWNED_EXECUTABLE
+  return {
+    uid: 0,
+    mode: executable ? 0o100755 : 0o040755,
+    isSymbolicLink: () => false,
+    isFile: () => executable,
+    isDirectory: () => !executable,
+  }
+}
+
+const TEST_ROOT_OWNED_PATH_METADATA: RootOwnedBwrapPathDependencies = {
+  realpath: async (path) => {
+    if (path !== ROOT_OWNED_EXECUTABLE) {
+      throw new Error(`unexpected root-owned executable: ${path}`)
+    }
+    return path
+  },
+  lstat: async (path) => testRootOwnedPathMetadata(path),
+  stat: async (path) => testRootOwnedPathMetadata(path),
+}
+
+function requireTestRootOwnedBwrap(
+  dependencies: Omit<RootOwnedBwrapDependencies, 'pathMetadata'> = {},
+): Promise<string> {
+  return requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+    ...dependencies,
+    pathMetadata: TEST_ROOT_OWNED_PATH_METADATA,
+  })
+}
 
 async function readLine(stream: ReadableStream<Uint8Array>): Promise<string> {
   const reader = stream.getReader()
@@ -124,7 +161,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     const signals: NodeJS.Signals[] = []
     let command: readonly string[] = []
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: (value) => {
           command = value
           return capabilityProcess({ signals })
@@ -158,7 +195,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
   test('filesystem qualification proves only the outer boundary and omits network namespace demand', async () => {
     let command: readonly string[] = []
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         trial: 'filesystem',
         spawn: (value) => {
           command = value
@@ -173,7 +210,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
   })
 
   test('uses an ownership-holding supervisor for the real capability process', async () => {
-    await expect(requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE)).resolves.toBe(ROOT_OWNED_EXECUTABLE)
+    await expect(requireTestRootOwnedBwrap()).resolves.toBe(ROOT_OWNED_EXECUTABLE)
   })
 
   test('relinquishes host signaling before writing the first ACK byte', async () => {
@@ -257,7 +294,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     }) as typeof process.kill
 
     try {
-      const admission = requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      const admission = requireTestRootOwnedBwrap({
         timeout: (milliseconds) =>
           milliseconds === 5_000 ? trialTimeout : Bun.sleep(milliseconds),
       })
@@ -444,7 +481,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
   test('maps a non-zero bwrap capability trial to sandbox-required', async () => {
     const signals: NodeJS.Signals[] = []
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => capabilityProcess({ code: 1, signals }),
         timeout: () => new Promise(() => {}),
       }),
@@ -456,7 +493,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
 
   test('maps a bwrap capability spawn failure to sandbox-required', async () => {
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => {
           throw new Error('private bwrap spawn diagnostic')
         },
@@ -517,7 +554,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     }) as typeof Bun.spawn
 
     try {
-      await expect(requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE)).rejects.toMatchObject({
+      await expect(requireTestRootOwnedBwrap()).rejects.toMatchObject({
         code: 'execution-identity-containment-required',
       })
       expect(supervisorPid).toBeNumber()
@@ -530,7 +567,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
   test('maps a rejected exit settlement without signaling its observed process group', async () => {
     const signals: NodeJS.Signals[] = []
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => ({
           exited: Promise.reject(new Error('private bwrap exit diagnostic')),
           killGroup: (signal) => signals.push(signal),
@@ -548,7 +585,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     const signals: NodeJS.Signals[] = []
     const timeouts: number[] = []
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => ({
           exited: Promise.resolve(0),
           killGroup: (signal) => signals.push(signal),
@@ -579,7 +616,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
       settleExit = resolve
     })
 
-    const admission = requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+    const admission = requireTestRootOwnedBwrap({
       spawn: () => ({
         exited,
         killGroup: (signal) => signals.push(signal),
@@ -627,7 +664,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     })
 
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => ({
           exited,
           killGroup: (signal) => {
@@ -661,7 +698,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     })
 
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => ({
           exited,
           killGroup: (signal) => {
@@ -694,7 +731,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     })
 
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => ({
           exited,
           killGroup: (signal) => {
@@ -721,7 +758,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     let groupProbe = 0
 
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => ({
           exited: new Promise<number>(() => {}),
           killGroup: (signal) => signals.push(signal),
@@ -754,7 +791,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
       settleExit = resolve
     })
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => ({
           exited,
           killGroup: (signal) => {
@@ -780,7 +817,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     const timeouts: number[] = []
     let groupAlive = true
     await expect(
-      requireRootOwnedBwrap(ROOT_OWNED_EXECUTABLE, {
+      requireTestRootOwnedBwrap({
         spawn: () => ({
           exited: new Promise<number>(() => {}),
           killGroup: (signal) => {

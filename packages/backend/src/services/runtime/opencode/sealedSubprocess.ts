@@ -169,9 +169,28 @@ export interface RootOwnedBwrapCapabilityProcess {
   hasSignalOwnership?(): boolean
 }
 
+export interface RootOwnedBwrapPathMetadata {
+  readonly uid: number
+  readonly mode: number
+  isSymbolicLink(): boolean
+  isFile(): boolean
+  isDirectory(): boolean
+}
+
+export interface RootOwnedBwrapPathDependencies {
+  realpath(path: string): Promise<string>
+  lstat(path: string): Promise<RootOwnedBwrapPathMetadata>
+  stat(path: string): Promise<RootOwnedBwrapPathMetadata>
+}
+
 export interface RootOwnedBwrapDependencies {
   spawn?: (command: readonly string[]) => RootOwnedBwrapCapabilityProcess
   timeout?: (milliseconds: number) => Promise<void>
+  /**
+   * Narrow metadata seam for deterministic lifecycle tests. Production omits
+   * it and always uses the real filesystem implementation below.
+   */
+  pathMetadata?: RootOwnedBwrapPathDependencies
   /**
    * The filesystem profile proves the generic runner boundary without
    * requiring a network namespace. The full profile additionally proves the
@@ -207,6 +226,12 @@ function delay(milliseconds: number): Promise<void> {
     const timer = setTimeout(resolvePromise, milliseconds)
     timer.unref?.()
   })
+}
+
+const REAL_ROOT_OWNED_BWRAP_PATH_METADATA: RootOwnedBwrapPathDependencies = {
+  realpath: (path) => realpath(path),
+  lstat: (path) => lstat(path),
+  stat: (path) => stat(path),
 }
 
 function remainingMilliseconds(deadline: bigint): number {
@@ -625,6 +650,7 @@ export async function requireRootOwnedBwrap(
 ): Promise<string> {
   const spawn = dependencies.spawn ?? spawnRootOwnedBwrapCapability
   const timeout = dependencies.timeout ?? delay
+  const pathMetadata = dependencies.pathMetadata ?? REAL_ROOT_OWNED_BWRAP_PATH_METADATA
   let child: RootOwnedBwrapCapabilityProcess | undefined
   let exited = false
   let resolvedPath: string | undefined
@@ -649,12 +675,12 @@ export async function requireRootOwnedBwrap(
     }
     let resolved = candidatePath
     try {
-      resolved = await realpath(candidatePath)
+      resolved = await pathMetadata.realpath(candidatePath)
     } catch {
       reject('provider-not-found')
     }
-    const before = await lstat(resolved)
-    const metadata = await stat(resolved)
+    const before = await pathMetadata.lstat(resolved)
+    const metadata = await pathMetadata.stat(resolved)
     if (before.isSymbolicLink() || !metadata.isFile() || metadata.uid !== 0) {
       reject('provider-owner-unsafe')
     }
@@ -666,8 +692,8 @@ export async function requireRootOwnedBwrap(
     // Prove the whole canonical ancestor chain through `/`.
     let parent = dirname(resolved)
     for (;;) {
-      const parentBefore = await lstat(parent)
-      const parentMetadata = await stat(parent)
+      const parentBefore = await pathMetadata.lstat(parent)
+      const parentMetadata = await pathMetadata.stat(parent)
       if (
         parentBefore.isSymbolicLink() ||
         !parentMetadata.isDirectory() ||
