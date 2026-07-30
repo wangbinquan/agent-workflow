@@ -413,16 +413,35 @@ function findSetextBlocks(text: string): LineBlock[] {
     !/^ {0,3}#{1,6}[ \t]/.test(rest) &&
     !/^ {0,3}>/.test(rest) &&
     !LIST_LINE_RE.test(rest)
+  // 引用内 fence（`> ~~~`）不受顶层 fence 原子化保护，这里自带剥前缀后的
+  // fence 状态机：fence 内（含 fence 行自身）不允许作下划线或题行，否则
+  // 引用 code 里的 `foo\n===` 会被当 setext 原子化、渲染出赝品 <h1>
+  // （Codex 五轮 P2）。顶层 fence 此时已是占位符行，不会误触发。
+  const inFence: boolean[] = new Array<boolean>(lines.length).fill(false)
+  {
+    let fenceMarker = ''
+    for (let k = 0; k < lines.length; k++) {
+      const rest = stripQuote(lines[k] ?? '').rest
+      const fm = FENCE_RE.exec(rest)
+      if (fenceMarker !== '') {
+        inFence[k] = true
+        if (fm !== null && (fm[2] ?? '').startsWith(fenceMarker)) fenceMarker = ''
+      } else if (fm !== null) {
+        inFence[k] = true
+        fenceMarker = fm[2] ?? ''
+      }
+    }
+  }
   const blocks: LineBlock[] = []
   let i = 0
   while (i < lines.length) {
     const u = stripQuote(lines[i] ?? '')
-    if (i === 0 || !SETEXT_UNDERLINE_RE.test(u.rest)) {
+    if (i === 0 || inFence[i] === true || !SETEXT_UNDERLINE_RE.test(u.rest)) {
       i++
       continue
     }
     let start = i
-    while (start > 0) {
+    while (start > 0 && inFence[start - 1] !== true) {
       const t = stripQuote(lines[start - 1] ?? '')
       if (t.prefix !== u.prefix || !isPlainTitleRest(t.rest)) break
       start--
@@ -858,6 +877,12 @@ const hasInsMarker = (l: string): boolean => l.includes(MARKERS.INS_OPEN)
  * 畸形判定（保守，避免误伤合法单表）：run[1] 不是分隔符形状，或存在
  * "紧跟 marker 行之后"的额外分隔符形状行（第二张表头的分隔符）。字面
  * `| --- |` body 行紧跟裸行 / 分隔符时不触发。
+ *
+ * 显式取舍（Codex 五轮 P2）：分隔符归属无法从 merged 层安全推断——若被
+ * 编辑的行恰好紧邻字面 `| --- |` body 行，会误判畸形、把单行编辑放大成
+ * 整表 DEL+INS（合法渲染、只是啰嗦）；反向放宽则让"整表搬移"（两表分隔
+ * 符互异、键集合相等）重新退化成裸 `|` 段落汤。取正确性弃紧凑：宁可偶发
+ * 整表替换呈现，不产出非法渲染。两侧行为均有测试锁定。
  */
 function repairMergedTableRuns(merged: string): string {
   ANY_MARKER_RE.lastIndex = 0

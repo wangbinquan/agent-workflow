@@ -420,6 +420,48 @@ describe('blockquote 内 setext 标题（Codex 四轮 P2）', () => {
   })
 })
 
+// Codex 实现门五轮（2026-07-30）：引用内 fence 不受顶层 fence 原子化保护，
+// setext 识别须自带剥前缀 fence 状态机（否则 code 里的 `foo\n===` 渲染出
+// 赝品 <h1>）；兜底重建的"marker 邻接分隔符"判据是显式取舍——紧邻字面
+// `|---|` body 行的单行编辑被放大为整表替换（合法渲染、只是啰嗦），换取
+// 整表搬移不退化成裸 `|` 汤。两侧行为都锁定。
+describe('引用内 fence 与 setext 互斥（Codex 五轮 P2）', () => {
+  const QF = '> ~~~\n> foo\n> ===\n> ~~~\n'
+
+  test('word：引用 fence 内的 `foo\\n===` 不被当 setext，无赝品 <h1>', () => {
+    const { container } = render(
+      <MarkdownDiffView left={QF} right={QF.replace('foo', 'bar')} granularity="word" />,
+    )
+    expect(container.querySelector('h1')).toBeNull()
+    expect(container.querySelector('blockquote pre code')).not.toBeNull()
+  })
+
+  test('identical 引用 fence 文档逐字节还原', () => {
+    expect(buildMergedMarkdown(QF, QF, 'word')).toBe(QF)
+    expect(buildMergedMarkdown(QF, QF, 'line')).toBe(QF)
+  })
+})
+
+describe('表段兜底重建取舍锁定（Codex 五轮 P2）', () => {
+  test('line：整表搬移（键集合相等、分隔符互异）→ 全部合法表、无裸 `|`', () => {
+    const A = '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
+    const B = '| x | y | z |\n| --- | --- | --- |\n| 3 | 4 | 5 |\n'
+    const { container } = render(
+      <MarkdownDiffView left={A + '\n' + B} right={B + '\n' + A} granularity="line" />,
+    )
+    expect(pipeLeak(container)).toBe(false)
+    expect(container.querySelectorAll('table').length).toBe(3)
+  })
+
+  test('line：单行编辑紧邻字面 `|---|` body 行 → 接受整表 DEL+INS 呈现（文档化取舍）', () => {
+    const l = '| h | i |\n| --- | --- |\n| x | 1 |\n| --- | --- |\n'
+    const r = '| h | i |\n| --- | --- |\n| x | 9 |\n| --- | --- |\n'
+    const { container } = render(<MarkdownDiffView left={l} right={r} granularity="line" />)
+    expect(pipeLeak(container)).toBe(false)
+    expect(container.querySelectorAll('table').length).toBe(2)
+  })
+})
+
 describe('identical 输入不变量（checkbox / setext / 引用内 checkbox 原子化不破坏无变更路径）', () => {
   const doc = [
     '# T',

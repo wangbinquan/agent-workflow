@@ -268,3 +268,16 @@ marker 仍靠 remarkDiffMarkers 的 value 剥离兜底渲染单侧；如需与 f
 2. **blockquote 内 setext**：`findSetextBlocks` 剥引用前缀后识别题行 +
    下划线（要求逐字相同前缀），`> Title` → `> Title\n> ===` 呈现为红引用
    段落 + 绿引用 H1；line 模式 setext 原子 pad 与 word 对齐（块间空行）。
+
+### 实现门五轮跟进（同日，收敛）
+
+1. **引用内 fence 与 setext 互斥**：`findSetextBlocks` 自带剥引用前缀的
+   fence 状态机——引用内 fence（`> ~~~`）不受顶层 fence 原子化保护，此前
+   code 里的 `foo\n===` 会被原子化渲染出赝品 `<h1>`。fence 内容里的
+   marker 仍由 remarkDiffMarkers 的 value 剥离兜底（与缩进代码同级，
+   引用内 fence 的整块原子化留作已知限制）。
+2. **兜底重建判据的显式取舍**（Codex 认定分隔符归属在 merged 层不可安全
+   推断）：保留"紧跟 marker 行的额外分隔符 → 畸形"判据。代价：紧邻字面
+   `| --- |` body 行的单行编辑被放大为整表 DEL+INS（合法渲染、只是啰
+   嗦）；收益：整表搬移 / 互换不退化成裸 `|` 段落汤。两侧行为均有渲染级
+   测试锁定（`markdown-diff-table-render.test.tsx` 共 42 用例）。
