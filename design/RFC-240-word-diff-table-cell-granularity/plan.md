@@ -4,21 +4,30 @@
 
 ## 子任务
 
-- **RFC-240-T1 配对层与占位符管道**
-  `pretreatWordAtoms` 内新增 `pairTables`:结构键 + 同键序数配对;
-  paired-and-different 双侧共享单占位符,lookup 挂 mergedTable(pad=true);
-  其余路径逐字节保持现状。依赖:无。
+- **RFC-240-T1 配对层与三视图还原管道**(v3)
+  `pretreatWordAtoms` 内新增配对层:阶段 1 纯内容寻址(内容在对侧存在
+  的表走现路径,零显式配对);阶段 2 两侧内容无对应的剩余表按
+  (结构键, 剩余序数) 配对,双侧共享单占位符,`pairLookup[ph] =
+  { merged, left, right }`。`restoreAtoms` 扩展:removed→left、
+  added→right(早期还原、pad=true,优雅降级现行为),context 跳过;
+  `buildMergedMarkdown` 在 `repairBrokenLinePrefixes` 之后新增
+  `restorePairedTables` 单趟替换 context-ph → merged。依赖:无。
 
-- **RFC-240-T2 intraTableDiff**
-  行级 LCS(`diffArrays`)→ 变更 run 相似度配对(Dice ≥0.3,贪心,平分取
-  位置差最小)→ 配对行 cell zip + cell 内词级 diff(局部 allocator 原子化
-  inline code、函数内还原、无嵌套占位符断言 + fail-safe 回退)→ 未配对行
-  `wrapTableRowCells` 整行 DEL/INS。依赖:T1。
+- **RFC-240-T2 intraTableDiff + 共享原语**(v3)
+  列数上限守卫(超列整对回退)→ 行级精确 LCS → 单 run 内相似度配对
+  (Dice **≥0.5**,token = trim 后丢空白与纯标点/符号;候选序
+  `(score↓, |i-j|↑, i, j)` 贪心;输出 = 先未配对 DEL(旧序)后新序)→
+  配对行 cell zip(max-cell 骨架,短侧空格占位)+ cell 内词级 diff
+  (局部 allocator 原子化 inline code **与行内链接**、函数内还原、按
+  发放码点集合断言残留 + fail-safe 回退,`_internal` 注入桩可测)→
+  未配对行整行 DEL/INS(空 cell 色块占位)。共享原语:
+  `splitTableCells`(反斜杠奇偶)替换两处 cell 切分;`INLINE_CODE_RE`
+  多反引号升级(全局生效,proposal 已列显式例外)。依赖:T1。
 
 - **RFC-240-T3 测试**
-  新增 `markdown-diff-table-cell.test.tsx`(渲染级,design §测试策略 1-10)
-  - `markdown-diff-table-word.test.ts` 补 merged 字符串层锁 + 11 的源码层
-    防误伤锁。依赖:T2。
+  新增 `markdown-diff-table-cell.test.tsx`(渲染级,design §测试策略
+  1-15)+ `markdown-diff-table-word.test.ts` 修订(同键 word 断言按新
+  语义更新)+ 第 16 项 line/block 源码层防误伤锁。依赖:T2。
 
 - **RFC-240-T4 文档同步**
   RFC-012 design.md 勘误区追加"C′ 落地"交叉引用(方案 A 的整表退化取舍
@@ -37,7 +46,7 @@
 
 ## 验收清单
 
-- [ ] design §测试策略 11 项全部落地且绿。
+- [ ] design §测试策略 16 项全部落地且绿。
 - [ ] 既有 diff 相关测试:除上节列明的**同键 word 档**断言按新语义有意
       更新外,其余(结构变化 / 行块档 / 正文 / identical / 兜底)零改动
       零回归。
