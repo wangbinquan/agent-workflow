@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -437,6 +437,28 @@ describe('RFC-234 /intent/$sessionId', () => {
         }),
       ).kind,
     ).toBe('error')
+  })
+
+  test('groups the build flow before the dedicated draft review workspace', async () => {
+    installFetch(detailFixture({ currentDraft: CLEAN_DRAFT }))
+    await renderPage()
+
+    const buildWorkspace = await screen.findByTestId('intent-build-workspace')
+    const reviewWorkspace = screen.getByTestId('intent-review-workspace')
+
+    expect(buildWorkspace.tagName).toBe('SECTION')
+    expect(buildWorkspace.getAttribute('aria-labelledby')).toBe('intent-conversation-heading')
+    expect(
+      within(buildWorkspace).getByRole('heading', {
+        name: enUS.intent.timeline,
+        level: 2,
+      }),
+    ).toBeTruthy()
+    expect(within(buildWorkspace).getByTestId('intent-composer')).toBeTruthy()
+    expect(within(reviewWorkspace).getByTestId('intent-draft')).toBeTruthy()
+    expect(
+      buildWorkspace.compareDocumentPosition(reviewWorkspace) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0)
   })
 
   test('pending questions answer via segmented choices and POST', async () => {

@@ -33,6 +33,7 @@ export const enUS: Resources = {
     hintAuto: 'Auto-detect',
     modifyTargetNote:
       'Modify target: {{type}} (mounted into this session; the AI works directly from it)',
+    buildWorkspace: 'Build workspace',
     timeline: 'Conversation',
     roleUser: 'Me',
     roleAgent: 'Builder agent',

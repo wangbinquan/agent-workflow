@@ -33,6 +33,7 @@ export interface Resources {
     hintPlaceholder: string
     hintAuto: string
     modifyTargetNote: string
+    buildWorkspace: string
     timeline: string
     roleUser: string
     roleAgent: string
@@ -4234,6 +4235,7 @@ export const zhCN: Resources = {
     hintPlaceholder: '工作流 / 工作组 / 代理 / 技能',
     hintAuto: '自动判断',
     modifyTargetNote: '修改目标：{{type}}（已挂载到本会话，AI 将直接基于它给出变更）',
+    buildWorkspace: '构建工作区',
     timeline: '会话记录',
     roleUser: '我',
     roleAgent: '构建 Agent',

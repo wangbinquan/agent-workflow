@@ -151,6 +151,22 @@ test('a11y + mobile dark: /intent list and session detail', async ({ page }) => 
   await page.goto(`${daemon.baseUrl}/intent/${rows[0]!.id}`)
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(page.getByTestId('intent-composer')).toBeVisible({ timeout: 15_000 })
+  const mobileLayout = await page.evaluate(() => {
+    const content = document.querySelector<HTMLElement>('.content')
+    const build = document.querySelector<HTMLElement>('[data-testid="intent-build-workspace"]')
+    const review = document.querySelector<HTMLElement>('[data-testid="intent-review-workspace"]')
+    if (content === null || build === null || review === null) return null
+    const buildRect = build.getBoundingClientRect()
+    const reviewRect = review.getBoundingClientRect()
+    return {
+      hasHorizontalOverflow: content.scrollWidth > content.clientWidth,
+      reviewFollowsBuild: reviewRect.top >= buildRect.bottom,
+    }
+  })
+  expect(mobileLayout).toEqual({
+    hasHorizontalOverflow: false,
+    reviewFollowsBuild: true,
+  })
   const detailScan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
   const detailBlocking = detailScan.violations.filter(
     (v) => v.impact === 'critical' || v.impact === 'serious',

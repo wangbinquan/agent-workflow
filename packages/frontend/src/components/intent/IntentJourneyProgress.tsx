@@ -93,7 +93,7 @@ export function IntentJourneyProgress({ detail }: { detail: IntentSessionDetail 
               <span className="intent-journey__marker" aria-hidden="true">
                 {status === 'done' ? '✓' : status === 'blocked' ? '!' : index + 1}
               </span>
-              <span>{label}</span>
+              <span className="intent-journey__label">{label}</span>
             </li>
           )
         })}

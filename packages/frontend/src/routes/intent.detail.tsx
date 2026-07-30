@@ -135,6 +135,7 @@ function IntentSessionDetailPage() {
   return (
     <div className="page intent-session-page">
       <PageHeader
+        className="intent-session__header"
         title={detail.session.title}
         headingLevel={1}
         meta={
@@ -172,11 +173,24 @@ function IntentSessionDetailPage() {
       <IntentJourneyProgress detail={detail} />
 
       <div className="intent-session__workspace">
-        <div className="intent-session__conversation">
-          <div className="page__section intent-session__timeline">
-            <h2>{t('intent.timeline')}</h2>
+        <section
+          className="intent-session__conversation"
+          aria-labelledby="intent-conversation-heading"
+          data-testid="intent-build-workspace"
+        >
+          <header className="intent-session__section-header">
+            <div>
+              <span className="intent-session__eyebrow">{t('intent.buildWorkspace')}</span>
+              <h2 id="intent-conversation-heading">{t('intent.timeline')}</h2>
+            </div>
+            <StatusChip kind="neutral" size="sm">
+              {t('intent.roundsCount', { count: detail.turns.length })}
+            </StatusChip>
+          </header>
+
+          <div className="intent-session__timeline">
             {detail.turns.map((turn) => (
-              <div
+              <article
                 key={turn.id}
                 className={`card intent-turn-card intent-turn-card--${turn.role}`}
                 data-testid={`intent-turn-${turn.kind}`}
@@ -221,14 +235,14 @@ function IntentSessionDetailPage() {
                     defaultOpen={turn.id === latestRunningTurnId}
                   />
                 ) : null}
-              </div>
+              </article>
             ))}
             {detail.session.inFlight ? <LoadingState label={t('intent.generating')} /> : null}
           </div>
 
           {pendingQuestions.length > 0 && !detail.session.inFlight ? (
-            <div className="page__section intent-session__questions" data-testid="intent-questions">
-              <h2>{t('intent.answerQuestions')}</h2>
+            <section className="intent-session__questions" data-testid="intent-questions">
+              <h3>{t('intent.answerQuestions')}</h3>
               {pendingQuestions.map((question) => (
                 <Field key={question.id} label={question.question} required group>
                   <div
@@ -275,11 +289,22 @@ function IntentSessionDetailPage() {
               >
                 {t('intent.submitAnswers')}
               </button>
-            </div>
+            </section>
           ) : null}
 
-          <div className="page__section intent-session__mounts">
-            <h2>{t('intent.mounts')}</h2>
+          <section className="intent-session__mounts" aria-labelledby="intent-mounts-heading">
+            <header className="intent-session__subsection-header">
+              <h3 id="intent-mounts-heading">{t('intent.mounts')}</h3>
+              <button
+                type="button"
+                className="btn btn--sm"
+                data-testid="intent-add-mount"
+                onClick={() => setMountOpen(true)}
+                disabled={detail.session.inFlight || detail.session.status === 'archived'}
+              >
+                {t('intent.addMount')}
+              </button>
+            </header>
             {detail.mounts.length > 0 ? (
               <ul>
                 {detail.mounts.map((mount) => (
@@ -297,15 +322,6 @@ function IntentSessionDetailPage() {
                 ))}
               </ul>
             ) : null}
-            <button
-              type="button"
-              className="btn btn--sm"
-              data-testid="intent-add-mount"
-              onClick={() => setMountOpen(true)}
-              disabled={detail.session.inFlight || detail.session.status === 'archived'}
-            >
-              {t('intent.addMount')}
-            </button>
             <IntentMountDialog
               open={mountOpen}
               onClose={() => setMountOpen(false)}
@@ -313,10 +329,10 @@ function IntentSessionDetailPage() {
               mounted={detail.mounts}
               onAdded={() => void invalidate()}
             />
-          </div>
+          </section>
 
           {detail.session.status === 'active' ? (
-            <div className="page__section intent-session__composer">
+            <section className="intent-session__composer">
               <Field label={t('intent.composerLabel')}>
                 <TextArea
                   value={message}
@@ -327,19 +343,28 @@ function IntentSessionDetailPage() {
                 />
               </Field>
               {sendMessage.isError ? <ErrorBanner error={sendMessage.error} /> : null}
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={message.trim() === '' || sendMessage.isPending || detail.session.inFlight}
-                onClick={() => sendMessage.mutate()}
-              >
-                {t('intent.send')}
-              </button>
-            </div>
+              <div className="intent-session__composer-footer">
+                <span>{t('intent.draftSafety')}</span>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={
+                    message.trim() === '' || sendMessage.isPending || detail.session.inFlight
+                  }
+                  onClick={() => sendMessage.mutate()}
+                >
+                  {t('intent.send')}
+                </button>
+              </div>
+            </section>
           ) : null}
-        </div>
+        </section>
 
-        <aside className="intent-session__review" aria-label={t('intent.reviewWorkspace')}>
+        <aside
+          className="intent-session__review"
+          aria-label={t('intent.reviewWorkspace')}
+          data-testid="intent-review-workspace"
+        >
           {draft === null ? (
             <div className="page__section intent-session__draft-empty">
               <span className="intent-session__draft-empty-mark" aria-hidden="true">
@@ -353,10 +378,13 @@ function IntentSessionDetailPage() {
           ) : null}
           {draft !== null ? (
             <div className="page__section intent-session__draft" data-testid="intent-draft">
-              <h2>
-                {t('intent.draftTitle', { revision: draft.revision })}{' '}
+              <header className="intent-session__section-header">
+                <div>
+                  <span className="intent-session__eyebrow">{t('intent.reviewWorkspace')}</span>
+                  <h2>{t('intent.draftTitle', { revision: draft.revision })}</h2>
+                </div>
                 {draft.stale ? <StatusChip kind="warn">{t('intent.draftStale')}</StatusChip> : null}
-              </h2>
+              </header>
               {draft.stale ? (
                 <NoticeBanner tone="warning">{t('intent.draftStaleNotice')}</NoticeBanner>
               ) : null}
@@ -371,7 +399,11 @@ function IntentSessionDetailPage() {
                 </NoticeBanner>
               ) : null}
               {draftOps.map((op) => (
-                <div key={String(op.opId)} className="card" data-testid="intent-op-card">
+                <div
+                  key={String(op.opId)}
+                  className="card intent-session__op-card"
+                  data-testid="intent-op-card"
+                >
                   <div className="card__meta">
                     <StatusChip kind={op.action === 'create' ? 'success' : 'info'} size="sm">
                       {op.action === 'create' ? t('intent.opCreate') : t('intent.opUpdate')}
@@ -389,23 +421,30 @@ function IntentSessionDetailPage() {
                   />
                 </div>
               ))}
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={
-                  draft.stale || draft.validation.errors.length > 0 || detail.session.inFlight
-                }
-                onClick={() => setCommitOpen(true)}
-                data-testid="intent-open-commit"
-              >
-                {t('intent.openCommit')}
-              </button>
+              <div className="intent-session__draft-actions">
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={
+                    draft.stale || draft.validation.errors.length > 0 || detail.session.inFlight
+                  }
+                  onClick={() => setCommitOpen(true)}
+                  data-testid="intent-open-commit"
+                >
+                  {t('intent.openCommit')}
+                </button>
+              </div>
             </div>
           ) : null}
 
           {detail.commits.length > 0 ? (
             <div className="page__section intent-session__commits">
-              <h2>{t('intent.commits')}</h2>
+              <header className="intent-session__section-header">
+                <h2>{t('intent.commits')}</h2>
+                <StatusChip kind="neutral" size="sm">
+                  {t('intent.commitsCount', { count: detail.commits.length })}
+                </StatusChip>
+              </header>
               {detail.commits.map((commit) => (
                 <div key={commit.journalId} className="card">
                   <div className="card__meta">
