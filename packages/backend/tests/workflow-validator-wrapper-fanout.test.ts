@@ -304,6 +304,32 @@ describe('boundary edges', () => {
     expect(codesOf(def, [agent('r')])).toContain('boundary-input-target-not-inner')
   })
 
+  test('boundary=wrapper-input target aggregator → flagged before runtime drops the input', () => {
+    const def = makeDef({
+      nodes: [
+        {
+          id: 'w',
+          kind: 'wrapper-fanout',
+          nodeIds: ['worker', 'agg'],
+          inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+        },
+        { id: 'worker', kind: 'agent-single', agentName: 'reporter' },
+        { id: 'agg', kind: 'agent-single', agentName: 'merger' },
+      ],
+      edges: [
+        {
+          id: 'e',
+          source: { nodeId: 'w', portName: 'docs' },
+          target: { nodeId: 'agg', portName: 'docs' },
+          boundary: 'wrapper-input',
+        },
+      ],
+    })
+    expect(codesOf(def, [agent('reporter'), agent('merger', { role: 'aggregator' })])).toContain(
+      'boundary-input-target-aggregator',
+    )
+  })
+
   test('boundary=wrapper-output source must be aggregator → non-aggregator flagged', () => {
     const def = makeDef({
       nodes: [

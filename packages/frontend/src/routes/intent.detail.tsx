@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ulid } from 'ulid'
 
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -36,13 +37,6 @@ export const Route = createRoute({
 
 interface QuestionDraft {
   [questionId: string]: string[]
-}
-
-function ulidLike(): string {
-  const chars = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
-  let out = ''
-  for (let i = 0; i < 26; i++) out += chars[Math.floor(Math.random() * chars.length)]
-  return out
 }
 
 function IntentSessionDetailPage() {
@@ -543,7 +537,9 @@ function CommitDialog(props: {
         ...(byOp.has(opId) ? { slots: byOp.get(opId) } : {}),
       }))
       return api.post(`/api/intent-sessions/${props.sessionId}/commit`, {
-        clientMutationId: ulidLike(),
+        // Downstream update appliers reuse this id at their canonical mutation
+        // fences, which require a real ULID (not merely 26 Crockford chars).
+        clientMutationId: ulid(),
         draftRevision: props.draft.revision,
         draftHash: props.draft.draftHash,
         decisions,

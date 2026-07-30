@@ -588,18 +588,27 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         'error',
         {
           code: 'intent-changeset-invalid',
-          // Truncated model output presents as malformed JSON — hint the
-          // self-fix loop toward smaller bundles (deepseek live-run 2026-07-28).
+          // JSON syntax failures are not synonymous with truncation. The GLM
+          // live probe emitted a short, normally-stopped response with one
+          // delimiter missing, so keep the hint factual and conditional.
           errors:
             cs.errors[0]?.startsWith('changeset-json-invalid') === true
               ? [
                   ...cs.errors.slice(0, 32),
-                  'hint: malformed JSON at the end usually means your output hit the model token limit — emit fewer/smaller ops this turn',
+                  'hint: verify every JSON object/array delimiter; if the response was truncated, emit fewer or smaller ops this turn',
                 ]
               : cs.errors.slice(0, 32),
         },
         { runMeta, scratchRetained: result.scratchRetained },
       )
+    }
+    if (cs.jsonRepair !== undefined) {
+      log.warn('intent-changeset-json-repaired', {
+        sessionId: input.sessionId,
+        turnId,
+        repairKind: cs.jsonRepair.kind,
+        repairOffset: cs.jsonRepair.offset,
+      })
     }
     const report = validateDraftChangeset(dump.manifest, cs.changeset)
     return settle(
@@ -610,6 +619,7 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         blockingErrors: report.errors.length,
         credentialFindings: report.credentialFindings.length,
         mountRequests,
+        ...(cs.jsonRepair === undefined ? {} : { jsonRepair: cs.jsonRepair }),
       },
       {
         runMeta,

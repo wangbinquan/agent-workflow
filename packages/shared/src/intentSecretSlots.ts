@@ -253,6 +253,25 @@ function escapePointer(segment: string): string {
   return segment.replace(/~/g, '~0').replace(/\//g, '~1')
 }
 
+/**
+ * Workflow input routing uses two canonical public identifier fields whose
+ * names happen to match the last-layer `key` heuristic. They are graph labels,
+ * not credential carriers:
+ *
+ *   definition.inputs[].key      — launcher input identifier
+ *   definition.nodes[].inputKey  — input-node reference to that identifier
+ *
+ * Keep this exemption path-exact. Unknown/free-form `*key*` fields elsewhere
+ * in a workflow definition still require the sentinel, and a redaction marker
+ * in either public field is still rejected by the generic string walk below.
+ */
+function isWorkflowRoutingIdentifier(resourceType: string, pointer: string, key: string): boolean {
+  if (resourceType !== 'workflow') return false
+  if (key === 'key') return /^\/payload\/definition\/inputs\/\d+\/key$/.test(pointer)
+  if (key === 'inputKey') return /^\/payload\/definition\/nodes\/\d+\/inputKey$/.test(pointer)
+  return false
+}
+
 export function findNonSentinelSecretCarriers(op: {
   resourceType: string
   payload: unknown
@@ -322,6 +341,7 @@ export function findNonSentinelSecretCarriers(op: {
         if (
           typeof v === 'string' &&
           SECRET_KEY_RE.test(k) &&
+          !isWorkflowRoutingIdentifier(op.resourceType, child, k) &&
           v !== '' &&
           v !== INTENT_SECRET_SENTINEL
         ) {

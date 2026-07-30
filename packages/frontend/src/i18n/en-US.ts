@@ -4054,6 +4054,8 @@ export const enUS: Resources = {
         'A wrapper-input edge references an undeclared input port.',
       'boundary-input-source-not-wrapper':
         'The wrapper-input edge source is not a fan-out wrapper.',
+      'boundary-input-target-aggregator':
+        'A wrapper-input edge cannot target the fan-out aggregator; shard outputs reach it through ordinary inner edges.',
       'boundary-input-target-not-inner': 'The wrapper-input edge target is not inside the wrapper.',
       'boundary-output-source-must-be-aggregator':
         'The wrapper-output edge must originate from the aggregator agent.',

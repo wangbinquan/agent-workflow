@@ -600,8 +600,20 @@ export function canonicalIntentJson(value: unknown): string {
 }
 
 export type IntentChangesetParseResult =
-  | { ok: true; changeset: IntentChangeset; canonicalJson: string; bytes: number }
+  | {
+      ok: true
+      changeset: IntentChangeset
+      canonicalJson: string
+      bytes: number
+      jsonRepair?: IntentChangesetJsonRepair
+    }
   | { ok: false; errors: string[] }
+
+export interface IntentChangesetJsonRepair {
+  kind: 'missing-final-op-object-close'
+  /** UTF-16 string offset where the single `}` was inserted. */
+  offset: number
+}
 
 /** The single entry point the turn engine uses on the `changeset` port text. */
 /**
@@ -672,12 +684,104 @@ function expandIssues(
   return out
 }
 
+/**
+ * Recover the one malformed shape observed repeatedly from GLM 5.2 in live
+ * Intent Workflow generation:
+ *
+ *   valid:   ... "edges":[...] } } } ] }
+ *   emitted: ... "edges":[...] } }   ] }
+ *                                  ^ final op object close is missing
+ *
+ * This is deliberately NOT a general JSON repairer. It inserts exactly one
+ * object closer only when a structural scan proves that:
+ *   - strings/escapes are complete;
+ *   - the only mismatch is the final `ops` array close while the final op
+ *     object remains open;
+ *   - the remaining non-whitespace suffix is exactly the root object close;
+ *   - the repaired bytes parse as JSON and later pass the full strict schema.
+ *
+ * EOF truncation, unterminated strings, multiple missing closers and any
+ * mid-document mismatch remain hard errors.
+ */
+function repairMissingFinalOpObjectClose(
+  portText: string,
+): { text: string; repair: IntentChangesetJsonRepair } | null {
+  const stack: Array<'{' | '['> = []
+  let inString = false
+  let escaped = false
+  let repairOffset = -1
+
+  for (let i = 0; i < portText.length; i++) {
+    const ch = portText[i]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (ch === '\\') {
+        escaped = true
+      } else if (ch === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+    if (ch === '{' || ch === '[') {
+      stack.push(ch)
+      continue
+    }
+    if (ch === '}') {
+      if (stack.pop() !== '{') return null
+      continue
+    }
+    if (ch !== ']') continue
+
+    if (stack.at(-1) === '[') {
+      stack.pop()
+      continue
+    }
+
+    const isFinalOpMismatch =
+      repairOffset === -1 &&
+      stack.length === 3 &&
+      stack[0] === '{' &&
+      stack[1] === '[' &&
+      stack[2] === '{' &&
+      portText.slice(i + 1).trim() === '}'
+    if (!isFinalOpMismatch) return null
+
+    repairOffset = i
+    stack.pop() // synthetic `}` closes the final op object
+    stack.pop() // the observed `]` closes the ops array
+  }
+
+  if (inString || escaped || stack.length !== 0 || repairOffset < 0) return null
+  const text = `${portText.slice(0, repairOffset)}}${portText.slice(repairOffset)}`
+  try {
+    JSON.parse(text)
+  } catch {
+    return null
+  }
+  return {
+    text,
+    repair: { kind: 'missing-final-op-object-close', offset: repairOffset },
+  }
+}
+
 export function parseIntentChangeset(portText: string): IntentChangesetParseResult {
   let raw: unknown
+  let jsonRepair: IntentChangesetJsonRepair | undefined
   try {
     raw = JSON.parse(portText)
   } catch (err) {
-    return { ok: false, errors: [`changeset-json-invalid: ${(err as Error).message}`] }
+    const repaired = repairMissingFinalOpObjectClose(portText)
+    if (repaired === null) {
+      return { ok: false, errors: [`changeset-json-invalid: ${(err as Error).message}`] }
+    }
+    raw = JSON.parse(repaired.text)
+    jsonRepair = repaired.repair
   }
   const parsed = IntentChangesetSchema.safeParse(raw)
   if (!parsed.success) {
@@ -693,5 +797,11 @@ export function parseIntentChangeset(portText: string): IntentChangesetParseResu
       ],
     }
   }
-  return { ok: true, changeset: parsed.data, canonicalJson, bytes }
+  return {
+    ok: true,
+    changeset: parsed.data,
+    canonicalJson,
+    bytes,
+    ...(jsonRepair === undefined ? {} : { jsonRepair }),
+  }
 }

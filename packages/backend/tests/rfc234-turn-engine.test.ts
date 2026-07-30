@@ -160,6 +160,69 @@ describe('runIntentTurn', () => {
     expect(JSON.parse(agentTurn?.contentJson ?? '{}').summary).toBe('built one agent')
   })
 
+  test('live GLM missing final-op brace is recovered into a schema-valid draft', async () => {
+    const { session } = await createIntentSession(db, actor, { message: 'build a workflow' })
+    const workflow = JSON.stringify({
+      $schema_version: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          action: 'create',
+          resourceType: 'workflow',
+          tempRef: '$new:flow',
+          payload: {
+            name: 'flow',
+            description: '',
+            definition: {
+              $schema_version: 4,
+              inputs: [{ kind: 'text', key: 'goal', label: 'Goal', required: true }],
+              nodes: [
+                { id: 'input', kind: 'input', inputKey: 'goal' },
+                { id: 'agent', kind: 'agent-single', agentRef: 'res#agent#1' },
+                { id: 'output', kind: 'output' },
+              ],
+              edges: [],
+            },
+          },
+        },
+      ],
+    })
+    const malformed = workflow.replace(/}}}]}$/, '}}]}')
+    expect(malformed).not.toBe(workflow)
+
+    const outcome = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((_o, nonce) =>
+          okResult(envelope(nonce, { summary: 'workflow', changeset: malformed })),
+        ),
+      },
+      { sessionId: session.id, actor },
+    )
+
+    expect(outcome.kind).toBe('changeset')
+    const draft = (
+      await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
+    )[0]
+    expect(JSON.parse(draft?.changesetJson ?? '{}')).toEqual(JSON.parse(workflow))
+    const validationErrors = JSON.parse(draft?.validationJson ?? '{}').errors as string[]
+    expect(validationErrors).toEqual([
+      'op-1: definition.agentRef[0] references unknown handle res#agent#1 (intent-ref-unknown)',
+    ])
+    expect(validationErrors.some((error) => error.includes('intent-secret-value-forbidden'))).toBe(
+      false,
+    )
+    const agentTurn = (
+      await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId))
+    )[0]
+    expect(JSON.parse(agentTurn?.contentJson ?? '{}').jsonRepair).toEqual({
+      kind: 'missing-final-op-object-close',
+      offset: malformed.length - 2,
+    })
+  })
+
   test('questions turn + answers reach the next INTENT.md', async () => {
     const { session } = await createIntentSession(db, actor, { message: 'build something' })
     const questions = JSON.stringify([
@@ -236,6 +299,18 @@ describe('runIntentTurn', () => {
       expect(fresh?.inFlightTurnId).toBeNull()
       expect(fresh?.currentDraftId).toBeNull()
     }
+    const turns = await db
+      .select()
+      .from(intentTurns)
+      .where(eq(intentTurns.sessionId, session.id))
+      .orderBy(intentTurns.seq)
+    const malformedJsonContent = JSON.parse(turns.at(-1)?.contentJson ?? '{}') as {
+      errors?: string[]
+    }
+    expect(malformedJsonContent.errors).toContain(
+      'hint: verify every JSON object/array delimiter; if the response was truncated, emit fewer or smaller ops this turn',
+    )
+    expect(malformedJsonContent.errors?.join('\n')).not.toContain('usually means')
   })
 
   test('unknown handle mints the draft WITH blocking errors (agent-fixable loop)', async () => {

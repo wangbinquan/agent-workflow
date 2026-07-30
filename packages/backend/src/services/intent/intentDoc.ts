@@ -143,17 +143,35 @@ Common rules:
 - Output budget: the WHOLE changeset must fit your model output limit. Keep \`bodyMd\`/\`instructions\` concise (aim ≤120 lines each). If the bundle risks truncation, emit fewer ops this turn and say in \`summary\` what you will add next turn.
 
 Per-type payload fields:
-- **agent**: \`{name, description, outputs: string[], bodyMd}\` + optional \`{outputKinds:{port:kind}, inputs:[{name,kind,required?,description?}], role:'normal'|'aggregator', runtime, skills:[ref|{kind:'project',name}], dependsOn:[ref], mcp:[ref], plugins:[ref], syncOutputsOnIterate, frontmatterExtra}\`. \`bodyMd\` is the agent's full markdown body (its system prompt). There is NO \`systemPrompt\`/\`ports\`/\`outputPorts\` field. Port kinds (\`outputKinds\` values / \`inputs[].kind\`): \`string\` (default) | \`markdown\` | \`signal\` | \`path<ext>\` | \`list<kind>\` — nothing else.
+- **agent**: \`{name, description, outputs: string[], bodyMd}\` + optional \`{outputKinds:{port:kind}, outputWrapperPortNames:{agentPort:wrapperPort}, inputs:[{name,kind,required?,description?}], role:'normal'|'aggregator', runtime, skills:[ref|{kind:'project',name}], dependsOn:[ref], mcp:[ref], plugins:[ref], syncOutputsOnIterate, frontmatterExtra}\`. \`bodyMd\` is the agent's full markdown body (its system prompt). There is NO \`systemPrompt\`/\`ports\`/\`outputPorts\` field. Port kinds (\`outputKinds\` values / \`inputs[].kind\`): \`string\` (default) | \`markdown\` | \`signal\` | \`path<ext>\` | \`list<kind>\` — nothing else. \`outputWrapperPortNames\` is only for an aggregator inside wrapper-fanout; omit it when wrapper outlet names equal the agent output names.
 - **skill**: \`{name, description, bodyMd}\` + optional \`{files:[{path,content}], frontmatterExtra}\`. \`bodyMd\` becomes SKILL.md. Skills have NO inputs/outputs.
 - **mcp**: \`{type:'local', name, description, config:{command: string[], env?:{KEY:'‹secret›'}}}\` OR \`{type:'remote', name, description, config:{url, headers?:{KEY:'‹secret›'}}}\`.
-- **plugin**: \`{name, spec, description?, options?}\` (spec = npm package or git/file URL).
-- **workflow**: \`{name, description, definition:{$schema_version:4, inputs:[{kind:'text',key,label,required?}…], nodes:[…], edges:[…]}}\`.
-  Nodes: \`{id, kind:'input', inputKey}\` / \`{id, kind:'agent-single', agentRef: ref, promptTemplate}\` / \`{id, kind:'output'}\`.
-  Edges: \`{id, source:{nodeId, portName}, target:{nodeId, portName}}\` (an input node's out-port = its inputKey; an agent's out-ports = its \`outputs\`; prompt templates read inputs as \`{{port_name}}\`).
-- **workgroup**: \`{name, description, instructions, mode:'leader_worker'|'free_collab'|'dynamic_workflow', leaderDisplayName?, members:[{memberType:'agent', agentRef: ref, displayName, roleDesc} | {memberType:'human', displayName, roleDesc}], switches?, maxRounds?, completionGate?, clarifyBudget?, fanOut?}\`. Human members are placeholders — never real usernames.
+- **plugin**: \`{name, spec, description, optionsJson?, enabled?}\` (spec = npm package or git/file URL; the key is exactly \`optionsJson\`, never \`options\`).
+- **workflow**: \`{name, description, definition:{$schema_version:4, inputs:[…], nodes:[…], edges:[…], outputs?}}\`.
+  Input declarations all use \`{kind,key,label,required?,description?}\`. Supported kinds and extra fields:
+  \`text{multiline?,maxLength?}\`; \`files{minCount?,maxCount?,accept?}\`;
+  \`enum{choices,multiSelect?,allowOther?}\`; \`git{gitKind:'branch'|'commit-range'|'pr'}\`;
+  \`upload{targetDir,accept?,maxFileSize?,minCount?,maxCount?}\`.
+  Every node has \`{id,kind}\` and may carry \`position:{x,y}\` / \`title\`. Supported node forms:
+  - \`{id,kind:'input',inputKey}\`.
+  - \`{id,kind:'agent-single',agentRef:ref,promptTemplate,overrides?}\`. Use \`agentRef\`, never agentId/agentName.
+  - \`{id,kind:'output',ports:[{name,bind:{nodeId,portName}}]}\`. Every incoming edge target port MUST be declared here with the same binding; omitting \`ports\` produces no task output.
+  - \`{id,kind:'wrapper-git',nodeIds:[nodeId]}\`. Its only output is \`git_diff:list<path<*>>\`; it accepts no inbound edge itself (outer inputs may target its inner agent nodes).
+  - \`{id,kind:'wrapper-loop',nodeIds:[nodeId],maxIterations,exitCondition:{kind:'port-empty'|'port-not-empty'|'port-equals'|'port-count-lt',nodeId,portName,value?,n?,separator?},outputBindings:[{name,bind:{nodeId,portName}}]}\`.
+  - \`{id,kind:'wrapper-fanout',nodeIds:[nodeId],inputs:[{name,kind,isShardSource?}],expectedShardCount?}\`. Exactly one input has \`isShardSource:true\` and a \`list<T>\` kind. v1 inner nodes are agent-single only; at most one inner agent may have payload \`role:'aggregator'\`. Worker→aggregator is an ordinary inner edge; the runtime groups every shard's worker output into that aggregator input. Never target the aggregator with a \`boundary:'wrapper-input'\` edge — runtime intentionally does not inject wrapper inputs into aggregators. Aggregator outputs are promoted through \`boundary:'wrapper-output'\` edges to wrapper outlets (same name unless the aggregator payload maps it with \`outputWrapperPortNames\`).
+  - \`{id,kind:'review',title?,inputSource:{nodeId,portName},rerunnableOnReject:[nodeId],rerunnableOnIterate:[nodeId],rollbackFilesOnReject?,rollbackFilesOnIterate?}\`. Also add the matching source→review edge targeting \`__review_input__\`; approved single-document output ports are \`approved_doc\` and \`approval_meta\`.
+  - \`{id,kind:'clarify',title?,description?,sessionMode?:'isolated'|'inline',clarifyMode?:'optional'}\`.
+  - \`{id,kind:'clarify-cross-agent',title?,description?,sessionModeForQuestioner?:'isolated'|'inline'}\`.
+  Ordinary edges: \`{id,source:{nodeId,portName},target:{nodeId,portName}}\`. A fanout boundary edge additionally has \`boundary:'wrapper-input'|'wrapper-output'\`: wrapper-input runs from wrapper declared input → inner agent input; wrapper-output runs from inner aggregator output → wrapper outlet. An input node's out-port = its inputKey; an agent's out-ports = its \`outputs\`; prompt templates read inbound ports as \`{{port_name}}\`.
+- **workgroup**: \`{name, description, instructions, mode:'leader_worker'|'free_collab'|'dynamic_workflow', leaderDisplayName?, members:[{memberType:'agent', agentRef: ref, displayName, roleDesc} | {memberType:'human', displayName, roleDesc}], switches?:{shareOutputs:boolean,directMessages:boolean,blackboard:boolean}, maxRounds?:integer(1..1000), completionGate?:boolean, clarifyBudget?:integer(0..50), fanOut?:boolean}\`. Human members are placeholders — never real usernames. Visibility choices must be encoded structurally: for “private direct messages + public blackboard”, set \`switches:{shareOutputs:true,directMessages:true,blackboard:true}\`; prose in \`instructions\` does not change runtime switches.
 
 Worked example (one agent):
-\`{"$schema_version":1,"ops":[{"opId":"op-1","action":"create","resourceType":"agent","tempRef":"$new:code-auditor","payload":{"name":"code-auditor","description":"代码审计代理：逐文件审查 git diff","outputs":["findings"],"bodyMd":"# 角色\\n你审查 git diff…"}}]}\``)
+\`{"$schema_version":1,"ops":[{"opId":"op-1","action":"create","resourceType":"agent","tempRef":"$new:code-auditor","payload":{"name":"code-auditor","description":"代码审计代理：逐文件审查 git diff","outputs":["findings"],"bodyMd":"# 角色\\n你审查 git diff…"}}]}\`
+
+JSON closure check (especially when the final op is a workflow): after the last edge,
+close the edges array, then close definition, payload, and the final op, then close
+the ops array and root object. The final structural suffix is \`]}}}]}\`, not
+\`]}}]}\`. Do not rely on prose self-checks; emit the actual delimiters.`)
 
   sections.push(`## Output contract
 

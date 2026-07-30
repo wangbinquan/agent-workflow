@@ -190,9 +190,10 @@ describe('RFC-199 strict workflow validation targets', () => {
     // Release hardening adds duplicate-node-id plus malformed loop-condition
     // emissions; RFC-199 B5 adds the fixed review-input port, conflict and
     // mirror-mismatch emissions; RFC-228 adds MCP closure failures; RFC-236
-    // adds the loop continuation-policy type failure. Every new site must still
-    // carry a strict navigation target.
-    expect(emissions).toHaveLength(103)
+    // adds the loop continuation-policy type failure; Intent Builder hardening
+    // adds the fanout wrapper-input-to-aggregator failure. Every new site must
+    // still carry a strict navigation target.
+    expect(emissions).toHaveLength(104)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

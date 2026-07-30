@@ -239,6 +239,43 @@ describe('credential scanner (IN direction)', () => {
     ).toContain('/payload/bodyMd')
   })
 
+  test('workflow routing key fields are public identifiers, not secret carriers', () => {
+    const findings = findNonSentinelSecretCarriers({
+      resourceType: 'workflow',
+      payload: {
+        name: 'flow',
+        definition: {
+          inputs: [
+            { kind: 'text', key: 'goal', label: 'Goal' },
+            { kind: 'text', key: 'context', label: 'Context' },
+          ],
+          nodes: [
+            { id: 'goal', kind: 'input', inputKey: 'goal' },
+            {
+              id: 'context',
+              kind: 'input',
+              inputKey: 'context',
+              privateKey: 'must-still-be-rejected',
+            },
+          ],
+        },
+      },
+    })
+    expect(findings).toEqual(['/payload/definition/nodes/1/privateKey'])
+
+    expect(
+      findNonSentinelSecretCarriers({
+        resourceType: 'workflow',
+        payload: {
+          definition: {
+            inputs: [{ key: INTENT_REDACTED }],
+            nodes: [{ inputKey: INTENT_REDACTED }],
+          },
+        },
+      }),
+    ).toEqual(['/payload/definition/inputs/0/key', '/payload/definition/nodes/0/inputKey'])
+  })
+
   test('maskDiagnosticsText scrubs stderr-style leaks', () => {
     const masked = maskDiagnosticsText(
       `fetch failed for https://u:${SECRET}@h.com/x?access_token=${SECRET} while running --token=${SECRET}`,

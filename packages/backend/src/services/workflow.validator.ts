@@ -2041,6 +2041,17 @@ export function validateWorkflowDef(
           target: target.edge(edge.id),
         })
       }
+      const targetNode = nodeById.get(edge.target.nodeId)
+      const targetAgent =
+        targetNode === undefined ? undefined : resolveNodeAgent(targetNode, agentByIdOrName)
+      if (targetNode?.kind === 'agent-single' && targetAgent?.role === 'aggregator') {
+        issues.push({
+          code: 'boundary-input-target-aggregator',
+          message: `edge '${edge.id}' boundary='wrapper-input' targets aggregator '${edge.target.nodeId}', but fanout runtime does not inject wrapper inputs into aggregators; feed it only through ordinary inner worker→aggregator edges`,
+          pointer: edge.id,
+          target: target.edge(edge.id),
+        })
+      }
     } else if (edge.boundary === 'wrapper-output') {
       const wrapper = nodeById.get(edge.target.nodeId)
       if (wrapper === undefined || wrapper.kind !== 'wrapper-fanout') {

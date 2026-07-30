@@ -594,7 +594,7 @@ describe('RFC-234 /intent/$sessionId', () => {
       }
       expect(body.draftRevision).toBe(3)
       expect(body.draftHash).toBe(CLEAN_DRAFT.draftHash)
-      expect(body.clientMutationId.length).toBeGreaterThanOrEqual(10)
+      expect(body.clientMutationId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
       expect(body.decisions).toEqual([
         {
           opId: 'op-1',

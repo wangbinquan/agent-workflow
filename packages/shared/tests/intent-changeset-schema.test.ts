@@ -250,6 +250,59 @@ describe('IntentChangesetSchema', () => {
       canonicalIntentJson({ a: { c: [3, { e: 5, f: 4 }], d: 2 }, b: 1 }),
     )
   })
+
+  test('repairs only the live GLM missing final-op brace shape', () => {
+    const workflow = changeset([
+      {
+        opId: 'op-1',
+        action: 'create',
+        resourceType: 'workflow',
+        tempRef: '$new:flow',
+        payload: {
+          name: 'flow',
+          description: '',
+          definition: {
+            $schema_version: 4,
+            inputs: [{ kind: 'text', key: 'goal', label: 'Goal', required: true }],
+            nodes: [
+              { id: 'input', kind: 'input', inputKey: 'goal' },
+              { id: 'agent', kind: 'agent-single', agentRef: 'res#agent#1' },
+              { id: 'output', kind: 'output' },
+            ],
+            edges: [],
+          },
+        },
+      },
+    ])
+    const valid = JSON.stringify(workflow)
+    const missingFinalOpBrace = valid.replace(/}}}]}$/, '}}]}')
+    expect(missingFinalOpBrace).not.toBe(valid)
+
+    const repaired = parseIntentChangeset(missingFinalOpBrace)
+    expect(repaired.ok).toBe(true)
+    if (!repaired.ok) throw new Error('unreachable')
+    expect(repaired.jsonRepair).toEqual({
+      kind: 'missing-final-op-object-close',
+      offset: missingFinalOpBrace.length - 2,
+    })
+    expect(repaired.canonicalJson).toBe(canonicalIntentJson(workflow))
+  })
+
+  test('does not repair truncation, multiple missing braces, or other JSON syntax errors', () => {
+    const valid = JSON.stringify(changeset([agentCreate()]))
+    const cases = [
+      valid.slice(0, -1),
+      '{"$schema_version":1,"ops":[{"opId":"op-1","action":"create","resourceType":"agent","tempRef":"$new:a","payload":{"name":"a","description":"","outputs":[],"bodyMd":"" ]}',
+      valid.replace('"auditor"', '"auditor",'),
+      '{"$schema_version":1,"ops":[{"opId":"op-1"',
+    ]
+    for (const malformed of cases) {
+      const parsed = parseIntentChangeset(malformed)
+      expect(parsed.ok).toBe(false)
+      if (parsed.ok) throw new Error('unreachable')
+      expect(parsed.errors[0]).toStartWith('changeset-json-invalid:')
+    }
+  })
 })
 
 // Live-run regression (deepseek 2026-07-28): IntentOpSchema is a plain

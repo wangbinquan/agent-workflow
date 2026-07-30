@@ -8008,6 +8008,8 @@ export const zhCN: Resources = {
       'binding-port-missing': '输出端口绑定到了不存在的端口。',
       'boundary-input-port-not-declared': '包装器入界边引用了未声明的输入端口。',
       'boundary-input-source-not-wrapper': '包装器入界边的源头不是扇出包装器。',
+      'boundary-input-target-aggregator':
+        '包装器入界边不能指向扇出聚合代理；分片输出只能通过普通内部边汇入聚合代理。',
       'boundary-input-target-not-inner': '包装器入界边指向了包装器外的节点。',
       'boundary-output-source-must-be-aggregator': '包装器出界边必须从聚合代理引出。',
       'boundary-output-source-not-inner': '包装器出界边的源头不在包装器内。',
