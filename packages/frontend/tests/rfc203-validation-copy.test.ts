@@ -30,6 +30,7 @@ describe('describeValidationIssue', () => {
     const cases: Array<[string, string]> = [
       ['topology-cycle', '工作流在循环包装器之外存在环。'],
       ['wrapper-loop-max-iterations', '循环包装器缺少最大迭代次数。'],
+      ['wrapper-loop-continue-on-max-iterations', '循环包装器的迭代上限处理开关必须为开启或关闭。'],
       ['clarify-no-iteration-cap', '反问节点不在循环包装器内，代理可能无限追问。'],
       ['agent-not-found', '节点引用的代理不存在。'],
       ['prompt-template-unresolved', '提示词引用的模板变量没有对应的入边端口。'],

@@ -58,6 +58,7 @@ import {
   resolveCrossClarifySessionMode,
   resolveKeyOf,
   projectWorkflowDependency,
+  readContinueOnMaxIterations,
   resolveWorkflowSourceRef,
   splitListItems,
   splitMarkdownDocs,
@@ -4376,6 +4377,84 @@ async function clearWrapperReuseDisabled(db: DbClient, wrapperRunId: string): Pr
 // wrapper-loop (P-4-01) — RFC-040 makes it bubble awaiting_* and resumable.
 // -----------------------------------------------------------------------------
 
+type LoopCompletionReason = 'exit-condition' | 'max-iterations-continued'
+
+/**
+ * RFC-236: both loop success policies share one completion path. In particular,
+ * reaching the iteration limit with continueOnMaxIterations=true must promote
+ * the same content/kind/archive row and merge the same loop-private canonical
+ * as an ordinary exit-condition success.
+ */
+async function completeLoopWrapperIteration(args: {
+  state: SchedulerState
+  node: WorkflowNode
+  wrapperRunId: string
+  wrapperIso: IsoHandle
+  bindings: readonly Binding[]
+  iteration: number
+  maxIterations: number
+  reason: LoopCompletionReason
+  log: Logger
+}): Promise<OneNodeResult> {
+  const { state, node, wrapperRunId, wrapperIso, bindings, iteration, maxIterations, reason, log } =
+    args
+  const { db, taskId } = state
+
+  for (const binding of bindings) {
+    const value = await readPortRowAtIteration(
+      db,
+      taskId,
+      binding.bind.nodeId,
+      binding.bind.portName,
+      iteration,
+    )
+    await upsertWrapperOutput(
+      db,
+      wrapperRunId,
+      binding.name,
+      value.content,
+      value.kind,
+      value.archiveJson,
+    )
+  }
+
+  // RFC-130 T12: merge the loop's total (all-iterations) delta back into the
+  // task canonical as one unit for both ordinary and policy-controlled success.
+  if (!wrapperIso.passthrough) {
+    const merge = await mergeBackWrapperIso(state, wrapperIso, wrapperRunId, node, iteration, log)
+    if (merge.kind === 'conflict-human') {
+      return {
+        kind: 'awaiting_human',
+        summary: `loop merge conflict: ${merge.detail}`,
+        message: 'merge-conflict',
+      }
+    }
+    if (merge.kind === 'merge-failed') {
+      await markWrapperTerminal(db, wrapperRunId, 'failed', `wrapper-merge-failed:${merge.msg}`)
+      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+      return {
+        kind: 'failed',
+        summary: `loop merge-back failed: ${merge.msg}`,
+        message: 'wrapper-merge-failed',
+      }
+    }
+  }
+
+  await markWrapperTerminal(db, wrapperRunId, 'done')
+  broadcastNodeStatus(taskId, wrapperRunId, node.id, 'done')
+  if (reason === 'max-iterations-continued') {
+    log.warn('wrapper-loop reached max iterations and continued by policy', {
+      code: 'wrapper-loop-max-iterations-continued',
+      taskId,
+      nodeId: node.id,
+      wrapperRunId,
+      iteration,
+      maxIterations,
+    })
+  }
+  return { kind: 'ok', summary: '', message: '' }
+}
+
 async function runLoopWrapperNode(
   state: SchedulerState,
   args: OneNodeArgs,
@@ -4396,6 +4475,14 @@ async function runLoopWrapperNode(
       kind: 'failed',
       summary: `wrapper-loop ${node.id} missing maxIterations`,
       message: 'wrapper-loop-max-iterations',
+    }
+  }
+  const continueOnMaxIterations = readContinueOnMaxIterations(node)
+  if (continueOnMaxIterations === null) {
+    return {
+      kind: 'failed',
+      summary: `wrapper-loop ${node.id} continueOnMaxIterations must be a boolean`,
+      message: 'wrapper-loop-continue-on-max-iterations',
     }
   }
   const cond = parseExitCondition((node as Record<string, unknown>).exitCondition)
@@ -4563,36 +4650,32 @@ async function runLoopWrapperNode(
     })
     const portContent = await readPortAtIteration(db, taskId, cond.nodeId, cond.portName, i)
     if (evaluateExitCondition(cond, portContent)) {
-      for (const b of bindings) {
-        const v = await readPortRowAtIteration(db, taskId, b.bind.nodeId, b.bind.portName, i)
-        await upsertWrapperOutput(db, wrapperRunId, b.name, v.content, v.kind, v.archiveJson)
-      }
-      // RFC-130 T12: merge the loop's total (all-iterations) delta back into the
-      // task canonical as one unit when it exits.
-      if (!wrapperIso.passthrough) {
-        const mb = await mergeBackWrapperIso(state, wrapperIso, wrapperRunId, node, i, log)
-        if (mb.kind === 'conflict-human') {
-          // row parked conflict-human → the scope outcome is awaiting_human.
-          return {
-            kind: 'awaiting_human',
-            summary: `loop merge conflict: ${mb.detail}`,
-            message: 'merge-conflict',
-          }
-        }
-        if (mb.kind === 'merge-failed') {
-          await markWrapperTerminal(db, wrapperRunId, 'failed', `wrapper-merge-failed:${mb.msg}`)
-          broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
-          return {
-            kind: 'failed',
-            summary: `loop merge-back failed: ${mb.msg}`,
-            message: 'wrapper-merge-failed',
-          }
-        }
-      }
-      await markWrapperTerminal(db, wrapperRunId, 'done')
-      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'done')
-      return { kind: 'ok', summary: '', message: '' }
+      return completeLoopWrapperIteration({
+        state,
+        node,
+        wrapperRunId,
+        wrapperIso,
+        bindings,
+        iteration: i,
+        maxIterations: maxIter,
+        reason: 'exit-condition',
+        log,
+      })
     }
+  }
+
+  if (continueOnMaxIterations) {
+    return completeLoopWrapperIteration({
+      state,
+      node,
+      wrapperRunId,
+      wrapperIso,
+      bindings,
+      iteration: maxIter - 1,
+      maxIterations: maxIter,
+      reason: 'max-iterations-continued',
+      log,
+    })
   }
 
   // Exhausted: max iterations without exit.

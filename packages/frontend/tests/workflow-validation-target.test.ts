@@ -109,6 +109,20 @@ describe('resolveWorkflowIssueTarget', () => {
       resolve({ code: 'wrapper-loop-exit-port-missing', message: 'legacy', pointer: 'loop' }, def),
     ).toEqual({ kind: 'node-field', nodeId: 'loop', field: 'loop-exit-condition' })
     expect(
+      resolve(
+        {
+          code: 'wrapper-loop-continue-on-max-iterations',
+          message: 'legacy',
+          pointer: 'loop',
+        },
+        def,
+      ),
+    ).toEqual({
+      kind: 'node-field',
+      nodeId: 'loop',
+      field: 'loop-continue-on-max-iterations',
+    })
+    expect(
       resolve({ code: 'prompt-template-unresolved', message: 'legacy', pointer: 'worker' }, def),
     ).toEqual({ kind: 'node-field', nodeId: 'worker', field: 'prompt' })
   })

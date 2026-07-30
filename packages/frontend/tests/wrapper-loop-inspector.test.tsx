@@ -93,6 +93,41 @@ function optionLabels(list: HTMLElement): string[] {
 }
 
 describe('loop NodeInspector candidate-driven selects', () => {
+  test('max-iteration continuation switch is directly after the limit and persists its value', () => {
+    const def = makeDef([loop('w1', ['a1']), agentNode('a1', 'fixer')])
+    function ChangeHost() {
+      const [d, setD] = useState(def)
+      return (
+        <>
+          <NodeInspector
+            definition={d}
+            selectedNodeId="w1"
+            agents={fakeAgents({ name: 'fixer', outputs: ['findings'] })}
+            onChange={setD}
+            onClose={() => {}}
+          />
+          <pre data-testid="snapshot">{JSON.stringify(d)}</pre>
+        </>
+      )
+    }
+
+    const { container } = render(<ChangeHost />)
+    const fields = Array.from(container.querySelectorAll('[data-inspector-field]')).map((field) =>
+      field.getAttribute('data-inspector-field'),
+    )
+    const maxIterationsIndex = fields.indexOf('loop-max-iterations')
+    expect(fields[maxIterationsIndex + 1]).toBe('loop-continue-on-max-iterations')
+
+    const policySwitch = screen.getByTestId('loop-continue-on-max-iterations')
+    expect((policySwitch as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(policySwitch)
+    expect((policySwitch as HTMLInputElement).checked).toBe(true)
+
+    const snap = JSON.parse(screen.getByTestId('snapshot').textContent ?? '{}')
+    const loopNode = snap.nodes.find((node: { id: string }) => node.id === 'w1')
+    expect(loopNode.continueOnMaxIterations).toBe(true)
+  })
+
   test('exitCondition.nodeId renders as a select populated from loop members', () => {
     const def = makeDef([
       loop('w1', ['a1', 'a2']),

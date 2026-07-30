@@ -82,6 +82,39 @@ describe('RFC-199 canonical workflow serialization', () => {
     expect(SNAPSHOT).toEqual(before)
   })
 
+  test('loop max-iteration continuation policy survives schema and YAML round-trips', () => {
+    const definition = WorkflowDefinitionSchema.parse({
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        {
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['worker'],
+          maxIterations: 3,
+          continueOnMaxIterations: true,
+          exitCondition: { kind: 'port-empty', nodeId: 'worker', portName: 'result' },
+        },
+        { id: 'worker', kind: 'agent-single', agentName: 'worker' },
+      ],
+      edges: [],
+    })
+    const yaml = stringifyWorkflowYamlDocument({
+      name: 'loop-policy',
+      description: '',
+      definition,
+    })
+    const roundTripped = parseYaml(yaml) as {
+      definition: { nodes: Array<Record<string, unknown>> }
+    }
+    expect(roundTripped.definition.nodes.find((node) => node.id === 'loop')).toMatchObject({
+      continueOnMaxIterations: true,
+    })
+    expect(serializeWorkflowDefinitionStorageV1(definition)).toContain(
+      '"continueOnMaxIterations":true',
+    )
+  })
+
   test('canonicalJson keeps integer-like object keys in lexical, not JS numeric, order', () => {
     expect(canonicalJson({ 2: 'two', 10: 'ten', 1: 'one', a: 'letter' })).toBe(
       '{"1":"one","10":"ten","2":"two","a":"letter"}',

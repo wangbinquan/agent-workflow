@@ -60,6 +60,7 @@ const NODE_POINTER_CODES = new Set([
 
 const NODE_FIELD_CODES: Readonly<Record<string, WorkflowNodeFieldKey>> = {
   'wrapper-loop-max-iterations': 'loop-max-iterations',
+  'wrapper-loop-continue-on-max-iterations': 'loop-continue-on-max-iterations',
   'wrapper-loop-exit-condition': 'loop-exit-condition',
   'wrapper-loop-exit-node-missing': 'loop-exit-condition',
   'wrapper-loop-exit-node-out-of-scope': 'loop-exit-condition',

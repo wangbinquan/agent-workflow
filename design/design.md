@@ -657,6 +657,7 @@ type WrapperLoopNode = {
   kind: 'wrapper-loop'
   nodeIds: string[]
   maxIterations: number // 必填，UI 默认 3
+  continueOnMaxIterations?: boolean // 缺失/false：达到上限失败；true：采用末轮结果继续
   exitCondition: ExitCondition // 必填
   outputBindings?: { name: string; bind: { nodeId: string; portName: string } }[] // wrapper 边界输出端口
   position: XY
@@ -812,14 +813,25 @@ while iteration < maxIterations:
     - port-count-lt: 指定节点本轮 outputs[port].split(separator).length < n
   if exitCondition 满足:
     根据 wrapper.outputBindings 把内层节点的指定 ports 复制到 wrapper 自身的输出
+    合并 loop-private canonical
     wrapper.status = done
     return
   iteration += 1
 
 # 超过 max_iterations 仍没退出
-wrapper.status = exhausted
-task.status = failed
+if continueOnMaxIterations == true:
+  根据 wrapper.outputBindings 把末轮 ports（含 kind/archive）复制到 wrapper 自身输出
+  合并 loop-private canonical
+  wrapper.status = done
+  继续调度下游
+else:
+  wrapper.status = exhausted
+  task.status = failed
 ```
+
+`continueOnMaxIterations` 只容忍“末轮 inner scope 成功但退出条件仍未满足”；inner
+failed/canceled/awaiting 与最终 merge conflict/failure 均保持原失败或停泊语义。字段缺失严格
+等价于 `false`，`maxIterations=N` 仍最多执行 N 轮，不会多跑第 N+1 轮。
 
 注意 v1 **不实现跨轮反馈端口**：每轮迭代是 wrapper 内子图的一次独立执行；跨轮的"状态"完全靠 worktree 文件落盘（fix 写文件 → 下轮 audit 看新内容）。
 
@@ -863,7 +875,7 @@ on exit (内部所有节点 done 后，同样在写锁内):
 - **git wrapper 嵌套 loop wrapper 内**：每轮迭代 fresh-mint 独立 wrapper 行，
   entry preDirty 天然含前轮残留 → 扣除后即"那一轮"的增量 diff（不再是 0..N
   累计并集）；外层"last-iter wins"由 resolveUpstreamInputs 最高 iteration 优先保证
-- **loop wrapper 嵌套 git wrapper 内**：git wrapper 的 baseline/preDirty 在 loop 第一轮启动前抓，post 在 loop 全部退出（满足条件 / exhausted）后抓 → 输出整个 loop 期间的总 diff
+- **loop wrapper 嵌套 git wrapper 内**：git wrapper 的 baseline/preDirty 在 loop 第一轮启动前抓，post 在 loop 成功退出（满足条件 / 达到上限后按策略继续）后抓 → 输出整个 loop 期间的总 diff；loop exhausted 仍按失败传播
 - **跨代 interplay（已知开放点，RFC-098 修订 #9 记录）**：wrapper 因上游 rerun
   判 stale 重跑时**不回滚 worktree**（wrapper 行不抓 preSnapshot），第二代的
   preDirty 会把第一代残留当作 pre-existing 脏改动扣掉——与"wrapper 整体重跑无
@@ -1278,7 +1290,9 @@ pending ──► running ──► done
 
 特殊：
 
-- Loop wrapper 自身在所有迭代跑完且退出条件满足后转 `done`；max_iterations 但未满足 → `exhausted`（task → failed）
+- Loop wrapper 在退出条件满足后转 `done`；达到 `maxIterations` 仍未满足时，缺失/false 的
+  `continueOnMaxIterations` → `exhausted`（task → failed），true → 提升末轮输出并完成
+  loop-private canonical merge 后转 `done`、继续下游。该开关不吞 inner/merge 错误。
 - 多进程节点的父节点在所有 shard 结束后转 `done`（即便部分 shard `failed`，错误信息聚合到 `errors` port）
 - **Review 节点（RFC-005）**：进入 `running` 后框架快照 `doc_versions` → 节点立刻转 `awaiting_review`，**task.status 也同步设为 `awaiting_review`**；阻塞至 `POST /reviews/:taskId/:nodeId/decision` 返回。决策后：
   - `approve` → 节点 `done`，docPort 写 body_md；reviewOutcomePort = `'approve'`

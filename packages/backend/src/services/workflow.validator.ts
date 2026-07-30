@@ -49,6 +49,7 @@ import {
   isNodeInsideWorkflowWrapper,
   isReviewableBodyKind,
   isWrapperKind,
+  readContinueOnMaxIterations,
   REVIEW_INPUT_PORT_NAME,
   resolveNodeAgent,
   resolveWorkflowSourceRef,
@@ -469,6 +470,14 @@ export function validateWorkflowDef(
           message: `wrapper-loop '${node.id}' missing maxIterations (integer ≥ 1)`,
           pointer: node.id,
           target: target.nodeField(node.id, 'loop-max-iterations'),
+        })
+      }
+      if (readContinueOnMaxIterations(node) === null) {
+        issues.push({
+          code: 'wrapper-loop-continue-on-max-iterations',
+          message: `wrapper-loop '${node.id}' continueOnMaxIterations must be a boolean when present`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'loop-continue-on-max-iterations'),
         })
       }
       const exitCond = (node as Record<string, unknown>).exitCondition

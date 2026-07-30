@@ -260,6 +260,7 @@ describe('rule 3: wrapper required fields', () => {
           kind: 'wrapper-loop',
           nodeIds: ['n1'],
           maxIterations: 5,
+          continueOnMaxIterations: true,
           exitCondition: { kind: 'port-count-lt', nodeId: 'n1', portName: 'r', n: 1 },
         },
       ],
@@ -269,6 +270,60 @@ describe('rule 3: wrapper required fields', () => {
     expect(codes).not.toContain('wrapper-loop-exit-condition')
     expect(codes).not.toContain('wrapper-empty')
   })
+
+  test.each([false, true])(
+    'valid: wrapper-loop accepts continueOnMaxIterations=%s',
+    (continueOnMaxIterations) => {
+      const def = makeDef({
+        inputs: [{ kind: 'text', key: 'r', label: 'r' }],
+        nodes: [
+          { id: 'n1', kind: 'input', inputKey: 'r' },
+          {
+            id: 'wl',
+            kind: 'wrapper-loop',
+            nodeIds: ['n1'],
+            maxIterations: 2,
+            continueOnMaxIterations,
+            exitCondition: { kind: 'port-empty', nodeId: 'n1', portName: 'r' },
+          },
+        ],
+      })
+      expect(validateWorkflowDef(def, EMPTY_CTX).issues.map((i) => i.code)).not.toContain(
+        'wrapper-loop-continue-on-max-iterations',
+      )
+    },
+  )
+
+  test.each([[null], ['true'], [1], [[]], [{}]] as const)(
+    'invalid: continueOnMaxIterations=%p fails closed at its inspector field',
+    (continueOnMaxIterations) => {
+      const def = makeDef({
+        inputs: [{ kind: 'text', key: 'r', label: 'r' }],
+        nodes: [
+          { id: 'n1', kind: 'input', inputKey: 'r' },
+          {
+            id: 'wl',
+            kind: 'wrapper-loop',
+            nodeIds: ['n1'],
+            maxIterations: 2,
+            continueOnMaxIterations,
+            exitCondition: { kind: 'port-empty', nodeId: 'n1', portName: 'r' },
+          },
+        ],
+      } as Partial<WorkflowDefinition>)
+      const issue = validateWorkflowDef(def, EMPTY_CTX).issues.find(
+        (candidate) => candidate.code === 'wrapper-loop-continue-on-max-iterations',
+      )
+      expect(issue).toMatchObject({
+        pointer: 'wl',
+        target: {
+          kind: 'node-field',
+          nodeId: 'wl',
+          field: 'loop-continue-on-max-iterations',
+        },
+      })
+    },
+  )
 
   test('invalid: port-count-lt requires a positive integer n', () => {
     const def = makeDef({

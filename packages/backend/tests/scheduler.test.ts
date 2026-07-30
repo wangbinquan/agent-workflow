@@ -872,6 +872,149 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
     expect(new Set(auditRuns.map((r) => r.iteration))).toEqual(new Set([0, 1]))
   })
 
+  test('loop can publish the last iteration and continue downstream at the iteration limit', async () => {
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'])
+    const def: WorkflowDefinition = {
+      $schema_version: 1,
+      inputs: [],
+      nodes: [
+        { id: 'audit', kind: 'agent-single', agentName: 'auditor' },
+        {
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['audit'],
+          maxIterations: 2,
+          continueOnMaxIterations: true,
+          exitCondition: { kind: 'port-empty', nodeId: 'audit', portName: 'findings' },
+          outputBindings: [{ name: 'final', bind: { nodeId: 'audit', portName: 'findings' } }],
+        },
+        {
+          id: 'publish',
+          kind: 'output',
+          ports: [{ name: 'result', bind: { nodeId: 'loop', portName: 'final' } }],
+        },
+      ] as unknown as WorkflowDefinition['nodes'],
+      edges: [
+        {
+          id: 'loop-to-publish',
+          source: { nodeId: 'loop', portName: 'final' },
+          target: { nodeId: 'publish', portName: 'result' },
+        },
+      ],
+    }
+    const { taskId } = await seedWorkflowAndTask(h, def)
+    await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ findings: 'last result' }) }, () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      }),
+    )
+
+    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(t?.status).toBe('done')
+    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const loopRun = runs.find((run) => run.nodeId === 'loop')
+    const publishRun = runs.find((run) => run.nodeId === 'publish')
+    expect(loopRun?.status).toBe('done')
+    expect(publishRun?.status).toBe('done')
+
+    const loopOutput = (
+      await h.db
+        .select()
+        .from(nodeRunOutputs)
+        .where(and(eq(nodeRunOutputs.nodeRunId, loopRun!.id), eq(nodeRunOutputs.portName, 'final')))
+    )[0]
+    const publishOutput = (
+      await h.db
+        .select()
+        .from(nodeRunOutputs)
+        .where(
+          and(eq(nodeRunOutputs.nodeRunId, publishRun!.id), eq(nodeRunOutputs.portName, 'result')),
+        )
+    )[0]
+    expect(loopOutput?.content).toBe('last result')
+    expect(publishOutput?.content).toBe('last result')
+
+    const auditRuns = runs.filter((run) => run.nodeId === 'audit')
+    expect(auditRuns).toHaveLength(2)
+    expect(new Set(auditRuns.map((run) => run.iteration))).toEqual(new Set([0, 1]))
+  })
+
+  test('loop rejects a malformed continueOnMaxIterations snapshot before side effects', async () => {
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'])
+    const def = {
+      $schema_version: 1,
+      inputs: [],
+      nodes: [
+        { id: 'audit', kind: 'agent-single', agentName: 'auditor' },
+        {
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['audit'],
+          maxIterations: 2,
+          continueOnMaxIterations: 'true',
+          exitCondition: { kind: 'port-empty', nodeId: 'audit', portName: 'findings' },
+          outputBindings: [],
+        },
+      ],
+      edges: [],
+    } as unknown as WorkflowDefinition
+    const { taskId } = await seedWorkflowAndTask(h, def)
+
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+    })
+
+    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(t?.status).toBe('failed')
+    expect(t?.errorMessage).toContain('wrapper-loop-continue-on-max-iterations')
+    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    expect(runs.filter((run) => run.nodeId === 'loop' || run.nodeId === 'audit')).toHaveLength(0)
+  })
+
+  test('loop continuation policy does not swallow an inner failure', async () => {
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'])
+    const def: WorkflowDefinition = {
+      $schema_version: 1,
+      inputs: [],
+      nodes: [
+        { id: 'audit', kind: 'agent-single', agentName: 'auditor' },
+        {
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['audit'],
+          maxIterations: 2,
+          continueOnMaxIterations: true,
+          exitCondition: { kind: 'port-empty', nodeId: 'audit', portName: 'findings' },
+          outputBindings: [],
+        },
+      ] as unknown as WorkflowDefinition['nodes'],
+      edges: [],
+    }
+    const { taskId } = await seedWorkflowAndTask(h, def)
+    await withEnv({ MOCK_OPENCODE_EXIT_CODE: '5', MOCK_OPENCODE_SKIP_ENVELOPE: '1' }, () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      }),
+    )
+
+    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(t?.status).toBe('failed')
+    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    expect(runs.find((run) => run.nodeId === 'loop')?.status).toBe('failed')
+    expect(
+      runs.filter((run) => run.nodeId === 'audit').some((run) => run.status === 'failed'),
+    ).toBe(true)
+  })
+
   test('port-count-lt exit condition triggers when token count is below n', async () => {
     await seedReadonlyAgent(h.db, 'auditor', ['findings'])
     const def: WorkflowDefinition = {

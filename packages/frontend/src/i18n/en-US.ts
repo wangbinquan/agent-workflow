@@ -3300,6 +3300,9 @@ export const enUS: Resources = {
     loopBanner:
       'Cross-iteration state lives in worktree files only. v1 has no feedback ports — agents communicate across iterations by reading/writing files.',
     fieldMaxIterations: 'Max iterations',
+    fieldContinueOnMaxIterations: 'Continue after reaching the iteration limit',
+    fieldContinueOnMaxIterationsHint:
+      'If the final iteration still does not satisfy the exit condition, use its outputs and continue downstream. Inner or merge failures still stop the workflow.',
     fieldExitConditionKind: 'Exit condition kind',
     fieldExitConditionKindHint:
       'port-empty: trimmed value empty · port-not-empty: trimmed value non-empty (clarify use case — exit when the agent finally produces an output instead of asking again) · port-equals: exact match · port-count-lt: count < n',
@@ -4138,6 +4141,8 @@ export const enUS: Resources = {
       'wrapper-loop-exit-port-missing': 'The loop exit condition references an unknown port.',
       'wrapper-loop-inner-data-cycle': 'The loop wrapper has a data cycle between its inner nodes.',
       'wrapper-loop-max-iterations': 'The loop wrapper is missing maxIterations.',
+      'wrapper-loop-continue-on-max-iterations':
+        'The loop continuation switch must be true or false.',
       'wrapper-loop-nested': 'Loop wrappers cannot nest inside each other.',
       'wrapper-loop-output-binding-out-of-scope':
         'A loop output binding must reference a direct member of the loop body.',

@@ -2916,6 +2916,8 @@ export interface Resources {
     none: string
     loopBanner: string
     fieldMaxIterations: string
+    fieldContinueOnMaxIterations: string
+    fieldContinueOnMaxIterationsHint: string
     fieldExitConditionKind: string
     fieldExitConditionKindHint: string
     fieldExitConditionTarget: string
@@ -7291,6 +7293,9 @@ export const zhCN: Resources = {
     none: '无',
     loopBanner: '跨轮次状态完全靠 worktree 文件流转。v1 没有反馈端口；agent 之间通过读写文件传递。',
     fieldMaxIterations: '最大迭代次数',
+    fieldContinueOnMaxIterations: '达到迭代上限后继续流程',
+    fieldContinueOnMaxIterationsHint:
+      '最后一轮仍未满足退出条件时，采用该轮输出并继续下游；内部执行或合并失败仍会停止流程。',
     fieldExitConditionKind: '退出条件类型',
     fieldExitConditionKindHint:
       'port-empty：trim 后为空 · port-not-empty：trim 后非空（反问场景：agent 真正给出 output 才退出）· port-equals：完全相等 · port-count-lt：行数 < n',
@@ -8065,6 +8070,7 @@ export const zhCN: Resources = {
       'wrapper-loop-exit-port-missing': '循环退出条件引用了不存在的端口。',
       'wrapper-loop-inner-data-cycle': '循环包装器内部存在数据环。',
       'wrapper-loop-max-iterations': '循环包装器缺少最大迭代次数。',
+      'wrapper-loop-continue-on-max-iterations': '循环包装器的迭代上限处理开关必须为开启或关闭。',
       'wrapper-loop-nested': '循环包装器不能嵌套在另一个循环包装器里。',
       'wrapper-loop-output-binding-out-of-scope': '循环输出绑定必须引用循环体的直接成员。',
       'wrapper-output-boundary-missing': '离开包装器的数据必须通过包装器输出边界显式暴露。',

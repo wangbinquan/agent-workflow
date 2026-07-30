@@ -84,6 +84,38 @@ describe('RFC-109 diffWorkflowForSync — node classification', () => {
     expect(d.modified[0]).toMatchObject({ nodeId: 'a', completed: true, changed: ['prompt'] })
   })
 
+  test('loop continuation policy change is preserved as a wrapper-structure modification', () => {
+    const oldDef = def(
+      [
+        node('loop', 'wrapper-loop', {
+          nodeIds: ['worker'],
+          maxIterations: 3,
+          continueOnMaxIterations: false,
+        }),
+        node('worker', 'agent-single'),
+      ],
+      [],
+    )
+    const newDef = def(
+      [
+        node('loop', 'wrapper-loop', {
+          nodeIds: ['worker'],
+          maxIterations: 3,
+          continueOnMaxIterations: true,
+        }),
+        node('worker', 'agent-single'),
+      ],
+      [],
+    )
+    const d = diffWorkflowForSync(oldDef, newDef, NO_RUNS)
+    expect(d.modified).toHaveLength(1)
+    expect(d.modified[0]).toMatchObject({
+      nodeId: 'loop',
+      completed: false,
+      changed: ['continueOnMaxIterations'],
+    })
+  })
+
   test('position-only change does not register as differs / modified', () => {
     const oldDef = def([node('a', 'agent-single', { prompt: 'p', position: { x: 0, y: 0 } })], [])
     const newDef = def([node('a', 'agent-single', { prompt: 'p', position: { x: 99, y: 99 } })], [])

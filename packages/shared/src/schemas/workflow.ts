@@ -443,6 +443,7 @@ export const WORKFLOW_NODE_FIELD_KEYS = [
   'review-rerunnable-on-reject',
   'review-rerunnable-on-iterate',
   'loop-max-iterations',
+  'loop-continue-on-max-iterations',
   'loop-exit-condition',
   'loop-output-bindings',
   'fanout-inputs',

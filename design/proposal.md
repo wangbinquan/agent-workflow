@@ -292,7 +292,8 @@ Runtime 概念是为了未来扩展到 claude-code 等其他 CLI 而预留的抽
 **边界端口模型**：
 
 - Wrapper 输入端口在**首轮迭代**前收一次值，每轮迭代都能读到（不变）
-- Wrapper 输出端口在 **退出条件满足那一轮**结束时，把内层指定节点的对应 port 透传出去
+- Wrapper 输出端口在**成功交付轮**结束时，把内层指定节点的对应 port 透传出去：通常是退出条件
+  满足的那一轮；若 `continueOnMaxIterations=true` 且直到上限仍未满足，则是最后一轮
 - 输出端口在 wrapper 配置里显式绑定到 `(nodeId, portName)`
 
 **视觉颜色**：
@@ -300,7 +301,10 @@ Runtime 概念是为了未来扩展到 claude-code 等其他 CLI 而预留的抽
 - 当前迭代正在跑的内层节点：黄色
 - 当前迭代已结束、未来还可能再跑的内层节点：**蓝色**
 - 退出条件满足或 max_iter 到达后，内层节点最终状态：绿色（成功轮）
-- wrapper 自身：所有迭代跑完且退出条件满足 → done（绿）；max 但未满足 → **`exhausted`** 状态（独立子状态，红边 + "exhausted" 文字），下游不触发，task = failed
+- wrapper 自身：退出条件满足 → done（绿）；达到 max 但未满足时，
+  `continueOnMaxIterations` 缺失/false → **`exhausted`**（红边 + "exhausted"，下游不触发，
+  task=failed），true → 采用末轮 output content/kind/archive、完成 loop-private canonical
+  merge 后转 done 并继续下游。inner/merge 错误不受该开关影响
 
 ### 5.4 嵌套行为
 
@@ -396,7 +400,7 @@ opencode 的 skill 发现是基于绝对路径的集合：每个被发现的 `SK
 | `failed` | ✓ | ✓ | 业务/运行错误（exit code、解析失败、timeout 等） |
 | `canceled` | ✓ | ✓ | 用户主动 cancel |
 | `interrupted` | ✓ | ✓ | daemon 重启 / 崩溃导致的中断（区别于用户 cancel） |
-| `exhausted` | — | ✓ | loop wrapper 达到 max_iterations 仍未满足退出条件 |
+| `exhausted` | — | ✓ | loop wrapper 达到 max_iterations 仍未满足退出条件，且未开启达到上限后继续 |
 | `skipped` | — | ✓ | resume 时已经 done 的节点不重跑 |
 
 UI 颜色：done=绿，running=黄，pending=灰，loop body 蓝（已跑可能再跑），失败族（failed/canceled/interrupted/exhausted）红边 + 文字区分。

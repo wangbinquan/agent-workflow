@@ -244,7 +244,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
   })
   afterEach(() => h?.cleanup())
 
-  test('loop 提升行与 output 虚拟节点行携带上游 kind + archive_json', async () => {
+  test('loop 达到上限后继续时提升行与 output 虚拟节点行携带上游 kind + archive_json', async () => {
     const writerId = await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
     writeFileSync(
       h.planFile,
@@ -262,7 +262,8 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
           kind: 'wrapper-loop',
           nodeIds: ['writer'],
           maxIterations: 1,
-          exitCondition: { kind: 'port-not-empty', nodeId: 'writer', portName: 'doc' },
+          continueOnMaxIterations: true,
+          exitCondition: { kind: 'port-empty', nodeId: 'writer', portName: 'doc' },
           outputBindings: [{ name: 'final', bind: { nodeId: 'writer', portName: 'doc' } }],
         } as unknown as WorkflowNode,
         {
@@ -321,6 +322,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
       expect(arch).not.toBeNull()
       expect(readFileSync(join(h.appHome, arch!.items[0]!.file!), 'utf8')).toBe('PROJECTED BODY')
     }
+    expect(readFileSync(join(h.worktreePath, 'design.md'), 'utf8')).toBe('PROJECTED BODY')
   })
 
   test('loop 内 writer 通过 outputBinding 提升后可被 loop 外 review 读取', async () => {

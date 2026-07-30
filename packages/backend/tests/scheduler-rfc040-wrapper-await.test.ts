@@ -178,6 +178,7 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
           kind: 'wrapper-loop',
           nodeIds: ['d', 'c'],
           maxIterations: 3,
+          continueOnMaxIterations: true,
           // Watch the agent's normal output port — empty while it's asking
           // clarify, non-empty once it answers and outputs normally.
           exitCondition: { kind: 'port-not-empty', nodeId: 'd', portName: 'design' },

@@ -4,9 +4,9 @@
 // shared case: wrapper-git renders the read-only inner list only; the loop
 // adds maxIterations / exitCondition / outputBindings.
 
-import type { WorkflowNode } from '@agent-workflow/shared'
+import { readContinueOnMaxIterations, type WorkflowNode } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
-import { Field, NumberInput, TextInput } from '@/components/Form'
+import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { loopMemberCandidates } from '../wrapperCandidates'
 import {
@@ -117,6 +117,24 @@ export function WrapperGitLoopEdit({
               />
             </InspectorHistoryBoundary>
           </Field>
+        </InspectorFieldAnchor>
+        <InspectorFieldAnchor nodeId={node.id} field="loop-continue-on-max-iterations">
+          <Switch
+            checked={readContinueOnMaxIterations(node) === true}
+            onChange={(checked) =>
+              update(
+                { continueOnMaxIterations: checked },
+                atomicNodeInspectorChange(
+                  node.id,
+                  'continueOnMaxIterations',
+                  t('inspector.fieldContinueOnMaxIterations'),
+                ),
+              )
+            }
+            label={t('inspector.fieldContinueOnMaxIterations')}
+            hint={t('inspector.fieldContinueOnMaxIterationsHint')}
+            data-testid="loop-continue-on-max-iterations"
+          />
         </InspectorFieldAnchor>
       </InspectorSection>
       <InspectorSection title={t('inspector.sectionFlow')}>
