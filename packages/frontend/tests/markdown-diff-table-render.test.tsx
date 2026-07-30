@@ -164,3 +164,29 @@ describe('task list checkbox', () => {
     expect(container.querySelector('.diff-ins')).not.toBeNull()
   })
 })
+
+describe('identical 输入不变量（checkbox / setext / 引用内 checkbox 原子化不破坏无变更路径）', () => {
+  const doc = [
+    '# T',
+    '',
+    '- [x] a',
+    '- [ ] b',
+    '1. [X] c',
+    '',
+    '> - [x] quoted',
+    '',
+    'Setext',
+    '======',
+    '',
+    '| a |',
+    '| --- |',
+    '| 1 |',
+    '',
+  ].join('\n')
+
+  test('word / line 逐字节还原，block 段落规范化后等价', () => {
+    expect(buildMergedMarkdown(doc, doc, 'word')).toBe(doc)
+    expect(buildMergedMarkdown(doc, doc, 'line')).toBe(doc)
+    expect(buildMergedMarkdown(doc, doc, 'block').trim()).toBe(doc.trim())
+  })
+})
