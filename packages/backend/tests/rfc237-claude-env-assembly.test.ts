@@ -12,6 +12,7 @@
 //      variant cannot appear silently.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -194,5 +195,73 @@ describe('claudeCode env-surface source ratchet', () => {
       if (surface.test(text)) offenders.push(name)
     }
     expect(offenders).toEqual([])
+  })
+})
+
+// RFC-242 T6 — anti-relapse ratchet for the business tool gate.
+//
+// T1-T3 made a DECLARED-permission business node run under the declared-control
+// contract (mapped `--tools`, dontAsk, sealed binary, controlled env). The
+// posture that must never come back is the one the RFC removed: a node whose
+// agent declared a permission silently falling back to `bypassPermissions`.
+// The surface split test above proves the two shapes differ; this one proves
+// the DECLARED side can never regress into the bypassed side — the exact
+// regression a future refactor of buildClaudeSpawn / buildBusinessSpawn would
+// otherwise reintroduce without any test noticing.
+describe('RFC-242 T6 — a declared-permission business node can never relapse to bypass', () => {
+  const scratchRoot = () => mkdtempSync(join(tmpdir(), 'rfc242-t6-'))
+
+  /** Business ctx with a mock head so no seal/keychain is touched. */
+  const ctx = (permission: Record<string, unknown>, runRoot: string) =>
+    ({
+      agent: { name: 'a', bodyMd: 'persona', permission } as never,
+      prompt: 'p',
+      injectedMemoryBlock: null,
+      dependents: [],
+      mcps: [],
+      plugins: [],
+      resolvedParamsByAgent: new Map(),
+      skills: [],
+      worktreePath: '/wt',
+      runRoot,
+      configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
+      wantsInventory: false,
+      nodeRunId: 'nr-t6',
+      runtimeCmd: ['bun', 'run', 'mock'],
+      log: { warn: () => {}, info: () => {}, error: () => {}, debug: () => {} },
+    }) as never
+
+  test('every non-empty permission shape produces a gated argv, never bypassPermissions', async () => {
+    // Spans the mapping's whole behavior space: allow / deny / wildcard /
+    // headless-ask / pattern rule / unknown key / fully-denied. Whatever the
+    // gate resolves to — even the empty load set — the node must stay gated.
+    const shapes: Array<Record<string, unknown>> = [
+      { read: 'allow' },
+      { bash: 'deny' },
+      { '*': 'allow' },
+      { '*': 'deny' },
+      { bash: 'ask' },
+      { bash: { 'git *': 'allow' } },
+      { not_a_real_key: 'allow' },
+      { read: 'allow', edit: 'allow', bash: 'deny', websearch: 'allow' },
+    ]
+    for (const permission of shapes) {
+      const plan = await claudeCodeDriver.buildBusinessSpawn(ctx(permission, scratchRoot()))
+      const argv = plan.cmd.join(' ')
+      expect(argv).not.toContain('bypassPermissions')
+      expect(argv).not.toContain('--dangerously-skip-permissions')
+      expect(argv).toContain('--permission-mode dontAsk')
+      expect(plan.cmd).toContain('--tools')
+      // Controlled env travels with the gate (no full inherit for a gated node).
+      expect(plan.env.DISABLE_TELEMETRY).toBe('1')
+    }
+  })
+
+  test('ONLY an empty declaration keeps the unconstrained shape (the documented escape valve)', async () => {
+    const plan = await claudeCodeDriver.buildBusinessSpawn(ctx({}, scratchRoot()))
+    expect(plan.cmd).toContain('bypassPermissions')
+    // …and that shape is the ONLY one allowed to skip the gate, so a future
+    // change that widens "unconstrained" beyond `{}` fails here.
+    expect(plan.cmd).not.toContain('--tools')
   })
 })
