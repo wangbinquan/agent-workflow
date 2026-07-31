@@ -478,9 +478,7 @@ describe('RFC-242 §3.1 — freezeCallClosure', () => {
     const defWithWg = {
       $schema_version: 4,
       inputs: [],
-      nodes: [
-        { id: 'cw', kind: 'call-workgroup', workgroupName: 'ghost-wg', goalTemplate: 'g' },
-      ],
+      nodes: [{ id: 'cw', kind: 'call-workgroup', workgroupName: 'ghost-wg', goalTemplate: 'g' }],
       edges: [],
     } as unknown as WorkflowDefinition
     await expect(freezeCallClosure(db, { id: 'W0', definition: defWithWg })).rejects.toMatchObject({

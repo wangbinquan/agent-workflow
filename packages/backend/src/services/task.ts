@@ -1777,7 +1777,8 @@ async function startTaskImpl(
           name: input.name,
           workflowId: workflow.id,
           workflowSnapshot:
-            (deps.callLaunch?.frozenSnapshotJson ?? null) ??
+            deps.callLaunch?.frozenSnapshotJson ??
+            null ??
             deps.workgroupLaunch?.snapshotJson ??
             deps.agentLaunch?.snapshotJson ??
             JSON.stringify(workflow.definition),

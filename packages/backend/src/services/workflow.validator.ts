@@ -63,7 +63,11 @@ import {
 import { createHash } from 'node:crypto'
 import { asc, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { mcps as mcpsTable, workflows as workflowsTable, workgroups as workgroupsTable } from '@/db/schema'
+import {
+  mcps as mcpsTable,
+  workflows as workflowsTable,
+  workgroups as workgroupsTable,
+} from '@/db/schema'
 import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
 import { listSkills } from '@/services/skill'

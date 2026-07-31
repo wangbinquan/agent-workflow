@@ -165,9 +165,9 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       'strategies/leaderWorker.ts': 1,
       'lifecycle.ts': 1,
       // RFC-242 §6.3 +2：startWorkgroupTaskFromFrozen（冻结启动面）在同文件内
-  // 复刻 readiness 的 leader 判定与 dw 快照选择——与 fresh 启动同语义、
-  // 不新增 mode 分支散射面（strategies/ 之外唯一属主仍是 launch.ts）。
-  'launch.ts': 3,
+      // 复刻 readiness 的 leader 判定与 dw 快照选择——与 fresh 启动同语义、
+      // 不新增 mode 分支散射面（strategies/ 之外唯一属主仍是 launch.ts）。
+      'launch.ts': 3,
       // T4：config PUT 编排（含 dynamic_workflow 免疫判断）落 configActions
       'configActions.ts': 1,
       'dwActions.ts': 2,
