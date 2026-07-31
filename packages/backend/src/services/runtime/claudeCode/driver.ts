@@ -208,12 +208,31 @@ export const claudeCodeDriver: RuntimeDriver = {
         warnings: gate.warnings,
       })
     }
+    // RFC-242 T2 — a permission-gated business node executes a byte-frozen
+    // copy, same TOCTOU fence as the intent path. The seam is the SAME one the
+    // credential bridge already uses: a test runtimeCmd means a mock head
+    // (multi-token, unsealable), production leaves it undefined. An
+    // unconstrained node keeps the historical head — sealing it without its
+    // tool gate would be posture theater on a bypassed process.
+    const businessHead = pickRuntimeHead(ctx.runtimeBinary, ctx.runtimeCmd)
+    const sealBusiness = gate !== null && ctx.runtimeCmd === undefined
+    let sealedHead = businessHead
+    let preSpawnVerify: (() => Promise<void>) | undefined
+    if (sealBusiness) {
+      const sealPath = join(ctx.runRoot, 'bin', 'claude-sealed')
+      const identity = await snapshotRuntimeBinary({
+        command: businessHead ?? ['claude'],
+        snapshotPath: sealPath,
+      })
+      sealedHead = [sealPath]
+      preSpawnVerify = () => verifyRuntimeBinarySnapshot(sealPath, identity.digest)
+    }
     const plan = buildClaudeSpawn({
       // Codex impl-gate P1-1: claude uses runtimeCmd (test-only), NEVER the
       // opencode-specific opencodeCmd. RFC-112/113: a custom claude fork's binary
       // (runtimeBinary, incl. the built-in's migrated config.claudeCodePath) wins;
       // else a test runtimeCmd; else production → undefined → ['claude'].
-      claudeCmd: pickRuntimeHead(ctx.runtimeBinary, ctx.runtimeCmd),
+      claudeCmd: sealedHead,
       prompt: ctx.prompt,
       systemPromptText,
       model: rootParams?.model ?? undefined,
@@ -236,6 +255,7 @@ export const claudeCodeDriver: RuntimeDriver = {
     })
     return {
       ...plan,
+      ...(preSpawnVerify === undefined ? {} : { preSpawnVerify }),
       // §4.4: same diagnostic fields the runner used to derive from the (built-
       // for-both-runtimes) inline config — byte-equal log line, claude included.
       diagnostics: {

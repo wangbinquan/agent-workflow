@@ -127,6 +127,25 @@ provider 能力），claude 全程只与 wrapper 的 stdio 对话，不需要它
 `sealedSubprocess.ts` 既有 bwrap `--unshare-net`（opencode local MCP 已在用）。两端
 证据齐备：**C-1 全链可行**。
 
+### 4.2 实现路径（已探明，零新机制）
+
+平台**已有**这条链的全部零件（opencode local MCP 在用），claude 只需接线：
+
+- `sealedSubprocess.ts` `materializeNetlessWrapper({wrapperPath, manifestPath, manifest})`
+  写出 0500 的 shell wrapper（内容 = `exec <平台二进制> __opencode-netless-subprocess
+--manifest <path> "$@"`）+ 0400 manifest；
+- `main.ts` 的隐藏命令 `__opencode-netless-subprocess` → `runNetlessSubprocess`
+  读 manifest → `renderNetlessInvocation` 施加 provider 的无网边界 → spawn 真命令，
+  **stdio 全 inherit**（正是 MCP stdio 直通所需）；
+- 因此 claude 侧只需把 `toClaudeMcpConfig` 里 `type==='local'` 条目的 `command`
+  指向该 wrapperPath（原 command/args 进 manifest），claude fork wrapper 即落入边界。
+
+**唯一新增依赖**：manifest 需要 provider child plan，它来自 containment 准入；claude
+driver 现固定申请 `runner-filesystem-v1`（无 child plan）。因此 T5 必须先让 claude
+driver 声明 `businessContainmentProfile`——有启用的 local MCP（且该节点受控）时申请带
+child provider 的 profile，与 opencode driver 的同名方法同构。这一步是 T5 的真正
+工作量，wrapper 本身是复用。
+
 C-3 降级为兜底：仅当某平台缺 provider 能力（如未来 Windows 无对应实现）时，按
 `warn/off` 语义显式声明该保证不可达，而不是静默失效。
 

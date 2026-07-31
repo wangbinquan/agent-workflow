@@ -180,13 +180,19 @@ describe('RFC-237 §2.3 controlled env', () => {
     expect(plan.env.CLAUDE_CONFIG_DIR).toContain('/run')
   })
 
-  test('legacy branch does NOT strip / inject (byte-compatible full inherit)', async () => {
+  test('RFC-242: the system-agent path is declared-control now, so it DOES strip/inject', async () => {
+    // Was "legacy branch keeps the full inherit". RFC-242 T4 made the
+    // system-agent surface declared-control (all-deny materialized), and T2
+    // ties the controlled env to that same contract — so this path now strips
+    // the internal markers and injects hardening. Semantics only TIGHTEN.
+    // The genuine full-inherit shape lives on the UNCONSTRAINED business path
+    // and is locked in rfc242-permission-map.test.ts.
     process.env.CLAUDECODE = '1'
     const plan = await claudeCodeDriver.buildSpawn(
       baseCtx({ testOnlyUnverifiedRuntime: true, runtimeBinary: claudeWrapper() }),
     )
-    expect(plan.env.CLAUDECODE).toBe('1')
-    expect(plan.env.DISABLE_TELEMETRY).toBeUndefined()
+    expect(plan.env.CLAUDECODE).toBeUndefined()
+    expect(plan.env.DISABLE_TELEMETRY).toBe('1')
   })
 
   test('uid-0 daemon deliberately re-asserts IS_SANDBOX=1 on the read-only branch (2026-07-31 root report)', () => {

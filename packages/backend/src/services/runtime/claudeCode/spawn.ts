@@ -253,6 +253,8 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   // permission produced a gate; otherwise it stays unconstrained (existing
   // agents keep working) and the caller warns.
   const businessGated = !systemSurface && !readOnlyIntent && ctx.businessTools !== undefined
+  /** Any shape running under the declared-control contract (argv AND env). */
+  const declaredControl = systemSurface || readOnlyIntent || businessGated
   const cmd = [
     ...head,
     ...CLAUDE_HEADLESS_BASE_ARGV,
@@ -286,9 +288,14 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
     cmd.push('--resume', ctx.resumeSessionId)
   }
 
+  // RFC-242 T2: every DECLARED-CONTROL shape (system agents, intent, and a
+  // permission-gated business node) gets the controlled env + hardening. An
+  // unconstrained business node keeps the full inherit — tightening it without
+  // its tool gate would disturb exactly the agents the user chose to leave
+  // alone (decision 2026-07-31).
   const env = assembleClaudeEnv({
-    inherit: readOnlyIntent ? 'controlled' : 'full',
-    hardening: readOnlyIntent,
+    inherit: declaredControl ? 'controlled' : 'full',
+    hardening: declaredControl,
     worktreePath: ctx.worktreePath,
     configDirEnv: ctx.configDirEnv ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env,
     configDir,
