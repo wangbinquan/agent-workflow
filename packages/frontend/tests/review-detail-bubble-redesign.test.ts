@@ -105,10 +105,17 @@ describe('review-detail bubble redesign', () => {
   // anchored text when their bubble is clicked.
   test('ReviewDocPane renders comments sorted by anchor.offsetStart', () => {
     const src = readFileSync(PANE_TSX, 'utf8')
-    // A `sortedComments` memo exists and sorts by offsetStart with
-    // occurrenceIndex as tiebreaker.
+    // RFC-241：比较器抽到 lib/review/commentOrder.ts（与上一版只读侧栏
+    // 共用唯一事实源）；本锁改为验证 (a) memo 仍在且使用共享比较器,
+    // (b) 比较器本体维持 offsetStart → occurrenceIndex 语义。
     expect(src).toMatch(/sortedComments/)
-    expect(src).toMatch(/anchor\.offsetStart\s*-\s*[ab]\.anchor\.offsetStart|offsetStart\s*-/)
+    expect(src).toMatch(/sort\(compareReviewComments\)/)
+    const order = readFileSync(
+      resolve(__dirname, '..', 'src', 'lib', 'review', 'commentOrder.ts'),
+      'utf8',
+    )
+    expect(order).toMatch(/anchor\.offsetStart\s*-\s*b\.anchor\.offsetStart/)
+    expect(order).toMatch(/anchor\.occurrenceIndex\s*-\s*b\.anchor\.occurrenceIndex/)
     // The bubble-column JSX iterates sortedComments, not the raw
     // detail.data.comments array.
     expect(src).toMatch(/sortedComments\.map\(/)

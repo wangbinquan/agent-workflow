@@ -27,6 +27,7 @@ import { Segmented } from '@/components/Segmented'
 import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { DiffView, type DiffGranularity } from '@/components/review/DiffView'
+import { PriorCommentsSidebar } from '@/components/review/PriorCommentsSidebar'
 import { Dialog } from '@/components/Dialog'
 import { MultiDocReviewView } from '@/components/review/MultiDocReviewView'
 import { ReviewDocPane } from '@/components/review/ReviewDocPane'
@@ -497,19 +498,30 @@ function ReviewDetailPage() {
       }
       return <LoadingState size="compact" />
     }
+    // RFC-241:diff 主列 + 上一版只读意见侧栏。渲染条件(diff on ∧
+    // priorVersion ∧ 非 historical)由本分支结构保证——historical 在
+    // 上方早退,diffMode/priorVersion 已判。当前版意见栏(ReviewDocPane
+    // 右列)保持原样不动。
     return (
-      <DiffView
-        left={priorBody.data.body}
-        right={data.currentBody}
-        granularity={diffGranularity}
-        leftLabel={t('reviews.diffLeftLabel', {
-          version: priorVersion.versionIndex,
-          decision: priorVersion.decision ?? t('reviews.decision.pending'),
-        })}
-        rightLabel={t('reviews.diffRightLabel', {
-          version: data.currentVersion.versionIndex,
-        })}
-      />
+      <div className="review-diff-layout">
+        <DiffView
+          left={priorBody.data.body}
+          right={data.currentBody}
+          granularity={diffGranularity}
+          leftLabel={t('reviews.diffLeftLabel', {
+            version: priorVersion.versionIndex,
+            decision: priorVersion.decision ?? t('reviews.decision.pending'),
+          })}
+          rightLabel={t('reviews.diffRightLabel', {
+            version: data.currentVersion.versionIndex,
+          })}
+        />
+        <PriorCommentsSidebar
+          comments={priorBody.data.comments}
+          body={priorBody.data.body}
+          versionIndex={priorVersion.versionIndex}
+        />
+      </div>
     )
   })()
 

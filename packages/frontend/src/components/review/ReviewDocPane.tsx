@@ -41,6 +41,7 @@ import { anchorKey, computeAnchorFromSelection, selectionCrossesHeading } from '
 import { BUBBLE_GAP_PX, computeBubbleLayout } from '@/lib/review/bubbleLayout'
 import { deleteDraft, getDraft, setDraft } from '@/lib/review/draftStore'
 import { computeLineRange } from '@/lib/review/lineRange'
+import { compareReviewComments } from '@/lib/review/commentOrder'
 import type { ReviewPaneMode } from '@/lib/review/readonly'
 
 // RFC-009-T2: sidebar width persistence + bounds. Shared with the single-doc
@@ -261,12 +262,8 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
   }, [popover, editingId, onShortcutCaptureChange])
 
   const sortedComments = useMemo<ReviewComment[]>(() => {
-    return [...comments].sort((a, b) => {
-      if (a.anchor.offsetStart !== b.anchor.offsetStart) {
-        return a.anchor.offsetStart - b.anchor.offsetStart
-      }
-      return a.anchor.occurrenceIndex - b.anchor.occurrenceIndex
-    })
+    // RFC-241:与上一版只读侧栏共用同一比较器(commentOrder 唯一事实源)。
+    return [...comments].sort(compareReviewComments)
   }, [comments])
 
   const lineRanges = useMemo<Map<string, { start: number; end: number }>>(() => {
