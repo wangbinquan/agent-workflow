@@ -121,6 +121,12 @@ shell）在无网边界内"。对 claude 的可达路径：
 `sealedSubprocess.ts` 的 no-network 边界内起真 MCP（与 opencode local MCP 复用同一
 provider 能力），claude 全程只与 wrapper 的 stdio 对话，不需要它支持"已连接传输"。
 
+**边界侧同日验证（macOS Seatbelt）**：`(version 1)(allow default)(deny network*)` 下
+`curl https://example.com` 返回 `000`（对照组无 profile 返回 `200`），同一 profile 下
+本地文件读正常——即 stdio + 本地 IO 不受影响，MCP server 可正常服务。Linux 侧复用
+`sealedSubprocess.ts` 既有 bwrap `--unshare-net`（opencode local MCP 已在用）。两端
+证据齐备：**C-1 全链可行**。
+
 C-3 降级为兜底：仅当某平台缺 provider 能力（如未来 Windows 无对应实现）时，按
 `warn/off` 语义显式声明该保证不可达，而不是静默失效。
 

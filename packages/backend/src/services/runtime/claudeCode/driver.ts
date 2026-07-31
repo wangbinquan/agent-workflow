@@ -29,6 +29,7 @@ import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
 import { snapshotRuntimeBinary, verifyRuntimeBinarySnapshot } from '../binarySnapshot'
+import { claudeToolsValue, mapAgentPermissionToClaudeTools } from './permissionMap'
 import { buildClaudeMcpTestSpawn } from './mcpTest'
 
 export const claudeCodeDriver: RuntimeDriver = {
@@ -188,6 +189,25 @@ export const claudeCodeDriver: RuntimeDriver = {
     // RFC-113 (Codex P1-3): claude's model is the RUNTIME's, not the agent's.
     // The root entry of resolvedParamsByAgent carries the frozen root profile.
     const rootParams = ctx.resolvedParamsByAgent.get(ctx.agent.name)
+    // RFC-242 §2 — derive the tool gate from the agent's declared permission.
+    // An agent with NO declaration stays unconstrained (user decision
+    // 2026-07-31: existing workflows must not break) but is logged as such, so
+    // the exposure is visible rather than silent.
+    const declaredPermission = Object.keys(ctx.agent.permission ?? {}).length > 0
+    const gate = declaredPermission ? mapAgentPermissionToClaudeTools(ctx.agent.permission) : null
+    if (gate === null) {
+      ctx.log.warn('claude-business-unconstrained', {
+        agent: ctx.agent.name,
+        nodeRunId: ctx.nodeRunId,
+        detail: 'agent declares no permission; claude node runs with bypassed permissions',
+      })
+    } else if (gate.warnings.length > 0) {
+      ctx.log.warn('claude-permission-mapping', {
+        agent: ctx.agent.name,
+        nodeRunId: ctx.nodeRunId,
+        warnings: gate.warnings,
+      })
+    }
     const plan = buildClaudeSpawn({
       // Codex impl-gate P1-1: claude uses runtimeCmd (test-only), NEVER the
       // opencode-specific opencodeCmd. RFC-112/113: a custom claude fork's binary
@@ -206,6 +226,8 @@ export const claudeCodeDriver: RuntimeDriver = {
       gitUserName: ctx.gitUserName,
       gitUserEmail: ctx.gitUserEmail,
       skills: ctx.skills,
+      surface: 'business',
+      ...(gate === null ? {} : { businessTools: claudeToolsValue(gate) }),
       ...(claudeMcp !== null ? { mcpConfigJson: JSON.stringify(claudeMcp) } : {}),
       ...(claudeAgents !== null ? { agentsJson: JSON.stringify(claudeAgents) } : {}),
       // bridge subscription creds only on REAL claude runs (tests set runtimeCmd).

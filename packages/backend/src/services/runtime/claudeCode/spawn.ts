@@ -80,6 +80,15 @@ export interface ClaudeSpawnContext {
    * 'business' (the historical default), so no caller silently tightens.
    */
   surface?: 'system' | 'business'
+  /**
+   * RFC-242 §2 — the BUSINESS tool gate derived from `agent.permission`
+   * (`permissionMap.ts`). Present ⇒ the declared-control shape with exactly
+   * these built-ins. Absent ⇒ the historical unconstrained shape
+   * (`bypassPermissions`), which the user decision of 2026-07-31 keeps as the
+   * default so existing agents do not break — the caller MUST surface an
+   * `unconstrained` warning instead of tightening silently.
+   */
+  businessTools?: string
   log?: Logger
 }
 
@@ -240,12 +249,20 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   // The surface is EXPLICIT — inferring it from optional business fields would
   // silently tighten a business spawn that happens to omit them.
   const systemSurface = ctx.surface === 'system'
+  // RFC-242 §2: a business spawn is declared-control IFF its agent's
+  // permission produced a gate; otherwise it stays unconstrained (existing
+  // agents keep working) and the caller warns.
+  const businessGated = !systemSurface && !readOnlyIntent && ctx.businessTools !== undefined
   const cmd = [
     ...head,
     ...CLAUDE_HEADLESS_BASE_ARGV,
-    ...(systemSurface || readOnlyIntent
+    ...(systemSurface || readOnlyIntent || businessGated
       ? claudeDeclaredControlArgv({
-          tools: readOnlyIntent ? CLAUDE_INTENT_READONLY_TOOLS : CLAUDE_ALL_DENY_TOOLS,
+          tools: readOnlyIntent
+            ? CLAUDE_INTENT_READONLY_TOOLS
+            : businessGated
+              ? (ctx.businessTools as string)
+              : CLAUDE_ALL_DENY_TOOLS,
         })
       : [
           // multica-proven non-interactive form; RFC-242 §2 replaces this with
