@@ -191,16 +191,15 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
       join(import.meta.dir, '../src/services/runtime/claudeCode/spawn.ts'),
       'utf-8',
     )
-    const anchor = src.indexOf(']: configDir')
-    const spread = src.indexOf(': claudeSandboxEnv(process.getuid?.())')
+    // RFC-237 unification: BOTH branches flow through assembleClaudeEnv, whose
+    // invariant tail spreads claudeSandboxEnv AFTER the config-dir key (and
+    // after the hardening set), so a uid-0 daemon's '1' always wins.
+    expect(src).toContain('const env = assembleClaudeEnv({')
+    const anchor = src.indexOf('[assembly.configDirEnv]: assembly.configDir,')
+    const hardening = src.indexOf('assembly.hardening ? CLAUDE_READONLY_HARDENING_ENV')
+    const spread = src.indexOf('...claudeSandboxEnv(uid),')
     expect(anchor).toBeGreaterThan(-1)
-    expect(spread).toBeGreaterThan(anchor)
-    // And the declared-control branch's tail (hardening composed WITH the
-    // uid-0 IS_SANDBOX re-assert — 2026-07-31 root report) sits after the
-    // config-dir key too (same override-precedence guarantee).
-    const hardening = src.indexOf(
-      '{ ...CLAUDE_READONLY_HARDENING_ENV, ...claudeSandboxEnv(process.getuid?.()) }',
-    )
     expect(hardening).toBeGreaterThan(anchor)
+    expect(spread).toBeGreaterThan(hardening)
   })
 })

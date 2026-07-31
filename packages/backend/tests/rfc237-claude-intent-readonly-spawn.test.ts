@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import {
+  assembleClaudeEnv,
   claudeControlledInheritEnv,
   claudeSandboxEnv,
 } from '../src/services/runtime/claudeCode/spawn'
@@ -194,13 +195,20 @@ describe('RFC-237 §2.3 controlled env', () => {
     expect(claudeSandboxEnv(0)).toEqual({ IS_SANDBOX: '1' })
     expect(claudeSandboxEnv(501)).toEqual({})
     expect(claudeSandboxEnv(undefined)).toEqual({})
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'claudeCode', 'spawn.ts'),
-      'utf8',
-    )
-    expect(src).toContain(
-      '{ ...CLAUDE_READONLY_HARDENING_ENV, ...claudeSandboxEnv(process.getuid?.()) }',
-    )
+    // Behavior-level via the unified assembly point (uid dependency-injected):
+    // controlled inherit strips the AMBIENT value, then a uid-0 daemon
+    // re-asserts '1'; non-root stays absent on both inherit policies.
+    process.env.IS_SANDBOX = '1'
+    const base = {
+      inherit: 'controlled' as const,
+      hardening: true,
+      worktreePath: '/wt',
+      configDirEnv: 'CLAUDE_CONFIG_DIR',
+      configDir: '/cfg/.claude',
+    }
+    expect(assembleClaudeEnv(base, 0).IS_SANDBOX).toBe('1')
+    expect(assembleClaudeEnv(base, 501).IS_SANDBOX).toBeUndefined()
+    expect(assembleClaudeEnv({ ...base, inherit: 'full' }, 0).IS_SANDBOX).toBe('1')
   })
 
   test('claudeControlledInheritEnv is a pure blacklist (auth families untouched)', () => {

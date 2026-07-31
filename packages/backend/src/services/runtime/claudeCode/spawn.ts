@@ -203,50 +203,80 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
     cmd.push('--resume', ctx.resumeSessionId)
   }
 
-  const configDirEnv = ctx.configDirEnv ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env
+  const env = assembleClaudeEnv({
+    inherit: readOnlyIntent ? 'controlled' : 'full',
+    hardening: readOnlyIntent,
+    worktreePath: ctx.worktreePath,
+    configDirEnv: ctx.configDirEnv ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env,
+    configDir,
+    gitUserName: ctx.gitUserName ?? null,
+    gitUserEmail: ctx.gitUserEmail ?? null,
+  })
+
+  return { cmd, env, stdin: { mode: 'pipe', data: ctx.prompt } }
+}
+
+export interface ClaudeEnvAssembly {
+  /** 'full' = legacy byte-compatible full inherit; 'controlled' = inherit minus
+   *  the internal-marker blacklist (declared-control branches). */
+  inherit: 'full' | 'controlled'
+  /** Inject the no-telemetry/no-autoupdate hardening set (declared-control). */
+  hardening: boolean
+  worktreePath: string
+  /** RFC-154 config-dir key + resolved private dir. */
+  configDirEnv: string
+  configDir: string
+  /** RFC-067 per-task git identity (both non-empty to inject). */
+  gitUserName?: string | null
+  gitUserEmail?: string | null
+}
+
+/**
+ * RFC-237 (2026-07-31 unification) — the SINGLE env assembly point for every
+ * Claude Code child the platform spawns. Survival-critical keys must never be
+ * re-implemented per call site (the root-deployment incident: the read-only
+ * branch re-built its tail and dropped the uid-0 IS_SANDBOX assert; the MCP
+ * playground then copied a third variant). Branches express ONLY their inherit
+ * policy and hardening choice; everything below is invariant:
+ *
+ *  - PWD=worktree (claude derives the transcript project slug from cwd);
+ *  - RFC-154 config-dir relocation + default-key scrub for custom forks
+ *    (Codex impl-gate P2: a child carrying BOTH keys lands a fork in a stale
+ *    dir);
+ *  - uid-0 daemons ALWAYS assert IS_SANDBOX=1, spread last so it wins over any
+ *    inherited value ('full') or survives the blacklist strip ('controlled'):
+ *    claude's root gate wants the exact string '1' (bypass branches), a root
+ *    daemon is a container-shaped deployment where the assertion is honest,
+ *    and it forward-proofs against claude releases widening the gate beyond
+ *    the bypass-only checks binary-verified on 2.1.220. Non-root spawns get
+ *    nothing;
+ *  - RFC-067 git identity (both fields non-empty to inject).
+ *
+ * `uid` is dependency-injected so root behavior is testable on non-root CI.
+ */
+export function assembleClaudeEnv(
+  assembly: ClaudeEnvAssembly,
+  uid: number | undefined = process.getuid?.(),
+): Record<string, string> {
   const env: Record<string, string> = {
-    // RFC-237 design §2.3: the declared-control branch inherits minus the
-    // internal-marker blacklist (incl. IS_SANDBOX); the legacy branch keeps the
-    // full-inherit shape byte-unchanged.
-    ...(readOnlyIntent
+    ...(assembly.inherit === 'controlled'
       ? claudeControlledInheritEnv(process.env)
       : (process.env as Record<string, string>)),
-    // opencode needed PWD=cwd; Claude Code resolves the project slug from cwd too,
-    // and we keep PWD aligned so the transcript project dir matches the worktree.
-    PWD: ctx.worktreePath,
-    // D16: relocate the config root per attempt → transcript + skills isolation.
-    // (Subscription auth bridge + skills land in PR-C; API-key auth flows via the
-    // inherited env and is orthogonal to this dir.)
-    // RFC-154: key is configurable (custom forks); default = CLAUDE_CONFIG_DIR.
-    [configDirEnv]: configDir,
-    // Spread LAST: legacy branch — a root daemon's injected IS_SANDBOX=1 wins
-    // over an inherited IS_SANDBOX=0 (claude's gate wants the exact '1');
-    // read-only branch — hardening injections win over any daemon-level opt-in,
-    // and a uid-0 daemon re-asserts IS_SANDBOX=1 DELIBERATELY (2026-07-31 root
-    // deployment report): the inherited value was stripped for determinism, a
-    // root daemon is a container-shaped deployment where the assertion is
-    // honest, and this forward-proofs against claude releases widening the
-    // root gate beyond the bypass-only checks verified on 2.1.220. Non-root
-    // spawns still get nothing on either branch.
-    ...(readOnlyIntent
-      ? { ...CLAUDE_READONLY_HARDENING_ENV, ...claudeSandboxEnv(process.getuid?.()) }
-      : claudeSandboxEnv(process.getuid?.())),
+    PWD: assembly.worktreePath,
+    [assembly.configDirEnv]: assembly.configDir,
+    ...(assembly.hardening ? CLAUDE_READONLY_HARDENING_ENV : {}),
+    ...claudeSandboxEnv(uid),
   }
-  // RFC-154 (Codex impl-gate P2): with a CUSTOM key, scrub the protocol default
-  // inherited from the daemon's own environment — otherwise the child carries
-  // BOTH keys and a fork that still consults the default one lands in a stale
-  // dir. Default-key spawns are untouched (we just wrote it ourselves).
-  if (configDirEnv !== DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env) {
+  if (assembly.configDirEnv !== DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env) {
     delete env[DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env]
   }
-  const gitName = typeof ctx.gitUserName === 'string' ? ctx.gitUserName : ''
-  const gitEmail = typeof ctx.gitUserEmail === 'string' ? ctx.gitUserEmail : ''
+  const gitName = typeof assembly.gitUserName === 'string' ? assembly.gitUserName : ''
+  const gitEmail = typeof assembly.gitUserEmail === 'string' ? assembly.gitUserEmail : ''
   if (gitName.length > 0 && gitEmail.length > 0) {
     env.GIT_AUTHOR_NAME = gitName
     env.GIT_AUTHOR_EMAIL = gitEmail
     env.GIT_COMMITTER_NAME = gitName
     env.GIT_COMMITTER_EMAIL = gitEmail
   }
-
-  return { cmd, env, stdin: { mode: 'pipe', data: ctx.prompt } }
+  return env
 }

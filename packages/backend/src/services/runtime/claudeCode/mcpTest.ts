@@ -12,16 +12,9 @@ import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { McpTestSpawnContext, McpTestSpawnPlan } from '../types'
 import { prepareClaudeConfigDir } from './config'
-import { claudeControlledInheritEnv } from './spawn'
+import { assembleClaudeEnv } from './spawn'
 import { snapshotRuntimeBinary, verifyRuntimeBinarySnapshot } from '../binarySnapshot'
 import { identityDigest } from '../opencode/executionIdentity'
-
-const HARDENING_ENV = Object.freeze({
-  DISABLE_AUTOUPDATER: '1',
-  DISABLE_TELEMETRY: '1',
-  DISABLE_ERROR_REPORTING: '1',
-  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-})
 
 export async function buildClaudeMcpTestSpawn(ctx: McpTestSpawnContext): Promise<McpTestSpawnPlan> {
   if (ctx.nativeSessionId !== undefined && ctx.resumeSessionId !== undefined) {
@@ -84,16 +77,18 @@ export async function buildClaudeMcpTestSpawn(ctx: McpTestSpawnContext): Promise
     cmd.push('--resume', ctx.resumeSessionId)
   }
 
+  // RFC-237 unification (2026-07-31): env flows through the single Claude
+  // assembly point — controlled inherit + hardening + config-dir scrub + the
+  // uid-0 sandbox assert this file previously lacked (same root-deployment
+  // exposure the read-only intent branch had).
   const configDirEnv = ctx.configDir.env ?? DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env
-  const env: Record<string, string> = {
-    ...claudeControlledInheritEnv(process.env),
-    PWD: ctx.worktreePath,
-    [configDirEnv]: configDir,
-    ...HARDENING_ENV,
-  }
-  if (configDirEnv !== DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env) {
-    delete env[DEFAULT_CONFIG_DIR_PROFILE['claude-code'].env]
-  }
+  const env = assembleClaudeEnv({
+    inherit: 'controlled',
+    hardening: true,
+    worktreePath: ctx.worktreePath,
+    configDirEnv,
+    configDir,
+  })
 
   const sessionContractDigest = identityDigest({
     codec: 1,
