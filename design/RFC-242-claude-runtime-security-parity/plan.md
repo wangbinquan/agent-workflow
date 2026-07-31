@@ -14,9 +14,9 @@ PR-1（T4）已实施。
 
 | ID         | 任务                                                                                                                                                                                                | 依赖       |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| RFC-242-T1 | 权限映射模块 + 逐条单测（按 T0a 定的形态；未覆盖键 fail-closed）                                                                                                                                    | T0a        |
-| RFC-242-T2 | 业务 spawn 受控化：封印 + `preSpawnVerify` + `assembleClaudeEnv('controlled')` + 映射驱动的 `--tools`；复用 `claudeDeclaredControlArgv`                                                             | T1         |
-| RFC-242-T3 | 逃生阀（显式 unconstrained 声明 + 保存期告警 + node_run 诊断标注）与 golden 改形                                                                                                                    | T2         |
+| RFC-242-T1 | ✅ 已实施（PR-2 `5ce22020`）：`claudeCode/permissionMap.ts` 冻结表（两侧词汇取自 opencode 源码 + claude 实测）；`ask`→deny+告警、未知键 fail-closed+告警、模式规则保守收敛并披露粒度损失            | T0a        |
+| RFC-242-T2 | 🚧 部分实施（PR-2）：映射驱动的 `--tools` + 受控 argv 已落；**封印二进制 + controlled env 留待后续切片**（业务 golden 面更大，分步降险）                                                            | T1         |
+| RFC-242-T3 | ✅ 已实施（PR-2）：未声明权限 = 保持 bypass（存量零破坏，用户决策）+ `claude-business-unconstrained` 告警；映射告警经 `claude-permission-mapping` 上报；业务/系统双形状锁                           | T2         |
 | RFC-242-T4 | ✅ 已实施（PR-1）：系统面 `all-deny`/omitted 物化为 `--tools ""`；新增显式 `surface: 'system' \| 'business'` 分流（业务面保持 RFC-111 形状）+ 泄漏防复发锁；两处 golden 改形；types.ts 文档名实一致 | —          |
 | RFC-242-T5 | 网络围栏：C-1（MCP wrapper 无网边界 + 实测）或 C-3（能力模型 + UI + docs 显式声明）                                                                                                                 | T0b        |
 | RFC-242-T6 | ratchet 扩展（业务分支无声明的 bypass 复活 → 红）+ backlog 三条转收口                                                                                                                               | T2, T4, T5 |
