@@ -1,4 +1,4 @@
-# RFC-241 — 技术设计（v4,阶段 2 锚定增补）
+# RFC-241 — 技术设计（v5,阶段 2 设计门一轮修订后）
 
 ## 数据流(零后端改动,已实证)
 
@@ -115,64 +115,104 @@ auxiliaryBodySlot 的 diff 分支内(historical 早退先行)并显式写明条�
   v3。评审结论:无需三轮全量,可进实现,实现门统一验证。
 
 
-## 阶段 2:上一版意见锚定(2026-07-31 用户增补需求,推翻 v1「不做内联
-锚定」拍板)
+## 阶段 2:上一版意见锚定(v5,设计门一轮 4 P1 + 2 P2 修订后)
 
-### 语义基础(为什么能精确锚定而非启发式)
+### 语义基础(v5 改写:保序近似 + 破例清单,非「逐字等于」)
 
-词档 diff 的合并文档 = 上一版与当前版的交错,其中**排除 `.diff-ins`
-子树后的文本流(context + del)逐字等于上一版原文**——这是 RFC-010/240
-diff 管线的构造不变量(word/line 对以换行结尾输入逐字节还原的同一来
-源)。因此上一版意见的 `selectedText + occurrenceIndex` 在「ins-排除
-文本流」上有与原文完全一致的出现次语义,锚定是**精确匹配**:
+合并文档排除 `.diff-ins` 子树后的 del/context 文本流,相对上一版原文是
+**保序近似**——大面成立、破例有限且可判定:
 
-- 锚文本未变 → 落在 context 区;
-- 锚文本被删/被改 → 落在红色 del 区;变更把旧文本切成多段时(如
-  `{D}a{d}{I}x{i}{D}b{d}`),匹配跨段成立,mark 分段包裹、整组高亮;
-- 找不到(如锚落在整表原子化重排区、或非 word 档的行/块粒度重排)→
-  该条意见回退 v1 无锚气泡形态(显示章节路径,不定位)。
+**成立面**(评审实证):word 档普通文本(diffArrays + trimCommonAffixes
+保序)、line/block 档全部(含 repairBrokenLinePrefixes 拆行——DEL 行 =
+del 视图 = 旧行逐字;repairMergedTableRuns 重建保序)、fence/inline code
+(SKIP_TAGS 兜住)、结构裸行(零渲染文本)。
 
-line/块档的合并文档同样满足「ins-排除 = 旧文」不变量(diffLines/块级
-同为交错构造),锚定机制三档通用。
+**破例清单与处置**(设计门一轮 P1×3):
 
-### 机制(全部复用既有原语,最小扩展)
+1. **含 ins 的表格**(RFC-240 配对表 / merged 重建表):行相似度贪心与
+   「未配对 DEL 前置」会重排旧行顺序;降级 cell 的垫片空格 / 色块 /
+   奇偶垫片会改写字面。**处置:锚定命中若落在「自身包含 `.diff-ins`
+   的 `<table>`」内 → 视为不可靠,回退未定位**(匹配后校验 mark 祖先,
+   命中即 unwrap;纯 DEL 整表〔不含 ins〕保序保字面,不回退)。
+2. **word 档行内数学式**:正文 math 无原子化保护,marker 落入
+   `inlineMath.value` 被 `resolveMarkedString` 解析成**仅新版**,新公式
+   文本(含 KaTeX HTML 输出)不带 `.diff-ins` 包装、会污染文本流。
+   **处置:排除选择器扩为列表 `['.diff-ins', '.katex']`**——KaTeX 输出
+   整树不入流(旧公式本就被剥离,新公式随排除消失,流中两版皆无):
+   锚在公式上的意见自然未定位回退,公式之后的锚不受计数污染。
+   line/block 档 math 整体进 diffMark,天然安全。
+3. **出现次数不足 / 次序漂移**:现 `wrapAnchorsInDom` 对次数不足 clamp
+   到最后一次——那是「当前版=锚定源」的容错;prior 路径文档≠锚定源,
+   clamp 会把该回退的**静默钉错**。**处置:新增 `strictOccurrence`
+   选项——次数不足即放弃该锚(回退未定位),不 clamp**;现有调用不传,
+   行为不变。`occurrenceIndex` 本为源码域计数、渲染域天然近似——
+   strict + 表格校验双闸后,残余错位风险限于「同 selectedText 在
+   非表格区域因删除减少出现次」一类,strict 直接回退,不错钉。
 
-1. **`wrapAnchorsInDom` 扩展**:新增可选 `excludeSelector?: string`——
-   遍历文本节点时跳过匹配该选择器的元素子树(本 RFC 传 `.diff-ins`)。
-   既有调用(ReviewDocPane)不传,行为逐字节不变。SKIP_TAGS(PRE/CODE)
-   语义保持:意见若锚在代码块内,与现状同样不匹配,回退无锚。
-2. **`useCommentBubbles` 抽取**:从 ReviewDocPane 私有提为
-   `hooks/useCommentBubbles.ts` 共享(签名不变),ReviewDocPane 与
-   PriorCommentsSidebar 两处消费。
-3. **diff 主列容器 ref**:`.review-diff-layout` 第一列包一层带 ref 的
-   div(`.review-diff-doc`),effect 在 merged 渲染或意见变化后调用
-   `wrapAnchorsInDom(ref, anchors, { excludeSelector: '.diff-ins' })`;
-   mark 用独立 class `prior-comment-anchor`(与当前版 `comment-anchor`
-   区分,样式同视觉但色调弱化,避免与 diff 红绿冲突——具体:中性
-   下划线高亮,active 时同现有 flash 效果)。
-4. **气泡对位与交互**:锚定成功的气泡随 mark 纵向对位(useCommentBubbles
-   同款);点击滚动至 mark 并短暂高亮(复用 ReviewDocPane 的
-   activeCommentId/flash 模式,抽同一份 scroll+flash 帮助函数);锚定
-   失败的气泡集中列在侧栏顶部「未定位」分节(v1 形态)。cursor 规则
-   更新:**锚定气泡 cursor: pointer(可跳转),未锚定 cursor: default**
-   ——v3「全部 default」相应作废;hover 抬升仅锚定气泡恢复。
-5. **只读不变**:锚定仅新增「跳转/高亮」,无任何编辑入口;marks 不参与
-   当前版评论的划词选区(选区逻辑仅在非 diff 模式启用,现状已然)。
+**不变量守卫测试**:属性测试锁成立面——对无表格/无 math 的文档对,
+`extractMarkedView(buildMergedMarkdown(L, R, 'word'), 'del') === L`
+(word/line 两档;`extractMarkedView` 已导出);破例清单各配一条回退
+用例。
 
-### 测试增补(阶段 2)
+### 机制(v5:参数化契约,撤回「签名不变」措辞——设计门一轮 P1)
 
-7. 锚文本未变 → mark 落 context、气泡随位、点击滚动高亮(scrollIntoView
-   调用与 active class 断言)。
-8. 锚文本被删 → mark 落 `.diff-del` 内;被词级切开 → 多段 mark 同
-   comment-id、点击整组高亮。
-9. ins-排除语义:当前版新增了与锚文本相同的字样时,occurrenceIndex 仍
-   按旧文顺序命中(新增区不计入出现次)。
-10. 找不到锚 → 回退无锚气泡且列于「未定位」分节;cursor/hover 按锚定
-    与否分别断言。
-11. wrapAnchorsInDom excludeSelector 单测:既有无参调用行为逐字节不变
-    (ReviewDocPane 路径回归)。
+1. **`wrapAnchorsInDom(root, anchors, opts?)`**,
+   `opts = { excludeSelectors?: string[]; markClass?: string; strictOccurrence?: boolean }`:
+   文本遍历跳过匹配任一 excludeSelectors 的元素子树;mark class 取
+   `markClass ?? 'comment-anchor'`;**unwrapAnchors 同步参数化**(按同
+   一 class 查询,保证幂等——否则 prior mark 清不掉、重复调用嵌套堆
+   积);`strictOccurrence: true` 时次数不足直接跳过该锚。现有调用
+   (ReviewDocPane)不传 opts,行为逐字节不变(测 11)。
+2. **`useCommentBubbles` 抽取为 `hooks/useCommentBubbles.ts`**,新增参数
+   `{ markSelector, headerEl, orphanPlacement }`:mark 查询用
+   `markSelector`(prior 路径 `mark.prior-comment-anchor[data-comment-id]`
+   前缀);headerFloor 改传显式元素 ref(prior 侧栏标题 + 「未定位」
+   分节高度计入 floor,不再硬编码 `.review-detail__sidebar-header`);
+   `computeBubbleLayout` 增加 `orphanPlacement: 'top' | 'bottom'`(默认
+   'bottom' 保 ReviewDocPane 现行为逐字节不变;prior 取 'top' 落实
+   「未定位列于顶部」),纯函数用例双分支锁定。ReviewDocPane 改用抽取
+   版并显式传等价默认参数。
+3. **点击滚动/高亮**:抽 `scrollToCommentAnchor(root, commentId, markClass)`
+   帮助函数,`querySelectorAll` **多节点**——active 时整组 mark 加
+   `data-active`,滚动到第一段;ReviewDocPane 迁移到同一帮助函数(单
+   节点场景行为不变)。
+4. **接线**:diff 主列包 `.review-diff-doc` ref;effect 在 merged 渲染 /
+   意见集变化后:unwrap(prior class)→ wrap(exclude
+   `['.diff-ins', '.katex']`、markClass `prior-comment-anchor`、strict)
+   → **表格校验**:mark 若 `closest('table')` 存在且该表含 `.diff-ins`
+   → unwrap 该意见全部 mark 并归入未定位。
+5. **「未定位」分节**:置于侧栏标题之下、锚定气泡之前;内部排序沿用
+   `compareReviewComments`;分节标题 i18n(「未能定位到原文 · N 条」)。
+6. **样式**(设计门一轮 P2):`mark.prior-comment-anchor` 显式
+   `background: transparent`(含 dark 主题变体,防 UA 黄底压 diff 红
+   绿)+ 中性点状下划线(色 `var(--muted)`);落在 `.diff-del` 内与删
+   除线叠加为「点下划线 + 删除线」,接受并写明;active 复用
+   `data-active` 属性,flash 与现有 comment-anchor 同款。锚定气泡加
+   `.comment-bubble--anchored`:`cursor: pointer` + hover 抬升恢复;
+   未定位气泡维持 default。
+
+### 测试(v5 拆分——JSDOM 无布局/滚动,断言面三分)
+
+7. 渲染级:锚文本未变 → mark 存在于 context、data-comment-id 正确;
+   点击气泡 → 整组 mark `data-active` + scrollIntoView spy 被调。
+8. 锚文本被删 → mark 落 `.diff-del` 内;被词级切开 → 同 comment-id
+   多段 mark,点击整组 active。
+9. ins-排除 / strict:当前版新增相同字样不改变命中;**次数不足 → 未
+   定位回退、绝不 clamp 错钉**;**含 ins 表格内命中 → 回退**(配对表
+   重排反例);word 档 math 意见 → 回退且其后锚不受计数污染。
+10. 未定位分节:位于顶部、排序、anchored/未定位的 cursor+hover 分别
+    断言(类名级)。
+11. 兼容:wrapAnchorsInDom 无 opts 行为逐字节不变;ReviewDocPane 经
+    抽取 hook + 帮助函数后既有测试零回归。
+12. 不变量属性测试(语义基础)+ computeBubbleLayout orphanPlacement
+    双分支纯函数用例。
 
 ### 设计门记录(阶段 2)
 
-- 增补轮(待跑):对抗复核锚定语义(ins-排除不变量的三档成立性、跨段
-  mark、occurrence 计数)、hook 抽取回归面、交互/样式规范完备性。
+- 一轮(2026-07-31,独立子代理续评,`NEEDS_REVISION`,4 P1 + 2 P2):
+  「逐字等于/精确匹配」与实码三处相悖(配对表重排+垫片改写、word math
+  单版本化污染、clamp+源码域计数)→ 保序近似 + 破例清单 + strict 匹配
+  + 表格校验回退 + `.katex` 排除;「签名不变」与四处硬编码冲突 → 全套
+  参数化契约(markClass/unwrap 幂等/markSelector/headerEl/
+  orphanPlacement/多节点 active);样式(透明底/暗色变体/删除线叠加)
+  与测试三分拆分补全。
