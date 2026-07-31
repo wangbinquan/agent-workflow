@@ -63,8 +63,9 @@ describe('buildPalette with real i18n', () => {
     // RFC-060 PR-E removed the standalone Fan-out section (fan-out now lives
     // inside the Wrappers section as `wrapper-fanout`); 2026-05-24 follow-up
     // updates the IO labels to ship a leading kind-icon glyph so every
-    // palette row starts with an icon column.
-    expect(sections.map((s) => s.label)).toEqual(['Agents', 'Wrappers', 'IO', 'Human'])
+    // palette row starts with an icon column. RFC-242 added the Calls
+    // section (call-workflow).
+    expect(sections.map((s) => s.label)).toEqual(['Agents', 'Wrappers', 'Calls', 'IO', 'Human'])
     // Built-in wrapper + IO labels come through too.
     const ioSection = sections.find((s) => s.label === 'IO')
     const ioItems = ioSection?.items.map((i) => i.label) ?? []

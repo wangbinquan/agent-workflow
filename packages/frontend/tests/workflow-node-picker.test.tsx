@@ -53,9 +53,11 @@ describe('WorkflowNodePicker', () => {
     expect(search.getAttribute('type')).toBe('search')
     expect(search.getAttribute('aria-label')).not.toBeNull()
     expect(getByRole('tablist', { name: /node type|节点类型/ })).toBeTruthy()
-    expect(getByTestId('workflow-node-picker-category-all').textContent).toMatch(/9/)
+    expect(getByTestId('workflow-node-picker-category-all').textContent).toMatch(/10/)
     expect(getByTestId('workflow-node-picker-category-agents').textContent).toMatch(/1/)
     expect(getByTestId('workflow-node-picker-category-wrappers').textContent).toMatch(/3/)
+    // RFC-242 — call-workflow entry in the new Calls category.
+    expect(getByTestId('workflow-node-picker-category-calls').textContent).toMatch(/1/)
     expect(getByTestId('workflow-node-picker-category-io').textContent).toMatch(/2/)
     expect(getByTestId('workflow-node-picker-category-human').textContent).toMatch(/3/)
     expect(getAllByText(/Recommended|推荐/).length).toBeGreaterThan(0)

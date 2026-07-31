@@ -70,6 +70,8 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
   defaultRuntime?: string // RFC-112: a registered runtime NAME (built-ins or custom)
   defaultNodeRetries?: number // RFC-115: global per-node retry budget
   mergeAgent?: { model?: string; runtime?: string } // RFC-130: built-in merge resolver
+  maxActiveChildTasks?: number // RFC-242 §3.2: global active-child-task cap
+  maxInvocationDepth?: number // RFC-242 §3.2: invocation-chain depth ceiling
 } {
   const out: {
     commitPush?: {
@@ -84,6 +86,8 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     defaultNodeRetries?: number // RFC-115: global per-node retry budget
     claudeCodePath?: string // RFC-112: built-in claude binary (config.claudeCodePath)
     mergeAgent?: { model?: string; runtime?: string } // RFC-130: built-in merge resolver
+    maxActiveChildTasks?: number // RFC-242
+    maxInvocationDepth?: number // RFC-242
   } = {}
   const commitPush = resolveCommitPushConfig(configPath)
   if (commitPush !== undefined) out.commitPush = commitPush
@@ -107,6 +111,13 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     // binary_path carries it now — RFC-112 P2 is收口).
   } catch {
     // fall back to the scheduler defaults
+  }
+  try {
+    const cfg = loadConfig(configPath)
+    out.maxActiveChildTasks = cfg.maxActiveChildTasks
+    out.maxInvocationDepth = cfg.maxInvocationDepth
+  } catch {
+    // config unreadable — child-budget consumers fall back to defaults
   }
   return out
 }

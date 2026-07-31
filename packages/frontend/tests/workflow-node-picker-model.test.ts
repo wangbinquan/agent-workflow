@@ -36,9 +36,11 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
     })
 
     expect(model.categoryCounts).toEqual({
-      all: 58,
+      all: 59,
       agents: 50,
       wrappers: 3,
+      // RFC-242 — call-workflow entry in the new Calls category.
+      calls: 1,
       io: 2,
       human: 3,
     })
@@ -46,10 +48,11 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
       'recommended',
       'agents',
       'wrappers',
+      'calls',
       'io',
       'human',
     ])
-    expect(model.visibleEntryCount).toBe(58)
+    expect(model.visibleEntryCount).toBe(59)
   })
 
   test('opens Wrapper and Human directly without any Agent rows', () => {
@@ -184,7 +187,7 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
     })
 
     expect(model.categoryCounts.agents).toBe(0)
-    expect(model.categoryCounts.all).toBe(8)
+    expect(model.categoryCounts.all).toBe(9)
     expect(model.groups).toEqual([])
     expect(model.visibleEntryCount).toBe(0)
   })
