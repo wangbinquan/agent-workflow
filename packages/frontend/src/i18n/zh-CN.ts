@@ -579,7 +579,8 @@ export interface Resources {
     sidebarTitle: string
     sidebarEmpty: string
     priorCommentsTitle: string
-    priorCommentsCount: string
+    priorCommentsCount_one: string
+    priorCommentsCount_other: string
     priorCommentsEmpty: string
     sidebarCountLabel: string
     sidebarCollapse: string
@@ -4653,7 +4654,8 @@ export const zhCN: Resources = {
     statusAwaiting: '待评审',
     sidebarTitle: '评审意见',
     priorCommentsTitle: '上一版 v{{version}} 的检视意见',
-    priorCommentsCount: '{{count}} 条',
+    priorCommentsCount_one: '{{count}} 条',
+    priorCommentsCount_other: '{{count}} 条',
     priorCommentsEmpty: '上一版没有检视意见',
     sidebarEmpty: '暂无评审意见。在正文里拖选一段文本即可添加。',
     sidebarCountLabel: '评审意见 · {{count}}',
