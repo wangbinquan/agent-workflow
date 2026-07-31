@@ -141,6 +141,13 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
           worktree,
         ]),
       ],
+      // RFC-242: the child environment is delivered to the bwrap PROCESS, not
+      // rendered into its argv (`--setenv` published MCP secrets in the
+      // world-readable /proc/<pid>/cmdline). Neither layer passes `--clearenv`,
+      // so this map reaches the inner `/bin/sh` verbatim — and `git` below
+      // resolves through THIS PATH rather than whatever the CI runner happens
+      // to export.
+      env: innerManifest.env,
       stdout: 'pipe',
       stderr: 'pipe',
     })
