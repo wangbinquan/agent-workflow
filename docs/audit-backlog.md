@@ -15,6 +15,23 @@
 | `design/workgroup-e2e-audit.md` | 工作组 e2e | 见报告 |
 | `design/codex-impl-gate-misc-2026-07-22.md` | Codex 实现门杂项 | 见报告 |
 
+## 运行时 / 沙箱能力收口盘点（2026-07-31，RFC-237 root 事故后自查）
+
+> 问题背景：root 部署事故暴露「claude env 三处手拼、生存性注入漂移」。本节回答「opencode / claude-code 的运行时与沙箱能力是否已完全收口」——**核心执行链已单点化 + 防漂移锁；剩余豁口均为已知、已登记、有意分期，非静默漂移**。
+
+**已收口（单一权威点 + 锁）**：spawn 入口 = `RuntimeDriver.buildSpawn/buildBusinessSpawn`（RFC-143，runner/smoke/distiller/systemAgentRun 零手搭）；运行时判别 = `narrowedSystemPermissionProfiles` 能力声明 + rfc143 强化源码锁（`!==`/`kind`/`defaultRuntime` 形态全盖，allowlist 显式）；二进制封印 = `runtime/binarySnapshot.ts` 单模块（opencode 旧名 re-export、claude intent 分支、claude mcpTest、opencode mcpTest verified 链全部经它，rfc224 callSites 锁）；claude env = `assembleClaudeEnv` 单装配点（uid 依赖注入可测 root 行为、目录级 env-surface ratchet 禁第四份变体）；会话捕获 = driver 能力方法三件（captureSessions / captureSessionsToSink / startLiveCapture）；containment 准入 = `ContainmentCoordinator.admit()` 单一事实源（RFC-233，driver 只声明 profile，bwrap/Seatbelt 渲染 `sandbox/policy.ts` 单点）；opencode verified 执行身份全套（单 builder / serve 单 owner / hermetic env / store owner-lease，`rfc224-source-reachability` 整卷锁）；claude 凭据桥 = `prepareClaudeConfigDir` 单点（仅 credentials 文件）。
+
+### ⏳ 未决（按风险排序）
+
+- **claude argv 双拼（与 env 同型的漂移面，env 已统一、argv 未）**：受控 flag 组（`dontAsk`/`--tools`/`--setting-sources ""`/`--disable-slash-commands`/`--strict-mcp-config`）在 `runtime/claudeCode/spawn.ts`（readOnly 分支）与 `runtime/claudeCode/mcpTest.ts` 各写一遍。建议同型收口（assembleClaudeArgv 或受控 flag 常量组 + ratchet）。
+- **claude 业务节点世代差**：不封印二进制、`bypassPermissions`、full env 继承（RFC-111 现状 + runner golden lock 有意保留）。升级到 intent 同级受控 = 独立 RFC（触及 golden）。
+- **claude `all-deny` 空洞**：distiller / smoke 在 claude 上以 bypass 全权运行（`runtime/types.ts` SYSTEM_PERMISSION_PROFILES 注释如实记录）；收窄会移动 smoke 的诊断面，defer。
+- **claude 无平台级网络围栏**：opencode verified 对 local MCP / shell 有 no-network 子进程边界；claude 的 MCP 子进程由 CLI 自管，平台 containment 对 claude 仅文件系统级（`runner-filesystem-v1`）。
+- **models 列举 opencode 分支仍在路由层**（`routes/runtime.ts:83`，rfc143 allowlist 已登记理由；能力化需搬 RFC-224 source-guard 语义，defer）。
+- **`validateBinaryPath` 保存期弱校验**（`runtimeRegistry.ts:423` 仅拒换行；真实可执行性校验在 advisory probe，不阻塞保存）。
+- **bwrap 祖先链诊断增强**：runner 镜像 20260726 环境漂移事件（dev-gotchas 已录实锤矩阵）；`requireRootOwnedBwrap` 失败时输出逐级 uid/mode 诊断，待立项。
+- 设计接受项（已声明差异、非漂移）：claude 无 same-instance attestation（docs + 设置页附注已标）。
+
 ## 权限 / 安全审计（2026-07-15，7 路并行）——**无独立报告，全文在此**
 
 RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单一事实源 `services/resourceAcl.ts`、admin 按 identity 不按 permission、RFC-170 OCC CAS 无 check-then-write 缝、prompt 归属隔离双锁、五资源 detail 404 同形防探测、禁用/降权每请求即时收敛）；缝集中在**非 HTTP 旁路 + 后备旧路由 + 前后端门漂移**。多项被 2-3 路 agent 独立命中（可信度高）。
