@@ -422,3 +422,56 @@ describe('RFC-242 §5.4(7) — dw generated definitions reject call nodes', () =
     expect(callSite).toBeLessThan(layer1Site)
   })
 })
+
+// RFC-242 PR-4 —— 4g call-workgroup 规则（fanout 内层拒绝 / advisory 存在性）。
+import { validateWorkflowDef as validateDef4g } from '../src/services/workflow.validator'
+describe('RFC-242 4g — call-workgroup rules', () => {
+  const baseCtx = { agents: [], skills: [], mcps: [], plugins: [] }
+  const wgNode = (over: Record<string, unknown> = {}) => ({
+    id: 'cw',
+    kind: 'call-workgroup',
+    workgroupName: 'g1',
+    goalTemplate: 'do it',
+    ...over,
+  })
+  const defOf = (nodes: unknown[], edges: unknown[] = []) =>
+    ({ $schema_version: 4, inputs: [], nodes, edges }) as never
+
+  test('fanout 传递内层的 call-workgroup 被拒；loop 内层合法', () => {
+    const def = defOf([
+      {
+        id: 'fan',
+        kind: 'wrapper-fanout',
+        nodeIds: ['cw'],
+        inputs: [{ name: 'items', kind: 'list<string>', isShardSource: true }],
+      },
+      wgNode(),
+    ])
+    const r = validateDef4g(def, baseCtx as never)
+    expect(r.issues.some((i) => i.code === 'call-workgroup-in-fanout-unsupported')).toBe(true)
+
+    const loopDef = defOf([
+      {
+        id: 'loop',
+        kind: 'wrapper-loop',
+        nodeIds: ['cw'],
+        maxIterations: 2,
+        exitCondition: { kind: 'port-empty', portRef: { nodeId: 'cw', portName: 'result' } },
+      },
+      wgNode(),
+    ])
+    const r2 = validateDef4g(loopDef, baseCtx as never)
+    expect(r2.issues.some((i) => i.code === 'call-workgroup-in-fanout-unsupported')).toBe(false)
+  })
+
+  test('advisory 存在性：context 带 callWorkgroupNames 时报 ref-missing；缺选择器恒报', () => {
+    const withNames = { ...baseCtx, callWorkgroupNames: new Set<string>() }
+    const r = validateDef4g(defOf([wgNode()]), withNames as never)
+    expect(r.issues.some((i) => i.code === 'call-workgroup-ref-missing')).toBe(true)
+    const known = { ...baseCtx, callWorkgroupNames: new Set(['g1']) }
+    const r2 = validateDef4g(defOf([wgNode()]), known as never)
+    expect(r2.issues.some((i) => i.code === 'call-workgroup-ref-missing')).toBe(false)
+    const r3 = validateDef4g(defOf([wgNode({ workgroupName: undefined })]), baseCtx as never)
+    expect(r3.issues.some((i) => i.code === 'call-workgroup-ref-missing')).toBe(true)
+  })
+})

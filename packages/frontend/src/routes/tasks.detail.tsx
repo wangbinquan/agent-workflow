@@ -30,6 +30,7 @@ import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { ChildTaskLink } from '@/components/tasks/ChildTaskLink'
 import { RecoverySection } from '@/components/tasks/RecoverySection'
 import { StuckTaskBanner } from '@/components/tasks/StuckTaskBanner'
 import { WorkflowSyncBanner } from '@/components/tasks/WorkflowSyncBanner'
@@ -867,7 +868,11 @@ function TaskDetailPage() {
               hidden={tab !== 'node-runs'}
             >
               {nodeRuns.data !== undefined && (
-                <NodeRunsTable runs={nodeRuns.data.runs} workflowSnapshot={tk.workflowSnapshot} />
+                <NodeRunsTable
+                  taskId={id}
+                  runs={nodeRuns.data.runs}
+                  workflowSnapshot={tk.workflowSnapshot}
+                />
               )}
             </section>
           )}
@@ -1442,7 +1447,15 @@ export function canvasStatus(s: NodeRun['status']): CanvasNodeData['status'] {
 // （原为与 backend 各写一份的裸字面量）。
 const COMMIT_PUSH_PREFIX = COMMIT_PUSH_NODE_PREFIX
 
-function NodeRunsTable({ runs, workflowSnapshot }: { runs: NodeRun[]; workflowSnapshot: unknown }) {
+function NodeRunsTable({
+  taskId,
+  runs,
+  workflowSnapshot,
+}: {
+  taskId: string
+  runs: NodeRun[]
+  workflowSnapshot: unknown
+}) {
   const { t } = useTranslation()
   if (runs.length === 0) return <div className="muted">{t('tasks.noNodeRuns')}</div>
   // Hide commit-session CHILD rows (kept reachable via the container's dialog).
@@ -1515,6 +1528,15 @@ function NodeRunsTable({ runs, workflowSnapshot }: { runs: NodeRun[]; workflowSn
                       >
                         {t('tasks.clarifyButton')}
                       </Link>
+                    </>
+                  )}
+                  {/* RFC-242 PR-5: a call node_run links its child execution
+                      (+ live status chip; neutral placeholder when the child
+                      is deleted/invisible). */}
+                  {r.childTaskId != null && (
+                    <>
+                      {' '}
+                      <ChildTaskLink taskId={taskId} childTaskId={r.childTaskId} />
                     </>
                   )}
                 </td>

@@ -2171,6 +2171,25 @@ export interface Resources {
       workgroup: string
       agent: string
     }
+    /** RFC-242 PR-5: child-task nesting on /tasks + detail call-node links.
+     *  scopeFilter toggles the flat `include_children=true` listing; the
+     *  expand/collapse pair labels the lazy per-parent children loader;
+     *  parentTask* is the flat-mode badge (link ↔ neutral degrade when the
+     *  parent is not visible to the viewer); childTask* is the detail-page
+     *  call node_run jump link (+ its deleted/invisible placeholder). */
+    scopeFilter: {
+      top: string
+      all: string
+    }
+    scopeFilterAria: string
+    expandChildren: string
+    collapseChildren: string
+    noChildTasks: string
+    childBadge: string
+    parentTaskChip: string
+    parentTaskUnavailable: string
+    childTaskLink: string
+    childTaskUnavailable: string
     detailTitleIdLabel: string
     loadingTask: string
     metaWorkflow: string
@@ -6610,6 +6629,20 @@ export const zhCN: Resources = {
       workgroup: '工作组',
       agent: '单代理',
     },
+    // RFC-242 PR-5 — 子任务嵌套 / 调用节点直链。
+    scopeFilter: {
+      top: '仅顶层',
+      all: '含子任务',
+    },
+    scopeFilterAria: '子任务显示范围',
+    expandChildren: '展开子任务',
+    collapseChildren: '收起子任务',
+    noChildTasks: '无子任务',
+    childBadge: '子任务',
+    parentTaskChip: '父任务',
+    parentTaskUnavailable: '父任务不可见',
+    childTaskLink: '子任务',
+    childTaskUnavailable: '子任务不可见或已删除',
     detailTitleIdLabel: '任务 ID',
     loadingTask: '加载任务中…',
     metaWorkflow: '工作流',

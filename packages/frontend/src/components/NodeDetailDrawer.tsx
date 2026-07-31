@@ -18,6 +18,7 @@ import { NODE_EVENT_KIND } from '@agent-workflow/shared'
 import { useNavigate } from '@tanstack/react-router'
 import { NodeDependencyTreeSection } from './agents/NodeDependencyTreeSection'
 import { LoadingState } from './LoadingState'
+import { ChildTaskLink } from './tasks/ChildTaskLink'
 import { SessionTab } from './node-session/SessionTab'
 import { StatusChip } from './StatusChip'
 import { TabBar, tabDomIds, type TabDef } from './TabBar'
@@ -208,6 +209,14 @@ export function NodeDetailDrawer({
       <FeedbackStack variant="section" className="stack-top--sm">
         {retry.error !== null && retry.error !== undefined && <ErrorBanner error={retry.error} />}
       </FeedbackStack>
+      {/* RFC-242 PR-5: call node_runs (call-workflow / call-workgroup) carry
+          the child task they launched — surface the jump link + live status
+          chip right under the drawer header. */}
+      {run.childTaskId != null && (
+        <div className="inspector__action-row">
+          <ChildTaskLink taskId={taskId} childTaskId={run.childTaskId} />
+        </div>
+      )}
       {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
         {tabs.map(({ key }) => {

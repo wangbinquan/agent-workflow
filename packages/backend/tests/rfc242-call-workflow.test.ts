@@ -472,4 +472,61 @@ describe('RFC-242 §3.1 — freezeCallClosure', () => {
     expect(payload).not.toContain('wf-a') // id-only 载荷（RFC-099 回显纪律）
     expect(payload).not.toContain('wf-b')
   })
+
+  test('PR-4：workgroups 叶随冻结入闭包（完整 roster）；缺失同码拒绝', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const defWithWg = {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        { id: 'cw', kind: 'call-workgroup', workgroupName: 'ghost-wg', goalTemplate: 'g' },
+      ],
+      edges: [],
+    } as unknown as WorkflowDefinition
+    await expect(freezeCallClosure(db, { id: 'W0', definition: defWithWg })).rejects.toMatchObject({
+      code: 'workflow-call-ref-missing',
+    })
+    const { createAgent } = await import('../src/services/agent')
+    const { createWorkgroup } = await import('../src/services/workgroups')
+    const { buildActor } = await import('../src/auth/actor')
+    const actor = buildActor({
+      user: { id: 'u-z', username: 'z', displayName: 'z', role: 'admin', status: 'active' },
+      source: 'daemon',
+    })
+    const agent = await createAgent(db, {
+      name: 'wg-a',
+      description: '',
+      outputs: [],
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {},
+      bodyMd: 'x',
+    })
+    const group = await createWorkgroup(
+      db,
+      {
+        name: 'ghost-wg',
+        description: '',
+        instructions: '',
+        mode: 'free_collab',
+        autonomous: true,
+        switches: { shareOutputs: true, directMessages: true, blackboard: true },
+        maxRounds: 4,
+        completionGate: false,
+        members: [{ memberType: 'agent', agentId: agent.id, displayName: 'a', roleDesc: 'r' }],
+      } as Parameters<typeof createWorkgroup>[1],
+      { ownerUserId: actor.user.id, actor },
+    )
+    const json = await freezeCallClosure(db, { id: 'W0', definition: defWithWg })
+    expect(json).not.toBeNull()
+    const parsed = JSON.parse(json!) as {
+      workgroups: Record<string, { id: string; group: { members: unknown[] } }>
+    }
+    expect(parsed.workgroups['ghost-wg']?.id).toBe(group.id)
+    expect(parsed.workgroups['ghost-wg']?.group.members.length).toBe(1)
+  })
 })

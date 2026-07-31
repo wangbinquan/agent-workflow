@@ -18375,6 +18375,14 @@ button.status-chip {
   color: var(--muted);
 }
 
+/* RFC-242 — nested child-task rows on /tasks. The <tr> sets
+   --task-child-depth (1 = direct child); indent lives here so the
+   .task-name-cell__inner markup stays byte-identical to the row-alignment
+   lock (flex on the inner wrapper, never the <td>). */
+.task-row--child .task-name-cell__inner {
+  padding-left: calc(var(--task-child-depth, 1) * 16px);
+}
+
 /* Row-click affordance: a mute chevron in the last cell (no button). */
 .data-table__chevron {
   color: var(--muted);
