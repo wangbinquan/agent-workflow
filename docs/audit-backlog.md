@@ -30,6 +30,7 @@
 
 ### ⏳ 未决（→ RFC-242 三件套已落档，待用户拍板三个决策点）
 
+- ✅ **`all-deny` 名实不符** 已收口（RFC-242 T4 / PR-1）：claude 系统面（distiller / smoke / intent）物化为 `--tools ""`，并引入显式 `surface: 'system' | 'business'` 分流——业务面刻意保持 RFC-111 形状（用户决策：存量零破坏），泄漏由测试锁防复发。
 - **claude 业务节点世代差**（不封印、`bypassPermissions`、full env 继承）、**`all-deny` 名实不符**、**无平台级网络围栏** 三项统一由 `design/RFC-242-claude-runtime-security-parity/` 承载。核心矛盾：`agent.permission` 是 opencode 词汇的 verbatim 透传（`shared/schemas/agent.ts:196`），claude 侧无等价词汇 → 需显式映射契约；决策点见该 RFC design §7（映射形态 / 存量默认 / 网络围栏投入）。
 - 设计接受项（已声明差异、非漂移）：claude 无 same-instance attestation（docs + 设置页附注已标）。
 

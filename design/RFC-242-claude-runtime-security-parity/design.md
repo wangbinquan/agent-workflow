@@ -107,8 +107,22 @@ shell）在无网边界内"。对 claude 的可达路径：
   显式声明 claude 无法提供子进程网络边界，并在 UI（agent 编辑器选 claude 运行时且
   声明了网络限制时）与 docs 标注——**显式声明优于静默失效**。
 
-本设计要求实施前先做一次 claude MCP 传输能力的源码/实测验证（`--mcp-config` 的
-command/args 语义），再在 C-1 与 C-3 之间定档。
+### 4.1 T0b 实测结论（2026-07-31，claude 2.1.220 / macOS）——**定档 C-1**
+
+`--mcp-config` 的 `command`/`args` 由 claude **fork 执行**，且平台可以放自己的命令：
+
+- 配置 `{"mcpServers":{"probe":{"command":"<平台 wrapper.sh>","args":[]}}}`；
+- wrapper 记录到自己被 fork（`WRAPPER_FORKED pid=89624 ppid=89611`），随后 `exec`
+  真 MCP server；
+- claude 以 `--tools "" --allowedTools "mcp__probe__*"` 成功完成 initialize →
+  tools/list → tools/call，拿回 `pong-from-wrapped-mcp`，`is_error=false`。
+
+因此 **C-1 可落地**：平台在 `--mcp-config` 里只写自己的 wrapper，wrapper 在
+`sealedSubprocess.ts` 的 no-network 边界内起真 MCP（与 opencode local MCP 复用同一
+provider 能力），claude 全程只与 wrapper 的 stdio 对话，不需要它支持"已连接传输"。
+
+C-3 降级为兜底：仅当某平台缺 provider 能力（如未来 Windows 无对应实现）时，按
+`warn/off` 语义显式声明该保证不可达，而不是静默失效。
 
 ## §5 失败模式与兼容性
 
@@ -130,10 +144,11 @@ command/args 语义），再在 C-1 与 C-3 之间定档。
 - 网络围栏：按选定方案给实测（wrapper 内 `curl` 应失败）或声明面断言（UI/docs/能力）；
 - ratchet 扩展：业务分支若重新出现 `bypassPermissions` 而无逃生阀声明 → 红。
 
-## §7 待用户拍板的决策点
+## §7 决策记录（用户 2026-07-31 拍板）
 
-1. **权限映射形态**：方案 1（映射表，推荐）/ 2（per-runtime 声明）/ 3（固定安全集）。
-2. **存量默认**：未声明权限的 agent 在 claude 上默认**收窄**（更安全、可能破坏存量工作流）
-   还是默认**保持全权 + 显著告警**（不破坏存量、需用户逐个迁移）。
-3. **网络围栏投入**：做 C-1 的 MCP wrapper（工作量大、收益是真边界）还是先 C-3 显式声明
-   （小、诚实但无新保证）。
+1. **权限映射形态 = 方案 1 冻结映射表**：`deny` → 该类工具移出装载集；headless 下的
+   `ask` 按 `deny` 处理并在保存期告警；`allow`/缺省保留；映射未覆盖的键 fail-closed。
+2. **存量默认 = 保持全权 + 显著告警**：未声明权限的 agent 在 claude 上行为不变（升级
+   零破坏），但设置页/agent 编辑器给出 `unconstrained` 告警、node_run 诊断标注同名字段，
+   用户按自己节奏逐个收窄。**不允许静默全权**——告警是这条路径的硬要求。
+3. **网络围栏 = 先验证再定档 → 实测通过，定档 C-1**（见 §4.1）。

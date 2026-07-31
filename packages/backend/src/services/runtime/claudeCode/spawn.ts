@@ -71,6 +71,15 @@ export interface ClaudeSpawnContext {
    * Omitted / 'all-deny' → the legacy bypass shape, byte-unchanged.
    */
   systemPermissionProfile?: SystemPermissionProfile
+  /**
+   * RFC-242 §3 — WHICH execution surface is being assembled. `buildClaudeSpawn`
+   * is shared by the system-agent path and the business-node path, and they
+   * have different security postures: 'system' materializes its frozen profile
+   * (all-deny ⇒ empty load set), 'business' keeps the RFC-111 shape until
+   * RFC-242 §2 lands its permission mapping + escape valve. Omitted ⇒
+   * 'business' (the historical default), so no caller silently tightens.
+   */
+  surface?: 'system' | 'business'
   log?: Logger
 }
 
@@ -148,6 +157,11 @@ export const CLAUDE_HEADLESS_BASE_ARGV: readonly string[] = Object.freeze([
 /** RFC-237 — the intent read-only load set (hands-on verified on 2.1.220). */
 export const CLAUDE_INTENT_READONLY_TOOLS = 'Read,Grep,Glob' as const
 
+/** RFC-242 §3 — `all-deny` materialized: an EMPTY built-in load set. Proven
+ *  usable by the RFC-238 MCP playground, which runs on `--tools ""` plus one
+ *  MCP namespace. */
+export const CLAUDE_ALL_DENY_TOOLS = '' as const
+
 export interface ClaudeDeclaredControlArgv {
   /** `--tools` value: the LOADED built-in set. '' disables all built-ins. */
   tools: string
@@ -213,13 +227,29 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
 
   const head = ctx.claudeCmd ?? ['claude']
   const readOnlyIntent = ctx.systemPermissionProfile === 'intent-read-v1'
+  // RFC-242 §3 — a SYSTEM-agent spawn materializes its frozen profile for real:
+  // 'all-deny' (and the omitted profile every system caller still sends) means
+  // an EMPTY built-in load set on claude too. System agents are pure inference
+  // + stdout (distiller distils, smoke round-trips a prompt into an envelope) —
+  // none of them ever called a tool, so the old bypass shape was exposure with
+  // no capability behind it.
+  //
+  // BUSINESS nodes keep the RFC-111 shape here on purpose: their tools ARE the
+  // product, and narrowing them needs the permission mapping + escape valve of
+  // RFC-242 §2 (user decision 2026-07-31: existing agents must not break).
+  // The surface is EXPLICIT — inferring it from optional business fields would
+  // silently tighten a business spawn that happens to omit them.
+  const systemSurface = ctx.surface === 'system'
   const cmd = [
     ...head,
     ...CLAUDE_HEADLESS_BASE_ARGV,
-    ...(readOnlyIntent
-      ? claudeDeclaredControlArgv({ tools: CLAUDE_INTENT_READONLY_TOOLS })
+    ...(systemSurface || readOnlyIntent
+      ? claudeDeclaredControlArgv({
+          tools: readOnlyIntent ? CLAUDE_INTENT_READONLY_TOOLS : CLAUDE_ALL_DENY_TOOLS,
+        })
       : [
-          // multica-proven non-interactive form; V6 to re-confirm vs --dangerously-skip-permissions.
+          // multica-proven non-interactive form; RFC-242 §2 replaces this with
+          // a mapping-driven tool gate + explicit unconstrained escape valve.
           '--permission-mode',
           'bypassPermissions',
         ]),

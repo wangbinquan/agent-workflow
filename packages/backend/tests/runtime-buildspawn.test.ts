@@ -115,7 +115,14 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
         '--verbose',
         '--permission-mode',
       ])
-      expect(plan.cmd).toContain('bypassPermissions')
+      // RFC-242 §3: the system-agent path no longer bypasses permissions — it
+      // materializes `all-deny` as an EMPTY built-in load set. Semantics only
+      // TIGHTEN here (distiller/smoke never called a tool).
+      expect(plan.cmd).not.toContain('bypassPermissions')
+      expect(plan.cmd).toContain('dontAsk')
+      const toolsAt = plan.cmd.indexOf('--tools')
+      expect(toolsAt).toBeGreaterThan(-1)
+      expect(plan.cmd[toolsAt + 1]).toBe('')
       expect(plan.cmd).toContain('--model')
       expect(plan.cmd).toContain('anthropic/claude-haiku')
       expect(plan.cmd).toContain('--append-system-prompt-file')

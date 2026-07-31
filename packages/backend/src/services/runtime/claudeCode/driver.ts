@@ -151,6 +151,8 @@ export const claudeCodeDriver: RuntimeDriver = {
       ...(claudeCmd !== undefined ? { claudeCmd } : {}),
       prompt: ctx.prompt,
       systemPromptText: ctx.systemPrompt,
+      // RFC-242 §3: this IS the system-agent surface — materialize the profile.
+      surface: 'system',
       ...(ctx.model != null && ctx.model !== '' ? { model: ctx.model } : {}),
       attemptDir: ctx.runDir,
       // Design-gate P1-2: RFC-154 custom config-dir profile of the selected

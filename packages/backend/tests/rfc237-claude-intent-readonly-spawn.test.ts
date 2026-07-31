@@ -111,7 +111,7 @@ describe('RFC-237 §2.2 declared-control argv (intent-read-v1)', () => {
     expect(plan.env.IS_SANDBOX).toBeUndefined()
   })
 
-  test('legacy branch (profile omitted / all-deny) keeps the bypass shape byte-compatible', async () => {
+  test('RFC-242 §3: all-deny / omitted profile materializes an EMPTY load set (was bypass)', async () => {
     for (const profile of [undefined, 'all-deny' as const]) {
       const plan = await claudeCodeDriver.buildSpawn(
         baseCtx({
@@ -121,10 +121,15 @@ describe('RFC-237 §2.2 declared-control argv (intent-read-v1)', () => {
         }),
       )
       const argv = plan.cmd.join(' ')
-      expect(argv).toContain('--permission-mode bypassPermissions')
-      expect(argv).not.toContain('--tools')
-      expect(argv).not.toContain('--setting-sources')
-      expect(argv).not.toContain('--disable-slash-commands')
+      // The name now matches the behavior on claude too: no built-ins at all.
+      expect(argv).toContain('--permission-mode dontAsk')
+      expect(argv).not.toContain('bypassPermissions')
+      const toolsAt = plan.cmd.indexOf('--tools')
+      expect(toolsAt).toBeGreaterThan(-1)
+      expect(plan.cmd[toolsAt + 1]).toBe('')
+      // …and the rest of the declared-control group comes with it.
+      expect(argv).toContain('--strict-mcp-config')
+      expect(argv).toContain('--disable-slash-commands')
     }
   })
 

@@ -12,10 +12,12 @@
 //      variant cannot appear silently.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import {
   assembleClaudeEnv,
+  buildClaudeSpawn,
   claudeDeclaredControlArgv,
   CLAUDE_HEADLESS_BASE_ARGV,
   CLAUDE_INTENT_READONLY_TOOLS,
@@ -129,6 +131,47 @@ describe('assembleClaudeArgv — declared-control flag group is single-owned', (
     expect(noMcp).toContain('--strict-mcp-config')
     expect(noMcp).not.toContain('--mcp-config')
     expect(CLAUDE_HEADLESS_BASE_ARGV).toEqual(['-p', '--output-format', 'stream-json', '--verbose'])
+  })
+})
+
+describe('RFC-242 §3 — system/business surface split cannot leak', () => {
+  test('the business surface keeps its tools; only the system surface denies all', async () => {
+    // Regression: collapsing all-deny into the SHARED assembler once made
+    // business nodes inherit `--tools ""` — every claude workflow node would
+    // have lost every tool. The surface is explicit and defaults to business.
+    const scratch = mkdtempSync(join(tmpdir(), 'rfc242-surface-'))
+    const common = {
+      prompt: 'p',
+      systemPromptText: 'sp',
+      attemptDir: join(scratch, 'run'),
+      worktreePath: join(scratch, 'wt'),
+    }
+    const business = buildClaudeSpawn(common)
+    expect(business.cmd).toContain('bypassPermissions')
+    expect(business.cmd).not.toContain('--tools')
+
+    const system = buildClaudeSpawn({ ...common, surface: 'system' })
+    expect(system.cmd).not.toContain('bypassPermissions')
+    const toolsAt = system.cmd.indexOf('--tools')
+    expect(toolsAt).toBeGreaterThan(-1)
+    expect(system.cmd[toolsAt + 1]).toBe('')
+
+    // And the business default is what an OMITTED surface means (no silent
+    // tightening of a business spawn that skips optional fields).
+    expect(buildClaudeSpawn({ ...common, surface: undefined }).cmd).toEqual(business.cmd)
+  })
+
+  test('only the system-agent driver entry marks the system surface', () => {
+    const driverSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'claudeCode', 'driver.ts'),
+      'utf8',
+    )
+    // buildSpawn (system) marks it; buildBusinessSpawn must NOT.
+    const systemAt = driverSrc.indexOf("surface: 'system'")
+    const businessAt = driverSrc.indexOf('async buildBusinessSpawn(')
+    expect(systemAt).toBeGreaterThan(-1)
+    expect(systemAt).toBeLessThan(businessAt)
+    expect(driverSrc.slice(businessAt)).not.toContain("surface: 'system'")
   })
 })
 

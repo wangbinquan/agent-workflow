@@ -298,12 +298,13 @@ export interface SessionCaptureContext {
  *
  * Per-driver materialization facts (RFC-237 — recorded honestly, not implied):
  *
- * - 'all-deny'        — opencode: the verified system plan denies every tool
- *                       (RFC-224 status quo). claude-code: ACCEPTED but runs
- *                       with the RFC-117 legacy semantics (bypassPermissions,
- *                       no tool gate) — a pre-existing gap kept byte-unchanged
- *                       here; narrowing it would shift the distiller/smoke
- *                       diagnostic surface and is deferred (design §1.3).
+ * - 'all-deny'        — every tool denied, on BOTH runtimes. opencode: the
+ *                       verified system plan's deny map (RFC-224). claude-code:
+ *                       an empty built-in load set (`--tools ""`, RFC-242 §3).
+ *                       This is also what an omitted profile means on the
+ *                       system-agent path: distiller and smoke are pure
+ *                       inference + stdout and never called a tool, so the
+ *                       former bypass shape was exposure without capability.
  * - 'intent-read-v1'  — read-only file access confined to the session cwd.
  *                       opencode: verified plan allows read/grep/glob with
  *                       `external_directory: {'*': 'deny'}`. claude-code:
