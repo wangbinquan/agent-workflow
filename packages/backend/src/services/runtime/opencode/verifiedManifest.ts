@@ -13,7 +13,11 @@ import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
 import { FffCapabilityProbeSchema } from './fffCapability'
 import { VerifiedInventoryPlanSchema } from './verifiedInventory'
 import { RuntimeChildProviderPlanSchema, RuntimeContainmentReceiptSchema } from './containment'
-import { containmentRequirementDigest } from '@/services/sandbox'
+import {
+  CONTAINMENT_REQUIREMENT_PROFILES,
+  containmentRequirementDigest,
+  type ContainmentRequirementProfileId,
+} from '@/services/sandbox'
 
 export const VERIFIED_LAUNCH_MANIFEST_CODEC = 4 as const
 export const MAX_VERIFIED_MANIFEST_BYTES = 4 * 1024 * 1024
@@ -48,7 +52,14 @@ const ContainmentAdmissionReceiptSchema = z
     probeGeneration: z.number().int().positive().nullable(),
     probeCheckedAt: z.number().int().nonnegative().nullable(),
     providerId: z.string().min(1).max(128).nullable(),
-    profileId: z.enum(['runner-filesystem-v1', 'opencode-verified-v1']),
+    // RFC-242 T5: derived from the closed registry, never re-listed. A new
+    // requirement profile must not be silently unrepresentable here.
+    profileId: z.enum(
+      Object.keys(CONTAINMENT_REQUIREMENT_PROFILES) as [
+        ContainmentRequirementProfileId,
+        ...ContainmentRequirementProfileId[],
+      ],
+    ),
     requirementDigest: Sha256Schema,
     mode: z.enum(['enforce', 'warn', 'off']),
     decision: z.enum(['contained', 'degraded', 'off']),
@@ -218,11 +229,15 @@ export const VerifiedLaunchManifestSchema = z
         message: 'child provider must match the admitted atomic topology',
       })
     }
+    // RFC-242 T5: the demand comes from the registry's childBoundary, not from
+    // a profile-id literal. Profile ids are identities, never capability
+    // criteria (RFC-227), and a third profile must not skip this check by
+    // matching neither literal.
+    const demandsChildBoundary =
+      CONTAINMENT_REQUIREMENT_PROFILES[admission.profileId].childBoundary === 'model-controlled'
     if (
-      (admission.profileId === 'runner-filesystem-v1' && childTopology) ||
-      (admission.profileId === 'opencode-verified-v1' &&
-        admission.decision === 'contained' &&
-        !childTopology)
+      (!demandsChildBoundary && childTopology) ||
+      (demandsChildBoundary && admission.decision === 'contained' && !childTopology)
     ) {
       ctx.addIssue({
         code: 'custom',

@@ -302,7 +302,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
       configuredMode: 'warn',
       effectiveMode: 'warn',
       restartRequired: false,
-      profileId: 'opencode-verified-v1',
+      profileId: 'model-child-netless-v1',
       probeState: 'unavailable',
       reasonCodes: ['provider-trial-rejected', 'required-capability-missing'],
     })

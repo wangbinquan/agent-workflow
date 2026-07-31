@@ -41,7 +41,7 @@ describe('RFC-224 verified system plan', () => {
       },
     })
 
-    await expect(coordinator.admit('opencode-verified-v1')).rejects.toMatchObject({
+    await expect(coordinator.admit('model-child-netless-v1')).rejects.toMatchObject({
       code: 'execution-identity-containment-required',
     })
     expect(await stat(storeRoot).catch(() => null)).toBeNull()
@@ -89,7 +89,7 @@ describe('RFC-224 verified system plan', () => {
         appHome,
       },
       qualifyBwrap: async () => '/usr/bin/bwrap',
-    }).admit('opencode-verified-v1')
+    }).admit('model-child-netless-v1')
 
     const plan = await buildVerifiedOpencodeSystemPlan(
       {

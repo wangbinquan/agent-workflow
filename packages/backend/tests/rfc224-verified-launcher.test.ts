@@ -134,8 +134,8 @@ function commonManifest(title: string) {
       probeGeneration: 1,
       probeCheckedAt: 1,
       providerId: 'linux-bwrap',
-      profileId: 'opencode-verified-v1' as const,
-      requirementDigest: containmentRequirementDigest('opencode-verified-v1'),
+      profileId: 'model-child-netless-v1' as const,
+      requirementDigest: containmentRequirementDigest('model-child-netless-v1'),
       mode: 'enforce' as const,
       decision: 'contained' as const,
       requiredCapabilities: [

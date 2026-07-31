@@ -57,7 +57,7 @@ async function coordinatedAdmission(input: {
       : {}),
     ...(input.mechanism === 'seatbelt' ? { qualifySeatbelt: async () => undefined } : {}),
   })
-  return runtimeContainmentAdmissionFromPrepared(await coordinator.admit('opencode-verified-v1'))
+  return runtimeContainmentAdmissionFromPrepared(await coordinator.admit('model-child-netless-v1'))
 }
 
 describe('RFC-227 provider-owned child rendering', () => {

@@ -1494,14 +1494,24 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     })
   let child: ReturnType<typeof trySpawn>
   try {
+    // RFC-242 T5 — the driver's TOCTOU fence, at the last instant before the
+    // child exists: re-verify the byte-frozen claude binary (T2) and the frozen
+    // local-MCP wrapper + manifest (T5). systemAgentRun has awaited this since
+    // RFC-237; the business path had the hook on SpawnPlan but never called it,
+    // so both seals were verified once at build time and then trusted. A fence
+    // nobody checks is not a fence.
+    await plan.preSpawnVerify?.()
     child = trySpawn()
   } catch (err) {
     // RFC-111 (Codex impl-gate P1-2): a missing / unspawnable runtime binary
     // (an optional runtime not installed, a bad path) throws ENOENT here. Mark
     // the node failed cleanly instead of throwing out of runNode and stranding
     // the row at 'running'. The spawn driver's temp dir is cleaned up.
+    // A preSpawnVerify rejection carries the closed identity vocabulary — keep
+    // that code instead of flattening a seal mutation into "spawn failed".
     const identityFailure =
-      opencodeControl === undefined ? undefined : ('execution-identity-bootstrap-failed' as const)
+      executionIdentityFailureCodeOf(err) ??
+      (opencodeControl === undefined ? undefined : ('execution-identity-bootstrap-failed' as const))
     const errorMessage =
       identityFailure ??
       `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`

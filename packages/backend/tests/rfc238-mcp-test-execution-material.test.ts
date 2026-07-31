@@ -23,7 +23,7 @@ async function containment(appHome: string): Promise<PreparedContainmentPlan> {
         appHome,
       },
       qualifyBwrap: async () => '/usr/bin/bwrap',
-    }).admit('opencode-verified-v1')
+    }).admit('model-child-netless-v1')
   }
   return new ContainmentCoordinator({
     provider: {
@@ -32,7 +32,7 @@ async function containment(appHome: string): Promise<PreparedContainmentPlan> {
       appHome,
     },
     qualifySeatbelt: async () => {},
-  }).admit('opencode-verified-v1')
+  }).admit('model-child-netless-v1')
 }
 
 function remoteMcp(secret: string, bearer: string): Extract<Mcp, { type: 'remote' }> {

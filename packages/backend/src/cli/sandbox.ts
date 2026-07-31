@@ -262,7 +262,7 @@ export async function sandboxCommand(
     ...(deps.qualifyBwrapFull === undefined ? {} : { qualifyBwrapFull: deps.qualifyBwrapFull }),
     ...(deps.qualifySeatbelt === undefined ? {} : { qualifySeatbelt: deps.qualifySeatbelt }),
   })
-  const exact = await exactCoordinator.preview('opencode-verified-v1')
+  const exact = await exactCoordinator.preview('model-child-netless-v1')
   const exactReasonCodes: readonly ContainmentReasonCode[] = exact.receipt.reasonCodes
   const status = {
     mechanism: discoveryStatus.mechanism,

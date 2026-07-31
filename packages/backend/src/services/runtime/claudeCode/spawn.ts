@@ -89,6 +89,20 @@ export interface ClaudeSpawnContext {
    * `unconstrained` warning instead of tightening silently.
    */
   businessTools?: string
+  /**
+   * RFC-242 T5 — names of the MCP servers this business node configures.
+   *
+   * MEASURED against claude 2.1.220 (2026-07-31): under `--permission-mode
+   * dontAsk` an MCP tool call is DENIED ("Permission to use mcp__x__y has been
+   * denied because Claude Code is running in don't ask mode") unless the tool
+   * matches `--allowedTools`. Built-ins keep their cwd-based auto-decision
+   * either way — verified in the same run: `Read` succeeded alongside an
+   * allowlisted MCP call. So a declared-control business node MUST allowlist its
+   * own MCP namespaces or its servers connect and then answer nothing. The
+   * historical `bypassPermissions` shape allows everything, which is why this
+   * only bites the RFC-242 §2 gated shape.
+   */
+  mcpServerNames?: readonly string[]
   log?: Logger
 }
 
@@ -255,6 +269,10 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   const businessGated = !systemSurface && !readOnlyIntent && ctx.businessTools !== undefined
   /** Any shape running under the declared-control contract (argv AND env). */
   const declaredControl = systemSurface || readOnlyIntent || businessGated
+  // RFC-242 T5: exactly the node's own MCP namespaces, never a broad `mcp__*` —
+  // `--strict-mcp-config` already fixes the server set, and naming them keeps
+  // the allowlist as narrow as the config it mirrors.
+  const mcpAllowedTools = (ctx.mcpServerNames ?? []).map((name) => `mcp__${name}__*`).join(',')
   const cmd = [
     ...head,
     ...CLAUDE_HEADLESS_BASE_ARGV,
@@ -265,6 +283,7 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
             : businessGated
               ? (ctx.businessTools as string)
               : CLAUDE_ALL_DENY_TOOLS,
+          ...(businessGated && mcpAllowedTools.length > 0 ? { allowedTools: mcpAllowedTools } : {}),
         })
       : [
           // multica-proven non-interactive form; RFC-242 §2 replaces this with

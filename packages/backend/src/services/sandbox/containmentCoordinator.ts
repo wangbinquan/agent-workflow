@@ -10,6 +10,21 @@ import {
 import { renderBwrapArgs, type SandboxPolicy } from './policy'
 import type { SandboxMode, SandboxProvider, SpawnSandboxTopology } from './index'
 
+/**
+ * The closed registry of requirement bundles a consumer may demand. A profile
+ * names WHAT is required, never WHO requires it: RFC-227 forbids a vendor or OS
+ * name from acting as a capability criterion, and RFC-242 T5 made a second
+ * runtime (Claude Code business nodes with local MCP) demand the exact same
+ * model-child bundle the verified OpenCode path demands. The bundle is
+ * therefore one entry with a capability name — `model-child-netless-v1`, the
+ * 2026-07-31 rename of `opencode-verified-v1` — instead of two byte-identical
+ * bundles that could drift apart. The id is process-local and per-run (receipt
+ * → log/status/alert + the same-run verified launch manifest); no durable row,
+ * session-owner identity digest or on-disk artifact survives across releases
+ * keyed by it, which is why the rename needed no migration.
+ *
+ * Split a profile only when the demands actually diverge.
+ */
 export const CONTAINMENT_REQUIREMENT_PROFILES = {
   'runner-filesystem-v1': {
     id: 'runner-filesystem-v1',
@@ -18,8 +33,8 @@ export const CONTAINMENT_REQUIREMENT_PROFILES = {
     optional: ['descendantLifetimeBound'],
     childBoundary: 'none',
   },
-  'opencode-verified-v1': {
-    id: 'opencode-verified-v1',
+  'model-child-netless-v1': {
+    id: 'model-child-netless-v1',
     revision: '1',
     required: ['platformHomeIsolation', 'immutableArtifactView', 'modelChildNetworkDeny'],
     optional: ['descendantLifetimeBound'],

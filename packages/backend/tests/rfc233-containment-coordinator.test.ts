@@ -28,12 +28,12 @@ describe('RFC-233 containment coordinator', () => {
       now: () => 42,
     })
 
-    const plan = await coordinator.admit('opencode-verified-v1')
+    const plan = await coordinator.admit('model-child-netless-v1')
     expect(plan.receipt).toMatchObject({
       coordinatorBootId: 'boot-warn',
       mode: 'warn',
       decision: 'degraded',
-      profileId: 'opencode-verified-v1',
+      profileId: 'model-child-netless-v1',
       admittedAt: 42,
     })
     expect(plan.receipt.reasonCodes).toEqual([
@@ -53,7 +53,7 @@ describe('RFC-233 containment coordinator', () => {
       },
     })
 
-    await expect(coordinator.admit('opencode-verified-v1')).rejects.toMatchObject({
+    await expect(coordinator.admit('model-child-netless-v1')).rejects.toMatchObject({
       code: 'execution-identity-containment-required',
       receipt: {
         mode: 'enforce',
@@ -61,7 +61,7 @@ describe('RFC-233 containment coordinator', () => {
         reasonCodes: ['provider-trial-rejected', 'required-capability-missing'],
       },
     })
-    await expect(coordinator.admit('opencode-verified-v1')).rejects.toBeInstanceOf(
+    await expect(coordinator.admit('model-child-netless-v1')).rejects.toBeInstanceOf(
       ContainmentAdmissionError,
     )
   })
@@ -76,7 +76,7 @@ describe('RFC-233 containment coordinator', () => {
       },
     })
 
-    const plan = await coordinator.admit('opencode-verified-v1')
+    const plan = await coordinator.admit('model-child-netless-v1')
     expect(calls).toBe(0)
     expect(plan.receipt.decision).toBe('off')
     expect(plan.receipt.probeGeneration).toBeNull()
@@ -97,7 +97,7 @@ describe('RFC-233 containment coordinator', () => {
       bootId: 'boot-race',
     })
 
-    const pending = coordinator.admit('opencode-verified-v1')
+    const pending = coordinator.admit('model-child-netless-v1')
     expect(coordinator.setMode('warn')).toBe(2)
     release()
     const plan = await pending
@@ -108,7 +108,7 @@ describe('RFC-233 containment coordinator', () => {
     })
 
     expect(coordinator.setMode('off')).toBe(3)
-    const off = await coordinator.admit('opencode-verified-v1')
+    const off = await coordinator.admit('model-child-netless-v1')
     expect(off.receipt).toMatchObject({
       policyGeneration: 3,
       mode: 'off',
@@ -132,7 +132,7 @@ describe('RFC-233 containment coordinator', () => {
       },
     })
 
-    const pending = coordinator.admit('opencode-verified-v1')
+    const pending = coordinator.admit('model-child-netless-v1')
     coordinator.setMode('off')
     release()
     const raced = await pending
@@ -144,7 +144,7 @@ describe('RFC-233 containment coordinator', () => {
     })
     expect(raced.sandbox.mode).toBe('off')
 
-    const later = await coordinator.admit('opencode-verified-v1')
+    const later = await coordinator.admit('model-child-netless-v1')
     expect(later.receipt.probeGeneration).toBeNull()
     expect(calls).toBe(1)
   })
@@ -154,7 +154,7 @@ describe('RFC-233 containment coordinator', () => {
       provider: provider('enforce'),
       qualifyBwrap: async () => '/opt/root-owned/bin/bwrap',
     })
-    const plan = await coordinator.admit('opencode-verified-v1')
+    const plan = await coordinator.admit('model-child-netless-v1')
     const ctx = buildRunSandboxCtx(
       plan.sandbox,
       'task-a',
@@ -192,7 +192,7 @@ describe('RFC-233 containment coordinator', () => {
     expect(filesystem.topology).toBe('runner-outer')
     expect(filesystem.childProvider).toEqual({ providerId: 'none', config: {} })
 
-    const opencode = await coordinator.admit('opencode-verified-v1')
+    const opencode = await coordinator.admit('model-child-netless-v1')
     expect(opencode.receipt).toMatchObject({
       decision: 'degraded',
       reasonCodes: ['provider-trial-rejected', 'required-capability-missing'],
@@ -232,7 +232,7 @@ describe('RFC-233 containment coordinator', () => {
       }),
     })
 
-    const plan = await coordinator.admit('opencode-verified-v1')
+    const plan = await coordinator.admit('model-child-netless-v1')
     expect(plan.receipt).toMatchObject({
       providerId: 'windows-appcontainer-v1',
       decision: 'contained',
@@ -265,7 +265,7 @@ describe('RFC-233 containment coordinator', () => {
       }),
     })
 
-    const plan = await coordinator.admit('opencode-verified-v1')
+    const plan = await coordinator.admit('model-child-netless-v1')
     expect(plan.receipt).toMatchObject({
       decision: 'degraded',
       reasonCodes: ['provider-contract-invalid', 'required-capability-missing'],
@@ -285,17 +285,17 @@ describe('RFC-233 containment coordinator', () => {
       now: () => now,
     })
 
-    const first = await coordinator.observe('opencode-verified-v1', 30_000)
+    const first = await coordinator.observe('model-child-netless-v1', 30_000)
     now += 5_000
-    const cached = await coordinator.observe('opencode-verified-v1', 30_000)
+    const cached = await coordinator.observe('model-child-netless-v1', 30_000)
     expect(calls).toBe(1)
     expect(cached.receipt.probeGeneration).toBe(first.receipt.probeGeneration)
     expect(cached.receipt.probeCheckedAt).toBe(first.receipt.probeCheckedAt)
 
-    await coordinator.admit('opencode-verified-v1')
+    await coordinator.admit('model-child-netless-v1')
     expect(calls).toBe(2)
     now += 31_000
-    await coordinator.observe('opencode-verified-v1', 30_000)
+    await coordinator.observe('model-child-netless-v1', 30_000)
     expect(calls).toBe(3)
   })
 
@@ -315,10 +315,10 @@ describe('RFC-233 containment coordinator', () => {
     })
     const controller = new AbortController()
 
-    const aborted = coordinator.admit('opencode-verified-v1', {
+    const aborted = coordinator.admit('model-child-netless-v1', {
       signal: controller.signal,
     })
-    const survivor = coordinator.admit('opencode-verified-v1')
+    const survivor = coordinator.admit('model-child-netless-v1')
     controller.abort()
     await expect(aborted).rejects.toBeInstanceOf(ContainmentAdmissionAborted)
     release()

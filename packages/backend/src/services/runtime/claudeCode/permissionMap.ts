@@ -159,3 +159,23 @@ export function mapAgentPermissionToClaudeTools(permission: AgentPermission): Cl
 export function claudeToolsValue(gate: ClaudeToolGate): string {
   return gate.tools.join(',')
 }
+
+/**
+ * RFC-242 — the SINGLE definition of "this claude business node is controlled".
+ *
+ * A node is controlled iff its agent declared a permission map: that is what
+ * turns on the tool gate (T2), the byte-frozen binary (T2b) and the local-MCP
+ * network fence (T5). An agent with NO declaration stays unconstrained by the
+ * user decision of 2026-07-31 (existing workflows must not break), and every
+ * one of those mechanisms must agree on that fact — `businessContainmentProfile`
+ * decides the containment DEMAND before the spawn is built, while
+ * `buildBusinessSpawn` decides what to MATERIALIZE, and a drift between the two
+ * would either over-block a launch or promise a boundary that never gets built.
+ *
+ * Returns the gate (controlled) or null (unconstrained).
+ */
+export function claudeBusinessGate(permission: AgentPermission | undefined): ClaudeToolGate | null {
+  const declared = permission ?? {}
+  if (Object.keys(declared).length === 0) return null
+  return mapAgentPermissionToClaudeTools(declared)
+}

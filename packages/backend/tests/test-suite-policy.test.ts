@@ -69,6 +69,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // (activated on the macOS CI shards; the test re-probes and no-ops where
   // the mechanism is unusable).
   'packages/backend/tests/rfc205-sandbox-integration.test.ts#skip': 1,
+  // RFC-242 T5: the REAL no-network evidence for claude's local-MCP children
+  // (curl denied / worktree IO preserved) shares the same reviewed
+  // RUN_SANDBOX_ITEST gate and is activated on every macOS backend shard. The
+  // rest of that file — demand matrix, wrapper materialization, the runner
+  // pre-spawn fence and the stdio round-trip — runs ungated everywhere.
+  'packages/backend/tests/rfc242-claude-netless-mcp.test.ts#skip': 1,
   'packages/backend/tests/worktree-submodule-init.test.ts#skipIf': 1,
 }
 

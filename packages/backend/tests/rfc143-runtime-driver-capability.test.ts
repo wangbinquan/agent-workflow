@@ -101,13 +101,13 @@ describe('RFC-143 (B) 能力接口', () => {
         agent: { permission: { bash: 'allow' } } as never,
         mcps: [],
       }),
-    ).toBe('opencode-verified-v1')
+    ).toBe('model-child-netless-v1')
     expect(
       profile!({
         agent: { permission: { bash: 'deny' } } as never,
         mcps: [{ type: 'local', enabled: true }] as never,
       }),
-    ).toBe('opencode-verified-v1')
+    ).toBe('model-child-netless-v1')
     expect(
       profile!({
         agent: { permission: { bash: 'deny' } } as never,
@@ -132,7 +132,7 @@ describe('RFC-143 (B) 能力接口', () => {
     const spawnCalls: string[] = []
     const mockDriver = {
       kind: 'opencode', // 借用已有 kind 满足 RuntimeKind union（真第三 kind 需 widen union）
-      containmentProfile: 'opencode-verified-v1',
+      containmentProfile: 'model-child-netless-v1',
       // RFC-237: 能力声明字段——第三 kind 不声明任何窄化 profile 时,intent
       // admission 对它 fail-closed(空数组即完整表达)。
       narrowedSystemPermissionProfiles: [],

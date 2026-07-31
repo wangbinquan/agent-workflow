@@ -42,7 +42,7 @@ import { buildOpencodeMcpTestSpawn } from './mcpTest'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
-  containmentProfile: 'opencode-verified-v1',
+  containmentProfile: 'model-child-netless-v1',
   // RFC-237 — the verified system plan materializes the read-only intent
   // profile (verifiedSystemPlan.ts: read/grep/glob + external-directory deny).
   narrowedSystemPermissionProfiles: ['intent-read-v1'],
@@ -56,13 +56,13 @@ export const opencodeDriver: RuntimeDriver = {
       nativeSessionId === null ? {} : { resumeSessionId: nativeSessionId },
     sessionStoreDbPath: (runDir) => join(runDir, 'xdg-data', 'opencode', 'opencode.db'),
     containmentProfile: ({ mcp }) =>
-      mcp.type === 'local' ? 'opencode-verified-v1' : 'runner-filesystem-v1',
+      mcp.type === 'local' ? 'model-child-netless-v1' : 'runner-filesystem-v1',
     buildSpawn: buildOpencodeMcpTestSpawn,
   },
   businessContainmentProfile: ({ agent, mcps }) =>
     agent.permission.bash !== 'deny' ||
     mcps.some((mcp) => mcp.enabled !== false && mcp.type === 'local')
-      ? 'opencode-verified-v1'
+      ? 'model-child-netless-v1'
       : 'runner-filesystem-v1',
   minVersion: null,
   parseEvent(line: string): NormalizedEvent | null {

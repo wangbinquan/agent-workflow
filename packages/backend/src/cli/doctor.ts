@@ -136,7 +136,7 @@ export async function checkSandbox(
     ...(deps.qualifyBwrapFull === undefined ? {} : { qualifyBwrapFull: deps.qualifyBwrapFull }),
     ...(deps.qualifySeatbelt === undefined ? {} : { qualifySeatbelt: deps.qualifySeatbelt }),
   })
-  const exact = await coordinator.preview('opencode-verified-v1')
+  const exact = await coordinator.preview('model-child-netless-v1')
   const status = {
     mechanism: discoveryStatus.mechanism,
     available: exact.receipt.decision === 'contained',

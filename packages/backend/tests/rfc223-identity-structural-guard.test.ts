@@ -76,6 +76,15 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fCallExpression:c4fcc147e09c28523846\u001f1\u001fruntime-protocol\u001fresolvedParamsByAgent.has(dep.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fCallExpression:ed70f7ab8579a8b397af\u001f1\u001fruntime-protocol\u001fresolvedParamsByAgent.set(dep.name, { model: r.model, variant: r.variant, temperature: r.temperature, steps: r.steps, maxSteps: r.maxSteps, })',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/driver.ts\u001fbuildBusinessSpawn\u001fCallExpression:d6aa73917b11a05318bb\u001f1\u001fruntime-protocol\u001fctx.resolvedParamsByAgent.get(ctx.agent.name)',
+  // RFC-242 T5: lookup side of the same wrapper map (see netlessMcp.ts above).
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeMcpConfig\u001fCallExpression:608b8baf7ebd19ab2171\u001f1\u001fruntime-protocol\u001flocalWrapperByName?.get(m.name)',
+  // RFC-242 T5: the MCP name IS claude's `--mcp-config` registry key, so the
+  // no-network wrapper map must be keyed by that same protocol name — keying it
+  // by MCP id would let the rewritten config and the wrapper map disagree and
+  // silently unfence a child. Duplicate names resolve first-wins, byte-identical
+  // to toClaudeMcpConfig's closure dedupe.
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/netlessMcp.ts\u001fmaterializeClaudeNetlessMcp\u001fCallExpression:6639d62583d336f64511\u001f1\u001fruntime-protocol\u001fwrapperByName.set(mcp.name, wrapperPath)',
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/netlessMcp.ts\u001fmaterializeClaudeNetlessMcp\u001fCallExpression:708e2e853dc145b836c2\u001f1\u001fruntime-protocol\u001fwrapperByName.has(mcp.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/injectionIdentity.ts\u001ffirstConflict\u001fCallExpression:0e951b1e1d97a1b0dc0c\u001f1\u001fruntime-protocol\u001ffirstIdByName.set(row.name, row.id)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/injectionIdentity.ts\u001ffirstConflict\u001fCallExpression:70a6aca824745ed4770c\u001f1\u001fruntime-protocol\u001ffirstIdByName.get(row.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fparseAgentRegistry\u001fCallExpression:eab39a265e40820fafc0\u001f1\u001fopencode-protocol\u001fNATIVE_AGENT_NAMES.has(name)',
@@ -112,6 +121,9 @@ const EXACT_ALLOWANCE_ROWS = [
   'frontend-name-key\u001fpackages/backend/src/services/runner.ts\u001frunNode\u001fBinaryExpression:d8cf512d7a0026109a14\u001f1\u001fport-or-protocol-name\u001foutputs[name] = norm',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeAgents\u001fBinaryExpression:7556d98e1f0ee2471bef\u001f1\u001fruntime-protocol\u001fagents[dep.name] = { description: dep.description, prompt: dep.bodyMd }',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeMcpConfig\u001fBinaryExpression:f8ebc86bd322dfcdc9a9\u001f2\u001fruntime-protocol\u001fservers[m.name] = entry',
+  // RFC-242 T5: the wrapped local entry — same claude protocol registry key as
+  // the raw entry above, only its value changes (wrapper instead of raw command).
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeMcpConfig\u001fBinaryExpression:8204e61aa23755d0dffc\u001f1\u001fruntime-protocol\u001fservers[m.name] = { command: wrapperPath, args: [] }',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/driver.ts\u001fbuildSpawn\u001fComputedPropertyName:efd90113b17bce420ca3\u001f1\u001fruntime-protocol\u001f[ctx.agentName]',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fbuildAgentRegistrySeal\u001fBinaryExpression:8ef5532133c5ce2aca8d\u001f1\u001fopencode-protocol\u001fseal[name] = registry.byName[name] as { [key: string]: IdentityJson }',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fparseAgentRegistry\u001fBinaryExpression:7c0ac997b9d2636bc2f3\u001f1\u001fopencode-protocol\u001fbyName[name] = info',
@@ -271,7 +283,7 @@ describe('RFC-223 T15 structural identity guard', () => {
   test('production source matches the exact reviewed fingerprint multiset', () => {
     const findings = scanProductionSources()
     expect(allowanceDiagnostics(findings, EXACT_ALLOWANCES)).toEqual([])
-    expect(findings.length).toBe(96)
+    expect(findings.length).toBe(100)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

@@ -158,7 +158,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     const configured = cfg.defaultRuntime ?? 'opencode'
     const defaultName = rows.some((r) => r.name === configured) ? configured : 'opencode'
     const timeoutMs = statusProbeTimeoutMs()
-    const containmentPlan = await deps.containmentCoordinator?.observe('opencode-verified-v1')
+    const containmentPlan = await deps.containmentCoordinator?.observe('model-child-netless-v1')
     const containment = containmentPlan?.runtimeReceipt ?? null
     const runtimes = await Promise.all(
       rows.map(async (row) => {

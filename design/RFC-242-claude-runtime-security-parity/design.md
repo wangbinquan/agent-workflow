@@ -149,6 +149,95 @@ child provider 的 profile，与 opencode driver 的同名方法同构。这一�
 C-3 降级为兜底：仅当某平台缺 provider 能力（如未来 Windows 无对应实现）时，按
 `warn/off` 语义显式声明该保证不可达，而不是静默失效。
 
+### 4.3 T5 实施纪要（2026-07-31 落地，PR-3）
+
+实现与 §4.2 的探明路径一致（零新机制）。落地时另做了三处判断（真 claude 实测另抓到两条行为，见 §4.4）：
+
+1. **profile id：重命名而非新增**。原计划新增一个运行时中立 id 与
+   `opencode-verified-v1` 并存。实施时改为把该条目**整体重命名**为
+   `model-child-netless-v1`，理由：
+   - profile 是「需求包」，命名 WHAT 而非 WHO；两个 required 完全相同的 bundle 并存
+     等于埋一个漂移点（改一个忘一个），单一事实源优先；
+   - 这个 id 会**露给用户**——`task.ts` 的 `sandbox-unavailable` 报错、
+     `doctor` / `sandbox` CLI、`/api/runtimes/status` 都带它。claude 工作流报
+     "containment profile 'opencode-verified-v1' 不可用" 是误导；
+   - 它**不进任何持久物**：`businessOpencodeIdentityDigest`（resume 归属）不含
+     profileId，verified launch manifest 是同一次 run 内写读，故零迁移。
+   - 同时把 `verifiedManifest.ts` 里对 profile id 字面量的两处判断改为从
+     `CONTAINMENT_REQUIREMENT_PROFILES[...].childBoundary` 推导（RFC-227：id 是身份，
+     不是能力判据），profileId 的 zod enum 也改为从注册表 key 派生。
+   - `claudeCodeDriver.mcpTest.containmentProfile`（RFC-238 已在申请该 profile）随之
+     自动获得中立命名，无需另立 id。
+2. **触发条件 = 受控 ∧ 有启用 local MCP ∧ 工具门未放行 Bash**。判据单点是
+   `netlessMcp.ts` 的 `claudeLocalMcpFenceDecision()`——`businessContainmentProfile`
+   （决定**需求**，在 spawn 之前）与 `buildBusinessSpawn`（决定**物化**）必须同源，
+   否则要么多拦一次启动、要么承诺一个没建出来的边界。三条排除各有理由：
+   - `unconstrained`（未声明权限）：存量零破坏（§7 决策 2），抬高 profile 会让
+     `sandboxMode=enforce` 拦住今天能跑的任务；
+   - `no-local-mcp`：remote MCP 没有子进程可关；
+   - `unfenced-shell`（放行了 Bash）：**实测约束**。2026-07-31 本机实测 macOS
+     **嵌套 `sandbox-exec` 不可行**——`sandbox-exec: sandbox_apply: Operation not
+permitted`。因此 RFC-227 的 `provider-child-only` 是必然而非偏好：在 Seatbelt
+     provider 上申请 `childBoundary: 'model-controlled'` 会让平台边界**整体下移到子
+     进程层**，runner 的 outer sandbox 被丢弃（`wrapSpawnPlanSandbox` 直接返回裸
+     cmd）。这笔交易只有在「所有模型可控子进程都走 child launcher」时才划算——
+     verified opencode 路径成立（shell 与 local MCP 都经 `materializeNetlessWrapper`），
+     claude 尚不成立（§4 C-2「Bash 走同一 wrapper」仍未做）。若对放行 Bash 的节点也
+     下这道围栏，等于用「claude 自身 + 其 shell 子进程失去文件系统边界」换「MCP 子进程
+     获得网络边界」，**净亏**。故这类节点保留今天的 outer sandbox，并在 spawn 期打
+     `claude-mcp-netless-skipped` 告警（不静默）。Linux 上本可两者兼得（
+     `runner-outer-and-child`），但 driver 不得按 provider/OS 分叉（RFC-227），故统一
+     按此规则；C-2 落地后该排除项即可移除，Linux 与 macOS 一起受益。
+
+   **行为变化**：满足上述三条的 claude 节点在 `sandboxMode=enforce` 且宿主无 provider
+   时会在启动期被拦（与 opencode 同级）；macOS 上这类节点的 runner outer sandbox 由
+   child Seatbelt 取代。这是本切片仅有的兼容面影响。
+
+3. **顺带修一个死围栏**：`SpawnPlan.preSpawnVerify` 在 `systemAgentRun` 侧自 RFC-237
+   起就被 await，但**业务侧 `runner.ts` 从未调用**——即 T2 封印二进制的 TOCTOU 复检
+   一直是空转。T5 在 `Bun.spawn` 前补上 `await plan.preSpawnVerify?.()`，并让
+   preSpawnVerify 抛出的 identity code 走 `executionIdentityFailureCodeOf` 保真上报。
+   T5 自己的 wrapper/manifest 摘要复检与二进制封印复检合成同一道围栏。
+
+### 4.4 T5 真实 claude 端到端实测（2026-07-31，claude 2.1.220 / macOS）
+
+用**平台自己产出的 argv + wrapper**（非简化复现）跑真 claude，拿到两条此前未知的行为，
+并各自落成修复 + 测试锁：
+
+1. **`dontAsk` 下 MCP 工具默认被拒**。受控业务节点（PR-2 的工具门形状）连上 MCP 后调用
+   `mcp__probe__netprobe`，claude 返回
+   `Permission to use mcp__probe__netprobe has been denied because Claude Code is
+running in don't ask mode`。即 `--tools` 只管**内置**装载集，MCP 工具另受
+   `--allowedTools` 管辖（RFC-238 playground 早就在传 `--allowedTools`，业务面漏了）。
+   **这不是 T5 引入的**：存量 `bypassPermissions` 形状放行一切，所以只有 PR-2 之后的
+   受控节点会中招——受控 claude 节点的 MCP **一个都调不动**。
+   修复：受控业务形状按节点自己的 MCP 名字下发
+   `--allowedTools mcp__<name>__*,…`（不用宽泛 `mcp__*`；`--strict-mcp-config` 已经把
+   服务器集合钉死）。同一次实测确认**内置工具不受影响**：加了 allowlist 之后
+   `Read` 仍按 cwd 自动放行，同回合 MCP 调用与 `Read` 双双成功。
+2. **claude 在 init 事件上冻结 MCP 可用性**。`initialize` 应答慢的 server 在 init 时为
+   `status: 'pending'`，其工具**整回合都不会出现**在模型的工具表里。用裸 server 加
+   `sleep` 对照：`0s → connected`、`0.3s → pending`、`1.0s → pending`。
+   平台 wrapper 的首答延迟：**dev 模式（`bun run main.ts`，全量 import graph）≈ 210ms
+   → 与阈值同量级，实测会闪**；**生产单二进制热态 ≈ 140ms → 连续多次 `connected`**，
+   但**冷态（二进制刚落盘 / 页缓存未热）首次 ≈ 646ms，实测即 `pending`**。裸 bun 启动
+   仅 ≈ 10ms，可见这 140-210ms 几乎全是 import graph / 二进制加载成本。
+   **运维含义**：升级或首次部署后的**第一个** claude 受控 MCP 节点可能整回合拿不到
+   MCP 工具（后续节点正常）。
+   最终端到端（生产 wrapper + 平台受控 argv + 真 claude）：`TOOL_USE mcp__probe__netprobe`
+   → `NETPROBE_RESULT net=000 home=<私有 scratch home>`，同回合 `Read` 正常——
+   **围栏生效 + MCP 工具可调用 + 内置工具不受损**三条同时成立。
+   **残留**：dev 模式常态、生产冷启首次会丢 MCP 工具，根因是隐藏子命令与 daemon 共用
+   `main.ts` 的顶层 import graph；正解是把 CLI 子命令改成惰性 `await import`，让
+   `__opencode-netless-subprocess` 不为整个 daemon 付启动成本（同样惠及 opencode
+   local MCP 与 RFC-238 playground）。已登记 audit-backlog，未在本切片动。
+   （flag 顺序无关：平台实际产出的 argv 顺序——`--allowedTools` 在
+   `--append-system-prompt-file` 之前、`--mcp-config` 在其后——已按原样对真 claude
+   验过，热态 `connected` + `net=000`。）
+
+MCP-authored env 顺带收益：包进 0400 manifest 后不再随 `--mcp-config` 的 inline JSON
+进 argv（即不再对宿主上任何 `ps` 可见）。remote MCP 两条路径都零改动。
+
 ## §5 失败模式与兼容性
 
 | 场景                         | 处置                                                                                                          |

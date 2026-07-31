@@ -121,6 +121,11 @@ interface ContainmentRequirementProfile {
 | `runner-filesystem-v1` | `platformHomeIsolation`, `immutableArtifactView`                          | `descendantLifetimeBound` |
 | `opencode-verified-v1` | `platformHomeIsolation`, `immutableArtifactView`, `modelChildNetworkDeny` | `descendantLifetimeBound` |
 
+> **2026-07-31 勘误（RFC-242 T5）**：`opencode-verified-v1` 已重命名为
+> `model-child-netless-v1`。需求包本身逐字不变；改名是因为它同时被 Claude Code 的
+> local-MCP 路径申请，而 profile id 命名的是「需要什么能力」而非「谁在要」（RFC-227）。
+> 下文出现的旧 id 一律按新 id 理解。
+
 Claude Code 与其它只使用 runner outer 的路径使用 `runner-filesystem-v1`。verified OpenCode
 business/system 路径使用 `opencode-verified-v1`。如果未来一个 runtime 能证明不存在
 model-controlled child，可选择 filesystem profile；该选择由 runtime driver 从同一个 frozen

@@ -29,8 +29,10 @@ import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from './probe'
 import { listClaudeModels } from './models'
 import { captureClaudeSessions } from './sessionCapture'
 import { snapshotRuntimeBinary, verifyRuntimeBinarySnapshot } from '../binarySnapshot'
-import { claudeToolsValue, mapAgentPermissionToClaudeTools } from './permissionMap'
+import { claudeBusinessGate, claudeToolsValue } from './permissionMap'
 import { buildClaudeMcpTestSpawn } from './mcpTest'
+import { claudeLocalMcpFenceDecision, materializeClaudeNetlessMcp } from './netlessMcp'
+import { executionIdentityFailure } from '../opencode/failure'
 
 export const claudeCodeDriver: RuntimeDriver = {
   kind: 'claude-code',
@@ -47,7 +49,7 @@ export const claudeCodeDriver: RuntimeDriver = {
     },
     sessionStoreDbPath: () => null,
     containmentProfile: ({ mcp }) =>
-      mcp.type === 'local' ? 'opencode-verified-v1' : 'runner-filesystem-v1',
+      mcp.type === 'local' ? 'model-child-netless-v1' : 'runner-filesystem-v1',
     buildSpawn: buildClaudeMcpTestSpawn,
   },
   // RFC-237 — this driver can materialize the read-only intent profile as a
@@ -55,6 +57,16 @@ export const claudeCodeDriver: RuntimeDriver = {
   // dontAsk; design §2). Admission gates consult this set; anything not
   // declared here still fails closed in buildSpawn below.
   narrowedSystemPermissionProfiles: ['intent-read-v1'],
+  // RFC-242 T5 — a node that fences its local MCP demands the model-child
+  // no-network bundle: claude forks the platform's wrapper, which needs the
+  // admitted child provider to build a boundary at all. WHICH nodes those are
+  // (and why the others are excluded) is `claudeLocalMcpFenceDecision`, the same
+  // predicate buildBusinessSpawn materializes from — demand and materialization
+  // must never drift.
+  businessContainmentProfile: ({ agent, mcps }) =>
+    claudeLocalMcpFenceDecision({ gate: claudeBusinessGate(agent.permission), mcps }).fence
+      ? 'model-child-netless-v1'
+      : 'runner-filesystem-v1',
   minVersion: MIN_CLAUDE_CODE_VERSION,
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
@@ -183,8 +195,6 @@ export const claudeCodeDriver: RuntimeDriver = {
       ctx.injectedMemoryBlock !== null
         ? `${ctx.agent.bodyMd}\n\n${ctx.injectedMemoryBlock}`
         : ctx.agent.bodyMd
-    // RFC-111 PR-C: MCP + dependsOn-closure subagents → inline-JSON flags.
-    const claudeMcp = toClaudeMcpConfig(ctx.mcps)
     const claudeAgents = toClaudeAgents(ctx.dependents)
     // RFC-113 (Codex P1-3): claude's model is the RUNTIME's, not the agent's.
     // The root entry of resolvedParamsByAgent carries the frozen root profile.
@@ -193,8 +203,7 @@ export const claudeCodeDriver: RuntimeDriver = {
     // An agent with NO declaration stays unconstrained (user decision
     // 2026-07-31: existing workflows must not break) but is logged as such, so
     // the exposure is visible rather than silent.
-    const declaredPermission = Object.keys(ctx.agent.permission ?? {}).length > 0
-    const gate = declaredPermission ? mapAgentPermissionToClaudeTools(ctx.agent.permission) : null
+    const gate = claudeBusinessGate(ctx.agent.permission)
     if (gate === null) {
       ctx.log.warn('claude-business-unconstrained', {
         agent: ctx.agent.name,
@@ -217,7 +226,7 @@ export const claudeCodeDriver: RuntimeDriver = {
     const businessHead = pickRuntimeHead(ctx.runtimeBinary, ctx.runtimeCmd)
     const sealBusiness = gate !== null && ctx.runtimeCmd === undefined
     let sealedHead = businessHead
-    let preSpawnVerify: (() => Promise<void>) | undefined
+    const preSpawnChecks: Array<() => Promise<void>> = []
     if (sealBusiness) {
       const sealPath = join(ctx.runRoot, 'bin', 'claude-sealed')
       const identity = await snapshotRuntimeBinary({
@@ -225,8 +234,57 @@ export const claudeCodeDriver: RuntimeDriver = {
         snapshotPath: sealPath,
       })
       sealedHead = [sealPath]
-      preSpawnVerify = () => verifyRuntimeBinarySnapshot(sealPath, identity.digest)
+      preSpawnChecks.push(() => verifyRuntimeBinarySnapshot(sealPath, identity.digest))
     }
+    // RFC-242 T5 — fence the model's local MCP children: claude is told to fork
+    // the platform's 0500 wrapper, which re-enters this binary and applies the
+    // admitted child provider's no-network boundary (netlessMcp.ts, design §4.2).
+    // The decision is `claudeLocalMcpFenceDecision` (shared with
+    // businessContainmentProfile above), plus the sealing seam — `runtimeCmd`
+    // marks a mock head whose fake claude never forks an MCP.
+    const fence = claudeLocalMcpFenceDecision({ gate, mcps: ctx.mcps })
+    if (fence.skipReason === 'unfenced-shell') {
+      // Never silent: this node's MCP servers keep full network because fencing
+      // them would cost the outer sandbox that also contains its shell.
+      ctx.log.warn('claude-mcp-netless-skipped', {
+        agent: ctx.agent.name,
+        nodeRunId: ctx.nodeRunId,
+        reason: fence.skipReason,
+        detail:
+          'node grants Bash; local MCP keeps network so the runner outer sandbox is preserved (RFC-242 C-2 pending)',
+      })
+    }
+    let localWrapperByName: ReadonlyMap<string, string> | undefined
+    if (sealBusiness && fence.fence) {
+      // Fail closed, never fall back to the raw command: reaching here means
+      // businessContainmentProfile already demanded the model-child bundle, so a
+      // missing admission is a wiring bug, not a reason to unfence the child.
+      const containment =
+        ctx.containment ?? executionIdentityFailure('execution-identity-containment-required')
+      const appHome = ctx.appHome ?? executionIdentityFailure('execution-identity-store-unsafe')
+      const netless = await materializeClaudeNetlessMcp({
+        mcps: ctx.mcps,
+        containment,
+        runRoot: ctx.runRoot,
+        worktreePath: ctx.worktreePath,
+        appHome,
+        ...(ctx.repoWorktreePaths === undefined
+          ? {}
+          : { repoWorktreePaths: ctx.repoWorktreePaths }),
+        log: ctx.log,
+      })
+      localWrapperByName = netless.wrapperByName
+      preSpawnChecks.push(netless.preSpawnVerify)
+    }
+    // RFC-111 PR-C: MCP → inline-JSON flag, with T5's local entries rewritten to
+    // their wrapper (remote entries are byte-unchanged).
+    const claudeMcp = toClaudeMcpConfig(ctx.mcps, localWrapperByName)
+    const preSpawnVerify: (() => Promise<void>) | undefined =
+      preSpawnChecks.length === 0
+        ? undefined
+        : async () => {
+            for (const check of preSpawnChecks) await check()
+          }
     const plan = buildClaudeSpawn({
       // Codex impl-gate P1-1: claude uses runtimeCmd (test-only), NEVER the
       // opencode-specific opencodeCmd. RFC-112/113: a custom claude fork's binary
@@ -247,7 +305,14 @@ export const claudeCodeDriver: RuntimeDriver = {
       skills: ctx.skills,
       surface: 'business',
       ...(gate === null ? {} : { businessTools: claudeToolsValue(gate) }),
-      ...(claudeMcp !== null ? { mcpConfigJson: JSON.stringify(claudeMcp) } : {}),
+      ...(claudeMcp !== null
+        ? {
+            mcpConfigJson: JSON.stringify(claudeMcp),
+            // RFC-242 T5: a gated node must allowlist its own MCP namespaces or
+            // dontAsk denies every MCP call (measured, see ClaudeSpawnContext).
+            mcpServerNames: Object.keys(claudeMcp.mcpServers),
+          }
+        : {}),
       ...(claudeAgents !== null ? { agentsJson: JSON.stringify(claudeAgents) } : {}),
       // bridge subscription creds only on REAL claude runs (tests set runtimeCmd).
       bridgeCredentials: ctx.runtimeCmd === undefined,

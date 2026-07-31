@@ -192,12 +192,12 @@ async function activateVerifiedLinux(appHome: string): Promise<void> {
       appHome,
     },
     qualifyBwrap: async () => '/usr/bin/bwrap',
-  }).admit('opencode-verified-v1')
+  }).admit('model-child-netless-v1')
 }
 
 async function activateVerifiedMac(
   appHome: string,
-  profile: 'runner-filesystem-v1' | 'opencode-verified-v1' = 'opencode-verified-v1',
+  profile: 'runner-filesystem-v1' | 'model-child-netless-v1' = 'model-child-netless-v1',
 ): Promise<void> {
   Object.defineProperty(process, 'platform', {
     ...platformDescriptor,
