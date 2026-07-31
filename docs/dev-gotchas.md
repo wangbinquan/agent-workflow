@@ -111,7 +111,7 @@
 
 - **`bun dev` 中编辑 `packages/backend/src/**`触发`--watch` 重启**，race 30s graceful-shutdown flock → daemon 常 **DOWN\*\*（浏览器空白 + 503 + 误导「token 无权限」横幅），非崩溃；重启复活。纯前端编辑不掉。
 - **claude-code 运行时直连 Anthropic**：daemon 从普通 shell 起若缺 `HTTP(S)_PROXY` → 403 被 smoke 误报「缺鉴权」；报缺鉴权先查 daemon 代理再查凭据。
-- **claude code 在 uid 0 下 bypassPermissions 会 exit(1)** 除非 env `IS_SANDBOX==="1"`（精确字符串）；root 跑 daemon 时每次 claude-code-protocol 启动都需（`buildClaudeSpawn` 已 gate）。
+- **claude code 在 uid 0 下 bypassPermissions 会 exit(1)** 除非 env `IS_SANDBOX==="1"`（精确字符串）；root 跑 daemon 时每次 claude-code-protocol 启动都需（`buildClaudeSpawn` 已 gate；2026-07-31 起 intent 受控分支同样 uid-0 主动注入——继承值仍剥离，2.1.220 二进制实证两处 gate 均 bypass-only，注入是容器形态下的诚实断言 + 前向防御）。
 - **分离 worktree 里 symlink `node_modules`** 会把 `@agent-workflow/*` 解析回污染的 main → 假 typecheck 错；worktree 里 `bun install` 或信 CI。
 - **CI 按你自己的确切 sha 查**：共享 main 上并发 push 会 cancel 你的 CI run；看含你 commit 的 superseding commit 的绿，按失败测试的 owning commit 归属。Codex `--base` 跨并发 commit 会把他人 diff 卷进复审——pin 到你的父提交（分离 worktree）隔离。
 - **已知 flaky（别当真红）**：`centralized-answer-pane.test.tsx` cross-round digit-key `checked` race（macOS 尤甚，ubuntu 同 shard 绿即判 flaky，`gh run rerun --failed`）；`skills-split-page` escaped-mocks；根 `bun run test` 的 git-network flaky（已 gate 在 `RUN_GIT_NETWORK`）。

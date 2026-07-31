@@ -79,11 +79,15 @@ export interface ClaudeSpawnContext {
  * leak into a declared-control child: the child would mistake itself for a
  * nested/resumed session or inherit the parent's exec path / IDE transport
  * (same closed list multica's claude backend strips, verified against 2.1.220).
- * `IS_SANDBOX` is stripped too (design-gate P2-2): the read-only branch is not
- * bypassPermissions, so the root-gate assertion must be ABSENT — an inherited
- * value would falsely brand the child as sandboxed. The user-facing
- * `CLAUDE_CODE_*` config namespace (GIT_BASH_PATH, USE_BEDROCK, …) passes
- * through untouched — users set those deliberately.
+ * `IS_SANDBOX` is stripped too (design-gate P2-2): the INHERITED value is
+ * ambient state, not a platform decision — stripping keeps the controlled env
+ * deterministic. When the daemon itself runs as uid 0, the branch tail then
+ * re-injects a deliberate `IS_SANDBOX=1` via claudeSandboxEnv (2026-07-31
+ * root-deployment report): a root daemon is a container-shaped deployment, the
+ * assertion is honest there, and it forward-proofs against any claude release
+ * widening its root gate beyond the two bypass-only checks verified on
+ * 2.1.220. The user-facing `CLAUDE_CODE_*` config namespace (GIT_BASH_PATH,
+ * USE_BEDROCK, …) passes through untouched — users set those deliberately.
  */
 const CLAUDE_INTERNAL_ENV_MARKERS = new Set([
   'CLAUDECODE',
@@ -167,7 +171,8 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
           // interactive hang possible. strict-mcp with NO --mcp-config → zero
           // MCP servers; --setting-sources "" cuts user/project/local settings;
           // --disable-slash-commands is defense-in-depth against config-dir
-          // skill loading. NOT bypassPermissions — and therefore no IS_SANDBOX.
+          // skill loading. NOT bypassPermissions; IS_SANDBOX is still injected
+          // on uid-0 daemons (env tail) as an honest container assertion.
           '--permission-mode',
           'dontAsk',
           '--tools',
@@ -216,9 +221,16 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
     [configDirEnv]: configDir,
     // Spread LAST: legacy branch — a root daemon's injected IS_SANDBOX=1 wins
     // over an inherited IS_SANDBOX=0 (claude's gate wants the exact '1');
-    // read-only branch — hardening injections win over any daemon-level opt-in
-    // (and IS_SANDBOX stays absent: not bypassPermissions, no root gate).
-    ...(readOnlyIntent ? CLAUDE_READONLY_HARDENING_ENV : claudeSandboxEnv(process.getuid?.())),
+    // read-only branch — hardening injections win over any daemon-level opt-in,
+    // and a uid-0 daemon re-asserts IS_SANDBOX=1 DELIBERATELY (2026-07-31 root
+    // deployment report): the inherited value was stripped for determinism, a
+    // root daemon is a container-shaped deployment where the assertion is
+    // honest, and this forward-proofs against claude releases widening the
+    // root gate beyond the bypass-only checks verified on 2.1.220. Non-root
+    // spawns still get nothing on either branch.
+    ...(readOnlyIntent
+      ? { ...CLAUDE_READONLY_HARDENING_ENV, ...claudeSandboxEnv(process.getuid?.()) }
+      : claudeSandboxEnv(process.getuid?.())),
   }
   // RFC-154 (Codex impl-gate P2): with a CUSTOM key, scrub the protocol default
   // inherited from the daemon's own environment — otherwise the child carries

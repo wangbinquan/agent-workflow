@@ -9,11 +9,14 @@
 // (P2-4). The binarySnapshot re-export identity (T-B) is locked here too.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmodSync, existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
-import { claudeControlledInheritEnv } from '../src/services/runtime/claudeCode/spawn'
+import {
+  claudeControlledInheritEnv,
+  claudeSandboxEnv,
+} from '../src/services/runtime/claudeCode/spawn'
 import {
   RUNTIME_BINARY_SNAPSHOT_ERROR_CODE,
   RuntimeBinarySnapshotError,
@@ -79,7 +82,10 @@ function baseCtx(overrides: Partial<SystemAgentSpawnContext> = {}): SystemAgentS
 
 describe('RFC-237 §2.2 declared-control argv (intent-read-v1)', () => {
   test('read-only branch: --tools pruning + dontAsk, no bypass, no IS_SANDBOX', async () => {
-    process.env.IS_SANDBOX = '1' // P2-2: an inherited value must not survive
+    // P2-2 (refined 2026-07-31): the INHERITED value must not survive — on a
+    // non-root runner (CI) the branch tail injects nothing, so absence below
+    // proves the strip; the uid-0 deliberate re-assert is locked separately.
+    process.env.IS_SANDBOX = '1'
     const plan = await claudeCodeDriver.buildSpawn(
       baseCtx({
         systemPermissionProfile: 'intent-read-v1',
@@ -175,6 +181,26 @@ describe('RFC-237 §2.3 controlled env', () => {
     )
     expect(plan.env.CLAUDECODE).toBe('1')
     expect(plan.env.DISABLE_TELEMETRY).toBeUndefined()
+  })
+
+  test('uid-0 daemon deliberately re-asserts IS_SANDBOX=1 on the read-only branch (2026-07-31 root report)', () => {
+    // CI cannot run as root, so the root behavior is locked at two layers:
+    // the pure helper's uid gate, and the source shape proving the read-only
+    // branch tail composes hardening WITH claudeSandboxEnv (spread last, so a
+    // uid-0 daemon's '1' always lands after the inherited value was stripped).
+    // Claude 2.1.220's two root gates are bypass-only (binary-verified), but a
+    // root daemon is a container-shaped deployment where the assertion is
+    // honest — and this forward-proofs against a widened gate.
+    expect(claudeSandboxEnv(0)).toEqual({ IS_SANDBOX: '1' })
+    expect(claudeSandboxEnv(501)).toEqual({})
+    expect(claudeSandboxEnv(undefined)).toEqual({})
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'claudeCode', 'spawn.ts'),
+      'utf8',
+    )
+    expect(src).toContain(
+      '{ ...CLAUDE_READONLY_HARDENING_ENV, ...claudeSandboxEnv(process.getuid?.()) }',
+    )
   })
 
   test('claudeControlledInheritEnv is a pure blacklist (auth families untouched)', () => {

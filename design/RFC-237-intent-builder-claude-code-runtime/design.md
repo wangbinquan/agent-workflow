@@ -4,23 +4,23 @@
 
 ## §0 现状锚点速查
 
-| 关注点 | 锚点 | 现状 |
-|---|---|---|
-| profile 枚举 + 「仅 opencode 可证」文档 | `packages/backend/src/services/runtime/types.ts:255-274` | `SYSTEM_PERMISSION_PROFILES = ['all-deny','intent-read-v1']`，注释写明 other drivers must fail closed |
-| 保存门 | `packages/backend/src/routes/config.ts:79-91` | `resolved.protocol !== 'opencode'` → 422 |
-| 启动门 | `packages/backend/src/services/intent/turnEngine.ts:649-676` | `runtime.protocol !== 'opencode'` → ConflictError |
-| claude driver fail-closed | `packages/backend/src/services/runtime/claudeCode/driver.ts:79-105` | 非 `all-deny` profile → throw |
-| claude spawn 装配 | `packages/backend/src/services/runtime/claudeCode/spawn.ts:81-155` | `-p --output-format stream-json --verbose --permission-mode bypassPermissions`，stdin prompt，私有 `CLAUDE_CONFIG_DIR`，继承 `process.env` |
-| claude configDir 预备（skills + 凭据桥） | `packages/backend/src/services/runtime/claudeCode/config.ts:31-85` | 仅桥接 credentials 文件；env 鉴权时跳过 |
-| opencode 只读 profile 物化 | `packages/backend/src/services/runtime/opencode/verifiedSystemPlan.ts:166-181`、`hermetic.ts:565`（`SYSTEM_READ_ONLY_TOOLS = ['read','grep','glob']`） | verified 链专属 |
-| opencode 二进制封印 | `packages/backend/src/services/runtime/opencode/runtimeBinary.ts` 全文 | 实现本身运行时无关（见 §3） |
-| system agent 运行原语 | `packages/backend/src/services/systemAgentRun.ts:231-705`；spawn 调用 `:380-392`；子会话补捞 `driver.kind === 'opencode'` 特判 `:622-637`；`identityFailureCode` `:144` | 捕获特判是 RFC-143 锁的逃逸旁路 |
-| turnEngine 调 runSystemAgent | `packages/backend/src/services/intent/turnEngine.ts:442-474` | 已传 `protocol` / `runtimeBinary` / `systemPermissionProfile: 'intent-read-v1'` / `eventSink`；`opencodeCmd` 无条件品牌传参（claude driver 不消费该字段，无害） |
-| RFC-143 源码锁 | `packages/backend/tests/rfc143-runtime-driver-capability.test.ts:214-247` | 正则只盖 `(?:runtime\|protocol)\s*===`，`!==` / `kind` / `defaultRuntime` 逃逸 |
-| 已知逃逸旁路 | `routes/config.ts:85`（`!==`）、`intent/turnEngine.ts:671`（`!==`）、`systemAgentRun.ts:626`（`kind ===`）、`cli/start.ts:194`（`defaultRuntime ===`） | 前三处本 RFC 消除；start.ts 入白名单 |
-| 前端 hint 文案 | `packages/frontend/src/i18n/en-US.ts:976-981`、`zh-CN.ts:5141`（`intentRuntimeHint`；另有 `intentHint` 尾句） | 「仅可选 opencode 协议」 |
-| 设置页 intent 卡 | `packages/frontend/src/routes/settings.tsx:1368-1437`（`RuntimeSelect`） | 无协议过滤，约束仅文案 + 保存 422 |
-| claude probe 下限 | `packages/backend/src/services/runtime/claudeCode/probe.ts:18` | `MIN_CLAUDE_CODE_VERSION = '2.0.0'`（advisory，不阻塞保存/运行） |
+| 关注点                                   | 锚点                                                                                                                                                                    | 现状                                                                                                                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| profile 枚举 + 「仅 opencode 可证」文档  | `packages/backend/src/services/runtime/types.ts:255-274`                                                                                                                | `SYSTEM_PERMISSION_PROFILES = ['all-deny','intent-read-v1']`，注释写明 other drivers must fail closed                                                           |
+| 保存门                                   | `packages/backend/src/routes/config.ts:79-91`                                                                                                                           | `resolved.protocol !== 'opencode'` → 422                                                                                                                        |
+| 启动门                                   | `packages/backend/src/services/intent/turnEngine.ts:649-676`                                                                                                            | `runtime.protocol !== 'opencode'` → ConflictError                                                                                                               |
+| claude driver fail-closed                | `packages/backend/src/services/runtime/claudeCode/driver.ts:79-105`                                                                                                     | 非 `all-deny` profile → throw                                                                                                                                   |
+| claude spawn 装配                        | `packages/backend/src/services/runtime/claudeCode/spawn.ts:81-155`                                                                                                      | `-p --output-format stream-json --verbose --permission-mode bypassPermissions`，stdin prompt，私有 `CLAUDE_CONFIG_DIR`，继承 `process.env`                      |
+| claude configDir 预备（skills + 凭据桥） | `packages/backend/src/services/runtime/claudeCode/config.ts:31-85`                                                                                                      | 仅桥接 credentials 文件；env 鉴权时跳过                                                                                                                         |
+| opencode 只读 profile 物化               | `packages/backend/src/services/runtime/opencode/verifiedSystemPlan.ts:166-181`、`hermetic.ts:565`（`SYSTEM_READ_ONLY_TOOLS = ['read','grep','glob']`）                  | verified 链专属                                                                                                                                                 |
+| opencode 二进制封印                      | `packages/backend/src/services/runtime/opencode/runtimeBinary.ts` 全文                                                                                                  | 实现本身运行时无关（见 §3）                                                                                                                                     |
+| system agent 运行原语                    | `packages/backend/src/services/systemAgentRun.ts:231-705`；spawn 调用 `:380-392`；子会话补捞 `driver.kind === 'opencode'` 特判 `:622-637`；`identityFailureCode` `:144` | 捕获特判是 RFC-143 锁的逃逸旁路                                                                                                                                 |
+| turnEngine 调 runSystemAgent             | `packages/backend/src/services/intent/turnEngine.ts:442-474`                                                                                                            | 已传 `protocol` / `runtimeBinary` / `systemPermissionProfile: 'intent-read-v1'` / `eventSink`；`opencodeCmd` 无条件品牌传参（claude driver 不消费该字段，无害） |
+| RFC-143 源码锁                           | `packages/backend/tests/rfc143-runtime-driver-capability.test.ts:214-247`                                                                                               | 正则只盖 `(?:runtime\|protocol)\s*===`，`!==` / `kind` / `defaultRuntime` 逃逸                                                                                  |
+| 已知逃逸旁路                             | `routes/config.ts:85`（`!==`）、`intent/turnEngine.ts:671`（`!==`）、`systemAgentRun.ts:626`（`kind ===`）、`cli/start.ts:194`（`defaultRuntime ===`）                  | 前三处本 RFC 消除；start.ts 入白名单                                                                                                                            |
+| 前端 hint 文案                           | `packages/frontend/src/i18n/en-US.ts:976-981`、`zh-CN.ts:5141`（`intentRuntimeHint`；另有 `intentHint` 尾句）                                                           | 「仅可选 opencode 协议」                                                                                                                                        |
+| 设置页 intent 卡                         | `packages/frontend/src/routes/settings.tsx:1368-1437`（`RuntimeSelect`）                                                                                                | 无协议过滤，约束仅文案 + 保存 422                                                                                                                               |
+| claude probe 下限                        | `packages/backend/src/services/runtime/claudeCode/probe.ts:18`                                                                                                          | `MIN_CLAUDE_CODE_VERSION = '2.0.0'`（advisory，不阻塞保存/运行）                                                                                                |
 
 ## §1 能力模型：narrowed profile 由 driver 声明
 
@@ -123,7 +123,7 @@ claude -p "<read seed.txt then try Write/Bash>" \
 
 1. init 事件 `"tools":["Glob","Grep","Read"]`——`--tools` 是装载面裁剪，非权限包装。
 2. 模型调用 `Write` → tool_result `is_error`：`No such tool available: Write. Write exists
-   but is not enabled in this context`；**进程继续运行**至正常 result，无挂起、无崩溃。
+but is not enabled in this context`；**进程继续运行**至正常 result，无挂起、无崩溃。
 3. `Bash` 完全不在装载集，模型自报 "no shell/bash tool available"。
 4. `--strict-mcp-config` 且无 `--mcp-config` → `"mcp_servers":[]`。
 5. `--setting-sources ""` 被接受（exit 0）。
@@ -141,7 +141,7 @@ claude -p "<read seed.txt then try Write/Bash>" \
 **逃逸负向实测**（同日第二轮，设计门 P1-4 的 qualification；同一 flag 组合）：
 
 11. `Read /etc/hosts`（cwd 外绝对路径）→ **拒**：`Permission to use Read has been denied
-    because Claude Code is running in don't ask mode`（is_error tool_result，进程继续）。
+because Claude Code is running in don't ask mode`（is_error tool_result，进程继续）。
 12. `Read ./link-to-hosts.txt`（cwd 内 symlink → `/etc/hosts`）→ **拒**（同上）——
     Claude Code 按 realpath 解析后的目标路径判定，symlink 不构成逃逸通道。
 13. `Read ../outside-secret.txt`（相对路径逃逸）→ **拒**（`permission_denials` 里以解析后
@@ -184,9 +184,13 @@ CLI 行为属外部依赖：CI 用 mock 锁 argv 形状（dontAsk + `--tools` �
 ```
 
 - prompt 照旧走 stdin（`stdin: {mode:'pipe'}`，E2BIG 规避不变）。
-- **不出现** `bypassPermissions` / `--dangerously-skip-permissions`；相应地该分支**不注入**
-  `IS_SANDBOX=1`（root gate 只针对 bypass；非 bypass 下注入等于虚假宣告沙箱，
-  `spawn.ts:68-79` 的 `claudeSandboxEnv` 仅保留在 bypass 分支）。
+- **不出现** `bypassPermissions` / `--dangerously-skip-permissions`。`IS_SANDBOX` 策略
+  （2026-07-31 修订，root 部署实报后）：**继承值恒剥离**（受控 env 的确定性），但 daemon
+  自身为 uid 0 时分支尾部**主动**注入 `IS_SANDBOX=1`——与 bypass 分支同构。依据：claude
+  2.1.220 二进制实证两处 root gate（setup 内联 + `refuseBypassUnderRoot`）均只查
+  `bypassPermissions || allowBypass`，`dontAsk` 不触发；但 root 跑 daemon 本就是容器形态
+  部署，该断言在此诚实成立，且对未来 claude 扩大 root gate 前向免疫。非 root 下两分支均
+  不注入（原「非 bypass 注入即虚假宣告」论述仅对非 root 环境保留）。
 - 不加 `--mcp-config`（intent 系统代理零 MCP；`--strict-mcp-config` 单独出现即拒绝其他
   来源，实测 #4）。
 - 不加 `--agents`（系统代理无 dependsOn）。不加 `--resume`（intent 每轮 ephemeral、全量
@@ -207,9 +211,10 @@ CLI 行为属外部依赖：CI 用 mock 锁 argv 形状（dontAsk + `--tools` �
 `HTTP(S)_PROXY`，白名单必漏；黑名单针对确定有害项）：
 
 剥离（child 误认嵌套会话 / 继承父传输的内部标记；multica `server/pkg/agent/claude.go`
-`isFilteredChildEnvKey` 同一清单，本机验证同版本语义。**设计门 P2-2**：`IS_SANDBOX` 一并
-剥离——本分支非 bypass、契约要求该变量缺席，daemon 自身环境若带它，继承会让 child 误认
-沙箱态；T-A 覆盖「daemon env 预置 IS_SANDBOX=1 → plan env 无此键」）：
+`isFilteredChildEnvKey` 同一清单，本机验证同版本语义。**设计门 P2-2（2026-07-31 细化）**：
+`IS_SANDBOX` 一并剥离——**剥的是环境态继承值**（确定性），随后 uid-0 daemon 在分支尾部
+主动重注 `1`（§2.2 修订）；非 root 下净效果=缺席。T-A 覆盖「非 root + daemon env 预置
+IS_SANDBOX=1 → plan env 无此键」与「uid-0 纯函数 + 尾部组合源码锁」两层）：
 
 ```
 CLAUDECODE、CLAUDE_CODE_ENTRYPOINT、CLAUDE_CODE_EXECPATH、
@@ -383,31 +388,31 @@ const kindDiscrimination =
 
 ## §7 安全模型对比（结论表，docs 级事实）
 
-| 维度 | opencode verified（现状不变） | claude-code（本 RFC） |
-|---|---|---|
-| 二进制 | copy-seal + 双 hash + exec 前再验 | **同**（§3 通用模块） |
-| 工具面 | 受控 config `read/grep/glob` + `/config`,`/agent` 双读 attestation | `--tools Read,Grep,Glob` 装载裁剪（init 回显，实测）+ `dontAsk` 兜底；**无 attestation** |
-| 配置面 | hermetic：私有 HOME/XDG + `OPENCODE_CONFIG_CONTENT` + 项目面扫描拒绝 | 私有 `CLAUDE_CONFIG_DIR` + `--setting-sources ""` + `--strict-mcp-config` + `--disable-slash-commands`；managed settings（IT 面）保留 |
-| env | 全 sanitize（hermetic env 白名单） | 继承 - 内部标记黑名单 + 禁流量注入（鉴权族保留） |
-| 会话 | 私有 ephemeral store + owner 行 | 私有 configDir 内 transcript（ephemeral，随 scratch 生命周期） |
-| OS 沙箱 | `runner-filesystem-v1` containment | **同**（`systemAgentRun.ts:263`，协议无关） |
-| 失败语义 | fail-closed（identity 失败码族） | fail-closed（封印失败同码；老版本 CLI 未知 flag → 非零退出 → turn error；未登录 → is_error result → turn error） |
+| 维度     | opencode verified（现状不变）                                        | claude-code（本 RFC）                                                                                                                 |
+| -------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 二进制   | copy-seal + 双 hash + exec 前再验                                    | **同**（§3 通用模块）                                                                                                                 |
+| 工具面   | 受控 config `read/grep/glob` + `/config`,`/agent` 双读 attestation   | `--tools Read,Grep,Glob` 装载裁剪（init 回显，实测）+ `dontAsk` 兜底；**无 attestation**                                              |
+| 配置面   | hermetic：私有 HOME/XDG + `OPENCODE_CONFIG_CONTENT` + 项目面扫描拒绝 | 私有 `CLAUDE_CONFIG_DIR` + `--setting-sources ""` + `--strict-mcp-config` + `--disable-slash-commands`；managed settings（IT 面）保留 |
+| env      | 全 sanitize（hermetic env 白名单）                                   | 继承 - 内部标记黑名单 + 禁流量注入（鉴权族保留）                                                                                      |
+| 会话     | 私有 ephemeral store + owner 行                                      | 私有 configDir 内 transcript（ephemeral，随 scratch 生命周期）                                                                        |
+| OS 沙箱  | `runner-filesystem-v1` containment                                   | **同**（`systemAgentRun.ts:263`，协议无关）                                                                                           |
+| 失败语义 | fail-closed（identity 失败码族）                                     | fail-closed（封印失败同码；老版本 CLI 未知 flag → 非零退出 → turn error；未登录 → is_error result → turn error）                      |
 
 UI/文档措辞纪律沿用 `docs/OPENCODE_CONFIG.md` §6：不得把声明式受控称为「已验证」。
 
 ## §8 失败模式
 
-| 场景 | 表现 | 处置 |
-|---|---|---|
-| claude 二进制不存在 / 不可执行 / 封印竞态 | `RuntimeBinarySnapshotError` | `identity-failed` + `execution-identity-untrusted-binary`，scratch 保留 |
-| 旧版 claude 不识 `--tools` / `--setting-sources` | argv 解析错误、非零退出 | `exit-nonzero` turn error（fail-closed，不降级）；probe 卡片 advisory 提示版本 |
-| 未登录 / 凭据桥接失败 | claude 输出 "Not logged in" 类 is_error result | §4.1 归一为 `result-error` → turn error `intent-run-result-error`（不再伪装 envelope-missing）；`config.ts:79-84` 桥接失败仅告警的现状不变 |
-| 终态 `is_error` + exit 0 | §4.1 | `result-error` 终态，`stderrTail` 带 masked result 文本 |
-| seal 在 plan 构造后被替换 | `preSpawnVerify` 拒绝（§2.4） | `identity-failed` + `execution-identity-untrusted-binary` |
-| 安装形态不是自包含单可执行（如某些平台的 npm shim/JS 入口） | 封印副本运行失败（副本脱离原目录资产） | 非零退出 → turn error，fail-closed 不静默；管理员应把 runtime 指向原生单二进制（本机实测：`claude.exe` 为 Mach-O arm64 自包含单二进制，realpath 解析 symlink 后封印副本 `--version` 正常，2.1.220，2026-07-30） |
-| 白名单外工具被模型调用 | is_error tool_result，进程继续（实测 #2） | 无需处置；不构成失败 |
-| turn 超时 / 取消 | 既有 TERM→KILL→reap 升级链（`systemAgentRun.ts:441-460`） | 不变 |
-| stdout 超 cap | 既有 `maxEventTextBytes` 链 | 不变 |
+| 场景                                                        | 表现                                                      | 处置                                                                                                                                                                                                            |
+| ----------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| claude 二进制不存在 / 不可执行 / 封印竞态                   | `RuntimeBinarySnapshotError`                              | `identity-failed` + `execution-identity-untrusted-binary`，scratch 保留                                                                                                                                         |
+| 旧版 claude 不识 `--tools` / `--setting-sources`            | argv 解析错误、非零退出                                   | `exit-nonzero` turn error（fail-closed，不降级）；probe 卡片 advisory 提示版本                                                                                                                                  |
+| 未登录 / 凭据桥接失败                                       | claude 输出 "Not logged in" 类 is_error result            | §4.1 归一为 `result-error` → turn error `intent-run-result-error`（不再伪装 envelope-missing）；`config.ts:79-84` 桥接失败仅告警的现状不变                                                                      |
+| 终态 `is_error` + exit 0                                    | §4.1                                                      | `result-error` 终态，`stderrTail` 带 masked result 文本                                                                                                                                                         |
+| seal 在 plan 构造后被替换                                   | `preSpawnVerify` 拒绝（§2.4）                             | `identity-failed` + `execution-identity-untrusted-binary`                                                                                                                                                       |
+| 安装形态不是自包含单可执行（如某些平台的 npm shim/JS 入口） | 封印副本运行失败（副本脱离原目录资产）                    | 非零退出 → turn error，fail-closed 不静默；管理员应把 runtime 指向原生单二进制（本机实测：`claude.exe` 为 Mach-O arm64 自包含单二进制，realpath 解析 symlink 后封印副本 `--version` 正常，2.1.220，2026-07-30） |
+| 白名单外工具被模型调用                                      | is_error tool_result，进程继续（实测 #2）                 | 无需处置；不构成失败                                                                                                                                                                                            |
+| turn 超时 / 取消                                            | 既有 TERM→KILL→reap 升级链（`systemAgentRun.ts:441-460`） | 不变                                                                                                                                                                                                            |
+| stdout 超 cap                                               | 既有 `maxEventTextBytes` 链                               | 不变                                                                                                                                                                                                            |
 
 ## §9 兼容性
 

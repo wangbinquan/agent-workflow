@@ -195,9 +195,12 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     const spread = src.indexOf(': claudeSandboxEnv(process.getuid?.())')
     expect(anchor).toBeGreaterThan(-1)
     expect(spread).toBeGreaterThan(anchor)
-    // And the declared-control branch's hardening injection sits after the
+    // And the declared-control branch's tail (hardening composed WITH the
+    // uid-0 IS_SANDBOX re-assert — 2026-07-31 root report) sits after the
     // config-dir key too (same override-precedence guarantee).
-    const hardening = src.indexOf('? CLAUDE_READONLY_HARDENING_ENV')
+    const hardening = src.indexOf(
+      '{ ...CLAUDE_READONLY_HARDENING_ENV, ...claudeSandboxEnv(process.getuid?.()) }',
+    )
     expect(hardening).toBeGreaterThan(anchor)
   })
 })
