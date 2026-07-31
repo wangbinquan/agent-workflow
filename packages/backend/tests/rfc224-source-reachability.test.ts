@@ -187,14 +187,23 @@ describe('RFC-224 verified OpenCode source reachability', () => {
   })
 
   test('model and status diagnostics execute only a byte-frozen runtime snapshot', () => {
-    const models = source('routes/runtime.ts')
-    expect(models).toContain('withRuntimeOpencodeSnapshot([binary], async (snapshot) =>')
-    expect(models).toContain('const result = await driver.listModels(snapshot, {')
+    // RFC-143 closeout (2026-07-31): the hermetic enumeration moved from the
+    // route INTO the opencode driver's own capability module — the guarantees
+    // are unchanged and now live next to the driver that needs them, while the
+    // route became runtime-kind-blind (its rfc143 allowlist entry is gone).
+    const models = source('services/runtime/opencode/models.ts')
+    expect(models).toContain('withSnapshot([binary], async (snapshot) =>')
+    expect(models).toContain('const result = await listOpencodeModels(snapshot, {')
     expect(models).toContain('const sourceBefore = await scanOpencodeProjectSurface(cwd)')
     expect(models).toContain('cwd,')
     expect(models).toContain('OPENCODE_TEST_MANAGED_CONFIG_DIR: managedConfig')
     expect(models).toContain('beforeCacheWrite: async () => {')
     expect(models).toContain('assertSourceFingerprintUnchanged(sourceBefore, sourceAfter)')
+    // And the route no longer performs it itself.
+    const modelsRoute = source('routes/runtime.ts')
+    expect(modelsRoute).toContain('await driver.listModels(binary, {')
+    expect(modelsRoute).not.toMatch(/withRuntimeOpencodeSnapshot\(\[binary\]/)
+    expect(modelsRoute).not.toContain('scanOpencodeProjectSurface(')
 
     const status = source('routes/runtimes.ts')
     expect(status).toContain('withRuntimeOpencodeSnapshot([binary], async (snapshot) =>')

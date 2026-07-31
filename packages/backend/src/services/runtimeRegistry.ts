@@ -9,6 +9,7 @@
 // path (RFC-112 D3).
 
 import { readFileSync } from 'node:fs'
+import { isAbsolute, resolve as resolvePath } from 'node:path'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -423,13 +424,40 @@ function validateProtocol(protocol: string): asserts protocol is RuntimeProtocol
     )
 }
 
-/** RFC-112 Codex P3: a single executable path, not a shell string with args. */
+/**
+ * RFC-112 Codex P3 + 2026-07-31 closeout: a single executable path, not a
+ * shell string with args — and the SAME shape the exec-time seal accepts
+ * (`runtime/binarySnapshot.ts` `resolveSingleExecutable`: one absolute path,
+ * or one bare PATH token with no separators). Saving `./bin/opencode` or
+ * `opencode --flag` used to succeed and then fail mysteriously at spawn with
+ * `execution-identity-untrusted-binary`; the mismatch is now rejected at the
+ * boundary the admin is actually looking at.
+ *
+ * Deliberately filesystem-free: existence/executability stays with the
+ * advisory probe (`POST /api/runtimes/probe`). A stat here would be a
+ * TOCTOU illusion (the seal re-checks at exec) and would block the legitimate
+ * "configure before install" flow.
+ */
 function validateBinaryPath(binaryPath: string | null | undefined): string | null {
   if (binaryPath === null || binaryPath === undefined) return null
   const p = binaryPath.trim()
   if (p.length === 0) return null
-  if (/[\n\r]/.test(p))
-    throw new ValidationError('runtime-binary-invalid', 'binaryPath must be a single path')
+  const reject = (detail: string): never => {
+    throw new ValidationError('runtime-binary-invalid', `binaryPath must be ${detail}`)
+  }
+  if (/[\n\r]/.test(p) || p.includes('\0')) reject('a single path')
+  if (isAbsolute(p)) {
+    // Canonical form only: '/usr/bin/../bin/oc' and '/usr/bin/' resolve
+    // elsewhere at exec time than they read here.
+    if (resolvePath(p) !== p) reject('a canonical absolute path (no "..", ".", or trailing slash)')
+    return p
+  }
+  // Not absolute → the only other accepted form is a bare PATH token. A
+  // relative fragment is cwd-dependent and the seal rejects it outright.
+  if (p.includes('/') || p.includes('\\')) {
+    reject('an absolute path or a bare PATH token (relative paths are cwd-dependent)')
+  }
+  if (/\s/.test(p)) reject('a single path without arguments')
   return p
 }
 

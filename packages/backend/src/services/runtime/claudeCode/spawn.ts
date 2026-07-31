@@ -137,6 +137,64 @@ export function claudeSandboxEnv(uid: number | undefined): { IS_SANDBOX?: '1' } 
   return uid === 0 ? { IS_SANDBOX: '1' } : {}
 }
 
+/** Headless transport base shared by every platform-spawned Claude child. */
+export const CLAUDE_HEADLESS_BASE_ARGV: readonly string[] = Object.freeze([
+  '-p',
+  '--output-format',
+  'stream-json',
+  '--verbose',
+])
+
+/** RFC-237 — the intent read-only load set (hands-on verified on 2.1.220). */
+export const CLAUDE_INTENT_READONLY_TOOLS = 'Read,Grep,Glob' as const
+
+export interface ClaudeDeclaredControlArgv {
+  /** `--tools` value: the LOADED built-in set. '' disables all built-ins. */
+  tools: string
+  /** Private MCP config file path; omitted → no --mcp-config (strict alone = zero MCP). */
+  mcpConfigFile?: string
+  /** `--allowedTools` pattern (e.g. one MCP namespace); omitted → flag absent. */
+  allowedTools?: string
+}
+
+/**
+ * RFC-237 (2026-07-31 unification) — the SINGLE owner of Claude's
+ * declared-control flag group. Every security-relevant flag lives here so a
+ * new capability cannot ship a near-copy that silently drops one (the env
+ * counterpart of this drift caused the root-deployment incident;
+ * `mcpTest.ts` had already grown a second copy of this group).
+ *
+ * Semantics (verified against claude 2.1.220, RFC-237 design §2.1-2.2):
+ *  - `dontAsk` — permission backstop: outside-cwd reads auto-denied, in-cwd
+ *    auto-allowed, no interactive hang in headless mode. NOT bypassPermissions
+ *    (uid-0 daemons still assert IS_SANDBOX via the env assembly, see above);
+ *  - `--tools` — prunes the LOADED built-in set (init echoes exactly this set;
+ *    a call to anything else returns "No such tool available" and the run
+ *    continues);
+ *  - `--strict-mcp-config` — UNCONDITIONAL: with no `--mcp-config` it means
+ *    zero MCP servers; with one it means exactly that file and nothing
+ *    inherited;
+ *  - `--setting-sources ""` — cuts user/project/local settings;
+ *  - `--disable-slash-commands` — defense-in-depth against config-dir skills.
+ *
+ * Flag ORDER is part of the contract (argv golden locks); callers append their
+ * own model/prompt/session flags after this group.
+ */
+export function claudeDeclaredControlArgv(input: ClaudeDeclaredControlArgv): string[] {
+  return [
+    '--permission-mode',
+    'dontAsk',
+    '--tools',
+    input.tools,
+    ...(input.mcpConfigFile === undefined ? [] : ['--mcp-config', input.mcpConfigFile]),
+    '--strict-mcp-config',
+    '--setting-sources',
+    '',
+    '--disable-slash-commands',
+    ...(input.allowedTools === undefined ? [] : ['--allowedTools', input.allowedTools]),
+  ]
+}
+
 export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   const log: Logger = ctx.log ?? createLogger('claude-code')
   // RFC-154: leaf name is configurable (custom forks); default = .claude.
@@ -157,31 +215,9 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   const readOnlyIntent = ctx.systemPermissionProfile === 'intent-read-v1'
   const cmd = [
     ...head,
-    '-p',
-    '--output-format',
-    'stream-json',
-    '--verbose',
+    ...CLAUDE_HEADLESS_BASE_ARGV,
     ...(readOnlyIntent
-      ? [
-          // RFC-237 design §2.2 (hands-on verified on 2.1.220): --tools prunes
-          // the LOADED tool set (init echoes exactly these three; Write returns
-          // "No such tool available" and the run continues; Bash is invisible);
-          // dontAsk is the permission-layer backstop — outside-cwd reads are
-          // auto-denied (design §2.1 #11-13), in-cwd reads auto-allowed, no
-          // interactive hang possible. strict-mcp with NO --mcp-config → zero
-          // MCP servers; --setting-sources "" cuts user/project/local settings;
-          // --disable-slash-commands is defense-in-depth against config-dir
-          // skill loading. NOT bypassPermissions; IS_SANDBOX is still injected
-          // on uid-0 daemons (env tail) as an honest container assertion.
-          '--permission-mode',
-          'dontAsk',
-          '--tools',
-          'Read,Grep,Glob',
-          '--strict-mcp-config',
-          '--setting-sources',
-          '',
-          '--disable-slash-commands',
-        ]
+      ? claudeDeclaredControlArgv({ tools: CLAUDE_INTENT_READONLY_TOOLS })
       : [
           // multica-proven non-interactive form; V6 to re-confirm vs --dangerously-skip-permissions.
           '--permission-mode',

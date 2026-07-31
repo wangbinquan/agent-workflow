@@ -212,13 +212,46 @@ export type RootOwnedBwrapFailureReason =
   | 'provider-lifecycle-unproven'
   | 'provider-internal-error'
 
+/**
+ * Which exact path level failed the root-owned proof, and why. Emitted ONLY
+ * on rejection; carries no secrets (absolute path + numeric uid + octal mode
+ * are all already visible to any local `stat`). 2026-07-31: a GitHub runner
+ * image bump flipped an ancestor's ownership and the failure was
+ * indistinguishable from a code regression for hours — the reason code alone
+ * cannot say WHICH level moved.
+ */
+export interface RootOwnedBwrapPathFinding {
+  path: string
+  /** 'binary' = the resolved executable; 'ancestor' = a directory component. */
+  level: 'binary' | 'ancestor'
+  uid: number | null
+  /** Octal permission bits, e.g. '0755'; null when the stat itself failed. */
+  mode: string | null
+  symlink: boolean
+  /** Which invariant this level broke. */
+  violation: 'not-root-owned' | 'group-or-other-writable' | 'symlink' | 'wrong-type' | 'stat-failed'
+}
+
 export class RootOwnedBwrapQualificationError extends Error {
   readonly code = 'execution-identity-containment-required' as const
 
-  constructor(readonly reason: RootOwnedBwrapFailureReason) {
-    super(reason)
+  constructor(
+    readonly reason: RootOwnedBwrapFailureReason,
+    /** Present for path-shaped rejections; absent for lifecycle failures. */
+    readonly finding?: RootOwnedBwrapPathFinding,
+  ) {
+    super(finding === undefined ? reason : `${reason} (${describeBwrapFinding(finding)})`)
     this.name = 'RootOwnedBwrapQualificationError'
   }
+}
+
+/** One-line operator-facing rendering of a path finding (non-secret). */
+export function describeBwrapFinding(finding: RootOwnedBwrapPathFinding): string {
+  return `${finding.level} ${finding.path}: ${finding.violation}; uid=${finding.uid ?? 'unknown'} mode=${finding.mode ?? 'unknown'}${finding.symlink ? ' symlink' : ''}`
+}
+
+function bwrapModeString(mode: number | undefined): string | null {
+  return typeof mode === 'number' ? `0${(mode & 0o7777).toString(8).padStart(3, '0')}` : null
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -657,9 +690,16 @@ export async function requireRootOwnedBwrap(
   let failed = false
   let cleanupFailed = false
   let failureReason: RootOwnedBwrapFailureReason | undefined
-  const reject = (reason: RootOwnedBwrapFailureReason): never => {
+  // The terminal throw happens once, after the lifecycle `finally`; carry the
+  // path finding alongside the reason so it survives that re-raise.
+  let failureFinding: RootOwnedBwrapPathFinding | undefined
+  const reject = (
+    reason: RootOwnedBwrapFailureReason,
+    finding?: RootOwnedBwrapPathFinding,
+  ): never => {
     failureReason ??= reason
-    throw new RootOwnedBwrapQualificationError(reason)
+    failureFinding ??= finding
+    throw new RootOwnedBwrapQualificationError(reason, finding)
   }
   try {
     if (path === null) {
@@ -682,10 +722,28 @@ export async function requireRootOwnedBwrap(
     const before = await pathMetadata.lstat(resolved)
     const metadata = await pathMetadata.stat(resolved)
     if (before.isSymbolicLink() || !metadata.isFile() || metadata.uid !== 0) {
-      reject('provider-owner-unsafe')
+      reject('provider-owner-unsafe', {
+        path: resolved,
+        level: 'binary',
+        uid: metadata.uid ?? null,
+        mode: bwrapModeString(metadata.mode),
+        symlink: before.isSymbolicLink(),
+        violation: before.isSymbolicLink()
+          ? 'symlink'
+          : !metadata.isFile()
+            ? 'wrong-type'
+            : 'not-root-owned',
+      })
     }
     if (!isSafeRootOwnedBwrapMode(metadata.mode)) {
-      reject('provider-mode-unsafe')
+      reject('provider-mode-unsafe', {
+        path: resolved,
+        level: 'binary',
+        uid: metadata.uid ?? null,
+        mode: bwrapModeString(metadata.mode),
+        symlink: false,
+        violation: 'group-or-other-writable',
+      })
     }
     // Executing the canonical inode is insufficient if an untrusted same-uid
     // process can replace any directory component between admission and spawn.
@@ -694,13 +752,28 @@ export async function requireRootOwnedBwrap(
     for (;;) {
       const parentBefore = await pathMetadata.lstat(parent)
       const parentMetadata = await pathMetadata.stat(parent)
-      if (
-        parentBefore.isSymbolicLink() ||
-        !parentMetadata.isDirectory() ||
-        parentMetadata.uid !== 0 ||
-        (parentMetadata.mode & 0o022) !== 0
-      ) {
-        reject('provider-parent-unsafe')
+      const parentSymlink = parentBefore.isSymbolicLink()
+      const parentNotDir = !parentMetadata.isDirectory()
+      const parentNotRoot = parentMetadata.uid !== 0
+      const parentWritable = (parentMetadata.mode & 0o022) !== 0
+      if (parentSymlink || parentNotDir || parentNotRoot || parentWritable) {
+        // Name the EXACT level and invariant: 'the chain is unsafe' cannot be
+        // told apart from a code regression by an operator (2026-07-31 runner
+        // image incident). The check itself is unchanged.
+        reject('provider-parent-unsafe', {
+          path: parent,
+          level: 'ancestor',
+          uid: parentMetadata.uid ?? null,
+          mode: bwrapModeString(parentMetadata.mode),
+          symlink: parentSymlink,
+          violation: parentSymlink
+            ? 'symlink'
+            : parentNotDir
+              ? 'wrong-type'
+              : parentNotRoot
+                ? 'not-root-owned'
+                : 'group-or-other-writable',
+        })
       }
       if (parent === '/') break
       const next = dirname(parent)
@@ -801,7 +874,10 @@ export async function requireRootOwnedBwrap(
     } catch {
       // Diagnosis callbacks cannot change the fail-closed security outcome.
     }
-    throw new RootOwnedBwrapQualificationError(failureReason ?? 'provider-internal-error')
+    throw new RootOwnedBwrapQualificationError(
+      failureReason ?? 'provider-internal-error',
+      failureFinding,
+    )
   }
   return resolvedPath
 }

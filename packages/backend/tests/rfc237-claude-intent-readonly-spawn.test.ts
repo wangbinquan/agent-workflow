@@ -9,7 +9,7 @@
 // (P2-4). The binarySnapshot re-export identity (T-B) is locked here too.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'

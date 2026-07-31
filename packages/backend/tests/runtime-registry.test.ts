@@ -412,3 +412,52 @@ describe('migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)',
     expect((await getRuntime(db, 'opencode'))!.binaryPath).toBeNull()
   })
 })
+
+// 2026-07-31 closeout — save-time binaryPath validation now mirrors the
+// exec-time seal contract (binarySnapshot.resolveSingleExecutable: one
+// absolute canonical path, or one bare PATH token). Before this, a relative
+// fragment / arg-string saved fine and only died at spawn with
+// `execution-identity-untrusted-binary`, far from the admin who typed it.
+describe('binaryPath save-time validation mirrors the seal contract', () => {
+  test('accepts an absolute canonical path and a bare PATH token', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedBuiltinRuntimes(db)
+    const abs = await createRuntime(db, {
+      name: 'abs-fork',
+      protocol: 'opencode',
+      binaryPath: '/opt/forks/opencode',
+    })
+    expect(abs.binaryPath).toBe('/opt/forks/opencode')
+    const token = await createRuntime(db, {
+      name: 'token-fork',
+      protocol: 'claude-code',
+      binaryPath: 'claude',
+    })
+    expect(token.binaryPath).toBe('claude')
+  })
+
+  test('rejects the shapes the seal would reject at exec time', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedBuiltinRuntimes(db)
+    const cases: Array<[string, RegExp]> = [
+      ['./bin/opencode', /relative paths are cwd-dependent/],
+      ['bin/opencode', /relative paths are cwd-dependent/],
+      ['/usr/bin/../bin/opencode', /canonical absolute path/],
+      ['/usr/local/bin/', /canonical absolute path/],
+      ['opencode --flag', /without arguments/],
+    ]
+    for (const [binaryPath, message] of cases) {
+      await expect(
+        createRuntime(db, {
+          name: `bad-${cases.indexOf([binaryPath, message])}`,
+          protocol: 'opencode',
+          binaryPath,
+        }),
+      ).rejects.toThrow(message)
+    }
+    // The historical newline guard is unchanged.
+    await expect(
+      createRuntime(db, { name: 'bad-nl', protocol: 'opencode', binaryPath: '/bin/x\nrm -rf /' }),
+    ).rejects.toThrow(/single path/)
+  })
+})

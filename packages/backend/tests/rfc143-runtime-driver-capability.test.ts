@@ -232,12 +232,6 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       // capabilities, not spawn assembly bypasses.
       'routes/runtimes.ts',
       'services/runner.ts',
-      // RFC-237: models listing keeps the opencode-only hermetic enumeration
-      // (RFC-224 source-guarded snapshot env) at the route layer — an opencode
-      // SECURITY boundary, not spawn assembly; folding it into
-      // driver.listModels means moving the source-guard semantics and is
-      // deferred (design §5 / design-gate P2-1 rationale).
-      'routes/runtime.ts',
       // RFC-237: boot-time probe prewarm keyed off config.defaultRuntime — a
       // startup probability optimization, not spawn assembly; removing it
       // needs a driver boot-probe declaration, out of proportion (design §5).

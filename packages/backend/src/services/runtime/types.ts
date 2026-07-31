@@ -258,6 +258,16 @@ export interface ListModelsOpts {
   cwd?: string
   /** Final async fence that must pass before a fresh result enters the cache. */
   beforeCacheWrite?: () => void | Promise<void>
+  /**
+   * Explicit test-only DI seam for the byte-frozen snapshot wrapper (same
+   * shape as the other `testOnly*` seams). Routes thread their AppDeps
+   * override through here so the capability keeps owning the hermetic
+   * execution; production callers omit it and the driver uses the real seal.
+   */
+  testOnlySnapshot?: <T>(
+    command: readonly string[],
+    callback: (snapshotPath: string) => Promise<T>,
+  ) => Promise<T>
 }
 
 /** run-after subagent session capture inputs (union; each driver takes what it

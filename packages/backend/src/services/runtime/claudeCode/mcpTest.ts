@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { McpTestSpawnContext, McpTestSpawnPlan } from '../types'
 import { prepareClaudeConfigDir } from './config'
-import { assembleClaudeEnv } from './spawn'
+import { assembleClaudeEnv, claudeDeclaredControlArgv, CLAUDE_HEADLESS_BASE_ARGV } from './spawn'
 import { snapshotRuntimeBinary, verifyRuntimeBinarySnapshot } from '../binarySnapshot'
 import { identityDigest } from '../opencode/executionIdentity'
 
@@ -48,24 +48,19 @@ export async function buildClaudeMcpTestSpawn(ctx: McpTestSpawnContext): Promise
     command: sourceHead,
     snapshotPath: sealedBinary,
   })
+  // RFC-237 unification (2026-07-31): the declared-control flag group is owned
+  // by spawn.ts — this capability only declares its own tool surface (no
+  // built-ins, exactly one MCP namespace). Byte-identical to the previous
+  // hand-rolled group; a dropped flag now fails the shared contract, not just
+  // this file's review.
   const cmd = [
     sealedBinary,
-    '-p',
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    '--permission-mode',
-    'dontAsk',
-    '--tools',
-    '',
-    '--mcp-config',
-    mcpConfigFile,
-    '--strict-mcp-config',
-    '--setting-sources',
-    '',
-    '--disable-slash-commands',
-    '--allowedTools',
-    `mcp__${ctx.executionMaterial.runtimeKey}__*`,
+    ...CLAUDE_HEADLESS_BASE_ARGV,
+    ...claudeDeclaredControlArgv({
+      tools: '',
+      mcpConfigFile,
+      allowedTools: `mcp__${ctx.executionMaterial.runtimeKey}__*`,
+    }),
   ]
   if (ctx.model !== undefined && ctx.model !== null && ctx.model !== '') {
     cmd.push('--model', ctx.model)

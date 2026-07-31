@@ -31,7 +31,7 @@ import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
 import { isProductionOpencodeCommand, probeOpencode } from '@/util/opencode'
 import { getOpencodeBinaryVersion } from '@/util/opencode-version-registry'
-import { listOpencodeModels } from '@/util/opencode-models'
+import { listOpencodeModelsHermetic } from './models'
 import { captureChildSessions, captureOpencodeSessionsToSink } from '@/services/sessionCapture'
 import { readSnapshotFromRunDir } from '@/services/inventory'
 import { startLiveSubagentCapture } from '@/services/subagentLiveCapture'
@@ -76,8 +76,12 @@ export const opencodeDriver: RuntimeDriver = {
   probe(binary: string, opts?: ProbeOpts): Promise<RuntimeProbe> {
     return probeOpencode(binary, opts)
   },
+  // RFC-143 closeout (2026-07-31): enumeration owns its OWN hermetic
+  // execution (byte-frozen snapshot + source-guarded private cwd + redirected
+  // config/auth roots + pre-cache fingerprint fence). The route used to do
+  // this behind a runtime-kind branch; capability code belongs here.
   async listModels(binary: string, opts?: ListModelsOpts): Promise<RuntimeModelList> {
-    return listOpencodeModels(binary, opts)
+    return listOpencodeModelsHermetic(binary, opts)
   },
   async captureSessions(ctx: SessionCaptureContext): Promise<void> {
     await captureChildSessions({

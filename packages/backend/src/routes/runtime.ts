@@ -16,13 +16,6 @@ import { parseBoolQuery } from '@/util/http'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
 import { resolveRuntimeByName } from '@/services/runtimeRegistry'
 import { redactSensitiveString } from '@/util/redact'
-import { withRuntimeOpencodeSnapshot as productionRuntimeOpencodeSnapshot } from '@/services/runtime/opencode/runtimeBinary'
-import { dirname, join } from 'node:path'
-import { mkdir } from 'node:fs/promises'
-import {
-  assertSourceFingerprintUnchanged,
-  scanOpencodeProjectSurface,
-} from '@/services/runtime/opencode/sourceGuard'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
 
 function safeExecutionIdentityRouteFailure(error: unknown): {
@@ -45,9 +38,10 @@ function executionIdentityCode(error: unknown): ExecutionIdentityFailureCode | n
 }
 
 export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
-  const withRuntimeOpencodeSnapshot =
-    deps.runtimeDiagnosticTestDependencies?.withRuntimeOpencodeSnapshot ??
-    productionRuntimeOpencodeSnapshot
+  // Test-only stand-in for the byte-frozen seal; production leaves it unset so
+  // the driver uses its own real seal (RFC-143 closeout: the route no longer
+  // performs the hermetic enumeration, it only forwards this seam).
+  const testOnlySnapshot = deps.runtimeDiagnosticTestDependencies?.withRuntimeOpencodeSnapshot
 
   app.get('/api/runtime/models', async (c) => {
     const cfg = loadConfig(deps.configPath)
@@ -80,77 +74,12 @@ export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
     const binary = resolvedBinary ?? driver.defaultBinary(cfg)[0]!
     const refresh = parseBoolQuery(c, 'refresh', { default: false })
     try {
-      if (kind !== 'opencode') {
-        return c.json(await driver.listModels(binary, { refresh }))
-      }
-      const listed = await withRuntimeOpencodeSnapshot([binary], async (snapshot) => {
-        const root = dirname(snapshot)
-        const home = join(root, 'home')
-        const cwd = join(root, 'cwd')
-        const tmp = join(root, 'tmp')
-        const xdgConfig = join(root, 'xdg-config')
-        const xdgData = join(root, 'xdg-data')
-        const xdgCache = join(root, 'xdg-cache')
-        const xdgState = join(root, 'xdg-state')
-        const explicitConfig = join(root, 'explicit-config')
-        const testHome = join(root, 'test-home')
-        const managedConfig = join(root, 'managed-config')
-        await Promise.all(
-          [
-            home,
-            cwd,
-            tmp,
-            xdgConfig,
-            xdgData,
-            xdgCache,
-            xdgState,
-            explicitConfig,
-            testHome,
-            managedConfig,
-          ].map((path) => mkdir(path, { recursive: true, mode: 0o700 })),
-        )
-        // `models` still initializes OpenCode's configuration stack. An
-        // frozen executable alone is therefore insufficient: run it from a
-        // private source-guarded cwd with every config/auth root redirected,
-        // so a repo/V2 plugin or host account cannot execute during inventory.
-        const sourceBefore = await scanOpencodeProjectSurface(cwd)
-        const result = await driver.listModels(snapshot, {
-          refresh,
-          cacheKey: binary,
-          cwd,
-          env: {
-            PATH: '/usr/bin:/bin',
-            HOME: home,
-            TMPDIR: tmp,
-            XDG_CONFIG_HOME: xdgConfig,
-            XDG_DATA_HOME: xdgData,
-            XDG_CACHE_HOME: xdgCache,
-            XDG_STATE_HOME: xdgState,
-            OPENCODE_CONFIG_DIR: explicitConfig,
-            OPENCODE_TEST_HOME: testHome,
-            OPENCODE_TEST_MANAGED_CONFIG_DIR: managedConfig,
-            OPENCODE_AUTH_CONTENT: '{}',
-            OPENCODE_PURE: '1',
-            OPENCODE_DISABLE_PROJECT_CONFIG: '1',
-            OPENCODE_DISABLE_EXTERNAL_SKILLS: '1',
-            OPENCODE_DISABLE_MODELS_FETCH: '1',
-            OPENCODE_DISABLE_DEFAULT_PLUGINS: '1',
-            OPENCODE_DISABLE_CLAUDE_CODE: '1',
-            OPENCODE_DISABLE_LSP_DOWNLOAD: '1',
-            OPENCODE_DISABLE_AUTOUPDATE: '1',
-            OPENCODE_DISABLE_AUTOCOMPACT: '1',
-            OPENCODE_DISABLE_PRUNE: '1',
-            OPENCODE_DISABLE_EMBEDDED_WEB_UI: '1',
-            OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: '1',
-            GIT_CONFIG_NOSYSTEM: '1',
-            GIT_CONFIG_GLOBAL: '/dev/null',
-          },
-          beforeCacheWrite: async () => {
-            const sourceAfter = await scanOpencodeProjectSurface(cwd)
-            assertSourceFingerprintUnchanged(sourceBefore, sourceAfter)
-          },
-        })
-        return result
+      // RFC-143 closeout (2026-07-31): the hermetic enumeration moved INTO the
+      // opencode driver — the route no longer branches on runtime kind, it just
+      // asks the capability. Identity/redaction mapping below is unchanged.
+      const listed = await driver.listModels(binary, {
+        refresh,
+        ...(testOnlySnapshot === undefined ? {} : { testOnlySnapshot }),
       })
       return c.json({ ...listed, binary })
     } catch (err) {
