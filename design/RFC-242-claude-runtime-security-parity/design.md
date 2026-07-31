@@ -171,10 +171,13 @@ C-3 降级为兜底：仅当某平台缺 provider 能力（如未来 Windows 无
 2. **触发条件 = 受控 ∧ 有启用 local MCP ∧ 工具门未放行 Bash**。判据单点是
    `netlessMcp.ts` 的 `claudeLocalMcpFenceDecision()`——`businessContainmentProfile`
    （决定**需求**，在 spawn 之前）与 `buildBusinessSpawn`（决定**物化**）必须同源，
-   否则要么多拦一次启动、要么承诺一个没建出来的边界。三条排除各有理由：
+   否则要么多拦一次启动、要么承诺一个没建出来的边界。**四条**排除各有理由
+   （`test-runtime-head` 是 §4.5-9 补齐的第四条：初版只给需求侧喂了两个输入）：
    - `unconstrained`（未声明权限）：存量零破坏（§7 决策 2），抬高 profile 会让
      `sandboxMode=enforce` 拦住今天能跑的任务；
    - `no-local-mcp`：remote MCP 没有子进程可关；
+   - `test-runtime-head`（注入了多 token 的测试 head）：它的假 claude 不 fork MCP，
+     抬高需求等于白白降级外层沙箱；
    - `unfenced-shell`（放行了 Bash）：**实测约束**。2026-07-31 本机实测 macOS
      **嵌套 `sandbox-exec` 不可行**——`sandbox-exec: sandbox_apply: Operation not
 permitted`。因此 RFC-227 的 `provider-child-only` 是必然而非偏好：在 Seatbelt
@@ -190,8 +193,44 @@ permitted`。因此 RFC-227 的 `provider-child-only` 是必然而非偏好：�
      按此规则；C-2 落地后该排除项即可移除，Linux 与 macOS 一起受益。
 
    **行为变化**：满足上述三条的 claude 节点在 `sandboxMode=enforce` 且宿主无 provider
-   时会在启动期被拦（与 opencode 同级）；macOS 上这类节点的 runner outer sandbox 由
-   child Seatbelt 取代。这是本切片仅有的兼容面影响。
+   时会在启动期被拦（与 opencode 同级）。
+
+   **macOS 上的边界交换（措辞更正，2026-07-31 对抗复核 P1-2）**：本节初版写的
+   「runner outer sandbox **由 child Seatbelt 取代**」**不准确**，容易读成"边界只是换了
+   一层"。准确表述是：
+
+   - child Seatbelt **只包住 local MCP 子进程**（wrapper 里那一个 `sandbox-exec`）；
+   - claude **主进程**（持 Read/Edit/Write/WebFetch 等**进程内**工具）在
+     `provider-child-only` 拓扑下**没有任何平台文件系统边界**——`wrapSpawnPlanSandbox`
+     对该拓扑直接返回裸 cmd。它此时只剩 claude 自身的 `--tools` 装载集 + `dontAsk`
+     的 cwd 自动判定这层**运行时内**约束；
+   - 因此这是一笔**交换**（MCP 拿到网络边界 + 自己的文件系统 jail，claude 主进程失去
+     平台文件系统 jail），不是纯增益。Linux 上不存在这笔交换：bwrap 可嵌套，拓扑是
+     `runner-outer-and-child`，两层同时成立。
+
+   **为何仍然保留这笔交换（复核给的 (b) 案未采纳，理由）**：
+
+   - 这个姿态**不是 claude 独有的新缺口，而是 RFC-227 对 verified opencode 早已成立的
+     同一笔交易**：opencode 的 write/edit/read 工具同样跑在 server **进程内**
+     （`opencode/packages/opencode/src/tool/write.ts` 用 `FileSystem`/`FSUtil` 服务，
+     不 fork），而 `sandbox/index.ts:114-131` 的注释正是说 verified opencode business
+     plan 在 macOS 上把 server 留在 runner wrapper **之外**。若只给 claude 收紧，
+     claude 会比 opencode **更严**，与本 RFC「姿态对齐」的目标背道而驰。
+   - (b) 的字面做法「C-2 落地前不申请该 profile」在 driver 层不可实现：
+     `businessContainmentProfile` 只吃 `(agent, mcps, runtimeCmd)`，且 RFC-227 明令
+     driver 不得按 provider/OS 分叉。要"按 provider 能力区分"就必须在 RFC-233
+     coordinator 里新增一档 `childBoundary`（"要 child 但**不得**牺牲 outer"）：在
+     macOS 上它只有两种收场——把 receipt 报成 `contained` 却不施加 child 边界（RFC-227
+     明令禁止的"静默承诺"），或在 `enforce` 下判 `blocked`（**直接拦死** macOS 上今天
+     能跑的任务）。二者都比现状差，且改的是单一准入权威的核心判定。
+   - 代价对比：被围栏的是**用户配置的第三方 MCP server 代码**（真正的外来代码），换来的
+     是 claude 自身少一层纵深防御——而 claude 自身仍受工具门约束。
+
+   **补偿措施（本轮已落）**：这笔交换不再只存在于文档里——`buildBusinessSpawn` 在拓扑
+   确实降为 `provider-child-only` 时打 `claude-mcp-netless-outer-dropped` 告警（与
+   `claude-mcp-netless-skipped` 同级），把"哪一层被换掉了"写进 node_run 日志。彻底解除
+   靠 C-2（Bash 走同一 wrapper），届时 macOS 也能把**全部**模型可控子进程收进 child
+   边界，交换消失。已在 `docs/audit-backlog.md` 登记为未决项。
 
 3. **顺带修一个死围栏**：`SpawnPlan.preSpawnVerify` 在 `systemAgentRun` 侧自 RFC-237
    起就被 await，但**业务侧 `runner.ts` 从未调用**——即 T2 封印二进制的 TOCTOU 复检
@@ -237,6 +276,98 @@ running in don't ask mode`。即 `--tools` 只管**内置**装载集，MCP 工�
 
 MCP-authored env 顺带收益：包进 0400 manifest 后不再随 `--mcp-config` 的 inline JSON
 进 argv（即不再对宿主上任何 `ps` 可见）。remote MCP 两条路径都零改动。
+
+### 4.5 T5 复核修复批（2026-07-31，对抗性安全复核 + Codex 实现门）
+
+PR-3（`e050d792`）上库后各跑了一轮：一次**对抗性安全复核**、一次外部 **Codex 实现门**
+（pin 在 `bcc5dcaf..e050d792`）。两边**各自独立**命中同两条（git 外部 common dir 缺注册
+校验、npx PATH 丢失），另各有独有发现。处置如下。
+
+**逃逸类（P0，同一类缺陷的两个入口：攻击者可影响的路径 → 可写 allow-back）**
+
+1. **伪造 `.git` 指针劫持 git allow-back**。`<worktree>/.git` 是 agent 工作区内的普通
+   可写文件（对任务内每个节点、以及被围栏的 MCP 子进程本身都可写——worktree 就是
+   manifest 的可写 allow-back 之一）。把它改成 `gitdir: <另一个仓>/.git`，git 会**如实
+   报告**那个 common dir，初版原样规范化后作为**可写子树**写进 manifest；由于可写
+   allow-back 在 realHome/appHome 掩码**之后**施加，真实 Seatbelt/bwrap 子边界内的进程
+   即可写入例如 `<appHome>/repos/<other>/.git/hooks/post-commit`——该 hook 之后以
+   **daemon 身份、在所有沙箱之外**执行。
+   根因是**代码重复**：初版在 `claudeCode/netlessMcp.ts` 里私抄了一份 opencode 的投影，
+   漏掉三道检查（对报告路径 `lstat` 拒 symlink/非目录、`realpath(reported) === reported`、
+   外部 common dir 时 `assertRegisteredGitWorktree`）。
+   **修法（取"提取共用"而非再补一份）**：新增 `services/runtime/netlessProjection.ts` 为
+   **唯一**投影权威，`verifiedPlan.ts` 与 `netlessMcp.ts` 同时消费；两处语义差用一个显式
+   参数表达（`undescribableRepo: 'fail-closed' | 'skip-projection'`——opencode 的业务
+   worktree 必是真仓库故 fail-closed，claude 允许非 git 的 scratch worktree 只丢投影）。
+   **注意这不是宽容 git 的报告**：一旦 git **报出**了 common dir，两条运行时走完全相同的
+   全套校验。实测复现（git 2.50.1）：伪造后 `git rev-parse --git-common-dir` 确实指向外
+   仓，而该外仓的 `git worktree list` 不含本 worktree → fail closed。
+2. **scratch 子目录被 symlink 重入劫持**。inline-clarify 重入复用同一 runRoot，上一轮
+   被围栏的子进程对 `claude-mcp-scratch` 有写权限，可把 `home`/`tmp` 换成 symlink；
+   `mkdir(...,{recursive:true})` 接受该 link、`realpath` 忠实跟随，于是下一轮 manifest
+   的 HOME/TMPDIR 指向外部目标并被授予**可写** allow-back。
+   **修法**：同一模块的 `ensurePrivateNetlessDirectory(root, ...segments)`——逐级
+   非递归 `mkdir` + `lstat` 拒 symlink/非目录 + 全路径 `realpath === self`，seal 根、
+   scratch 根、home、tmp 全部改走它。
+   两条均有**红/绿变异实证**（去掉对应检查即红）。
+
+**功能回归 / 静默降级类**
+
+3. **`npx` 型 local MCP 被围栏后静默失效**（两边同时命中）。`/opt/homebrew/bin/npx`
+   realpath 到 `.../npm/bin/npx-cli.js`（`#!/usr/bin/env node`），而该 dirname 里没有
+   `node` → wrapper `exit 127`；claude 侧表现为 `mcp_servers:[{status:"failed"}]`、
+   工具表缺失、**节点照常 `is_error:false` 成功结束**。
+   **修法（两半都要）**：(a) 解析 `#!` 解释器链（`env` 形式取其后的工具名），把解释器的
+   canonical 路径加入 `bindReadOnly`、其目录加入围栏 PATH——已在固定 netless PATH 内的
+   解释器（`/bin/sh`）不重复投影；解析不出解释器则 fail closed（否则必 127）。
+   **真边界实测（macOS Seatbelt，2026-07-31 本轮）**：`#!/usr/bin/env fakenode` 的
+   launcher 经平台 wrapper 起在真 Seatbelt 子边界内 → `exit 0` +
+   `interp-ok net=000 home=<私有 scratch home>`（修复前同一输入 exit 127）。
+   (b) **静默降级变显式失败**：`SpawnPlan.fencedMcpServers` 声明平台围栏了哪些 server，
+   `RuntimeDriver.parseUnusableMcpServers` 解析 claude init 事件的 `mcp_servers`，runner
+   在**任一被围栏 server 不是 `connected`** 时 kill 并把节点判 `failed`
+   （`mcp-unavailable: …`）。按 §4.4 的实测，`pending` 与 `failed` 对模型是同一后果
+   （整回合无该 server 工具），故同等对待；不设 `failureCode`，节点按重试语义再来一次
+   （冷启 `pending` 可自愈）。**只对被围栏的 server 生效**，存量/未围栏 MCP 行为不变。
+4. **合法 MCP `env` key 现在硬失败**。初版把 MCP 作者写的 env 丢进**daemon env**
+   的允许名单（要求 SCREAMING_CASE）再按数量差 fail——实测 `{token}` / `{apiKey}` /
+   `{PYTHONPATH}` / `{NODE_OPTIONS}` 全部抛错，而这些此前可用。同一名单在 opencode 侧
+   是**静默丢弃**（更糟：server 少了凭据却无任何日志）。
+   **修法**：区分两类环境——daemon env 仍走原名单；**MCP 作者写的 env** 走新的
+   `sanitizeMcpAuthoredEnvironment`：名字合法（POSIX identifier，大小写不限）即**转发**，
+   只拒**动态链接器族**（`LD_*` / `DYLD_*`，因为 `bwrap`/`sandbox-exec` **本身**先读到
+   这份环境，边界尚未建立），失败消息带 `/mcp/<name>/env/<KEY>` 定位。同一规则前移到
+   **保存期**（`McpLocalConfigWriteSchema`，只挂写路径——读路径不动，存量行仍可读）。
+   claude / opencode / RFC-238 playground 三处 MCP env 消费点统一到这一个函数。
+5. **相对路径 MCP 命令解析基准错了**。`./tools/server` 此前由 claude 以任务 worktree 为
+   cwd 启动；初版交给 `Bun.which`，它对含斜杠 token 相对 **daemon cwd** 解析 → 要么失败、
+   要么执行安装目录里同名的无关文件。**修法**：含分隔符的相对 token 相对
+   `canonicalWorktree` 解析；PATH 查找只留给裸名字。
+6. **RFC-067 任务级 git 身份在被围栏的 MCP 里丢失**。`runNetlessSubprocess` **替换**而非
+   继承子进程环境，manifest 里没带身份 → 围栏内 commit 用错身份或在私有 scratch HOME 下
+   失败。**修法**：`buildBusinessSpawn` 把 `gitUserName/gitUserEmail` 传进物化，
+   manifest env 带上四个 `GIT_AUTHOR_*`/`GIT_COMMITTER_*`（与 opencode wrapper 同形）。
+
+**其余（P2）**
+
+7. **MCP 密钥仍进 argv（Linux）**。`inject.ts` 声称密钥不再走 argv，但 bwrap 渲染用
+   `--setenv NAME VALUE`，于是密钥落进 `/proc/<bwrap-pid>/cmdline`（**全局可读**）。
+   **取正解而非收窄声明**：`renderNetlessBwrapArgs` 不再渲染 env，改由
+   `renderNetlessInvocation` 把 `manifest.env` 交给 **bwrap 进程本身**——bwrap 此处没有
+   `--clearenv`，其环境原样传给子进程，子进程 env 逐字不变，而 argv 里一个字节都没有。
+   （remote MCP 的 header 仍在业务 argv 里，属另一条链，见 backlog。）
+8. **preSpawnVerify 只验形状不验身份**。注释说"必须仍是计划时那个确切文件"，实现只有
+   `lstat` + 非 symlink + isFile，换成另一个普通文件也能过。**修法**：记录并比对
+   dev/ino。
+9. **需求 / 物化判据漂移**。`businessContainmentProfile`（需求）只看 `(agent, mcps)`，
+   物化还要 `runtimeCmd === undefined` → 注入 mock head 时会"降级了外层沙箱却没有围栏"。
+   **修法**：把 `runtimeCmd` 并入**同一个** `claudeLocalMcpFenceDecision`，两侧喂同一
+   seam（新增 `test-runtime-head` skipReason），runner 调用处补传。
+10. **P1-2（macOS 外层沙箱）** 见 §4.3 的措辞更正 + 新增 `claude-mcp-netless-outer-dropped`
+    告警；未采纳"暂不申请 profile"的理由同处，残留登记进 backlog。
+11. **预览 / 准入的 MCP 集合不一致**（`task.ts` 用 `agent.mcp`、`runner.ts` 用 dependsOn
+    闭包并集）：opencode 同形、属**既有**问题，claude 只是新可达。**未修，落档到
+    `docs/audit-backlog.md`**——正解是让两侧共用同一个闭包解析，属独立切片。
 
 ## §5 失败模式与兼容性
 

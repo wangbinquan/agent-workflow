@@ -86,6 +86,39 @@ describe('POST /api/mcps', () => {
     expect(body.code).toBe('mcp-invalid')
   })
 
+  // RFC-242 (adversarial review P1-4): the runtime fence can never forward a
+  // dynamic-loader variable to an MCP child — `bwrap`/`sandbox-exec` read this
+  // environment BEFORE the boundary exists. It used to surface as an opaque
+  // `execution-identity-mismatch` hours later, at spawn; refuse it at save time
+  // with the key named. Everything that is merely unusual (`token`, `apiKey`,
+  // `PYTHONPATH`, `NODE_OPTIONS`) must still save — the first cut rejected
+  // those too and broke working configurations.
+  test('env: a dynamic-loader key → 422 naming the key', async () => {
+    const res = await req(app, '/api/mcps', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...localPayload('loader'),
+        config: { command: ['uvx', 'pg-mcp'], env: { LD_PRELOAD: '/tmp/evil.so' } },
+      }),
+    })
+    expect(res.status).toBe(422)
+    expect(JSON.stringify(await res.json())).toContain('LD_PRELOAD')
+  })
+
+  test('env: ordinary lowercase / interpreter keys still save', async () => {
+    const res = await req(app, '/api/mcps', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...localPayload('envkeys'),
+        config: {
+          command: ['uvx', 'pg-mcp'],
+          env: { token: 't', apiKey: 'k', PYTHONPATH: '/srv', NODE_OPTIONS: '--trace-warnings' },
+        },
+      }),
+    })
+    expect(res.status).toBe(201)
+  })
+
   test('duplicate name → 409 mcp-name-in-use', async () => {
     await req(app, '/api/mcps', {
       method: 'POST',

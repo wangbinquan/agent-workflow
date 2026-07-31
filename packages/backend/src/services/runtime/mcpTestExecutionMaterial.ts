@@ -13,7 +13,10 @@ import type { PreparedContainmentPlan } from '@/services/sandbox'
 import type { McpTestExecutionMaterial } from './types'
 import { snapshotRuntimeBinary, verifyRuntimeBinarySnapshot } from './binarySnapshot'
 import { identityDigest, type IdentityJson } from './opencode/executionIdentity'
-import { materializeNetlessWrapper, sanitizeNetlessEnvironment } from './opencode/sealedSubprocess'
+import {
+  materializeNetlessWrapper,
+  sanitizeMcpAuthoredEnvironment,
+} from './opencode/sealedSubprocess'
 import { runtimeContainmentAdmissionFromPrepared } from './opencode/containment'
 import { executionIdentityFailure } from './opencode/failure'
 
@@ -167,11 +170,10 @@ export async function prepareMcpTestExecutionMaterial(
   if (command.length === 0 || command.some((part) => part.length === 0 || part.includes('\0'))) {
     return executionIdentityFailure('execution-identity-mismatch')
   }
-  const requestedEnv = input.mcp.config.env ?? {}
-  const configuredEnv = sanitizeNetlessEnvironment(requestedEnv)
-  if (Object.keys(configuredEnv).length !== Object.keys(requestedEnv).length) {
-    return executionIdentityFailure('execution-identity-mismatch')
-  }
+  // RFC-242 — MCP-authored env goes through the MCP rule (author configured the
+  // command AND its variables), not the daemon-env allowlist: `token` is a
+  // legitimate key, `LD_PRELOAD` is not, and the failure names which is which.
+  const configuredEnv = sanitizeMcpAuthoredEnvironment(input.mcp.config.env ?? {}, input.mcp.name)
   const snapshotPath = join(input.root, 'mcp-bin', 'server')
   const snapshot = await snapshotRuntimeBinary({
     command: [command[0]!],

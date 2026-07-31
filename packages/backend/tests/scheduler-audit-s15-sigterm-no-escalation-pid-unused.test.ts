@@ -85,8 +85,9 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
 
     // Every ordinary kill initiator routes through the same idempotent
     // escalation arm: abort, timeout, RFC-224 control-barrier failure,
-    // launcher stable-code failure, and stream-pump failure.
-    expect(countNonCommentMatches(runnerSrc, /\bstartKill\(\)/g)).toBe(5)
+    // launcher stable-code failure, stream-pump failure, and (RFC-242 T5) a
+    // platform-fenced MCP server that did not come up.
+    expect(countNonCommentMatches(runnerSrc, /\bstartKill\(\)/g)).toBe(6)
     expect(countNonCommentMatches(runnerSrc, /armKillEscalation\(/g)).toBeGreaterThanOrEqual(1)
 
     // The grace timer must be unref'd (a wedged child can't pin bun test).

@@ -21,7 +21,7 @@ import type {
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
-import { parseEvent, parseResultError } from './events'
+import { parseEvent, parseResultError, parseUnusableMcpServers } from './events'
 import { buildClaudeSpawn } from './spawn'
 import { toClaudeAgents, toClaudeMcpConfig } from './inject'
 import { pickRuntimeHead } from '../head'
@@ -63,8 +63,12 @@ export const claudeCodeDriver: RuntimeDriver = {
   // (and why the others are excluded) is `claudeLocalMcpFenceDecision`, the same
   // predicate buildBusinessSpawn materializes from — demand and materialization
   // must never drift.
-  businessContainmentProfile: ({ agent, mcps }) =>
-    claudeLocalMcpFenceDecision({ gate: claudeBusinessGate(agent.permission), mcps }).fence
+  businessContainmentProfile: ({ agent, mcps, runtimeCmd }) =>
+    claudeLocalMcpFenceDecision({
+      gate: claudeBusinessGate(agent.permission),
+      mcps,
+      runtimeCmd,
+    }).fence
       ? 'model-child-netless-v1'
       : 'runner-filesystem-v1',
   minVersion: MIN_CLAUDE_CODE_VERSION,
@@ -78,6 +82,11 @@ export const claudeCodeDriver: RuntimeDriver = {
     const parsed = parseResultError(line)
     if (parsed === null || !parsed.isError) return null
     return parsed.message.length > 0 ? parsed.message : 'claude reported a terminal error result'
+  },
+  // RFC-242 T5 — claude freezes MCP availability on its init event; a fenced
+  // server that is not `connected` there loses its tools for the whole turn.
+  parseUnusableMcpServers(line: string): readonly string[] | null {
+    return parseUnusableMcpServers(line)
   },
   // RFC-143 — capability methods. PR-1 delegates to the existing free functions.
   defaultBinary(config: RuntimeBinaryConfig): string[] {
@@ -239,10 +248,19 @@ export const claudeCodeDriver: RuntimeDriver = {
     // RFC-242 T5 — fence the model's local MCP children: claude is told to fork
     // the platform's 0500 wrapper, which re-enters this binary and applies the
     // admitted child provider's no-network boundary (netlessMcp.ts, design §4.2).
-    // The decision is `claudeLocalMcpFenceDecision` (shared with
-    // businessContainmentProfile above), plus the sealing seam — `runtimeCmd`
-    // marks a mock head whose fake claude never forks an MCP.
-    const fence = claudeLocalMcpFenceDecision({ gate, mcps: ctx.mcps })
+    //
+    // ONE predicate decides both the containment DEMAND (above) and this
+    // MATERIALIZATION, from the SAME three inputs — including `runtimeCmd`. The
+    // first cut fed the demand two of them and the materialization three, so an
+    // injected mock head produced a node that had dropped the runner's outer
+    // sandbox (macOS `provider-child-only`) while building no fence at all
+    // (impl-gate P2-7). The seam is the same one the credential bridge and the
+    // binary seal use; it now lives inside the shared decision.
+    const fence = claudeLocalMcpFenceDecision({
+      gate,
+      mcps: ctx.mcps,
+      runtimeCmd: ctx.runtimeCmd,
+    })
     if (fence.skipReason === 'unfenced-shell') {
       // Never silent: this node's MCP servers keep full network because fencing
       // them would cost the outer sandbox that also contains its shell.
@@ -255,13 +273,31 @@ export const claudeCodeDriver: RuntimeDriver = {
       })
     }
     let localWrapperByName: ReadonlyMap<string, string> | undefined
-    if (sealBusiness && fence.fence) {
+    if (fence.fence) {
       // Fail closed, never fall back to the raw command: reaching here means
       // businessContainmentProfile already demanded the model-child bundle, so a
       // missing admission is a wiring bug, not a reason to unfence the child.
       const containment =
         ctx.containment ?? executionIdentityFailure('execution-identity-containment-required')
       const appHome = ctx.appHome ?? executionIdentityFailure('execution-identity-store-unsafe')
+      if (containment.spawnTopology === 'provider-child-only') {
+        // Adversarial review P1-2: on a provider that cannot nest (macOS
+        // Seatbelt) the model-child boundary REPLACES the runner's outer one,
+        // and the child launcher only wraps the MCP servers — claude's own
+        // in-process Read/Edit/Write lose their platform filesystem boundary.
+        // That is the same trade RFC-227 already makes for the verified
+        // opencode server (its write/edit tools are in-process too), but it is
+        // a trade, not a pure gain: say so per node instead of leaving it in a
+        // design document. RFC-242 C-2 (Bash through the same wrapper) is what
+        // removes it — then macOS can contain every model-controlled child.
+        ctx.log.warn('claude-mcp-netless-outer-dropped', {
+          agent: ctx.agent.name,
+          nodeRunId: ctx.nodeRunId,
+          providerId: containment.receipt.providerId,
+          detail:
+            'local MCP children gain the no-network child boundary; this provider cannot nest, so the runner outer sandbox around claude itself is dropped for this node (RFC-242 C-2 pending)',
+        })
+      }
       const netless = await materializeClaudeNetlessMcp({
         mcps: ctx.mcps,
         containment,
@@ -271,6 +307,10 @@ export const claudeCodeDriver: RuntimeDriver = {
         ...(ctx.repoWorktreePaths === undefined
           ? {}
           : { repoWorktreePaths: ctx.repoWorktreePaths }),
+        // RFC-067: the fenced child's env is REPLACED, not inherited, so the
+        // task identity has to travel in the manifest like it does for claude.
+        gitUserName: ctx.gitUserName,
+        gitUserEmail: ctx.gitUserEmail,
         log: ctx.log,
       })
       localWrapperByName = netless.wrapperByName
@@ -321,6 +361,13 @@ export const claudeCodeDriver: RuntimeDriver = {
     return {
       ...plan,
       ...(preSpawnVerify === undefined ? {} : { preSpawnVerify }),
+      // RFC-242 T5: a server the PLATFORM fenced must actually come up. The
+      // runner fails the node when claude's init inventory says otherwise —
+      // a fence that silently drops the node's tools is the failure mode this
+      // whole path exists to prevent.
+      ...(localWrapperByName === undefined || localWrapperByName.size === 0
+        ? {}
+        : { fencedMcpServers: [...localWrapperByName.keys()] }),
       // §4.4: same diagnostic fields the runner used to derive from the (built-
       // for-both-runtimes) inline config — byte-equal log line, claude included.
       diagnostics: {

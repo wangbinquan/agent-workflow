@@ -4,7 +4,7 @@
 
 import { createHash, randomBytes } from 'node:crypto'
 import { chmod, lstat, mkdir, realpath, rm } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { BusinessNodeSpawnContext, SpawnPlan } from '../types'
 import {
   buildControlledOpencodeConfig,
@@ -28,6 +28,7 @@ import {
 } from './sealedInputs'
 import {
   materializeNetlessWrapper,
+  sanitizeMcpAuthoredEnvironment,
   sanitizeNetlessEnvironment,
   type NetlessSubprocessManifest,
 } from './sealedSubprocess'
@@ -41,6 +42,7 @@ import {
   type IdentityJson,
 } from './executionIdentity'
 import { executionIdentityFailure } from './failure'
+import { resolveNetlessGitCommonDirs } from '../netlessProjection'
 import {
   OPENCODE_DIRECT_PROTOCOL_CODEC,
   ROOT_SESSION_PERMISSION_RULES,
@@ -53,7 +55,6 @@ import {
   type VerifiedLaunchManifest,
 } from './verifiedManifest'
 import { isProductionOpencodeCommand } from '@/util/opencode'
-import { runGit } from '@/util/git'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 import { buildVerifiedInventoryPlan } from './verifiedInventory'
 import {
@@ -101,110 +102,25 @@ function safeAbsoluteHome(value: string | undefined): string {
   return value
 }
 
-function contained(root: string, child: string): boolean {
-  const rel = relative(root, child)
-  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
-}
-
-async function assertRegisteredGitWorktree(canonicalRepo: string): Promise<void> {
-  const listed = await runGit(canonicalRepo, ['worktree', 'list', '--porcelain', '-z'])
-  if (listed.exitCode !== 0) {
-    return executionIdentityFailure('execution-identity-source-changed')
-  }
-  for (const record of listed.stdout.split('\0')) {
-    if (!record.startsWith('worktree ')) continue
-    const registeredPath = record.slice('worktree '.length)
-    if (
-      !isAbsolute(registeredPath) ||
-      resolve(registeredPath) !== registeredPath ||
-      registeredPath.includes('\0')
-    ) {
-      return executionIdentityFailure('execution-identity-store-unsafe')
-    }
-    const metadata = await lstat(registeredPath).catch(() => null)
-    if (metadata === null || metadata.isSymbolicLink() || !metadata.isDirectory()) continue
-    if ((await realpath(registeredPath)) === canonicalRepo) return
-  }
-  // A `.git` pointer is writable from the worktree. Never turn an arbitrary
-  // valid repository named by that pointer into a writable allow-back: the
-  // common dir must also register this exact canonical worktree.
-  return executionIdentityFailure('execution-identity-store-unsafe')
-}
-
 /**
- * Resolve only daemon-owned Git metadata projections. The child sandbox
- * already exposes each worktree's files, but linked worktrees keep objects,
- * refs, index and config in an external common dir hidden by the appHome/HOME
- * masks. Asking Git avoids parsing attacker-controlled `.git` pointer text,
- * and canonicalization prevents a symlinked broad subtree from becoming an
- * accidental allow-back.
+ * RFC-242 — the Git projection, the `contained` predicate and the private
+ * directory fence now live in ONE runtime-neutral module (`netlessProjection`)
+ * shared with the Claude local-MCP fence. The duplicate that used to sit in
+ * `claudeCode/netlessMcp.ts` had silently dropped three of the checks below,
+ * which is exactly the drift a second copy invites.
  */
 async function resolveGitCommonDirs(
   repoWorktreePaths: readonly string[] | undefined,
   canonicalPrimaryWorktree: string,
 ): Promise<string[]> {
-  // Direct unit callers predating the runner-owned topology keep the historical
-  // non-Git fixture path. Production runner calls always provide this field.
-  if (repoWorktreePaths === undefined) return []
-  if (repoWorktreePaths.length === 0 || repoWorktreePaths.length > 64) {
-    return executionIdentityFailure('execution-identity-store-unsafe')
-  }
-
-  const canonicalRepos: string[] = []
-  const commonDirs: string[] = []
-  for (const repoPath of repoWorktreePaths) {
-    if (!isAbsolute(repoPath) || resolve(repoPath) !== repoPath || repoPath.includes('\0')) {
-      return executionIdentityFailure('execution-identity-store-unsafe')
-    }
-    const metadata = await lstat(repoPath).catch(() => null)
-    if (metadata === null || metadata.isSymbolicLink() || !metadata.isDirectory()) {
-      return executionIdentityFailure('execution-identity-source-changed')
-    }
-    const canonicalRepo = await realpath(repoPath)
-    canonicalRepos.push(canonicalRepo)
-
-    const common = await runGit(canonicalRepo, [
-      'rev-parse',
-      '--path-format=absolute',
-      '--git-common-dir',
-    ])
-    const reportedCommonDir = common.stdout.trim()
-    if (
-      common.exitCode !== 0 ||
-      !isAbsolute(reportedCommonDir) ||
-      resolve(reportedCommonDir) !== reportedCommonDir ||
-      reportedCommonDir.includes('\0')
-    ) {
-      return executionIdentityFailure('execution-identity-source-changed')
-    }
-    const commonMetadata = await lstat(reportedCommonDir).catch(() => null)
-    if (
-      commonMetadata === null ||
-      commonMetadata.isSymbolicLink() ||
-      !commonMetadata.isDirectory()
-    ) {
-      return executionIdentityFailure('execution-identity-source-changed')
-    }
-    const canonicalCommonDir = await realpath(reportedCommonDir)
-    if (canonicalCommonDir !== reportedCommonDir) {
-      return executionIdentityFailure('execution-identity-store-unsafe')
-    }
-    if (!contained(canonicalRepo, canonicalCommonDir)) {
-      await assertRegisteredGitWorktree(canonicalRepo)
-    }
-    commonDirs.push(canonicalCommonDir)
-  }
-  if (!canonicalRepos.includes(canonicalPrimaryWorktree)) {
-    return executionIdentityFailure('execution-identity-source-changed')
-  }
-
-  return [
-    ...new Set(
-      commonDirs.filter(
-        (commonDir) => !canonicalRepos.some((repoPath) => contained(repoPath, commonDir)),
-      ),
-    ),
-  ].sort()
+  return resolveNetlessGitCommonDirs({
+    repoWorktreePaths,
+    primaryWorktree: canonicalPrimaryWorktree,
+    // A verified OpenCode business plan always runs in a real repository; a
+    // worktree Git cannot describe is a source-integrity failure, not a
+    // capability to drop.
+    undescribableRepo: 'fail-closed',
+  })
 }
 
 function shaName(value: string): string {
@@ -362,7 +278,11 @@ async function planMcpConfig(
     // the persistent store. The full semantic descriptor becomes the stable
     // wrapper suffix, so resume identity changes for executable/argv/env/
     // timeout without depending on this attempt's runRoot.
-    const configuredEnv = sanitizeNetlessEnvironment(mcp.config.env ?? {})
+    // RFC-242: MCP-authored env follows the MCP rule. The daemon-env allowlist
+    // this used to call SILENTLY DROPPED any name it did not recognize, so a
+    // server configured with `token`/`apiKey` started without its credential
+    // and failed in a way no log explained.
+    const configuredEnv = sanitizeMcpAuthoredEnvironment(mcp.config.env ?? {}, mcp.name)
     const wrapperIdentity = identityDigest({
       codec: 1,
       name: mcp.name,

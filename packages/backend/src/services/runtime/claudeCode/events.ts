@@ -59,6 +59,42 @@ export function parseEvent(line: string): NormalizedEvent | null {
   }
 }
 
+/**
+ * RFC-242 T5 — the `system/init` event's `mcp_servers` inventory, reduced to
+ * the servers that will NOT be usable this turn.
+ *
+ * Measured against claude 2.1.220 (design §4.4): claude freezes MCP
+ * availability at init. A server that failed to start reports
+ * `status:'failed'`, and one whose `initialize` is still outstanding reports
+ * `status:'pending'` — in BOTH cases its tools are absent from the model's tool
+ * table for the entire turn, while the run itself completes `is_error:false`.
+ * Anything that is not an established connection therefore counts as unusable;
+ * the runner turns that into an explicit node failure for platform-fenced
+ * servers instead of letting the node "succeed" without its declared tools.
+ */
+export function parseUnusableMcpServers(line: string): readonly string[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(line)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object') return null
+  const evt = parsed as Record<string, unknown>
+  if (evt.type !== 'system' || evt.subtype !== 'init') return null
+  const servers = evt.mcp_servers
+  if (!Array.isArray(servers)) return null
+  const unusable: string[] = []
+  for (const entry of servers) {
+    if (!entry || typeof entry !== 'object') continue
+    const row = entry as Record<string, unknown>
+    if (typeof row.name !== 'string' || row.name.length === 0) continue
+    if (row.status === 'connected') continue
+    unusable.push(row.name)
+  }
+  return unusable
+}
+
 /** ISO-8601 `timestamp` → ms epoch; undefined when absent/unparseable. */
 function extractTimestamp(evt: Record<string, unknown>): number | undefined {
   const raw = evt.timestamp

@@ -24,6 +24,59 @@ export const McpNameSchema = z
   .max(128, 'name too long')
   .regex(MCP_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
 
+/**
+ * RFC-242 — env names an MCP may declare for its stdio child. POSIX identifier
+ * shape; deliberately case-INSENSITIVE because `token` / `apiKey` are ordinary,
+ * legitimate names that servers really use (the platform's first no-network
+ * fence rejected them and broke working configurations).
+ */
+export const MCP_ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
+
+/**
+ * The one family the platform refuses on every path. A fenced local MCP is
+ * launched THROUGH the containment binary (`bwrap` / `sandbox-exec`), which
+ * receives this environment before it can apply the boundary — a dynamic-loader
+ * variable would therefore become code running OUTSIDE the fence. Everything
+ * else (including `NODE_OPTIONS` / `PYTHONPATH`) is the author's own business:
+ * they configured the command it applies to.
+ */
+export const MCP_ENV_DENY_RE = /^(?:LD_|DYLD_)/i
+
+export type McpEnvNameProblem = 'name-charset' | 'loader-injection' | 'value-nul'
+
+/** The single reason an MCP env entry is refused, or null when it is fine. */
+export function mcpEnvEntryProblem(name: string, value: string): McpEnvNameProblem | null {
+  if (!MCP_ENV_NAME_RE.test(name)) return 'name-charset'
+  if (MCP_ENV_DENY_RE.test(name)) return 'loader-injection'
+  if (value.includes('\0')) return 'value-nul'
+  return null
+}
+
+/** Operator-facing explanation used by both the save-time gate and the docs. */
+export function describeMcpEnvProblem(name: string, problem: McpEnvNameProblem): string {
+  if (problem === 'name-charset') {
+    return `env key '${name}' is not a valid environment variable name (letters, digits and _ only, not starting with a digit)`
+  }
+  if (problem === 'value-nul') {
+    return `env value for '${name}' contains a NUL byte`
+  }
+  return `env key '${name}' is a dynamic-loader variable; it would be read by the sandbox launcher itself, so the platform never forwards it to an MCP child`
+}
+
+/** Every refused entry of an MCP env map, in declaration order. */
+export function mcpEnvIssues(
+  env: Readonly<Record<string, string>> | undefined,
+): Array<{ name: string; problem: McpEnvNameProblem; message: string }> {
+  if (env === undefined) return []
+  const issues: Array<{ name: string; problem: McpEnvNameProblem; message: string }> = []
+  for (const [name, value] of Object.entries(env)) {
+    const problem = mcpEnvEntryProblem(name, value)
+    if (problem !== null)
+      issues.push({ name, problem, message: describeMcpEnvProblem(name, problem) })
+  }
+  return issues
+}
+
 /** Local stdio server (opencode `McpLocalConfig`). */
 export const McpLocalConfigSchema = z
   .object({
@@ -39,6 +92,22 @@ export const McpLocalConfigSchema = z
   })
   .strict()
 export type McpLocalConfig = z.infer<typeof McpLocalConfigSchema>
+
+/**
+ * RFC-242 — the SAVE-path local config: same shape plus the env gate, so a key
+ * the runtime fence can never forward is refused where the author can still see
+ * and fix it (with the key named), instead of failing a node run hours later.
+ *
+ * Deliberately NOT folded into `McpLocalConfigSchema`: that one also parses
+ * STORED rows, and a legacy row carrying a refused key must stay readable —
+ * turning every list request into a 500 would be a worse failure than the one
+ * being prevented.
+ */
+export const McpLocalConfigWriteSchema = McpLocalConfigSchema.superRefine((config, ctx) => {
+  for (const issue of mcpEnvIssues(config.env)) {
+    ctx.addIssue({ code: 'custom', message: issue.message, path: ['env', issue.name] })
+  }
+})
 
 /** OAuth knobs used by remote servers; mirrors opencode `McpOAuthConfig`. */
 export const McpOAuthConfigSchema = z
@@ -125,7 +194,8 @@ export const CreateMcpSchema = z.discriminatedUnion('type', [
     name: McpNameSchema,
     description: z.string().default(''),
     type: z.literal('local'),
-    config: McpLocalConfigSchema,
+    // RFC-242: save-time env gate (write path only — see McpLocalConfigWriteSchema).
+    config: McpLocalConfigWriteSchema,
     enabled: z.boolean().default(true),
   }),
   z.object({
@@ -146,7 +216,8 @@ export const UpdateMcpLocalSchema = z
   .object({
     description: z.string().optional(),
     type: z.literal('local').optional(),
-    config: McpLocalConfigSchema.optional(),
+    // RFC-242: save-time env gate (write path only — see McpLocalConfigWriteSchema).
+    config: McpLocalConfigWriteSchema.optional(),
     enabled: z.boolean().optional(),
   })
   .strict()

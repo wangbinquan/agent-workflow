@@ -142,6 +142,14 @@ export interface SpawnPlan {
    * opencode omits it (its re-verify already runs inside the launcher).
    */
   preSpawnVerify?: () => Promise<void>
+  /**
+   * RFC-242 T5 — MCP servers the PLATFORM fenced for this spawn (it replaced
+   * their command with its own no-network wrapper). A fenced server that does
+   * not come up is a node-level failure, never a silent capability loss: the
+   * model would otherwise run the whole turn without the tools the node
+   * declares and still report success.
+   */
+  fencedMcpServers?: readonly string[]
   /** Which process layer owns platform containment for this plan. */
   sandboxTopology?: SpawnSandboxTopology
   /**
@@ -633,7 +641,7 @@ export interface RuntimeDriver {
    * System callers use the filesystem-only profile directly.
    */
   businessContainmentProfile?(
-    input: Pick<BusinessNodeSpawnContext, 'agent' | 'mcps'>,
+    input: Pick<BusinessNodeSpawnContext, 'agent' | 'mcps' | 'runtimeCmd'>,
   ): ContainmentRequirementProfileId
   /**
    * Optional protocol-specific minimum used only by runtimes that define a
@@ -708,6 +716,14 @@ export interface RuntimeDriver {
    *  `is_error:true`). Returns the raw error text (caller masks) or null.
    *  Runtimes without such a dialect omit the method. */
   parseTerminalResultError?(line: string): string | null
+  /**
+   * RFC-242 T5 — names of MCP servers this startup line reports as UNUSABLE for
+   * the turn (anything but a live connection). Returns null for lines that
+   * carry no MCP inventory. The runner intersects the result with
+   * `SpawnPlan.fencedMcpServers`, so only servers the platform itself fenced
+   * can fail a node this way.
+   */
+  parseUnusableMcpServers?(line: string): readonly string[] | null
 }
 
 /** RFC-237 — inputs for `captureSessionsToSink?`. The sink slice is structural

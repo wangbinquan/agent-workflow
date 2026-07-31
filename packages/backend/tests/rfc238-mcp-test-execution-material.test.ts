@@ -153,7 +153,16 @@ describe('RFC-238 frozen MCP execution material', () => {
     })
   })
 
-  test('local material resolves a stable PATH token and rejects silently-dropped env keys', async () => {
+  // RFC-242 (adversarial review P1-4) reshaped the second half of this case
+  // WITHOUT weakening it. The invariant is unchanged — "an author-declared env
+  // key is never silently dropped" — but the right answer for an ordinary
+  // lowercase name is to FORWARD it, not to fail the run: `token`/`apiKey` are
+  // legitimate names, and the daemon-env allowlist that rejected them here (and
+  // silently dropped them on the opencode path) broke working servers. The
+  // fail-closed leg now covers the family that genuinely cannot be forwarded:
+  // dynamic-loader variables, which `bwrap`/`sandbox-exec` read before the
+  // boundary exists.
+  test('local material resolves a stable PATH token and never silently drops env keys', async () => {
     const base = root('rfc238-local-path-material-')
     const appHome = join(base, 'app-home')
     const worktreePath = join(base, 'worktree')
@@ -181,9 +190,21 @@ describe('RFC-238 frozen MCP execution material', () => {
     expect(material.rawCommandDigest).toMatch(/^[0-9a-f]{64}$/)
     await expect(material.preSpawnVerify()).resolves.toBeUndefined()
 
+    const lowercaseRoot = join(base, 'material-lowercase')
+    await prepareMcpTestExecutionMaterial({
+      mcp: local({ lowercase_key: 'must-not-be-silently-dropped' }),
+      root: lowercaseRoot,
+      worktreePath,
+      appHome,
+      containment: admitted,
+    })
+    expect(readFileSync(join(lowercaseRoot, 'mcp-wrapper', 'netless.json'), 'utf8')).toContain(
+      'must-not-be-silently-dropped',
+    )
+
     await expect(
       prepareMcpTestExecutionMaterial({
-        mcp: local({ lowercase_key: 'must-not-be-silently-dropped' }),
+        mcp: local({ DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib' }),
         root: join(base, 'material-rejected'),
         worktreePath,
         appHome,

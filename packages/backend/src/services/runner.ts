@@ -1050,6 +1050,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         driver.businessContainmentProfile?.({
           agent: opts.agent,
           mcps: opts.mcps ?? [],
+          // RFC-242 (impl-gate P2-7): the demand must see EXACTLY what the
+          // materialization sees. An injected mock head builds no fence, so it
+          // must not raise a demand that costs the runner's outer sandbox.
+          runtimeCmd: opts.runtimeCmd,
         }) ?? driver.containmentProfile
       preparedContainment = await opts.containmentCoordinator.admit(containmentProfile, {
         ...(opts.signal === undefined ? {} : { signal: opts.signal }),
@@ -1652,6 +1656,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     let sessionId: string | undefined
     let launcherFailureCode: ExecutionIdentityFailureCode | undefined
     let controlFailureCode: ExecutionIdentityFailureCode | undefined
+    // RFC-242 T5 — servers the PLATFORM fenced (their command was replaced by
+    // its no-network wrapper). If one of them is not usable in the runtime's
+    // startup inventory, the model would run the whole turn without the tools
+    // this node declares and still finish "successfully": fail the node loudly
+    // instead. Only fenced servers qualify — an unfenced/legacy MCP keeps its
+    // historical best-effort behavior.
+    const fencedMcpServers = new Set(plan.fencedMcpServers ?? [])
+    let fencedMcpFailure: string | undefined
+    /** The inventory arrives once, in the runtime's first event. */
+    let fencedMcpInventorySeen = false
     const failControlBarrier = (): void => {
       controlFailureCode ??= 'execution-identity-control-failed'
       startKill()
@@ -1690,6 +1704,26 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // bypass attempt, not user-visible output.
         failControlBarrier()
         return
+      }
+      if (fencedMcpServers.size > 0 && !fencedMcpInventorySeen) {
+        // Null = this line is not the inventory; keep looking. A non-null answer
+        // is the one-shot startup inventory, so stop re-parsing every line after
+        // it (the runtime freezes MCP availability there — RFC-242 §4.4).
+        const unusable = driver.parseUnusableMcpServers?.(line) ?? null
+        if (unusable !== null) {
+          fencedMcpInventorySeen = true
+          const missing = unusable.filter((name) => fencedMcpServers.has(name)).sort()
+          if (missing.length > 0) {
+            fencedMcpFailure =
+              `mcp-unavailable: platform-fenced MCP server(s) ${missing.join(', ')} ` +
+              'did not come up; the node would have run without the tools it declares'
+            log.warn('claude-mcp-netless-unusable', {
+              nodeRunId: opts.nodeRunId,
+              servers: missing,
+            })
+            startKill()
+          }
+        }
       }
       // RFC-111 PR-A/B: normalize one stdout line through the frozen runtime's
       // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
@@ -2003,6 +2037,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       status = 'failed'
       failureCode = controlFailureCode
       errorMessage = controlFailureCode
+    } else if (fencedMcpFailure !== undefined) {
+      // No failureCode on purpose: this is retryable (claude freezes MCP
+      // availability at init, so a slow first start can resolve on the next
+      // attempt) and it is not an execution-identity violation.
+      status = 'failed'
+      errorMessage = fencedMcpFailure
     } else if (streamPumpFailed) {
       status = 'failed'
       errorMessage = `${runtime} stream persistence failed`

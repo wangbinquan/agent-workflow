@@ -9,6 +9,7 @@ import { constants } from 'node:fs'
 import { chmod, lstat, mkdir, open, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
+import { mcpEnvEntryProblem } from '@agent-workflow/shared'
 import { IS_EMBEDDED } from '@/embed'
 import { executionIdentityFailure } from './failure'
 import { RuntimeChildProviderPlanSchema, type RuntimeChildProviderPlan } from './containment'
@@ -160,6 +161,42 @@ export function sanitizeNetlessEnvironment(
     output[name] = value
   }
   return output
+}
+
+/**
+ * RFC-242 — the MCP-AUTHORED half of a netless child's environment.
+ *
+ * `sanitizeNetlessEnvironment` above sanitizes the DAEMON's environment, where
+ * an unknown name is untrusted ambient state and dropping it is right. An MCP's
+ * `env` map is the opposite: the author configured both the command and the
+ * variables it needs, so
+ *   - a name the allowlist merely does not recognize (`token`, `apiKey`) must
+ *     be FORWARDED, not silently dropped (opencode) and not turned into an
+ *     opaque node failure (the first Claude fence did both, in two runtimes);
+ *   - the one family that is genuinely refused — dynamic-loader variables, read
+ *     by `bwrap`/`sandbox-exec` itself before the boundary exists — fails
+ *     CLOSED, and the pointer names the exact MCP and key so the operator can
+ *     act on it.
+ *
+ * The save-time gate (`McpLocalConfigWriteSchema`) refuses the same entries at
+ * the API with a human message; this is the fail-closed backstop for rows
+ * written before that gate (or around it).
+ */
+export function sanitizeMcpAuthoredEnvironment(
+  input: Readonly<Record<string, string>>,
+  mcpName: string,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(input).map(([name, value]) => {
+      if (typeof value !== 'string' || mcpEnvEntryProblem(name, value) !== null) {
+        return executionIdentityFailure(
+          'execution-identity-mismatch',
+          `/mcp/${mcpName}/env/${name}`,
+        )
+      }
+      return [name, value]
+    }),
+  )
 }
 
 export interface RootOwnedBwrapCapabilityProcess {
@@ -1013,11 +1050,13 @@ export function renderNetlessBwrapArgs(
   for (const target of writable) args.push('--bind', target, target)
   for (const target of parsed.bindReadOnly) args.push('--ro-bind', target, target)
   args.push('--chdir', parsed.worktreePath)
-  for (const [name, value] of Object.entries(parsed.env).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0,
-  )) {
-    args.push('--setenv', name, value)
-  }
+  // RFC-242 — the environment is deliberately NOT rendered into argv. `bwrap`
+  // has no `--clearenv` here, so it hands its OWN environment to the child;
+  // `renderNetlessInvocation` therefore spawns bwrap WITH `manifest.env` and the
+  // child sees the identical map. The `--setenv NAME VALUE` form this replaced
+  // published every MCP secret in `/proc/<bwrap-pid>/cmdline`, which is
+  // world-readable — exactly the exposure moving MCP env out of claude's
+  // `--mcp-config` argv was meant to end.
   args.push('--')
   if (parsed.mode === 'shell') {
     args.push(...parsed.command, ...passthroughArgs)
@@ -1110,7 +1149,14 @@ export function renderNetlessSeatbeltProfile(manifest: NetlessSubprocessManifest
   return lines.join('\n')
 }
 
-function renderNetlessInvocation(
+/**
+ * The exact `cmd`/`cwd`/`env` the hidden subcommand spawns. Exported so the
+ * env-out-of-argv contract (RFC-242) is unit-lockable on every host: the Linux
+ * boundary is otherwise only exercised by the gated integration suite, and a
+ * bwrap child that silently lost its environment would look identical to one
+ * that never started.
+ */
+export function renderNetlessInvocation(
   manifest: NetlessSubprocessManifest,
   passthroughArgs: readonly string[],
 ): NetlessSubprocessInvocation {
@@ -1120,7 +1166,9 @@ function renderNetlessInvocation(
     return {
       cmd: [config.bwrapPath, ...renderNetlessBwrapArgs(manifest, passthroughArgs)],
       cwd: manifest.worktreePath,
-      env: {},
+      // bwrap without `--clearenv` passes its own environment through, so this
+      // IS the child's environment — and it never touches any argv.
+      env: manifest.env,
     }
   }
   if (provider.providerId === 'macos-seatbelt') {
