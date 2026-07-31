@@ -363,6 +363,8 @@ export const enUS: Resources = {
     priorCommentsCount_one: '{{count}} item',
     priorCommentsCount_other: '{{count}} items',
     priorCommentsEmpty: 'No review comments on the previous version',
+    priorCommentsUnanchored_one: 'Not located in the text · {{count}} item',
+    priorCommentsUnanchored_other: 'Not located in the text · {{count}} items',
     sidebarEmpty: 'No comments yet. Select text in the body to add one.',
     sidebarCountLabel: 'Comments · {{count}}',
     sidebarCollapse: 'Collapse sidebar',

@@ -21,6 +21,13 @@
 //     (matches DOM utility semantics; orphaned anchors are tolerated).
 //   - Selections that span multiple text nodes produce multiple sibling
 //     `<mark>` elements sharing the same `data-comment-id`.
+//
+// RFC-241 阶段 2:新增 opts(markClass / strictOccurrence / excludeClasses /
+// tableGuard)供「上一版意见锚进 merged diff 文档」路径复用同一插件——
+// 后挂载 DOM 突变(legacy wrapAnchorsInDom)在 body / granularity 变化时
+// 会撞 React reconciliation,与本插件当年替换它的原因相同,因此 prior
+// 锚定同样必须在 hast 阶段完成。全部 opts 缺省时行为与旧版逐字节一致
+// (当前版 Prose 调用零改动)。
 
 export interface AnchorWrapInput {
   /** Comment id, written to `data-comment-id` on each `<mark>`. */
@@ -33,6 +40,28 @@ export interface AnchorWrapInput {
 
 export interface RehypeWrapAnchorsOptions {
   anchors: ReadonlyArray<AnchorWrapInput>
+  /** Mark class written to each `<mark>`; default `'comment-anchor'`. */
+  markClass?: string
+  /**
+   * RFC-241 阶段 2:true 时出现次数不足直接放弃该锚(不 clamp 到最后
+   * 一次)。当前版路径的 clamp 是「文档=锚定源」的容错;上一版意见锚进
+   * merged diff 文档时文档≠锚定源,clamp 会把该回退的静默钉错。
+   */
+  strictOccurrence?: boolean
+  /**
+   * 整棵子树不进入文本流的 className token 列表(如 `diff-ins` —— 排除
+   * 新增内容后 del/context 流保序近似上一版原文;`katex`/`katex-error`
+   * —— word 档行内公式被 resolveMarkedString 解析成仅新版,整树出流)。
+   */
+  excludeClasses?: ReadonlyArray<string>
+  /**
+   * RFC-241 阶段 2 表格校验(仅 word 档传 true):锚若命中「含 diff-ins,
+   * 或含 diff-del 且存在不属任何 diff 标记的 context 文本」的 <table>
+   * (配对表行相似度贪心 + 未配对 DEL 前置会重排旧行序;纯删减词级配对
+   * 表无 ins 但重排照发),放弃该锚整体 → 未定位回退。纯 DEL 原子化整表
+   * (全部文本在 del 内)保序保字面,锚定保留。
+   */
+  tableGuard?: boolean
 }
 
 interface HastText {
@@ -63,6 +92,8 @@ interface TextSegment {
   indexInParent: number
   offsetStart: number
   node: HastText
+  /** 最近的 <table> 祖先(表格校验用);无则 null。 */
+  tableEl: HastElement | null
 }
 
 interface WrapRange {
@@ -71,39 +102,87 @@ interface WrapRange {
   commentId: string
 }
 
-function collectTextSegments(tree: HastRoot): TextSegment[] {
+function classTokens(el: HastElement): string[] {
+  const cls = el.properties?.['className']
+  if (Array.isArray(cls)) return cls.map((c) => String(c))
+  if (typeof cls === 'string') return cls.split(/\s+/)
+  return []
+}
+
+function collectTextSegments(tree: HastRoot, excludeClasses: ReadonlyArray<string>): TextSegment[] {
   const out: TextSegment[] = []
   let cursor = 0
-  const walk = (parent: HastRoot | HastElement): void => {
+  const walk = (parent: HastRoot | HastElement, tableEl: HastElement | null): void => {
     const children = parent.children
     for (let i = 0; i < children.length; i++) {
       const node = children[i]!
       if (node.type === 'text') {
         const t = node as HastText
-        out.push({ parent, indexInParent: i, offsetStart: cursor, node: t })
+        out.push({ parent, indexInParent: i, offsetStart: cursor, node: t, tableEl })
         cursor += t.value.length
       } else if (node.type === 'element') {
-        walk(node as HastElement)
+        const el = node as HastElement
+        if (excludeClasses.length > 0) {
+          const tokens = classTokens(el)
+          if (tokens.some((c) => excludeClasses.includes(c))) continue
+        }
+        walk(el, el.tagName === 'table' ? el : tableEl)
       } else if ('children' in node && Array.isArray(node.children)) {
         // E.g. fragments inside math nodes; recurse but treat as opaque
         // for indexInParent bookkeeping since we don't mutate them.
         const placeholder = { type: 'root', children: node.children } as HastRoot
-        walk(placeholder)
+        walk(placeholder, tableEl)
       }
     }
   }
-  walk(tree)
+  walk(tree, null)
   return out
+}
+
+/**
+ * RFC-241 阶段 2 表格校验:该表的锚定是否不可靠。条件(聚焦复核修订):
+ * (a) 表含 diff-ins;(b) 表含 diff-del 且存在不属任何 diff 标记的非空白
+ * context 文本。纯 DEL 原子化整表(全部文本在 del 内)两条都不满足,
+ * 锚定保留。
+ */
+function isUnreliableTable(table: HastElement): boolean {
+  let hasIns = false
+  let hasDel = false
+  let hasContextText = false
+  const walk = (parent: HastElement | HastRoot, inDiff: boolean): void => {
+    for (const node of parent.children) {
+      if (node.type === 'text') {
+        if (!inDiff && /\S/.test((node as HastText).value)) hasContextText = true
+      } else if (node.type === 'element') {
+        const el = node as HastElement
+        const tokens = classTokens(el)
+        const isIns = tokens.includes('diff-ins')
+        const isDel = tokens.includes('diff-del')
+        if (isIns) hasIns = true
+        if (isDel) hasDel = true
+        walk(el, inDiff || isIns || isDel)
+      } else if ('children' in node && Array.isArray(node.children)) {
+        walk({ type: 'root', children: node.children } as HastRoot, inDiff)
+      }
+    }
+  }
+  walk(table, false)
+  return hasIns || (hasDel && hasContextText)
 }
 
 export function rehypeWrapAnchors(opts: RehypeWrapAnchorsOptions) {
   const { anchors } = opts
+  const markClass = opts.markClass ?? 'comment-anchor'
+  const strict = opts.strictOccurrence === true
+  const excludeClasses = opts.excludeClasses ?? []
+  const tableGuard = opts.tableGuard === true
   return (tree: HastRoot): void => {
     if (anchors.length === 0) return
-    const segments = collectTextSegments(tree)
+    const segments = collectTextSegments(tree, excludeClasses)
     if (segments.length === 0) return
     const full = segments.map((s) => s.node.value).join('')
     const wrapsPerSegment = new Map<number, WrapRange[]>()
+    const unreliableTables = new Map<HastElement, boolean>()
     for (const a of anchors) {
       if (a.selectedText.length === 0) continue
       const occs: number[] = []
@@ -115,9 +194,14 @@ export function rehypeWrapAnchors(opts: RehypeWrapAnchorsOptions) {
         pos = i + 1
       }
       if (occs.length === 0) continue
-      const clamped = Math.min(Math.max(a.occurrenceIndex - 1, 0), occs.length - 1)
+      const wanted = Math.max(a.occurrenceIndex - 1, 0)
+      // strict:次数不足即放弃该锚(未定位回退),绝不 clamp 错钉。
+      if (strict && wanted >= occs.length) continue
+      const clamped = Math.min(wanted, occs.length - 1)
       const startOff = occs[clamped]!
       const endOff = startOff + a.selectedText.length
+      const hits: Array<{ si: number; from: number; to: number }> = []
+      let unreliable = false
       for (let si = 0; si < segments.length; si++) {
         const seg = segments[si]!
         const segEnd = seg.offsetStart + seg.node.value.length
@@ -126,9 +210,25 @@ export function rehypeWrapAnchors(opts: RehypeWrapAnchorsOptions) {
         const from = Math.max(0, startOff - seg.offsetStart)
         const to = Math.min(seg.node.value.length, endOff - seg.offsetStart)
         if (from >= to) continue
-        const list = wrapsPerSegment.get(si) ?? []
-        list.push({ from, to, commentId: a.commentId })
-        wrapsPerSegment.set(si, list)
+        if (tableGuard && seg.tableEl !== null) {
+          let bad = unreliableTables.get(seg.tableEl)
+          if (bad === undefined) {
+            bad = isUnreliableTable(seg.tableEl)
+            unreliableTables.set(seg.tableEl, bad)
+          }
+          if (bad) {
+            unreliable = true
+            break
+          }
+        }
+        hits.push({ si, from, to })
+      }
+      // 表格校验命中:该意见全部段一并放弃(整体归未定位),不留半截 mark。
+      if (unreliable) continue
+      for (const h of hits) {
+        const list = wrapsPerSegment.get(h.si) ?? []
+        list.push({ from: h.from, to: h.to, commentId: a.commentId })
+        wrapsPerSegment.set(h.si, list)
       }
     }
     if (wrapsPerSegment.size === 0) return
@@ -170,7 +270,7 @@ export function rehypeWrapAnchors(opts: RehypeWrapAnchorsOptions) {
               // `property-information` defaults preserve `data-*` keys
               // verbatim so the rendered HTML matches the existing CSS
               // selector `mark.comment-anchor[data-comment-id="..."]`.
-              properties: { className: ['comment-anchor'], 'data-comment-id': r.commentId },
+              properties: { className: [markClass], 'data-comment-id': r.commentId },
               children: [{ type: 'text', value: value.slice(from, to) }],
             }
             replacement.push(mark)

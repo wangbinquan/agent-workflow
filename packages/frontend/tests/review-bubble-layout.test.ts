@@ -95,4 +95,49 @@ describe('computeBubbleLayout', () => {
     expect(r.tops.size).toBe(0)
     expect(r.minHeight).toBe(720)
   })
+
+  // RFC-241 阶段 2 — orphanPlacement 双分支纯函数锁(design v6 §机制 2)。
+  describe('orphanPlacement (RFC-241 阶段 2)', () => {
+    const input = {
+      located: [{ id: 'a', top: 10, height: 40 }],
+      orphans: [
+        { id: 'x', height: 30 },
+        { id: 'y', height: 30 },
+      ],
+      headerFloor: 20,
+      rootHeight: 0,
+      gap: 8,
+    }
+
+    test("'top':orphan 从 headerFloor 起先行堆叠,located 游标从 orphan 堆之后继续", () => {
+      const r = computeBubbleLayout({ ...input, orphanPlacement: 'top' })
+      expect(r.tops.get('x')).toBe(20) // headerFloor
+      expect(r.tops.get('y')).toBe(58) // 20+30+8
+      expect(r.tops.get('a')).toBe(96) // max(10, 58+30+8)
+      expect(r.minHeight).toBe(144) // 96+40+8
+    })
+
+    test("'bottom' 与缺省逐字节一致(保 ReviewDocPane 现行为)", () => {
+      const explicit = computeBubbleLayout({ ...input, orphanPlacement: 'bottom' })
+      const implicit = computeBubbleLayout(input)
+      expect([...explicit.tops.entries()]).toEqual([...implicit.tops.entries()])
+      expect(explicit.minHeight).toBe(implicit.minHeight)
+      expect(implicit.tops.get('a')).toBe(20) // max(10, headerFloor)
+      expect(implicit.tops.get('x')).toBe(68) // 20+40+8
+      expect(implicit.tops.get('y')).toBe(106) // 68+30+8
+    })
+
+    test("'top' 且无 located:orphan 即整列,minHeight 覆盖 orphan 堆", () => {
+      const r = computeBubbleLayout({
+        located: [],
+        orphans: [{ id: 'x', height: 30 }],
+        headerFloor: 20,
+        rootHeight: 0,
+        gap: 8,
+        orphanPlacement: 'top',
+      })
+      expect(r.tops.get('x')).toBe(20)
+      expect(r.minHeight).toBe(58)
+    })
+  })
 })

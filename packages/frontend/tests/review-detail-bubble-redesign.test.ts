@@ -126,19 +126,34 @@ describe('review-detail bubble redesign', () => {
     // .content scroll container, so the (anchor.top - col.top) math is
     // invariant under scroll *today* — but if any container later
     // introduces its own overflow:auto the bubbles would drift. The
-    // scroll listener is cheap insurance.
-    const src = readFileSync(PANE_TSX, 'utf8')
-    expect(src).toMatch(/addEventListener\(\s*'scroll'/)
+    // scroll listener is cheap insurance. RFC-241 阶段 2: the measurement
+    // machinery moved verbatim into hooks/useCommentBubbles.ts (shared with
+    // the prior-comments sidebar) — the lock follows it, plus a wiring lock
+    // that the pane still consumes the extracted hook.
+    const hookSrc = readFileSync(
+      resolve(__dirname, '..', 'src', 'hooks', 'useCommentBubbles.ts'),
+      'utf8',
+    )
+    expect(hookSrc).toMatch(/addEventListener\(\s*'scroll'/)
     // Must use the capture phase — scroll events don't bubble.
-    expect(src).toMatch(/'scroll'[^)]*,\s*true\s*\)/)
+    expect(hookSrc).toMatch(/'scroll'[^)]*,\s*true\s*\)/)
+    const src = readFileSync(PANE_TSX, 'utf8')
+    expect(src).toMatch(/from '@\/hooks\/useCommentBubbles'/)
   })
 
   test('ReviewDocPane wires click-bubble → highlight-anchor-text', () => {
+    // An effect toggles data-active on the matching marks when
+    // activeCommentId changes. RFC-241 阶段 2: the attribute toggle moved
+    // into lib/review/anchorMarks.ts (multi-node group highlight, shared
+    // with the prior-comments sidebar) — lock the helper + the pane wiring.
+    const helperSrc = readFileSync(
+      resolve(__dirname, '..', 'src', 'lib', 'review', 'anchorMarks.ts'),
+      'utf8',
+    )
+    expect(helperSrc).toMatch(/setAttribute\(\s*'data-active'/)
     const src = readFileSync(PANE_TSX, 'utf8')
-    // An effect toggles data-active on the matching mark when
-    // activeCommentId changes.
-    expect(src).toMatch(/data-active/)
-    expect(src).toMatch(/setAttribute\(\s*'data-active'/)
+    expect(src).toMatch(/setActiveAnchorMarks\(/)
+    expect(src).toMatch(/scrollToAnchorMark\(/)
   })
 
   test('styles.css paints the active anchor with a stronger highlight', () => {

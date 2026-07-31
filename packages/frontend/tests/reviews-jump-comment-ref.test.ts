@@ -66,11 +66,20 @@ describe('ReviewDocPane — jump scroll lands reliably under a real mouse click'
     // re-render around the handler) cancels an in-flight `behavior: 'smooth'`
     // scrollIntoView partway, so the document stops between comments and the
     // jump "does nothing". An instant scroll has no animation to cancel.
+    // RFC-241 阶段 2: the scrollIntoView call moved into the shared
+    // lib/review/anchorMarks.ts helper — the behavior lock follows it, plus
+    // a wiring lock that the pane's callback delegates to the helper.
+    const helper = readFileSync(
+      resolve(__dirname, '..', 'src', 'lib', 'review', 'anchorMarks.ts'),
+      'utf8',
+    )
+    expect(helper).toMatch(/scrollIntoView\(\s*\{[^}]*behavior:\s*'auto'/)
+    expect(helper).not.toMatch(/behavior:\s*'smooth'/)
     const fn = PANE.slice(
       PANE.indexOf('const scrollToCommentAnchor'),
       PANE.indexOf('const onBubbleClick'),
     )
-    expect(fn).toMatch(/scrollIntoView\(\s*\{[^}]*behavior:\s*'auto'/)
+    expect(fn).toMatch(/scrollToAnchorMark\(/)
     expect(fn).not.toMatch(/behavior:\s*'smooth'/)
   })
 })

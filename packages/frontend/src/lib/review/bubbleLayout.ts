@@ -35,6 +35,13 @@ export interface BubbleLayoutInput {
   /** Rendered markdown body height — the column is at least this tall. */
   rootHeight: number
   gap?: number
+  /**
+   * RFC-241 阶段 2:orphan(未定位)气泡的落位。'bottom'(默认)保持
+   * 现行为——堆在最后一个 located 气泡之后;'top' 把 orphan 从
+   * headerFloor 起先行堆叠(「未定位」分节列于侧栏顶部),located 气泡
+   * 的游标从 orphan 堆之后继续。
+   */
+  orphanPlacement?: 'top' | 'bottom'
 }
 
 export interface BubbleLayoutResult {
@@ -59,14 +66,18 @@ export function computeBubbleLayout(input: BubbleLayoutInput): BubbleLayoutResul
   const located = [...input.located].sort((a, b) => a.top - b.top)
   const tops = new Map<string, number>()
   let cursor = input.headerFloor
+  const placeOrphans = (): void => {
+    for (const item of input.orphans) {
+      tops.set(item.id, cursor)
+      cursor = cursor + item.height + gap
+    }
+  }
+  if (input.orphanPlacement === 'top') placeOrphans()
   for (const item of located) {
     const top = Math.max(item.top, cursor)
     tops.set(item.id, top)
     cursor = top + item.height + gap
   }
-  for (const item of input.orphans) {
-    tops.set(item.id, cursor)
-    cursor = cursor + item.height + gap
-  }
+  if (input.orphanPlacement !== 'top') placeOrphans()
   return { tops, minHeight: Math.max(cursor, input.rootHeight) }
 }

@@ -9618,8 +9618,17 @@ details.form-section[open] > summary {
   }
 }
 
+/* diff 主列容器(阶段 2):上一版意见 mark 的查询/滚动域,占原 DiffView
+   的 grid 位。 */
+.review-diff-doc {
+  min-width: 0;
+}
+
 .prior-comments {
   min-width: 0;
+  /* 阶段 2:气泡改回 absolute + 测量 top(useCommentBubbles 注入),
+     容器是定位上下文;minHeight 由测量注入内联样式。 */
+  position: relative;
 }
 
 .prior-comments__header {
@@ -9638,12 +9647,19 @@ details.form-section[open] > summary {
   white-space: nowrap;
 }
 
-/* 只读气泡:comment-bubble 本体是 absolute + 测量注入 top(锚定语义)
-   且带 cursor: pointer / hover 抬升(点击跳转语义)。本侧栏无锚定无
-   交互,覆盖为静态流 + 默认光标 + 基线阴影(RFC-241 设计门一/二轮)。 */
+/* 「未定位」分节标题:置于侧栏标题之下、气泡之前(orphanPlacement 'top'
+   把这些气泡从 header floor 起先行堆叠)。 */
+.prior-comments__orphan-header {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+/* 只读气泡(阶段 2):布局与当前版侧栏同款 absolute + 测量 top。默认
+   (未定位)维持 default 光标 + 基线阴影——无锚可跳,pointer 是可点
+   假象(设计门二轮);已锚定(--anchored)恢复 pointer + hover 抬升
+   (点击滚动到 mark 并整组高亮)。 */
 .prior-comments .comment-bubble {
-  position: static;
-  margin-bottom: 8px;
   cursor: default;
 }
 
@@ -9651,6 +9667,16 @@ details.form-section[open] > summary {
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.08),
     0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.prior-comments .comment-bubble--anchored {
+  cursor: pointer;
+}
+
+.prior-comments .comment-bubble--anchored:hover {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .review-detail__bubbles {
@@ -9970,6 +9996,32 @@ mark.comment-anchor[data-active='true'] {
 }
 
 :root[data-theme='dark'] mark.comment-anchor[data-active='true'] {
+  background-color: rgba(255, 180, 50, 0.45);
+  box-shadow: 0 0 0 2px rgba(255, 180, 50, 0.6);
+}
+
+/* RFC-241 阶段 2:上一版意见在 merged diff 文档内的锚。显式透明底
+   (UA <mark> 黄底会压掉 diff 红绿高亮,dark 同理)+ 中性点状下划线;
+   落在 .diff-del 内与删除线叠加为「点下划线 + 删除线」,显式接受。
+   active 高亮(点击气泡整组点亮)与 mark.comment-anchor 同款。 */
+mark.prior-comment-anchor {
+  background: transparent;
+  color: inherit;
+  border-bottom: 1px dotted var(--muted);
+  padding: 0;
+  transition: background-color 0.12s ease;
+}
+
+mark.prior-comment-anchor[data-active='true'] {
+  background-color: rgba(255, 180, 50, 0.65);
+  box-shadow: 0 0 0 2px rgba(255, 180, 50, 0.75);
+}
+
+:root[data-theme='dark'] mark.prior-comment-anchor {
+  background: transparent;
+}
+
+:root[data-theme='dark'] mark.prior-comment-anchor[data-active='true'] {
   background-color: rgba(255, 180, 50, 0.45);
   box-shadow: 0 0 0 2px rgba(255, 180, 50, 0.6);
 }

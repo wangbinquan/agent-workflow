@@ -129,6 +129,19 @@ function ReviewDetailPage() {
     enabled: diffMode && priorVersion !== null,
   })
 
+  // RFC-241 阶段 2:上一版意见锚进 merged diff 文档(hast 阶段包 mark),
+  // 侧栏按 mark 存在性分「已锚定 / 未定位」。ref 指向 diff 主列容器。
+  const diffDocRef = useRef<HTMLDivElement>(null)
+  const priorAnchors = useMemo(
+    () =>
+      (priorBody.data?.comments ?? []).map((c) => ({
+        commentId: c.id,
+        selectedText: c.anchor.selectedText,
+        occurrenceIndex: c.anchor.occurrenceIndex,
+      })),
+    [priorBody.data?.comments],
+  )
+
   // RFC-013: when ?version=<vid> is present and it's not the current vid,
   // fetch that historical version's body + comments. The endpoint validates
   // nodeRunId scoping server-side; a bogus vid returns 404 which we surface
@@ -504,22 +517,28 @@ function ReviewDetailPage() {
     // 右列)保持原样不动。
     return (
       <div className="review-diff-layout">
-        <DiffView
-          left={priorBody.data.body}
-          right={data.currentBody}
-          granularity={diffGranularity}
-          leftLabel={t('reviews.diffLeftLabel', {
-            version: priorVersion.versionIndex,
-            decision: priorVersion.decision ?? t('reviews.decision.pending'),
-          })}
-          rightLabel={t('reviews.diffRightLabel', {
-            version: data.currentVersion.versionIndex,
-          })}
-        />
+        <div className="review-diff-doc" ref={diffDocRef}>
+          <DiffView
+            left={priorBody.data.body}
+            right={data.currentBody}
+            granularity={diffGranularity}
+            leftLabel={t('reviews.diffLeftLabel', {
+              version: priorVersion.versionIndex,
+              decision: priorVersion.decision ?? t('reviews.decision.pending'),
+            })}
+            rightLabel={t('reviews.diffRightLabel', {
+              version: data.currentVersion.versionIndex,
+            })}
+            priorAnchors={priorAnchors}
+          />
+        </div>
         <PriorCommentsSidebar
           comments={priorBody.data.comments}
           body={priorBody.data.body}
           versionIndex={priorVersion.versionIndex}
+          docRef={diffDocRef}
+          granularity={diffGranularity}
+          currentBody={data.currentBody}
         />
       </div>
     )

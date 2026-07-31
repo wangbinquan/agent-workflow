@@ -19,13 +19,11 @@ import { useMutation } from '@tanstack/react-query'
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
-  type RefObject,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ReviewComment, ReviewCommentAnchor } from '@agent-workflow/shared'
@@ -34,11 +32,12 @@ import { AttributionChip } from '@/components/AttributionChip'
 import { copyText } from '@/lib/clipboard'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { TextArea } from '@/components/Form'
+import { useCommentBubbles } from '@/hooks/useCommentBubbles'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { Prose } from '@/components/prose/Prose'
 import { useResizable } from '@/hooks/useResizable'
 import { anchorKey, computeAnchorFromSelection, selectionCrossesHeading } from '@/lib/review/anchor'
-import { BUBBLE_GAP_PX, computeBubbleLayout } from '@/lib/review/bubbleLayout'
+import { scrollToAnchorMark, setActiveAnchorMarks } from '@/lib/review/anchorMarks'
 import { deleteDraft, getDraft, setDraft } from '@/lib/review/draftStore'
 import { computeLineRange } from '@/lib/review/lineRange'
 import { compareReviewComments } from '@/lib/review/commentOrder'
@@ -107,78 +106,12 @@ export interface ReviewDocPaneProps {
   onShortcutCaptureChange?: (capturing: boolean) => void
 }
 
-// ---------------------------------------------------------------------------
-// useCommentBubbles — DOM measurement wrapper around computeBubbleLayout.
-// ---------------------------------------------------------------------------
+// useCommentBubbles(DOM measurement wrapper around computeBubbleLayout)
+// moved to hooks/useCommentBubbles.ts in RFC-241 阶段 2 so the prior-comments
+// sidebar shares it; this pane passes explicit equivalent defaults
+// (markSelector 'mark.comment-anchor' / its own header ref / orphan 'bottom').
 
-function useCommentBubbles(params: {
-  markdownRef: RefObject<HTMLDivElement | null>
-  bubblesRef: RefObject<HTMLDivElement | null>
-  sortedComments: ReviewComment[]
-  enabled: boolean
-  sidebarWidth: number
-  editingId: string | null
-}): { bubbleTops: Map<string, number>; bubblesMinHeight: number } {
-  const { markdownRef, bubblesRef, sortedComments, enabled, sidebarWidth, editingId } = params
-  const [bubbleTops, setBubbleTops] = useState<Map<string, number>>(new Map())
-  const [bubblesMinHeight, setBubblesMinHeight] = useState<number>(0)
-
-  useLayoutEffect(() => {
-    if (markdownRef.current === null || bubblesRef.current === null) return
-    if (!enabled) return
-
-    const measure = (): void => {
-      const root = markdownRef.current
-      const col = bubblesRef.current
-      if (root === null || col === null) return
-      const colTop = col.getBoundingClientRect().top
-      const headerEl = col.querySelector<HTMLElement>('.review-detail__sidebar-header')
-      const headerFloor = headerEl !== null ? headerEl.offsetHeight + BUBBLE_GAP_PX : 0
-      const located: { id: string; top: number; height: number }[] = []
-      const orphans: { id: string; height: number }[] = []
-      for (const c of sortedComments) {
-        const bubble = col.querySelector<HTMLElement>(`.comment-bubble[data-comment-id="${c.id}"]`)
-        const h = bubble?.getBoundingClientRect().height ?? 0
-        const el = root.querySelector<HTMLElement>(`mark.comment-anchor[data-comment-id="${c.id}"]`)
-        if (el === null) {
-          orphans.push({ id: c.id, height: h })
-          continue
-        }
-        const rect = el.getBoundingClientRect()
-        located.push({ id: c.id, top: rect.top - colTop, height: h })
-      }
-      const { tops, minHeight } = computeBubbleLayout({
-        located,
-        orphans,
-        headerFloor,
-        rootHeight: root.getBoundingClientRect().height,
-      })
-      setBubbleTops(tops)
-      setBubblesMinHeight(minHeight)
-    }
-
-    measure()
-
-    const ro = new ResizeObserver(() => measure())
-    ro.observe(markdownRef.current)
-    ro.observe(bubblesRef.current)
-    bubblesRef.current
-      .querySelectorAll<HTMLElement>('.comment-bubble')
-      .forEach((b) => ro.observe(b))
-    const onResize = (): void => measure()
-    window.addEventListener('resize', onResize)
-    const onScroll = (): void => measure()
-    window.addEventListener('scroll', onScroll, true)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', onResize)
-      window.removeEventListener('scroll', onScroll, true)
-    }
-    // editingId in deps so opening/closing inline edit re-measures immediately.
-  }, [markdownRef, bubblesRef, sortedComments, enabled, sidebarWidth, editingId])
-
-  return { bubbleTops, bubblesMinHeight }
-}
+const MARK_SELECTOR = 'mark.comment-anchor'
 
 export function ReviewDocPane(props: ReviewDocPaneProps) {
   const {
@@ -200,6 +133,8 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
 
   const markdownRef = useRef<HTMLDivElement>(null)
   const bubblesRef = useRef<HTMLDivElement>(null)
+  const sidebarHeaderRef = useRef<HTMLElement>(null)
+  const headerEls = useMemo(() => [sidebarHeaderRef], [])
   const suppressScrollSpyUntilRef = useRef<number>(0)
 
   const [popover, setPopover] = useState<{
@@ -291,6 +226,9 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     enabled: !diffActive && !collapsed,
     sidebarWidth,
     editingId,
+    markSelector: MARK_SELECTOR,
+    headerEls,
+    orphanPlacement: 'bottom',
   })
 
   const onMouseUpInDoc = useCallback(async () => {
@@ -395,33 +333,24 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     [editDraft, updateComment],
   )
 
-  // Toggle data-active on the matching mark whenever the active comment changes.
+  // Toggle data-active on the matching marks whenever the active comment
+  // changes. RFC-241 阶段 2: shared multi-node helper — a selection spanning
+  // several text nodes produces several marks, all lit as a group now.
   useEffect(() => {
     if (markdownRef.current === null) return
-    const root = markdownRef.current
-    root.querySelectorAll<HTMLElement>('mark.comment-anchor[data-active]').forEach((m) => {
-      m.removeAttribute('data-active')
-    })
-    if (activeCommentId === null) return
-    const el = root.querySelector<HTMLElement>(
-      `mark.comment-anchor[data-comment-id="${activeCommentId}"]`,
-    )
-    if (el !== null) el.setAttribute('data-active', 'true')
+    setActiveAnchorMarks(markdownRef.current, activeCommentId, MARK_SELECTOR)
   }, [activeCommentId, sortedComments, diffActive])
 
   const scrollToCommentAnchor = useCallback((commentId: string) => {
-    const el = markdownRef.current?.querySelector<HTMLElement>(
-      `mark.comment-anchor[data-comment-id="${commentId}"]`,
-    )
-    if (el === null || el === undefined) return
-    suppressScrollSpyUntilRef.current = Date.now() + 800
-    // RFC-082 fix: a REAL mouse click on the ▲/▼ jump button (mousedown/focus +
-    // React re-render around the handler) cancels an in-flight `behavior:
-    // 'smooth'` scroll partway — the document stops between comments and the
-    // jump "does nothing". (Programmatic .click() has no focus/mousedown, which
-    // is why automated tests never caught it.) An instant scroll has no
-    // animation to cancel, so the jump reliably lands on the comment.
-    el.scrollIntoView({ behavior: 'auto', block: 'center' })
+    if (markdownRef.current === null) return
+    // RFC-082 fix (lives in scrollToAnchorMark): instant scroll — a REAL mouse
+    // click on the ▲/▼ jump button cancels an in-flight smooth scroll partway.
+    // Only suppress the scroll-spy when a mark actually exists to scroll to
+    // (scroll-spy callbacks are async, so ordering after the sync scroll is
+    // equivalent to the pre-extraction before-scroll assignment).
+    if (scrollToAnchorMark(markdownRef.current, commentId, MARK_SELECTOR)) {
+      suppressScrollSpyUntilRef.current = Date.now() + 800
+    }
   }, [])
 
   const onBubbleClick = useCallback(
@@ -571,7 +500,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
               role="separator"
               aria-orientation="vertical"
             />
-            <header className="review-detail__sidebar-header">
+            <header className="review-detail__sidebar-header" ref={sidebarHeaderRef}>
               <span className="review-detail__sidebar-count">
                 {t('reviews.sidebarCountLabel', { count: sortedComments.length })}
               </span>

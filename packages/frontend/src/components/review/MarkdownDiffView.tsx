@@ -19,8 +19,18 @@ import rehypeSlug from 'rehype-slug'
 import remarkGfm from 'remark-gfm'
 import { remarkAlert } from 'remark-github-blockquote-alert'
 import remarkMath from 'remark-math'
+import { rehypeWrapAnchors, type AnchorWrapInput } from '@/components/prose/rehypeWrapAnchors'
 import { buildMergedMarkdown, type DiffGranularity } from '@/lib/review/markdownDiff'
 import { remarkDiffMarkers } from '@/lib/review/remarkDiffMarkers'
+
+// RFC-241 阶段 2 — 上一版意见锚进 merged diff 文档的匹配策略(design v6
+// §语义基础):排除 .diff-ins 子树后的 del/context 文本流相对上一版原文
+// 保序近似;word 档行内公式被 resolveMarkedString 解析成仅新版,katex
+// 输出整树出流(正常形态 .katex,ParseError 形态 .katex-error);次数不足
+// 走 strict 弃锚(未定位回退),不 clamp 错钉;word 档另有配对表重排校验
+// (tableGuard)。mark class 与当前版区分,样式 / 测量选择器按它查询。
+export const PRIOR_ANCHOR_MARK_CLASS = 'prior-comment-anchor'
+const PRIOR_ANCHOR_EXCLUDE_CLASSES = ['diff-ins', 'katex', 'katex-error'] as const
 
 export interface MarkdownDiffViewProps {
   left: string
@@ -29,6 +39,9 @@ export interface MarkdownDiffViewProps {
    *  渲染管线（remark + rehype 链 + 高亮 CSS）共用。 */
   granularity?: DiffGranularity
   className?: string
+  /** RFC-241 阶段 2:上一版检视意见的锚(hast 阶段包 mark;后挂载 DOM
+   *  突变会撞 React reconciliation,禁走 legacy wrapAnchorsInDom)。 */
+  priorAnchors?: ReadonlyArray<AnchorWrapInput>
 }
 
 export function MarkdownDiffView({
@@ -36,6 +49,7 @@ export function MarkdownDiffView({
   right,
   granularity = 'word',
   className,
+  priorAnchors,
 }: MarkdownDiffViewProps): ReactNode {
   const merged = useMemo(() => {
     try {
@@ -45,33 +59,46 @@ export function MarkdownDiffView({
     }
   }, [left, right, granularity])
 
-  const rehypePlugins = useMemo(
-    () =>
+  const rehypePlugins = useMemo(() => {
+    const base: unknown[] = [
+      [rehypeKatex, { strict: false, output: 'html' }],
+      rehypeSlug,
       [
-        [rehypeKatex, { strict: false, output: 'html' }],
-        rehypeSlug,
-        [
-          rehypeAutolinkHeadings,
-          {
-            behavior: 'append',
-            properties: {
-              className: ['prose__anchor'],
-              ariaHidden: 'true',
-              tabIndex: -1,
-            },
-            content: { type: 'text', value: '#' },
+        rehypeAutolinkHeadings,
+        {
+          behavior: 'append',
+          properties: {
+            className: ['prose__anchor'],
+            ariaHidden: 'true',
+            tabIndex: -1,
           },
-        ],
-        [
-          rehypeExternalLinks,
-          {
-            target: '_blank',
-            rel: ['noopener', 'noreferrer'],
-          },
-        ],
-      ] as unknown as React.ComponentProps<typeof ReactMarkdown>['rehypePlugins'],
-    [],
-  )
+          content: { type: 'text', value: '#' },
+        },
+      ],
+      [
+        rehypeExternalLinks,
+        {
+          target: '_blank',
+          rel: ['noopener', 'noreferrer'],
+        },
+      ],
+    ]
+    // 置于链尾:katex / autolink 产出的 className 先落地,排除列表与
+    // 表格校验才能看到最终形态(与 Prose 的 rehypeWrapAnchors 位次同理)。
+    if (priorAnchors !== undefined && priorAnchors.length > 0) {
+      base.push([
+        rehypeWrapAnchors,
+        {
+          anchors: priorAnchors,
+          markClass: PRIOR_ANCHOR_MARK_CLASS,
+          strictOccurrence: true,
+          excludeClasses: PRIOR_ANCHOR_EXCLUDE_CLASSES,
+          tableGuard: granularity === 'word',
+        },
+      ])
+    }
+    return base as unknown as React.ComponentProps<typeof ReactMarkdown>['rehypePlugins']
+  }, [priorAnchors, granularity])
 
   const wrapperClass = 'markdown-diff-view prose' + (className !== undefined ? ' ' + className : '')
 

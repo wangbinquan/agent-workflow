@@ -22,6 +22,8 @@ import { resolve } from 'node:path'
 const PANE_TSX = resolve(__dirname, '..', 'src', 'components', 'review', 'ReviewDocPane.tsx')
 const STYLES_CSS = resolve(__dirname, '..', 'src', 'styles.css')
 const USE_RESIZABLE = resolve(__dirname, '..', 'src', 'hooks', 'useResizable.ts')
+// RFC-241 阶段 2:测量机制抽到共享 hook,机制级锁跟着它走。
+const HOOK_TS = resolve(__dirname, '..', 'src', 'hooks', 'useCommentBubbles.ts')
 
 describe('RFC-009 sidebar enhancements — ReviewDocPane surface', () => {
   test('reviews.detail.tsx wires the useResizable hook + bounds constants', () => {
@@ -109,23 +111,28 @@ describe('RFC-009 sidebar enhancements — ReviewDocPane surface', () => {
   })
 
   test('ReviewDocPane bails out of measure() when collapsed', () => {
-    const src = readFileSync(PANE_TSX, 'utf8')
     // RFC-082: the measure useLayoutEffect lives in the useCommentBubbles hook
     // and early-returns when `!enabled`; `enabled` folds in the collapsed +
     // diff guards so a 0-height (collapsed) column never gets measured.
-    expect(src).toMatch(/if\s*\(!enabled\)\s*return/)
+    // RFC-241 阶段 2: the hook moved verbatim to hooks/useCommentBubbles.ts
+    // (shared with the prior-comments sidebar) — the machinery locks follow
+    // it; the pane keeps the `enabled` wiring lock.
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toMatch(/enabled:\s*!diffActive\s*&&\s*!collapsed/)
+    const hookSrc = readFileSync(HOOK_TS, 'utf8')
+    expect(hookSrc).toMatch(/if\s*\(!enabled\)\s*return/)
     // And measure re-runs when those inputs / editingId toggle (so the
     // expanding textarea pushes lower bubbles down before the per-bubble
-    // ResizeObserver kicks in).
-    expect(src).toMatch(
-      /\[markdownRef,\s*bubblesRef,\s*sortedComments,\s*enabled,\s*sidebarWidth,\s*editingId\]/,
+    // ResizeObserver kicks in). 阶段 2 extends the deps with the
+    // parameterization (markSelector / headerEls / orphanPlacement).
+    expect(hookSrc).toMatch(
+      /\[\s*markdownRef,\s*bubblesRef,\s*sortedComments,\s*enabled,\s*sidebarWidth,\s*editingId,\s*markSelector,\s*headerEls,\s*orphanPlacement,\s*remeasureKey,?\s*\]/,
     )
     // Per-bubble ResizeObserver — bubble grows when its inline editor opens,
     // and the column's own minHeight masks the change from a column-level
     // observer.
-    expect(src).toMatch(/querySelectorAll[^)]*'\.comment-bubble'[^)]*\)/)
-    expect(src).toMatch(/\.forEach\(\(b\)\s*=>\s*ro\.observe\(b\)/)
+    expect(hookSrc).toMatch(/querySelectorAll[^)]*'\.comment-bubble'[^)]*\)/)
+    expect(hookSrc).toMatch(/\.forEach\(\(b\)\s*=>\s*ro\.observe\(b\)/)
   })
 
   test('reviews.detail.tsx offsets the bubble cursor by the sticky header', () => {
@@ -135,16 +142,20 @@ describe('RFC-009 sidebar enhancements — ReviewDocPane surface', () => {
     // header element's offsetHeight once per measure pass and uses that
     // value as the cursor floor. If a future refactor reverts this, the
     // first comment overlaps the count badge again.
+    // RFC-241 阶段 2: the floor is now an explicit headerEls ref list (no
+    // hard-coded selector in the hook) — the pane attaches the ref to its
+    // sticky header and the hook sums offsetHeight into the floor.
     const src = readFileSync(PANE_TSX, 'utf8')
-    // Grabs the header element and reads offsetHeight.
-    expect(src).toMatch(/querySelector[^)]*review-detail__sidebar-header/)
-    expect(src).toMatch(/headerEl[^.]*\.offsetHeight/)
+    expect(src).toMatch(/className="review-detail__sidebar-header"\s+ref=\{sidebarHeaderRef\}/)
+    expect(src).toMatch(/headerEls/)
+    const hookSrc = readFileSync(HOOK_TS, 'utf8')
+    expect(hookSrc).toMatch(/\.offsetHeight/)
     // RFC-082: the floor is handed to computeBubbleLayout (whose
     // review-bubble-layout.test.ts locks `cursor = headerFloor` as the start),
     // so the first bubble can never sit under the sticky header.
-    expect(src).toMatch(/computeBubbleLayout\(\{[\s\S]*?headerFloor/)
+    expect(hookSrc).toMatch(/computeBubbleLayout\(\{[\s\S]*?headerFloor/)
     // And the floor itself includes the BUBBLE_GAP_PX clearance.
-    expect(src).toMatch(/headerFloor[\s\S]{0,80}BUBBLE_GAP_PX/)
+    expect(hookSrc).toMatch(/headerFloor[\s\S]{0,80}BUBBLE_GAP_PX/)
   })
 })
 

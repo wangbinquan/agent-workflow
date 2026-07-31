@@ -9,10 +9,15 @@
   ∧ 非 historical)+ i18n(zh/en)。
 - **RFC-241-T2 测试**:design §测试策略 6 项渲染级用例(含 historical 互斥与 within 作用域只读断言)。
 - **RFC-241-T3 文档**:索引 / STATE 登记与收口。
-- **RFC-241-T4 阶段 2 锚定**(增补):wrapAnchorsInDom excludeSelector
-  扩展 + useCommentBubbles 抽共享 hook + diff 主列 ref/effect + 气泡
-  对位与点击滚动高亮 + 未定位分节 + cursor/hover 规则更新。依赖:T1。
-- **RFC-241-T5 阶段 2 测试**:design §测试增补 7-11。依赖:T4。
+- **RFC-241-T4 阶段 2 锚定**(增补;按 design v7 实现):
+  rehypeWrapAnchors opts 参数化(hast 阶段,非 legacy DOM 突变)+
+  MarkdownDiffView/DiffView priorAnchors + useCommentBubbles 抽共享 hook
+  (markSelector/headerEls/orphanPlacement)+ anchorMarks 帮助函数 +
+  侧栏锚定化(未定位分节 + 点击滚动整组高亮)+ cursor/hover 与 mark
+  样式。依赖:T1。——已完成。
+- **RFC-241-T5 阶段 2 测试**:design §测试 7-12(锚定/strict/表格闸/
+  katex/未定位/orphanPlacement 纯函数/del 视图不变量 + fence 破例锁)。
+  依赖:T4。——已完成。
 
 ## 验收清单
 

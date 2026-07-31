@@ -10,6 +10,7 @@
 // 公开接口（DiffViewProps、DiffGranularity）保持不变，调用方 reviews.detail
 // 零改动。
 
+import type { AnchorWrapInput } from '@/components/prose/rehypeWrapAnchors'
 import { MarkdownDiffView } from './MarkdownDiffView'
 
 export type DiffGranularity = 'word' | 'line' | 'block'
@@ -21,9 +22,18 @@ export interface DiffViewProps {
   /** 仅用于在外层标题栏展示版本号 / decision，不影响 diff 渲染。 */
   leftLabel?: string
   rightLabel?: string
+  /** RFC-241 阶段 2:上一版检视意见锚(透传 MarkdownDiffView)。 */
+  priorAnchors?: ReadonlyArray<AnchorWrapInput>
 }
 
-export function DiffView({ left, right, granularity, leftLabel, rightLabel }: DiffViewProps) {
+export function DiffView({
+  left,
+  right,
+  granularity,
+  leftLabel,
+  rightLabel,
+  priorAnchors,
+}: DiffViewProps) {
   return (
     <div className="diff-view diff-view--inline" data-granularity={granularity}>
       {(leftLabel !== undefined || rightLabel !== undefined) && (
@@ -32,7 +42,12 @@ export function DiffView({ left, right, granularity, leftLabel, rightLabel }: Di
           {rightLabel !== undefined && <span className="diff-view__label muted">{rightLabel}</span>}
         </div>
       )}
-      <MarkdownDiffView left={left} right={right} granularity={granularity} />
+      <MarkdownDiffView
+        left={left}
+        right={right}
+        granularity={granularity}
+        priorAnchors={priorAnchors}
+      />
     </div>
   )
 }

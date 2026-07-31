@@ -1,4 +1,4 @@
-# RFC-241 — 技术设计（v6,阶段 2 聚焦复核修订后;门收口)
+# RFC-241 — 技术设计（v7,实现期机制修订:锚定迁至 hast 阶段)
 
 ## 数据流(零后端改动,已实证)
 
@@ -115,7 +115,52 @@ auxiliaryBodySlot 的 diff 分支内(historical 早退先行)并显式写明条�
   v3。评审结论:无需三轮全量,可进实现,实现门统一验证。
 
 
-## 阶段 2:上一版意见锚定(v5,设计门一轮 4 P1 + 2 P2 修订后)
+## 阶段 2:上一版意见锚定(v7;v5 设计门修订 + v6 聚焦复核收口 + 实现期 hast 迁移)
+
+### 实现期机制修订(v7,代码现实强约束)
+
+v5/v6 的机制层写在 `wrapAnchorsInDom`(后挂载 DOM 突变)上;实现时发现
+该函数是 **legacy 遗留物**——当前版锚定早已在 RFC-051 迁至
+`rehypeWrapAnchors`(hast 插件),其文件头明确记载迁移原因:后挂载突变
+在 **body 变化时崩掉 React reconciliation**。diff 视图恰恰频繁重建 body
+(granularity / 版本切换),照 v6 原文实现会复活已知崩溃类。因此**全部
+锚定语义保持不变,机制承载体从 DOM 层迁到 hast 层**:
+
+- `rehypeWrapAnchors` 增加 opts
+  `{ markClass?, strictOccurrence?, excludeClasses?, tableGuard? }`,全部
+  缺省时与旧行为逐字节一致(当前版 Prose 调用零改动;既有
+  prose-anchors 测试锁定)。excludeClasses 按 className token 剪整棵子树
+  出流;tableGuard 在 hast 上按破例 1 的 (a)/(b) 条件判表并整锚放弃。
+- `MarkdownDiffView` 新增 `priorAnchors` prop,在自己的 rehype 链尾
+  (katex / autolink 的 className 落地之后)推入参数化插件;策略常量
+  (mark class `prior-comment-anchor`、排除列表、word 档 tableGuard)
+  集中在该文件。DiffView 透传。
+- **unwrap / 幂等问题整体消失**(纯渲染,无后挂载突变);「未定位」分
+  类改为**只读 DOM 查询**(mark 是否存在),无渲染期副信道。
+- v5 机制 1 的「wrapAnchorsInDom 参数化 + unwrapAnchors 同步参数化」作
+  废;legacy 文件与其测试原样保留(anchor.ts 选区计算仍引用其类型)。
+- 帮助函数落 `lib/review/anchorMarks.ts`:`setActiveAnchorMarks`(整组
+  data-active,React 不管此属性,既有 pane 同款模式)与
+  `scrollToAnchorMark`(instant 滚动,RFC-082 fix 随迁)。
+
+**成立面修正(v7)**:v5「fence/inline code(SKIP_TAGS 兜住)」一句作废
+——hast 路径无 SKIP_TAGS,且**不应**排除 pre/code:锚创建侧的
+`occurrenceIndex` 按 **sourceBody**(源码全文,含 code 文本)计数
+(`anchor.ts` findAllOccurrences),排除 pre/code 会让「selectedText 同
+时出现在行内 code 与正文」这一常见场景计数左移、错钉后一次出现。未变
+更 code 保序入流,与创建侧计数域对齐。代价是新增破例 4(见下)。
+
+**破例 4(v7 新增):变更 fenced code block。** RFC-010 的既有取舍是块
+级原子还原不携带 marker(marker 落 fence 头部破坏解析、落内部只是 code
+文本里的 PUA 字符),变更 fence 在 merged 里是"旧块 + 新块"两段无
+marker 的普通代码块——**新 fence 内容以 context 形态进入文本流**。残余
+风险面:「锚点位于变更 fence 之后 + selectedText 恰好出现在新 fence 内
+容中」→ 计数右移(strict 兜不住次数增加)。处置:**接受为残余**并以
+`markdown-diff-del-view-invariant.test.ts` 的破例锁定用例钉住形态——
+若未来 markdownDiff 给 fence 携带 marker,该锁变红,届时回头收紧锚定侧。
+锚在旧 fence 文本上的意见仍可命中(旧内容保序在流中)。
+
+### 阶段 2 原设计(v5 语义 + v6 聚焦复核修订;机制段以 v7 修订为准)
 
 ### 语义基础(v5 改写:保序近似 + 破例清单,非「逐字等于」)
 
@@ -154,12 +199,17 @@ del 视图 = 旧行逐字;repairMergedTableRuns 重建保序)、fence/inline cod
    strict + 表格校验双闸后,残余错位风险限于「同 selectedText 在
    非表格区域因删除减少出现次」一类,strict 直接回退,不错钉。
 
-**不变量守卫测试**(聚焦复核修订——逐字节等式因 ins 行的 context
-前缀/空行、removed 原子 pad、拆行修复插行而恒不成立):属性测试改
-**归一化比较**——对无表格/无 math 的文档对,
-`tokenizeForWordDiff(extractMarkedView(buildMergedMarkdown(L, R, g), 'del'))`
-过滤空白 token 后的序列 === `tokenizeForWordDiff(L)` 同滤序列
-(word/line 两档);破例清单各配一条回退用例。
+**不变量守卫测试**(聚焦复核修订,v7 定稿归一化规范——逐字节等式因
+ins 行的 context 前缀/空行、removed 原子 pad、拆行修复插行而恒不成立):
+属性测试改**归一化比较**,规则写死在
+`markdown-diff-del-view-invariant.test.ts`:del 视图与 L 两侧同规则——
+先按行丢弃「结构框架行」(仅由空白与结构前缀字符——`>` `#` `*` `+`
+反引号 `-` 数字 `.` `=`——组成:空行、
+ins 行剥掉内容后的 `- `/`### `/fence 框架残留、setext 下划线、pad 空
+行),再 `tokenizeForWordDiff` 切词并丢纯空白 token,序列逐项相等
+(word/line 两档,无表格/无 math 夹具)。该规则保住防污染方向:ins 内
+容若漏进 del 视图,所在行含非结构字符,必不等。破例清单各配回退用例;
+变更 fence 单列破例锁定(见破例 4)。
 
 ### 机制(v5:参数化契约,撤回「签名不变」措辞——设计门一轮 P1)
 
@@ -216,6 +266,15 @@ del 视图 = 旧行逐字;repairMergedTableRuns 重建保序)、fence/inline cod
 
 ### 设计门记录(阶段 2)
 
+- 实现期修订(2026-07-31,v7):发现 v5/v6 机制承载体 `wrapAnchorsInDom`
+  是 RFC-051 已废弃的后挂载 DOM 突变(其替换动机——body 变化崩
+  reconciliation——对 diff 视图同样成立),锚定迁至 hast 阶段
+  (`rehypeWrapAnchors` opts 参数化),语义决策(strict / 排除 / 表格
+  校验 / 未定位 / orphanPlacement)全部保留;成立面「SKIP_TAGS 兜住」
+  作废(创建侧计数域含 code 文本,排除 pre/code 反错钉),新增破例 4
+  (变更 fence 无 marker,新内容以 context 入流,接受为残余 + 破例锁
+  定);测 12 归一化规范定稿(框架行丢弃 + 空白 token 过滤)。由实现
+  门统一复核。
 - 聚焦复核(2026-07-31,同代理,`NEEDS_REVISION`→折入本 v6 后收口;
   P1 2/3/4 全闭、P1-1 主体闭合):纯删减词级配对表残缝(无 ins、重排照
   发)→ 表校验条件扩为「含 ins,或含 del 且 context 共存」且分档生效

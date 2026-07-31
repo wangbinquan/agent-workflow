@@ -582,6 +582,8 @@ export interface Resources {
     priorCommentsCount_one: string
     priorCommentsCount_other: string
     priorCommentsEmpty: string
+    priorCommentsUnanchored_one: string
+    priorCommentsUnanchored_other: string
     sidebarCountLabel: string
     sidebarCollapse: string
     sidebarExpand: string
@@ -4657,6 +4659,8 @@ export const zhCN: Resources = {
     priorCommentsCount_one: '{{count}} 条',
     priorCommentsCount_other: '{{count}} 条',
     priorCommentsEmpty: '上一版没有检视意见',
+    priorCommentsUnanchored_one: '未能定位到原文 · {{count}} 条',
+    priorCommentsUnanchored_other: '未能定位到原文 · {{count}} 条',
     sidebarEmpty: '暂无评审意见。在正文里拖选一段文本即可添加。',
     sidebarCountLabel: '评审意见 · {{count}}',
     sidebarCollapse: '折叠侧栏',
