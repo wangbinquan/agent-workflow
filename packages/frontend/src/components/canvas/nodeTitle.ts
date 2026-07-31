@@ -19,7 +19,8 @@ import i18n from '@/i18n'
  *   3. input → inputKey (or the localized "(unset key)");
  *   4. review → `review:<port>` when inputSource.portName is wired;
  *   5. call-workflow → workflowName (or the localized kind label, RFC-242);
- *   6. otherwise '' — callers decide the id fallback.
+ *   6. call-workgroup → workgroupName (same rule, RFC-242 PR-4);
+ *   7. otherwise '' — callers decide the id fallback.
  */
 export function nodeDisplayTitle(n: WorkflowNode): string {
   const rec = n as unknown as Record<string, unknown>
@@ -38,6 +39,13 @@ export function nodeDisplayTitle(n: WorkflowNode): string {
     return typeof rec.workflowName === 'string' && rec.workflowName.length > 0
       ? rec.workflowName
       : i18n.t('callWorkflowNode.label')
+  }
+  if (n.kind === 'call-workgroup') {
+    // RFC-242 PR-4 — workgroup twin of the rule above: workgroupName is the
+    // identity, kind label the unset fallback.
+    return typeof rec.workgroupName === 'string' && rec.workgroupName.length > 0
+      ? rec.workgroupName
+      : i18n.t('callWorkgroupNode.label')
   }
   if (n.kind === 'input') {
     return typeof rec.inputKey === 'string' ? rec.inputKey : i18n.t('editor.nodeTitleUnsetKey')

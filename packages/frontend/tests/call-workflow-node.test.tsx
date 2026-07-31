@@ -121,7 +121,9 @@ describe('palette carries the call-workflow entry (Calls section)', () => {
     const sections = buildPalette([], identityT)
     const calls = sections.find((s) => s.key === 'calls')
     expect(calls).toBeDefined()
-    expect(calls?.items.map((i) => i.item.kind)).toEqual(['call-workflow'])
+    // RFC-242 PR-4 — the Calls section now carries the workgroup twin too
+    // (NODE_KIND declaration order fixes within-section order).
+    expect(calls?.items.map((i) => i.item.kind)).toEqual(['call-workflow', 'call-workgroup'])
     expect(calls?.items[0]?.label).toBe('⧉ editor.paletteCallWorkflowLabel')
     expect(calls?.items[0]?.description).toBe('editor.paletteCallWorkflowDesc')
   })

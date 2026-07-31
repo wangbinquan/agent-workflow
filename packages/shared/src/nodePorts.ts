@@ -263,6 +263,13 @@ const PORT_DERIVERS = {
     }
     return { ...NO_PORTS, dataInputs, dataOutputs }
   },
+  // RFC-242 §5.2 — call-workgroup: inputs are edge-derived prompt vars for the
+  // goalTemplate (agent-single precedent, never declared); the single output
+  // is the workgroup task's minimal `result` projection (§6.4).
+  'call-workgroup': (): DeclaredPorts => ({
+    ...NO_PORTS,
+    dataOutputs: [{ name: 'result', kind: 'text' }],
+  }),
 } as const satisfies Record<NodeKind, (ctx: DeriverCtx) => DeclaredPorts>
 
 /**

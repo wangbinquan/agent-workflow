@@ -74,6 +74,7 @@ export const WORKFLOW_NODE_REFERENCE_INVENTORY = {
   // rewrite / deletion pruning machinery has nothing to manage, and the
   // scalar walk never mistakes them for node ids.
   'call-workflow': NO_NODE_REFERENCES,
+  'call-workgroup': NO_NODE_REFERENCES,
 } as const satisfies Record<NodeKind, WorkflowNodeReferenceDescriptor>
 
 export type WorkflowNodeReferenceWarningCode =

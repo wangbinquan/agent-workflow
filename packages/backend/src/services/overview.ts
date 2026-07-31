@@ -15,7 +15,7 @@
 // routes/tasks.ts scope decision): read:all → unscoped; read:own →
 // owner∨collaborator; neither → null.
 
-import { and, count, eq, gte, inArray, type SQL } from 'drizzle-orm'
+import { isNull, and, count, eq, gte, inArray, type SQL } from 'drizzle-orm'
 import type { OverviewResponse, OverviewTasks, Permission } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -56,7 +56,10 @@ async function buildTaskStats(
     ? undefined
     : taskVisibilityCondition(db, { actorUserId: actor.user.id, scope: 'mine' })
   const countWhere = async (cond: SQL<unknown>): Promise<number> => {
-    const where = vis === undefined ? cond : and(vis, cond)!
+    // RFC-242 §8 — child executions stay out of the homepage cards (the parent
+    // task represents its tree), matching the task list's top-level default.
+    const topLevel = and(cond, isNull(tasks.parentTaskId))!
+    const where = vis === undefined ? topLevel : and(vis, topLevel)!
     const r = await db.select({ n: count() }).from(tasks).where(where)
     return r[0]?.n ?? 0
   }

@@ -100,6 +100,10 @@ describe('RFC-233 containment architecture source guard', () => {
         /\{ containmentCoordinator: (?:opts|state\.opts)\.containmentCoordinator \}/g,
       ) ?? []
     expect(runNodeCalls).toHaveLength(6)
-    expect(coordinatorInjections).toHaveLength(runNodeCalls.length)
+    // RFC-242: the call node's child-deps assembly (buildChildDeps) threads
+    // the SAME daemon authority into the child task's runTask — a 7th
+    // injection site without a runNode call of its own (the child's nodes
+    // spawn through their own runTask → runNode chain).
+    expect(coordinatorInjections).toHaveLength(runNodeCalls.length + 1)
   })
 })

@@ -115,6 +115,7 @@ export function livenessSourceOfKind(kind: NodeKind): 'process' | 'delegated' {
     case 'wrapper-loop':
     case 'wrapper-fanout':
     case 'call-workflow':
+    case 'call-workgroup':
       return 'delegated'
     default: {
       const exhaustive: never = kind

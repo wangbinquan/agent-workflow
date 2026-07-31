@@ -32,9 +32,10 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // dispatchFanoutAggregator); RFC-060 PR-E removed agent-multi's
     // runFanOutNode call site. RFC-164 added buildWorkgroupHooks.runHostNode.
     // Currently: agent-single + dispatchFanoutShard + dispatchFanoutAggregator
-    // + workgroup runHostNode = 4. Future call sites should keep this lock in
-    // step.
-    expect(matches.length).toBe(4)
+    // + workgroup runHostNode = 4; RFC-242 buildChildDeps threads the SAME
+    // capture config into a call node's CHILD task (its runners inherit the
+    // operator cadence) = 5. Future call sites should keep this lock in step.
+    expect(matches.length).toBe(5)
   })
 
   test('StartTaskDeps declares the field and runTask receives it from every kick-off path', () => {

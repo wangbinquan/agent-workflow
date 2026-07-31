@@ -3064,6 +3064,9 @@ export const enUS: Resources = {
     paletteCallWorkflowLabel: 'call workflow',
     paletteCallWorkflowDesc:
       'Run another workflow as an independent child task; ports mirror the referenced workflow’s inputs/outputs.',
+    paletteCallWorkgroupLabel: 'call workgroup',
+    paletteCallWorkgroupDesc:
+      'Hand this stage to a workgroup as an independent child task; inputs derive from inbound edges, output is the fixed result port.',
     menuPaste: 'Paste',
     menuSelectAll: 'Select all',
     menuDuplicate: 'Duplicate',
@@ -3497,6 +3500,15 @@ export const enUS: Resources = {
     fieldCallMaxDurationMsHint: 'Optional; falls back to the global limit when empty.',
     fieldCallMaxTotalTokens: 'Child task total-token limit',
     fieldCallMaxTotalTokensHint: 'Optional; falls back to the global limit when empty.',
+    fieldCallWorkgroup: 'Called workgroup',
+    fieldCallWorkgroupHint:
+      'Runs the selected workgroup as an independent child task; its goal is rendered from the template below.',
+    pickCallWorkgroup: '— pick a workgroup —',
+    fieldCallGoalTemplate: 'Goal template',
+    fieldCallGoalTemplateHint:
+      'Rendered into the workgroup child task’s goal. Use {{port_name}} + builtins like {{__repo_path__}}.',
+    callWorkgroupResultInfo:
+      'Output port is fixed to result (text): the workgroup child task’s final result.',
   },
   promptPreview: {
     mockTitle: 'Mock port values',
@@ -4157,6 +4169,10 @@ export const enUS: Resources = {
     label: 'call workflow',
     unsetWorkflow: '(no workflow selected)',
   },
+  callWorkgroupNode: {
+    label: 'call workgroup',
+    unsetWorkgroup: '(no workgroup selected)',
+  },
   errorDomains: {
     taskQuestion: 'Question board action failed',
     task: 'Task action failed',
@@ -4300,6 +4316,9 @@ export const enUS: Resources = {
       'call-workflow-input-unwired':
         'A called-workflow input port has no inbound edge with the same name.',
       'call-workflow-in-fanout-unsupported': 'Call nodes cannot sit inside a fan-out wrapper.',
+      // RFC-242 PR-4 — call-workgroup nodes.
+      'call-workgroup-ref-missing': 'The call node references a missing or unselected workgroup.',
+      'call-workgroup-in-fanout-unsupported': 'Call nodes cannot sit inside a fan-out wrapper.',
     },
     family: {
       'wrapper-loop': 'Loop wrapper misconfigured.',

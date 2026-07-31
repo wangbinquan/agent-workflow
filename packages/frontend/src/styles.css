@@ -7450,6 +7450,19 @@ details.form-section[open] > summary {
   font-weight: 600;
 }
 
+/* RFC-242 PR-4 call-workgroup node — the workgroup twin of call-workflow.
+ * Fuchsia keeps it inside the same "Calls" color family as the violet
+ * call-workflow while staying glanceably distinct; same background-tint
+ * approach so `.canvas-node[data-status=…]` still owns the status border. */
+.canvas-node--call-workgroup {
+  background: color-mix(in srgb, #c026d3 8%, var(--panel));
+  border-color: color-mix(in srgb, #c026d3 45%, var(--border));
+}
+.canvas-node--call-workgroup .canvas-node__kind {
+  color: #a21caf;
+  font-weight: 600;
+}
+
 /* Clarify (反问) node — mirrors the review palette so the two human-in-the-loop
  * kinds read as the same family on the canvas. Status-specific borders are
  * still allowed via `.canvas-node[data-status=…]`. */

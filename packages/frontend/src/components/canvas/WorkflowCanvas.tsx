@@ -60,6 +60,7 @@ import {
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
 import { CallWorkflowNode } from './nodes/CallWorkflowNode'
+import { CallWorkgroupNode } from './nodes/CallWorkgroupNode'
 import { useWorkflowRefResolver } from './useWorkflowRefResolver'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
 import { classifyClarifyConnection } from './clarifyDragHelper'
@@ -155,6 +156,8 @@ const NODE_TYPES = {
   'clarify-cross-agent': CrossClarifyNode,
   // RFC-242 — call-workflow invokes another workflow as a child task.
   'call-workflow': CallWorkflowNode,
+  // RFC-242 PR-4 — call-workgroup hands the stage to a workgroup child task.
+  'call-workgroup': CallWorkgroupNode,
 } satisfies Record<NodeKind, ComponentType<never>>
 
 const EDGE_TYPES = { 'workflow-insertable': WorkflowCanvasEdge }
@@ -2929,6 +2932,14 @@ function toFlowNodes(
       const ref = (n as unknown as { workflowName?: unknown }).workflowName
       if (typeof ref === 'string' && ref.length > 0) {
         ;(data as CanvasNodeData & { workflowName?: string }).workflowName = ref
+      }
+    }
+    if (n.kind === 'call-workgroup') {
+      // RFC-242 PR-4: same reference chrome for the workgroup twin — surface
+      // the referenced workgroup name onto node data for CallWorkgroupNode.
+      const ref = (n as unknown as { workgroupName?: unknown }).workgroupName
+      if (typeof ref === 'string' && ref.length > 0) {
+        ;(data as CanvasNodeData & { workgroupName?: string }).workgroupName = ref
       }
     }
     // RFC-060 PR-E: agent-multi sourcePort mirroring removed.

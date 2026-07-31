@@ -27,6 +27,7 @@ import { PromptPreview } from './PromptPreview'
 import { useWorkflowRefResolver } from './useWorkflowRefResolver'
 import { AgentSingleEdit } from './inspector/AgentSingleEdit'
 import { CallWorkflowEdit } from './inspector/CallWorkflowEdit'
+import { CallWorkgroupEdit } from './inspector/CallWorkgroupEdit'
 import { ClarifyEdit } from './inspector/ClarifyEdit'
 import { CrossClarifyEdit } from './inspector/CrossClarifyEdit'
 import { InputEdit } from './inspector/InputEdit'
@@ -90,6 +91,8 @@ const KIND_INSPECTORS = {
   'clarify-cross-agent': CrossClarifyEdit,
   // RFC-242 — call-workflow: child-workflow selector + port preview + limits.
   'call-workflow': CallWorkflowEdit,
+  // RFC-242 PR-4 — call-workgroup: workgroup selector + goalTemplate + limits.
+  'call-workgroup': CallWorkgroupEdit,
 } as const satisfies Record<NodeKind, FC<EditProps>>
 
 export function NodeInspector({

@@ -46,7 +46,7 @@ export interface WorkgroupCallRef {
 export function collectWorkgroupCallRefs(defn: WorkflowDefinition): WorkgroupCallRef[] {
   const out: WorkgroupCallRef[] = []
   for (const node of defn.nodes) {
-    if ((node.kind as string) !== 'call-workgroup') continue
+    if (node.kind !== 'call-workgroup') continue
     const workgroupName = readStr(node, 'workgroupName')
     if (workgroupName === undefined) continue
     const workgroupId = readStr(node, 'workgroupId')

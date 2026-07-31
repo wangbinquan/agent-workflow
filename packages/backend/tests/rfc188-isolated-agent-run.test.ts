@@ -285,14 +285,16 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     expect(count('snapshotNodeIsoFinal(')).toBe(1)
   })
 
-  test('五个 agent 站点与 wrapper 创建走共享锁：createIsoUnderLock×6 + mergeBackAndSettle×5 + markMergeFailed×3', () => {
-    // 6 = workgroup hook / 主线首建 / 主线 fresh-session 重建 / shard /
-    // aggregator / wrapper-private canonical。
-    expect(count('createIsoUnderLock(')).toBe(6)
-    // 5 = hook / 主线 §段③ / shard / aggregator / replayPendingMerges。
-    expect(count('mergeBackAndSettle(')).toBe(5)
-    // 3 = 主线 / shard / aggregator（hook 有意不打——留 pending-merge 走重放，
-    // isolatedAgentRun.ts 模块头文档裁定；wrapper 不在此列）。
-    expect(count('markMergeFailed(')).toBe(3)
+  test('六个 agent 站点与 wrapper 创建走共享锁：createIsoUnderLock×7 + mergeBackAndSettle×6 + markMergeFailed×5', () => {
+    // 7 = workgroup hook / 主线首建 / 主线 fresh-session 重建 / shard /
+    // aggregator / wrapper-private canonical / RFC-242 call 节点派生（D 步，
+    // 子任务 canonical 的诞生点——与 agent 站点同一把 writeSem 短窗纪律）。
+    expect(count('createIsoUnderLock(')).toBe(7)
+    // 6 = hook / 主线 §段③ / shard / aggregator / replayPendingMerges /
+    // RFC-242 call 节点 M 步（live 与 adoption-rebuild 共用同一调用点）。
+    expect(count('mergeBackAndSettle(')).toBe(6)
+    // 5 = 主线 / shard / aggregator + RFC-242 call 的 adoption base 缺失与
+    // merge 异常两处（hook 有意不打——留 pending-merge 走重放；wrapper 不在此列）。
+    expect(count('markMergeFailed(')).toBe(5)
   })
 })

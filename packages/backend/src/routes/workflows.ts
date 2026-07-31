@@ -34,6 +34,7 @@ import {
   diffNewNames,
   extractWorkflowAgentRefs,
   extractWorkflowWorkflowRefs,
+  extractWorkflowWorkgroupRefs,
 } from '@/services/resourceRefs'
 import {
   copyWorkflow,
@@ -211,9 +212,14 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       new Set(extractWorkflowWorkflowRefs(workflow.definition)),
       new Set(extractWorkflowWorkflowRefs(parsed.data.definition)),
     )
+    const addedWorkgroupNames = diffNewNames(
+      new Set(extractWorkflowWorkgroupRefs(workflow.definition)),
+      new Set(extractWorkflowWorkgroupRefs(parsed.data.definition)),
+    )
     await assertNewRefsUsable(deps.db, actor, [
       { type: 'agent', names: addedAgentNames },
       { type: 'workflow', names: addedWorkflowNames, domain: 'name' },
+      { type: 'workgroup', names: addedWorkgroupNames, domain: 'name' },
     ])
 
     const context = await loadWorkflowValidationContext(deps.db)

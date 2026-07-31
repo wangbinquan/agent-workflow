@@ -29,8 +29,8 @@ const STUB_AGENT: Agent = {
   updatedAt: 0,
 }
 
-// RFC-242 added ⧉ (call-workflow, Calls section).
-const KIND_ICON_GLYPHS = ['⚙', '⎈', '⟳', '⫶', '↳', '⤴', '⚖', '⚡', '⧉']
+// RFC-242 added ⧉ (call-workflow, Calls section); PR-4 added ⬡ (call-workgroup).
+const KIND_ICON_GLYPHS = ['⚙', '⎈', '⟳', '⫶', '↳', '⤴', '⚖', '⚡', '⧉', '⬡']
 const LEADING_ICON_RE = new RegExp(`^(?:${KIND_ICON_GLYPHS.map((g) => g).join('|')}) `)
 
 describe('palette rows lead with a kind-icon glyph (both locales)', () => {

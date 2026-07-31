@@ -15,7 +15,7 @@
 // name the editor typed (no id / description / owner — D1).
 
 import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
-import { collectWorkflowCallRefs } from '@agent-workflow/shared'
+import { collectWorkflowCallRefs, collectWorkgroupCallRefs } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -63,6 +63,11 @@ export function diffNewNames(prev: ReadonlySet<string>, next: ReadonlySet<string
  */
 export function extractWorkflowWorkflowRefs(defn: WorkflowDefinition): string[] {
   return [...new Set(collectWorkflowCallRefs(defn).map((ref) => ref.workflowName))]
+}
+
+/** RFC-242 PR-4 — call-workgroup selectors (same name-domain semantics). */
+export function extractWorkflowWorkgroupRefs(defn: WorkflowDefinition): string[] {
+  return [...new Set(collectWorkgroupCallRefs(defn).map((ref) => ref.workgroupName))]
 }
 
 /**

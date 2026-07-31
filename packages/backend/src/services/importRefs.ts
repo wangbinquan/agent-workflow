@@ -42,7 +42,13 @@ interface ImportRefRow {
  * and an explicit stale selection still fails closed — only the "nothing to
  * bind" case degrades to dangling.
  */
-const DANGLE_TOLERANT_IMPORT_REF_TYPES: ReadonlySet<ImportRefType> = new Set(['workflow'])
+const DANGLE_TOLERANT_IMPORT_REF_TYPES: ReadonlySet<ImportRefType> = new Set([
+  'workflow',
+  // RFC-242 PR-4 — call-workgroup selectors share the dangling-until-launch
+  // contract (the workgroup resource never rides the YAML; launch fails
+  // closed on an unresolved name).
+  'workgroup',
+])
 
 interface ImportRefCandidateSnapshot {
   candidate: ImportRefCandidate

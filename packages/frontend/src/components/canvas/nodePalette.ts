@@ -36,6 +36,9 @@ export type PaletteItem =
   // because each palette row IS one agent; the Calls section has one generic
   // row, so the fresh node starts with an empty workflowName).
   | { kind: 'call-workflow' }
+  // RFC-242 PR-4 — call-workgroup mirrors call-workflow: one generic Calls
+  // row, the referenced workgroup is picked in the Inspector after the drop.
+  | { kind: 'call-workgroup' }
 
 /** mime carried in HTML5 dataTransfer. Custom to avoid colliding with files. */
 export const PALETTE_MIME = 'application/x-agent-workflow-node'
@@ -180,6 +183,17 @@ export const PALETTE_DESCRIPTORS = {
     // validator's call-ref rules block launch until it is filled.
     makeDefaults: () => ({ workflowName: '' }),
   },
+  'call-workgroup': {
+    section: 'calls',
+    glyph: '⬡',
+    labelKey: 'editor.paletteCallWorkgroupLabel',
+    descKey: 'editor.paletteCallWorkgroupDesc',
+    idPrefix: 'call_wg',
+    // RFC-242 PR-4 — reference + goal are filled in the Inspector; empty
+    // strings are the visible "unset" state and the validator's
+    // call-workgroup rules block launch until both are set.
+    makeDefaults: () => ({ workgroupName: '', goalTemplate: '' }),
+  },
 } as const satisfies Record<NodeKind, PaletteDescriptor>
 
 /** Canvas chip / palette leading icon per kind — one projection of the
@@ -299,7 +313,7 @@ export const PALETTE_SECTIONS = [
   // wrapper-fanout, then drag the agent-single nodes you want into it.
   { key: 'wrappers', labelKey: 'editor.paletteWrappers' },
   // RFC-242 — Calls: nodes that invoke another platform resource as an
-  // independent child task (call-workflow now; call-workgroup in PR-4).
+  // independent child task (call-workflow + call-workgroup).
   { key: 'calls', labelKey: 'editor.paletteCalls' },
   { key: 'io', labelKey: 'editor.paletteIo' },
   { key: 'human', labelKey: 'editor.paletteHuman' },

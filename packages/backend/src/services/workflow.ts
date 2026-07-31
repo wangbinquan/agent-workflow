@@ -49,6 +49,7 @@ import {
   diffNewNames,
   extractWorkflowAgentRefs,
   extractWorkflowWorkflowRefs,
+  extractWorkflowWorkgroupRefs,
   resolveRefsUsableById,
   resolveRefsUsableByName,
 } from './resourceRefs'
@@ -153,6 +154,7 @@ export async function createWorkflow(
   // the same D15 semantics as agent refs (existence tolerated until launch,
   // visibility enforced on save) in the dangle-tolerant name domain.
   const newWorkflowNames = extractWorkflowWorkflowRefs(normalized)
+  const newWorkgroupNames = extractWorkflowWorkgroupRefs(normalized)
   const actor = opts?.actor ?? null
   const resolvedNewAgents = await resolveRefsUsableById(db, actor, 'agent', newAgentIds)
   const resolvedNewWorkflows = await resolveRefsUsableByName(
@@ -161,7 +163,17 @@ export async function createWorkflow(
     'workflow',
     newWorkflowNames,
   )
-  assertNoMissingRefs([...resolvedNewAgents.missing, ...resolvedNewWorkflows.missing])
+  const resolvedNewWorkgroups = await resolveRefsUsableByName(
+    db,
+    actor,
+    'workgroup',
+    newWorkgroupNames,
+  )
+  assertNoMissingRefs([
+    ...resolvedNewAgents.missing,
+    ...resolvedNewWorkflows.missing,
+    ...resolvedNewWorkgroups.missing,
+  ])
   // Workflow definitions historically tolerate a never-resolved agent id until
   // validator/launch time. Fence only ids that preflight actually matched.
   const fenceableAgentIds = new Set(resolvedNewAgents.byToken.values())
@@ -175,6 +187,7 @@ export async function createWorkflow(
       { type: 'agent', names: newAgentIds.filter((id) => fenceableAgentIds.has(id)) },
       // Name domain is dangle-tolerant in-tx too: no fenceable filter needed.
       { type: 'workflow', names: newWorkflowNames, domain: 'name' },
+      { type: 'workgroup', names: newWorkgroupNames, domain: 'name' },
     ])
     return insertWorkflowInTx(tx, {
       id,
@@ -250,6 +263,11 @@ export async function copyWorkflow(
       // be able to see every referenced workflow name it is about to adopt
       // (dangling names pass; name domain).
       { type: 'workflow', names: extractWorkflowWorkflowRefs(source.definition), domain: 'name' },
+      {
+        type: 'workgroup',
+        names: extractWorkflowWorkgroupRefs(source.definition),
+        domain: 'name',
+      },
     ])
 
     const occupiedNames = tx
@@ -348,7 +366,21 @@ export async function prepareWorkflowSave(
       'workflow',
       newWorkflowNames,
     )
-    assertNoMissingRefs([...resolved.missing, ...resolvedWorkflows.missing])
+    const newWorkgroupNames2 = diffNewNames(
+      new Set(extractWorkflowWorkgroupRefs(preflightWorkflow.definition)),
+      new Set(extractWorkflowWorkgroupRefs(normalizedSnapshot.definition)),
+    )
+    const resolvedWorkgroups = await resolveRefsUsableByName(
+      db,
+      principalActor,
+      'workgroup',
+      newWorkgroupNames2,
+    )
+    assertNoMissingRefs([
+      ...resolved.missing,
+      ...resolvedWorkflows.missing,
+      ...resolvedWorkgroups.missing,
+    ])
     fenceableAgentIds = new Set(resolved.byToken.values())
   }
   return {
@@ -399,9 +431,14 @@ export function commitWorkflowSaveInTx(
     new Set(extractWorkflowWorkflowRefs(current.definition)),
     new Set(extractWorkflowWorkflowRefs(normalizedSnapshot.definition)),
   )
+  const newWorkgroupNames = diffNewNames(
+    new Set(extractWorkflowWorkgroupRefs(current.definition)),
+    new Set(extractWorkflowWorkgroupRefs(normalizedSnapshot.definition)),
+  )
   assertRefsUsableInTx(tx, principal.kind === 'actor' ? principal.actor : null, [
     { type: 'agent', names: newAgentIds },
     { type: 'workflow', names: newWorkflowNames, domain: 'name' },
+    { type: 'workgroup', names: newWorkgroupNames, domain: 'name' },
   ])
 
   const currentSnapshot = workflowDraftSnapshotOf(current)

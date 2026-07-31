@@ -139,11 +139,12 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     const scheduledTaskId = c.req.query('scheduled_task_id') ?? c.req.query('scheduledTaskId')
     if (scheduledTaskId !== undefined && scheduledTaskId !== '')
       filters.scheduledTaskId = scheduledTaskId
-    // RFC-242 §8 (PR-2: query surface only; the default flips with the PR-5 UI).
-    // include_children=false → top-level rows only; parent_id=<taskId> → that
-    // task's direct children.
+    // RFC-242 §8 (PR-5 flip): the list is TOP-LEVEL BY DEFAULT — child
+    // executions appear only via include_children=true (flat, with parent
+    // badges) or the parent_id children query. Landed together with the
+    // nesting UI so awaiting children are never invisible-but-unreachable.
     const includeChildren = c.req.query('include_children')
-    if (includeChildren === 'false') filters.topLevelOnly = true
+    if (includeChildren !== 'true') filters.topLevelOnly = true
     const parentId = c.req.query('parent_id') ?? c.req.query('parentId')
     if (parentId !== undefined && parentId !== '') filters.parentTaskId = parentId
     const limit = c.req.query('limit')

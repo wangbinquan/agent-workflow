@@ -168,6 +168,12 @@ export const NODE_KIND_BEHAVIORS = {
     isAgent: false,
     settlesWithoutRow: false,
   },
+  'call-workgroup': {
+    retryCascade: 'mint-placeholder',
+    isProcess: true,
+    isAgent: false,
+    settlesWithoutRow: false,
+  },
 } as const satisfies Record<NodeKind, NodeKindBehavior>
 
 // ---------------------------------------------------------------------------

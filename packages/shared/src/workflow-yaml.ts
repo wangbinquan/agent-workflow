@@ -29,11 +29,20 @@ export function stripCallWorkflowNodeIds(definition: WorkflowDefinition): Workfl
   return {
     ...definition,
     nodes: definition.nodes.map((node) => {
-      if (node.kind !== 'call-workflow') return node
-      const rec = node as Record<string, unknown>
-      if (!('workflowId' in rec)) return node
-      const { workflowId: _drop, ...rest } = rec
-      return rest as typeof node
+      if (node.kind === 'call-workflow') {
+        const rec = node as Record<string, unknown>
+        if (!('workflowId' in rec)) return node
+        const { workflowId: _drop, ...rest } = rec
+        return rest as typeof node
+      }
+      // RFC-242 PR-4 — call-workgroup carries the same local-id cache shape.
+      if (node.kind === 'call-workgroup') {
+        const rec = node as Record<string, unknown>
+        if (!('workgroupId' in rec)) return node
+        const { workgroupId: _drop, ...rest } = rec
+        return rest as typeof node
+      }
+      return node
     }),
   }
 }

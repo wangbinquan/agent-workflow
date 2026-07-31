@@ -364,6 +364,16 @@ function callWorkflowSelectorOf(
   return { type: 'workflow', name }
 }
 
+/** RFC-242 PR-4 — call-workgroup portable selector (same dangle contract). */
+function callWorkgroupSelectorOf(
+  node: Record<string, unknown>,
+): { type: 'workgroup'; name: string } | null {
+  if (node.kind !== 'call-workgroup') return null
+  const name = node.workgroupName
+  if (typeof name !== 'string' || name.length === 0) return null
+  return { type: 'workgroup', name }
+}
+
 async function resolveImportedWorkflowNodeRefs(
   db: DbClient,
   actor: Extract<WorkflowWritePrincipal, { kind: 'actor' }>['actor'],
@@ -394,7 +404,15 @@ async function resolveImportedWorkflowNodeRefs(
   const callSelectors = (def.nodes ?? [])
     .map((node) => callWorkflowSelectorOf(node as Record<string, unknown>))
     .filter((selector): selector is { type: 'workflow'; name: string } => selector !== null)
-  const resolved = await resolveImportRefs(db, actor, [...selectors, ...callSelectors], selections)
+  const callWorkgroupSelectors = (def.nodes ?? [])
+    .map((node) => callWorkgroupSelectorOf(node as Record<string, unknown>))
+    .filter((selector): selector is { type: 'workgroup'; name: string } => selector !== null)
+  const resolved = await resolveImportRefs(
+    db,
+    actor,
+    [...selectors, ...callSelectors, ...callWorkgroupSelectors],
+    selections,
+  )
   const definition = WorkflowDefinitionSchema.parse({
     ...def,
     nodes: (def.nodes ?? []).map((node) => {
@@ -412,6 +430,15 @@ async function resolveImportedWorkflowNodeRefs(
             ? undefined
             : resolved.bySelector.get(importRefSelectorKey(callSelector))
         return id === undefined ? portable : { ...portable, workflowId: id }
+      }
+      if (node.kind === 'call-workgroup') {
+        const { workgroupId: _foreignId, ...portable } = rec
+        const callSelector = callWorkgroupSelectorOf(rec)
+        const id =
+          callSelector === null
+            ? undefined
+            : resolved.bySelector.get(importRefSelectorKey(callSelector))
+        return id === undefined ? portable : { ...portable, workgroupId: id }
       }
       if (node.kind !== 'agent-single') return node
       const name = rec.agentName

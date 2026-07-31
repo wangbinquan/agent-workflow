@@ -121,3 +121,11 @@
 - **分离 worktree 里 symlink `node_modules`** 会把 `@agent-workflow/*` 解析回污染的 main → 假 typecheck 错；worktree 里 `bun install` 或信 CI。
 - **CI 按你自己的确切 sha 查**：共享 main 上并发 push 会 cancel 你的 CI run；看含你 commit 的 superseding commit 的绿，按失败测试的 owning commit 归属。Codex `--base` 跨并发 commit 会把他人 diff 卷进复审——pin 到你的父提交（分离 worktree）隔离。
 - **已知 flaky（别当真红）**：`centralized-answer-pane.test.tsx` cross-round digit-key `checked` race（macOS 尤甚，ubuntu 同 shard 绿即判 flaky，`gh run rerun --failed`）；`skills-split-page` escaped-mocks；根 `bun run test` 的 git-network flaky（已 gate 在 `RUN_GIT_NETWORK`）。
+- **integration-opencode 撞新 runner 镜像红 = 环境非代码（2026-07-30 实锤）**：RFC-227 real-binary 用例在 `requireRootOwnedBwrap` 抛 `provider-parent-unsafe`（bwrap 祖先链逐级 root-owned + 无 group/other-write 判定），只发生在 ubuntu-22.04 镜像 **20260726.241.1**；同一 commit（def3d252）attempt 1 新镜像红、attempt 2 旧镜像 20260720.234.2 绿，且 `sealedSubprocess.ts`/该测试/workflow yml 在窗口内零提交——同代码双镜像对照实锤镜像内 bwrap 路径祖先属主/权限漂移。处置：`gh run rerun` 换镜像可过；根治需失败时打印祖先链逐级 uid/mode 诊断后针对性适配（勿放松判定），撞到新镜像的红先按本条归因、别追代码。
+
+## 跨任务并发（RFC-242 起）
+
+- **跨任务锁序约定：持有任务 A `writeSem` 的临界区不得等待任务 B 的任何锁或终态。** RFC-242 的调用节点是唯一跨任务组合点，靠「writeSem 只在派生/合并两个短窗口持有、等待子任务阶段零锁」满足（`services/callNode` 语义内联在 scheduler 的 `runCallWorkflowNode`）；新增任何跨任务等待路径都要先对这条约定过一遍。
+- **call 行的领养禁 mint**：`nodeRunMint` 咽喉的 `abandonSupersededMergeStates` 会把旧世代 iso 连带作废——而 call 行的 iso 是**子任务的 canonical**。恢复/重入一律锚定被派发行原地复位（`setNodeRunStatus allowedFrom:['interrupted']` 逃生舱，wrapper 先例），只有显式 retryNode 才换代（先级联取消旧子任务）。
+- **子任务的「删除/回收」都要看两代**：`deleteTask` 双向门（父有活后代 409 / 子的 owning call 行未收尾 409）；`runIsoWorktreeGc` 对 interrupted（可复活）父任务与「call 行引用非终态/interrupted 子任务」的容器都必须跳过——iso 容器里住着子任务的 canonical（设计门 P0-2 的教训）。
+- **枚举扩面（新增 NodeKind）踩过的 ratchet 清单**：rfc167 调度分流源码锁、rfc188 装配站点计数、rfc223 身份指纹 multiset、rfc233 containment 注入计数、RFC-048 subagentLiveCapture 转发计数、S-14 非状态写点快照、rfc217 G5 mode 分支棘轮、migration-0041 列数、upgrade-rolling journal 冻结、node-kind 结构不变量（isProcess=agent∪wrapper∪call）。加 kind 后全量跑一遍 backend 按清单逐项登记，别一个个撞。

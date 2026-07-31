@@ -2693,6 +2693,9 @@ export interface Resources {
     paletteCalls: string
     paletteCallWorkflowLabel: string
     paletteCallWorkflowDesc: string
+    /** RFC-242 PR-4 — call-workgroup entry (Calls section). */
+    paletteCallWorkgroupLabel: string
+    paletteCallWorkgroupDesc: string
     menuPaste: string
     menuSelectAll: string
     menuDuplicate: string
@@ -3092,6 +3095,14 @@ export interface Resources {
     fieldCallMaxDurationMsHint: string
     fieldCallMaxTotalTokens: string
     fieldCallMaxTotalTokensHint: string
+    // RFC-242 PR-4 call-workgroup node inspector
+    fieldCallWorkgroup: string
+    fieldCallWorkgroupHint: string
+    pickCallWorkgroup: string
+    fieldCallGoalTemplate: string
+    fieldCallGoalTemplateHint: string
+    /** Read-only line for the FIXED `result` output port. */
+    callWorkgroupResultInfo: string
   }
   promptPreview: {
     mockTitle: string
@@ -3731,6 +3742,12 @@ export interface Resources {
   callWorkflowNode: {
     label: string
     unsetWorkflow: string
+  }
+  /** RFC-242 PR-4 — canvas chip label + unset-reference line for
+   *  call-workgroup nodes (⬡ icon). */
+  callWorkgroupNode: {
+    label: string
+    unsetWorkgroup: string
   }
   errors: Record<string, string>
   errorDomains: Record<string, string>
@@ -7203,6 +7220,9 @@ export const zhCN: Resources = {
     paletteCalls: '调用',
     paletteCallWorkflowLabel: '调用工作流',
     paletteCallWorkflowDesc: '把另一个工作流作为独立子任务执行；端口与被引工作流的输入/输出一致。',
+    paletteCallWorkgroupLabel: '调用工作组',
+    paletteCallWorkgroupDesc:
+      '把当前阶段交给一个工作组作为独立子任务执行；输入端口由入边派生，输出固定为 result。',
     menuPaste: '粘贴',
     menuSelectAll: '全选',
     menuDuplicate: '复制为新节点',
@@ -7603,6 +7623,13 @@ export const zhCN: Resources = {
     fieldCallMaxDurationMsHint: '可选；留空时沿用全局限额。',
     fieldCallMaxTotalTokens: '子任务 token 总量上限',
     fieldCallMaxTotalTokensHint: '可选；留空时沿用全局限额。',
+    fieldCallWorkgroup: '被调用工作组',
+    fieldCallWorkgroupHint: '以独立子任务运行所选工作组；目标由下方模板渲染后传入。',
+    pickCallWorkgroup: '— 选择工作组 —',
+    fieldCallGoalTemplate: '目标模板',
+    fieldCallGoalTemplateHint:
+      '渲染后作为工作组子任务的目标。使用 {{port_name}} 引用入边端口；内置变量如 {{__repo_path__}}。',
+    callWorkgroupResultInfo: '输出端口固定为 result（text）：工作组子任务的最终结果。',
   },
   promptPreview: {
     mockTitle: '模拟端口值',
@@ -8230,6 +8257,10 @@ export const zhCN: Resources = {
     label: '调用工作流',
     unsetWorkflow: '（未选择工作流）',
   },
+  callWorkgroupNode: {
+    label: '调用工作组',
+    unsetWorkgroup: '（未选择工作组）',
+  },
   // RFC-203: per-domain fallback templates — any unmapped code resolves to
   // its domain's template instead of a bare English message.
   errorDomains: {
@@ -8344,6 +8375,9 @@ export const zhCN: Resources = {
       'call-workflow-output-port-collision': '被调用工作流的多个输出节点存在重名端口。',
       'call-workflow-input-unwired': '被调用工作流的输入端口缺少同名入边。',
       'call-workflow-in-fanout-unsupported': '调用节点不能放在扇出包装器内部。',
+      // RFC-242 PR-4 — call-workgroup 节点。
+      'call-workgroup-ref-missing': '调用节点引用的工作组不存在或未选择。',
+      'call-workgroup-in-fanout-unsupported': '调用节点不能放在扇出包装器内部。',
     },
     family: {
       'wrapper-loop': '循环包装器配置有误。',

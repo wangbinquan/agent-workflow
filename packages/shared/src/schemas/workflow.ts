@@ -41,6 +41,7 @@ export const NODE_KIND = [
   'clarify', // RFC-023: agent-initiated clarification questions
   'clarify-cross-agent', // RFC-056: downstream questioner reverse-feeds upstream designer via human gate
   'call-workflow', // RFC-242: invoke another workflow as an independent child task
+  'call-workgroup', // RFC-242: hand a DAG stage to a workgroup as an independent child task
 ] as const
 // RFC-060 PR-E: 'agent-multi' was the M3 fan-out kind; superseded by
 // wrapper-fanout (RFC-060). Its node_runs / row shape are no longer minted by
@@ -788,3 +789,24 @@ export const CallWorkflowNodeSchema = WorkflowNodeSchema.extend({
     .optional(),
 }).passthrough()
 export type CallWorkflowNode = z.infer<typeof CallWorkflowNodeSchema>
+
+/**
+ * RFC-242 — call-workgroup node: hand this DAG stage to a workgroup running
+ * as an independent child task (design §6.3). `workgroupName` mirrors the
+ * workflow selector semantics (durable name + optional id cache, dangling
+ * until launch); `goalTemplate` renders parent-side ({{port}} + builtin
+ * tokens) into the child's literal goal; output is the fixed `result` port.
+ */
+export const CallWorkgroupNodeSchema = WorkflowNodeSchema.extend({
+  kind: z.literal('call-workgroup'),
+  workgroupName: z.string().min(1),
+  workgroupId: z.string().min(1).optional(),
+  goalTemplate: z.string().min(1).max(65536),
+  limits: z
+    .object({
+      maxDurationMs: z.number().int().positive().optional(),
+      maxTotalTokens: z.number().int().positive().optional(),
+    })
+    .optional(),
+}).passthrough()
+export type CallWorkgroupNode = z.infer<typeof CallWorkgroupNodeSchema>

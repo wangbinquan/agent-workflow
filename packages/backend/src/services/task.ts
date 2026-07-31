@@ -300,7 +300,13 @@ export interface StartTaskDeps {
     parentTaskId: string
     parentNodeRunId: string
     invocationDepth: number
-    frozenSnapshotJson: string
+    /**
+     * Frozen child definition (call-workflow arm). NULL for the workgroup arm
+     * — there the host snapshot is composed by the frozen launch face and
+     * rides `workgroupLaunch.snapshotJson`; only the parent linkage columns
+     * come from here.
+     */
+    frozenSnapshotJson: string | null
     refClosureJson: string | null
   }
   /**
@@ -1417,7 +1423,7 @@ async function startTaskImpl(
   // the definition that will actually run. The resource row stays the FK
   // anchor (agent/workgroup host precedent).
   let effectiveDefinition = workflow.definition
-  if (deps.callLaunch !== undefined) {
+  if (deps.callLaunch !== undefined && deps.callLaunch.frozenSnapshotJson !== null) {
     try {
       const parsed = WorkflowDefinitionSchema.safeParse(
         JSON.parse(deps.callLaunch.frozenSnapshotJson),
@@ -1771,7 +1777,7 @@ async function startTaskImpl(
           name: input.name,
           workflowId: workflow.id,
           workflowSnapshot:
-            deps.callLaunch?.frozenSnapshotJson ??
+            (deps.callLaunch?.frozenSnapshotJson ?? null) ??
             deps.workgroupLaunch?.snapshotJson ??
             deps.agentLaunch?.snapshotJson ??
             JSON.stringify(workflow.definition),

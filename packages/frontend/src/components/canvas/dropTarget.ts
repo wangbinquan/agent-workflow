@@ -68,9 +68,14 @@ export function nextFreeInputPort(existing: readonly string[], desired: string):
  *  RFC-242: call-workflow is deliberately NOT here — its input ports are a
  *  CLOSED set mirrored from the child definition's `inputs[]` (design §5.2
  *  consumer #5), so minting a NEW deconflicted input name on drop would
- *  always produce a port the validator rejects. */
+ *  always produce a port the validator rejects.
+ *
+ *  RFC-242 PR-4: call-workgroup IS here — the opposite of its call-workflow
+ *  sibling. Its inputs are an OPEN set of edge-derived prompt vars consumed
+ *  by the goalTemplate ({{port}}), exactly the agent-single shape, so a
+ *  minted NEW deconflicted input name is always a legal port. */
 function acceptsNamedInputs(kind: string): boolean {
-  return kind === 'agent-single' || kind === 'output'
+  return kind === 'agent-single' || kind === 'output' || kind === 'call-workgroup'
 }
 
 /** A node's flow-space bounding box (from xyflow node.position + measured). */

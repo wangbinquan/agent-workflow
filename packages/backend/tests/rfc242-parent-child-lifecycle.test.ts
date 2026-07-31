@@ -325,6 +325,23 @@ describe('RFC-242 §4.5 — duration limit human-wait deduction', () => {
   })
 })
 
+describe('RFC-242 §8 — 列表口径（PR-5 翻转）', () => {
+  test('listTasks topLevelOnly 隐藏子任务；parentTaskId 过滤只出直接子代', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const wf = await seedWorkflow(db)
+    const parent = await seedTask(db, wf, { status: 'running' })
+    const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
+    const { listTasks } = await import('../src/services/task')
+    const top = await listTasks(db, { topLevelOnly: true })
+    expect(top.map((t) => t.id)).toContain(parent)
+    expect(top.map((t) => t.id)).not.toContain(child)
+    expect(top.find((t) => t.id === parent)?.parentTaskId ?? null).toBeNull()
+    const children = await listTasks(db, { parentTaskId: parent })
+    expect(children.map((t) => t.id)).toEqual([child])
+    expect(children[0]?.parentTaskId).toBe(parent)
+  })
+})
+
 describe('RFC-242 §4.4 — iso GC revivability carve-outs (design-gate P0-2)', () => {
   test('interrupted parents and parents with live/interrupted children keep their iso', async () => {
     const db = createInMemoryDb(MIGRATIONS)

@@ -43,6 +43,7 @@ import {
   canonicalJson,
   CLARIFY_SOURCE_PORT_NAME,
   collectWorkflowCallRefs,
+  collectWorkgroupCallRefs,
   countFanoutAggregators,
   declaredPorts,
   detectCallCycles,
@@ -62,7 +63,7 @@ import {
 import { createHash } from 'node:crypto'
 import { asc, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { mcps as mcpsTable, workflows as workflowsTable } from '@/db/schema'
+import { mcps as mcpsTable, workflows as workflowsTable, workgroups as workgroupsTable } from '@/db/schema'
 import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
 import { listSkills } from '@/services/skill'
@@ -145,6 +146,7 @@ export async function loadWorkflowValidationContext(
   }
   if (candidate !== undefined) {
     ctx.callWorkflows = await loadCallWorkflowClosure(db, candidate.definition)
+    ctx.callWorkgroupNames = await loadCallWorkgroupNames(db, candidate.definition)
     if (candidate.currentWorkflow !== undefined) ctx.currentWorkflow = candidate.currentWorkflow
   }
   return ctx
@@ -161,6 +163,19 @@ export async function loadWorkflowValidationContext(
  * validator reports `call-workflow-ref-missing`), it never throws. The map is
  * keyed by BOTH name and id; on a key collision the name entry wins.
  */
+async function loadCallWorkgroupNames(
+  db: DbClient,
+  definition: WorkflowDefinition,
+): Promise<ReadonlySet<string>> {
+  const wanted = [...new Set(collectWorkgroupCallRefs(definition).map((r) => r.workgroupName))]
+  if (wanted.length === 0) return new Set()
+  const rows = await db
+    .select({ name: workgroupsTable.name })
+    .from(workgroupsTable)
+    .where(inArray(workgroupsTable.name, wanted))
+  return new Set(rows.map((r) => r.name))
+}
+
 async function loadCallWorkflowClosure(
   db: DbClient,
   definition: WorkflowDefinition,
@@ -279,6 +294,9 @@ export interface ValidatorContext {
    * it is the route-wiring task's concern.
    */
   callWorkflows?: ReadonlyMap<string, ValidatorWorkflowRef>
+  /** RFC-242 PR-4 — names of EXISTING workgroups referenced by call-workgroup
+   *  nodes (advisory existence check; launch freeze stays authoritative). */
+  callWorkgroupNames?: ReadonlySet<string>
   /**
    * RFC-242 §5.4: identity of the workflow being validated, when it exists as
    * a row. Enables the trivial self-call error and roots the cycle walk on
@@ -2379,6 +2397,45 @@ export function validateWorkflowDef(
     }
   }
 
+  // 4g. RFC-242 PR-4 — call-workgroup nodes (design §6.3) --------------------
+  // Workgroups are closure LEAVES: no recursion, no cycles — the checks are
+  // structural fan-out containment + advisory existence (readiness stays a
+  // launch-time gate; the frozen-launch face re-runs roster/policy/integrity).
+  for (const node of nodes) {
+    if (node.kind !== 'call-workgroup') continue
+    {
+      let cur = innerToWrapper.get(node.id)
+      for (let hop = 0; cur !== undefined && hop < nodes.length; hop++) {
+        if (nodeById.get(cur)?.kind === 'wrapper-fanout') {
+          issues.push({
+            code: 'call-workgroup-in-fanout-unsupported',
+            message: `call-workgroup node '${node.id}' sits inside wrapper-fanout '${cur}' — call nodes cannot be fan-out sharded in v1; move the call outside the fanout (wrapper-git / wrapper-loop containment is allowed)`,
+            pointer: node.id,
+            target: target.node(node.id),
+          })
+          break
+        }
+        cur = innerToWrapper.get(cur)
+      }
+    }
+    const name = readString(node, 'workgroupName')
+    if (name === undefined || name === '') {
+      issues.push({
+        code: 'call-workgroup-ref-missing',
+        message: `call-workgroup node '${node.id}' is missing its workgroupName selector`,
+        pointer: node.id,
+        target: target.nodeField(node.id, 'call-ref'),
+      })
+    } else if (ctx.callWorkgroupNames !== undefined && !ctx.callWorkgroupNames.has(name)) {
+      issues.push({
+        code: 'call-workgroup-ref-missing',
+        message: `call-workgroup node '${node.id}' references a workgroup that does not exist`,
+        pointer: node.id,
+        target: target.nodeField(node.id, 'call-ref'),
+      })
+    }
+  }
+
   // 4e. RFC-060 — boundary edge validation --------------------------------
   for (const edge of edges) {
     if (edge.boundary === undefined) continue
@@ -2462,8 +2519,11 @@ export function validateWorkflowDef(
 
   // 5. prompt-template --------------------------------------------------------
   for (const node of nodes) {
-    if (node.kind !== 'agent-single') continue
-    const template = readString(node, 'promptTemplate')
+    // RFC-242 PR-4: call-workgroup goalTemplate shares the prompt-template
+    // variable domain (builtin tokens + inbound edge ports) and its codes.
+    const isCallWorkgroup = node.kind === 'call-workgroup'
+    if (node.kind !== 'agent-single' && !isCallWorkgroup) continue
+    const template = readString(node, isCallWorkgroup ? 'goalTemplate' : 'promptTemplate')
     if (template === undefined || template === '') continue
     const refs = extractTemplateVars(template)
     const inboundPorts = inbound.get(node.id) ?? new Set<string>()

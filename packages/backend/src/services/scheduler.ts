@@ -241,7 +241,12 @@ import { resolveTaskEngine } from '@/services/execution/engines'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { ensureChildTaskBudget, registerKnownChildTask } from '@/services/execution/childBudget'
-import { childClosureSubset, frozenWorkflowFromClosure } from '@/services/execution/closure'
+import {
+  childClosureSubset,
+  frozenWorkflowFromClosure,
+  frozenWorkgroupFromClosure,
+  type FrozenWorkgroupRef,
+} from '@/services/execution/closure'
 import { TERMINAL_TASK_STATUSES, type StartTask } from '@agent-workflow/shared'
 import type { MaterializedSpace, StartTaskDeps } from '@/services/task'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
@@ -2774,19 +2779,26 @@ async function runCallWorkflowNode(
     ownerUserId?: string | null
   }
 
-  const workflowName = pickString(node, 'workflowName') ?? undefined
+  const isWorkgroupCall = node.kind === 'call-workgroup'
+  const selectorField = isWorkgroupCall ? 'workgroupName' : 'workflowName'
+  const workflowName = pickString(node, selectorField) ?? undefined
   if (workflowName === undefined) {
     return {
       kind: 'failed',
-      summary: 'call node is missing its workflowName selector',
+      summary: `call node is missing its ${selectorField} selector`,
       message: 'workflow-call-ref-missing',
     }
   }
-  const frozen = frozenWorkflowFromClosure(taskRow.refClosureJson ?? null, workflowName)
-  if (frozen === null) {
+  const frozen = isWorkgroupCall
+    ? null
+    : frozenWorkflowFromClosure(taskRow.refClosureJson ?? null, workflowName)
+  const frozenGroup = isWorkgroupCall
+    ? frozenWorkgroupFromClosure(taskRow.refClosureJson ?? null, workflowName)
+    : null
+  if ((isWorkgroupCall ? frozenGroup : frozen) === null) {
     return {
       kind: 'failed',
-      summary: `workflow '${workflowName}' is missing from the frozen call closure`,
+      summary: `${isWorkgroupCall ? 'workgroup' : 'workflow'} '${workflowName}' is missing from the frozen call closure`,
       message: 'workflow-call-ref-missing',
     }
   }
@@ -2979,16 +2991,31 @@ async function runCallWorkflowNode(
     const childId = ulid()
     await db.update(nodeRuns).set({ childTaskId: childId }).where(eq(nodeRuns.id, nodeRunId))
     try {
-      await launchCallChild(state, {
-        node,
-        nodeRunId,
-        childId,
-        frozen,
-        workflowName,
-        inputs: upstreamInputs,
-        iso: childIso,
-        childDepth,
-      })
+      if (isWorkgroupCall) {
+        await launchCallWorkgroupChild(state, {
+          node,
+          nodeRunId,
+          childId,
+          frozenGroup: frozenGroup!,
+          workgroupName: workflowName,
+          inputs: upstreamInputs,
+          iso: childIso,
+          childDepth,
+          iteration,
+          inheritedShardKey: latestExisting?.shardKey ?? null,
+        })
+      } else {
+        await launchCallChild(state, {
+          node,
+          nodeRunId,
+          childId,
+          frozen: frozen!,
+          workflowName,
+          inputs: upstreamInputs,
+          iso: childIso,
+          childDepth,
+        })
+      }
       hold.bind(childId)
       registerKnownChildTask(childId)
       launchedChildId = childId
@@ -3524,6 +3551,165 @@ async function launchCallChild(
   void workflowName
 }
 
+/**
+ * RFC-242 §6.3 — bare goalTemplate expansion. {{port}} tokens read the
+ * resolved upstream inputs; repo-shaped builtin tokens describe the CHILD's
+ * workspace (the call-node iso); identity tokens describe the CALLER context.
+ * Unknown tokens render '' (validator §5 already nudges at edit time). The
+ * rendered string is LITERAL for the child — the workgroup prompt layer's
+ * literal-render protection (2026-07-27) keeps embedded `{{…}}` inert.
+ */
+function renderCallGoal(
+  template: string,
+  inputs: Record<string, string>,
+  meta: {
+    taskId: string
+    nodeId: string
+    iteration: number
+    shardKey: string | null
+    repos: ReadonlyArray<{ isoWorktreePath: string; worktreeDirName: string; baseBranch: string }>
+  },
+): string {
+  const primary = meta.repos[0]
+  const builtins: Record<string, string> = {
+    __repo_path__: primary?.isoWorktreePath ?? '',
+    __base_branch__: primary?.baseBranch ?? '',
+    __task_id__: meta.taskId,
+    __node_id__: meta.nodeId,
+    __iteration__: String(meta.iteration),
+    __shard_key__: meta.shardKey ?? '',
+    __repo_count__: String(meta.repos.length),
+    __repo_names__: meta.repos.map((r) => r.worktreeDirName || '(root)').join(', '),
+    __repos__: meta.repos
+      .map((r) => `- ${r.worktreeDirName || '(root)'}: ${r.isoWorktreePath}`)
+      .join('\n'),
+  }
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, name: string) => {
+    if (Object.hasOwn(builtins, name)) return builtins[name] ?? ''
+    return inputs[name] ?? ''
+  })
+}
+
+/** L (workgroup arm) — frozen-group launch through the RFC-242 frozen face. */
+async function launchCallWorkgroupChild(
+  state: SchedulerState,
+  args: {
+    node: WorkflowNode
+    nodeRunId: string
+    childId: string
+    frozenGroup: FrozenWorkgroupRef
+    workgroupName: string
+    inputs: Record<string, string>
+    iso: IsoHandle
+    childDepth: number
+    iteration: number
+    inheritedShardKey: string | null
+  },
+): Promise<void> {
+  const { db, task, taskId } = state
+  const taskRow = task as unknown as {
+    ownerUserId?: string | null
+    gitUserName?: string | null
+    gitUserEmail?: string | null
+  }
+  const { node, nodeRunId, childId, frozenGroup, inputs, iso, childDepth } = args
+
+  const goalTemplate = pickString(node, 'goalTemplate') ?? ''
+  const goal = renderCallGoal(goalTemplate, inputs, {
+    taskId,
+    nodeId: node.id,
+    iteration: args.iteration,
+    shardKey: args.inheritedShardKey,
+    repos: iso.repos.map((r) => ({
+      isoWorktreePath: r.isoWorktreePath,
+      worktreeDirName: r.worktreeDirName,
+      baseBranch: r.baseBranch,
+    })),
+  })
+
+  const memberRows = await db
+    .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
+    .from(taskCollaborators)
+    .where(eq(taskCollaborators.taskId, taskId))
+  const collaboratorUserIds = [
+    ...new Set(
+      memberRows
+        .filter((m) => m.role !== 'owner' && m.userId !== null)
+        .map((m) => m.userId as string),
+    ),
+  ]
+
+  const limits = ((): { maxDurationMs?: number; maxTotalTokens?: number } => {
+    const raw = (node as unknown as Record<string, unknown>).limits
+    if (typeof raw !== 'object' || raw === null) return {}
+    const o = raw as { maxDurationMs?: unknown; maxTotalTokens?: unknown }
+    return {
+      ...(typeof o.maxDurationMs === 'number' ? { maxDurationMs: o.maxDurationMs } : {}),
+      ...(typeof o.maxTotalTokens === 'number' ? { maxTotalTokens: o.maxTotalTokens } : {}),
+    }
+  })()
+  const nodeTitle = pickString(node, 'title') ?? node.id
+  const childName = `${task.name} › ${nodeTitle}`.slice(0, 255)
+  const primary = iso.repos[0]
+  const space: MaterializedSpace = {
+    kind: state.repos.length > 1 ? 'multi' : 'single',
+    spaceKind: 'inherited',
+    taskId: childId,
+    worktreePath:
+      state.repos.length > 1 ? iso.containerPath : (primary?.isoWorktreePath ?? task.worktreePath),
+    branch: task.branch ?? `agent-workflow/${childId}`,
+    baseCommit: primary?.baseSnapshot ?? null,
+    earlyError: null,
+    resolvedSources: [],
+    cleanup: { taskId: childId, ownedRoot: null, worktrees: [], state: 'owned', report: null },
+    repos: iso.repos.map((r, i) => ({
+      repoIndex: i,
+      repoPath: r.repoPath,
+      repoUrl: null,
+      cachedRepoId: null,
+      baseBranch: r.baseBranch,
+      branch: task.branch ?? `agent-workflow/${childId}`,
+      baseCommit: r.baseSnapshot ?? null,
+      worktreePath: r.isoWorktreePath,
+      worktreeDirName: r.worktreeDirName,
+      submoduleInitOk: true,
+      submoduleInitError: null,
+      hasSubmodules: false,
+    })),
+  }
+
+  const { startWorkgroupTaskFromFrozen } = await import('@/services/workgroup/launch')
+  await startWorkgroupTaskFromFrozen(
+    db,
+    {
+      frozenGroup: frozenGroup.group as Parameters<
+        typeof startWorkgroupTaskFromFrozen
+      >[1]['frozenGroup'],
+      workgroupId: frozenGroup.id,
+      goal,
+      name: childName,
+      collaboratorUserIds,
+      ...(taskRow.gitUserName != null ? { gitUserName: taskRow.gitUserName } : {}),
+      ...(taskRow.gitUserEmail != null ? { gitUserEmail: taskRow.gitUserEmail } : {}),
+      ...limits,
+    },
+    {
+      ...buildChildDeps(state),
+      materializedSpace: space,
+      callLaunch: {
+        parentTaskId: taskId,
+        parentNodeRunId: nodeRunId,
+        invocationDepth: childDepth,
+        // The host snapshot is composed INSIDE the frozen launch face (it
+        // needs the runtime config); the workgroupLaunch dep drives the
+        // snapshot — this arm only carries the parent linkage + closure rules.
+        frozenSnapshotJson: null,
+        refClosureJson: null,
+      },
+    },
+  )
+}
+
 async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
   const { db, task, taskId, definition, opts, inputsMap, globalSem, writeSem, log } = state
   const { node, iteration } = args
@@ -3783,7 +3969,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // RFC-242: call nodes — an independent child task behind an agent-shaped
   // node. Deliberately BEFORE the agent fall-through guard; never acquires
   // globalSem (design §6.1 — the child's own nodes compete for it).
-  if (node.kind === 'call-workflow') {
+  if (node.kind === 'call-workflow' || node.kind === 'call-workgroup') {
     return await runCallWorkflowNode(state, args)
   }
   if (node.kind !== 'agent-single') {
