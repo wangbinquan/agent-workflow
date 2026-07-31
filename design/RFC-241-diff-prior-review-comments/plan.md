@@ -9,6 +9,10 @@
   ∧ 非 historical)+ i18n(zh/en)。
 - **RFC-241-T2 测试**:design §测试策略 6 项渲染级用例(含 historical 互斥与 within 作用域只读断言)。
 - **RFC-241-T3 文档**:索引 / STATE 登记与收口。
+- **RFC-241-T4 阶段 2 锚定**(增补):wrapAnchorsInDom excludeSelector
+  扩展 + useCommentBubbles 抽共享 hook + diff 主列 ref/effect + 气泡
+  对位与点击滚动高亮 + 未定位分节 + cursor/hover 规则更新。依赖:T1。
+- **RFC-241-T5 阶段 2 测试**:design §测试增补 7-11。依赖:T4。
 
 ## 验收清单
 

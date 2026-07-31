@@ -1,4 +1,4 @@
-# RFC-241 — 技术设计（v3,设计门二轮修订后;门收口）
+# RFC-241 — 技术设计（v4,阶段 2 锚定增补）
 
 ## 数据流(零后端改动,已实证)
 
@@ -113,3 +113,66 @@ auxiliaryBodySlot 的 diff 分支内(historical 早退先行)并显式写明条�
   721~1100px 区间 diff 被挤穿(minmax 侧栏先缩 + ≤1100px 堆叠)、
   `cursor: pointer` 可点假象(覆盖 cursor 与 hover 阴影)——折入本
   v3。评审结论:无需三轮全量,可进实现,实现门统一验证。
+
+
+## 阶段 2:上一版意见锚定(2026-07-31 用户增补需求,推翻 v1「不做内联
+锚定」拍板)
+
+### 语义基础(为什么能精确锚定而非启发式)
+
+词档 diff 的合并文档 = 上一版与当前版的交错,其中**排除 `.diff-ins`
+子树后的文本流(context + del)逐字等于上一版原文**——这是 RFC-010/240
+diff 管线的构造不变量(word/line 对以换行结尾输入逐字节还原的同一来
+源)。因此上一版意见的 `selectedText + occurrenceIndex` 在「ins-排除
+文本流」上有与原文完全一致的出现次语义,锚定是**精确匹配**:
+
+- 锚文本未变 → 落在 context 区;
+- 锚文本被删/被改 → 落在红色 del 区;变更把旧文本切成多段时(如
+  `{D}a{d}{I}x{i}{D}b{d}`),匹配跨段成立,mark 分段包裹、整组高亮;
+- 找不到(如锚落在整表原子化重排区、或非 word 档的行/块粒度重排)→
+  该条意见回退 v1 无锚气泡形态(显示章节路径,不定位)。
+
+line/块档的合并文档同样满足「ins-排除 = 旧文」不变量(diffLines/块级
+同为交错构造),锚定机制三档通用。
+
+### 机制(全部复用既有原语,最小扩展)
+
+1. **`wrapAnchorsInDom` 扩展**:新增可选 `excludeSelector?: string`——
+   遍历文本节点时跳过匹配该选择器的元素子树(本 RFC 传 `.diff-ins`)。
+   既有调用(ReviewDocPane)不传,行为逐字节不变。SKIP_TAGS(PRE/CODE)
+   语义保持:意见若锚在代码块内,与现状同样不匹配,回退无锚。
+2. **`useCommentBubbles` 抽取**:从 ReviewDocPane 私有提为
+   `hooks/useCommentBubbles.ts` 共享(签名不变),ReviewDocPane 与
+   PriorCommentsSidebar 两处消费。
+3. **diff 主列容器 ref**:`.review-diff-layout` 第一列包一层带 ref 的
+   div(`.review-diff-doc`),effect 在 merged 渲染或意见变化后调用
+   `wrapAnchorsInDom(ref, anchors, { excludeSelector: '.diff-ins' })`;
+   mark 用独立 class `prior-comment-anchor`(与当前版 `comment-anchor`
+   区分,样式同视觉但色调弱化,避免与 diff 红绿冲突——具体:中性
+   下划线高亮,active 时同现有 flash 效果)。
+4. **气泡对位与交互**:锚定成功的气泡随 mark 纵向对位(useCommentBubbles
+   同款);点击滚动至 mark 并短暂高亮(复用 ReviewDocPane 的
+   activeCommentId/flash 模式,抽同一份 scroll+flash 帮助函数);锚定
+   失败的气泡集中列在侧栏顶部「未定位」分节(v1 形态)。cursor 规则
+   更新:**锚定气泡 cursor: pointer(可跳转),未锚定 cursor: default**
+   ——v3「全部 default」相应作废;hover 抬升仅锚定气泡恢复。
+5. **只读不变**:锚定仅新增「跳转/高亮」,无任何编辑入口;marks 不参与
+   当前版评论的划词选区(选区逻辑仅在非 diff 模式启用,现状已然)。
+
+### 测试增补(阶段 2)
+
+7. 锚文本未变 → mark 落 context、气泡随位、点击滚动高亮(scrollIntoView
+   调用与 active class 断言)。
+8. 锚文本被删 → mark 落 `.diff-del` 内;被词级切开 → 多段 mark 同
+   comment-id、点击整组高亮。
+9. ins-排除语义:当前版新增了与锚文本相同的字样时,occurrenceIndex 仍
+   按旧文顺序命中(新增区不计入出现次)。
+10. 找不到锚 → 回退无锚气泡且列于「未定位」分节;cursor/hover 按锚定
+    与否分别断言。
+11. wrapAnchorsInDom excludeSelector 单测:既有无参调用行为逐字节不变
+    (ReviewDocPane 路径回归)。
+
+### 设计门记录(阶段 2)
+
+- 增补轮(待跑):对抗复核锚定语义(ins-排除不变量的三档成立性、跨段
+  mark、occurrence 计数)、hook 抽取回归面、交互/样式规范完备性。
