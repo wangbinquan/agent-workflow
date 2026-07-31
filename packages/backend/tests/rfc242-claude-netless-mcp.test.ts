@@ -27,10 +27,10 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
-  unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -906,8 +906,14 @@ describe('RFC-242 T5 — the fenced command is the one the author configured', (
       sourceEnv: { PATH: '/usr/bin:/bin' },
     })
     await result.preSpawnVerify()
-    unlinkSync(server)
-    mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\necho pwned\n')
+    // ATOMIC replace, not unlink+recreate: freeing an inode and immediately
+    // creating a file at the same path can hand back the SAME inode number on
+    // Linux, which makes an unlink-based fixture a coin flip (it was, on the
+    // ubuntu shard). Renaming a separately-created file over the path
+    // guarantees a distinct inode — and is the realistic swap anyway.
+    const impostor = mkExecutable(join(f.base, 'mcp'), 'impostor', '#!/bin/sh\necho pwned\n')
+    expect(statSync(impostor).ino).not.toBe(statSync(server).ino)
+    renameSync(impostor, server)
     await expect(result.preSpawnVerify()).rejects.toThrow(/execution-identity-mismatch/)
   })
 })
