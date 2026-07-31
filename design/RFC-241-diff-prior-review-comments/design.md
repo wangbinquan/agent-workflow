@@ -1,4 +1,4 @@
-# RFC-241 — 技术设计（v2,设计门一轮修订后）
+# RFC-241 — 技术设计（v3,设计门二轮修订后;门收口）
 
 ## 数据流(零后端改动,已实证)
 
@@ -36,9 +36,14 @@
   `.comment-bubble` 本体是 `position: absolute` + 由 DOM 测量注入
   `top`(`useCommentBubbles`),本侧栏无内联锚定、无测量,不覆盖则全部
   气泡叠压在容器顶(一轮 P1)。规范:
-  `.prior-comments .comment-bubble { position: static; margin-bottom: 8px; }`
-  (与 `styles.css` 720px 媒体查询先例同法)。**无** action 区
-  (`comment-bubble__actions` 不渲染)。
+  `.prior-comments .comment-bubble { position: static; margin-bottom: 8px; cursor: default; }`
+  (与 `styles.css` 720px 媒体查询先例同法),并抑制 hover 抬升阴影
+  (`.prior-comments .comment-bubble:hover { box-shadow: 基线值 }`)——
+  本体的 `cursor: pointer` + hover 阴影语义是"点击跳转文中锚点",本
+  侧栏无锚定无 onClick,不覆盖会造成可点假象(二轮 P2)。**无** action
+  区(`comment-bubble__actions` 不渲染)。**不显示时间戳**(既有
+  comment-bubble 与版本详情页均不渲染 createdAt,proposal 已同步删
+  "时间",二轮 P2 勘误)。
 - **a11y**:容器 `role="complementary"` + `aria-label` 含来源版本;逐条
   沿用 `<article>`;测试以 role 锚点断言。
 - 空态 `<EmptyState>`;作者行沿用 AttributionChip + useUserLookup。
@@ -63,9 +68,13 @@ proposal 的「右侧」修正为「diff 主列右缘、当前版意见栏左侧
 ——`diffMode` 是本地 state,进入 `?version=` historical 视图不会重置,
 不加排除会在 historical 页冒出孤立侧栏(一轮 P1);实现放在
 auxiliaryBodySlot 的 diff 分支内(historical 早退先行)并显式写明条件。
-**响应式**:≤720px 外层已单列,`.review-diff-layout` 同步单列堆叠
-(侧栏移至 diff 下方);320px 为写死值,不复用可拖拽的
-`--review-sidebar-width`(「同宽」与「固定宽」二选一,取固定,一轮 P2)。
+**响应式**(二轮 P2 补阈值):`.review-diff-layout` 两栏为
+`minmax(0, 1fr) minmax(240px, 320px)`(侧栏可先压缩到 240px);视口
+**≤1100px 即内层单列堆叠**(侧栏移至 diff 下方)——外层 body 列宽 ≈
+内容区 − 318px(当前版侧栏拖宽时至 −558px),仅 ≤720px 堆叠会在
+721~约 1100px 区间把 diff 主列挤到 <300px 不可读。320px 上限为写死值,
+不复用可拖拽的 `--review-sidebar-width`(「同宽」与「固定宽」二选一,
+取固定,一轮 P2)。
 
 ## 失败模式(一轮 P2 改写)
 
@@ -92,3 +101,15 @@ auxiliaryBodySlot 的 diff 分支内(historical 早退先行)并显式写明条�
 5. i18n key 存在性(zh/en)。
 6. 布局:`.review-diff-layout` 存在时 `.diff-view` 仍可被既有测试选择器
    命中(不破坏 `review-diff-*` 既有连续性测试)。
+
+## 设计门记录
+
+- 一轮(2026-07-31,独立子代理评审,`NEEDS_REVISION`,5 P1 + 4 P2):
+  绝对定位气泡叠压、Props 缺 body、排序引用不存在语义、双意见栏共存
+  未定义、historical 泄漏 + 失败模式矛盾、宽度矛盾、只读断言作用域、
+  a11y——全部折入 v2。
+- 二轮(2026-07-31,同代理续评,`NEEDS_REVISION`,0 P1 + 3 P2;一轮
+  九项修订逐条核验**全部实闭**):proposal「时间」措辞矛盾(删)、
+  721~1100px 区间 diff 被挤穿(minmax 侧栏先缩 + ≤1100px 堆叠)、
+  `cursor: pointer` 可点假象(覆盖 cursor 与 hover 阴影)——折入本
+  v3。评审结论:无需三轮全量,可进实现,实现门统一验证。
