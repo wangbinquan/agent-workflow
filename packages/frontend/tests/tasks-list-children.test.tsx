@@ -1,4 +1,4 @@
-// RFC-242 PR-5 — /tasks child-task nesting locks.
+// RFC-243 PR-5 — /tasks child-task nesting locks.
 //
 //   1. The DEFAULT list request carries NO include_children param (the
 //      server's top-level filter is the contract); the expand arrow is
@@ -150,7 +150,7 @@ async function renderPage(
   return router
 }
 
-describe('/tasks — child-task nesting (RFC-242 PR-5)', () => {
+describe('/tasks — child-task nesting (RFC-243 PR-5)', () => {
   test('default request carries no include_children; arrows only on running/awaiting/done rows', async () => {
     const rec = installFetch({
       top: [

@@ -134,7 +134,7 @@ export async function workflowDefinitionToSelectors(
   actor: Actor,
   definition: WorkflowDefinition,
 ): Promise<WorkflowDefinitionSelector> {
-  // RFC-242 (§5.5): call-workflow nodes drop their installation-local
+  // RFC-243 (§5.5): call-workflow nodes drop their installation-local
   // `workflowId` cache up-front — `workflowName` (already on the node) is the
   // portable selector, so no owner/name directory lookup is needed for them.
   definition = stripCallWorkflowNodeIds(definition)
@@ -250,7 +250,7 @@ export async function importWorkflowYaml(
   }
   const preview = previewWorkflowYaml(request.yamlText)
   // RFC-223 (PR-2): resolve each agent-single node's canonical agentId from its
-  // portable name+owner selector against THIS install's agents; RFC-242 (§5.5)
+  // portable name+owner selector against THIS install's agents; RFC-243 (§5.5)
   // rides the same pass for call-workflow nodes' `workflowName` selectors
   // (dangle-tolerant — an unmatched name imports as-is and launch fails
   // closed). Safe to normalize server-side here — the import
@@ -364,7 +364,7 @@ function callWorkflowSelectorOf(
   return { type: 'workflow', name }
 }
 
-/** RFC-242 PR-4 — call-workgroup portable selector (same dangle contract). */
+/** RFC-243 PR-4 — call-workgroup portable selector (same dangle contract). */
 function callWorkgroupSelectorOf(
   node: Record<string, unknown>,
 ): { type: 'workgroup'; name: string } | null {
@@ -398,7 +398,7 @@ async function resolveImportedWorkflowNodeRefs(
         ...(typeof ownerUsername === 'string' ? { ownerUsername } : {}),
       }
     })
-  // RFC-242 (§5.5): call-workflow nodes contribute name-only 'workflow'
+  // RFC-243 (§5.5): call-workflow nodes contribute name-only 'workflow'
   // selectors. Zero visible candidates is a SKIP inside resolveImportRefs
   // (dangle-tolerant type) — the node then keeps its portable name unresolved.
   const callSelectors = (def.nodes ?? [])
@@ -476,7 +476,7 @@ function rejectPortableRefsForSystemImport(def: WorkflowDefinitionSelector): Wor
       'system workflow import cannot resolve portable resource selectors',
     )
   }
-  // RFC-242 (§5.5): call-workflow nodes are acceptable for system import —
+  // RFC-243 (§5.5): call-workflow nodes are acceptable for system import —
   // `workflowName` needs no candidate resolution and dangling is legal — but a
   // foreign install's `workflowId` cache must never be persisted verbatim.
   return stripCallWorkflowNodeIds(WorkflowDefinitionSchema.parse(def))

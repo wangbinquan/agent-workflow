@@ -56,7 +56,7 @@ async function buildTaskStats(
     ? undefined
     : taskVisibilityCondition(db, { actorUserId: actor.user.id, scope: 'mine' })
   const countWhere = async (cond: SQL<unknown>): Promise<number> => {
-    // RFC-242 §8 — child executions stay out of the homepage cards (the parent
+    // RFC-243 §8 — child executions stay out of the homepage cards (the parent
     // task represents its tree), matching the task list's top-level default.
     const topLevel = and(cond, isNull(tasks.parentTaskId))!
     const where = vis === undefined ? topLevel : and(vis, topLevel)!

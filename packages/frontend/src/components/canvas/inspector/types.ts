@@ -12,7 +12,7 @@ export interface EditProps {
   agents: Agent[]
   definition: WorkflowDefinition
   /**
-   * RFC-242: identity of the workflow being edited. CallWorkflowEdit uses it
+   * RFC-243: identity of the workflow being edited. CallWorkflowEdit uses it
    * to exclude the current workflow from the reference selector (self
    * reference = the trivial call cycle). Optional — isolated stories/tests
    * may omit it and simply see the full visible list.

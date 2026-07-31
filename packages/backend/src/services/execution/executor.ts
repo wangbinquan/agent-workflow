@@ -1,8 +1,8 @@
-// RFC-242 T1/T2 — the unified executor facade (design §1.1). The ONE start
+// RFC-243 T1/T2 — the unified executor facade (design §1.1). The ONE start
 // choke point for all task-level execution kinds: routes, the scheduled-task
 // loop and (from PR-3) call nodes go through `startExecution` instead of
 // calling the per-kind launch services directly (source-text lock in
-// rfc242-executor-facade.test.ts).
+// rfc243-executor-facade.test.ts).
 //
 // Behavior freeze: each adapter is the pre-existing launch service called with
 // an unchanged argument shape — validation order, error codes and side effects

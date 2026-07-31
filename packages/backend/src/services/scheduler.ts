@@ -235,7 +235,7 @@ import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { isWorkgroupTask } from '@agent-workflow/shared'
-// RFC-242 §1.2 — the engine fork is decided by the executor registry (a pure
+// RFC-243 §1.2 — the engine fork is decided by the executor registry (a pure
 // resolver extracted verbatim from the inline dispatch this file used to own).
 import { resolveTaskEngine } from '@/services/execution/engines'
 import { getExecutionOutcome } from '@/services/execution/outcome'
@@ -293,9 +293,9 @@ export interface RunTaskOptions {
    * Default 256.
    */
   fanoutMaxShardTotal?: number
-  /** RFC-242 §3.2: daemon-wide active-child-task cap (default 8). */
+  /** RFC-243 §3.2: daemon-wide active-child-task cap (default 8). */
   maxActiveChildTasks?: number
-  /** RFC-242 §3.2: invocation-chain depth ceiling (default 3). */
+  /** RFC-243 §3.2: invocation-chain depth ceiling (default 3). */
   maxInvocationDepth?: number
   /**
    * RFC-048: forwarded verbatim to every `runNode` call so the runner spins
@@ -632,7 +632,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // DAG frontier (design §4). The host snapshot's nodes exist only as mint
     // anchors + clarify wiring; runScope/deriveFrontier must not see them.
     // RFC-167: dynamic_workflow workgroups are the exception — their dispatch
-    // follows the dw phase. RFC-242 §1.2: the decision itself now lives in
+    // follows the dw phase. RFC-243 §1.2: the decision itself now lives in
     // the executor engine registry (resolveTaskEngine — same oracle, extracted
     // verbatim); this file keeps consuming it. RFC-217 T2: the phase lives in
     // workgroup_task_state (an unknown mode still routes to the turn engine,
@@ -2731,7 +2731,7 @@ async function resolveMergeConflicts(
 }
 
 // =============================================================================
-// RFC-242 §6.2 — call-workflow node: invoke another workflow as an independent
+// RFC-243 §6.2 — call-workflow node: invoke another workflow as an independent
 // child task running INSIDE this node's iso worktree. From the parent's
 // perspective the node is agent-shaped: derive iso → run (the child task) →
 // write outputs → merge back; conflict parking, merge_state gating, replay and
@@ -2841,12 +2841,12 @@ async function runCallWorkflowNode(
   let adoptedChildTaskId: string | null = null
   let launchedChildId: string | null = null
   let liveIso: IsoHandle | null = null
-  // RFC-242-LOCK:adoption-no-mint-begin — this block re-attaches; minting
+  // RFC-243-LOCK:adoption-no-mint-begin — this block re-attaches; minting
   // here would abandonSupersededMergeStates the child's canonical iso.
   // 实现门 P1-5：领养判据按「这一代是否已收尾」而不是单看 running/interrupted。
   // daemon shutdown 的收尾会把调用行落成 canceled（RFC-095 revival 语义下它
   // 仍是可复活行），只认 running/interrupted 会漏掉领养 → 重新 mint → 同一
-  // 父任务下重复发起第二个子任务（rfc242-call-workflow 恢复矩阵实测）。
+  // 父任务下重复发起第二个子任务（rfc243-call-workflow 恢复矩阵实测）。
   // done/failed/exhausted 是已收尾代：retry 会 mint 新行，那条行 childTaskId
   // 为空，自然走下面的发起分支。
   const ADOPTABLE_CALL_ROW_STATUSES = new Set(['pending', 'running', 'interrupted', 'canceled'])
@@ -2875,7 +2875,7 @@ async function runCallWorkflowNode(
       nodeId: node.id,
       childTaskId: adoptedChildTaskId,
     })
-    // RFC-242-LOCK:adoption-no-mint-end
+    // RFC-243-LOCK:adoption-no-mint-end
   } else {
     const pendingExisting = sameNodeIterRuns.find(
       (r) => r.status === 'pending' && r.parentNodeRunId === null,
@@ -3466,7 +3466,7 @@ function isShutdownAbort(signal: AbortSignal | undefined): boolean {
 }
 
 /**
- * RFC-242 实现门 P1-5 — confirm that a child's `daemon-restart` interrupt is
+ * RFC-243 实现门 P1-5 — confirm that a child's `daemon-restart` interrupt is
  * THIS daemon going down, by waiting (bounded) for the parent's own shutdown
  * abort. The child's abort routinely lands first (abortAllActiveTasks iterates
  * one map), so an instantaneous `signal.aborted` check is not a discriminator.
@@ -3661,7 +3661,7 @@ async function launchCallChild(
 }
 
 /**
- * RFC-242 §6.3 — bare goalTemplate expansion. {{port}} tokens read the
+ * RFC-243 §6.3 — bare goalTemplate expansion. {{port}} tokens read the
  * resolved upstream inputs; repo-shaped builtin tokens describe the CHILD's
  * workspace (the call-node iso); identity tokens describe the CALLER context.
  * Unknown tokens render '' (validator §5 already nudges at edit time). The
@@ -3699,7 +3699,7 @@ function renderCallGoal(
   })
 }
 
-/** L (workgroup arm) — frozen-group launch through the RFC-242 frozen face. */
+/** L (workgroup arm) — frozen-group launch through the RFC-243 frozen face. */
 async function launchCallWorkgroupChild(
   state: SchedulerState,
   args: {
@@ -4075,7 +4075,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // runOneNode branch fails loud here instead of being silently driven as an
   // agent. (Dispatch stays an if-chain by design — the handlers close over
   // SchedulerState; see RFC-146 design D2.)
-  // RFC-242: call nodes — an independent child task behind an agent-shaped
+  // RFC-243: call nodes — an independent child task behind an agent-shaped
   // node. Deliberately BEFORE the agent fall-through guard; never acquires
   // globalSem (design §6.1 — the child's own nodes compete for it).
   if (node.kind === 'call-workflow' || node.kind === 'call-workgroup') {

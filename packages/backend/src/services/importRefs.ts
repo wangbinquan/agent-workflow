@@ -32,7 +32,7 @@ interface ImportRefRow {
 }
 
 /**
- * RFC-242 (§5.5) — reference kinds whose ZERO-visible-candidate outcome is a
+ * RFC-243 (§5.5) — reference kinds whose ZERO-visible-candidate outcome is a
  * SKIP (the caller keeps the dangling portable name and imports successfully)
  * instead of a 422 `import-ref-unresolved`. Workflow call selectors are
  * dangling-until-launch by design (agent-single's dangling-agentId philosophy
@@ -44,7 +44,7 @@ interface ImportRefRow {
  */
 const DANGLE_TOLERANT_IMPORT_REF_TYPES: ReadonlySet<ImportRefType> = new Set([
   'workflow',
-  // RFC-242 PR-4 — call-workgroup selectors share the dangling-until-launch
+  // RFC-243 PR-4 — call-workgroup selectors share the dangling-until-launch
   // contract (the workgroup resource never rides the YAML; launch fails
   // closed on an unresolved name).
   'workgroup',
@@ -272,7 +272,7 @@ function resolveImportRefsInTx(
       requested === undefined &&
       DANGLE_TOLERANT_IMPORT_REF_TYPES.has(selector.type)
     ) {
-      // RFC-242 skip: no bySelector binding, no selection, no fence entry —
+      // RFC-243 skip: no bySelector binding, no selection, no fence entry —
       // the caller persists the dangling portable name as-is.
       continue
     }

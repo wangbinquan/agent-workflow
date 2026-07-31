@@ -115,7 +115,7 @@ import { freezeCallClosure } from '@/services/execution/closure'
 import { collectExecutionRefs } from '@agent-workflow/shared'
 
 /**
- * RFC-242 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
+ * RFC-243 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
  * fence on the name fallback). Call-node-free definitions skip everything
  * (byte-compat). A call-bearing launch WITHOUT an actor (internal faces never
  * produce one today) fails closed rather than freezing blind.
@@ -242,11 +242,11 @@ export interface StartTaskDeps {
    * agent.runtime=null node fell back to opencode). Omitted → scheduler default.
    */
   defaultRuntime?: string
-  /** RFC-242 实现门 P0-1: the launch actor — closure name-resolution visibility fence. */
+  /** RFC-243 实现门 P0-1: the launch actor — closure name-resolution visibility fence. */
   launchActor?: Actor
-  /** RFC-242 §3.2: daemon-wide active-child-task cap (config.maxActiveChildTasks). */
+  /** RFC-243 §3.2: daemon-wide active-child-task cap (config.maxActiveChildTasks). */
   maxActiveChildTasks?: number
-  /** RFC-242 §3.2: invocation-chain depth ceiling (config.maxInvocationDepth). */
+  /** RFC-243 §3.2: invocation-chain depth ceiling (config.maxInvocationDepth). */
   maxInvocationDepth?: number
   /** Override opencode command (tests inject mock-opencode). */
   opencodeCmd?: string[]
@@ -314,7 +314,7 @@ export interface StartTaskDeps {
    */
   workgroupLaunch?: { workgroupId: string; configJson: string; snapshotJson: string; dw?: DwState }
   /**
-   * RFC-242 §6.2 L: node-invoked CHILD launch payload. `frozenSnapshotJson`
+   * RFC-243 §6.2 L: node-invoked CHILD launch payload. `frozenSnapshotJson`
    * (the child definition frozen in the PARENT's ref closure at parent launch,
    * D9) replaces the referenced workflow row's CURRENT definition as the
    * snapshot AND as the definition every launch gate evaluates — the resource
@@ -736,7 +736,7 @@ export function selectResumeRollbackTargets<
   return [...latestPerNode.values()].filter(
     (r) =>
       (r.status === 'failed' || r.status === 'interrupted') &&
-      // RFC-242 §4.2 — call rows have no canonical writes to roll back (the
+      // RFC-243 §4.2 — call rows have no canonical writes to roll back (the
       // child works in the call-node iso); their interrupted rows are handled
       // by the scheduler's adoption path (re-attach / merge_state-staged
       // replay), never by pre_snapshot rollback + re-mint.
@@ -864,7 +864,7 @@ export function runtimeConfigOpts(
 export interface MaterializedSpace {
   kind: 'scratch' | 'single' | 'multi'
   /** RFC-165: persisted `tasks.space_kind` value, decided at materialize time.
-   *  RFC-242: 'inherited' = a child execution's synthesized space pointing into
+   *  RFC-243: 'inherited' = a child execution's synthesized space pointing into
    *  its parent's call-node iso (never produced by materializeSpace itself). */
   spaceKind: 'local' | 'remote' | 'scratch' | 'internal' | 'inherited'
   taskId: string
@@ -1443,7 +1443,7 @@ async function startTaskImpl(
   if (workflow === null) {
     throw new NotFoundError('workflow-not-found', `workflow '${input.workflowId}' not found`)
   }
-  // RFC-242 §6.2 L: a child launch executes the definition FROZEN at the
+  // RFC-243 §6.2 L: a child launch executes the definition FROZEN at the
   // parent's launch, never the resource row's current one (D9) — every gate
   // below (execution policy, multi-repo, static validation, inputs) evaluates
   // the definition that will actually run. The resource row stays the FK
@@ -1584,7 +1584,7 @@ async function startTaskImpl(
   // and refuse to launch if it surfaces any error-severity issues. Warnings pass.
   const validation = validateWorkflowDef(
     effectiveDefinition,
-    // RFC-242 实现门 P1-2 — the service funnel enforces 4f/4g on the exact
+    // RFC-243 实现门 P1-2 — the service funnel enforces 4f/4g on the exact
     // definition it will execute (frozen child included).
     await buildWorkflowValidationContext(deps.db, {
       definition: effectiveDefinition,
@@ -1599,7 +1599,7 @@ async function startTaskImpl(
       { issues: validation.issues },
     )
   }
-  // RFC-242 §3.1: parents freeze the reference closure at launch (null when
+  // RFC-243 §3.1: parents freeze the reference closure at launch (null when
   // the definition has no call nodes — byte-compat fast path); children carry
   // the subset handed down via deps.callLaunch. Runs AFTER static validation
   // so a cycle/missing-ref failure points at launch, not at a half-built row.
@@ -1615,7 +1615,7 @@ async function startTaskImpl(
   // different synthesized-host contracts and validate them in their launch
   // services before entering this generic workflow funnel.
   if (deps.agentLaunch === undefined && deps.workgroupLaunch === undefined) {
-    // RFC-242: child launches validate against the FROZEN definition's inputs
+    // RFC-243: child launches validate against the FROZEN definition's inputs
     // (identical map semantics — the call node wired them from its ports).
     assertWorkflowLaunchInputs(effectiveDefinition.inputs, input.inputs)
   }
@@ -1864,7 +1864,7 @@ async function startTaskImpl(
           // its public retirement lands within this PR); 'internal' is stamped via
           // the internalSource dep (fusion) once that migration lands.
           spaceKind: space.spaceKind,
-          // RFC-242: parent linkage for node-invoked children + the frozen
+          // RFC-243: parent linkage for node-invoked children + the frozen
           // reference closure (parents freeze it above; children carry the
           // handed-down subset). All NULL/0 on ordinary launches.
           parentTaskId: deps.callLaunch?.parentTaskId ?? null,
@@ -2217,7 +2217,7 @@ export async function cancelTask(
   id: string,
   opts: {
     /**
-     * RFC-242 §4.3 — set when this cancel is a parent-cascade. Lands a durable
+     * RFC-243 §4.3 — set when this cancel is a parent-cascade. Lands a durable
      * `canceled-by-parent-cascade` errorMessage marker so a parent resuming
      * after a crash can still distinguish "my own cascade" (call node follows
      * the parent's canceled outcome) from "someone canceled my child"
@@ -2243,7 +2243,7 @@ export async function cancelTask(
     controller.abort()
     // Wait for the scheduler to record the canceled state (best-effort 5s
     // poll). If the daemon was restarted, no controller exists; we just mark
-    // the row canceled directly. NOTE (RFC-242 §4.3): do NOT return here —
+    // the row canceled directly. NOTE (RFC-243 §4.3): do NOT return here —
     // the cascade stamp + child enumeration below must run on BOTH paths.
     const deadline = Date.now() + 5000
     while (Date.now() < deadline) {
@@ -2281,7 +2281,7 @@ export async function cancelTask(
       },
       reason: 'cancelTask-fallback',
     })
-  // RFC-242 §4.3 — the scheduler path can also have landed the terminal write
+  // RFC-243 §4.3 — the scheduler path can also have landed the terminal write
   // (abort → cancelTaskRow). Stamp the cascade marker idempotently AFTER the
   // row is terminal so the durable judgement survives either path. errorMessage
   // is the machine-code column (summary stays the human line).
@@ -2291,7 +2291,7 @@ export async function cancelTask(
       .set({ errorMessage: 'canceled-by-parent-cascade' })
       .where(and(eq(tasks.id, id), eq(tasks.status, 'canceled')))
   }
-  // RFC-242 §4.3 — recursively cascade into active child executions. Depth is
+  // RFC-243 §4.3 — recursively cascade into active child executions. Depth is
   // bounded by maxInvocationDepth at launch; `task-not-cancelable` (already
   // terminal) is skipped silently — cascade is idempotent by construction.
   const children = await db
@@ -2447,7 +2447,7 @@ async function resumeKick(
       `task '${id}' is ${task.status}; only [${allowedFrom.join('/')}] tasks can ${opts.verb}`,
     )
   }
-  // RFC-242 §4.2 — a child execution whose owning call row already settled
+  // RFC-243 §4.2 — a child execution whose owning call row already settled
   // must not be re-driven: nobody will ever merge its further output.
   await assertChildTaskDrivable(db, task, opts.verb)
 
@@ -2922,11 +2922,11 @@ export async function computeWorkflowSyncPreview(
  *   - kicking the scheduler
  */
 /**
- * RFC-242 §4.2 — child-side gate: once the parent's call row is TERMINAL the
+ * RFC-243 §4.2 — child-side gate: once the parent's call row is TERMINAL the
  * invocation is over; re-running the child would write into an iso the parent
  * will never merge (retrying the CALL NODE on the parent is the sanctioned
  * re-run path). Non-child tasks and live call rows pass untouched; a missing
- * call row (dirty data) fails open to the pre-RFC-242 behavior.
+ * call row (dirty data) fails open to the pre-RFC-243 behavior.
  */
 async function assertChildTaskDrivable(
   db: DbClient,
@@ -2973,9 +2973,9 @@ export async function retryNode(
       `task '${taskId}' is ${task.status}; cancel it first before retrying a node`,
     )
   }
-  // RFC-242 §4.2 — child-side gate (same rule as resumeKick).
+  // RFC-243 §4.2 — child-side gate (same rule as resumeKick).
   await assertChildTaskDrivable(db, task, 'retry')
-  // RFC-242 D12 / 实现门 P2-2 — retrying a CALL ROW supersedes its invocation:
+  // RFC-243 D12 / 实现门 P2-2 — retrying a CALL ROW supersedes its invocation:
   // a still-live child (parent failed while the child kept running) must be
   // cascade-canceled BEFORE the ownership CAS mints the next generation, or
   // two children could write the same inherited workspace.
@@ -3305,7 +3305,7 @@ export interface ListTasksFilters {
   /** RFC-159: filter to tasks launched by a given `scheduled_tasks` id (run history). */
   scheduledTaskId?: string
   /**
-   * RFC-242 §8: parent/child list filters (PR-2 lands the query surface only —
+   * RFC-243 §8: parent/child list filters (PR-2 lands the query surface only —
    * the DEFAULT stays "everything flat" until PR-5 flips it together with the
    * nesting UI, so awaiting child executions never become invisible in a
    * window where the UI cannot reveal them).
@@ -3631,7 +3631,7 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       // RFC-203 T4: RFC-145 machine-readable failure code, now surfaced so
       // the UI can localize failure copy instead of parsing errorMessage.
       failureCode: (r.failureCode ?? null) as FailureCode | null,
-      // RFC-242: child task launched by this call node_run (link + live status).
+      // RFC-243: child task launched by this call node_run (link + live status).
       childTaskId: r.childTaskId ?? null,
       supersededByReview: (r.supersededByReview ?? null) as 'iterated' | 'rejected' | null,
       rolledBack: r.rolledBack ?? null,
@@ -4005,7 +4005,7 @@ function rowToTask(
     goal: frozenWorkgroupGoal(row.workgroupConfigJson),
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
-    // RFC-242: parent linkage for node-invoked child executions.
+    // RFC-243: parent linkage for node-invoked child executions.
     parentTaskId: row.parentTaskId ?? null,
     parentNodeRunId: row.parentNodeRunId ?? null,
     invocationDepth: row.invocationDepth ?? 0,
@@ -4084,7 +4084,7 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     workgroupName: frozenWorkgroupName(row.workgroupConfigJson),
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
-    // RFC-242: parent linkage so the list can nest/badge child executions.
+    // RFC-243: parent linkage so the list can nest/badge child executions.
     parentTaskId: row.parentTaskId ?? null,
     invocationDepth: row.invocationDepth ?? 0,
     sourceAgentName: row.sourceAgentName ?? null,

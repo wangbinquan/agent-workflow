@@ -124,7 +124,7 @@ async function seedTaskWithEdge(
       case 'input':
         return { id: downstreamNodeId, kind: 'input', inputKey: 'topic' }
       case 'call-workflow':
-        // RFC-242 — a call node is process-bearing (an independent child
+        // RFC-243 — a call node is process-bearing (an independent child
         // task); upstream retries mint it a placeholder like any wrapper.
         return { id: downstreamNodeId, kind: 'call-workflow', workflowName: 'child-wf' }
       case 'call-workgroup':

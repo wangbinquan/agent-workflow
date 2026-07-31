@@ -1,4 +1,4 @@
-// RFC-242 PR-3 — call-workflow inspector branch. Picks the referenced child
+// RFC-243 PR-3 — call-workflow inspector branch. Picks the referenced child
 // workflow (name = authoritative selector, id = resolution cache, design
 // §5.1), previews the child's declared ports through the shared
 // useWorkflowRefResolver cache, and edits the optional child-task limits.

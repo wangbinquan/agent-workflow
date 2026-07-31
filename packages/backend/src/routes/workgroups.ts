@@ -35,7 +35,7 @@ import {
   renameWorkgroup,
   saveWorkgroup,
 } from '@/services/workgroups'
-// RFC-242 T2: workgroup launches go through the unified executor facade — this
+// RFC-243 T2: workgroup launches go through the unified executor facade — this
 // route must not call startWorkgroupTask directly (source-text lock).
 import { startExecution } from '@/services/execution/executor'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'

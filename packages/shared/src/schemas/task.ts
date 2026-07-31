@@ -55,7 +55,7 @@ export const MULTI_REPO_MAX = 8
  *                (empty root commit); no source repo, no remote.
  * - 'internal' — framework-internal launches (fusion) via the service-level
  *                `internalSource` dep; unreachable from the public wire.
- * - 'inherited' — RFC-242 child execution running inside its parent's
+ * - 'inherited' — RFC-243 child execution running inside its parent's
  *                call-node iso worktree; the task does not own its disk space
  *                (delete/GC skip worktree removal). Service-level only.
  */
@@ -378,7 +378,7 @@ export const TaskSchema = z.object({
    */
   spaceKind: SpaceKindSchema.default('remote'),
   /**
-   * RFC-242: parent linkage for node-invoked child executions. `parentTaskId`
+   * RFC-243: parent linkage for node-invoked child executions. `parentTaskId`
    * = the invoking task, `parentNodeRunId` = the launching call node_run,
    * `invocationDepth` = chain depth (root 0). All optional/defaulted so older
    * daemons' payloads and legacy fixtures keep parsing; `ref_closure_json`
@@ -442,7 +442,7 @@ export const TaskSummarySchema = z.object({
   workgroupName: z.string().nullable().optional(),
   /** RFC-165: execution-space kind (see TaskSchema.spaceKind). */
   spaceKind: SpaceKindSchema.default('remote'),
-  /** RFC-242: parent task linkage (see TaskSchema.parentTaskId); list rows carry
+  /** RFC-243: parent task linkage (see TaskSchema.parentTaskId); list rows carry
    *  it so the tasks page can nest/badge child executions without extra fetches. */
   parentTaskId: z.string().nullable().optional(),
   invocationDepth: z.number().int().nonnegative().optional(),
@@ -1013,7 +1013,7 @@ export const NodeRunSchema = z.object({
   /** RFC-203 T4 — RFC-145 machine-readable failure code (null for legacy
    *  rows / non-protocol failures). */
   failureCode: FailureCodeSchema.nullable().optional(),
-  /** RFC-242: the child task this call node_run launched (call-workflow /
+  /** RFC-243: the child task this call node_run launched (call-workflow /
    *  call-workgroup rows only). The task-detail UI links the node card to the
    *  child task and subscribes its status by this id. Optional+nullable for
    *  older daemons' payloads. */

@@ -117,11 +117,11 @@ export const ConfigSchema = z.object({
   scheduledTasksEnabled: z.boolean().default(true),
   /** RFC-159: consecutive fire failures before a schedule auto-disables. */
   scheduledTasksMaxFailures: z.number().int().positive().default(10),
-  /** RFC-242 §3.2: daemon-wide cap on concurrently active ({pending,running})
+  /** RFC-243 §3.2: daemon-wide cap on concurrently active ({pending,running})
    *  node-invoked child tasks. Grants are scan-based with ancestor exemption
    *  (deadlock-free); awaiting/interrupted children do not hold quota. */
   maxActiveChildTasks: z.number().int().positive().default(8),
-  /** RFC-242 §3.2: invocation-chain depth ceiling (root task = 0). A defensive
+  /** RFC-243 §3.2: invocation-chain depth ceiling (root task = 0). A defensive
    *  gate behind the launch-time closure cycle detection. */
   maxInvocationDepth: z.number().int().positive().default(3),
 

@@ -2171,7 +2171,7 @@ export interface Resources {
       workgroup: string
       agent: string
     }
-    /** RFC-242 PR-5: child-task nesting on /tasks + detail call-node links.
+    /** RFC-243 PR-5: child-task nesting on /tasks + detail call-node links.
      *  scopeFilter toggles the flat `include_children=true` listing; the
      *  expand/collapse pair labels the lazy per-parent children loader;
      *  parentTask* is the flat-mode badge (link ↔ neutral degrade when the
@@ -2598,7 +2598,7 @@ export interface Resources {
       categoryAll: string
       categoryAgent: string
       categoryWrapper: string
-      /** RFC-242 — Calls category (call-workflow). */
+      /** RFC-243 — Calls category (call-workflow). */
       categoryCalls: string
       categoryIo: string
       categoryHuman: string
@@ -2708,11 +2708,11 @@ export interface Resources {
     paletteReviewDesc: string
     paletteClarifyLabel: string
     paletteClarifyDesc: string
-    /** RFC-242 — Calls palette section + call-workflow entry. */
+    /** RFC-243 — Calls palette section + call-workflow entry. */
     paletteCalls: string
     paletteCallWorkflowLabel: string
     paletteCallWorkflowDesc: string
-    /** RFC-242 PR-4 — call-workgroup entry (Calls section). */
+    /** RFC-243 PR-4 — call-workgroup entry (Calls section). */
     paletteCallWorkgroupLabel: string
     paletteCallWorkgroupDesc: string
     menuPaste: string
@@ -3098,7 +3098,7 @@ export interface Resources {
     clarifySessionModeInline: string
     clarifySessionModeHint: string
     missingOption: string
-    // RFC-242 call-workflow node inspector
+    // RFC-243 call-workflow node inspector
     fieldCallWorkflow: string
     fieldCallWorkflowHint: string
     pickCallWorkflow: string
@@ -3114,7 +3114,7 @@ export interface Resources {
     fieldCallMaxDurationMsHint: string
     fieldCallMaxTotalTokens: string
     fieldCallMaxTotalTokensHint: string
-    // RFC-242 PR-4 call-workgroup node inspector
+    // RFC-243 PR-4 call-workgroup node inspector
     fieldCallWorkgroup: string
     fieldCallWorkgroupHint: string
     pickCallWorkgroup: string
@@ -3756,13 +3756,13 @@ export interface Resources {
   crossClarifyNode: {
     label: string
   }
-  /** RFC-242 — canvas chip label + unset-reference line for call-workflow
+  /** RFC-243 — canvas chip label + unset-reference line for call-workflow
    *  nodes (⧉ icon). */
   callWorkflowNode: {
     label: string
     unsetWorkflow: string
   }
-  /** RFC-242 PR-4 — canvas chip label + unset-reference line for
+  /** RFC-243 PR-4 — canvas chip label + unset-reference line for
    *  call-workgroup nodes (⬡ icon). */
   callWorkgroupNode: {
     label: string
@@ -6629,7 +6629,7 @@ export const zhCN: Resources = {
       workgroup: '工作组',
       agent: '单代理',
     },
-    // RFC-242 PR-5 — 子任务嵌套 / 调用节点直链。
+    // RFC-243 PR-5 — 子任务嵌套 / 调用节点直链。
     scopeFilter: {
       top: '仅顶层',
       all: '含子任务',
@@ -8400,7 +8400,7 @@ export const zhCN: Resources = {
       'wrapper-loop-nested': '循环包装器不能嵌套在另一个循环包装器里。',
       'wrapper-loop-output-binding-out-of-scope': '循环输出绑定必须引用循环体的直接成员。',
       'wrapper-output-boundary-missing': '离开包装器的数据必须通过包装器输出边界显式暴露。',
-      // RFC-242 — call-workflow 节点（design §9 错误码闭集）。
+      // RFC-243 — call-workflow 节点（design §9 错误码闭集）。
       'workflow-call-cycle': '工作流调用形成了环（含调用自身）。',
       'call-workflow-ref-missing': '调用节点引用的工作流不存在或未选择。',
       'call-workflow-upload-input-unsupported':
@@ -8408,7 +8408,7 @@ export const zhCN: Resources = {
       'call-workflow-output-port-collision': '被调用工作流的多个输出节点存在重名端口。',
       'call-workflow-input-unwired': '被调用工作流的输入端口缺少同名入边。',
       'call-workflow-in-fanout-unsupported': '调用节点不能放在扇出包装器内部。',
-      // RFC-242 PR-4 — call-workgroup 节点。
+      // RFC-243 PR-4 — call-workgroup 节点。
       'call-workgroup-ref-missing': '调用节点引用的工作组不存在或未选择。',
       'call-workgroup-in-fanout-unsupported': '调用节点不能放在扇出包装器内部。',
     },

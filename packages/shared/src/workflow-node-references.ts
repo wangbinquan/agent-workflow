@@ -69,7 +69,7 @@ export const WORKFLOW_NODE_REFERENCE_INVENTORY = {
   },
   clarify: NO_NODE_REFERENCES,
   'clarify-cross-agent': NO_NODE_REFERENCES,
-  // RFC-242: `workflowName`/`workflowId` are RESOURCE references (scalar,
+  // RFC-243: `workflowName`/`workflowId` are RESOURCE references (scalar,
   // rename-tolerant selectors), not node/port references — the clipboard
   // rewrite / deletion pruning machinery has nothing to manage, and the
   // scalar walk never mistakes them for node ids.

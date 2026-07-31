@@ -1,4 +1,4 @@
-# RFC-242 · 技术设计 —— 统一执行器与子工作流 / 工作组调用节点
+# RFC-243 · 技术设计 —— 统一执行器与子工作流 / 工作组调用节点
 
 - 状态：Draft **v2**（v1 经设计门一轮：2 P0 + 6 P1 + 14 P2，全部折入本版；
   门记录见 `./design-gate-2026-07-31.md`。配套 `proposal.md` 决策 D1–D16 及本轮勘误。）
@@ -14,7 +14,7 @@
    `POST /api/agents/:id/tasks`、`POST /api/workgroups/:id/tasks`、`scheduleLaunch`
    五个既有调用面，wire 零变化。
 2. **父子任务基建**：`tasks.parent_task_id / parent_node_run_id / invocation_depth /
-   ref_closure_json` 与 `node_runs.child_task_id`；引用闭包启动冻结 + 环检测 + 深度守卫 +
+ref_closure_json` 与 `node_runs.child_task_id`；引用闭包启动冻结 + 环检测 + 深度守卫 +
    全局活跃子任务限额（可放行者扫描制）；跨任务活性证据（RFC-230 `delegated` 的
    child-task 扩展）；取消/删除/GC/恢复级联与人工门等待的计时扣除。
 3. **两种新节点 kind**：`call-workflow` / `call-workgroup`。执行语义 = 把 RFC-130
@@ -27,30 +27,29 @@
 ### 1.1 契约（`packages/backend/src/services/execution/types.ts`）
 
 ```ts
-type ExecutionKind = 'workflow' | 'agent' | 'workgroup';   // 与 taskExecutionKind() 同域
-type ExecutionRef = { kind: ExecutionKind; id: string };
+type ExecutionKind = 'workflow' | 'agent' | 'workgroup' // 与 taskExecutionKind() 同域
+type ExecutionRef = { kind: ExecutionKind; id: string }
 
 type ExecutionInvoker =
-  | { type: 'user' }                                        // HTTP 启动（actor 即 owner）
-  | { type: 'scheduled'; scheduledTaskId: string }          // 定时启动
-  | { type: 'node'; parentTaskId: string; parentNodeRunId: string;
-      invocationDepth: number };                            // 调用节点（PR-3/4 启用）
+  | { type: 'user' } // HTTP 启动（actor 即 owner）
+  | { type: 'scheduled'; scheduledTaskId: string } // 定时启动
+  | { type: 'node'; parentTaskId: string; parentNodeRunId: string; invocationDepth: number } // 调用节点（PR-3/4 启用）
 
 type StartExecutionRequest = {
-  ref: ExecutionRef;
-  invoker: ExecutionInvoker;
+  ref: ExecutionRef
+  invoker: ExecutionInvoker
   // kind 专属载荷原样透传（zod 校验后的 StartTask / StartAgentTask / StartWorkgroupTask）。
   // 统一层不重造输入 schema —— 三种 wire 保持不变（D10），统一的是动词与生命周期。
-  payload: StartTask | StartAgentTask | StartWorkgroupTask;
-};
+  payload: StartTask | StartAgentTask | StartWorkgroupTask
+}
 
 type ExecutionOutcome = {
-  taskId: string;
-  status: TaskStatus;                                       // shared/schemas/task.ts:9
-  terminal: boolean;
-  outputs: Record<string, { content: string; kind: string | null }>; // §1.3 投影
-  error?: { summary: string | null; message: string | null; failedNodeId: string | null };
-};
+  taskId: string
+  status: TaskStatus // shared/schemas/task.ts:9
+  terminal: boolean
+  outputs: Record<string, { content: string; kind: string | null }> // §1.3 投影
+  error?: { summary: string | null; message: string | null; failedNodeId: string | null }
+}
 ```
 
 对外函数（`services/execution/executor.ts`）：
@@ -62,11 +61,11 @@ type ExecutionOutcome = {
     同样收编**——其 service 层对 `startTask` 的直调改经执行器，上传清理路径不变；
   - `agent` → 现 `startAgentTask`（`services/agentLaunch.ts:320`）全链（JSON 与 multipart）；
   - `workgroup` → 现 `startWorkgroupTask`（`services/workgroup/launch.ts:179`）全链。
-  适配器就是既有函数改名收编——**不改校验顺序、不改错误码/状态码、不改副作用**；
-  `routes/tasks.ts:198`、`routes/agents.ts:229`、`routes/workgroups.ts:174`、
-  `services/scheduleLaunch.ts:47-72` 的 kind-switch 全部换成 `startExecution`。
-  源代码文本锁：routes 层与 scheduleLaunch、launchMultipart 不得直呼 `startTask` /
-  `startAgentTask` / `startWorkgroupTask`（allowlist 只留执行器适配器自身）。
+    适配器就是既有函数改名收编——**不改校验顺序、不改错误码/状态码、不改副作用**；
+    `routes/tasks.ts:198`、`routes/agents.ts:229`、`routes/workgroups.ts:174`、
+    `services/scheduleLaunch.ts:47-72` 的 kind-switch 全部换成 `startExecution`。
+    源代码文本锁：routes 层与 scheduleLaunch、launchMultipart 不得直呼 `startTask` /
+    `startAgentTask` / `startWorkgroupTask`（allowlist 只留执行器适配器自身）。
 - `getExecutionOutcome(db, actor, taskId): Promise<ExecutionOutcome>` —— §1.3。
 - `watchExecutionTerminal(taskId, {signal, pollMs}): Promise<ExecutionOutcome>` —— §1.4。
 - `cancelExecution(db, taskId, opts?)` —— 委托 `cancelTask`（`services/task.ts:2095`）；
@@ -231,7 +230,7 @@ wrapper/有子行→delegated；否则 none。**新增最高优先的 child-task
   1. 行含 `child_task_id`，子任务**非终态** → 复用该行重挂等待（不 mint）。行状态若为
      interrupted，用 `setNodeRunStatus({allowedFrom:['interrupted'], to:'running'})`
      逃生舱复位（wrapper/fanout 恢复复位先例：`scheduler.ts:4522-4532 / 5425-5432 /
-     5907-5913`）；**call 行 adoption 禁走 mint**（mint 咽喉的
+5907-5913`）；**call 行 adoption 禁走 mint**（mint 咽喉的
      `abandonSupersededMergeStates`（`services/lifecycle.ts:708`）会作废子任务 canonical
      所在 iso 世代）——加源代码文本锁。
   2. 子任务 `interrupted` → 尝试 `resumeTask(child)`；**失败后必须重读子状态**：
@@ -248,7 +247,7 @@ wrapper/有子行→delegated；否则 none。**新增最高优先的 child-task
     merge_state 重读为准）→ F → 行 done；
   - `merged` → 仅 F（幂等：`onConflictDoUpdate` + 归档覆写）→ 行 done；
   - `conflict-human / merge-failed / abandoned` → 沿既有语义（park / failed / 已被取代）。
-  子任务非 done 终态 → 跳过 F/M，按失败映射收行（§6.2）。
+    子任务非 done 终态 → 跳过 F/M，按失败映射收行（§6.2）。
 - **重试调用节点**（`retryNode`，`task.ts:2756`）：目标为 call 行且旧子任务非终态 →
   先 `cancelExecution(child)`（级联、带级联标记）；`abandonSupersededMergeStates` 在
   mint 咽喉照常作废旧 iso 世代。新行入场即全新派生（现行 RFC-130 重试语义，
@@ -280,10 +279,10 @@ wrapper/有子行→delegated；否则 none。**新增最高优先的 child-task
   - **删子：`parent_task_id` 非空且 owning call 行非终态（或父任务非终态）→ 409
     `task-parent-active`**——堵「父收尾前删掉终态子任务」造成 `child_task_id` 悬空
     （现门只查子自身状态，`taskDelete.ts:86-105`）。
-  删除父行时 FK `ON DELETE CASCADE`（运行时 `PRAGMA foreign_keys=ON`，
-  `db/client.ts:122`）连带删子任务行；磁盘清理对 `space_kind='inherited'` 的后代
-  **跳过 worktree 删除**（空间属父 iso；含直接删子路径——`taskDelete.ts:109-115/166-181`
-  的逐仓 removeWorktree 对 inherited 一律跳过），仍清 `runs/{childId}`、`logs/{childId}`。
+    删除父行时 FK `ON DELETE CASCADE`（运行时 `PRAGMA foreign_keys=ON`，
+    `db/client.ts:122`）连带删子任务行；磁盘清理对 `space_kind='inherited'` 的后代
+    **跳过 worktree 删除**（空间属父 iso；含直接删子路径——`taskDelete.ts:109-115/166-181`
+    的逐仓 removeWorktree 对 inherited 一律跳过），仍清 `runs/{childId}`、`logs/{childId}`。
 - `runWorktreeGc`（`services/gc.ts:92`）候选排除 `space_kind='inherited'`。
 - **`runIsoWorktreeGc`（`gc.ts:377`）候选收紧**（修 P0-2）：容器 `{iso}/{taskId}` 仅当
   「任务终态 **且非 interrupted**（interrupted 可复活）**且**该任务不存在
@@ -305,7 +304,7 @@ limit-cancel 会级联砍掉停在完成门的子任务，且即便推迟击杀�
   续算）。
 - `enforceLimits`（`limits.ts:76-88`）的 duration 判定改为
   `elapsed − Σ(本任务 call 行 humanWaitMs 含在途段) > maxDurationMs`；
-- **击杀缓冲带**：存在「子任务当前处于 awaiting_*」时本 tick 不执行 duration 击杀
+- **击杀缓冲带**：存在「子任务当前处于 awaiting\_\*」时本 tick 不执行 duration 击杀
   （补 poll 粒度空隙），只记 alert。token 限额不受影响（子任务预算独立，D13）。
 - proposal D13 随本节勘误（人工门等待不计入父时长）。
 
@@ -342,9 +341,9 @@ name 为权威选择器、id 为解析缓存（agent 节点 `agentName`/`agentId
 「dangling until launch」语义同构，`services/resourceRefs.ts:10-13`）。
 不进 `WRAPPER_NODE_KINDS`。`NODE_KIND_BEHAVIORS`（`shared/node-kind-behavior.ts:100-161`）：
 
-| kind | retryCascade | isProcess | isAgent | settlesWithoutRow |
-|---|---|---|---|---|
-| call-workflow / call-workgroup | `mint-placeholder` | `true` | `false` | `false` |
+| kind                           | retryCascade       | isProcess | isAgent | settlesWithoutRow |
+| ------------------------------ | ------------------ | --------- | ------- | ----------------- |
+| call-workflow / call-workgroup | `mint-placeholder` | `true`    | `false` | `false`           |
 
 `WORKFLOW_NODE_FIELD_KEYS`（`shared/schemas/workflow.ts:436-452`，**校验焦点键**枚举，
 `'review-source'` 风格）新增 `call-ref / call-goal-template / call-limits / call-ports`。
@@ -580,24 +579,25 @@ agent 路径）——调用节点不占 agent 进程槽，消解「父占槽等�
 
 ## 9. 失败模式清单（错误码闭集）
 
-| 码 | 层 | 触发 |
-|---|---|---|
-| `workflow-call-cycle` | validate-draft / 启动闭包走查 | 跨定义调用环（含自环；issue 载荷 id-only） |
-| `workflow-call-ref-missing` | 启动闭包走查 / 调用节点发起 | 悬空 name / 资源不可读 |
-| `call-workflow-upload-input-unsupported` | validate-draft / launch 门 | 子定义含 upload 输入 |
-| `call-workflow-in-fanout-unsupported` | validate-draft / launch 门 | call 节点位于 wrapper-fanout 内层（v1 取舍，D7 偏差登记） |
-| `call-workflow-output-port-collision` | validate-draft / launch 门 | 子定义 output 端口重名 |
-| `invocation-depth-exceeded` | 调用节点发起 | 深度守卫 |
-| `workgroup-not-ready` | 调用节点发起 | 冻结配置 readiness / roster 失效 |
-| `child-task-failed` / `child-canceled` / `child-interrupted` / `child-deleted` | 调用节点收尾 | 子任务终态映射（§6.2；级联标记判别） |
-| `task-has-active-children` | deleteTask（父） | 有非终态后代 |
-| `task-parent-active` | deleteTask（子） | owning call 行 / 父任务未收尾 |
-| `call-row-finalized` | 子任务 resume/retry | 调用已收尾，禁止重跑子任务 |
-| 既有 `merge-conflict` / merge-failed / `unhandled-node-kind` 等 | 原语层 | 复用不变 |
+| 码                                                                             | 层                            | 触发                                                      |
+| ------------------------------------------------------------------------------ | ----------------------------- | --------------------------------------------------------- |
+| `workflow-call-cycle`                                                          | validate-draft / 启动闭包走查 | 跨定义调用环（含自环；issue 载荷 id-only）                |
+| `workflow-call-ref-missing`                                                    | 启动闭包走查 / 调用节点发起   | 悬空 name / 资源不可读                                    |
+| `call-workflow-upload-input-unsupported`                                       | validate-draft / launch 门    | 子定义含 upload 输入                                      |
+| `call-workflow-in-fanout-unsupported`                                          | validate-draft / launch 门    | call 节点位于 wrapper-fanout 内层（v1 取舍，D7 偏差登记） |
+| `call-workflow-output-port-collision`                                          | validate-draft / launch 门    | 子定义 output 端口重名                                    |
+| `invocation-depth-exceeded`                                                    | 调用节点发起                  | 深度守卫                                                  |
+| `workgroup-not-ready`                                                          | 调用节点发起                  | 冻结配置 readiness / roster 失效                          |
+| `child-task-failed` / `child-canceled` / `child-interrupted` / `child-deleted` | 调用节点收尾                  | 子任务终态映射（§6.2；级联标记判别）                      |
+| `task-has-active-children`                                                     | deleteTask（父）              | 有非终态后代                                              |
+| `task-parent-active`                                                           | deleteTask（子）              | owning call 行 / 父任务未收尾                             |
+| `call-row-finalized`                                                           | 子任务 resume/retry           | 调用已收尾，禁止重跑子任务                                |
+| 既有 `merge-conflict` / merge-failed / `unhandled-node-kind` 等                | 原语层                        | 复用不变                                                  |
 
 ## 10. 测试策略（随各 PR 交付，命名锁定回归意图）
 
 **shared 纯函数**：
+
 - `execution-outcome-projection.test.ts`：三 kind × 四终态投影矩阵；
   `pickUpstreamSourceRun` 口径的多代行（review 迭代 / loop 多 iteration / fanout 子行
   排除）；workgroup `result_message_id` 锚 + 历史回退 + **fc zero-delta 告警行不串味**；
@@ -611,6 +611,7 @@ agent 路径）——调用节点不占 agent 进程槽，消解「父占槽等�
   等待 60s 告警。
 
 **backend 集成**（stub runtime）：
+
 - `rfc242-executor-facade.test.ts`：五调用面（含 multipart）收编 wire/错误码逐字节回归；
   watch 四终态 + 注册即查 + poll fallback + 行缺失语义。
 - `rfc242-call-workflow.test.ts`：D→L→W→F→M 端到端；未提交父改动对子可见；子改动合回；
@@ -631,7 +632,7 @@ agent 路径）——调用节点不占 agent 进程槽，消解「父占槽等�
 - `rfc242-registry-mutex.test.ts`：并发 worktree add/remove 压力 + common-git-dir 键
   归属（iso-from-iso）+ 锁序断言。
 - **源代码文本锁**：`callNode.ts` 无 `globalSem.acquire`；路由/scheduleLaunch/
-  launchMultipart 不直呼 start*；call 行 adoption 无 mint 调用。
+  launchMultipart 不直呼 start\*；call 行 adoption 无 mint 调用。
 
 **frontend**：palette/inspector（含 forbidden 占位态）/画布端口/连线校验；列表嵌套
 与筛选 + overview 口径；子任务页 parentTaskId 降级呈现；i18n 类型强制。
@@ -660,7 +661,7 @@ agent 路径）——调用节点不占 agent 进程槽，消解「父占槽等�
 逐条处置见 `./design-gate-2026-07-31.md`。残余登记（实现期复核，不阻塞批准）：
 
 1. §3.2 深树插队饥饿的优先级老化（v1 只告警）。
-1b. fanout 内层 call 节点（D7 完整形态）：给 `dispatchFanoutShard` 增加 call 分支
+   1b. fanout 内层 call 节点（D7 完整形态）：给 `dispatchFanoutShard` 增加 call 分支
    （分片 iso 内派生子任务、shardKey 谱系、限额×subprocessSem 复合背压），独立后续项。
 2. §7.2 注册表互斥收口范围（默认全量；可降级新链路 only）。
 3. dw `result` 端口透传（v1 拼接文本）。
@@ -685,7 +686,8 @@ extract（§5.3）；YAML（§5.5）。
 **frontend**：`NODE_TYPES`（`WorkflowCanvas.tsx:141-153`）；节点组件
 （`components/canvas/nodes/`）；`PALETTE_DESCRIPTORS/PaletteItem/PALETTE_SECTIONS`
 （`nodePalette.ts:21-33/57-167/279-287`）；`KIND_INSPECTORS`（`NodeInspector.tsx:76-86`）
-+ Inspector 组件（`components/canvas/inspector/`）；`nodeTitle.ts:28-36`；
-`dropTarget.ts:67-69/101`；`controlFlowEdge.ts:46`；`wrapperCandidates.ts:60/77`；
-（容器才需）`coordProjection/wrapperFit/wrapperOps`；i18n 类型 + 双 locale
-（`zh-CN.ts:2678/7162`、`en-US.ts:3047`）。
+
+- Inspector 组件（`components/canvas/inspector/`）；`nodeTitle.ts:28-36`；
+  `dropTarget.ts:67-69/101`；`controlFlowEdge.ts:46`；`wrapperCandidates.ts:60/77`；
+  （容器才需）`coordProjection/wrapperFit/wrapperOps`；i18n 类型 + 双 locale
+  （`zh-CN.ts:2678/7162`、`en-US.ts:3047`）。

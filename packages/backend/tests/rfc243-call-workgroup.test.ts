@@ -1,4 +1,4 @@
-// RFC-242 PR-4 — call-workgroup 节点端到端（design §6.3）。
+// RFC-243 PR-4 — call-workgroup 节点端到端（design §6.3）。
 //
 // Locks in:
 //   1. 父工作流的 call-workgroup 节点从冻结闭包（workgroups 叶：完整 roster）
@@ -47,7 +47,7 @@ interface Harness {
 }
 
 async function buildHarness(): Promise<Harness> {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc242-wg-'))
+  const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc243-wg-'))
   const appHome = join(tmp, 'home')
   const stateDir = join(tmp, 'state')
   const planFile = join(tmp, 'plan.json')
@@ -89,9 +89,9 @@ async function buildHarness(): Promise<Harness> {
 
 const actor = buildActor({
   user: {
-    id: 'u-rfc242',
-    username: 'rfc242',
-    displayName: 'rfc242',
+    id: 'u-rfc243',
+    username: 'rfc243',
+    displayName: 'rfc243',
     role: 'admin',
     status: 'active',
   },
@@ -115,7 +115,7 @@ async function seedAgent(db: DbClient, name: string): Promise<string> {
   return agent.id
 }
 
-describe('RFC-242 e2e — call-workgroup 全链', () => {
+describe('RFC-243 e2e — call-workgroup 全链', () => {
   let h: Harness
   beforeEach(async () => {
     h = await buildHarness()
@@ -211,7 +211,7 @@ describe('RFC-242 e2e — call-workgroup 全链', () => {
     const parentTaskId = ulid()
     await h.db.insert(tasks).values({
       id: parentTaskId,
-      name: 'rfc242-wg-parent',
+      name: 'rfc243-wg-parent',
       workflowId: parentWorkflowId,
       workflowSnapshot: JSON.stringify(parentDef),
       repoPath: h.repoPath,

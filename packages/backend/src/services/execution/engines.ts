@@ -1,4 +1,4 @@
-// RFC-242 T3 — the explicit engine registry. `scheduler.runTask` used to
+// RFC-243 T3 — the explicit engine registry. `scheduler.runTask` used to
 // inline the workgroup/dw dispatch decision at its fork point; this module is
 // that decision, extracted verbatim as a pure function so the "which engine
 // drives this task" oracle lives in the executor namespace (design §1.2). The

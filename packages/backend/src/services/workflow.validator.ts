@@ -84,7 +84,7 @@ import { NotFoundError } from '@/util/errors'
 // -----------------------------------------------------------------------------
 
 /**
- * RFC-242 §5.4 — one entry of the pre-loaded call-workflow reference closure.
+ * RFC-243 §5.4 — one entry of the pre-loaded call-workflow reference closure.
  * `name` is the authoritative selector, `id` the resolution cache — both key
  * the closure map so `workflowName` and a stale `workflowId` hit the same row.
  */
@@ -95,7 +95,7 @@ export interface ValidatorWorkflowRef {
 }
 
 /**
- * RFC-242 §5.4 — the candidate a context is being loaded FOR. Optional second
+ * RFC-243 §5.4 — the candidate a context is being loaded FOR. Optional second
  * input of `loadWorkflowValidationContext`: when present the loader lazily
  * walks the candidate's call-workflow closure (never a full-table scan).
  * `currentWorkflow` is the candidate's own row identity when it exists —
@@ -116,10 +116,10 @@ export interface WorkflowValidationCandidate {
  * workflow referencing a missing/disabled plugin validated at launch and
  * died at spawn. A consistency lock test pins every caller to this helper.
  *
- * RFC-242 §5.4: pass the candidate being validated to ALSO load its
+ * RFC-243 §5.4: pass the candidate being validated to ALSO load its
  * call-workflow reference closure (lazy, name-keyed, transitively — the
  * advisory twin of the launch freeze in `services/execution/closure.ts`).
- * Callers that omit it keep the pre-RFC-242 context: call rules that need the
+ * Callers that omit it keep the pre-RFC-243 context: call rules that need the
  * child definition then degrade instead of false-failing (see §4f / rule 2).
  */
 export async function loadWorkflowValidationContext(
@@ -157,7 +157,7 @@ export async function loadWorkflowValidationContext(
 }
 
 /**
- * RFC-242 §5.4 — lazily load the call-workflow reference closure for ONE
+ * RFC-243 §5.4 — lazily load the call-workflow reference closure for ONE
  * candidate definition: BFS level-by-level over the `workflows` table by
  * authoritative NAME selector, following references of referenced definitions
  * transitively. Never loads unreferenced rows. Lenient advisory twin of the
@@ -288,7 +288,7 @@ export interface ValidatorContext {
    */
   plugins?: ValidatorPluginResource[]
   /**
-   * RFC-242 §5.4: the candidate's call-workflow reference closure, keyed by
+   * RFC-243 §5.4: the candidate's call-workflow reference closure, keyed by
    * name AND id (see `loadCallWorkflowClosure`). `undefined` ⇒ resolver
    * unavailable (a caller that didn't pass a candidate): §4f skips the
    * ref/shape/cycle checks and rule-2 edge/binding checks over call ports
@@ -298,11 +298,11 @@ export interface ValidatorContext {
    * it is the route-wiring task's concern.
    */
   callWorkflows?: ReadonlyMap<string, ValidatorWorkflowRef>
-  /** RFC-242 PR-4 — names of EXISTING workgroups referenced by call-workgroup
+  /** RFC-243 PR-4 — names of EXISTING workgroups referenced by call-workgroup
    *  nodes (advisory existence check; launch freeze stays authoritative). */
   callWorkgroupNames?: ReadonlySet<string>
   /**
-   * RFC-242 §5.4: identity of the workflow being validated, when it exists as
+   * RFC-243 §5.4: identity of the workflow being validated, when it exists as
    * a row. Enables the trivial self-call error and roots the cycle walk on
    * the real id (a draft-only back-edge closes against stored rows).
    */
@@ -529,7 +529,7 @@ export function validateWorkflowDef(
             .map((p) => p.id)
             .filter((id): id is string => id != null),
         )
-  // RFC-242 §5.4 — call-workflow resolver over the pre-loaded closure
+  // RFC-243 §5.4 — call-workflow resolver over the pre-loaded closure
   // (`loadWorkflowValidationContext(db, candidate)`). Kept as a nullable
   // function so `declaredPorts` receives the exact `workflowByRef` shape the
   // shared deriver expects; `callChildResolved` mirrors the deriver's ref
@@ -803,7 +803,7 @@ export function validateWorkflowDef(
   // — the same oracle the canvas renders with — so those wirings validate.
   const defnForPorts: WorkflowDefinition = { ...def, nodes, edges }
   for (const node of nodes) {
-    // RFC-242 §5.4: the optional resolver lets call-workflow nodes mirror the
+    // RFC-243 §5.4: the optional resolver lets call-workflow nodes mirror the
     // referenced definition's inputs/outputs; without it they declare no
     // ports and the call-specific rules degrade instead of false-erroring.
     const declared = declaredPorts(node, defnForPorts, agentByIdOrName, { workflowByRef })
@@ -856,7 +856,7 @@ export function validateWorkflowDef(
     if (edge.boundary !== 'wrapper-input') {
       const outs = outputPorts.get(src.id) ?? new Set()
       if (!outs.has(edge.source.portName)) {
-        // RFC-242 §5.4: a call-workflow source whose child definition is
+        // RFC-243 §5.4: a call-workflow source whose child definition is
         // unresolved (no resolver in ctx, or dangling ref — the latter is a
         // hard §4f error already) declares no ports; degrade to warning so
         // resolver unavailability cannot kill a legal edge.
@@ -921,7 +921,7 @@ export function validateWorkflowDef(
         })
       }
     } else if (tgt.kind === 'call-workflow') {
-      // RFC-242 §5.4(5): call nodes accept DATA inbound edges only, and only
+      // RFC-243 §5.4(5): call nodes accept DATA inbound edges only, and only
       // on the ports mirrored from the referenced definition's inputs[]
       // (fan-in merge on one port stays legal — this is a membership check,
       // not a cardinality check). Clarify-family channel wirings into a call
@@ -1315,7 +1315,7 @@ export function validateWorkflowDef(
         } else {
           const outs = outputPorts.get(b.bind.nodeId) ?? new Set()
           if (!outs.has(b.bind.portName)) {
-            // RFC-242 §5.4: binding a call-workflow port whose child is
+            // RFC-243 §5.4: binding a call-workflow port whose child is
             // unresolved degrades to warning (same rationale as rule 2).
             const boundNode = nodeById.get(b.bind.nodeId)
             const degraded = boundNode?.kind === 'call-workflow' && !callChildResolved(boundNode)
@@ -1358,7 +1358,7 @@ export function validateWorkflowDef(
         } else {
           const outs = outputPorts.get(b.bind.nodeId) ?? new Set()
           if (!outs.has(b.bind.portName)) {
-            // RFC-242 §5.4: loop-in-git/loop-over-call compositions are legal;
+            // RFC-243 §5.4: loop-in-git/loop-over-call compositions are legal;
             // an unresolved call child degrades this to warning (rule-2 twin).
             const boundNode = nodeById.get(b.bind.nodeId)
             const degraded = boundNode?.kind === 'call-workflow' && !callChildResolved(boundNode)
@@ -1416,7 +1416,7 @@ export function validateWorkflowDef(
               ? // RFC-223 (PR-3a impl-gate H3): id-first existence check.
                 resolveNodeAgent(exitNode, agentByIdOrName) !== undefined
               : exitNode?.kind === 'call-workflow'
-                ? // RFC-242 §5.4: loop-around-call ("loop until the audit is
+                ? // RFC-243 §5.4: loop-around-call ("loop until the audit is
                   // clean") is a designed composition; only judge the exit
                   // port when the referenced definition actually resolved.
                   callChildResolved(exitNode)
@@ -2234,7 +2234,7 @@ export function validateWorkflowDef(
     }
   }
 
-  // 4f. RFC-242 — call-workflow nodes (design §5.4) --------------------------
+  // 4f. RFC-243 — call-workflow nodes (design §5.4) --------------------------
   // Advisory twin of the launch-time closure freeze (`freezeCallClosure`,
   // services/execution/closure.ts): shown at /validate + /validate-draft,
   // enforced at the launch gate — which additionally fails closed on its own
@@ -2401,7 +2401,7 @@ export function validateWorkflowDef(
     }
   }
 
-  // 4g. RFC-242 PR-4 — call-workgroup nodes (design §6.3) --------------------
+  // 4g. RFC-243 PR-4 — call-workgroup nodes (design §6.3) --------------------
   // Workgroups are closure LEAVES: no recursion, no cycles — the checks are
   // structural fan-out containment + advisory existence (readiness stays a
   // launch-time gate; the frozen-launch face re-runs roster/policy/integrity).
@@ -2523,7 +2523,7 @@ export function validateWorkflowDef(
 
   // 5. prompt-template --------------------------------------------------------
   for (const node of nodes) {
-    // RFC-242 PR-4: call-workgroup goalTemplate shares the prompt-template
+    // RFC-243 PR-4: call-workgroup goalTemplate shares the prompt-template
     // variable domain (builtin tokens + inbound edge ports) and its codes.
     const isCallWorkgroup = node.kind === 'call-workgroup'
     if (node.kind !== 'agent-single' && !isCallWorkgroup) continue

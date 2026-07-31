@@ -53,7 +53,7 @@ export interface WorkgroupTaskState {
   gateRejectedComment: string | null
   pauseReason: string | null
   dwState: DwState | null
-  /** RFC-242 §6.4 — room message id anchoring the task's final result. */
+  /** RFC-243 §6.4 — room message id anchoring the task's final result. */
   resultMessageId: string | null
 }
 
@@ -450,7 +450,7 @@ export async function loadDbState(db: DbClient, taskId: string): Promise<EngineD
 }
 
 /**
- * RFC-242 §6.4 — stamp the result anchor. A plain column write (NOT a gate
+ * RFC-243 §6.4 — stamp the result anchor. A plain column write (NOT a gate
  * transition): the engine's done path calls it exactly once per convergence;
  * last write wins on the (unreachable) double-done.
  */

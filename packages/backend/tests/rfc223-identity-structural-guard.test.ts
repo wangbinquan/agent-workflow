@@ -104,7 +104,7 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/structuralDiff/classGraph.ts\u001fusedMembersAndCallers\u001fCallExpression:2bf15707fa543e1b8e92\u001f1\u001fcode-symbol\u001fbyName.set(m.name, arr)',
   'collection-name-identity\u001fpackages/backend/src/services/structuralDiff/classGraph.ts\u001fusedMembersAndCallers\u001fCallExpression:6edf3998342b9d961944\u001f1\u001fcode-symbol\u001fbyName.get(m.name)',
   'collection-name-identity\u001fpackages/backend/src/services/structuralDiff/gitBackend.ts\u001faugmentCrossFileImpact\u001fNewExpression:784001ec1ae2346e6103\u001f1\u001fcode-symbol\u001fnew Set(targets.map((t) => `${t.name}(`))',
-  // RFC-242 §5.4: the validator's lazy call-closure loader resolves the
+  // RFC-243 §5.4: the validator's lazy call-closure loader resolves the
   // node-authored `workflowName` portable selector (agentName precedent) to
   // stable ids + frozen definitions — the same boundary the launch freeze
   // (services/execution/closure.ts freezeCallClosure) crosses.
@@ -116,14 +116,14 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkgroupNames\u001fNewExpression:2cc6f17218adcaf9829a\u001f1\u001fportable-selector\u001fnew Set(rows.map((r) => r.name))',
   'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001fvalidateWorkflowDef\u001fCallExpression:1a30f5725a976c2cd480\u001f1\u001fportable-selector\u001fctx.callWorkgroupNames.has(name)',
   'collection-name-identity\u001fpackages/frontend/src/components/canvas/inspector/CallWorkgroupEdit.tsx\u001fCallWorkgroupEdit\u001fCallExpression:3f88d1d5f58f7d20b8a5\u001f1\u001fportable-selector\u001fworkgroups.find((w) => w.name === refName)',
-  // RFC-242 实现门 P0-1 — the id-cache-first hint map: the node's cached
+  // RFC-243 实现门 P0-1 — the id-cache-first hint map: the node's cached
   // workflowId is honored only when that row still bears the selector NAME,
   // and the name fallback is visibility-fenced (see closure.ts).
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:3f701ec7e535cf39181b\u001f1\u001fportable-selector\u001fidHintByName.get(name)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:6aaf3d713e00bc20c93a\u001f1\u001fportable-selector\u001fidHintByName.set(r.workflowName, r.workflowId)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:f615cea2c8ebd9f44567\u001f1\u001fportable-selector\u001fidHintByName.has(ref.workflowName)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:f6483c5b3337f8b8b880\u001f1\u001fportable-selector\u001fidHintByName.set(ref.workflowName, ref.workflowId)',
-  // RFC-242 PR-4 — workgroup-leaf closure freeze name surfaces (same
+  // RFC-243 PR-4 — workgroup-leaf closure freeze name surfaces (same
   // deterministic oldest-ULID selector rule as the workflow side).
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:02a5932b1082cf8c9639\u001f1\u001fportable-selector\u001frowByName.get(name)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:cc5f8d207780b450171f\u001f1\u001fportable-selector\u001frowByName.set(r.name, r)',
@@ -133,7 +133,7 @@ const EXACT_ALLOWANCE_ROWS = [
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fBinaryExpression:b7eb66bf361458a26852\u001f1\u001fportable-selector\u001ffrozenWorkgroups[name] = { id: row.id, version: row.version, group }',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fkeepWorkgroupsOf\u001fBinaryExpression:f7a5f661ceac0065c5fe\u001f1\u001fportable-selector\u001fkept.workgroups[ref.workgroupName] = g',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fparseCallClosure\u001fBinaryExpression:0dfb50f5c2f57f92e91c\u001f1\u001fportable-selector\u001fout.workgroups[name] = { id: r.id, version: r.version, group: r.group }',
-  // RFC-242 PR-3 — call-node name-selector surfaces (closure freeze /
+  // RFC-243 PR-3 — call-node name-selector surfaces (closure freeze /
   // save-time name-domain ACL / canvas resolver + inspector). All resolve the
   // portable workflowName selector to a stable id (or render it as display).
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:9ffabec59513ccd0a313\u001f1\u001fportable-selector\u001fbyName.set(r.name, r)',
@@ -335,7 +335,7 @@ describe('RFC-223 T15 structural identity guard', () => {
   test('production source matches the exact reviewed fingerprint multiset', () => {
     const findings = scanProductionSources()
     expect(allowanceDiagnostics(findings, EXACT_ALLOWANCES)).toEqual([])
-    expect(findings.length).toBe(136)
+    expect(findings.length).toBe(140)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

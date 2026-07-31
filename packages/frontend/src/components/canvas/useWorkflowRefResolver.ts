@@ -1,4 +1,4 @@
-// RFC-242 PR-3 — the ONE frontend fetch layer for call-workflow references
+// RFC-243 PR-3 — the ONE frontend fetch layer for call-workflow references
 // (design §5.2 consumer surface #1/#3). The canvas, the NodeInspector port
 // summary and the CallWorkflowEdit selector all resolve the referenced child
 // workflow through this hook so they share a single TanStack Query cache

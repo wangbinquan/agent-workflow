@@ -1,4 +1,4 @@
-// RFC-242 §3.1/§5.4 — call-node reference extraction and cross-definition
+// RFC-243 §3.1/§5.4 — call-node reference extraction and cross-definition
 // cycle detection. Pure, resolver-injected (zero IO); the backend launch
 // closure walk and the validator's 4f rules both consume these so the two
 // gates cannot drift.
@@ -34,7 +34,7 @@ export function collectWorkflowCallRefs(defn: WorkflowDefinition): WorkflowCallR
   return out
 }
 
-/** RFC-242 PR-4 — call-workgroup selector (workgroups are closure LEAVES:
+/** RFC-243 PR-4 — call-workgroup selector (workgroups are closure LEAVES:
  *  the dw validator rejects call nodes in generated DAGs, so a workgroup can
  *  never re-open the reference graph at runtime). */
 export interface WorkgroupCallRef {

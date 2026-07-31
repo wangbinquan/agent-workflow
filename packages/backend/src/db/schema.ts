@@ -743,7 +743,7 @@ export const workgroupTaskState = sqliteTable('workgroup_task_state', {
   pauseReason: text('pause_reason'),
   dwStateJson: text('dw_state_json'),
   /**
-   * RFC-242 §6.4 (migration 0127): the explicit RESULT ANCHOR — the room
+   * RFC-243 §6.4 (migration 0127): the explicit RESULT ANCHOR — the room
    * message id whose body IS the workgroup task's final result (lw: the
    * leader's done decision; fc: the engine's convergence summary). The
    * executor outcome projection reads THIS instead of guessing by
@@ -935,7 +935,7 @@ export const tasks = sqliteTable(
      * 'remote' = URL mode; 'scratch' = temporary space (workspace IS a fresh
      * git repo); 'internal' = framework-internal launches (fusion, via
      * `internalSource` — unreachable from the public wire); 'inherited' =
-     * RFC-242 child execution running inside its parent's call-node iso (the
+     * RFC-243 child execution running inside its parent's call-node iso (the
      * task does NOT own its disk space — delete/GC skip worktree removal).
      */
     spaceKind: text('space_kind', {
@@ -965,7 +965,7 @@ export const tasks = sqliteTable(
     workspacePruningAt: integer('workspace_pruning_at'),
     workspacePrunedAt: integer('workspace_pruned_at'),
     /**
-     * RFC-242 (migration 0126): parent linkage for node-invoked child
+     * RFC-243 (migration 0126): parent linkage for node-invoked child
      * executions. `parent_task_id` = the invoking task (FK, subtree rows are
      * cascade-deleted with the parent; deleteTask gates active descendants
      * first); `parent_node_run_id` = the call node_run that launched this
@@ -978,10 +978,10 @@ export const tasks = sqliteTable(
       onDelete: 'cascade',
     }),
     parentNodeRunId: text('parent_node_run_id'),
-    /** RFC-242: invocation-chain depth (root = 0); the launch-time depth guard input. */
+    /** RFC-243: invocation-chain depth (root = 0); the launch-time depth guard input. */
     invocationDepth: integer('invocation_depth').notNull().default(0),
     /**
-     * RFC-242 §3.1: the reference closure frozen at launch (workflow
+     * RFC-243 §3.1: the reference closure frozen at launch (workflow
      * definitions + workgroup config templates keyed by name). NULL when the
      * definition has no call nodes. NEVER serialized to any wire (TaskSchema
      * whitelist + regression lock) — child tasks re-expose only their own
@@ -996,7 +996,7 @@ export const tasks = sqliteTable(
     workflowIdx: index('idx_tasks_workflow').on(t.workflowId, t.startedAt),
     ownerIdx: index('idx_tasks_owner').on(t.ownerUserId),
     schedTaskIdx: index('idx_tasks_scheduled_task').on(t.scheduledTaskId), // RFC-159
-    parentIdx: index('idx_tasks_parent').on(t.parentTaskId), // RFC-242
+    parentIdx: index('idx_tasks_parent').on(t.parentTaskId), // RFC-243
   }),
 )
 
@@ -1413,7 +1413,7 @@ export const nodeRuns = sqliteTable(
      */
     agentOverrideId: text('agent_override_id'),
     /**
-     * RFC-242: the child task a call node_run launched (call-workflow /
+     * RFC-243: the child task a call node_run launched (call-workflow /
      * call-workgroup rows only, NULL everywhere else). Soft link on purpose —
      * a deleted child resolves to the `child-deleted` failure mapping instead
      * of breaking FK integrity for the historical run row. Doubles as the
@@ -1425,7 +1425,7 @@ export const nodeRuns = sqliteTable(
   (t) => ({
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),
     parentIdx: index('idx_node_runs_parent').on(t.parentNodeRunId),
-    childTaskIdx: index('idx_node_runs_child_task').on(t.childTaskId), // RFC-242
+    childTaskIdx: index('idx_node_runs_child_task').on(t.childTaskId), // RFC-243
   }),
 )
 

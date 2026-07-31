@@ -1,4 +1,4 @@
-// RFC-242 §7.2 — `.git/worktrees` 注册表互斥（实现门 P1-4 落地锁）。
+// RFC-243 §7.2 — `.git/worktrees` 注册表互斥（实现门 P1-4 落地锁）。
 //
 // Locks in:
 //   1. withWorktreeRegistryLock 对同一 common git dir 串行（互斥时序断言），
@@ -28,9 +28,9 @@ async function initRepo(dir: string): Promise<void> {
   await runGit(dir, ['commit', '-m', 'init'])
 }
 
-describe('RFC-242 §7.2 — worktree registry mutex', () => {
+describe('RFC-243 §7.2 — worktree registry mutex', () => {
   test('same common dir serializes; different repos run independently', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc242-lock-'))
+    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc243-lock-'))
     try {
       const repoA = join(tmp, 'a')
       const repoB = join(tmp, 'b')
@@ -64,7 +64,7 @@ describe('RFC-242 §7.2 — worktree registry mutex', () => {
   })
 
   test('并发 8 路 iso worktree add 打同一注册表：全部成功注册', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc242-stress-'))
+    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc243-stress-'))
     try {
       const repo = join(tmp, 'repo')
       await initRepo(repo)

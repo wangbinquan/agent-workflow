@@ -56,7 +56,7 @@ describe('WorkflowNodePicker', () => {
     expect(getByTestId('workflow-node-picker-category-all').textContent).toMatch(/11/)
     expect(getByTestId('workflow-node-picker-category-agents').textContent).toMatch(/1/)
     expect(getByTestId('workflow-node-picker-category-wrappers').textContent).toMatch(/3/)
-    // RFC-242 — call-workflow + call-workgroup entries in the Calls category.
+    // RFC-243 — call-workflow + call-workgroup entries in the Calls category.
     expect(getByTestId('workflow-node-picker-category-calls').textContent).toMatch(/2/)
     expect(getByTestId('workflow-node-picker-category-io').textContent).toMatch(/2/)
     expect(getByTestId('workflow-node-picker-category-human').textContent).toMatch(/3/)

@@ -1,4 +1,4 @@
-// RFC-242 §3.1 — the launch-time reference-closure freeze.
+// RFC-243 §3.1 — the launch-time reference-closure freeze.
 //
 // A parent task whose definition contains call nodes freezes EVERY transitively
 // referenced workflow definition (by authoritative NAME selector) into
@@ -31,7 +31,7 @@ export interface FrozenWorkflowRef {
   definition: WorkflowDefinition
 }
 
-/** RFC-242 PR-4 — a frozen workgroup RESOURCE row (member roster included).
+/** RFC-243 PR-4 — a frozen workgroup RESOURCE row (member roster included).
  *  Stored opaquely: the frozen-launch face re-derives the runtime config via
  *  buildWorkgroupRuntimeConfig(group, renderedGoal) at call time, so the
  *  closure never bakes a goal in. Workgroups are closure LEAVES (the dw

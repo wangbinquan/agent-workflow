@@ -158,7 +158,7 @@ describe('buildPalette', () => {
   // pin the exact i18n keys this module emits without booting the bundle.
   const identityT = (key: string) => key
 
-  test('groups agents into Agents + Wrappers + Calls + IO + Human sections (RFC-242 added Calls)', () => {
+  test('groups agents into Agents + Wrappers + Calls + IO + Human sections (RFC-243 added Calls)', () => {
     const sections = buildPalette([AGENT_A], identityT)
     expect(sections.map((s) => s.key)).toEqual(['agents', 'wrappers', 'calls', 'io', 'human'])
     const labels = sections.map((s) => s.label)

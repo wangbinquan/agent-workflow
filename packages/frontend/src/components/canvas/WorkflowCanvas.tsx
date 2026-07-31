@@ -154,9 +154,9 @@ const NODE_TYPES = {
   review: ReviewNode,
   clarify: ClarifyNode,
   'clarify-cross-agent': CrossClarifyNode,
-  // RFC-242 — call-workflow invokes another workflow as a child task.
+  // RFC-243 — call-workflow invokes another workflow as a child task.
   'call-workflow': CallWorkflowNode,
-  // RFC-242 PR-4 — call-workgroup hands the stage to a workgroup child task.
+  // RFC-243 PR-4 — call-workgroup hands the stage to a workgroup child task.
   'call-workgroup': CallWorkgroupNode,
 } satisfies Record<NodeKind, ComponentType<never>>
 
@@ -373,7 +373,7 @@ function CanvasInner({
   // `agentByName` — its many downstream consumers only read, and the id keys are
   // ULIDs that never collide with human names.)
   const agentByName = useMemo(() => buildNodeAgentLookup(agents ?? [], (a) => a), [agents])
-  // RFC-242 — shared child-workflow resolver for call-workflow port
+  // RFC-243 — shared child-workflow resolver for call-workflow port
   // derivation (declaredPorts 4th arg). Identity only changes when the
   // ['workflows'] cache entry does, so it can drive the def-sync ref-guard.
   const { workflowByRef } = useWorkflowRefResolver()
@@ -547,7 +547,7 @@ function CanvasInner({
   const externalClarifyNavsRef = useRef(clarifyNavs)
   const externalValidationIssuesRef = useRef(validationIssues)
   const externalEdgeInsertEnabledRef = useRef(edgeInsertEnabled)
-  // RFC-242: mirror of the agents late-load guard for the child-workflow
+  // RFC-243: mirror of the agents late-load guard for the child-workflow
   // resolver — the ['workflows'] query resolves after mount, and without a
   // resolver-changed arm a call-workflow node would keep zero port rows
   // until the next definition edit.
@@ -733,7 +733,7 @@ function CanvasInner({
     const clarifyNavsChanged = clarifyNavs !== externalClarifyNavsRef.current
     const validationChanged = validationIssues !== externalValidationIssuesRef.current
     const edgeInsertEnabledChanged = edgeInsertEnabled !== externalEdgeInsertEnabledRef.current
-    // RFC-242: resolver identity changes exactly when the ['workflows'] cache
+    // RFC-243: resolver identity changes exactly when the ['workflows'] cache
     // entry does — repaint call-workflow port rows on child-definition edits.
     const workflowRefsChanged = workflowByRef !== externalWorkflowByRefRef.current
     if (
@@ -2722,9 +2722,9 @@ export function computePorts(
   node: WorkflowNode,
   agentByName: Map<string, Agent>,
   definition: WorkflowDefinition,
-  // RFC-242 §5.2 — optional child-workflow resolver; only call-workflow
+  // RFC-243 §5.2 — optional child-workflow resolver; only call-workflow
   // nodes consult it. Omitting it (legacy call sites/tests) keeps the exact
-  // pre-RFC-242 declaration: the node declares no ports and edge-derived
+  // pre-RFC-243 declaration: the node declares no ports and edge-derived
   // fallbacks still render whatever edges exist.
   workflowByRef?: WorkflowByRef,
 ): PortInventory {
@@ -2819,7 +2819,7 @@ function toFlowNodes(
   onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void,
   validationCounts?: Readonly<Record<string, WorkflowValidationCounts | undefined>>,
   surface: WorkflowCanvasSurface = 'task',
-  // RFC-242: child-workflow resolver threaded into computePorts so
+  // RFC-243: child-workflow resolver threaded into computePorts so
   // call-workflow nodes render their child-mirrored port rows.
   workflowByRef?: WorkflowByRef,
 ): Node[] {
@@ -2926,7 +2926,7 @@ function toFlowNodes(
       }
     }
     if (n.kind === 'call-workflow') {
-      // RFC-242: surface the referenced workflow name onto node data so
+      // RFC-243: surface the referenced workflow name onto node data so
       // CallWorkflowNode can show "which workflow does this call" inside the
       // card body without re-reading the definition.
       const ref = (n as unknown as { workflowName?: unknown }).workflowName
@@ -2935,7 +2935,7 @@ function toFlowNodes(
       }
     }
     if (n.kind === 'call-workgroup') {
-      // RFC-242 PR-4: same reference chrome for the workgroup twin — surface
+      // RFC-243 PR-4: same reference chrome for the workgroup twin — surface
       // the referenced workgroup name onto node data for CallWorkgroupNode.
       const ref = (n as unknown as { workgroupName?: unknown }).workgroupName
       if (typeof ref === 'string' && ref.length > 0) {
@@ -3353,7 +3353,7 @@ export const __testToFlowNodes = (
   clarifyNavs?: Record<string, 'awaiting' | 'answered'>,
   onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void,
   surface: WorkflowCanvasSurface = 'task',
-  // RFC-242: child-workflow resolver so call-workflow port threading is
+  // RFC-243: child-workflow resolver so call-workflow port threading is
   // testable the same way the other data slots are.
   workflowByRef?: WorkflowByRef,
 ): Node[] => {

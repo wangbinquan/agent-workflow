@@ -1,4 +1,4 @@
-// RFC-242 PR-5 — call-workflow node authoring against a real daemon.
+// RFC-243 PR-5 — call-workflow node authoring against a real daemon.
 //
 // Scope note (deliberate, per the PR-5 plan): this spec covers the EDITOR
 // seam only — the palette's new Calls section, interactive creation of a
@@ -6,7 +6,7 @@
 // preview, real autosave persistence, and an error-free validation badge.
 // It does NOT run a parent→child task execution chain: the full
 // D→L→W→F→M runtime path is locked by the backend integration suites
-// (rfc242-call-workflow.test.ts and friends) with the stub runtime, and a
+// (rfc243-call-workflow.test.ts and friends) with the stub runtime, and a
 // browser re-run would only re-prove them at much higher cost.
 //
 // The seeded CHILD workflow has zero inputs on purpose: a call node whose
@@ -21,7 +21,7 @@ import { startDaemon, type DaemonHandle } from './harness'
 let daemon: DaemonHandle
 let parentWorkflowId: string
 
-const CHILD_WORKFLOW_NAME = 'rfc242-child-wf'
+const CHILD_WORKFLOW_NAME = 'rfc243-child-wf'
 
 test.setTimeout(60_000)
 
@@ -49,7 +49,7 @@ async function seedWorkflow(name: string): Promise<string> {
     },
     body: JSON.stringify({
       name,
-      description: 'RFC-242 PR-5 e2e fixture',
+      description: 'RFC-243 PR-5 e2e fixture',
       definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
     }),
   })
@@ -60,7 +60,7 @@ async function seedWorkflow(name: string): Promise<string> {
 test.beforeAll(async () => {
   daemon = await startDaemon()
   await seedWorkflow(CHILD_WORKFLOW_NAME)
-  parentWorkflowId = await seedWorkflow('rfc242-parent-wf')
+  parentWorkflowId = await seedWorkflow('rfc243-parent-wf')
 })
 
 test.afterAll(async () => {
@@ -76,7 +76,7 @@ test('palette Calls section creates a call-workflow node that selects a child an
   await expect(page.locator('.react-flow__node')).toHaveCount(0)
 
   // Empty-state entry → the canvas-owned node picker. The Calls category
-  // (RFC-242) must be present alongside the RFC-219 sections, and it carries
+  // (RFC-243) must be present alongside the RFC-219 sections, and it carries
   // the generic call-workflow entry.
   await page.getByTestId('workflow-empty-add-first').click()
   const picker = page.getByTestId('workflow-node-picker-dialog')

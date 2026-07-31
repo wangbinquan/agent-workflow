@@ -168,7 +168,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     }
     const revision = assertExactWorkflowRevision(workflow, parsed.data, 'workflow-validation-stale')
     await deps.workflowExactOperationHook?.({ operation: 'validate', revision })
-    // RFC-242 实现门 P1-2: thread the candidate so the 4f/4g call-node rules
+    // RFC-243 实现门 P1-2: thread the candidate so the 4f/4g call-node rules
     // (closure loader + workgroup existence) actually run on the editor face.
     const context = await loadWorkflowValidationContext(deps.db, {
       definition: workflow.definition,
@@ -211,7 +211,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       extractWorkflowAgentRefs(workflow.definition),
       extractWorkflowAgentRefs(parsed.data.definition),
     )
-    // RFC-242 (§5.3): NEW call-workflow name selectors ride the same D15 gate
+    // RFC-243 (§5.3): NEW call-workflow name selectors ride the same D15 gate
     // (dangle-tolerant name domain — see resourceRefs.RefCheckGroup.domain).
     const addedWorkflowNames = diffNewNames(
       new Set(extractWorkflowWorkflowRefs(workflow.definition)),
@@ -227,7 +227,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       { type: 'workgroup', names: addedWorkgroupNames, domain: 'name' },
     ])
 
-    // RFC-242 实现门 P1-2 — draft face gets the same candidate threading.
+    // RFC-243 实现门 P1-2 — draft face gets the same candidate threading.
     const context = await loadWorkflowValidationContext(deps.db, {
       definition: parsed.data.definition,
       currentWorkflow: { id: workflow.id, name: workflow.name },

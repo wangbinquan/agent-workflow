@@ -1,4 +1,4 @@
-// RFC-242 PR-4 — call-workgroup canvas renderer. A leaf node that hands this
+// RFC-243 PR-4 — call-workgroup canvas renderer. A leaf node that hands this
 // DAG stage to a workgroup running as an independent child task. Unlike
 // call-workflow (whose ports mirror the CHILD definition), its input ports
 // are pure edge-derived prompt vars for the goalTemplate (agent-single

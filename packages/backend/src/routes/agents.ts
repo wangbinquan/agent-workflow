@@ -42,7 +42,7 @@ import {
 } from '@/services/systemResources'
 import { mcps, plugins, skills } from '@/db/schema'
 import { inArray } from 'drizzle-orm'
-// RFC-242 T2: agent launches go through the unified executor facade — this
+// RFC-243 T2: agent launches go through the unified executor facade — this
 // route must not call startAgentTask directly (source-text lock).
 import { startExecution } from '@/services/execution/executor'
 import {

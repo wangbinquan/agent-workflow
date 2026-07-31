@@ -1530,7 +1530,7 @@ function NodeRunsTable({
                       </Link>
                     </>
                   )}
-                  {/* RFC-242 PR-5: a call node_run links its child execution
+                  {/* RFC-243 PR-5: a call node_run links its child execution
                       (+ live status chip; neutral placeholder when the child
                       is deleted/invisible). */}
                   {r.childTaskId != null && (

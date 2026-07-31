@@ -1,5 +1,5 @@
-// LOCKS: RFC-242 PR-3 — call-workflow static validation
-// (design/RFC-242-unified-executor/design.md §5.4).
+// LOCKS: RFC-243 PR-3 — call-workflow static validation
+// (design/RFC-243-unified-executor/design.md §5.4).
 //
 // WHY: the validator's 4f rules are the ADVISORY twin of the launch-time
 // closure freeze (services/execution/closure.ts) — validate-draft shows these
@@ -94,7 +94,7 @@ const codesOf = (r: { issues: Array<{ code: string }> }): string[] => r.issues.m
 const errorsOf = (r: { issues: Array<{ code: string; severity?: string }> }) =>
   r.issues.filter((i) => (i.severity ?? 'error') === 'error')
 
-describe('RFC-242 §5.4 — call-workflow validator (4f + rule-2 degradation)', () => {
+describe('RFC-243 §5.4 — call-workflow validator (4f + rule-2 degradation)', () => {
   test('call-workflow-ref-missing: unresolvable workflowName is an error', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const definition = def({ nodes: [callNode({ workflowName: 'ghost' })] })
@@ -388,7 +388,7 @@ describe('RFC-242 §5.4 — call-workflow validator (4f + rule-2 degradation)', 
   })
 })
 
-describe('RFC-242 §5.4(7) — dw generated definitions reject call nodes', () => {
+describe('RFC-243 §5.4(7) — dw generated definitions reject call nodes', () => {
   test('dwCallNodeRejections flags every call-workflow node with the layer-2 code', () => {
     const generated = def({
       nodes: [
@@ -423,9 +423,9 @@ describe('RFC-242 §5.4(7) — dw generated definitions reject call nodes', () =
   })
 })
 
-// RFC-242 PR-4 —— 4g call-workgroup 规则（fanout 内层拒绝 / advisory 存在性）。
+// RFC-243 PR-4 —— 4g call-workgroup 规则（fanout 内层拒绝 / advisory 存在性）。
 import { validateWorkflowDef as validateDef4g } from '../src/services/workflow.validator'
-describe('RFC-242 4g — call-workgroup rules', () => {
+describe('RFC-243 4g — call-workgroup rules', () => {
   const baseCtx = { agents: [], skills: [], mcps: [], plugins: [] }
   const wgNode = (over: Record<string, unknown> = {}) => ({
     id: 'cw',

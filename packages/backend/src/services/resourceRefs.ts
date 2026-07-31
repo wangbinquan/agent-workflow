@@ -55,7 +55,7 @@ export function diffNewNames(prev: ReadonlySet<string>, next: ReadonlySet<string
 }
 
 /**
- * RFC-242 (§5.3) — workflow references of a workflow definition (call-workflow
+ * RFC-243 (§5.3) — workflow references of a workflow definition (call-workflow
  * nodes). Unlike agent refs these are NAME selectors (the authoritative field;
  * `workflowId` is a local cache), deduped in declaration order. A malformed
  * call node without a `workflowName` is skipped — the validator owns that
@@ -65,7 +65,7 @@ export function extractWorkflowWorkflowRefs(defn: WorkflowDefinition): string[] 
   return [...new Set(collectWorkflowCallRefs(defn).map((ref) => ref.workflowName))]
 }
 
-/** RFC-242 PR-4 — call-workgroup selectors (same name-domain semantics). */
+/** RFC-243 PR-4 — call-workgroup selectors (same name-domain semantics). */
 export function extractWorkflowWorkgroupRefs(defn: WorkflowDefinition): string[] {
   return [...new Set(collectWorkgroupCallRefs(defn).map((ref) => ref.workgroupName))]
 }
@@ -95,13 +95,13 @@ export interface RefCheckGroup {
   /**
    * Reference tokens. In the default `'id'` domain these are canonical
    * resource ids (portable selectors are resolved only by the explicit
-   * importRefs boundary). In the `'name'` domain (RFC-242 workflow call
+   * importRefs boundary). In the `'name'` domain (RFC-243 workflow call
    * selectors) they are display names resolved against the type's `name`
    * column.
    */
   names: readonly string[]
   /**
-   * RFC-242 (§5.3) — token domain, default `'id'`. `'name'` groups carry
+   * RFC-243 (§5.3) — token domain, default `'id'`. `'name'` groups carry
    * dangle-tolerant NAME selectors (workflow names are deliberately
    * non-unique): a name matching ZERO rows passes (dangling until launch,
    * which fails closed with `workflow-call-ref-missing`), a name whose every
@@ -114,7 +114,7 @@ export interface RefCheckGroup {
 }
 
 /**
- * RFC-242 (§5.3) — async preflight twin of `resolveRefsUsableById` for the
+ * RFC-243 (§5.3) — async preflight twin of `resolveRefsUsableById` for the
  * NAME token domain. Existence is not enforced (zero matching rows = dangling,
  * legal to persist); a name is `missing` only when at least one row matches
  * and none is visible to the enforcing actor. Never throws — callers
@@ -260,7 +260,7 @@ export async function assertNewRefsUsable(
  * Framework callers (`actor === null`) and resource admins bypass visibility,
  * but never existence — they cannot commit a new dangling reference either.
  *
- * `'name'`-domain groups (RFC-242 workflow call selectors) invert the
+ * `'name'`-domain groups (RFC-243 workflow call selectors) invert the
  * existence half on purpose: a dangling name IS a legal persisted state
  * (launch fails closed with `workflow-call-ref-missing`), so a fenced name
  * whose rows vanished between preflight and commit degrades to dangling

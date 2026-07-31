@@ -39,7 +39,7 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
       all: 60,
       agents: 50,
       wrappers: 3,
-      // RFC-242 — call-workflow + call-workgroup entries in the Calls category.
+      // RFC-243 — call-workflow + call-workgroup entries in the Calls category.
       calls: 2,
       io: 2,
       human: 3,

@@ -59,7 +59,7 @@ export interface NodeInspectorProps {
   definition: WorkflowDefinition
   selectedNodeId: string | null
   agents: Agent[]
-  /** RFC-242: identity of the workflow being edited — threaded to
+  /** RFC-243: identity of the workflow being edited — threaded to
    *  CallWorkflowEdit so the reference selector excludes self. Optional. */
   workflowId?: string
   focusRequest?: { requestId: number; focusId: string } | null
@@ -89,9 +89,9 @@ const KIND_INSPECTORS = {
   review: ReviewEdit,
   clarify: ClarifyEdit,
   'clarify-cross-agent': CrossClarifyEdit,
-  // RFC-242 — call-workflow: child-workflow selector + port preview + limits.
+  // RFC-243 — call-workflow: child-workflow selector + port preview + limits.
   'call-workflow': CallWorkflowEdit,
-  // RFC-242 PR-4 — call-workgroup: workgroup selector + goalTemplate + limits.
+  // RFC-243 PR-4 — call-workgroup: workgroup selector + goalTemplate + limits.
   'call-workgroup': CallWorkgroupEdit,
 } as const satisfies Record<NodeKind, FC<EditProps>>
 
@@ -110,7 +110,7 @@ export function NodeInspector({
   const [tab, setTab] = useState<Tab>('edit')
   const [transitionNotice, setTransitionNotice] = useState<string | null>(null)
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents), [agents])
-  // RFC-242: child-workflow resolver so a selected call-workflow node's port
+  // RFC-243: child-workflow resolver so a selected call-workflow node's port
   // summary counts its child-mirrored ports (provider-tolerant hook — several
   // inspector suites render without a QueryClientProvider).
   const { workflowByRef } = useWorkflowRefResolver()

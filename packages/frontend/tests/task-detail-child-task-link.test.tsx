@@ -1,4 +1,4 @@
-// RFC-242 PR-5 — task-detail child-task link locks.
+// RFC-243 PR-5 — task-detail child-task link locks.
 //
 // A call-workflow / call-workgroup node_run carries `childTaskId`. The detail
 // page must surface it as a「子任务」jump link + live status chip, resolved
@@ -108,7 +108,7 @@ async function renderLink(childTaskId: string) {
   return router
 }
 
-describe('ChildTaskLink (RFC-242 PR-5)', () => {
+describe('ChildTaskLink (RFC-243 PR-5)', () => {
   test('renders the /tasks/<child> jump link plus the live status chip', async () => {
     const rec = installFetch([childRow('t_child', 'running')])
     await renderLink('t_child')

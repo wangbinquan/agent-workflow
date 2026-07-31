@@ -80,7 +80,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // T4/T6 把该写点随 handler 本体下沉 services/workgroup/configActions.ts
   // （updateTaskConfig 是 workgroupConfigJson 的唯一 UPDATE 属主）。
   'services/workgroup/configActions.ts': 1,
-  // RFC-242 §4.3 — cancelTask 的级联标记补写：cascade 收尾在行已 canceled
+  // RFC-243 §4.3 — cancelTask 的级联标记补写：cascade 收尾在行已 canceled
   // （status 由调度器或 fallback CAS 落定）之后，把 errorMessage 幂等改写为
   // 'canceled-by-parent-cascade'（WHERE status='canceled' 守卫，绝不翻状态）。
   'services/task.ts': 1,

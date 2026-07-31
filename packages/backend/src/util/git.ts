@@ -653,10 +653,10 @@ export async function cleanupCreatedWorktree(
 }
 
 // -----------------------------------------------------------------------------
-// RFC-242 §7.2 — `.git/worktrees` registry mutex.
+// RFC-243 §7.2 — `.git/worktrees` registry mutex.
 //
 // `git worktree add/remove/prune` all mutate the COMMON git dir's worktrees
-// registry. Cross-task concurrency on one repo predates RFC-242 (two tasks on
+// registry. Cross-task concurrency on one repo predates RFC-243 (two tasks on
 // the same cached repo already race), but call nodes multiply the surface:
 // the parent's node isos AND every child task's node isos register into the
 // SAME common dir (a child's canonical is a linked worktree of it). The
@@ -2027,7 +2027,7 @@ export interface RemoveWorktreeOptions {
 export async function removeWorktree(opts: RemoveWorktreeOptions): Promise<void> {
   const args = ['worktree', 'remove', opts.worktreePath]
   if (opts.force) args.push('--force')
-  // RFC-242 §7.2 registry mutex (see withWorktreeRegistryLock).
+  // RFC-243 §7.2 registry mutex (see withWorktreeRegistryLock).
   const r = await withWorktreeRegistryLock(opts.repoPath, () =>
     runGit(opts.repoPath, args, { timeoutMs: opts.timeoutMs }),
   )
@@ -2215,7 +2215,7 @@ export interface CreateIsolatedWorktreeOptions {
  * shows nothing. Then submodules are synced (D20) so submodule working dirs match.
  */
 export async function createIsolatedWorktree(opts: CreateIsolatedWorktreeOptions): Promise<void> {
-  // RFC-242 §7.2: the registry write serializes on the common git dir —
+  // RFC-243 §7.2: the registry write serializes on the common git dir —
   // parent tasks, child tasks and iso-of-iso all collapse onto one key.
   const add = await withWorktreeRegistryLock(opts.repoPath, () =>
     runGit(opts.repoPath, ['worktree', 'add', '--detach', opts.isoPath, opts.baseSnapshotCommit]),

@@ -1,4 +1,4 @@
-// RFC-242 PR-3 — frontend registration of the call-workflow node kind.
+// RFC-243 PR-3 — frontend registration of the call-workflow node kind.
 // Locks in, per design §5.2 (frontend consumer surfaces) + §8:
 //   1. palette: the new Calls section carries the call-workflow entry and a
 //      fresh drop starts with an empty workflowName (Inspector fills it);
@@ -121,7 +121,7 @@ describe('palette carries the call-workflow entry (Calls section)', () => {
     const sections = buildPalette([], identityT)
     const calls = sections.find((s) => s.key === 'calls')
     expect(calls).toBeDefined()
-    // RFC-242 PR-4 — the Calls section now carries the workgroup twin too
+    // RFC-243 PR-4 — the Calls section now carries the workgroup twin too
     // (NODE_KIND declaration order fixes within-section order).
     expect(calls?.items.map((i) => i.item.kind)).toEqual(['call-workflow', 'call-workgroup'])
     expect(calls?.items[0]?.label).toBe('⧉ editor.paletteCallWorkflowLabel')
@@ -204,7 +204,7 @@ describe('call-workflow port derivation (computePorts / candidates via resolver)
       },
     ])
     // Without a resolver the member stays listed but contributes no ports —
-    // legacy callers keep their exact pre-RFC-242 shape.
+    // legacy callers keep their exact pre-RFC-243 shape.
     expect(loopMemberCandidates(wrapper, defOf([wrapper, member]), [])[0]?.outputPorts).toEqual([])
   })
 })

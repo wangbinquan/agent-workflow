@@ -191,7 +191,7 @@ describe('RFC-199 strict workflow validation targets', () => {
     // emissions; RFC-199 B5 adds the fixed review-input port, conflict and
     // mirror-mismatch emissions; RFC-228 adds MCP closure failures; RFC-236
     // adds the loop continuation-policy type failure; Intent Builder hardening
-    // adds the fanout wrapper-input-to-aggregator failure; RFC-242 §5.4 adds
+    // adds the fanout wrapper-input-to-aggregator failure; RFC-243 §5.4 adds
     // the nine call-workflow emissions (rule-2 call edge branch + 4f family:
     // fanout containment, self/graph cycles, ref-missing ×2, upload, output
     // collision, input unwired). Every new site must still carry a strict

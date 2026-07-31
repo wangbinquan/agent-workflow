@@ -214,7 +214,7 @@ interface NodeRunCounts {
   }>
 }
 
-/** RFC-242 §4.1 — is a call row's child task legitimately quiet? True when the
+/** RFC-243 §4.1 — is a call row's child task legitimately quiet? True when the
  *  child sits on a human gate (awaiting_*) or its own events are fresh. A
  *  missing / terminal-but-unfinalized child is NOT healthy — the call row's
  *  silence is then a real signal. */
@@ -418,7 +418,7 @@ async function checkOne(
       // {nodeRunId,nodeId,pid,lastEventTs} so the operator can inspect /
       // kill the pid; cancel/resume run the RFC-098 kill-then-proceed path.
       //
-      // RFC-242 §4.1 — S5 freshness delegation: a call row's silence is by
+      // RFC-243 §4.1 — S5 freshness delegation: a call row's silence is by
       // design (its work happens in the CHILD task). The row is quiet-but-fine
       // when its child is currently awaiting_* (legitimate multi-day human
       // gate) OR the child's own event stream is fresh. Only rows with no such

@@ -1,4 +1,4 @@
-// RFC-242 PR-1 — unified executor facade locks.
+// RFC-243 PR-1 — unified executor facade locks.
 //
 // Locks in (design.md §1.1/§1.2/§1.4):
 //   1. Source-text: the four launch call faces (routes/tasks.ts incl. the
@@ -6,10 +6,10 @@
 //      services/scheduleLaunch.ts) go through `startExecution` and never call
 //      startTask / startAgentTask / startWorkgroupTask directly again.
 //   2. resolveTaskEngine — the engine fork extracted from scheduler.ts is
-//      byte-equal to the pre-RFC-242 inline decision (RFC-164/167/217
+//      byte-equal to the pre-RFC-243 inline decision (RFC-164/167/217
 //      semantics).
 //   3. startExecution guards: workflow ref/payload id mismatch fails loudly;
-//      the `node` invoker is fail-closed until RFC-242 PR-3/4.
+//      the `node` invoker is fail-closed until RFC-243 PR-3/4.
 //   4. executionWatch: immediate resolve for already-terminal rows; multicast
 //      resolve from the lifecycle write path for ALL FOUR terminal statuses
 //      (failed/interrupted included — the single-slot RFC-202 hook only fires
@@ -41,7 +41,7 @@ function srcText(rel: string): string {
   return readFileSync(resolve(SRC, rel), 'utf8')
 }
 
-describe('RFC-242 T2 — launch call faces route through the executor (source lock)', () => {
+describe('RFC-243 T2 — launch call faces route through the executor (source lock)', () => {
   const CALL_FACES = [
     'routes/tasks.ts',
     'routes/agents.ts',
@@ -75,8 +75,8 @@ describe('RFC-242 T2 — launch call faces route through the executor (source lo
     expect(fnEnd).toBeGreaterThan(fnStart)
     const body = text.slice(fnStart, fnEnd)
     expect(body).not.toContain('globalSem.acquire')
-    const aStart = body.indexOf('RFC-242-LOCK:adoption-no-mint-begin')
-    const aEnd = body.indexOf('RFC-242-LOCK:adoption-no-mint-end')
+    const aStart = body.indexOf('RFC-243-LOCK:adoption-no-mint-begin')
+    const aEnd = body.indexOf('RFC-243-LOCK:adoption-no-mint-end')
     expect(aStart).toBeGreaterThan(0)
     expect(aEnd).toBeGreaterThan(aStart)
     expect(body.slice(aStart, aEnd)).not.toContain('mintNodeRun(')
@@ -89,7 +89,7 @@ describe('RFC-242 T2 — launch call faces route through the executor (source lo
   })
 })
 
-describe('RFC-242 T3 — resolveTaskEngine (extracted fork, byte-equal semantics)', () => {
+describe('RFC-243 T3 — resolveTaskEngine (extracted fork, byte-equal semantics)', () => {
   const lwConfig = JSON.stringify({ mode: 'leader_worker' })
   const dwConfig = JSON.stringify({ mode: 'dynamic_workflow' })
 
@@ -128,7 +128,7 @@ describe('RFC-242 T3 — resolveTaskEngine (extracted fork, byte-equal semantics
   })
 })
 
-describe('RFC-242 T1 — startExecution guards', () => {
+describe('RFC-243 T1 — startExecution guards', () => {
   // guard paths throw before any db/actor/deps use — safe minimal stubs.
   const stubDb = null as unknown as DbClient
   const stubActor = { user: { id: 'u1' } } as unknown as Actor
@@ -187,11 +187,11 @@ async function seedTask(db: DbClient, status: TaskStatus): Promise<string> {
   })
   await db.insert(tasks).values({
     id: taskId,
-    name: 'rfc242-watch',
+    name: 'rfc243-watch',
     workflowId,
     workflowSnapshot: JSON.stringify(definition),
-    repoPath: '/tmp/rfc242-nowhere',
-    worktreePath: '/tmp/rfc242-nowhere',
+    repoPath: '/tmp/rfc243-nowhere',
+    worktreePath: '/tmp/rfc243-nowhere',
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
     status,
@@ -201,7 +201,7 @@ async function seedTask(db: DbClient, status: TaskStatus): Promise<string> {
   return taskId
 }
 
-describe('RFC-242 T5 — executionWatch', () => {
+describe('RFC-243 T5 — executionWatch', () => {
   test('already-terminal task resolves on the immediate read', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db, 'done')
@@ -224,7 +224,7 @@ describe('RFC-242 T5 — executionWatch', () => {
       taskId,
       to: 'failed',
       allowedFrom: ['running'],
-      reason: 'rfc242-test',
+      reason: 'rfc243-test',
     })
     expect(await watching).toEqual({ kind: 'terminal', status: 'failed' })
   })
@@ -241,7 +241,7 @@ describe('RFC-242 T5 — executionWatch', () => {
       taskId,
       to: 'interrupted',
       allowedFrom: ['running'],
-      reason: 'rfc242-test',
+      reason: 'rfc243-test',
     })
     expect(won).toBe(true)
     expect(await a).toEqual({ kind: 'terminal', status: 'interrupted' })

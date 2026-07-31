@@ -1,4 +1,4 @@
-// RFC-242 T4 — unified outcome projection matrix.
+// RFC-243 T4 — unified outcome projection matrix.
 //
 // Locks in (design.md §1.3/§6.4):
 //   1. Row selection is the pickUpstreamSourceRun口径 (top-level + done +
@@ -58,7 +58,7 @@ function run(over: Partial<OutcomeRunRow> & { id: string; nodeId: string }): Out
   return { iteration: 0, parentNodeRunId: null, status: 'done', ...over }
 }
 
-describe('RFC-242 T4 — workflow projection (pickUpstreamSourceRun口径)', () => {
+describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () => {
   test('picks the highest iteration, then the freshest ULID; fanout child rows excluded', () => {
     const old = run({ id: '01A', nodeId: 'out-a' })
     const newer = run({ id: '01B', nodeId: 'out-a', iteration: 1 })
@@ -147,7 +147,7 @@ describe('RFC-242 T4 — workflow projection (pickUpstreamSourceRun口径)', () 
   })
 })
 
-describe('RFC-242 T4 — agent projection', () => {
+describe('RFC-243 T4 — agent projection', () => {
   test('projects the __agent_main__ ports', () => {
     const outcome = projectExecutionOutcome({
       task: baseTask({ sourceAgentName: 'worker', workflowSnapshot: '{"nodes":[]}' }),
@@ -159,7 +159,7 @@ describe('RFC-242 T4 — agent projection', () => {
   })
 })
 
-describe('RFC-242 T4/§6.4 — workgroup result carriers', () => {
+describe('RFC-243 T4/§6.4 — workgroup result carriers', () => {
   const lw = JSON.stringify({ mode: 'leader_worker' })
   const fc = JSON.stringify({ mode: 'free_collab' })
   const dw = JSON.stringify({ mode: 'dynamic_workflow' })
@@ -230,7 +230,7 @@ describe('RFC-242 T4/§6.4 — workgroup result carriers', () => {
   })
 })
 
-describe('RFC-242 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
+describe('RFC-243 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
   test('result_message_id anchors the projection; noise decision rows cannot win', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wfId = ulid()
@@ -287,7 +287,7 @@ describe('RFC-242 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
   })
 })
 
-describe('RFC-242 §6.3 — dw 子任务的 result 折叠（实现门 P1-3）', () => {
+describe('RFC-243 §6.3 — dw 子任务的 result 折叠（实现门 P1-3）', () => {
   test('多端口按 name 字典序折叠成单一 result；已有 result 端口原样保留', async () => {
     // 折叠发生在调度器 F 步（call-workgroup 臂）；这里锁定其纯函数形态：
     // 投影产出多端口 → 折叠为 `## name` 分节，顺序与端口名字典序一致。
@@ -325,7 +325,7 @@ describe('RFC-242 §6.3 — dw 子任务的 result 折叠（实现门 P1-3）', 
   })
 })
 
-describe('RFC-242 T4 — getExecutionOutcome db assembly', () => {
+describe('RFC-243 T4 — getExecutionOutcome db assembly', () => {
   test('done workflow task round-trips output rows; missing task 404s', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const definition = {
@@ -343,11 +343,11 @@ describe('RFC-242 T4 — getExecutionOutcome db assembly', () => {
     })
     await db.insert(tasks).values({
       id: taskId,
-      name: 'rfc242-outcome',
+      name: 'rfc243-outcome',
       workflowId,
       workflowSnapshot: JSON.stringify(definition),
-      repoPath: '/tmp/rfc242-nowhere',
-      worktreePath: '/tmp/rfc242-nowhere',
+      repoPath: '/tmp/rfc243-nowhere',
+      worktreePath: '/tmp/rfc243-nowhere',
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
       status: 'done',

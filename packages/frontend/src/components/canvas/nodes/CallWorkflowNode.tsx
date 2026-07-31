@@ -1,4 +1,4 @@
-// RFC-242 PR-3 — call-workflow canvas renderer. A leaf node that invokes
+// RFC-243 PR-3 — call-workflow canvas renderer. A leaf node that invokes
 // another workflow as an independent child task; its data ports mirror the
 // CHILD definition (inputs = child workflow inputs, outputs = child output
 // nodes' port union) resolved by useWorkflowRefResolver and pre-computed

@@ -18,8 +18,8 @@ import i18n from '@/i18n'
  *   2. agent-single → agentName (or the localized "(unset agent)");
  *   3. input → inputKey (or the localized "(unset key)");
  *   4. review → `review:<port>` when inputSource.portName is wired;
- *   5. call-workflow → workflowName (or the localized kind label, RFC-242);
- *   6. call-workgroup → workgroupName (same rule, RFC-242 PR-4);
+ *   5. call-workflow → workflowName (or the localized kind label, RFC-243);
+ *   6. call-workgroup → workgroupName (same rule, RFC-243 PR-4);
  *   7. otherwise '' — callers decide the id fallback.
  */
 export function nodeDisplayTitle(n: WorkflowNode): string {
@@ -33,7 +33,7 @@ export function nodeDisplayTitle(n: WorkflowNode): string {
       : i18n.t('editor.nodeTitleUnsetAgent')
   }
   if (n.kind === 'call-workflow') {
-    // RFC-242 — the referenced workflow name IS the node's identity (same
+    // RFC-243 — the referenced workflow name IS the node's identity (same
     // rule as agentName); an unset ref falls back to the kind label rather
     // than the raw node id so fresh drops read as "调用工作流".
     return typeof rec.workflowName === 'string' && rec.workflowName.length > 0
@@ -41,7 +41,7 @@ export function nodeDisplayTitle(n: WorkflowNode): string {
       : i18n.t('callWorkflowNode.label')
   }
   if (n.kind === 'call-workgroup') {
-    // RFC-242 PR-4 — workgroup twin of the rule above: workgroupName is the
+    // RFC-243 PR-4 — workgroup twin of the rule above: workgroupName is the
     // identity, kind label the unset fallback.
     return typeof rec.workgroupName === 'string' && rec.workgroupName.length > 0
       ? rec.workgroupName

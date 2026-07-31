@@ -331,7 +331,7 @@ export async function startWorkgroupTask(
 }
 
 // -----------------------------------------------------------------------------
-// RFC-242 §6.3 — the FROZEN launch face for call-workgroup child executions.
+// RFC-243 §6.3 — the FROZEN launch face for call-workgroup child executions.
 //
 // The parent froze `buildWorkgroupRuntimeConfig(group, '')` into its ref
 // closure at ITS launch (D9); a call node materializes that template with the

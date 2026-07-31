@@ -86,11 +86,11 @@ const NO_PORTS: DeclaredPorts = Object.freeze({
 })
 
 /**
- * RFC-242 §5.2 — resolver for call-workflow port derivation. Returns the
+ * RFC-243 §5.2 — resolver for call-workflow port derivation. Returns the
  * referenced workflow's definition, `'forbidden'` when the caller may not see
  * it (grandfathered reference without a use-grant — Inspector shows an
  * opaque placeholder), or `null` when unknown/still loading. Optional: every
- * pre-RFC-242 call site keeps its 3-arg shape and call-workflow simply
+ * pre-RFC-243 call site keeps its 3-arg shape and call-workflow simply
  * declares no ports there.
  */
 export type WorkflowByRef = (nameOrId: string) => WorkflowDefinition | 'forbidden' | null
@@ -235,7 +235,7 @@ const PORT_DERIVERS = {
       { name: CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT },
     ],
   }),
-  // RFC-242 §5.2 — call-workflow: inputs mirror the CHILD definition's
+  // RFC-243 §5.2 — call-workflow: inputs mirror the CHILD definition's
   // declared workflow inputs; outputs are the union of its output nodes'
   // bound port names (deduped — a collision is a validator error, the
   // declaration keeps first-wins for rendering stability). Without a
@@ -263,7 +263,7 @@ const PORT_DERIVERS = {
     }
     return { ...NO_PORTS, dataInputs, dataOutputs }
   },
-  // RFC-242 §5.2 — call-workgroup: inputs are edge-derived prompt vars for the
+  // RFC-243 §5.2 — call-workgroup: inputs are edge-derived prompt vars for the
   // goalTemplate (agent-single precedent, never declared); the single output
   // is the workgroup task's minimal `result` projection (§6.4).
   'call-workgroup': (): DeclaredPorts => ({

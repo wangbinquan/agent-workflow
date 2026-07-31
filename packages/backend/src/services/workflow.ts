@@ -150,7 +150,7 @@ export async function createWorkflow(
   const normalized = migrateDefinitionToLatest(input.definition)
   assertCanonicalWorkflowAgentIds(normalized)
   const newAgentIds = [...extractWorkflowAgentRefs(normalized)]
-  // RFC-242 (§5.3): call-workflow references are NAME selectors, checked with
+  // RFC-243 (§5.3): call-workflow references are NAME selectors, checked with
   // the same D15 semantics as agent refs (existence tolerated until launch,
   // visibility enforced on save) in the dangle-tolerant name domain.
   const newWorkflowNames = extractWorkflowWorkflowRefs(normalized)
@@ -259,7 +259,7 @@ export async function copyWorkflow(
     assertCanonicalWorkflowAgentIds(source.definition)
     assertRefsUsableInTx(tx, actor, [
       { type: 'agent', names: [...extractWorkflowAgentRefs(source.definition)] },
-      // RFC-242 (§5.3): copy re-checks the FULL call-ref set — the copier must
+      // RFC-243 (§5.3): copy re-checks the FULL call-ref set — the copier must
       // be able to see every referenced workflow name it is about to adopt
       // (dangling names pass; name domain).
       { type: 'workflow', names: extractWorkflowWorkflowRefs(source.definition), domain: 'name' },
@@ -354,7 +354,7 @@ export async function prepareWorkflowSave(
     )
     const principalActor = principal.kind === 'actor' ? principal.actor : null
     const resolved = await resolveRefsUsableById(db, principalActor, 'agent', newIds)
-    // RFC-242 (§5.3): NEW call-workflow name selectors only (D15 grandfather —
+    // RFC-243 (§5.3): NEW call-workflow name selectors only (D15 grandfather —
     // references already stored keep working even if their target went private).
     const newWorkflowNames = diffNewNames(
       new Set(extractWorkflowWorkflowRefs(preflightWorkflow.definition)),
@@ -425,7 +425,7 @@ export function commitWorkflowSaveInTx(
     extractWorkflowAgentRefs(current.definition),
     extractWorkflowAgentRefs(normalizedSnapshot.definition),
   ).filter((id) => fenceableAgentIds.has(id))
-  // RFC-242 (§5.3): re-diff call-workflow names against the transaction's row
+  // RFC-243 (§5.3): re-diff call-workflow names against the transaction's row
   // snapshot; the name domain tolerates dangling in-tx, so no fenceable set.
   const newWorkflowNames = diffNewNames(
     new Set(extractWorkflowWorkflowRefs(current.definition)),

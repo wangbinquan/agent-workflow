@@ -13,7 +13,7 @@
 // explicitly requested `limit=500` window (listTasks defaults to 100 —
 // without the param local filtering would silently miss older rows).
 //
-// RFC-242 PR-5 — child-task nesting. The backend defaults the list to
+// RFC-243 PR-5 — child-task nesting. The backend defaults the list to
 // top-level rows (`parent_task_id IS NULL`); node-invoked child executions
 // surface two ways:
 //   - default scope: an expand arrow on running/awaiting/done rows lazily
@@ -87,11 +87,11 @@ export const Route = createRoute({
 
 const SUBJECT_FILTERS: readonly TaskSubjectFilter[] = ['all', 'workflow', 'workgroup', 'agent']
 
-/** RFC-242: list scope —「仅顶层」(server default) vs「含子任务」(flat). */
+/** RFC-243: list scope —「仅顶层」(server default) vs「含子任务」(flat). */
 type TaskChildScope = 'top' | 'all'
 
 /**
- * RFC-242: statuses whose rows carry the always-on expand arrow. There is no
+ * RFC-243: statuses whose rows carry the always-on expand arrow. There is no
  * per-row has-children signal by design (no N+1 probing); these are the
  * states a call node's child execution can exist under (running parent,
  * parent parked on review/human, finished parent).
@@ -122,7 +122,7 @@ function TasksPage() {
     queryFn: ({ signal }) => {
       const query: Record<string, string> = { include_owner: 'true', limit: '500' }
       if (status !== undefined) query.status = status
-      // RFC-242: flat child view. The default request deliberately carries NO
+      // RFC-243: flat child view. The default request deliberately carries NO
       // include_children param — the server's top-level filter is the contract.
       if (scope === 'all') query.include_children = 'true'
       return api.get('/api/tasks', query, signal)
@@ -133,7 +133,7 @@ function TasksPage() {
   const now = useNowTick()
   const [subject, setSubject] = useState<TaskSubjectFilter>('all')
   const [nameSearch, setNameSearch] = useState('')
-  // RFC-242: expanded parent rows + the "known childless" memory (an empty
+  // RFC-243: expanded parent rows + the "known childless" memory (an empty
   // children result renders the「无子任务」row once and is not re-fetched on
   // the next expand; plain component state per the design).
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
@@ -156,7 +156,7 @@ function TasksPage() {
     () => (data === undefined ? undefined : filterTaskRows(data, { subject, search: nameSearch })),
     [data, subject, nameSearch],
   )
-  // RFC-242: ACL-visibility proxy for the flat-mode parent badge — a parent
+  // RFC-243: ACL-visibility proxy for the flat-mode parent badge — a parent
   // present in the SAME (unfiltered) response is trivially visible; absent
   // parents get one probe fetch in ParentTaskBadge. Built from `data`, not
   // `rows`, because client-side subject/search filters say nothing about
@@ -236,7 +236,7 @@ function TasksPage() {
         </div>
         {/* RFC-192 — subject + name filters, pure client-side. Rendered only
             when the list has rows so the empty page does not show controls
-            that cannot narrow anything. RFC-242: the child-scope Segmented is
+            that cannot narrow anything. RFC-243: the child-scope Segmented is
             deliberately OUTSIDE that gate — it is a server-side scope that
             can BROADEN an empty top-level list (a workgroup human member may
             be a member of child tasks only; hiding the toggle would strand
@@ -356,7 +356,7 @@ function TasksPage() {
 }
 
 // ---------------------------------------------------------------------------
-// RFC-242 — row group (one task row + its lazily expanded direct children).
+// RFC-243 — row group (one task row + its lazily expanded direct children).
 // ---------------------------------------------------------------------------
 
 interface TaskRowGroupProps {
@@ -468,7 +468,7 @@ function TaskChildRows(props: Omit<TaskRowGroupProps, 'row'> & { parentId: strin
 }
 
 /**
- * RFC-242 — flat-mode parent badge on a child row. Links to the parent detail
+ * RFC-243 — flat-mode parent badge on a child row. Links to the parent detail
  * when the parent is visible; degrades to a neutral non-link label when it is
  * not (design §8 — a workgroup human member can be a member of the child task
  * only; the ACL-filtered list/detail make "invisible" and "deleted" look the
@@ -552,7 +552,7 @@ function TaskRow({ row, now, depth, expandState, onToggleExpand, parentBadge }: 
       className={`data-table__row${depth > 0 ? ' task-row--child' : ''}`}
       data-testid={`task-row-${row.id}`}
       data-depth={depth > 0 ? depth : undefined}
-      // RFC-242: nested-child indent rides a CSS var on the <tr>; the
+      // RFC-243: nested-child indent rides a CSS var on the <tr>; the
       // `.task-row--child .task-name-cell__inner` rule consumes it. The inner
       // <div> stays byte-identical — tasks-list-name-cell-row-alignment locks
       // its exact markup (flex belongs on the inner wrapper, never the <td>).
@@ -566,7 +566,7 @@ function TaskRow({ row, now, depth, expandState, onToggleExpand, parentBadge }: 
       }}
     >
       <td className="data-table__nowrap">
-        {/* RFC-242: always-on expand arrow (no per-row children probe). A
+        {/* RFC-243: always-on expand arrow (no per-row children probe). A
             <button> is exempt from row navigation by the shouldRowNavigate
             closest() guard. */}
         {expandState !== null && (
@@ -619,7 +619,7 @@ function TaskRow({ row, now, depth, expandState, onToggleExpand, parentBadge }: 
             >
               {row.name}
             </Link>
-            {/* RFC-242: nested rows are marked as child executions; flat-mode
+            {/* RFC-243: nested rows are marked as child executions; flat-mode
                 child rows link their parent instead (parentBadge). */}
             {depth > 0 && (
               <span className="chip chip--tight" data-testid={`task-child-badge-${row.id}`}>

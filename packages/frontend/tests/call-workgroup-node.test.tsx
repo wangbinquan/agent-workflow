@@ -1,4 +1,4 @@
-// RFC-242 PR-4 — frontend registration of the call-workgroup node kind, the
+// RFC-243 PR-4 — frontend registration of the call-workgroup node kind, the
 // workgroup twin of call-workflow (locked next door in
 // call-workflow-node.test.tsx). Locks in, per design §6.3/§6.4:
 //   1. palette: the Calls section carries the call-workgroup entry (⬡) and a

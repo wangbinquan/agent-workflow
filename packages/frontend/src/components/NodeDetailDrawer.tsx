@@ -209,7 +209,7 @@ export function NodeDetailDrawer({
       <FeedbackStack variant="section" className="stack-top--sm">
         {retry.error !== null && retry.error !== undefined && <ErrorBanner error={retry.error} />}
       </FeedbackStack>
-      {/* RFC-242 PR-5: call node_runs (call-workflow / call-workgroup) carry
+      {/* RFC-243 PR-5: call node_runs (call-workflow / call-workgroup) carry
           the child task they launched — surface the jump link + live status
           chip right under the drawer header. */}
       {run.childTaskId != null && (

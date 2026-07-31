@@ -1,4 +1,4 @@
-// RFC-242 PR-5 — direct-children query for one parent task.
+// RFC-243 PR-5 — direct-children query for one parent task.
 //
 // One shared query per parent id, used by BOTH consumers of the new
 // `GET /api/tasks?parent_id=<id>` backend filter:

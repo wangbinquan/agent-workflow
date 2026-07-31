@@ -1,4 +1,4 @@
-// RFC-242 T5 — terminal-state observation seam (design §1.4). A multicast,
+// RFC-243 T5 — terminal-state observation seam (design §1.4). A multicast,
 // in-process registry resolved from the lifecycle write path for ALL FOUR task
 // terminal statuses (done/failed/canceled/interrupted) — deliberately separate
 // from `registerTerminalTaskHook` (single-slot, done|canceled-only, RFC-202
@@ -9,7 +9,7 @@
 //      closes the "went terminal while we were subscribing" window;
 //   2. poll fallback (default 20s) covers crash/restart windows and any writer
 //      that bypasses the in-process notifier;
-//   3. a deleted row resolves as `missing` (never hangs) — RFC-242 §4.2 maps
+//   3. a deleted row resolves as `missing` (never hangs) — RFC-243 §4.2 maps
 //      that to `child-deleted` on the consuming side.
 //
 // Module discipline: this file must import NOTHING from task/scheduler/

@@ -2404,7 +2404,7 @@ export const enUS: Resources = {
       workgroup: 'Workgroup',
       agent: 'Agent',
     },
-    // RFC-242 PR-5 — child-task nesting / call-node deep links.
+    // RFC-243 PR-5 — child-task nesting / call-node deep links.
     scopeFilter: {
       top: 'Top-level',
       all: 'With children',
@@ -4320,7 +4320,7 @@ export const enUS: Resources = {
         'A loop output binding must reference a direct member of the loop body.',
       'wrapper-output-boundary-missing':
         'Data leaving a wrapper must be exposed through the wrapper output boundary.',
-      // RFC-242 — call-workflow nodes (design §9 error-code closed set).
+      // RFC-243 — call-workflow nodes (design §9 error-code closed set).
       'workflow-call-cycle': 'Workflow calls form a cycle (including calling itself).',
       'call-workflow-ref-missing': 'The call node references a missing or unselected workflow.',
       'call-workflow-upload-input-unsupported':
@@ -4330,7 +4330,7 @@ export const enUS: Resources = {
       'call-workflow-input-unwired':
         'A called-workflow input port has no inbound edge with the same name.',
       'call-workflow-in-fanout-unsupported': 'Call nodes cannot sit inside a fan-out wrapper.',
-      // RFC-242 PR-4 — call-workgroup nodes.
+      // RFC-243 PR-4 — call-workgroup nodes.
       'call-workgroup-ref-missing': 'The call node references a missing or unselected workgroup.',
       'call-workgroup-in-fanout-unsupported': 'Call nodes cannot sit inside a fan-out wrapper.',
     },

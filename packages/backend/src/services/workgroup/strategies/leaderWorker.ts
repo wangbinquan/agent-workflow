@@ -401,7 +401,7 @@ export async function driveLeaderTurn(
         kind: 'decision',
         bodyMd: decision.value.summary ?? '',
       })
-      // RFC-242 §6.4 — the leader's done decision IS the task result; anchor
+      // RFC-243 §6.4 — the leader's done decision IS the task result; anchor
       // it explicitly so the executor projection never guesses by kind/author.
       await stampWorkgroupResultAnchor(db, taskId, decisionMessageId)
       await casGateStatus(db, taskId, {

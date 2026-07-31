@@ -154,7 +154,7 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
       .from(nodeRuns)
       .where(eq(nodeRuns.taskId, taskId))
 
-    // RFC-242 §4.1 — cross-task delegation probe: batch-read the child tasks
+    // RFC-243 §4.1 — cross-task delegation probe: batch-read the child tasks
     // referenced by this task's call rows once per tick. Terminal AND missing
     // both map to 'settled' (evidence lapses; the parent's resume replay owns
     // the finalize).

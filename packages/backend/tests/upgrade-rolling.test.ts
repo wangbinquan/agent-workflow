@@ -326,7 +326,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-229 workgroup message trigger relation bumped to 122 with 0122.
     // RFC-234 intent-builder five tables bumped to 123 with 0123.
     // RFC-235 intent-turn Session capture bumped to 124 with 0124.
-    // RFC-238 bumped to 125 with 0125; RFC-242 to 127 with 0126/0127.
+    // RFC-238 bumped to 125 with 0125; RFC-243 to 127 with 0126/0127.
     expect(HEAD_TOTAL_MIGRATIONS).toBe(127)
   })
 

@@ -106,7 +106,7 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
       `task '${taskId}' is a framework-internal (fusion) task and cannot be deleted directly`,
     )
   }
-  // RFC-242 §4.4 — two-way parent/child gates.
+  // RFC-243 §4.4 — two-way parent/child gates.
   // Deleting a PARENT while any descendant is non-terminal would cascade-drop
   // live children's rows out from under their schedulers.
   {
@@ -194,7 +194,7 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
       error: err instanceof Error ? err.message : String(err),
     })
   }
-  // RFC-242 §4.4 — an 'inherited' child's workspace IS the parent's call-node
+  // RFC-243 §4.4 — an 'inherited' child's workspace IS the parent's call-node
   // iso; removing it here would rip the directory out of the parent's iso
   // lifecycle (discard / GC own it). Skip worktree + snapshot-ref cleanup,
   // keep the runs/logs/scratch sweep below.
@@ -241,7 +241,7 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
 }
 
 /**
- * RFC-242 §4.4 — BFS over parent_task_id for any non-terminal descendant.
+ * RFC-243 §4.4 — BFS over parent_task_id for any non-terminal descendant.
  * Depth is bounded by maxInvocationDepth at launch time; the walk is defensive
  * against dirty data via a visited set.
  */

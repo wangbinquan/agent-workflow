@@ -31,12 +31,12 @@ export type PaletteItem =
   | { kind: 'review' }
   | { kind: 'clarify' }
   | { kind: 'clarify-cross-agent' }
-  // RFC-242 — call-workflow: the referenced workflow is picked in the
+  // RFC-243 — call-workflow: the referenced workflow is picked in the
   // Inspector after the drop (agent-single needs its identity at drag time
   // because each palette row IS one agent; the Calls section has one generic
   // row, so the fresh node starts with an empty workflowName).
   | { kind: 'call-workflow' }
-  // RFC-242 PR-4 — call-workgroup mirrors call-workflow: one generic Calls
+  // RFC-243 PR-4 — call-workgroup mirrors call-workflow: one generic Calls
   // row, the referenced workgroup is picked in the Inspector after the drop.
   | { kind: 'call-workgroup' }
 
@@ -178,7 +178,7 @@ export const PALETTE_DESCRIPTORS = {
     labelKey: 'editor.paletteCallWorkflowLabel',
     descKey: 'editor.paletteCallWorkflowDesc',
     idPrefix: 'call_wf',
-    // RFC-242 — the referenced workflow is picked in the Inspector; an empty
+    // RFC-243 — the referenced workflow is picked in the Inspector; an empty
     // workflowName stays a visible "unset" state on the card and the
     // validator's call-ref rules block launch until it is filled.
     makeDefaults: () => ({ workflowName: '' }),
@@ -189,7 +189,7 @@ export const PALETTE_DESCRIPTORS = {
     labelKey: 'editor.paletteCallWorkgroupLabel',
     descKey: 'editor.paletteCallWorkgroupDesc',
     idPrefix: 'call_wg',
-    // RFC-242 PR-4 — reference + goal are filled in the Inspector; empty
+    // RFC-243 PR-4 — reference + goal are filled in the Inspector; empty
     // strings are the visible "unset" state and the validator's
     // call-workgroup rules block launch until both are set.
     makeDefaults: () => ({ workgroupName: '', goalTemplate: '' }),
@@ -312,7 +312,7 @@ export const PALETTE_SECTIONS = [
   // fan-out is now done via wrapper-fanout (a Wrappers entry). Drop a
   // wrapper-fanout, then drag the agent-single nodes you want into it.
   { key: 'wrappers', labelKey: 'editor.paletteWrappers' },
-  // RFC-242 — Calls: nodes that invoke another platform resource as an
+  // RFC-243 — Calls: nodes that invoke another platform resource as an
   // independent child task (call-workflow + call-workgroup).
   { key: 'calls', labelKey: 'editor.paletteCalls' },
   { key: 'io', labelKey: 'editor.paletteIo' },

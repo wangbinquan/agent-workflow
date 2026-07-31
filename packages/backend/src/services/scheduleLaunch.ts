@@ -6,8 +6,8 @@
 // RFC-165 §9b: the closure dispatches by launch kind — agent / workgroup rows
 // re-run the full ACL / builtin / readiness gates against the owner actor
 // rebuilt by fireSchedule; workflow rows keep the direct launch path (no
-// assertWorkflowLaunchable at fire time — pre-RFC-242 behavior, frozen).
-// RFC-242 T2: all three kinds now go through the unified executor facade; the
+// assertWorkflowLaunchable at fire time — pre-RFC-243 behavior, frozen).
+// RFC-243 T2: all three kinds now go through the unified executor facade; the
 // `scheduled` invoker stamps `tasks.scheduled_task_id` for run-history
 // attribution (previously a hand-spread deps field).
 import type { Actor } from '@/auth/actor'
@@ -43,7 +43,7 @@ export function buildScheduleLaunch(
         undefined,
         containmentCoordinator,
       ),
-      // RFC-242 实现门 P0-1: scheduled fires resolve call-node closures inside
+      // RFC-243 实现门 P0-1: scheduled fires resolve call-node closures inside
       // the rebuilt owner actor's visibility (same fence as a manual launch).
       launchActor: actor,
     }

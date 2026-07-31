@@ -109,13 +109,13 @@ export function extractJsonPayload(text: string): string {
 }
 
 /**
- * RFC-242 §5.4(7): a workgroup is a closure LEAF — a generated definition may
+ * RFC-243 §5.4(7): a workgroup is a closure LEAF — a generated definition may
  * never contain call nodes (either kind), or execution would bypass the launch-time
  * frozen reference closure and the cross-definition cycle gate. Today's token
  * schema cannot even express one (`dwGeneratedToWorkflowDef` stamps every node
  * `agent-single`), so this is a belt-and-braces admission guard that survives
  * any future loosening of the generated-node schema or of layer-2's kind
- * allowlist. Pure; exported for the RFC-242 regression lock.
+ * allowlist. Pure; exported for the RFC-243 regression lock.
  */
 export function dwCallNodeRejections(def: WorkflowDefinition): string[] {
   return def.nodes
@@ -171,7 +171,7 @@ export function evaluateGeneratedWorkflow(
       ),
     }
   }
-  // RFC-242 §5.4(7): reject call nodes ahead of the generic layers so the
+  // RFC-243 §5.4(7): reject call nodes ahead of the generic layers so the
   // closure-leaf rule cannot be lost to a future kind-allowlist loosening.
   const callNodeErrors = dwCallNodeRejections(def)
   if (callNodeErrors.length > 0) {

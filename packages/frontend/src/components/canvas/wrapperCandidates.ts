@@ -50,7 +50,7 @@ function deriveOutputPorts(
   // flag-audit W0 §3-3 假端口 bug). Wrapper members are filtered out by the
   // caller, so only leaf kinds reach here.
   // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
-  // RFC-242: the optional child-workflow resolver lets a call-workflow loop
+  // RFC-243: the optional child-workflow resolver lets a call-workflow loop
   // member expose its child-mirrored output ports as exitCondition /
   // outputBindings candidates ("loop 包 call-workflow 直到审计干净").
   const declared = declaredPorts(
@@ -70,7 +70,7 @@ export function loopMemberCandidates(
   wrapper: WorkflowNode,
   definition: WorkflowDefinition,
   agents: AgentSummary[],
-  // RFC-242 §5.2 consumer #3 — optional; omitted (legacy callers/tests) a
+  // RFC-243 §5.2 consumer #3 — optional; omitted (legacy callers/tests) a
   // call-workflow member simply contributes no candidate ports.
   workflowByRef?: WorkflowByRef,
 ): LoopMemberCandidate[] {

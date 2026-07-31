@@ -30,10 +30,10 @@ export const DEFAULT_NODE_SIZE_BY_KIND: Record<NodeKind, { width: number; height
   'wrapper-loop': { width: 240, height: 160 },
   // RFC-060 — wrapper-fanout matches sibling wrapper container footprint.
   'wrapper-fanout': { width: 240, height: 160 },
-  // RFC-242 — call-workflow renders agent-shaped (header + ref line + port
+  // RFC-243 — call-workflow renders agent-shaped (header + ref line + port
   // rows both sides), so it shares agent-single's generous default.
   'call-workflow': { width: 280, height: 180 },
-  // RFC-242 PR-4 — call-workgroup shares the same agent-shaped card chrome.
+  // RFC-243 PR-4 — call-workgroup shares the same agent-shaped card chrome.
   'call-workgroup': { width: 280, height: 180 },
 }
 

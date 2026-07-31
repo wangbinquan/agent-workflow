@@ -7437,7 +7437,7 @@ details.form-section[open] > summary {
   font-size: 11px;
 }
 
-/* RFC-242 call-workflow node — composition kind (invokes another workflow as
+/* RFC-243 call-workflow node — composition kind (invokes another workflow as
  * a child task). Violet tint separates it from agent (accent border), IO
  * (accent wash) and the human amber family; background-tinted (not solely
  * border) so `.canvas-node[data-status=…]` still owns the status border. */
@@ -7450,7 +7450,7 @@ details.form-section[open] > summary {
   font-weight: 600;
 }
 
-/* RFC-242 PR-4 call-workgroup node — the workgroup twin of call-workflow.
+/* RFC-243 PR-4 call-workgroup node — the workgroup twin of call-workflow.
  * Fuchsia keeps it inside the same "Calls" color family as the violet
  * call-workflow while staying glanceably distinct; same background-tint
  * approach so `.canvas-node[data-status=…]` still owns the status border. */
@@ -18375,7 +18375,7 @@ button.status-chip {
   color: var(--muted);
 }
 
-/* RFC-242 — nested child-task rows on /tasks. The <tr> sets
+/* RFC-243 — nested child-task rows on /tasks. The <tr> sets
    --task-child-depth (1 = direct child); indent lives here so the
    .task-name-cell__inner markup stays byte-identical to the row-alignment
    lock (flex on the inner wrapper, never the <td>). */

@@ -1,4 +1,4 @@
-// RFC-242 PR-2 — parent/child lifecycle cross-cutting locks.
+// RFC-243 PR-2 — parent/child lifecycle cross-cutting locks.
 //
 // Locks in (design §4.1–§4.5, design-gate P0-2 / P1-1 / P2-6 fixes):
 //   1. cancelTask cascades into active children recursively and stamps the
@@ -70,8 +70,8 @@ async function seedTask(db: DbClient, wfId: string, opts: SeedOpts = {}): Promis
     name: `t-${id.slice(-6).toLowerCase()}`,
     workflowId: wfId,
     workflowSnapshot: opts.snapshot ?? EMPTY_DEF,
-    repoPath: opts.worktreePath ?? '/tmp/rfc242-nowhere',
-    worktreePath: opts.worktreePath ?? '/tmp/rfc242-nowhere',
+    repoPath: opts.worktreePath ?? '/tmp/rfc243-nowhere',
+    worktreePath: opts.worktreePath ?? '/tmp/rfc243-nowhere',
     baseBranch: 'main',
     branch: `agent-workflow/${id}`,
     status: (opts.status ?? 'running') as 'running',
@@ -109,7 +109,7 @@ async function seedRun(
   return id
 }
 
-describe('RFC-242 §4.3 — cancel cascade with durable marker', () => {
+describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
   test('parent cancel cascades recursively; markers distinguish cascade vs direct', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wf = await seedWorkflow(db)
@@ -138,7 +138,7 @@ describe('RFC-242 §4.3 — cancel cascade with durable marker', () => {
   })
 })
 
-describe('RFC-242 §4.4 — deleteTask two-way gates + inherited workspace skip', () => {
+describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip', () => {
   test('parent with a non-terminal grandchild 409s task-has-active-children', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wf = await seedWorkflow(db)
@@ -161,7 +161,7 @@ describe('RFC-242 §4.4 — deleteTask two-way gates + inherited workspace skip'
   test("an inherited child's delete never removes the (parent-owned) workspace dir", async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wf = await seedWorkflow(db)
-    const isoDir = mkdtempSync(join(tmpdir(), 'aw-rfc242-inherited-'))
+    const isoDir = mkdtempSync(join(tmpdir(), 'aw-rfc243-inherited-'))
     writeFileSync(join(isoDir, 'work.txt'), 'child output')
     const parent = await seedTask(db, wf, { status: 'done' })
     const child = await seedTask(db, wf, {
@@ -176,7 +176,7 @@ describe('RFC-242 §4.4 — deleteTask two-way gates + inherited workspace skip'
   })
 })
 
-describe('RFC-242 §4.2 — resume/rollback carve-outs', () => {
+describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
   test('selectResumeRollbackTargets excludes call rows', () => {
     const rows = [
       { id: '01A', nodeId: 'work', parentNodeRunId: null, status: 'failed', childTaskId: null },
@@ -212,7 +212,7 @@ describe('RFC-242 §4.2 — resume/rollback carve-outs', () => {
   })
 })
 
-describe('RFC-242 §4.1 — liveness delegation to the child task', () => {
+describe('RFC-243 §4.1 — liveness delegation to the child task', () => {
   const def = JSON.parse(EMPTY_DEF)
   const callRow = {
     id: '01CALL',
@@ -270,7 +270,7 @@ describe('RFC-242 §4.1 — liveness delegation to the child task', () => {
   })
 })
 
-describe('RFC-242 §4.5 — duration limit human-wait deduction', () => {
+describe('RFC-243 §4.5 — duration limit human-wait deduction', () => {
   test('parseCallHumanWait sums the ledger and the live segment', () => {
     const now = 1_000_000
     expect(parseCallHumanWait(null, now)).toBe(0)
@@ -325,7 +325,7 @@ describe('RFC-242 §4.5 — duration limit human-wait deduction', () => {
   })
 })
 
-describe('RFC-242 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1）', () => {
+describe('RFC-243 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1）', () => {
   test('新代调用行台账归零；仅领养同一行才继承', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wf = await seedWorkflow(db)
@@ -358,7 +358,7 @@ describe('RFC-242 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1�
   })
 })
 
-describe('RFC-242 §8 — 列表口径（PR-5 翻转）', () => {
+describe('RFC-243 §8 — 列表口径（PR-5 翻转）', () => {
   test('listTasks topLevelOnly 隐藏子任务；parentTaskId 过滤只出直接子代', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wf = await seedWorkflow(db)
@@ -375,11 +375,11 @@ describe('RFC-242 §8 — 列表口径（PR-5 翻转）', () => {
   })
 })
 
-describe('RFC-242 §4.4 — iso GC revivability carve-outs (design-gate P0-2)', () => {
+describe('RFC-243 §4.4 — iso GC revivability carve-outs (design-gate P0-2)', () => {
   test('interrupted parents and parents with live/interrupted children keep their iso', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wf = await seedWorkflow(db)
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc242-isogc-'))
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc243-isogc-'))
     const mkIso = (taskId: string): string => {
       const dir = join(appHome, 'iso', taskId)
       mkdirSync(dir, { recursive: true })

@@ -1,8 +1,8 @@
-// RFC-242 T1 — the unified executor contract. One vocabulary for "start an
+// RFC-243 T1 — the unified executor contract. One vocabulary for "start an
 // execution / read its outcome / wait for its terminal state / cancel it"
 // across the three task-level execution kinds. The kind domain deliberately
 // equals `taskExecutionKind()` (shared/schemas/task.ts) — parent/child links
-// added by RFC-242 PR-2 are an orthogonal dimension and never change a task's
+// added by RFC-243 PR-2 are an orthogonal dimension and never change a task's
 // kind.
 //
 // The executor does NOT re-model the per-kind launch inputs: the three wire
@@ -26,7 +26,7 @@ export type ExecutionRef = { kind: ExecutionKind; id: string }
  * Who is asking for this execution. `user` = an interactive HTTP launch (the
  * actor becomes the owner); `scheduled` = the RFC-159 scheduled-task loop
  * (stamps `tasks.scheduled_task_id`); `node` = a call node inside a running
- * parent task (RFC-242 PR-3/4 — carries the parent linkage + depth guard
+ * parent task (RFC-243 PR-3/4 — carries the parent linkage + depth guard
  * input; rejected until those PRs land).
  */
 export type ExecutionInvoker =

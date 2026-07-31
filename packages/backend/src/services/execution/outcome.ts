@@ -1,4 +1,4 @@
-// RFC-242 T4 — the unified outcome projection (design §1.3). One answer to
+// RFC-243 T4 — the unified outcome projection (design §1.3). One answer to
 // "the task finished — what did it produce?" for all three execution kinds:
 //
 //   workflow  → the `output` nodes' io-virtual rows (scheduler.ts output
@@ -9,7 +9,7 @@
 //               fanout rows included).
 //   agent     → the `__agent_main__` host node's ports, same row oracle.
 //   workgroup → single `result` port. lw/fc read the explicit result anchor
-//               (`workgroup_task_state.result_message_id`, RFC-242 PR-4);
+//               (`workgroup_task_state.result_message_id`, RFC-243 PR-4);
 //               until that lands / for legacy tasks: lw falls back to
 //               gate_summary, fc to '' + warning (design §6.4 — the wg_* port
 //               envelope is deliberately never persisted, RFC-184 invariant).

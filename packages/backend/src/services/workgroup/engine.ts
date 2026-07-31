@@ -532,7 +532,7 @@ export async function runWorkgroupEngine(
                   ? `free-collab converged — ${doneCards.length} task(s) done:\n${lines.join('\n')}`
                   : 'free-collab converged with no completed tasks',
             })
-            // RFC-242 §6.4 — anchor the convergence summary as the fc result
+            // RFC-243 §6.4 — anchor the convergence summary as the fc result
             // (same kind+author as the zero-delta warning, so author filtering
             // can never disambiguate — the anchor does).
             await stampWorkgroupResultAnchor(db, taskId, summaryMessageId)

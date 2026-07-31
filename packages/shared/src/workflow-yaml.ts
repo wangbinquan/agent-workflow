@@ -19,7 +19,7 @@ export interface WorkflowYamlDocumentOptions {
 }
 
 /**
- * RFC-242 (§5.5) — strip the installation-local `workflowId` resolution cache
+ * RFC-243 (§5.5) — strip the installation-local `workflowId` resolution cache
  * from call-workflow nodes. `workflowName` (the authoritative, portable
  * selector) already lives on the node, so exports carry the name alone and the
  * import boundary re-resolves (or deliberately keeps dangling) against the
@@ -35,7 +35,7 @@ export function stripCallWorkflowNodeIds(definition: WorkflowDefinition): Workfl
         const { workflowId: _drop, ...rest } = rec
         return rest as typeof node
       }
-      // RFC-242 PR-4 — call-workgroup carries the same local-id cache shape.
+      // RFC-243 PR-4 — call-workgroup carries the same local-id cache shape.
       if (node.kind === 'call-workgroup') {
         const rec = node as Record<string, unknown>
         if (!('workgroupId' in rec)) return node

@@ -1,4 +1,4 @@
-// RFC-242 §3.2 — the daemon-wide active-child-task budget.
+// RFC-243 §3.2 — the daemon-wide active-child-task budget.
 //
 // Counting口径: child tasks (parent_task_id non-null) in {pending, running}
 // hold one unit each. awaiting_review / awaiting_human / interrupted hold
@@ -18,7 +18,7 @@
 // registered follow-up, not v1).
 //
 // Bookkeeping is driven from the lifecycle write path (notifyChildBudgetTaskStatus,
-// wired next to the RFC-242 executionWatch emission) plus explicit pre-insert
+// wired next to the RFC-243 executionWatch emission) plus explicit pre-insert
 // holds around the launch window. Boot/lazy init rebuilds the counted set from
 // the DB so restarts cannot leak or double-count units.
 import { and, eq, inArray, isNotNull } from 'drizzle-orm'

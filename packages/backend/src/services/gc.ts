@@ -111,7 +111,7 @@ export async function runWorktreeGc(
         inArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
         // RFC-165 (R3-4): internal (fusion) workspaces feed the approval flow
         // and are never GC candidates. Already-pruned rows have nothing to do.
-        // RFC-242 §4.4: 'inherited' children do not own their workspace (it is
+        // RFC-243 §4.4: 'inherited' children do not own their workspace (it is
         // the parent's call-node iso) — nothing for THIS gc to prune.
         ne(tasks.spaceKind, 'internal'),
         ne(tasks.spaceKind, 'inherited'),
@@ -377,7 +377,7 @@ export async function runWorktreeOrphanGc(
  * stale GC deletes it" race. Tasks whose workspace is already tombstoned
  * (`workspace_pruned_at` set) delete freely — no revival is possible.
  */
-/** RFC-242 §4.4 — does any call row of `taskId` reference a child task that is
+/** RFC-243 §4.4 — does any call row of `taskId` reference a child task that is
  *  non-terminal or interrupted (revivable)? Such a child's canonical workspace
  *  lives inside this task's iso container — the container must survive it. */
 async function hasLiveOrRevivableChild(db: DbClient, taskId: string): Promise<boolean> {
@@ -425,7 +425,7 @@ export async function runIsoWorktreeGc(
     if (t !== undefined && !isTerminalTaskStatus(t.status as TaskStatus)) {
       continue
     }
-    // RFC-242 §4.4 (design-gate P0-2): two revivability carve-outs.
+    // RFC-243 §4.4 (design-gate P0-2): two revivability carve-outs.
     // ① 'interrupted' is terminal BUT revivable — a daemon restart flips
     //    parent AND child to interrupted together; reaping the parent's iso
     //    here would delete the child's canonical workspace before resume.

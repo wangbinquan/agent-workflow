@@ -40,8 +40,8 @@ export const NODE_KIND = [
   'review', // RFC-005: human-in-the-loop review gate
   'clarify', // RFC-023: agent-initiated clarification questions
   'clarify-cross-agent', // RFC-056: downstream questioner reverse-feeds upstream designer via human gate
-  'call-workflow', // RFC-242: invoke another workflow as an independent child task
-  'call-workgroup', // RFC-242: hand a DAG stage to a workgroup as an independent child task
+  'call-workflow', // RFC-243: invoke another workflow as an independent child task
+  'call-workgroup', // RFC-243: hand a DAG stage to a workgroup as an independent child task
 ] as const
 // RFC-060 PR-E: 'agent-multi' was the M3 fan-out kind; superseded by
 // wrapper-fanout (RFC-060). Its node_runs / row shape are no longer minted by
@@ -451,10 +451,10 @@ export const WORKFLOW_NODE_FIELD_KEYS = [
   'fanout-inputs',
   'clarify-session-mode',
   'cross-clarify-session-mode',
-  'call-ref', // RFC-242: the referenced workflow/workgroup selector
-  'call-goal-template', // RFC-242 (call-workgroup): goal template
-  'call-limits', // RFC-242: child task limit overrides
-  'call-ports', // RFC-242: input/output port mapping issues
+  'call-ref', // RFC-243: the referenced workflow/workgroup selector
+  'call-goal-template', // RFC-243 (call-workgroup): goal template
+  'call-limits', // RFC-243: child task limit overrides
+  'call-ports', // RFC-243: input/output port mapping issues
 ] as const
 export const WorkflowNodeFieldKeySchema = z.enum(WORKFLOW_NODE_FIELD_KEYS)
 export type WorkflowNodeFieldKey = z.infer<typeof WorkflowNodeFieldKeySchema>
@@ -770,7 +770,7 @@ export const WrapperFanoutNodeSchema = z
 export type WrapperFanoutNode = z.infer<typeof WrapperFanoutNodeSchema>
 
 /**
- * RFC-242 — call-workflow node: invoke another workflow as an independent
+ * RFC-243 — call-workflow node: invoke another workflow as an independent
  * child task (design §5.1). `workflowName` is the AUTHORITATIVE selector
  * (agentName precedent: durable, rename-tolerant, YAML-portable — dangling
  * until launch, which fails closed with `workflow-call-ref-missing`);
@@ -791,7 +791,7 @@ export const CallWorkflowNodeSchema = WorkflowNodeSchema.extend({
 export type CallWorkflowNode = z.infer<typeof CallWorkflowNodeSchema>
 
 /**
- * RFC-242 — call-workgroup node: hand this DAG stage to a workgroup running
+ * RFC-243 — call-workgroup node: hand this DAG stage to a workgroup running
  * as an independent child task (design §6.3). `workgroupName` mirrors the
  * workflow selector semantics (durable name + optional id cache, dangling
  * until launch); `goalTemplate` renders parent-side ({{port}} + builtin

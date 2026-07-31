@@ -1,4 +1,4 @@
-// RFC-242 PR-3 (T15, design §5.3/§5.5) — call-workflow cross-resource refs +
+// RFC-243 PR-3 (T15, design §5.3/§5.5) — call-workflow cross-resource refs +
 // YAML portability. LOCKS:
 //
 //   1. `extractWorkflowWorkflowRefs` extracts call nodes' authoritative
@@ -103,7 +103,7 @@ async function storedDefinition(db: DbClient, workflowId: string): Promise<Workf
 }
 
 // ---------------------------------------------------------------------------
-describe('RFC-242 — extractWorkflowWorkflowRefs', () => {
+describe('RFC-243 — extractWorkflowWorkflowRefs', () => {
   test('dedupes call-node workflowNames in declaration order; skips malformed and other kinds', () => {
     const refs = extractWorkflowWorkflowRefs({
       $schema_version: 4,
@@ -123,7 +123,7 @@ describe('RFC-242 — extractWorkflowWorkflowRefs', () => {
 })
 
 // ---------------------------------------------------------------------------
-describe('RFC-242 §5.3 — save-time call-ref ACL (name domain, D15)', () => {
+describe('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15)', () => {
   let db: DbClient
   const editor = actor('editor')
 
@@ -276,7 +276,7 @@ describe('RFC-242 §5.3 — save-time call-ref ACL (name domain, D15)', () => {
 })
 
 // ---------------------------------------------------------------------------
-describe('RFC-242 §5.5 — YAML export strips the workflowId cache', () => {
+describe('RFC-243 §5.5 — YAML export strips the workflowId cache', () => {
   test('shared workflowDefinitionToNameSelectors drops workflowId, keeps workflowName', () => {
     const portable = workflowDefinitionToNameSelectors({
       $schema_version: 4,
@@ -337,7 +337,7 @@ describe('RFC-242 §5.5 — YAML export strips the workflowId cache', () => {
 })
 
 // ---------------------------------------------------------------------------
-describe('RFC-242 §5.5 — YAML import resolves / dangles call-workflow names', () => {
+describe('RFC-243 §5.5 — YAML import resolves / dangles call-workflow names', () => {
   let db: DbClient
   const viewer = actor('viewer')
 

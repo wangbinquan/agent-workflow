@@ -29,7 +29,7 @@ export function WrapperGitLoopEdit({
   onHistoryBoundary,
 }: EditProps) {
   const { t } = useTranslation()
-  // RFC-242: a call-workflow loop member contributes its child-mirrored
+  // RFC-243: a call-workflow loop member contributes its child-mirrored
   // output ports to the exitCondition / outputBindings candidate selects.
   const { workflowByRef } = useWorkflowRefResolver()
   const rec = node as unknown as Record<string, unknown>

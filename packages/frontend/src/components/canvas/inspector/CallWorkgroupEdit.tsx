@@ -1,4 +1,4 @@
-// RFC-242 PR-4 — call-workgroup inspector branch. Picks the referenced
+// RFC-243 PR-4 — call-workgroup inspector branch. Picks the referenced
 // workgroup (name = authoritative selector, id = resolution cache — same
 // contract as CallWorkflowEdit / design §6.3), edits the required
 // goalTemplate the parent renders into the child's literal goal, and the

@@ -717,7 +717,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       'utf8',
     )
     expect(src).toContain('isWorkgroupTask(task)') // RFC-164 lock stays (RFC-217 G4: oracle form)
-    // RFC-242 §1.2: the three-way oracle moved VERBATIM into the executor
+    // RFC-243 §1.2: the three-way oracle moved VERBATIM into the executor
     // engine registry (services/execution/engines.ts) — the lock follows the
     // mechanism: scheduler must consume resolveTaskEngine, and the registry
     // must keep the RFC-217 T2 shape (frozen-config mode + task-state phase).

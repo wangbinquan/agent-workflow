@@ -80,7 +80,7 @@ async function checkOne(
     // what a duration limit is for.
     const elapsed = t.runningMs + (t.runningSince === null ? 0 : now - t.runningSince)
     if (elapsed > t.maxDurationMs) {
-      // RFC-242 §4.5 — a parent waiting on a child execution stays 'running'
+      // RFC-243 §4.5 — a parent waiting on a child execution stays 'running'
       // (D6, no status bubbling), so its clock keeps accruing while the child
       // sits on a HUMAN gate. That wait is RFC-207-parked time in spirit:
       //   ① deduct the call rows' accounted human-wait (durable ledger the
@@ -95,7 +95,7 @@ async function checkOne(
       if (effective > t.maxDurationMs) {
         if (wait.childAwaiting) {
           log.warn(
-            'duration limit exceeded but a child execution awaits human input — kill deferred (RFC-242 §4.5)',
+            'duration limit exceeded but a child execution awaits human input — kill deferred (RFC-243 §4.5)',
             {
               taskId: t.id,
               elapsed,
@@ -123,7 +123,7 @@ async function checkOne(
   return null
 }
 
-/** RFC-242 §4.5 — the call rows' human-wait ledger + live awaiting probe. */
+/** RFC-243 §4.5 — the call rows' human-wait ledger + live awaiting probe. */
 async function callRowHumanWait(
   db: DbClient,
   taskId: string,

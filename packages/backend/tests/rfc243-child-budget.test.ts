@@ -1,4 +1,4 @@
-// RFC-242 PR-2 — active-child-task budget locks (design §3.2).
+// RFC-243 PR-2 — active-child-task budget locks (design §3.2).
 //
 // Locks in:
 //   1. The design-gate P0-1 deadlock construction CANNOT reproduce: with the
@@ -25,7 +25,7 @@ function budgetOf(db: DbClient, cap: number): ChildTaskBudget {
 
 const stubDb = null as unknown as DbClient // rebuildFromDb not used in pure tests
 
-describe('RFC-242 §3.2 — grant rules', () => {
+describe('RFC-243 §3.2 — grant rules', () => {
   test('under capacity grants immediately and bind converts hold → counted', async () => {
     const b = budgetOf(stubDb, 2)
     const hold = await b.acquire([])
@@ -109,7 +109,7 @@ describe('RFC-242 §3.2 — grant rules', () => {
   })
 })
 
-describe('RFC-242 §3.2 — DB rebuild', () => {
+describe('RFC-243 §3.2 — DB rebuild', () => {
   test('rebuildFromDb seeds counted from pending/running child rows only', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wfId = ulid()

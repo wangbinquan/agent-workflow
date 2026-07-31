@@ -55,8 +55,8 @@ export interface LivenessRunRow {
   spawnBinaryPath: string | null
   parentNodeRunId: string | null
   /**
-   * RFC-242: the child task a call node_run launched (NULL everywhere else).
-   * Optional so pre-RFC-242 callers/tests keep constructing the row shape.
+   * RFC-243: the child task a call node_run launched (NULL everywhere else).
+   * Optional so pre-RFC-243 callers/tests keep constructing the row shape.
    */
   childTaskId?: string | null
 }
@@ -77,7 +77,7 @@ export type LivenessReason =
   | 'driver-attached' // 任务仍被本进程调度器持有
   | 'process-alive' // 自己的子进程还活着
   | 'process-gone' // 自己的子进程确已消失
-  | 'child-task-active' // RFC-242 委派：调用行的子任务仍非终态（跨任务证据）
+  | 'child-task-active' // RFC-243 委派：调用行的子任务仍非终态（跨任务证据）
   | 'inner-alive' // 委派：至少一个下层 run 还活着
   | 'inner-all-terminal' // 委派：下层全部终态 —— 真正的孤儿容器行
   | 'empty-delegation' // 容器行零下层，且无驱动 —— 没人会再造出下层
@@ -106,7 +106,7 @@ export function livenessSourceOfKind(kind: NodeKind): 'process' | 'delegated' {
     case 'clarify':
     case 'clarify-cross-agent':
       return 'process'
-    // RFC-242: a call node's liveness is carried by its independent child
+    // RFC-243: a call node's liveness is carried by its independent child
     // task (the childTaskId probe in resolveRunLiveness, which outranks this
     // structural classification); structurally it is a container with zero
     // in-task inner rows — 'delegated' keeps the empty-delegation reap path
@@ -171,10 +171,10 @@ export interface ResolveRunLivenessArgs {
   /** 进程探针：pid 存活且仍是我们 spawn 的那个二进制。 */
   probeProcess: (pid: number, spawnBinaryPath: string | null) => boolean
   /**
-   * RFC-242 跨任务探针：调用行的子任务当下是否非终态（'active'）。终态与行
+   * RFC-243 跨任务探针：调用行的子任务当下是否非终态（'active'）。终态与行
    * 缺失统一为 'settled' —— 那时子任务证据失效，判定落回结构链（对调用行即
    * 判死回收，收尾由父任务 resume 的 replay 分段完成，design §4.2 R）。
-   * 缺省视为 'settled'（pre-RFC-242 调用方无需感知）。
+   * 缺省视为 'settled'（pre-RFC-243 调用方无需感知）。
    */
   probeChildTask?: (childTaskId: string) => 'active' | 'settled'
 }
@@ -216,7 +216,7 @@ function resolveWithoutDriver(
   if (visited.has(row.id)) return { alive: false, reason: 'lineage-cycle' }
   visited.add(row.id)
 
-  // ①.5 RFC-242 — 跨任务委派，优先于一切结构证据：调用行的活性由它发起的
+  // ①.5 RFC-243 — 跨任务委派，优先于一切结构证据：调用行的活性由它发起的
   // 独立子任务承载。子任务非终态 ⇒ 活；已终态 / 行缺失 ⇒ 该证据不判活，
   // 落回下方结构链（调用行无 pid 无下层 ⇒ 判死回收；父 resume 的 R 分段
   // 负责收尾，与 replayPendingMerges 语义一致）。

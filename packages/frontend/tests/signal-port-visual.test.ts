@@ -51,7 +51,7 @@ describe('RFC-060 F.T2 — wrapper-fanout signal-port visual contract', () => {
       resolve(REPO, 'packages/frontend/src/components/canvas/WorkflowCanvas.tsx'),
       'utf-8',
     )
-    // RFC-242 widened the call to thread the optional child-workflow
+    // RFC-243 widened the call to thread the optional child-workflow
     // resolver; the lock's intent is unchanged — computePorts must read the
     // SHARED declaration table, never a local per-kind fork.
     expect(canvasSrc).toMatch(/declaredPorts\(\s*node,\s*definition,\s*agentByName,/)

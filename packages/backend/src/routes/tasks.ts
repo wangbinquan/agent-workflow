@@ -56,7 +56,7 @@ import {
   retryNode,
   syncTaskWorkflow,
 } from '@/services/task'
-// RFC-242 T2: task launches go through the unified executor facade — this
+// RFC-243 T2: task launches go through the unified executor facade — this
 // route must not call startTask directly (source-text lock).
 import { startExecution } from '@/services/execution/executor'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
@@ -139,7 +139,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     const scheduledTaskId = c.req.query('scheduled_task_id') ?? c.req.query('scheduledTaskId')
     if (scheduledTaskId !== undefined && scheduledTaskId !== '')
       filters.scheduledTaskId = scheduledTaskId
-    // RFC-242 §8 (PR-5 flip): the list is TOP-LEVEL BY DEFAULT — child
+    // RFC-243 §8 (PR-5 flip): the list is TOP-LEVEL BY DEFAULT — child
     // executions appear only via include_children=true (flat, with parent
     // badges) or the parent_id children query. Landed together with the
     // nesting UI so awaiting children are never invisible-but-unreachable.
@@ -270,7 +270,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         deps.secretBox,
         deps.containmentCoordinator,
       ),
-      // RFC-242 实现门 P0-1: closure freezing resolves call-node names inside
+      // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
       // THIS actor's visibility.
       launchActor: actor,
     }
@@ -1047,7 +1047,7 @@ async function handleMultipartTaskStart(
     throw attachWorkspaceCleanupToMultipartError(err, cleanup)
   }
 
-  // 6. Hand off ownership to the launch (via the RFC-242 executor facade —
+  // 6. Hand off ownership to the launch (via the RFC-243 executor facade —
   // same startTask underneath). Its outer wrapper now covers every pre-commit
   // error (including the initial exact-version guard), so this call
   // intentionally sits outside the upload-write catch above.
