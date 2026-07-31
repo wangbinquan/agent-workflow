@@ -19,6 +19,26 @@ export interface WorkflowYamlDocumentOptions {
 }
 
 /**
+ * RFC-242 (§5.5) — strip the installation-local `workflowId` resolution cache
+ * from call-workflow nodes. `workflowName` (the authoritative, portable
+ * selector) already lives on the node, so exports carry the name alone and the
+ * import boundary re-resolves (or deliberately keeps dangling) against the
+ * target install. Pure; only call-workflow nodes are touched.
+ */
+export function stripCallWorkflowNodeIds(definition: WorkflowDefinition): WorkflowDefinition {
+  return {
+    ...definition,
+    nodes: definition.nodes.map((node) => {
+      if (node.kind !== 'call-workflow') return node
+      const rec = node as Record<string, unknown>
+      if (!('workflowId' in rec)) return node
+      const { workflowId: _drop, ...rest } = rec
+      return rest as typeof node
+    }),
+  }
+}
+
+/**
  * Browser-safe fallback for an unsaved workflow draft. The browser has no
  * authoritative owner directory, so it emits name-only portable selectors and
  * lets the import mapping flow disambiguate them. Installation-local ids are
@@ -27,9 +47,10 @@ export interface WorkflowYamlDocumentOptions {
 export function workflowDefinitionToNameSelectors(
   definition: WorkflowDefinition,
 ): WorkflowDefinitionSelector {
+  const withoutCallIds = stripCallWorkflowNodeIds(definition)
   return WorkflowDefinitionSelectorSchema.parse({
-    ...definition,
-    nodes: definition.nodes.map((node) => {
+    ...withoutCallIds,
+    nodes: withoutCallIds.nodes.map((node) => {
       if (node.kind !== 'agent-single') return node
       const { agentId: _agentId, ...portable } = node
       return portable

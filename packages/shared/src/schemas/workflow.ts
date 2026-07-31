@@ -40,6 +40,7 @@ export const NODE_KIND = [
   'review', // RFC-005: human-in-the-loop review gate
   'clarify', // RFC-023: agent-initiated clarification questions
   'clarify-cross-agent', // RFC-056: downstream questioner reverse-feeds upstream designer via human gate
+  'call-workflow', // RFC-242: invoke another workflow as an independent child task
 ] as const
 // RFC-060 PR-E: 'agent-multi' was the M3 fan-out kind; superseded by
 // wrapper-fanout (RFC-060). Its node_runs / row shape are no longer minted by
@@ -449,6 +450,10 @@ export const WORKFLOW_NODE_FIELD_KEYS = [
   'fanout-inputs',
   'clarify-session-mode',
   'cross-clarify-session-mode',
+  'call-ref', // RFC-242: the referenced workflow/workgroup selector
+  'call-goal-template', // RFC-242 (call-workgroup): goal template
+  'call-limits', // RFC-242: child task limit overrides
+  'call-ports', // RFC-242: input/output port mapping issues
 ] as const
 export const WorkflowNodeFieldKeySchema = z.enum(WORKFLOW_NODE_FIELD_KEYS)
 export type WorkflowNodeFieldKey = z.infer<typeof WorkflowNodeFieldKeySchema>
@@ -762,3 +767,24 @@ export const WrapperFanoutNodeSchema = z
   })
   .passthrough()
 export type WrapperFanoutNode = z.infer<typeof WrapperFanoutNodeSchema>
+
+/**
+ * RFC-242 — call-workflow node: invoke another workflow as an independent
+ * child task (design §5.1). `workflowName` is the AUTHORITATIVE selector
+ * (agentName precedent: durable, rename-tolerant, YAML-portable — dangling
+ * until launch, which fails closed with `workflow-call-ref-missing`);
+ * `workflowId` is a local resolution cache stripped from YAML exports.
+ * `limits` maps onto the child task's maxDurationMs/maxTotalTokens (D13).
+ */
+export const CallWorkflowNodeSchema = WorkflowNodeSchema.extend({
+  kind: z.literal('call-workflow'),
+  workflowName: z.string().min(1),
+  workflowId: z.string().min(1).optional(),
+  limits: z
+    .object({
+      maxDurationMs: z.number().int().positive().optional(),
+      maxTotalTokens: z.number().int().positive().optional(),
+    })
+    .optional(),
+}).passthrough()
+export type CallWorkflowNode = z.infer<typeof CallWorkflowNodeSchema>

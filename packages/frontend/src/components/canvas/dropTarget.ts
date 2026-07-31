@@ -63,7 +63,12 @@ export function nextFreeInputPort(existing: readonly string[], desired: string):
 }
 
 /** Kinds whose left input is the PortHandles catch-all with arbitrary named
- *  ports — the only hit-test targets (RFC-106 scope). */
+ *  ports — the only hit-test targets (RFC-106 scope).
+ *
+ *  RFC-242: call-workflow is deliberately NOT here — its input ports are a
+ *  CLOSED set mirrored from the child definition's `inputs[]` (design §5.2
+ *  consumer #5), so minting a NEW deconflicted input name on drop would
+ *  always produce a port the validator rejects. */
 function acceptsNamedInputs(kind: string): boolean {
   return kind === 'agent-single' || kind === 'output'
 }

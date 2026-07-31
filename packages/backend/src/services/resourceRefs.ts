@@ -15,6 +15,7 @@
 // name the editor typed (no id / description / owner — D1).
 
 import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
+import { collectWorkflowCallRefs } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -54,6 +55,17 @@ export function diffNewNames(prev: ReadonlySet<string>, next: ReadonlySet<string
 }
 
 /**
+ * RFC-242 (§5.3) — workflow references of a workflow definition (call-workflow
+ * nodes). Unlike agent refs these are NAME selectors (the authoritative field;
+ * `workflowId` is a local cache), deduped in declaration order. A malformed
+ * call node without a `workflowName` is skipped — the validator owns that
+ * error, exactly like the agent extractor's name-only fail-closed stance.
+ */
+export function extractWorkflowWorkflowRefs(defn: WorkflowDefinition): string[] {
+  return [...new Set(collectWorkflowCallRefs(defn).map((ref) => ref.workflowName))]
+}
+
+/**
  * RFC-223 (PR-2) — portable EXPORT form of a workflow definition: drop the
  * internal `agentId` from every agent-single node so exported YAML is a
  * name-based selector that resolves against the TARGET environment's agents on
@@ -76,10 +88,76 @@ export function stripWorkflowNodeAgentIds(def: WorkflowDefinition): WorkflowDefi
 export interface RefCheckGroup {
   type: AclResourceType
   /**
-   * Canonical resource ids. Portable selectors are resolved only by the
-   * explicit importRefs boundary.
+   * Reference tokens. In the default `'id'` domain these are canonical
+   * resource ids (portable selectors are resolved only by the explicit
+   * importRefs boundary). In the `'name'` domain (RFC-242 workflow call
+   * selectors) they are display names resolved against the type's `name`
+   * column.
    */
   names: readonly string[]
+  /**
+   * RFC-242 (§5.3) — token domain, default `'id'`. `'name'` groups carry
+   * dangle-tolerant NAME selectors (workflow names are deliberately
+   * non-unique): a name matching ZERO rows passes (dangling until launch,
+   * which fails closed with `workflow-call-ref-missing`), a name whose every
+   * matching row is invisible to the actor is rejected — that visibility
+   * fence is the ONLY thing standing between a name-guessing editor and the
+   * launch-time closure freeze, which reads referenced rows without ACL
+   * (D3/D11 implicit closure authorization).
+   */
+  domain?: 'id' | 'name'
+}
+
+/**
+ * RFC-242 (§5.3) — async preflight twin of `resolveRefsUsableById` for the
+ * NAME token domain. Existence is not enforced (zero matching rows = dangling,
+ * legal to persist); a name is `missing` only when at least one row matches
+ * and none is visible to the enforcing actor. Never throws — callers
+ * aggregate `missing` across groups into one `acl-missing-refs`.
+ */
+export async function resolveRefsUsableByName(
+  db: DbClient,
+  actor: Actor | null,
+  type: AclResourceType,
+  names: readonly string[],
+): Promise<{ missing: Array<{ type: AclResourceType; name: string }> }> {
+  const refs = [...new Set(names)].filter((n) => n.length > 0)
+  const missing: Array<{ type: AclResourceType; name: string }> = []
+  const enforce = actor !== null && !isResourceAdminActor(actor)
+  if (refs.length === 0 || !enforce) return { missing }
+  const table = ACL_TABLES[type]
+  const rows = (await db
+    .select({
+      id: table.id,
+      name: table.name,
+      ownerUserId: table.ownerUserId,
+      visibility: table.visibility,
+    })
+    .from(table)
+    .where(inArray(table.name, refs))) as Array<AclRow & { name: string }>
+  if (rows.length === 0) return { missing }
+  const granted = await listGrantedResourceIds(db, actor, type)
+  const byName = groupRowsByName(rows)
+  for (const ref of refs) {
+    const matched = byName.get(ref)
+    if (matched === undefined) continue // dangling until launch
+    if (!matched.some((row) => isVisibleRow(actor, row, granted))) {
+      missing.push({ type, name: ref }) // echo INPUT token (D1/P2-2)
+    }
+  }
+  return { missing }
+}
+
+function groupRowsByName(
+  rows: ReadonlyArray<AclRow & { name: string }>,
+): Map<string, Array<AclRow & { name: string }>> {
+  const byName = new Map<string, Array<AclRow & { name: string }>>()
+  for (const row of rows) {
+    const bucket = byName.get(row.name)
+    if (bucket === undefined) byName.set(row.name, [row])
+    else bucket.push(row)
+  }
+  return byName
 }
 
 /** id + name maps for the tokens that matched a row of `type`. */
@@ -127,6 +205,11 @@ export async function assertNewRefsUsable(
   if (isResourceAdminActor(actor)) return
   const missing: Array<{ type: AclResourceType; name: string }> = []
   for (const group of groups) {
+    if ((group.domain ?? 'id') === 'name') {
+      const resolved = await resolveRefsUsableByName(db, actor, group.type, group.names)
+      missing.push(...resolved.missing)
+      continue
+    }
     const refs = [...new Set(group.names)].filter((n) => n.length > 0)
     if (refs.length === 0) continue
     const { byId } = await loadAclRefRows(db, group.type, refs)
@@ -171,6 +254,13 @@ export async function assertNewRefsUsable(
  * caller-supplied canonical id. That preserves D1's non-enumerating shape.
  * Framework callers (`actor === null`) and resource admins bypass visibility,
  * but never existence — they cannot commit a new dangling reference either.
+ *
+ * `'name'`-domain groups (RFC-242 workflow call selectors) invert the
+ * existence half on purpose: a dangling name IS a legal persisted state
+ * (launch fails closed with `workflow-call-ref-missing`), so a fenced name
+ * whose rows vanished between preflight and commit degrades to dangling
+ * instead of rejecting the save. Only "every matching row is invisible to the
+ * enforcing actor" rejects — the matched-then-made-private race.
  */
 export function assertRefsUsableInTx(
   tx: DbTxSync,
@@ -181,37 +271,57 @@ export function assertRefsUsableInTx(
   for (const group of groups) {
     const refs = [...new Set(group.names)].filter((ref) => ref.length > 0)
     if (refs.length === 0) continue
+    const nameDomain = (group.domain ?? 'id') === 'name'
     const table = ACL_TABLES[group.type]
+    // Narrowed enforcement identity: null ⇒ framework caller or resource admin.
+    const enforcingActor = actor !== null && !isResourceAdminActor(actor) ? actor : null
+    if (nameDomain && enforcingActor === null) continue // dangle-tolerant + no ACL to enforce
     const rows = tx
       .select({
         id: table.id,
+        name: table.name,
         ownerUserId: table.ownerUserId,
         visibility: table.visibility,
       })
       .from(table)
-      .where(inArray(table.id, refs))
-      .all() as AclRow[]
+      .where(nameDomain ? inArray(table.name, refs) : inArray(table.id, refs))
+      .all() as Array<AclRow & { name: string }>
     const byId = new Map(rows.map((row) => [row.id, row]))
-    const enforceVisibility = actor !== null && !isResourceAdminActor(actor)
-    const granted = enforceVisibility
-      ? new Set(
-          tx
-            .select({ resourceId: resourceGrants.resourceId })
-            .from(resourceGrants)
-            .where(
-              and(
-                eq(resourceGrants.resourceType, group.type),
-                eq(resourceGrants.userId, actor.user.id),
-              ),
-            )
-            .all()
-            .map((row) => row.resourceId),
-        )
-      : new Set<string>()
+    const granted =
+      enforcingActor !== null
+        ? new Set(
+            tx
+              .select({ resourceId: resourceGrants.resourceId })
+              .from(resourceGrants)
+              .where(
+                and(
+                  eq(resourceGrants.resourceType, group.type),
+                  eq(resourceGrants.userId, enforcingActor.user.id),
+                ),
+              )
+              .all()
+              .map((row) => row.resourceId),
+          )
+        : new Set<string>()
+
+    if (nameDomain && enforcingActor !== null) {
+      const byName = groupRowsByName(rows)
+      for (const ref of refs) {
+        const matched = byName.get(ref)
+        if (matched === undefined) continue // dangling until launch
+        if (!matched.some((row) => isVisibleRow(enforcingActor, row, granted))) {
+          missing.push({ type: group.type, name: ref })
+        }
+      }
+      continue
+    }
 
     for (const ref of refs) {
       const row = byId.get(ref)
-      if (row === undefined || (enforceVisibility && !isVisibleRow(actor, row, granted))) {
+      if (
+        row === undefined ||
+        (enforcingActor !== null && !isVisibleRow(enforcingActor, row, granted))
+      ) {
         missing.push({ type: group.type, name: ref })
       }
     }

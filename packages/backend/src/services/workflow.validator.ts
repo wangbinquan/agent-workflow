@@ -42,8 +42,10 @@ import {
   buildNodeAgentLookup,
   canonicalJson,
   CLARIFY_SOURCE_PORT_NAME,
+  collectWorkflowCallRefs,
   countFanoutAggregators,
   declaredPorts,
+  detectCallCycles,
   isClarifyChannelEdge,
   isMultiDocReviewInput,
   isNodeInsideWorkflowWrapper,
@@ -55,10 +57,12 @@ import {
   resolveWorkflowSourceRef,
   serializeWorkflowDefinitionCandidateV1,
   tryParseKind,
+  WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
+import { asc, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { mcps as mcpsTable } from '@/db/schema'
+import { mcps as mcpsTable, workflows as workflowsTable } from '@/db/schema'
 import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
 import { listSkills } from '@/services/skill'
@@ -75,14 +79,48 @@ import { NotFoundError } from '@/util/errors'
 // -----------------------------------------------------------------------------
 
 /**
+ * RFC-242 §5.4 — one entry of the pre-loaded call-workflow reference closure.
+ * `name` is the authoritative selector, `id` the resolution cache — both key
+ * the closure map so `workflowName` and a stale `workflowId` hit the same row.
+ */
+export interface ValidatorWorkflowRef {
+  id: string
+  name: string
+  definition: WorkflowDefinition
+}
+
+/**
+ * RFC-242 §5.4 — the candidate a context is being loaded FOR. Optional second
+ * input of `loadWorkflowValidationContext`: when present the loader lazily
+ * walks the candidate's call-workflow closure (never a full-table scan).
+ * `currentWorkflow` is the candidate's own row identity when it exists —
+ * it feeds the self-call rule and roots the cycle walk on the real id, so a
+ * draft that newly adds `A → B` while `B` (stored) already calls `A` is
+ * caught before saving.
+ */
+export interface WorkflowValidationCandidate {
+  definition: WorkflowDefinition
+  currentWorkflow?: { id: string; name: string }
+}
+
+/**
  * RFC-165 (F14/R3-3): THE production validation context — agents + skills +
  * MCPs + plugins, all live from the DB. Every launch-path / sync-path caller MUST
  * build its ctx through this helper: hand-rolled `{agents, skills}` objects
  * silently skipped the plugin checks (ctx.plugins undefined ⇒ no-op), so a
  * workflow referencing a missing/disabled plugin validated at launch and
  * died at spawn. A consistency lock test pins every caller to this helper.
+ *
+ * RFC-242 §5.4: pass the candidate being validated to ALSO load its
+ * call-workflow reference closure (lazy, name-keyed, transitively — the
+ * advisory twin of the launch freeze in `services/execution/closure.ts`).
+ * Callers that omit it keep the pre-RFC-242 context: call rules that need the
+ * child definition then degrade instead of false-failing (see §4f / rule 2).
  */
-export async function loadWorkflowValidationContext(db: DbClient): Promise<ValidatorContext> {
+export async function loadWorkflowValidationContext(
+  db: DbClient,
+  candidate?: WorkflowValidationCandidate,
+): Promise<ValidatorContext> {
   const [agents, skills, mcps, plugins] = await Promise.all([
     listAgents(db),
     listSkills(db),
@@ -99,12 +137,80 @@ export async function loadWorkflowValidationContext(db: DbClient): Promise<Valid
       .from(mcpsTable),
     listPlugins(db),
   ])
-  return {
+  const ctx: ValidatorContext = {
     agents,
     skills,
     mcps,
     plugins,
   }
+  if (candidate !== undefined) {
+    ctx.callWorkflows = await loadCallWorkflowClosure(db, candidate.definition)
+    if (candidate.currentWorkflow !== undefined) ctx.currentWorkflow = candidate.currentWorkflow
+  }
+  return ctx
+}
+
+/**
+ * RFC-242 §5.4 — lazily load the call-workflow reference closure for ONE
+ * candidate definition: BFS level-by-level over the `workflows` table by
+ * authoritative NAME selector, following references of referenced definitions
+ * transitively. Never loads unreferenced rows. Lenient advisory twin of the
+ * launch freeze (`freezeCallClosure`, services/execution/closure.ts — keep the
+ * two walks shape-identical so the gates cannot drift): an unresolvable name
+ * or an unreadable stored definition simply stays absent from the map (the
+ * validator reports `call-workflow-ref-missing`), it never throws. The map is
+ * keyed by BOTH name and id; on a key collision the name entry wins.
+ */
+async function loadCallWorkflowClosure(
+  db: DbClient,
+  definition: WorkflowDefinition,
+): Promise<ReadonlyMap<string, ValidatorWorkflowRef>> {
+  const resolvedByName = new Map<string, ValidatorWorkflowRef>()
+  const queried = new Set<string>()
+  let frontier = [...new Set(collectWorkflowCallRefs(definition).map((r) => r.workflowName))]
+  while (frontier.length > 0) {
+    const wanted = frontier.filter((name) => !queried.has(name))
+    if (wanted.length === 0) break
+    for (const name of wanted) queried.add(name)
+    const rows = await db
+      .select({
+        id: workflowsTable.id,
+        name: workflowsTable.name,
+        definition: workflowsTable.definition,
+      })
+      .from(workflowsTable)
+      .where(inArray(workflowsTable.name, wanted))
+      .orderBy(asc(workflowsTable.id))
+    // Duplicate names resolve DETERMINISTICALLY: oldest row (lowest ULID)
+    // wins, first-wins per name — the exact rule freezeCallClosure applies,
+    // so editor preview and launch bind the same row.
+    const byName = new Map<string, (typeof rows)[number]>()
+    for (const r of rows) if (!byName.has(r.name)) byName.set(r.name, r)
+    const nextFrontier: string[] = []
+    for (const name of wanted) {
+      const row = byName.get(name)
+      if (row === undefined) continue // dangling ref → 4f `call-workflow-ref-missing`
+      let parsedDefinition: WorkflowDefinition
+      try {
+        const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(row.definition))
+        if (!parsed.success) continue // unreadable ⇒ treated as unresolvable
+        parsedDefinition = parsed.data
+      } catch {
+        continue
+      }
+      resolvedByName.set(name, { id: row.id, name: row.name, definition: parsedDefinition })
+      for (const ref of collectWorkflowCallRefs(parsedDefinition)) {
+        nextFrontier.push(ref.workflowName)
+      }
+    }
+    frontier = [...new Set(nextFrontier)]
+  }
+  // id keys first, then name keys — a (pathological) name equal to another
+  // row's id resolves to the name entry, matching the authoritative selector.
+  const out = new Map<string, ValidatorWorkflowRef>()
+  for (const ref of resolvedByName.values()) out.set(ref.id, ref)
+  for (const [name, ref] of resolvedByName) out.set(name, ref)
+  return out
 }
 
 /** @deprecated Use the canonical loader; retained for existing runtime callers. */
@@ -118,7 +224,13 @@ export async function validateWorkflowById(
   if (wf === null) {
     throw new NotFoundError('workflow-not-found', `workflow '${id}' not found`)
   }
-  return validateWorkflowDefinition(wf.definition, await loadWorkflowValidationContext(db))
+  return validateWorkflowDefinition(
+    wf.definition,
+    await loadWorkflowValidationContext(db, {
+      definition: wf.definition,
+      currentWorkflow: { id: wf.id, name: wf.name },
+    }),
+  )
 }
 
 export interface ValidatorPluginResource {
@@ -156,6 +268,23 @@ export interface ValidatorContext {
    * tests + workflow-yaml import sites don't break.
    */
   plugins?: ValidatorPluginResource[]
+  /**
+   * RFC-242 §5.4: the candidate's call-workflow reference closure, keyed by
+   * name AND id (see `loadCallWorkflowClosure`). `undefined` ⇒ resolver
+   * unavailable (a caller that didn't pass a candidate): §4f skips the
+   * ref/shape/cycle checks and rule-2 edge/binding checks over call ports
+   * degrade to warnings — resolver unavailability must not kill legal wiring.
+   * Deliberately NOT part of `projectWorkflowValidationContext`: the context
+   * hash is inventory-scoped while this closure is candidate-scoped; hashing
+   * it is the route-wiring task's concern.
+   */
+  callWorkflows?: ReadonlyMap<string, ValidatorWorkflowRef>
+  /**
+   * RFC-242 §5.4: identity of the workflow being validated, when it exists as
+   * a row. Enables the trivial self-call error and roots the cycle walk on
+   * the real id (a draft-only back-edge closes against stored rows).
+   */
+  currentWorkflow?: { id: string; name: string }
 }
 
 export const WORKFLOW_VALIDATION_CONTEXT_DOMAIN_V1 = 'workflow-validation-context/v1\n'
@@ -378,6 +507,23 @@ export function validateWorkflowDef(
             .map((p) => p.id)
             .filter((id): id is string => id != null),
         )
+  // RFC-242 §5.4 — call-workflow resolver over the pre-loaded closure
+  // (`loadWorkflowValidationContext(db, candidate)`). Kept as a nullable
+  // function so `declaredPorts` receives the exact `workflowByRef` shape the
+  // shared deriver expects; `callChildResolved` mirrors the deriver's ref
+  // choice (name first, id cache second) so the severity of rule-2 edge
+  // checks always matches the ports that were actually derived.
+  const callWorkflows = ctx.callWorkflows
+  const workflowByRef =
+    callWorkflows === undefined
+      ? undefined
+      : (nameOrId: string): WorkflowDefinition | null =>
+          callWorkflows.get(nameOrId)?.definition ?? null
+  const callChildResolved = (node: WorkflowDefinition['nodes'][number]): boolean => {
+    if (workflowByRef === undefined) return false
+    const ref = readString(node, 'workflowName') ?? readString(node, 'workflowId')
+    return ref !== undefined && workflowByRef(ref) !== null
+  }
 
   // Stable node identity is a scheduler invariant, not a canvas nicety. A
   // duplicate id used to survive validation, then `new Map(nodes.map(...))`
@@ -635,7 +781,10 @@ export function validateWorkflowDef(
   // — the same oracle the canvas renders with — so those wirings validate.
   const defnForPorts: WorkflowDefinition = { ...def, nodes, edges }
   for (const node of nodes) {
-    const declared = declaredPorts(node, defnForPorts, agentByIdOrName)
+    // RFC-242 §5.4: the optional resolver lets call-workflow nodes mirror the
+    // referenced definition's inputs/outputs; without it they declare no
+    // ports and the call-specific rules degrade instead of false-erroring.
+    const declared = declaredPorts(node, defnForPorts, agentByIdOrName, { workflowByRef })
     outputPorts.set(
       node.id,
       new Set([...declared.dataOutputs, ...declared.systemOutputs].map((p) => p.name)),
@@ -685,11 +834,19 @@ export function validateWorkflowDef(
     if (edge.boundary !== 'wrapper-input') {
       const outs = outputPorts.get(src.id) ?? new Set()
       if (!outs.has(edge.source.portName)) {
+        // RFC-242 §5.4: a call-workflow source whose child definition is
+        // unresolved (no resolver in ctx, or dangling ref — the latter is a
+        // hard §4f error already) declares no ports; degrade to warning so
+        // resolver unavailability cannot kill a legal edge.
+        const degraded = src.kind === 'call-workflow' && !callChildResolved(src)
         issues.push({
           code: 'edge-source-port-missing',
-          message: `edge '${edge.id}': node '${src.id}' has no output port '${edge.source.portName}'`,
+          message: `edge '${edge.id}': node '${src.id}' has no output port '${edge.source.portName}'${
+            degraded ? ' (referenced workflow unresolved — port set unknown)' : ''
+          }`,
           pointer: edge.id,
           target: target.nodePort(src.id, 'output', edge.source.portName),
+          ...(degraded ? { severity: 'warning' as const } : {}),
         })
       }
     }
@@ -740,6 +897,37 @@ export function validateWorkflowDef(
           pointer: edge.id,
           target: target.nodePort(tgt.id, 'input', edge.target.portName),
         })
+      }
+    } else if (tgt.kind === 'call-workflow') {
+      // RFC-242 §5.4(5): call nodes accept DATA inbound edges only, and only
+      // on the ports mirrored from the referenced definition's inputs[]
+      // (fan-in merge on one port stays legal — this is a membership check,
+      // not a cardinality check). Clarify-family channel wirings into a call
+      // node are hard-rejected by the 4d-bis system-port rules, which key on
+      // the reserved port names regardless of target kind — skip those two
+      // names here so one bad edge doesn't double-report. When the child is
+      // unresolved (no resolver in ctx / dangling ref) the node declares no
+      // ports; degrade to warning so a legal edge is not killed by resolver
+      // unavailability (dangling refs stay fatal via §4f ref-missing).
+      if (
+        edge.target.portName !== CLARIFY_RESPONSE_TARGET_PORT_NAME &&
+        edge.target.portName !== CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT
+      ) {
+        const ins = inputPorts.get(tgt.id) ?? new Set()
+        if (!ins.has(edge.target.portName)) {
+          const degraded = !callChildResolved(tgt)
+          issues.push({
+            code: 'edge-target-port-missing',
+            message: `edge '${edge.id}': call-workflow '${tgt.id}' has no input port '${edge.target.portName}'${
+              degraded
+                ? ' (referenced workflow unresolved — port set unknown)'
+                : ` (call inputs mirror the referenced workflow's inputs[])`
+            }`,
+            pointer: edge.id,
+            target: target.nodePort(tgt.id, 'input', edge.target.portName),
+            ...(degraded ? { severity: 'warning' as const } : {}),
+          })
+        }
       }
     }
 
@@ -1105,11 +1293,16 @@ export function validateWorkflowDef(
         } else {
           const outs = outputPorts.get(b.bind.nodeId) ?? new Set()
           if (!outs.has(b.bind.portName)) {
+            // RFC-242 §5.4: binding a call-workflow port whose child is
+            // unresolved degrades to warning (same rationale as rule 2).
+            const boundNode = nodeById.get(b.bind.nodeId)
+            const degraded = boundNode?.kind === 'call-workflow' && !callChildResolved(boundNode)
             issues.push({
               code: 'binding-port-missing',
               message: `output node '${node.id}' port '${b.name}' binds to unknown port '${b.bind.portName}' on '${b.bind.nodeId}'`,
               pointer: node.id,
               target: target.outputBinding(node.id, b.name),
+              ...(degraded ? { severity: 'warning' as const } : {}),
             })
           }
           const sourceResolution = resolveWorkflowSourceRef(
@@ -1143,11 +1336,16 @@ export function validateWorkflowDef(
         } else {
           const outs = outputPorts.get(b.bind.nodeId) ?? new Set()
           if (!outs.has(b.bind.portName)) {
+            // RFC-242 §5.4: loop-in-git/loop-over-call compositions are legal;
+            // an unresolved call child degrades this to warning (rule-2 twin).
+            const boundNode = nodeById.get(b.bind.nodeId)
+            const degraded = boundNode?.kind === 'call-workflow' && !callChildResolved(boundNode)
             issues.push({
               code: 'binding-port-missing',
               message: `wrapper-loop '${node.id}' outputBinding '${b.name}' references unknown port '${b.bind.portName}' on '${b.bind.nodeId}'`,
               pointer: node.id,
               target: target.nodeField(node.id, 'loop-output-bindings'),
+              ...(degraded ? { severity: 'warning' as const } : {}),
             })
           }
         }
@@ -1195,7 +1393,12 @@ export function validateWorkflowDef(
             exitNode?.kind === 'agent-single'
               ? // RFC-223 (PR-3a impl-gate H3): id-first existence check.
                 resolveNodeAgent(exitNode, agentByIdOrName) !== undefined
-              : true
+              : exitNode?.kind === 'call-workflow'
+                ? // RFC-242 §5.4: loop-around-call ("loop until the audit is
+                  // clean") is a designed composition; only judge the exit
+                  // port when the referenced definition actually resolved.
+                  callChildResolved(exitNode)
+                : true
           if (portsKnown && !(outputPorts.get(exitNodeId) ?? new Set<string>()).has(exitPortName)) {
             issues.push({
               code: 'wrapper-loop-exit-port-missing',
@@ -2006,6 +2209,173 @@ export function validateWorkflowDef(
         pointer: node.id,
         target: target.node(node.id),
       })
+    }
+  }
+
+  // 4f. RFC-242 — call-workflow nodes (design §5.4) --------------------------
+  // Advisory twin of the launch-time closure freeze (`freezeCallClosure`,
+  // services/execution/closure.ts): shown at /validate + /validate-draft,
+  // enforced at the launch gate — which additionally fails closed on its own
+  // fresh walk, so a stale resolver here can never ADMIT a broken launch.
+  // Checks that need the referenced definition run only when the closure was
+  // pre-loaded (`ctx.callWorkflows`); the structural fan-out rule always runs.
+  {
+    let selfCycleReported = false
+    for (const node of nodes) {
+      if (node.kind !== 'call-workflow') continue
+
+      // (i) fan-out containment — structural, resolver-independent. A call
+      // node dispatches an independent CHILD TASK; wrapper-fanout shard
+      // dispatch is an agent-specialized path (per-shard prompt injection),
+      // so v1 refuses call nodes anywhere in a fanout's transitive inner set.
+      // wrapper-git / wrapper-loop containment stays legal (design §5.4-6).
+      // Upward hop-capped walk mirrors the wrapper-loop-nested rule above.
+      {
+        let cur = innerToWrapper.get(node.id)
+        for (let hop = 0; cur !== undefined && hop < nodes.length; hop++) {
+          if (nodeById.get(cur)?.kind === 'wrapper-fanout') {
+            issues.push({
+              code: 'call-workflow-in-fanout-unsupported',
+              message: `call-workflow node '${node.id}' sits inside wrapper-fanout '${cur}' — call nodes cannot be fan-out sharded in v1; move the call outside the fanout (wrapper-git / wrapper-loop containment is allowed)`,
+              pointer: node.id,
+              target: target.node(node.id),
+            })
+            break
+          }
+          cur = innerToWrapper.get(cur)
+        }
+      }
+
+      const workflowName = readString(node, 'workflowName')
+
+      // (ii) self-reference — the trivial call cycle, anchored on the node.
+      // Message is id-free AND name-free by construction (RFC-099 echo
+      // discipline). The cycle walk below re-derives it as [id, id]; that
+      // duplicate is suppressed so one mistake reads as one issue.
+      if (
+        workflowName !== undefined &&
+        workflowName !== '' &&
+        ctx.currentWorkflow !== undefined &&
+        workflowName === ctx.currentWorkflow.name
+      ) {
+        issues.push({
+          code: 'workflow-call-cycle',
+          message: `call-workflow node '${node.id}' invokes the workflow being validated — a workflow cannot call itself`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'call-ref'),
+        })
+        selfCycleReported = true
+        continue // shape checks against the workflow itself would only repeat the cycle
+      }
+
+      if (callWorkflows === undefined) continue // resolver unavailable — degrade (see ctx docs)
+
+      // (iii) existence. The name is the author's own input — echoing it back
+      // is the agent-not-found precedent, not a resource-data leak.
+      if (workflowName === undefined || workflowName === '') {
+        issues.push({
+          code: 'call-workflow-ref-missing',
+          message: `call-workflow node '${node.id}' does not name a workflow (workflowName is required)`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'call-ref'),
+        })
+        continue
+      }
+      const childRef = callWorkflows.get(workflowName)
+      if (childRef === undefined) {
+        issues.push({
+          code: 'call-workflow-ref-missing',
+          message: `call-workflow node '${node.id}' references workflow '${workflowName}', which does not resolve to a known workflow`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'call-ref'),
+        })
+        continue
+      }
+      const childDef = childRef.definition
+
+      // (iv) upload inputs cannot cross a workflow call: the child launches
+      // headless from the parent's port values — there is no launcher form to
+      // collect files (design §5.4-2).
+      for (const input of childDef.inputs ?? []) {
+        if (input.kind !== 'upload') continue
+        issues.push({
+          code: 'call-workflow-upload-input-unsupported',
+          message: `call-workflow node '${node.id}': referenced workflow input '${input.key}' is kind 'upload' — upload inputs cannot cross a workflow call in v1`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'call-ports'),
+        })
+      }
+
+      // (v) output-port collisions across the child's output nodes. The port
+      // deriver dedupes first-wins for rendering stability, so a collision
+      // would silently drop one binding at the call boundary — reject it.
+      // (Zero output nodes stays legal: a pure write-to-worktree child.)
+      const childOutputNameCounts = new Map<string, number>()
+      for (const childNode of childDef.nodes ?? []) {
+        if (childNode.kind !== 'output') continue
+        for (const binding of readBindings(childNode, 'ports')) {
+          childOutputNameCounts.set(
+            binding.name,
+            (childOutputNameCounts.get(binding.name) ?? 0) + 1,
+          )
+        }
+      }
+      for (const [portName, count] of childOutputNameCounts) {
+        if (count < 2) continue
+        issues.push({
+          code: 'call-workflow-output-port-collision',
+          message: `call-workflow node '${node.id}': referenced workflow binds output port '${portName}' ${count} times across its output nodes — call output ports must be unique`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'call-ports'),
+        })
+      }
+
+      // (vi) every non-upload child input must be fed by ≥1 plain inbound
+      // edge on the same-named port (fan-in merge keeps ≥1, not exactly-1 —
+      // scheduler merge semantics). Upload inputs were rejected in (iv).
+      for (const input of childDef.inputs ?? []) {
+        if (input.kind === 'upload') continue
+        const wired = edges.some(
+          (e) =>
+            e.boundary === undefined &&
+            e.target.nodeId === node.id &&
+            e.target.portName === input.key,
+        )
+        if (wired) continue
+        issues.push({
+          code: 'call-workflow-input-unwired',
+          message: `call-workflow node '${node.id}': referenced workflow input '${input.key}' has no inbound edge on port '${input.key}'`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'call-ports'),
+        })
+      }
+    }
+
+    // (vii) cross-definition cycle walk over the pre-loaded closure. Root id
+    // is the candidate's real row id when known, so a DRAFT-only back-edge
+    // (draft A→B while stored B→A) still closes the loop; unsaved candidates
+    // fall back to a placeholder that can never appear inside a cycle.
+    // Messages carry resource IDS only (RFC-099 echo discipline — names are
+    // display data the reporter may not be entitled to echo; the id payload
+    // matches the launch gate's `workflow-call-cycle`). Names the resolver
+    // could not load are already owned by (iii) and deliberately not
+    // re-reported here.
+    if (callWorkflows !== undefined && collectWorkflowCallRefs(def).length > 0) {
+      const rootId = ctx.currentWorkflow?.id ?? '__workflow-under-validation__'
+      const report = detectCallCycles({ id: rootId, definition: def }, (name) => {
+        const ref = callWorkflows.get(name)
+        return ref === undefined ? null : { id: ref.id, definition: ref.definition }
+      })
+      for (const cycle of report.cycles) {
+        if (selfCycleReported && cycle.length === 2 && cycle[0] === rootId && cycle[1] === rootId) {
+          continue // trivial self-call already anchored on its node in (ii)
+        }
+        issues.push({
+          code: 'workflow-call-cycle',
+          message: `workflow call graph contains a cycle: ${cycle.join(' → ')}`,
+          target: target.workflow(),
+        })
+      }
     }
   }
 

@@ -123,6 +123,10 @@ async function seedTaskWithEdge(
         return { id: downstreamNodeId, kind: 'output' }
       case 'input':
         return { id: downstreamNodeId, kind: 'input', inputKey: 'topic' }
+      case 'call-workflow':
+        // RFC-242 — a call node is process-bearing (an independent child
+        // task); upstream retries mint it a placeholder like any wrapper.
+        return { id: downstreamNodeId, kind: 'call-workflow', workflowName: 'child-wf' }
       default: {
         const _exhaustive: never = downstreamKind
         throw new Error(`unexpected kind ${_exhaustive as string}`)

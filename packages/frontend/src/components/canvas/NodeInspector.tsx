@@ -24,7 +24,9 @@ import { FeedbackStack } from '@/components/FeedbackStack'
 import { computePorts } from './WorkflowCanvas'
 import { nodeTitle } from './nodeTitle'
 import { PromptPreview } from './PromptPreview'
+import { useWorkflowRefResolver } from './useWorkflowRefResolver'
 import { AgentSingleEdit } from './inspector/AgentSingleEdit'
+import { CallWorkflowEdit } from './inspector/CallWorkflowEdit'
 import { ClarifyEdit } from './inspector/ClarifyEdit'
 import { CrossClarifyEdit } from './inspector/CrossClarifyEdit'
 import { InputEdit } from './inspector/InputEdit'
@@ -56,6 +58,9 @@ export interface NodeInspectorProps {
   definition: WorkflowDefinition
   selectedNodeId: string | null
   agents: Agent[]
+  /** RFC-242: identity of the workflow being edited — threaded to
+   *  CallWorkflowEdit so the reference selector excludes self. Optional. */
+  workflowId?: string
   focusRequest?: { requestId: number; focusId: string } | null
   onChange: (next: WorkflowDefinition, meta: InspectorChangeMeta) => void
   onClose: () => void
@@ -83,12 +88,15 @@ const KIND_INSPECTORS = {
   review: ReviewEdit,
   clarify: ClarifyEdit,
   'clarify-cross-agent': CrossClarifyEdit,
+  // RFC-242 — call-workflow: child-workflow selector + port preview + limits.
+  'call-workflow': CallWorkflowEdit,
 } as const satisfies Record<NodeKind, FC<EditProps>>
 
 export function NodeInspector({
   definition,
   selectedNodeId,
   agents,
+  workflowId,
   focusRequest,
   onChange,
   onClose,
@@ -99,6 +107,10 @@ export function NodeInspector({
   const [tab, setTab] = useState<Tab>('edit')
   const [transitionNotice, setTransitionNotice] = useState<string | null>(null)
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents), [agents])
+  // RFC-242: child-workflow resolver so a selected call-workflow node's port
+  // summary counts its child-mirrored ports (provider-tolerant hook — several
+  // inspector suites render without a QueryClientProvider).
+  const { workflowByRef } = useWorkflowRefResolver()
 
   // Reset to edit tab whenever the selection changes.
   useEffect(() => {
@@ -129,6 +141,7 @@ export function NodeInspector({
     node,
     buildNodeAgentLookup(agents, (a) => a),
     definition,
+    workflowByRef,
   )
   const displayTitle = nodeTitle(node)
 
@@ -284,6 +297,7 @@ export function NodeInspector({
                   node={node}
                   agents={agents}
                   definition={definition}
+                  workflowId={workflowId}
                   onPatch={patch}
                   onCommitDef={commitDefinition}
                   onTransition={commitTransition}

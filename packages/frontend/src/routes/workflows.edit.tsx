@@ -976,6 +976,7 @@ export function WorkflowEditorLoaded({
         definition={draft}
         selectedNodeId={selectedNode.id}
         agents={agents.data ?? []}
+        workflowId={workflowId}
         focusRequest={inspectorFocusRequest}
         onChange={commitDefinition}
         onClose={closeInspector}

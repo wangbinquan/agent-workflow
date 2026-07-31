@@ -158,6 +158,16 @@ export const NODE_KIND_BEHAVIORS = {
     isAgent: false,
     settlesWithoutRow: false,
   },
+  // RFC-242 — call nodes represent real execution (an independent child
+  // task), so they cascade on retry and count as process-bearing; they own
+  // no opencode session THEMSELVES (each node inside the child task does),
+  // and they always write a container-style node_run row.
+  'call-workflow': {
+    retryCascade: 'mint-placeholder',
+    isProcess: true,
+    isAgent: false,
+    settlesWithoutRow: false,
+  },
 } as const satisfies Record<NodeKind, NodeKindBehavior>
 
 // ---------------------------------------------------------------------------

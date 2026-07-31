@@ -742,6 +742,14 @@ export const workgroupTaskState = sqliteTable('workgroup_task_state', {
   gateRejectedComment: text('gate_rejected_comment'),
   pauseReason: text('pause_reason'),
   dwStateJson: text('dw_state_json'),
+  /**
+   * RFC-242 §6.4 (migration 0127): the explicit RESULT ANCHOR — the room
+   * message id whose body IS the workgroup task's final result (lw: the
+   * leader's done decision; fc: the engine's convergence summary). The
+   * executor outcome projection reads THIS instead of guessing by
+   * kind/author (the fc summary and the zero-delta warning share both).
+   */
+  resultMessageId: text('result_message_id'),
   updatedAt: integer('updated_at').notNull(),
 })
 

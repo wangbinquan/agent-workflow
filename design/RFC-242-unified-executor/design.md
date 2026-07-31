@@ -413,7 +413,14 @@ type PortDeriveContext = { …existing…,
    （launch 冻结走查为权威第二道）；issue 载荷遵守 §3.1 的 id-only 纪律。
 5. 入边规则：两 kind 接受数据入边（`workflow.validator.ts:699-838` else-if 链加分支）；
    拒绝 signal/系统通道端口。
-6. wrapper 叠加：允许位于三类 wrapper 内层；`analyzeWorkflowScopeTree` 无需改。
+6. wrapper 叠加（**实现期修订，D7 偏差登记**）：允许位于 `wrapper-git` /
+   `wrapper-loop` 内层（二者经 `runScope → runOneNode` 驱动内层节点，call 分支
+   天然可达）；**`wrapper-fanout` 内层 v1 拒绝**（error
+   `call-workflow-in-fanout-unsupported`）——fanout 分片派发是 agent 特化路径
+   （`dispatchFanoutShard` 直调 `runNode`，`scheduler.ts:5588`），per-shard 子任务
+   需要给分片派发面开第二条 call 通道，风险/收益比不支持挤进本 RFC；登记为
+   后续项。等价写法：把 fanout 放进**子工作流内部**（子定义自带 fanout），
+   per-shard 语义完整保留。
 7. **dw 生成物拒绝 call 节点**：dynamic_workflow 生成 DAG 的准入面追加「含 call 节点 →
    拒绝重生」——工作组是闭包叶，杜绝运行期绕过冻结闭包与环检测。
 
@@ -485,6 +492,8 @@ agent 路径）——调用节点不占 agent 进程槽，消解「父占槽等�
   对内层 call 节点透明；每分片独立子任务受 §3.2 限额背压；fail-all-after-join 不变。
   wrapper 嵌套隔离（`scheduler.ts:4571-4586/6603-6620`）下 call 行 iso 从 wrapper iso
   分叉、合回 wrapper iso——git wrapper 的 diff 窗口天然包含子任务改动（回答开放问题 4）。
+  **fanout 内层 call v1 由 validator 拒绝**（见 §5.4 修订与 §12 后续项）；per-shard
+  子流程的等价写法是让子工作流自身包含 fanout。
 
 ### 6.3 call-workgroup 差异点
 
@@ -576,6 +585,7 @@ agent 路径）——调用节点不占 agent 进程槽，消解「父占槽等�
 | `workflow-call-cycle` | validate-draft / 启动闭包走查 | 跨定义调用环（含自环；issue 载荷 id-only） |
 | `workflow-call-ref-missing` | 启动闭包走查 / 调用节点发起 | 悬空 name / 资源不可读 |
 | `call-workflow-upload-input-unsupported` | validate-draft / launch 门 | 子定义含 upload 输入 |
+| `call-workflow-in-fanout-unsupported` | validate-draft / launch 门 | call 节点位于 wrapper-fanout 内层（v1 取舍，D7 偏差登记） |
 | `call-workflow-output-port-collision` | validate-draft / launch 门 | 子定义 output 端口重名 |
 | `invocation-depth-exceeded` | 调用节点发起 | 深度守卫 |
 | `workgroup-not-ready` | 调用节点发起 | 冻结配置 readiness / roster 失效 |
@@ -650,6 +660,8 @@ agent 路径）——调用节点不占 agent 进程槽，消解「父占槽等�
 逐条处置见 `./design-gate-2026-07-31.md`。残余登记（实现期复核，不阻塞批准）：
 
 1. §3.2 深树插队饥饿的优先级老化（v1 只告警）。
+1b. fanout 内层 call 节点（D7 完整形态）：给 `dispatchFanoutShard` 增加 call 分支
+   （分片 iso 内派生子任务、shardKey 谱系、限额×subprocessSem 复合背压），独立后续项。
 2. §7.2 注册表互斥收口范围（默认全量；可降级新链路 only）。
 3. dw `result` 端口透传（v1 拼接文本）。
 4. 限额/深度默认值（8 / 3）与 Settings 暴露面。

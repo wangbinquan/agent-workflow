@@ -11,6 +11,13 @@ export interface EditProps {
   node: WorkflowNode
   agents: Agent[]
   definition: WorkflowDefinition
+  /**
+   * RFC-242: identity of the workflow being edited. CallWorkflowEdit uses it
+   * to exclude the current workflow from the reference selector (self
+   * reference = the trivial call cycle). Optional — isolated stories/tests
+   * may omit it and simply see the full visible list.
+   */
+  workflowId?: string
   onPatch: (next: WorkflowNode, meta: InspectorChangeMeta) => void
   /**
    * Apply a multi-field workflow definition change. Used by branches that

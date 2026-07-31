@@ -31,12 +31,17 @@ export type PaletteItem =
   | { kind: 'review' }
   | { kind: 'clarify' }
   | { kind: 'clarify-cross-agent' }
+  // RFC-242 — call-workflow: the referenced workflow is picked in the
+  // Inspector after the drop (agent-single needs its identity at drag time
+  // because each palette row IS one agent; the Calls section has one generic
+  // row, so the fresh node starts with an empty workflowName).
+  | { kind: 'call-workflow' }
 
 /** mime carried in HTML5 dataTransfer. Custom to avoid colliding with files. */
 export const PALETTE_MIME = 'application/x-agent-workflow-node'
 
 /** Sidebar section a kind's palette entry renders under. */
-export type PaletteSectionKey = 'agents' | 'wrappers' | 'io' | 'human'
+export type PaletteSectionKey = 'agents' | 'wrappers' | 'calls' | 'io' | 'human'
 
 interface PaletteDescriptor {
   section: PaletteSectionKey
@@ -164,6 +169,17 @@ export const PALETTE_DESCRIPTORS = {
     // `cross-clarify-manual-edge-missing` cover the gap.
     makeDefaults: () => ({ title: '', description: '' }),
   },
+  'call-workflow': {
+    section: 'calls',
+    glyph: '⧉',
+    labelKey: 'editor.paletteCallWorkflowLabel',
+    descKey: 'editor.paletteCallWorkflowDesc',
+    idPrefix: 'call_wf',
+    // RFC-242 — the referenced workflow is picked in the Inspector; an empty
+    // workflowName stays a visible "unset" state on the card and the
+    // validator's call-ref rules block launch until it is filled.
+    makeDefaults: () => ({ workflowName: '' }),
+  },
 } as const satisfies Record<NodeKind, PaletteDescriptor>
 
 /** Canvas chip / palette leading icon per kind — one projection of the
@@ -282,6 +298,9 @@ export const PALETTE_SECTIONS = [
   // fan-out is now done via wrapper-fanout (a Wrappers entry). Drop a
   // wrapper-fanout, then drag the agent-single nodes you want into it.
   { key: 'wrappers', labelKey: 'editor.paletteWrappers' },
+  // RFC-242 — Calls: nodes that invoke another platform resource as an
+  // independent child task (call-workflow now; call-workgroup in PR-4).
+  { key: 'calls', labelKey: 'editor.paletteCalls' },
   { key: 'io', labelKey: 'editor.paletteIo' },
   { key: 'human', labelKey: 'editor.paletteHuman' },
 ] as const satisfies ReadonlyArray<{ key: PaletteSectionKey; labelKey: string }>

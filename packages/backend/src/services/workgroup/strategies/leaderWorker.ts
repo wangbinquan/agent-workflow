@@ -15,7 +15,11 @@ import {
 import { WG_LEADER_NODE_ID, WG_RERUN_CAUSE } from '@/services/workgroup/constants'
 import { casAssignmentStatus, advanceMemberCursor } from '@/services/workgroup/lifecycle'
 import { executeTurn, WG_PROTOCOL_RETRIES } from '@/services/workgroup/turnExecution'
-import { casGateStatus, type EngineDbState } from '@/services/workgroup/state'
+import {
+  casGateStatus,
+  stampWorkgroupResultAnchor,
+  type EngineDbState,
+} from '@/services/workgroup/state'
 import { countBudgetUsed, currentRound, roundMode, stampWgRound } from '@/services/workgroup/rounds'
 import { maxMessageId, memberDisplayName, rosterDisplayNames } from '@/services/workgroup/context'
 import { persistWgMessages, postMessage } from '@/services/workgroup/messages'
@@ -390,13 +394,16 @@ export async function driveLeaderTurn(
   // 4. decision.
   if (decision !== null && decision.ok) {
     if (decision.value.action === 'done') {
-      await postMessage(db, taskId, roundMode(config), {
+      const decisionMessageId = await postMessage(db, taskId, roundMode(config), {
         round,
         authorKind: 'member',
         authorMemberId: leaderId,
         kind: 'decision',
         bodyMd: decision.value.summary ?? '',
       })
+      // RFC-242 §6.4 — the leader's done decision IS the task result; anchor
+      // it explicitly so the executor projection never guesses by kind/author.
+      await stampWorkgroupResultAnchor(db, taskId, decisionMessageId)
       await casGateStatus(db, taskId, {
         from: ['idle', 'rejected'],
         to: 'declared',

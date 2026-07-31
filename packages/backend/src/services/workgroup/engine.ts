@@ -33,7 +33,11 @@ import type { DbClient } from '@/db/client'
 import { agents } from '@/db/schema'
 import type { nodeRuns } from '@/db/schema'
 import { isClarifyRerunCause, mintNodeRun } from '@/services/nodeRunMint'
-import { ensureWorkgroupTaskStateRow, setPauseReason } from '@/services/workgroup/state'
+import {
+  ensureWorkgroupTaskStateRow,
+  setPauseReason,
+  stampWorkgroupResultAnchor,
+} from '@/services/workgroup/state'
 import {
   casAssignmentStatus,
   dismissOpenClarifyParksForAutonomous,
@@ -520,7 +524,7 @@ export async function runWorkgroupEngine(
                   : null
               return `- ${a.title}${result ? `: ${result}` : ''}`
             })
-            await postMessage(db, taskId, roundMode(state.config), {
+            const summaryMessageId = await postMessage(db, taskId, roundMode(state.config), {
               authorKind: 'system',
               kind: 'decision',
               bodyMd:
@@ -528,6 +532,10 @@ export async function runWorkgroupEngine(
                   ? `free-collab converged — ${doneCards.length} task(s) done:\n${lines.join('\n')}`
                   : 'free-collab converged with no completed tasks',
             })
+            // RFC-242 §6.4 — anchor the convergence summary as the fc result
+            // (same kind+author as the zero-delta warning, so author filtering
+            // can never disambiguate — the anchor does).
+            await stampWorkgroupResultAnchor(db, taskId, summaryMessageId)
           }
           await cancelLeftovers(db, taskId, state)
           if (state.config.mode === 'leader_worker' && !state.gate.declaredDone) {

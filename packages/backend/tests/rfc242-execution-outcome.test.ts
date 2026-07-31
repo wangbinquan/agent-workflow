@@ -16,7 +16,14 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import {
+  nodeRunOutputs,
+  nodeRuns,
+  tasks,
+  workflows,
+  workgroupMessages,
+  workgroupTaskState,
+} from '../src/db/schema'
 import {
   getExecutionOutcome,
   projectExecutionOutcome,
@@ -219,6 +226,63 @@ describe('RFC-242 T4/§6.4 — workgroup result carriers', () => {
       workgroup: { gateSummary: null, dwPhase: null, resultMessageBody: null },
     })
     expect(outcome.warnings).toContain('workgroup-config-unparsable')
+  })
+})
+
+describe('RFC-242 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
+  test('result_message_id anchors the projection; noise decision rows cannot win', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const wfId = ulid()
+    await db.insert(workflows).values({ id: wfId, name: 'wf-wg', definition: '{}' })
+    const taskId = ulid()
+    await db.insert(tasks).values({
+      id: taskId,
+      name: 'wg-anchor',
+      workflowId: wfId,
+      workflowSnapshot: '{}',
+      repoPath: '/x',
+      worktreePath: '/x',
+      baseBranch: 'main',
+      branch: `b-${taskId.slice(-4)}`,
+      status: 'done',
+      inputs: '{}',
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+      workgroupId: ulid(),
+      workgroupConfigJson: JSON.stringify({ mode: 'free_collab' }),
+    })
+    const anchorId = ulid()
+    // 先插一条同 kind 同 author 的噪声行（zero-delta 告警形态），再插真结果 ——
+    // 锚必须精确指到真结果，任何 kind/author 启发式都会取错。
+    await db.insert(workgroupMessages).values({
+      id: ulid(),
+      taskId,
+      round: 1,
+      authorKind: 'system',
+      kind: 'decision',
+      bodyMd: '⚠️ zero-delta warning noise',
+      createdAt: Date.now(),
+    })
+    await db.insert(workgroupMessages).values({
+      id: anchorId,
+      taskId,
+      round: 1,
+      authorKind: 'system',
+      kind: 'decision',
+      bodyMd: 'free-collab converged — 2 task(s) done',
+      createdAt: Date.now() + 1,
+    })
+    await db.insert(workgroupTaskState).values({
+      taskId,
+      gateStatus: 'idle',
+      resultMessageId: anchorId,
+      updatedAt: Date.now(),
+    })
+    const outcome = await getExecutionOutcome(db, taskId)
+    expect(outcome.outputs).toEqual({
+      result: { content: 'free-collab converged — 2 task(s) done', kind: 'text' },
+    })
+    expect(outcome.warnings).toEqual([])
   })
 })
 

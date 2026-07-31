@@ -2948,6 +2948,7 @@ export const enUS: Resources = {
       categoryAll: 'All',
       categoryAgent: 'Agent',
       categoryWrapper: 'Wrapper',
+      categoryCalls: 'Calls',
       categoryIo: 'I/O',
       categoryHuman: 'Human',
       noMatches: 'No matching steps.',
@@ -3059,6 +3060,10 @@ export const enUS: Resources = {
     paletteClarifyLabel: 'clarify',
     paletteClarifyDesc:
       'Lets an agent ask back when stuck; drag from this node’s input handle onto the agent to wire it.',
+    paletteCalls: 'Calls',
+    paletteCallWorkflowLabel: 'call workflow',
+    paletteCallWorkflowDesc:
+      'Run another workflow as an independent child task; ports mirror the referenced workflow’s inputs/outputs.',
     menuPaste: 'Paste',
     menuSelectAll: 'Select all',
     menuDuplicate: 'Duplicate',
@@ -3477,6 +3482,21 @@ export const enUS: Resources = {
     clarifySessionModeHint:
       'In "Same session" mode the agent keeps its full conversation across clarify rounds (cheaper tokens, faster turnaround). Falls back to isolated automatically when the prior session is unavailable.',
     missingOption: '{{value}} (missing)',
+    fieldCallWorkflow: 'Called workflow',
+    fieldCallWorkflowHint:
+      'Runs the selected workflow as an independent child task; input/output ports mirror its definition. The workflow being edited is excluded (self reference = call cycle).',
+    pickCallWorkflow: '— pick a workflow —',
+    callWorkflowNoRef: 'No workflow selected yet.',
+    callWorkflowRefUnavailable: 'Reference is not visible or does not exist',
+    callWorkflowPortsPreview: 'Child workflow ports',
+    callWorkflowPortsPreviewHint:
+      'From the referenced workflow’s current definition: inputs = its workflow inputs, outputs = the union of its output-node ports.',
+    callWorkflowChildInputs: 'Inputs',
+    callWorkflowChildOutputs: 'Outputs',
+    fieldCallMaxDurationMs: 'Child task duration limit (ms)',
+    fieldCallMaxDurationMsHint: 'Optional; falls back to the global limit when empty.',
+    fieldCallMaxTotalTokens: 'Child task total-token limit',
+    fieldCallMaxTotalTokensHint: 'Optional; falls back to the global limit when empty.',
   },
   promptPreview: {
     mockTitle: 'Mock port values',
@@ -4133,6 +4153,10 @@ export const enUS: Resources = {
   crossClarifyNode: {
     label: 'cross-clarify',
   },
+  callWorkflowNode: {
+    label: 'call workflow',
+    unsetWorkflow: '(no workflow selected)',
+  },
   errorDomains: {
     taskQuestion: 'Question board action failed',
     task: 'Task action failed',
@@ -4266,6 +4290,16 @@ export const enUS: Resources = {
         'A loop output binding must reference a direct member of the loop body.',
       'wrapper-output-boundary-missing':
         'Data leaving a wrapper must be exposed through the wrapper output boundary.',
+      // RFC-242 — call-workflow nodes (design §9 error-code closed set).
+      'workflow-call-cycle': 'Workflow calls form a cycle (including calling itself).',
+      'call-workflow-ref-missing': 'The call node references a missing or unselected workflow.',
+      'call-workflow-upload-input-unsupported':
+        'The called workflow declares an upload input, which cannot cross a workflow call yet.',
+      'call-workflow-output-port-collision':
+        'Multiple output nodes of the called workflow declare the same port name.',
+      'call-workflow-input-unwired':
+        'A called-workflow input port has no inbound edge with the same name.',
+      'call-workflow-in-fanout-unsupported': 'Call nodes cannot sit inside a fan-out wrapper.',
     },
     family: {
       'wrapper-loop': 'Loop wrapper misconfigured.',
@@ -5444,7 +5478,13 @@ export const enUS: Resources = {
     selectorLabel: '{{type}}: {{name}}',
     selectOwner: 'Select resource owner',
     candidateDescription: '{{visibility}} · {{id}}',
-    resourceType: { agent: 'Agent', skill: 'Skill', mcp: 'MCP', plugin: 'Plugin' },
+    resourceType: {
+      agent: 'Agent',
+      skill: 'Skill',
+      mcp: 'MCP',
+      plugin: 'Plugin',
+      workflow: 'Workflow',
+    },
   },
   members: {
     title: 'Task members',

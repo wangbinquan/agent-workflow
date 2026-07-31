@@ -110,6 +110,7 @@ import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRou
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
 import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
+import { freezeCallClosure } from '@/services/execution/closure'
 
 const log = createLogger('task')
 
@@ -217,6 +218,10 @@ export interface StartTaskDeps {
    * agent.runtime=null node fell back to opencode). Omitted → scheduler default.
    */
   defaultRuntime?: string
+  /** RFC-242 §3.2: daemon-wide active-child-task cap (config.maxActiveChildTasks). */
+  maxActiveChildTasks?: number
+  /** RFC-242 §3.2: invocation-chain depth ceiling (config.maxInvocationDepth). */
+  maxInvocationDepth?: number
   /** Override opencode command (tests inject mock-opencode). */
   opencodeCmd?: string[]
   /** Await scheduler completion in this call (tests). HTTP route does NOT pass this. */
@@ -282,6 +287,22 @@ export interface StartTaskDeps {
    * Stamped atomically with the task INSERT like scheduledTaskId.
    */
   workgroupLaunch?: { workgroupId: string; configJson: string; snapshotJson: string; dw?: DwState }
+  /**
+   * RFC-242 §6.2 L: node-invoked CHILD launch payload. `frozenSnapshotJson`
+   * (the child definition frozen in the PARENT's ref closure at parent launch,
+   * D9) replaces the referenced workflow row's CURRENT definition as the
+   * snapshot AND as the definition every launch gate evaluates — the resource
+   * row serves only as the FK anchor. `refClosureJson` is the closure subset
+   * handed down for grandchildren. Parent linkage columns are stamped
+   * atomically with the task INSERT.
+   */
+  callLaunch?: {
+    parentTaskId: string
+    parentNodeRunId: string
+    invocationDepth: number
+    frozenSnapshotJson: string
+    refClosureJson: string | null
+  }
   /**
    * RFC-165 §4: single-agent launch payload. `snapshotJson` (the synthesized
    * `__agent_host__` snapshot) replaces the FK-anchor row's stub definition
@@ -744,9 +765,17 @@ export function runtimeConfigOpts(
     | 'defaultNodeRetries'
     | 'defaultRuntime'
     | 'containmentCoordinator'
+    | 'maxActiveChildTasks'
+    | 'maxInvocationDepth'
   >,
 ): Partial<RunTaskOptions> {
   return {
+    ...(deps.maxActiveChildTasks !== undefined
+      ? { maxActiveChildTasks: deps.maxActiveChildTasks }
+      : {}),
+    ...(deps.maxInvocationDepth !== undefined
+      ? { maxInvocationDepth: deps.maxInvocationDepth }
+      : {}),
     ...(deps.commitPush?.model !== undefined ? { commitPushModel: deps.commitPush.model } : {}),
     ...(deps.commitPush?.runtime !== undefined
       ? { commitPushRuntime: deps.commitPush.runtime }
@@ -802,8 +831,10 @@ export function runtimeConfigOpts(
  */
 export interface MaterializedSpace {
   kind: 'scratch' | 'single' | 'multi'
-  /** RFC-165: persisted `tasks.space_kind` value, decided at materialize time. */
-  spaceKind: 'local' | 'remote' | 'scratch' | 'internal'
+  /** RFC-165: persisted `tasks.space_kind` value, decided at materialize time.
+   *  RFC-242: 'inherited' = a child execution's synthesized space pointing into
+   *  its parent's call-node iso (never produced by materializeSpace itself). */
+  spaceKind: 'local' | 'remote' | 'scratch' | 'internal' | 'inherited'
   taskId: string
   /** Multi: the container dir; single: the worktree; scratch: the repo dir; '' on failure. */
   worktreePath: string
@@ -1380,13 +1411,33 @@ async function startTaskImpl(
   if (workflow === null) {
     throw new NotFoundError('workflow-not-found', `workflow '${input.workflowId}' not found`)
   }
+  // RFC-242 §6.2 L: a child launch executes the definition FROZEN at the
+  // parent's launch, never the resource row's current one (D9) — every gate
+  // below (execution policy, multi-repo, static validation, inputs) evaluates
+  // the definition that will actually run. The resource row stays the FK
+  // anchor (agent/workgroup host precedent).
+  let effectiveDefinition = workflow.definition
+  if (deps.callLaunch !== undefined) {
+    try {
+      const parsed = WorkflowDefinitionSchema.safeParse(
+        JSON.parse(deps.callLaunch.frozenSnapshotJson),
+      )
+      if (!parsed.success) throw new Error('schema')
+      effectiveDefinition = parsed.data
+    } catch {
+      throw new ValidationError(
+        'workflow-call-ref-missing',
+        `frozen child definition for workflow '${input.workflowId}' is unreadable`,
+      )
+    }
+  }
   // RFC-224 final service funnel. Route/multipart/schedule faces reject even
   // earlier, but internal startTask callers must not be able to bypass the
   // effective OpenCode model/plugin/dependent policy. This remains before
   // source resolution, cloning, worktree creation, or task-row writes.
   const resolvedAgents = await assertWorkflowExecutionPolicy(
     deps.db,
-    workflow.definition,
+    effectiveDefinition,
     deps.defaultRuntime,
   )
   // RFC-233: early UX preview is evaluated only after the same canonical
@@ -1471,7 +1522,7 @@ async function startTaskImpl(
   // launchable as today, gated by the static validation rules only).
   if (repoSpecs.length > 1) {
     const wrapperGitNodes = (
-      (workflow.definition.nodes as Array<{ id: string; kind: string }>) ?? []
+      (effectiveDefinition.nodes as Array<{ id: string; kind: string }>) ?? []
     )
       .filter((n) => n.kind === 'wrapper-git')
       .map((n) => n.id)
@@ -1483,7 +1534,7 @@ async function startTaskImpl(
       )
     }
     const uploadInputs = (
-      (workflow.definition.inputs as Array<{ key: string; kind: string }>) ?? []
+      (effectiveDefinition.inputs as Array<{ key: string; kind: string }>) ?? []
     )
       .filter((i) => i.kind === 'upload')
       .map((i) => i.key)
@@ -1500,7 +1551,7 @@ async function startTaskImpl(
   // Run the same 5-rule check the editor uses, against the live agent/skill set,
   // and refuse to launch if it surfaces any error-severity issues. Warnings pass.
   const validation = validateWorkflowDef(
-    workflow.definition,
+    effectiveDefinition,
     await buildWorkflowValidationContext(deps.db),
   )
   if (!validation.ok) {
@@ -1511,6 +1562,15 @@ async function startTaskImpl(
       { issues: validation.issues },
     )
   }
+  // RFC-242 §3.1: parents freeze the reference closure at launch (null when
+  // the definition has no call nodes — byte-compat fast path); children carry
+  // the subset handed down via deps.callLaunch. Runs AFTER static validation
+  // so a cycle/missing-ref failure points at launch, not at a half-built row.
+  const frozenClosureJson =
+    deps.callLaunch !== undefined
+      ? null // this arm never reads it — the INSERT takes deps.callLaunch.refClosureJson
+      : await freezeCallClosure(deps.db, { id: workflow.id, definition: effectiveDefinition })
+
   // Browser-side required/picker gates are advisory: JSON API callers and
   // scheduled fires reach this service directly. Validate the packed map here
   // before any repo resolution/materialization so a missing required input
@@ -1518,7 +1578,9 @@ async function startTaskImpl(
   // different synthesized-host contracts and validate them in their launch
   // services before entering this generic workflow funnel.
   if (deps.agentLaunch === undefined && deps.workgroupLaunch === undefined) {
-    assertWorkflowLaunchInputs(workflow.definition.inputs, input.inputs)
+    // RFC-242: child launches validate against the FROZEN definition's inputs
+    // (identical map semantics — the call node wired them from its ports).
+    assertWorkflowLaunchInputs(effectiveDefinition.inputs, input.inputs)
   }
 
   const appHome = deps.appHome ?? Paths.root
@@ -1709,6 +1771,7 @@ async function startTaskImpl(
           name: input.name,
           workflowId: workflow.id,
           workflowSnapshot:
+            deps.callLaunch?.frozenSnapshotJson ??
             deps.workgroupLaunch?.snapshotJson ??
             deps.agentLaunch?.snapshotJson ??
             JSON.stringify(workflow.definition),
@@ -1764,6 +1827,14 @@ async function startTaskImpl(
           // its public retirement lands within this PR); 'internal' is stamped via
           // the internalSource dep (fusion) once that migration lands.
           spaceKind: space.spaceKind,
+          // RFC-242: parent linkage for node-invoked children + the frozen
+          // reference closure (parents freeze it above; children carry the
+          // handed-down subset). All NULL/0 on ordinary launches.
+          parentTaskId: deps.callLaunch?.parentTaskId ?? null,
+          parentNodeRunId: deps.callLaunch?.parentNodeRunId ?? null,
+          invocationDepth: deps.callLaunch?.invocationDepth ?? 0,
+          refClosureJson:
+            deps.callLaunch !== undefined ? deps.callLaunch.refClosureJson : frozenClosureJson,
           // RFC-165 (R3-2-r4): a materialize-failure row has NO revivable workspace —
           // stamp the tombstone atomically with the row so retry / sync-workflow can
           // never CAS it back to pending against a missing directory.
@@ -2130,11 +2201,13 @@ export async function cancelTask(
   }
 
   const controller = activeTasks.get(id)
+  let settledEarly: Task | null = null
   if (controller !== undefined) {
     controller.abort()
     // Wait for the scheduler to record the canceled state (best-effort 5s
     // poll). If the daemon was restarted, no controller exists; we just mark
-    // the row canceled directly.
+    // the row canceled directly. NOTE (RFC-242 §4.3): do NOT return here —
+    // the cascade stamp + child enumeration below must run on BOTH paths.
     const deadline = Date.now() + 5000
     while (Date.now() < deadline) {
       const reread = await getTask(db, id)
@@ -2142,7 +2215,8 @@ export async function cancelTask(
         reread !== null &&
         !(CANCELABLE_TASK_STATUSES as readonly string[]).includes(reread.status)
       ) {
-        return reread
+        settledEarly = reread
+        break
       }
       await Bun.sleep(50)
     }
@@ -2154,21 +2228,22 @@ export async function cancelTask(
   // instead of overwriting it. Parked tasks (awaiting_*) have no controller
   // and always take this path; the terminal-task hook (RFC-202 T2) then
   // seals their open clarify/review rounds.
-  await trySetTaskStatus({
-    db,
-    taskId: id,
-    to: 'canceled',
-    allowedFrom: CANCELABLE_TASK_STATUSES,
-    extra: {
-      finishedAt: Date.now(),
-      errorSummary: 'canceled by user',
-      errorMessage:
-        opts.cascadeFromParent === true
-          ? 'canceled-by-parent-cascade'
-          : 'no active scheduler at cancel time',
-    },
-    reason: 'cancelTask-fallback',
-  })
+  if (settledEarly === null)
+    await trySetTaskStatus({
+      db,
+      taskId: id,
+      to: 'canceled',
+      allowedFrom: CANCELABLE_TASK_STATUSES,
+      extra: {
+        finishedAt: Date.now(),
+        errorSummary: 'canceled by user',
+        errorMessage:
+          opts.cascadeFromParent === true
+            ? 'canceled-by-parent-cascade'
+            : 'no active scheduler at cancel time',
+      },
+      reason: 'cancelTask-fallback',
+    })
   // RFC-242 §4.3 — the scheduler path can also have landed the terminal write
   // (abort → cancelTaskRow). Stamp the cascade marker idempotently AFTER the
   // row is terminal so the durable judgement survives either path. errorMessage

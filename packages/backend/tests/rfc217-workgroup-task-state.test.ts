@@ -145,7 +145,13 @@ describe('rfc217 T2 — gate state machine', () => {
   })
 
   test('gateViewOf derivation matrix (wire-frozen booleans)', () => {
-    const base = { gateSummary: null, gateRejectedComment: null, pauseReason: null, dwState: null }
+    const base = {
+      gateSummary: null,
+      gateRejectedComment: null,
+      pauseReason: null,
+      dwState: null,
+      resultMessageId: null,
+    }
     const view = (gateStatus: WorkgroupGateStatus) => gateViewOf({ ...base, gateStatus })
     expect(view('idle')).toMatchObject({
       declaredDone: false,

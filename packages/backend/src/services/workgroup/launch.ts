@@ -23,6 +23,7 @@ import {
   initialDwState,
   serializeWorkflowDefinitionStorageV1,
   StartTaskSchema,
+  type StartTask,
   workgroupLaunchReadiness,
   WorkgroupRuntimeConfigSchema,
   type LaunchSpaceFields,
@@ -327,4 +328,119 @@ export async function startWorkgroupTask(
       ...(isDynamic ? { dw: initialDwState() } : {}),
     },
   })
+}
+
+// -----------------------------------------------------------------------------
+// RFC-242 §6.3 — the FROZEN launch face for call-workgroup child executions.
+//
+// The parent froze `buildWorkgroupRuntimeConfig(group, '')` into its ref
+// closure at ITS launch (D9); a call node materializes that template with the
+// rendered goal and launches WITHOUT re-reading the workgroup resource or its
+// OCC fences. Launch gates ④–⑦ (roster agent existence / execution policy /
+// resource integrity) STILL run — agents are live resources and the child
+// launch semantics must match a fresh launch's guarantees.
+// -----------------------------------------------------------------------------
+
+export interface StartWorkgroupTaskFromFrozenArgs {
+  /** The frozen workgroup RESOURCE row (roster included) from the parent's
+   *  ref closure — the runtime config is derived HERE with the rendered goal
+   *  (buildWorkgroupRuntimeConfig), exactly like a fresh launch would. */
+  frozenGroup: Parameters<typeof buildWorkgroupRuntimeConfig>[0]
+  workgroupId: string
+  /** Parent-side rendered goal (template layer已展开; literal for the child). */
+  goal: string
+  name: string
+  /** Parent task members (D11) — merged with the roster's human members. */
+  collaboratorUserIds: readonly string[]
+  gitUserName?: string | undefined
+  gitUserEmail?: string | undefined
+  maxDurationMs?: number | undefined
+  maxTotalTokens?: number | undefined
+}
+
+export async function startWorkgroupTaskFromFrozen(
+  db: DbClient,
+  args: StartWorkgroupTaskFromFrozenArgs,
+  deps: StartTaskDeps,
+): Promise<Task> {
+  const config: WorkgroupRuntimeConfig = buildWorkgroupRuntimeConfig(args.frozenGroup, args.goal)
+
+  // Frozen-template readiness (workgroupLaunchReadiness reads the RESOURCE
+  // shape; the template carries the same member/mode/leader facts).
+  const agentMembers = config.members.filter((m) => m.memberType === 'agent')
+  const reasons: string[] = []
+  if (agentMembers.length === 0) reasons.push('no-agent-member')
+  if (
+    config.mode === 'leader_worker' &&
+    !config.members.some((m) => m.id === config.leaderMemberId)
+  ) {
+    reasons.push('leader-missing')
+  }
+  if (reasons.length > 0) {
+    throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', { reasons })
+  }
+  const memberAgentIds = agentMembers.flatMap((m) =>
+    typeof m.agentId === 'string' && m.agentId.length > 0 ? [m.agentId] : [],
+  )
+  const existingAgentIds =
+    memberAgentIds.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await db
+              .select({ id: agents.id })
+              .from(agents)
+              .where(inArray(agents.id, [...new Set(memberAgentIds)]))
+          ).map((row) => row.id),
+        )
+  const missing = agentMembers.filter(
+    (m) => typeof m.agentId !== 'string' || !existingAgentIds.has(m.agentId),
+  )
+  if (missing.length > 0 || memberAgentIds.length !== agentMembers.length) {
+    throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
+      reasons: ['agent-missing'],
+      missingAgentNames: [...new Set(missing.map((m) => m.displayName))],
+    })
+  }
+  await assertAgentIdsExecutionPolicy(db, memberAgentIds, deps.defaultRuntime)
+  await assertAgentResourceIntegrity(db, memberAgentIds)
+
+  // resolveWorkgroupCollaborators 的入参是资源行成员形态；冻结模板等价字段
+  // 直接并集（显式在前、去重、顺序稳定 —— 语义同源）。
+  const humanMemberIds = config.members.flatMap((m) =>
+    m.memberType === 'human' && typeof m.userId === 'string' && m.userId.length > 0
+      ? [m.userId]
+      : [],
+  )
+  const collaboratorUserIds = [...new Set([...args.collaboratorUserIds, ...humanMemberIds])]
+
+  const isDynamic = config.mode === 'dynamic_workflow'
+  const snapshot = isDynamic
+    ? buildDynamicWorkflowGenerateSnapshot()
+    : buildWorkgroupHostSnapshot(config)
+
+  await ensureWorkgroupHostWorkflow(db)
+  return startTask(
+    {
+      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+      name: args.name,
+      inputs: {},
+      ...(collaboratorUserIds.length > 0 ? { collaboratorUserIds } : {}),
+      ...(args.gitUserName !== undefined ? { gitUserName: args.gitUserName } : {}),
+      ...(args.gitUserEmail !== undefined ? { gitUserEmail: args.gitUserEmail } : {}),
+      ...(args.maxDurationMs !== undefined ? { maxDurationMs: args.maxDurationMs } : {}),
+      ...(args.maxTotalTokens !== undefined ? { maxTotalTokens: args.maxTotalTokens } : {}),
+      // publication belongs to the parent (D12): no workingBranch / auto push.
+      autoCommitPush: false,
+    } as StartTask,
+    {
+      ...deps,
+      workgroupLaunch: {
+        workgroupId: args.workgroupId,
+        configJson: JSON.stringify(config),
+        snapshotJson: JSON.stringify(snapshot),
+        ...(isDynamic ? { dw: initialDwState() } : {}),
+      },
+    },
+  )
 }

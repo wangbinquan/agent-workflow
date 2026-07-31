@@ -33,6 +33,7 @@ import {
   assertNewRefsUsable,
   diffNewNames,
   extractWorkflowAgentRefs,
+  extractWorkflowWorkflowRefs,
 } from '@/services/resourceRefs'
 import {
   copyWorkflow,
@@ -204,7 +205,16 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       extractWorkflowAgentRefs(workflow.definition),
       extractWorkflowAgentRefs(parsed.data.definition),
     )
-    await assertNewRefsUsable(deps.db, actor, [{ type: 'agent', names: addedAgentNames }])
+    // RFC-242 (§5.3): NEW call-workflow name selectors ride the same D15 gate
+    // (dangle-tolerant name domain — see resourceRefs.RefCheckGroup.domain).
+    const addedWorkflowNames = diffNewNames(
+      new Set(extractWorkflowWorkflowRefs(workflow.definition)),
+      new Set(extractWorkflowWorkflowRefs(parsed.data.definition)),
+    )
+    await assertNewRefsUsable(deps.db, actor, [
+      { type: 'agent', names: addedAgentNames },
+      { type: 'workflow', names: addedWorkflowNames, domain: 'name' },
+    ])
 
     const context = await loadWorkflowValidationContext(deps.db)
     const result = validateWorkflowDefinition(parsed.data.definition, context)

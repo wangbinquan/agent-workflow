@@ -19,7 +19,7 @@
 // tested directly); `getExecutionOutcome` is the thin DB assembler.
 import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
+import { nodeRunOutputs, nodeRuns, tasks, workgroupMessages } from '@/db/schema'
 import { NotFoundError } from '@/util/errors'
 import { pickUpstreamSourceRun } from '@/services/freshness'
 import { AGENT_HOST_AGENT_NODE_ID } from '@/services/agentLaunch'
@@ -57,6 +57,9 @@ export type OutcomeOutputRow = {
   portName: string
   content: string
   kind: string | null
+  /** RFC-193 archive reference — copied verbatim into a parent call row so
+   *  the forced-port roster keeps covering child-produced gitignored files. */
+  archiveJson?: string | null
 }
 
 /** lw/fc anchors + dw phase, pre-fetched by the assembler (null = not a workgroup task). */
@@ -119,7 +122,11 @@ function projectOutputNodePorts(
         // (design §5.4), historical snapshots settle here.
         warnings.push(`output-port-collision:${o.portName}`)
       }
-      result[o.portName] = { content: o.content, kind: o.kind }
+      result[o.portName] = {
+        content: o.content,
+        kind: o.kind,
+        ...(o.archiveJson != null ? { archiveJson: o.archiveJson } : {}),
+      }
     }
   }
   return result
@@ -223,12 +230,19 @@ export async function getExecutionOutcome(db: DbClient, taskId: string): Promise
   let workgroup: WorkgroupOutcomeInput | null = null
   if (taskExecutionKind(task) === 'workgroup') {
     const state = await loadWorkgroupTaskState(db, taskId)
+    let resultMessageBody: string | null = null
+    if (state.resultMessageId !== null) {
+      const msg = await db
+        .select({ bodyMd: workgroupMessages.bodyMd })
+        .from(workgroupMessages)
+        .where(eq(workgroupMessages.id, state.resultMessageId))
+        .limit(1)
+      resultMessageBody = msg[0]?.bodyMd ?? null
+    }
     workgroup = {
       gateSummary: state.gateSummary,
       dwPhase: state.dwState?.phase ?? null,
-      // RFC-242 PR-4 wires the explicit anchor (result_message_id → body);
-      // until then the projection uses the documented fallback chain.
-      resultMessageBody: null,
+      resultMessageBody,
     }
   }
 
@@ -252,6 +266,7 @@ export async function getExecutionOutcome(db: DbClient, taskId: string): Promise
         portName: nodeRunOutputs.portName,
         content: nodeRunOutputs.content,
         kind: nodeRunOutputs.kind,
+        archiveJson: nodeRunOutputs.archiveJson,
       })
       .from(nodeRunOutputs)
       .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))

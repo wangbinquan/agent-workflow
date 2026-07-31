@@ -106,9 +106,15 @@ export function livenessSourceOfKind(kind: NodeKind): 'process' | 'delegated' {
     case 'clarify':
     case 'clarify-cross-agent':
       return 'process'
+    // RFC-242: a call node's liveness is carried by its independent child
+    // task (the childTaskId probe in resolveRunLiveness, which outranks this
+    // structural classification); structurally it is a container with zero
+    // in-task inner rows — 'delegated' keeps the empty-delegation reap path
+    // correct once the child settles.
     case 'wrapper-git':
     case 'wrapper-loop':
     case 'wrapper-fanout':
+    case 'call-workflow':
       return 'delegated'
     default: {
       const exhaustive: never = kind

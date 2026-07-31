@@ -81,6 +81,7 @@ import {
   nodeRunOutputs,
   nodeRuns,
   skills,
+  taskCollaborators,
   taskRepos,
   tasks,
 } from '@/db/schema'
@@ -179,7 +180,13 @@ import {
   type WrapperProgress,
 } from '@/services/wrapperProgress'
 import { emitTaskStatus, getTask } from '@/services/task'
-import { ConflictError, SkillQuarantinedError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  SkillQuarantinedError,
+  ValidationError,
+} from '@/util/errors'
 import { isSkillInjectableThisBoot } from '@/services/skillBootVerify'
 import { skillFilesRel } from '@/services/skillIdentityPaths'
 import { createLogger, type Logger } from '@/util/log'
@@ -231,11 +238,18 @@ import { isWorkgroupTask } from '@agent-workflow/shared'
 // RFC-242 §1.2 — the engine fork is decided by the executor registry (a pure
 // resolver extracted verbatim from the inline dispatch this file used to own).
 import { resolveTaskEngine } from '@/services/execution/engines'
+import { getExecutionOutcome } from '@/services/execution/outcome'
+import { watchTaskTerminal } from '@/services/execution/executionWatch'
+import { ensureChildTaskBudget, registerKnownChildTask } from '@/services/execution/childBudget'
+import { childClosureSubset, frozenWorkflowFromClosure } from '@/services/execution/closure'
+import { TERMINAL_TASK_STATUSES, type StartTask } from '@agent-workflow/shared'
+import type { MaterializedSpace, StartTaskDeps } from '@/services/task'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import { existsSync } from 'node:fs'
 import { basename, join as pathJoin } from 'node:path'
 import { Semaphore } from '@/util/semaphore'
+import { ulid } from 'ulid'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
 export interface RunTaskOptions {
@@ -274,6 +288,10 @@ export interface RunTaskOptions {
    * Default 256.
    */
   fanoutMaxShardTotal?: number
+  /** RFC-242 §3.2: daemon-wide active-child-task cap (default 8). */
+  maxActiveChildTasks?: number
+  /** RFC-242 §3.2: invocation-chain depth ceiling (default 3). */
+  maxInvocationDepth?: number
   /**
    * RFC-048: forwarded verbatim to every `runNode` call so the runner spins
    * up its subagent live-capture poller with the operator-configured cadence.
@@ -2707,6 +2725,805 @@ async function resolveMergeConflicts(
   return { allResolved, detail: parts.join('; ') }
 }
 
+// =============================================================================
+// RFC-242 §6.2 — call-workflow node: invoke another workflow as an independent
+// child task running INSIDE this node's iso worktree. From the parent's
+// perspective the node is agent-shaped: derive iso → run (the child task) →
+// write outputs → merge back; conflict parking, merge_state gating, replay and
+// GC all reuse the RFC-130 machinery. Recovery (daemon restart, reap) re-enters
+// through the SAME function: the frontier redispatches the interrupted row and
+// the adoption block decides attach / resume-child / finalize instead of
+// re-launching (design §4.2 — minting here would abandonSupersededMergeStates
+// the child's canonical iso generation, so adoption NEVER mints).
+// =============================================================================
+
+const CALL_CHILD_OBSERVE_MS = 5_000
+
+interface CallLedger {
+  callHumanWaitMs: number
+  callHumanWaitSince: number | null
+}
+
+function parseCallLedger(json: string | null): CallLedger {
+  if (json === null || json === '') return { callHumanWaitMs: 0, callHumanWaitSince: null }
+  try {
+    const o = JSON.parse(json) as { callHumanWaitMs?: unknown; callHumanWaitSince?: unknown }
+    return {
+      callHumanWaitMs:
+        typeof o.callHumanWaitMs === 'number' && o.callHumanWaitMs >= 0 ? o.callHumanWaitMs : 0,
+      callHumanWaitSince:
+        typeof o.callHumanWaitSince === 'number' && o.callHumanWaitSince > 0
+          ? o.callHumanWaitSince
+          : null,
+    }
+  } catch {
+    return { callHumanWaitMs: 0, callHumanWaitSince: null }
+  }
+}
+
+async function runCallWorkflowNode(
+  state: SchedulerState,
+  args: OneNodeArgs,
+): Promise<OneNodeResult> {
+  const { db, task, taskId, definition, opts, writeSem, log } = state
+  const { node, iteration } = args
+  const taskRow = task as unknown as {
+    refClosureJson?: string | null
+    invocationDepth?: number | null
+    parentTaskId?: string | null
+    ownerUserId?: string | null
+  }
+
+  const workflowName = pickString(node, 'workflowName') ?? undefined
+  if (workflowName === undefined) {
+    return {
+      kind: 'failed',
+      summary: 'call node is missing its workflowName selector',
+      message: 'workflow-call-ref-missing',
+    }
+  }
+  const frozen = frozenWorkflowFromClosure(taskRow.refClosureJson ?? null, workflowName)
+  if (frozen === null) {
+    return {
+      kind: 'failed',
+      summary: `workflow '${workflowName}' is missing from the frozen call closure`,
+      message: 'workflow-call-ref-missing',
+    }
+  }
+
+  const { inputs: upstreamInputs, consumed: consumedUpstream } = await resolveUpstreamInputs(
+    db,
+    taskId,
+    definition.edges,
+    node.id,
+    iteration,
+    log,
+    definition,
+    state.containerOf,
+  )
+  const consumedUpstreamJson = JSON.stringify(consumedUpstream)
+
+  // ---- locate the row: adopt an in-flight/interrupted call row, else reuse
+  // pending, else mint (agent-path idiom; fanout shard rows never reach here —
+  // the validator rejects call nodes inside wrapper-fanout in v1).
+  const sameNodeIterRuns = await db
+    .select()
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, taskId),
+        eq(nodeRuns.nodeId, node.id),
+        eq(nodeRuns.iteration, iteration),
+      ),
+    )
+    .orderBy(asc(nodeRuns.startedAt))
+  let latestExisting: (typeof sameNodeIterRuns)[number] | undefined
+  for (const r of sameNodeIterRuns) {
+    if (r.parentNodeRunId !== null) continue
+    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
+  }
+
+  let nodeRunId: string
+  let adoptedChildTaskId: string | null = null
+  let launchedChildId: string | null = null
+  let liveIso: IsoHandle | null = null
+  if (
+    latestExisting !== undefined &&
+    latestExisting.childTaskId !== null &&
+    (latestExisting.status === 'running' || latestExisting.status === 'interrupted')
+  ) {
+    nodeRunId = latestExisting.id
+    adoptedChildTaskId = latestExisting.childTaskId
+    if (latestExisting.status === 'interrupted') {
+      // Wrapper-revive escape hatch (RFC-053/095 precedent): the interrupted
+      // call row RESUMES in place — never a fresh mint (see header).
+      await setNodeRunStatus({
+        db,
+        nodeRunId,
+        to: 'running',
+        allowedFrom: ['interrupted'],
+        allowTerminal: true,
+        reason: 'call-adoption',
+      })
+      broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
+    }
+    log.info('call node adopted its in-flight child task', {
+      nodeId: node.id,
+      childTaskId: adoptedChildTaskId,
+    })
+  } else {
+    const pendingExisting = sameNodeIterRuns.find(
+      (r) => r.status === 'pending' && r.parentNodeRunId === null,
+    )
+    let retryIndex: number
+    if (pendingExisting !== undefined) {
+      nodeRunId = pendingExisting.id
+      retryIndex = pendingExisting.retryIndex
+      await db
+        .update(nodeRuns)
+        .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
+        .where(eq(nodeRuns.id, nodeRunId))
+    } else {
+      retryIndex =
+        sameNodeIterRuns.length === 0
+          ? 0
+          : Math.max(...sameNodeIterRuns.map((r) => r.retryIndex)) + 1
+      nodeRunId = await mintNodeRun(db, {
+        taskId,
+        nodeId: node.id,
+        status: 'pending',
+        cause: schedulerMintCause(latestExisting),
+        retryIndex,
+        iteration,
+        overrides: {
+          reviewIteration: latestExisting?.reviewIteration ?? 0,
+          shardKey: latestExisting?.shardKey ?? null,
+          parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
+          consumedUpstreamRunsJson: consumedUpstreamJson,
+          agentOverrideName: null,
+        },
+      })
+    }
+    broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
+    await transitionNodeRunStatus({ db, nodeRunId, event: { kind: 'mark-running' } })
+    broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
+
+    // ---- gates BEFORE side effects: depth, then the global child budget
+    // (ancestor-exempt scan grants — §3.2; the wait holds NO locks).
+    const maxDepth = opts.maxInvocationDepth ?? 3
+    const childDepth = (taskRow.invocationDepth ?? 0) + 1
+    if (childDepth > maxDepth) {
+      await failCallRow(
+        db,
+        taskId,
+        nodeRunId,
+        node.id,
+        'invocation-depth-exceeded',
+        `invocation depth ${childDepth} exceeds the configured ceiling ${maxDepth}`,
+      )
+      return {
+        kind: 'failed',
+        summary: `invocation depth ${childDepth} exceeds the configured ceiling ${maxDepth}`,
+        message: 'invocation-depth-exceeded',
+      }
+    }
+    const budget = await ensureChildTaskBudget(db, () => opts.maxActiveChildTasks ?? 8)
+    const ancestors: string[] = [taskId]
+    {
+      let cursor = taskRow.parentTaskId ?? null
+      while (cursor !== null && !ancestors.includes(cursor)) {
+        ancestors.push(cursor)
+        const row = await db
+          .select({ parentTaskId: tasks.parentTaskId })
+          .from(tasks)
+          .where(eq(tasks.id, cursor))
+          .get()
+        cursor = row?.parentTaskId ?? null
+      }
+    }
+    let hold: Awaited<ReturnType<typeof budget.acquire>>
+    try {
+      hold = await budget.acquire(ancestors, {
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+      })
+    } catch {
+      await failCallRow(
+        db,
+        taskId,
+        nodeRunId,
+        node.id,
+        'canceled',
+        'canceled while queued for a child-task slot',
+        'canceled',
+      )
+      return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
+    }
+
+    // ---- D: derive the child's workspace from THIS node's iso (slot first,
+    // snapshot second — the agent path's globalSem-then-iso ordering, so a
+    // long budget queue cannot serve the child a stale base).
+    try {
+      liveIso = await createIsoUnderLock({
+        writeSem,
+        appHome: opts.appHome,
+        taskId,
+        db,
+        isoKeyRunId: nodeRunId,
+        canonRepos: state.repos,
+        log,
+      })
+    } catch (err) {
+      hold.release()
+      const msg = err instanceof Error ? err.message : String(err)
+      await failCallRow(
+        db,
+        taskId,
+        nodeRunId,
+        node.id,
+        'iso-setup-failed',
+        `isolated worktree setup failed: ${msg}`,
+      )
+      return {
+        kind: 'failed',
+        summary: 'isolated worktree setup failed',
+        message: 'iso-setup-failed',
+      }
+    }
+    if (!liveIso.passthrough) await persistIsoBase(db, nodeRunId, task.repoCount, liveIso)
+    const childIso: IsoHandle = liveIso
+
+    // ---- L: launch the child through the executor facade. The child task id
+    // is pre-minted so the call row's childTaskId stamp lands BEFORE the
+    // child INSERT — a crash between the two surfaces as `child-deleted`
+    // (dangling stamp) instead of a duplicate child on redispatch.
+    const childId = ulid()
+    await db.update(nodeRuns).set({ childTaskId: childId }).where(eq(nodeRuns.id, nodeRunId))
+    try {
+      await launchCallChild(state, {
+        node,
+        nodeRunId,
+        childId,
+        frozen,
+        workflowName,
+        inputs: upstreamInputs,
+        iso: childIso,
+        childDepth,
+      })
+      hold.bind(childId)
+      registerKnownChildTask(childId)
+      launchedChildId = childId
+    } catch (err) {
+      hold.release()
+      await db.update(nodeRuns).set({ childTaskId: null }).where(eq(nodeRuns.id, nodeRunId))
+      await discardNodeIso(liveIso, log, writeSem)
+      const code =
+        err instanceof ValidationError || err instanceof DomainError || err instanceof NotFoundError
+          ? err.code
+          : 'child-launch-failed'
+      const msg = err instanceof Error ? err.message : String(err)
+      await failCallRow(db, taskId, nodeRunId, node.id, code, `child launch failed: ${msg}`)
+      return { kind: 'failed', summary: `child launch failed: ${msg}`, message: code }
+    }
+  }
+  if (adoptedChildTaskId === null && launchedChildId === null) {
+    // unreachable — both arms either set an id or returned; guard for TS + drift.
+    return {
+      kind: 'failed',
+      summary: 'call node resolved no child task',
+      message: 'child-launch-failed',
+    }
+  }
+  const childTaskId: string = adoptedChildTaskId ?? (launchedChildId as string)
+
+  // ---- W: await the child's terminal state, keeping the §4.5 human-wait
+  // ledger current (observed at CALL_CHILD_OBSERVE_MS granularity) and
+  // re-driving an interrupted child once per observation (design §4.2 ②).
+  let ledger = parseCallLedger(latestExisting?.wrapperProgressJson ?? null)
+  const persistLedger = async (): Promise<void> => {
+    await db
+      .update(nodeRuns)
+      .set({ wrapperProgressJson: JSON.stringify(ledger) })
+      .where(eq(nodeRuns.id, nodeRunId))
+      .catch?.(() => {})
+  }
+  const observeChild = async (): Promise<void> => {
+    const row = await db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, childTaskId))
+      .get()
+    const awaiting =
+      row !== undefined && (row.status === 'awaiting_review' || row.status === 'awaiting_human')
+    const now = Date.now()
+    if (awaiting && ledger.callHumanWaitSince === null) {
+      ledger = { ...ledger, callHumanWaitSince: now }
+      await persistLedger()
+    } else if (!awaiting && ledger.callHumanWaitSince !== null) {
+      ledger = {
+        callHumanWaitMs: ledger.callHumanWaitMs + Math.max(0, now - ledger.callHumanWaitSince),
+        callHumanWaitSince: null,
+      }
+      await persistLedger()
+    }
+  }
+
+  let resumeAttempted = false
+  let outcomeStatus: string
+  for (;;) {
+    const obsTimer = setInterval(() => {
+      void observeChild().catch(() => {})
+    }, CALL_CHILD_OBSERVE_MS)
+    let watched: Awaited<ReturnType<typeof watchTaskTerminal>>
+    try {
+      watched = await watchTaskTerminal(db, childTaskId, {
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+        pollMs: 20_000,
+      })
+    } finally {
+      clearInterval(obsTimer)
+      await observeChild().catch(() => {})
+    }
+    if (watched.kind === 'aborted') {
+      const shutdown = isShutdownAbort(opts.signal)
+      if (!shutdown) {
+        // User cancel — cascade into the child (belt; cancelTask's own child
+        // enumeration is the suspenders) and settle the row canceled.
+        try {
+          const { cancelTask } = await import('@/services/task')
+          await cancelTask(db, childTaskId, { cascadeFromParent: true })
+        } catch {
+          // already terminal / racing — the durable marker decides later
+        }
+        await failCallRow(db, taskId, nodeRunId, node.id, 'canceled', 'task canceled', 'canceled')
+        return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
+      }
+      // Daemon shutdown: leave the row running — boot reap flips it to
+      // interrupted and adoption re-attaches on resume (child stays revivable).
+      return { kind: 'canceled', summary: 'daemon shutdown', message: 'signal aborted' }
+    }
+    if (watched.kind === 'missing') {
+      await failCallRow(
+        db,
+        taskId,
+        nodeRunId,
+        node.id,
+        'child-deleted',
+        `child task '${childTaskId}' row disappeared before finalize`,
+      )
+      return {
+        kind: 'failed',
+        summary: `child task '${childTaskId}' was deleted before its result was consumed`,
+        message: 'child-deleted',
+      }
+    }
+    outcomeStatus = watched.status
+    if (outcomeStatus === 'interrupted' && !resumeAttempted) {
+      // §4.2 ② — parent-driven child recovery (independent of autoResumeOnBoot).
+      resumeAttempted = true
+      try {
+        const { resumeTask } = await import('@/services/task')
+        await resumeTask(db, childTaskId, buildChildDeps(state))
+        continue
+      } catch {
+        const fresh = await db
+          .select({ status: tasks.status })
+          .from(tasks)
+          .where(eq(tasks.id, childTaskId))
+          .get()
+        if (
+          fresh !== undefined &&
+          !(TERMINAL_TASK_STATUSES as readonly string[]).includes(fresh.status)
+        ) {
+          continue // someone else revived it — re-attach
+        }
+        await failCallRow(
+          db,
+          taskId,
+          nodeRunId,
+          node.id,
+          'child-interrupted',
+          `child task '${childTaskId}' is interrupted and could not be resumed`,
+        )
+        return {
+          kind: 'failed',
+          summary: `child task '${childTaskId}' is interrupted and could not be resumed`,
+          message: 'child-interrupted',
+        }
+      }
+    }
+    break
+  }
+
+  // ---- terminal child → finalize. Non-done children map per design §6.2.
+  const outcome = await getExecutionOutcome(db, childTaskId)
+  if (outcome.status === 'canceled') {
+    const cascade = outcome.error?.message === 'canceled-by-parent-cascade'
+    if (cascade) {
+      await failCallRow(
+        db,
+        taskId,
+        nodeRunId,
+        node.id,
+        'canceled',
+        'canceled with parent',
+        'canceled',
+      )
+      return { kind: 'canceled', summary: 'task canceled', message: 'canceled-with-parent' }
+    }
+    await failCallRow(
+      db,
+      taskId,
+      nodeRunId,
+      node.id,
+      'child-canceled',
+      `child task '${childTaskId}' was canceled directly`,
+    )
+    return {
+      kind: 'failed',
+      summary: `child task '${childTaskId}' was canceled outside this parent`,
+      message: 'child-canceled',
+    }
+  }
+  if (outcome.status === 'interrupted') {
+    await failCallRow(
+      db,
+      taskId,
+      nodeRunId,
+      node.id,
+      'child-interrupted',
+      `child task '${childTaskId}' stayed interrupted`,
+    )
+    return {
+      kind: 'failed',
+      summary: `child task '${childTaskId}' is interrupted and could not be resumed`,
+      message: 'child-interrupted',
+    }
+  }
+  if (outcome.status !== 'done') {
+    const summary = outcome.error?.summary ?? `child task '${childTaskId}' failed`
+    await failCallRow(
+      db,
+      taskId,
+      nodeRunId,
+      node.id,
+      'child-task-failed',
+      `${summary}${outcome.error?.message ? ` (${outcome.error.message})` : ''}`,
+    )
+    return {
+      kind: 'failed',
+      summary: `child task failed: ${summary}`,
+      message: 'child-task-failed',
+    }
+  }
+
+  // ---- F: copy the child's projected outputs onto the call row (idempotent —
+  // the merge_state-staged replay re-enters here). archiveJson rides along so
+  // forcedPortPathsForTask keeps covering child-produced gitignored files.
+  for (const [portName, v] of Object.entries(outcome.outputs)) {
+    await db
+      .insert(nodeRunOutputs)
+      .values({
+        nodeRunId,
+        portName,
+        content: v.content,
+        kind: v.kind,
+        archiveJson: v.archiveJson ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+        set: { content: v.content, kind: v.kind, archiveJson: v.archiveJson ?? null },
+      })
+  }
+  // Row goes done BEFORE merge (runner precedent) — downstream still gates on
+  // merge_state (deriveFrontier D15), so nothing dispatches early.
+  const currentRow = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+  if (currentRow !== undefined && currentRow.status !== 'done') {
+    await setNodeRunStatus({
+      db,
+      nodeRunId,
+      to: 'done',
+      allowedFrom: ['running'],
+      extra: { finishedAt: Date.now() },
+      reason: 'call-child-done',
+    })
+    broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
+  }
+
+  // ---- M: merge the iso (the child's canonical) back into the parent
+  // canonical, staged by merge_state (design §4.2 R):
+  //   merged         → outputs re-written above; nothing to merge.
+  //   conflict-human → still parked; resume replay owns completion.
+  //   pending-merge  → the task-entry replayPendingMerges already merged (or
+  //                    will on next resume) — treat like merged here if it
+  //                    settled, else leave for replay.
+  //   isolating/null → live merge (snapshots the iso final state itself).
+  const mergeStateNow = currentRow?.mergeState ?? null
+  if (mergeStateNow === 'conflict-human') {
+    return {
+      kind: 'awaiting_human',
+      summary: 'merge conflict awaiting human resolution',
+      message: 'merge-conflict',
+    }
+  }
+  if (mergeStateNow === null && liveIso === null) {
+    // Passthrough/mock harness adoption: nothing persisted to merge.
+    return { kind: 'ok', summary: `child task ${childTaskId} done`, message: '' }
+  }
+  if (mergeStateNow !== 'merged') {
+    let handle = liveIso
+    if (handle === null) {
+      // Adoption after restart — rebuild from persisted columns (replay idiom).
+      const baseSnapshots: Record<string, string> = {}
+      if (task.repoCount === 1) {
+        if (currentRow?.isoBaseSnapshot != null) baseSnapshots[''] = currentRow.isoBaseSnapshot
+      } else {
+        Object.assign(baseSnapshots, parseIsoJsonMap(currentRow?.isoBaseSnapshotReposJson ?? null))
+      }
+      if (Object.keys(baseSnapshots).length === 0) {
+        await markMergeFailed(db, nodeRunId, 'call adoption: iso base snapshot missing', log)
+        return {
+          kind: 'failed',
+          summary: 'call adoption could not rebuild the iso handle (base snapshot missing)',
+          message: 'merge-back-failed',
+        }
+      }
+      const taskBaseHeads: Record<string, string> = {}
+      for (const repo of state.repos) {
+        const h = await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
+        taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
+      }
+      const submodules =
+        currentRow !== undefined ? parseIsoSubmodules(currentRow, task.repoCount) : {}
+      handle = rebuildIsoHandle({
+        appHome: state.opts.appHome,
+        taskId,
+        nodeRunId: isoKeyOf(currentRow?.isoWorktreePath ?? null, nodeRunId),
+        canonRepos: state.repos,
+        baseSnapshots,
+        taskBaseHeads,
+        submodules,
+        forcedContainerPaths: await forcedPortPathsForTask(db, taskId),
+      })
+    }
+    if (!handle.passthrough) {
+      try {
+        const merge = await mergeBackAndSettle({
+          db,
+          writeSem,
+          handle,
+          nodeRunId,
+          repoCount: task.repoCount,
+          via: 'live',
+          conflictResolver: (conflicts, containerPath) =>
+            resolveMergeConflicts(state, {
+              conflicts,
+              containerPath,
+              conflictNodeRunId: nodeRunId,
+              nodeId: node.id,
+              iteration,
+            }),
+          log,
+        })
+        if (merge.kind === 'conflict-human') {
+          log.warn('call merge-back conflict unresolved → awaiting_human', {
+            nodeId: node.id,
+            detail: merge.detail,
+          })
+          return {
+            kind: 'awaiting_human',
+            summary: `merge conflict unresolved: ${merge.detail}`,
+            message: 'merge-conflict',
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        log.warn('call merge-back failed', { nodeId: node.id, error: msg })
+        await markMergeFailed(db, nodeRunId, msg, log)
+        return {
+          kind: 'failed',
+          summary: `merge-back failed: ${msg}`,
+          message: 'merge-back-failed',
+        }
+      }
+    }
+    await discardNodeIso(handle, log, writeSem)
+  }
+  return { kind: 'ok', summary: `child task ${childTaskId} done`, message: '' }
+}
+
+/** Settle a call row into a terminal status with its failure metadata. */
+async function failCallRow(
+  db: DbClient,
+  taskId: string,
+  nodeRunId: string,
+  nodeId: string,
+  failureCode: string,
+  errorMessage: string,
+  to: 'failed' | 'canceled' = 'failed',
+): Promise<void> {
+  const ok = await setNodeRunStatus({
+    db,
+    nodeRunId,
+    to,
+    allowedFrom: ['pending', 'running'],
+    extra: { finishedAt: Date.now(), errorMessage, failureCode },
+    reason: 'call-settle',
+  })
+    .then(() => true)
+    .catch(() => false)
+  if (ok) broadcastNodeStatus(taskId, nodeRunId, nodeId, to)
+}
+
+function isShutdownAbort(signal: AbortSignal | undefined): boolean {
+  if (signal === undefined || !signal.aborted) return false
+  return signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+}
+
+/** Child StartTaskDeps assembled from the parent scheduler's runtime options. */
+function buildChildDeps(state: SchedulerState): StartTaskDeps {
+  const { opts, db } = state
+  return {
+    db,
+    actorUserId:
+      (state.task as unknown as { ownerUserId?: string | null }).ownerUserId ?? undefined,
+    ...(opts.opencodeCmd !== undefined ? { opencodeCmd: opts.opencodeCmd } : {}),
+    ...(opts.containmentCoordinator !== undefined
+      ? { containmentCoordinator: opts.containmentCoordinator }
+      : {}),
+    appHome: opts.appHome,
+    ...(opts.defaultPerNodeTimeoutMs !== undefined
+      ? { defaultPerNodeTimeoutMs: opts.defaultPerNodeTimeoutMs }
+      : {}),
+    ...(opts.defaultNodeRetries !== undefined
+      ? { defaultNodeRetries: opts.defaultNodeRetries }
+      : {}),
+    ...(opts.defaultRuntime !== undefined ? { defaultRuntime: opts.defaultRuntime } : {}),
+    ...(opts.maxConcurrentNodes !== undefined
+      ? { maxConcurrentNodes: opts.maxConcurrentNodes }
+      : {}),
+    ...(opts.maxActiveChildTasks !== undefined
+      ? { maxActiveChildTasks: opts.maxActiveChildTasks }
+      : {}),
+    ...(opts.maxInvocationDepth !== undefined
+      ? { maxInvocationDepth: opts.maxInvocationDepth }
+      : {}),
+    ...(opts.subagentLiveCapture !== undefined
+      ? { subagentLiveCapture: opts.subagentLiveCapture }
+      : {}),
+  } as StartTaskDeps
+}
+
+/** L — assemble and fire the child launch through the executor facade. */
+async function launchCallChild(
+  state: SchedulerState,
+  args: {
+    node: WorkflowNode
+    nodeRunId: string
+    childId: string
+    frozen: { id: string; version: number; definition: unknown }
+    workflowName: string
+    inputs: Record<string, string>
+    iso: IsoHandle
+    childDepth: number
+  },
+): Promise<void> {
+  const { db, task, taskId } = state
+  const taskRow = task as unknown as {
+    refClosureJson?: string | null
+    ownerUserId?: string | null
+    gitUserName?: string | null
+    gitUserEmail?: string | null
+  }
+  const { node, nodeRunId, childId, frozen, workflowName, inputs, iso, childDepth } = args
+  const frozenSnapshotJson = JSON.stringify(frozen.definition)
+
+  // Child collaborators = the parent task's members (D11).
+  const memberRows = await db
+    .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
+    .from(taskCollaborators)
+    .where(eq(taskCollaborators.taskId, taskId))
+  const collaboratorUserIds = [
+    ...new Set(
+      memberRows
+        .filter((m) => m.role !== 'owner' && m.userId !== null)
+        .map((m) => m.userId as string),
+    ),
+  ]
+
+  const limits = ((): { maxDurationMs?: number; maxTotalTokens?: number } => {
+    const raw = (node as unknown as Record<string, unknown>).limits
+    if (typeof raw !== 'object' || raw === null) return {}
+    const o = raw as { maxDurationMs?: unknown; maxTotalTokens?: unknown }
+    return {
+      ...(typeof o.maxDurationMs === 'number' ? { maxDurationMs: o.maxDurationMs } : {}),
+      ...(typeof o.maxTotalTokens === 'number' ? { maxTotalTokens: o.maxTotalTokens } : {}),
+    }
+  })()
+
+  const nodeTitle = pickString(node, 'title') ?? node.id
+  const childName = `${task.name} › ${nodeTitle}`.slice(0, 255)
+
+  // The synthesized 'inherited' space: the child's canonical IS this call
+  // node's iso worktree(s); cleanup carries ZERO worktrees + no owned root
+  // (borrowed semantics — the iso lifecycle stays with the parent).
+  const primary = iso.repos[0]
+  const space: MaterializedSpace = {
+    kind: state.repos.length > 1 ? 'multi' : 'single',
+    spaceKind: 'inherited',
+    taskId: childId,
+    worktreePath:
+      state.repos.length > 1 ? iso.containerPath : (primary?.isoWorktreePath ?? task.worktreePath),
+    branch: task.branch ?? `agent-workflow/${childId}`,
+    baseCommit: primary?.baseSnapshot ?? null,
+    earlyError: null,
+    resolvedSources: [],
+    cleanup: { taskId: childId, ownedRoot: null, worktrees: [], state: 'owned', report: null },
+    repos: iso.repos.map((r, i) => ({
+      repoIndex: i,
+      repoPath: r.repoPath,
+      repoUrl: null,
+      cachedRepoId: null,
+      baseBranch: r.baseBranch,
+      branch: task.branch ?? `agent-workflow/${childId}`,
+      baseCommit: r.baseSnapshot ?? null,
+      worktreePath: r.isoWorktreePath,
+      worktreeDirName: r.worktreeDirName,
+      submoduleInitOk: true,
+      submoduleInitError: null,
+      hasSubmodules: false,
+    })),
+  }
+
+  const payload: StartTask = {
+    workflowId: frozen.id,
+    name: childName,
+    inputs,
+    ...(taskRow.gitUserName != null && taskRow.gitUserEmail != null
+      ? { gitUserName: taskRow.gitUserName, gitUserEmail: taskRow.gitUserEmail }
+      : {}),
+    ...(collaboratorUserIds.length > 0 ? { collaboratorUserIds } : {}),
+    ...limits,
+    // publication belongs to the parent (D12): no workingBranch, no auto push.
+    autoCommitPush: false,
+  } as StartTask
+
+  const { startExecution } = await import('@/services/execution/executor')
+  const actor = {
+    user: { id: taskRow.ownerUserId ?? '__system__' },
+    permissions: new Set<string>(),
+  } as unknown as Parameters<typeof startExecution>[1]
+  await startExecution(
+    db,
+    actor,
+    {
+      kind: 'workflow',
+      refId: frozen.id,
+      invoker: {
+        type: 'node',
+        parentTaskId: taskId,
+        parentNodeRunId: nodeRunId,
+        invocationDepth: childDepth,
+      },
+      payload,
+    },
+    {
+      ...buildChildDeps(state),
+      materializedSpace: space,
+      callLaunch: {
+        parentTaskId: taskId,
+        parentNodeRunId: nodeRunId,
+        invocationDepth: childDepth,
+        frozenSnapshotJson,
+        refClosureJson: childClosureSubset(
+          taskRow.refClosureJson ?? null,
+          frozen.definition as Parameters<typeof childClosureSubset>[1],
+        ),
+      },
+    },
+  )
+  void workflowName
+}
+
 async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
   const { db, task, taskId, definition, opts, inputsMap, globalSem, writeSem, log } = state
   const { node, iteration } = args
@@ -2963,6 +3780,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // runOneNode branch fails loud here instead of being silently driven as an
   // agent. (Dispatch stays an if-chain by design — the handlers close over
   // SchedulerState; see RFC-146 design D2.)
+  // RFC-242: call nodes — an independent child task behind an agent-shaped
+  // node. Deliberately BEFORE the agent fall-through guard; never acquires
+  // globalSem (design §6.1 — the child's own nodes compete for it).
+  if (node.kind === 'call-workflow') {
+    return await runCallWorkflowNode(state, args)
+  }
   if (node.kind !== 'agent-single') {
     return {
       kind: 'failed',

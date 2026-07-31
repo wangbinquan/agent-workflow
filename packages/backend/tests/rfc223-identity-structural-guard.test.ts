@@ -104,6 +104,36 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/structuralDiff/classGraph.ts\u001fusedMembersAndCallers\u001fCallExpression:2bf15707fa543e1b8e92\u001f1\u001fcode-symbol\u001fbyName.set(m.name, arr)',
   'collection-name-identity\u001fpackages/backend/src/services/structuralDiff/classGraph.ts\u001fusedMembersAndCallers\u001fCallExpression:6edf3998342b9d961944\u001f1\u001fcode-symbol\u001fbyName.get(m.name)',
   'collection-name-identity\u001fpackages/backend/src/services/structuralDiff/gitBackend.ts\u001faugmentCrossFileImpact\u001fNewExpression:784001ec1ae2346e6103\u001f1\u001fcode-symbol\u001fnew Set(targets.map((t) => `${t.name}(`))',
+  // RFC-242 §5.4: the validator's lazy call-closure loader resolves the
+  // node-authored `workflowName` portable selector (agentName precedent) to
+  // stable ids + frozen definitions — the same boundary the launch freeze
+  // (services/execution/closure.ts freezeCallClosure) crosses.
+  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fCallExpression:dd1289bbe947439ca8c2\u001f1\u001fportable-selector\u001fbyName.get(name)',
+  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fCallExpression:e244bad43cbbe60ef6df\u001f1\u001fportable-selector\u001fresolvedByName.set(name, { id: row.id, name: row.name, definition: parsedDefinition })',
+  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fNewExpression:e471fa71736153b63b0a\u001f1\u001fportable-selector\u001fnew Set(collectWorkflowCallRefs(definition).map((r) => r.workflowName))',
+  // RFC-242 PR-3 — call-node name-selector surfaces (closure freeze /
+  // save-time name-domain ACL / canvas resolver + inspector). All resolve the
+  // portable workflowName selector to a stable id (or render it as display).
+  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:9ffabec59513ccd0a313\u001f1\u001fportable-selector\u001fbyName.set(r.name, r)',
+  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:a3a4376981d17c0b23bb\u001f1\u001fportable-selector\u001fbyName.has(r.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:dd1289bbe947439ca8c2\u001f1\u001fportable-selector\u001fbyName.get(name)',
+  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:0f9ad456aeefa123f140\u001f1\u001fportable-selector\u001fnew Set(rootRefs.map((r) => r.workflowName))',
+  'collection-name-identity\u001fpackages/backend/src/services/resourceRefs.ts\u001fextractWorkflowWorkflowRefs\u001fNewExpression:c1af3dd799b7b0c5fa6c\u001f1\u001fportable-selector\u001fnew Set(collectWorkflowCallRefs(defn).map((ref) => ref.workflowName))',
+  'collection-name-identity\u001fpackages/backend/src/services/resourceRefs.ts\u001fgroupRowsByName\u001fCallExpression:1878291824ac3d8a428d\u001f1\u001fportable-selector\u001fbyName.set(row.name, [row])',
+  'collection-name-identity\u001fpackages/backend/src/services/resourceRefs.ts\u001fgroupRowsByName\u001fCallExpression:a68e1be588b0b8918920\u001f1\u001fportable-selector\u001fbyName.get(row.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fCallExpression:9ffabec59513ccd0a313\u001f1\u001fportable-selector\u001fbyName.set(r.name, r)',
+  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fCallExpression:a3a4376981d17c0b23bb\u001f1\u001fportable-selector\u001fbyName.has(r.name)',
+  'collection-name-identity\u001fpackages/frontend/src/components/canvas/inspector/CallWorkflowEdit.tsx\u001fCallWorkflowEdit\u001fCallExpression:f74de0867559d90020c9\u001f1\u001fportable-selector\u001fcandidates.find((w) => w.name === refName)',
+  'collection-name-identity\u001fpackages/frontend/src/components/canvas/useWorkflowRefResolver.ts\u001fuseWorkflowRefResolver\u001fCallExpression:d62dfab769d04d37dc55\u001f1\u001fportable-selector\u001fworkflows.find((w) => w.name === nameOrId)',
+  'collection-name-identity\u001fpackages/shared/src/workflowCalls.ts\u001fcollectExecutionRefs\u001fNewExpression:02f50f53ee060c201eb3\u001f1\u001fportable-selector\u001fnew Set(collectWorkflowCallRefs(defn).map((r) => r.workflowName))',
+  'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fchildClosureSubset\u001fBinaryExpression:396b9fc963e0a714216b\u001f1\u001fportable-selector\u001fkept.workflows[name] = ref',
+  'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fBinaryExpression:0d100ea4e71d12f49ee1\u001f1\u001fportable-selector\u001fclosure.workflows[name] = ref',
+  'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fparseCallClosure\u001fBinaryExpression:78cd6ddf35cd8b0056e2\u001f1\u001fportable-selector\u001fout.workflows[name] = { id: r.id, version: r.version, definition: def.data }',
+  'frontend-name-key\u001fpackages/frontend/src/components/canvas/inspector/CallWorkflowEdit.tsx\u001fCallWorkflowEdit\u001fJsxAttribute:68c4bdce1d7b982e55c3\u001f1\u001fdisplay-fallback\u001fkey={name}',
+  'id-name-fallback\u001fpackages/frontend/src/components/canvas/inspector/CallWorkflowEdit.tsx\u001fCallWorkflowEdit\u001fBinaryExpression:b58954c6132d406c7d4b\u001f1\u001fdisplay-fallback\u001frefName || refId',
+  'sql-name-selector\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:be6cb55b3879b8e8391e\u001f1\u001fportable-selector\u001finArray(workflows.name, missing)',
+  'sql-name-selector\u001fpackages/backend/src/services/resourceRefs.ts\u001fassertRefsUsableInTx\u001fCallExpression:3937fae482b42f8dc11f\u001f1\u001fportable-selector\u001finArray(table.name, refs)',
+  'sql-name-selector\u001fpackages/backend/src/services/resourceRefs.ts\u001fresolveRefsUsableByName\u001fCallExpression:3937fae482b42f8dc11f\u001f1\u001fportable-selector\u001finArray(table.name, refs)',
   'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001fvalidateWorkflowDef\u001fNewExpression:7e4d470a28695735ce47\u001f1\u001fport-or-protocol-name\u001fnew Set([...declared.dataOutputs, ...declared.systemOutputs].map((p) => p.name))',
   'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001fvalidateWorkflowDef\u001fNewExpression:c6fd6d9df36491340b56\u001f1\u001fport-or-protocol-name\u001fnew Set([...declared.dataInputs, ...declared.systemInputs].map((p) => p.name))',
   "collection-name-identity\u001fpackages/backend/src/services/workgroup/launch.ts\u001fstartWorkgroupTask\u001fNewExpression:a020e8f44332039a7241\u001f1\u001fdisplay-diagnostic\u001fnew Set( agentMembers .filter((m) => typeof m.agentId !== 'string' || !existingAgentIds.has(m.agentId)) .map((m) => m.agentName ?? '(unnamed)'), )",
@@ -283,7 +313,7 @@ describe('RFC-223 T15 structural identity guard', () => {
   test('production source matches the exact reviewed fingerprint multiset', () => {
     const findings = scanProductionSources()
     expect(allowanceDiagnostics(findings, EXACT_ALLOWANCES)).toEqual([])
-    expect(findings.length).toBe(100)
+    expect(findings.length).toBe(119)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

@@ -10,7 +10,7 @@
 
 import { buildNodeAgentLookup, declaredPorts, isWrapperKind } from '@agent-workflow/shared'
 import { nodeDisplayTitle } from './nodeTitle'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type { WorkflowByRef, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 export interface LoopMemberCandidate {
   nodeId: string
@@ -43,16 +43,21 @@ function deriveOutputPorts(
   node: WorkflowNode,
   agents: AgentSummary[],
   definition: WorkflowDefinition,
+  workflowByRef?: WorkflowByRef,
 ): string[] {
   // RFC-146: read the shared port-declaration table (this was fork #3 of
   // five — it knew agent/review only; review had already drifted once,
   // flag-audit W0 §3-3 假端口 bug). Wrapper members are filtered out by the
   // caller, so only leaf kinds reach here.
   // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
+  // RFC-242: the optional child-workflow resolver lets a call-workflow loop
+  // member expose its child-mirrored output ports as exitCondition /
+  // outputBindings candidates ("loop 包 call-workflow 直到审计干净").
   const declared = declaredPorts(
     node,
     definition,
     buildNodeAgentLookup(agents, (a) => a),
+    workflowByRef === undefined ? undefined : { workflowByRef },
   )
   const names = declared.dataOutputs.map((p) => p.name).filter((n) => n.length > 0)
   // Agent fallback preserved at the call site: an agent with no declared
@@ -65,6 +70,9 @@ export function loopMemberCandidates(
   wrapper: WorkflowNode,
   definition: WorkflowDefinition,
   agents: AgentSummary[],
+  // RFC-242 §5.2 consumer #3 — optional; omitted (legacy callers/tests) a
+  // call-workflow member simply contributes no candidate ports.
+  workflowByRef?: WorkflowByRef,
 ): LoopMemberCandidate[] {
   const innerIds = (wrapper as Record<string, unknown>).nodeIds
   const ids = Array.isArray(innerIds)
@@ -75,7 +83,7 @@ export function loopMemberCandidates(
   for (const n of definition.nodes) {
     if (!idSet.has(n.id)) continue
     if (isWrapperKind(n.kind)) continue
-    const outputPorts = deriveOutputPorts(n, agents, definition)
+    const outputPorts = deriveOutputPorts(n, agents, definition, workflowByRef)
     result.push({
       nodeId: n.id,
       title: nodeDisplayTitle(n),

@@ -61,7 +61,7 @@ export type ExecutionOutcome = {
   taskId: string
   status: TaskStatus
   terminal: boolean
-  outputs: Record<string, { content: string; kind: string | null }>
+  outputs: Record<string, { content: string; kind: string | null; archiveJson?: string | null }>
   /** Non-fatal projection notes (e.g. legacy workgroup task without a result anchor). */
   warnings: string[]
   error?: {

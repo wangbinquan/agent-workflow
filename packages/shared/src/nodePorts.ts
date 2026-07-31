@@ -85,10 +85,21 @@ const NO_PORTS: DeclaredPorts = Object.freeze({
   systemOutputs: [],
 })
 
+/**
+ * RFC-242 §5.2 — resolver for call-workflow port derivation. Returns the
+ * referenced workflow's definition, `'forbidden'` when the caller may not see
+ * it (grandfathered reference without a use-grant — Inspector shows an
+ * opaque placeholder), or `null` when unknown/still loading. Optional: every
+ * pre-RFC-242 call site keeps its 3-arg shape and call-workflow simply
+ * declares no ports there.
+ */
+export type WorkflowByRef = (nameOrId: string) => WorkflowDefinition | 'forbidden' | null
+
 interface DeriverCtx {
   node: WorkflowNode
   defn: WorkflowDefinition
   agents: PortAgentLookup
+  workflowByRef?: WorkflowByRef
 }
 
 function readString(node: WorkflowNode, key: string): string | undefined {
@@ -224,6 +235,34 @@ const PORT_DERIVERS = {
       { name: CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT },
     ],
   }),
+  // RFC-242 §5.2 — call-workflow: inputs mirror the CHILD definition's
+  // declared workflow inputs; outputs are the union of its output nodes'
+  // bound port names (deduped — a collision is a validator error, the
+  // declaration keeps first-wins for rendering stability). Without a
+  // resolver (or an unresolvable/forbidden child) the node declares no
+  // ports — callers render edge-derived fallbacks and the validator
+  // degrades per design §5.2.
+  'call-workflow': ({ node, workflowByRef }: DeriverCtx): DeclaredPorts => {
+    const ref = readString(node, 'workflowName') ?? readString(node, 'workflowId')
+    const child = ref !== undefined ? (workflowByRef?.(ref) ?? null) : null
+    if (child === null || child === 'forbidden') return NO_PORTS
+    const dataInputs: DeclaredPort[] = []
+    for (const input of child.inputs) {
+      const rec = input as { key?: unknown; kind?: unknown }
+      if (typeof rec.key !== 'string') continue
+      dataInputs.push(
+        typeof rec.kind === 'string' ? { name: rec.key, kind: rec.kind } : { name: rec.key },
+      )
+    }
+    const dataOutputs: DeclaredPort[] = []
+    for (const n of child.nodes) {
+      if (n.kind !== 'output') continue
+      for (const p of readNamedList(n, 'ports')) {
+        if (!dataOutputs.some((d) => d.name === p.name)) dataOutputs.push({ name: p.name })
+      }
+    }
+    return { ...NO_PORTS, dataInputs, dataOutputs }
+  },
 } as const satisfies Record<NodeKind, (ctx: DeriverCtx) => DeclaredPorts>
 
 /**
@@ -234,6 +273,7 @@ export function declaredPorts(
   node: WorkflowNode,
   defn: WorkflowDefinition,
   agents: PortAgentLookup,
+  extras?: { workflowByRef?: WorkflowByRef },
 ): DeclaredPorts {
   // Object.hasOwn (not a bare index): an inherited key like 'constructor'
   // would otherwise resolve to a Function and be invoked as a deriver.
@@ -241,7 +281,12 @@ export function declaredPorts(
   // edge-derived fallbacks still render/route whatever edges exist.
   if (!Object.hasOwn(PORT_DERIVERS, node.kind)) return NO_PORTS
   const derive = PORT_DERIVERS[node.kind as NodeKind] as (ctx: DeriverCtx) => DeclaredPorts
-  return derive({ node, defn, agents })
+  return derive({
+    node,
+    defn,
+    agents,
+    ...(extras?.workflowByRef ? { workflowByRef: extras.workflowByRef } : {}),
+  })
 }
 
 /** All NodeKind values whose declaration derives from PORT_DERIVERS —

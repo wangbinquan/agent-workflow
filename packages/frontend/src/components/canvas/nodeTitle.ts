@@ -18,7 +18,8 @@ import i18n from '@/i18n'
  *   2. agent-single → agentName (or the localized "(unset agent)");
  *   3. input → inputKey (or the localized "(unset key)");
  *   4. review → `review:<port>` when inputSource.portName is wired;
- *   5. otherwise '' — callers decide the id fallback.
+ *   5. call-workflow → workflowName (or the localized kind label, RFC-242);
+ *   6. otherwise '' — callers decide the id fallback.
  */
 export function nodeDisplayTitle(n: WorkflowNode): string {
   const rec = n as unknown as Record<string, unknown>
@@ -29,6 +30,14 @@ export function nodeDisplayTitle(n: WorkflowNode): string {
     return typeof rec.agentName === 'string' && rec.agentName.length > 0
       ? rec.agentName
       : i18n.t('editor.nodeTitleUnsetAgent')
+  }
+  if (n.kind === 'call-workflow') {
+    // RFC-242 — the referenced workflow name IS the node's identity (same
+    // rule as agentName); an unset ref falls back to the kind label rather
+    // than the raw node id so fresh drops read as "调用工作流".
+    return typeof rec.workflowName === 'string' && rec.workflowName.length > 0
+      ? rec.workflowName
+      : i18n.t('callWorkflowNode.label')
   }
   if (n.kind === 'input') {
     return typeof rec.inputKey === 'string' ? rec.inputKey : i18n.t('editor.nodeTitleUnsetKey')

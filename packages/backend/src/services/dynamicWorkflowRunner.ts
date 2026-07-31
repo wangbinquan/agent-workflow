@@ -109,6 +109,24 @@ export function extractJsonPayload(text: string): string {
 }
 
 /**
+ * RFC-242 §5.4(7): a workgroup is a closure LEAF — a generated definition may
+ * never contain call-workflow nodes, or execution would bypass the launch-time
+ * frozen reference closure and the cross-definition cycle gate. Today's token
+ * schema cannot even express one (`dwGeneratedToWorkflowDef` stamps every node
+ * `agent-single`), so this is a belt-and-braces admission guard that survives
+ * any future loosening of the generated-node schema or of layer-2's kind
+ * allowlist. Pure; exported for the RFC-242 regression lock.
+ */
+export function dwCallNodeRejections(def: WorkflowDefinition): string[] {
+  return def.nodes
+    .filter((n) => n.kind === 'call-workflow')
+    .map(
+      (n) =>
+        `${DW_VALIDATION_CODES.nodeKindForbidden}: node '${n.id}' is 'call-workflow' — a generated workflow cannot call other workflows; use only the member#N agents listed in the pool`,
+    )
+}
+
+/**
  * Parse + convert + two-layer-validate one orchestrator `workflow` port
  * payload. RFC-223 (PR-3b): the payload references pool members by opaque
  * `member#N` TOKENS; `dwGeneratedToWorkflowDef` is the single conversion point
@@ -152,6 +170,12 @@ export function evaluateGeneratedWorkflow(
           `${DW_VALIDATION_CODES.agentOutsidePool}: unknown member '${t}' — reference only the member#N tokens listed in the pool`,
       ),
     }
+  }
+  // RFC-242 §5.4(7): reject call nodes ahead of the generic layers so the
+  // closure-leaf rule cannot be lost to a future kind-allowlist loosening.
+  const callNodeErrors = dwCallNodeRejections(def)
+  if (callNodeErrors.length > 0) {
+    return { ok: false, errors: callNodeErrors }
   }
   const poolAgentIds = [...new Set([...tokenMap.values()].map((b) => b.agentId))]
   const layer1 = validateWorkflowDef(def, layer1Ctx)

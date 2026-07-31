@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { loopMemberCandidates } from '../wrapperCandidates'
+import { useWorkflowRefResolver } from '../useWorkflowRefResolver'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -28,6 +29,9 @@ export function WrapperGitLoopEdit({
   onHistoryBoundary,
 }: EditProps) {
   const { t } = useTranslation()
+  // RFC-242: a call-workflow loop member contributes its child-mirrored
+  // output ports to the exitCondition / outputBindings candidate selects.
+  const { workflowByRef } = useWorkflowRefResolver()
   const rec = node as unknown as Record<string, unknown>
   const inner = Array.isArray(rec.nodeIds) ? (rec.nodeIds as string[]) : []
   const isLoop = node.kind === 'wrapper-loop'
@@ -174,7 +178,7 @@ export function WrapperGitLoopEdit({
             // TextInputs. Candidates are computed from the wrapper's
             // current nodeIds + each member's declared output ports so a
             // node moved out of the loop can no longer be referenced.
-            const candidates = loopMemberCandidates(node, definition, agents)
+            const candidates = loopMemberCandidates(node, definition, agents, workflowByRef)
             const currentCand = candidates.find((c) => c.nodeId === exitNodeId)
             const nodeIdInvalid = exitNodeId.length > 0 && currentCand === undefined
             const portCandidates = currentCand?.outputPorts ?? []
@@ -352,7 +356,7 @@ export function WrapperGitLoopEdit({
                 // RFC-016 T7: same candidate-driven select pattern used in
                 // exitCondition target — each binding row references an
                 // inner member node + its declared output port.
-                const candidates = loopMemberCandidates(node, definition, agents)
+                const candidates = loopMemberCandidates(node, definition, agents, workflowByRef)
                 const currentCand = candidates.find((c) => c.nodeId === b.bind.nodeId)
                 const bindNodeInvalid = b.bind.nodeId.length > 0 && currentCand === undefined
                 const bindPortCandidates = currentCand?.outputPorts ?? []

@@ -28,12 +28,21 @@ function depsForInvoker(deps: StartTaskDeps, req: StartExecutionRequest): StartT
     return { ...deps, scheduledTaskId: invoker.scheduledTaskId }
   }
   if (invoker.type === 'node') {
-    // Parent-child launches land with RFC-242 PR-3 (call-workflow) / PR-4
-    // (call-workgroup). Fail closed until the linkage columns + guards exist.
-    throw new ValidationError(
-      'execution-invoker-unsupported',
-      'node-invoked executions land with RFC-242 PR-3/PR-4',
-    )
+    // PR-3: the scheduler's call-node launcher supplies the full child deps
+    // (callLaunch + synthesized inherited space). The facade only asserts the
+    // invoker and the deps agree — a mismatch is a programming error.
+    if (
+      req.kind !== 'workflow' ||
+      deps.callLaunch === undefined ||
+      deps.callLaunch.parentTaskId !== invoker.parentTaskId ||
+      deps.callLaunch.parentNodeRunId !== invoker.parentNodeRunId
+    ) {
+      throw new ValidationError(
+        'execution-invoker-unsupported',
+        'node-invoked executions require a matching callLaunch deps payload (call-workgroup lands with RFC-242 PR-4)',
+      )
+    }
+    return deps
   }
   return deps
 }

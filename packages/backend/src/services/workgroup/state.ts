@@ -53,6 +53,8 @@ export interface WorkgroupTaskState {
   gateRejectedComment: string | null
   pauseReason: string | null
   dwState: DwState | null
+  /** RFC-242 §6.4 — room message id anchoring the task's final result. */
+  resultMessageId: string | null
 }
 
 /**
@@ -119,6 +121,7 @@ const DEFAULT_STATE: WorkgroupTaskState = {
   gateRejectedComment: null,
   pauseReason: null,
   dwState: null,
+  resultMessageId: null,
 }
 
 function rowToState(row: typeof workgroupTaskState.$inferSelect | undefined): WorkgroupTaskState {
@@ -138,6 +141,7 @@ function rowToState(row: typeof workgroupTaskState.$inferSelect | undefined): Wo
     gateRejectedComment: row.gateRejectedComment,
     pauseReason: row.pauseReason,
     dwState: dw,
+    resultMessageId: row.resultMessageId ?? null,
   }
 }
 
@@ -443,4 +447,20 @@ export async function loadDbState(db: DbClient, taskId: string): Promise<EngineD
     clarifySessions: clarifySessionRows,
     agentCards: await buildRosterAgentCards(db, parsed.data),
   }
+}
+
+/**
+ * RFC-242 §6.4 — stamp the result anchor. A plain column write (NOT a gate
+ * transition): the engine's done path calls it exactly once per convergence;
+ * last write wins on the (unreachable) double-done.
+ */
+export async function stampWorkgroupResultAnchor(
+  db: DbClient,
+  taskId: string,
+  messageId: string,
+): Promise<void> {
+  await db
+    .update(workgroupTaskState)
+    .set({ resultMessageId: messageId, updatedAt: Date.now() })
+    .where(eq(workgroupTaskState.taskId, taskId))
 }

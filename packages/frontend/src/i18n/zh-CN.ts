@@ -2579,6 +2579,8 @@ export interface Resources {
       categoryAll: string
       categoryAgent: string
       categoryWrapper: string
+      /** RFC-242 — Calls category (call-workflow). */
+      categoryCalls: string
       categoryIo: string
       categoryHuman: string
       noMatches: string
@@ -2687,6 +2689,10 @@ export interface Resources {
     paletteReviewDesc: string
     paletteClarifyLabel: string
     paletteClarifyDesc: string
+    /** RFC-242 — Calls palette section + call-workflow entry. */
+    paletteCalls: string
+    paletteCallWorkflowLabel: string
+    paletteCallWorkflowDesc: string
     menuPaste: string
     menuSelectAll: string
     menuDuplicate: string
@@ -3070,6 +3076,22 @@ export interface Resources {
     clarifySessionModeInline: string
     clarifySessionModeHint: string
     missingOption: string
+    // RFC-242 call-workflow node inspector
+    fieldCallWorkflow: string
+    fieldCallWorkflowHint: string
+    pickCallWorkflow: string
+    callWorkflowNoRef: string
+    /** Neutral same-shape placeholder — invisible and deleted references are
+     *  indistinguishable by design (no existence leak). */
+    callWorkflowRefUnavailable: string
+    callWorkflowPortsPreview: string
+    callWorkflowPortsPreviewHint: string
+    callWorkflowChildInputs: string
+    callWorkflowChildOutputs: string
+    fieldCallMaxDurationMs: string
+    fieldCallMaxDurationMsHint: string
+    fieldCallMaxTotalTokens: string
+    fieldCallMaxTotalTokensHint: string
   }
   promptPreview: {
     mockTitle: string
@@ -3704,6 +3726,12 @@ export interface Resources {
   crossClarifyNode: {
     label: string
   }
+  /** RFC-242 — canvas chip label + unset-reference line for call-workflow
+   *  nodes (⧉ icon). */
+  callWorkflowNode: {
+    label: string
+    unsetWorkflow: string
+  }
   errors: Record<string, string>
   errorDomains: Record<string, string>
   // RFC-203 T3c — workflow-validation issue copy: exact per-code titles +
@@ -4227,7 +4255,7 @@ export interface Resources {
     selectorLabel: string
     selectOwner: string
     candidateDescription: string
-    resourceType: { agent: string; skill: string; mcp: string; plugin: string }
+    resourceType: { agent: string; skill: string; mcp: string; plugin: string; workflow: string }
   }
   members: {
     title: string
@@ -7064,6 +7092,7 @@ export const zhCN: Resources = {
       categoryAll: '全部',
       categoryAgent: 'Agent',
       categoryWrapper: '包装器',
+      categoryCalls: '调用',
       categoryIo: '输入输出',
       categoryHuman: '人工节点',
       noMatches: '没有匹配的步骤。',
@@ -7171,6 +7200,9 @@ export const zhCN: Resources = {
     paletteReviewDesc: '挂在 markdown port 下游，让人评审后再继续。',
     paletteClarifyLabel: '反问',
     paletteClarifyDesc: '让 agent 在无法决断时主动反问；从节点左侧 input 端往 agent 上拖即可挂接。',
+    paletteCalls: '调用',
+    paletteCallWorkflowLabel: '调用工作流',
+    paletteCallWorkflowDesc: '把另一个工作流作为独立子任务执行；端口与被引工作流的输入/输出一致。',
     menuPaste: '粘贴',
     menuSelectAll: '全选',
     menuDuplicate: '复制为新节点',
@@ -7556,6 +7588,21 @@ export const zhCN: Resources = {
     clarifySessionModeHint:
       '选「同 session」时 agent 在每轮反问之间保留完整对话历史（省 token + 响应更快）；session 失效时自动回退到独立模式。',
     missingOption: '{{value}}(缺失)',
+    fieldCallWorkflow: '被调用工作流',
+    fieldCallWorkflowHint:
+      '以独立子任务运行所选工作流；输入/输出端口与其定义一致。不能调用当前正在编辑的工作流（自引用即调用环）。',
+    pickCallWorkflow: '— 选择工作流 —',
+    callWorkflowNoRef: '尚未选择工作流。',
+    callWorkflowRefUnavailable: '引用不可见或不存在',
+    callWorkflowPortsPreview: '子工作流端口预览',
+    callWorkflowPortsPreviewHint:
+      '来自被引工作流当前定义：输入 = 其工作流输入，输出 = 其输出节点端口并集。',
+    callWorkflowChildInputs: '输入端口',
+    callWorkflowChildOutputs: '输出端口',
+    fieldCallMaxDurationMs: '子任务时长上限（毫秒）',
+    fieldCallMaxDurationMsHint: '可选；留空时沿用全局限额。',
+    fieldCallMaxTotalTokens: '子任务 token 总量上限',
+    fieldCallMaxTotalTokensHint: '可选；留空时沿用全局限额。',
   },
   promptPreview: {
     mockTitle: '模拟端口值',
@@ -8179,6 +8226,10 @@ export const zhCN: Resources = {
   crossClarifyNode: {
     label: '跨代理反问',
   },
+  callWorkflowNode: {
+    label: '调用工作流',
+    unsetWorkflow: '（未选择工作流）',
+  },
   // RFC-203: per-domain fallback templates — any unmapped code resolves to
   // its domain's template instead of a bare English message.
   errorDomains: {
@@ -8285,6 +8336,14 @@ export const zhCN: Resources = {
       'wrapper-loop-nested': '循环包装器不能嵌套在另一个循环包装器里。',
       'wrapper-loop-output-binding-out-of-scope': '循环输出绑定必须引用循环体的直接成员。',
       'wrapper-output-boundary-missing': '离开包装器的数据必须通过包装器输出边界显式暴露。',
+      // RFC-242 — call-workflow 节点（design §9 错误码闭集）。
+      'workflow-call-cycle': '工作流调用形成了环（含调用自身）。',
+      'call-workflow-ref-missing': '调用节点引用的工作流不存在或未选择。',
+      'call-workflow-upload-input-unsupported':
+        '被调用工作流含文件上传输入，暂不支持跨工作流调用。',
+      'call-workflow-output-port-collision': '被调用工作流的多个输出节点存在重名端口。',
+      'call-workflow-input-unwired': '被调用工作流的输入端口缺少同名入边。',
+      'call-workflow-in-fanout-unsupported': '调用节点不能放在扇出包装器内部。',
     },
     family: {
       'wrapper-loop': '循环包装器配置有误。',
@@ -9376,7 +9435,7 @@ export const zhCN: Resources = {
     selectorLabel: '{{type}}：{{name}}',
     selectOwner: '选择资源所有者',
     candidateDescription: '{{visibility}} · {{id}}',
-    resourceType: { agent: '代理', skill: '技能', mcp: 'MCP', plugin: '插件' },
+    resourceType: { agent: '代理', skill: '技能', mcp: 'MCP', plugin: '插件', workflow: '工作流' },
   },
   members: {
     title: '任务成员',

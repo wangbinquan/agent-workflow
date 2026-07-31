@@ -7437,6 +7437,19 @@ details.form-section[open] > summary {
   font-size: 11px;
 }
 
+/* RFC-242 call-workflow node — composition kind (invokes another workflow as
+ * a child task). Violet tint separates it from agent (accent border), IO
+ * (accent wash) and the human amber family; background-tinted (not solely
+ * border) so `.canvas-node[data-status=…]` still owns the status border. */
+.canvas-node--call-workflow {
+  background: color-mix(in srgb, #7c3aed 8%, var(--panel));
+  border-color: color-mix(in srgb, #7c3aed 45%, var(--border));
+}
+.canvas-node--call-workflow .canvas-node__kind {
+  color: #6d28d9;
+  font-weight: 600;
+}
+
 /* Clarify (反问) node — mirrors the review palette so the two human-in-the-loop
  * kinds read as the same family on the canvas. Status-specific borders are
  * still allowed via `.canvas-node[data-status=…]`. */

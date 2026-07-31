@@ -87,6 +87,7 @@ export function deriveNodePickerCatalog(input: {
     all: entries.length,
     agents: 0,
     wrappers: 0,
+    calls: 0,
     io: 0,
     human: 0,
   }

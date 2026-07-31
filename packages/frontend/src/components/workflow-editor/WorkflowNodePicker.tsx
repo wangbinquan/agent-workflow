@@ -141,6 +141,8 @@ function WorkflowNodePickerCatalogBody({
     () => ({
       agents: t('editor.nodePicker.categoryAgent'),
       wrappers: t('editor.nodePicker.categoryWrapper'),
+      // RFC-242 — call-workflow lives in its own Calls category.
+      calls: t('editor.nodePicker.categoryCalls'),
       io: t('editor.nodePicker.categoryIo'),
       human: t('editor.nodePicker.categoryHuman'),
     }),
@@ -179,6 +181,13 @@ function WorkflowNodePickerCatalogBody({
         label: categoryLabels.wrappers,
         badge: model.categoryCounts.wrappers,
         testid: 'workflow-node-picker-category-wrappers',
+      },
+      {
+        // RFC-242 — call-workflow lives in its own Calls category.
+        key: 'calls',
+        label: categoryLabels.calls,
+        badge: model.categoryCounts.calls,
+        testid: 'workflow-node-picker-category-calls',
       },
       {
         key: 'io',

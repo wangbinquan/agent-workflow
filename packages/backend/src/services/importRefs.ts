@@ -31,6 +31,19 @@ interface ImportRefRow {
   aclRevision: number
 }
 
+/**
+ * RFC-242 (§5.5) — reference kinds whose ZERO-visible-candidate outcome is a
+ * SKIP (the caller keeps the dangling portable name and imports successfully)
+ * instead of a 422 `import-ref-unresolved`. Workflow call selectors are
+ * dangling-until-launch by design (agent-single's dangling-agentId philosophy
+ * transplanted to the name domain): launch fails closed with
+ * `workflow-call-ref-missing`, so there is no import deadlock and no silent
+ * mis-binding. Ambiguity (2+ visible candidates) still returns the mapping 409
+ * and an explicit stale selection still fails closed — only the "nothing to
+ * bind" case degrades to dangling.
+ */
+const DANGLE_TOLERANT_IMPORT_REF_TYPES: ReadonlySet<ImportRefType> = new Set(['workflow'])
+
 interface ImportRefCandidateSnapshot {
   candidate: ImportRefCandidate
   name: string
@@ -230,6 +243,7 @@ function resolveImportRefsInTx(
   const unresolved = uniqueSelectors.filter((selector) => {
     const key = importRefSelectorKey(selector)
     return (
+      !DANGLE_TOLERANT_IMPORT_REF_TYPES.has(selector.type) &&
       requestedBySelector.get(key) === undefined &&
       (candidatesBySelector.get(key) ?? []).length === 0
     )
@@ -247,6 +261,15 @@ function resolveImportRefsInTx(
     const snapshots = candidatesBySelector.get(key) ?? []
     const candidates = snapshots.map((snapshot) => snapshot.candidate)
     const requested = requestedBySelector.get(key)
+    if (
+      candidates.length === 0 &&
+      requested === undefined &&
+      DANGLE_TOLERANT_IMPORT_REF_TYPES.has(selector.type)
+    ) {
+      // RFC-242 skip: no bySelector binding, no selection, no fence entry —
+      // the caller persists the dangling portable name as-is.
+      continue
+    }
     if (candidates.length === 1) {
       if (
         requested !== undefined &&

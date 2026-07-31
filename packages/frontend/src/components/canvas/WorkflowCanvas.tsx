@@ -55,9 +55,12 @@ import {
   declaredPorts,
   isClarifyAskingNode,
   isWrapperKind,
+  type WorkflowByRef,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
+import { CallWorkflowNode } from './nodes/CallWorkflowNode'
+import { useWorkflowRefResolver } from './useWorkflowRefResolver'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
 import { classifyClarifyConnection } from './clarifyDragHelper'
 import { classifyCrossClarifyConnection } from './crossClarifyDragHelper'
@@ -150,6 +153,8 @@ const NODE_TYPES = {
   review: ReviewNode,
   clarify: ClarifyNode,
   'clarify-cross-agent': CrossClarifyNode,
+  // RFC-242 — call-workflow invokes another workflow as a child task.
+  'call-workflow': CallWorkflowNode,
 } satisfies Record<NodeKind, ComponentType<never>>
 
 const EDGE_TYPES = { 'workflow-insertable': WorkflowCanvasEdge }
@@ -365,6 +370,10 @@ function CanvasInner({
   // `agentByName` — its many downstream consumers only read, and the id keys are
   // ULIDs that never collide with human names.)
   const agentByName = useMemo(() => buildNodeAgentLookup(agents ?? [], (a) => a), [agents])
+  // RFC-242 — shared child-workflow resolver for call-workflow port
+  // derivation (declaredPorts 4th arg). Identity only changes when the
+  // ['workflows'] cache entry does, so it can drive the def-sync ref-guard.
+  const { workflowByRef } = useWorkflowRefResolver()
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents ?? []), [agents])
   const validationProjection = useMemo(
     () => projectWorkflowValidationIssues(definition, validationIssues),
@@ -499,6 +508,7 @@ function CanvasInner({
         readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
         validationProjection.nodes,
         surface,
+        workflowByRef,
       ),
     ),
   )
@@ -534,6 +544,11 @@ function CanvasInner({
   const externalClarifyNavsRef = useRef(clarifyNavs)
   const externalValidationIssuesRef = useRef(validationIssues)
   const externalEdgeInsertEnabledRef = useRef(edgeInsertEnabled)
+  // RFC-242: mirror of the agents late-load guard for the child-workflow
+  // resolver — the ['workflows'] query resolves after mount, and without a
+  // resolver-changed arm a call-workflow node would keep zero port rows
+  // until the next definition edit.
+  const externalWorkflowByRefRef = useRef(workflowByRef)
   // Track the last agentByName ref we rebuilt against. The canvas is often
   // mounted on the task-detail page before the `useQuery(['agents'])` call
   // resolves; on first render `agents` is `[]`, so agent-node `outputPorts`
@@ -715,6 +730,9 @@ function CanvasInner({
     const clarifyNavsChanged = clarifyNavs !== externalClarifyNavsRef.current
     const validationChanged = validationIssues !== externalValidationIssuesRef.current
     const edgeInsertEnabledChanged = edgeInsertEnabled !== externalEdgeInsertEnabledRef.current
+    // RFC-242: resolver identity changes exactly when the ['workflows'] cache
+    // entry does — repaint call-workflow port rows on child-definition edits.
+    const workflowRefsChanged = workflowByRef !== externalWorkflowByRefRef.current
     if (
       defChanged ||
       surfaceChanged ||
@@ -725,7 +743,8 @@ function CanvasInner({
       reviewNavsChanged ||
       clarifyNavsChanged ||
       validationChanged ||
-      edgeInsertEnabledChanged
+      edgeInsertEnabledChanged ||
+      workflowRefsChanged
     ) {
       externalDefRef.current = definition
       externalSurfaceRef.current = surface
@@ -737,6 +756,7 @@ function CanvasInner({
       externalClarifyNavsRef.current = clarifyNavs
       externalValidationIssuesRef.current = validationIssues
       externalEdgeInsertEnabledRef.current = edgeInsertEnabled
+      externalWorkflowByRefRef.current = workflowByRef
       // Preserve `selected: true` across the rebuild. Without this, an
       // inspector edit (which mints a new `definition` reference) wipes
       // the selected flag, xyflow sees a phantom deselect and fires
@@ -761,6 +781,7 @@ function CanvasInner({
               readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
               validationProjection.nodes,
               surface,
+              workflowByRef,
             ),
             measured,
           ),
@@ -810,6 +831,7 @@ function CanvasInner({
     surface,
     validationIssues,
     validationProjection,
+    workflowByRef,
   ])
 
   const handleNodesChange = useCallback(
@@ -1380,6 +1402,7 @@ function CanvasInner({
             readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
             undefined,
             surface,
+            workflowByRef,
           ),
           measured,
         ),
@@ -1423,6 +1446,7 @@ function CanvasInner({
       semanticContext,
       surface,
       syncCanvasSelection,
+      workflowByRef,
     ],
   )
 
@@ -1895,12 +1919,15 @@ function CanvasInner({
       : definition.nodes.find((node) => node.id === selectedNodeId)
   const selectedNodeCanConnect =
     selectedNode !== undefined &&
-    computePorts(selectedNode, agentByName, definition).outputs.length > 0
+    computePorts(selectedNode, agentByName, definition, workflowByRef).outputs.length > 0
 
   const openConnectionDialog = useCallback(
     (nodeId: string, trigger: HTMLElement | null) => {
       const node = definition.nodes.find((candidate) => candidate.id === nodeId)
-      if (node === undefined || computePorts(node, agentByName, definition).outputs.length === 0) {
+      if (
+        node === undefined ||
+        computePorts(node, agentByName, definition, workflowByRef).outputs.length === 0
+      ) {
         return
       }
       connectionTriggerRef.current = trigger
@@ -1909,7 +1936,7 @@ function CanvasInner({
       setMenu(null)
       onModalSurfaceChange?.('connection')
     },
-    [agentByName, definition, onModalSurfaceChange],
+    [agentByName, definition, onModalSurfaceChange, workflowByRef],
   )
 
   const openAfterNodePicker = useCallback(
@@ -2019,7 +2046,8 @@ function CanvasInner({
     }
     const menuNode = definition.nodes.find((candidate) => candidate.id === menu.nodeId)
     const menuNodeCanConnect =
-      menuNode !== undefined && computePorts(menuNode, agentByName, definition).outputs.length > 0
+      menuNode !== undefined &&
+      computePorts(menuNode, agentByName, definition, workflowByRef).outputs.length > 0
     return [
       {
         label: t('editor.nodeActions.connectNext'),
@@ -2094,6 +2122,7 @@ function CanvasInner({
     selectAll,
     selection.nodes.length,
     t,
+    workflowByRef,
     wrapSelection,
   ])
 
@@ -2690,6 +2719,11 @@ export function computePorts(
   node: WorkflowNode,
   agentByName: Map<string, Agent>,
   definition: WorkflowDefinition,
+  // RFC-242 §5.2 — optional child-workflow resolver; only call-workflow
+  // nodes consult it. Omitting it (legacy call sites/tests) keeps the exact
+  // pre-RFC-242 declaration: the node declares no ports and edge-derived
+  // fallbacks still render whatever edges exist.
+  workflowByRef?: WorkflowByRef,
 ): PortInventory {
   const inputs: string[] = []
   const outputs: string[] = []
@@ -2721,7 +2755,12 @@ export function computePorts(
   // renders the DATA projection only — system channels (clarify family,
   // __clarify__/…) keep their historical "render only when an edge exists"
   // behavior via the edge-derived passes around this block.
-  const declared = declaredPorts(node, definition, agentByName)
+  const declared = declaredPorts(
+    node,
+    definition,
+    agentByName,
+    workflowByRef === undefined ? undefined : { workflowByRef },
+  )
   for (const p of declared.dataInputs) {
     if (!inputs.includes(p.name)) inputs.push(p.name)
   }
@@ -2777,6 +2816,9 @@ function toFlowNodes(
   onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void,
   validationCounts?: Readonly<Record<string, WorkflowValidationCounts | undefined>>,
   surface: WorkflowCanvasSurface = 'task',
+  // RFC-242: child-workflow resolver threaded into computePorts so
+  // call-workflow nodes render their child-mirrored port rows.
+  workflowByRef?: WorkflowByRef,
 ): Node[] {
   const loopBodyIds = new Set<string>()
   for (const n of definition.nodes) {
@@ -2785,7 +2827,7 @@ function toFlowNodes(
     if (Array.isArray(inner)) for (const id of inner) loopBodyIds.add(id)
   }
   return definition.nodes.map((n, idx) => {
-    const ports = computePorts(n, agentByName, definition)
+    const ports = computePorts(n, agentByName, definition, workflowByRef)
     const data: CanvasNodeData = {
       surface,
       nodeId: n.id,
@@ -2878,6 +2920,15 @@ function toFlowNodes(
         reviewData.inputSource = { nodeId, portName }
         const sourceNode = definition.nodes.find((candidate) => candidate.id === nodeId)
         if (sourceNode !== undefined) reviewData.inputSourceTitle = nodeTitle(sourceNode)
+      }
+    }
+    if (n.kind === 'call-workflow') {
+      // RFC-242: surface the referenced workflow name onto node data so
+      // CallWorkflowNode can show "which workflow does this call" inside the
+      // card body without re-reading the definition.
+      const ref = (n as unknown as { workflowName?: unknown }).workflowName
+      if (typeof ref === 'string' && ref.length > 0) {
+        ;(data as CanvasNodeData & { workflowName?: string }).workflowName = ref
       }
     }
     // RFC-060 PR-E: agent-multi sourcePort mirroring removed.
@@ -3291,6 +3342,9 @@ export const __testToFlowNodes = (
   clarifyNavs?: Record<string, 'awaiting' | 'answered'>,
   onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void,
   surface: WorkflowCanvasSurface = 'task',
+  // RFC-242: child-workflow resolver so call-workflow port threading is
+  // testable the same way the other data slots are.
+  workflowByRef?: WorkflowByRef,
 ): Node[] => {
   const def: WorkflowDefinition = {
     $schema_version: 1,
@@ -3313,6 +3367,7 @@ export const __testToFlowNodes = (
     onAddInsideWrapper,
     undefined,
     surface,
+    workflowByRef,
   )
 }
 export const __testToFlowEdges = toFlowEdges
