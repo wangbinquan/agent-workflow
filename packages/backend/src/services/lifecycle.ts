@@ -267,6 +267,12 @@ import {
   type TaskTransitionEvent,
 } from '@agent-workflow/shared'
 import { tasks } from '@/db/schema'
+// RFC-242 §1.4: multicast terminal notification (executionWatch is a leaf
+// module — db schema + shared only — so this import cannot form a cycle).
+import { notifyTaskTerminal } from '@/services/execution/executionWatch'
+// RFC-242 §3.2: child-task budget bookkeeping (leaf module, no-op until a call
+// node initializes the daemon singleton).
+import { notifyChildBudgetTaskStatus } from '@/services/execution/childBudget'
 
 // RFC-108 T2 (AR-19 / 01-LIFE-08): the terminal-task-status set now lives in
 // @agent-workflow/shared (symmetric with node_run) so the frontend imports the
@@ -477,6 +483,29 @@ export async function setTaskStatus(args: {
         `terminal task hook failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
       )
     }
+  }
+  // RFC-242 §1.4 — executionWatch multicast, for ALL FOUR terminal statuses
+  // (the single-slot hook above deliberately stays done|canceled-only).
+  // Post-commit and best-effort: a resolver failure never undoes or blocks
+  // the already-committed status write; watchers own a poll fallback.
+  if (isTerminalTaskStatus(args.to)) {
+    try {
+      notifyTaskTerminal(args.taskId, args.to)
+    } catch (err) {
+      lifecycleLog.warn(
+        `terminal watch notify failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+  // RFC-242 §3.2 — child-task budget bookkeeping (EVERY status, not only
+  // terminal: awaiting_* frees a unit, resume re-counts). No-op until the
+  // budget singleton exists; never blocks the committed write.
+  try {
+    notifyChildBudgetTaskStatus(args.db, args.taskId, args.to)
+  } catch (err) {
+    lifecycleLog.warn(
+      `child-budget notify failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
+    )
   }
   return transition
 }

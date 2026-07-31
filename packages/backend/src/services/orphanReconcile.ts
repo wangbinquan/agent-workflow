@@ -32,7 +32,11 @@ import { and, eq, inArray, lt } from 'drizzle-orm'
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
-import { transitionNodeRunStatus, trySetTaskStatus } from '@/services/lifecycle'
+import {
+  isTerminalTaskStatus,
+  transitionNodeRunStatus,
+  trySetTaskStatus,
+} from '@/services/lifecycle'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type LivenessReason,
@@ -110,6 +114,7 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
       pid: nodeRuns.pid,
       spawnBinaryPath: nodeRuns.spawnBinaryPath,
       parentNodeRunId: nodeRuns.parentNodeRunId,
+      childTaskId: nodeRuns.childTaskId,
     })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.status, 'running'), lt(nodeRuns.startedAt, now - deps.graceMs)))
@@ -144,10 +149,29 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
         pid: nodeRuns.pid,
         spawnBinaryPath: nodeRuns.spawnBinaryPath,
         parentNodeRunId: nodeRuns.parentNodeRunId,
+        childTaskId: nodeRuns.childTaskId,
       })
       .from(nodeRuns)
       .where(eq(nodeRuns.taskId, taskId))
 
+    // RFC-242 §4.1 — cross-task delegation probe: batch-read the child tasks
+    // referenced by this task's call rows once per tick. Terminal AND missing
+    // both map to 'settled' (evidence lapses; the parent's resume replay owns
+    // the finalize).
+    const childIds = [...new Set(rows.flatMap((r) => (r.childTaskId ? [r.childTaskId] : [])))]
+    const childStatus = new Map<string, string>()
+    if (childIds.length > 0) {
+      const childRows = await db
+        .select({ id: tasks.id, status: tasks.status })
+        .from(tasks)
+        .where(inArray(tasks.id, childIds))
+      for (const c of childRows) childStatus.set(c.id, c.status)
+    }
+    const probeChildTask = (childTaskId: string): 'active' | 'settled' => {
+      const st = childStatus.get(childTaskId)
+      if (st === undefined) return 'settled'
+      return isTerminalTaskStatus(st) ? 'settled' : 'active'
+    }
     for (const run of taskCandidates) {
       const verdict = resolveRunLiveness({
         row: run,
@@ -155,6 +179,7 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
         definition,
         taskHasDriver: false, // already gated above
         probeProcess,
+        probeChildTask,
       })
       if (verdict.alive) continue
       // RFC-230 (Codex 设计门 P2-2): the gate above and this write are separated

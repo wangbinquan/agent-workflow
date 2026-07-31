@@ -42,7 +42,9 @@ import {
 } from '@/services/systemResources'
 import { mcps, plugins, skills } from '@/db/schema'
 import { inArray } from 'drizzle-orm'
-import { startAgentTask } from '@/services/agentLaunch'
+// RFC-242 T2: agent launches go through the unified executor facade — this
+// route must not call startAgentTask directly (source-text lock).
+import { startExecution } from '@/services/execution/executor'
 import {
   parseMultipartLaunch,
   resolveUploadLimits,
@@ -262,11 +264,16 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const task = await startAgentTask(
+    const task = await startExecution(
       deps.db,
       actor,
-      existing.id,
-      parsed.data,
+      {
+        kind: 'agent',
+        refId: existing.id,
+        invoker: { type: 'user' },
+        payload: parsed.data,
+        ...(uploads !== undefined ? { uploads } : {}),
+      },
       buildStartTaskDeps(
         deps.db,
         deps.configPath,
@@ -275,7 +282,6 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         deps.secretBox,
         deps.containmentCoordinator,
       ),
-      uploads,
     )
     return c.json(task, 201)
   })

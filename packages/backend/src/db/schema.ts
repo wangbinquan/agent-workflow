@@ -926,9 +926,13 @@ export const tasks = sqliteTable(
      * (backfilled by migration 0085, never written for new launches);
      * 'remote' = URL mode; 'scratch' = temporary space (workspace IS a fresh
      * git repo); 'internal' = framework-internal launches (fusion, via
-     * `internalSource` — unreachable from the public wire).
+     * `internalSource` — unreachable from the public wire); 'inherited' =
+     * RFC-242 child execution running inside its parent's call-node iso (the
+     * task does NOT own its disk space — delete/GC skip worktree removal).
      */
-    spaceKind: text('space_kind', { enum: ['local', 'remote', 'scratch', 'internal'] })
+    spaceKind: text('space_kind', {
+      enum: ['local', 'remote', 'scratch', 'internal', 'inherited'],
+    })
       .notNull()
       .default('remote'),
     /** RFC-165/RFC-223: launch-time agent name for display only; NULL otherwise. */
@@ -952,6 +956,30 @@ export const tasks = sqliteTable(
      */
     workspacePruningAt: integer('workspace_pruning_at'),
     workspacePrunedAt: integer('workspace_pruned_at'),
+    /**
+     * RFC-242 (migration 0126): parent linkage for node-invoked child
+     * executions. `parent_task_id` = the invoking task (FK, subtree rows are
+     * cascade-deleted with the parent; deleteTask gates active descendants
+     * first); `parent_node_run_id` = the call node_run that launched this
+     * child (soft link — node_runs rows are minted/superseded per retry, so
+     * no FK). NULL/0 on every non-child task. Orthogonal to
+     * `taskExecutionKind` — a child task's kind still derives from its own
+     * workgroupId/sourceAgentName columns.
+     */
+    parentTaskId: text('parent_task_id').references((): AnySQLiteColumn => tasks.id, {
+      onDelete: 'cascade',
+    }),
+    parentNodeRunId: text('parent_node_run_id'),
+    /** RFC-242: invocation-chain depth (root = 0); the launch-time depth guard input. */
+    invocationDepth: integer('invocation_depth').notNull().default(0),
+    /**
+     * RFC-242 §3.1: the reference closure frozen at launch (workflow
+     * definitions + workgroup config templates keyed by name). NULL when the
+     * definition has no call nodes. NEVER serialized to any wire (TaskSchema
+     * whitelist + regression lock) — child tasks re-expose only their own
+     * workflowSnapshot through the existing member-gated surface.
+     */
+    refClosureJson: text('ref_closure_json'),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },
@@ -960,6 +988,7 @@ export const tasks = sqliteTable(
     workflowIdx: index('idx_tasks_workflow').on(t.workflowId, t.startedAt),
     ownerIdx: index('idx_tasks_owner').on(t.ownerUserId),
     schedTaskIdx: index('idx_tasks_scheduled_task').on(t.scheduledTaskId), // RFC-159
+    parentIdx: index('idx_tasks_parent').on(t.parentTaskId), // RFC-242
   }),
 )
 
@@ -1375,10 +1404,20 @@ export const nodeRuns = sqliteTable(
      * prompt.
      */
     agentOverrideId: text('agent_override_id'),
+    /**
+     * RFC-242: the child task a call node_run launched (call-workflow /
+     * call-workgroup rows only, NULL everywhere else). Soft link on purpose —
+     * a deleted child resolves to the `child-deleted` failure mapping instead
+     * of breaking FK integrity for the historical run row. Doubles as the
+     * liveness-delegation anchor (runLiveness: child task non-terminal ⇒ the
+     * call row is alive) and the resume re-attach anchor (design §4.2).
+     */
+    childTaskId: text('child_task_id'),
   },
   (t) => ({
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),
     parentIdx: index('idx_node_runs_parent').on(t.parentNodeRunId),
+    childTaskIdx: index('idx_node_runs_child_task').on(t.childTaskId), // RFC-242
   }),
 )
 

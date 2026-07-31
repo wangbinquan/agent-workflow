@@ -666,7 +666,13 @@ function resolveMultiRepoDirName(rawBasename: string, used: Set<string>): string
  * `pickFreshestRun` `topLevelOnly` default (freshness.ts).
  */
 export function selectResumeRollbackTargets<
-  R extends { id: string; nodeId: string; parentNodeRunId: string | null; status: string },
+  R extends {
+    id: string
+    nodeId: string
+    parentNodeRunId: string | null
+    status: string
+    childTaskId?: string | null
+  },
 >(runs: readonly R[]): R[] {
   const latestPerNode = new Map<string, R>()
   for (const r of runs) {
@@ -675,7 +681,13 @@ export function selectResumeRollbackTargets<
     if (prev === undefined || r.id > prev.id) latestPerNode.set(r.nodeId, r)
   }
   return [...latestPerNode.values()].filter(
-    (r) => r.status === 'failed' || r.status === 'interrupted',
+    (r) =>
+      (r.status === 'failed' || r.status === 'interrupted') &&
+      // RFC-242 §4.2 — call rows have no canonical writes to roll back (the
+      // child works in the call-node iso); their interrupted rows are handled
+      // by the scheduler's adoption path (re-attach / merge_state-staged
+      // replay), never by pre_snapshot rollback + re-mint.
+      (r.childTaskId ?? null) === null,
   )
 }
 
@@ -2092,7 +2104,20 @@ const CANCELABLE_TASK_STATUSES = [
   'awaiting_human',
 ] as const
 
-export async function cancelTask(db: DbClient, id: string): Promise<Task> {
+export async function cancelTask(
+  db: DbClient,
+  id: string,
+  opts: {
+    /**
+     * RFC-242 §4.3 — set when this cancel is a parent-cascade. Lands a durable
+     * `canceled-by-parent-cascade` errorMessage marker so a parent resuming
+     * after a crash can still distinguish "my own cascade" (call node follows
+     * the parent's canceled outcome) from "someone canceled my child"
+     * (call node fails with `child-canceled`).
+     */
+    cascadeFromParent?: boolean
+  } = {},
+): Promise<Task> {
   const task = await getTask(db, id)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${id}' not found`)
@@ -2137,10 +2162,38 @@ export async function cancelTask(db: DbClient, id: string): Promise<Task> {
     extra: {
       finishedAt: Date.now(),
       errorSummary: 'canceled by user',
-      errorMessage: 'no active scheduler at cancel time',
+      errorMessage:
+        opts.cascadeFromParent === true
+          ? 'canceled-by-parent-cascade'
+          : 'no active scheduler at cancel time',
     },
     reason: 'cancelTask-fallback',
   })
+  // RFC-242 §4.3 — the scheduler path can also have landed the terminal write
+  // (abort → cancelTaskRow). Stamp the cascade marker idempotently AFTER the
+  // row is terminal so the durable judgement survives either path. errorMessage
+  // is the machine-code column (summary stays the human line).
+  if (opts.cascadeFromParent === true) {
+    await db
+      .update(tasks)
+      .set({ errorMessage: 'canceled-by-parent-cascade' })
+      .where(and(eq(tasks.id, id), eq(tasks.status, 'canceled')))
+  }
+  // RFC-242 §4.3 — recursively cascade into active child executions. Depth is
+  // bounded by maxInvocationDepth at launch; `task-not-cancelable` (already
+  // terminal) is skipped silently — cascade is idempotent by construction.
+  const children = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.parentTaskId, id), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES])))
+  for (const child of children) {
+    try {
+      await cancelTask(db, child.id, { cascadeFromParent: true })
+    } catch (err) {
+      if (err instanceof ConflictError || err instanceof NotFoundError) continue
+      throw err
+    }
+  }
   const final = (await getTask(db, id)) as Task
   emitTaskStatus(final)
   return final
@@ -2282,6 +2335,9 @@ async function resumeKick(
       `task '${id}' is ${task.status}; only [${allowedFrom.join('/')}] tasks can ${opts.verb}`,
     )
   }
+  // RFC-242 §4.2 — a child execution whose owning call row already settled
+  // must not be re-driven: nobody will ever merge its further output.
+  await assertChildTaskDrivable(db, task, opts.verb)
 
   // RFC-108 T6 (AR-15): 410 before the ownership CAS when the worktree is gone
   // (gc reclaimed a resumable task) — never flip to pending then 500 on a
@@ -2753,6 +2809,34 @@ export async function computeWorkflowSyncPreview(
  *   - flipping task.status back to pending
  *   - kicking the scheduler
  */
+/**
+ * RFC-242 §4.2 — child-side gate: once the parent's call row is TERMINAL the
+ * invocation is over; re-running the child would write into an iso the parent
+ * will never merge (retrying the CALL NODE on the parent is the sanctioned
+ * re-run path). Non-child tasks and live call rows pass untouched; a missing
+ * call row (dirty data) fails open to the pre-RFC-242 behavior.
+ */
+async function assertChildTaskDrivable(
+  db: DbClient,
+  task: { id: string; parentTaskId?: string | null; parentNodeRunId?: string | null },
+  verb: string,
+): Promise<void> {
+  const callRowId = task.parentNodeRunId ?? null
+  if ((task.parentTaskId ?? null) === null || callRowId === null) return
+  const row = await db
+    .select({ status: nodeRuns.status })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, callRowId))
+    .get()
+  if (row === undefined) return
+  if (isTerminalNodeRunStatus(row.status as NodeRunStatus)) {
+    throw new ConflictError(
+      'call-row-finalized',
+      `task '${task.id}' is a child execution whose call node run already settled ('${row.status}'); ${verb} the parent's call node instead`,
+    )
+  }
+}
+
 export async function retryNode(
   db: DbClient,
   taskId: string,
@@ -2777,6 +2861,8 @@ export async function retryNode(
       `task '${taskId}' is ${task.status}; cancel it first before retrying a node`,
     )
   }
+  // RFC-242 §4.2 — child-side gate (same rule as resumeKick).
+  await assertChildTaskDrivable(db, task, 'retry')
   // RFC-099 audit (2026-07-15): validate the nodeRunId belongs to THIS task
   // BEFORE the CAS below. The CAS clears finishedAt/errorSummary/errorMessage/
   // failedNodeId and flips the task to pending, so a bogus / cross-task
@@ -3086,6 +3172,16 @@ export interface ListTasksFilters {
   repoPath?: string
   /** RFC-159: filter to tasks launched by a given `scheduled_tasks` id (run history). */
   scheduledTaskId?: string
+  /**
+   * RFC-242 §8: parent/child list filters (PR-2 lands the query surface only —
+   * the DEFAULT stays "everything flat" until PR-5 flips it together with the
+   * nesting UI, so awaiting child executions never become invisible in a
+   * window where the UI cannot reveal them).
+   *   - topLevelOnly: only rows with parent_task_id IS NULL.
+   *   - parentTaskId: only the direct children of the given task.
+   */
+  topLevelOnly?: boolean
+  parentTaskId?: string
   limit?: number
   /**
    * RFC-036 visibility filter. When set, the SQL also requires either
@@ -3142,6 +3238,9 @@ async function listTaskSummaryRows(
   if (filters.repoPath !== undefined) conditions.push(eq(tasks.repoPath, filters.repoPath))
   if (filters.scheduledTaskId !== undefined)
     conditions.push(eq(tasks.scheduledTaskId, filters.scheduledTaskId))
+  if (filters.topLevelOnly === true) conditions.push(isNull(tasks.parentTaskId))
+  if (filters.parentTaskId !== undefined)
+    conditions.push(eq(tasks.parentTaskId, filters.parentTaskId))
   if (filters.visibility) {
     conditions.push(taskVisibilityCondition(db, filters.visibility))
   }
@@ -3400,6 +3499,8 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       // RFC-203 T4: RFC-145 machine-readable failure code, now surfaced so
       // the UI can localize failure copy instead of parsing errorMessage.
       failureCode: (r.failureCode ?? null) as FailureCode | null,
+      // RFC-242: child task launched by this call node_run (link + live status).
+      childTaskId: r.childTaskId ?? null,
       supersededByReview: (r.supersededByReview ?? null) as 'iterated' | 'rejected' | null,
       rolledBack: r.rolledBack ?? null,
       promptText: r.promptText,
@@ -3772,6 +3873,10 @@ function rowToTask(
     goal: frozenWorkgroupGoal(row.workgroupConfigJson),
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
+    // RFC-242: parent linkage for node-invoked child executions.
+    parentTaskId: row.parentTaskId ?? null,
+    parentNodeRunId: row.parentNodeRunId ?? null,
+    invocationDepth: row.invocationDepth ?? 0,
     sourceAgentName: row.sourceAgentName ?? null,
     // RFC-175 (§2e): stable agent id (NULL for non-agent + pre-0091 tasks).
     sourceAgentId: row.sourceAgentId ?? null,
@@ -3847,6 +3952,9 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     workgroupName: frozenWorkgroupName(row.workgroupConfigJson),
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
+    // RFC-242: parent linkage so the list can nest/badge child executions.
+    parentTaskId: row.parentTaskId ?? null,
+    invocationDepth: row.invocationDepth ?? 0,
     sourceAgentName: row.sourceAgentName ?? null,
     // RFC-177: frozen stable agent id so the list subject link resolves by id
     // (rename/reuse-safe); NULL for non-agent / pre-RFC-175 rows (by-name fallback).

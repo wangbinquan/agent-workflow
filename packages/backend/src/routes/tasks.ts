@@ -54,9 +54,11 @@ import {
   materializeSpace,
   resumeTask,
   retryNode,
-  startTask,
   syncTaskWorkflow,
 } from '@/services/task'
+// RFC-242 T2: task launches go through the unified executor facade — this
+// route must not call startTask directly (source-text lock).
+import { startExecution } from '@/services/execution/executor'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { getTaskFileContent } from '@/services/worktreeFileContent'
 import { getChangeNarrativeStatus, triggerChangeNarrative } from '@/services/changeNarrative'
@@ -137,6 +139,13 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     const scheduledTaskId = c.req.query('scheduled_task_id') ?? c.req.query('scheduledTaskId')
     if (scheduledTaskId !== undefined && scheduledTaskId !== '')
       filters.scheduledTaskId = scheduledTaskId
+    // RFC-242 §8 (PR-2: query surface only; the default flips with the PR-5 UI).
+    // include_children=false → top-level rows only; parent_id=<taskId> → that
+    // task's direct children.
+    const includeChildren = c.req.query('include_children')
+    if (includeChildren === 'false') filters.topLevelOnly = true
+    const parentId = c.req.query('parent_id') ?? c.req.query('parentId')
+    if (parentId !== undefined && parentId !== '') filters.parentTaskId = parentId
     const limit = c.req.query('limit')
     if (limit !== undefined) {
       const n = Number(limit)
@@ -254,7 +263,17 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       deps.containmentCoordinator,
     )
     await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId, startDeps.defaultRuntime)
-    const task = await startTask(parsed.data, startDeps)
+    const task = await startExecution(
+      deps.db,
+      actor,
+      {
+        kind: 'workflow',
+        refId: parsed.data.workflowId,
+        invoker: { type: 'user' },
+        payload: parsed.data,
+      },
+      startDeps,
+    )
     return c.json(task, 201)
   })
 
@@ -968,19 +987,29 @@ async function handleMultipartTaskStart(
   if (space.earlyError !== null) {
     // Create a failed task row so the user sees the error. No files were
     // written (the workspace never fully existed; scratch already cleaned).
-    const task = await startTask(startInput, {
-      db: deps.db,
-      actorUserId: actor.user.id,
-      ...(deps.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: deps.containmentCoordinator }),
-      ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
-      ...(opencodeCmd ? { opencodeCmd } : {}),
-      ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-      // RFC-103 T2: multipart (upload) start must thread runtime config too.
-      ...launchRuntime,
-      materializedSpace: space,
-    })
+    const task = await startExecution(
+      deps.db,
+      actor,
+      {
+        kind: 'workflow',
+        refId: startInput.workflowId,
+        invoker: { type: 'user' },
+        payload: startInput,
+      },
+      {
+        db: deps.db,
+        actorUserId: actor.user.id,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
+        ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
+        ...(opencodeCmd ? { opencodeCmd } : {}),
+        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
+        // RFC-103 T2: multipart (upload) start must thread runtime config too.
+        ...launchRuntime,
+        materializedSpace: space,
+      },
+    )
     return task
   }
 
@@ -1005,11 +1034,19 @@ async function handleMultipartTaskStart(
     throw attachWorkspaceCleanupToMultipartError(err, cleanup)
   }
 
-  // 6. Hand off ownership to startTask. Its outer wrapper now covers every
-  // pre-commit error (including the initial exact-version guard), so this call
+  // 6. Hand off ownership to the launch (via the RFC-242 executor facade —
+  // same startTask underneath). Its outer wrapper now covers every pre-commit
+  // error (including the initial exact-version guard), so this call
   // intentionally sits outside the upload-write catch above.
-  return await startTask(
-    { ...startInput, inputs: inputsOut },
+  return await startExecution(
+    deps.db,
+    actor,
+    {
+      kind: 'workflow',
+      refId: startInput.workflowId,
+      invoker: { type: 'user' },
+      payload: { ...startInput, inputs: inputsOut },
+    },
     {
       db: deps.db,
       actorUserId: actor.user.id,

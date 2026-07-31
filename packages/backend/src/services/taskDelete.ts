@@ -31,7 +31,7 @@
 // their next poll / reconnect. The workflow-style audience-context fast-path
 // for cold connections is a documented follow-up.
 
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
@@ -76,6 +76,8 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
       spaceKind: tasks.spaceKind,
       worktreePath: tasks.worktreePath,
       repoPath: tasks.repoPath,
+      parentTaskId: tasks.parentTaskId,
+      parentNodeRunId: tasks.parentNodeRunId,
     })
     .from(tasks)
     .where(eq(tasks.id, taskId))
@@ -103,6 +105,35 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
       'task-internal',
       `task '${taskId}' is a framework-internal (fusion) task and cannot be deleted directly`,
     )
+  }
+  // RFC-242 §4.4 — two-way parent/child gates.
+  // Deleting a PARENT while any descendant is non-terminal would cascade-drop
+  // live children's rows out from under their schedulers.
+  {
+    const active = await findNonTerminalDescendant(db, taskId)
+    if (active !== null) {
+      throw new ConflictError(
+        'task-has-active-children',
+        `task '${taskId}' has a non-terminal child execution ('${active.id}' is ${active.status}); cancel the tree first`,
+      )
+    }
+  }
+  // Deleting a CHILD before its parent consumed the result would dangle the
+  // call row's child_task_id (outputs/merge sources gone). The parent being
+  // terminal implies its call rows are settled (boot reap flips crashed rows
+  // to interrupted, which is terminal).
+  if (row.parentTaskId !== null) {
+    const parent = await db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, row.parentTaskId))
+      .get()
+    if (parent !== undefined && !isTerminalTaskStatus(parent.status as TaskStatus)) {
+      throw new ConflictError(
+        'task-parent-active',
+        `task '${taskId}' is a child execution of non-terminal task '${row.parentTaskId}'; the parent must settle first`,
+      )
+    }
   }
 
   // Capture every worktree BEFORE deletion (taskRepos cascades away with the row).
@@ -163,7 +194,12 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
       error: err instanceof Error ? err.message : String(err),
     })
   }
-  for (const wt of worktrees) {
+  // RFC-242 §4.4 — an 'inherited' child's workspace IS the parent's call-node
+  // iso; removing it here would rip the directory out of the parent's iso
+  // lifecycle (discard / GC own it). Skip worktree + snapshot-ref cleanup,
+  // keep the runs/logs/scratch sweep below.
+  const ownsWorkspace = row.spaceKind !== 'inherited'
+  for (const wt of ownsWorkspace ? worktrees : []) {
     try {
       await removeWorktree({ repoPath: wt.repoPath, worktreePath: wt.worktreePath, force: true })
     } catch (err) {
@@ -202,4 +238,31 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
 
   tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, { type: 'task.deleted', taskId })
   return { taskId, cleanup }
+}
+
+/**
+ * RFC-242 §4.4 — BFS over parent_task_id for any non-terminal descendant.
+ * Depth is bounded by maxInvocationDepth at launch time; the walk is defensive
+ * against dirty data via a visited set.
+ */
+async function findNonTerminalDescendant(
+  db: DbClient,
+  rootId: string,
+): Promise<{ id: string; status: string } | null> {
+  const visited = new Set<string>([rootId])
+  let frontier = [rootId]
+  while (frontier.length > 0) {
+    const children = await db
+      .select({ id: tasks.id, status: tasks.status, parentTaskId: tasks.parentTaskId })
+      .from(tasks)
+      .where(inArray(tasks.parentTaskId, frontier))
+    frontier = []
+    for (const c of children) {
+      if (visited.has(c.id)) continue
+      visited.add(c.id)
+      if (!isTerminalTaskStatus(c.status as TaskStatus)) return { id: c.id, status: c.status }
+      frontier.push(c.id)
+    }
+  }
+  return null
 }

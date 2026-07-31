@@ -1,20 +1,21 @@
 // RFC-159 — the launch closure shared by the scheduled-task loop (cli/start.ts)
 // and the manual run-now route. Kept in its own tiny module so it can import
-// startTask (a VALUE) without dragging services/task.ts into an import cycle:
-// nothing that task.ts imports transitively reaches here.
+// the executor (a VALUE) without dragging services/task.ts into an import
+// cycle: nothing that task.ts imports transitively reaches here.
 //
-// RFC-165 §9b: the closure dispatches by launch kind — workflow rows keep the
-// direct startTask path; agent / workgroup rows go through their launch
-// services (which re-run the full ACL / builtin / readiness gates against the
-// owner actor rebuilt by fireSchedule).
+// RFC-165 §9b: the closure dispatches by launch kind — agent / workgroup rows
+// re-run the full ACL / builtin / readiness gates against the owner actor
+// rebuilt by fireSchedule; workflow rows keep the direct launch path (no
+// assertWorkflowLaunchable at fire time — pre-RFC-242 behavior, frozen).
+// RFC-242 T2: all three kinds now go through the unified executor facade; the
+// `scheduled` invoker stamps `tasks.scheduled_task_id` for run-history
+// attribution (previously a hand-spread deps field).
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { ContainmentCoordinator } from '@/services/sandbox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { startAgentTask } from '@/services/agentLaunch'
-import { startTask } from '@/services/task'
-import { startWorkgroupTask } from '@/services/workgroup/launch'
+import { startExecution } from '@/services/execution/executor'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import type {
   ScheduledAgentPayload,
@@ -25,7 +26,7 @@ import type {
 /**
  * `(ownerUserId, scheduledTaskId) => (kind, payload, actor) => …` — builds the
  * launch deps live (so scheduled / manual launches match a manual UI launch)
- * and stamps `tasks.scheduled_task_id` for run-history attribution.
+ * and threads the `scheduled` invoker for run-history attribution.
  */
 export function buildScheduleLaunch(
   db: DbClient,
@@ -33,43 +34,55 @@ export function buildScheduleLaunch(
   containmentCoordinator?: ContainmentCoordinator,
 ): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
-    const deps = {
-      ...buildStartTaskDeps(
-        db,
-        configPath,
-        ownerUserId,
-        resolveOpencodeCmd(configPath),
-        undefined,
-        containmentCoordinator,
-      ),
-      scheduledTaskId,
-    }
+    const deps = buildStartTaskDeps(
+      db,
+      configPath,
+      ownerUserId,
+      resolveOpencodeCmd(configPath),
+      undefined,
+      containmentCoordinator,
+    )
+    const invoker = { type: 'scheduled', scheduledTaskId } as const
     if (kind === 'agent') {
       const p = payload as unknown as ScheduledAgentPayload
       // RFC-223 PR-7: the durable envelope requires the canonical id. The
       // launch service resolves that id directly; the name snapshot is display
       // metadata only and can never become a fallback.
-      const task = await startAgentTask(
+      const task = await startExecution(
         db,
         actor,
-        p.agentId,
-        { ...p, expectedAgentId: p.agentId },
+        {
+          kind: 'agent',
+          refId: p.agentId,
+          invoker,
+          payload: { ...p, expectedAgentId: p.agentId },
+        },
         deps,
       )
       return { id: task.id }
     }
     if (kind === 'workgroup') {
       const p = payload as unknown as ScheduledWorkgroupPayload
-      const task = await startWorkgroupTask(
+      const task = await startExecution(
         db,
         actor,
-        p.workgroupId,
-        { ...p, expectedWorkgroupId: p.workgroupId },
+        {
+          kind: 'workgroup',
+          refId: p.workgroupId,
+          invoker,
+          payload: { ...p, expectedWorkgroupId: p.workgroupId },
+        },
         deps,
       )
       return { id: task.id }
     }
-    const task = await startTask(payload as unknown as StartTask, deps)
+    const p = payload as unknown as StartTask
+    const task = await startExecution(
+      db,
+      actor,
+      { kind: 'workflow', refId: p.workflowId, invoker, payload: p },
+      deps,
+    )
     return { id: task.id }
   }
 }

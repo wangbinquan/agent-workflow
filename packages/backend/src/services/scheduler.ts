@@ -227,12 +227,10 @@ import {
 import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
-import {
-  deriveWorkgroupDispatch,
-  isWorkgroupTask,
-  workgroupModeOf,
-  type WorkgroupDispatch,
-} from '@agent-workflow/shared'
+import { isWorkgroupTask } from '@agent-workflow/shared'
+// RFC-242 §1.2 — the engine fork is decided by the executor registry (a pure
+// resolver extracted verbatim from the inline dispatch this file used to own).
+import { resolveTaskEngine } from '@/services/execution/engines'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import { existsSync } from 'node:fs'
@@ -611,18 +609,17 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // DAG frontier (design §4). The host snapshot's nodes exist only as mint
     // anchors + clarify wiring; runScope/deriveFrontier must not see them.
     // RFC-167: dynamic_workflow workgroups are the exception — their dispatch
-    // follows the dw phase (deriveWorkgroupDispatch, the shared single
-    // oracle): the GENERATE engine until the human-confirmed DAG is swapped
-    // into the snapshot (phase 'executing'), after which runScope executes it
-    // like any ordinary workflow task. RFC-217 T2: the phase lives in
+    // follows the dw phase. RFC-242 §1.2: the decision itself now lives in
+    // the executor engine registry (resolveTaskEngine — same oracle, extracted
+    // verbatim); this file keeps consuming it. RFC-217 T2: the phase lives in
     // workgroup_task_state (an unknown mode still routes to the turn engine,
     // which fails with its own precise config diagnostics).
-    const wgDispatch: WorkgroupDispatch | null = isWorkgroupTask(task)
-      ? deriveWorkgroupDispatch(
-          workgroupModeOf(task.workgroupConfigJson) ?? 'leader_worker',
-          (await loadWorkgroupTaskState(db, taskId)).dwState?.phase ?? null,
-        )
-      : null
+    const { engine, wgDispatch } = resolveTaskEngine(
+      task,
+      isWorkgroupTask(task)
+        ? ((await loadWorkgroupTaskState(db, taskId)).dwState?.phase ?? null)
+        : null,
+    )
     if (
       wgDispatch === 'dw-execute' &&
       definition.nodes.some((n) => n.id === DW_ORCHESTRATOR_NODE_ID)
@@ -640,28 +637,28 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       return
     }
     result =
-      isWorkgroupTask(task) && wgDispatch !== 'dw-execute'
-        ? wgDispatch === 'dw-generate'
-          ? await runDynamicWorkflowGenerate({
-              db,
-              taskId,
-              log,
-              ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildWorkgroupHooks(state),
-            })
-          : await runWorkgroupEngine({
-              db,
-              taskId,
-              log,
-              ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildWorkgroupHooks(state),
-            })
-        : await runScope(state, {
-            scopeId: null,
-            scopeIds: topLevelIds,
-            iteration: 0,
+      engine === 'dw-generate'
+        ? await runDynamicWorkflowGenerate({
+            db,
+            taskId,
             log,
+            ...(opts.signal ? { signal: opts.signal } : {}),
+            hooks: buildWorkgroupHooks(state),
           })
+        : engine === 'workgroup-turns'
+          ? await runWorkgroupEngine({
+              db,
+              taskId,
+              log,
+              ...(opts.signal ? { signal: opts.signal } : {}),
+              hooks: buildWorkgroupHooks(state),
+            })
+          : await runScope(state, {
+              scopeId: null,
+              scopeIds: topLevelIds,
+              iteration: 0,
+              log,
+            })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log.error('runTask: scope threw — failing task', { taskId, error: message })

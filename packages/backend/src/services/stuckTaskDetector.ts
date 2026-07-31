@@ -205,7 +205,35 @@ interface NodeRunCounts {
   active: number
   /** RFC-098 WP-8 (S5): the non-terminal rows with the fields the alert
    *  detail surfaces ({nodeRunId,nodeId,pid} + per-run lastEventTs later). */
-  activeRows: Array<{ id: string; nodeId: string; status: string; pid: number | null }>
+  activeRows: Array<{
+    id: string
+    nodeId: string
+    status: string
+    pid: number | null
+    childTaskId: string | null
+  }>
+}
+
+/** RFC-242 §4.1 — is a call row's child task legitimately quiet? True when the
+ *  child sits on a human gate (awaiting_*) or its own events are fresh. A
+ *  missing / terminal-but-unfinalized child is NOT healthy — the call row's
+ *  silence is then a real signal. */
+export async function childDelegationIsHealthy(
+  db: DbClient,
+  childTaskId: string,
+  now: number,
+  stuckThresholdMs: number,
+): Promise<boolean> {
+  const child = await db
+    .select({ status: tasks.status, startedAt: tasks.startedAt })
+    .from(tasks)
+    .where(eq(tasks.id, childTaskId))
+    .get()
+  if (child === undefined) return false
+  if (child.status === 'awaiting_review' || child.status === 'awaiting_human') return true
+  const childEventTs = await latestEventTsForTask(db, childTaskId)
+  const lastActivity = childEventTs ?? child.startedAt
+  return now - lastActivity <= stuckThresholdMs
 }
 
 async function nodeRunCounts(db: DbClient, taskId: string): Promise<NodeRunCounts> {
@@ -215,6 +243,7 @@ async function nodeRunCounts(db: DbClient, taskId: string): Promise<NodeRunCount
       nodeId: nodeRuns.nodeId,
       status: nodeRuns.status,
       pid: nodeRuns.pid,
+      childTaskId: nodeRuns.childTaskId,
     })
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
@@ -388,6 +417,12 @@ async function checkOne(
       // without the runner settling the row. detail carries per-run
       // {nodeRunId,nodeId,pid,lastEventTs} so the operator can inspect /
       // kill the pid; cancel/resume run the RFC-098 kill-then-proceed path.
+      //
+      // RFC-242 §4.1 — S5 freshness delegation: a call row's silence is by
+      // design (its work happens in the CHILD task). The row is quiet-but-fine
+      // when its child is currently awaiting_* (legitimate multi-day human
+      // gate) OR the child's own event stream is fresh. Only rows with no such
+      // delegation left in the list can constitute an S5.
       const activeRuns: Array<{
         nodeRunId: string
         nodeId: string
@@ -395,6 +430,12 @@ async function checkOne(
         lastEventTs: number | null
       }> = []
       for (const r of counts.activeRows) {
+        if (
+          r.childTaskId !== null &&
+          (await childDelegationIsHealthy(db, r.childTaskId, now, stuckThresholdMs))
+        ) {
+          continue
+        }
         activeRuns.push({
           nodeRunId: r.id,
           nodeId: r.nodeId,
@@ -402,6 +443,7 @@ async function checkOne(
           lastEventTs: await latestEventTsForRun(db, r.id),
         })
       }
+      if (activeRuns.length === 0) return out
       out.push({
         taskId: c.taskId,
         rule: 'S5',

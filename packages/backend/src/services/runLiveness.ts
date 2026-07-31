@@ -54,6 +54,11 @@ export interface LivenessRunRow {
   pid: number | null
   spawnBinaryPath: string | null
   parentNodeRunId: string | null
+  /**
+   * RFC-242: the child task a call node_run launched (NULL everywhere else).
+   * Optional so pre-RFC-242 callers/tests keep constructing the row shape.
+   */
+  childTaskId?: string | null
 }
 
 /** 一行 run 的活性证据来源。`driver` 是任务级证据，由 resolveRunLiveness 产出。 */
@@ -72,6 +77,7 @@ export type LivenessReason =
   | 'driver-attached' // 任务仍被本进程调度器持有
   | 'process-alive' // 自己的子进程还活着
   | 'process-gone' // 自己的子进程确已消失
+  | 'child-task-active' // RFC-242 委派：调用行的子任务仍非终态（跨任务证据）
   | 'inner-alive' // 委派：至少一个下层 run 还活着
   | 'inner-all-terminal' // 委派：下层全部终态 —— 真正的孤儿容器行
   | 'empty-delegation' // 容器行零下层，且无驱动 —— 没人会再造出下层
@@ -157,6 +163,13 @@ export interface ResolveRunLivenessArgs {
   taskHasDriver: boolean
   /** 进程探针：pid 存活且仍是我们 spawn 的那个二进制。 */
   probeProcess: (pid: number, spawnBinaryPath: string | null) => boolean
+  /**
+   * RFC-242 跨任务探针：调用行的子任务当下是否非终态（'active'）。终态与行
+   * 缺失统一为 'settled' —— 那时子任务证据失效，判定落回结构链（对调用行即
+   * 判死回收，收尾由父任务 resume 的 replay 分段完成，design §4.2 R）。
+   * 缺省视为 'settled'（pre-RFC-242 调用方无需感知）。
+   */
+  probeChildTask?: (childTaskId: string) => 'active' | 'settled'
 }
 
 /**
@@ -175,7 +188,14 @@ export function resolveRunLiveness(args: ResolveRunLivenessArgs): LivenessVerdic
   //   它同时天然覆盖两类瞬时窗口：agent 行的 pre-spawn 窗口，以及容器行的
   //   空窗（loop 两次迭代之间 / fanout 分片结束到聚合器起来）。
   if (args.taskHasDriver) return { alive: true, reason: 'driver-attached' }
-  return resolveWithoutDriver(args.row, args.rows, args.definition, args.probeProcess, new Set())
+  return resolveWithoutDriver(
+    args.row,
+    args.rows,
+    args.definition,
+    args.probeProcess,
+    args.probeChildTask ?? (() => 'settled'),
+    new Set(),
+  )
 }
 
 function resolveWithoutDriver(
@@ -183,10 +203,20 @@ function resolveWithoutDriver(
   rows: readonly LivenessRunRow[],
   definition: WorkflowDefinition,
   probeProcess: (pid: number, spawnBinaryPath: string | null) => boolean,
+  probeChildTask: (childTaskId: string) => 'active' | 'settled',
   visited: Set<string>,
 ): LivenessVerdict {
   if (visited.has(row.id)) return { alive: false, reason: 'lineage-cycle' }
   visited.add(row.id)
+
+  // ①.5 RFC-242 — 跨任务委派，优先于一切结构证据：调用行的活性由它发起的
+  // 独立子任务承载。子任务非终态 ⇒ 活；已终态 / 行缺失 ⇒ 该证据不判活，
+  // 落回下方结构链（调用行无 pid 无下层 ⇒ 判死回收；父 resume 的 R 分段
+  // 负责收尾，与 replayPendingMerges 语义一致）。
+  const childTaskId = row.childTaskId ?? null
+  if (childTaskId !== null && probeChildTask(childTaskId) === 'active') {
+    return { alive: true, reason: 'child-task-active' }
+  }
 
   const evidence = classifyRunLiveness(row, definition, rows)
   // ② process —— 逻辑与改动前一致，只是不再兼任「类别判断」。
@@ -208,7 +238,9 @@ function resolveWithoutDriver(
       // running 的下层继续向下解析（它可能自己就是个容器行）。
       if (isTerminalStatusRow(child)) continue
       if (child.status !== 'running') return { alive: true, reason: 'inner-alive' }
-      if (resolveWithoutDriver(child, rows, definition, probeProcess, visited).alive) {
+      if (
+        resolveWithoutDriver(child, rows, definition, probeProcess, probeChildTask, visited).alive
+      ) {
         return { alive: true, reason: 'inner-alive' }
       }
     }

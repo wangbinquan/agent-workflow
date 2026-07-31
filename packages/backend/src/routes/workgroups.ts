@@ -35,7 +35,9 @@ import {
   renameWorkgroup,
   saveWorkgroup,
 } from '@/services/workgroups'
-import { startWorkgroupTask } from '@/services/workgroup/launch'
+// RFC-242 T2: workgroup launches go through the unified executor facade — this
+// route must not call startWorkgroupTask directly (source-text lock).
+import { startExecution } from '@/services/execution/executor'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -192,11 +194,15 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const task = await startWorkgroupTask(
+    const task = await startExecution(
       deps.db,
       actor,
-      existing.id,
-      parsed.data,
+      {
+        kind: 'workgroup',
+        refId: existing.id,
+        invoker: { type: 'user' },
+        payload: parsed.data,
+      },
       buildStartTaskDeps(
         deps.db,
         deps.configPath,

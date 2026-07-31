@@ -24,13 +24,13 @@
 // tasks (fusion) are NEVER candidates: their dirs feed the approval flow
 // (RFC-165 R3-4).
 
-import { and, eq, inArray, isNull, lt, ne, or } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, isNull, lt, ne, or } from 'drizzle-orm'
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { TERMINAL_TASK_STATUSES, isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { Config, TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { taskRepos, tasks } from '@/db/schema'
+import { nodeRuns, taskRepos, tasks } from '@/db/schema'
 import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { runOpencodeStoreOrphanGc } from '@/services/opencodeStoreRecovery'
@@ -111,7 +111,10 @@ export async function runWorktreeGc(
         inArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
         // RFC-165 (R3-4): internal (fusion) workspaces feed the approval flow
         // and are never GC candidates. Already-pruned rows have nothing to do.
+        // RFC-242 §4.4: 'inherited' children do not own their workspace (it is
+        // the parent's call-node iso) — nothing for THIS gc to prune.
         ne(tasks.spaceKind, 'internal'),
+        ne(tasks.spaceKind, 'inherited'),
         isNull(tasks.workspacePrunedAt),
       ),
     )
@@ -374,6 +377,25 @@ export async function runWorktreeOrphanGc(
  * stale GC deletes it" race. Tasks whose workspace is already tombstoned
  * (`workspace_pruned_at` set) delete freely — no revival is possible.
  */
+/** RFC-242 §4.4 — does any call row of `taskId` reference a child task that is
+ *  non-terminal or interrupted (revivable)? Such a child's canonical workspace
+ *  lives inside this task's iso container — the container must survive it. */
+async function hasLiveOrRevivableChild(db: DbClient, taskId: string): Promise<boolean> {
+  const callRows = await db
+    .select({ childTaskId: nodeRuns.childTaskId })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, taskId), isNotNull(nodeRuns.childTaskId)))
+  const childIds = [...new Set(callRows.flatMap((r) => (r.childTaskId ? [r.childTaskId] : [])))]
+  if (childIds.length === 0) return false
+  const children = await db
+    .select({ status: tasks.status })
+    .from(tasks)
+    .where(inArray(tasks.id, childIds))
+  return children.some(
+    (c) => !isTerminalTaskStatus(c.status as TaskStatus) || c.status === 'interrupted',
+  )
+}
+
 export async function runIsoWorktreeGc(
   db: DbClient,
   appHome: string,
@@ -403,6 +425,14 @@ export async function runIsoWorktreeGc(
     if (t !== undefined && !isTerminalTaskStatus(t.status as TaskStatus)) {
       continue
     }
+    // RFC-242 §4.4 (design-gate P0-2): two revivability carve-outs.
+    // ① 'interrupted' is terminal BUT revivable — a daemon restart flips
+    //    parent AND child to interrupted together; reaping the parent's iso
+    //    here would delete the child's canonical workspace before resume.
+    if (t !== undefined && t.status === 'interrupted') continue
+    // ② A call row whose child task is non-terminal or interrupted still
+    //    anchors a live/revivable child INSIDE this container.
+    if (t !== undefined && (await hasLiveOrRevivableChild(db, taskId))) continue
     const containerRoot = join(isoRoot, taskId)
     // RFC-165 (D1): row-anchored + revivable → take the transient claim.
     // Tombstoned or row-less containers delete without ceremony.
