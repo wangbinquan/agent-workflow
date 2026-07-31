@@ -39,7 +39,16 @@ export async function assertWorkflowLaunchable(
   }
   assertNotBuiltin('workflow', wf)
   await assertWorkflowExecutionPolicy(db, wf.definition, defaultRuntime)
-  const validation = validateWorkflowDef(wf.definition, await loadWorkflowValidationContext(db))
+  // RFC-242 实现门 P1-2: launch is the ENFORCEMENT point of the call-node
+  // rules — thread the candidate so 4f/4g (upload inputs / output collisions /
+  // unwired inputs / cycles) actually gate here, not only in unit tests.
+  const validation = validateWorkflowDef(
+    wf.definition,
+    await loadWorkflowValidationContext(db, {
+      definition: wf.definition,
+      currentWorkflow: { id: wf.id, name: wf.name },
+    }),
+  )
   if (!validation.ok) {
     const errors = validation.issues.filter((issue) => (issue.severity ?? 'error') === 'error')
     throw new ValidationError(

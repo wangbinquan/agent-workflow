@@ -11,8 +11,10 @@
 // name fails the LAUNCH closed with id-only payloads (design-gate P2-6 —
 // names are display data the launcher may not be entitled to echo).
 import { asc, inArray } from 'drizzle-orm'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { workflows, workgroups as workgroupsTable } from '@/db/schema'
+import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
 import { ValidationError } from '@/util/errors'
 import {
@@ -140,40 +142,85 @@ export function childClosureSubset(
 export async function freezeCallClosure(
   db: DbClient,
   root: { id: string; definition: WorkflowDefinition },
+  /**
+   * 实现门 P0-1 —— the LAUNCH actor. Resolution is id-cache-first (the node's
+   * `workflowId`, accepted only when that row still bears the selector name —
+   * resolveNodeAgent's id-first precedent) and the name fallback is confined
+   * to rows VISIBLE to this actor (oldest visible ULID wins). Without the
+   * fence, a same-name row invisible to the launcher could be bound, frozen
+   * into the task snapshot and EXECUTED — a cross-visibility leak the
+   * save-time name gate cannot see (it only proves ≥1 visible match exists).
+   */
+  actor: Actor,
 ): Promise<string | null> {
   const rootRefs = collectWorkflowCallRefs(root.definition)
   const rootWorkgroupRefs = collectWorkgroupCallRefs(root.definition)
   if (rootRefs.length === 0 && rootWorkgroupRefs.length === 0) return null
+  const workflowGrants = await listGrantedResourceIds(db, actor, 'workflow')
+  const workgroupGrants = await listGrantedResourceIds(db, actor, 'workgroup')
 
   const resolved = new Map<string, FrozenWorkflowRef>()
+  // id-cache hints per selector name (last write wins across the walk; the
+  // cache is advisory — a hint whose row no longer bears the name falls back
+  // to the visible-name path).
+  const idHintByName = new Map<string, string>()
+  for (const r of rootRefs)
+    if (r.workflowId !== undefined) idHintByName.set(r.workflowName, r.workflowId)
   let frontier = [...new Set(rootRefs.map((r) => r.workflowName))]
   while (frontier.length > 0) {
     const missing = frontier.filter((name) => !resolved.has(name))
     if (missing.length === 0) break
     // `workflows.name` is NOT unique (YAML import collisions live behind a
-    // dialog). Freeze-time has no dialog — resolution must be DETERMINISTIC:
-    // oldest row (lowest ULID) wins, first-wins per name. The validator's
-    // closure loader follows the same rule so editor preview and launch bind
-    // the same row.
+    // dialog). Freeze-time has no dialog — resolution is id-cache-first, then
+    // DETERMINISTIC among the rows the launch actor CAN SEE: oldest visible
+    // ULID wins (实现门 P0-1).
+    const hintIds = [
+      ...new Set(missing.flatMap((n) => (idHintByName.has(n) ? [idHintByName.get(n)!] : []))),
+    ]
+    const hintRows =
+      hintIds.length === 0
+        ? []
+        : await db
+            .select({
+              id: workflows.id,
+              name: workflows.name,
+              version: workflows.version,
+              definition: workflows.definition,
+              ownerUserId: workflows.ownerUserId,
+              visibility: workflows.visibility,
+            })
+            .from(workflows)
+            .where(inArray(workflows.id, hintIds))
+    const hintById = new Map(hintRows.map((r) => [r.id, r]))
     const rows = await db
       .select({
         id: workflows.id,
         name: workflows.name,
         version: workflows.version,
         definition: workflows.definition,
+        ownerUserId: workflows.ownerUserId,
+        visibility: workflows.visibility,
       })
       .from(workflows)
       .where(inArray(workflows.name, missing))
       .orderBy(asc(workflows.id))
     const byName = new Map<string, (typeof rows)[number]>()
-    for (const r of rows) if (!byName.has(r.name)) byName.set(r.name, r)
+    for (const r of rows) {
+      if (!isVisibleRow(actor, r, workflowGrants)) continue
+      if (!byName.has(r.name)) byName.set(r.name, r)
+    }
     const nextFrontier: string[] = []
     for (const name of missing) {
-      const row = byName.get(name)
+      const hintId = idHintByName.get(name)
+      const hinted = hintId !== undefined ? hintById.get(hintId) : undefined
+      const row =
+        hinted !== undefined && hinted.name === name && isVisibleRow(actor, hinted, workflowGrants)
+          ? hinted
+          : byName.get(name)
       if (row === undefined) {
         throw new ValidationError(
           'workflow-call-ref-missing',
-          `a call node references workflow '${name}' which does not exist`,
+          `a call node references workflow '${name}' which does not exist or is not visible to the launcher`,
         )
       }
       let definition: WorkflowDefinition
@@ -188,7 +235,12 @@ export async function freezeCallClosure(
         )
       }
       resolved.set(name, { id: row.id, version: row.version, definition })
-      for (const ref of collectWorkflowCallRefs(definition)) nextFrontier.push(ref.workflowName)
+      for (const ref of collectWorkflowCallRefs(definition)) {
+        nextFrontier.push(ref.workflowName)
+        if (ref.workflowId !== undefined && !idHintByName.has(ref.workflowName)) {
+          idHintByName.set(ref.workflowName, ref.workflowId)
+        }
+      }
     }
     frontier = [...new Set(nextFrontier)]
   }
@@ -228,18 +280,23 @@ export async function freezeCallClosure(
         id: workgroupsTable.id,
         name: workgroupsTable.name,
         version: workgroupsTable.version,
+        ownerUserId: workgroupsTable.ownerUserId,
+        visibility: workgroupsTable.visibility,
       })
       .from(workgroupsTable)
       .where(inArray(workgroupsTable.name, [...workgroupNames]))
       .orderBy(asc(workgroupsTable.id))
     const rowByName = new Map<string, (typeof rows)[number]>()
-    for (const r of rows) if (!rowByName.has(r.name)) rowByName.set(r.name, r)
+    for (const r of rows) {
+      if (!isVisibleRow(actor, r, workgroupGrants)) continue
+      if (!rowByName.has(r.name)) rowByName.set(r.name, r)
+    }
     for (const name of workgroupNames) {
       const row = rowByName.get(name)
       if (row === undefined) {
         throw new ValidationError(
           'workflow-call-ref-missing',
-          `a call node references workgroup '${name}' which does not exist`,
+          `a call node references workgroup '${name}' which does not exist or is not visible to the launcher`,
         )
       }
       const group = await getWorkgroupById(db, row.id)

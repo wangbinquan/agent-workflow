@@ -2743,6 +2743,8 @@ async function resolveMergeConflicts(
 // =============================================================================
 
 const CALL_CHILD_OBSERVE_MS = 5_000
+/** Bounded wait proving a child's daemon-restart interrupt is this process going down. */
+const SHUTDOWN_CONFIRM_MS = 2_000
 
 interface CallLedger {
   callHumanWaitMs: number
@@ -2839,21 +2841,31 @@ async function runCallWorkflowNode(
   let adoptedChildTaskId: string | null = null
   let launchedChildId: string | null = null
   let liveIso: IsoHandle | null = null
+  // RFC-242-LOCK:adoption-no-mint-begin — this block re-attaches; minting
+  // here would abandonSupersededMergeStates the child's canonical iso.
+  // 实现门 P1-5：领养判据按「这一代是否已收尾」而不是单看 running/interrupted。
+  // daemon shutdown 的收尾会把调用行落成 canceled（RFC-095 revival 语义下它
+  // 仍是可复活行），只认 running/interrupted 会漏掉领养 → 重新 mint → 同一
+  // 父任务下重复发起第二个子任务（rfc242-call-workflow 恢复矩阵实测）。
+  // done/failed/exhausted 是已收尾代：retry 会 mint 新行，那条行 childTaskId
+  // 为空，自然走下面的发起分支。
+  const ADOPTABLE_CALL_ROW_STATUSES = new Set(['pending', 'running', 'interrupted', 'canceled'])
   if (
     latestExisting !== undefined &&
     latestExisting.childTaskId !== null &&
-    (latestExisting.status === 'running' || latestExisting.status === 'interrupted')
+    ADOPTABLE_CALL_ROW_STATUSES.has(latestExisting.status)
   ) {
     nodeRunId = latestExisting.id
     adoptedChildTaskId = latestExisting.childTaskId
-    if (latestExisting.status === 'interrupted') {
-      // Wrapper-revive escape hatch (RFC-053/095 precedent): the interrupted
-      // call row RESUMES in place — never a fresh mint (see header).
+    if (latestExisting.status !== 'running') {
+      // Wrapper-revive escape hatch (RFC-053/095 precedent): the parked /
+      // reaped / shutdown-canceled call row RESUMES in place — never a fresh
+      // mint (see header).
       await setNodeRunStatus({
         db,
         nodeRunId,
         to: 'running',
-        allowedFrom: ['interrupted'],
+        allowedFrom: ['pending', 'interrupted', 'canceled'],
         allowTerminal: true,
         reason: 'call-adoption',
       })
@@ -2863,6 +2875,7 @@ async function runCallWorkflowNode(
       nodeId: node.id,
       childTaskId: adoptedChildTaskId,
     })
+    // RFC-242-LOCK:adoption-no-mint-end
   } else {
     const pendingExisting = sameNodeIterRuns.find(
       (r) => r.status === 'pending' && r.parentNodeRunId === null,
@@ -3045,7 +3058,15 @@ async function runCallWorkflowNode(
   // ---- W: await the child's terminal state, keeping the §4.5 human-wait
   // ledger current (observed at CALL_CHILD_OBSERVE_MS granularity) and
   // re-driving an interrupted child once per observation (design §4.2 ②).
-  let ledger = parseCallLedger(latestExisting?.wrapperProgressJson ?? null)
+  // 实现门 P2-1 — the human-wait ledger belongs to ONE invocation generation:
+  // adopt the persisted account only when re-attaching the SAME row; a fresh
+  // mint (retry supersession) starts at zero, otherwise the superseded
+  // generation's wait would be deducted twice (callRowHumanWait sums ALL call
+  // rows of the task).
+  let ledger =
+    adoptedChildTaskId !== null
+      ? parseCallLedger(latestExisting?.wrapperProgressJson ?? null)
+      : parseCallLedger(null)
   const persistLedger = async (): Promise<void> => {
     await db
       .update(nodeRuns)
@@ -3124,6 +3145,15 @@ async function runCallWorkflowNode(
       }
     }
     outcomeStatus = watched.status
+    // 实现门 P1-5 实测缺陷：daemon 关停时子任务先落 `interrupted`，watch 因此
+    // 以 terminal（而非 aborted）返回；若继续按终态映射，就会把「整机关停」
+    // 误判成「子任务不可恢复」→ 调用行 failed → 父任务 failed（而非可恢复的
+    // interrupted），resume 时该行已终态、不再被领养 → 重复发起第二个子任务、
+    // 旧子任务沦为孤儿。关停期一律不收尾：保持行 running，交给 boot reap 翻
+    // interrupted，由 resume 的 adoption 续上（design §4.2）。
+    if (isShutdownAbort(opts.signal)) {
+      return { kind: 'canceled', summary: 'daemon shutdown', message: 'signal aborted' }
+    }
     if (outcomeStatus === 'interrupted' && !resumeAttempted) {
       // §4.2 ② — parent-driven child recovery (independent of autoResumeOnBoot).
       resumeAttempted = true
@@ -3133,7 +3163,7 @@ async function runCallWorkflowNode(
         continue
       } catch {
         const fresh = await db
-          .select({ status: tasks.status })
+          .select({ status: tasks.status, errorSummary: tasks.errorSummary })
           .from(tasks)
           .where(eq(tasks.id, childTaskId))
           .get()
@@ -3142,6 +3172,30 @@ async function runCallWorkflowNode(
           !(TERMINAL_TASK_STATUSES as readonly string[]).includes(fresh.status)
         ) {
           continue // someone else revived it — re-attach
+        }
+        // 实现门 P1-5 加固：`task-active` means ANOTHER in-process driver still
+        // owns the child (a shutdown still draining, a concurrent resume). Its
+        // row may read terminal for the moment, but the owner is the authority
+        // — re-attach and let the watch settle instead of declaring failure.
+        const { isTaskActive } = await import('@/services/task')
+        if (isTaskActive(childTaskId)) {
+          await Bun.sleep(200)
+          resumeAttempted = false
+          continue
+        }
+        // 实现门 P1-5 实测缺陷（时序无关判据）：a child interrupted by the
+        // DAEMON RESTART is not "unrecoverable" — the process is going down and
+        // the parent's own row is about to be reaped to interrupted too.
+        // Writing a terminal failure here would (a) fail the parent instead of
+        // leaving it resumable and (b) drop the call row out of the adoption
+        // set, so the next resume launches a SECOND child and orphans the
+        // first. `opts.signal` is NOT a reliable discriminator — the child's
+        // abort can land before the parent controller fires.
+        if (
+          fresh?.errorSummary === DAEMON_RESTART_ERROR_SUMMARY &&
+          (await awaitShutdownAbort(opts.signal, SHUTDOWN_CONFIRM_MS))
+        ) {
+          return { kind: 'canceled', summary: 'daemon shutdown', message: 'signal aborted' }
         }
         await failCallRow(
           db,
@@ -3192,6 +3246,14 @@ async function runCallWorkflowNode(
     }
   }
   if (outcome.status === 'interrupted') {
+    // 实现门 P1-5（同一判据，终态映射侧）：daemon-restart 中断留给 boot reap
+    // + adoption，绝不写成 call 行的终态失败。
+    if (
+      outcome.error?.summary === DAEMON_RESTART_ERROR_SUMMARY &&
+      (await awaitShutdownAbort(opts.signal, SHUTDOWN_CONFIRM_MS))
+    ) {
+      return { kind: 'canceled', summary: 'daemon shutdown', message: 'signal aborted' }
+    }
     await failCallRow(
       db,
       taskId,
@@ -3226,7 +3288,24 @@ async function runCallWorkflowNode(
   // ---- F: copy the child's projected outputs onto the call row (idempotent —
   // the merge_state-staged replay re-enters here). archiveJson rides along so
   // forcedPortPathsForTask keeps covering child-produced gitignored files.
-  for (const [portName, v] of Object.entries(outcome.outputs)) {
+  // 实现门 P1-3 — a call-workgroup node declares EXACTLY one output (`result`).
+  // dw-mode children project raw workflow ports; collapse them into `result`
+  // (lexicographic `## name` sections, design §6.3) so the declared port is
+  // never silently empty.
+  const projectedOutputs: typeof outcome.outputs = isWorkgroupCall
+    ? Object.hasOwn(outcome.outputs, 'result')
+      ? { result: outcome.outputs.result! }
+      : {
+          result: {
+            content: Object.entries(outcome.outputs)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([name, v]) => `## ${name}\n${v.content}`)
+              .join('\n\n'),
+            kind: 'text',
+          },
+        }
+    : outcome.outputs
+  for (const [portName, v] of Object.entries(projectedOutputs)) {
     await db
       .insert(nodeRunOutputs)
       .values({
@@ -3384,6 +3463,36 @@ async function failCallRow(
 function isShutdownAbort(signal: AbortSignal | undefined): boolean {
   if (signal === undefined || !signal.aborted) return false
   return signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+}
+
+/**
+ * RFC-242 实现门 P1-5 — confirm that a child's `daemon-restart` interrupt is
+ * THIS daemon going down, by waiting (bounded) for the parent's own shutdown
+ * abort. The child's abort routinely lands first (abortAllActiveTasks iterates
+ * one map), so an instantaneous `signal.aborted` check is not a discriminator.
+ * Confirmed ⇒ the caller yields without writing a terminal row and the
+ * parent's ordinary shutdown path (`cancelTaskRow`) records `interrupted`,
+ * keeping the whole tree resumable. NOT confirmed (e.g. a stale interrupt
+ * inherited from a previous crash that resume could not clear) ⇒ the caller
+ * keeps its genuine `child-interrupted` failure.
+ */
+async function awaitShutdownAbort(
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (signal === undefined) return false
+  if (signal.aborted) return signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+  return await new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve(false)
+    }, timeoutMs)
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      resolve(signal.reason === DAEMON_SHUTDOWN_ABORT_REASON)
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 /** Child StartTaskDeps assembled from the parent scheduler's runtime options. */

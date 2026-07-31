@@ -25,6 +25,12 @@ import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/sc
 import { runTask } from '../src/services/scheduler'
 import type { StartTaskDeps } from '../src/services/task'
 import { freezeCallClosure } from '../src/services/execution/closure'
+import { buildActor } from '../src/auth/actor'
+
+const closureActor = buildActor({
+  user: { id: 'u-closure', username: 'closure', displayName: 'c', role: 'admin', status: 'active' },
+  source: 'daemon',
+})
 import { runGit } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
@@ -422,6 +428,305 @@ describe('RFC-242 e2e — 生命周期', () => {
   }, 30000)
 })
 
+describe('RFC-242 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 4·9）', () => {
+  let h: Harness
+  beforeEach(async () => {
+    h = await buildHarness()
+  })
+  afterEach(() => h?.cleanup())
+
+  function loopParentDefinition(): WorkflowDefinition {
+    return {
+      $schema_version: 4,
+      inputs: [{ kind: 'text', key: 'req', label: 'r' }],
+      nodes: [
+        { id: 'pin', kind: 'input', inputKey: 'req' } as WorkflowNode,
+        {
+          id: 'lp',
+          kind: 'wrapper-loop',
+          nodeIds: ['call1'],
+          maxIterations: 2,
+          continueOnMaxIterations: true,
+          exitCondition: {
+            kind: 'port-equals',
+            nodeId: 'call1',
+            portName: 'report',
+            value: 'NEVER',
+          },
+          outputBindings: [{ name: 'final', bind: { nodeId: 'call1', portName: 'report' } }],
+        } as unknown as WorkflowNode,
+        { id: 'call1', kind: 'call-workflow', workflowName: 'child-wf' } as WorkflowNode,
+      ],
+      edges: [
+        {
+          id: 'pe1',
+          source: { nodeId: 'pin', portName: 'req' },
+          target: { nodeId: 'call1', portName: 'req' },
+          boundary: 'wrapper-input',
+        },
+      ],
+    } as unknown as WorkflowDefinition
+  }
+
+  test('loop 内 call：每轮一个独立子任务（验收 4）', async () => {
+    const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
+    writeFileSync(
+      h.planFile,
+      JSON.stringify({ worker: { output: { out: 'ROUND OUTPUT', echo: 'x' } } }),
+    )
+    const seeded = await seedParentTask(h, workerId)
+    // 换成 loop 形态快照（复用已入库的 child-wf 与闭包）。
+    await h.db
+      .update(tasks)
+      .set({ workflowSnapshot: JSON.stringify(loopParentDefinition()) })
+      .where(eq(tasks.id, seeded.parentTaskId))
+    await runTask({
+      db: h.db,
+      taskId: seeded.parentTaskId,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', h.mockPath],
+    })
+    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, seeded.parentTaskId)))[0]!
+    expect(parent.status).toBe('done')
+    const children = await h.db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.parentTaskId, seeded.parentTaskId))
+    expect(children.length).toBe(2) // 每轮一个
+    expect(children.every((c) => c.status === 'done')).toBe(true)
+  }, 40000)
+
+  test('git wrapper 内 call：子任务写盘计入 git_diff 窗口（验收 9 / 开放问题 4）', async () => {
+    const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
+    writeFileSync(
+      h.planFile,
+      JSON.stringify({
+        worker: {
+          files: { 'src/from-child.txt': 'CHILD IN GIT WRAPPER' },
+          output: { out: 'ok', echo: 'x' },
+        },
+      }),
+    )
+    const seeded = await seedParentTask(h, workerId)
+    const gitDef = {
+      $schema_version: 4,
+      inputs: [{ kind: 'text', key: 'req', label: 'r' }],
+      nodes: [
+        { id: 'pin', kind: 'input', inputKey: 'req' },
+        { id: 'gw', kind: 'wrapper-git', nodeIds: ['call1'] },
+        { id: 'call1', kind: 'call-workflow', workflowName: 'child-wf' },
+        {
+          id: 'pout',
+          kind: 'output',
+          ports: [{ name: 'diff', bind: { nodeId: 'gw', portName: 'git_diff' } }],
+        },
+      ],
+      edges: [
+        {
+          id: 'pe1',
+          source: { nodeId: 'pin', portName: 'req' },
+          target: { nodeId: 'call1', portName: 'req' },
+          boundary: 'wrapper-input',
+        },
+      ],
+    } as unknown as WorkflowDefinition
+    await h.db
+      .update(tasks)
+      .set({ workflowSnapshot: JSON.stringify(gitDef) })
+      .where(eq(tasks.id, seeded.parentTaskId))
+    await runTask({
+      db: h.db,
+      taskId: seeded.parentTaskId,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', h.mockPath],
+    })
+    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, seeded.parentTaskId)))[0]!
+    expect(parent.status).toBe('done')
+    const gwRow = (
+      await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, seeded.parentTaskId), eq(nodeRuns.nodeId, 'gw')))
+    ).find((r) => r.parentNodeRunId === null)!
+    const gwOutputs = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, gwRow.id))
+    expect(gwOutputs.find((o) => o.portName === 'git_diff')?.content ?? '').toContain(
+      'src/from-child.txt',
+    )
+  }, 40000)
+
+  test('daemon 重启恢复：shutdown 打断 → reap → resume 领养同一子任务收尾（P1-5 分支 1/2）', async () => {
+    const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
+    writeFileSync(h.planFile, JSON.stringify({ worker: { hangMs: 120000 } }))
+    const { parentTaskId } = await seedParentTask(h, workerId)
+    const { DAEMON_SHUTDOWN_ABORT_REASON } = await import('@agent-workflow/shared')
+    const { abortAllActiveTasks, isTaskActive, resumeTask } = await import('../src/services/task')
+    // 父任务在生产里由 startTask 注册 activeTasks 并持 signal；直连 runTask 的
+    // 测试必须自带 controller，否则「关停」只打到子任务，父侧判据无从谈起。
+    const parentCtrl = new AbortController()
+    const running = runTask({
+      db: h.db,
+      taskId: parentTaskId,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', h.mockPath],
+      signal: parentCtrl.signal,
+    })
+    let childId: string | null = null
+    for (let i = 0; i < 200 && childId === null; i++) {
+      const rows = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+      if (rows[0]?.status === 'running') childId = rows[0].id
+      else await Bun.sleep(50)
+    }
+    expect(childId).not.toBeNull()
+    abortAllActiveTasks(DAEMON_SHUTDOWN_ABORT_REASON)
+    parentCtrl.abort(DAEMON_SHUTDOWN_ABORT_REASON)
+    await running
+    // 忠实模拟「daemon 重启后的新进程」：等本进程的驱动全部收尾，activeTasks
+    // 清空（真实重启后该表天然为空）。不等的话子任务仍被本进程持有，
+    // resume 会以 task-active 冲突——那是测试假象，不是恢复语义。
+    for (let i = 0; i < 200; i++) {
+      const rows = await h.db.select().from(tasks)
+      if (!rows.some((t) => isTaskActive(t.id))) break
+      await Bun.sleep(50)
+    }
+    // boot reap（孤儿收割）把父子与残行翻 interrupted。
+    const { reapOrphanRuns } = await import('../src/services/orphans')
+    await reapOrphanRuns(h.db)
+    // 修好计划再恢复。
+    writeFileSync(h.planFile, JSON.stringify({ worker: { output: { out: 'RESUMED', echo: 'x' } } }))
+    await resumeTask(h.db, parentTaskId, {
+      db: h.db,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', h.mockPath],
+      awaitScheduler: true,
+    } as unknown as StartTaskDeps)
+    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    expect(parent.status).toBe('done')
+    const children = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+    expect(children.length).toBe(1) // 领养同一子任务，绝不重复发起
+    expect(children[0]!.id).toBe(childId!)
+    expect(children[0]!.status).toBe('done')
+    // 调用行原地复用（retryIndex 不递增）——领养绝不 mint 新代，否则
+    // abandonSupersededMergeStates 会作废子任务 canonical 所在的 iso 世代。
+    const callRows = (
+      await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'call1')))
+    ).filter((r) => r.parentNodeRunId === null)
+    expect(callRows.length).toBe(1)
+    expect(callRows[0]!.retryIndex).toBe(0)
+    expect(callRows[0]!.mergeState).toBe('merged')
+  }, 40000)
+
+  test('R-merged 分段：子已 done+已合并、调用行 interrupted → 领养只补 F 与终态（P1-5 分支 3）', async () => {
+    const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
+    void workerId
+    const { parentTaskId, childWorkflowId } = await seedParentTask(h, workerId)
+    // 构造崩溃后现场：子任务 done + 输出行在库；调用行 interrupted、
+    // mergeState='merged'（合并早已完成）；父任务 pending 等待重驱。
+    const childId = ulid()
+    await h.db.insert(tasks).values({
+      id: childId,
+      name: 'seeded-child',
+      workflowId: childWorkflowId,
+      workflowSnapshot: JSON.stringify(childDefinition(workerId)),
+      repoPath: h.repoPath,
+      worktreePath: h.worktreePath,
+      baseBranch: 'main',
+      branch: `agent-workflow/${childId}`,
+      status: 'done',
+      inputs: JSON.stringify({ req: 'go' }),
+      startedAt: Date.now() - 60_000,
+      finishedAt: Date.now() - 30_000,
+      parentTaskId,
+      invocationDepth: 1,
+      spaceKind: 'inherited',
+    })
+    const childOut = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: childOut,
+      taskId: childId,
+      nodeId: 'cout',
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 60_000,
+      finishedAt: Date.now() - 30_000,
+    })
+    await h.db.insert(nodeRunOutputs).values({
+      nodeRunId: childOut,
+      portName: 'report',
+      content: 'MERGED ALREADY',
+      kind: 'text',
+    })
+    const callRun = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: callRun,
+      taskId: parentTaskId,
+      nodeId: 'call1',
+      status: 'interrupted',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 60_000,
+      childTaskId: childId,
+      mergeState: 'merged',
+    })
+    await h.db.update(tasks).set({ parentNodeRunId: callRun }).where(eq(tasks.id, childId))
+    await runTask({
+      db: h.db,
+      taskId: parentTaskId,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', h.mockPath],
+    })
+    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    expect(parent.status).toBe('done')
+    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, callRun)))[0]!
+    expect(row.status).toBe('done')
+    const outs = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, callRun))
+    expect(outs.find((o) => o.portName === 'report')?.content).toBe('MERGED ALREADY')
+    // 领养复用同一行：无新代 call 行。
+    const callRows = await h.db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'call1')))
+    expect(callRows.length).toBe(1)
+  })
+
+  test('child-deleted：调用行 interrupted 指向不存在子任务 → failed(child-deleted)（P1-5 分支 4）', async () => {
+    const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
+    const { parentTaskId } = await seedParentTask(h, workerId)
+    const callRun = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: callRun,
+      taskId: parentTaskId,
+      nodeId: 'call1',
+      status: 'interrupted',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 60_000,
+      childTaskId: ulid(), // 已被删除的子任务
+      mergeState: null,
+    })
+    await runTask({
+      db: h.db,
+      taskId: parentTaskId,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', h.mockPath],
+    })
+    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, callRun)))[0]!
+    expect(row.status).toBe('failed')
+    expect(row.failureCode).toBe('child-deleted')
+    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    expect(parent.status).toBe('failed')
+  })
+})
+
 describe('RFC-242 §3.1 — freezeCallClosure', () => {
   test('无 call 节点 → null；缺引用/环 → 专码', async () => {
     const db = createInMemoryDb(MIGRATIONS)
@@ -431,7 +736,7 @@ describe('RFC-242 §3.1 — freezeCallClosure', () => {
       nodes: [],
       edges: [],
     } as WorkflowDefinition
-    expect(await freezeCallClosure(db, { id: 'W0', definition: plain })).toBeNull()
+    expect(await freezeCallClosure(db, { id: 'W0', definition: plain }, closureActor)).toBeNull()
 
     const callsMissing = {
       $schema_version: 4,
@@ -440,7 +745,7 @@ describe('RFC-242 §3.1 — freezeCallClosure', () => {
       edges: [],
     } as unknown as WorkflowDefinition
     await expect(
-      freezeCallClosure(db, { id: 'W0', definition: callsMissing }),
+      freezeCallClosure(db, { id: 'W0', definition: callsMissing }, closureActor),
     ).rejects.toMatchObject({ code: 'workflow-call-ref-missing' })
 
     // A(root) → B → A 环：B 在库里、其定义回指 root 的 name——环检测按冻结图。
@@ -460,10 +765,11 @@ describe('RFC-242 §3.1 — freezeCallClosure', () => {
       edges: [],
     }
     await db.insert(workflows).values({ id: idA, name: 'wf-a', definition: JSON.stringify(defA) })
-    const err = await freezeCallClosure(db, {
-      id: idA,
-      definition: defA as unknown as WorkflowDefinition,
-    }).then(
+    const err = await freezeCallClosure(
+      db,
+      { id: idA, definition: defA as unknown as WorkflowDefinition },
+      closureActor,
+    ).then(
       () => null,
       (e: unknown) => e as { code: string; detail?: { cycle?: string[] } },
     )
@@ -481,7 +787,9 @@ describe('RFC-242 §3.1 — freezeCallClosure', () => {
       nodes: [{ id: 'cw', kind: 'call-workgroup', workgroupName: 'ghost-wg', goalTemplate: 'g' }],
       edges: [],
     } as unknown as WorkflowDefinition
-    await expect(freezeCallClosure(db, { id: 'W0', definition: defWithWg })).rejects.toMatchObject({
+    await expect(
+      freezeCallClosure(db, { id: 'W0', definition: defWithWg }, closureActor),
+    ).rejects.toMatchObject({
       code: 'workflow-call-ref-missing',
     })
     const { createAgent } = await import('../src/services/agent')
@@ -519,7 +827,7 @@ describe('RFC-242 §3.1 — freezeCallClosure', () => {
       } as Parameters<typeof createWorkgroup>[1],
       { ownerUserId: actor.user.id, actor },
     )
-    const json = await freezeCallClosure(db, { id: 'W0', definition: defWithWg })
+    const json = await freezeCallClosure(db, { id: 'W0', definition: defWithWg }, closureActor)
     expect(json).not.toBeNull()
     const parsed = JSON.parse(json!) as {
       workgroups: Record<string, { id: string; group: { members: unknown[] } }>

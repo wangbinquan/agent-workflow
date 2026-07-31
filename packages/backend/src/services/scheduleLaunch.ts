@@ -34,14 +34,19 @@ export function buildScheduleLaunch(
   containmentCoordinator?: ContainmentCoordinator,
 ): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
-    const deps = buildStartTaskDeps(
-      db,
-      configPath,
-      ownerUserId,
-      resolveOpencodeCmd(configPath),
-      undefined,
-      containmentCoordinator,
-    )
+    const deps = {
+      ...buildStartTaskDeps(
+        db,
+        configPath,
+        ownerUserId,
+        resolveOpencodeCmd(configPath),
+        undefined,
+        containmentCoordinator,
+      ),
+      // RFC-242 实现门 P0-1: scheduled fires resolve call-node closures inside
+      // the rebuilt owner actor's visibility (same fence as a manual launch).
+      launchActor: actor,
+    }
     const invoker = { type: 'scheduled', scheduledTaskId } as const
     if (kind === 'agent') {
       const p = payload as unknown as ScheduledAgentPayload

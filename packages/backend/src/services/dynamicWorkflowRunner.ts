@@ -110,7 +110,7 @@ export function extractJsonPayload(text: string): string {
 
 /**
  * RFC-242 §5.4(7): a workgroup is a closure LEAF — a generated definition may
- * never contain call-workflow nodes, or execution would bypass the launch-time
+ * never contain call nodes (either kind), or execution would bypass the launch-time
  * frozen reference closure and the cross-definition cycle gate. Today's token
  * schema cannot even express one (`dwGeneratedToWorkflowDef` stamps every node
  * `agent-single`), so this is a belt-and-braces admission guard that survives
@@ -119,10 +119,10 @@ export function extractJsonPayload(text: string): string {
  */
 export function dwCallNodeRejections(def: WorkflowDefinition): string[] {
   return def.nodes
-    .filter((n) => n.kind === 'call-workflow')
+    .filter((n) => n.kind === 'call-workflow' || n.kind === 'call-workgroup')
     .map(
       (n) =>
-        `${DW_VALIDATION_CODES.nodeKindForbidden}: node '${n.id}' is 'call-workflow' — a generated workflow cannot call other workflows; use only the member#N agents listed in the pool`,
+        `${DW_VALIDATION_CODES.nodeKindForbidden}: node '${n.id}' is a call node — a generated workflow cannot call other workflows or workgroups; use only the member#N agents listed in the pool`,
     )
 }
 

@@ -652,6 +652,62 @@ export async function cleanupCreatedWorktree(
   }
 }
 
+// -----------------------------------------------------------------------------
+// RFC-242 §7.2 — `.git/worktrees` registry mutex.
+//
+// `git worktree add/remove/prune` all mutate the COMMON git dir's worktrees
+// registry. Cross-task concurrency on one repo predates RFC-242 (two tasks on
+// the same cached repo already race), but call nodes multiply the surface:
+// the parent's node isos AND every child task's node isos register into the
+// SAME common dir (a child's canonical is a linked worktree of it). The
+// 2026-07-27 half-initialized-commondir incident is the in-repo proof that
+// this race corrupts for real. One daemon-level keyed mutex serializes the
+// short registry-mutating critical sections; the key is the RESOLVED
+// --git-common-dir so linked worktrees (and iso-of-iso) collapse onto their
+// root repo. Lock order: callers may hold a task writeSem — registry lock
+// nests strictly INSIDE it (writeSem ≺ registrySem) and never the reverse.
+// -----------------------------------------------------------------------------
+
+const worktreeRegistryLocks = new Map<string, { chain: Promise<void> }>()
+const commonGitDirCache = new Map<string, string>()
+
+async function resolveCommonGitDirKey(anyWorktreePath: string): Promise<string> {
+  const cached = commonGitDirCache.get(anyWorktreePath)
+  if (cached !== undefined) return cached
+  let key = anyWorktreePath
+  try {
+    const r = await runGit(anyWorktreePath, [
+      'rev-parse',
+      '--path-format=absolute',
+      '--git-common-dir',
+    ])
+    const dir = r.stdout.trim()
+    if (dir.length > 0) key = dir
+  } catch {
+    // pre-init / non-repo paths fall back to the literal path — still a
+    // consistent (if over-narrow) key; git itself will surface the real error.
+  }
+  commonGitDirCache.set(anyWorktreePath, key)
+  return key
+}
+
+/** Serialize a worktree-registry-mutating operation for one common git dir. */
+export async function withWorktreeRegistryLock<T>(
+  anyWorktreePath: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const key = await resolveCommonGitDirKey(anyWorktreePath)
+  const entry = worktreeRegistryLocks.get(key) ?? { chain: Promise.resolve() }
+  worktreeRegistryLocks.set(key, entry)
+  const run = entry.chain.then(fn, fn)
+  // keep the chain healthy regardless of fn's outcome
+  entry.chain = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
 export async function createWorktree(opts: CreateWorktreeOptions): Promise<CreatedWorktree> {
   await requireGitRepo(opts.repoPath)
   // RFC-066: caller can override the auto-composed path (multi-repo branches
@@ -703,14 +759,9 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
   } else {
     const branchRef = `refs/heads/${branch}`
     const branchBefore = await readLocalBranchRef(opts.repoPath, branchRef)
-    const add = await runGit(opts.repoPath, [
-      'worktree',
-      'add',
-      '-b',
-      branch,
-      worktreePath,
-      baseCommit,
-    ])
+    const add = await withWorktreeRegistryLock(opts.repoPath, () =>
+      runGit(opts.repoPath, ['worktree', 'add', '-b', branch, worktreePath, baseCommit]),
+    )
     if (add.exitCode !== 0) {
       throw new DomainError(
         'worktree-add-failed',
@@ -1976,7 +2027,10 @@ export interface RemoveWorktreeOptions {
 export async function removeWorktree(opts: RemoveWorktreeOptions): Promise<void> {
   const args = ['worktree', 'remove', opts.worktreePath]
   if (opts.force) args.push('--force')
-  const r = await runGit(opts.repoPath, args, { timeoutMs: opts.timeoutMs })
+  // RFC-242 §7.2 registry mutex (see withWorktreeRegistryLock).
+  const r = await withWorktreeRegistryLock(opts.repoPath, () =>
+    runGit(opts.repoPath, args, { timeoutMs: opts.timeoutMs }),
+  )
   if (r.exitCode !== 0) {
     throw new DomainError(
       'worktree-remove-failed',
@@ -2161,13 +2215,11 @@ export interface CreateIsolatedWorktreeOptions {
  * shows nothing. Then submodules are synced (D20) so submodule working dirs match.
  */
 export async function createIsolatedWorktree(opts: CreateIsolatedWorktreeOptions): Promise<void> {
-  const add = await runGit(opts.repoPath, [
-    'worktree',
-    'add',
-    '--detach',
-    opts.isoPath,
-    opts.baseSnapshotCommit,
-  ])
+  // RFC-242 §7.2: the registry write serializes on the common git dir —
+  // parent tasks, child tasks and iso-of-iso all collapse onto one key.
+  const add = await withWorktreeRegistryLock(opts.repoPath, () =>
+    runGit(opts.repoPath, ['worktree', 'add', '--detach', opts.isoPath, opts.baseSnapshotCommit]),
+  )
   if (add.exitCode !== 0) {
     throw new DomainError(
       'iso-worktree-add-failed',

@@ -168,7 +168,12 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     }
     const revision = assertExactWorkflowRevision(workflow, parsed.data, 'workflow-validation-stale')
     await deps.workflowExactOperationHook?.({ operation: 'validate', revision })
-    const context = await loadWorkflowValidationContext(deps.db)
+    // RFC-242 实现门 P1-2: thread the candidate so the 4f/4g call-node rules
+    // (closure loader + workgroup existence) actually run on the editor face.
+    const context = await loadWorkflowValidationContext(deps.db, {
+      definition: workflow.definition,
+      currentWorkflow: { id: workflow.id, name: workflow.name },
+    })
     const result = validateWorkflowDefinition(workflow.definition, context)
     return c.json({
       revision,
@@ -222,7 +227,11 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       { type: 'workgroup', names: addedWorkgroupNames, domain: 'name' },
     ])
 
-    const context = await loadWorkflowValidationContext(deps.db)
+    // RFC-242 实现门 P1-2 — draft face gets the same candidate threading.
+    const context = await loadWorkflowValidationContext(deps.db, {
+      definition: parsed.data.definition,
+      currentWorkflow: { id: workflow.id, name: workflow.name },
+    })
     const result = validateWorkflowDefinition(parsed.data.definition, context)
     return c.json({
       candidateHash,

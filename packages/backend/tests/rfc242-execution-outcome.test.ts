@@ -13,6 +13,7 @@
 //   4. Cross-output-node port collisions are deterministic (node-id order,
 //      later wins) and surfaced as warnings.
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
@@ -283,6 +284,44 @@ describe('RFC-242 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
       result: { content: 'free-collab converged — 2 task(s) done', kind: 'text' },
     })
     expect(outcome.warnings).toEqual([])
+  })
+})
+
+describe('RFC-242 §6.3 — dw 子任务的 result 折叠（实现门 P1-3）', () => {
+  test('多端口按 name 字典序折叠成单一 result；已有 result 端口原样保留', async () => {
+    // 折叠发生在调度器 F 步（call-workgroup 臂）；这里锁定其纯函数形态：
+    // 投影产出多端口 → 折叠为 `## name` 分节，顺序与端口名字典序一致。
+    const collapse = (outputs: Record<string, { content: string; kind: string | null }>) =>
+      Object.hasOwn(outputs, 'result')
+        ? { result: outputs.result! }
+        : {
+            result: {
+              content: Object.entries(outputs)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([name, v]) => `## ${name}\n${v.content}`)
+                .join('\n\n'),
+              kind: 'text',
+            },
+          }
+    expect(
+      collapse({
+        zeta: { content: 'Z', kind: 'text' },
+        alpha: { content: 'A', kind: 'text' },
+      }),
+    ).toEqual({ result: { content: '## alpha\nA\n\n## zeta\nZ', kind: 'text' } })
+    expect(collapse({ result: { content: 'R', kind: 'text' } })).toEqual({
+      result: { content: 'R', kind: 'text' },
+    })
+  })
+
+  test('源码锁：调度器 F 步对 call-workgroup 执行折叠', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    expect(src).toContain('const projectedOutputs')
+    expect(src).toContain('isWorkgroupCall')
+    expect(src).toContain('localeCompare')
   })
 })
 

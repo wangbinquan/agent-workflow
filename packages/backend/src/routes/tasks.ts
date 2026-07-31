@@ -144,9 +144,15 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     // badges) or the parent_id children query. Landed together with the
     // nesting UI so awaiting children are never invisible-but-unreachable.
     const includeChildren = c.req.query('include_children')
-    if (includeChildren !== 'true') filters.topLevelOnly = true
     const parentId = c.req.query('parent_id') ?? c.req.query('parentId')
-    if (parentId !== undefined && parentId !== '') filters.parentTaskId = parentId
+    if (parentId !== undefined && parentId !== '') {
+      // 实现门 P1-1: a children query IS a child listing — combining it with
+      // the top-level default would AND `parent_task_id IS NULL` with
+      // `parent_task_id = X` (always empty).
+      filters.parentTaskId = parentId
+    } else if (includeChildren !== 'true') {
+      filters.topLevelOnly = true
+    }
     const limit = c.req.query('limit')
     if (limit !== undefined) {
       const n = Number(limit)
@@ -255,14 +261,19 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     // referenced agent/skill/mcp/plugin closure is implicitly authorized. Invisible
     // and missing produce the identical 404; built-in → 403. Shared gate — the
     // multipart path and scheduled-task fires enforce the exact same policy.
-    const startDeps = buildStartTaskDeps(
-      deps.db,
-      deps.configPath,
-      actor.user.id,
-      opencodeCmd,
-      deps.secretBox,
-      deps.containmentCoordinator,
-    )
+    const startDeps = {
+      ...buildStartTaskDeps(
+        deps.db,
+        deps.configPath,
+        actor.user.id,
+        opencodeCmd,
+        deps.secretBox,
+        deps.containmentCoordinator,
+      ),
+      // RFC-242 实现门 P0-1: closure freezing resolves call-node names inside
+      // THIS actor's visibility.
+      launchActor: actor,
+    }
     await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId, startDeps.defaultRuntime)
     const task = await startExecution(
       deps.db,
@@ -1009,6 +1020,7 @@ async function handleMultipartTaskStart(
         // RFC-103 T2: multipart (upload) start must thread runtime config too.
         ...launchRuntime,
         materializedSpace: space,
+        launchActor: actor,
       },
     )
     return task
@@ -1060,6 +1072,7 @@ async function handleMultipartTaskStart(
       // RFC-103 T2: multipart (upload) start must thread runtime config too.
       ...launchRuntime,
       materializedSpace: space,
+      launchActor: actor,
     },
   )
 }

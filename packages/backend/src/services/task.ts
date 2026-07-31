@@ -110,7 +110,31 @@ import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRou
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
 import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
+import type { Actor } from '@/auth/actor'
 import { freezeCallClosure } from '@/services/execution/closure'
+import { collectExecutionRefs } from '@agent-workflow/shared'
+
+/**
+ * RFC-242 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
+ * fence on the name fallback). Call-node-free definitions skip everything
+ * (byte-compat). A call-bearing launch WITHOUT an actor (internal faces never
+ * produce one today) fails closed rather than freezing blind.
+ */
+async function freezeClosureForLaunch(
+  deps: StartTaskDeps,
+  workflowId: string,
+  definition: WorkflowDefinition,
+): Promise<string | null> {
+  const refs = collectExecutionRefs(definition)
+  if (refs.workflowNames.size === 0 && refs.workgroupNames.size === 0) return null
+  if (deps.launchActor === undefined) {
+    throw new ValidationError(
+      'workflow-call-ref-missing',
+      'call-node launches require an authenticated launch actor for closure resolution',
+    )
+  }
+  return freezeCallClosure(deps.db, { id: workflowId, definition }, deps.launchActor)
+}
 
 const log = createLogger('task')
 
@@ -218,6 +242,8 @@ export interface StartTaskDeps {
    * agent.runtime=null node fell back to opencode). Omitted → scheduler default.
    */
   defaultRuntime?: string
+  /** RFC-242 实现门 P0-1: the launch actor — closure name-resolution visibility fence. */
+  launchActor?: Actor
   /** RFC-242 §3.2: daemon-wide active-child-task cap (config.maxActiveChildTasks). */
   maxActiveChildTasks?: number
   /** RFC-242 §3.2: invocation-chain depth ceiling (config.maxInvocationDepth). */
@@ -1558,7 +1584,12 @@ async function startTaskImpl(
   // and refuse to launch if it surfaces any error-severity issues. Warnings pass.
   const validation = validateWorkflowDef(
     effectiveDefinition,
-    await buildWorkflowValidationContext(deps.db),
+    // RFC-242 实现门 P1-2 — the service funnel enforces 4f/4g on the exact
+    // definition it will execute (frozen child included).
+    await buildWorkflowValidationContext(deps.db, {
+      definition: effectiveDefinition,
+      currentWorkflow: { id: workflow.id, name: workflow.name },
+    }),
   )
   if (!validation.ok) {
     const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')
@@ -1575,7 +1606,7 @@ async function startTaskImpl(
   const frozenClosureJson =
     deps.callLaunch !== undefined
       ? null // this arm never reads it — the INSERT takes deps.callLaunch.refClosureJson
-      : await freezeCallClosure(deps.db, { id: workflow.id, definition: effectiveDefinition })
+      : await freezeClosureForLaunch(deps, workflow.id, effectiveDefinition)
 
   // Browser-side required/picker gates are advisory: JSON API callers and
   // scheduled fires reach this service directly. Validate the packed map here
@@ -1778,7 +1809,6 @@ async function startTaskImpl(
           workflowId: workflow.id,
           workflowSnapshot:
             deps.callLaunch?.frozenSnapshotJson ??
-            null ??
             deps.workgroupLaunch?.snapshotJson ??
             deps.agentLaunch?.snapshotJson ??
             JSON.stringify(workflow.definition),
@@ -2945,6 +2975,26 @@ export async function retryNode(
   }
   // RFC-242 §4.2 — child-side gate (same rule as resumeKick).
   await assertChildTaskDrivable(db, task, 'retry')
+  // RFC-242 D12 / 实现门 P2-2 — retrying a CALL ROW supersedes its invocation:
+  // a still-live child (parent failed while the child kept running) must be
+  // cascade-canceled BEFORE the ownership CAS mints the next generation, or
+  // two children could write the same inherited workspace.
+  {
+    const targetRun = await db
+      .select({ childTaskId: nodeRuns.childTaskId })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, nodeRunId))
+      .get()
+    const childId = targetRun?.childTaskId ?? null
+    if (childId !== null) {
+      try {
+        await cancelTask(db, childId, { cascadeFromParent: true })
+      } catch (err) {
+        if (!(err instanceof ConflictError) && !(err instanceof NotFoundError)) throw err
+        // already terminal / deleted — nothing to supersede
+      }
+    }
+  }
   // RFC-099 audit (2026-07-15): validate the nodeRunId belongs to THIS task
   // BEFORE the CAS below. The CAS clears finishedAt/errorSummary/errorMessage/
   // failedNodeId and flips the task to pending, so a bogus / cross-task

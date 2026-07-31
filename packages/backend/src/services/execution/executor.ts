@@ -39,7 +39,7 @@ function depsForInvoker(deps: StartTaskDeps, req: StartExecutionRequest): StartT
     ) {
       throw new ValidationError(
         'execution-invoker-unsupported',
-        'node-invoked executions require a matching callLaunch deps payload (call-workgroup lands with RFC-242 PR-4)',
+        'node-invoked executions require a matching callLaunch deps payload (workgroup calls ride startWorkgroupTaskFromFrozen — design §6.3)',
       )
     }
     return deps

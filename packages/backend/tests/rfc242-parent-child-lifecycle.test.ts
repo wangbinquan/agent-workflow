@@ -19,7 +19,7 @@
 //   7. runIsoWorktreeGc P0-2 tightening: interrupted parents and parents with
 //      live/interrupted children keep their iso containers.
 import { describe, expect, test } from 'bun:test'
-import { mkdirSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -322,6 +322,39 @@ describe('RFC-242 §4.5 — duration limit human-wait deduction', () => {
     expect(result.canceled).not.toContain(parentA)
     expect(result.canceled).not.toContain(parentB)
     expect(result.canceled).toContain(parentC)
+  })
+})
+
+describe('RFC-242 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1）', () => {
+  test('新代调用行台账归零；仅领养同一行才继承', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const wf = await seedWorkflow(db)
+    const parent = await seedTask(db, wf, {
+      status: 'running',
+      maxDurationMs: 60_000,
+      runningMs: 100_000,
+      runningSince: null,
+    })
+    // 旧代（已终态、带 70s 等待台账）+ 新代（领养前应为空账）。
+    const child1 = await seedTask(db, wf, { status: 'canceled', parentTaskId: parent })
+    await seedRun(db, parent, 'call1', {
+      status: 'failed',
+      childTaskId: child1,
+      wrapperProgressJson: JSON.stringify({ callHumanWaitMs: 70_000 }),
+    })
+    const child2 = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
+    await seedRun(db, parent, 'call1', { childTaskId: child2, retryIndex: 1 })
+    // 台账合计只应来自真实存在的账，不因换代翻倍：70s（旧代）+0（新代）。
+    const { parseCallHumanWait } = await import('../src/services/limits')
+    expect(parseCallHumanWait(JSON.stringify({ callHumanWaitMs: 70_000 }), Date.now())).toBe(70_000)
+    expect(parseCallHumanWait(null, Date.now())).toBe(0)
+    // 源码锁：新 mint 的行不得继承被取代行的台账（否则同段等待计两次）。
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    expect(src).toContain('adoptedChildTaskId !== null')
+    expect(src).toContain('parseCallLedger(null)')
   })
 })
 

@@ -11,7 +11,14 @@ import { ResourceVisibilitySchema } from './resourceAcl'
 
 // RFC-242 (§5.5): 'workflow' joins for call-workflow name selectors; the
 // 'workgroup' member of the design pair lands with PR-4's call-workgroup kind.
-export const IMPORT_REF_TYPES = ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup'] as const
+export const IMPORT_REF_TYPES = [
+  'agent',
+  'skill',
+  'mcp',
+  'plugin',
+  'workflow',
+  'workgroup',
+] as const
 export const ImportRefTypeSchema = z.enum(IMPORT_REF_TYPES)
 export type ImportRefType = z.infer<typeof ImportRefTypeSchema>
 

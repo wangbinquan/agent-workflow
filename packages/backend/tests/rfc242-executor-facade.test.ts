@@ -67,6 +67,21 @@ describe('RFC-242 T2 — launch call faces route through the executor (source lo
     expect(text).toContain('startWorkgroupTask(')
   })
 
+  test('call 分支纪律：不持 globalSem；adoption 区零 mint（实现门 P2-4 源锁）', () => {
+    const text = srcText('services/scheduler.ts')
+    const fnStart = text.indexOf('async function runCallWorkflowNode')
+    const fnEnd = text.indexOf('async function failCallRow')
+    expect(fnStart).toBeGreaterThan(0)
+    expect(fnEnd).toBeGreaterThan(fnStart)
+    const body = text.slice(fnStart, fnEnd)
+    expect(body).not.toContain('globalSem.acquire')
+    const aStart = body.indexOf('RFC-242-LOCK:adoption-no-mint-begin')
+    const aEnd = body.indexOf('RFC-242-LOCK:adoption-no-mint-end')
+    expect(aStart).toBeGreaterThan(0)
+    expect(aEnd).toBeGreaterThan(aStart)
+    expect(body.slice(aStart, aEnd)).not.toContain('mintNodeRun(')
+  })
+
   test('scheduler consumes the engine registry (no inline dispatch left)', () => {
     const text = srcText('services/scheduler.ts')
     expect(text).toContain('resolveTaskEngine')
