@@ -196,7 +196,7 @@ describe('RFC-199 strict workflow validation targets', () => {
     // fanout containment, self/graph cycles, ref-missing ×2, upload, output
     // collision, input unwired). Every new site must still carry a strict
     // navigation target.
-    expect(emissions).toHaveLength(113)
+    expect(emissions).toHaveLength(116)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

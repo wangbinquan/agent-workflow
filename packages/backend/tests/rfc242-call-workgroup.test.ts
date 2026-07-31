@@ -88,7 +88,13 @@ async function buildHarness(): Promise<Harness> {
 }
 
 const actor = buildActor({
-  user: { id: 'u-rfc242', username: 'rfc242', displayName: 'rfc242', role: 'admin', status: 'active' },
+  user: {
+    id: 'u-rfc242',
+    username: 'rfc242',
+    displayName: 'rfc242',
+    role: 'admin',
+    status: 'active',
+  },
   source: 'daemon',
 })
 
@@ -162,9 +168,7 @@ describe('RFC-242 e2e — call-workgroup 全链', () => {
             },
           },
         ],
-        'wg-writer': [
-          { output: { wg_result: JSON.stringify({ summary: 'wrote alpha.txt' }) } },
-        ],
+        'wg-writer': [{ output: { wg_result: JSON.stringify({ summary: 'wrote alpha.txt' }) } }],
       }),
     )
 
