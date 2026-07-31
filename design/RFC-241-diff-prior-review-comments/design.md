@@ -1,4 +1,4 @@
-# RFC-241 — 技术设计（v5,阶段 2 设计门一轮修订后）
+# RFC-241 — 技术设计（v6,阶段 2 聚焦复核修订后;门收口)
 
 ## 数据流(零后端改动,已实证)
 
@@ -129,16 +129,21 @@ del 视图 = 旧行逐字;repairMergedTableRuns 重建保序)、fence/inline cod
 
 **破例清单与处置**(设计门一轮 P1×3):
 
-1. **含 ins 的表格**(RFC-240 配对表 / merged 重建表):行相似度贪心与
-   「未配对 DEL 前置」会重排旧行顺序;降级 cell 的垫片空格 / 色块 /
-   奇偶垫片会改写字面。**处置:锚定命中若落在「自身包含 `.diff-ins`
-   的 `<table>`」内 → 视为不可靠,回退未定位**(匹配后校验 mark 祖先,
-   命中即 unwrap;纯 DEL 整表〔不含 ins〕保序保字面,不回退)。
+1. **word 档配对表 / merged 重建表**:行相似度贪心与「未配对 DEL 前置」
+   会重排旧行顺序;降级 cell 的垫片空格 / 色块 / 奇偶垫片会改写字面。
+   **处置(聚焦复核修订):word 档下,锚定命中落在满足以下任一条件的
+   `<table>` 内即回退未定位**——(a) 表含 `.diff-ins`;(b) 表含
+   `.diff-del` **且**存在不属任何 diff 标记的 context 文本(纯删减词级
+   配对表无 ins、但重排照发,仅此条件能拦)。纯 DEL 原子化整表(全部
+   文本在 del 内、无 context)保序保字面,锚定保留。**分档生效**:此
+   校验仅 word 档必要;line/block 档表内为行级/块级保序(同键表行级
+   增删),不校验、不白丢锚定。
 2. **word 档行内数学式**:正文 math 无原子化保护,marker 落入
    `inlineMath.value` 被 `resolveMarkedString` 解析成**仅新版**,新公式
    文本(含 KaTeX HTML 输出)不带 `.diff-ins` 包装、会污染文本流。
-   **处置:排除选择器扩为列表 `['.diff-ins', '.katex']`**——KaTeX 输出
-   整树不入流(旧公式本就被剥离,新公式随排除消失,流中两版皆无):
+   **处置:排除选择器扩为列表 `['.diff-ins', '.katex', '.katex-error']`**
+   (聚焦复核:ParseError 形态的类名是 `katex-error`,`.katex` 不匹配)
+   ——KaTeX 输出整树不入流(旧公式本就被剥离,新公式随排除消失):
    锚在公式上的意见自然未定位回退,公式之后的锚不受计数污染。
    line/block 档 math 整体进 diffMark,天然安全。
 3. **出现次数不足 / 次序漂移**:现 `wrapAnchorsInDom` 对次数不足 clamp
@@ -149,10 +154,12 @@ del 视图 = 旧行逐字;repairMergedTableRuns 重建保序)、fence/inline cod
    strict + 表格校验双闸后,残余错位风险限于「同 selectedText 在
    非表格区域因删除减少出现次」一类,strict 直接回退,不错钉。
 
-**不变量守卫测试**:属性测试锁成立面——对无表格/无 math 的文档对,
-`extractMarkedView(buildMergedMarkdown(L, R, 'word'), 'del') === L`
-(word/line 两档;`extractMarkedView` 已导出);破例清单各配一条回退
-用例。
+**不变量守卫测试**(聚焦复核修订——逐字节等式因 ins 行的 context
+前缀/空行、removed 原子 pad、拆行修复插行而恒不成立):属性测试改
+**归一化比较**——对无表格/无 math 的文档对,
+`tokenizeForWordDiff(extractMarkedView(buildMergedMarkdown(L, R, g), 'del'))`
+过滤空白 token 后的序列 === `tokenizeForWordDiff(L)` 同滤序列
+(word/line 两档);破例清单各配一条回退用例。
 
 ### 机制(v5:参数化契约,撤回「签名不变」措辞——设计门一轮 P1)
 
@@ -179,8 +186,8 @@ del 视图 = 旧行逐字;repairMergedTableRuns 重建保序)、fence/inline cod
 4. **接线**:diff 主列包 `.review-diff-doc` ref;effect 在 merged 渲染 /
    意见集变化后:unwrap(prior class)→ wrap(exclude
    `['.diff-ins', '.katex']`、markClass `prior-comment-anchor`、strict)
-   → **表格校验**:mark 若 `closest('table')` 存在且该表含 `.diff-ins`
-   → unwrap 该意见全部 mark 并归入未定位。
+   → **表格校验(仅 word 档)**:mark 的 `closest('table')` 满足语义
+   基础破例 1 的 (a)/(b) 条件 → unwrap 该意见全部 mark 并归入未定位。
 5. **「未定位」分节**:置于侧栏标题之下、锚定气泡之前;内部排序沿用
    `compareReviewComments`;分节标题 i18n(「未能定位到原文 · N 条」)。
 6. **样式**(设计门一轮 P2):`mark.prior-comment-anchor` 显式
@@ -209,6 +216,12 @@ del 视图 = 旧行逐字;repairMergedTableRuns 重建保序)、fence/inline cod
 
 ### 设计门记录(阶段 2)
 
+- 聚焦复核(2026-07-31,同代理,`NEEDS_REVISION`→折入本 v6 后收口;
+  P1 2/3/4 全闭、P1-1 主体闭合):纯删减词级配对表残缝(无 ins、重排照
+  发)→ 表校验条件扩为「含 ins,或含 del 且 context 共存」且分档生效
+  (line/block 不校验);`.katex-error` 入排除列表;属性测试改归一化
+  token 序列比较(逐字节等式因 context 前缀/pad/拆行恒不成立)。评审
+  结论:折入后无需再评,可进实现,实现门按测 9/12 修订稿验证。
 - 一轮(2026-07-31,独立子代理续评,`NEEDS_REVISION`,4 P1 + 2 P2):
   「逐字等于/精确匹配」与实码三处相悖(配对表重排+垫片改写、word math
   单版本化污染、clamp+源码域计数)→ 保序近似 + 破例清单 + strict 匹配
