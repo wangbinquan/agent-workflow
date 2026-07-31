@@ -885,12 +885,18 @@ function intraTableDiff(
     // 残留才需要整 cell 降级。
     if (AUTOLINK_RE.test(o.atom) || AUTOLINK_RE.test(n.atom))
       return degradedCell(lead, o.atom, n.atom, tail)
-    if (o.tokens.length > CELL_MAX_TOKENS || n.tokens.length > CELL_MAX_TOKENS)
+    // 规模守卫按**全量 token**计（实现门 P1 修正）：contentTokens 过滤了
+    // 空白与纯标点，但 diffArrays 的真实成本恰由全量 token 驱动——两侧
+    // 纯标点的巨型 cell（如两万个中文顿号）内容 token 恒 0，会绕过守卫
+    // 与预算直入全量 LCS（实测 71s 冻结）。内容 token 仍专用于相似度。
+    const da = tokenizeForWordDiff(o.atom)
+    const db = tokenizeForWordDiff(n.atom)
+    if (da.length > CELL_MAX_TOKENS || db.length > CELL_MAX_TOKENS)
       return degradedCell(lead, o.atom, n.atom, tail)
-    if (budgetUsed + o.tokens.length * n.tokens.length > CELL_DIFF_BUDGET)
+    if (budgetUsed + da.length * db.length > CELL_DIFF_BUDGET)
       return degradedCell(lead, o.atom, n.atom, tail)
-    budgetUsed += o.tokens.length * n.tokens.length
-    const raw = diffArrays<string>(tokenizeForWordDiff(o.atom), tokenizeForWordDiff(n.atom))
+    budgetUsed += da.length * db.length
+    const raw = diffArrays<string>(da, db)
     const joined = raw.map((c) => ({
       ...c,
       value: (c.value as unknown as string[]).join(''),
@@ -1077,6 +1083,10 @@ function restoreAtoms(changes: Change[], lookup: Map<string, AtomEntry>): Change
 // ---------------------------------------------------------------------------
 
 let cachedSegmenter: Intl.Segmenter | null | undefined
+/** 仅测试：清空 Segmenter 缓存以强制 fallback tokenizer 路径。 */
+function __resetSegmenterCacheForTests(): void {
+  cachedSegmenter = undefined
+}
 function getWordSegmenter(): Intl.Segmenter | null {
   if (cachedSegmenter !== undefined) return cachedSegmenter
   const IntlNs = (globalThis as { Intl?: { Segmenter?: typeof Intl.Segmenter } }).Intl
@@ -1729,6 +1739,7 @@ export const _internal = {
   diceScore,
   computeWordChanges,
   EXTEND_CHAR_RE,
+  __resetSegmenterCacheForTests,
   repairBrokenLinePrefixes,
   extractMarkedView,
   isPrefixInterrupted,

@@ -11,7 +11,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { render } from '@testing-library/react'
 import { MarkdownDiffView } from '@/components/review/MarkdownDiffView'
-import { buildMergedMarkdown, MARKERS, _internal } from '@/lib/review/markdownDiff'
+import {
+  buildMergedMarkdown,
+  MARKERS,
+  tokenizeForWordDiff,
+  _internal,
+} from '@/lib/review/markdownDiff'
 
 const T = (rows: string[][]): string =>
   [
@@ -393,5 +398,224 @@ describe('RFC-240 §10-16 保护集、守卫与不变量', () => {
     // line 档保持行级 DEL 行 + INS 行相邻语义（非 cell 级内联）
     const rows = tables[0]?.querySelectorAll('tbody tr') ?? []
     expect(rows.length).toBe(3)
+  })
+})
+// 实现门（2026-07-31，独立子代理评审）P1-2 补测：设计 §测试策略点名必写
+// 但首版遗漏的 ~14 项——共享原语字素簇（全局生效改动）、四道规模守卫的
+// 功能行为（此前仅有源码序锁）、及 P1-1 纯标点绕过守卫的回归本体。
+// emoji / ZWJ / IVS 一律码点构造（字面不可见字符会被编辑链剥掉）。
+const IVS_A = '葛' + String.fromCodePoint(0xe0100)
+const IVS_B = '葛' + String.fromCodePoint(0xe0101)
+const THUMB_A = String.fromCodePoint(0x1f44d, 0x1f3fb)
+const THUMB_B = String.fromCodePoint(0x1f44d, 0x1f3fd)
+const ASTRONAUT = String.fromCodePoint(0x1f469, 0x200d, 0x1f680)
+
+describe('实现门补测：共享原语字素簇（全局生效）', () => {
+  test('IVS cell：变体选择符不与基字拆散，两侧整簇红绿', () => {
+    const { container } = rtl(T([['k', IVS_A, 'x']]), T([['k', IVS_B, 'x']]))
+    expect(container.querySelector('.diff-del')?.textContent).toBe(IVS_A)
+    expect(container.querySelector('.diff-ins')?.textContent).toBe(IVS_B)
+  })
+
+  test('正文 IVS 与 emoji modifier：整簇进变更区', () => {
+    const m = buildMergedMarkdown('前缀 ' + IVS_A + '\n', '前缀 ' + IVS_B + '\n', 'word')
+    expect(m).toContain(MARKERS.DEL_OPEN + IVS_A + MARKERS.DEL_CLOSE)
+    expect(m).toContain(MARKERS.INS_OPEN + IVS_B + MARKERS.INS_CLOSE)
+    const m2 = buildMergedMarkdown('赞 ' + THUMB_A + '\n', '赞 ' + THUMB_B + '\n', 'word')
+    expect(m2).toContain(MARKERS.DEL_OPEN + THUMB_A + MARKERS.DEL_CLOSE)
+    expect(m2).toContain(MARKERS.INS_OPEN + THUMB_B + MARKERS.INS_CLOSE)
+  })
+
+  test('fallback tokenizer（stub 无 Segmenter）：extend 黏合与 ZWJ 序列', () => {
+    const IntlRef = globalThis.Intl as unknown as { Segmenter?: unknown }
+    const orig = IntlRef.Segmenter
+    try {
+      delete IntlRef.Segmenter
+      _internal.__resetSegmenterCacheForTests()
+      expect(tokenizeForWordDiff(IVS_A + 'x')).toEqual([IVS_A, 'x'])
+      expect(tokenizeForWordDiff(THUMB_A)).toEqual([THUMB_A])
+      expect(tokenizeForWordDiff(ASTRONAUT)).toEqual([ASTRONAUT])
+    } finally {
+      IntlRef.Segmenter = orig as never
+      _internal.__resetSegmenterCacheForTests()
+    }
+  })
+})
+
+describe('实现门补测：规模守卫功能行为', () => {
+  const bigTable = (rows: number, edit: boolean): string => {
+    const body = Array.from(
+      { length: rows },
+      (_, i) => '| r' + i + ' | v' + i + (edit && i === 0 ? 'x' : '') + ' |',
+    )
+    return ['| a | b |', '| --- | --- |', ...body].join('\n') + '\n'
+  }
+
+  test('行数 >500 → 行级 LCS 之前整对回退（两张表）', () => {
+    const { container } = rtl(bigTable(501, false), bigTable(501, true))
+    expect(container.querySelectorAll('table').length).toBe(2)
+  })
+
+  test('run 候选 >50×50 → 该 run 整行 DEL/INS，不做配对', () => {
+    const mk = (p: string) =>
+      [
+        '| a | b |',
+        '| --- | --- |',
+        ...Array.from({ length: 51 }, (_, i) => '| ' + p + 'k' + i + ' | ' + p + 'v' + i + ' |'),
+      ].join('\n') + '\n'
+    const merged = buildMergedMarkdown(mk('老'), mk('新'), 'word')
+    for (const line of merged.split('\n')) {
+      expect(line.includes(MARKERS.DEL_OPEN) && line.includes(MARKERS.INS_OPEN)).toBe(false)
+    }
+  })
+
+  test('单 cell >500 全量 token → 整 cell 降级（含 P1 纯标点绕过回归）', () => {
+    const words = (n: number, w: string) => Array.from({ length: n }, (_, i) => w + i).join(' ')
+    // 首 cell 给足共享 token 让行配对成功（Dice≥0.5），大 cell 触发守卫
+    const merged = buildMergedMarkdown(
+      T([[words(600, 's'), words(501, 'a'), 'x']]),
+      T([[words(600, 's'), words(501, 'b'), 'x']]),
+      'word',
+    )
+    expect(merged).toContain(MARKERS.DEL_OPEN + ' ' + words(501, 'a') + ' ' + MARKERS.DEL_CLOSE)
+    // P1 回归本体：两侧纯标点巨型 cell（内容 token 恒 0）必须走降级而
+    // 不是全量 LCS——守卫按全量 token 计（修复前实测 71s）
+    const t0 = Date.now()
+    const mp = buildMergedMarkdown(
+      T([['same', '。'.repeat(2000), 'x']]),
+      T([['same', '、'.repeat(2000), 'x']]),
+      'word',
+    )
+    expect(Date.now() - t0).toBeLessThan(5000)
+    expect(mp).toContain(MARKERS.DEL_OPEN + ' ' + '。'.repeat(2000) + ' ' + MARKERS.DEL_CLOSE)
+  })
+
+  test('累计预算超限 → 后续 cell 整体降级、此前 cell 词级', () => {
+    const words = (n: number, w: string) => Array.from({ length: n }, (_, i) => w + i).join(' ')
+    const row = (fix: (c: number) => string) =>
+      Array.from({ length: 8 }, (_, c) => words(200, 'w' + c) + ' ' + fix(c)).join(' | ')
+    const head =
+      '| ' +
+      Array.from({ length: 8 }, (_, i) => 'h' + i).join(' | ') +
+      ' |\n|' +
+      ' --- |'.repeat(8) +
+      '\n'
+    const l = head + '| ' + row(() => 'xxx') + ' |\n'
+    const r = head + '| ' + row(() => 'yyy') + ' |\n'
+    const merged = buildMergedMarkdown(l, r, 'word')
+    // 首 cell 词级：del 为 xxx（无共享缀，token 完整替换）
+    expect(merged).toContain(MARKERS.DEL_OPEN + 'xxx' + MARKERS.DEL_CLOSE)
+    // 末 cell 已降级：del 段以垫片 + 该 cell 全文起始词 w70 开头
+    expect(merged).toContain(MARKERS.DEL_OPEN + ' w70')
+  })
+})
+
+describe('实现门补测：序列化、单射与保护集残项', () => {
+  test('尾奇数反斜杠 cell：闭合 pipe 前垫空格，内容不被改写', () => {
+    const l = '| k | tag |\n| --- | --- |\n| old | path\\ |\n'
+    const r = '| k | tag |\n| --- | --- |\n| new | path\\ |\n'
+    const { container } = rtl(l, r)
+    expect(container.querySelectorAll('thead th').length).toBe(2)
+    const tds = Array.from(container.querySelectorAll('td')).map((t) => t.textContent)
+    expect(tds).toContain('path\\')
+    expect(container.querySelector('.diff-del')?.textContent).toBe('old')
+    expect(container.querySelector('.diff-ins')?.textContent).toBe('new')
+  })
+
+  test('pair 键单射：(P, Q+R) 与 (P+Q, R) 不共用占位符', () => {
+    const alloc = new _internal.PlaceholderAllocator([''])
+    const ph1 = alloc.allocPair('p', 'q r', 'm1')
+    const ph2 = alloc.allocPair('p q', 'r', 'm2')
+    expect(ph1).not.toBeNull()
+    expect(ph2).not.toBeNull()
+    expect(ph1).not.toBe(ph2)
+  })
+
+  test('重排+编辑 run 的输出顺序：先未配对 DEL（旧序）后新序', () => {
+    const l = '| c |\n| --- |\n| 甲一二三 |\n| 乙四五六 |\n'
+    const r = '| c |\n| --- |\n| 乙四五六七 |\n| 全新内容行 |\n'
+    const merged = buildMergedMarkdown(l, r, 'word')
+    const lines = merged.split('\n')
+    const delIdx = lines.findIndex(
+      (x) => x.includes(MARKERS.DEL_OPEN) && !x.includes(MARKERS.INS_OPEN),
+    )
+    const pairIdx = lines.findIndex((x) => x.includes('乙四五六'))
+    const insIdx = lines.findIndex((x) => x.includes('全新内容行'))
+    expect(delIdx).toBeGreaterThan(1)
+    expect(pairIdx).toBeGreaterThan(delIdx)
+    expect(insIdx).toBeGreaterThan(pairIdx)
+  })
+
+  test('下划线 emphasis 降级 cell：两侧 em 保留且着色', () => {
+    // 首 cell 提供共享 token 保证行配对（否则走整行路径，非降级 cell 形态）
+    const { container } = rtl(
+      T([['shared words here', '_old_', 'x']]),
+      T([['shared words here', '_new_', 'x']]),
+    )
+    // 定界符是 context token（未变）→ 走词级路径且更优：em 完整包住
+    // 红绿 span（em .diff-del），而非降级形态（.diff-del em）
+    expect(container.querySelector('em .diff-del')?.textContent).toBe('old')
+    expect(container.querySelector('em .diff-ins')?.textContent).toBe('new')
+  })
+
+  test('autolink 残项：email / www. / 文本后随 URL 均降级红绿、无拼接 href', () => {
+    const cases: Array<[string, string]> = [
+      ['foo@old.example', 'foo@new.example'],
+      ['www.old.example', 'www.new.example'],
+      ['见 https://old.example 说明', '见 https://new.example 说明'],
+    ]
+    for (const [a, b] of cases) {
+      const { container } = rtl(T([['k', a, 'x']]), T([['k', b, 'x']]))
+      expect(container.querySelector('.diff-del')).not.toBeNull()
+      expect(container.querySelector('.diff-ins')).not.toBeNull()
+      for (const link of Array.from(container.querySelectorAll('a'))) {
+        const href = link.getAttribute('href') ?? ''
+        expect(href.includes('old') && href.includes('new')).toBe(false)
+      }
+    }
+  })
+
+  test('图片 cell：img 结构完整、src 各侧精确', () => {
+    const { container } = rtl(
+      T([['k', '![logo](old.png)', 'x']]),
+      T([['k', '![logo](new.png)', 'x']]),
+    )
+    expect(container.querySelector('.diff-del img')?.getAttribute('src')).toBe('old.png')
+    expect(container.querySelector('.diff-ins img')?.getAttribute('src')).toBe('new.png')
+  })
+
+  test('raw HTML / 实体 / 嵌套括号 URL 残留 → 整 cell 降级、红绿可见', () => {
+    const cases: Array<[string, string]> = [
+      ['<span data-x>v1</span>', '<span data-x>v2</span>'],
+      ['A &amp; B', 'A &amp; C'],
+      ['[l](https://a/(b))', '[l](https://a/(c))'],
+    ]
+    for (const [a, b] of cases) {
+      const { container } = rtl(T([['k', a, 'x']]), T([['k', b, 'x']]))
+      expect(container.querySelector('.diff-del')).not.toBeNull()
+      expect(container.querySelector('.diff-ins')).not.toBeNull()
+    }
+  })
+
+  test('code 内容以反斜杠结尾：span 完整、红旧绿新', () => {
+    const { container } = rtl(T([['k', '`x\\`', 'y']]), T([['k', '`z\\`', 'y']]))
+    expect(container.querySelector('.diff-del code')?.textContent).toBe('x\\')
+    expect(container.querySelector('.diff-ins code')?.textContent).toBe('z\\')
+  })
+
+  test('零 cell 裸 pipe 行新增 → 色块可见、表结构完好', () => {
+    const l = '| a |\n| --- |\n| 1 |\n'
+    const r = '| a |\n| --- |\n| 1 |\n|\n'
+    const { container } = rtl(l, r)
+    expect(container.querySelectorAll('table').length).toBe(1)
+    expect(container.querySelector('.diff-ins')).not.toBeNull()
+  })
+
+  test('表头与分隔符 cell 数不等 → 整对回退（del+ins 双侧完整呈现）', () => {
+    const l = '| a | b |\n| --- |\n| 1 | 2 |\n'
+    const r = '| a | b |\n| --- |\n| 1 | 9 |\n'
+    const merged = buildMergedMarkdown(l, r, 'word')
+    expect(merged.includes(MARKERS.DEL_OPEN)).toBe(true)
+    expect(merged.includes(MARKERS.INS_OPEN)).toBe(true)
   })
 })
