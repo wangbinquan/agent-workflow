@@ -56,6 +56,7 @@ function row(name: string, overrides: Partial<TaskListItem> = {}): TaskListItem 
     errorSummary: null,
     repoCount: 1,
     spaceKind: 'remote',
+    childCount: 0,
     ownerUserId: 'u1',
     owner: { id: 'u1', username: 'alice', displayName: 'Alice' },
     ...overrides,

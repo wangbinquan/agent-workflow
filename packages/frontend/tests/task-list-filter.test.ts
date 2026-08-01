@@ -70,6 +70,7 @@ describe('filterTaskRows', () => {
         ...row('owner-row'),
         ownerUserId: 'u1',
         owner: { id: 'u1', username: 'alice', displayName: 'Alice' },
+        childCount: 0,
       },
     ]
     const filtered = filterTaskRows(ownerRows, { subject: 'all', search: '' })

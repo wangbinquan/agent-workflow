@@ -57,6 +57,7 @@ function childRow(id: string, status: TaskListItem['status']): TaskListItem {
     errorSummary: null,
     repoCount: 1,
     spaceKind: 'remote',
+    childCount: 0,
     parentTaskId: 't_parent',
     invocationDepth: 1,
     ownerUserId: 'u1',

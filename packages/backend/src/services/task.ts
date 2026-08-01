@@ -3427,6 +3427,35 @@ export async function listTasks(
   return (await listTaskSummaryRows(db, filters)).map((row) => row.summary)
 }
 
+/**
+ * RFC-243 follow-up — direct visible child counts for one page of list rows.
+ *
+ * ONE grouped query for the whole page (never a per-row probe), and it reuses
+ * `taskVisibilityCondition` — the exact predicate the list itself ran under.
+ * That shared predicate is the point: it makes `childCount > 0` mean "expanding
+ * shows something" for THIS actor, so a child the viewer cannot see can never
+ * produce an arrow that opens onto an empty list.
+ */
+async function loadChildCounts(
+  db: DbClient,
+  parentIds: readonly string[],
+  visibility: ListTasksFilters['visibility'],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  if (parentIds.length === 0) return counts
+  const conditions: SQL<unknown>[] = [inArray(tasks.parentTaskId, [...parentIds])]
+  if (visibility) conditions.push(taskVisibilityCondition(db, visibility))
+  const rows = await db
+    .select({ parentTaskId: tasks.parentTaskId, n: count() })
+    .from(tasks)
+    .where(and(...conditions))
+    .groupBy(tasks.parentTaskId)
+  for (const row of rows) {
+    if (row.parentTaskId !== null) counts.set(row.parentTaskId, row.n)
+  }
+  return counts
+}
+
 /** RFC-232 — list-only owner projection over the canonical summary pipeline. */
 export async function listTaskItems(
   db: DbClient,
@@ -3437,10 +3466,16 @@ export async function listTaskItems(
     db,
     rows.map((row) => row.ownerUserId),
   )
+  const childCounts = await loadChildCounts(
+    db,
+    rows.map((row) => row.summary.id),
+    filters.visibility,
+  )
   return rows.map(({ summary, ownerUserId }) => ({
     ...summary,
     ownerUserId,
     owner: ownerUserId === null ? null : (owners.get(ownerUserId) ?? null),
+    childCount: childCounts.get(summary.id) ?? 0,
   }))
 }
 

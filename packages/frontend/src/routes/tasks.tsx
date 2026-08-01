@@ -16,12 +16,13 @@
 // RFC-243 PR-5 — child-task nesting. The backend defaults the list to
 // top-level rows (`parent_task_id IS NULL`); node-invoked child executions
 // surface two ways:
-//   - default scope: an expand arrow on running/awaiting/done rows lazily
-//     fetches `GET /api/tasks?parent_id=<id>` and nests the direct children
-//     under the parent row (indent +「子任务」badge). There is no per-row
-//     has-children signal, so the arrow is shown unconditionally on those
-//     statuses; an empty result renders one「无子任务」row and is remembered
-//     in component state (no re-probe on re-expand).
+//   - default scope: rows the server reports as having visible direct children
+//     (`childCount > 0`) carry an expand arrow that lazily fetches
+//     `GET /api/tasks?parent_id=<id>` and nests them under the parent row
+//     (indent +「子任务」badge). Rows without children carry no affordance at
+//     all. The「无子任务」row survives only as a race guard (children deleted
+//     between list and expand) and is remembered so a re-expand never
+//     re-probes.
 //   - 「含子任务」scope: the query adds `include_children=true` (flat), and
 //     child rows carry a parent-task link badge. When the parent itself is
 //     not visible to the viewer (design §8 — e.g. a workgroup human member
@@ -91,17 +92,17 @@ const SUBJECT_FILTERS: readonly TaskSubjectFilter[] = ['all', 'workflow', 'workg
 type TaskChildScope = 'top' | 'all'
 
 /**
- * RFC-243: statuses whose rows carry the always-on expand arrow. There is no
- * per-row has-children signal by design (no N+1 probing); these are the
- * states a call node's child execution can exist under (running parent,
- * parent parked on review/human, finished parent).
+ * RFC-243 follow-up: a row is expandable iff the server says it HAS visible
+ * direct children (`childCount`, one grouped query per page — see
+ * `loadChildCounts`). This replaced a status-based always-on arrow: statuses
+ * only bound where a child COULD exist, so every ordinary running/done task —
+ * the overwhelming majority, which never invoke a call node — carried an arrow
+ * that opened onto 「无子任务」. The count is computed under the list's own
+ * visibility predicate, so the arrow never promises rows this actor can't see.
  */
-const EXPANDABLE_STATUSES: ReadonlySet<TaskStatus> = new Set([
-  'running',
-  'awaiting_review',
-  'awaiting_human',
-  'done',
-])
+function hasVisibleChildren(row: TaskListItem): boolean {
+  return row.childCount > 0
+}
 
 /** Column count of the run-monitor table (child loading/empty rows span it). */
 const TASK_TABLE_COL_COUNT = 8
@@ -378,7 +379,7 @@ function TaskRowGroup(props: TaskRowGroupProps) {
   const { t } = useTranslation()
   // Expansion only exists in the nested (top-level) scope — the flat
   //「含子任务」listing already shows every child row.
-  const expandable = scope === 'top' && EXPANDABLE_STATUSES.has(row.status)
+  const expandable = scope === 'top' && hasVisibleChildren(row)
   const isExpanded = expandable && props.expanded.has(row.id)
   return (
     <Fragment>

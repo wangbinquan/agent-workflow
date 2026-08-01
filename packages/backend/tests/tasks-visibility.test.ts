@@ -169,7 +169,7 @@ describe('GET /api/tasks visibility filter', () => {
     expect(list.map((t) => t.id).sort()).toEqual([h.bobTaskId, h.systemTaskId].sort())
   })
 
-  test('default wire stays TaskSummary-only; owner projection is explicit opt-in', async () => {
+  test('default wire stays TaskSummary-only; list projection is explicit opt-in', async () => {
     const defaults = (await (await reqAs(h.app, h.aliceToken, '/api/tasks')).json()) as Array<
       Record<string, unknown>
     >
@@ -177,15 +177,24 @@ describe('GET /api/tasks visibility filter', () => {
     for (const row of defaults) {
       expect(row).not.toHaveProperty('ownerUserId')
       expect(row).not.toHaveProperty('owner')
+      // RFC-243 follow-up: childCount costs an extra grouped query, so it rides
+      // the LIST projection only — the default wire (shared with the WS task
+      // payloads) must stay a plain TaskSummary.
+      expect(row).not.toHaveProperty('childCount')
     }
 
     for (const enabled of ['true', '1']) {
       const rows = (await (
         await reqAs(h.app, h.aliceToken, `/api/tasks?include_owner=${enabled}`)
       ).json()) as Array<Record<string, unknown>>
-      expect(rows.map(({ owner: _owner, ownerUserId: _ownerUserId, ...row }) => row)).toEqual(
-        defaults,
-      )
+      // Stripping exactly the list-projection fields must recover the default
+      // wire byte-for-byte: opting in adds these and NOTHING else.
+      expect(
+        rows.map(
+          ({ owner: _owner, ownerUserId: _ownerUserId, childCount: _childCount, ...row }) => row,
+        ),
+      ).toEqual(defaults)
+      expect(rows.every((row) => typeof row['childCount'] === 'number')).toBe(true)
       const bob = rows.find((row) => row['id'] === h.bobTaskId)
       expect(bob?.['owner']).toEqual({
         id: expect.any(String),

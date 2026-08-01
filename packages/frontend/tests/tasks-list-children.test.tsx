@@ -1,14 +1,18 @@
 // RFC-243 PR-5 — /tasks child-task nesting locks.
 //
 //   1. The DEFAULT list request carries NO include_children param (the
-//      server's top-level filter is the contract); the expand arrow is
-//      always-on for running/awaiting/done rows and absent elsewhere (no
-//      per-row has-children probing).
+//      server's top-level filter is the contract); the expand arrow appears
+//      iff the row reports visible children (`childCount > 0`) and is absent
+//      otherwise. Status is NOT a gate — the RFC-243 follow-up replaced the
+//      status-based always-on arrow, which put a 「无子任务」 dead end on every
+//      ordinary running/done task that never invoked a call node.
 //   2. Expanding a parent lazily fetches `GET /api/tasks?parent_id=<id>` and
 //      nests the direct children under it (indent +「子任务」badge + status
 //      chip); collapsing removes them.
 //   3. An empty children result renders the「无子任务」row once and is
-//      REMEMBERED in component state — re-expanding must not re-fetch.
+//      REMEMBERED in component state — re-expanding must not re-fetch. Since
+//      (1) only offers the arrow when childCount > 0, this path is now the
+//      RACE guard: the children were deleted between list and expand.
 //   4. The「含子任务」scope toggle re-requests with include_children=true
 //      (flat) and child rows carry a parent-task LINK badge.
 //   5. When the parent is not visible (absent from the list AND the probe
@@ -60,6 +64,7 @@ function row(name: string, overrides: Partial<TaskListItem> = {}): TaskListItem 
     errorSummary: null,
     repoCount: 1,
     spaceKind: 'remote',
+    childCount: 0,
     ownerUserId: 'u1',
     owner: { id: 'u1', username: 'alice', displayName: 'Alice' },
     ...overrides,
@@ -151,13 +156,21 @@ async function renderPage(
 }
 
 describe('/tasks — child-task nesting (RFC-243 PR-5)', () => {
-  test('default request carries no include_children; arrows only on running/awaiting/done rows', async () => {
+  test('default request carries no include_children; arrows follow childCount, not status', async () => {
     const rec = installFetch({
       top: [
-        row('live', { status: 'running', finishedAt: null }),
-        row('parked', { status: 'awaiting_human', finishedAt: null }),
-        row('finished'),
-        row('boom', { status: 'failed', errorSummary: 'x' }),
+        // childCount > 0 → arrow, across every status the count can occur on.
+        row('live', { status: 'running', finishedAt: null, childCount: 1 }),
+        row('parked', { status: 'awaiting_human', finishedAt: null, childCount: 2 }),
+        row('finished', { childCount: 1 }),
+        // A FAILED parent still owns its children — status is not a gate. This
+        // row had no arrow under the old status set, hiding a real child.
+        row('boom', { status: 'failed', errorSummary: 'x', childCount: 1 }),
+        // childCount === 0 → NO affordance, even on the statuses that used to
+        // carry the always-on arrow. This is the regression this test exists
+        // for: ordinary tasks must not offer an expand that leads nowhere.
+        row('solo-running', { status: 'running', finishedAt: null }),
+        row('solo-done'),
         row('queued', { status: 'pending', finishedAt: null }),
       ],
     })
@@ -171,13 +184,15 @@ describe('/tasks — child-task nesting (RFC-243 PR-5)', () => {
     expect(screen.getByTestId('task-expand-t_live')).toBeTruthy()
     expect(screen.getByTestId('task-expand-t_parked')).toBeTruthy()
     expect(screen.getByTestId('task-expand-t_finished')).toBeTruthy()
-    expect(screen.queryByTestId('task-expand-t_boom')).toBeNull()
+    expect(screen.getByTestId('task-expand-t_boom')).toBeTruthy()
+    expect(screen.queryByTestId('task-expand-t_solo-running')).toBeNull()
+    expect(screen.queryByTestId('task-expand-t_solo-done')).toBeNull()
     expect(screen.queryByTestId('task-expand-t_queued')).toBeNull()
   })
 
   test('expand lazily fetches parent_id children and nests them; collapse removes', async () => {
     const rec = installFetch({
-      top: [row('parent', { status: 'running', finishedAt: null })],
+      top: [row('parent', { status: 'running', finishedAt: null, childCount: 1 })],
       childrenByParent: {
         t_parent: [
           row('kid', {
@@ -215,7 +230,8 @@ describe('/tasks — child-task nesting (RFC-243 PR-5)', () => {
 
   test('empty children render the no-child row once and are remembered (no re-fetch)', async () => {
     const rec = installFetch({
-      top: [row('lonely', { status: 'done' })],
+      // Race: the list reported a child, but it was deleted before the expand.
+      top: [row('lonely', { status: 'done', childCount: 1 })],
       childrenByParent: { t_lonely: [] },
     })
     await renderPage()
@@ -236,7 +252,7 @@ describe('/tasks — child-task nesting (RFC-243 PR-5)', () => {
   })
 
   test('scope toggle requests include_children=true and child rows link their parent', async () => {
-    const parent = row('parent', { status: 'running', finishedAt: null })
+    const parent = row('parent', { status: 'running', finishedAt: null, childCount: 1 })
     const kid = row('kid', {
       status: 'awaiting_human',
       finishedAt: null,
@@ -284,7 +300,7 @@ describe('/tasks — child-task nesting (RFC-243 PR-5)', () => {
 
   test('expand arrow click never triggers whole-row navigation', async () => {
     installFetch({
-      top: [row('parent', { status: 'done' })],
+      top: [row('parent', { status: 'done', childCount: 1 })],
       childrenByParent: { t_parent: [] },
     })
     const router = await renderPage()
@@ -307,5 +323,17 @@ describe('/tasks — child-task nesting (RFC-243 PR-5)', () => {
     expect(css).toMatch(
       /\.task-row--child \.task-name-cell__inner\s*\{[^}]*padding-left:\s*calc\(var\(--task-child-depth,\s*1\)\s*\*\s*16px\)/,
     )
+  })
+
+  test('styles.css keeps the 「子任务」badge on one line (no shrink, no wrap)', () => {
+    // Regression: the badge wrapped mid-word inside its pill. Two independent
+    // causes, so two independent locks — either one alone lets it come back.
+    const css = readFileSync(resolve(import.meta.dirname, '..', 'src', 'styles.css'), 'utf-8')
+    // 1. The shared chip primitive must not wrap its own text.
+    expect(css).toMatch(/^\.chip \{[^}]*white-space:\s*nowrap/m)
+    // 2. Chips in the task-name row must not absorb the flex squeeze — the
+    //    name ellipsizes instead. The badge carried no flex rule of its own,
+    //    unlike the scheduled-origin chip beside it, and got compressed.
+    expect(css).toMatch(/\.task-name-cell__row > \.chip \{[^}]*flex:\s*none/)
   })
 })

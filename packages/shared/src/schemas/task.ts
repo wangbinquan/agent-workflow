@@ -462,6 +462,18 @@ export type TaskSummary = z.infer<typeof TaskSummarySchema>
 export const TaskListItemSchema = TaskSummarySchema.extend({
   ownerUserId: z.string().nullable(),
   owner: OwnerIdentitySchema.nullable(),
+  /**
+   * RFC-243 follow-up: number of DIRECT child executions of this row that are
+   * visible to the requesting actor — one grouped query per list page, never
+   * an N+1 probe. It is computed under the SAME visibility predicate as the
+   * list itself (`taskVisibilityCondition`), so `childCount > 0` is exactly
+   * "expanding this row will show something": the tasks page keys its expand
+   * arrow off this instead of the old always-on arrow, which rendered an
+   * affordance on every running/awaiting/done row and paid off in a 「无子任务」
+   * dead end for the overwhelming majority that never invoked a call node.
+   * List-only (`listTaskItems`); TaskSummary and the WS wires stay unchanged.
+   */
+  childCount: z.number().int().nonnegative().default(0),
 }).strict()
 export type TaskListItem = z.infer<typeof TaskListItemSchema>
 

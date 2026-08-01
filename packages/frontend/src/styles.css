@@ -3789,6 +3789,11 @@ code {
   border-radius: 12px;
   padding: 2px 10px;
   font-size: 13px;
+  /* A chip is a compact single-line label: its text must never wrap inside
+     the pill (a wrapped chip renders as a two-line blob with a stretched
+     border). Squeezing is the caller's job to prevent — see
+     `.task-name-cell__row > .chip`. */
+  white-space: nowrap;
 }
 
 .chip--tight {
@@ -18516,6 +18521,16 @@ button.status-chip {
 .task-name-cell__row .task-name-cell__name {
   flex: 0 1 auto;
   min-width: 0;
+}
+
+/* The row's contract: the NAME absorbs the squeeze (it ellipsizes), every
+   chip beside it keeps its intrinsic width. Without this a chip inherits
+   flex-shrink:1 and gets compressed below its text — which is how the
+   「子任务」badge ended up wrapping while the scheduled-origin chip next to
+   it stayed intact (that one carried its own `flex: none`). Scoping the rule
+   to the row means any chip added here is correct by default. */
+.task-name-cell__row > .chip {
+  flex: none;
 }
 
 /* Scheduled-origin chip next to the task name. */
