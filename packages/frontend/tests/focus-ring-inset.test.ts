@@ -145,6 +145,12 @@ describe('focus ring — inset for full-bleed form controls', () => {
     const body = ruleBody('.workgroup-card__open:focus-visible::after {')
     expect(body).toMatch(/outline-offset:\s*var\(--focus-ring-offset-inset\)/)
   })
+
+  it('task-operations metadata links keep their ring inside the clipped row', () => {
+    const body = ruleBody('.task-operations__meta .data-table__link:focus-visible {')
+    expect(body).toMatch(/outline:\s*var\(--focus-ring-width\)\s+solid\s+var\(--focus-ring-color\)/)
+    expect(body).toMatch(/outline-offset:\s*var\(--focus-ring-offset-inset\)/)
+  })
 })
 
 // Table-level guard (not file-level): the point is that NO scroll-flush control
@@ -178,6 +184,7 @@ describe('focus ring — no scroll-flush control may reintroduce an outset ring'
     '.workgroup-room__runlog-row',
     '.react-flow__controls-button',
     '.clarify-question',
+    '.task-operations__meta .data-table__link',
   ]
 
   /**
