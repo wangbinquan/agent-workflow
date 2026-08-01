@@ -747,7 +747,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     // permission half (memory:approve) sits in every logged-in baseline, so
     // the identity predicate is the operative check here.
     upgradeGate: async (_db, actor) =>
-      isResourceAdminRole(actor.user.role) && actor.permissions.has('memory:approve')
+      isResourceAdminRole(actor.user.role) && actor.permissions.has('memory:update')
         ? true
         : {
             code: 'admin-required',

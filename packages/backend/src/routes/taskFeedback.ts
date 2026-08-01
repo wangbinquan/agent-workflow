@@ -27,7 +27,7 @@ export function mountTaskFeedbackRoutes(app: Hono, deps: AppDeps): void {
     return c.json({ items })
   })
 
-  app.post('/api/tasks/:taskId/feedback', requirePermission('memory:write_feedback'), async (c) => {
+  app.post('/api/tasks/:taskId/feedback', requirePermission('memory:create'), async (c) => {
     const taskId = c.req.param('taskId')
     await assertVisible(c, deps, taskId)
     const body = await c.req.json().catch(() => ({}))

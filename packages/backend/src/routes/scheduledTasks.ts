@@ -58,9 +58,9 @@ async function loadVisible(deps: AppDeps, actor: Actor, id: string): Promise<Sch
 
 /** RFC-165 (N1-r3): the launch-arming operations gate. */
 function requireLaunchPermission(actor: Actor): void {
-  if (!actor.permissions.has('tasks:launch')) {
+  if (!actor.permissions.has('tasks:execute')) {
     throw new ForbiddenError('forbidden', 'missing permission: tasks:launch', {
-      requiredPermission: 'tasks:launch',
+      requiredPermission: 'tasks:execute',
     })
   }
 }

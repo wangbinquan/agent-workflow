@@ -323,7 +323,7 @@ describe('PATs', () => {
     const created = await reqRaw(
       h.app,
       '/api/auth/pats',
-      { method: 'POST', body: JSON.stringify({ name: 'ci-launcher', scopes: ['tasks:launch'] }) },
+      { method: 'POST', body: JSON.stringify({ name: 'ci-launcher', scopes: ['tasks:execute'] }) },
       { Authorization: `Bearer ${sessionToken}` },
     )
     expect(created.status).toBe(403)
@@ -334,7 +334,7 @@ describe('PATs', () => {
       db: h.db,
       userId: bob.id,
       name: 'legacy-ci-launcher',
-      scopes: ['tasks:launch'],
+      scopes: ['tasks:execute'],
     })
     expect(token.startsWith('aws_pat_')).toBe(true)
 
@@ -378,7 +378,7 @@ describe('PATs', () => {
       {
         method: 'POST',
         // RFC-099: agents:write moved to user baseline; users:read stays admin-only.
-        body: JSON.stringify({ name: 'overreach', scopes: ['users:read', 'tasks:launch'] }),
+        body: JSON.stringify({ name: 'overreach', scopes: ['users:read', 'tasks:execute'] }),
       },
       { Authorization: `Bearer ${sessionToken}` },
     )

@@ -41,12 +41,12 @@ describe('patStore', () => {
       db,
       userId: id,
       name: 'ci-launcher',
-      scopes: ['tasks:launch', 'agents:read'],
+      scopes: ['tasks:execute', 'agents:read'],
     })
     expect(token.startsWith('aws_pat_')).toBe(true)
     expect(token.length).toBe('aws_pat_'.length + 64)
     expect(meta.name).toBe('ci-launcher')
-    expect(meta.scopes).toEqual(['tasks:launch', 'agents:read'])
+    expect(meta.scopes).toEqual(['tasks:execute', 'agents:read'])
   })
 
   test('lookupActivePat returns null for unknown / non-aws_pat_', async () => {

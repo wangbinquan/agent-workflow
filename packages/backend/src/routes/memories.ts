@@ -134,7 +134,7 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
     })
   })
 
-  app.post('/api/memories', requirePermission('memory:approve'), async (c) => {
+  app.post('/api/memories', requirePermission('memory:create'), async (c) => {
     const body = await c.req.json().catch(() => ({}))
     const parsed = MemoryCreateRequestSchema.safeParse(body)
     if (!parsed.success) {
@@ -160,7 +160,7 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
   // RFC-045 — admin in-place edit (scope_type / scope_id / title / body_md /
   // tags) on candidate / approved / archived rows. version is bumped only
   // when ≥1 field actually changes (service-side idempotent semantics).
-  app.patch('/api/memories/:id', requirePermission('memory:edit'), async (c) => {
+  app.patch('/api/memories/:id', requirePermission('memory:update'), async (c) => {
     const id = c.req.param('id')
     const body = await c.req.json().catch(() => ({}))
     const parsed = MemoryPatchRequestSchema.safeParse(body)
@@ -173,7 +173,7 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
     return c.json({ memory: result.memory, changedFields: result.changedFields })
   })
 
-  app.post('/api/memories/:id/promote', requirePermission('memory:approve'), async (c) => {
+  app.post('/api/memories/:id/promote', requirePermission('memory:update'), async (c) => {
     const id = c.req.param('id')
     const body = await c.req.json().catch(() => ({}))
     const parsed = MemoryCandidatePromoteSchema.safeParse(body)
@@ -186,14 +186,14 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
     return c.json({ memory })
   })
 
-  app.post('/api/memories/:id/archive', requirePermission('memory:archive'), async (c) => {
+  app.post('/api/memories/:id/archive', requirePermission('memory:update'), async (c) => {
     const id = c.req.param('id')
     await loadManagedMemory(deps, c, id)
     const memory = await archiveMemory(deps.db, id)
     return c.json({ memory })
   })
 
-  app.post('/api/memories/:id/unarchive', requirePermission('memory:archive'), async (c) => {
+  app.post('/api/memories/:id/unarchive', requirePermission('memory:update'), async (c) => {
     const id = c.req.param('id')
     await loadManagedMemory(deps, c, id)
     const memory = await unarchiveMemory(deps.db, id)

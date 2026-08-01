@@ -549,7 +549,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
       db,
       userId: bob.id,
       name: 'launch-only',
-      scopes: ['agents:read', 'tasks:launch'],
+      scopes: ['agents:read', 'tasks:execute'],
     })
     const ok = await req(`/api/agents/${soloId}/tasks`, launchPat, {
       method: 'POST',
@@ -569,7 +569,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
       db,
       userId: bob.id,
       name: 'write-only',
-      scopes: ['agents:read', 'agents:write'],
+      scopes: ['agents:read', 'agents:update'],
     })
     const refused = await req(`/api/agents/${soloId}/tasks`, writePat, {
       method: 'POST',

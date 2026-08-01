@@ -41,7 +41,7 @@ interface RouteJson {
 
 const ME = {
   user: { id: 'u1', username: 'u1', displayName: 'u1', role: 'user', status: 'active' },
-  permissions: ['agents:write'],
+  permissions: ['agents:update'],
 }
 
 function stubFetch(routes: RouteJson[]) {

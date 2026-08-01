@@ -68,6 +68,12 @@
 - **围栏子进程的 PATH 还要能找到 shebang 解释器**：`npx` realpath 到 `.../npm/bin/npx-cli.js`（`#!/usr/bin/env node`）而同目录**没有** `node` → 围栏内 `exit 127`。只把命令自身的 dirname 加进 PATH 不够，要解析 `#!` 链把解释器目录也加进去（已在 `/usr/bin:/bin` 里的解释器不必重复投影）。**更要命的是它的失败形态**：claude 报 `mcp_servers:[{status:"failed"}]`、工具表缺失，而节点照常 `is_error:false` 成功——**安全围栏导致的能力丢失必须做成节点级显式失败**，否则没人会发现。
 - **bwrap `--setenv NAME VALUE` 把密钥写进世界可读的 `/proc/<pid>/cmdline`**：bwrap 无 `--clearenv` 时把**自己的** environ 原样交给子进程，所以正确做法是把 env 交给 bwrap **进程**（`Bun.spawn({env})`），argv 里一个字节都不放。同理，任何「把密钥移出 argv」的声明都要顺着链路查到底（remote MCP 的 header 仍在 claude 的 `--mcp-config` inline JSON 里，见 audit-backlog）。
 
+- **opencode 作为 MCP **客户端**的三条实测行为（RFC-247 设计期读源码确认，写服务端必须知道）**：
+  ① `packages/opencode/src/mcp/catalog.ts:53-67` 调工具时传 `{ resetTimeoutOnProgress: true, onprogress: () => {} }`，源码注释明写「SDK 只有这个 hook 存在时才发 progress token，从而启用超时重置」⇒ **每条 progress notification 都会重置客户端超时**，长驻工具只要心跳频率高于客户端超时就能一直挂着；
+  ② `mcp/index.ts:38` `DEFAULT_TIMEOUT = 30_000`——**`packages/core/src/v1/config/mcp.ts` 的 schema 注解写「默认 5000」是过期文案**，以代码为准；同一个 `timeout` 既做连接超时（`:286`）又做请求超时（`:662-664`）；
+  ③ `core/src/v1/config/mcp.ts:44-60` 的 `Remote.oauth` **不显式设 `false` 就默认开启 OAuth 自动探测**，opencode 会对你的端点发起 discovery。给用户的远程 MCP 配置片段**必须带 `oauth: false`**，否则第一次连接就走错路径。
+  另：`catalog.ts:47` 会**强制**给你的 `inputSchema` 加 `additionalProperties: false`（入参 schema 必须闭合）；`:69-75` 在 `isError` 时把 text content 拼起来 throw（错误文本必须自解释且**不得含密钥**）。
+
 ## 工作流提示与人工重跑
 
 - **框架已经组合好的 prompt 不是用户模板，不能再跑一次 `{{token}}` 展开**：工作组回合和动态工作流编排器会先把 goal、charter、消息与结果围栏成完整 prompt；若随后仍走普通 Workflow `promptTemplate` 替换器，用户数据里的任意 `{{literal}}` 会被当成不存在的端口并静默删掉。渲染入口必须显式区分 author template 与 framework-composed prompt，后者原样保留；附加工作组协议块前也要强制建立空行段落边界，防止 `</aw-input>## ...` 粘连。

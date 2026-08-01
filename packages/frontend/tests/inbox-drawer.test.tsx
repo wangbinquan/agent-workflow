@@ -309,7 +309,7 @@ describe('RFC-195 InboxDrawer', () => {
         return json({
           user: { id: 'u', username: 'u', displayName: 'u', role: 'admin', status: 'active' },
           source: 'session',
-          permissions: ['memory:approve'],
+          permissions: ['memory:update'],
           linkedIdentities: [],
           pats: [],
         })

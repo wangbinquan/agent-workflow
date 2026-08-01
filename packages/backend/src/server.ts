@@ -180,9 +180,9 @@ export function createApp(deps: AppDeps): Hono {
   // RFC-165 (F15/N1): launching is a TASK operation on every subject face —
   // all three launch endpoints gate on tasks:launch uniformly, and the agent
   // launch path is exempt from the agents:write method gate below.
-  app.on('POST', '/api/tasks', requirePermission('tasks:launch'))
-  app.on('POST', '/api/workgroups/:id/tasks', requirePermission('tasks:launch'))
-  app.on('POST', '/api/agents/:id/tasks', requirePermission('tasks:launch'))
+  app.on('POST', '/api/tasks', requirePermission('tasks:execute'))
+  app.on('POST', '/api/workgroups/:id/tasks', requirePermission('tasks:execute'))
+  app.on('POST', '/api/agents/:id/tasks', requirePermission('tasks:execute'))
   // RFC-222 — task deletion is admin-only (tasks:delete ∉ manager/user).
   app.on('DELETE', '/api/tasks/:id', requirePermission('tasks:delete'))
   app.use(

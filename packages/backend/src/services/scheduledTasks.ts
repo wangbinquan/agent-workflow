@@ -550,9 +550,9 @@ export async function updateScheduledTask(
     patch.launchPayload !== undefined ||
     (patch.enabled === true && !rowEnabled) ||
     (patch.scheduleSpec !== undefined && (patch.enabled ?? rowEnabled))
-  if (armsLaunchAgainst(existing.enabled) && !opts.actor.permissions.has('tasks:launch')) {
+  if (armsLaunchAgainst(existing.enabled) && !opts.actor.permissions.has('tasks:execute')) {
     throw new ForbiddenError('forbidden', 'missing permission: tasks:launch', {
-      requiredPermission: 'tasks:launch',
+      requiredPermission: 'tasks:execute',
     })
   }
 
@@ -591,9 +591,9 @@ export async function updateScheduledTask(
     if (fresh === undefined) {
       throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
     }
-    if (armsLaunchAgainst(fresh.enabled) && !opts.actor.permissions.has('tasks:launch')) {
+    if (armsLaunchAgainst(fresh.enabled) && !opts.actor.permissions.has('tasks:execute')) {
       throw new ForbiddenError('forbidden', 'missing permission: tasks:launch', {
-        requiredPermission: 'tasks:launch',
+        requiredPermission: 'tasks:execute',
       })
     }
     const resultEnabled = patch.enabled !== undefined ? patch.enabled : fresh.enabled

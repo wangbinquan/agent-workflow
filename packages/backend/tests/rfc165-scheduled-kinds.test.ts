@@ -575,7 +575,7 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
         db,
         userId: bob.id,
         name: 'launcher',
-        scopes: ['tasks:launch', 'workflows:read'],
+        scopes: ['tasks:execute', 'workflows:read'],
       })
     ).token
     const wf = await createWorkflow(

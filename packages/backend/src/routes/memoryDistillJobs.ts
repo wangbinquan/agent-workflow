@@ -23,7 +23,7 @@ import { getDistillJobSessionView } from '@/services/memoryDistillSessionView'
 import { ConflictError, ValidationError } from '@/util/errors'
 
 export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/memory-distill-jobs', requireResourceAdmin('memory:approve'), async (c) => {
+  app.get('/api/memory-distill-jobs', requireResourceAdmin('memory:update'), async (c) => {
     const statusRaw = c.req.query('status')
     let status: string | undefined
     if (statusRaw !== undefined && statusRaw !== '') {
@@ -39,7 +39,7 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
 
   app.post(
     '/api/memory-distill-jobs/:id/retry',
-    requireResourceAdmin('memory:approve'),
+    requireResourceAdmin('memory:update'),
     async (c) => {
       const id = c.req.param('id')
       const ok = await retryFailedJob(deps.db, id)
@@ -56,7 +56,7 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
 
   app.post(
     '/api/memory-distill-jobs/:id/cancel',
-    requireResourceAdmin('memory:approve'),
+    requireResourceAdmin('memory:update'),
     async (c) => {
       const id = c.req.param('id')
       const ok = await cancelPendingJob(deps.db, id)
@@ -71,14 +71,14 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
   )
 
   // RFC-043: admin-only distill job detail page support.
-  app.get('/api/memory-distill-jobs/:id', requireResourceAdmin('memory:approve'), async (c) => {
+  app.get('/api/memory-distill-jobs/:id', requireResourceAdmin('memory:update'), async (c) => {
     const detail = await getDistillJobDetail(deps.db, c.req.param('id'))
     return c.json(detail)
   })
 
   app.get(
     '/api/memory-distill-jobs/:id/session',
-    requireResourceAdmin('memory:approve'),
+    requireResourceAdmin('memory:update'),
     async (c) => {
       const view = await getDistillJobSessionView(deps.db, c.req.param('id'))
       return c.json(view)
