@@ -1,6 +1,6 @@
 # RFC-246 · 技术设计：统一运行表面
 
-- 状态：Implementation Complete Locally / Publication In Progress（2026-08-01）
+- 状态：Done（2026-08-01）
 - 配套：`proposal.md`、`plan.md`
 
 ## 1. 现状与边界

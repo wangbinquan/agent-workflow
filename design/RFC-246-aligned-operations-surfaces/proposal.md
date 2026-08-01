@@ -1,6 +1,6 @@
 # RFC-246 · 任务、定时任务与远程仓库运行表面统一
 
-- 状态：Implementation Complete Locally / Publication In Progress（2026-08-01）
+- 状态：Done（2026-08-01）
 - 日期：2026-08-01
 - 触发：用户要求「把定时任务和远程仓库界面也同步下 UX，和任务列表一样」
 - 相关 RFC：RFC-024（远程仓库缓存）、RFC-159 / RFC-192（定时任务行内操作）、
