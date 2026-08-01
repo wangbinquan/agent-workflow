@@ -705,9 +705,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       transition,
     })
   }
+  const broadcastResolved = (taskId: string): void => {
+    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+      type: 'lifecycle.alert.resolved',
+      taskId,
+    })
+  }
   const lifecycleInvariantsTicker = startLifecycleInvariantsLoop({
     db,
     onAlert: broadcastAlert,
+    onResolved: broadcastResolved,
   })
 
   // RFC-053 P-6 — stuck-task detector. Runs every 5 min looking for tasks
@@ -719,6 +726,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const stuckDetectorTicker = startStuckTaskDetectorLoop({
     db,
     onAlert: broadcastAlert,
+    onResolved: broadcastResolved,
   })
 
   // RFC-101: settle running fusions (engine task done → awaiting_approval) so
@@ -731,6 +739,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     appHome: Paths.root,
     configPath: Paths.config,
+    onAlert: broadcastAlert,
+    onResolved: broadcastResolved,
   })
 
   // RFC-108 T20 (AR-05a) — heartbeat stalled-child auto-kill (DEFAULT OFF).
