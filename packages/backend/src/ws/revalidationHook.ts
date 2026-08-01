@@ -22,7 +22,7 @@ export type RevocationReason =
   | 'resource-acl-changed'
   | 'bootstrap-completed'
 
-type TriggerImpl = (db: DbClient, reason: RevocationReason) => void
+type TriggerImpl = (db: DbClient, reason: RevocationReason) => Promise<void>
 
 let impl: TriggerImpl | undefined
 
@@ -37,5 +37,13 @@ export function registerRevalidationTrigger(fn: TriggerImpl): void {
  * WS server has registered its implementation.
  */
 export function triggerRevalidation(db: DbClient, reason: RevocationReason): void {
-  impl?.(db, reason)
+  void impl?.(db, reason).catch(() => {
+    // The registered implementation logs and fails closed. This terminal catch
+    // protects legacy fire-and-forget callers from an unhandled rejection.
+  })
+}
+
+/** RFC-244: awaited variant for audience-transition notifications. */
+export function triggerRevalidationAndWait(db: DbClient, reason: RevocationReason): Promise<void> {
+  return impl?.(db, reason) ?? Promise.resolve()
 }

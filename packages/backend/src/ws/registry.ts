@@ -88,6 +88,7 @@ import {
   type WorkgroupsBroadcastContext,
   type WorkflowsBroadcastContext,
   type McpRuntimeTestBroadcastContext,
+  type TasksListBroadcastContext,
 } from './broadcaster'
 
 const log = createLogger('ws.registry')
@@ -127,7 +128,7 @@ export interface ChannelMessageByKind {
 /** Process-local metadata delivered beside frames; never part of JSON wire. */
 export interface ChannelBroadcastContextByKind {
   task: never
-  'tasks-list': never
+  'tasks-list': TasksListBroadcastContext
   workflows: WorkflowsBroadcastContext
   workgroups: WorkgroupsBroadcastContext
   'repo-import': never
@@ -425,6 +426,9 @@ function extractTaskIdFromListMessage(msg: TasksListWsMessage): string | null {
       return msg.taskId
     case 'task.deleted':
       return msg.taskId
+    case 'task.members.changed':
+    case 'lifecycle.alert.resolved':
+      return msg.taskId
     case 'lifecycle.alert':
       // lifecycle.alert carries the alert payload's taskId.
       // Defensive narrowing — payload shape may evolve.
@@ -434,6 +438,16 @@ function extractTaskIdFromListMessage(msg: TasksListWsMessage): string | null {
     default:
       return null
   }
+}
+
+function taskAudienceContextVisible(
+  actor: Actor,
+  taskId: string,
+  context: TasksListBroadcastContext | undefined,
+): boolean | null {
+  if (context === undefined || context.taskId !== taskId) return null
+  if (actor.permissions.has('tasks:read:all')) return true
+  return context.visibleUserIds.has(actor.user.id)
 }
 
 /** Task `?since=N` replay — node_run_events joined via nodeRuns.taskId. */
@@ -540,9 +554,20 @@ export const WS_CHANNELS: WsChannelRegistry = {
     // exactly one task; unknown shapes drop. NO adminShortCircuit: canViewTask
     // short-circuits internally on `tasks:read:all`, keeping admin frames on
     // the same async path as before the registry.
-    frameGate: async (ctx, msg) => {
+    frameGate: async (ctx, msg, deliveryContext) => {
       const taskId = extractTaskIdFromListMessage(msg)
       if (taskId === null) return false
+      if (msg.type === 'task.members.changed' || msg.type === 'task.deleted') {
+        const cached = ctx.cache.get(taskId)
+        const audience = taskAudienceContextVisible(ctx.actor, taskId, deliveryContext)
+        // Both mutations invalidate any pre-change cached verdict. When an
+        // audience snapshot exists it is authoritative even after DELETE.
+        ctx.cache.delete(taskId)
+        if (audience !== null) return audience
+        // Preserve the legacy direct-broadcast behavior: a cached-visible
+        // connection may still receive a delete after the row is gone.
+        if (msg.type === 'task.deleted') return cached === true
+      }
       return cachedTaskVisible(ctx, taskId)
     },
   },

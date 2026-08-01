@@ -218,13 +218,24 @@ registerRevalidationTrigger((db, reason) => {
   // connection's re-resolve the synchronous broadcast for-of must not deliver a
   // frame under the stale actor. `revalidating` is cleared per-connection by the
   // pass once its actor is refreshed (or the socket is closed).
-  for (const ws of liveConnections()) {
+  const frozen = liveConnections()
+  for (const ws of frozen) {
     if (!ws.data.closing) ws.data.revalidating = true
   }
-  void revalidateAllConnections({ db, log: revalidateLog }, reason).catch((err) => {
-    revalidateLog.warn('ws-revalidate-threw', {
-      reason,
-      err: err instanceof Error ? err.message : String(err),
+  return revalidateAllConnections({ db, log: revalidateLog }, reason)
+    .then(() => undefined)
+    .catch((err) => {
+      revalidateLog.warn('ws-revalidate-threw', {
+        reason,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      // A failed pass must never leave a live socket frozen indefinitely or
+      // restore it under an actor we did not finish checking. Fail closed for
+      // every connection captured by this trigger that is still unresolved.
+      for (const ws of frozen) {
+        if (!ws.data.closing && ws.data.revalidating) {
+          closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'auth-revalidation-failed')
+        }
+      }
     })
-  })
 })

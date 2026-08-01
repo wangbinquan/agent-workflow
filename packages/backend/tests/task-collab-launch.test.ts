@@ -20,6 +20,12 @@ import {
   updateTaskMembers,
 } from '../src/services/taskCollab'
 import { ForbiddenError } from '../src/util/errors'
+import {
+  TASKS_LIST_CHANNEL,
+  tasksListBroadcaster,
+  type TasksListBroadcastContext,
+} from '../src/ws/broadcaster'
+import { registerRevalidationTrigger } from '../src/ws/revalidationHook'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -201,6 +207,62 @@ describe('taskCollab — RFC-099 membership model', () => {
       userIds: [carol, dave],
     })
     expect(updated.users.map((u) => u.id).sort()).toEqual([carol, dave].sort())
+  })
+
+  test('member notification waits for revalidation and carries the before/after audience union', async () => {
+    await seedTask('task-audience', bob)
+    await recordLaunchContext(db, {
+      taskId: 'task-audience',
+      ownerUserId: bob,
+      collaboratorUserIds: [carol],
+      now: 1_000,
+    })
+    let releaseRevalidation!: () => void
+    const revalidation = new Promise<void>((resolve) => {
+      releaseRevalidation = resolve
+    })
+    let markRevalidationStarted!: () => void
+    const revalidationStarted = new Promise<void>((resolve) => {
+      markRevalidationStarted = resolve
+    })
+    const order: string[] = []
+    registerRevalidationTrigger(async () => {
+      order.push('revalidation-start')
+      markRevalidationStarted()
+      await revalidation
+      order.push('revalidation-finished')
+    })
+    let context: TasksListBroadcastContext | undefined
+    const unsubscribe = tasksListBroadcaster.subscribe(
+      TASKS_LIST_CHANNEL,
+      (message, nextContext) => {
+        if (message.type !== 'task.members.changed') return
+        order.push('broadcast')
+        context = nextContext
+      },
+    )
+    try {
+      const update = updateTaskMembers(
+        db,
+        actorFor(bob, 'user'),
+        { id: 'task-audience', ownerUserId: bob },
+        { ownerUserId: dave, userIds: [] },
+      )
+      await revalidationStarted
+      expect(order).toEqual(['revalidation-start'])
+
+      releaseRevalidation()
+      await update
+
+      expect(order).toEqual(['revalidation-start', 'revalidation-finished', 'broadcast'])
+      expect(context?.kind).toBe('task.members-changed-audience')
+      if (context?.kind === 'task.members-changed-audience') {
+        expect([...context.visibleUserIds].sort()).toEqual([bob, carol, dave].sort())
+      }
+    } finally {
+      unsubscribe()
+      registerRevalidationTrigger(async () => {})
+    }
   })
 
   test('updateTaskMembers rejects disabled / system users', async () => {

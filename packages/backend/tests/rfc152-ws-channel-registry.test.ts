@@ -425,6 +425,45 @@ describe('RFC-152 — gatedSubscribe pipeline (admin short-circuit → frameGate
     ])
   })
 
+  test('task audience snapshots reach before/after members, reject outsiders, and bust stale cache', async () => {
+    const gate = WS_CHANNELS['tasks-list'].frameGate!
+    const taskId = 'task-audience-transition'
+    const visibleUserIds = new Set([
+      'before-owner',
+      'removed-member',
+      'after-owner',
+      'added-member',
+    ])
+    const deliveryContext = {
+      kind: 'task.members-changed-audience' as const,
+      taskId,
+      visibleUserIds,
+    }
+    const message = { type: 'task.members.changed' as const, taskId }
+
+    for (const userId of visibleUserIds) {
+      const cache = new Map([[taskId, false]])
+      expect(
+        await gate({ db, actor: makeActor('user', userId), cache }, message, deliveryContext),
+      ).toBe(true)
+      expect(cache.has(taskId)).toBe(false)
+    }
+    expect(
+      await gate(
+        { db, actor: makeActor('user', 'outsider'), cache: new Map([[taskId, true]]) },
+        message,
+        deliveryContext,
+      ),
+    ).toBe(false)
+    expect(
+      await gate(
+        { db, actor: makeActor('admin', 'admin'), cache: new Map() },
+        message,
+        deliveryContext,
+      ),
+    ).toBe(true)
+  })
+
   test('MCP runtime-test locator reaches only its owner; admin audit still requires an exact id', async () => {
     const owner = makeFakeWs(makeActor('user', 'owner-1'))
     const stranger = makeFakeWs(makeActor('user', 'stranger-1'))

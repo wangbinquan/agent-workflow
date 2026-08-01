@@ -10,6 +10,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { routePopulatedInbox } from './inbox-fixtures'
+import { routeTaskOperationsFixture } from './task-operations-fixtures'
 
 const FIXTURE_AGENT = 'ux-fixture-agent'
 const FIXTURE_WORKFLOW = 'ux-fixture-workflow'
@@ -127,58 +128,30 @@ async function expectWithinViewport(locator: Locator): Promise<void> {
   ).toEqual({ left: true, top: true, right: true, bottom: true })
 }
 
-async function expectTableOwnsOverflow(page: Page, preceding: Locator): Promise<void> {
-  const viewport = page.locator('.table-viewport').first()
-  const scroller = viewport.locator('.table-viewport__scroller')
-  await expect(scroller).toHaveAttribute('tabindex', '0')
-
+async function expectTaskOperationsFits(page: Page, preceding: Locator): Promise<void> {
+  const operations = page.locator('.task-operations')
+  await expect(operations).toBeVisible()
   expect(
-    await scroller.evaluate((element) => {
+    await operations.evaluate((element) => {
       const main = document.querySelector<HTMLElement>('[data-testid="app-shell-main"]')
       return {
-        ownsOverflow: element.scrollWidth > element.clientWidth,
+        listFits: element.scrollWidth <= element.clientWidth,
         documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
         bodyMainFits: main !== null && main.scrollWidth <= main.clientWidth,
       }
     }),
-  ).toEqual({ ownsOverflow: true, documentFits: true, bodyMainFits: true })
+  ).toEqual({ listFits: true, documentFits: true, bodyMainFits: true })
 
   await preceding.focus()
   await page.keyboard.press('Tab')
-  await expect(scroller).toBeFocused()
-
-  await scroller.evaluate((element) => element.scrollTo({ left: 120 }))
-  await expect(viewport).toHaveAttribute('data-overflow-start', 'true')
-  await expect
-    .poll(() => page.getByTestId('app-shell-main').evaluate((main) => main.scrollLeft))
-    .toBe(0)
+  await expect(page.getByTestId('tasks-filter-button')).toBeFocused()
 }
 
 async function routeTaskFixture(page: Page): Promise<void> {
-  await page.route(/\/api\/tasks(?:\?.*)?$/, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue()
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([
-        {
-          id: 'ux-task-1',
-          name: 'Responsive browser matrix task',
-          workflowId: 'ux-workflow-id',
-          workflowName: FIXTURE_WORKFLOW,
-          repoPath: '/tmp/agent-workflow-with-a-deliberately-long-display-name',
-          repoUrl: null,
-          status: 'done',
-          startedAt: Date.now() - 3_600_000,
-          finishedAt: Date.now() - 3_000_000,
-          errorSummary: null,
-          repoCount: 1,
-          spaceKind: 'remote',
-          sourceAgentName: null,
-          openAlertCount: 0,
-        },
-      ]),
-    })
+  await routeTaskOperationsFixture(page, {
+    primaryId: 'ux-task-1',
+    primaryName: 'Responsive browser matrix task',
+    workflowName: FIXTURE_WORKFLOW,
   })
 }
 
@@ -365,9 +338,10 @@ test.describe('RFC-198 global UX browser matrix', () => {
 
     await routeTaskFixture(page)
     await page.goto(`${daemon.baseUrl}/tasks`)
-    await expect(page.getByTestId('task-row-ux-task-1')).toBeVisible()
+    const taskRow = page.getByTestId('task-row-ux-task-1')
+    await expect(taskRow).toBeVisible()
     await expect(page.getByTestId('tasks-new-button')).toBeVisible()
-    await expect(page.locator('.status-chip--success')).toBeVisible()
+    await expect(taskRow.locator('.status-chip--success')).toBeVisible()
     await expectNoPageOverflow(page)
 
     await page.goto(`${daemon.baseUrl}/settings?tab=limits`)
@@ -514,7 +488,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await routeTaskFixture(page)
     await page.goto(`${daemon.baseUrl}/tasks`)
     await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible()
-    await expectTableOwnsOverflow(page, page.getByTestId('tasks-search'))
+    await expectTaskOperationsFits(page, page.getByTestId('tasks-search'))
     await expectNoPageOverflow(page)
   })
 
@@ -718,7 +692,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
 
     await page.goto(`${daemon.baseUrl}/tasks`)
-    await expectTableOwnsOverflow(page, page.getByTestId('tasks-search'))
+    await expectTaskOperationsFits(page, page.getByTestId('tasks-search'))
     await expectNoPageOverflow(page)
   })
 
@@ -829,7 +803,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.goto(`${daemon.baseUrl}/tasks`)
     await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible()
     await expect(page.getByTestId('tasks-new-button')).toBeVisible()
-    await expectTableOwnsOverflow(page, page.getByTestId('tasks-search'))
+    await expectTaskOperationsFits(page, page.getByTestId('tasks-search'))
     await expectNoPageOverflow(page)
 
     await page.goto(`${daemon.baseUrl}/settings?tab=network`)
@@ -986,8 +960,9 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await primeAuth(page)
     await page.goto(`${daemon.baseUrl}/tasks`)
 
-    await expect(page.getByTestId('task-row-ux-task-1')).toBeVisible()
-    const status = page.locator('.status-chip--success')
+    const taskRow = page.getByTestId('task-row-ux-task-1')
+    await expect(taskRow).toBeVisible()
+    const status = taskRow.locator('.status-chip--success')
     await expect(status).toHaveCSS('color', 'rgb(102, 209, 122)')
     await expect(page.getByTestId('tasks-new-button')).toHaveCSS(
       'background-color',
@@ -1047,7 +1022,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
 
     await page.goto(`${daemon.baseUrl}/tasks`)
     await expect(page.getByTestId('task-row-ux-task-1')).toBeVisible()
-    await expectTableOwnsOverflow(page, page.getByTestId('tasks-search'))
+    await expectTaskOperationsFits(page, page.getByTestId('tasks-search'))
     await expectNoPageOverflow(page)
 
     await page.goto(`${daemon.baseUrl}/settings?tab=network`)

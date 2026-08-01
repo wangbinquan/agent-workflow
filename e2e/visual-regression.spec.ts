@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { routePopulatedInbox } from './inbox-fixtures'
+import { routeTaskOperationsFixture } from './task-operations-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
 const EXPECTED_VISUAL_SCENE_COUNT = 26
@@ -183,35 +184,6 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
     throw new Error(`visual-regression: failed to seed ${path} (${response.status})`)
   }
   return response.json()
-}
-
-async function routeTasksTableFixture(page: Page): Promise<void> {
-  const now = Date.now()
-  await page.route(/\/api\/tasks(?:\?.*)?$/, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue()
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([
-        {
-          id: 'visual-task-row',
-          name: 'Stable responsive table fixture',
-          workflowId: 'visual-workflow-id',
-          workflowName: 'visual-stub-workflow-with-a-long-name',
-          repoPath: '/tmp/agent-workflow-with-a-deliberately-long-repository-display-name',
-          repoUrl: null,
-          status: 'done',
-          startedAt: now - 5_400_000,
-          finishedAt: now - 4_800_000,
-          errorSummary: null,
-          repoCount: 1,
-          spaceKind: 'remote',
-          sourceAgentName: null,
-          openAlertCount: 0,
-        },
-      ]),
-    })
-  })
 }
 
 async function seedResources(): Promise<SeededResources> {
@@ -627,15 +599,19 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
 
   test('/tasks list', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
-    await routeTasksTableFixture(page)
+    await routeTaskOperationsFixture(page, {
+      primaryId: 'visual-task-row',
+      primaryName: 'Stable dense task operations fixture',
+      workflowName: 'visual-stub-workflow-with-a-long-name',
+    })
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/tasks`)
     await expect(page.getByRole('heading', { name: /tasks/i }).first()).toBeVisible()
     await expect(page.getByTestId('task-row-visual-task-row')).toBeVisible()
-    const tableViewport = page.locator('.table-viewport').first()
-    await expect(tableViewport).toHaveAttribute('data-overflow-end', 'true')
+    const operations = page.locator('.task-operations')
+    await expect(operations).toBeVisible()
     await waitForStableAuthenticatedShell(page)
-    await expect(tableViewport).toHaveScreenshot('table-edge.png', COMPONENT_SNAPSHOT_OPTS)
+    await expect(operations).toHaveScreenshot('table-edge.png', COMPONENT_SNAPSHOT_OPTS)
     await expect(page).toHaveScreenshot('tasks.png', SNAPSHOT_OPTS)
   })
 

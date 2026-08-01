@@ -67,6 +67,7 @@ export * from './plugin-operation' // RFC-201
 export * from './workflow-yaml' // RFC-199
 export * from './workflow-node-references' // RFC-199 T7.1
 export * from './task-questions' // RFC-120
+export * from './taskOperations' // RFC-244
 // RFC-060 PR-E: removed `./sharding` (was RFC-055 agent-multi sharding strategy
 // helpers — agent-multi NodeKind has been removed in favor of wrapper-fanout).
 export * from './kindParser'

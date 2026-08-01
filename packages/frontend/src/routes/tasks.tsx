@@ -1,36 +1,24 @@
-// Tasks list page — RFC-192 run-monitor table.
-//
-// Status leads the row (running rows pulse); the name cell carries the ULID
-// subtitle, a「定时」origin chip (scheduledTaskId → /scheduled/$id) and — on
-// FAILED rows only — the red error summary line (the always-on Error column
-// retired; canceled/interrupted rows keep their non-error summaries for the
-// detail page). Repo shows the display name (URL-mode derives from the
-// REDACTED repoUrl, never the cache dir). Whole row navigates via the shared
-// `shouldRowNavigate` guard (modifier clicks / inner links exempt).
-//
-// Filters: status chips stay URL-driven (API param); subject (Segmented over
-// `taskExecutionKind`) + name search are pure client-side (决策 D2) over the
-// explicitly requested `limit=500` window (listTasks defaults to 100 —
-// without the param local filtering would silently miss older rows).
-//
-// RFC-243 PR-5 — child-task nesting. The backend defaults the list to
-// top-level rows (`parent_task_id IS NULL`); node-invoked child executions
-// surface two ways:
-//   - default scope: rows the server reports as having visible direct children
-//     (`childCount > 0`) carry an expand arrow that lazily fetches
-//     `GET /api/tasks?parent_id=<id>` and nests them under the parent row
-//     (indent +「子任务」badge). Rows without children carry no affordance at
-//     all. The「无子任务」row survives only as a race guard (children deleted
-//     between list and expand) and is remembered so a re-expand never
-//     re-probes.
-//   - 「含子任务」scope: the query adds `include_children=true` (flat), and
-//     child rows carry a parent-task link badge. When the parent itself is
-//     not visible to the viewer (design §8 — e.g. a workgroup human member
-//     who is only a member of the child), the badge degrades to a neutral
-//     non-link label instead of a dead link.
+// RFC-244 — high-density task operations list.
 
 import {
-  Fragment,
+  TASK_LIST_ORIGINS,
+  TASK_LIST_SCOPES,
+  TASK_LIST_SUBJECTS,
+  TASK_LIST_VIEWS,
+  TASK_STATUS,
+  canonicalTaskStatuses,
+  parseTaskStatusList,
+  type TaskListOrigin,
+  type TaskListScope,
+  type TaskListSubject,
+  type TaskListView,
+  type TaskOperationsFilters,
+  type TaskOperationsListItem,
+  type TaskOperationsPage,
+  type TaskStatus,
+} from '@agent-workflow/shared'
+import { Link, createRoute, useNavigate, useRouterState } from '@tanstack/react-router'
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -39,258 +27,404 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { describeTaskFailure } from '@/lib/task-failure'
-import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import type { Task, TaskListItem, TaskStatus, TaskSummary } from '@agent-workflow/shared'
-import { TASK_STATUS } from '@agent-workflow/shared'
-import { api } from '@/api/client'
+
+import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
-import { TextInput } from '@/components/Form'
+import { Field, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
-import { PageHeader } from '@/components/PageHeader'
+import { ManagedLiveRegionProvider, useManagedLiveRegion } from '@/components/ManagedLiveRegion'
+import { MultiSelect } from '@/components/MultiSelect'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { OwnerLabel } from '@/components/OwnerLabel'
+import { PageHeader } from '@/components/PageHeader'
 import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
-import { TableViewport } from '@/components/TableViewport'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { TASK_ICON } from '@/components/icons/resourceIcons'
+import { useActor } from '@/hooks/useActor'
 import { useNowTick } from '@/hooks/useNowTick'
-import { useTaskChildren } from '@/hooks/useTaskChildren'
-import { useTasksSync } from '@/hooks/useTasksSync'
-import { taskDurationCell } from '@/lib/duration'
+import { useTaskOperationsPage } from '@/hooks/useTaskOperationsPage'
+import { useTaskOperationsSync } from '@/hooks/useTaskOperationsSync'
 import { shouldRowNavigate } from '@/lib/row-nav'
-import { filterTaskRows, type TaskSubjectFilter } from '@/lib/task-list-filter'
+import { taskOperationsDuration } from '@/lib/task-operations-duration'
+import { describeTaskFailure } from '@/lib/task-failure'
 import { taskRepoDisplayName } from '@/lib/task-repo-name'
 import { Route as RootRoute } from './__root'
 
 interface TasksSearch {
-  status?: TaskStatus
+  view?: Exclude<TaskListView, 'all'>
+  q?: string
+  statuses?: string
+  subject?: Exclude<TaskListSubject, 'all'>
+  scope?: TaskListScope
+  origin?: Exclude<TaskListOrigin, 'all'>
+}
+
+function canonicalSearch(raw: Record<string, unknown>): TasksSearch {
+  const out: TasksSearch = {}
+  if (
+    typeof raw.view === 'string' &&
+    raw.view !== 'all' &&
+    (TASK_LIST_VIEWS as readonly string[]).includes(raw.view)
+  ) {
+    out.view = raw.view as Exclude<TaskListView, 'all'>
+  }
+  if (typeof raw.q === 'string') {
+    const q = Array.from(raw.q.trim()).slice(0, 100).join('')
+    if (q !== '') out.q = q
+  }
+  const rawStatuses =
+    typeof raw.statuses === 'string'
+      ? raw.statuses
+      : typeof raw.status === 'string'
+        ? raw.status
+        : undefined
+  if (rawStatuses !== undefined) {
+    const statuses = parseTaskStatusList(rawStatuses)
+    if (statuses !== null) out.statuses = statuses.join(',')
+  }
+  if (
+    typeof raw.subject === 'string' &&
+    raw.subject !== 'all' &&
+    (TASK_LIST_SUBJECTS as readonly string[]).includes(raw.subject)
+  ) {
+    out.subject = raw.subject as Exclude<TaskListSubject, 'all'>
+  }
+  if (
+    typeof raw.scope === 'string' &&
+    (TASK_LIST_SCOPES as readonly string[]).includes(raw.scope)
+  ) {
+    out.scope = raw.scope as TaskListScope
+  }
+  if (
+    typeof raw.origin === 'string' &&
+    raw.origin !== 'all' &&
+    (TASK_LIST_ORIGINS as readonly string[]).includes(raw.origin)
+  ) {
+    out.origin = raw.origin as Exclude<TaskListOrigin, 'all'>
+  }
+  return out
+}
+
+function taskSearchParams(search: TasksSearch): URLSearchParams {
+  const params = new URLSearchParams()
+  if (search.view !== undefined) params.set('view', search.view)
+  if (search.q !== undefined) params.set('q', search.q)
+  if (search.statuses !== undefined) params.set('statuses', search.statuses)
+  if (search.subject !== undefined) params.set('subject', search.subject)
+  if (search.scope !== undefined) params.set('scope', search.scope)
+  if (search.origin !== undefined) params.set('origin', search.origin)
+  return params
+}
+
+function taskSearchParamsFromHref(href: string): URLSearchParams {
+  return new URL(href, 'http://tasks.local').searchParams
+}
+
+function taskSearchFromHref(href: string): TasksSearch {
+  const params = taskSearchParamsFromHref(href)
+  const raw: Record<string, unknown> = {}
+  for (const key of ['view', 'q', 'statuses', 'status', 'subject', 'scope', 'origin'] as const) {
+    const values = params.getAll(key)
+    if (values.length > 0) raw[key] = values.at(-1)
+  }
+  return canonicalSearch(raw)
 }
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/tasks',
-  component: TasksPage,
-  validateSearch: (raw: Record<string, unknown>): TasksSearch => {
-    const status = raw.status
-    if (typeof status === 'string' && (TASK_STATUS as readonly string[]).includes(status)) {
-      return { status: status as TaskStatus }
-    }
-    return {}
-  },
+  component: TasksPageRoute,
+  validateSearch: canonicalSearch,
 })
 
-const SUBJECT_FILTERS: readonly TaskSubjectFilter[] = ['all', 'workflow', 'workgroup', 'agent']
-
-/** RFC-243: list scope —「仅顶层」(server default) vs「含子任务」(flat). */
-type TaskChildScope = 'top' | 'all'
-
-/**
- * RFC-243 follow-up: a row is expandable iff the server says it HAS visible
- * direct children (`childCount`, one grouped query per page — see
- * `loadChildCounts`). This replaced a status-based always-on arrow: statuses
- * only bound where a child COULD exist, so every ordinary running/done task —
- * the overwhelming majority, which never invoke a call node — carried an arrow
- * that opened onto 「无子任务」. The count is computed under the list's own
- * visibility predicate, so the arrow never promises rows this actor can't see.
- */
-function hasVisibleChildren(row: TaskListItem): boolean {
-  return row.childCount > 0
+function TasksPageRoute() {
+  return (
+    <ManagedLiveRegionProvider>
+      <TasksPage />
+    </ManagedLiveRegionProvider>
+  )
 }
 
-/** Column count of the run-monitor table (child loading/empty rows span it). */
-const TASK_TABLE_COL_COUNT = 8
+interface FilterDraft {
+  statuses: TaskStatus[]
+  subject: TaskListSubject
+  scope: TaskListScope
+  origin: TaskListOrigin
+}
+
+function dedupeItems(pages: TaskOperationsPage[] | undefined): TaskOperationsListItem[] {
+  const items: TaskOperationsListItem[] = []
+  const seen = new Set<string>()
+  for (const page of pages ?? []) {
+    for (const item of page.items) {
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      items.push(item)
+    }
+  }
+  return items
+}
 
 function TasksPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const search = Route.useSearch() as TasksSearch
-  const status = search.status
-
-  useTasksSync()
-  const [scope, setScope] = useState<TaskChildScope>('top')
-  const { data, isLoading, error, refetch } = useQuery<TaskListItem[]>({
-    queryKey: ['tasks', { status, scope }],
-    // RFC-192 (Codex 设计门 P1): listTasks defaults to 100 rows — request the
-    // route's full 500-row cap explicitly so client-side subject/search
-    // filtering never silently misses rows 101+.
-    queryFn: ({ signal }) => {
-      const query: Record<string, string> = { include_owner: 'true', limit: '500' }
-      if (status !== undefined) query.status = status
-      // RFC-243: flat child view. The default request deliberately carries NO
-      // include_children param — the server's top-level filter is the contract.
-      if (scope === 'all') query.include_children = 'true'
-      return api.get('/api/tasks', query, signal)
-    },
-    refetchInterval: 15_000, // Fallback for cases where WS is unavailable.
-  })
-
-  const now = useNowTick()
-  const [subject, setSubject] = useState<TaskSubjectFilter>('all')
-  const [nameSearch, setNameSearch] = useState('')
-  // RFC-243: expanded parent rows + the "known childless" memory (an empty
-  // children result renders the「无子任务」row once and is not re-fetched on
-  // the next expand; plain component state per the design).
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
-  const [childless, setChildless] = useState<ReadonlySet<string>>(() => new Set())
-  const toggleExpanded = useCallback((id: string) => {
-    setExpanded((previous) => {
-      const next = new Set(previous)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
-  const markChildless = useCallback((id: string) => {
-    setChildless((previous) => (previous.has(id) ? previous : new Set(previous).add(id)))
-  }, [])
-  const nameSearchRef = useRef<HTMLInputElement | null>(null)
-  const allStatusRef = useRef<HTMLAnchorElement | null>(null)
-  const focusAfterStatusClearRef = useRef(false)
-  const rows = useMemo(
-    () => (data === undefined ? undefined : filterTaskRows(data, { subject, search: nameSearch })),
-    [data, subject, nameSearch],
+  const liveRegion = useManagedLiveRegion()
+  const href = useRouterState({ select: (state) => state.location.href })
+  // Parent/root search state may retain adjacent or legacy raw keys at runtime.
+  // Re-run the owned-key canonicalizer before any spread/navigation so a
+  // replace can actually remove those keys instead of carrying them forward.
+  const routeSearch = Route.useSearch()
+  const search = useMemo(
+    () => canonicalSearch(routeSearch as Record<string, unknown>),
+    [routeSearch],
   )
-  // RFC-243: ACL-visibility proxy for the flat-mode parent badge — a parent
-  // present in the SAME (unfiltered) response is trivially visible; absent
-  // parents get one probe fetch in ParentTaskBadge. Built from `data`, not
-  // `rows`, because client-side subject/search filters say nothing about
-  // visibility.
-  const listedIds = useMemo(() => new Set((data ?? []).map((row) => row.id)), [data])
-  const hasRows = data !== undefined && data.length > 0
-  const isInitialEmpty =
-    !isLoading && data !== undefined && data.length === 0 && status === undefined
-  const isStatusEmpty =
-    !isLoading && data !== undefined && data.length === 0 && status !== undefined
+  const actor = useActor()
+  const canReadAll = actor.data?.permissions?.includes('tasks:read:all') ?? false
+  const defaultScope: TaskListScope = canReadAll ? 'all' : 'mine'
+  const effectiveScope: TaskListScope =
+    search.scope === 'all' && !canReadAll ? 'mine' : (search.scope ?? defaultScope)
 
-  // A status-only empty result does not mount the search field. Clearing that
-  // URL filter therefore has to wait until the unfiltered query has rendered
-  // before restoring focus. Fall back to the always-mounted "All" chip when
-  // the unfiltered list is empty too.
   useEffect(() => {
-    if (
-      !focusAfterStatusClearRef.current ||
-      status !== undefined ||
-      isLoading ||
-      data === undefined
-    ) {
-      return
+    if (actor.data === undefined || actor.data === null) return
+    const hrefSearch = taskSearchFromHref(href)
+    const canonical: TasksSearch = {
+      ...hrefSearch,
+      scope:
+        hrefSearch.scope === defaultScope || (!canReadAll && hrefSearch.scope === 'all')
+          ? undefined
+          : hrefSearch.scope,
     }
-    focusAfterStatusClearRef.current = false
-    const target = nameSearchRef.current ?? allStatusRef.current
-    if (target !== null && target.isConnected) target.focus()
-  }, [data, isLoading, status])
+    if (taskSearchParamsFromHref(href).toString() !== taskSearchParams(canonical).toString()) {
+      void navigate({
+        to: '/tasks',
+        search: canonical,
+        replace: true,
+      })
+    }
+  }, [actor.data, canReadAll, defaultScope, href, navigate])
+
+  const statuses = useMemo(
+    () => (search.statuses === undefined ? [] : (parseTaskStatusList(search.statuses) ?? [])),
+    [search.statuses],
+  )
+  const filters = useMemo<TaskOperationsFilters>(
+    () => ({
+      view: search.view ?? 'all',
+      ...(search.q === undefined ? {} : { q: search.q }),
+      statuses,
+      subject: search.subject ?? 'all',
+      scope: effectiveScope,
+      origin: search.origin ?? 'all',
+    }),
+    [effectiveScope, search.origin, search.q, search.subject, search.view, statuses],
+  )
+  const filterFingerprint = JSON.stringify(filters)
+  const query = useTaskOperationsPage(filters, undefined, actor.data != null)
+  const sync = useTaskOperationsSync()
+  const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
+  const rootPage = query.data?.pages.find((page) => page.kind === 'root')
+  const facets =
+    rootPage?.kind === 'root' ? rootPage.facets : { all: 0, active: 0, attention: 0, finished: 0 }
+
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
+  useEffect(() => {
+    setExpanded(new Set())
+    setCollapsed(new Set())
+  }, [filterFingerprint])
+  const toggleBranch = useCallback((id: string, currentlyOpen: boolean) => {
+    if (currentlyOpen) {
+      setExpanded((previous) => {
+        const next = new Set(previous)
+        next.delete(id)
+        return next
+      })
+      setCollapsed((previous) => new Set(previous).add(id))
+    } else {
+      setCollapsed((previous) => {
+        const next = new Set(previous)
+        next.delete(id)
+        return next
+      })
+      setExpanded((previous) => new Set(previous).add(id))
+    }
+  }, [])
+
+  const [searchDraft, setSearchDraft] = useState(search.q ?? '')
+  useEffect(() => setSearchDraft(search.q ?? ''), [search.q])
+  useEffect(() => {
+    const next = searchDraft.trim()
+    if (next === (search.q ?? '')) return
+    const timer = window.setTimeout(() => {
+      void navigate({
+        to: '/tasks',
+        search: { ...search, q: next === '' ? undefined : next },
+        replace: true,
+      })
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [navigate, search, searchDraft])
+
+  const searchRef = useRef<HTMLInputElement | null>(null)
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [draft, setDraft] = useState<FilterDraft>({
+    statuses,
+    subject: filters.subject,
+    scope: filters.scope,
+    origin: filters.origin,
+  })
+  const openFilters = () => {
+    setDraft({
+      statuses: filters.statuses,
+      subject: filters.subject,
+      scope: filters.scope,
+      origin: filters.origin,
+    })
+    setFiltersOpen(true)
+  }
+  const filterDimensionCount =
+    Number(filters.statuses.length > 0) +
+    Number(filters.subject !== 'all') +
+    Number(filters.scope !== defaultScope) +
+    Number(filters.origin !== 'all')
+  const hasAnyFilter = filters.view !== 'all' || filters.q !== undefined || filterDimensionCount > 0
+
+  const clearFilters = () => {
+    setSearchDraft('')
+    void navigate({ to: '/tasks', search: {} }).then(() => searchRef.current?.focus())
+  }
+  const applyFilters = () => {
+    const canonicalStatuses = canonicalTaskStatuses(draft.statuses)
+    void navigate({
+      to: '/tasks',
+      search: {
+        ...search,
+        statuses: canonicalStatuses.length === 0 ? undefined : canonicalStatuses.join(','),
+        subject: draft.subject === 'all' ? undefined : draft.subject,
+        scope: draft.scope === defaultScope ? undefined : draft.scope,
+        origin: draft.origin === 'all' ? undefined : draft.origin,
+      },
+    })
+    setFiltersOpen(false)
+  }
+
+  const isLoading = actor.isLoading || query.isLoading
+  const initialEmpty =
+    !isLoading && query.error == null && items.length === 0 && facets.all === 0 && !hasAnyFilter
+  const noMatches = !isLoading && query.error == null && items.length === 0 && !initialEmpty
   const newTaskAction = (
     <Link to="/tasks/new" className="btn btn--primary" data-testid="tasks-new-button">
       {t('tasks.newButton')}
     </Link>
   )
-  const clearFiltersAction = (
-    <button
-      type="button"
-      className="btn btn--sm"
-      onClick={() => {
-        setSubject('all')
-        setNameSearch('')
-        if (status !== undefined) {
-          focusAfterStatusClearRef.current = true
-          void navigate({ to: '/tasks', search: {} })
-        }
-        const target = nameSearchRef.current
-        if (target !== null && target.isConnected) target.focus()
-      }}
-    >
-      {t('common.clearFilters')}
-    </button>
-  )
+  const previousResult = useRef<{ fingerprint: string; count: number } | null>(null)
+  useEffect(() => {
+    if (isLoading || query.error != null || liveRegion === null) return
+    const previous = previousResult.current
+    if (previous === null || previous.fingerprint !== filterFingerprint) {
+      liveRegion.announce(t('tasks.operations.resultCount', { count: items.length }))
+    } else if (items.length > previous.count) {
+      liveRegion.announce(
+        t('tasks.operations.addedCount', { count: items.length - previous.count }),
+      )
+    }
+    previousResult.current = { fingerprint: filterFingerprint, count: items.length }
+  }, [filterFingerprint, isLoading, items.length, liveRegion, query.error, t])
 
   return (
-    <div className="page">
-      <PageHeader title={t('tasks.title')} actions={isInitialEmpty ? undefined : newTaskAction} />
+    <div className="page page--task-operations">
+      <PageHeader title={t('tasks.title')} actions={initialEmpty ? undefined : newTaskAction} />
 
-      <div className="status-filter">
-        <div className="status-filter__statuses">
-          <Link
-            ref={allStatusRef}
-            to="/tasks"
-            search={{}}
-            className={`chip ${status === undefined ? 'chip--active' : ''}`}
-          >
-            {t('tasks.filterAll')}
-          </Link>
-          {TASK_STATUS.map((s) => (
-            <Link
-              key={s}
-              to="/tasks"
-              search={{ status: s }}
-              className={`chip ${status === s ? 'chip--active' : ''}`}
-            >
-              {t(`tasks.status.${s}`)}
-            </Link>
-          ))}
-        </div>
-        {/* RFC-192 — subject + name filters, pure client-side. Rendered only
-            when the list has rows so the empty page does not show controls
-            that cannot narrow anything. RFC-243: the child-scope Segmented is
-            deliberately OUTSIDE that gate — it is a server-side scope that
-            can BROADEN an empty top-level list (a workgroup human member may
-            be a member of child tasks only; hiding the toggle would strand
-            their awaiting children, the exact P2-5(R1) window the design
-            closes). */}
-        {data !== undefined && (
-          // div, not span: Segmented's root is a <div> and <span><div> is
-          // invalid nesting (React 19 validateDOMNesting; 实现门 P3).
-          <div className="tasks-toolbar">
-            <Segmented<TaskChildScope>
-              value={scope}
-              onChange={setScope}
-              ariaLabel={t('tasks.scopeFilterAria')}
-              options={[
-                { value: 'top', label: t('tasks.scopeFilter.top'), testid: 'tasks-scope-top' },
-                { value: 'all', label: t('tasks.scopeFilter.all'), testid: 'tasks-scope-all' },
-              ]}
+      {sync.dirty && (
+        <NoticeBanner
+          tone="info"
+          size="compact"
+          testid="tasks-dirty-banner"
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void sync.refresh()}>
+              {t('tasks.operations.refresh')}
+            </button>
+          }
+        >
+          {t('tasks.operations.updated')}
+        </NoticeBanner>
+      )}
+
+      {!initialEmpty && (
+        <div className="task-operations-toolbar">
+          <Segmented<TaskListView>
+            value={filters.view}
+            onChange={(view) =>
+              void navigate({
+                to: '/tasks',
+                search: { ...search, view: view === 'all' ? undefined : view },
+              })
+            }
+            ariaLabel={t('tasks.operations.viewAria')}
+            disabled={isLoading}
+            rootTestid="tasks-views"
+            options={TASK_LIST_VIEWS.map((view) => ({
+              value: view,
+              testid: `tasks-view-${view}`,
+              label: (
+                <span className="task-operations-toolbar__view-label">
+                  <span>{t(`tasks.operations.views.${view}`)}</span>
+                  <span className="task-operations-toolbar__count" aria-hidden="true">
+                    {facets[view]}
+                  </span>
+                </span>
+              ),
+            }))}
+          />
+          <div className="task-operations-toolbar__actions">
+            <TextInput
+              type="search"
+              value={searchDraft}
+              onChange={setSearchDraft}
+              maxLength={100}
+              placeholder={t('tasks.operations.searchPlaceholder')}
+              aria-label={t('tasks.operations.searchLabel')}
+              className="task-operations-toolbar__search"
+              disabled={isLoading}
+              inputRef={searchRef}
+              data-testid="tasks-search"
             />
-            {hasRows && (
-              <>
-                <Segmented<TaskSubjectFilter>
-                  value={subject}
-                  onChange={setSubject}
-                  ariaLabel={t('tasks.colSubject')}
-                  options={SUBJECT_FILTERS.map((v) => ({
-                    value: v,
-                    label: t(`tasks.subjectFilter.${v}`),
-                    testid: `tasks-subject-${v}`,
-                  }))}
-                />
-                <TextInput
-                  type="search"
-                  value={nameSearch}
-                  onChange={setNameSearch}
-                  placeholder={t('common.searchEllipsis')}
-                  aria-label={t('common.searchEllipsis')}
-                  className="tasks-toolbar__search"
-                  inputRef={nameSearchRef}
-                  data-testid="tasks-search"
-                />
-              </>
-            )}
+            <button
+              ref={filterButtonRef}
+              type="button"
+              className="btn btn--sm task-operations-toolbar__filter"
+              disabled={isLoading}
+              onClick={openFilters}
+              data-testid="tasks-filter-button"
+            >
+              {t('tasks.operations.filters')}
+              {filterDimensionCount > 0 && (
+                <span
+                  className="chip chip--tight"
+                  aria-label={t('tasks.operations.activeFilters', { count: filterDimensionCount })}
+                >
+                  {filterDimensionCount}
+                </span>
+              )}
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {isLoading && <LoadingState data-testid="tasks-loading" />}
       <FeedbackStack variant="section">
-        {error !== null && error !== undefined && (
-          <ErrorBanner error={error} onRetry={() => void refetch()} />
+        {query.error != null && (
+          <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
         )}
       </FeedbackStack>
-      {isInitialEmpty && (
+      {isLoading && <LoadingState data-testid="tasks-loading" />}
+      {initialEmpty && (
         <EmptyState
           title={t('tasks.emptyList')}
           description={t('tasks.emptyDescription')}
@@ -299,395 +433,483 @@ function TasksPage() {
           data-testid="tasks-empty"
         />
       )}
-      {isStatusEmpty && (
+      {noMatches && (
         <EmptyState
           size="compact"
           title={t('common.noMatches')}
-          action={clearFiltersAction}
-          data-testid="tasks-no-matches"
-        />
-      )}
-      {hasRows && rows !== undefined && rows.length === 0 && (
-        <EmptyState
-          size="compact"
-          title={t('common.noMatches')}
-          action={clearFiltersAction}
+          action={
+            <button type="button" className="btn btn--sm" onClick={clearFilters}>
+              {t('common.clearFilters')}
+            </button>
+          }
           data-testid="tasks-no-matches"
         />
       )}
 
-      {rows !== undefined && rows.length > 0 && (
-        <TableViewport label={t('tasks.title')} minWidth="lg">
-          <table className="data-table">
-            <thead>
-              <tr>
-                {/* RFC-192: status leads (monitor-scan entry point); the ULID
-                    stays a muted subtitle inside the name cell (RFC-037). */}
-                <th>{t('tasks.colStatus')}</th>
-                <th>{t('tasks.colName')}</th>
-                <th>{t('tasks.colSubject')}</th>
-                <th>{t('acl.owner')}</th>
-                <th>{t('tasks.colRepo')}</th>
-                <th>{t('tasks.colStarted')}</th>
-                <th>{t('tasks.colDuration')}</th>
-                <th aria-label={t('common.ariaActions')} />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <TaskRowGroup
-                  key={row.id}
-                  row={row}
-                  now={now}
-                  depth={0}
-                  scope={scope}
-                  expanded={expanded}
-                  childless={childless}
-                  onToggleExpanded={toggleExpanded}
-                  onMarkChildless={markChildless}
-                  listedIds={listedIds}
-                />
-              ))}
-            </tbody>
-          </table>
-        </TableViewport>
+      {items.length > 0 && (
+        <TaskOperationsList
+          items={items}
+          filters={filters}
+          expanded={expanded}
+          collapsed={collapsed}
+          onToggle={toggleBranch}
+          onLoadMore={() => void query.fetchNextPage()}
+          hasNextPage={query.hasNextPage}
+          loadingMore={query.isFetchingNextPage}
+        />
       )}
+
+      <TaskListFilterDialog
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        triggerRef={filterButtonRef}
+        draft={draft}
+        onChange={setDraft}
+        canReadAll={canReadAll}
+        onApply={applyFilters}
+        onClear={() =>
+          setDraft({ statuses: [], subject: 'all', scope: defaultScope, origin: 'all' })
+        }
+      />
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// RFC-243 — row group (one task row + its lazily expanded direct children).
-// ---------------------------------------------------------------------------
-
-interface TaskRowGroupProps {
-  row: TaskListItem
-  now: number
-  /** Nesting depth: 0 = top-level; >0 = nested child row (indent + badge). */
-  depth: number
-  scope: TaskChildScope
-  expanded: ReadonlySet<string>
-  childless: ReadonlySet<string>
-  onToggleExpanded: (id: string) => void
-  onMarkChildless: (id: string) => void
-  /** Ids present in the main list response — flat-mode parent-badge shortcut. */
-  listedIds: ReadonlySet<string>
-}
-
-function TaskRowGroup(props: TaskRowGroupProps) {
-  const { row, scope, depth } = props
-  const { t } = useTranslation()
-  // Expansion only exists in the nested (top-level) scope — the flat
-  //「含子任务」listing already shows every child row.
-  const expandable = scope === 'top' && hasVisibleChildren(row)
-  const isExpanded = expandable && props.expanded.has(row.id)
-  return (
-    <Fragment>
-      <TaskRow
-        row={row}
-        now={props.now}
-        depth={depth}
-        expandState={expandable ? (isExpanded ? 'expanded' : 'collapsed') : null}
-        onToggleExpand={() => props.onToggleExpanded(row.id)}
-        parentBadge={
-          scope === 'all' && row.parentTaskId != null ? (
-            <ParentTaskBadge
-              taskId={row.id}
-              parentTaskId={row.parentTaskId}
-              parentInList={props.listedIds.has(row.parentTaskId)}
-            />
-          ) : undefined
-        }
-      />
-      {isExpanded &&
-        (props.childless.has(row.id) ? (
-          <tr data-testid={`task-children-empty-${row.id}`}>
-            <td colSpan={TASK_TABLE_COL_COUNT} className="data-table__muted">
-              {t('tasks.noChildTasks')}
-            </td>
-          </tr>
-        ) : (
-          <TaskChildRows {...props} parentId={row.id} depth={depth + 1} />
-        ))}
-    </Fragment>
-  )
-}
-
-/**
- * Lazily loaded direct children of one expanded parent row. Children that are
- * themselves in an expandable state recurse through TaskRowGroup, so a
- * grandchild chain (invocationDepth > 1) stays reachable from the list.
- */
-function TaskChildRows(props: Omit<TaskRowGroupProps, 'row'> & { parentId: string }) {
-  const { parentId, onMarkChildless } = props
-  const { t } = useTranslation()
-  const query = useTaskChildren(parentId)
-  const isEmpty = query.data !== undefined && query.data.length === 0
-  // Remember "no children" in the page's component state (setState in render
-  // is illegal — effect). The parent then renders the empty row itself and
-  // this query unmounts, so a re-expand never re-probes the server.
-  useEffect(() => {
-    if (isEmpty) onMarkChildless(parentId)
-  }, [isEmpty, onMarkChildless, parentId])
-
-  if (query.data === undefined) {
-    if (query.error !== null && query.error !== undefined) {
-      return (
-        <tr data-testid={`task-children-error-${parentId}`}>
-          <td colSpan={TASK_TABLE_COL_COUNT}>
-            <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-          </td>
-        </tr>
-      )
-    }
-    return (
-      <tr data-testid={`task-children-loading-${parentId}`}>
-        <td colSpan={TASK_TABLE_COL_COUNT}>
-          <LoadingState size="compact" />
-        </td>
-      </tr>
-    )
-  }
-  if (isEmpty) {
-    // First (pre-memory) frame of an empty result — same DOM as the
-    // remembered branch in TaskRowGroup, which takes over on the next render.
-    return (
-      <tr data-testid={`task-children-empty-${parentId}`}>
-        <td colSpan={TASK_TABLE_COL_COUNT} className="data-table__muted">
-          {t('tasks.noChildTasks')}
-        </td>
-      </tr>
-    )
-  }
-  return (
-    <Fragment>
-      {query.data.map((child) => (
-        <TaskRowGroup {...props} key={child.id} row={child} />
-      ))}
-    </Fragment>
-  )
-}
-
-/**
- * RFC-243 — flat-mode parent badge on a child row. Links to the parent detail
- * when the parent is visible; degrades to a neutral non-link label when it is
- * not (design §8 — a workgroup human member can be a member of the child task
- * only; the ACL-filtered list/detail make "invisible" and "deleted" look the
- * same, so one neutral label covers both, never a dead link).
- */
-function ParentTaskBadge({
-  taskId,
-  parentTaskId,
-  parentInList,
-}: {
-  taskId: string
-  parentTaskId: string
-  parentInList: boolean
+function TaskListFilterDialog(props: {
+  open: boolean
+  onClose: () => void
+  triggerRef: React.RefObject<HTMLButtonElement | null>
+  draft: FilterDraft
+  onChange: (draft: FilterDraft) => void
+  canReadAll: boolean
+  onApply: () => void
+  onClear: () => void
 }) {
   const { t } = useTranslation()
-  // Probe only when the parent is not already in the list window (rare:
-  // ACL-invisible parent, or a parent older than the 500-row window). Shares
-  // the detail route's ['tasks', id] cache entry, so a successful probe also
-  // pre-warms the parent detail navigation.
-  const probe = useQuery<Task>({
-    queryKey: ['tasks', parentTaskId],
-    queryFn: ({ signal }) =>
-      api.get(`/api/tasks/${encodeURIComponent(parentTaskId)}`, undefined, signal),
-    enabled: !parentInList,
-    retry: false,
-    staleTime: 30_000,
-  })
-  if (parentInList || probe.data !== undefined) {
-    return (
-      <Link
-        to="/tasks/$id"
-        params={{ id: parentTaskId }}
-        className="chip chip--tight task-name-cell__origin"
-        data-testid={`task-parent-chip-${taskId}`}
-      >
-        {t('tasks.parentTaskChip')}
-      </Link>
-    )
-  }
+  const statusOptions = TASK_STATUS.map((status) => ({
+    value: status,
+    label: t(`tasks.status.${status}`),
+  }))
+  const scopeOptions = (props.canReadAll ? TASK_LIST_SCOPES : ['mine', 'shared']).map((scope) => ({
+    value: scope as TaskListScope,
+    label: t(`tasks.operations.scope.${scope}`),
+  }))
   return (
-    <span
-      className="chip chip--tight task-name-cell__origin"
-      data-testid={`task-parent-chip-${taskId}`}
+    <Dialog
+      open={props.open}
+      onClose={props.onClose}
+      title={t('tasks.operations.filterTitle')}
+      size="md"
+      triggerRef={props.triggerRef}
+      data-testid="tasks-filter-dialog"
+      footer={
+        <>
+          <button type="button" className="btn" onClick={props.onClear}>
+            {t('common.clearFilters')}
+          </button>
+          <button type="button" className="btn btn--primary" onClick={props.onApply}>
+            {t('tasks.operations.applyFilters')}
+          </button>
+        </>
+      }
     >
-      {probe.isError ? t('tasks.parentTaskUnavailable') : t('tasks.parentTaskChip')}
-    </span>
+      <div className="form-grid task-list-filter-dialog">
+        <Field label={t('tasks.operations.statuses')} group>
+          <MultiSelect
+            value={props.draft.statuses}
+            onChange={(values) =>
+              props.onChange({ ...props.draft, statuses: values as TaskStatus[] })
+            }
+            options={statusOptions}
+            ariaLabel={t('tasks.operations.statuses')}
+            allowCustom={false}
+            placeholder={t('tasks.operations.statusPlaceholder')}
+            data-testid="tasks-status-filter"
+          />
+        </Field>
+        <Field label={t('tasks.colSubject')} group>
+          <Segmented<TaskListSubject>
+            value={props.draft.subject}
+            onChange={(subject) => props.onChange({ ...props.draft, subject })}
+            ariaLabel={t('tasks.colSubject')}
+            options={TASK_LIST_SUBJECTS.map((subject) => ({
+              value: subject,
+              label: t(`tasks.subjectFilter.${subject}`),
+            }))}
+          />
+        </Field>
+        <Field label={t('tasks.operations.scopeLabel')} group>
+          <Segmented<TaskListScope>
+            value={props.draft.scope}
+            onChange={(scope) => props.onChange({ ...props.draft, scope })}
+            ariaLabel={t('tasks.operations.scopeLabel')}
+            options={scopeOptions}
+          />
+        </Field>
+        <Field label={t('tasks.operations.originLabel')} group>
+          <Segmented<TaskListOrigin>
+            value={props.draft.origin}
+            onChange={(origin) => props.onChange({ ...props.draft, origin })}
+            ariaLabel={t('tasks.operations.originLabel')}
+            options={TASK_LIST_ORIGINS.map((origin) => ({
+              value: origin,
+              label: t(`tasks.operations.origin.${origin}`),
+            }))}
+          />
+        </Field>
+      </div>
+    </Dialog>
   )
 }
 
-// ---------------------------------------------------------------------------
-// One run-monitor table row (top-level or nested child).
-// ---------------------------------------------------------------------------
-
-interface TaskRowProps {
-  row: TaskListItem
-  now: number
-  depth: number
-  /** null = no expand affordance on this row. */
-  expandState: 'collapsed' | 'expanded' | null
-  onToggleExpand: () => void
-  /** Flat-mode parent badge (link or neutral degrade), when applicable. */
-  parentBadge?: ReactNode
+function TaskOperationsList(props: {
+  items: TaskOperationsListItem[]
+  filters: TaskOperationsFilters
+  expanded: ReadonlySet<string>
+  collapsed: ReadonlySet<string>
+  onToggle: (id: string, currentlyOpen: boolean) => void
+  onLoadMore: () => void
+  hasNextPage: boolean
+  loadingMore: boolean
+}) {
+  const { t } = useTranslation()
+  return (
+    <section
+      className="task-operations"
+      aria-label={t('tasks.title')}
+      aria-busy={props.loadingMore || undefined}
+    >
+      <div className="task-operations__head" aria-hidden="true">
+        <span>{t('tasks.operations.columns.task')}</span>
+        <span>{t('tasks.operations.columns.execution')}</span>
+        <span>{t('tasks.operations.columns.time')}</span>
+        <span>{t('acl.owner')}</span>
+        <span />
+      </div>
+      <ol className="task-operations__list" aria-label={t('tasks.title')}>
+        {props.items.map((item) => (
+          <TaskBranch key={item.id} item={item} depth={0} {...props} />
+        ))}
+        {props.hasNextPage && (
+          <li className="task-operations__more">
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={props.loadingMore}
+              onClick={props.onLoadMore}
+            >
+              {props.loadingMore
+                ? t('tasks.operations.loadingMore')
+                : t('tasks.operations.loadMore')}
+            </button>
+          </li>
+        )}
+      </ol>
+    </section>
+  )
 }
 
-function TaskRow({ row, now, depth, expandState, onToggleExpand, parentBadge }: TaskRowProps) {
+interface TaskBranchProps {
+  item: TaskOperationsListItem
+  depth: number
+  filters: TaskOperationsFilters
+  expanded: ReadonlySet<string>
+  collapsed: ReadonlySet<string>
+  onToggle: (id: string, currentlyOpen: boolean) => void
+}
+
+function TaskBranch(props: TaskBranchProps) {
+  const { item } = props
+  const hasChildren = item.listContext.qualifyingChildCount > 0
+  const autoExpanded = item.listContext.matchKind === 'context' && !props.collapsed.has(item.id)
+  const isExpanded = hasChildren && (props.expanded.has(item.id) || autoExpanded)
+  const branchId = `task-children-${encodeURIComponent(item.id).replaceAll('%', '_')}`
+  return (
+    <li
+      className="task-operations__item"
+      style={{ '--task-tree-depth': props.depth } as CSSProperties}
+      data-depth={props.depth}
+    >
+      <TaskOperationsRow
+        item={item}
+        depth={props.depth}
+        branchId={hasChildren ? branchId : undefined}
+        expanded={isExpanded}
+        onToggle={() => props.onToggle(item.id, isExpanded)}
+      />
+      {hasChildren && (
+        <ol
+          id={branchId}
+          className="task-operations__children"
+          aria-label={`${item.name}`}
+          hidden={!isExpanded}
+        >
+          {isExpanded && (
+            <TaskChildren
+              parent={item}
+              depth={props.depth + 1}
+              filters={props.filters}
+              expanded={props.expanded}
+              collapsed={props.collapsed}
+              onToggle={props.onToggle}
+            />
+          )}
+        </ol>
+      )}
+    </li>
+  )
+}
+
+function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskOperationsListItem }) {
+  const { t } = useTranslation()
+  const liveRegion = useManagedLiveRegion()
+  const query = useTaskOperationsPage(props.filters, props.parent.id)
+  const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
+  const childFingerprint = `${props.parent.id}:${JSON.stringify(props.filters)}`
+  const previousPage = useRef<{ fingerprint: string; pages: number; count: number } | null>(null)
+  useEffect(() => {
+    const pages = query.data?.pages.length ?? 0
+    if (pages === 0) return
+    const previous = previousPage.current
+    if (
+      previous !== null &&
+      previous.fingerprint === childFingerprint &&
+      pages > previous.pages &&
+      items.length > previous.count
+    ) {
+      liveRegion?.announce(
+        t('tasks.operations.addedChildrenCount', { count: items.length - previous.count }),
+      )
+    }
+    previousPage.current = { fingerprint: childFingerprint, pages, count: items.length }
+  }, [childFingerprint, items.length, liveRegion, query.data?.pages.length, t])
+
+  if (query.isLoading) {
+    return (
+      <li
+        className="task-operations__branch-state"
+        data-testid={`task-children-loading-${props.parent.id}`}
+      >
+        <LoadingState size="compact" />
+      </li>
+    )
+  }
+  if (query.error != null && items.length === 0) {
+    return (
+      <li
+        className="task-operations__branch-state"
+        data-testid={`task-children-error-${props.parent.id}`}
+      >
+        <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
+      </li>
+    )
+  }
+  if (items.length === 0) {
+    return (
+      <li
+        className="task-operations__branch-state"
+        data-testid={`task-children-empty-${props.parent.id}`}
+      >
+        {t('tasks.noChildTasks')}
+      </li>
+    )
+  }
+  return (
+    <>
+      {query.error != null && (
+        <li className="task-operations__branch-state">
+          <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
+        </li>
+      )}
+      {items.map((item) => (
+        <TaskBranch key={item.id} item={item} {...props} />
+      ))}
+      {query.hasNextPage && (
+        <li className="task-operations__more task-operations__more--child">
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={query.isFetchingNextPage}
+            onClick={() => void query.fetchNextPage()}
+          >
+            {query.isFetchingNextPage
+              ? t('tasks.operations.loadingMoreChildren')
+              : t('tasks.operations.loadMoreChildren')}
+          </button>
+        </li>
+      )}
+    </>
+  )
+}
+
+function TaskOperationsRow(props: {
+  item: TaskOperationsListItem
+  depth: number
+  branchId?: string
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const { item } = props
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const repo = taskRepoDisplayName(row)
-
-  function durationCell(r: TaskSummary): string {
-    const cell = taskDurationCell(r, now)
-    if (cell.kind === 'dash') return t('common.emDash')
-    const dur = t(`common.dur.${cell.dur.key}`, cell.dur.opts)
-    if (cell.kind === 'running') return t('tasks.durationRunning', { dur })
-    if (cell.kind === 'waiting') return t('tasks.durationWaiting', { dur })
-    return dur
-  }
+  const now = useNowTick()
+  const repo = taskRepoDisplayName(item)
+  const duration = taskOperationsDuration(item, now)
+  const durationText =
+    duration.kind === 'dash'
+      ? t('common.emDash')
+      : t(`tasks.operations.duration.${duration.kind}`, {
+          dur: t(`common.dur.${duration.dur.key}`, duration.dur.opts),
+        })
+  const detail = executionDetail(item, t)
 
   return (
-    <tr
-      className={`data-table__row${depth > 0 ? ' task-row--child' : ''}`}
-      data-testid={`task-row-${row.id}`}
-      data-depth={depth > 0 ? depth : undefined}
-      // RFC-243: nested-child indent rides a CSS var on the <tr>; the
-      // `.task-row--child .task-name-cell__inner` rule consumes it. The inner
-      // <div> stays byte-identical — tasks-list-name-cell-row-alignment locks
-      // its exact markup (flex belongs on the inner wrapper, never the <td>).
-      style={depth > 0 ? ({ '--task-child-depth': depth } as CSSProperties) : undefined}
-      onClick={(e) => {
-        // Whole-row navigation; inner links / modifier clicks are
-        // exempt via the shared guard (RFC-192 design §4).
-        if (shouldRowNavigate(e)) {
-          void navigate({ to: '/tasks/$id', params: { id: row.id } })
+    <div
+      className={`task-operations__row${props.depth > 0 ? ' task-operations__row--child' : ''}`}
+      data-testid={`task-row-${item.id}`}
+      onClick={(event) => {
+        if (shouldRowNavigate(event)) {
+          void navigate({ to: '/tasks/$id', params: { id: item.id } })
         }
       }}
     >
-      <td className="data-table__nowrap">
-        {/* RFC-243: always-on expand arrow (no per-row children probe). A
-            <button> is exempt from row navigation by the shouldRowNavigate
-            closest() guard. */}
-        {expandState !== null && (
-          <>
-            <button
-              type="button"
-              className="btn btn--xs"
-              aria-expanded={expandState === 'expanded'}
-              aria-label={t(
-                expandState === 'expanded' ? 'tasks.collapseChildren' : 'tasks.expandChildren',
-              )}
-              data-testid={`task-expand-${row.id}`}
-              onClick={onToggleExpand}
-            >
-              <span aria-hidden="true">{expandState === 'expanded' ? '▾' : '▸'}</span>
-            </button>{' '}
-          </>
-        )}
-        <TaskStatusChip status={row.status} pulse={row.status === 'running'} />
-        {/* RFC-108 T22: stuck badge — open lifecycle alerts. */}
-        {(row.openAlertCount ?? 0) > 0 && (
-          <>
-            {' '}
-            <StatusChip
-              kind="warn"
-              size="sm"
-              aria-label={t('tasks.stuckBadge', { count: row.openAlertCount })}
-            >
-              {t('tasks.stuckBadge', { count: row.openAlertCount })}
-            </StatusChip>
-          </>
-        )}
-      </td>
-      <td className="task-name-cell">
-        {/* Flex column lives on this inner wrapper, NOT the <td> —
-          a flex <td> drops out of row-height equalization and its
-          bottom border paints ~3px above the neighbors' (stepped
-          row separator). See .skills__name-cell__inner for the
-          same pattern. */}
-        <div className="task-name-cell__inner">
-          {/* Flex row so the origin chip sits BESIDE the name
-            (__name is display:block — a bare span would push
-            the chip to its own line; 实现门 P2). */}
-          <span className="task-name-cell__row">
+      <div className="task-operations__cell task-operations__task">
+        <span className="sr-only">{t('tasks.operations.columns.task')}：</span>
+        <div className="task-operations__name-line">
+          <Link
+            to="/tasks/$id"
+            params={{ id: item.id }}
+            className="data-table__link task-operations__name"
+            title={item.name}
+          >
+            {item.name}
+          </Link>
+          {item.scheduledTaskId != null && (
             <Link
-              to="/tasks/$id"
-              params={{ id: row.id }}
-              className="data-table__link task-name-cell__name"
-              title={row.name}
+              to="/scheduled/$id"
+              params={{ id: item.scheduledTaskId }}
+              className="chip chip--tight task-operations__chip-link"
+              data-testid={`task-scheduled-chip-${item.id}`}
             >
-              {row.name}
+              {t('tasks.scheduledChip')}
             </Link>
-            {/* RFC-243: nested rows are marked as child executions; flat-mode
-                child rows link their parent instead (parentBadge). */}
-            {depth > 0 && (
-              <span className="chip chip--tight" data-testid={`task-child-badge-${row.id}`}>
-                {t('tasks.childBadge')}
-              </span>
-            )}
-            {parentBadge}
-            {/* RFC-192: scheduled-origin chip → the owning schedule. */}
-            {row.scheduledTaskId != null && (
-              <Link
-                to="/scheduled/$id"
-                params={{ id: row.scheduledTaskId }}
-                className="chip chip--tight task-name-cell__origin"
-                data-testid={`task-scheduled-chip-${row.id}`}
-              >
-                {t('tasks.scheduledChip')}
-              </Link>
-            )}
-          </span>
-          <code className="task-name-cell__id">{row.id}</code>
-          {/* RFC-192: the error line renders on FAILED rows only —
-            canceled/interrupted rows also carry non-null
-            summaries ("canceled by user", "daemon-shutdown")
-            that are notes, not errors (Codex 设计门 P2). */}
-          {row.status === 'failed' && row.errorSummary != null && (
-            <span
-              className="task-name-cell__error"
-              title={row.errorSummary}
-              data-testid={`task-error-${row.id}`}
-            >
-              {/* RFC-203 T4: localized failure copy; raw token stays in title. */}
-              {
-                describeTaskFailure({
-                  failureCode: row.failureCode ?? null,
-                  errorSummary: row.errorSummary,
-                }).title
-              }
+          )}
+          {item.listContext.parentAvailability === 'unavailable' && (
+            <span className="chip chip--tight" data-testid={`task-parent-unavailable-${item.id}`}>
+              {t('tasks.parentTaskUnavailable')}
             </span>
           )}
         </div>
-      </td>
-      <td className="data-table__nowrap">
-        {/* Execution subject (group / agent / workflow) — resolved
-          by TaskSubjectLink so builtin host anchors never leak. */}
-        <TaskSubjectLink task={row} taskId={row.id} badge />
-      </td>
-      <td className="data-table__owner-cell">
-        <OwnerLabel ownerUserId={row.ownerUserId} owner={row.owner} />
-      </td>
-      <td className="data-table__nowrap">
-        <code title={repo.title}>{repo.name}</code>
-        {row.repoCount > 1 && (
-          <>
-            {' '}
-            <span className="chip chip--tight" data-testid={`task-repos-${row.id}`}>
-              {t('tasks.repoCountChip', { n: row.repoCount })}
+        <div className="task-operations__meta">
+          <TaskSubjectLink task={item} taskId={item.id} badge />
+          <span className="task-operations__repo-separator" aria-hidden="true">
+            ·
+          </span>
+          <code className="task-operations__repo" title={repo.title}>
+            {repo.name}
+          </code>
+          {item.repoCount > 1 && (
+            <span
+              className="chip chip--tight task-operations__repo-count"
+              data-testid={`task-repos-${item.id}`}
+            >
+              {t('tasks.repoCountChip', { n: item.repoCount })}
             </span>
-          </>
+          )}
+          <span aria-hidden="true">·</span>
+          <code className="task-operations__id" title={item.id}>
+            {item.id.slice(-8)}
+          </code>
+          {item.childCount > 0 && (
+            <span>{t('tasks.operations.childCount', { count: item.childCount })}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="task-operations__cell task-operations__execution">
+        <span className="sr-only">{t('tasks.operations.columns.execution')}：</span>
+        <div className="task-operations__status-line">
+          <TaskStatusChip status={item.status} pulse={item.status === 'running'} />
+          {(item.openAlertCount ?? 0) > 0 && (
+            <StatusChip kind="warn" size="sm">
+              {t('tasks.stuckBadge', { count: item.openAlertCount })}
+            </StatusChip>
+          )}
+        </div>
+        <span className="task-operations__detail" title={detail.title}>
+          {detail.text}
+        </span>
+      </div>
+
+      <div className="task-operations__cell task-operations__time">
+        <span className="sr-only">{t('tasks.operations.columns.time')}：</span>
+        <RelativeTime ts={item.startedAt} />
+        <span className="task-operations__duration">{durationText}</span>
+      </div>
+
+      <div className="task-operations__cell task-operations__owner">
+        <span className="sr-only">{t('acl.owner')}：</span>
+        <OwnerLabel ownerUserId={item.ownerUserId} owner={item.owner} wrap />
+      </div>
+
+      <div className="task-operations__expand">
+        {props.branchId !== undefined && (
+          <button
+            type="button"
+            className="task-operations__expand-button"
+            aria-expanded={props.expanded}
+            aria-controls={props.branchId}
+            aria-label={t(props.expanded ? 'tasks.collapseChildren' : 'tasks.expandChildrenCount', {
+              count: item.listContext.qualifyingChildCount,
+            })}
+            data-testid={`task-expand-${item.id}`}
+            onClick={props.onToggle}
+          >
+            <span aria-hidden="true">{props.expanded ? '⌄' : '›'}</span>
+          </button>
         )}
-      </td>
-      <td className="data-table__muted data-table__nowrap">
-        <RelativeTime ts={row.startedAt} />
-      </td>
-      <td className="data-table__muted data-table__nowrap">{durationCell(row)}</td>
-      <td className="data-table__chevron" aria-hidden="true">
-        ›
-      </td>
-    </tr>
+      </div>
+    </div>
   )
+}
+
+function executionDetail(
+  item: TaskOperationsListItem,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): { text: string; title?: string } {
+  if ((item.openAlertCount ?? 0) > 0) {
+    return { text: t('tasks.operations.openAlertDetail', { count: item.openAlertCount }) }
+  }
+  if (item.status === 'failed') {
+    const failure = describeTaskFailure({
+      failureCode: item.failureCode ?? null,
+      errorSummary: item.errorSummary,
+    })
+    return { text: failure.title, title: item.errorSummary ?? failure.title }
+  }
+  if (item.listContext.matchKind === 'context') {
+    return {
+      text: t('tasks.operations.contextMatches', {
+        count: item.listContext.matchingDescendantCount,
+      }),
+    }
+  }
+  if (item.status === 'awaiting_review') return { text: t('tasks.operations.awaitingReview') }
+  if (item.status === 'awaiting_human') return { text: t('tasks.operations.awaitingHuman') }
+  if (item.status === 'pending') return { text: t('tasks.operations.pendingDetail') }
+  if (item.status === 'running') return { text: t('tasks.operations.runningDetail') }
+  return { text: t('tasks.operations.finishedDetail') }
+}
+
+// Retained as a small named seam for duration source locks and component tests.
+export function taskOperationsDurationText(
+  item: TaskOperationsListItem,
+  now: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ReactNode {
+  const duration = taskOperationsDuration(item, now)
+  if (duration.kind === 'dash') return t('common.emDash')
+  return t(`tasks.operations.duration.${duration.kind}`, {
+    dur: t(`common.dur.${duration.dur.key}`, duration.dur.opts),
+  })
 }

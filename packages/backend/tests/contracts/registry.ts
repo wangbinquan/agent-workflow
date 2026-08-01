@@ -30,6 +30,7 @@ import {
   ScheduledTaskListItemSchema,
   SkillSchema,
   TaskListItemSchema,
+  TaskOperationsPageSchema,
   WorkgroupSchema,
   WorkflowDetailSchema,
   WorkflowDraftValidationReceiptSchema,
@@ -406,6 +407,14 @@ export const ENDPOINTS: EndpointSpec[] = [
     happy: {
       query: { include_owner: 'true' },
       schema: z.array(TaskListItemSchema),
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/tasks/page',
+    happy: {
+      query: { view: 'all', scope: 'all' },
+      schema: TaskOperationsPageSchema,
     },
   },
   {

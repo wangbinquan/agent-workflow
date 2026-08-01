@@ -31,10 +31,12 @@ describe('node-run duration column carries no 人工/非人工 marker', () => {
   })
 
   test('no surviving review-duration marker strings in the zh bundle', () => {
-    // The retired markers, spelled out so a re-introduction trips this test.
+    // The retired parenthetical marker is specific enough to guard the
+    // duration cell. Generic「等待人工」copy is valid elsewhere (for example
+    // the RFC-244 task execution detail) and must not be banned bundle-wide.
     const blob = JSON.stringify(zhCN.tasks)
     expect(blob).not.toContain('（人工）')
-    expect(blob).not.toContain('等待人工')
+    expect(blob).not.toContain('等待人工耗时')
   })
 
   test('both surfaces render the unified durationMs, not the removed keys', () => {

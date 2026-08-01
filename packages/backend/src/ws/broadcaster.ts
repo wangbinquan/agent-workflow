@@ -126,6 +126,24 @@ export interface WorkgroupDeletedAudienceContext {
 
 export type WorkgroupsBroadcastContext = WorkgroupDeletedAudienceContext
 
+export interface TaskMembersChangedAudienceContext {
+  kind: 'task.members-changed-audience'
+  taskId: string
+  /** Union of the before/after owner + collaborator audiences. */
+  visibleUserIds: ReadonlySet<string>
+}
+
+export interface TaskDeletedAudienceContext {
+  kind: 'task.deleted-audience'
+  taskId: string
+  /** Owner + collaborators frozen before the task row disappears. */
+  visibleUserIds: ReadonlySet<string>
+}
+
+export type TasksListBroadcastContext =
+  | TaskMembersChangedAudienceContext
+  | TaskDeletedAudienceContext
+
 /** Owner identity is authorization metadata and is never serialized on wire. */
 export interface McpRuntimeTestBroadcastContext {
   kind: 'mcp-runtime-test-owner'
@@ -133,7 +151,10 @@ export interface McpRuntimeTestBroadcastContext {
 }
 
 export const taskBroadcaster = new TypedBroadcaster<TaskWsMessage>()
-export const tasksListBroadcaster = new TypedBroadcaster<TasksListWsMessage>()
+export const tasksListBroadcaster = new TypedBroadcaster<
+  TasksListWsMessage,
+  TasksListBroadcastContext
+>()
 export const workflowsBroadcaster = new TypedBroadcaster<
   WorkflowsWsMessage,
   WorkflowsBroadcastContext

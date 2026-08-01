@@ -236,6 +236,9 @@ export const TasksListWsMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('task.created'), task: TaskSummarySchema }),
   z.object({ type: z.literal('task.status'), taskId: z.string(), status: TaskStatusSchema }),
   z.object({ type: z.literal('task.deleted'), taskId: z.string() }),
+  // RFC-244: membership full-replace changed list visibility/Owner. The
+  // process-local before/after audience is carried beside this wire frame.
+  z.object({ type: z.literal('task.members.changed'), taskId: z.string() }),
   // RFC-053 P-3: the lifecycle invariant scan emitted a new finding (or
   // promoted an existing 'warning' to 'error'). Subscribers (the list page
   // + the future detail-page banner in PR-E) invalidate the per-task alerts
@@ -247,6 +250,7 @@ export const TasksListWsMessageSchema = z.discriminatedUnion('type', [
     severity: z.enum(['warning', 'error']),
     transition: z.enum(['new', 'promoted']),
   }),
+  z.object({ type: z.literal('lifecycle.alert.resolved'), taskId: z.string() }),
 ])
 export type TasksListWsMessage = z.infer<typeof TasksListWsMessageSchema>
 

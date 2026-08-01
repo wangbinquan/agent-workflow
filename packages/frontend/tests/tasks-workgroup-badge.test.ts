@@ -23,9 +23,9 @@ import { zhCN } from '../src/i18n/zh-CN'
 
 const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.tsx'), 'utf-8')
 
-describe('routes/tasks.tsx — subject cell delegates to TaskSubjectLink (no host-workflow leak)', () => {
-  test('the subject <td> renders <TaskSubjectLink> with the row + badge', () => {
-    expect(SRC).toContain('<TaskSubjectLink task={row} taskId={row.id} badge />')
+describe('routes/tasks.tsx — task metadata delegates to TaskSubjectLink (no host-workflow leak)', () => {
+  test('the compact task metadata renders <TaskSubjectLink> with the item + badge', () => {
+    expect(SRC).toContain('<TaskSubjectLink task={item} taskId={item.id} badge />')
   })
 
   test('the list no longer inlines a subject link (moved into the shared component)', () => {

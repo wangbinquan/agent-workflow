@@ -138,6 +138,11 @@ export function startAutoRepairLoop(opts: {
   db: DbClient
   appHome: string
   configPath: string
+  onAlert?: (
+    row: { taskId: string; rule: string; severity: 'warning' | 'error' },
+    transition: 'new' | 'promoted',
+  ) => void
+  onResolved?: (taskId: string) => void
   intervalMs?: number
 }): AutoRepairLoopHandle {
   const intervalMs = opts.intervalMs ?? 5 * 60 * 1000
@@ -186,6 +191,8 @@ export function startAutoRepairLoop(opts: {
             actorUserId: null,
             appHome: opts.appHome,
             deps,
+            onAlert: opts.onAlert,
+            onResolved: opts.onResolved,
           }).then((r) => ({ outcome: r.outcome })),
       })
     } catch (err) {

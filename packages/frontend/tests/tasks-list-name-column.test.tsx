@@ -1,54 +1,43 @@
-// RFC-037 T7 — locks the Linear-style first column on /tasks: task name is
-// the primary identifier, the ULID drops into a muted subtitle inside the
-// same cell. Rendered against a stub `useQuery` so we don't need the real
-// HTTP stack.
+// RFC-244 — task identity remains primary in the compact five-column record.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
 const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.tsx'), 'utf-8')
+const CSS = readFileSync(resolve(import.meta.dirname, '..', 'src', 'styles.css'), 'utf-8')
 
-describe('routes/tasks.tsx — RFC-037 Linear-style first column', () => {
-  test('the name column header is t("tasks.colName") (no colId header)', () => {
-    // RFC-192 column order: Status → Name → Subject → Repo → Started →
-    // Duration (status leads the monitor scan). The ID column header
-    // (`tasks.colId`) stays gone — the ULID lives in the name-cell subtitle.
-    expect(SRC).toContain("t('tasks.colName')")
-    expect(SRC).not.toMatch(/<th>\{t\('tasks\.colId'\)\}<\/th>/)
+describe('routes/tasks.tsx — dense task identity column', () => {
+  test('business-facing visual headers replace the eight-column table', () => {
+    for (const key of ['task', 'execution', 'time']) {
+      expect(SRC).toContain(`t('tasks.operations.columns.${key}')`)
+    }
+    expect(SRC).toContain("t('acl.owner')")
+    expect(SRC).not.toContain('<th')
   })
 
-  test('name cell contains `row.name` as the linked label', () => {
-    expect(SRC).toMatch(/className="task-name-cell"/)
-    expect(SRC).toMatch(/task-name-cell__name[\s\S]*?\{row\.name\}/)
+  test('task name is the linked primary label', () => {
+    expect(SRC).toMatch(/task-operations__name[\s\S]*?\{item\.name\}/)
   })
 
-  test('name cell surfaces the full ULID as subtitle', () => {
-    // The previous design showed only the last 10 chars and put the full ID
-    // in a `title` tooltip; that left a wide empty chip below short names
-    // and forced users to hover. Now we render `{row.id}` directly and let
-    // the `.task-name-cell__id` `align-self: flex-start` shrink the chip.
-    expect(SRC).toMatch(/task-name-cell__id[\s\S]*?\{row\.id\}/)
-    expect(SRC).not.toMatch(/row\.id\.slice\(-10\)/)
+  test('metadata keeps subject, repository, and a compact recoverable id', () => {
+    expect(SRC).toContain('<TaskSubjectLink task={item} taskId={item.id} badge />')
+    expect(SRC).toContain('taskRepoDisplayName(item)')
+    expect(SRC).toMatch(
+      /className="task-operations__id" title=\{item\.id\}[\s\S]*?item\.id\.slice\(-8\)/,
+    )
   })
 
-  test('Subject / Status / Started / Repo / Duration columns present (RFC-192 set)', () => {
-    expect(SRC).toContain("t('tasks.colSubject')")
-    expect(SRC).toContain("t('tasks.colStatus')")
-    expect(SRC).toContain("t('tasks.colStarted')")
-    expect(SRC).toContain("t('tasks.colRepo')")
-    expect(SRC).toContain("t('tasks.colDuration')")
-    // The always-on Error column retired with RFC-192 — locked in
-    // tasks-list-error-column-single-line.test.ts.
-    expect(SRC).not.toContain("t('tasks.colError')")
+  test('status, time, duration, and Owner are present in the same record', () => {
+    expect(SRC).toContain('<TaskStatusChip status={item.status}')
+    expect(SRC).toContain('<RelativeTime ts={item.startedAt} />')
+    expect(SRC).toContain('taskOperationsDuration(item, now)')
+    expect(SRC).toContain('<OwnerLabel ownerUserId={item.ownerUserId} owner={item.owner} wrap />')
   })
 
-  test('styles.css declares the .task-name-cell layout family', () => {
-    const css = readFileSync(resolve(import.meta.dirname, '..', 'src', 'styles.css'), 'utf-8')
-    // The flex column sits on the inner wrapper, not the <td> — see
-    // tasks-list-name-cell-row-alignment.test.ts for why that must hold.
-    expect(css).toMatch(/\.task-name-cell__inner\s*\{[^}]*display:\s*flex/)
-    expect(css).toMatch(/\.task-name-cell__name/)
-    expect(css).toMatch(/\.task-name-cell__id/)
+  test('styles declare the task identity layout family', () => {
+    expect(CSS).toMatch(/\.task-operations__task,/)
+    expect(CSS).toMatch(/\.task-operations__name\s*\{/)
+    expect(CSS).toMatch(/\.task-operations__id\s*\{/)
   })
 })

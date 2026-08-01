@@ -78,6 +78,7 @@ export interface RunStuckTaskDetectorArgs {
   pendingThresholdMs?: number
   /** Receives newly-detected / promoted alerts; wired in cli/start.ts. */
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
+  onResolved?: (taskId: string) => void
   /**
    * RFC-057: narrow the candidate set to a specific task subset. Used by the
    * repair engine to re-scan only the just-modified task after an apply().
@@ -565,6 +566,7 @@ export async function runStuckTaskDetector(
     now,
     ownedRules: STUCK_RULES,
     onAlert: args.onAlert,
+    onResolved: args.onResolved,
   })
   log.info('scan complete', {
     scanned: candidates.length,
@@ -596,6 +598,7 @@ export async function runStuckTaskDetector(
 export function startStuckTaskDetectorLoop(opts: {
   db: DbClient
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
+  onResolved?: (taskId: string) => void
   intervalMs?: number
 }): { stop: () => void } {
   const interval = opts.intervalMs ?? 5 * MIN_MS
@@ -603,7 +606,11 @@ export function startStuckTaskDetectorLoop(opts: {
   const safeRun = (): void => {
     if (running) return
     running = true
-    void runStuckTaskDetector({ db: opts.db, onAlert: opts.onAlert })
+    void runStuckTaskDetector({
+      db: opts.db,
+      onAlert: opts.onAlert,
+      onResolved: opts.onResolved,
+    })
       .catch((err: unknown) => {
         log.error('scan failed', { error: err instanceof Error ? err.message : String(err) })
       })

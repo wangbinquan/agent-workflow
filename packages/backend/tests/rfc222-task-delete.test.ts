@@ -21,8 +21,10 @@ import {
   lifecycleRepairAudit,
   nodeRuns,
   recoveryEvents,
+  taskCollaborators,
   taskFeedback,
   tasks,
+  users,
   workflows,
 } from '../src/db/schema'
 import { createApp } from '../src/server'
@@ -256,6 +258,49 @@ describe('RFC-222 D-4 — WS broadcast', () => {
       expect(seen).toContain(id)
     } finally {
       unsub()
+    }
+  })
+
+  test('root deletion broadcasts every cascaded task with its frozen audience', async () => {
+    const h = await harness()
+    const [owner, collaborator] = await Promise.all([
+      h.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.username, 'bob'))
+        .then((rows) => rows[0]!),
+      h.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.username, 'mgr'))
+        .then((rows) => rows[0]!),
+    ])
+    const rootId = await seedTask(h.db, { ownerUserId: owner.id })
+    const childId = await seedTask(h.db, {
+      ownerUserId: collaborator.id,
+      parentTaskId: rootId,
+      invocationDepth: 1,
+    })
+    await h.db.insert(taskCollaborators).values({
+      taskId: childId,
+      userId: owner.id,
+      role: 'collaborator',
+      addedBy: collaborator.id,
+      addedAt: Date.now(),
+    })
+    const audiences = new Map<string, ReadonlySet<string>>()
+    const unsubscribe = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (message, context) => {
+      if (message.type === 'task.deleted' && context?.kind === 'task.deleted-audience') {
+        audiences.set(message.taskId, context.visibleUserIds)
+      }
+    })
+    try {
+      expect((await del(h, h.adminToken, rootId, `task-${rootId}`)).status).toBe(200)
+      expect([...audiences.keys()].sort()).toEqual([rootId, childId].sort())
+      expect([...audiences.get(rootId)!]).toEqual([owner.id])
+      expect([...audiences.get(childId)!].sort()).toEqual([owner.id, collaborator.id].sort())
+    } finally {
+      unsubscribe()
     }
   })
 })

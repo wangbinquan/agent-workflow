@@ -992,11 +992,20 @@ export const tasks = sqliteTable(
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },
   (t) => ({
-    statusIdx: index('idx_tasks_status').on(t.status, t.startedAt),
+    listStartedIdx: index('idx_tasks_list_started_id').on(t.startedAt, t.id),
+    listStatusStartedIdx: index('idx_tasks_list_status_started_id').on(t.status, t.startedAt, t.id),
+    listParentStartedIdx: index('idx_tasks_list_parent_started_id').on(
+      t.parentTaskId,
+      t.startedAt,
+      t.id,
+    ),
+    listOwnerStartedIdx: index('idx_tasks_list_owner_started_id').on(
+      t.ownerUserId,
+      t.startedAt,
+      t.id,
+    ),
     workflowIdx: index('idx_tasks_workflow').on(t.workflowId, t.startedAt),
-    ownerIdx: index('idx_tasks_owner').on(t.ownerUserId),
     schedTaskIdx: index('idx_tasks_scheduled_task').on(t.scheduledTaskId), // RFC-159
-    parentIdx: index('idx_tasks_parent').on(t.parentTaskId), // RFC-243
   }),
 )
 

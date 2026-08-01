@@ -37,7 +37,7 @@ import type {
   WorkflowDefinition,
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
-import { and, asc, count, desc, eq, gt, inArray, isNull, ne, or, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNull, type SQL } from 'drizzle-orm'
 import { existsSync, mkdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
@@ -113,6 +113,10 @@ import { loadOwnerIdentities } from '@/services/ownerIdentity'
 import type { Actor } from '@/auth/actor'
 import { freezeCallClosure } from '@/services/execution/closure'
 import { collectExecutionRefs } from '@agent-workflow/shared'
+import {
+  defaultTaskAuthorizationRef,
+  taskOwnershipScopeCondition,
+} from '@/services/taskAuthorization'
 
 /**
  * RFC-243 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
@@ -3338,21 +3342,12 @@ export function taskVisibilityCondition(
   db: DbClient,
   visibility: { actorUserId: string; scope: 'mine' | 'shared' },
 ): SQL<unknown> {
-  const { actorUserId, scope } = visibility
-  const ownerEq = eq(tasks.ownerUserId, actorUserId)
-  const collabExists = inArray(
-    tasks.id,
-    db
-      .select({ id: taskCollaborators.taskId })
-      .from(taskCollaborators)
-      .where(eq(taskCollaborators.userId, actorUserId)),
+  return taskOwnershipScopeCondition(
+    db,
+    defaultTaskAuthorizationRef(),
+    visibility.actorUserId,
+    visibility.scope,
   )
-  if (scope === 'shared') {
-    // Strict "shared with me but not mine" — exclude rows the actor owns.
-    return and(collabExists, ne(tasks.ownerUserId, actorUserId))!
-  }
-  // 'mine' — owner OR collaborator. Either alone satisfies the gate.
-  return or(ownerEq, collabExists)!
 }
 
 interface TaskSummaryRow {
@@ -3503,7 +3498,7 @@ function parseCommitPushJson(raw: string | null): CommitPushMeta | null {
  * query for any number of tasks; tasks without failedNodeId (scheduler-level
  * failures) resolve to null.
  */
-async function loadTaskFailureCodes(
+export async function loadTaskFailureCodes(
   db: DbClient,
   rows: ReadonlyArray<{ id: string; status: string; failedNodeId: string | null }>,
 ): Promise<Map<string, FailureCode | null>> {

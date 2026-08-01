@@ -1,4 +1,4 @@
-// RFC-232 — only the dedicated /tasks table opts into the wider task-list wire.
+// RFC-232/RFC-244 — only /tasks uses the owner-enriched operations wire.
 
 import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -16,10 +16,15 @@ describe('RFC-232 — task-list owner query isolation', () => {
       read('src/routes/scheduled.$id.tsx'),
     ]
 
-    expect(taskList).toContain("include_owner: 'true'")
+    expect(taskList).toContain('useTaskOperationsPage(filters')
+    expect(taskList).toContain(
+      '<OwnerLabel ownerUserId={item.ownerUserId} owner={item.owner} wrap />',
+    )
+    expect(read('src/hooks/useTaskOperationsPage.ts')).toContain("'/api/tasks/page'")
     for (const source of unchangedConsumers) {
       expect(source).not.toContain('include_owner')
       expect(source).not.toContain('TaskListItem')
+      expect(source).not.toContain('TaskOperationsListItem')
     }
   })
 })

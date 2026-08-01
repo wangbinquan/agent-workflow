@@ -13,11 +13,13 @@ const RULES: WsInvalidationRules<TasksListWsMessage> = {
   'task.created': () => [['tasks']],
   'task.status': () => [['tasks']],
   'task.deleted': () => [['tasks']],
+  'task.members.changed': () => [['tasks']],
   // RFC-053 P-6: the banner on the detail page subscribes to
   // ['tasks', taskId, 'alerts']; refresh that query so a stuck task lights
   // up without waiting for the 30s poll fallback. Deliberately does NOT
   // touch the broad ['tasks'] key (saves a list-page round-trip).
   'lifecycle.alert': (msg) => [['tasks', msg.taskId, 'alerts']],
+  'lifecycle.alert.resolved': (msg) => [['tasks', msg.taskId, 'alerts']],
 }
 
 export function useTasksSync(enabled: boolean = true): void {

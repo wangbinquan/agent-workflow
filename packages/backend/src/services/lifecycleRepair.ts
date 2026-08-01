@@ -210,6 +210,7 @@ export interface ApplyRepairOptionArgs extends ListRepairOptionsArgs {
   optionId: string
   /** WS hook so the route layer can re-broadcast `lifecycle.alert` events. */
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
+  onResolved?: (taskId: string) => void
 }
 
 export async function applyRepairOption(args: ApplyRepairOptionArgs): Promise<RepairResponse> {
@@ -356,16 +357,19 @@ export async function applyRepairOption(args: ApplyRepairOptionArgs): Promise<Re
     .update(lifecycleAlerts)
     .set({ resolvedAt: now() })
     .where(and(eq(lifecycleAlerts.id, alert.id), isNull(lifecycleAlerts.resolvedAt)))
+  args.onResolved?.(taskId)
   await runLifecycleInvariants({
     db,
     scope: { taskId },
     now,
     ...(args.onAlert ? { onAlert: args.onAlert } : {}),
+    ...(args.onResolved ? { onResolved: args.onResolved } : {}),
   })
   await runStuckTaskDetector({
     db,
     now,
     ...(args.onAlert ? { onAlert: args.onAlert } : {}),
+    ...(args.onResolved ? { onResolved: args.onResolved } : {}),
     taskIdFilter: [taskId],
   })
   const afterOpenIds = await loadOpenAlertIdsForTask(db, taskId)

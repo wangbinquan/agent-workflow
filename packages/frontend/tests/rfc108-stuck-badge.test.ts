@@ -16,7 +16,7 @@ const en = read('../src/i18n/en-US.ts')
 
 describe('RFC-108 T22 — task-list stuck badge', () => {
   test('renders a StatusChip badge gated on openAlertCount > 0', () => {
-    expect(list.includes('(row.openAlertCount ?? 0) > 0')).toBe(true)
+    expect(list.includes('(item.openAlertCount ?? 0) > 0')).toBe(true)
     expect(list.includes('<StatusChip')).toBe(true)
     expect(list.includes('kind="warn"')).toBe(true)
   })

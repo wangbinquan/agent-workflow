@@ -16,7 +16,8 @@ import type { tasks } from '@/db/schema'
 import { taskCollaborators, tasks as tasksTable, users } from '@/db/schema'
 import { isResourceAdminActor, resolveTaskRole } from '@/services/resourceAcl'
 import { ForbiddenError, ValidationError } from '@/util/errors'
-import { triggerRevalidation } from '@/ws/revalidationHook'
+import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
+import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 
 /** Row-shape that visibility checks accept. The full `tasks` row is supersets of this. */
 export type TaskRowForVisibility = Pick<typeof tasks.$inferSelect, 'id' | 'ownerUserId'>
@@ -158,26 +159,33 @@ export async function updateTaskMembers(
 
   const prevOwner = task.ownerUserId ?? null
   const nextOwner = body.ownerUserId !== undefined ? body.ownerUserId : prevOwner
-
-  let nextUserIds: string[]
-  if (body.userIds !== undefined) {
-    nextUserIds = [...new Set(body.userIds)]
-  } else {
-    const current = await listCollaborators(db, task.id)
-    nextUserIds = current.filter((r) => r.role === 'collaborator').map((r) => r.userId)
-  }
-  if (
-    nextOwner !== prevOwner &&
-    prevOwner !== null &&
-    prevOwner !== SYSTEM_USER_ID &&
-    !nextUserIds.includes(prevOwner)
-  ) {
-    nextUserIds.push(prevOwner)
-  }
-  nextUserIds = nextUserIds.filter((id) => id !== nextOwner)
+  let beforeCollaborators: (typeof taskCollaborators.$inferSelect)[] = []
+  let nextUserIds: string[] = []
 
   const now = Date.now()
   dbTxSync(db, (tx) => {
+    // Freeze the pre-change audience in the same transaction as the full
+    // replacement. The post-commit WS frame can then authorize both sides of
+    // the transition without racing a membership read.
+    beforeCollaborators = tx
+      .select()
+      .from(taskCollaborators)
+      .where(eq(taskCollaborators.taskId, task.id))
+      .all()
+    nextUserIds =
+      body.userIds !== undefined
+        ? [...new Set(body.userIds)]
+        : beforeCollaborators.filter((r) => r.role === 'collaborator').map((r) => r.userId)
+    if (
+      nextOwner !== prevOwner &&
+      prevOwner !== null &&
+      prevOwner !== SYSTEM_USER_ID &&
+      !nextUserIds.includes(prevOwner)
+    ) {
+      nextUserIds.push(prevOwner)
+    }
+    nextUserIds = nextUserIds.filter((id) => id !== nextOwner)
+
     if (nextOwner !== prevOwner) {
       tx.update(tasksTable).set({ ownerUserId: nextOwner }).where(eq(tasksTable.id, task.id)).run()
     }
@@ -209,7 +217,18 @@ export async function updateTaskMembers(
   // RFC-212 — AFTER the transaction commits: a member just lost access, so any
   // WS they have open on this task must be re-checked. Triggering inside/before
   // the tx would let the rescan read the pre-change membership and never close.
-  triggerRevalidation(db, 'task-members-changed')
+  await triggerRevalidationAndWait(db, 'task-members-changed')
+
+  const visibleUserIds = new Set<string>()
+  if (prevOwner !== null) visibleUserIds.add(prevOwner)
+  if (nextOwner !== null) visibleUserIds.add(nextOwner)
+  for (const row of beforeCollaborators) visibleUserIds.add(row.userId)
+  for (const userId of nextUserIds) visibleUserIds.add(userId)
+  tasksListBroadcaster.broadcast(
+    TASKS_LIST_CHANNEL,
+    { type: 'task.members.changed', taskId: task.id },
+    { kind: 'task.members-changed-audience', taskId: task.id, visibleUserIds },
+  )
 
   return getTaskMembers(db, actor, { id: task.id, ownerUserId: nextOwner })
 }

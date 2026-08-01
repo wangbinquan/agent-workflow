@@ -381,6 +381,38 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
     expect(calls).toHaveLength(2)
     expect(calls.map((c) => c.transition)).toEqual(['new', 'new'])
   })
+
+  test('reconcile.onResolved fires once per task when multiple open alerts close', async () => {
+    const env = await freshDb()
+    cleanup = env.cleanup
+    const taskId = await seedTask(env.db, {
+      status: 'running',
+      startedAt: T0,
+      snapshotJson: REVIEW_ONLY_JSON,
+    })
+    await reconcileLifecycleAlerts({
+      db: env.db,
+      taskIds: [taskId],
+      findings: [
+        { taskId, rule: 'S1', detail: { rule: 'S1' } },
+        { taskId, rule: 'S2', detail: { rule: 'S2' } },
+      ],
+      now: T0,
+      ownedRules: STUCK_RULES,
+    })
+    const resolved: string[] = []
+    const result = await reconcileLifecycleAlerts({
+      db: env.db,
+      taskIds: [taskId],
+      findings: [],
+      now: T0 + MIN_MS,
+      ownedRules: STUCK_RULES,
+      onResolved: (id) => resolved.push(id),
+    })
+
+    expect(result.resolvedAlerts).toBe(2)
+    expect(resolved).toEqual([taskId])
+  })
 })
 
 // ---------------------------------------------------------------------------

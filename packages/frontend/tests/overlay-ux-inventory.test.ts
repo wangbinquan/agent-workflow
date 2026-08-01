@@ -152,6 +152,8 @@ const OVERLAY_CALLSITES = {
   'components/tasks/WorkflowSyncDialog.tsx': { family: 'task-execution', count: 1 },
   // RFC-222 (D5): +1 for the admin-only task-delete type-to-confirm dialog.
   'routes/tasks.detail.tsx': { family: 'task-execution', count: 2 },
+  // RFC-244: dense task-list advanced filters use the shared Dialog shell.
+  'routes/tasks.tsx': { family: 'task-execution', count: 1 },
 
   'components/clarify/CentralizedAnswerDialog.tsx': {
     family: 'review-and-clarify',

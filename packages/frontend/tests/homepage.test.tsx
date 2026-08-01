@@ -354,7 +354,9 @@ describe('RFC-032 Homepage dashboard', () => {
 
     expect(running.getAttribute('data-router-link')).toBe('true')
     expect(running.getAttribute('href')).toBe('/tasks')
-    expect(running.getAttribute('data-search')).toBe(JSON.stringify({ status: 'running' }))
+    expect(running.getAttribute('data-search')).toBe(
+      JSON.stringify({ view: 'active', statuses: 'running' }),
+    )
     expect(all.getAttribute('data-router-link')).toBe('true')
     expect(all.getAttribute('href')).toBe('/tasks')
     expect(all.getAttribute('data-search')).toBeNull()

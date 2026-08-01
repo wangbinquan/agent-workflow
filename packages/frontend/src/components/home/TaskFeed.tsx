@@ -58,7 +58,7 @@ export function TaskFeed() {
         action={
           <Link
             to="/tasks"
-            search={{ status: 'running' }}
+            search={{ view: 'active', statuses: 'running' }}
             className="homepage-section__link"
             data-testid="homepage-running-tasks-link"
           >

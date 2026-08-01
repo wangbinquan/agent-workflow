@@ -273,6 +273,8 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 
 | [RFC-242](./RFC-242-claude-runtime-security-parity/proposal.md) | Claude Code 运行时安全姿态对齐：业务节点世代差（不封印/bypassPermissions/full env 继承）、`all-deny` 名实不符、无平台级网络围栏三项统一收口。核心矛盾是 `agent.permission` 为 opencode 词汇 verbatim 透传而 claude 无等价词汇 → 需显式映射契约（推荐冻结映射表 + fail-closed 兜底 + 显式逃生阀）；`all-deny` 物化为 `--tools ""`；网络围栏在「MCP wrapper 无网边界」与「能力模型 + UI + docs 显式声明不可达」间定档。复用 RFC-237 的 `assembleClaudeEnv` / `claudeDeclaredControlArgv` 单点原语。 | **Draft（2026-07-31）**：三件套已落档；design §7 三个决策点（映射形态 / 存量默认 / 网络围栏投入）待用户拍板后才进入实现。 |
 
+| [RFC-244](./RFC-244-dense-task-operations-view/proposal.md) | 高密度任务运行中心：`/tasks` 改为「全部 / 进行中 / 需处理 / 已结束」四业务视图与服务端全量搜索/筛选；ACL-only authorized tree 与 ownership scope 分层，root/child cursor 各走 global/bounded-subtree plan；子任务统一入父分支，未授权/dangling parent 安全降级；桌面普通父行 56px、子行 48px，移动端原生 nested list 单列；轻量 SQL、RFC-207 running clock、operations dirty 真值，旧 `/api/tasks` 保持兼容。 | **Implementation Complete Locally / Publication Closure Pending（2026-08-01）**：T6–T20 与 T22 完成；shared 1536、backend 7907 pass / 28 skip、frontend 5626、RFC-244 E2E 4/4、UX 20/20、macOS visual 1/1，typecheck/lint/format 全绿；工作区预门 `LOCAL APPROVED — P0=0/P1=0/P2=0`。尚差 hosted-Ubuntu baseline、Safari VoiceOver、固定 SHA 实现门与 exact-SHA CI；未授权 commit/push。 |
+
 > RFC-235 发布说明（2026-07-29）：用户已单独授权“基于当前设计先做一版”。首版仅交付目标优先/响应式/双栏 UX 与 Intent turn Session 持久化、权限、WS/poll、共享 renderer 切片；它不等同于批准或完成表中 v21 的 mutation ledger、artifact recovery/restore authority、分步提交及全部 supporting contracts，故完整 RFC 状态继续保持 Draft。
 
 ---

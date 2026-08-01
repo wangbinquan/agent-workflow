@@ -31,13 +31,13 @@
 // their next poll / reconnect. The workflow-style audience-context fast-path
 // for cold connections is a documented follow-up.
 
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { taskFeedback, taskRepos, tasks } from '@/db/schema'
+import { taskCollaborators, taskFeedback, taskRepos, tasks } from '@/db/schema'
 import { isTaskActive } from '@/services/task'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import {
@@ -149,6 +149,7 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
   // one transaction (closes the resume/retry TOCTOU — §6.2).
   const release = await getTaskWriteSem(taskId).acquire()
   let opencodeStoreKeys: string[] = []
+  let deletedAudiences: Array<{ taskId: string; visibleUserIds: ReadonlySet<string> }> = []
   try {
     const opencodeStores = await inspectTaskOpencodeStores(db, Paths.root, taskId)
     if (opencodeStores.hasLease || opencodeStores.hasLock) {
@@ -176,6 +177,38 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
           },
         )
       }
+      // RFC-244: freeze the complete FK-cascade audience inside the deletion
+      // transaction. Once the root delete commits neither rows nor memberships
+      // remain available to the tasks-list frame gate.
+      const cascadeRows = tx.all(sql`
+        WITH RECURSIVE cascade(id) AS (
+          SELECT id FROM tasks WHERE id = ${taskId}
+          UNION
+          SELECT child.id
+          FROM tasks child
+          JOIN cascade parent ON child.parent_task_id = parent.id
+        )
+        SELECT t.id, t.owner_user_id
+        FROM tasks t
+        JOIN cascade c ON c.id = t.id
+      `) as Array<{ id: string; owner_user_id: string | null }>
+      const cascadeIds = cascadeRows.map((item) => item.id)
+      const memberRows =
+        cascadeIds.length === 0
+          ? []
+          : tx
+              .select({ taskId: taskCollaborators.taskId, userId: taskCollaborators.userId })
+              .from(taskCollaborators)
+              .where(inArray(taskCollaborators.taskId, cascadeIds))
+              .all()
+      deletedAudiences = cascadeRows.map((item) => {
+        const visibleUserIds = new Set<string>()
+        if (item.owner_user_id !== null) visibleUserIds.add(item.owner_user_id)
+        for (const member of memberRows) {
+          if (member.taskId === item.id) visibleUserIds.add(member.userId)
+        }
+        return { taskId: item.id, visibleUserIds }
+      })
       // Explicit non-FK task-scoped delete; the 12 FK tables cascade with the row.
       tx.delete(taskFeedback).where(eq(taskFeedback.taskId, taskId)).run()
       tx.delete(tasks).where(eq(tasks.id, taskId)).run()
@@ -236,7 +269,17 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
     fail('removeOpencodeStores', err)
   }
 
-  tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, { type: 'task.deleted', taskId })
+  for (const audience of deletedAudiences) {
+    tasksListBroadcaster.broadcast(
+      TASKS_LIST_CHANNEL,
+      { type: 'task.deleted', taskId: audience.taskId },
+      {
+        kind: 'task.deleted-audience',
+        taskId: audience.taskId,
+        visibleUserIds: audience.visibleUserIds,
+      },
+    )
+  }
   return { taskId, cleanup }
 }
 

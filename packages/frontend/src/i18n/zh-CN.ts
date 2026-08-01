@@ -2184,12 +2184,49 @@ export interface Resources {
     scopeFilterAria: string
     expandChildren: string
     collapseChildren: string
+    expandChildrenCount: string
     noChildTasks: string
     childBadge: string
     parentTaskChip: string
     parentTaskUnavailable: string
     childTaskLink: string
     childTaskUnavailable: string
+    /** RFC-244: dense task operations list. */
+    operations: {
+      updated: string
+      refresh: string
+      viewAria: string
+      views: { all: string; active: string; attention: string; finished: string }
+      searchPlaceholder: string
+      searchLabel: string
+      filters: string
+      activeFilters: string
+      filterTitle: string
+      statuses: string
+      statusPlaceholder: string
+      scopeLabel: string
+      scope: { mine: string; shared: string; all: string }
+      originLabel: string
+      origin: { all: string; manual: string; scheduled: string }
+      applyFilters: string
+      resultCount: string
+      addedCount: string
+      addedChildrenCount: string
+      columns: { task: string; execution: string; time: string }
+      loadMore: string
+      loadingMore: string
+      loadMoreChildren: string
+      loadingMoreChildren: string
+      childCount: string
+      openAlertDetail: string
+      contextMatches: string
+      awaitingReview: string
+      awaitingHuman: string
+      pendingDetail: string
+      runningDetail: string
+      finishedDetail: string
+      duration: { queued: string; running: string; accumulated: string }
+    }
     detailTitleIdLabel: string
     loadingTask: string
     metaWorkflow: string
@@ -6638,12 +6675,57 @@ export const zhCN: Resources = {
     scopeFilterAria: '子任务显示范围',
     expandChildren: '展开子任务',
     collapseChildren: '收起子任务',
+    expandChildrenCount: '展开 {{count}} 个匹配子任务',
     noChildTasks: '无子任务',
     childBadge: '子任务',
     parentTaskChip: '父任务',
     parentTaskUnavailable: '父任务不可见',
     childTaskLink: '子任务',
     childTaskUnavailable: '子任务不可见或已删除',
+    operations: {
+      updated: '任务列表已有更新',
+      refresh: '刷新列表',
+      viewAria: '任务业务视图',
+      views: {
+        all: '全部',
+        active: '进行中',
+        attention: '需处理',
+        finished: '已结束',
+      },
+      searchPlaceholder: '搜索任务、主体或仓库…',
+      searchLabel: '搜索任务',
+      filters: '筛选',
+      activeFilters: '已启用 {{count}} 项高级筛选',
+      filterTitle: '筛选任务',
+      statuses: '精确状态',
+      statusPlaceholder: '选择状态',
+      scopeLabel: '任务用户范围',
+      scope: { mine: '我的任务', shared: '与我共享', all: '所有任务' },
+      originLabel: '启动来源',
+      origin: { all: '全部来源', manual: '手动启动', scheduled: '定时启动' },
+      applyFilters: '应用筛选',
+      resultCount: '共显示 {{count}} 个任务分支',
+      addedCount: '已追加 {{count}} 个任务分支',
+      addedChildrenCount: '已追加 {{count}} 个子任务分支',
+      columns: { task: '任务', execution: '执行', time: '时间' },
+      loadMore: '加载更多任务',
+      loadingMore: '正在加载更多任务…',
+      loadMoreChildren: '加载更多子任务',
+      loadingMoreChildren: '正在加载更多子任务…',
+      childCount: '{{count}} 个子任务',
+      openAlertDetail: '{{count}} 个未解决告警，请优先处理',
+      contextMatches: '包含 {{count}} 个匹配子任务',
+      awaitingReview: '等待复核决定',
+      awaitingHuman: '等待人工回答',
+      pendingDetail: '等待调度执行',
+      runningDetail: '任务正在执行',
+      finishedDetail: '执行已结束',
+      duration: {
+        queued: '排队 {{dur}}',
+        running: '已运行 {{dur}}',
+        accumulated: '累计运行 {{dur}}',
+      },
+    },
     detailTitleIdLabel: '任务 ID',
     loadingTask: '加载任务中…',
     metaWorkflow: '工作流',

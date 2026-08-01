@@ -136,6 +136,8 @@ export interface RunLifecycleInvariantsArgs {
    * tests assert on the calls.
    */
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
+  /** Called once per task whose open alert set shrank in this pass. */
+  onResolved?: (taskId: string) => void
 }
 
 export interface RunLifecycleInvariantsResult {
@@ -522,8 +524,9 @@ export async function reconcileLifecycleAlerts(args: {
   now: number
   ownedRules: readonly LifecycleAlertRule[]
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
+  onResolved?: (taskId: string) => void
 }): Promise<ReconcileLifecycleAlertsResult> {
-  const { db, taskIds, findings, now, ownedRules, onAlert } = args
+  const { db, taskIds, findings, now, ownedRules, onAlert, onResolved } = args
   // Load currently-open alerts in scope whose rule is owned by this pass.
   const openRows =
     taskIds.length === 0 || ownedRules.length === 0
@@ -549,6 +552,7 @@ export async function reconcileLifecycleAlerts(args: {
   let promotedCount = 0
   let resolvedCount = 0
   const open: LifecycleAlertRow[] = []
+  const resolvedTaskIds = new Set<string>()
 
   // 1. Resolve open rows no longer in findings.
   for (const r of openRows) {
@@ -556,6 +560,7 @@ export async function reconcileLifecycleAlerts(args: {
     if (!findingByKey.has(k)) {
       await db.update(lifecycleAlerts).set({ resolvedAt: now }).where(eq(lifecycleAlerts.id, r.id))
       resolvedCount++
+      resolvedTaskIds.add(r.taskId)
     }
   }
 
@@ -613,6 +618,8 @@ export async function reconcileLifecycleAlerts(args: {
       if (promoted) onAlert?.(row, 'promoted')
     }
   }
+
+  for (const taskId of resolvedTaskIds) onResolved?.(taskId)
 
   return {
     newAlerts: newCount,
@@ -761,6 +768,7 @@ export async function runLifecycleInvariants(
     now,
     ownedRules: INVARIANT_RULES,
     onAlert: args.onAlert,
+    onResolved: args.onResolved,
   })
 
   log.info('scan complete', {
@@ -805,6 +813,7 @@ export async function runLifecycleInvariants(
 export function startLifecycleInvariantsLoop(opts: {
   db: DbClient
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
+  onResolved?: (taskId: string) => void
   bootDelayMs?: number
   intervalMs?: number
   /** Incremental window: how far back to look (default 2h). */
@@ -818,7 +827,12 @@ export function startLifecycleInvariantsLoop(opts: {
   const safeRun = (scope: InvariantScope): void => {
     if (running) return
     running = true
-    void runLifecycleInvariants({ db: opts.db, scope, onAlert: opts.onAlert })
+    void runLifecycleInvariants({
+      db: opts.db,
+      scope,
+      onAlert: opts.onAlert,
+      onResolved: opts.onResolved,
+    })
       .catch((err: unknown) => {
         log.error('scan failed', { error: err instanceof Error ? err.message : String(err) })
       })

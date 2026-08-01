@@ -319,7 +319,7 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
         offenders.push(`${p.file}: write surface for '${p.reason}' not found (marker moved?)`)
         continue
       }
-      if (!body.includes('triggerRevalidation(')) {
+      if (!body.includes('triggerRevalidation(') && !body.includes('triggerRevalidationAndWait(')) {
         offenders.push(`${p.file}: '${p.reason}' write point does not call triggerRevalidation`)
       }
     }
@@ -356,7 +356,10 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
           const after = text.slice(start)
           const next = after.indexOf('\nexport ', 1)
           const body = after.slice(0, next < 0 ? undefined : next)
-          if (!body.includes('triggerRevalidation(')) {
+          if (
+            !body.includes('triggerRevalidation(') &&
+            !body.includes('triggerRevalidationAndWait(')
+          ) {
             offenders.push(
               `${root}/${name}: update(users) sets role/status (narrowing) but does not trigger revalidation`,
             )
