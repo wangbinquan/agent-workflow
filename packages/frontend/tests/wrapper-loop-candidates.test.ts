@@ -80,4 +80,19 @@ describe('loopMemberCandidates', () => {
     const out = loopMemberCandidates(l, defOf([l, a]), [])
     expect(out).toEqual([{ nodeId: 'a1', title: 'unknown_agent', outputPorts: ['out'] }])
   })
+
+  test('agent candidate without a display snapshot uses the configured agent name', () => {
+    const l = loop('loop1', ['a1'])
+    const a = {
+      id: 'a1',
+      kind: 'agent-single',
+      agentId: 'agent-1',
+      position: { x: 0, y: 0 },
+    } as unknown as WorkflowNode
+    const out = loopMemberCandidates(l, defOf([l, a]), [
+      { id: 'agent-1', name: 'coder', outputs: ['result'] },
+    ])
+
+    expect(out).toEqual([{ nodeId: 'a1', title: 'coder', outputPorts: ['result'] }])
+  })
 })

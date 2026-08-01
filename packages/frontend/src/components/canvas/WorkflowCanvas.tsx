@@ -68,7 +68,7 @@ import { classifyCrossClarifyConnection } from './crossClarifyDragHelper'
 import { existingInputPorts, nextFreeInputPort } from './dropTarget'
 import { getNodeBoxes, resolveDropTarget } from './connectResolve'
 import { buildControlFlowEdgeIds, CONTROL_FLOW_EDGE_CLASS } from './controlFlowEdge'
-import { nodeTitle } from './nodeTitle'
+import { nodeAgentDisplayName, nodeTitle } from './nodeTitle'
 import { ConnectDropHint, type ConnectPreviewTarget } from './ConnectDropHint'
 import { WorkflowCanvasEdge, type WorkflowCanvasEdgeData } from './WorkflowCanvasEdge'
 import { ClarifyNode } from './nodes/ClarifyNode'
@@ -2835,9 +2835,13 @@ function toFlowNodes(
       surface,
       nodeId: n.id,
       kind: n.kind,
-      title: nodeTitle(n),
+      title: nodeTitle(n, agentByName),
       inputPorts: ports.inputs,
       outputPorts: ports.outputs,
+    }
+    if (n.kind === 'agent-single') {
+      const agentName = nodeAgentDisplayName(n, agentByName)
+      if (agentName.length > 0) data.agentName = agentName
     }
     if (statuses !== undefined) {
       const s = statuses[n.id]
@@ -2922,7 +2926,9 @@ function toFlowNodes(
         }
         reviewData.inputSource = { nodeId, portName }
         const sourceNode = definition.nodes.find((candidate) => candidate.id === nodeId)
-        if (sourceNode !== undefined) reviewData.inputSourceTitle = nodeTitle(sourceNode)
+        if (sourceNode !== undefined) {
+          reviewData.inputSourceTitle = nodeTitle(sourceNode, agentByName)
+        }
       }
     }
     if (n.kind === 'call-workflow') {

@@ -3093,7 +3093,6 @@ export const enUS: Resources = {
     layoutAll: 'Layout all',
     layoutSelection: 'Layout selection',
     menuSelectedCount: '{{n}} selected',
-    nodeTitleUnsetAgent: '(unset agent)',
     nodeTitleUnsetKey: '(unset key)',
     history: {
       undo: 'Undo',
@@ -3461,6 +3460,8 @@ export const enUS: Resources = {
     loopExitInvalidPortName: "'{{portName}}' is not declared by this node; pick a current port.",
     fieldAgent: 'Agent',
     pickAgent: '— pick an agent —',
+    openReferencedResource: 'View details',
+    openReferencedResourceAria: 'View details for {{resource}} “{{name}}” in a new tab',
     fieldPromptTemplate: 'Prompt template',
     fieldPromptTemplateHint: 'Use {{port_name}} + builtins like {{__repo_path__}}.',
     edgeTitle: 'Edge',

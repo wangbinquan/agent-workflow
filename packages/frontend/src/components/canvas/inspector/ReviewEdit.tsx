@@ -61,7 +61,7 @@ export function ReviewEdit({
     .filter((n) => n.id !== node.id && n.kind !== 'output')
     .map((candidate) => ({
       id: candidate.id,
-      title: nodeTitle(candidate),
+      title: nodeTitle(candidate, agentByName),
       ports: computePorts(candidate, agentByName, definition).outputs,
     }))
   const selectedSource = upstreamCandidates.find(

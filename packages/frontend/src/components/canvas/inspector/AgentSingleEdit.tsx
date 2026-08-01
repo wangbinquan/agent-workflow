@@ -8,7 +8,7 @@
 // through wrapper-fanout, which has its own inspector component.)
 
 import type { WorkflowNode } from '@agent-workflow/shared'
-import { buildNodeAgentLookup } from '@agent-workflow/shared'
+import { buildNodeAgentLookup, resolveNodeAgent } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Field, TextArea } from '@/components/Form'
 import { Select } from '@/components/Select'
@@ -24,6 +24,7 @@ import {
 } from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
 import { InspectorFieldAnchor } from './InspectorFieldAnchor'
+import { ResourceReferenceControl } from './ResourceReferenceControl'
 import type { EditProps } from './types'
 
 export function AgentSingleEdit({
@@ -39,11 +40,9 @@ export function AgentSingleEdit({
   const promptTemplate = typeof rec.promptTemplate === 'string' ? rec.promptTemplate : ''
   const owners = useUserLookup(agents.map((agent) => agent.ownerUserId))
   // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
-  const ports = computePorts(
-    node,
-    buildNodeAgentLookup(agents, (a) => a),
-    definition,
-  )
+  const agentLookup = buildNodeAgentLookup(agents, (a) => a)
+  const selectedAgent = resolveNodeAgent(node, agentLookup)
+  const ports = computePorts(node, agentLookup, definition)
 
   function update(p: Record<string, unknown>, meta: InspectorChangeMeta) {
     onPatch({ ...(node as Record<string, unknown>), ...p } as unknown as WorkflowNode, meta)
@@ -59,34 +58,42 @@ export function AgentSingleEdit({
     <div className="form-grid">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <InspectorFieldAnchor nodeId={node.id} field="agent">
-        <Field label={t('inspector.fieldAgent')} required>
-          <Select<string>
-            value={agentId}
-            placeholder={t('inspector.pickAgent')}
-            ariaLabel={t('inspector.fieldAgent')}
-            searchable
-            onChange={(v) => {
-              // RFC-223 PR7: the inspector is another agent-selection writer.
-              // Unknown/cleared values must not turn a canonical node back into
-              // a persisted name-only draft.
-              const selected = agents.find((agent) => agent.id === v)
-              if (selected === undefined) return
-              update(
-                { agentName: selected.name, agentId: selected.id },
-                atomicNodeInspectorChange(node.id, 'agentName', t('inspector.fieldAgent')),
-              )
-            }}
-            options={[
-              { value: '', label: t('inspector.pickAgent') },
-              ...agents.map((agent) => ({
-                value: agent.id,
-                label: resourceOptionLabel(
-                  agent.name,
-                  owners.get(agent.ownerUserId)?.displayName ?? agent.ownerUserId ?? undefined,
-                ),
-              })),
-            ]}
-          />
+        <Field label={t('inspector.fieldAgent')} required group>
+          <ResourceReferenceControl
+            kind="agent"
+            resourceId={selectedAgent?.id}
+            resourceName={selectedAgent?.name}
+            resourceLabel={t('inspector.fieldAgent')}
+            testId="agent-ref-open"
+          >
+            <Select<string>
+              value={agentId}
+              placeholder={t('inspector.pickAgent')}
+              ariaLabel={t('inspector.fieldAgent')}
+              searchable
+              onChange={(v) => {
+                // RFC-223 PR7: the inspector is another agent-selection writer.
+                // Unknown/cleared values must not turn a canonical node back into
+                // a persisted name-only draft.
+                const selected = agents.find((agent) => agent.id === v)
+                if (selected === undefined) return
+                update(
+                  { agentName: selected.name, agentId: selected.id },
+                  atomicNodeInspectorChange(node.id, 'agentName', t('inspector.fieldAgent')),
+                )
+              }}
+              options={[
+                { value: '', label: t('inspector.pickAgent') },
+                ...agents.map((agent) => ({
+                  value: agent.id,
+                  label: resourceOptionLabel(
+                    agent.name,
+                    owners.get(agent.ownerUserId)?.displayName ?? agent.ownerUserId ?? undefined,
+                  ),
+                })),
+              ]}
+            />
+          </ResourceReferenceControl>
         </Field>
       </InspectorFieldAnchor>
 

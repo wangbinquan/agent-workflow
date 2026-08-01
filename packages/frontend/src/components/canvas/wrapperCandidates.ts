@@ -79,6 +79,7 @@ export function loopMemberCandidates(
     ? innerIds.filter((s): s is string => typeof s === 'string')
     : []
   const idSet = new Set(ids)
+  const agentLookup = buildNodeAgentLookup(agents, (agent) => agent)
   const result: LoopMemberCandidate[] = []
   for (const n of definition.nodes) {
     if (!idSet.has(n.id)) continue
@@ -86,7 +87,7 @@ export function loopMemberCandidates(
     const outputPorts = deriveOutputPorts(n, agents, definition, workflowByRef)
     result.push({
       nodeId: n.id,
-      title: nodeDisplayTitle(n),
+      title: nodeDisplayTitle(n, agentLookup),
       outputPorts,
     })
   }

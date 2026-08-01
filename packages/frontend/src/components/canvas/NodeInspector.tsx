@@ -110,6 +110,7 @@ export function NodeInspector({
   const [tab, setTab] = useState<Tab>('edit')
   const [transitionNotice, setTransitionNotice] = useState<string | null>(null)
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents), [agents])
+  const agentLookup = useMemo(() => buildNodeAgentLookup(agents, (agent) => agent), [agents])
   // RFC-243: child-workflow resolver so a selected call-workflow node's port
   // summary counts its child-mirrored ports (provider-tolerant hook — several
   // inspector suites render without a QueryClientProvider).
@@ -140,13 +141,8 @@ export function NodeInspector({
   const node = definition.nodes.find((n) => n.id === selectedNodeId)
   if (node === undefined) return null
   const headingId = workflowInspectorHeadingId(node.id)
-  const ports = computePorts(
-    node,
-    buildNodeAgentLookup(agents, (a) => a),
-    definition,
-    workflowByRef,
-  )
-  const displayTitle = nodeTitle(node)
+  const ports = computePorts(node, agentLookup, definition, workflowByRef)
+  const displayTitle = nodeTitle(node, agentLookup)
 
   // PreviewPane only renders prompt-template assembly for agent kinds; other
   // kinds previously got a disabled tab + "preview only available for agents"

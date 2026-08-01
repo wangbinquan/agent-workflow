@@ -28,6 +28,7 @@ import {
 import { NodeTitleField } from './NodeTitleField'
 import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import { InspectorSection } from './InspectorSection'
+import { ResourceReferenceControl } from './ResourceReferenceControl'
 import type { EditProps } from './types'
 
 interface CallLimits {
@@ -66,6 +67,7 @@ export function CallWorkgroupEdit({ node, onPatch, onHistoryBoundary }: EditProp
     refId.length > 0 && workgroups.some((w) => w.id === refId)
       ? refId
       : (workgroups.find((w) => w.name === refName)?.id ?? '')
+  const selectedWorkgroup = workgroups.find((workgroup) => workgroup.id === selectedId)
   // Dangling reference (loop-exit invalid-option pattern): keep the stored
   // name visible on the trigger instead of silently blanking it. Suppressed
   // while the list is still loading so a resolvable ref never flickers.
@@ -100,45 +102,54 @@ export function CallWorkgroupEdit({ node, onPatch, onHistoryBoundary }: EditProp
             label={t('inspector.fieldCallWorkgroup')}
             hint={t('inspector.fieldCallWorkgroupHint')}
             required
+            group
           >
-            <Select<string>
-              value={selectValue}
-              placeholder={t('inspector.pickCallWorkgroup')}
-              ariaLabel={t('inspector.fieldCallWorkgroup')}
-              searchable
-              data-testid="call-workgroup-ref-select"
-              onChange={(v) => {
-                const selected = workgroups.find((w) => w.id === v)
-                // Unknown/cleared values must not wipe a persisted reference
-                // (agent-selection writer rule, RFC-223 PR7 precedent).
-                if (selected === undefined) return
-                update(
-                  { workgroupName: selected.name, workgroupId: selected.id },
-                  atomicNodeInspectorChange(
-                    node.id,
-                    'workgroupName',
-                    t('inspector.fieldCallWorkgroup'),
-                  ),
-                )
-              }}
-              options={[
-                { value: '', label: t('inspector.pickCallWorkgroup') },
-                ...workgroups.map((w) => ({
-                  value: w.id,
-                  label: resourceOptionLabel(
-                    w.name,
-                    owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId ?? undefined,
-                  ),
-                })),
-                // A dangling reference stays visible (and revertable by
-                // picking something else) instead of silently blanking.
-                // Its value is the raw name, never a candidate id, so the
-                // onChange guard above makes re-picking it a no-op.
-                ...(refMissing
-                  ? [{ value: refName, label: t('inspector.missingOption', { value: refName }) }]
-                  : []),
-              ]}
-            />
+            <ResourceReferenceControl
+              kind="workgroup"
+              resourceId={selectedWorkgroup?.id}
+              resourceName={selectedWorkgroup?.name}
+              resourceLabel={t('inspector.fieldCallWorkgroup')}
+              testId="call-workgroup-ref-open"
+            >
+              <Select<string>
+                value={selectValue}
+                placeholder={t('inspector.pickCallWorkgroup')}
+                ariaLabel={t('inspector.fieldCallWorkgroup')}
+                searchable
+                data-testid="call-workgroup-ref-select"
+                onChange={(v) => {
+                  const selected = workgroups.find((w) => w.id === v)
+                  // Unknown/cleared values must not wipe a persisted reference
+                  // (agent-selection writer rule, RFC-223 PR7 precedent).
+                  if (selected === undefined) return
+                  update(
+                    { workgroupName: selected.name, workgroupId: selected.id },
+                    atomicNodeInspectorChange(
+                      node.id,
+                      'workgroupName',
+                      t('inspector.fieldCallWorkgroup'),
+                    ),
+                  )
+                }}
+                options={[
+                  { value: '', label: t('inspector.pickCallWorkgroup') },
+                  ...workgroups.map((w) => ({
+                    value: w.id,
+                    label: resourceOptionLabel(
+                      w.name,
+                      owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId ?? undefined,
+                    ),
+                  })),
+                  // A dangling reference stays visible (and revertable by
+                  // picking something else) instead of silently blanking.
+                  // Its value is the raw name, never a candidate id, so the
+                  // onChange guard above makes re-picking it a no-op.
+                  ...(refMissing
+                    ? [{ value: refName, label: t('inspector.missingOption', { value: refName }) }]
+                    : []),
+                ]}
+              />
+            </ResourceReferenceControl>
           </Field>
         </InspectorFieldAnchor>
         <InspectorFieldAnchor nodeId={node.id} field="call-goal-template">

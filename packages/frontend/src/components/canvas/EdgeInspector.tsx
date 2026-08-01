@@ -49,6 +49,7 @@ export function EdgeInspector({
 }: EdgeInspectorProps) {
   const { t } = useTranslation()
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents ?? []), [agents])
+  const agentLookup = useMemo(() => buildNodeAgentLookup(agents ?? [], (agent) => agent), [agents])
   const targetPortRenameable = isEdgeTargetPortRenameable(definition, edge, semanticContext)
   const [conflict, setConflict] = useState<string | null>(null)
   const sourceNode = definition.nodes.find((node) => node.id === edge.source.nodeId)
@@ -61,7 +62,7 @@ export function EdgeInspector({
             ...computePorts(
               targetNode,
               // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
-              buildNodeAgentLookup(agents ?? [], (a) => a),
+              agentLookup,
               definition,
             ).inputs,
             // Keep a legacy or temporarily-invalid persisted value visible.
@@ -150,7 +151,7 @@ export function EdgeInspector({
           <Field label={t('inspector.edgeSourceLabel')}>
             <div className="inspector__readonly">
               <strong>
-                {sourceNode === undefined ? edge.source.nodeId : nodeTitle(sourceNode)}
+                {sourceNode === undefined ? edge.source.nodeId : nodeTitle(sourceNode, agentLookup)}
               </strong>
               <span> · {edge.source.portName}</span>
             </div>
@@ -158,7 +159,7 @@ export function EdgeInspector({
           <Field label={t('inspector.edgeTargetLabel')}>
             <div className="inspector__readonly">
               <strong>
-                {targetNode === undefined ? edge.target.nodeId : nodeTitle(targetNode)}
+                {targetNode === undefined ? edge.target.nodeId : nodeTitle(targetNode, agentLookup)}
               </strong>
             </div>
           </Field>

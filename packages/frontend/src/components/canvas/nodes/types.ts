@@ -25,6 +25,12 @@ export interface CanvasNodeData extends Record<string, unknown> {
   kind: NodeKind
   /** Human-readable label (agent name / input key / etc.). */
   title: string
+  /**
+   * Agent nodes only: current referenced-agent name (or its persisted display
+   * snapshot when the resource cannot be resolved). Kept separate from title
+   * so a custom node display name does not hide which agent it invokes.
+   */
+  agentName?: string
   /** Optional second line (defaults to the node id). */
   subtitle?: string
   /** Output ports declared by this node (rendered on the right). */

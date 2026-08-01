@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { PortHandles } from './PortHandles'
 import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
 import { CanvasNodeCard } from './CanvasNodeCard'
+import { CanvasNodeReferenceBand } from './CanvasNodeReferenceBand'
 
 interface CallResourceNodeCardProps {
   data: CanvasNodeData
@@ -31,11 +32,6 @@ export function CallResourceNodeCard({
 }: CallResourceNodeCardProps) {
   const hasReference = referenceName.length > 0
   const displayTitle = data.title || data.nodeId
-  // nodeTitle() uses the referenced resource as the default canvas title.
-  // Repeating that same value in the reference band adds no information; the
-  // band is useful only for an explicit alias or for the actionable unset
-  // state.
-  const showReferenceBand = !hasReference || displayTitle !== referenceName
 
   return (
     <CanvasNodeCard
@@ -52,16 +48,11 @@ export function CallResourceNodeCard({
       loopBody={data.loopBody}
       dataAttributes={{ 'data-reference-state': hasReference ? 'resolved' : 'unset' }}
     >
-      {showReferenceBand ? (
-        <div className="canvas-node__call-reference">
-          <span className="canvas-node__call-reference-indicator" aria-hidden="true" />
-          {hasReference ? (
-            <code title={referenceName}>{referenceName}</code>
-          ) : (
-            <span>{unsetReferenceLabel}</span>
-          )}
-        </div>
-      ) : null}
+      <CanvasNodeReferenceBand
+        displayTitle={displayTitle}
+        referenceName={referenceName}
+        unsetReferenceLabel={unsetReferenceLabel}
+      />
       <PortHandles
         side="left"
         ports={data.inputPorts}

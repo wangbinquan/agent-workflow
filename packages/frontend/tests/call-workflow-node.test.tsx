@@ -274,6 +274,10 @@ describe('CallWorkflowEdit inspector', () => {
     expect(preview.textContent).toContain('audit_report')
     expect(preview.textContent).toContain('summary')
     expect(preview.textContent).toContain('notes')
+    const detailsLink = await screen.findByTestId('call-workflow-ref-open')
+    expect(detailsLink.getAttribute('href')).toBe('/workflows/wf-child')
+    expect(detailsLink.getAttribute('target')).toBe('_blank')
+    expect(detailsLink.getAttribute('aria-label')).toContain('child-wf')
 
     fireEvent.click(trigger)
     const listbox = await screen.findByRole('listbox')
@@ -301,6 +305,7 @@ describe('CallWorkflowEdit inspector', () => {
     const placeholder = await screen.findByTestId('call-workflow-ref-unavailable')
     expect(placeholder.textContent).toBe(i18n.t('inspector.callWorkflowRefUnavailable'))
     expect(screen.queryByTestId('call-workflow-ports-preview')).toBeNull()
+    expect(screen.queryByTestId('call-workflow-ref-open')).toBeNull()
   })
 
   test('limits NumberInputs write and clear the optional limits object', async () => {

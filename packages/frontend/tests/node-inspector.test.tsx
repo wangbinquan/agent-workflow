@@ -338,6 +338,37 @@ describe('NodeInspector', () => {
     })
   })
 
+  test('agent-single: resolved reference exposes a stable-id details link', async () => {
+    setup({
+      id: 'a1',
+      kind: 'agent-single',
+      agentId: 'agent-coder',
+      agentName: 'coder',
+      promptTemplate: '',
+    })
+
+    const link = await screen.findByTestId('agent-ref-open')
+    expect(link.tagName).toBe('A')
+    expect(link.getAttribute('href')).toBe('/agents/agent-coder')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('aria-label')).toContain('coder')
+  })
+
+  test('agent-single: unresolved reference does not offer a misleading details link', () => {
+    setup(
+      {
+        id: 'a1',
+        kind: 'agent-single',
+        agentId: 'missing-agent',
+        agentName: 'ghost',
+        promptTemplate: '',
+      },
+      [],
+    )
+
+    expect(screen.queryByTestId('agent-ref-open')).toBeNull()
+  })
+
   test('agent-single: clearing the picker cannot persist a name-only identity', () => {
     const { onChange } = setup({
       id: 'a1',

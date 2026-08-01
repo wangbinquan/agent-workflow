@@ -260,6 +260,10 @@ describe('CallWorkgroupEdit inspector', () => {
     // Fixed output info line — there is no per-child port preview to render.
     const info = await screen.findByTestId('call-workgroup-result-info')
     expect(info.textContent).toBe(i18n.t('inspector.callWorkgroupResultInfo'))
+    const detailsLink = await screen.findByTestId('call-workgroup-ref-open')
+    expect(detailsLink.getAttribute('href')).toBe('/workgroups/wg-a')
+    expect(detailsLink.getAttribute('target')).toBe('_blank')
+    expect(detailsLink.getAttribute('aria-label')).toContain('audit-squad')
 
     fireEvent.click(trigger)
     const listbox = await screen.findByRole('listbox')
@@ -292,6 +296,7 @@ describe('CallWorkgroupEdit inspector', () => {
     expect(
       within(listbox).queryByText(i18n.t('inspector.missingOption', { value: 'ghost-squad' })),
     ).not.toBeNull()
+    expect(screen.queryByTestId('call-workgroup-ref-open')).toBeNull()
   })
 
   test('goalTemplate edits write back through the node patch', async () => {

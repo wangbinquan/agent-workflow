@@ -4198,6 +4198,25 @@ code {
   margin-top: 2px;
 }
 
+/* Resource-backed node inspectors keep the picker and its stable-id detail
+ * action on one compact row. Grid's minmax(0, 1fr) preserves Select ellipsis
+ * instead of letting a long owner/name push the action out of the drawer. */
+.inspector__resource-reference {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.inspector__resource-reference-picker {
+  min-width: 0;
+}
+
+.inspector__resource-reference-link {
+  gap: 4px;
+}
+
 .form-input {
   font: inherit;
   font-size: 14px;
@@ -7553,9 +7572,9 @@ details.form-section[open] > summary {
   font-size: 11px;
 }
 
-/* Resource-call cards add a bounded target band to the shared card shell.
- * The band appears for an actionable unset state or when a custom node title
- * differs from the referenced resource name. */
+/* Resource-backed nodes add a bounded target band to the shared card shell.
+ * The band appears for an actionable unset call or when a custom node title
+ * differs from the referenced workflow, workgroup, or agent name. */
 .canvas-node__call-reference {
   display: flex;
   min-width: 0;

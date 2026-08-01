@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Agent,
@@ -16,6 +16,7 @@ import type {
   WorkflowDraftSnapshot,
   WorkflowValidationReceipt,
 } from '@agent-workflow/shared'
+import { buildNodeAgentLookup } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { EditorPaletteContent, EditorSidebar } from '@/components/canvas/EditorSidebar'
@@ -326,6 +327,10 @@ export function WorkflowEditorLoaded({
     refetchOnWindowFocus: 'always',
     refetchInterval: 15_000,
   })
+  const agentTitleLookup = useMemo(
+    () => buildNodeAgentLookup(agents.data ?? [], (agent) => agent),
+    [agents.data],
+  )
   const skills = useQuery<Skill[]>({
     queryKey: ['skills'],
     queryFn: ({ signal }) => api.get('/api/skills', undefined, signal),
@@ -953,7 +958,7 @@ export function WorkflowEditorLoaded({
     selectedEdge !== null
       ? t('inspector.edgeTitle')
       : selectedNode !== null
-        ? nodeTitle(selectedNode)
+        ? nodeTitle(selectedNode, agentTitleLookup)
         : t('inspector.tabEdit')
   const renderInspector = (chrome: 'rail' | 'content') =>
     selectedEdge !== null ? (

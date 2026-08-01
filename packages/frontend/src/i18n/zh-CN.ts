@@ -2727,7 +2727,6 @@ export interface Resources {
     layoutAll: string
     layoutSelection: string
     menuSelectedCount: string
-    nodeTitleUnsetAgent: string
     nodeTitleUnsetKey: string
     history: {
       undo: string
@@ -3064,6 +3063,8 @@ export interface Resources {
     loopExitInvalidPortName: string
     fieldAgent: string
     pickAgent: string
+    openReferencedResource: string
+    openReferencedResourceAria: string
     fieldPromptTemplate: string
     fieldPromptTemplateHint: string
     edgeTitle: string
@@ -7268,7 +7269,6 @@ export const zhCN: Resources = {
     layoutAll: '整理全图',
     layoutSelection: '整理所选',
     menuSelectedCount: '已选 {{n}} 个',
-    nodeTitleUnsetAgent: '(未设置代理)',
     nodeTitleUnsetKey: '(未设置 key)',
     history: {
       undo: '撤销',
@@ -7608,6 +7608,8 @@ export const zhCN: Resources = {
     loopExitInvalidPortName: '"{{portName}}" 不是该节点声明的输出端口，请重新选择。',
     fieldAgent: '代理',
     pickAgent: '— 选一个代理 —',
+    openReferencedResource: '查看详情',
+    openReferencedResourceAria: '在新标签页查看{{resource}}“{{name}}”的详情',
     fieldPromptTemplate: 'Prompt 模板',
     fieldPromptTemplateHint: '使用 {{port_name}} 引用入边端口；内置变量如 {{__repo_path__}}。',
     edgeTitle: '边设置',

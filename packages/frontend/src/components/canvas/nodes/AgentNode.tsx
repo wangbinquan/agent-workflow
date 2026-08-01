@@ -8,6 +8,7 @@ import { QuestionBadge } from './QuestionBadge'
 import { ClarifyDirectiveToggle } from './ClarifyDirectiveToggle'
 import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
 import { CanvasNodeCard } from './CanvasNodeCard'
+import { CanvasNodeReferenceBand } from './CanvasNodeReferenceBand'
 
 interface Props extends NodeProps {
   data: CanvasNodeData
@@ -15,6 +16,8 @@ interface Props extends NodeProps {
 
 export function AgentNode({ data, selected }: Props) {
   const { t } = useTranslation()
+  const displayTitle = data.title || data.nodeId
+  const agentName = typeof data.agentName === 'string' ? data.agentName : ''
   return (
     <CanvasNodeCard
       data={data}
@@ -22,12 +25,13 @@ export function AgentNode({ data, selected }: Props) {
       className="canvas-node--agent"
       icon={NODE_GLYPHS['agent-single']}
       kindLabel={t('agentNode.label')}
-      title={data.title}
-      titleTooltip={data.title}
+      title={displayTitle}
+      titleTooltip={displayTitle}
       status={data.status ?? 'default'}
       loopBody={data.loopBody}
       overlays={<QuestionBadge data={data} />}
     >
+      <CanvasNodeReferenceBand displayTitle={displayTitle} referenceName={agentName} />
       {/* RFC-122: per-(task, asking-node) clarify directive toggle — only on
           asking-agent nodes in the task canvas (data.clarifyDirective set). */}
       <ClarifyDirectiveToggle data={data} />

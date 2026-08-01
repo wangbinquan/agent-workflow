@@ -36,7 +36,7 @@ export function OutputEdit({
     .filter((candidate) => candidate.id !== node.id && candidate.kind !== 'output')
     .map((candidate) => ({
       id: candidate.id,
-      title: nodeTitle(candidate),
+      title: nodeTitle(candidate, agentByName),
       ports: computePorts(candidate, agentByName, definition).outputs,
     }))
   // RFC-199: node declarations and matching edges are one typed transition;

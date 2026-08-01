@@ -2,10 +2,14 @@
 // blank/missing falls back to the kind-specific derivation (agentName /
 // inputKey / id). Covers all node kinds touched by the unified
 // "display name" field in NodeInspector.
+//
+// 2026-08-01 regression: a canonical agentId with no node-title/display
+// snapshot must resolve the configured agent's name and must never render an
+// "unset agent" label on the card or its companion inspector surfaces.
 
 import { describe, expect, test } from 'vitest'
-import type { WorkflowNode } from '@agent-workflow/shared'
-import { nodeTitle } from '../src/components/canvas/WorkflowCanvas'
+import { buildNodeAgentLookup, type Agent, type WorkflowNode } from '@agent-workflow/shared'
+import { __testToFlowNodes, nodeTitle } from '../src/components/canvas/WorkflowCanvas'
 
 const mk = (extra: Record<string, unknown>): WorkflowNode =>
   ({ id: 'n1', kind: 'agent-single', ...extra }) as unknown as WorkflowNode
@@ -29,8 +33,43 @@ describe('nodeTitle()', () => {
     expect(nodeTitle(mk({ agentName: 'coder' }))).toBe('coder')
   })
 
-  test('agent-single without agentName shows unset placeholder', () => {
-    expect(nodeTitle(mk({}))).toBe('(unset agent)')
+  test('blank display name resolves the configured agent name by canonical id', () => {
+    const configuredAgent = { id: 'agent-1', name: 'coder' } as Agent
+    const lookup = buildNodeAgentLookup([configuredAgent], (agent) => agent)
+
+    expect(nodeTitle(mk({ agentId: 'agent-1', title: '' }), lookup)).toBe('coder')
+  })
+
+  test('canvas card projection supplies the configured-agent lookup to the title rule', () => {
+    const configuredAgent = { id: 'agent-1', name: 'coder' } as Agent
+    const [flowNode] = __testToFlowNodes([mk({ agentId: 'agent-1', title: '' })], [configuredAgent])
+
+    expect(flowNode?.data.title).toBe('coder')
+    expect(flowNode?.data.agentName).toBe('coder')
+  })
+
+  test('canvas card keeps custom title and current referenced-agent name separately', () => {
+    const configuredAgent = { id: 'agent-1', name: 'renamed-coder' } as Agent
+    const [flowNode] = __testToFlowNodes(
+      [mk({ agentId: 'agent-1', agentName: 'old-coder', title: 'Implementation' })],
+      [configuredAgent],
+    )
+
+    expect(flowNode?.data.title).toBe('Implementation')
+    expect(flowNode?.data.agentName).toBe('renamed-coder')
+  })
+
+  test('the configured agent name wins over a stale display snapshot', () => {
+    const configuredAgent = { id: 'agent-1', name: 'renamed-coder' } as Agent
+    const lookup = buildNodeAgentLookup([configuredAgent], (agent) => agent)
+
+    expect(nodeTitle(mk({ agentId: 'agent-1', agentName: 'old-coder', title: '' }), lookup)).toBe(
+      'renamed-coder',
+    )
+  })
+
+  test('an unresolved agent node falls back to its node id, never an unset-agent label', () => {
+    expect(nodeTitle(mk({}))).toBe('n1')
   })
 
   test('input node falls back to inputKey when no title', () => {

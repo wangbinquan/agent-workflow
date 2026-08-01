@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { CallWorkflowNode } from '../src/components/canvas/nodes/CallWorkflowNode'
 import { CallWorkgroupNode } from '../src/components/canvas/nodes/CallWorkgroupNode'
+import { AgentNode } from '../src/components/canvas/nodes/AgentNode'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function nodeProps(data: Record<string, unknown>): any {
@@ -100,6 +101,53 @@ describe('call resource canvas cards', () => {
     expect(card?.querySelector('[data-icon="workgroup"]')).not.toBeNull()
     expect(card?.querySelector('.canvas-node__call-reference code')).toBeNull()
     expect(card?.querySelector('.canvas-node__call-reference')?.textContent?.trim()).not.toBe('')
+  })
+})
+
+describe('agent resource identity', () => {
+  // 2026-08-01 regression: a custom node display name used to replace the
+  // configured agent name entirely, unlike the two call-resource cards.
+  test('custom node title keeps the referenced agent name in the shared band', () => {
+    const { container } = render(
+      <ReactFlowProvider>
+        <AgentNode
+          {...nodeProps({
+            nodeId: 'agent-step',
+            kind: 'agent-single',
+            title: 'Review the patch',
+            agentName: 'code-auditor',
+            inputPorts: [],
+            outputPorts: ['report'],
+            surface: 'editor',
+          })}
+        />
+      </ReactFlowProvider>,
+    )
+
+    expect(container.querySelector('.canvas-node__title')?.textContent).toBe('Review the patch')
+    expect(container.querySelector('.canvas-node__call-reference code')?.textContent).toBe(
+      'code-auditor',
+    )
+  })
+
+  test('default agent title is not repeated in a second reference band', () => {
+    const { container } = render(
+      <ReactFlowProvider>
+        <AgentNode
+          {...nodeProps({
+            nodeId: 'agent-step',
+            kind: 'agent-single',
+            title: 'code-auditor',
+            agentName: 'code-auditor',
+            inputPorts: [],
+            outputPorts: ['report'],
+            surface: 'editor',
+          })}
+        />
+      </ReactFlowProvider>,
+    )
+
+    expect(container.querySelector('.canvas-node__call-reference')).toBeNull()
   })
 })
 

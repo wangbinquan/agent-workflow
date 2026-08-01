@@ -34,7 +34,8 @@ export function NodeTitleField({
             value={nodeTitle}
             onChange={(v) => {
               // Strip the field entirely when the user blanks it so the canvas
-              // falls back to the kind-specific derivation (agentName etc.).
+              // falls back to the kind-specific derivation (configured agent
+              // name, input key, node id, etc.).
               const next = { ...(node as Record<string, unknown>) }
               if (v.length === 0) delete next.title
               else next.title = v
