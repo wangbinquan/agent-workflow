@@ -23,7 +23,7 @@
 
 ### PR-1 · 路由元数据层与权限点重构
 
-- [ ] **RFC-247-T1**：设计并落地 `RouteMeta` 契约与 `registerRoute`（design §3.1）；
+- [x] **RFC-247-T1**：设计并落地 `RouteMeta` 契约与 `registerRoute`（design §3.1）；
       支持 `permissions` 数组 AND 语义、`tokenAccess`、`publicReason`。
 - [x] **RFC-247-T2**：权限目录重构——`资源:write` 拆为 `:create` / `:update` / `:delete`；
       新增 workgroups / scheduled-tasks / memory 的完整点；memory 旧五点退役并按 design §2.3

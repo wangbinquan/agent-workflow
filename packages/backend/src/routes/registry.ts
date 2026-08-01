@@ -28,6 +28,7 @@
 // symmetry rather than by any real route) and deliberately never created.
 
 import type { Handler, Hono, MiddlewareHandler } from 'hono'
+import type { BlankEnv } from 'hono/types'
 import type { Permission } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import { ForbiddenError } from '@/util/errors'
@@ -56,10 +57,10 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
  */
 export type TokenAccess = 'allow' | 'never'
 
-export interface RouteMeta {
+export interface RouteMeta<P extends string = string> {
   readonly method: HttpMethod
   /** Hono path template, byte-identical to the string passed at registration. */
-  readonly path: string
+  readonly path: P
   /**
    * Points required to pass. The array is an **AND** — every entry must be held.
    *
@@ -107,6 +108,17 @@ export function lookupRouteMeta(method: string, path: string): RouteMeta | undef
 }
 
 export class RouteMetaError extends Error {}
+
+/** Two declarations describe the same authorization contract. */
+function sameMeta(a: RouteMeta, b: RouteMeta): boolean {
+  return (
+    a.tokenAccess === b.tokenAccess &&
+    a.publicReason === b.publicReason &&
+    a.summary === b.summary &&
+    a.permissions.length === b.permissions.length &&
+    a.permissions.every((p, i) => p === b.permissions[i])
+  )
+}
 
 function validate(meta: RouteMeta): void {
   if (meta.permissions.length === 0 && meta.publicReason === undefined) {
@@ -169,17 +181,30 @@ export function routeMetaGate(meta: RouteMeta): MiddlewareHandler {
  * `src/routes/*.ts` and its `stripLineComments` does not strip block comments,
  * so an example in a doc comment is discovered as a real endpoint.)
  */
-export function registerRoute(
+export function registerRoute<P extends string>(
   app: Hono,
-  meta: RouteMeta,
-  ...handlers: Array<Handler | MiddlewareHandler>
+  meta: RouteMeta<P>,
+  // Generic over the path literal so Hono's `c.req.param('id')` inference
+  // survives the indirection — without it every migrated handler would see
+  // `string | undefined` and the migration would trade a real type guarantee
+  // for the registry's bookkeeping.
+  ...handlers: Array<Handler<BlankEnv, P>>
 ): void {
   validate(meta)
   const k = key(meta.method, meta.path)
   const existing = REGISTRY.get(k)
-  if (existing !== undefined) {
-    throw new RouteMetaError(`${k}: already registered — a route may declare metadata exactly once`)
+  if (existing !== undefined && !sameMeta(existing, meta)) {
+    throw new RouteMetaError(
+      `${k}: already declared with DIFFERENT metadata — a route has exactly one authorization contract`,
+    )
   }
+  // Re-declaring the same contract is a no-op rather than an error: the registry
+  // describes the CODEBASE's route inventory, which is static, while `createApp`
+  // is legitimately called many times in one process (every backend test that
+  // builds a fresh app). Throwing on the second identical declaration would make
+  // the registry unusable in exactly the place its guarantees matter most.
+  // A CONFLICTING re-declaration is still an error — that is the real mistake
+  // this check exists to catch.
   REGISTRY.set(k, meta)
   // `app.on(method, path, ...)` rather than `app.get`/`app.post`/… : the latter
   // are generic over a literal path type, which a runtime `meta.path` cannot

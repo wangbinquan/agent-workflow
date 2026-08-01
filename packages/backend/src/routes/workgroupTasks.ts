@@ -16,6 +16,7 @@
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { buildConfigActions } from '@/services/workgroup/configActions'
 import { buildDwActions } from '@/services/workgroup/dwActions'
 import { buildRoomReads } from '@/services/workgroup/room'
@@ -52,56 +53,146 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     ...buildConfigActions({ db: deps.db, configPath: deps.configPath }, core),
   }
 
-  app.get('/api/workgroup-tasks/pending-count', async (c) =>
-    c.json(await actions.pendingCount(actorOf(c))),
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/workgroup-tasks/pending-count',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Count of workgroup tasks awaiting input',
+    },
+    async (c) => c.json(await actions.pendingCount(actorOf(c))),
   )
 
-  app.get('/api/workgroup-tasks/:taskId/room', async (c) =>
-    c.json(await actions.roomAggregate(actorOf(c), c.req.param('taskId'))),
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/workgroup-tasks/:taskId/room',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Workgroup task room state',
+    },
+    async (c) => c.json(await actions.roomAggregate(actorOf(c), c.req.param('taskId'))),
   )
 
-  app.post('/api/workgroup-tasks/:taskId/dw-confirm', async (c) =>
-    c.json(await actions.dwConfirm(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw))),
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workgroup-tasks/:taskId/dw-confirm',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Confirm a generated dynamic workflow',
+    },
+    async (c) =>
+      c.json(await actions.dwConfirm(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw))),
   )
 
-  app.post('/api/workgroup-tasks/:taskId/dw-save-as-workflow', async (c) =>
-    c.json(
-      await actions.dwSaveAsWorkflow(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw)),
-      201,
-    ),
-  )
-
-  app.post('/api/workgroup-tasks/:taskId/messages', async (c) =>
-    c.json(
-      await actions.postRoomMessage(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw)),
-      201,
-    ),
-  )
-
-  app.post('/api/workgroup-tasks/:taskId/assignments/:id/deliver', async (c) =>
-    c.json(
-      await actions.deliverAssignment(
-        actorOf(c),
-        c.req.param('taskId'),
-        c.req.param('id'),
-        await safeJson(c.req.raw),
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workgroup-tasks/:taskId/dw-save-as-workflow',
+      permissions: ['tasks:execute', 'workflows:create'],
+      tokenAccess: 'allow',
+      summary: 'Persist a dynamic workflow as a real workflow resource',
+    },
+    async (c) =>
+      c.json(
+        await actions.dwSaveAsWorkflow(
+          actorOf(c),
+          c.req.param('taskId'),
+          await safeJson(c.req.raw),
+        ),
+        201,
       ),
-      201,
-    ),
   )
 
-  app.post('/api/workgroup-tasks/:taskId/confirm', async (c) =>
-    c.json(await actions.confirmGate(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw))),
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workgroup-tasks/:taskId/messages',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Post a room message',
+    },
+    async (c) =>
+      c.json(
+        await actions.postRoomMessage(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw)),
+        201,
+      ),
   )
 
-  app.put('/api/workgroup-tasks/:taskId/config', async (c) =>
-    c.json(
-      await actions.updateTaskConfig(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw)),
-    ),
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workgroup-tasks/:taskId/assignments/:id/deliver',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Deliver an assignment',
+    },
+    async (c) =>
+      c.json(
+        await actions.deliverAssignment(
+          actorOf(c),
+          c.req.param('taskId'),
+          c.req.param('id'),
+          await safeJson(c.req.raw),
+        ),
+        201,
+      ),
   )
 
-  app.post('/api/workgroup-tasks/:taskId/assignments/:id/cancel', async (c) => {
-    await actions.cancelAssignment(actorOf(c), c.req.param('taskId'), c.req.param('id'))
-    return c.body(null, 204)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workgroup-tasks/:taskId/confirm',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Confirm a workgroup task step',
+    },
+    async (c) =>
+      c.json(
+        await actions.confirmGate(actorOf(c), c.req.param('taskId'), await safeJson(c.req.raw)),
+      ),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/workgroup-tasks/:taskId/config',
+      permissions: ['tasks:update'],
+      tokenAccess: 'never',
+      summary: 'Update workgroup task config (members / switches)',
+    },
+    async (c) =>
+      c.json(
+        await actions.updateTaskConfig(
+          actorOf(c),
+          c.req.param('taskId'),
+          await safeJson(c.req.raw),
+        ),
+      ),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workgroup-tasks/:taskId/assignments/:id/cancel',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Cancel an assignment',
+    },
+    async (c) => {
+      await actions.cancelAssignment(actorOf(c), c.req.param('taskId'), c.req.param('id'))
+      return c.body(null, 204)
+    },
+  )
 }

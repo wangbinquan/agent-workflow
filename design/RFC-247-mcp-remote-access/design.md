@@ -253,9 +253,22 @@ PAT 分支恒走收窄路径。
 |---|---|
 | `GET /api/scheduled-tasks`、`/:id` | read |
 | `POST /api/scheduled-tasks` | create **AND `tasks:execute`** |
-| `PUT /:id` | update **AND `tasks:execute`** |
+| `PUT /:id` | update **只此一点**（见下方「实现期修正」） |
 | `POST /:id/run-now` | execute **AND `tasks:execute`** |
 | `DELETE /:id` | delete |
+
+> **实现期修正（2026-08-02，T3 迁移时实测）：`PUT` 不加 `tasks:execute`。**
+> 本文初稿把 PUT 也列入双点 AND，**这会回归 RFC-165 N1-r3 有意授予的能力**。该 PUT 的门是
+> **payload-conditional** 的：改名、以及对**已停用**计划的 spec 编辑对窄令牌开放，只有真正
+> **武装启动**的编辑才要执行点——判定在 `services/scheduledTasks.ts:549-553`（`armsLaunchAgainst`）
+> 与 `:594`，因为只有那里看得见请求体。
+>
+> 静态路由元数据**表达不了「取决于 body」**。声明更严的门看似安全，实则**静默撤销**了一项
+> 既有能力，并且比现状更不精确。因此：`POST` 与 `run-now` 保留双点 AND（它们**无条件**武装
+> 启动），`PUT` 只声明 `scheduled-tasks:update`，武装条件继续由服务层承担。
+> `tests/rfc165-scheduled-kinds.test.ts` 的 K6 矩阵是这条区分的回归锁。
+>
+> 这也印证了事实核对评审对 AC-6 的那条 P2：**payload-dependent 的门不能从静态 `RouteMeta` 派生**。
 
 > **这是本 RFC 发现的一个真实提权面**。现状里 `POST /api/scheduled-tasks` 的门是
 > `tasks:launch`，`routes/scheduledTasks.ts:77-80` 的注释写明理由：「创建 schedule 武装了

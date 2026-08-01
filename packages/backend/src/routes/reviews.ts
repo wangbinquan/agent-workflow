@@ -27,6 +27,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -140,220 +141,334 @@ function appHomeFor(_deps: AppDeps): string {
 }
 
 export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/reviews', async (c) => {
-    const q = ListReviewsQuerySchema.safeParse({
-      status: c.req.query('status') ?? 'pending',
-      taskId: c.req.query('taskId') ?? c.req.query('task_id') ?? undefined,
-      workflowId: c.req.query('workflowId') ?? c.req.query('workflow_id') ?? undefined,
-      limit: c.req.query('limit') ? Number(c.req.query('limit')) : undefined,
-    })
-    if (!q.success) {
-      throw new ValidationError('review-list-query-invalid', 'invalid review list query', {
-        issues: q.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/reviews',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List review gates the caller can act on',
+    },
+    async (c) => {
+      const q = ListReviewsQuerySchema.safeParse({
+        status: c.req.query('status') ?? 'pending',
+        taskId: c.req.query('taskId') ?? c.req.query('task_id') ?? undefined,
+        workflowId: c.req.query('workflowId') ?? c.req.query('workflow_id') ?? undefined,
+        limit: c.req.query('limit') ? Number(c.req.query('limit')) : undefined,
       })
-    }
-    const out = await listReviewSummaries(deps.db, q.data)
-    return c.json(await filterVisibleByTask(deps, actorOf(c), out))
-  })
+      if (!q.success) {
+        throw new ValidationError('review-list-query-invalid', 'invalid review list query', {
+          issues: q.error.issues,
+        })
+      }
+      const out = await listReviewSummaries(deps.db, q.data)
+      return c.json(await filterVisibleByTask(deps, actorOf(c), out))
+    },
+  )
 
-  app.get('/api/reviews/pending-count', async (c) => {
-    // RFC-099: badge counts only reviews on tasks visible to the actor.
-    const actor = actorOf(c)
-    if (actor.permissions.has('tasks:read:all')) {
-      return c.json({ count: await countPendingReviews(deps.db) })
-    }
-    // RFC-202 T6: exact count — not truncated by the default list page size.
-    const pending = await listReviewSummaries(deps.db, {
-      status: 'pending',
-      limit: Number.MAX_SAFE_INTEGER,
-    })
-    const visible = await filterVisibleByTask(deps, actor, pending)
-    return c.json({ count: visible.length })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/reviews/pending-count',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Count of pending review gates',
+    },
+    async (c) => {
+      // RFC-099: badge counts only reviews on tasks visible to the actor.
+      const actor = actorOf(c)
+      if (actor.permissions.has('tasks:read:all')) {
+        return c.json({ count: await countPendingReviews(deps.db) })
+      }
+      // RFC-202 T6: exact count — not truncated by the default list page size.
+      const pending = await listReviewSummaries(deps.db, {
+        status: 'pending',
+        limit: Number.MAX_SAFE_INTEGER,
+      })
+      const visible = await filterVisibleByTask(deps, actor, pending)
+      return c.json({ count: visible.length })
+    },
+  )
 
-  app.get('/api/reviews/:nodeRunId', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    await ensureReviewVisible(deps, nodeRunId, actorOf(c))
-    const detail = await getReviewDetail(deps.db, appHomeFor(deps), nodeRunId)
-    return c.json(detail)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/reviews/:nodeRunId',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one review gate',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      await ensureReviewVisible(deps, nodeRunId, actorOf(c))
+      const detail = await getReviewDetail(deps.db, appHomeFor(deps), nodeRunId)
+      return c.json(detail)
+    },
+  )
 
-  app.get('/api/reviews/:nodeRunId/versions', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    await ensureReviewVisible(deps, nodeRunId, actorOf(c))
-    const versions = await listDocVersionsForReview(deps.db, nodeRunId)
-    if (versions.length === 0) {
-      throw new NotFoundError(
-        'review-versions-empty',
-        `no doc_versions for review run ${nodeRunId}`,
-      )
-    }
-    return c.json(versions)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/reviews/:nodeRunId/versions',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List review document versions',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      await ensureReviewVisible(deps, nodeRunId, actorOf(c))
+      const versions = await listDocVersionsForReview(deps.db, nodeRunId)
+      if (versions.length === 0) {
+        throw new NotFoundError(
+          'review-versions-empty',
+          `no doc_versions for review run ${nodeRunId}`,
+        )
+      }
+      return c.json(versions)
+    },
+  )
 
-  app.get('/api/reviews/:nodeRunId/versions/:versionId', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    await ensureReviewVisible(deps, nodeRunId, actorOf(c))
-    const versionId = c.req.param('versionId')
-    // RFC-013: returns body + comments for read-only historical view. The
-    // helper validates the version belongs to `nodeRunId` so a caller can't
-    // brute-force doc_versions across unrelated reviews.
-    const dv = await getDocVersionDetail(deps.db, appHomeFor(deps), nodeRunId, versionId)
-    if (dv === null) {
-      throw new NotFoundError('review-version-not-found', `doc_version ${versionId} not found`)
-    }
-    return c.json(dv)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/reviews/:nodeRunId/versions/:versionId',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one review document version',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      await ensureReviewVisible(deps, nodeRunId, actorOf(c))
+      const versionId = c.req.param('versionId')
+      // RFC-013: returns body + comments for read-only historical view. The
+      // helper validates the version belongs to `nodeRunId` so a caller can't
+      // brute-force doc_versions across unrelated reviews.
+      const dv = await getDocVersionDetail(deps.db, appHomeFor(deps), nodeRunId, versionId)
+      if (dv === null) {
+        throw new NotFoundError('review-version-not-found', `doc_version ${versionId} not found`)
+      }
+      return c.json(dv)
+    },
+  )
 
   // RFC-142: multi-document round history for the list expand + the read-only
   // historical-round view. [] for single-document reviews.
-  app.get('/api/reviews/:nodeRunId/rounds', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    await ensureReviewVisible(deps, nodeRunId, actorOf(c))
-    return c.json(await listReviewRounds(deps.db, appHomeFor(deps), nodeRunId))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/reviews/:nodeRunId/rounds',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List review rounds',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      await ensureReviewVisible(deps, nodeRunId, actorOf(c))
+      return c.json(await listReviewRounds(deps.db, appHomeFor(deps), nodeRunId))
+    },
+  )
 
-  app.post('/api/reviews/:nodeRunId/decision', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    const raw: unknown = await c.req.json().catch(() => null)
-    const parsed = SubmitReviewDecisionSchema.safeParse(raw)
-    if (!parsed.success) {
-      throw new ValidationError('review-decision-invalid', 'invalid review decision body', {
-        issues: parsed.error.issues,
-      })
-    }
-    // RFC-099 (D5/D7): any task member (or admin) may decide; record the
-    // user id + role snapshot on the decision row.
-    const actor = actorOf(c)
-    const role = await ensureReviewMember(deps, nodeRunId, actor)
-    const args: Parameters<typeof submitReviewDecision>[0] = {
-      db: deps.db,
-      appHome: appHomeFor(deps),
-      nodeRunId,
-      decision: parsed.data.decision,
-      expectedReviewIteration: parsed.data.reviewIteration,
-      author: actor.user.id,
-      authorRole: role,
-      ...(parsed.data.rejectReason !== undefined ? { rejectReason: parsed.data.rejectReason } : {}),
-    }
-    const result = await submitReviewDecision(args)
-    // RFC-202 T8: the resume kick is no longer pure fire-and-forget — real
-    // failures (worktree GC'd → 410, spawn errors, …) used to vanish into
-    // the daemon log while the HTTP response claimed unqualified success and
-    // the task sat parked (audit R4 "伪成功"). The decision itself DID land
-    // (2xx stays correct); the kick outcome now rides in the response as an
-    // optional `resume` field the UI surfaces as a warning.
-    let resumeFailure: { ok: false; code: string; message: string } | undefined
-    if (result.resumeRequired) {
-      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-      const resumeDeps: Parameters<typeof resumeTask>[2] = {
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/reviews/:nodeRunId/decision',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Submit a review decision (advances the task)',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      const raw: unknown = await c.req.json().catch(() => null)
+      const parsed = SubmitReviewDecisionSchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new ValidationError('review-decision-invalid', 'invalid review decision body', {
+          issues: parsed.error.issues,
+        })
+      }
+      // RFC-099 (D5/D7): any task member (or admin) may decide; record the
+      // user id + role snapshot on the decision row.
+      const actor = actorOf(c)
+      const role = await ensureReviewMember(deps, nodeRunId, actor)
+      const args: Parameters<typeof submitReviewDecision>[0] = {
         db: deps.db,
         appHome: appHomeFor(deps),
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
-        ...(opencodeCmd ? { opencodeCmd } : {}),
-        // RFC-108 T4 (Codex impl gate P2): a review decision resumes the task;
-        // thread the per-node timeout floor (+commit&push/concurrency) so the
-        // continued nodes are not unbounded.
-        ...resolveLaunchRuntimeConfig(deps.configPath),
+        nodeRunId,
+        decision: parsed.data.decision,
+        expectedReviewIteration: parsed.data.reviewIteration,
+        author: actor.user.id,
+        authorRole: role,
+        ...(parsed.data.rejectReason !== undefined
+          ? { rejectReason: parsed.data.rejectReason }
+          : {}),
       }
-      // RFC-097 (audit S-27): classified swallow — `task-not-resumable` is
-      // EXPECTED when the task is still running or actively driven (the live
-      // dispatch loop picks the freshly minted pending rerun row up via
-      // deriveFrontier's pending-anchor release, RFC-092).
-      try {
-        await resumeTask(deps.db, result.taskId, resumeDeps)
-      } catch (err) {
-        if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-          log.info('review resume deferred — live dispatch loop picks up the pending rerun', {
-            taskId: result.taskId,
-          })
-        } else {
-          const message = err instanceof Error ? err.message : String(err)
-          const code = err instanceof DomainError ? err.code : 'resume-failed'
-          log.warn('review resume threw', { taskId: result.taskId, error: message })
-          resumeFailure = { ok: false, code, message }
+      const result = await submitReviewDecision(args)
+      // RFC-202 T8: the resume kick is no longer pure fire-and-forget — real
+      // failures (worktree GC'd → 410, spawn errors, …) used to vanish into
+      // the daemon log while the HTTP response claimed unqualified success and
+      // the task sat parked (audit R4 "伪成功"). The decision itself DID land
+      // (2xx stays correct); the kick outcome now rides in the response as an
+      // optional `resume` field the UI surfaces as a warning.
+      let resumeFailure: { ok: false; code: string; message: string } | undefined
+      if (result.resumeRequired) {
+        const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+        const resumeDeps: Parameters<typeof resumeTask>[2] = {
+          db: deps.db,
+          appHome: appHomeFor(deps),
+          ...(deps.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: deps.containmentCoordinator }),
+          ...(opencodeCmd ? { opencodeCmd } : {}),
+          // RFC-108 T4 (Codex impl gate P2): a review decision resumes the task;
+          // thread the per-node timeout floor (+commit&push/concurrency) so the
+          // continued nodes are not unbounded.
+          ...resolveLaunchRuntimeConfig(deps.configPath),
+        }
+        // RFC-097 (audit S-27): classified swallow — `task-not-resumable` is
+        // EXPECTED when the task is still running or actively driven (the live
+        // dispatch loop picks the freshly minted pending rerun row up via
+        // deriveFrontier's pending-anchor release, RFC-092).
+        try {
+          await resumeTask(deps.db, result.taskId, resumeDeps)
+        } catch (err) {
+          if (err instanceof ConflictError && err.code === 'task-not-resumable') {
+            log.info('review resume deferred — live dispatch loop picks up the pending rerun', {
+              taskId: result.taskId,
+            })
+          } else {
+            const message = err instanceof Error ? err.message : String(err)
+            const code = err instanceof DomainError ? err.code : 'resume-failed'
+            log.warn('review resume threw', { taskId: result.taskId, error: message })
+            resumeFailure = { ok: false, code, message }
+          }
         }
       }
-    }
-    return c.json({ ok: true, ...result, ...(resumeFailure ? { resume: resumeFailure } : {}) })
-  })
+      return c.json({ ok: true, ...result, ...(resumeFailure ? { resume: resumeFailure } : {}) })
+    },
+  )
 
   // RFC-079: set one multi-document review item's accepted/not_accepted choice.
   // Does not advance the workflow (no resumeTask) — only the round-level
   // decision does.
-  app.patch('/api/reviews/:nodeRunId/documents/:docVersionId/selection', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    const docVersionId = c.req.param('docVersionId')
-    const raw: unknown = await c.req.json().catch(() => null)
-    const parsed = SetDocumentSelectionSchema.safeParse(raw)
-    if (!parsed.success) {
-      throw new ValidationError('review-selection-invalid', 'invalid selection body', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'PATCH',
+      path: '/api/reviews/:nodeRunId/documents/:docVersionId/selection',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Update a review document selection',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      const docVersionId = c.req.param('docVersionId')
+      const raw: unknown = await c.req.json().catch(() => null)
+      const parsed = SetDocumentSelectionSchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new ValidationError('review-selection-invalid', 'invalid selection body', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      await ensureReviewMember(deps, nodeRunId, actor)
+      const result = await setDocumentSelection({
+        db: deps.db,
+        nodeRunId,
+        docVersionId,
+        selection: parsed.data.selection,
       })
-    }
-    const actor = actorOf(c)
-    await ensureReviewMember(deps, nodeRunId, actor)
-    const result = await setDocumentSelection({
-      db: deps.db,
-      nodeRunId,
-      docVersionId,
-      selection: parsed.data.selection,
-    })
-    return c.json({ ok: true, ...result })
-  })
+      return c.json({ ok: true, ...result })
+    },
+  )
 
-  app.post('/api/reviews/:nodeRunId/comments', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    const raw: unknown = await c.req.json().catch(() => null)
-    const parsed = SubmitReviewCommentSchema.safeParse(raw)
-    if (!parsed.success) {
-      throw new ValidationError('review-comment-invalid', 'invalid review comment body', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/reviews/:nodeRunId/comments',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Add a review comment',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      const raw: unknown = await c.req.json().catch(() => null)
+      const parsed = SubmitReviewCommentSchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new ValidationError('review-comment-invalid', 'invalid review comment body', {
+          issues: parsed.error.issues,
+        })
+      }
+      // RFC-099 (D7): record who commented and with which task role.
+      const actor = actorOf(c)
+      const role = await ensureReviewMember(deps, nodeRunId, actor)
+      const comment = await addReviewComment({
+        db: deps.db,
+        appHome: appHomeFor(deps),
+        nodeRunId,
+        anchor: parsed.data.anchor,
+        commentText: parsed.data.commentText,
+        author: actor.user.id,
+        authorRole: role,
+        ...(parsed.data.docVersionId !== undefined
+          ? { docVersionId: parsed.data.docVersionId }
+          : {}),
       })
-    }
-    // RFC-099 (D7): record who commented and with which task role.
-    const actor = actorOf(c)
-    const role = await ensureReviewMember(deps, nodeRunId, actor)
-    const comment = await addReviewComment({
-      db: deps.db,
-      appHome: appHomeFor(deps),
-      nodeRunId,
-      anchor: parsed.data.anchor,
-      commentText: parsed.data.commentText,
-      author: actor.user.id,
-      authorRole: role,
-      ...(parsed.data.docVersionId !== undefined ? { docVersionId: parsed.data.docVersionId } : {}),
-    })
-    return c.json(comment, 201)
-  })
+      return c.json(comment, 201)
+    },
+  )
 
-  app.patch('/api/reviews/:nodeRunId/comments/:commentId', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    const commentId = c.req.param('commentId')
-    const raw: unknown = await c.req.json().catch(() => null)
-    const parsed = UpdateReviewCommentBodySchema.safeParse(raw)
-    if (!parsed.success) {
-      throw new ValidationError('review-comment-invalid', 'invalid review comment body', {
-        issues: parsed.error.issues,
-      })
-    }
-    await ensureReviewMember(deps, nodeRunId, actorOf(c))
-    const updated = await updateReviewCommentText(
-      deps.db,
-      nodeRunId,
-      commentId,
-      parsed.data.commentText,
-    )
-    return c.json(updated)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'PATCH',
+      path: '/api/reviews/:nodeRunId/comments/:commentId',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Edit a review comment',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      const commentId = c.req.param('commentId')
+      const raw: unknown = await c.req.json().catch(() => null)
+      const parsed = UpdateReviewCommentBodySchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new ValidationError('review-comment-invalid', 'invalid review comment body', {
+          issues: parsed.error.issues,
+        })
+      }
+      await ensureReviewMember(deps, nodeRunId, actorOf(c))
+      const updated = await updateReviewCommentText(
+        deps.db,
+        nodeRunId,
+        commentId,
+        parsed.data.commentText,
+      )
+      return c.json(updated)
+    },
+  )
 
-  app.delete('/api/reviews/:nodeRunId/comments/:commentId', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    const commentId = c.req.param('commentId')
-    await ensureReviewMember(deps, nodeRunId, actorOf(c))
-    await deleteReviewComment(deps.db, nodeRunId, commentId)
-    return c.json({ ok: true })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/reviews/:nodeRunId/comments/:commentId',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Delete a review comment',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      const commentId = c.req.param('commentId')
+      await ensureReviewMember(deps, nodeRunId, actorOf(c))
+      await deleteReviewComment(deps.db, nodeRunId, commentId)
+      return c.json({ ok: true })
+    },
+  )
 }

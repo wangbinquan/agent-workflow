@@ -121,8 +121,12 @@ describe('RFC-247 registry — declaration validation', () => {
     ).toThrow(RouteMetaError)
   })
 
-  test('registering the same method+path twice is refused', () => {
-    const app = new Hono()
+  // `createApp` is called many times in one process (every backend test builds a
+  // fresh app), so re-declaring the SAME contract has to be a no-op — a registry
+  // that threw on the second identical declaration would be unusable exactly
+  // where its guarantees matter. A CONFLICTING re-declaration is the real
+  // mistake and still throws.
+  test('re-declaring the same contract is a no-op (app rebuilds must work)', () => {
     const meta: RouteMeta = {
       method: 'GET',
       path: '/x',
@@ -130,8 +134,37 @@ describe('RFC-247 registry — declaration validation', () => {
       tokenAccess: 'allow',
       summary: 's',
     }
-    registerRoute(app, meta, OK)
-    expect(() => registerRoute(app, meta, OK)).toThrow(RouteMetaError)
+    registerRoute(new Hono(), meta, OK)
+    expect(() => registerRoute(new Hono(), meta, OK)).not.toThrow()
+    expect(allRouteMeta().length).toBe(1)
+  })
+
+  test('re-declaring with DIFFERENT permissions is refused', () => {
+    const base: RouteMeta = {
+      method: 'GET',
+      path: '/x',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 's',
+    }
+    registerRoute(new Hono(), base, OK)
+    expect(() =>
+      registerRoute(new Hono(), { ...base, permissions: ['agents:update'] }, OK),
+    ).toThrow(RouteMetaError)
+  })
+
+  test('re-declaring with a DIFFERENT tokenAccess is refused', () => {
+    const base: RouteMeta = {
+      method: 'PUT',
+      path: '/y',
+      permissions: ['agents:update'],
+      tokenAccess: 'allow',
+      summary: 's',
+    }
+    registerRoute(new Hono(), base, OK)
+    expect(() => registerRoute(new Hono(), { ...base, tokenAccess: 'never' }, OK)).toThrow(
+      RouteMetaError,
+    )
   })
 })
 

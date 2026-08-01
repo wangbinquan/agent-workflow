@@ -250,14 +250,25 @@ describe('RFC-222 C-2 — workflows DELETE (schema path) confirms against row na
 describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gate', () => {
   const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
   // (file, the DELETE path that must be confirm-gated)
+  // RFC-247 T3 migrates routes from `app.delete('/path', …)` to
+  // `registerRoute(app, { method: 'DELETE', path: '/path', … }, …)`. Both forms
+  // must be recognised while the migration is in flight — a guard that only knew
+  // the old shape would silently stop guarding a route the moment it moved,
+  // which is the exact failure mode this guard exists to prevent.
+  const deleteHandlerRe = (path: string): RegExp =>
+    new RegExp(
+      `app\\.delete\\('${path.replace(/\//g, '\\/')}'` +
+        `|path:\\s*'${path.replace(/\//g, '\\/')}'`,
+    )
+
   const GATED: Array<[string, RegExp]> = [
-    ['agents.ts', /app\.delete\('\/api\/agents\/:id'/],
-    ['skills.ts', /app\.delete\('\/api\/skills\/:id'/],
-    ['mcps.ts', /app\.delete\('\/api\/mcps\/:id'/],
-    ['plugins.ts', /app\.delete\('\/api\/plugins\/:id'/],
-    ['workgroups.ts', /app\.delete\('\/api\/workgroups\/:id'/],
-    ['workflows.ts', /app\.delete\('\/api\/workflows\/:id'/],
-    ['tasks.ts', /app\.delete\('\/api\/tasks\/:id'/], // PR-3 lights this up
+    ['agents.ts', deleteHandlerRe('/api/agents/:id')],
+    ['skills.ts', deleteHandlerRe('/api/skills/:id')],
+    ['mcps.ts', deleteHandlerRe('/api/mcps/:id')],
+    ['plugins.ts', deleteHandlerRe('/api/plugins/:id')],
+    ['workgroups.ts', deleteHandlerRe('/api/workgroups/:id')],
+    ['workflows.ts', deleteHandlerRe('/api/workflows/:id')],
+    ['tasks.ts', deleteHandlerRe('/api/tasks/:id')], // PR-3 lights this up
   ]
 
   for (const [file, deleteRe] of GATED) {

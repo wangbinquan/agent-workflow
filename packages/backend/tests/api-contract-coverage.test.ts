@@ -18,6 +18,21 @@ const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
 // of leading whitespace and additional middleware args.
 const ROUTE_RE = /\bapp\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/g
 
+/**
+ * RFC-247 T3 — the second registration form. Migrated routes declare themselves
+ * as `registerRoute(app, { method: 'GET', path: '/api/x', … }, handler)` so the
+ * framework can derive their permission gate from the same declaration the API
+ * documentation is generated from.
+ *
+ * Both forms must be discoverable while the migration is in flight. A scanner
+ * that only knew `app.<verb>('…')` would report every migrated route as a
+ * "zombie registration" in ENDPOINTS — i.e. it would fail loudly for the right
+ * reason but the wrong cause, and the obvious way to silence it (deleting the
+ * ENDPOINTS entry) would delete real contract coverage.
+ */
+const REGISTER_ROUTE_RE =
+  /\bregisterRoute\s*\(\s*app\s*,\s*\{[^}]*?method:\s*['"](GET|POST|PUT|DELETE|PATCH)['"][^}]*?path:\s*['"]([^'"]+)['"]/gs
+
 interface DiscoveredRoute {
   method: HttpMethod
   path: string
@@ -72,6 +87,14 @@ function discoverRoutes(): DiscoveredRoute[] {
     let m: RegExpExecArray | null
     ROUTE_RE.lastIndex = 0
     while ((m = ROUTE_RE.exec(src)) !== null) {
+      out.push({
+        method: m[1]!.toUpperCase() as HttpMethod,
+        path: m[2]!,
+        source: f,
+      })
+    }
+    REGISTER_ROUTE_RE.lastIndex = 0
+    while ((m = REGISTER_ROUTE_RE.exec(src)) !== null) {
       out.push({
         method: m[1]!.toUpperCase() as HttpMethod,
         path: m[2]!,
