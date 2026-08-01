@@ -20945,6 +20945,10 @@ button.status-chip {
   scrollbar-gutter: auto;
 }
 
+.operations-surface .table-viewport__scroller > .operations-table {
+  min-width: 0;
+}
+
 .operations-table {
   table-layout: fixed;
   border: 0;
@@ -21266,7 +21270,7 @@ button.status-chip {
   }
 
   .scheduled-operations__row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       'schedule schedule'
       'state state'
@@ -21294,12 +21298,23 @@ button.status-chip {
 
   .scheduled-operations__owner {
     grid-area: owner;
+    width: 100%;
+    max-width: 100%;
     justify-self: end;
     text-align: right;
   }
 
   .scheduled-operations__owner .owner-label {
+    width: 100%;
+    max-width: 100%;
     align-items: flex-end;
+  }
+
+  .scheduled-operations__owner .owner-label__display {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .scheduled-operations__actions {

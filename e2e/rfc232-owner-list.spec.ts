@@ -141,7 +141,9 @@ async function expectOwnerCell(
   const cell = row.locator('.data-table__owner-cell, .task-operations__owner')
   const label = cell.locator('.owner-label')
   if (await cell.evaluate((element) => element.matches('.data-table__owner-cell'))) {
-    await expect(cell).toHaveAccessibleName(`${LONG_DISPLAY_NAME} @${username}`)
+    await expect(cell).toHaveAccessibleName(
+      new RegExp(`^(?:Owner： )?${LONG_DISPLAY_NAME} @${username}$`),
+    )
   } else {
     await expect(cell.locator('.sr-only')).toHaveText(/^Owner/)
   }
@@ -245,17 +247,6 @@ async function expectOwnerAxeClean(
   ).toEqual([])
 }
 
-async function centerOwnerInScroller(row: Locator): Promise<void> {
-  const cell = row.locator('.data-table__owner-cell')
-  await cell.evaluate((element) => {
-    element.scrollIntoView({ block: 'nearest', inline: 'center' })
-  })
-  const box = await cell.boundingBox()
-  expect(box).not.toBeNull()
-  expect(box!.x).toBeGreaterThanOrEqual(0)
-  expect(box!.x + box!.width).toBeLessThanOrEqual(390)
-}
-
 test('owner identity is visible, distinct, accessible, and reachable at 390px', async ({
   page,
 }) => {
@@ -283,12 +274,10 @@ test('owner identity is visible, distinct, accessible, and reachable at 390px', 
   await page.goto(`${daemon.baseUrl}/scheduled`)
   await expect(page.getByRole('heading', { name: 'Scheduled Tasks', exact: true })).toBeVisible()
   await expect(page.locator('thead th')).toHaveText([
-    'Enabled',
-    'Name',
-    'Owner',
     'Schedule',
+    'State & last run',
     'Next run',
-    'Last run',
+    'Owner',
     '',
     '',
   ])
@@ -321,15 +310,22 @@ test('owner identity is visible, distinct, accessible, and reachable at 390px', 
 
   await page.goto(`${daemon.baseUrl}/scheduled`)
   const narrowSchedule = page.getByTestId(`scheduled-row-${fixtures.adminScheduleId}`)
+  const narrowScheduleOwner = (await expectOwnerCell(narrowSchedule, 'e2e_admin')).cell
   const scheduleScroller = page.locator('.table-viewport__scroller')
+  const scheduledPageWidth = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }))
+  expect(scheduledPageWidth.scrollWidth).toBeLessThanOrEqual(scheduledPageWidth.clientWidth)
   expect(
-    await scheduleScroller.evaluate((element) => element.scrollWidth > element.clientWidth),
+    await scheduleScroller.evaluate((element) => element.scrollWidth <= element.clientWidth),
   ).toBe(true)
-  await centerOwnerInScroller(narrowSchedule)
+  for (const box of [await narrowSchedule.boundingBox(), await narrowScheduleOwner.boundingBox()]) {
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(scheduledPageWidth.clientWidth)
+  }
   await expect(narrowSchedule.locator('.owner-label__identity')).toHaveText('@e2e_admin')
-  await scheduleScroller.evaluate((element) => {
-    element.scrollLeft = element.scrollWidth
-  })
   await expect(
     narrowSchedule.getByRole('button', { name: 'Run now', exact: true }),
   ).toBeInViewport()

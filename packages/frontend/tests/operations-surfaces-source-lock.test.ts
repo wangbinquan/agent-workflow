@@ -37,9 +37,16 @@ describe('RFC-246 shared operations surfaces', () => {
     expect(CSS).toMatch(
       /\.operations-surface \.table-viewport__scroller\s*\{[^}]*overflow-x:\s*clip/,
     )
+    expect(CSS).toMatch(
+      /\.operations-surface \.table-viewport__scroller > \.operations-table\s*\{[^}]*min-width:\s*0/,
+    )
     expect(CSS).toMatch(/@media \(max-width:\s*720px\)[\s\S]*\.operations-table thead/)
     expect(CSS).toMatch(/\.scheduled-operations__row\s*\{[^}]*grid-template-areas:/)
     expect(CSS).toMatch(/\.repo-operations__row\s*\{[^}]*grid-template-areas:/)
+    expect(CSS).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));')
+    expect(CSS).toMatch(
+      /\.scheduled-operations__owner \.owner-label__display\s*\{[^}]*overflow-wrap:\s*anywhere/,
+    )
     expect(SCHEDULED).toContain('className="operations-table__mobile-label"')
     expect(REPOS).toContain('className="operations-table__mobile-label"')
     expect(CSS).toMatch(
