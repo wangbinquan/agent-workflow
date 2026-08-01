@@ -138,9 +138,13 @@ async function expectOwnerCell(
   row: Locator,
   username: string,
 ): Promise<{ cell: Locator; label: Locator }> {
-  const cell = row.locator('.data-table__owner-cell')
+  const cell = row.locator('.data-table__owner-cell, .task-operations__owner')
   const label = cell.locator('.owner-label')
-  await expect(cell).toHaveAccessibleName(`${LONG_DISPLAY_NAME} @${username}`)
+  if (await cell.evaluate((element) => element.matches('.data-table__owner-cell'))) {
+    await expect(cell).toHaveAccessibleName(`${LONG_DISPLAY_NAME} @${username}`)
+  } else {
+    await expect(cell.locator('.sr-only')).toHaveText(/^Owner/)
+  }
   await expect(label.locator('.owner-label__display')).toHaveText(LONG_DISPLAY_NAME)
   await expect(label.locator('.owner-label__identity')).toHaveText(`@${username}`)
   await expect(label).toHaveAttribute('title', `${LONG_DISPLAY_NAME} (@${username})`)
@@ -179,9 +183,37 @@ async function expectLongIdentityLayout(label: Locator): Promise<void> {
   expect(identityMetrics.whiteSpace).toBe('normal')
 }
 
-async function expectOwnerAxeClean(page: Page): Promise<void> {
+async function expectWrappedIdentityLayout(label: Locator): Promise<void> {
+  await expect(label).toHaveClass(/owner-label--wrap/)
+  const displayMetrics = await label.locator('.owner-label__display').evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      overflow: style.overflow,
+      overflowWrap: style.overflowWrap,
+      textOverflow: style.textOverflow,
+      whiteSpace: style.whiteSpace,
+    }
+  })
+  expect(displayMetrics.scrollWidth).toBeLessThanOrEqual(displayMetrics.clientWidth)
+  expect(displayMetrics).toMatchObject({
+    overflow: 'visible',
+    overflowWrap: 'anywhere',
+    textOverflow: 'clip',
+    whiteSpace: 'normal',
+  })
+}
+
+async function expectOwnerAxeClean(
+  page: Page,
+  selectors: { surface: string; owner: string } = {
+    surface: 'table.data-table',
+    owner: '.data-table__owner-cell',
+  },
+): Promise<void> {
   const results = await new AxeBuilder({ page })
-    .include('table.data-table')
+    .include(selectors.surface)
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze()
   const blocking = results.violations.filter(
@@ -195,7 +227,7 @@ async function expectOwnerAxeClean(page: Page): Promise<void> {
   ).toEqual([])
 
   const ownerResults = await new AxeBuilder({ page })
-    .include('.data-table__owner-cell')
+    .include(selectors.owner)
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze()
   expect(
@@ -231,22 +263,22 @@ test('owner identity is visible, distinct, accessible, and reachable at 390px', 
 
   await page.goto(`${daemon.baseUrl}/tasks`)
   await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible()
-  await expect(page.locator('thead th')).toHaveText([
-    'Status',
-    'Name',
-    'Subject',
+  await expect(page.locator('.task-operations__head > span')).toHaveText([
+    'Task',
+    'Execution',
+    'Time',
     'Owner',
-    'Repo',
-    'Started',
-    'Duration',
     '',
   ])
   const adminTask = page.getByTestId(`task-row-${fixtures.adminTaskId}`)
   const peerTask = page.getByTestId(`task-row-${fixtures.peerTaskId}`)
   const adminTaskOwner = await expectOwnerCell(adminTask, 'e2e_admin')
   await expectOwnerCell(peerTask, PEER_USERNAME)
-  await expectLongIdentityLayout(adminTaskOwner.label)
-  await expectOwnerAxeClean(page)
+  await expectWrappedIdentityLayout(adminTaskOwner.label)
+  await expectOwnerAxeClean(page, {
+    surface: '.task-operations',
+    owner: '.task-operations__owner',
+  })
 
   await page.goto(`${daemon.baseUrl}/scheduled`)
   await expect(page.getByRole('heading', { name: 'Scheduled Tasks', exact: true })).toBeVisible()
@@ -271,16 +303,21 @@ test('owner identity is visible, distinct, accessible, and reachable at 390px', 
 
   await page.goto(`${daemon.baseUrl}/tasks`)
   const narrowTask = page.getByTestId(`task-row-${fixtures.adminTaskId}`)
-  const taskScroller = page.locator('.table-viewport__scroller')
-  await expect
-    .poll(async () => taskScroller.evaluate((element) => element.scrollWidth > element.clientWidth))
-    .toBe(true)
-  await centerOwnerInScroller(narrowTask)
+  const narrowTaskOwner = (await expectOwnerCell(narrowTask, 'e2e_admin')).cell
+  const pageWidth = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }))
+  expect(pageWidth.scrollWidth).toBeLessThanOrEqual(pageWidth.clientWidth)
+  for (const box of [await narrowTask.boundingBox(), await narrowTaskOwner.boundingBox()]) {
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(pageWidth.clientWidth)
+  }
+  await expect(
+    narrowTask.getByRole('link', { name: 'owner-admin-task', exact: true }),
+  ).toBeInViewport()
   await expect(narrowTask.locator('.owner-label__identity')).toHaveText('@e2e_admin')
-  await taskScroller.evaluate((element) => {
-    element.scrollLeft = element.scrollWidth
-  })
-  await expect(narrowTask.locator('.data-table__chevron')).toBeInViewport()
 
   await page.goto(`${daemon.baseUrl}/scheduled`)
   const narrowSchedule = page.getByTestId(`scheduled-row-${fixtures.adminScheduleId}`)

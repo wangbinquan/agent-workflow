@@ -20608,6 +20608,14 @@ button.status-chip {
   white-space: nowrap;
 }
 
+/* The subject link is the first child of an overflow-clipped metadata row.
+   Its default outset focus ring is therefore cut on the inline-start edge.
+   Keep the compact row geometry and draw this ring inside the link instead. */
+.task-operations__meta .data-table__link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+
 .task-operations__meta > code {
   min-width: 0;
   padding: 0;
