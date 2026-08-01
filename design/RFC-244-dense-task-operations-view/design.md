@@ -1,8 +1,8 @@
 # RFC-244 · 技术设计 —— 高密度任务运行中心
 
-状态：Visual Contract Correction Complete Locally / Publication In Progress（首轮与 focused 复审
-findings 已全部折入 Draft v3；closing 设计门 `APPROVED — P0=0/P1=0/P2=0`；2026-08-01 用户以
-“ok” 正式批准；首个实现提交后发现界面未完整遵循已批准原型，现按仓库内 visual contract 修正）。
+状态：Done（首轮与 focused 复审 findings 已全部折入 Draft v3；closing 设计门与固定 SHA 实现门
+均 `APPROVED — P0=0/P1=0/P2=0`；2026-08-01 用户批准并授权上库；最终代码 SHA
+`1fbbd46388d458afda526115786c045ea17ac133`）。
 
 ## 0. 摘要
 
@@ -776,13 +776,14 @@ Draft v3；closing 复审为 `APPROVED — P0=0/P1=0/P2=0`，逐项记录见
 `design-gate-2026-08-01.md`。T4 已完成；用户于 2026-08-01 以 “ok” 正式批准，T5 完成并进入
 生产实现。
 
-## 11. 实施状态
+## 11. 最终实施状态
 
-截至 2026-08-01，设计中的 shared、DB/backend、frontend 与本地 acceptance 切片均已实现；本地
-工作区预门结果为 `LOCAL APPROVED — P0=0/P1=0/P2=0`，详见
-[implementation-gate-2026-08-01.md](./implementation-gate-2026-08-01.md)。该结论审核的是
-`f134f9863e7055d96ff6ddc25bf2c1bc7594fe37` 加当前 RFC-244 未提交 patch，不是不可变 commit，
-因此不替代 T23 固定 SHA 实现门。
+截至 2026-08-01，设计中的 shared、DB/backend、frontend、acceptance 与发布切片均已实现。固定
+SHA `1fbbd46388d458afda526115786c045ea17ac133` 的实现门结论为
+`APPROVED — P0=0/P1=0/P2=0`，详见
+[implementation-gate-2026-08-01.md](./implementation-gate-2026-08-01.md)。
 
-待发布闭环：hosted-Ubuntu screenshot baseline、Safari VoiceOver 人工走查、固定 SHA 实现门及
-exact-SHA CI。用户已授权精确 commit/push，发布流程正在闭环。
+任务页 hosted-Ubuntu visual run `30697676219` 在 UI SHA
+`e8e42b6c170889274cc04029c7202c632d842dab` 上 27/27；Chromium/WebKit RFC-244 Playwright 各
+4/4，Safari + VoiceOver 人工走查通过；最终代码 exact-SHA main CI run `30700645728` 全绿。
+RFC-244 已发布并标记为 Done。

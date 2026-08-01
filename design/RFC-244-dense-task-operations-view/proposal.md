@@ -1,8 +1,8 @@
 # RFC-244 · 高密度任务运行中心
 
-- 状态：Visual Contract Correction Complete Locally / Publication In Progress（2026-08-01 用户以 “ok”
-  正式批准；三轮设计门最终 `APPROVED — P0=0/P1=0/P2=0`；本地未提交实现预门
-  `LOCAL APPROVED — P0=0/P1=0/P2=0`）
+- 状态：Done（2026-08-01；三轮设计门与固定 SHA 实现门均
+  `APPROVED — P0=0/P1=0/P2=0`；代码 SHA
+  `1fbbd46388d458afda526115786c045ea17ac133` 的 main CI run `30700645728` 全绿）
 - 日期：2026-08-01
 - 触发：用户要求重做任务列表 UX，并明确「任务会比较多，所以任务行高度小一些」；随后确认按推荐方案推进。
 - 相关 RFC：RFC-036（任务可见性）、RFC-108（生命周期告警）、RFC-165（执行主体）、
@@ -146,14 +146,16 @@
 用户已先确认 D1–D4 的推荐方向，并在三轮设计门闭合后于 2026-08-01 以 “ok” 正式批准
 RFC-244；实现可以进入 T6。该次 “ok” 只批准实施；用户随后已明确要求提交上库，发布授权现已具备。
 
-## 8. 当前实施状态
+## 8. 最终交付状态
 
-T6–T20 与 T22 已在本地工作区完成；实现覆盖 shared contract、migration 0128、ACL-only 服务端
+T1–T24 已全部完成；实现覆盖 shared contract、migration 0128、ACL-only 服务端
 分页树、operations dirty 真值、新 `/api/tasks/page`、响应式高密度任务列表及自动化验收。普通
 桌面父行/子行分别达到 56px/48px 的设计目标；390px 移动端改为同一原生 nested-list DOM 的
 单列记录，无页面或列表横向溢出。
 
-本地预门结论与验证证据见 [implementation-gate-2026-08-01.md](./implementation-gate-2026-08-01.md)。
-尚未完成的发布闭环只有 T21 的 hosted-Ubuntu 基线与 Safari VoiceOver 人工验证、T23 的固定 SHA
-实现门，以及依赖它们的 T24。用户已授权精确 commit/push，当前正在固定 SHA 与远端门禁上闭环，
-因此尚不标记为 Done。
+固定 SHA 实现门与验证证据见
+[implementation-gate-2026-08-01.md](./implementation-gate-2026-08-01.md)：Chromium/WebKit RFC-244
+Playwright 均 4/4，Safari + VoiceOver 人工展开 22 个子任务通过；hosted-Ubuntu visual run
+`30697676219` 在 UI SHA `e8e42b6c170889274cc04029c7202c632d842dab` 上 27/27；最终代码 SHA
+`1fbbd46388d458afda526115786c045ea17ac133` 的 main CI run `30700645728` 全绿。RFC-244 已发布并
+标记为 Done。
