@@ -682,25 +682,25 @@ function CanvasInner({
   // visible wrapper. Only a degenerate first measure arms the observer; the
   // first real size then redoes fitView once. A canvas that mounts visible
   // never arms this, so user pan/zoom is never clobbered.
-  const hiddenMountArmRef = useRef<boolean | null>(null)
+  const refitRef = useRef<CanvasRefitState>(INITIAL_CANVAS_REFIT)
   useEffect(() => {
     const el = wrapperRef.current
     if (el === null) return
-    if (hiddenMountArmRef.current === null) {
+    if (refitRef.current.phase === 'pending') {
       const rect = el.getBoundingClientRect()
-      hiddenMountArmRef.current = resolveHiddenMountRefit(null, rect.width, rect.height).armed
+      refitRef.current = resolveCanvasRefit(refitRef.current, rect.width, rect.height).state
     }
-    if (hiddenMountArmRef.current !== true) return
+    if (refitRef.current.phase === 'settled') return
     let raf = 0
     const ro = new ResizeObserver((entries) => {
       const entry = entries[entries.length - 1]
       if (entry === undefined) return
-      const next = resolveHiddenMountRefit(
-        hiddenMountArmRef.current,
+      const next = resolveCanvasRefit(
+        refitRef.current,
         entry.contentRect.width,
         entry.contentRect.height,
       )
-      hiddenMountArmRef.current = next.armed
+      refitRef.current = next.state
       if (!next.refit) return
       ro.disconnect()
       // Next frame: xyflow's own ResizeObservers (same delivery batch) must
@@ -711,9 +711,16 @@ function CanvasInner({
       })
     })
     ro.observe(el)
+    // Hard stop on the settle window: past it, a resize is the USER resizing
+    // something, and refitting would throw away their pan/zoom.
+    const timer = window.setTimeout(() => {
+      refitRef.current = settleCanvasRefit(refitRef.current)
+      ro.disconnect()
+    }, CANVAS_SETTLE_WINDOW_MS)
     return () => {
       ro.disconnect()
       cancelAnimationFrame(raf)
+      window.clearTimeout(timer)
     }
   }, [rf])
 
@@ -2416,6 +2423,14 @@ function CanvasInner({
         // do NOT enable `selectionOnDrag` — it intercepts every left click into
         // a zero-distance lasso and silently swallows edge clicks.
         panOnDrag={readOnly === true ? true : [0, 1, 2]}
+        // The moment the user takes the viewport, the settle window closes —
+        // no automatic refit may ever clobber their pan/zoom. xyflow passes a
+        // null event for PROGRAMMATIC moves (our own fitView animates through
+        // this same callback), so the null check is what keeps the refit from
+        // settling itself before the layout has finished.
+        onMoveStart={(event) => {
+          if (event !== null) refitRef.current = settleCanvasRefit(refitRef.current)
+        }}
         fitView
         minZoom={0.2}
         maxZoom={2}
@@ -2691,26 +2706,89 @@ function CanvasInner({
 // definition <-> xyflow shape translation
 // ---------------------------------------------------------------------------
 
+/** How long after mount a size change still counts as "layout settling". */
+export const CANVAS_SETTLE_WINDOW_MS = 1200
+
+export type CanvasRefitPhase =
+  /** nothing measured yet */
+  | 'pending'
+  /** mounted degenerate (hidden pane) — waiting for the first real size */
+  | 'awaiting-size'
+  /** mounted at a real size — watching for the layout to finish settling */
+  | 'watching-settle'
+  /** terminal: no further automatic refit, ever */
+  | 'settled'
+
+export interface CanvasRefitState {
+  phase: CanvasRefitPhase
+  /** the size `watching-settle` compares against (null in every other phase) */
+  size: { width: number; height: number } | null
+}
+
+export const INITIAL_CANVAS_REFIT: CanvasRefitState = { phase: 'pending', size: null }
+
 /**
- * Decision oracle for the hidden-mount refit (pure — see the ResizeObserver
- * effect in CanvasInner). `armed` starts as `null` (nothing observed yet):
- * - first observation decides arming: a degenerate (zero) size means the
- *   canvas mounted inside a hidden pane and the init fitView was garbage;
- * - while armed, the first real size flips `refit` (caller fits + stops
- *   observing); further zero sizes keep waiting;
- * - a canvas whose first observation is already real never arms — its init
- *   fitView was computed against true dimensions and any later resize must
- *   NOT clobber the user's pan/zoom.
+ * Decision oracle for the automatic refit (pure — see the ResizeObserver
+ * effect in CanvasInner). Two distinct problems share this state machine:
+ *
+ * 1. HIDDEN MOUNT. A canvas mounted in a hidden pane (`display:none`)
+ *    measures 0×0, so xyflow resolves its queued init fitView against a
+ *    degenerate viewport (zoom clamps to minZoom, nodes land off-screen) and
+ *    v12 never re-queues the fit when the pane unhides. `pending` + a zero
+ *    size arms `awaiting-size`; the first real size refits once.
+ *
+ * 2. LAYOUT STILL SETTLING. A canvas that mounts at a real size is NOT safe
+ *    either: the init fitView runs against whatever the viewport measured at
+ *    that instant, and anything that changes the surrounding layout shortly
+ *    after (web font swap, a chip that stops wrapping, an image reserving
+ *    space) leaves the viewport fitted to a stale box — the nodes render
+ *    visibly off-centre and nothing ever corrects them. This is not
+ *    hypothetical: the 390px task-detail canvas drifted 37px off-centre on CI
+ *    when an UNRELATED `.chip { white-space: nowrap }` landed, because that
+ *    shifted the pre-settle layout the init fit had measured. `pending` + a
+ *    real size therefore enters `watching-settle`, and the FIRST size change
+ *    while watching refits once.
+ *
+ * Both paths converge on `settled`, which is inert forever after. The caller
+ * additionally settles on the user's first pan/zoom and on a
+ * CANVAS_SETTLE_WINDOW_MS timeout, so a resize the user causes later can
+ * never clobber their viewport — that guarantee is what the old
+ * "a visible mount never arms" rule bought, and it is preserved here by
+ * closing the window rather than by never watching at all.
  */
-export function resolveHiddenMountRefit(
-  armed: boolean | null,
+export function resolveCanvasRefit(
+  state: CanvasRefitState,
   width: number,
   height: number,
-): { armed: boolean; refit: boolean } {
+): { state: CanvasRefitState; refit: boolean } {
   const degenerate = width <= 0 || height <= 0
-  if (armed === null) return { armed: degenerate, refit: false }
-  if (armed && !degenerate) return { armed: false, refit: true }
-  return { armed, refit: false }
+  switch (state.phase) {
+    case 'pending':
+      return degenerate
+        ? { state: { phase: 'awaiting-size', size: null }, refit: false }
+        : { state: { phase: 'watching-settle', size: { width, height } }, refit: false }
+    case 'awaiting-size':
+      return degenerate
+        ? { state, refit: false }
+        : { state: { phase: 'settled', size: null }, refit: true }
+    case 'watching-settle': {
+      // A degenerate size mid-watch means the pane was hidden again; keep the
+      // baseline and wait rather than burning the one refit on a zero box.
+      if (degenerate) return { state, refit: false }
+      const prev = state.size
+      if (prev !== null && prev.width === width && prev.height === height) {
+        return { state, refit: false }
+      }
+      return { state: { phase: 'settled', size: null }, refit: true }
+    }
+    case 'settled':
+      return { state, refit: false }
+  }
+}
+
+/** Close the window early — the user took the viewport, or it timed out. */
+export function settleCanvasRefit(state: CanvasRefitState): CanvasRefitState {
+  return state.phase === 'settled' ? state : { phase: 'settled', size: null }
 }
 
 interface PortInventory {
