@@ -31,6 +31,7 @@ import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/W
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { ChildTaskLink } from '@/components/tasks/ChildTaskLink'
+import { ParentTaskLink } from '@/components/tasks/ParentTaskLink'
 import { RecoverySection } from '@/components/tasks/RecoverySection'
 import { StuckTaskBanner } from '@/components/tasks/StuckTaskBanner'
 import { WorkflowSyncBanner } from '@/components/tasks/WorkflowSyncBanner'
@@ -56,6 +57,12 @@ import {
 import { agentNodeOptionsFromSnapshot, resolveNodeNameFromSnapshot } from '@/lib/node-names'
 import { deriveReviewNodeNav, type ReviewNodeNavKind } from '@/lib/review-node-nav'
 import { deriveClarifyNodeNav, type ClarifyNodeNavKind } from '@/lib/clarify-node-nav'
+import {
+  callNavIsReachable,
+  deriveCallNodeNav,
+  deriveCurrentCallNodeRun,
+  type CallNodeNavKind,
+} from '@/lib/call-node-nav'
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import { describeTaskFailure } from '@/lib/task-failure'
 import {
@@ -77,6 +84,7 @@ import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-ro
 import { useActor, usePermission } from '@/hooks/useActor'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { useTaskSync } from '@/hooks/useTaskSync'
+import { useTaskChildren } from '@/hooks/useTaskChildren'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Route as RootRoute } from './__root'
 
@@ -85,6 +93,19 @@ export const Route = createRoute({
   path: '/tasks/$id',
   component: TaskDetailPage,
   validateSearch: validateTaskDetailSearch,
+  // RFC-245: detail → detail navigation is now a primary interaction (a call
+  // node jumps DOWN into its child task, the header's parent link walks back
+  // UP), and TanStack Router does not remount a component when only its params
+  // change. Without this, every task-scoped `useState` below survives the jump:
+  // `selectedNodeRunId` would still hold the PREVIOUS task's run id, which
+  // `taskCanvasLayoutClass` reads as "drawer open" and reserves an empty drawer
+  // column for (the drawer itself bails out via `run === undefined`), and
+  // `dismissedBanners` / `focusTargetNode` / `structScope` would all point at
+  // the task we just left. Keying the remount on params — the same idiom as
+  // routes/workgroups.detail.tsx and routes/skills.detail.tsx — resets ALL of
+  // them at once, so a future state slot cannot be forgotten. `search` is
+  // deliberately not a remount dep: switching tabs must not remount.
+  remountDeps: ({ params }) => params,
 })
 
 function bannerErrorSignature(error: unknown): string {
@@ -163,6 +184,20 @@ function TaskDetailPage() {
     canvasRef.current?.clearSelection()
     setSelectedNodeRunId(null)
   }
+  // RFC-245: the node-runs table's per-row entry into the drawer, for CALL rows.
+  // A canvas click on a call node now routes to its child task and never opens
+  // the drawer (design D1) — but the drawer is where a node's Retry (with the
+  // cascade toggle) and its attempt history live, and the failed-task banner
+  // only reaches the ONE node the task recorded as `failedNodeId`. So that entry
+  // point moves to the table rather than disappearing. Same mechanism the banner
+  // uses: select the run, then switch to the pane that hosts the drawer.
+  const openRunDetail = useCallback(
+    (nodeRunId: string) => {
+      setSelectedNodeRunId(nodeRunId)
+      navigateTaskTab('workflow-status')
+    },
+    [navigateTaskTab],
+  )
 
   const task = useQuery<Task>({
     queryKey: ['tasks', id],
@@ -502,6 +537,13 @@ function TaskDetailPage() {
             <div className="task-detail__workflow">
               <TaskSubjectLink task={tk} taskId={tk.id} badge />
             </div>
+            {/* RFC-245: child executions (launched by a parent's call node) get
+                a walk-back-up entry. Absent for root tasks — no extra request. */}
+            {tk.parentTaskId != null && tk.parentTaskId !== '' && (
+              <div className="task-detail__parent">
+                <ParentTaskLink taskId={tk.id} parentTaskId={tk.parentTaskId} showName />
+              </div>
+            )}
           </>
         }
         actions={
@@ -872,6 +914,10 @@ function TaskDetailPage() {
                   taskId={id}
                   runs={nodeRuns.data.runs}
                   workflowSnapshot={tk.workflowSnapshot}
+                  // The drawer lives inside the workflow-status pane, so the
+                  // entry only exists where that pane does — same guard the
+                  // failed-task banner's jump uses.
+                  onOpenRunDetail={canOfferFailedJump(displayedTabs) ? openRunDetail : undefined}
                 />
               )}
             </section>
@@ -1272,20 +1318,16 @@ function TaskStatusCanvas({
     },
   })
 
-  const statuses = useMemo<Record<string, CanvasNodeData['status']>>(() => {
-    const latest = new Map<string, NodeRun>()
-    for (const r of runs) {
-      const prev = latest.get(r.nodeId)
-      if (prev === undefined || (r.startedAt ?? 0) >= (prev.startedAt ?? 0)) {
-        latest.set(r.nodeId, r)
-      }
-    }
-    const out: Record<string, CanvasNodeData['status']> = {}
-    for (const [nodeId, run] of latest) {
-      out[nodeId] = canvasStatus(run.status)
-    }
-    return out
-  }, [runs])
+  // RFC-245: call nodes need their identity set before status projection: their
+  // status and click target must resolve from the exact same freshest run.
+  const callNodeIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const n of definition?.nodes ?? [])
+      if (n.kind === 'call-workflow' || n.kind === 'call-workgroup') ids.add(n.id)
+    return ids
+  }, [definition])
+
+  const statuses = useMemo(() => deriveCanvasNodeStatuses(runs, callNodeIds), [callNodeIds, runs])
 
   const latestRunByNode = useMemo(() => {
     const m = new Map<string, NodeRun>()
@@ -1345,6 +1387,35 @@ function TaskStatusCanvas({
     return out
   }, [clarifyNavByNode])
 
+  // RFC-245: call nodes open the CHILD TASK they launched instead of the drawer
+  // — the third instance of the review/clarify three-piece above. `callNodeIds`
+  // gates the onSelect branch (and, per design D1, gates it UNCONDITIONALLY: a
+  // call node with no reachable child is inert, never a drawer fallback);
+  // `callNavByNode` holds the target; `callNavs` projects clickability to the
+  // canvas so the card paints the hint + pointer cursor.
+  // The ACL-filtered direct-children list decides whether a stamped childTaskId
+  // is actually reachable (design D5) — same query key, and therefore the same
+  // single fetch, as the drawer/table ChildTaskLink. Enabled only for
+  // definitions that HAVE call nodes, so the overwhelming majority of tasks
+  // issue no extra request at all (D6); `parentActive` keeps it polling while
+  // this task can still spawn a child (D9).
+  const children = useTaskChildren(task.id, callNodeIds.size > 0, !isTerminal(task.status))
+  const callNavByNode = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const nodeId of callNodeIds) {
+      const nav = deriveCallNodeNav(runs, nodeId)
+      if (nav === null) continue
+      if (!callNavIsReachable(nav.childTaskId, children.data, children.isError)) continue
+      m.set(nodeId, nav.childTaskId)
+    }
+    return m
+  }, [callNodeIds, runs, children.data, children.isError])
+  const callNavs = useMemo(() => {
+    const out: Record<string, CallNodeNavKind> = {}
+    for (const nodeId of callNavByNode.keys()) out[nodeId] = 'child'
+    return out
+  }, [callNavByNode])
+
   if (definition === null) {
     return <div className="muted">{t('tasks.noWorkflowSnapshot')}</div>
   }
@@ -1365,6 +1436,7 @@ function TaskStatusCanvas({
         }
         reviewNavs={reviewNavs}
         clarifyNavs={clarifyNavs}
+        callNavs={callNavs}
         onSelect={(sel) => {
           if (sel === null || sel.kind !== 'node') {
             onSelectNodeRun(null)
@@ -1400,6 +1472,24 @@ function TaskStatusCanvas({
                 to: '/clarify/$nodeRunId',
                 params: { nodeRunId: nav.nodeRunId },
               })
+            }
+            return
+          }
+          // RFC-245: call nodes never open the drawer either — they route to the
+          // CHILD TASK they launched. `clearSelection()` must come FIRST: it is
+          // what resets `lastEmittedSelectionSig` (WorkflowCanvas'
+          // `clearSelection` handle), without which onNodeClick's same-signature
+          // dedupe swallows a second click on the same node. `onSelectNodeRun(null)`
+          // then only clears THIS component's drawer state — which matters when
+          // the failed-task banner already opened the drawer. Design D1: when the
+          // node has no reachable child we still fall through to `return`, never
+          // to the drawer.
+          if (callNodeIds.has(sel.id)) {
+            canvasRef?.current?.clearSelection()
+            onSelectNodeRun(null)
+            const childTaskId = callNavByNode.get(sel.id)
+            if (childTaskId !== undefined) {
+              void navigate({ to: '/tasks/$id', params: { id: childTaskId }, search: {} })
             }
             return
           }
@@ -1440,6 +1530,35 @@ export function canvasStatus(s: NodeRun['status']): CanvasNodeData['status'] {
   }
 }
 
+/**
+ * Project node-run state onto the task canvas.
+ *
+ * Non-call nodes deliberately retain the route's established startedAt picker.
+ * RFC-245 call nodes override that projection with the same pure-id, top-level
+ * freshness rule used by `deriveCallNodeNav`: a fresh retry placeholder often
+ * has no startedAt yet, and showing the older row's colour while navigation has
+ * already moved to the new generation would violate A3.
+ */
+export function deriveCanvasNodeStatuses(
+  runs: NodeRun[],
+  callNodeIds: ReadonlySet<string> = new Set<string>(),
+): Record<string, CanvasNodeData['status']> {
+  const latest = new Map<string, NodeRun>()
+  for (const r of runs) {
+    const prev = latest.get(r.nodeId)
+    if (prev === undefined || (r.startedAt ?? 0) >= (prev.startedAt ?? 0)) {
+      latest.set(r.nodeId, r)
+    }
+  }
+  const out: Record<string, CanvasNodeData['status']> = {}
+  for (const [nodeId, run] of latest) out[nodeId] = canvasStatus(run.status)
+  for (const nodeId of callNodeIds) {
+    const current = deriveCurrentCallNodeRun(runs, nodeId)
+    if (current !== null) out[nodeId] = canvasStatus(current.status)
+  }
+  return out
+}
+
 // RFC-075: synthetic commit&push node id prefix. Container rows carry
 // `commitPush` metadata; the message/repair session children share the nodeId
 // but have `commitPush == null` (hidden from the table — reachable via the
@@ -1447,14 +1566,23 @@ export function canvasStatus(s: NodeRun['status']): CanvasNodeData['status'] {
 // （原为与 backend 各写一份的裸字面量）。
 const COMMIT_PUSH_PREFIX = COMMIT_PUSH_NODE_PREFIX
 
+/** RFC-245: the two RFC-243 call kinds, read off the frozen workflow snapshot.
+ *  Exported for the regression test that locks the table entry to call rows. */
+export function isCallNodeKind(kind: string | null): boolean {
+  return kind === 'call-workflow' || kind === 'call-workgroup'
+}
+
 function NodeRunsTable({
   taskId,
   runs,
   workflowSnapshot,
+  onOpenRunDetail,
 }: {
   taskId: string
   runs: NodeRun[]
   workflowSnapshot: unknown
+  /** RFC-245: opens the node drawer for a call row (see `openRunDetail`). */
+  onOpenRunDetail?: (nodeRunId: string) => void
 }) {
   const { t } = useTranslation()
   if (runs.length === 0) return <div className="muted">{t('tasks.noNodeRuns')}</div>
@@ -1489,6 +1617,7 @@ function NodeRunsTable({
             // a compute span format identically, with no 人工/非人工 marker. See
             // lib/reviewRunDisplay.
             const { displayStartedAt, durationMs } = reviewRunDisplay(r)
+            const nodeKind = resolveNodeKindFromSnapshot(workflowSnapshot, r.nodeId)
             return (
               <tr key={r.id}>
                 <td>
@@ -1539,6 +1668,25 @@ function NodeRunsTable({
                       <ChildTaskLink taskId={taskId} childTaskId={r.childTaskId} />
                     </>
                   )}
+                  {/* RFC-245: a call node's canvas click now routes to the child
+                      task and never opens the drawer, so this row carries the
+                      drawer entry (Retry + cascade toggle + attempt history live
+                      only there). Call rows only — every other kind still opens
+                      its drawer from the canvas. */}
+                  {onOpenRunDetail !== undefined &&
+                    (isCallNodeKind(nodeKind) || r.childTaskId != null) && (
+                      <>
+                        {' '}
+                        <button
+                          type="button"
+                          className="btn btn--sm"
+                          onClick={() => onOpenRunDetail(r.id)}
+                          data-testid={`node-run-detail-${r.id}`}
+                        >
+                          {t('tasks.runDetailButton')}
+                        </button>
+                      </>
+                    )}
                 </td>
                 <td className="data-table__muted">{r.iteration}</td>
                 <td className="data-table__muted">{r.retryIndex}</td>

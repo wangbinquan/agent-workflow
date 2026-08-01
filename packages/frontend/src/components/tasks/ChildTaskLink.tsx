@@ -22,7 +22,10 @@ export function ChildTaskLink({ taskId, childTaskId }: { taskId: string; childTa
   const children = useTaskChildren(taskId)
   const child = children.data?.find((candidate) => candidate.id === childTaskId)
 
-  if (children.data !== undefined && child === undefined) {
+  // A refetch error may coexist with the last successful `data`. Treat that as
+  // absence-of-proof (optimistic link), not proof that the child is unavailable;
+  // this is the same RFC-245 D5 contract the task-canvas affordance follows.
+  if (!children.isError && children.data !== undefined && child === undefined) {
     return (
       <span className="muted" data-testid={`child-task-unavailable-${childTaskId}`}>
         {t('tasks.childTaskUnavailable')}

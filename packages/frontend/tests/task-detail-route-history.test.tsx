@@ -15,7 +15,7 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { Task } from '@agent-workflow/shared'
+import type { NodeRun, Task } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 const actorState = vi.hoisted(() => ({
@@ -55,8 +55,12 @@ vi.mock('@/components/TaskSubjectLink', () => ({
 vi.mock('@/components/canvas/WorkflowCanvas', () => ({
   WorkflowCanvas: ({
     onNodeQuestionBadgeClick,
+    onSelect,
+    callNavs,
   }: {
     onNodeQuestionBadgeClick?: (nodeId: string) => void
+    onSelect?: (selection: { kind: 'node'; id: string }) => void
+    callNavs?: Record<string, 'child'>
   }) => (
     <div data-testid="workflow-canvas-stub">
       <button
@@ -65,6 +69,14 @@ vi.mock('@/components/canvas/WorkflowCanvas', () => ({
         onClick={() => onNodeQuestionBadgeClick?.('node-1')}
       >
         jump to questions
+      </button>
+      <button
+        type="button"
+        data-testid="canvas-call-jump"
+        data-call-nav={callNavs?.call1}
+        onClick={() => onSelect?.({ kind: 'node', id: 'call1' })}
+      >
+        jump to child
       </button>
     </div>
   ),
@@ -208,7 +220,39 @@ function primeTask(qc: QueryClient, row: Task, primeNodeRuns = true): void {
   })
   qc.setQueryData(['task-questions', row.id], [])
   qc.setQueryData(['task-clarify-directives', row.id], {})
+  qc.setQueryData(['tasks', 'children', row.id], [])
   qc.setQueryData(['agents'], [])
+}
+
+function nodeRun(overrides: Partial<NodeRun> = {}): NodeRun {
+  return {
+    id: 'run_1',
+    taskId: 'parent',
+    nodeId: 'call1',
+    parentNodeRunId: null,
+    iteration: 0,
+    shardKey: null,
+    retryIndex: 0,
+    wgRound: null,
+    rerunCause: null,
+    reviewIteration: 0,
+    status: 'done',
+    startedAt: 1_700_000_000_000,
+    finishedAt: 1_700_000_001_000,
+    pid: null,
+    exitCode: 0,
+    errorMessage: null,
+    supersededByReview: null,
+    rolledBack: null,
+    promptText: null,
+    tokInput: null,
+    tokOutput: null,
+    tokTotal: null,
+    tokCacheCreate: null,
+    tokCacheRead: null,
+    opencodeSessionId: null,
+    ...overrides,
+  } satisfies NodeRun
 }
 
 function installFetch(
@@ -245,6 +289,7 @@ function renderTaskRoute(
     getParentRoute: () => rootRoute,
     path: '/tasks/$id',
     validateSearch: TaskDetailRoute.options.validateSearch,
+    remountDeps: TaskDetailRoute.options.remountDeps,
     component: TaskDetailRoute.options.component,
   })
   const router = createRouter({
@@ -314,6 +359,78 @@ afterEach(() => {
 })
 
 describe('/tasks/$id rendered URL-backed panels', () => {
+  test('a reachable call node jumps directly to its child task', async () => {
+    installFetch(() => undefined)
+    const parent = task('parent', {
+      workflowSnapshot: {
+        $schema_version: 4,
+        inputs: [],
+        nodes: [{ id: 'call1', kind: 'call-workflow', workflowName: 'child-flow' }],
+        edges: [],
+      } as Task['workflowSnapshot'],
+    })
+    const child = task('child', { parentTaskId: 'parent' })
+    const { qc, router } = renderTaskRoute('/tasks/parent?tab=workflow-status', [parent, child])
+    act(() => {
+      qc.setQueryData(['tasks', 'parent', 'node-runs'], {
+        runs: [nodeRun({ childTaskId: 'child' })],
+        outputs: [],
+      })
+      qc.setQueryData(['tasks', 'children', 'parent'], [child])
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('canvas-call-jump').getAttribute('data-call-nav')).toBe('child')
+    })
+    fireEvent.click(screen.getByTestId('canvas-call-jump'))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/tasks/child')
+      expect(document.querySelector('.task-detail__name')?.textContent).toBe('Task child')
+      expect(document.querySelector('.task-canvas-layout--with-drawer')).toBeNull()
+    })
+  })
+
+  test('call-row run detail stays reachable and task-to-task navigation clears its drawer state', async () => {
+    installFetch(() => undefined)
+    const parent = task('parent', {
+      workflowSnapshot: {
+        $schema_version: 4,
+        inputs: [],
+        // Legacy/corrupt snapshots may no longer resolve the node kind; the
+        // wire-level childTaskId still proves this is a call row.
+        nodes: [],
+        edges: [],
+      } as Task['workflowSnapshot'],
+    })
+    const next = task('next')
+    const { qc, router } = renderTaskRoute('/tasks/parent?tab=node-runs', [parent, next])
+    act(() => {
+      qc.setQueryData(['tasks', 'parent', 'node-runs'], {
+        runs: [nodeRun({ childTaskId: 'legacy-child' })],
+        outputs: [],
+      })
+    })
+
+    fireEvent.click(await screen.findByTestId('node-run-detail-run_1'))
+    await waitFor(() => {
+      expect(router.state.location.search.tab).toBe('workflow-status')
+      expect(document.querySelector('.task-canvas-layout--with-drawer')).not.toBeNull()
+    })
+
+    await act(async () => {
+      await router.navigate({
+        to: '/tasks/$id',
+        params: { id: 'next' },
+        search: { tab: 'workflow-status' },
+      })
+    })
+    await waitFor(() => {
+      expect(document.querySelector('.task-detail__name')?.textContent).toBe('Task next')
+      expect(document.querySelector('.task-canvas-layout--with-drawer')).toBeNull()
+    })
+  })
+
   test('no-worktree task filters artifact leaves and replaces an old diff deep link', async () => {
     installFetch(() => undefined)
     const { router } = renderTaskRoute('/tasks/no-worktree?tab=changes&focus=keep', [

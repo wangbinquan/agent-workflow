@@ -23,6 +23,10 @@ export function taskChildrenQueryKey(parentTaskId: string): readonly unknown[] {
 export function useTaskChildren(
   parentTaskId: string,
   enabled: boolean = true,
+  // RFC-245 (design gate P0-2): whether the PARENT task is still non-terminal.
+  // See the refetchInterval comment — an empty child list is not proof that no
+  // child is coming.
+  parentActive: boolean = false,
 ): UseQueryResult<TaskListItem[]> {
   return useQuery<TaskListItem[]>({
     queryKey: taskChildrenQueryKey(parentTaskId),
@@ -35,9 +39,20 @@ export function useTaskChildren(
         signal,
       ),
     enabled,
-    // Poll fallback while any child is still live (WS invalidation is the
-    // primary refresh path; this mirrors the task-detail query idiom).
+    // Poll fallback (WS invalidation is the primary refresh path).
+    //
+    // RFC-245: polling used to key ONLY off "some child is live", which made an
+    // empty first response self-sealing: open a parent whose call node has not
+    // dispatched yet → `[]` → polling off → and since useTaskSync's keys are all
+    // `['tasks', taskId, …]` (never `['tasks','children',id]`), nothing ever
+    // refetched. Consumers that treat "loaded and absent" as proof — the drawer
+    // /table ChildTaskLink placeholder, and RFC-245's canvas click affordance —
+    // then stayed wrong forever. Keep polling while the PARENT is active too, so
+    // a child that appears later is picked up. (T10 additionally wires the WS
+    // invalidation so the common case does not wait for this fallback.)
     refetchInterval: (q) =>
-      (q.state.data ?? []).some((child) => !isTerminal(child.status)) ? 5000 : false,
+      parentActive || (q.state.data ?? []).some((child) => !isTerminal(child.status))
+        ? 5000
+        : false,
   })
 }

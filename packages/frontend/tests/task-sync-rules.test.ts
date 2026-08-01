@@ -14,6 +14,7 @@
 import { describe, expect, test } from 'vitest'
 import type { TaskWsMessage } from '@agent-workflow/shared'
 import { buildTaskSyncRules } from '@/hooks/useTaskSync'
+import { taskChildrenQueryKey } from '@/hooks/useTaskChildren'
 import { workgroupRoomKey } from '@/lib/workgroup-room'
 
 const TASK = 't1'
@@ -75,5 +76,47 @@ describe('buildTaskSyncRules — workgroup room liveness', () => {
     expect(keysFor({ id: 4, type: 'task.done', status: 'done' })).toContainEqual(
       workgroupRoomKey(TASK),
     )
+  })
+})
+
+// RFC-245 — the direct-children list must be re-validated by WS, not left to a
+// poll that switches itself off.
+//
+// `useTaskChildren` keys the child list under ['tasks','children',parentId].
+// That is NOT a suffix of ['tasks', taskId], so react-query's prefix matching
+// means none of the keys this table used to emit could ever refresh it — and
+// the query's own refetchInterval turns OFF when the list is empty. Opening a
+// parent whose call node had not dispatched yet therefore froze the list at []
+// forever, and every consumer that treats "loaded and absent" as proof (the
+// ChildTaskLink placeholder, and RFC-245's canvas click affordance) stayed wrong
+// for the life of the page. A call node stamps child_task_id and flips its row
+// to running, so `node.status` is exactly the frame that invalidates it.
+describe('buildTaskSyncRules — child-task list re-validation (RFC-245)', () => {
+  test('node.status invalidates the children list key', () => {
+    const keys = keysFor({
+      id: 5,
+      type: 'node.status',
+      nodeRunId: 'r1',
+      nodeId: 'n1',
+      status: 'running',
+    })
+    expect(keys).toContainEqual(taskChildrenQueryKey(TASK))
+  })
+
+  test('the children key is not reachable through the other invalidated prefixes', () => {
+    // Guards the reason this rule has to exist at all: if someone "simplifies"
+    // it away believing ['tasks', TASK] already covers it, this fails.
+    const childrenKey = taskChildrenQueryKey(TASK) as readonly unknown[]
+    expect(childrenKey[0]).toBe('tasks')
+    expect(childrenKey[1]).not.toBe(TASK)
+  })
+
+  test('task terminal transitions refresh the children list too', () => {
+    for (const frame of [
+      { id: 6, type: 'task.status', status: 'running' },
+      { id: 7, type: 'task.done', status: 'done' },
+    ] as TaskWsMessage[]) {
+      expect(keysFor(frame)).toContainEqual(taskChildrenQueryKey(TASK))
+    }
   })
 })

@@ -38,6 +38,7 @@ export function CallWorkflowNode({ data, selected }: Props) {
       kindLabel={t('callWorkflowNode.label')}
       referenceName={workflowName}
       unsetReferenceLabel={t('callWorkflowNode.unsetWorkflow')}
+      navHintLabel={t('callNode.navChild')}
     />
   )
 }

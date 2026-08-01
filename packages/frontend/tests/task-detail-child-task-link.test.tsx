@@ -106,7 +106,7 @@ async function renderLink(childTaskId: string) {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
-  return router
+  return { qc, router }
 }
 
 describe('ChildTaskLink (RFC-243 PR-5)', () => {
@@ -133,6 +133,32 @@ describe('ChildTaskLink (RFC-243 PR-5)', () => {
     expect(placeholder.textContent).toBe(enUS.tasks.childTaskUnavailable)
     expect(placeholder.querySelector('a')).toBeNull()
     expect(screen.queryByTestId('child-task-link-t_ghost')).toBeNull()
+  })
+
+  test('a refetch error restores the optimistic link even when stale absence data is retained', async () => {
+    let fail = false
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      if (fail) {
+        return new Response(JSON.stringify({ error: { code: 'temporarily-unavailable' } }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('[]', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const { qc } = await renderLink('t_child')
+    await screen.findByTestId('child-task-unavailable-t_child')
+
+    fail = true
+    await qc.refetchQueries({ queryKey: ['tasks', 'children', 't_parent'] })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('child-task-link-t_child').querySelector('a')).not.toBeNull()
+      expect(screen.queryByTestId('child-task-unavailable-t_child')).toBeNull()
+    })
   })
 })
 

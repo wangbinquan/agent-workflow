@@ -3983,6 +3983,13 @@ code {
   color: var(--muted);
 }
 
+/* RFC-245 — child executions echo their parent right under the subject line,
+ * same rhythm as the subject row above it. */
+.task-detail__parent {
+  margin-top: var(--space-1);
+  font-size: var(--font-xs);
+}
+
 .task-detail__id-label {
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -7584,6 +7591,17 @@ details.form-section[open] > summary {
   cursor: pointer;
 }
 .canvas-node__clarify-nav {
+  margin-top: 4px;
+  font-size: 11px;
+}
+/* RFC-245 — a call-workflow / call-workgroup node the task-detail canvas marked
+ * clickable (opens the child task it launched). The `data-call-nav` attribute is
+ * only present on call nodes with a reachable child; the pointer cursor + hint
+ * line advertise the click. */
+.canvas-node--call[data-call-nav] {
+  cursor: pointer;
+}
+.canvas-node__call-nav {
   margin-top: 4px;
   font-size: 11px;
 }

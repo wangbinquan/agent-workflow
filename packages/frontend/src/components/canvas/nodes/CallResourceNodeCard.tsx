@@ -12,6 +12,13 @@ interface CallResourceNodeCardProps {
   kindLabel: string
   referenceName: string
   unsetReferenceLabel: string
+  /**
+   * RFC-245: "click to open the child task" hint text. Rendered only when the
+   * task-detail canvas marked this node clickable (`data.callNav`). Passed in
+   * (rather than translated here) so this shared shell stays dumb — the same
+   * contract CanvasNodeCard / CanvasNodeReferenceBand keep.
+   */
+  navHintLabel: string
 }
 
 /**
@@ -29,9 +36,14 @@ export function CallResourceNodeCard({
   kindLabel,
   referenceName,
   unsetReferenceLabel,
+  navHintLabel,
 }: CallResourceNodeCardProps) {
   const hasReference = referenceName.length > 0
   const displayTitle = data.title || data.nodeId
+  // RFC-245: the task-detail canvas marks the click target; clicking routes to
+  // the child task. Absent on the editor canvas and on call nodes with no
+  // reachable child (which are simply inert — no drawer fallback, design D1).
+  const callNav = data.callNav
 
   return (
     <CanvasNodeCard
@@ -46,7 +58,10 @@ export function CallResourceNodeCard({
       titleTooltip={displayTitle}
       status={data.status ?? 'default'}
       loopBody={data.loopBody}
-      dataAttributes={{ 'data-reference-state': hasReference ? 'resolved' : 'unset' }}
+      dataAttributes={{
+        'data-reference-state': hasReference ? 'resolved' : 'unset',
+        ...(callNav === undefined ? {} : { 'data-call-nav': callNav }),
+      }}
     >
       <CanvasNodeReferenceBand
         displayTitle={displayTitle}
@@ -61,6 +76,7 @@ export function CallResourceNodeCard({
         reusePort={data.reuseInputPort}
       />
       <PortHandles side="right" ports={data.outputPorts} />
+      {callNav !== undefined && <div className="canvas-node__call-nav muted">{navHintLabel}</div>}
     </CanvasNodeCard>
   )
 }

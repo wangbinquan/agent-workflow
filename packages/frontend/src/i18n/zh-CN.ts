@@ -2189,6 +2189,8 @@ export interface Resources {
     childBadge: string
     parentTaskChip: string
     parentTaskUnavailable: string
+    /** RFC-245: node-runs table entry into the drawer for call rows. */
+    runDetailButton: string
     childTaskLink: string
     childTaskUnavailable: string
     /** RFC-244: dense task operations list. */
@@ -3805,6 +3807,11 @@ export interface Resources {
   callWorkgroupNode: {
     label: string
     unsetWorkgroup: string
+  }
+  /** RFC-245 — shared click hint for BOTH call kinds on the task-detail canvas
+   *  (one key: the text does not vary by kind). */
+  callNode: {
+    navChild: string
   }
   errors: Record<string, string>
   errorDomains: Record<string, string>
@@ -6680,6 +6687,7 @@ export const zhCN: Resources = {
     childBadge: '子任务',
     parentTaskChip: '父任务',
     parentTaskUnavailable: '父任务不可见',
+    runDetailButton: '运行详情',
     childTaskLink: '子任务',
     childTaskUnavailable: '子任务不可见或已删除',
     operations: {
@@ -8377,6 +8385,9 @@ export const zhCN: Resources = {
   callWorkgroupNode: {
     label: '调用工作组',
     unsetWorkgroup: '（未选择工作组）',
+  },
+  callNode: {
+    navChild: '点击进入子任务',
   },
   // RFC-203: per-domain fallback templates — any unmapped code resolves to
   // its domain's template instead of a bare English message.

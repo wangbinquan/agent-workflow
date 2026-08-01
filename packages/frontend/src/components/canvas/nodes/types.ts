@@ -139,6 +139,17 @@ export interface CanvasNodeData extends Record<string, unknown> {
    * clickable (golden-lock — editor canvas byte-for-byte unchanged).
    */
   clarifyNav?: 'awaiting' | 'answered'
+  /**
+   * RFC-245: call-node click target — only set on `call-workflow` /
+   * `call-workgroup` kind nodes on the task-detail canvas, and only when the
+   * node's freshest generation actually launched a child task the viewer can
+   * see. Presence makes CallResourceNodeCard render a click hint + pointer
+   * cursor and routes the click to `/tasks/{childTaskId}`; absence means the
+   * node is inert — per design D1 a call node NEVER falls back to the node
+   * drawer from the canvas. Undefined on the editor/preview canvases
+   * (golden-lock — those canvases stay byte-for-byte unchanged).
+   */
+  callNav?: 'child'
   /** Editable workflow only: opens the shared picker with explicit wrapper scope. */
   onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void
 }

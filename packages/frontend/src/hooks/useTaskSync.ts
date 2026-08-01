@@ -15,6 +15,7 @@ import type { QueryKey } from '@tanstack/react-query'
 import type { TaskWsMessage } from '@agent-workflow/shared'
 import { WS_PATHS } from '@agent-workflow/shared'
 import { workgroupRoomKey } from '@/lib/workgroup-room'
+import { taskChildrenQueryKey } from './useTaskChildren'
 import { useWsInvalidation, type WsInvalidationRules } from './useWsInvalidation'
 
 /**
@@ -38,6 +39,11 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
     // dw slot lives in the room aggregate — refresh it alongside the task
     // row. Harmless for non-workgroup tasks (no active query under the key).
     workgroupRoomKey(taskId),
+    // RFC-245: a parent reaching a terminal state is also when its children
+    // settle (cascade cancel / merge-back), and it is the LAST refresh the
+    // children query gets — `useTaskChildren` stops polling once neither the
+    // parent nor any child is active.
+    taskChildrenQueryKey(taskId ?? ''),
   ]
   // RFC-005: review.* events invalidate the per-review detail (if any tab
   // has that page open) + the list + pending-count so the sidebar badge
@@ -91,6 +97,16 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
       ['task-questions', taskId],
       ['task-clarify-directives', taskId],
       workgroupRoomKey(taskId),
+      // RFC-245 (design gate P0-2): a call node launching its child stamps
+      // `child_task_id` on the call row and flips that row to running, so this
+      // frame is exactly when the direct-children list goes stale. The key is
+      // ['tasks','children',id] — NOT a prefix of ['tasks', taskId], so none of
+      // the keys above cover it. Without this the children query (whose polling
+      // switches off on an empty result) could stay empty forever, and every
+      // consumer that treats "loaded and absent" as proof — the ChildTaskLink
+      // placeholder and RFC-245's canvas click affordance — would be wrong for
+      // the rest of the page's life.
+      taskChildrenQueryKey(taskId ?? ''),
     ],
     // Future: render directly on a node-events feed instead of going
     // through react-query. For now we just keep the node-runs row's

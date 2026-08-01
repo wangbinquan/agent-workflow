@@ -39,6 +39,7 @@ export function CallWorkgroupNode({ data, selected }: Props) {
       kindLabel={t('callWorkgroupNode.label')}
       referenceName={workgroupName}
       unsetReferenceLabel={t('callWorkgroupNode.unsetWorkgroup')}
+      navHintLabel={t('callNode.navChild')}
     />
   )
 }

@@ -2417,6 +2417,7 @@ export const enUS: Resources = {
     childBadge: 'Child task',
     parentTaskChip: 'Parent task',
     parentTaskUnavailable: 'Parent task not visible',
+    runDetailButton: 'Run detail',
     childTaskLink: 'Child task',
     childTaskUnavailable: 'Child task not visible or deleted',
     operations: {
@@ -4232,6 +4233,9 @@ export const enUS: Resources = {
   callWorkgroupNode: {
     label: 'call workgroup',
     unsetWorkgroup: '(no workgroup selected)',
+  },
+  callNode: {
+    navChild: 'Open child task',
   },
   errorDomains: {
     taskQuestion: 'Question board action failed',

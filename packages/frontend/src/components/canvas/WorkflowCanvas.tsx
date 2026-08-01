@@ -58,6 +58,7 @@ import {
   type WorkflowByRef,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
+import type { CallNodeNavKind } from '@/lib/call-node-nav'
 import { AgentNode } from './nodes/AgentNode'
 import { CallWorkflowNode } from './nodes/CallWorkflowNode'
 import { CallWorkgroupNode } from './nodes/CallWorkgroupNode'
@@ -255,6 +256,15 @@ export interface WorkflowCanvasProps {
    * (golden-lock). Changing this map rebuilds node data like `reviewNavs` does.
    */
   clarifyNavs?: Record<string, 'awaiting' | 'answered'>
+  /**
+   * RFC-245: per call-workflow/call-workgroup-node click target, keyed by workflow
+   * node id. When DEFINED (task-detail canvas) a call node with an entry renders a
+   * click-to-open-child hint + pointer cursor; nodes absent from the map are not
+   * clickable (and, per design D1, never fall back to the drawer). Undefined
+   * (editor canvas) ⇒ no hints, byte-for-byte unchanged (golden-lock). Changing
+   * this map rebuilds node data like `reviewNavs` / `clarifyNavs` do.
+   */
+  callNavs?: Record<string, CallNodeNavKind>
 }
 
 export function canShowEdgeInsertAffordance(
@@ -354,6 +364,7 @@ function CanvasInner({
   onNodeClarifyDirectiveToggle,
   reviewNavs,
   clarifyNavs,
+  callNavs,
   canUndo,
   canRedo,
   onUndo,
@@ -512,6 +523,7 @@ function CanvasInner({
         validationProjection.nodes,
         surface,
         workflowByRef,
+        callNavs,
       ),
     ),
   )
@@ -545,6 +557,10 @@ function CanvasInner({
   // RFC-161: mirror of the same ref-guard so a clarifyNavs-only change (node-runs
   // query resolves / a clarify advances, definition unchanged) repaints hints.
   const externalClarifyNavsRef = useRef(clarifyNavs)
+  // RFC-245: same shape for call-node click targets — the map flips when the
+  // node-runs query stamps a childTaskId OR when the ACL-filtered children query
+  // resolves (design D5/D9), both without touching the definition.
+  const externalCallNavsRef = useRef(callNavs)
   const externalValidationIssuesRef = useRef(validationIssues)
   const externalEdgeInsertEnabledRef = useRef(edgeInsertEnabled)
   // RFC-243: mirror of the agents late-load guard for the child-workflow
@@ -738,6 +754,12 @@ function CanvasInner({
     const reviewNavsChanged = reviewNavs !== externalReviewNavsRef.current
     // RFC-161: clarifyNavs map change repaints clarify-node hints (same shape).
     const clarifyNavsChanged = clarifyNavs !== externalClarifyNavsRef.current
+    // RFC-245: callNavs map change repaints call-node hints (same shape). Note
+    // `callNavs` is ALSO in this effect's dependency array — the ref-guard alone
+    // decides "should we rebuild", the dep decides "does the effect run at all"
+    // (design-gate P1-3: without the dep, a visibility-only flip left the card's
+    // hint/cursor stale while the click closure had already updated).
+    const callNavsChanged = callNavs !== externalCallNavsRef.current
     const validationChanged = validationIssues !== externalValidationIssuesRef.current
     const edgeInsertEnabledChanged = edgeInsertEnabled !== externalEdgeInsertEnabledRef.current
     // RFC-243: resolver identity changes exactly when the ['workflows'] cache
@@ -752,6 +774,7 @@ function CanvasInner({
       directivesChanged ||
       reviewNavsChanged ||
       clarifyNavsChanged ||
+      callNavsChanged ||
       validationChanged ||
       edgeInsertEnabledChanged ||
       workflowRefsChanged
@@ -764,6 +787,7 @@ function CanvasInner({
       externalClarifyDirectivesRef.current = clarifyDirectives
       externalReviewNavsRef.current = reviewNavs
       externalClarifyNavsRef.current = clarifyNavs
+      externalCallNavsRef.current = callNavs
       externalValidationIssuesRef.current = validationIssues
       externalEdgeInsertEnabledRef.current = edgeInsertEnabled
       externalWorkflowByRefRef.current = workflowByRef
@@ -792,6 +816,7 @@ function CanvasInner({
               validationProjection.nodes,
               surface,
               workflowByRef,
+              callNavs,
             ),
             measured,
           ),
@@ -833,6 +858,10 @@ function CanvasInner({
     handleAddInsideWrapper,
     reviewNavs,
     clarifyNavs,
+    // RFC-245 (design-gate P1-3): the ref-guard above is not enough — without
+    // this dep the effect never re-runs on a callNavs-only flip and the card's
+    // hint/cursor desyncs from the click behavior.
+    callNavs,
     edgeInsertEnabled,
     handleInsertNodeOnEdge,
     onChange,
@@ -1413,6 +1442,7 @@ function CanvasInner({
             undefined,
             surface,
             workflowByRef,
+            callNavs,
           ),
           measured,
         ),
@@ -1441,6 +1471,7 @@ function CanvasInner({
     },
     [
       agentByName,
+      callNavs,
       clarifyDirectives,
       clarifyNavs,
       definition,
@@ -2900,6 +2931,10 @@ function toFlowNodes(
   // RFC-243: child-workflow resolver threaded into computePorts so
   // call-workflow nodes render their child-mirrored port rows.
   workflowByRef?: WorkflowByRef,
+  // RFC-245: per call-node click target. APPENDED (not inserted after
+  // clarifyNavs) because every caller — including nine test files — passes these
+  // positionally; inserting would silently reinterpret their arguments.
+  callNavs?: Record<string, CallNodeNavKind>,
 ): Node[] {
   const loopBodyIds = new Set<string>()
   for (const n of definition.nodes) {
@@ -2963,6 +2998,15 @@ function toFlowNodes(
     if (clarifyNavs !== undefined && (n.kind === 'clarify' || n.kind === 'clarify-cross-agent')) {
       const nav = clarifyNavs[n.id]
       if (nav !== undefined) data.clarifyNav = nav
+    }
+    // RFC-245: mark a call node's click target so the card can render the
+    // "click to open the child task" hint + pointer cursor. Only the two call
+    // kinds present in `callNavs` get it; absent ⇒ not clickable AND (design D1)
+    // no drawer fallback. Undefined map (editor canvas) ⇒ no call node ever gets
+    // it (golden-lock).
+    if (callNavs !== undefined && (n.kind === 'call-workflow' || n.kind === 'call-workgroup')) {
+      const nav = callNavs[n.id]
+      if (nav !== undefined) data.callNav = nav
     }
     if (loopBodyIds.has(n.id)) data.loopBody = true
     if (isWrapperKind(n.kind)) {
@@ -3440,6 +3484,9 @@ export const __testToFlowNodes = (
   // RFC-243: child-workflow resolver so call-workflow port threading is
   // testable the same way the other data slots are.
   workflowByRef?: WorkflowByRef,
+  // RFC-245: call-node click targets. Appended last for the same reason the
+  // production signature appends it — existing tests pass through position 13.
+  callNavs?: Record<string, CallNodeNavKind>,
 ): Node[] => {
   const def: WorkflowDefinition = {
     $schema_version: 1,
@@ -3463,6 +3510,7 @@ export const __testToFlowNodes = (
     undefined,
     surface,
     workflowByRef,
+    callNavs,
   )
 }
 export const __testToFlowEdges = toFlowEdges
