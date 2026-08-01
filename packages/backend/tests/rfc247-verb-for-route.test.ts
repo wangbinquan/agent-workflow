@@ -59,6 +59,9 @@ describe('RFC-247 verbForRoute — rule ②: side-effect-free POSTs', () => {
     '/api/mcps/m1/probe',
     '/api/mcps/m1/runtime-test-sessions',
     '/api/mcps/m1/runtime-test-sessions/s1/messages',
+    // repo mirrors: real fetch work against a remote, no resource created
+    '/api/cached-repos/r1/refresh',
+    '/api/cached-repos/imports/b1/rows/row1/retry',
   ]
   for (const path of executish) {
     test(`POST ${path} → execute (runs real work)`, () => {
@@ -123,5 +126,12 @@ describe('RFC-247 verbForRoute — the traps', () => {
 
   test('unknown nested POSTs fall through to create rather than throwing', () => {
     expect(verbForRoute('POST', '/api/agents/a1/some-future-action')).toBe('create')
+  })
+
+  test('batch-import IS create — it really produces new mirrors', () => {
+    // Sits right next to two `execute` overrides on the same prefix; the naive
+    // POST→create fall-through is the correct answer here and must not be
+    // swept up by a loosened regex on its neighbours.
+    expect(verbForRoute('POST', '/api/cached-repos/batch-import')).toBe('create')
   })
 })

@@ -19,8 +19,10 @@
 // route implements them (a startup self-check enforces this — see
 // design/RFC-247-mcp-remote-access/design.md §3.2):
 //
-//   - `repos:update`   — routes/cached-repos.ts + routes/repos.ts have NO PUT/PATCH
-//   - `skills:execute` — routes/skills.ts has no execute-semantics route
+//   - `repos:update`      — routes/cached-repos.ts + repos.ts have NO PUT/PATCH
+//   - `skills:execute`    — routes/skills.ts has no execute-semantics route
+//   - `agents:execute`    — RFC-165 F15/N1 gates agent launch on tasks:execute
+//   - `workgroups:execute`— …and workgroup launch likewise
 //
 // A declared-but-unrouted point is worse than a missing one: it shows up in the
 // account page's token matrix and tells the user that ticking it grants a
@@ -123,15 +125,22 @@ export const PERMISSIONS = [
   // ---------------------------------------------------------------------------
   // Matrix domain — execute.
   // ---------------------------------------------------------------------------
-  'agents:execute',
   'mcps:execute',
   'plugins:execute',
   'workflows:execute',
-  'workgroups:execute',
   'scheduled-tasks:execute',
   'repos:execute',
   'tasks:execute',
   // NOTE: no `skills:execute` — no execute-semantics route in the skills domain.
+  //
+  // NOTE: no `agents:execute` / `workgroups:execute` either. The only candidate
+  // routes were `POST /api/{agents,workgroups}/:id/tasks`, and RFC-165 F15/N1
+  // decided that launching is a TASK operation on every subject face: all three
+  // launch endpoints gate uniformly on `tasks:execute`, with the agent path
+  // explicitly EXEMPT from the agent method gate. Minting per-subject execute
+  // points would reverse that decision AND leave two points no route
+  // references — the "authorization UI lying to its user" failure this file
+  // opens by warning about.
   //
   // RFC-247 also DELETES `tasks:cancel:own` / `tasks:cancel:all`. They were dead
   // points: `services/task.ts:2219` `cancelTask(db, id, opts)` takes no actor at
@@ -301,11 +310,9 @@ const USER_RESOURCE_WRITES: ReadonlyArray<Permission> = [
 // own `:write` (mcp probe, plugin check-update, workflow validate) — the user
 // baseline had all of them.
 const USER_EXECUTE: ReadonlyArray<Permission> = [
-  'agents:execute',
   'mcps:execute',
   'plugins:execute',
   'workflows:execute',
-  'workgroups:execute',
   'scheduled-tasks:execute',
   'tasks:execute',
 ]

@@ -31,14 +31,16 @@ import {
 } from '../src/schemas/permission'
 
 describe('PERMISSIONS catalog', () => {
-  test('contains the documented 60 entries', () => {
+  test('contains the documented 58 entries', () => {
     // RFC-222 added tasks:delete (33 → 34); RFC-234 added intent:read/write (→ 36).
     // RFC-247 split the five `:write` points into create/update/delete, gave the
     // previously-ungated domains (workgroups / scheduled-tasks) real points,
     // folded the five RFC-041 memory points into four verbs, retired
     // `tasks:launch` → `tasks:execute`, and DELETED the two dead cancel range
-    // points (36 → 60).
-    expect(PERMISSIONS.length).toBe(60)
+    // points, and did NOT mint agents:execute / workgroups:execute because
+    // RFC-165 F15/N1 gates every launch endpoint uniformly on tasks:execute
+    // (36 → 58).
+    expect(PERMISSIONS.length).toBe(58)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -49,7 +51,7 @@ describe('PERMISSIONS catalog', () => {
     expect(ROLE_PERMISSIONS.admin.length).toBe(PERMISSIONS.length)
   })
 
-  test('user role contains exactly the documented baseline (48 entries)', () => {
+  test('user role contains exactly the documented baseline (46 entries)', () => {
     const expected: Permission[] = [
       // reads
       'agents:read',
@@ -92,11 +94,9 @@ describe('PERMISSIONS catalog', () => {
       'scheduled-tasks:update',
       'scheduled-tasks:delete',
       // execute — formerly reached via `tasks:launch` or the resource's `:write`
-      'agents:execute',
       'mcps:execute',
       'plugins:execute',
       'workflows:execute',
-      'workgroups:execute',
       'scheduled-tasks:execute',
       'tasks:execute',
       'users:search',
@@ -113,7 +113,7 @@ describe('PERMISSIONS catalog', () => {
       'intent:write',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
-    expect(ROLE_PERMISSIONS.user.length).toBe(48)
+    expect(ROLE_PERMISSIONS.user.length).toBe(46)
   })
 
   test('user role does NOT include any admin-only point (snapshot guard)', () => {
@@ -203,11 +203,17 @@ describe('RFC-247 retired names stay retired', () => {
     expect(PERMISSIONS.filter((p) => p.startsWith('scheduled-tasks:')).length).toBe(5)
   })
 
-  test('the two symmetry-only dead points were never created', () => {
-    // routes/cached-repos.ts + routes/repos.ts have zero PUT/PATCH;
-    // routes/skills.ts has no execute-semantics route.
-    expect((PERMISSIONS as readonly string[]).includes('repos:update')).toBe(false)
-    expect((PERMISSIONS as readonly string[]).includes('skills:execute')).toBe(false)
+  test('no point exists that no route could reference', () => {
+    // Four points a mechanical "every resource gets every verb" pass would have
+    // minted, each of which would then sit on the account page's token matrix
+    // advertising a capability that maps to no endpoint:
+    //   repos:update       — repos.ts + cached-repos.ts have zero PUT/PATCH
+    //   skills:execute     — skills.ts has no execute-semantics route
+    //   agents:execute     — RFC-165 F15/N1 gates agent launch on tasks:execute
+    //   workgroups:execute — …and workgroup launch likewise
+    for (const dead of ['repos:update', 'skills:execute', 'agents:execute', 'workgroups:execute']) {
+      expect((PERMISSIONS as readonly string[]).includes(dead)).toBe(false)
+    }
   })
 })
 

@@ -108,6 +108,20 @@ const VERB_OVERRIDES: ReadonlyArray<{
   { method: 'POST', re: /^\/api\/plugins\/[^/]+\/check-update$/, verb: 'execute' },
   { method: 'POST', re: /^\/api\/mcps\/[^/]+\/probe$/, verb: 'execute' },
   { method: 'POST', re: /^\/api\/mcps\/[^/]+\/runtime-test-sessions(\/.*)?$/, verb: 'execute' },
+  // Repo mirrors: refreshing / retrying an import row does real fetch work
+  // against a remote, but creates no resource. These two MUST agree with the
+  // route metadata (routes/cached-repos.ts) — while the manual
+  // `resourcePermissionGate('repos')` mount in server.ts still runs alongside
+  // the migrated routes, a disagreement means the middleware demands
+  // `repos:create` while the declaration demands `repos:execute`, and a token
+  // holding exactly one of them is refused by the other. Both gates read this
+  // function precisely so that cannot happen.
+  { method: 'POST', re: /^\/api\/cached-repos\/[^/]+\/refresh$/, verb: 'execute' },
+  {
+    method: 'POST',
+    re: /^\/api\/cached-repos\/imports\/[^/]+\/rows\/[^/]+\/retry$/,
+    verb: 'execute',
+  },
 
   // — rule ③: POSTs that mutate an EXISTING resource rather than create one —
   {

@@ -9,13 +9,13 @@
 
 ## PR 划分
 
-| PR | 主题 | 依赖 | 交付后系统状态 |
-|---|---|---|---|
-| **PR-1** | 路由元数据层 + 权限点重构 | — | 内部重构，对外行为不变；「忘挂 gate」结构性消失 |
-| **PR-2** | 令牌签发 + 矩阵 UI + 用途 + 脱敏 | PR-1 | 可签发令牌并用于 REST |
-| **PR-3** | MCP 服务端 + 工具集 | PR-2 | 外部客户端可接入 |
-| **PR-4** | 审计表 + 删除快照 + 管理员可视面 | PR-3 | 可追溯 |
-| **PR-5** | wiki + `/.well-known/mcp` | PR-3 | 可自助上手 |
+| PR       | 主题                             | 依赖 | 交付后系统状态                                  |
+| -------- | -------------------------------- | ---- | ----------------------------------------------- |
+| **PR-1** | 路由元数据层 + 权限点重构        | —    | 内部重构，对外行为不变；「忘挂 gate」结构性消失 |
+| **PR-2** | 令牌签发 + 矩阵 UI + 用途 + 脱敏 | PR-1 | 可签发令牌并用于 REST                           |
+| **PR-3** | MCP 服务端 + 工具集              | PR-2 | 外部客户端可接入                                |
+| **PR-4** | 审计表 + 删除快照 + 管理员可视面 | PR-3 | 可追溯                                          |
+| **PR-5** | wiki + `/.well-known/mcp`        | PR-3 | 可自助上手                                      |
 
 ---
 
@@ -143,6 +143,7 @@
 对应 proposal §5 的 AC 编号。
 
 ### 授权层
+
 - [ ] AC-1 权限目录无 `资源:write`；三档齐全；角色点集快照锁定
 - [ ] AC-2 全路由有元数据；删任一条声明 ⇒ 启动失败（有测试）
 - [ ] AC-3 `server.ts` 无手工门挂载（源码层文本断言）
@@ -151,6 +152,7 @@
 - [ ] AC-6 `scheduled-tasks` 双点 AND，无法绕过 `tasks:execute`
 
 ### 令牌
+
 - [ ] AC-7 创建可用；原始令牌只出现一次；越权 422 而非静默丢弃
 - [ ] AC-8 删除档不进任何模板；「完整」模板签出的令牌 DELETE 全 403
 - [ ] AC-9 `mcp_only` 打 `/api/*` → 403 专用码；通用两通道皆通
@@ -159,6 +161,7 @@
 - [ ] AC-12 令牌读三类 MCP 密钥字段全掩码；session 通道明文不变
 
 ### MCP
+
 - [ ] AC-13 `/api/mcp` 只接 PAT
 - [ ] AC-14 `tools/list` 随矩阵变化
 - [ ] AC-15 `watch_task` ≤10s 心跳、240s 超时返回快照
@@ -167,11 +170,13 @@
 - [ ] AC-18 全局开关同时关掉 `/api/mcp` 与令牌创建
 
 ### 审计
+
 - [ ] AC-19 每次调用留痕且不含 body
 - [ ] AC-20 每次令牌 DELETE 有脱敏快照
 - [ ] AC-21 属主自查 / admin 全看 / 到期清理
 
 ### wiki
+
 - [ ] AC-22 文档由代码派生（派生关系有测试锁定）
 - [ ] AC-23 按角色裁剪
 - [ ] AC-24 四份配置片段可直接使用
@@ -181,6 +186,7 @@
 - [ ] AC-28 390px 无页面级横向溢出
 
 ### 设计门追加
+
 - [ ] AC-29 跨域副作用族五条各有专属回归
 - [ ] AC-30 `mcp_only` 令牌无法建立 WS 连接
 - [ ] AC-31 脱敏对 REST 与 WS 两条出口一致生效
@@ -188,6 +194,7 @@
 - [ ] AC-33 路由元数据覆盖生产 app 上每一条路由（含 whoami 与模板 ACL 路由）
 
 ### 设计门第二 / 第三批
+
 - [ ] AC-34 `PUT /api/tasks/:id/members`、`PUT /api/workgroup-tasks/:taskId/config` 为 never
 - [ ] AC-35 cancel 归 `tasks:execute`；空矩阵令牌取消被拒
 - [ ] AC-36 npm 安装带 `--ignore-scripts`（postinstall fixture 断言未执行）
@@ -208,21 +215,22 @@
 
 ## 风险与已知取舍
 
-| # | 项 | 处置 |
-|---|---|---|
-| R1 | PR-1 触及全部 ~200 条路由，是本 RFC 最大的单点风险 | 启动期穷尽性自检 + `verbForRoute` 逐行表驱动测试，把「漏改」变成「跑不起来 / 测试红」 |
-| R2 | 严格 DELETE 规则导致「删技能附件」与「删整个技能」同档 | design §2.3 已如实标注；不开语义例外（可判定性优先） |
-| R3 | 同上导致**经令牌无法删评审评论**（`tasks:delete` 是 admin 专属） | 同上如实记录；日后放开的正解是拆独立资源域，不是给规则开例外 |
-| R4 | 管理员不可吊销他人令牌 | 用户知情决策；外泄处置 = 禁用账号 / 关全局开关；属主本人可吊销 |
-| R5 | `/.well-known/mcp` 向未认证访客确认平台存在 | 用户知情决策；换来不污染 `PUBLIC_PATH_PREFIXES` 这道安全边界 |
-| R6 | 全量 REST 文档暴露接口形状给所有登录用户 | 按角色裁剪（AC-23）；内容只有形状与权限，不含任何资源数据 |
-| R7 | opencode 默认 30s 超时可能断开 `watch_task` | 已由 ≤10s 心跳 progress 解决（源码实测 `resetTimeoutOnProgress: true`）；片段里同时给 `timeout` 建议值 |
+| #   | 项                                                               | 处置                                                                                                   |
+| --- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| R1  | PR-1 触及全部 ~200 条路由，是本 RFC 最大的单点风险               | 启动期穷尽性自检 + `verbForRoute` 逐行表驱动测试，把「漏改」变成「跑不起来 / 测试红」                  |
+| R2  | 严格 DELETE 规则导致「删技能附件」与「删整个技能」同档           | design §2.3 已如实标注；不开语义例外（可判定性优先）                                                   |
+| R3  | 同上导致**经令牌无法删评审评论**（`tasks:delete` 是 admin 专属） | 同上如实记录；日后放开的正解是拆独立资源域，不是给规则开例外                                           |
+| R4  | 管理员不可吊销他人令牌                                           | 用户知情决策；外泄处置 = 禁用账号 / 关全局开关；属主本人可吊销                                         |
+| R5  | `/.well-known/mcp` 向未认证访客确认平台存在                      | 用户知情决策；换来不污染 `PUBLIC_PATH_PREFIXES` 这道安全边界                                           |
+| R6  | 全量 REST 文档暴露接口形状给所有登录用户                         | 按角色裁剪（AC-23）；内容只有形状与权限，不含任何资源数据                                              |
+| R7  | opencode 默认 30s 超时可能断开 `watch_task`                      | 已由 ≤10s 心跳 progress 解决（源码实测 `resetTimeoutOnProgress: true`）；片段里同时给 `timeout` 建议值 |
 
 ---
 
 ## 交付记录
 
 ### 2026-08-01 — 设计门闭环
+
 Codex 直驱路径 wedge（rollout 1.05MB 后冻结、CPU 0）；按 dev-gotchas 止损不重试，改用两个正交
 视角的 Claude 子代理对抗评审替代，全过程与替代关系记档于
 [`design-gate-2026-08-01.md`](./design-gate-2026-08-01.md)。合计 **5 P0 / 17 P1 / 23 P2**，
@@ -230,6 +238,7 @@ Codex 直驱路径 wedge（rollout 1.05MB 后冻结、CPU 0）；按 dev-gotchas
 2 条（`cached_repos.url` 是 no-op、cancel 范围点是死点）。
 
 ### 2026-08-02 — PR-1 首批（权限目录与授权公式）
+
 - **T2 完成**：`permission.ts` 重写。60 点 / 48 矩阵域 / 46 route-backed；`资源:write` 全部拆分；
   memory 旧五点退役；`tasks:launch → tasks:execute`；删除零引用死点 `tasks:cancel:own|all`；
   新增 `MATRIX_RESOURCES` / `MATRIX_VERBS` / `RANGE_POINTS` / `ROUTE_BACKED_POINTS` /
@@ -247,17 +256,73 @@ Codex 直驱路径 wedge（rollout 1.05MB 后冻结、CPU 0）；按 dev-gotchas
   `docs/audit-backlog.md` 标记 `:60` / `:61` / `:62` 三条收口，并新登记三条（插件安装仍在
   containment 外、`shared/schemas/mcp.ts:88-91` 过期断言、`/ws/repo-imports` 无 gate 的 session 侧）。
 
+### 2026-08-02 — PR-1 第三批（系统域 / 仓库域迁移 + 双门收进元数据）
+
+再迁 **15 条**，累计 **67 条**：`memoryDistillJobs`(5) · `overview`/`plantuml`(2，**此前完全无门**，
+AC-48) · `daemon`/`backup`/`runtime`(3) · `repos`/`cached-repos`(8)。
+
+两处不是机械迁移能带过去的：
+
+1. **RFC-222 的双门收进 `RouteMeta`**（新增 `identity?: 'admin' | 'resource-admin'`）。
+   `memoryDistillJobs` 原本是 `requireResourceAdmin('memory:update')`——身份门 + 权限点两道。
+   把身份门留在 `registerRoute` 旁边当中间件是可行的，但**生成的 API 文档会低估要求**：
+   文档会说「需要 `memory:update`」，而该点就在**普通 user 基线**里，读者会以为普通用户能调。
+   注册表存在的意义就是让文档不漂移，所以完整契约必须都在声明里。新测试锁死这点：
+   持 `memory:update` 的**普通 user** 令牌被拒，错误为 `resource admin only`。
+   同批补上**第五条跨域 AND**：`POST /api/memory-distill-jobs/:id/retry` 会让调度器
+   **拉起真实模型进程**（`memoryDistillScheduler.ts:342` / `:448`），故需
+   `memory:update AND tasks:execute`。
+2. **自己制造的门冲突（实测抓到）**：`server.ts` 的 `resourcePermissionGate('repos')` 仍在跑，
+   它对 `POST /api/cached-repos/:id/refresh` 算出 `repos:create`，而新元数据声明 `repos:execute`
+   ——一枚只持其中一个点的令牌会被**另一道门**拒掉。repos 套件没暴露它，因为那些用例跑在
+   admin 身份下（什么都有）。已给 `verbForRoute` 补对应 override，让**两道门读同一个函数**，
+   结构上不可能再分歧；并加一条「`batch-import` 仍是 create」的邻居用例，防止将来放宽正则时
+   把它误扫进 execute。
+
+#### 第二次「机械迁移静默反转前序决定」——并已固化为守卫
+
+`POST /api/agents/:id/tasks` 机械写成 `agents:execute AND tasks:execute`，**当场把
+RFC-165 的 A9 回归打红**。`server.ts:180-186` 原文：「launching is a TASK operation on every
+subject face —— 三条启动端点**统一** gate 在 `tasks:launch`，且 agent 启动路径**豁免** agent
+方法门」。这是与 `PUT /api/scheduled-tasks/:id`（payload-conditional）**同一类错误的第二次
+实例**；两次都是**既有的具名回归**当场抓住的——若那两条测试不存在，两处都会静默上线。
+
+连带：`agents:execute` / `workgroups:execute` 失去唯一候选路由 ⇒ 成死点 ⇒ 按 §3.2 规则不该
+存在，已删（**60 → 58 点**，user 基线 48 → 46）。
+
+`rfc247-cross-domain-escalation.test.ts` 新增**迁移守卫**，把规律固化为可执行断言：
+
+> **AND 成立的条件是「路由产生了它所在域之外的副作用」，不是「路由挂在某个资源的 URL 下」。**
+
+守卫锁在两个犯错位置：scheduled-task PUT 必须单点、POST/run-now 必须双点、启动端点不得出现
+非 tasks 域的 `:execute`。**下一批迁移再推导出错误答案就会红。**
+
+#### 另修两处
+
+- **门冲突**：`server.ts` 的 `resourcePermissionGate('repos')` 仍在跑，对
+  `POST /api/cached-repos/:id/refresh` 算出 `repos:create`，而新元数据声明 `repos:execute`
+  ——只持其中一个点的令牌会被**另一道门**拒掉。repos 套件没暴露它，因为那些用例跑在 admin
+  身份下（什么都有）。已给 `verbForRoute` 补 override，让**两道门读同一个函数**，结构上不可能
+  再分歧；并加「`batch-import` 仍是 create」的邻居用例防止将来放宽正则时误扫。
+- **测试助手真 bug**：`ensureMounted` 用**一个** try/catch 包住全部 mount，第一个抛异常的
+  mount 会让后面所有 mount **静默跳过**，测试却报「did the route move?」把人指向错误方向。
+  改为逐 mount 独立 try/catch。
+
+> **`server.ts` 的手工门本批仍保留**（与迁移后的路由双重把关、判据同源，无行为差异）。
+> 按 design §3.2 的硬顺序 **T1 → T3 → T4**，它们随 T4 的双向自检一起摘除——在全量覆盖被
+> 证明之前摘门就是在赌自己没漏，正是这道自检要消灭的赌。
+
 #### 语义变更的测试爆炸半径（实测，全部按新契约重写而非删除）
 
 全量 backend 套件揭示 5 条依赖旧语义的断言，**没有一条是回归**——都是本 RFC 有意改变的行为
 被既有测试锁着。逐条按「保留原意、改锁新契约」处理：
 
-| 测试 | 锁的旧语义 | 为什么变 | 处置 |
-|---|---|---|---|
-| `auth-session.test.ts` ×2 | PAT 权限**恰好等于** scopes | D3 读恒开 ⇒ 多 11 个读点 | 改断言「非读点恰好等于所勾档位」，读点单独确认 |
-| `rfc190-overview-route.test.ts` | PAT scope 能**剥掉资源读** ⇒ 该 key 为 null | 同上，令牌不可能缺读点 | null 分支改用 `exactActor`（精确权限集、绕过角色基线）直接构造——**该分支在 `buildOverview` 里仍存在，删测试等于静默退掉真实代码路径的覆盖** |
-| `auth-self-service-idor.test.ts` | PAT 可调 `GET /api/auth/me` 证明「令牌仍有效」 | D6 关闭整个 `/api/auth/*` | 探针换成 `/api/whoami`（在该面之外、令牌可达），**证明的事情不变**：bob 被拒的 DELETE 没有真的吊销 |
-| `api-contract-coverage.test.ts` | `src/routes/*.ts` 里的 `app.<verb>('literal')` 即路由 | 我在 `registry.ts` 的 JSDoc 里写了一个 `app.get('/x', handler)` 示例 | **改我的注释**——该扫描器的 `stripLineComments` 不剥块注释，是既有盲点；不动共享测试，并在 `registry.ts` 里写明这条约束 |
+| 测试                             | 锁的旧语义                                            | 为什么变                                                             | 处置                                                                                                                                        |
+| -------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth-session.test.ts` ×2        | PAT 权限**恰好等于** scopes                           | D3 读恒开 ⇒ 多 11 个读点                                             | 改断言「非读点恰好等于所勾档位」，读点单独确认                                                                                              |
+| `rfc190-overview-route.test.ts`  | PAT scope 能**剥掉资源读** ⇒ 该 key 为 null           | 同上，令牌不可能缺读点                                               | null 分支改用 `exactActor`（精确权限集、绕过角色基线）直接构造——**该分支在 `buildOverview` 里仍存在，删测试等于静默退掉真实代码路径的覆盖** |
+| `auth-self-service-idor.test.ts` | PAT 可调 `GET /api/auth/me` 证明「令牌仍有效」        | D6 关闭整个 `/api/auth/*`                                            | 探针换成 `/api/whoami`（在该面之外、令牌可达），**证明的事情不变**：bob 被拒的 DELETE 没有真的吊销                                          |
+| `api-contract-coverage.test.ts`  | `src/routes/*.ts` 里的 `app.<verb>('literal')` 即路由 | 我在 `registry.ts` 的 JSDoc 里写了一个 `app.get('/x', handler)` 示例 | **改我的注释**——该扫描器的 `stripLineComments` 不剥块注释，是既有盲点；不动共享测试，并在 `registry.ts` 里写明这条约束                      |
 
 > **迁移中间态（T4 落地前的已知状态，不是缺陷）**：本批新增的点里有一部分**暂时没有路由引用**
 > —— `tasks:read`、`workgroups:*`、`scheduled-tasks:*`、`memory:create|update|delete`、

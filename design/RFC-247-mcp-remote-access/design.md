@@ -371,6 +371,26 @@ PAT 分支恒走收窄路径。
 > `skills:update` 档」**。因此一枚只勾了任务执行的令牌可以借 fusion 改写自己拥有的 skill，
 > 绕过矩阵上没勾的 skill 修改档。用双点 AND 收口。
 >
+> ### 反例：启动端点**不是**跨域族，别机械套 `${resource}:execute`
+>
+> `POST /api/{tasks,agents/:id,workgroups/:id}/tasks` 三条看起来最像跨域 AND 的路由，
+> **恰恰不是**。RFC-165 F15/N1 明文决定：「launching is a TASK operation on every subject
+> face — 三条启动端点统一 gate 在 `tasks:launch`，且 agent 启动路径**豁免** agent 方法门」
+> （`server.ts:180-186` 注释原文），并有具名回归 A9 锁着。
+>
+> T3 迁移时机械地写成 `agents:execute AND tasks:execute` **当场把 A9 打红**——这是与
+> `PUT /api/scheduled-tasks/:id`（payload-conditional）**同一类错误的第二次实例**：
+> **机械迁移会静默反转前序 RFC 的深思决定**，而 D15 明确要求「不改变 reach」。
+>
+> 连带后果：`agents:execute` 与 `workgroups:execute` 失去唯一候选路由 ⇒ 成为**死点** ⇒
+> 按 §3.2 的规则**根本不该存在**，已从目录删除（60 → 58 点，user 基线 48 → 46）。
+> `rfc247-cross-domain-escalation.test.ts` 里加了一条**统一性反例**断言这两条启动路由
+> 「permissions 恰好等于 `['tasks:execute']`」，让下一次迁移不能再犯。
+>
+> **可迁移的判据**：跨域 AND 的成立条件是「路由产生了它所在域**之外**的副作用」，
+> 不是「路由挂在某个资源的 URL 下」。启动端点的副作用**就在** tasks 域内——subject 只是
+> 被启动的对象，不是被改动的资源。
+
 > ### 跨域副作用族（本 RFC 迄今找到 5 处）
 >
 > **「A 域的路由产生 B 域的副作用，而门只看 A 域」**——这是本 RFC 最容易漏、也最容易被

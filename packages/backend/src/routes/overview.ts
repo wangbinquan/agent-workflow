@@ -6,10 +6,21 @@ import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { buildOverview } from '@/services/overview'
 
 export function mountOverviewRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/overview', async (c) => {
-    return c.json(await buildOverview(deps.db, actorOf(c)))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/overview',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Home page aggregate counters',
+    },
+    async (c) => {
+      return c.json(await buildOverview(deps.db, actorOf(c)))
+    },
+  )
 }

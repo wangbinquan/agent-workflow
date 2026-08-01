@@ -21,6 +21,7 @@ import { z } from 'zod'
 import type { Hono } from 'hono'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import {
   createAgent,
   deleteAgent,
@@ -87,140 +88,220 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     return agent
   }
 
-  app.get('/api/agents', async (c) => {
-    // Hide framework built-ins (RFC-101 aw-skill-merger): infrastructure, never
-    // a user-managed list row. Discriminator = reserved name AND __system__
-    // owner (see systemResources.ts) — neither half alone is safe.
-    const list = excludeBuiltinAgents(await listAgents(deps.db))
-    return c.json(await filterVisibleRows(deps.db, actorOf(c), 'agent', list))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/agents',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 'List agents visible to the caller',
+    },
+    async (c) => {
+      // Hide framework built-ins (RFC-101 aw-skill-merger): infrastructure, never
+      // a user-managed list row. Discriminator = reserved name AND __system__
+      // owner (see systemResources.ts) — neither half alone is safe.
+      const list = excludeBuiltinAgents(await listAgents(deps.db))
+      return c.json(await filterVisibleRows(deps.db, actorOf(c), 'agent', list))
+    },
+  )
 
-  app.post('/api/agents/import-resolve', async (c) => {
-    const parsed = ResolveAgentImportRefsRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('agent-import-invalid', 'invalid agent import references', {
-        issues: parsed.error.issues,
-      })
-    }
-    return c.json(await resolveAgentImportRefs(deps.db, actorOf(c), parsed.data))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/agents/import-resolve',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 'Resolve an agent import (pure, no side effect)',
+    },
+    async (c) => {
+      const parsed = ResolveAgentImportRefsRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('agent-import-invalid', 'invalid agent import references', {
+          issues: parsed.error.issues,
+        })
+      }
+      return c.json(await resolveAgentImportRefs(deps.db, actorOf(c), parsed.data))
+    },
+  )
 
   // Stable semantic seam for the hidden Settings resource. PR4 seeds and
   // repairs this exact id; never fall back to its mutable display name.
-  app.get('/api/agents/builtins/skill-merger', async (c) => {
-    const agent = await getAgentById(deps.db, SKILL_MERGER_AGENT_ID)
-    if (
-      agent === null ||
-      agent.id !== SKILL_MERGER_AGENT_ID ||
-      agent.builtin !== true ||
-      agent.ownerUserId !== SYSTEM_USER_ID ||
-      !(await canViewResource(deps.db, actorOf(c), 'agent', agent))
-    ) {
-      throw new NotFoundError('agent-not-found', 'agent not found')
-    }
-    return c.json(agent)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/agents/builtins/skill-merger',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 'Built-in skill-merger agent definition',
+    },
+    async (c) => {
+      const agent = await getAgentById(deps.db, SKILL_MERGER_AGENT_ID)
+      if (
+        agent === null ||
+        agent.id !== SKILL_MERGER_AGENT_ID ||
+        agent.builtin !== true ||
+        agent.ownerUserId !== SYSTEM_USER_ID ||
+        !(await canViewResource(deps.db, actorOf(c), 'agent', agent))
+      ) {
+        throw new NotFoundError('agent-not-found', 'agent not found')
+      }
+      return c.json(agent)
+    },
+  )
 
-  app.get('/api/agents/:id', async (c) => {
-    const agent = await loadVisibleAgent(actorOf(c), c.req.param('id'))
-    return c.json(agent)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/agents/:id',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one agent',
+    },
+    async (c) => {
+      const agent = await loadVisibleAgent(actorOf(c), c.req.param('id'))
+      return c.json(agent)
+    },
+  )
 
   // RFC-228: actor-safe labels + integrity for the edit form. Existence is
   // computed from the unfiltered inventory; visibility is applied only while
   // projecting names, so a private-but-existing ref is never misreported as
   // deleted and its name is never leaked.
-  app.get('/api/agents/:id/resource-status', async (c) => {
-    const actor = actorOf(c)
-    const agent = await loadVisibleAgent(actor, c.req.param('id'))
-    return c.json(await getAgentResourceStatus(deps.db, actor, agent))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/agents/:id/resource-status',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 'Referenced-resource status for an agent',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const agent = await loadVisibleAgent(actor, c.req.param('id'))
+      return c.json(await getAgentResourceStatus(deps.db, actor, agent))
+    },
+  )
 
-  app.post('/api/agents', async (c) => {
-    const body = await safeJson(c.req.raw)
-    const parsed = CreateAgentSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('agent-invalid', 'invalid agent payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/agents',
+      permissions: ['agents:create'],
+      tokenAccess: 'allow',
+      summary: 'Create an agent',
+    },
+    async (c) => {
+      const body = await safeJson(c.req.raw)
+      const parsed = CreateAgentSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('agent-invalid', 'invalid agent payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const defaultRuntime = loadConfig(deps.configPath).defaultRuntime
+      // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
+      // enforced INSIDE createAgent, bound to the same single resolution that
+      // produces the persisted ids (no check-then-resolve TOCTOU). On create every
+      // reference is new.
+      const created = await createAgent(deps.db, parsed.data, {
+        ownerUserId: actor.user.id,
+        actor,
+        executionPolicy: { defaultRuntime },
       })
-    }
-    const actor = actorOf(c)
-    const defaultRuntime = loadConfig(deps.configPath).defaultRuntime
-    // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
-    // enforced INSIDE createAgent, bound to the same single resolution that
-    // produces the persisted ids (no check-then-resolve TOCTOU). On create every
-    // reference is new.
-    const created = await createAgent(deps.db, parsed.data, {
-      ownerUserId: actor.user.id,
-      actor,
-      executionPolicy: { defaultRuntime },
-    })
-    return c.json(created, 201)
-  })
+      return c.json(created, 201)
+    },
+  )
 
-  app.put('/api/agents/:id', async (c) => {
-    const id = c.req.param('id')
-    const body = await safeJson(c.req.raw)
-    const parsed = UpdateAgentRequestSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('agent-invalid', 'invalid agent patch', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const existing = await loadVisibleAgent(actor, id)
-    // RFC-117: built-in framework agents (aw-skill-merger) stay read-only EXCEPT a
-    // runtime-ONLY patch — an admin may point fusion's merger at a runtime profile
-    // (the "select a runtime" parity user agents have). Any other field, or a mixed
-    // patch, on a built-in is still rejected (RFC-104). requireResourceOwner below
-    // still gates it (built-ins are SYSTEM-owned → admin only).
-    if (!(isBuiltinRow(existing) && isRuntimeOnlyAgentPatch(body))) {
-      assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
-    }
-    await requireResourceOwner(deps.db, actor, 'agent', existing)
-    // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
-    // enforced INSIDE updateAgent, bound to the same single resolution that
-    // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
-    // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
-    // not mis-flagged as new.
-    const { expectedUpdatedAt, expectedAclRevision, ...patch } = parsed.data
-    const updated = await updateAgent(
-      deps.db,
-      id,
-      patch,
-      actor,
-      {
-        expectedUpdatedAt,
-        expectedAclRevision,
-      },
-      {
-        executionPolicy: {
-          defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/agents/:id',
+      permissions: ['agents:update'],
+      tokenAccess: 'allow',
+      summary: 'Replace an agent',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const body = await safeJson(c.req.raw)
+      const parsed = UpdateAgentRequestSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('agent-invalid', 'invalid agent patch', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const existing = await loadVisibleAgent(actor, id)
+      // RFC-117: built-in framework agents (aw-skill-merger) stay read-only EXCEPT a
+      // runtime-ONLY patch — an admin may point fusion's merger at a runtime profile
+      // (the "select a runtime" parity user agents have). Any other field, or a mixed
+      // patch, on a built-in is still rejected (RFC-104). requireResourceOwner below
+      // still gates it (built-ins are SYSTEM-owned → admin only).
+      if (!(isBuiltinRow(existing) && isRuntimeOnlyAgentPatch(body))) {
+        assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
+      }
+      await requireResourceOwner(deps.db, actor, 'agent', existing)
+      // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
+      // enforced INSIDE updateAgent, bound to the same single resolution that
+      // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
+      // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
+      // not mis-flagged as new.
+      const { expectedUpdatedAt, expectedAclRevision, ...patch } = parsed.data
+      const updated = await updateAgent(
+        deps.db,
+        id,
+        patch,
+        actor,
+        {
+          expectedUpdatedAt,
+          expectedAclRevision,
         },
-      },
-    )
-    return c.json(updated)
-  })
+        {
+          executionPolicy: {
+            defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
+          },
+        },
+      )
+      return c.json(updated)
+    },
+  )
 
-  app.delete('/api/agents/:id', async (c) => {
-    const id = c.req.param('id')
-    const actor = actorOf(c)
-    const existing = await loadVisibleAgent(actor, id)
-    assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
-    await requireResourceOwner(deps.db, actor, 'agent', existing)
-    const deleteBody = await readDeleteBody(c)
-    // Preserve RFC-222's confirmation precedence: a missing/wrong confirm is
-    // reported before the independent revision-fence validation.
-    assertDeleteConfirm(deleteBody, existing.name, 'agent')
-    const parsed = DeleteAgentSchema.safeParse(deleteBody)
-    if (!parsed.success) {
-      throw new ValidationError('agent-delete-invalid', 'invalid agent delete payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    await deleteAgent(deps.db, id, actor, parsed.data)
-    return c.body(null, 204)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/agents/:id',
+      permissions: ['agents:delete'],
+      tokenAccess: 'allow',
+      summary: 'Delete an agent',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const actor = actorOf(c)
+      const existing = await loadVisibleAgent(actor, id)
+      assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
+      await requireResourceOwner(deps.db, actor, 'agent', existing)
+      const deleteBody = await readDeleteBody(c)
+      // Preserve RFC-222's confirmation precedence: a missing/wrong confirm is
+      // reported before the independent revision-fence validation.
+      assertDeleteConfirm(deleteBody, existing.name, 'agent')
+      const parsed = DeleteAgentSchema.safeParse(deleteBody)
+      if (!parsed.success) {
+        throw new ValidationError('agent-delete-invalid', 'invalid agent delete payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      await deleteAgent(deps.db, id, actor, parsed.data)
+      return c.body(null, 204)
+    },
+  )
 
   // RFC-165 §4 — launch a SINGLE-AGENT task (POST /api/agents/:id/tasks).
   // Service-layer entry (the builtin __agent_host__ workflow would 403
@@ -228,119 +309,156 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   // is a LAUNCH, gated by tasks:launch in server.ts (F15) — deliberately
   // exempt from the agents:write method gate. The schema only ever declared
   // modern space fields, so no raw-key gate is needed (workgroup precedent).
-  app.post('/api/agents/:id/tasks', async (c) => {
-    const actor = actorOf(c)
-    const existing = await loadVisibleAgent(actor, c.req.param('id'))
-    // RFC-218: path<ext> input ports bind files via multipart — same parser
-    // family as POST /api/tasks (services/launchMultipart). JSON stays the
-    // only shape for text-port / zero-port launches.
-    const ct = c.req.header('content-type') ?? ''
-    let body: unknown
-    let uploads: { parts: MultipartFilePart[]; limits: UploadLimits } | undefined
-    if (ct.toLowerCase().startsWith('multipart/form-data')) {
-      const parsedForm = await parseMultipartLaunch(c.req.raw)
-      body = parsedForm.payloadJson
-      uploads = { parts: parsedForm.parts, limits: resolveUploadLimits(deps.configPath) }
-    } else {
-      try {
-        body = await c.req.raw.json()
-      } catch {
-        body = {}
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/agents/:id/tasks',
+      // RFC-165 F15/N1: launching is a TASK operation on every subject face —
+      // all three launch endpoints gate uniformly on the task execute point,
+      // and the agent launch path is explicitly EXEMPT from the agent method
+      // gate. Adding `agents:execute` here would silently reverse that
+      // decision (and break its named regression, A9). RFC-247 D15 is "do not
+      // change reach"; a mechanical `${resource}:execute` would have done
+      // exactly that.
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Launch a task from an agent',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const existing = await loadVisibleAgent(actor, c.req.param('id'))
+      // RFC-218: path<ext> input ports bind files via multipart — same parser
+      // family as POST /api/tasks (services/launchMultipart). JSON stays the
+      // only shape for text-port / zero-port launches.
+      const ct = c.req.header('content-type') ?? ''
+      let body: unknown
+      let uploads: { parts: MultipartFilePart[]; limits: UploadLimits } | undefined
+      if (ct.toLowerCase().startsWith('multipart/form-data')) {
+        const parsedForm = await parseMultipartLaunch(c.req.raw)
+        body = parsedForm.payloadJson
+        uploads = { parts: parsedForm.parts, limits: resolveUploadLimits(deps.configPath) }
+      } else {
+        try {
+          body = await c.req.raw.json()
+        } catch {
+          body = {}
+        }
       }
-    }
-    // 实现门 P2 修复（F1 同型）：schema 非 strict，{scratch:true, repoPath}
-    // 会被静默剥键降级成 scratch 启动——退役键必须在 parse 前整体拒收。
-    const retired = rejectRetiredStartTaskKeys(body)
-    if (retired !== null) {
-      throw new ValidationError(
-        'start-task-path-retired',
-        `field '${retired}' was retired by RFC-165 — launch with repoUrl/repos (file:// for local repos) or scratch`,
-      )
-    }
-    const parsed = StartAgentTaskSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('agent-launch-invalid', 'invalid agent launch payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const task = await startExecution(
-      deps.db,
-      actor,
-      {
-        kind: 'agent',
-        refId: existing.id,
-        invoker: { type: 'user' },
-        payload: parsed.data,
-        ...(uploads !== undefined ? { uploads } : {}),
-      },
-      buildStartTaskDeps(
+      // 实现门 P2 修复（F1 同型）：schema 非 strict，{scratch:true, repoPath}
+      // 会被静默剥键降级成 scratch 启动——退役键必须在 parse 前整体拒收。
+      const retired = rejectRetiredStartTaskKeys(body)
+      if (retired !== null) {
+        throw new ValidationError(
+          'start-task-path-retired',
+          `field '${retired}' was retired by RFC-165 — launch with repoUrl/repos (file:// for local repos) or scratch`,
+        )
+      }
+      const parsed = StartAgentTaskSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('agent-launch-invalid', 'invalid agent launch payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+      const task = await startExecution(
         deps.db,
-        deps.configPath,
-        actor.user.id,
-        opencodeCmd,
-        deps.secretBox,
-        deps.containmentCoordinator,
-      ),
-    )
-    return c.json(task, 201)
-  })
+        actor,
+        {
+          kind: 'agent',
+          refId: existing.id,
+          invoker: { type: 'user' },
+          payload: parsed.data,
+          ...(uploads !== undefined ? { uploads } : {}),
+        },
+        buildStartTaskDeps(
+          deps.db,
+          deps.configPath,
+          actor.user.id,
+          opencodeCmd,
+          deps.secretBox,
+          deps.containmentCoordinator,
+        ),
+      )
+      return c.json(task, 201)
+    },
+  )
 
-  app.post('/api/agents/:id/rename', async (c) => {
-    const id = c.req.param('id')
-    const body = await safeJson(c.req.raw)
-    const parsed = RenameAgentRequestSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('agent-rename-invalid', 'invalid rename payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/agents/:id/rename',
+      permissions: ['agents:update'],
+      tokenAccess: 'allow',
+      summary: 'Rename an agent',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const body = await safeJson(c.req.raw)
+      const parsed = RenameAgentRequestSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('agent-rename-invalid', 'invalid rename payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const existing = await loadVisibleAgent(actor, id)
+      assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
+      await requireResourceOwner(deps.db, actor, 'agent', existing)
+      const { expectedUpdatedAt, expectedAclRevision, ...rename } = parsed.data
+      const renamed = await renameAgent(deps.db, id, rename, {
+        actor,
+        expectedUpdatedAt,
+        expectedAclRevision,
       })
-    }
-    const actor = actorOf(c)
-    const existing = await loadVisibleAgent(actor, id)
-    assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
-    await requireResourceOwner(deps.db, actor, 'agent', existing)
-    const { expectedUpdatedAt, expectedAclRevision, ...rename } = parsed.data
-    const renamed = await renameAgent(deps.db, id, rename, {
-      actor,
-      expectedUpdatedAt,
-      expectedAclRevision,
-    })
-    return c.json(renamed)
-  })
+      return c.json(renamed)
+    },
+  )
 
   // RFC-022: closure read-only endpoint. Returns the BFS-ordered agent list
   // for the named agent's dependsOn closure (root first). Missing closure
   // members surface as `{ name, masked, missing }` placeholders so the UI can
   // distinguish ACL-hidden rows from deleted references.
-  app.get('/api/agents/:id/closure', async (c) => {
-    const actor = actorOf(c)
-    const root = await loadVisibleAgent(actor, c.req.param('id'))
-    const closure = await resolveDependsClosure(deps.db, root, { allowMissing: true })
-    // `allowMissing: true` never produces ok:false (cycles only arise when a
-    // name appears on the active path — which agent.ts save guard prevents),
-    // but defensively handle the type anyway.
-    if (closure.ok === false) {
-      return c.json({
-        ok: false,
-        code: 'agent-dependency-cycle',
-        cyclePath: closure.cyclePath,
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/agents/:id/closure',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 'Resolved dependency closure of an agent',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const root = await loadVisibleAgent(actor, c.req.param('id'))
+      const closure = await resolveDependsClosure(deps.db, root, { allowMissing: true })
+      // `allowMissing: true` never produces ok:false (cycles only arise when a
+      // name appears on the active path — which agent.ts save guard prevents),
+      // but defensively handle the type anyway.
+      if (closure.ok === false) {
+        return c.json({
+          ok: false,
+          code: 'agent-dependency-cycle',
+          cyclePath: closure.cyclePath,
+        })
+      }
+      // RFC-099 / RFC-223 (PR-1, Codex impl-gate P2-1 + P2-2): project stored id
+      // refs to display NAMES (skills/mcp/plugins/dependsOn — never raw ULIDs in the
+      // UI), and mask closure members the viewer cannot see. A masked member no
+      // longer discloses its NAME: its display identity collapses to its opaque id
+      // (and other agents' dependsOn projections keep that id opaque too), so a
+      // private dependency's name never leaks (D1 — mirrors the "无权限占位" rule).
+      const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
+      const visibleAgentIds = new Set(visible.map((a) => a.id))
+      const names = await loadClosureRefNames(deps.db, actor, closure.agents, visibleAgentIds)
+      const masked = toAgentClosureSummaries(closure.agents, {
+        names,
+        visibleAgentIds,
       })
-    }
-    // RFC-099 / RFC-223 (PR-1, Codex impl-gate P2-1 + P2-2): project stored id
-    // refs to display NAMES (skills/mcp/plugins/dependsOn — never raw ULIDs in the
-    // UI), and mask closure members the viewer cannot see. A masked member no
-    // longer discloses its NAME: its display identity collapses to its opaque id
-    // (and other agents' dependsOn projections keep that id opaque too), so a
-    // private dependency's name never leaks (D1 — mirrors the "无权限占位" rule).
-    const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
-    const visibleAgentIds = new Set(visible.map((a) => a.id))
-    const names = await loadClosureRefNames(deps.db, actor, closure.agents, visibleAgentIds)
-    const masked = toAgentClosureSummaries(closure.agents, {
-      names,
-      visibleAgentIds,
-    })
-    return c.json({ ok: true, agents: masked })
-  })
+      return c.json({ ok: true, agents: masked })
+    },
+  )
 
   // RFC-022: preview endpoint used by AgentForm while editing. Returns
   // HTTP 200 with `ok: false` on validation errors (instead of a 4xx)
@@ -353,82 +471,92 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // RFC-223: the edit form's dependsOn is canonical-id only.
     dependsOn: z.array(ResourceRefSchema).max(64).default([]),
   })
-  app.post('/api/agents/closure-preview', async (c) => {
-    const actor = actorOf(c)
-    const body = await safeJson(c.req.raw)
-    const parsed = ClosurePreviewBodySchema.safeParse(body)
-    if (!parsed.success) {
-      return c.json({
-        ok: false,
-        code: 'agent-closure-preview-invalid',
-        details: { issues: parsed.error.issues },
-      })
-    }
-    // The closure guard is keyed by the existing agent's immutable id. A new
-    // draft has no id and stays synthetic; mutable name is display-only.
-    const resolved = await resolveRefsUsableById(deps.db, actor, 'agent', parsed.data.dependsOn)
-    if (resolved.missing.length > 0) {
-      return c.json({
-        ok: false,
-        code: 'acl-missing-refs',
-        details: { missing: resolved.missing },
-      })
-    }
-    const dependsOn = resolved.ids
-    const existing =
-      parsed.data.id === undefined ? null : await loadVisibleAgent(actor, parsed.data.id)
-    const selfId = existing?.id ?? ''
-    try {
-      await validateDependsOn(deps.db, selfId, dependsOn)
-    } catch (err) {
-      if (err instanceof DomainError) {
-        return c.json({ ok: false, code: err.code, details: err.details })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/agents/closure-preview',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 'Preview a closure (pure, no side effect)',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const body = await safeJson(c.req.raw)
+      const parsed = ClosurePreviewBodySchema.safeParse(body)
+      if (!parsed.success) {
+        return c.json({
+          ok: false,
+          code: 'agent-closure-preview-invalid',
+          details: { issues: parsed.error.issues },
+        })
       }
-      throw err
-    }
-    // Build a synthetic root agent for closure expansion (self may not exist in
-    // DB yet — new-agent flow). validateDependsOn already vetted ids exist + no
-    // cycle, so allowMissing:false is safe here.
-    const syntheticRoot: Agent = existing
-      ? { ...existing, dependsOn }
-      : ({
-          id: selfId,
-          name: parsed.data.name,
-          description: '',
-          outputs: [],
-          inputs: [], // RFC-166
-          syncOutputsOnIterate: true,
-          permission: {},
-          skills: [],
-          dependsOn,
-          mcp: [],
-          plugins: [],
-          frontmatterExtra: {},
-          bodyMd: '',
-          schemaVersion: 1,
-          createdAt: 0,
-          updatedAt: 0,
-        } satisfies Agent)
-    const closure = await resolveDependsClosure(deps.db, syntheticRoot, { allowMissing: false })
-    if (closure.ok === false) {
-      // Shouldn't happen — validateDependsOn already screened cycles — but
-      // surface defensively so a race doesn't 500.
+      // The closure guard is keyed by the existing agent's immutable id. A new
+      // draft has no id and stays synthetic; mutable name is display-only.
+      const resolved = await resolveRefsUsableById(deps.db, actor, 'agent', parsed.data.dependsOn)
+      if (resolved.missing.length > 0) {
+        return c.json({
+          ok: false,
+          code: 'acl-missing-refs',
+          details: { missing: resolved.missing },
+        })
+      }
+      const dependsOn = resolved.ids
+      const existing =
+        parsed.data.id === undefined ? null : await loadVisibleAgent(actor, parsed.data.id)
+      const selfId = existing?.id ?? ''
+      try {
+        await validateDependsOn(deps.db, selfId, dependsOn)
+      } catch (err) {
+        if (err instanceof DomainError) {
+          return c.json({ ok: false, code: err.code, details: err.details })
+        }
+        throw err
+      }
+      // Build a synthetic root agent for closure expansion (self may not exist in
+      // DB yet — new-agent flow). validateDependsOn already vetted ids exist + no
+      // cycle, so allowMissing:false is safe here.
+      const syntheticRoot: Agent = existing
+        ? { ...existing, dependsOn }
+        : ({
+            id: selfId,
+            name: parsed.data.name,
+            description: '',
+            outputs: [],
+            inputs: [], // RFC-166
+            syncOutputsOnIterate: true,
+            permission: {},
+            skills: [],
+            dependsOn,
+            mcp: [],
+            plugins: [],
+            frontmatterExtra: {},
+            bodyMd: '',
+            schemaVersion: 1,
+            createdAt: 0,
+            updatedAt: 0,
+          } satisfies Agent)
+      const closure = await resolveDependsClosure(deps.db, syntheticRoot, { allowMissing: false })
+      if (closure.ok === false) {
+        // Shouldn't happen — validateDependsOn already screened cycles — but
+        // surface defensively so a race doesn't 500.
+        return c.json({
+          ok: false,
+          code: 'agent-dependency-cycle',
+          details: { cyclePath: closure.cyclePath },
+        })
+      }
+      const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
+      const visibleAgentIds = new Set(visible.map((a) => a.id))
       return c.json({
-        ok: false,
-        code: 'agent-dependency-cycle',
-        details: { cyclePath: closure.cyclePath },
+        ok: true,
+        agents: toAgentClosureSummaries(closure.agents, {
+          names: await loadClosureRefNames(deps.db, actor, closure.agents, visibleAgentIds),
+          visibleAgentIds,
+        }),
       })
-    }
-    const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
-    const visibleAgentIds = new Set(visible.map((a) => a.id))
-    return c.json({
-      ok: true,
-      agents: toAgentClosureSummaries(closure.agents, {
-        names: await loadClosureRefNames(deps.db, actor, closure.agents, visibleAgentIds),
-        visibleAgentIds,
-      }),
-    })
-  })
+    },
+  )
 
   // RFC-099 / RFC-223 — GET/PUT /api/agents/:id/acl
   mountAclEndpoints(app, deps, {
