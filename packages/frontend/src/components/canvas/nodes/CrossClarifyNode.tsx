@@ -15,7 +15,7 @@
 //   - abandoned       → red               (CR-1 invariant flipped status='abandoned')
 //   - failed          → red               (envelope malformed)
 //
-// The kind pill defaults to '⚡ cross-clarify'.
+// The shared card shell renders a ⚡ icon tile plus the localized kind label.
 
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { NODE_GLYPHS } from '../nodePalette'
@@ -27,8 +27,7 @@ import {
 } from '@agent-workflow/shared'
 import { QuestionBadge } from './QuestionBadge'
 import type { CanvasNodeData } from './types'
-import { NodeValidationBadge } from './NodeValidationBadge'
-import { NodeConfigurationSummary } from './NodeConfigurationSummary'
+import { CanvasNodeCard } from './CanvasNodeCard'
 
 export type CrossClarifyStatus = 'pending' | 'awaiting_human' | 'answered' | 'abandoned' | 'failed'
 
@@ -45,40 +44,38 @@ interface Props extends NodeProps {
 export function CrossClarifyNode({ data, selected }: Props) {
   const { t } = useTranslation()
   const status: CrossClarifyStatus = data.statusOverlay ?? mapFallbackStatus(data.status)
-  const labelText =
-    data.kindLabel ?? `${NODE_GLYPHS['clarify-cross-agent']} ${t('crossClarifyNode.label')}`
+  const icon = NODE_GLYPHS['clarify-cross-agent']
+  const rawLabel = data.kindLabel ?? t('crossClarifyNode.label')
+  const labelText = rawLabel.startsWith(icon) ? rawLabel.slice(icon.length).trimStart() : rawLabel
   const toQuestionerLabel = t('crossClarify.canvas.handleLabel.toQuestioner')
   const toDesignerLabel = t('crossClarify.canvas.handleLabel.toDesigner')
   return (
-    <div
-      className={
-        'canvas-node canvas-node--clarify-cross-agent' +
-        (selected ? ' canvas-node--selected' : '') +
-        ` canvas-node--clarify-cross-agent-${status}`
+    <CanvasNodeCard
+      data={data}
+      selected={selected}
+      className={`canvas-node--clarify-cross-agent canvas-node--clarify-cross-agent-${status}`}
+      icon={icon}
+      kindLabel={labelText}
+      title={data.title || data.nodeId}
+      titleTooltip={data.title || data.nodeId}
+      status={status}
+      dataAttributes={{
+        ...(data.clarifyNav === undefined ? {} : { 'data-clarify-nav': data.clarifyNav }),
+        'data-testid': `canvas-node-cross-clarify-${data.nodeId}`,
+      }}
+      overlays={
+        <>
+          <QuestionBadge data={data} />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={CROSS_CLARIFY_INPUT_PORT_NAME}
+            className="canvas-node__handle canvas-node__handle--cross-clarify-input"
+            aria-label="cross-clarify-input"
+          />
+        </>
       }
-      data-status={status}
-      data-clarify-nav={data.clarifyNav}
-      data-surface={data.surface}
-      data-testid={`canvas-node-cross-clarify-${data.nodeId}`}
     >
-      <QuestionBadge data={data} />
-      <NodeValidationBadge data={data} />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id={CROSS_CLARIFY_INPUT_PORT_NAME}
-        className="canvas-node__handle canvas-node__handle--cross-clarify-input"
-        aria-label="cross-clarify-input"
-      />
-      <div className="canvas-node__header">
-        <span className="canvas-node__kind">{labelText}</span>
-        <span className="canvas-node__title">{data.title || data.nodeId}</span>
-      </div>
-      {data.surface === 'editor' ? (
-        <NodeConfigurationSummary data={data} />
-      ) : (
-        <div className="canvas-node__id">{data.nodeId}</div>
-      )}
       {data.description !== undefined && data.description.length > 0 && (
         <div className="canvas-node__description muted">{data.description}</div>
       )}
@@ -129,7 +126,7 @@ export function CrossClarifyNode({ data, selected }: Props) {
         aria-label="cross-clarify-to-designer"
         style={{ top: '70%' }}
       />
-    </div>
+    </CanvasNodeCard>
   )
 }
 

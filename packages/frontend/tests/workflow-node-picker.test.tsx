@@ -117,12 +117,25 @@ describe('WorkflowNodePicker', () => {
     const { getAllByTestId } = renderPicker()
     const agentRow = getAllByTestId('workflow-node-picker-item-agent-agent-a')[0]!
     const reviewRow = getAllByTestId('workflow-node-picker-item-kind-review')[0]!
+    const callWorkflowRow = getAllByTestId('workflow-node-picker-item-kind-call-workflow')[0]!
+    const callWorkgroupRow = getAllByTestId('workflow-node-picker-item-kind-call-workgroup')[0]!
     expect(agentRow.dataset.category).toBe('agents')
     expect(agentRow.querySelector('.workflow-node-picker__type-chip')?.textContent).toMatch(/Agent/)
     expect(reviewRow.dataset.category).toBe('human')
     expect(reviewRow.querySelector('.workflow-node-picker__type-chip')?.textContent).toMatch(
       /Human|人工/,
     )
+    // The two Calls rows share a category but keep their resource kind in the
+    // DOM so CSS can mirror the workflow/workgroup canvas-card accents.
+    expect(callWorkflowRow.dataset.category).toBe('calls')
+    expect(callWorkflowRow.dataset.nodeKind).toBe('call-workflow')
+    expect(callWorkgroupRow.dataset.category).toBe('calls')
+    expect(callWorkgroupRow.dataset.nodeKind).toBe('call-workgroup')
+    expect(
+      callWorkflowRow
+        .querySelector('.workflow-node-picker__type-chip')
+        ?.getAttribute('data-node-kind'),
+    ).toBe('call-workflow')
   })
 
   test('search covers labels, kinds and descriptions', () => {

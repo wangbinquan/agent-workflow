@@ -1,14 +1,10 @@
-// Regression test for the 2026-05-24 follow-up fix: align the canvas kind
-// chip across every node renderer.
+// Regression test for canvas node identity: every card-shaped renderer keeps
+// its icon in the shared tile and its kind label localized beside it.
 //
-// Before: AgentNode rendered just "agent" with no leading icon — every other
-// renderer had one (↳ input, ⤴ output, ⎈ git, ⟳ loop, ⫶ fanout, ⚖ review,
-// ⚡ clarify). And ReviewNode / ClarifyNode / CrossClarifyNode kept the
-// chip text hardcoded in English ("review", "⚡ clarify", "⚡ cross-clarify"),
-// so a Chinese-locale workflow editor saw English on the human-category
-// nodes. This file pins:
-//   - AgentNode now leads with the ⚙ glyph + a localized label
-//   - The human-category chips resolve through t()
+// Earlier renderers mixed glyphs into the label text and some human-category
+// labels were hardcoded in English. This file pins:
+//   - AgentNode keeps the ⚙ glyph in the shared icon slot
+//   - Human-category labels resolve through t()
 //   - Source files no longer carry the old English literals
 
 import { afterEach, describe, expect, test } from 'vitest'
@@ -102,22 +98,22 @@ function crossClarifyData(): CanvasNodeData {
   }
 }
 
-describe('AgentNode chip now leads with an icon and a localized label', () => {
-  test('en-US: chip shows ⚙ + "agent"', () => {
+describe('AgentNode card separates its icon tile from the localized kind label', () => {
+  test('en-US: icon shows ⚙ and kind shows "agent"', () => {
     setLanguage('en-US')
     const { container } = mountAgent(agentData())
+    const icon = container.querySelector('.canvas-node__icon')
     const chip = container.querySelector('.canvas-node__kind')
-    // The agent chip used to be `agent` with no leading glyph — assert both
-    // the new ⚙ icon AND the localized text are present.
-    expect(chip?.textContent).toContain('⚙')
+    expect(icon?.textContent).toContain('⚙')
     expect(chip?.textContent).toContain('agent')
   })
-  test('zh-CN: chip shows ⚙ + 代理', () => {
+  test('zh-CN: icon shows ⚙ and kind shows 代理', () => {
     setLanguage('zh-CN')
     try {
       const { container } = mountAgent(agentData())
+      const icon = container.querySelector('.canvas-node__icon')
       const chip = container.querySelector('.canvas-node__kind')
-      expect(chip?.textContent).toContain('⚙')
+      expect(icon?.textContent).toContain('⚙')
       expect(chip?.textContent).toContain('代理')
     } finally {
       setLanguage('en-US')
@@ -129,15 +125,17 @@ describe('Human-category chips resolve through i18n', () => {
   test('ReviewNode chip: ⚖ + localized label', () => {
     setLanguage('en-US')
     const { container } = mountReview(reviewData())
+    const icon = container.querySelector('.canvas-node__icon')
     const chip = container.querySelector('.canvas-node__kind')
-    expect(chip?.textContent).toContain('⚖')
+    expect(icon?.textContent).toContain('⚖')
     expect(chip?.textContent).toContain('review')
 
     setLanguage('zh-CN')
     try {
       const { container: zhContainer } = mountReview(reviewData())
+      const zhIcon = zhContainer.querySelector('.canvas-node__icon')
       const zhChip = zhContainer.querySelector('.canvas-node__kind')
-      expect(zhChip?.textContent).toContain('⚖')
+      expect(zhIcon?.textContent).toContain('⚖')
       expect(zhChip?.textContent).toContain('评审')
     } finally {
       setLanguage('en-US')
@@ -148,8 +146,9 @@ describe('Human-category chips resolve through i18n', () => {
     setLanguage('zh-CN')
     try {
       const { container } = mountClarify(clarifyData())
+      const icon = container.querySelector('.canvas-node__icon')
       const chip = container.querySelector('.canvas-node__kind')
-      expect(chip?.textContent).toContain('⚡')
+      expect(icon?.textContent).toContain('⚡')
       expect(chip?.textContent).toContain('反问')
       // Must NOT collapse back to the English fallback literal.
       expect(chip?.textContent ?? '').not.toContain('clarify')
@@ -178,8 +177,9 @@ describe('Human-category chips resolve through i18n', () => {
     setLanguage('zh-CN')
     try {
       const { container } = mountCrossClarify(crossClarifyData())
+      const icon = container.querySelector('.canvas-node__icon')
       const chip = container.querySelector('.canvas-node__kind')
-      expect(chip?.textContent).toContain('⚡')
+      expect(icon?.textContent).toContain('⚡')
       expect(chip?.textContent).toContain('跨代理反问')
       expect(chip?.textContent ?? '').not.toContain('cross-clarify')
     } finally {

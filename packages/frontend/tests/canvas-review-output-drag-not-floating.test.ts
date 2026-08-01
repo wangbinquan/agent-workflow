@@ -88,16 +88,16 @@ describe('RFC-007 source-level guard', () => {
     expect(tsx).toContain('healFieldEdgeConsistency')
   })
 
-  // Visual distinction for the review-node kind: the canvas would otherwise
-  // render review/agent/io cards in the same neutral panel color, leaving
-  // users to read the small kind label to tell them apart. The CSS gives
-  // `.canvas-node--review` an amber tint that matches the ⚖ judgment
-  // icon — runtime tests can't assert color (jsdom has no layout/style
-  // engine), so lock in the rule at the source level.
-  test('styles.css gives .canvas-node--review a dedicated amber tint', () => {
+  // Visual distinction for the review-node kind now comes from the shared
+  // card shell plus a centralized Human-family accent token. Lock both halves
+  // so review cannot fall back to an untyped neutral card.
+  test('styles.css maps review into the shared amber card family', () => {
     const css = readFileSync(STYLES_CSS, 'utf8')
-    expect(css).toMatch(/\.canvas-node--review\s*\{[^}]*background:[^;]*color-mix/)
-    expect(css).toMatch(/\.canvas-node--review\s*\{[^}]*border-color:[^;]*color-mix/)
-    expect(css).toMatch(/\.canvas-node--review\s+\.canvas-node__kind\s*\{/)
+    expect(css).toContain('.canvas-node--card {')
+    const start = css.indexOf(".canvas-node--card[data-node-kind='review'],")
+    expect(start).toBeGreaterThanOrEqual(0)
+    const humanAccentGroup = css.slice(start, css.indexOf('}', start) + 1)
+    expect(humanAccentGroup).toContain('--node-accent: #d97706;')
+    expect(css).toMatch(/\.canvas-node--card \.canvas-node__kind\s*\{[^}]*var\(--node-accent\)/s)
   })
 })

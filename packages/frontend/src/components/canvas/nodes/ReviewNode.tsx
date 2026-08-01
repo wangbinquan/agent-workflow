@@ -18,8 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { PortHandles } from './PortHandles'
 import { REVIEW_INPUT_HANDLE_ID } from '../connectionSync'
 import type { CanvasNodeData } from './types'
-import { NodeValidationBadge } from './NodeValidationBadge'
-import { NodeConfigurationSummary } from './NodeConfigurationSummary'
+import { CanvasNodeCard } from './CanvasNodeCard'
 
 interface Props extends NodeProps {
   data: CanvasNodeData
@@ -34,31 +33,26 @@ export function ReviewNode({ data, selected }: Props) {
   // review page. Absent on the editor canvas and on non-clickable reviews.
   const reviewNav = data.reviewNav
   return (
-    <div
-      className={'canvas-node canvas-node--review' + (selected ? ' canvas-node--selected' : '')}
-      data-status={data.status ?? 'default'}
-      data-review-nav={reviewNav}
-      data-surface={data.surface}
+    <CanvasNodeCard
+      data={data}
+      selected={selected}
+      className="canvas-node--review"
+      icon={NODE_GLYPHS.review}
+      kindLabel={t('reviewNode.label')}
+      title={data.title || data.nodeId}
+      titleTooltip={data.title || data.nodeId}
+      status={data.status ?? 'default'}
+      dataAttributes={reviewNav === undefined ? undefined : { 'data-review-nav': reviewNav }}
+      overlays={
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={REVIEW_INPUT_HANDLE_ID}
+          className="canvas-node__handle canvas-node__handle--review-input"
+          aria-label="review-input"
+        />
+      }
     >
-      <NodeValidationBadge data={data} />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id={REVIEW_INPUT_HANDLE_ID}
-        className="canvas-node__handle canvas-node__handle--review-input"
-        aria-label="review-input"
-      />
-      <div className="canvas-node__header">
-        <span className="canvas-node__kind">
-          {NODE_GLYPHS.review} {t('reviewNode.label')}
-        </span>
-        <span className="canvas-node__title">{data.title || data.nodeId}</span>
-      </div>
-      {data.surface === 'editor' ? (
-        <NodeConfigurationSummary data={data} />
-      ) : (
-        <div className="canvas-node__id">{data.nodeId}</div>
-      )}
       {inputSource !== null &&
         (inputSource.nodeId.length > 0 || inputSource.portName.length > 0) && (
           <div className="canvas-node__input-source muted">
@@ -77,6 +71,6 @@ export function ReviewNode({ data, selected }: Props) {
           {reviewNav === 'awaiting' ? t('reviewNode.navAwaiting') : t('reviewNode.navDecided')}
         </div>
       )}
-    </div>
+    </CanvasNodeCard>
   )
 }

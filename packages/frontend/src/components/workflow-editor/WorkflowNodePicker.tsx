@@ -346,6 +346,7 @@ function WorkflowNodePickerCatalogBody({
                               className="workflow-node-picker__item editor-sidebar__item"
                               aria-disabled={reason === null ? undefined : true}
                               data-category={entry.sectionKey}
+                              data-node-kind={entry.item.kind}
                               data-testid={`workflow-node-picker-item-${entry.item.kind === 'agent-single' ? `agent-${entry.item.agentId}` : `kind-${entry.item.kind}`}`}
                               onClick={() => choose(entry)}
                               onKeyDown={(event) => onItemKeyDown(event, index, entry)}
@@ -358,6 +359,7 @@ function WorkflowNodePickerCatalogBody({
                                   <span
                                     className="chip chip--tight workflow-node-picker__type-chip"
                                     data-category={entry.sectionKey}
+                                    data-node-kind={entry.item.kind}
                                   >
                                     {categoryLabels[entry.sectionKey]}
                                   </span>

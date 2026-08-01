@@ -119,14 +119,17 @@ describe('RFC-056 cross-clarify canvas wiring', () => {
 
   test('styles.css declares .canvas-node--clarify-cross-agent matching the clarify family palette', () => {
     // UI bug 2026-05-22 issue 3: cross-clarify on canvas rendered with no
-    // amber/gold tint because the CSS class was never declared. The fix
-    // adds the rule mirroring `.canvas-node--clarify`. This guard locks
-    // both the kind-tint rule AND the kind-text rule so a future refactor
-    // can't accidentally drop one half.
+    // amber/gold tint. Card chrome now lives in CanvasNodeCard, so lock the
+    // centralized Human-kind accent group instead of requiring a duplicated
+    // cross-clarify background block.
     const STYLES_CSS = resolve(FRONTEND_SRC, 'styles.css')
     const css = readFileSync(STYLES_CSS, 'utf8')
-    expect(css).toMatch(/\.canvas-node--clarify-cross-agent\s*\{/)
-    expect(css).toMatch(/\.canvas-node--clarify-cross-agent\s+\.canvas-node__kind\s*\{/)
+    const start = css.indexOf(".canvas-node--card[data-node-kind='review'],")
+    expect(start).toBeGreaterThanOrEqual(0)
+    const humanAccentGroup = css.slice(start, css.indexOf('}', start) + 1)
+    expect(humanAccentGroup).toContain(".canvas-node--card[data-node-kind='clarify']")
+    expect(humanAccentGroup).toContain(".canvas-node--card[data-node-kind='clarify-cross-agent']")
+    expect(humanAccentGroup).toContain('--node-accent: #d97706;')
   })
 
   test('styles.css renders __external_feedback__ port row with the same friendly badge styling as __clarify__/__clarify_response__', () => {

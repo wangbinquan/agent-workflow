@@ -9,8 +9,7 @@ import { NODE_GLYPHS } from '../nodePalette'
 import { useTranslation } from 'react-i18next'
 import { PortHandles } from './PortHandles'
 import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
-import { NodeValidationBadge } from './NodeValidationBadge'
-import { NodeConfigurationSummary } from './NodeConfigurationSummary'
+import { CanvasNodeCard } from './CanvasNodeCard'
 
 interface Props extends NodeProps {
   data: CanvasNodeData
@@ -19,22 +18,15 @@ interface Props extends NodeProps {
 export function OutputNode({ data, selected }: Props) {
   const { t } = useTranslation()
   return (
-    <div
-      className={`canvas-node canvas-node--io canvas-node--output ${selected ? 'canvas-node--selected' : ''}`}
-      data-surface={data.surface}
+    <CanvasNodeCard
+      data={data}
+      selected={selected}
+      className="canvas-node--io canvas-node--output"
+      icon={NODE_GLYPHS.output}
+      kindLabel={t('ioNode.labelOutput')}
+      title={data.title}
+      titleTooltip={data.title}
     >
-      <NodeValidationBadge data={data} />
-      <div className="canvas-node__header">
-        <span className="canvas-node__kind">
-          {NODE_GLYPHS.output} {t('ioNode.labelOutput')}
-        </span>
-        <span className="canvas-node__title">{data.title}</span>
-      </div>
-      {data.surface === 'editor' ? (
-        <NodeConfigurationSummary data={data} />
-      ) : (
-        <div className="canvas-node__id">{data.nodeId}</div>
-      )}
       <PortHandles
         side="left"
         ports={data.inputPorts}
@@ -42,6 +34,6 @@ export function OutputNode({ data, selected }: Props) {
         previewPort={data.previewInputPort}
         reusePort={data.reuseInputPort}
       />
-    </div>
+    </CanvasNodeCard>
   )
 }

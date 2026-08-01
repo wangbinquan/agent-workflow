@@ -14,11 +14,9 @@
 
 import { type NodeProps } from '@xyflow/react'
 import { useTranslation } from 'react-i18next'
-import { NODE_GLYPHS } from '../nodePalette'
-import { PortHandles } from './PortHandles'
-import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
-import { NodeValidationBadge } from './NodeValidationBadge'
-import { NodeConfigurationSummary } from './NodeConfigurationSummary'
+import { WORKGROUP_ICON } from '@/components/icons/resourceIcons'
+import type { CanvasNodeData } from './types'
+import { CallResourceNodeCard } from './CallResourceNodeCard'
 
 export interface CallWorkgroupNodeData extends CanvasNodeData {
   /** Referenced workgroup name (authoritative selector, design §6.3). */
@@ -33,43 +31,14 @@ export function CallWorkgroupNode({ data, selected }: Props) {
   const { t } = useTranslation()
   const workgroupName = typeof data.workgroupName === 'string' ? data.workgroupName : ''
   return (
-    <div
-      className={
-        'canvas-node canvas-node--call-workgroup' + (selected ? ' canvas-node--selected' : '')
-      }
-      data-status={data.status ?? 'default'}
-      data-loop-body={data.loopBody ? 'true' : undefined}
-      data-surface={data.surface}
-    >
-      <NodeValidationBadge data={data} />
-      <div className="canvas-node__header">
-        <span className="canvas-node__kind">
-          {NODE_GLYPHS['call-workgroup']} {t('callWorkgroupNode.label')}
-        </span>
-        <span className="canvas-node__title">{data.title || data.nodeId}</span>
-      </div>
-      {data.surface === 'editor' ? (
-        <NodeConfigurationSummary data={data} />
-      ) : (
-        <div className="canvas-node__id">{data.nodeId}</div>
-      )}
-      {/* Referenced-workgroup line — mirrors CallWorkflowNode's reference
-          chrome so the card shows WHICH workgroup it calls at a glance. */}
-      <div className="canvas-node__input-source muted">
-        {workgroupName.length > 0 ? (
-          <code>{workgroupName}</code>
-        ) : (
-          <span>{t('callWorkgroupNode.unsetWorkgroup')}</span>
-        )}
-      </div>
-      <PortHandles
-        side="left"
-        ports={data.inputPorts}
-        catchAll={{ id: INBOUND_HANDLE_ID }}
-        previewPort={data.previewInputPort}
-        reusePort={data.reuseInputPort}
-      />
-      <PortHandles side="right" ports={data.outputPorts} />
-    </div>
+    <CallResourceNodeCard
+      data={data}
+      selected={selected}
+      resourceKind="workgroup"
+      resourceIcon={WORKGROUP_ICON}
+      kindLabel={t('callWorkgroupNode.label')}
+      referenceName={workgroupName}
+      unsetReferenceLabel={t('callWorkgroupNode.unsetWorkgroup')}
+    />
   )
 }

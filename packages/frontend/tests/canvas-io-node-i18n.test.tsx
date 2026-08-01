@@ -66,9 +66,10 @@ describe('IO node chip labels are localized', () => {
     setLanguage('en-US')
     const { container } = renderInput(inputData())
     const chip = container.querySelector('.canvas-node__kind')
+    const icon = container.querySelector('.canvas-node__icon')
     expect(chip?.textContent).toContain('Input')
     // Sanity: the icon arrow is preserved (not stripped by the t() wiring).
-    expect(chip?.textContent).toContain('↳')
+    expect(icon?.textContent).toContain('↳')
   })
 
   test('InputNode renders the Chinese label under zh-CN', () => {
@@ -86,8 +87,9 @@ describe('IO node chip labels are localized', () => {
     setLanguage('en-US')
     const { container } = renderOutput(outputData())
     const chip = container.querySelector('.canvas-node__kind')
+    const icon = container.querySelector('.canvas-node__icon')
     expect(chip?.textContent).toContain('Output')
-    expect(chip?.textContent).toContain('⤴')
+    expect(icon?.textContent).toContain('⤴')
   })
 
   test('OutputNode renders the Chinese label under zh-CN', () => {

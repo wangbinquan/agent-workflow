@@ -11,10 +11,10 @@
 //
 // `data.statusOverlay` overlays whatever status the runtime assigned; when
 // undefined the node falls back to data.status (legacy CanvasNodeData
-// behavior). The header pill text is i18n-driven via data.kindLabel when the
-// caller wants to override the default; with no override the renderer pulls
-// the localized label through `t('clarifyNode.label')` so the chip aligns
-// with the rest of the canvas (Chinese under zh-CN, English under en-US).
+// behavior). The kind label is i18n-driven via data.kindLabel when the caller
+// wants to override the default; with no override the renderer pulls the
+// localized label through `t('clarifyNode.label')`. CanvasNodeCard owns the
+// separate ⚡ icon tile shared with every other card-shaped node.
 
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { NODE_GLYPHS } from '../nodePalette'
@@ -22,16 +22,15 @@ import { useTranslation } from 'react-i18next'
 import { CLARIFY_INPUT_PORT_NAME, CLARIFY_OUTPUT_PORT_NAME } from '@agent-workflow/shared'
 import { QuestionBadge } from './QuestionBadge'
 import type { CanvasNodeData } from './types'
-import { NodeValidationBadge } from './NodeValidationBadge'
-import { NodeConfigurationSummary } from './NodeConfigurationSummary'
+import { CanvasNodeCard } from './CanvasNodeCard'
 
 export type ClarifyStatus = 'pending' | 'awaiting_human' | 'answered' | 'failed'
 
 export interface ClarifyNodeData extends CanvasNodeData {
   /** Overrides data.status with a clarify-specific palette. Optional. */
   statusOverlay?: ClarifyStatus
-  /** Display label inside the kind pill. When unset, the chip resolves
-   *  to `⚡ {t('clarifyNode.label')}`. */
+  /** Display label inside the kind line. Legacy callers may still prefix ⚡;
+   *  the renderer strips it because CanvasNodeCard owns the icon tile. */
   kindLabel?: string
   /** Description (passes through from node config; rendered below the title). */
   description?: string
@@ -47,36 +46,35 @@ export function ClarifyNode({ data, selected }: Props) {
   // to the standard data.status (e.g. node-run-coloring on the task detail
   // canvas may pass through 'done' for the answered case).
   const status: ClarifyStatus = data.statusOverlay ?? mapFallbackStatus(data.status)
-  const labelText = data.kindLabel ?? `${NODE_GLYPHS.clarify} ${t('clarifyNode.label')}`
+  const icon = NODE_GLYPHS.clarify
+  const rawLabel = data.kindLabel ?? t('clarifyNode.label')
+  const labelText = rawLabel.startsWith(icon) ? rawLabel.slice(icon.length).trimStart() : rawLabel
   return (
-    <div
-      className={
-        'canvas-node canvas-node--clarify' +
-        (selected ? ' canvas-node--selected' : '') +
-        ` canvas-node--clarify-${status}`
+    <CanvasNodeCard
+      data={data}
+      selected={selected}
+      className={`canvas-node--clarify canvas-node--clarify-${status}`}
+      icon={icon}
+      kindLabel={labelText}
+      title={data.title || data.nodeId}
+      titleTooltip={data.title || data.nodeId}
+      status={status}
+      dataAttributes={
+        data.clarifyNav === undefined ? undefined : { 'data-clarify-nav': data.clarifyNav }
       }
-      data-status={status}
-      data-clarify-nav={data.clarifyNav}
-      data-surface={data.surface}
+      overlays={
+        <>
+          <QuestionBadge data={data} />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={CLARIFY_INPUT_PORT_NAME}
+            className="canvas-node__handle canvas-node__handle--clarify-input"
+            aria-label="clarify-input"
+          />
+        </>
+      }
     >
-      <QuestionBadge data={data} />
-      <NodeValidationBadge data={data} />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id={CLARIFY_INPUT_PORT_NAME}
-        className="canvas-node__handle canvas-node__handle--clarify-input"
-        aria-label="clarify-input"
-      />
-      <div className="canvas-node__header">
-        <span className="canvas-node__kind">{labelText}</span>
-        <span className="canvas-node__title">{data.title || data.nodeId}</span>
-      </div>
-      {data.surface === 'editor' ? (
-        <NodeConfigurationSummary data={data} />
-      ) : (
-        <div className="canvas-node__id">{data.nodeId}</div>
-      )}
       {data.description !== undefined && data.description.length > 0 && (
         <div className="canvas-node__description muted">{data.description}</div>
       )}
@@ -96,7 +94,7 @@ export function ClarifyNode({ data, selected }: Props) {
         className="canvas-node__handle canvas-node__handle--clarify-output"
         aria-label="clarify-output"
       />
-    </div>
+    </CanvasNodeCard>
   )
 }
 

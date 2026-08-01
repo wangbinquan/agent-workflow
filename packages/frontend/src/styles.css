@@ -6421,6 +6421,36 @@ details.form-section[open] > summary {
   color: color-mix(in srgb, #7a4ea6 72%, var(--text));
 }
 
+/* Resource calls are one catalog category, but the two cards should retain
+ * the resource identity users already know from the workflow/workgroup
+ * galleries and from their canvas nodes. `data-node-kind` keeps that visual
+ * mapping explicit instead of sending both through the old generic row. */
+.workflow-node-picker__item[data-node-kind='call-workflow'],
+.workflow-node-picker__type-chip[data-node-kind='call-workflow'] {
+  --node-picker-call-accent: #7c3aed;
+}
+
+.workflow-node-picker__item[data-node-kind='call-workgroup'],
+.workflow-node-picker__type-chip[data-node-kind='call-workgroup'] {
+  --node-picker-call-accent: #c026d3;
+}
+
+.workflow-node-picker__item[data-category='calls'] {
+  border-inline-start-width: 3px;
+  border-inline-start-color: var(--node-picker-call-accent);
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--node-picker-call-accent) 7%, var(--bg)),
+    var(--bg) 58%
+  );
+}
+
+.workflow-node-picker__type-chip[data-category='calls'] {
+  border-color: color-mix(in srgb, var(--node-picker-call-accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--node-picker-call-accent) 10%, var(--panel));
+  color: color-mix(in srgb, var(--node-picker-call-accent) 72%, var(--text));
+}
+
 .workflow-node-picker__item[data-category='io'] {
   border-inline-start-width: 3px;
   border-inline-start-color: #0f766e;
@@ -7291,7 +7321,7 @@ details.form-section[open] > summary {
   min-width: 240px;
 }
 
-.canvas-node--review[data-surface='editor'] {
+.canvas-node.canvas-node--review[data-surface='editor'] {
   width: 260px;
   min-width: 260px;
 }
@@ -7330,6 +7360,113 @@ details.form-section[open] > summary {
   margin-top: 4px;
   color: var(--muted);
   font-size: 11px;
+}
+
+/* Shared shell for every card-shaped canvas node. Node kinds only provide
+ * --node-accent and their specialised body/ports; spacing, icon hierarchy,
+ * surface and selection treatment live here. Wrapper groups are resizable
+ * containers and intentionally do not use this class. */
+.canvas-node--card {
+  --node-accent: var(--accent);
+  padding: 10px 12px 12px;
+  overflow: visible;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--node-accent) 9%, var(--panel)) 0,
+    var(--panel) 62%
+  );
+  border-color: color-mix(in srgb, var(--node-accent) 42%, var(--border));
+  box-shadow: var(--shadow-sm);
+}
+
+.canvas-node--card .canvas-node__header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+}
+
+.canvas-node__icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--node-accent) 28%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--node-accent) 11%, var(--panel));
+  color: color-mix(in srgb, var(--node-accent) 72%, var(--text));
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.canvas-node__icon svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.5;
+}
+
+.canvas-node__identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.canvas-node--card .canvas-node__kind {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--node-accent) 72%, var(--text));
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node--card .canvas-node__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node--card > .canvas-node__configuration,
+.canvas-node--card > .canvas-node__id {
+  margin-left: 43px;
+}
+
+.canvas-node--card.canvas-node--selected {
+  border-color: var(--node-accent);
+  box-shadow: 0 0 0 1px var(--node-accent);
+}
+
+.canvas-node--card[data-node-kind='agent-single'] {
+  --node-accent: var(--accent);
+}
+
+.canvas-node--card[data-node-kind='input'] {
+  --node-accent: #0f766e;
+}
+
+.canvas-node--card[data-node-kind='output'] {
+  --node-accent: #0369a1;
+}
+
+.canvas-node--card[data-node-kind='review'],
+.canvas-node--card[data-node-kind='clarify'],
+.canvas-node--card[data-node-kind='clarify-cross-agent'] {
+  --node-accent: #d97706;
+}
+
+.canvas-node--card[data-node-kind='call-workflow'] {
+  --node-accent: #7c3aed;
+}
+
+.canvas-node--card[data-node-kind='call-workgroup'] {
+  --node-accent: #c026d3;
 }
 
 .canvas-node--wrapper-group[data-surface='editor'] > .canvas-node__configuration {
@@ -7390,31 +7527,10 @@ details.form-section[open] > summary {
   white-space: nowrap;
 }
 
-.canvas-node--agent {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
-}
-
 .canvas-node--multi {
   border-style: dashed;
 }
 
-.canvas-node--io {
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
-}
-
-/* Review node — human-judgment kind. Amber/gold tint mirrors the ⚖ icon
- * in the header and visually separates it from agent/io/multi cards.
- * Background-tinted (not solely border) so `.canvas-node[data-status=…]`
- * can still own the border color across running/done/failed without
- * fighting this rule. */
-.canvas-node--review {
-  background: color-mix(in srgb, #d97706 10%, var(--panel));
-  border-color: color-mix(in srgb, #d97706 45%, var(--border));
-}
-.canvas-node--review .canvas-node__kind {
-  color: #b45309;
-  font-weight: 600;
-}
 /* RFC-158 — a review node the task-detail canvas marked clickable (opens the
  * review page). The `data-review-nav` attribute is only present on clickable
  * reviews; the pointer cursor + hint line advertise the click. */
@@ -7437,42 +7553,55 @@ details.form-section[open] > summary {
   font-size: 11px;
 }
 
-/* RFC-243 call-workflow node — composition kind (invokes another workflow as
- * a child task). Violet tint separates it from agent (accent border), IO
- * (accent wash) and the human amber family; background-tinted (not solely
- * border) so `.canvas-node[data-status=…]` still owns the status border. */
-.canvas-node--call-workflow {
-  background: color-mix(in srgb, #7c3aed 8%, var(--panel));
-  border-color: color-mix(in srgb, #7c3aed 45%, var(--border));
-}
-.canvas-node--call-workflow .canvas-node__kind {
-  color: #6d28d9;
-  font-weight: 600;
-}
-
-/* RFC-243 PR-4 call-workgroup node — the workgroup twin of call-workflow.
- * Fuchsia keeps it inside the same "Calls" color family as the violet
- * call-workflow while staying glanceably distinct; same background-tint
- * approach so `.canvas-node[data-status=…]` still owns the status border. */
-.canvas-node--call-workgroup {
-  background: color-mix(in srgb, #c026d3 8%, var(--panel));
-  border-color: color-mix(in srgb, #c026d3 45%, var(--border));
-}
-.canvas-node--call-workgroup .canvas-node__kind {
-  color: #a21caf;
-  font-weight: 600;
+/* Resource-call cards add a bounded target band to the shared card shell.
+ * The band appears for an actionable unset state or when a custom node title
+ * differs from the referenced resource name. */
+.canvas-node__call-reference {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--node-accent) 20%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--node-accent) 5%, var(--bg));
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
-/* Clarify (反问) node — mirrors the review palette so the two human-in-the-loop
- * kinds read as the same family on the canvas. Status-specific borders are
- * still allowed via `.canvas-node[data-status=…]`. */
-.canvas-node--clarify {
-  background: color-mix(in srgb, #d97706 10%, var(--panel));
-  border-color: color-mix(in srgb, #d97706 45%, var(--border));
+.canvas-node__call-reference-indicator {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-pill);
+  background: var(--node-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-accent) 11%, transparent);
 }
-.canvas-node--clarify .canvas-node__kind {
-  color: #b45309;
+
+.canvas-node__call-reference code {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node--call[data-reference-state='unset'] .canvas-node__call-reference {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.canvas-node--call[data-reference-state='unset'] .canvas-node__call-reference-indicator {
+  border: 1px solid color-mix(in srgb, var(--node-accent) 58%, var(--border));
+  background: transparent;
+  box-shadow: none;
 }
 
 /* RFC-056 cross-clarify node — reuses the clarify/review amber/gold tint
@@ -7487,14 +7616,16 @@ details.form-section[open] > summary {
  * overlap them (2026-05-22 follow-up). `min-width` is widened to keep the
  * remaining title column readable after the reservation. */
 .canvas-node--clarify-cross-agent {
-  background: color-mix(in srgb, #d97706 10%, var(--panel));
-  border-color: color-mix(in srgb, #d97706 45%, var(--border));
   min-width: 240px;
   padding-right: 88px;
 }
-.canvas-node--clarify-cross-agent .canvas-node__kind {
-  color: #b45309;
-  font-weight: 600;
+
+/* The shared icon column and the right-side output-label gutter both consume
+ * horizontal space. Match the generic editor selector's specificity so this
+ * exception actually wins and the English kind label remains readable. */
+.canvas-node.canvas-node--clarify-cross-agent[data-surface='editor'] {
+  width: 280px;
+  min-width: 280px;
 }
 /* Status-specific border overlays (mirror RFC-023 clarify pattern).
  * awaiting_human → amber (matches default tint, slightly stronger);
