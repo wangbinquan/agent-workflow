@@ -991,6 +991,27 @@ export interface Resources {
   }
   repos: {
     title: string
+    operations: {
+      subtitle: string
+      viewAria: string
+      views: { all: string; referenced: string; attention: string; unused: string }
+      searchPlaceholder: string
+      searchLabel: string
+      filters: string
+      activeFilters: string
+      filterTitle: string
+      submodulesLabel: string
+      submodules: { all: string; with: string; without: string }
+      autoRefreshLabel: string
+      autoRefreshFilters: { all: string; refreshed: string; never: string }
+      applyFilters: string
+      noMatchesDescription: string
+      columns: { repository: string; freshness: string; usage: string }
+      branch: string
+      fetched: string
+      autoRefresh: string
+      referencingTasks: string
+    }
     loading: string
     empty: string
     emptyDescription: string
@@ -2087,6 +2108,23 @@ export interface Resources {
   scheduled: {
     repairBadge: string
     title: string
+    operations: {
+      subtitle: string
+      viewAria: string
+      views: { all: string; enabled: string; attention: string; paused: string }
+      searchPlaceholder: string
+      searchLabel: string
+      filters: string
+      activeFilters: string
+      filterTitle: string
+      launchKindLabel: string
+      launchKinds: { all: string; workflow: string; workgroup: string; agent: string }
+      outcomeLabel: string
+      outcomes: { all: string; never: string; launched: string; failed: string }
+      applyFilters: string
+      noMatchesDescription: string
+      columns: { schedule: string; state: string; next: string }
+    }
     empty: string
     emptyDescription: string
     new: string
@@ -2195,6 +2233,7 @@ export interface Resources {
     childTaskUnavailable: string
     /** RFC-244: dense task operations list. */
     operations: {
+      subtitle: string
       updated: string
       refresh: string
       viewAria: string
@@ -5187,6 +5226,27 @@ export const zhCN: Resources = {
   },
   repos: {
     title: '远端仓缓存',
+    operations: {
+      subtitle: '集中查看缓存新鲜度、使用情况与仓库健康状态',
+      viewAria: '远端仓业务视图',
+      views: { all: '全部', referenced: '使用中', attention: '需关注', unused: '未使用' },
+      searchPlaceholder: '搜索远端地址、路径或分支…',
+      searchLabel: '搜索远端仓缓存',
+      filters: '筛选',
+      activeFilters: '已启用 {{count}} 个高级筛选',
+      filterTitle: '筛选远端仓缓存',
+      submodulesLabel: 'Submodule',
+      submodules: { all: '全部', with: '包含', without: '不包含' },
+      autoRefreshLabel: '后台自动刷新',
+      autoRefreshFilters: { all: '全部', refreshed: '刷新过', never: '从未刷新' },
+      applyFilters: '应用筛选',
+      noMatchesDescription: '当前业务视图和筛选条件下没有匹配的远端仓缓存。',
+      columns: { repository: '仓库', freshness: '新鲜度', usage: '使用情况' },
+      branch: '分支 {{branch}}',
+      fetched: '抓取于',
+      autoRefresh: '自动刷新',
+      referencingTasks: '个关联任务',
+    },
     loading: '加载中…',
     empty: '还没有远端仓缓存',
     emptyDescription: '批量导入常用远端仓库，提前准备可复用缓存并加快后续任务启动。',
@@ -6594,6 +6654,23 @@ export const zhCN: Resources = {
   scheduled: {
     repairBadge: '需修复',
     title: '定时任务',
+    operations: {
+      subtitle: '集中查看周期执行、处理失败，并按需立即运行',
+      viewAria: '定时任务业务视图',
+      views: { all: '全部', enabled: '启用', attention: '需关注', paused: '已暂停' },
+      searchPlaceholder: '搜索日程、Owner 或执行主体…',
+      searchLabel: '搜索定时任务',
+      filters: '筛选',
+      activeFilters: '已启用 {{count}} 个高级筛选',
+      filterTitle: '筛选定时任务',
+      launchKindLabel: '启动类型',
+      launchKinds: { all: '全部', workflow: '工作流', workgroup: '工作组', agent: 'Agent' },
+      outcomeLabel: '最近结果',
+      outcomes: { all: '全部', never: '从未运行', launched: '已启动', failed: '失败' },
+      applyFilters: '应用筛选',
+      noMatchesDescription: '当前业务视图和筛选条件下没有匹配的定时任务。',
+      columns: { schedule: '日程', state: '状态与最近运行', next: '下次运行' },
+    },
     empty: '还没有定时任务',
     emptyDescription: '配置一次工作流启动并保存周期，让重复执行按计划自动发生。',
     new: '新建',
@@ -6691,6 +6768,7 @@ export const zhCN: Resources = {
     childTaskLink: '子任务',
     childTaskUnavailable: '子任务不可见或已删除',
     operations: {
+      subtitle: '跟踪执行、处理阻塞，并回看历史结果',
       updated: '任务列表已有更新',
       refresh: '刷新列表',
       viewAria: '任务业务视图',

@@ -32,10 +32,14 @@ import { fileURLToPath } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { routePopulatedInbox } from './inbox-fixtures'
+import {
+  OPERATIONS_VISUAL_TIME,
+  routeOperationsSurfaceFixtures,
+} from './operations-surface-fixtures'
 import { routeTaskOperationsFixture } from './task-operations-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 26
+const EXPECTED_VISUAL_SCENE_COUNT = 27
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -552,11 +556,26 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
 
   test('/repos list', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await page.clock.setFixedTime(OPERATIONS_VISUAL_TIME)
+    await routeOperationsSurfaceFixtures(page)
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/repos`)
     await expect(page.getByRole('heading', { name: /repos/i }).first()).toBeVisible()
+    await expect(page.getByTestId('repos-row-repo-ux-01')).toBeVisible()
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('repos.png', SNAPSHOT_OPTS)
+  })
+
+  test('/scheduled list', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await page.clock.setFixedTime(OPERATIONS_VISUAL_TIME)
+    await routeOperationsSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/scheduled`)
+    await expect(page.getByRole('heading', { name: /scheduled/i }).first()).toBeVisible()
+    await expect(page.getByTestId('scheduled-row-scheduled-ux-01')).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('scheduled.png', SNAPSHOT_OPTS)
   })
 
   test('/memory list', async ({ page }) => {
@@ -612,6 +631,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(operations).toBeVisible()
     await waitForStableAuthenticatedShell(page)
     await expect(operations).toHaveScreenshot('table-edge.png', COMPONENT_SNAPSHOT_OPTS)
+    await page.getByRole('heading', { name: /tasks/i }).first().scrollIntoViewIfNeeded()
     await expect(page).toHaveScreenshot('tasks.png', SNAPSHOT_OPTS)
   })
 

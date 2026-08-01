@@ -1,8 +1,8 @@
 # RFC-244 · 技术设计 —— 高密度任务运行中心
 
-状态：Implementation Complete Locally / Publication Closure Pending（首轮与 focused 复审 findings
-已全部折入 Draft v3；closing 设计门 `APPROVED — P0=0/P1=0/P2=0`；2026-08-01 用户以 “ok”
-正式批准；本地未提交实现预门 `LOCAL APPROVED — P0=0/P1=0/P2=0`）。
+状态：Visual Contract Correction Complete Locally / Publication In Progress（首轮与 focused 复审
+findings 已全部折入 Draft v3；closing 设计门 `APPROVED — P0=0/P1=0/P2=0`；2026-08-01 用户以
+“ok” 正式批准；首个实现提交后发现界面未完整遵循已批准原型，现按仓库内 visual contract 修正）。
 
 ## 0. 摘要
 
@@ -95,6 +95,9 @@
 ```
 
 移动端不维护第二套数据/交互组件；同一语义 DOM 通过 task-specific responsive CSS 改变列布局。
+
+本节布局的权威细化见 [visual-contract.md](./visual-contract.md)：标题到列表必须形成一个完整 surface；
+展开控件位于任务名左侧，最右 chevron 只表达进入详情；展开子任务进入带左侧 rail 的 inset well。
 
 ### 2.2 四个业务视图
 
@@ -197,8 +200,9 @@ replace 为省略的 `mine`，不会把无效扩权意图留在可复制 URL 中
 
 桌面收敛为五个视觉列：
 
-1. **任务**：主链接名称；次行显示 `主体 · repo · short id`，按需附「定时」来源和
-   `N 个子任务`。子行只用缩进/连接线表达层级，不在每行重复「子任务」badge。
+1. **任务**：可展开分支先显示 24×24 展开按钮，随后是单行省略的主链接名称；无分支时保留同宽
+   spacer。次行显示 `主体 · repo · short id`，按需附「定时」来源；`N 个子任务`紧邻名称。子行只
+   用 inset well、rail 与缩进表达层级，不在每行重复「子任务」badge。
 2. **执行**：`TaskStatusChip`；次行按真实数据选择一个最高优先级说明：未解决告警、失败摘要 /
    failure code、等待人工文案、运行/排队计时。最多一行并安全截断，完整诊断在任务详情。
 3. **时间**：`RelativeTime(startedAt)` + 新 `taskOperationsRunningDuration`。后者使用 RFC-207 的
@@ -210,11 +214,12 @@ replace 为省略的 `mine`，不会把无效扩权意图留在可复制 URL 中
 4. **Owner**：给公共 `OwnerLabel` 增加向后兼容 `wrap?: boolean`（默认 false 保持现有调用方）；本页
    传 true，使 display name 与 username/stable id 都可换行、无 ellipsis/hover-only 正文。普通身份仍
    在 56px 内；超长身份让该行自然增高。
-5. **展开**：仅 `qualifyingChildCount > 0` 时出现。桌面按钮可见盒 28×28；移动端扩大到 44×44。
+5. **进入详情提示**：无障碍隐藏的右向 chevron，只说明整行空白可进入详情。它不控制子任务；真正
+   展开按钮属于第一列，且仅在 `qualifyingChildCount > 0` 时出现，移动端扩大到 44×44。
 
 普通父行 `min-height: 56px`，直接/深层子行 `min-height: 48px`；单元格纵向 padding 6px。
-不得设置固定 `height`、`max-height` 或在 Owner 身份上使用不可恢复的裁切。任务名桌面最多两行，
-仓库/失败摘要可单行省略并提供非唯一的 `title`；详情主链接始终可达。
+不得设置固定 `height`、`max-height` 或在 Owner 身份上使用不可恢复的裁切。任务名保持单行省略并
+提供 `title`；仓库/失败摘要可单行省略并提供非唯一的 `title`；详情主链接始终可达。
 
 ### 2.6 树、筛选与展开状态
 
@@ -621,11 +626,11 @@ hook 收到任一已授权 frame、WS reconnect `reconcileOnOpen` 或 disconnect
 
 Desktop（>720px）：
 
-- nested list row grid 宽度为容器 100%，不设置固定最小宽；视觉列宽建议
-  `minmax(280px, 1fr) / 210px / 128px / minmax(150px, 190px) / 36px`；
+- 标题、副标题、动作、toolbar、表头与列表处于同一 bordered surface；nested list row grid 宽度为
+  容器 100%，不设置固定最小宽；视觉列宽以 visual contract 的任务优先比例为准；
 - row `min-height` 由 cell padding + line-height 达成，禁止 `transform: scale` 或缩小全局字号；
-- 子层每级缩进 14px，并设最大视觉缩进；超过最大视觉缩进后仍由 native nested list 保留真实
-  层级，并显示短 ID。
+- 首层 child branch 放入 `margin: 0 22px 8px 55px` 的 inset well，使用左侧 rail 与轻底色；深层仍
+  由 native nested list 保留真实层级，并显示短 ID。
 
 Mobile（≤720px）：
 
@@ -633,7 +638,8 @@ Mobile（≤720px）：
   次序或 native list nesting；
 - task + status 同首行，meta/time/owner 后续排列；Owner 可换行；
 - 展开按钮 44×44；整行空白点击进入详情，但任务名原生链接仍是键盘入口；
-- toolbar 垂直排列；四个 view 可横向滚动于**自身 segmented 容器**，页面和结果列表不横向滚动；
+- toolbar 的 views 与 tools 分为两层；search 与 filter 仍在同一 tools 行。四个 view 可横向滚动于
+  **自身 segmented 容器**，页面和结果列表不横向滚动；
 - 390×568 下 filter dialog 主 action 不被软键盘/viewport bottom 遮挡。
 
 ## 6. 安全、隐私与失败边界
@@ -779,4 +785,4 @@ Draft v3；closing 复审为 `APPROVED — P0=0/P1=0/P2=0`，逐项记录见
 因此不替代 T23 固定 SHA 实现门。
 
 待发布闭环：hosted-Ubuntu screenshot baseline、Safari VoiceOver 人工走查、固定 SHA 实现门及
-exact-SHA CI。用户尚未授权 commit、push 或发布。
+exact-SHA CI。用户已授权精确 commit/push，发布流程正在闭环。

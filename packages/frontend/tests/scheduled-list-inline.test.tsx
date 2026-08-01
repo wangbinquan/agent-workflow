@@ -18,7 +18,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -143,6 +143,33 @@ describe('runNowBlocked — disable predicate (pure)', () => {
 })
 
 describe('/scheduled — inline operations (RFC-192)', () => {
+  test('RFC-246 business views, search, and launch-kind filter compose', async () => {
+    installFetch([
+      sched('healthy'),
+      sched('paused', { enabled: false, launchKind: 'agent' }),
+      sched('flaky-group', { launchKind: 'workgroup', lastStatus: 'failed' }),
+    ])
+    await renderPage()
+    await screen.findByTestId('scheduled-row-healthy')
+
+    fireEvent.click(screen.getByTestId('scheduled-view-paused'))
+    expect(screen.getByTestId('scheduled-row-paused')).toBeTruthy()
+    expect(screen.queryByTestId('scheduled-row-healthy')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('scheduled-view-all'))
+    fireEvent.change(screen.getByTestId('scheduled-search'), { target: { value: 'flaky' } })
+    expect(screen.getByTestId('scheduled-row-flaky-group')).toBeTruthy()
+    expect(screen.queryByTestId('scheduled-row-paused')).toBeNull()
+
+    fireEvent.change(screen.getByTestId('scheduled-search'), { target: { value: '' } })
+    fireEvent.click(screen.getByTestId('scheduled-filter-button'))
+    const dialog = await screen.findByTestId('scheduled-filter-dialog')
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Workgroup' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply filters' }))
+    expect(screen.getByTestId('scheduled-row-flaky-group')).toBeTruthy()
+    expect(screen.queryByTestId('scheduled-row-healthy')).toBeNull()
+  })
+
   test('Owner column shows display name plus full username and stable-id fallback', async () => {
     installFetch([
       sched('resolved'),
@@ -159,7 +186,7 @@ describe('/scheduled — inline operations (RFC-192)', () => {
     expect(missing.querySelector('.data-table__owner-cell')?.textContent).toContain(
       'deleted-user-42',
     )
-    expect(resolved.closest('table')?.querySelector('th:nth-child(3)')?.textContent).toBe('Owner')
+    expect(resolved.closest('table')?.querySelector('th:nth-child(4)')?.textContent).toBe('Owner')
   })
 
   test('Switch PUTs {enabled:false} without navigating the row', async () => {
@@ -236,7 +263,8 @@ describe('/scheduled — inline operations (RFC-192)', () => {
     expect(on.querySelector('.scheduled-next time')).not.toBeNull()
     expect(on.querySelector('.scheduled-next__abs')).not.toBeNull()
     const off = screen.getByTestId('scheduled-row-off')
-    expect(off.querySelector('.scheduled-next')).toBeNull()
+    expect(off.querySelector('.scheduled-next time')).toBeNull()
+    expect(off.querySelector('.scheduled-next__abs')).toBeNull()
     expect(off.textContent).toContain('—')
   })
 
@@ -254,14 +282,14 @@ describe('/scheduled — inline operations (RFC-192)', () => {
     const cells = row.querySelectorAll('td')
     const last = cells[cells.length - 1]
     expect(last?.classList.contains('data-table__chevron')).toBe(true)
-    expect(last?.textContent?.trim()).toBe('›')
+    expect(last?.querySelector('svg')).not.toBeNull()
     expect(last?.getAttribute('aria-hidden')).toBe('true')
     // Column-count lock: a td without its matching th (or vice versa) skews
     // every header over the wrong column.
     const table = row.closest('table')
     expect(table?.querySelectorAll('thead th')).toHaveLength(cells.length)
     expect(table?.parentElement?.classList.contains('table-viewport__scroller')).toBe(true)
-    expect(table?.closest('.table-viewport')?.classList.contains('table-viewport--lg')).toBe(true)
+    expect(table?.closest('.table-viewport')?.classList.contains('table-viewport--lg')).toBe(false)
     expect(document.querySelector('h1.page__title')).not.toBeNull()
   })
 

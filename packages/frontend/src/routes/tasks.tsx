@@ -33,11 +33,12 @@ import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
-import { Field, TextInput } from '@/components/Form'
+import { Field } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { ManagedLiveRegionProvider, useManagedLiveRegion } from '@/components/ManagedLiveRegion'
 import { MultiSelect } from '@/components/MultiSelect'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { OperationsChevronIcon, OperationsToolbar } from '@/components/operations/OperationsToolbar'
 import { OwnerLabel } from '@/components/OwnerLabel'
 import { PageHeader } from '@/components/PageHeader'
 import { RelativeTime } from '@/components/RelativeTime'
@@ -339,9 +340,7 @@ function TasksPage() {
   }, [filterFingerprint, isLoading, items.length, liveRegion, query.error, t])
 
   return (
-    <div className="page page--task-operations">
-      <PageHeader title={t('tasks.title')} actions={initialEmpty ? undefined : newTaskAction} />
-
+    <div className="page page--operations page--task-operations">
       {sync.dirty && (
         <NoticeBanner
           tone="info"
@@ -357,107 +356,89 @@ function TasksPage() {
         </NoticeBanner>
       )}
 
-      {!initialEmpty && (
-        <div className="task-operations-toolbar">
-          <Segmented<TaskListView>
-            value={filters.view}
-            onChange={(view) =>
+      <div className="operations-surface">
+        <PageHeader
+          title={t('tasks.title')}
+          actions={initialEmpty ? undefined : newTaskAction}
+          className="operations-surface__header"
+        >
+          <p className="operations-surface__subtitle">{t('tasks.operations.subtitle')}</p>
+        </PageHeader>
+
+        {!initialEmpty && (
+          <OperationsToolbar<TaskListView>
+            view={filters.view}
+            onViewChange={(view) =>
               void navigate({
                 to: '/tasks',
                 search: { ...search, view: view === 'all' ? undefined : view },
               })
             }
-            ariaLabel={t('tasks.operations.viewAria')}
-            disabled={isLoading}
-            rootTestid="tasks-views"
-            options={TASK_LIST_VIEWS.map((view) => ({
+            views={TASK_LIST_VIEWS.map((view) => ({
               value: view,
-              testid: `tasks-view-${view}`,
-              label: (
-                <span className="task-operations-toolbar__view-label">
-                  <span>{t(`tasks.operations.views.${view}`)}</span>
-                  <span className="task-operations-toolbar__count" aria-hidden="true">
-                    {facets[view]}
-                  </span>
-                </span>
-              ),
+              label: t(`tasks.operations.views.${view}`),
+              count: facets[view],
             }))}
+            viewAria={t('tasks.operations.viewAria')}
+            searchValue={searchDraft}
+            onSearchChange={setSearchDraft}
+            searchPlaceholder={t('tasks.operations.searchPlaceholder')}
+            searchLabel={t('tasks.operations.searchLabel')}
+            filterLabel={t('tasks.operations.filters')}
+            activeFilterCount={filterDimensionCount}
+            activeFiltersLabel={(count) => t('tasks.operations.activeFilters', { count })}
+            onOpenFilters={openFilters}
+            showClear={hasAnyFilter}
+            clearLabel={t('common.clearFilters')}
+            onClear={clearFilters}
+            testidPrefix="tasks"
+            disabled={isLoading}
+            searchRef={searchRef}
+            filterButtonRef={filterButtonRef}
           />
-          <div className="task-operations-toolbar__actions">
-            <TextInput
-              type="search"
-              value={searchDraft}
-              onChange={setSearchDraft}
-              maxLength={100}
-              placeholder={t('tasks.operations.searchPlaceholder')}
-              aria-label={t('tasks.operations.searchLabel')}
-              className="task-operations-toolbar__search"
-              disabled={isLoading}
-              inputRef={searchRef}
-              data-testid="tasks-search"
-            />
-            <button
-              ref={filterButtonRef}
-              type="button"
-              className="btn btn--sm task-operations-toolbar__filter"
-              disabled={isLoading}
-              onClick={openFilters}
-              data-testid="tasks-filter-button"
-            >
-              {t('tasks.operations.filters')}
-              {filterDimensionCount > 0 && (
-                <span
-                  className="chip chip--tight"
-                  aria-label={t('tasks.operations.activeFilters', { count: filterDimensionCount })}
-                >
-                  {filterDimensionCount}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <FeedbackStack variant="section">
-        {query.error != null && (
-          <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
         )}
-      </FeedbackStack>
-      {isLoading && <LoadingState data-testid="tasks-loading" />}
-      {initialEmpty && (
-        <EmptyState
-          title={t('tasks.emptyList')}
-          description={t('tasks.emptyDescription')}
-          icon={TASK_ICON}
-          action={newTaskAction}
-          data-testid="tasks-empty"
-        />
-      )}
-      {noMatches && (
-        <EmptyState
-          size="compact"
-          title={t('common.noMatches')}
-          action={
-            <button type="button" className="btn btn--sm" onClick={clearFilters}>
-              {t('common.clearFilters')}
-            </button>
-          }
-          data-testid="tasks-no-matches"
-        />
-      )}
 
-      {items.length > 0 && (
-        <TaskOperationsList
-          items={items}
-          filters={filters}
-          expanded={expanded}
-          collapsed={collapsed}
-          onToggle={toggleBranch}
-          onLoadMore={() => void query.fetchNextPage()}
-          hasNextPage={query.hasNextPage}
-          loadingMore={query.isFetchingNextPage}
-        />
-      )}
+        <FeedbackStack variant="section">
+          {query.error != null && (
+            <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
+          )}
+        </FeedbackStack>
+        {isLoading && <LoadingState data-testid="tasks-loading" />}
+        {initialEmpty && (
+          <EmptyState
+            title={t('tasks.emptyList')}
+            description={t('tasks.emptyDescription')}
+            icon={TASK_ICON}
+            action={newTaskAction}
+            data-testid="tasks-empty"
+          />
+        )}
+        {noMatches && (
+          <EmptyState
+            size="compact"
+            title={t('common.noMatches')}
+            action={
+              <button type="button" className="btn btn--sm" onClick={clearFilters}>
+                {t('common.clearFilters')}
+              </button>
+            }
+            data-testid="tasks-no-matches"
+          />
+        )}
+
+        {items.length > 0 && (
+          <TaskOperationsList
+            items={items}
+            filters={filters}
+            expanded={expanded}
+            collapsed={collapsed}
+            onToggle={toggleBranch}
+            onLoadMore={() => void query.fetchNextPage()}
+            hasNextPage={query.hasNextPage}
+            loadingMore={query.isFetchingNextPage}
+          />
+        )}
+      </div>
 
       <TaskListFilterDialog
         open={filtersOpen}
@@ -775,54 +756,81 @@ function TaskOperationsRow(props: {
     >
       <div className="task-operations__cell task-operations__task">
         <span className="sr-only">{t('tasks.operations.columns.task')}：</span>
-        <div className="task-operations__name-line">
-          <Link
-            to="/tasks/$id"
-            params={{ id: item.id }}
-            className="data-table__link task-operations__name"
-            title={item.name}
-          >
-            {item.name}
-          </Link>
-          {item.scheduledTaskId != null && (
-            <Link
-              to="/scheduled/$id"
-              params={{ id: item.scheduledTaskId }}
-              className="chip chip--tight task-operations__chip-link"
-              data-testid={`task-scheduled-chip-${item.id}`}
+        <div className="task-operations__task-main">
+          {props.branchId === undefined ? (
+            <span className="task-operations__expand-spacer" aria-hidden="true" />
+          ) : (
+            <button
+              type="button"
+              className="task-operations__expand-button"
+              aria-expanded={props.expanded}
+              aria-controls={props.branchId}
+              aria-label={t(
+                props.expanded ? 'tasks.collapseChildren' : 'tasks.expandChildrenCount',
+                { count: item.listContext.qualifyingChildCount },
+              )}
+              data-testid={`task-expand-${item.id}`}
+              onClick={props.onToggle}
             >
-              {t('tasks.scheduledChip')}
-            </Link>
+              <OperationsChevronIcon />
+            </button>
           )}
-          {item.listContext.parentAvailability === 'unavailable' && (
-            <span className="chip chip--tight" data-testid={`task-parent-unavailable-${item.id}`}>
-              {t('tasks.parentTaskUnavailable')}
-            </span>
-          )}
-        </div>
-        <div className="task-operations__meta">
-          <TaskSubjectLink task={item} taskId={item.id} badge />
-          <span className="task-operations__repo-separator" aria-hidden="true">
-            ·
-          </span>
-          <code className="task-operations__repo" title={repo.title}>
-            {repo.name}
-          </code>
-          {item.repoCount > 1 && (
-            <span
-              className="chip chip--tight task-operations__repo-count"
-              data-testid={`task-repos-${item.id}`}
-            >
-              {t('tasks.repoCountChip', { n: item.repoCount })}
-            </span>
-          )}
-          <span aria-hidden="true">·</span>
-          <code className="task-operations__id" title={item.id}>
-            {item.id.slice(-8)}
-          </code>
-          {item.childCount > 0 && (
-            <span>{t('tasks.operations.childCount', { count: item.childCount })}</span>
-          )}
+          <div className="task-operations__task-copy">
+            <div className="task-operations__name-line">
+              <Link
+                to="/tasks/$id"
+                params={{ id: item.id }}
+                className="data-table__link task-operations__name"
+                title={item.name}
+              >
+                {item.name}
+              </Link>
+              {item.childCount > 0 && (
+                <span className="task-operations__child-count">
+                  {t('tasks.operations.childCount', { count: item.childCount })}
+                </span>
+              )}
+              {item.listContext.parentAvailability === 'unavailable' && (
+                <span
+                  className="chip chip--tight"
+                  data-testid={`task-parent-unavailable-${item.id}`}
+                >
+                  {t('tasks.parentTaskUnavailable')}
+                </span>
+              )}
+            </div>
+            <div className="task-operations__meta">
+              <TaskSubjectLink task={item} taskId={item.id} badge />
+              <span className="task-operations__repo-separator" aria-hidden="true">
+                ·
+              </span>
+              <code className="task-operations__repo" title={repo.title}>
+                {repo.name}
+              </code>
+              {item.repoCount > 1 && (
+                <span
+                  className="chip chip--tight task-operations__repo-count"
+                  data-testid={`task-repos-${item.id}`}
+                >
+                  {t('tasks.repoCountChip', { n: item.repoCount })}
+                </span>
+              )}
+              {item.scheduledTaskId != null && (
+                <Link
+                  to="/scheduled/$id"
+                  params={{ id: item.scheduledTaskId }}
+                  className="task-operations__meta-link"
+                  data-testid={`task-scheduled-chip-${item.id}`}
+                >
+                  {t('tasks.scheduledChip')}
+                </Link>
+              )}
+              <span aria-hidden="true">·</span>
+              <code className="task-operations__id" title={item.id}>
+                {item.id.slice(-8)}
+              </code>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -852,22 +860,8 @@ function TaskOperationsRow(props: {
         <OwnerLabel ownerUserId={item.ownerUserId} owner={item.owner} wrap />
       </div>
 
-      <div className="task-operations__expand">
-        {props.branchId !== undefined && (
-          <button
-            type="button"
-            className="task-operations__expand-button"
-            aria-expanded={props.expanded}
-            aria-controls={props.branchId}
-            aria-label={t(props.expanded ? 'tasks.collapseChildren' : 'tasks.expandChildrenCount', {
-              count: item.listContext.qualifyingChildCount,
-            })}
-            data-testid={`task-expand-${item.id}`}
-            onClick={props.onToggle}
-          >
-            <span aria-hidden="true">{props.expanded ? '⌄' : '›'}</span>
-          </button>
-        )}
+      <div className="task-operations__nav" aria-hidden="true">
+        <OperationsChevronIcon />
       </div>
     </div>
   )

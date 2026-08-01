@@ -1,4 +1,4 @@
-# visual-regression — 26 full-page + 6 component pixel baselines (RFC-054 / RFC-198 / RFC-199 / RFC-219)
+# visual-regression — 27 full-page + 6 component pixel baselines (RFC-054 / RFC-198 / RFC-199 / RFC-219 / RFC-246)
 
 Spec: `e2e/visual-regression.spec.ts`. Baselines: `e2e/visual-regression.spec.ts-snapshots/`.
 

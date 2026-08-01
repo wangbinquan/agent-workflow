@@ -73,6 +73,18 @@ test('1280px keeps 30+ tasks dense and paginates roots and child branches indepe
   expect(rootBox!.height).toBeGreaterThanOrEqual(56)
   expect(rootBox!.height).toBeLessThanOrEqual(64)
 
+  const branchRow = page.getByTestId('task-row-branch-many')
+  const expandBox = await page.getByTestId('task-expand-branch-many').boundingBox()
+  const nameBox = await branchRow.locator('.task-operations__name').boundingBox()
+  const ownerBox = await branchRow.locator('.task-operations__owner').boundingBox()
+  const navBox = await branchRow.locator('.task-operations__nav').boundingBox()
+  expect(expandBox).not.toBeNull()
+  expect(nameBox).not.toBeNull()
+  expect(ownerBox).not.toBeNull()
+  expect(navBox).not.toBeNull()
+  expect(expandBox!.x + expandBox!.width).toBeLessThanOrEqual(nameBox!.x)
+  expect(navBox!.x).toBeGreaterThan(ownerBox!.x)
+
   await page.getByRole('button', { name: 'Load more tasks' }).click()
   await expect(page.getByTestId('task-row-root-page-two-18')).toBeVisible()
   await expect(rootItems).toHaveCount(34)
@@ -80,9 +92,16 @@ test('1280px keeps 30+ tasks dense and paginates roots and child branches indepe
   await page.getByTestId('task-expand-branch-many').click()
   await expect(page.getByTestId('task-row-branch-child-01')).toBeVisible()
   const childBox = await page.getByTestId('task-row-branch-child-01').boundingBox()
+  const childWellBox = await page
+    .getByTestId('task-row-branch-child-01')
+    .locator('xpath=ancestor::ol[1]')
+    .boundingBox()
   expect(childBox).not.toBeNull()
+  expect(childWellBox).not.toBeNull()
   expect(childBox!.height).toBeGreaterThanOrEqual(48)
   expect(childBox!.height).toBeLessThanOrEqual(56)
+  expect(childWellBox!.x).toBeGreaterThan(rootBox!.x)
+  expect(childWellBox!.width).toBeLessThan(rootBox!.width)
   await page.getByRole('button', { name: 'Load more child tasks' }).click()
   await expect(page.getByTestId('task-row-branch-child-20')).toBeVisible()
 
@@ -95,6 +114,11 @@ test('1280px keeps 30+ tasks dense and paginates roots and child branches indepe
   await expect(page.getByTestId('task-scheduled-chip-dense-scheduled')).toBeVisible()
   await expect(page.getByTestId('task-parent-unavailable-unavailable-parent-child')).toBeVisible()
   await expectNoHorizontalOverflow(page)
+
+  for (const width of [1024, 901]) {
+    await page.setViewportSize({ width, height: 768 })
+    await expectNoHorizontalOverflow(page)
+  }
 })
 
 test('debounced deep search restores its visible ancestry and advanced status filtering round-trips through URL', async ({
@@ -166,6 +190,12 @@ test('390×844 and 390×568 reflow the same nested list without horizontal scrol
   expect(expandBox).not.toBeNull()
   expect(expandBox!.width).toBeGreaterThanOrEqual(44)
   expect(expandBox!.height).toBeGreaterThanOrEqual(44)
+
+  const searchBox = await page.getByTestId('tasks-search').boundingBox()
+  const filterBox = await page.getByTestId('tasks-filter-button').boundingBox()
+  expect(searchBox).not.toBeNull()
+  expect(filterBox).not.toBeNull()
+  expect(Math.abs(searchBox!.y - filterBox!.y)).toBeLessThanOrEqual(2)
 
   await page.setViewportSize({ width: 390, height: 568 })
   await expectNoHorizontalOverflow(page)

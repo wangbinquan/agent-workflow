@@ -24,4 +24,30 @@ describe('routes/tasks.tsx — operations-grid row alignment', () => {
   test('all four content cells keep min-width zero for safe alignment', () => {
     expect(CSS).toMatch(/\.task-operations__cell\s*\{[^}]*min-width:\s*0/)
   })
+
+  test('the approved prototype is one unified operations surface', () => {
+    expect(SRC).toContain('className="operations-surface"')
+    expect(SRC).toContain('className="operations-surface__header"')
+    expect(SRC).toContain('<OperationsToolbar<TaskListView>')
+    expect(CSS).toMatch(
+      /\.operations-surface\s*\{[^}]*border:\s*1px solid var\(--border\)[^}]*box-shadow:/,
+    )
+  })
+
+  test('hierarchy expands beside the name while a separate trailing chevron opens detail', () => {
+    const row = SRC.slice(
+      SRC.indexOf('function TaskOperationsRow'),
+      SRC.indexOf('function executionDetail'),
+    )
+    expect(row).toMatch(
+      /task-operations__task-main[\s\S]*task-operations__expand-button[\s\S]*task-operations__name/,
+    )
+    expect(row).toMatch(/task-operations__owner[\s\S]*task-operations__nav/)
+  })
+
+  test('expanded children use the prototype inset well and branch rail', () => {
+    expect(CSS).toMatch(
+      /\.task-operations__children\s*\{[^}]*margin:\s*0 22px 8px 55px[^}]*border-left:[^}]*background:/,
+    )
+  })
 })

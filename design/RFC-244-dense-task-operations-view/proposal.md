@@ -1,6 +1,6 @@
 # RFC-244 · 高密度任务运行中心
 
-- 状态：Implementation Complete Locally / Publication Closure Pending（2026-08-01 用户以 “ok”
+- 状态：Visual Contract Correction Complete Locally / Publication In Progress（2026-08-01 用户以 “ok”
   正式批准；三轮设计门最终 `APPROVED — P0=0/P1=0/P2=0`；本地未提交实现预门
   `LOCAL APPROVED — P0=0/P1=0/P2=0`）
 - 日期：2026-08-01
@@ -144,7 +144,7 @@
 ## 7. 批准与实施边界
 
 用户已先确认 D1–D4 的推荐方向，并在三轮设计门闭合后于 2026-08-01 以 “ok” 正式批准
-RFC-244；实现可以进入 T6。该批准不授权 commit、push 或发布。
+RFC-244；实现可以进入 T6。该次 “ok” 只批准实施；用户随后已明确要求提交上库，发布授权现已具备。
 
 ## 8. 当前实施状态
 
@@ -155,4 +155,5 @@ T6–T20 与 T22 已在本地工作区完成；实现覆盖 shared contract、mi
 
 本地预门结论与验证证据见 [implementation-gate-2026-08-01.md](./implementation-gate-2026-08-01.md)。
 尚未完成的发布闭环只有 T21 的 hosted-Ubuntu 基线与 Safari VoiceOver 人工验证、T23 的固定 SHA
-实现门，以及依赖它们的 T24。用户尚未授权 commit、push 或发布，因此当前状态不标记为 Done。
+实现门，以及依赖它们的 T24。用户已授权精确 commit/push，当前正在固定 SHA 与远端门禁上闭环，
+因此尚不标记为 Done。

@@ -1,40 +1,52 @@
-// RFC-159 → RFC-192 — scheduled-task list with inline operations.
+// RFC-159 → RFC-192 → RFC-246 — scheduled-task operations surface.
 //
-// The page's highest-frequency actions live IN the rows now: an enable
-// Switch (PUT {enabled} — the same partial-update the detail toggle uses),
-// and a two-click「立即运行」(POST run-now → navigate to the new task, same
-// behavior as the detail button; 决策 D3 轻确认). The last-run cell folds
-// result chip + relative time + task link into one — the link renders ONLY
-// for `lastStatus === 'launched'`: recordFailure never touches lastTaskId,
-// so after a success→failure sequence the id still points at the OLDER
-// successful launch (Codex 设计门 P1 — a failure chip must not link there).
-// `consecutiveFailures > 1` adds the「连挂 ×N」danger chip. Next-run shows
-// the relative time with the short absolute as a subtitle. Row click keeps
-// navigating via the shared `shouldRowNavigate` guard (Switch / links /
-// buttons exempt by construction — design §4).
+// RFC-246 keeps every established row behavior (enable PUT, two-click run-now,
+// launched-only last-task links, and guarded row navigation) while aligning the
+// information hierarchy, density, filters, and responsive shape with /tasks.
 
 import type { ScheduledTask, ScheduledTaskListItem } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
+import { useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api, type ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
-import { Switch } from '@/components/Form'
+import { Field, Switch } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
-import { PageHeader } from '@/components/PageHeader'
+import { OperationsChevronIcon, OperationsToolbar } from '@/components/operations/OperationsToolbar'
 import { OwnerLabel } from '@/components/OwnerLabel'
+import { PageHeader } from '@/components/PageHeader'
 import { RelativeTime } from '@/components/RelativeTime'
+import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
 import { SCHEDULE_ICON } from '@/components/icons/resourceIcons'
 import { useScheduledTaskWs } from '@/hooks/useScheduledTaskWs'
+import {
+  SCHEDULED_OPERATIONS_VIEWS,
+  filterScheduledOperations,
+  scheduledNeedsRepair,
+  scheduledOperationsFacets,
+  type ScheduledLaunchKindFilter,
+  type ScheduledOperationsView,
+  type ScheduledOutcomeFilter,
+} from '@/lib/operations-filters'
 import { shouldRowNavigate } from '@/lib/row-nav'
 import { scheduleSummary } from '@/lib/schedule-view'
 import { Route as RootRoute } from './__root'
+
+const SCHEDULED_LAUNCH_KINDS = ['all', 'workflow', 'workgroup', 'agent'] as const
+const SCHEDULED_OUTCOMES = ['all', 'never', 'launched', 'failed'] as const
+
+interface ScheduledFilterDraft {
+  launchKind: ScheduledLaunchKindFilter
+  outcome: ScheduledOutcomeFilter
+}
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
@@ -42,10 +54,8 @@ export const Route = createRoute({
   component: ScheduledPage,
 })
 
-/** Repair rows (healer-disabled payloads, unparsable JSON) cannot fire — the
- *  run-now button disables on the same structural predicate as the repair
- *  badge, MINUS lastError: a schedule whose last fire failed is run-now's
- *  primary user (design §2.3 — the two predicates differ on purpose). */
+/** Repair rows cannot fire. `lastError` intentionally does not block run-now:
+ * a schedule whose previous launch failed is one of run-now's main uses. */
 export function runNowBlocked(row: ScheduledTask): boolean {
   return row.migrationNeeded || row.launchPayload === null || row.scheduleSpec === null
 }
@@ -64,9 +74,7 @@ function ScheduledPage() {
   })
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['scheduled-tasks'] })
-  // No optimistic write — WS + invalidate settle to the true value, and the
-  // backend may flip `enabled` itself (consecutive-failure auto-disable), so
-  // an optimistic mirror could show a phantom state (design §2.1).
+  // No optimistic mirror: the backend can auto-disable after repeated failures.
   const toggle = useMutation<ScheduledTask, ApiError, { id: string; enabled: boolean }>({
     mutationFn: ({ id, enabled }) =>
       api.put(`/api/scheduled-tasks/${encodeURIComponent(id)}`, { enabled }),
@@ -79,7 +87,47 @@ function ScheduledPage() {
       void navigate({ to: '/tasks/$id', params: { id: taskId } })
     },
   })
-  const isInitialEmpty = !isLoading && data !== undefined && data.length === 0
+
+  const [view, setView] = useState<ScheduledOperationsView>('all')
+  const [search, setSearch] = useState('')
+  const [launchKind, setLaunchKind] = useState<ScheduledLaunchKindFilter>('all')
+  const [outcome, setOutcome] = useState<ScheduledOutcomeFilter>('all')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [draft, setDraft] = useState<ScheduledFilterDraft>({ launchKind: 'all', outcome: 'all' })
+  const searchRef = useRef<HTMLInputElement | null>(null)
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null)
+
+  const items = useMemo(() => data ?? [], [data])
+  const facets = useMemo(() => scheduledOperationsFacets(items), [items])
+  const filtered = useMemo(
+    () =>
+      filterScheduledOperations(items, { view, q: search, launchKind, outcome }, (row) =>
+        scheduleSummary(row.scheduleSpec, lang),
+      ),
+    [items, lang, launchKind, outcome, search, view],
+  )
+  const advancedFilterCount = Number(launchKind !== 'all') + Number(outcome !== 'all')
+  const hasAnyFilter = view !== 'all' || search.trim() !== '' || advancedFilterCount > 0
+  const isInitialEmpty = !isLoading && data !== undefined && items.length === 0
+  const noMatches = !isLoading && error == null && items.length > 0 && filtered.length === 0
+
+  const clearFilters = () => {
+    setView('all')
+    setSearch('')
+    setLaunchKind('all')
+    setOutcome('all')
+    window.setTimeout(() => searchRef.current?.focus(), 0)
+  }
+  const openFilters = () => {
+    setDraft({ launchKind, outcome })
+    setFilterOpen(true)
+  }
+  const applyFilters = () => {
+    setLaunchKind(draft.launchKind)
+    setOutcome(draft.outcome)
+    setFilterOpen(false)
+  }
+
   const newScheduledAction = (
     <button
       type="button"
@@ -90,187 +138,314 @@ function ScheduledPage() {
       {t('scheduled.new')}
     </button>
   )
-  return (
-    <div className="page">
-      <PageHeader
-        title={t('scheduled.title')}
-        actions={isInitialEmpty ? undefined : newScheduledAction}
-      />
 
-      {isLoading && <LoadingState data-testid="scheduled-loading" />}
-      <FeedbackStack variant="section">
-        {error !== null && error !== undefined && (
-          <ErrorBanner error={error} onRetry={() => void refetch()} />
+  return (
+    <div className="page page--operations page--scheduled-operations">
+      <div className="operations-surface">
+        <PageHeader
+          title={t('scheduled.title')}
+          actions={isInitialEmpty ? undefined : newScheduledAction}
+          className="operations-surface__header"
+        >
+          <p className="operations-surface__subtitle">{t('scheduled.operations.subtitle')}</p>
+        </PageHeader>
+
+        {!isInitialEmpty && (
+          <OperationsToolbar<ScheduledOperationsView>
+            view={view}
+            onViewChange={setView}
+            views={SCHEDULED_OPERATIONS_VIEWS.map((value) => ({
+              value,
+              label: t(`scheduled.operations.views.${value}`),
+              count: facets[value],
+            }))}
+            viewAria={t('scheduled.operations.viewAria')}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder={t('scheduled.operations.searchPlaceholder')}
+            searchLabel={t('scheduled.operations.searchLabel')}
+            filterLabel={t('scheduled.operations.filters')}
+            activeFilterCount={advancedFilterCount}
+            activeFiltersLabel={(count) => t('scheduled.operations.activeFilters', { count })}
+            onOpenFilters={openFilters}
+            showClear={hasAnyFilter}
+            clearLabel={t('common.clearFilters')}
+            onClear={clearFilters}
+            testidPrefix="scheduled"
+            disabled={isLoading}
+            searchRef={searchRef}
+            filterButtonRef={filterButtonRef}
+          />
         )}
-        {toggle.error != null && <ErrorBanner error={toggle.error} />}
-        {runNow.error != null && <ErrorBanner error={runNow.error} />}
-      </FeedbackStack>
-      {isInitialEmpty && (
-        <EmptyState
-          title={t('scheduled.empty')}
-          description={t('scheduled.emptyDescription')}
-          icon={SCHEDULE_ICON}
-          action={newScheduledAction}
-          data-testid="scheduled-empty"
-        />
-      )}
-      {data !== undefined && data.length > 0 && (
-        <TableViewport label={t('scheduled.title')} minWidth="lg">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t('scheduled.colEnabled')}</th>
-                <th>{t('scheduled.colName')}</th>
-                <th>{t('acl.owner')}</th>
-                <th>{t('scheduled.colSchedule')}</th>
-                <th>{t('scheduled.colNext')}</th>
-                <th>{t('scheduled.colStatus')}</th>
-                <th aria-label={t('common.ariaActions')} />
-                {/* Chevron column is purely decorative (all its cells are
-                    aria-hidden), so the header hides from AT too. */}
-                <th aria-hidden="true" />
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((row) => (
-                <tr
-                  key={row.id}
-                  className="data-table__row"
-                  onClick={(e) => {
-                    if (shouldRowNavigate(e)) {
-                      void navigate({ to: '/scheduled/$id', params: { id: row.id } })
-                    }
-                  }}
-                  data-testid={`scheduled-row-${row.id}`}
-                >
-                  <td>
-                    {/* Inline enable/disable — same PUT the detail toggle fires.
-                      The <label>-based Switch is exempt from row navigation
-                      via the shared guard's closest() whitelist. */}
-                    <Switch
-                      checked={row.enabled}
-                      disabled={toggle.isPending}
-                      onChange={(enabled) => toggle.mutate({ id: row.id, enabled })}
-                      aria-label={t('scheduled.colEnabled')}
-                      data-testid={`scheduled-enable-${row.id}`}
-                    />
-                  </td>
-                  <td className="data-table__nowrap">
+
+        <FeedbackStack variant="section">
+          {error !== null && error !== undefined && (
+            <ErrorBanner error={error} onRetry={() => void refetch()} />
+          )}
+          {toggle.error != null && <ErrorBanner error={toggle.error} />}
+          {runNow.error != null && <ErrorBanner error={runNow.error} />}
+        </FeedbackStack>
+        {isLoading && <LoadingState data-testid="scheduled-loading" />}
+        {isInitialEmpty && (
+          <EmptyState
+            title={t('scheduled.empty')}
+            description={t('scheduled.emptyDescription')}
+            icon={SCHEDULE_ICON}
+            action={newScheduledAction}
+            data-testid="scheduled-empty"
+          />
+        )}
+        {noMatches && (
+          <EmptyState
+            title={t('common.noMatches')}
+            description={t('scheduled.operations.noMatchesDescription')}
+            action={
+              <button type="button" className="btn" onClick={clearFilters}>
+                {t('common.clearFilters')}
+              </button>
+            }
+            data-testid="scheduled-no-matches"
+          />
+        )}
+        {filtered.length > 0 && (
+          <ScheduledOperationsTable
+            rows={filtered}
+            lang={lang}
+            togglePending={toggle.isPending}
+            runNowPending={runNow.isPending}
+            onToggle={(id, enabled) => toggle.mutate({ id, enabled })}
+            onRunNow={(id) => runNow.mutate(id)}
+            onNavigate={(id) => void navigate({ to: '/scheduled/$id', params: { id } })}
+          />
+        )}
+      </div>
+
+      <ScheduledFilterDialog
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        triggerRef={filterButtonRef}
+        draft={draft}
+        onChange={setDraft}
+        onApply={applyFilters}
+        onClear={() => setDraft({ launchKind: 'all', outcome: 'all' })}
+      />
+    </div>
+  )
+}
+
+function ScheduledFilterDialog(props: {
+  open: boolean
+  onClose: () => void
+  triggerRef: RefObject<HTMLButtonElement | null>
+  draft: ScheduledFilterDraft
+  onChange: (draft: ScheduledFilterDraft) => void
+  onApply: () => void
+  onClear: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Dialog
+      open={props.open}
+      onClose={props.onClose}
+      title={t('scheduled.operations.filterTitle')}
+      size="md"
+      triggerRef={props.triggerRef}
+      data-testid="scheduled-filter-dialog"
+      footer={
+        <>
+          <button type="button" className="btn" onClick={props.onClear}>
+            {t('common.clearFilters')}
+          </button>
+          <button type="button" className="btn btn--primary" onClick={props.onApply}>
+            {t('scheduled.operations.applyFilters')}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid operations-filter-dialog">
+        <Field label={t('scheduled.operations.launchKindLabel')} group>
+          <Segmented<ScheduledLaunchKindFilter>
+            value={props.draft.launchKind}
+            onChange={(next) => props.onChange({ ...props.draft, launchKind: next })}
+            ariaLabel={t('scheduled.operations.launchKindLabel')}
+            options={SCHEDULED_LAUNCH_KINDS.map((value) => ({
+              value,
+              label: t(`scheduled.operations.launchKinds.${value}`),
+            }))}
+          />
+        </Field>
+        <Field label={t('scheduled.operations.outcomeLabel')} group>
+          <Segmented<ScheduledOutcomeFilter>
+            value={props.draft.outcome}
+            onChange={(next) => props.onChange({ ...props.draft, outcome: next })}
+            ariaLabel={t('scheduled.operations.outcomeLabel')}
+            options={SCHEDULED_OUTCOMES.map((value) => ({
+              value,
+              label: t(`scheduled.operations.outcomes.${value}`),
+            }))}
+          />
+        </Field>
+      </div>
+    </Dialog>
+  )
+}
+
+function ScheduledOperationsTable(props: {
+  rows: ScheduledTaskListItem[]
+  lang: 'zh' | 'en'
+  togglePending: boolean
+  runNowPending: boolean
+  onToggle: (id: string, enabled: boolean) => void
+  onRunNow: (id: string) => void
+  onNavigate: (id: string) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <TableViewport label={t('scheduled.title')}>
+      <table
+        className="data-table operations-table scheduled-operations"
+        data-testid="scheduled-table"
+      >
+        <thead>
+          <tr>
+            <th>{t('scheduled.operations.columns.schedule')}</th>
+            <th>{t('scheduled.operations.columns.state')}</th>
+            <th>{t('scheduled.operations.columns.next')}</th>
+            <th>{t('acl.owner')}</th>
+            <th aria-label={t('common.ariaActions')} />
+            <th aria-hidden="true" />
+          </tr>
+        </thead>
+        <tbody>
+          {props.rows.map((row) => {
+            const repair = scheduledNeedsRepair(row)
+            const summary = scheduleSummary(row.scheduleSpec, props.lang)
+            return (
+              <tr
+                key={row.id}
+                className="data-table__row scheduled-operations__row"
+                onClick={(event) => {
+                  if (shouldRowNavigate(event)) props.onNavigate(row.id)
+                }}
+                data-testid={`scheduled-row-${row.id}`}
+              >
+                <td className="scheduled-operations__schedule">
+                  <span className="operations-table__mobile-label">
+                    {t('scheduled.operations.columns.schedule')}：
+                  </span>
+                  <div className="scheduled-operations__name-line">
                     <Link
                       to="/scheduled/$id"
                       params={{ id: row.id }}
-                      className="data-table__link"
+                      className="data-table__link scheduled-operations__name"
                       title={row.name}
                     >
                       {row.name}
                     </Link>
-                    {/* RFC-165 T14: legacy/degraded rows carry a repair badge —
-                      the wizard's editScheduled mode is the repair path. */}
-                    {(row.migrationNeeded ||
-                      row.lastError != null ||
-                      row.launchPayload === null ||
-                      row.scheduleSpec === null) && (
+                    {repair && (
+                      <StatusChip kind="warn" size="sm" data-testid={`scheduled-repair-${row.id}`}>
+                        {t('scheduled.repairBadge')}
+                      </StatusChip>
+                    )}
+                  </div>
+                  <div className="scheduled-operations__meta">
+                    <span>{t(`scheduled.operations.launchKinds.${row.launchKind}`)}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="scheduled-operations__summary" title={summary}>
+                      {summary}
+                    </span>
+                  </div>
+                </td>
+                <td className="scheduled-operations__state">
+                  <span className="operations-table__mobile-label">
+                    {t('scheduled.operations.columns.state')}：
+                  </span>
+                  <div className="scheduled-operations__toggle">
+                    <Switch
+                      checked={row.enabled}
+                      disabled={props.togglePending}
+                      onChange={(enabled) => props.onToggle(row.id, enabled)}
+                      aria-label={t('scheduled.colEnabled')}
+                      data-testid={`scheduled-enable-${row.id}`}
+                    />
+                    <span>{t(row.enabled ? 'scheduled.enabledYes' : 'scheduled.enabledNo')}</span>
+                  </div>
+                  <div className="scheduled-operations__last-run">
+                    {row.lastStatus === null ? (
+                      <span>{t('scheduled.lastNever')}</span>
+                    ) : (
                       <>
-                        {' '}
                         <StatusChip
-                          kind="warn"
+                          kind={row.lastStatus === 'failed' ? 'danger' : 'success'}
                           size="sm"
-                          data-testid={`scheduled-repair-${row.id}`}
                         >
-                          {t('scheduled.repairBadge')}
-                        </StatusChip>
-                      </>
-                    )}
-                  </td>
-                  <td className="data-table__owner-cell">
-                    <OwnerLabel ownerUserId={row.ownerUserId} owner={row.owner} />
-                  </td>
-                  <td className="data-table__muted">{scheduleSummary(row.scheduleSpec, lang)}</td>
-                  <td className="data-table__nowrap">
-                    {row.enabled && row.nextRunAt != null ? (
-                      <div className="scheduled-next">
-                        <RelativeTime ts={row.nextRunAt} />
-                        <span className="scheduled-next__abs">
-                          {new Date(row.nextRunAt).toLocaleString(undefined, {
-                            dateStyle: 'short',
-                            timeStyle: 'short',
-                          })}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="data-table__muted">{t('common.emDash')}</span>
-                    )}
-                  </td>
-                  <td className="data-table__nowrap">
-                    {row.lastStatus == null ? (
-                      <span className="muted">{t('scheduled.lastNever')}</span>
-                    ) : (
-                      <>
-                        <StatusChip kind={row.lastStatus === 'failed' ? 'danger' : 'success'}>
                           {t(`scheduled.last_${row.lastStatus}`)}
                         </StatusChip>
-                        {/* 连挂告警 — only when failures streak (>1); a single
-                          failure is already the chip above. */}
                         {row.consecutiveFailures > 1 && (
-                          <>
-                            {' '}
-                            <StatusChip
-                              kind="danger"
-                              size="sm"
-                              data-testid={`scheduled-streak-${row.id}`}
-                            >
-                              {t('scheduled.consecutiveChip', { n: row.consecutiveFailures })}
-                            </StatusChip>
-                          </>
+                          <StatusChip
+                            kind="danger"
+                            size="sm"
+                            data-testid={`scheduled-streak-${row.id}`}
+                          >
+                            {t('scheduled.consecutiveChip', { n: row.consecutiveFailures })}
+                          </StatusChip>
                         )}
-                        {row.lastRunAt != null && (
-                          <>
-                            {' '}
-                            <span className="data-table__muted">
-                              <RelativeTime ts={row.lastRunAt} />
-                            </span>
-                          </>
-                        )}
-                        {/* Task link ONLY for launched — recordFailure leaves
-                          lastTaskId pointing at the previous SUCCESSFUL task
-                          (Codex 设计门 P1: never link a failure chip there). */}
-                        {row.lastStatus === 'launched' && row.lastTaskId != null && (
-                          <>
-                            {' '}
-                            <Link
-                              to="/tasks/$id"
-                              params={{ id: row.lastTaskId }}
-                              className="data-table__link"
-                              data-testid={`scheduled-last-task-${row.id}`}
-                            >
-                              {t('scheduled.lastTaskLink')}
-                            </Link>
-                          </>
+                        {row.lastRunAt !== null && <RelativeTime ts={row.lastRunAt} />}
+                        {row.lastStatus === 'launched' && row.lastTaskId !== null && (
+                          <Link
+                            to="/tasks/$id"
+                            params={{ id: row.lastTaskId }}
+                            className="data-table__link"
+                            data-testid={`scheduled-last-task-${row.id}`}
+                          >
+                            {t('scheduled.lastTaskLink')}
+                          </Link>
                         )}
                       </>
                     )}
-                  </td>
-                  <td className="data-table__actions">
-                    <ConfirmButton
-                      label={t('scheduled.runNow')}
-                      // mutate (not mutateAsync): the rejection is consumed by the
-                      // mutation state (→ ErrorBanner) instead of escaping the
-                      // ConfirmButton's un-handled promise (实现门 P2).
-                      onConfirm={() => runNow.mutate(row.id)}
-                      size="sm"
-                      disabled={runNowBlocked(row) || runNow.isPending}
-                    />
-                  </td>
-                  {/* Row-click affordance — same mute chevron as /tasks rows. */}
-                  <td className="data-table__chevron" aria-hidden="true">
-                    ›
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableViewport>
-      )}
-    </div>
+                  </div>
+                </td>
+                <td className="scheduled-next scheduled-operations__next">
+                  <span className="operations-table__mobile-label">
+                    {t('scheduled.operations.columns.next')}：
+                  </span>
+                  {row.enabled && row.nextRunAt !== null ? (
+                    <>
+                      <RelativeTime ts={row.nextRunAt} />
+                      <span className="scheduled-next__abs scheduled-operations__secondary">
+                        {new Date(row.nextRunAt).toLocaleString(undefined, {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="data-table__muted">{t('common.emDash')}</span>
+                  )}
+                </td>
+                <td className="data-table__owner-cell scheduled-operations__owner">
+                  <span className="operations-table__mobile-label">{t('acl.owner')}：</span>
+                  <OwnerLabel ownerUserId={row.ownerUserId} owner={row.owner} />
+                </td>
+                <td className="data-table__actions scheduled-operations__actions">
+                  <span className="operations-table__mobile-label">
+                    {t('common.ariaActions')}：
+                  </span>
+                  <ConfirmButton
+                    label={t('scheduled.runNow')}
+                    onConfirm={() => props.onRunNow(row.id)}
+                    size="sm"
+                    disabled={runNowBlocked(row) || props.runNowPending}
+                  />
+                </td>
+                <td className="data-table__chevron scheduled-operations__nav" aria-hidden="true">
+                  <OperationsChevronIcon />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </TableViewport>
   )
 }

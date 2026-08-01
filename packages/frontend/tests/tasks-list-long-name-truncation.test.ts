@@ -14,12 +14,12 @@ function rule(selector: string): string {
 }
 
 describe('tasks operations list — long content containment', () => {
-  test('task names are capped at two recoverable lines', () => {
+  test("task names keep the prototype's recoverable one-line density", () => {
     const body = rule('\\.task-operations__name')
-    expect(body).toMatch(/display:\s*-webkit-box/)
+    expect(body).toMatch(/display:\s*block/)
     expect(body).toMatch(/overflow:\s*hidden/)
-    expect(body).toMatch(/-webkit-line-clamp:\s*2/)
-    expect(body).toMatch(/overflow-wrap:\s*anywhere/)
+    expect(body).toMatch(/text-overflow:\s*ellipsis/)
+    expect(body).toMatch(/white-space:\s*nowrap/)
   })
 
   test('metadata and execution detail ellipsize instead of widening the grid', () => {
@@ -31,6 +31,12 @@ describe('tasks operations list — long content containment', () => {
 
   test('short id cannot absorb the task metadata row', () => {
     expect(rule('\\.task-operations__id')).toMatch(/flex:\s*none/)
+  })
+
+  test('ordinary owner labels stay compact without disabling wrapping', () => {
+    const body = rule('\\.task-operations__owner')
+    expect(body).toMatch(/font-size:\s*var\(--font-sm\)/)
+    expect(body).toMatch(/overflow-wrap:\s*anywhere/)
   })
 
   test('the task link exposes the full name through its title', () => {

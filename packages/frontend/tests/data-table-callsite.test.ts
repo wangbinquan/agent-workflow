@@ -17,7 +17,7 @@ function read(rel: string): string {
 describe('RFC-035 .data-table推广 grep guard', () => {
   test('routes/repos.tsx renders .data-table for its list', () => {
     const body = read('routes/repos.tsx')
-    expect(body.includes('className="data-table"')).toBe(true)
+    expect(body).toMatch(/className="data-table\s[^"]*repo-operations"/)
     expect(body.includes("<TableViewport label={t('repos.title')}>"), 'responsive wrapper').toBe(
       true,
     )

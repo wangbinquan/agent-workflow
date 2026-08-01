@@ -1,8 +1,8 @@
 # RFC-244 · 高密度任务运行中心 — plan
 
-状态：Implementation Complete Locally / Publication Closure Pending（推荐方向已确认；三轮设计门
-最终 `APPROVED — P0=0/P1=0/P2=0`；2026-08-01 用户以 “ok” 正式批准；本地未提交实现预门
-`LOCAL APPROVED — P0=0/P1=0/P2=0`）。
+状态：Visual Contract Correction Complete Locally / Publication In Progress（推荐方向已确认；三轮
+设计门最终 `APPROVED — P0=0/P1=0/P2=0`；2026-08-01 用户以 “ok” 正式批准；首个实现提交后
+发现界面与已批准原型存在偏差，当前以 `visual-contract.md` 为基线修正）。
 
 交付形态：一个 RFC / 一个 PR，按三个可独立验证的提交批次推进；不得为了前后端并行留下
 「新 backend 已默认改变旧列表」或「frontend 指向尚未存在的 wire」窗口。
@@ -77,7 +77,8 @@
 - [x] **RFC-244-T20 Playwright seed**：30+ task、八状态、alert、scheduled、三层树、父未授权 child、
       异常 dangling、admin shared-scope context 反例、大量 siblings、长内容与深层 child-only search。
 - [ ] **RFC-244-T21 browser/visual**：1280×800、390×844、390×568；无横向 overflow、紧凑行、
-      filter/keyboard/touch、搜索恢复、root/child load more、错误恢复；更新 hosted-Ubuntu 基线。
+      filter/keyboard/touch、搜索恢复、root/child load more、错误恢复；按 `visual-contract.md` 核对统一
+      surface、左侧展开/右侧详情提示、inset child well 与单行任务名；更新 hosted-Ubuntu 基线。
 - [x] **RFC-244-T22 full gates**：运行完整 typecheck、lint、test 与 format check；失败按 ownership
       归因，不能用定向绿冒充全量绿。完整命令：
       `bun run typecheck && bun run lint && bun run test && bun run format:check`。
@@ -87,7 +88,7 @@
       更新为 Done，记录 exact SHA、测试、浏览器与 gate 证据。
 
 本地交付记录：T6–T20 与 T22 已完成。T21 尚差 hosted-Ubuntu screenshot baseline 与 Safari
-VoiceOver 人工走查；T23 必须在用户授权提交后对固定 SHA 执行，不能用工作区预门代替；T24 因此
+VoiceOver 人工走查；用户已授权精确提交，T23 将对固定 SHA 执行，不能用工作区预门代替；T24 因此
 保持未完成。当前预门记录见
 [implementation-gate-2026-08-01.md](./implementation-gate-2026-08-01.md)。
 
