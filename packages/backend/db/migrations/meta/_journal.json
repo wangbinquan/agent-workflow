@@ -911,6 +911,20 @@
       "when": 1788278400004,
       "tag": "0130_rfc247_audit_snapshot_failed",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "6",
+      "when": 1788278400005,
+      "tag": "0131_rfc248_repo_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "6",
+      "when": 1788278400006,
+      "tag": "0132_rfc248_memory_repo_group_scope",
+      "breakpoints": true
     }
   ]
 }

@@ -819,6 +819,60 @@ export const cachedRepos = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// repo_groups / repo_group_members — RFC-248. 一个可命名、可复用、可绑定记忆的
+// 执行空间定义：哪几个仓 + 各自 checkout 什么 + 在运行目录里怎么摆。
+// 取代 RFC-066 的「启动表单手填多仓 + basename 平铺」。
+// -----------------------------------------------------------------------------
+export const repoGroups = sqliteTable('repo_groups', {
+  id: text('id').primaryKey(), // ULID
+  name: text('name').notNull(), // migration 0131 建了 lower(name) 唯一索引
+  description: text('description').notNull().default(''),
+  /** PUT 时自增（与 workflows 同款）。启动时快照进 task_repos，不做漂移提示（D8）。 */
+  version: integer('version').notNull().default(1),
+  /**
+   * 审计展示用，**不是** ACL owner——仓库组与 cached_repos 同类，不进 RFC-099
+   * 的 owner + visibility + grants 体系，能力只由 `repos:*` 权限点治理（D5）。
+   */
+  createdByUserId: text('created_by_user_id'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  schemaVersion: integer('schema_version').notNull().default(1),
+})
+
+export const repoGroupMembers = sqliteTable(
+  'repo_group_members',
+  {
+    groupId: text('group_id')
+      .notNull()
+      .references(() => repoGroups.id, { onDelete: 'cascade' }),
+    /** 0..N-1，稳定排序键；也是展平后同深度的次序来源。 */
+    memberIndex: integer('member_index').notNull(),
+    kind: text('kind', { enum: ['repo', 'group'] }).notNull(),
+    /**
+     * kind='repo'。**刻意不加** onDelete cascade：删仓走 gitRepoCache 的显式
+     * 守卫（409 列出引用它的组 + `force=1` 摘除，D13）。静默级联会让组悄悄
+     * 变形，用户下次启动才发现少了一个仓。
+     */
+    cachedRepoId: text('cached_repo_id').references(() => cachedRepos.id),
+    /** '' = 该仓默认分支。D6：存在组里，启动时不可改。 */
+    ref: text('ref').notNull().default(''),
+    /** '' = 整仓；否则 sparse 只检出这个仓内子目录（D17，非 cone 模式）。 */
+    subdir: text('subdir').notNull().default(''),
+    /** kind='group'。同样不 cascade——删组也走显式守卫。 */
+    childGroupId: text('child_group_id'),
+    /** '' = 挂在根（cwd 本身就是那个仓的 worktree）。至多一个成员可以挂根（D2）。 */
+    mountPath: text('mount_path').notNull().default(''),
+    /** D11/D20：只读成员不快照 / 不进 diff / 不推送；向内传播取并集。 */
+    readonly: integer('readonly', { mode: 'boolean' }).notNull().default(false),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.groupId, t.memberIndex] }),
+    cachedRepoIdx: index('idx_rgm_cached_repo').on(t.cachedRepoId),
+    childGroupIdx: index('idx_rgm_child_group').on(t.childGroupId),
+  }),
+)
+
+// -----------------------------------------------------------------------------
 // tasks — one row per `POST /api/tasks`. Holds workflow snapshot for replay safety.
 // -----------------------------------------------------------------------------
 export const tasks = sqliteTable(
@@ -845,6 +899,17 @@ export const tasks = sqliteTable(
     repoUrl: text('repo_url'),
     /** RFC-204: cached mirror this task was materialized from (deterministic ref key). */
     cachedRepoId: text('cached_repo_id'),
+    /**
+     * RFC-248: 本任务是用哪个仓库组启动的。NULL = 单仓 / scratch 启动。
+     * 只用于溯源、记忆注入（组 scope）与详情页 chip；**布局本身**已经快照进
+     * `task_repos`，改组不影响在跑任务（D8）。
+     */
+    repoGroupId: text('repo_group_id'),
+    /**
+     * RFC-248（设计门 G5）: 组名的**快照**。组被删除后详情页的 chip 仍要能渲染
+     * 名字，而不是退化成一个悬空 id。
+     */
+    repoGroupName: text('repo_group_name'),
     worktreePath: text('worktree_path').notNull(),
     baseBranch: text('base_branch').notNull(),
     branch: text('branch').notNull(), // 'agent-workflow/{task-id}'
@@ -1092,6 +1157,29 @@ export const taskRepos = sqliteTable(
      * `tasks.worktree_path` is the repo worktree itself.
      */
     worktreeDirName: text('worktree_dir_name').notNull().default(''),
+    /**
+     * RFC-248: 相对任务根（cwd）的挂载路径；'' = 挂在根。**取代**
+     * `worktree_dir_name` 成为规范的仓 key（文本 diff 分段头 / 结构化 diff id
+     * 前缀 / 扇出 shard_key 三处同源）。migration 0131 从 `worktree_dir_name`
+     * backfill——存量多仓是平铺布局，basename 就**是**它的挂载路径，所以历史
+     * 审阅锚点不变。`worktree_dir_name` 在 T26（调用点全部迁完）后删除。
+     */
+    mountPath: text('mount_path').notNull().default(''),
+    /** RFC-248: '' = 整仓；否则该成员是 sparse 检出（只有这个仓内子目录落盘）。 */
+    subdir: text('subdir').notNull().default(''),
+    /**
+     * RFC-248 D11: 只读成员——不写 pre_snapshot、resume 不回滚、不进 git_diff /
+     * 任务 diff / 结构化 diff、不参与自动提交推送；任务收尾时若检出 dirty 就发
+     * 一条告警（不改任务状态）。
+     */
+    readonly: integer('readonly', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * RFC-248 D1: 平台预置 commit 的 sha——把嵌套挂载点写进本仓 `.gitignore`
+     * 并提交的那一笔，`base_commit` 指向它。单独存一列，让「这一笔到底是不是
+     * 平台造的」在排错与 UI 上一眼可判，也让「它的父提交才是真 base tip」可推导。
+     * NULL = 本仓没有嵌套子成员，未产生预置 commit。
+     */
+    gitignoreCommit: text('gitignore_commit'),
     /** RFC-034: per-repo submodule init telemetry. NULL for legacy rows. */
     hasSubmodules: integer('has_submodules', { mode: 'boolean' }),
     submoduleInitOk: integer('submodule_init_ok', { mode: 'boolean' }),
