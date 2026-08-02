@@ -66,9 +66,18 @@ joinMount(prefix, own):
 | 必须是相对路径（不以 `/` 开头，无 Windows 盘符） | `mount-path-absolute` |
 | 任一段不得为 `.` 或 `..` | `mount-path-traversal` |
 | 不得含 `\r` `\n` `\\` | `mount-path-unsafe-char` |
-| 折叠重复 `/`、去尾 `/`；折叠后不得为空（除非本来就是 `''`） | `mount-path-empty` |
-| 展平结果里**不得重复**（精确相等） | `mount-path-duplicate` |
+| 折叠重复 `/`、去尾 `/` | —（无错误码，见下） |
 | 展平结果里**至多一个** `''` | `mount-path-multiple-roots` |
+| 展平结果里**不得重复**（精确相等） | `mount-path-duplicate` |
+
+> 初稿还列了第六条 `mount-path-empty`（「非空但折叠成空」）。实现时证明它
+> **不可达**：非空且不以 `/` 开头的串必然至少有一个非空段，而全是斜杠的串会先
+> 被 `mount-path-absolute` 挡掉。死码不留，已删；
+> `rfc248-repo-group-layout.test.ts` 里有一条测试锁住这个前提。
+>
+> 两条集合级约束的**检查顺序**是有意的：根计数先于重复检查。两个成员都挂根时
+> 两条都成立，但「至多一个成员可以挂在根」比 `duplicate mount path:` 更可操作
+> （后者读起来像是路径写重了）。
 
 **刻意不校验的**：一个挂载点是另一个的前缀（`''` 与 `vendor/b`、`a` 与
 `a/vendor/c`）——这正是嵌套，是本 RFC 的目的。

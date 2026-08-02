@@ -10,7 +10,47 @@
 // `a\nb`) would otherwise collapse into the same string and cross-join files
 // between repos.
 
+// -----------------------------------------------------------------------------
+// RFC-248 — 后继方案：规范 key **就是挂载路径**（`task_repos.mount_path`），
+// 根仓为空串。下面的 `canonicalRepoLabels`（RFC-239 的 basename + `-2` 后缀）
+// 会在 RFC-248 T29 把五个调用点迁完后**删除**——`mount_path` 列到 PR-2 才存在，
+// 所以本 PR 只做纯新增，不制造「两套都在用」的过渡态。
+//
+// 为什么换：嵌套布局下 basename 彻底丢失方位——agent 拿到 `utils-2` 不知道该
+// 去哪个目录。挂载路径与它在磁盘上看到的完全一致，`cd <key>` 就到位。
+//
+// 为什么新方案不 sanitize：挂载路径在**建组期**已过 `normalizeMountPath`
+// ——拒绝绝对路径 / `.` / `..` / CR / LF / 反斜杠，并在集合级保证唯一。再
+// sanitize 一次只会把 `apps/web` 毁成 `apps-web`，反而制造歧义；唯一性由挂载
+// 路径本身保证，不需要 uniquing。
+// -----------------------------------------------------------------------------
+
 import { basename } from 'node:path'
+import { repoKeyWire } from '@agent-workflow/shared'
+
+/** RFC-248 —— 一个仓在 key 计算里需要的最小视图。 */
+export interface RepoForKey {
+  /** `task_repos.mount_path`；'' = 挂在根。 */
+  mountPath: string
+}
+
+/**
+ * RFC-248 —— 规范 key，与输入等长同序。**对完整 repo 列表**计算（不要先过滤
+ * 再算），这样文本 diff 与结构化 diff 即使各自的 usable 过滤不同，也会给同一个
+ * 仓同一个 key。
+ */
+export function canonicalRepoKeys(repos: readonly RepoForKey[]): string[] {
+  return repos.map((r) => r.mountPath)
+}
+
+/**
+ * RFC-248 —— 线上/展示形态。根仓的 key 是空串，空串没法出现在单行的
+ * `# === Repo: X ===` 标记里，所以线上写 `.`；`normalizeMountPath` 拒绝 `.`
+ * 段，故它不可能与真实挂载路径冲突。
+ */
+export function canonicalRepoKeysWire(repos: readonly RepoForKey[]): string[] {
+  return repos.map((r) => repoKeyWire(r.mountPath))
+}
 
 export interface RepoForLabel {
   worktreeDirName?: string | null

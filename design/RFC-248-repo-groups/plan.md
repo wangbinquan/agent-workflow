@@ -37,9 +37,15 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
 - **T5** 分支后缀（design §3.3）：`assignBranchSuffixes(planned, taskId, workingBranch?)`。
 - **T6** `.gitignore` 区块（design §3.1）：`buildGitignoreBlock(existing, rules, taskId)`
   → `{ nextContent, added: string[] }`，`added` 为空表示无需 commit（幂等）。
-- **T7** 重写 `packages/backend/src/services/repoLabels.ts`：`repoKey` /
-  `repoKeyWire` / `parseRepoKeyWire` / `splitRepoPrefix`（最长前缀匹配）。
-  **删除** `sanitizeLabel` 与 basename+数字后缀 uniquing。
+- **T7** `packages/backend/src/services/repoLabels.ts` **纯新增**
+  `canonicalRepoKeys` / `canonicalRepoKeysWire`；`repoKeyWire` /
+  `parseRepoKeyWire` / `splitRepoPrefix`（最长前缀匹配）落在 shared 的
+  `repoGroupLayout.ts` 里（前端布局树与后端物化共用）。
+  ⚠ **旧的 `canonicalRepoLabels` + `sanitizeLabel` 在本 PR 不删**——它有 5 个
+  调用点，而 `mount_path` 列要到 PR-2 的 migration 才存在，本 PR 删了就编译不过、
+  PR-1 无法独立跑绿。删除归 **T29**（调用点迁移时一并做），
+  T44 的源码层文本断言（`repoLabels.ts` 不得出现 `sanitizeLabel`）也在那时才生效。
+  这不是留过渡态——同一个 RFC 内的 PR 序列，终态无重复。
 - **T8** `packages/backend/src/util/diffSplit.ts`：三个 split 函数加仓 key 游标，
   `shard_key` 带挂载路径前缀（design §6.5）。
 - **T9** 测试：`repo-group-flatten` / `repo-group-mount-path` /

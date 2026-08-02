@@ -108,3 +108,8 @@ export * from './structureSemantics'
 // RFC-239 — deterministic change-group model shared by the overview sidebar
 // and the AI-narrative input. Dependency-free leaf.
 export * from './changeGroups'
+// RFC-248 — 仓库组。schema 与**纯**布局代数（挂载路径规范化 / 递归展平 /
+// 包含关系 / 排除计划 / 分支序号 / 仓 key）。零 DB / 零 fs 依赖，前端布局预览
+// 与后端物化共用，两边不可能算出不同的布局。
+export * from './schemas/repoGroup'
+export * from './repoGroupLayout'

@@ -40,11 +40,30 @@ export interface Shard {
 const DIFF_HEAD_RE = /^diff --git a\/(.+?) b\/(.+)$/
 
 /**
+ * RFC-248 — 多仓 `git_diff` 的仓分段标记。文本 diff 把每个仓拼成一段，段首是
+ * `# === Repo: <keyWire> ===`（`keyWire` 是挂载路径，根仓写 `.`）。
+ *
+ * 解析时用它切换「当前仓」游标，并把该段里的路径前缀成 `<挂载路径>/<仓内路径>`
+ * ——这样扇出分片的 `shard_key` 与 agent 在磁盘上看到的路径一致（`cd` 就到位），
+ * 而且两个仓里的同名目录在 per-directory 分片下不会被合并成一个分片。
+ *
+ * 单仓任务的 diff **不含**任何分段头，游标保持空串，路径原样——与今天字节级一致。
+ */
+const REPO_MARKER_RE = /^# === Repo: (.+) ===$/
+
+function joinRepoPrefix(repoKey: string, path: string): string {
+  return repoKey === '' ? path : `${repoKey}/${path}`
+}
+
+/**
  * Parse a unified diff into per-file blocks. The parser is tolerant of
  * leading text before the first `diff --git` line (it gets dropped).
+ *
+ * RFC-248: `# === Repo: X ===` 分段头会切换仓前缀游标（见 `REPO_MARKER_RE`）。
  */
 export function parseDiff(diff: string): FileDiff[] {
   const out: FileDiff[] = []
+  let repoKey = ''
   let current: { header: string; buf: string[]; path: string; oldPath: string } | null = null
 
   function flush() {
@@ -61,6 +80,15 @@ export function parseDiff(diff: string): FileDiff[] {
   }
 
   for (const line of diff.split('\n')) {
+    // 仓分段头必须先于 diff 头判定：它出现在两个仓的 diff 之间，此时上一个仓的
+    // 最后一个文件块还开着，必须 flush 掉再换游标，否则会把标记行吞进上一块。
+    const rm = REPO_MARKER_RE.exec(line)
+    if (rm !== null) {
+      flush()
+      const wire = rm[1] ?? '.'
+      repoKey = wire === '.' ? '' : wire
+      continue
+    }
     const m = DIFF_HEAD_RE.exec(line)
     if (m !== null) {
       flush()
@@ -68,8 +96,8 @@ export function parseDiff(diff: string): FileDiff[] {
       current = {
         header: line,
         buf: [line],
-        path: b ?? a ?? '',
-        oldPath: a ?? '',
+        path: joinRepoPrefix(repoKey, b ?? a ?? ''),
+        oldPath: joinRepoPrefix(repoKey, a ?? ''),
       }
       continue
     }
