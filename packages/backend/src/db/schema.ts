@@ -2158,7 +2158,10 @@ export const memories = sqliteTable(
   'memories',
   {
     id: text('id').primaryKey(),
-    scopeType: text('scope_type', { enum: ['agent', 'workflow', 'repo', 'global'] }).notNull(),
+    // RFC-248: 第 5 种 scope `repo_group`（migration 0132 同步扩了 CHECK）。
+    scopeType: text('scope_type', {
+      enum: ['agent', 'workflow', 'repo', 'repo_group', 'global'],
+    }).notNull(),
     scopeId: text('scope_id'),
     title: text('title').notNull(),
     bodyMd: text('body_md').notNull(),

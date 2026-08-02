@@ -1,0 +1,591 @@
+// RFC-248 — 仓库组的 CRUD + 展平 + 引用守卫。
+//
+// 布局算法本身**不在这里**：它是无 DB / 无 fs 的纯逻辑，住在
+// `@agent-workflow/shared` 的 `repoGroupLayout.ts`，前端布局预览与后端物化共用
+// 同一份——两边算出不同结果 = 用户看到的目录和真实跑出来的目录不一样。本模块
+// 只负责「把 DB 行喂给那份纯逻辑」和「持久化 / 守卫 / 脱敏」。
+//
+// 权限模型：仓库组与 cached_repos 同类，**不进** RFC-099 的 owner + visibility
+// + grants 体系，能力只由 `repos:*` 权限点治理（D5）。`created_by_user_id`
+// 只作审计展示，不参与任何鉴权判定。
+
+import type {
+  CreateRepoGroup,
+  FlattenableGroup,
+  PlannedRepo,
+  RepoGroup,
+  RepoGroupLayoutResponse,
+  RepoGroupMember,
+} from '@agent-workflow/shared'
+import {
+  RepoGroupLayoutError,
+  flattenRepoGroup,
+  normalizeMountPath,
+  redactGitUrl,
+} from '@agent-workflow/shared'
+import { and, eq, inArray, ne, sql } from 'drizzle-orm'
+import { ulid } from 'ulid'
+import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
+import { cachedRepos, memories, repoGroupMembers, repoGroups } from '@/db/schema'
+import { resolveCachedRepo, type GitRepoCacheDeps } from '@/services/gitRepoCache'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+
+export interface RepoGroupDeps {
+  db: DbClient
+  /** 建组时把还没导入的 URL 现场 clone 成 cached_repos 行（D7）。 */
+  cache?: GitRepoCacheDeps
+  now?: () => number
+}
+
+/** 被别的组引用时删不掉；`force=1` 才摘除引用行。 */
+export class RepoGroupHasReferencesError extends DomainError {
+  constructor(readonly referencingGroups: Array<{ id: string; name: string }>) {
+    super(
+      'repo-group-has-references',
+      `${referencingGroups.length} repo group(s) still reference this group; pass force=1 to detach them`,
+      409,
+      { referencingGroups },
+    )
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 读
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface RawGroupRow {
+  id: string
+  name: string
+  description: string
+  version: number
+  createdByUserId: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+interface RawMemberRow {
+  groupId: string
+  memberIndex: number
+  kind: 'repo' | 'group'
+  cachedRepoId: string | null
+  ref: string
+  subdir: string
+  childGroupId: string | null
+  mountPath: string
+  readonly: boolean
+}
+
+/**
+ * 一次性把**所有**组与成员读进内存，给展平用的 loader。
+ *
+ * 全量加载而不是按需递归查询：展平要跟着 `child_group_id` 走任意条边，按需查询
+ * 在菱形引用下会把同一个组查很多遍，而组的总量是「用户手工建的若干个」这个量级
+ * （不是任务级数据），全量读一次反而更简单也更快。
+ */
+function loadAllGroups(db: DbClient): Map<string, FlattenableGroup> {
+  const groups = db.select().from(repoGroups).all() as RawGroupRow[]
+  const members = db
+    .select()
+    .from(repoGroupMembers)
+    .orderBy(repoGroupMembers.groupId, repoGroupMembers.memberIndex)
+    .all() as RawMemberRow[]
+  const repoUrlById = new Map(
+    (
+      db
+        .select({ id: cachedRepos.id, url: cachedRepos.url, urlRedacted: cachedRepos.urlRedacted })
+        .from(cachedRepos)
+        .all() as Array<{ id: string; url: string; urlRedacted: string | null }>
+    ).map((r) => [
+      r.id,
+      // RFC-204: 出网只给脱敏形态。`url_redacted` 是封存后写入的；封存前的
+      // 存量行还留着明文 `url`，现场脱敏一次而不是原样吐出去。
+      r.urlRedacted ?? redactGitUrl(r.url),
+    ]),
+  )
+
+  const byId = new Map<string, FlattenableGroup>()
+  for (const g of groups) byId.set(g.id, { id: g.id, name: g.name, members: [] })
+  for (const m of members) {
+    const g = byId.get(m.groupId)
+    if (g === undefined) continue
+    const arr = g.members as FlattenableGroup['members'][number][]
+    if (m.kind === 'repo') {
+      arr.push({
+        kind: 'repo',
+        cachedRepoId: m.cachedRepoId ?? '',
+        repoUrlRedacted: repoUrlById.get(m.cachedRepoId ?? '') ?? '',
+        ref: m.ref,
+        subdir: m.subdir,
+        mountPath: m.mountPath,
+        readonly: m.readonly,
+      })
+    } else {
+      arr.push({
+        kind: 'group',
+        childGroupId: m.childGroupId ?? '',
+        mountPath: m.mountPath,
+        readonly: m.readonly,
+      })
+    }
+  }
+  return byId
+}
+
+/**
+ * 展平一个组。
+ *
+ * 布局错误统一转成 `ValidationError`（422）——`RepoGroupLayoutError` 是 shared
+ * 里的普通 Error，直接漏到 route 层会被中央 errorHandler 渲染成 **500**，
+ * 于是「你的组成环了」这条完全可操作的用户错误变成了一个服务端故障。
+ * 写路径的 `assertFlattenable` 早就这么做了，读路径漏了。
+ */
+export function resolveRepoGroupLayout(
+  db: DbClient,
+  groupId: string,
+): { repos: PlannedRepo[]; maxDepth: number; groupName: string } {
+  const all = loadAllGroups(db)
+  const root = all.get(groupId)
+  if (root === undefined) {
+    throw new NotFoundError('repo-group-not-found', `repo group ${groupId} not found`)
+  }
+  try {
+    const { repos, maxDepth } = flattenRepoGroup(groupId, (id) => all.get(id))
+    return { repos, maxDepth, groupName: root.name }
+  } catch (err) {
+    if (err instanceof RepoGroupLayoutError) {
+      throw new ValidationError(err.code, err.message, err.detail)
+    }
+    throw err
+  }
+}
+
+export function getRepoGroupLayoutResponse(db: DbClient, groupId: string): RepoGroupLayoutResponse {
+  const { repos, maxDepth, groupName } = resolveRepoGroupLayout(db, groupId)
+  return { groupId, groupName, repos, totalRepos: repos.length, maxDepth }
+}
+
+function boundMemoryCount(db: DbClient, groupId: string): number {
+  const rows = db
+    .select({ n: sql<number>`count(*)` })
+    .from(memories)
+    .where(
+      and(
+        eq(memories.scopeType, 'repo_group'),
+        eq(memories.scopeId, groupId),
+        ne(memories.status, 'archived'),
+      ),
+    )
+    .all()
+  return Number(rows[0]?.n ?? 0)
+}
+
+function toDto(db: DbClient, row: RawGroupRow, all: Map<string, FlattenableGroup>): RepoGroup {
+  const src = all.get(row.id)
+  const members: RepoGroupMember[] = (src?.members ?? []).map((m, i) =>
+    m.kind === 'repo'
+      ? {
+          kind: 'repo' as const,
+          memberIndex: i,
+          cachedRepoId: m.cachedRepoId,
+          repoUrlRedacted: m.repoUrlRedacted,
+          ref: m.ref,
+          subdir: m.subdir,
+          mountPath: m.mountPath,
+          readonly: m.readonly,
+        }
+      : {
+          kind: 'group' as const,
+          memberIndex: i,
+          childGroupId: m.childGroupId,
+          childGroupName: all.get(m.childGroupId)?.name ?? '',
+          mountPath: m.mountPath,
+          readonly: m.readonly,
+        },
+  )
+  // 展平失败（环 / 超限 / 悬空引用）不该让列表整个 500——把 flatRepoCount 记 0，
+  // 用户点进详情或启动时才看到那条具体的 422。
+  let flatRepoCount = 0
+  try {
+    flatRepoCount = flattenRepoGroup(row.id, (id) => all.get(id)).repos.length
+  } catch (err) {
+    if (!(err instanceof RepoGroupLayoutError)) throw err
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    version: row.version,
+    createdByUserId: row.createdByUserId,
+    createdAt: new Date(row.createdAt).toISOString(),
+    updatedAt: new Date(row.updatedAt).toISOString(),
+    members,
+    flatRepoCount,
+    boundMemories: boundMemoryCount(db, row.id),
+  }
+}
+
+export function listRepoGroups(db: DbClient): RepoGroup[] {
+  const all = loadAllGroups(db)
+  const rows = db.select().from(repoGroups).all() as RawGroupRow[]
+  return rows.sort((a, b) => a.name.localeCompare(b.name)).map((r) => toDto(db, r, all))
+}
+
+export function getRepoGroup(db: DbClient, id: string): RepoGroup {
+  const rows = db.select().from(repoGroups).where(eq(repoGroups.id, id)).limit(1).all()
+  const row = rows[0] as RawGroupRow | undefined
+  if (row === undefined) {
+    throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
+  }
+  return toDto(db, row, loadAllGroups(db))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 写
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 成员输入 → 可落库的行；顺带把 `repoUrl` resolve 成 `cachedRepoId`（D7）。 */
+async function materializeMembers(
+  deps: RepoGroupDeps,
+  input: CreateRepoGroup,
+): Promise<RawMemberRow[]> {
+  const out: RawMemberRow[] = []
+  for (let i = 0; i < input.members.length; i++) {
+    const m = input.members[i]!
+    // 挂载路径在**写入前**规范化并校验：DB 里存的永远是规范形态，展平期再跑
+    // 一次是幂等的。校验失败带上成员下标，让 UI 能就地标红。
+    let mountPath: string
+    try {
+      mountPath = normalizeMountPath(m.mountPath)
+    } catch (err) {
+      if (err instanceof RepoGroupLayoutError) {
+        throw new ValidationError(err.code, err.message, { ...err.detail, memberIndex: i })
+      }
+      throw err
+    }
+    if (m.kind === 'group') {
+      const exists = deps.db
+        .select({ id: repoGroups.id })
+        .from(repoGroups)
+        .where(eq(repoGroups.id, m.childGroupId))
+        .limit(1)
+        .all()
+      if (exists.length === 0) {
+        throw new ValidationError(
+          'repo-group-member-not-found',
+          `referenced repo group ${m.childGroupId} not found`,
+          { memberIndex: i, childGroupId: m.childGroupId },
+        )
+      }
+      out.push({
+        groupId: '',
+        memberIndex: i,
+        kind: 'group',
+        cachedRepoId: null,
+        ref: '',
+        subdir: '',
+        childGroupId: m.childGroupId,
+        mountPath,
+        readonly: m.readonly,
+      })
+      continue
+    }
+    let cachedRepoId = m.cachedRepoId ?? null
+    if (cachedRepoId === null) {
+      if (deps.cache === undefined) {
+        throw new ValidationError(
+          'repo-group-url-import-unavailable',
+          'cannot import a repo URL in this context; pass cachedRepoId instead',
+          { memberIndex: i },
+        )
+      }
+      // D7：粘一个还没导入的 URL ⇒ 现场 clone 成 cached_repos 行并回填 id。
+      const resolved = await resolveCachedRepo(deps.cache, { url: m.repoUrl! })
+      cachedRepoId = resolved.cached.id
+    } else {
+      const exists = deps.db
+        .select({ id: cachedRepos.id })
+        .from(cachedRepos)
+        .where(eq(cachedRepos.id, cachedRepoId))
+        .limit(1)
+        .all()
+      if (exists.length === 0) {
+        throw new ValidationError(
+          'repo-group-member-not-found',
+          `referenced cached repo ${cachedRepoId} not found`,
+          { memberIndex: i, cachedRepoId },
+        )
+      }
+    }
+    let subdir = ''
+    if (m.subdir !== '') {
+      // 子目录复用挂载路径的同一套规范化——同样不许绝对 / `..` / CR / LF /
+      // 反斜杠 / NUL，同样归一化到 NFC。
+      try {
+        subdir = normalizeMountPath(m.subdir)
+      } catch (err) {
+        if (err instanceof RepoGroupLayoutError) {
+          throw new ValidationError(err.code, `subdir: ${err.message}`, {
+            ...err.detail,
+            memberIndex: i,
+            field: 'subdir',
+          })
+        }
+        throw err
+      }
+    }
+    out.push({
+      groupId: '',
+      memberIndex: i,
+      kind: 'repo',
+      cachedRepoId,
+      ref: m.ref,
+      subdir,
+      childGroupId: null,
+      mountPath,
+      readonly: m.readonly,
+    })
+  }
+  return out
+}
+
+/** 写库后立刻展平一次——环 / 超限 / 重复挂点必须在**保存时**就被拒。 */
+function assertFlattenable(db: DbClient, groupId: string): void {
+  const all = loadAllGroups(db)
+  try {
+    flattenRepoGroup(groupId, (id) => all.get(id))
+  } catch (err) {
+    if (err instanceof RepoGroupLayoutError) {
+      throw new ValidationError(err.code, err.message, err.detail)
+    }
+    throw err
+  }
+}
+
+/**
+ * 保存后还要复查**所有引用了本组的祖先组**是否仍然可展平。
+ *
+ * 单查自己不够：给内层组加一个成员，可能把某个外层组顶过 32 仓上限或造出重复
+ * 挂点，而外层组自己的定义一个字都没改。不查的话那个外层组会在**下次启动时**
+ * 才炸——那时用户已经不记得是哪一次编辑导致的了。
+ */
+function assertAncestorsStillFlattenable(db: DbClient, groupId: string): void {
+  const all = loadAllGroups(db)
+  const ancestors = new Set<string>()
+  const stack = [groupId]
+  while (stack.length > 0) {
+    const cur = stack.pop()!
+    const parents = db
+      .select({ groupId: repoGroupMembers.groupId })
+      .from(repoGroupMembers)
+      .where(eq(repoGroupMembers.childGroupId, cur))
+      .all()
+    for (const p of parents) {
+      if (ancestors.has(p.groupId)) continue
+      ancestors.add(p.groupId)
+      stack.push(p.groupId)
+    }
+  }
+  for (const a of ancestors) {
+    try {
+      flattenRepoGroup(a, (id) => all.get(id))
+    } catch (err) {
+      if (err instanceof RepoGroupLayoutError) {
+        throw new ValidationError(
+          err.code,
+          `saving this group would break repo group '${all.get(a)?.name ?? a}': ${err.message}`,
+          { ...err.detail, brokenGroupId: a },
+        )
+      }
+      throw err
+    }
+  }
+}
+
+function assertNameFree(db: DbClient, name: string, excludeId?: string): void {
+  const rows = db
+    .select({ id: repoGroups.id })
+    .from(repoGroups)
+    .where(sql`lower(${repoGroups.name}) = lower(${name})`)
+    .all()
+  if (rows.some((r) => r.id !== excludeId)) {
+    throw new ConflictError(
+      'repo-group-name-conflict',
+      `a repo group named '${name}' already exists`,
+    )
+  }
+}
+
+export async function createRepoGroup(
+  deps: RepoGroupDeps,
+  input: CreateRepoGroup,
+  actorUserId: string | null,
+): Promise<RepoGroup> {
+  assertNameFree(deps.db, input.name)
+  // URL → id 的 resolve 会 clone，可能很慢，且必须在事务**外**做（clone 期间
+  // 持有写事务会把整个 daemon 的 DB 写全部堵住）。
+  const members = await materializeMembers(deps, input)
+  const id = ulid()
+  const now = (deps.now ?? Date.now)()
+  dbTxSync(deps.db, (tx) => {
+    assertNameFree(deps.db, input.name)
+    tx.insert(repoGroups)
+      .values({
+        id,
+        name: input.name,
+        description: input.description,
+        version: 1,
+        createdByUserId: actorUserId,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
+    for (const m of members)
+      tx.insert(repoGroupMembers)
+        .values({ ...m, groupId: id })
+        .run()
+  })
+  assertFlattenable(deps.db, id)
+  return getRepoGroup(deps.db, id)
+}
+
+export async function updateRepoGroup(
+  deps: RepoGroupDeps,
+  id: string,
+  input: CreateRepoGroup,
+): Promise<RepoGroup> {
+  const existing = deps.db.select().from(repoGroups).where(eq(repoGroups.id, id)).limit(1).all()
+  if (existing.length === 0) {
+    throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
+  }
+  assertNameFree(deps.db, input.name, id)
+  const members = await materializeMembers(deps, input)
+  // 自引用在展平期也会被环检测抓住，但在这里先拒能给出更准的成员下标。
+  const selfRef = members.findIndex((m) => m.kind === 'group' && m.childGroupId === id)
+  if (selfRef >= 0) {
+    throw new ValidationError('repo-group-cycle', 'a repo group cannot reference itself', {
+      memberIndex: selfRef,
+    })
+  }
+  const now = (deps.now ?? Date.now)()
+  dbTxSync(deps.db, (tx) => {
+    tx.delete(repoGroupMembers).where(eq(repoGroupMembers.groupId, id)).run()
+    for (const m of members)
+      tx.insert(repoGroupMembers)
+        .values({ ...m, groupId: id })
+        .run()
+    tx.update(repoGroups)
+      .set({
+        name: input.name,
+        description: input.description,
+        version: sql`${repoGroups.version} + 1`,
+        updatedAt: now,
+      })
+      .where(eq(repoGroups.id, id))
+      .run()
+  })
+  assertFlattenable(deps.db, id)
+  assertAncestorsStillFlattenable(deps.db, id)
+  return getRepoGroup(deps.db, id)
+}
+
+export interface DeleteRepoGroupResult {
+  archivedMemories: number
+  detachedReferences: number
+}
+
+/**
+ * 删组。
+ *
+ * 设计门 G5：绑在本组上的记忆在**同一事务**里置为 `archived`——不硬删（保住
+ * 用户知识），但 `memoryInject` 按 `status='approved'` 过滤，注入立即停止。
+ * 不这么做的话会留下孤儿记忆：`repo_group` 与 repo/global 同档，
+ * `canViewMemory`（`memory.ts:743`）在加载资源行**之前**就 return true，
+ * 于是删掉的组的记忆仍然可列出、仍会被引用了旧 id 的任务注入。
+ */
+export function deleteRepoGroup(
+  db: DbClient,
+  id: string,
+  options: { force?: boolean } = {},
+): DeleteRepoGroupResult {
+  const rows = db.select().from(repoGroups).where(eq(repoGroups.id, id)).limit(1).all()
+  if (rows.length === 0) {
+    throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
+  }
+  const referencing = db
+    .select({ id: repoGroups.id, name: repoGroups.name })
+    .from(repoGroupMembers)
+    .innerJoin(repoGroups, eq(repoGroups.id, repoGroupMembers.groupId))
+    .where(eq(repoGroupMembers.childGroupId, id))
+    .all()
+  const uniqueRefs = [...new Map(referencing.map((r) => [r.id, r])).values()]
+  if (uniqueRefs.length > 0 && options.force !== true) {
+    throw new RepoGroupHasReferencesError(uniqueRefs)
+  }
+  let archivedMemories = 0
+  let detachedReferences = 0
+  dbTxSync(db, (tx) => {
+    const bound = tx
+      .select({ id: memories.id })
+      .from(memories)
+      .where(
+        and(
+          eq(memories.scopeType, 'repo_group'),
+          eq(memories.scopeId, id),
+          ne(memories.status, 'archived'),
+        ),
+      )
+      .all()
+    if (bound.length > 0) {
+      tx.update(memories)
+        .set({ status: 'archived' })
+        .where(
+          inArray(
+            memories.id,
+            bound.map((b) => b.id),
+          ),
+        )
+        .run()
+      archivedMemories = bound.length
+    }
+    // drizzle 的 `.run()` 在这个版本不回传 changes，所以先数再删。
+    detachedReferences = tx
+      .select({ groupId: repoGroupMembers.groupId })
+      .from(repoGroupMembers)
+      .where(eq(repoGroupMembers.childGroupId, id))
+      .all().length
+    tx.delete(repoGroupMembers).where(eq(repoGroupMembers.childGroupId, id)).run()
+    tx.delete(repoGroups).where(eq(repoGroups.id, id)).run()
+  })
+  return { archivedMemories, detachedReferences }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 删仓守卫（D13）—— 供 gitRepoCache.deleteCachedRepo 调用
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 引用了某个 cached repo 的组（去重）。 */
+export function groupsReferencingRepo(
+  db: DbClient,
+  cachedRepoId: string,
+): Array<{ id: string; name: string }> {
+  const rows = db
+    .select({ id: repoGroups.id, name: repoGroups.name })
+    .from(repoGroupMembers)
+    .innerJoin(repoGroups, eq(repoGroups.id, repoGroupMembers.groupId))
+    .where(eq(repoGroupMembers.cachedRepoId, cachedRepoId))
+    .all()
+  return [...new Map(rows.map((r) => [r.id, r])).values()]
+}
+
+/** `force=1` 删仓时把它从所有组里摘掉，返回摘除的成员行数。 */
+export function detachRepoFromAllGroups(db: DbClient, cachedRepoId: string): number {
+  // 先数再删（drizzle 的 `.run()` 在这个版本不回传 changes）。
+  const n = db
+    .select({ groupId: repoGroupMembers.groupId })
+    .from(repoGroupMembers)
+    .where(eq(repoGroupMembers.cachedRepoId, cachedRepoId))
+    .all().length
+  db.delete(repoGroupMembers).where(eq(repoGroupMembers.cachedRepoId, cachedRepoId)).run()
+  return n
+}

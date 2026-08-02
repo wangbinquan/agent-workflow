@@ -75,9 +75,12 @@ describe('groupCandidatesByScope', () => {
     expect(grouped.global.map((m) => m.id)).toEqual(['g1'])
   })
 
-  test('empty input → 4 empty buckets', () => {
+  test('empty input → 5 empty buckets', () => {
+    // RFC-248 把 scope 从 4 种扩到 5 种（新增 repo_group：绑在仓库组上的记忆，
+    // 用组启动的任务会连同组内各成员仓的 repo 记忆一起注入）。这条断言故意用
+    // 全等而不是子集匹配——桶少一个就意味着某一档记忆在 UI 上整档消失。
     const grouped = groupCandidatesByScope([])
-    expect(grouped).toEqual({ agent: [], workflow: [], repo: [], global: [] })
+    expect(grouped).toEqual({ agent: [], workflow: [], repo: [], repo_group: [], global: [] })
   })
 })
 

@@ -4,7 +4,9 @@
 import { z } from 'zod'
 import { SessionTreeSchema } from './sessionView'
 
-export const MemoryScopeSchema = z.enum(['agent', 'workflow', 'repo', 'global'])
+// RFC-248: 第 5 种 scope `repo_group`——用组启动的任务注入「组记忆 + 组内每个
+// 成员仓的 repo 记忆」；单个仓库直启**不**注入它所属任何组的记忆（D4）。
+export const MemoryScopeSchema = z.enum(['agent', 'workflow', 'repo', 'repo_group', 'global'])
 export type MemoryScope = z.infer<typeof MemoryScopeSchema>
 
 export const MemoryStatusSchema = z.enum([

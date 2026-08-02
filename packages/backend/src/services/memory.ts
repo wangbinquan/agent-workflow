@@ -700,7 +700,10 @@ import {
 } from '@/services/resourceAcl'
 
 export interface MemoryScopeRef {
-  scopeType: 'agent' | 'workflow' | 'repo' | 'global'
+  // RFC-248: 第 5 种 scope。`repo_group` 与 repo/global 同档——全员可读、仅
+  // admin 可管（下面 canViewMemory / canManageMemory / filterVisibleMemories
+  // 三处的提前放行分支）。
+  scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
   scopeId: string | null
 }
 
@@ -740,7 +743,14 @@ export async function canViewMemory(
   scope: MemoryScopeRef,
 ): Promise<boolean> {
   if (isResourceAdminActor(actor)) return true
-  if (scope.scopeType === 'repo' || scope.scopeType === 'global') return true
+  // RFC-248 AC-29: repo_group 与 repo/global 同档——全员可读。
+  if (
+    scope.scopeType === 'repo' ||
+    scope.scopeType === 'repo_group' ||
+    scope.scopeType === 'global'
+  ) {
+    return true
+  }
   const row = await loadScopeAclRow(db, scope)
   // Scope resource vanished → fail closed for non-admins (nothing to anchor
   // visibility on; admins still see it for cleanup).
@@ -755,7 +765,14 @@ export async function canManageMemory(
   scope: MemoryScopeRef,
 ): Promise<boolean> {
   if (isResourceAdminActor(actor)) return true
-  if (scope.scopeType === 'repo' || scope.scopeType === 'global') return false
+  // RFC-248 AC-29: repo_group 与 repo/global 同档——仅 admin 可管。
+  if (
+    scope.scopeType === 'repo' ||
+    scope.scopeType === 'repo_group' ||
+    scope.scopeType === 'global'
+  ) {
+    return false
+  }
   const row = await loadScopeAclRow(db, scope)
   if (row === null) return false
   return isResourceOwner(actor, row)
@@ -804,7 +821,10 @@ export async function filterMemoriesByScopeVisibility<T extends MemoryScopeRef>(
     }
   }
   return rows.filter((r) => {
-    if (r.scopeType === 'repo' || r.scopeType === 'global') return true
+    // RFC-248 AC-29: repo_group 与 repo/global 同档。
+    if (r.scopeType === 'repo' || r.scopeType === 'repo_group' || r.scopeType === 'global') {
+      return true
+    }
     if (r.scopeId === null) return false
     return r.scopeType === 'agent' ? visibleAgents.has(r.scopeId) : visibleWorkflows.has(r.scopeId)
   })

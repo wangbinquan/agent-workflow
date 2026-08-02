@@ -37,7 +37,7 @@ const DEFAULT_BUDGET: ScopeBudget = { agent: 1500, workflow: 800, repo: 800, glo
 
 export interface InjectableMemoryRow {
   id: string
-  scopeType: 'agent' | 'workflow' | 'repo' | 'global'
+  scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
   scopeId: string | null
   title: string
   bodyMd: string
@@ -170,7 +170,7 @@ export async function loadInjectableMemories(
 
 function rowToInjectable(row: {
   id: string
-  scopeType: 'agent' | 'workflow' | 'repo' | 'global'
+  scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
   scopeId: string | null
   title: string
   bodyMd: string

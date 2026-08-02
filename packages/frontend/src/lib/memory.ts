@@ -16,6 +16,8 @@ export interface MemoryGroupedByScope {
   agent: MemorySummary[]
   workflow: MemorySummary[]
   repo: MemorySummary[]
+  /** RFC-248: 第 5 种 scope——绑在仓库组上的记忆。 */
+  repo_group: MemorySummary[]
   global: MemorySummary[]
 }
 
@@ -56,7 +58,13 @@ export function promoteActionToLabel(
  * Buckets are insertion-ordered (so the caller can pre-sort once).
  */
 export function groupCandidatesByScope(rows: MemorySummary[]): MemoryGroupedByScope {
-  const out: MemoryGroupedByScope = { agent: [], workflow: [], repo: [], global: [] }
+  const out: MemoryGroupedByScope = {
+    agent: [],
+    workflow: [],
+    repo: [],
+    repo_group: [],
+    global: [],
+  }
   for (const r of rows) {
     out[r.scopeType].push(r)
   }

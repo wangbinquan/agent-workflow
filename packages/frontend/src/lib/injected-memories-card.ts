@@ -30,15 +30,24 @@ export interface GroupedSnapshots {
   agent: InjectedMemorySnapshot[]
   workflow: InjectedMemorySnapshot[]
   repo: InjectedMemorySnapshot[]
+  /** RFC-248: 第 5 种 scope——绑在仓库组上的记忆。 */
+  repo_group: InjectedMemorySnapshot[]
   global: InjectedMemorySnapshot[]
 }
 
 /** Stable display order: most-specific → most-general. */
-export const SCOPE_ORDER = ['agent', 'workflow', 'repo', 'global'] as const
+// RFC-248: repo_group 排在 repo 与 global 之间——它比单个仓宽、比 global 窄。
+export const SCOPE_ORDER = ['agent', 'workflow', 'repo', 'repo_group', 'global'] as const
 export type ScopeKey = (typeof SCOPE_ORDER)[number]
 
 export function groupByScope(list: readonly InjectedMemorySnapshot[]): GroupedSnapshots {
-  const out: GroupedSnapshots = { agent: [], workflow: [], repo: [], global: [] }
+  const out: GroupedSnapshots = {
+    agent: [],
+    workflow: [],
+    repo: [],
+    repo_group: [],
+    global: [],
+  }
   for (const m of list) {
     out[m.scopeType].push(m)
   }

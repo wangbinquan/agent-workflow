@@ -20,6 +20,7 @@ import { mountAuthRoutes } from '@/routes/auth'
 import { mountBackupRoutes } from '@/routes/backup'
 import { mountRestoreRoutes } from '@/routes/restore'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
+import { mountRepoGroupRoutes } from '@/routes/repoGroups'
 import { mountConfigRoutes } from '@/routes/config'
 import { mountDaemonRoutes } from '@/routes/daemon'
 import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
@@ -297,6 +298,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountSkillRoutes(app, deps)
   mountRepoRoutes(app, deps)
   mountCachedRepoRoutes(app, deps)
+  mountRepoGroupRoutes(app, deps)
   mountWorkflowRoutes(app, deps)
   mountWorkgroupRoutes(app, deps) // RFC-164
   mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4

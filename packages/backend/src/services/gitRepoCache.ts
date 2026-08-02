@@ -40,6 +40,8 @@ import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/util/paths'
 import { getCachedGitCapabilities } from '@/services/gitVersion'
 import { detectSubmodules, syncSubmodules, type SubmoduleMode } from '@/services/gitSubmodule'
+// RFC-248 D13: 删仓的第二个拦截理由——被仓库组引用。
+import { detachRepoFromAllGroups, groupsReferencingRepo } from '@/services/repoGroup'
 // RFC-210 G9: config/index.ts only depends on shared + fs + errors + log, so this
 // adds no cycle. util/git.ts still never imports config directly — it reaches
 // resolveSubmoduleParams through the existing dynamic import.
@@ -949,12 +951,23 @@ export class CachedRepoHasReferencesError extends DomainError {
   constructor(
     public readonly count: number,
     public readonly urlRedacted: string,
+    /**
+     * RFC-248 D13 —— 引用这个镜像的仓库组。与「被 N 个任务引用」并列成为删除
+     * 拦截的第二个理由：组是**用户手工编排**的定义，静默让它少一个仓，用户下次
+     * 启动才发现，而那时已经想不起是哪次删除导致的。
+     */
+    public readonly referencingGroups: ReadonlyArray<{ id: string; name: string }> = [],
   ) {
     super(
       'cached-repo-has-references',
-      `${count} task(s) still reference ${urlRedacted}; pass force=1 to delete anyway`,
+      `${[
+        count > 0 ? `${count} task(s)` : null,
+        referencingGroups.length > 0 ? `${referencingGroups.length} repo group(s)` : null,
+      ]
+        .filter((x) => x !== null)
+        .join(' and ')} still reference ${urlRedacted}; pass force=1 to delete anyway`,
       409,
-      { count, urlRedacted },
+      { count, urlRedacted, referencingGroups },
     )
   }
 }
@@ -970,9 +983,14 @@ export async function deleteCachedRepo(
     throw new NotFoundError('cached-repo-not-found', `cached repo ${id} not found`)
   }
   const count = await refTaskCount(deps.db, row.id)
-  if (count > 0 && !options.force) {
-    throw new CachedRepoHasReferencesError(count, redactGitUrl(row.url))
+  // RFC-248 D13: 任务引用与仓库组引用是两个独立的拦截理由，一起报给用户，
+  // 免得他解决了一个再撞另一个。
+  const groups = groupsReferencingRepo(deps.db, row.id)
+  if ((count > 0 || groups.length > 0) && !options.force) {
+    throw new CachedRepoHasReferencesError(count, redactGitUrl(row.url), groups)
   }
+  // force=1：把它从所有组里摘掉（组本身保留——用户要删的是仓，不是组）。
+  if (groups.length > 0) detachRepoFromAllGroups(deps.db, row.id)
   return await withUrlLock(row.urlHash, async () => {
     try {
       // RFC-208: async removal. `rmSync` on a large mirror blocks Bun's single

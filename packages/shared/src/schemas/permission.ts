@@ -15,11 +15,10 @@
 // exactly what a self-issued API token needs to express. Every matrix-domain
 // resource now carries explicit `:create` / `:update` / `:delete` / `:execute`
 // points, derived FROM THE REAL ROUTE INVENTORY rather than symmetrically
-// filled in per resource type. Two verbs are deliberately absent because no
+// filled in per resource type. Three verbs are deliberately absent because no
 // route implements them (a startup self-check enforces this — see
 // design/RFC-247-mcp-remote-access/design.md §3.2):
 //
-//   - `repos:update`      — routes/cached-repos.ts + repos.ts have NO PUT/PATCH
 //   - `skills:execute`    — routes/skills.ts has no execute-semantics route
 //   - `agents:execute`    — RFC-165 F15/N1 gates agent launch on tasks:execute
 //   - `workgroups:execute`— …and workgroup launch likewise
@@ -105,7 +104,11 @@ export const PERMISSIONS = [
   'scheduled-tasks:update',
   'memory:update',
   'tasks:update',
-  // NOTE: no `repos:update` — no PUT/PATCH route exists in the repos domain.
+  // RFC-248: `repos:update` 由 `PUT /api/repo-groups/:id` 引入——在此之前 repos
+  // 域确实没有任何 PUT/PATCH 路由（那条 NOTE 曾在这里）。仓库组与 cached_repos
+  // 同类，复用 repos:* 而不新增授权矩阵行（D5）。它**必须**同时进 MANAGER_EXTRA，
+  // 否则 manager 能建组却改不了组、也无法给 PAT 授权（设计门 G4）。
+  'repos:update',
 
   // ---------------------------------------------------------------------------
   // Matrix domain — delete. RFC-247 D4: every one of these must be ticked
@@ -344,6 +347,7 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
 // Repos are out of the ACL model, so the repos points are plain points here.
 const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   'repos:create',
+  'repos:update', // RFC-248 D5/G4 —— 仓库组走 repos:* 这一档
   'repos:delete',
   'repos:execute',
   'tasks:read:all',
