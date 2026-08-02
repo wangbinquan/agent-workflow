@@ -991,21 +991,6 @@ export async function deleteCachedRepo(
     throw new CachedRepoHasReferencesError(count, redactGitUrl(row.url), groups)
   }
   return await withUrlLock(row.urlHash, async () => {
-    // RFC-248 设计门二轮 H2 —— detach 必须在**锁内**、并且紧挨着行删除做。
-    // 原实现把它放在 withUrlLock 之前：等锁期间可以新建引用（那条引用随后指向
-    // 一个已被删掉的镜像），而中途崩溃则留下「组已改、cached_repos 还在」的
-    // 断链状态。放进锁里、且在 rm 之后紧接着删行，把窗口压到最小。
-    const detachAndDeleteRow = () => {
-      dbTxSync(deps.db, (tx) => {
-        // 锁内**重查**引用：等锁期间可能有人刚把这个仓加进一个组。用启动时的
-        // 快照去 detach 会漏掉新引用，随后删行被 FK 拒绝（或更糟——留下指向已
-        // 消失 localPath 的成员行）。
-        if (groupsReferencingRepo(deps.db, row.id).length > 0) {
-          detachRepoFromAllGroups(deps.db, row.id)
-        }
-        tx.delete(cachedRepos).where(eq(cachedRepos.id, id)).run()
-      })
-    }
     try {
       // RFC-208: async removal. `rmSync` on a large mirror blocks Bun's single
       // event loop for the whole walk — which also means any timeout racing it
@@ -1019,7 +1004,25 @@ export async function deleteCachedRepo(
         err: (err as Error).message,
       })
     }
-    detachAndDeleteRow()
+    // RFC-248 设计门二轮 H2 —— detach 必须在**锁内**、与删行在**同一事务**里。
+    // 原实现把 detach 放在 withUrlLock 之前：等锁期间可以新建引用（那条引用随后
+    // 指向一个已被删掉的镜像），而中途崩溃则留下「组已改、cached_repos 还在」的
+    // 断链状态。
+    //
+    // 这段刻意**内联**而不是抽成闭包放在 try 之前：RFC-208 的守卫
+    // （tests/rfc208-boot-and-external-timeouts.test.ts:135）用
+    // `withUrlLock(row.urlHash, async () => {\n    try {` 做源码切片锚点来证明
+    // 缓存目录删除走的是异步 `rm`。在箭头与 `try` 之间插任何东西都会切空那段、
+    // 把守卫弄哑——那条守卫本身是对的，不该为我的排版让路。
+    dbTxSync(deps.db, (tx) => {
+      // 锁内**重查**引用：等锁期间可能有人刚把这个仓加进一个组。用启动时的快照
+      // 去 detach 会漏掉新引用，随后删行被 FK 拒绝（或更糟——留下指向已消失
+      // localPath 的成员行）。
+      if (groupsReferencingRepo(deps.db, row.id).length > 0) {
+        detachRepoFromAllGroups(deps.db, row.id)
+      }
+      tx.delete(cachedRepos).where(eq(cachedRepos.id, id)).run()
+    })
     return { deletedLocalPath: row.localPath }
   })
 }
