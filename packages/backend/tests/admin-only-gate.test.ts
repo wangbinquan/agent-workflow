@@ -142,17 +142,26 @@ describe('regular-user session token — admin-only endpoints all return 403', (
     expect(res.status).toBe(422)
   })
 
-  test('POST /api/repos → 403', async () => {
-    const res = await reqAs(h.app, h.userToken, '/api/repos', {
+  // RFC-247: these two used to POST to `/api/repos` and `/api/cached-repos`,
+  // neither of which is a real endpoint — they returned 403 only because a
+  // PREFIX middleware (`app.use('/api/repos/*', …)`) intercepted every method on
+  // the path before routing. With the gate moved into each route's own
+  // declaration, a path with no route now 404s, so those assertions were
+  // testing the middleware's shadow rather than the authorization.
+  //
+  // Point them at the repos-domain writes that actually exist. The property
+  // under test is unchanged: a plain user must not pass a repos write gate.
+  test('POST /api/cached-repos/batch-import → 403', async () => {
+    const res = await reqAs(h.app, h.userToken, '/api/cached-repos/batch-import', {
       method: 'POST',
       body: JSON.stringify({}),
     })
     expect(res.status).toBe(403)
   })
 
-  test('POST /api/cached-repos → 403', async () => {
-    const res = await reqAs(h.app, h.userToken, '/api/cached-repos', {
-      method: 'POST',
+  test('DELETE /api/cached-repos/:id → 403', async () => {
+    const res = await reqAs(h.app, h.userToken, '/api/cached-repos/whatever', {
+      method: 'DELETE',
       body: JSON.stringify({}),
     })
     expect(res.status).toBe(403)
@@ -232,6 +241,7 @@ describe('PAT-bearing actor cannot escape role limits', () => {
       userId: bob!.id,
       name: 'overreach',
       scopes: ['users:read'],
+      purpose: 'general',
     })
     const res = await reqAs(app, token, '/api/users')
     expect(res.status).toBe(403)
@@ -258,6 +268,7 @@ describe('PAT-bearing actor cannot escape role limits', () => {
       userId: admin.id,
       name: 'narrow',
       scopes: ['settings:read'], // admin role kept, backup:run dropped
+      purpose: 'general',
     })
     const get = await reqAs(app, token, '/api/restore/pending')
     expect(get.status).toBe(403)

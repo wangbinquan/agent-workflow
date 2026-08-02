@@ -14,6 +14,7 @@
 - **用错 runner 的表现是「挂死」不是报错**：`cd packages/frontend && bun test`（上一条说的那个错法）不会干脆失败，而是刷 `ReferenceError: document is not defined` 后长时间不退——正确的 `bun run --filter @agent-workflow/frontend test` 全量只要 ~60s。**跑套件卡住先怀疑 runner 用错，别当 flaky**（RFC-230 session 因此空等 2h37m）。
 - **`长任务 | tail -N` 会让你全程失明**：tail 要等 EOF 才吐字节，后台跑的全量测试在结束前输出文件恒为 0 字节，「没输出」看起来和「还在跑」一模一样。长任务全量落盘再取尾（`> log 2>&1` 后 `tail`）。判断进程死活看 **`ps -o etime=`**，不看输出有没有内容。
 - **结构守卫必做变异实证**：加 grep/AST 守卫后，改坏源码断言必须看它变红；否则守卫是空的。表级锁（一次锁一类）优于文件级——注释里的字面量也会踩表级锁（RFC-072 事故）。
+- **「写了规则 + 单测绿」≠「接上了」**：脱敏/校验这类横切规则，单测测的是**函数**，接线是另一件事。RFC-247 里 `redactMcpRecord` 与 `redactStdout` **各自**都是「定义了、单测了、零调用方」——`GET /api/mcps/:id` 一直原样吐 `config.env`/`oauth.clientSecret`。单测不会红，因为它没在测出口。**收尾必须从 AC/需求反查「谁调它」**（`grep -rn '<fn>' src | grep -v '<定义文件>'`，命中为空即未接线），或把出口写成唯一入口（`serializeXForActor(record, source)`）让调用方无从绕过。
 - **改符号前先 grep 测试源码锁**：改函数/常量名前全量盘「锁住旧接线的测试」，定向重跑集 = grep 命中集；否则本地绿、CI 红（他人 source-lock 锁了旧名，2026-07-08 三连事故）。
 - **`e2e/` 在 workspace typecheck 之外**：删/改 wire 字段能过所有本地门却红 Playwright CI；推前 grep `e2e/` 找该字段（inline response 类型 + 断言都要改）。
 - **CI 根 `bun test` 只跑 backend**（bunfig `root=packages/backend/tests`）；shared 测试单独跑且含一个**已知陈旧** `memory-schema` 红（RFC-101 `fused`，在 CI 之外）——忽略它，别「修」他人代码。
@@ -33,7 +34,7 @@
 - **协作者 commit gate 会 `git stash -u`**：未提交工作中途「消失」时 `git stash apply`（含 untracked）恢复。
 - **混合文件提交前查交叉依赖**：`git commit -- <混了他人 hunk 的文件>` 前，确认并发 hunk 不引用**其他未提交文件**的符号、且无 HEAD 测试锁了旧接线；写完测试后重跑 `typecheck`（`bun test` 跳 tsc，RFC-161 事故）。
 - **子代理完成通知非终态**：子代理可能继续推翻出 v2；`git add` 它的文件前必查 untracked import，否则提交半截（`87ac52d3` 事故）。
-- **`design/` 与 `STATE.md` 在 prettier 作用域外**：在那跑 `prettier --write` 会 reflow 他人表格行、坏 markdown 转义（`next_run_at`→`next*run_at`）；**只手改**。
+- **`design/` 与 `STATE.md` 在 prettier 作用域外**：在那跑 `prettier --write` 会 reflow 他人表格行、坏 markdown 转义（`next_run_at`→`next*run_at`）、剥掉 blockquote 续行的 `> `；**只手改**。实测代价：一次顺手格式化把 `design/plan.md` 整张 RFC 索引表重排成 ~500 行 diff（全是别人 RFC 的行）（RFC-247 复犯）。改完 `git diff --stat` 对一眼行数是否与改动量相称。
 
 ## 迁移（Drizzle + bun:sqlite）
 
@@ -67,6 +68,12 @@
 - **`Bun.which('./x/y')` 按 daemon 的 cwd 解析，不是按你想要的 cwd**：含斜杠的相对 token 交给 `Bun.which` 要么返回 null、要么命中安装目录里的同名无关文件。用户配置里的相对命令必须显式 `resolve(<预期 cwd>, token)`，PATH 查找只留给**裸名字**。
 - **围栏子进程的 PATH 还要能找到 shebang 解释器**：`npx` realpath 到 `.../npm/bin/npx-cli.js`（`#!/usr/bin/env node`）而同目录**没有** `node` → 围栏内 `exit 127`。只把命令自身的 dirname 加进 PATH 不够，要解析 `#!` 链把解释器目录也加进去（已在 `/usr/bin:/bin` 里的解释器不必重复投影）。**更要命的是它的失败形态**：claude 报 `mcp_servers:[{status:"failed"}]`、工具表缺失，而节点照常 `is_error:false` 成功——**安全围栏导致的能力丢失必须做成节点级显式失败**，否则没人会发现。
 - **bwrap `--setenv NAME VALUE` 把密钥写进世界可读的 `/proc/<pid>/cmdline`**：bwrap 无 `--clearenv` 时把**自己的** environ 原样交给子进程，所以正确做法是把 env 交给 bwrap **进程**（`Bun.spawn({env})`），argv 里一个字节都不放。同理，任何「把密钥移出 argv」的声明都要顺着链路查到底（remote MCP 的 header 仍在 claude 的 `--mcp-config` inline JSON 里，见 audit-backlog）。
+
+- **opencode 作为 MCP **客户端**的三条实测行为（RFC-247 设计期读源码确认，写服务端必须知道）**：
+  ① `packages/opencode/src/mcp/catalog.ts:53-67` 调工具时传 `{ resetTimeoutOnProgress: true, onprogress: () => {} }`，源码注释明写「SDK 只有这个 hook 存在时才发 progress token，从而启用超时重置」⇒ **每条 progress notification 都会重置客户端超时**，长驻工具只要心跳频率高于客户端超时就能一直挂着；
+  ② `mcp/index.ts:38` `DEFAULT_TIMEOUT = 30_000`——**`packages/core/src/v1/config/mcp.ts` 的 schema 注解写「默认 5000」是过期文案**，以代码为准；同一个 `timeout` 既做连接超时（`:286`）又做请求超时（`:662-664`）；
+  ③ `core/src/v1/config/mcp.ts:44-60` 的 `Remote.oauth` **不显式设 `false` 就默认开启 OAuth 自动探测**，opencode 会对你的端点发起 discovery。给用户的远程 MCP 配置片段**必须带 `oauth: false`**，否则第一次连接就走错路径。
+  另：`catalog.ts:47` 会**强制**给你的 `inputSchema` 加 `additionalProperties: false`（入参 schema 必须闭合）；`:69-75` 在 `isError` 时把 text content 拼起来 throw（错误文本必须自解释且**不得含密钥**）。
 
 ## 工作流提示与人工重跑
 
@@ -103,6 +110,8 @@
 - **守卫强化类介于两者**：**实质加固能落地**，但「完整正确」常是子系统——**源码文本守卫的防漂移正则 ratchet 是无底洞**（receiver 语法/空白/注释变体穷不尽），完整闭合 defer 到「守卫 AST 化」RFC，但精确 occurrence 锁 + 表驱动变体锁的实质加固可保留。
 - **「测试加固」类 finding 可能实为生产竞态子系统**：给 fire-and-forget 链加 settle seam 时，Codex 常揭示这不是补测试、而是暴露原设计的 [high] 并发 bug（RFC-212 WS 授权握手期不重跑 gate + 无 pass generation → 被移除成员仍收 stdout）；「不能仅延期测试」。
 
+- **进程级注册表 + 测试夹具 = 只在共享进程下才炸的碰撞**：`bun test` 的项目脚本带 `--isolate`，每个文件独立进程；**手敲 `bun test`（不带 flag）则全部文件共享一个进程**。RFC-247 的路由元数据注册表是模块级单例（它描述「本仓有哪些路由」这一静态事实），于是一个测试夹具若拿**生产路径**当例子（当时用了 `/api/whoami`），共享进程下就会和真实声明撞成「同路径不同契约」并抛错——而带 `--isolate` 跑永远绿。**夹具一律用合成路径**（`/api/__x_fixture__`），别借生产路径当例子；另外**本地复现 CI 请用 `bun run test` 而不是 `bun test`**，两者的进程模型不同。
+
 ## 前端
 
 - **CSS 改动别肉眼跳过**：最小 repro HTML + `python3 -m http.server`（chrome MCP 拒 `file://`）+ chrome 截图 light&dark 验像素再推。
@@ -112,6 +121,7 @@
 - **`.tabs--segment` 换行兜底只在 `.auth-page` 域**；RFC-219 picker 分类条须横向滚动+箭头（全局化曾双层红）。
 - **markdown/结构化文本的管线改动必须锁「渲染级」断言**（`render` + `<table>`/`<input>`/`<h1>` 等 DOM 产物 + 无字面 `|`/`===` 泄漏），不能只锁中间字符串 `includes`：评审页 diff 表格碎裂期间字符串层测试全绿、浏览器已烂（2026-07-30 修复的盲区；正例 `markdown-diff-table-render.test.tsx`）。
 - **带 `/g` 的正则严禁做 `.test()`/`.exec()` 成员判定**：`lastIndex` 跨调用残留，同一输入间歇性漏匹配（markdownDiff identical 输入曾产生假 diff）。成员判定用非 global 兄弟正则或 `String.match`；已有 `ANY_MARKER_RE.lastIndex = 0` 手动复位的写法是次选。
+- **删 i18n 键别用「缩进+键名」字符串 `replace`**：`"    generate: 'Generate',\n"` 会命中**更深缩进**的同名键（6 空格行天然包含 4 空格模式），把别人域里的键吃掉并粘连成一行。RFC-247 删 `account.generate` 时误删 `intent.journey.generate`，`tsc` 与 i18n parity 全绿（两文件+类型被对称吃掉），只有一条渲染断言变红。改 i18n 一律**带上下文锚定**（前后各一行一起匹配）并 `assert count == 1`，删完 `git diff | grep '^-'` 逐行过一遍。
 
 ## dev-env / daemon
 

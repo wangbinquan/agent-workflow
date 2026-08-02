@@ -471,6 +471,28 @@ export const ConfigSchema = z.object({
    * makes the IdP redirect back to the proxy that serves the SPA).
    */
   publicBaseUrl: z.string().url().optional(),
+
+  // --- RFC-247 API / MCP surface ---
+  /**
+   * Master switch for the whole external programmatic surface: `POST /api/mcp`
+   * AND the ability to issue new API tokens.
+   *
+   * Defaults to ENABLED. The alternative — ship dark and make every operator
+   * flip a switch — trades a real usability cost for a theoretical one, since
+   * the surface is inert until somebody deliberately creates a token, and
+   * creating one is itself an explicit act.
+   *
+   * Turning it off is the incident lever: it stops new tokens being minted and
+   * closes the MCP endpoint in one move. Existing tokens keep working on the
+   * REST channel by design, so flipping this does not break running automation
+   * that was never the problem.
+   */
+  mcpSurfaceEnabled: z.boolean().optional(),
+  /**
+   * RFC-247 D16 — how long token call-audit rows (and the delete snapshots
+   * hanging off them) are kept. Default 90 days.
+   */
+  tokenAuditRetentionDays: z.number().int().positive().optional(),
 })
 
 export type Config = z.infer<typeof ConfigSchema>

@@ -401,6 +401,29 @@ function patActor(
   })
 }
 
+/**
+ * RFC-247 — an actor holding an EXACT permission set, bypassing role baselines
+ * and the token-grant formula entirely.
+ *
+ * Needed because `buildOverview`'s "this key is null when the actor lacks its
+ * read point" branch is no longer reachable through a PAT: RFC-247 D3 grants
+ * reads unconditionally to every token, so a token can never be missing
+ * `agents:read`. The branch still has to work (a future role, or a session actor
+ * of a role that lacks the point), so it is exercised directly here rather than
+ * being dropped — dropping it would silently retire a real code path's coverage.
+ */
+function exactActor(
+  userId: string,
+  role: 'admin' | 'user',
+  perms: ReadonlyArray<Permission>,
+): Actor {
+  return {
+    user: { id: userId, username: 'u', displayName: 'u', role, status: 'active' },
+    source: 'session',
+    permissions: new Set(perms),
+  }
+}
+
 describe('RFC-190 /api/overview — 口径 oracle（逐 actor 与列表接口相等）', () => {
   let h: Harness
   beforeEach(async () => {
@@ -483,43 +506,51 @@ describe('RFC-190 buildOverview — 权限真值表 + 固定时钟 7d 边界（�
     h = await buildHarness()
   })
 
-  test('权限真值表：read:all 全量 / read:own mine / 皆无 null；粗门 key 置 null；无粗门 key 恒数字', async () => {
+  // RFC-247 reshaped half of this table. What SURVIVES: the range points
+  // (`tasks:read:own` vs `tasks:read:all`) still decide whose task numbers you
+  // see, and `buildOverview` still nulls a resource key when the actor lacks its
+  // read point. What CHANGED: a PAT can no longer be missing a read point at all
+  // (D3 「读恒开」 grants every read unconditionally), so the null branch is
+  // exercised with an exact-permission actor instead of a narrowed token.
+  test('权限真值表：read:all 全量 / read:own mine / 皆无 null；缺读点的 key 置 null', async () => {
     await seedResources(h)
     await seedTasks(h)
 
-    // admin PAT scoped to tasks:read:all ONLY (design gate P1-2 scenario):
-    // tasks must be the UNSCOPED numbers even though tasks:read:own is absent.
+    // admin PAT ticking tasks:read:all — tasks are the UNSCOPED numbers.
     const readAllOnly = patActor('ghost-admin', 'admin', ['tasks:read:all'])
     const ovAll = await buildOverview(h.db, readAllOnly)
     expect(ovAll.tasks).toEqual({ running: 1, awaiting: 2, done7d: 2, failed7d: 1 })
-    // …and every coarse-gated resource key is null (scope stripped them)…
-    expect(ovAll.resources.agents).toBeNull()
-    expect(ovAll.resources.skills).toBeNull()
-    expect(ovAll.resources.mcps).toBeNull()
-    expect(ovAll.resources.plugins).toBeNull()
-    expect(ovAll.resources.workflows).toBeNull()
-    expect(ovAll.resources.repos).toBeNull()
-    expect(ovAll.resources.memories).toBeNull()
-    // …while the gate-less keys stay numbers (admin role → sees all rows).
+    // RFC-247: reads ride along, so NO resource key is null for a token any more.
+    // This is the visible face of D3 — a token cannot be scoped away from reads.
+    expect(ovAll.resources.agents).toBe(5)
+    expect(ovAll.resources.skills).not.toBeNull()
+    expect(ovAll.resources.mcps).not.toBeNull()
+    expect(ovAll.resources.plugins).not.toBeNull()
+    expect(ovAll.resources.workflows).not.toBeNull()
+    expect(ovAll.resources.repos).not.toBeNull()
+    expect(ovAll.resources.memories).not.toBeNull()
     expect(ovAll.resources.workgroups).toBe(2)
     expect(ovAll.resources.scheduled).toBe(2)
 
-    // user PAT scoped to tasks:read:own only → mine numbers (alice's view).
+    // user PAT ticking tasks:read:own only → mine numbers (alice's view).
+    // The range points still do their job; they are NOT on the token matrix and
+    // ride in from the role baseline (RFC-247 §2.1 RANGE_POINTS).
     const ownOnly = patActor(h.alice.id, 'user', ['tasks:read:own'])
     const ovOwn = await buildOverview(h.db, ownOnly)
     expect(ovOwn.tasks).toEqual({ running: 1, awaiting: 2, done7d: 1, failed7d: 1 })
 
-    // neither read permission → tasks null; gate-less keys STILL numbers
-    // (user role, no owned rows → 0, public workgroups only).
-    const noTaskRead = patActor(h.carol.id, 'user', ['account:self'])
+    // neither range point → tasks null. Unreachable via a PAT now (a user-role
+    // token always carries tasks:read:own), so exercised directly — the branch
+    // still exists in buildOverview and must keep working.
+    const noTaskRead = exactActor(h.carol.id, 'user', ['workgroups:read', 'scheduled-tasks:read'])
     const ovNone = await buildOverview(h.db, noTaskRead)
     expect(ovNone.tasks).toBeNull()
     expect(ovNone.resources.workgroups).toBe(1)
     expect(ovNone.resources.scheduled).toBe(0)
     expect(ovNone.resources.agents).toBeNull()
 
-    // single-key null: everything except repos:read granted → only repos null.
-    const noRepos = patActor(h.alice.id, 'user', [
+    // single-key null: everything except repos:read → only repos null.
+    const noRepos = exactActor(h.alice.id, 'user', [
       'agents:read',
       'skills:read',
       'mcps:read',

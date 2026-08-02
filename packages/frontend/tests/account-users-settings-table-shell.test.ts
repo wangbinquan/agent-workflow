@@ -33,11 +33,13 @@ describe('account and admin responsive shells', () => {
     expect(source).not.toContain('className="auth-form__error"')
   })
 
-  test('/account is route-backed and removes PAT creation and identity unlink surfaces', () => {
+  test('/account is route-backed and keeps identity unlink removed', () => {
     const source = read('routes/account.tsx')
     const overview = read('components/account/AccountOverviewPanel.tsx')
     const security = read('components/account/AccountSecurityPanel.tsx')
     const tokens = read('components/account/AccountTokensPanel.tsx')
+    const createDialog = read('components/account/CreateTokenDialog.tsx')
+    const matrix = read('components/account/TokenPermissionMatrix.tsx')
 
     expect(source).toContain(
       "<PageHeader title={t('account.title', { defaultValue: 'My account' })}",
@@ -53,9 +55,30 @@ describe('account and admin responsive shells', () => {
     expect(security).toContain('<ConfirmDialog')
     expect(tokens).toContain('<ConfirmDialog')
     expect(tokens).toContain('api.delete(`/api/auth/pats/${revokeId}`)')
-    expect(tokens).not.toContain('TextInput')
-    expect(tokens).not.toContain("api.post('/api/auth/pats'")
+
+    // RFC-247 D1 rewrites the three RFC-221 locks that stood here. Two of them
+    // ("no TextInput", "no POST to /api/auth/pats") asserted the ABSENCE of a
+    // creation surface, which was RFC-221's whole point and is now false — the
+    // surface is back because the catalog can finally express a narrow token.
+    // What is worth locking instead is that it is built the shared way rather
+    // than hand-rolled, since a bespoke overlay is how this file's subject
+    // (chrome consistency) regresses.
+    expect(tokens).toContain('<CreateTokenDialog')
+    expect(createDialog).toContain("import { Dialog } from '@/components/Dialog'")
+    expect(createDialog).toContain("import { Field, TextInput } from '@/components/Form'")
+    expect(createDialog).toContain("import { Segmented } from '@/components/Segmented'")
+    expect(createDialog).not.toContain('__overlay')
+    expect(createDialog).not.toContain('<input')
+    expect(createDialog).not.toContain('<select')
+    expect(matrix).toContain("import { Checkbox } from '@/components/Form'")
+    expect(matrix).not.toContain('<input')
+
+    // The third lock survives verbatim, because its reason survives: a
+    // hand-listed scope table is a second source of truth that drifts from the
+    // permission catalog. The matrix derives its cells from the catalog.
     expect(tokens).not.toContain('PAT_SCOPE_GROUPS')
+    expect(createDialog).not.toContain('PAT_SCOPE_GROUPS')
+    expect(matrix).toContain("from '@/lib/token-matrix'")
     expect(source).not.toContain('/api/auth/identities')
     expect(source).not.toContain('/api/auth/pats')
     expect(source).not.toContain('<header className="page__header')

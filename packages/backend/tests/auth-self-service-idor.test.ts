@@ -171,13 +171,20 @@ describe('account self-service is scoped to the calling user', () => {
       db: h.db,
       userId: h.alice.id,
       name: 'ci',
+      purpose: 'general',
     })
 
     const res = await as(h.app, h.bob, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })
     expect(res.status).toBe(403)
 
-    // Alice's CI token still authenticates.
-    const me = await h.app.request('/api/auth/me', {
+    // Alice's CI token still authenticates. Probed via `/api/whoami` rather than
+    // `/api/auth/me`: RFC-247 D6 closes the whole `/api/auth/*` surface to
+    // tokens (a token must not be able to mint or manage tokens), so
+    // `/api/auth/me` now 403s for a PAT by design. `/api/whoami` sits outside
+    // that surface and is the token-reachable identity probe — it proves the
+    // same thing this assertion has always been here to prove: bob's refused
+    // DELETE did not actually revoke anything.
+    const me = await h.app.request('/api/whoami', {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(me.status).toBe(200)
@@ -212,6 +219,7 @@ describe('account self-service is scoped to the calling user', () => {
       db: h.db,
       userId: h.alice.id,
       name: 'alice-ci',
+      purpose: 'general',
     })
     await createIdentity(h.db, {
       userId: h.alice.id,
@@ -263,7 +271,12 @@ describe('account self-service is scoped to the calling user', () => {
     expect((await as(h.app, h.alice, '/api/auth/me')).status).toBe(200)
 
     const alice: Actor = h.alice
-    const { meta: pat } = await createPat({ db: h.db, userId: alice.id, name: 'mine' })
+    const { meta: pat } = await createPat({
+      db: h.db,
+      userId: alice.id,
+      name: 'mine',
+      purpose: 'general',
+    })
     expect((await as(h.app, alice, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })).status).toBe(
       204,
     )

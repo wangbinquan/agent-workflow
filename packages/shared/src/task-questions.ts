@@ -29,6 +29,8 @@ import type { NodeRunStatus, RerunCause } from './schemas/task'
  *  节点反问者；designer=人工 reassign 增派的「让上游/下游修订」handler 行。默认一条问题只有
  *  self 或 questioner 单条（提问节点自己带答案重跑）；designer 行仅在人工增派时新增，可再改派
  *  / 移除（回到单卡）。 */
+
+import { z } from 'zod'
 export type TaskQuestionRoleKind = 'self' | 'questioner' | 'designer'
 
 /** Stored / DTO source kind. `self`/`cross` come from a clarify round (via reconcile);
@@ -42,12 +44,23 @@ export type TaskQuestionRoundSourceKind = 'self' | 'cross'
 /** 条目展示态（RFC-120 v2 看板列）。`下发`（mint 承接 rerun）是 pending/staged→processing
  *  的边界（design §11.2/11.6）——一旦有承接 run 即「已下发=处理中」，不再以 run 是否
  *  startedAt 分界。 */
-export type TaskQuestionPhase =
-  | 'pending' // 待指派：未下发、未批准（handler 可能未定 / 待答）
-  | 'staged' // 待下发：已批准·未下发（拖入「准许执行/待下发」、等批量下发）
-  | 'processing' // 处理中：已下发（承接 run 存在，含 queued/running/failed；失败仍处理中 D3）
-  | 'awaiting_confirm' // 已处理待确认：承接 run done（答案已被消费，有无产出均可——clarify-ask 续问收尾亦 done）
-  | 'done' // 完成：人工确认关闭
+export const TASK_QUESTION_PHASES = [
+  'pending', // 待指派：未下发、未批准（handler 可能未定 / 待答）
+  'staged', // 待下发：已批准·未下发（拖入「准许执行/待下发」、等批量下发）
+  'processing', // 处理中：已下发（承接 run 存在，含 queued/running/failed；失败仍处理中 D3）
+  'awaiting_confirm', // 已处理待确认：承接 run done（答案已被消费，有无产出均可——clarify-ask 续问收尾亦 done）
+  'done', // 完成：人工确认关闭
+] as const
+
+/**
+ * RFC-247 T3: derived from the tuple above so the route layer can VALIDATE a
+ * `?phase=` query param instead of casting it. The cast that used to sit in
+ * `routes/taskQuestions.ts` let any string through as a phase — `?phase=bogus`
+ * reached the service and silently matched nothing rather than being refused.
+ */
+export const TaskQuestionPhaseSchema = z.enum(TASK_QUESTION_PHASES)
+
+export type TaskQuestionPhase = (typeof TASK_QUESTION_PHASES)[number]
 // RFC-126: 'closed' 相位移除。来源轮取消/放弃不再产生终态条目（CR-1 退役 + migration
 // un-abandon 历史行；canceled 轮在 reconcile 被跳过、不建条目）——问题永远停在自然相位。
 

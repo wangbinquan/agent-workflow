@@ -25,6 +25,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { broadcastClarifyAnsweredForRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/services/clarifySeal'
 import { autoDispatchClarifyRound } from '@/services/clarifyAutoDispatch'
@@ -137,336 +138,389 @@ async function filterRoundsByTaskVisibility<T extends { taskId: string }>(
 }
 
 export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/clarify', async (c) => {
-    const q = ListClarifyQuerySchema.safeParse({
-      status: c.req.query('status') ?? undefined,
-      taskId: c.req.query('taskId') ?? c.req.query('task_id') ?? undefined,
-      limit: c.req.query('limit') ? Number(c.req.query('limit')) : undefined,
-    })
-    if (!q.success) {
-      throw new ValidationError('clarify-list-query-invalid', 'invalid clarify list query', {
-        issues: q.error.issues,
-      })
-    }
-    // RFC-058 T14: single ClarifyRoundSummary[] from unified clarify_rounds.
-    // Replaces the kind-tagged ClarifySession|CrossClarifySession union the
-    // route used to emit; `entry.kind` discriminator lives on the row itself.
-    const filter: {
-      status?: 'awaiting_human' | 'answered' | 'canceled' | 'abandoned' | 'all'
-      taskId?: string
-      limit?: number
-    } = {}
-    if (q.data.status !== undefined) filter.status = q.data.status
-    if (q.data.taskId !== undefined) filter.taskId = q.data.taskId
-    if (q.data.limit !== undefined) filter.limit = q.data.limit
-    const summaries = await listClarifyRoundSummaries(deps.db, filter)
-    return c.json(await filterRoundsByTaskVisibility(deps, actorOf(c), summaries))
-  })
-
-  app.get('/api/clarify/pending-count', async (c) => {
-    // RFC-099: badge counts only rounds on tasks visible to the actor.
-    // RFC-202 T6: both branches now count via the SAME clarify_rounds path —
-    // the old admin branch queried the legacy self-clarify table, which
-    // (a) missed every cross-agent round (audit P2: admin badge undercounted)
-    // and (b) kept counting rounds of terminal tasks forever. The uncapped
-    // limit keeps the count exact (never truncated by the list page size).
-    const actor = actorOf(c)
-    const pending = await listClarifyRoundSummaries(deps.db, {
-      status: 'awaiting_human',
-      limit: Number.MAX_SAFE_INTEGER,
-    })
-    if (actor.permissions.has('tasks:read:all')) {
-      return c.json({ count: pending.length })
-    }
-    const visible = await filterRoundsByTaskVisibility(deps, actor, pending)
-    return c.json({ count: visible.length })
-  })
-
-  app.get('/api/clarify/:nodeRunId', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    await ensureClarifyVisible(deps, nodeRunId, actorOf(c))
-    // RFC-058 T14: single ClarifyRound shape; `kind` discriminator
-    // distinguishes self vs cross. The keying by intermediary node_run id
-    // works for both because dual-write already mints the matching
-    // clarify_rounds row at session creation time.
-    const detail = await getClarifyRoundDetail(deps.db, nodeRunId)
-    return c.json(detail)
-  })
-
-  app.post('/api/clarify/:nodeRunId/answers', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    const raw: unknown = await c.req.json().catch(() => null)
-    const parsed = SubmitClarifyAnswersSchema.safeParse(raw)
-    if (!parsed.success) {
-      throw new ValidationError('clarify-answers-invalid', 'invalid clarify answers body', {
-        issues: parsed.error.issues,
-      })
-    }
-    // Header-based optimistic lock; body field takes precedence if both set.
-    let ifMatch = parsed.data.ifMatchIteration
-    if (ifMatch === undefined) {
-      const header = c.req.header('If-Match')
-      if (header !== undefined && /^-?\d+$/.test(header)) {
-        ifMatch = Number.parseInt(header, 10)
-      }
-    }
-    // RFC-099 (D5/D7): any task member (or admin); capture the role snapshot.
-    const actor = actorOf(c)
-    const role = await ensureClarifyMember(deps, nodeRunId, actor)
-
-    // RFC-128 P2 (Codex P2-1) — `questionIds` (a subset cap) is ONLY meaningful for the
-    // defer/control channel. On the quick channel it would silently drop questions while
-    // submitClarifyAnswers/submitCrossClarifyAnswers still finalize the WHOLE round (status
-    // answered + rerun mint), permanently stranding the dropped questions. Reject the combo
-    // instead of filtering-then-falling-through to the quick path.
-    if (parsed.data.questionIds !== undefined && parsed.data.defer !== true) {
-      throw new ValidationError(
-        'clarify-question-ids-requires-defer',
-        'questionIds is only honored with defer=true (the control channel); a quick-channel submit answers the whole round',
-      )
-    }
-    // RFC-136 — the re-answer declaration is control-channel-only for the same reason:
-    // the quick channel is seal-exactly-once (its seal→dispatch must never overwrite).
-    if (parsed.data.resubmitQuestionIds !== undefined && parsed.data.defer !== true) {
-      throw new ValidationError(
-        'clarify-resubmit-requires-defer',
-        'resubmitQuestionIds is only honored with defer=true (the centralized answer pane); the quick channel cannot re-answer',
-      )
-    }
-
-    // RFC-128 P2 (T6) — defer routing. defer=true → CONTROL channel: seal the answered
-    // subset (sealRoundQuestions, P1) WITHOUT minting a rerun or resuming the task; the
-    // sealed question(s) enter 待指派 for the centralized-answer pane / batch dispatch. The
-    // seal primitive is kind-agnostic (reads round.kind internally + dual-writes the legacy
-    // session), so no self/cross branch is needed here. defer=false (the default, and the
-    // value when omitted) falls through to the unchanged quick channel below — which keeps
-    // using `parsed.data.answers` verbatim (golden lock).
-    if (parsed.data.defer) {
-      // Subset cap (T5): seal only answers whose questionId is in `questionIds` (when set).
-      const subsetIds = parsed.data.questionIds
-      const sealAnswers =
-        subsetIds !== undefined
-          ? parsed.data.answers.filter((a) => subsetIds.includes(a.questionId))
-          : parsed.data.answers
-      const sealResult = await sealRoundQuestions({
-        db: deps.db,
-        originNodeRunId: nodeRunId,
-        answers: sealAnswers,
-        // RFC-128 (用户 2026-07-01) — AUTO-STAGE: the centralized-answer control channel seals a
-        // question straight into 待下发 (staged) so the board's "批量下发全下" (dispatchTaskQuestions
-        // = ALL staged) can pick it up, instead of leaving it in 待指派 (pending) needing a manual
-        // 移入待下发. Only THIS branch opts in; autoDispatchClarifyRound (P5-D) never passes it.
-        autoStage: true,
-        // RFC-136 (Codex 实现门 P2 fold) — the control channel may RE-answer a sealed 待指派
-        // question, but ONLY the ones the client explicitly DECLARED (the pane showed the
-        // committed answer and the user edited it). Forwarding the declaration (instead of a
-        // route-level boolean) closes the cross-channel race with a quick submit's
-        // seal→dispatch window; the quick channel stays exactly-once (see
-        // SealRoundQuestionsArgs.allowResealFor).
-        ...(parsed.data.resubmitQuestionIds !== undefined
-          ? { allowResealFor: parsed.data.resubmitQuestionIds }
-          : {}),
-        // RFC-128 P2 (Codex P2-2): thread the round directive so the control channel matches
-        // quick-path stop semantics (no designer entries + directive persisted; 'continue'
-        // also satisfies the §18 designer park). Schema defaults it to 'continue'.
-        directive: parsed.data.directive,
-        // RFC-162: per-question scope removed.
-        // RFC-099: audit-only setter id — NEVER enters an agent prompt.
-        sealedBy: actor.user.id,
-      })
-      // NB: no resumeTask — the whole point of defer is to NOT advance execution; the
-      // user dispatches later from the board (P3 designer 借壳 / P5 self·questioner rerun).
-      // RFC-161: the defer control channel emits no answered WS event (unlike the quick
-      // channel's emitAutoAnswered). On a FULL seal the intermediary clarify/cross-clarify
-      // node_run flips awaiting_human → done (clarifySeal.ts) — broadcast node.status so
-      // open task canvases refresh node-runs (the RFC-161 clarifyNavKind click target) +
-      // the board, via useTaskSync's existing node.status rule. Best-effort: a broadcast
-      // failure must not affect the seal outcome. Partial seals keep the round
-      // awaiting_human → no event (canvas nav stays 'awaiting').
-      if (sealResult.roundFullySealed) {
-        try {
-          const nrRow = (
-            await deps.db
-              .select({ taskId: nodeRuns.taskId, nodeId: nodeRuns.nodeId })
-              .from(nodeRuns)
-              .where(eq(nodeRuns.id, nodeRunId))
-              .limit(1)
-          )[0]
-          if (nrRow !== undefined) {
-            taskBroadcaster.broadcast(TASK_CHANNEL(nrRow.taskId), {
-              id: -1,
-              type: 'node.status',
-              nodeRunId,
-              nodeId: nrRow.nodeId,
-              status: 'done',
-            })
-          }
-        } catch (err) {
-          log.warn('clarify defer full-seal node.status broadcast threw', {
-            nodeRunId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-      return c.json({ ok: true, kind: 'seal' as const, ...sealResult })
-    }
-
-    // RFC-132 PR-B (universal deferred model, §6) — EVERY quick-channel answer (defer=false) seals
-    // the round + AUTO-triggers the SAME per-question dispatch the board's 批量下发 uses
-    // (autoDispatchClarifyRound). `defer` only chooses AUTO (here) vs MANUAL (the centralized-answer
-    // pane, defer=true) triggering of the ONE dispatch path — never a second delivery path. The legacy
-    // immediate-mint branches (submitClarifyAnswers / submitCrossClarifyAnswers / triggerDesignerRerun)
-    // are no longer reached from the route (§4). Kind-agnostic: autoDispatchClarifyRound reads
-    // round.kind internally + dispatches the round's self/questioner AND designer entries (designer
-    // aggregates its siblings; multi-source not-ready parks 等齐 until the last sibling answers).
+  registerRoute(
+    app,
     {
-      const nrRow = (
-        await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-      )[0]
-      // RFC-128 P5-D (Codex round-6/7): re-emit the legacy answered WS event(s) the deferred quick
-      // branch otherwise skips, so OTHER clients (a mounted board / a collaborator) invalidate clarify
-      // list/detail/pending-count + node-runs + the directive toggle (the submitting client navigates +
-      // invalidates). The helpers are NO-OP unless the round is ANSWERED, so this is safe to call on
-      // BOTH the success AND the error paths: autoDispatchClarifyRound seals (commits answered) BEFORE
-      // it may RETHROW a non-recoverable dispatch conflict — round-7: without broadcasting on the error
-      // path the committed answer would be hidden behind a failed response with no invalidation. A
-      // 'stop' cross round also fires the rejected event (parity with submitCrossClarifyAnswers).
-      // Best-effort — a broadcast failure must not affect the answer/error outcome.
-      // RFC-217 T7（消灭双盲调）：kind 由统一表 clarify_rounds 精确判定（本行
-      // 就是这轮的 intermediary run id），不再「两个 no-op-safe 的都调一遍」——
-      // 那是数据模型二分时代 snapshot 判 kind 不可靠逼出来的防御式浪费；统一
-      // 表的 kind 列是权威判别。stop 的 rejected 事件仍只属 cross。
-      const emitAutoAnswered = async (rerunId: string): Promise<void> => {
-        const kindRow = (
-          await deps.db
-            .select({ kind: clarifyRounds.kind })
-            .from(clarifyRounds)
-            .where(eq(clarifyRounds.intermediaryNodeRunId, nodeRunId))
-            .orderBy(desc(clarifyRounds.createdAt))
-            .limit(1)
-        )[0]
-        try {
-          // RFC-217 T9: single kind-routed re-emit (was the self/cross pair).
-          await broadcastClarifyAnsweredForRound(
-            deps.db,
-            kindRow?.kind === 'cross' ? 'cross' : 'self',
-            nodeRunId,
-            kindRow?.kind === 'cross'
-              ? parsed.data.directive === 'stop'
-                ? { rejectedQuestionerNodeRunId: rerunId }
-                : {}
-              : { rerunNodeRunId: rerunId },
-          )
-        } catch (err) {
-          log.warn('clarify autodispatch answered-broadcast threw', {
-            taskId: nrRow?.taskId,
-            kind: kindRow?.kind ?? 'unknown',
-            error: err instanceof Error ? err.message : String(err),
-          })
+      method: 'GET',
+      path: '/api/clarify',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List clarify gates the caller can act on',
+    },
+    async (c) => {
+      const q = ListClarifyQuerySchema.safeParse({
+        status: c.req.query('status') ?? undefined,
+        taskId: c.req.query('taskId') ?? c.req.query('task_id') ?? undefined,
+        limit: c.req.query('limit') ? Number(c.req.query('limit')) : undefined,
+      })
+      if (!q.success) {
+        throw new ValidationError('clarify-list-query-invalid', 'invalid clarify list query', {
+          issues: q.error.issues,
+        })
+      }
+      // RFC-058 T14: single ClarifyRoundSummary[] from unified clarify_rounds.
+      // Replaces the kind-tagged ClarifySession|CrossClarifySession union the
+      // route used to emit; `entry.kind` discriminator lives on the row itself.
+      const filter: {
+        status?: 'awaiting_human' | 'answered' | 'canceled' | 'abandoned' | 'all'
+        taskId?: string
+        limit?: number
+      } = {}
+      if (q.data.status !== undefined) filter.status = q.data.status
+      if (q.data.taskId !== undefined) filter.taskId = q.data.taskId
+      if (q.data.limit !== undefined) filter.limit = q.data.limit
+      const summaries = await listClarifyRoundSummaries(deps.db, filter)
+      return c.json(await filterRoundsByTaskVisibility(deps, actorOf(c), summaries))
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/clarify/pending-count',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Count of pending clarify gates',
+    },
+    async (c) => {
+      // RFC-099: badge counts only rounds on tasks visible to the actor.
+      // RFC-202 T6: both branches now count via the SAME clarify_rounds path —
+      // the old admin branch queried the legacy self-clarify table, which
+      // (a) missed every cross-agent round (audit P2: admin badge undercounted)
+      // and (b) kept counting rounds of terminal tasks forever. The uncapped
+      // limit keeps the count exact (never truncated by the list page size).
+      const actor = actorOf(c)
+      const pending = await listClarifyRoundSummaries(deps.db, {
+        status: 'awaiting_human',
+        limit: Number.MAX_SAFE_INTEGER,
+      })
+      if (actor.permissions.has('tasks:read:all')) {
+        return c.json({ count: pending.length })
+      }
+      const visible = await filterRoundsByTaskVisibility(deps, actor, pending)
+      return c.json({ count: visible.length })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/clarify/:nodeRunId',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one clarify gate',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      await ensureClarifyVisible(deps, nodeRunId, actorOf(c))
+      // RFC-058 T14: single ClarifyRound shape; `kind` discriminator
+      // distinguishes self vs cross. The keying by intermediary node_run id
+      // works for both because dual-write already mints the matching
+      // clarify_rounds row at session creation time.
+      const detail = await getClarifyRoundDetail(deps.db, nodeRunId)
+      return c.json(detail)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/clarify/:nodeRunId/answers',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Submit clarify answers (advances the task)',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      const raw: unknown = await c.req.json().catch(() => null)
+      const parsed = SubmitClarifyAnswersSchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new ValidationError('clarify-answers-invalid', 'invalid clarify answers body', {
+          issues: parsed.error.issues,
+        })
+      }
+      // Header-based optimistic lock; body field takes precedence if both set.
+      let ifMatch = parsed.data.ifMatchIteration
+      if (ifMatch === undefined) {
+        const header = c.req.header('If-Match')
+        if (header !== undefined && /^-?\d+$/.test(header)) {
+          ifMatch = Number.parseInt(header, 10)
         }
       }
-      let auto: Awaited<ReturnType<typeof autoDispatchClarifyRound>>
-      try {
-        auto = await autoDispatchClarifyRound({
+      // RFC-099 (D5/D7): any task member (or admin); capture the role snapshot.
+      const actor = actorOf(c)
+      const role = await ensureClarifyMember(deps, nodeRunId, actor)
+
+      // RFC-128 P2 (Codex P2-1) — `questionIds` (a subset cap) is ONLY meaningful for the
+      // defer/control channel. On the quick channel it would silently drop questions while
+      // submitClarifyAnswers/submitCrossClarifyAnswers still finalize the WHOLE round (status
+      // answered + rerun mint), permanently stranding the dropped questions. Reject the combo
+      // instead of filtering-then-falling-through to the quick path.
+      if (parsed.data.questionIds !== undefined && parsed.data.defer !== true) {
+        throw new ValidationError(
+          'clarify-question-ids-requires-defer',
+          'questionIds is only honored with defer=true (the control channel); a quick-channel submit answers the whole round',
+        )
+      }
+      // RFC-136 — the re-answer declaration is control-channel-only for the same reason:
+      // the quick channel is seal-exactly-once (its seal→dispatch must never overwrite).
+      if (parsed.data.resubmitQuestionIds !== undefined && parsed.data.defer !== true) {
+        throw new ValidationError(
+          'clarify-resubmit-requires-defer',
+          'resubmitQuestionIds is only honored with defer=true (the centralized answer pane); the quick channel cannot re-answer',
+        )
+      }
+
+      // RFC-128 P2 (T6) — defer routing. defer=true → CONTROL channel: seal the answered
+      // subset (sealRoundQuestions, P1) WITHOUT minting a rerun or resuming the task; the
+      // sealed question(s) enter 待指派 for the centralized-answer pane / batch dispatch. The
+      // seal primitive is kind-agnostic (reads round.kind internally + dual-writes the legacy
+      // session), so no self/cross branch is needed here. defer=false (the default, and the
+      // value when omitted) falls through to the unchanged quick channel below — which keeps
+      // using `parsed.data.answers` verbatim (golden lock).
+      if (parsed.data.defer) {
+        // Subset cap (T5): seal only answers whose questionId is in `questionIds` (when set).
+        const subsetIds = parsed.data.questionIds
+        const sealAnswers =
+          subsetIds !== undefined
+            ? parsed.data.answers.filter((a) => subsetIds.includes(a.questionId))
+            : parsed.data.answers
+        const sealResult = await sealRoundQuestions({
           db: deps.db,
           originNodeRunId: nodeRunId,
-          answers: parsed.data.answers,
+          answers: sealAnswers,
+          // RFC-128 (用户 2026-07-01) — AUTO-STAGE: the centralized-answer control channel seals a
+          // question straight into 待下发 (staged) so the board's "批量下发全下" (dispatchTaskQuestions
+          // = ALL staged) can pick it up, instead of leaving it in 待指派 (pending) needing a manual
+          // 移入待下发. Only THIS branch opts in; autoDispatchClarifyRound (P5-D) never passes it.
+          autoStage: true,
+          // RFC-136 (Codex 实现门 P2 fold) — the control channel may RE-answer a sealed 待指派
+          // question, but ONLY the ones the client explicitly DECLARED (the pane showed the
+          // committed answer and the user edited it). Forwarding the declaration (instead of a
+          // route-level boolean) closes the cross-channel race with a quick submit's
+          // seal→dispatch window; the quick channel stays exactly-once (see
+          // SealRoundQuestionsArgs.allowResealFor).
+          ...(parsed.data.resubmitQuestionIds !== undefined
+            ? { allowResealFor: parsed.data.resubmitQuestionIds }
+            : {}),
+          // RFC-128 P2 (Codex P2-2): thread the round directive so the control channel matches
+          // quick-path stop semantics (no designer entries + directive persisted; 'continue'
+          // also satisfies the §18 designer park). Schema defaults it to 'continue'.
           directive: parsed.data.directive,
-          // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
-          ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
-          actor: { userId: actor.user.id, role },
+          // RFC-162: per-question scope removed.
+          // RFC-099: audit-only setter id — NEVER enters an agent prompt.
+          sealedBy: actor.user.id,
         })
-      } catch (err) {
-        // A NON-recoverable dispatch conflict (terminal/snapshot/...) rethrown AFTER the seal committed:
-        // the round IS answered (the helper checks status), so broadcast the answered event (other
-        // clients invalidate) BEFORE surfacing the failure. Errors BEFORE the seal (iteration-mismatch,
-        // not-deferred, round-not-found) leave the round un-answered → the helper no-ops. Then rethrow.
-        await emitAutoAnswered('')
-        throw err
-      }
-      // Success: the dispatched rerun id (or '' when dispatch was deferred to the board).
-      await emitAutoAnswered(auto.dispatch.reruns[0]?.nodeRunId ?? '')
-      // Release the gate so the freshly-minted self/questioner reruns dispatch — mirroring the
-      // manual dispatch route + the legacy quick path. Best-effort: a `running` deferred task'
-      // live loop picks up the pending reruns (task-not-resumable logged at info, not surfaced).
-      const opencodeCmdAuto = resolveOpencodeCmd(deps.configPath)
-      const resumeDepsAuto: Parameters<typeof resumeTask>[2] = {
-        db: deps.db,
-        appHome: Paths.root,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
-        ...(opencodeCmdAuto ? { opencodeCmd: opencodeCmdAuto } : {}),
-        ...resolveLaunchRuntimeConfig(deps.configPath),
-      }
-      // RFC-202 T8: real resume failures ride in the response (the answers
-      // ARE sealed — 2xx stays true); the UI shows a warning instead of the
-      // old silent parked-forever outcome. task-not-resumable stays a benign
-      // deferral (live loop picks the reruns up).
-      let resumeFailure: { ok: false; code: string; message: string } | undefined
-      try {
-        await resumeTask(deps.db, auto.taskId, resumeDepsAuto)
-      } catch (err) {
-        if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-          log.info('clarify autodispatch resume deferred — live loop picks up the pending reruns', {
-            taskId: auto.taskId,
-          })
-        } else {
-          const message = err instanceof Error ? err.message : String(err)
-          log.warn('clarify autodispatch resume threw', { taskId: auto.taskId, error: message })
-          resumeFailure = {
-            ok: false,
-            code: err instanceof DomainError ? err.code : 'resume-failed',
-            message,
+        // NB: no resumeTask — the whole point of defer is to NOT advance execution; the
+        // user dispatches later from the board (P3 designer 借壳 / P5 self·questioner rerun).
+        // RFC-161: the defer control channel emits no answered WS event (unlike the quick
+        // channel's emitAutoAnswered). On a FULL seal the intermediary clarify/cross-clarify
+        // node_run flips awaiting_human → done (clarifySeal.ts) — broadcast node.status so
+        // open task canvases refresh node-runs (the RFC-161 clarifyNavKind click target) +
+        // the board, via useTaskSync's existing node.status rule. Best-effort: a broadcast
+        // failure must not affect the seal outcome. Partial seals keep the round
+        // awaiting_human → no event (canvas nav stays 'awaiting').
+        if (sealResult.roundFullySealed) {
+          try {
+            const nrRow = (
+              await deps.db
+                .select({ taskId: nodeRuns.taskId, nodeId: nodeRuns.nodeId })
+                .from(nodeRuns)
+                .where(eq(nodeRuns.id, nodeRunId))
+                .limit(1)
+            )[0]
+            if (nrRow !== undefined) {
+              taskBroadcaster.broadcast(TASK_CHANNEL(nrRow.taskId), {
+                id: -1,
+                type: 'node.status',
+                nodeRunId,
+                nodeId: nrRow.nodeId,
+                status: 'done',
+              })
+            }
+          } catch (err) {
+            log.warn('clarify defer full-seal node.status broadcast threw', {
+              nodeRunId,
+              error: err instanceof Error ? err.message : String(err),
+            })
           }
         }
+        return c.json({ ok: true, kind: 'seal' as const, ...sealResult })
       }
-      return c.json({
-        ok: true,
-        ...(resumeFailure ? { resume: resumeFailure } : {}),
-        kind: 'autodispatch' as const,
-        roundKind: auto.kind,
-        sealedQuestionIds: auto.sealedQuestionIds,
-        roundFullySealed: auto.roundFullySealed,
-        reruns: auto.dispatch.reruns,
-        dispatchedEntryIds: auto.dispatch.dispatchedEntryIds,
-        deferred: auto.dispatch.deferred,
-        // Codex round-5: set when the answer WAS sealed but auto-dispatch was deferred to the board
-        // (a post-seal dispatch conflict, e.g. a same-home in-flight rerun). The answer is saved +
-        // parked; the user dispatches it from the board. The request still succeeds (not a failure).
-        ...(auto.dispatchDeferredReason !== undefined
-          ? { dispatchDeferredReason: auto.dispatchDeferredReason }
-          : {}),
-      })
-    }
-  })
+
+      // RFC-132 PR-B (universal deferred model, §6) — EVERY quick-channel answer (defer=false) seals
+      // the round + AUTO-triggers the SAME per-question dispatch the board's 批量下发 uses
+      // (autoDispatchClarifyRound). `defer` only chooses AUTO (here) vs MANUAL (the centralized-answer
+      // pane, defer=true) triggering of the ONE dispatch path — never a second delivery path. The legacy
+      // immediate-mint branches (submitClarifyAnswers / submitCrossClarifyAnswers / triggerDesignerRerun)
+      // are no longer reached from the route (§4). Kind-agnostic: autoDispatchClarifyRound reads
+      // round.kind internally + dispatches the round's self/questioner AND designer entries (designer
+      // aggregates its siblings; multi-source not-ready parks 等齐 until the last sibling answers).
+      {
+        const nrRow = (
+          await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
+        )[0]
+        // RFC-128 P5-D (Codex round-6/7): re-emit the legacy answered WS event(s) the deferred quick
+        // branch otherwise skips, so OTHER clients (a mounted board / a collaborator) invalidate clarify
+        // list/detail/pending-count + node-runs + the directive toggle (the submitting client navigates +
+        // invalidates). The helpers are NO-OP unless the round is ANSWERED, so this is safe to call on
+        // BOTH the success AND the error paths: autoDispatchClarifyRound seals (commits answered) BEFORE
+        // it may RETHROW a non-recoverable dispatch conflict — round-7: without broadcasting on the error
+        // path the committed answer would be hidden behind a failed response with no invalidation. A
+        // 'stop' cross round also fires the rejected event (parity with submitCrossClarifyAnswers).
+        // Best-effort — a broadcast failure must not affect the answer/error outcome.
+        // RFC-217 T7（消灭双盲调）：kind 由统一表 clarify_rounds 精确判定（本行
+        // 就是这轮的 intermediary run id），不再「两个 no-op-safe 的都调一遍」——
+        // 那是数据模型二分时代 snapshot 判 kind 不可靠逼出来的防御式浪费；统一
+        // 表的 kind 列是权威判别。stop 的 rejected 事件仍只属 cross。
+        const emitAutoAnswered = async (rerunId: string): Promise<void> => {
+          const kindRow = (
+            await deps.db
+              .select({ kind: clarifyRounds.kind })
+              .from(clarifyRounds)
+              .where(eq(clarifyRounds.intermediaryNodeRunId, nodeRunId))
+              .orderBy(desc(clarifyRounds.createdAt))
+              .limit(1)
+          )[0]
+          try {
+            // RFC-217 T9: single kind-routed re-emit (was the self/cross pair).
+            await broadcastClarifyAnsweredForRound(
+              deps.db,
+              kindRow?.kind === 'cross' ? 'cross' : 'self',
+              nodeRunId,
+              kindRow?.kind === 'cross'
+                ? parsed.data.directive === 'stop'
+                  ? { rejectedQuestionerNodeRunId: rerunId }
+                  : {}
+                : { rerunNodeRunId: rerunId },
+            )
+          } catch (err) {
+            log.warn('clarify autodispatch answered-broadcast threw', {
+              taskId: nrRow?.taskId,
+              kind: kindRow?.kind ?? 'unknown',
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+        let auto: Awaited<ReturnType<typeof autoDispatchClarifyRound>>
+        try {
+          auto = await autoDispatchClarifyRound({
+            db: deps.db,
+            originNodeRunId: nodeRunId,
+            answers: parsed.data.answers,
+            directive: parsed.data.directive,
+            // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
+            ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
+            actor: { userId: actor.user.id, role },
+          })
+        } catch (err) {
+          // A NON-recoverable dispatch conflict (terminal/snapshot/...) rethrown AFTER the seal committed:
+          // the round IS answered (the helper checks status), so broadcast the answered event (other
+          // clients invalidate) BEFORE surfacing the failure. Errors BEFORE the seal (iteration-mismatch,
+          // not-deferred, round-not-found) leave the round un-answered → the helper no-ops. Then rethrow.
+          await emitAutoAnswered('')
+          throw err
+        }
+        // Success: the dispatched rerun id (or '' when dispatch was deferred to the board).
+        await emitAutoAnswered(auto.dispatch.reruns[0]?.nodeRunId ?? '')
+        // Release the gate so the freshly-minted self/questioner reruns dispatch — mirroring the
+        // manual dispatch route + the legacy quick path. Best-effort: a `running` deferred task'
+        // live loop picks up the pending reruns (task-not-resumable logged at info, not surfaced).
+        const opencodeCmdAuto = resolveOpencodeCmd(deps.configPath)
+        const resumeDepsAuto: Parameters<typeof resumeTask>[2] = {
+          db: deps.db,
+          appHome: Paths.root,
+          ...(deps.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: deps.containmentCoordinator }),
+          ...(opencodeCmdAuto ? { opencodeCmd: opencodeCmdAuto } : {}),
+          ...resolveLaunchRuntimeConfig(deps.configPath),
+        }
+        // RFC-202 T8: real resume failures ride in the response (the answers
+        // ARE sealed — 2xx stays true); the UI shows a warning instead of the
+        // old silent parked-forever outcome. task-not-resumable stays a benign
+        // deferral (live loop picks the reruns up).
+        let resumeFailure: { ok: false; code: string; message: string } | undefined
+        try {
+          await resumeTask(deps.db, auto.taskId, resumeDepsAuto)
+        } catch (err) {
+          if (err instanceof ConflictError && err.code === 'task-not-resumable') {
+            log.info(
+              'clarify autodispatch resume deferred — live loop picks up the pending reruns',
+              {
+                taskId: auto.taskId,
+              },
+            )
+          } else {
+            const message = err instanceof Error ? err.message : String(err)
+            log.warn('clarify autodispatch resume threw', { taskId: auto.taskId, error: message })
+            resumeFailure = {
+              ok: false,
+              code: err instanceof DomainError ? err.code : 'resume-failed',
+              message,
+            }
+          }
+        }
+        return c.json({
+          ok: true,
+          ...(resumeFailure ? { resume: resumeFailure } : {}),
+          kind: 'autodispatch' as const,
+          roundKind: auto.kind,
+          sealedQuestionIds: auto.sealedQuestionIds,
+          roundFullySealed: auto.roundFullySealed,
+          reruns: auto.dispatch.reruns,
+          dispatchedEntryIds: auto.dispatch.dispatchedEntryIds,
+          deferred: auto.dispatch.deferred,
+          // Codex round-5: set when the answer WAS sealed but auto-dispatch was deferred to the board
+          // (a post-seal dispatch conflict, e.g. a same-home in-flight rerun). The answer is saved +
+          // parked; the user dispatches it from the board. The request still succeeds (not a failure).
+          ...(auto.dispatchDeferredReason !== undefined
+            ? { dispatchDeferredReason: auto.dispatchDeferredReason }
+            : {}),
+        })
+      }
+    },
+  )
 
   // RFC-099 (D8/D14) — collaborative answer draft, one question per call,
   // per-question last-write-wins. Members only; the editor's identity + role
   // are recorded per question and broadcast to other open forms via the
   // task channel ('clarify.draft.updated').
-  app.put('/api/clarify/:nodeRunId/draft', async (c) => {
-    const nodeRunId = c.req.param('nodeRunId')
-    const raw: unknown = await c.req.json().catch(() => null)
-    const parsed = ClarifyDraftSaveBodySchema.safeParse(raw)
-    if (!parsed.success) {
-      throw new ValidationError('clarify-draft-invalid', 'invalid clarify draft body', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/clarify/:nodeRunId/draft',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Save a collaborative clarify draft',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      const raw: unknown = await c.req.json().catch(() => null)
+      const parsed = ClarifyDraftSaveBodySchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new ValidationError('clarify-draft-invalid', 'invalid clarify draft body', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const role = await ensureClarifyMember(deps, nodeRunId, actor)
+      const result = await saveClarifyDraft({
+        db: deps.db,
+        intermediaryNodeRunId: nodeRunId,
+        roundId: parsed.data.roundId,
+        questionId: parsed.data.questionId,
+        value: {
+          selectedOptionIndices: parsed.data.selectedOptionIndices,
+          customText: parsed.data.customText,
+        },
+        editor: { userId: actor.user.id, displayName: actor.user.displayName, role },
       })
-    }
-    const actor = actorOf(c)
-    const role = await ensureClarifyMember(deps, nodeRunId, actor)
-    const result = await saveClarifyDraft({
-      db: deps.db,
-      intermediaryNodeRunId: nodeRunId,
-      roundId: parsed.data.roundId,
-      questionId: parsed.data.questionId,
-      value: {
-        selectedOptionIndices: parsed.data.selectedOptionIndices,
-        customText: parsed.data.customText,
-      },
-      editor: { userId: actor.user.id, displayName: actor.user.displayName, role },
-    })
-    return c.json({ ok: true, ...result })
-  })
+      return c.json({ ok: true, ...result })
+    },
+  )
 }

@@ -17,7 +17,7 @@
 // The "developer / viewer" roles named in the RFC-054 plan don't exist in
 // the schema; we cover the actual `admin` × `user` matrix here instead.
 //
-// 7 cases, each rebuilds its own daemon for full isolation:
+// 8 cases, each rebuilds its own daemon for full isolation:
 //
 //   1. regular bob can NOT see admin alice's task             → 403 task-not-visible
 //   2. admin alice CAN see regular bob's task                 → 200 (tasks:read:all)
@@ -25,7 +25,8 @@
 //   4. regular bob CAN see own task (control / sanity)        → 200
 //   5. regular bob can NOT GET /api/config                    → 403 forbidden
 //   6. regular bob can NOT POST /api/users                    → 403 forbidden
-//   7. PAT creation remains disabled                          → 403 pat-creation-disabled
+//   7. a minted PAT holds exactly its matrix                  → 201, then 200/201/403
+//   8. an mcp_only PAT is refused on the REST channel         → 403 token-mcp-only
 
 import { test, expect } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -452,10 +453,17 @@ test('regular bob can NOT POST /api/users → 403 forbidden', async () => {
   }
 })
 
-// RFC-221: existing PATs remain revocable, but no browser/session actor may
-// mint a new credential. Store-level revocation remains covered by backend
-// route and persistence tests.
-test('PAT creation remains disabled → 403 pat-creation-disabled', async () => {
+// RFC-247 D1/D3/D4 — supersedes RFC-221's "no session actor may ever mint a
+// credential" lock (which asserted 403 `pat-creation-disabled` here).
+//
+// That rule existed because the permission catalog of the day could not express
+// a narrow token: `资源:write` covered delete as well as edit, and an empty
+// scope list silently meant "everything the owner has". RFC-247 fixed both, so
+// the interesting property is no longer that minting is refused — it is that a
+// minted token holds EXACTLY what its matrix says. That is a chain of five
+// pieces (issue → hash → present → resolve → gate) which only an end-to-end run
+// exercises together, so this test now proves the chain instead of its absence.
+test('a minted PAT holds exactly its matrix — reads on, unticked verbs off', async () => {
   const daemon = await startDaemon({ stubOpencode: FAST_STUB })
   try {
     const alice = await createUserAndLogin(daemon, {
@@ -470,11 +478,111 @@ test('PAT creation remains disabled → 403 pat-creation-disabled', async () => 
         Authorization: `Bearer ${alice.sessionToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name: 'auth-isolation-pat' }),
+      // Create only. Alice is an admin, so her role baseline holds every delete
+      // point — the token must still not get them.
+      body: JSON.stringify({
+        name: 'auth-isolation-pat',
+        scopes: ['agents:create'],
+        purpose: 'general',
+      }),
     })
-    expect(mintRes.status).toBe(403)
-    const body = (await mintRes.json()) as { code: string }
-    expect(body.code).toBe('pat-creation-disabled')
+    expect(mintRes.status).toBe(201)
+    const minted = (await mintRes.json()) as { token: string; pat: { scopes: string[] } }
+    expect(minted.token.length).toBeGreaterThan(20)
+
+    const withToken = (path: string, init?: RequestInit) =>
+      fetch(`${daemon.baseUrl}${path}`, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${minted.token}`,
+          'Content-Type': 'application/json',
+          ...(init?.headers ?? {}),
+        },
+      })
+
+    // Reads are always on — an empty-ish matrix is a read-only token, not a
+    // powerless one.
+    expect((await withToken('/api/agents')).status).toBe(200)
+
+    // The ticked verb works.
+    const created = await withToken('/api/agents', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'pat-minted-agent',
+        description: 'created by an RFC-247 scoped token',
+        bodyMd: 'noop',
+      }),
+    })
+    expect(created.status).toBe(201)
+    const agent = (await created.json()) as { id: string }
+
+    // …and the unticked one does not, even though the OWNER could do it.
+    const deleteRes = await withToken(`/api/agents/${agent.id}`, { method: 'DELETE' })
+    expect(deleteRes.status).toBe(403)
+    expect(((await deleteRes.json()) as { code: string }).code).toBe('forbidden')
+
+    // The same delete through Alice's SESSION succeeds — proving the refusal
+    // above is the token's matrix, not a missing capability on the account.
+    //
+    // An agent delete carries TWO independent guards besides the permission
+    // gate: RFC-222's type-to-confirm name and RFC-231's revision fence. Both
+    // have to be satisfied here, and both are read back from the resource
+    // rather than guessed — which is also exactly what an MCP caller has to do.
+    const fetched = (await (await withToken(`/api/agents/${agent.id}`)).json()) as {
+      updatedAt: number
+      aclRevision: number
+    }
+    const sessionDelete = await fetch(`${daemon.baseUrl}/api/agents/${agent.id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${alice.sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        confirm: 'pat-minted-agent',
+        expectedUpdatedAt: fetched.updatedAt,
+        expectedAclRevision: fetched.aclRevision,
+      }),
+    })
+    expect(sessionDelete.status).toBe(204)
+
+    // D6 — no token reaches the account surface, whatever its matrix.
+    expect((await withToken('/api/auth/me')).status).toBe(403)
+  } finally {
+    await daemon.stop()
+  }
+})
+
+// RFC-247 D2 — the purpose axis, end to end. An `mcp_only` token authenticates
+// (it is a valid credential) and is then refused at the REST channel.
+test('an mcp_only PAT authenticates but cannot use the REST API', async () => {
+  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  try {
+    const alice = await createUserAndLogin(daemon, {
+      username: 'alice',
+      password: 'AlicePassword123',
+      role: 'admin',
+    })
+
+    const mintRes = await fetch(`${daemon.baseUrl}/api/auth/pats`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${alice.sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'mcp-only-pat', scopes: [], purpose: 'mcp_only' }),
+    })
+    expect(mintRes.status).toBe(201)
+    const minted = (await mintRes.json()) as { token: string }
+
+    const res = await fetch(`${daemon.baseUrl}/api/agents`, {
+      headers: { Authorization: `Bearer ${minted.token}` },
+    })
+    // 403, not 401: the credential is real and the refusal is about the
+    // channel. A 401 would send the caller off to re-authenticate, which would
+    // never fix it.
+    expect(res.status).toBe(403)
+    expect(((await res.json()) as { code: string }).code).toBe('token-mcp-only')
   } finally {
     await daemon.stop()
   }

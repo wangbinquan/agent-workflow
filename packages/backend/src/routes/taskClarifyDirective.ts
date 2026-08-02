@@ -18,6 +18,7 @@ import { ClarifyDirectiveSchema } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import {
   isAskingNodeInSnapshot,
@@ -45,54 +46,74 @@ async function loadVisibleTask(deps: AppDeps, taskId: string, actor: Actor) {
 }
 
 export function mountTaskClarifyDirectiveRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/tasks/:id/clarify-directives', async (c) => {
-    const taskId = c.req.param('id')
-    await loadVisibleTask(deps, taskId, actorOf(c))
-    return c.json(await listNodeClarifyDirectives(deps.db, taskId))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/clarify-directives',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List clarify directives',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      await loadVisibleTask(deps, taskId, actorOf(c))
+      return c.json(await listNodeClarifyDirectives(deps.db, taskId))
+    },
+  )
 
-  app.post('/api/tasks/:id/nodes/:nodeId/clarify-directive', async (c) => {
-    const taskId = c.req.param('id')
-    const nodeId = c.req.param('nodeId') ?? ''
-    const actor = actorOf(c)
-    const task = await loadVisibleTask(deps, taskId, actor)
-    // Member gate (403 if not owner/collaborator/admin). The role snapshot is
-    // not persisted on the directive row — the toggle is a runtime control, not
-    // an attributed answer — so the return value is intentionally discarded.
-    await requireTaskMember(deps.db, actor, task)
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/nodes/:nodeId/clarify-directive',
+      permissions: ['tasks:update'],
+      tokenAccess: 'allow',
+      summary: 'Set a node clarify directive',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      const nodeId = c.req.param('nodeId') ?? ''
+      const actor = actorOf(c)
+      const task = await loadVisibleTask(deps, taskId, actor)
+      // Member gate (403 if not owner/collaborator/admin). The role snapshot is
+      // not persisted on the directive row — the toggle is a runtime control, not
+      // an attributed answer — so the return value is intentionally discarded.
+      await requireTaskMember(deps.db, actor, task)
 
-    const parsed = SetDirectiveBodySchema.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) {
-      throw new ValidationError(
-        'clarify-directive-invalid',
-        "directive must be 'continue' or 'stop'",
-        { issues: parsed.error.issues },
+      const parsed = SetDirectiveBodySchema.safeParse(await c.req.json().catch(() => ({})))
+      if (!parsed.success) {
+        throw new ValidationError(
+          'clarify-directive-invalid',
+          "directive must be 'continue' or 'stop'",
+          { issues: parsed.error.issues },
+        )
+      }
+
+      // The node must be an asking-agent node in the frozen workflow snapshot. The
+      // service owns the JSON.parse so the route never casts unknown → a type
+      // (RFC-054 W1-7); an unreadable snapshot just resolves to false → 422.
+      if (!isAskingNodeInSnapshot(task.workflowSnapshot, nodeId)) {
+        throw new ValidationError(
+          'not-asking-node',
+          `node '${nodeId}' is not a clarify asking-agent node in task ${taskId}`,
+        )
+      }
+
+      await setNodeClarifyDirective(
+        deps.db,
+        taskId,
+        nodeId,
+        parsed.data.directive,
+        actor.user.id,
+        parsed.data.shardKey,
       )
-    }
-
-    // The node must be an asking-agent node in the frozen workflow snapshot. The
-    // service owns the JSON.parse so the route never casts unknown → a type
-    // (RFC-054 W1-7); an unreadable snapshot just resolves to false → 422.
-    if (!isAskingNodeInSnapshot(task.workflowSnapshot, nodeId)) {
-      throw new ValidationError(
-        'not-asking-node',
-        `node '${nodeId}' is not a clarify asking-agent node in task ${taskId}`,
-      )
-    }
-
-    await setNodeClarifyDirective(
-      deps.db,
-      taskId,
-      nodeId,
-      parsed.data.directive,
-      actor.user.id,
-      parsed.data.shardKey,
-    )
-    return c.json({
-      ok: true,
-      nodeId,
-      directive: parsed.data.directive,
-      ...(parsed.data.shardKey !== undefined ? { shardKey: parsed.data.shardKey } : {}),
-    })
-  })
+      return c.json({
+        ok: true,
+        nodeId,
+        directive: parsed.data.directive,
+        ...(parsed.data.shardKey !== undefined ? { shardKey: parsed.data.shardKey } : {}),
+      })
+    },
+  )
 }

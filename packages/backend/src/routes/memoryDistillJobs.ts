@@ -12,7 +12,7 @@
 import { DistillJobStatusSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import type { AppDeps } from '@/server'
-import { requireResourceAdmin } from '@/auth/permissions'
+import { registerRoute } from '@/routes/registry'
 import {
   cancelPendingJob,
   listDistillJobs,
@@ -23,23 +23,41 @@ import { getDistillJobSessionView } from '@/services/memoryDistillSessionView'
 import { ConflictError, ValidationError } from '@/util/errors'
 
 export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/memory-distill-jobs', requireResourceAdmin('memory:approve'), async (c) => {
-    const statusRaw = c.req.query('status')
-    let status: string | undefined
-    if (statusRaw !== undefined && statusRaw !== '') {
-      const r = DistillJobStatusSchema.safeParse(statusRaw)
-      if (!r.success) {
-        throw new ValidationError('invalid-filter', `invalid status: ${statusRaw}`)
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/memory-distill-jobs',
+      permissions: ['memory:read'],
+      tokenAccess: 'allow',
+      identity: 'resource-admin',
+      summary: 'List memory distill jobs',
+    },
+    async (c) => {
+      const statusRaw = c.req.query('status')
+      let status: string | undefined
+      if (statusRaw !== undefined && statusRaw !== '') {
+        const r = DistillJobStatusSchema.safeParse(statusRaw)
+        if (!r.success) {
+          throw new ValidationError('invalid-filter', `invalid status: ${statusRaw}`)
+        }
+        status = r.data
       }
-      status = r.data
-    }
-    const items = await listDistillJobs(deps.db, status !== undefined ? { status } : {})
-    return c.json({ items })
-  })
+      const items = await listDistillJobs(deps.db, status !== undefined ? { status } : {})
+      return c.json({ items })
+    },
+  )
 
-  app.post(
-    '/api/memory-distill-jobs/:id/retry',
-    requireResourceAdmin('memory:approve'),
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/memory-distill-jobs/:id/retry',
+      permissions: ['memory:update', 'tasks:execute'],
+      tokenAccess: 'allow',
+      identity: 'resource-admin',
+      summary: 'Retry a failed distill job (spawns a model run)',
+    },
     async (c) => {
       const id = c.req.param('id')
       const ok = await retryFailedJob(deps.db, id)
@@ -54,9 +72,16 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  app.post(
-    '/api/memory-distill-jobs/:id/cancel',
-    requireResourceAdmin('memory:approve'),
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/memory-distill-jobs/:id/cancel',
+      permissions: ['memory:update'],
+      tokenAccess: 'allow',
+      identity: 'resource-admin',
+      summary: 'Cancel a pending distill job',
+    },
     async (c) => {
       const id = c.req.param('id')
       const ok = await cancelPendingJob(deps.db, id)
@@ -71,14 +96,32 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
   )
 
   // RFC-043: admin-only distill job detail page support.
-  app.get('/api/memory-distill-jobs/:id', requireResourceAdmin('memory:approve'), async (c) => {
-    const detail = await getDistillJobDetail(deps.db, c.req.param('id'))
-    return c.json(detail)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/memory-distill-jobs/:id',
+      permissions: ['memory:read'],
+      tokenAccess: 'allow',
+      identity: 'resource-admin',
+      summary: 'Get one distill job',
+    },
+    async (c) => {
+      const detail = await getDistillJobDetail(deps.db, c.req.param('id'))
+      return c.json(detail)
+    },
+  )
 
-  app.get(
-    '/api/memory-distill-jobs/:id/session',
-    requireResourceAdmin('memory:approve'),
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/memory-distill-jobs/:id/session',
+      permissions: ['memory:read'],
+      tokenAccess: 'allow',
+      identity: 'resource-admin',
+      summary: 'Distill job session view',
+    },
     async (c) => {
       const view = await getDistillJobSessionView(deps.db, c.req.param('id'))
       return c.json(view)

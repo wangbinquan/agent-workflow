@@ -8,6 +8,7 @@
 import type { Hono } from 'hono'
 import { cachedRepos } from '@/db/schema'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { getRepoFiles, getRepoRefs, isKnownRepoPath } from '@/services/repo'
 import { ValidationError } from '@/util/errors'
 
@@ -27,17 +28,37 @@ export function mountRepoRoutes(app: Hono, deps: AppDeps): void {
     }
   }
 
-  app.get('/api/repos/refs', async (c) => {
-    const path = requirePath(c.req.query('path'))
-    await requireKnownPath(path)
-    return c.json(await getRepoRefs(path))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/repos/refs',
+      permissions: ['repos:read'],
+      tokenAccess: 'allow',
+      summary: 'List refs for a repo URL',
+    },
+    async (c) => {
+      const path = requirePath(c.req.query('path'))
+      await requireKnownPath(path)
+      return c.json(await getRepoRefs(path))
+    },
+  )
 
-  app.get('/api/repos/files', async (c) => {
-    const path = requirePath(c.req.query('path'))
-    await requireKnownPath(path)
-    return c.json(await getRepoFiles(path))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/repos/files',
+      permissions: ['repos:read'],
+      tokenAccess: 'allow',
+      summary: 'List files at a repo ref',
+    },
+    async (c) => {
+      const path = requirePath(c.req.query('path'))
+      await requireKnownPath(path)
+      return c.json(await getRepoFiles(path))
+    },
+  )
 }
 
 function requirePath(p: string | undefined): string {

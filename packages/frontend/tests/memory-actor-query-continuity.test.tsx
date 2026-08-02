@@ -40,7 +40,7 @@ const userActor: MeResponse = {
     status: 'active',
   },
   source: 'session',
-  permissions: ['memory:approve'],
+  permissions: ['memory:update'],
   linkedIdentities: [],
   pats: [],
 }

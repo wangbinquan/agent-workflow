@@ -27,6 +27,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { createMcp, deleteMcp, getMcpById, listMcps, renameMcp, updateMcp } from '@/services/mcp'
 import {
   mcpOperationConfigHashOf,
@@ -34,6 +35,7 @@ import {
 } from '@/services/mcpOperationRevision'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { serializeMcpFor } from '@/services/tokenRedaction'
 import { mountAclEndpoints } from './resourceAcl'
 import { probeMcp, type ProbeOptions } from '@/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '@/services/mcpProbeStore'
@@ -88,337 +90,511 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     )
   }
 
-  app.get('/api/mcps', async (c) => {
-    const list = await listMcps(deps.db)
-    const visible = await filterVisibleRows(deps.db, actorOf(c), 'mcp', list)
-    return c.json(visible.map(withMcpOperationConfigHash))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/mcps',
+      permissions: ['mcps:read'],
+      tokenAccess: 'allow',
+      summary: 'List MCP servers visible to the caller',
+    },
+    async (c) => {
+      const list = await listMcps(deps.db)
+      const visible = await filterVisibleRows(deps.db, actorOf(c), 'mcp', list)
+      const actor = actorOf(c)
+      return c.json(
+        visible.map((m) => serializeMcpFor(withMcpOperationConfigHash(m), actor.source)),
+      )
+    },
+  )
 
   // RFC-030 — must come BEFORE /api/mcps/:id to avoid being swallowed.
   // RFC-099: probe rows are keyed by mcpId — only visible MCPs' probes leak.
-  app.get('/api/mcps/probes', async (c) => {
-    const list = await listProbes(deps.db)
-    const visibleMcps = await filterVisibleRows(deps.db, actorOf(c), 'mcp', await listMcps(deps.db))
-    const allowed = new Set(visibleMcps.map((m) => m.id))
-    return c.json(list.filter((p) => allowed.has(p.mcpId)))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/mcps/probes',
+      permissions: ['mcps:read'],
+      tokenAccess: 'allow',
+      summary: 'Stored probe results for all MCP servers',
+    },
+    async (c) => {
+      const list = await listProbes(deps.db)
+      const visibleMcps = await filterVisibleRows(
+        deps.db,
+        actorOf(c),
+        'mcp',
+        await listMcps(deps.db),
+      )
+      const allowed = new Set(visibleMcps.map((m) => m.id))
+      return c.json(list.filter((p) => allowed.has(p.mcpId)))
+    },
+  )
 
-  app.get('/api/mcps/:id', async (c) => {
-    return c.json(withMcpOperationConfigHash(await loadVisibleMcp(actorOf(c), c.req.param('id'))))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/mcps/:id',
+      permissions: ['mcps:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one MCP server',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      return c.json(
+        serializeMcpFor(
+          withMcpOperationConfigHash(await loadVisibleMcp(actor, c.req.param('id'))),
+          actor.source,
+        ),
+      )
+    },
+  )
 
   // RFC-238 — private multi-turn runtime playground. Dialog dismiss never
   // reaches a mutating endpoint; only message/cancel/end change lifecycle.
-  app.get('/api/mcps/:id/runtime-test-session', async (c) => {
-    const actor = actorOf(c)
-    const mcpId = c.req.param('id')
-    const session = await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-      const mcp = await loadVisibleMcp(actor, mcpId)
-      return runtimeTests.latest(actor, mcp.id)
-    })
-    return session === null ? c.body(null, 204) : c.json(session)
-  })
-
-  app.post('/api/mcps/:id/runtime-test-sessions', async (c) => {
-    const parsed = McpRuntimeTestCreateRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, c.req.param('id'))
-    const receipt = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-      const fresh = await loadVisibleMcp(actor, resolved.id)
-      return runtimeTests.create(actor, fresh, parsed.data)
-    })
-    return c.json(receipt, 202)
-  })
-
-  app.get('/api/mcps/:id/runtime-test-sessions/:sessionId', async (c) => {
-    const actor = actorOf(c)
-    const mcpId = c.req.param('id')
-    return c.json(
-      await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/mcps/:id/runtime-test-session',
+      permissions: ['mcps:read'],
+      tokenAccess: 'allow',
+      summary: 'Current runtime-test session',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const mcpId = c.req.param('id')
+      const session = await mcpOperationCoordinator.runExclusive(mcpId, async () => {
         const mcp = await loadVisibleMcp(actor, mcpId)
-        return runtimeTests.get(actor, mcp.id, c.req.param('sessionId'))
-      }),
-    )
-  })
+        return runtimeTests.latest(actor, mcp.id)
+      })
+      return session === null ? c.body(null, 204) : c.json(session)
+    },
+  )
 
-  app.post('/api/mcps/:id/runtime-test-sessions/:sessionId/messages', async (c) => {
-    const parsed = McpRuntimeTestMessageRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test message', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/mcps/:id/runtime-test-sessions',
+      permissions: ['mcps:execute', 'tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Start an MCP runtime-test session (spawns a model run)',
+    },
+    async (c) => {
+      const parsed = McpRuntimeTestCreateRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const resolved = await loadVisibleMcp(actor, c.req.param('id'))
+      const receipt = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+        const fresh = await loadVisibleMcp(actor, resolved.id)
+        return runtimeTests.create(actor, fresh, parsed.data)
       })
-    }
-    const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, c.req.param('id'))
-    const receipt = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-      const fresh = await loadVisibleMcp(actor, resolved.id)
-      return runtimeTests.message(actor, fresh, c.req.param('sessionId'), parsed.data)
-    })
-    return c.json(receipt, 202)
-  })
+      return c.json(receipt, 202)
+    },
+  )
 
-  app.post('/api/mcps/:id/runtime-test-sessions/:sessionId/cancel-turn', async (c) => {
-    const parsed = McpRuntimeTestCancelRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test cancel payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const mcpId = c.req.param('id')
-    return c.json(
-      await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-        const mcp = await loadVisibleMcp(actor, mcpId)
-        return runtimeTests.cancel(actor, mcp.id, c.req.param('sessionId'), parsed.data)
-      }),
-    )
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/mcps/:id/runtime-test-sessions/:sessionId',
+      permissions: ['mcps:read'],
+      tokenAccess: 'allow',
+      summary: 'Get a runtime-test session',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const mcpId = c.req.param('id')
+      return c.json(
+        await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+          const mcp = await loadVisibleMcp(actor, mcpId)
+          return runtimeTests.get(actor, mcp.id, c.req.param('sessionId'))
+        }),
+      )
+    },
+  )
 
-  app.post('/api/mcps/:id/runtime-test-sessions/:sessionId/end', async (c) => {
-    const parsed = McpRuntimeTestEndRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test end payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/mcps/:id/runtime-test-sessions/:sessionId/messages',
+      permissions: ['mcps:execute', 'tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Send a runtime-test turn (spawns a model run)',
+    },
+    async (c) => {
+      const parsed = McpRuntimeTestMessageRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test message', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const resolved = await loadVisibleMcp(actor, c.req.param('id'))
+      const receipt = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+        const fresh = await loadVisibleMcp(actor, resolved.id)
+        return runtimeTests.message(actor, fresh, c.req.param('sessionId'), parsed.data)
       })
-    }
-    const actor = actorOf(c)
-    const mcpId = c.req.param('id')
-    return c.json(
-      await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-        const mcp = await loadVisibleMcp(actor, mcpId)
-        return runtimeTests.end(actor, mcp.id, c.req.param('sessionId'))
-      }),
-    )
-  })
+      return c.json(receipt, 202)
+    },
+  )
 
-  app.get('/api/mcps/:id/runtime-test-sessions/:sessionId/session', async (c) => {
-    const actor = actorOf(c)
-    const mcpId = c.req.param('id')
-    return c.json(
-      await mcpOperationCoordinator.runExclusive(mcpId, async () => {
-        const mcp = await loadVisibleMcp(actor, mcpId)
-        return runtimeTests.sessionView(actor, mcp.id, c.req.param('sessionId'))
-      }),
-    )
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/mcps/:id/runtime-test-sessions/:sessionId/cancel-turn',
+      permissions: ['mcps:execute'],
+      tokenAccess: 'allow',
+      summary: 'Cancel the in-flight runtime-test turn',
+    },
+    async (c) => {
+      const parsed = McpRuntimeTestCancelRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test cancel payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const mcpId = c.req.param('id')
+      return c.json(
+        await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+          const mcp = await loadVisibleMcp(actor, mcpId)
+          return runtimeTests.cancel(actor, mcp.id, c.req.param('sessionId'), parsed.data)
+        }),
+      )
+    },
+  )
 
-  app.post('/api/mcps', async (c) => {
-    const body = await safeJson(c.req.raw)
-    const parsed = CreateMcpSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('mcp-invalid', 'invalid mcp payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const created = await createMcp(deps.db, parsed.data, {
-      ownerUserId: actor.user.id,
-      actor,
-    })
-    return c.json(withMcpOperationConfigHash(created), 201)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/mcps/:id/runtime-test-sessions/:sessionId/end',
+      permissions: ['mcps:execute'],
+      tokenAccess: 'allow',
+      summary: 'End a runtime-test session',
+    },
+    async (c) => {
+      const parsed = McpRuntimeTestEndRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('mcp-test-invalid', 'invalid MCP runtime test end payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const mcpId = c.req.param('id')
+      return c.json(
+        await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+          const mcp = await loadVisibleMcp(actor, mcpId)
+          return runtimeTests.end(actor, mcp.id, c.req.param('sessionId'))
+        }),
+      )
+    },
+  )
 
-  app.put('/api/mcps/:id', async (c) => {
-    const id = c.req.param('id')
-    const body = await safeJson(c.req.raw)
-    const parsed = UpdateMcpRequestSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('mcp-invalid', 'invalid mcp patch', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, id)
-    const updated = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-      const fresh = await loadVisibleMcp(actor, resolved.id)
-      await requireResourceOwner(deps.db, actor, 'mcp', fresh)
-      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-      const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
-      return updateMcp(deps.db, fresh.id, patch, {
-        existing: fresh,
-        updatedAt: await nextMutationTimestamp(fresh),
-      })
-    })
-    await runtimeTests.reconcileDurableIntents()
-    return c.json(withMcpOperationConfigHash(updated))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/mcps/:id/runtime-test-sessions/:sessionId/session',
+      permissions: ['mcps:read'],
+      tokenAccess: 'allow',
+      summary: 'Runtime-test session transcript',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const mcpId = c.req.param('id')
+      return c.json(
+        await mcpOperationCoordinator.runExclusive(mcpId, async () => {
+          const mcp = await loadVisibleMcp(actor, mcpId)
+          return runtimeTests.sessionView(actor, mcp.id, c.req.param('sessionId'))
+        }),
+      )
+    },
+  )
 
-  app.delete('/api/mcps/:id', async (c) => {
-    const id = c.req.param('id')
-    const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, id)
-    const deleteBody = await readDeleteBody(c)
-    assertDeleteConfirm(deleteBody, resolved.name, 'mcp')
-    const parsed = DeleteMcpSchema.safeParse(deleteBody)
-    if (!parsed.success) {
-      throw new ValidationError('mcp-delete-invalid', 'invalid mcp delete payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/mcps',
+      permissions: ['mcps:create'],
+      tokenAccess: 'allow',
+      summary: 'Create an MCP server',
+    },
+    async (c) => {
+      const body = await safeJson(c.req.raw)
+      const parsed = CreateMcpSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('mcp-invalid', 'invalid mcp payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const created = await createMcp(deps.db, parsed.data, {
+        ownerUserId: actor.user.id,
+        actor,
       })
-    }
-    await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-      const fresh = await loadVisibleMcp(actor, resolved.id)
-      await requireResourceOwner(deps.db, actor, 'mcp', fresh)
-      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-      // RFC-222 (D5, N-6): confirm against the FRESH name inside the exclusive
-      // section, so a concurrent rename is caught as a mismatch.
-      assertDeleteConfirm(parsed.data, fresh.name, 'mcp')
-      await runtimeTests.prepareMcpDelete(fresh.id)
-      await deleteMcp(deps.db, fresh.id, actor, {
-        existing: fresh,
-        beforeDeleteInTx: (tx) => deletePreparedMcpRuntimeTestsInTx(tx, fresh.id),
-      })
-    })
-    return c.body(null, 204)
-  })
+      return c.json(serializeMcpFor(withMcpOperationConfigHash(created), actor.source), 201)
+    },
+  )
 
-  app.post('/api/mcps/:id/rename', async (c) => {
-    const id = c.req.param('id')
-    const body = await safeJson(c.req.raw)
-    const parsed = RenameMcpRequestSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('mcp-rename-invalid', 'invalid rename payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/mcps/:id',
+      permissions: ['mcps:update'],
+      tokenAccess: 'allow',
+      summary: 'Replace an MCP server',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const body = await safeJson(c.req.raw)
+      const parsed = UpdateMcpRequestSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('mcp-invalid', 'invalid mcp patch', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const resolved = await loadVisibleMcp(actor, id)
+      const updated = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+        const fresh = await loadVisibleMcp(actor, resolved.id)
+        await requireResourceOwner(deps.db, actor, 'mcp', fresh)
+        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+        const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
+        return updateMcp(deps.db, fresh.id, patch, {
+          existing: fresh,
+          updatedAt: await nextMutationTimestamp(fresh),
+        })
       })
-    }
-    const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, id)
-    const renamed = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-      const fresh = await loadVisibleMcp(actor, resolved.id)
-      await requireResourceOwner(deps.db, actor, 'mcp', fresh)
-      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-      const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
-      return renameMcp(deps.db, fresh.id, rename, {
-        existing: fresh,
-        updatedAt: await nextMutationTimestamp(fresh),
+      await runtimeTests.reconcileDurableIntents()
+      return c.json(serializeMcpFor(withMcpOperationConfigHash(updated), actorOf(c).source))
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/mcps/:id',
+      permissions: ['mcps:delete'],
+      tokenAccess: 'allow',
+      summary: 'Delete an MCP server',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const actor = actorOf(c)
+      const resolved = await loadVisibleMcp(actor, id)
+      const deleteBody = await readDeleteBody(c)
+      assertDeleteConfirm(deleteBody, resolved.name, 'mcp')
+      const parsed = DeleteMcpSchema.safeParse(deleteBody)
+      if (!parsed.success) {
+        throw new ValidationError('mcp-delete-invalid', 'invalid mcp delete payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+        const fresh = await loadVisibleMcp(actor, resolved.id)
+        await requireResourceOwner(deps.db, actor, 'mcp', fresh)
+        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+        // RFC-222 (D5, N-6): confirm against the FRESH name inside the exclusive
+        // section, so a concurrent rename is caught as a mismatch.
+        assertDeleteConfirm(parsed.data, fresh.name, 'mcp')
+        await runtimeTests.prepareMcpDelete(fresh.id)
+        await deleteMcp(deps.db, fresh.id, actor, {
+          existing: fresh,
+          beforeDeleteInTx: (tx) => deletePreparedMcpRuntimeTestsInTx(tx, fresh.id),
+        })
       })
-    })
-    await runtimeTests.reconcileDurableIntents()
-    return c.json(withMcpOperationConfigHash(renamed))
-  })
+      return c.body(null, 204)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/mcps/:id/rename',
+      permissions: ['mcps:update'],
+      tokenAccess: 'allow',
+      summary: 'Rename an MCP server',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const body = await safeJson(c.req.raw)
+      const parsed = RenameMcpRequestSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('mcp-rename-invalid', 'invalid rename payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const resolved = await loadVisibleMcp(actor, id)
+      const renamed = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+        const fresh = await loadVisibleMcp(actor, resolved.id)
+        await requireResourceOwner(deps.db, actor, 'mcp', fresh)
+        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+        const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
+        return renameMcp(deps.db, fresh.id, rename, {
+          existing: fresh,
+          updatedAt: await nextMutationTimestamp(fresh),
+        })
+      })
+      await runtimeTests.reconcileDurableIntents()
+      return c.json(serializeMcpFor(withMcpOperationConfigHash(renamed), actorOf(c).source))
+    },
+  )
 
   // RFC-030 — per-mcp probe endpoints.
-  app.get('/api/mcps/:id/probe', async (c) => {
-    const id = c.req.param('id')
-    // Existence check on the parent mcp keeps the 404 distinction:
-    //   - mcp doesn't exist            → 404 mcp-not-found
-    //   - mcp exists but never probed  → 404 probe-not-found
-    const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, id)
-    const { currentName, probe } = await mcpOperationCoordinator.runExclusive(
-      resolved.id,
-      async () => {
-        // Bind the read to the already-resolved stable id. Reload visibility
-        // under the same fence used by rename/ACL so name reuse cannot expose a
-        // different MCP's inventory or make the original probe disappear.
-        const fresh = await loadVisibleMcp(actor, resolved.id)
-        return {
-          currentName: fresh.name,
-          probe: await getProbeByMcpId(deps.db, fresh.id),
-        }
-      },
-    )
-    if (probe === null) {
-      throw new NotFoundError(
-        'probe-not-found',
-        `mcp '${currentName}' has not been probed yet — POST /api/mcps/${resolved.id}/probe first`,
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/mcps/:id/probe',
+      permissions: ['mcps:read'],
+      tokenAccess: 'allow',
+      summary: 'Read the stored probe result',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      // Existence check on the parent mcp keeps the 404 distinction:
+      //   - mcp doesn't exist            → 404 mcp-not-found
+      //   - mcp exists but never probed  → 404 probe-not-found
+      const actor = actorOf(c)
+      const resolved = await loadVisibleMcp(actor, id)
+      const { currentName, probe } = await mcpOperationCoordinator.runExclusive(
+        resolved.id,
+        async () => {
+          // Bind the read to the already-resolved stable id. Reload visibility
+          // under the same fence used by rename/ACL so name reuse cannot expose a
+          // different MCP's inventory or make the original probe disappear.
+          const fresh = await loadVisibleMcp(actor, resolved.id)
+          return {
+            currentName: fresh.name,
+            probe: await getProbeByMcpId(deps.db, fresh.id),
+          }
+        },
       )
-    }
-    return c.json(probe)
-  })
+      if (probe === null) {
+        throw new NotFoundError(
+          'probe-not-found',
+          `mcp '${currentName}' has not been probed yet — POST /api/mcps/${resolved.id}/probe first`,
+        )
+      }
+      return c.json(probe)
+    },
+  )
 
-  app.post('/api/mcps/:id/probe', async (c) => {
-    const id = c.req.param('id')
-    const body = await safeJson(c.req.raw)
-    const parsed = McpOperationRequestSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('mcp-probe-invalid', 'expectedConfigHash is required', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, id)
-    const expectedHash = parsed.data.expectedConfigHash
-
-    const receipt = await mcpOperationCoordinator.runDeduplicatedOperation(
-      resolved.id,
-      expectedHash,
-      async () => {
-        const start = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-          const captured = await loadVisibleMcp(actor, resolved.id)
-          const actualHash = mcpOperationConfigHashOf(captured)
-          if (actualHash !== expectedHash) {
-            throw new ConflictError(
-              'resource-operation-stale',
-              'the MCP changed; reload before probing',
-              { expectedConfigHash: expectedHash, currentConfigHash: actualHash },
-            )
-          }
-          // Preserve the existing 422 disabled contract before assigning a
-          // generation to an operation that cannot truly start.
-          if (!captured.enabled) {
-            throw new ValidationError(
-              'mcp-disabled',
-              `mcp '${captured.name}' is disabled; enable it before probing`,
-            )
-          }
-          const persisted = await getProbeByMcpId(deps.db, captured.id)
-          const operation = mcpOperationCoordinator.beginOperation(
-            captured.id,
-            (probeOptionsOverride?.now ?? Date.now)(),
-            [captured.updatedAt + 1, (persisted?.startedAt ?? 0) + 1],
-          )
-          return { captured, ...operation }
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/mcps/:id/probe',
+      permissions: ['mcps:execute'],
+      tokenAccess: 'allow',
+      summary: 'Probe an MCP server (network work, no resource write)',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const body = await safeJson(c.req.raw)
+      const parsed = McpOperationRequestSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('mcp-probe-invalid', 'expectedConfigHash is required', {
+          issues: parsed.error.issues,
         })
+      }
+      const actor = actorOf(c)
+      const resolved = await loadVisibleMcp(actor, id)
+      const expectedHash = parsed.data.expectedConfigHash
 
-        let result
-        try {
-          result = await probeMcp(start.captured, {
-            ...probeOptionsOverride,
-            startedAt: start.startedAt,
+      const receipt = await mcpOperationCoordinator.runDeduplicatedOperation(
+        resolved.id,
+        expectedHash,
+        async () => {
+          const start = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+            const captured = await loadVisibleMcp(actor, resolved.id)
+            const actualHash = mcpOperationConfigHashOf(captured)
+            if (actualHash !== expectedHash) {
+              throw new ConflictError(
+                'resource-operation-stale',
+                'the MCP changed; reload before probing',
+                { expectedConfigHash: expectedHash, currentConfigHash: actualHash },
+              )
+            }
+            // Preserve the existing 422 disabled contract before assigning a
+            // generation to an operation that cannot truly start.
+            if (!captured.enabled) {
+              throw new ValidationError(
+                'mcp-disabled',
+                `mcp '${captured.name}' is disabled; enable it before probing`,
+              )
+            }
+            const persisted = await getProbeByMcpId(deps.db, captured.id)
+            const operation = mcpOperationCoordinator.beginOperation(
+              captured.id,
+              (probeOptionsOverride?.now ?? Date.now)(),
+              [captured.updatedAt + 1, (persisted?.startedAt ?? 0) + 1],
+            )
+            return { captured, ...operation }
           })
-        } catch (err) {
-          if (err instanceof DomainError) throw err
-          log.error('probeMcp unexpectedly threw', {
-            mcp: start.captured.name,
-            message: err instanceof Error ? err.message : String(err),
-          })
-          throw err
-        }
 
-        return mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-          const current = await getMcpById(deps.db, resolved.id)
-          if (current === null || mcpOperationConfigHashOf(current) !== expectedHash) {
-            throw new ConflictError(
-              'resource-operation-stale',
-              'the MCP changed while the probe was running; result was discarded',
-              { expectedConfigHash: expectedHash },
-            )
+          let result
+          try {
+            result = await probeMcp(start.captured, {
+              ...probeOptionsOverride,
+              startedAt: start.startedAt,
+            })
+          } catch (err) {
+            if (err instanceof DomainError) throw err
+            log.error('probeMcp unexpectedly threw', {
+              mcp: start.captured.name,
+              message: err instanceof Error ? err.message : String(err),
+            })
+            throw err
           }
-          if (!(await canViewResource(deps.db, actor, 'mcp', current))) {
-            throw new ConflictError(
-              'resource-operation-stale',
-              'MCP access changed while the probe was running; result was discarded',
-            )
-          }
-          if (mcpOperationCoordinator.latestGeneration(current.id) !== start.generation) {
-            throw new ConflictError(
-              'resource-operation-superseded',
-              'a newer probe completed for this MCP; result was discarded',
-              { generation: start.generation },
-            )
-          }
-          const persisted = await upsertProbe(deps.db, current.id, current.name, result)
-          return { ...persisted, configHashUsed: expectedHash }
-        })
-      },
-    )
-    return c.json(receipt)
-  })
+
+          return mcpOperationCoordinator.runExclusive(resolved.id, async () => {
+            const current = await getMcpById(deps.db, resolved.id)
+            if (current === null || mcpOperationConfigHashOf(current) !== expectedHash) {
+              throw new ConflictError(
+                'resource-operation-stale',
+                'the MCP changed while the probe was running; result was discarded',
+                { expectedConfigHash: expectedHash },
+              )
+            }
+            if (!(await canViewResource(deps.db, actor, 'mcp', current))) {
+              throw new ConflictError(
+                'resource-operation-stale',
+                'MCP access changed while the probe was running; result was discarded',
+              )
+            }
+            if (mcpOperationCoordinator.latestGeneration(current.id) !== start.generation) {
+              throw new ConflictError(
+                'resource-operation-superseded',
+                'a newer probe completed for this MCP; result was discarded',
+                { generation: start.generation },
+              )
+            }
+            const persisted = await upsertProbe(deps.db, current.id, current.name, result)
+            return { ...persisted, configHashUsed: expectedHash }
+          })
+        },
+      )
+      return c.json(receipt)
+    },
+  )
 
   // RFC-099 / RFC-223 — GET/PUT /api/mcps/:id/acl
   mountAclEndpoints(app, deps, {

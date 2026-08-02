@@ -39,8 +39,8 @@ import {
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { actorOf, type Actor } from '@/auth/actor'
-import { requirePermission } from '@/auth/permissions'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { loadConfig } from '@/config'
 import { intentApplyJournal, intentDrafts } from '@/db/schema'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -209,287 +209,446 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
     })
   }
 
-  const read = requirePermission('intent:read')
-  const write = requirePermission('intent:write')
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Create an intent session',
+    },
+    async (c) => {
+      const parsed = CreateIntentSessionSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid intent session payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const { session } = await createIntentSession(deps.db, actor, parsed.data)
+      void fireTurn(session.id, actor)
+      return c.json(sessionSummary(session, { includeOwner: false }), 201)
+    },
+  )
 
-  app.post('/api/intent-sessions', write, async (c) => {
-    const parsed = CreateIntentSessionSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('intent-invalid', 'invalid intent session payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/intent-sessions',
+      permissions: ['intent:read'],
+      tokenAccess: 'allow',
+      summary: 'List intent sessions',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const statusRaw = c.req.query('status')
+      const status = statusRaw === 'active' || statusRaw === 'archived' ? statusRaw : undefined
+      const all = c.req.query('all') === '1'
+      const rows = await listIntentSessionsForActor(deps.db, actor, {
+        ...(status === undefined ? {} : { status }),
+        all,
       })
-    }
-    const actor = actorOf(c)
-    const { session } = await createIntentSession(deps.db, actor, parsed.data)
-    void fireTurn(session.id, actor)
-    return c.json(sessionSummary(session, { includeOwner: false }), 201)
-  })
+      return c.json(rows.map((row) => sessionSummary(row, { includeOwner: all })))
+    },
+  )
 
-  app.get('/api/intent-sessions', read, async (c) => {
-    const actor = actorOf(c)
-    const statusRaw = c.req.query('status')
-    const status = statusRaw === 'active' || statusRaw === 'archived' ? statusRaw : undefined
-    const all = c.req.query('all') === '1'
-    const rows = await listIntentSessionsForActor(deps.db, actor, {
-      ...(status === undefined ? {} : { status }),
-      all,
-    })
-    return c.json(rows.map((row) => sessionSummary(row, { includeOwner: all })))
-  })
-
-  app.get('/api/intent-sessions/:id', read, async (c) => {
-    const actor = actorOf(c)
-    const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
-    const turns = await listIntentTurns(deps.db, session.id)
-    const turnDtos: IntentTurnDto[] = turns.map((t) => ({
-      id: t.id,
-      seq: t.seq,
-      role: t.role,
-      kind: t.kind,
-      content: parseJsonRecord(t.contentJson),
-      contextRevision: t.contextRevision,
-      runMeta: t.runMetaJson === null ? null : parseJsonRecord(t.runMetaJson),
-      execution: projectIntentTurnExecution(t),
-      createdAt: t.createdAt,
-    }))
-    let currentDraft: IntentDraftDto | null = null
-    if (session.currentDraftId !== null) {
-      const draft = (
-        await deps.db
-          .select()
-          .from(intentDrafts)
-          .where(eq(intentDrafts.id, session.currentDraftId))
-          .limit(1)
-      )[0]
-      if (draft !== undefined) {
-        const parsedChangeset = parseIntentChangeset(draft.changesetJson)
-        const slots = parsedChangeset.ok
-          ? deriveIntentSlots(sessionManifest(session), parsedChangeset.changeset).slots
-          : []
-        currentDraft = {
-          id: draft.id,
-          revision: draft.revision,
-          changeset: JSON.parse(draft.changesetJson),
-          validation: IntentDraftDtoSchema.shape.validation.parse(JSON.parse(draft.validationJson)),
-          slots,
-          draftHash: draft.draftHash,
-          contextRevision: draft.contextRevision,
-          stale: draft.contextRevision !== session.contextRevision,
-          createdAt: draft.createdAt,
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/intent-sessions/:id',
+      permissions: ['intent:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one intent session',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
+      const turns = await listIntentTurns(deps.db, session.id)
+      const turnDtos: IntentTurnDto[] = turns.map((t) => ({
+        id: t.id,
+        seq: t.seq,
+        role: t.role,
+        kind: t.kind,
+        content: parseJsonRecord(t.contentJson),
+        contextRevision: t.contextRevision,
+        runMeta: t.runMetaJson === null ? null : parseJsonRecord(t.runMetaJson),
+        execution: projectIntentTurnExecution(t),
+        createdAt: t.createdAt,
+      }))
+      let currentDraft: IntentDraftDto | null = null
+      if (session.currentDraftId !== null) {
+        const draft = (
+          await deps.db
+            .select()
+            .from(intentDrafts)
+            .where(eq(intentDrafts.id, session.currentDraftId))
+            .limit(1)
+        )[0]
+        if (draft !== undefined) {
+          const parsedChangeset = parseIntentChangeset(draft.changesetJson)
+          const slots = parsedChangeset.ok
+            ? deriveIntentSlots(sessionManifest(session), parsedChangeset.changeset).slots
+            : []
+          currentDraft = {
+            id: draft.id,
+            revision: draft.revision,
+            changeset: JSON.parse(draft.changesetJson),
+            validation: IntentDraftDtoSchema.shape.validation.parse(
+              JSON.parse(draft.validationJson),
+            ),
+            slots,
+            draftHash: draft.draftHash,
+            contextRevision: draft.contextRevision,
+            stale: draft.contextRevision !== session.contextRevision,
+            createdAt: draft.createdAt,
+          }
         }
       }
-    }
-    const commits = (
-      await deps.db
-        .select()
-        .from(intentApplyJournal)
-        .where(eq(intentApplyJournal.sessionId, session.id))
-    ).map((row) => ({
-      journalId: row.id,
-      draftId: row.draftId,
-      state: row.state,
-      receipt:
-        row.receiptJson === null
-          ? null
-          : IntentApplyReceiptSchema.parse(JSON.parse(row.receiptJson)),
-      error: row.error,
-      createdAt: row.createdAt,
-    }))
-    const mounts = sessionManifest(session)
-      .filter((entry) => entry.root)
-      .map((entry) => ({
-        handle: entry.handle,
-        resourceType: entry.resourceType,
-        resourceId: entry.resourceId,
-        detail: entry.detail,
+      const commits = (
+        await deps.db
+          .select()
+          .from(intentApplyJournal)
+          .where(eq(intentApplyJournal.sessionId, session.id))
+      ).map((row) => ({
+        journalId: row.id,
+        draftId: row.draftId,
+        state: row.state,
+        receipt:
+          row.receiptJson === null
+            ? null
+            : IntentApplyReceiptSchema.parse(JSON.parse(row.receiptJson)),
+        error: row.error,
+        createdAt: row.createdAt,
       }))
-    const detail: IntentSessionDetail = {
-      session: {
-        ...sessionSummary(session, { includeOwner: session.ownerUserId !== actor.user.id }),
-        currentDraftRevision: currentDraft?.revision ?? null,
-      },
-      mounts,
-      turns: turnDtos,
-      currentDraft,
-      commits,
-    }
-    return c.json(detail)
-  })
+      const mounts = sessionManifest(session)
+        .filter((entry) => entry.root)
+        .map((entry) => ({
+          handle: entry.handle,
+          resourceType: entry.resourceType,
+          resourceId: entry.resourceId,
+          detail: entry.detail,
+        }))
+      const detail: IntentSessionDetail = {
+        session: {
+          ...sessionSummary(session, { includeOwner: session.ownerUserId !== actor.user.id }),
+          currentDraftRevision: currentDraft?.revision ?? null,
+        },
+        mounts,
+        turns: turnDtos,
+        currentDraft,
+        commits,
+      }
+      return c.json(detail)
+    },
+  )
 
-  app.get('/api/intent-sessions/:id/turns/:turnId/session', read, async (c) => {
-    const actor = actorOf(c)
-    const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
-    return c.json(await getIntentTurnSession(deps.db, session.id, c.req.param('turnId')))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/intent-sessions/:id/turns/:turnId/session',
+      permissions: ['intent:read'],
+      tokenAccess: 'allow',
+      summary: 'Intent turn session view',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
+      return c.json(await getIntentTurnSession(deps.db, session.id, c.req.param('turnId')))
+    },
+  )
 
-  app.post('/api/intent-sessions/:id/messages', write, async (c) => {
-    const parsed = PostIntentMessageSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('intent-invalid', 'invalid message payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/messages',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Send an intent message',
+    },
+    async (c) => {
+      const parsed = PostIntentMessageSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid message payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const sessionId = c.req.param('id')
+      const { turnId } = await insertUserTurn(deps.db, actor, sessionId, 'message', {
+        message: parsed.data.message,
       })
-    }
-    const actor = actorOf(c)
-    const sessionId = c.req.param('id')
-    const { turnId } = await insertUserTurn(deps.db, actor, sessionId, 'message', {
-      message: parsed.data.message,
-    })
-    void fireTurn(sessionId, actor)
-    return c.json({ turnId }, 202)
-  })
+      void fireTurn(sessionId, actor)
+      return c.json({ turnId }, 202)
+    },
+  )
 
-  app.post('/api/intent-sessions/:id/answers', write, async (c) => {
-    const parsed = PostIntentAnswersSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('intent-invalid', 'invalid answers payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/answers',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Answer intent questions',
+    },
+    async (c) => {
+      const parsed = PostIntentAnswersSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid answers payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const sessionId = c.req.param('id')
+      const { turnId } = await insertUserTurn(deps.db, actor, sessionId, 'answers', {
+        answers: parsed.data.answers,
       })
-    }
-    const actor = actorOf(c)
-    const sessionId = c.req.param('id')
-    const { turnId } = await insertUserTurn(deps.db, actor, sessionId, 'answers', {
-      answers: parsed.data.answers,
-    })
-    void fireTurn(sessionId, actor)
-    return c.json({ turnId }, 202)
-  })
+      void fireTurn(sessionId, actor)
+      return c.json({ turnId }, 202)
+    },
+  )
 
-  app.post('/api/intent-sessions/:id/mount-approvals', write, async (c) => {
-    const parsed = PostIntentMountApprovalsSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('intent-invalid', 'invalid mount approvals payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/mount-approvals',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Approve an intent mount',
+    },
+    async (c) => {
+      const parsed = PostIntentMountApprovalsSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid mount approvals payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const sessionId = c.req.param('id')
+      const mounted: Array<{ handle: string }> = []
+      for (const ref of parsed.data.approve) {
+        mounted.push(await addIntentMount(deps.db, actor, sessionId, ref))
+      }
+      await insertUserTurn(deps.db, actor, sessionId, 'mount-approval', {
+        approved: mounted.map((m) => m.handle),
+        rejected: parsed.data.rejectNames,
       })
-    }
-    const actor = actorOf(c)
-    const sessionId = c.req.param('id')
-    const mounted: Array<{ handle: string }> = []
-    for (const ref of parsed.data.approve) {
-      mounted.push(await addIntentMount(deps.db, actor, sessionId, ref))
-    }
-    await insertUserTurn(deps.db, actor, sessionId, 'mount-approval', {
-      approved: mounted.map((m) => m.handle),
-      rejected: parsed.data.rejectNames,
-    })
-    emitSessionUpdated(sessionId, actor.user.id)
-    return c.json({ mounted: mounted.map((m) => m.handle) })
-  })
+      emitSessionUpdated(sessionId, actor.user.id)
+      return c.json({ mounted: mounted.map((m) => m.handle) })
+    },
+  )
 
-  app.post('/api/intent-sessions/:id/mounts', write, async (c) => {
-    const parsed = IntentMountRefSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('intent-invalid', 'invalid mount payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const result = await addIntentMount(deps.db, actor, c.req.param('id'), parsed.data)
-    emitSessionUpdated(c.req.param('id'), actor.user.id)
-    return c.json(result, 201)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/mounts',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Mount a resource into an intent session',
+    },
+    async (c) => {
+      const parsed = IntentMountRefSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid mount payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const result = await addIntentMount(deps.db, actor, c.req.param('id'), parsed.data)
+      emitSessionUpdated(c.req.param('id'), actor.user.id)
+      return c.json(result, 201)
+    },
+  )
 
-  app.delete('/api/intent-sessions/:id/mounts/:handle', write, async (c) => {
-    const actor = actorOf(c)
-    const result = await removeIntentMount(
-      deps.db,
-      actor,
-      c.req.param('id'),
-      decodeURIComponent(c.req.param('handle')),
-    )
-    emitSessionUpdated(c.req.param('id'), actor.user.id)
-    return c.json(result)
-  })
-
-  app.post('/api/intent-sessions/:id/rebase', write, async (c) => {
-    const actor = actorOf(c)
-    const result = await rebaseIntentSession(deps.db, actor, c.req.param('id'))
-    emitSessionUpdated(c.req.param('id'), actor.user.id)
-    return c.json(result)
-  })
-
-  app.post('/api/intent-sessions/:id/retry', write, async (c) => {
-    const actor = actorOf(c)
-    const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
-    if (session.ownerUserId !== actor.user.id) {
-      // Codex impl-gate P2-4: owner-only mutations keep the 404 shape — the
-      // admin read bypass must not leak a distinguishable 422 here.
-      throw new NotFoundError('intent-session-not-found', 'intent session not found')
-    }
-    void fireTurn(session.id, actor)
-    return c.json({ ok: true }, 202)
-  })
-
-  app.post('/api/intent-sessions/:id/cancel-turn', write, async (c) => {
-    const actor = actorOf(c)
-    const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
-    if (session.ownerUserId !== actor.user.id) {
-      // Admin READ bypass never cancels another user's turn — 404 shape (P2-4).
-      throw new NotFoundError('intent-session-not-found', 'intent session not found')
-    }
-    return c.json({ aborted: abortIntentTurn(session.id) })
-  })
-
-  app.post('/api/intent-sessions/:id/commit', write, async (c) => {
-    const parsed = CommitIntentSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('intent-invalid', 'invalid commit payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const cfg = loadConfig(deps.configPath)
-    const receipt = await applyIntentChangeset(
-      {
-        db: deps.db,
-        appHome,
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/intent-sessions/:id/mounts/:handle',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Unmount a resource',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const result = await removeIntentMount(
+        deps.db,
         actor,
-        executionPolicy: { defaultRuntime: cfg.defaultRuntime ?? null },
-      },
-      {
+        c.req.param('id'),
+        decodeURIComponent(c.req.param('handle')),
+      )
+      emitSessionUpdated(c.req.param('id'), actor.user.id)
+      return c.json(result)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/rebase',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Rebase an intent session',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const result = await rebaseIntentSession(deps.db, actor, c.req.param('id'))
+      emitSessionUpdated(c.req.param('id'), actor.user.id)
+      return c.json(result)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/retry',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Retry an intent turn',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
+      if (session.ownerUserId !== actor.user.id) {
+        // Codex impl-gate P2-4: owner-only mutations keep the 404 shape — the
+        // admin read bypass must not leak a distinguishable 422 here.
+        throw new NotFoundError('intent-session-not-found', 'intent session not found')
+      }
+      void fireTurn(session.id, actor)
+      return c.json({ ok: true }, 202)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/cancel-turn',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Cancel the in-flight intent turn',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
+      if (session.ownerUserId !== actor.user.id) {
+        // Admin READ bypass never cancels another user's turn — 404 shape (P2-4).
+        throw new NotFoundError('intent-session-not-found', 'intent session not found')
+      }
+      return c.json({ aborted: abortIntentTurn(session.id) })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/commit',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Commit an intent changeset',
+    },
+    async (c) => {
+      const parsed = CommitIntentSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid commit payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const cfg = loadConfig(deps.configPath)
+      const receipt = await applyIntentChangeset(
+        {
+          db: deps.db,
+          appHome,
+          actor,
+          executionPolicy: { defaultRuntime: cfg.defaultRuntime ?? null },
+        },
+        {
+          sessionId: c.req.param('id'),
+          clientMutationId: parsed.data.clientMutationId,
+          draftRevision: parsed.data.draftRevision,
+          draftHash: parsed.data.draftHash,
+          decisions: parsed.data.decisions,
+        },
+      )
+      intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
+        type: 'intent.apply.committed',
         sessionId: c.req.param('id'),
-        clientMutationId: parsed.data.clientMutationId,
-        draftRevision: parsed.data.draftRevision,
-        draftHash: parsed.data.draftHash,
-        decisions: parsed.data.decisions,
-      },
-    )
-    intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
-      type: 'intent.apply.committed',
-      sessionId: c.req.param('id'),
-      journalId: receipt.journalId,
-      ownerUserId: actor.user.id,
-    })
-    return c.json(receipt)
-  })
+        journalId: receipt.journalId,
+        ownerUserId: actor.user.id,
+      })
+      return c.json(receipt)
+    },
+  )
 
-  app.post('/api/intent-sessions/:id/archive', write, async (c) => {
-    const actor = actorOf(c)
-    await setIntentSessionStatus(deps.db, actor, c.req.param('id'), 'archived')
-    emitSessionUpdated(c.req.param('id'), actor.user.id)
-    return c.json({ ok: true })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/archive',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Archive an intent session',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      await setIntentSessionStatus(deps.db, actor, c.req.param('id'), 'archived')
+      emitSessionUpdated(c.req.param('id'), actor.user.id)
+      return c.json({ ok: true })
+    },
+  )
 
-  app.post('/api/intent-sessions/:id/reopen', write, async (c) => {
-    const actor = actorOf(c)
-    await setIntentSessionStatus(deps.db, actor, c.req.param('id'), 'active')
-    emitSessionUpdated(c.req.param('id'), actor.user.id)
-    return c.json({ ok: true })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/intent-sessions/:id/reopen',
+      permissions: ['intent:write'],
+      tokenAccess: 'allow',
+      summary: 'Reopen an intent session',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      await setIntentSessionStatus(deps.db, actor, c.req.param('id'), 'active')
+      emitSessionUpdated(c.req.param('id'), actor.user.id)
+      return c.json({ ok: true })
+    },
+  )
 
   // AC-11 resource-side provenance badge. Uniform-empty read: invisible
   // resource, foreign session, or no provenance all return [] — the endpoint
   // never confirms resource existence nor another user's intent activity.
-  app.get('/api/intent-provenance/:resourceType/:resourceId', read, async (c) => {
-    const parsed = IntentMountRefSchema.safeParse({
-      resourceType: c.req.param('resourceType'),
-      resourceId: c.req.param('resourceId'),
-    })
-    if (!parsed.success) {
-      throw new ValidationError('intent-invalid', 'invalid provenance ref', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/intent-provenance/:resourceType/:resourceId',
+      permissions: ['intent:read'],
+      tokenAccess: 'allow',
+      summary: 'Intent provenance for a resource',
+    },
+    async (c) => {
+      const parsed = IntentMountRefSchema.safeParse({
+        resourceType: c.req.param('resourceType'),
+        resourceId: c.req.param('resourceId'),
       })
-    }
-    const rows = await listIntentProvenanceForActor(deps.db, actorOf(c), parsed.data)
-    return c.json(rows)
-  })
+      if (!parsed.success) {
+        throw new ValidationError('intent-invalid', 'invalid provenance ref', {
+          issues: parsed.error.issues,
+        })
+      }
+      const rows = await listIntentProvenanceForActor(deps.db, actorOf(c), parsed.data)
+      return c.json(rows)
+    },
+  )
 }

@@ -14,12 +14,13 @@
 
 import { eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
-import type { TaskActorRole, TaskQuestionPhase } from '@agent-workflow/shared'
+import { TaskQuestionPhaseSchema, type TaskActorRole } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 // RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { taskQuestions, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import {
   confirmTaskQuestion,
   createManualTaskQuestion,
@@ -69,13 +70,36 @@ async function gateMemberEntry(
 }
 
 export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/tasks/:id/questions', async (c) => {
-    const taskId = c.req.param('id')
-    await loadVisibleTask(deps, taskId, actorOf(c))
-    const sourceNodeId = c.req.query('sourceNodeId') || undefined
-    const phase = (c.req.query('phase') as TaskQuestionPhase | undefined) || undefined
-    return c.json(await listTaskQuestions(deps.db, taskId, { sourceNodeId, phase }))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/questions',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List task question entries',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      await loadVisibleTask(deps, taskId, actorOf(c))
+      const sourceNodeId = c.req.query('sourceNodeId') || undefined
+      // RFC-247 T3: validate rather than cast. The old `as TaskQuestionPhase`
+      // let `?phase=bogus` through to the service, where it silently matched
+      // nothing instead of being refused.
+      const phaseRaw = c.req.query('phase')
+      const phase =
+        phaseRaw === undefined || phaseRaw === ''
+          ? undefined
+          : (() => {
+              const parsed = TaskQuestionPhaseSchema.safeParse(phaseRaw)
+              if (!parsed.success) {
+                throw new ValidationError('invalid-filter', `invalid phase: ${phaseRaw}`)
+              }
+              return parsed.data
+            })()
+      return c.json(await listTaskQuestions(deps.db, taskId, { sourceNodeId, phase }))
+    },
+  )
 
   // RFC-120 §15 — author a MANUAL question (自主新增/复制). Member-gated (任务成员；ACL
   // 同 reassign/stage). Body { title, body, targetNodeId? }: title+body required; if
@@ -83,122 +107,172 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
   // (待下发) ready for batch-dispatch (§15.2), else 待指派. Dispatch + manual_body injection
   // reuse the §18 per-node queue (which requires a deferred-dispatch task). The creator is
   // recorded for audit only — NEVER enters a prompt (RFC-099 prompt-isolation).
-  app.post('/api/tasks/:id/questions/manual', async (c) => {
-    const taskId = c.req.param('id')
-    const actor = actorOf(c)
-    const task = await loadVisibleTask(deps, taskId, actor)
-    const role = await requireTaskMember(deps.db, actor, task)
-    const body = (await c.req.json().catch(() => ({}))) as {
-      title?: unknown
-      body?: unknown
-      targetNodeId?: unknown
-    }
-    const title = typeof body.title === 'string' ? body.title : ''
-    const instruction = typeof body.body === 'string' ? body.body : ''
-    const targetNodeId = typeof body.targetNodeId === 'string' ? body.targetNodeId : null
-    const { id } = await createManualTaskQuestion(
-      deps.db,
-      taskId,
-      { title, body: instruction, targetNodeId },
-      { userId: actor.user.id, role },
-    )
-    return c.json({ ok: true, id })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/questions/manual',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Raise a manual question',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      const actor = actorOf(c)
+      const task = await loadVisibleTask(deps, taskId, actor)
+      const role = await requireTaskMember(deps.db, actor, task)
+      const body = (await c.req.json().catch(() => ({}))) as {
+        title?: unknown
+        body?: unknown
+        targetNodeId?: unknown
+      }
+      const title = typeof body.title === 'string' ? body.title : ''
+      const instruction = typeof body.body === 'string' ? body.body : ''
+      const targetNodeId = typeof body.targetNodeId === 'string' ? body.targetNodeId : null
+      const { id } = await createManualTaskQuestion(
+        deps.db,
+        taskId,
+        { title, body: instruction, targetNodeId },
+        { userId: actor.user.id, role },
+      )
+      return c.json({ ok: true, id })
+    },
+  )
 
-  app.post('/api/tasks/:id/questions/:entryId/confirm', async (c) => {
-    const { entryId, role, actor } = await gateMemberEntry(c, deps)
-    await confirmTaskQuestion(deps.db, entryId, { userId: actor.user.id, role })
-    return c.json({ ok: true })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/questions/:entryId/confirm',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Confirm a question entry',
+    },
+    async (c) => {
+      const { entryId, role, actor } = await gateMemberEntry(c, deps)
+      await confirmTaskQuestion(deps.db, entryId, { userId: actor.user.id, role })
+      return c.json({ ok: true })
+    },
+  )
 
-  app.post('/api/tasks/:id/questions/:entryId/reassign', async (c) => {
-    const { entryId, role, actor } = await gateMemberEntry(c, deps)
-    const body = (await c.req.json().catch(() => ({}))) as { targetNodeId?: unknown }
-    const targetNodeId = typeof body.targetNodeId === 'string' ? body.targetNodeId : ''
-    if (!targetNodeId) {
-      throw new ValidationError('target-node-required', 'targetNodeId is required')
-    }
-    // RFC-162: `action` tells the client what happened — 'added-designer' (a clarify question
-    // gained an upstream/downstream designer handler), 'removed-designer' (back to single card),
-    // or 'moved-manual' (a manual question re-targeted). The asker entry is always kept.
-    const action = await reassignTaskQuestion(deps.db, entryId, targetNodeId, {
-      userId: actor.user.id,
-      role,
-    })
-    return c.json({ ok: true, action })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/questions/:entryId/reassign',
+      permissions: ['tasks:update'],
+      tokenAccess: 'never',
+      summary: 'Reassign a question entry',
+    },
+    async (c) => {
+      const { entryId, role, actor } = await gateMemberEntry(c, deps)
+      const body = (await c.req.json().catch(() => ({}))) as { targetNodeId?: unknown }
+      const targetNodeId = typeof body.targetNodeId === 'string' ? body.targetNodeId : ''
+      if (!targetNodeId) {
+        throw new ValidationError('target-node-required', 'targetNodeId is required')
+      }
+      // RFC-162: `action` tells the client what happened — 'added-designer' (a clarify question
+      // gained an upstream/downstream designer handler), 'removed-designer' (back to single card),
+      // or 'moved-manual' (a manual question re-targeted). The asker entry is always kept.
+      const action = await reassignTaskQuestion(deps.db, entryId, targetNodeId, {
+        userId: actor.user.id,
+        role,
+      })
+      return c.json({ ok: true, action })
+    },
+  )
 
-  app.post('/api/tasks/:id/questions/:entryId/stage', async (c) => {
-    const { entryId, role, actor } = await gateMemberEntry(c, deps)
-    const body = (await c.req.json().catch(() => ({}))) as { staged?: unknown }
-    const staged = body.staged !== false // default true
-    await stageTaskQuestion(deps.db, entryId, staged, { userId: actor.user.id, role })
-    return c.json({ ok: true })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/questions/:entryId/stage',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Stage a question entry',
+    },
+    async (c) => {
+      const { entryId, role, actor } = await gateMemberEntry(c, deps)
+      const body = (await c.req.json().catch(() => ({}))) as { staged?: unknown }
+      const staged = body.staged !== false // default true
+      await stageTaskQuestion(deps.db, entryId, staged, { userId: actor.user.id, role })
+      return c.json({ ok: true })
+    },
+  )
 
   // RFC-120 T9 (model A) — batch-dispatch the chosen entries: mint the handler
   // reruns + stamp trigger_run_id (dispatchTaskQuestions) then resumeTask to
   // RELEASE the deferred park (the same resume the clarify route uses). Without
   // this route a deferred-dispatch task parks awaiting_human forever (Codex H2).
-  app.post('/api/tasks/:id/questions/dispatch', async (c) => {
-    const taskId = c.req.param('id')
-    const actor = actorOf(c)
-    const task = await loadVisibleTask(deps, taskId, actor)
-    const role = await requireTaskMember(deps.db, actor, task)
-    // RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有任务都是 deferred-dispatch——
-    // batch-dispatch 恒适用（旧 deferred-only 门移除；dispatchTaskQuestions 仍防御性去重）。
-    const body = (await c.req.json().catch(() => ({}))) as { entryIds?: unknown }
-    const entryIds = Array.isArray(body.entryIds)
-      ? body.entryIds.filter((x): x is string => typeof x === 'string')
-      : []
-    if (entryIds.length === 0) {
-      throw new ValidationError(
-        'entry-ids-required',
-        'entryIds (a non-empty array of task_question ids) is required',
-      )
-    }
-    const result = await dispatchTaskQuestions(deps.db, taskId, entryIds, {
-      userId: actor.user.id,
-      role,
-    })
-    // Release the gate: re-enter scheduling so the minted reruns dispatch and the
-    // task leaves awaiting_human. Best-effort, mirroring the clarify route. NB: a
-    // TERMINAL task (done/canceled) is already rejected by dispatchTaskQuestions'
-    // status pre-check ABOVE (nothing minted), so `task-not-resumable` here is ONLY
-    // the benign live-scheduler race (a `running` deferred task — the live loop picks
-    // up the freshly-minted rerun); it is logged at info, not surfaced as an error.
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const resumeDeps: Parameters<typeof resumeTask>[2] = {
-      db: deps.db,
-      appHome: Paths.root,
-      ...(deps.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: deps.containmentCoordinator }),
-      ...(opencodeCmd ? { opencodeCmd } : {}),
-      ...resolveLaunchRuntimeConfig(deps.configPath),
-    }
-    // RFC-202 T8: surface real resume failures in the response (dispatch DID
-    // land; the UI shows a warning) instead of the old silent log-only path.
-    let resumeFailure: { ok: false; code: string; message: string } | undefined
-    try {
-      await resumeTask(deps.db, taskId, resumeDeps)
-    } catch (err) {
-      if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-        log.info('task-questions dispatch resume deferred', { taskId })
-      } else {
-        const message = err instanceof Error ? err.message : String(err)
-        log.warn('task-questions dispatch resume threw', { taskId, error: message })
-        resumeFailure = {
-          ok: false,
-          code: err instanceof DomainError ? err.code : 'resume-failed',
-          message,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/questions/dispatch',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Dispatch staged questions (advances the task)',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      const actor = actorOf(c)
+      const task = await loadVisibleTask(deps, taskId, actor)
+      const role = await requireTaskMember(deps.db, actor, task)
+      // RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有任务都是 deferred-dispatch——
+      // batch-dispatch 恒适用（旧 deferred-only 门移除；dispatchTaskQuestions 仍防御性去重）。
+      const body = (await c.req.json().catch(() => ({}))) as { entryIds?: unknown }
+      const entryIds = Array.isArray(body.entryIds)
+        ? body.entryIds.filter((x): x is string => typeof x === 'string')
+        : []
+      if (entryIds.length === 0) {
+        throw new ValidationError(
+          'entry-ids-required',
+          'entryIds (a non-empty array of task_question ids) is required',
+        )
+      }
+      const result = await dispatchTaskQuestions(deps.db, taskId, entryIds, {
+        userId: actor.user.id,
+        role,
+      })
+      // Release the gate: re-enter scheduling so the minted reruns dispatch and the
+      // task leaves awaiting_human. Best-effort, mirroring the clarify route. NB: a
+      // TERMINAL task (done/canceled) is already rejected by dispatchTaskQuestions'
+      // status pre-check ABOVE (nothing minted), so `task-not-resumable` here is ONLY
+      // the benign live-scheduler race (a `running` deferred task — the live loop picks
+      // up the freshly-minted rerun); it is logged at info, not surfaced as an error.
+      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+      const resumeDeps: Parameters<typeof resumeTask>[2] = {
+        db: deps.db,
+        appHome: Paths.root,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
+        ...(opencodeCmd ? { opencodeCmd } : {}),
+        ...resolveLaunchRuntimeConfig(deps.configPath),
+      }
+      // RFC-202 T8: surface real resume failures in the response (dispatch DID
+      // land; the UI shows a warning) instead of the old silent log-only path.
+      let resumeFailure: { ok: false; code: string; message: string } | undefined
+      try {
+        await resumeTask(deps.db, taskId, resumeDeps)
+      } catch (err) {
+        if (err instanceof ConflictError && err.code === 'task-not-resumable') {
+          log.info('task-questions dispatch resume deferred', { taskId })
+        } else {
+          const message = err instanceof Error ? err.message : String(err)
+          log.warn('task-questions dispatch resume threw', { taskId, error: message })
+          resumeFailure = {
+            ok: false,
+            code: err instanceof DomainError ? err.code : 'resume-failed',
+            message,
+          }
         }
       }
-    }
-    return c.json({
-      ok: true,
-      reruns: result.reruns,
-      ...(resumeFailure ? { resume: resumeFailure } : {}),
-    })
-  })
+      return c.json({
+        ok: true,
+        reruns: result.reruns,
+        ...(resumeFailure ? { resume: resumeFailure } : {}),
+      })
+    },
+  )
 }

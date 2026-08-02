@@ -103,10 +103,30 @@ export const SessionPublicSchema = z.object({
 
 export type SessionPublic = z.infer<typeof SessionPublicSchema>
 
+/**
+ * RFC-247 D2 — which channel a token may use.
+ *
+ *   'general'  : `/api/*` and `/api/mcp`
+ *   'mcp_only' : `/api/mcp` only; any business route answers 403 `token-mcp-only`
+ *
+ * A separate axis from the permission matrix on purpose: "what may this token
+ * DO" and "where may it be USED" are independent questions, and collapsing them
+ * would make "an MCP client that can only launch tasks" inexpressible without
+ * also deciding whether curl may use the same credential.
+ */
+export const PatPurposeSchema = z.enum(['general', 'mcp_only'])
+export type PatPurpose = z.infer<typeof PatPurposeSchema>
+
 export const PatPublicSchema = z.object({
   id: z.string(),
   name: z.string().min(1).max(128),
+  /**
+   * The authorization matrix, stored as the permission points it resolves to.
+   * RFC-247 keeps ONE representation: the matrix UI is a view over these points,
+   * not a second encoding that could drift from them.
+   */
   scopes: z.array(PermissionSchema),
+  purpose: PatPurposeSchema,
   createdAt: z.number(),
   lastUsedAt: z.number().nullable(),
   expiresAt: z.number().nullable(),
@@ -118,7 +138,10 @@ export type PatPublic = z.infer<typeof PatPublicSchema>
 export const CreatePatBodySchema = z.object({
   name: z.string().min(1).max(128),
   scopes: z.array(PermissionSchema).default([]),
-  expiresAt: z.number().int().nonnegative().optional(),
+  /** Defaults to the narrower of the two channels. */
+  purpose: PatPurposeSchema.default('mcp_only'),
+  /** RFC-247 D8 — optional; absent means the token never expires. */
+  expiresAt: z.number().int().nonnegative().nullable().optional(),
 })
 
 export type CreatePatBody = z.infer<typeof CreatePatBodySchema>

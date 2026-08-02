@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { Hono } from 'hono'
+import { READ_POINTS, type Permission } from '@agent-workflow/shared'
 import { actorOf, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createPat } from '../src/auth/patStore'
 import { multiAuth } from '../src/auth/session'
@@ -146,7 +147,8 @@ describe('multiAuth — PAT track', () => {
       db,
       userId: '01HQCAROL',
       name: 'ci',
-      scopes: ['tasks:launch'],
+      scopes: ['tasks:execute'],
+      purpose: 'general',
     })
     const res = await buildApp(db).request('/api/whoami', {
       headers: { Authorization: `Bearer ${token}` },
@@ -161,9 +163,12 @@ describe('multiAuth — PAT track', () => {
     expect(body.id).toBe('01HQCAROL')
     expect(body.role).toBe('user')
     expect(body.source).toBe('pat')
-    // PAT scopes are intersected with role baseline → only 'tasks:launch'
-    // (because role='user' has tasks:launch in its baseline). No other.
-    expect(body.permissions).toEqual(['tasks:launch'])
+    // RFC-247: a token's grants are (READ_POINTS ∪ matrix) ∩ role baseline.
+    // Reads ride along unconditionally (D3 "读恒开"), so the assertion is
+    // "exactly the ticked write verb, plus reads, and nothing else".
+    expect(body.permissions).toContain('tasks:execute')
+    const nonRead = body.permissions.filter((p) => !READ_POINTS.includes(p as Permission))
+    expect(nonRead).toEqual(['tasks:execute'])
   })
 
   test('PAT cannot widen beyond role (admin-only scope on user PAT is dropped)', async () => {
@@ -174,13 +179,17 @@ describe('multiAuth — PAT track', () => {
       name: 'overreach',
       // RFC-099: agents:write moved to the user baseline; users:read is the
       // canonical admin-only scope this widening test needs.
-      scopes: ['users:read', 'tasks:launch'],
+      scopes: ['users:read', 'tasks:execute'],
+      purpose: 'general',
     })
     const res = await buildApp(db).request('/api/whoami', {
       headers: { Authorization: `Bearer ${token}` },
     })
     const body = (await res.json()) as { permissions: string[] }
-    expect(body.permissions.sort()).toEqual(['tasks:launch'])
+    // `users:read` is admin-only AND system-domain — dropped on both counts.
+    expect(body.permissions).not.toContain('users:read')
+    const nonRead = body.permissions.filter((p) => !READ_POINTS.includes(p as Permission))
+    expect(nonRead.sort()).toEqual(['tasks:execute'])
   })
 })
 

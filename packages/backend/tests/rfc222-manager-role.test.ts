@@ -168,13 +168,17 @@ describe('RFC-222 manager — positive resource / task / memory domain', () => {
     expect(usr.status).toBe(403)
   })
 
-  test('manager holds repos:write (POST /api/repos not 403); stranger → 403', async () => {
-    const mgr = await reqAs(h.app, h.managerToken, '/api/repos', {
+  // RFC-247 split `repos:write` into create/delete/execute and moved the gate
+  // from a prefix middleware into each route's declaration. `/api/repos` itself
+  // is not an endpoint (the old 403 came from the prefix middleware running
+  // before routing), so this now exercises a real repos-domain write.
+  test('manager holds the repos write verbs (batch-import not 403); stranger → 403', async () => {
+    const mgr = await reqAs(h.app, h.managerToken, '/api/cached-repos/batch-import', {
       method: 'POST',
       body: JSON.stringify({}),
     })
     expect(mgr.status).not.toBe(403) // gate open → 422/400 for empty body
-    const usr = await reqAs(h.app, h.userToken, '/api/repos', {
+    const usr = await reqAs(h.app, h.userToken, '/api/cached-repos/batch-import', {
       method: 'POST',
       body: JSON.stringify({}),
     })

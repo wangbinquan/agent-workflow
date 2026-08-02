@@ -562,12 +562,30 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
+    // RFC-247: the schedules domain gained real permission points (it had NONE
+    // before — docs/audit-backlog.md:60 class). Both fixtures therefore need
+    // `scheduled-tasks:update` to reach the PUT at all; what still separates
+    // them is `tasks:execute`, which is exactly what N1-r3 is about — the
+    // LAUNCH-ARMING half of the matrix. Creating a schedule always arms a future
+    // launch, so `POST` needs both points (RFC-247 cross-domain AND gate);
+    // rename / disabled-spec edits stay open to the narrow token because that
+    // check is payload-conditional and lives in the service, not the route gate.
     narrowPat = (
       await createPat({
         db,
         userId: bob.id,
         name: 'narrow',
-        scopes: ['tasks:read:own', 'workflows:read'],
+        // `scheduled-tasks:delete` is ticked EXPLICITLY — RFC-247 D4 never lets a
+        // delete point ride a role baseline, so this also exercises that rule.
+        // The point of the narrow token is still "no tasks:execute": it can
+        // rename, edit a disabled spec, and delete, but cannot arm a launch.
+        scopes: [
+          'tasks:read:own',
+          'workflows:read',
+          'scheduled-tasks:update',
+          'scheduled-tasks:delete',
+        ],
+        purpose: 'general',
       })
     ).token
     launchPat = (
@@ -575,7 +593,13 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
         db,
         userId: bob.id,
         name: 'launcher',
-        scopes: ['tasks:launch', 'workflows:read'],
+        scopes: [
+          'tasks:execute',
+          'workflows:read',
+          'scheduled-tasks:create',
+          'scheduled-tasks:update',
+        ],
+        purpose: 'general',
       })
     ).token
     const wf = await createWorkflow(
@@ -680,7 +704,21 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
       body: JSON.stringify({ enabled: false }),
     })
     expect(disable.status).toBe(200)
-    const del = await req(`/api/scheduled-tasks/${sched.id}`, narrowPat, { method: 'DELETE' })
+    // RFC-247 T20 — delete stays open to the narrow PAT in the sense this test
+    // locks (no launch permission needed), but a TOKEN must now name what it
+    // deletes. The two rules are orthogonal: this one is about PERMISSION, that
+    // one is about intent, and a token has no confirmation dialog standing
+    // between "the caller decided" and the row being gone.
+    const delNoConfirm = await req(`/api/scheduled-tasks/${sched.id}`, narrowPat, {
+      method: 'DELETE',
+    })
+    expect(delNoConfirm.status).toBe(422)
+    expect(((await delNoConfirm.json()) as { code: string }).code).toBe('delete-confirm-required')
+
+    const del = await req(`/api/scheduled-tasks/${sched.id}`, narrowPat, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'renamed by narrow' }),
+    })
     expect([200, 204]).toContain(del.status)
 
     // Sanity: an admin session is never gated.

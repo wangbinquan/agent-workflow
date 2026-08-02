@@ -16,7 +16,7 @@
 // sessions / tokens are managed on /account.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, useRouterState } from '@tanstack/react-router'
+import { createRoute, Link, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuthLoginPolicy, Config, ConfigPatch } from '@agent-workflow/shared'
@@ -1062,6 +1062,32 @@ export function NetworkTab({ config }: TabProps) {
           </div>
         )}
       </div>
+
+      {/* RFC-247 D10 — the external-access switch. It closes `POST /api/mcp` and
+          new token minting together: from an operator's point of view they are
+          one surface ("can the outside world drive this platform"), and
+          splitting them would create a state — MCP closed, tokens still
+          issuable — that answers no real question. Existing tokens keep working
+          on REST by design, so flipping this stops the bleeding without
+          breaking automation that was never implicated. */}
+      <Field
+        label={t('settingsForm.mcpSurfaceLabel')}
+        hint={t('settingsForm.mcpSurfaceHint')}
+        group
+        labelId="settings-mcp-surface-label"
+      >
+        <Switch
+          checked={state.mcpSurfaceEnabled ?? true}
+          onChange={(v) => setState({ ...state, mcpSurfaceEnabled: v })}
+          aria-label={t('settingsForm.mcpSurfaceLabel')}
+          data-testid="settings-mcp-surface"
+        />
+      </Field>
+      <p className="form-field__hint">
+        <Link to="/docs/api" className="link" data-testid="settings-api-docs-link">
+          {t('settingsForm.mcpSurfaceDocsLink')}
+        </Link>
+      </p>
     </SectionForm>
   )
 }

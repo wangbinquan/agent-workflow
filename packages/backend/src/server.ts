@@ -3,18 +3,18 @@
 // without monkey-patching the module.
 
 import { Hono } from 'hono'
-import type { MiddlewareHandler } from 'hono'
 import type { WorkflowRevision } from '@agent-workflow/shared'
-import { actorOf } from '@/auth/actor'
-import { requirePermission, resourcePermissionGate } from '@/auth/permissions'
+import { actorOf, tryActorOf } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { multiAuth } from '@/auth/session'
+import { recordTokenCall } from '@/services/tokenAudit'
+import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import type { ContainmentCoordinator } from '@/services/sandbox'
-import { ForbiddenError } from '@/util/errors'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
+import { mountMcpTransport } from '@/mcp/server'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
 import { mountBackupRoutes } from '@/routes/backup'
@@ -22,6 +22,7 @@ import { mountRestoreRoutes } from '@/routes/restore'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import { mountConfigRoutes } from '@/routes/config'
 import { mountDaemonRoutes } from '@/routes/daemon'
+import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
@@ -148,104 +149,139 @@ export function createApp(deps: AppDeps): Hono {
 
   // Public routes (no auth).
   mountHealthRoutes(app, deps)
+  // RFC-247 D18 — discovery must answer before any credential exists.
+  mountWellKnownRoutes(app, deps)
 
   // Authenticated routes — three-track auth (RFC-036): session token / PAT /
   // legacy daemon token. Daemon token still maps to the seeded __system__
   // admin actor so existing single-user deployments stay zero-touch.
   app.use('/api/*', multiAuth({ db: deps.db, daemonToken: deps.token }))
 
-  // /api/whoami returns the resolved actor; keeps `ok`/`pid` fields for
-  // backwards compatibility with anything that pinged the P-1-08 probe.
-  app.get('/api/whoami', (c) => {
-    const actor = actorOf(c)
-    return c.json({
-      ok: true,
-      pid: process.pid,
-      uptime: Math.round(process.uptime()),
-      user: {
-        id: actor.user.id,
-        username: actor.user.username,
-        displayName: actor.user.displayName,
-        role: actor.user.role,
-        status: actor.user.status,
-      },
-      source: actor.source,
+  // RFC-247 D16 — the REST half of the token audit. Mounted right after
+  // multiAuth so the actor exists, and BEFORE the routes so it observes every
+  // one of them including the ones that throw. It records after `next()` and
+  // never rethrows: an audit failure must not turn a working call into a 500
+  // (F13). `/api/mcp` records per TOOL instead — a single "POST /api/mcp" row
+  // would say nothing about what the model actually did.
+  app.use('/api/*', async (c, next) => {
+    await next()
+    const actor = tryActorOf(c)
+    if (actor === null || actor.source !== 'pat') return
+    if (c.req.path === '/api/mcp') return
+    void recordTokenCall(deps.db, {
+      actor,
+      channel: 'rest',
+      method: c.req.method,
+      path: c.req.path,
+      statusCode: c.res.status,
     })
   })
 
-  // RFC-036 permission gates. Mounted BEFORE the route handlers so a non-
-  // permitted actor (e.g. a regular-user session token) is rejected with 403
-  // before any service-layer code runs. The gates pick the permission point
-  // from the request method (GET → :read, mutating verbs → :write).
-  // RFC-165 (F15/N1): launching is a TASK operation on every subject face —
-  // all three launch endpoints gate on tasks:launch uniformly, and the agent
-  // launch path is exempt from the agents:write method gate below.
-  app.on('POST', '/api/tasks', requirePermission('tasks:launch'))
-  app.on('POST', '/api/workgroups/:id/tasks', requirePermission('tasks:launch'))
-  app.on('POST', '/api/agents/:id/tasks', requirePermission('tasks:launch'))
-  // RFC-222 — task deletion is admin-only (tasks:delete ∉ manager/user).
-  app.on('DELETE', '/api/tasks/:id', requirePermission('tasks:delete'))
-  app.use(
-    '/api/agents',
-    resourcePermissionGate('agents', {
-      skip: (method, path) => method === 'POST' && /^\/api\/agents\/[^/]+\/tasks$/.test(path),
-    }),
-  )
-  app.use(
-    '/api/agents/*',
-    resourcePermissionGate('agents', {
-      skip: (method, path) => method === 'POST' && /^\/api\/agents\/[^/]+\/tasks$/.test(path),
-    }),
-  )
-  app.use('/api/skills', resourcePermissionGate('skills'))
-  app.use('/api/skills/*', resourcePermissionGate('skills'))
-  app.use('/api/mcps', resourcePermissionGate('mcps'))
-  app.use('/api/mcps/*', resourcePermissionGate('mcps'))
-  app.use('/api/plugins', resourcePermissionGate('plugins'))
-  app.use('/api/plugins/*', resourcePermissionGate('plugins'))
-  app.use('/api/workflows', resourcePermissionGate('workflows'))
-  app.use('/api/workflows/*', resourcePermissionGate('workflows'))
-  app.use('/api/repos', resourcePermissionGate('repos'))
-  app.use('/api/repos/*', resourcePermissionGate('repos'))
-  app.use('/api/cached-repos', resourcePermissionGate('repos'))
-  app.use('/api/cached-repos/*', resourcePermissionGate('repos'))
-
-  // Admin-only end points: settings, OIDC providers, backup. /api/users +
-  // /api/users/search are mounted in mountUserRoutes (PR3/PR5) and have
-  // their own bespoke gates (search is admin+user, the rest admin-only).
-  const configGate: MiddlewareHandler = async (c, next) => {
-    const perm =
-      c.req.method === 'GET' || c.req.method === 'HEAD' ? 'settings:read' : 'settings:write'
-    const actor = actorOf(c)
-    if (!actor.permissions.has(perm)) {
-      throw new ForbiddenError('forbidden', `missing permission: ${perm}`, {
-        requiredPermission: perm,
-        actorPermissions: [...actor.permissions],
+  // /api/whoami returns the resolved actor; keeps `ok`/`pid` fields for
+  // backwards compatibility with anything that pinged the P-1-08 probe.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/whoami',
+      permissions: [],
+      publicReason:
+        'identity self-introspection; any authenticated actor may ask who it is, and a token needs it because RFC-247 D6 closes /api/auth/me to tokens',
+      tokenAccess: 'allow',
+      summary: 'Resolved actor identity for the current credential',
+    },
+    (c) => {
+      const actor = actorOf(c)
+      return c.json({
+        ok: true,
+        pid: process.pid,
+        uptime: Math.round(process.uptime()),
+        user: {
+          id: actor.user.id,
+          username: actor.user.username,
+          displayName: actor.user.displayName,
+          role: actor.user.role,
+          status: actor.user.status,
+        },
+        source: actor.source,
       })
-    }
-    await next()
+    },
+  )
+
+  // RFC-247 T4 — the manual permission gates that used to live here are GONE.
+  //
+  // They were mounted by PATH PREFIX (`app.use('/api/skills/*', …)`) and by
+  // hand-written method mapping, which is why whole domains shipped with no
+  // gate at all: nothing forced a new route to acquire one, and nothing could
+  // answer "which permission does this endpoint need" for an arbitrary path.
+  //
+  // Every route now declares its own contract via `registerRoute` and the
+  // framework derives the gate from that declaration. The startup self-check
+  // below refuses to boot when the declarations and the mounted routes
+  // disagree in EITHER direction, which is what makes the guarantee real
+  // rather than aspirational.
+
+  mountApiRoutes(app, deps)
+
+  // RFC-247 §4.1 — the MCP transport. Mounted after the REST table (it builds a
+  // second, actor-injected copy of that table for tool dispatch) and inside the
+  // /api/* auth scope, so the credential is resolved before it is inspected.
+  mountMcpTransport(app, deps)
+
+  // RFC-247 T4 — refuse to boot on a coverage mismatch, in either direction.
+  // Placed after every mount and before the SPA fallback so it sees the real
+  // route table. `app.routes` is Hono's own registry of what was mounted, so a
+  // route cannot hide from this by being registered through some other helper.
+  assertRouteMetaCoverage(app.routes.map((r) => ({ method: r.method, path: r.path })))
+
+  app.onError(errorHandler)
+
+  // P-5-05: When running as the compiled single-binary, the daemon also
+  // serves the frontend SPA from its embedded asset table. /, /index.html,
+  // and any /assets/* path map directly; unknown client-side routes fall back
+  // to index.html so TanStack Router can handle a hard refresh. Missing
+  // /assets/* paths stay 404 instead of returning HTML to a JS/CSS request.
+  // In dev mode IS_EMBEDDED=false and these handlers are no-ops, letting the
+  // vite dev server serve the SPA on its own port.
+  if (IS_EMBEDDED) {
+    app.get('*', async (c) => {
+      if (c.req.path.startsWith('/api/') || c.req.path.startsWith('/ws/')) {
+        return c.json(
+          { ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` },
+          404,
+        )
+      }
+      const response = await getEmbeddedFrontendResponse(c.req.path)
+      if (response !== null) return response
+      return c.json(
+        { ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` },
+        404,
+      )
+    })
   }
-  app.use('/api/config', configGate)
-  app.use('/api/config/*', configGate)
-  // GET /api/daemon surfaces the same Network-settings readout as /api/config
-  // (daemon bind host/port + pid/startedAt). Gate it with settings:read like
-  // config so a regular user session / narrow PAT can't read daemon internals
-  // through the generic /api/* auth. Read-only route → no write variant.
-  app.use('/api/daemon', requirePermission('settings:read'))
-  app.use('/api/backup', requirePermission('backup:run'))
-  app.use('/api/backup/*', requirePermission('backup:run'))
-  app.use('/api/restore', requirePermission('backup:run'))
-  // RFC-213 impl-gate P0-5 (Codex 2026-07-22): the sub-path gate was missing, so
-  // GET/DELETE /api/restore/pending only enforced the in-handler admin-role check
-  // — a scoped PAT that narrows away `backup:run` (but keeps the admin role) could
-  // still read failed-restore state and dis-arm a pending restore. Gate the whole
-  // subtree like /api/backup/*.
-  app.use('/api/restore/*', requirePermission('backup:run'))
 
-  // runtime is admin+user — homepage runtime dot relies on it.
-  app.use('/api/runtime', requirePermission('runtime:read'))
-  app.use('/api/runtime/*', requirePermission('runtime:read'))
+  app.notFound((c) =>
+    c.json({ ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` }, 404),
+  )
 
+  return app
+}
+
+/**
+ * Every `/api/*` route, mounted onto whatever app is passed in.
+ *
+ * Split out of `createApp` for RFC-247's MCP transport: the MCP tools dispatch
+ * into THIS SAME route table with an injected actor, rather than reaching past
+ * it into the services. That is the whole reason MCP cannot become a second,
+ * weaker authorization surface — every gate, payload validation and row-level
+ * ACL check a REST caller passes through is the identical code path, not a
+ * parallel implementation that has to be kept in agreement with it.
+ *
+ * Note what is deliberately NOT here: `multiAuth`. Authentication belongs to
+ * the entry point (HTTP for `createApp`, the token that opened the MCP session
+ * for the dispatcher), while authorization belongs to the route declarations.
+ */
+export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountConfigRoutes(app, deps)
   mountDaemonRoutes(app, deps)
   mountPlantumlRoutes(app, deps)
@@ -282,36 +318,5 @@ export function createApp(deps: AppDeps): Hono {
   mountOidcAuthRoutes(app, deps)
   mountOidcRoutes(app, deps)
   mountUserRoutes(app, deps)
-
-  app.onError(errorHandler)
-
-  // P-5-05: When running as the compiled single-binary, the daemon also
-  // serves the frontend SPA from its embedded asset table. /, /index.html,
-  // and any /assets/* path map directly; unknown client-side routes fall back
-  // to index.html so TanStack Router can handle a hard refresh. Missing
-  // /assets/* paths stay 404 instead of returning HTML to a JS/CSS request.
-  // In dev mode IS_EMBEDDED=false and these handlers are no-ops, letting the
-  // vite dev server serve the SPA on its own port.
-  if (IS_EMBEDDED) {
-    app.get('*', async (c) => {
-      if (c.req.path.startsWith('/api/') || c.req.path.startsWith('/ws/')) {
-        return c.json(
-          { ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` },
-          404,
-        )
-      }
-      const response = await getEmbeddedFrontendResponse(c.req.path)
-      if (response !== null) return response
-      return c.json(
-        { ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` },
-        404,
-      )
-    })
-  }
-
-  app.notFound((c) =>
-    c.json({ ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` }, 404),
-  )
-
-  return app
+  mountDocsRoutes(app, deps) // RFC-247 D17
 }

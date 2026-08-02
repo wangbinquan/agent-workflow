@@ -5,7 +5,14 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { PAT_TOKEN_PREFIX, type Permission, type PatPublic } from '@agent-workflow/shared'
+import {
+  grantableMatrixPoints,
+  PAT_TOKEN_PREFIX,
+  type PatPublic,
+  type PatPurpose,
+  type Permission,
+  type Role,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { userPats, users } from '@/db/schema'
 import { triggerRevalidation } from '@/ws/revalidationHook'
@@ -15,8 +22,40 @@ export interface CreatePatInput {
   userId: string
   name: string
   scopes?: ReadonlyArray<Permission>
+  /**
+   * RFC-247 D2 — REQUIRED, with no default on purpose.
+   *
+   * A store-level default would have to guess, and both guesses are wrong in
+   * some caller: `mcp_only` silently breaks every existing REST automation
+   * fixture, `general` silently widens tokens the UI meant to scope to MCP.
+   * Making it explicit moves the mistake to compile time, where the call site
+   * that knows the answer is right there.
+   */
+  purpose: PatPurpose
   expiresAt?: number | null
   now?: number
+}
+
+/** Raised when a requested matrix contains points the owner's role cannot grant. */
+export class PatMatrixError extends Error {
+  constructor(readonly ungrantable: ReadonlyArray<Permission>) {
+    super(`matrix contains points this role cannot grant: ${ungrantable.join(', ')}`)
+  }
+}
+
+/**
+ * RFC-247 AC-7 — reject an over-reaching matrix instead of silently dropping it.
+ *
+ * `resolveTokenPermissions` already intersects with the role baseline, so an
+ * ungrantable point simply would not take effect. Silently narrowing is the
+ * wrong behaviour at CREATION time though: the user walks away believing they
+ * issued a token that can do something it cannot, and only finds out when the
+ * automation fails somewhere far from here. Refuse, and name what was refused.
+ */
+export function assertMatrixGrantable(role: Role, scopes: ReadonlyArray<Permission>): void {
+  const grantable = new Set(grantableMatrixPoints(role))
+  const bad = scopes.filter((p) => !grantable.has(p))
+  if (bad.length > 0) throw new PatMatrixError(bad)
 }
 
 export interface CreatePatResult {
@@ -38,6 +77,7 @@ export async function createPat(input: CreatePatInput): Promise<CreatePatResult>
   const token = generatePatToken()
   const id = ulid()
   const scopes = input.scopes ? Array.from(input.scopes) : []
+  const purpose: PatPurpose = input.purpose
   const row = {
     id,
     userId: input.userId,
@@ -48,6 +88,7 @@ export async function createPat(input: CreatePatInput): Promise<CreatePatResult>
     lastUsedAt: null,
     expiresAt: input.expiresAt ?? null,
     revokedAt: null,
+    purpose,
   }
   await input.db.insert(userPats).values(row)
   return {
@@ -56,6 +97,7 @@ export async function createPat(input: CreatePatInput): Promise<CreatePatResult>
       id,
       name: row.name,
       scopes,
+      purpose,
       createdAt: row.createdAt,
       lastUsedAt: null,
       expiresAt: row.expiresAt,
@@ -67,6 +109,8 @@ export async function createPat(input: CreatePatInput): Promise<CreatePatResult>
 export interface ResolvedPat {
   user: typeof users.$inferSelect
   scopes: ReadonlyArray<Permission>
+  /** RFC-247 D2 — the purpose gate reads this; see auth/session.ts. */
+  purpose: PatPurpose
   patId: string
   /** RFC-212 — surfaced so a WS credential can carry the PAT's expiry. */
   expiresAt: number | null
@@ -105,6 +149,7 @@ export async function lookupActivePatByHash(
   return {
     user,
     scopes: safeParseScopes(pat.scopesJson),
+    purpose: (pat.purpose === 'general' ? 'general' : 'mcp_only') as PatPurpose,
     patId: pat.id,
     expiresAt: pat.expiresAt,
   }
@@ -130,6 +175,27 @@ export async function revokePat(
   triggerRevalidation(db, 'pat-revoked')
 }
 
+/**
+ * RFC-247 D8 — every token on the platform, for the administrator's read-only
+ * inventory. Carries `userId` (unlike `PatPublic`) because "whose token is
+ * this" is the entire point of the admin view; the hash is never included, so
+ * this cannot become a credential-recovery path.
+ */
+export async function listAllPats(db: DbClient): Promise<Array<PatPublic & { userId: string }>> {
+  const rows = await db.select().from(userPats)
+  return rows.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    name: r.name,
+    scopes: safeParseScopes(r.scopesJson),
+    purpose: (r.purpose === 'general' ? 'general' : 'mcp_only') as PatPurpose,
+    createdAt: r.createdAt,
+    lastUsedAt: r.lastUsedAt,
+    expiresAt: r.expiresAt,
+    revokedAt: r.revokedAt,
+  }))
+}
+
 export async function listPatsForUser(db: DbClient, userId: string): Promise<PatPublic[]> {
   const rows = await db
     .select()
@@ -139,6 +205,7 @@ export async function listPatsForUser(db: DbClient, userId: string): Promise<Pat
     id: r.id,
     name: r.name,
     scopes: safeParseScopes(r.scopesJson),
+    purpose: (r.purpose === 'general' ? 'general' : 'mcp_only') as PatPurpose,
     createdAt: r.createdAt,
     lastUsedAt: r.lastUsedAt,
     expiresAt: r.expiresAt,

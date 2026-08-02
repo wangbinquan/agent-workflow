@@ -84,7 +84,9 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
   // save. It is also `satisfies Record<keyof SETTINGS_CONFIG_SCOPE_IDS, …>`,
   // which is why the scope id above has to exist first.
   git: ['gitRecurseSubmodules', 'gitSubmoduleJobs', 'gitSubmoduleRemote', 'submoduleAutoRefresh'],
-  network: ['bindHost', 'bindPort'],
+  // RFC-247 — the external-access surface switch lives with the other network
+  // knobs: it governs whether the outside world can drive this platform at all.
+  network: ['bindHost', 'bindPort', 'mcpSurfaceEnabled'],
   appearance: ['theme', 'language'],
   rendering: ['plantumlEndpoint', 'plantumlAuthHeader'],
 } as const satisfies Record<keyof typeof SETTINGS_CONFIG_SCOPE_IDS, readonly (keyof ConfigPatch)[]>

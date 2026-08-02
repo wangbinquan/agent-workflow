@@ -26,65 +26,96 @@ import {
 import { validateBackupForStage } from '@/services/restore'
 import { Paths } from '@/util/paths'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 
 export function mountRestoreRoutes(app: Hono, _deps: AppDeps): void {
-  app.get('/api/restore/pending', (c) => {
-    if (actorOf(c).user.role !== 'admin') return c.json({ error: 'admin only' }, 403)
-    return c.json({ pending: readPendingRestore(), failed: listFailedRestores() })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/restore/pending',
+      permissions: ['backup:run'],
+      tokenAccess: 'allow',
+      summary: 'Pending restore state',
+    },
+    (c) => {
+      if (actorOf(c).user.role !== 'admin') return c.json({ error: 'admin only' }, 403)
+      return c.json({ pending: readPendingRestore(), failed: listFailedRestores() })
+    },
+  )
 
-  app.delete('/api/restore/pending', (c) => {
-    if (actorOf(c).user.role !== 'admin') return c.json({ error: 'admin only' }, 403)
-    const cleared = clearPendingRestore()
-    return c.json({ cleared })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/restore/pending',
+      permissions: ['backup:run'],
+      tokenAccess: 'allow',
+      summary: 'Disarm a pending restore',
+    },
+    (c) => {
+      if (actorOf(c).user.role !== 'admin') return c.json({ error: 'admin only' }, 403)
+      const cleared = clearPendingRestore()
+      return c.json({ cleared })
+    },
+  )
 
-  app.post('/api/restore', async (c) => {
-    if (actorOf(c).user.role !== 'admin') return c.json({ error: 'admin only' }, 403)
-    let form: Awaited<ReturnType<Request['formData']>>
-    try {
-      form = await c.req.raw.formData()
-    } catch (err) {
-      return c.json(
-        { error: `failed to parse multipart body: ${err instanceof Error ? err.message : err}` },
-        400,
-      )
-    }
-    const file = form.get('file')
-    if (file === null || typeof file === 'string') {
-      return c.json({ error: "multipart field 'file' (a backup .tar.gz) is required" }, 400)
-    }
-
-    // Impl-gate P2-16: a unique per-request path (the old fixed upload.tar.gz +
-    // rm of the whole dir made concurrent uploads clobber/delete each other).
-    const uploadDir = join(Paths.root, '.restore-upload')
-    mkdirSync(uploadDir, { recursive: true })
-    const tmpTar = join(uploadDir, `upload-${ulid()}.tar.gz`)
-    try {
-      writeFileSync(tmpTar, Buffer.from(await file.arrayBuffer()))
-
-      let migrationsFolder = Paths.migrationsDir
-      if (IS_EMBEDDED) {
-        migrationsFolder = join(Paths.root, 'runtime', 'migrations')
-        await extractMigrationsTo(migrationsFolder)
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/restore',
+      permissions: ['backup:run'],
+      tokenAccess: 'allow',
+      summary: 'Arm a restore',
+    },
+    async (c) => {
+      if (actorOf(c).user.role !== 'admin') return c.json({ error: 'admin only' }, 403)
+      let form: Awaited<ReturnType<Request['formData']>>
+      try {
+        form = await c.req.raw.formData()
+      } catch (err) {
+        return c.json(
+          { error: `failed to parse multipart body: ${err instanceof Error ? err.message : err}` },
+          400,
+        )
+      }
+      const file = form.get('file')
+      if (file === null || typeof file === 'string') {
+        return c.json({ error: "multipart field 'file' (a backup .tar.gz) is required" }, 400)
       }
 
-      // Impl-gate P1-1: full stage-depth validation (db.sqlite present +
-      // quick_check + downgrade gate) — NOT just the manifest read. Staging an
-      // arbitrary/corrupt tarball used to arm a deterministic boot-fail loop.
-      const plan = await validateBackupForStage(tmpTar, { migrationsFolder })
+      // Impl-gate P2-16: a unique per-request path (the old fixed upload.tar.gz +
+      // rm of the whole dir made concurrent uploads clobber/delete each other).
+      const uploadDir = join(Paths.root, '.restore-upload')
+      mkdirSync(uploadDir, { recursive: true })
+      const tmpTar = join(uploadDir, `upload-${ulid()}.tar.gz`)
+      try {
+        writeFileSync(tmpTar, Buffer.from(await file.arrayBuffer()))
 
-      // Stage for the next boot; the swap runs while the DB is closed.
-      stagePendingRestore(tmpTar, { now: Date.now() })
-      return c.json({
-        status: 'staged',
-        direction: plan.direction,
-        message: 'restart the daemon to apply the restore (agent-workflow stop && start)',
-      })
-    } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
-    } finally {
-      rmSync(tmpTar, { force: true })
-    }
-  })
+        let migrationsFolder = Paths.migrationsDir
+        if (IS_EMBEDDED) {
+          migrationsFolder = join(Paths.root, 'runtime', 'migrations')
+          await extractMigrationsTo(migrationsFolder)
+        }
+
+        // Impl-gate P1-1: full stage-depth validation (db.sqlite present +
+        // quick_check + downgrade gate) — NOT just the manifest read. Staging an
+        // arbitrary/corrupt tarball used to arm a deterministic boot-fail loop.
+        const plan = await validateBackupForStage(tmpTar, { migrationsFolder })
+
+        // Stage for the next boot; the swap runs while the DB is closed.
+        stagePendingRestore(tmpTar, { now: Date.now() })
+        return c.json({
+          status: 'staged',
+          direction: plan.direction,
+          message: 'restart the daemon to apply the restore (agent-workflow stop && start)',
+        })
+      } catch (err) {
+        return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
+      } finally {
+        rmSync(tmpTar, { force: true })
+      }
+    },
+  )
 }

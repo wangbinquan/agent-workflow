@@ -139,7 +139,7 @@ describe('WS upgrade — RFC-036 multi-token auth', () => {
 
   test('PAT (aws_pat_…) upgrades the connection', async () => {
     const userId = await seedUser(h.db)
-    const { token } = await createPat({ db: h.db, userId, name: 'test' })
+    const { token } = await createPat({ db: h.db, userId, name: 'test', purpose: 'general' })
     const out = await probeUpgrade(`${h.baseUrl}/ws/tasks?token=${encodeURIComponent(token)}`)
     expect(out.outcome).toBe('open')
   })

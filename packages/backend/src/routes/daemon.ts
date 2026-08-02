@@ -12,11 +12,22 @@
 
 import type { Hono } from 'hono'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { readDaemonInfo } from '@/util/daemonInfo'
 import { Paths } from '@/util/paths'
 
 export function mountDaemonRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/daemon', (c) => {
-    return c.json(readDaemonInfo(deps.daemonInfoPath ?? Paths.daemonInfo))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/daemon',
+      permissions: ['settings:read'],
+      tokenAccess: 'allow',
+      summary: 'Daemon bind host/port and process info',
+    },
+    (c) => {
+      return c.json(readDaemonInfo(deps.daemonInfoPath ?? Paths.daemonInfo))
+    },
+  )
 }

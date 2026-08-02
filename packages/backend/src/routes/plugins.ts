@@ -14,6 +14,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import {
   createPlugin,
   deletePlugin,
@@ -59,183 +60,267 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     return plugin
   }
 
-  app.get('/api/plugins', async (c) => {
-    const visible = await filterVisibleRows(
-      deps.db,
-      actorOf(c),
-      'plugin',
-      await listPlugins(deps.db),
-    )
-    return c.json(visible.map(withPluginOperationConfigHash))
-  })
-
-  app.get('/api/plugins/:id', async (c) => {
-    return c.json(
-      withPluginOperationConfigHash(await loadVisiblePlugin(actorOf(c), c.req.param('id'))),
-    )
-  })
-
-  app.post('/api/plugins', async (c) => {
-    const parsed = CreatePluginSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('plugin-invalid', 'invalid plugin payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    try {
-      const actor = actorOf(c)
-      const created = await createPlugin(
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/plugins',
+      permissions: ['plugins:read'],
+      tokenAccess: 'allow',
+      summary: 'List plugins visible to the caller',
+    },
+    async (c) => {
+      const visible = await filterVisibleRows(
         deps.db,
-        parsed.data,
-        {},
-        { ownerUserId: actor.user.id, actor },
+        actorOf(c),
+        'plugin',
+        await listPlugins(deps.db),
       )
-      return c.json(withPluginOperationConfigHash(created), 201)
-    } catch (error) {
-      throw wrapInstallErrors(error)
-    }
-  })
+      return c.json(visible.map(withPluginOperationConfigHash))
+    },
+  )
 
-  app.put('/api/plugins/:id', async (c) => {
-    const parsed = UpdatePluginRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('plugin-invalid', 'invalid plugin patch', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-    try {
-      const updated = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/plugins/:id',
+      permissions: ['plugins:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one plugin',
+    },
+    async (c) => {
+      return c.json(
+        withPluginOperationConfigHash(await loadVisiblePlugin(actorOf(c), c.req.param('id'))),
+      )
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/plugins',
+      permissions: ['plugins:create'],
+      tokenAccess: 'allow',
+      summary: 'Install a plugin',
+    },
+    async (c) => {
+      const parsed = CreatePluginSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('plugin-invalid', 'invalid plugin payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      try {
+        const actor = actorOf(c)
+        const created = await createPlugin(
+          deps.db,
+          parsed.data,
+          {},
+          { ownerUserId: actor.user.id, actor },
+        )
+        return c.json(withPluginOperationConfigHash(created), 201)
+      } catch (error) {
+        throw wrapInstallErrors(error)
+      }
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/plugins/:id',
+      permissions: ['plugins:update'],
+      tokenAccess: 'allow',
+      summary: 'Replace a plugin',
+    },
+    async (c) => {
+      const parsed = UpdatePluginRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('plugin-invalid', 'invalid plugin patch', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const initial = await loadVisiblePlugin(actor, c.req.param('id'))
+      try {
+        const updated = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
+          const fresh = await loadFreshOwned(actor, initial.id)
+          assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+          const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
+          return updatePlugin(deps.db, initial.id, patch)
+        })
+        return c.json(withPluginOperationConfigHash(updated))
+      } catch (error) {
+        throw wrapInstallErrors(error)
+      }
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/plugins/:id',
+      permissions: ['plugins:delete'],
+      tokenAccess: 'allow',
+      summary: 'Delete a plugin',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const initial = await loadVisiblePlugin(actor, c.req.param('id'))
+      const deleteBody = await readDeleteBody(c)
+      assertDeleteConfirm(deleteBody, initial.name, 'plugin')
+      const parsed = DeletePluginSchema.safeParse(deleteBody)
+      if (!parsed.success) {
+        throw new ValidationError('plugin-delete-invalid', 'invalid plugin delete payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      await pluginOperationCoordinator.runExclusive(initial.id, async () => {
         const fresh = await loadFreshOwned(actor, initial.id)
         assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-        const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
-        return updatePlugin(deps.db, initial.id, patch)
+        // RFC-222 (D5, N-6): confirm against the fresh name in the exclusive section.
+        assertDeleteConfirm(parsed.data, fresh.name, 'plugin')
+        await deletePlugin(deps.db, initial.id, actor)
       })
-      return c.json(withPluginOperationConfigHash(updated))
-    } catch (error) {
-      throw wrapInstallErrors(error)
-    }
-  })
+      return c.body(null, 204)
+    },
+  )
 
-  app.delete('/api/plugins/:id', async (c) => {
-    const actor = actorOf(c)
-    const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-    const deleteBody = await readDeleteBody(c)
-    assertDeleteConfirm(deleteBody, initial.name, 'plugin')
-    const parsed = DeletePluginSchema.safeParse(deleteBody)
-    if (!parsed.success) {
-      throw new ValidationError('plugin-delete-invalid', 'invalid plugin delete payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/plugins/:id/rename',
+      permissions: ['plugins:update'],
+      tokenAccess: 'allow',
+      summary: 'Rename a plugin',
+    },
+    async (c) => {
+      const parsed = RenamePluginRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('plugin-rename-invalid', 'invalid rename payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const initial = await loadVisiblePlugin(actor, c.req.param('id'))
+      const renamed = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
+        const fresh = await loadFreshOwned(actor, initial.id)
+        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+        const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
+        return renamePlugin(deps.db, initial.id, rename)
       })
-    }
-    await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-      const fresh = await loadFreshOwned(actor, initial.id)
-      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-      // RFC-222 (D5, N-6): confirm against the fresh name in the exclusive section.
-      assertDeleteConfirm(parsed.data, fresh.name, 'plugin')
-      await deletePlugin(deps.db, initial.id, actor)
-    })
-    return c.body(null, 204)
-  })
+      return c.json(withPluginOperationConfigHash(renamed))
+    },
+  )
 
-  app.post('/api/plugins/:id/rename', async (c) => {
-    const parsed = RenamePluginRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('plugin-rename-invalid', 'invalid rename payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-    const renamed = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-      const fresh = await loadFreshOwned(actor, initial.id)
-      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-      const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
-      return renamePlugin(deps.db, initial.id, rename)
-    })
-    return c.json(withPluginOperationConfigHash(renamed))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/plugins/:id/check-update',
+      permissions: ['plugins:execute'],
+      tokenAccess: 'allow',
+      summary: 'Check upstream for a newer version',
+    },
+    async (c) => {
+      const parsed = PluginOperationRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('plugin-operation-invalid', 'expectedConfigHash is required', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const initial = await loadVisiblePlugin(actor, c.req.param('id'))
+      await requireResourceOwner(deps.db, actor, 'plugin', initial)
+      assertOperationSupported(initial)
 
-  app.post('/api/plugins/:id/check-update', async (c) => {
-    const parsed = PluginOperationRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('plugin-operation-invalid', 'expectedConfigHash is required', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-    await requireResourceOwner(deps.db, actor, 'plugin', initial)
-    assertOperationSupported(initial)
+      try {
+        const receipt =
+          await pluginOperationCoordinator.runDeduplicatedOperation<PluginUpdateCheck>(
+            initial.id,
+            parsed.data.expectedConfigHash,
+            async () => {
+              const captured = await pluginOperationCoordinator.runExclusive(
+                initial.id,
+                async () => {
+                  const fresh = await loadFreshOwned(actor, initial.id)
+                  assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+                  assertOperationSupported(fresh)
+                  return fresh
+                },
+              )
+              const result = await checkForUpdate(captured.id, captured.spec, captured.cachedPath)
+              return pluginOperationCoordinator.runExclusive(captured.id, async () => {
+                const current = await loadFreshOwned(actor, captured.id)
+                assertExpectedHash(current, parsed.data.expectedConfigHash)
+                return {
+                  available: result.available,
+                  current: captured.resolvedVersion,
+                  latest: result.latest,
+                  identityStatus: result.identityStatus,
+                  configHashUsed: parsed.data.expectedConfigHash,
+                }
+              })
+            },
+          )
+        return c.json(receipt)
+      } catch (error) {
+        throw wrapInstallErrors(error)
+      }
+    },
+  )
 
-    try {
-      const receipt = await pluginOperationCoordinator.runDeduplicatedOperation<PluginUpdateCheck>(
-        initial.id,
-        parsed.data.expectedConfigHash,
-        async () => {
-          const captured = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-            const fresh = await loadFreshOwned(actor, initial.id)
-            assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-            assertOperationSupported(fresh)
-            return fresh
-          })
-          const result = await checkForUpdate(captured.id, captured.spec, captured.cachedPath)
-          return pluginOperationCoordinator.runExclusive(captured.id, async () => {
-            const current = await loadFreshOwned(actor, captured.id)
-            assertExpectedHash(current, parsed.data.expectedConfigHash)
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/plugins/:id/upgrade',
+      permissions: ['plugins:update'],
+      tokenAccess: 'allow',
+      summary: 'Upgrade a plugin to a newer version',
+    },
+    async (c) => {
+      const parsed = PluginOperationRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('plugin-operation-invalid', 'expectedConfigHash is required', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const initial = await loadVisiblePlugin(actor, c.req.param('id'))
+      try {
+        const receipt = await pluginOperationCoordinator.runExclusive<PluginUpgradeResult>(
+          initial.id,
+          async () => {
+            const captured = await loadFreshOwned(actor, initial.id)
+            assertExpectedHash(captured, parsed.data.expectedConfigHash)
+            assertOperationSupported(captured)
+
+            // Upgrade authorization never trusts a frontend cache. A legacy
+            // generation with unknown identity is allowed to reinstall once to
+            // establish a manifest baseline; a known no-change stays a no-op.
+            const check = await checkForUpdate(captured.id, captured.spec, captured.cachedPath)
+            const updated =
+              check.identityStatus === 'known' && !check.available
+                ? captured
+                : await reinstallPlugin(deps.db, captured.id)
             return {
-              available: result.available,
-              current: captured.resolvedVersion,
-              latest: result.latest,
-              identityStatus: result.identityStatus,
               configHashUsed: parsed.data.expectedConfigHash,
+              resource: withPluginOperationConfigHash(updated),
             }
-          })
-        },
-      )
-      return c.json(receipt)
-    } catch (error) {
-      throw wrapInstallErrors(error)
-    }
-  })
-
-  app.post('/api/plugins/:id/upgrade', async (c) => {
-    const parsed = PluginOperationRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('plugin-operation-invalid', 'expectedConfigHash is required', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-    try {
-      const receipt = await pluginOperationCoordinator.runExclusive<PluginUpgradeResult>(
-        initial.id,
-        async () => {
-          const captured = await loadFreshOwned(actor, initial.id)
-          assertExpectedHash(captured, parsed.data.expectedConfigHash)
-          assertOperationSupported(captured)
-
-          // Upgrade authorization never trusts a frontend cache. A legacy
-          // generation with unknown identity is allowed to reinstall once to
-          // establish a manifest baseline; a known no-change stays a no-op.
-          const check = await checkForUpdate(captured.id, captured.spec, captured.cachedPath)
-          const updated =
-            check.identityStatus === 'known' && !check.available
-              ? captured
-              : await reinstallPlugin(deps.db, captured.id)
-          return {
-            configHashUsed: parsed.data.expectedConfigHash,
-            resource: withPluginOperationConfigHash(updated),
-          }
-        },
-      )
-      return c.json(receipt)
-    } catch (error) {
-      throw wrapInstallErrors(error)
-    }
-  })
+          },
+        )
+        return c.json(receipt)
+      } catch (error) {
+        throw wrapInstallErrors(error)
+      }
+    },
+  )
 
   mountAclEndpoints(app, deps, {
     type: 'plugin',

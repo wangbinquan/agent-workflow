@@ -23,7 +23,7 @@ import '../src/i18n'
 // actor's ROLE (memory:approve moved into the user baseline).
 vi.mock('../src/hooks/useActor', () => ({
   usePermission: (perm: string) =>
-    perm === 'memory:approve' ? mockIsAdmin : perm === 'memory:edit' ? mockIsAdmin : false,
+    perm === 'memory:create' ? mockIsAdmin : perm === 'memory:update' ? mockIsAdmin : false,
   useActor: () => ({
     data: {
       user: {

@@ -14,6 +14,7 @@ import { FusionStatusSchema, LaunchFusionSchema, RejectFusionSchema } from '@age
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import {
   approveFusion,
   awaitingApprovalFusionOwners,
@@ -52,80 +53,153 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
     }
   }
 
-  app.post('/api/fusions', async (c) => {
-    const parsed = LaunchFusionSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('fusion-invalid', 'invalid fusion payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const fusion = await createFusion(parsed.data, fusionDeps(), actorOf(c))
-    return c.json(fusion, 201)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/fusions',
+      permissions: ['tasks:execute', 'skills:update'],
+      tokenAccess: 'allow',
+      summary: 'Launch a memory→skill fusion (runs an agent)',
+    },
+    async (c) => {
+      const parsed = LaunchFusionSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('fusion-invalid', 'invalid fusion payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const fusion = await createFusion(parsed.data, fusionDeps(), actorOf(c))
+      return c.json(fusion, 201)
+    },
+  )
 
-  app.get('/api/fusions', async (c) => {
-    const actor = actorOf(c)
-    const skillId = c.req.query('skillId')
-    // Validate ?status against the enum (no `as` cast — RFC-054 W1-7); an
-    // unknown value is treated as "no status filter".
-    const statusRaw = c.req.query('status')
-    const statusParsed =
-      statusRaw !== undefined ? FusionStatusSchema.safeParse(statusRaw) : undefined
-    const status = statusParsed?.success === true ? statusParsed.data : undefined
-    // listFusionSummaries pushes status/skillId into SQL and never reads the
-    // proposedDiff, so the inbox's 15s poll stays cheap. Full diff: /:id.
-    const all = await listFusionSummaries(fusionDeps(), {
-      ...(skillId ? { skillId } : {}),
-      ...(status ? { status } : {}),
-    })
-    const visible = isResourceAdminActor(actor)
-      ? all
-      : all.filter((f) => f.ownerUserId === actor.user.id)
-    return c.json(visible)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/fusions',
+      permissions: ['skills:read'],
+      tokenAccess: 'allow',
+      summary: 'List fusions',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const skillId = c.req.query('skillId')
+      // Validate ?status against the enum (no `as` cast — RFC-054 W1-7); an
+      // unknown value is treated as "no status filter".
+      const statusRaw = c.req.query('status')
+      const statusParsed =
+        statusRaw !== undefined ? FusionStatusSchema.safeParse(statusRaw) : undefined
+      const status = statusParsed?.success === true ? statusParsed.data : undefined
+      // listFusionSummaries pushes status/skillId into SQL and never reads the
+      // proposedDiff, so the inbox's 15s poll stays cheap. Full diff: /:id.
+      const all = await listFusionSummaries(fusionDeps(), {
+        ...(skillId ? { skillId } : {}),
+        ...(status ? { status } : {}),
+      })
+      const visible = isResourceAdminActor(actor)
+        ? all
+        : all.filter((f) => f.ownerUserId === actor.user.id)
+      return c.json(visible)
+    },
+  )
 
   // Left-nav inbox badge. Reconciles running fusions (lazy done-detection), so
   // a fusion whose engine task just finished is surfaced within one poll. MUST
   // precede '/api/fusions/:id' so 'pending-count' isn't captured as an id.
   // Uses a narrow (id, ownerUserId) projection — no diff read/parse per poll.
-  app.get('/api/fusions/pending-count', async (c) => {
-    const actor = actorOf(c)
-    const owners = await awaitingApprovalFusionOwners(fusionDeps())
-    const count = isResourceAdminActor(actor)
-      ? owners.length
-      : owners.filter((o) => o.ownerUserId === actor.user.id).length
-    return c.json({ count })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/fusions/pending-count',
+      permissions: ['skills:read'],
+      tokenAccess: 'allow',
+      summary: 'Count of fusions awaiting approval',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const owners = await awaitingApprovalFusionOwners(fusionDeps())
+      const count = isResourceAdminActor(actor)
+        ? owners.length
+        : owners.filter((o) => o.ownerUserId === actor.user.id).length
+      return c.json({ count })
+    },
+  )
 
-  app.get('/api/fusions/:id', async (c) => {
-    const actor = actorOf(c)
-    const fusion = await getFusion(fusionDeps(), c.req.param('id'))
-    // RFC-099-style existence isolation: not-owner / not-found are identical.
-    if (fusion === null || (!isResourceAdminActor(actor) && fusion.ownerUserId !== actor.user.id)) {
-      throw new NotFoundError('fusion-not-found', `fusion '${c.req.param('id')}' not found`)
-    }
-    return c.json(fusion)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/fusions/:id',
+      permissions: ['skills:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one fusion',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const fusion = await getFusion(fusionDeps(), c.req.param('id'))
+      // RFC-099-style existence isolation: not-owner / not-found are identical.
+      if (
+        fusion === null ||
+        (!isResourceAdminActor(actor) && fusion.ownerUserId !== actor.user.id)
+      ) {
+        throw new NotFoundError('fusion-not-found', `fusion '${c.req.param('id')}' not found`)
+      }
+      return c.json(fusion)
+    },
+  )
 
-  app.post('/api/fusions/:id/approve', async (c) => {
-    return c.json(await approveFusion(fusionDeps(), c.req.param('id'), actorOf(c)))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/fusions/:id/approve',
+      permissions: ['skills:update', 'memory:update'],
+      tokenAccess: 'allow',
+      summary: 'Approve a fusion (bumps the skill version and fuses memory)',
+    },
+    async (c) => {
+      return c.json(await approveFusion(fusionDeps(), c.req.param('id'), actorOf(c)))
+    },
+  )
 
-  app.post('/api/fusions/:id/reject', async (c) => {
-    const parsed = RejectFusionSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('fusion-reject-invalid', 'invalid reject payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    return c.json(
-      await rejectFusion(fusionDeps(), c.req.param('id'), parsed.data.feedback, actorOf(c)),
-    )
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/fusions/:id/reject',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Reject a fusion and re-run it',
+    },
+    async (c) => {
+      const parsed = RejectFusionSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('fusion-reject-invalid', 'invalid reject payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      return c.json(
+        await rejectFusion(fusionDeps(), c.req.param('id'), parsed.data.feedback, actorOf(c)),
+      )
+    },
+  )
 
-  app.post('/api/fusions/:id/cancel', async (c) => {
-    return c.json(await cancelFusion(fusionDeps(), c.req.param('id'), actorOf(c)))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/fusions/:id/cancel',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Cancel a fusion',
+    },
+    async (c) => {
+      return c.json(await cancelFusion(fusionDeps(), c.req.param('id'), actorOf(c)))
+    },
+  )
 }
 
 async function safeJson(req: Request): Promise<unknown> {

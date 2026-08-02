@@ -172,11 +172,17 @@ describe('/account security center', () => {
     expect(screen.getByRole('heading', { name: enUS.account.sessions })).toBeTruthy()
   })
 
-  test('existing PATs are retirement-only and revoke through confirmation', async () => {
+  // RFC-247 D1 supersedes RFC-221's retirement-only state: this test used to
+  // assert the "生成已关闭" banner and the ABSENCE of any creation control.
+  // Issuing is available again (the catalog can now express a narrow token), so
+  // what still needs locking is that revoke keeps working and stays behind a
+  // confirmation — the half that was never about the catalog.
+  test('PATs revoke through confirmation, alongside an available creation control', async () => {
     const pat = {
       id: 'pat-1',
       name: 'legacy-ci',
       scopes: ['account:self'] as const,
+      purpose: 'general' as const,
       createdAt: 1_700_000_000_000,
       lastUsedAt: null,
       expiresAt: null,
@@ -205,9 +211,9 @@ describe('/account security center', () => {
     renderAccount(queryClient(), '/account?section=tokens')
 
     expect(await screen.findByText('legacy-ci')).toBeTruthy()
-    expect(screen.getByText(enUS.account.tokensRetiredTitle)).toBeTruthy()
+    expect(screen.getByRole('button', { name: enUS.account.token.create })).toBeTruthy()
+    // The creation form is behind the dialog, not inline on the panel.
     expect(screen.queryByRole('textbox')).toBeNull()
-    expect(screen.queryByRole('button', { name: enUS.account.generate })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: enUS.account.revoke }))
     const dialog = await screen.findByRole('dialog')

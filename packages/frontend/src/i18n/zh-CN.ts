@@ -762,6 +762,37 @@ export interface Resources {
     signedOutHint: string
   }
   // RFC-036 — /account self-service page.
+  apiDocs: {
+    title: string
+    subtitle: string
+    intro: string
+    quickStart: string
+    quickStartBody: string
+    connecting: string
+    toolsHeading: string
+    toolsIntro: string
+    restHeading: string
+    restIntro: string
+    permissionsHeading: string
+    permissionsIntro: string
+    alwaysGrantedHeading: string
+    alwaysGrantedIntro: string
+    resourcesHeading: string
+    resourcesIntro: string
+    colTool: string
+    colNeeds: string
+    colDescription: string
+    colMethod: string
+    colPath: string
+    colSummary: string
+    colOperation: string
+    colPermission: string
+    needsNothing: string
+    notAvailableToYou: string
+    adminOnly: string
+    resourceAdminOnly: string
+  }
+
   account: {
     title: string
     profile: string
@@ -783,9 +814,7 @@ export interface Resources {
     patNameCol: string
     patScopes: string
     patStatus: string
-    patShownOnce: string
     copy: string
-    generate: string
     revoke: string
     unlink: string
     noPats: string
@@ -800,36 +829,60 @@ export interface Resources {
     subject: string
     noIdentities: string
     patScopesLabel: string
-    patSelectAll: string
-    patSelectDefault: string
-    patSelectNone: string
-    patNoScopes: string
     patStatusActive: string
     patStatusRevoked: string
-    patGroup: {
-      spa: string
-      tasks: string
-      resourceRead: string
-      admin: string
-    }
-    patScope: {
-      accountSelf: { label: string; desc: string }
-      usersSearch: { label: string; desc: string }
-      runtimeRead: { label: string; desc: string }
-      tasksLaunch: { label: string; desc: string }
-      tasksReadOwn: { label: string; desc: string }
-      tasksCancelOwn: { label: string; desc: string }
-      agentsRead: { label: string; desc: string }
-      skillsRead: { label: string; desc: string }
-      mcpsRead: { label: string; desc: string }
-      pluginsRead: { label: string; desc: string }
-      workflowsRead: { label: string; desc: string }
-      reposRead: { label: string; desc: string }
-      usersRead: { label: string; desc: string }
-      usersWrite: { label: string; desc: string }
-      settingsRead: { label: string; desc: string }
-      settingsWrite: { label: string; desc: string }
-      tasksReadAll: { label: string; desc: string }
+    // RFC-247 — token issuance. Replaces the RFC-036 `patGroup` / `patScope`
+    // key trees, which described the hand-listed scope-group picker that
+    // RFC-221 removed; the matrix derives its labels from the shared permission
+    // catalog instead, so there is no per-point key tree to keep in sync.
+    token: {
+      create: string
+      docsLink: string
+      createTitle: string
+      createdTitle: string
+      nameHint: string
+      matrixLabel: string
+      cellLabel: string
+      resource: {
+        agents: string
+        skills: string
+        mcps: string
+        plugins: string
+        workflows: string
+        workgroups: string
+        tasks: string
+        'scheduled-tasks': string
+        repos: string
+        memory: string
+      }
+      verb: {
+        create: string
+        update: string
+        delete: string
+        execute: string
+      }
+      purposeLabel: string
+      purpose: { general: string; mcp_only: string }
+      purposeHint: { general: string; mcp_only: string }
+      templateLabel: string
+      templateHint: string
+      template: {
+        'read-only': string
+        'task-automation': string
+        full: string
+        custom: string
+      }
+      advanced: string
+      advancedHint: string
+      deleteWarningTitle: string
+      deleteWarningDescription: string
+      expiryLabel: string
+      expiryHint: string
+      expiry: { '30d': string; '90d': string; '365d': string; never: string }
+      shownOnceTitle: string
+      shownOnceDescription: string
+      copied: string
+      copyFailed: string
     }
     pleaseSignIn: string
     pleaseSignInDescription: string
@@ -864,8 +917,6 @@ export interface Resources {
     expires: string
     revokeSessionTitle: string
     revokeSessionDescription: string
-    tokensRetiredTitle: string
-    tokensRetiredDescription: string
     noPatsDescription: string
     created: string
     lastUsed: string
@@ -3750,6 +3801,9 @@ export interface Resources {
     bindPortHint: string
     bindPortCurrent: string
     bindPortUseCurrent: string
+    mcpSurfaceLabel: string
+    mcpSurfaceHint: string
+    mcpSurfaceDocsLink: string
     modelLoadFailed: string
     modelLoading: string
     modelRefresh: string
@@ -4984,6 +5038,43 @@ export const zhCN: Resources = {
     tokenIssue: '当前 Token 无访问权限',
     signedOutHint: '当前 Token 缺少 account:self 权限。点击退出登录。',
   },
+  apiDocs: {
+    title: 'API 与 MCP 接入',
+    subtitle: '本页内容由守护进程按当前路由表与工具注册表实时生成，不会与实现脱节。',
+    intro:
+      '本平台可以被外部模型和脚本远程驱动：MCP 走 `POST /api/mcp`，REST 走 `/api/*`。两条通道用同一枚个人访问令牌，权限也完全一致——令牌能做什么，两边就都能做什么。令牌在[账号页](/account)创建。',
+    quickStart: '快速开始',
+    quickStartBody:
+      '在账号页创建令牌时选择用途：**仅 MCP**（推荐给模型客户端）或 **REST API + MCP**。读取权限恒定开启，写入与执行按矩阵勾选，删除必须逐项显式勾选。',
+    connecting: '客户端配置',
+    toolsHeading: 'MCP 工具',
+    toolsIntro:
+      '`tools/list` 只返回当前令牌真正能调用的工具。下表列出全部工具；标注「当前角色不可用」的表示你的角色无法授出它所需的权限。',
+    restHeading: 'REST 端点',
+    restIntro:
+      '下表只列出令牌可达、且你的角色能够授权的端点。账号与 ACL 接口对所有令牌关闭，故不在此列。',
+    permissionsHeading: '权限矩阵',
+    permissionsIntro:
+      '你的角色可以授予令牌的档位。角色拿不到的档位不会出现在这里，也不会出现在账号页。',
+    alwaysGrantedHeading: '恒定开启的读取权限',
+    alwaysGrantedIntro: '任何有效令牌都带这些读取权限（可见范围仍受资源 ACL 约束），无需勾选。',
+    resourcesHeading: '资源类型',
+    resourcesIntro:
+      '`resource_read` / `resource_write` 支持的资源与操作。形状特殊的会在表格上方标注。',
+    colTool: '工具',
+    colNeeds: '需要权限',
+    colDescription: '说明',
+    colMethod: '方法',
+    colPath: '路径',
+    colSummary: '说明',
+    colOperation: '操作',
+    colPermission: '权限',
+    needsNothing: '无需额外权限',
+    notAvailableToYou: '当前角色不可用',
+    adminOnly: '仅管理员',
+    resourceAdminOnly: '仅资源管理员',
+  },
+
   account: {
     title: '我的账户',
     profile: '基本信息',
@@ -5005,9 +5096,7 @@ export const zhCN: Resources = {
     patNameCol: '名称',
     patScopes: '作用域',
     patStatus: '状态',
-    patShownOnce: '新令牌（请立即复制）',
     copy: '复制',
-    generate: '生成',
     revoke: '吊销',
     unlink: '解除绑定',
     noPats: '还没有任何令牌。',
@@ -5022,48 +5111,68 @@ export const zhCN: Resources = {
     subject: 'Subject',
     noIdentities: '还没有绑定任何身份。',
     patScopesLabel: '权限范围',
-    patSelectAll: '全选',
-    patSelectDefault: '默认',
-    patSelectNone: '清空',
-    patNoScopes: '请至少勾选一个权限。',
     patStatusActive: '有效',
     patStatusRevoked: '已吊销',
-    patGroup: {
-      spa: 'Web 访问 — 使用此 Token 登录网页时需要',
-      tasks: '任务',
-      resourceRead: '只读资源',
-      admin: '管理员权限 — 仅在你的角色为 admin 时实际生效',
-    },
-    patScope: {
-      accountSelf: {
-        label: '账户自助',
-        desc: '读取 /api/auth/me、改自己密码、管理自己的 PAT 和会话。',
+    token: {
+      create: '创建令牌',
+      docsLink: '接入文档',
+      createTitle: '创建访问令牌',
+      createdTitle: '令牌已创建',
+      nameHint: '给它一个能看出用途的名字，例如哪台机器、哪条流水线。吧名字只在这里显示。',
+      matrixLabel: '权限矩阵',
+      cellLabel: '{{resource}}：{{verb}}',
+      resource: {
+        agents: '代理',
+        skills: '技能',
+        mcps: 'MCP',
+        plugins: '插件',
+        workflows: '工作流',
+        workgroups: '工作组',
+        tasks: '任务',
+        'scheduled-tasks': '定时任务',
+        repos: '仓库',
+        memory: '记忆',
       },
-      usersSearch: {
-        label: '搜索用户',
-        desc: 'launcher / collaborators 选用户时需要。仅返回公开字段。',
+      verb: {
+        create: '新建',
+        update: '修改',
+        delete: '删除',
+        execute: '执行',
       },
-      runtimeRead: {
-        label: '运行时状态',
-        desc: '首页运行时小圆点和 /settings 运行时面板依赖这条。',
+      purposeLabel: '用途',
+      purpose: {
+        general: 'REST API + MCP',
+        mcp_only: '仅 MCP',
       },
-      tasksLaunch: { label: '启动任务', desc: '提交 POST /api/tasks 启动新任务。' },
-      tasksReadOwn: { label: '查看自己的任务', desc: '查看你 owner 或被加入协作的任务。' },
-      tasksCancelOwn: { label: '取消自己的任务', desc: '中止你 owner 的任务。' },
-      agentsRead: { label: '浏览 Agents', desc: '读取 agent 列表 / 详情。' },
-      skillsRead: { label: '浏览 Skills', desc: '读取 skill 列表 / 详情。' },
-      mcpsRead: { label: '浏览 MCP', desc: '读取 MCP 列表 / 详情 / 探针结果。' },
-      pluginsRead: { label: '浏览插件', desc: '读取 opencode 插件列表 / 详情。' },
-      workflowsRead: { label: '浏览工作流', desc: '读取 workflow 列表 / 定义。' },
-      reposRead: { label: '浏览远端仓', desc: '读取 cached_repos 列表 / 同步状态。' },
-      usersRead: { label: '读取用户列表', desc: '/api/users 完整字段（含 email、上次登录）。' },
-      usersWrite: { label: '管理用户', desc: '新建 / 编辑 / 停用 / 重置密码。' },
-      settingsRead: { label: '读取设置', desc: '/api/config 完整字段。' },
-      settingsWrite: { label: '修改设置', desc: 'PUT /api/config 改全局配置。' },
-      tasksReadAll: {
-        label: '查看所有任务',
-        desc: '不止 owner 或 collaborator —— 整库可见。仅管理员。',
+      purposeHint: {
+        general: '可调用 REST API，也可接入 MCP。',
+        mcp_only: '只能接入 MCP；直接调 /api/* 会被拒。模型客户端选这一档。',
       },
+      templateLabel: '权限模板',
+      templateHint:
+        '读取权限始终开启（不超过你自己的可见范围），模板只决定写入与执行。任何模板都不含删除。',
+      template: {
+        'read-only': '只读',
+        'task-automation': '任务自动化',
+        full: '完整（不含删除）',
+        custom: '自定义',
+      },
+      advanced: '逐项选择权限',
+      advancedHint: '只列出你当前角色真正拥有、因而能授出去的权限。',
+      deleteWarningTitle: '这枚令牌可以删除数据',
+      deleteWarningDescription: '已勾选：{{points}}。删除不可撤销；只在确实需要时保留它。',
+      expiryLabel: '有效期',
+      expiryHint: '到期后令牌自动失效，无需你记得去吊销。',
+      expiry: {
+        '30d': '30 天',
+        '90d': '90 天',
+        '365d': '1 年',
+        never: '永不过期',
+      },
+      shownOnceTitle: '令牌只会显示这一次',
+      shownOnceDescription: '关闭后无法再次查看。现在就把它存到密钥管理器或 CI 变量里。',
+      copied: '已复制',
+      copyFailed: '复制失败，请手动选中上方文本。',
     },
     pleaseSignIn: '请先登录。',
     pleaseSignInDescription: '登录后即可查看账户资料与安全设置。',
@@ -5098,8 +5207,6 @@ export const zhCN: Resources = {
     expires: '到期',
     revokeSessionTitle: '吊销这个会话？',
     revokeSessionDescription: '该浏览器的下一次请求将被要求重新登录。此操作不会影响其他会话。',
-    tokensRetiredTitle: '已关闭新令牌生成',
-    tokensRetiredDescription: '现有令牌会继续有效，直到到期或被你吊销。这里仅保留安全退出通道。',
     noPatsDescription: '你的账户没有存量个人访问令牌，也无法再生成新的令牌。',
     created: '创建于',
     lastUsed: '最近使用',
@@ -8388,6 +8495,10 @@ export const zhCN: Resources = {
       '需要重启。留空 / 0 表示启动时自动挑选空闲端口；当前实际端口只作提示，不会自动保存。',
     bindPortCurrent: '本次运行实际使用 {{port}}。',
     bindPortUseCurrent: '固定为当前端口',
+    mcpSurfaceLabel: '对外接口（API 令牌与 MCP）',
+    mcpSurfaceHint:
+      '关闭后立即停止签发新令牌并关闭 /api/mcp。已存在的令牌在 REST 通道继续有效——这是止血开关，不是吊销开关；要停掉某一枚请让属主吊销，要停掉某个人的全部请停用其账号。',
+    mcpSurfaceDocsLink: '查看 API 与 MCP 接入文档',
     modelLoadFailed: '模型列表加载失败 — 已降级为手动输入。',
     modelLoading: '加载模型列表…',
     modelRefresh: '刷新',

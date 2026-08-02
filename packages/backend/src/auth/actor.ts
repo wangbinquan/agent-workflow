@@ -4,8 +4,9 @@
 
 import type { Context } from 'hono'
 import {
-  PAT_EXPLICIT_ONLY_PERMISSIONS,
+  resolveTokenPermissions,
   ROLE_PERMISSIONS,
+  type PatPurpose,
   type Permission,
   type Role,
 } from '@agent-workflow/shared'
@@ -26,6 +27,19 @@ export interface Actor {
   source: ActorSource
   /** Already-resolved permission set: role baseline ∩ (PAT scopes if source='pat'). */
   permissions: ReadonlySet<Permission>
+  /**
+   * RFC-247 D2 — present only for `source: 'pat'`. Kept on the actor rather than
+   * re-read per request so the purpose gate is a field comparison instead of
+   * another DB round trip on every call.
+   */
+  purpose?: PatPurpose
+  /**
+   * RFC-247 D16 — which token this is, for the call audit. Present only for
+   * `source: 'pat'`. The audit is keyed on the TOKEN rather than the user: two
+   * of someone's tokens doing different things is precisely the distinction an
+   * operator is trying to make when they open the log.
+   */
+  patId?: string
 }
 
 export const SYSTEM_USER_ID = '__system__'
@@ -34,27 +48,38 @@ export function buildActor(opts: {
   user: ActorUser
   source: ActorSource
   patScopes?: ReadonlyArray<Permission>
+  patPurpose?: PatPurpose
+  patId?: string
 }): Actor {
-  const rolePerms = ROLE_PERMISSIONS[opts.user.role]
-  let set: Set<Permission>
-  if (opts.source === 'pat' && opts.patScopes && opts.patScopes.length > 0) {
-    // PAT narrows the role baseline; never widens it.
-    const baseline = new Set(rolePerms)
-    set = new Set(opts.patScopes.filter((p) => baseline.has(p)))
-  } else {
-    set = new Set(rolePerms)
-  }
-  // RFC-222 (P1-3): explicit-only permissions never ride the role baseline into
-  // a PAT. Even an empty-scoped PAT (which otherwise inherits the full role
-  // baseline via the else-branch above) must name them, else they're stripped.
-  // Protects high-blast-radius points (tasks:delete) from silently widening a
-  // historical token as the catalog grows. Session/daemon actors are untouched.
+  // RFC-247 — a token's grant set is computed by ONE function in shared
+  // (resolveTokenPermissions); this file must not reimplement any part of it.
+  //
+  // Three behaviour changes vs RFC-036/RFC-222, all deliberate:
+  //  1. The `patScopes.length > 0` short-circuit is GONE. It meant an
+  //     empty-scoped PAT silently inherited the owner's ENTIRE role baseline
+  //     (docs/audit-backlog.md:61). An empty matrix now yields a READ-ONLY
+  //     token, which is also what the account page promises.
+  //  2. Reads are always granted (RFC-247 D3) rather than having to be ticked.
+  //  3. Delete points are stripped unless the matrix names them — generalised
+  //     from RFC-222's hand-listed PAT_EXPLICIT_ONLY_PERMISSIONS to every
+  //     `:delete` point, so a new resource type cannot widen a historical token.
   if (opts.source === 'pat') {
-    for (const perm of PAT_EXPLICIT_ONLY_PERMISSIONS) {
-      if (!(opts.patScopes?.includes(perm) ?? false)) set.delete(perm)
+    return {
+      user: opts.user,
+      source: opts.source,
+      permissions: resolveTokenPermissions({
+        role: opts.user.role,
+        matrix: opts.patScopes ?? [],
+      }),
+      purpose: opts.patPurpose ?? 'mcp_only',
+      patId: opts.patId,
     }
   }
-  return { user: opts.user, source: opts.source, permissions: set }
+  return {
+    user: opts.user,
+    source: opts.source,
+    permissions: new Set(ROLE_PERMISSIONS[opts.user.role]),
+  }
 }
 
 export function actorOf(c: Context): Actor {

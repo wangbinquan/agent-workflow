@@ -2,9 +2,12 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
+import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createPat } from '../src/auth/patStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -21,18 +24,28 @@ interface Harness {
   app: Hono
 }
 
-async function buildHarness(bootstrap: 'ready' | 'required' = 'ready'): Promise<Harness> {
+async function buildHarness(
+  bootstrap: 'ready' | 'required' = 'ready',
+  configPath = '/tmp/aw-test-config-never-used.json',
+): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS, { bootstrap })
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   const app = createApp({
     token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
+    configPath,
     opencodeVersion: '1.14.25',
     dbVersion: 1,
     db,
     secretBox,
   })
   return { db, app }
+}
+
+/** Writes a real config file so `isMcpSurfaceEnabled` reads a real value. */
+function writeConfigWithSurface(enabled: boolean): string {
+  const path = join(mkdtempSync(join(tmpdir(), 'aw-rfc247-cfg-')), 'config.json')
+  writeFileSync(path, JSON.stringify({ ...DEFAULT_CONFIG, mcpSurfaceEnabled: enabled }))
+  return path
 }
 
 describe('RFC-221 bootstrap and login-policy route contracts', () => {
@@ -320,21 +333,33 @@ describe('PATs', () => {
     })
     const { sessionToken } = (await login.json()) as { sessionToken: string }
 
+    // RFC-247 D1 REOPENS creation. RFC-221 D1 had closed it globally because
+    // there was no way to issue a NARROW token — `资源:write` covered delete
+    // too, and an empty scope list silently meant "everything the owner has".
+    // RFC-247 fixed both, which is what makes issuing safe again, so this test
+    // now locks the ISSUING contract instead of the closure.
     const created = await reqRaw(
       h.app,
       '/api/auth/pats',
-      { method: 'POST', body: JSON.stringify({ name: 'ci-launcher', scopes: ['tasks:launch'] }) },
+      { method: 'POST', body: JSON.stringify({ name: 'ci-launcher', scopes: ['tasks:execute'] }) },
       { Authorization: `Bearer ${sessionToken}` },
     )
-    expect(created.status).toBe(403)
-    expect(((await created.json()) as { code: string }).code).toBe('pat-creation-disabled')
+    expect(created.status).toBe(201)
+    const issued = (await created.json()) as {
+      token: string
+      pat: { id: string; scopes: string[] }
+    }
+    // The raw token is returned exactly once; only its SHA-256 is stored, so no
+    // later read path can surface it again.
+    expect(issued.token.startsWith('aws_pat_')).toBe(true)
+    expect(issued.pat.scopes).toEqual(['tasks:execute'])
 
-    // RFC-221 deliberately keeps the retirement path for pre-existing PATs.
     const { token, meta } = await createPat({
       db: h.db,
       userId: bob.id,
       name: 'legacy-ci-launcher',
-      scopes: ['tasks:launch'],
+      scopes: ['tasks:execute'],
+      purpose: 'general',
     })
     expect(token.startsWith('aws_pat_')).toBe(true)
 
@@ -345,7 +370,8 @@ describe('PATs', () => {
       { Authorization: `Bearer ${sessionToken}` },
     )
     expect(list.status).toBe(200)
-    expect(((await list.json()) as unknown[]).length).toBe(1)
+    // the freshly issued one plus the directly-seeded one
+    expect(((await list.json()) as unknown[]).length).toBe(2)
 
     const del = await reqRaw(
       h.app,
@@ -354,12 +380,74 @@ describe('PATs', () => {
       { Authorization: `Bearer ${sessionToken}` },
     )
     expect(del.status).toBe(204)
-    // After revoke, PAT token cannot be used.
-    const auth = await reqRaw(h.app, '/api/auth/me', {}, { Authorization: `Bearer ${token}` })
+    // After revoke the token no longer authenticates. Probed via /api/whoami:
+    // RFC-247 D6 closes all of /api/auth/* to tokens, so /api/auth/me would 403
+    // for a LIVE token too and could not distinguish revoked from forbidden.
+    const auth = await reqRaw(h.app, '/api/whoami', {}, { Authorization: `Bearer ${token}` })
     expect(auth.status).toBe(401)
   })
 
-  test('creation denial happens before payload scope processing', async () => {
+  // RFC-247 D10 / AC-18 — the surviving half of RFC-221's intent. RFC-221 wanted
+  // "no one mints a credential outside the sanctioned path"; RFC-247 replaces a
+  // permanent closure with an operator-controlled switch, so the thing worth
+  // locking is that the switch is REAL — i.e. that the route consults it rather
+  // than merely having a config field somebody could believe in.
+  test('creation is refused while the external surface switch is off (AC-18)', async () => {
+    const h = await buildHarness('ready', writeConfigWithSurface(false))
+    await createUser(h.db, {
+      username: 'bob',
+      displayName: 'Bob',
+      role: 'admin',
+      password: 'pw12345678',
+    })
+    const login = await reqRaw(h.app, '/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'bob', password: 'pw12345678' }),
+    })
+    const { sessionToken } = (await login.json()) as { sessionToken: string }
+
+    const created = await reqRaw(
+      h.app,
+      '/api/auth/pats',
+      { method: 'POST', body: JSON.stringify({ name: 'blocked', scopes: [] }) },
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect(created.status).toBe(403)
+    expect(((await created.json()) as { code: string }).code).toBe('token-issuance-disabled')
+
+    // Zero side effects: nothing was written before the refusal.
+    const list = await reqRaw(
+      h.app,
+      '/api/auth/pats',
+      {},
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect((await list.json()) as unknown[]).toEqual([])
+
+    // The SAME request succeeds with the switch on — otherwise this test would
+    // also pass if creation were broken for an unrelated reason.
+    const open = await buildHarness('ready', writeConfigWithSurface(true))
+    await createUser(open.db, {
+      username: 'bob',
+      displayName: 'Bob',
+      role: 'admin',
+      password: 'pw12345678',
+    })
+    const openLogin = await reqRaw(open.app, '/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'bob', password: 'pw12345678' }),
+    })
+    const openSession = ((await openLogin.json()) as { sessionToken: string }).sessionToken
+    const openCreated = await reqRaw(
+      open.app,
+      '/api/auth/pats',
+      { method: 'POST', body: JSON.stringify({ name: 'allowed', scopes: [] }) },
+      { Authorization: `Bearer ${openSession}` },
+    )
+    expect(openCreated.status).toBe(201)
+  })
+
+  test('an over-reaching matrix is REFUSED, not silently narrowed (AC-7)', async () => {
     const h = await buildHarness()
     await createUser(h.db, {
       username: 'bob',
@@ -378,12 +466,18 @@ describe('PATs', () => {
       {
         method: 'POST',
         // RFC-099: agents:write moved to user baseline; users:read stays admin-only.
-        body: JSON.stringify({ name: 'overreach', scopes: ['users:read', 'tasks:launch'] }),
+        body: JSON.stringify({ name: 'overreach', scopes: ['users:read', 'tasks:execute'] }),
       },
       { Authorization: `Bearer ${sessionToken}` },
     )
-    expect(created.status).toBe(403)
-    const body = (await created.json()) as { code: string }
-    expect(body.code).toBe('pat-creation-disabled')
+    // `resolveTokenPermissions` would drop `users:read` anyway (a token never
+    // exceeds its owner's role), so silently accepting would still be SAFE —
+    // and would still be wrong. The user walks away believing they issued a
+    // token that can read users, and finds out when the automation 403s hours
+    // later, far from this decision.
+    expect(created.status).toBe(422)
+    const body = (await created.json()) as { code: string; details?: { ungrantable?: string[] } }
+    expect(body.code).toBe('pat-scope-ungrantable')
+    expect(body.details?.ungrantable).toEqual(['users:read'])
   })
 })

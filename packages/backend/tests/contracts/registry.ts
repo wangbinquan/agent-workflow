@@ -109,8 +109,19 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/auth/pats' },
   { method: 'POST', path: '/api/auth/pats' },
   { method: 'DELETE', path: '/api/auth/pats/:id' },
+  // RFC-247 D16 — the owner's own token call log.
+  { method: 'GET', path: '/api/auth/pats/audit' },
   { method: 'GET', path: '/api/auth/identities' },
   { method: 'DELETE', path: '/api/auth/identities/:id' },
+
+  // ---- RFC-247 admin token inventory + audit (read-only, admin identity) ----
+  { method: 'GET', path: '/api/tokens' },
+  { method: 'GET', path: '/api/tokens/audit' },
+
+  // ---- RFC-247 generated documentation ----
+  { method: 'GET', path: '/api/docs/api' },
+  // Discovery: answers before any credential exists, by definition.
+  { method: 'GET', path: '/.well-known/mcp', public: true },
 
   // ---- oidc-auth (mixed: providers list + login flow are public) ----
   { method: 'GET', path: '/api/auth/oidc/providers', public: true },
