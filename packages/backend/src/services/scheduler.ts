@@ -376,6 +376,14 @@ interface SchedulerState {
     repoPath: string
     worktreePath: string
     worktreeDirName: string
+    /** RFC-248: 规范仓 key = 挂载路径；'' = 挂根。取代 worktreeDirName。 */
+    mountPath: string
+    /**
+     * RFC-248 D11: 只读成员——不写 pre_snapshot、resume 不回滚、不进 git_diff、
+     * 不参与自动提交推送。物理上仍可写（框架不在文件系统层面阻止），任务收尾时
+     * 检出 dirty 就发告警。
+     */
+    readonly: boolean
     baseBranch: string
     /** RFC-187 §4 (Codex impl-gate P1) — per-repo base for the zero-delta-done check.
      *  A multi-repo task's `tasks.worktreePath` is a NON-git parent container, so
@@ -439,10 +447,9 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
           repoPath: r.repoPath,
           worktreePath: r.worktreePath,
           worktreeDirName: r.worktreeDirName,
-          mountPath: r.worktreeDirName,
-          subdir: '',
-          readonly: false,
-          gitignoreCommit: null,
+          // RFC-248: 真值来自 DB 列（migration 0131 已 backfill 存量行）。
+          mountPath: r.mountPath,
+          readonly: r.readonly,
           baseBranch: r.baseBranch,
           baseCommit: r.baseCommit,
         }))
@@ -452,9 +459,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
             worktreePath: task.worktreePath,
             worktreeDirName: '',
             mountPath: '',
-            subdir: '',
             readonly: false,
-            gitignoreCommit: null,
             baseBranch: task.baseBranch,
             baseCommit: task.baseCommit,
           },
@@ -1742,6 +1747,25 @@ async function maybeRunCommitPush(
     // boundary (the in-repo opencode session already holds the shared signal).
     if (state.opts.signal?.aborted === true) return
     const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
+    // RFC-248 D11: 只读成员不参与自动提交推送。它被改动了不是「无事发生」——
+    // 框架不在文件系统层面阻止写入，所以 agent 确实可能改了它。静默丢弃最难
+    // 排查，故落一条任务级告警（不改任务状态：一个误建的临时文件不该搞垮整任务）。
+    if (repo.readonly) {
+      if (status.stdout.trim() !== '') {
+        // 用与 RFC-034 子模块初始化失败同一套「带标签的 log.warn」形态——本仓
+        // 目前没有独立的任务告警表，那类信息要么进 log、要么进 task_repos 的
+        // 专用列。任务详情上的可见呈现归 PR-5（AC-19），届时决定是加一列还是
+        // 复用别的通道；在那之前这条至少不会静默。
+        const changed = status.stdout.trim().split('\n')
+        log.warn('[rfc248/readonly-dirty] read-only repo was modified; NOT committed or pushed', {
+          taskId: task.id,
+          mountPath: repo.mountPath === '' ? '<root>' : repo.mountPath,
+          changedCount: changed.length,
+          changedSample: changed.slice(0, 20),
+        })
+      }
+      continue
+    }
     if (status.stdout.trim() === '') continue // nothing changed in this repo
     const repoSlug = repo.worktreeDirName
     const nodeId = commitPushNodeId(node.id, repoSlug || undefined)

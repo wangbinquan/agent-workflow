@@ -2017,6 +2017,15 @@ async function startTaskImpl(
   // RFC-204: the deterministic mirror ref. repo_url is stored REDACTED (RFC-054
   // W3-4) so it can never drive a relaunch; this id is what does.
   const headCachedRepoId = head?.cachedRepoId ?? fallbackSource?.cachedRepoId ?? null
+  // RFC-248: 组身份快照。与 D8「启动时快照」一致——`task_repos` 本就是布局
+  // 快照，这里只再存一份 id+名字供溯源、记忆注入与详情页 chip 使用。
+  const repoGroupSnapshot =
+    typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0
+      ? {
+          id: input.repoGroupId,
+          name: resolveRepoGroupLayout(deps.db, input.repoGroupId).groupName,
+        }
+      : null
   const headBaseBranch = head?.baseBranch ?? fallbackSource?.baseBranch ?? ''
   const headBranch = head?.branch ?? (branch !== '' ? branch : `agent-workflow/${taskId}`)
   const headBaseCommit = head?.baseCommit ?? baseCommit
@@ -2107,6 +2116,10 @@ async function startTaskImpl(
           // hash, so even DB-level access can't reconstruct it.
           repoUrl: headRepoUrl !== null ? redactGitUrl(headRepoUrl) : null,
           cachedRepoId: headCachedRepoId,
+          // RFC-248: 组溯源 + 记忆注入的 scope 来源。名字是**快照**（设计门 G5）
+          // ——组被删除后任务详情的 chip 仍要能渲染名字，而不是悬空 id。
+          repoGroupId: repoGroupSnapshot?.id ?? null,
+          repoGroupName: repoGroupSnapshot?.name ?? null,
           worktreePath,
           baseBranch: headBaseBranch,
           branch: headBranch !== '' ? headBranch : `agent-workflow/${taskId}`,
@@ -2186,10 +2199,12 @@ async function startTaskImpl(
               baseCommit: r.baseCommit,
               worktreePath: r.worktreePath,
               worktreeDirName: r.worktreeDirName,
-              mountPath: r.worktreeDirName,
-              subdir: '',
-              readonly: false,
-              gitignoreCommit: null,
+              // RFC-248: mountPath 是规范 key（migration 0131 已把存量的
+              // worktree_dir_name backfill 进来，两者对平铺布局取值一致）。
+              mountPath: r.mountPath,
+              subdir: r.subdir,
+              readonly: r.readonly,
+              gitignoreCommit: r.gitignoreCommit,
               hasSubmodules: r.hasSubmodules,
               submoduleInitOk: r.submoduleInitOk,
               submoduleInitError: r.submoduleInitError,

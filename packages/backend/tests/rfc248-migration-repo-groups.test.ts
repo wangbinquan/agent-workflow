@@ -178,6 +178,72 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
   })
 })
 
+describe('T19c —— migration ↔ ORM schema 一致性（设计门二轮 P2-1）', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  // drizzle 的 `schema.ts` **表达不了**下面这几样东西：表达式唯一索引
+  // （`lower(name)`）、CHECK 约束、以及本 RFC 刻意不加 cascade 的两条外键。
+  // 它们只存在于 migration SQL 里。若有人按 ORM schema 重新生成迁移，这些约束
+  // 会被**静默抹掉**——组名唯一没了、kind 枚举没了、删仓的显式守卫被 FK 缺失
+  // 架空。这一组测试从 `sqlite_master` 读真实 DDL 来钉死它们。
+
+  function ddlOf(table: string): string {
+    const rows = db.all<{ sql: string }>(
+      sql`SELECT sql FROM sqlite_master WHERE type='table' AND name=${table}`,
+    )
+    return rows[0]?.sql ?? ''
+  }
+
+  test('repo_groups 的 lower(name) 表达式唯一索引存在', () => {
+    const idx = db.all<{ name: string; sql: string }>(
+      sql`SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='repo_groups'`,
+    )
+    const ci = idx.find((i) => i.name === 'idx_repo_groups_name_ci')
+    expect(ci).toBeDefined()
+    expect(ci?.sql.toLowerCase()).toContain('lower(')
+    expect(ci?.sql.toLowerCase()).toContain('unique')
+  })
+
+  test('repo_group_members 的三条 CHECK 都在 DDL 里', () => {
+    const ddl = ddlOf('repo_group_members')
+    expect(ddl).toContain("`kind` IN ('repo','group')")
+    // kind ⇄ 两个外键之一的互斥
+    expect(ddl).toContain('cached_repo_id')
+    expect(ddl).toContain('child_group_id')
+    // D19：组成员不带 ref / subdir
+    expect(ddl.replace(/\s+/g, ' ')).toContain(
+      "CHECK (`kind` = 'repo' OR (`ref` = '' AND `subdir` = ''))",
+    )
+    expect((ddl.match(/CHECK/g) ?? []).length).toBe(3)
+  })
+
+  test('两条外键刻意**不带** ON DELETE CASCADE（删除走显式守卫，D13）', () => {
+    const fks = db.all<{ table: string; from: string; on_delete: string }>(
+      sql`SELECT "table", "from", "on_delete" FROM pragma_foreign_key_list('repo_group_members')`,
+    )
+    const byFrom = new Map(fks.map((f) => [f.from, f]))
+    // group_id 级联（成员是组的一部分，组没了成员就该没）
+    expect(byFrom.get('group_id')?.on_delete).toBe('CASCADE')
+    // 这两条**不**级联——静默级联会让组悄悄少一个仓
+    expect(byFrom.get('cached_repo_id')?.on_delete).toBe('NO ACTION')
+    expect(byFrom.get('child_group_id')?.on_delete).toBe('NO ACTION')
+  })
+
+  test('task_repos 的四个新列都是 migration 里声明的形态', () => {
+    const cols = db.all<{ name: string; type: string; notnull: number; dflt_value: string | null }>(
+      sql`SELECT name, type, "notnull", dflt_value FROM pragma_table_info('task_repos')`,
+    )
+    const by = new Map(cols.map((c) => [c.name, c]))
+    expect(by.get('mount_path')).toMatchObject({ notnull: 1, dflt_value: "''" })
+    expect(by.get('subdir')).toMatchObject({ notnull: 1, dflt_value: "''" })
+    expect(by.get('readonly')).toMatchObject({ notnull: 1, dflt_value: '0' })
+    expect(by.get('gitignore_commit')?.notnull).toBe(0) // 可空：叶子仓没有预置 commit
+  })
+})
+
 describe('migration 0132 — memories.scope_type 扩到 repo_group', () => {
   let db: DbClient
   beforeEach(() => {
