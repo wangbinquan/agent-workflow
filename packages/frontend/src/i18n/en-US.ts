@@ -4241,6 +4241,10 @@ export const enUS: Resources = {
       'Restart required. Leave blank / 0 to pick a free port at start time. The effective port is only a suggestion and is never saved automatically.',
     bindPortCurrent: 'This run is using port {{port}}.',
     bindPortUseCurrent: 'Pin current port',
+    mcpSurfaceLabel: 'External access (API tokens and MCP)',
+    mcpSurfaceHint:
+      'Turning this off stops new tokens being minted and closes /api/mcp immediately. Existing tokens keep working over REST — this is the stop-the-bleeding lever, not a revoke: killing one token is the owner’s job, killing all of someone’s is disabling the account.',
+    mcpSurfaceDocsLink: 'Read the API & MCP docs',
     modelLoadFailed: 'Failed to load model list — falling back to text input.',
     modelLoading: 'Loading models…',
     modelRefresh: 'Refresh',

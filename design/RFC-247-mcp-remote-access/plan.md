@@ -479,3 +479,27 @@ i18n 文案」——本 RFC 让这条前提第一次不成立（`apiDocs.*` 经 
 
 **末轮全量**：backend **8101 pass / 0 fail**、shared **1555**、frontend **681 文件 / 5698 tests**，
 typecheck / lint / format 全绿。
+
+#### AC 逐条回扫抓到的两个「写了规则没接出口」
+
+收尾时按 AC-1〜AC-48 回扫，又抓到与 `redactMcpRecord` **同一形态**的第二例，以及两条只做了一半的 AC：
+
+- **AC-39**：`redactStdout` 同样是「定义了、单测了、没有任何调用方」。已接在
+  `GET /api/tasks/:id/nodes/:nodeRunId/stdout`，仅令牌通道生效——节点 stdout 是平台无法分类的
+  自由文本，尽力而为；但一个 echo 过密钥的节点，离那把密钥进模型上下文只差一次 `get_task`。
+  属主读自己那次运行的原始输出保持逐字（那正是他在调试的东西）。
+- **AC-18 的另一半 / T15**：`mcpSurfaceEnabled` 有 config 项和后端读点，**没有 settings UI**。
+  已加进 Network 分区（它管的正是「外面能不能驱动这台平台」），并附文档链接。
+  `NetworkTab` 因此第一次需要 router 上下文，其既有测试的 `wrap()` 补了 memory router
+  ——让它继续渲染**真组件**，而不是换成一个会与真组件漂移的替身。
+- **AC-43 / AC-44**：补负向断言（admin 调他人 `patId` 的吊销端点被拒 403 且对方令牌仍有效）与
+  入口锁（`lib/nav.ts` 不含 `/docs/api`；账号页令牌区与设置页各有一处）。
+
+**教训**（已够格成为规律，并已上锁）：本 RFC 里「脱敏规则写完 + 单测写完」出现了 **两次** 之后
+仍然没有调用方。单测测的是**函数**，接线是**另一件事**；只有从 AC 出发反查「谁调它」才会暴露。
+已把这条判据写成可执行守卫（`rfc247-token-redaction.test.ts` 末段）：`tokenRedaction.ts` 导出的
+**每一个** redactor 都必须在该模块**之外**被调用，否则红；外加三条具名出口断言
+（stdout 路由 / `mcps.ts` 五个序列化点 / `rowToTask` 四处）。**做过变异实证**：拆掉三个
+`serializeMcpFor` 调用点 → 红，装回 → 绿。
+（正则要允许 `<T>` 出现在函数名与 `(` 之间——不允许的话这条守卫自己就只检查了一个子集，
+正是它要防的那类漏检。）

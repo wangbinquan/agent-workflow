@@ -345,11 +345,45 @@ describe('RFC-247 D8 — who can read the audit', () => {
       headers: { Authorization: `Bearer ${h.patToken}` },
     })
     expect(byToken.status).toBe(403)
-    // No DELETE exists: an admin cannot revoke someone else's token (D8).
+    // No admin revoke endpoint exists at all.
     const revoke = await h.app.request('/api/tokens/x', {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${h.sessionToken}` },
     })
     expect(revoke.status).toBe(404)
+  })
+
+  test('AC-43 — an admin cannot revoke SOMEONE ELSE’s token', async () => {
+    // The real shape of the rule: the only revoke endpoint is the owner's own,
+    // and it refuses a token belonging to another user even for an admin. The
+    // admin's lever for a compromised account is disabling the account, which
+    // revokes everything at once and is the honest action to take.
+    const h = await harness()
+    const bob = await createUser(h.db, {
+      username: 'bob',
+      displayName: 'Bob',
+      role: 'user',
+      password: 'pw12345678',
+    })
+    const { meta: bobPat } = await createPat({
+      db: h.db,
+      userId: bob.id,
+      name: 'bobs-token',
+      scopes: [],
+      purpose: 'general',
+    })
+
+    // h.sessionToken belongs to alice, an ADMIN.
+    const res = await h.app.request(`/api/auth/pats/${bobPat.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${h.sessionToken}` },
+    })
+    expect(res.status).toBe(403)
+
+    // …and Bob's token is still live.
+    const stillThere = await listTokenAudit(h.db)
+    expect(Array.isArray(stillThere)).toBe(true)
+    const bobsPats = await (await import('../src/auth/patStore')).listPatsForUser(h.db, bob.id)
+    expect(bobsPats[0]?.revokedAt).toBeNull()
   })
 })

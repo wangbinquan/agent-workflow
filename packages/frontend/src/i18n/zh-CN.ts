@@ -3801,6 +3801,9 @@ export interface Resources {
     bindPortHint: string
     bindPortCurrent: string
     bindPortUseCurrent: string
+    mcpSurfaceLabel: string
+    mcpSurfaceHint: string
+    mcpSurfaceDocsLink: string
     modelLoadFailed: string
     modelLoading: string
     modelRefresh: string
@@ -8492,6 +8495,10 @@ export const zhCN: Resources = {
       '需要重启。留空 / 0 表示启动时自动挑选空闲端口；当前实际端口只作提示，不会自动保存。',
     bindPortCurrent: '本次运行实际使用 {{port}}。',
     bindPortUseCurrent: '固定为当前端口',
+    mcpSurfaceLabel: '对外接口（API 令牌与 MCP）',
+    mcpSurfaceHint:
+      '关闭后立即停止签发新令牌并关闭 /api/mcp。已存在的令牌在 REST 通道继续有效——这是止血开关，不是吊销开关；要停掉某一枚请让属主吊销，要停掉某个人的全部请停用其账号。',
+    mcpSurfaceDocsLink: '查看 API 与 MCP 接入文档',
     modelLoadFailed: '模型列表加载失败 — 已降级为手动输入。',
     modelLoading: '加载模型列表…',
     modelRefresh: '刷新',

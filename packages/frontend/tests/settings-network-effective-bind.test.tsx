@@ -5,15 +5,45 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { NetworkTab } from '../src/routes/settings'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken, clearToken } from '../src/stores/auth'
 
+/**
+ * RFC-247 — NetworkTab now renders a `<Link>` to the generated API docs beside
+ * the external-access switch, so it needs a router in scope. A memory router
+ * with a single catch-all keeps this test rendering the REAL component rather
+ * than a stubbed variant that could drift from it.
+ */
 function wrap(qc: QueryClient) {
   return function Wrapped({ children }: { children: React.ReactNode }) {
-    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    const root = createRootRoute({ component: Outlet })
+    const index = createRoute({
+      getParentRoute: () => root,
+      path: '/',
+      component: () => <>{children}</>,
+    })
+    const router = createRouter({
+      routeTree: root.addChildren([index]),
+      history: createMemoryHistory({ initialEntries: ['/'] }),
+    })
+    return (
+      <QueryClientProvider client={qc}>
+        {/* Test route types intentionally differ from the generated app tree. */}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <RouterProvider router={router as any} />
+      </QueryClientProvider>
+    )
   }
 }
 

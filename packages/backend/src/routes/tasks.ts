@@ -31,6 +31,7 @@ import { registerRoute } from '@/routes/registry'
 import { canViewTask, getTaskMembers, updateTaskMembers } from '@/services/taskCollab'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { redactStdout, shouldRedactFor } from '@/services/tokenRedaction'
 import { deleteTask } from '@/services/taskDelete'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { ForbiddenError } from '@/util/errors'
@@ -986,7 +987,13 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const text = await getNodeRunStdout(deps.db, c.req.param('id'), c.req.param('nodeRunId'))
-      return c.text(text)
+      // RFC-247 AC-39 — agent stdout is free-form text the platform cannot
+      // classify, so this is best-effort by nature. It is still worth doing on
+      // the token channel: a node that echoed a key is one `get_task` away from
+      // that key landing in a model's context. A human owner reading their own
+      // run's output keeps it verbatim — that is what they are debugging with.
+      const actor = actorOf(c)
+      return c.text(shouldRedactFor(actor.source) ? redactStdout(text) : text)
     },
   )
 

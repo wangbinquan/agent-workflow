@@ -320,3 +320,22 @@ describe('RFC-247 — the markdown carve-out cannot silently widen', () => {
     expect([...new Set(used)].sort()).toEqual(['apiDocs.subtitle', 'apiDocs.title'])
   })
 })
+
+describe('RFC-247 AC-44 — where the wiki is reachable from', () => {
+  const SRC3 = resolve(import.meta.dirname, '..', 'src')
+
+  test('it is NOT a sidebar entry', () => {
+    // Reference material, not a place work happens. Putting it in the sidebar
+    // would spend a permanent slot on a page most users read once.
+    expect(readFileSync(join(SRC3, 'lib', 'nav.ts'), 'utf8')).not.toContain('/docs/api')
+  })
+
+  test('it IS reachable from the two places a user needs it', () => {
+    // Beside the token they just minted ("what do I point this at"), and beside
+    // the switch that governs the whole external surface.
+    expect(
+      readFileSync(join(SRC3, 'components', 'account', 'AccountTokensPanel.tsx'), 'utf8'),
+    ).toContain('to="/docs/api"')
+    expect(readFileSync(join(SRC3, 'routes', 'settings.tsx'), 'utf8')).toContain('to="/docs/api"')
+  })
+})
