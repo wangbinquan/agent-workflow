@@ -23,7 +23,9 @@
 
 **门禁**：typecheck 三包 / lint / format 全绿；shared **1555**、frontend **680 文件 5685**、backend **8101 pass / 0 fail**、frontend **681 文件 5698 tests**（末轮全量；收尾三条见下）。另有真实浏览器 e2e：`/docs/api` 5/5（含 390px 无页面级横向溢出）、`auth-isolation` 令牌整链；并用**生产单二进制**实测 MCP 端到端——签发 `tasks:execute` + `mcp_only` 令牌 → `tools/list` 返回 20 个工具 → `describe_capabilities` 如实只列读点 + `tasks:execute`（属主是 admin 但删除档与系统域点均不在）→ `resource_write` 创建被拒且**指名缺失点**（`missing permission: agents:create`）。
 
-**剩余**：T1–T38 全部实现完成（PR-1〜PR-5 五批）。待办只剩**实现门**——按 CLAUDE.md，declare done 前需跑一轮 Codex review 并修 findings（设计门那轮 Codex 直驱 wedge，已用两个正交子代理替代并如实记档；实现门同样受配额影响时按 `docs/dev-gotchas.md` 处置并记档，不得声称已通过）。
+**实现门已跑并闭环（2026-08-02）**：Codex 直驱**成功**（分离 worktree 从 pin `f004b618` 跑 75 分钟、86KB 日志，与设计门那次 8 分钟僵死完全不同），出 **24 findings（11 P1 + 13 P2）**。**12 条已修 + 12 条登记 `docs/audit-backlog.md`**，逐条见 `design/RFC-247-mcp-remote-access/plan.md`。
+
+它抓到的东西 CI 与我自己的测试**全都抓不到**，值得记住三类：①**三个操作从来没成功过**（skills update 打退休的 410 路由、repair 发错 body、memory delete 缺查询门）——原测试桩掉了 dispatcher，证明了「工具会调某个 path」，完全没证明「那个 path 接受这个 body」；②**AC-20 快照生产零触发**——审计钩子跑在响应之后、行已没了，而原测试直接手喂快照给 `recordTokenCall`；③**401 契约写反且我的测试给它背书**——这是本 RFC 第三次「实现与测试共享同一个错误前提」，且是唯一一次结构守卫救不了的（前两次是漏接线可扫，这次是把规格读错，只有外部评审能抓）。
 
 ✅ **已完成并发布（2026-08-01）：[RFC-246 任务、定时任务与远程仓库运行表面统一](design/RFC-246-aligned-operations-surfaces/proposal.md)** —— Scheduled/Repos 已同步为 RFC-244 任务列表的高密度 UX：三页共用 public `OperationsToolbar` 与统一 surface；Scheduled=`全部/启用/需关注/已暂停`，Repos=`全部/使用中/需关注/未使用`；搜索与高级筛选只派生现有授权全集，保留 mutation、ACL、导航与 URL 脱敏，不改 backend/shared wire。桌面普通行以 56px 为目标，721–1100px 收紧网格，≤720px 同一语义 DOM 重排并补读屏字段名。门禁：frontend **678 文件 / 5648 tests**，全仓 typecheck/lint/format 全绿，相关 Chromium E2E **8/8**，macOS Tasks/Scheduled/Repos targeted visual **3/3**。发布以 UI/visual exact SHA `e8e42b6c` 收口：GitHub-hosted Ubuntu visual run `30697676219` **27/27**，main CI run `30697676238` attempt 2 全绿。attempt 1 唯一失败为本 RFC 未触及的 `centralized-answer-pane.test.tsx` 单选键盘用例 3 秒时序波动；exact SHA 本地独立复跑 **5/5**、失败 job 重跑通过，随后双平台 build 与全部 Playwright 分片通过。
 

@@ -503,3 +503,37 @@ typecheck / lint / format 全绿。
 `serializeMcpFor` 调用点 → 红，装回 → 绿。
 （正则要允许 `<T>` 出现在函数名与 `(` 之间——不允许的话这条守卫自己就只检查了一个子集，
 正是它要防的那类漏检。）
+
+### 2026-08-02 — 实现门（Codex 直驱，成功）
+
+分离 worktree 从 pin `f004b618` 跑到 `642589f0`（139 文件 / +19005 −5174），**75 分钟、86KB 日志**——
+与设计门那次 8 分钟僵死是两码事。产出 **24 findings（11 P1 + 13 P2）**。
+
+**它抓到的东西，CI 与我自己的测试全都抓不到。** 三类值得固化：
+
+1. **三个操作从来没成功过**——`resource_write(skills,update)` 打的是**已退休、恒返 410** 的
+   `PUT /api/skills/:id`；`repair_alert` 发 `{option}` 而路由要 `{optionId, confirm:true}`；
+   `resource_write(memory,delete)` 缺 `?confirm=true` 查询门。三条原测试全绿，因为它们**桩掉了
+   dispatcher**——证明了「工具会调用某个 path」，完全没证明「那个 path 会接受这个 body」。
+   新用例一律走**真实路由表**。
+2. **AC-20 快照生产零触发**——表、脱敏器、测试俱在，但审计钩子跑在响应之后、那时行已经没了；
+   原测试直接调 `recordTokenCall` 手喂快照，于是证明了表能用、完全没证明管道能用。
+3. **401 契约写反，且我的测试给它背书**——D10 明写「一律 401」，我实现成 403 并写了断言 403 的
+   用例。**本 RFC 第三次「实现与测试共享同一个错误前提」**，且是唯一一次结构守卫救不了的：
+   前两次（redactor 零调用方、upload 夹具用 `name`）是漏接线，可以扫；这次是把规格读错，
+   只有外部评审能抓。**这就是双门存在的理由**——CI 全绿、自测全绿，契约仍然是错的。
+
+**12 条已修**（两批，各带红绿变异实证）：三个失败操作 + `list_repair_options` + 路径穿越编码
++ 401 + `snapshot_failed`（migration 0130）+ 三扇门脱敏 + plugin spec + `describe_resource`
+派生 JSON Schema + `launch_task` 补 7 字段 + AC-20 快照时序。
+
+**12 条登记 `docs/audit-backlog.md`** 并写明 defer 理由：收敛工具非 CRUD 面、review 逐文档 /
+clarify 子集、审计查询下推 SQL、反代下 origin 推导、wiki 缺请求体 schema、discovery 不反映
+开关、`redactSensitiveString` 的前缀环境变量缺口、插件安装 `--ignore-scripts` 等。
+
+> **共享工作树事故（记录以免重演）**：第二批 commit 期间，并发 session 把主工作树切到了
+> `rfc-248-repo-groups`，我的提交因此落到**别人的分支**上而非 main；`git push origin main`
+> 报 "Everything up-to-date" 却领先 2，这个矛盾才暴露它。处置：**不在共享树上切分支**（那正是
+> 刚发生在我身上的事），改开独立 worktree checkout main、cherry-pick、push、删除；也**不去
+> 别人分支上 revert**（重写别人正在用的分支比留一个重复提交危险得多）。教训：共享树上提交前
+> 先 `git branch --show-current`。
