@@ -6,7 +6,7 @@
 
 import type { GitRef } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -429,6 +429,21 @@ export interface CreateWorktreeOptions {
    */
   overrideWorktreePath?: string
   /**
+   * RFC-248 D14: explicit branch name, overriding BOTH the default isolation
+   * branch and `workingBranch`. The repo-group materializer computes it
+   * (`assignBranchNames`) because the same source repo may appear more than
+   * once in one group — without a per-occurrence suffix the second
+   * `worktree add` dies on `'<branch>' is already checked out`.
+   */
+  branchName?: string
+  /**
+   * RFC-248 D17: check out ONLY this repo-relative sub-directory (sparse).
+   * Non-cone mode, so the mount point contains exactly `<subdir>/` and not the
+   * repo's root-level files (cone mode keeps those — measured, proposal E6).
+   * Undefined ⇒ full checkout, byte-for-byte the legacy path.
+   */
+  sparseSubdir?: string
+  /**
    * RFC-075: optional user-specified working branch. When provided it
    * REPLACES the default `agent-workflow/{taskId}` as the worktree's
    * checked-out branch:
@@ -708,6 +723,152 @@ export async function withWorktreeRegistryLock<T>(
   return run
 }
 
+/**
+ * RFC-248 D17 —— 把一个 worktree 收窄成只检出 `subdir` 一棵子树。
+ *
+ * 用**非 cone** 模式：实测（proposal E6）cone 模式除了目标子目录还会连带检出
+ * 仓根级文件（`README.md` / `LICENSE` …），而挂载点应当只含用户点名的那部分。
+ *
+ * 模式文件落在 `$GIT_DIR/info/sparse-checkout`，实测是 **per-worktree** 的
+ * ——同一个镜像的其它任务 worktree 完全不受影响（proposal E5）。这一点和
+ * `info/exclude` 正好相反（后者是 common-dir 级的，会污染所有 worktree）。
+ */
+export async function applySparseSubdir(worktreePath: string, subdir: string): Promise<void> {
+  const set = await runGit(worktreePath, ['sparse-checkout', 'set', '--no-cone', `/${subdir}/`])
+  if (set.exitCode !== 0) {
+    throw new DomainError(
+      'worktree-sparse-failed',
+      `git sparse-checkout set failed for '${subdir}': ${set.stderr.trim()}`,
+      500,
+    )
+  }
+  const co = await runGit(worktreePath, ['checkout'])
+  if (co.exitCode !== 0) {
+    throw new DomainError(
+      'worktree-sparse-failed',
+      `git checkout after sparse-checkout failed for '${subdir}': ${co.stderr.trim()}`,
+      500,
+    )
+  }
+}
+
+/**
+ * RFC-248 设计门二轮 H8 —— 挂载点占用校验必须看 **git tree**，不是工作树。
+ *
+ * `git worktree add` 到一个已存在且非空的目录会 fatal（proposal E7），这挡住了
+ * 「容器仓在工作树里已经有那个目录」的情形。但 **sparse checkout 只控制工作树，
+ * 不删索引里的已跟踪路径**：容器可以仍然跟踪 `hidden/dep/file` 而工作树里没有
+ * `hidden/dep`，于是子仓挂得进去；此后 `git rm --cached --sparse` 或 plumbing
+ * 操作能让容器产出 `hidden/dep/...` 的变更，归属判定就错了。
+ *
+ * 所以在物化前，对每个有子挂载点的容器，在**选定 ref 的树**上检查是否存在落在
+ * 任一子挂载前缀下的已跟踪路径。返回第一个冲突（`{ mountRel, trackedPath }`），
+ * 无冲突返回 null。
+ */
+export async function findTrackedPathUnderMounts(
+  repoPath: string,
+  ref: string,
+  mountRels: readonly string[],
+): Promise<{ mountRel: string; trackedPath: string } | null> {
+  if (mountRels.length === 0) return null
+  // `ls-tree -r --name-only <ref> -- <prefix>` 只列该前缀下的已跟踪路径；
+  // 一次问全部前缀，命中即冲突。用 `-z` 避免路径里的特殊字符把行拆坏。
+  const r = await runGit(repoPath, [
+    'ls-tree',
+    '-r',
+    '-z',
+    '--name-only',
+    ref,
+    '--',
+    ...mountRels.map((m) => `${m}/`),
+  ])
+  // ref 不可解析等错误不在这里判——调用方在更早的步骤已经 rev-parse 过它；
+  // 这里把非零退出当作「查不出冲突」，让后续 worktree add 给出更准的报错。
+  if (r.exitCode !== 0) return null
+  const first = r.stdout.split('\0').find((p) => p !== '')
+  if (first === undefined) return null
+  const hit = mountRels.find((m) => first === m || first.startsWith(`${m}/`)) ?? mountRels[0]!
+  return { mountRel: hit, trackedPath: first }
+}
+
+/**
+ * RFC-248 D1 —— 把嵌套挂载点写进本仓 `.gitignore` 并提交成一笔**平台预置
+ * commit**，返回它的 sha；规则已全部存在时返回 null（幂等，不产生空 commit）。
+ *
+ * 为什么必须是 commit 而不是未提交的工作区改动（proposal E1–E3 实测）：
+ * - 不排除的话，`git add -A`（RFC-075 自动提交推送用的正是它）会把嵌套仓
+ *   **当作 gitlink 加入索引**并告警，推上去就是一个指向不存在子模块的坏指针。
+ * - 排除规则若留成工作区改动，`M .gitignore` 会出现在**每一份**审计 diff 里，
+ *   并被 `add -A` 一起提交推走；而 ignore 只作用于未跟踪文件，没有办法
+ *   「让 .gitignore 忽略自己的修改」。
+ * - `.git/info/exclude` 不能用：它是 **common-dir 级**的，会污染同一个镜像的
+ *   所有任务 worktree。
+ * 做成 `base_commit` 之前的一笔，审计 diff（`base_commit..工作树`）就彻底干净。
+ *
+ * 幂等是硬要求：RFC-075 的 `workingBranch` 允许复用一条真实开发分支，同一条
+ * 分支上连跑多个任务不能累积多个相同 commit。
+ */
+export async function commitGitignorePreset(opts: {
+  worktreePath: string
+  /** 相对本仓工作树根的挂载点路径（不含前后斜杠）。 */
+  relMountPaths: readonly string[]
+  taskId: string
+  gitUserName?: string | null
+  gitUserEmail?: string | null
+}): Promise<{ commitSha: string | null; addedRules: string[] }> {
+  const { buildGitignoreBlock } = await import('@/services/repoGroupGitignore')
+  const file = join(opts.worktreePath, '.gitignore')
+  const existing = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  const plan = buildGitignoreBlock(existing, opts.relMountPaths, opts.taskId)
+  if (plan.added.length === 0) return { commitSha: null, addedRules: [] }
+
+  writeFileSync(file, plan.nextContent, 'utf8')
+  const add = await runGit(opts.worktreePath, ['add', '--', '.gitignore'])
+  if (add.exitCode !== 0) {
+    throw new DomainError(
+      'gitignore-preset-failed',
+      `git add .gitignore failed: ${add.stderr.trim()}`,
+      500,
+    )
+  }
+  // RFC-067 的任务身份；缺省时回落到一个明确的平台身份，绝不让 git 去猜用户的
+  // 全局 user.name（那会把任务提交署成运维本人）。
+  const name =
+    opts.gitUserName != null && opts.gitUserName !== '' ? opts.gitUserName : 'agent-workflow'
+  const email =
+    opts.gitUserEmail != null && opts.gitUserEmail !== ''
+      ? opts.gitUserEmail
+      : 'agent-workflow@localhost'
+  const commit = await runGit(opts.worktreePath, [
+    '-c',
+    `user.name=${name}`,
+    '-c',
+    `user.email=${email}`,
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '--no-verify',
+    '-m',
+    'chore(agent-workflow): exclude nested repo mounts',
+  ])
+  if (commit.exitCode !== 0) {
+    throw new DomainError(
+      'gitignore-preset-failed',
+      `git commit of .gitignore preset failed: ${commit.stderr.trim()}`,
+      500,
+    )
+  }
+  const head = await runGit(opts.worktreePath, ['rev-parse', 'HEAD'])
+  if (head.exitCode !== 0) {
+    throw new DomainError(
+      'gitignore-preset-failed',
+      `cannot read HEAD after .gitignore preset commit: ${head.stderr.trim()}`,
+      500,
+    )
+  }
+  return { commitSha: head.stdout.trim(), addedRules: plan.added }
+}
+
 export async function createWorktree(opts: CreateWorktreeOptions): Promise<CreatedWorktree> {
   await requireGitRepo(opts.repoPath)
   // RFC-066: caller can override the auto-composed path (multi-repo branches
@@ -744,7 +905,7 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
   // RFC-075: a user-specified working branch replaces the default isolation
   // branch as the worktree's checked-out branch. Omitted → byte-for-byte
   // legacy behavior (grep guard locks the `agent-workflow/{taskId}` literal).
-  const branch = opts.workingBranch ?? `agent-workflow/${opts.taskId}`
+  const branch = opts.branchName ?? opts.workingBranch ?? `agent-workflow/${opts.taskId}`
   let cleanup: WorktreeCleanupProvenance
   if (opts.workingBranch) {
     cleanup = await checkoutWorkingBranch({
@@ -759,15 +920,22 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
   } else {
     const branchRef = `refs/heads/${branch}`
     const branchBefore = await readLocalBranchRef(opts.repoPath, branchRef)
-    const add = await withWorktreeRegistryLock(opts.repoPath, () =>
-      runGit(opts.repoPath, ['worktree', 'add', '-b', branch, worktreePath, baseCommit]),
-    )
+    // RFC-248 D17: sparse 成员先 --no-checkout 落一个空工作树，配好 sparse
+    // 模式再 checkout。反过来（先全量检出再收窄）在大仓上要白检出一整棵树。
+    const addArgs =
+      opts.sparseSubdir !== undefined && opts.sparseSubdir !== ''
+        ? ['worktree', 'add', '--no-checkout', '-b', branch, worktreePath, baseCommit]
+        : ['worktree', 'add', '-b', branch, worktreePath, baseCommit]
+    const add = await withWorktreeRegistryLock(opts.repoPath, () => runGit(opts.repoPath, addArgs))
     if (add.exitCode !== 0) {
       throw new DomainError(
         'worktree-add-failed',
         `git worktree add failed: ${add.stderr.trim()}`,
         500,
       )
+    }
+    if (opts.sparseSubdir !== undefined && opts.sparseSubdir !== '') {
+      await applySparseSubdir(worktreePath, opts.sparseSubdir)
     }
     cleanup = {
       repoPath: opts.repoPath,
