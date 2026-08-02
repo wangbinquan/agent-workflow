@@ -38,11 +38,30 @@ async function expectNoHorizontalOverflow(page: Page, listSelector: string): Pro
       page.evaluate((selector) => {
         const main = document.querySelector<HTMLElement>('[data-testid="app-shell-main"]')
         const list = document.querySelector<HTMLElement>(selector)
+        const scroller = list?.closest<HTMLElement>('.table-viewport__scroller') ?? null
+        const scrollerRect = scroller?.getBoundingClientRect() ?? null
+        // WebKit can retain the table/scroller's pre-resize intrinsic scrollWidth
+        // even after its block-level grid rows and visible scroller have reflowed.
+        // Assert the user-visible overflow boundary and every rendered row so
+        // a real clipped column still fails without trusting that stale metric.
+        const rowsFit =
+          list !== null &&
+          scrollerRect !== null &&
+          Array.from(list.querySelectorAll<HTMLElement>('tr'))
+            .filter((row) => row.getClientRects().length > 0)
+            .every((row) => {
+              const rect = row.getBoundingClientRect()
+              return (
+                row.scrollWidth <= row.clientWidth &&
+                rect.left >= scrollerRect.left - 0.5 &&
+                rect.right <= scrollerRect.right + 0.5
+              )
+            })
         return {
           documentFits:
             document.documentElement.scrollWidth <= document.documentElement.clientWidth,
           mainFits: main !== null && main.scrollWidth <= main.clientWidth,
-          listFits: list !== null && list.scrollWidth <= list.clientWidth,
+          listFits: rowsFit,
         }
       }, listSelector),
     )

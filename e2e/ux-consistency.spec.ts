@@ -128,6 +128,16 @@ async function expectWithinViewport(locator: Locator): Promise<void> {
   ).toEqual({ left: true, top: true, right: true, bottom: true })
 }
 
+async function pressNextFocusableControl(page: Page): Promise<void> {
+  const browserName = page.context().browser()?.browserType().name()
+  // macOS WebKit honors the platform's default "Tab focuses text fields"
+  // mode. Option+Tab is the native path through every control; plain Tab is
+  // still correct for Chromium and WebKit on the other CI runner.
+  await page.keyboard.press(
+    process.platform === 'darwin' && browserName === 'webkit' ? 'Alt+Tab' : 'Tab',
+  )
+}
+
 async function expectTaskOperationsFits(page: Page, preceding: Locator): Promise<void> {
   const operations = page.locator('.task-operations')
   await expect(operations).toBeVisible()
@@ -143,7 +153,7 @@ async function expectTaskOperationsFits(page: Page, preceding: Locator): Promise
   ).toEqual({ listFits: true, documentFits: true, bodyMainFits: true })
 
   await preceding.focus()
-  await page.keyboard.press('Tab')
+  await pressNextFocusableControl(page)
   await expect(page.getByTestId('tasks-filter-button')).toBeFocused()
 }
 
