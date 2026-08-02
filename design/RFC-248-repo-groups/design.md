@@ -136,7 +136,10 @@ CREATE INDEX idx_rgm_child_group  ON repo_group_members (child_group_id);
 ### 2.2 既有表改动
 
 ```sql
-ALTER TABLE tasks      ADD COLUMN repo_group_id TEXT;       -- 溯源 + 记忆注入（D4/D8）
+ALTER TABLE tasks      ADD COLUMN repo_group_id   TEXT;     -- 溯源 + 记忆注入（D4/D8）
+ALTER TABLE tasks      ADD COLUMN repo_group_name TEXT;     -- 组名快照（设计门 G5）
+-- 名字快照的作用：组被删除后任务详情的 chip 仍能渲染名字，而不是退化成悬空 id。
+-- 与 D8「启动时快照」一致；task_repos 本就是快照，删组不影响在跑任务的布局。
 
 ALTER TABLE task_repos ADD COLUMN mount_path       TEXT NOT NULL DEFAULT '';
 ALTER TABLE task_repos ADD COLUMN subdir           TEXT NOT NULL DEFAULT '';
@@ -147,11 +150,20 @@ UPDATE task_repos SET mount_path = worktree_dir_name;       -- 存量平铺 = ba
 -- 沿用 0035 / 0041 / 0057 的建新表 + INSERT SELECT + RENAME 套路）
 ```
 
-`memories` 表重建以扩 CHECK（参照 `0048_rfc101_fusion.sql:45`）：
+`memories` 表重建以扩 CHECK：
 
 ```sql
 CHECK (scope_type IN ('agent','workflow','repo','repo_group','global'))
 ```
+
+**先例必须取 `0117_rfc223_fusion_provenance.sql:119-190`，不是 0048。**
+`memories` 带两条自引用 FK（`supersedes_id` / `superseded_by_id` →
+`memories.id`）；0117 的注释明确指出，把 `__new_memories` rename 成
+`memories` 时 SQLite 是否重写这两条自引用**依赖 `legacy_alter_table` 模式**，
+而 daemon 迁移期跑在 `foreign_keys=OFF`、直连 migrator 与测试跑在 `ON`。
+因此必须用 0117 的顺序：`RENAME TO __old_memories` → `CREATE TABLE memories`
+（直接建最终名）→ `INSERT SELECT` → `DROP __old_memories` → 重建 4 个索引。
+列清单以 0117 的 **24 列**为准（0048 那版缺 `fused_into_skill_id`）。
 
 `(scope_type='global' AND scope_id IS NULL) OR (scope_type<>'global' AND scope_id IS NOT NULL)`
 这条不变——`repo_group` 属于「非 global」一侧。
@@ -204,6 +216,38 @@ export const PlannedRepoSchema = z.object({
 `PERMISSIONS`（`shared/src/schemas/permission.ts:108`）新增 `'repos:update'`，
 并改掉第 22 行与第 108 行「no PUT/PATCH route exists in the repos domain」的注释
 ——本 RFC 引入了 `PUT /api/repo-groups/:id`，那条断言不再成立。
+
+**同时必须加进 `MANAGER_EXTRA`**（`schemas/permission.ts:344-350`）。repos 域
+**不在** ACL 模型里，它的能力完全靠那张手工表授予（表上方的注释就写着
+「Repos are out of the ACL model, so the repos points are plain points here」）；
+漏了这一步，manager 能建组却对 `PUT` 拿 403，也无法给 PAT 授权（设计门 G4）。
+
+### 2.3a 启动入口契约迁移表（设计门 G1）
+
+`repos[]` 的断代必须**同时**覆盖下面每一行，漏一行就留一个「静默在错误工作区
+启动」的洞。实现期逐行核对并打勾：
+
+| # | 入口 | 现状 | 目标 |
+| --- | --- | --- | --- |
+| 1 | `StartTaskSchema`（`schemas/task.ts:569`） | `repos[]` | `repoGroupId` |
+| 2 | `StartAgentTaskSchema`（`schemas/task.ts:1267`） | `repos[]` | `repoGroupId` |
+| 3 | `StartWorkgroupTaskSchema`（`schemas/workgroup.ts:597`） | `repos[]` | `repoGroupId` |
+| 4 | scheduled payload 各档（`schemas/scheduledTask.ts`，agent 档继承 #2） | 继承 | 跟随 #1–#3 |
+| 5 | `LaunchSpaceFields` + `applySpaceFields`（`schemas/task.ts:701-715`） | 只透传 `repos` | 透传 `repoGroupId` |
+| 6 | REST：JSON 与 multipart 两条启动路径 | — | 两条都过退役键守卫 |
+| 7 | MCP `launch_task` 工具（`backend/src/mcp/tools.ts`） | 无 `repoGroupId` | 加参数 + 去 `repos` |
+| 8 | e2e fixture / 测试夹具 | `repos[]` | `repoGroupId` |
+
+**退役键守卫**（`RETIRED_START_TASK_KEYS`，`schemas/task.ts:730`）当前是
+`['repoPath','baseBranch','fetchBeforeLaunch']`，**没有顶层 `repos`**。
+StartTask 用的是非 strict zod，所以删字段后旧客户端传 `repos` 会被**静默剥除**
+并成功启动在错误工作区。因此：
+
+- 顶层 `'repos'` **加进** `RETIRED_START_TASK_KEYS`；
+- `rejectRetiredStartTaskKeys` 里把 `repos` 当数组遍历查行内退役键的那段
+  （`schemas/task.ts:738-747`）**删除**——顶层已硬拒，那段不可达；
+- 守卫必须在**任何 schema parse 之前**执行，且三个启动面都要确认接上
+  （实现期逐面核实，不假设已接）。
 
 ## 3. Git 机制
 
@@ -331,6 +375,38 @@ git -C docs worktree add "$NONEMPTY" -b b3   # → fatal: '<path>' already exist
 git -C docs worktree add "$EMPTYDIR"  -b b4  # → 成功
 ```
 
+### 3.7 端到端物化原型（E8）
+
+`design/RFC-248-repo-groups/materialize-prototype.sh` 是本节全部机制拼在一起的
+**可复跑**原型，布局刻意覆盖每一种成员形态：
+
+```
+''              → app          可写，挂根
+vendor/sdk      → sdk          只读，嵌在 app 工作树里
+vendor/sdk/ext  → ext          可写，三层嵌套（嵌在 sdk 里）
+site/docs       → docs@guides  可写，sparse 子目录挂载，嵌在 app 里
+compare/main    → app（第二份）可写，同仓复用 → 分支带序号
+```
+
+跑出来的关键断言（`bash design/RFC-248-repo-groups/materialize-prototype.sh`）：
+
+```
+物化后各仓 status          ：全部干净（5/5）
+sparse 挂点内容            ：只有 guides
+<root> app   diff          ：tracked=[src/main.ts] untracked=[newfile.md]
+                             ← 不含 .gitignore / vendor/sdk / site/docs /
+                               compare/main / .agent-workflow-inputs
+vendor/sdk(ro) diff        ：tracked=[lib/sdk.ts]   ← 可独立检出以发告警
+vendor/sdk/ext diff        ：tracked=[ext/plug.ts]  ← 三层嵌套不串味
+site/docs      diff        ：tracked=[guides/g1.md]
+add -A（仅可写仓）          ：各自只暂存自己的文件，零 embedded-repo 告警
+幂等复检                    ：规则已存在 → 跳过 commit
+分支名                      ：agent-workflow/T01HZZ / agent-workflow/T01HZZ-2
+```
+
+PR-3 的集成测试（design §10.2）应当是这份原型的 TypeScript 化，**逐条断言同一批
+不变量**。
+
 ## 4. 启动流水线
 
 ### 4.1 入口与形态判定
@@ -377,8 +453,16 @@ for depth in 0..maxDepth:                      # 逐层
 ### 4.3 失败与回收
 
 沿用 `createMaterializedSpaceCleanup` / `cleanupMaterializedSpaceLease`
-（`services/task.ts:1279`）。新增点：预置 commit 失败时该仓的 worktree 已登记
-lease，整体回滚照常。
+（`services/task.ts:1279`）。新增点：
+
+- 预置 commit 失败时该仓的 worktree 已登记 lease，整体回滚照常。
+- **回收按挂载深度倒序**（内层先删）。实测（E9）表明正序也不会坏账——
+  `git worktree remove --force <outer>` 会连带删掉内层目录，内层镜像的注册被
+  git 标成 `prunable`，随后对已消失路径再跑 `worktree remove --force`
+  **仍返回 0** 并把注册表清干净，`cleanupCreatedWorktree`
+  （`util/git.ts:616`）的 `exitCode !== 0` 判据不会误报失败。但倒序不依赖这条
+  自愈行为，且让「删除失败」这件事仍然可归因到具体某个仓，所以**倒序是要求，
+  不是优化**。集成测试要同时锁住两种顺序都不留悬空注册。
 
 ### 4.4 `base_commit` 与 `baseRef` 的分离
 
@@ -435,6 +519,16 @@ export function parseRepoKeyWire(s: string): string { return s === '.' ? '' : s 
 调用点：`services/worktreeFileContent.ts:151`、`services/changeNarrative.ts:124`、
 `services/task.ts:3941`、`services/structuralDiff/service.ts:147,238`。
 
+**已核实这些调用点只把标签当标识符用**（`Map` 键、结构化前缀、
+`?repo=` 查询参数），**从不**拿它当文件系统路径组件，所以带 `/` 的挂载路径不会
+在任何一处被当成目录层级展开。两个连带契约点：
+
+- `worktreeFileContent.ts:145-155` 的 `?repo=` 参数值现在是挂载路径，前端必须
+  `encodeURIComponent`；根仓传 `.`。查不到时的 404 码
+  `file-content-repo-not-found` 不变。
+- `structuralDiff/service.ts:239` 的 `perRepoNodeRuns(rows, repo.worktreeDirName)`
+  是 `worktreeDirName` 的又一个消费者，随 T26 一并迁到 `mountPath`。
+
 ### 6.2 文本 diff 拼接
 
 `services/task.ts:3946` 的 `# === Repo: ${label} ===` 改用 `repoKeyWire`。
@@ -461,8 +555,50 @@ function splitRepoPrefix(fullPath: string, keys: readonly string[]): [string, st
 }
 ```
 
-key 集合从任务的 `task_repos` 派生，前后端同源（后端在 diff 响应里带上
-`repoKeys: string[]`，前端不自己猜）。
+key 集合从任务的 `task_repos` 派生，前后端同源（后端在**文本 diff 与结构化
+diff 两类响应里都**带上 `repoKeys: string[]`，前端不自己猜）。
+
+#### 结构化 diff 的根成员必须不加前缀（设计门 G3）
+
+现状的不变量是「**加前缀 ⟺ 多仓**」：
+
+- 单仓走 `structuralDiff/service.ts:95-118` 的**早分支**，直接
+  `computeFromWorktree`，**完全不加前缀**（`src/a.ts`），与文本 diff 单仓
+  无分段头的形态一致；
+- 多仓走 `service.ts:147-172` → `mergeStructuralDiffs`
+  （`assemble.ts:224-252`），而 `prefixPath = (label, fp) => \`${label}/${fp}\``
+  （`assemble.ts:147`）是**无条件**的。
+
+把根成员的 key `''` 直接塞进现有 assembler 会产出 `/src/a.ts`（用 wire 形态
+`.` 则是 `./src/a.ts`），**两者都不等于**文本 diff 的 `src/a.ts`；
+`frontend/src/lib/changeReview.ts:168-180` 靠路径逐字符相等来 join 两侧，
+于是根仓的符号、严重度、文件内容与导航会**静默脱节**。
+
+修法：`prefixPath` 改为
+
+```ts
+const prefixPath = (label: string, fp: string): string => (label === '' ? fp : `${label}/${fp}`)
+```
+
+`assemble.ts:140-146` 的注释列出了 7 类必须同步前缀的嵌入路径（file path、
+symbol id/parentId、edge 端点、impact refs、classEdge 端点/成员、card id、
+hunkAnchor），**全部经由 `prefixPath` 与 `prefixIdPath`**，所以改这两个函数
+即可覆盖。改后：
+
+- 单仓（根成员 + 计数 1）继续走早分支 → **baseline 字节级不变**；
+- 组任务里根成员无前缀、其余成员前缀 = 挂载路径 → 与文本 diff **逐字符相等**。
+
+**为什么最长前缀匹配按构造无歧义**（这条要配专门的回归测试）：容器仓永远
+不可能产出落在某个挂载点前缀下的路径——挂载点在启动期就被证明在容器仓里不存在
+（E7 占用校验：`git worktree add` 到已存在非空目录直接 fatal ⇒
+`repo-group-mount-occupied`），之后又被 `.gitignore` 预置 commit 排除。
+所以「根仓的 `src/a.ts`」与「挂在 `src` 的成员的 `a.ts`」不可能同时存在。
+
+**被否决的替代方案**：设计门建议「给结构化实体加独立 `repoKey` 字段、彻底
+不用字符串前缀承载身份」。未采纳——字符串前缀是 RFC-089/239/240/241 与前端
+join 的既有承重结构，替换是跨四个 RFC 的大重构，而上面那条构造性不变量已经
+消除了歧义。深层关切（身份不该编码进字符串）如实登记进
+`docs/audit-backlog.md`，留给未来的结构化 diff 重构 RFC。
 
 ### 6.4 `wrapper-git` 多仓（D9）
 
@@ -504,6 +640,26 @@ exit:  for each writable repo → diff(repo, baseSnapshot)
 `services/memory.ts` 的可见性/管理判定（第 743 / 758 / 807 行）把
 `'repo_group'` 与 `'repo'` `'global'` 归为同一类：全员可读、仅 admin 可管
 （AC-29）。
+
+**删组时的记忆生命周期（设计门 G5）**。上面那三处对 repo/global 是**在加载
+资源行之前就 return true**，fail-closed 分支只覆盖 agent/workflow。所以
+`repo_group` 一旦并进这一档，删组就会留下**仍可列出、仍会被注入**的孤儿记忆
+（`tasks.repo_group_id` 还留着旧 id，注入照样命中）。处置：
+
+```
+deleteRepoGroup(id) 事务内：
+  1. 校验引用（其它组引用它 → 409，除非 force）
+  2. UPDATE memories SET status='archived'
+       WHERE scope_type='repo_group' AND scope_id=:id AND status<>'archived'
+     → 返回受影响条数
+  3. DELETE FROM repo_group_members WHERE group_id=:id （或 force 时的摘除）
+  4. DELETE FROM repo_groups WHERE id=:id
+```
+
+用 `archived` 而不是硬删：保住用户知识，且 `memoryInject` 本就按
+`status='approved'` 过滤（`memoryInject.ts:155`），注入立即停止。DELETE 响应体
+带 `archivedMemories: number`，前端确认弹窗在删除前先调 `GET /:id` 拿到该计数
+并显示。
 
 前端 `components/memory/MemoryFormFields.tsx:132` 的 `SCOPE_OPTIONS` 加第 5 档，
 `scopeIdOptions` 加 `repoGroups` 数据源。

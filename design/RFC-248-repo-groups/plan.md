@@ -53,26 +53,52 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
 
 ## PR-2 — 持久层与 CRUD
 
-- **T10** migration `0130_rfc248_repo_groups.sql`：建 `repo_groups` /
+- **T10** migration `<下一个可用号>_rfc248_repo_groups.sql`：建 `repo_groups` /
   `repo_group_members`（含 CHECK 与索引，design §2.1）；`tasks` 加
-  `repo_group_id`；`task_repos` 加 `mount_path` / `subdir` / `readonly` /
-  `gitignore_commit` 并 backfill `mount_path = worktree_dir_name`。
-  **提交前 grep 编号防撞**（当前最新 `0129`）。
-- **T11** migration `0131_rfc248_memory_repo_group_scope.sql`：重建 `memories`
-  表以扩 CHECK 到 `('agent','workflow','repo','repo_group','global')`。照抄
-  `0048_rfc101_fusion.sql` 的建新表 + INSERT SELECT + 索引重建套路，
-  **列清单逐列核对**（漏列 = 静默丢数据）。
+  `repo_group_id` + `repo_group_name`（设计门 G5 的组名快照）；`task_repos` 加
+  `mount_path` / `subdir` / `readonly` / `gitignore_commit` 并 backfill
+  `mount_path = worktree_dir_name`。
+  ⚠ **编号在实现期现取，RFC 里不写死**（设计门 G2）：本 RFC 落档时最新是
+  `0129`，写文档这段时间里另一并发 session 已经落了
+  `0130_rfc247_audit_snapshot_failed.sql`。动手前先
+  `ls packages/backend/db/migrations | tail -3` 取尾号顺延，**每个 PR 提交前
+  再核一次**。
+- **T11** migration `<下一个可用号>_rfc248_memory_repo_group_scope.sql`：重建 `memories`
+  表以扩 CHECK 到 `('agent','workflow','repo','repo_group','global')`。
+  **权威先例是 `0117_rfc223_fusion_provenance.sql:119-190`，不是 0048。**
+  0117 的注释写明了原因：`memories` 带两条**自引用 FK**
+  （`supersedes_id` / `superseded_by_id` → `memories.id`），把
+  `__new_memories` rename 成 `memories` 时 SQLite 是否重写这两条自引用
+  **依赖 `legacy_alter_table` 模式**，而 daemon 迁移期是 `foreign_keys=OFF`、
+  直连 migrator / 测试是 `ON`，两种模式结果不同。正确套路：**先
+  `ALTER TABLE memories RENAME TO __old_memories`，再直接
+  `CREATE TABLE memories`（最终名），INSERT SELECT，DROP `__old_memories`，
+  重建 4 个索引**。
+  **列清单以 `0117:129-152` 的 24 列为准**——0048 那版**没有**
+  `fused_into_skill_id`（它是 RFC-223 后加的），照抄 0048 会静默丢掉整列溯源
+  数据。0117 的 6 条 CHECK 与 2 条自引用 FK 原样保留，只改 `scope_type` 那一条。
+- **T11b** 迁移后校验（设计门 G2 采纳建议）：`memories` 重建的**同一事务**内
+  校验「行数一致 / `fused_into_skill_id` 非空计数一致 / 索引集合一致 /
+  `PRAGMA foreign_key_check` 为空」，任一不符即 abort。写成迁移末尾的断言语句 +
+  一条迁移单测（造带 fused 溯源的行，跑迁移，断言整列未丢）。
 - **T12** `packages/backend/src/db/schema.ts`：两张新表的 drizzle 定义 +
   三张既有表的列增删。
 - **T13** `services/repoGroup.ts`：`listRepoGroups` / `getRepoGroup` /
   `createRepoGroup` / `updateRepoGroup`（version 自增）/ `deleteRepoGroup`
-  （引用守卫 + `force`）/ `resolveRepoGroupLayout`（DB loader + T3 展平）。
+  （引用守卫 + `force` + **同事务归档组记忆**，设计门 G5）/
+  `resolveRepoGroupLayout`（DB loader + T3 展平）。
   URL→id 的成员导入复用 `services/gitRepoCache.ts` 的 resolve（D7）。
+  `getRepoGroup` 响应带 `boundMemories: number` 供确认弹窗显示；
+  `deleteRepoGroup` 响应带 `archivedMemories: number`。
 - **T14** `routes/repoGroups.ts`：design §8 的 6 条路由，全部 `registerRoute`
   声明权限点；DELETE 的 PAT 分支走 `assertTokenDeleteConfirm`（回显组名）。
   挂进 `server.ts`。
-- **T15** `shared/src/schemas/permission.ts` 加 `'repos:update'`；**同时改掉**
-  第 22 行与第 108 行「no PUT/PATCH route exists」的注释（它们现在是错的）。
+- **T15** `shared/src/schemas/permission.ts` 加 `'repos:update'` **并同时加进
+  `MANAGER_EXTRA`（第 344-350 行）**——repos 域不在 ACL 模型里，能力完全靠那张
+  手工表授予，漏了 manager 就「建得了组、改不了组」且无法给 PAT 授权
+  （设计门 G4）。**同时改掉**第 22 行与第 108 行「no PUT/PATCH route exists」
+  的注释（它们现在是错的）。测试用 **admin / manager / 普通用户 / 窄 PAT
+  四档**跑路由级授权矩阵。
 - **T16** `services/gitRepoCache.ts` 的 `deleteCachedRepo` 加「被 N 个组引用」
   守卫；409 详情体加 `referencingGroups`；`force=1` 时删掉引用行（D13）。
 - **T17** `shared/src/schemas/memory.ts` 的 `MemoryScopeSchema` 加
@@ -127,8 +153,19 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
   `services/scheduler.ts:558`）；包裹器遍历可写成员；`git_diff` 拼接；
   **单可写仓时不加分段头**（字节级保 baseline）。
 - **T29** diff 消费面：`services/task.ts:3941-3946` 的拼接改 `repoKeyWire`；
-  diff 响应带 `repoKeys: string[]`；`services/structuralDiff/service.ts:147,238`
-  与 `services/changeNarrative.ts:124` 换 key 源。
+  **文本 diff 与结构化 diff 两类响应都**带 `repoKeys: string[]`；
+  `services/structuralDiff/service.ts:147,238` 与
+  `services/changeNarrative.ts:124` 换 key 源。
+- **T29b**（设计门 G3，**原计划遗漏**）`structuralDiff/assemble.ts:147` 的
+  `prefixPath` 改为 `label === '' ? fp : \`${label}/${fp}\``，让根成员不加前缀。
+  现状不变量是「加前缀 ⟺ 多仓」（单仓走 `service.ts:95-118` 早分支完全不加
+  前缀），不改这一处，组任务里根仓会产出 `/src/a.ts`，与文本 diff 的
+  `src/a.ts` 对不上，前端 `changeReview.ts:168-180` 的 join 静默脱节。
+  `assemble.ts:140-146` 注释列的 7 类嵌入路径全部经由 `prefixPath` /
+  `prefixIdPath`，改这两个函数即可覆盖。
+  **必写测试**：①单仓结构化路径与今天字节级相同；②组任务里根仓路径无前缀、
+  嵌套仓路径 = 挂载路径前缀；③文本 diff 与结构化 diff 的路径集合逐字符相等；
+  ④「容器仓不可能产出落在挂载点前缀下的路径」这条构造性不变量的回归锁。
 - **T30** 上传解禁（D12 / AC-18）：删 `multi-repo-upload-unsupported`
   （`services/task.ts:1579,1651`、`routes/tasks.ts:1302`、
   `services/agentLaunch.ts:458`）；多仓时 `applyUploadsToWorktree` 的
@@ -139,9 +176,20 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
   （`eq` → `inArray`）、`resolveInjectScope` 从 `tasks.repo_group_id` +
   `task_repos.cached_repo_id[]` 取值、`ScopeBudget` 加档。RFC-046 的注入快照
   结构相应扩一档（**存量快照要能容忍缺档**，否则老任务的 replay 会炸）。
-- **T32** `StartTaskSchema` / `StartWorkgroupTaskSchema` 删 `repos[]` 加
-  `repoGroupId`；三态互斥 superRefine；`MULTI_REPO_MAX` 退役、语义迁到
-  `MAX_FLAT_REPOS`。定时任务存量 payload 的降级展示验证（AC-35）。
+- **T32a** schema + 退役键守卫：`StartTaskSchema` / `StartAgentTaskSchema`
+  （`schemas/task.ts:1267`）/ `StartWorkgroupTaskSchema`
+  （`schemas/workgroup.ts:597`）删 `repos[]` 加 `repoGroupId`；三态互斥
+  superRefine；`MULTI_REPO_MAX` 退役、语义迁到 `MAX_FLAT_REPOS`。
+  **顶层 `'repos'` 加进 `RETIRED_START_TASK_KEYS`**（`schemas/task.ts:730`）
+  并删掉 `rejectRetiredStartTaskKeys` 里那段把 `repos` 当数组遍历的死代码
+  （设计门 G1——StartTask 是非 strict zod，不硬拒就会**静默剥除**并在错误
+  工作区成功启动，与 AC-9 的 422 直接矛盾）。
+- **T32b** 八个入口逐面迁移（design §2.3a 的契约迁移表，**逐行打勾**）：
+  三个 schema + 全部 scheduled payload 档 + `LaunchSpaceFields` /
+  `applySpaceFields`（`schemas/task.ts:701-715`）+ REST JSON 与 multipart
+  两条 + MCP `launch_task`（`backend/src/mcp/tools.ts`）+ e2e fixture。
+  **逐面核实退役键守卫真的接上了**（不假设）。定时任务存量 payload 的降级
+  展示验证（AC-35）。契约矩阵测试：每个入口各一条「传 `repos` → 422」。
 - **T33** 模板变量（AC-31/32）：`{{__repo_names__}}` 改挂载路径、新增
   `{{__repo_group__}}`；`shared/src/prompt.ts` + `services/scheduler.ts` 的
   `templateMeta`。
@@ -195,16 +243,24 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
 - [ ] 单二进制 build smoke + Playwright e2e
 - [ ] push 后按**自己的确切 sha** 查 GitHub Actions（共享 `main` 上并发 push
       会取消你的 run，须看含你 commit 的 superseding commit 的绿）
-- [ ] **设计门**：RFC 请批前跑一次 Codex review 并修 findings（本文件落档后、
-      用户批准前）
+- [x] **设计门第一轮**（2026-08-02，记档
+      [`design-gate-2026-08-02.md`](./design-gate-2026-08-02.md)）：Codex 0.146.0
+      对抗式评审，分离 worktree pin 到 `f6e637dd`，13 分钟全程实读源码。
+      **3 × P1 + 2 × P2，逐条核实后全部属实、全部折入**（G1 断代面 + 静默剥除、
+      G2 迁移编号撞车 + memories 重建丢列、G3 根仓结构化路径不一致、
+      G4 manager 权限、G5 删组孤儿记忆）。另有本人自查独立命中 2 条（A1/A2）。
+- [ ] **设计门第二轮**（修订后复跑，Codex next-steps 要求）
 - [ ] **实现门**：declare done 前再跑一次 Codex review 并修 findings
 - [ ] `design/plan.md` 的 RFC 索引状态改 Done；`STATE.md` 已完成表加一行
 - [ ] `docs/dev-gotchas.md` 补「嵌套 worktree 的 git 事实」（proposal E1–E4）
 
 ## 已知的跨 RFC 撞车点
 
-- **migration 编号**：本 RFC 占 `0130` / `0131` / `0132`。若有并行 RFC 也在排队，
-  提交前 `ls packages/backend/db/migrations | tail` 复核并顺延。
+- **migration 编号（已发生一次真实撞车）**：RFC 落档时最新是 `0129`，写文档
+  期间另一并发 session 落了 `f67db859`（含
+  `0130_rfc247_audit_snapshot_failed.sql`）与 `94c654ad`。因此本 RFC**不写死
+  编号**——每个 PR 动手前与提交前各跑一次
+  `ls packages/backend/db/migrations | tail -3` 取尾号顺延。
 - **`task_repos` 表**：RFC-243 的父子任务链也读它。T26 的建表重命名要确认
   RFC-243 的读取点在新列名上（`mount_path`）已同步。
 - **`tasks.new.tsx`**：RFC-165/218 的向导骨架与 RFC-234/235 的意图构建入口都在

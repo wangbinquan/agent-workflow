@@ -109,6 +109,8 @@ RFC-066 的多仓有三条硬伤，导致它在真实编排里几乎用不起来
 | E5 | sparse checkout 的模式文件 `$GIT_DIR/info/sparse-checkout` 是 **per-worktree** 的，同镜像的其它 worktree 不受影响。 | 第三个 worktree 仍完整检出。 |
 | E6 | 非 cone 模式（`git sparse-checkout set --no-cone '/guides/'`）能做到挂点下**只有** `guides/`；cone 模式会连带检出仓根级文件（`README.md` / `LICENSE`）。两种下 `status` 都干净、diff 正常。 | 决定 D17 采用非 cone。 |
 | E7 | `git worktree add` 到**已存在且非空**的目录 → `fatal: '<path>' already exists`；到**已存在的空目录** → 成功。 | 决定「挂载点被外层仓内容占用」必须是启动期显式失败（见 design §5 失败模式 F3）。 |
+| E9 | **嵌套 worktree 的回收顺序不会坏账**：先删外层会连带删掉内层目录，内层镜像的注册被 git 标 `prunable`；随后对已消失路径跑 `git worktree remove --force` **仍返回 0** 并清干净注册表（`cleanupCreatedWorktree` 的 `exitCode !== 0` 判据不误报）。倒序（内层先删）同样干净。 | 据此把「按挂载深度倒序回收」定为**要求**而非依赖自愈（design §4.3）。 |
+| E8 | **整条物化流水线的端到端原型跑通**：5 个 worktree（挂根 app + 只读 `vendor/sdk` + 三层嵌套 `vendor/sdk/ext` + sparse `site/docs` + 同仓第二份 `compare/main`）物化后 `status` **全部干净**；worker 改动后每个仓的 diff **只含自己的**改动；根仓 diff 里既没有 `.gitignore`（它在 `base_commit` 里）也没有任何嵌套挂载点与上传目录；对可写仓跑 `git add -A` **零** `adding embedded git repository` 告警；只读仓的脏改动能被独立检出供告警；分支名 `…/{taskId}` 与 `…/{taskId}-2` 正确分化；幂等复检通过。 | 脚本 `design/RFC-248-repo-groups/materialize-prototype.sh`，可直接 `bash` 复跑。这条同时证明 E2 那个坏 gitlink 风险被 D1 方案彻底消除。 |
 
 ## 用户故事
 
@@ -205,7 +207,19 @@ RFC-066 的多仓有三条硬伤，导致它在真实编排里几乎用不起来
     挂载路径已经在建组期校验过唯一与安全。
 22. ✅ 文本 diff 与结构化 diff 用同一个 key 关联；前端
     `components/DiffViewer.tsx:89` 的 `REPO_MARKER` 与
-    `lib/changeReview.ts` 的 `label/` 拆分改为「按已知 key 集合做最长前缀匹配」。
+    `lib/changeReview.ts` 的 `label/` 拆分改为「按已知 key 集合做最长前缀匹配」，
+    key 集合由后端在两类 diff 响应里都带上的 `repoKeys: string[]` 提供，
+    前端**不自己猜**。
+22b. ✅ **结构化 diff 的根成员不加前缀**：`structuralDiff/assemble.ts:147` 的
+    `prefixPath` 改为「`label === ''` 时原样返回」。
+    〔设计门 G3：现状不变量是「加前缀 ⟺ 多仓」——单仓走
+    `structuralDiff/service.ts:95-118` 的早分支完全不加前缀，多仓才过
+    `mergeStructuralDiffs`，而 `prefixPath` 是**无条件**拼 `${label}/`。
+    把根成员的 key `''` 塞进去会得到 `/src/a.ts`（或 wire 形态的 `./src/a.ts`），
+    两者都不等于文本 diff 的 `src/a.ts`，前端 `changeReview.ts` 靠路径相等
+    join 两侧，根仓的符号 / 严重度 / 文件内容 / 导航会**静默脱节**。
+    改这一处即可覆盖 `assemble.ts:140-146` 注释列出的全部 7 类嵌入路径
+    （它们都经由 `prefixPath` 与 `prefixIdPath`）。〕
 23. ✅ 单仓任务（挂根单成员）的 diff 输出**不带**任何 `# === Repo:` 分段头，
     与今天字节级一致。
 24. ✅ 任务详情 header 显示组名 chip + 可展开的布局树（挂载路径 / ref / 只读
@@ -223,8 +237,18 @@ RFC-066 的多仓有三条硬伤，导致它在真实编排里几乎用不起来
 28. ✅ 单个仓库直启的任务**不**注入它所属任何组的记忆。
 29. ✅ 组记忆的读/管理权限沿用 `repo` scope 的规则（全员可读、仅 admin 可管，
     `services/memory.ts:743,758`）。
-30. ✅ 删除组时，绑在它上面的记忆按现有 scope 资源消失的处置走（
-    `services/memory.ts:745-746` fail-closed），并在删除确认里提示条数。
+30. ✅ **删除组时，在同一事务里把绑在它上面的记忆置为 `archived`**，DELETE
+    响应体与前端确认弹窗回报受影响条数。
+    〔设计门 G5 修正：初稿写「按 `services/memory.ts:745-746` fail-closed
+    处置」是**事实错误**——那条 fail-closed 只覆盖 agent/workflow；
+    `canViewMemory`（`memory.ts:743`）与 `filterVisibleMemories`
+    （`memory.ts:807`）对 repo/global **在加载资源行之前就 return true**。
+    按 AC-29 把 `repo_group` 并进那一档后，删组会留下仍可列出、仍会被注入的
+    孤儿记忆。改用 `archived` 而非硬删：保住用户知识，同时
+    `memoryInject` 的 `status='approved'` 过滤让注入立即停止。〕
+30b. ✅ `tasks` 携带 `repo_group_name` 快照列（与 D8 一致），组被删除后任务详情
+    的组 chip 仍能渲染名字，而不是退化成一个悬空 id。`task_repos` 本就是快照，
+    删组**不影响**在跑任务的布局；停的只有组记忆注入。
 
 ### 模板变量
 
@@ -236,9 +260,24 @@ RFC-066 的多仓有三条硬伤，导致它在真实编排里几乎用不起来
 
 ### 断代
 
-33. ✅ `StartTask.repos[]` 从 shared schema、后端、前端、MCP 工具集、API 文档
-    页**全部删除**，不留 deprecated 别名。
-34. ✅ `StartWorkgroupTaskSchema.repos` 同样删除，改 `repoGroupId`。
+33. ✅ `repos[]` 从**全部八个启动入口**删除，不留 deprecated 别名——
+    `StartTaskSchema` / `StartAgentTaskSchema`（`schemas/task.ts:1267`）/
+    `StartWorkgroupTaskSchema`（`schemas/workgroup.ts:597`）/ 全部 scheduled
+    payload 档 / `LaunchSpaceFields` + `applySpaceFields` / REST JSON + multipart
+    两条 / MCP `launch_task` 工具 / e2e fixture。契约迁移表见 design §2.3a。
+33b. ✅ **顶层 `repos` 进 `RETIRED_START_TASK_KEYS`**（`schemas/task.ts:730`），
+    在任何 schema parse **之前**硬拒 422。
+    〔设计门 G1：StartTask 用的是**非 strict zod**，删掉字段后旧客户端传
+    `repos` 会被**静默剥除**，然后在错误的工作区里把任务跑起来并返回 200——
+    与 AC-9 要求的 422 直接矛盾。同时删掉 `rejectRetiredStartTaskKeys` 里把
+    `repos` 当数组遍历查行内退役键的那段死代码（顶层已硬拒，不可达）。
+    三个启动面都要确认接上了这个守卫，不假设已接。〕
+34. ✅ 授权矩阵与角色表同步：`repos:update` 同时进 `PERMISSIONS`、
+    **`MANAGER_EXTRA`**（`schemas/permission.ts:344-350`）与 PAT 授权矩阵。
+    〔设计门 G4：repos 域不在 ACL 模型里，能力**完全靠那张手工表**授予；
+    不加进去，manager 建完组对 PUT 拿 403 且无法给 PAT 授权。〕
+    连带补 MCP 的 repo-group 资源映射与 `docs/api` 条目；测试用
+    admin / manager / 普通用户 / 窄 PAT 四档跑路由级授权矩阵。
 35. ✅ 存量定时任务里带 `repos[]` 的 payload 变为不可解析，走
     `services/scheduledTasks.ts:137` 既有的 `migrationNeeded` / `migrationError`
     降级路径展示，不静默吞掉、也不尝试自动迁移。
