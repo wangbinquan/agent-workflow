@@ -1,0 +1,160 @@
+// RFC-248 T37/T44 —— 仓库组管理界面的行为锁 + 设计系统兜底断言。
+//
+// 两类断言：
+//
+//  1. **行为**：`/repos` 的分段在两个视图间切换、组列表把展平仓数与绑定记忆数
+//     显示出来、编辑 / 删除按钮把 id 传出去。
+//  2. **源代码层兜底**（CLAUDE.md 强制条款的机器化）：新界面不得自造 modal
+//     chrome / 表单原语 / 原生 `<select>` / 自写空态。这类回归在运行时看起来
+//     「能用」，只有对着源码才查得出来——所以留一条文本断言。
+
+import { describe, expect, test, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { RepoGroup } from '@agent-workflow/shared'
+import { RepoGroupsPane } from '@/components/repos/RepoGroupsPane'
+
+const EDITOR_SRC = readFileSync(
+  resolve(__dirname, '..', 'src', 'components', 'repos', 'RepoGroupEditor.tsx'),
+  'utf8',
+)
+const PANE_SRC = readFileSync(
+  resolve(__dirname, '..', 'src', 'components', 'repos', 'RepoGroupsPane.tsx'),
+  'utf8',
+)
+const TREE_SRC = readFileSync(
+  resolve(__dirname, '..', 'src', 'components', 'repos', 'RepoLayoutTree.tsx'),
+  'utf8',
+)
+const REPOS_SRC = readFileSync(resolve(__dirname, '..', 'src', 'routes', 'repos.tsx'), 'utf8')
+
+/**
+ * 剥掉 `//` 行注释后再做「不得出现某个原生标签」的匹配。
+ *
+ * 不剥的话，文件头那句「**不用**原生 `<select>`」自己就会把守卫打红——一条
+ * 因为**解释了规则**而失败的守卫，只会教人把注释删掉，而不是把代码改对。
+ */
+const codeOnly = (src: string): string =>
+  src
+    .split('\n')
+    .filter((l) => !l.trimStart().startsWith('//') && !l.trimStart().startsWith('*'))
+    .join('\n')
+
+function group(over: Partial<RepoGroup> = {}): RepoGroup {
+  return {
+    id: 'g1',
+    name: '全栈',
+    description: '前后端一起跑',
+    version: 1,
+    createdByUserId: null,
+    createdAt: '2026-08-02T00:00:00.000Z',
+    updatedAt: '2026-08-02T00:00:00.000Z',
+    members: [],
+    flatRepoCount: 3,
+    boundMemories: 2,
+    ...over,
+  }
+}
+
+function renderPane(props: Partial<Parameters<typeof RepoGroupsPane>[0]> = {}) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const list = {
+    data: { items: [group()] },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  } as unknown as Parameters<typeof RepoGroupsPane>[0]['list']
+  const onEdit = vi.fn()
+  const onDelete = vi.fn()
+  render(
+    <QueryClientProvider client={qc}>
+      <RepoGroupsPane
+        list={list}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        deleteError={null}
+        newAction={<button type="button">new</button>}
+        {...props}
+      />
+    </QueryClientProvider>,
+  )
+  return { onEdit, onDelete }
+}
+
+describe('RepoGroupsPane —— 列表行为', () => {
+  test('显示名称、展平仓数与绑定记忆数', () => {
+    renderPane()
+    const row = screen.getByTestId('repo-group-row-g1')
+    expect(row.textContent).toContain('全栈')
+    // 展平仓数是「这个组实际会物化几个仓」——组套组后与成员数不是一回事，
+    // 列表里必须显示展平后的那个数。
+    expect(row.textContent).toContain('3')
+    // 绑定记忆数是删组确认弹窗要用的信息（设计门 G5）。
+    expect(row.textContent).toContain('2')
+  })
+
+  test('编辑 / 删除把这一行的组传出去', () => {
+    const { onEdit, onDelete } = renderPane()
+    fireEvent.click(screen.getByTestId('repo-group-edit-g1'))
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }))
+    fireEvent.click(screen.getByTestId('repo-group-delete-g1'))
+    expect(onDelete).toHaveBeenCalledWith('g1')
+  })
+
+  test('空列表走 EmptyState 并带上新建入口', () => {
+    renderPane({
+      list: {
+        data: { items: [] },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as unknown as Parameters<typeof RepoGroupsPane>[0]['list'],
+    })
+    expect(screen.getByTestId('repo-groups-empty')).toBeTruthy()
+  })
+})
+
+describe('RFC-248 设计系统兜底（源代码层）', () => {
+  test('编辑器走 <Dialog>，不自造 overlay / panel chrome', () => {
+    expect(EDITOR_SRC).toContain("from '@/components/Dialog'")
+    expect(EDITOR_SRC).not.toMatch(/className="[^"]*__overlay/)
+    expect(EDITOR_SRC).not.toMatch(/className="[^"]*__panel/)
+  })
+
+  test('编辑器的下拉走 <Select>，绝不落原生 <select>', () => {
+    // 原生弹层无法与周围 UI 风格对齐（CLAUDE.md 点名禁止）。
+    expect(EDITOR_SRC).toContain("from '@/components/Select'")
+    expect(codeOnly(EDITOR_SRC)).not.toMatch(/<select[\s>]/)
+  })
+
+  test('编辑器的表单字段走 Form 原语，不落裸 <input>', () => {
+    expect(EDITOR_SRC).toContain("from '@/components/Form'")
+    expect(codeOnly(EDITOR_SRC)).not.toMatch(/<input[\s>]/)
+  })
+
+  test('三个新组件都不自写错误 / 空 / 加载态', () => {
+    for (const src of [EDITOR_SRC, PANE_SRC, TREE_SRC]) {
+      expect(codeOnly(src)).not.toMatch(/className="error-box"/)
+      expect(codeOnly(src)).not.toMatch(/<div className="muted">\s*\{t\(/)
+    }
+    // 空态与加载态经共享原语表达。
+    expect(PANE_SRC).toContain('EmptyState')
+    expect(PANE_SRC).toContain('LoadingState')
+    expect(EDITOR_SRC).toContain('QueryState')
+  })
+
+  test('布局树是三处共用的**同一个**组件，不是各画一棵', () => {
+    // 编辑器预览、组列表展开行、任务详情都 import 它——任何一处 fork 都会让
+    // 三个界面的树慢慢长歪。
+    expect(EDITOR_SRC).toContain("from '@/components/repos/RepoLayoutTree'")
+    expect(PANE_SRC).toContain("from '@/components/repos/RepoLayoutTree'")
+  })
+
+  test('/repos 的视图切换走 <Segmented>，不自写 radio 组', () => {
+    expect(REPOS_SRC).toContain("from '@/components/Segmented'")
+    expect(REPOS_SRC).toContain('testidPrefix="repos-tab"')
+    expect(codeOnly(REPOS_SRC)).not.toMatch(/type="radio"/)
+  })
+})

@@ -1,7 +1,7 @@
 // RFC-024 → RFC-246 — cached-repo operations surface. The wire remains
 // redacted and every refresh/delete/batch-import behavior is preserved.
 
-import type { CachedRepo, ListCachedReposResponse } from '@agent-workflow/shared'
+import type { CachedRepo, ListCachedReposResponse, RepoGroup } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
@@ -20,6 +20,8 @@ import { RelativeTime } from '@/components/RelativeTime'
 import { BatchImportDialog } from '@/components/repos/BatchImportDialog'
 import { SubmoduleBadge } from '@/components/repos/SubmoduleBadge'
 import { Segmented } from '@/components/Segmented'
+import { RepoGroupEditor } from '@/components/repos/RepoGroupEditor'
+import { RepoGroupsPane } from '@/components/repos/RepoGroupsPane'
 import { TableViewport } from '@/components/TableViewport'
 import { REPO_ICON } from '@/components/icons/resourceIcons'
 import {
@@ -122,6 +124,36 @@ function ReposPage() {
     setFilterOpen(false)
   }
 
+  // RFC-248 T37: 「远端仓库 | 仓库组」分段。两者是同一类资源的两个视图
+  // （组就是「一组仓怎么摆」），所以共用这一页而不是新开一条路由——用户在
+  // 侧栏里找「仓库」时不该还要猜「组在哪」。
+  const [tab, setTab] = useState<'repos' | 'groups'>('repos')
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editing, setEditing] = useState<RepoGroup | undefined>(undefined)
+  const groupList = useQuery<{ items: RepoGroup[] }>({
+    queryKey: ['repo-groups'],
+    queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
+    enabled: tab === 'groups',
+  })
+  const removeGroup = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/repo-groups/${encodeURIComponent(id)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['repo-groups'] }),
+  })
+
+  const newGroupAction = (
+    <button
+      type="button"
+      className="btn btn--primary"
+      data-testid="repo-groups-new"
+      onClick={() => {
+        setEditing(undefined)
+        setEditorOpen(true)
+      }}
+    >
+      {t('repoGroups.newButton')}
+    </button>
+  )
+
   const batchImportAction = (
     <button
       ref={batchImportTriggerRef}
@@ -139,13 +171,44 @@ function ReposPage() {
       <div className="operations-surface">
         <PageHeader
           title={t('repos.title')}
-          actions={isInitialEmpty ? undefined : batchImportAction}
+          actions={
+            tab === 'groups' ? newGroupAction : isInitialEmpty ? undefined : batchImportAction
+          }
           className="operations-surface__header"
         >
           <p className="operations-surface__subtitle">{t('repos.operations.subtitle')}</p>
         </PageHeader>
 
-        {!isInitialEmpty && (
+        <Segmented<'repos' | 'groups'>
+          value={tab}
+          onChange={setTab}
+          ariaLabel={t('repoGroups.tabAria')}
+          testidPrefix="repos-tab"
+          options={[
+            { value: 'repos', label: t('repos.title') },
+            { value: 'groups', label: t('repoGroups.tabLabel') },
+          ]}
+        />
+
+        {tab === 'groups' && (
+          <RepoGroupsPane
+            list={groupList}
+            onEdit={(g) => {
+              setEditing(g)
+              setEditorOpen(true)
+            }}
+            onDelete={(id) => removeGroup.mutate(id)}
+            deleteError={removeGroup.error}
+            newAction={newGroupAction}
+          />
+        )}
+        <RepoGroupEditor
+          open={editorOpen}
+          onClose={() => setEditorOpen(false)}
+          {...(editing !== undefined ? { group: editing } : {})}
+        />
+
+        {tab === 'repos' && !isInitialEmpty && (
           <OperationsToolbar<RepoOperationsView>
             view={view}
             onViewChange={setView}
@@ -173,140 +236,146 @@ function ReposPage() {
           />
         )}
 
-        <FeedbackStack variant="section">
-          {list.error !== null && list.error !== undefined && (
-            <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
-          )}
-          {refresh.error !== null && refresh.error !== undefined && (
-            <ErrorBanner error={refresh.error} />
-          )}
-          {remove.error !== null && remove.error !== undefined && (
-            <ErrorBanner error={remove.error} />
-          )}
-        </FeedbackStack>
-        {list.isLoading && <LoadingState label={t('repos.loading')} data-testid="repos-loading" />}
-        {isInitialEmpty && (
-          <EmptyState
-            title={t('repos.empty')}
-            description={t('repos.emptyDescription')}
-            icon={REPO_ICON}
-            action={batchImportAction}
-            data-testid="repos-empty"
-          />
-        )}
-        {noMatches && (
-          <EmptyState
-            title={t('common.noMatches')}
-            description={t('repos.operations.noMatchesDescription')}
-            action={
-              <button type="button" className="btn" onClick={clearFilters}>
-                {t('common.clearFilters')}
-              </button>
-            }
-            data-testid="repos-no-matches"
-          />
-        )}
-        {filtered.length > 0 && (
-          <TableViewport label={t('repos.title')}>
-            <table
-              className="data-table operations-table repo-operations"
-              data-testid="repos-table"
-            >
-              <thead>
-                <tr>
-                  <th>{t('repos.operations.columns.repository')}</th>
-                  <th>{t('repos.operations.columns.freshness')}</th>
-                  <th>{t('repos.operations.columns.usage')}</th>
-                  <th>{t('repos.colActions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="repo-operations__row"
-                    data-testid={`repos-row-${item.id}`}
-                  >
-                    <td className="repo-operations__repo">
-                      <span className="operations-table__mobile-label">
-                        {t('repos.operations.columns.repository')}：
-                      </span>
-                      <div className="repo-operations__url-line">
-                        <span className="repo-operations__url" title={item.urlRedacted}>
-                          {item.urlRedacted}
-                        </span>
-                        <SubmoduleBadge
-                          hasSubmodules={item.hasSubmodules}
-                          lastSubmoduleSyncOk={item.lastSubmoduleSyncOk}
-                          lastSubmoduleSyncError={item.lastSubmoduleSyncError}
-                        />
-                      </div>
-                      <div className="repo-operations__meta">
-                        <code title={item.localPath}>{item.localPath}</code>
-                        {item.defaultBranch !== null && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span>
-                              {t('repos.operations.branch', { branch: item.defaultBranch })}
+        {tab === 'repos' && (
+          <>
+            <FeedbackStack variant="section">
+              {list.error !== null && list.error !== undefined && (
+                <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
+              )}
+              {refresh.error !== null && refresh.error !== undefined && (
+                <ErrorBanner error={refresh.error} />
+              )}
+              {remove.error !== null && remove.error !== undefined && (
+                <ErrorBanner error={remove.error} />
+              )}
+            </FeedbackStack>
+            {list.isLoading && (
+              <LoadingState label={t('repos.loading')} data-testid="repos-loading" />
+            )}
+            {isInitialEmpty && (
+              <EmptyState
+                title={t('repos.empty')}
+                description={t('repos.emptyDescription')}
+                icon={REPO_ICON}
+                action={batchImportAction}
+                data-testid="repos-empty"
+              />
+            )}
+            {noMatches && (
+              <EmptyState
+                title={t('common.noMatches')}
+                description={t('repos.operations.noMatchesDescription')}
+                action={
+                  <button type="button" className="btn" onClick={clearFilters}>
+                    {t('common.clearFilters')}
+                  </button>
+                }
+                data-testid="repos-no-matches"
+              />
+            )}
+            {filtered.length > 0 && (
+              <TableViewport label={t('repos.title')}>
+                <table
+                  className="data-table operations-table repo-operations"
+                  data-testid="repos-table"
+                >
+                  <thead>
+                    <tr>
+                      <th>{t('repos.operations.columns.repository')}</th>
+                      <th>{t('repos.operations.columns.freshness')}</th>
+                      <th>{t('repos.operations.columns.usage')}</th>
+                      <th>{t('repos.colActions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="repo-operations__row"
+                        data-testid={`repos-row-${item.id}`}
+                      >
+                        <td className="repo-operations__repo">
+                          <span className="operations-table__mobile-label">
+                            {t('repos.operations.columns.repository')}：
+                          </span>
+                          <div className="repo-operations__url-line">
+                            <span className="repo-operations__url" title={item.urlRedacted}>
+                              {item.urlRedacted}
                             </span>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    <td className="repo-operations__freshness">
-                      <span className="operations-table__mobile-label">
-                        {t('repos.operations.columns.freshness')}：
-                      </span>
-                      <span>
-                        {t('repos.operations.fetched')} <RelativeTime ts={item.lastFetchedAt} />
-                      </span>
-                      <span className="repo-operations__secondary">
-                        {t('repos.operations.autoRefresh')}{' '}
-                        {item.lastAutoRefreshAt === null ? (
-                          t('common.emDash')
-                        ) : (
-                          <RelativeTime ts={item.lastAutoRefreshAt} />
-                        )}
-                      </span>
-                    </td>
-                    <td className="repo-operations__usage">
-                      <span className="operations-table__mobile-label">
-                        {t('repos.operations.columns.usage')}：
-                      </span>
-                      <strong>{item.referencingTaskCount}</strong>
-                      <span>{t('repos.operations.referencingTasks')}</span>
-                    </td>
-                    <td className="repo-operations__actions">
-                      <span className="operations-table__mobile-label">
-                        {t('common.ariaActions')}：
-                      </span>
-                      <div className="data-table__actions">
-                        <button
-                          type="button"
-                          className="btn btn--sm"
-                          disabled={refresh.isPending}
-                          onClick={() => refresh.mutate(item.id)}
-                        >
-                          {t('repos.refresh')}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--sm btn--danger"
-                          onClick={() =>
-                            item.referencingTaskCount > 0
-                              ? setPendingDelete(item)
-                              : remove.mutate({ id: item.id })
-                          }
-                        >
-                          {t('repos.delete')}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableViewport>
+                            <SubmoduleBadge
+                              hasSubmodules={item.hasSubmodules}
+                              lastSubmoduleSyncOk={item.lastSubmoduleSyncOk}
+                              lastSubmoduleSyncError={item.lastSubmoduleSyncError}
+                            />
+                          </div>
+                          <div className="repo-operations__meta">
+                            <code title={item.localPath}>{item.localPath}</code>
+                            {item.defaultBranch !== null && (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span>
+                                  {t('repos.operations.branch', { branch: item.defaultBranch })}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="repo-operations__freshness">
+                          <span className="operations-table__mobile-label">
+                            {t('repos.operations.columns.freshness')}：
+                          </span>
+                          <span>
+                            {t('repos.operations.fetched')} <RelativeTime ts={item.lastFetchedAt} />
+                          </span>
+                          <span className="repo-operations__secondary">
+                            {t('repos.operations.autoRefresh')}{' '}
+                            {item.lastAutoRefreshAt === null ? (
+                              t('common.emDash')
+                            ) : (
+                              <RelativeTime ts={item.lastAutoRefreshAt} />
+                            )}
+                          </span>
+                        </td>
+                        <td className="repo-operations__usage">
+                          <span className="operations-table__mobile-label">
+                            {t('repos.operations.columns.usage')}：
+                          </span>
+                          <strong>{item.referencingTaskCount}</strong>
+                          <span>{t('repos.operations.referencingTasks')}</span>
+                        </td>
+                        <td className="repo-operations__actions">
+                          <span className="operations-table__mobile-label">
+                            {t('common.ariaActions')}：
+                          </span>
+                          <div className="data-table__actions">
+                            <button
+                              type="button"
+                              className="btn btn--sm"
+                              disabled={refresh.isPending}
+                              onClick={() => refresh.mutate(item.id)}
+                            >
+                              {t('repos.refresh')}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--sm btn--danger"
+                              onClick={() =>
+                                item.referencingTaskCount > 0
+                                  ? setPendingDelete(item)
+                                  : remove.mutate({ id: item.id })
+                              }
+                            >
+                              {t('repos.delete')}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableViewport>
+            )}
+          </>
         )}
       </div>
 

@@ -164,20 +164,27 @@ export function buildChangeEntries(
     }
   }
 
+  // RFC-248 T40: 挂根成员的规范 key 是**空串**，不是 null——null 表示「整个
+  // diff 没有分段」（单仓 baseline）。两者在拼前缀这件事上表现一致（都不加
+  // 前缀），但 `repoLabel` 要保留区分：`''` 说明这是多仓里的根成员。
+  const noPrefix = (label: string | null): boolean => label === null || label === ''
+  const withPrefix = (label: string | null, rel: string): string =>
+    noPrefix(label) ? rel : `${label}/${rel}`
+
   const entries: ChangeFileEntry[] = []
   const seen = new Set<string>()
   for (const g of groups) {
     for (const block of g.blocks) {
       if (block.header === '(preamble)') continue
       const rel = diffFilePath(block.header)
-      const structuralKey = g.repo === null ? rel : `${g.repo}/${rel}`
+      const structuralKey = withPrefix(g.repo, rel)
       const f = structuralByKey.get(structuralKey)
       const textStats = blockTextStats(block.lines)
       const renamedFrom =
         f?.renamedFrom !== undefined
-          ? g.repo === null
+          ? noPrefix(g.repo)
             ? f.renamedFrom
-            : stripLabel(f.renamedFrom, g.repo)
+            : stripLabel(f.renamedFrom, g.repo as string)
           : renamedFromOfHeader(block.header)
       const sev = f === undefined ? { breaking: 0, risky: 0, safe: 0 } : severityCounts([f])
       entries.push({
@@ -200,6 +207,8 @@ export function buildChangeEntries(
           (f !== undefined ? f.changes.length === 0 : textStats.added + textStats.removed === 0),
         textStats,
         severity: { breaking: sev.breaking, risky: sev.risky },
+        // 挂根成员也要带 `::` 前缀区分——多仓里根仓与子仓可能有同名文件，
+        // 共用 viewedKey 会让「已查看」状态串台。
         viewedKey: g.repo === null ? block.header : `${g.repo}::${block.header}`,
       })
       seen.add(structuralKey)

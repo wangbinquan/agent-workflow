@@ -1174,6 +1174,14 @@ export const taskRepos = sqliteTable(
      */
     readonly: integer('readonly', { mode: 'boolean' }).notNull().default(false),
     /**
+     * RFC-248 AC-19: 只读成员被丢弃的改动处数。NULL = 从未检查（存量行 / 可写
+     * 成员）；0 = 检查过且干净；N>0 = 有 N 处改动**没有**被提交推送。
+     *
+     * 框架不在文件系统层面阻止写入只读成员，所以「agent 改了但什么都没推」是
+     * 真实可能发生的事。只落 log.warn 等于静默——这一列让任务详情看得见。
+     */
+    readonlyDirtyCount: integer('readonly_dirty_count'),
+    /**
      * RFC-248 D1: 平台预置 commit 的 sha——把嵌套挂载点写进本仓 `.gitignore`
      * 并提交的那一笔，`base_commit` 指向它。单独存一列，让「这一笔到底是不是
      * 平台造的」在排错与 UI 上一眼可判，也让「它的父提交才是真 base tip」可推导。

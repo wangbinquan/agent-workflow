@@ -7,6 +7,7 @@
 // can reuse the same parsing + per-line styling without duplicating it.
 
 import { useMemo } from 'react'
+import { parseRepoKeyWire } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 
 interface DiffViewerProps {
@@ -79,7 +80,9 @@ export function splitByFile(diff: string): FileBlock[] {
 }
 
 /** RFC-066 multi-repo: one repo's file blocks within a concatenated worktree
- *  diff. `repo` is the name from the `# === Repo: <name> ===` marker, or null
+ *  diff. `repo` is the canonical repo key parsed from the
+ *  `# === Repo: <name> ===` marker (RFC-248: the key IS the mount path; the
+ *  wire writes the root member as `.`, parsed back to `''` here), or null
  *  for an un-marked (single-repo) diff so callers render it without a heading. */
 export interface RepoGroup {
   repo: string | null
@@ -121,7 +124,12 @@ export function splitByRepo(diff: string): RepoGroup[] {
     const m = REPO_MARKER.exec(line)
     if (m !== null) {
       flush()
-      repo = m[1] ?? null
+      // RFC-248 T40: marker 里的挂根成员写作 `.`（`repoKeyWire`——空串在
+      // `# === Repo:  ===` 里不可读也不可解析）。这里过 `parseRepoKeyWire`
+      // 还原成规范 key `''`，与结构化侧的 `repoKey` 对齐；不还原的话
+      // `changeReview` 会拿 `.` 去拼 `./src/a.ts`，与结构化的 `src/a.ts`
+      // **逐字符不等**，根仓的符号 / 严重度 / 内容 / 导航全部静默脱节。
+      repo = m[1] === undefined ? null : parseRepoKeyWire(m[1])
       buf = []
       continue
     }

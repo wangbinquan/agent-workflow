@@ -180,6 +180,14 @@ export const TaskRepoSchema = z.object({
   subdir: z.string().default(''),
   /** RFC-248 D11: 只读成员不快照 / 不进 diff / 不参与自动提交推送。 */
   readonly: z.boolean().default(false),
+  /**
+   * RFC-248 AC-19: 只读成员被**丢弃**的改动处数。null = 从未检查（可写成员 /
+   * 存量任务）；0 = 检查过且干净；N>0 = 有 N 处改动没被提交推送。
+   *
+   * 框架不在文件系统层面阻止写入只读成员，所以「agent 改了但什么都没推」是
+   * 真实可能的。任务详情据此在那个成员旁边给出提示，而不是让它静默。
+   */
+  readonlyDirtyCount: z.number().int().nonnegative().nullish().default(null),
   /** RFC-248 D1: 平台预置 commit 的 sha；null = 本仓没有嵌套子成员。 */
   gitignoreCommit: z.string().nullable().default(null),
   /** RFC-034: post-`worktree add` submodule init telemetry per repo. */

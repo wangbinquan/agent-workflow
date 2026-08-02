@@ -233,7 +233,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 132 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 133 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -330,8 +330,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-244 task-list query indexes bumped to 128 with 0128.
     // RFC-247 bumped to 130 with 0129/0130.
     // RFC-248 bumped to 132 with 0131_rfc248_repo_groups +
-    // 0132_rfc248_memory_repo_group_scope.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(132)
+    // 0132_rfc248_memory_repo_group_scope，再到 133 with
+    // 0133_rfc248_readonly_dirty（AC-19：只读成员被丢弃的改动处数）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(133)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -418,6 +418,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/repo-groups' },
   { method: 'GET', path: '/api/repo-groups/:id' },
   { method: 'GET', path: '/api/repo-groups/:id/layout' },
+  // RFC-248 T36: 编辑器实时预览——未保存成员表的干跑展平（纯读、零副作用）。
+  { method: 'POST', path: '/api/repo-groups/preview' },
   { method: 'PUT', path: '/api/repo-groups/:id' },
   { method: 'DELETE', path: '/api/repo-groups/:id' },
 

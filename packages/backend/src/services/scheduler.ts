@@ -373,6 +373,8 @@ interface SchedulerState {
    * migration 0034's INSERT FROM backfill.
    */
   repos: Array<{
+    /** RFC-248 AC-19: 回写 `task_repos.readonly_dirty_count` 时定位行。 */
+    repoIndex: number
     repoPath: string
     worktreePath: string
     worktreeDirName: string
@@ -447,6 +449,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   const repos: SchedulerState['repos'] =
     repoRows.length > 0
       ? repoRows.map((r) => ({
+          repoIndex: r.repoIndex,
           repoPath: r.repoPath,
           worktreePath: r.worktreePath,
           worktreeDirName: r.worktreeDirName,
@@ -458,6 +461,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
         }))
       : [
           {
+            repoIndex: 0,
             repoPath: task.repoPath,
             worktreePath: task.worktreePath,
             worktreeDirName: '',
@@ -1742,12 +1746,22 @@ async function maybeRunCommitPush(
     // 框架不在文件系统层面阻止写入，所以 agent 确实可能改了它。静默丢弃最难
     // 排查，故落一条任务级告警（不改任务状态：一个误建的临时文件不该搞垮整任务）。
     if (repo.readonly) {
-      if (status.stdout.trim() !== '') {
-        // 用与 RFC-034 子模块初始化失败同一套「带标签的 log.warn」形态——本仓
-        // 目前没有独立的任务告警表，那类信息要么进 log、要么进 task_repos 的
-        // 专用列。任务详情上的可见呈现归 PR-5（AC-19），届时决定是加一列还是
-        // 复用别的通道；在那之前这条至少不会静默。
-        const changed = status.stdout.trim().split('\n')
+      const changed = status.stdout.trim() === '' ? [] : status.stdout.trim().split('\n')
+      // AC-19: 持久化到 `task_repos.readonly_dirty_count`，任务详情据此在这个
+      // 成员旁边显示「有 N 处改动被丢弃」。只落 log.warn 等于静默——用户看到
+      // agent 说「改好了」、工作树里也确实改了，推上去却什么都没有。
+      //
+      // **刻意不用 lifecycle_alerts**：那张表绑 `LifecycleAlertRule`，RFC-108
+      // 的自动修复循环会全局扫描并尝试修复每一条。这不是待修复的不变量违反，
+      // 是给人看的事实通报，让修复循环去碰它只会误修。
+      //
+      // 干净时写 0（而不是留 NULL），这样「检查过且干净」与「从未检查」在 UI
+      // 上可区分。
+      await state.db
+        .update(taskRepos)
+        .set({ readonlyDirtyCount: changed.length })
+        .where(and(eq(taskRepos.taskId, task.id), eq(taskRepos.repoIndex, repo.repoIndex)))
+      if (changed.length > 0) {
         log.warn('[rfc248/readonly-dirty] read-only repo was modified; NOT committed or pushed', {
           taskId: task.id,
           mountPath: repo.mountPath === '' ? '<root>' : repo.mountPath,
@@ -5734,6 +5748,8 @@ async function runLoopWrapperNode(
     : {
         ...state,
         repos: wrapperIso.repos.map((r, i) => ({
+          // iso 仓按下标与 canonical 对齐，repoIndex 直接沿用。
+          repoIndex: i,
           repoPath: r.repoPath,
           worktreePath: r.isoWorktreePath,
           worktreeDirName: r.worktreeDirName,
@@ -7819,7 +7835,8 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
     ? state
     : {
         ...state,
-        repos: wrapperIso.repos.map((r) => ({
+        repos: wrapperIso.repos.map((r, i) => ({
+          repoIndex: i,
           repoPath: r.repoPath,
           worktreePath: r.isoWorktreePath,
           worktreeDirName: r.worktreeDirName,

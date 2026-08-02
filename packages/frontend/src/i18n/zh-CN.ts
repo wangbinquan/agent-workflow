@@ -1040,6 +1040,41 @@ export interface Resources {
       body: string
     }
   }
+  repoGroups: {
+    tabLabel: string
+    tabAria: string
+    newButton: string
+    loading: string
+    empty: string
+    emptyDescription: string
+    columns: { name: string; repoCount: string; memories: string }
+    editor: {
+      createTitle: string
+      editTitle: string
+      name: string
+      description: string
+      members: string
+      preview: string
+      kindRepo: string
+      kindGroup: string
+      pickRepo: string
+      pickGroup: string
+      mountPlaceholder: string
+      refPlaceholder: string
+      subdirPlaceholder: string
+      readonly: string
+      addRepo: string
+      addGroup: string
+      pendingImports: string
+    }
+    layout: {
+      rootMount: string
+      subdirChip: string
+      readonlyChip: string
+      via: string
+      empty: string
+    }
+  }
   repos: {
     title: string
     operations: {
@@ -2351,6 +2386,7 @@ export interface Resources {
     /** RFC-248: 任务详情的组溯源 chip / 只读成员 chip。 */
     repoGroupChip: string
     repoReadonlyChip: string
+    repoReadonlyDirty: string
     cancelButton: string
     relaunchButton: string
     resumeButton: string
@@ -5344,6 +5380,42 @@ export const zhCN: Resources = {
       body: '该页面仅管理员角色可访问。',
     },
   },
+  repoGroups: {
+    tabLabel: '仓库组',
+    tabAria: '仓库视图',
+    newButton: '新建仓库组',
+    loading: '正在加载仓库组…',
+    empty: '还没有仓库组',
+    emptyDescription:
+      '仓库组描述「哪几个仓 + 各自 checkout 什么 + 在运行目录里怎么摆」，是多仓任务的唯一启动方式。',
+    columns: { name: '名称', repoCount: '展平仓数', memories: '绑定记忆' },
+    editor: {
+      createTitle: '新建仓库组',
+      editTitle: '编辑仓库组',
+      name: '名称',
+      description: '描述',
+      members: '成员',
+      preview: '布局预览',
+      kindRepo: '仓库',
+      kindGroup: '组',
+      pickRepo: '— 选择一个已缓存仓 —',
+      pickGroup: '— 选择一个仓库组 —',
+      mountPlaceholder: '挂载路径（留空 = 任务根）',
+      refPlaceholder: 'ref（留空 = 默认分支）',
+      subdirPlaceholder: '仓内子目录（留空 = 整仓）',
+      readonly: '只读',
+      addRepo: '+ 添加仓库',
+      addGroup: '+ 添加组',
+      pendingImports: '还有 {{count}} 个仓按 URL 填写，将在保存时导入（预览不含它们）',
+    },
+    layout: {
+      rootMount: '（任务根）',
+      subdirChip: '子目录：{{subdir}}',
+      readonlyChip: '只读',
+      via: '经由 {{chain}}',
+      empty: '这个组还没有成员。',
+    },
+  },
   repos: {
     title: '远端仓缓存',
     operations: {
@@ -6963,6 +7035,7 @@ export const zhCN: Resources = {
     multiRepoSummary: '{{count}} 个仓库',
     repoGroupChip: '组：{{name}}',
     repoReadonlyChip: '只读',
+    repoReadonlyDirty: '{{count}} 处改动被丢弃（只读成员不提交推送）',
     cancelButton: '取消任务',
     relaunchButton: '再次启动',
     resumeButton: '继续任务',

@@ -11,7 +11,11 @@
 // 授权矩阵行、不进 RFC-099 的 per-resource ACL。注意 `repos:update` 是本 RFC
 // 新引入的点——在此之前 repos 域没有任何 PUT/PATCH 路由。
 
-import { CreateRepoGroupSchema, UpdateRepoGroupSchema } from '@agent-workflow/shared'
+import {
+  CreateRepoGroupSchema,
+  PreviewRepoGroupSchema,
+  UpdateRepoGroupSchema,
+} from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { loadConfig } from '@/config'
@@ -23,6 +27,7 @@ import {
   getRepoGroup,
   getRepoGroupLayoutResponse,
   listRepoGroups,
+  previewRepoGroupLayout,
   updateRepoGroup,
 } from '@/services/repoGroup'
 import type { AppDeps } from '@/server'
@@ -88,6 +93,23 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Get a repo group',
     },
     (c) => c.json(getRepoGroup(deps.db, c.req.param('id'))),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/repo-groups/preview',
+      // 纯读：干跑展平，不导入任何仓、不落任何行。所以只要 read 就够——
+      // 用 `repos:create` 反而会让「只能看」的用户在编辑器里连预览都拿不到。
+      permissions: ['repos:read'],
+      tokenAccess: 'allow',
+      summary: 'Dry-run flatten an unsaved repo group definition',
+    },
+    async (c) => {
+      const body = PreviewRepoGroupSchema.parse(await c.req.json())
+      return c.json(previewRepoGroupLayout(deps.db, body))
+    },
   )
 
   registerRoute(

@@ -69,7 +69,13 @@ function makeFixtureRepo(label: string): RepoFixture {
   }
 }
 
+// RFC-248: 名字必须**每次调用唯一**——这个 describe 是 serial 且共用一个
+// daemon，两条测试各建一次；固定名字的第二次会撞 409（agent 名唯一）。
+let seedSeq = 0
+
 async function seedLinearWorkflow(daemon: DaemonHandle): Promise<string> {
+  const suffix = `${(seedSeq += 1)}`
+  const agentName = `rfc248-agent-${suffix}`
   const headers = {
     Authorization: `Bearer ${daemon.token}`,
     'Content-Type': 'application/json',
@@ -78,7 +84,7 @@ async function seedLinearWorkflow(daemon: DaemonHandle): Promise<string> {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      name: 'rfc066-agent',
+      name: agentName,
       description: 'multi-repo e2e stub',
       outputs: ['answer'],
       readonly: true,
@@ -91,7 +97,7 @@ async function seedLinearWorkflow(daemon: DaemonHandle): Promise<string> {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      name: 'rfc066-multi-repo',
+      name: `rfc248-multi-repo-${suffix}`,
       description: 'multi-repo e2e workflow',
       definition: {
         $schema_version: 2,
@@ -102,7 +108,7 @@ async function seedLinearWorkflow(daemon: DaemonHandle): Promise<string> {
             id: 'agent_1',
             kind: 'agent-single',
             agentId: agent.id,
-            agentName: 'rfc066-agent',
+            agentName,
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },
           },

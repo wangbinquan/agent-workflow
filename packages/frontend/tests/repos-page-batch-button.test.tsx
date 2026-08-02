@@ -104,7 +104,15 @@ describe('/repos page batch import button (RFC-033)', () => {
     // RFC-198: one stable action element moves between the initial empty state
     // and PageHeader, so a list refresh while the dialog is open updates the
     // shared ref to the newly connected trigger.
-    expect(src).toContain('actions={isInitialEmpty ? undefined : batchImportAction}')
+    // RFC-248 T37 加了「远端仓库 | 仓库组」分段后，`actions` 外层多了一个
+    // `tab === 'groups' ? newGroupAction : …` 的三元。本条锁的不变量没变——
+    // **仓库分段下**空态与 PageHeader 仍共用同一个 `batchImportAction` 元素
+    // 实例，所以列表刷新时 ref 会跟到新挂载的那个 trigger 上。改成断言这段
+    // 子表达式，既不因为外层多一层就假红，也不会漏掉真正的回归（把
+    // batchImportAction 拆成两个不同实例）。
+    expect(src).toContain('isInitialEmpty ? undefined : batchImportAction')
+    // 且 `batchImportAction` 只被**定义一次**（拆成两份就破坏共享实例）。
+    expect(src.match(/const batchImportAction = /g)).toHaveLength(1)
     expect(src).toMatch(/<EmptyState[^>]+action=\{batchImportAction\}/)
   })
 

@@ -27,7 +27,9 @@
 - **PR-5a 前端**：启动向导的仓库下拉里同列仓库组（用户视角只多了个标签）、remote 空间锁成单行、任务详情的组 chip + 只读 chip + 挂载路径、记忆表单第 5 档 scope、`changeReview` 读 `repoKey`、e2e 重写为组路径。
 - 顺手修掉两条**早已空转**的测试（`task-start-pre-worktree` 的单仓回落自 RFC-165 起只建空目录就断言「目录存在」；`rfc107` 的 D12 因旧路径不给同源仓加分支后缀而只物化一个仓）。
 
-**余下 PR-5b（组的管理界面）**：`/repos` 页的分段控件、`RepoGroupEditor` 弹窗、`RepoLayoutTree` 公共组件。启动面与消费面已完整可用——组可经 `POST /api/repo-groups` 或 MCP `resource_write(kind="repo-groups")` 创建。三条改设计的 P1 已落地，**第三轮设计门 + 实现门**待跑。
+**PR-5b（组的管理界面）也已落地**：`RepoLayoutTree` 公共组件（编辑器预览 / 组列表展开行两处共用同一棵树）、`RepoGroupEditor` 弹窗（全程复用 Dialog / Field / Select / Switch / QueryState，配一条源代码层守卫锁住「不得自造 chrome」）、`/repos` 页「远端仓库 | 仓库组」分段 + 组列表。为编辑器的实时预览新增 `POST /api/repo-groups/preview`——**干跑展平、纯读**（`repoUrl` 成员不导入、只报 `pendingImports`），用的是服务端同一份展平实现，所以组套组 / 深度 / 循环 / 只读并集 / 挂载点冲突在预览期就按真实语义报出来，不会「预览通过、保存 422」。AC-19 补上 `task_repos.readonly_dirty_count`（迁移 0133）：只读成员被改动过要**看得见**，否则用户会遇到「agent 说改好了、工作树里确实改了、推上去什么都没有」这类最难排查的问题；刻意**不**走 `lifecycle_alerts`（那张表会被 RFC-108 的自动修复循环误修）。
+
+**RFC-248 至此实现完毕**（T1–T45 全部落地）。剩余把关项：**第三轮设计门 + 实现门**（Codex 双门），以及一次真实浏览器的视觉对齐自查（T43）。
 
 ✅ **已完成并合入 main（2026-08-02）：[RFC-247 MCP 远程接入、路由元数据授权层与 API 文档界面](design/RFC-247-mcp-remote-access/proposal.md)** —— 平台首次对外提供程序化接口：`POST /api/mcp`（Streamable HTTP / 无状态 / 只接 PAT）+ 账号页自助签发令牌 + **资源类型 × `新增/修改/删除/执行`** 矩阵（**读恒开**，空矩阵 = 只读）。**显式 supersede RFC-221 D1**。为让「能建不能改」「不能删」在 REST 层真实成立，把 `资源:write` 拆成 `:create/:update/:delete`，并引入**路由元数据注册层**作为权限门单一事实源。用户授权「不用管现有实现、还没人用」⇒ 存量断代、零兼容包袱。决策固化为 proposal §3 的 **D1–D19**；**单 RFC / 5 PR 按层切**（T1–T40）。
 

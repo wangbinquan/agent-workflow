@@ -159,6 +159,16 @@ export const CreateRepoGroupSchema = z.object({
 })
 export type CreateRepoGroup = z.infer<typeof CreateRepoGroupSchema>
 
+/**
+ * RFC-248 T36：编辑器实时预览的入参。名字可省（预览不关心），成员**可以为空**
+ * ——用户刚打开编辑器时就是空的，那时也该看到一棵空树而不是 422。
+ */
+export const PreviewRepoGroupSchema = z.object({
+  name: z.string().max(255).optional(),
+  members: z.array(RepoGroupMemberInputSchema).max(MAX_FLAT_REPOS),
+})
+export type PreviewRepoGroup = z.infer<typeof PreviewRepoGroupSchema>
+
 export const UpdateRepoGroupSchema = CreateRepoGroupSchema
 export type UpdateRepoGroup = z.infer<typeof UpdateRepoGroupSchema>
 

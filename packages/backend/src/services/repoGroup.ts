@@ -12,10 +12,12 @@
 import type {
   CreateRepoGroup,
   FlattenableGroup,
+  FlattenableMember,
   PlannedRepo,
   RepoGroup,
   RepoGroupLayoutResponse,
   RepoGroupMember,
+  RepoGroupMemberInput,
 } from '@agent-workflow/shared'
 import {
   RepoGroupLayoutError,
@@ -176,6 +178,89 @@ export function resolveRepoGroupLayout(
   try {
     const { repos, maxDepth } = flattenRepoGroup(groupId, (id) => all.get(id))
     return { repos, maxDepth, groupName: root.name }
+  } catch (err) {
+    if (err instanceof RepoGroupLayoutError) {
+      throw new ValidationError(err.code, err.message, err.detail)
+    }
+    throw err
+  }
+}
+
+/**
+ * RFC-248 T36 —— **未保存**成员表的干跑展平预览（编辑器实时预览用）。
+ *
+ * `GET /:id/layout` 只服务已存在的组，而编辑器需要在用户还在拖挂载点时就看到
+ * 结果。这里用一个**临时的、不落库**的伪组参与展平：真实的子组从库里读，所以
+ * 组套组、深度上限、循环检测、只读并集全都按真实语义走。
+ *
+ * **零副作用**：`repoUrl` 形态的成员会触发镜像导入（写），预览里一律**不导入**
+ * ——它们不进展平，只回报个数，UI 显示「保存时导入 N 个仓」。这样预览永远是
+ * 纯读，不会因为用户输错一个 URL 就在库里留下垃圾镜像。
+ */
+export function previewRepoGroupLayout(
+  db: DbClient,
+  input: { name?: string; members: readonly RepoGroupMemberInput[] },
+): RepoGroupLayoutResponse & { pendingImports: number } {
+  const all = loadAllGroups(db)
+  const urlById = new Map(
+    (
+      db
+        .select({ id: cachedRepos.id, url: cachedRepos.url, urlRedacted: cachedRepos.urlRedacted })
+        .from(cachedRepos)
+        .all() as Array<{ id: string; url: string; urlRedacted: string | null }>
+    ).map((r) => [r.id, r.urlRedacted ?? redactGitUrl(r.url)]),
+  )
+
+  let pendingImports = 0
+  const members: FlattenableMember[] = []
+  for (const m of input.members) {
+    if (m.kind === 'group') {
+      const child = all.get(m.childGroupId)
+      if (child === undefined) {
+        throw new NotFoundError(
+          'repo-group-not-found',
+          `child repo group ${m.childGroupId} not found`,
+        )
+      }
+      members.push({
+        kind: 'group',
+        childGroupId: m.childGroupId,
+        mountPath: m.mountPath,
+        readonly: m.readonly,
+      })
+      continue
+    }
+    if (m.cachedRepoId === undefined || m.cachedRepoId === '') {
+      // 只给了 URL ⇒ 保存时才导入，预览里不落库。
+      pendingImports += 1
+      continue
+    }
+    members.push({
+      kind: 'repo',
+      cachedRepoId: m.cachedRepoId,
+      repoUrlRedacted: urlById.get(m.cachedRepoId) ?? '',
+      ref: m.ref,
+      subdir: m.subdir,
+      mountPath: m.mountPath,
+      readonly: m.readonly,
+    })
+  }
+
+  // 伪 id 不可能与真实 ULID 相撞（前缀不合法），所以自引用也就无从谈起——
+  // 用户想让组引用自己，只能引用一个**已存在**的组，那条环由 flatten 抓。
+  const draftId = '__draft__'
+  const withDraft = new Map(all)
+  withDraft.set(draftId, { id: draftId, name: input.name ?? '', members })
+  try {
+    const { repos, maxDepth } = flattenRepoGroup(draftId, (id) => withDraft.get(id))
+    return {
+      groupId: draftId,
+      groupName: input.name ?? '',
+      repos,
+      totalRepos: repos.length,
+      maxDepth,
+      pendingImports,
+    }
   } catch (err) {
     if (err instanceof RepoGroupLayoutError) {
       throw new ValidationError(err.code, err.message, err.detail)

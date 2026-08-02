@@ -968,6 +968,21 @@ function TaskDetailPage() {
                           </StatusChip>
                         </>
                       )}
+                      {/* RFC-248 AC-19: 只读成员被改动过——那些改动**没有**被
+                          提交推送。不提示的话用户会看到 agent 说「改好了」、
+                          工作树里也确实改了，推上去却什么都没有。 */}
+                      {r.readonly && (r.readonlyDirtyCount ?? 0) > 0 && (
+                        <>
+                          {' '}
+                          <StatusChip
+                            kind="warn"
+                            size="sm"
+                            data-testid={`task-detail-repo-readonly-dirty-${r.repoIndex}`}
+                          >
+                            {t('tasks.repoReadonlyDirty', { count: r.readonlyDirtyCount ?? 0 })}
+                          </StatusChip>
+                        </>
+                      )}
                       {r.repoUrl !== null && r.repoUrl !== '' && (
                         <span className="data-table__muted"> · {redactGitUrl(r.repoUrl)}</span>
                       )}

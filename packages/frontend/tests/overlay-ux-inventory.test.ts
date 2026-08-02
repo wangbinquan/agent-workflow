@@ -122,6 +122,8 @@ const OVERLAY_CALLSITES = {
   // RFC-238: runtime playground plus its separate immediate-end confirmation.
   'components/mcps/McpRuntimeTestDialog.tsx': { family: 'resource-management', count: 2 },
   'components/repos/BatchImportDialog.tsx': { family: 'resource-management', count: 1 },
+  // RFC-248: 仓库组编辑器（成员表 + 实时布局预览），与仓库导入同族。
+  'components/repos/RepoGroupEditor.tsx': { family: 'resource-management', count: 1 },
   'components/skill/SkillVersionHistory.tsx': { family: 'resource-management', count: 1 },
   // RFC-201: replacing ZIP-import review state is an explicit shared Dialog.
   'components/skills/ImportZipPanel.tsx': { family: 'resource-management', count: 1 },

@@ -21541,3 +21541,66 @@ button.status-chip {
 .wizard-space-group__head > .btn {
   margin-left: auto;
 }
+
+/* RFC-248 —— 仓库组布局树。缩进用 inline padding（由组件按深度计算），行内元素
+   用 flex 排，与 `.data-table` 的行高 / 字号保持一致。 */
+.repo-layout-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.repo-layout-tree__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--font-sm);
+  min-height: 24px;
+}
+.repo-layout-tree__mount {
+  font-weight: 600;
+}
+.repo-layout-tree__url,
+.repo-layout-tree__via {
+  font-size: var(--font-xs);
+}
+
+/* RFC-248 —— 仓库组编辑器。左成员表 / 右布局预览两栏，窄屏折成一栏。
+   行内控件用 flex 排；所有 chrome（overlay / panel / 表单边框）都来自
+   <Dialog> 与 Form 原语，这里只补编辑器特有的排版。 */
+.repo-group-editor__split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
+}
+@media (max-width: 900px) {
+  .repo-group-editor__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.repo-group-editor__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.repo-group-editor__member {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.repo-group-editor__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.repo-group-editor__preview {
+  min-width: 0;
+  overflow-x: auto;
+}
