@@ -26,10 +26,17 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { Hono, type MiddlewareHandler } from 'hono'
 import type { Actor } from '@/auth/actor'
 import { type AppDeps, mountApiRoutes } from '@/server'
+import { takeDeleteSnapshot } from '@/services/tokenAudit'
 import { errorHandler } from '@/util/errors'
 
-/** The actor a dispatch is running as; empty outside `dispatch`. */
-const actorStore = new AsyncLocalStorage<Actor>()
+interface DispatchScope {
+  readonly actor: Actor
+  /** Filled by the inject middleware from whatever the route captured. */
+  snapshot?: unknown
+}
+
+/** The scope a dispatch is running in; empty outside `dispatch`. */
+const scopeStore = new AsyncLocalStorage<DispatchScope>()
 
 export interface DispatchRequest {
   readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -44,6 +51,12 @@ export interface DispatchResult {
   readonly status: number
   /** Parsed JSON body, or `null` for 204 / empty responses. */
   readonly body: unknown
+  /**
+   * RFC-247 AC-20 — the row a DELETE route captured before removing it. The
+   * MCP audit is written per TOOL, outside the request, so the snapshot has to
+   * ride back out on the result or it is unreachable by the time it is needed.
+   */
+  readonly auditSnapshot?: unknown
 }
 
 export type Dispatcher = (req: DispatchRequest, actor: Actor) => Promise<DispatchResult>
@@ -55,13 +68,15 @@ export type Dispatcher = (req: DispatchRequest, actor: Actor) => Promise<Dispatc
 export function createDispatcher(deps: AppDeps): Dispatcher {
   const app = new Hono()
   const injectActor: MiddlewareHandler = async (c, next) => {
-    const actor = actorStore.getStore()
+    const scope = scopeStore.getStore()
     // Unreachable through `dispatch`, which always establishes the store. A
     // throw here beats proceeding actor-less, which `routeMetaGate` would read
     // as "public route" for any route declaring no points.
-    if (actor === undefined) throw new Error('mcp dispatch: no actor in scope')
-    c.set('actor', actor)
+    if (scope === undefined) throw new Error('mcp dispatch: no actor in scope')
+    c.set('actor', scope.actor)
     await next()
+    // The route ran and has gone; anything it stashed must be lifted out now.
+    scope.snapshot = takeDeleteSnapshot(c)
   }
   app.use('*', injectActor)
   mountApiRoutes(app, deps)
@@ -84,16 +99,18 @@ export function createDispatcher(deps: AppDeps): Dispatcher {
       init.headers = { 'content-type': 'application/json' }
     }
 
-    const res = await actorStore.run(actor, () => app.request(url, init))
-    if (res.status === 204) return { status: res.status, body: null }
+    const scope: DispatchScope = { actor }
+    const res = await scopeStore.run(scope, () => app.request(url, init))
+    const auditSnapshot = scope.snapshot
+    if (res.status === 204) return { status: res.status, body: null, auditSnapshot }
     const text = await res.text()
-    if (text === '') return { status: res.status, body: null }
+    if (text === '') return { status: res.status, body: null, auditSnapshot }
     try {
-      return { status: res.status, body: JSON.parse(text) as unknown }
+      return { status: res.status, body: JSON.parse(text) as unknown, auditSnapshot }
     } catch {
       // A non-JSON body from an /api/* route would be a bug, but reporting the
       // text beats throwing away the only evidence of what happened.
-      return { status: res.status, body: text }
+      return { status: res.status, body: text, auditSnapshot }
     }
   }
 }

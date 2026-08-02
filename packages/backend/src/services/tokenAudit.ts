@@ -19,6 +19,7 @@
 
 import { eq, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import type { Context } from 'hono'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { tokenAudit, tokenDeleteSnapshot } from '@/db/schema'
@@ -28,6 +29,35 @@ import { createLogger } from '@/util/log'
 const log = createLogger('token-audit')
 
 export type TokenAuditChannel = 'rest' | 'mcp'
+
+/**
+ * RFC-247 AC-20 — the row a DELETE is about to remove.
+ *
+ * The audit hook runs AFTER the response, by which time the row is gone; the
+ * first version therefore recorded metadata and never once wrote a snapshot in
+ * production, even though the table, the redactor and the tests all existed.
+ * "Who deleted what" without "what was it" is the half of the question that
+ * stops mattering the moment you need the other half.
+ *
+ * Keyed off the Hono context rather than `c.set`, for two reasons: it needs no
+ * typed context variable (route handlers are not middleware), and it is
+ * automatically collected with the request. Only PAT callers pay anything —
+ * for everyone else this is a branch and a return.
+ */
+const pendingSnapshots = new WeakMap<object, unknown>()
+
+/** Call from a delete route AFTER loading the row and BEFORE removing it. */
+export function captureDeleteSnapshot(c: Context, actor: Actor, row: unknown): void {
+  if (actor.source !== 'pat') return
+  pendingSnapshots.set(c, row)
+}
+
+/** Consume it. Returns undefined when the route captured nothing. */
+export function takeDeleteSnapshot(c: Context): unknown {
+  const row = pendingSnapshots.get(c)
+  if (row !== undefined) pendingSnapshots.delete(c)
+  return row
+}
 
 export interface TokenCallRecord {
   readonly actor: Actor

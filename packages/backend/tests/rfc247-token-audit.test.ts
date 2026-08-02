@@ -31,6 +31,7 @@ import {
   recordTokenCall,
   redactSnapshot,
 } from '../src/services/tokenAudit'
+import { createManualCandidate } from '../src/services/memory'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -455,5 +456,95 @@ describe('RFC-247 F14 — a lost snapshot is marked, not silently absent', () =>
     })
     const row = (await h.db.select().from(tokenAudit)).find((r) => r.id === id)
     expect(row?.snapshotFailed).toBe(false)
+  })
+})
+
+describe('RFC-247 AC-20 — the snapshot is captured in PRODUCTION, not just in a unit test', () => {
+  test('a token DELETE through the real route writes a snapshot of the row', async () => {
+    // The original test called `recordTokenCall` directly and hand-fed it a
+    // snapshot, so it proved the TABLE worked and nothing about the pipeline.
+    // In production the audit hook runs after the response — by then the row is
+    // gone — so no real delete had ever produced one.
+    const h = await harness()
+    const memory = await createManualCandidate(h.db, {
+      scopeType: 'global',
+      scopeId: null,
+      title: 'about to be deleted',
+      bodyMd: 'the body worth keeping a copy of',
+      tags: [],
+    })
+
+    const { token } = await createPat({
+      db: h.db,
+      userId: h.userId,
+      name: 'deleter',
+      scopes: ['memory:delete'],
+      purpose: 'general',
+    })
+
+    const res = await h.app.request(`/api/memories/${memory.id}?confirm=true`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ confirm: 'about to be deleted' }),
+    })
+    expect(res.status).toBe(200)
+
+    // The audit hook is fire-and-forget, so settle the microtask queue.
+    await new Promise((r) => setTimeout(r, 50))
+
+    const snaps = await h.db.select().from(tokenDeleteSnapshot)
+    expect(snaps.length).toBe(1)
+    // The CONTENT is the point — metadata alone answers "who deleted what" but
+    // not "what was it", and the second question is the one that survives.
+    expect(snaps[0]?.snapshotJson).toContain('about to be deleted')
+    expect(snaps[0]?.snapshotJson).toContain('the body worth keeping a copy of')
+
+    const audits = await listTokenAudit(h.db)
+    expect(audits.some((a) => a.id === snaps[0]?.auditId)).toBe(true)
+  })
+
+  test('a SESSION delete writes no snapshot — this table is token attribution', async () => {
+    const h = await harness()
+    const memory = await createManualCandidate(h.db, {
+      scopeType: 'global',
+      scopeId: null,
+      title: 'session deletes leave no audit',
+      bodyMd: 'body',
+      tags: [],
+    })
+    const res = await h.app.request(`/api/memories/${memory.id}?confirm=true`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${h.sessionToken}` },
+    })
+    expect(res.status).toBe(200)
+    await new Promise((r) => setTimeout(r, 50))
+    expect((await h.db.select().from(tokenDeleteSnapshot)).length).toBe(0)
+  })
+
+  test('a REFUSED delete leaves no snapshot — nothing was destroyed', async () => {
+    const h = await harness()
+    const memory = await createManualCandidate(h.db, {
+      scopeType: 'global',
+      scopeId: null,
+      title: 'survives the refusal',
+      bodyMd: 'body',
+      tags: [],
+    })
+    const { token } = await createPat({
+      db: h.db,
+      userId: h.userId,
+      name: 'deleter2',
+      scopes: ['memory:delete'],
+      purpose: 'general',
+    })
+    // Wrong confirmation → 422 before the row is touched.
+    const res = await h.app.request(`/api/memories/${memory.id}?confirm=true`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ confirm: 'wrong name' }),
+    })
+    expect(res.status).toBe(422)
+    await new Promise((r) => setTimeout(r, 50))
+    expect((await h.db.select().from(tokenDeleteSnapshot)).length).toBe(0)
   })
 })

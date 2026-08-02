@@ -90,6 +90,42 @@ export function serializeMcpFor<T>(record: T, source: ActorSource): T {
 }
 
 /**
+ * Serialize one plugin record for a specific caller.
+ *
+ * `PluginSpecSchema` says so itself: the spec is "the raw spec string as the
+ * user typed it", capped at a length chosen to fit "git URLs with embedded
+ * tokens". So `GET /api/plugins` handed any token — including an empty-matrix
+ * read-only one — the git credential of every plugin its owner can see.
+ */
+export function serializePluginFor<T>(record: T, source: ActorSource): T {
+  if (!shouldRedactFor(source) || !isPlainObject(record)) return record
+  const spec = record.spec
+  if (typeof spec !== 'string') return record
+  return { ...record, spec: redactSensitiveString(spec) } as T
+}
+
+/**
+ * Redact one persisted node-run event before it leaves through a token.
+ *
+ * Node events carry whatever the agent printed. The stdout ROUTE already runs
+ * `redactStdout`; these rows are the same bytes reached by a different door
+ * (`/node-runs/:id/events`, the `/session` reconstruction, and the WS replay),
+ * and a redaction that only covers one door is a redaction the caller routes
+ * around without trying.
+ */
+export function redactEventPayload(payload: unknown, source: ActorSource): unknown {
+  if (!shouldRedactFor(source)) return payload
+  if (typeof payload === 'string') return redactSensitiveString(payload)
+  // Structured payloads are re-serialized so the same string rules apply to
+  // every leaf, rather than only to the ones this function happens to name.
+  try {
+    return JSON.parse(redactSensitiveString(JSON.stringify(payload))) as unknown
+  } catch {
+    return payload
+  }
+}
+
+/**
  * Redact a repository URL that may embed credentials.
  *
  * NOTE (design-gate correction): the RFC's first draft listed `cached_repos.url`

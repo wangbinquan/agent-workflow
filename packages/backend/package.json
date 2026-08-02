@@ -32,7 +32,8 @@
     "ulid": "^2.3.0",
     "web-tree-sitter": "0.22.2",
     "yaml": "^2.6.1",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -28,10 +28,11 @@ import { resolveOpencodeCmd } from '@/util/opencode'
 import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { canViewTask, getTaskMembers, updateTaskMembers } from '@/services/taskCollab'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
-import { redactStdout, shouldRedactFor } from '@/services/tokenRedaction'
+import { redactEventPayload, redactStdout, shouldRedactFor } from '@/services/tokenRedaction'
 import { deleteTask } from '@/services/taskDelete'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { ForbiddenError } from '@/util/errors'
@@ -446,6 +447,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // RFC-222 (D5): type-to-confirm against the task's name (N-5 order — after
       // existence/authz, before the deleteTask business gates).
       assertDeleteConfirm(await readDeleteBody(c), row[0].name, 'task')
+      captureDeleteSnapshot(c, actorOf(c), row[0])
       const result = await deleteTask(deps.db, id)
       return c.json(result)
     },
@@ -1024,9 +1026,23 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         }
         opts.limit = n
       }
-      return c.json(
-        await getNodeRunEvents(deps.db, c.req.param('id'), c.req.param('nodeRunId'), opts),
+      // RFC-247 AC-39 family — these rows are the same bytes the stdout route
+      // already redacts, reached through a different door. A redaction that
+      // covers one door is one the caller routes around without trying.
+      const eventsActor = actorOf(c)
+      const events = await getNodeRunEvents(
+        deps.db,
+        c.req.param('id'),
+        c.req.param('nodeRunId'),
+        opts,
       )
+      return c.json({
+        ...events,
+        events: events.events.map((e) => ({
+          ...e,
+          payload: redactEventPayload(e.payload, eventsActor.source),
+        })),
+      })
     },
   )
 

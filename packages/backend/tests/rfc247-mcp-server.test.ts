@@ -30,6 +30,7 @@ import {
   toolsFor,
 } from '../src/mcp/tools'
 import { MATRIX_RESOURCES } from '@agent-workflow/shared'
+import { KINDS_WITH_BODY_SCHEMAS } from '../src/mcp/resourceSchemas'
 import { createApp } from '../src/server'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createUser } from '../src/services/users'
@@ -626,5 +627,75 @@ describe('RFC-247 impl-gate — a model-supplied id cannot retarget the dispatch
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
     await tool!.handler({ id: '01KZ08WX6YHWNFEZPX2PGT8GDP' }, ctx)
     expect(path).toBe('/api/tasks/01KZ08WX6YHWNFEZPX2PGT8GDP')
+  })
+})
+
+describe('RFC-247 impl-gate — describe_resource answers the question it is pointed at', () => {
+  test('it returns the create/update JSON Schema, derived from the route schemas', () => {
+    // `resource_write` tells callers to come here for "a kind's field schema".
+    // It used to return only method/path/permission, so a model following that
+    // instruction had no move left except to guess a body and read the 422.
+    const agents = describeResource('agents')
+    const create = agents.bodySchemas.create as { properties?: Record<string, unknown> }
+    expect(Object.keys(create?.properties ?? {})).toContain('name')
+    expect(Object.keys(create?.properties ?? {})).toContain('bodyMd')
+  })
+
+  test('the update schema exposes the revision fence', () => {
+    // The single most useful thing here: without these an update ALWAYS fails,
+    // and nothing else in the tool set says they exist.
+    const update = describeResource('agents').bodySchemas.update as { required?: string[] }
+    expect(update?.required ?? []).toContain('expectedUpdatedAt')
+    expect(update?.required ?? []).toContain('expectedAclRevision')
+  })
+
+  test('a kind with no body contract reports none rather than inventing one', () => {
+    // repos have no single-resource create (imports are a batch) and no update.
+    expect(describeResource('repos').bodySchemas).toEqual({})
+  })
+
+  test('schemas are inlined — a model cannot resolve $ref against a tool result', () => {
+    const serialized = JSON.stringify(describeResource('workflows').bodySchemas)
+    expect(serialized).not.toContain('"$ref"')
+  })
+
+  test('it is DERIVED: every kind that has a route create also reports a schema', () => {
+    // Locks the correspondence rather than a snapshot of today's field list —
+    // a snapshot would pass forever while the real schema drifted underneath.
+    for (const kind of KINDS_WITH_BODY_SCHEMAS) {
+      const d = describeResource(kind)
+      const hasRouteCreate = d.operations.some((o) => o.operation === 'create')
+      if (hasRouteCreate) expect(d.bodySchemas.create).toBeDefined()
+    }
+  })
+})
+
+describe('RFC-247 impl-gate — launch_task can reach every field the route accepts', () => {
+  const launch = ALL_TOOLS.find((t) => t.name === 'launch_task')
+
+  test('the previously unreachable fields are declared', () => {
+    // MCP tool inputs are a CLOSED schema: an undeclared field cannot reach the
+    // route no matter what the caller sends, so omissions here are not cosmetic
+    // — they are capabilities that do not exist over this channel.
+    const keys = Object.keys(launch!.inputSchema)
+    for (const field of [
+      'maxDurationMs',
+      'maxTotalTokens',
+      'collaboratorUserIds',
+      'gitUserName',
+      'gitUserEmail',
+      'expectedWorkflowVersion',
+      'repos',
+    ]) {
+      expect(keys).toContain(field)
+    }
+  })
+
+  test('inputs tells the caller where port keys come from', () => {
+    // The gap that made `inputs` unusable in practice: it is a free-form map and
+    // nothing said which keys a given workflow wants.
+    const desc = JSON.stringify(launch!.inputSchema.inputs)
+    expect(desc).toContain('resource_read')
+    expect(desc).toContain('definition.inputs')
   })
 })

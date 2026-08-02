@@ -20,6 +20,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import {
@@ -206,6 +207,7 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
         'scheduled task',
         actor.source,
       )
+      captureDeleteSnapshot(c, actor, existing)
       await deleteScheduledTask(deps.db, existing.id)
       return c.body(null, 204)
     },

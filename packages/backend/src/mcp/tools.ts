@@ -29,6 +29,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DispatchResult, Dispatcher } from '@/mcp/dispatch'
+import { bodySchemasFor, type ResourceBodySchemas } from '@/mcp/resourceSchemas'
 
 export interface McpToolContext {
   readonly actor: Actor
@@ -142,9 +143,49 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
       inputs: z
         .record(z.string(), z.string())
         .optional()
-        .describe('Workflow input port values, keyed by port name'),
+        .describe(
+          'Workflow input values, keyed by the port KEY. Read them first with ' +
+            'resource_read(kind="workflows", method="get"): `definition.inputs[]` gives each ' +
+            'key, label, kind and whether it is required. `files` and `enum` values use a ' +
+            'packed multi-line encoding — copy the shape the workflow documents.',
+        ),
       workingBranch: z.string().min(1).optional(),
       autoCommitPush: z.boolean().optional().describe('Commit and push after each writer node'),
+      // MCP tool inputs are a CLOSED schema — a field not listed here can never
+      // reach the route, whatever the caller sends. The first version stopped
+      // after `autoCommitPush`, which silently made the per-task budgets,
+      // collaborators, git identity and multi-repo launches unreachable over
+      // MCP even though the route accepts them all.
+      maxDurationMs: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe('Per-task wall-clock budget; falls back to the global setting'),
+      maxTotalTokens: z.number().int().nonnegative().optional(),
+      collaboratorUserIds: z
+        .array(z.string().min(1))
+        .optional()
+        .describe('Users added alongside the launcher (who becomes owner)'),
+      gitUserName: z
+        .string()
+        .min(1)
+        .max(255)
+        .optional()
+        .describe('Per-task commit identity; set together with gitUserEmail or not at all'),
+      gitUserEmail: z.string().min(1).max(255).optional(),
+      expectedWorkflowVersion: z
+        .number()
+        .int()
+        .optional()
+        .describe('Refuse (409) if the workflow changed since you read it'),
+      repos: z
+        .array(z.record(z.string(), z.unknown()))
+        .optional()
+        .describe(
+          'Multi-repo launch; mutually exclusive with the top-level repo fields. ' +
+            'See describe_resource(kind="repos") for how mirrors are identified.',
+        ),
     },
     handler: async (args, ctx) => {
       await assertNoUploadInputs(String(args.workflowId), ctx)
@@ -704,8 +745,10 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
     name: 'describe_resource',
     title: 'Describe a resource kind',
     description:
-      'Which operations a resource kind supports, which permission each needs, and any quirk in its shape ' +
-      '(repos import in batches; memory updates are partial). Call this before a first create or update.',
+      'Which operations a resource kind supports, which permission each needs, the JSON Schema of its ' +
+      'create/update bodies, and any quirk in its shape (repos import in batches; memory updates are ' +
+      'partial). Call this before a first create or update — the schemas include the revision fields ' +
+      'whose absence makes an update fail.',
     permissions: [],
     inputSchema: { kind: z.enum(RESOURCE_KINDS) },
     handler: async (args) => describeResource(args.kind as MatrixResource),
@@ -727,6 +770,7 @@ function fillId(path: string, id: unknown): string {
 export function describeResource(kind: MatrixResource): {
   kind: MatrixResource
   operations: Array<{ operation: string; method: string; path: string; permission: string | null }>
+  bodySchemas: ResourceBodySchemas
   note?: string
 } {
   const routes = routesFor(kind)
@@ -743,9 +787,13 @@ export function describeResource(kind: MatrixResource): {
       permission: operation === 'list' || operation === 'get' ? null : `${kind}:${operation}`,
     })
   }
+  // The field contract, derived from the same zod objects the routes validate
+  // with. `resource_write` points callers here for it; before this it was the
+  // one question this tool could not answer.
+  const bodySchemas = bodySchemasFor(kind)
   return routes.note === undefined
-    ? { kind, operations: ops }
-    : { kind, operations: ops, note: routes.note }
+    ? { kind, operations: ops, bodySchemas }
+    : { kind, operations: ops, bodySchemas, note: routes.note }
 }
 
 // -----------------------------------------------------------------------------

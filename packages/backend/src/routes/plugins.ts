@@ -15,6 +15,8 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
+import { serializePluginFor } from '@/services/tokenRedaction'
 import {
   createPlugin,
   deletePlugin,
@@ -76,7 +78,10 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
         'plugin',
         await listPlugins(deps.db),
       )
-      return c.json(visible.map(withPluginOperationConfigHash))
+      const listActor = actorOf(c)
+      return c.json(
+        visible.map((r) => serializePluginFor(withPluginOperationConfigHash(r), listActor.source)),
+      )
     },
   )
 
@@ -90,8 +95,12 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Get one plugin',
     },
     async (c) => {
+      const actor = actorOf(c)
       return c.json(
-        withPluginOperationConfigHash(await loadVisiblePlugin(actorOf(c), c.req.param('id'))),
+        serializePluginFor(
+          withPluginOperationConfigHash(await loadVisiblePlugin(actor, c.req.param('id'))),
+          actor.source,
+        ),
       )
     },
   )
@@ -120,7 +129,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
           {},
           { ownerUserId: actor.user.id, actor },
         )
-        return c.json(withPluginOperationConfigHash(created), 201)
+        return c.json(serializePluginFor(withPluginOperationConfigHash(created), actor.source), 201)
       } catch (error) {
         throw wrapInstallErrors(error)
       }
@@ -152,7 +161,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
           const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
           return updatePlugin(deps.db, initial.id, patch)
         })
-        return c.json(withPluginOperationConfigHash(updated))
+        return c.json(serializePluginFor(withPluginOperationConfigHash(updated), actorOf(c).source))
       } catch (error) {
         throw wrapInstallErrors(error)
       }
@@ -184,6 +193,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
         assertExpectedHash(fresh, parsed.data.expectedConfigHash)
         // RFC-222 (D5, N-6): confirm against the fresh name in the exclusive section.
         assertDeleteConfirm(parsed.data, fresh.name, 'plugin')
+        captureDeleteSnapshot(c, actor, initial)
         await deletePlugin(deps.db, initial.id, actor)
       })
       return c.body(null, 204)
@@ -214,7 +224,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
         const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
         return renamePlugin(deps.db, initial.id, rename)
       })
-      return c.json(withPluginOperationConfigHash(renamed))
+      return c.json(serializePluginFor(withPluginOperationConfigHash(renamed), actorOf(c).source))
     },
   )
 

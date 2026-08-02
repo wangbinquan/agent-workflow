@@ -7,7 +7,7 @@ import type { WorkflowRevision } from '@agent-workflow/shared'
 import { actorOf, tryActorOf } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { multiAuth } from '@/auth/session'
-import { recordTokenCall } from '@/services/tokenAudit'
+import { recordTokenCall, takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
@@ -174,6 +174,9 @@ export function createApp(deps: AppDeps): Hono {
       method: c.req.method,
       path: c.req.path,
       statusCode: c.res.status,
+      // AC-20 — captured by the delete route before it removed the row; the
+      // row itself is unreachable from here.
+      deletedSnapshot: takeDeleteSnapshot(c),
     })
   })
 

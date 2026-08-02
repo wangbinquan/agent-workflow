@@ -52,9 +52,16 @@ export function buildMcpServer(
       // is heterogeneous by construction, so the shape is re-widened here and
       // the zod schema above is what actually validates the arguments.
       (async (args: Record<string, unknown>, extra: ToolExtra) => {
+        // The snapshot a delete route captured rides back on the dispatch
+        // result; hold the most recent one so the audit below can carry it.
+        let deletedSnapshot: unknown
         const ctx: McpToolContext = {
           actor,
-          dispatch: (req) => dispatcher(req, dispatchActor),
+          dispatch: async (req) => {
+            const res = await dispatcher(req, dispatchActor)
+            if (res.auditSnapshot !== undefined) deletedSnapshot = res.auditSnapshot
+            return res
+          },
           progress: async (message) => {
             const token = extra._meta?.progressToken
             // D9 / F9 — no progressToken means the client did not ask to be
@@ -79,6 +86,7 @@ export function buildMcpServer(
             resourceKind: stringArg(args.kind),
             resourceId: stringArg(args.id),
             statusCode: 200,
+            deletedSnapshot,
           })
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],

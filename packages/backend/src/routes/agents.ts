@@ -22,6 +22,7 @@ import type { Hono } from 'hono'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import {
   createAgent,
   deleteAgent,
@@ -298,6 +299,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
+      captureDeleteSnapshot(c, actor, existing)
       await deleteAgent(deps.db, id, actor, parsed.data)
       return c.body(null, 204)
     },

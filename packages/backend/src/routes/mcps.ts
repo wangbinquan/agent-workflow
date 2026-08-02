@@ -28,6 +28,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { createMcp, deleteMcp, getMcpById, listMcps, renameMcp, updateMcp } from '@/services/mcp'
 import {
   mcpOperationConfigHashOf,
@@ -413,6 +414,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         // section, so a concurrent rename is caught as a mismatch.
         assertDeleteConfirm(parsed.data, fresh.name, 'mcp')
         await runtimeTests.prepareMcpDelete(fresh.id)
+        captureDeleteSnapshot(c, actor, fresh)
         await deleteMcp(deps.db, fresh.id, actor, {
           existing: fresh,
           beforeDeleteInTx: (tx) => deletePreparedMcpRuntimeTestsInTx(tx, fresh.id),

@@ -22,6 +22,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import {
   canViewResource,
   filterVisibleRows,
@@ -208,6 +209,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       }
       // RFC-222 (D5, N-1): confirm against the workflow's current name (id ≠ name).
       assertDeleteConfirm(parsed.data, row.name, 'workflow')
+      captureDeleteSnapshot(c, actor, row)
       await deleteWorkflow(deps.db, c.req.param('id'), parsed.data, { kind: 'actor', actor })
       return c.body(null, 204)
     },

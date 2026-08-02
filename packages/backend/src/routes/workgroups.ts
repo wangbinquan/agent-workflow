@@ -25,6 +25,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { assertDeleteConfirm } from '@/services/deleteConfirm'
 import {
@@ -218,6 +219,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       }
       // RFC-222 (D5): type-to-confirm (N-5 order).
       assertDeleteConfirm(parsed.data, existing.name, 'workgroup')
+      captureDeleteSnapshot(c, actor, existing)
       await deleteWorkgroup(deps.db, existing.id, parsed.data, { kind: 'actor', actor })
       return c.body(null, 204)
     },

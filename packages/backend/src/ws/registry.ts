@@ -52,6 +52,7 @@ import type {
 import { isResourceAdminRole } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import { redactEventPayload } from '@/services/tokenRedaction'
 import {
   memories as memoriesTable,
   nodeRunEvents,
@@ -483,7 +484,11 @@ async function replayTaskEvents(
       nodeRunId: r.nodeRunId,
       ts: r.ts,
       kind: r.kind,
-      payload,
+      // The THIRD door onto these bytes (REST events + REST stdout are the
+      // other two). The socket's actor is on `ws.data`, so the same rule the
+      // REST outlets apply is available here — and it has to be applied here
+      // too, or `?since=` becomes the way to read what REST masks.
+      payload: redactEventPayload(payload, ws.data.actor.source),
     }
     sendJson(ws, msg)
   }

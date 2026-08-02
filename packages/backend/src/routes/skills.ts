@@ -28,6 +28,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import {
   assertDeleteConfirm,
@@ -233,6 +234,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
+      captureDeleteSnapshot(c, actor, existing)
       await deleteSkill(deps.db, fsOpts, existing.id, actor, {
         token: parsed.data.expectedToken,
         aclRevision: parsed.data.expectedAclRevision,
@@ -405,6 +407,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       // RFC-247 T20 — a token echoes the file PATH (the thing being destroyed);
       // the skill name would confirm the wrong noun here.
       assertTokenDeleteConfirm(await readDeleteBody(c), path, 'skill file', actor.source)
+      captureDeleteSnapshot(c, actor, { skillId: existing.id, name: existing.name, path })
       await deleteSkillFile(
         deps.db,
         fsOpts,

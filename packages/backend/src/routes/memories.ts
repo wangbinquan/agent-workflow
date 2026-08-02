@@ -20,6 +20,7 @@ import {
 import type { Hono } from 'hono'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { actorOf } from '@/auth/actor'
 import {
@@ -302,6 +303,7 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
         'memory',
         actorOf(c).source,
       )
+      captureDeleteSnapshot(c, actorOf(c), memory.memory)
       await deleteMemory(deps.db, id)
       return c.json({ ok: true })
     },

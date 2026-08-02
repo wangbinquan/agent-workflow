@@ -20,9 +20,11 @@ import { redactGitUrl } from '@agent-workflow/shared'
 import {
   REDACTED,
   redactErrorText,
+  redactEventPayload,
   redactMcpRecord,
   redactRepoUrl,
   redactStdout,
+  serializePluginFor,
   shouldRedactFor,
 } from '@/services/tokenRedaction'
 
@@ -206,3 +208,81 @@ function walkSrc(dir: string): string[] {
     return entry.name.endsWith('.ts') ? [full] : []
   })
 }
+
+// -----------------------------------------------------------------------------
+// Impl-gate: the same bytes have MORE THAN ONE door.
+//
+// Node output reaches a caller three ways — the stdout route, the events route,
+// and the WS replay. Redacting one of them is not a partial fix, it is no fix:
+// a caller who wants the unmasked bytes simply uses another door, without even
+// having to know the first one was guarded.
+// -----------------------------------------------------------------------------
+
+describe('RFC-247 impl-gate — redaction covers every door onto node output', () => {
+  const SRC = resolve(import.meta.dir, '..', 'src')
+  const SECRET = 'sk-live-must-not-escape'
+
+  test('a string payload is masked for a token and left alone for a session', () => {
+    const raw = `token=${SECRET} and https://u:${SECRET}@example.com/x`
+    expect(String(redactEventPayload(raw, 'pat'))).not.toContain(SECRET)
+    expect(redactEventPayload(raw, 'session')).toBe(raw)
+    expect(redactEventPayload(raw, 'daemon')).toBe(raw)
+  })
+
+  test('KNOWN GAP: a prefixed env-var name is NOT masked', () => {
+    // `SENSITIVE_KV_RE` is `\b(token|api_key|…)\b`, and `_` is a word
+    // character, so `\bapi_key\b` does not match inside `OPENAI_API_KEY`.
+    // Asserted deliberately rather than left as a surprise: `util/redact.ts`
+    // says in its own header that it is "not a security boundary", and node
+    // output echoing `FOO_API_KEY=…` is exactly the shape it misses.
+    //
+    // NOT widened here on purpose — that regex is shared with RFC-030's MCP
+    // probe persistence and the daemon logs, so loosening the word boundary is
+    // a decision for those owners, not a side effect of this RFC. Recorded in
+    // docs/audit-backlog.md.
+    const raw = `OPENAI_API_KEY=${SECRET}`
+    expect(String(redactEventPayload(raw, 'pat'))).toContain(SECRET)
+  })
+
+  test('a STRUCTURED payload is masked at its leaves, not just at the top level', () => {
+    // The reason this re-serializes rather than naming fields: an event payload
+    // is agent output with no fixed shape, so a field allowlist would mask the
+    // leaves someone thought of and miss the rest.
+    const payload = { tool: 'bash', nested: { deep: [`token=${SECRET}`] } }
+    const masked = JSON.stringify(redactEventPayload(payload, 'pat'))
+    expect(masked).not.toContain(SECRET)
+    // Structure survives — this is redaction, not deletion.
+    expect(masked).toContain('bash')
+    expect(masked).toContain('nested')
+  })
+
+  test('an unserializable payload is returned as-is rather than thrown away', () => {
+    const circular: Record<string, unknown> = { a: 1 }
+    circular.self = circular
+    expect(redactEventPayload(circular, 'pat')).toBe(circular)
+  })
+
+  test('a plugin spec with an embedded git credential is masked for tokens', () => {
+    // PluginSpecSchema documents this exact case ("git URLs with embedded
+    // tokens"), so any PAT could read the credential of every visible plugin.
+    const row = { id: 'p1', name: 'x', spec: 'git+https://user:ghp_secret@github.com/o/r.git' }
+    const masked = serializePluginFor(row, 'pat')
+    expect(JSON.stringify(masked)).not.toContain('ghp_secret')
+    expect(masked.name).toBe('x')
+    expect(serializePluginFor(row, 'session')).toBe(row)
+  })
+
+  test('all three node-output doors call a redactor', () => {
+    const tasks = readFileSync(resolve(SRC, 'routes/tasks.ts'), 'utf8')
+    const wsRegistry = readFileSync(resolve(SRC, 'ws/registry.ts'), 'utf8')
+    // stdout route + events route + WS replay.
+    expect(tasks).toContain('redactStdout(text)')
+    expect(tasks).toContain('redactEventPayload(e.payload')
+    expect(wsRegistry).toContain('redactEventPayload(payload, ws.data.actor.source)')
+  })
+
+  test('every plugin serialization point goes through the outlet', () => {
+    const plugins = readFileSync(resolve(SRC, 'routes/plugins.ts'), 'utf8')
+    expect(plugins.split('serializePluginFor(').length - 1).toBeGreaterThanOrEqual(5)
+  })
+})

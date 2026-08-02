@@ -15,6 +15,7 @@ import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { loadConfig } from '@/config'
 import {
   CachedRepoHasReferencesError,
@@ -96,6 +97,10 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
           'repo',
           actor.source,
         )
+        // AC-20 — the row is already in hand for the confirmation check, so the
+        // snapshot costs nothing extra. `urlRedacted` is what the wire carries
+        // (RFC-204 removed the plaintext url), so nothing sensitive is stored.
+        captureDeleteSnapshot(c, actor, existing)
       }
       try {
         const r = await deleteCachedRepo({ db: deps.db }, id, { force: isForce })
