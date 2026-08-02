@@ -81,7 +81,7 @@ memories 重建模板一条 —— **本人自查已独立命中并在门跑完�
   `# === Repo:` 分段头）一致。
 - 多仓走 `service.ts:147-172`，每个 part 过 `mergeStructuralDiffs`
   （`assemble.ts:224-252`），而 `prefixPath = (label, fp) => \`${label}/${fp}\``
-  （`assemble.ts:147`）是**无条件**的。
+（`assemble.ts:147`）是**无条件**的。
 
 我的设计把根成员的 key 定为 `''`、wire 形态定为 `.`，塞进现有 assembler 会得到
 `/src/a.ts` 或 `./src/a.ts`，**两者都不等于**文本 diff 的 `src/a.ts`；
@@ -170,3 +170,101 @@ PR-3 的集成测试即为这份原型的 TypeScript 化。
 
 按 Codex 的 next-steps 建议，修订后**重跑一次设计门**（记录追加到本文件），
 再请用户批准。
+
+---
+
+# 第二轮（同日，审至 `024d843a`）
+
+工具同上，分离 worktree pin 到 `fb04f84e`，**47 分钟**。范围是一轮的三倍：复核
+一轮 5 条修法 + 审 PR-1/PR-2 已落地代码 + 我点名的 6 个攻击向量 + 两个 migration。
+
+**判定：needs-attention，不应发版。9 × P1 + 2 × P2。**
+
+先记**已闭合**的：G2 独立验证通过——「0132 与 0117 的 24 列、7 个 CHECK、
+2 个自外键和 5 个索引等价；`foreign_keys` × `legacy_alter_table` 四种组合的迁移
+探针均通过，TEMP 表也能跨 statement-breakpoint 存活」。这是外部证据，比我自己的
+16 条迁移测试更有说服力。
+
+## 已在本轮修掉的代码缺陷（5 条 P1）
+
+| #      | 缺陷                                                                                                                                                                                                                                                                                                      | 修法                                                                                                                                             | 锁                                                                                |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| **H1** | **校验发生在事务提交后**：`createRepoGroup` 先提交组+成员再 `assertFlattenable`，于是返回 422 的请求**仍把非法组持久化**了；`update` 同样先替换成员并自增 version 再校验。且无 OCC，两个并发全量替换静默互相覆盖。                                                                                        | 校验移进 `dbTxSync` 内（抛出即回滚）；`update` 在事务内**重读** version 并支持 `expectedVersion` OCC，冲突回 409 `repo-group-version-conflict`。 | 三条：失败 create 不留记录 / 失败 update 成员与 version 完全不变 / OCC 冲突不覆盖 |
+| **H2** | **force 删仓横跨 DB 与 FS**：detach 在 `withUrlLock` **之前**，等锁期间可新建引用；中途崩溃留下「组已改、`cached_repos` 还在」的断链。                                                                                                                                                                    | detach 移进锁内、与删行放进**同一事务**，并在锁内**重查**引用（用启动时快照会漏掉新引用）。                                                      | —                                                                                 |
+| **H3** | **含 fused 记忆的组永远删不掉**：删组把所有非 archived 记忆 `UPDATE ... SET status='archived'`，而 0132 的 CHECK 是 `(status='fused') = (fused_into_skill IS NOT NULL)` ⇒ 违反约束、整个删除事务 **500 回滚**。                                                                                           | 引入 `ARCHIVABLE_STATUSES`（不含 `fused`）。fused 本就是终态且被 `memoryInject` 的 `status='approved'` 过滤排除，注入早就停了，不动它是正确的。  | 一条：组里同时有 approved + fused，删组成功、fused 原样保留                       |
+| **H6** | 挂载路径校验三个洞：①`isUnder` 区分大小写而查重折叠 ⇒ macOS 上 `Vendor` 与 `vendor/sdk` **实际嵌套**却被排除计划当兄弟 ⇒ 内层不被排除 ⇒ `add -A` 当 gitlink 提交；②允许 U+2028/U+2029（JS 正则的 `^`/`$` 认它们，会打断单行 marker）；③允许把 `.agent-workflow-inputs` 当挂载点，上传物会落进那个成员仓。 | `isUnder` 改折叠比较；控制字符检查改按码点（C0 + DEL + C1 + U+2028/29 + 反斜杠）；保留首段 `.agent-workflow-inputs`。                            | 四条                                                                              |
+| **H7** | **展平可指数遍历而绕过上限**：预算只在追加真实 repo 时计，走 group 边不计。`force=1` 删仓会留下空叶子组，深度 5 × 每层 32 条边 ≈ 3400 万次同步递归、产出 0 个 repo，永远撞不到 `MAX_FLAT_REPOS`，daemon 事件循环卡死。                                                                                    | 另设独立**遍历预算**，每访问一个节点就扣。                                                                                                       | 一条：20 宽 × 5 深的零产出菱形图必须立即报错（带耗时上界断言）                    |
+
+## 本轮采纳并改设计的（尚未实现，归 PR-3/PR-4/PR-5）
+
+### H4【P1】`git_diff` 端口契约与设计稿冲突——**设计稿错了**
+
+核实属实且比 Codex 描述的更彻底：`nodePorts.ts:188` 声明
+`git_diff` 是 `list<path<*>>`，`scheduler.ts:7834` 注释写明是「newline-joined
+file paths」。**它从来不是完整 patch。** 而且 `util/diffSplit.ts` 经查有
+**零生产调用方**。
+
+⇒ **design §6.4 的「git_diff = 每仓一段拼接的 patch」是错的**，照它实现会让
+wrapper-fanout 把 marker 行和补丁行当成路径。
+
+**已做**：回退 PR-1 里给 `parseDiff` 加的仓 marker 游标与配套测试——那是为一个
+现已证伪的设计写的投机代码，且模块本身无人调用。
+
+**新契约（改写 design §6.4/§6.5）**：保持 `list<path>`。wrapper-git 对每个
+**可写**成员各跑一次 `gitChangedFiles`，把结果用该成员的 `mountPath` 前缀化后
+合并。仓归属建模为 `repoKey + relPath`，**不从文本 marker 或目录深度反推**。
+若将来真需要完整 patch，另开一个独立的 `string` 端口，不动 `git_diff`。
+
+### H8【P1】「最长前缀匹配按构造无歧义」的论证**不成立**
+
+一轮我用这条构造性不变量否决了「给结构化实体加独立 `repoKey`」的重构。Codex
+给出了反例：**sparse checkout 只控制工作树，不删除索引里的已跟踪路径**。容器仓
+可以仍然跟踪 `hidden/dep/file`，而工作树里 `hidden/dep` 不存在——于是
+`git worktree add` 到 `hidden/dep` 会成功（E7 的占用校验看的是工作树）。此后
+`git rm --cached --sparse` 或 plumbing 操作能让容器产出同一路径的变更，
+`splitRepoPrefix` 会无条件把它判给子仓，结构化 diff **静默错归属**。
+
+**处置**：撤回一轮的否决。改为——
+
+1. **运行期 fail-closed**：物化时对每个有子挂载点的容器，在**选定 ref 的 git
+   tree 层面**（不是工作树）检查是否有落在任一子挂载前缀下的已跟踪路径；
+   有 ⇒ `repo-group-mount-occupied`。这把 E7 从「工作树占用」升级为
+   「索引/树占用」，堵住 sparse 那条缝。
+2. **显式 `repoKey`**：结构化 diff 实体与 join 携带独立的 `repoKey` 字段，
+   不再从路径反推。这条正是一轮登记进 `docs/audit-backlog.md` 的那项——现在它
+   从「未来重构」升级为 **PR-4 必做**，backlog 条目相应改写。
+
+### H9【P1】八入口迁移表漏了**重启**与**定时任务**
+
+`taskToLaunchPayload` 会从旧任务重建 `payload.repos`；顶层 `repos` 退役后重启
+直接 422。简单改成 `repoGroupId` 又会读**可变的当前组**，组删除后失效——而正确
+语义是复用任务自己的**冻结快照**。定时任务持久化整个 StartTask body，删组时也
+没有检查或禁用引用它的计划。
+
+**处置**：design §2.3a 的迁移表从 8 行扩到 **10 行**，新增：
+
+- **重启**：服务端按 `sourceTaskId` 用冻结的 `task_repos` 快照重建，
+  **不**读当前组定义。
+- **定时任务**：删组时在同一事务里检查引用它的计划——默认**阻止删除**并列出，
+  `force` 时显式禁用它们（而不是留一堆反复失败的计划）。
+
+### P2-1 plan.md 与真实 schema 漂移
+
+`0132` 已被记忆 scope 占用，删 `worktree_dir_name` 那条得另取号；文档写「4 个
+索引 / 6 个 CHECK」，实际是 **5 个索引 / 7 个 CHECK**；`schema.ts` 缺
+`lower(name)` 唯一索引、三条 CHECK 与 `child_group_id` 外键——若有人按 ORM
+schema 重新生成迁移，这些约束会被抹掉。
+
+**处置**：修正文档计数；`schema.ts` 补注释说明「这些约束由 migration 持有、
+drizzle 表达不了」，并加一条 **migration ↔ ORM schema 精确一致性测试**（PR-3）。
+
+### P2-2 MCP `resource_write` 够不着仓库组
+
+`RESOURCE_ROUTES.repos` 只映射 cached-repos 且明确声明没有 update。
+**处置**：新增独立 MCP kind `repo-groups`，并把工具 kind 与 `permissionDomain`
+**解耦**——kind 是 `repo-groups`，权限域仍是 `repos`。归 PR-4。
+
+## 复门
+
+三条 P1（H4/H8/H9）改的是**尚未实现**的设计，两条 P2 同理。它们落地在 PR-3/PR-4
+之后需要**第三轮**设计门；本轮修掉的 5 条代码 P1 已带回归锁。

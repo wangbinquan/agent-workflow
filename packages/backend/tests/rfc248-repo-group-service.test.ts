@@ -667,6 +667,200 @@ describe('RFC-248 repo group service', () => {
     expect(codeOf(() => getRepoGroupLayoutResponse(db, g1.id))).toBe('repo-group-cycle')
   })
 
+  // ── 设计门二轮 P1 回归锁 ───────────────────────────────────────────────
+
+  test('H1: 建组校验失败**不留任何记录**（校验在事务内，不是提交后）', async () => {
+    // 原实现先提交组和成员、再 assertFlattenable，于是一个返回 422 的请求
+    // 仍然把非法组持久化了下来，用户在列表里看到一个永远启动不了的组。
+    const code = await codeOfAsync(() =>
+      createRepoGroup(
+        deps(),
+        {
+          name: 'bad',
+          description: '',
+          members: [
+            {
+              kind: 'repo',
+              cachedRepoId: appRepo,
+              ref: '',
+              subdir: '',
+              mountPath: 'x',
+              readonly: false,
+            },
+            // 同一个挂点两次 → 展平期 duplicate。
+            {
+              kind: 'repo',
+              cachedRepoId: sdkRepo,
+              ref: '',
+              subdir: '',
+              mountPath: 'x',
+              readonly: false,
+            },
+          ],
+        },
+        null,
+      ),
+    )
+    expect(code).toBe('mount-path-duplicate')
+    expect(listRepoGroups(db)).toHaveLength(0)
+    expect(db.select().from(repoGroupMembers).all()).toHaveLength(0)
+  })
+
+  test('H1: 改组校验失败 ⇒ 成员列表与 version 完全不变', async () => {
+    const g = await createRepoGroup(
+      deps(),
+      {
+        name: 'g',
+        description: '',
+        members: [
+          {
+            kind: 'repo',
+            cachedRepoId: appRepo,
+            ref: '',
+            subdir: '',
+            mountPath: '',
+            readonly: false,
+          },
+        ],
+      },
+      null,
+    )
+    const code = await codeOfAsync(() =>
+      updateRepoGroup(deps(), g.id, {
+        name: 'g',
+        description: '毁掉它',
+        members: [
+          {
+            kind: 'repo',
+            cachedRepoId: appRepo,
+            ref: '',
+            subdir: '',
+            mountPath: 'x',
+            readonly: false,
+          },
+          {
+            kind: 'repo',
+            cachedRepoId: sdkRepo,
+            ref: '',
+            subdir: '',
+            mountPath: 'x',
+            readonly: false,
+          },
+        ],
+      }),
+    )
+    expect(code).toBe('mount-path-duplicate')
+    const after = getRepoGroup(db, g.id)
+    expect(after.version).toBe(1) // 没有自增
+    expect(after.description).toBe('') // 没被改
+    expect(after.members).toHaveLength(1)
+    expect(after.members[0]?.mountPath).toBe('') // 原成员原样
+  })
+
+  test('H1: OCC —— expectedVersion 不匹配 ⇒ 409，且不写入', async () => {
+    const g = await createRepoGroup(
+      deps(),
+      {
+        name: 'g',
+        description: '',
+        members: [
+          {
+            kind: 'repo',
+            cachedRepoId: appRepo,
+            ref: '',
+            subdir: '',
+            mountPath: '',
+            readonly: false,
+          },
+        ],
+      },
+      null,
+    )
+    // 模拟并发：别人先改了一版。
+    await updateRepoGroup(deps(), g.id, {
+      name: 'g',
+      description: '别人的改动',
+      members: [
+        {
+          kind: 'repo',
+          cachedRepoId: sdkRepo,
+          ref: '',
+          subdir: '',
+          mountPath: '',
+          readonly: false,
+        },
+      ],
+    })
+    const code = await codeOfAsync(() =>
+      updateRepoGroup(
+        deps(),
+        g.id,
+        {
+          name: 'g',
+          description: '我的改动',
+          members: [
+            {
+              kind: 'repo',
+              cachedRepoId: appRepo,
+              ref: '',
+              subdir: '',
+              mountPath: '',
+              readonly: false,
+            },
+          ],
+        },
+        1, // 我拿到的是 v1，但库里已经是 v2
+      ),
+    )
+    expect(code).toBe('repo-group-version-conflict')
+    const after = getRepoGroup(db, g.id)
+    expect(after.description).toBe('别人的改动') // 没被静默覆盖
+    expect(after.version).toBe(2)
+  })
+
+  test('H3: 组里有 fused 记忆时删组不能崩（0132 的 CHECK 会拒绝把它改成 archived）', async () => {
+    const g = await createRepoGroup(
+      deps(),
+      {
+        name: 'g',
+        description: '',
+        members: [
+          {
+            kind: 'repo',
+            cachedRepoId: appRepo,
+            ref: '',
+            subdir: '',
+            mountPath: '',
+            readonly: false,
+          },
+        ],
+      },
+      null,
+    )
+    // 一条 approved（可归档）+ 一条 fused（不可改——CHECK 要求 fused ⟺ 两个
+    // fused_into_skill* 非空，把它改成 archived 会违反约束、整个删除事务 500）。
+    db.run(sql`
+      INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
+      VALUES (${ulid()}, 'repo_group', ${g.id}, 'ok', 'b', '[]', 'approved', 'manual', ${Date.now()}, 1)
+    `)
+    db.run(sql`
+      INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version,
+                            fused_into_skill, fused_into_skill_id)
+      VALUES (${ulid()}, 'repo_group', ${g.id}, 'fused-one', 'b', '[]', 'fused', 'manual', ${Date.now()}, 1,
+              'some-skill', ${ulid()})
+    `)
+    // boundMemories 只数可归档的那条。
+    expect(getRepoGroup(db, g.id).boundMemories).toBe(1)
+
+    const r = deleteRepoGroup(db, g.id)
+    expect(r.archivedMemories).toBe(1)
+    const rows = db.select().from(memories).all()
+    expect(rows).toHaveLength(2)
+    // fused 那条原样保留——它本就是终态、也本就不会被注入。
+    expect(rows.filter((m) => m.status === 'fused')).toHaveLength(1)
+    expect(rows.filter((m) => m.status === 'archived')).toHaveLength(1)
+  })
+
   test('删不存在的组 → 404', () => {
     expect(codeOf(() => deleteRepoGroup(db, 'nope'))).toBe('repo-group-not-found')
   })

@@ -12,7 +12,15 @@
 
 **端到端物化原型已跑通**（[`materialize-prototype.sh`](design/RFC-248-repo-groups/materialize-prototype.sh)，可复跑）：5 个 worktree（挂根 + 只读 + 三层嵌套 + sparse + 同仓两份）status 全干净、diff 互不串味、根仓 diff 不含 `.gitignore` 与任何挂载点、`git add -A` 零 embedded-repo 告警、分支序号正确、幂等复检通过——PR-3 的主要不确定性已提前消除，其集成测试即为这份原型的 TypeScript 化。
 
-**下一步**：复跑设计门（Codex next-steps 要求）+ 并行开工 PR-1（纯逻辑地基，findings 不改其形状）。
+**设计门第二轮已闭环**（同日，审至 `024d843a`，47 分钟，范围是一轮的三倍：复核一轮 5 条修法 + 审 PR-1/PR-2 已落地代码 + 6 个点名攻击向量 + 两个 migration）。**判定 needs-attention：9 × P1 + 2 × P2**。先记已闭合的：**G2 由外部迁移探针独立验证通过**——「0132 与 0117 的 24 列、7 个 CHECK、2 个自外键和 5 个索引等价；`foreign_keys` × `legacy_alter_table` 四种组合的探针均通过，TEMP 表能跨 statement-breakpoint 存活」。
+
+**本轮已修掉的 5 条代码 P1（全部带回归锁）**：**H1** 校验发生在**事务提交后**——`createRepoGroup` 先提交组+成员再 `assertFlattenable`，于是返回 422 的请求**仍把非法组持久化**了；`update` 同样先替换成员并自增 version 再校验，且无 OCC ⇒ 校验移进 `dbTxSync`（抛出即回滚）+ 事务内重读 version + `expectedVersion` OCC（409）；**H2** force 删仓横跨 DB 与 FS——detach 在 `withUrlLock` 之前，等锁期间可新建引用、中途崩溃留断链 ⇒ detach 移进锁内、与删行同事务、锁内**重查**引用；**H3** **含 fused 记忆的组永远删不掉**——删组把所有非 archived 记忆改成 archived，而 0132 的 CHECK 是 `(status='fused') = (fused_into_skill IS NOT NULL)` ⇒ 违反约束、整个删除事务 500 回滚 ⇒ 引入 `ARCHIVABLE_STATUSES` 排除 fused（它本就是终态且不被注入）；**H6** 挂载路径三个洞——`isUnder` 区分大小写而查重折叠 ⇒ macOS 上 `Vendor` 与 `vendor/sdk` **实际嵌套却被排除计划当兄弟** ⇒ 内层不被排除 ⇒ `add -A` 当 gitlink 提交；允许 U+2028/U+2029（JS 正则 `^`/`$` 认它们）；允许把 `.agent-workflow-inputs` 当挂载点；**H7** 展平预算只在追加真实 repo 时计、走 group 边不计 ⇒ `force=1` 留下的空叶子组能在深度 5 × 每层 32 边下跑出 ~3400 万次同步递归、产出 0 repo、永远撞不到上限、卡死 daemon 事件循环 ⇒ 另设独立遍历预算。
+
+**改设计、归 PR-3/PR-4 的 4 条**：**H4** —— `git_diff` 端口**从来不是 patch**（`nodePorts.ts:188` 是 `list<path<*>>`、`scheduler.ts:7834` 注释亦然），design §6.4 初稿写错，照它实现会让 fanout 把 marker 行当路径；连带发现 `util/diffSplit.ts` **零生产调用方**，PR-1 给它加的仓 marker 游标是为已证伪设计写的投机代码，**已回退**；新契约 = 逐仓 `gitChangedFiles` + `mountPath` 前缀化后合并，仓归属建模为 `repoKey + relPath`。**H8** —— 一轮我用「按构造无歧义」否决了「结构化实体加独立 `repoKey`」，**该论证被证伪**：sparse checkout 只控制工作树、**不删索引里的已跟踪路径**，容器仍可跟踪 `hidden/dep/file` 而工作树无 `hidden/dep`，于是子仓挂得进去、之后 `git rm --cached --sparse` 能让容器产出同路径变更、`splitRepoPrefix` 静默错归属 ⇒ 占用校验升级到 **git tree 层面** + 结构化实体**显式携带 repoKey**（从「未来重构」升级为 PR-4 必做）。**H9** —— 八入口迁移表漏了**重启**（`taskToLaunchPayload` 会重建 `payload.repos`，退役后直接 422；且必须用**冻结快照**而非当前组）与**定时任务**（删组后留下反复失败的启用计划）⇒ 扩到 10 行。两条 P2：文档索引/CHECK 计数写错（实为 5/7）+ `schema.ts` 表达不了的约束需一致性测试；MCP 需独立 kind `repo-groups` 且 kind 与 permissionDomain 解耦。
+
+**已入库并推送**（分支 `rfc-248-repo-groups`）：`f6e637dd` RFC 三件套 → `eb4f6194` 一轮闭环 → `fb04f84e`+`6d78cff0` PR-1 → `fcfbfdc9` PR-2a → `d04854c5` PR-2b → `024d843a` 交付记录 → 二轮修复批。**PR-3/PR-4/PR-5 未开工**；三条改设计的 P1 落地后需要**第三轮**设计门。
+
+⚠ **跨 session 提醒**：并发 session 的 commit `94c654ad`（RFC-247 实现门第二批）因分支切换落到了 `rfc-248-repo-groups` 而非 `main`，未做任何改写，随分支一起推了远端；要归位一次 cherry-pick 即可。
 
 ✅ **已完成并合入 main（2026-08-02）：[RFC-247 MCP 远程接入、路由元数据授权层与 API 文档界面](design/RFC-247-mcp-remote-access/proposal.md)** —— 平台首次对外提供程序化接口：`POST /api/mcp`（Streamable HTTP / 无状态 / 只接 PAT）+ 账号页自助签发令牌 + **资源类型 × `新增/修改/删除/执行`** 矩阵（**读恒开**，空矩阵 = 只读）。**显式 supersede RFC-221 D1**。为让「能建不能改」「不能删」在 REST 层真实成立，把 `资源:write` 拆成 `:create/:update/:delete`，并引入**路由元数据注册层**作为权限门单一事实源。用户授权「不用管现有实现、还没人用」⇒ 存量断代、零兼容包袱。决策固化为 proposal §3 的 **D1–D19**；**单 RFC / 5 PR 按层切**（T1–T40）。
 

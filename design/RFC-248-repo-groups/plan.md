@@ -7,17 +7,17 @@
 
 ## 交付记录（滚动更新）
 
-| PR         | 状态 | commit                  | 摘要                                                                         |
-| ---------- | ---- | ----------------------- | ---------------------------------------------------------------------------- |
-| RFC 三件套 | ✅   | `f6e637dd`              | proposal / design / plan + 索引登记                                          |
-| 设计门一轮 | ✅   | `eb4f6194`              | 3×P1 + 2×P2 全部核实并折入，记档 `design-gate-2026-08-02.md`                 |
-| **PR-1**   | ✅   | `fb04f84e` + `6d78cff0` | T1–T9 纯逻辑地基 + 三个实证缺陷加固                                          |
-| **PR-2a**  | ✅   | `fcfbfdc9`              | T10/T11/T11b/T12 两个 migration + drizzle 定义 + 16 条迁移测试               |
-| **PR-2b**  | ✅   | `d04854c5`              | T13/T14/T15/T16/T17 服务层 + 六条路由 + 权限点 + 记忆第五档 + 18 条服务测试  |
-| 设计门二轮 | 🔄   | —                       | 复核一轮修法 + 审 PR-1/PR-2 代码 + 六个攻击向量                              |
-| **PR-3**   | ⬜   | —                       | 运行时物化（布局建 worktree / 预置 commit / sparse / 只读 / 回收）           |
-| **PR-4**   | ⬜   | —                       | 消费面（wrapper-git 多仓 / diff / 分片 / 上传 / 记忆注入 / 模板变量 / 断代） |
-| **PR-5**   | ⬜   | —                       | 前端（`/repos` 分段 / 组编辑器 / 布局树 / 启动选择器 / 任务详情 / 记忆表单） |
+| PR         | 状态 | commit                  | 摘要                                                                                                                   |
+| ---------- | ---- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| RFC 三件套 | ✅   | `f6e637dd`              | proposal / design / plan + 索引登记                                                                                    |
+| 设计门一轮 | ✅   | `eb4f6194`              | 3×P1 + 2×P2 全部核实并折入，记档 `design-gate-2026-08-02.md`                                                           |
+| **PR-1**   | ✅   | `fb04f84e` + `6d78cff0` | T1–T9 纯逻辑地基 + 三个实证缺陷加固                                                                                    |
+| **PR-2a**  | ✅   | `fcfbfdc9`              | T10/T11/T11b/T12 两个 migration + drizzle 定义 + 16 条迁移测试                                                         |
+| **PR-2b**  | ✅   | `d04854c5`              | T13/T14/T15/T16/T17 服务层 + 六条路由 + 权限点 + 记忆第五档 + 18 条服务测试                                            |
+| 设计门二轮 | ✅   | 见下                    | **9×P1 + 2×P2，判定 needs-attention**；5 条代码 P1 已修并带锁，4 条改设计的归 PR-3/PR-4；G2 由外部迁移探针独立验证通过 |
+| **PR-3**   | ⬜   | —                       | 运行时物化（布局建 worktree / 预置 commit / sparse / 只读 / 回收）                                                     |
+| **PR-4**   | ⬜   | —                       | 消费面（wrapper-git 多仓 / diff / 分片 / 上传 / 记忆注入 / 模板变量 / 断代）                                           |
+| **PR-5**   | ⬜   | —                       | 前端（`/repos` 分段 / 组编辑器 / 布局树 / 启动选择器 / 任务详情 / 记忆表单）                                           |
 
 实现期相对设计稿的**偏离**（均已回写文档）：
 
@@ -29,6 +29,14 @@
   Unicode NFC + NUL（PR-1 加固批，均有实测/红绿证据）。
 - 新增一条 PR-2b 发现的真 bug 修复：读路径 `resolveRepoGroupLayout` 让
   `RepoGroupLayoutError` 逃到 route 层会渲染成 500 而非 422。
+- **设计门二轮回退**：PR-1 给 `util/diffSplit.ts` 加的仓 marker 游标**已删**
+  ——`git_diff` 端口是 `list<path<*>>` 不是 patch（`nodePorts.ts:188`），且该
+  模块零生产调用方，那段是为已证伪设计写的投机代码。
+- **设计门二轮新增 5 条代码修复**（H1 事务内校验 + OCC、H2 删仓原子性、
+  H3 fused 记忆、H6 三个校验洞、H7 遍历预算），详见 `design-gate-2026-08-02.md`。
+- **P2-1 修正**：`memories` 是 **5 个索引 / 7 个 CHECK**（初稿写 4/6）；
+  删 `worktree_dir_name` 的迁移**不再预留 0132**（已被记忆 scope 占用），
+  实现期现取尾号。
 
 ## PR 划分
 
@@ -145,6 +153,16 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
 
 ## PR-3 — 运行时物化
 
+- **T19b**（设计门二轮 H8）**占用校验升级到 tree 层面**：对每个有子挂载点的
+  容器，在**选定 ref 的 git tree**（`git ls-tree -r --name-only <ref>`）而不是
+  工作树上检查是否存在落在任一子挂载前缀下的已跟踪路径；有 ⇒
+  `repo-group-mount-occupied`。sparse checkout 只控制工作树、不删索引里的
+  已跟踪路径，只看工作树会漏掉这类冲突。
+- **T19c**（设计门二轮 P2-1）**migration ↔ ORM schema 一致性测试**：
+  `schema.ts` 表达不了 `lower(name)` 表达式唯一索引、三条 CHECK 与
+  `child_group_id` 外键——若有人按 ORM schema 重新生成迁移，这些约束会被静默
+  抹掉。加一条从 `sqlite_master` 读真实 DDL 并断言其存在的测试，
+  并在 `schema.ts` 就地注释说明「这些约束由 migration 持有」。
 - **T19** `util/git.ts` 新增两个原语：
   - `createSparseWorktree(opts)`：`worktree add --no-checkout` +
     `sparse-checkout set --no-cone` + `checkout`（design §3.2）；
@@ -179,7 +197,22 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
 
 ## PR-4 — 消费面
 
-- **T28** `wrapper-git` 多仓（design §6.4）：删
+- **T28** `wrapper-git` 多仓（design §6.4，**已按设计门二轮 H4 改写**）：
+  删两处 `multi-repo-wrapper-git-unsupported`；包裹器对每个**可写**成员各跑
+  `gitChangedFiles`，结果用该成员 `mountPath` 前缀化后合并成
+  **`list<path>`**（**不是** patch——`nodePorts.ts:188` 的端口类型就是
+  `list<path<*>>`）。单可写仓时前缀为空 ⇒ 输出字节级不变。
+- **T28b**（设计门二轮 H8）结构化 diff 实体与 join **显式携带 `repoKey`**，
+  不再从路径最长前缀反推归属；运行期发现前缀冲突 **fail closed**。
+  字符串前缀在展示与文本 diff join 上保留。
+- **T30b**（设计门二轮 H9）**重启与定时任务**两个入口（design §2.3a 第 9/10 行）：
+  重启按 `sourceTaskId` 用冻结的 `task_repos` 快照重建，**不读当前组**；
+  删组时同事务检查引用它的计划任务，默认阻止删除并列出，`force` 时显式禁用。
+- **T30c**（设计门二轮 P2-2）MCP 新增独立 kind `repo-groups`，并把工具 kind 与
+  `permissionDomain` **解耦**（kind = `repo-groups`，权限域仍是 `repos`）；
+  映射六条路由与请求 schema，加资源表/权限/服务路由的漂移测试。
+- **T28 旧稿删除** —— 原「git_diff = 每仓一段拼接 patch」的写法作废。
+  删
   `multi-repo-wrapper-git-unsupported`（`services/task.ts:1567` +
   `services/scheduler.ts:558`）；包裹器遍历可写成员；`git_diff` 拼接；
   **单可写仓时不加分段头**（字节级保 baseline）。

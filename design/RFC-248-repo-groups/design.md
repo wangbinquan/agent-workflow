@@ -61,14 +61,14 @@ joinMount(prefix, own):
 
 `normalize` 规则（建组期校验 + 展平期再跑一次）：
 
-| 规则 | 拒绝原因码 |
-| --- | --- |
-| 必须是相对路径（不以 `/` 开头，无 Windows 盘符） | `mount-path-absolute` |
-| 任一段不得为 `.` 或 `..` | `mount-path-traversal` |
-| 不得含 `\r` `\n` `\\` | `mount-path-unsafe-char` |
-| 折叠重复 `/`、去尾 `/` | —（无错误码，见下） |
-| 展平结果里**至多一个** `''` | `mount-path-multiple-roots` |
-| 展平结果里**不得重复**（精确相等） | `mount-path-duplicate` |
+| 规则                                             | 拒绝原因码                  |
+| ------------------------------------------------ | --------------------------- |
+| 必须是相对路径（不以 `/` 开头，无 Windows 盘符） | `mount-path-absolute`       |
+| 任一段不得为 `.` 或 `..`                         | `mount-path-traversal`      |
+| 不得含 `\r` `\n` `\\`                            | `mount-path-unsafe-char`    |
+| 折叠重复 `/`、去尾 `/`                           | —（无错误码，见下）         |
+| 展平结果里**至多一个** `''`                      | `mount-path-multiple-roots` |
+| 展平结果里**不得重复**（精确相等）               | `mount-path-duplicate`      |
 
 > 初稿还列了第六条 `mount-path-empty`（「非空但折叠成空」）。实现时证明它
 > **不可达**：非空且不以 `/` 开头的串必然至少有一个非空段，而全是斜杠的串会先
@@ -182,19 +182,22 @@ CHECK (scope_type IN ('agent','workflow','repo','repo_group','global'))
 ```ts
 // packages/shared/src/schemas/repoGroup.ts（新增）
 export const MAX_GROUP_DEPTH = 5
-export const MAX_FLAT_REPOS = 32          // 取代 MULTI_REPO_MAX=8 的语义
+export const MAX_FLAT_REPOS = 32 // 取代 MULTI_REPO_MAX=8 的语义
 
 export const RepoGroupMemberSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('repo'),
-    cachedRepoId: z.string().min(1).optional(),
-    repoUrl: z.string().min(1).optional(),   // D7：不在缓存里则导入后回填 id
-    ref: z.string().default(''),
-    subdir: z.string().default(''),
-    mountPath: z.string().default(''),
-    readonly: z.boolean().default(false),
-  }).refine(v => (v.cachedRepoId === undefined) !== (v.repoUrl === undefined),
-            { message: 'cachedRepoId ⊕ repoUrl' }),
+  z
+    .object({
+      kind: z.literal('repo'),
+      cachedRepoId: z.string().min(1).optional(),
+      repoUrl: z.string().min(1).optional(), // D7：不在缓存里则导入后回填 id
+      ref: z.string().default(''),
+      subdir: z.string().default(''),
+      mountPath: z.string().default(''),
+      readonly: z.boolean().default(false),
+    })
+    .refine((v) => (v.cachedRepoId === undefined) !== (v.repoUrl === undefined), {
+      message: 'cachedRepoId ⊕ repoUrl',
+    }),
   z.object({
     kind: z.literal('group'),
     childGroupId: z.string().min(1),
@@ -205,7 +208,7 @@ export const RepoGroupMemberSchema = z.discriminatedUnion('kind', [
 
 export const PlannedRepoSchema = z.object({
   cachedRepoId: z.string(),
-  repoUrlRedacted: z.string(),            // 出网只给脱敏形态（RFC-204）
+  repoUrlRedacted: z.string(), // 出网只给脱敏形态（RFC-204）
   ref: z.string(),
   subdir: z.string(),
   mountPath: z.string(),
@@ -236,16 +239,23 @@ export const PlannedRepoSchema = z.object({
 `repos[]` 的断代必须**同时**覆盖下面每一行，漏一行就留一个「静默在错误工作区
 启动」的洞。实现期逐行核对并打勾：
 
-| # | 入口 | 现状 | 目标 |
-| --- | --- | --- | --- |
-| 1 | `StartTaskSchema`（`schemas/task.ts:569`） | `repos[]` | `repoGroupId` |
-| 2 | `StartAgentTaskSchema`（`schemas/task.ts:1267`） | `repos[]` | `repoGroupId` |
-| 3 | `StartWorkgroupTaskSchema`（`schemas/workgroup.ts:597`） | `repos[]` | `repoGroupId` |
-| 4 | scheduled payload 各档（`schemas/scheduledTask.ts`，agent 档继承 #2） | 继承 | 跟随 #1–#3 |
-| 5 | `LaunchSpaceFields` + `applySpaceFields`（`schemas/task.ts:701-715`） | 只透传 `repos` | 透传 `repoGroupId` |
-| 6 | REST：JSON 与 multipart 两条启动路径 | — | 两条都过退役键守卫 |
-| 7 | MCP `launch_task` 工具（`backend/src/mcp/tools.ts`） | 无 `repoGroupId` | 加参数 + 去 `repos` |
-| 8 | e2e fixture / 测试夹具 | `repos[]` | `repoGroupId` |
+| #   | 入口                                                                  | 现状                         | 目标                                                                                          |
+| --- | --------------------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------- |
+| 1   | `StartTaskSchema`（`schemas/task.ts:569`）                            | `repos[]`                    | `repoGroupId`                                                                                 |
+| 2   | `StartAgentTaskSchema`（`schemas/task.ts:1267`）                      | `repos[]`                    | `repoGroupId`                                                                                 |
+| 3   | `StartWorkgroupTaskSchema`（`schemas/workgroup.ts:597`）              | `repos[]`                    | `repoGroupId`                                                                                 |
+| 4   | scheduled payload 各档（`schemas/scheduledTask.ts`，agent 档继承 #2） | 继承                         | 跟随 #1–#3                                                                                    |
+| 5   | `LaunchSpaceFields` + `applySpaceFields`（`schemas/task.ts:701-715`） | 只透传 `repos`               | 透传 `repoGroupId`                                                                            |
+| 6   | REST：JSON 与 multipart 两条启动路径                                  | —                            | 两条都过退役键守卫                                                                            |
+| 7   | MCP `launch_task` 工具（`backend/src/mcp/tools.ts`）                  | 无 `repoGroupId`             | 加参数 + 去 `repos`                                                                           |
+| 8   | e2e fixture / 测试夹具                                                | `repos[]`                    | `repoGroupId`                                                                                 |
+| 9   | **任务重启**（`taskToLaunchPayload`）                                 | 从旧任务重建 `payload.repos` | 服务端按 `sourceTaskId` 用**冻结的 `task_repos` 快照**重建，**不读当前组定义**                |
+| 10  | **定时任务执行**                                                      | 持久化整个 StartTask body    | 跟随 #1；且**删组时**在同一事务里检查引用它的计划：默认阻止删除并列出，`force` 时显式禁用它们 |
+
+> 设计门二轮 H9：初稿只列了 8 行，漏掉 #9 / #10。漏 #9 的后果是顶层 `repos`
+> 退役后**重启直接 422**；而简单改成 `repoGroupId` 又会读**可变的当前组**、
+> 组删除后失效——正确语义是复用任务自己的冻结快照。漏 #10 的后果是删组后留下
+> 一堆**反复失败**的启用中计划。
 
 **退役键守卫**（`RETIRED_START_TASK_KEYS`，`schemas/task.ts:730`）当前是
 `['repoPath','baseBranch','fetchBeforeLaunch']`，**没有顶层 `repos`**。
@@ -341,16 +351,16 @@ branch = n === 1 ? `agent-workflow/${taskId}` : `agent-workflow/${taskId}-${n}`
 
 ### 3.5 只读成员（D11）
 
-| 环节 | 只读成员的行为 |
-| --- | --- |
-| worktree 物化 | 与可写成员完全一致（要 checkout 出来给 agent 读） |
-| `.gitignore` 预置 commit | **照做**（D21）——只影响这个一次性 worktree |
-| `gitStashSnapshot` / `pre_snapshot_repos_json` | **跳过**（不写条目） |
-| resume / retry 回滚 | **跳过** |
-| `wrapper-git` 的 `git_diff` | **不参与** |
-| `GET /api/tasks/:id/diff` / 结构化 diff | **不参与** |
-| RFC-075 自动提交推送 | **跳过** |
-| 任务进入终态时 | 跑一次 `git status --porcelain`；非空 ⇒ 落一条任务级告警事件 `repo-group-readonly-dirty`，带挂载路径与变更文件数（截断到前 20 条）。**不改任务状态**。 |
+| 环节                                           | 只读成员的行为                                                                                                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| worktree 物化                                  | 与可写成员完全一致（要 checkout 出来给 agent 读）                                                                                                      |
+| `.gitignore` 预置 commit                       | **照做**（D21）——只影响这个一次性 worktree                                                                                                             |
+| `gitStashSnapshot` / `pre_snapshot_repos_json` | **跳过**（不写条目）                                                                                                                                   |
+| resume / retry 回滚                            | **跳过**                                                                                                                                               |
+| `wrapper-git` 的 `git_diff`                    | **不参与**                                                                                                                                             |
+| `GET /api/tasks/:id/diff` / 结构化 diff        | **不参与**                                                                                                                                             |
+| RFC-075 自动提交推送                           | **跳过**                                                                                                                                               |
+| 任务进入终态时                                 | 跑一次 `git status --porcelain`；非空 ⇒ 落一条任务级告警事件 `repo-group-readonly-dirty`，带挂载路径与变更文件数（截断到前 20 条）。**不改任务状态**。 |
 
 ### 3.6 实测脚本
 
@@ -478,30 +488,30 @@ for depth in 0..maxDepth:                      # 逐层
 引入预置 commit 后，`task_repos.base_commit` 不再等于「base 分支的 tip」。两个
 消费者要区别对待：
 
-| 消费者 | 用哪个 |
-| --- | --- |
-| 审计 diff / 结构化 diff / `wrapper-git` 快照基线 | `base_commit`（= 预置 commit，干净） |
-| RFC-075 提交信息生成里的 `baseRef` 文案、PR 基线描述 | `base_branch`（分支名，不变） |
-| `rollbackToSnapshot` / `pre_snapshot` | 与 `base_commit` 无关，走 stash sha，不变 |
+| 消费者                                               | 用哪个                                    |
+| ---------------------------------------------------- | ----------------------------------------- |
+| 审计 diff / 结构化 diff / `wrapper-git` 快照基线     | `base_commit`（= 预置 commit，干净）      |
+| RFC-075 提交信息生成里的 `baseRef` 文案、PR 基线描述 | `base_branch`（分支名，不变）             |
+| `rollbackToSnapshot` / `pre_snapshot`                | 与 `base_commit` 无关，走 stash sha，不变 |
 
 `task_repos.gitignore_commit` 单独存一列，便于「这一笔到底是不是平台造的」在
 排查与 UI 上一眼可判，也让「预置 commit 的父提交才是真 base tip」可推导。
 
 ## 5. 失败模式
 
-| 码 | 触发 | HTTP | 处置 |
-| --- | --- | --- | --- |
-| `repo-group-name-conflict` | 组名（大小写不敏感）已存在 | 409 | — |
-| `mount-path-*`（§1.2 六种） | 挂载路径非法 | 422 | 带成员下标 |
-| `repo-group-cycle` | 组引用成环 | 422 | 带环路径 `[A → B → A]` |
-| `repo-group-depth-exceeded` | 展平深度 > 5 | 422 | 带超深的链 |
-| `repo-group-too-many-repos` | 展平后 > 32 | 422 | 带实际数量 |
-| `repo-group-member-not-found` | 引用的仓 / 组不存在 | 422 | — |
-| `repo-group-has-references` | 删组时被别的组引用 | 409 | 列出引用者；`force=1` 摘除 |
-| `cached-repo-has-group-references` | 删仓时被组引用 | 409 | 与既有 `CachedRepoHasReferencesError` 并列返回 |
-| `repo-group-mount-occupied` | **F3**：`git worktree add` 撞上外层仓自身已有内容（E7） | 422（启动期） | 带 `mountPath` + 占用它的仓的挂载路径 |
-| `repo-group-ref-not-found` | 某成员的 ref 在其仓里不存在 | 422 | 复用 `repo-ref-not-found` 的 `availableRefs` 形态，带 `mountPath` |
-| `repo-group-sparse-empty` | sparse 模式检出后目录为空（`subdir` 在该 ref 上不存在） | 422 | 带 `mountPath` + `subdir` |
+| 码                                 | 触发                                                    | HTTP          | 处置                                                              |
+| ---------------------------------- | ------------------------------------------------------- | ------------- | ----------------------------------------------------------------- |
+| `repo-group-name-conflict`         | 组名（大小写不敏感）已存在                              | 409           | —                                                                 |
+| `mount-path-*`（§1.2 六种）        | 挂载路径非法                                            | 422           | 带成员下标                                                        |
+| `repo-group-cycle`                 | 组引用成环                                              | 422           | 带环路径 `[A → B → A]`                                            |
+| `repo-group-depth-exceeded`        | 展平深度 > 5                                            | 422           | 带超深的链                                                        |
+| `repo-group-too-many-repos`        | 展平后 > 32                                             | 422           | 带实际数量                                                        |
+| `repo-group-member-not-found`      | 引用的仓 / 组不存在                                     | 422           | —                                                                 |
+| `repo-group-has-references`        | 删组时被别的组引用                                      | 409           | 列出引用者；`force=1` 摘除                                        |
+| `cached-repo-has-group-references` | 删仓时被组引用                                          | 409           | 与既有 `CachedRepoHasReferencesError` 并列返回                    |
+| `repo-group-mount-occupied`        | **F3**：`git worktree add` 撞上外层仓自身已有内容（E7） | 422（启动期） | 带 `mountPath` + 占用它的仓的挂载路径                             |
+| `repo-group-ref-not-found`         | 某成员的 ref 在其仓里不存在                             | 422           | 复用 `repo-ref-not-found` 的 `availableRefs` 形态，带 `mountPath` |
+| `repo-group-sparse-empty`          | sparse 模式检出后目录为空（`subdir` 在该 ref 上不存在） | 422           | 带 `mountPath` + `subdir`                                         |
 
 F3 的判定**必须在启动期**，不能在建组期——外层仓在不同 ref 上有没有那个路径是会
 变的。建组期只做静态校验（§1.2），运行期做占用校验。
@@ -514,11 +524,15 @@ F3 的判定**必须在启动期**，不能在建组期——外层仓在不同 
 
 ```ts
 /** 规范 key = 挂载路径；挂根为 ''。线上/展示形态用 '.' 表示根。 */
-export function repoKey(r: { mountPath: string }): string { return r.mountPath }
+export function repoKey(r: { mountPath: string }): string {
+  return r.mountPath
+}
 export function repoKeyWire(r: { mountPath: string }): string {
   return r.mountPath === '' ? '.' : r.mountPath
 }
-export function parseRepoKeyWire(s: string): string { return s === '.' ? '' : s }
+export function parseRepoKeyWire(s: string): string {
+  return s === '.' ? '' : s
+}
 ```
 
 删除 `sanitizeLabel`（把 `/` 换成 `-`）与 basename + 数字后缀 uniquing——挂载
@@ -576,7 +590,7 @@ diff 两类响应里都**带上 `repoKeys: string[]`，前端不自己猜）。
   无分段头的形态一致；
 - 多仓走 `service.ts:147-172` → `mergeStructuralDiffs`
   （`assemble.ts:224-252`），而 `prefixPath = (label, fp) => \`${label}/${fp}\``
-  （`assemble.ts:147`）是**无条件**的。
+（`assemble.ts:147`）是**无条件**的。
 
 把根成员的 key `''` 直接塞进现有 assembler 会产出 `/src/a.ts`（用 wire 形态
 `.` 则是 `./src/a.ts`），**两者都不等于**文本 diff 的 `src/a.ts`；
@@ -603,33 +617,61 @@ hunkAnchor），**全部经由 `prefixPath` 与 `prefixIdPath`**，所以改这�
 `repo-group-mount-occupied`），之后又被 `.gitignore` 预置 commit 排除。
 所以「根仓的 `src/a.ts`」与「挂在 `src` 的成员的 `a.ts`」不可能同时存在。
 
-**被否决的替代方案**：设计门建议「给结构化实体加独立 `repoKey` 字段、彻底
-不用字符串前缀承载身份」。未采纳——字符串前缀是 RFC-089/239/240/241 与前端
-join 的既有承重结构，替换是跨四个 RFC 的大重构，而上面那条构造性不变量已经
-消除了歧义。深层关切（身份不该编码进字符串）如实登记进
-`docs/audit-backlog.md`，留给未来的结构化 diff 重构 RFC。
+> ⚠ **设计门二轮 H8 撤回了上面那条构造性论证。** 反例：**sparse checkout 只
+> 控制工作树，不删除索引里的已跟踪路径**。容器仓可以仍然跟踪
+> `hidden/dep/file`，而工作树里 `hidden/dep` 不存在——于是 `git worktree add`
+> 到 `hidden/dep` **会成功**（E7 看的是工作树占用）。此后
+> `git rm --cached --sparse` 或 plumbing 操作能让容器产出同一路径的变更，
+> `splitRepoPrefix` 会无条件把它判给子仓，结构化 diff **静默错归属**。
+>
+> 因此改为**两条一起做**（PR-3 + PR-4）：
+>
+> 1. **占用校验升级到 tree 层面**：物化时对每个有子挂载点的容器，在**选定 ref
+>    的 git tree**（`git ls-tree -r --name-only <ref>`）而不是工作树上检查是否
+>    存在落在任一子挂载前缀下的已跟踪路径；有 ⇒ `repo-group-mount-occupied`。
+>    这堵住 sparse 那条缝。
+> 2. **结构化实体显式携带 `repoKey`**：不再从路径最长前缀反推归属。一轮把它
+>    登记为「未来重构」，二轮升级为 **PR-4 必做**；`docs/audit-backlog.md`
+>    的对应条目相应改写。运行期若仍发现前缀冲突，**fail closed**。
+>
+> 字符串前缀在**展示**与**文本 diff join**上保留（它是 RFC-089/239/240/241 的
+> 承重结构），但**归属判定**不再依赖它。
 
 ### 6.4 `wrapper-git` 多仓（D9）
 
-`services/scheduler.ts:558` 的 `multi-repo-wrapper-git-unsupported` 删除。包裹器
-的前后快照改为遍历 `state.repos.filter(r => !r.readonly)`：
+> ⚠ **设计门二轮 H4 更正**。初稿写「`git_diff` = 每仓一段拼接的 patch」，
+> **是错的**。核实：`shared/src/nodePorts.ts:188` 声明
+> `dataOutputs: [{ name: 'git_diff', kind: 'list<path<*>>' }]`，
+> `services/scheduler.ts:7834` 注释亦写明「newline-joined file paths」。
+> 它从来不是 patch。照初稿实现会让 wrapper-fanout 把 `# === Repo:` 标记行与
+> 补丁行当成文件路径。
+>
+> 连带结论：`util/diffSplit.ts` 经查有**零生产调用方**，PR-1 给它加的仓 marker
+> 游标是为这个已证伪的设计写的投机代码，**已回退**。
+
+`services/scheduler.ts:558` 的 `multi-repo-wrapper-git-unsupported` 删除。
+包裹器的正确多仓形态是**保持 `list<path>` 契约**：
 
 ```
 enter: for each writable repo → snapshot(repo, 'base')
-exit:  for each writable repo → diff(repo, baseSnapshot)
-       git_diff = 非空段按 repo_index 顺序拼接，每段前置 `# === Repo: <keyWire> ===`
+exit:  for each writable repo →
+         paths = gitChangedFiles(repo.worktreePath, repo.baseSnapshot)
+         emit paths.map(p => join(repo.mountPath, p))     // mountPath='' ⇒ 原样
+       git_diff = 各仓结果按 repo_index 顺序拼成的换行分隔路径列表
 ```
 
-单个可写仓时不加分段头（与 §6.2 同规则），因此**单仓工作流的 `git_diff` 端口
-内容字节级不变**。
+- 单个可写仓（含挂根单成员）⇒ 前缀为空 ⇒ 输出与今天**字节级一致**。
+- 只读成员不参与（D11）。
+- 仓归属建模为 **`repoKey` + `relPath`**，绝不从文本 marker 或目录深度反推。
+- 真需要完整 patch 时，另开一个独立的 `string` 端口，**不动 `git_diff`**。
 
-### 6.5 扇出分片带仓前缀（D15 / AC-20）
+### 6.5 扇出分片
 
-`util/diffSplit.ts` 的 `parseDiff` / `splitDiffPerFile` / `splitDiffPerNFiles` /
-`splitDiffPerDirectory` 增加一个可选的「当前仓 key」游标：解析时遇到
-`# === Repo: X ===` 行就切换游标，产出的 `shard_key` = `join(key, 仓内路径)`
-（key 为 `''` 时就是仓内路径本身）。`per-directory` 的目录键同样带前缀，所以
-两个仓里的同名目录不会被合并成一个分片。
+分片消费的是 `git_diff` 这份**路径列表**，路径已带挂载路径前缀，所以
+per-file / per-N-files / per-directory 三种策略天然不跨仓合并——
+`vendor/a/src` 与 `vendor/b/src` 在 depth=1 下分别归 `vendor` 是**正确**的，
+因为它们确实同在 `vendor/` 下；真正要防的「两个仓的同名 `src/` 被合并」由前缀
+本身解决。`util/diffSplit.ts`（patch 分片）与本路径无关，保持原样。
 
 ## 7. 记忆（D4）
 
@@ -677,14 +719,14 @@ deleteRepoGroup(id) 事务内：
 
 全部经 `registerRoute`（RFC-247 路由元数据层）声明。
 
-| 方法 | 路径 | 权限 | 说明 |
-| --- | --- | --- | --- |
-| GET | `/api/repo-groups` | `repos:read` | 列表（含成员数、展平仓数） |
-| POST | `/api/repo-groups` | `repos:create` | 建组；成员 URL 未缓存时同步导入 |
-| GET | `/api/repo-groups/:id` | `repos:read` | 详情（成员原始定义，URL 脱敏） |
-| GET | `/api/repo-groups/:id/layout` | `repos:read` | 展平预览（`PlannedRepo[]` + 总数 + 深度） |
-| PUT | `/api/repo-groups/:id` | `repos:update` | 全量替换成员，`version` 自增 |
-| DELETE | `/api/repo-groups/:id` | `repos:delete` | `?force=1` 摘除引用；PAT 走 type-to-confirm（回显组名） |
+| 方法   | 路径                          | 权限           | 说明                                                    |
+| ------ | ----------------------------- | -------------- | ------------------------------------------------------- |
+| GET    | `/api/repo-groups`            | `repos:read`   | 列表（含成员数、展平仓数）                              |
+| POST   | `/api/repo-groups`            | `repos:create` | 建组；成员 URL 未缓存时同步导入                         |
+| GET    | `/api/repo-groups/:id`        | `repos:read`   | 详情（成员原始定义，URL 脱敏）                          |
+| GET    | `/api/repo-groups/:id/layout` | `repos:read`   | 展平预览（`PlannedRepo[]` + 总数 + 深度）               |
+| PUT    | `/api/repo-groups/:id`        | `repos:update` | 全量替换成员，`version` 自增                            |
+| DELETE | `/api/repo-groups/:id`        | `repos:delete` | `?force=1` 摘除引用；PAT 走 type-to-confirm（回显组名） |
 
 所有响应里的仓 URL 只出 `urlRedacted`（RFC-204）。`POST` / `PUT` 接受
 `repoUrl`，服务端 resolve 后只回 id + 脱敏 URL。
@@ -744,29 +786,29 @@ header 的多仓 chip 改为「组名 + N 个仓库」，展开是 `RepoLayoutTr
 
 ### 10.1 纯函数（首选可断言面）
 
-| 文件 | 锁什么 |
-| --- | --- |
-| `repo-group-flatten.test.ts` | `flatten()`：嵌套前缀拼接、只读并集（D20）、同组被两处引用不算环、自引用/互引用成环、深度 6 拒绝、展平 33 拒绝、内层根成员落到外层挂点 |
-| `repo-group-mount-path.test.ts` | `normalize` 六条规则 × 边界；重复挂载点；多个根；`''` 与 `vendor/b` 共存**合法** |
-| `repo-group-containment.test.ts` | `containerOf` / `directChildren`：路径段边界匹配（`a/bc` 不是 `a/b` 的子）、三层嵌套只排直接子、无根仓时容器为 null |
-| `repo-group-branch-suffix.test.ts` | 同仓出现 1/2/3 次的分支名；与 `workingBranch` 叠加 |
-| `repo-labels.test.ts`（改写） | `repoKey` / `repoKeyWire` / `parseRepoKeyWire`；**回归**：`apps/web` 不得被 sanitize 成 `apps-web` |
-| `diff-split-repo-prefix.test.ts` | `# === Repo: X ===` 游标切换；`per-file` / `per-N` / `per-directory` 三种分片的 key 前缀；根仓（`.`）无前缀 |
-| `gitignore-preset-block.test.ts` | 区块生成、幂等过滤、全部已存在 ⇒ 返回「无需 commit」 |
+| 文件                               | 锁什么                                                                                                                                 |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `repo-group-flatten.test.ts`       | `flatten()`：嵌套前缀拼接、只读并集（D20）、同组被两处引用不算环、自引用/互引用成环、深度 6 拒绝、展平 33 拒绝、内层根成员落到外层挂点 |
+| `repo-group-mount-path.test.ts`    | `normalize` 六条规则 × 边界；重复挂载点；多个根；`''` 与 `vendor/b` 共存**合法**                                                       |
+| `repo-group-containment.test.ts`   | `containerOf` / `directChildren`：路径段边界匹配（`a/bc` 不是 `a/b` 的子）、三层嵌套只排直接子、无根仓时容器为 null                    |
+| `repo-group-branch-suffix.test.ts` | 同仓出现 1/2/3 次的分支名；与 `workingBranch` 叠加                                                                                     |
+| `repo-labels.test.ts`（改写）      | `repoKey` / `repoKeyWire` / `parseRepoKeyWire`；**回归**：`apps/web` 不得被 sanitize 成 `apps-web`                                     |
+| `diff-split-repo-prefix.test.ts`   | `# === Repo: X ===` 游标切换；`per-file` / `per-N` / `per-directory` 三种分片的 key 前缀；根仓（`.`）无前缀                            |
+| `gitignore-preset-block.test.ts`   | 区块生成、幂等过滤、全部已存在 ⇒ 返回「无需 commit」                                                                                   |
 
 ### 10.2 集成（真 git）
 
-| 场景 | 断言 |
-| --- | --- |
-| 挂根 + 嵌套 | 外层 `git status` 干净；`add -A` 不吞内层；内层自己的 diff 正常 |
-| 三层嵌套 | 每层只排直接子；最内层改动出现在最内层的 diff 段里 |
-| sparse 成员 | 挂点下只有 `subdir`；`status` 干净；改动进 diff |
-| sparse + 子目录不存在 | `repo-group-sparse-empty` |
-| 挂载点被外层内容占用 | `repo-group-mount-occupied`，且**已建的 worktree 全部回收** |
-| 同仓两份不同 ref | 两个 worktree 分支名不同，两段 diff 互不串 |
-| 只读成员 | 无 `pre_snapshot` 条目；不进 `git_diff`；不被 `commitPush` 触碰；改动后出告警事件 |
-| 预置 commit 幂等 | 同一 `workingBranch` 连跑两个任务，第二个不新增 commit |
-| 单成员挂根 | worktree 路径 / `tasks.*` 列 / diff 输出与单仓 baseline **字节级相同** |
+| 场景                  | 断言                                                                              |
+| --------------------- | --------------------------------------------------------------------------------- |
+| 挂根 + 嵌套           | 外层 `git status` 干净；`add -A` 不吞内层；内层自己的 diff 正常                   |
+| 三层嵌套              | 每层只排直接子；最内层改动出现在最内层的 diff 段里                                |
+| sparse 成员           | 挂点下只有 `subdir`；`status` 干净；改动进 diff                                   |
+| sparse + 子目录不存在 | `repo-group-sparse-empty`                                                         |
+| 挂载点被外层内容占用  | `repo-group-mount-occupied`，且**已建的 worktree 全部回收**                       |
+| 同仓两份不同 ref      | 两个 worktree 分支名不同，两段 diff 互不串                                        |
+| 只读成员              | 无 `pre_snapshot` 条目；不进 `git_diff`；不被 `commitPush` 触碰；改动后出告警事件 |
+| 预置 commit 幂等      | 同一 `workingBranch` 连跑两个任务，第二个不新增 commit                            |
+| 单成员挂根            | worktree 路径 / `tasks.*` 列 / diff 输出与单仓 baseline **字节级相同**            |
 
 ### 10.3 契约与断代
 
@@ -790,7 +832,7 @@ header 的多仓 chip 改为「组名 + N 个仓库」，展开是 `RepoLayoutTr
 ## 11. 明确的未决 / 待用户确认
 
 1. **上传目录的口径**（AC-18）：本设计定为「多仓任务强制 `<taskRoot>/
-   .agent-workflow-inputs/<def.targetDir>`，单仓任务保持
+.agent-workflow-inputs/<def.targetDir>`，单仓任务保持
    `<worktree>/<def.targetDir>` 不变」。这样既满足 D12 又不破坏单仓 baseline，
    但代价是同一个工作流在单仓与多仓下上传物落点不同。若用户希望**永远**走固定
    目录（更一致，但改变单仓既有行为），实现前需要改这一条。

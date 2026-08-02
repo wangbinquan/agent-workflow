@@ -162,6 +162,68 @@ describe('assertMountPathSet', () => {
   })
 })
 
+describe('设计门二轮 P1 回归锁', () => {
+  test('H6a: 拒绝 U+2028 / U+2029——JS 正则的 `^`/`$` 认它们，会打断单行 marker', () => {
+    expect(codeOf(() => normalizeMountPath(`a${String.fromCharCode(0x2028)}b`))).toBe(
+      'mount-path-unsafe-char',
+    )
+    expect(codeOf(() => normalizeMountPath(`a${String.fromCharCode(0x2029)}b`))).toBe(
+      'mount-path-unsafe-char',
+    )
+  })
+
+  test('H6a: 拒绝其余 C0/C1 控制字符', () => {
+    for (const cp of [0x01, 0x1f, 0x7f, 0x85, 0x9f]) {
+      expect(codeOf(() => normalizeMountPath(`a${String.fromCharCode(cp)}b`))).toBe(
+        'mount-path-unsafe-char',
+      )
+    }
+  })
+
+  test(`H6c: 保留首段 ${UPLOAD_INPUTS_DIR}——挂到它上面会让上传物落进那个成员仓`, () => {
+    expect(codeOf(() => normalizeMountPath(UPLOAD_INPUTS_DIR))).toBe('mount-path-unsafe-char')
+    expect(codeOf(() => normalizeMountPath(`${UPLOAD_INPUTS_DIR}/sub`))).toBe(
+      'mount-path-unsafe-char',
+    )
+    // 只保留**首段**——深层同名目录无害。
+    expect(normalizeMountPath(`a/${UPLOAD_INPUTS_DIR}`)).toBe(`a/${UPLOAD_INPUTS_DIR}`)
+  })
+
+  test('H6b: 包含关系必须大小写折叠——否则 macOS 上真嵌套却被当兄弟', () => {
+    // `Vendor` 与 `vendor/sdk` 在 macOS 的 APFS 上是真嵌套。区分大小写的 isUnder
+    // 会把它们算成兄弟 ⇒ exclusionPlanFor 不给 `Vendor` 写排除规则 ⇒
+    // `git add -A` 把 sdk 当 gitlink 提交上去。
+    expect(isUnder('Vendor', 'vendor/sdk')).toBe(true)
+    expect(containerOf('vendor/sdk', ['Vendor', 'vendor/sdk'])).toBe('Vendor')
+    expect(exclusionPlanFor('Vendor', ['Vendor', 'vendor/sdk'])).toEqual(['sdk'])
+    // 段边界仍然要守住：折叠后也不能让 `a/BC` 落进 `a/b`。
+    expect(isUnder('a/b', 'a/BC')).toBe(false)
+  })
+
+  test('H7: 零产出的菱形图不会指数爆炸——遍历预算独立于 repo 计数', () => {
+    // `force=1` 删仓会把组的成员摘光，空叶子组是可达状态。只在 append repo 时
+    // 计预算的话，深度 5 × 每层 32 条边 ≈ 3400 万次同步递归而产出 0 个 repo，
+    // 永远撞不到 MAX_FLAT_REPOS，daemon 事件循环被整个卡死。
+    const WIDTH = 20
+    const DEPTH = 5
+    const groups: FlattenableGroup[] = [{ id: 'leaf', name: 'leaf', members: [] }]
+    for (let d = DEPTH; d >= 1; d--) {
+      const child = d === DEPTH ? 'leaf' : `L${d + 1}`
+      groups.push({
+        id: `L${d}`,
+        name: `L${d}`,
+        members: Array.from({ length: WIDTH }, (_, i) => groupMember(child, `m${d}_${i}`)),
+      })
+    }
+    const started = performance.now()
+    const code = codeOf(() => flattenRepoGroup('L1', loaderFor(...groups)))
+    const elapsed = performance.now() - started
+    expect(code).toBe('repo-group-too-many-repos')
+    // 预算生效的直接证据：立刻返回，而不是跑到天荒地老。
+    expect(elapsed).toBeLessThan(2000)
+  })
+})
+
 describe('joinMountPath', () => {
   test('内层组的「根成员」落在外层给该组的挂点上', () => {
     expect(joinMountPath('base', '')).toBe('base')

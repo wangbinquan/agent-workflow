@@ -47,23 +47,29 @@ export function normalizeMountPath(raw: string): string {
   // `é`（U+0065 U+0301）在磁盘上是**同一个目录**。不归一化的话两个"不同"的挂载
   // 点会在 macOS 上撞成一个，而重复检查（精确字符串比较）放它们过去。
   raw = raw.normalize('NFC')
-  // NUL 会被 C 层的路径 API 截断——`a\0/../..` 传到 git 就变成了 `a`。
-  if (raw.includes('\0')) {
-    throw new RepoGroupLayoutError(
-      'mount-path-unsafe-char',
-      'mount path may not contain a NUL byte',
-      { mountPath: raw.replace(/\0/g, '\\0') },
-    )
-  }
   if (raw.startsWith('/') || /^[A-Za-z]:[\\/]/.test(raw)) {
     throw new RepoGroupLayoutError('mount-path-absolute', `mount path must be relative: ${raw}`, {
       mountPath: raw,
     })
   }
-  if (/[\r\n\\]/.test(raw)) {
+  // CR / LF / U+2028 LINE SEPARATOR / U+2029 PARAGRAPH SEPARATOR 全都会打断单行的
+  // `# === Repo: X ===` 标记（JS 的 `^`/`$` 在多行模式下认 U+2028/U+2029）；反斜杠
+  // 会被当成 gitignore 的转义符；其余 C0/C1 控制字符在路径里没有正当用途，且会让
+  // 日志与 UI 显示错乱。一律拒绝。
+  const badCharIndex = [...raw].findIndex((ch) => {
+    const cp = ch.codePointAt(0) ?? 0
+    return (
+      ch === '\\' ||
+      cp === 0x2028 || // LINE SEPARATOR
+      cp === 0x2029 || // PARAGRAPH SEPARATOR
+      cp <= 0x1f || // C0（含 CR / LF / NUL）
+      (cp >= 0x7f && cp <= 0x9f) // DEL + C1
+    )
+  })
+  if (badCharIndex >= 0) {
     throw new RepoGroupLayoutError(
       'mount-path-unsafe-char',
-      `mount path may not contain CR / LF / backslash: ${JSON.stringify(raw)}`,
+      `mount path may not contain line terminators, control characters or backslash: ${JSON.stringify(raw)}`,
       { mountPath: raw },
     )
   }
@@ -80,6 +86,15 @@ export function normalizeMountPath(raw: string): string {
   // 折叠后不可能为空：非空且不以 '/' 开头的串必然至少有一个非空段（全是斜杠
   // 的串会先在上面被 mount-path-absolute 挡掉）。曾经有过一个
   // `mount-path-empty` 分支，实测不可达，已删。
+  // D12 的上传目录是任务根下的保留名。允许成员挂到它上面的话，上传物会直接落进
+  // 那个成员仓的工作树、进它的审计 diff 与自动提交。
+  if (segments[0] === UPLOAD_INPUTS_DIR) {
+    throw new RepoGroupLayoutError(
+      'mount-path-unsafe-char',
+      `'${UPLOAD_INPUTS_DIR}' is reserved for uploaded inputs and cannot be a mount path root`,
+      { mountPath: raw },
+    )
+  }
   return segments.join('/')
 }
 
@@ -132,11 +147,23 @@ export function assertMountPathSet(mountPaths: readonly string[]): void {
 // 包含关系（design §1.3）
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** `child` 是否严格落在 `parent` 之内（按**路径段边界**匹配，`a/bc` 不属于 `a/b`）。 */
+/**
+ * `child` 是否严格落在 `parent` 之内。
+ *
+ * 两条都不能省：
+ * - 按**路径段边界**匹配——`a/bc` 不属于 `a/b`（纯 startsWith 会算错）。
+ * - **大小写折叠**比较——macOS 的 APFS/HFS+ 默认 case-insensitive，磁盘上
+ *   `Vendor/` 与 `vendor/sdk` 是真嵌套。若这里区分大小写，`exclusionPlanFor`
+ *   会把它们当兄弟、不给 `Vendor` 写排除规则，于是 `git add -A` 把内层仓当
+ *   gitlink 提交上去（proposal E2）。`assertMountPathSet` 只折叠比较**完全
+ *   相等**，挡不住这种「折叠后才成立的祖先关系」。
+ */
 export function isUnder(parent: string, child: string): boolean {
-  if (parent === child) return false
-  if (parent === '') return true // 挂根的仓包含其余一切
-  return child.startsWith(`${parent}/`)
+  const p = parent.toLowerCase()
+  const c = child.toLowerCase()
+  if (p === c) return false
+  if (p === '') return true // 挂根的仓包含其余一切
+  return c.startsWith(`${p}/`)
 }
 
 /** `p` 的容器 = 挂载路径集合里 `p` 的**最长**严格前缀；没有则 null。 */
@@ -218,6 +245,12 @@ export function flattenRepoGroup(
 ): FlattenResult {
   const repos: PlannedRepo[] = []
   let maxDepth = 0
+  // 只在「追加了一个真实 repo」时计预算是不够的：走 group 边不产出 repo，于是
+  // 一个**零产出**的菱形图可以在深度 5 下展开出 32^5 ≈ 3400 万次同步递归而永远
+  // 撞不到 MAX_FLAT_REPOS，把 daemon 的事件循环整个卡死。空叶子组是可达状态
+  // ——`force=1` 删仓会把成员摘光。故另设一份**遍历预算**，每访问一个节点就扣。
+  let expansions = 0
+  const MAX_EXPANSIONS = MAX_FLAT_REPOS * (MAX_GROUP_DEPTH + 1) * 4
 
   const walk = (
     groupId: string,
@@ -238,6 +271,14 @@ export function flattenRepoGroup(
         'repo-group-cycle',
         `repo group cycle: ${[...chain.map((c) => c.id), groupId].join(' → ')}`,
         { cycle: [...chain.map((c) => c.id), groupId] },
+      )
+    }
+    expansions++
+    if (expansions > MAX_EXPANSIONS) {
+      throw new RepoGroupLayoutError(
+        'repo-group-too-many-repos',
+        `repo group expansion exceeded ${MAX_EXPANSIONS} nodes (cyclic-looking or pathologically wide nesting)`,
+        { expansions },
       )
     }
     const group = load(groupId)

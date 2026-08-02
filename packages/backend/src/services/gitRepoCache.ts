@@ -31,6 +31,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { classifyBaseRef, GIT_TIMEOUT_EXIT_CODE, nonInteractiveGitEnv, runGit } from '@/util/git'
@@ -989,9 +990,22 @@ export async function deleteCachedRepo(
   if ((count > 0 || groups.length > 0) && !options.force) {
     throw new CachedRepoHasReferencesError(count, redactGitUrl(row.url), groups)
   }
-  // force=1：把它从所有组里摘掉（组本身保留——用户要删的是仓，不是组）。
-  if (groups.length > 0) detachRepoFromAllGroups(deps.db, row.id)
   return await withUrlLock(row.urlHash, async () => {
+    // RFC-248 设计门二轮 H2 —— detach 必须在**锁内**、并且紧挨着行删除做。
+    // 原实现把它放在 withUrlLock 之前：等锁期间可以新建引用（那条引用随后指向
+    // 一个已被删掉的镜像），而中途崩溃则留下「组已改、cached_repos 还在」的
+    // 断链状态。放进锁里、且在 rm 之后紧接着删行，把窗口压到最小。
+    const detachAndDeleteRow = () => {
+      dbTxSync(deps.db, (tx) => {
+        // 锁内**重查**引用：等锁期间可能有人刚把这个仓加进一个组。用启动时的
+        // 快照去 detach 会漏掉新引用，随后删行被 FK 拒绝（或更糟——留下指向已
+        // 消失 localPath 的成员行）。
+        if (groupsReferencingRepo(deps.db, row.id).length > 0) {
+          detachRepoFromAllGroups(deps.db, row.id)
+        }
+        tx.delete(cachedRepos).where(eq(cachedRepos.id, id)).run()
+      })
+    }
     try {
       // RFC-208: async removal. `rmSync` on a large mirror blocks Bun's single
       // event loop for the whole walk — which also means any timeout racing it
@@ -1005,7 +1019,7 @@ export async function deleteCachedRepo(
         err: (err as Error).message,
       })
     }
-    deps.db.delete(cachedRepos).where(eq(cachedRepos.id, id)).run()
+    detachAndDeleteRow()
     return { deletedLocalPath: row.localPath }
   })
 }

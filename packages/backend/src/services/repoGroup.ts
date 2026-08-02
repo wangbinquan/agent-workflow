@@ -23,7 +23,7 @@ import {
   normalizeMountPath,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, ne, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
@@ -37,6 +37,18 @@ export interface RepoGroupDeps {
   cache?: GitRepoCacheDeps
   now?: () => number
 }
+
+/**
+ * 删组时**可以**被改成 `archived` 的记忆状态。
+ *
+ * `fused` 刻意不在内：0132 的 CHECK 是
+ * `(status='fused') = (fused_into_skill IS NOT NULL)`，把一条 fused 行改成
+ * archived 会**违反约束并让整个删除事务 500 回滚**——即「组里只要有一条已融合
+ * 的记忆就永远删不掉」。fused 本身已是终态且被 `memoryInject` 的
+ * `status='approved'` 过滤排除，注入本来就停了，所以不动它是正确的，
+ * 只需单独报数让用户知道有几条留在那儿。
+ */
+const ARCHIVABLE_STATUSES = ['candidate', 'approved', 'superseded', 'rejected'] as const
 
 /** 被别的组引用时删不掉；`force=1` 才摘除引用行。 */
 export class RepoGroupHasReferencesError extends DomainError {
@@ -173,7 +185,7 @@ function boundMemoryCount(db: DbClient, groupId: string): number {
       and(
         eq(memories.scopeType, 'repo_group'),
         eq(memories.scopeId, groupId),
-        ne(memories.status, 'archived'),
+        inArray(memories.status, ARCHIVABLE_STATUSES),
       ),
     )
     .all()
@@ -422,11 +434,13 @@ export async function createRepoGroup(
   actorUserId: string | null,
 ): Promise<RepoGroup> {
   assertNameFree(deps.db, input.name)
-  // URL → id 的 resolve 会 clone，可能很慢，且必须在事务**外**做（clone 期间
-  // 持有写事务会把整个 daemon 的 DB 写全部堵住）。
+  // URL → id 的 resolve 会真的 clone，必须在事务**外**做：持有写事务 clone 会把
+  // 整个 daemon 的 DB 写全部堵住。
   const members = await materializeMembers(deps, input)
   const id = ulid()
   const now = (deps.now ?? Date.now)()
+  // 校验必须在**事务内**、写入之后、提交之前。设计门二轮 H1：原实现先提交再
+  // assertFlattenable，于是一个返回 422 的请求仍然把非法组持久化了下来。
   dbTxSync(deps.db, (tx) => {
     assertNameFree(deps.db, input.name)
     tx.insert(repoGroups)
@@ -444,8 +458,9 @@ export async function createRepoGroup(
       tx.insert(repoGroupMembers)
         .values({ ...m, groupId: id })
         .run()
+    // 抛出 ⇒ dbTxSync 回滚 ⇒ 库里不留任何痕迹。
+    assertFlattenable(tx as unknown as DbClient, id)
   })
-  assertFlattenable(deps.db, id)
   return getRepoGroup(deps.db, id)
 }
 
@@ -453,8 +468,19 @@ export async function updateRepoGroup(
   deps: RepoGroupDeps,
   id: string,
   input: CreateRepoGroup,
+  /**
+   * 设计门二轮 H1 —— 乐观并发控制。两个并发的全量替换在没有它时会静默互相
+   * 覆盖（后到的赢，先到的成员列表无声消失）。前端从 GET 拿到 version 后回传。
+   * 省略 = 不做 OCC（内部调用方 / 脚本）。
+   */
+  expectedVersion?: number,
 ): Promise<RepoGroup> {
-  const existing = deps.db.select().from(repoGroups).where(eq(repoGroups.id, id)).limit(1).all()
+  const existing = deps.db
+    .select()
+    .from(repoGroups)
+    .where(eq(repoGroups.id, id))
+    .limit(1)
+    .all() as RawGroupRow[]
   if (existing.length === 0) {
     throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
   }
@@ -469,6 +495,25 @@ export async function updateRepoGroup(
   }
   const now = (deps.now ?? Date.now)()
   dbTxSync(deps.db, (tx) => {
+    // 在事务内**重读** version：materializeMembers 期间（可能有 clone，很慢）
+    // 别人可能已经改过这个组。
+    const fresh = tx
+      .select({ version: repoGroups.version })
+      .from(repoGroups)
+      .where(eq(repoGroups.id, id))
+      .limit(1)
+      .all()
+    const current = fresh[0]?.version
+    if (current === undefined) {
+      throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
+    }
+    if (expectedVersion !== undefined && current !== expectedVersion) {
+      throw new ConflictError(
+        'repo-group-version-conflict',
+        `repo group was modified concurrently (expected version ${expectedVersion}, found ${current})`,
+        { expectedVersion, actualVersion: current },
+      )
+    }
     tx.delete(repoGroupMembers).where(eq(repoGroupMembers.groupId, id)).run()
     for (const m of members)
       tx.insert(repoGroupMembers)
@@ -478,14 +523,16 @@ export async function updateRepoGroup(
       .set({
         name: input.name,
         description: input.description,
-        version: sql`${repoGroups.version} + 1`,
+        version: current + 1,
         updatedAt: now,
       })
       .where(eq(repoGroups.id, id))
       .run()
+    // 事务内校验：目标组本身 + 所有引用它的祖先组。任一不可展平 ⇒ 整笔回滚，
+    // 成员列表与 version 都保持原样（H1 要求「失败 update 完全不变」）。
+    assertFlattenable(tx as unknown as DbClient, id)
+    assertAncestorsStillFlattenable(tx as unknown as DbClient, id)
   })
-  assertFlattenable(deps.db, id)
-  assertAncestorsStillFlattenable(deps.db, id)
   return getRepoGroup(deps.db, id)
 }
 
@@ -532,7 +579,7 @@ export function deleteRepoGroup(
         and(
           eq(memories.scopeType, 'repo_group'),
           eq(memories.scopeId, id),
-          ne(memories.status, 'archived'),
+          inArray(memories.status, ARCHIVABLE_STATUSES),
         ),
       )
       .all()

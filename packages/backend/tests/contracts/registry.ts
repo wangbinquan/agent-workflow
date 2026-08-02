@@ -411,6 +411,16 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/cached-repos/imports/:batchId' },
   { method: 'POST', path: '/api/cached-repos/imports/:batchId/rows/:rowId/retry' },
 
+  // ---- repo groups (RFC-248) ----
+  // 六条都只声明存在性，不挂 happy schema：建组要真实的 cached_repos 行，
+  // 而契约夹具跑在空库上——覆盖走 rfc248-repo-groups-http.test.ts 的真实 HTTP 断言。
+  { method: 'GET', path: '/api/repo-groups' },
+  { method: 'POST', path: '/api/repo-groups' },
+  { method: 'GET', path: '/api/repo-groups/:id' },
+  { method: 'GET', path: '/api/repo-groups/:id/layout' },
+  { method: 'PUT', path: '/api/repo-groups/:id' },
+  { method: 'DELETE', path: '/api/repo-groups/:id' },
+
   // ---- tasks ----
   {
     method: 'GET',
