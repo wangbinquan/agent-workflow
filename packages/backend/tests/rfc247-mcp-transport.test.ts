@@ -116,20 +116,22 @@ describe('RFC-247 §4.1 — only personal access tokens open the pipe', () => {
     expect(text).toContain('agent-workflow')
   })
 
-  test('a session token is refused', async () => {
-    // A browser session reaching this endpoint would mean a page was talked
-    // into driving the platform on the user's behalf.
+  // D10: "session token 与 daemon token 打该端点一律 401". 401 rather than 403 is
+  // load-bearing — the caller presented a credential this endpoint does not
+  // accept AT ALL, so the actionable answer is "authenticate with a personal
+  // access token", not "your permissions are insufficient". An earlier version
+  // returned 403 and THIS TEST ASSERTED IT, so implementation and test agreed
+  // with each other while both disagreed with the contract (impl-gate finding).
+  test('a session token is refused with 401', async () => {
     const h = await harness()
     const res = await mcpRequest(h.app, h.sessionToken)
-    expect(res.status).toBe(403)
-    expect(((await res.json()) as { code: string }).code).toBe('mcp-requires-token')
+    expect(res.status).toBe(401)
   })
 
-  test('the daemon token is refused', async () => {
+  test('the daemon token is refused with 401', async () => {
     const h = await harness()
     const res = await mcpRequest(h.app, DAEMON_TOKEN)
-    expect(res.status).toBe(403)
-    expect(((await res.json()) as { code: string }).code).toBe('mcp-requires-token')
+    expect(res.status).toBe(401)
   })
 
   test('no credential at all is a 401', async () => {

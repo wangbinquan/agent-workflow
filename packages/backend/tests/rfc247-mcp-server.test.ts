@@ -22,7 +22,13 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createDispatcher, mcpDispatchActor } from '../src/mcp/dispatch'
-import { ALL_TOOLS, describeCapabilities, MCP_RESOURCE_KINDS, toolsFor } from '../src/mcp/tools'
+import {
+  ALL_TOOLS,
+  describeCapabilities,
+  describeResource,
+  MCP_RESOURCE_KINDS,
+  toolsFor,
+} from '../src/mcp/tools'
 import { MATRIX_RESOURCES } from '@agent-workflow/shared'
 import { createApp } from '../src/server'
 import { createRuntime } from '../src/services/runtimeRegistry'
@@ -477,5 +483,148 @@ describe('RFC-247 AC-17 — an upload workflow is refused before anything exists
 
     await expect(tool!.handler({ workflowId: 'wf-2', name: 'ok' }, ctx)).rejects.toThrow()
     expect(calls).toEqual(['GET /api/workflows/wf-2', 'POST /api/tasks'])
+  })
+})
+
+// -----------------------------------------------------------------------------
+// Implementation-gate fixes (Codex impl-gate 2026-08-02).
+//
+// Every one of these was an operation the tool set ADVERTISED and that had never
+// once succeeded, because the tool's dispatch shape disagreed with the route it
+// targets. They all passed the original tests because those tests stubbed the
+// dispatcher — proving "the tool calls some path" while proving nothing about
+// whether that path accepts the body. These go through the REAL route table.
+// -----------------------------------------------------------------------------
+
+describe('RFC-247 impl-gate — advertised operations actually reach a live route', () => {
+  test('skills update targets the combined-save endpoint, not the retired PUT', async () => {
+    // `PUT /api/skills/:id` answers 410 Gone on every call, so the previous
+    // mapping made `resource_write(skills, update)` impossible to succeed.
+    const h = await harness()
+    const dispatch = createDispatcher(h.deps)
+    const actor = mcpDispatchActor(tokenActor(h, ['skills:update']))
+
+    const seen: string[] = []
+    const tool = ALL_TOOLS.find((t) => t.name === 'resource_write')
+    const ctx = {
+      actor,
+      dispatch: async (req: { method: string; path: string }) => {
+        seen.push(`${req.method} ${req.path}`)
+        return dispatch(req as Parameters<typeof dispatch>[0], actor)
+      },
+      progress: async () => {},
+      signal: new AbortController().signal,
+    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+
+    await tool!
+      .handler({ kind: 'skills', method: 'update', id: 'sk-1', body: {} }, ctx)
+      .catch(() => undefined)
+
+    expect(seen).toEqual(['POST /api/skills/sk-1/save'])
+    expect(seen[0]).not.toContain('PUT')
+  })
+
+  test('memory delete carries the ?confirm=true query the route demands', async () => {
+    // The route checks the QUERY flag before the token's type-to-confirm body,
+    // so a body-only dispatch failed with `confirm-required` every time.
+    const h = await harness()
+    const dispatch = createDispatcher(h.deps)
+    const actor = mcpDispatchActor(tokenActor(h, ['memory:delete']))
+
+    const seen: Array<{ path: string; query: unknown }> = []
+    const tool = ALL_TOOLS.find((t) => t.name === 'resource_write')
+    const ctx = {
+      actor,
+      dispatch: async (req: { method: string; path: string; query?: unknown }) => {
+        seen.push({ path: req.path, query: req.query })
+        return dispatch(req as Parameters<typeof dispatch>[0], actor)
+      },
+      progress: async () => {},
+      signal: new AbortController().signal,
+    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+
+    await tool!
+      .handler({ kind: 'memory', method: 'delete', id: 'm-1', confirm: 'x' }, ctx)
+      .catch(() => undefined)
+
+    expect(seen[0]?.query).toEqual({ confirm: 'true' })
+  })
+
+  test('agents delete does NOT carry it — the flag is memory-specific', () => {
+    // Guards the guard: a blanket `?confirm=true` would be indistinguishable
+    // from the fix in the test above.
+    expect(
+      describeResource('agents').operations.find((o) => o.operation === 'delete'),
+    ).toBeDefined()
+    expect(describeResource('memory').note).toBeUndefined()
+  })
+
+  test('repair_alert sends optionId + confirm, the shape the route validates', async () => {
+    const h = await harness()
+    const actor = mcpDispatchActor(tokenActor(h, ['tasks:execute']))
+    const tool = ALL_TOOLS.find((t) => t.name === 'repair_alert')
+    let body: unknown
+    const ctx = {
+      actor,
+      dispatch: async (req: { body?: unknown }) => {
+        body = req.body
+        return { status: 200, body: {} }
+      },
+      progress: async () => {},
+      signal: new AbortController().signal,
+    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+
+    await tool!.handler({ id: 't1', alertId: 'a1', optionId: 'opt-9', confirm: true }, ctx)
+    expect(body).toEqual({ optionId: 'opt-9', confirm: true })
+  })
+
+  test('list_repair_options exists, so an option id is obtainable over MCP', () => {
+    // Fixing repair_alert's body alone would still leave the operation unusable:
+    // nothing else in the tool set returns an option id.
+    expect(ALL_TOOLS.map((t) => t.name)).toContain('list_repair_options')
+  })
+})
+
+describe('RFC-247 impl-gate — a model-supplied id cannot retarget the dispatch', () => {
+  test('a traversal id is encoded instead of normalised into another endpoint', async () => {
+    // `get_task({id:"../workflows"})` used to build `/api/tasks/../workflows`,
+    // which URL normalisation collapses to `/api/workflows` — a different
+    // endpoint from the one the tool declares, while the audit row still says
+    // `get_task`.
+    const h = await harness()
+    const actor = mcpDispatchActor(tokenActor(h, []))
+    const tool = ALL_TOOLS.find((t) => t.name === 'get_task')
+    let path = ''
+    const ctx = {
+      actor,
+      dispatch: async (req: { path: string }) => {
+        path = req.path
+        return { status: 200, body: {} }
+      },
+      progress: async () => {},
+      signal: new AbortController().signal,
+    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+
+    await tool!.handler({ id: '../workflows' }, ctx)
+    expect(path).toBe('/api/tasks/..%2Fworkflows')
+    expect(new URL(`http://x${path}`).pathname).toBe('/api/tasks/..%2Fworkflows')
+  })
+
+  test('a normal ULID is unaffected', async () => {
+    const h = await harness()
+    const actor = mcpDispatchActor(tokenActor(h, []))
+    const tool = ALL_TOOLS.find((t) => t.name === 'get_task')
+    let path = ''
+    const ctx = {
+      actor,
+      dispatch: async (req: { path: string }) => {
+        path = req.path
+        return { status: 200, body: {} }
+      },
+      progress: async () => {},
+      signal: new AbortController().signal,
+    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
+    await tool!.handler({ id: '01KZ08WX6YHWNFEZPX2PGT8GDP' }, ctx)
+    expect(path).toBe('/api/tasks/01KZ08WX6YHWNFEZPX2PGT8GDP')
   })
 })

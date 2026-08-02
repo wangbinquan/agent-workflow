@@ -1,0 +1,12 @@
+-- RFC-247 F14 — mark an audit row whose delete snapshot could not be stored.
+--
+-- The snapshot is best-effort by design (F13/F14: auditing must never break the
+-- business call), so a serialization or insert failure is swallowed and logged.
+-- Without this column that leaves a row which looks ORDINARY: same shape as a
+-- delete whose evidence was captured, with nothing to say the evidence is
+-- missing. An investigator reading the log would silently conclude the resource
+-- had no snapshot worth keeping, rather than that one was attempted and lost.
+--
+-- Defaults to 0 so every existing row reads as "nothing went wrong", which is
+-- true for them: they predate this failure mode being recordable at all.
+ALTER TABLE token_audit ADD COLUMN snapshot_failed INTEGER NOT NULL DEFAULT 0;

@@ -387,3 +387,73 @@ describe('RFC-247 D8 — who can read the audit', () => {
     expect(bobsPats[0]?.revokedAt).toBeNull()
   })
 })
+
+describe('RFC-247 F14 — a lost snapshot is marked, not silently absent', () => {
+  test('snapshot_failed is set when the snapshot cannot be stored', async () => {
+    // Without the marker, a row whose evidence was ATTEMPTED AND LOST looks
+    // identical to one that never needed evidence — an investigator would read
+    // it as "nothing to capture" rather than "capture failed".
+    const h = await harness()
+    const actor = buildActor({
+      user: {
+        id: h.userId,
+        username: 'alice',
+        displayName: 'Alice',
+        role: 'admin',
+        status: 'active',
+      },
+      source: 'pat',
+      patScopes: [],
+      patId: h.patId,
+    })
+
+    const circular: Record<string, unknown> = { id: 'x' }
+    circular.self = circular // JSON.stringify throws
+
+    const id = await recordTokenCall(h.db, {
+      actor,
+      channel: 'mcp',
+      toolName: 'resource_write',
+      resourceKind: 'agents',
+      resourceId: 'a1',
+      statusCode: 204,
+      deletedSnapshot: circular,
+    })
+    expect(id).not.toBeNull()
+
+    // The audit row survives (F13: auditing never breaks the call)…
+    const rows = await h.db.select().from(tokenAudit)
+    const row = rows.find((r) => r.id === id)
+    expect(row).toBeDefined()
+    // …no snapshot was written…
+    expect((await h.db.select().from(tokenDeleteSnapshot)).length).toBe(0)
+    // …and the row says so.
+    expect(row?.snapshotFailed).toBe(true)
+  })
+
+  test('a successful snapshot leaves the flag clear', async () => {
+    const h = await harness()
+    const actor = buildActor({
+      user: {
+        id: h.userId,
+        username: 'alice',
+        displayName: 'Alice',
+        role: 'admin',
+        status: 'active',
+      },
+      source: 'pat',
+      patScopes: [],
+      patId: h.patId,
+    })
+    const id = await recordTokenCall(h.db, {
+      actor,
+      channel: 'mcp',
+      resourceKind: 'agents',
+      resourceId: 'a1',
+      statusCode: 204,
+      deletedSnapshot: { id: 'a1', name: 'fine' },
+    })
+    const row = (await h.db.select().from(tokenAudit)).find((r) => r.id === id)
+    expect(row?.snapshotFailed).toBe(false)
+  })
+})

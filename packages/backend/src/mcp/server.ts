@@ -27,7 +27,7 @@ import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
 import { recordTokenCall, type TokenCallRecord } from '@/services/tokenAudit'
 import { redactErrorText } from '@/services/tokenRedaction'
 import type { AppDeps } from '@/server'
-import { ForbiddenError } from '@/util/errors'
+import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 
 /** Advertised to clients on initialize. */
 const SERVER_INFO = { name: 'agent-workflow', version: '1' } as const
@@ -171,10 +171,13 @@ export function mountMcpTransport(app: Hono, deps: AppDeps): void {
     // token would mean the deployment's root credential is being used as an
     // agent credential. Neither is a thing anyone needs.
     if (actor.source !== 'pat') {
-      throw new ForbiddenError(
-        'mcp-requires-token',
-        'the MCP endpoint accepts personal access tokens only',
-      )
+      // 401, not 403 — D10 says so explicitly, and the distinction is
+      // meaningful here: the caller presented a credential this endpoint does
+      // not accept AT ALL, so the actionable answer is "authenticate with a
+      // personal access token", not "your permissions are insufficient". The
+      // first version used 403 and a test asserted it, so implementation and
+      // test agreed with each other while both disagreed with the contract.
+      throw new UnauthorizedError('the MCP endpoint accepts personal access tokens only')
     }
 
     const server = buildMcpServer(actor, dispatcherOnce(), (record) => {

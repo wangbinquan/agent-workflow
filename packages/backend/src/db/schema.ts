@@ -1900,6 +1900,12 @@ export const tokenAudit = sqliteTable(
     resourceKind: text('resource_kind'),
     resourceId: text('resource_id'),
     statusCode: integer('status_code').notNull(),
+    /**
+     * RFC-247 F14 — the delete snapshot was attempted and could not be stored.
+     * Without it a row with missing evidence is indistinguishable from a row
+     * that never needed any.
+     */
+    snapshotFailed: integer('snapshot_failed', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(),
   },
   (t) => ({

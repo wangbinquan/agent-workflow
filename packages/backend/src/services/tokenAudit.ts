@@ -17,7 +17,7 @@
 // the failure is logged: a daemon that refuses to serve because it could not
 // write a log row has turned an observability feature into an outage.
 
-import { lt } from 'drizzle-orm'
+import { eq, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -108,6 +108,17 @@ async function writeDeleteSnapshot(
     })
   } catch (err) {
     log.warn('delete snapshot failed (audit row kept)', { auditId, error: String(err) })
+    // F14 — mark the row. A swallowed failure that leaves no trace turns "we
+    // could not capture the evidence" into "there was no evidence to capture",
+    // which is the reading an investigator would take.
+    try {
+      await db.update(tokenAudit).set({ snapshotFailed: true }).where(eq(tokenAudit.id, auditId))
+    } catch (markErr) {
+      // Still must not break the business call (F13). At this point the row
+      // exists and the snapshot does not; a lost marker is the least bad of
+      // the three outcomes.
+      log.warn('could not mark snapshot_failed', { auditId, error: String(markErr) })
+    }
   }
 }
 

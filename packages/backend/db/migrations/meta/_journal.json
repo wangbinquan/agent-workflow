@@ -904,6 +904,13 @@
       "when": 1788278400003,
       "tag": "0129_rfc247_pat_purpose_and_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "6",
+      "when": 1788278400004,
+      "tag": "0130_rfc247_audit_snapshot_failed",
+      "breakpoints": true
     }
   ]
 }

@@ -82,7 +82,14 @@ export async function watchTask(
   let task: unknown = null
 
   for (;;) {
-    const res = await ctx.dispatch({ method: 'GET', path: `/api/tasks/${taskId}` })
+    // Encoded for the same reason the named tools encode (see `enc` in
+    // tools.ts): the id is model-supplied, and `..` segments would silently
+    // retarget the poll at a different endpoint. `taskId` stays raw for the
+    // progress text, which is read by a human.
+    const res = await ctx.dispatch({
+      method: 'GET',
+      path: `/api/tasks/${encodeURIComponent(taskId)}`,
+    })
     if (res.status >= 400) {
       // A read failure is a real error — unlike a timeout, waiting longer will
       // not help. Let it propagate so the tool reports the code.

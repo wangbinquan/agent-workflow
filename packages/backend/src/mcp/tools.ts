@@ -57,6 +57,23 @@ export interface McpToolDef {
 
 const taskId = z.string().min(1).describe('Task id (ULID), as returned by launch_task/list_tasks')
 
+/**
+ * Encode one path segment before it is interpolated into a dispatch URL.
+ *
+ * Tool arguments are model-supplied. Without this, `get_task({id:"../workflows"})`
+ * builds `/api/tasks/../workflows`, which WHATWG URL normalisation collapses to
+ * `/api/workflows` — a DIFFERENT endpoint from the one the tool declared. The
+ * target route's own gate still runs, so this cannot exceed the token's matrix,
+ * but it breaks two things that do matter: the audit row still says `get_task`,
+ * and `tools/list` stops describing what a tool can actually reach.
+ *
+ * The converged tools already did this inside `fillId`; the named tools did not.
+ * One helper now, used by both, so they cannot drift apart again.
+ */
+function enc(value: unknown): string {
+  return encodeURIComponent(String(value))
+}
+
 /** Everything a dispatch answer needs to become a tool result. */
 function unwrap(res: DispatchResult): unknown {
   if (res.status >= 400) throw new McpCallError(res)
@@ -141,7 +158,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${String(args.id)}` })),
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${enc(args.id)}` })),
   },
   {
     name: 'list_tasks',
@@ -187,7 +204,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${String(args.id)}/diff` })),
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${enc(args.id)}/diff` })),
   },
   {
     name: 'list_node_runs',
@@ -197,9 +214,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(
-        await ctx.dispatch({ method: 'GET', path: `/api/tasks/${String(args.id)}/node-runs` }),
-      ),
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${enc(args.id)}/node-runs` })),
   },
   {
     name: 'cancel_task',
@@ -209,7 +224,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: ['tasks:execute'],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${String(args.id)}/cancel` })),
+      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${enc(args.id)}/cancel` })),
   },
   {
     name: 'retry_node',
@@ -227,7 +242,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
       unwrap(
         await ctx.dispatch({
           method: 'POST',
-          path: `/api/tasks/${String(args.id)}/nodes/${String(args.nodeRunId)}/retry`,
+          path: `/api/tasks/${enc(args.id)}/nodes/${enc(args.nodeRunId)}/retry`,
         }),
       ),
   },
@@ -239,7 +254,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: ['tasks:execute'],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${String(args.id)}/resume` })),
+      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${enc(args.id)}/resume` })),
   },
   {
     name: 'diagnose_task',
@@ -248,9 +263,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: ['tasks:execute'],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(
-        await ctx.dispatch({ method: 'POST', path: `/api/tasks/${String(args.id)}/diagnose` }),
-      ),
+      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${enc(args.id)}/diagnose` })),
   },
   {
     name: 'repair_alert',
@@ -261,14 +274,39 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: {
       id: taskId,
       alertId: z.string().min(1),
-      option: z.string().min(1).describe('Repair option id from the alert'),
+      optionId: z
+        .string()
+        .min(1)
+        .describe('Repair option id — from list_repair_options on this alert'),
+      confirm: z
+        .literal(true)
+        .describe('Must be true; a repair mutates the run, so the route demands an explicit ack'),
     },
+    // Field names mirror `RepairRequestSchema` exactly. The first version sent
+    // `{ option }`, which the route rejected on EVERY call — the tool advertised
+    // an operation that had never once worked.
     handler: async (args, ctx) =>
       unwrap(
         await ctx.dispatch({
           method: 'POST',
-          path: `/api/tasks/${String(args.id)}/alerts/${String(args.alertId)}/repair`,
-          body: { option: args.option },
+          path: `/api/tasks/${enc(args.id)}/alerts/${enc(args.alertId)}/repair`,
+          body: { optionId: args.optionId, confirm: args.confirm },
+        }),
+      ),
+  },
+  {
+    name: 'list_repair_options',
+    title: 'List repair options for an alert',
+    description:
+      'The repair options a task alert offers, with their ids. repair_alert needs one of these ids — ' +
+      'without this tool an MCP-only caller has no way to obtain one.',
+    permissions: [],
+    inputSchema: { id: taskId, alertId: z.string().min(1) },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'GET',
+          path: `/api/tasks/${enc(args.id)}/alerts/${enc(args.alertId)}/repair-options`,
         }),
       ),
   },
@@ -287,7 +325,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
       unwrap(
         await ctx.dispatch({
           method: 'DELETE',
-          path: `/api/tasks/${String(args.id)}`,
+          path: `/api/tasks/${enc(args.id)}`,
           body: { confirm: args.confirm },
         }),
       ),
@@ -303,7 +341,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
  * task row, no worktree, nothing to clean up.
  */
 async function assertNoUploadInputs(workflowId: string, ctx: McpToolContext): Promise<void> {
-  const res = await ctx.dispatch({ method: 'GET', path: `/api/workflows/${workflowId}` })
+  const res = await ctx.dispatch({ method: 'GET', path: `/api/workflows/${enc(workflowId)}` })
   if (res.status >= 400) throw new McpCallError(res)
   // `WorkflowInput` identifies a port by `key`, NOT `name` — an earlier version
   // read `.name`, so every refusal said "(?)" and the caller could not tell
@@ -350,7 +388,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { nodeRunId: z.string().min(1) },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/clarify/${String(args.nodeRunId)}` })),
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/clarify/${enc(args.nodeRunId)}` })),
   },
   {
     name: 'answer_clarify',
@@ -376,7 +414,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
       unwrap(
         await ctx.dispatch({
           method: 'POST',
-          path: `/api/clarify/${String(args.nodeRunId)}/answers`,
+          path: `/api/clarify/${enc(args.nodeRunId)}/answers`,
           body: {
             answers: args.answers,
             ifMatchIteration: args.ifMatchIteration,
@@ -393,7 +431,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { nodeRunId: z.string().min(1) },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/reviews/${String(args.nodeRunId)}` })),
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/reviews/${enc(args.nodeRunId)}` })),
   },
   {
     name: 'submit_review',
@@ -412,7 +450,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
       unwrap(
         await ctx.dispatch({
           method: 'POST',
-          path: `/api/reviews/${String(args.nodeRunId)}/decision`,
+          path: `/api/reviews/${enc(args.nodeRunId)}/decision`,
           body: {
             decision: args.decision,
             rejectReason: args.rejectReason,
@@ -444,6 +482,11 @@ interface ResourceOp {
   readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   /** `:id` is substituted; absent means a collection path. */
   readonly path: string
+  /**
+   * The route ALSO demands `?confirm=true` as an irreversibility ack, separate
+   * from RFC-247's type-to-confirm body. Only `memory` does this today.
+   */
+  readonly confirmQuery?: boolean
 }
 
 interface ResourceRoutes {
@@ -469,9 +512,14 @@ const RESOURCE_ROUTES: Partial<Record<MatrixResource, ResourceRoutes>> = {
     list: { method: 'GET', path: '/api/skills' },
     get: { method: 'GET', path: '/api/skills/:id' },
     create: { method: 'POST', path: '/api/skills' },
-    update: { method: 'PUT', path: '/api/skills/:id' },
+    // NOT `PUT /api/skills/:id` — that route is retired and answers 410 Gone on
+    // every call, so the first version of this table advertised a skill update
+    // that could never succeed.
+    update: { method: 'POST', path: '/api/skills/:id/save' },
     delete: { method: 'DELETE', path: '/api/skills/:id' },
-    note: 'Updates and deletes are fenced: include the `expectedAclRevision` from a prior read.',
+    note:
+      'Updates go through the combined-save endpoint and are fenced: include the `expectedToken` ' +
+      'from a prior read. Deletes need `expectedToken` + `expectedAclRevision`.',
   },
   mcps: {
     list: { method: 'GET', path: '/api/mcps' },
@@ -527,7 +575,7 @@ const RESOURCE_ROUTES: Partial<Record<MatrixResource, ResourceRoutes>> = {
     get: { method: 'GET', path: '/api/memories/:id' },
     create: { method: 'POST', path: '/api/memories' },
     update: { method: 'PATCH', path: '/api/memories/:id' },
-    delete: { method: 'DELETE', path: '/api/memories/:id' },
+    delete: { method: 'DELETE', path: '/api/memories/:id', confirmQuery: true },
   },
 }
 
@@ -642,6 +690,11 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
         await ctx.dispatch({
           method: op.method,
           path: fillId(op.path, args.id),
+          // `memory` gates hard-delete on a `?confirm=true` QUERY (its own
+          // pre-RFC-247 irreversibility ack) IN ADDITION to the token's
+          // type-to-confirm body. Sending only the body made every memory
+          // delete fail with `confirm-required`.
+          query: op.confirmQuery === true ? { confirm: 'true' } : undefined,
           body: { ...(args.body ?? {}), confirm: args.confirm },
         }),
       )
