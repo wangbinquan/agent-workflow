@@ -266,7 +266,7 @@ export function ChangeReviewPanel({
   // structural artifact may still exist on disk (its whole point: survive GC).
   // Render from the structural side alone in that case instead of dead-ending.
   if (diff === undefined && structural.data === undefined) {
-    return <LoadingState size="compact" label={t('tasks.diffLoading')} />
+    return <LoadingState size="compact" label={t('tasks.loadingDiff')} />
   }
   if (entries.length === 0) {
     const hint = structural.data?.emptyHint

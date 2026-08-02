@@ -1340,6 +1340,7 @@ export const enUS: Resources = {
     },
   },
   common: {
+    done: 'Done',
     searchEllipsis: 'Search…',
     searchCards: 'Search names, descriptions, or details…',
     noMatches: 'No matches',

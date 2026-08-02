@@ -1417,6 +1417,7 @@ export interface Resources {
     }
   }
   common: {
+    done: string
     searchEllipsis: string
     searchCards: string
     noMatches: string
@@ -5781,6 +5782,7 @@ export const zhCN: Resources = {
     },
   },
   common: {
+    done: '完成',
     searchEllipsis: '搜索…',
     searchCards: '搜索名称、描述或配置…',
     noMatches: '无匹配项',
