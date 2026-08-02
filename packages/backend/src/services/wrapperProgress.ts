@@ -79,6 +79,17 @@ export const WrapperProgressSchema = z
      */
     preDirty: z.record(z.string(), z.string()).optional(),
     /**
+     * RFC-248 D9 —— 多仓 wrapper-git 的**逐仓** baseline / preDirty，键为挂载
+     * 路径（挂根为 `''`）。
+     *
+     * 上面两个标量字段保留并继续写入 repos[0] 的值：既有遥测与老 payload 的
+     * resume 都靠它们，翻新成 map-only 会让**跑在半路的**包裹器在升级后读不到
+     * 基线、把整棵工作树当成新增。读取时优先用 map，缺失则把标量视作
+     * `{ '': baseline }` —— 单仓的挂载路径正好就是空串，两种形态天然对齐。
+     */
+    baselines: z.record(z.string(), z.string()).optional(),
+    preDirtyByRepo: z.record(z.string(), z.record(z.string(), z.string())).optional(),
+    /**
      * RFC-098 B3 (audit S-20, adversarial-review revision #7) — wrapper-fanout
      * only: set to true when the wrapper-entry consumed generation gate
      * tripped (the previously recorded consumed provenance differs from the

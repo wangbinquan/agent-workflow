@@ -165,7 +165,7 @@ describe('getTaskFileContent', () => {
     expect(base.content).toBe('original text\n')
   })
 
-  test('multi-repo selects the repo by canonical label and uses ITS base commit', async () => {
+  test('multi-repo selects the repo by canonical key (RFC-248: = mount_path) and uses ITS base commit', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const primary = await makeRepo()
     const secondary = await makeRepo()
@@ -192,6 +192,9 @@ describe('getTaskFileContent', () => {
         repoPath: primary.dir,
         worktreePath: primary.dir,
         worktreeDirName: 'primary',
+        // RFC-248: 规范 key 是 mount_path（不再是 basename）。生产路径 startTask
+        // 永远显式写它；直插 task_repos 的夹具必须自己给，否则拿到列默认 ''。
+        mountPath: 'primary',
         baseCommit: primary.commit,
       },
       {
@@ -200,6 +203,7 @@ describe('getTaskFileContent', () => {
         repoPath: secondary.dir,
         worktreePath: secondary.dir,
         worktreeDirName: 'secondary',
+        mountPath: 'secondary',
         baseCommit: secondaryHead,
       },
     ])

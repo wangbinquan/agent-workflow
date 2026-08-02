@@ -20,7 +20,7 @@ import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { readBlobAtRef } from '@/util/git'
 import type { DbClient } from '@/db/client'
 import { getTask } from '@/services/task'
-import { canonicalRepoLabels } from '@/services/repoLabels'
+import { canonicalRepoKeys } from '@/services/repoLabels'
 import { MAX_ANALYZE_BYTES } from '@/services/structuralDiff/baseline'
 
 /** Same ceiling as the structural analyzer (1.5 MiB) — beyond it the rendered
@@ -148,7 +148,7 @@ export async function getTaskFileContent(
         'repo query param required for a multi-repo task',
       )
     }
-    const labels = canonicalRepoLabels(task.repos)
+    const labels = canonicalRepoKeys(task.repos)
     const idx = labels.indexOf(q.repo)
     const repo = idx >= 0 ? task.repos[idx] : undefined
     if (repo === undefined) {

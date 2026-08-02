@@ -24,16 +24,29 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import type { Agent, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { fenceUntrusted, sanitizeInlineField } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { cachedRepos, memories, nodeRuns, tasks } from '@/db/schema'
+import { cachedRepos, memories, nodeRuns, tasks, taskRepos } from '@/db/schema'
 
 export interface ScopeBudget {
   agent: number
   workflow: number
   repo: number
+  /**
+   * RFC-248: 仓库组 scope 的**独立**预算档。每档各自裁剪、互不抢额度
+   * （`formatMemoryBlockWithSnapshot` 逐档 `clipByBudget`），所以加这一档不会
+   * 挤掉现有任何一档的内容。
+   */
+  repoGroup: number
   global: number
 }
 
-const DEFAULT_BUDGET: ScopeBudget = { agent: 1500, workflow: 800, repo: 800, global: 500 }
+const DEFAULT_BUDGET: ScopeBudget = {
+  agent: 1500,
+  workflow: 800,
+  repo: 800,
+  // 与 repo 同量级：组记忆讲的是「这几个仓一起怎么干活」，信息密度与单仓相当。
+  repoGroup: 800,
+  global: 500,
+}
 
 export interface InjectableMemoryRow {
   id: string
@@ -61,6 +74,8 @@ export interface InjectableMemorySet {
     agent: InjectableMemoryRow[]
     workflow: InjectableMemoryRow[]
     repo: InjectableMemoryRow[]
+    /** RFC-248 D4：用组启动时才非空。 */
+    repoGroup: InjectableMemoryRow[]
     global: InjectableMemoryRow[]
   }
 }
@@ -76,12 +91,21 @@ export interface LoadInjectableMemoriesOptions {
   /** task.workflowId — null skips the workflow scope. */
   workflowId: string | null
   /**
-   * Resolved cached_repo.id for the task (looked up via repoUrl); null
-   * when the task was launched from a path-mode worktree. The lookup is
-   * the caller's responsibility because the runner already holds the
-   * task row and we don't want a second SELECT per inject.
+   * RFC-248: 本任务涉及的**全部** cached_repo.id（去重）。RFC-041 时代这里是
+   * 单数 `repoId`——一个任务只有一个仓。仓库组启动后一个任务有 N 个成员仓，
+   * 每个仓自己的 repo 记忆都该注入（D4），所以改成复数。空数组 = 跳过 repo 档。
+   *
+   * 查表是调用方的责任：runner 手上已经有 task 行与 task_repos 行，不值得为此
+   * 在每次注入时再 SELECT 一遍。
    */
-  repoId: string | null
+  repoIds: readonly string[]
+  /**
+   * RFC-248 D4: 用仓库组启动时的组 id；null = 单仓 / scratch 启动。
+   *
+   * 单仓直启**不**注入它所属任何组的记忆——组记忆是关于「这个组合怎么一起
+   * 干活」的知识，单独跑一个仓时无意义，且一个仓可能属于很多组，全注入会爆。
+   */
+  repoGroupId: string | null
 }
 
 /**
@@ -100,7 +124,7 @@ export async function loadInjectableMemories(
   opts: LoadInjectableMemoriesOptions,
 ): Promise<InjectableMemorySet> {
   const out: InjectableMemorySet = {
-    byScope: { agent: [], workflow: [], repo: [], global: [] },
+    byScope: { agent: [], workflow: [], repo: [], repoGroup: [], global: [] },
   }
 
   // Agent scope — closure-aware: every closure member's memories surface
@@ -143,19 +167,37 @@ export async function loadInjectableMemories(
     out.byScope.workflow = rows.map(rowToInjectable)
   }
 
-  if (opts.repoId !== null) {
+  if (opts.repoIds.length > 0) {
+    // RFC-248: 组内 N 个成员仓的 repo 记忆共用 `budget.repo` 一档，按
+    // createdAt DESC 统一排序后裁剪——不给每个仓单独配额，否则成员一多
+    // 整块就撑爆了。
     const rows = await db
       .select()
       .from(memories)
       .where(
         and(
           eq(memories.scopeType, 'repo'),
-          eq(memories.scopeId, opts.repoId),
+          inArray(memories.scopeId, [...opts.repoIds]),
           eq(memories.status, 'approved'),
         ),
       )
       .orderBy(desc(memories.createdAt))
     out.byScope.repo = rows.map(rowToInjectable)
+  }
+
+  if (opts.repoGroupId !== null) {
+    const rows = await db
+      .select()
+      .from(memories)
+      .where(
+        and(
+          eq(memories.scopeType, 'repo_group'),
+          eq(memories.scopeId, opts.repoGroupId),
+          eq(memories.status, 'approved'),
+        ),
+      )
+      .orderBy(desc(memories.createdAt))
+    out.byScope.repoGroup = rows.map(rowToInjectable)
   }
 
   const globalRows = await db
@@ -241,8 +283,10 @@ export function formatMemoryBlockWithSnapshot(
   const agent = clipByBudget(set.byScope.agent, budget.agent)
   const workflow = clipByBudget(set.byScope.workflow, budget.workflow)
   const repo = clipByBudget(set.byScope.repo, budget.repo)
+  // RFC-248: repo_group 排在 repo 与 global 之间——比单个仓宽、比 global 窄。
+  const repoGroup = clipByBudget(set.byScope.repoGroup, budget.repoGroup)
   const global = clipByBudget(set.byScope.global, budget.global)
-  const all = [...agent, ...workflow, ...repo, ...global]
+  const all = [...agent, ...workflow, ...repo, ...repoGroup, ...global]
   if (all.length === 0) return { block: null, snapshot: null }
   const snapshot = all.map(toSnapshot)
   return {
@@ -382,17 +426,44 @@ export async function injectMemoryForRun(deps: {
   // `repo_url == cached_repos.url` never matched for a credentialed URL — repo
   // scoped memory was silently skipped for private repos. The id join fixes
   // that and survives the credential being sealed.
-  let repoId: string | null = null
-  if (typeof taskRow.cachedRepoId === 'string' && taskRow.cachedRepoId.length > 0) {
-    const repoRow = (
-      await deps.db
-        .select({ id: cachedRepos.id })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, taskRow.cachedRepoId))
-        .limit(1)
-    )[0]
-    repoId = repoRow?.id ?? null
+  //
+  // RFC-248: 从 `task_repos` 取**全部**成员仓的 cached_repo_id（去重），不再只看
+  // `tasks.cached_repo_id`（那是 repos[0] 的镜像）。组任务有 N 个成员仓，每个仓
+  // 自己的 repo 记忆都该注入。只读成员也算——它是「给 agent 看的参考资料」，
+  // 关于它的经验同样有用。
+  const repoRows = await deps.db
+    .select({ cachedRepoId: taskRepos.cachedRepoId })
+    .from(taskRepos)
+    .where(eq(taskRepos.taskId, deps.taskId))
+  const repoIdSet = new Set<string>()
+  for (const r of repoRows) {
+    if (typeof r.cachedRepoId === 'string' && r.cachedRepoId.length > 0)
+      repoIdSet.add(r.cachedRepoId)
   }
+  // 兜底：migration 0034 之前的老任务可能没有 task_repos 行。
+  if (
+    repoIdSet.size === 0 &&
+    typeof taskRow.cachedRepoId === 'string' &&
+    taskRow.cachedRepoId.length > 0
+  ) {
+    repoIdSet.add(taskRow.cachedRepoId)
+  }
+  // 只保留仍然存在的镜像行——删仓之后那条 scope 已经没有锚，注入它等于把
+  // 一个「关于已不存在的仓」的规则塞给 agent。
+  const repoIds =
+    repoIdSet.size === 0
+      ? []
+      : (
+          await deps.db
+            .select({ id: cachedRepos.id })
+            .from(cachedRepos)
+            .where(inArray(cachedRepos.id, [...repoIdSet]))
+        ).map((r) => r.id)
+  // RFC-248 D4: 只有用组启动的任务才注入组记忆；单仓直启不注入它所属的组。
+  const repoGroupId =
+    typeof taskRow.repoGroupId === 'string' && taskRow.repoGroupId.length > 0
+      ? taskRow.repoGroupId
+      : null
   const agentIds = [
     deps.primaryAgent.id,
     ...deps.dependents.map((d) => d.id).filter((id) => id !== deps.primaryAgent.id),
@@ -400,7 +471,8 @@ export async function injectMemoryForRun(deps: {
   const set = await loadInjectableMemories(deps.db, {
     agentIds,
     workflowId,
-    repoId,
+    repoIds,
+    repoGroupId,
   })
   return formatMemoryBlockWithSnapshot(set, deps.budget ?? DEFAULT_BUDGET, deps.envelopeNonce ?? '')
 }

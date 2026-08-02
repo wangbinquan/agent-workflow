@@ -98,7 +98,9 @@ describe('loadInjectableMemories', () => {
     const set = await loadInjectableMemories(db, {
       agentIds: ['a1'],
       workflowId: 'w1',
-      repoId: 'r1',
+      repoIds: ['r1'],
+
+      repoGroupId: null,
     })
     expect(set.byScope.agent).toEqual([])
     expect(set.byScope.workflow).toEqual([])
@@ -114,7 +116,9 @@ describe('loadInjectableMemories', () => {
     const set = await loadInjectableMemories(db, {
       agentIds: ['a1'],
       workflowId: 'w1',
-      repoId: 'r1',
+      repoIds: ['r1'],
+
+      repoGroupId: null,
     })
     expect(set.byScope.agent.map((m) => m.title)).toEqual(['A'])
     expect(set.byScope.workflow.map((m) => m.title)).toEqual(['W'])
@@ -129,7 +133,9 @@ describe('loadInjectableMemories', () => {
     const set = await loadInjectableMemories(db, {
       agentIds: ['primary', 'dep1', 'dep2'],
       workflowId: null,
-      repoId: null,
+      repoIds: [],
+
+      repoGroupId: null,
     })
     expect(set.byScope.agent.map((m) => m.title)).toEqual(['D2', 'D1', 'P'])
   })
@@ -143,7 +149,9 @@ describe('loadInjectableMemories', () => {
     const set = await loadInjectableMemories(db, {
       agentIds: [],
       workflowId: null,
-      repoId: null,
+      repoIds: [],
+
+      repoGroupId: null,
     })
     expect(set.byScope.global.map((m) => m.title)).toEqual(['approved'])
   })
@@ -155,7 +163,9 @@ describe('loadInjectableMemories', () => {
     const set = await loadInjectableMemories(db, {
       agentIds: [],
       workflowId: null,
-      repoId: null,
+      repoIds: [],
+
+      repoGroupId: null,
     })
     expect(set.byScope.workflow).toEqual([])
     expect(set.byScope.repo).toEqual([])
@@ -167,7 +177,9 @@ describe('loadInjectableMemories', () => {
     const set = await loadInjectableMemories(db, {
       agentIds: ['a1', 'a1', 'a1'],
       workflowId: null,
-      repoId: null,
+      repoIds: [],
+
+      repoGroupId: null,
     })
     expect(set.byScope.agent.length).toBe(1)
   })
@@ -178,7 +190,9 @@ describe('loadInjectableMemories', () => {
     const set = await loadInjectableMemories(db, {
       agentIds: [],
       workflowId: 'wf-1',
-      repoId: null,
+      repoIds: [],
+
+      repoGroupId: null,
     })
     expect(set.byScope.workflow.map((m) => m.title)).toEqual(['mine'])
   })
@@ -220,7 +234,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
   test('formatMemoryBlock returns null when every scope is empty', () => {
     expect(
       formatMemoryBlock({
-        byScope: { agent: [], workflow: [], repo: [], global: [] },
+        byScope: { agent: [], workflow: [], repo: [], repoGroup: [], global: [] },
       }),
     ).toBeNull()
   })
@@ -233,6 +247,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
         ],
         workflow: [],
         repo: [],
+        repoGroup: [],
         global: [
           { id: 'g', scopeType: 'global', scopeId: null, title: 'G', bodyMd: 'b', createdAt: 0 },
         ],
@@ -263,6 +278,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
           ],
           workflow: [],
           repo: [],
+          repoGroup: [],
           global: [],
         },
       },
@@ -296,6 +312,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
         repo: [
           { id: '3', scopeType: 'repo', scopeId: 'r', title: 'Rtitle', bodyMd: 'b', createdAt: 0 },
         ],
+        repoGroup: [],
         global: [
           {
             id: '4',
@@ -319,7 +336,13 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
   })
 
   test('formatMemoryBlock honors per-scope budget override (e.g. agent=0)', () => {
-    const tightBudget: ScopeBudget = { agent: 0, workflow: 100, repo: 100, global: 100 }
+    const tightBudget: ScopeBudget = {
+      agent: 0,
+      workflow: 100,
+      repo: 100,
+      repoGroup: 100,
+      global: 100,
+    }
     const block = formatMemoryBlock(
       {
         byScope: {
@@ -335,6 +358,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
           ],
           workflow: [],
           repo: [],
+          repoGroup: [],
           global: [
             {
               id: '4',
@@ -359,6 +383,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
       agent: 1500,
       workflow: 800,
       repo: 800,
+      repoGroup: 800,
       global: 500,
     })
   })
@@ -554,7 +579,7 @@ describe('injectMemoryForRun', () => {
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
-      budget: { agent: 0, workflow: 0, repo: 0, global: 0 },
+      budget: { agent: 0, workflow: 0, repo: 0, repoGroup: 0, global: 0 },
     })
     expect(block).toBeNull()
   })

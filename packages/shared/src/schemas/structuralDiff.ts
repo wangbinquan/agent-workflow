@@ -241,6 +241,20 @@ export type FileAnalysisStatus = z.infer<typeof fileAnalysisStatusSchema>
 
 export const fileStructuralDiffSchema = z.object({
   filePath: z.string(),
+  /**
+   * RFC-248 设计门二轮 H8 —— 这个文件属于哪个仓，**显式**携带而不是从
+   * `filePath` 的最长前缀反推。
+   *
+   * 一轮我曾用「按构造无歧义」否决过这个字段，二轮被证伪：**sparse checkout
+   * 只控制工作树、不删索引里的已跟踪路径**。容器仓可以仍然跟踪
+   * `hidden/dep/file` 而工作树里没有 `hidden/dep`，于是子仓挂得进去；此后
+   * `git rm --cached --sparse` 或 plumbing 操作能让容器产出同一路径的变更，
+   * 纯前缀反推就会把它判给子仓，结构化 diff **静默错归属**。
+   *
+   * 值 = `task_repos.mount_path`（根仓为 `''`）。可选：单仓 / 旧持久化 JSON
+   * 没有它，消费方按「缺失 ⇒ 根仓」处理。
+   */
+  repoKey: z.string().optional(),
   lang: fileLangSchema,
   status: fileAnalysisStatusSchema,
   /** RFC-239 — file-level rename: the pre-rename path when git detected R
@@ -355,6 +369,12 @@ export const structuralDiffSchema = z.object({
    *  manifest incl. per-file symbol identities). The ONLY comparison peer is
    *  ChangeNarrative.inputDigest — the frontend never recomputes it. */
   contentDigest: z.string().optional(),
+  /**
+   * RFC-248 —— 本次 diff 覆盖的全部仓 key（挂载路径，根仓为 `''`），按
+   * `repo_index` 序。前端拿它做最长前缀拆分时**不用自己猜**集合；同时它也是
+   * 「这个响应是不是多仓」的唯一判据。
+   */
+  repoKeys: z.array(z.string()).optional(),
   /** RFC-239 — why `files` is empty when it is (differentiated empty states):
    *  'scratch-space' = task ran in a scratch space with no git-visible change;
    *  'no-changes' = a real repo task that modified nothing. */

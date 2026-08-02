@@ -68,7 +68,7 @@ import {
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
-import { canonicalRepoLabels } from '@/services/repoLabels'
+import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import type { ContainmentCoordinator } from '@/services/sandbox'
 import { getRuntimeDriver } from '@/services/runtime'
 import { loadMcpsByIds } from '@/services/mcpClosure'
@@ -1833,32 +1833,14 @@ async function startTaskImpl(
   // node into an already-started task. Single-repo launches keep their
   // existing behavior (workflows containing wrapper-git / upload are still
   // launchable as today, gated by the static validation rules only).
-  if (repoSpecs.length > 1) {
-    const wrapperGitNodes = (
-      (effectiveDefinition.nodes as Array<{ id: string; kind: string }>) ?? []
-    )
-      .filter((n) => n.kind === 'wrapper-git')
-      .map((n) => n.id)
-    if (wrapperGitNodes.length > 0) {
-      throw new ValidationError(
-        'multi-repo-wrapper-git-unsupported',
-        'wrapper-git nodes are not supported in multi-repo tasks (v1)',
-        { wrapperGitNodes },
-      )
-    }
-    const uploadInputs = (
-      (effectiveDefinition.inputs as Array<{ key: string; kind: string }>) ?? []
-    )
-      .filter((i) => i.kind === 'upload')
-      .map((i) => i.key)
-    if (uploadInputs.length > 0) {
-      throw new ValidationError(
-        'multi-repo-upload-unsupported',
-        'multipart upload inputs are not supported in multi-repo tasks (v1)',
-        { uploadInputs },
-      )
-    }
-  }
+  // RFC-248 D9/D12: RFC-066 当年在这里拦掉了多仓 + wrapper-git 与多仓 + 上传输入
+  // 两种组合，理由是包裹器只会对单一 worktree 取快照、上传物不知道该落到哪个仓。
+  // 两条都已解除：
+  //   - wrapper-git 现在逐仓快照、逐仓 diff，路径用挂载路径前缀化后合并成一个
+  //     `list<path>`（scheduler.ts runGitWrapperNode）。不解除的话仓库组永远
+  //     用不了平台的 Code → Audit → Fix 主链路。
+  //   - 上传输入落到任务根下的固定目录 `.agent-workflow-inputs/`，不属于任何仓；
+  //     有仓挂根时该目录进它的 `.gitignore` 预置 commit（services/task.ts 物化）。
 
   // Static validation gate (proposal.md §静态校验): "校验失败不阻止保存，但阻止启动 task".
   // Run the same 5-rule check the editor uses, against the live agent/skill set,
@@ -1920,15 +1902,8 @@ async function startTaskImpl(
         'multipart uploads into a scratch space must use the materializedSpace handoff',
       )
     }
-    // Multipart-upload flow is single-repo only. RFC-066 routes/tasks.ts
-    // wires a multi-repo + upload combo to 422 via T6's gate well before
-    // this code path runs; the assertion is belt-and-suspenders.
-    if (repoSpecs.length !== 1) {
-      throw new ValidationError(
-        'multi-repo-upload-unsupported',
-        'preCreatedWorktree path can only be used with single-repo bodies',
-      )
-    }
+    // RFC-248 D12: 多仓 + 上传的禁令已解除；上传物落任务根下的固定目录，
+    // 不属于任何成员仓（applyUploadsToWorktree 的 inputsSubdir）。
     const source =
       deps.preResolvedSource ??
       (await resolveRepoSourceSingle(
@@ -4238,12 +4213,19 @@ export async function getTaskDiff(db: DbClient, taskId: string): Promise<TaskDif
   // structural diff's `label/` prefixes; before this, the fallback here was the
   // full repoPath while the structural side used basename, so the frontend
   // could never join the two sides for fallback-labeled repos).
-  const repoLabels = canonicalRepoLabels(task.repos)
-  const labelOf = new Map(task.repos.map((r, i) => [r, repoLabels[i] ?? 'repo']))
+  //
+  // RFC-248 D15：规范 key 换成**挂载路径**（`canonicalRepoKeysWire`，根仓写 `.`）。
+  // basename 在嵌套布局下彻底丢失方位——agent 拿到 `utils-2` 不知道该去哪个目录；
+  // 挂载路径与它在磁盘上看到的一致。同一份 key 也用于结构化 diff 的 id 前缀与
+  // 扇出分片，三处同源。
+  const repoLabels = canonicalRepoKeysWire(task.repos)
+  const labelOf = new Map(task.repos.map((r, i) => [r, repoLabels[i] ?? '.']))
   for (const repo of usable) {
+    // RFC-248 D11: 只读成员不进任务 diff。
+    if (repo.readonly === true) continue
     const oneRaw = await gitDiffSnapshot(repo.worktreePath, repo.baseCommit as string)
     if (oneRaw === '') continue
-    const header = `# === Repo: ${labelOf.get(repo) ?? 'repo'} ===\n`
+    const header = `# === Repo: ${labelOf.get(repo) ?? '.'} ===\n`
     const remaining = TASK_DIFF_MAX_BYTES - out.length
     if (remaining <= 0) {
       truncated = true
@@ -4463,10 +4445,13 @@ function mapTaskRepoRow(row: typeof taskRepos.$inferSelect): TaskRepo {
     baseCommit: row.baseCommit ?? null,
     worktreePath: row.worktreePath,
     worktreeDirName: row.worktreeDirName,
-    mountPath: '',
-    subdir: '',
-    readonly: false,
-    gitignoreCommit: null,
+    // RFC-248: 读 DB 真值。写死 '' 会让**每一个**多仓任务的 diff 分段头退化成
+    // `.`、结构化 diff 前缀丢失、`?repo=` 查不到——由 task-diff-multi-repo 的
+    // 既有断言抓出来。
+    mountPath: row.mountPath,
+    subdir: row.subdir,
+    readonly: row.readonly,
+    gitignoreCommit: row.gitignoreCommit ?? null,
     hasSubmodules: row.hasSubmodules ?? null,
     submoduleInitOk: row.submoduleInitOk ?? null,
     submoduleInitError: row.submoduleInitError ?? null,

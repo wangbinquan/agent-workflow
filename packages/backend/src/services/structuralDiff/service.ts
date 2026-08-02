@@ -16,7 +16,7 @@ import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { isGitWorkTree } from '@/util/git'
 import { computeSummary, type StructuralDiff, type StructuralScope } from '@agent-workflow/shared'
 import { getTask } from '@/services/task'
-import { canonicalRepoLabels } from '@/services/repoLabels'
+import { canonicalRepoKeys } from '@/services/repoLabels'
 import { WrapperProgressSchema } from '@/services/wrapperProgress'
 import { computeFromWorktree, computeBetweenRefs } from './gitBackend'
 import { computeContentDigest } from './digest'
@@ -144,7 +144,7 @@ export async function getTaskStructuralDiff(
   // RFC-239 — canonical labels are computed over the FULL repo list so the
   // text-diff markers and these structural prefixes agree per repo even when
   // the two paths filter different usable subsets.
-  const allLabels = canonicalRepoLabels(task.repos)
+  const allLabels = canonicalRepoKeys(task.repos)
   const labelOf = new Map(task.repos.map((r, i) => [r, allLabels[i] ?? 'repo']))
   const parts: Array<{ label: string; diff: StructuralDiff }> = []
   for (const repo of usable) {
@@ -166,6 +166,8 @@ export async function getTaskStructuralDiff(
           toRef: 'WORKTREE',
           engine: 'baseline',
           status: usable.length === task.repos.length ? 'ok' : 'partial',
+          // RFC-248: 前端拆前缀时用它，不自己猜 key 集合。
+          repoKeys: allLabels,
         },
         parts,
       ),
@@ -235,7 +237,7 @@ async function getNodeStructuralDiff(
     const parts: Array<{ label: string; diff: StructuralDiff }> = []
     let hadSnapshot = false
     let hadError = false
-    const nodeLabels = canonicalRepoLabels(task.repos)
+    const nodeLabels = canonicalRepoKeys(task.repos)
     for (const [repoIdx, repo] of task.repos.entries()) {
       const res = resolveNodeScope(perRepoNodeRuns(rows, repo.worktreeDirName), nodeRunId)
       if (res.kind !== 'between' && res.kind !== 'to-worktree') continue // node didn't write this repo

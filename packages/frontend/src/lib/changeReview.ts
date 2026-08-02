@@ -6,7 +6,8 @@
 // The FILE universe is the textual diff's block list (it has every changed
 // file); structural data joins in per path. Multi-repo: text blocks arrive in
 // `# === Repo: <label> ===` groups while structural paths carry a `label/`
-// prefix — both sides use the backend's canonicalRepoLabels, so joining is
+// prefix — both sides use the backend's canonicalRepoKeys (RFC-248: the key IS
+// the mount path), so joining is
 // exact label equality (unjoinable rows keep their single side, never dropped).
 
 import type { FileStructuralDiff, StructuralDiff, ChangeGroupEntry } from '@agent-workflow/shared'

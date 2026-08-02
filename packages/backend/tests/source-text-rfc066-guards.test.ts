@@ -81,11 +81,25 @@ describe('RFC-066 PR-A — source guards', () => {
     expect(rfc066Entry!.idx).toBe(33)
   })
 
-  test('G5 services/task.ts multi-repo gate emits the canonical error codes', () => {
-    // Locks the exact code strings used in the multi-repo gate so frontend
-    // i18n / route 422 handlers can rely on them.
-    expect(TASK_SRC.includes("'multi-repo-wrapper-git-unsupported'")).toBe(true)
-    expect(TASK_SRC.includes("'multi-repo-upload-unsupported'")).toBe(true)
+  test('G5 RFC-248 D9/D12：两条多仓禁令已解除，错误码不得复活', () => {
+    // 这条守卫**翻转**了。RFC-066 当年在 startTask 里拦掉「多仓 + wrapper-git」
+    // 与「多仓 + 上传」，原断言锁的是那两个错误码存在。RFC-248 解除了两条禁令：
+    //   - wrapper-git 现在逐仓快照、逐仓 diff，路径按挂载路径前缀化后合并成
+    //     `list<path>`。不解除的话仓库组永远用不了 Code → Audit → Fix 主链路。
+    //   - 上传物落到任务根下的 `.agent-workflow-inputs/`，不属于任何成员仓。
+    // 断言改成「这两个码在生产代码里彻底消失」——留一个就意味着某条路径上禁令
+    // 还在，组任务会在那里撞墙。
+    expect(TASK_SRC.includes("'multi-repo-wrapper-git-unsupported'")).toBe(false)
+    expect(TASK_SRC.includes("'multi-repo-upload-unsupported'")).toBe(false)
+    for (const rel of [
+      'src/routes/tasks.ts',
+      'src/services/agentLaunch.ts',
+      'src/services/scheduler.ts',
+    ]) {
+      const src = readFileSync(resolve(import.meta.dir, '..', rel), 'utf8')
+      expect(src.includes("'multi-repo-wrapper-git-unsupported'")).toBe(false)
+      expect(src.includes("'multi-repo-upload-unsupported'")).toBe(false)
+    }
   })
 })
 

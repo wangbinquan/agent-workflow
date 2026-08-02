@@ -12,6 +12,7 @@
 // endpoint unable to target it.
 
 import {
+  UPLOAD_INPUTS_DIR,
   applySpaceFields,
   buildClarifyEdges,
   deriveAgentLaunchForm,
@@ -453,13 +454,7 @@ export async function startAgentTask(
       // for a launch that has already passed ACL/OCC/blockers/F14.
       const files = await bufferUploadParts(uploads.parts, uploadDefs)
       validateUploadPlan({ defs: uploadDefs, files, limits: uploads.limits })
-      if (Array.isArray(parsed.data.repos) && parsed.data.repos.length > 1) {
-        throw new ValidationError(
-          'multi-repo-upload-unsupported',
-          'multipart upload inputs are not supported in multi-repo tasks (v1)',
-          { repoCount: parsed.data.repos.length },
-        )
-      }
+      // RFC-248 D12: 多仓 + 上传的禁令已解除（上传物落任务根下的固定目录）。
       const appHome = deps.appHome ?? Paths.root
       const space = await materializeSpace(parsed.data, { db }, appHome)
       if (space.earlyError !== null) {
@@ -470,6 +465,7 @@ export async function startAgentTask(
       try {
         const result = await applyUploadsToWorktree({
           worktreePath: space.worktreePath,
+          ...(space.repos.length > 1 ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
           defs: uploadDefs,
           files,
           limits: uploads.limits,

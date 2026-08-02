@@ -9,7 +9,7 @@
 //    `renamedFrom` (pre-RFC-239 this misreported refactors as all-new code)
 //  - gitDiffSnapshot: rename headers are explicit (`--find-renames`), not
 //    dependent on the host's diff.renames default
-//  - canonicalRepoLabels: ONE label per repo for text markers + structural
+//  - canonicalRepoKeys（RFC-248 取代 canonicalRepoLabels）：ONE key per repo
 //    prefixes (sanitize-then-unique, design gate 3rd-round P1-N4)
 
 import { describe, expect, test, afterAll } from 'bun:test'
@@ -24,7 +24,7 @@ import {
   runGit,
 } from '../src/util/git'
 import { computeFromWorktree } from '../src/services/structuralDiff/gitBackend'
-import { canonicalRepoLabels } from '../src/services/repoLabels'
+import { canonicalRepoKeys, canonicalRepoKeysWire } from '../src/services/repoLabels'
 
 describe('parseNameStatusZ', () => {
   const z = (...tokens: string[]): string => tokens.join('\0') + '\0'
@@ -179,41 +179,30 @@ describe('rename enumeration + assemble (real git)', () => {
   })
 })
 
-describe('canonicalRepoLabels', () => {
-  test('worktreeDirName wins; fallback is basename(repoPath) on BOTH consumers', () => {
+describe('canonicalRepoKeys（RFC-248 取代 RFC-239 的 canonicalRepoLabels）', () => {
+  // RFC-239 那四条测试锁的是 basename fallback + CR/LF 消毒 + `-2` 去重 + 终极
+  // 'repo' 兜底。RFC-248 把规范 key 换成**挂载路径**后，这四件事全部不再需要，
+  // 也不再正确：
+  //   - basename 在嵌套布局下丢方位（agent 拿到 `utils-2` 不知道该去哪个目录）；
+  //   - 消毒会把 `apps/web` 毁成 `apps-web`，而挂载路径本来就带 `/`；
+  //   - 唯一性由建组期的 `assertMountPathSet`（含大小写折叠）保证，不需后置去重；
+  //   - 挂载路径经 `normalizeMountPath` 校验，不存在"消毒后啥也不剩"的输入。
+  // 现在锁的是「原样返回挂载路径」这条更简单也更强的契约。
+  test('原样返回挂载路径，不做任何消毒或去重', () => {
     expect(
-      canonicalRepoLabels([
-        { worktreeDirName: 'main', repoPath: '/repos/whatever' },
-        { worktreeDirName: '', repoPath: '/repos/helper-lib' },
-        { worktreeDirName: null, repoPath: '/repos/tool' },
+      canonicalRepoKeys([
+        { mountPath: '' },
+        { mountPath: 'vendor/sdk' },
+        { mountPath: 'apps/web' },
       ]),
-    ).toEqual(['main', 'helper-lib', 'tool'])
+    ).toEqual(['', 'vendor/sdk', 'apps/web'])
   })
 
-  test('CR/LF and slashes are sanitized (marker + path-prefix safety)', () => {
-    expect(canonicalRepoLabels([{ worktreeDirName: 'a\r\nb', repoPath: '/x' }])).toEqual(['a-b'])
-    expect(canonicalRepoLabels([{ worktreeDirName: 'a/b\\c', repoPath: '/x' }])).toEqual(['a-b-c'])
+  test('带 `/` 的挂载路径不得被压成 `-`（RFC-239 的老行为在这里是回归）', () => {
+    expect(canonicalRepoKeys([{ mountPath: 'apps/web' }])).toEqual(['apps/web'])
   })
 
-  test('post-sanitization collisions re-unique with -2/-3 (P1-N4)', () => {
-    expect(
-      canonicalRepoLabels([
-        { worktreeDirName: 'ab', repoPath: '/x' },
-        { worktreeDirName: 'a\nb', repoPath: '/y' },
-        { worktreeDirName: 'a/b', repoPath: '/z' },
-      ]),
-    ).toEqual(['ab', 'a-b', 'a-b-2'])
-  })
-
-  test('fully-stripped label falls back to basename, then to "repo"', () => {
-    // whitespace-only dirName sanitizes to nothing → fall back to basename
-    expect(canonicalRepoLabels([{ worktreeDirName: '\n', repoPath: '/repos/real-name' }])).toEqual([
-      'real-name',
-    ])
-    expect(canonicalRepoLabels([{ worktreeDirName: '', repoPath: '/repos/real-name' }])).toEqual([
-      'real-name',
-    ])
-    // both sources substance-free → the terminal 'repo' fallback
-    expect(canonicalRepoLabels([{ worktreeDirName: ' ', repoPath: '/' }])).toEqual(['repo'])
+  test('线上形态：根仓写 `.`，其余原样', () => {
+    expect(canonicalRepoKeysWire([{ mountPath: '' }, { mountPath: 'a/b' }])).toEqual(['.', 'a/b'])
   })
 })

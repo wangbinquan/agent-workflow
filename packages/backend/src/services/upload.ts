@@ -73,6 +73,12 @@ export interface UploadFile {
 }
 
 export interface UploadPlan {
+  /**
+   * RFC-248 D12: 上传物的额外根前缀（相对 `worktreePath`）。多仓任务传
+   * `.agent-workflow-inputs`——上传物不属于任何成员仓，落进某个仓会变成它的
+   * 未跟踪改动、进审计 diff 与自动提交。单仓任务不传，路径保持 baseline。
+   */
+  inputsSubdir?: string
   worktreePath: string
   defs: ReadonlyMap<string, UploadInputDef>
   files: readonly UploadFile[]
@@ -345,7 +351,13 @@ export async function applyUploadsToWorktree(plan: UploadPlan): Promise<UploadRe
     for (const f of files) {
       idx++
       const def = defs.get(f.inputKey)!
-      const targetAbs = assertInsideWorktree(worktreePath, def.targetDir)
+      // RFC-248 D12: 多仓任务把上传物统一落到任务根下的固定目录，不属于任何仓。
+      // 单仓时 `inputsSubdir` 为空 ⇒ 路径与今天字节级一致。
+      const effectiveTarget =
+        plan.inputsSubdir !== undefined && plan.inputsSubdir !== ''
+          ? `${plan.inputsSubdir}/${def.targetDir}`
+          : def.targetDir
+      const targetAbs = assertInsideWorktree(worktreePath, effectiveTarget)
       // RFC-107 security: reject a symlinked targetDir / ancestor (from an
       // untrusted URL-cloned repo) that would escape the worktree once the fs
       // calls below follow it. Runs before mkdirSync so nothing is created

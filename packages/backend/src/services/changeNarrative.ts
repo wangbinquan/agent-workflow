@@ -34,7 +34,7 @@ import { gitChangedEntries, gitDiffNumstat } from '@/util/git'
 import { markProductionOpencodeCommand } from '@/util/opencode'
 import type { Logger } from '@/util/log'
 import type { Actor } from '@/auth/actor'
-import { canonicalRepoLabels } from '@/services/repoLabels'
+import { canonicalRepoKeys } from '@/services/repoLabels'
 import { requireTaskMember } from '@/services/taskCollab'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import type { ContainmentCoordinator } from '@/services/sandbox'
@@ -121,7 +121,7 @@ export async function buildNarrativeInput(db: DbClient, task: Task): Promise<Nar
     : [{ worktreePath: task.worktreePath, base: task.baseCommit }]
   // Same canonical labels the structural service prefixed files with — ONE
   // function on both sides, so `label/rel` keys line up by construction.
-  const labels = multiRepo ? canonicalRepoLabels(task.repos) : [undefined]
+  const labels = multiRepo ? canonicalRepoKeys(task.repos) : [undefined]
 
   const entries: ChangeGroupEntry[] = []
   for (const [i, repo] of repos.entries()) {

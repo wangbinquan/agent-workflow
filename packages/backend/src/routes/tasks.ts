@@ -10,6 +10,7 @@
 // Resume / single-node retry land in M3 (P-3-08, P-3-09).
 
 import {
+  UPLOAD_INPUTS_DIR,
   isTurnEngineWorkgroupTask,
   RepairRequestSchema,
   rejectRetiredStartTaskKeys,
@@ -1307,19 +1308,9 @@ async function handleMultipartTaskStart(
 
   // 4. Materialize the space first so we have a real path to write into.
   const appHome = Paths.root
-  // RFC-066: multi-repo + multipart uploads is not supported in v1. The
-  // upload pipeline writes files into a single worktree; with N sibling
-  // worktrees there's no obvious target. Gate at the route so the caller
-  // sees a structured 422 instead of a misleading downstream error. The
-  // mirror gate in `services/task.ts` startTask catches direct callers
-  // that bypass this route.
-  if (Array.isArray(startInput.repos) && startInput.repos.length > 1) {
-    throw new ValidationError(
-      'multi-repo-upload-unsupported',
-      'multipart upload inputs are not supported in multi-repo tasks (v1)',
-      { repoCount: startInput.repos.length },
-    )
-  }
+  // RFC-248 D12: RFC-066 的「多仓 + 上传」禁令已解除——上传物落到任务根下的
+  // 固定目录 `.agent-workflow-inputs/`，不属于任何成员仓（见 applyUploadsToWorktree
+  // 的 inputsSubdir）。原本这里与 services/task.ts 各有一道 422 门，两处一并删除。
   // RFC-107 (Codex design-gate F1): run the SAME static workflow validation
   // startTask runs (services/task.ts) BEFORE resolving/cloning the repo. JSON
   // launches validate before any repo resolution; the multipart path
@@ -1404,6 +1395,9 @@ async function handleMultipartTaskStart(
   try {
     const result = await applyUploadsToWorktree({
       worktreePath: space.worktreePath,
+      // RFC-248 D12: 多仓任务的上传物落到任务根下的固定目录，不属于任何成员仓。
+      // 单仓不传 ⇒ 路径与今天字节级一致。
+      ...(space.repos.length > 1 ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
       defs: uploadDefs,
       files: uploadFiles,
       limits,

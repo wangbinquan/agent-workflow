@@ -144,7 +144,19 @@ function applyViaImport(files: FileStructuralDiff[], deps: DependencyChange[]): 
 // `file.filePath`, which is exactly why `classEdges` had to be dropped.
 // ---------------------------------------------------------------------------
 
-const prefixPath = (label: string, fp: string): string => `${label}/${fp}`
+/**
+ * RFC-248 设计门一轮 G3 —— **空 label 原样返回**。
+ *
+ * 现状不变量是「加前缀 ⟺ 多仓」：单仓走 `structuralDiff/service.ts:95-118` 的
+ * 早分支、完全不加前缀（`src/a.ts`），与文本 diff 单仓无分段头的形态一致。
+ * 仓库组引入「挂根成员」后，它的规范 key 是空串——无条件拼 `${label}/` 会产出
+ * `/src/a.ts`，而文本 diff 那边是 `src/a.ts`；前端 `lib/changeReview.ts` 靠路径
+ * 逐字符相等 join 两侧，于是根仓的符号 / 严重度 / 文件内容 / 导航会**静默脱节**。
+ *
+ * 改这一处即可覆盖下方注释列出的全部 7 类嵌入路径——它们都经由本函数与
+ * `prefixIdPath`。
+ */
+const prefixPath = (label: string, fp: string): string => (label === '' ? fp : `${label}/${fp}`)
 
 /** Prefix the leading filePath segment of an id delimited by `delim` — symbol
  *  id `${filePath}#…` (delim `#`) or card id `${filePath}::…` (delim `::`). A
@@ -192,6 +204,9 @@ function prefixImpactItem(label: string, it: ImpactItem): ImpactItem {
 function prefixFile(label: string, f: FileStructuralDiff): FileStructuralDiff {
   return {
     ...f,
+    // RFC-248 H8: 归属**显式**落在字段上，不让下游从路径最长前缀反推。
+    // 字符串前缀仍然保留（展示与文本 diff join 靠它），但判定不再依赖它。
+    repoKey: label,
     filePath: prefixPath(label, f.filePath),
     renamedFrom: f.renamedFrom !== undefined ? prefixPath(label, f.renamedFrom) : undefined,
     changes: f.changes.map((c) => prefixChange(label, c)),

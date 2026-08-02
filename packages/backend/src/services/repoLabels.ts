@@ -25,7 +25,6 @@
 // 路径本身保证，不需要 uniquing。
 // -----------------------------------------------------------------------------
 
-import { basename } from 'node:path'
 import { repoKeyWire } from '@agent-workflow/shared'
 
 /** RFC-248 —— 一个仓在 key 计算里需要的最小视图。 */
@@ -50,44 +49,4 @@ export function canonicalRepoKeys(repos: readonly RepoForKey[]): string[] {
  */
 export function canonicalRepoKeysWire(repos: readonly RepoForKey[]): string[] {
   return repos.map((r) => repoKeyWire(r.mountPath))
-}
-
-export interface RepoForLabel {
-  worktreeDirName?: string | null
-  repoPath: string
-}
-
-/** Strip characters that break the diff marker line or path-prefix parsing:
- *  CR/LF (marker is single-line) and `/` (labels prefix repo-relative paths as
- *  `label/…` — a slash would shift the split point). */
-function sanitizeLabel(raw: string): string {
-  return raw.replace(/[\r\n/\\]+/g, '-').trim()
-}
-
-/** A label made only of replacement dashes/whitespace carries no identity. */
-function hasSubstance(label: string): boolean {
-  return /[^\s-]/.test(label)
-}
-
-/**
- * Canonical labels for a task's repos, index-aligned with the input. Compute
- * over the FULL repo list (not a filtered subset) so both consumers hand the
- * same repo the same label even when their usable-filters differ.
- */
-export function canonicalRepoLabels(repos: readonly RepoForLabel[]): string[] {
-  const labels: string[] = []
-  const used = new Map<string, number>()
-  for (const repo of repos) {
-    const raw = repo.worktreeDirName ?? ''
-    let label = sanitizeLabel(raw)
-    if (!hasSubstance(label)) label = sanitizeLabel(basename(repo.repoPath))
-    if (!hasSubstance(label)) label = 'repo'
-    const n = used.get(label) ?? 0
-    used.set(label, n + 1)
-    // Post-sanitization uniquing: creation-time `-2/-3` dedup only guarantees
-    // uniqueness BEFORE stripping, so collisions can reappear here.
-    if (n > 0) label = `${label}-${n + 1}`
-    labels.push(label)
-  }
-  return labels
 }

@@ -92,12 +92,20 @@ describe('RFC-060 PR-E — scheduler finalize uses gitChangedFiles, not gitDiffS
   const SCHEDULER_PATH = resolve(import.meta.dirname, '..', 'src', 'services', 'scheduler.ts')
   const src = readFileSync(SCHEDULER_PATH, 'utf-8')
 
-  test('finalize block calls gitChangedFiles', () => {
-    // RFC-130 T11 (D29): the finalize now diffs the wrapper-PRIVATE canonical
-    // (`wrapperCanonPath`, == task.worktreePath under passthrough) — isolated from
-    // sibling merge-backs into the task canonical (AC-10). Still gitChangedFiles,
-    // not gitDiffSnapshot (RFC-060 PR-E), which is what this guard locks.
-    expect(src).toContain('gitChangedFiles(wrapperCanonPath')
+  test('finalize block calls gitChangedFiles（RFC-248：逐仓）', () => {
+    // RFC-060 PR-E 锁的核心不变：finalize 用 `gitChangedFiles`（路径列表）而**不是**
+    // `gitDiffSnapshot`（完整 patch）——`git_diff` 端口的类型是 `list<path<*>>`。
+    //
+    // RFC-248 D9 改的是**对谁**做：原来对单一 `wrapperCanonPath`（= repos[0] 的 iso
+    // 根）做，这正是 RFC-066 当年必须禁掉多仓 wrapper-git 的根因（只看得见第一个
+    // 仓）。现在遍历 `diffableRepos`（已滤掉只读成员）逐仓做，路径按挂载路径前缀化
+    // 后合并。`wrapperCanonPath` 这个变量随之删除。
+    expect(src).toContain('gitChangedFiles(r.path')
+    expect(src).toContain('for (const r of diffableRepos)')
+    // 反向锁：不得退回完整 patch。
+    expect(src).not.toContain('gitDiffSnapshot(wrapperCanonPath')
+    // 反向锁：不得退回只看第一个仓。
+    expect(src).not.toContain('gitChangedFiles(wrapperCanonPath')
   })
 
   test('finalize block writes `paths.join("\\n")` as git_diff port content', () => {

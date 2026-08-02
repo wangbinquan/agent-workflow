@@ -172,7 +172,7 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
-      budget: { agent: 0, workflow: 0, repo: 0, global: 12 },
+      budget: { agent: 0, workflow: 0, repo: 0, repoGroup: 0, global: 12 },
     })
     expect(out.block).toContain('KEEP')
     expect(out.block).not.toContain('DROP')
@@ -220,7 +220,9 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
     const set = await loadInjectableMemories(db, {
       agentIds: [],
       workflowId,
-      repoId: null,
+      repoIds: [],
+
+      repoGroupId: null,
     })
     expect(set.byScope.workflow.length).toBe(1)
     expect(set.byScope.workflow[0]!.tags).toEqual([])

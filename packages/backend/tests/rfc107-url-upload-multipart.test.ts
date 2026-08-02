@@ -541,7 +541,11 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(branch).toBe('feature/path-wb')
   })
 
-  test('REGRESSION: multi-repo + upload still rejected (multi-repo-upload-unsupported)', async () => {
+  test('RFC-248 D12：多仓 + 上传**不再**被拒（上传物落任务根下的固定目录）', async () => {
+    // 这条**翻转**了。RFC-066/107 当年拒绝这个组合，理由是「上传管道往单一
+    // worktree 写文件，N 个兄弟 worktree 下没有明显目标」。RFC-248 给了明显
+    // 目标：任务根下的 `.agent-workflow-inputs/`，不属于任何成员仓——所以它
+    // 既不会变成某个仓的未跟踪改动，也不会进那个仓的审计 diff 与自动提交。
     const h = await buildHarness()
     const fd = buildFormData(
       {
@@ -553,9 +557,19 @@ describe('RFC-107 — URL launch + multipart upload', () => {
       [['refs', 'a.txt', 'alpha']],
     )
     const res = await postMultipart(h.app, fd)
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('multi-repo-upload-unsupported')
+    // 关键断言：**不再**是 422 / multi-repo-upload-unsupported。
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { id: string; code?: string }
+    expect(body.id).toBeTruthy()
+    expect(body.code).toBeUndefined()
+
+    // 注：这个夹具把**同一个 URL 传了两次**。旧的 wire `repos[]` 多仓路径不给
+    // 同源仓的隔离分支加序号（两个 worktree 都要 `agent-workflow/{taskId}`，
+    // 第二个 `worktree add` 撞车），所以它只能落一个仓。那是旧路径的既有限制，
+    // 不是本条断言的主题——「同一个仓出现多次」由 D14 在**仓库组**路径上支持
+    // （`assignBranchNames` 给第 n 次加 `-n` 后缀，见
+    // rfc248-materialize-group.test.ts 的「同仓两份」用例）。旧路径连同
+    // `repos[]` 一起在 T32 退役。
   })
 })
 

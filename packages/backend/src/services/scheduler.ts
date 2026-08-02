@@ -401,6 +401,9 @@ interface SchedulerState {
    * exact bug this RFC roots out).
    */
   scopeRoot: string
+  /** RFC-248: 用仓库组启动时的组名快照（`tasks.repo_group_name`）；否则 null。
+   *  只喂 `{{__repo_group__}}` 占位符用。 */
+  repoGroupName: string | null
 }
 
 /**
@@ -557,24 +560,11 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     return
   }
 
-  // RFC-066 PR-B T9: scheduler-side defense-in-depth gate. T6 already
-  // rejects multi-repo + wrapper-git at launch time, but a hypothetical
-  // direct insert into `tasks` (skipping the route layer) or a future
-  // resume path could in principle hand us a wrapper-git node with
-  // repoCount > 1. Catch it here before any inner-scope work runs.
-  if (task.repoCount > 1) {
-    const wgNode = definition.nodes.find((n) => n.kind === 'wrapper-git')
-    if (wgNode !== undefined) {
-      await failTask(
-        db,
-        taskId,
-        'multi-repo-wrapper-git-unsupported',
-        `wrapper-git node ${wgNode.id} not allowed in multi-repo task (repoCount=${task.repoCount})`,
-        wgNode.id,
-      )
-      return
-    }
-  }
+  // RFC-248 D9: 多仓 + wrapper-git 的禁令**已解除**。RFC-066 当年禁它是因为
+  // 包裹器只会对单一 worktree 取快照；现在它逐仓快照、逐仓 diff，并把每个仓的
+  // 路径用挂载路径前缀化后合并成一个 `list<path>`（见 runGitWrapperNode）。
+  // 这里原本有一条 `multi-repo-wrapper-git-unsupported` 的纵深防御门，随禁令
+  // 一并删除——留着它会让组任务永远跑不了平台的 Code → Audit → Fix 主链路。
 
   // 5. Direct child → wrapper map. Chained entries retain nested scope ancestry.
   const containerOf = scopeTree.parents
@@ -607,6 +597,9 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     taskId,
     definition,
     opts,
+    // RFC-248: 组名**快照**（`tasks.repo_group_name`）——组被删除后仍能渲染，
+    // 这正是 D8 存这一列的理由。
+    repoGroupName: task.repoGroupName ?? null,
     log,
     inputsMap,
     globalSem: getProcessNodeSemaphore(db, opts.maxConcurrentNodes ?? 4),
@@ -925,14 +918,12 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           baseBranch: task.baseBranch,
           taskId,
           nodeId: req.nodeId,
-          repos: iso.repos.map((r) => ({
+          repos: iso.repos.map((r, i) => ({
             repoPath: r.repoPath,
             worktreePath: r.isoWorktreePath,
             worktreeDirName: r.worktreeDirName,
-            mountPath: r.worktreeDirName,
-            subdir: '',
-            readonly: false,
-            gitignoreCommit: null,
+            // RFC-248: 同上——`{{__repo_names__}}` 要渲染挂载路径。
+            mountPath: state.repos[i]?.mountPath ?? r.worktreeDirName,
             baseBranch: r.baseBranch,
           })),
         },
@@ -1828,6 +1819,8 @@ async function maybeRunCommitPush(
             nodeId,
             iteration,
             repos: state.repos,
+            // RFC-248: `{{__repo_group__}}`；非组启动时不传 ⇒ 渲染空串。
+            ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
           },
           skills: [],
           dependents: [],
@@ -2716,6 +2709,7 @@ async function resolveMergeConflicts(
         nodeId: mergeNodeId,
         iteration: opts.iteration,
         repos: state.repos,
+        ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
       },
       skills: [],
       dependents: [],
@@ -5739,14 +5733,15 @@ async function runLoopWrapperNode(
     ? state
     : {
         ...state,
-        repos: wrapperIso.repos.map((r) => ({
+        repos: wrapperIso.repos.map((r, i) => ({
           repoPath: r.repoPath,
           worktreePath: r.isoWorktreePath,
           worktreeDirName: r.worktreeDirName,
-          mountPath: r.worktreeDirName,
-          subdir: '',
-          readonly: false,
-          gitignoreCommit: null,
+          // RFC-248: iso 仓由 `canonRepos: state.repos` 派生，**按下标对齐**，
+          // 所以挂载路径与只读标记要从 state 那侧取真值——iso 句柄本身只带
+          // worktreeDirName，用它当 mountPath 在组任务里就丢了嵌套信息。
+          mountPath: state.repos[i]?.mountPath ?? r.worktreeDirName,
+          readonly: state.repos[i]?.readonly ?? false,
           baseBranch: r.baseBranch,
           // RFC-187 §4 — a wrapper-iso repo's base is the commit it forked from.
           baseCommit: r.baseSnapshot,
@@ -7679,7 +7674,9 @@ async function mergeBackWrapperIso(
 }
 
 async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
-  const { db, task, taskId, definition } = state
+  // RFC-248: `task` 曾用于 passthrough 时的 `task.worktreePath` 回落——那条回落
+  // 现在由 `diffableRepos` 从 `state.repos` 直接取，不再需要它。
+  const { db, taskId, definition } = state
   const { node, iteration, log } = args
   const inner = pickStringArray(node, 'nodeIds')
   if (inner.length === 0) {
@@ -7699,6 +7696,10 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   // the WRAPPER-canonical (below), NOT the task canonical.
   let baseline: string | undefined
   let preDirty: Record<string, string> = {}
+  // RFC-248 D9: 多仓的逐仓形态（键 = 挂载路径，挂根为 ''）。上面两个标量继续
+  // 承载 repos[0]，见 wrapperProgress.ts 上关于「为什么不翻新成 map-only」的说明。
+  let baselines: Record<string, string> = {}
+  let preDirtyByRepo: Record<string, Record<string, string>> = {}
   // RFC-144 D13 second half (PR-4 review P2): a revived row whose prior
   // generation is 'merged' gets a FRESH wrapper-canonical from the CURRENT
   // task canonical (createOrRebuildWrapperIso replaces the iso). The persisted
@@ -7728,6 +7729,11 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
       // S-4: resume reads the persisted pre-set; NEVER re-capture — the inner scope's
       // own writes are already in the (wrapper-)worktree.
       preDirty = progress.preDirty ?? {}
+      // RFC-248: 优先用逐仓 map；RFC-248 之前的 payload 只有标量，把它当作
+      // `{ '': baseline }`——单仓的挂载路径正好就是空串，两种形态天然对齐，
+      // 所以升级期间**跑在半路**的包裹器不会丢基线。
+      baselines = progress.baselines ?? { '': progress.baseline }
+      preDirtyByRepo = progress.preDirtyByRepo ?? { '': preDirty }
     }
     // Malformed / missing payload → baseline stays undefined → captured below on the
     // wrapper-canonical (pre-set stays empty, S-4 malformed fallback).
@@ -7783,9 +7789,32 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   // On a NON-git worktree (mock harness) createNodeIso returns passthrough → the
   // wrapper runs directly on the task canonical as pre-RFC-130 (diff + no merge-back).
   const wrapperIso = await createOrRebuildWrapperIso(state, wrapperRunId, existing)
-  const wrapperCanonPath = wrapperIso.passthrough
-    ? task.worktreePath
-    : (wrapperIso.repos[0]?.isoWorktreePath ?? task.worktreePath)
+  // RFC-248 D9: 包裹器要逐仓取快照 / 逐仓 diff 的那批仓。
+  // 这里原本先算一个 `wrapperCanonPath = wrapperIso.repos[0]?.isoWorktreePath`
+  // 再对它单独取快照/做 diff——那正是 RFC-066 当年必须禁掉多仓 wrapper-git 的
+  // 原因（只看得见第一个仓）。现在整块换成逐仓，那个变量随之删除。
+  // - passthrough（mock 夹具 / 非 git 工作树）走 `state.repos`，与 pre-RFC-130 一致；
+  // - 正常路径走 wrapper-iso 的 per-repo 句柄（与 state.repos 按下标对齐）。
+  // **只读成员不参与**（D11：它的改动不进 git_diff、不被提交推送）。
+  const diffableRepos: Array<{ path: string; mountPath: string }> = (
+    wrapperIso.passthrough
+      ? state.repos.map((r) => ({
+          path: r.worktreePath,
+          mountPath: r.mountPath,
+          readonly: r.readonly,
+        }))
+      : wrapperIso.repos.map((r, i) => ({
+          path: r.isoWorktreePath,
+          mountPath: state.repos[i]?.mountPath ?? r.worktreeDirName,
+          readonly: state.repos[i]?.readonly ?? false,
+        }))
+  )
+    .filter((r) => !r.readonly)
+    .map((r) => ({ path: r.path, mountPath: r.mountPath }))
+  // 标量兼容字段承载的那个仓：优先挂根的成员，否则第一个可 diff 的。
+  const primaryMount = diffableRepos.some((r) => r.mountPath === '')
+    ? ''
+    : (diffableRepos[0]?.mountPath ?? '')
   const innerState: SchedulerState = wrapperIso.passthrough
     ? state
     : {
@@ -7836,18 +7865,30 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
     //   progress overwrite.
     const generationStart =
       existing === null || freshGeneration || existing.wrapperProgressJson === null
+    // RFC-248 D9: 逐仓捕获。只读成员不参与（D11——它的改动不进 git_diff）。
     const entry = await state.writeSem.run(async () => {
-      const base = await captureHead(wrapperCanonPath)
-      const pre = generationStart ? await captureGitPreDirty(wrapperCanonPath, base, log) : {}
-      return { base, pre }
+      const bases: Record<string, string> = {}
+      const pres: Record<string, Record<string, string>> = {}
+      for (const r of diffableRepos) {
+        const b = await captureHead(r.path)
+        bases[r.mountPath] = b
+        pres[r.mountPath] = generationStart ? await captureGitPreDirty(r.path, b, log) : {}
+      }
+      return { bases, pres }
     })
-    baseline = entry.base
-    preDirty = entry.pre
+    baselines = entry.bases
+    preDirtyByRepo = entry.pres
+    // 标量字段继续写 repos[0]，保住既有遥测与老 payload 的 resume（见
+    // wrapperProgress.ts 上的说明）。
+    baseline = baselines[primaryMount] ?? ''
+    preDirty = preDirtyByRepo[primaryMount] ?? {}
     if (generationStart) {
       await persistWrapperProgress(db, wrapperRunId, {
         kind: 'git',
         baseline,
         preDirty,
+        baselines,
+        preDirtyByRepo,
         phase: 'inner-running',
       })
     }
@@ -7929,11 +7970,27 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
     paths = await state.writeSem.run(async () => {
       // RFC-130 T11: diff the WRAPPER-canonical (isolated from sibling merge-backs),
       // not the task canonical — with passthrough this IS the task canonical.
-      const all = await gitChangedFiles(wrapperCanonPath, baseline || 'HEAD')
-      const candidates = all.filter((p) => preDirty[p] !== undefined)
-      if (candidates.length === 0) return all
-      const post = await gitBlobHashes(wrapperCanonPath, candidates)
-      return all.filter((p) => preDirty[p] === undefined || post[p] !== preDirty[p])
+      //
+      // RFC-248 D9: 逐仓做，再把每个仓的路径用它的**挂载路径**前缀化后合并。
+      // 端口契约仍是 `list<path<*>>`（`nodePorts.ts:188`）——不是拼接的完整
+      // patch；下游 wrapper-fanout 直接把它当路径列表消费，前缀让分片天然带上
+      // 仓归属、也让 agent `cd <前缀>` 就能到位。
+      const out: string[] = []
+      for (const r of diffableRepos) {
+        const base = baselines[r.mountPath] ?? ''
+        const pre = preDirtyByRepo[r.mountPath] ?? {}
+        const all = await gitChangedFiles(r.path, base || 'HEAD')
+        const candidates = all.filter((p) => pre[p] !== undefined)
+        const kept =
+          candidates.length === 0
+            ? all
+            : await (async () => {
+                const post = await gitBlobHashes(r.path, candidates)
+                return all.filter((p) => pre[p] === undefined || post[p] !== pre[p])
+              })()
+        for (const p of kept) out.push(r.mountPath === '' ? p : `${r.mountPath}/${p}`)
+      }
+      return out
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

@@ -24,7 +24,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { startTask, startTaskWithLocalRepo } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
-import { ValidationError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -77,7 +76,19 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
   let h: Harness
   afterEach(() => h?.cleanup())
 
-  test('B13 multi-repo + wrapper-git workflow → 422 multi-repo-wrapper-git-unsupported', async () => {
+  // RFC-248 D9/D12 —— B13 / B14 **翻转**。
+  //
+  // RFC-066 当年在 startTask 里拦掉「多仓 + wrapper-git」与「多仓 + 上传」，理由是
+  // 包裹器只对单一 worktree 取快照、上传物不知道该落到哪个仓。两条禁令都已解除：
+  //   - wrapper-git 现在逐仓快照、逐仓 diff，路径按挂载路径前缀化后合并成
+  //     `list<path>`（scheduler.ts runGitWrapperNode / diffableRepos）。不解除的话
+  //     仓库组永远用不了平台的 Code → Audit → Fix 主链路——那正是本 RFC 的目的。
+  //   - 上传物落到任务根下的 `.agent-workflow-inputs/`，不属于任何成员仓
+  //     （applyUploadsToWorktree 的 inputsSubdir）。
+  //
+  // 断言从「抛 422」翻成「**能启动**」。留着旧断言等于把禁令又焊回来。
+
+  test('B13 多仓 + wrapper-git → 不再被拒，正常启动（D9）', async () => {
     h = await buildHarness(2)
     const wfId = await seedWorkflow(h.db, {
       $schema_version: 1,
@@ -88,58 +99,53 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
       ],
       edges: [],
     })
-    let err: unknown = null
-    try {
-      await startTask(
-        {
-          workflowId: wfId,
-          name: 't',
-          repos: [
-            { repoPath: h.repos[0]!, baseBranch: 'main' },
-            { repoPath: h.repos[1]!, baseBranch: 'main' },
-          ],
-          inputs: {},
-        } as unknown as StartTask,
-        { db: h.db, appHome: h.appHome },
-      )
-    } catch (e) {
-      err = e
-    }
-    expect(err).toBeInstanceOf(ValidationError)
-    expect((err as ValidationError).code).toBe('multi-repo-wrapper-git-unsupported')
-    const details = (err as ValidationError).details as { wrapperGitNodes: string[] }
-    expect(details.wrapperGitNodes).toContain('wg-1')
+    const task = await startTask(
+      {
+        workflowId: wfId,
+        name: 't',
+        repos: [
+          { repoPath: h.repos[0]!, baseBranch: 'main' },
+          { repoPath: h.repos[1]!, baseBranch: 'main' },
+        ],
+        inputs: {},
+      } as unknown as StartTask,
+      { db: h.db, appHome: h.appHome },
+    )
+    expect(task.id).toBeTruthy()
+    expect(task.repos).toHaveLength(2)
   })
 
-  test('B14 multi-repo + upload input → 422 multi-repo-upload-unsupported', async () => {
+  test('B14 多仓 + 上传输入 → 不再被拒，正常启动（D12）', async () => {
     h = await buildHarness(2)
     const wfId = await seedWorkflow(h.db, {
       $schema_version: 1,
-      inputs: [{ key: 'attachments', label: 'Files', kind: 'upload' }],
-      nodes: [],
+      // upload 输入必须带 `targetDir`（UploadInputSchema）。原夹具缺它，但旧的
+      // 多仓门在静态校验器之前就抛了，所以这个缺陷一直没暴露。
+      inputs: [{ key: 'attachments', label: 'Files', kind: 'upload', targetDir: 'inbox' }],
+      // 原夹具是零节点的空工作流——多仓门当年在静态校验器**之前**抛，把这个
+      // 夹具本身的非法性挡住了。门拆掉后校验器先说话（workflow-invalid），
+      // 所以换成与 B13/B15 同款的最小合法节点集，让断言真的落在
+      // 「多仓 + 上传能启动」上。
+      nodes: [
+        { id: 'wg-1', kind: 'wrapper-git', nodeIds: ['inner-output'] },
+        { id: 'inner-output', kind: 'output', ports: [] },
+      ],
       edges: [],
     })
-    let err: unknown = null
-    try {
-      await startTask(
-        {
-          workflowId: wfId,
-          name: 't',
-          repos: [
-            { repoPath: h.repos[0]!, baseBranch: 'main' },
-            { repoPath: h.repos[1]!, baseBranch: 'main' },
-          ],
-          inputs: {},
-        } as unknown as StartTask,
-        { db: h.db, appHome: h.appHome },
-      )
-    } catch (e) {
-      err = e
-    }
-    expect(err).toBeInstanceOf(ValidationError)
-    expect((err as ValidationError).code).toBe('multi-repo-upload-unsupported')
-    const details = (err as ValidationError).details as { uploadInputs: string[] }
-    expect(details.uploadInputs).toContain('attachments')
+    const task = await startTask(
+      {
+        workflowId: wfId,
+        name: 't',
+        repos: [
+          { repoPath: h.repos[0]!, baseBranch: 'main' },
+          { repoPath: h.repos[1]!, baseBranch: 'main' },
+        ],
+        inputs: {},
+      } as unknown as StartTask,
+      { db: h.db, appHome: h.appHome },
+    )
+    expect(task.id).toBeTruthy()
+    expect(task.repos).toHaveLength(2)
   })
 
   test('B15 single-repo + wrapper-git → still launches (gate only fires when multi-repo)', async () => {

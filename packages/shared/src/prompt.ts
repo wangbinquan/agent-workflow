@@ -290,8 +290,17 @@ export interface RenderPromptInput {
       repoPath: string
       worktreePath: string
       worktreeDirName: string
+      /**
+       * RFC-248: 相对任务根的挂载路径；'' = 挂根。`{{__repo_names__}}` 从
+       * basename 改渲染它——basename 在嵌套布局下彻底丢失方位（agent 拿到
+       * `utils-2` 不知道该去哪个目录），挂载路径与它在磁盘上看到的一致，
+       * `cd <name>` 就到位。单仓时仍是 ''，占位符仍渲染空串（字节级 baseline）。
+       */
+      mountPath?: string
       baseBranch: string
     }>
+    /** RFC-248: 用仓库组启动时的组名；非组启动为 undefined ⇒ 占位符渲染空串。 */
+    repoGroupName?: string
   }
   /** Declared outputs for the protocol block instructions. */
   agentOutputs: string[]
@@ -418,6 +427,7 @@ export const BUILTIN_VARS = new Set([
   '__repos__',
   '__repo_names__',
   '__repo_count__',
+  '__repo_group__',
 ])
 
 /**
@@ -544,12 +554,18 @@ export function renderUserPrompt(input: RenderPromptInput): string {
                   (input.meta.repos ?? []).map((r) => r.worktreePath).join('\n'),
                 )
               case '__repo_names__':
+                // RFC-248: 渲染**挂载路径**而不是 basename。挂根的成员渲染为
+                // 空行——它就在 cwd，没有相对路径可 cd。回落到
+                // `worktreeDirName` 只是为了兼容还没带 mountPath 的调用方
+                // （两者对存量平铺布局取值一致）。
                 return fence(
                   'repository-names',
-                  (input.meta.repos ?? []).map((r) => r.worktreeDirName).join('\n'),
+                  (input.meta.repos ?? []).map((r) => r.mountPath ?? r.worktreeDirName).join('\n'),
                 )
               case '__repo_count__':
                 return String((input.meta.repos ?? []).length)
+              case '__repo_group__':
+                return input.meta.repoGroupName ?? ''
             }
           }
           // RFC-148: retired tokens render '' unconditionally — historically their

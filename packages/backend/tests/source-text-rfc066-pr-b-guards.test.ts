@@ -35,10 +35,14 @@ const RUNNER_SRC = readFileSync(
 const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
 
 describe('RFC-066 PR-B — source guards', () => {
-  test('PB-G1 scheduler retains the multi-repo wrapper-git defense-in-depth gate', () => {
-    expect(SCHEDULER_SRC.includes("'multi-repo-wrapper-git-unsupported'")).toBe(true)
-    // The gate body must reference `task.repoCount > 1` to actually trigger.
-    expect(SCHEDULER_SRC.includes('task.repoCount > 1')).toBe(true)
+  test('PB-G1（RFC-248 翻转）scheduler 里的多仓 wrapper-git 纵深防御门必须**已删除**', () => {
+    // RFC-066 PR-B 加这道门是因为包裹器只对单一 worktree 取快照，多仓下会静默
+    // 只看第一个仓。RFC-248 D9 让它逐仓快照、逐仓 diff、按挂载路径前缀化合并，
+    // 禁令随之解除——门留着就等于仓库组永远跑不了 Code → Audit → Fix 主链路。
+    // 断言翻成「码彻底消失」：留一个就意味着某条路径上禁令还在。
+    expect(SCHEDULER_SRC.includes("'multi-repo-wrapper-git-unsupported'")).toBe(false)
+    // 正向锚：finalize 确实在逐仓做。
+    expect(SCHEDULER_SRC.includes('for (const r of diffableRepos)')).toBe(true)
   })
 
   test('PB-G2 scheduler threads `state.repos` into every dispatch (via RFC-130 iso creation)', () => {
