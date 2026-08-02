@@ -30,220 +30,259 @@ import {
 } from '@/services/oidc/provisioning'
 import { findByUsername } from '@/services/users'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { eq } from 'drizzle-orm'
 import { users } from '@/db/schema'
 import { DomainError } from '@/util/errors'
 import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
 
 export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/auth/oidc/providers', async (c) => {
-    return c.json(getAuthMethodDiscovery(deps.db, deps.secretBox !== undefined))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/auth/oidc/providers',
+      permissions: [],
+      publicReason:
+        'login flow; must answer before any identity exists (already in multiAuth PUBLIC_PATH_PREFIXES)',
+      tokenAccess: 'never',
+      summary: 'List enabled OIDC providers for the login page',
+    },
+    async (c) => {
+      return c.json(getAuthMethodDiscovery(deps.db, deps.secretBox !== undefined))
+    },
+  )
 
-  app.post('/api/auth/oidc/:slug/login/start', async (c) => {
-    assertBootstrapComplete(deps.db)
-    if (!deps.secretBox) return c.json({ ok: false, code: 'oidc-not-configured' }, 503)
-    const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
-    const provider = await svc.findBySlug(c.req.param('slug'))
-    if (!provider || !provider.enabled) {
-      return c.json({ ok: false, code: 'provider-not-found' }, 404)
-    }
-    const body = (await safeJson(c.req.raw)) as Record<string, unknown>
-    const postLoginRedirect =
-      typeof body.postLoginRedirect === 'string' ? body.postLoginRedirect : undefined
-    const redirectUri = resolveRedirectUri(c, provider.slug, deps)
-    // RFC-220 — discovery merged over manual fallbacks; a failure used to
-    // escape as an unhandled 500 here (behavior change #1).
-    const eff = await resolveEndpoints(provider)
-    if (!eff.authorizationEndpoint) {
-      return c.json(
-        {
-          ok: false,
-          code: 'oidc-endpoints-unresolved',
-          // message must be present: the frontend error decoder only keeps a
-          // structured code when code AND message are both strings
-          // (api/client.ts extractErrorBody).
-          message: 'identity provider endpoints could not be resolved',
-        },
-        503,
-      )
-    }
-    const flow = startFlow(provider.id, {
-      redirectUri,
-      ...(postLoginRedirect ? { postLoginRedirect } : {}),
-    })
-    const authorizeUrl = buildAuthorizeUrl(eff.authorizationEndpoint, {
-      clientId: provider.clientId,
-      scopes: provider.scopes,
-      state: flow.state,
-      codeChallenge: flow.codeChallenge,
-      nonce: flow.nonce,
-      redirectUri,
-    })
-    return c.json({ authorizeUrl, state: flow.state })
-  })
-
-  app.get('/api/auth/oidc/:slug/callback', async (c) => {
-    if (getAuthLoginPolicy(deps.db).bootstrapCompletedAt === null) {
-      return c.html(friendly('bootstrap-admin-required'), 403)
-    }
-    if (!deps.secretBox) return c.html(friendly('oidc-not-configured'), 503)
-    const code = c.req.query('code')
-    const state = c.req.query('state')
-    if (!code || !state) return c.html(friendly('invalid-callback'), 400)
-    const flow = consumeFlow(state)
-    if (!flow) return c.html(friendly('state-expired'), 400)
-
-    const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
-    const provider = await svc.findById(flow.providerId)
-    if (!provider || !provider.enabled) {
-      return c.html(friendly('provider-disabled'), 400)
-    }
-    const clientSecret = await svc.resolveClientSecret(provider.id)
-    if (!clientSecret) return c.html(friendly('client-secret-missing'), 500)
-
-    // RFC-220 — effective endpoints: discovery merged over manual fallbacks.
-    const eff = await resolveEndpoints(provider)
-    if (!eff.tokenEndpoint) return c.html(friendly('endpoints-unresolved'), 503)
-
-    let claims: IdTokenClaims
-    try {
-      const tokens = await exchangeCodeForTokens({
-        tokenEndpoint: eff.tokenEndpoint,
-        clientId: provider.clientId,
-        clientSecret,
-        code,
-        codeVerifier: flow.codeVerifier,
-        redirectUri: flow.redirectUri,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/auth/oidc/:slug/login/start',
+      permissions: [],
+      publicReason:
+        'login flow; must answer before any identity exists (already in multiAuth PUBLIC_PATH_PREFIXES)',
+      tokenAccess: 'never',
+      summary: 'Begin an OIDC login',
+    },
+    async (c) => {
+      assertBootstrapComplete(deps.db)
+      if (!deps.secretBox) return c.json({ ok: false, code: 'oidc-not-configured' }, 503)
+      const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
+      const provider = await svc.findBySlug(c.req.param('slug'))
+      if (!provider || !provider.enabled) {
+        return c.json({ ok: false, code: 'provider-not-found' }, 404)
+      }
+      const body = (await safeJson(c.req.raw)) as Record<string, unknown>
+      const postLoginRedirect =
+        typeof body.postLoginRedirect === 'string' ? body.postLoginRedirect : undefined
+      const redirectUri = resolveRedirectUri(c, provider.slug, deps)
+      // RFC-220 — discovery merged over manual fallbacks; a failure used to
+      // escape as an unhandled 500 here (behavior change #1).
+      const eff = await resolveEndpoints(provider)
+      if (!eff.authorizationEndpoint) {
+        return c.json(
+          {
+            ok: false,
+            code: 'oidc-endpoints-unresolved',
+            // message must be present: the frontend error decoder only keeps a
+            // structured code when code AND message are both strings
+            // (api/client.ts extractErrorBody).
+            message: 'identity provider endpoints could not be resolved',
+          },
+          503,
+        )
+      }
+      const flow = startFlow(provider.id, {
+        redirectUri,
+        ...(postLoginRedirect ? { postLoginRedirect } : {}),
       })
-      claims = applyEmailTrust(
-        await acquireIdentityClaims({
-          tokens,
-          effective: eff,
-          clientId: provider.clientId,
-          nonce: flow.nonce,
-          usernameClaim: provider.usernameClaim,
-          subjectClaim: provider.subjectClaim,
-          userinfoRequestStyle: provider.userinfoRequestStyle,
-          scopes: provider.scopes,
-        }),
-        provider.trustEmailVerified,
-      )
-    } catch (err) {
-      const code =
-        err instanceof BadRequestErrorOrFriendlyHtml
-          ? err.code
-          : err instanceof OidcTokenError
-            ? err.code
-            : 'verify-failed'
-      return c.html(friendly(code), 400)
-    }
+      const authorizeUrl = buildAuthorizeUrl(eff.authorizationEndpoint, {
+        clientId: provider.clientId,
+        scopes: provider.scopes,
+        state: flow.state,
+        codeChallenge: flow.codeChallenge,
+        nonce: flow.nonce,
+        redirectUri,
+      })
+      return c.json({ authorizeUrl, state: flow.state })
+    },
+  )
 
-    // RFC-220 D7 — identity snapshot seed ('' = observed-but-absent sentinel);
-    // only meaningful when usernameClaim is configured.
-    const snapshotInit = provider.usernameClaim !== null ? (claims.preferred_username ?? '') : null
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/auth/oidc/:slug/callback',
+      permissions: [],
+      publicReason:
+        'login flow; must answer before any identity exists (already in multiAuth PUBLIC_PATH_PREFIXES)',
+      tokenAccess: 'never',
+      summary: 'OIDC callback',
+    },
+    async (c) => {
+      if (getAuthLoginPolicy(deps.db).bootstrapCompletedAt === null) {
+        return c.html(friendly('bootstrap-admin-required'), 403)
+      }
+      if (!deps.secretBox) return c.html(friendly('oidc-not-configured'), 503)
+      const code = c.req.query('code')
+      const state = c.req.query('state')
+      if (!code || !state) return c.html(friendly('invalid-callback'), 400)
+      const flow = consumeFlow(state)
+      if (!flow) return c.html(friendly('state-expired'), 400)
 
-    if (flow.linkUserId) {
+      const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
+      const provider = await svc.findById(flow.providerId)
+      if (!provider || !provider.enabled) {
+        return c.html(friendly('provider-disabled'), 400)
+      }
+      const clientSecret = await svc.resolveClientSecret(provider.id)
+      if (!clientSecret) return c.html(friendly('client-secret-missing'), 500)
+
+      // RFC-220 — effective endpoints: discovery merged over manual fallbacks.
+      const eff = await resolveEndpoints(provider)
+      if (!eff.tokenEndpoint) return c.html(friendly('endpoints-unresolved'), 503)
+
+      let claims: IdTokenClaims
       try {
-        await createIdentity(deps.db, {
-          userId: flow.linkUserId,
-          providerId: provider.id,
-          subject: claims.sub,
-          email: claims.email ?? null,
-          emailVerified: !!claims.email_verified,
-          preferredSnapshot: snapshotInit,
-          expectedSubjectClaim: provider.subjectClaim,
+        const tokens = await exchangeCodeForTokens({
+          tokenEndpoint: eff.tokenEndpoint,
+          clientId: provider.clientId,
+          clientSecret,
+          code,
+          codeVerifier: flow.codeVerifier,
+          redirectUri: flow.redirectUri,
         })
+        claims = applyEmailTrust(
+          await acquireIdentityClaims({
+            tokens,
+            effective: eff,
+            clientId: provider.clientId,
+            nonce: flow.nonce,
+            usernameClaim: provider.usernameClaim,
+            subjectClaim: provider.subjectClaim,
+            userinfoRequestStyle: provider.userinfoRequestStyle,
+            scopes: provider.scopes,
+          }),
+          provider.trustEmailVerified,
+        )
       } catch (err) {
+        const code =
+          err instanceof BadRequestErrorOrFriendlyHtml
+            ? err.code
+            : err instanceof OidcTokenError
+              ? err.code
+              : 'verify-failed'
+        return c.html(friendly(code), 400)
+      }
+
+      // RFC-220 D7 — identity snapshot seed ('' = observed-but-absent sentinel);
+      // only meaningful when usernameClaim is configured.
+      const snapshotInit =
+        provider.usernameClaim !== null ? (claims.preferred_username ?? '') : null
+
+      if (flow.linkUserId) {
+        try {
+          await createIdentity(deps.db, {
+            userId: flow.linkUserId,
+            providerId: provider.id,
+            subject: claims.sub,
+            email: claims.email ?? null,
+            emailVerified: !!claims.email_verified,
+            preferredSnapshot: snapshotInit,
+            expectedSubjectClaim: provider.subjectClaim,
+          })
+        } catch (err) {
+          if (isDomainCode(err, 'provider-config-changed')) {
+            return c.html(friendly('provider-config-changed'), 400)
+          }
+          return c.html(friendly('identity-already-linked'), 409)
+        }
+        return c.redirect(flow.postLoginRedirect ?? `/account?linked=${provider.slug}`)
+      }
+
+      const existingIdentity = await findByProviderSubject(deps.db, provider.id, claims.sub)
+      const invited =
+        claims.email && claims.email_verified ? await findInvitedByEmail(deps, claims.email) : null
+      const decision = decideProvisioning(
+        provider,
+        claims,
+        existingIdentity ? { userId: existingIdentity.userId } : null,
+        invited,
+      )
+      if (decision.action === 'reject') {
+        return c.html(friendly(decision.reason), 403)
+      }
+
+      const identitySeed = {
+        providerId: provider.id,
+        subject: claims.sub,
+        email: claims.email ?? null,
+        emailVerified: !!claims.email_verified,
+        preferredSnapshot: snapshotInit,
+        expectedSubjectClaim: provider.subjectClaim,
+      }
+      let userId: string
+      try {
+        switch (decision.action) {
+          case 'login':
+            userId = decision.userId
+            // RFC-220 D7 — presented-name follow + email_verified sync for the
+            // existing identity (three-way snapshot merge, design §5.3).
+            syncPreferredSnapshot(deps.db, {
+              providerId: provider.id,
+              subject: claims.sub,
+              userId,
+              composed:
+                provider.usernameClaim !== null ? (claims.preferred_username ?? null) : null,
+              emailVerified: !!claims.email_verified,
+              usernameClaimConfigured: provider.usernameClaim !== null,
+            })
+            break
+          case 'create': {
+            // OIDC auto-provisioning: the IdP verified the identity, so the user
+            // lands as `active` immediately. User row + identity row commit in
+            // ONE transaction — a subjectClaim race must roll back both instead
+            // of leaving an identity-less active account (design §6.2).
+            const created = await createUserWithIdentity(deps.db, {
+              username: await pickUniqueUsername(deps, claims),
+              displayName:
+                (provider.usernameClaim !== null ? claims.preferred_username : null) ??
+                claims.name ??
+                claims.email ??
+                'OIDC User',
+              email: claims.email ?? null,
+              identity: identitySeed,
+            })
+            userId = created.userId
+            break
+          }
+          case 'bindInvited':
+            await bindInvitedUserWithIdentity(deps.db, {
+              userId: decision.userId,
+              identity: identitySeed,
+            })
+            userId = decision.userId
+            break
+        }
+      } catch (err) {
+        // The write-time subjectClaim recheck throws AFTER the claims try/catch;
+        // without this second net it would surface as a JSON 500 instead of the
+        // promised friendly page (design §6.2).
         if (isDomainCode(err, 'provider-config-changed')) {
           return c.html(friendly('provider-config-changed'), 400)
         }
-        return c.html(friendly('identity-already-linked'), 409)
-      }
-      return c.redirect(flow.postLoginRedirect ?? `/account?linked=${provider.slug}`)
-    }
-
-    const existingIdentity = await findByProviderSubject(deps.db, provider.id, claims.sub)
-    const invited =
-      claims.email && claims.email_verified ? await findInvitedByEmail(deps, claims.email) : null
-    const decision = decideProvisioning(
-      provider,
-      claims,
-      existingIdentity ? { userId: existingIdentity.userId } : null,
-      invited,
-    )
-    if (decision.action === 'reject') {
-      return c.html(friendly(decision.reason), 403)
-    }
-
-    const identitySeed = {
-      providerId: provider.id,
-      subject: claims.sub,
-      email: claims.email ?? null,
-      emailVerified: !!claims.email_verified,
-      preferredSnapshot: snapshotInit,
-      expectedSubjectClaim: provider.subjectClaim,
-    }
-    let userId: string
-    try {
-      switch (decision.action) {
-        case 'login':
-          userId = decision.userId
-          // RFC-220 D7 — presented-name follow + email_verified sync for the
-          // existing identity (three-way snapshot merge, design §5.3).
-          syncPreferredSnapshot(deps.db, {
-            providerId: provider.id,
-            subject: claims.sub,
-            userId,
-            composed: provider.usernameClaim !== null ? (claims.preferred_username ?? null) : null,
-            emailVerified: !!claims.email_verified,
-            usernameClaimConfigured: provider.usernameClaim !== null,
-          })
-          break
-        case 'create': {
-          // OIDC auto-provisioning: the IdP verified the identity, so the user
-          // lands as `active` immediately. User row + identity row commit in
-          // ONE transaction — a subjectClaim race must roll back both instead
-          // of leaving an identity-less active account (design §6.2).
-          const created = await createUserWithIdentity(deps.db, {
-            username: await pickUniqueUsername(deps, claims),
-            displayName:
-              (provider.usernameClaim !== null ? claims.preferred_username : null) ??
-              claims.name ??
-              claims.email ??
-              'OIDC User',
-            email: claims.email ?? null,
-            identity: identitySeed,
-          })
-          userId = created.userId
-          break
+        if (isDomainCode(err, 'identity-already-linked')) {
+          return c.html(friendly('identity-already-linked'), 409)
         }
-        case 'bindInvited':
-          await bindInvitedUserWithIdentity(deps.db, {
-            userId: decision.userId,
-            identity: identitySeed,
-          })
-          userId = decision.userId
-          break
+        throw err
       }
-    } catch (err) {
-      // The write-time subjectClaim recheck throws AFTER the claims try/catch;
-      // without this second net it would surface as a JSON 500 instead of the
-      // promised friendly page (design §6.2).
-      if (isDomainCode(err, 'provider-config-changed')) {
-        return c.html(friendly('provider-config-changed'), 400)
-      }
-      if (isDomainCode(err, 'identity-already-linked')) {
-        return c.html(friendly('identity-already-linked'), 409)
-      }
-      throw err
-    }
 
-    const { token } = createLoginSession({ db: deps.db, userId })
-    // For SPA login: redirect with token in fragment so localStorage hook can
-    // pick it up without leaking to server logs.
-    return c.redirect(`${flow.postLoginRedirect ?? '/'}#aw_session=${encodeURIComponent(token)}`)
-  })
+      const { token } = createLoginSession({ db: deps.db, userId })
+      // For SPA login: redirect with token in fragment so localStorage hook can
+      // pick it up without leaking to server logs.
+      return c.redirect(`${flow.postLoginRedirect ?? '/'}#aw_session=${encodeURIComponent(token)}`)
+    },
+  )
 }
 
 async function safeJson(req: Request): Promise<unknown> {

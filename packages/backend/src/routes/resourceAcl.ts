@@ -14,6 +14,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import type { DbTxSync } from '@/db/txSync'
 import {
   canViewResource,
@@ -61,68 +62,119 @@ export interface AclEndpointConfig {
 
 export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConfig): void {
   const path = `${cfg.base}/:${cfg.param}/acl`
+  // RFC-247 T1/T3 — these twelve routes (six resources x GET/PUT) are generated
+  // from a template, so there is no literal path for a caller to declare. The
+  // mount registers its OWN metadata instead: leaving it to the six callers
+  // would mean six chances to write a different contract for the same endpoint,
+  // and the startup coverage self-check could not tell a missing declaration
+  // from a templated one.
+  // Exhaustive singular→plural map rather than a cast off `cfg.base`: adding a
+  // seventh ACL resource type becomes a COMPILE error here instead of silently
+  // producing a permission point that no route backs (which the RFC-247 startup
+  // reverse check would then reject at boot, much further from the cause).
+  // Value type is the SIX ACL prefixes only — deliberately not MatrixResource,
+  // which also contains repos / tasks / memory / scheduled-tasks. Widening it
+  // would let `${resource}:update` name `repos:update`, a point RFC-247 never
+  // created because the repos domain has no PUT/PATCH route. TypeScript catches
+  // that today; keeping the narrow type means it keeps catching it.
+  const ACL_PERMISSION_PREFIX: Record<
+    AclResourceType,
+    'agents' | 'skills' | 'mcps' | 'plugins' | 'workflows' | 'workgroups'
+  > = {
+    agent: 'agents',
+    skill: 'skills',
+    mcp: 'mcps',
+    plugin: 'plugins',
+    workflow: 'workflows',
+    workgroup: 'workgroups',
+  }
+  const resource = ACL_PERMISSION_PREFIX[cfg.type]
 
-  app.get(path, async (c) => {
-    const key = c.req.param(cfg.param) ?? ''
-    const actor = actorOf(c)
-    const row = await cfg.load(deps.db, key)
-    if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
-      throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
-    }
-    return c.json(await getResourceAcl(deps.db, actor, cfg.type, row))
-  })
-
-  app.put(path, async (c) => {
-    const key = c.req.param(cfg.param) ?? ''
-    const actor = actorOf(c)
-    const row = await cfg.load(deps.db, key)
-    if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
-      throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
-    }
-    const body: unknown = await c.req.json().catch(() => ({}))
-    const parsed = UpdateResourceAclBodySchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('acl-invalid', 'invalid acl payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const updateFresh = async (fresh: AclRow): Promise<ResourceAcl> => {
-      if (!(await canViewResource(deps.db, actor, cfg.type, fresh))) {
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path,
+      permissions: [`${resource}:read`],
+      tokenAccess: 'allow',
+      summary: `Read the ACL of one ${cfg.type}`,
+    },
+    async (c) => {
+      const key = c.req.param(cfg.param) ?? ''
+      const actor = actorOf(c)
+      const row = await cfg.load(deps.db, key)
+      if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
         throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
       }
-      // RFC-104: built-ins are read-only. This runs on the in-lock fresh row.
-      assertNotBuiltin(cfg.type, fresh)
-      const updatedAt = await cfg.coordinator?.nextUpdatedAt?.(fresh)
-      return updateResourceAcl(deps.db, actor, cfg.type, fresh, parsed.data, {
-        updatedAt,
-        afterWriteInTx: cfg.afterWriteInTx,
-      })
-    }
-    const result =
-      cfg.coordinator === undefined
-        ? await updateFresh(row)
-        : await cfg.coordinator.runExclusive(row.id, async () => {
-            const fresh = await cfg.coordinator!.loadById(deps.db, row.id)
-            if (fresh === null) {
-              throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
-            }
-            return updateFresh(fresh)
-          })
-    await cfg.afterUpdate?.(row.id)
-    if (cfg.type === 'workflow') {
-      // Lets connected /ws/workflows clients re-fetch AND lets the WS server
-      // invalidate its per-connection visibility cache for this workflow.
-      workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-        type: 'workflow.acl.updated',
-        workflowId: row.id,
-      })
-    }
-    if (cfg.type === 'workgroup') {
-      workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
-        type: 'workgroup.acl.updated',
-        workgroupId: row.id,
-      })
-    }
-    return c.json(result)
-  })
+      return c.json(await getResourceAcl(deps.db, actor, cfg.type, row))
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path,
+      // RFC-247 D5 — a token must NEVER change owner / grants / visibility.
+      // This is the invariant's canonical URL shape; three more carry the same
+      // rule (PUT /api/tasks/:id/members, PUT /api/workgroup-tasks/:taskId/config,
+      // POST /api/tasks/:id/questions/:entryId/reassign).
+      permissions: [`${resource}:update`],
+      tokenAccess: 'never',
+      summary: `Replace the ACL of one ${cfg.type}`,
+    },
+    async (c) => {
+      const key = c.req.param(cfg.param) ?? ''
+      const actor = actorOf(c)
+      const row = await cfg.load(deps.db, key)
+      if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
+        throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
+      }
+      const body: unknown = await c.req.json().catch(() => ({}))
+      const parsed = UpdateResourceAclBodySchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('acl-invalid', 'invalid acl payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const updateFresh = async (fresh: AclRow): Promise<ResourceAcl> => {
+        if (!(await canViewResource(deps.db, actor, cfg.type, fresh))) {
+          throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
+        }
+        // RFC-104: built-ins are read-only. This runs on the in-lock fresh row.
+        assertNotBuiltin(cfg.type, fresh)
+        const updatedAt = await cfg.coordinator?.nextUpdatedAt?.(fresh)
+        return updateResourceAcl(deps.db, actor, cfg.type, fresh, parsed.data, {
+          updatedAt,
+          afterWriteInTx: cfg.afterWriteInTx,
+        })
+      }
+      const result =
+        cfg.coordinator === undefined
+          ? await updateFresh(row)
+          : await cfg.coordinator.runExclusive(row.id, async () => {
+              const fresh = await cfg.coordinator!.loadById(deps.db, row.id)
+              if (fresh === null) {
+                throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
+              }
+              return updateFresh(fresh)
+            })
+      await cfg.afterUpdate?.(row.id)
+      if (cfg.type === 'workflow') {
+        // Lets connected /ws/workflows clients re-fetch AND lets the WS server
+        // invalidate its per-connection visibility cache for this workflow.
+        workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+          type: 'workflow.acl.updated',
+          workflowId: row.id,
+        })
+      }
+      if (cfg.type === 'workgroup') {
+        workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
+          type: 'workgroup.acl.updated',
+          workgroupId: row.id,
+        })
+      }
+      return c.json(result)
+    },
+  )
 }

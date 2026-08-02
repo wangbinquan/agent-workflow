@@ -3,17 +3,15 @@
 // without monkey-patching the module.
 
 import { Hono } from 'hono'
-import type { MiddlewareHandler } from 'hono'
 import type { WorkflowRevision } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
-import { requirePermission, resourcePermissionGate } from '@/auth/permissions'
 import type { SecretBox } from '@/auth/secretBox'
 import { multiAuth } from '@/auth/session'
+import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import type { ContainmentCoordinator } from '@/services/sandbox'
-import { ForbiddenError } from '@/util/errors'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
@@ -156,95 +154,47 @@ export function createApp(deps: AppDeps): Hono {
 
   // /api/whoami returns the resolved actor; keeps `ok`/`pid` fields for
   // backwards compatibility with anything that pinged the P-1-08 probe.
-  app.get('/api/whoami', (c) => {
-    const actor = actorOf(c)
-    return c.json({
-      ok: true,
-      pid: process.pid,
-      uptime: Math.round(process.uptime()),
-      user: {
-        id: actor.user.id,
-        username: actor.user.username,
-        displayName: actor.user.displayName,
-        role: actor.user.role,
-        status: actor.user.status,
-      },
-      source: actor.source,
-    })
-  })
-
-  // RFC-036 permission gates. Mounted BEFORE the route handlers so a non-
-  // permitted actor (e.g. a regular-user session token) is rejected with 403
-  // before any service-layer code runs. The gates pick the permission point
-  // from the request method (GET → :read, mutating verbs → :write).
-  // RFC-165 (F15/N1): launching is a TASK operation on every subject face —
-  // all three launch endpoints gate on tasks:launch uniformly, and the agent
-  // launch path is exempt from the agents:write method gate below.
-  app.on('POST', '/api/tasks', requirePermission('tasks:execute'))
-  app.on('POST', '/api/workgroups/:id/tasks', requirePermission('tasks:execute'))
-  app.on('POST', '/api/agents/:id/tasks', requirePermission('tasks:execute'))
-  // RFC-222 — task deletion is admin-only (tasks:delete ∉ manager/user).
-  app.on('DELETE', '/api/tasks/:id', requirePermission('tasks:delete'))
-  app.use(
-    '/api/agents',
-    resourcePermissionGate('agents', {
-      skip: (method, path) => method === 'POST' && /^\/api\/agents\/[^/]+\/tasks$/.test(path),
-    }),
-  )
-  app.use(
-    '/api/agents/*',
-    resourcePermissionGate('agents', {
-      skip: (method, path) => method === 'POST' && /^\/api\/agents\/[^/]+\/tasks$/.test(path),
-    }),
-  )
-  app.use('/api/skills', resourcePermissionGate('skills'))
-  app.use('/api/skills/*', resourcePermissionGate('skills'))
-  app.use('/api/mcps', resourcePermissionGate('mcps'))
-  app.use('/api/mcps/*', resourcePermissionGate('mcps'))
-  app.use('/api/plugins', resourcePermissionGate('plugins'))
-  app.use('/api/plugins/*', resourcePermissionGate('plugins'))
-  app.use('/api/workflows', resourcePermissionGate('workflows'))
-  app.use('/api/workflows/*', resourcePermissionGate('workflows'))
-  app.use('/api/repos', resourcePermissionGate('repos'))
-  app.use('/api/repos/*', resourcePermissionGate('repos'))
-  app.use('/api/cached-repos', resourcePermissionGate('repos'))
-  app.use('/api/cached-repos/*', resourcePermissionGate('repos'))
-
-  // Admin-only end points: settings, OIDC providers, backup. /api/users +
-  // /api/users/search are mounted in mountUserRoutes (PR3/PR5) and have
-  // their own bespoke gates (search is admin+user, the rest admin-only).
-  const configGate: MiddlewareHandler = async (c, next) => {
-    const perm =
-      c.req.method === 'GET' || c.req.method === 'HEAD' ? 'settings:read' : 'settings:write'
-    const actor = actorOf(c)
-    if (!actor.permissions.has(perm)) {
-      throw new ForbiddenError('forbidden', `missing permission: ${perm}`, {
-        requiredPermission: perm,
-        actorPermissions: [...actor.permissions],
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/whoami',
+      permissions: [],
+      publicReason:
+        'identity self-introspection; any authenticated actor may ask who it is, and a token needs it because RFC-247 D6 closes /api/auth/me to tokens',
+      tokenAccess: 'allow',
+      summary: 'Resolved actor identity for the current credential',
+    },
+    (c) => {
+      const actor = actorOf(c)
+      return c.json({
+        ok: true,
+        pid: process.pid,
+        uptime: Math.round(process.uptime()),
+        user: {
+          id: actor.user.id,
+          username: actor.user.username,
+          displayName: actor.user.displayName,
+          role: actor.user.role,
+          status: actor.user.status,
+        },
+        source: actor.source,
       })
-    }
-    await next()
-  }
-  app.use('/api/config', configGate)
-  app.use('/api/config/*', configGate)
-  // GET /api/daemon surfaces the same Network-settings readout as /api/config
-  // (daemon bind host/port + pid/startedAt). Gate it with settings:read like
-  // config so a regular user session / narrow PAT can't read daemon internals
-  // through the generic /api/* auth. Read-only route → no write variant.
-  app.use('/api/daemon', requirePermission('settings:read'))
-  app.use('/api/backup', requirePermission('backup:run'))
-  app.use('/api/backup/*', requirePermission('backup:run'))
-  app.use('/api/restore', requirePermission('backup:run'))
-  // RFC-213 impl-gate P0-5 (Codex 2026-07-22): the sub-path gate was missing, so
-  // GET/DELETE /api/restore/pending only enforced the in-handler admin-role check
-  // — a scoped PAT that narrows away `backup:run` (but keeps the admin role) could
-  // still read failed-restore state and dis-arm a pending restore. Gate the whole
-  // subtree like /api/backup/*.
-  app.use('/api/restore/*', requirePermission('backup:run'))
+    },
+  )
 
-  // runtime is admin+user — homepage runtime dot relies on it.
-  app.use('/api/runtime', requirePermission('runtime:read'))
-  app.use('/api/runtime/*', requirePermission('runtime:read'))
+  // RFC-247 T4 — the manual permission gates that used to live here are GONE.
+  //
+  // They were mounted by PATH PREFIX (`app.use('/api/skills/*', …)`) and by
+  // hand-written method mapping, which is why whole domains shipped with no
+  // gate at all: nothing forced a new route to acquire one, and nothing could
+  // answer "which permission does this endpoint need" for an arbitrary path.
+  //
+  // Every route now declares its own contract via `registerRoute` and the
+  // framework derives the gate from that declaration. The startup self-check
+  // below refuses to boot when the declarations and the mounted routes
+  // disagree in EITHER direction, which is what makes the guarantee real
+  // rather than aspirational.
 
   mountConfigRoutes(app, deps)
   mountDaemonRoutes(app, deps)
@@ -282,6 +232,12 @@ export function createApp(deps: AppDeps): Hono {
   mountOidcAuthRoutes(app, deps)
   mountOidcRoutes(app, deps)
   mountUserRoutes(app, deps)
+
+  // RFC-247 T4 — refuse to boot on a coverage mismatch, in either direction.
+  // Placed after every mount and before the SPA fallback so it sees the real
+  // route table. `app.routes` is Hono's own registry of what was mounted, so a
+  // route cannot hide from this by being registered through some other helper.
+  assertRouteMetaCoverage(app.routes.map((r) => ({ method: r.method, path: r.path })))
 
   app.onError(errorHandler)
 

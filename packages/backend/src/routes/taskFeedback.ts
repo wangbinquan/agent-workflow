@@ -12,37 +12,57 @@ import { TaskFeedbackCreateSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
-import { requirePermission } from '@/auth/permissions'
 import { tasks } from '@/db/schema'
 import { createTaskFeedback, listTaskFeedback } from '@/services/taskFeedback'
 import { canViewTask } from '@/services/taskCollab'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 export function mountTaskFeedbackRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/tasks/:taskId/feedback', requirePermission('memory:read'), async (c) => {
-    const taskId = c.req.param('taskId')
-    await assertVisible(c, deps, taskId)
-    const items = await listTaskFeedback(deps.db, taskId)
-    return c.json({ items })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:taskId/feedback',
+      permissions: ['memory:read'],
+      tokenAccess: 'allow',
+      summary: 'List task feedback',
+    },
+    async (c) => {
+      const taskId = c.req.param('taskId')
+      await assertVisible(c, deps, taskId)
+      const items = await listTaskFeedback(deps.db, taskId)
+      return c.json({ items })
+    },
+  )
 
-  app.post('/api/tasks/:taskId/feedback', requirePermission('memory:create'), async (c) => {
-    const taskId = c.req.param('taskId')
-    await assertVisible(c, deps, taskId)
-    const body = await c.req.json().catch(() => ({}))
-    const parsed = TaskFeedbackCreateSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('invalid-body', 'invalid feedback body', parsed.error.format())
-    }
-    const actor = actorOf(c)
-    const result = await createTaskFeedback(deps.db, {
-      taskId,
-      authorUserId: actor.user.id,
-      bodyMd: parsed.data.bodyMd,
-    })
-    return c.json({ feedback: result.feedback, distillJobId: result.distillJobId }, 201)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:taskId/feedback',
+      permissions: ['memory:create'],
+      tokenAccess: 'allow',
+      summary: 'Write task feedback',
+    },
+    async (c) => {
+      const taskId = c.req.param('taskId')
+      await assertVisible(c, deps, taskId)
+      const body = await c.req.json().catch(() => ({}))
+      const parsed = TaskFeedbackCreateSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('invalid-body', 'invalid feedback body', parsed.error.format())
+      }
+      const actor = actorOf(c)
+      const result = await createTaskFeedback(deps.db, {
+        taskId,
+        authorUserId: actor.user.id,
+        bodyMd: parsed.data.bodyMd,
+      })
+      return c.json({ feedback: result.feedback, distillJobId: result.distillJobId }, 201)
+    },
+  )
 }
 
 async function assertVisible(c: Context, deps: AppDeps, taskId: string): Promise<void> {

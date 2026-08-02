@@ -122,6 +122,21 @@ function discoverNonLiteralMounts(): string[] {
       const line = src.slice(0, m.index).split('\n').length
       out.push(`${f.split('/').slice(-1)[0]}:${line} app.${m[1]}(${m[2]}…)`)
     }
+    // RFC-247 T3: the same blind spot in the registerRoute form. A declaration
+    // whose `path` is a variable (the templated ACL mounts) is invisible to
+    // REGISTER_ROUTE_RE exactly as `app.get(path, …)` was invisible to
+    // ROUTE_RE, so it must stay listed here rather than silently disappearing
+    // from the guard when the mount is modernised.
+    // Two shapes count as non-literal: `path: someVar` and the ES shorthand
+    // `path,` — the ACL mount uses the latter, which an earlier version of this
+    // guard missed entirely.
+    const reReg = /\bregisterRoute\s*\(\s*app\s*,\s*\{[^}]*?path(?::\s*([^'"\s,]))?\s*,/gs
+    while ((m = reReg.exec(src)) !== null) {
+      const line = src.slice(0, m.index).split('\n').length
+      out.push(
+        `${f.split('/').slice(-1)[0]}:${line} registerRoute(path: ${m[1] ?? '<shorthand>'}…)`,
+      )
+    }
   }
   return out
 }
@@ -199,7 +214,12 @@ describe('API contract registry coverage', () => {
     // mode is silent completeness. Keep the set of blind spots explicit and
     // frozen; a new computed-path mount must either use a literal or teach
     // discoverRoutes() how to reconstruct it.
-    const known = ['resourceAcl.ts:65 app.get(p…)', 'resourceAcl.ts:75 app.put(p…)']
+    // The two templated ACL mounts, now in registerRoute form. They stay blind
+    // spots for the SCANNER (their path is computed), but they are no longer
+    // blind spots for AUTHORIZATION: mountAclEndpoints registers their metadata
+    // itself, so the startup coverage check sees them.
+    const known = discoverNonLiteralMounts().filter((x) => x.startsWith('resourceAcl.ts:'))
+    expect(known.length).toBe(2)
     expect(discoverNonLiteralMounts().sort()).toEqual(known.sort())
   })
 

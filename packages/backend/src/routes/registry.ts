@@ -29,9 +29,9 @@
 
 import type { Handler, Hono, MiddlewareHandler } from 'hono'
 import type { BlankEnv } from 'hono/types'
-import { isResourceAdminRole, type Permission } from '@agent-workflow/shared'
-import { actorOf } from '@/auth/actor'
-import { ForbiddenError } from '@/util/errors'
+import { isResourceAdminRole, ROUTE_BACKED_POINTS, type Permission } from '@agent-workflow/shared'
+import { tryActorOf } from '@/auth/actor'
+import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -164,7 +164,20 @@ function validate(meta: RouteMeta): void {
  */
 export function routeMetaGate(meta: RouteMeta): MiddlewareHandler {
   return async (c, next) => {
-    const actor = actorOf(c)
+    // A route declared with `publicReason` answers BEFORE any identity exists —
+    // the login flow and the bootstrap gate are in multiAuth's
+    // PUBLIC_PATH_PREFIXES, so no actor is on the context at all. Demanding one
+    // here would turn every public route into a 401 and make logging in
+    // impossible. Use the optional lookup and let the declaration decide:
+    // no points declared ⇒ no identity needed.
+    const actor = tryActorOf(c)
+    if (actor === null) {
+      if (meta.permissions.length === 0) {
+        await next()
+        return
+      }
+      throw new UnauthorizedError()
+    }
     if (meta.tokenAccess === 'never' && actor.source === 'pat') {
       throw new ForbiddenError(
         'token-forbidden-route',
@@ -238,4 +251,98 @@ export function registerRoute<P extends string>(
 /** Test-only: drop every registration so suites can build fresh apps. */
 export function resetRouteMetaRegistry(): void {
   REGISTRY.clear()
+}
+
+// -----------------------------------------------------------------------------
+// RFC-247 T4 — startup exhaustiveness self-check, in BOTH directions.
+//
+// Forward: a route with no declaration would run ungated. That is the failure
+// this whole layer exists to make impossible, so it must be impossible to ship,
+// not merely discouraged.
+//
+// Reverse: a permission point that no route references still appears on the
+// account page's token matrix, where it tells the user that ticking it grants
+// a capability. The authorization UI lying to its user is harder to notice than
+// a missing gate and just as wrong. Four such points were caught while writing
+// this RFC — `repos:update`, `skills:execute`, `agents:execute`,
+// `workgroups:execute` — every one of them produced by the symmetric intuition
+// "each resource gets each verb" rather than by any real route.
+//
+// Range points are exempt from the reverse check because handlers consume them
+// directly through `actor.permissions.has(...)` and they never appear in a
+// declaration; `RANGE_POINTS` carries the file:line of each consumer so that
+// exemption cannot quietly become a dumping ground.
+// -----------------------------------------------------------------------------
+
+export interface RouteMetaCoverage {
+  /** Mounted on the app but carrying no declaration. */
+  readonly undeclaredRoutes: ReadonlyArray<string>
+  /** Declared in the catalog but referenced by no declaration. */
+  readonly unroutedPoints: ReadonlyArray<Permission>
+}
+
+/**
+ * Compare the declaration set against the app's mounted routes and the
+ * permission catalog. Pure — callers decide what to do with the result.
+ */
+export function routeMetaCoverage(
+  mountedRoutes: ReadonlyArray<{ method: string; path: string }>,
+): RouteMetaCoverage {
+  const declared = new Set(allRouteMeta().map((m) => key(m.method, m.path)))
+  const undeclaredRoutes = mountedRoutes
+    // Hono reports `app.use(...)` middleware in the same table as endpoints,
+    // with method 'ALL'. Middleware is not an endpoint and has no permission
+    // contract of its own — the request logger, multiAuth, and the task
+    // visibility filter all land here. Filtering on the METHOD is a structural
+    // distinction; adding each of them to EXEMPT_MOUNTS by path would be a
+    // hand-maintained list that silently grows into a hole.
+    .filter((r) => r.method.toUpperCase() !== 'ALL')
+    .filter((r) => !EXEMPT_MOUNTS.has(r.path))
+    .filter((r) => !declared.has(key(r.method.toUpperCase(), r.path)))
+    .map((r) => `${r.method.toUpperCase()} ${r.path}`)
+    .sort()
+
+  const referenced = new Set<string>()
+  for (const m of allRouteMeta()) for (const p of m.permissions) referenced.add(p)
+  const unroutedPoints = ROUTE_BACKED_POINTS.filter((p) => !referenced.has(p))
+    .slice()
+    .sort()
+
+  return { undeclaredRoutes, unroutedPoints }
+}
+
+/**
+ * Mounted paths that are deliberately not API endpoints and therefore carry no
+ * declaration. Kept explicit and tiny — every entry is a hole in the forward
+ * check, so each needs a reason a reader can audit.
+ */
+const EXEMPT_MOUNTS = new Set<string>([
+  // The embedded SPA fallback: serves index.html for client-side routes. It is
+  // not an API surface and explicitly 404s anything under /api/ or /ws/.
+  '*',
+])
+
+/** Throw when either direction of the coverage check fails. */
+export function assertRouteMetaCoverage(
+  mountedRoutes: ReadonlyArray<{ method: string; path: string }>,
+): void {
+  const { undeclaredRoutes, unroutedPoints } = routeMetaCoverage(mountedRoutes)
+  const problems: string[] = []
+  if (undeclaredRoutes.length > 0) {
+    problems.push(
+      `${undeclaredRoutes.length} route(s) mounted without a RouteMeta declaration — they would run UNGATED:\n` +
+        undeclaredRoutes.map((r) => `    ${r}`).join('\n') +
+        '\n  Register them with registerRoute(), or add a reasoned entry to EXEMPT_MOUNTS.',
+    )
+  }
+  if (unroutedPoints.length > 0) {
+    problems.push(
+      `${unroutedPoints.length} permission point(s) reference no route — they would appear on the token matrix advertising a capability that maps to no endpoint:\n` +
+        unroutedPoints.map((p) => `    ${p}`).join('\n') +
+        '\n  Delete them, or declare the route that uses them.',
+    )
+  }
+  if (problems.length > 0) {
+    throw new RouteMetaError(`RFC-247 route metadata coverage failed.\n  ${problems.join('\n  ')}`)
+  }
 }

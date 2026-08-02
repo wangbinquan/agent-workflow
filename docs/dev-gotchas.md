@@ -109,6 +109,8 @@
 - **守卫强化类介于两者**：**实质加固能落地**，但「完整正确」常是子系统——**源码文本守卫的防漂移正则 ratchet 是无底洞**（receiver 语法/空白/注释变体穷不尽），完整闭合 defer 到「守卫 AST 化」RFC，但精确 occurrence 锁 + 表驱动变体锁的实质加固可保留。
 - **「测试加固」类 finding 可能实为生产竞态子系统**：给 fire-and-forget 链加 settle seam 时，Codex 常揭示这不是补测试、而是暴露原设计的 [high] 并发 bug（RFC-212 WS 授权握手期不重跑 gate + 无 pass generation → 被移除成员仍收 stdout）；「不能仅延期测试」。
 
+- **进程级注册表 + 测试夹具 = 只在共享进程下才炸的碰撞**：`bun test` 的项目脚本带 `--isolate`，每个文件独立进程；**手敲 `bun test`（不带 flag）则全部文件共享一个进程**。RFC-247 的路由元数据注册表是模块级单例（它描述「本仓有哪些路由」这一静态事实），于是一个测试夹具若拿**生产路径**当例子（当时用了 `/api/whoami`），共享进程下就会和真实声明撞成「同路径不同契约」并抛错——而带 `--isolate` 跑永远绿。**夹具一律用合成路径**（`/api/__x_fixture__`），别借生产路径当例子；另外**本地复现 CI 请用 `bun run test` 而不是 `bun test`**，两者的进程模型不同。
+
 ## 前端
 
 - **CSS 改动别肉眼跳过**：最小 repro HTML + `python3 -m http.server`（chrome MCP 拒 `file://`）+ chrome 截图 light&dark 验像素再推。

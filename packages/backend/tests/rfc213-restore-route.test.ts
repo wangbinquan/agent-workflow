@@ -3,6 +3,7 @@
 // stagePendingRestore call → no marker written → the hasPendingRestore assertion reds.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { errorHandler } from '../src/util/errors'
 import type { Database } from 'bun:sqlite'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -10,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb } from '../src/db/client'
 import type { AppDeps } from '../src/server'
-import type { Actor } from '../src/auth/actor'
+import { buildActor, type Actor } from '../src/auth/actor'
 import { createBackup } from '../src/services/backup'
 import { hasPendingRestore, stagePendingRestore } from '../src/services/pendingRestore'
 import { mountRestoreRoutes } from '../src/routes/restore'
@@ -36,15 +37,20 @@ afterEach(() => {
 function appWithRoute(role: 'admin' | 'user' = 'admin'): Hono {
   const app = new Hono()
   const inject: MiddlewareHandler = (c, next) => {
-    const actor: Actor = {
+    // RFC-247: the permission gate moved from a server.ts prefix mount INTO the
+    // route declaration, so this harness now exercises it. Build the actor the
+    // way production does instead of hand-writing an empty permission set —
+    // `role: 'admin'` with zero permissions is a state buildActor can never
+    // produce, and relying on it made the harness silently gate-free.
+    const actor: Actor = buildActor({
       user: { id: 'u1', username: 'u1', displayName: 'u1', role, status: 'active' },
       source: 'daemon',
-      permissions: new Set(),
-    }
+    })
     c.set('actor', actor)
     return next()
   }
   app.use('*', inject)
+  app.onError(errorHandler)
   mountRestoreRoutes(app, {} as AppDeps) // route uses Paths + services, not deps
   return app
 }

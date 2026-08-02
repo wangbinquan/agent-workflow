@@ -265,15 +265,20 @@ describe('RFC-247 registry — a public route stays reachable', () => {
       app,
       {
         method: 'GET',
-        path: '/api/whoami',
+        // A synthetic path, deliberately not a production one. The registry is
+        // process-global (it describes the codebase's route inventory, which is
+        // static), so a fixture that squats on a real path collides with the
+        // production declaration the moment tests share a process — which is
+        // exactly what happened when this file first used '/api/whoami'.
+        path: '/api/__registry_fixture_public__',
         permissions: [],
-        publicReason: 'any authenticated actor may introspect its own identity',
+        publicReason: 'fixture: a route that needs no permission point',
         tokenAccess: 'allow',
-        summary: 'Resolved actor identity',
+        summary: 'Fixture public route',
       },
       OK,
     )
-    const res = await app.request('/api/whoami')
+    const res = await app.request('/api/__registry_fixture_public__')
     expect(res.status).toBe(200)
   })
 })

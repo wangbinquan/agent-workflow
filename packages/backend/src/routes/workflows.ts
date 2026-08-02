@@ -21,6 +21,7 @@ import type { WorkflowDetail, WorkflowExactRevision } from '@agent-workflow/shar
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import {
   canViewResource,
   filterVisibleRows,
@@ -70,224 +71,335 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     return wf
   }
 
-  app.get('/api/workflows', async (c) =>
-    // Hide the built-in aw-skill-fusion workflow (RFC-101): infrastructure the
-    // daemon references by name, not a user list row. Discriminator = reserved
-    // name AND __system__ owner — workflows.name is non-unique, so a user-owned
-    // workflow named aw-skill-fusion must stay visible. See systemResources.ts.
-    c.json(
-      await filterVisibleRows(
-        deps.db,
-        actorOf(c),
-        'workflow',
-        excludeBuiltinWorkflows(await listWorkflows(deps.db)),
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/workflows',
+      permissions: ['workflows:read'],
+      tokenAccess: 'allow',
+      summary: 'List workflows visible to the caller',
+    },
+    async (c) =>
+      // Hide the built-in aw-skill-fusion workflow (RFC-101): infrastructure the
+      // daemon references by name, not a user list row. Discriminator = reserved
+      // name AND __system__ owner — workflows.name is non-unique, so a user-owned
+      // workflow named aw-skill-fusion must stay visible. See systemResources.ts.
+      c.json(
+        await filterVisibleRows(
+          deps.db,
+          actorOf(c),
+          'workflow',
+          excludeBuiltinWorkflows(await listWorkflows(deps.db)),
+        ),
       ),
-    ),
   )
 
-  app.get('/api/workflows/:id', async (c) => {
-    return c.json(await loadVisibleWorkflow(actorOf(c), c.req.param('id')))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/workflows/:id',
+      permissions: ['workflows:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one workflow',
+    },
+    async (c) => {
+      return c.json(await loadVisibleWorkflow(actorOf(c), c.req.param('id')))
+    },
+  )
 
-  app.post('/api/workflows', async (c) => {
-    const parsed = CreateWorkflowSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('workflow-invalid', 'invalid workflow payload', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workflows',
+      permissions: ['workflows:create'],
+      tokenAccess: 'allow',
+      summary: 'Create a workflow',
+    },
+    async (c) => {
+      const parsed = CreateWorkflowSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('workflow-invalid', 'invalid workflow payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      // Service preflight + final dbTxSync bind every canonical id to this actor.
+      const created = await createWorkflow(deps.db, parsed.data, {
+        ownerUserId: actor.user.id,
+        actor,
       })
-    }
-    const actor = actorOf(c)
-    // Service preflight + final dbTxSync bind every canonical id to this actor.
-    const created = await createWorkflow(deps.db, parsed.data, {
-      ownerUserId: actor.user.id,
-      actor,
-    })
-    return c.json(created, 201)
-  })
+      return c.json(created, 201)
+    },
+  )
 
-  app.post('/api/workflows/:id/copy', async (c) => {
-    const parsed = CopyWorkflowRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('workflow-copy-invalid', 'invalid workflow copy payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    return c.json(await copyWorkflow(deps.db, c.req.param('id'), parsed.data, actorOf(c)), 201)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workflows/:id/copy',
+      permissions: ['workflows:create'],
+      tokenAccess: 'allow',
+      summary: 'Copy a workflow into a private duplicate',
+    },
+    async (c) => {
+      const parsed = CopyWorkflowRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('workflow-copy-invalid', 'invalid workflow copy payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      return c.json(await copyWorkflow(deps.db, c.req.param('id'), parsed.data, actorOf(c)), 201)
+    },
+  )
 
-  app.put('/api/workflows/:id', async (c) => {
-    const id = c.req.param('id')
-    const parsed = UpdateWorkflowSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('workflow-invalid', 'invalid workflow save payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    return c.json(await updateWorkflow(deps.db, id, parsed.data, { kind: 'actor', actor }))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/workflows/:id',
+      permissions: ['workflows:update'],
+      tokenAccess: 'allow',
+      summary: 'Replace a workflow',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const parsed = UpdateWorkflowSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('workflow-invalid', 'invalid workflow save payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      return c.json(await updateWorkflow(deps.db, id, parsed.data, { kind: 'actor', actor }))
+    },
+  )
 
-  app.delete('/api/workflows/:id', async (c) => {
-    const actor = actorOf(c)
-    // RFC-222 (N-5 order): existence 404 → visibility 404 → builtin/owner 403 →
-    // confirm 422 → deleteWorkflow (OCC + reference refusal, re-checked in-tx).
-    // Uses the raw ACL row (NOT loadVisibleWorkflow) so a workflow with a corrupt
-    // stored definition is still deletable — deletion must not require a
-    // parseable definition.
-    const row = await getWorkflowAclRow(deps.db, c.req.param('id'))
-    if (row === null) {
-      throw new NotFoundError('workflow-not-found', `workflow '${c.req.param('id')}' not found`)
-    }
-    await requireResourceView(deps.db, actor, 'workflow', row)
-    assertNotBuiltin('workflow', row) // RFC-104: built-ins are read-only
-    await requireResourceOwner(deps.db, actor, 'workflow', row)
-    const parsed = DeleteWorkflowSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    // RFC-222 (D5, N-1): confirm against the workflow's current name (id ≠ name).
-    assertDeleteConfirm(parsed.data, row.name, 'workflow')
-    await deleteWorkflow(deps.db, c.req.param('id'), parsed.data, { kind: 'actor', actor })
-    return c.body(null, 204)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/workflows/:id',
+      permissions: ['workflows:delete'],
+      tokenAccess: 'allow',
+      summary: 'Delete a workflow',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      // RFC-222 (N-5 order): existence 404 → visibility 404 → builtin/owner 403 →
+      // confirm 422 → deleteWorkflow (OCC + reference refusal, re-checked in-tx).
+      // Uses the raw ACL row (NOT loadVisibleWorkflow) so a workflow with a corrupt
+      // stored definition is still deletable — deletion must not require a
+      // parseable definition.
+      const row = await getWorkflowAclRow(deps.db, c.req.param('id'))
+      if (row === null) {
+        throw new NotFoundError('workflow-not-found', `workflow '${c.req.param('id')}' not found`)
+      }
+      await requireResourceView(deps.db, actor, 'workflow', row)
+      assertNotBuiltin('workflow', row) // RFC-104: built-ins are read-only
+      await requireResourceOwner(deps.db, actor, 'workflow', row)
+      const parsed = DeleteWorkflowSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      // RFC-222 (D5, N-1): confirm against the workflow's current name (id ≠ name).
+      assertDeleteConfirm(parsed.data, row.name, 'workflow')
+      await deleteWorkflow(deps.db, c.req.param('id'), parsed.data, { kind: 'actor', actor })
+      return c.body(null, 204)
+    },
+  )
 
-  app.post('/api/workflows/:id/validate', async (c) => {
-    // ACL, revision guard and validation all consume this one immutable detail.
-    // In particular, do not replace this with validateWorkflowById after the
-    // guard: that would re-read latest and admit a check-vN/validate-vN+1 race.
-    const workflow = await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
-    const parsed = WorkflowValidationRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError(
-        'workflow-validation-invalid',
-        'invalid exact workflow validation payload',
-        { issues: parsed.error.issues },
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workflows/:id/validate',
+      permissions: ['workflows:execute'],
+      tokenAccess: 'allow',
+      summary: 'Validate a stored workflow',
+    },
+    async (c) => {
+      // ACL, revision guard and validation all consume this one immutable detail.
+      // In particular, do not replace this with validateWorkflowById after the
+      // guard: that would re-read latest and admit a check-vN/validate-vN+1 race.
+      const workflow = await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
+      const parsed = WorkflowValidationRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError(
+          'workflow-validation-invalid',
+          'invalid exact workflow validation payload',
+          { issues: parsed.error.issues },
+        )
+      }
+      const revision = assertExactWorkflowRevision(
+        workflow,
+        parsed.data,
+        'workflow-validation-stale',
       )
-    }
-    const revision = assertExactWorkflowRevision(workflow, parsed.data, 'workflow-validation-stale')
-    await deps.workflowExactOperationHook?.({ operation: 'validate', revision })
-    // RFC-243 实现门 P1-2: thread the candidate so the 4f/4g call-node rules
-    // (closure loader + workgroup existence) actually run on the editor face.
-    const context = await loadWorkflowValidationContext(deps.db, {
-      definition: workflow.definition,
-      currentWorkflow: { id: workflow.id, name: workflow.name },
-    })
-    const result = validateWorkflowDefinition(workflow.definition, context)
-    return c.json({
-      revision,
-      validationContextHash: workflowValidationContextHashOf(context),
-      validatedAt: Date.now(),
-      ...result,
-    })
-  })
+      await deps.workflowExactOperationHook?.({ operation: 'validate', revision })
+      // RFC-243 实现门 P1-2: thread the candidate so the 4f/4g call-node rules
+      // (closure loader + workgroup existence) actually run on the editor face.
+      const context = await loadWorkflowValidationContext(deps.db, {
+        definition: workflow.definition,
+        currentWorkflow: { id: workflow.id, name: workflow.name },
+      })
+      const result = validateWorkflowDefinition(workflow.definition, context)
+      return c.json({
+        revision,
+        validationContextHash: workflowValidationContextHashOf(context),
+        validatedAt: Date.now(),
+        ...result,
+      })
+    },
+  )
 
-  app.post('/api/workflows/:id/validate-draft', async (c) => {
-    // Capture the stored reference baseline once. This endpoint validates only
-    // in-memory bytes: it never creates a temporary workflow row and never
-    // writes the captured workflow.
-    const actor = actorOf(c)
-    const workflow = await loadVisibleWorkflow(actor, c.req.param('id'))
-    const parsed = WorkflowDraftValidationRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError(
-        'workflow-draft-validation-invalid',
-        'invalid workflow draft validation payload',
-        { issues: parsed.error.issues },
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workflows/:id/validate-draft',
+      permissions: ['workflows:execute'],
+      tokenAccess: 'allow',
+      summary: 'Validate an unsaved draft',
+    },
+    async (c) => {
+      // Capture the stored reference baseline once. This endpoint validates only
+      // in-memory bytes: it never creates a temporary workflow row and never
+      // writes the captured workflow.
+      const actor = actorOf(c)
+      const workflow = await loadVisibleWorkflow(actor, c.req.param('id'))
+      const parsed = WorkflowDraftValidationRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError(
+          'workflow-draft-validation-invalid',
+          'invalid workflow draft validation payload',
+          { issues: parsed.error.issues },
+        )
+      }
+
+      const candidateHash = workflowDefinitionCandidateHashOf(parsed.data.definition)
+      if (candidateHash !== parsed.data.claimedCandidateHash) {
+        throw new ValidationError(
+          'workflow-candidate-hash-mismatch',
+          'workflow candidate does not match the claimed hash',
+          { claimed: parsed.data.claimedCandidateHash, actual: candidateHash },
+        )
+      }
+
+      const addedAgentNames = diffNewNames(
+        extractWorkflowAgentRefs(workflow.definition),
+        extractWorkflowAgentRefs(parsed.data.definition),
       )
-    }
-
-    const candidateHash = workflowDefinitionCandidateHashOf(parsed.data.definition)
-    if (candidateHash !== parsed.data.claimedCandidateHash) {
-      throw new ValidationError(
-        'workflow-candidate-hash-mismatch',
-        'workflow candidate does not match the claimed hash',
-        { claimed: parsed.data.claimedCandidateHash, actual: candidateHash },
+      // RFC-243 (§5.3): NEW call-workflow name selectors ride the same D15 gate
+      // (dangle-tolerant name domain — see resourceRefs.RefCheckGroup.domain).
+      const addedWorkflowNames = diffNewNames(
+        new Set(extractWorkflowWorkflowRefs(workflow.definition)),
+        new Set(extractWorkflowWorkflowRefs(parsed.data.definition)),
       )
-    }
+      const addedWorkgroupNames = diffNewNames(
+        new Set(extractWorkflowWorkgroupRefs(workflow.definition)),
+        new Set(extractWorkflowWorkgroupRefs(parsed.data.definition)),
+      )
+      await assertNewRefsUsable(deps.db, actor, [
+        { type: 'agent', names: addedAgentNames },
+        { type: 'workflow', names: addedWorkflowNames, domain: 'name' },
+        { type: 'workgroup', names: addedWorkgroupNames, domain: 'name' },
+      ])
 
-    const addedAgentNames = diffNewNames(
-      extractWorkflowAgentRefs(workflow.definition),
-      extractWorkflowAgentRefs(parsed.data.definition),
-    )
-    // RFC-243 (§5.3): NEW call-workflow name selectors ride the same D15 gate
-    // (dangle-tolerant name domain — see resourceRefs.RefCheckGroup.domain).
-    const addedWorkflowNames = diffNewNames(
-      new Set(extractWorkflowWorkflowRefs(workflow.definition)),
-      new Set(extractWorkflowWorkflowRefs(parsed.data.definition)),
-    )
-    const addedWorkgroupNames = diffNewNames(
-      new Set(extractWorkflowWorkgroupRefs(workflow.definition)),
-      new Set(extractWorkflowWorkgroupRefs(parsed.data.definition)),
-    )
-    await assertNewRefsUsable(deps.db, actor, [
-      { type: 'agent', names: addedAgentNames },
-      { type: 'workflow', names: addedWorkflowNames, domain: 'name' },
-      { type: 'workgroup', names: addedWorkgroupNames, domain: 'name' },
-    ])
-
-    // RFC-243 实现门 P1-2 — draft face gets the same candidate threading.
-    const context = await loadWorkflowValidationContext(deps.db, {
-      definition: parsed.data.definition,
-      currentWorkflow: { id: workflow.id, name: workflow.name },
-    })
-    const result = validateWorkflowDefinition(parsed.data.definition, context)
-    return c.json({
-      candidateHash,
-      validationContextHash: workflowValidationContextHashOf(context),
-      validatedAt: Date.now(),
-      ...result,
-    })
-  })
+      // RFC-243 实现门 P1-2 — draft face gets the same candidate threading.
+      const context = await loadWorkflowValidationContext(deps.db, {
+        definition: parsed.data.definition,
+        currentWorkflow: { id: workflow.id, name: workflow.name },
+      })
+      const result = validateWorkflowDefinition(parsed.data.definition, context)
+      return c.json({
+        candidateHash,
+        validationContextHash: workflowValidationContextHashOf(context),
+        validatedAt: Date.now(),
+        ...result,
+      })
+    },
+  )
 
   // P-4-08: YAML export / import.
-  app.get('/api/workflows/:id/export', async (c) => {
-    // Capture once: ACL, exact-revision guard and YAML bytes are all derived
-    // from this same immutable detail. Never re-read latest after the guard.
-    const workflow = await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
-    const query = Object.fromEntries(
-      Object.entries(c.req.queries()).map(([key, values]) => [
-        key,
-        values.length === 1 ? values[0] : values,
-      ]),
-    )
-    const parsed = WorkflowExactRevisionSchema.safeParse({
-      ...query,
-      expectedVersion: parseExactPositiveInteger(
-        typeof query.expectedVersion === 'string' ? query.expectedVersion : undefined,
-      ),
-    })
-    if (!parsed.success) {
-      throw new ValidationError('workflow-export-invalid', 'invalid exact workflow export query', {
-        issues: parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/workflows/:id/export',
+      permissions: ['workflows:read'],
+      tokenAccess: 'allow',
+      summary: 'Export a workflow as YAML',
+    },
+    async (c) => {
+      // Capture once: ACL, exact-revision guard and YAML bytes are all derived
+      // from this same immutable detail. Never re-read latest after the guard.
+      const workflow = await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
+      const query = Object.fromEntries(
+        Object.entries(c.req.queries()).map(([key, values]) => [
+          key,
+          values.length === 1 ? values[0] : values,
+        ]),
+      )
+      const parsed = WorkflowExactRevisionSchema.safeParse({
+        ...query,
+        expectedVersion: parseExactPositiveInteger(
+          typeof query.expectedVersion === 'string' ? query.expectedVersion : undefined,
+        ),
       })
-    }
-    const revision = assertExactWorkflowRevision(workflow, parsed.data, 'workflow-version-mismatch')
-    await deps.workflowExactOperationHook?.({ operation: 'export', revision })
-    // RFC-223: emit portable name+owner selectors. Backup export keeps full
-    // fidelity and does not go through this route.
-    const yaml = stringifyWorkflowYaml({
-      ...workflow,
-      definition: await workflowDefinitionToSelectors(deps.db, actorOf(c), workflow.definition),
-    })
-    return c.body(yaml, 200, {
-      'content-type': 'application/yaml; charset=utf-8',
-      'content-disposition': `attachment; filename="${c.req.param('id')}.yaml"`,
-    })
-  })
+      if (!parsed.success) {
+        throw new ValidationError(
+          'workflow-export-invalid',
+          'invalid exact workflow export query',
+          {
+            issues: parsed.error.issues,
+          },
+        )
+      }
+      const revision = assertExactWorkflowRevision(
+        workflow,
+        parsed.data,
+        'workflow-version-mismatch',
+      )
+      await deps.workflowExactOperationHook?.({ operation: 'export', revision })
+      // RFC-223: emit portable name+owner selectors. Backup export keeps full
+      // fidelity and does not go through this route.
+      const yaml = stringifyWorkflowYaml({
+        ...workflow,
+        definition: await workflowDefinitionToSelectors(deps.db, actorOf(c), workflow.definition),
+      })
+      return c.body(yaml, 200, {
+        'content-type': 'application/yaml; charset=utf-8',
+        'content-disposition': `attachment; filename="${c.req.param('id')}.yaml"`,
+      })
+    },
+  )
 
-  app.post('/api/workflows/import', async (c) => {
-    const parsed = ImportWorkflowRequestSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('workflow-import-invalid', 'invalid workflow import payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const result = await importWorkflowYaml(deps.db, parsed.data, { kind: 'actor', actor })
-    return c.json(result, result.outcome === 'created' ? 201 : 200)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/workflows/import',
+      permissions: ['workflows:create'],
+      tokenAccess: 'allow',
+      summary: 'Import a workflow from YAML',
+    },
+    async (c) => {
+      const parsed = ImportWorkflowRequestSchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('workflow-import-invalid', 'invalid workflow import payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const result = await importWorkflowYaml(deps.db, parsed.data, { kind: 'actor', actor })
+      return c.json(result, result.outcome === 'created' ? 201 : 200)
+    },
+  )
 
   // RFC-099 — GET/PUT /api/workflows/:id/acl
   mountAclEndpoints(app, deps, {

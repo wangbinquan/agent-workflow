@@ -29,7 +29,7 @@
       新增 workgroups / scheduled-tasks / memory 的完整点；memory 旧五点退役并按 design §2.3
       映射；`ROLE_PERMISSIONS` 按 D15 等价照搬；`PAT_EXPLICIT_ONLY_PERMISSIONS` 升级为
       按 `:delete` 后缀派生的全集。
-- [ ] **RFC-247-T3**：全量迁移**36 个路由文件**的路由到 `registerRoute`，逐条填写 design §2.3
+- [x] **RFC-247-T3**：全量迁移**36 个路由文件**的路由到 `registerRoute`，逐条填写 design §2.3
       的动词映射。**逐条回答「这条路由有没有跨域副作用」**，不按 URL 前缀想当然归档；已知的
       跨域副作用族**五条**必须用双点 AND 收口（design §2.3 的表）：`scheduled-tasks` 三条、
       `workgroup-tasks/dw-save-as-workflow`、`fusions` 的 launch 与 approve、
@@ -39,7 +39,7 @@
 - [x] **RFC-247-T3b**：`routes/memoryDistillJobs.ts` 的
       `requireResourceAdmin('memory:approve')` 随 memory 旧点退役改为 `memory:update`，
       **身份门保持 admin/manager 不放宽**（design §2.3 memory 小节的连带）。
-- [ ] **RFC-247-T4**：删除 `server.ts:183-247` 的**全部**手工门挂载（不只 183-211——
+- [x] **RFC-247-T4**：删除 `server.ts:183-247` 的**全部**手工门挂载（不只 183-211——
       下面还有 `configGate` :216-229、`/api/daemon` :234、`/api/backup*` :235-236、
       `/api/restore*` :237,243、`/api/runtime*` :246-247 六处）；实现启动期**双向**穷尽自检
       （无元数据的路由 → 启动失败；无路由引用的矩阵域权限点 → 启动失败）。
@@ -49,7 +49,7 @@
       短路，PAT 分支恒收窄（关闭 `docs/audit-backlog.md:61`）。
 - [x] **RFC-247-T6**：`resolveTokenPermissions` 纯函数（design §2.2 公式）+ 表驱动测试；
       角色点集快照测试重写（`ADMIN_ONLY_PERMISSIONS` / `MANAGER_DENIED_PERMISSIONS`）。
-- [ ] **RFC-247-T7**：`verbForRoute` 映射表逐行测试；`routeMetaCoverage` 断言生产 app 无缺漏；
+- [x] **RFC-247-T7**：`verbForRoute` 映射表逐行测试；`routeMetaCoverage` 断言生产 app 无缺漏；
       每个域各一条「窄令牌被拒」集成测试；**跨域副作用族五条专属回归**（AC-29），文件名与顶部注释写明它锁的是
       「A 域路由产生 B 域副作用」这一族。
 - [ ] **RFC-247-T8**：在 `docs/audit-backlog.md` 记录收口——`:60`（workgroups 无 method 点）、
@@ -144,9 +144,9 @@
 
 ### 授权层
 
-- [ ] AC-1 权限目录无 `资源:write`；三档齐全；角色点集快照锁定
-- [ ] AC-2 全路由有元数据；删任一条声明 ⇒ 启动失败（有测试）
-- [ ] AC-3 `server.ts` 无手工门挂载（源码层文本断言）
+- [x] AC-1 权限目录无 `资源:write`；三档齐全；角色点集快照锁定
+- [x] AC-2 全路由有元数据；删任一条声明 ⇒ 启动失败（有测试）
+- [x] AC-3 `server.ts` 无手工门挂载（源码层文本断言）
 - [ ] AC-4 真正无 gate 的 workgroups / reviews / clarify（+ scheduled-tasks PUT/DELETE）各有「窄令牌被拒」测试
 - [ ] AC-5 空矩阵 = 只读
 - [ ] AC-6 `scheduled-tasks` 双点 AND，无法绕过 `tasks:execute`
@@ -187,11 +187,11 @@
 
 ### 设计门追加
 
-- [ ] AC-29 跨域副作用族五条各有专属回归
+- [x] AC-29 跨域副作用族五条各有专属回归
 - [ ] AC-30 `mcp_only` 令牌无法建立 WS 连接
 - [ ] AC-31 脱敏对 REST 与 WS 两条出口一致生效
 - [ ] AC-32 `memoryDistillJobs` 门改 `memory:update`，身份门不放宽
-- [ ] AC-33 路由元数据覆盖生产 app 上每一条路由（含 whoami 与模板 ACL 路由）
+- [x] AC-33 路由元数据覆盖生产 app 上每一条路由（含 whoami 与模板 ACL 路由）
 
 ### 设计门第二 / 第三批
 
@@ -201,17 +201,43 @@
 - [ ] AC-37 WS 默认拒绝白名单放行；新增频道未声明裁决即编译失败
 - [ ] AC-38 `rowToTask` 脱敏 `repoUrl`（对所有通道）
 - [ ] AC-39 stdout 脱敏；文案不得承诺 worktree 文件脱敏
-- [ ] AC-40 `/api/runtimes` 两条 GET 要求 `runtime:read`
+- [x] AC-40 `/api/runtimes` 两条 GET 要求 `runtime:read`
 - [ ] AC-41 退役点清扫覆盖整个 backend（含 WS gate 与 `as never` 处）
 - [ ] AC-42 `/.well-known/mcp` 公开且先于 SPA catch-all
 - [ ] AC-43 管理员**不能**吊销他人令牌（负向断言）
 - [ ] AC-44 wiki 入口两处；`NAV_GROUPS` 零改动
 - [ ] AC-45 `assertDeleteConfirm` 覆盖 11 条
-- [ ] AC-46 `RANGE_POINTS` / `ROUTE_BACKED_POINTS` 存在；`READ∩SYSTEM=∅`
-- [ ] AC-47 资源键统一 `scheduled-tasks`，无 `schedules:` 变体
-- [ ] AC-48 `overview` / `plantuml` 补门
+- [x] AC-46 `RANGE_POINTS` / `ROUTE_BACKED_POINTS` 存在；`READ∩SYSTEM=∅`
+- [x] AC-47 资源键统一 `scheduled-tasks`，无 `schedules:` 变体
+- [x] AC-48 `overview` / `plantuml` 补门
 
 ---
+
+### 2026-08-02 — PR-1 收官（T3 全量 + T4 双向自检）
+
+**T3 完成**：剩余 ~175 条路由全部迁移，**252 条全覆盖**。含两处不在路由文件里的挂载：
+`GET /api/whoami`（`server.ts`）与 **12 条模板生成的 ACL 路由**（`mountAclEndpoints` 自己登记
+元数据——留给六个调用方就是六次写出不同契约的机会）。
+
+**T4 完成**：删除 `server.ts` 全部 **73 行**手工门；`assertRouteMetaCoverage` 接进 `createApp`，
+**生产 app 通过双向自检**——每条路由都有声明，每个矩阵域点都有路由。
+
+#### 迁移暴露的六个真问题
+
+| #   | 问题                                                                                                                                                          | 处置                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1   | **gate 让登录不可能**：`publicReason` 路由在 `PUBLIC_PATH_PREFIXES` 里、context 无 actor，而 `routeMetaGate` 调 `actorOf` 直接抛 401（15 条 auth 测试当场红） | 改为「无 actor 时由**声明**决定是否需要身份」                                                   |
+| 2   | 自检在真实 app 上抓到 4 条「未声明路由」，实为 `app.use()` **中间件**（Hono 与端点同表、method 记 `ALL`）                                                     | 按 **method 结构性区分**，不往豁免名单加 4 条路径——手工名单会长成洞                             |
+| 3   | 反 Zod 守卫抓到 `?phase=` 的 `as TaskQuestionPhase`——**真不安全**：`?phase=bogus` 穿到 service 静默匹配不到                                                   | **不加豁免**，按守卫要求修：新增 `TaskQuestionPhaseSchema`，非法值 422                          |
+| 4   | 我自己在 `resourceAcl.ts` 写的 `as` 联合断言                                                                                                                  | 改**穷尽 Record**；TS 当场抓到它会生成 `repos:update`——刻意从未创建的点                         |
+| 5   | 三条测试在测**中间件的影子**：`POST /api/repos` 根本不是端点，403 只因前缀中间件在路由前拦截                                                                  | 指向真实存在的 repos 域写端点；**行为变化如实记录**：网关下不存在的路径由 403 变 404            |
+| 6   | **测试夹具占用生产路径 `/api/whoami`**——注册表是进程级单例，共享进程下与真实声明撞成「同路径不同契约」                                                        | 改合成路径；已写进 `docs/dev-gotchas.md`（含「本地复现 CI 用 `bun run test` 而非 `bun test`」） |
+
+> 第 6 条只在**不带 `--isolate`** 时才炸。CI 与 `bun run test` 都带该 flag，所以它本可以一直
+> 潜伏——本轮是手敲 `bun test` 才暴露。收口后**共享进程模式也全绿**，比 CI 的隔离模式更严。
+
+- 门禁：typecheck 三包 / lint / format 全绿；shared **1555**、frontend **678 文件 5648**、
+  backend **7991 pass / 28 skip / 0 fail**（共享进程模式）。
 
 ## 风险与已知取舍
 

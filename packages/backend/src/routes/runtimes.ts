@@ -9,8 +9,8 @@ import { z } from 'zod'
 import { isExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import { loadConfig } from '@/config'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
-import { requireAdmin, requirePermission } from '@/auth/permissions'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   cacheRuntimeProbe,
@@ -127,18 +127,28 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     deps.runtimeDiagnosticTestDependencies?.smokeRuntime ?? productionSmokeRuntime
 
   // List — any authed user (the agent/settings runtime pickers read this).
-  app.get('/api/runtimes', async (c) => {
-    const rows = await listRuntimes(deps.db)
-    const cfg = loadConfig(deps.configPath)
-    return c.json({
-      runtimes: rows.map((row) => ({
-        ...runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
-        capabilities: {
-          mcpRuntimeTestV1: isRuntimeMcpTestEligible(row),
-        },
-      })),
-    })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/runtimes',
+      permissions: ['runtime:read'],
+      tokenAccess: 'allow',
+      summary: 'List registered runtimes',
+    },
+    async (c) => {
+      const rows = await listRuntimes(deps.db)
+      const cfg = loadConfig(deps.configPath)
+      return c.json({
+        runtimes: rows.map((row) => ({
+          ...runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
+          capabilities: {
+            mcpRuntimeTestV1: isRuntimeMcpTestEligible(row),
+          },
+        })),
+      })
+    },
+  )
 
   // RFC-135 / RFC-226 — live light status for the homepage hero: every ENABLED
   // runtime is probed `--version` in parallel against the binary a dispatch
@@ -147,320 +157,396 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
   // `runtime:read` mirrors the legacy /api/runtime/* gate (server.ts) — this
   // spawns registered binaries, so a narrowed PAT without the permission must
   // not reach it.
-  app.get('/api/runtimes/status', requirePermission('runtime:read'), async (c) => {
-    const cfg = loadConfig(deps.configPath)
-    const rows = (await listRuntimes(deps.db)).filter((r) => r.enabled)
-    // Mirror resolveRuntimeByName's fail-safe: a stale/unknown configured
-    // default falls back to the opencode builtin for real dispatch, so the
-    // status line must mark that SAME row as the default — else a broken
-    // effective default reads as a soft non-default failure. (The enabled
-    // filter can't hide the configured default: RFC-118 blocks disabling it.)
-    const configured = cfg.defaultRuntime ?? 'opencode'
-    const defaultName = rows.some((r) => r.name === configured) ? configured : 'opencode'
-    const timeoutMs = statusProbeTimeoutMs()
-    const containmentPlan = await deps.containmentCoordinator?.observe('model-child-netless-v1')
-    const containment = containmentPlan?.runtimeReceipt ?? null
-    const runtimes = await Promise.all(
-      rows.map(async (row) => {
-        const binary = resolveRuntimeBinary(row, cfg)
-        // quiet: an enabled-but-missing optional runtime is a normal state
-        // here (opencode-only installs keep the claude-code builtin enabled)
-        // and the homepage polls every 60s — the response already carries the
-        // failure, so per-probe warns would just flood the log (D5/§6).
-        const probe =
-          row.protocol === 'opencode'
-            ? await withRuntimeOpencodeSnapshot([binary], async (snapshot) => {
-                const verified = await getRuntimeDriver(row.protocol).probe(snapshot, {
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/runtimes/status',
+      permissions: ['runtime:read'],
+      tokenAccess: 'allow',
+      summary: 'Runtime qualification status',
+    },
+    async (c) => {
+      const cfg = loadConfig(deps.configPath)
+      const rows = (await listRuntimes(deps.db)).filter((r) => r.enabled)
+      // Mirror resolveRuntimeByName's fail-safe: a stale/unknown configured
+      // default falls back to the opencode builtin for real dispatch, so the
+      // status line must mark that SAME row as the default — else a broken
+      // effective default reads as a soft non-default failure. (The enabled
+      // filter can't hide the configured default: RFC-118 blocks disabling it.)
+      const configured = cfg.defaultRuntime ?? 'opencode'
+      const defaultName = rows.some((r) => r.name === configured) ? configured : 'opencode'
+      const timeoutMs = statusProbeTimeoutMs()
+      const containmentPlan = await deps.containmentCoordinator?.observe('model-child-netless-v1')
+      const containment = containmentPlan?.runtimeReceipt ?? null
+      const runtimes = await Promise.all(
+        rows.map(async (row) => {
+          const binary = resolveRuntimeBinary(row, cfg)
+          // quiet: an enabled-but-missing optional runtime is a normal state
+          // here (opencode-only installs keep the claude-code builtin enabled)
+          // and the homepage polls every 60s — the response already carries the
+          // failure, so per-probe warns would just flood the log (D5/§6).
+          const probe =
+            row.protocol === 'opencode'
+              ? await withRuntimeOpencodeSnapshot([binary], async (snapshot) => {
+                  const verified = await getRuntimeDriver(row.protocol).probe(snapshot, {
+                    timeoutMs,
+                    quiet: true,
+                  })
+                  return { ...verified, binary }
+                }).catch((error: unknown) => {
+                  const code =
+                    typeof error === 'object' &&
+                    error !== null &&
+                    'code' in error &&
+                    isExecutionIdentityFailureCode(error.code)
+                      ? error.code
+                      : 'execution-identity-untrusted-binary'
+                  return {
+                    binary,
+                    version: null,
+                    compatible: false,
+                    incompatibleReason: code,
+                    ran: false,
+                    snapshotFailure:
+                      typeof error === 'object' &&
+                      error !== null &&
+                      'reason' in error &&
+                      error.reason === 'not-found'
+                        ? ('not-found' as const)
+                        : ('unlaunchable' as const),
+                  }
+                })
+              : await getRuntimeDriver(row.protocol).probe(binary, {
                   timeoutMs,
                   quiet: true,
                 })
-                return { ...verified, binary }
-              }).catch((error: unknown) => {
-                const code =
-                  typeof error === 'object' &&
-                  error !== null &&
-                  'code' in error &&
-                  isExecutionIdentityFailureCode(error.code)
-                    ? error.code
-                    : 'execution-identity-untrusted-binary'
-                return {
-                  binary,
-                  version: null,
-                  compatible: false,
-                  incompatibleReason: code,
-                  ran: false,
-                  snapshotFailure:
-                    typeof error === 'object' &&
-                    error !== null &&
-                    'reason' in error &&
-                    error.reason === 'not-found'
-                      ? ('not-found' as const)
-                      : ('unlaunchable' as const),
-                }
-              })
-            : await getRuntimeDriver(row.protocol).probe(binary, {
-                timeoutMs,
-                quiet: true,
-              })
-        const availabilityState =
-          row.protocol === 'opencode'
-            ? 'snapshotFailure' in probe
-              ? probe.snapshotFailure
-              : probe.ran === true
-                ? ('available-unverified' as const)
-                : ('unlaunchable' as const)
-            : probe.ran === true && probe.compatible
-              ? ('ready' as const)
-              : ('not-found' as const)
-        const state =
-          row.protocol === 'opencode' &&
-          availabilityState === 'available-unverified' &&
-          containment !== null
-            ? containment.mode === 'enforce' && containment.degradedReasons.length > 0
-              ? ('containment-blocked' as const)
-              : containment.mode === 'warn' && containment.degradedReasons.length > 0
-                ? ('degraded' as const)
-                : availabilityState
-            : availabilityState
-        return {
-          name: row.name,
-          protocol: row.protocol,
-          binary: probe.binary,
-          // RFC-227: OpenCode version output is telemetry. A lightweight
-          // status can prove availability but only Runtime Test / execution
-          // selects the behavior codec.
-          ok: state === 'ready' || state === 'available-unverified' || state === 'degraded',
-          version: probe.version,
-          reportedVersion: probe.version,
-          state,
-          ...(row.protocol === 'opencode' && containment !== null ? { containment } : {}),
-          isDefault: row.name === defaultName,
-          ...(isExecutionIdentityFailureCode(probe.incompatibleReason)
-            ? { failureCode: probe.incompatibleReason }
-            : {}),
-        }
-      }),
-    )
-    // Exact profile projection from the same coordinator used at spawn.
-    const sandbox =
-      containmentPlan !== undefined
-        ? {
-            mode: containmentPlan.receipt.mode,
-            effectiveMode: containmentPlan.receipt.mode,
-            configuredMode: cfg.sandboxMode,
-            restartRequired: cfg.sandboxMode !== containmentPlan.receipt.mode,
-            policyGeneration: containmentPlan.receipt.policyGeneration,
-            probeGeneration: containmentPlan.receipt.probeGeneration,
-            probeCheckedAt: containmentPlan.receipt.probeCheckedAt,
-            coordinatorBootId: containmentPlan.receipt.coordinatorBootId,
-            admissionGeneration: containmentPlan.receipt.admissionGeneration,
-            decision: containmentPlan.receipt.decision,
-            profileId: containmentPlan.receipt.profileId,
-            requirementDigest: containmentPlan.receipt.requirementDigest,
-            probeState:
-              containmentPlan.receipt.decision === 'contained'
+          const availabilityState =
+            row.protocol === 'opencode'
+              ? 'snapshotFailure' in probe
+                ? probe.snapshotFailure
+                : probe.ran === true
+                  ? ('available-unverified' as const)
+                  : ('unlaunchable' as const)
+              : probe.ran === true && probe.compatible
                 ? ('ready' as const)
-                : Object.values(containmentPlan.receipt.capabilities).some(
-                      (strength) => strength === 'strong',
-                    )
-                  ? ('partial' as const)
-                  : ('unavailable' as const),
-            mechanism: containmentPlan.sandbox.status.mechanism,
-            available: containmentPlan.receipt.decision === 'contained',
-            providerId: containment?.providerId ?? null,
-            capabilities: containment?.capabilities ?? {},
-            degradedReasons: containment?.degradedReasons ?? [],
-            reasonCodes: containmentPlan.receipt.reasonCodes,
+                : ('not-found' as const)
+          const state =
+            row.protocol === 'opencode' &&
+            availabilityState === 'available-unverified' &&
+            containment !== null
+              ? containment.mode === 'enforce' && containment.degradedReasons.length > 0
+                ? ('containment-blocked' as const)
+                : containment.mode === 'warn' && containment.degradedReasons.length > 0
+                  ? ('degraded' as const)
+                  : availabilityState
+              : availabilityState
+          return {
+            name: row.name,
+            protocol: row.protocol,
+            binary: probe.binary,
+            // RFC-227: OpenCode version output is telemetry. A lightweight
+            // status can prove availability but only Runtime Test / execution
+            // selects the behavior codec.
+            ok: state === 'ready' || state === 'available-unverified' || state === 'degraded',
+            version: probe.version,
+            reportedVersion: probe.version,
+            state,
+            ...(row.protocol === 'opencode' && containment !== null ? { containment } : {}),
+            isDefault: row.name === defaultName,
+            ...(isExecutionIdentityFailureCode(probe.incompatibleReason)
+              ? { failureCode: probe.incompatibleReason }
+              : {}),
           }
-        : {
-            mode: cfg.sandboxMode,
-            effectiveMode: cfg.sandboxMode,
-            configuredMode: cfg.sandboxMode,
-            restartRequired: false,
-            mechanism: null,
-            available: false,
-          }
-    return c.json({ runtimes, sandbox })
-  })
+        }),
+      )
+      // Exact profile projection from the same coordinator used at spawn.
+      const sandbox =
+        containmentPlan !== undefined
+          ? {
+              mode: containmentPlan.receipt.mode,
+              effectiveMode: containmentPlan.receipt.mode,
+              configuredMode: cfg.sandboxMode,
+              restartRequired: cfg.sandboxMode !== containmentPlan.receipt.mode,
+              policyGeneration: containmentPlan.receipt.policyGeneration,
+              probeGeneration: containmentPlan.receipt.probeGeneration,
+              probeCheckedAt: containmentPlan.receipt.probeCheckedAt,
+              coordinatorBootId: containmentPlan.receipt.coordinatorBootId,
+              admissionGeneration: containmentPlan.receipt.admissionGeneration,
+              decision: containmentPlan.receipt.decision,
+              profileId: containmentPlan.receipt.profileId,
+              requirementDigest: containmentPlan.receipt.requirementDigest,
+              probeState:
+                containmentPlan.receipt.decision === 'contained'
+                  ? ('ready' as const)
+                  : Object.values(containmentPlan.receipt.capabilities).some(
+                        (strength) => strength === 'strong',
+                      )
+                    ? ('partial' as const)
+                    : ('unavailable' as const),
+              mechanism: containmentPlan.sandbox.status.mechanism,
+              available: containmentPlan.receipt.decision === 'contained',
+              providerId: containment?.providerId ?? null,
+              capabilities: containment?.capabilities ?? {},
+              degradedReasons: containment?.degradedReasons ?? [],
+              reasonCodes: containmentPlan.receipt.reasonCodes,
+            }
+          : {
+              mode: cfg.sandboxMode,
+              effectiveMode: cfg.sandboxMode,
+              configuredMode: cfg.sandboxMode,
+              restartRequired: false,
+              mechanism: null,
+              available: false,
+            }
+      return c.json({ runtimes, sandbox })
+    },
+  )
 
   // Deep-smoke a given (protocol, binary) WITHOUT saving — registration preflight
   // + the list's "Test" button. Admin only (it spawns the binary).
-  app.post('/api/runtimes/probe', requireAdmin(), async (c) => {
-    const body = parseBody(ProbeBody, await c.req.json().catch(() => ({})))
-    const cfg = loadConfig(deps.configPath)
-    const result = await smokeRuntime({
-      protocol: body.protocol,
-      binaryPath: body.binaryPath,
-      config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
-      ...(body.model !== undefined ? { model: body.model } : {}),
-      bridgeCredentials: true,
-      ...(deps.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: deps.containmentCoordinator }),
-    })
-    return c.json({ smoke: result })
-  })
-
-  // Register a custom runtime. Optionally deep-smokes first; the result is
-  // stored as advisory `lastProbe` but does NOT block saving (Codex P2 — an
-  // auth-missing fork is still registrable; the admin decides).
-  app.post('/api/runtimes', requireAdmin(), async (c) => {
-    const body = parseBody(CreateBody, await c.req.json().catch(() => ({})))
-    const actor = actorOf(c)
-    let smoke: SmokeResult | undefined
-    const wantProbe = body.probe ?? body.binaryPath !== undefined
-    if (wantProbe && body.binaryPath !== undefined) {
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/runtimes/probe',
+      permissions: ['settings:write'],
+      tokenAccess: 'allow',
+      identity: 'admin',
+      summary: 'Probe an arbitrary runtime binary',
+    },
+    async (c) => {
+      const body = parseBody(ProbeBody, await c.req.json().catch(() => ({})))
       const cfg = loadConfig(deps.configPath)
-      smoke = await smokeRuntime({
+      const result = await smokeRuntime({
         protocol: body.protocol,
         binaryPath: body.binaryPath,
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
-        ...(typeof body.model === 'string' ? { model: body.model } : {}),
+        ...(body.model !== undefined ? { model: body.model } : {}),
         bridgeCredentials: true,
         ...(deps.containmentCoordinator === undefined
           ? {}
           : { containmentCoordinator: deps.containmentCoordinator }),
       })
-    }
-    let row = await createRuntime(
-      deps.db,
-      {
-        name: body.name,
-        protocol: body.protocol,
-        binaryPath: body.binaryPath ?? null,
-        configDirEnv: body.configDirEnv,
-        configDirName: body.configDirName,
-        createdBy: actor.user.id,
-        model: body.model,
-        variant: body.variant,
-        temperature: body.temperature,
-        steps: body.steps,
-        maxSteps: body.maxSteps,
-      },
-      { enforceExecutionPolicy: true },
-    )
-    const cfg = loadConfig(deps.configPath)
-    if (smoke !== undefined) {
-      const target = runtimeProbeTargetOf(row, resolveRuntimeBinary(row, cfg))
-      await cacheRuntimeProbe(deps.db, target, smoke)
-      const refreshed = await getRuntime(deps.db, row.name)
-      if (refreshed?.id === row.id) row = refreshed
-    }
-    return c.json(
-      {
-        runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
-        ...(smoke !== undefined ? { smoke } : {}),
-      },
-      201,
-    )
-  })
+      return c.json({ smoke: result })
+    },
+  )
+
+  // Register a custom runtime. Optionally deep-smokes first; the result is
+  // stored as advisory `lastProbe` but does NOT block saving (Codex P2 — an
+  // auth-missing fork is still registrable; the admin decides).
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/runtimes',
+      permissions: ['settings:write'],
+      tokenAccess: 'allow',
+      identity: 'admin',
+      summary: 'Register a runtime',
+    },
+    async (c) => {
+      const body = parseBody(CreateBody, await c.req.json().catch(() => ({})))
+      const actor = actorOf(c)
+      let smoke: SmokeResult | undefined
+      const wantProbe = body.probe ?? body.binaryPath !== undefined
+      if (wantProbe && body.binaryPath !== undefined) {
+        const cfg = loadConfig(deps.configPath)
+        smoke = await smokeRuntime({
+          protocol: body.protocol,
+          binaryPath: body.binaryPath,
+          config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
+          ...(typeof body.model === 'string' ? { model: body.model } : {}),
+          bridgeCredentials: true,
+          ...(deps.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: deps.containmentCoordinator }),
+        })
+      }
+      let row = await createRuntime(
+        deps.db,
+        {
+          name: body.name,
+          protocol: body.protocol,
+          binaryPath: body.binaryPath ?? null,
+          configDirEnv: body.configDirEnv,
+          configDirName: body.configDirName,
+          createdBy: actor.user.id,
+          model: body.model,
+          variant: body.variant,
+          temperature: body.temperature,
+          steps: body.steps,
+          maxSteps: body.maxSteps,
+        },
+        { enforceExecutionPolicy: true },
+      )
+      const cfg = loadConfig(deps.configPath)
+      if (smoke !== undefined) {
+        const target = runtimeProbeTargetOf(row, resolveRuntimeBinary(row, cfg))
+        await cacheRuntimeProbe(deps.db, target, smoke)
+        const refreshed = await getRuntime(deps.db, row.name)
+        if (refreshed?.id === row.id) row = refreshed
+      }
+      return c.json(
+        {
+          runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
+          ...(smoke !== undefined ? { smoke } : {}),
+        },
+        201,
+      )
+    },
+  )
 
   // Update a runtime's binary path + profile params (name + protocol immutable;
   // RFC-113 D8: built-ins editable here, only delete/identity stays locked).
-  app.put('/api/runtimes/:name', requireAdmin(), async (c) => {
-    const name = c.req.param('name')
-    const body = parseBody(UpdateBody, await c.req.json().catch(() => ({})))
-    const row = await updateRuntime(
-      deps.db,
-      name,
-      {
-        ...(body.binaryPath !== undefined ? { binaryPath: body.binaryPath } : {}),
-        ...(body.configDirEnv !== undefined ? { configDirEnv: body.configDirEnv } : {}),
-        ...(body.configDirName !== undefined ? { configDirName: body.configDirName } : {}),
-        model: body.model,
-        variant: body.variant,
-        temperature: body.temperature,
-        steps: body.steps,
-        maxSteps: body.maxSteps,
-      },
-      { enforceExecutionPolicy: true },
-    )
-    await runtimeTests.reconcileDurableIntents()
-    const cfg = loadConfig(deps.configPath)
-    return c.json({
-      runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
-    })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/runtimes/:name',
+      permissions: ['settings:write'],
+      tokenAccess: 'allow',
+      identity: 'admin',
+      summary: 'Update a runtime',
+    },
+    async (c) => {
+      const name = c.req.param('name')
+      const body = parseBody(UpdateBody, await c.req.json().catch(() => ({})))
+      const row = await updateRuntime(
+        deps.db,
+        name,
+        {
+          ...(body.binaryPath !== undefined ? { binaryPath: body.binaryPath } : {}),
+          ...(body.configDirEnv !== undefined ? { configDirEnv: body.configDirEnv } : {}),
+          ...(body.configDirName !== undefined ? { configDirName: body.configDirName } : {}),
+          model: body.model,
+          variant: body.variant,
+          temperature: body.temperature,
+          steps: body.steps,
+          maxSteps: body.maxSteps,
+        },
+        { enforceExecutionPolicy: true },
+      )
+      await runtimeTests.reconcileDurableIntents()
+      const cfg = loadConfig(deps.configPath)
+      return c.json({
+        runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
+      })
+    },
+  )
 
   // RFC-118: enable/disable a runtime (incl. built-ins) — admin only. A disabled
   // runtime stays in the list but drops out of the agent / default-runtime pickers.
   // The effective default (config.defaultRuntime ?? 'opencode') can't be disabled
   // (setRuntimeEnabled guards → 409).
-  app.post('/api/runtimes/:name/enabled', requireAdmin(), async (c) => {
-    const name = c.req.param('name')
-    const body = parseBody(EnabledBody, await c.req.json().catch(() => ({})))
-    const cfg = loadConfig(deps.configPath)
-    const row = await setRuntimeEnabled(deps.db, name, body.enabled, cfg.defaultRuntime)
-    await runtimeTests.reconcileDurableIntents()
-    return c.json({
-      runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
-    })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/runtimes/:name/enabled',
+      permissions: ['settings:write'],
+      tokenAccess: 'allow',
+      identity: 'admin',
+      summary: 'Enable or disable a runtime',
+    },
+    async (c) => {
+      const name = c.req.param('name')
+      const body = parseBody(EnabledBody, await c.req.json().catch(() => ({})))
+      const cfg = loadConfig(deps.configPath)
+      const row = await setRuntimeEnabled(deps.db, name, body.enabled, cfg.defaultRuntime)
+      await runtimeTests.reconcileDurableIntents()
+      return c.json({
+        runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
+      })
+    },
+  )
 
   // Delete a runtime — blocked while referenced by an agent, the effective default,
   // or a per-feature config runtime field, and blocked if it's the last row (RFC-153).
-  app.delete('/api/runtimes/:name', requireAdmin(), async (c) => {
-    const name = c.req.param('name')
-    const cfg = loadConfig(deps.configPath)
-    await deleteRuntime(deps.db, name, {
-      defaultRuntime: cfg.defaultRuntime,
-      memoryDistillRuntime: cfg.memoryDistillRuntime,
-      commitPushRuntime: cfg.commitPushRuntime,
-      mergeAgentRuntime: cfg.mergeAgentRuntime,
-      intentBuilderRuntime: cfg.intentBuilderRuntime,
-      changeNarrativeRuntime: cfg.changeNarrativeRuntime,
-    })
-    await runtimeTests.reconcileDurableIntents()
-    return c.json({ ok: true })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/runtimes/:name',
+      permissions: ['settings:write'],
+      tokenAccess: 'allow',
+      identity: 'admin',
+      summary: 'Delete a runtime',
+    },
+    async (c) => {
+      const name = c.req.param('name')
+      const cfg = loadConfig(deps.configPath)
+      await deleteRuntime(deps.db, name, {
+        defaultRuntime: cfg.defaultRuntime,
+        memoryDistillRuntime: cfg.memoryDistillRuntime,
+        commitPushRuntime: cfg.commitPushRuntime,
+        mergeAgentRuntime: cfg.mergeAgentRuntime,
+        intentBuilderRuntime: cfg.intentBuilderRuntime,
+        changeNarrativeRuntime: cfg.changeNarrativeRuntime,
+      })
+      await runtimeTests.reconcileDurableIntents()
+      return c.json({ ok: true })
+    },
+  )
 
   // Re-smoke an existing runtime + cache the result onto the row (the list's
   // "Test" button for a saved runtime). Resolves the binary the same way a real
   // dispatch would (custom path, or the protocol default for built-ins). Probe
   // caching is allowed on built-ins (it's advisory display, not an identity edit).
-  app.post('/api/runtimes/:name/probe', requireAdmin(), async (c) => {
-    const name = c.req.param('name')
-    const row = await getRuntime(deps.db, name)
-    if (row === null) {
-      throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
-    }
-    const cfg = loadConfig(deps.configPath)
-    const binaryPath = resolveRuntimeBinary(row, cfg)
-    const probeTarget = runtimeProbeTargetOf(row, binaryPath)
-    const smoke = await smokeRuntime({
-      protocol: row.protocol,
-      binaryPath,
-      config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
-      ...(row.model !== null ? { model: row.model } : {}),
-      bridgeCredentials: true,
-      ...(deps.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: deps.containmentCoordinator }),
-    })
-    return withRuntimeProbeConfigFence(deps.configPath, async () => {
-      // A row with binaryPath=NULL inherits the protocol path from config.json.
-      // Config PUT holds this same fence while it first bumps the persisted DB
-      // generation and then replaces the file, closing the final check→CAS gap.
-      const currentRow = await getRuntime(deps.db, name)
-      const currentConfig = loadConfig(deps.configPath)
-      if (
-        currentRow === null ||
-        resolveRuntimeBinary(currentRow, currentConfig) !== probeTarget.resolvedBinaryPath
-      ) {
-        throw new ConflictError(
-          'runtime-probe-stale',
-          `runtime '${name}' changed while its probe was running; retry the probe`,
-        )
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/runtimes/:name/probe',
+      permissions: ['settings:write'],
+      tokenAccess: 'allow',
+      identity: 'admin',
+      summary: 'Probe a registered runtime',
+    },
+    async (c) => {
+      const name = c.req.param('name')
+      const row = await getRuntime(deps.db, name)
+      if (row === null) {
+        throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
       }
-      await deps.runtimeDiagnosticTestDependencies?.beforeRuntimeProbeCache?.()
-      const cached = await cacheRuntimeProbe(deps.db, probeTarget, smoke)
-      if (!cached) {
-        throw new ConflictError(
-          'runtime-probe-stale',
-          `runtime '${name}' changed while its probe was running; retry the probe`,
-        )
-      }
-      return c.json({ smoke })
-    })
-  })
+      const cfg = loadConfig(deps.configPath)
+      const binaryPath = resolveRuntimeBinary(row, cfg)
+      const probeTarget = runtimeProbeTargetOf(row, binaryPath)
+      const smoke = await smokeRuntime({
+        protocol: row.protocol,
+        binaryPath,
+        config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
+        ...(row.model !== null ? { model: row.model } : {}),
+        bridgeCredentials: true,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
+      })
+      return withRuntimeProbeConfigFence(deps.configPath, async () => {
+        // A row with binaryPath=NULL inherits the protocol path from config.json.
+        // Config PUT holds this same fence while it first bumps the persisted DB
+        // generation and then replaces the file, closing the final check→CAS gap.
+        const currentRow = await getRuntime(deps.db, name)
+        const currentConfig = loadConfig(deps.configPath)
+        if (
+          currentRow === null ||
+          resolveRuntimeBinary(currentRow, currentConfig) !== probeTarget.resolvedBinaryPath
+        ) {
+          throw new ConflictError(
+            'runtime-probe-stale',
+            `runtime '${name}' changed while its probe was running; retry the probe`,
+          )
+        }
+        await deps.runtimeDiagnosticTestDependencies?.beforeRuntimeProbeCache?.()
+        const cached = await cacheRuntimeProbe(deps.db, probeTarget, smoke)
+        if (!cached) {
+          throw new ConflictError(
+            'runtime-probe-stale',
+            `runtime '${name}' changed while its probe was running; retry the probe`,
+          )
+        }
+        return c.json({ smoke })
+      })
+    },
+  )
 }

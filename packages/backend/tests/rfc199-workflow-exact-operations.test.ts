@@ -357,14 +357,18 @@ describe('RFC-199 exact workflow Export', () => {
 describe('RFC-199 route source lock', () => {
   test('Validate and Export each load one visible detail and consume that captured object', () => {
     const source = readFileSync(ROUTE_SOURCE, 'utf8')
+    // RFC-247 T3 moved these routes from `app.<verb>('/path', …)` to
+    // `registerRoute(app, { …, path: '/path', … }, …)`, so the block boundaries
+    // are now the path literal inside the declaration. Anchoring on the path
+    // (rather than on the registration form) keeps this lock working across
+    // both shapes — the property it guards is about the HANDLER body, and that
+    // property did not change.
+    const at = (path: string): number => source.indexOf(`path: '${path}'`)
     const validateBlock = source.slice(
-      source.indexOf("app.post('/api/workflows/:id/validate'"),
-      source.indexOf("app.post('/api/workflows/:id/validate-draft'"),
+      at('/api/workflows/:id/validate'),
+      at('/api/workflows/:id/validate-draft'),
     )
-    const exportBlock = source.slice(
-      source.indexOf("app.get('/api/workflows/:id/export'"),
-      source.indexOf("app.post('/api/workflows/import'"),
-    )
+    const exportBlock = source.slice(at('/api/workflows/:id/export'), at('/api/workflows/import'))
 
     expect(validateBlock.match(/loadVisibleWorkflow\(/g)).toHaveLength(1)
     expect(validateBlock).toContain('validateWorkflowDefinition(workflow.definition, context)')

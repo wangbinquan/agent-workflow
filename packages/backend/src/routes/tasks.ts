@@ -27,6 +27,7 @@ import { loadConfig } from '@/config'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
+import { registerRoute } from '@/routes/registry'
 import { canViewTask, getTaskMembers, updateTaskMembers } from '@/services/taskCollab'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
@@ -127,90 +128,110 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
 // task routes). Call sites below are unchanged.
 
 export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
-  app.get('/api/tasks', async (c) => {
-    const actor = actorOf(c)
-    const includeOwner = parseBoolQuery(c, 'include_owner', { default: false })
-    const filters: Parameters<typeof listTasks>[1] = {}
-    const status = c.req.query('status')
-    if (status !== undefined) {
-      const parsed = TaskStatusSchema.safeParse(status)
-      if (!parsed.success) {
-        throw new ValidationError('task-filter-invalid', `unknown status: ${status}`)
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List tasks (legacy shape)',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const includeOwner = parseBoolQuery(c, 'include_owner', { default: false })
+      const filters: Parameters<typeof listTasks>[1] = {}
+      const status = c.req.query('status')
+      if (status !== undefined) {
+        const parsed = TaskStatusSchema.safeParse(status)
+        if (!parsed.success) {
+          throw new ValidationError('task-filter-invalid', `unknown status: ${status}`)
+        }
+        filters.status = parsed.data
       }
-      filters.status = parsed.data
-    }
-    const workflowId = c.req.query('workflow_id') ?? c.req.query('workflowId')
-    if (workflowId !== undefined && workflowId !== '') filters.workflowId = workflowId
-    const repoPath = c.req.query('repo_path') ?? c.req.query('repoPath')
-    if (repoPath !== undefined && repoPath !== '') filters.repoPath = repoPath
-    // RFC-159: a scheduled task's run history = its launched tasks.
-    const scheduledTaskId = c.req.query('scheduled_task_id') ?? c.req.query('scheduledTaskId')
-    if (scheduledTaskId !== undefined && scheduledTaskId !== '')
-      filters.scheduledTaskId = scheduledTaskId
-    // RFC-243 §8 (PR-5 flip): the list is TOP-LEVEL BY DEFAULT — child
-    // executions appear only via include_children=true (flat, with parent
-    // badges) or the parent_id children query. Landed together with the
-    // nesting UI so awaiting children are never invisible-but-unreachable.
-    const includeChildren = c.req.query('include_children')
-    const parentId = c.req.query('parent_id') ?? c.req.query('parentId')
-    if (parentId !== undefined && parentId !== '') {
-      // 实现门 P1-1: a children query IS a child listing — combining it with
-      // the top-level default would AND `parent_task_id IS NULL` with
-      // `parent_task_id = X` (always empty).
-      filters.parentTaskId = parentId
-    } else if (includeChildren !== 'true') {
-      filters.topLevelOnly = true
-    }
-    const limit = c.req.query('limit')
-    if (limit !== undefined) {
-      const n = Number(limit)
-      if (!Number.isFinite(n) || n <= 0) {
-        throw new ValidationError('task-filter-invalid', `limit must be a positive number`)
+      const workflowId = c.req.query('workflow_id') ?? c.req.query('workflowId')
+      if (workflowId !== undefined && workflowId !== '') filters.workflowId = workflowId
+      const repoPath = c.req.query('repo_path') ?? c.req.query('repoPath')
+      if (repoPath !== undefined && repoPath !== '') filters.repoPath = repoPath
+      // RFC-159: a scheduled task's run history = its launched tasks.
+      const scheduledTaskId = c.req.query('scheduled_task_id') ?? c.req.query('scheduledTaskId')
+      if (scheduledTaskId !== undefined && scheduledTaskId !== '')
+        filters.scheduledTaskId = scheduledTaskId
+      // RFC-243 §8 (PR-5 flip): the list is TOP-LEVEL BY DEFAULT — child
+      // executions appear only via include_children=true (flat, with parent
+      // badges) or the parent_id children query. Landed together with the
+      // nesting UI so awaiting children are never invisible-but-unreachable.
+      const includeChildren = c.req.query('include_children')
+      const parentId = c.req.query('parent_id') ?? c.req.query('parentId')
+      if (parentId !== undefined && parentId !== '') {
+        // 实现门 P1-1: a children query IS a child listing — combining it with
+        // the top-level default would AND `parent_task_id IS NULL` with
+        // `parent_task_id = X` (always empty).
+        filters.parentTaskId = parentId
+      } else if (includeChildren !== 'true') {
+        filters.topLevelOnly = true
       }
-      filters.limit = Math.min(n, 500)
-    }
-    // RFC-036 visibility filter. Admin default scope=all; regular user
-    // default scope=mine. Explicit ?scope=mine|shared|all wins. Asking for
-    // 'all' without tasks:read:all collapses to 'mine'.
-    const rawScope = c.req.query('scope')
-    const scope: 'mine' | 'shared' | 'all' =
-      rawScope === 'shared'
-        ? 'shared'
-        : rawScope === 'all'
-          ? 'all'
-          : rawScope === 'mine'
-            ? 'mine'
-            : actor.permissions.has('tasks:read:all')
-              ? 'all'
-              : 'mine'
-    if (scope !== 'all') {
-      filters.visibility = { actorUserId: actor.user.id, scope }
-    } else if (!actor.permissions.has('tasks:read:all')) {
-      filters.visibility = { actorUserId: actor.user.id, scope: 'mine' }
-    }
-    return c.json(
-      includeOwner ? await listTaskItems(deps.db, filters) : await listTasks(deps.db, filters),
-    )
-  })
+      const limit = c.req.query('limit')
+      if (limit !== undefined) {
+        const n = Number(limit)
+        if (!Number.isFinite(n) || n <= 0) {
+          throw new ValidationError('task-filter-invalid', `limit must be a positive number`)
+        }
+        filters.limit = Math.min(n, 500)
+      }
+      // RFC-036 visibility filter. Admin default scope=all; regular user
+      // default scope=mine. Explicit ?scope=mine|shared|all wins. Asking for
+      // 'all' without tasks:read:all collapses to 'mine'.
+      const rawScope = c.req.query('scope')
+      const scope: 'mine' | 'shared' | 'all' =
+        rawScope === 'shared'
+          ? 'shared'
+          : rawScope === 'all'
+            ? 'all'
+            : rawScope === 'mine'
+              ? 'mine'
+              : actor.permissions.has('tasks:read:all')
+                ? 'all'
+                : 'mine'
+      if (scope !== 'all') {
+        filters.visibility = { actorUserId: actor.user.id, scope }
+      } else if (!actor.permissions.has('tasks:read:all')) {
+        filters.visibility = { actorUserId: actor.user.id, scope: 'mine' }
+      }
+      return c.json(
+        includeOwner ? await listTaskItems(deps.db, filters) : await listTasks(deps.db, filters),
+      )
+    },
+  )
 
   // RFC-244 — static route must stay above the /api/tasks/:id visibility
   // middleware so the literal "page" is never interpreted as a task id.
-  app.get('/api/tasks/page', async (c) => {
-    const actor = actorOf(c)
-    return c.json(
-      await listTaskOperationsPage(deps.db, actor, {
-        view: c.req.query('view'),
-        q: c.req.query('q'),
-        statuses: c.req.query('statuses'),
-        subject: c.req.query('subject'),
-        scope: c.req.query('scope'),
-        origin: c.req.query('origin'),
-        parent_id: c.req.query('parent_id'),
-        cursor: c.req.query('cursor'),
-        limit: c.req.query('limit'),
-      }),
-    )
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/page',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List tasks (paged)',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      return c.json(
+        await listTaskOperationsPage(deps.db, actor, {
+          view: c.req.query('view'),
+          q: c.req.query('q'),
+          statuses: c.req.query('statuses'),
+          subject: c.req.query('subject'),
+          scope: c.req.query('scope'),
+          origin: c.req.query('origin'),
+          parent_id: c.req.query('parent_id'),
+          cursor: c.req.query('cursor'),
+          limit: c.req.query('limit'),
+        }),
+      )
+    },
+  )
 
   // RFC-036 visibility gate. All /api/tasks/:id/... reads require the actor
   // to be admin, owner, or a task_collaborators member. Mounted as middleware
@@ -229,276 +250,441 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     await next()
   })
 
-  app.get('/api/tasks/:id', async (c) => {
-    const id = c.req.param('id')
-    const task = await getTask(deps.db, id)
-    if (task === null) {
-      throw new NotFoundError('task-not-found', `task '${id}' not found`)
-    }
-    return c.json(task)
-  })
-
-  app.post('/api/tasks', async (c) => {
-    const ct = c.req.header('content-type') ?? ''
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-
-    // RFC-020: multipart branch handles launcher uploads. payload field is
-    // JSON-encoded StartTask; files[<inputKey>][] fields are the binary
-    // contents bound to `kind: 'upload'` inputs.
-    if (ct.toLowerCase().startsWith('multipart/form-data')) {
-      const task = await handleMultipartTaskStart(c.req.raw, deps, opencodeCmd, actorOf(c))
-      return c.json(task, 201)
-    }
-
-    const bodyJson = await safeJson(c.req.raw)
-    // RFC-099 (D6): the per-node assignments field is gone. Reject payloads
-    // still carrying it with a structured 422 instead of silently stripping,
-    // so automation callers notice the breaking change.
-    if (
-      typeof bodyJson === 'object' &&
-      bodyJson !== null &&
-      Object.prototype.hasOwnProperty.call(bodyJson, 'assignments')
-    ) {
-      throw new ValidationError(
-        'assignments-removed',
-        'RFC-099 removed per-node assignments; task members answer reviews/clarifications now',
-      )
-    }
-    // RFC-165 (F1): non-strict zod SILENTLY STRIPS retired path-mode keys, so
-    // a mixed body like {scratch:true, repoPath} would silently degrade to a
-    // scratch launch. Reject the raw keys before parsing (assignments-removed
-    // precedent above).
+  registerRoute(
+    app,
     {
-      const retired = rejectRetiredStartTaskKeys(bodyJson)
-      if (retired !== null) {
+      method: 'GET',
+      path: '/api/tasks/:id',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Get one task',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const task = await getTask(deps.db, id)
+      if (task === null) {
+        throw new NotFoundError('task-not-found', `task '${id}' not found`)
+      }
+      return c.json(task)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Launch a task',
+    },
+    async (c) => {
+      const ct = c.req.header('content-type') ?? ''
+      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+
+      // RFC-020: multipart branch handles launcher uploads. payload field is
+      // JSON-encoded StartTask; files[<inputKey>][] fields are the binary
+      // contents bound to `kind: 'upload'` inputs.
+      if (ct.toLowerCase().startsWith('multipart/form-data')) {
+        const task = await handleMultipartTaskStart(c.req.raw, deps, opencodeCmd, actorOf(c))
+        return c.json(task, 201)
+      }
+
+      const bodyJson = await safeJson(c.req.raw)
+      // RFC-099 (D6): the per-node assignments field is gone. Reject payloads
+      // still carrying it with a structured 422 instead of silently stripping,
+      // so automation callers notice the breaking change.
+      if (
+        typeof bodyJson === 'object' &&
+        bodyJson !== null &&
+        Object.prototype.hasOwnProperty.call(bodyJson, 'assignments')
+      ) {
         throw new ValidationError(
-          'start-task-path-retired',
-          `RFC-165 retired path-mode launches; remove '${retired}' (use a file:// repoUrl for local repos)`,
+          'assignments-removed',
+          'RFC-099 removed per-node assignments; task members answer reviews/clarifications now',
         )
       }
-    }
-    const parsed = StartTaskSchema.safeParse(bodyJson)
-    if (!parsed.success) {
-      throw new ValidationError('task-invalid', 'invalid task payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    // RFC-099 (D3) + RFC-104: the launcher must be able to use the WORKFLOW; the
-    // referenced agent/skill/mcp/plugin closure is implicitly authorized. Invisible
-    // and missing produce the identical 404; built-in → 403. Shared gate — the
-    // multipart path and scheduled-task fires enforce the exact same policy.
-    const startDeps = {
-      ...buildStartTaskDeps(
-        deps.db,
-        deps.configPath,
-        actor.user.id,
-        opencodeCmd,
-        deps.secretBox,
-        deps.containmentCoordinator,
-      ),
-      // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
-      // THIS actor's visibility.
-      launchActor: actor,
-    }
-    await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId, startDeps.defaultRuntime)
-    const task = await startExecution(
-      deps.db,
-      actor,
+      // RFC-165 (F1): non-strict zod SILENTLY STRIPS retired path-mode keys, so
+      // a mixed body like {scratch:true, repoPath} would silently degrade to a
+      // scratch launch. Reject the raw keys before parsing (assignments-removed
+      // precedent above).
       {
-        kind: 'workflow',
-        refId: parsed.data.workflowId,
-        invoker: { type: 'user' },
-        payload: parsed.data,
-      },
-      startDeps,
-    )
-    return c.json(task, 201)
-  })
+        const retired = rejectRetiredStartTaskKeys(bodyJson)
+        if (retired !== null) {
+          throw new ValidationError(
+            'start-task-path-retired',
+            `RFC-165 retired path-mode launches; remove '${retired}' (use a file:// repoUrl for local repos)`,
+          )
+        }
+      }
+      const parsed = StartTaskSchema.safeParse(bodyJson)
+      if (!parsed.success) {
+        throw new ValidationError('task-invalid', 'invalid task payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      // RFC-099 (D3) + RFC-104: the launcher must be able to use the WORKFLOW; the
+      // referenced agent/skill/mcp/plugin closure is implicitly authorized. Invisible
+      // and missing produce the identical 404; built-in → 403. Shared gate — the
+      // multipart path and scheduled-task fires enforce the exact same policy.
+      const startDeps = {
+        ...buildStartTaskDeps(
+          deps.db,
+          deps.configPath,
+          actor.user.id,
+          opencodeCmd,
+          deps.secretBox,
+          deps.containmentCoordinator,
+        ),
+        // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
+        // THIS actor's visibility.
+        launchActor: actor,
+      }
+      await assertWorkflowLaunchable(
+        deps.db,
+        actor,
+        parsed.data.workflowId,
+        startDeps.defaultRuntime,
+      )
+      const task = await startExecution(
+        deps.db,
+        actor,
+        {
+          kind: 'workflow',
+          refId: parsed.data.workflowId,
+          invoker: { type: 'user' },
+          payload: parsed.data,
+        },
+        startDeps,
+      )
+      return c.json(task, 201)
+    },
+  )
 
   // RFC-099 (D10) — task members panel. Read open to anyone who can see the
   // task (the visibility middleware above already gated us); writes are
   // owner/admin only (enforced in updateTaskMembers).
-  app.get('/api/tasks/:id/members', async (c) => {
-    const taskId = c.req.param('id')
-    const rows = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
-    const task = rows[0]
-    if (!task) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-    return c.json(await getTaskMembers(deps.db, actorOf(c), task))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/members',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List task members',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      const rows = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
+      const task = rows[0]
+      if (!task) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+      return c.json(await getTaskMembers(deps.db, actorOf(c), task))
+    },
+  )
 
-  app.put('/api/tasks/:id/members', async (c) => {
-    const taskId = c.req.param('id')
-    const parsed = UpdateTaskMembersBodySchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('members-invalid', 'invalid members payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const rows = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
-    const task = rows[0]
-    if (!task) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-    return c.json(await updateTaskMembers(deps.db, actorOf(c), task, parsed.data))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/tasks/:id/members',
+      permissions: ['tasks:update'],
+      tokenAccess: 'never',
+      summary: 'Replace task members',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      const parsed = UpdateTaskMembersBodySchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('members-invalid', 'invalid members payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const rows = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
+      const task = rows[0]
+      if (!task) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+      return c.json(await updateTaskMembers(deps.db, actorOf(c), task, parsed.data))
+    },
+  )
 
-  app.post('/api/tasks/:id/cancel', async (c) => {
-    const task = await cancelTask(deps.db, c.req.param('id'))
-    return c.json(task)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/cancel',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Cancel a task',
+    },
+    async (c) => {
+      const task = await cancelTask(deps.db, c.req.param('id'))
+      return c.json(task)
+    },
+  )
 
   // RFC-222 — admin-only hard delete of a terminal task. Route gate
   // tasks:delete is registered in server.ts; visibilityCheck (the /:id
   // middleware) has already confirmed the task exists + is admin-visible.
-  app.delete('/api/tasks/:id', async (c) => {
-    const id = c.req.param('id')
-    const row = await deps.db
-      .select({ name: tasksTable.name })
-      .from(tasksTable)
-      .where(eq(tasksTable.id, id))
-      .limit(1)
-    if (row[0] === undefined) throw new NotFoundError('task-not-found', `task '${id}' not found`)
-    // RFC-222 (D5): type-to-confirm against the task's name (N-5 order — after
-    // existence/authz, before the deleteTask business gates).
-    assertDeleteConfirm(await readDeleteBody(c), row[0].name, 'task')
-    const result = await deleteTask(deps.db, id)
-    return c.json(result)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/tasks/:id',
+      permissions: ['tasks:delete'],
+      tokenAccess: 'allow',
+      summary: 'Delete a task',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const row = await deps.db
+        .select({ name: tasksTable.name })
+        .from(tasksTable)
+        .where(eq(tasksTable.id, id))
+        .limit(1)
+      if (row[0] === undefined) throw new NotFoundError('task-not-found', `task '${id}' not found`)
+      // RFC-222 (D5): type-to-confirm against the task's name (N-5 order — after
+      // existence/authz, before the deleteTask business gates).
+      assertDeleteConfirm(await readDeleteBody(c), row[0].name, 'task')
+      const result = await deleteTask(deps.db, id)
+      return c.json(result)
+    },
+  )
 
-  app.get('/api/tasks/:id/node-runs', async (c) => {
-    return c.json(await getTaskNodeRuns(deps.db, c.req.param('id')))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/node-runs',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List node runs',
+    },
+    async (c) => {
+      return c.json(await getTaskNodeRuns(deps.db, c.req.param('id')))
+    },
+  )
 
-  app.get('/api/tasks/:id/diff', async (c) => {
-    return c.json(await getTaskDiff(deps.db, c.req.param('id')))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/diff',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Task worktree diff',
+    },
+    async (c) => {
+      return c.json(await getTaskDiff(deps.db, c.req.param('id')))
+    },
+  )
 
   // RFC-083 — structural (semantic) diff overlay for the textual diff above.
   // `?scope=task|node` (+ `nodeRunId` for node scope); 'wrapper' → 422.
   // `?mode=deep` tries an external SCIP indexer for precise cross-file impact,
   // auto-falling back to the heuristic baseline when none is available.
-  app.get('/api/tasks/:id/structural-diff', async (c) => {
-    const scope = structuralScopeSchema.catch('task').parse(c.req.query('scope'))
-    const nodeRunId = c.req.query('nodeRunId')
-    const mode = c.req.query('mode') === 'deep' ? 'deep' : 'baseline'
-    return c.json(
-      await getTaskStructuralDiff(deps.db, c.req.param('id'), scope, nodeRunId, {
-        mode,
-        deepCfg: mode === 'deep' ? resolveStructuralDeepConfig(deps.configPath) : undefined,
-      }),
-    )
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/structural-diff',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Structural diff',
+    },
+    async (c) => {
+      const scope = structuralScopeSchema.catch('task').parse(c.req.query('scope'))
+      const nodeRunId = c.req.query('nodeRunId')
+      const mode = c.req.query('mode') === 'deep' ? 'deep' : 'baseline'
+      return c.json(
+        await getTaskStructuralDiff(deps.db, c.req.param('id'), scope, nodeRunId, {
+          mode,
+          deepCfg: mode === 'deep' ? resolveStructuralDeepConfig(deps.configPath) : undefined,
+        }),
+      )
+    },
+  )
 
   // RFC-239 §3.2 — AI change narrative. GET follows the task-visibility
   // middleware (read = can see the task); POST additionally requires the
   // member gate (owner / collaborator / admin) inside the service. 404 body
   // means "not generated yet" — the frontend's button state.
-  app.get('/api/tasks/:id/change-narrative', async (c) => {
-    const scope = c.req.query('scope') ?? 'task'
-    if (scope !== 'task') {
-      throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
-    }
-    const status = await getChangeNarrativeStatus(c.req.param('id'))
-    if (status === null) {
-      throw new NotFoundError('narrative-not-found', 'no narrative generated for this task yet')
-    }
-    return c.json(status)
-  })
-  app.post('/api/tasks/:id/change-narrative', async (c) => {
-    const body = (await safeJson(c.req.raw)) as { scope?: string } | null
-    const scope = body?.scope ?? 'task'
-    if (scope !== 'task') {
-      throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
-    }
-    const id = c.req.param('id')
-    const task = await getTask(deps.db, id)
-    if (task === null) {
-      throw new NotFoundError('task-not-found', `task '${id}' not found`)
-    }
-    const narrativeCfg = loadConfig(deps.configPath)
-    const state = await triggerChangeNarrative(
-      {
-        db: deps.db,
-        runtimeName: narrativeCfg.changeNarrativeRuntime ?? null,
-        defaultRuntime: narrativeCfg.defaultRuntime ?? null,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
-      },
-      task,
-      actorOf(c),
-    )
-    return c.json(state, 202)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/change-narrative',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Read the change narrative',
+    },
+    async (c) => {
+      const scope = c.req.query('scope') ?? 'task'
+      if (scope !== 'task') {
+        throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
+      }
+      const status = await getChangeNarrativeStatus(c.req.param('id'))
+      if (status === null) {
+        throw new NotFoundError('narrative-not-found', 'no narrative generated for this task yet')
+      }
+      return c.json(status)
+    },
+  )
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/change-narrative',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Generate the change narrative (model call)',
+    },
+    async (c) => {
+      const body = (await safeJson(c.req.raw)) as { scope?: string } | null
+      const scope = body?.scope ?? 'task'
+      if (scope !== 'task') {
+        throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
+      }
+      const id = c.req.param('id')
+      const task = await getTask(deps.db, id)
+      if (task === null) {
+        throw new NotFoundError('task-not-found', `task '${id}' not found`)
+      }
+      const narrativeCfg = loadConfig(deps.configPath)
+      const state = await triggerChangeNarrative(
+        {
+          db: deps.db,
+          runtimeName: narrativeCfg.changeNarrativeRuntime ?? null,
+          defaultRuntime: narrativeCfg.defaultRuntime ?? null,
+          ...(deps.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: deps.containmentCoordinator }),
+        },
+        task,
+        actorOf(c),
+      )
+      return c.json(state, 202)
+    },
+  )
 
   // RFC-239 §3.5 — full-text file content (base|worktree side) for the
   // markdown rendered-diff view. Both sides answer a missing file with
   // 200 {exists:false}; a renamed file's base side is read via `basePath`
   // (the caller passes the structural diff's renamedFrom). Behind the same
   // /api/tasks/:id visibility middleware as every other task read.
-  app.get('/api/tasks/:id/file-content', async (c) => {
-    const side = c.req.query('side')
-    if (side !== 'base' && side !== 'worktree') {
-      throw new ValidationError(
-        'file-content-side-invalid',
-        `side query param must be 'base' or 'worktree'`,
-      )
-    }
-    const q: Parameters<typeof getTaskFileContent>[2] = {
-      path: c.req.query('path') ?? '',
-      side,
-    }
-    const basePath = c.req.query('basePath')
-    if (basePath !== undefined && basePath !== '') q.basePath = basePath
-    const repo = c.req.query('repo')
-    if (repo !== undefined && repo !== '') q.repo = repo
-    return c.json(await getTaskFileContent(deps.db, c.req.param('id'), q))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/file-content',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Read a file from the diff',
+    },
+    async (c) => {
+      const side = c.req.query('side')
+      if (side !== 'base' && side !== 'worktree') {
+        throw new ValidationError(
+          'file-content-side-invalid',
+          `side query param must be 'base' or 'worktree'`,
+        )
+      }
+      const q: Parameters<typeof getTaskFileContent>[2] = {
+        path: c.req.query('path') ?? '',
+        side,
+      }
+      const basePath = c.req.query('basePath')
+      if (basePath !== undefined && basePath !== '') q.basePath = basePath
+      const repo = c.req.query('repo')
+      if (repo !== undefined && repo !== '') q.repo = repo
+      return c.json(await getTaskFileContent(deps.db, c.req.param('id'), q))
+    },
+  )
 
   // RFC-085 — lazy call-chain expansion: direct callees of one method (method+
   // constructor calls), source-ordered, best-effort resolved/external/unresolved.
-  app.get('/api/tasks/:id/call-targets', async (c) => {
-    const methodRef = c.req.query('methodRef')
-    if (methodRef === undefined || methodRef === '') {
-      // RFC-203 T6: uniform error body (was a bare `{error: string}` the
-      // shared decoder could not parse) + a call-target-specific code.
-      throw new ValidationError(
-        'call-target-method-required',
-        'methodRef query param required for /call-targets',
-      )
-    }
-    const targets = await getCallTargets(deps.db, c.req.param('id'), methodRef)
-    return c.json({ targets })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/call-targets',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Call-node targets',
+    },
+    async (c) => {
+      const methodRef = c.req.query('methodRef')
+      if (methodRef === undefined || methodRef === '') {
+        // RFC-203 T6: uniform error body (was a bare `{error: string}` the
+        // shared decoder could not parse) + a call-target-specific code.
+        throw new ValidationError(
+          'call-target-method-required',
+          'methodRef query param required for /call-targets',
+        )
+      }
+      const targets = await getCallTargets(deps.db, c.req.param('id'), methodRef)
+      return c.json({ targets })
+    },
+  )
 
   // RFC-053 P-6: list currently-open lifecycle_alerts (invariant + stuck)
   // for this task. Powers the StuckTaskBanner — banners only render when
   // the response has at least one row. Empty list = healthy task = no
   // banner at all.
-  app.get('/api/tasks/:id/alerts', async (c) => {
-    const taskId = c.req.param('id')
-    const alerts = await listOpenLifecycleAlertsForTask(deps.db, taskId)
-    return c.json({ alerts })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/alerts',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List task alerts',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      const alerts = await listOpenLifecycleAlertsForTask(deps.db, taskId)
+      return c.json({ alerts })
+    },
+  )
 
   // RFC-108 T3 (AR-11): per-task system-recovery audit trail (boot-reap /
   // shutdown-flip / limit-cancel / snapshot-lost / live-child-survived / …).
   // Behind the same /api/tasks/:id visibility middleware mounted above.
-  app.get('/api/tasks/:id/recovery-events', async (c) => {
-    const taskId = c.req.param('id')
-    const [events, suspended] = await Promise.all([
-      listRecoveryEventsForTask(deps.db, taskId),
-      isAutoRecoverySuspended(deps.db, taskId),
-    ])
-    return c.json({ events, suspended })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/recovery-events',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List recovery events',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      const [events, suspended] = await Promise.all([
+        listRecoveryEventsForTask(deps.db, taskId),
+        isAutoRecoverySuspended(deps.db, taskId),
+      ])
+      return c.json({ events, suspended })
+    },
+  )
 
   // RFC-108 T11 (AR-09): human one-click clear of an auto-recovery quarantine
   // (a task that crash-looped past the breaker threshold). Behind the same
   // /api/tasks/:id visibility middleware (owner / collaborator / admin).
-  app.post('/api/tasks/:id/clear-recovery-suspension', async (c) => {
-    await clearAutoRecoverySuspension(deps.db, c.req.param('id'))
-    return c.json({ ok: true })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/clear-recovery-suspension',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Clear recovery suspension',
+    },
+    async (c) => {
+      await clearAutoRecoverySuspension(deps.db, c.req.param('id'))
+      return c.json({ ok: true })
+    },
+  )
 
   // RFC-053 P-3: on-demand invariant scan for the diagnose panel. Reads
   // live (not the cached lifecycle_alerts table) so a stuck-task report
@@ -508,241 +694,334 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   // a 30-min freshness gate and runs on its own 5-min cadence, so the
   // live scan alone misses those — leaving the banner saying "open
   // alerts" while the panel says "no findings".
-  app.post('/api/tasks/:id/diagnose', async (c) => {
-    const taskId = c.req.param('id')
-    const result = await runLifecycleInvariants({
-      db: deps.db,
-      scope: { taskId },
-      onAlert: (row, transition) => {
-        tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-          type: 'lifecycle.alert',
-          taskId: row.taskId,
-          rule: row.rule,
-          severity: row.severity,
-          transition,
-        })
-      },
-      onResolved: broadcastLifecycleAlertResolved,
-    })
-    const invariantIds = new Set(result.openAlerts.map((a) => a.id))
-    const allOpen = await listOpenLifecycleAlertsForTask(deps.db, taskId)
-    const extra = allOpen
-      .filter((a) => !invariantIds.has(a.id))
-      .map((a) => ({
-        id: a.id,
-        taskId: a.taskId,
-        rule: a.rule,
-        severity: a.severity,
-        detail: a.detail,
-        detectedAt: a.detectedAt,
-        resolvedAt: null,
-      }))
-    return c.json({ ...result, openAlerts: [...result.openAlerts, ...extra] })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/diagnose',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Run diagnosis',
+    },
+    async (c) => {
+      const taskId = c.req.param('id')
+      const result = await runLifecycleInvariants({
+        db: deps.db,
+        scope: { taskId },
+        onAlert: (row, transition) => {
+          tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+            type: 'lifecycle.alert',
+            taskId: row.taskId,
+            rule: row.rule,
+            severity: row.severity,
+            transition,
+          })
+        },
+        onResolved: broadcastLifecycleAlertResolved,
+      })
+      const invariantIds = new Set(result.openAlerts.map((a) => a.id))
+      const allOpen = await listOpenLifecycleAlertsForTask(deps.db, taskId)
+      const extra = allOpen
+        .filter((a) => !invariantIds.has(a.id))
+        .map((a) => ({
+          id: a.id,
+          taskId: a.taskId,
+          rule: a.rule,
+          severity: a.severity,
+          detail: a.detail,
+          detectedAt: a.detectedAt,
+          resolvedAt: null,
+        }))
+      return c.json({ ...result, openAlerts: [...result.openAlerts, ...extra] })
+    },
+  )
 
-  app.post('/api/tasks/:id/resume', async (c) => {
-    await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-    const task = await resumeTask(deps.db, c.req.param('id'), {
-      db: deps.db,
-      ...(deps.containmentCoordinator === undefined
-        ? {}
-        : { containmentCoordinator: deps.containmentCoordinator }),
-      ...(opencodeCmd ? { opencodeCmd } : {}),
-      ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-      // RFC-103 T2: resume must thread commit&push + maxConcurrentNodes too.
-      ...resolveLaunchRuntimeConfig(deps.configPath),
-    })
-    return c.json(task)
-  })
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/resume',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Resume a task',
+    },
+    async (c) => {
+      await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
+      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
+      const task = await resumeTask(deps.db, c.req.param('id'), {
+        db: deps.db,
+        ...(deps.containmentCoordinator === undefined
+          ? {}
+          : { containmentCoordinator: deps.containmentCoordinator }),
+        ...(opencodeCmd ? { opencodeCmd } : {}),
+        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
+        // RFC-103 T2: resume must thread commit&push + maxConcurrentNodes too.
+        ...resolveLaunchRuntimeConfig(deps.configPath),
+      })
+      return c.json(task)
+    },
+  )
 
   // RFC-109 — preview the delta between the task's frozen workflow snapshot and
   // the latest definition of its workflow (drives the "workflow updated" banner
   // + confirm dialog). Read-only; visibilityCheck already gates task membership,
   // and the workflow must be visible (RFC-099, 404-shaped to avoid probing).
-  app.get('/api/tasks/:id/workflow-sync-preview', async (c) => {
-    const id = c.req.param('id')
-    const task = await getTask(deps.db, id)
-    if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
-    const notSyncable = (reason: WorkflowSyncPreview['reason']): WorkflowSyncPreview => ({
-      syncable: false,
-      reason,
-      workflowId: task.workflowId,
-      workflowName: task.workflowName,
-      currentVersion: task.workflowVersion,
-      latestVersion: null,
-      differs: false,
-      invalid: false,
-      invalidIssues: [],
-      diff: emptyWorkflowSyncDiff(),
-    })
-    const workflow = await getWorkflow(deps.db, task.workflowId)
-    if (workflow === null) return c.json(notSyncable('workflow-deleted'))
-    if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
-      return c.json(notSyncable('workflow-not-visible'))
-    }
-    return c.json(await computeWorkflowSyncPreview(deps.db, task, workflow))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/workflow-sync-preview',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Preview a workflow sync',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const task = await getTask(deps.db, id)
+      if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
+      const notSyncable = (reason: WorkflowSyncPreview['reason']): WorkflowSyncPreview => ({
+        syncable: false,
+        reason,
+        workflowId: task.workflowId,
+        workflowName: task.workflowName,
+        currentVersion: task.workflowVersion,
+        latestVersion: null,
+        differs: false,
+        invalid: false,
+        invalidIssues: [],
+        diff: emptyWorkflowSyncDiff(),
+      })
+      const workflow = await getWorkflow(deps.db, task.workflowId)
+      if (workflow === null) return c.json(notSyncable('workflow-deleted'))
+      if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
+        return c.json(notSyncable('workflow-not-visible'))
+      }
+      return c.json(await computeWorkflowSyncPreview(deps.db, task, workflow))
+    },
+  )
 
   // RFC-109 — apply the sync: swap the task's snapshot to the latest definition
   // (recording its version) and continue from the breakpoint. Built-in guard
   // (RFC-104) + workflow visibility (RFC-099) mirror launch; the service owns
   // the version-TOCTOU / invalid / noop / wrapper-blocker / status gates.
-  app.post('/api/tasks/:id/sync-workflow', async (c) => {
-    const id = c.req.param('id')
-    await assertTaskSyncable(deps, id) // RFC-104 builtin 403 / RFC-165 host 422
-    const task = await getTask(deps.db, id)
-    if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
-    const workflow = await getWorkflow(deps.db, task.workflowId)
-    if (workflow === null) {
-      throw new NotFoundError('workflow-deleted', `workflow '${task.workflowId}' no longer exists`)
-    }
-    if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
-      // 404-shaped (RFC-099 anti-probing) — same as an unknown workflow.
-      throw new NotFoundError('workflow-not-visible', `workflow '${task.workflowId}' not found`)
-    }
-    const body = SyncWorkflowBodySchema.safeParse(await c.req.json().catch(() => ({})))
-    if (!body.success) {
-      throw new ValidationError('invalid-body', 'expectedVersion (number) required', {
-        issues: body.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/sync-workflow',
+      permissions: ['tasks:update'],
+      tokenAccess: 'allow',
+      summary: 'Sync the task to its workflow definition',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      await assertTaskSyncable(deps, id) // RFC-104 builtin 403 / RFC-165 host 422
+      const task = await getTask(deps.db, id)
+      if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
+      const workflow = await getWorkflow(deps.db, task.workflowId)
+      if (workflow === null) {
+        throw new NotFoundError(
+          'workflow-deleted',
+          `workflow '${task.workflowId}' no longer exists`,
+        )
+      }
+      if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
+        // 404-shaped (RFC-099 anti-probing) — same as an unknown workflow.
+        throw new NotFoundError('workflow-not-visible', `workflow '${task.workflowId}' not found`)
+      }
+      const body = SyncWorkflowBodySchema.safeParse(await c.req.json().catch(() => ({})))
+      if (!body.success) {
+        throw new ValidationError('invalid-body', 'expectedVersion (number) required', {
+          issues: body.error.issues,
+        })
+      }
+      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
+      const updated = await syncTaskWorkflow(deps.db, id, {
+        db: deps.db,
+        expectedVersion: body.data.expectedVersion,
+        ...(opencodeCmd ? { opencodeCmd } : {}),
+        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
+        ...resolveLaunchRuntimeConfig(deps.configPath),
       })
-    }
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-    const updated = await syncTaskWorkflow(deps.db, id, {
-      db: deps.db,
-      expectedVersion: body.data.expectedVersion,
-      ...(opencodeCmd ? { opencodeCmd } : {}),
-      ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-      ...resolveLaunchRuntimeConfig(deps.configPath),
-    })
-    return c.json(updated)
-  })
+      return c.json(updated)
+    },
+  )
 
   // RFC-057: Diagnose-Panel repair options.
-  app.get('/api/tasks/:id/alerts/:alertId/repair-options', async (c) => {
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-    const actor = actorOf(c)
-    const result = await listRepairOptionsForAlert({
-      db: deps.db,
-      taskId: c.req.param('id'),
-      alertId: c.req.param('alertId'),
-      actorUserId: actor.user.id,
-      appHome: Paths.root,
-      deps: {
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/alerts/:alertId/repair-options',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Repair options for an alert',
+    },
+    async (c) => {
+      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
+      const actor = actorOf(c)
+      const result = await listRepairOptionsForAlert({
         db: deps.db,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
-        ...(opencodeCmd ? { opencodeCmd } : {}),
-        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-        // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
-        // → resumeTask(deps); thread the same runtime config (timeout floor +
-        // commit&push + concurrency) so repair-kicked nodes are not unbounded.
-        ...resolveLaunchRuntimeConfig(deps.configPath),
-      },
-    })
-    return c.json(result)
-  })
+        taskId: c.req.param('id'),
+        alertId: c.req.param('alertId'),
+        actorUserId: actor.user.id,
+        appHome: Paths.root,
+        deps: {
+          db: deps.db,
+          ...(deps.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: deps.containmentCoordinator }),
+          ...(opencodeCmd ? { opencodeCmd } : {}),
+          ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
+          // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
+          // → resumeTask(deps); thread the same runtime config (timeout floor +
+          // commit&push + concurrency) so repair-kicked nodes are not unbounded.
+          ...resolveLaunchRuntimeConfig(deps.configPath),
+        },
+      })
+      return c.json(result)
+    },
+  )
 
-  app.post('/api/tasks/:id/alerts/:alertId/repair', async (c) => {
-    const bodyJson = (await c.req.json().catch(() => ({}))) as unknown
-    const parsed = RepairRequestSchema.safeParse(bodyJson)
-    if (!parsed.success) {
-      throw new ValidationError(
-        'confirm-required',
-        'POST body must be `{ optionId: string, confirm: true }`',
-        parsed.error.issues,
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/alerts/:alertId/repair',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Apply an alert repair',
+    },
+    async (c) => {
+      const bodyJson = (await c.req.json().catch(() => ({}))) as unknown
+      const parsed = RepairRequestSchema.safeParse(bodyJson)
+      if (!parsed.success) {
+        throw new ValidationError(
+          'confirm-required',
+          'POST body must be `{ optionId: string, confirm: true }`',
+          parsed.error.issues,
+        )
+      }
+      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
+      const actor = actorOf(c)
+      const result = await applyRepairOption({
+        db: deps.db,
+        taskId: c.req.param('id'),
+        alertId: c.req.param('alertId'),
+        optionId: parsed.data.optionId,
+        actorUserId: actor.user.id,
+        appHome: Paths.root,
+        deps: {
+          db: deps.db,
+          ...(deps.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: deps.containmentCoordinator }),
+          ...(opencodeCmd ? { opencodeCmd } : {}),
+          ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
+          // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
+          // resumeTask(deps) must carry the runtime config (timeout floor +
+          // commit&push + concurrency), else auto/manual repairs kick unbounded nodes.
+          ...resolveLaunchRuntimeConfig(deps.configPath),
+        },
+        onAlert: (row, transition) => {
+          tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+            type: 'lifecycle.alert',
+            taskId: row.taskId,
+            rule: row.rule,
+            severity: row.severity,
+            transition,
+          })
+        },
+        onResolved: broadcastLifecycleAlertResolved,
+      })
+      return c.json(result)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/tasks/:id/nodes/:nodeRunId/retry',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Retry a node (rolls back to pre_snapshot, cascades downstream)',
+    },
+    async (c) => {
+      await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
+      // flag-audit W0：统一布尔解析（此前 `!== 'false'` 双重否定——任何拼错值静默当
+      // true）。产品语义保留默认级联。
+      const cascade = parseBoolQuery(c, 'cascade', { default: true })
+      const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
+      const task = await retryNode(deps.db, c.req.param('id'), c.req.param('nodeRunId'), {
+        cascade,
+        deps: {
+          db: deps.db,
+          ...(deps.containmentCoordinator === undefined
+            ? {}
+            : { containmentCoordinator: deps.containmentCoordinator }),
+          ...(opencodeCmd ? { opencodeCmd } : {}),
+          ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
+          // RFC-103 T2: retry must thread commit&push + maxConcurrentNodes too.
+          ...resolveLaunchRuntimeConfig(deps.configPath),
+        },
+      })
+      return c.json(task)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/nodes/:nodeRunId/stdout',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Node run stdout',
+    },
+    async (c) => {
+      const text = await getNodeRunStdout(deps.db, c.req.param('id'), c.req.param('nodeRunId'))
+      return c.text(text)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/node-runs/:nodeRunId/events',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Node run events',
+    },
+    async (c) => {
+      const sinceRaw = c.req.query('since')
+      const limitRaw = c.req.query('limit')
+      const opts: { since?: number; limit?: number } = {}
+      if (sinceRaw !== undefined) {
+        const n = Number(sinceRaw)
+        if (!Number.isFinite(n) || n < 0) {
+          throw new ValidationError('events-since-invalid', `since must be a non-negative number`)
+        }
+        opts.since = n
+      }
+      if (limitRaw !== undefined) {
+        const n = Number(limitRaw)
+        if (!Number.isFinite(n) || n <= 0) {
+          throw new ValidationError('events-limit-invalid', `limit must be a positive number`)
+        }
+        opts.limit = n
+      }
+      return c.json(
+        await getNodeRunEvents(deps.db, c.req.param('id'), c.req.param('nodeRunId'), opts),
       )
-    }
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-    const actor = actorOf(c)
-    const result = await applyRepairOption({
-      db: deps.db,
-      taskId: c.req.param('id'),
-      alertId: c.req.param('alertId'),
-      optionId: parsed.data.optionId,
-      actorUserId: actor.user.id,
-      appHome: Paths.root,
-      deps: {
-        db: deps.db,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
-        ...(opencodeCmd ? { opencodeCmd } : {}),
-        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-        // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
-        // resumeTask(deps) must carry the runtime config (timeout floor +
-        // commit&push + concurrency), else auto/manual repairs kick unbounded nodes.
-        ...resolveLaunchRuntimeConfig(deps.configPath),
-      },
-      onAlert: (row, transition) => {
-        tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-          type: 'lifecycle.alert',
-          taskId: row.taskId,
-          rule: row.rule,
-          severity: row.severity,
-          transition,
-        })
-      },
-      onResolved: broadcastLifecycleAlertResolved,
-    })
-    return c.json(result)
-  })
-
-  app.post('/api/tasks/:id/nodes/:nodeRunId/retry', async (c) => {
-    await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
-    // flag-audit W0：统一布尔解析（此前 `!== 'false'` 双重否定——任何拼错值静默当
-    // true）。产品语义保留默认级联。
-    const cascade = parseBoolQuery(c, 'cascade', { default: true })
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-    const task = await retryNode(deps.db, c.req.param('id'), c.req.param('nodeRunId'), {
-      cascade,
-      deps: {
-        db: deps.db,
-        ...(deps.containmentCoordinator === undefined
-          ? {}
-          : { containmentCoordinator: deps.containmentCoordinator }),
-        ...(opencodeCmd ? { opencodeCmd } : {}),
-        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-        // RFC-103 T2: retry must thread commit&push + maxConcurrentNodes too.
-        ...resolveLaunchRuntimeConfig(deps.configPath),
-      },
-    })
-    return c.json(task)
-  })
-
-  app.get('/api/tasks/:id/nodes/:nodeRunId/stdout', async (c) => {
-    const text = await getNodeRunStdout(deps.db, c.req.param('id'), c.req.param('nodeRunId'))
-    return c.text(text)
-  })
-
-  app.get('/api/tasks/:id/node-runs/:nodeRunId/events', async (c) => {
-    const sinceRaw = c.req.query('since')
-    const limitRaw = c.req.query('limit')
-    const opts: { since?: number; limit?: number } = {}
-    if (sinceRaw !== undefined) {
-      const n = Number(sinceRaw)
-      if (!Number.isFinite(n) || n < 0) {
-        throw new ValidationError('events-since-invalid', `since must be a non-negative number`)
-      }
-      opts.since = n
-    }
-    if (limitRaw !== undefined) {
-      const n = Number(limitRaw)
-      if (!Number.isFinite(n) || n <= 0) {
-        throw new ValidationError('events-limit-invalid', `limit must be a positive number`)
-      }
-      opts.limit = n
-    }
-    return c.json(
-      await getNodeRunEvents(deps.db, c.req.param('id'), c.req.param('nodeRunId'), opts),
-    )
-  })
+    },
+  )
 
   // RFC-027: Session-tree view consumed by the NodeDetailDrawer's
   // Session tab. Reads the persisted events for one node_run and
@@ -750,53 +1029,95 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   // / tool_use / subagent-call, with recursive children for any task
   // tool whose child sessionID was captured into node_run_events by
   // sessionCapture).
-  app.get('/api/tasks/:id/node-runs/:nodeRunId/session', async (c) => {
-    return c.json(await getSessionTree(deps.db, c.req.param('id'), c.req.param('nodeRunId')))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/node-runs/:nodeRunId/session',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Node run session view',
+    },
+    async (c) => {
+      return c.json(await getSessionTree(deps.db, c.req.param('id'), c.req.param('nodeRunId')))
+    },
+  )
 
   // RFC-029: Runtime inventory snapshot rendered at the top of the
   // NodeDetailDrawer's Session tab. The snapshot was written into
   // node_runs.inventory_snapshot_json by the runner after `child.exited`,
   // sourced from a file the framework-injected `aw-inventory-dump.mjs`
   // opencode plugin produced inside the per-run dir.
-  app.get('/api/tasks/:id/node-runs/:nodeRunId/inventory', async (c) => {
-    return c.json(await getInventorySnapshot(deps.db, c.req.param('id'), c.req.param('nodeRunId')))
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/node-runs/:nodeRunId/inventory',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Node run resolved inventory',
+    },
+    async (c) => {
+      return c.json(
+        await getInventorySnapshot(deps.db, c.req.param('id'), c.req.param('nodeRunId')),
+      )
+    },
+  )
 
   // RFC-065 — task detail page "工作目录" tab.
   //
   // List one directory's direct children (lazy load). `path` query param is
   // relative to the task's worktreePath; empty string = root.
-  app.get('/api/tasks/:id/worktree-tree', async (c) => {
-    const id = c.req.param('id')
-    const task = await getTask(deps.db, id)
-    if (task === null) {
-      throw new NotFoundError('task-not-found', `task '${id}' not found`)
-    }
-    if (task.worktreePath === '') {
-      throw new NotFoundError('task-worktree-missing', `task '${id}' has no worktree`)
-    }
-    const rel = c.req.query('path') ?? ''
-    const { entries, truncated } = await listWorktreeDir(task.worktreePath, rel)
-    return c.json({ path: rel, entries, truncated })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/worktree-tree',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Worktree file tree',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const task = await getTask(deps.db, id)
+      if (task === null) {
+        throw new NotFoundError('task-not-found', `task '${id}' not found`)
+      }
+      if (task.worktreePath === '') {
+        throw new NotFoundError('task-worktree-missing', `task '${id}' has no worktree`)
+      }
+      const rel = c.req.query('path') ?? ''
+      const { entries, truncated } = await listWorktreeDir(task.worktreePath, rel)
+      return c.json({ path: rel, entries, truncated })
+    },
+  )
 
   // RFC-065 — read one worktree file's text content. Server enforces the
   // 2 MiB cap; oversized returns `{oversized:true, content:''}` with the
   // real size so the UI can render an "too large" hint.
-  app.get('/api/tasks/:id/worktree-file', async (c) => {
-    const id = c.req.param('id')
-    const task = await getTask(deps.db, id)
-    if (task === null) {
-      throw new NotFoundError('task-not-found', `task '${id}' not found`)
-    }
-    if (task.worktreePath === '') {
-      throw new NotFoundError('task-worktree-missing', `task '${id}' has no worktree`)
-    }
-    const rel = c.req.query('path') ?? ''
-    const result = await readWorktreeFile(task.worktreePath, rel)
-    return c.json({ path: rel, ...result })
-  })
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/worktree-file',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Read a worktree file',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const task = await getTask(deps.db, id)
+      if (task === null) {
+        throw new NotFoundError('task-not-found', `task '${id}' not found`)
+      }
+      if (task.worktreePath === '') {
+        throw new NotFoundError('task-worktree-missing', `task '${id}' has no worktree`)
+      }
+      const rel = c.req.query('path') ?? ''
+      const result = await readWorktreeFile(task.worktreePath, rel)
+      return c.json({ path: rel, ...result })
+    },
+  )
 }
 
 async function safeJson(req: Request): Promise<unknown> {
