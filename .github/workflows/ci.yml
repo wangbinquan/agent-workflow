@@ -357,10 +357,21 @@ jobs:
           # 403 / 429 are accepted because some sites (GitHub anonymous,
           # Wikipedia rate limits) block CI runners — those aren't
           # actionable as "broken links". 200 / 206 cover normal + range.
+          #
+          # The retry/timeout flags cover a DIFFERENT failure mode that
+          # `--accept` structurally cannot: a dropped TCP connection yields no
+          # HTTP status at all, so no status allowlist can absorb it. Observed
+          # on main 2026-08-02 — `w3c.github.io` reset the connection
+          # (`os error 104`) and reddened a run whose only change was two i18n
+          # files; the URL returned 200 on every manual retry. Being explicit
+          # here also beats inheriting lychee's defaults silently.
           args: >-
             --no-progress
             --max-concurrency 4
             --accept 200,206,403,429
+            --max-retries 5
+            --retry-wait-time 5
+            --timeout 30
             'design/**/*.md'
           fail: true
           jobSummary: true
