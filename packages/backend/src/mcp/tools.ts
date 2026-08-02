@@ -531,6 +531,12 @@ interface ResourceOp {
    * from RFC-247's type-to-confirm body. Only `memory` does this today.
    */
   readonly confirmQuery?: boolean
+  /**
+   * RFC-248: 这个 kind 的 delete 支持 `?force=1`（摘除引用 / 停发计划）。
+   * 没有它的话，MCP 调用方收到 409 后**无路可走**——`resource_write` 不接
+   * 任何 query，往 body 里塞 `force` 也会被 REST 路由忽略（它读的是查询串）。
+   */
+  readonly forceQuery?: boolean
 }
 
 interface ResourceRoutes {
@@ -636,7 +642,7 @@ const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
     get: { method: 'GET', path: '/api/repo-groups/:id' },
     create: { method: 'POST', path: '/api/repo-groups' },
     update: { method: 'PUT', path: '/api/repo-groups/:id' },
-    delete: { method: 'DELETE', path: '/api/repo-groups/:id' },
+    delete: { method: 'DELETE', path: '/api/repo-groups/:id', forceQuery: true },
     note:
       'RFC-248: a repo group is a named multi-repo layout (mount paths, nesting, sparse subdir, ' +
       'readonly). It is the ONLY way to launch a multi-repo task — `launch_task` takes ' +
@@ -726,6 +732,14 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
         .min(1)
         .optional()
         .describe('Required for delete: the exact resource name'),
+      force: z
+        .boolean()
+        .optional()
+        .describe(
+          'Delete only, and only where the kind supports it (repo-groups): proceed even though ' +
+            'other resources still reference this one — detaching those references and disabling ' +
+            'referencing scheduled tasks. Without it such a delete returns 409.',
+        ),
     },
     handler: async (args, ctx) => {
       const routes = routesFor(args.kind)
@@ -772,7 +786,11 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
           // pre-RFC-247 irreversibility ack) IN ADDITION to the token's
           // type-to-confirm body. Sending only the body made every memory
           // delete fail with `confirm-required`.
-          query: op.confirmQuery === true ? { confirm: 'true' } : undefined,
+          query: {
+            ...(op.confirmQuery === true ? { confirm: 'true' } : {}),
+            // RFC-248: 强制删除走查询串（REST 路由读的是 `?force=1`）。
+            ...(op.forceQuery === true && args.force === true ? { force: '1' } : {}),
+          },
           body: { ...(args.body ?? {}), confirm: args.confirm },
         }),
       )

@@ -169,7 +169,17 @@ export const PreviewRepoGroupSchema = z.object({
 })
 export type PreviewRepoGroup = z.infer<typeof PreviewRepoGroupSchema>
 
-export const UpdateRepoGroupSchema = CreateRepoGroupSchema
+/**
+ * 改组 = 建组的字段 + **OCC 栅栏** `expectedVersion`。
+ *
+ * 曾经它只是 `CreateRepoGroupSchema` 的别名——于是客户端老老实实发了
+ * `expectedVersion`，zod（非 strict）**静默剥掉**，路由也就没什么可转发的，
+ * 服务层那道 409 永远不触发：两个人同时编辑同一个组，后写的无声覆盖先写的
+ * （Codex 实现门 P1）。栅栏是可选的：不传就是「我知道会覆盖」。
+ */
+export const UpdateRepoGroupSchema = CreateRepoGroupSchema.extend({
+  expectedVersion: z.number().int().positive().optional(),
+})
 export type UpdateRepoGroup = z.infer<typeof UpdateRepoGroupSchema>
 
 export const RepoGroupLayoutResponseSchema = z.object({

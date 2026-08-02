@@ -44,6 +44,7 @@ import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
 import { Dialog } from '@/components/Dialog'
 import { SessionTab } from '@/components/node-session/SessionTab'
 import { collectPorts, TaskOutputPanel } from '@/components/TaskOutputPanel'
+import { RepoLayoutTree } from '@/components/repos/RepoLayoutTree'
 import { StatusChip } from '@/components/StatusChip'
 import { ShaRange } from '@/components/ShaRange'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
@@ -932,63 +933,51 @@ function TaskDetailPage() {
               render nothing here — byte-baseline visual against pre-RFC-066.
               Multi-repo shows a collapsible block listing every repo's
               sub-dir name, baseBranch, and (when present) redacted URL. */}
+            {/* RFC-248（实现门 P2）：溯源按 `repoGroupName` 判定，**不看仓数**
+                ——一个合法的仓库组完全可以只有一个成员，用 `repoCount > 1` 会把
+                它的组标记、只读提示、布局整块吞掉。多仓布局块仍按仓数渲染。 */}
+            {(tk.repoGroupName ?? '') !== '' && (
+              <div className="info-box" data-testid="task-detail-repo-group">
+                <StatusChip kind="info" size="sm">
+                  {t('tasks.repoGroupChip', { name: tk.repoGroupName })}
+                </StatusChip>
+              </div>
+            )}
+            {tk.repos.some((r) => r.readonly && (r.readonlyDirtyCount ?? 0) > 0) && (
+              // 只读成员被改动过 ⇒ 那些改动**没有**被提交推送。这条要显眼，
+              // 否则用户会以为 agent 的改动丢了是平台的 bug（AC-19）。
+              <div
+                className="info-box info-box--warn"
+                role="alert"
+                data-testid="task-detail-readonly-dirty-banner"
+              >
+                {t('tasks.repoReadonlyDirtyBanner', {
+                  mounts: tk.repos
+                    .filter((r) => r.readonly && (r.readonlyDirtyCount ?? 0) > 0)
+                    .map((r) => (r.mountPath === '' ? '.' : r.mountPath))
+                    .join(', '),
+                })}
+              </div>
+            )}
             {tk.repoCount > 1 && (
               <details className="task-detail__multi-repo" data-testid="task-detail-multi-repo">
-                <summary>
-                  {t('tasks.multiRepoSummary', { count: tk.repoCount })}
-                  {/* RFC-248: 组溯源 chip。名字是启动时的**快照**，组后来被改名
-                      或删除都不影响这里——任务跑的是当时那份布局（D8）。 */}
-                  {tk.repoGroupName !== null && tk.repoGroupName !== undefined && (
-                    <>
-                      {' '}
-                      <StatusChip kind="info" size="sm" data-testid="task-detail-repo-group">
-                        {t('tasks.repoGroupChip', { name: tk.repoGroupName })}
-                      </StatusChip>
-                    </>
-                  )}
-                </summary>
-                <ul className="task-detail__multi-repo-list">
-                  {tk.repos.map((r) => (
-                    <li key={r.repoIndex} data-testid={`task-detail-multi-repo-row-${r.repoIndex}`}>
-                      {/* RFC-248: 显示**挂载路径**——嵌套布局下 basename 丢方位，
-                          `vendor/sdk` 才说明这个仓在工作树里的位置。挂根成员的
-                          挂载路径是空串，用 `.` 表示任务根。 */}
-                      <code>{r.mountPath === '' ? '.' : r.mountPath || r.repoPath}</code>
-                      {' @ '}
-                      <code>{r.baseBranch || t('common.emDash')}</code>
-                      {r.readonly && (
-                        <>
-                          {' '}
-                          <StatusChip
-                            kind="neutral"
-                            size="sm"
-                            data-testid={`task-detail-repo-readonly-${r.repoIndex}`}
-                          >
-                            {t('tasks.repoReadonlyChip')}
-                          </StatusChip>
-                        </>
-                      )}
-                      {/* RFC-248 AC-19: 只读成员被改动过——那些改动**没有**被
-                          提交推送。不提示的话用户会看到 agent 说「改好了」、
-                          工作树里也确实改了，推上去却什么都没有。 */}
-                      {r.readonly && (r.readonlyDirtyCount ?? 0) > 0 && (
-                        <>
-                          {' '}
-                          <StatusChip
-                            kind="warn"
-                            size="sm"
-                            data-testid={`task-detail-repo-readonly-dirty-${r.repoIndex}`}
-                          >
-                            {t('tasks.repoReadonlyDirty', { count: r.readonlyDirtyCount ?? 0 })}
-                          </StatusChip>
-                        </>
-                      )}
-                      {r.repoUrl !== null && r.repoUrl !== '' && (
-                        <span className="data-table__muted"> · {redactGitUrl(r.repoUrl)}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <summary>{t('tasks.multiRepoSummary', { count: tk.repoCount })}</summary>
+                {/* RFC-248（实现门 P2）：用**共享**的 `RepoLayoutTree` 渲染，
+                    而不是另画一个扁平 <ul>——否则嵌套层级、sparse 子目录、只读
+                    标记在这里全看不出来，而组编辑器与组列表里都看得到。
+                    冻结的 task_repos 行适配成 PlannedRepo 形状即可。 */}
+                <RepoLayoutTree
+                  repos={tk.repos.map((r) => ({
+                    cachedRepoId: r.cachedRepoId ?? '',
+                    repoUrlRedacted: r.repoUrl ?? '',
+                    ref: r.baseBranch,
+                    subdir: r.subdir,
+                    mountPath: r.mountPath,
+                    readonly: r.readonly,
+                    viaGroups: [],
+                  }))}
+                  testidPrefix="task-detail-repo-layout"
+                />
               </details>
             )}
             <dl className="task-meta">

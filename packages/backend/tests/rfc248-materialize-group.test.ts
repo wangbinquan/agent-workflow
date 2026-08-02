@@ -279,7 +279,13 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     ])
     const space = await materialize(gid)
     expect(space.kind).toBe('group')
-    expect(lsVisible(space.worktreePath)).toEqual(['guides'])
+    // `.gitignore` 是**平台预置**的（D1）：组空间的上传物落在任务根下的
+    // `.agent-workflow-inputs/`，而挂根成员的工作树根就是任务根。未跟踪文件
+    // **不受 sparse 规则约束**，不排除就会出现在这个仓的 `git status` 里、被
+    // `add -A` 吞进自动提交。所以哪怕是 sparse 成员也要有这一笔。
+    // （对应 `commitGitignorePreset` 的 `git add --sparse`——仓根 .gitignore
+    //   落在 sparse 集之外，不带那个 flag git 会直接拒。）
+    expect(lsVisible(space.worktreePath).sort()).toEqual(['.gitignore', 'guides'])
   })
 
   test('没有仓挂根时 cwd 是不属于任何仓的普通父目录', async () => {

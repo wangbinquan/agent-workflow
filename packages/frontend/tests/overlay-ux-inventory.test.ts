@@ -127,7 +127,7 @@ const OVERLAY_CALLSITES = {
   'components/skill/SkillVersionHistory.tsx': { family: 'resource-management', count: 1 },
   // RFC-201: replacing ZIP-import review state is an explicit shared Dialog.
   'components/skills/ImportZipPanel.tsx': { family: 'resource-management', count: 1 },
-  'routes/repos.tsx': { family: 'resource-management', count: 2 },
+  'routes/repos.tsx': { family: 'resource-management', count: 3 },
   'routes/scheduled.tsx': { family: 'resource-management', count: 1 },
 
   // RFC-239: the changes pane's deep views (graph/impact/call-chain/deps) overlay.

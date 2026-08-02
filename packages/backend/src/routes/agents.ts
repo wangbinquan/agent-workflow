@@ -20,6 +20,7 @@ import {
 import { z } from 'zod'
 import type { Hono } from 'hono'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
@@ -355,6 +356,17 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           'start-task-path-retired',
           `field '${retired}' was retired by RFC-165 — launch with repoUrl/repos (file:// for local repos) or scratch`,
         )
+      }
+
+      // RFC-248 H9（实现门 P1）：`sourceTaskId` 由调用方控制。重放前先确认
+      // 他**看得见**那个任务——否则「能启动某工作流但看不见任务 X」的用户可以
+      // 传 X 的 id，让服务端读出 X 冻结的仓库构成并按它物化，而且泄漏形式是
+      // 「任务成功启动」，完全不像一次越权。不可见与不存在同形（都 404）。
+      {
+        const src = (body as { sourceTaskId?: unknown }).sourceTaskId
+        if (typeof src === 'string' && src.length > 0) {
+          await assertCanReplaySourceTask(deps.db, actorOf(c), src)
+        }
       }
       const parsed = StartAgentTaskSchema.safeParse(body)
       if (!parsed.success) {

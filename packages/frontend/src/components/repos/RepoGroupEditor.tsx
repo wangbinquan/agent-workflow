@@ -121,6 +121,11 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['repo-groups'] })
+      // 组列表里那一行可能正展开着布局树（`['repo-group-layout', id]`）。只失效
+      // 列表的话，那棵树还挂在缓存里显示**改之前**的布局（实现门 P2）。
+      if (group !== undefined) {
+        await qc.invalidateQueries({ queryKey: ['repo-group-layout', group.id] })
+      }
       onClose()
     },
   })
@@ -195,7 +200,12 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
                   {m.kind === 'repo' ? (
                     <Select<string>
                       value={m.cachedRepoId ?? ''}
-                      onChange={(id) => patchAt(i, { cachedRepoId: id } as Partial<DraftMember>)}
+                      onChange={(id) =>
+                        patchAt(i, {
+                          cachedRepoId: id === '' ? undefined : id,
+                          repoUrl: undefined,
+                        } as Partial<DraftMember>)
+                      }
                       ariaLabel={t('repoGroups.editor.pickRepo')}
                       placeholder={t('repoGroups.editor.pickRepo')}
                       data-testid={`repo-group-member-repo-${i}`}
@@ -222,6 +232,23 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
                           .filter((g) => g.id !== group?.id)
                           .map((g) => ({ value: g.id, label: g.name })),
                       ]}
+                    />
+                  )}
+                  {m.kind === 'repo' && (
+                    // RFC-248（实现门 P2）：只给「已导入」下拉的话，API 支持的
+                    // `repoUrl` 形态与预览的 `pendingImports` 在 UI 上完全够不着
+                    // ——用户得先离开编辑器去别处导入一遍再回来。粘 URL 与选已有
+                    // 仓是互斥的两种指定方式，填了 URL 就清掉 id。
+                    <TextInput
+                      value={m.repoUrl ?? ''}
+                      onChange={(v) =>
+                        patchAt(i, {
+                          repoUrl: v === '' ? undefined : v,
+                          ...(v === '' ? {} : { cachedRepoId: undefined }),
+                        } as Partial<DraftMember>)
+                      }
+                      placeholder={t('repoGroups.editor.pasteUrl')}
+                      data-testid={`repo-group-member-url-${i}`}
                     />
                   )}
                   <TextInput

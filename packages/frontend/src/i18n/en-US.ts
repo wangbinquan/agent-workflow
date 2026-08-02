@@ -865,6 +865,16 @@ export const enUS: Resources = {
   },
   repoGroups: {
     tabLabel: 'Repo groups',
+    searchPlaceholder: 'Search name or description…',
+    noMatchesDescription: 'No repo groups match.',
+    deleteTitle: 'Delete repo group',
+    deleteBody:
+      'Delete "{{name}}"? Its {{memories}} bound memories are archived (not hard-deleted, but injection stops immediately).',
+    deleteConflictBody:
+      '"{{name}}" is still referenced by other repo groups or enabled scheduled tasks. Force delete detaches those references and disables those schedules.',
+    deleteForce: 'Force delete',
+    deleteReport:
+      'Deleted: {{memories}} memories archived, {{refs}} references detached, {{schedules}} schedules disabled.',
     tabAria: 'Repo view',
     newButton: 'New repo group',
     loading: 'Loading repo groups…',
@@ -882,6 +892,7 @@ export const enUS: Resources = {
       kindRepo: 'Repo',
       kindGroup: 'Group',
       pickRepo: '— pick a cached repo —',
+      pasteUrl: 'or paste a repo URL (imported on save)',
       pickGroup: '— pick a repo group —',
       mountPlaceholder: 'Mount path (empty = task root)',
       refPlaceholder: 'ref (empty = default branch)',
@@ -2625,6 +2636,8 @@ export const enUS: Resources = {
     repoGroupChip: 'Group: {{name}}',
     repoReadonlyChip: 'read-only',
     repoReadonlyDirty: '{{count}} change(s) discarded (read-only members are never committed)',
+    repoReadonlyDirtyBanner:
+      'Read-only member(s) {{mounts}} were modified during this task — those changes were not committed or pushed. Read-only members never take part in auto commit/push (D11).',
     cancelButton: 'Cancel task',
     relaunchButton: 'Launch again',
     resumeButton: 'Resume task',
@@ -3379,6 +3392,10 @@ export const enUS: Resources = {
     spaceScratchHint:
       'The platform creates an empty Git repo as the working directory; output is delivered as a diff against it and the directory is kept for manual pickup.',
     spaceGroupChip: 'Repo group',
+    spaceReplayChip: 'Reuse task layout',
+    spaceReplaySummary: 'Reuse the repo layout of task {{taskId}}',
+    spaceReplayHint:
+      'Replays the layout frozen when that task launched (not the current group definition — groups can change or be deleted).',
     spaceGroupChange: 'Change',
     spaceGroupSummary: 'Repo group: {{name}}',
     spaceGroupRepoCount: '{{count}} repo(s) after flattening',

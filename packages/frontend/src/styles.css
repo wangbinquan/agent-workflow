@@ -3230,6 +3230,15 @@ code {
   color: var(--text);
 }
 
+/* RFC-248 —— `.info-box` 的告警变体。用既有的 --warn-* 令牌（与 StatusChip
+   的 warn 同源），不新造颜色。场景：只读成员被改动过——这不是错误（任务照常
+   完成），但用户必须看见，否则会以为「agent 的改动丢了」是平台 bug。 */
+.info-box--warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-fg);
+  color: var(--warn-fg);
+}
+
 .form-grid--two {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -21603,4 +21612,10 @@ button.status-chip {
 .repo-group-editor__preview {
   min-width: 0;
   overflow-x: auto;
+}
+
+/* RFC-248 —— 组列表的搜索行。与远端仓那边的工具条同一档间距。 */
+.repo-groups-pane__toolbar {
+  margin-bottom: var(--space-3);
+  max-width: 420px;
 }

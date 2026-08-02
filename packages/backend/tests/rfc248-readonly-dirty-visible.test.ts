@@ -83,33 +83,51 @@ describe('migration 0133 —— task_repos.readonly_dirty_count', () => {
 })
 
 describe('AC-19 —— 语义边界', () => {
+  /** 只读脏检查的实现体（实现门 P1 后从提交推送路径搬到了任务终态收尾）。 */
+  async function inspectorSource(): Promise<string> {
+    const src = await Bun.file(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    ).text()
+    const i = src.indexOf('async function inspectReadonlyRepos(')
+    expect(i).toBeGreaterThan(0)
+    return src.slice(i, src.indexOf('\n}\n', i))
+  }
+
+  test('检查挂在**任务终态收尾**，不是搭在自动提交推送里（实现门 P1）', async () => {
+    // 搭在 `maybeRunCommitPush` 里的话，只有 `autoCommitPush=true` 且顶层节点
+    // 成功的任务才会被检查——默认配置的任务、失败 / 取消的任务全都漏掉，
+    // `readonly_dirty_count` 永远是 NULL、详情页永远没有提示。
+    const src = await Bun.file(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    ).text()
+    const callIdx = src.indexOf('await inspectReadonlyRepos(state, log)')
+    expect(callIdx).toBeGreaterThan(0)
+    // 调用点在终态分派**之前**（failed / canceled / awaiting_* / done 都在它后面）。
+    expect(callIdx).toBeLessThan(src.indexOf("if (result.kind === 'failed'"))
+    // 而且不在 maybeRunCommitPush 体内。
+    const cpIdx = src.indexOf('async function maybeRunCommitPush(')
+    expect(callIdx).toBeLessThan(cpIdx)
+  })
+
   test('**不**使用 lifecycle_alerts 通道', async () => {
     // RFC-108 的自动修复循环会全局扫描 `lifecycle_alerts` 并尝试**修复**每一
     // 条。「只读仓被改动了」不是待修复的不变量违反，是给人看的事实通报——
     // 塞进那张表会被误修。这条锁住实现没有走那条路。
-    const src = await Bun.file(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
-    ).text()
-    const idx = src.indexOf('rfc248/readonly-dirty')
-    expect(idx).toBeGreaterThan(0)
-    const around = src.slice(Math.max(0, idx - 2000), idx + 500)
-    expect(around).toContain('readonlyDirtyCount')
-    expect(around).not.toContain('lifecycleAlerts')
+    const body = await inspectorSource()
+    expect(body).toContain('readonlyDirtyCount')
+    expect(body).not.toContain('lifecycleAlerts')
   })
 
   test('干净时也写 0 —— 不是只在脏的时候才写', async () => {
     // 只在脏时写会让「干净」与「没查过」永远无法区分，UI 也就没法说
     // 「这个只读成员确认没被动过」。
-    const src = await Bun.file(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
-    ).text()
-    const idx = src.indexOf('rfc248/readonly-dirty')
-    const around = src.slice(Math.max(0, idx - 2000), idx)
+    const body = await inspectorSource()
     // 写入语句在 `if (changed.length > 0)` 的**外面**：先无条件写计数，
     // 再按需打日志。
-    const writeAt = around.lastIndexOf('readonlyDirtyCount: changed.length')
-    const guardAt = around.lastIndexOf('if (changed.length > 0)')
+    const writeAt = body.indexOf('readonlyDirtyCount: changed.length')
+    const guardAt = body.indexOf('if (changed.length > 0)')
     expect(writeAt).toBeGreaterThan(0)
-    expect(writeAt).toBeLessThan(guardAt === -1 ? Number.MAX_SAFE_INTEGER : guardAt)
+    expect(guardAt).toBeGreaterThan(0)
+    expect(writeAt).toBeLessThan(guardAt)
   })
 })

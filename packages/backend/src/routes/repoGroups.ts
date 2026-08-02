@@ -107,8 +107,16 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Dry-run flatten an unsaved repo group definition',
     },
     async (c) => {
-      const body = PreviewRepoGroupSchema.parse(await c.req.json())
-      return c.json(previewRepoGroupLayout(deps.db, body))
+      // 用 safeParse：编辑器每加一行都会先出现一个「还没选仓」的中间态，
+      // `.parse()` 抛出的 ZodError 到中央 handler 会渲染成 **500**——把用户
+      // 正常的输入过程报成服务端故障（实现门 P2）。
+      const parsed = PreviewRepoGroupSchema.safeParse(await c.req.json().catch(() => null))
+      if (!parsed.success) {
+        throw new ValidationError('repo-group-invalid', parsed.error.message, {
+          issues: parsed.error.issues,
+        })
+      }
+      return c.json(previewRepoGroupLayout(deps.db, parsed.data))
     },
   )
 
@@ -144,10 +152,14 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
+      // RFC-248: OCC 栅栏必须真的传下去——只在 schema 里留个字段而不转发，
+      // 服务层那道 409 永远不会触发（实现门 P1）。
+      const { expectedVersion, ...body } = parsed.data
       const group = await updateRepoGroup(
         { db: deps.db, cache: cacheDeps() },
         c.req.param('id'),
-        parsed.data,
+        body,
+        expectedVersion,
       )
       return c.json(group)
     },

@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { StructuralDiff, TaskDiff } from '@agent-workflow/shared'
-import { buildChangeGroups, type ChangeGroup } from '@agent-workflow/shared'
+import { buildChangeGroups, changeEntryKey, type ChangeGroup } from '@agent-workflow/shared'
 import { splitByRepo } from '@/components/DiffViewer'
 import { Select } from '@/components/Select'
 import { Segmented } from '@/components/Segmented'
@@ -97,7 +97,7 @@ export function ChangeReviewPanel({
     const order: string[] = []
     for (const g of changeGroups) {
       for (const f of g.files) {
-        const key = f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`
+        const key = changeEntryKey(f.repoLabel, f.filePath)
         if (entryByKey.has(key)) order.push(key)
       }
     }
@@ -177,8 +177,7 @@ export function ChangeReviewPanel({
         setExpanded((prev) => new Set([...prev, ref]))
         const first = group.files[0]
         if (first !== undefined) {
-          const key =
-            first.repoLabel === undefined ? first.filePath : `${first.repoLabel}/${first.filePath}`
+          const key = changeEntryKey(first.repoLabel, first.filePath)
           if (entryByKey.has(key)) setSelectedKey(key)
         }
         return
@@ -197,17 +196,10 @@ export function ChangeReviewPanel({
     const currentKey = selectedKey ?? fileOrder[0]
     if (currentKey === undefined || currentKey === null) return null
     const group = changeGroups.find((g) =>
-      g.files.some(
-        (f) =>
-          (f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`) === currentKey,
-      ),
+      g.files.some((f) => changeEntryKey(f.repoLabel, f.filePath) === currentKey),
     )
     if (group === undefined) return null
-    return new Set(
-      group.files.map((f) =>
-        f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`,
-      ),
-    )
+    return new Set(group.files.map((f) => changeEntryKey(f.repoLabel, f.filePath)))
   }, [changeGroups, selectedKey, fileOrder])
 
   // ---- keyboard on the sidebar tablist ----
@@ -397,7 +389,7 @@ export function ChangeReviewPanel({
                   : t(CATEGORY_TITLE[g.category])
               const sentence = groupSummaries.get(g.key)
               const groupViewed = g.files.filter((f) => {
-                const key = f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`
+                const key = changeEntryKey(f.repoLabel, f.filePath)
                 const entry = entryByKey.get(key)
                 return entry !== undefined && viewed.has(entry.viewedKey)
               }).length
@@ -464,8 +456,7 @@ export function ChangeReviewPanel({
                   )}
                   {isOpen &&
                     g.files.map((f) => {
-                      const key =
-                        f.repoLabel === undefined ? f.filePath : `${f.repoLabel}/${f.filePath}`
+                      const key = changeEntryKey(f.repoLabel, f.filePath)
                       const entry = entryByKey.get(key)
                       if (entry === undefined) return null
                       const isActive = selected?.key === key

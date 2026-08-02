@@ -16,6 +16,7 @@ import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { TextInput } from '@/components/Form'
 import { QueryState } from '@/components/QueryState'
 import { TableViewport } from '@/components/TableViewport'
 import { RepoLayoutTree } from '@/components/repos/RepoLayoutTree'
@@ -23,9 +24,12 @@ import { RepoLayoutTree } from '@/components/repos/RepoLayoutTree'
 export interface RepoGroupsPaneProps {
   list: UseQueryResult<{ items: RepoGroup[] }>
   onEdit: (g: RepoGroup) => void
-  onDelete: (id: string) => void
+  onDelete: (group: RepoGroup) => void
   deleteError: unknown
   newAction: ReactNode
+  /** RFC-248: 名称 / 描述子串过滤（大小写不敏感）。 */
+  search: string
+  onSearchChange: (v: string) => void
 }
 
 function LayoutRow({ groupId }: { groupId: string }) {
@@ -55,10 +59,19 @@ export function RepoGroupsPane({
   onDelete,
   deleteError,
   newAction,
+  search,
+  onSearchChange,
 }: RepoGroupsPaneProps) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState<string | null>(null)
-  const items = list.data?.items ?? []
+  const all = list.data?.items ?? []
+  const q = search.trim().toLowerCase()
+  const items =
+    q === ''
+      ? all
+      : all.filter(
+          (g) => g.name.toLowerCase().includes(q) || g.description.toLowerCase().includes(q),
+        )
 
   if (list.isLoading) {
     return <LoadingState label={t('repoGroups.loading')} data-testid="repo-groups-loading" />
@@ -69,13 +82,36 @@ export function RepoGroupsPane({
         <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
       )}
       {deleteError !== null && deleteError !== undefined && <ErrorBanner error={deleteError} />}
-      {items.length === 0 ? (
-        <EmptyState
-          title={t('repoGroups.empty')}
-          description={t('repoGroups.emptyDescription')}
-          action={newAction}
-          data-testid="repo-groups-empty"
+      <div className="repo-groups-pane__toolbar">
+        <TextInput
+          value={search}
+          onChange={onSearchChange}
+          placeholder={t('repoGroups.searchPlaceholder')}
+          aria-label={t('repoGroups.searchPlaceholder')}
+          data-testid="repo-groups-search"
         />
+      </div>
+      {items.length === 0 ? (
+        all.length === 0 ? (
+          <EmptyState
+            title={t('repoGroups.empty')}
+            description={t('repoGroups.emptyDescription')}
+            action={newAction}
+            data-testid="repo-groups-empty"
+          />
+        ) : (
+          // 「一个组都没有」与「搜不到」是两回事——后者给的是清空搜索，不是新建。
+          <EmptyState
+            title={t('common.noMatches')}
+            description={t('repoGroups.noMatchesDescription')}
+            action={
+              <button type="button" className="btn" onClick={() => onSearchChange('')}>
+                {t('common.clearFilters')}
+              </button>
+            }
+            data-testid="repo-groups-no-matches"
+          />
+        )
       ) : (
         <TableViewport label={t('repoGroups.tabLabel')}>
           <table className="data-table" data-testid="repo-groups-table">
@@ -120,7 +156,7 @@ export function RepoGroupsPane({
                         <button
                           type="button"
                           className="btn btn--sm btn--danger"
-                          onClick={() => onDelete(g.id)}
+                          onClick={() => onDelete(g)}
                           data-testid={`repo-group-delete-${g.id}`}
                         >
                           {t('common.delete')}

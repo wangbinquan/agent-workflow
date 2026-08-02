@@ -65,6 +65,20 @@ describe('buildLayoutTree —— 挂载路径的父子投影', () => {
     ])
   })
 
+  test('大小写不敏感的嵌套（macOS）：`Vendor` 是 `vendor/sdk` 的父', () => {
+    // 服务端的排除计划用的是**折叠**比较（`isUnder`），树这边如果区分大小写就
+    // 会把实际嵌套的两个仓画成兄弟——用户看到的结构与真正物化出来的不一样。
+    expect(shape(buildLayoutTree([repo('Vendor'), repo('vendor/sdk')]))).toEqual([
+      ['Vendor', ['vendor/sdk']],
+    ])
+  })
+
+  test('挂根成员深度为 0：即便排在一段挂载点之后也仍是父', () => {
+    // 自写 `''.split('/').length` 会算成 1，与一段挂载点同深 ⇒ `tools` 先被
+    // 处理时挂根成员就当不成它的父了。
+    expect(shape(buildLayoutTree([repo('tools'), repo('')]))).toEqual([['', ['tools']]])
+  })
+
   test('输入顺序不影响结果（深度排序在内部完成）', () => {
     const deep = buildLayoutTree([repo('vendor/sdk/ext'), repo(''), repo('vendor/sdk')])
     expect(shape(deep)).toEqual([['', [['vendor/sdk', ['vendor/sdk/ext']]]]])

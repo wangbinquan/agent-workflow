@@ -902,6 +902,30 @@ export async function healScheduledLaunchPayloads(
       continue
     }
 
+    // RFC-248: `repos[]` 退役后，存量的**多仓** payload 到这里是无法自愈的——
+    // 框架没法替用户凭空造一个仓库组（挂载布局、ref、只读是人的设计意图，不是
+    // 能从两个 URL 推出来的东西）。
+    //
+    // 不处理的后果不是「保持现状」，而是一条**反复失败的启用中计划**：`repos`
+    // 现在会让 `rejectRetiredStartTaskKeys` 返回非 null，于是每轮扫描都把它当
+    // 「待转换」捡起来、删掉几个别的键、写回、计一次 converted，而 `repos` 还
+    // 在——下一轮再来一遍，永远清不干净；与此同时计划照旧到点触发、每次 422。
+    // 这正是设计第 10 行要防的烂账，只是从存量 payload 这一侧进来的。
+    //
+    // 单条 `repos` 是可以自愈的（它语义上就是单仓），下面统一在末尾摊平；
+    // 两条及以上只能停发并说清怎么改。
+    {
+      const rawRepos = body['repos']
+      if (Array.isArray(rawRepos) && rawRepos.length > 1) {
+        await disable(
+          row,
+          `rfc248-multi-repo-retired: inline repos[] is retired (${rawRepos.length} entries); ` +
+            'create a repo group and re-save this schedule with repoGroupId',
+        )
+        continue
+      }
+    }
+
     // Pair each legacy path with the baseBranch that would ride into `ref`,
     // so both the root canonicalization and the remote-tracking check run
     // against the RIGHT source repo.
@@ -928,6 +952,10 @@ export async function healScheduledLaunchPayloads(
       // strip them so the payload becomes v2-clean.
       delete body['baseBranch']
       delete body['fetchBeforeLaunch']
+      // RFC-248: 到这里 `repos` 至多一条（多条已在上面停发）。把它摊平成顶层
+      // 单仓字段再删除——**必须删**，留着它 payload 永远不是 v2-clean，扫描会
+      // 每轮把这行捡起来重写一次，计划则一直启用着反复 422。
+      flattenSingleRepo(body)
       await db
         .update(scheduledTasks)
         .set({ launchPayload: JSON.stringify(body), updatedAt: now })
@@ -980,6 +1008,9 @@ export async function healScheduledLaunchPayloads(
       }
     }
     delete body['fetchBeforeLaunch']
+    // 路径已在上面的循环里healed成 URL，这里把这唯一一条摊平进顶层并删除
+    // `repos`，payload 才真正 v2-clean。
+    flattenSingleRepo(body)
 
     await db
       .update(scheduledTasks)
@@ -988,6 +1019,27 @@ export async function healScheduledLaunchPayloads(
     converted += 1
   }
   return { scanned: rows.length, converted, disabled }
+}
+
+/**
+ * RFC-248: 把**至多一条**的存量 `repos[]` 摊平成顶层单仓字段，并删掉 `repos` 键。
+ *
+ * 单条 `repos` 语义上就是单仓（RFC-066 时代 length-1 走的正是单仓码路径，
+ * 字节级等价），所以摊平是无损的。两条及以上的调用方在上面已经停发。
+ *
+ * 顶层字段**已存在时不覆盖**——那种 payload 本来就自相矛盾（schema 的
+ * 单仓 ⊕ 组互斥会拒），保留顶层、丢掉数组是更可预期的一侧。
+ */
+function flattenSingleRepo(body: Record<string, unknown>): void {
+  const raw = body['repos']
+  if (!Array.isArray(raw)) return
+  const only = raw.length === 1 ? (raw[0] as Record<string, unknown> | null) : null
+  if (only !== null && typeof only === 'object') {
+    for (const k of ['repoUrl', 'cachedRepoId', 'ref'] as const) {
+      if (body[k] === undefined && typeof only[k] === 'string') body[k] = only[k]
+    }
+  }
+  delete body['repos']
 }
 
 export async function runScheduleNow(

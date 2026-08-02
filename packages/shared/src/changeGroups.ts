@@ -13,6 +13,23 @@ import type { ChangeCount } from './schemas/structuralDiff'
 
 export type ChangeFileKind = 'code' | 'doc' | 'config' | 'deps' | 'binary' | 'other'
 
+/**
+ * RFC-248 —— 变更评审里「仓标签 + 仓内相对路径」→ 唯一 key 的**唯一**构造器。
+ *
+ * 三种「没有仓前缀」的形态必须等价：`undefined`（单仓 baseline，从来没有标签）、
+ * `null`（多仓里的挂根成员，`changeReview` 内部用的形态）、`''`（规范 key 本身
+ * ——挂根成员的挂载路径就是空串）。
+ *
+ * 不统一的后果是**静默**的：调用方各写各的 `label === undefined ? p : label+'/'+p`，
+ * 遇到挂根成员就拼出 `/src/a.ts`，与结构化侧的 `src/a.ts` 逐字符不等 ⇒ 根仓的
+ * 文件在侧栏里整批消失、详情渲染不出来、导航跳空。Codex 实现门 P1 实锤。
+ */
+export function changeEntryKey(repoLabel: string | null | undefined, filePath: string): string {
+  return repoLabel === undefined || repoLabel === null || repoLabel === ''
+    ? filePath
+    : `${repoLabel}/${filePath}`
+}
+
 export interface ChangeGroupEntry {
   /** Repo-relative path (no repo-label prefix). */
   filePath: string
@@ -301,7 +318,10 @@ export function buildChangeGroups(entries: ChangeGroupEntry[]): ChangeGroup[] {
   const groups: ChangeGroup[] = []
   for (const repoLabel of repoOrder) {
     const repoEntries = byRepo.get(repoLabel) ?? []
-    const prefix = repoLabel === undefined ? '' : `repo:${repoLabel}/`
+    // RFC-248: 挂根成员的标签是空串——它**是**一个仓，只是没有路径前缀，
+    // 所以仍要有自己的分组（否则会与单仓 baseline 混在一起）。
+    const prefix =
+      repoLabel === undefined ? '' : repoLabel === '' ? 'repo:./' : `repo:${repoLabel}/`
     const raw = groupOneRepo(repoEntries, useLines)
     for (const g of raw) {
       const files = [...g.files].sort((a, b) => compareTuples(fileSortKey(a), fileSortKey(b)))

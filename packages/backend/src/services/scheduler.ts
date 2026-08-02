@@ -699,6 +699,22 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     return
   }
 
+  // RFC-248 AC-19（实现门 P1）：只读成员的脏检查必须在**每一条终态路径**上都
+  // 跑一次，而不是搭在自动提交推送里——`maybeRunCommitPush` 只在
+  // `task.autoCommitPush` 开启且顶层节点成功后触发，于是默认配置的任务、以及
+  // 失败 / 取消的任务，`readonly_dirty_count` 永远是 NULL、详情页永远没有提示。
+  // 放在这里：跑完节点、分派终态之前，done / failed / canceled / awaiting_* 全覆盖。
+  //
+  // 包 try/catch：这只是一条给人看的通报，绝不能因为它把任务收尾搞垮。
+  try {
+    await inspectReadonlyRepos(state, log)
+  } catch (err) {
+    log.warn('[rfc248/readonly-dirty] inspection failed (ignored)', {
+      taskId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   if (result.kind === 'failed' && result.detail) {
     await failTask(db, taskId, result.detail.summary, result.detail.message, result.detail.nodeId)
     return
@@ -1692,6 +1708,44 @@ async function loadOpenClarify(
 }
 
 /**
+ * RFC-248 AC-19 —— 只读成员的脏检查。
+ *
+ * 只读成员不快照、不进 diff、不自动提交推送（D11）。但框架**不在文件系统层面
+ * 阻止写入**——agent 拿到的就是一个普通目录。改动被静默丢弃是本 RFC 里最难排查
+ * 的一类问题：agent 报告「已修复 vendor/sdk」→ 工作树里确实改了 → 推上去空空
+ * 如也。所以把「丢弃了几处」持久化，任务详情据此提示。
+ *
+ * **每条终态路径都要跑**（done / failed / canceled / awaiting_*）。早先版本把它
+ * 搭在自动提交推送里，于是只有 `autoCommitPush=true` 且顶层节点成功的任务才会
+ * 被检查——默认配置与失败任务全都漏了（Codex 实现门 P1）。
+ *
+ * 干净时写 0 而不是留 NULL：UI 要能区分「检查过且干净」与「从未检查」。
+ *
+ * **刻意不用 `lifecycle_alerts`**：那张表绑 `LifecycleAlertRule`，RFC-108 的
+ * 自动修复循环会全局扫描并尝试**修复**每一条。这不是待修复的不变量违反，是
+ * 给人看的事实通报，让修复循环去碰它只会误修。
+ */
+async function inspectReadonlyRepos(state: SchedulerState, log: Logger): Promise<void> {
+  for (const repo of state.repos) {
+    if (!repo.readonly) continue
+    const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
+    const changed = status.stdout.trim() === '' ? [] : status.stdout.trim().split('\n')
+    await state.db
+      .update(taskRepos)
+      .set({ readonlyDirtyCount: changed.length })
+      .where(and(eq(taskRepos.taskId, state.task.id), eq(taskRepos.repoIndex, repo.repoIndex)))
+    if (changed.length > 0) {
+      log.warn('[rfc248/readonly-dirty] read-only repo was modified; NOT committed or pushed', {
+        taskId: state.task.id,
+        mountPath: repo.mountPath === '' ? '<root>' : repo.mountPath,
+        changedCount: changed.length,
+        changedSample: changed.slice(0, 20),
+      })
+    }
+  }
+}
+
+/**
  * RFC-075: auto commit&push after a top-level node completed. Diff-driven —
  * for each repo whose worktree has changes since the last commit, the
  * framework stages + commits (LLM message) + pushes via `runCommitPush`, with
@@ -1745,32 +1799,10 @@ async function maybeRunCommitPush(
     // RFC-248 D11: 只读成员不参与自动提交推送。它被改动了不是「无事发生」——
     // 框架不在文件系统层面阻止写入，所以 agent 确实可能改了它。静默丢弃最难
     // 排查，故落一条任务级告警（不改任务状态：一个误建的临时文件不该搞垮整任务）。
-    if (repo.readonly) {
-      const changed = status.stdout.trim() === '' ? [] : status.stdout.trim().split('\n')
-      // AC-19: 持久化到 `task_repos.readonly_dirty_count`，任务详情据此在这个
-      // 成员旁边显示「有 N 处改动被丢弃」。只落 log.warn 等于静默——用户看到
-      // agent 说「改好了」、工作树里也确实改了，推上去却什么都没有。
-      //
-      // **刻意不用 lifecycle_alerts**：那张表绑 `LifecycleAlertRule`，RFC-108
-      // 的自动修复循环会全局扫描并尝试修复每一条。这不是待修复的不变量违反，
-      // 是给人看的事实通报，让修复循环去碰它只会误修。
-      //
-      // 干净时写 0（而不是留 NULL），这样「检查过且干净」与「从未检查」在 UI
-      // 上可区分。
-      await state.db
-        .update(taskRepos)
-        .set({ readonlyDirtyCount: changed.length })
-        .where(and(eq(taskRepos.taskId, task.id), eq(taskRepos.repoIndex, repo.repoIndex)))
-      if (changed.length > 0) {
-        log.warn('[rfc248/readonly-dirty] read-only repo was modified; NOT committed or pushed', {
-          taskId: task.id,
-          mountPath: repo.mountPath === '' ? '<root>' : repo.mountPath,
-          changedCount: changed.length,
-          changedSample: changed.slice(0, 20),
-        })
-      }
-      continue
-    }
+    // RFC-248 D11: 只读成员不参与自动提交推送。脏检查本身**不在这里**做——
+    // 它挂在任务终态收尾（`inspectReadonlyRepos`），否则默认关闭自动推送的
+    // 任务永远不会被检查（实现门 P1）。
+    if (repo.readonly) continue
     if (status.stdout.trim() === '') continue // nothing changed in this repo
     const repoSlug = repo.worktreeDirName
     const nodeId = commitPushNodeId(node.id, repoSlug || undefined)

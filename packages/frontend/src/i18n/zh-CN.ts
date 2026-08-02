@@ -1042,6 +1042,13 @@ export interface Resources {
   }
   repoGroups: {
     tabLabel: string
+    searchPlaceholder: string
+    noMatchesDescription: string
+    deleteTitle: string
+    deleteBody: string
+    deleteConflictBody: string
+    deleteForce: string
+    deleteReport: string
     tabAria: string
     newButton: string
     loading: string
@@ -1058,6 +1065,7 @@ export interface Resources {
       kindRepo: string
       kindGroup: string
       pickRepo: string
+      pasteUrl: string
       pickGroup: string
       mountPlaceholder: string
       refPlaceholder: string
@@ -2387,6 +2395,7 @@ export interface Resources {
     repoGroupChip: string
     repoReadonlyChip: string
     repoReadonlyDirty: string
+    repoReadonlyDirtyBanner: string
     cancelButton: string
     relaunchButton: string
     resumeButton: string
@@ -2995,6 +3004,9 @@ export interface Resources {
     spaceScratchHint: string
     /** RFC-248 仓库组空间 */
     spaceGroupChip: string
+    spaceReplayChip: string
+    spaceReplaySummary: string
+    spaceReplayHint: string
     spaceGroupChange: string
     spaceGroupSummary: string
     spaceGroupRepoCount: string
@@ -5382,6 +5394,16 @@ export const zhCN: Resources = {
   },
   repoGroups: {
     tabLabel: '仓库组',
+    searchPlaceholder: '搜索组名或描述…',
+    noMatchesDescription: '没有匹配的仓库组。',
+    deleteTitle: '删除仓库组',
+    deleteBody:
+      '确定删除「{{name}}」？绑在它上面的 {{memories}} 条记忆会被归档（不硬删，但立即停止注入）。',
+    deleteConflictBody:
+      '「{{name}}」仍被别的仓库组或启用中的定时任务引用。强制删除会摘除那些引用、并把引用它的计划停发。',
+    deleteForce: '强制删除',
+    deleteReport:
+      '已删除：归档 {{memories}} 条记忆、摘除 {{refs}} 处引用、停发 {{schedules}} 个计划。',
     tabAria: '仓库视图',
     newButton: '新建仓库组',
     loading: '正在加载仓库组…',
@@ -5399,6 +5421,7 @@ export const zhCN: Resources = {
       kindRepo: '仓库',
       kindGroup: '组',
       pickRepo: '— 选择一个已缓存仓 —',
+      pasteUrl: '或粘一个仓库 URL（保存时导入）',
       pickGroup: '— 选择一个仓库组 —',
       mountPlaceholder: '挂载路径（留空 = 任务根）',
       refPlaceholder: 'ref（留空 = 默认分支）',
@@ -7036,6 +7059,8 @@ export const zhCN: Resources = {
     repoGroupChip: '组：{{name}}',
     repoReadonlyChip: '只读',
     repoReadonlyDirty: '{{count}} 处改动被丢弃（只读成员不提交推送）',
+    repoReadonlyDirtyBanner:
+      '只读成员 {{mounts}} 在本次任务中被改动过——这些改动没有被提交或推送。只读成员按设计不参与自动提交推送（D11）。',
     cancelButton: '取消任务',
     relaunchButton: '再次启动',
     resumeButton: '继续任务',
@@ -7734,6 +7759,9 @@ export const zhCN: Resources = {
     spaceScratchHint:
       '平台会创建一个空 Git 仓库作为工作目录；产出以对空仓的 diff 形式交付，目录保留可手动取用。',
     spaceGroupChip: '仓库组',
+    spaceReplayChip: '复用任务布局',
+    spaceReplaySummary: '复用任务 {{taskId}} 的仓库布局',
+    spaceReplayHint: '按那个任务启动时冻结的布局重放（不读当前的组定义——组可能已被改动或删除）。',
     spaceGroupChange: '更换',
     spaceGroupSummary: '仓库组：{{name}}',
     spaceGroupRepoCount: '展平后共 {{count}} 个仓库',

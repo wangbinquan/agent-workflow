@@ -30,7 +30,12 @@ import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { canViewTask, getTaskMembers, updateTaskMembers } from '@/services/taskCollab'
+import {
+  assertCanReplaySourceTask,
+  canViewTask,
+  getTaskMembers,
+  updateTaskMembers,
+} from '@/services/taskCollab'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { redactEventPayload, redactStdout, shouldRedactFor } from '@/services/tokenRedaction'
@@ -318,6 +323,17 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
             'start-task-path-retired',
             `RFC-165 retired path-mode launches; remove '${retired}' (use a file:// repoUrl for local repos)`,
           )
+        }
+
+        // RFC-248 H9（实现门 P1）：`sourceTaskId` 由调用方控制。重放前先确认
+        // 他**看得见**那个任务——否则「能启动某工作流但看不见任务 X」的用户可以
+        // 传 X 的 id，让服务端读出 X 冻结的仓库构成并按它物化，而且泄漏形式是
+        // 「任务成功启动」，完全不像一次越权。不可见与不存在同形（都 404）。
+        {
+          const src = (bodyJson as { sourceTaskId?: unknown }).sourceTaskId
+          if (typeof src === 'string' && src.length > 0) {
+            await assertCanReplaySourceTask(deps.db, actorOf(c), src)
+          }
         }
       }
       const parsed = StartTaskSchema.safeParse(bodyJson)
@@ -1265,6 +1281,17 @@ async function handleMultipartTaskStart(
         `RFC-165 retired path-mode launches; remove '${retired}' (use a file:// repoUrl for local repos)`,
       )
     }
+
+    // RFC-248 H9（实现门 P1）：`sourceTaskId` 由调用方控制。重放前先确认
+    // 他**看得见**那个任务——否则「能启动某工作流但看不见任务 X」的用户可以
+    // 传 X 的 id，让服务端读出 X 冻结的仓库构成并按它物化，而且泄漏形式是
+    // 「任务成功启动」，完全不像一次越权。不可见与不存在同形（都 404）。
+    {
+      const src = (payloadJson as { sourceTaskId?: unknown }).sourceTaskId
+      if (typeof src === 'string' && src.length > 0) {
+        await assertCanReplaySourceTask(deps.db, actor, src)
+      }
+    }
   }
   const parsed = StartTaskSchema.safeParse(payloadJson)
   if (!parsed.success) {
@@ -1358,7 +1385,15 @@ async function handleMultipartTaskStart(
   // clone/resolve failure still throws the same structured 4xx a JSON launch
   // would (no task row). scratch + uploads is a legal combination: the files
   // land in the fresh scratch repo.
-  const space = await materializeSpace(startInput, { db: deps.db }, appHome)
+  // RFC-248（实现门 P1）：预物化也要带上 `secretBox`。组成员一律按 `cachedRepoId`
+  // 解析，私有仓的 URL 是**封存**的，没有 box 就解不开 ⇒
+  // `cached-repo-credential-unavailable`。少了它，「私有仓组 + 上传」这条被 D12
+  // 明确解禁的组合会必失败，而完全等价的 JSON 启动却能成功。
+  const space = await materializeSpace(
+    startInput,
+    { db: deps.db, ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}) },
+    appHome,
+  )
   const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
   if (space.earlyError !== null) {
     // Create a failed task row so the user sees the error. No files were
@@ -1397,7 +1432,11 @@ async function handleMultipartTaskStart(
       worktreePath: space.worktreePath,
       // RFC-248 D12: 多仓任务的上传物落到任务根下的固定目录，不属于任何成员仓。
       // 单仓不传 ⇒ 路径与今天字节级一致。
-      ...(space.repos.length > 1 ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
+      // RFC-248 D12（实现门 P1）：按**空间类型**判定，不看仓数。组空间即便只展平出
+      // 一个成员（sparse / 非根挂载），上传物也必须落在任务根下的保留目录——
+      // 用 `repos.length > 1` 会让那种组把上传物写进成员仓的工作树。
+      // 单仓 / scratch 不传 ⇒ 路径与今天字节级一致。
+      ...(space.kind === 'group' ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
       defs: uploadDefs,
       files: uploadFiles,
       limits,

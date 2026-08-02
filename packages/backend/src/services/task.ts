@@ -1152,7 +1152,9 @@ async function materializeGroupSpace(opts: {
   const branchNames = assignBranchNames(ordered, taskId, opts.workingBranch)
   const rootMounted = allMounts.includes('')
   const groupRoot = join(appHome, 'worktrees', 'group', taskId)
-  const multiRepo = ordered.length > 1
+  // （原来这里有个 `multiRepo = ordered.length > 1`，只服务于排除计划的
+  //   `includeUploadDir`。它已改成恒 true——组空间一律用保留上传目录，
+  //   与展平出几个仓无关，见 writePresetCommitsForDepth 的注释。）
 
   const cleanup = createMaterializedSpaceCleanup(taskId, groupRoot)
   try {
@@ -1284,7 +1286,12 @@ async function materializeGroupSpace(opts: {
         const rels = exclusionPlanFor(rec.mountPath, allMounts, {
           // D12: 上传物落在任务根下的固定目录；有仓挂根时它就落在那个仓的
           // 工作树里，必须一并排除。
-          includeUploadDir: multiRepo,
+          //
+          // **恒为 true**：走到 `materializeGroupSpace` 的都是组空间，上传一律
+          // 用保留目录。曾经写的是 `multiRepo`（= 展平后 >1 个仓），于是「单成员
+          // 但挂了 sparse 子目录」的组不排除该目录 ⇒ 上传物落进那个仓的工作树、
+          // 进它的审计 diff、甚至被自动推送（Codex 实现门 P1）。
+          includeUploadDir: true,
         })
         if (rels.length === 0) continue
         const preset = await commitGitignorePreset({
@@ -1425,9 +1432,27 @@ export async function materializeSpace(
 
   // RFC-248: 用仓库组启动时，成员规格由**展平后的布局**给出，而不是 wire 上的
   // `repos[]`。展平在 services/repoGroup.ts 里做（校验错误已在那里转成 422）。
+  // RFC-248（实现门 P1）：展平出 0 个仓的组**不能启动**。它可能来自 force 删掉
+  // 最后一个仓、或者一个空的子组。放行的后果不是报错而是更糟：服务端建出一个
+  // 没有任何 `task_repos` 的组根目录、`repoCount` 记成 1，然后任务在一个**不是
+  // git 仓库**的目录里跑——agent 的每一条 git 命令都会失败，而失败原因与真正的
+  // 起因（组是空的）隔了十万八千里。
+  const assertNonEmptyLayout = (repos: PlannedRepo[], source: string): PlannedRepo[] => {
+    if (repos.length === 0) {
+      throw new ValidationError(
+        'repo-group-empty',
+        `${source} flattens to zero repos; a task needs at least one repo to run in`,
+      )
+    }
+    return repos
+  }
+
   const groupPlanned: PlannedRepo[] | null =
     typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0
-      ? resolveRepoGroupLayout(deps.db, input.repoGroupId).repos
+      ? assertNonEmptyLayout(
+          resolveRepoGroupLayout(deps.db, input.repoGroupId).repos,
+          `repo group ${input.repoGroupId}`,
+        )
       : typeof input.sourceTaskId === 'string' && input.sourceTaskId.length > 0
         ? // RFC-248 H9（重启）：按源任务**冻结的** task_repos 快照重放布局。
           // 刻意**不**读 `repo_groups`——组可能已被改动或删除，而重启的语义是

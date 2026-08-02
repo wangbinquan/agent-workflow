@@ -671,6 +671,19 @@ export const StartTaskSchema = z
       return // scratch body is complete — repo-source rules below don't apply.
     }
 
+    // RFC-248（实现门 P2）：组 / 冻结快照来源下，顶层 `ref` 是**无效**的——
+    // 每个成员的 ref 来自组定义或冻结快照，materialize 用的是那些，顶层这个会
+    // 被**静默忽略**。API 调用方以为自己换了分支，实际跑在别的 ref 上；显式拒
+    // 比静默忽略好。
+    if (hasRepos && typeof value.ref === 'string' && value.ref.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'start-task-ref-not-applicable',
+        path: ['ref'],
+      })
+      return
+    }
+
     // RFC-248 H9: 组 ↔ 冻结快照互斥——两者都给无法判断该用哪个布局。
     if (hasGroup && hasSourceTask) {
       ctx.addIssue({

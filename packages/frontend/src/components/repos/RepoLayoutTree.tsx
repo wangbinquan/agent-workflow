@@ -11,7 +11,7 @@
 // 后端返回平数组、前端投影，两边都不用维护第二种表示。
 
 import { useTranslation } from 'react-i18next'
-import type { PlannedRepo } from '@agent-workflow/shared'
+import { isUnder, mountDepth, type PlannedRepo } from '@agent-workflow/shared'
 import { StatusChip } from '@/components/StatusChip'
 
 export interface RepoLayoutTreeProps {
@@ -35,13 +35,12 @@ interface TreeNode {
  * （段边界，`startsWith` 会误判）。挂根成员（`''`）是所有人的兜底父节点。
  */
 export function buildLayoutTree(repos: readonly PlannedRepo[]): TreeNode[] {
-  const isUnder = (parent: string, child: string): boolean =>
-    parent === '' ? child !== '' : child.startsWith(`${parent}/`)
-
-  // 浅到深处理，保证父节点先于子节点建好。
-  const sorted = [...repos].sort(
-    (a, b) => a.mountPath.split('/').length - b.mountPath.split('/').length,
-  )
+  // **复用共享原语**，不在这里自写一套（实现门 P2）。两处曾经不一致：
+  //   - 自写的 `isUnder` 区分大小写 ⇒ macOS 上 `Vendor` 与 `vendor/sdk` 实际
+  //     嵌套却被画成兄弟，与服务端的排除计划（用的是折叠比较）对不上；
+  //   - 自写的深度用 `''.split('/').length === 1`，让挂根成员与一段挂载点同深，
+  //     于是 `tools` 排在 `''` 前面时挂根成员反而成不了父。
+  const sorted = [...repos].sort((a, b) => mountDepth(a.mountPath) - mountDepth(b.mountPath))
   const nodes = new Map<string, TreeNode>()
   const roots: TreeNode[] = []
   for (const repo of sorted) {

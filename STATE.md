@@ -29,7 +29,11 @@
 
 **PR-5b（组的管理界面）也已落地**：`RepoLayoutTree` 公共组件（编辑器预览 / 组列表展开行两处共用同一棵树）、`RepoGroupEditor` 弹窗（全程复用 Dialog / Field / Select / Switch / QueryState，配一条源代码层守卫锁住「不得自造 chrome」）、`/repos` 页「远端仓库 | 仓库组」分段 + 组列表。为编辑器的实时预览新增 `POST /api/repo-groups/preview`——**干跑展平、纯读**（`repoUrl` 成员不导入、只报 `pendingImports`），用的是服务端同一份展平实现，所以组套组 / 深度 / 循环 / 只读并集 / 挂载点冲突在预览期就按真实语义报出来，不会「预览通过、保存 422」。AC-19 补上 `task_repos.readonly_dirty_count`（迁移 0133）：只读成员被改动过要**看得见**，否则用户会遇到「agent 说改好了、工作树里确实改了、推上去什么都没有」这类最难排查的问题；刻意**不**走 `lifecycle_alerts`（那张表会被 RFC-108 的自动修复循环误修）。
 
-**RFC-248 至此实现完毕**（T1–T45 全部落地）。剩余把关项：**第三轮设计门 + 实现门**（Codex 双门），以及一次真实浏览器的视觉对齐自查（T43）。
+**实现门已闭环**（2026-08-03，记档 [`impl-gate-2026-08-03.md`](design/RFC-248-repo-groups/impl-gate-2026-08-03.md)）：Codex 从 pin 到 `cf56f888` 的分离 worktree 跑了 80 分钟、全程实读源码，判定 **not ready to merge：9×P1 + 11×P2**，逐条核实后**全部属实、全部修复并带回归锁**。最重的几条：①挂根成员的文件在评审侧栏里**整批消失**（`ChangeReviewPanel` 6 处仍用 `label === undefined` 判前缀，挂根成员的 `''` 被拼成 `/src/a.ts`）⇒ 引入唯一 key 构造器 `changeEntryKey`；②只读脏计数**只在 `autoCommitPush=true` 时才写** ⇒ 抽出 `inspectReadonlyRepos` 挂到任务终态收尾，done/failed/canceled/awaiting_* 全覆盖；③`sourceTaskId` 重放**绕过 `canViewTask`**（安全：泄漏私有任务的仓库构成，且形式是「任务成功启动」）⇒ 四个启动入口统一加 `assertCanReplaySourceTask`，不可见与不存在同形 404；④组的 **OCC 栅栏形同虚设**（`UpdateRepoGroupSchema` 是 `Create` 的别名 ⇒ 非 strict zod 静默剥掉 `expectedVersion`）；⑤上传目录**按仓数**判定 ⇒ 单成员 sparse 组会把上传物写进成员仓并被自动推送 ⇒ 改判 `space.kind === 'group'`。P1-8 连带暴露 sparse 成员的仓根 `.gitignore` 落在 sparse 集之外、`git add` 会拒——但这条排除**必须**写（未跟踪文件不受 sparse 约束），改用 `git add --sparse`。
+
+**另有一条由 gate 探针引出、本人自查命中的缺口**：顶层 `repos` 进退役键后，存量的多仓定时任务 payload 会被 RFC-165 自愈扫描反复捡起（那段只认识 `repoPath`/`baseBranch`/`fetchBeforeLaunch`，删掉别的键写回、`repos` 还在 ⇒ 永远清不干净），而计划一直启用着每次 422——正是设计第 10 行要防的烂账从存量数据那侧进来。1 条 `repos` 摊平进顶层、≥2 条停发并给出可操作原因。
+
+**RFC-248 至此实现完毕并通过双门**（T1–T45 全部落地；设计门两轮 + 实现门一轮，findings 全修）。视觉对齐已在真实浏览器渲染上确认（`/repos` 分段与页面既有 pill 同风格，基线已刷两平台）。
 
 ✅ **已完成并合入 main（2026-08-02）：[RFC-247 MCP 远程接入、路由元数据授权层与 API 文档界面](design/RFC-247-mcp-remote-access/proposal.md)** —— 平台首次对外提供程序化接口：`POST /api/mcp`（Streamable HTTP / 无状态 / 只接 PAT）+ 账号页自助签发令牌 + **资源类型 × `新增/修改/删除/执行`** 矩阵（**读恒开**，空矩阵 = 只读）。**显式 supersede RFC-221 D1**。为让「能建不能改」「不能删」在 REST 层真实成立，把 `资源:write` 拆成 `:create/:update/:delete`，并引入**路由元数据注册层**作为权限门单一事实源。用户授权「不用管现有实现、还没人用」⇒ 存量断代、零兼容包袱。决策固化为 proposal §3 的 **D1–D19**；**单 RFC / 5 PR 按层切**（T1–T40）。
 

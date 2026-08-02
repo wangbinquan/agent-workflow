@@ -114,7 +114,8 @@ const PANELS: PanelCase[] = [
     name: 'by-scope browser',
     node: () => <MemoryByScopeBrowser />,
     emptyResponse: { items: [] },
-    assertEmpty: () => expect(screen.getAllByTestId('empty-state')).toHaveLength(4),
+    // RFC-248: 第 5 档 `repo_group` 加入 SCOPE_TABS ⇒ 空态也多一个分区。
+    assertEmpty: () => expect(screen.getAllByTestId('empty-state')).toHaveLength(5),
   },
   {
     name: 'scoped list',

@@ -119,7 +119,16 @@ export function sortByRecency<T extends { approvedAt: number | null; createdAt?:
 }
 
 /** Stable scope-tab ordering. */
-export const SCOPE_TABS: ReadonlyArray<MemoryScope> = ['agent', 'workflow', 'repo', 'global']
+// RFC-248（实现门 P2）：`repo_group` 也要能按 scope 浏览。漏掉它的话，用户在
+// 新表单里建出来的组记忆只会出现在「全部已批准」里，在它自己那一档下永远看不到
+// ——`groupCandidatesByScope` 早就分了这一档，只是没人展示。
+export const SCOPE_TABS: ReadonlyArray<MemoryScope> = [
+  'agent',
+  'workflow',
+  'repo',
+  'repo_group',
+  'global',
+]
 
 /**
  * Build the comparison rows used by <MemoryConflictCompareDialog />. The

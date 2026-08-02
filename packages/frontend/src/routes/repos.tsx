@@ -1,7 +1,12 @@
 // RFC-024 → RFC-246 — cached-repo operations surface. The wire remains
 // redacted and every refresh/delete/batch-import behavior is preserved.
 
-import type { CachedRepo, ListCachedReposResponse, RepoGroup } from '@agent-workflow/shared'
+import type {
+  CachedRepo,
+  DeleteRepoGroupResponse,
+  ListCachedReposResponse,
+  RepoGroup,
+} from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
@@ -19,6 +24,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { RelativeTime } from '@/components/RelativeTime'
 import { BatchImportDialog } from '@/components/repos/BatchImportDialog'
 import { SubmoduleBadge } from '@/components/repos/SubmoduleBadge'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Segmented } from '@/components/Segmented'
 import { RepoGroupEditor } from '@/components/repos/RepoGroupEditor'
 import { RepoGroupsPane } from '@/components/repos/RepoGroupsPane'
@@ -135,9 +141,38 @@ function ReposPage() {
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
     enabled: tab === 'groups',
   })
+  // RFC-248（实现门 P1）：删组要**先确认**再删——它会连带把绑在这个组上的记忆
+  // 置为 archived，无确认地一键抹掉是不可接受的。被别的组或启用中计划引用时
+  // 服务端回 409，UI 要给出「强制删除（并摘除引用 / 停发计划）」的重试路径，
+  // 而不是把用户堵在一个没有出口的错误上。
+  // RFC-248（实现门 P2）：组这一档也要能搜——组多起来（每个项目一个组合）时
+  // 一张没有搜索的长表和远端仓那边的体验就割裂了。
+  const [groupSearch, setGroupSearch] = useState('')
+  const [pendingGroupDelete, setPendingGroupDelete] = useState<RepoGroup | null>(null)
+  const [deleteConflict, setDeleteConflict] = useState<string | null>(null)
+  const [deleteReport, setDeleteReport] = useState<string | null>(null)
   const removeGroup = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/repo-groups/${encodeURIComponent(id)}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['repo-groups'] }),
+    mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
+      api.delete<DeleteRepoGroupResponse>(
+        `/api/repo-groups/${encodeURIComponent(id)}${force === true ? '?force=1' : ''}`,
+      ),
+    onSuccess: async (res) => {
+      await qc.invalidateQueries({ queryKey: ['repo-groups'] })
+      setPendingGroupDelete(null)
+      setDeleteConflict(null)
+      // 回报服务端实际做了什么——归档了几条记忆、摘掉几处引用、停发几个计划。
+      setDeleteReport(
+        t('repoGroups.deleteReport', {
+          memories: res.archivedMemories,
+          refs: res.detachedReferences,
+          schedules: res.disabledSchedules,
+        }),
+      )
+    },
+    onError: (err: unknown) => {
+      const code = (err as { code?: string }).code
+      setDeleteConflict(code === 'repo-group-has-references' ? 'references' : null)
+    },
   })
 
   const newGroupAction = (
@@ -193,15 +228,53 @@ function ReposPage() {
         {tab === 'groups' && (
           <RepoGroupsPane
             list={groupList}
+            search={groupSearch}
+            onSearchChange={setGroupSearch}
             onEdit={(g) => {
               setEditing(g)
               setEditorOpen(true)
             }}
-            onDelete={(id) => removeGroup.mutate(id)}
+            onDelete={(g) => {
+              setDeleteConflict(null)
+              setDeleteReport(null)
+              setPendingGroupDelete(g)
+            }}
             deleteError={removeGroup.error}
             newAction={newGroupAction}
           />
         )}
+        {deleteReport !== null && (
+          <div className="info-box" role="status" data-testid="repo-group-delete-report">
+            {deleteReport}
+          </div>
+        )}
+        <ConfirmDialog
+          open={pendingGroupDelete !== null}
+          title={t('repoGroups.deleteTitle')}
+          description={
+            deleteConflict === 'references'
+              ? t('repoGroups.deleteConflictBody', { name: pendingGroupDelete?.name ?? '' })
+              : t('repoGroups.deleteBody', {
+                  name: pendingGroupDelete?.name ?? '',
+                  memories: pendingGroupDelete?.boundMemories ?? 0,
+                })
+          }
+          confirmLabel={
+            deleteConflict === 'references' ? t('repoGroups.deleteForce') : t('common.delete')
+          }
+          tone="danger"
+          onConfirm={() => {
+            if (pendingGroupDelete === null) return
+            removeGroup.mutate({
+              id: pendingGroupDelete.id,
+              ...(deleteConflict === 'references' ? { force: true } : {}),
+            })
+          }}
+          onClose={() => {
+            setPendingGroupDelete(null)
+            setDeleteConflict(null)
+          }}
+        />
         <RepoGroupEditor
           open={editorOpen}
           onClose={() => setEditorOpen(false)}

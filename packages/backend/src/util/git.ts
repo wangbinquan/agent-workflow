@@ -823,7 +823,13 @@ export async function commitGitignorePreset(opts: {
   if (plan.added.length === 0) return { commitSha: null, addedRules: [] }
 
   writeFileSync(file, plan.nextContent, 'utf8')
-  const add = await runGit(opts.worktreePath, ['add', '--', '.gitignore'])
+  // `--sparse`：**sparse 成员**（挂载时只检出仓内某个子目录）的仓根 `.gitignore`
+  // 落在 sparse 集之外，不带这个 flag 时 `git add` 直接拒（"paths … outside of
+  // your sparse-checkout definition"）。而这条 .gitignore 恰恰是**必须**写的
+  // ——未跟踪文件不受 sparse 规则约束，嵌套挂载点与上传目录照样会出现在它的
+  // `git status` 里、被 `add -A` 吞掉。sparse-checkout 是工作树概念，提交里带上
+  // 集合外的路径完全正当。非 sparse 仓上这个 flag 是 no-op。
+  const add = await runGit(opts.worktreePath, ['add', '--sparse', '--', '.gitignore'])
   if (add.exitCode !== 0) {
     throw new DomainError(
       'gitignore-preset-failed',

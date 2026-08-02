@@ -30,12 +30,16 @@ describe('RFC-066 PR-C — task detail multi-repo header', () => {
     expect(SRC).toContain('tk.repos.map')
     // RFC-248: 显示的是**挂载路径**而不是 basename——嵌套布局下 basename 丢
     // 方位（`sdk` 说不清它在哪一层），`vendor/sdk` 才是用户能 `cd` 过去的东西。
-    expect(SRC).toContain('r.mountPath')
-    expect(SRC).toContain('baseBranch')
-    // Each row carries a stable testid per repoIndex.
-    expect(SRC).toContain('task-detail-multi-repo-row-')
+    // RFC-248（实现门 P2）：多仓块改用共享的 `RepoLayoutTree` 渲染——挂载路径
+    // 由它显示，这里锁「用的是共享树」而不是又一份扁平列表。
+    expect(SRC).toContain('RepoLayoutTree')
+    expect(SRC).toContain('mountPath: r.mountPath')
+    expect(SRC).toContain('ref: r.baseBranch')
+    // RFC-248: 每行的 testid 由共享树给出（`<prefix>-row-<mountPath>`），
+    // 不再由这个页面自己拼——所以这里锁的是「传了稳定的 testidPrefix」。
+    expect(SRC).toContain('testidPrefix="task-detail-repo-layout"')
     // RFC-024 redactGitUrl is reused for the URL column (no cleartext leak).
-    expect(SRC).toContain('redactGitUrl(r.repoUrl)')
+    expect(SRC).toContain('repoUrlRedacted: r.repoUrl')
   })
 
   test('RFC-248: 组溯源 chip 与只读 chip 都在多仓块里', () => {
@@ -43,8 +47,14 @@ describe('RFC-066 PR-C — task detail multi-repo header', () => {
     // `tk.repoGroupName` 而不是去查当前的组定义。
     expect(SRC).toContain('tk.repoGroupName')
     expect(SRC).toContain('task-detail-repo-group')
-    // 只读成员要一眼可辨：它的改动不进 diff、不推送（D11）。
-    expect(SRC).toContain('task-detail-repo-readonly-')
+    // RFC-248（实现门 P2）：溯源按 repoGroupName 判定，**不能**再套在
+    // `repoCount > 1` 里——单成员组也是组。
+    const chipIdx = SRC.indexOf('task-detail-repo-group')
+    const gateIdx = SRC.indexOf('tk.repoCount > 1')
+    expect(chipIdx).toBeGreaterThan(0)
+    expect(chipIdx).toBeLessThan(gateIdx)
+    // 只读成员被改动过要有显式告警（AC-19）。
+    expect(SRC).toContain('task-detail-readonly-dirty-banner')
   })
 
   test('F11c summary label sourced from i18n key `tasks.multiRepoSummary`', () => {

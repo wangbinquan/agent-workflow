@@ -40,6 +40,14 @@ export type WizardSpace =
    * 组只是列表里带标签的一类条目。
    */
   | { kind: 'group'; groupId: string }
+  /**
+   * RFC-248 H9 —— **重放**另一个任务冻结的仓库布局（重启）。
+   *
+   * 它不是「组」：组是可变的、也可能已被删除，而重启要的是「再跑一次刚才那个」，
+   * 所以服务端读的是那个任务自己的 `task_repos` 快照。向导里它是只读的一档
+   * ——用户能看到「复用任务 X 的布局」并换成别的空间，但不能在这里编辑布局。
+   */
+  | { kind: 'replay'; sourceTaskId: string }
 
 export function defaultWizardSpace(kind: 'remote' | 'scratch' = 'remote'): WizardSpace {
   return kind === 'scratch' ? { kind: 'scratch' } : { kind: 'remote', repos: [defaultRepoSource()] }
@@ -66,6 +74,15 @@ export interface WizardAdvancedFields {
  * remote round-trip.
  */
 function buildSpaceBody(space: WizardSpace, common: LaunchCommonPayload): Record<string, unknown> {
+  if (space.kind === 'replay') {
+    // 只发 `sourceTaskId`；仓库字段一个都不带（schema 里四种来源互斥）。
+    const body = buildLaunchBody(defaultRepoSource(), common)
+    delete body.repoUrl
+    delete body.cachedRepoId
+    delete body.ref
+    body.sourceTaskId = space.sourceTaskId
+    return body
+  }
   if (space.kind === 'group') {
     // RFC-248: 组空间只发 `repoGroupId`——布局由服务端展平。仓库字段一个都
     // 不带（schema 里单仓 ⊕ 组互斥）。
@@ -316,7 +333,14 @@ export function payloadToWizardSeed(
         ? { kind: 'scratch' }
         : typeof payload.repoGroupId === 'string' && payload.repoGroupId.length > 0
           ? { kind: 'group', groupId: payload.repoGroupId }
-          : { kind: 'remote', repos: bodyToRepoSources(payload) },
+          : // RFC-248 H9（实现门 P1）：`taskToLaunchPayload` 重启多仓任务时只发
+            // `sourceTaskId`。这里不认它的话，`bodyToRepoSources` 会因为没有
+            // `repoUrl` 而产出一个**空白 remote 行**，而 `spaceResolvable` 仍是
+            // true ⇒ 向导既不报「空间无法还原」，也没有任何途径把 `sourceTaskId`
+            // 发出去，用户点了重启却启动在一个空仓上。
+            typeof payload.sourceTaskId === 'string' && payload.sourceTaskId.length > 0
+            ? { kind: 'replay', sourceTaskId: payload.sourceTaskId }
+            : { kind: 'remote', repos: bodyToRepoSources(payload) },
     inputs:
       typeof payload.inputs === 'object' && payload.inputs !== null
         ? Object.fromEntries(

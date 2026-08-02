@@ -76,6 +76,8 @@ function renderPane(props: Partial<Parameters<typeof RepoGroupsPane>[0]> = {}) {
         onDelete={onDelete}
         deleteError={null}
         newAction={<button type="button">new</button>}
+        search=""
+        onSearchChange={vi.fn()}
         {...props}
       />
     </QueryClientProvider>,
@@ -100,7 +102,28 @@ describe('RepoGroupsPane —— 列表行为', () => {
     fireEvent.click(screen.getByTestId('repo-group-edit-g1'))
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }))
     fireEvent.click(screen.getByTestId('repo-group-delete-g1'))
-    expect(onDelete).toHaveBeenCalledWith('g1')
+    // RFC-248: 删除回调传的是**整个组**（确认弹窗要显示组名与绑定记忆数）。
+    expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }))
+  })
+
+  test('搜索过滤名称与描述（大小写不敏感）', () => {
+    renderPane({
+      list: {
+        data: { items: [group(), group({ id: 'g2', name: 'infra', description: '' })] },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as unknown as Parameters<typeof RepoGroupsPane>[0]['list'],
+      search: 'INFRA',
+    })
+    expect(screen.queryByTestId('repo-group-row-g1')).toBeNull()
+    expect(screen.getByTestId('repo-group-row-g2')).toBeTruthy()
+  })
+
+  test('搜不到 ⇒ noMatches 空态（给清空搜索，不是给新建）', () => {
+    renderPane({ search: 'zzz' })
+    expect(screen.getByTestId('repo-groups-no-matches')).toBeTruthy()
+    expect(screen.queryByTestId('repo-groups-empty')).toBeNull()
   })
 
   test('空列表走 EmptyState 并带上新建入口', () => {

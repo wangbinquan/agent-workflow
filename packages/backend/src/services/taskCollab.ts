@@ -14,6 +14,7 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import type { tasks } from '@/db/schema'
 import { taskCollaborators, tasks as tasksTable, users } from '@/db/schema'
+import { NotFoundError } from '@/util/errors'
 import { isResourceAdminActor, resolveTaskRole } from '@/services/resourceAcl'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
@@ -38,6 +39,34 @@ export async function canViewTask(
   if (task.ownerUserId && task.ownerUserId === actor.user.id) return true
   if (task.ownerUserId === SYSTEM_USER_ID && actor.user.id === SYSTEM_USER_ID) return true
   return hasMembership(db, task.id, actor.user.id)
+}
+
+/**
+ * RFC-248 H9（实现门 P1）—— 用 `sourceTaskId` 重放前，先确认调用方**看得见**那个
+ * 任务。
+ *
+ * `sourceTaskId` 完全由调用方控制。不设这道门的话，一个「能启动某工作流、但看
+ * 不见任务 X」的用户可以传 X 的 id，让服务端读出 X 冻结的 `task_repos` 并按它
+ * 物化——泄漏的是私有 / 已撤权任务的仓库构成（哪几个仓、什么 ref、什么布局），
+ * 而且泄漏形式还是「任务成功启动」，完全不像一次越权。
+ *
+ * 与任务读取共用 `canViewTask`，且**不可见与不存在同形**（都 404），不让调用方
+ * 靠错误码区分「有这个任务但你没权限」与「没有这个任务」。
+ */
+export async function assertCanReplaySourceTask(
+  db: DbClient,
+  actor: Actor,
+  sourceTaskId: string,
+): Promise<void> {
+  const rows = await db
+    .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
+    .from(tasksTable)
+    .where(eq(tasksTable.id, sourceTaskId))
+    .limit(1)
+  const row = rows[0]
+  if (row === undefined || !(await canViewTask(db, actor, row))) {
+    throw new NotFoundError('task-not-found', `task ${sourceTaskId} not found`)
+  }
 }
 
 export async function hasMembership(

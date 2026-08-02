@@ -18,7 +18,9 @@
 | **PR-3**   | ✅   | `8dd8b6e8`…`fa6c1d6d`   | T19/T19b/T19c/T20/T21/T22/T24/T27 + 权限守卫；尾巴 T23半/T25/T26半 未做                                                |
 | **PR-4**   | ✅   | 见 PR-4/5 合并 commit   | T28/T28b/T29/T29b/T30/T30b/T30c/T31/T32a/T32b/T33/T34 + T26 全量（旧多仓分支删除）                                     |
 | **PR-5a**  | ✅   | 同上                    | 启动选择器（仓库/组同列）· 任务详情组 chip + 只读 chip + 挂载路径 · 记忆表单第五档 · changeReview `repoKey` · e2e 重写 |
-| **PR-5b**  | ✅   | 见 PR-5b commit         | `RepoLayoutTree` 公共组件 · `RepoGroupEditor` 弹窗 + 干跑预览路由 · `/repos` 分段 + 组列表 · AC-19 只读脏计数           |
+| **PR-5b**  | ✅   | `cf56f888`              | `RepoLayoutTree` 公共组件 · `RepoGroupEditor` 弹窗 + 干跑预览路由 · `/repos` 分段 + 组列表 · AC-19 只读脏计数           |
+| 视觉基线   | ✅   | `f5639b06`              | `/repos` 两平台基线（linux 取 CI artifact）；顺带记录 `--include-e2e` 与 darwin 既有漂移                                |
+| 实现门修复 | ✅   | 见实现门 commit         | 9×P1 + 11×P2 全修 + 存量定时任务 payload 缺口（本人自查）                                                              |
 
 实现期相对设计稿的**偏离**（均已回写文档）：
 
@@ -365,8 +367,12 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
       **3 × P1 + 2 × P2，逐条核实后全部属实、全部折入**（G1 断代面 + 静默剥除、
       G2 迁移编号撞车 + memories 重建丢列、G3 根仓结构化路径不一致、
       G4 manager 权限、G5 删组孤儿记忆）。另有本人自查独立命中 2 条（A1/A2）。
-- [ ] **设计门第二轮**（修订后复跑，Codex next-steps 要求）
-- [ ] **实现门**：declare done 前再跑一次 Codex review 并修 findings
+- [x] **设计门第二轮**（同日闭环，9×P1 + 2×P2 全部核实并折入）
+- [x] **实现门**（2026-08-03，记档
+      [`impl-gate-2026-08-03.md`](./impl-gate-2026-08-03.md)）：从 pin 到
+      `cf56f888` 的分离 worktree 跑，80 分钟全程实读源码。**9×P1 + 11×P2，
+      逐条核实后全部属实、全部修复并带回归锁**；另由它的一次探针引出本人自查
+      命中的存量定时任务 payload 缺口
 - [ ] `design/plan.md` 的 RFC 索引状态改 Done；`STATE.md` 已完成表加一行
 - [ ] `docs/dev-gotchas.md` 补「嵌套 worktree 的 git 事实」（proposal E1–E4）
 

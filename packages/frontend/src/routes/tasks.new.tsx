@@ -35,6 +35,7 @@ import {
   taskExecutionKind,
   workgroupLaunchReadiness,
   type RepoGroup,
+  type RepoGroupLayoutResponse,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -50,6 +51,8 @@ import { Stepper } from '@/components/Stepper'
 import { UserPicker } from '@/components/UserPicker'
 import { DynamicInput } from '@/components/launch/DynamicInput'
 import { RepoSourceList } from '@/components/launch/RepoSourceList'
+import { QueryState } from '@/components/QueryState'
+import { RepoLayoutTree } from '@/components/repos/RepoLayoutTree'
 import { StatusChip } from '@/components/StatusChip'
 import { UploadPicker } from '@/components/launch/UploadPicker'
 import { useActor } from '@/hooks/useActor'
@@ -811,6 +814,14 @@ function TaskWizardPage() {
   })
   const selectedGroup =
     space.kind === 'group' ? repoGroups.data?.items.find((g) => g.id === space.groupId) : undefined
+  // 选中组后拉一次展平布局，供启动前预览（见「已选仓库组」卡片）。
+  const selectedGroupId = space.kind === 'group' ? space.groupId : ''
+  const groupLayout = useQuery<RepoGroupLayoutResponse>({
+    queryKey: ['repo-group-layout', selectedGroupId],
+    queryFn: ({ signal }) =>
+      api.get(`/api/repo-groups/${encodeURIComponent(selectedGroupId)}/layout`, undefined, signal),
+    enabled: selectedGroupId !== '',
+  })
 
   const stepModeReady = selectedObject !== ''
   // Impl-gate F2: `[].every()` is vacuously true, so a zero-repo remote space
@@ -820,6 +831,8 @@ function TaskWizardPage() {
     space.kind === 'scratch' ||
     // RFC-248: 组空间选中即就绪——布局与各仓 ref 都由服务端从组定义展平。
     (space.kind === 'group' && space.groupId !== '') ||
+    // RFC-248 H9: 重放空间选中即就绪——布局来自源任务的冻结快照。
+    (space.kind === 'replay' && space.sourceTaskId !== '') ||
     (space.kind === 'remote' &&
       space.repos.length > 0 &&
       space.repos.every((r) => validateRepoUrl(r.repoUrl) === null))
@@ -1421,7 +1434,7 @@ function TaskWizardPage() {
               <ChoiceCards<'remote' | 'scratch'>
                 // RFC-248: 组空间在「仓库」这一档里表达（用户视角就是从仓库
                 // 列表里选了个带标签的条目），不单开一张卡。
-                value={space.kind === 'group' ? 'remote' : space.kind}
+                value={space.kind === 'group' || space.kind === 'replay' ? 'remote' : space.kind}
                 onChange={(next) => {
                   if (next === space.kind) return
                   setSpace(defaultWizardSpace(next))
@@ -1446,7 +1459,27 @@ function TaskWizardPage() {
                 ]}
               />
             </Field>
-            {space.kind === 'group' ? (
+            {space.kind === 'replay' ? (
+              // RFC-248 H9: 重放空间——展示来源任务并允许改回普通选择。布局本身
+              // 是**冻结**的，不在这里编辑（要改布局就换成一个组）。
+              <div className="info-box" data-testid="wizard-space-replay">
+                <div className="wizard-space-group__head">
+                  <StatusChip kind="info" size="sm">
+                    {t('taskWizard.spaceReplayChip')}
+                  </StatusChip>
+                  <code>{space.sourceTaskId}</code>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    data-testid="wizard-space-replay-change"
+                    onClick={() => setSpace(defaultWizardSpace('remote'))}
+                  >
+                    {t('taskWizard.spaceGroupChange')}
+                  </button>
+                </div>
+                <div className="muted">{t('taskWizard.spaceReplayHint')}</div>
+              </div>
+            ) : space.kind === 'group' ? (
               // RFC-248: 已选中仓库组——展示组名 + 展平仓数 + 挂载布局预览，
               // 「更换」退回仓库/组选择列表。
               <div className="info-box" data-testid="wizard-space-group">
@@ -1469,6 +1502,23 @@ function TaskWizardPage() {
                     {t('taskWizard.spaceGroupRepoCount', { count: selectedGroup.flatRepoCount })}
                   </div>
                 )}
+                {/* RFC-248（实现门 P2）：光有组名与仓数，用户无法在启动**之前**
+                    确认挂载路径 / ref / sparse 子目录 / 只读成员。这些恰恰是
+                    「任务会跑在什么样的目录里」的全部内容，必须看得见再决定。 */}
+                <QueryState
+                  query={groupLayout}
+                  data={groupLayout.data?.repos ?? []}
+                  emptyText={t('repoGroups.layout.empty')}
+                  testid="wizard-space-group-layout-state"
+                >
+                  {(repos) => (
+                    <RepoLayoutTree
+                      repos={repos}
+                      testidPrefix="wizard-space-group-layout"
+                      compact
+                    />
+                  )}
+                </QueryState>
               </div>
             ) : space.kind === 'remote' ? (
               <RepoSourceList
@@ -1743,15 +1793,17 @@ function TaskWizardPage() {
               <dd data-testid="wizard-summary-space">
                 {space.kind === 'scratch'
                   ? t('taskWizard.spaceScratch')
-                  : space.kind === 'group'
-                    ? t('taskWizard.spaceGroupSummary', {
-                        name:
-                          repoGroups.data?.items.find((g) => g.id === space.groupId)?.name ??
-                          space.groupId,
-                      })
-                    : space.repos
-                        .map((r) => `${r.repoUrl}${r.ref ? ` @ ${r.ref}` : ''}`)
-                        .join(', ')}
+                  : space.kind === 'replay'
+                    ? t('taskWizard.spaceReplaySummary', { taskId: space.sourceTaskId })
+                    : space.kind === 'group'
+                      ? t('taskWizard.spaceGroupSummary', {
+                          name:
+                            repoGroups.data?.items.find((g) => g.id === space.groupId)?.name ??
+                            space.groupId,
+                        })
+                      : space.repos
+                          .map((r) => `${r.repoUrl}${r.ref ? ` @ ${r.ref}` : ''}`)
+                          .join(', ')}
                 {summaryEdit(STEP_SPACE)}
               </dd>
             </div>

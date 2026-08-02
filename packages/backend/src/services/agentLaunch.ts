@@ -456,7 +456,13 @@ export async function startAgentTask(
       validateUploadPlan({ defs: uploadDefs, files, limits: uploads.limits })
       // RFC-248 D12: 多仓 + 上传的禁令已解除（上传物落任务根下的固定目录）。
       const appHome = deps.appHome ?? Paths.root
-      const space = await materializeSpace(parsed.data, { db }, appHome)
+      // RFC-248（实现门 P1）：同 routes/tasks.ts——组成员按 cachedRepoId 解析，
+      // 私有仓 URL 是封存的，缺 secretBox 会 `cached-repo-credential-unavailable`。
+      const space = await materializeSpace(
+        parsed.data,
+        { db, ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}) },
+        appHome,
+      )
       if (space.earlyError !== null) {
         // Failed task row so the user sees the error; no files were written.
         return await startTask(parsed.data, { ...deps, materializedSpace: space, agentLaunch })
@@ -465,7 +471,11 @@ export async function startAgentTask(
       try {
         const result = await applyUploadsToWorktree({
           worktreePath: space.worktreePath,
-          ...(space.repos.length > 1 ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
+          // RFC-248 D12（实现门 P1）：按**空间类型**判定，不看仓数。组空间即便只展平出
+          // 一个成员（sparse / 非根挂载），上传物也必须落在任务根下的保留目录——
+          // 用 `repos.length > 1` 会让那种组把上传物写进成员仓的工作树。
+          // 单仓 / scratch 不传 ⇒ 路径与今天字节级一致。
+          ...(space.kind === 'group' ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),
           defs: uploadDefs,
           files,
           limits: uploads.limits,
