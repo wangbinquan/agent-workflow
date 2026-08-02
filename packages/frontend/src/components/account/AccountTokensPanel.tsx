@@ -6,9 +6,9 @@ import { api } from '@/api/client'
 import { Card } from '@/components/Card'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
-import { NoticeBanner } from '@/components/NoticeBanner'
 import { RelativeTime } from '@/components/RelativeTime'
 import { StatusChip } from '@/components/StatusChip'
+import { CreateTokenDialog } from '@/components/account/CreateTokenDialog'
 import { ACTOR_QUERY_KEY, type MeResponse } from '@/hooks/useActor'
 
 export function AccountTokensPanel({ me }: { me: MeResponse }) {
@@ -16,23 +16,36 @@ export function AccountTokensPanel({ me }: { me: MeResponse }) {
   const qc = useQueryClient()
   const focusFallbackRef = useRef<HTMLHeadingElement>(null)
   const [revokeId, setRevokeId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
   const triggerRef = useRef<HTMLElement | null>(null)
+  const createTriggerRef = useRef<HTMLButtonElement | null>(null)
   const tokens = [...me.pats].sort((a, b) => {
     const activeDelta = Number(a.revokedAt !== null) - Number(b.revokedAt !== null)
     return activeDelta === 0 ? b.createdAt - a.createdAt : activeDelta
   })
   return (
     <section className="account-section-panel" aria-labelledby="account-section-title-tokens">
-      <header className="account-section-panel__header">
-        <h2 id="account-section-title-tokens" ref={focusFallbackRef} tabIndex={-1}>
-          {t('account.sections.tokens')}
-        </h2>
-        <p>{t('account.sectionDescriptions.tokens')}</p>
+      <header className="account-section-panel__header account-section-panel__header--row">
+        <div>
+          <h2 id="account-section-title-tokens" ref={focusFallbackRef} tabIndex={-1}>
+            {t('account.sections.tokens')}
+          </h2>
+          <p>{t('account.sectionDescriptions.tokens')}</p>
+        </div>
+        {/* RFC-247 D1 — issuance reopened. RFC-221 closed it because the
+            permission catalog of the day could not express a narrow token; the
+            "生成已关闭" banner that stood here explained that state and is now
+            simply false. */}
+        <button
+          type="button"
+          className="btn btn--primary btn--sm"
+          ref={createTriggerRef}
+          onClick={() => setCreating(true)}
+          data-testid="token-create-open"
+        >
+          {t('account.token.create')}
+        </button>
       </header>
-      <NoticeBanner tone="info">
-        <strong>{t('account.tokensRetiredTitle')}</strong>
-        <p>{t('account.tokensRetiredDescription')}</p>
-      </NoticeBanner>
       <Card className="account-tokens-card">
         {tokens.length === 0 ? (
           <EmptyState
@@ -55,6 +68,13 @@ export function AccountTokensPanel({ me }: { me: MeResponse }) {
           </ul>
         )}
       </Card>
+      <CreateTokenDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        role={me.user.role}
+        triggerRef={createTriggerRef}
+        onCreated={() => qc.invalidateQueries({ queryKey: ACTOR_QUERY_KEY })}
+      />
       <ConfirmDialog
         open={revokeId !== null}
         title={t('account.revokePatTitle')}
@@ -115,6 +135,12 @@ function TokenItem({
             ) : (
               <RelativeTime ts={token.expiresAt} />
             )}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('account.token.purposeLabel')}</dt>
+          <dd data-testid={`token-purpose-${token.id}`}>
+            {t(`account.token.purpose.${token.purpose}`)}
           </dd>
         </div>
         <div>

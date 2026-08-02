@@ -86,6 +86,15 @@ const OVERLAY_CALLSITES = {
     family: 'access-and-settings',
     count: 1,
   },
+  // RFC-247 — token issuance. Two Dialog renders in one component because the
+  // flow has two phases with different stakes: pick the permissions, then read
+  // a secret shown exactly once. The reveal is not a separate dialog by
+  // accident — remounting between phases would risk losing the only copy of
+  // the token to a stray dismiss.
+  'components/account/CreateTokenDialog.tsx': {
+    family: 'access-and-settings',
+    count: 2,
+  },
   // Runtime edit/add dialog plus RFC-201's shared destructive confirmation.
   'components/RuntimeList.tsx': { family: 'access-and-settings', count: 2 },
   'components/users/CreateUserDialog.tsx': { family: 'access-and-settings', count: 1 },

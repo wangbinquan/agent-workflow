@@ -353,3 +353,57 @@ export function Switch({
     </label>
   )
 }
+
+interface CheckboxProps {
+  checked: boolean
+  onChange: (v: boolean) => void
+  /** Optional: a bare grid cell passes `aria-label` instead. */
+  label?: string
+  hint?: string
+  disabled?: boolean
+  /** Explains WHY it is disabled — surfaced as the native tooltip. */
+  title?: string
+  'aria-label'?: string
+  'data-testid'?: string
+}
+
+/**
+ * RFC-247 — a plain checkbox primitive.
+ *
+ * `Switch` already wraps `<input type="checkbox">`, but it renders a toggle:
+ * the right control for "is this feature on", and the wrong one for a dense
+ * grid of ~40 independent grants where the user scans columns and needs the
+ * ticked ones to read as a set rather than as forty separate settings.
+ *
+ * Added here rather than inside the token page because five call sites in this
+ * repo already hand-roll `<input type="checkbox">` (NodeDetailDrawer,
+ * fusion/FuseDialog, memory/MemoryRow, launch/FilesPicker, and Form's own
+ * Switch). A sixth private copy would have made "we have no checkbox primitive"
+ * permanently true. Same namespace, same `.form-*` styling, same testid
+ * conventions as its siblings.
+ */
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+  title,
+  'aria-label': ariaLabel,
+  'data-testid': testid,
+}: CheckboxProps) {
+  return (
+    <label className="form-checkbox" title={title}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        aria-label={ariaLabel}
+        data-testid={testid}
+      />
+      {label !== undefined && <span className="form-checkbox__label">{label}</span>}
+      {hint !== undefined && <span className="form-field__hint">{hint}</span>}
+    </label>
+  )
+}

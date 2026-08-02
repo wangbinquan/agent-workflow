@@ -957,6 +957,89 @@ code {
   justify-content: flex-end;
 }
 
+/* RFC-247 — token issuance. */
+
+.account-section-panel__header--row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+/* The permission matrix: one label column plus the four verb columns. A verb a
+   role cannot grant leaves its slot empty, so the columns must be fixed rather
+   than content-sized — otherwise rows with different verb sets would each land
+   their checkboxes somewhere else and the grid would stop reading as a grid. */
+.token-matrix {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) repeat(4, minmax(3.5rem, auto));
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.token-matrix__head,
+.token-matrix__row {
+  display: contents;
+}
+
+.token-matrix__verb {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  text-align: center;
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border);
+}
+
+.token-matrix__resource {
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+
+.token-matrix__cell {
+  display: flex;
+  justify-content: center;
+}
+
+/* Delete reads differently from the other three at a glance — the point of the
+   column is that ticking one is a decision, not a default. */
+.token-matrix__cell--delete > .form-checkbox > input[type='checkbox'] {
+  accent-color: var(--danger-fill);
+}
+
+.token-reveal {
+  display: block;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  /* One click selects the whole secret — the copy button's fallback path can
+     fail on plain http, and manual selection is then the only way out. */
+  user-select: all;
+}
+
+.token-reveal__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.token-reveal__status {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.token-reveal__status--error {
+  color: var(--danger);
+}
+
 .account-session-list__item {
   display: flex;
   align-items: center;
@@ -4274,6 +4357,44 @@ code {
 /* Switch row: switch + label on line 1; hint (if any) on line 2 indented to
  * align under the label. Grid keeps the hint from pushing inline to the
  * right edge or wrapping awkwardly across the row. */
+/* RFC-247 — plain checkbox primitive (components/Form.tsx Checkbox).
+ * Shares Switch's grid/typography tokens so the two read as siblings, but
+ * keeps the NATIVE checkbox rendering: the token matrix shows ~40 independent
+ * grants at once, and a grid of toggles reads as forty separate settings
+ * rather than one selected set. */
+.form-checkbox {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.form-checkbox > span {
+  grid-column: 2;
+}
+.form-checkbox > .form-field__hint {
+  grid-column: 2;
+  grid-row: 2;
+}
+.form-checkbox > input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.form-checkbox:has(> input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.form-checkbox > input:disabled {
+  cursor: not-allowed;
+}
+
 .form-switch {
   display: grid;
   grid-template-columns: auto 1fr;

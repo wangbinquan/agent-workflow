@@ -2,9 +2,12 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
+import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createPat } from '../src/auth/patStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -21,18 +24,28 @@ interface Harness {
   app: Hono
 }
 
-async function buildHarness(bootstrap: 'ready' | 'required' = 'ready'): Promise<Harness> {
+async function buildHarness(
+  bootstrap: 'ready' | 'required' = 'ready',
+  configPath = '/tmp/aw-test-config-never-used.json',
+): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS, { bootstrap })
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   const app = createApp({
     token: DAEMON_TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
+    configPath,
     opencodeVersion: '1.14.25',
     dbVersion: 1,
     db,
     secretBox,
   })
   return { db, app }
+}
+
+/** Writes a real config file so `isMcpSurfaceEnabled` reads a real value. */
+function writeConfigWithSurface(enabled: boolean): string {
+  const path = join(mkdtempSync(join(tmpdir(), 'aw-rfc247-cfg-')), 'config.json')
+  writeFileSync(path, JSON.stringify({ ...DEFAULT_CONFIG, mcpSurfaceEnabled: enabled }))
+  return path
 }
 
 describe('RFC-221 bootstrap and login-policy route contracts', () => {
@@ -372,6 +385,66 @@ describe('PATs', () => {
     // for a LIVE token too and could not distinguish revoked from forbidden.
     const auth = await reqRaw(h.app, '/api/whoami', {}, { Authorization: `Bearer ${token}` })
     expect(auth.status).toBe(401)
+  })
+
+  // RFC-247 D10 / AC-18 — the surviving half of RFC-221's intent. RFC-221 wanted
+  // "no one mints a credential outside the sanctioned path"; RFC-247 replaces a
+  // permanent closure with an operator-controlled switch, so the thing worth
+  // locking is that the switch is REAL — i.e. that the route consults it rather
+  // than merely having a config field somebody could believe in.
+  test('creation is refused while the external surface switch is off (AC-18)', async () => {
+    const h = await buildHarness('ready', writeConfigWithSurface(false))
+    await createUser(h.db, {
+      username: 'bob',
+      displayName: 'Bob',
+      role: 'admin',
+      password: 'pw12345678',
+    })
+    const login = await reqRaw(h.app, '/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'bob', password: 'pw12345678' }),
+    })
+    const { sessionToken } = (await login.json()) as { sessionToken: string }
+
+    const created = await reqRaw(
+      h.app,
+      '/api/auth/pats',
+      { method: 'POST', body: JSON.stringify({ name: 'blocked', scopes: [] }) },
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect(created.status).toBe(403)
+    expect(((await created.json()) as { code: string }).code).toBe('token-issuance-disabled')
+
+    // Zero side effects: nothing was written before the refusal.
+    const list = await reqRaw(
+      h.app,
+      '/api/auth/pats',
+      {},
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect((await list.json()) as unknown[]).toEqual([])
+
+    // The SAME request succeeds with the switch on — otherwise this test would
+    // also pass if creation were broken for an unrelated reason.
+    const open = await buildHarness('ready', writeConfigWithSurface(true))
+    await createUser(open.db, {
+      username: 'bob',
+      displayName: 'Bob',
+      role: 'admin',
+      password: 'pw12345678',
+    })
+    const openLogin = await reqRaw(open.app, '/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'bob', password: 'pw12345678' }),
+    })
+    const openSession = ((await openLogin.json()) as { sessionToken: string }).sessionToken
+    const openCreated = await reqRaw(
+      open.app,
+      '/api/auth/pats',
+      { method: 'POST', body: JSON.stringify({ name: 'allowed', scopes: [] }) },
+      { Authorization: `Bearer ${openSession}` },
+    )
+    expect(openCreated.status).toBe(201)
   })
 
   test('an over-reaching matrix is REFUSED, not silently narrowed (AC-7)', async () => {
