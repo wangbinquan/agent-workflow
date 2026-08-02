@@ -5181,12 +5181,12 @@ export const zhCN: Resources = {
     sections: {
       overview: '账户概览',
       security: '登录与安全',
-      tokens: '存量访问令牌',
+      tokens: '外部对接令牌',
     },
     sectionDescriptions: {
       overview: '查看账户状态和已关联的登录身份。',
       security: '管理本地密码与当前 Web 会话。',
-      tokens: '查看并逐步吊销此前创建的个人访问令牌。',
+      tokens: '创建并管理个人访问令牌——外部模型与脚本通过 API / MCP 驱动本平台时用它。',
     },
     oidcManaged: 'OIDC 托管',
     localAccount: '本地账户',
@@ -5207,7 +5207,7 @@ export const zhCN: Resources = {
     expires: '到期',
     revokeSessionTitle: '吊销这个会话？',
     revokeSessionDescription: '该浏览器的下一次请求将被要求重新登录。此操作不会影响其他会话。',
-    noPatsDescription: '你的账户没有存量个人访问令牌，也无法再生成新的令牌。',
+    noPatsDescription: '还没有创建过令牌。创建一枚即可让外部模型或脚本接入本平台。',
     created: '创建于',
     lastUsed: '最近使用',
     neverUsed: '从未使用',

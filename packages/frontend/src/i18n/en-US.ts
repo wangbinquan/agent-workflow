@@ -700,12 +700,13 @@ export const enUS: Resources = {
     sections: {
       overview: 'Account overview',
       security: 'Sign-in & security',
-      tokens: 'Existing access tokens',
+      tokens: 'Integration tokens',
     },
     sectionDescriptions: {
       overview: 'Review your account status and linked sign-in identities.',
       security: 'Manage a local password and your active web sessions.',
-      tokens: 'Review and gradually revoke personal access tokens created previously.',
+      tokens:
+        'Create and manage the personal access tokens external models and scripts use to drive this platform over the API and MCP.',
     },
     oidcManaged: 'OIDC managed',
     localAccount: 'Local account',
@@ -730,7 +731,7 @@ export const enUS: Resources = {
     revokeSessionDescription:
       'The next request from that browser will require sign-in again. Other sessions are not affected.',
     noPatsDescription:
-      'Your account has no existing personal access tokens, and new ones can no longer be created.',
+      'No tokens yet. Create one to let an external model or script reach this platform.',
     created: 'Created',
     lastUsed: 'Last used',
     neverUsed: 'Never used',
