@@ -241,6 +241,7 @@ describe('PAT-bearing actor cannot escape role limits', () => {
       userId: bob!.id,
       name: 'overreach',
       scopes: ['users:read'],
+      purpose: 'general',
     })
     const res = await reqAs(app, token, '/api/users')
     expect(res.status).toBe(403)
@@ -267,6 +268,7 @@ describe('PAT-bearing actor cannot escape role limits', () => {
       userId: admin.id,
       name: 'narrow',
       scopes: ['settings:read'], // admin role kept, backup:run dropped
+      purpose: 'general',
     })
     const get = await reqAs(app, token, '/api/restore/pending')
     expect(get.status).toBe(403)

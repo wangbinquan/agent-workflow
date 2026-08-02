@@ -140,6 +140,39 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
         403,
       )
     }
+    // RFC-247 D2 / §3.5 — the token gates for WebSocket.
+    //
+    // `/ws/*` is upgraded here in Bun.serve's fetch handler, entirely OUTSIDE
+    // `multiAuth` (which is mounted on `/api/*`), and `resolveActor` above
+    // accepts PATs. So none of the three gates the route-metadata layer applies
+    // to HTTP reach this path — they have to be restated.
+    //
+    //   · purpose: an `mcp_only` token is for `/api/mcp` and nothing else. Left
+    //     unhandled, a token that cannot call `GET /api/tasks` could simply
+    //     subscribe to `/ws/tasks/:id` for the same data.
+    //   · channel allowlist: DEFAULT DENY. `repo-import` has no gate of any kind
+    //     (its own spec says so — RFC-152 D4 leftover), and `intent-sessions`
+    //     carries a domain RFC-247 D7 puts permanently out of a token's reach.
+    //     Denying by default means a channel added later is closed to tokens
+    //     until someone decides otherwise, rather than open until someone
+    //     notices.
+    if (actor.source === 'pat') {
+      if (actor.purpose === 'mcp_only') {
+        return wsError(
+          'token-mcp-only',
+          'this token was issued for MCP use only and cannot open a WebSocket',
+          403,
+        )
+      }
+      if (!TOKEN_ALLOWED_WS_CHANNELS.has(channel.kind)) {
+        return wsError(
+          'token-forbidden-channel',
+          `personal access tokens cannot open the '${channel.kind}' channel`,
+          403,
+        )
+      }
+    }
+
     // RFC-152 — upgrade-time whole-connection gates come from the registry:
     //   task               → canViewTask (RFC-054 W2-4; the tasks-list channel
     //                        does per-frame filtering instead because it
@@ -225,3 +258,27 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     },
   }
 }
+
+/**
+ * RFC-247 §3.5 — the channels a `general` token may open. DEFAULT DENY: a
+ * channel absent from this set is closed to tokens.
+ *
+ * Two are deliberately excluded:
+ *   · `repo-import`     — its spec states it has "no gate of any kind"
+ *     (RFC-152 D4 leftover); anyone who guesses a batchId sees another user's
+ *     import. That is an existing defect, but leaving it open to tokens would
+ *     downgrade it from "needs an interactive login" to "one leaked token".
+ *   · `intent-sessions` — RFC-247 D7 puts `intent:*` permanently out of a
+ *     token's reach, and every `/api/intent-sessions/*` route 403s for tokens.
+ *     Allowing the socket would be a back door to exactly that data.
+ */
+const TOKEN_ALLOWED_WS_CHANNELS: ReadonlySet<string> = new Set([
+  'task',
+  'tasks-list',
+  'workflows',
+  'workgroups',
+  'memories',
+  'memory-distill-jobs',
+  'scheduled-tasks',
+  'mcp-runtime-tests',
+])

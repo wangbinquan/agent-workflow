@@ -406,6 +406,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
       userId: bob.id,
       name: 'narrow',
       scopes: ['agents:read'],
+      purpose: 'general',
     })
     const denied = await req(h.app, patToken)
     expect(denied.status).toBe(403)

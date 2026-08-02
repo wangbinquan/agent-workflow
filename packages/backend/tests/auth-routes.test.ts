@@ -320,21 +320,33 @@ describe('PATs', () => {
     })
     const { sessionToken } = (await login.json()) as { sessionToken: string }
 
+    // RFC-247 D1 REOPENS creation. RFC-221 D1 had closed it globally because
+    // there was no way to issue a NARROW token — `资源:write` covered delete
+    // too, and an empty scope list silently meant "everything the owner has".
+    // RFC-247 fixed both, which is what makes issuing safe again, so this test
+    // now locks the ISSUING contract instead of the closure.
     const created = await reqRaw(
       h.app,
       '/api/auth/pats',
       { method: 'POST', body: JSON.stringify({ name: 'ci-launcher', scopes: ['tasks:execute'] }) },
       { Authorization: `Bearer ${sessionToken}` },
     )
-    expect(created.status).toBe(403)
-    expect(((await created.json()) as { code: string }).code).toBe('pat-creation-disabled')
+    expect(created.status).toBe(201)
+    const issued = (await created.json()) as {
+      token: string
+      pat: { id: string; scopes: string[] }
+    }
+    // The raw token is returned exactly once; only its SHA-256 is stored, so no
+    // later read path can surface it again.
+    expect(issued.token.startsWith('aws_pat_')).toBe(true)
+    expect(issued.pat.scopes).toEqual(['tasks:execute'])
 
-    // RFC-221 deliberately keeps the retirement path for pre-existing PATs.
     const { token, meta } = await createPat({
       db: h.db,
       userId: bob.id,
       name: 'legacy-ci-launcher',
       scopes: ['tasks:execute'],
+      purpose: 'general',
     })
     expect(token.startsWith('aws_pat_')).toBe(true)
 
@@ -345,7 +357,8 @@ describe('PATs', () => {
       { Authorization: `Bearer ${sessionToken}` },
     )
     expect(list.status).toBe(200)
-    expect(((await list.json()) as unknown[]).length).toBe(1)
+    // the freshly issued one plus the directly-seeded one
+    expect(((await list.json()) as unknown[]).length).toBe(2)
 
     const del = await reqRaw(
       h.app,
@@ -354,12 +367,14 @@ describe('PATs', () => {
       { Authorization: `Bearer ${sessionToken}` },
     )
     expect(del.status).toBe(204)
-    // After revoke, PAT token cannot be used.
-    const auth = await reqRaw(h.app, '/api/auth/me', {}, { Authorization: `Bearer ${token}` })
+    // After revoke the token no longer authenticates. Probed via /api/whoami:
+    // RFC-247 D6 closes all of /api/auth/* to tokens, so /api/auth/me would 403
+    // for a LIVE token too and could not distinguish revoked from forbidden.
+    const auth = await reqRaw(h.app, '/api/whoami', {}, { Authorization: `Bearer ${token}` })
     expect(auth.status).toBe(401)
   })
 
-  test('creation denial happens before payload scope processing', async () => {
+  test('an over-reaching matrix is REFUSED, not silently narrowed (AC-7)', async () => {
     const h = await buildHarness()
     await createUser(h.db, {
       username: 'bob',
@@ -382,8 +397,14 @@ describe('PATs', () => {
       },
       { Authorization: `Bearer ${sessionToken}` },
     )
-    expect(created.status).toBe(403)
-    const body = (await created.json()) as { code: string }
-    expect(body.code).toBe('pat-creation-disabled')
+    // `resolveTokenPermissions` would drop `users:read` anyway (a token never
+    // exceeds its owner's role), so silently accepting would still be SAFE —
+    // and would still be wrong. The user walks away believing they issued a
+    // token that can read users, and finds out when the automation 403s hours
+    // later, far from this decision.
+    expect(created.status).toBe(422)
+    const body = (await created.json()) as { code: string; details?: { ungrantable?: string[] } }
+    expect(body.code).toBe('pat-scope-ungrantable')
+    expect(body.details?.ungrantable).toEqual(['users:read'])
   })
 })

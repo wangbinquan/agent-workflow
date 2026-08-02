@@ -164,6 +164,7 @@ export async function resolveActor(
       },
       source: 'pat',
       patScopes: resolved.scopes as ReadonlyArray<Permission>,
+      patPurpose: resolved.purpose,
     })
   }
   // Legacy daemon token: any opaque string the daemon was launched with.
@@ -229,6 +230,7 @@ export async function reresolveActor(
       },
       source: 'pat',
       patScopes: resolved.scopes as ReadonlyArray<Permission>,
+      patPurpose: resolved.purpose,
     })
   }
   // daemon: RFC-221 makes this a one-way bootstrap credential. Revalidation

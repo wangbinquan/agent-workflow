@@ -171,6 +171,7 @@ describe('account self-service is scoped to the calling user', () => {
       db: h.db,
       userId: h.alice.id,
       name: 'ci',
+      purpose: 'general',
     })
 
     const res = await as(h.app, h.bob, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })
@@ -218,6 +219,7 @@ describe('account self-service is scoped to the calling user', () => {
       db: h.db,
       userId: h.alice.id,
       name: 'alice-ci',
+      purpose: 'general',
     })
     await createIdentity(h.db, {
       userId: h.alice.id,
@@ -269,7 +271,12 @@ describe('account self-service is scoped to the calling user', () => {
     expect((await as(h.app, h.alice, '/api/auth/me')).status).toBe(200)
 
     const alice: Actor = h.alice
-    const { meta: pat } = await createPat({ db: h.db, userId: alice.id, name: 'mine' })
+    const { meta: pat } = await createPat({
+      db: h.db,
+      userId: alice.id,
+      name: 'mine',
+      purpose: 'general',
+    })
     expect((await as(h.app, alice, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })).status).toBe(
       204,
     )

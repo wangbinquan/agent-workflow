@@ -5,6 +5,7 @@
 import { and, eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
 import {
+  CreatePatBodySchema,
   ChangePasswordBodySchema,
   CreateBootstrapAdminBodySchema,
   LoginBodySchema,
@@ -12,7 +13,14 @@ import {
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import { hashPassword, verifyPassword, verifyPasswordDummy } from '@/auth/passwords'
-import { listPatsForUser, revokePat } from '@/auth/patStore'
+import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
+import {
+  assertMatrixGrantable,
+  createPat,
+  listPatsForUser,
+  PatMatrixError,
+  revokePat,
+} from '@/auth/patStore'
 import {
   createSession,
   hashToken,
@@ -334,11 +342,53 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'never',
       summary: 'Create a personal access token',
     },
-    async () => {
-      throw new ForbiddenError(
-        'pat-creation-disabled',
-        'personal access token creation is disabled',
-      )
+    async (c) => {
+      // RFC-247 D1 — reopened. RFC-221 D1 closed this globally ("只退不进")
+      // because there was no way to issue a NARROW token: the permission
+      // catalog only had `资源:write`, so any token that could edit could also
+      // delete, and an empty scope list silently meant "everything the owner
+      // has". RFC-247 fixed both, which is what makes issuing safe again.
+      const actor = actorOf(c)
+      if (!isMcpSurfaceEnabled(deps.configPath)) {
+        throw new ForbiddenError(
+          'token-issuance-disabled',
+          'the administrator has disabled the API token surface',
+        )
+      }
+      const parsed = CreatePatBodySchema.safeParse(await safeJson(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('pat-invalid', 'invalid token payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      // AC-7 — refuse an over-reaching matrix rather than silently narrowing it.
+      // resolveTokenPermissions would drop the extra points anyway, but a user
+      // who walks away believing they issued a token that can create repos, and
+      // discovers otherwise when their automation 403s hours later, was failed
+      // at exactly this line.
+      try {
+        assertMatrixGrantable(actor.user.role, parsed.data.scopes)
+      } catch (err) {
+        if (err instanceof PatMatrixError) {
+          throw new ValidationError(
+            'pat-scope-ungrantable',
+            'your role cannot grant some of the selected permissions',
+            { ungrantable: err.ungrantable },
+          )
+        }
+        throw err
+      }
+      const created = await createPat({
+        db: deps.db,
+        userId: actor.user.id,
+        name: parsed.data.name,
+        scopes: parsed.data.scopes,
+        purpose: parsed.data.purpose,
+        expiresAt: parsed.data.expiresAt ?? null,
+      })
+      // The raw token is returned exactly once and never stored — only its
+      // SHA-256 lives in the DB, so no later read path can surface it.
+      return c.json({ token: created.token, pat: created.meta }, 201)
     },
   )
 

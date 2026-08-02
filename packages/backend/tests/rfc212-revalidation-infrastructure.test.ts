@@ -100,7 +100,13 @@ describe('RFC-212 T2 — credential fingerprint, never the raw token', () => {
       password: 'longEnoughPassword',
     })
     const { token: sessionToken } = await createSession({ db, userId: user.id })
-    const { token: patToken } = await createPat({ db, userId: user.id, name: 'ci', scopes: [] })
+    const { token: patToken } = await createPat({
+      db,
+      userId: user.id,
+      name: 'ci',
+      scopes: [],
+      purpose: 'general',
+    })
 
     expect(describeCredential(sessionToken)).toEqual({
       kind: 'session',
@@ -154,7 +160,13 @@ describe('RFC-212 T3 — hash-keyed lookups are read-only when asked', () => {
       password: 'longEnoughPassword',
     })
     const { token: sessionToken } = await createSession({ db, userId: user.id })
-    const { token: patToken } = await createPat({ db, userId: user.id, name: 'ci', scopes: [] })
+    const { token: patToken } = await createPat({
+      db,
+      userId: user.id,
+      name: 'ci',
+      scopes: [],
+      purpose: 'general',
+    })
     return { db, userId: user.id, sessionToken, patToken }
   }
 

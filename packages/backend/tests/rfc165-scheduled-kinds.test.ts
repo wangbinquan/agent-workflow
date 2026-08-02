@@ -585,6 +585,7 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
           'scheduled-tasks:update',
           'scheduled-tasks:delete',
         ],
+        purpose: 'general',
       })
     ).token
     launchPat = (
@@ -598,6 +599,7 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
           'scheduled-tasks:create',
           'scheduled-tasks:update',
         ],
+        purpose: 'general',
       })
     ).token
     const wf = await createWorkflow(

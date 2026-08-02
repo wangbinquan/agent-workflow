@@ -1863,9 +1863,73 @@ export const userPats = sqliteTable(
     lastUsedAt: integer('last_used_at'),
     expiresAt: integer('expires_at'),
     revokedAt: integer('revoked_at'),
+    /**
+     * RFC-247 — which channel this token may use.
+     *   'general'  : /api/* and /api/mcp
+     *   'mcp_only' : /api/mcp only; any business route 403s `token-mcp-only`
+     * The DB default exists for schema sanity only — migration 0129 revokes
+     * every pre-RFC-247 row, so no live token silently inherits it.
+     */
+    purpose: text('purpose').notNull().default('general'),
   },
   (t) => ({
     userIdx: index('idx_user_pats_user').on(t.userId),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-247 token_audit — one row per call made with a token.
+//
+// Deliberately does NOT store the request body. `resource_write` bodies carry
+// MCP `env` values and repo credentials; an audit table holding secrets is a
+// new breach surface, not a control. Metadata answers "who did what to which
+// resource, and did it succeed", which is what an operator actually needs.
+// -----------------------------------------------------------------------------
+export const tokenAudit = sqliteTable(
+  'token_audit',
+  {
+    id: text('id').primaryKey(),
+    /** No FK cascade on purpose: revoking a token must not erase its history. */
+    patId: text('pat_id').notNull(),
+    userId: text('user_id').notNull(),
+    /** 'mcp' | 'rest' */
+    channel: text('channel').notNull(),
+    toolName: text('tool_name'),
+    method: text('method'),
+    path: text('path'),
+    resourceKind: text('resource_kind'),
+    resourceId: text('resource_id'),
+    statusCode: integer('status_code').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    userIdx: index('idx_token_audit_user_created').on(t.userId, t.createdAt),
+    patIdx: index('idx_token_audit_pat_created').on(t.patId, t.createdAt),
+    createdIdx: index('idx_token_audit_created').on(t.createdAt),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-247 token_delete_snapshot — what a token-issued DELETE removed.
+//
+// Metadata alone answers "who deleted what" but not "what was it", and the
+// second question is the one that matters once the row is gone. Snapshots are
+// redacted by services/tokenRedaction.ts before insert and expire on the same
+// retention clock as the audit rows.
+// -----------------------------------------------------------------------------
+export const tokenDeleteSnapshot = sqliteTable(
+  'token_delete_snapshot',
+  {
+    id: text('id').primaryKey(),
+    auditId: text('audit_id').notNull(),
+    resourceKind: text('resource_kind').notNull(),
+    resourceId: text('resource_id').notNull(),
+    snapshotJson: text('snapshot_json').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    auditIdx: index('idx_token_delete_snapshot_audit').on(t.auditId),
+    createdIdx: index('idx_token_delete_snapshot_created').on(t.createdAt),
   }),
 )
 

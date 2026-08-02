@@ -83,6 +83,7 @@ async function probe(m: RouteMeta, matrix: Permission[]): Promise<Response> {
     user: { id: 'u1', username: 'u1', displayName: 'U1', role: 'admin', status: 'active' },
     source: 'pat',
     patScopes: matrix,
+    patPurpose: 'general',
   })
   const inject: MiddlewareHandler = async (c, next) => {
     c.set('actor', actor)
@@ -194,6 +195,7 @@ describe('RFC-247 — the identity door AND the point door', () => {
       user: { id: 'u2', username: 'u2', displayName: 'U2', role: 'user', status: 'active' },
       source: 'pat',
       patScopes: ['memory:update'],
+      patPurpose: 'general',
     })
     // the point IS held — a plain user has memory:update in its baseline
     expect(plainUser.permissions.has('memory:update')).toBe(true)

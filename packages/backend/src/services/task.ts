@@ -3994,7 +3994,14 @@ function rowToTask(
     workflowVersion: row.workflowVersion ?? null, // RFC-109
 
     repoPath: row.repoPath,
-    repoUrl: row.repoUrl ?? null,
+    // RFC-247 (design gate): `tasks.repo_url` can embed credentials —
+    // StartTaskSchema only rejects them in the QUERY STRING, so a
+    // `https://user:token@host/repo.git` launch URL is accepted and stored.
+    // Sibling paths in this file already redact (see `:1194`); these four
+    // `rowToTask` sites did not, so every task read handed the credential back.
+    // Redacted for ALL channels, not just tokens: this is an existing leak
+    // being closed, not a new token-only gate.
+    repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
     cachedRepoId: row.cachedRepoId ?? null,
     worktreePath: row.worktreePath,
     baseBranch: row.baseBranch,
@@ -4099,7 +4106,14 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     workflowId: row.workflowId,
     workflowName,
     repoPath: row.repoPath,
-    repoUrl: row.repoUrl ?? null,
+    // RFC-247 (design gate): `tasks.repo_url` can embed credentials —
+    // StartTaskSchema only rejects them in the QUERY STRING, so a
+    // `https://user:token@host/repo.git` launch URL is accepted and stored.
+    // Sibling paths in this file already redact (see `:1194`); these four
+    // `rowToTask` sites did not, so every task read handed the credential back.
+    // Redacted for ALL channels, not just tokens: this is an existing leak
+    // being closed, not a new token-only gate.
+    repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
     cachedRepoId: row.cachedRepoId ?? null,
     status: row.status,
     startedAt: row.startedAt,
@@ -4133,7 +4147,14 @@ function mapTaskRepoRow(row: typeof taskRepos.$inferSelect): TaskRepo {
   return {
     repoIndex: row.repoIndex,
     repoPath: row.repoPath,
-    repoUrl: row.repoUrl ?? null,
+    // RFC-247 (design gate): `tasks.repo_url` can embed credentials —
+    // StartTaskSchema only rejects them in the QUERY STRING, so a
+    // `https://user:token@host/repo.git` launch URL is accepted and stored.
+    // Sibling paths in this file already redact (see `:1194`); these four
+    // `rowToTask` sites did not, so every task read handed the credential back.
+    // Redacted for ALL channels, not just tokens: this is an existing leak
+    // being closed, not a new token-only gate.
+    repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
     cachedRepoId: row.cachedRepoId ?? null,
     baseBranch: row.baseBranch,
     branch: row.branch,
@@ -4159,7 +4180,14 @@ function synthesizeRepoFromTaskRow(row: typeof tasks.$inferSelect): TaskRepo {
   return {
     repoIndex: 0,
     repoPath: row.repoPath,
-    repoUrl: row.repoUrl ?? null,
+    // RFC-247 (design gate): `tasks.repo_url` can embed credentials —
+    // StartTaskSchema only rejects them in the QUERY STRING, so a
+    // `https://user:token@host/repo.git` launch URL is accepted and stored.
+    // Sibling paths in this file already redact (see `:1194`); these four
+    // `rowToTask` sites did not, so every task read handed the credential back.
+    // Redacted for ALL channels, not just tokens: this is an existing leak
+    // being closed, not a new token-only gate.
+    repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
     cachedRepoId: row.cachedRepoId ?? null,
     baseBranch: row.baseBranch,
     branch: row.branch,

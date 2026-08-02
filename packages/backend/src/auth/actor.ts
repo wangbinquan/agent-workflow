@@ -6,6 +6,7 @@ import type { Context } from 'hono'
 import {
   resolveTokenPermissions,
   ROLE_PERMISSIONS,
+  type PatPurpose,
   type Permission,
   type Role,
 } from '@agent-workflow/shared'
@@ -26,6 +27,12 @@ export interface Actor {
   source: ActorSource
   /** Already-resolved permission set: role baseline ∩ (PAT scopes if source='pat'). */
   permissions: ReadonlySet<Permission>
+  /**
+   * RFC-247 D2 — present only for `source: 'pat'`. Kept on the actor rather than
+   * re-read per request so the purpose gate is a field comparison instead of
+   * another DB round trip on every call.
+   */
+  purpose?: PatPurpose
 }
 
 export const SYSTEM_USER_ID = '__system__'
@@ -34,6 +41,7 @@ export function buildActor(opts: {
   user: ActorUser
   source: ActorSource
   patScopes?: ReadonlyArray<Permission>
+  patPurpose?: PatPurpose
 }): Actor {
   // RFC-247 — a token's grant set is computed by ONE function in shared
   // (resolveTokenPermissions); this file must not reimplement any part of it.
@@ -55,6 +63,7 @@ export function buildActor(opts: {
         role: opts.user.role,
         matrix: opts.patScopes ?? [],
       }),
+      purpose: opts.patPurpose ?? 'mcp_only',
     }
   }
   return {

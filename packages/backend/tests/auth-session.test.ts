@@ -148,6 +148,7 @@ describe('multiAuth — PAT track', () => {
       userId: '01HQCAROL',
       name: 'ci',
       scopes: ['tasks:execute'],
+      purpose: 'general',
     })
     const res = await buildApp(db).request('/api/whoami', {
       headers: { Authorization: `Bearer ${token}` },
@@ -179,6 +180,7 @@ describe('multiAuth — PAT track', () => {
       // RFC-099: agents:write moved to the user baseline; users:read is the
       // canonical admin-only scope this widening test needs.
       scopes: ['users:read', 'tasks:execute'],
+      purpose: 'general',
     })
     const res = await buildApp(db).request('/api/whoami', {
       headers: { Authorization: `Bearer ${token}` },

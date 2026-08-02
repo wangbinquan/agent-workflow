@@ -185,6 +185,22 @@ export function routeMetaGate(meta: RouteMeta): MiddlewareHandler {
         { route: key(meta.method, meta.path) },
       )
     }
+    // RFC-247 D2 — the purpose gate. A token issued for MCP use only must not
+    // become a general REST credential just because it authenticates.
+    //
+    // Ordered AFTER the `never` check on purpose: an `mcp_only` token hitting
+    // `/api/auth/me` should be told it cannot reach that endpoint AT ALL rather
+    // than that it is the wrong kind of token — the permanent reason wins, and
+    // the answer stays stable if the same matrix is later reissued as
+    // `general`. `/api/mcp` never reaches this gate: it is the MCP transport,
+    // not a route registered through registerRoute.
+    if (actor.source === 'pat' && actor.purpose === 'mcp_only') {
+      throw new ForbiddenError(
+        'token-mcp-only',
+        'this token was issued for MCP use only and cannot call the REST API',
+        { route: key(meta.method, meta.path) },
+      )
+    }
     if (meta.identity === 'admin' && actor.user.role !== 'admin') {
       throw new ForbiddenError('forbidden', 'admin only')
     }

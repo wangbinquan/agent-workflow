@@ -47,6 +47,10 @@ function actorOfKind(
     user: { id: 'u1', username: 'u1', displayName: 'U1', role, status: 'active' },
     source,
     patScopes: source === 'pat' ? matrix : undefined,
+    // These fixtures exercise the REST channel; without an explicit purpose the
+    // actor would default to `mcp_only` and the purpose gate would refuse first,
+    // masking the permission behaviour actually under test.
+    patPurpose: source === 'pat' ? 'general' : undefined,
   })
 }
 

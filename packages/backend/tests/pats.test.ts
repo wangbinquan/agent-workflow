@@ -42,6 +42,7 @@ describe('patStore', () => {
       userId: id,
       name: 'ci-launcher',
       scopes: ['tasks:execute', 'agents:read'],
+      purpose: 'general',
     })
     expect(token.startsWith('aws_pat_')).toBe(true)
     expect(token.length).toBe('aws_pat_'.length + 64)
@@ -63,13 +64,14 @@ describe('patStore', () => {
       name: 'ci',
       expiresAt: 1_000,
       now: 0,
+      purpose: 'general',
     })
     expect(await lookupActivePat(db, token, 2_000)).toBe(null)
   })
 
   test('lookupActivePat returns null after revoke', async () => {
     const id = await seedActiveUser(db)
-    const { token, meta } = await createPat({ db, userId: id, name: 'ci' })
+    const { token, meta } = await createPat({ db, userId: id, name: 'ci', purpose: 'general' })
     expect(await lookupActivePat(db, token)).not.toBe(null)
     await revokePat(db, meta.id)
     expect(await lookupActivePat(db, token)).toBe(null)
@@ -77,14 +79,20 @@ describe('patStore', () => {
 
   test('lookupActivePat returns null when user is disabled', async () => {
     const id = await seedActiveUser(db)
-    const { token } = await createPat({ db, userId: id, name: 'ci' })
+    const { token } = await createPat({ db, userId: id, name: 'ci', purpose: 'general' })
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, id))
     expect(await lookupActivePat(db, token)).toBe(null)
   })
 
   test('lookupActivePat bumps last_used_at on each hit', async () => {
     const id = await seedActiveUser(db)
-    const { token } = await createPat({ db, userId: id, name: 'ci', now: 1_000 })
+    const { token } = await createPat({
+      db,
+      userId: id,
+      name: 'ci',
+      now: 1_000,
+      purpose: 'general',
+    })
     await lookupActivePat(db, token, 5_000)
     const after = await listPatsForUser(db, id)
     expect(after[0]?.lastUsedAt).toBe(5_000)
@@ -92,8 +100,8 @@ describe('patStore', () => {
 
   test('listPatsForUser returns all PATs (revoked included for UI history)', async () => {
     const id = await seedActiveUser(db)
-    const { meta: a } = await createPat({ db, userId: id, name: 'a' })
-    await createPat({ db, userId: id, name: 'b' })
+    const { meta: a } = await createPat({ db, userId: id, name: 'a', purpose: 'general' })
+    await createPat({ db, userId: id, name: 'b', purpose: 'general' })
     await revokePat(db, a.id)
     const list = await listPatsForUser(db, id)
     expect(list.length).toBe(2)
@@ -101,7 +109,7 @@ describe('patStore', () => {
 
   test('scopes JSON malformed → empty scopes (no crash)', async () => {
     const id = await seedActiveUser(db)
-    const { token } = await createPat({ db, userId: id, name: 'ci' })
+    const { token } = await createPat({ db, userId: id, name: 'ci', purpose: 'general' })
     const { userPats } = await import('../src/db/schema')
     // Manually corrupt the row.
     await db.update(userPats).set({ scopesJson: '{not-json' }).where(eq(userPats.userId, id))
