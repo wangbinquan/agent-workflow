@@ -20,6 +20,7 @@ import {
 import type { Hono } from 'hono'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { actorOf } from '@/auth/actor'
 import {
   archiveMemory,
@@ -285,13 +286,22 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      await loadManagedMemory(deps, c, id)
+      const memory = await loadManagedMemory(deps, c, id)
       if (!parseBoolQuery(c, 'confirm', { default: false })) {
         throw new ValidationError(
           'confirm-required',
           'hard delete requires ?confirm=true to acknowledge irreversibility',
         )
       }
+      // RFC-247 T20 — the query flag is enough for a human who clicked through
+      // a dialog; a token additionally echoes the memory's title, so a model
+      // cannot delete one it never read.
+      assertTokenDeleteConfirm(
+        await readDeleteBody(c),
+        memory.memory.title,
+        'memory',
+        actorOf(c).source,
+      )
       await deleteMemory(deps.db, id)
       return c.json({ ok: true })
     },

@@ -96,10 +96,23 @@ describe('RFC-211 guide copy', () => {
       import('../src/i18n/zh-CN'),
       import('../src/i18n/en-US'),
     ])
+    // RFC-247 — the FIRST exception, and it is narrow on purpose. The
+    // `apiDocs.*` strings (except the two below) are assembled into a markdown
+    // document by `lib/api-docs-markdown.ts` and rendered through `Prose`, so
+    // emphasis in them is emphasis, not literal asterisks.
+    //
+    // `title` and `subtitle` are excluded from the exception because they go to
+    // `PageHeader` as plain text — the exact failure this guard was written for.
+    // Anything else that wants markdown must state its render path here too.
+    const MARKDOWN_RENDERED = (path: string): boolean =>
+      path.startsWith('apiDocs.') && path !== 'apiDocs.title' && path !== 'apiDocs.subtitle'
+
     const offenders: string[] = []
     const walk = (node: unknown, path: string): void => {
       if (typeof node === 'string') {
-        if (node.includes('**')) offenders.push(`${path}: ${node.slice(0, 60)}`)
+        if (node.includes('**') && !MARKDOWN_RENDERED(path)) {
+          offenders.push(`${path}: ${node.slice(0, 60)}`)
+        }
         return
       }
       if (node !== null && typeof node === 'object') {

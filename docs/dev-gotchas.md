@@ -33,7 +33,7 @@
 - **协作者 commit gate 会 `git stash -u`**：未提交工作中途「消失」时 `git stash apply`（含 untracked）恢复。
 - **混合文件提交前查交叉依赖**：`git commit -- <混了他人 hunk 的文件>` 前，确认并发 hunk 不引用**其他未提交文件**的符号、且无 HEAD 测试锁了旧接线；写完测试后重跑 `typecheck`（`bun test` 跳 tsc，RFC-161 事故）。
 - **子代理完成通知非终态**：子代理可能继续推翻出 v2；`git add` 它的文件前必查 untracked import，否则提交半截（`87ac52d3` 事故）。
-- **`design/` 与 `STATE.md` 在 prettier 作用域外**：在那跑 `prettier --write` 会 reflow 他人表格行、坏 markdown 转义（`next_run_at`→`next*run_at`）；**只手改**。
+- **`design/` 与 `STATE.md` 在 prettier 作用域外**：在那跑 `prettier --write` 会 reflow 他人表格行、坏 markdown 转义（`next_run_at`→`next*run_at`）、剥掉 blockquote 续行的 `> `；**只手改**。实测代价：一次顺手格式化把 `design/plan.md` 整张 RFC 索引表重排成 ~500 行 diff（全是别人 RFC 的行）（RFC-247 复犯）。改完 `git diff --stat` 对一眼行数是否与改动量相称。
 
 ## 迁移（Drizzle + bun:sqlite）
 

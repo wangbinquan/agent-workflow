@@ -1,0 +1,745 @@
+// RFC-247 §4.2 — the MCP tool set.
+//
+// One declarative table. A tool names the permission points it needs, and
+// `tools/list` filtering, the pre-call check and the generated documentation
+// all read that same field — the `RouteMeta` discipline applied to the second
+// channel, for the same reason: a capability list that is written twice is a
+// capability list that disagrees with itself.
+//
+// Every handler goes through `Dispatcher`, i.e. through the REST route table.
+// Tools do not touch services directly (see dispatch.ts for why).
+//
+// ## Why named task tools but converged resource tools (D11)
+//
+// The task domain is where a model spends its time and where mistakes are
+// expensive, so those verbs are spelled out: `launch_task`, `cancel_task`,
+// `retry_node` each carry their own description, their own argument names, and
+// their own warnings. The resource domain is broad, uniform, and mostly CRUD;
+// eleven resource types × four verbs as named tools would be 44 entries whose
+// descriptions differ only in a noun, drowning the task tools that matter.
+// `resource_read` / `resource_write` take `kind` + `method` instead, and
+// `describe_resource` hands back the schema for a kind on request.
+
+import { z } from 'zod'
+import { type MatrixResource, type Permission, type Role } from '@agent-workflow/shared'
+import type { Actor } from '@/auth/actor'
+import type { DispatchResult, Dispatcher } from '@/mcp/dispatch'
+
+export interface McpToolContext {
+  readonly actor: Actor
+  readonly dispatch: (req: Parameters<Dispatcher>[0]) => Promise<DispatchResult>
+  /** Progress heartbeat; a no-op when the client sent no progressToken. */
+  readonly progress: (message: string) => Promise<void>
+  readonly signal: AbortSignal
+}
+
+export interface McpToolDef {
+  readonly name: string
+  readonly title: string
+  readonly description: string
+  /**
+   * Points required to CALL the tool, ANDed. Empty means "reads", which every
+   * valid token has (D3) — those tools are always listed.
+   */
+  readonly permissions: ReadonlyArray<Permission>
+  readonly inputSchema: z.ZodRawShape
+  readonly handler: (args: Record<string, unknown>, ctx: McpToolContext) => Promise<unknown>
+}
+
+// -----------------------------------------------------------------------------
+// Shared argument fragments
+// -----------------------------------------------------------------------------
+
+const taskId = z.string().min(1).describe('Task id (ULID), as returned by launch_task/list_tasks')
+
+/** Everything a dispatch answer needs to become a tool result. */
+function unwrap(res: DispatchResult): unknown {
+  if (res.status >= 400) throw new McpCallError(res)
+  return res.body
+}
+
+/**
+ * A business refusal, carrying the code the REST channel would have returned.
+ * `details` is deliberately dropped — it can hold internal structure (row ids,
+ * file paths, actor permission dumps) that has no place in a model's context.
+ */
+export class McpCallError extends Error {
+  readonly status: number
+  readonly code: string
+  constructor(res: DispatchResult) {
+    // The daemon's error envelope is FLAT — `{ok:false, code, message, details}`
+    // (util/errors.ts `toPayload`), not `{error:{…}}`. Reading the wrong shape
+    // would degrade every business refusal to a generic "request failed",
+    // throwing away the one part a model can act on.
+    const body = res.body as { code?: string; message?: string } | null
+    const code = body?.code ?? 'error'
+    const message = body?.message ?? `request failed with status ${res.status}`
+    super(message)
+    this.name = 'McpCallError'
+    this.status = res.status
+    this.code = code
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Task domain (D11 — named tools)
+// -----------------------------------------------------------------------------
+
+const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
+  {
+    name: 'launch_task',
+    title: 'Launch a task',
+    description:
+      'Start a workflow run. Creates a git worktree from the chosen base branch and executes the workflow. ' +
+      'Returns immediately with the task id — use watch_task or get_task to follow it. ' +
+      'Workflows that declare an upload input cannot be launched over MCP (files have no representation here).',
+    permissions: ['tasks:execute'],
+    // Field names and requiredness mirror StartTaskSchema exactly. Getting
+    // `name` wrong (it is required, with no server fallback) or inventing a
+    // `repoId` would 422 every call with a schema error the model cannot act on.
+    inputSchema: {
+      workflowId: z.string().min(1).describe('Workflow id to run'),
+      name: z.string().min(1).max(255).describe('Task name — required, shown in every list'),
+      cachedRepoId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Imported repo to run against (resource_read kind="repos" lists them)'),
+      repoUrl: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Remote git URL, as an alternative to cachedRepoId'),
+      ref: z.string().min(1).optional().describe('Branch, tag or commit to start from'),
+      scratch: z
+        .boolean()
+        .optional()
+        .describe(
+          'Run in a fresh empty git repo instead of a source repo; excludes every repo field',
+        ),
+      inputs: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe('Workflow input port values, keyed by port name'),
+      workingBranch: z.string().min(1).optional(),
+      autoCommitPush: z.boolean().optional().describe('Commit and push after each writer node'),
+    },
+    handler: async (args, ctx) => {
+      await assertNoUploadInputs(String(args.workflowId), ctx)
+      return unwrap(await ctx.dispatch({ method: 'POST', path: '/api/tasks', body: args }))
+    },
+  },
+  {
+    name: 'get_task',
+    title: 'Get a task',
+    description: 'Full state of one task: status, node runs, timing, and any alerts.',
+    permissions: [],
+    inputSchema: { id: taskId },
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${String(args.id)}` })),
+  },
+  {
+    name: 'list_tasks',
+    title: 'List tasks',
+    description:
+      'Tasks visible to this token. Scope depends on the account: most users see the tasks they own or collaborate on.',
+    permissions: [],
+    inputSchema: {
+      status: z.string().optional().describe('Filter by task status'),
+      limit: z.number().int().positive().max(200).optional(),
+    },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'GET',
+          path: '/api/tasks',
+          query: {
+            status: args.status === undefined ? undefined : String(args.status),
+            limit: args.limit === undefined ? undefined : String(args.limit),
+          },
+        }),
+      ),
+  },
+  {
+    name: 'watch_task',
+    title: 'Wait for a task to settle',
+    description:
+      'Block until the task finishes, fails, is cancelled, or stops for human input — up to 240 seconds. ' +
+      'Sends a progress heartbeat while it waits. If the cap is reached the call returns normally with ' +
+      '`stillRunning: true` and the latest snapshot; call it again to keep waiting.',
+    permissions: [],
+    inputSchema: { id: taskId },
+    handler: async (args, ctx) => {
+      const { watchTask } = await import('@/mcp/watch')
+      return watchTask(String(args.id), ctx)
+    },
+  },
+  {
+    name: 'get_task_diff',
+    title: 'Get a task diff',
+    description:
+      "The task's accumulated worktree diff, including uncommitted changes. This is what a Code → Audit → Fix workflow passes between its stages.",
+    permissions: [],
+    inputSchema: { id: taskId },
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${String(args.id)}/diff` })),
+  },
+  {
+    name: 'list_node_runs',
+    title: 'List node runs',
+    description:
+      'Per-node execution records for a task, including retries (each retry is its own run).',
+    permissions: [],
+    inputSchema: { id: taskId },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({ method: 'GET', path: `/api/tasks/${String(args.id)}/node-runs` }),
+      ),
+  },
+  {
+    name: 'cancel_task',
+    title: 'Cancel a task',
+    description:
+      'Stop a running task. The worktree is KEPT, so the work done so far stays inspectable and the task can be resumed.',
+    permissions: ['tasks:execute'],
+    inputSchema: { id: taskId },
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${String(args.id)}/cancel` })),
+  },
+  {
+    name: 'retry_node',
+    title: 'Retry one node',
+    description:
+      "Re-run a single node. IMPORTANT: this rolls the worktree back to that node's pre-run snapshot, " +
+      'and by default cascades — every downstream node re-runs too, discarding their results. ' +
+      'The retry becomes a new node run rather than overwriting the old one.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: taskId,
+      nodeRunId: z.string().min(1).describe('Node run id from list_node_runs'),
+    },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/tasks/${String(args.id)}/nodes/${String(args.nodeRunId)}/retry`,
+        }),
+      ),
+  },
+  {
+    name: 'resume_task',
+    title: 'Resume a task',
+    description:
+      'Resume a task that was cancelled or interrupted by a daemon restart. Retried nodes roll back to their pre-run snapshot.',
+    permissions: ['tasks:execute'],
+    inputSchema: { id: taskId },
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${String(args.id)}/resume` })),
+  },
+  {
+    name: 'diagnose_task',
+    title: 'Diagnose a failing task',
+    description: 'Run the built-in diagnosis for a failed or stuck task and return its findings.',
+    permissions: ['tasks:execute'],
+    inputSchema: { id: taskId },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({ method: 'POST', path: `/api/tasks/${String(args.id)}/diagnose` }),
+      ),
+  },
+  {
+    name: 'repair_alert',
+    title: 'Apply a repair option to an alert',
+    description:
+      'Apply one of the repair options a task alert offers. Call get_task first to read the alert and its options.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: taskId,
+      alertId: z.string().min(1),
+      option: z.string().min(1).describe('Repair option id from the alert'),
+    },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/tasks/${String(args.id)}/alerts/${String(args.alertId)}/repair`,
+          body: { option: args.option },
+        }),
+      ),
+  },
+  {
+    name: 'delete_task',
+    title: 'Delete a task',
+    description:
+      'Permanently delete a task and its worktree. Irreversible. Requires the task name as confirmation, ' +
+      'exactly as the web UI does — pass it in `confirm`.',
+    permissions: ['tasks:delete'],
+    inputSchema: {
+      id: taskId,
+      confirm: z.string().min(1).describe('The exact task name, to confirm the deletion'),
+    },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'DELETE',
+          path: `/api/tasks/${String(args.id)}`,
+          body: { confirm: args.confirm },
+        }),
+      ),
+  },
+]
+
+/**
+ * RFC-247 AC-17 — refuse an upload-input workflow BEFORE anything is created.
+ *
+ * Upload inputs arrive over multipart and are written into the worktree; MCP
+ * has no representation for a file, so such a launch cannot succeed. Checking
+ * here rather than letting the route fail keeps the promise that matters: no
+ * task row, no worktree, nothing to clean up.
+ */
+async function assertNoUploadInputs(workflowId: string, ctx: McpToolContext): Promise<void> {
+  const res = await ctx.dispatch({ method: 'GET', path: `/api/workflows/${workflowId}` })
+  if (res.status >= 400) throw new McpCallError(res)
+  const inputs = (res.body as { definition?: { inputs?: Array<{ name?: string; kind?: string }> } })
+    ?.definition?.inputs
+  const uploads = (inputs ?? []).filter((i) => i.kind === 'upload').map((i) => i.name ?? '?')
+  if (uploads.length > 0) {
+    throw new Error(
+      `this workflow takes file uploads (${uploads.join(', ')}), which cannot be supplied over MCP — ` +
+        'launch it from the web UI instead',
+    )
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Human gates (D11 T18) — the moments a run stops and waits for a person
+// -----------------------------------------------------------------------------
+
+const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
+  {
+    name: 'list_pending_gates',
+    title: 'List everything waiting on a human',
+    description:
+      'Tasks stopped at a review or a clarifying question. These are the runs that will not move on their own — ' +
+      'watch_task returns as soon as one reaches this state.',
+    permissions: [],
+    inputSchema: {},
+    handler: async (_args, ctx) => {
+      const [reviews, clarify] = await Promise.all([
+        ctx.dispatch({ method: 'GET', path: '/api/reviews' }),
+        ctx.dispatch({ method: 'GET', path: '/api/clarify' }),
+      ])
+      return { reviews: unwrap(reviews), clarify: unwrap(clarify) }
+    },
+  },
+  {
+    name: 'get_clarify_session',
+    title: 'Read a clarifying question round',
+    description:
+      'The questions a node is waiting on, plus the current `iterationIndex` — pass that back to answer_clarify ' +
+      'so a concurrent answer from someone else is detected instead of overwritten.',
+    permissions: [],
+    inputSchema: { nodeRunId: z.string().min(1) },
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/clarify/${String(args.nodeRunId)}` })),
+  },
+  {
+    name: 'answer_clarify',
+    title: 'Answer clarifying questions',
+    description:
+      'Submit answers and let the task continue. Include `ifMatchIteration` from get_clarify_session: without it, ' +
+      'two answerers can silently overwrite each other. `directive: "stop"` answers and asks for no further rounds.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      nodeRunId: z.string().min(1),
+      answers: z
+        .array(z.record(z.string(), z.unknown()))
+        .describe('One entry per question — see get_clarify_session for their shape'),
+      ifMatchIteration: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe('The iterationIndex you read; mismatched answers are refused with 412'),
+      directive: z.enum(['continue', 'stop']).optional(),
+    },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/clarify/${String(args.nodeRunId)}/answers`,
+          body: {
+            answers: args.answers,
+            ifMatchIteration: args.ifMatchIteration,
+            directive: args.directive,
+          },
+        }),
+      ),
+  },
+  {
+    name: 'get_review',
+    title: 'Read a pending review',
+    description:
+      'The documents awaiting review plus the current `reviewIteration` — pass that back to submit_review.',
+    permissions: [],
+    inputSchema: { nodeRunId: z.string().min(1) },
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/reviews/${String(args.nodeRunId)}` })),
+  },
+  {
+    name: 'submit_review',
+    title: 'Approve, iterate or reject a review',
+    description:
+      'Decide a pending review. `rejected` requires a reason. `reviewIteration` must match what get_review ' +
+      'returned, so a decision made against a stale version is refused rather than applied.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      nodeRunId: z.string().min(1),
+      decision: z.enum(['approved', 'rejected', 'iterate']),
+      rejectReason: z.string().min(1).optional().describe('Required when decision is "rejected"'),
+      reviewIteration: z.number().int().nonnegative(),
+    },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/reviews/${String(args.nodeRunId)}/decision`,
+          body: {
+            decision: args.decision,
+            rejectReason: args.rejectReason,
+            reviewIteration: args.reviewIteration,
+          },
+        }),
+      ),
+  },
+]
+
+// -----------------------------------------------------------------------------
+// Resource domain (D11 — converged tools)
+// -----------------------------------------------------------------------------
+
+/**
+ * What each resource kind actually supports, read off the real route table
+ * rather than assumed from the kind name. The differences are not cosmetic and
+ * a symmetric guess gets three of them wrong:
+ *
+ *   · `repos` are imported in batches (`/api/cached-repos/batch-import`) and
+ *     have NO update route at all — which is why `repos:update` was never
+ *     minted as a permission point.
+ *   · `memory` updates are PATCH, not PUT.
+ *   · `tasks` are absent: launching is not "creating a resource", and the task
+ *     verbs have dedicated tools above. Two ways to cancel a task is one way
+ *     too many.
+ */
+interface ResourceOp {
+  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  /** `:id` is substituted; absent means a collection path. */
+  readonly path: string
+}
+
+interface ResourceRoutes {
+  readonly list: ResourceOp
+  readonly get?: ResourceOp
+  readonly create?: ResourceOp
+  readonly update?: ResourceOp
+  readonly delete?: ResourceOp
+  /** Surfaced by describe_resource when the shape is not the obvious one. */
+  readonly note?: string
+}
+
+const RESOURCE_ROUTES: Partial<Record<MatrixResource, ResourceRoutes>> = {
+  agents: {
+    list: { method: 'GET', path: '/api/agents' },
+    get: { method: 'GET', path: '/api/agents/:id' },
+    create: { method: 'POST', path: '/api/agents' },
+    update: { method: 'PUT', path: '/api/agents/:id' },
+    delete: { method: 'DELETE', path: '/api/agents/:id' },
+    note: 'Updates and deletes are fenced: include `expectedUpdatedAt` and `expectedAclRevision` from a prior read.',
+  },
+  skills: {
+    list: { method: 'GET', path: '/api/skills' },
+    get: { method: 'GET', path: '/api/skills/:id' },
+    create: { method: 'POST', path: '/api/skills' },
+    update: { method: 'PUT', path: '/api/skills/:id' },
+    delete: { method: 'DELETE', path: '/api/skills/:id' },
+    note: 'Updates and deletes are fenced: include the `expectedAclRevision` from a prior read.',
+  },
+  mcps: {
+    list: { method: 'GET', path: '/api/mcps' },
+    get: { method: 'GET', path: '/api/mcps/:id' },
+    create: { method: 'POST', path: '/api/mcps' },
+    update: { method: 'PUT', path: '/api/mcps/:id' },
+    delete: { method: 'DELETE', path: '/api/mcps/:id' },
+  },
+  plugins: {
+    list: { method: 'GET', path: '/api/plugins' },
+    get: { method: 'GET', path: '/api/plugins/:id' },
+    create: { method: 'POST', path: '/api/plugins' },
+    update: { method: 'PUT', path: '/api/plugins/:id' },
+    delete: { method: 'DELETE', path: '/api/plugins/:id' },
+  },
+  workflows: {
+    list: { method: 'GET', path: '/api/workflows' },
+    get: { method: 'GET', path: '/api/workflows/:id' },
+    create: { method: 'POST', path: '/api/workflows' },
+    update: { method: 'PUT', path: '/api/workflows/:id' },
+    delete: { method: 'DELETE', path: '/api/workflows/:id' },
+    note: 'Updates and deletes are fenced: include the `expectedVersion` from a prior read.',
+  },
+  workgroups: {
+    list: { method: 'GET', path: '/api/workgroups' },
+    get: { method: 'GET', path: '/api/workgroups/:id' },
+    create: { method: 'POST', path: '/api/workgroups' },
+    update: { method: 'PUT', path: '/api/workgroups/:id' },
+    delete: { method: 'DELETE', path: '/api/workgroups/:id' },
+    note: 'Updates and deletes are fenced: include the `expectedVersion` from a prior read.',
+  },
+  'scheduled-tasks': {
+    list: { method: 'GET', path: '/api/scheduled-tasks' },
+    get: { method: 'GET', path: '/api/scheduled-tasks/:id' },
+    create: { method: 'POST', path: '/api/scheduled-tasks' },
+    update: { method: 'PUT', path: '/api/scheduled-tasks/:id' },
+    delete: { method: 'DELETE', path: '/api/scheduled-tasks/:id' },
+    note:
+      'Creating a schedule, or editing one in a way that arms a launch, additionally requires tasks:execute — ' +
+      'a schedule is a launch with a delay.',
+  },
+  repos: {
+    list: { method: 'GET', path: '/api/cached-repos' },
+    get: { method: 'GET', path: '/api/cached-repos/:id' },
+    create: { method: 'POST', path: '/api/cached-repos/batch-import' },
+    delete: { method: 'DELETE', path: '/api/cached-repos/:id' },
+    note:
+      'Repos are imported in batches: `create` takes a batch payload, not one repo. There is no update — ' +
+      'a mirror is refreshed, not edited.',
+  },
+  memory: {
+    list: { method: 'GET', path: '/api/memories' },
+    get: { method: 'GET', path: '/api/memories/:id' },
+    create: { method: 'POST', path: '/api/memories' },
+    update: { method: 'PATCH', path: '/api/memories/:id' },
+    delete: { method: 'DELETE', path: '/api/memories/:id' },
+  },
+}
+
+/**
+ * The kinds the converged tools accept: every matrix resource except `tasks`.
+ *
+ * Spelled out as a tuple because `z.enum` needs one, and locked against
+ * `MATRIX_RESOURCES` by a test rather than derived with a cast — a cast would
+ * let a newly added resource silently miss its tools, which is the same class
+ * of drift the permission catalog's self-checks exist to prevent.
+ */
+const RESOURCE_KINDS = [
+  'agents',
+  'skills',
+  'mcps',
+  'plugins',
+  'workflows',
+  'workgroups',
+  'scheduled-tasks',
+  'repos',
+  'memory',
+] as const
+
+/** Exported for the drift lock in tests. */
+export const MCP_RESOURCE_KINDS: ReadonlyArray<MatrixResource> = RESOURCE_KINDS
+
+const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
+  {
+    name: 'resource_read',
+    title: 'Read resources',
+    description:
+      'List or fetch a resource of any kind (agents, skills, mcps, plugins, workflows, workgroups, ' +
+      'scheduled-tasks, repos, memory). Reads are available to every token, bounded by what the ' +
+      'owning account can see.',
+    permissions: [],
+    inputSchema: {
+      kind: z.enum(RESOURCE_KINDS).describe('Resource type'),
+      method: z.enum(['list', 'get']).describe('list = all visible; get = one by id'),
+      id: z.string().min(1).optional().describe('Required when method is "get"'),
+    },
+    handler: async (args, ctx) => {
+      const routes = routesFor(args.kind)
+      const op = args.method === 'get' ? routes.get : routes.list
+      if (op === undefined)
+        throw new Error(`resource_read: ${String(args.kind)} has no ${String(args.method)}`)
+      return unwrap(await ctx.dispatch({ method: op.method, path: fillId(op.path, args.id) }))
+    },
+  },
+  {
+    name: 'resource_write',
+    title: 'Create, update or delete a resource',
+    description:
+      'Write to a resource of any kind. The token must hold the matching permission for that kind and verb — ' +
+      'call describe_capabilities to see which it has. Deletion is irreversible and requires the resource ' +
+      "name in `confirm`; call describe_resource for a kind's field schema before creating or updating.",
+    // Declared empty and checked PER CALL against (kind, method): a token that
+    // may create workflows but not delete them still needs this tool listed.
+    // The real gate is the route's own, which cannot be bypassed from here.
+    permissions: [],
+    inputSchema: {
+      kind: z.enum(RESOURCE_KINDS).describe('Resource type'),
+      method: z.enum(['create', 'update', 'delete']),
+      id: z.string().min(1).optional().describe('Required for update and delete'),
+      body: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe('Field values for create/update — see describe_resource'),
+      confirm: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Required for delete: the exact resource name'),
+    },
+    handler: async (args, ctx) => {
+      const routes = routesFor(args.kind)
+      const method = args.method as 'create' | 'update' | 'delete'
+      const op = routes[method]
+      if (op === undefined) {
+        // Not a permission refusal — the capability does not exist for anyone.
+        // Saying so plainly stops a model retrying with a wider token.
+        throw new Error(
+          `resource_write: ${String(args.kind)} has no ${method} operation` +
+            (routes.note === undefined ? '' : ` — ${routes.note}`),
+        )
+      }
+      if (method === 'create') {
+        return unwrap(
+          await ctx.dispatch({ method: op.method, path: op.path, body: args.body ?? {} }),
+        )
+      }
+      if (typeof args.id !== 'string' || args.id === '') {
+        throw new Error(`resource_write: \`id\` is required for ${method}`)
+      }
+      if (method === 'update') {
+        return unwrap(
+          await ctx.dispatch({
+            method: op.method,
+            path: fillId(op.path, args.id),
+            body: args.body ?? {},
+          }),
+        )
+      }
+      if (typeof args.confirm !== 'string' || args.confirm === '') {
+        throw new Error('resource_write: `confirm` must carry the exact resource name to delete it')
+      }
+      // `body` is merged in, not dropped: several kinds fence their deletes on
+      // a revision (`expectedUpdatedAt` / `expectedVersion` / …). Those fields
+      // arrive here the same way they arrive from the web UI — read first, pass
+      // what you read. Filling them in on the caller's behalf would defeat the
+      // fence exactly when it matters, which is when two writers race.
+      return unwrap(
+        await ctx.dispatch({
+          method: op.method,
+          path: fillId(op.path, args.id),
+          body: { ...(args.body ?? {}), confirm: args.confirm },
+        }),
+      )
+    },
+  },
+  {
+    name: 'describe_resource',
+    title: 'Describe a resource kind',
+    description:
+      'Which operations a resource kind supports, which permission each needs, and any quirk in its shape ' +
+      '(repos import in batches; memory updates are partial). Call this before a first create or update.',
+    permissions: [],
+    inputSchema: { kind: z.enum(RESOURCE_KINDS) },
+    handler: async (args) => describeResource(args.kind as MatrixResource),
+  },
+]
+
+function routesFor(kind: unknown): ResourceRoutes {
+  const routes = RESOURCE_ROUTES[kind as MatrixResource]
+  if (routes === undefined) throw new Error(`unknown resource kind: ${String(kind)}`)
+  return routes
+}
+
+function fillId(path: string, id: unknown): string {
+  if (!path.includes(':id')) return path
+  if (typeof id !== 'string' || id === '') throw new Error('`id` is required for this operation')
+  return path.replace(':id', encodeURIComponent(id))
+}
+
+export function describeResource(kind: MatrixResource): {
+  kind: MatrixResource
+  operations: Array<{ operation: string; method: string; path: string; permission: string | null }>
+  note?: string
+} {
+  const routes = routesFor(kind)
+  const ops: Array<{ operation: string; method: string; path: string; permission: string | null }> =
+    []
+  for (const operation of ['list', 'get', 'create', 'update', 'delete'] as const) {
+    const op = routes[operation]
+    if (op === undefined) continue
+    ops.push({
+      operation,
+      method: op.method,
+      path: op.path,
+      // Reads need no point (D3); writes need the matching verb.
+      permission: operation === 'list' || operation === 'get' ? null : `${kind}:${operation}`,
+    })
+  }
+  return routes.note === undefined
+    ? { kind, operations: ops }
+    : { kind, operations: ops, note: routes.note }
+}
+
+// -----------------------------------------------------------------------------
+// Introspection
+// -----------------------------------------------------------------------------
+
+const INTROSPECTION_TOOLS: ReadonlyArray<McpToolDef> = [
+  {
+    name: 'describe_capabilities',
+    title: 'What can this token do',
+    description:
+      'The permissions this token holds and, just as usefully, the ones it does not — so a refusal can be ' +
+      'explained to the user as "ask for workflows:create" rather than "it failed".',
+    permissions: [],
+    inputSchema: {},
+    handler: async (_args, ctx) => describeCapabilities(ctx.actor),
+  },
+]
+
+export function describeCapabilities(actor: Actor): {
+  role: Role
+  granted: Permission[]
+  toolsAvailable: string[]
+  toolsUnavailable: Array<{ tool: string; missing: Permission[] }>
+} {
+  const granted = [...actor.permissions].sort()
+  const available: string[] = []
+  const unavailable: Array<{ tool: string; missing: Permission[] }> = []
+  for (const tool of ALL_TOOLS) {
+    const missing = tool.permissions.filter((p) => !actor.permissions.has(p))
+    if (missing.length === 0) available.push(tool.name)
+    else unavailable.push({ tool: tool.name, missing })
+  }
+  return {
+    role: actor.user.role,
+    granted,
+    toolsAvailable: available,
+    toolsUnavailable: unavailable,
+  }
+}
+
+export const ALL_TOOLS: ReadonlyArray<McpToolDef> = [
+  ...TASK_TOOLS,
+  ...GATE_TOOLS,
+  ...RESOURCE_TOOLS,
+  ...INTROSPECTION_TOOLS,
+]
+
+/**
+ * RFC-247 D10 — the tools a given token may see.
+ *
+ * Filtering `tools/list` is not a security boundary (the route gate is); it is
+ * an accuracy one. A model shown `delete_task` will eventually try it, and
+ * spending a turn to learn it was never allowed is worse than never having been
+ * offered it.
+ */
+export function toolsFor(actor: Actor): ReadonlyArray<McpToolDef> {
+  return ALL_TOOLS.filter((tool) => tool.permissions.every((p) => actor.permissions.has(p)))
+}

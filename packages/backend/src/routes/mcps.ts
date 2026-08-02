@@ -35,6 +35,7 @@ import {
 } from '@/services/mcpOperationRevision'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { serializeMcpFor } from '@/services/tokenRedaction'
 import { mountAclEndpoints } from './resourceAcl'
 import { probeMcp, type ProbeOptions } from '@/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '@/services/mcpProbeStore'
@@ -101,7 +102,10 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const list = await listMcps(deps.db)
       const visible = await filterVisibleRows(deps.db, actorOf(c), 'mcp', list)
-      return c.json(visible.map(withMcpOperationConfigHash))
+      const actor = actorOf(c)
+      return c.json(
+        visible.map((m) => serializeMcpFor(withMcpOperationConfigHash(m), actor.source)),
+      )
     },
   )
 
@@ -139,7 +143,13 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Get one MCP server',
     },
     async (c) => {
-      return c.json(withMcpOperationConfigHash(await loadVisibleMcp(actorOf(c), c.req.param('id'))))
+      const actor = actorOf(c)
+      return c.json(
+        serializeMcpFor(
+          withMcpOperationConfigHash(await loadVisibleMcp(actor, c.req.param('id'))),
+          actor.source,
+        ),
+      )
     },
   )
 
@@ -335,7 +345,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         ownerUserId: actor.user.id,
         actor,
       })
-      return c.json(withMcpOperationConfigHash(created), 201)
+      return c.json(serializeMcpFor(withMcpOperationConfigHash(created), actor.source), 201)
     },
   )
 
@@ -370,7 +380,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         })
       })
       await runtimeTests.reconcileDurableIntents()
-      return c.json(withMcpOperationConfigHash(updated))
+      return c.json(serializeMcpFor(withMcpOperationConfigHash(updated), actorOf(c).source))
     },
   )
 
@@ -443,7 +453,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         })
       })
       await runtimeTests.reconcileDurableIntents()
-      return c.json(withMcpOperationConfigHash(renamed))
+      return c.json(serializeMcpFor(withMcpOperationConfigHash(renamed), actorOf(c).source))
     },
   )
 

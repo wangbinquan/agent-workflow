@@ -523,15 +523,26 @@ test('a minted PAT holds exactly its matrix — reads on, unticked verbs off', a
 
     // The same delete through Alice's SESSION succeeds — proving the refusal
     // above is the token's matrix, not a missing capability on the account.
-    // (RFC-222 type-to-confirm body; the token was refused at the gate, before
-    // the handler ever looked for one.)
+    //
+    // An agent delete carries TWO independent guards besides the permission
+    // gate: RFC-222's type-to-confirm name and RFC-231's revision fence. Both
+    // have to be satisfied here, and both are read back from the resource
+    // rather than guessed — which is also exactly what an MCP caller has to do.
+    const fetched = (await (await withToken(`/api/agents/${agent.id}`)).json()) as {
+      updatedAt: number
+      aclRevision: number
+    }
     const sessionDelete = await fetch(`${daemon.baseUrl}/api/agents/${agent.id}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${alice.sessionToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ confirm: 'pat-minted-agent' }),
+      body: JSON.stringify({
+        confirm: 'pat-minted-agent',
+        expectedUpdatedAt: fetched.updatedAt,
+        expectedAclRevision: fetched.aclRevision,
+      }),
     })
     expect(sessionDelete.status).toBe(204)
 

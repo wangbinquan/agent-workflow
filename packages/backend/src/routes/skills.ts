@@ -29,7 +29,11 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
-import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import {
+  assertDeleteConfirm,
+  assertTokenDeleteConfirm,
+  readDeleteBody,
+} from '@/services/deleteConfirm'
 import { Paths } from '@/util/paths'
 import {
   createManagedSkill,
@@ -398,6 +402,9 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       const existing = await loadVisibleSkill(actor, c.req.param('id'))
       await requireResourceOwner(deps.db, actor, 'skill', existing)
       const path = requirePath(c.req.query('path'))
+      // RFC-247 T20 — a token echoes the file PATH (the thing being destroyed);
+      // the skill name would confirm the wrong noun here.
+      assertTokenDeleteConfirm(await readDeleteBody(c), path, 'skill file', actor.source)
       await deleteSkillFile(
         deps.db,
         fsOpts,

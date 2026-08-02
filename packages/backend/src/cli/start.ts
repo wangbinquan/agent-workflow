@@ -3,6 +3,8 @@
 import { createSecretBox } from '@/auth/secretBox'
 import { createBuiltinContainmentCoordinator } from '@/services/containmentComposition'
 import { setPushCredentialResolver } from '@/services/gitCredential'
+import { tokenAuditRetentionDays } from '@/services/mcpSurface'
+import { pruneTokenAudit } from '@/services/tokenAudit'
 import { getSandboxStatus } from '@/services/sandbox/probe'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
@@ -688,6 +690,29 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     60 * 60 * 1000,
   )
   intentGcTimer.unref?.()
+
+  // RFC-247 D16 — token-audit retention. Rides the same hourly cadence as the
+  // other sweeps rather than adding a scheduler: an audit row that lingers an
+  // extra hour past its retention window is not a problem worth a new timer.
+  const tokenAuditGcTimer = setInterval(
+    () => {
+      void (async () => {
+        try {
+          const days = tokenAuditRetentionDays(Paths.config)
+          const pruned = await pruneTokenAudit(db, days)
+          if (pruned.audits > 0 || pruned.snapshots > 0) {
+            log.info('token audit pruned', { ...pruned, retentionDays: days })
+          }
+        } catch (err) {
+          log.warn('token audit prune failed', {
+            err: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+    },
+    60 * 60 * 1000,
+  )
+  tokenAuditGcTimer.unref?.()
 
   // RFC-053 P-3 — lifecycle invariant scan. Boot-time scan (~5s after the
   // listener comes up) catches historic stuck tasks; hourly incremental

@@ -616,9 +616,18 @@ token、**PAT** 和 legacy daemon token，与 HTTP multiAuth 同一集合」。
 
 ### 4.1 传输与认证
 
-- 端点：`POST /api/mcp`，`@modelcontextprotocol/sdk` 的 `StreamableHTTPServerTransport`，
-  **无状态**（`sessionIdGenerator: undefined`）。SDK 已在 backend 依赖里
-  （`packages/backend/package.json:24`，1.27.1），不新增依赖。
+- 端点：`POST /api/mcp`，`@modelcontextprotocol/sdk` 的
+  **`WebStandardStreamableHTTPServerTransport`**，**无状态**（`sessionIdGenerator: undefined`）。
+  SDK 已在 backend 依赖里（`packages/backend/package.json:24`，1.27.1），不新增依赖。
+  > **实施更正（2026-08-02）**：本节初稿写的是 `StreamableHTTPServerTransport`。SDK 里那个是
+  > Node `IncomingMessage` / `ServerResponse` 的**包装层**，内核正是这里的 web 标准实现；
+  > 本仓是 Bun + Hono，请求本身就是 `Request`，用包装层等于把 web 标准对象垫成 Node 流再垫回来。
+  > 该类的 docstring 直接给的就是 Hono 用法。
+- **工具如何触达业务逻辑**（初稿未定，实施期定案）：**dispatch 进 REST 的同一张路由表**，
+  而不是绕过它调 `services/*`。`server.ts` 抽出 `mountApiRoutes(app, deps)`；`mcp/dispatch.ts`
+  用它建第二个 app，**不挂 `multiAuth`**，actor 经 `AsyncLocalStorage` 以**值**注入
+  （请求伪造不了值，只有代码能设）。这样门、载荷校验、行级 ACL、删除确认、修订栅栏
+  全是同一条代码路径——MCP 在结构上不可能成为第二个更弱的授权面。
 - 认证：复用 `multiAuth` 解析出的 actor，再加一道**只接 PAT** 的收紧
   （`actor.source !== 'pat'` → 401）。
 - 全局开关关闭时：`/api/mcp` 与 `POST /api/auth/pats` 同时 403。

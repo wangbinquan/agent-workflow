@@ -79,6 +79,17 @@ export function redactMcpRecord<T>(record: T): T {
 }
 
 /**
+ * Serialize one MCP record for a specific caller.
+ *
+ * THE outlet. `redactMcpRecord` above is the rule; this is where it is applied,
+ * and routes call it instead of choosing for themselves — a per-route decision
+ * is how five of six call sites end up redacting and the sixth does not.
+ */
+export function serializeMcpFor<T>(record: T, source: ActorSource): T {
+  return shouldRedactFor(source) ? redactMcpRecord(record) : record
+}
+
+/**
  * Redact a repository URL that may embed credentials.
  *
  * NOTE (design-gate correction): the RFC's first draft listed `cached_repos.url`

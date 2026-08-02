@@ -762,6 +762,37 @@ export interface Resources {
     signedOutHint: string
   }
   // RFC-036 — /account self-service page.
+  apiDocs: {
+    title: string
+    subtitle: string
+    intro: string
+    quickStart: string
+    quickStartBody: string
+    connecting: string
+    toolsHeading: string
+    toolsIntro: string
+    restHeading: string
+    restIntro: string
+    permissionsHeading: string
+    permissionsIntro: string
+    alwaysGrantedHeading: string
+    alwaysGrantedIntro: string
+    resourcesHeading: string
+    resourcesIntro: string
+    colTool: string
+    colNeeds: string
+    colDescription: string
+    colMethod: string
+    colPath: string
+    colSummary: string
+    colOperation: string
+    colPermission: string
+    needsNothing: string
+    notAvailableToYou: string
+    adminOnly: string
+    resourceAdminOnly: string
+  }
+
   account: {
     title: string
     profile: string
@@ -806,6 +837,7 @@ export interface Resources {
     // catalog instead, so there is no per-point key tree to keep in sync.
     token: {
       create: string
+      docsLink: string
       createTitle: string
       createdTitle: string
       nameHint: string
@@ -5003,6 +5035,43 @@ export const zhCN: Resources = {
     tokenIssue: '当前 Token 无访问权限',
     signedOutHint: '当前 Token 缺少 account:self 权限。点击退出登录。',
   },
+  apiDocs: {
+    title: 'API 与 MCP 接入',
+    subtitle: '本页内容由守护进程按当前路由表与工具注册表实时生成，不会与实现脱节。',
+    intro:
+      '本平台可以被外部模型和脚本远程驱动：MCP 走 `POST /api/mcp`，REST 走 `/api/*`。两条通道用同一枚个人访问令牌，权限也完全一致——令牌能做什么，两边就都能做什么。令牌在[账号页](/account)创建。',
+    quickStart: '快速开始',
+    quickStartBody:
+      '在账号页创建令牌时选择用途：**仅 MCP**（推荐给模型客户端）或 **REST API + MCP**。读取权限恒定开启，写入与执行按矩阵勾选，删除必须逐项显式勾选。',
+    connecting: '客户端配置',
+    toolsHeading: 'MCP 工具',
+    toolsIntro:
+      '`tools/list` 只返回当前令牌真正能调用的工具。下表列出全部工具；标注「当前角色不可用」的表示你的角色无法授出它所需的权限。',
+    restHeading: 'REST 端点',
+    restIntro:
+      '下表只列出令牌可达、且你的角色能够授权的端点。账号与 ACL 接口对所有令牌关闭，故不在此列。',
+    permissionsHeading: '权限矩阵',
+    permissionsIntro:
+      '你的角色可以授予令牌的档位。角色拿不到的档位不会出现在这里，也不会出现在账号页。',
+    alwaysGrantedHeading: '恒定开启的读取权限',
+    alwaysGrantedIntro: '任何有效令牌都带这些读取权限（可见范围仍受资源 ACL 约束），无需勾选。',
+    resourcesHeading: '资源类型',
+    resourcesIntro:
+      '`resource_read` / `resource_write` 支持的资源与操作。形状特殊的会在表格上方标注。',
+    colTool: '工具',
+    colNeeds: '需要权限',
+    colDescription: '说明',
+    colMethod: '方法',
+    colPath: '路径',
+    colSummary: '说明',
+    colOperation: '操作',
+    colPermission: '权限',
+    needsNothing: '无需额外权限',
+    notAvailableToYou: '当前角色不可用',
+    adminOnly: '仅管理员',
+    resourceAdminOnly: '仅资源管理员',
+  },
+
   account: {
     title: '我的账户',
     profile: '基本信息',
@@ -5043,6 +5112,7 @@ export const zhCN: Resources = {
     patStatusRevoked: '已吊销',
     token: {
       create: '创建令牌',
+      docsLink: '接入文档',
       createTitle: '创建访问令牌',
       createdTitle: '令牌已创建',
       nameHint: '给它一个能看出用途的名字，例如哪台机器、哪条流水线。吧名字只在这里显示。',

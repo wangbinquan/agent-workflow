@@ -633,6 +633,17 @@ export const ROUTE_UX_INVENTORY = {
     owners: [rendered('users-page-actions.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/users.tsx', primitive: 'PageHeader' },
   },
+  // RFC-247 — the generated API & MCP wiki. Its body is a pure function over
+  // the daemon's payload, so the owning test asserts the derivation (the part
+  // that can silently go wrong) plus a source lock that it renders through the
+  // shared Prose path; the real-browser coverage lives in
+  // e2e/rfc247-api-docs-page.spec.ts.
+  '@/routes/docs.api#DocsApiRoute': {
+    surface: '/docs/api',
+    classification: 'standard',
+    owners: [source('api-docs-markdown.test.ts')],
+    header: { mode: 'direct', sourceFile: 'routes/docs.api.tsx', primitive: 'PageHeader' },
+  },
 } as const satisfies Record<string, RouteInventoryEntry>
 
 describe('route UX inventory parser', () => {

@@ -4,15 +4,17 @@
 
 import { Hono } from 'hono'
 import type { WorkflowRevision } from '@agent-workflow/shared'
-import { actorOf } from '@/auth/actor'
+import { actorOf, tryActorOf } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { multiAuth } from '@/auth/session'
+import { recordTokenCall } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import type { ContainmentCoordinator } from '@/services/sandbox'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
+import { mountMcpTransport } from '@/mcp/server'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
 import { mountBackupRoutes } from '@/routes/backup'
@@ -20,6 +22,7 @@ import { mountRestoreRoutes } from '@/routes/restore'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import { mountConfigRoutes } from '@/routes/config'
 import { mountDaemonRoutes } from '@/routes/daemon'
+import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
@@ -146,11 +149,33 @@ export function createApp(deps: AppDeps): Hono {
 
   // Public routes (no auth).
   mountHealthRoutes(app, deps)
+  // RFC-247 D18 — discovery must answer before any credential exists.
+  mountWellKnownRoutes(app, deps)
 
   // Authenticated routes — three-track auth (RFC-036): session token / PAT /
   // legacy daemon token. Daemon token still maps to the seeded __system__
   // admin actor so existing single-user deployments stay zero-touch.
   app.use('/api/*', multiAuth({ db: deps.db, daemonToken: deps.token }))
+
+  // RFC-247 D16 — the REST half of the token audit. Mounted right after
+  // multiAuth so the actor exists, and BEFORE the routes so it observes every
+  // one of them including the ones that throw. It records after `next()` and
+  // never rethrows: an audit failure must not turn a working call into a 500
+  // (F13). `/api/mcp` records per TOOL instead — a single "POST /api/mcp" row
+  // would say nothing about what the model actually did.
+  app.use('/api/*', async (c, next) => {
+    await next()
+    const actor = tryActorOf(c)
+    if (actor === null || actor.source !== 'pat') return
+    if (c.req.path === '/api/mcp') return
+    void recordTokenCall(deps.db, {
+      actor,
+      channel: 'rest',
+      method: c.req.method,
+      path: c.req.path,
+      statusCode: c.res.status,
+    })
+  })
 
   // /api/whoami returns the resolved actor; keeps `ok`/`pid` fields for
   // backwards compatibility with anything that pinged the P-1-08 probe.
@@ -196,42 +221,12 @@ export function createApp(deps: AppDeps): Hono {
   // disagree in EITHER direction, which is what makes the guarantee real
   // rather than aspirational.
 
-  mountConfigRoutes(app, deps)
-  mountDaemonRoutes(app, deps)
-  mountPlantumlRoutes(app, deps)
-  mountRuntimeRoutes(app, deps)
-  mountRuntimesRoutes(app, deps)
-  mountOverviewRoutes(app, deps) // RFC-190
-  mountAgentRoutes(app, deps)
-  mountMcpRoutes(app, deps)
-  mountPluginRoutes(app, deps)
-  mountSkillRoutes(app, deps)
-  mountRepoRoutes(app, deps)
-  mountCachedRepoRoutes(app, deps)
-  mountWorkflowRoutes(app, deps)
-  mountWorkgroupRoutes(app, deps) // RFC-164
-  mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
-  mountTaskRoutes(app, deps)
-  mountScheduledTaskRoutes(app, deps) // RFC-159
-  mountBackupRoutes(app, deps)
-  mountRestoreRoutes(app, deps)
-  mountWorktreeFilesRoutes(app, deps)
-  mountPortArtifactRoutes(app, deps)
-  mountReviewRoutes(app, deps)
-  mountClarifyRoutes(app, deps)
-  mountTaskQuestionRoutes(app, deps)
-  mountTaskClarifyDirectiveRoutes(app, deps)
-  mountFusionRoutes(app, deps)
-  mountIntentSessionRoutes(app, deps) // RFC-234
-  mountMemoryRoutes(app, deps)
-  mountMemoryDistillJobRoutes(app, deps)
-  mountTaskFeedbackRoutes(app, deps)
-  // RFC-036 — auth + OIDC + user-CRUD routes. The first three are always
-  // mounted; OIDC routes self-skip when deps.secretBox is omitted.
-  mountAuthRoutes(app, deps)
-  mountOidcAuthRoutes(app, deps)
-  mountOidcRoutes(app, deps)
-  mountUserRoutes(app, deps)
+  mountApiRoutes(app, deps)
+
+  // RFC-247 §4.1 — the MCP transport. Mounted after the REST table (it builds a
+  // second, actor-injected copy of that table for tool dispatch) and inside the
+  // /api/* auth scope, so the credential is resolved before it is inspected.
+  mountMcpTransport(app, deps)
 
   // RFC-247 T4 — refuse to boot on a coverage mismatch, in either direction.
   // Placed after every mount and before the SPA fallback so it sees the real
@@ -270,4 +265,58 @@ export function createApp(deps: AppDeps): Hono {
   )
 
   return app
+}
+
+/**
+ * Every `/api/*` route, mounted onto whatever app is passed in.
+ *
+ * Split out of `createApp` for RFC-247's MCP transport: the MCP tools dispatch
+ * into THIS SAME route table with an injected actor, rather than reaching past
+ * it into the services. That is the whole reason MCP cannot become a second,
+ * weaker authorization surface — every gate, payload validation and row-level
+ * ACL check a REST caller passes through is the identical code path, not a
+ * parallel implementation that has to be kept in agreement with it.
+ *
+ * Note what is deliberately NOT here: `multiAuth`. Authentication belongs to
+ * the entry point (HTTP for `createApp`, the token that opened the MCP session
+ * for the dispatcher), while authorization belongs to the route declarations.
+ */
+export function mountApiRoutes(app: Hono, deps: AppDeps): void {
+  mountConfigRoutes(app, deps)
+  mountDaemonRoutes(app, deps)
+  mountPlantumlRoutes(app, deps)
+  mountRuntimeRoutes(app, deps)
+  mountRuntimesRoutes(app, deps)
+  mountOverviewRoutes(app, deps) // RFC-190
+  mountAgentRoutes(app, deps)
+  mountMcpRoutes(app, deps)
+  mountPluginRoutes(app, deps)
+  mountSkillRoutes(app, deps)
+  mountRepoRoutes(app, deps)
+  mountCachedRepoRoutes(app, deps)
+  mountWorkflowRoutes(app, deps)
+  mountWorkgroupRoutes(app, deps) // RFC-164
+  mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
+  mountTaskRoutes(app, deps)
+  mountScheduledTaskRoutes(app, deps) // RFC-159
+  mountBackupRoutes(app, deps)
+  mountRestoreRoutes(app, deps)
+  mountWorktreeFilesRoutes(app, deps)
+  mountPortArtifactRoutes(app, deps)
+  mountReviewRoutes(app, deps)
+  mountClarifyRoutes(app, deps)
+  mountTaskQuestionRoutes(app, deps)
+  mountTaskClarifyDirectiveRoutes(app, deps)
+  mountFusionRoutes(app, deps)
+  mountIntentSessionRoutes(app, deps) // RFC-234
+  mountMemoryRoutes(app, deps)
+  mountMemoryDistillJobRoutes(app, deps)
+  mountTaskFeedbackRoutes(app, deps)
+  // RFC-036 — auth + OIDC + user-CRUD routes. The first three are always
+  // mounted; OIDC routes self-skip when deps.secretBox is omitted.
+  mountAuthRoutes(app, deps)
+  mountOidcAuthRoutes(app, deps)
+  mountOidcRoutes(app, deps)
+  mountUserRoutes(app, deps)
+  mountDocsRoutes(app, deps) // RFC-247 D17
 }

@@ -175,6 +175,27 @@ export async function revokePat(
   triggerRevalidation(db, 'pat-revoked')
 }
 
+/**
+ * RFC-247 D8 — every token on the platform, for the administrator's read-only
+ * inventory. Carries `userId` (unlike `PatPublic`) because "whose token is
+ * this" is the entire point of the admin view; the hash is never included, so
+ * this cannot become a credential-recovery path.
+ */
+export async function listAllPats(db: DbClient): Promise<Array<PatPublic & { userId: string }>> {
+  const rows = await db.select().from(userPats)
+  return rows.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    name: r.name,
+    scopes: safeParseScopes(r.scopesJson),
+    purpose: (r.purpose === 'general' ? 'general' : 'mcp_only') as PatPurpose,
+    createdAt: r.createdAt,
+    lastUsedAt: r.lastUsedAt,
+    expiresAt: r.expiresAt,
+    revokedAt: r.revokedAt,
+  }))
+}
+
 export async function listPatsForUser(db: DbClient, userId: string): Promise<PatPublic[]> {
   const rows = await db
     .select()

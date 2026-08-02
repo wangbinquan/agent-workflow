@@ -1,5 +1,6 @@
 import type { PatPublic } from '@agent-workflow/shared'
 import { useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
@@ -36,15 +37,22 @@ export function AccountTokensPanel({ me }: { me: MeResponse }) {
             permission catalog of the day could not express a narrow token; the
             "生成已关闭" banner that stood here explained that state and is now
             simply false. */}
-        <button
-          type="button"
-          className="btn btn--primary btn--sm"
-          ref={createTriggerRef}
-          onClick={() => setCreating(true)}
-          data-testid="token-create-open"
-        >
-          {t('account.token.create')}
-        </button>
+        <div className="page__actions">
+          {/* The docs are one click from where the token is minted: "what can
+              I point this at" is the next question every time. */}
+          <Link to="/docs/api" className="btn btn--sm" data-testid="token-docs-link">
+            {t('account.token.docsLink')}
+          </Link>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            ref={createTriggerRef}
+            onClick={() => setCreating(true)}
+            data-testid="token-create-open"
+          >
+            {t('account.token.create')}
+          </button>
+        </div>
       </header>
       <Card className="account-tokens-card">
         {tokens.length === 0 ? (

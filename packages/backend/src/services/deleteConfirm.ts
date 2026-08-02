@@ -14,6 +14,7 @@
 // convention (invalid-json et al.); the front-end keys on the `code`.
 
 import type { Context } from 'hono'
+import type { ActorSource } from '@/auth/actor'
 import { ValidationError } from '@/util/errors'
 
 /**
@@ -63,4 +64,34 @@ export function assertDeleteConfirm(
       { resourceType },
     )
   }
+}
+
+/**
+ * RFC-247 T20 — the same check, but only for TOKEN callers.
+ *
+ * Four delete routes were outside RFC-222's seven: schedules, memories, cached
+ * repos, and single skill files. Their web flows confirm in a lighter way (a
+ * yes/no dialog, a `?confirm=true` flag) and that is a deliberate weighting —
+ * a memory row is not an agent definition, and its identity is a 120-character
+ * TITLE, so demanding it be retyped would be a real UX regression aimed at the
+ * wrong risk.
+ *
+ * A token has no dialog. Nothing stands between "the model decided to call
+ * this" and the row being gone, on either channel — a `general` PAT reaches
+ * these over plain REST too, so guarding only the MCP tool would leave the hole
+ * open next to the patch. Hence: same rule, applied where the reasoning
+ * actually differs.
+ *
+ * The asymmetry is the point, and it mirrors `shouldRedactFor` in
+ * services/tokenRedaction.ts: this RFC treats "which channel is this" as a real
+ * distinction rather than pretending every caller is the same.
+ */
+export function assertTokenDeleteConfirm(
+  body: unknown,
+  expectedName: string,
+  resourceType: string,
+  source: ActorSource,
+): void {
+  if (source !== 'pat') return
+  assertDeleteConfirm(body, expectedName, resourceType)
 }

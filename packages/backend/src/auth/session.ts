@@ -165,6 +165,7 @@ export async function resolveActor(
       source: 'pat',
       patScopes: resolved.scopes as ReadonlyArray<Permission>,
       patPurpose: resolved.purpose,
+      patId: resolved.patId,
     })
   }
   // Legacy daemon token: any opaque string the daemon was launched with.

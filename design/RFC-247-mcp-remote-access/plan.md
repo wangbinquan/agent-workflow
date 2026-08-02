@@ -52,84 +52,84 @@
 - [x] **RFC-247-T7**：`verbForRoute` 映射表逐行测试；`routeMetaCoverage` 断言生产 app 无缺漏；
       每个域各一条「窄令牌被拒」集成测试；**跨域副作用族五条专属回归**（AC-29），文件名与顶部注释写明它锁的是
       「A 域路由产生 B 域副作用」这一族。
-- [ ] **RFC-247-T8**：在 `docs/audit-backlog.md` 记录收口——`:60`（workgroups 无 method 点）、
+- [x] **RFC-247-T8**：在 `docs/audit-backlog.md` 记录收口——`:60`（workgroups 无 method 点）、
       `:61`（空 scope 全权）、`:62`（任务操作面无写点 + cancel 死点）三条随本 RFC 关闭；
       `:63`（review 评论不验作者）**不关**，本 RFC 只是把它从 `tasks:delete` 的误归中解开。
 
 ### PR-2 · 令牌签发、矩阵 UI 与脱敏
 
-- [ ] **RFC-247-T9**：migration —— `user_pats` 加 `purpose` 列；存量行统一标记 `revoked_at`
+- [x] **RFC-247-T9**：migration —— `user_pats` 加 `purpose` 列；存量行统一标记 `revoked_at`
       （D19 断代）。
-- [ ] **RFC-247-T10**：重开 `POST /api/auth/pats`；创建期校验（越权 422、删除档必须显式、
+- [x] **RFC-247-T10**：重开 `POST /api/auth/pats`；创建期校验（越权 422、删除档必须显式、
       原始令牌只返回一次）；`tokenAccess: 'never'` 覆盖 `/api/auth/*` 与 ACL PUT。
-- [ ] **RFC-247-T11**：用途门 —— `mcp_only` 令牌打 `/api/*` → 403 `token-mcp-only`。
-- [ ] **RFC-247-T11b**：**WS 用途门** —— `/ws/*` 在 `multiAuth` 之外（`cli/start.ts:551-556`
+- [x] **RFC-247-T11**：用途门 —— `mcp_only` 令牌打 `/api/*` → 403 `token-mcp-only`。
+- [x] **RFC-247-T11b**：**WS 用途门** —— `/ws/*` 在 `multiAuth` 之外（`cli/start.ts:551-556`
       先走 `ws.tryUpgrade`），必须在 `ws/server.ts` 的 `tryUpgrade` 里单独实施：
       `mcp_only` 令牌 401。（design §3.5）
-- [ ] **RFC-247-T12**：`services/tokenRedaction.ts` 单一事实源 + **两条出口**接线 ——
+- [x] **RFC-247-T12**：`services/tokenRedaction.ts` 单一事实源 + **两条出口**接线 ——
       REST 响应序列化 **与 `ws/broadcaster.ts` 的出帧路径**（MCP env / headers /
       oauth secret / cached_repo url）。脱敏必须挂在通道无关的位置，否则 WS 是绕过路径。
-- [ ] **RFC-247-T13**：账号页令牌区改造 —— 模板（只读 / 任务自动化 / 完整）+ 高级矩阵展开；
+- [x] **RFC-247-T13**：账号页令牌区改造 —— 模板（只读 / 任务自动化 / 完整）+ 高级矩阵展开；
       **只渲染该角色实际拥有的档位**；删除档不进任何模板且带显著警告；
       移除 RFC-221 留下的「生成已关闭」NoticeBanner。复用 `Dialog` / `Form` / `Segmented` /
       `Switch` 等既有公共组件，禁止自写 chrome。
-- [ ] **RFC-247-T14**：zh-CN / en-US i18n；令牌创建与矩阵的单测 + 脱敏红绿测试；
+- [x] **RFC-247-T14**：zh-CN / en-US i18n；令牌创建与矩阵的单测 + 脱敏红绿测试；
       RFC-221 的三条锁定测试改写为新语义（不删除）。
 
 ### PR-3 · MCP 服务端与工具集
 
-- [ ] **RFC-247-T15**：`POST /api/mcp` —— `StreamableHTTPServerTransport` 无状态挂载；
+- [x] **RFC-247-T15**：`POST /api/mcp` —— `StreamableHTTPServerTransport` 无状态挂载；
       只接 PAT；全局开关（config 项 + settings UI，默认开启）。
-- [ ] **RFC-247-T16**：任务域具名工具（`launch_task` / `get_task` / `list_tasks` /
+- [x] **RFC-247-T16**：任务域具名工具（`launch_task` / `get_task` / `list_tasks` /
       `get_task_diff` / `list_node_runs` / `cancel_task` / `retry_node` / `resume_task` /
       `diagnose_task` / `repair_alert`）。
-- [ ] **RFC-247-T17**：`watch_task` —— ≤240s 阻塞、**≤10s 心跳 progress**（design §2.4 实测
+- [x] **RFC-247-T17**：`watch_task` —— ≤240s 阻塞、**≤10s 心跳 progress**（design §2.4 实测
       推出的硬要求）、超时返回快照 + `stillRunning`。
-- [ ] **RFC-247-T18**：人工门工具完整面（`list_pending_gates` / `answer_clarify` 逐题+提交 /
+- [x] **RFC-247-T18**：人工门工具完整面（`list_pending_gates` / `answer_clarify` 逐题+提交 /
       `submit_review` 逐文档评论+通过打回）。
-- [ ] **RFC-247-T19**：`resource_read` / `resource_write` + `method` 收敛工具；
+- [x] **RFC-247-T19**：`resource_read` / `resource_write` + `method` 收敛工具；
       `describe_resource` 由 zod 派生 JSON Schema；`describe_capabilities`。
-- [ ] **RFC-247-T20**：删除工具接 `assertDeleteConfirm`，并把它从 7 条**补到 11 条**
+- [x] **RFC-247-T20**：删除工具接 `assertDeleteConfirm`，并把它从 7 条**补到 11 条**
       （skill 文件 / cached-repo / memory / scheduled-task）；`launch_task` 的 upload 输入检测
       （零副作用拒绝）。
-- [ ] **RFC-247-T21**：`tools/list` 按矩阵过滤；错误语义（缺失点名 + 脱敏文本 + 闭合
+- [x] **RFC-247-T21**：`tools/list` 按矩阵过滤；错误语义（缺失点名 + 脱敏文本 + 闭合
       `additionalProperties` 的入参 schema）。
-- [ ] **RFC-247-T22**：MCP 测试 —— `tools/list` 三种矩阵快照、`watch_task` 假时钟心跳、
+- [x] **RFC-247-T22**：MCP 测试 —— `tools/list` 三种矩阵快照、`watch_task` 假时钟心跳、
       confirm 红绿、upload 拒绝断言无落库、错误文本不含密钥。
 
 ### PR-4 · 审计与删除快照
 
-- [ ] **RFC-247-T23**：migration —— `token_audit` + `token_delete_snapshot` 两表 + 索引。
-- [ ] **RFC-247-T24**：两条通道的审计写入（旁路、失败不阻断业务）；**不记 body**。
-- [ ] **RFC-247-T25**：删除快照（复用 T12 脱敏；任务删除只存 DB 行不含 worktree）。
-- [ ] **RFC-247-T26**：`tokenAuditRetentionDays` 配置项（默认 90）+ 清理器挂进既有小时级
+- [x] **RFC-247-T23**：migration —— `token_audit` + `token_delete_snapshot` 两表 + 索引。
+- [x] **RFC-247-T24**：两条通道的审计写入（旁路、失败不阻断业务）；**不记 body**。
+- [x] **RFC-247-T25**：删除快照（复用 T12 脱敏；任务删除只存 DB 行不含 worktree）。
+- [x] **RFC-247-T26**：`tokenAuditRetentionDays` 配置项（默认 90）+ 清理器挂进既有小时级
       后台任务。
-- [ ] **RFC-247-T27**：`GET /api/auth/pats/audit`（属主自查）+ 管理员全平台令牌与审计
+- [x] **RFC-247-T27**：`GET /api/auth/pats/audit`（属主自查）+ 管理员全平台令牌与审计
       **只读**面（无吊销按钮）。
-- [ ] **RFC-247-T28**：审计测试（字段正确、无 body、快照脱敏、保留期清理、写入失败不阻断）。
+- [x] **RFC-247-T28**：审计测试（字段正确、无 body、快照脱敏、保留期清理、写入失败不阻断）。
 
 ### PR-5 · wiki 与端点发现
 
-- [ ] **RFC-247-T29**：`GET /api/docs/api` —— 从 `RouteMeta` + 工具注册表 + 权限目录 +
+- [x] **RFC-247-T29**：`GET /api/docs/api` —— 从 `RouteMeta` + 工具注册表 + 权限目录 +
       错误码常量派生，按角色裁剪。
-- [ ] **RFC-247-T30**：`GET /.well-known/mcp`（无需认证，挂在 SPA catch-all 之前，
+- [x] **RFC-247-T30**：`GET /.well-known/mcp`（无需认证，挂在 SPA catch-all 之前，
       **不动** `PUBLIC_PATH_PREFIXES`）。
-- [ ] **RFC-247-T31**：`/docs/api` 页面 —— 复用 `Prose` / `PageHeader` / `Card` /
+- [x] **RFC-247-T31**：`/docs/api` 页面 —— 复用 `Prose` / `PageHeader` / `Card` /
       `PageSectionNav` / `TabBar`；MCP 接入指南 + REST 参考两个分区。
-- [ ] **RFC-247-T32**：配置片段生成器 —— Claude Code / **opencode（必带 `oauth: false`）** /
+- [x] **RFC-247-T32**：配置片段生成器 —— Claude Code / **opencode（必带 `oauth: false`）** /
       通用 MCP 客户端 / 裸 curl；地址由 `window.location.origin` 推导；令牌为占位符。
-- [ ] **RFC-247-T33**：入口 —— 账号页令牌区旁 + 设置页各一个；`lib/nav.ts` 的 `NAV_GROUPS`
+- [x] **RFC-247-T33**：入口 —— 账号页令牌区旁 + 设置页各一个；`lib/nav.ts` 的 `NAV_GROUPS`
       **不动**。
-- [ ] **RFC-247-T34**：双语外壳 + 生成内容保持英文；i18n key 补齐。
-- [ ] **RFC-247-T35**：wiki 测试 —— **派生关系锁定**（改一条 `RouteMeta` 权限点 ⇒ 文档输出
+- [x] **RFC-247-T34**：双语外壳 + 生成内容保持英文；i18n key 补齐。
+- [x] **RFC-247-T35**：wiki 测试 —— **派生关系锁定**（改一条 `RouteMeta` 权限点 ⇒ 文档输出
       随之变）、角色裁剪、`Prose` 唯一性源码断言、390px 无横向溢出 Playwright。
 
 ### 收尾
 
-- [ ] **RFC-247-T36**：`docs/dev-gotchas.md` 补记本轮的通用踩坑（opencode
+- [x] **RFC-247-T36**：`docs/dev-gotchas.md` 补记本轮的通用踩坑（opencode
       `resetTimeoutOnProgress` / `DEFAULT_TIMEOUT=30s` / `oauth` 默认探测三条）。
-- [ ] **RFC-247-T37**：`docs/audit-backlog.md` 登记 design §11 的 `mcp.ts:88-91` 过期断言。
-- [ ] **RFC-247-T38**：`design/RFC-221-account-users-ux/proposal.md` 的 D1 标注
+- [x] **RFC-247-T37**：`docs/audit-backlog.md` 登记 design §11 的 `mcp.ts:88-91` 过期断言。
+- [x] **RFC-247-T38**：`design/RFC-221-account-users-ux/proposal.md` 的 D1 标注
       「Superseded by RFC-247」。
 - [ ] **RFC-247-T39**：设计门（Codex review，请批前）+ 实现门（Codex review，declare done 前）
       各一轮并修 findings。
@@ -357,3 +357,125 @@ subject face —— 三条启动端点**统一** gate 在 `tasks:launch`，且 a
 > **T4 的反向穷尽自检必须最后落**——它一旦生效，上述任何一个点没被 `RouteMeta` 引用就会让
 > daemon 起不来，这正是它存在的意义；但在 T3 完成前打开它会挡住自己的迁移路径。
 > 顺序硬约束：**T1 → T3 → T4**。
+
+### 2026-08-02 — PR-2（令牌签发、用途门、脱敏、矩阵 UI）
+
+PR-2 全六项（T9–T14）交付，`POST /api/auth/pats` 重开。
+
+- **T9/T10**：migration `0129` 加 `purpose` 列并按 D19 断代吊销存量行；创建路由做三重校验
+  （全局开关 → 越权矩阵 422 且**指名**越权点 → 原始令牌只返回一次）。
+- **T11/T11b**：用途门落在**两条互不共享代码的通道**——`registerRoute` 的派生门（排在
+  `tokenAccess: 'never'` 之后，让「永久理由」压过「换发即可解」的理由）与 `ws/server.ts`
+  的 `tryUpgrade`（在 `multiAuth` 之外，不单独实施就等于给 `mcp_only` 令牌开了等价读通道）。
+- **T12**：`services/tokenRedaction.ts` 单一事实源，接在 REST 序列化与 WS 出帧两条出口；
+  顺带修掉 `services/task.ts` 四处 `rowToTask` 的 repo URL 明文（既有泄漏，四条通道全中）。
+- **T13**：账号页矩阵 UI。派生逻辑抽进 `lib/token-matrix.ts`（纯函数、无 DOM 可断言），
+  组件只做渲染；新增**公共** `Checkbox` 原语（`Switch` 渲染的是开关，40 格网格里语义不对；
+  仓内已有 5 处手搓 `<input type="checkbox">`，第 6 份私有拷贝会让「我们没有 checkbox 原语」
+  永久为真）。角色拿不到的档位**不渲染**而非置灰——置灰是在教用户「你有这个能力，只是没开」。
+- **T14**：中英 i18n（退役 `patGroup`/`patScope` 两棵死键树）+ 51 条新测试。
+
+RFC-221 的三条锁定测试按 design §10 全部**改写而非删除**：两条后端锁改为锁「签发契约」，
+e2e 那条改为锁**整链**（签发 → 哈希 → 出示 → 解析 → 门），并新增一条真正的开关测试
+——`mcpSurfaceEnabled: false` 时创建被拒且零副作用，这才是 RFC-221「不能绕过 UI 直接建」
+那层意图在新语义下的落点。
+
+#### 本批踩的坑
+
+删 `account.generate` 时用「4 空格 + 键名」做 `str.replace`，**吃掉了 6 空格缩进的
+`intent.journey.generate`**（深缩进行天然包含浅缩进模式）。`tsc` 与 i18n parity 双绿
+——两个语言文件加类型定义被对称吃掉，类型层看不出——只有一条渲染断言变红。已记入
+`docs/dev-gotchas.md §前端`。
+
+### 2026-08-02 — PR-3（MCP 服务端与工具集）
+
+**架构决定：MCP 工具走的是 REST 的同一张路由表，而不是绕过它调 service。**
+`server.ts` 抽出 `mountApiRoutes(app, deps)`，`mcp/dispatch.ts` 用它建第二个 app——
+不挂 `multiAuth`，actor 经 `AsyncLocalStorage` 以**值**传入（请求伪造不了值，只有代码能设）。
+收益是结构性的：门、载荷校验、行级 ACL、删除确认、修订栅栏全部是同一条代码路径，
+MCP 在结构上**不可能**成为第二个更弱的授权面。实测立刻兑现——删除确认与 RFC-231 修订栅栏
+在 MCP 通道自动生效，没写一行相关代码。
+
+- **T15**：`POST /api/mcp`。**修正 design §4.1**：SDK 里 `StreamableHTTPServerTransport` 是
+  Node `IncomingMessage` 包装层，本仓是 Bun + Hono（请求就是 web 标准 `Request`），
+  应使用 `WebStandardStreamableHTTPServerTransport`——它是同一个传输的**内核**（Node 那个包着它），
+  其 docstring 直接给的就是 Hono 用法。只接 PAT（session / daemon 403），全局开关同时关签发与本端点。
+- **T16–T19**：任务域具名工具 + 人工门工具 + `resource_read` / `resource_write` /
+  `describe_resource` / `describe_capabilities`。资源路由表**按真实路由抄写**而非对称猜测——
+  三处猜测会错：repos 是批量导入且**没有 update**、memory 是 PATCH、tasks 不进收敛工具
+  （启动不是「创建资源」，且已有具名工具）。修订栅栏字段**必须由调用方从读结果带回**，
+  工具**不代填**——代填等于在唯一重要的时刻（两个写者竞争）废掉栅栏。
+- **T17**：`watch_task` ≤240s、≤10s 心跳、触顶返回 `stillRunning` 而非报错；
+  `awaiting_review` / `awaiting_human` 计入「已停」——那正是模型需要知道的时刻，
+  当成「还在跑」会把整个预算耗在一个没人回答就不会动的任务上。假时钟驱动测试。
+- **T20**：删除确认从 7 条补到 11 条，但**只对令牌调用方**生效
+  （`assertTokenDeleteConfirm`）。四条落在外面的路由（定时任务 / 记忆 / 仓库镜像 / 技能文件）
+  的 Web 流程是**有意**用更轻的确认——记忆的身份是 120 字标题，逼人重打是拿错风险换 UX。
+  令牌没有对话框，且 `general` PAT 走 REST 也能到，所以只补 MCP 工具等于在补丁旁边留着洞。
+  非对称是刻意的，与本 RFC 的 `shouldRedactFor` 同构。
+
+#### 本批抓到的真实缺口（T12 的自我更正）
+
+`redactMcpRecord` 写了、单测了，**但没有任何调用方**——`GET /api/mcps/:id` 一直原样返回
+`config.env` / `headers` / `oauth.clientSecret`。此前 STATE 里「T12 接了 REST 与 WS 两条出口」
+只对 `redactGitUrl` 那一半成立。已补 `serializeMcpFor(record, source)` 作为**唯一出口**并接在
+`routes/mcps.ts` 的 5 个序列化点上（WS 侧确认无频道承载 MCP 定义记录，故无第二处）。
+红绿锁在 `rfc247-mcp-server.test.ts`：PAT 读到 `***` 而键名保留，session 读到原值。
+**这个洞是写 MCP 工具测试时发现的**——`resource_read(kind='mcps')` 会把它直接送进模型上下文。
+
+### 2026-08-02 — PR-4（调用审计）与 PR-5（生成式 wiki）
+
+**PR-4 · 审计（T23–T28）**
+
+- `services/tokenAudit.ts`：一次调用一行，**两条通道各挂一个钩子**——REST 是 `/api/*` 上的
+  一条中间件（挂在 `multiAuth` 之后、路由之前，`next()` 之后记录，观察得到抛错的路由），
+  MCP 是**逐工具**记录（每次 MCP 调用都是同一个 `POST /api/mcp`，请求行不携带任何信息，
+  工具名才携带）。`Actor` 加 `patId`——审计按**令牌**而非用户归集，因为「同一个人的两枚令牌
+  在做不同的事」正是运维打开日志时想区分的东西。
+- **不记 body**：`resource_write` 载荷里有 MCP env 与仓库凭据；存 body 的审计表是新的泄漏面，
+  不是控制项。删除额外落一份**脱敏快照**——元数据回答「谁删了什么」，不回答「那是什么」，
+  而行没了以后后者才是要紧的。
+- F13/F14：写审计失败 **不阻断业务**（一个写不进日志就拒绝服务的守护进程，把可观测性做成了故障）；
+  快照失败保留审计行。保留期清理挂进既有小时级 sweep。
+- 读面：属主 `GET /api/auth/pats/audit`（令牌不可读——D6 关闭整个 `/api/auth/*`，
+  一份被攻陷令牌能读的审计日志是「还能试什么」的地图）；管理员 `GET /api/tokens` /
+  `/api/tokens/audit` **只读**，**没有** DELETE：管理员看得见每一枚令牌却不能吊销别人的，
+  对应手段是停用账号——一次吊销全部，且是诚实的动作。
+
+**PR-5 · wiki（T29–T35）**
+
+- `GET /api/docs/api` 运行时从 `allRouteMeta()` + 工具注册表 + 权限目录派生，**按角色裁剪**
+  （普通 user 看不到仓库域写端点；`tokenAccess:'never'` 的整片不出现——本页讲的是令牌能做什么）。
+  AC-22 的锁不是「输出里有某个字符串」（手写页面也满足），而是**改一条 `RouteMeta` 的权限点，
+  输出跟着变**。
+- `/docs/api` 页面走 `Prose`（AC-27 源码级守卫：`components/prose` 之外不得新增 markdown 渲染
+  入口；RFC-010 的 review diff 视图作为**具名例外**列入白名单，让例外可见、让第二个必须先说服人）。
+  markdown 由 `lib/api-docs-markdown.ts` 纯函数生成，前端这半边的派生锁同样可断言。
+- 客户端片段四种（Claude Code / opencode / 通用 / curl），opencode 那份必带 `oauth: false`
+  （源码实测：不写会先探测 OAuth）。`/.well-known/mcp` 免鉴权，只讲端点与鉴权方式——
+  免鉴权地列出全部工具等于白送一份能力清单，何况工具集本来就是按令牌变的。
+- e2e 真实浏览器 5/5：派生内容渲染、`oauth:false`、**390px 无页面级横向溢出**、宽块自身可滚、
+  `/.well-known/mcp` 免鉴权可达。
+
+#### 全量套件揭示的三条（PR-3〜PR-5 收尾）
+
+| 测试 | 现象 | 归属与处置 |
+| --- | --- | --- |
+| `rfc165-scheduled-kinds.test.ts` K6 | narrow PAT 删除定时任务由 200 变 422 | **本 RFC 有意**。K6 锁的是「删除**不需要**启动权限」——那条**仍然成立**；T20 加的是「令牌必须**指名**要删的东西」，两条正交（一条讲权限、一条讲意图）。测试改为先断 422 `delete-confirm-required`、再带 `confirm` 断成功，**原意完整保留**。存量令牌已被 migration 0129 全部吊销，故此 break 无活跃调用方。 |
+| `api-contract-coverage.test.ts` | 5 条新端点未登记 | 该守卫正常工作。登记 `/api/auth/pats/audit`、`/api/tokens`、`/api/tokens/audit`、`/api/docs/api`、`/.well-known/mcp`（最后一条标 `public`）。 |
+| `plugin-install` timeout kill | 全量套件下红、单独跑 17/17 绿 | **不属本 RFC**（未触及 `pluginInstaller`）；是 `timeoutMs` 杀子进程的时序敏感用例在满载下抖动。按 CLAUDE.md **不以「重跑就过」作为通过依据**——如实记录于此，留待其 owner 判定是真 flaky 还是真 bug。 |
+
+顺带把 dispatcher 改为**首次使用时**才构建：它会把整张 `/api` 路由表挂进第二个 Hono app，
+对一个从不收 MCP 请求的守护进程（或测试）是纯浪费——测试套件会建几百个 app。
+
+两条 UX ratchet 也各自吃到本 RFC 的新东西，都按「让守卫学会」而非「把代码扭成守卫喜欢的样子」处理：
+`overlay-ux-inventory` 要求每个 Dialog 调用点登记（`CreateTokenDialog` 两个 phase = count 2）；
+`route-ux-inventory` 要求每条路由登记 owner + header 归属。
+`onboarding-guide` 的「i18n 文案里不得出现 `**`」是**全库规则**，其前提是「没有任何地方 markdown 渲染
+i18n 文案」——本 RFC 让这条前提第一次不成立（`apiDocs.*` 经 `buildApiDocsMarkdown` → `Prose`）。
+处置是**窄豁免**：`apiDocs.*` 除 `title` / `subtitle`（它们进 `PageHeader` 纯文本槽，正是该守卫当初要防的
+那个 bug）。豁免的前提本身也上了锁——`api-docs-markdown.test.ts` 断言 `docs.api.tsx` 里
+**只有** 这两个键用在 markdown builder 之外，将来谁把新键喂进纯文本槽会立刻变红。
+
+**末轮全量**：backend **8101 pass / 0 fail**、shared **1555**、frontend **681 文件 / 5698 tests**，
+typecheck / lint / format 全绿。

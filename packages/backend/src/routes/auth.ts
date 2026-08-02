@@ -39,6 +39,7 @@ import {
 } from '@/services/authLoginPolicy'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { listTokenAuditForUser } from '@/services/tokenAudit'
 import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '@/util/errors'
 
 export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
@@ -389,6 +390,23 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       // The raw token is returned exactly once and never stored — only its
       // SHA-256 lives in the DB, so no later read path can surface it.
       return c.json({ token: created.token, pat: created.meta }, 201)
+    },
+  )
+
+  // RFC-247 D16 / T27 — the owner's own call log. Placed BEFORE `/:id` so the
+  // literal segment is not swallowed by the parameter route.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/auth/pats/audit',
+      permissions: ['account:self'],
+      tokenAccess: 'never',
+      summary: 'Recent calls made with your own tokens',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      return c.json(await listTokenAuditForUser(deps.db, actor.user.id))
     },
   )
 

@@ -20,6 +20,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import {
   canViewScheduledTask,
@@ -197,6 +198,14 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const existing = await loadVisible(deps, actor, c.req.param('id'))
       requireWriteAccess(actor, existing)
+      // RFC-247 T20 — a token must name what it deletes; the web flow keeps its
+      // lighter yes/no confirmation (see services/deleteConfirm.ts).
+      assertTokenDeleteConfirm(
+        await readDeleteBody(c),
+        existing.name,
+        'scheduled task',
+        actor.source,
+      )
       await deleteScheduledTask(deps.db, existing.id)
       return c.body(null, 204)
     },

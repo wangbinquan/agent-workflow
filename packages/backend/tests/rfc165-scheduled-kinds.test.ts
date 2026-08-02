@@ -704,7 +704,21 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
       body: JSON.stringify({ enabled: false }),
     })
     expect(disable.status).toBe(200)
-    const del = await req(`/api/scheduled-tasks/${sched.id}`, narrowPat, { method: 'DELETE' })
+    // RFC-247 T20 — delete stays open to the narrow PAT in the sense this test
+    // locks (no launch permission needed), but a TOKEN must now name what it
+    // deletes. The two rules are orthogonal: this one is about PERMISSION, that
+    // one is about intent, and a token has no confirmation dialog standing
+    // between "the caller decided" and the row being gone.
+    const delNoConfirm = await req(`/api/scheduled-tasks/${sched.id}`, narrowPat, {
+      method: 'DELETE',
+    })
+    expect(delNoConfirm.status).toBe(422)
+    expect(((await delNoConfirm.json()) as { code: string }).code).toBe('delete-confirm-required')
+
+    const del = await req(`/api/scheduled-tasks/${sched.id}`, narrowPat, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'renamed by narrow' }),
+    })
     expect([200, 204]).toContain(del.status)
 
     // Sanity: an admin session is never gated.

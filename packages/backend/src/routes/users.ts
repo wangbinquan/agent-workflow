@@ -9,6 +9,8 @@ import {
 import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { listAllPats } from '@/auth/patStore'
+import { listTokenAudit } from '@/services/tokenAudit'
 import {
   createUser,
   disableUser,
@@ -78,6 +80,42 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
   )
 
   // Everything below is admin-only.
+  // RFC-247 D8 / D16 / T27 — the administrator's platform-wide token view.
+  // READ-ONLY on purpose: an admin can see every token and every call made with
+  // one, and cannot revoke someone else's. Revocation stays with the owner
+  // because a token is a credential the owner is accountable for; the lever an
+  // admin has for a compromised account is disabling the account, which revokes
+  // everything at once and is the honest action to take.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tokens/audit',
+      permissions: ['users:read'],
+      identity: 'admin',
+      tokenAccess: 'never',
+      summary: 'Platform-wide token call audit (read-only)',
+    },
+    async (c) => {
+      return c.json(await listTokenAudit(deps.db))
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tokens',
+      permissions: ['users:read'],
+      identity: 'admin',
+      tokenAccess: 'never',
+      summary: 'Platform-wide token inventory (read-only)',
+    },
+    async (c) => {
+      return c.json(await listAllPats(deps.db))
+    },
+  )
+
   registerRoute(
     app,
     {

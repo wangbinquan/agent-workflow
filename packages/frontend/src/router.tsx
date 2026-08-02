@@ -41,6 +41,7 @@ import { Route as workgroupsRoute } from '@/routes/workgroups'
 import { Route as workgroupDetailRoute } from '@/routes/workgroups.detail'
 import { EditRoute as workflowEditRoute } from '@/routes/workflows.edit'
 import { ReposRoute as reposRoute } from '@/routes/repos'
+import { DocsApiRoute as docsApiRoute } from '@/routes/docs.api'
 import { Route as memoryRoute } from '@/routes/memory'
 import { Route as memoryDistillJobDetailRoute } from '@/routes/memory.distill-jobs.$jobId'
 import { Route as fusionDetailRoute } from '@/routes/fusions.detail'
@@ -130,6 +131,10 @@ const routeTree = rootRoute.addChildren([
   // RFC-101: memory→skill fusion detail + approval gate.
   fusionDetailRoute,
   settingsRoute,
+  // RFC-247 — the generated API & MCP wiki. Reachable from /account (where a
+  // token is minted) and by direct link; deliberately not a sidebar entry,
+  // since it is reference material rather than a place work happens.
+  docsApiRoute,
   // RFC-036
   accountRoute,
   usersRoute,

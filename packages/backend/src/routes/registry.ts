@@ -336,6 +336,15 @@ const EXEMPT_MOUNTS = new Set<string>([
   // The embedded SPA fallback: serves index.html for client-side routes. It is
   // not an API surface and explicitly 404s anything under /api/ or /ws/.
   '*',
+  // RFC-247 §4.1 — the MCP transport. It carries no permission point because it
+  // is not an endpoint with a capability: it is a pipe, and authorization
+  // happens per TOOL against the same declarations `tools/list` filters on.
+  // Its own gates (PAT-only, surface switch) run before any tool does.
+  //
+  // Listed explicitly even though `app.all` mounts register as method ALL and
+  // are already skipped above. Relying on that would make the exemption an
+  // accident of how the route happens to be mounted rather than a decision.
+  '/api/mcp',
 ])
 
 /** Throw when either direction of the coverage check fails. */

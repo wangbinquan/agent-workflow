@@ -13,6 +13,8 @@ import {
 import type { Hono } from 'hono'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { actorOf } from '@/auth/actor'
+import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { loadConfig } from '@/config'
 import {
   CachedRepoHasReferencesError,
@@ -79,6 +81,22 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const id = c.req.param('id')
       const isForce = parseBoolQuery(c, 'force', { default: false })
+      // RFC-247 T20 — a token names the mirror it is deleting. A cached repo has
+      // no `name`; its visible identity is `urlRedacted`, which is also what
+      // `resource_read` hands back, so that is what gets echoed. The row is
+      // looked up first so a stale id answers 404 rather than a confirm error —
+      // the same ordering the other seven delete routes use.
+      const actor = actorOf(c)
+      if (actor.source === 'pat') {
+        const existing = (await listCachedRepos(deps.db)).find((r) => r.id === id)
+        if (!existing) throw new NotFoundError('cached-repo-not-found', 'cached repo not found')
+        assertTokenDeleteConfirm(
+          await readDeleteBody(c),
+          existing.urlRedacted,
+          'repo',
+          actor.source,
+        )
+      }
       try {
         const r = await deleteCachedRepo({ db: deps.db }, id, { force: isForce })
         return c.json({ ok: true, deletedLocalPath: r.deletedLocalPath })

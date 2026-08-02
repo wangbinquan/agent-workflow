@@ -33,6 +33,13 @@ export interface Actor {
    * another DB round trip on every call.
    */
   purpose?: PatPurpose
+  /**
+   * RFC-247 D16 — which token this is, for the call audit. Present only for
+   * `source: 'pat'`. The audit is keyed on the TOKEN rather than the user: two
+   * of someone's tokens doing different things is precisely the distinction an
+   * operator is trying to make when they open the log.
+   */
+  patId?: string
 }
 
 export const SYSTEM_USER_ID = '__system__'
@@ -42,6 +49,7 @@ export function buildActor(opts: {
   source: ActorSource
   patScopes?: ReadonlyArray<Permission>
   patPurpose?: PatPurpose
+  patId?: string
 }): Actor {
   // RFC-247 — a token's grant set is computed by ONE function in shared
   // (resolveTokenPermissions); this file must not reimplement any part of it.
@@ -64,6 +72,7 @@ export function buildActor(opts: {
         matrix: opts.patScopes ?? [],
       }),
       purpose: opts.patPurpose ?? 'mcp_only',
+      patId: opts.patId,
     }
   }
   return {
