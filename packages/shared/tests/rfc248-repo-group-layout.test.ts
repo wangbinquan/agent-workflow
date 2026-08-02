@@ -103,6 +103,27 @@ describe('normalizeMountPath', () => {
     expect(codeOf(() => normalizeMountPath('a\\b'))).toBe('mount-path-unsafe-char')
   })
 
+  test('拒绝 NUL 字节——C 层路径 API 会在它那里截断', () => {
+    // `a\0/../..` 传到 git 就变成了 `a`，段级的 `..` 检查形同虚设。
+    expect(codeOf(() => normalizeMountPath('a\0b'))).toBe('mount-path-unsafe-char')
+    expect(codeOf(() => normalizeMountPath('a\0/../../etc'))).toBe('mount-path-unsafe-char')
+  })
+
+  test('Unicode 归一化到 NFC——否则 macOS 上两个「不同」的挂点会撞成一个', () => {
+    // APFS/HFS+ 会归一化文件名：é (U+00E9) 与 é (U+0065 U+0301) 是同一个目录。
+    // 不归一化的话精确字符串比较会放这两个挂点过去，磁盘上却撞车。
+    //
+    // **用码位显式构造**，不要在源文件里写两个肉眼相同的字面量——编辑器或
+    // prettier 一旦把它们归一化成同一个串，这条测试就变成恒真的空测试。
+    const nfc = `caf${String.fromCharCode(0xe9)}`
+    const nfd = `cafe${String.fromCharCode(0x301)}`
+    expect(nfc).not.toBe(nfd) // 前提：两者确实是不同的字节序列
+    expect(normalizeMountPath(nfd)).toBe(nfc)
+    expect(
+      codeOf(() => assertMountPathSet([normalizeMountPath(nfc), normalizeMountPath(nfd)])),
+    ).toBe('mount-path-duplicate')
+  })
+
   test('全是斜杠的串归 absolute，绝不静默折叠成「挂根」', () => {
     // 静默降级成挂根是最坏的结果：用户以为写了个子目录，实际把整个 cwd 变成了
     // 那个仓。设计稿曾预留过一条 `mount-path-empty`，实现时证明不可达（非空且
@@ -122,6 +143,15 @@ describe('assertMountPathSet', () => {
 
   test('重复挂载点被拒', () => {
     expect(codeOf(() => assertMountPathSet(['a', 'a']))).toBe('mount-path-duplicate')
+  })
+
+  test('大小写不同但在 macOS 上会撞的挂载点也被拒', () => {
+    // macOS 的 APFS/HFS+ 默认 case-insensitive：`Vendor` 与 `vendor` 在磁盘上是
+    // 同一个目录，第二个 `git worktree add` 会撞 already exists 或覆盖第一个。
+    // 组定义存在 DB 里、可以在 Linux 建而在 macOS 跑，所以两个平台都拒——只在
+    // macOS 上拒会让同一个组「这台机器能跑、那台不能跑」。
+    expect(codeOf(() => assertMountPathSet(['Vendor', 'vendor']))).toBe('mount-path-duplicate')
+    expect(codeOf(() => assertMountPathSet(['a/B', 'a/b']))).toBe('mount-path-duplicate')
   })
 
   test('两个成员都挂根被拒（D2：至多一个），且报 multiple-roots 而不是 duplicate', () => {

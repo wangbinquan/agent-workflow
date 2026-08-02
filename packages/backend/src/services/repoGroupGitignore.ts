@@ -29,9 +29,21 @@ export interface GitignoreBlockPlan {
   added: string[]
 }
 
-/** 一条挂载点相对路径 → 一条 gitignore 规则。锚定到仓根并显式标成目录。 */
+/**
+ * 一条挂载点相对路径 → 一条 gitignore 规则。锚定到仓根并显式标成目录。
+ *
+ * **必须转义 gitignore 的元字符**：`*` `?` `[` `]` 在 gitignore 里是通配/字符类
+ * 语法。目录名 `a[b]` 不转义会生成 `/a[b]/`，git 把它当成「a 后面跟一个 b 字符」
+ * ——匹配的是 `ab/` 而不是字面的 `a[b]/`。结果就是该排的没排，`git add -A` 把
+ * 嵌套仓当 gitlink 提交上去（实测 proposal E2）。
+ *
+ * 行首的 `!`（取反）与 `#`（注释）不需要处理：规则永远以 `/` 开头。
+ * 反斜杠不需要处理：`normalizeMountPath` 已经拒绝了含 `\` 的挂载路径，所以这里
+ * 加的 `\` 一定是我们自己加的转义符。
+ */
 export function ruleForMount(relMountPath: string): string {
-  return `/${relMountPath}/`
+  const escaped = relMountPath.replace(/[*?[\]]/g, (ch) => `\\${ch}`)
+  return `/${escaped}/`
 }
 
 /**

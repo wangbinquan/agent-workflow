@@ -23,6 +23,23 @@ describe('ruleForMount', () => {
     expect(ruleForMount('vendor/sdk')).toBe('/vendor/sdk/')
     expect(ruleForMount('ext')).toBe('/ext/')
   })
+
+  test('转义 gitignore 元字符 * ? [ ] —— 不转义是双重 bug（实测）', () => {
+    // 真实 git 2.50.1 实测（scratchpad/meta.sh）：目录 `a[b]/` 与 `ab/` 并存时
+    //   /a[b]/    → `?? a[b]/` 仍在（**没排掉**，add -A 会把嵌套仓当 gitlink
+    //               提交上去），且 `ab/` 反被**误排**（用户在 ab/ 里的真实改动
+    //               静默消失在审计 diff 与自动提交之外——这一重更糟）
+    //   /a\[b\]/  → `a[b]/` 正确排除，`ab/` 正确保留
+    expect(ruleForMount('a[b]')).toBe('/a\\[b\\]/')
+    expect(ruleForMount('v*ndor')).toBe('/v\\*ndor/')
+    expect(ruleForMount('a?b')).toBe('/a\\?b/')
+    expect(ruleForMount('x[a-z]*y')).toBe('/x\\[a-z\\]\\*y/')
+  })
+
+  test('普通路径不被转义污染', () => {
+    expect(ruleForMount('vendor/sdk-2')).toBe('/vendor/sdk-2/')
+    expect(ruleForMount('a.b_c')).toBe('/a.b_c/')
+  })
 })
 
 describe('buildGitignoreBlock', () => {

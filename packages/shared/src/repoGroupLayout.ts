@@ -43,6 +43,18 @@ export class RepoGroupLayoutError extends Error {
  */
 export function normalizeMountPath(raw: string): string {
   if (raw === '') return ''
+  // Unicode 归一化到 NFC：macOS 的 APFS/HFS+ 会把文件名归一化，`é`（U+00E9）与
+  // `é`（U+0065 U+0301）在磁盘上是**同一个目录**。不归一化的话两个"不同"的挂载
+  // 点会在 macOS 上撞成一个，而重复检查（精确字符串比较）放它们过去。
+  raw = raw.normalize('NFC')
+  // NUL 会被 C 层的路径 API 截断——`a\0/../..` 传到 git 就变成了 `a`。
+  if (raw.includes('\0')) {
+    throw new RepoGroupLayoutError(
+      'mount-path-unsafe-char',
+      'mount path may not contain a NUL byte',
+      { mountPath: raw.replace(/\0/g, '\\0') },
+    )
+  }
   if (raw.startsWith('/') || /^[A-Za-z]:[\\/]/.test(raw)) {
     throw new RepoGroupLayoutError('mount-path-absolute', `mount path must be relative: ${raw}`, {
       mountPath: raw,
@@ -94,14 +106,25 @@ export function assertMountPathSet(mountPaths: readonly string[]): void {
       { roots },
     )
   }
-  const seen = new Set<string>()
+  // 大小写**不敏感**地查重。macOS 默认是 case-insensitive 文件系统：两个成员
+  // 挂 `Vendor` 与 `vendor` 会在磁盘上撞成同一个目录，而精确比较放它们过去，
+  // 于是第二个 `git worktree add` 撞 `already exists` 或直接覆盖第一个。
+  // 组定义存在 DB 里、可以在 Linux 建而在 macOS 跑，所以**两个平台都拒**——
+  // 只在 macOS 上拒会让同一个组"在这台机器上能跑、在那台机器上不能跑"。
+  const seen = new Map<string, string>()
   for (const p of mountPaths) {
-    if (seen.has(p)) {
-      throw new RepoGroupLayoutError('mount-path-duplicate', `duplicate mount path: ${p}`, {
-        mountPath: p,
-      })
+    const folded = p.toLowerCase()
+    const prior = seen.get(folded)
+    if (prior !== undefined) {
+      throw new RepoGroupLayoutError(
+        'mount-path-duplicate',
+        prior === p
+          ? `duplicate mount path: ${p}`
+          : `mount paths collide case-insensitively (macOS filesystems are case-insensitive): '${prior}' vs '${p}'`,
+        { mountPath: p, collidesWith: prior },
+      )
     }
-    seen.add(p)
+    seen.set(folded, p)
   }
 }
 

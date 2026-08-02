@@ -82,6 +82,30 @@ describe('parseDiff 的仓前缀游标', () => {
     expect(files[1]?.raw).not.toContain('# === Repo:')
   })
 
+  test('文件内容里出现同形文本**不会**被误当成分段头', () => {
+    // 想象一个 markdown 文件正在文档化这个格式本身。在 unified diff 里，任何
+    // 文件内容行都带 `+` / `-` / ` ` 前缀，所以 `^# === Repo:` 永远匹配不到内容
+    // 行——这条锁住这个安全前提。它一旦破了，后续文件会被归错仓，扇出分片把
+    // 一个仓的文件发给另一个仓的 agent。
+    const diff = [
+      '# === Repo: real ===',
+      'diff --git a/doc.md b/doc.md',
+      '--- a/doc.md',
+      '+++ b/doc.md',
+      '@@ -1,2 +1,3 @@',
+      ' # === Repo: context-line ===', // 上下文行：前导空格
+      '+# === Repo: added-line ===', // 新增行：前导 +
+      '-# === Repo: removed-line ===', // 删除行：前导 -
+      'diff --git a/after.ts b/after.ts',
+      '--- a/after.ts',
+      '+++ b/after.ts',
+      '@@ -1 +1 @@',
+      '+x',
+    ].join('\n')
+    // 两个文件都必须仍归 `real`——没有任何一行内容切走了游标。
+    expect(parseDiff(diff).map((f) => f.path)).toEqual(['real/doc.md', 'real/after.ts'])
+  })
+
   test('三个仓（含三层嵌套挂点）各自前缀正确', () => {
     const diff = multiRepoDiff([
       { keyWire: '.', files: ['src/main.ts'] },
