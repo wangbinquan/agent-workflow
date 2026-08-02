@@ -2,6 +2,7 @@
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
 import type {
+  PlannedRepo,
   FailureCode,
   NodeKind,
   NodeRun,
@@ -18,6 +19,11 @@ import type {
 } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
 import {
+  assignBranchNames,
+  directChildren,
+  exclusionPlanFor,
+  mountDepth,
+  orderForMaterialize,
   CommitPushMetaSchema,
   NODE_KIND_BEHAVIORS,
   WorkflowDefinitionSchema,
@@ -38,7 +44,7 @@ import type {
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
 import { and, asc, count, desc, eq, gt, inArray, isNull, type SQL } from 'drizzle-orm'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { ulid } from 'ulid'
@@ -83,6 +89,8 @@ import { mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
 import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
 import {
+  commitGitignorePreset,
+  findTrackedPathUnderMounts,
   cleanupCreatedWorktree,
   createWorktree,
   gitDiffSnapshot,
@@ -104,6 +112,7 @@ import {
 import { runTask, type RunTaskOptions } from './scheduler'
 import { Paths } from '@/util/paths'
 import { createLogger } from '@/util/log'
+import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import { parseInjectedSnapshotJson } from './memoryInject'
 import { parsePortValidationFailuresJson } from './envelope'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRoundStart'
@@ -432,6 +441,10 @@ export async function materializeWorktree(opts: {
   /** RFC-075/067: identity for the framework's merge commit on branch reuse. */
   gitUserName?: string | null
   gitUserEmail?: string | null
+  /** RFC-248 D17: sparse 只检出该仓内子目录（非 cone）。 */
+  sparseSubdir?: string
+  /** RFC-248 D14: 显式分支名（同一源仓在组里出现多次时带序号）。 */
+  branchName?: string
   /** RFC-199 deterministic create/post-add race seam; tests only. */
   lifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
 }): Promise<{
@@ -455,6 +468,8 @@ export async function materializeWorktree(opts: {
         ? { overrideWorktreePath: opts.overrideWorktreePath }
         : {}),
       ...(opts.workingBranch !== undefined ? { workingBranch: opts.workingBranch } : {}),
+      ...(opts.sparseSubdir !== undefined ? { sparseSubdir: opts.sparseSubdir } : {}),
+      ...(opts.branchName !== undefined ? { branchName: opts.branchName } : {}),
       ...(opts.gitUserName != null ? { gitUserName: opts.gitUserName } : {}),
       ...(opts.gitUserEmail != null ? { gitUserEmail: opts.gitUserEmail } : {}),
       ...(opts.lifecycleHook !== undefined ? { lifecycleHook: opts.lifecycleHook } : {}),
@@ -695,6 +710,14 @@ interface MaterializedRepo {
   baseCommit: string | null
   worktreePath: string
   worktreeDirName: string
+  /** RFC-248: 相对任务根的挂载路径；'' = 挂根。取代 worktreeDirName 成为规范 key。 */
+  mountPath: string
+  /** RFC-248 D17: '' = 整仓；否则该成员是 sparse 检出。 */
+  subdir: string
+  /** RFC-248 D11: 只读成员不快照 / 不进 diff / 不推送。 */
+  readonly: boolean
+  /** RFC-248 D1: 平台预置 commit 的 sha；null = 本仓没有嵌套子成员。 */
+  gitignoreCommit: string | null
   submoduleInitOk: boolean
   submoduleInitError: string | null
   hasSubmodules: boolean
@@ -866,7 +889,7 @@ export function runtimeConfigOpts(
  * (`repo-ref-not-found`) where no task row must be minted.
  */
 export interface MaterializedSpace {
-  kind: 'scratch' | 'single' | 'multi'
+  kind: 'scratch' | 'single' | 'multi' | 'group'
   /** RFC-165: persisted `tasks.space_kind` value, decided at materialize time.
    *  RFC-243: 'inherited' = a child execution's synthesized space pointing into
    *  its parent's call-node iso (never produced by materializeSpace itself). */
@@ -1069,6 +1092,214 @@ function workflowLaunchHookEvent(
   }
 }
 
+/**
+ * RFC-248 PR-3 —— 按仓库组的展平布局物化整个工作空间。
+ *
+ * 顺序约束是**硬的**（design §4.2）：
+ *  1. 挂载深度升序建 worktree——内层要落进外层的工作树里，外层必须先在。
+ *  2. 建完某一层之后、建下一层之前，给该层里**有直接子挂载点**的仓写
+ *     `.gitignore` 预置 commit。反过来的话，`git add .gitignore` 会把已经落在
+ *     那里的内层 worktree 当未跟踪目录一起吞进索引（proposal E2）。
+ *
+ * 回收按挂载深度**倒序**（design §4.3）。实测（proposal E9）正序也不会坏账
+ * ——git 会把内层注册标 `prunable` 并在后续 remove 时自愈——但倒序不依赖那条
+ * 自愈行为，且让「删除失败」仍可归因到具体某个仓。
+ */
+async function materializeGroupSpace(opts: {
+  planned: readonly PlannedRepo[]
+  resolvedSources: ResolvedRepoSource[]
+  taskId: string
+  appHome: string
+  workingBranch?: string | undefined
+  gitUserName: string | null
+  gitUserEmail: string | null
+}): Promise<MaterializedSpace> {
+  const { planned, resolvedSources, taskId, appHome } = opts
+  // `resolvedSources` 与 `planned` **同序**（它是按 repoSpecs 逐个 resolve 出来
+  // 的），但物化要按挂载深度重排。先把两者**配对**再排序——只排 planned、然后
+  // 用重排后的下标去索引 resolvedSources 会张冠李戴：sparse 成员会拿到别的仓的
+  // 源，症状是「子目录明明存在却报 sparse-empty」。
+  const paired = planned.map((p, i) => ({ p, src: resolvedSources[i]! }))
+  const ordered = orderForMaterialize(paired.map((x) => x.p))
+  const orderedPairs = orderForMaterialize(
+    paired.map((x, i) => ({ ...x, mountPath: x.p.mountPath, _i: i })),
+  )
+  const allMounts = ordered.map((p) => p.mountPath)
+  const branchNames = assignBranchNames(ordered, taskId, opts.workingBranch)
+  const rootMounted = allMounts.includes('')
+  const groupRoot = join(appHome, 'worktrees', 'group', taskId)
+  const multiRepo = ordered.length > 1
+
+  const cleanup = createMaterializedSpaceCleanup(taskId, groupRoot)
+  try {
+    // 有仓挂根时根目录由它的 `worktree add` 自己创建——预先 mkdir 会让
+    // `worktree add` 撞上「已存在」（proposal E7 显示空目录其实可以，但让 git
+    // 自己建更贴近单仓 baseline）。
+    if (!rootMounted) mkdirSync(groupRoot, { recursive: true })
+
+    // ── 设计门二轮 H8：占用校验看 git tree，不是工作树 ──────────────────
+    // sparse 只控制工作树、不删索引里的已跟踪路径，所以「工作树里没有那个目录」
+    // 不代表该路径没被容器跟踪。先把冲突挡在建任何 worktree 之前。
+    for (let i = 0; i < orderedPairs.length; i++) {
+      const p = orderedPairs[i]!.p
+      const kids = directChildren(p.mountPath, allMounts)
+      if (kids.length === 0) continue
+      const rels = kids.map((c) => (p.mountPath === '' ? c : c.slice(p.mountPath.length + 1)))
+      const src = orderedPairs[i]!.src
+      const ref = src.baseBranch ?? 'HEAD'
+      const hit = await findTrackedPathUnderMounts(src.repoPath, ref, rels)
+      if (hit !== null) {
+        throw new ValidationError(
+          'repo-group-mount-occupied',
+          `mount path '${p.mountPath === '' ? hit.mountRel : `${p.mountPath}/${hit.mountRel}`}' is already tracked by the enclosing repo at ref '${ref}' (${hit.trackedPath})`,
+          {
+            mountPath: p.mountPath === '' ? hit.mountRel : `${p.mountPath}/${hit.mountRel}`,
+            containerMountPath: p.mountPath,
+            trackedPath: hit.trackedPath,
+            ref,
+          },
+        )
+      }
+    }
+
+    const repos: MaterializedRepo[] = []
+    const byMount = new Map<string, MaterializedRepo>()
+    let depth = -1
+    for (let i = 0; i < orderedPairs.length; i++) {
+      const p = orderedPairs[i]!.p
+      const src = orderedPairs[i]!.src
+      const d = mountDepth(p.mountPath)
+      if (d !== depth) {
+        // 进入新的一层：先给**上一层**里有子挂载点的仓写预置 commit。
+        if (depth >= 0) await writePresetCommitsForDepth(depth)
+        depth = d
+      }
+      const abs = p.mountPath === '' ? groupRoot : join(groupRoot, p.mountPath)
+      if (p.mountPath !== '') mkdirSync(join(abs, '..'), { recursive: true })
+      const wt = await materializeWorktree({
+        repoPath: src.repoPath,
+        baseBranch: src.baseBranch,
+        taskId,
+        appHome,
+        overrideWorktreePath: abs,
+        branchName: branchNames[i]!,
+        ...(p.subdir !== '' ? { sparseSubdir: p.subdir } : {}),
+        ...(opts.workingBranch !== undefined ? { workingBranch: opts.workingBranch } : {}),
+        gitUserName: opts.gitUserName,
+        gitUserEmail: opts.gitUserEmail,
+      })
+      if (wt.cleanup !== null) cleanup.worktrees.push(wt.cleanup)
+      if (wt.earlyError !== null) {
+        if (
+          src.repoUrl !== null &&
+          /worktree-base-invalid|cannot resolve base ref/i.test(wt.earlyError)
+        ) {
+          const available = await listAvailableRefs(src.repoPath, 10)
+          throw new ValidationError(
+            'repo-group-ref-not-found',
+            `ref '${p.ref !== '' ? p.ref : '(default)'}' not found in ${redactGitUrl(src.repoUrl)}`,
+            {
+              url: redactGitUrl(src.repoUrl),
+              ref: p.ref !== '' ? p.ref : null,
+              availableRefs: available,
+              mountPath: p.mountPath,
+            },
+          )
+        }
+        throw new ValidationError(
+          'repo-group-materialize-failed',
+          `mounting '${p.mountPath === '' ? '<root>' : p.mountPath}' failed: ${wt.earlyError}`,
+          { mountPath: p.mountPath },
+        )
+      }
+      // D17: sparse 成员检出后为空 ⇒ 用户指定的子目录在该 ref 上不存在。
+      // 静默给一个空目录比报错糟糕得多——agent 会以为那个仓真的没内容。
+      if (p.subdir !== '' && readdirSync(abs).filter((n) => n !== '.git').length === 0) {
+        throw new ValidationError(
+          'repo-group-sparse-empty',
+          `subdir '${p.subdir}' does not exist at ref '${src.baseBranch ?? 'HEAD'}' for mount '${p.mountPath === '' ? '<root>' : p.mountPath}'`,
+          { mountPath: p.mountPath, subdir: p.subdir },
+        )
+      }
+      if (!wt.submoduleInitOk) {
+        log.warn('[rfc034/submodule-init-failed] worktree submodule init failed', {
+          taskId,
+          worktreePath: wt.worktreePath,
+          mountPath: p.mountPath,
+          stderr: wt.submoduleInitError ?? '',
+        })
+      }
+      const rec: MaterializedRepo = {
+        repoIndex: i,
+        repoPath: src.repoPath,
+        repoUrl: src.repoUrl,
+        cachedRepoId: src.cachedRepoId,
+        baseBranch: src.baseBranch ?? '',
+        branch: wt.branch,
+        baseCommit: wt.baseCommit,
+        worktreePath: wt.worktreePath,
+        worktreeDirName: p.mountPath,
+        mountPath: p.mountPath,
+        subdir: p.subdir,
+        readonly: p.readonly,
+        gitignoreCommit: null,
+        submoduleInitOk: wt.submoduleInitOk,
+        submoduleInitError: wt.submoduleInitError,
+        hasSubmodules: wt.hasSubmodules,
+      }
+      repos.push(rec)
+      byMount.set(p.mountPath, rec)
+    }
+    // 最后一层的预置 commit（循环里只在**进入下一层**时写）。
+    if (depth >= 0) await writePresetCommitsForDepth(depth)
+
+    async function writePresetCommitsForDepth(d: number): Promise<void> {
+      for (const rec of repos) {
+        if (mountDepth(rec.mountPath) !== d) continue
+        if (rec.gitignoreCommit !== null) continue
+        const rels = exclusionPlanFor(rec.mountPath, allMounts, {
+          // D12: 上传物落在任务根下的固定目录；有仓挂根时它就落在那个仓的
+          // 工作树里，必须一并排除。
+          includeUploadDir: multiRepo,
+        })
+        if (rels.length === 0) continue
+        const preset = await commitGitignorePreset({
+          worktreePath: rec.worktreePath,
+          relMountPaths: rels,
+          taskId,
+          gitUserName: opts.gitUserName,
+          gitUserEmail: opts.gitUserEmail,
+        })
+        if (preset.commitSha !== null) {
+          rec.gitignoreCommit = preset.commitSha
+          // D1: base_commit 指向预置 commit ⇒ 审计 diff 里没有 .gitignore 那一笔。
+          rec.baseCommit = preset.commitSha
+        }
+      }
+    }
+
+    const head0 = repos[0]
+    return {
+      kind: 'group',
+      spaceKind: resolvedSources.some((s) => s.repoUrl === null) ? 'local' : 'remote',
+      taskId,
+      // 有仓挂根时 cwd 就是那个仓的 worktree；否则是不属于任何仓的父目录。
+      worktreePath: groupRoot,
+      branch: head0?.branch ?? '',
+      baseCommit: head0?.baseCommit ?? null,
+      earlyError: null,
+      resolvedSources,
+      repos,
+      cleanup,
+    }
+  } catch (error) {
+    // 回收按挂载深度倒序（design §4.3）——lease 里的顺序就是建的顺序，反转即可。
+    cleanup.worktrees.reverse()
+    const report = await cleanupMaterializedSpaceLease(cleanup)
+    throw withWorkspaceCleanupReport(error, report)
+  }
+}
+
 export async function materializeSpace(
   input: StartTask,
   deps: StartTaskDeps,
@@ -1124,6 +1355,10 @@ export async function materializeSpace(
             baseCommit: init.rootCommit,
             worktreePath: scratchDir,
             worktreeDirName: '',
+            mountPath: '',
+            subdir: '',
+            readonly: false,
+            gitignoreCommit: null,
             submoduleInitOk: true,
             submoduleInitError: null,
             hasSubmodules: false,
@@ -1164,10 +1399,23 @@ export async function materializeSpace(
     }
   }
 
+  // RFC-248: 用仓库组启动时，成员规格由**展平后的布局**给出，而不是 wire 上的
+  // `repos[]`。展平在 services/repoGroup.ts 里做（校验错误已在那里转成 422）。
+  const groupPlanned: PlannedRepo[] | null =
+    typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0
+      ? resolveRepoGroupLayout(deps.db, input.repoGroupId).repos
+      : null
+
   const repoSpecs =
     deps.internalSource !== undefined
       ? [{ repoPath: deps.internalSource.repoPath, baseBranch: deps.internalSource.baseBranch }]
-      : normalizeStartTaskRepos(input)
+      : groupPlanned !== null
+        ? // 组成员一律按 cachedRepoId 复用已导入的镜像；`ref` 为空 ⇒ 该仓默认分支。
+          groupPlanned.map((p) => ({
+            cachedRepoId: p.cachedRepoId,
+            ...(p.ref !== '' ? { ref: p.ref } : {}),
+          }))
+        : normalizeStartTaskRepos(input)
 
   // RFC-066: per-repo source resolution. Each spec independently runs
   // path-mode opt-in fetch (RFC-068) or URL-mode FF; warnings collected per
@@ -1196,6 +1444,27 @@ export async function materializeSpace(
       })
     }
     resolvedSources.push(r)
+  }
+
+  // RFC-248: 仓库组路径。展平后**恰好一个成员且挂根**时落回单仓分支——
+  // 那是「单仓是多仓的特例」这条产品判断的实现兑现（AC-10 要求路径 / `tasks.*`
+  // 列 / cwd 与今天字节级一致），所以这里只在 >1 或非根挂载时才走组物化。
+  if (groupPlanned !== null) {
+    const onlyRootMember =
+      groupPlanned.length === 1 &&
+      groupPlanned[0]!.mountPath === '' &&
+      groupPlanned[0]!.subdir === ''
+    if (!onlyRootMember) {
+      return await materializeGroupSpace({
+        planned: groupPlanned,
+        resolvedSources,
+        taskId,
+        appHome,
+        ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+        gitUserName: input.gitUserName ?? null,
+        gitUserEmail: input.gitUserEmail ?? null,
+      })
+    }
   }
 
   // RFC-066: single-path byte-baseline branch — pre-RFC-066 behavior
@@ -1266,6 +1535,10 @@ export async function materializeSpace(
           baseCommit: wt.baseCommit,
           worktreePath: wt.worktreePath,
           worktreeDirName: '',
+          mountPath: '',
+          subdir: '',
+          readonly: false,
+          gitignoreCommit: null,
           submoduleInitOk: wt.submoduleInitOk,
           submoduleInitError: wt.submoduleInitError,
           hasSubmodules: wt.hasSubmodules,
@@ -1347,6 +1620,10 @@ export async function materializeSpace(
         baseCommit: wt.baseCommit,
         worktreePath: wt.worktreePath,
         worktreeDirName: dirName,
+        mountPath: dirName,
+        subdir: '',
+        readonly: false,
+        gitignoreCommit: null,
         submoduleInitOk: wt.submoduleInitOk,
         submoduleInitError: wt.submoduleInitError,
         hasSubmodules: wt.hasSubmodules,
@@ -1695,6 +1972,10 @@ async function startTaskImpl(
           baseCommit: pre.baseCommit,
           worktreePath: pre.worktreePath,
           worktreeDirName: '',
+          mountPath: '',
+          subdir: '',
+          readonly: false,
+          gitignoreCommit: null,
           submoduleInitOk: true,
           submoduleInitError: null,
           hasSubmodules: false,
@@ -1905,6 +2186,10 @@ async function startTaskImpl(
               baseCommit: r.baseCommit,
               worktreePath: r.worktreePath,
               worktreeDirName: r.worktreeDirName,
+              mountPath: r.worktreeDirName,
+              subdir: '',
+              readonly: false,
+              gitignoreCommit: null,
               hasSubmodules: r.hasSubmodules,
               submoduleInitOk: r.submoduleInitOk,
               submoduleInitError: r.submoduleInitError,
@@ -4163,6 +4448,10 @@ function mapTaskRepoRow(row: typeof taskRepos.$inferSelect): TaskRepo {
     baseCommit: row.baseCommit ?? null,
     worktreePath: row.worktreePath,
     worktreeDirName: row.worktreeDirName,
+    mountPath: '',
+    subdir: '',
+    readonly: false,
+    gitignoreCommit: null,
     hasSubmodules: row.hasSubmodules ?? null,
     submoduleInitOk: row.submoduleInitOk ?? null,
     submoduleInitError: row.submoduleInitError ?? null,
@@ -4196,6 +4485,10 @@ function synthesizeRepoFromTaskRow(row: typeof tasks.$inferSelect): TaskRepo {
     baseCommit: row.baseCommit ?? null,
     worktreePath: row.worktreePath,
     worktreeDirName: '',
+    mountPath: '',
+    subdir: '',
+    readonly: false,
+    gitignoreCommit: null,
     hasSubmodules: null,
     submoduleInitOk: null,
     submoduleInitError: null,

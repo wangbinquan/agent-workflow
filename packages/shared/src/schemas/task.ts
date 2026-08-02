@@ -186,6 +186,19 @@ export const TaskRepoSchema = z.object({
    * worktree itself.
    */
   worktreeDirName: z.string(),
+  /**
+   * RFC-248: 相对任务根的挂载路径；'' = 挂根。**取代** `worktreeDirName` 成为
+   * 规范的仓 key（文本 diff 分段头 / 结构化 diff id 前缀 / 扇出 shard_key 三处
+   * 同源）。`.default('')` 让 RFC-248 之前的夹具继续解析——存量多仓是平铺布局，
+   * migration 已把 basename backfill 进来，两者取值一致。
+   */
+  mountPath: z.string().default(''),
+  /** RFC-248 D17: '' = 整仓；否则该成员是 sparse 检出（只有这个子目录落盘）。 */
+  subdir: z.string().default(''),
+  /** RFC-248 D11: 只读成员不快照 / 不进 diff / 不参与自动提交推送。 */
+  readonly: z.boolean().default(false),
+  /** RFC-248 D1: 平台预置 commit 的 sha；null = 本仓没有嵌套子成员。 */
+  gitignoreCommit: z.string().nullable().default(null),
   /** RFC-034: post-`worktree add` submodule init telemetry per repo. */
   hasSubmodules: z.boolean().nullable(),
   submoduleInitOk: z.boolean().nullable(),
@@ -567,6 +580,15 @@ export const StartTaskSchema = z
      * `~/.agent-workflow/worktrees/multi/{taskId}/`).
      */
     repos: z.array(StartTaskRepoSchema).min(1).max(MULTI_REPO_MAX).optional(),
+    /**
+     * RFC-248: 用一个仓库组作为执行空间。与 `scratch` / 单仓字段 / `repos[]`
+     * 互斥。服务端展平该组（深度 ≤ 5、展平 ≤ 32）后按布局物化。
+     *
+     * 本字段是 **additive** 落地的：`repos[]` 的退役（连同顶层 `repos` 进
+     * `RETIRED_START_TASK_KEYS`、八入口契约迁移）归 PR-4 的 T32a/T32b，
+     * 这样 PR-3 能独立跑绿。
+     */
+    repoGroupId: z.string().min(1).optional(),
     /**
      * RFC-075 — optional working branch name. Applies to every repo in a
      * multi-repo task. When set, the worktree is checked out on this branch
