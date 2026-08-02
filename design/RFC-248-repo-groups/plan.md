@@ -5,15 +5,40 @@
 > （`typecheck` / `lint --max-warnings 0` / `test` / `format:check`），
 > push 后按 **exact SHA** 查 CI。
 
+## 交付记录（滚动更新）
+
+| PR         | 状态 | commit                  | 摘要                                                                         |
+| ---------- | ---- | ----------------------- | ---------------------------------------------------------------------------- |
+| RFC 三件套 | ✅   | `f6e637dd`              | proposal / design / plan + 索引登记                                          |
+| 设计门一轮 | ✅   | `eb4f6194`              | 3×P1 + 2×P2 全部核实并折入，记档 `design-gate-2026-08-02.md`                 |
+| **PR-1**   | ✅   | `fb04f84e` + `6d78cff0` | T1–T9 纯逻辑地基 + 三个实证缺陷加固                                          |
+| **PR-2a**  | ✅   | `fcfbfdc9`              | T10/T11/T11b/T12 两个 migration + drizzle 定义 + 16 条迁移测试               |
+| **PR-2b**  | ✅   | `d04854c5`              | T13/T14/T15/T16/T17 服务层 + 六条路由 + 权限点 + 记忆第五档 + 18 条服务测试  |
+| 设计门二轮 | 🔄   | —                       | 复核一轮修法 + 审 PR-1/PR-2 代码 + 六个攻击向量                              |
+| **PR-3**   | ⬜   | —                       | 运行时物化（布局建 worktree / 预置 commit / sparse / 只读 / 回收）           |
+| **PR-4**   | ⬜   | —                       | 消费面（wrapper-git 多仓 / diff / 分片 / 上传 / 记忆注入 / 模板变量 / 断代） |
+| **PR-5**   | ⬜   | —                       | 前端（`/repos` 分段 / 组编辑器 / 布局树 / 启动选择器 / 任务详情 / 记忆表单） |
+
+实现期相对设计稿的**偏离**（均已回写文档）：
+
+- `mount-path-empty` 错误码不可达 ⇒ 删除（PR-1）。
+- `assertMountPathSet` 的根计数先于重复检查（更可操作的报错）。
+- T7 的旧 `canonicalRepoLabels` 删除推迟到 T29（`mount_path` 列要 PR-2 才存在，
+  PR-1 删了就编译不过）。
+- 新增三条设计稿没写的加固：gitignore 元字符转义、大小写不敏感挂载点碰撞、
+  Unicode NFC + NUL（PR-1 加固批，均有实测/红绿证据）。
+- 新增一条 PR-2b 发现的真 bug 修复：读路径 `resolveRepoGroupLayout` 让
+  `RepoGroupLayoutError` 逃到 route 层会渲染成 500 而非 422。
+
 ## PR 划分
 
-| PR | 范围 | 依赖 | 大致体量 |
-| --- | --- | --- | --- |
-| **PR-1** | 纯逻辑地基：shared schema、展平/校验/包含关系/标签/分片的纯函数 + 全套单测 | — | 中 |
-| **PR-2** | 持久层与 CRUD：2 个 migration、`services/repoGroup.ts`、`routes/repoGroups.ts`、删仓守卫 | PR-1 | 中 |
-| **PR-3** | 运行时物化：布局建 worktree、`.gitignore` 预置 commit、sparse、只读语义、失败回收 | PR-2 | **大** |
-| **PR-4** | 消费面：`wrapper-git` 多仓、diff/结构化 diff/分片、上传解禁、记忆第 5 档、模板变量 | PR-3 | 大 |
-| **PR-5** | 前端：`/repos` 分段 + 组编辑器 + 布局树、启动选择器改造、任务详情、记忆表单 | PR-4 | 大 |
+| PR       | 范围                                                                                     | 依赖 | 大致体量 |
+| -------- | ---------------------------------------------------------------------------------------- | ---- | -------- |
+| **PR-1** | 纯逻辑地基：shared schema、展平/校验/包含关系/标签/分片的纯函数 + 全套单测               | —    | 中       |
+| **PR-2** | 持久层与 CRUD：2 个 migration、`services/repoGroup.ts`、`routes/repoGroups.ts`、删仓守卫 | PR-1 | 中       |
+| **PR-3** | 运行时物化：布局建 worktree、`.gitignore` 预置 commit、sparse、只读语义、失败回收        | PR-2 | **大**   |
+| **PR-4** | 消费面：`wrapper-git` 多仓、diff/结构化 diff/分片、上传解禁、记忆第 5 档、模板变量       | PR-3 | 大       |
+| **PR-5** | 前端：`/repos` 分段 + 组编辑器 + 布局树、启动选择器改造、任务详情、记忆表单              | PR-4 | 大       |
 
 断代改动（删 `repos[]`）横跨 PR-2（shared/后端）与 PR-5（前端）。为避免中间态
 编译不过，**`StartTaskSchema` 的字段删除放在 PR-4**，前端在 PR-5 同批跟上；
@@ -164,11 +189,9 @@ PR-2/PR-3 期间 `repoGroupId` 与 `repos[]` 并存但前端不产出后者。
   `services/changeNarrative.ts:124` 换 key 源。
 - **T29b**（设计门 G3，**原计划遗漏**）`structuralDiff/assemble.ts:147` 的
   `prefixPath` 改为 `label === '' ? fp : \`${label}/${fp}\``，让根成员不加前缀。
-  现状不变量是「加前缀 ⟺ 多仓」（单仓走 `service.ts:95-118` 早分支完全不加
-  前缀），不改这一处，组任务里根仓会产出 `/src/a.ts`，与文本 diff 的
-  `src/a.ts` 对不上，前端 `changeReview.ts:168-180` 的 join 静默脱节。
-  `assemble.ts:140-146` 注释列的 7 类嵌入路径全部经由 `prefixPath` /
-  `prefixIdPath`，改这两个函数即可覆盖。
+现状不变量是「加前缀 ⟺ 多仓」（单仓走 `service.ts:95-118`早分支完全不加
+前缀），不改这一处，组任务里根仓会产出`/src/a.ts`，与文本 diff 的
+`src/a.ts`对不上，前端`changeReview.ts:168-180`的 join 静默脱节。`assemble.ts:140-146`注释列的 7 类嵌入路径全部经由`prefixPath`/`prefixIdPath`，改这两个函数即可覆盖。
   **必写测试**：①单仓结构化路径与今天字节级相同；②组任务里根仓路径无前缀、
   嵌套仓路径 = 挂载路径前缀；③文本 diff 与结构化 diff 的路径集合逐字符相等；
   ④「容器仓不可能产出落在挂载点前缀下的路径」这条构造性不变量的回归锁。
