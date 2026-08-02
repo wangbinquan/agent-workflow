@@ -85,8 +85,10 @@ describe('groupByScope', () => {
     expect(out.repo).toEqual([])
     expect(out.global.map((s) => s.id)).toEqual(['g1'])
   })
-  test('SCOPE_ORDER is agent → workflow → repo → global (locks the display order)', () => {
-    expect(SCOPE_ORDER).toEqual(['agent', 'workflow', 'repo', 'global'])
+  test('SCOPE_ORDER is agent → workflow → repo → repo_group → global（锁展示次序）', () => {
+    // RFC-248 在 repo 与 global 之间插入 repo_group：它比单个仓宽、比 global 窄。
+    // 次序即「从最具体到最一般」，注入块与 UI 分组都靠它。
+    expect(SCOPE_ORDER).toEqual(['agent', 'workflow', 'repo', 'repo_group', 'global'])
   })
 })
 

@@ -41,7 +41,13 @@ describe('RFC-247 buildMatrix — only grantable cells (AC-23)', () => {
   it('a manager IS offered repos cells', () => {
     const repos = buildMatrix('manager').find((r) => r.resource === 'repos')
     expect(repos).toBeDefined()
-    expect(repos!.cells.map((c) => c.verb).sort()).toEqual(['create', 'delete', 'execute'])
+    // RFC-248 加了 update（仓库组的 PUT —— repos 域第一条 PUT/PATCH 路由）。
+    expect(repos!.cells.map((c) => c.verb).sort()).toEqual([
+      'create',
+      'delete',
+      'execute',
+      'update',
+    ])
   })
 
   it('never produces a row with zero cells', () => {
@@ -51,11 +57,16 @@ describe('RFC-247 buildMatrix — only grantable cells (AC-23)', () => {
   })
 
   it('offers no verb that has no route behind it', () => {
-    // `repos:update` and `skills:execute` were never created (no route
-    // implements them); a matrix that offered them would advertise a capability
-    // that maps to no endpoint.
+    // `skills:execute` was never created (no route implements it); a matrix that
+    // offered it would advertise a capability that maps to no endpoint.
+    //
+    // `repos:update` USED to be listed here too. RFC-248 added
+    // `PUT /api/repo-groups/:id` — the repos domain's first PUT/PATCH route —
+    // so the point now HAS a route and belongs in the matrix. The invariant is
+    // "no cell without a route", satisfied by the route existing, not by
+    // keeping the cell hidden.
     const all = buildMatrix('admin').flatMap((r) => r.cells.map((c) => c.permission))
-    expect(all).not.toContain('repos:update')
+    expect(all).toContain('repos:update')
     expect(all).not.toContain('skills:execute')
     // …and the two launch-subject verbs RFC-165 F15/N1 rules out
     expect(all).not.toContain('agents:execute')
