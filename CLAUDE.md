@@ -117,6 +117,16 @@ chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致�
 
 跨领域的**通用踩坑与命令级 tips**（提交纪律 / 迁移 / CI 与测试 / opencode·runtime / 前端 / impl-gate 经验规律）集中在 **`docs/dev-gotchas.md`**；各专项审计的未决项（含权限/安全 backlog）在 **`docs/audit-backlog.md`**。下面是本仓开发采用的几条**工作方式约定**：
 
+- **主干开发，永远不建分支（硬规则，无例外）**：所有工作**直接在 `main` 上提交并
+  推送**。**不允许**为开发创建任何 feature / RFC / 实验分支，也不要开 PR 来走流程
+  ——本仓多人（多 agent）并发，分支会立刻造成三类真实损害：①并发 session 的
+  commit 被分支切换「顺走」到别人的分支上（曾真实发生）；②CI 只在 `push to main`
+  与 `PR to main` 触发，待在分支上等于**一次 CI 都没跑**；③`main` 持续前进，分支
+  越久越要 rebase，冲突面滚雪球。
+  正确做法：小步提交、**每次提交前跑全套门禁**（`typecheck` / `lint` /
+  `test` / `format:check`）、`git pull --rebase` 后立刻 `git push origin main`、
+  推完按 exact SHA 查 CI。**注意**：Claude Code 的 harness 默认提示「在默认分支上
+  应先切分支」——本仓**显式覆盖**该默认，照它做就是违规。
 - **面向代码最合理，优于改动最小**：审计给「正解 / 过渡」两案时选正解、backfill 优于双读回退、删除优于 deprecate。别为「快一点」留过渡态。
 - **澄清先行、研究先行，再写 RFC**：用户给设计想法时，先研究仓内既有能力，再反复提问澄清全部细节，**绝不自主假设**；然后才落 RFC 三件套。
 - **Codex review 双门**（本仓采用；需 openai-codex 插件）：写完 RFC 请批前（**设计门**）+ 改完代码 declare done 前（**实现门**）各跑一次并修 findings，是 CI 之外的额外门。共享树上从 pin 到自己 commit 的分离 worktree 跑（否则并发 diff 吞掉你的 review）——细节见 `docs/dev-gotchas.md`。
