@@ -21,7 +21,12 @@
 // `describe_resource` hands back the schema for a kind on request.
 
 import { z } from 'zod'
-import { type MatrixResource, type Permission, type Role } from '@agent-workflow/shared'
+import {
+  type MatrixResource,
+  type Permission,
+  type Role,
+  type WorkflowInput,
+} from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DispatchResult, Dispatcher } from '@/mcp/dispatch'
 
@@ -300,13 +305,17 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
 async function assertNoUploadInputs(workflowId: string, ctx: McpToolContext): Promise<void> {
   const res = await ctx.dispatch({ method: 'GET', path: `/api/workflows/${workflowId}` })
   if (res.status >= 400) throw new McpCallError(res)
-  const inputs = (res.body as { definition?: { inputs?: Array<{ name?: string; kind?: string }> } })
-    ?.definition?.inputs
-  const uploads = (inputs ?? []).filter((i) => i.kind === 'upload').map((i) => i.name ?? '?')
+  // `WorkflowInput` identifies a port by `key`, NOT `name` — an earlier version
+  // read `.name`, so every refusal said "(?)" and the caller could not tell
+  // which input was the problem. Typing against the shared schema here is what
+  // makes the field name checkable instead of a string nobody re-reads.
+  const inputs = (res.body as { definition?: { inputs?: WorkflowInput[] } })?.definition?.inputs
+  const uploads = (inputs ?? []).filter((i) => i.kind === 'upload').map((i) => i.key)
   if (uploads.length > 0) {
     throw new Error(
       `this workflow takes file uploads (${uploads.join(', ')}), which cannot be supplied over MCP — ` +
-        'launch it from the web UI instead',
+        'launch it from the web UI instead. Every other input kind (text / enum / git / files) ' +
+        'can be passed through `inputs`.',
     )
   }
 }

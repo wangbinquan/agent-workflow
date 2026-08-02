@@ -17,7 +17,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DEFAULT_CONFIG, type Permission } from '@agent-workflow/shared'
+import { DEFAULT_CONFIG, type Permission, type WorkflowInput } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -402,6 +402,21 @@ describe('RFC-247 D9 — an MCP secret does not come back through a token', () =
   })
 })
 
+/**
+ * Typed against the SHARED schema on purpose.
+ *
+ * The previous version of these fixtures was an untyped literal using `name`,
+ * which is not a field `WorkflowInput` has — the implementation read `.name`
+ * too, so the stub and the bug agreed with each other and the test passed while
+ * every real refusal said "(?)". Declaring the type makes the compiler the
+ * thing that keeps fixture and schema honest, instead of two humans reading
+ * the same wrong string twice.
+ */
+const UPLOAD_INPUTS: WorkflowInput[] = [
+  { kind: 'upload', key: 'attachment', label: 'Attachment', required: true },
+]
+const TEXT_INPUTS: WorkflowInput[] = [{ kind: 'text', key: 'goal', label: 'Goal' }]
+
 describe('RFC-247 AC-17 — an upload workflow is refused before anything exists', () => {
   test('launch_task rejects it, and never dispatches the launch', async () => {
     const h = await harness()
@@ -420,10 +435,7 @@ describe('RFC-247 AC-17 — an upload workflow is refused before anything exists
       dispatch: async (req: { method: string; path: string }) => {
         calls.push(`${req.method} ${req.path}`)
         if (req.method === 'GET' && req.path.startsWith('/api/workflows/')) {
-          return {
-            status: 200,
-            body: { definition: { inputs: [{ name: 'attachment', kind: 'upload' }] } },
-          }
+          return { status: 200, body: { definition: { inputs: UPLOAD_INPUTS } } }
         }
         return dispatch(req as Parameters<typeof dispatch>[0], actor)
       },
@@ -431,9 +443,12 @@ describe('RFC-247 AC-17 — an upload workflow is refused before anything exists
       signal: new AbortController().signal,
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
 
+    // The refusal must NAME the offending input. Asserting only /upload/i is
+    // what let the `.name` vs `.key` bug live: the message read
+    // "takes file uploads (?)" and still matched.
     await expect(
       tool!.handler({ workflowId: 'wf-1', name: 'should-not-launch' }, ctx),
-    ).rejects.toThrow(/upload/i)
+    ).rejects.toThrow(/attachment/)
     expect(calls).toEqual(['GET /api/workflows/wf-1'])
   })
 
@@ -450,7 +465,7 @@ describe('RFC-247 AC-17 — an upload workflow is refused before anything exists
       dispatch: async (req: { method: string; path: string }) => {
         calls.push(`${req.method} ${req.path}`)
         if (req.method === 'GET' && req.path.startsWith('/api/workflows/')) {
-          return { status: 200, body: { definition: { inputs: [{ name: 'goal', kind: 'text' }] } } }
+          return { status: 200, body: { definition: { inputs: TEXT_INPUTS } } }
         }
         // The launch itself will fail on a nonexistent workflow — irrelevant
         // here; the point is that it was ATTEMPTED.
