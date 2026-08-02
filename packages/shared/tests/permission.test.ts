@@ -31,7 +31,7 @@ import {
 } from '../src/schemas/permission'
 
 describe('PERMISSIONS catalog', () => {
-  test('contains the documented 58 entries', () => {
+  test('contains the documented 59 entries', () => {
     // RFC-222 added tasks:delete (33 → 34); RFC-234 added intent:read/write (→ 36).
     // RFC-247 split the five `:write` points into create/update/delete, gave the
     // previously-ungated domains (workgroups / scheduled-tasks) real points,
@@ -40,7 +40,9 @@ describe('PERMISSIONS catalog', () => {
     // points, and did NOT mint agents:execute / workgroups:execute because
     // RFC-165 F15/N1 gates every launch endpoint uniformly on tasks:execute
     // (36 → 58).
-    expect(PERMISSIONS.length).toBe(58)
+    // RFC-248 加 `repos:update`（`PUT /api/repo-groups/:id` —— repos 域第一条
+    // PUT/PATCH 路由）⇒ 59。
+    expect(PERMISSIONS.length).toBe(59)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -121,6 +123,9 @@ describe('PERMISSIONS catalog', () => {
       // RFC-099: repos stay OUT of the ownership ACL model — the repos write
       // verbs remain admin/manager while the five resource writes are baseline.
       'repos:create',
+      // RFC-248: 仓库组的 PUT 引入了 repos 域的第一个 update 点，它与其余
+      // repos 写动词同档——admin/manager 有、普通用户没有。
+      'repos:update',
       'repos:delete',
       'repos:execute',
       'users:read',
@@ -204,14 +209,18 @@ describe('RFC-247 retired names stay retired', () => {
   })
 
   test('no point exists that no route could reference', () => {
-    // Four points a mechanical "every resource gets every verb" pass would have
+    // Points a mechanical "every resource gets every verb" pass would have
     // minted, each of which would then sit on the account page's token matrix
     // advertising a capability that maps to no endpoint:
-    //   repos:update       — repos.ts + cached-repos.ts have zero PUT/PATCH
     //   skills:execute     — skills.ts has no execute-semantics route
     //   agents:execute     — RFC-165 F15/N1 gates agent launch on tasks:execute
     //   workgroups:execute — …and workgroup launch likewise
-    for (const dead of ['repos:update', 'skills:execute', 'agents:execute', 'workgroups:execute']) {
+    //
+    // `repos:update` USED to be on this list and no longer is: RFC-248 added
+    // `PUT /api/repo-groups/:id`, the repos domain's first PUT/PATCH route.
+    // The invariant this test protects is "no point without a route" — it is
+    // satisfied by the point now HAVING one, not by keeping it out.
+    for (const dead of ['skills:execute', 'agents:execute', 'workgroups:execute']) {
       expect((PERMISSIONS as readonly string[]).includes(dead)).toBe(false)
     }
   })
@@ -311,7 +320,8 @@ describe('RFC-247 grantableMatrixPoints', () => {
   test('never offers a point the role lacks — a plain user sees no repos verb', () => {
     const userGrantable = grantableMatrixPoints('user')
     expect(userGrantable.filter((p) => p.startsWith('repos:'))).toEqual([])
-    expect(grantableMatrixPoints('manager').filter((p) => p.startsWith('repos:')).length).toBe(3)
+    // RFC-248: create / update / delete / execute —— update 是新加的（仓库组的 PUT）。
+    expect(grantableMatrixPoints('manager').filter((p) => p.startsWith('repos:')).length).toBe(4)
   })
 
   test('never offers a system-domain point to anyone', () => {
@@ -346,6 +356,9 @@ describe('RFC-222 manager role', () => {
     const expected: Permission[] = [
       ...ROLE_PERMISSIONS.user,
       'repos:create',
+      // RFC-248 设计门二轮 G4：repos 域不在 ACL 模型里，能力全靠这张手工表
+      // 授予——漏了 manager 就「建得了仓库组、改不了」且无法给 PAT 授权。
+      'repos:update',
       'repos:delete',
       'repos:execute',
       'tasks:read:all',
