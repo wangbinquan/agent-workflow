@@ -1084,7 +1084,7 @@ export function NetworkTab({ config }: TabProps) {
         />
       </Field>
       <p className="form-field__hint">
-        <Link to="/docs/api" data-testid="settings-api-docs-link">
+        <Link to="/docs/api" className="link" data-testid="settings-api-docs-link">
           {t('settingsForm.mcpSurfaceDocsLink')}
         </Link>
       </p>
