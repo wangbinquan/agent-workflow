@@ -52,7 +52,8 @@ describe('RFC-165 T1 — StartTaskSchema scratch matrix', () => {
   const sourceConflicts: Array<[string, Record<string, unknown>]> = [
     ['scratch + repoUrl', { scratch: true, repoUrl: 'https://example.com/a.git' }],
     ['scratch + ref', { scratch: true, ref: 'main' }],
-    ['scratch + repos[]', { scratch: true, repos: [{ repoUrl: 'https://example.com/a.git' }] }],
+    // RFC-248 T32: `repos[]` 退役后，多仓侧的 scratch 冲突源变成 repoGroupId。
+    ['scratch + repoGroupId', { scratch: true, repoGroupId: '01JQ0000000000000000000000' }],
   ]
   for (const [label, extra] of sourceConflicts) {
     test(`rejects ${label} → scratch-source-conflict`, () => {
@@ -122,7 +123,8 @@ describe('RFC-165 T1 — rejectRetiredStartTaskKeys (raw-key gate)', () => {
   test('clean v2 bodies pass', () => {
     expect(rejectRetiredStartTaskKeys({ ...BASE, scratch: true })).toBe(null)
     expect(rejectRetiredStartTaskKeys({ ...BASE, repoUrl: 'x', ref: 'main' })).toBe(null)
-    expect(rejectRetiredStartTaskKeys({ ...BASE, repos: [{ repoUrl: 'x' }] })).toBe(null)
+    // RFC-248 T32: 多仓的 clean 形态改成 repoGroupId——`repos[]` 自己退役了。
+    expect(rejectRetiredStartTaskKeys({ ...BASE, repoGroupId: 'grp_1' })).toBe(null)
   })
 
   test('non-object inputs are ignored (route-level schema rejects them anyway)', () => {
@@ -135,6 +137,10 @@ describe('RFC-165 T1 — rejectRetiredStartTaskKeys (raw-key gate)', () => {
     expect(rejectRetiredStartTaskKeys({ repoPath: '/tmp/x' })).toBe('repoPath')
     expect(rejectRetiredStartTaskKeys({ baseBranch: 'main' })).toBe('baseBranch')
     expect(rejectRetiredStartTaskKeys({ fetchBeforeLaunch: true })).toBe('fetchBeforeLaunch')
+    // RFC-248 T32: `repos[]` 加入退役名单。它曾是唯一的多仓入口，如果只是从
+    // schema 里删掉（非 strict ⇒ 未知键静默丢弃），老调用方会「成功」启动一个
+    // **单仓/scratch** 任务——正是 RFC-165 F1 要防的静默降级。
+    expect(rejectRetiredStartTaskKeys({ repos: [{ repoUrl: 'x' }] })).toBe('repos')
   })
 
   test('MIXED bodies are caught — the silent-degrade shapes from design F1', () => {
@@ -147,22 +153,23 @@ describe('RFC-165 T1 — rejectRetiredStartTaskKeys (raw-key gate)', () => {
     expect(rejectRetiredStartTaskKeys({ ...BASE, repoUrl: 'x', baseBranch: 'dev' })).toBe(
       'baseBranch',
     )
+    // RFC-248 T32: 顶层 `repos` 先于任何行内键命中——嵌套扫描随 `repos[]` 一起
+    // 删除了（整个数组都进不来，再逐行报 `repos[1].repoPath` 是死代码）。
     expect(
       rejectRetiredStartTaskKeys({
         ...BASE,
         repos: [{ repoUrl: 'x' }, { repoUrl: 'y', repoPath: '/tmp/y' }],
       }),
-    ).toBe('repos[1].repoPath')
+    ).toBe('repos')
     expect(
-      rejectRetiredStartTaskKeys({ ...BASE, repos: [{ repoUrl: 'x', baseBranch: 'dev' }] }),
-    ).toBe('repos[0].baseBranch')
+      rejectRetiredStartTaskKeys({ ...BASE, repoGroupId: 'g', repos: [{ repoUrl: 'x' }] }),
+    ).toBe('repos')
   })
 
   test('key presence alone triggers (even undefined/null values)', () => {
     expect(rejectRetiredStartTaskKeys({ repoPath: undefined })).toBe('repoPath')
-    expect(rejectRetiredStartTaskKeys({ repos: [{ baseBranch: null }] })).toBe(
-      'repos[0].baseBranch',
-    )
+    expect(rejectRetiredStartTaskKeys({ repos: undefined })).toBe('repos')
+    expect(rejectRetiredStartTaskKeys({ repos: null })).toBe('repos')
   })
 })
 
@@ -196,16 +203,17 @@ describe('RFC-165 T1 — applySpaceFields shared assembly point', () => {
   test('copies every present space field, skips absent ones', () => {
     const out = applySpaceFields(
       { workflowId: 'w', name: 'n' },
-      { scratch: true, repoUrl: undefined, ref: undefined, repos: undefined },
+      { scratch: true, repoUrl: undefined, ref: undefined, repoGroupId: undefined },
     )
     expect(out).toEqual({ workflowId: 'w', name: 'n', scratch: true })
     const out2 = applySpaceFields(
       { workflowId: 'w' },
-      { repoUrl: 'https://example.com/a.git', ref: 'dev', repos: [{ repoUrl: 'x' }] },
+      // RFC-248: `repos[]` 已退役，多仓走 repoGroupId。
+      { repoUrl: 'https://example.com/a.git', ref: 'dev', repoGroupId: 'g1' },
     )
     expect(out2.repoUrl).toBe('https://example.com/a.git')
     expect(out2.ref).toBe('dev')
-    expect(out2.repos).toEqual([{ repoUrl: 'x' }])
+    expect(out2.repoGroupId).toBe('g1')
     expect('scratch' in out2).toBe(false)
   })
 

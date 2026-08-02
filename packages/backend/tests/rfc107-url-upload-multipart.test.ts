@@ -26,6 +26,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -35,10 +36,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
+import { eq as eqOp } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, tasks as tasksTable } from '../src/db/schema'
+import { cachedRepos, taskRepos as taskReposTable, tasks as tasksTable } from '../src/db/schema'
 import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
+import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { UPLOAD_INPUTS_DIR } from '@agent-workflow/shared'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { createRuntime } from '../src/services/runtimeRegistry'
@@ -176,6 +180,8 @@ const UPLOAD_WF_INPUTS = [
 interface Harness {
   db: DbClient
   app: Hono
+  /** RFC-248: 建仓库组夹具需要 appHome（镜像仓落在它下面）。 */
+  appHome: string
   bareUrl: string
   localRepo: string
   validWorkflowId: string
@@ -298,6 +304,7 @@ async function buildHarness(): Promise<Harness> {
   return {
     db,
     app,
+    appHome: join(tmp, 'home'),
     bareUrl,
     localRepo,
     validWorkflowId: valid.id,
@@ -547,11 +554,17 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     // 目标：任务根下的 `.agent-workflow-inputs/`，不属于任何成员仓——所以它
     // 既不会变成某个仓的未跟踪改动，也不会进那个仓的审计 diff 与自动提交。
     const h = await buildHarness()
+    // RFC-248 T32: wire 上的 `repos[]` 已退役，多仓一律经 repoGroupId。这里
+    // 顺带把**同一个仓挂两份**（D14）真跑起来——组路径的 `assignBranchNames`
+    // 给第 n 份加 `-n` 后缀，两个 worktree 不再抢同一个分支名。
+    const groupId = await seedRepoGroup(h.db, h.appHome, [h.localRepo, h.localRepo], {
+      name: 'rfc107-multi-upload',
+    })
     const fd = buildFormData(
       {
         workflowId: h.validWorkflowId,
         name: 'multi-upload',
-        repos: [{ repoUrl: h.bareUrl }, { repoUrl: h.bareUrl }],
+        repoGroupId: groupId,
         inputs: { topic: 'x', refs: '' },
       },
       [['refs', 'a.txt', 'alpha']],
@@ -563,13 +576,30 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(body.id).toBeTruthy()
     expect(body.code).toBeUndefined()
 
-    // 注：这个夹具把**同一个 URL 传了两次**。旧的 wire `repos[]` 多仓路径不给
-    // 同源仓的隔离分支加序号（两个 worktree 都要 `agent-workflow/{taskId}`，
-    // 第二个 `worktree add` 撞车），所以它只能落一个仓。那是旧路径的既有限制，
-    // 不是本条断言的主题——「同一个仓出现多次」由 D14 在**仓库组**路径上支持
-    // （`assignBranchNames` 给第 n 次加 `-n` 后缀，见
-    // rfc248-materialize-group.test.ts 的「同仓两份」用例）。旧路径连同
-    // `repos[]` 一起在 T32 退役。
+    // 两份都真的物化了（D14 同仓多份），且上传物落在**任务根**下的固定目录，
+    // 不在任何成员仓里——所以它不会变成某个仓的未跟踪改动。
+    // 直接读库——这个夹具的 app 只挂了启动路由。
+    const rows = h.db
+      .select()
+      .from(taskReposTable)
+      .where(eqOp(taskReposTable.taskId, body.id))
+      .orderBy(taskReposTable.repoIndex)
+      .all()
+    expect(rows.map((r) => r.mountPath)).toEqual(['r0', 'r1'])
+    // D14: 同一个源仓挂了两份 ⇒ 两条不同的隔离分支（第二份带 `-2` 后缀）。
+    expect(new Set(rows.map((r) => r.branch)).size).toBe(2)
+
+    const taskRow = h.db.select().from(tasksTable).where(eqOp(tasksTable.id, body.id)).get()
+    const root = taskRow!.worktreePath
+    // 上传物在 `<任务根>/.agent-workflow-inputs/<targetDir>/…` 下（targetDir 由
+    // 输入定义给出），这里只断言它确实落在这个保留目录内。
+    const inputsRoot = join(root, UPLOAD_INPUTS_DIR)
+    expect(existsSync(inputsRoot)).toBe(true)
+    const found = readdirSync(inputsRoot, { recursive: true }) as string[]
+    expect(found.some((f) => f.endsWith('a.txt'))).toBe(true)
+    for (const m of ['r0', 'r1']) {
+      expect(existsSync(join(root, m, UPLOAD_INPUTS_DIR))).toBe(false)
+    }
   })
 })
 

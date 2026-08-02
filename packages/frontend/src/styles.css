@@ -21529,3 +21529,15 @@ button.status-chip {
     flex: 1 1 0;
   }
 }
+
+/* RFC-248 —— 任务向导里「已选仓库组」卡片的头部一行：组标签 + 组名 + 更换。
+   复用既有的 .info-box 外壳与 .btn--sm，这里只补一行内 flex 排版。 */
+.wizard-space-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.wizard-space-group__head > .btn {
+  margin-left: auto;
+}

@@ -2348,6 +2348,9 @@ export interface Resources {
     metaError: string
     /** RFC-066: multi-repo summary `<details>` label on the task detail page. */
     multiRepoSummary: string
+    /** RFC-248: 任务详情的组溯源 chip / 只读成员 chip。 */
+    repoGroupChip: string
+    repoReadonlyChip: string
     cancelButton: string
     relaunchButton: string
     resumeButton: string
@@ -2954,6 +2957,11 @@ export interface Resources {
     spaceScratchDesc: string
     spaceRemoteDesc: string
     spaceScratchHint: string
+    /** RFC-248 仓库组空间 */
+    spaceGroupChip: string
+    spaceGroupChange: string
+    spaceGroupSummary: string
+    spaceGroupRepoCount: string
     contentDescription: string
     contentDescriptionHint: string
     agentPortsBlocked: string
@@ -3033,6 +3041,8 @@ export interface Resources {
       refHint: string
       refPlaceholder: string
       recentUrlsPlaceholder: string
+      /** RFC-248: 下拉里的仓库组条目标签 */
+      groupOption: string
       cloningHint: string
       /** RFC-068: hint shown under the URL-mode ref field. */
       urlAutoSync: string
@@ -4187,6 +4197,8 @@ export interface Resources {
       agent: string
       workflow: string
       repo: string
+      /** RFC-248: 第 5 档 —— 仓库组。 */
+      repo_group: string
       global: string
     }
     scopeRow: {
@@ -6949,6 +6961,8 @@ export const zhCN: Resources = {
     metaError: '错误',
     // RFC-066: multi-repo summary on the task detail page.
     multiRepoSummary: '{{count}} 个仓库',
+    repoGroupChip: '组：{{name}}',
+    repoReadonlyChip: '只读',
     cancelButton: '取消任务',
     relaunchButton: '再次启动',
     resumeButton: '继续任务',
@@ -7646,6 +7660,10 @@ export const zhCN: Resources = {
     spaceRemoteDesc: '克隆远端仓库（URL），在其工作树上执行',
     spaceScratchHint:
       '平台会创建一个空 Git 仓库作为工作目录；产出以对空仓的 diff 形式交付，目录保留可手动取用。',
+    spaceGroupChip: '仓库组',
+    spaceGroupChange: '更换',
+    spaceGroupSummary: '仓库组：{{name}}',
+    spaceGroupRepoCount: '展平后共 {{count}} 个仓库',
     contentDescription: '任务描述',
     contentDescriptionHint: '将作为提示词直接交给 Agent。',
     agentPortsBlocked: '该 Agent 的输入端口声明阻止手动启动：',
@@ -7729,6 +7747,7 @@ export const zhCN: Resources = {
       refHint: '留空则使用克隆后的默认分支。',
       refPlaceholder: 'main / v1.2.0 / a3f9c…',
       recentUrlsPlaceholder: '— 从已缓存仓里挑一个 —',
+      groupOption: '{{name}}（组 · {{count}} 仓）',
       cloningHint: '首次克隆可能耗时数分钟；下次启动会复用本地缓存。',
       urlAutoSync: '本地镜像会在启动前自动同步到远端（fetch + 所选分支 fast-forward）。',
       // RFC-066 multi-repo controls.
@@ -9455,6 +9474,7 @@ export const zhCN: Resources = {
       agent: 'Agent',
       workflow: '工作流',
       repo: '仓库',
+      repo_group: '仓库组',
       global: '全局',
     },
     scopeRow: {

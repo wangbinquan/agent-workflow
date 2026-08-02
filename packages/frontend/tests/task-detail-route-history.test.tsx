@@ -138,6 +138,8 @@ function task(id: string, overrides: Partial<Task> = {}): Task {
     name: `Task ${id}`,
     workflowId: 'workflow_1',
     workflowName: 'Fixture workflow',
+    repoGroupId: null,
+    repoGroupName: null,
     workflowSnapshot: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
     workflowVersion: 1,
     repoPath: '/repo',

@@ -57,21 +57,14 @@ describe('buildWorkgroupStartBody', () => {
     expect(noRef.ref).toBeUndefined()
   })
 
-  test('multi-repo: repos[] entries (RFC-165: url-only, no retired path keys)', () => {
+  test('RFC-248 多仓: repoGroupId only（`repos[]` 退役，退役路径键仍不得出现）', () => {
     const body = buildWorkgroupStartBody(
-      {
-        kind: 'remote',
-        repos: [
-          { kind: 'url', repoUrl: 'https://github.com/o/a.git', ref: '' },
-          { kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: 'dev' },
-        ],
-      },
+      { kind: 'group', groupId: 'grp_9' },
       { name: 't', goal: 'g' },
     )
-    expect(body.repos).toEqual([
-      { repoUrl: 'https://github.com/o/a.git' },
-      { repoUrl: 'https://github.com/o/r.git', ref: 'dev' },
-    ])
+    expect(body.repoGroupId).toBe('grp_9')
+    expect(body.repos).toBeUndefined()
+    // RFC-165 的退役键守卫照旧适用。
     expect(body.fetchBeforeLaunch).toBeUndefined()
     expect(body.repoPath).toBeUndefined()
     expect(body.repoUrl).toBeUndefined()

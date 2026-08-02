@@ -934,13 +934,40 @@ function TaskDetailPage() {
               sub-dir name, baseBranch, and (when present) redacted URL. */}
             {tk.repoCount > 1 && (
               <details className="task-detail__multi-repo" data-testid="task-detail-multi-repo">
-                <summary>{t('tasks.multiRepoSummary', { count: tk.repoCount })}</summary>
+                <summary>
+                  {t('tasks.multiRepoSummary', { count: tk.repoCount })}
+                  {/* RFC-248: 组溯源 chip。名字是启动时的**快照**，组后来被改名
+                      或删除都不影响这里——任务跑的是当时那份布局（D8）。 */}
+                  {tk.repoGroupName !== null && tk.repoGroupName !== undefined && (
+                    <>
+                      {' '}
+                      <StatusChip kind="info" size="sm" data-testid="task-detail-repo-group">
+                        {t('tasks.repoGroupChip', { name: tk.repoGroupName })}
+                      </StatusChip>
+                    </>
+                  )}
+                </summary>
                 <ul className="task-detail__multi-repo-list">
                   {tk.repos.map((r) => (
                     <li key={r.repoIndex} data-testid={`task-detail-multi-repo-row-${r.repoIndex}`}>
-                      <code>{r.worktreeDirName || r.repoPath}</code>
+                      {/* RFC-248: 显示**挂载路径**——嵌套布局下 basename 丢方位，
+                          `vendor/sdk` 才说明这个仓在工作树里的位置。挂根成员的
+                          挂载路径是空串，用 `.` 表示任务根。 */}
+                      <code>{r.mountPath === '' ? '.' : r.mountPath || r.repoPath}</code>
                       {' @ '}
                       <code>{r.baseBranch || t('common.emDash')}</code>
+                      {r.readonly && (
+                        <>
+                          {' '}
+                          <StatusChip
+                            kind="neutral"
+                            size="sm"
+                            data-testid={`task-detail-repo-readonly-${r.repoIndex}`}
+                          >
+                            {t('tasks.repoReadonlyChip')}
+                          </StatusChip>
+                        </>
+                      )}
                       {r.repoUrl !== null && r.repoUrl !== '' && (
                         <span className="data-table__muted"> · {redactGitUrl(r.repoUrl)}</span>
                       )}

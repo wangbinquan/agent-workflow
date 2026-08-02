@@ -17,6 +17,7 @@
 
 import {
   grantableMatrixPoints,
+  MATRIX_RESOURCES,
   MATRIX_VERBS,
   READ_POINTS,
   type MatrixResource,
@@ -105,10 +106,15 @@ export function buildApiDocs(role: Role): ApiDocs {
     verbs: Array<{ verb: string; permission: Permission }>
   }> = []
   for (const kind of MCP_RESOURCE_KINDS) {
-    const verbs = MATRIX_VERBS.filter((v) => grantable.has(`${kind}:${v}` as Permission)).map(
-      (v) => ({ verb: v, permission: `${kind}:${v}` as Permission }),
+    // RFC-248 T30c: MCP 的 kind 不都是可授权资源——`repo-groups` 是独立的工具
+    // 寻址单位，写权限沿用 `repos:*`。这里只枚举真正在权限矩阵上的那些，
+    // 否则会给账号页凭空造出一行永远勾不上的 `repo-groups:*`。
+    if (!(MATRIX_RESOURCES as readonly string[]).includes(kind)) continue
+    const resource = kind as MatrixResource
+    const verbs = MATRIX_VERBS.filter((v) => grantable.has(`${resource}:${v}` as Permission)).map(
+      (v) => ({ verb: v, permission: `${resource}:${v}` as Permission }),
     )
-    if (verbs.length > 0) grantablePermissions.push({ resource: kind, verbs })
+    if (verbs.length > 0) grantablePermissions.push({ resource, verbs })
   }
   // `tasks` is not in MCP_RESOURCE_KINDS (its verbs have dedicated tools) but a
   // token absolutely can hold them, so the permission list must still show it.

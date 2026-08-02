@@ -247,40 +247,7 @@ function basenameForRepoSource(src: RepoSource): string {
   return stripped.replace(/\.git$/i, '')
 }
 
-/**
- * RFC-066 PR-C — compose the JSON body for a multi-repo POST /api/tasks.
- * Emits the v2 `repos: [...]` shape; legacy single-repo callers (length 1)
- * should keep using `buildLaunchBody` to stay byte-baseline against
- * pre-RFC-066 fixtures. RFC-067 git identity is handled the same way as the
- * single-repo helper.
- */
-export function buildLaunchBodyMultiRepo(
-  repos: RepoSource[],
-  common: LaunchCommonPayload,
-): Record<string, unknown> {
-  const hasGitIdentity =
-    typeof common.gitUserName === 'string' &&
-    common.gitUserName.length > 0 &&
-    typeof common.gitUserEmail === 'string' &&
-    common.gitUserEmail.length > 0
-  const out: Record<string, unknown> = {
-    workflowId: common.workflowId,
-    name: common.name,
-    inputs: common.inputs,
-    repos: repos.map((r) => {
-      // RFC-204: reuse rides as an id; a typed URL still rides as a URL.
-      const entry: Record<string, unknown> =
-        r.cachedRepoId !== undefined && r.cachedRepoId.length > 0
-          ? { cachedRepoId: r.cachedRepoId }
-          : { repoUrl: r.repoUrl }
-      if (r.ref.trim().length > 0) entry.ref = r.ref.trim()
-      return entry
-    }),
-  }
-  if (hasGitIdentity) {
-    out.gitUserName = common.gitUserName
-    out.gitUserEmail = common.gitUserEmail
-  }
-  stampLaunchExtras(out, common)
-  return out
-}
+// RFC-248 T38: `buildLaunchBodyMultiRepo` 已删除。它唯一的产出就是 wire 上
+// 已退役的 `repos: [...]`（顶层 `repos` 进了 RETIRED_START_TASK_KEYS，服务端
+// 422 硬拒）。多仓改由 `repoGroupId` 表达，body 里只有一个 id，不需要专门的
+// 构造器——`buildSpaceBody` 的 group 分支直接盖章。

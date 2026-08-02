@@ -180,5 +180,7 @@ export const DeleteRepoGroupResponseSchema = z.object({
   archivedMemories: z.number().int().nonnegative(),
   /** `force=1` 时从别的组里摘掉的引用行数。 */
   detachedReferences: z.number().int().nonnegative(),
+  /** RFC-248 #10：`force=1` 时被**禁用**（不是删除）的定时任务数。 */
+  disabledSchedules: z.number().int().nonnegative(),
 })
 export type DeleteRepoGroupResponse = z.infer<typeof DeleteRepoGroupResponseSchema>

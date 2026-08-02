@@ -17,6 +17,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { startTask, startTaskWithLocalRepo, getTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
+import { basename } from 'node:path'
+import { seedRepoGroup } from './helpers/repoGroupFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -95,11 +97,7 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
       {
         workflowId: 'wf-gt',
         name: 'multi',
-        repos: [
-          { repoPath: h.repos[0]!, baseBranch: 'main' },
-          { repoPath: h.repos[1]!, baseBranch: 'main' },
-          { repoPath: h.repos[2]!, baseBranch: 'main' },
-        ],
+        repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!, h.repos[2]!]),
         inputs: {},
       } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },
@@ -109,9 +107,15 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
     expect(task!.repoCount).toBe(3)
     expect(task!.repos).toHaveLength(3)
     expect(task!.repos.map((r) => r.repoIndex)).toEqual([0, 1, 2])
-    expect(task!.repos[0]!.repoPath).toBe(h.repos[0]!)
-    expect(task!.repos[1]!.repoPath).toBe(h.repos[1]!)
-    expect(task!.repos[2]!.repoPath).toBe(h.repos[2]!)
+    // RFC-248: 组路径的成员经**镜像仓**落地（RFC-204 的 URL 封存要求源仓先
+    // 被 clone 进 `~/.agent-workflow/repos/`），所以 `repoPath` 是镜像路径，
+    // 不再等于源目录。B27 锁的是**按 repoIndex 升序 hydrate**这件事，源路径
+    // 相等只是 RFC-066 直路径时代的巧合——这里改断言镜像与源仓一一对应。
+    for (const [i, r] of task!.repos.entries()) {
+      expect(r.repoPath.startsWith(h.appHome)).toBe(true)
+      // 镜像目录名以源仓 basename 收尾，顺序与 repoIndex 对齐。
+      expect(r.repoPath.endsWith(basename(h.repos[i]!))).toBe(true)
+    }
     // worktreeDirName non-empty for every multi-repo row.
     for (const r of task!.repos) expect(r.worktreeDirName.length > 0).toBe(true)
   })

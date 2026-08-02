@@ -34,6 +34,7 @@ import {
   isLooseValidBranchName,
   taskExecutionKind,
   workgroupLaunchReadiness,
+  type RepoGroup,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -48,7 +49,8 @@ import { Select } from '@/components/Select'
 import { Stepper } from '@/components/Stepper'
 import { UserPicker } from '@/components/UserPicker'
 import { DynamicInput } from '@/components/launch/DynamicInput'
-import { RepoSourceList, type MultiRepoBlockedReason } from '@/components/launch/RepoSourceList'
+import { RepoSourceList } from '@/components/launch/RepoSourceList'
+import { StatusChip } from '@/components/StatusChip'
 import { UploadPicker } from '@/components/launch/UploadPicker'
 import { useActor } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
@@ -792,21 +794,23 @@ function TaskWizardPage() {
   })
   const hasUploads = Object.values(uploads).some((arr) => arr.length > 0)
   const hasUploadInput = inputDefs.some((d) => d.kind === 'upload')
-  const hasWrapperGitNode =
-    kind === 'workflow' &&
-    (normalizedWorkflowDefinition?.nodes ?? []).some((n) => n.kind === 'wrapper-git')
   // RFC-218 (impl-gate P2-6): the upload arm applies to agent port forms too —
   // multipart + multi-repo is refused server-side (multi-repo-upload-
   // unsupported), so the wizard must gate it for BOTH kinds that can carry
   // upload inputs. wrapper-git stays workflow-only (agents have no canvas).
-  const multiRepoBlockedReason: MultiRepoBlockedReason | null =
-    space.kind === 'remote' && space.repos.length > 1
-      ? kind === 'workflow' && hasWrapperGitNode
-        ? 'wrapper-git'
-        : (kind === 'workflow' || kind === 'agent') && hasUploadInput
-          ? 'upload'
-          : null
-      : null
+  // RFC-248 T38: `multiRepoBlockedReason` 已删除。它拦的是「向导里临时拼 N 行
+  // URL」这种多仓形态，而多仓现在**只能**由仓库组表达（组空间由服务端展平，
+  // wrapper-git 与上传输入两条限制都在服务端按组布局判定）。remote 空间因此
+  // 恒为单行，这个门天然不可达。
+
+  // RFC-248: 组名 / 展平仓数用于空间摘要与已选卡片。只在 remote 系空间下查。
+  const repoGroups = useQuery<{ items: RepoGroup[] }>({
+    queryKey: ['repo-groups'],
+    queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
+    enabled: space.kind !== 'scratch',
+  })
+  const selectedGroup =
+    space.kind === 'group' ? repoGroups.data?.items.find((g) => g.id === space.groupId) : undefined
 
   const stepModeReady = selectedObject !== ''
   // Impl-gate F2: `[].every()` is vacuously true, so a zero-repo remote space
@@ -814,7 +818,11 @@ function TaskWizardPage() {
   // A remote launch needs at least one valid repo.
   const sourceReady =
     space.kind === 'scratch' ||
-    (space.repos.length > 0 && space.repos.every((r) => validateRepoUrl(r.repoUrl) === null))
+    // RFC-248: 组空间选中即就绪——布局与各仓 ref 都由服务端从组定义展平。
+    (space.kind === 'group' && space.groupId !== '') ||
+    (space.kind === 'remote' &&
+      space.repos.length > 0 &&
+      space.repos.every((r) => validateRepoUrl(r.repoUrl) === null))
   const nameReady = taskName.trim().length > 0
   // Codex P1: while the workflow detail is loading (or failed), inputDefs is
   // empty and missingRequired reads false — the wizard must NOT treat that as
@@ -1079,7 +1087,6 @@ function TaskWizardPage() {
     stepModeReady &&
     sourceReady &&
     stepContentReady &&
-    multiRepoBlockedReason === null &&
     collabReady &&
     relaunchReady &&
     !relaunchError &&
@@ -1412,7 +1419,9 @@ function TaskWizardPage() {
             )}
             <Field label={t('taskWizard.spaceLabel')} group>
               <ChoiceCards<'remote' | 'scratch'>
-                value={space.kind}
+                // RFC-248: 组空间在「仓库」这一档里表达（用户视角就是从仓库
+                // 列表里选了个带标签的条目），不单开一张卡。
+                value={space.kind === 'group' ? 'remote' : space.kind}
                 onChange={(next) => {
                   if (next === space.kind) return
                   setSpace(defaultWizardSpace(next))
@@ -1437,11 +1446,36 @@ function TaskWizardPage() {
                 ]}
               />
             </Field>
-            {space.kind === 'remote' ? (
+            {space.kind === 'group' ? (
+              // RFC-248: 已选中仓库组——展示组名 + 展平仓数 + 挂载布局预览，
+              // 「更换」退回仓库/组选择列表。
+              <div className="info-box" data-testid="wizard-space-group">
+                <div className="wizard-space-group__head">
+                  <StatusChip kind="info" size="sm">
+                    {t('taskWizard.spaceGroupChip')}
+                  </StatusChip>
+                  <strong>{selectedGroup?.name ?? space.groupId}</strong>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    data-testid="wizard-space-group-change"
+                    onClick={() => setSpace(defaultWizardSpace('remote'))}
+                  >
+                    {t('taskWizard.spaceGroupChange')}
+                  </button>
+                </div>
+                {selectedGroup !== undefined && (
+                  <div className="muted">
+                    {t('taskWizard.spaceGroupRepoCount', { count: selectedGroup.flatRepoCount })}
+                  </div>
+                )}
+              </div>
+            ) : space.kind === 'remote' ? (
               <RepoSourceList
                 repos={space.repos}
                 onChange={(repos) => setSpace({ kind: 'remote', repos })}
-                multiRepoBlockedReason={multiRepoBlockedReason}
+                onSelectGroup={(groupId) => setSpace({ kind: 'group', groupId })}
+                maxCount={1}
               />
             ) : (
               <div className="muted" data-testid="wizard-scratch-hint">
@@ -1709,7 +1743,15 @@ function TaskWizardPage() {
               <dd data-testid="wizard-summary-space">
                 {space.kind === 'scratch'
                   ? t('taskWizard.spaceScratch')
-                  : space.repos.map((r) => `${r.repoUrl}${r.ref ? ` @ ${r.ref}` : ''}`).join(', ')}
+                  : space.kind === 'group'
+                    ? t('taskWizard.spaceGroupSummary', {
+                        name:
+                          repoGroups.data?.items.find((g) => g.id === space.groupId)?.name ??
+                          space.groupId,
+                      })
+                    : space.repos
+                        .map((r) => `${r.repoUrl}${r.ref ? ` @ ${r.ref}` : ''}`)
+                        .join(', ')}
                 {summaryEdit(STEP_SPACE)}
               </dd>
             </div>

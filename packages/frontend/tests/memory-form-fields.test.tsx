@@ -37,6 +37,7 @@ function Harness({ initial, onChange }: HarnessProps) {
       onTitle={f.setTitle}
       onBodyMd={f.setBodyMd}
       onTags={f.setTags}
+      repoGroups={[{ id: 'grp1', label: '全栈' }]}
       agents={[
         { id: 'agent-a', label: 'agent-a' },
         { id: 'agent-b', label: 'agent-b' },

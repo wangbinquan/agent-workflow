@@ -594,7 +594,10 @@ export const StartWorkgroupTaskSchema = z.object({
   /** RFC-204: reuse a cached mirror by id (XOR `repoUrl`; enforced by StartTaskSchema downstream). */
   cachedRepoId: z.string().min(1).optional(),
   ref: z.string().min(1).optional(),
-  repos: z.array(z.unknown()).min(1).max(16).optional(),
+  /** RFC-248: 用仓库组作为执行空间（取代已退役的 `repos[]`）。 */
+  repoGroupId: z.string().min(1).optional(),
+  /** RFC-248 H9: 按另一任务的**冻结** task_repos 快照重放布局（重启）。 */
+  sourceTaskId: z.string().min(1).optional(),
   collaboratorUserIds: z.array(z.string().min(1)).max(64).optional(),
   gitUserName: z.string().max(255).optional(),
   gitUserEmail: z.string().max(255).optional(),

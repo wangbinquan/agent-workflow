@@ -36,6 +36,8 @@ export interface RepoSourceListProps {
   multiRepoBlockedReason?: MultiRepoBlockedReason | null
   /** Override for tests; defaults to MULTI_REPO_MAX (8). */
   maxCount?: number
+  /** RFC-248: 透传给每一行——给了就在下拉里同列仓库组。 */
+  onSelectGroup?: (groupId: string) => void
 }
 
 export function RepoSourceList({
@@ -43,6 +45,7 @@ export function RepoSourceList({
   onChange,
   multiRepoBlockedReason,
   maxCount,
+  onSelectGroup,
 }: RepoSourceListProps) {
   const { t } = useTranslation()
   const max = maxCount ?? MULTI_REPO_MAX
@@ -71,25 +74,31 @@ export function RepoSourceList({
           showRemove={isMulti}
           onRemove={() => removeAt(i)}
           previewDirName={isMulti ? (previewNames[i] ?? null) : null}
+          {...(onSelectGroup !== undefined && i === 0 ? { onSelectGroup } : {})}
         />
       ))}
-      <div className="repo-source-list__actions">
-        <button
-          type="button"
-          className="btn btn--sm"
-          data-testid="repo-source-add"
-          disabled={repos.length >= max}
-          onClick={addRow}
-          aria-label={t('launch.repoSource.add')}
-        >
-          {t('launch.repoSource.add')}
-        </button>
-        {repos.length >= max && (
-          <span className="muted repo-source-list__max-hint" data-testid="repo-source-max-hint">
-            {t('launch.repoSource.maxReached', { max })}
-          </span>
-        )}
-      </div>
+      {/* RFC-248: 只在还允许多行时渲染「+ 添加仓库」。组模式（onSelectGroup
+          已给）下多仓只能由仓库组表达——留着加行按钮会让用户拼出一个
+          builder 只取首行的空间，那是静默降级。 */}
+      {max > 1 && (
+        <div className="repo-source-list__actions">
+          <button
+            type="button"
+            className="btn btn--sm"
+            data-testid="repo-source-add"
+            disabled={repos.length >= max}
+            onClick={addRow}
+            aria-label={t('launch.repoSource.add')}
+          >
+            {t('launch.repoSource.add')}
+          </button>
+          {repos.length >= max && (
+            <span className="muted repo-source-list__max-hint" data-testid="repo-source-max-hint">
+              {t('launch.repoSource.maxReached', { max })}
+            </span>
+          )}
+        </div>
+      )}
       {multiRepoBlockedReason !== null && multiRepoBlockedReason !== undefined && isMulti && (
         <div
           className="repo-source-list__banner error-text"

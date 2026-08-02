@@ -2585,6 +2585,8 @@ export const enUS: Resources = {
     metaError: 'Error',
     // RFC-066: multi-repo summary on the task detail page.
     multiRepoSummary: '{{count}} repositories',
+    repoGroupChip: 'Group: {{name}}',
+    repoReadonlyChip: 'read-only',
     cancelButton: 'Cancel task',
     relaunchButton: 'Launch again',
     resumeButton: 'Resume task',
@@ -3338,6 +3340,10 @@ export const enUS: Resources = {
     spaceRemoteDesc: 'Clone a remote repo (URL) and work on its tree',
     spaceScratchHint:
       'The platform creates an empty Git repo as the working directory; output is delivered as a diff against it and the directory is kept for manual pickup.',
+    spaceGroupChip: 'Repo group',
+    spaceGroupChange: 'Change',
+    spaceGroupSummary: 'Repo group: {{name}}',
+    spaceGroupRepoCount: '{{count}} repo(s) after flattening',
     contentDescription: 'Task description',
     contentDescriptionHint: 'Passed to the agent verbatim as its prompt.',
     agentPortsBlocked: 'This agent’s declared input ports block manual launch:',
@@ -3428,6 +3434,7 @@ export const enUS: Resources = {
       refHint: 'Leave blank to use the cloned default branch.',
       refPlaceholder: 'main / v1.2.0 / a3f9c…',
       recentUrlsPlaceholder: '— pick a cached repo —',
+      groupOption: '{{name}} (group · {{count}} repos)',
       cloningHint: 'First-time clone may take a few minutes; subsequent launches reuse the cache.',
       urlAutoSync:
         'Cached mirror auto-syncs to remote before launch (fetch + fast-forward of the selected branch).',
@@ -5320,6 +5327,7 @@ export const enUS: Resources = {
       agent: 'Agent',
       workflow: 'Workflow',
       repo: 'Repo',
+      repo_group: 'Repo group',
       global: 'Global',
     },
     scopeRow: {

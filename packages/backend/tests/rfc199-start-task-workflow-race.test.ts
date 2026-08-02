@@ -30,6 +30,7 @@ import {
   startTaskWithLocalRepo,
   type WorkflowLaunchCommitHookEvent,
 } from '../src/services/task'
+import { createRepoGroup } from '@/services/repoGroup'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -199,6 +200,25 @@ describe('RFC-199 startTask workflow delete/version race', () => {
   test('delete-first after multi-repo materialization unregisters every worktree and removes container', async () => {
     harness = await buildHarness(2)
     const workflow = await seedWorkflow(harness.db, 'multi-delete-race')
+    // RFC-248: 两个源仓先经 createRepoGroup 的 URL 导入路径落成 cached_repos，
+    // 再组成一个平铺两仓的组（挂载点 r0 / r1）。
+    const group = await createRepoGroup(
+      { db: harness.db, cache: { db: harness.db, appHome: harness.appHome } },
+      {
+        name: 'rfc199-multi',
+        description: '',
+        members: harness.sourcePaths.map((repoPath, i) => ({
+          kind: 'repo' as const,
+          repoUrl: pathToFileURL(repoPath).href,
+          ref: '',
+          subdir: '',
+          mountPath: `r${i}`,
+          readonly: false,
+        })),
+      },
+      null,
+    )
+    const multiGroupId = group.id
     let captured: WorkflowLaunchCommitHookEvent | undefined
 
     await expect(
@@ -207,7 +227,9 @@ describe('RFC-199 startTask workflow delete/version race', () => {
           workflowId: workflow.id,
           expectedWorkflowVersion: workflow.version,
           name: 'multi-race',
-          repos: harness.sourcePaths.map((repoPath) => ({ repoUrl: pathToFileURL(repoPath).href })),
+          // RFC-248: wire `repos[]` 已退役——多仓一律经 repoGroupId。本条测的
+          // 主题（多仓物化后的 delete-first 竞态回收）不变，只是入口换了。
+          repoGroupId: multiGroupId,
           inputs: {},
         },
         {
@@ -358,6 +380,25 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         .exitCode,
     ).toBe(0)
 
+    // RFC-248 T32: 入口换成仓库组（`repos[]` 已退役），不变量照旧——第二个成员
+    // 物化失败必须把**已经建好的**第一个成员的工作树 / 分支 / 容器目录全回收。
+    const group = await createRepoGroup(
+      { db: harness.db, cache: { db: harness.db, appHome: harness.appHome } },
+      {
+        name: 'rfc199-partial',
+        description: '',
+        members: harness.sourcePaths.map((repoPath, i) => ({
+          kind: 'repo' as const,
+          repoUrl: pathToFileURL(repoPath).href,
+          ref: '',
+          subdir: '',
+          mountPath: `r${i}`,
+          readonly: false,
+        })),
+      },
+      null,
+    )
+
     await expect(
       materializeSpace(
         {
@@ -365,7 +406,7 @@ describe('RFC-199 startTask workflow delete/version race', () => {
           name: 'multi-partial-hard-failure',
           inputs: {},
           workingBranch: blockedBranch,
-          repos: harness.sourcePaths.map((repoPath) => ({ repoPath, baseBranch: 'main' })),
+          repoGroupId: group.id,
         } as unknown as StartTask,
         { db: harness.db, appHome: harness.appHome },
         harness.appHome,
@@ -385,8 +426,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
       '--porcelain',
     ])
     expect(firstWorktrees.stdout).not.toContain(harness.appHome)
-    const multiRoot = join(harness.appHome, 'worktrees', 'multi')
-    if (existsSync(multiRoot)) expect(readdirSync(multiRoot)).toHaveLength(0)
+    const groupRoot = join(harness.appHome, 'worktrees', 'group')
+    if (existsSync(groupRoot)) expect(readdirSync(groupRoot)).toHaveLength(0)
     // The second repo's pre-existing checked-out branch was never ours.
     expect(
       (await runGit(harness.sourcePaths[1]!, ['branch', '--show-current'])).stdout.trim(),

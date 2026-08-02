@@ -12,6 +12,7 @@ import type { CachedRepo } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Field, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
+import type { RepoGroup } from '@agent-workflow/shared'
 import { validateRepoUrl, type RepoSource } from '@/lib/launch-repo-source'
 
 export interface RepoSourceRowProps {
@@ -30,17 +31,35 @@ export interface RepoSourceRowProps {
   previewDirName?: string | null
   /** RFC-066: zero-based position; used for stable test selectors only. */
   index?: number
+  /**
+   * RFC-248: 给了这个回调，下拉里就会**同时列出仓库组**（带 `（组·N 仓）`
+   * 标签）。选中组时调用它——组不是 `RepoSource`，它把整个执行空间切成组空间，
+   * 所以走独立通道而不是塞进 `onChange`。不给则完全维持旧行为（只列仓库）。
+   */
+  onSelectGroup?: (groupId: string) => void
 }
+
+/** 下拉里区分「组条目」与「仓库条目」的值前缀（仓库值是裸 ULID）。 */
+export const GROUP_OPTION_PREFIX = 'group:'
 
 export function RepoSourceRow({
   source,
   onChange,
+  onSelectGroup,
   showRemove,
   onRemove,
   previewDirName,
   index,
 }: RepoSourceRowProps) {
   const { t } = useTranslation()
+  // RFC-248: 仓库组与仓库同列在这一个下拉里——用户视角「就是从仓库列表里选
+  // 一个」，组只是带标签的一类条目（D-决策原话）。选中组时空间整体切成组空间，
+  // 所以这里只往上抛 id，不塞进 RepoSource。
+  const groups = useQuery<{ items: RepoGroup[] }>({
+    queryKey: ['repo-groups'],
+    queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
+    enabled: onSelectGroup !== undefined,
+  })
   const cached = useQuery<{ items: CachedRepo[] }>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
@@ -81,6 +100,10 @@ export function RepoSourceRow({
             placeholder={t('launch.repoSource.recentUrlsPlaceholder')}
             value={source.cachedRepoId ?? ''}
             onChange={(id) => {
+              if (id.startsWith(GROUP_OPTION_PREFIX)) {
+                onSelectGroup?.(id.slice(GROUP_OPTION_PREFIX.length))
+                return
+              }
               if (id !== '') {
                 // RFC-204: reuse by id — the credentialed URL is never sent to
                 // the client, so we carry the id and show the redacted label.
@@ -96,6 +119,15 @@ export function RepoSourceRow({
             options={[
               { value: '', label: t('launch.repoSource.recentUrlsPlaceholder') },
               ...cached.data.items.map((it) => ({ value: it.id, label: it.urlRedacted })),
+              ...(onSelectGroup !== undefined
+                ? (groups.data?.items ?? []).map((g) => ({
+                    value: `${GROUP_OPTION_PREFIX}${g.id}`,
+                    label: t('launch.repoSource.groupOption', {
+                      name: g.name,
+                      count: g.flatRepoCount,
+                    }),
+                  }))
+                : []),
             ]}
           />
         )}

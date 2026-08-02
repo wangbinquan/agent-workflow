@@ -22,6 +22,7 @@ import { getTaskStructuralDiff } from '../src/services/structuralDiff/service'
 import { startTask } from '../src/services/task'
 import { nodeRuns, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
+import { seedRepoGroup } from './helpers/repoGroupFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -70,10 +71,7 @@ async function twoRepoTask(h: Harness) {
     {
       workflowId: 'wf-node',
       name: 't',
-      repos: [
-        { repoPath: h.repos[0]!, baseBranch: 'main' },
-        { repoPath: h.repos[1]!, baseBranch: 'main' },
-      ],
+      repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
       inputs: {},
     } as unknown as StartTask,
     { db: h.db, appHome: h.appHome },

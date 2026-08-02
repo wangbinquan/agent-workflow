@@ -46,7 +46,7 @@ import type {
 import { and, asc, count, desc, eq, gt, inArray, isNull, type SQL } from 'drizzle-orm'
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { insertWorkgroupTaskStateTx, setDwStateTx } from '@/services/workgroup/state'
@@ -549,18 +549,9 @@ export function normalizeStartTaskRepos(input: StartTask): RepoSourceSpec[] {
   // RepoSourceSpec here so nothing downstream has to re-guess.
   const withRef = <T extends object>(base: T, ref: string | undefined): T & { ref?: string } =>
     ref !== undefined ? { ...base, ref } : base
-  if (Array.isArray(input.repos) && input.repos.length > 0) {
-    return input.repos.map((r) => {
-      // The framework-internal face (fusion / test helpers) hands us path specs
-      // that never went through the wire schema — pass those through untouched.
-      if (typeof (r as { repoPath?: unknown }).repoPath === 'string') {
-        return r as unknown as RepoSourceSpec
-      }
-      return typeof r.cachedRepoId === 'string' && r.cachedRepoId.length > 0
-        ? withRef({ cachedRepoId: r.cachedRepoId }, r.ref)
-        : withRef({ repoUrl: r.repoUrl as string }, r.ref)
-    })
-  }
+  // RFC-248: wire 上的 `repos[]` 已退役（顶层键进 RETIRED_START_TASK_KEYS 硬拒）。
+  // 多仓一律由 `repoGroupId` 表达，展平后的成员规格在 materializeSpace 里直接从
+  // 布局产出，不经过这里。这里只剩「单仓 / 框架内部路径规格」两种形态。
   if (typeof input.cachedRepoId === 'string' && input.cachedRepoId.length > 0) {
     return [withRef({ cachedRepoId: input.cachedRepoId }, input.ref)]
   }
@@ -721,19 +712,6 @@ interface MaterializedRepo {
   submoduleInitOk: boolean
   submoduleInitError: string | null
   hasSubmodules: boolean
-}
-
-/**
- * RFC-066: compute the per-repo sub-directory basename for a multi-repo
- * task, applying `-2`/`-3` collision suffixes when the raw basename is
- * already in use. Mirrors the frontend `computePreviewDirNames` behavior
- * so the launcher's preview chip matches what the daemon actually mounts.
- */
-function resolveMultiRepoDirName(rawBasename: string, used: Set<string>): string {
-  if (!used.has(rawBasename)) return rawBasename
-  let suffix = 2
-  while (used.has(`${rawBasename}-${suffix}`)) suffix += 1
-  return `${rawBasename}-${suffix}`
 }
 
 /**
@@ -1093,6 +1071,52 @@ function workflowLaunchHookEvent(
 }
 
 /**
+ * RFC-248 H9 —— 从一个既有任务的**冻结** `task_repos` 快照重建布局（重启）。
+ *
+ * 与 `resolveRepoGroupLayout` 返回同构的 `PlannedRepo[]`，因此下游物化管线
+ * 一行不用改。三条关键语义：
+ *
+ *  - **不读组定义**：源任务当初属于哪个组、那个组现在长什么样，都与这里无关。
+ *    组可能被改布局、被加减成员、被删除；重启要的是「再跑一次刚才那个」。
+ *  - **必须能按镜像 id 重放**：快照里没有 `cached_repo_id` 的行（RFC-204 之前
+ *    的存量、或纯框架内部路径任务）无法安全重放——URL 是脱敏存的，拿它去 clone
+ *    会带着 `***` 认证失败。这种情况直接 422，让调用方改用别的来源，而不是
+ *    悄悄少物化一个仓。
+ *  - **顺序按 repo_index**：与当初物化时一致，分支后缀（D14 同源多份）才对得上。
+ */
+function loadFrozenLayout(db: DbClient, sourceTaskId: string): PlannedRepo[] {
+  const rows = db
+    .select()
+    .from(taskRepos)
+    .where(eq(taskRepos.taskId, sourceTaskId))
+    .orderBy(taskRepos.repoIndex)
+    .all()
+  if (rows.length === 0) {
+    throw new ValidationError(
+      'source-task-not-replayable',
+      `task '${sourceTaskId}' has no frozen repo snapshot to relaunch from`,
+    )
+  }
+  const missing = rows.filter((r) => (r.cachedRepoId ?? '') === '')
+  if (missing.length > 0) {
+    throw new ValidationError(
+      'source-task-not-replayable',
+      `task '${sourceTaskId}' has ${missing.length} repo(s) with no cached mirror id; ` +
+        'its space cannot be replayed (relaunch by picking a repo or repo group instead)',
+    )
+  }
+  return rows.map((r) => ({
+    cachedRepoId: r.cachedRepoId as string,
+    repoUrlRedacted: r.repoUrl ?? '',
+    ref: r.baseBranch,
+    subdir: r.subdir,
+    mountPath: r.mountPath,
+    readonly: r.readonly,
+    viaGroups: [],
+  }))
+}
+
+/**
  * RFC-248 PR-3 —— 按仓库组的展平布局物化整个工作空间。
  *
  * 顺序约束是**硬的**（design §4.2）：
@@ -1314,11 +1338,11 @@ export async function materializeSpace(
     const hasPublicSource =
       input.scratch === true ||
       (typeof input.repoUrl === 'string' && input.repoUrl.length > 0) ||
-      (Array.isArray(input.repos) && input.repos.length > 0)
+      (typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0)
     if (hasPublicSource) {
       throw new ValidationError(
         'internal-source-conflict',
-        'internalSource is mutually exclusive with scratch/repoUrl/repos',
+        'internalSource is mutually exclusive with scratch/repoUrl/repoGroupId',
       )
     }
   }
@@ -1404,7 +1428,13 @@ export async function materializeSpace(
   const groupPlanned: PlannedRepo[] | null =
     typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0
       ? resolveRepoGroupLayout(deps.db, input.repoGroupId).repos
-      : null
+      : typeof input.sourceTaskId === 'string' && input.sourceTaskId.length > 0
+        ? // RFC-248 H9（重启）：按源任务**冻结的** task_repos 快照重放布局。
+          // 刻意**不**读 `repo_groups`——组可能已被改动或删除，而重启的语义是
+          // 「再跑一次刚才那个」。快照与组定义同构（挂载点 / subdir / 只读 /
+          // 镜像 id / ref 都在行上），所以能喂进同一条物化管线。
+          loadFrozenLayout(deps.db, input.sourceTaskId)
+        : null
 
   const repoSpecs =
     deps.internalSource !== undefined
@@ -1547,106 +1577,19 @@ export async function materializeSpace(
     }
   }
 
-  // RFC-066: multi-repo materialize branch. cwd is the parent dir; each
-  // source repo becomes a per-basename sibling worktree under it. The
-  // legacy `tasks.*` repo/worktree/branch columns mirror repos[0] for
-  // back-compat with API consumers that haven't adopted `repos[]` yet.
-  const parentWorktree = join(appHome, 'worktrees', 'multi', taskId)
-  const cleanup = createMaterializedSpaceCleanup(taskId, parentWorktree)
-  try {
-    mkdirSync(parentWorktree, { recursive: true })
-    let earlyError: string | null = null
-    const repos: MaterializedRepo[] = []
-    const usedDirNames = new Set<string>()
-    for (let i = 0; i < resolvedSources.length; i++) {
-      const source = resolvedSources[i]!
-      const rawName = basename(source.repoPath)
-      const dirName = resolveMultiRepoDirName(rawName, usedDirNames)
-      usedDirNames.add(dirName)
-      const wt = await materializeWorktree({
-        repoPath: source.repoPath,
-        baseBranch: source.baseBranch,
-        taskId,
-        appHome,
-        overrideWorktreePath: join(parentWorktree, dirName),
-        // RFC-075: same working branch name applied to every repo in the task.
-        ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-        gitUserName: input.gitUserName ?? null,
-        gitUserEmail: input.gitUserEmail ?? null,
-      })
-      // Ownership is registered immediately after createWorktree hands it off,
-      // before any later per-repo validation/logging can throw.
-      if (wt.cleanup !== null) cleanup.worktrees.push(wt.cleanup)
-      if (wt.earlyError !== null) {
-        earlyError = `repo[${i}] (${dirName}) failed: ${wt.earlyError}`
-        // URL mode: rewrap missing-ref into the legacy `repo-ref-not-found`
-        // error shape so the launcher's existing helpful-list UI continues
-        // to work for the first failing repo.
-        if (
-          source.repoUrl !== null &&
-          /worktree-base-invalid|cannot resolve base ref/i.test(wt.earlyError)
-        ) {
-          const available = await listAvailableRefs(source.repoPath, 10)
-          const spec = repoSpecs[i]!
-          const specRef = 'ref' in spec ? spec.ref : undefined
-          throw new ValidationError(
-            'repo-ref-not-found',
-            `ref '${specRef ?? source.baseBranch ?? '(default)'}' not found in ${redactGitUrl(source.repoUrl)}`,
-            {
-              url: redactGitUrl(source.repoUrl),
-              ref: specRef ?? null,
-              availableRefs: available,
-              repoIndex: i,
-            },
-          )
-        }
-        break
-      }
-      if (!wt.submoduleInitOk) {
-        log.warn('[rfc034/submodule-init-failed] worktree submodule init failed', {
-          taskId,
-          worktreePath: wt.worktreePath,
-          repoIndex: i,
-          stderr: wt.submoduleInitError ?? '',
-        })
-      }
-      repos.push({
-        repoIndex: i,
-        repoPath: source.repoPath,
-        repoUrl: source.repoUrl,
-        cachedRepoId: source.cachedRepoId,
-        baseBranch: source.baseBranch ?? '',
-        branch: wt.branch,
-        baseCommit: wt.baseCommit,
-        worktreePath: wt.worktreePath,
-        worktreeDirName: dirName,
-        mountPath: dirName,
-        subdir: '',
-        readonly: false,
-        gitignoreCommit: null,
-        submoduleInitOk: wt.submoduleInitOk,
-        submoduleInitError: wt.submoduleInitError,
-        hasSubmodules: wt.hasSubmodules,
-      })
-    }
-    // Mirror repos[0] into the legacy `tasks.*` columns for API back-compat.
-    const head0 = repos[0]
-    return {
-      kind: 'multi',
-      spaceKind: resolvedSources.some((s) => s.repoUrl === null) ? 'local' : 'remote',
-      taskId,
-      worktreePath: parentWorktree,
-      branch: head0?.branch ?? '',
-      baseCommit: head0?.baseCommit ?? null,
-      earlyError,
-      resolvedSources,
-      repos,
-      cleanup,
-    }
-  } catch (error) {
-    const report = await cleanupMaterializedSpaceLease(cleanup)
-    throw withWorkspaceCleanupReport(error, report)
-  }
+  // RFC-248 T26: RFC-066 的多仓 materialize 分支（`worktrees/multi/{taskId}` +
+  // basename 平铺 + `resolveMultiRepoDirName` 的 `-2`/`-3` 后缀）**已删除**。
+  // wire 上的 `repos[]` 退役后（顶层键进 RETIRED_START_TASK_KEYS 硬拒），
+  // `repoSpecs.length > 1` 已不可达——多仓一律经 `repoGroupId` 走上面的
+  // `materializeGroupSpace`，它支持挂根、任意嵌套、sparse、只读与同仓多份，
+  // 是旧分支的严格超集。
+  //
+  // 存量任务的 `tasks.worktree_path` 是绝对路径存量值，继续指向老 `multi/`
+  // 目录即可；GC 按 `worktree_path` 删，天然覆盖，无需目录迁移。
+  throw new ValidationError(
+    'start-task-source-required',
+    'multi-repo launches must use repoGroupId (RFC-248); the legacy repos[] path is retired',
+  )
 }
 
 /**
@@ -4311,6 +4254,9 @@ function rowToTask(
     // denormalized column on `tasks` (cheap for list queries); `repos[]` is
     // hydrated by the caller from `task_repos` ordered by `repo_index`.
     repoCount: row.repoCount,
+    // RFC-248: 组溯源。名字是快照——组删掉后详情页仍渲染名字（设计门 G5）。
+    repoGroupId: row.repoGroupId ?? null,
+    repoGroupName: row.repoGroupName ?? null,
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
@@ -4404,6 +4350,8 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     // RFC-066: source-of-truth `tasks.repo_count`. Migration 0034 defaulted
     // every existing row to 1; multi-repo launches set it explicitly.
     repoCount: row.repoCount,
+    // RFC-248: 组名不进 summary DTO——列表页已有「N 仓」chip，再加一列组名会
+    // 把行挤爆；组溯源在详情页展示（`rowToTask` 带）。
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,

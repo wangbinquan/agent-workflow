@@ -14,7 +14,6 @@ import { describe, expect, test } from 'vitest'
 import {
   bodyToRepoSources,
   buildLaunchBody,
-  buildLaunchBodyMultiRepo,
   defaultRepoSource,
   type RepoSource,
 } from '@/lib/launch-repo-source'
@@ -71,12 +70,22 @@ describe('bodyToRepoSources — round-trips through the forward builders', () =>
     expect(bodyToRepoSources(body)).toEqual([src])
   })
 
-  test('multi-repo: inverse(buildLaunchBodyMultiRepo(repos)) === repos', () => {
-    const repos: RepoSource[] = [
+  test('RFC-248: `repos[]` body 已不再产生，但反解仍容忍它（读旧的编辑态）', () => {
+    // `buildLaunchBodyMultiRepo` 随 `repos[]` 一起删除了，所以正向不会再有多仓
+    // body。反向留着是因为 `bodyToRepoSources` 也用于读**历史**的编辑态草稿；
+    // 遇到老形态时至少还原成行，而不是丢空。
+    const body = {
+      workflowId: 'wf',
+      name: 'n',
+      inputs: {},
+      repos: [
+        { repoUrl: 'git@h:o/a.git', ref: 'main' },
+        { repoUrl: 'git@h:o/b.git', ref: 'dev' },
+      ],
+    }
+    expect(bodyToRepoSources(body)).toEqual([
       { kind: 'url', repoUrl: 'git@h:o/a.git', ref: 'main' },
       { kind: 'url', repoUrl: 'git@h:o/b.git', ref: 'dev' },
-    ]
-    const body = buildLaunchBodyMultiRepo(repos, { workflowId: 'wf', name: 'n', inputs: {} })
-    expect(bodyToRepoSources(body)).toEqual(repos)
+    ])
   })
 })

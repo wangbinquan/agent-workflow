@@ -82,27 +82,10 @@ export function isLooseValidBranchName(name: string): boolean {
   return !WORKING_BRANCH_ILLEGAL.test(name)
 }
 
-/**
- * RFC-066/165: single repo entry inside `StartTask.repos[]` — URL-only since
- * RFC-165 retired path mode from the public wire (`file://` URLs are the
- * local-repo escape hatch; framework-internal local launches ride
- * `deps.internalSource` instead). `ref` optional → the cached repo's default
- * branch.
- */
-export const StartTaskRepoSchema = z
-  .object({
-    repoUrl: z.string().min(1).optional(),
-    /**
-     * RFC-204 — reuse an already-cached mirror by id instead of re-sending a
-     * credentialed URL (the wire no longer carries one). XOR with `repoUrl`.
-     */
-    cachedRepoId: z.string().min(1).optional(),
-    ref: z.string().min(1).optional(),
-  })
-  .superRefine((value, ctx) => {
-    refineRepoSourceFields(value, ctx, { requireSource: true })
-  })
-export type StartTaskRepo = z.infer<typeof StartTaskRepoSchema>
+// RFC-248 T32: `StartTaskRepoSchema` / `StartTaskRepo` 已删除——它们只服务于
+// 退役的 `repos[]` 数组项。单仓来源的字段规则仍由下面的 `refineRepoSourceFields`
+// 直接作用在顶层 body 上；多仓来源是 `repoGroupId`，其成员形状归
+// `schemas/repoGroup.ts` 的 `RepoGroupMemberInputSchema`。
 
 /**
  * RFC-204 — per-repo-source rules defined ONCE and reused by both
@@ -353,6 +336,16 @@ export const TaskSchema = z.object({
   /** RFC-066: per-repo detail, length == repoCount, sorted by repoIndex asc. */
   repos: z.array(TaskRepoSchema).default([]),
   /**
+   * RFC-248: 用哪个仓库组启动的（null = 单仓 / scratch）。名字是**快照**（设计
+   * 门 G5）——组删掉后详情页仍渲染名字，不退化成一个悬空 id。
+   *
+   * 只用于溯源展示与记忆注入的 scope；布局本身已经冻结在 `repos[]` 里，所以
+   * 改组不影响在跑的任务（D8）。nullish + 默认 null，让 RFC-248 之前的夹具
+   * 继续解析。
+   */
+  repoGroupId: z.string().nullish().default(null),
+  repoGroupName: z.string().nullish().default(null),
+  /**
    * RFC-159: the `scheduled_tasks` id that auto-launched this task (null =
    * manually launched). Lets the UI link a task back to its schedule; a
    * schedule's run history is `GET /api/tasks?scheduledTaskId=`. Optional (like
@@ -571,24 +564,24 @@ export const StartTaskSchema = z
     gitUserName: z.string().min(1).max(255).optional(),
     gitUserEmail: z.string().min(1).max(255).optional(),
     /**
-     * RFC-066: multi-repo task launch. Length ∈ [1, MULTI_REPO_MAX]. When
-     * present, the legacy top-level `repoPath` / `repoUrl` / `baseBranch` /
-     * `ref` fields MUST be absent (mutex enforced in superRefine). Length-1
-     * arrays are equivalent to the legacy body and walk the single-repo code
-     * path byte-for-byte; length > 1 triggers the multi-repo materialize
-     * branch (parent dir + per-repo sub-worktrees under
-     * `~/.agent-workflow/worktrees/multi/{taskId}/`).
-     */
-    repos: z.array(StartTaskRepoSchema).min(1).max(MULTI_REPO_MAX).optional(),
-    /**
-     * RFC-248: 用一个仓库组作为执行空间。与 `scratch` / 单仓字段 / `repos[]`
+     * RFC-248: 用一个仓库组作为执行空间。与 `scratch` / 单仓字段 / `sourceTaskId`
      * 互斥。服务端展平该组（深度 ≤ 5、展平 ≤ 32）后按布局物化。
      *
-     * 本字段是 **additive** 落地的：`repos[]` 的退役（连同顶层 `repos` 进
-     * `RETIRED_START_TASK_KEYS`、八入口契约迁移）归 PR-4 的 T32a/T32b，
-     * 这样 PR-3 能独立跑绿。
+     * 这是**唯一**的多仓入口——RFC-066 的 `repos[]` 已在 T32 退役（顶层 `repos`
+     * 进 `RETIRED_START_TASK_KEYS`，422 硬拒，不做静默剥除）。
      */
     repoGroupId: z.string().min(1).optional(),
+
+    /**
+     * RFC-248（设计门二轮 H9）——**重启**：按另一个任务**冻结的**仓库快照
+     * （`task_repos` 的 mount_path / subdir / readonly / cached_repo_id / ref）
+     * 重建执行空间，**不读当前的组定义**。
+     *
+     * 为什么不复用 `repoGroupId` 重启：组是可变的、也可能已被删除。用当前组
+     * 重启会静默换掉布局（甚至直接 404），而重启的语义是「再跑一次刚才那个」。
+     * 与 `scratch` / 单仓字段 / `repoGroupId` 互斥。
+     */
+    sourceTaskId: z.string().min(1).optional(),
     /**
      * RFC-075 — optional working branch name. Applies to every repo in a
      * multi-repo task. When set, the worktree is checked out on this branch
@@ -611,10 +604,14 @@ export const StartTaskSchema = z
     const hasLegacyCachedId =
       typeof value.cachedRepoId === 'string' && value.cachedRepoId.length > 0
     const hasLegacy = hasLegacyUrl || hasLegacyCachedId
-    const hasRepos = Array.isArray(value.repos) && value.repos.length > 0
+    // RFC-248: 多仓改由 repoGroupId 表达（`repos[]` 已退役并进硬拒清单）。
+    const hasGroup = typeof value.repoGroupId === 'string' && value.repoGroupId.length > 0
+    // RFC-248 H9: 重启按冻结快照重放，也是一种「空间来源」。
+    const hasSourceTask = typeof value.sourceTaskId === 'string' && value.sourceTaskId.length > 0
+    const hasRepos = hasGroup || hasSourceTask
 
     // RFC-204: same url ⊕ id + query-credential rules the repos[] entries get.
-    // requireSource:false — "at least one source" is decided below vs scratch/repos.
+    // requireSource:false — "at least one source" is decided below vs scratch/group.
     refineRepoSourceFields(value, ctx, { requireSource: false })
 
     // RFC-067: Git identity XOR + format check — runs for EVERY space kind
@@ -666,22 +663,32 @@ export const StartTaskSchema = z
       return // scratch body is complete — repo-source rules below don't apply.
     }
 
-    // RFC-066: legacy ↔ v2 mutex. Mixed body → reject (caller must pick one).
-    if (hasLegacy && hasRepos) {
+    // RFC-248 H9: 组 ↔ 冻结快照互斥——两者都给无法判断该用哪个布局。
+    if (hasGroup && hasSourceTask) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'start-task-source-conflict',
-        path: ['repos'],
+        path: ['sourceTaskId'],
       })
       return
     }
 
-    // RFC-066/165: at least one source (or scratch) must be provided.
+    // RFC-248: 单仓 ↔ 仓库组互斥。给了两个 → 拒（调用方必须挑一个）。
+    if (hasLegacy && hasRepos) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'start-task-source-conflict',
+        path: ['repoGroupId'],
+      })
+      return
+    }
+
+    // RFC-165/248: 三态之一必须给——scratch / 单仓 / 仓库组。
     if (!hasLegacy && !hasRepos) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'start-task-source-required',
-        path: ['repos'],
+        path: ['repoGroupId'],
       })
       return
     }
@@ -720,7 +727,9 @@ export interface LaunchSpaceFields {
    */
   cachedRepoId?: string
   ref?: string
-  repos?: StartTaskRepo[]
+  /** RFC-248: 用仓库组作为执行空间（取代已退役的 `repos[]`）。 */
+  repoGroupId?: string
+  sourceTaskId?: string
 }
 
 export function applySpaceFields<T extends Record<string, unknown>>(
@@ -733,7 +742,8 @@ export function applySpaceFields<T extends Record<string, unknown>>(
     ...(body.repoUrl !== undefined ? { repoUrl: body.repoUrl } : {}),
     ...(body.cachedRepoId !== undefined ? { cachedRepoId: body.cachedRepoId } : {}),
     ...(body.ref !== undefined ? { ref: body.ref } : {}),
-    ...(body.repos !== undefined ? { repos: body.repos } : {}),
+    ...(body.repoGroupId !== undefined ? { repoGroupId: body.repoGroupId } : {}),
+    ...(body.sourceTaskId !== undefined ? { sourceTaskId: body.sourceTaskId } : {}),
   }
 }
 
@@ -749,23 +759,26 @@ export function applySpaceFields<T extends Record<string, unknown>>(
  * Returns the offending key path (e.g. `repoPath`, `repos[2].baseBranch`) or
  * null when the body is clean.
  */
-export const RETIRED_START_TASK_KEYS = ['repoPath', 'baseBranch', 'fetchBeforeLaunch'] as const
+/**
+ * RFC-248 D3/设计门一轮 G1 —— 顶层 `repos` 加进退役清单。
+ *
+ * 这不是洁癖，是**安全网**：`StartTaskSchema` 是非 strict zod，删掉 `repos`
+ * 字段后旧客户端传它会被**静默剥除**，然后任务在**错误的工作区**里跑起来并
+ * 返回 200。多仓改由 `repoGroupId` 表达（布局、ref、只读、嵌套都在组定义里，
+ * wire 上的裸数组表达不了）。
+ */
+export const RETIRED_START_TASK_KEYS = [
+  'repoPath',
+  'baseBranch',
+  'fetchBeforeLaunch',
+  'repos',
+] as const
 
 export function rejectRetiredStartTaskKeys(raw: unknown): string | null {
   if (raw === null || typeof raw !== 'object') return null
   const body = raw as Record<string, unknown>
   for (const key of RETIRED_START_TASK_KEYS) {
     if (key in body) return key
-  }
-  const repos = body['repos']
-  if (Array.isArray(repos)) {
-    for (let i = 0; i < repos.length; i++) {
-      const row = repos[i]
-      if (row === null || typeof row !== 'object') continue
-      for (const key of RETIRED_START_TASK_KEYS) {
-        if (key in (row as Record<string, unknown>)) return `repos[${i}].${key}`
-      }
-    }
   }
   return null
 }
@@ -1287,7 +1300,10 @@ export const StartAgentTaskSchema = z.object({
   /** RFC-204: reuse a cached mirror by id (XOR `repoUrl`; enforced by StartTaskSchema downstream). */
   cachedRepoId: z.string().min(1).optional(),
   ref: z.string().min(1).optional(),
-  repos: z.array(z.unknown()).min(1).max(16).optional(),
+  /** RFC-248: 用仓库组作为执行空间（取代已退役的 `repos[]`）。 */
+  repoGroupId: z.string().min(1).optional(),
+  /** RFC-248 H9: 按另一任务的**冻结** task_repos 快照重放布局（重启）。 */
+  sourceTaskId: z.string().min(1).optional(),
   collaboratorUserIds: z.array(z.string().min(1)).max(64).optional(),
   gitUserName: z.string().max(255).optional(),
   gitUserEmail: z.string().max(255).optional(),

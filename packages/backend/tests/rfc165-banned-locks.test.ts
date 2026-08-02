@@ -27,16 +27,27 @@ import {
   RETIRED_START_TASK_KEYS,
   StartTaskSchema,
   StartWorkgroupTaskSchema,
+  rejectRetiredStartTaskKeys,
 } from '@agent-workflow/shared'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 const read = (rel: string): string => readFileSync(join(ROOT, rel), 'utf8')
 const countOf = (haystack: string, needle: string): number => haystack.split(needle).length - 1
 
-const KEYS = ['repoPath', 'baseBranch', 'fetchBeforeLaunch'] as const
+/**
+ * RFC-248: 前端源码守卫必须**精确**匹配「作为对象键出现」，不能用裸子串。
+ * 新加入退役清单的 `repos` 是个太常见的子串——`cached-repos` / `repoSource` /
+ * `useRepos` 都会误命中，把守卫变成永远红的噪声。负向 lookbehind 排掉前面接
+ * 词字符或连字符的情况。
+ */
+const mentionsAsKey = (src: string, key: string): boolean =>
+  new RegExp(String.raw`(?<![\w-])${key}\s*:`).test(src)
+
+// RFC-165 的三个 path-mode 键 + RFC-248 退役的顶层 `repos`。
+const KEYS = ['repoPath', 'baseBranch', 'fetchBeforeLaunch', 'repos'] as const
 
 describe('RFC-165 — retired-key registry', () => {
-  test('RETIRED_START_TASK_KEYS is exactly the three path-mode keys', () => {
+  test('RETIRED_START_TASK_KEYS 恰好是这四个键（RFC-165 三个 + RFC-248 的 repos）', () => {
     expect([...RETIRED_START_TASK_KEYS].sort()).toEqual([...KEYS].sort())
   })
 })
@@ -60,23 +71,12 @@ describe('RFC-165 — public request schemas never emit the retired keys', () =>
     })
   }
 
-  test('StartTaskSchema repos[i] entries never carry repoPath/baseBranch', () => {
-    const parsed = StartTaskSchema.safeParse({
-      workflowId: 'wf',
-      name: 'n',
-      inputs: {},
-      repos: [
-        { repoUrl: 'https://h/o/a.git', repoPath: '/x', baseBranch: 'main' },
-        { repoUrl: 'https://h/o/b.git', ref: 'dev' },
-      ],
-    })
-    expect(parsed.success).toBe(true)
-    if (parsed.success) {
-      for (const entry of parsed.data.repos ?? []) {
-        expect('repoPath' in entry).toBe(false)
-        expect('baseBranch' in entry).toBe(false)
-      }
-    }
+  test('RFC-248: 顶层 repos 整个被硬拒（原「repos[i] 行内不得含退役键」）', () => {
+    // RFC-248: 这条原本锁「`repos[]` 的行内不得含退役键」。顶层 `repos` 现在
+    // 整个进了 RETIRED_START_TASK_KEYS 硬拒清单（非 strict zod 会静默剥除，
+    // 不硬拒就会在错误工作区里成功启动），所以断言翻成「带 repos 的 body 直接
+    // 被守卫拒掉」——比逐行检查行内键强得多。
+    expect(rejectRetiredStartTaskKeys({ workflowId: 'w', name: 'n', repos: [] })).toBe('repos')
   })
 
   for (const k of KEYS) {
@@ -153,12 +153,12 @@ describe('RFC-165 — frontend launch builders emit no retired keys', () => {
     expect(/\bbaseBranch\s*:/.test(wiz)).toBe(false)
     expect(wiz.includes("from './launch-repo-source'")).toBe(true)
     const wg = read('packages/frontend/src/lib/workgroup-launch.ts')
-    for (const k of KEYS) expect(wg.includes(k)).toBe(false)
+    for (const k of KEYS) expect(mentionsAsKey(wg, k)).toBe(false)
   })
 
   test('RepoSourceRow.tsx is URL-only (no retired keys, no recent-repos query)', () => {
     const row = read('packages/frontend/src/components/launch/RepoSourceRow.tsx')
-    for (const k of KEYS) expect(row.includes(k)).toBe(false)
+    for (const k of KEYS) expect(mentionsAsKey(row, k)).toBe(false)
     expect(row.includes('repos/recent')).toBe(false)
   })
 

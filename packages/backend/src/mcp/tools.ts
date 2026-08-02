@@ -179,12 +179,15 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
         .int()
         .optional()
         .describe('Refuse (409) if the workflow changed since you read it'),
-      repos: z
-        .array(z.record(z.string(), z.unknown()))
+      repoGroupId: z
+        .string()
+        .min(1)
         .optional()
         .describe(
-          'Multi-repo launch; mutually exclusive with the top-level repo fields. ' +
-            'See describe_resource(kind="repos") for how mirrors are identified.',
+          "Multi-repo launch: run in a repo group's materialized layout. " +
+            'Mutually exclusive with the top-level repo fields. RFC-248 retired the ' +
+            'old inline `repos[]` array — passing it now fails with 422. ' +
+            'See resource_read(kind="repo-groups") for available groups.',
         ),
     },
     handler: async (args, ctx) => {
@@ -540,7 +543,24 @@ interface ResourceRoutes {
   readonly note?: string
 }
 
-const RESOURCE_ROUTES: Partial<Record<MatrixResource, ResourceRoutes>> = {
+/**
+ * RFC-248 T30c —— MCP 的资源 kind **不等于**权限域。
+ *
+ * 仓库组在 UI / API 上是独立一类资源，但它的写权限沿用 `repos:*`（它管理的是
+ * 仓库的编排，不是第十一种可授权资源；`MATRIX_RESOURCES` 保持不变，账号页的
+ * 令牌矩阵也就不会多出一个用户无从理解的勾）。所以这里显式把两者拆开：
+ * `McpResourceKind` 是「工具能寻址的资源」，`permissionDomain` 是「写它要哪个点」。
+ */
+export type McpResourceKind = MatrixResource | 'repo-groups'
+
+/** kind → 权限域。缺省即 kind 自身。 */
+const PERMISSION_DOMAIN: Partial<Record<McpResourceKind, MatrixResource>> = {
+  'repo-groups': 'repos',
+}
+
+const permissionDomainFor = (kind: McpResourceKind): string => PERMISSION_DOMAIN[kind] ?? kind
+
+const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
   agents: {
     list: { method: 'GET', path: '/api/agents' },
     get: { method: 'GET', path: '/api/agents/:id' },
@@ -611,6 +631,21 @@ const RESOURCE_ROUTES: Partial<Record<MatrixResource, ResourceRoutes>> = {
       'Repos are imported in batches: `create` takes a batch payload, not one repo. There is no update — ' +
       'a mirror is refreshed, not edited.',
   },
+  'repo-groups': {
+    list: { method: 'GET', path: '/api/repo-groups' },
+    get: { method: 'GET', path: '/api/repo-groups/:id' },
+    create: { method: 'POST', path: '/api/repo-groups' },
+    update: { method: 'PUT', path: '/api/repo-groups/:id' },
+    delete: { method: 'DELETE', path: '/api/repo-groups/:id' },
+    note:
+      'RFC-248: a repo group is a named multi-repo layout (mount paths, nesting, sparse subdir, ' +
+      'readonly). It is the ONLY way to launch a multi-repo task — `launch_task` takes ' +
+      '`repoGroupId`; the old inline `repos[]` array is retired and now fails with 422. ' +
+      'Writes are gated on `repos:*` (a group orchestrates repos, it is not a separate grantable ' +
+      'resource). Updates are fenced: pass the `version` from a prior read as `expectedVersion`. ' +
+      'Delete refuses (409) while other groups or enabled scheduled tasks still reference it; ' +
+      'pass force=1 to detach those groups and disable those schedules.',
+  },
   memory: {
     list: { method: 'GET', path: '/api/memories' },
     get: { method: 'GET', path: '/api/memories/:id' },
@@ -637,11 +672,13 @@ const RESOURCE_KINDS = [
   'workgroups',
   'scheduled-tasks',
   'repos',
+  // RFC-248: 独立 kind、权限沿用 `repos:*`（见 PERMISSION_DOMAIN）。
+  'repo-groups',
   'memory',
 ] as const
 
 /** Exported for the drift lock in tests. */
-export const MCP_RESOURCE_KINDS: ReadonlyArray<MatrixResource> = RESOURCE_KINDS
+export const MCP_RESOURCE_KINDS: ReadonlyArray<McpResourceKind> = RESOURCE_KINDS
 
 const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
   {
@@ -751,12 +788,12 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
       'whose absence makes an update fail.',
     permissions: [],
     inputSchema: { kind: z.enum(RESOURCE_KINDS) },
-    handler: async (args) => describeResource(args.kind as MatrixResource),
+    handler: async (args) => describeResource(args.kind as McpResourceKind),
   },
 ]
 
 function routesFor(kind: unknown): ResourceRoutes {
-  const routes = RESOURCE_ROUTES[kind as MatrixResource]
+  const routes = RESOURCE_ROUTES[kind as McpResourceKind]
   if (routes === undefined) throw new Error(`unknown resource kind: ${String(kind)}`)
   return routes
 }
@@ -767,8 +804,8 @@ function fillId(path: string, id: unknown): string {
   return path.replace(':id', encodeURIComponent(id))
 }
 
-export function describeResource(kind: MatrixResource): {
-  kind: MatrixResource
+export function describeResource(kind: McpResourceKind): {
+  kind: McpResourceKind
   operations: Array<{ operation: string; method: string; path: string; permission: string | null }>
   bodySchemas: ResourceBodySchemas
   note?: string
@@ -784,7 +821,12 @@ export function describeResource(kind: MatrixResource): {
       method: op.method,
       path: op.path,
       // Reads need no point (D3); writes need the matching verb.
-      permission: operation === 'list' || operation === 'get' ? null : `${kind}:${operation}`,
+      // RFC-248 T30c: 权限点用**权限域**拼，不是 kind——`repo-groups` 的写点
+      // 是 `repos:update` 之类，不存在 `repo-groups:update` 这个点。
+      permission:
+        operation === 'list' || operation === 'get'
+          ? null
+          : `${permissionDomainFor(kind)}:${operation}`,
     })
   }
   // The field contract, derived from the same zod objects the routes validate

@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { createInMemoryDb } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -215,19 +216,26 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
   })
 
   test('without preCreatedWorktree, falls back to the original git path', async () => {
+    // RFC-248 修正：这条自 RFC-165 退役 `repoPath` 起就在**空转**——顶层
+    // `repoPath` 不再被 `normalizeStartTaskRepos` 识别，repoSpecs 为空、落进
+    // 多仓分支只建了个空容器目录，而断言只查「目录存在」，于是一直绿着却什么
+    // 都没测。RFC-248 给空来源加了显式 422 后它才露出来。
+    // 改用幸存的单仓 wire 形态（`file://` URL），让它真的走一遍单仓 git 路径。
     const { appHome, repoPath, db, stubOpencode, wf } = await setup()
     const task = await startTask(
       {
         workflowId: wf.id,
         name: 'fixture-task',
-        repoPath,
-        baseBranch: 'main',
+        repoUrl: pathToFileURL(repoPath).href,
         inputs: { topic: 'orders' },
       } as unknown as StartTask,
       { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
     )
     expect(task.worktreePath).not.toBe('')
     expect(existsSync(task.worktreePath)).toBe(true)
+    // 真的物化出了单仓工作树：仓内文件在，且不是空的多仓容器。
+    expect(task.repoCount).toBe(1)
+    expect(existsSync(join(task.worktreePath, '.git'))).toBe(true)
   })
 
   test('materializeWorktree returns earlyError on bad repo', async () => {

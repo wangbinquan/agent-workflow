@@ -22,6 +22,7 @@ import {
 import { startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
+import { seedRepoGroup } from './helpers/repoGroupFixture'
 
 describe('splitRepoRef', () => {
   test('strips the matching repo-dir prefix', () => {
@@ -91,10 +92,7 @@ async function twoRepoTask(h: Harness) {
     {
       workflowId: 'wf-cc',
       name: 't',
-      repos: [
-        { repoPath: h.repos[0]!, baseBranch: 'main' },
-        { repoPath: h.repos[1]!, baseBranch: 'main' },
-      ],
+      repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
       inputs: {},
     } as unknown as StartTask,
     { db: h.db, appHome: h.appHome },

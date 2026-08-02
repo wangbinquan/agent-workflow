@@ -26,14 +26,25 @@ describe('RFC-066 PR-C — task detail multi-repo header', () => {
     expect(SRC).toContain('data-testid="task-detail-multi-repo"')
   })
 
-  test('F11b iterates tk.repos with worktreeDirName + baseBranch + redactGitUrl', () => {
+  test('F11b iterates tk.repos with mountPath + baseBranch + redactGitUrl', () => {
     expect(SRC).toContain('tk.repos.map')
-    expect(SRC).toContain('worktreeDirName')
+    // RFC-248: 显示的是**挂载路径**而不是 basename——嵌套布局下 basename 丢
+    // 方位（`sdk` 说不清它在哪一层），`vendor/sdk` 才是用户能 `cd` 过去的东西。
+    expect(SRC).toContain('r.mountPath')
     expect(SRC).toContain('baseBranch')
     // Each row carries a stable testid per repoIndex.
     expect(SRC).toContain('task-detail-multi-repo-row-')
     // RFC-024 redactGitUrl is reused for the URL column (no cleartext leak).
     expect(SRC).toContain('redactGitUrl(r.repoUrl)')
+  })
+
+  test('RFC-248: 组溯源 chip 与只读 chip 都在多仓块里', () => {
+    // 组名是启动时的快照（设计门 G5），组被删也要能渲染——所以读的是
+    // `tk.repoGroupName` 而不是去查当前的组定义。
+    expect(SRC).toContain('tk.repoGroupName')
+    expect(SRC).toContain('task-detail-repo-group')
+    // 只读成员要一眼可辨：它的改动不进 diff、不推送（D11）。
+    expect(SRC).toContain('task-detail-repo-readonly-')
   })
 
   test('F11c summary label sourced from i18n key `tasks.multiRepoSummary`', () => {

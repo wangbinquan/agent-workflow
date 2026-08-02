@@ -26,6 +26,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { getTask, resumeTask, startTask, startTaskWithLocalRepo } from '../src/services/task'
 import { nodeRuns, tasks as tasksTbl, workflows } from '../src/db/schema'
 import { gitStashSnapshot, runGit } from '../src/util/git'
+import { seedRepoGroup } from './helpers/repoGroupFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -119,10 +120,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       {
         workflowId: 'wf-rb',
         name: 't',
-        repos: [
-          { repoPath: h.repos[0]!, baseBranch: 'main' },
-          { repoPath: h.repos[1]!, baseBranch: 'main' },
-        ],
+        repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
       { db: h.db, appHome: h.appHome, awaitScheduler: true },
@@ -164,10 +162,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       {
         workflowId: 'wf-rb',
         name: 't',
-        repos: [
-          { repoPath: h.repos[0]!, baseBranch: 'main' },
-          { repoPath: h.repos[1]!, baseBranch: 'main' },
-        ],
+        repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
       { db: h.db, appHome: h.appHome, awaitScheduler: true },

@@ -17,7 +17,6 @@ import {
 import {
   bodyToRepoSources,
   buildLaunchBody,
-  buildLaunchBodyMultiRepo,
   defaultRepoSource,
   type LaunchCommonPayload,
   type RepoSource,
@@ -31,7 +30,16 @@ export type WizardKind = ScheduledLaunchKind
  * the RFC-165 temporary space (backend `git init`s an empty repo — no repo
  * fields on the wire, `scratch: true` instead).
  */
-export type WizardSpace = { kind: 'scratch' } | { kind: 'remote'; repos: RepoSource[] }
+export type WizardSpace =
+  | { kind: 'scratch' }
+  | { kind: 'remote'; repos: RepoSource[] }
+  /**
+   * RFC-248: 仓库组空间。多仓**只能**由组表达——布局（挂载点 / 嵌套 /
+   * sparse / 只读）住在组定义里，向导里临时拼 N 行 URL 表达不了它，
+   * 且 wire 上的 `repos[]` 已退役。用户视角这仍是「从仓库列表里选一个」，
+   * 组只是列表里带标签的一类条目。
+   */
+  | { kind: 'group'; groupId: string }
 
 export function defaultWizardSpace(kind: 'remote' | 'scratch' = 'remote'): WizardSpace {
   return kind === 'scratch' ? { kind: 'scratch' } : { kind: 'remote', repos: [defaultRepoSource()] }
@@ -58,10 +66,21 @@ export interface WizardAdvancedFields {
  * remote round-trip.
  */
 function buildSpaceBody(space: WizardSpace, common: LaunchCommonPayload): Record<string, unknown> {
+  if (space.kind === 'group') {
+    // RFC-248: 组空间只发 `repoGroupId`——布局由服务端展平。仓库字段一个都
+    // 不带（schema 里单仓 ⊕ 组互斥）。
+    const body = buildLaunchBody(defaultRepoSource(), common)
+    delete body.repoUrl
+    delete body.cachedRepoId
+    delete body.ref
+    body.repoGroupId = space.groupId
+    return body
+  }
   if (space.kind === 'remote') {
-    return space.repos.length > 1
-      ? buildLaunchBodyMultiRepo(space.repos, common)
-      : buildLaunchBody(space.repos[0] ?? defaultRepoSource(), common)
+    // RFC-248: remote 空间恒为**单行**——多仓由 `kind: 'group'` 表达。向导侧
+    // 用 `maxCount={1}` 关掉了加行入口（`tests/task-wizard-builders.test.ts`
+    // 锁住这条），所以这里取首行不构成静默丢仓。
+    return buildLaunchBody(space.repos[0] ?? defaultRepoSource(), common)
   }
   const { workingBranch: _wb, autoCommitPush: _acp, ...rest } = common
   const body = buildLaunchBody(defaultRepoSource(), rest)
@@ -295,7 +314,9 @@ export function payloadToWizardSeed(
     space:
       payload.scratch === true
         ? { kind: 'scratch' }
-        : { kind: 'remote', repos: bodyToRepoSources(payload) },
+        : typeof payload.repoGroupId === 'string' && payload.repoGroupId.length > 0
+          ? { kind: 'group', groupId: payload.repoGroupId }
+          : { kind: 'remote', repos: bodyToRepoSources(payload) },
     inputs:
       typeof payload.inputs === 'object' && payload.inputs !== null
         ? Object.fromEntries(
@@ -431,21 +452,44 @@ export function taskToLaunchPayload(task: Task): {
     // (RFC-054 W3-4), so relaunching a private repo by URL sent `https://***@…`
     // and failed authentication — it was never a usable relaunch source. The id
     // is; the daemon resolves the real URL server-side.
-    const repos = task.repos
-      .filter((r) => (r.cachedRepoId ?? '') !== '' || (r.repoUrl ?? '') !== '')
-      .map((r) =>
-        (r.cachedRepoId ?? '') !== ''
-          ? {
-              cachedRepoId: r.cachedRepoId as string,
-              ...(r.baseBranch ? { ref: r.baseBranch } : {}),
-            }
-          : {
-              repoUrl: r.repoUrl ?? '',
-              ...(r.baseBranch ? { ref: r.baseBranch } : {}),
-            },
-      )
-    if (repos.length > 0) payload.repos = repos
-    else spaceResolvable = false
+    // RFC-248 H9: 多仓（含任何非根挂载 / sparse / 只读的组布局）改用
+    // `sourceTaskId` 让**服务端**按冻结的 `task_repos` 快照重放。理由：
+    //   - wire 上的 `repos[]` 已退役（顶层键硬拒 422）；
+    //   - 改传 `repoGroupId` 会读**当前**组定义——组被改过或删掉时，重启会静默
+    //     换布局或直接失败，而重启的语义是「再跑一次刚才那个」；
+    //   - 布局信息（挂载点 / subdir / 只读）本来就不在 DTO 的 repos[] 里，
+    //     前端也无从重建。
+    const replayable = task.repos.filter((r) => (r.cachedRepoId ?? '') !== '')
+    const isMultiSpace = task.repos.length > 1 || task.repos.some((r) => (r.mountPath ?? '') !== '')
+    if (isMultiSpace) {
+      // 有任何一行缺镜像 id ⇒ 服务端也重放不了（脱敏 URL 不能 clone），
+      // 与其发出去吃 422，不如让向导退回默认空间。
+      if (replayable.length === task.repos.length && task.repos.length > 0) {
+        payload.sourceTaskId = task.id
+      } else {
+        spaceResolvable = false
+      }
+    } else {
+      // 单仓：保持原样按 id/URL 预填，向导仍可显示并让用户改仓。
+      // RFC-204: prefer the mirror id — `repoUrl` 是脱敏存的，拿它重启会
+      // 带着 `https://***@…` 认证失败，从来就不是可用的重启来源。
+      const repos = task.repos
+        .filter((r) => (r.cachedRepoId ?? '') !== '' || (r.repoUrl ?? '') !== '')
+        .map((r) =>
+          (r.cachedRepoId ?? '') !== ''
+            ? {
+                cachedRepoId: r.cachedRepoId as string,
+                ...(r.baseBranch ? { ref: r.baseBranch } : {}),
+              }
+            : {
+                repoUrl: r.repoUrl ?? '',
+                ...(r.baseBranch ? { ref: r.baseBranch } : {}),
+              },
+        )
+      const first = repos[0]
+      if (first !== undefined) Object.assign(payload, first)
+      else spaceResolvable = false
+    }
   }
 
   // Common advanced fields (git identity is pair-gated; only send set ones).

@@ -55,14 +55,25 @@ describe('RFC-066 PR-A — source guards', () => {
     // call site allowed to pass overrideWorktreePath. The single-path branch
     // (length === 1) must omit it. We grep by anchoring on the surrounding
     // comments.
+    // RFC-248 T26: 原来的结束锚点是 RFC-066 多仓分支的注释，那个分支已被删除
+    // （多仓一律走 `materializeGroupSpace`）。守卫的意图不变——单仓分支不得传
+    // `overrideWorktreePath`——只是结束锚点改成接替它的退役抛错注释。
     const singlePathSection = extractSection(
       TASK_SRC,
       'RFC-066: single-path byte-baseline branch',
-      // End anchor: the next `} else {` opens the multi-repo branch.
-      'RFC-066: multi-repo materialize branch',
+      'RFC-248 T26',
     )
     expect(singlePathSection.length).toBeGreaterThan(0)
     expect(singlePathSection.includes('overrideWorktreePath')).toBe(false)
+
+    // 组路径**是**合法的 override 消费方——确认它确实在用，否则上面的断言会
+    // 因为「全仓库都没人传 override」而变成空守卫。
+    const groupSection = extractSection(
+      TASK_SRC,
+      'async function materializeGroupSpace',
+      'RFC-066: single-path byte-baseline branch',
+    )
+    expect(groupSection.includes('overrideWorktreePath')).toBe(true)
   })
 
   test('G4 migration 0034 file exists with the expected RFC-066 tag', () => {

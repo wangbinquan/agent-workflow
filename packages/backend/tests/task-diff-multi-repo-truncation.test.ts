@@ -32,6 +32,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { getTaskDiff, startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
+import { seedRepoGroup } from './helpers/repoGroupFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TASK_DIFF_MAX_BYTES = 1024 * 1024 // mirror of the cap in task.ts:1640.
@@ -95,10 +96,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
       {
         workflowId: 'wf-trunc',
         name: 't',
-        repos: [
-          { repoPath: h.repos[0]!, baseBranch: 'main' },
-          { repoPath: h.repos[1]!, baseBranch: 'main' },
-        ],
+        repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },
@@ -126,10 +124,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
       {
         workflowId: 'wf-trunc',
         name: 't',
-        repos: [
-          { repoPath: h.repos[0]!, baseBranch: 'main' },
-          { repoPath: h.repos[1]!, baseBranch: 'main' },
-        ],
+        repoGroupId: await seedRepoGroup(h.db, h.appHome, [h.repos[0]!, h.repos[1]!]),
         inputs: {},
       } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },

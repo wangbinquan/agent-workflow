@@ -236,7 +236,7 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     expect(res.status).toBe(409)
   })
 
-  test('DELETE 返回归档记忆数与摘除引用数', async () => {
+  test('DELETE 返回归档记忆数、摘除引用数与禁用计划数', async () => {
     const created = (await (
       await req(h.app, '/api/repo-groups', {
         method: 'POST',
@@ -249,6 +249,8 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
       ok: true,
       archivedMemories: 0,
       detachedReferences: 0,
+      // RFC-248 #10: force 删除时被禁用的定时任务数；这里没有引用它的计划。
+      disabledSchedules: 0,
     })
     expect((await (await req(h.app, '/api/repo-groups')).json()) as unknown).toEqual({ items: [] })
   })

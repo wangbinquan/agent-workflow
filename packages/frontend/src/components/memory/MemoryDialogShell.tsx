@@ -80,6 +80,17 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
       api.get<{ items: CachedRepoListEntry[] }>('/api/cached-repos', undefined, signal),
     enabled: props.open && props.contentState === undefined,
   })
+  // RFC-248: `repo_group` 档的下拉来源。
+  const repoGroups = useQuery<{ items: Array<{ id: string; name: string }> }>({
+    queryKey: ['repo-groups'],
+    queryFn: ({ signal }) =>
+      api.get<{ items: Array<{ id: string; name: string }> }>(
+        '/api/repo-groups',
+        undefined,
+        signal,
+      ),
+    enabled: props.open && props.contentState === undefined,
+  })
   const owners = useUserLookup([
     ...(agents.data ?? []).map((agent) => agent.ownerUserId),
     ...(workflows.data ?? []).map((workflow) => workflow.ownerUserId),
@@ -149,6 +160,7 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
               (ownerUserId) => owners.get(ownerUserId)?.displayName ?? ownerUserId ?? undefined,
             )}
             repos={reposToOptions(repos.data?.items)}
+            repoGroups={(repoGroups.data?.items ?? []).map((g) => ({ id: g.id, label: g.name }))}
             disabled={props.pending}
           />
         </>

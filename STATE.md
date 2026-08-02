@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-📝 **进行中 RFC（Draft，2026-08-02）：[RFC-248 仓库组](design/RFC-248-repo-groups/proposal.md)** —— 用户要求「在远端仓库里增加仓库组的概念，运行任务可以选择一个仓库组，记忆也可以绑定在仓库组上，一个仓库组包含多个仓库并可以指定各仓库在运行时目录的目录结构」。**七轮反问逐条拍板，固化为 proposal §决策清单 D1–D21**，其中几条改变了实现范围：仓库组**取代**手填多仓（wire 删 `repos[]` 改 `repoGroupId`，存量定时任务多仓 payload 断代）；至多一个成员挂**根**（单成员挂根 = 今天的单仓、字节级保 baseline，把「单仓是多仓的特例」做实）；支持**仓内子目录挂载**（sparse，非 cone）与**组套组**（递归展平，深度 ≤ 5 / 展平 ≤ 32）；解禁 RFC-066 当年禁掉的 `wrapper-git`（`git_diff` = 全组拼接）与 multipart 上传；成员可标 `readonly`（不快照/不进 diff/不推送，被改动只告警）；记忆加第 5 种 scope `repo_group`；权限**复用 `repos:*`** 不进 RFC-099 per-resource ACL（唯一目录变化 = 新增 `repos:update`）。
+📝 **进行中 RFC（In Progress，2026-08-02；PR-1…PR-4 + PR-5a 已合入 `main`，余 PR-5b 管理界面）：[RFC-248 仓库组](design/RFC-248-repo-groups/proposal.md)** —— 用户要求「在远端仓库里增加仓库组的概念，运行任务可以选择一个仓库组，记忆也可以绑定在仓库组上，一个仓库组包含多个仓库并可以指定各仓库在运行时目录的目录结构」。**七轮反问逐条拍板，固化为 proposal §决策清单 D1–D21**，其中几条改变了实现范围：仓库组**取代**手填多仓（wire 删 `repos[]` 改 `repoGroupId`，存量定时任务多仓 payload 断代）；至多一个成员挂**根**（单成员挂根 = 今天的单仓、字节级保 baseline，把「单仓是多仓的特例」做实）；支持**仓内子目录挂载**（sparse，非 cone）与**组套组**（递归展平，深度 ≤ 5 / 展平 ≤ 32）；解禁 RFC-066 当年禁掉的 `wrapper-git`（`git_diff` = 全组拼接）与 multipart 上传；成员可标 `readonly`（不快照/不进 diff/不推送，被改动只告警）；记忆加第 5 种 scope `repo_group`；权限**复用 `repos:*`** 不进 RFC-099 per-resource ACL（唯一目录变化 = 新增 `repos:update`）。
 
 **嵌套的 git 语义是本 RFC 的技术核心，七条断言全部在 git 2.50.1 上跑过真实命令**（proposal §实测依据 E1–E7、design §3.6 附脚本）：①嵌套仓在外层显示为一个未跟踪目录、`ls-files --others` 不递归；②`git add -A`（RFC-075 自动提交推送用的正是它）会把嵌套仓**当 gitlink 提交并告警**，不处理就推出坏子模块指针；③`.git/info/exclude` 是 **common-dir 级**的，写进去会污染同镜像**所有**任务 worktree，per-worktree gitdir 下那份**无效**；④`extensions.worktreeConfig` + `--worktree core.excludesFile` 可行且不泄漏（本 RFC 未采用，但记录下来——RFC-067 当年否决它的理由「父仓不是我们的」在 RFC-165 砍掉本地路径启动后已不成立）；⑤sparse 模式文件 `$GIT_DIR/info/sparse-checkout` 反而**是** per-worktree 的；⑥非 cone 模式能做到挂点下只有目标子目录（cone 会连带检出仓根级文件）；⑦`worktree add` 到已存在非空目录直接 fatal ⇒ 「挂载点被外层仓内容占用」必须是启动期显式失败。用户在知情「会在远端工作分支上多一个平台 commit」的前提下选了 **`.gitignore` + 平台预置 commit（`base_commit` 指向它）** 方案，因此审计 diff 干净、`git status` 干净、`add -A` 不吞嵌套仓。
 
@@ -18,9 +18,16 @@
 
 **改设计、归 PR-3/PR-4 的 4 条**：**H4** —— `git_diff` 端口**从来不是 patch**（`nodePorts.ts:188` 是 `list<path<*>>`、`scheduler.ts:7834` 注释亦然），design §6.4 初稿写错，照它实现会让 fanout 把 marker 行当路径；连带发现 `util/diffSplit.ts` **零生产调用方**，PR-1 给它加的仓 marker 游标是为已证伪设计写的投机代码，**已回退**；新契约 = 逐仓 `gitChangedFiles` + `mountPath` 前缀化后合并，仓归属建模为 `repoKey + relPath`。**H8** —— 一轮我用「按构造无歧义」否决了「结构化实体加独立 `repoKey`」，**该论证被证伪**：sparse checkout 只控制工作树、**不删索引里的已跟踪路径**，容器仍可跟踪 `hidden/dep/file` 而工作树无 `hidden/dep`，于是子仓挂得进去、之后 `git rm --cached --sparse` 能让容器产出同路径变更、`splitRepoPrefix` 静默错归属 ⇒ 占用校验升级到 **git tree 层面** + 结构化实体**显式携带 repoKey**（从「未来重构」升级为 PR-4 必做）。**H9** —— 八入口迁移表漏了**重启**（`taskToLaunchPayload` 会重建 `payload.repos`，退役后直接 422；且必须用**冻结快照**而非当前组）与**定时任务**（删组后留下反复失败的启用计划）⇒ 扩到 10 行。两条 P2：文档索引/CHECK 计数写错（实为 5/7）+ `schema.ts` 表达不了的约束需一致性测试；MCP 需独立 kind `repo-groups` 且 kind 与 permissionDomain 解耦。
 
-**已入库并推送**（分支 `rfc-248-repo-groups`）：`f6e637dd` RFC 三件套 → `eb4f6194` 一轮闭环 → `fb04f84e`+`6d78cff0` PR-1 → `fcfbfdc9` PR-2a → `d04854c5` PR-2b → `024d843a` 交付记录 → 二轮修复批。**PR-3/PR-4/PR-5 未开工**；三条改设计的 P1 落地后需要**第三轮**设计门。
+**已入库并推送（全部在 `main` 上——本仓禁止非主干开发）**：`f6e637dd` RFC 三件套 → `eb4f6194` 一轮闭环 → `fb04f84e`+`6d78cff0` PR-1 → `fcfbfdc9` PR-2a → `d04854c5` PR-2b → `024d843a` 交付记录 → 二轮修复批 → `8dd8b6e8`…`fa6c1d6d` PR-3 → PR-4 + PR-5a。
 
-⚠ **跨 session 提醒**：并发 session 的 commit `94c654ad`（RFC-247 实现门第二批）因分支切换落到了 `rfc-248-repo-groups` 而非 `main`，未做任何改写，随分支一起推了远端；要归位一次 cherry-pick 即可。
+**PR-4 + PR-5a 这一批做完的**（三条改设计的 P1 全部落地）：
+- **H4** wrapper-git 多仓 = 逐仓 `gitChangedFiles` + 挂载路径前缀化合并（端口仍是 `list<path>`，下游 fanout 零改动）；**H8** 结构化实体显式携带 `repoKey`，前后端都不再按路径前缀反推归属；**H9** 迁移表第 9/10 行——重启改走**冻结快照**（新增第 4 种启动来源 `sourceTaskId`，读 `task_repos` 而非可变的当前组）、删组检查并禁用引用它的**启用中定时任务**。
+- **T32 八入口断代闭环**：顶层 `repos` 进 `RETIRED_START_TASK_KEYS`（非 strict zod 会静默剥除 ⇒ 必须硬拒 422），三个 Start\*Schema / `LaunchSpaceFields` / scheduled payload / REST JSON+multipart / MCP `launch_task` / e2e 夹具逐个迁到 `repoGroupId`。**T26 把 RFC-066 的多仓 materialize 分支整段删除**（101 行 + `resolveMultiRepoDirName`），多仓只剩 `materializeGroupSpace` 一条路径。
+- **T30c** MCP 的资源 kind 与权限域解耦：`repo-groups` 独立成 kind，写权限沿用 `repos:*`。
+- **PR-5a 前端**：启动向导的仓库下拉里同列仓库组（用户视角只多了个标签）、remote 空间锁成单行、任务详情的组 chip + 只读 chip + 挂载路径、记忆表单第 5 档 scope、`changeReview` 读 `repoKey`、e2e 重写为组路径。
+- 顺手修掉两条**早已空转**的测试（`task-start-pre-worktree` 的单仓回落自 RFC-165 起只建空目录就断言「目录存在」；`rfc107` 的 D12 因旧路径不给同源仓加分支后缀而只物化一个仓）。
+
+**余下 PR-5b（组的管理界面）**：`/repos` 页的分段控件、`RepoGroupEditor` 弹窗、`RepoLayoutTree` 公共组件。启动面与消费面已完整可用——组可经 `POST /api/repo-groups` 或 MCP `resource_write(kind="repo-groups")` 创建。三条改设计的 P1 已落地，**第三轮设计门 + 实现门**待跑。
 
 ✅ **已完成并合入 main（2026-08-02）：[RFC-247 MCP 远程接入、路由元数据授权层与 API 文档界面](design/RFC-247-mcp-remote-access/proposal.md)** —— 平台首次对外提供程序化接口：`POST /api/mcp`（Streamable HTTP / 无状态 / 只接 PAT）+ 账号页自助签发令牌 + **资源类型 × `新增/修改/删除/执行`** 矩阵（**读恒开**，空矩阵 = 只读）。**显式 supersede RFC-221 D1**。为让「能建不能改」「不能删」在 REST 层真实成立，把 `资源:write` 拆成 `:create/:update/:delete`，并引入**路由元数据注册层**作为权限门单一事实源。用户授权「不用管现有实现、还没人用」⇒ 存量断代、零兼容包袱。决策固化为 proposal §3 的 **D1–D19**；**单 RFC / 5 PR 按层切**（T1–T40）。
 

@@ -16,8 +16,9 @@
 | **PR-2b**  | ✅   | `d04854c5`              | T13/T14/T15/T16/T17 服务层 + 六条路由 + 权限点 + 记忆第五档 + 18 条服务测试                                            |
 | 设计门二轮 | ✅   | 见下                    | **9×P1 + 2×P2，判定 needs-attention**；5 条代码 P1 已修并带锁，4 条改设计的归 PR-3/PR-4；G2 由外部迁移探针独立验证通过 |
 | **PR-3**   | ✅   | `8dd8b6e8`…`fa6c1d6d`   | T19/T19b/T19c/T20/T21/T22/T24/T27 + 权限守卫；尾巴 T23半/T25/T26半 未做                                                |
-| **PR-4**   | 🔄   | 进行中                  | ✅T28/T28b/T29/T29b/T30/T31/T33/T26半 · ❌T30b/T30c/T32a/T32b/T34                                                      |
-| **PR-5**   | ⬜   | —                       | 前端（`/repos` 分段 / 组编辑器 / 布局树 / 启动选择器 / 任务详情 / 记忆表单）                                           |
+| **PR-4**   | ✅   | 见 PR-4/5 合并 commit   | T28/T28b/T29/T29b/T30/T30b/T30c/T31/T32a/T32b/T33/T34 + T26 全量（旧多仓分支删除）                                     |
+| **PR-5a**  | ✅   | 同上                    | 启动选择器（仓库/组同列）· 任务详情组 chip + 只读 chip + 挂载路径 · 记忆表单第五档 · changeReview `repoKey` · e2e 重写 |
+| **PR-5b**  | ⬜   | —                       | `/repos` 分段控件 · `RepoGroupEditor` 弹窗 · `RepoLayoutTree` 公共组件（组的**管理界面**，启动/消费面已可用）          |
 
 实现期相对设计稿的**偏离**（均已回写文档）：
 
@@ -37,6 +38,35 @@
 - **P2-1 修正**：`memories` 是 **5 个索引 / 7 个 CHECK**（初稿写 4/6）；
   删 `worktree_dir_name` 的迁移**不再预留 0132**（已被记忆 scope 占用），
   实现期现取尾号。
+
+### PR-4/5a 实现期偏离（均为「面向代码最合理」的择优，非缩水）
+
+- **`sourceTaskId` 是第 4 种启动来源**（设计 §2.3a #9）。设计只说「服务端按
+  `sourceTaskId` 用冻结快照重建」，实现把它落成 `StartTaskSchema` 的一等来源
+  字段（与 scratch / 单仓 / 组四选一、两两互斥），`loadFrozenLayout` 把
+  `task_repos` 行还原成与 `resolveRepoGroupLayout` **同构**的 `PlannedRepo[]`，
+  于是复用同一条物化管线、零分叉。缺 `cached_repo_id` 的存量行显式 422
+  （脱敏 URL clone 会带 `***` 认证失败），不静默少物化一个仓。
+- **T30c 把 MCP 的 kind 与权限域解耦**。`repo-groups` 成为独立的工具寻址单位，
+  但写权限沿用 `repos:*`——给账号页的令牌矩阵加一行 `repo-groups:*` 只会让用户
+  面对一个无从理解的勾。RFC-247 的漂移锁相应从「相等」放宽成「覆盖」，并新增
+  一条反向守卫：矩阵外的 kind 必须显式声明权限域，且那个域真实存在。
+- **#10 删组 × 定时任务**：`LIKE '%"repoGroupId":"<id>"%'` 粗筛后**逐条
+  JSON.parse 复核**——只靠子串会把「组 id 出现在某条提示词里」误判成引用，
+  用户会遇到一个永远删不掉也解释不清的组。已禁用的计划不算引用。
+- **向导的 remote 空间锁成单行**（`maxCount={1}`，加行按钮下线）。留着加行会让
+  用户拼出一个 builder 只取首行的空间——那是 RFC-165 F1 那类静默降级。
+- **删除优于 deprecate**：`buildLaunchBodyMultiRepo`（只产出退役的 `repos[]`）、
+  `StartTaskRepoSchema` / `StartTaskRepo`（只服务于该数组项）、
+  `multiRepoBlockedReason` 与 `hasWrapperGitNode`（多仓 + wrapper-git 现在受
+  支持）全部删除，各自留下「不得复活」的锁。
+- **T41 修掉一个随嵌套布局诞生的真 bug**：`changeReview` 的 structural-only 分支
+  按第一个路径段反推仓归属，`vendor/sdk` 会被切成 `vendor`（标签与相对路径同时
+  错，静默）。改读后端显式的 `repoKey`，无该字段的存量数据回落旧行为。
+- **两条测试因本 RFC 暴露出「早已空转」**，一并修成真测：
+  `task-start-pre-worktree` 的「回落到单仓 git 路径」自 RFC-165 退役 `repoPath`
+  起就只建了个空的多仓容器目录还断言「目录存在」；`rfc107` 的 D12 用例原本
+  因旧路径不给同源仓加分支后缀而只物化了一个仓，现在经组路径真跑两份。
 
 ## PR 划分
 

@@ -27,6 +27,7 @@ import {
   CreateManagedSkillSchema,
   CreateMcpSchema,
   CreatePluginSchema,
+  CreateRepoGroupSchema,
   CreateScheduledTaskSchema,
   CreateWorkflowSchema,
   CreateWorkgroupSchema,
@@ -35,11 +36,12 @@ import {
   UpdateAgentRequestSchema,
   UpdateMcpRequestSchema,
   UpdatePluginRequestSchema,
+  UpdateRepoGroupSchema,
   UpdateScheduledTaskSchema,
   UpdateWorkflowSchema,
   UpdateWorkgroupSchema,
-  type MatrixResource,
 } from '@agent-workflow/shared'
+import type { McpResourceKind } from '@/mcp/tools'
 
 interface KindSchemas {
   readonly create?: ZodTypeAny
@@ -52,7 +54,7 @@ interface KindSchemas {
  * (imports are a batch) and no update at all, so inventing a shape here would
  * document an operation that does not exist.
  */
-const KIND_SCHEMAS: Partial<Record<MatrixResource, KindSchemas>> = {
+const KIND_SCHEMAS: Partial<Record<McpResourceKind, KindSchemas>> = {
   agents: { create: CreateAgentSchema, update: UpdateAgentRequestSchema },
   skills: { create: CreateManagedSkillSchema, update: CombinedSaveSkillSchema },
   mcps: { create: CreateMcpSchema, update: UpdateMcpRequestSchema },
@@ -60,6 +62,8 @@ const KIND_SCHEMAS: Partial<Record<MatrixResource, KindSchemas>> = {
   workflows: { create: CreateWorkflowSchema, update: UpdateWorkflowSchema },
   workgroups: { create: CreateWorkgroupSchema, update: UpdateWorkgroupSchema },
   'scheduled-tasks': { create: CreateScheduledTaskSchema, update: UpdateScheduledTaskSchema },
+  // RFC-248: 建组 / 改组同一套 body（成员数组 + 布局），改组另需 expectedVersion。
+  'repo-groups': { create: CreateRepoGroupSchema, update: UpdateRepoGroupSchema },
   memory: { create: MemoryCreateRequestSchema, update: MemoryPatchRequestSchema },
 }
 
@@ -76,7 +80,7 @@ export interface ResourceBodySchemas {
  * resolve a `$ref` against a document it was handed as a tool result, so a
  * ref-laden schema would be technically complete and practically unusable.
  */
-export function bodySchemasFor(kind: MatrixResource): ResourceBodySchemas {
+export function bodySchemasFor(kind: McpResourceKind): ResourceBodySchemas {
   const entry = KIND_SCHEMAS[kind]
   if (entry === undefined) return {}
   const out: { create?: unknown; update?: unknown } = {}
@@ -90,6 +94,6 @@ export function bodySchemasFor(kind: MatrixResource): ResourceBodySchemas {
 }
 
 /** Which kinds report a body schema — exported so a test can lock the coverage. */
-export const KINDS_WITH_BODY_SCHEMAS: ReadonlyArray<MatrixResource> = Object.keys(
+export const KINDS_WITH_BODY_SCHEMAS: ReadonlyArray<McpResourceKind> = Object.keys(
   KIND_SCHEMAS,
-) as MatrixResource[]
+) as McpResourceKind[]

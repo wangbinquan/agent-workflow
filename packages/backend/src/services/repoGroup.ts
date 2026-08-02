@@ -23,11 +23,11 @@ import {
   normalizeMountPath,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, like, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { cachedRepos, memories, repoGroupMembers, repoGroups } from '@/db/schema'
+import { cachedRepos, memories, repoGroupMembers, repoGroups, scheduledTasks } from '@/db/schema'
 import { resolveCachedRepo, type GitRepoCacheDeps } from '@/services/gitRepoCache'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 
@@ -52,12 +52,24 @@ const ARCHIVABLE_STATUSES = ['candidate', 'approved', 'superseded', 'rejected'] 
 
 /** 被别的组引用时删不掉；`force=1` 才摘除引用行。 */
 export class RepoGroupHasReferencesError extends DomainError {
-  constructor(readonly referencingGroups: Array<{ id: string; name: string }>) {
+  constructor(
+    readonly referencingGroups: Array<{ id: string; name: string }>,
+    /**
+     * RFC-248 H9/#10：**引用本组的启用中定时任务**。漏掉它的后果是删组后留下
+     * 一堆反复失败的计划（每次触发都 404），而管理员在计划列表里看不出原因。
+     */
+    readonly referencingSchedules: Array<{ id: string; name: string }> = [],
+  ) {
+    const parts: string[] = []
+    if (referencingGroups.length > 0) parts.push(`${referencingGroups.length} repo group(s)`)
+    if (referencingSchedules.length > 0) {
+      parts.push(`${referencingSchedules.length} scheduled task(s)`)
+    }
     super(
       'repo-group-has-references',
-      `${referencingGroups.length} repo group(s) still reference this group; pass force=1 to detach them`,
+      `${parts.join(' and ')} still reference this group; pass force=1 to detach/disable them`,
       409,
-      { referencingGroups },
+      { referencingGroups, referencingSchedules },
     )
   }
 }
@@ -539,6 +551,26 @@ export async function updateRepoGroup(
 export interface DeleteRepoGroupResult {
   archivedMemories: number
   detachedReferences: number
+  /** RFC-248 #10: force 删除时被**禁用**的定时任务数（不删计划，只停发）。 */
+  disabledSchedules: number
+}
+
+/**
+ * 从一条持久化的定时任务 launch payload 里取出 `repoGroupId`。
+ *
+ * payload 是 kind-enveloped 的（`{kind, body}` 或直接就是 body，历史上两种都
+ * 出现过），所以两层都看一眼；取不到就返回 null。
+ */
+function scheduledPayloadRepoGroupId(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null) return null
+  const direct = (payload as { repoGroupId?: unknown }).repoGroupId
+  if (typeof direct === 'string' && direct.length > 0) return direct
+  const body = (payload as { body?: unknown }).body
+  if (typeof body === 'object' && body !== null) {
+    const nested = (body as { repoGroupId?: unknown }).repoGroupId
+    if (typeof nested === 'string' && nested.length > 0) return nested
+  }
+  return null
 }
 
 /**
@@ -566,11 +598,39 @@ export function deleteRepoGroup(
     .where(eq(repoGroupMembers.childGroupId, id))
     .all()
   const uniqueRefs = [...new Map(referencing.map((r) => [r.id, r])).values()]
-  if (uniqueRefs.length > 0 && options.force !== true) {
-    throw new RepoGroupHasReferencesError(uniqueRefs)
+  // RFC-248 #10：**启用中**的定时任务也算引用。payload 是 JSON 文本，这里按
+  // 精确的 `"repoGroupId":"<id>"` 子串筛出候选，再逐条 JSON.parse 确认——只用
+  // 子串会把「组 id 恰好出现在某个提示词里」误判成引用。
+  const scheduleCandidates = db
+    .select({
+      id: scheduledTasks.id,
+      name: scheduledTasks.name,
+      payload: scheduledTasks.launchPayload,
+    })
+    .from(scheduledTasks)
+    .where(
+      and(
+        eq(scheduledTasks.enabled, true),
+        like(scheduledTasks.launchPayload, `%"repoGroupId":"${id}"%`),
+      ),
+    )
+    .all()
+  const refSchedules = scheduleCandidates
+    .filter((row) => {
+      try {
+        return scheduledPayloadRepoGroupId(JSON.parse(row.payload)) === id
+      } catch {
+        return false
+      }
+    })
+    .map((row) => ({ id: row.id, name: row.name }))
+
+  if ((uniqueRefs.length > 0 || refSchedules.length > 0) && options.force !== true) {
+    throw new RepoGroupHasReferencesError(uniqueRefs, refSchedules)
   }
   let archivedMemories = 0
   let detachedReferences = 0
+  let disabledSchedules = 0
   dbTxSync(db, (tx) => {
     const bound = tx
       .select({ id: memories.id })
@@ -602,9 +662,28 @@ export function deleteRepoGroup(
       .where(eq(repoGroupMembers.childGroupId, id))
       .all().length
     tx.delete(repoGroupMembers).where(eq(repoGroupMembers.childGroupId, id)).run()
+    // RFC-248 #10: force 删除时，引用本组的启用中计划在**同一事务**里禁用。
+    // 不删计划——用户可能只是想换个组重新启用；`next_run_at` 置 null 让轮询
+    // 直接跳过，`last_error` 说明原因，管理员在列表里一眼看得出。
+    if (refSchedules.length > 0) {
+      tx.update(scheduledTasks)
+        .set({
+          enabled: false,
+          nextRunAt: null,
+          lastError: `repo group ${id} was deleted; re-point this schedule before re-enabling`,
+        })
+        .where(
+          inArray(
+            scheduledTasks.id,
+            refSchedules.map((r) => r.id),
+          ),
+        )
+        .run()
+      disabledSchedules = refSchedules.length
+    }
     tx.delete(repoGroups).where(eq(repoGroups.id, id)).run()
   })
-  return { archivedMemories, detachedReferences }
+  return { archivedMemories, detachedReferences, disabledSchedules }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

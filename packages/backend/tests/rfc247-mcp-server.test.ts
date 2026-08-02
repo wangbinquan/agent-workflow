@@ -316,16 +316,40 @@ describe('RFC-247 — describe_capabilities explains a refusal', () => {
 })
 
 describe('RFC-247 — the tool table cannot drift from the permission catalog', () => {
-  test('the converged resource kinds are the matrix resources minus tasks', () => {
+  test('the converged resource kinds cover every matrix resource except tasks', () => {
     // `MCP_RESOURCE_KINDS` is spelled out as a tuple (z.enum needs one). This
     // is the lock that keeps it honest: add a resource type to the catalog
     // without giving it tools and this goes red, rather than the resource
     // silently having no MCP surface.
-    expect([...MCP_RESOURCE_KINDS].sort()).toEqual(
-      MATRIX_RESOURCES.filter((k) => k !== 'tasks')
-        .slice()
-        .sort(),
+    //
+    // RFC-248 T30c 把方向从「相等」放宽成「覆盖」：MCP 的 kind 是**工具寻址
+    // 单位**，不必逐个对应可授权资源。`repo-groups` 就是这种——它有独立的
+    // CRUD 路由，但写权限沿用 `repos:*`（组编排的是仓库，不是第十一种可授权
+    // 资源；给账号页的令牌矩阵加一行没人看得懂的 `repo-groups:*` 才是坏的）。
+    for (const r of MATRIX_RESOURCES) {
+      if (r === 'tasks') continue
+      expect(MCP_RESOURCE_KINDS).toContain(r)
+    }
+    expect(MCP_RESOURCE_KINDS as readonly string[]).not.toContain('tasks')
+  })
+
+  test('RFC-248: kind 之外的额外项必须显式声明权限域，且那个域在矩阵里', async () => {
+    // 反向守卫：任何**不在** MATRIX_RESOURCES 里的 kind，它的写操作报出来的
+    // 权限点必须落在一个真实存在的域上。漏掉映射会让 describe_resource 报出
+    // `repo-groups:update` 这种不存在的点——调用方照着去申请，永远申请不到。
+    const { describeResource } = await import('@/mcp/tools')
+    const extras = MCP_RESOURCE_KINDS.filter(
+      (k) => !(MATRIX_RESOURCES as readonly string[]).includes(k),
     )
+    expect(extras).toEqual(['repo-groups'])
+    for (const kind of extras) {
+      const d = describeResource(kind)
+      for (const op of d.operations) {
+        if (op.permission === null) continue
+        const domain = op.permission.split(':')[0]!
+        expect(MATRIX_RESOURCES as readonly string[]).toContain(domain)
+      }
+    }
   })
 
   test('every tool declares points that exist in the catalog', async () => {
@@ -685,10 +709,15 @@ describe('RFC-247 impl-gate — launch_task can reach every field the route acce
       'gitUserName',
       'gitUserEmail',
       'expectedWorkflowVersion',
-      'repos',
+      // RFC-248: `repos` 退役，多仓改由 `repoGroupId` 表达。这条断言的意义
+      // 不变——多仓能力必须在这个通道上**可达**，只是字段名换了。
+      'repoGroupId',
     ]) {
       expect(keys).toContain(field)
     }
+    // 退役字段反过来必须**不可达**：MCP 的入参是闭合 schema，留着 `repos`
+    // 只会让调用方发出一个注定 422 的 body。
+    expect(keys).not.toContain('repos')
   })
 
   test('inputs tells the caller where port keys come from', () => {

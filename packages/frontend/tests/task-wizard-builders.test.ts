@@ -28,14 +28,9 @@ const REMOTE: WizardSpace = {
   kind: 'remote',
   repos: [{ kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: 'dev' }],
 }
-const MULTI: WizardSpace = {
-  kind: 'remote',
-  repos: [
-    { kind: 'url', repoUrl: 'https://github.com/o/a.git', ref: '' },
-    { kind: 'url', repoUrl: 'https://github.com/o/b.git', ref: 'v2' },
-  ],
-}
 const SCRATCH: WizardSpace = { kind: 'scratch' }
+/** RFC-248: 多仓空间——布局住在组定义里，wire 上只发一个 id。 */
+const GROUP: WizardSpace = { kind: 'group', groupId: 'grp_1' }
 
 describe('buildWorkflowStartBody (RFC-165 T13)', () => {
   test('remote single repo: every field lands', () => {
@@ -67,13 +62,24 @@ describe('buildWorkflowStartBody (RFC-165 T13)', () => {
     })
   })
 
-  test('remote multi repo: repos[] shape, no top-level repoUrl', () => {
-    const body = buildWorkflowStartBody(MULTI, { workflowId: 'wf1', name: 'T', inputs: {} })
-    expect(body.repos).toEqual([
-      { repoUrl: 'https://github.com/o/a.git' },
-      { repoUrl: 'https://github.com/o/b.git', ref: 'v2' },
-    ])
+  test('RFC-248: 组空间只发 repoGroupId，一个仓库字段都不带', () => {
+    const body = buildWorkflowStartBody(GROUP, { workflowId: 'wf1', name: 'T', inputs: {} })
+    expect(body.repoGroupId).toBe('grp_1')
+    // 单仓字段与组互斥（StartTaskSchema 的 superRefine 会拒），一个都不能漏发。
     expect(body.repoUrl).toBeUndefined()
+    expect(body.cachedRepoId).toBeUndefined()
+    expect(body.ref).toBeUndefined()
+    expect(body.repos).toBeUndefined()
+    expect(body.scratch).toBeUndefined()
+  })
+
+  test('RFC-248: 退役的 `repos[]` 绝不再出现在任何启动 body 里', () => {
+    // wire 上顶层 `repos` 进了 RETIRED_START_TASK_KEYS（422 硬拒）。前端只要
+    // 还发它，多仓启动就整条挂掉——这条锁住三种空间都不发。
+    for (const space of [REMOTE, SCRATCH, GROUP]) {
+      const body = buildWorkflowStartBody(space, { workflowId: 'wf1', name: 'T', inputs: {} })
+      expect(body.repos).toBeUndefined()
+    }
   })
 
   test('scratch: scratch=true, NO repo fields, strips workingBranch/autoCommitPush', () => {
@@ -201,8 +207,8 @@ describe('buildAgentStartBody', () => {
 })
 
 describe('buildWorkgroupStartBody', () => {
-  test('remote multi: goal + repos + limits land; workflowId/inputs never leak', () => {
-    const body = buildWorkgroupStartBody(MULTI, {
+  test('RFC-248 组空间: goal + repoGroupId + limits land; workflowId/inputs never leak', () => {
+    const body = buildWorkgroupStartBody(GROUP, {
       name: 'T',
       goal: 'ship it',
       collaboratorUserIds: ['u1', 'u2'],
@@ -212,10 +218,7 @@ describe('buildWorkgroupStartBody', () => {
     expect(body).toEqual({
       name: 'T',
       goal: 'ship it',
-      repos: [
-        { repoUrl: 'https://github.com/o/a.git' },
-        { repoUrl: 'https://github.com/o/b.git', ref: 'v2' },
-      ],
+      repoGroupId: 'grp_1',
       collaboratorUserIds: ['u1', 'u2'],
       maxDurationMs: 5,
       maxTotalTokens: 6,
@@ -431,7 +434,11 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     expect(payload.workflowId).toBe('wf-9')
     expect(payload.name).toBe('my task')
     expect(payload.inputs).toEqual({ topic: 'orders' })
-    expect(payload.repos).toEqual([{ repoUrl: 'https://x/r.git', ref: 'dev' }])
+    // RFC-248: 单仓重启改成**顶层**单仓字段（`repos[]` 已退役）；
+    // 这里的夹具没有 cachedRepoId，于是回落到脱敏 URL 预填。
+    expect(payload.repoUrl).toBe('https://x/r.git')
+    expect(payload.ref).toBe('dev')
+    expect(payload.repos).toBeUndefined()
     expect(payload.agentName).toBeUndefined()
     expect(payload.workgroupName).toBeUndefined()
     expect(payload.agentId).toBeUndefined()

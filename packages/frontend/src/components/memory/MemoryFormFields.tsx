@@ -129,7 +129,15 @@ export function validateMemoryForm(
   return errors
 }
 
-const SCOPE_OPTIONS: ReadonlyArray<MemoryScope> = ['global', 'agent', 'workflow', 'repo']
+// RFC-248: 第 5 档 `repo_group` 排在 `repo` 之后——两者是同一类「代码归属」，
+// 组只是「一组仓怎么一起干活」的那一层知识。
+const SCOPE_OPTIONS: ReadonlyArray<MemoryScope> = [
+  'global',
+  'agent',
+  'workflow',
+  'repo',
+  'repo_group',
+]
 
 export interface MemoryFormFieldsProps {
   state: MemoryFormState
@@ -143,6 +151,8 @@ export interface MemoryFormFieldsProps {
   agents: ScopeOption[]
   workflows: ScopeOption[]
   repos: ScopeOption[]
+  /** RFC-248: `repo_group` 档的下拉来源。 */
+  repoGroups: ScopeOption[]
   /** Disables every input (used while save is in-flight). */
   disabled?: boolean
 }
@@ -156,6 +166,8 @@ export function MemoryFormFields(props: MemoryFormFieldsProps) {
     if (state.scopeType === 'workflow')
       return props.workflows.map((o) => ({ value: o.id, label: o.label }))
     if (state.scopeType === 'repo') return props.repos.map((o) => ({ value: o.id, label: o.label }))
+    if (state.scopeType === 'repo_group')
+      return props.repoGroups.map((o) => ({ value: o.id, label: o.label }))
     return []
   })()
 

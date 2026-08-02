@@ -12,6 +12,7 @@
 // its option value. Reuse now travels as `cachedRepoId` and the daemon resolves
 // the real URL itself — hence the second block.
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -96,25 +97,47 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
 
 describe('RFC-204 — reuse travels as an id, never as a URL', () => {
   test('normalizeStartTaskRepos narrows both source shapes and preserves ref', () => {
+    // RFC-248: 这两条原本走 `repos[]`。该数组已退役，函数只剩单仓两形态——
+    // 断言的实质（id / url 各自窄化、`ref` 原样保留）不变。
     const byId = normalizeStartTaskRepos({
-      repos: [{ cachedRepoId: 'cr_1', ref: 'dev' }],
+      cachedRepoId: 'cr_1',
+      ref: 'dev',
     } as unknown as Parameters<typeof normalizeStartTaskRepos>[0])
     expect(byId).toEqual([{ cachedRepoId: 'cr_1', ref: 'dev' }])
 
     const byUrl = normalizeStartTaskRepos({
-      repos: [{ repoUrl: 'https://github.com/acme/p.git' }],
+      repoUrl: 'https://github.com/acme/p.git',
     } as unknown as Parameters<typeof normalizeStartTaskRepos>[0])
     expect(byUrl).toEqual([{ repoUrl: 'https://github.com/acme/p.git' }])
   })
 
-  test('the framework-internal path spec is passed through untouched', () => {
-    // Fusion / test helpers hand us `{repoPath, baseBranch}` entries that never
-    // went through the wire schema; mapping them as url-or-id shapes turned them
-    // into `{repoUrl: undefined}` and blew up materializeSpace.
-    const internal = normalizeStartTaskRepos({
-      repos: [{ repoPath: '/srv/repo', baseBranch: 'main' }],
+  test('RFC-248: 杂散的 `repos[]` 不被静默展开成多仓', () => {
+    // 纵深防御：顶层退役键守卫已在路由层硬拒 `repos`，但万一某条内部调用绕过了
+    // 守卫，这里也**不能**把它当多仓来源——否则就退回到「静默启动在错误工作区」
+    // 那个洞。函数只认单仓字段，杂散数组一律无视。
+    const stray = normalizeStartTaskRepos({
+      repos: [{ repoUrl: 'https://github.com/acme/a.git' }, { repoUrl: 'https://x/b.git' }],
     } as unknown as Parameters<typeof normalizeStartTaskRepos>[0])
-    expect(internal).toEqual([{ repoPath: '/srv/repo', baseBranch: 'main' }])
+    expect(stray).toEqual([])
+
+    // 单仓字段仍然生效，杂散数组不干扰它。
+    const mixed = normalizeStartTaskRepos({
+      repoUrl: 'https://github.com/acme/real.git',
+      repos: [{ repoUrl: 'https://github.com/acme/ignored.git' }],
+    } as unknown as Parameters<typeof normalizeStartTaskRepos>[0])
+    expect(mixed).toEqual([{ repoUrl: 'https://github.com/acme/real.git' }])
+  })
+
+  test('the framework-internal path spec rides deps.internalSource, not the wire', () => {
+    // Fusion / test helpers hand us `{repoPath, baseBranch}` specs that never
+    // went through the wire schema. RFC-248 之前它们借道 `repos[]`；现在唯一
+    // 通道是 `deps.internalSource`。源码级锁住那条分支原样构造路径规格——
+    // 一旦有人把它也改成 url-or-id 形态，materializeSpace 会拿到
+    // `{repoUrl: undefined}` 而炸。
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    expect(src).toContain(
+      '[{ repoPath: deps.internalSource.repoPath, baseBranch: deps.internalSource.baseBranch }]',
+    )
   })
 
   test('the legacy single-repo body accepts a cachedRepoId source', () => {

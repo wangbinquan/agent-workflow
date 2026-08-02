@@ -211,7 +211,23 @@ export function buildChangeEntries(
   if (structural !== undefined) {
     for (const [key, f] of structuralByKey) {
       if (seen.has(key)) continue
-      const label = multiRepo ? (key.includes('/') ? (key.split('/')[0] ?? null) : null) : null
+      // RFC-248（设计门二轮 H8）：仓归属读**显式的 `repoKey`**，不再按第一个
+      // 路径段反推。两个理由：
+      //   1. 挂载路径可以是多段（`vendor/sdk`），`split('/')[0]` 会切成
+      //      `vendor`，rel 变成 `sdk/lib/x.rs`——标签与相对路径同时错。
+      //   2. sparse 不删索引里已跟踪的路径，容器仓自己也可能产出落在子挂载
+      //      前缀下的文件；纯前缀反推会把它判给子仓。
+      // `repoKey` 缺失（RFC-248 之前的存量结构化 diff）时才回落到旧的反推。
+      const label =
+        f.repoKey !== undefined
+          ? f.repoKey === ''
+            ? null
+            : f.repoKey
+          : multiRepo
+            ? key.includes('/')
+              ? (key.split('/')[0] ?? null)
+              : null
+            : null
       const rel = label === null ? key : stripLabel(key, label)
       const sev = severityCounts([f])
       entries.push({
