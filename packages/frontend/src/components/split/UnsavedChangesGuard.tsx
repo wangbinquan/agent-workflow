@@ -10,10 +10,23 @@
 // EVERY dismiss path (onClose, "stay") maps to `resolver.reset()` = stay on the
 // page; only "discard" calls `resolver.proceed()`.
 
-import { useCallback, useEffect, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useBlocker, type ShouldBlockFn } from '@tanstack/react-router'
 import { Dialog } from '@/components/Dialog'
+import { ErrorBanner } from '@/components/ErrorBanner'
+
+export interface UnsavedChangesCopyKeys {
+  title: string
+  body: string
+  busyBody: string
+  stay: string
+  discard: string
+  save: string
+  saveFailed: string
+  forceLeave: string
+  forceLeaveWarning: string
+}
 
 export interface UnsavedChangesGuardProps {
   /** Synchronously-readable dirty key (non-null ⇒ block). */
@@ -44,6 +57,14 @@ export interface UnsavedChangesGuardProps {
    * when the caller could not clear them (for example, a mutation just began).
    */
   onDiscard?: () => boolean | void
+  /**
+   * RFC-250 — durably save the latest caller-owned local generation before
+   * continuing the blocked navigation. The callback must synchronously clear
+   * `dirtyRef` before its promise fulfills; otherwise the guard fails closed.
+   */
+  onSaveAndProceed?: () => Promise<void>
+  /** Caller-owned copy stays in the typed i18n catalog; raw HTML is forbidden. */
+  copyKeys?: Partial<UnsavedChangesCopyKeys>
 }
 
 /** RFC-208 — how long a busy stretch may run before the dialog offers an out. */
@@ -56,8 +77,14 @@ export function UnsavedChangesGuard({
   onForceLeave,
   shouldBlockNavigation,
   onDiscard,
+  onSaveAndProceed,
+  copyKeys,
 }: UnsavedChangesGuardProps) {
   const { t } = useTranslation()
+  const stayRef = useRef<HTMLButtonElement | null>(null)
+  const [savePending, setSavePending] = useState(false)
+  const [saveError, setSaveError] = useState<unknown>(null)
+  const [, setEscapeTick] = useState(0)
   const shouldBlock = useCallback<ShouldBlockFn>(
     (args) => {
       const dirty = dirtyRef.current !== null
@@ -82,36 +109,75 @@ export function UnsavedChangesGuard({
   // because that exact save settles clean. Do not leave a stale resolver/dialog
   // asking the user to discard work that no longer exists.
   useEffect(() => {
-    if (resolver.status === 'blocked' && dirtyRef.current === null && busyRef?.current !== true) {
+    if (
+      resolver.status === 'blocked' &&
+      !savePending &&
+      dirtyRef.current === null &&
+      busyRef?.current !== true
+    ) {
       resolver.reset()
     }
   })
 
-  if (resolver.status !== 'blocked') return null
+  useEffect(() => {
+    if (resolver.status !== 'blocked') {
+      setSavePending(false)
+      setSaveError(null)
+    }
+  }, [resolver.status])
 
   const busy = busyRef?.current === true
+  const since = busySinceRef?.current ?? null
+
+  // `busySinceRef` deliberately stays synchronously readable, but refs do not
+  // schedule React renders. Arm the one render needed at the escape threshold;
+  // otherwise a navigation attempted during the first ten seconds can remain
+  // on a Stay-only dialog forever when the request itself never settles.
+  useEffect(() => {
+    if (resolver.status !== 'blocked' || !busy || since === null) return
+    const remaining = since + BUSY_ESCAPE_AFTER_MS - Date.now()
+    if (remaining <= 0) return
+    const timer = window.setTimeout(() => setEscapeTick((tick) => tick + 1), remaining)
+    return () => window.clearTimeout(timer)
+  }, [busy, resolver.status, since])
+
+  if (resolver.status !== 'blocked') return null
+
   // Only offer the escape once the operation has visibly stopped progressing.
   // Before that the honest answer really is "wait" — a normal save settles in
   // well under this, so the button never appears during healthy use.
-  const since = busySinceRef?.current ?? null
   const stalled = busy && since !== null && Date.now() - since >= BUSY_ESCAPE_AFTER_MS
+  const key = <K extends keyof UnsavedChangesCopyKeys>(
+    name: K,
+    fallback: UnsavedChangesCopyKeys[K],
+  ) => copyKeys?.[name] ?? fallback
 
   return (
     <Dialog
       open
       onClose={resolver.reset}
-      title={t('splitPage.unsavedTitle')}
+      title={t(key('title', 'splitPage.unsavedTitle'))}
       size="sm"
       data-testid="unsaved-guard-dialog"
+      initialFocusRef={stayRef}
+      dismissDisabled={savePending}
       footer={
         <>
-          <button type="button" className="btn" onClick={resolver.reset} data-testid="unsaved-stay">
-            {t('splitPage.unsavedStay')}
+          <button
+            ref={stayRef}
+            type="button"
+            className="btn"
+            onClick={resolver.reset}
+            disabled={savePending}
+            data-testid="unsaved-stay"
+          >
+            {t(key('stay', 'splitPage.unsavedStay'))}
           </button>
           {!busy && (
             <button
               type="button"
               className="btn btn--danger"
+              disabled={savePending}
               onClick={() => {
                 // The dialog can render while cleanly discardable, then an
                 // exact save starts before this click. Re-check the live ref;
@@ -124,7 +190,37 @@ export function UnsavedChangesGuard({
               }}
               data-testid="unsaved-discard"
             >
-              {t('splitPage.unsavedDiscard')}
+              {t(key('discard', 'splitPage.unsavedDiscard'))}
+            </button>
+          )}
+          {!busy && onSaveAndProceed !== undefined && (
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={savePending}
+              onClick={() => {
+                setSavePending(true)
+                setSaveError(null)
+                void onSaveAndProceed()
+                  .then(() => {
+                    // A fulfilled write for an older generation is not enough:
+                    // only the caller's synchronous exact-generation clear can
+                    // authorize the navigation.
+                    if (dirtyRef.current !== null || busyRef?.current === true) {
+                      throw new Error(t(key('saveFailed', 'splitPage.unsavedSaveFailed')))
+                    }
+                    resolver.proceed()
+                  })
+                  .catch((error: unknown) => {
+                    setSaveError(error)
+                  })
+                  .finally(() => {
+                    setSavePending(false)
+                  })
+              }}
+              data-testid="unsaved-save-and-proceed"
+            >
+              {savePending ? t('common.saving') : t(key('save', 'splitPage.unsavedSaveAndProceed'))}
             </button>
           )}
           {busy && stalled && (
@@ -137,14 +233,29 @@ export function UnsavedChangesGuard({
               }}
               data-testid="unsaved-force-leave"
             >
-              {t('splitPage.unsavedForceLeave')}
+              {t(key('forceLeave', 'splitPage.unsavedForceLeave'))}
             </button>
           )}
         </>
       }
     >
-      <p>{t(busy ? 'splitPage.unsavedBusyBody' : 'splitPage.unsavedBody')}</p>
-      {busy && stalled && <p>{t('splitPage.unsavedForceLeaveWarning')}</p>}
+      <p>
+        {t(
+          busy
+            ? key('busyBody', 'splitPage.unsavedBusyBody')
+            : key('body', 'splitPage.unsavedBody'),
+        )}
+      </p>
+      {busy && stalled && (
+        <p>{t(key('forceLeaveWarning', 'splitPage.unsavedForceLeaveWarning'))}</p>
+      )}
+      {saveError !== null && (
+        <ErrorBanner
+          error={saveError}
+          message={t(key('saveFailed', 'splitPage.unsavedSaveFailed'))}
+          testid="unsaved-save-error"
+        />
+      )}
     </Dialog>
   )
 }

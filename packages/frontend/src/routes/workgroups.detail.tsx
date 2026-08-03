@@ -18,6 +18,7 @@ import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
 import { RenameDialog } from '@/components/RenameDialog'
@@ -742,35 +743,31 @@ export function WorkgroupEditor(props: {
           />
         )}
 
-        {(!readiness.ready || readiness.warnings.length > 0) && (
-          <div
-            className="info-box info-box--muted workgroup-readiness"
-            role="status"
-            data-testid="workgroup-readiness-banner"
-          >
-            {readiness.reasons.map((reason) => (
-              <span key={reason}>
-                {reason === 'no-agent-member'
-                  ? t('workgroups.readiness.noAgentMember')
-                  : t('workgroups.readiness.leaderMissing')}
-              </span>
-            ))}
-            {readiness.warnings.map((warning) => (
-              <span key={warning}>{t('workgroups.readiness.noNonLeaderWorker')}</span>
-            ))}
-          </div>
-        )}
-        {resourceStatusQuery.data?.ok === false && (
-          <div
-            className="error-banner workgroup-readiness"
-            role="alert"
-            data-testid="workgroup-resource-integrity-banner"
-          >
-            {t('workgroups.readiness.resourcesInvalid', {
-              count: resourceStatusQuery.data.issues.length,
-            })}
-          </div>
-        )}
+        <FeedbackStack>
+          {(!readiness.ready || readiness.warnings.length > 0) && (
+            <NoticeBanner tone="warning" size="compact" testid="workgroup-readiness-banner">
+              <div className="workgroup-readiness">
+                {readiness.reasons.map((reason) => (
+                  <span key={reason}>
+                    {reason === 'no-agent-member'
+                      ? t('workgroups.readiness.noAgentMember')
+                      : t('workgroups.readiness.leaderMissing')}
+                  </span>
+                ))}
+                {readiness.warnings.map((warning) => (
+                  <span key={warning}>{t('workgroups.readiness.noNonLeaderWorker')}</span>
+                ))}
+              </div>
+            </NoticeBanner>
+          )}
+          {resourceStatusQuery.data?.ok === false && (
+            <NoticeBanner tone="error" size="compact" testid="workgroup-resource-integrity-banner">
+              {t('workgroups.readiness.resourcesInvalid', {
+                count: resourceStatusQuery.data.issues.length,
+              })}
+            </NoticeBanner>
+          )}
+        </FeedbackStack>
       </div>
 
       <div className="split">

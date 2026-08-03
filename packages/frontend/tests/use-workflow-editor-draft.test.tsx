@@ -944,12 +944,35 @@ describe('useWorkflowEditorDraft', () => {
     )
     act(() => load.result.current.commit(snapshot('latest')))
     act(() => load.result.current.remoteDetail(detail(2, 'foreign', hash('f'))))
-    await act(async () => load.result.current.confirmLoadRemote())
+    let confirmed = false
+    await act(async () => {
+      confirmed = await load.result.current.confirmLoadRemote()
+    })
     await flush()
+    expect(confirmed).toBe(true)
     expect(load.result.current.state).toMatchObject({
       phase: 'clean',
       local: snapshot('remote'),
       serverRevision: { version: 4 },
     })
+    expect(await load.result.current.confirmLoadRemote()).toBe(false)
+    expect(loadIo.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  test('confirmLoadRemote returns false when the fetch fails', async () => {
+    const io = makeTransport()
+    io.fetch.mockRejectedValueOnce(new Error('offline'))
+    const { result } = renderHook(() =>
+      useWorkflowEditorDraft({ initial: detail(), transport: io.transport }),
+    )
+    act(() => result.current.commit(snapshot('latest')))
+    act(() => result.current.remoteDetail(detail(2, 'foreign', hash('f'))))
+
+    let confirmed = true
+    await act(async () => {
+      confirmed = await result.current.confirmLoadRemote()
+    })
+    expect(confirmed).toBe(false)
+    expect(result.current.state.phase).toBe('conflict')
   })
 })

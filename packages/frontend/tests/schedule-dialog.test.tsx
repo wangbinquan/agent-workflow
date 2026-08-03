@@ -105,6 +105,62 @@ describe('ScheduleDialog', () => {
     expect(body.scheduleSpec).toMatchObject({ kind: 'daily', at: '09:00' })
   })
 
+  test('controlled create emits the full request without starting a second component-owned POST', () => {
+    const onCreate = vi.fn()
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const r = wrap(
+      <ScheduleDialog
+        open
+        onClose={() => {}}
+        buildLaunchPayload={() => LAUNCH}
+        launchKind="workflow"
+        defaultName="daily audit"
+        onCreate={onCreate}
+      />,
+    )
+
+    fireEvent.click(r.getByTestId('schedule-save'))
+
+    expect(onCreate).toHaveBeenCalledWith({
+      name: 'daily audit',
+      launchKind: 'workflow',
+      launchPayload: LAUNCH,
+      scheduleSpec: expect.objectContaining({ kind: 'daily', at: '09:00' }),
+      enabled: true,
+    })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  test('controlled pending freezes every material and dismiss path', () => {
+    const onClose = vi.fn()
+    const r = wrap(
+      <ScheduleDialog
+        open
+        onClose={onClose}
+        buildLaunchPayload={() => LAUNCH}
+        defaultName="daily audit"
+        onCreate={() => {}}
+        createPending
+      />,
+    )
+
+    const dialog = r.getByTestId('schedule-dialog')
+    const fieldset = dialog.querySelector('fieldset.schedule-dialog__fieldset')
+    if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('schedule fieldset missing')
+    expect(fieldset.disabled).toBe(true)
+    expect(fieldset.getAttribute('aria-busy')).toBe('true')
+    expect(fieldset.contains(r.getByTestId('schedule-name'))).toBe(true)
+    expect((r.getByTestId('schedule-save') as HTMLButtonElement).disabled).toBe(true)
+    expect((r.getByRole('button', { name: /取消|Cancel/ }) as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    expect((dialog.querySelector('.dialog__close') as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.mouseDown(dialog)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   test('switching to interval swaps in the every/unit fields', () => {
     const r = wrap(<ScheduleDialog open onClose={() => {}} buildLaunchPayload={() => LAUNCH} />)
     expect(r.queryByTestId('schedule-every')).toBeNull() // daily by default

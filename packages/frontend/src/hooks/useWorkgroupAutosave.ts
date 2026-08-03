@@ -264,7 +264,9 @@ export function useWorkgroupAutosave(
     remoteFrame,
     remoteDetail: (detail) => base.remoteDetail(detailAsWorkflowDetail(detail)),
     remoteInaccessible: base.remoteInaccessible,
-    confirmLoadRemote: base.confirmLoadRemote,
+    confirmLoadRemote: async () => {
+      await base.confirmLoadRemote()
+    },
     confirmOverwrite: base.confirmOverwrite,
     requestCopy: base.requestCopy,
     ensureSaved: async (ensureOptions) => {

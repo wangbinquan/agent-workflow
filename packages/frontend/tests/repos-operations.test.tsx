@@ -11,11 +11,21 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+vi.mock('@/components/repos/RepoGroupEditor', () => ({
+  RepoGroupEditor: ({ open }: { open: boolean }) => (
+    <div data-testid="repo-group-editor-stub" data-open={String(open)} />
+  ),
+}))
+
 import '../src/i18n'
-import { ReposRoute, validateReposSearch } from '../src/routes/repos'
+import {
+  ReposRoute,
+  shouldNormalizeRepoResourceLocation,
+  validateReposSearch,
+} from '../src/routes/repos'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 function repo(id: string, overrides: Partial<CachedRepo> = {}): CachedRepo {
@@ -65,8 +75,16 @@ function renderPage() {
     validateSearch: validateReposSearch,
     component: ReposRoute.options.component,
   })
+  const memoryRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/memory',
+    validateSearch: (search: Record<string, unknown>) => ({
+      ...(search.tab === 'all' ? { tab: 'all' as const } : {}),
+    }),
+    component: () => <h1>Memory Library</h1>,
+  })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([reposRoute]),
+    routeTree: rootRoute.addChildren([reposRoute, memoryRoute]),
     history: createMemoryHistory({ initialEntries: ['/repos?tab=repos'] }),
   })
   render(
@@ -76,7 +94,7 @@ function renderPage() {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
-  return client
+  return { client, router }
 }
 
 beforeEach(() => {
@@ -91,6 +109,39 @@ afterEach(() => {
 })
 
 describe('/repos operations surface (RFC-246)', () => {
+  test('normalizes invalid tabs only while the committed route is /repos', () => {
+    expect(shouldNormalizeRepoResourceLocation('/repos', '/repos?tab=all')).toBe(true)
+    expect(shouldNormalizeRepoResourceLocation('/memory', '/memory?tab=all')).toBe(false)
+  })
+
+  test('does not replace a committed Memory navigation back to /repos', async () => {
+    installFetch([])
+    const { router } = renderPage()
+    await screen.findByTestId('repos-empty')
+
+    await act(async () => {
+      await router.navigate({ to: '/memory', search: { tab: 'all' } })
+    })
+
+    await screen.findByRole('heading', { name: 'Memory Library' })
+    expect(router.state.location.href).toBe('/memory?tab=all')
+  })
+
+  test('keeps the route-owned editor unmounted until the user opens it', async () => {
+    installFetch([])
+    renderPage()
+
+    await screen.findByTestId('repos-empty')
+    expect(screen.queryByTestId('repo-group-editor-stub')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('repos-tab-groups'))
+    await screen.findByTestId('repo-groups-empty')
+    fireEvent.click(screen.getAllByTestId('repo-groups-new')[0]!)
+    expect((await screen.findByTestId('repo-group-editor-stub')).getAttribute('data-open')).toBe(
+      'true',
+    )
+  })
+
   test('business views, search, and submodule filter compose', async () => {
     installFetch([
       repo('used', { referencingTaskCount: 2 }),
@@ -125,7 +176,7 @@ describe('/repos operations surface (RFC-246)', () => {
 
   test('refresh, direct delete, and referenced force-delete keep their endpoints', async () => {
     const calls = installFetch([repo('unused'), repo('used', { referencingTaskCount: 2 })])
-    const client = renderPage()
+    const { client } = renderPage()
     await screen.findByTestId('repos-row-unused')
 
     const unused = screen.getByTestId('repos-row-unused')

@@ -167,6 +167,87 @@ describe('<Dialog />', () => {
     expect(document.activeElement?.getAttribute('data-testid')).toBe('focus-target')
   })
 
+  test('default initial focus skips the close chrome and prefers the dialog body', async () => {
+    render(
+      <Dialog
+        open
+        onClose={() => {}}
+        title="t"
+        footer={<button data-testid="footer-action">footer</button>}
+      >
+        <button data-testid="body-action">body</button>
+      </Dialog>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('body-action')
+  })
+
+  test('data-dialog-autofocus wins over the implicit body candidate', async () => {
+    render(
+      <Dialog
+        open
+        onClose={() => {}}
+        title="t"
+        footer={
+          <button data-dialog-autofocus data-testid="marked-action">
+            marked
+          </button>
+        }
+      >
+        <button data-testid="body-action">body</button>
+      </Dialog>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('marked-action')
+  })
+
+  test('focus escape wraps in the causal Tab direction', async () => {
+    render(
+      <>
+        <button data-testid="outside">outside</button>
+        <Dialog open onClose={() => {}} title="t">
+          <button data-testid="body-first">first</button>
+          <button data-testid="body-last">last</button>
+        </Dialog>
+      </>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    const outside = document.querySelector<HTMLButtonElement>('[data-testid="outside"]')!
+    const close = document.querySelector<HTMLButtonElement>('.dialog__close')!
+    const last = document.querySelector<HTMLButtonElement>('[data-testid="body-last"]')!
+
+    last.focus()
+    fireEvent.keyDown(last, { key: 'Tab' })
+    outside.focus()
+    expect(document.activeElement).toBe(close)
+
+    close.focus()
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true })
+    outside.focus()
+    expect(document.activeElement).toBe(last)
+  })
+
+  test('an internal Tab move clears direction before a later programmatic escape', async () => {
+    render(
+      <>
+        <button data-testid="outside">outside</button>
+        <Dialog open onClose={() => {}} title="t">
+          <button data-testid="body-first">first</button>
+          <button data-testid="body-second">second</button>
+        </Dialog>
+      </>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    const first = document.querySelector<HTMLButtonElement>('[data-testid="body-first"]')!
+    const second = document.querySelector<HTMLButtonElement>('[data-testid="body-second"]')!
+    const outside = document.querySelector<HTMLButtonElement>('[data-testid="outside"]')!
+    first.focus()
+    fireEvent.keyDown(first, { key: 'Tab' })
+    second.focus()
+    outside.focus()
+    expect(document.activeElement).toBe(first)
+  })
+
   test('focus restore skips a disconnected trigger and uses the stable fallback', async () => {
     const trigger = document.createElement('button')
     const fallback = document.createElement('button')

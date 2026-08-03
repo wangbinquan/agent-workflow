@@ -75,7 +75,12 @@
 ## PR-4 — 浏览器、视觉与收口
 
 - **T31** Playwright Chromium/WebKit 跑新建平铺组→整理层级→保存重开→启动→详情→
-  sourceTask 重跑全流程；锁定启动初始态只显示统一选择器，手工 URL 与分支按需展开。
+  sourceTask 重跑全流程；锁定启动初始态只显示统一选择器，手工 URL 与分支按需展开；按 RFC-198
+  page-level tab 合同把 `/repos` 仓库/仓库组选择改由 strict `?tab=repos|groups` 驱动，并覆盖无参数默认、
+  非法值 replace、刷新、Back/Forward、deep link、无关 search/hash 保留与 query gating；补
+  RepoGroupEditor residual dirty 合同：nodes/name/description 以及未应用的 `newDirectory`、`pastedUrls`、
+  `directoryNameDraft` 均纳入防丢，×/Esc/遮罩/sidebar/Back 统一进入 discard confirm，save pending 锁定
+  dismiss，失败保留完整草稿与错误。
 - **T32** 390/736/1440 三宽验证，无横向 overflow；移动端 44px、长 URL/组名可读。
 - **T33** 本地 macOS 与 hosted Ubuntu visual baseline；覆盖 20 仓平铺、三层嵌套、
   inline edit、批量态。
@@ -121,4 +126,8 @@
 - [x] 桌面与 390px 本地真实浏览器：20 仓平铺、批量态、三层目录、改名与无 overflow
 - [x] targeted tests、全仓 typecheck / lint / format、migration `db:check`
 - [x] 更新后二进制 Chromium + WebKit 持久化启动 E2E（各 2/2）
-- [ ] T31–T36 发布门余项：完整编辑链 E2E、hosted Ubuntu visual、旧兼容投影清扫与独立实现门
+- [x] T31 关闭增量：strict `/repos?tab=` canonicalizer 只处理 committed `/repos` location；修复从
+  `/repos?tab=repos` 点击 Memory 被 replace 抢回的问题；关闭态 RepoGroupEditor 不挂全局 blocker；当前
+  binary Chromium/WebKit 390px 与 focused RouterProvider 回归通过。
+- [ ] T31–T36 发布门余项：完整编辑链与 RepoGroupEditor residual dirty 的剩余 E2E 矩阵、hosted Ubuntu
+  visual、旧兼容投影清扫与独立实现门（上条只关闭用户报告的跨页回归，不等同于 T31 整体完成）

@@ -88,6 +88,10 @@ export function hrefForRepoResourceTab(href: string, tab: RepoResourceTab): stri
   return `${url.pathname}${url.search}${url.hash}`
 }
 
+export function shouldNormalizeRepoResourceLocation(pathname: string, href: string): boolean {
+  return pathname === '/repos' && repoResourceTabFromUrl(href).invalid
+}
+
 export const ReposRoute = createRoute({
   getParentRoute: () => RootRoute,
   path: '/repos',
@@ -100,8 +104,9 @@ function ReposPage() {
   const qc = useQueryClient()
   const routeSearch = ReposRoute.useSearch()
   const navigateRepos = ReposRoute.useNavigate()
-  const routeHref = useRouterState({ select: (state) => state.location.href })
-  const routeHash = useRouterState({ select: (state) => state.location.hash })
+  const routeLocation = useRouterState({
+    select: (state) => state.resolvedLocation ?? state.location,
+  })
   const list = useQuery<ListCachedReposResponse>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
@@ -178,18 +183,22 @@ function ReposPage() {
   // refresh and browser history must restore the same resource surface.
   const tab = isRepoResourceTab(routeSearch.tab) ? routeSearch.tab : 'repos'
   useEffect(() => {
-    if (!repoResourceTabFromUrl(routeHref).invalid) return
+    // `state.location` becomes the optimistic destination before this route
+    // unmounts. Never interpret another route's search params as a malformed
+    // repos URL, otherwise leaving for `/memory?tab=all` is replaced back to
+    // `/repos?tab=repos` during the transition.
+    if (!shouldNormalizeRepoResourceLocation(routeLocation.pathname, routeLocation.href)) return
     void navigateRepos({
       search: (previous) => withRepoResourceTab(previous, 'repos'),
-      hash: routeHash,
+      hash: routeLocation.hash,
       replace: true,
     })
-  }, [navigateRepos, routeHash, routeHref])
+  }, [navigateRepos, routeLocation])
   const selectTab = (next: RepoResourceTab) => {
     if (next === tab) return
     void navigateRepos({
       search: (previous) => withRepoResourceTab(previous, next),
-      hash: routeHash,
+      hash: routeLocation.hash,
     })
   }
   const [editorOpen, setEditorOpen] = useState(false)
@@ -362,11 +371,13 @@ function ReposPage() {
             setDeleteConflict(null)
           }}
         />
-        <RepoGroupEditor
-          open={editorOpen}
-          onClose={() => setEditorOpen(false)}
-          {...(editing !== undefined ? { group: editing } : {})}
-        />
+        {editorOpen && (
+          <RepoGroupEditor
+            open
+            onClose={() => setEditorOpen(false)}
+            {...(editing !== undefined ? { group: editing } : {})}
+          />
+        )}
 
         <div
           role="tabpanel"

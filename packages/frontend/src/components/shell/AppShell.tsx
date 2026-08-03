@@ -84,9 +84,16 @@ export function AppShell({ pathname, children }: AppShellProps) {
   const prepareMobileNavigation = useCallback((destination: string) => {
     // This must happen synchronously before the Link's own router click. If an
     // UnsavedChangesGuard blocks the transition, its Stay/ESC focus restore
-    // therefore lands on the stable topbar trigger, not an unmounted sheet link.
+    // therefore lands on the stable topbar trigger, not the sheet link.
     focusStableTrigger(menuTriggerRef.current)
     pendingNavigationRef.current = destination
+  }, [])
+
+  const completeMobileNavigation = useCallback(() => {
+    // RFC-250: close only from the bubble phase, after TanStack Link has
+    // preventDefault()ed the anchor and handed the transition to the router.
+    // Closing in capture unmounted the Link first, turning the click into a
+    // native document navigation that bypassed every useBlocker dirty guard.
     setMobileNavOpen(false)
   }, [])
 
@@ -148,10 +155,17 @@ export function AppShell({ pathname, children }: AppShellProps) {
           active={active}
           onClose={closeMobileNav}
           onNavigate={prepareMobileNavigation}
+          onNavigationHandled={completeMobileNavigation}
           triggerRef={menuTriggerRef}
           restoreFocusFallbackRef={mainRef}
           renderBadge={renderBadge}
-          footer={<ShellFooter active={active} onNavigate={prepareMobileNavigation} />}
+          footer={
+            <ShellFooter
+              active={active}
+              onNavigate={prepareMobileNavigation}
+              onNavigationHandled={completeMobileNavigation}
+            />
+          }
         />
       )}
 
@@ -243,34 +257,38 @@ function ShellBrand() {
 function ShellFooter({
   active,
   onNavigate,
+  onNavigationHandled,
 }: {
   active: ActiveNav
   onNavigate?: (destination: string) => void
+  onNavigationHandled?: () => void
 }) {
-  const captureNavigation = (event: MouseEvent<HTMLDivElement>) => {
-    if (onNavigate === undefined) return
-    if (
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      event.defaultPrevented
-    ) {
-      return
+  const navigationDestination = (event: MouseEvent<HTMLDivElement>): string | null => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return null
     }
     const target = event.target
-    if (!(target instanceof Element)) return
+    if (!(target instanceof Element)) return null
     const link = target.closest<HTMLAnchorElement>('a[href]')
-    if (link !== null) {
-      onNavigate(link.pathname)
-      return
-    }
-    if (target.closest('.settings-gear') !== null) onNavigate('/settings')
+    if (link !== null) return link.pathname
+    return target.closest('.settings-gear') !== null ? '/settings' : null
+  }
+
+  const captureNavigation = (event: MouseEvent<HTMLDivElement>) => {
+    const destination = navigationDestination(event)
+    if (destination !== null) onNavigate?.(destination)
+  }
+
+  const completeNavigation = (event: MouseEvent<HTMLDivElement>) => {
+    if (navigationDestination(event) !== null) onNavigationHandled?.()
   }
 
   return (
-    <div className="sidebar__footer shell-footer" onClickCapture={captureNavigation}>
+    <div
+      className="sidebar__footer shell-footer"
+      onClickCapture={captureNavigation}
+      onClick={completeNavigation}
+    >
       <UserMenu />
       <div className="sidebar__footer-row">
         <LanguageSwitch />

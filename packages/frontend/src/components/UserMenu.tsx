@@ -13,6 +13,8 @@ import { api } from '@/api/client'
 import { useActor, usePermission } from '@/hooks/useActor'
 import { clearAllClarifyDrafts } from '@/lib/clarify/draftStore'
 import { clearAllReviewDrafts } from '@/lib/review/draftStore'
+import { clearAllPatReconciliationMarkers } from '@/lib/pat-reconciliation'
+import { clearAllTaskWizardDrafts } from '@/lib/task-wizard-draft'
 import { clearToken, getToken, subscribeAuth } from '@/stores/auth'
 
 export function UserMenu() {
@@ -47,6 +49,12 @@ export function UserMenu() {
     // flash the previous user's private data before the refetch 403s (RFC-099
     // audit).
     queryClient.clear()
+    try {
+      clearAllTaskWizardDrafts(window.sessionStorage)
+      clearAllPatReconciliationMarkers(window.sessionStorage)
+    } catch {
+      // Private-mode/sessionStorage failures must not trap the user in-session.
+    }
     await Promise.all([clearAllClarifyDrafts(), clearAllReviewDrafts()])
     setOpen(false)
     navigate({ to: '/auth' })
@@ -67,6 +75,14 @@ export function UserMenu() {
           className="user-menu__trigger user-menu__trigger--orphan"
           onClick={() => {
             clearToken()
+            try {
+              clearAllTaskWizardDrafts(window.sessionStorage)
+              clearAllPatReconciliationMarkers(window.sessionStorage)
+            } catch {
+              // Best effort; the actor/source namespace and TTL still prevent
+              // another identity from adopting this envelope.
+            }
+            void Promise.all([clearAllClarifyDrafts(), clearAllReviewDrafts()])
             navigate({ to: '/auth' })
           }}
           title={t('userMenu.signedOutHint', {

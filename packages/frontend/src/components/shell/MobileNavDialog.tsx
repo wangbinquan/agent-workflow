@@ -10,6 +10,7 @@ interface MobileNavDialogProps {
   active: ActiveNav
   onClose: () => void
   onNavigate: (destination: string) => void
+  onNavigationHandled: () => void
   triggerRef: RefObject<HTMLButtonElement | null>
   restoreFocusFallbackRef: RefObject<HTMLElement | null>
   footer: ReactNode
@@ -20,6 +21,7 @@ export function MobileNavDialog({
   active,
   onClose,
   onNavigate,
+  onNavigationHandled,
   triggerRef,
   restoreFocusFallbackRef,
   footer,
@@ -44,6 +46,7 @@ export function MobileNavDialog({
         active={active}
         mode="mobile"
         onNavigate={onNavigate}
+        onNavigationHandled={onNavigationHandled}
         focusTargetRef={initialFocusRef}
         renderBadge={renderBadge}
       />

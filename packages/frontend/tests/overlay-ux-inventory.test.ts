@@ -86,14 +86,13 @@ const OVERLAY_CALLSITES = {
     family: 'access-and-settings',
     count: 1,
   },
-  // RFC-247 — token issuance. Two Dialog renders in one component because the
-  // flow has two phases with different stakes: pick the permissions, then read
-  // a secret shown exactly once. The reveal is not a separate dialog by
-  // accident — remounting between phases would risk losing the only copy of
-  // the token to a stray dismiss.
+  // RFC-247 / RFC-250 — token issuance. Four Dialog renders separate editing /
+  // creating, unreadable recovery storage, the secret shown exactly once, and
+  // an unknown POST outcome that must reconcile inventory without offering a
+  // second create attempt.
   'components/account/CreateTokenDialog.tsx': {
     family: 'access-and-settings',
-    count: 2,
+    count: 4,
   },
   // Runtime edit/add dialog plus RFC-201's shared destructive confirmation.
   'components/RuntimeList.tsx': { family: 'access-and-settings', count: 2 },
@@ -103,8 +102,9 @@ const OVERLAY_CALLSITES = {
     family: 'access-and-settings',
     count: 1,
   },
-  // OIDC provider form/delete, backup restore, and password-login policy confirm.
-  'routes/settings.tsx': { family: 'access-and-settings', count: 4 },
+  // OIDC provider form/delete, its RFC-250 dirty-close confirmation, backup
+  // restore, and password-login policy confirmation.
+  'routes/settings.tsx': { family: 'access-and-settings', count: 5 },
   'routes/users.tsx': { family: 'access-and-settings', count: 2 },
 
   'components/AgentImportDialog.tsx': { family: 'resource-management', count: 1 },
@@ -168,6 +168,8 @@ const OVERLAY_CALLSITES = {
   'routes/tasks.detail.tsx': { family: 'task-execution', count: 2 },
   // RFC-244: dense task-list advanced filters use the shared Dialog shell.
   'routes/tasks.tsx': { family: 'task-execution', count: 1 },
+  // RFC-250: persisted Task Wizard draft recovery is an explicit decision.
+  'routes/tasks.new.tsx': { family: 'task-execution', count: 1 },
 
   'components/clarify/CentralizedAnswerDialog.tsx': {
     family: 'review-and-clarify',

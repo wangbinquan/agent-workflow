@@ -97,5 +97,14 @@ describe('WorkflowCanvas surface isolation', () => {
     expect(project('editor', true, true)?.data).toBeUndefined()
     expect(project('editor', false, false)?.data).toBeUndefined()
     expect(project('editor', false, true)?.data).toMatchObject({ onInsertNode })
+    expect(
+      toFlowEdges([edge], undefined, new Set([edge.id]), {
+        surface: 'editor',
+        readOnly: false,
+        hasChangeHandler: true,
+        onInsertNode,
+        showInlineActions: false,
+      })[0]?.data,
+    ).toBeUndefined()
   })
 })

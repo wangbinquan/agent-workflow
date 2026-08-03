@@ -13,13 +13,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   Outlet,
   RouterProvider,
+  createBrowserHistory,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Window as HappyWindow } from 'happy-dom'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
 
@@ -70,7 +72,13 @@ const FULL_ROW = {
   updatedAt: 1,
 }
 
-function renderAuthentication(rows: Array<Record<string, unknown>>) {
+function renderAuthentication(
+  rows: Array<Record<string, unknown>>,
+  options: {
+    history?: ReturnType<typeof createMemoryHistory> | ReturnType<typeof createBrowserHistory>
+    initialEntries?: string[]
+  } = {},
+) {
   ;(api.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
     if (url === '/api/oidc/providers') return Promise.resolve(rows.slice())
     if (url === '/api/oidc/login-policy') {
@@ -93,9 +101,19 @@ function renderAuthentication(rows: Array<Record<string, unknown>>) {
     validateSearch: validateSettingsSearch,
     component: SettingsRoute.options.component,
   })
+  const other = createRoute({
+    getParentRoute: () => root,
+    path: '/other',
+    component: () => <div data-testid="other-page">other</div>,
+  })
+  const history =
+    options.history ??
+    createMemoryHistory({
+      initialEntries: options.initialEntries ?? ['/settings?tab=authentication'],
+    })
   const router = createRouter({
-    routeTree: root.addChildren([settings]),
-    history: createMemoryHistory({ initialEntries: ['/settings?tab=authentication'] }),
+    routeTree: root.addChildren([settings, other]),
+    history,
   })
   render(
     <QueryClientProvider client={client}>
@@ -104,6 +122,7 @@ function renderAuthentication(rows: Array<Record<string, unknown>>) {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  return { history, router }
 }
 
 beforeEach(async () => {
@@ -280,5 +299,148 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     expect(screen.getAllByText('(discovery)', { exact: false }).length).toBe(1) // token
     expect(screen.getByText(/not configured/)).toBeTruthy()
     expect(screen.getByText(/JWKS is configured but unreachable/)).toBeTruthy()
+  })
+
+  // RFC-250 T13 — provider forms contain a client secret and therefore stay
+  // memory-only, but every dismiss path must acknowledge meaningful edits.
+  test('dirty edit requires an explicit discard while a clean edit closes directly', async () => {
+    renderAuthentication([FULL_ROW])
+    fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
+    await screen.findByRole('dialog', { name: 'Edit OIDC provider' })
+
+    fireEvent.change(screen.getByPlaceholderText('GitHub Enterprise'), {
+      target: { value: 'Changed provider' },
+    })
+    fireEvent.click(document.querySelector('.dialog__close')!)
+    expect(await screen.findByRole('dialog', { name: 'Discard provider changes?' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Discard provider changes?' })).toBeNull(),
+    )
+    expect(screen.getByRole('dialog', { name: 'Edit OIDC provider' })).toBeTruthy()
+
+    fireEvent.click(document.querySelector('.dialog__close')!)
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Edit OIDC provider' })).toBeNull(),
+    )
+
+    // Reopening without edits keeps the ordinary one-step close behavior.
+    fireEvent.click(screen.getByTestId('oidc-edit-p1'))
+    await screen.findByRole('dialog', { name: 'Edit OIDC provider' })
+    fireEvent.click(document.querySelector('.dialog__close')!)
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Edit OIDC provider' })).toBeNull(),
+    )
+  })
+
+  test('dirty provider blocks router navigation until explicit discard', async () => {
+    const { router } = renderAuthentication([FULL_ROW])
+    fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
+    await screen.findByRole('dialog', { name: 'Edit OIDC provider' })
+    fireEvent.change(screen.getByPlaceholderText('GitHub Enterprise'), {
+      target: { value: 'Changed provider' },
+    })
+
+    // The focused harness owns /other; the app-wide RegisteredRouter type does not.
+    void router.navigate({ to: '/other' } as never)
+    const routeGuard = await screen.findByTestId('unsaved-guard-dialog')
+    expect(router.state.location.pathname).toBe('/settings')
+    expect(within(routeGuard).getByText(/client secret/i)).toBeTruthy()
+    fireEvent.click(within(routeGuard).getByRole('button', { name: 'Discard changes' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/other'))
+  })
+
+  test('dirty provider blocks browser Back until explicit discard', async () => {
+    const isolatedWindow = new HappyWindow({
+      url: 'http://oidc.test/other',
+    })
+    const history = createBrowserHistory({ window: isolatedWindow })
+    history.push('/settings?tab=authentication')
+    history.flush()
+    try {
+      const { router } = renderAuthentication([FULL_ROW], { history })
+      fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
+      await screen.findByRole('dialog', { name: 'Edit OIDC provider' })
+      fireEvent.change(screen.getByPlaceholderText('GitHub Enterprise'), {
+        target: { value: 'Changed provider' },
+      })
+
+      isolatedWindow.history.back()
+      await isolatedWindow.happyDOM.waitUntilComplete()
+      const backGuard = await screen.findByTestId('unsaved-guard-dialog')
+      expect(router.state.location.pathname).toBe('/settings')
+      fireEvent.click(within(backGuard).getByRole('button', { name: 'Discard changes' }))
+      await isolatedWindow.happyDOM.waitUntilComplete()
+      await waitFor(() => expect(router.state.location.pathname).toBe('/other'))
+    } finally {
+      cleanup()
+      history.destroy()
+      await isolatedWindow.happyDOM.close()
+    }
+  })
+
+  test('dirty provider arms beforeunload', async () => {
+    const isolatedWindow = new HappyWindow({
+      url: 'http://oidc.test/settings?tab=authentication',
+    })
+    const history = createBrowserHistory({ window: isolatedWindow })
+    try {
+      renderAuthentication([FULL_ROW], { history })
+      fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
+      await screen.findByRole('dialog', { name: 'Edit OIDC provider' })
+      fireEvent.change(screen.getByPlaceholderText('GitHub Enterprise'), {
+        target: { value: 'Changed provider' },
+      })
+
+      const event = new isolatedWindow.Event('beforeunload', { cancelable: true })
+      isolatedWindow.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(true)
+    } finally {
+      history.destroy()
+      await isolatedWindow.happyDOM.close()
+    }
+  })
+
+  test('save and connection test are mutually exclusive, block navigation, and success disarms the guard', async () => {
+    let resolvePatch!: () => void
+    ;(api.patch as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePatch = resolve
+        }),
+    )
+    const { router } = renderAuthentication([FULL_ROW])
+    fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
+    await screen.findByRole('dialog', { name: 'Edit OIDC provider' })
+    fireEvent.change(screen.getByPlaceholderText('GitHub Enterprise'), {
+      target: { value: 'Changed provider' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1))
+    expect(
+      (screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    expect((document.querySelector('.dialog__close') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByRole('dialog', { name: 'Edit OIDC provider' })).toBeTruthy()
+
+    // The focused harness owns /other; the app-wide RegisteredRouter type does not.
+    void router.navigate({ to: '/other' } as never)
+    const routeGuard = await screen.findByTestId('unsaved-guard-dialog')
+    expect(within(routeGuard).queryByRole('button', { name: 'Discard changes' })).toBeNull()
+    expect(router.state.location.pathname).toBe('/settings')
+
+    resolvePatch()
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Edit OIDC provider' })).toBeNull(),
+    )
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    await router.navigate({ to: '/other' } as never)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/other'))
   })
 })

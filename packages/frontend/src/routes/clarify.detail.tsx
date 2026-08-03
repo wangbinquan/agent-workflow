@@ -6,7 +6,7 @@
 //   3. Shard switcher (only when the same task + clarifyNodeId has ≥ 2
 //      awaiting_human sessions across different sourceShardKeys).
 //   4. QuestionForm list (each question gets its own QuestionForm; answers
-//      flow through local state with debounce-to-IDB draft persistence).
+//      enter a serial IDB writer immediately and a debounced server queue).
 //   5. Submit button + draft saving indicator.
 //   6. History rows (other answered sessions for the same agent+clarify
 //      pair) underneath, read-only.
@@ -39,6 +39,7 @@ import { PeerNav } from '@/components/PeerNav'
 import { StatusChip } from '@/components/StatusChip'
 import { QuestionForm, type QuestionFormHandle } from '@/components/clarify/QuestionForm'
 import { ClarifyQuestionHandler } from '@/components/clarify/ClarifyQuestionHandler'
+import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import type { TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { answersEqual, isAnswerFilled } from '@/lib/clarify/answers'
 import { useActor } from '@/hooks/useActor'
@@ -46,6 +47,12 @@ import { useUserLookup } from '@/hooks/useUserLookup'
 import { Dialog } from '@/components/Dialog'
 import { useClarifyWs } from '@/hooks/useClarifyWs'
 import { deleteClarifyDraft, getClarifyDraft, setClarifyDraft } from '@/lib/clarify/draftStore'
+import {
+  createClarifyDraftDurabilityController,
+  projectClarifyDraftStatus,
+  type ClarifyDraftDurabilityController,
+  type ClarifyDraftGenerationState,
+} from '@/lib/clarify/durability'
 import { goToTaskDetail } from '@/lib/nav/taskNav'
 import { resolveNodeNameFromSnapshot } from '@/lib/node-names'
 import { Route as RootRoute } from './__root'
@@ -60,6 +67,28 @@ export const Route = createRoute({
 })
 
 const DRAFT_DEBOUNCE_MS = 500
+
+const INITIAL_DRAFT_GENERATION_STATE: ClarifyDraftGenerationState = {
+  latestGeneration: 0,
+  localAckGeneration: 0,
+  latestQuestionGeneration: {},
+  serverAckGenerationByQuestion: {},
+  localPending: false,
+  serverPending: false,
+  localError: null,
+  serverError: null,
+  serverRetryable: false,
+  sealed: false,
+}
+
+function emptyAnswer(questionId: string): ClarifyAnswer {
+  return {
+    questionId,
+    selectedOptionIndices: [],
+    selectedOptionLabels: [],
+    customText: '',
+  }
+}
 
 export function ClarifyDetailPage() {
   const { t } = useTranslation()
@@ -165,16 +194,17 @@ export function ClarifyDetailPage() {
   // ----------------------------------------------------------------------
 
   const [answers, setAnswers] = useState<Record<string, ClarifyAnswer>>({})
+  const answersRef = useRef<Record<string, ClarifyAnswer>>({})
   // RFC-162: per-question scope (designer ↔ questioner) removed — cross unified with self.
   const [draftLoaded, setDraftLoaded] = useState(false)
-  const [draftSaving, setDraftSaving] = useState(false)
-  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // RFC-099 (D8/D14) — server-side collaborative drafts. `serverDraftRef`
-  // mirrors the last server-acknowledged value per question; the autosave
-  // diff and the remote-merge effect both compare against it so a remote
-  // editor's change never clobbers text the local user typed since.
-  const serverDraftRef = useRef<Record<string, ClarifyAnswer>>({})
-  const serverDraftDisabledRef = useRef(false)
+  const [draftGenerationState, setDraftGenerationState] = useState<ClarifyDraftGenerationState>(
+    INITIAL_DRAFT_GENERATION_STATE,
+  )
+  const durabilityRef = useRef<ClarifyDraftDurabilityController | null>(null)
+  const durabilityUnsubscribeRef = useRef<(() => void) | null>(null)
+  // The route guard tracks LOCAL durability only. Once IndexedDB acks the
+  // latest generation it is safe to leave even while server sync/retry remains.
+  const localDraftDirtyRef = useRef<string | null>(null)
   // Resolve attribution ids (per-question editors + submitter) to names.
   const attributionUserIds = useMemo(() => {
     const s = session.data
@@ -209,24 +239,30 @@ export function ClarifyDetailPage() {
   // a stable mount — remounting tears down + reconnects the WS for the
   // same taskId on every clarify swap, which is wasteful and racy.
   useEffect(() => {
+    durabilityUnsubscribeRef.current?.()
+    durabilityUnsubscribeRef.current = null
+    durabilityRef.current = null
+    localDraftDirtyRef.current = null
+    answersRef.current = {}
     setAnswers({})
     setDraftLoaded(false)
+    setDraftGenerationState(INITIAL_DRAFT_GENERATION_STATE)
     initialFocusedRef.current = false
-    serverDraftRef.current = {}
-    serverDraftDisabledRef.current = false
     setDraftHint(null)
-    if (draftTimerRef.current !== null) {
-      clearTimeout(draftTimerRef.current)
-      draftTimerRef.current = null
+    return () => {
+      durabilityUnsubscribeRef.current?.()
+      durabilityUnsubscribeRef.current = null
+      durabilityRef.current = null
     }
   }, [nodeRunId])
 
   useEffect(() => {
     const s = session.data
     if (s === undefined || draftLoaded) return
-    const fresh: Record<string, ClarifyAnswer> = {}
+    let cancelled = false
+    const empty: Record<string, ClarifyAnswer> = {}
     for (const q of s.questions) {
-      fresh[q.id] = {
+      empty[q.id] = {
         questionId: q.id,
         selectedOptionIndices: [],
         selectedOptionLabels: [],
@@ -241,24 +277,72 @@ export function ClarifyDetailPage() {
     // (b) is unreviewable.
     if (s.status !== 'awaiting_human' && Array.isArray(s.answers)) {
       for (const a of s.answers) {
-        if (fresh[a.questionId] !== undefined) fresh[a.questionId] = a
+        if (empty[a.questionId] !== undefined) empty[a.questionId] = a
       }
       // Sealed sessions never reload from IDB drafts — the answer is what
       // got persisted server-side. Mark loaded immediately and skip the
       // draft restore branch below.
-      setAnswers(fresh)
+      answersRef.current = empty
+      setAnswers(empty)
       setDraftLoaded(true)
       return
     }
+
+    const key = {
+      taskId: s.taskId,
+      intermediaryNodeRunId: s.intermediaryNodeRunId,
+      roundId: s.id,
+    }
+    const attachController = (
+      initial: Record<string, ClarifyAnswer>,
+      serverBaseline: Record<string, ClarifyAnswer>,
+      initialLocalPersisted: boolean,
+    ): void => {
+      if (cancelled) return
+      // Capture the concrete writers for this controller. Its queues deliberately
+      // outlive React subscriptions/unmount, so later module/mock replacement must
+      // not redirect already-enqueued work to a different writer.
+      const persistDraft = setClarifyDraft
+      const putServerDraft = api.put
+      const toArray = (record: Record<string, ClarifyAnswer>) =>
+        s.questions.map((question) => record[question.id] ?? empty[question.id]!)
+      const controller = createClarifyDraftDurabilityController({
+        initialAnswers: toArray(initial),
+        serverAnswers: toArray(serverBaseline),
+        initialLocalPersisted,
+        debounceMs: DRAFT_DEBOUNCE_MS,
+        writeLocal: ({ answers: next }) => persistDraft(key, next),
+        writeServer: async ({ answer }) => {
+          await putServerDraft(`/api/clarify/${s.intermediaryNodeRunId}/draft`, {
+            roundId: s.id,
+            questionId: answer.questionId,
+            selectedOptionIndices: answer.selectedOptionIndices,
+            customText: answer.customText,
+          })
+        },
+      })
+      durabilityUnsubscribeRef.current?.()
+      durabilityRef.current = controller
+      durabilityUnsubscribeRef.current = controller.subscribe((state) => {
+        localDraftDirtyRef.current =
+          !state.sealed && state.latestGeneration > state.localAckGeneration ? s.id : null
+        setDraftGenerationState(state)
+      })
+      answersRef.current = initial
+      setAnswers(initial)
+      setDraftLoaded(true)
+    }
+
     // RFC-099 (D8): the SERVER draft is the collaborative source of truth.
     // When present it wins over the local IDB copy (another member may have
     // edited from a different machine); IDB stays as the single-user /
     // offline fallback only.
     const serverDrafts = s.draftAnswers ?? null
     if (serverDrafts !== null && Object.keys(serverDrafts).length > 0) {
+      const serverBaseline = { ...empty }
       for (const [qid, v] of Object.entries(serverDrafts)) {
-        if (fresh[qid] !== undefined) {
-          fresh[qid] = {
+        if (serverBaseline[qid] !== undefined) {
+          serverBaseline[qid] = {
             questionId: qid,
             selectedOptionIndices: v.selectedOptionIndices ?? [],
             selectedOptionLabels: [],
@@ -266,86 +350,40 @@ export function ClarifyDetailPage() {
           }
         }
       }
-      serverDraftRef.current = { ...fresh }
-      setAnswers(fresh)
-      setDraftLoaded(true)
-      return
+      attachController(serverBaseline, serverBaseline, false)
+      return () => {
+        cancelled = true
+      }
     }
-    serverDraftRef.current = { ...fresh }
     // Try to restore the IDB draft (if any) for this session.
-    const key = {
-      taskId: s.taskId,
-      intermediaryNodeRunId: s.intermediaryNodeRunId,
-      roundId: s.id,
-    }
     getClarifyDraft(key)
       .then((stored) => {
+        if (cancelled) return
+        const initial = { ...empty }
         if (stored !== null) {
           for (const a of stored) {
-            if (fresh[a.questionId] !== undefined) fresh[a.questionId] = a
+            if (initial[a.questionId] !== undefined) initial[a.questionId] = a
           }
         }
+        attachController(initial, empty, stored !== null)
       })
-      .finally(() => {
-        setAnswers(fresh)
-        setDraftLoaded(true)
-      })
+      .catch(() => attachController(empty, empty, false))
+    return () => {
+      cancelled = true
+    }
   }, [draftLoaded, session.data])
 
-  // Debounced draft write: IDB (offline fallback) + RFC-099 server drafts —
-  // one PUT per question whose value changed since the last server ack, so
-  // concurrent members editing DIFFERENT questions merge (D14 per-question
-  // last-write-wins).
-  useEffect(() => {
+  const updateAnswer = (questionId: string, nextAnswer: ClarifyAnswer): void => {
     const s = session.data
-    if (s === undefined || !draftLoaded) return
-    if (s.status !== 'awaiting_human') return
-    if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current)
-    setDraftSaving(true)
-    draftTimerRef.current = setTimeout(() => {
-      const arr = s.questions.map(
-        (q) =>
-          answers[q.id] ?? {
-            questionId: q.id,
-            selectedOptionIndices: [],
-            selectedOptionLabels: [],
-            customText: '',
-          },
-      )
-      const serverPuts: Array<Promise<unknown>> = []
-      if (!serverDraftDisabledRef.current) {
-        for (const a of arr) {
-          const prev = serverDraftRef.current[a.questionId]
-          if (prev !== undefined && answersEqual(prev, a)) continue
-          serverDraftRef.current[a.questionId] = a
-          serverPuts.push(
-            api
-              .put(`/api/clarify/${s.intermediaryNodeRunId}/draft`, {
-                roundId: s.id,
-                questionId: a.questionId,
-                selectedOptionIndices: a.selectedOptionIndices,
-                customText: a.customText,
-              })
-              .catch(() => {
-                // 403 (not a member) / 409 (round sealed under us) — stop
-                // hammering the server; the IDB draft keeps working locally.
-                serverDraftDisabledRef.current = true
-              }),
-          )
-        }
-      }
-      void Promise.allSettled([
-        setClarifyDraft(
-          { taskId: s.taskId, intermediaryNodeRunId: s.intermediaryNodeRunId, roundId: s.id },
-          arr,
-        ),
-        ...serverPuts,
-      ]).finally(() => setDraftSaving(false))
-    }, DRAFT_DEBOUNCE_MS)
-    return () => {
-      if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current)
-    }
-  }, [answers, draftLoaded, session.data])
+    if (s === undefined || s.status !== 'awaiting_human') return
+    const next = { ...answersRef.current, [questionId]: nextAnswer }
+    answersRef.current = next
+    setAnswers(next)
+    durabilityRef.current?.recordChange(
+      s.questions.map((question) => next[question.id] ?? emptyAnswer(question.id)),
+      questionId,
+    )
+  }
 
   // RFC-099 (D14) — merge REMOTE draft changes (refetched after a
   // clarify.draft.updated frame) into the form. A remote value is adopted
@@ -357,30 +395,30 @@ export function ClarifyDetailPage() {
     if (s === undefined || !draftLoaded || s.status !== 'awaiting_human') return
     const serverDrafts = s.draftAnswers ?? null
     if (serverDrafts === null) return
-    setAnswers((prev) => {
-      let changed = false
-      const next = { ...prev }
-      for (const [qid, v] of Object.entries(serverDrafts)) {
-        if (prev[qid] === undefined) continue
-        const remote: ClarifyAnswer = {
-          questionId: qid,
-          selectedOptionIndices: v.selectedOptionIndices ?? [],
-          selectedOptionLabels: [],
-          customText: v.customText ?? '',
-        }
-        const acked = serverDraftRef.current[qid]
-        if (answersEqual(remote, prev[qid])) {
-          serverDraftRef.current[qid] = remote
-          continue
-        }
-        if (acked !== undefined && answersEqual(prev[qid], acked)) {
-          next[qid] = remote
-          serverDraftRef.current[qid] = remote
-          changed = true
-        }
+    const controller = durabilityRef.current
+    if (controller === null) return
+    const current = answersRef.current
+    let changed = false
+    const next = { ...current }
+    for (const [qid, v] of Object.entries(serverDrafts)) {
+      const local = current[qid]
+      if (local === undefined) continue
+      const remote: ClarifyAnswer = {
+        questionId: qid,
+        selectedOptionIndices: v.selectedOptionIndices ?? [],
+        selectedOptionLabels: [],
+        customText: v.customText ?? '',
       }
-      return changed ? next : prev
-    })
+      if (!controller.tryAdoptRemote(qid, local, remote)) continue
+      if (!answersEqual(local, remote)) {
+        next[qid] = remote
+        changed = true
+      }
+    }
+    if (changed) {
+      answersRef.current = next
+      setAnswers(next)
+    }
   }, [session.data, draftLoaded])
 
   // ----------------------------------------------------------------------
@@ -482,12 +520,16 @@ export function ClarifyDetailPage() {
         `/api/clarify/${s.intermediaryNodeRunId}/answers`,
         body,
       )
-      // Clear the IDB draft; the answer is committed server-side.
+      // Stop queued draft writes before deletion. Otherwise an IDB write that
+      // began just before submit can finish after delete and recreate a stale
+      // draft for this now-sealed round.
+      await durabilityRef.current?.seal()
       await deleteClarifyDraft({
         taskId: s.taskId,
         intermediaryNodeRunId: s.intermediaryNodeRunId,
         roundId: s.id,
       })
+      localDraftDirtyRef.current = null
       return resp
     },
     onSuccess: (resp) => {
@@ -615,6 +657,19 @@ export function ClarifyDetailPage() {
   if (s === undefined) return null
 
   const readonly = s.status !== 'awaiting_human'
+  const draftStatus = readonly
+    ? ({ kind: 'sealed' } as const)
+    : projectClarifyDraftStatus(draftGenerationState)
+  const draftStatusLabel =
+    draftStatus.kind === 'sealed'
+      ? t('clarify.detail.roundSealedFooter')
+      : draftStatus.kind === 'saving'
+        ? t('clarify.detail.draftSaving')
+        : draftStatus.kind === 'saved'
+          ? t('clarify.detail.draftSaved')
+          : draftStatus.kind === 'local-only'
+            ? t('clarify.detail.draftLocalOnly')
+            : t('clarify.detail.draftSaveFailed')
   // RFC-128 P4 (T10): every question already sealed/dispatched elsewhere → nothing left
   // to submit here. Disable the submit buttons (the form is all read-only anyway).
   const allLocked = s.questions.length > 0 && s.questions.every((q) => lockedQuestionIds.has(q.id))
@@ -696,6 +751,39 @@ export function ClarifyDetailPage() {
 
         {peers.error !== null && peers.error !== undefined && (
           <ErrorBanner error={peers.error} onRetry={() => void peers.refetch()} />
+        )}
+
+        {draftStatus.kind === 'error' && (
+          <ErrorBanner
+            error={draftStatus.error}
+            message={t('clarify.detail.draftSaveFailed')}
+            onRetry={() => {
+              void durabilityRef.current?.retryLocal().catch(() => {})
+            }}
+            testid="clarify-draft-local-error"
+          />
+        )}
+
+        {draftStatus.kind === 'local-only' && (
+          <NoticeBanner
+            tone="warning"
+            size="compact"
+            testid="clarify-draft-local-only"
+            action={
+              draftStatus.canRetryServer ? (
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => durabilityRef.current?.retryServer()}
+                  data-testid="clarify-draft-server-retry"
+                >
+                  {t('common.retry')}
+                </button>
+              ) : undefined
+            }
+          >
+            {t('clarify.detail.draftLocalOnly')}
+          </NoticeBanner>
         )}
 
         {truncationWarnings !== undefined && truncationWarnings.length > 0 && (
@@ -886,7 +974,7 @@ export function ClarifyDetailPage() {
                 value={a}
                 index={idx + 1}
                 disabled={readonly || submitMut.isPending || locked}
-                onChange={(next) => setAnswers((prev) => ({ ...prev, [q.id]: next }))}
+                onChange={(next) => updateAnswer(q.id, next)}
                 onAdvance={() => advanceFromQuestion(q.id)}
               />
               {/* RFC-099 (D7/D8): per-question last editor, live while
@@ -914,12 +1002,13 @@ export function ClarifyDetailPage() {
       </section>
 
       <footer className="clarify-detail__footer">
-        <span className="muted" data-testid="clarify-draft-indicator">
-          {s.terminatedAs !== null
-            ? t('clarify.detail.roundSealedFooter')
-            : draftSaving
-              ? t('clarify.detail.draftSaving')
-              : t('clarify.detail.draftSaved')}
+        <span
+          className="muted"
+          role="status"
+          data-draft-status={draftStatus.kind}
+          data-testid="clarify-draft-indicator"
+        >
+          {draftStatusLabel}
         </span>
         {/* RFC-162: scope-distribution submit hint removed (scope deleted). */}
         <div className="clarify-detail__submit-group" data-testid="clarify-submit-group">
@@ -955,6 +1044,40 @@ export function ClarifyDetailPage() {
           <ErrorBanner error={submitMut.error} />
         )}
       </footer>
+
+      {!readonly && (
+        <UnsavedChangesGuard
+          dirtyRef={localDraftDirtyRef}
+          onSaveAndProceed={async () => {
+            const controller = durabilityRef.current
+            if (controller === null) throw new Error(t('clarify.detail.draftSaveFailed'))
+            await controller.flushLocal()
+            const state = controller.getState()
+            if (state.latestGeneration > state.localAckGeneration) {
+              throw new Error(t('clarify.detail.draftSaveFailed'))
+            }
+            // UnsavedChangesGuard verifies this synchronously before proceeding.
+            localDraftDirtyRef.current = null
+          }}
+          onDiscard={() => {
+            const controller = durabilityRef.current
+            localDraftDirtyRef.current = null
+            if (controller !== null) {
+              void controller
+                .seal()
+                .then(() =>
+                  deleteClarifyDraft({
+                    taskId: s.taskId,
+                    intermediaryNodeRunId: s.intermediaryNodeRunId,
+                    roundId: s.id,
+                  }),
+                )
+                .catch(() => {})
+            }
+            return true
+          }}
+        />
+      )}
 
       {/* Unified stop-confirm modal. Both kinds share the same dialog
           shell + testids so the two pages look and behave identically;

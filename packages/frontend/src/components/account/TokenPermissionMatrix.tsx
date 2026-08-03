@@ -62,6 +62,9 @@ export function TokenPermissionMatrix({
                   'token-matrix__cell' + (cell.isDelete ? ' token-matrix__cell--delete' : '')
                 }
               >
+                <span className="token-matrix__cell-verb" aria-hidden="true">
+                  {t(`account.token.verb.${verb}`)}
+                </span>
                 <Checkbox
                   checked={selected.has(cell.permission)}
                   onChange={(next) => onToggle(cell.permission, next)}

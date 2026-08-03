@@ -1002,10 +1002,90 @@ code {
   justify-content: center;
 }
 
+.token-matrix__cell-verb {
+  display: none;
+}
+
 /* Delete reads differently from the other three at a glance — the point of the
    column is that ticking one is a decision, not a default. */
 .token-matrix__cell--delete > .form-checkbox > input[type='checkbox'] {
   accent-color: var(--danger-fill);
+}
+
+/* RFC-250 — the desktop matrix keeps column comparison, while narrow screens
+   turn each resource into a self-labelled card so no verb or control clips. */
+@media (max-width: 720px) {
+  /* Purpose/template labels are intentionally unbroken in the shared
+     Segmented primitive. Four of them in one intrinsic-width row made this
+     dialog's body 426px wide inside a 340px scrollport. Keep the generic
+     control untouched and give this form a stable two-column radio matrix. */
+  .token-create-dialog .segmented {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+  }
+
+  .token-create-dialog .segmented__option {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .token-matrix {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+    gap: var(--space-2);
+  }
+
+  .token-matrix__head {
+    display: none;
+  }
+
+  .token-matrix__row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--panel);
+  }
+
+  .token-matrix__resource {
+    grid-column: 1 / -1;
+    padding-bottom: var(--space-1);
+    border-bottom: 1px solid var(--border);
+    font-weight: 650;
+  }
+
+  .token-matrix__cell {
+    min-width: 0;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1);
+  }
+
+  .token-matrix__cell:empty {
+    display: none;
+  }
+
+  .token-matrix__cell-verb {
+    display: inline;
+    min-width: 0;
+    color: var(--muted);
+    font-size: var(--font-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .token-matrix__cell > .form-checkbox {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+  }
 }
 
 .token-reveal {
@@ -3562,7 +3642,7 @@ code {
   flex-shrink: 0;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--bg);
 }
 
@@ -3577,7 +3657,7 @@ code {
   color: var(--on-accent);
 }
 
-.btn--primary:hover {
+.btn--primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent-fill) 85%, #000);
 }
 
@@ -3594,13 +3674,13 @@ code {
   border-color: transparent;
   color: var(--accent);
 }
-.btn--ghost:hover {
+.btn--ghost:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .btn--ghost.btn--danger {
   color: var(--danger);
 }
-.btn--ghost.btn--danger:hover {
+.btn--ghost.btn--danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
@@ -3624,13 +3704,21 @@ code {
    the cursor is necessarily over the button the moment it arms (you just clicked
    it), so every confirm hit this. Mirror `.btn--primary:hover`: darken the
    danger fill on hover so the white label stays legible. */
-.btn--armed:hover {
+.btn--armed:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger-fill) 85%, #000);
 }
 
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Disabled controls must not acquire hover-only motion/elevation from a
+   specialized callsite rule. Their visual state stays quiet and truthful. */
+button:disabled:hover {
+  transform: none;
+  box-shadow: none;
+  filter: none;
 }
 
 /* ---- Data table ---- */
@@ -4467,6 +4555,24 @@ code {
 .form-switch > input[type='checkbox']:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
+}
+.form-switch > input[type='checkbox']:disabled::before {
+  box-shadow: none;
+}
+.form-switch:has(> input:disabled) {
+  cursor: not-allowed;
+}
+
+/* RFC-250: grow the LABEL hit target without inflating the visual checkbox or
+   toggle, so adjacent controls never overlap. Coarse pointers receive the
+   same target even on wider touch devices. */
+@media (max-width: 720px), (pointer: coarse) {
+  .form-checkbox,
+  .form-switch {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .form-actions {
@@ -5736,6 +5842,17 @@ details.form-section[open] > summary {
   overflow: hidden;
 }
 
+@media (min-width: 1180px) and (max-width: 1535px) {
+  /* Workflow headers carry history, validation, launch, and overflow actions.
+   * Let the already-ellipsized title column yield first so the complete action
+   * rail remains visible in the medium workspace (including canonical 1280px).
+   * Other modes retain their existing title/action allocation. */
+  .page--editor > .editor-page-header--workflow > .page__heading {
+    flex-basis: clamp(220px, 24vw, 320px);
+    min-width: 220px;
+  }
+}
+
 .page--editor > .page__header .page__title,
 .page--editor > .page__header .page__meta,
 .editor-page-header .page__title,
@@ -6773,6 +6890,68 @@ details.form-section[open] > summary {
   outline: none;
 }
 
+/* RFC-250 semantic zoom is editor-only. `visibility`/`opacity` preserve node
+   geometry, so changing bands never feeds a new size back into the camera. */
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview']
+  :is(
+    .canvas-node__configuration,
+    .canvas-node__port-label,
+    .canvas-node__port-tag,
+    .canvas-node__description,
+    .canvas-node__input-source,
+    .canvas-node__call-reference,
+    .canvas-node__call-nav,
+    .canvas-node__review-nav,
+    .canvas-node__clarify-nav,
+    .canvas-node__clarify-directive,
+    .canvas-node__cross-clarify-handle-label,
+    .canvas-node__wrapper-empty-hint
+  ) {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology']
+  .canvas-node
+  > :not(.canvas-node__validation) {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Selection and validation are orientation markers, not flow-space content.
+   Cancel the viewport scale below readable zoom so each marker retains at
+   least an 8px screen-space footprint even at React Flow's 0.2 minZoom. */
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview'],
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology'] {
+  --workflow-canvas-marker-scale: var(--workflow-canvas-inverse-zoom, 1);
+}
+
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview'] .canvas-node--selected::after,
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology'] .canvas-node--selected::after {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  right: 0;
+  box-sizing: border-box;
+  width: calc(8px * var(--workflow-canvas-marker-scale));
+  height: calc(8px * var(--workflow-canvas-marker-scale));
+  content: '';
+  background: var(--accent-fill);
+  border: 1px solid var(--panel);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+  transform: translate(50%, -50%);
+}
+
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview'] .canvas-node__validation,
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology'] .canvas-node__validation {
+  transform: scale(var(--workflow-canvas-marker-scale));
+  transform-origin: top right;
+}
+
 .workflow-canvas__empty {
   position: absolute;
   inset: 0;
@@ -6812,7 +6991,10 @@ details.form-section[open] > summary {
 
 .workflow-canvas__layout-panel > [role='toolbar'] {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 4px;
+  max-width: min(640px, calc(100vw - 96px));
   padding: 4px;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   border: 1px solid var(--border);
@@ -6822,8 +7004,10 @@ details.form-section[open] > summary {
 
 @media (max-width: 520px) {
   .workflow-canvas__layout-panel > [role='toolbar'] {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
+    max-width: calc(100vw - 96px);
   }
 }
 
@@ -6851,6 +7035,30 @@ details.form-section[open] > summary {
 .workflow-edge-insert:focus-visible,
 .workflow-edge-insert[data-selected='true'] {
   opacity: 1;
+}
+
+@media (pointer: coarse), (max-width: 520px) {
+  .workflow-canvas[data-surface='editor'] .workflow-edge-insert {
+    width: 44px;
+    height: 44px;
+  }
+
+  .workflow-canvas[data-surface='editor'] .workflow-canvas__layout-panel .btn,
+  .workflow-canvas[data-surface='editor'] .workflow-canvas__node-actions .btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .workflow-canvas[data-surface='editor'] .react-flow__controls-button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-edge-insert {
+    transition: none;
+  }
 }
 
 .workflow-canvas__live {
@@ -7225,6 +7433,12 @@ details.form-section[open] > summary {
   gap: 12px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.workflow-validation__header > h2 {
+  margin: 0;
+  font: inherit;
+  font-weight: 700;
 }
 
 .workflow-validation__details {
@@ -8058,6 +8272,23 @@ details.form-section[open] > summary {
   align-items: center;
   gap: 8px;
 }
+.canvas-node__add-inside {
+  min-width: 26px;
+  min-height: 26px;
+  margin: 4px 10px;
+  padding: 2px 8px;
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+@media (pointer: coarse), (max-width: 520px) {
+  .canvas-node__add-inside {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 .canvas-node__wrapper-empty-hint {
   padding: 16px;
   text-align: center;
@@ -8502,6 +8733,24 @@ details.form-section[open] > summary {
   stroke: var(--muted);
   stroke-width: 2.5;
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--muted) 60%, transparent));
+}
+
+/* Low-zoom edge selection/validation must remain visible after the SVG
+   viewport scales. These rules intentionally follow the per-edge-kind rules
+   above so data/control edges share the same 8px screen-space floor. */
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview']
+  .react-flow__edge.selected
+  .react-flow__edge-path,
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology']
+  .react-flow__edge.selected
+  .react-flow__edge-path,
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview']
+  .react-flow__edge:is(.canvas-edge--validation-error, .canvas-edge--validation-warning)
+  .react-flow__edge-path,
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology']
+  .react-flow__edge:is(.canvas-edge--validation-error, .canvas-edge--validation-warning)
+  .react-flow__edge-path {
+  stroke-width: calc(8px * var(--workflow-canvas-marker-scale));
 }
 
 /* ---- Task output panel ---- */
@@ -11681,6 +11930,11 @@ mark.prior-comment-anchor[data-active='true'] {
   display: flex;
   flex-direction: column;
 }
+.changes__file-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .changes__group-header {
   display: flex;
   align-items: center;
@@ -11764,7 +12018,7 @@ mark.prior-comment-anchor[data-active='true'] {
   color: var(--muted);
   text-decoration: line-through;
 }
-.changes__viewed {
+.changes__file-row > .form-checkbox {
   flex: none;
 }
 .changes__file-tab {
@@ -11787,10 +12041,24 @@ mark.prior-comment-anchor[data-active='true'] {
   background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 .changes__file-tab--active,
-.changes__file-tab[aria-selected='true'] {
+.changes__file-tab[aria-current='true'] {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: var(--accent);
   color: var(--accent);
+}
+@media (max-width: 720px), (pointer: coarse) {
+  .changes__group-header,
+  .changes__file-tab {
+    min-height: 44px;
+  }
+
+  .changes__file-row > .form-checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 .changes__file-stats {
   margin-left: auto;
@@ -16346,6 +16614,12 @@ mark.prior-comment-anchor[data-active='true'] {
 .detail-grid dd {
   margin: 0;
 }
+.schedule-dialog__fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
 .schedule-dialog__row {
   display: flex;
   gap: 1rem;
@@ -17523,6 +17797,19 @@ button.status-chip {
 
 .task-wizard .stepper__body {
   min-height: 14rem;
+}
+
+.task-wizard__material {
+  border: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* Native fieldset semantics freeze inputs/buttons; pointer-events also cover
+   custom dropzones and drag handlers that are not native form controls. */
+.task-wizard__material:disabled {
+  pointer-events: none;
 }
 
 /* ── RFC-169 · resource split page (master-detail) ──────────────────────────
@@ -18742,7 +19029,8 @@ button.status-chip {
 .segmented__option,
 .form-input,
 .select__trigger,
-.dialog__close {
+.dialog__close,
+.stepper__step {
   min-height: 36px;
 }
 
@@ -18964,7 +19252,8 @@ button.status-chip {
   .form-input,
   .select__trigger,
   .dialog__close,
-  .dialog__footer .btn {
+  .dialog__footer .btn,
+  .stepper__step {
     min-height: 44px;
   }
 
@@ -21268,6 +21557,31 @@ button.status-chip {
   white-space: nowrap;
 }
 
+/* A run-now failure belongs to the scheduled item, not to its 86px action
+   cell. The table uses block row groups plus grid data rows, so native
+   `colspan` alone cannot establish width; make the sibling feedback row an
+   explicit one-track full-width owner and keep the shared banner readable. */
+.operations-table tbody .scheduled-operations__feedback-row {
+  display: grid;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  padding: 0 22px 10px;
+  border-top: 0;
+}
+
+.scheduled-operations__feedback-row > td,
+.scheduled-operations__feedback {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+
+.scheduled-operations__feedback > .notice-banner {
+  box-sizing: border-box;
+  width: 100%;
+}
+
 .scheduled-operations__nav {
   display: grid;
   place-items: center;
@@ -21401,6 +21715,10 @@ button.status-chip {
     column-gap: 10px;
   }
 
+  .operations-table tbody .scheduled-operations__feedback-row {
+    padding-inline: 14px;
+  }
+
   .repo-operations thead tr,
   .repo-operations__row {
     grid-template-columns: minmax(250px, 1.55fr) minmax(170px, 0.8fr) 86px auto;
@@ -21427,6 +21745,10 @@ button.status-chip {
 
   .operations-table tbody tr {
     padding: 10px 16px;
+  }
+
+  .operations-table tbody .scheduled-operations__feedback-row {
+    padding: 0 16px 10px;
   }
 
   .scheduled-operations__row {

@@ -363,6 +363,73 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
   })
 
+  test('a single enabled runtime stays visible and round-trips inherit and explicit pin', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await setDaemonTheme('light')
+    await primeAuth(page)
+
+    // RFC-250 final-audit P1: reproduce the real single-runtime installation
+    // without mutating the daemon registry shared by the rest of this matrix.
+    // The response still comes from the production endpoint; this route only
+    // narrows its enabled inventory to the existing opencode profile.
+    await page.route(/\/api\/runtimes(?:\?.*)?$/, async (route) => {
+      const response = await route.fetch()
+      const body = (await response.json()) as {
+        runtimes: Array<{
+          name: string
+          protocol: string
+          enabled: boolean
+          isDefault: boolean
+          model: string | null
+        }>
+      }
+      const opencode = body.runtimes.find((runtime) => runtime.name === 'opencode')
+      expect(opencode, 'the E2E daemon must expose the built-in opencode runtime').toBeDefined()
+      await route.fulfill({
+        response,
+        json: { runtimes: [{ ...opencode!, enabled: true, isDefault: true }] },
+      })
+    })
+
+    await page.goto(`${daemon.baseUrl}/agents/${fixtureAgentId}`)
+    const runtime = page.getByRole('combobox', { name: 'Runtime', exact: true })
+    await expect(runtime).toBeVisible()
+    await expect(runtime).toBeEnabled()
+    await expect(runtime).toContainText('Inherit')
+    await expectNoPageOverflow(page)
+
+    await runtime.click()
+    await page.getByRole('option', { name: 'opencode', exact: true }).click()
+    const pinSaved = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PUT' &&
+        new URL(response.url()).pathname === `/api/agents/${fixtureAgentId}`,
+    )
+    await page.getByTestId('agent-save-button').click()
+    expect((await pinSaved).ok()).toBe(true)
+
+    await page.reload()
+    await expect(runtime).toBeEnabled()
+    await expect(runtime).toContainText('opencode')
+
+    await runtime.click()
+    await page.getByRole('option', { name: /Inherit/, exact: false }).click()
+    const inheritSaved = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PUT' &&
+        new URL(response.url()).pathname === `/api/agents/${fixtureAgentId}`,
+    )
+    await page.getByTestId('agent-save-button').click()
+    expect((await inheritSaved).ok()).toBe(true)
+
+    await page.reload()
+    await expect(runtime).toBeEnabled()
+    await expect(runtime).toContainText('Inherit')
+    await expectNoPageOverflow(page)
+  })
+
   test('1081 to 1080 split resize hands off only hidden-list focus and preserves detail draft focus', async ({
     page,
   }) => {
@@ -797,6 +864,28 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.keyboard.press('Escape')
     await expect(menu).toBeFocused()
 
+    // Regression: while /repos was unmounting, its canonicalizer interpreted
+    // Memory's `tab=all` as an invalid repos tab and replaced the destination
+    // back to `/repos?tab=repos`.
+    await page.goto(`${daemon.baseUrl}/repos?tab=repos`)
+    await expect(page.getByTestId('repos-tab-repos')).toHaveAttribute('aria-selected', 'true')
+    await page.getByTestId('mobile-menu-trigger').click()
+    const memoryDestination = page
+      .getByTestId('shell-navigation-mobile')
+      .locator('a[href="/memory?tab=all"]')
+    await expect(memoryDestination).toBeVisible()
+    await memoryDestination.click()
+    await expect(page).toHaveURL(`${daemon.baseUrl}/memory?tab=all`)
+    const memoryHeading = page.getByRole('heading', {
+      name: 'Platform long-term memory',
+      exact: true,
+    })
+    await expect(memoryHeading).toBeVisible()
+    await expect(memoryHeading).toBeFocused()
+    await expect(page.getByTestId('memory-section-panel')).toBeVisible()
+    await expect(page.getByTestId('mobile-nav-dialog')).toHaveCount(0)
+
+    await openAgents(page)
     const card = page.getByTestId(`split-card-${fixtureAgentId}`)
     await card.focus()
     await page.keyboard.press('Enter')

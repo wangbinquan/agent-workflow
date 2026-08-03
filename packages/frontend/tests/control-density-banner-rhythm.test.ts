@@ -96,6 +96,27 @@ describe('shared control density and feedback rhythm', () => {
     expect(authRules.some((body) => body.includes('min-height: 44px'))).toBe(true)
   })
 
+  test('mobile Stepper headers share the 44px touch floor with other navigation controls', () => {
+    expect(css).toMatch(/\.dialog__footer \.btn,\s*\.stepper__step\s*\{\s*min-height: 44px;/)
+  })
+
+  test('checkbox and switch wrappers own non-overlapping 44px coarse-pointer targets', () => {
+    expect(css).toMatch(
+      /@media \(max-width: 720px\), \(pointer: coarse\)\s*\{\s*\.form-checkbox,\s*\.form-switch\s*\{[^}]*min-width: 44px;[^}]*min-height: 44px;/,
+    )
+    expect(css).not.toMatch(/\.form-(?:checkbox|switch)[^{]*\{[^}]*(?:margin:\s*-|inset:\s*-)/)
+  })
+
+  test('disabled shared buttons and switches cannot retain hover motion or elevation', () => {
+    expect(css).toContain('.btn:hover:not(:disabled)')
+    expect(css).toMatch(
+      /button:disabled:hover\s*\{[^}]*transform: none;[^}]*box-shadow: none;[^}]*filter: none;/,
+    )
+    expect(css).toMatch(
+      /\.form-switch > input\[type='checkbox'\]:disabled::before\s*\{[^}]*box-shadow: none;/,
+    )
+  })
+
   test('draft chips live in compact editor metadata while recovery banners keep their rhythm', () => {
     const meta = rule('.editor-resource-meta')
     expect(meta).toContain('display: flex')

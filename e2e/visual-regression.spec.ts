@@ -270,6 +270,124 @@ async function openEditorScene(
   }
 }
 
+interface VisualCanvasViewport {
+  x: number
+  y: number
+  zoom: number
+}
+
+async function readVisualCanvasViewport(page: Page): Promise<VisualCanvasViewport> {
+  return page.locator('.react-flow__viewport').evaluate((element) => {
+    const transform = getComputedStyle(element).transform
+    const matrix = new DOMMatrixReadOnly(transform === 'none' ? undefined : transform)
+    return { x: matrix.m41, y: matrix.m42, zoom: matrix.m11 }
+  })
+}
+
+async function waitForVisualCanvasViewportSettled(
+  page: Page,
+  previousViewport: VisualCanvasViewport,
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const current = await readVisualCanvasViewport(page)
+      return Math.max(
+        Math.abs(current.x - previousViewport.x),
+        Math.abs(current.y - previousViewport.y),
+        Math.abs(current.zoom - previousViewport.zoom) * 100,
+      )
+    })
+    .toBeGreaterThan(0.5)
+
+  let previous: VisualCanvasViewport | null = null
+  let stableSamples = 0
+  await expect
+    .poll(
+      async () => {
+        const current = await readVisualCanvasViewport(page)
+        const delta =
+          previous === null
+            ? Number.POSITIVE_INFINITY
+            : Math.max(
+                Math.abs(current.x - previous.x),
+                Math.abs(current.y - previous.y),
+                Math.abs(current.zoom - previous.zoom) * 100,
+              )
+        stableSamples = delta <= 0.05 ? stableSamples + 1 : 0
+        previous = current
+        return stableSamples
+      },
+      { intervals: Array.from({ length: 12 }, () => 40) },
+    )
+    .toBeGreaterThanOrEqual(3)
+}
+
+async function expectSelectedNodeCanvasMargin(
+  page: Page,
+  nodeId: string,
+  previousViewport: VisualCanvasViewport,
+  margin = 16,
+): Promise<void> {
+  const selectedNode = page.locator(`.react-flow__node[data-id="${nodeId}"]`)
+  await expect(selectedNode).toHaveClass(/selected/)
+  await waitForVisualCanvasViewportSettled(page, previousViewport)
+  const [canvasRect, nodeRect] = await Promise.all([
+    page.locator('.workflow-canvas').boundingBox(),
+    selectedNode.boundingBox(),
+  ])
+  if (canvasRect === null || nodeRect === null) {
+    throw new Error(`${nodeId} final canvas geometry is incomplete`)
+  }
+  const minimumInset = Math.min(
+    nodeRect.x - canvasRect.x,
+    canvasRect.x + canvasRect.width - (nodeRect.x + nodeRect.width),
+    nodeRect.y - canvasRect.y,
+    canvasRect.y + canvasRect.height - (nodeRect.y + nodeRect.height),
+  )
+  expect(
+    minimumInset,
+    `${nodeId} did not retain a ${margin}px workflow-canvas margin`,
+  ).toBeGreaterThanOrEqual(margin)
+}
+
+async function expectSelectedNodeVisibleBesideInspector(
+  page: Page,
+  nodeId: string,
+  previousViewport: VisualCanvasViewport,
+  margin = 16,
+): Promise<void> {
+  const selectedNode = page.locator(`.react-flow__node[data-id="${nodeId}"]`)
+  const inspectorPanel = page
+    .getByTestId('workflow-editor-inspector-surface')
+    .locator('.workflow-editor-surface-dialog')
+  await expect(selectedNode).toHaveClass(/selected/)
+  await expect(inspectorPanel).toBeVisible()
+  await waitForVisualCanvasViewportSettled(page, previousViewport)
+  const [canvasRect, nodeRect, inspectorRect] = await Promise.all([
+    page.locator('.workflow-canvas').boundingBox(),
+    selectedNode.boundingBox(),
+    inspectorPanel.boundingBox(),
+  ])
+  if (canvasRect === null || nodeRect === null || inspectorRect === null) {
+    throw new Error('compact Inspector visibility geometry is incomplete')
+  }
+  // Compact uses a right-side Dialog panel over the canvas. Its dimmed
+  // backdrop may cover the canvas, but the selected card itself must sit
+  // wholly in the unobscured strip to the panel's left — being present
+  // under an opaque panel is not a readable camera result.
+  const visibleCanvasRight = Math.min(canvasRect.x + canvasRect.width, inspectorRect.x)
+  const minimumVisibleInset = Math.min(
+    nodeRect.x - canvasRect.x,
+    visibleCanvasRight - (nodeRect.x + nodeRect.width),
+    nodeRect.y - canvasRect.y,
+    canvasRect.y + canvasRect.height - (nodeRect.y + nodeRect.height),
+  )
+  expect(
+    minimumVisibleInset,
+    `${nodeId} was hidden by the compact Inspector instead of retaining a ${margin}px visible-canvas margin`,
+  ).toBeGreaterThanOrEqual(margin)
+}
+
 async function routeLargeAgentCatalog(page: Page, total = 50): Promise<void> {
   await page.route(/\/api\/agents(?:\?.*)?$/, async (route) => {
     const response = await route.fetch()
@@ -835,7 +953,9 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     const workflowId = await seedEditorWorkflow()
     await openEditorScene(page, workflowId, 3)
+    const beforeSelection = await readVisualCanvasViewport(page)
     await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expectSelectedNodeCanvasMargin(page, 'visual_agent', beforeSelection)
     await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'wide')
     await expect(page.locator('.editor-layout > .editor-sidebar')).toBeVisible()
     await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
@@ -850,7 +970,9 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     const workflowId = await seedEditorWorkflow()
     await openEditorScene(page, workflowId, 3)
+    const beforeSelection = await readVisualCanvasViewport(page)
     await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expectSelectedNodeCanvasMargin(page, 'visual_agent', beforeSelection)
     await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'medium')
     await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
     await expect(page).toHaveScreenshot('workflow-editor-1280-inspector-light.png', {
@@ -864,7 +986,9 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'dark', fixture: 'clean' })
     const workflowId = await seedEditorWorkflow()
     await openEditorScene(page, workflowId, 3)
+    const beforeSelection = await readVisualCanvasViewport(page)
     await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expectSelectedNodeCanvasMargin(page, 'visual_agent', beforeSelection)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'medium')
     await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
@@ -879,9 +1003,9 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     const workflowId = await seedEditorWorkflow()
     await openEditorScene(page, workflowId, 3)
-    await page.getByTestId('workflow-add-step').click()
+    await page.getByTestId('workflow-canvas-add').click()
     await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'compact')
-    await expect(page.getByTestId('workflow-editor-palette-surface')).toBeVisible()
+    await expect(page.getByTestId('workflow-node-picker-dialog')).toBeVisible()
     await expect(page).toHaveScreenshot('workflow-editor-1179-palette-light.png', {
       ...SNAPSHOT_OPTS,
       mask: [page.locator('.page--editor .page__meta code')],
@@ -894,8 +1018,8 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const workflowId = await seedEditorWorkflow()
     await routeLargeAgentCatalog(page, 50)
     await openEditorScene(page, workflowId, 3)
-    await page.getByTestId('workflow-add-step').click()
-    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await page.getByTestId('workflow-canvas-add').click()
+    const palette = page.getByTestId('workflow-node-picker-dialog')
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await expect(palette.getByTestId('workflow-node-picker-category-agents')).toContainText('50')
     await palette.getByTestId('workflow-node-picker-category-human').click()
@@ -912,7 +1036,9 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     const workflowId = await seedEditorWorkflow()
     await openEditorScene(page, workflowId, 3)
+    const beforeSelection = await readVisualCanvasViewport(page)
     await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expectSelectedNodeVisibleBesideInspector(page, 'visual_agent', beforeSelection)
     await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'compact')
     await expect(page.getByTestId('workflow-editor-inspector-surface')).toBeVisible()
     await expect(page).toHaveScreenshot('workflow-editor-1179-inspector-light.png', {

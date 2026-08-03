@@ -49,6 +49,31 @@ function hasBadge(value: ReactNode): boolean {
   return value !== undefined && value !== null && value !== false
 }
 
+function firstEnabledIndex<V extends string>(options: ReadonlyArray<SelectOption<V>>): number {
+  return options.findIndex((option) => option.disabled !== true)
+}
+
+function lastEnabledIndex<V extends string>(options: ReadonlyArray<SelectOption<V>>): number {
+  for (let index = options.length - 1; index >= 0; index -= 1) {
+    if (options[index]?.disabled !== true) return index
+  }
+  return -1
+}
+
+function moveEnabledIndex<V extends string>(
+  options: ReadonlyArray<SelectOption<V>>,
+  current: number,
+  direction: 1 | -1,
+): number {
+  let index = current
+  if (index < 0) return direction === 1 ? firstEnabledIndex(options) : lastEnabledIndex(options)
+  while (true) {
+    index += direction
+    if (index < 0 || index >= options.length) return current
+    if (options[index]?.disabled !== true) return index
+  }
+}
+
 function OptionBadge({
   value,
   tone = 'neutral',
@@ -115,12 +140,15 @@ export function Select<V extends string>(props: Props<V>) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [activeIndex, setActiveIndex] = useState<number>(() =>
-    Math.max(
-      0,
-      props.options.findIndex((o) => o.value === props.value),
-    ),
-  )
+  // Keep the highlighted option by its stable identity, never by its current
+  // array position. Async inventories can reorder while the popover is open;
+  // retaining an index would make Enter commit whichever value moved into it.
+  const [activeValue, setActiveValue] = useState<V | null>(() => {
+    const selected = props.options.find(
+      (option) => option.value === props.value && option.disabled !== true,
+    )
+    return selected?.value ?? props.options[firstEnabledIndex(props.options)]?.value ?? null
+  })
   // The list every render path (keyboard nav, aria ids, option rows) works
   // on. Without `searchable` it is exactly props.options, so the pre-existing
   // behaviour is untouched.
@@ -132,12 +160,18 @@ export function Select<V extends string>(props: Props<V>) {
       (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
     )
   }, [props.options, props.searchable, query])
+  const activeIndex = visible.findIndex(
+    (option) => option.value === activeValue && option.disabled !== true,
+  )
   // Listbox is portaled out of the trigger's parent so containers with
   // overflow:hidden (e.g. .data-table — used for border-radius rounding)
   // don't clip it. We position it manually with the trigger's
   // bounding rect each time it opens / on scroll / on resize.
   const triggerRef = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
+  const openIntentRef = useRef<'selected' | 'first' | 'last'>('selected')
+  const typeaheadRef = useRef('')
+  const typeaheadTimerRef = useRef<number | null>(null)
   const popoverId = useId()
   const labelId = useId()
   // RFC-173 (T1): portal positioning extracted to the shared hook (was a
@@ -167,17 +201,21 @@ export function Select<V extends string>(props: Props<V>) {
   const searchRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (open) {
-      setQuery('')
       // Re-align the active row with the CURRENT selection on every open.
       // The same Select instance may receive a new value while hidden (for
-      // example KindSelect's Advanced → Guided transition); retaining its old
-      // index would make an immediate Enter silently choose another option.
-      setActiveIndex(
-        Math.max(
-          0,
-          props.options.findIndex((o) => o.value === props.value),
-        ),
+      // example KindSelect's Advanced → Guided transition).
+      const selected = props.options.find(
+        (option) => option.value === props.value && option.disabled !== true,
       )
+      const nextOption =
+        openIntentRef.current === 'first'
+          ? props.options[firstEnabledIndex(props.options)]
+          : openIntentRef.current === 'last'
+            ? props.options[lastEnabledIndex(props.options)]
+            : selected !== undefined
+              ? selected
+              : props.options[firstEnabledIndex(props.options)]
+      setActiveValue(nextOption?.value ?? null)
       const t = window.setTimeout(() => {
         if (props.searchable === true) searchRef.current?.focus()
         else listRef.current?.focus()
@@ -188,9 +226,30 @@ export function Select<V extends string>(props: Props<V>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    setActiveValue((currentValue) => {
+      const stillAvailable = visible.some(
+        (option) => option.value === currentValue && option.disabled !== true,
+      )
+      if (stillAvailable) return currentValue
+      return visible[firstEnabledIndex(visible)]?.value ?? null
+    })
+  }, [open, visible])
+
+  useEffect(
+    () => () => {
+      if (typeaheadTimerRef.current !== null) window.clearTimeout(typeaheadTimerRef.current)
+    },
+    [],
+  )
+
   function onTriggerKey(e: React.KeyboardEvent<HTMLButtonElement>) {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
+      openIntentRef.current =
+        e.key === 'ArrowUp' ? 'last' : e.key === 'ArrowDown' ? 'first' : 'selected'
+      setQuery('')
       setOpen(true)
     }
   }
@@ -199,19 +258,30 @@ export function Select<V extends string>(props: Props<V>) {
     // CJK IME: Enter/arrows while composing commit the composition — they
     // must never select an option or move the active row (Codex P1).
     if (e.nativeEvent.isComposing) return
-    const last = visible.length - 1
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActiveIndex((i) => Math.min(last, i + 1))
+      setActiveValue((value) => {
+        const index = visible.findIndex(
+          (option) => option.value === value && option.disabled !== true,
+        )
+        const next = visible[moveEnabledIndex(visible, index, 1)]
+        return next?.value ?? value
+      })
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setActiveIndex((i) => Math.max(0, i - 1))
+      setActiveValue((value) => {
+        const index = visible.findIndex(
+          (option) => option.value === value && option.disabled !== true,
+        )
+        const next = visible[moveEnabledIndex(visible, index, -1)]
+        return next?.value ?? value
+      })
     } else if (e.key === 'Home') {
       e.preventDefault()
-      setActiveIndex(0)
+      setActiveValue(visible[firstEnabledIndex(visible)]?.value ?? null)
     } else if (e.key === 'End') {
       e.preventDefault()
-      setActiveIndex(last)
+      setActiveValue(visible[lastEnabledIndex(visible)]?.value ?? null)
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const opt = visible[activeIndex]
@@ -240,8 +310,51 @@ export function Select<V extends string>(props: Props<V>) {
       triggerRef.current?.focus()
     } else if (e.key === 'Tab') {
       setOpen(false)
+    } else if (
+      props.searchable !== true &&
+      e.key.length === 1 &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      const key = e.key.toLocaleLowerCase()
+      typeaheadRef.current += key
+      if (typeaheadTimerRef.current !== null) window.clearTimeout(typeaheadTimerRef.current)
+      typeaheadTimerRef.current = window.setTimeout(() => {
+        typeaheadRef.current = ''
+        typeaheadTimerRef.current = null
+      }, 500)
+      const findMatch = (needle: string): number => {
+        for (let offset = 1; offset <= visible.length; offset += 1) {
+          const index = (Math.max(activeIndex, -1) + offset) % Math.max(visible.length, 1)
+          const option = visible[index]
+          if (
+            option !== undefined &&
+            option.disabled !== true &&
+            (option.label.toLocaleLowerCase().startsWith(needle) ||
+              option.value.toLocaleLowerCase().startsWith(needle))
+          )
+            return index
+        }
+        return -1
+      }
+      let match = findMatch(typeaheadRef.current)
+      if (match < 0 && typeaheadRef.current.length > 1) {
+        typeaheadRef.current = key
+        match = findMatch(key)
+      }
+      if (match >= 0) {
+        e.preventDefault()
+        setActiveValue(visible[match]?.value ?? null)
+      }
     }
   }
+
+  const activeDescendant =
+    activeIndex >= 0 && visible[activeIndex]?.disabled !== true
+      ? `${popoverId}-opt-${activeIndex}`
+      : undefined
+  const hasEnabledVisible = visible.some((option) => option.disabled !== true)
 
   return (
     <div className="select" data-open={open}>
@@ -264,7 +377,13 @@ export function Select<V extends string>(props: Props<V>) {
         aria-label={props.ariaLabel}
         data-testid={props['data-testid']}
         disabled={props.disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (!open) {
+            openIntentRef.current = 'selected'
+            setQuery('')
+          }
+          setOpen((value) => !value)
+        }}
         onKeyDown={onTriggerKey}
       >
         <span id={labelId} className="select__value">
@@ -291,7 +410,7 @@ export function Select<V extends string>(props: Props<V>) {
             tabIndex={-1}
             role="listbox"
             aria-label={props.ariaLabel ?? t('common.selectAnOption')}
-            aria-activedescendant={`${popoverId}-opt-${activeIndex}`}
+            aria-activedescendant={activeDescendant}
             className="select__listbox select__listbox--portal"
             onKeyDown={onListKey}
             style={{
@@ -310,15 +429,25 @@ export function Select<V extends string>(props: Props<V>) {
                   placeholder={t('common.searchEllipsis')}
                   aria-label={props.ariaLabel ?? t('common.searchEllipsis')}
                   aria-controls={popoverId}
-                  aria-activedescendant={`${popoverId}-opt-${activeIndex}`}
+                  aria-activedescendant={activeDescendant}
                   data-testid={
                     props['data-testid'] !== undefined
                       ? `${props['data-testid']}-search`
                       : undefined
                   }
                   onChange={(e) => {
-                    setQuery(e.target.value)
-                    setActiveIndex(0)
+                    const nextQuery = e.target.value
+                    setQuery(nextQuery)
+                    const normalized = nextQuery.trim().toLocaleLowerCase()
+                    const nextVisible =
+                      normalized === ''
+                        ? props.options
+                        : props.options.filter(
+                            (option) =>
+                              option.label.toLocaleLowerCase().includes(normalized) ||
+                              option.value.toLocaleLowerCase().includes(normalized),
+                          )
+                    setActiveValue(nextVisible[firstEnabledIndex(nextVisible)]?.value ?? null)
                   }}
                   onKeyDown={(e) => {
                     // Handle once here — without stopPropagation the same
@@ -330,9 +459,19 @@ export function Select<V extends string>(props: Props<V>) {
                 />
               </li>
             )}
-            {visible.length === 0 && (
+            {props.options.length === 0 && (
+              <li className="select__empty" role="presentation">
+                {t('common.noAvailableOptions')}
+              </li>
+            )}
+            {props.options.length > 0 && visible.length === 0 && (
               <li className="select__empty" role="presentation">
                 {t('common.noMatches')}
+              </li>
+            )}
+            {visible.length > 0 && !hasEnabledVisible && (
+              <li className="select__empty" role="presentation">
+                {t('common.allOptionsUnavailable')}
               </li>
             )}
             {visible.map((opt, i) => {
@@ -364,7 +503,9 @@ export function Select<V extends string>(props: Props<V>) {
                     className={`select__option ${active ? 'select__option--active' : ''} ${
                       selected ? 'select__option--selected' : ''
                     }`.trim()}
-                    onMouseEnter={() => setActiveIndex(i)}
+                    onMouseEnter={() => {
+                      if (opt.disabled !== true) setActiveValue(opt.value)
+                    }}
                     onMouseDown={(e) => {
                       // mousedown not click — keeps focus from leaving before we close
                       e.preventDefault()

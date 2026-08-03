@@ -260,13 +260,12 @@ describe('AclPanel', () => {
   })
 })
 
-// --- Header-button sizing. RFC-198 promotes the editor's sole primary action
-// (Launch) to the default page-primary target size. The visible More trigger
-// shares that readable font/target size while its outline keeps the secondary
-// hierarchy; lower-frequency actions remain inside the dialog. ---
+// --- Header-button sizing. Launch stays the editor's sole primary action.
+// RFC-250 restores Validate as a visible full-size secondary beside the
+// existing More trigger; lower-frequency management remains in More. ---
 
-describe('workflows editor header — one primary plus a same-size secondary More action', () => {
-  test('Launch and More are full-size; utility actions stay compact and management lives in More', async () => {
+describe('workflows editor header — one primary plus visible Validate and More actions', () => {
+  test('Launch is unique primary; Validate and More are full-size secondaries', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
     const here = path.dirname(new URL(import.meta.url).pathname)
@@ -291,7 +290,8 @@ describe('workflows editor header — one primary plus a same-size secondary Mor
       }
     }
     expect(primaryCount).toBe(1)
-    expect(fullSizeSecondaryCount).toBe(1)
+    expect(fullSizeSecondaryCount).toBe(2)
+    expect(block).toContain('data-testid="workflow-validate"')
     expect(block).toContain('data-testid="workflow-more-actions"')
     expect(src).toContain('data-testid="workflow-actions-dialog"')
     expect(src).toContain('data-testid="workflow-acl-button"')

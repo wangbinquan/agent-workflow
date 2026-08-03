@@ -375,8 +375,8 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
 
     // Pointer/touch-equivalent activation: Add opens the full-screen palette,
     // whose rows are real buttons. Mobile users never depend on HTML5 drag.
-    await page.getByTestId('workflow-add-step').click()
-    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await page.getByTestId('workflow-canvas-add').click()
+    const palette = page.getByTestId('workflow-node-picker-dialog')
     await expect(palette).toBeVisible()
     await expect(palette.getByRole('tablist', { name: 'Filter by node type' })).toBeVisible()
     await palette.locator('.editor-sidebar__item').first().click()
@@ -393,7 +393,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.getByTestId('workflow-editor-inspector-surface').locator('.dialog__close').click()
     await page.getByTestId('workflow-undo').click()
     await expect(nodes).toHaveCount(before)
-    await page.getByTestId('workflow-add-step').click()
+    await page.getByTestId('workflow-canvas-add').click()
     // The palette is a Dialog, so it owns a focus trap. Two waits, both of which
     // the pointer branch above already had and this branch was missing: the
     // surface must be open before we reach into it, and focus must have actually
@@ -402,7 +402,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // fires into the void — the node count stays at `before` and line 364 fails.
     // (CI run 29757172909, shard 4/4; this file already needed 255e6473 for the
     // same class of race on the same locator.)
-    const keyboardPalette = page.getByTestId('workflow-editor-palette-surface')
+    const keyboardPalette = page.getByTestId('workflow-node-picker-dialog')
     await expect(keyboardPalette).toBeVisible()
     const keyboardItem = keyboardPalette.locator('.editor-sidebar__item').first()
     await keyboardItem.focus()
@@ -448,11 +448,11 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await expect(inspector).toBeVisible()
     await inspector.locator('.dialog__close').click()
 
-    // Header Add → review, still without drag/touch precision gestures. A
+    // Canvas Add → review, still without drag/touch precision gestures. A
     // review without inputSource is intentionally invalid; the seeded agent's
     // markdown output is compatible and the same connection planner repairs it.
-    await page.getByTestId('workflow-add-step').click()
-    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await page.getByTestId('workflow-canvas-add').click()
+    const palette = page.getByTestId('workflow-node-picker-dialog')
     await palette.getByTestId('workflow-node-picker-item-kind-review').first().click()
     await expect(page.locator('.react-flow__node')).toHaveCount(2)
     inspector = page.getByTestId('workflow-editor-inspector-surface')
@@ -517,8 +517,8 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
   test('palette filter input narrows the visible drag items', async ({ page }) => {
     await openEditor(page)
     // At the canonical 1280px medium mode the palette is a Dialog.
-    await page.getByTestId('workflow-add-step').click()
-    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await page.getByTestId('workflow-canvas-add').click()
+    const palette = page.getByTestId('workflow-node-picker-dialog')
     const filter = palette.locator('input[type="search"]')
     await expect(filter).toBeVisible()
     const items = palette.locator('.editor-sidebar__item')
@@ -549,8 +549,8 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     const nodes = page.locator('.react-flow__node')
     const before = await nodes.count()
 
-    await page.getByTestId('workflow-add-step').click()
-    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await page.getByTestId('workflow-canvas-add').click()
+    const palette = page.getByTestId('workflow-node-picker-dialog')
     await expect(palette).toBeVisible()
     await expect(palette.getByTestId('workflow-node-picker-category-agents')).toContainText('50')
     await expect(palette.getByTestId('workflow-node-picker-category-wrappers')).toContainText('3')
@@ -824,9 +824,9 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
       y: paneBox.y + paneBox.height / 2,
     }
 
-    await page.getByTestId('workflow-add-step').click()
+    await page.getByTestId('workflow-canvas-add').click()
     await page
-      .getByTestId('workflow-editor-palette-surface')
+      .getByTestId('workflow-node-picker-dialog')
       .locator('.editor-sidebar__item')
       .first()
       .click()
@@ -891,16 +891,16 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
 
     await page.setViewportSize({ width: 1179, height: 800 })
     await openEditor(page)
-    await page.getByTestId('workflow-add-step').click()
-    await expect(page.getByTestId('workflow-editor-palette-surface')).toBeVisible()
+    await page.getByTestId('workflow-canvas-add').click()
+    await expect(page.getByTestId('workflow-node-picker-dialog')).toBeVisible()
     await expect(page.getByRole('dialog')).toHaveCount(1)
     await expectEditorAxeClean(page, '1179 editor palette dialog')
-    await page.getByTestId('workflow-editor-palette-surface').locator('.dialog__close').click()
+    await page.getByTestId('workflow-node-picker-dialog').locator('.dialog__close').click()
 
     await page.setViewportSize({ width: 390, height: 844 })
     await openEditor(page)
-    await page.getByTestId('workflow-add-step').click()
-    let dialog = page.getByTestId('workflow-editor-palette-surface')
+    await page.getByTestId('workflow-canvas-add').click()
+    let dialog = page.getByTestId('workflow-node-picker-dialog')
     await expect(dialog).toBeVisible()
     await expect(page.getByRole('dialog')).toHaveCount(1)
     await expectEditorAxeClean(page, '390 editor NodePicker dialog')

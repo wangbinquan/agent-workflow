@@ -10,9 +10,16 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AgentForm, emptyAgent } from '../src/components/AgentForm'
+import type { AgentResourceStatus } from '../src/lib/agent-resource-status'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
-function mount({ defaultTechnicalDetailsOpen = false } = {}) {
+function mount({
+  defaultTechnicalDetailsOpen = false,
+  resourceStatus,
+}: {
+  defaultTechnicalDetailsOpen?: boolean
+  resourceStatus?: AgentResourceStatus
+} = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } },
   })
@@ -22,6 +29,7 @@ function mount({ defaultTechnicalDetailsOpen = false } = {}) {
         value={emptyAgent()}
         onChange={() => {}}
         defaultTechnicalDetailsOpen={defaultTechnicalDetailsOpen}
+        resourceStatus={resourceStatus}
       />
     </QueryClientProvider>,
   )
@@ -96,6 +104,32 @@ describe('RFC-173 — resources tab two-group layout', () => {
 
     fireEvent.click(screen.getByText('Technical information'))
     expect(details?.open).toBe(false)
+  })
+
+  test('resource-integrity blockers use the shared alert and feedback spacing contract', () => {
+    mount({
+      resourceStatus: {
+        ok: false,
+        references: [],
+        issues: [
+          {
+            code: 'resource-missing',
+            refKind: 'skill',
+            state: 'missing',
+            refId: 'skill-1',
+            refName: null,
+            ownerAgentId: null,
+            ownerAgentName: null,
+            direct: true,
+          },
+        ],
+      },
+    })
+
+    const banner = screen.getByTestId('agent-resource-integrity-error')
+    expect(banner.getAttribute('role')).toBe('alert')
+    expect(banner.closest('.feedback-stack')).not.toBeNull()
+    expect(banner.textContent).toContain('Resource references are invalid')
   })
 })
 

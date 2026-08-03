@@ -50,6 +50,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // lost).
   'e2e/focus-ring-clip.spec.ts#skip': 1,
   'e2e/git-protocols.spec.ts#skip': 2,
+  // RFC-250: populated interaction-state screenshots are intentionally opt-in
+  // beside the canonical visual suite and are activated by `test:visual` in
+  // both local and hosted gates.
+  'e2e/rfc250-visual-states.spec.ts#skip': 1,
   'e2e/visual-regression.spec.ts#skip': 1,
   'e2e/workflow-editor.spec.ts#skip': 1,
   'packages/backend/tests/git-repo-cache-submodule.test.ts#skipIf': 1,
@@ -117,7 +121,7 @@ const REQUIRED_GATE_ACTIVATIONS: Record<string, GateActivationCheck[]> = {
     {
       file: 'package.json',
       marker:
-        '"test:visual": "RUN_VISUAL_REGRESSION=1 playwright test e2e/visual-regression.spec.ts --project=chromium",',
+        '"test:visual": "RUN_VISUAL_REGRESSION=1 playwright test e2e/visual-regression.spec.ts e2e/rfc250-visual-states.spec.ts --project=chromium",',
     },
     {
       file: '.github/workflows/visual-regression-nightly.yml',

@@ -1,9 +1,9 @@
 // Two-click delete button. First click swaps to "Confirm" for 4 seconds;
 // any other click outside resets. Keeps M1 dialog-free.
 //
-// RFC-150 PR-1 (D4): the `danger` boolean became `variant?: 'danger' |
-// 'default'` to line up with the `.btn--*` enum vocabulary. No
-// primary/ghost variants until a callsite actually needs them (YAGNI).
+// RFC-150 PR-1 (D4): the `danger` boolean became a `variant` enum aligned
+// with `.btn--*`. RFC-250 adds the first primary callsite so scheduled list
+// and detail can share this control without losing the detail CTA hierarchy.
 
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +15,8 @@ interface ConfirmButtonProps {
   ariaLabel?: string
   /** Accessible name for the armed state; defaults to `confirmLabel`. */
   confirmAriaLabel?: string
+  /** Optional explanation announced after the accessible name. */
+  ariaDescribedBy?: string
   /**
    * Identity of the value being confirmed. If a live refetch replaces the
    * target between clicks, the new target must be armed again instead of
@@ -22,9 +24,10 @@ interface ConfirmButtonProps {
    */
   confirmationKey?: string
   onConfirm: () => unknown | Promise<unknown>
-  variant?: 'danger' | 'default'
+  variant?: 'danger' | 'primary' | 'default'
   disabled?: boolean
   size?: 'sm'
+  'data-testid'?: string
 }
 
 export function ConfirmButton({
@@ -32,11 +35,13 @@ export function ConfirmButton({
   confirmLabel,
   ariaLabel,
   confirmAriaLabel,
+  ariaDescribedBy,
   confirmationKey,
   onConfirm,
   variant,
   disabled,
   size,
+  'data-testid': testId,
 }: ConfirmButtonProps) {
   const { t } = useTranslation()
   const resolvedConfirmLabel = confirmLabel ?? t('common.confirmPrompt')
@@ -87,10 +92,12 @@ export function ConfirmButton({
   return (
     <button
       type="button"
-      className={`btn ${size === 'sm' ? 'btn--sm' : ''} ${variant === 'danger' ? 'btn--danger' : ''} ${armed ? 'btn--armed' : ''}`}
+      className={`btn ${size === 'sm' ? 'btn--sm' : ''} ${variant === 'danger' ? 'btn--danger' : variant === 'primary' ? 'btn--primary' : ''} ${armed ? 'btn--armed' : ''}`}
       disabled={disabled}
       onClick={handle}
       aria-label={armed ? (confirmAriaLabel ?? resolvedConfirmLabel) : (ariaLabel ?? label)}
+      aria-describedby={ariaDescribedBy}
+      data-testid={testId}
     >
       {armed ? resolvedConfirmLabel : label}
     </button>

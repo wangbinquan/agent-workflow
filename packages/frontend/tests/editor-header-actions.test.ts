@@ -20,6 +20,10 @@ import path from 'node:path'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const css = readFileSync(path.resolve(here, '../src/styles.css'), 'utf8')
 const editorRoute = readFileSync(path.resolve(here, '../src/routes/workflows.edit.tsx'), 'utf8')
+const workflowCanvas = readFileSync(
+  path.resolve(here, '../src/components/canvas/WorkflowCanvas.tsx'),
+  'utf8',
+)
 const tourScript = readFileSync(path.resolve(here, '../src/components/tour/tourScript.ts'), 'utf8')
 
 describe('editor header action strip alignment', () => {
@@ -34,6 +38,14 @@ describe('editor header action strip alignment', () => {
     const body = block.slice(0, block.indexOf('}'))
     expect(body).toContain('justify-content: flex-start')
     expect(body).toContain('overflow-x: auto')
+  })
+
+  test('the workflow title yields enough width for the 1280px primary action rail', () => {
+    expect(editorRoute).toContain('className="editor-page-header editor-page-header--workflow"')
+    const block = css.split('.page--editor > .editor-page-header--workflow > .page__heading {')[1]!
+    const body = block.slice(0, block.indexOf('}'))
+    expect(body).toContain('flex-basis: clamp(220px, 24vw, 320px)')
+    expect(body).toContain('min-width: 220px')
   })
 
   test('the 390px workgroup title leaves Linux font-metric headroom for both actions', () => {
@@ -54,12 +66,9 @@ describe('editor header starter entry removal', () => {
   })
 })
 
-describe('editor header add-step entry gating', () => {
-  test('the add-step button renders only when the palette rail is absent', () => {
-    // On wide the sidebar palette IS the entry (header duplicate removed by
-    // user decision, 2026-07-21); below wide the header button must stay —
-    // it is the sole free-insert entry there (390 mobile e2e depends on it).
-    expect(editorRoute).toMatch(/\{!hasPaletteRail && \([\s\S]{0,400}?workflow-add-step/)
-    expect(editorRoute.includes('workflow-add-step')).toBe(true)
+describe('editor add-step entry ownership', () => {
+  test('the stable canvas action is the only button entry outside the wide palette rail', () => {
+    expect(editorRoute.includes('workflow-add-step')).toBe(false)
+    expect(workflowCanvas.match(/data-testid="workflow-canvas-add"/g)).toHaveLength(1)
   })
 })

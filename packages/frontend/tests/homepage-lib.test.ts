@@ -16,6 +16,8 @@ import {
   formatRelativeTime,
   mergeInboxItems,
   pickGreetingKey,
+  projectInboxPreviewState,
+  type InboxPreviewQuerySnapshot,
 } from '@/lib/homepage'
 
 function review(overrides: Partial<ReviewSummary> = {}): ReviewSummary {
@@ -82,6 +84,83 @@ function clarify(overrides: LegacyClarifyOverrides = {}): ClarifyRoundSummary {
     answeredAt: overrides.answeredAt ?? null,
   }
 }
+
+function inboxFeed<T>(
+  data: readonly T[] | undefined,
+  options: { loading?: boolean; success?: boolean; error?: unknown | null } = {},
+): InboxPreviewQuerySnapshot<T> {
+  const error = options.error ?? null
+  const isLoading = options.loading ?? false
+  return {
+    data,
+    error,
+    isLoading,
+    isSuccess: options.success ?? (data !== undefined && error === null && !isLoading),
+  }
+}
+
+describe('RFC-250 homepage inbox projection truth table', () => {
+  test('both sources loading without cached items -> loading', () => {
+    expect(
+      projectInboxPreviewState(
+        inboxFeed<ReviewSummary>(undefined, { loading: true }),
+        inboxFeed<ClarifyRoundSummary>(undefined, { loading: true }),
+      ),
+    ).toEqual({ kind: 'loading' })
+  })
+
+  test('empty is truthful only after both sources succeed', () => {
+    expect(projectInboxPreviewState(inboxFeed<ReviewSummary>([]), inboxFeed([]))).toEqual({
+      kind: 'empty',
+    })
+
+    const clarifyError = new Error('clarify down')
+    expect(
+      projectInboxPreviewState(
+        inboxFeed<ReviewSummary>([]),
+        inboxFeed<ClarifyRoundSummary>(undefined, { error: clarifyError }),
+      ),
+    ).toEqual({ kind: 'items', items: [], failedSources: ['clarify'] })
+  })
+
+  test('successful-source items survive another source failure with a directional warning', () => {
+    const clarifyError = new Error('clarify down')
+    const state = projectInboxPreviewState(
+      inboxFeed([review({ nodeRunId: 'known-review' })]),
+      inboxFeed<ClarifyRoundSummary>(undefined, { error: clarifyError }),
+    )
+
+    expect(state.kind).toBe('items')
+    if (state.kind !== 'items') throw new Error('expected items')
+    expect(state.items.map((item) => item.id)).toEqual(['known-review'])
+    expect(state.failedSources).toEqual(['clarify'])
+  })
+
+  test('cached items remain visible when both background refetches fail', () => {
+    const reviewError = new Error('review refetch failed')
+    const clarifyError = new Error('clarify refetch failed')
+    const state = projectInboxPreviewState(
+      inboxFeed([review()], { error: reviewError }),
+      inboxFeed([clarify()], { error: clarifyError }),
+    )
+
+    expect(state.kind).toBe('items')
+    if (state.kind !== 'items') throw new Error('expected items')
+    expect(state.items).toHaveLength(2)
+    expect(state.failedSources).toEqual(['reviews', 'clarify'])
+  })
+
+  test('all failed without cached items reports every error', () => {
+    const reviewError = new Error('reviews down')
+    const clarifyError = new Error('clarify down')
+    expect(
+      projectInboxPreviewState(
+        inboxFeed<ReviewSummary>(undefined, { error: reviewError }),
+        inboxFeed<ClarifyRoundSummary>(undefined, { error: clarifyError }),
+      ),
+    ).toEqual({ kind: 'error', errors: [reviewError, clarifyError] })
+  })
+})
 
 describe('RFC-032 mergeInboxItems — locks newest-first ordering and limit', () => {
   test('empty + empty → empty', () => {

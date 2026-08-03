@@ -17,7 +17,7 @@ const STYLES = readFileSync(join(__dirname, '..', 'src', 'styles.css'), 'utf8').
 
 function ruleBody(selector: string): string {
   // Escape every regex metachar so we can match `:has(.x)`, `[hidden]`,
-  // `[aria-selected='true']` etc. without per-selector special casing.
+  // `[aria-current='true']` etc. without per-selector special casing.
   const escaped = selector.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')
   const re = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`)
   const m = STYLES.match(re)
@@ -136,8 +136,17 @@ describe('changes pane layout (RFC-239 merged view)', () => {
     expect(body).toMatch(/overflow:\s*hidden/)
   })
 
-  test('selected file tab has a distinct visual via [aria-selected=true]', () => {
+  test('current file selector has a distinct visual via button aria-current', () => {
     expect(STYLES).toMatch(/\.changes__file-tab--active\b/)
-    expect(STYLES).toMatch(/\.changes__file-tab\[aria-selected='true'\]/)
+    expect(STYLES).toMatch(/\.changes__file-tab\[aria-current='true'\]/)
+  })
+
+  test('mobile and coarse pointers get 44px group, file, and viewed targets', () => {
+    expect(STYLES).toMatch(
+      /@media\s+\(max-width:\s*720px\),\s*\(pointer:\s*coarse\)\s*\{[\s\S]*?\.changes__group-header,\s*\.changes__file-tab\s*\{[^}]*min-height:\s*44px/,
+    )
+    expect(STYLES).toMatch(
+      /@media\s+\(max-width:\s*720px\),\s*\(pointer:\s*coarse\)\s*\{[\s\S]*?\.changes__file-row\s*>\s*\.form-checkbox\s*\{[^}]*min-width:\s*44px[^}]*min-height:\s*44px/,
+    )
   })
 })

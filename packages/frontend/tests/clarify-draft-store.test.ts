@@ -18,7 +18,7 @@
 // (the pure key helper + the read-after-write round-trip when IDB exists,
 // the no-op fallback when it doesn't).
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClarifyAnswer } from '@agent-workflow/shared'
 import {
   clarifyDraftKey,
@@ -28,6 +28,7 @@ import {
   listClarifyDrafts,
   setClarifyDraft,
 } from '../src/lib/clarify/draftStore'
+import { resetDraftDbForTest } from '../src/lib/draftDb'
 
 const KEY = {
   taskId: 'task_abc',
@@ -45,6 +46,8 @@ const SAMPLE: ClarifyAnswer[] = [
 ]
 
 afterEach(async () => {
+  vi.unstubAllGlobals()
+  resetDraftDbForTest()
   await clearAllClarifyDrafts()
 })
 
@@ -57,14 +60,21 @@ describe('clarifyDraftKey', () => {
 describe('set / get / delete round-trip', () => {
   it('persists then reads back the same ClarifyAnswer[] shape', async () => {
     if (typeof indexedDB === 'undefined') {
-      // Happy-dom on some hosts skips IDB; the facade should no-op gracefully.
-      await setClarifyDraft(KEY, SAMPLE)
+      // RFC-250: the caller must be able to distinguish "not persisted" from
+      // success; silently resolving here made the footer lie.
+      await expect(setClarifyDraft(KEY, SAMPLE)).rejects.toThrow()
       expect(await getClarifyDraft(KEY)).toBeNull()
       return
     }
     await setClarifyDraft(KEY, SAMPLE)
     const got = await getClarifyDraft(KEY)
     expect(got).toEqual(SAMPLE)
+  })
+
+  it('rejects when IndexedDB is unavailable so durability status can fail visibly', async () => {
+    resetDraftDbForTest()
+    vi.stubGlobal('indexedDB', undefined)
+    await expect(setClarifyDraft(KEY, SAMPLE)).rejects.toThrow('clarify draft storage unavailable')
   })
 
   it('delete then get returns null', async () => {

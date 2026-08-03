@@ -21,4 +21,8 @@ describe('logout clears client-side private state', () => {
     expect(src).toContain('clearAllClarifyDrafts')
     expect(src).toContain('clearAllReviewDrafts')
   })
+
+  test('clears actor-scoped PAT reconciliation receipts', () => {
+    expect(src).toContain('clearAllPatReconciliationMarkers')
+  })
 })

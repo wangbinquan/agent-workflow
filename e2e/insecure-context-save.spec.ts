@@ -112,8 +112,8 @@ test('editor saves nodes, survives reload, and launch validation completes witho
 
   // Symptom 1 — "cannot create nodes": add one through the picker and require
   // the autosave to land (draft phase returns to Saved, not stuck dirty).
-  await page.getByTestId('workflow-add-step').click()
-  const palette = page.getByTestId('workflow-editor-palette-surface')
+  await page.getByTestId('workflow-canvas-add').click()
+  const palette = page.getByTestId('workflow-node-picker-dialog')
   await palette.getByTestId('workflow-node-picker-item-kind-input').first().click()
   await expect(page.locator('.react-flow__node')).toHaveCount(1)
   await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')

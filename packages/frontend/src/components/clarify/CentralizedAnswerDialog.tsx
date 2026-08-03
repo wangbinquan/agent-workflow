@@ -32,15 +32,44 @@ import { Card } from '@/components/Card'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { QuestionForm, type QuestionFormHandle } from '@/components/clarify/QuestionForm'
 import { ClarifyQuestionHandler } from '@/components/clarify/ClarifyQuestionHandler'
 import type { TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { answersEqual, isAnswerFilled } from '@/lib/clarify/answers'
-import { getClarifyDraft, setClarifyDraft } from '@/lib/clarify/draftStore'
+import { deleteClarifyDraft, getClarifyDraft, setClarifyDraft } from '@/lib/clarify/draftStore'
+import {
+  createClarifyDraftDurabilityController,
+  projectClarifyDraftStatus,
+  type ClarifyDraftDurabilityController,
+  type ClarifyDraftGenerationState,
+} from '@/lib/clarify/durability'
 import { resolveNodeNameFromSnapshot } from '@/lib/node-names'
 
 const DRAFT_DEBOUNCE_MS = 500
+const INITIAL_DRAFT_GENERATION_STATE: ClarifyDraftGenerationState = {
+  latestGeneration: 0,
+  localAckGeneration: 0,
+  latestQuestionGeneration: {},
+  serverAckGenerationByQuestion: {},
+  localPending: false,
+  serverPending: false,
+  localError: null,
+  serverError: null,
+  serverRetryable: false,
+  sealed: false,
+}
+
+function emptyAnswer(questionId: string): ClarifyAnswer {
+  return {
+    questionId,
+    selectedOptionIndices: [],
+    selectedOptionLabels: [],
+    customText: '',
+  }
+}
 
 export interface CentralizedAnswerGroup {
   originNodeRunId: string
@@ -148,6 +177,13 @@ interface RoundSubmission {
   resubmitQuestionIds: string[]
 }
 
+interface RoundDurabilityHandle {
+  flushLocal: () => Promise<void>
+  seal: () => Promise<void>
+}
+
+class PartialRoundSubmitError extends Error {}
+
 export interface CentralizedAnswerDialogProps {
   taskId: string
   open: boolean
@@ -174,6 +210,14 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
   // no feedback render loop). Stale keys (a round that left `groups`) are ignored at
   // submit because we iterate `groups`, not the raw map.
   const [submissions, setSubmissions] = useState<Record<string, RoundSubmission>>({})
+  const durabilityHandlesRef = useRef<Map<string, RoundDurabilityHandle>>(new Map())
+  const completedRoundIdsRef = useRef<ReadonlySet<string>>(new Set())
+  const [completedRoundIds, setCompletedRoundIds] = useState<ReadonlySet<string>>(new Set())
+  const [roundSubmitErrors, setRoundSubmitErrors] = useState<Record<string, unknown>>({})
+  const submitMutatingRef = useRef(false)
+  const closePendingRef = useRef(false)
+  const [closePending, setClosePending] = useState(false)
+  const [closeError, setCloseError] = useState<unknown>(null)
   const onSubmissionChange = useCallback((originNodeRunId: string, sub: RoundSubmission | null) => {
     setSubmissions((prev) => {
       if (sub === null) {
@@ -185,10 +229,73 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
       return { ...prev, [originNodeRunId]: sub }
     })
   }, [])
+  const registerDurability = useCallback(
+    (originNodeRunId: string, handle: RoundDurabilityHandle | null) => {
+      if (handle === null) durabilityHandlesRef.current.delete(originNodeRunId)
+      else durabilityHandlesRef.current.set(originNodeRunId, handle)
+    },
+    [],
+  )
+  const markRoundCompleted = useCallback(
+    (originNodeRunId: string) => {
+      if (completedRoundIdsRef.current.has(originNodeRunId)) return
+      const next = new Set(completedRoundIdsRef.current)
+      next.add(originNodeRunId)
+      completedRoundIdsRef.current = next
+      setCompletedRoundIds(next)
+      onSubmissionChange(originNodeRunId, null)
+      setRoundSubmitErrors((previous) => {
+        if (!(originNodeRunId in previous)) return previous
+        const remaining = { ...previous }
+        delete remaining[originNodeRunId]
+        return remaining
+      })
+    },
+    [onSubmissionChange],
+  )
 
+  useEffect(() => {
+    if (!open) {
+      completedRoundIdsRef.current = new Set()
+      setCompletedRoundIds(new Set())
+      setRoundSubmitErrors({})
+      closePendingRef.current = false
+      setClosePending(false)
+      setCloseError(null)
+    }
+  }, [open])
+
+  const closeAfterLocalSave = useCallback(async () => {
+    if (closePendingRef.current || submitMutatingRef.current) return
+    closePendingRef.current = true
+    setClosePending(true)
+    setCloseError(null)
+    try {
+      // Save-and-leave intentionally waits for IndexedDB only. Each handle's
+      // per-question server queue may continue after the dialog unmounts.
+      await Promise.all(
+        [...durabilityHandlesRef.current.values()].map((handle) => handle.flushLocal()),
+      )
+      onClose()
+    } catch (error) {
+      setCloseError(error)
+    } finally {
+      closePendingRef.current = false
+      setClosePending(false)
+    }
+  }, [onClose])
+
+  const activeGroups = useMemo(
+    () => groups.filter((group) => !completedRoundIds.has(group.originNodeRunId)),
+    [completedRoundIds, groups],
+  )
   const filledTotal = useMemo(
-    () => groups.reduce((n, g) => n + (submissions[g.originNodeRunId]?.questionIds.length ?? 0), 0),
-    [groups, submissions],
+    () =>
+      activeGroups.reduce(
+        (n, g) => n + (submissions[g.originNodeRunId]?.questionIds.length ?? 0),
+        0,
+      ),
+    [activeGroups, submissions],
   )
 
   // RFC-128 (用户 2026-07-01) — cross-round keyboard navigation. The reference (/clarify page,
@@ -268,13 +375,20 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
 
   const submitMut = useMutation<void, Error, void>({
     mutationFn: async () => {
-      const targets = groups
+      const targets = activeGroups
         .map((g) => ({ originNodeRunId: g.originNodeRunId, sub: submissions[g.originNodeRunId] }))
         .filter(
           (x): x is { originNodeRunId: string; sub: RoundSubmission } =>
             x.sub !== undefined && x.sub.questionIds.length > 0,
         )
-      const results = await Promise.allSettled(
+        .filter((x) => !completedRoundIdsRef.current.has(x.originNodeRunId))
+      setRoundSubmitErrors((previous) => {
+        const next = { ...previous }
+        for (const target of targets) delete next[target.originNodeRunId]
+        return next
+      })
+
+      const results = await Promise.all(
         targets.map(async ({ originNodeRunId, sub }) => {
           const body: SubmitClarifyAnswers = {
             answers: sub.answers,
@@ -292,31 +406,68 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
           }
           // RFC-162: no questionScopes exist — self and cross answers post identically; the
           // asker's own handler entry (self/questioner) reruns to consume the answer.
-          await api.post(`/api/clarify/${originNodeRunId}/answers`, body)
+          try {
+            await api.post(`/api/clarify/${originNodeRunId}/answers`, body)
+          } catch (error) {
+            return { kind: 'failed' as const, originNodeRunId, error }
+          }
+
+          // Settle each round independently. A successful round leaves both the visible
+          // pane and every future retry target as soon as its own POST fulfills; it must
+          // never be replayed merely because a sibling round later fails.
+          const durability = durabilityHandlesRef.current.get(originNodeRunId)
+          markRoundCompleted(originNodeRunId)
+          void qc.invalidateQueries({ queryKey: ['task-questions', taskId] })
+          void qc.invalidateQueries({ queryKey: ['clarify', 'list'] })
+          void qc.invalidateQueries({ queryKey: ['clarify', 'pending-count'] })
+          void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
+          void qc.invalidateQueries({ queryKey: ['clarify', 'detail', originNodeRunId] })
+
+          try {
+            // Stop the queued writer, wait for an already-running IDB transaction,
+            // then delete only this successful round's local draft. Failed sibling
+            // rounds deliberately keep both their controller and draft intact.
+            await durability?.seal()
+            await deleteClarifyDraft({
+              taskId,
+              intermediaryNodeRunId: originNodeRunId,
+              roundId: sub.roundId,
+            })
+            return { kind: 'succeeded' as const, originNodeRunId }
+          } catch (error) {
+            // The server submission already succeeded, so this remains completed and
+            // excluded from retries even if local cleanup reports an error.
+            return { kind: 'cleanup-failed' as const, originNodeRunId, error }
+          }
         }),
       )
-      const failed = results.find((r) => r.status === 'rejected')
-      if (failed !== undefined) {
-        const reason = (failed as PromiseRejectedResult).reason
+      const failed = results.filter(
+        (result): result is Extract<(typeof results)[number], { kind: 'failed' }> =>
+          result.kind === 'failed',
+      )
+      if (failed.length > 0) {
+        setRoundSubmitErrors((previous) => ({
+          ...previous,
+          ...Object.fromEntries(failed.map((result) => [result.originNodeRunId, result.error])),
+        }))
+      }
+
+      const cleanupFailure = results.find((result) => result.kind === 'cleanup-failed')
+      if (cleanupFailure !== undefined) {
+        const reason = cleanupFailure.error
         throw reason instanceof Error ? reason : new Error(String(reason))
+      }
+      if (failed.length > 0) {
+        throw new PartialRoundSubmitError(
+          t('taskQuestions.answerPanePartialFailed', { count: failed.length }),
+        )
       }
     },
     onSuccess: () => {
-      // Sealed questions leave the unsealed pool (board / pane / badge) + each round
-      // detail flips its draft → answer. useTaskSync also refreshes via clarify.* WS.
-      void qc.invalidateQueries({ queryKey: ['task-questions', taskId] })
-      void qc.invalidateQueries({ queryKey: ['clarify', 'list'] })
-      void qc.invalidateQueries({ queryKey: ['clarify', 'pending-count'] })
-      // RFC-161: a full seal here flips the clarify node_run awaiting_human → done, so
-      // the task-detail canvas's clarify-node click target (clarifyNavKind) changes.
-      // The defer control channel emits no answered WS event for THIS client, so
-      // invalidate node-runs locally (the backend also broadcasts node.status for other
-      // open clients — routes/clarify.ts).
-      void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
-      for (const g of groups) {
-        void qc.invalidateQueries({ queryKey: ['clarify', 'detail', g.originNodeRunId] })
-      }
       onClose()
+    },
+    onSettled: () => {
+      submitMutatingRef.current = false
     },
   })
 
@@ -333,22 +484,34 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
         <p className="muted" data-testid="centralized-answer-hint">
           {t('taskQuestions.answerPaneHint')}
         </p>
-        {groups.map((g) => (
+        {activeGroups.map((g) => (
           <RoundAnswerBlock
             key={g.originNodeRunId}
             taskId={taskId}
             originNodeRunId={g.originNodeRunId}
             answerableQuestionIds={g.questionIds}
             resubmitQuestionIds={g.resubmitQuestionIds}
-            disabled={submitMut.isPending}
+            submitError={roundSubmitErrors[g.originNodeRunId] ?? null}
+            disabled={submitMut.isPending || closePending}
             onSubmissionChange={onSubmissionChange}
+            registerDurability={registerDurability}
             registerQuestionRef={registerQuestionRef}
             reportRoundOrder={reportRoundOrder}
             onAdvance={advanceFromQuestion}
           />
         ))}
-        {submitMut.error !== null && submitMut.error !== undefined && (
-          <ErrorBanner error={submitMut.error} />
+        {submitMut.error !== null &&
+          submitMut.error !== undefined &&
+          !(submitMut.error instanceof PartialRoundSubmitError) && (
+            <ErrorBanner error={submitMut.error} />
+          )}
+        {closeError !== null && closeError !== undefined && (
+          <ErrorBanner
+            error={closeError}
+            message={t('clarify.detail.draftSaveFailed')}
+            onRetry={() => void closeAfterLocalSave()}
+            testid="centralized-draft-close-error"
+          />
         )}
       </div>
     )
@@ -357,20 +520,30 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={() => void closeAfterLocalSave()}
+      dismissDisabled={closePending || submitMut.isPending}
       title={t('taskQuestions.answerPaneTitle')}
       size="lg"
       data-testid="centralized-answer-dialog"
       footer={
         <>
-          <button type="button" className="btn" onClick={onClose}>
+          <button
+            type="button"
+            className="btn"
+            disabled={closePending || submitMut.isPending}
+            onClick={() => void closeAfterLocalSave()}
+          >
             {t('common.cancel')}
           </button>
           <button
             type="button"
             className="btn btn--primary"
-            disabled={filledTotal === 0 || submitMut.isPending}
-            onClick={() => submitMut.mutate()}
+            disabled={filledTotal === 0 || submitMut.isPending || closePending}
+            onClick={() => {
+              if (submitMutatingRef.current || closePendingRef.current) return
+              submitMutatingRef.current = true
+              submitMut.mutate()
+            }}
             data-testid="centralized-answer-submit"
           >
             {filledTotal > 0
@@ -393,8 +566,10 @@ interface RoundAnswerBlockProps {
   /** RFC-136 — subset of answerableQuestionIds that are RE-answers (sealed, prefilled from
    *  the committed answer; resubmission overwrites). */
   resubmitQuestionIds: string[]
+  submitError: unknown | null
   disabled: boolean
   onSubmissionChange: (originNodeRunId: string, sub: RoundSubmission | null) => void
+  registerDurability: (originNodeRunId: string, handle: RoundDurabilityHandle | null) => void
   /** RFC-128 (用户 2026-07-01) cross-round keyboard nav — register/unregister this round's
    *  QuestionForm imperative handles into the dialog's global Map (key `${origin}:${qid}`). */
   registerQuestionRef: (key: string, handle: QuestionFormHandle | null) => void
@@ -417,8 +592,10 @@ function RoundAnswerBlock({
   originNodeRunId,
   answerableQuestionIds,
   resubmitQuestionIds,
+  submitError,
   disabled,
   onSubmissionChange,
+  registerDurability,
   registerQuestionRef,
   reportRoundOrder,
   onAdvance,
@@ -444,6 +621,13 @@ function RoundAnswerBlock({
     () => (round?.questions ?? []).filter((q) => answerableSet.has(q.id)),
     [round?.questions, answerableSet],
   )
+  const persistedQuestionIds = useMemo(
+    () =>
+      round?.status === 'awaiting_human'
+        ? visibleQuestions.filter((q) => !resubmitSet.has(q.id)).map((q) => q.id)
+        : [],
+    [round?.status, visibleQuestions, resubmitSet],
+  )
 
   // Report this round's visible render order up for the dialog's cross-round nav order. Ref-only
   // write in the parent (no state) ⇒ no re-render / loop. Runs whenever the visible set changes.
@@ -455,12 +639,25 @@ function RoundAnswerBlock({
   }, [originNodeRunId, visibleQuestions, reportRoundOrder])
 
   const [answers, setAnswers] = useState<Record<string, ClarifyAnswer>>({})
+  const answersRef = useRef<Record<string, ClarifyAnswer>>({})
   const [seeded, setSeeded] = useState(false)
-  // Mirrors the last server-acknowledged draft per question, so the autosave only PUTs
-  // the questions that actually changed (RFC-099 per-question last-write-wins).
-  const serverDraftRef = useRef<Record<string, ClarifyAnswer>>({})
-  const serverDraftDisabledRef = useRef(false)
-  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [draftGenerationState, setDraftGenerationState] = useState<ClarifyDraftGenerationState>(
+    INITIAL_DRAFT_GENERATION_STATE,
+  )
+  const durabilityRef = useRef<ClarifyDraftDurabilityController | null>(null)
+  const durabilityUnsubscribeRef = useRef<(() => void) | null>(null)
+
+  // UI listeners/parent handles are component-scoped, but removing them must not cancel
+  // the controller itself: an already-enqueued IDB write and a debounced server PUT stay
+  // alive after the dialog unmounts.
+  useEffect(
+    () => () => {
+      durabilityUnsubscribeRef.current?.()
+      durabilityUnsubscribeRef.current = null
+      registerDurability(originNodeRunId, null)
+    },
+    [originNodeRunId, registerDurability],
+  )
 
   // Seed once the round loads: server drafts (collaborative SoT, shared with /clarify)
   // win; the local IDB draft is the offline fallback when there's no server draft.
@@ -475,12 +672,7 @@ function RoundAnswerBlock({
     if (round === undefined || seeded) return
     const fresh: Record<string, ClarifyAnswer> = {}
     for (const q of visibleQuestions) {
-      fresh[q.id] = {
-        questionId: q.id,
-        selectedOptionIndices: [],
-        selectedOptionLabels: [],
-        customText: '',
-      }
+      fresh[q.id] = emptyAnswer(q.id)
     }
     for (const a of round.answers ?? []) {
       if (resubmitSet.has(a.questionId) && fresh[a.questionId] !== undefined) {
@@ -492,16 +684,54 @@ function RoundAnswerBlock({
         }
       }
     }
-    const finalize = () => {
-      serverDraftRef.current = { ...fresh }
-      setAnswers(fresh)
+    let cancelled = false
+    const attachController = (
+      initial: Record<string, ClarifyAnswer>,
+      serverBaseline: Record<string, ClarifyAnswer>,
+      initialLocalPersisted: boolean,
+    ) => {
+      if (cancelled) return
+      // The durability queues intentionally outlive this component's UI listener.
+      // Capture their concrete writers so an unmounted round cannot be redirected
+      // through a later module/mock replacement.
+      const persistDraft = setClarifyDraft
+      const putServerDraft = api.put
+      const toArray = (record: Record<string, ClarifyAnswer>) =>
+        visibleQuestions.map((question) => record[question.id] ?? emptyAnswer(question.id))
+      const controller = createClarifyDraftDurabilityController({
+        initialAnswers: toArray(initial),
+        serverAnswers: toArray(serverBaseline),
+        initialLocalPersisted,
+        persistedQuestionIds,
+        debounceMs: DRAFT_DEBOUNCE_MS,
+        writeLocal: ({ answers: next }) =>
+          persistDraft({ taskId, intermediaryNodeRunId: originNodeRunId, roundId: round.id }, next),
+        writeServer: async ({ answer }) => {
+          await putServerDraft(`/api/clarify/${originNodeRunId}/draft`, {
+            roundId: round.id,
+            questionId: answer.questionId,
+            selectedOptionIndices: answer.selectedOptionIndices,
+            customText: answer.customText,
+          })
+        },
+      })
+      durabilityUnsubscribeRef.current?.()
+      durabilityRef.current = controller
+      durabilityUnsubscribeRef.current = controller.subscribe(setDraftGenerationState)
+      registerDurability(originNodeRunId, {
+        flushLocal: () => controller.flushLocal(),
+        seal: () => controller.seal(),
+      })
+      answersRef.current = initial
+      setAnswers(initial)
       setSeeded(true)
     }
     const serverDrafts = round.draftAnswers ?? null
     if (serverDrafts !== null && Object.keys(serverDrafts).length > 0) {
+      const serverBaseline = { ...fresh }
       for (const [qid, v] of Object.entries(serverDrafts)) {
-        if (fresh[qid] !== undefined && !resubmitSet.has(qid)) {
-          fresh[qid] = {
+        if (serverBaseline[qid] !== undefined && !resubmitSet.has(qid)) {
+          serverBaseline[qid] = {
             questionId: qid,
             selectedOptionIndices: v.selectedOptionIndices ?? [],
             selectedOptionLabels: [],
@@ -509,80 +739,84 @@ function RoundAnswerBlock({
           }
         }
       }
-      finalize()
-      return
+      attachController(serverBaseline, serverBaseline, false)
+      return () => {
+        cancelled = true
+      }
     }
-    let cancelled = false
     void getClarifyDraft({ taskId, intermediaryNodeRunId: originNodeRunId, roundId: round.id })
       .then((stored) => {
-        if (cancelled || stored === null) return
-        for (const a of stored) {
-          if (fresh[a.questionId] !== undefined && !resubmitSet.has(a.questionId)) {
-            fresh[a.questionId] = a
+        if (cancelled) return
+        const initial = { ...fresh }
+        if (stored !== null) {
+          for (const a of stored) {
+            if (initial[a.questionId] !== undefined && !resubmitSet.has(a.questionId)) {
+              initial[a.questionId] = a
+            }
           }
         }
+        attachController(initial, fresh, stored !== null)
       })
-      .finally(() => {
-        if (!cancelled) finalize()
-      })
+      .catch(() => attachController(fresh, fresh, false))
     return () => {
       cancelled = true
     }
-  }, [round, seeded, visibleQuestions, resubmitSet, taskId, originNodeRunId])
+  }, [
+    round,
+    seeded,
+    visibleQuestions,
+    resubmitSet,
+    persistedQuestionIds,
+    taskId,
+    originNodeRunId,
+    registerDurability,
+  ])
 
-  // Debounced draft autosave — one server PUT per changed question (shared key with
-  // /clarify) + an IDB mirror. Only while the round is still awaiting answers.
-  // RFC-136 (Codex 实现门 P3 fold): resubmit (re-answer) questions are EXCLUDED — their
-  // durable baseline is the committed answer (seed ignores drafts for them, D5), so a
-  // draft write would only pollute the shared /clarify draft face without ever being read.
+  // RFC-250 T15-T17: every material answer edit enters the shared generation controller
+  // synchronously. Local IDB snapshots are serial/coalesced; server writes remain debounced
+  // and single-flight per question. RFC-136 re-answer questions retain their established
+  // committed-answer baseline and remain excluded from drafts.
+  const updateAnswer = (questionId: string, nextAnswer: ClarifyAnswer): void => {
+    const next = { ...answersRef.current, [questionId]: nextAnswer }
+    answersRef.current = next
+    setAnswers(next)
+    durabilityRef.current?.recordChange(
+      visibleQuestions.map((question) => next[question.id] ?? emptyAnswer(question.id)),
+      questionId,
+    )
+  }
+
+  // RFC-099 D14: adopt a collaborative remote draft only while this question has not
+  // diverged from the last acknowledged server value. A late refetch can never overwrite
+  // a queued/newer local generation.
   useEffect(() => {
     if (round === undefined || !seeded || round.status !== 'awaiting_human') return
-    if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current)
-    const roundId = round.id
-    draftTimerRef.current = setTimeout(() => {
-      const arr = visibleQuestions
-        .filter((q) => !resubmitSet.has(q.id))
-        .map(
-          (q) =>
-            answers[q.id] ?? {
-              questionId: q.id,
-              selectedOptionIndices: [],
-              selectedOptionLabels: [],
-              customText: '',
-            },
-        )
-      if (arr.length === 0) return
-      const puts: Array<Promise<unknown>> = []
-      if (!serverDraftDisabledRef.current) {
-        for (const a of arr) {
-          const prev = serverDraftRef.current[a.questionId]
-          if (prev !== undefined && answersEqual(prev, a)) continue
-          serverDraftRef.current[a.questionId] = a
-          puts.push(
-            api
-              .put(`/api/clarify/${originNodeRunId}/draft`, {
-                roundId,
-                questionId: a.questionId,
-                selectedOptionIndices: a.selectedOptionIndices,
-                customText: a.customText,
-              })
-              .catch(() => {
-                // 403 (not a member) / 409 (round sealed under us) — stop hammering;
-                // the IDB mirror keeps working locally.
-                serverDraftDisabledRef.current = true
-              }),
-          )
-        }
+    const serverDrafts = round.draftAnswers ?? null
+    const controller = durabilityRef.current
+    if (serverDrafts === null || controller === null) return
+    const current = answersRef.current
+    const next = { ...current }
+    let changed = false
+    for (const [questionId, value] of Object.entries(serverDrafts)) {
+      const local = current[questionId]
+      if (local === undefined || resubmitSet.has(questionId)) continue
+      const remote: ClarifyAnswer = {
+        questionId,
+        selectedOptionIndices: value.selectedOptionIndices ?? [],
+        selectedOptionLabels: [],
+        customText: value.customText ?? '',
       }
-      void Promise.allSettled([
-        setClarifyDraft({ taskId, intermediaryNodeRunId: originNodeRunId, roundId }, arr),
-        ...puts,
-      ])
-    }, DRAFT_DEBOUNCE_MS)
-    return () => {
-      if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current)
+      if (!controller.tryAdoptRemote(questionId, local, remote)) continue
+      if (!answersEqual(local, remote)) {
+        next[questionId] = remote
+        changed = true
+      }
     }
-  }, [answers, seeded, round, visibleQuestions, resubmitSet, taskId, originNodeRunId])
+    if (changed) {
+      answersRef.current = next
+      setAnswers(next)
+    }
+  }, [round, seeded, resubmitSet])
 
   // Report the filled subset up so the dialog's single submit can collect it.
   useEffect(() => {
@@ -629,13 +863,70 @@ function RoundAnswerBlock({
       : isCross
         ? t('crossClarify.contextCard', { name: askingNodeName, n: round.iteration })
         : t('clarify.detail.contextCard', { name: askingNodeName, n: round.iteration })
+  const draftStatus = projectClarifyDraftStatus(draftGenerationState)
+  const draftStatusLabel =
+    draftStatus.kind === 'sealed'
+      ? t('clarify.detail.roundSealedFooter')
+      : draftStatus.kind === 'saving'
+        ? t('clarify.detail.draftSaving')
+        : draftStatus.kind === 'saved'
+          ? t('clarify.detail.draftSaved')
+          : draftStatus.kind === 'local-only'
+            ? t('clarify.detail.draftLocalOnly')
+            : t('clarify.detail.draftSaveFailed')
 
   return (
     <Card data-testid={`centralized-round-${originNodeRunId}`}>
       <div className="card__title">{header}</div>
+      {submitError !== null && (
+        <ErrorBanner error={submitError} testid={`centralized-submit-error-${originNodeRunId}`} />
+      )}
       {roundQuery.isLoading && <LoadingState />}
       {roundQuery.error !== null && roundQuery.error !== undefined && (
         <ErrorBanner error={roundQuery.error} />
+      )}
+      {seeded && persistedQuestionIds.length > 0 && (
+        <FeedbackStack>
+          {draftStatus.kind === 'error' && (
+            <ErrorBanner
+              error={draftStatus.error}
+              message={t('clarify.detail.draftSaveFailed')}
+              onRetry={() => {
+                void durabilityRef.current?.retryLocal().catch(() => {})
+              }}
+              testid={`centralized-draft-local-error-${originNodeRunId}`}
+            />
+          )}
+          {draftStatus.kind === 'local-only' && (
+            <NoticeBanner
+              tone="warning"
+              size="compact"
+              testid={`centralized-draft-local-only-${originNodeRunId}`}
+              action={
+                draftStatus.canRetryServer ? (
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => durabilityRef.current?.retryServer()}
+                    data-testid={`centralized-draft-server-retry-${originNodeRunId}`}
+                  >
+                    {t('common.retry')}
+                  </button>
+                ) : undefined
+              }
+            >
+              {t('clarify.detail.draftLocalOnly')}
+            </NoticeBanner>
+          )}
+          <p
+            className="muted"
+            role="status"
+            data-draft-status={draftStatus.kind}
+            data-testid={`centralized-draft-indicator-${originNodeRunId}`}
+          >
+            {draftStatusLabel}
+          </p>
+        </FeedbackStack>
       )}
       {round !== undefined &&
         visibleQuestions.map((q, idx) => {
@@ -666,7 +957,7 @@ function RoundAnswerBlock({
                 value={a}
                 index={idx + 1}
                 disabled={disabled}
-                onChange={(next) => setAnswers((prev) => ({ ...prev, [q.id]: next }))}
+                onChange={(next) => updateAnswer(q.id, next)}
                 onAdvance={() => onAdvance(originNodeRunId, q.id)}
               />
             </div>

@@ -458,7 +458,7 @@ describe('segmented option nowrap (RFC-192)', () => {
       resolve(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css'),
       'utf8',
     )
-    const block = css.match(/\.segmented__option\s*\{[^}]*\}/)
+    const block = css.match(/^\.segmented__option\s*\{[^}]*\}/m)
     expect(block, '.segmented__option rule must exist').not.toBeNull()
     expect(block![0]).toMatch(/white-space:\s*nowrap/)
   })

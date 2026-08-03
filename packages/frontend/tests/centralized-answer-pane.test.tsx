@@ -29,6 +29,7 @@ import {
   groupAnswerableQuestions,
 } from '@/components/clarify/CentralizedAnswerDialog'
 import { isAnswerFilled } from '@/lib/clarify/answers'
+import * as clarifyDraftStore from '@/lib/clarify/draftStore'
 import type { TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
@@ -130,6 +131,7 @@ function renderDialog(
   entries: TaskQuestionEntry[],
   rounds: ClarifyRound[],
   snapshot: unknown = { nodes: [] },
+  onClose: () => void = () => {},
 ) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -139,11 +141,22 @@ function renderDialog(
   for (const r of rounds) {
     qc.setQueryData(['clarify', 'detail', r.intermediaryNodeRunId], r)
   }
-  return render(
+  const rendered = render(
     <QueryClientProvider client={qc}>
-      <CentralizedAnswerDialog taskId="task-1" open onClose={() => {}} />
+      <CentralizedAnswerDialog taskId="task-1" open onClose={onClose} />
     </QueryClientProvider>,
   )
+  return { ...rendered, qc }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 describe('groupAnswerableQuestions (oracle)', () => {
@@ -505,6 +518,181 @@ describe('CentralizedAnswerDialog — RFC-136 重答', () => {
 })
 
 describe('CentralizedAnswerDialog — submit 流程', () => {
+  test('Cancel 只等待最新 IDB 写入，不等待 server draft ack', async () => {
+    const localWrite = deferred<void>()
+    const serverWrite = deferred<void>()
+    const onClose = vi.fn()
+    const setDraft = vi
+      .spyOn(clarifyDraftStore, 'setClarifyDraft')
+      .mockImplementation(() => localWrite.promise)
+    const put = vi.spyOn(api, 'put').mockImplementation(() => serverWrite.promise as never)
+
+    renderDialog(
+      [entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a' })],
+      [round({ intermediaryNodeRunId: 'nr_a' })],
+      { nodes: [] },
+      onClose,
+    )
+    const question = await screen.findByTestId('clarify-question-q1')
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+
+    // The immutable local snapshot is queued immediately; server sync stays independently
+    // debounced and may still be in flight when the user leaves.
+    await waitFor(() => expect(setDraft).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1), { timeout: 2_000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onClose).not.toHaveBeenCalled()
+
+    localWrite.resolve()
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    // Intentionally unresolved at close: leaving did not wait for or claim server sync.
+    expect(screen.getByTestId('centralized-draft-indicator-nr_a').dataset.draftStatus).toBe(
+      'saving',
+    )
+    serverWrite.resolve()
+    await waitFor(() =>
+      expect(screen.getByTestId('centralized-draft-indicator-nr_a').dataset.draftStatus).toBe(
+        'saved',
+      ),
+    )
+  })
+
+  test('Cancel keeps the dialog open when IDB flush rejects and Retry closes only after persistence', async () => {
+    let attempts = 0
+    const onClose = vi.fn()
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockImplementation(async () => {
+      attempts += 1
+      if (attempts <= 2) throw new Error('indexeddb unavailable')
+    })
+    vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
+
+    renderDialog(
+      [entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a' })],
+      [round({ intermediaryNodeRunId: 'nr_a' })],
+      { nodes: [] },
+      onClose,
+    )
+    const question = await screen.findByTestId('clarify-question-q1')
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+    await screen.findByTestId('centralized-draft-local-error-nr_a')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    const closeError = await screen.findByTestId('centralized-draft-close-error')
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.click(within(closeError).getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(attempts).toBe(3)
+  })
+
+  test('submit success waits for the active IDB write before deleting the local draft', async () => {
+    const localWrite = deferred<void>()
+    const onClose = vi.fn()
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockImplementation(() => localWrite.promise)
+    const deleteDraft = vi
+      .spyOn(clarifyDraftStore, 'deleteClarifyDraft')
+      .mockResolvedValue(undefined)
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true } as never)
+    vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
+
+    renderDialog(
+      [entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a' })],
+      [round({ intermediaryNodeRunId: 'nr_a' })],
+      { nodes: [] },
+      onClose,
+    )
+    const question = await screen.findByTestId('clarify-question-q1')
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+    await waitFor(() => expect(clarifyDraftStore.setClarifyDraft).toHaveBeenCalledTimes(1))
+
+    const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
+    await waitFor(() => expect(submit.disabled).toBe(false))
+    fireEvent.click(submit)
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+    expect(deleteDraft).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+
+    localWrite.resolve()
+    await waitFor(() => expect(deleteDraft).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+  })
+
+  test('multi-round partial success settles A immediately and retry submits only failed B', async () => {
+    const roundA = deferred<unknown>()
+    const roundB = deferred<unknown>()
+    const onClose = vi.fn()
+    let roundBAttempts = 0
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockResolvedValue(undefined)
+    const deleteDraft = vi
+      .spyOn(clarifyDraftStore, 'deleteClarifyDraft')
+      .mockResolvedValue(undefined)
+    vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
+    const post = vi.spyOn(api, 'post').mockImplementation((path) => {
+      if (path === '/api/clarify/nr_a/answers') return roundA.promise as never
+      if (path === '/api/clarify/nr_b/answers') {
+        roundBAttempts += 1
+        return (roundBAttempts === 1 ? roundB.promise : Promise.resolve({ ok: true })) as never
+      }
+      throw new Error(`unexpected POST ${path}`)
+    })
+
+    const { qc } = renderDialog(
+      [
+        entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a' }),
+        entry({ id: 'b', questionId: 'q2', originNodeRunId: 'nr_b' }),
+      ],
+      [
+        round({ intermediaryNodeRunId: 'nr_a' }),
+        round({
+          intermediaryNodeRunId: 'nr_b',
+          questions: [singleQ('q2')],
+        }),
+      ],
+      { nodes: [] },
+      onClose,
+    )
+    // Keep this regression focused on settlement order; active refetches are
+    // separately covered by query contracts and would otherwise replace the
+    // seeded fixture with this file's catch-all `{}` response.
+    const invalidate = vi.spyOn(qc, 'invalidateQueries').mockResolvedValue(undefined)
+
+    const questionA = await screen.findByTestId('clarify-question-q1')
+    const questionB = await screen.findByTestId('clarify-question-q2')
+    fireEvent.click(within(questionA).getAllByRole('radio')[0]!)
+    fireEvent.click(within(questionB).getAllByRole('radio')[0]!)
+    const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
+    await waitFor(() => expect(submit.disabled).toBe(false))
+    fireEvent.click(submit)
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2))
+
+    roundA.resolve({ ok: true })
+    await waitFor(() => expect(screen.queryByTestId('centralized-round-nr_a')).toBeNull())
+    await waitFor(() =>
+      expect(deleteDraft).toHaveBeenCalledWith({
+        taskId: 'task-1',
+        intermediaryNodeRunId: 'nr_a',
+        roundId: 'rnd_nr_a',
+      }),
+    )
+    expect(screen.getByTestId('centralized-round-nr_b')).toBeTruthy()
+    expect(onClose).not.toHaveBeenCalled()
+
+    roundB.reject(new Error('round B unavailable'))
+    const targetedError = await screen.findByTestId('centralized-submit-error-nr_b')
+    expect(targetedError.textContent).toContain('round B unavailable')
+    expect(deleteDraft).toHaveBeenCalledTimes(1)
+    expect((within(questionB).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true)
+    await waitFor(() => expect(submit.disabled).toBe(false))
+
+    fireEvent.click(submit)
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(3))
+    expect(post.mock.calls.filter(([path]) => path === '/api/clarify/nr_a/answers')).toHaveLength(1)
+    expect(post.mock.calls.filter(([path]) => path === '/api/clarify/nr_b/answers')).toHaveLength(2)
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['clarify', 'detail', 'nr_a'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['clarify', 'detail', 'nr_b'] })
+  })
+
   test('flattens 2 rounds, single submit seals each round subset (defer + questionIds, no questionScopes)', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true } as never)
     vi.spyOn(api, 'put').mockResolvedValue(undefined as never)

@@ -102,8 +102,8 @@ export interface UseWorkflowEditorDraftResult {
   remoteDetail(detail: WorkflowDetail): void
   remoteInaccessible(error?: unknown): void
   requestLoadRemote(): void
-  /** Safe to call directly after UI confirmation; no request* render is required. */
-  confirmLoadRemote(): Promise<void>
+  /** Resolves true only when the confirmed remote snapshot was actually adopted. */
+  confirmLoadRemote(): Promise<boolean>
   requestOverwrite(): void
   /** Safe to call directly after UI confirmation; always refetches the CAS base. */
   confirmOverwrite(): Promise<void>
@@ -752,19 +752,27 @@ export function useWorkflowEditorDraft(
     dispatchEvent({ type: 'CONFLICT_LOAD_REMOTE_INTENT' })
   }, [dispatchEvent])
 
-  const confirmLoadRemote = useCallback(async (): Promise<void> => {
+  const confirmLoadRemote = useCallback(async (): Promise<boolean> => {
     setIntent(null)
-    const workflowId = stateRef.current.workflowId
+    const captured = stateRef.current
+    if (captured.phase !== 'conflict') return false
+    const workflowId = captured.workflowId
     const generation = generationRef.current
     try {
       const detail = await (optionsRef.current.transport ?? DEFAULT_TRANSPORT).fetch(workflowId)
-      if (!isLive(workflowId, generation)) return
-      dispatchEvent({
+      if (!isLive(workflowId, generation)) return false
+      const before = stateRef.current
+      const transition = dispatchEvent({
         type: 'CONFLICT_LOAD_REMOTE_CONFIRMED',
         remote: workflowRemoteSnapshotFromDetail(detail),
       })
+      return (
+        before.phase === 'conflict' &&
+        transition.state.phase === 'clean' &&
+        transition.state.revision > before.revision
+      )
     } catch (error) {
-      if (!isLive(workflowId, generation)) return
+      if (!isLive(workflowId, generation)) return false
       const failure = failureFromError(error)
       if (failure.status === 403 || failure.status === 404) {
         dispatchEvent({ type: 'REMOTE_INACCESSIBLE', workflowId, failure })
@@ -774,6 +782,7 @@ export function useWorkflowEditorDraft(
           transport: failure.kind === 'transport' ? 'offline' : 'degraded',
         })
       }
+      return false
     }
   }, [dispatchEvent, isLive, setIntent])
 

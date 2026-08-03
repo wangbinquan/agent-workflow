@@ -157,11 +157,15 @@ vi.mock('@/components/canvas/WorkflowCanvas', async () => {
       unknown,
       {
         definition: WorkflowDefinition
+        authoritativeLoadEpoch?: number
         onChange: (definition: WorkflowDefinition) => void
         onSelect?: (selection: { kind: 'node' | 'edge'; id: string } | null) => void
         onStartFromTemplate?: (trigger: HTMLElement) => void
       }
-    >(function MockWorkflowCanvas({ definition, onChange, onSelect, onStartFromTemplate }, ref) {
+    >(function MockWorkflowCanvas(
+      { definition, authoritativeLoadEpoch, onChange, onSelect, onStartFromTemplate },
+      ref,
+    ) {
       React.useImperativeHandle(ref, () => ({
         addPaletteItemAtViewportCenter: () => undefined,
         openNodePicker: canvasHistoryHarness.openNodePicker,
@@ -173,6 +177,9 @@ vi.mock('@/components/canvas/WorkflowCanvas', async () => {
       return (
         <>
           <output data-testid="canvas-input-count">{definition.inputs.length}</output>
+          <output data-testid="canvas-authoritative-load-epoch">
+            {authoritativeLoadEpoch ?? 0}
+          </output>
           {onStartFromTemplate !== undefined ? (
             <button
               type="button"
@@ -467,7 +474,7 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
   })
 
-  test('header keeps plain-text Launch as its only primary action, omits Validate, and More opens Rename', async () => {
+  test('header keeps plain-text Launch as its only primary action, exposes secondary Validate, and More opens Rename', async () => {
     const { container } = renderEditor(detail())
     await flushEffects()
     const header = container.querySelector('.page__header')
@@ -475,9 +482,10 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     const meta = header?.querySelector('.page__meta')
 
     expect(header?.querySelectorAll('.btn--primary')).toHaveLength(1)
+    expect(header?.querySelector('[data-testid="workflow-add-step"]')).toBeNull()
     expect(launchButton?.textContent).toMatch(/^(启动任务|Launch task)$/)
     expect(launchButton?.textContent).not.toContain('→')
-    expect(screen.queryByRole('button', { name: /^校验$|^Validate$/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /^校验$|^Validate$/ }).className).toBe('btn')
     expect(screen.getByTestId('workflow-more-actions').classList.contains('btn--sm')).toBe(false)
     expect(screen.queryByRole('button', { name: /导出 YAML|Export YAML/ })).toBeNull()
     expect(screen.queryByTestId('workflow-rename-button')).toBeNull()
@@ -733,6 +741,43 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     })
   })
 
+  test('same-id camera owner advances once after explicit remote load, never for ambient remote adoption or local edits', async () => {
+    const initial = detail()
+    const foreign = detail(2, 'workflow-remote', 'remote description', hash('f'))
+    const laterAmbient = detail(3, 'workflow-later', 'later description', hash('e'))
+    vi.mocked(api.get).mockImplementation(async (path) =>
+      path === '/api/workflows/wf-1' ? (foreign as never) : ([] as never),
+    )
+    const rendered = renderEditor(initial)
+    await flushEffects()
+    expect(screen.getByTestId('canvas-authoritative-load-epoch').textContent).toBe('0')
+
+    renameLocal('workflow-local', 'local description')
+    expect(screen.getByTestId('canvas-authoritative-load-epoch').textContent).toBe('0')
+    rendered.rerender({ detail: foreign, error: null })
+    await flushEffects()
+    expect(screen.getByTestId('workflow-draft-phase').textContent).toMatch(
+      /版本冲突|Version conflict/,
+    )
+    expect(screen.getByTestId('canvas-authoritative-load-epoch').textContent).toBe('0')
+
+    fireEvent.click(screen.getByRole('button', { name: /^加载远端$|^Load remote$/ }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /加载远端并丢弃本地修改|Load remote and discard local changes/,
+      }),
+    )
+    await flushEffects()
+    expect(screen.getByTestId('workflow-draft-phase').textContent).toMatch(/已保存|Saved/)
+    expect(screen.getByTestId('canvas-authoritative-load-epoch').textContent).toBe('1')
+
+    rendered.rerender({ detail: laterAmbient, error: null })
+    await flushEffects()
+    expect(screen.getByTestId('canvas-authoritative-load-epoch').textContent).toBe('1')
+    renameLocal('workflow-locally-edited-again', 'camera stays user-owned')
+    expect(screen.getByTestId('canvas-authoritative-load-epoch').textContent).toBe('1')
+  })
+
   test('background 404 retains local draft as inaccessible and explicit return does not self-block', async () => {
     const initial = detail()
     const rendered = renderEditor(initial)
@@ -752,20 +797,33 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
   })
 
-  test('Launch keeps exact save-bound validation without exposing a standalone Validate action', async () => {
+  test('header Validate is secondary, focuses its fresh result, and Launch validates again', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(validationReceipt() as never)
     const rendered = renderEditor(detail())
     await flushEffects()
 
-    expect(screen.queryByRole('button', { name: /^校验$|^Validate$/ })).toBeNull()
+    const validate = screen.getByRole('button', { name: /^校验$|^Validate$/ })
     const launch = screen.getByRole('button', { name: /启动任务|Launch task/ })
+    expect(validate.classList.contains('btn--primary')).toBe(false)
+    expect(launch.classList.contains('btn--primary')).toBe(true)
+    expect(validate.compareDocumentPosition(launch) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+
+    fireEvent.click(validate)
+    fireEvent.click(validate)
+    await flushEffects()
+
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(rendered.router.state.location.pathname).toBe('/editor')
+    expect(screen.getByTestId('workflow-validation-overlay')).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByTestId('workflow-validation-heading'))
+
     fireEvent.click(launch)
     fireEvent.click(launch)
     await flushEffects()
 
     // The validation safety fence stays inside Launch while the synchronous
     // ref collapses two clicks into one preparing-launch operation.
-    expect(post).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenCalledTimes(2)
     expect(post).toHaveBeenLastCalledWith(
       '/api/workflows/wf-1/validate',
       {
@@ -776,6 +834,97 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     )
     expect(rendered.router.state.location.pathname).toBe('/workflows/wf-1/launch')
     expect(rendered.router.state.location.search).toMatchObject({ version: 1 })
+  })
+
+  test('dirty header Validate saves the exact composite revision before validating it', async () => {
+    const put = vi.spyOn(api, 'put').mockImplementation((_path, body) => {
+      const input = body as UpdateWorkflow
+      return Promise.resolve({
+        clientMutationId: input.clientMutationId,
+        requestedBaseVersion: input.expectedVersion,
+        revision: {
+          workflowId: 'wf-1',
+          version: 2,
+          snapshotHash: hash('b'),
+          updatedAt: 200,
+        },
+        snapshot: input.snapshot,
+        outcome: 'committed',
+      } satisfies SaveWorkflowReceipt) as never
+    })
+    const post = vi.spyOn(api, 'post').mockResolvedValue(validationReceipt(2, hash('b')) as never)
+    const rendered = renderEditor(detail())
+    await flushEffects()
+    renameLocal('saved-before-validate', 'exact validate sequence')
+
+    fireEvent.click(screen.getByTestId('workflow-validate'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(299)
+    })
+    await flushEffects()
+    expect(put).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    await vi.waitFor(() => {
+      expect(put).toHaveBeenCalledTimes(1)
+      expect(post).toHaveBeenCalledWith(
+        '/api/workflows/wf-1/validate',
+        {
+          expectedVersion: 2,
+          expectedSnapshotHash: hash('b'),
+        },
+        expect.any(AbortSignal),
+      )
+    })
+
+    expect(put.mock.invocationCallOrder[0]).toBeLessThan(post.mock.invocationCallOrder[0]!)
+    expect(rendered.router.state.location.pathname).toBe('/editor')
+    expect(document.activeElement).toBe(screen.getByTestId('workflow-validation-heading'))
+  })
+
+  test('compact header Validate focuses the Dialog heading and close restores its result trigger', async () => {
+    const priorMatchMedia = window.matchMedia
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('max-width: 720px'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    vi.spyOn(api, 'post').mockResolvedValue(validationReceipt() as never)
+
+    try {
+      renderEditor(detail())
+      await flushEffects()
+      fireEvent.click(screen.getByTestId('workflow-validate'))
+      await flushEffects()
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync()
+      })
+
+      const dialog = screen.getByTestId('workflow-validation-dialog')
+      const heading = screen.getByRole('heading', { name: /工作流校验|Workflow validation/ })
+      expect(dialog).toBeTruthy()
+      expect(document.activeElement).toBe(heading)
+
+      fireEvent.click(dialog.querySelector('.dialog__close') as HTMLButtonElement)
+      expect(screen.queryByTestId('workflow-validation-dialog')).toBeNull()
+      expect(document.activeElement).toBe(screen.getByTestId('workflow-validation-summary'))
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        value: priorMatchMedia,
+      })
+    }
   })
 
   test('dirty Launch flushes the composite snapshot before validating the saved exact revision', async () => {
@@ -850,7 +999,7 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(document.activeElement).toBe(screen.getByTestId('workflow-action-error-focus'))
   })
 
-  test('the failure-details Revalidate path stays available after removing the header action', async () => {
+  test('the failure-details Revalidate path stays available beside the header action', async () => {
     const pending = deferred<WorkflowValidationReceipt>()
     vi.spyOn(api, 'post')
       .mockResolvedValueOnce(

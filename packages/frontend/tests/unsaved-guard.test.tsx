@@ -15,7 +15,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   Link,
   Outlet,
@@ -144,11 +144,15 @@ function GuardAdapterHarness({
   onDiscard,
   busySince,
   onForceLeave,
+  saveResult,
+  onSaveAttempt,
 }: {
   busy: boolean
   onDiscard?: () => void
   busySince?: number | null
   onForceLeave?: () => void
+  saveResult?: 'success' | 'error' | 'stale'
+  onSaveAttempt?: () => void
 }) {
   const [settled, setSettled] = useState(false)
   const dirtyRef = useRef<string | null>('settings:appearance')
@@ -177,6 +181,20 @@ function GuardAdapterHarness({
           return changedKeys.length !== 1 || changedKeys[0] !== 'tab'
         }}
         onDiscard={onDiscard}
+        {...(saveResult === undefined
+          ? {}
+          : {
+              onSaveAndProceed: async () => {
+                onSaveAttempt?.()
+                if (saveResult === 'error') throw new Error('local draft write failed')
+                if (saveResult === 'success') {
+                  // RFC-250: the callback must synchronously clear the exact
+                  // dirty generation before its promise resolves.
+                  dirtyRef.current = null
+                  setSettled(true)
+                }
+              },
+            })}
       />
       <button type="button" data-testid="settle-busy" onClick={() => setSettled(true)}>
         settle
@@ -217,6 +235,8 @@ function renderGuardAdapter(
     onDiscard?: () => void
     busySince?: number | null
     onForceLeave?: () => void
+    saveResult?: 'success' | 'error' | 'stale'
+    onSaveAttempt?: () => void
   } = {},
 ) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
@@ -233,6 +253,8 @@ function renderGuardAdapter(
         onDiscard={opts.onDiscard}
         busySince={opts.busySince ?? null}
         onForceLeave={opts.onForceLeave}
+        saveResult={opts.saveResult}
+        onSaveAttempt={opts.onSaveAttempt}
       />
     ),
   })
@@ -266,6 +288,7 @@ afterEach(() => {
   // wipe races React 19's commit-time portal cleanup (see dialog.test.tsx). The
   // global setup.ts afterEach already runs RTL cleanup().
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('UnsavedChangesGuard', () => {
@@ -405,6 +428,22 @@ describe('UnsavedChangesGuard', () => {
     expect(screen.queryByTestId('unsaved-force-leave')).toBeNull()
   })
 
+  test('a Stay-only busy dialog reveals the escape when its live threshold elapses', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-08-03T00:00:00.000Z'))
+    renderGuardAdapter({ busy: true, busySince: Date.now() })
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-section'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    expect(screen.queryByTestId('unsaved-force-leave')).toBeNull()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(BUSY_ESCAPE_AFTER_MS)
+    })
+    expect(screen.getByTestId('unsaved-force-leave')).toBeTruthy()
+  })
+
   test('discard clears the caller-owned registry before a blocked navigation proceeds', async () => {
     const onDiscard = vi.fn()
     const router = renderGuardAdapter({ onDiscard })
@@ -446,4 +485,37 @@ describe('UnsavedChangesGuard', () => {
     expect(onDiscard).not.toHaveBeenCalled()
     expect(screen.getByTestId('unsaved-guard-dialog')).toBeTruthy()
   })
+
+  // RFC-250 T5 — Clarify can durably flush its newest local generation before
+  // proceeding. Fulfillment is accepted only after the caller synchronously
+  // clears dirtyRef; a rejection or stale fulfillment remains on the page.
+  test('save-and-proceed navigates only after the exact dirty generation is cleared', async () => {
+    const onSaveAttempt = vi.fn()
+    const router = renderGuardAdapter({ saveResult: 'success', onSaveAttempt })
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-filter'))
+    const save = await screen.findByTestId('unsaved-save-and-proceed')
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('unsaved-stay')))
+    fireEvent.click(save)
+
+    await waitFor(() => expect(router.state.location.search.filter).toBe('changed'))
+    expect(onSaveAttempt).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
+  })
+
+  test.each(['error', 'stale'] as const)(
+    'save-and-proceed %s keeps the blocked navigation and renders an error',
+    async (saveResult) => {
+      const router = renderGuardAdapter({ saveResult })
+      await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+      fireEvent.click(screen.getByTestId('change-filter'))
+      fireEvent.click(await screen.findByTestId('unsaved-save-and-proceed'))
+
+      await waitFor(() => screen.getByTestId('unsaved-save-error'))
+      expect(router.state.location.search.filter).toBe('stable')
+      expect(screen.getByTestId('unsaved-guard-dialog')).toBeTruthy()
+    },
+  )
 })

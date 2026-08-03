@@ -9,17 +9,25 @@ import { useTranslation } from 'react-i18next'
 
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, NumberInput, TextInput } from '@/components/Form'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { nextRuns } from '@/lib/schedule-view'
-import { ErrorBanner } from '@/components/ErrorBanner'
 
 type Kind = ScheduleSpec['kind']
 type Unit = 'minutes' | 'hours' | 'days'
 
 const CREATOR_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+
+export interface ScheduleCreateRequest {
+  name: string
+  launchKind: ScheduledLaunchKind
+  launchPayload: unknown
+  scheduleSpec: ScheduleSpec
+  enabled: true
+}
 
 interface ScheduleDialogProps {
   open: boolean
@@ -36,6 +44,14 @@ interface ScheduleDialogProps {
    */
   launchKind?: ScheduledLaunchKind
   defaultName?: string
+  /**
+   * Task Wizard create mode owns the non-idempotent transaction so it can
+   * durably write its reconciliation marker before the POST leaves the
+   * browser. When supplied, this dialog only collects and emits the request.
+   */
+  onCreate?: (request: ScheduleCreateRequest) => void
+  createPending?: boolean
+  createError?: unknown | null
   /**
    * Edit mode — pre-fill from an existing schedule and PUT { name, scheduleSpec }
    * instead of POST. `launchPayload` (the task config) is left untouched here; it
@@ -101,6 +117,9 @@ export function ScheduleDialog({
   buildLaunchPayload,
   launchKind,
   defaultName,
+  onCreate,
+  createPending,
+  createError,
   edit,
 }: ScheduleDialogProps) {
   const { t } = useTranslation()
@@ -159,7 +178,24 @@ export function ScheduleDialog({
     },
   })
 
-  const canSave = name.trim().length > 0 && spec !== null && !save.isPending
+  const createIsControlled = edit === undefined && onCreate !== undefined
+  const isPending = createIsControlled ? (createPending ?? false) : save.isPending
+  const visibleError = createIsControlled ? createError : save.error
+  const canSave = name.trim().length > 0 && spec !== null && !isPending
+  const submit = (): void => {
+    if (edit !== undefined || onCreate === undefined) {
+      save.mutate()
+      return
+    }
+    if (spec === null) return
+    onCreate({
+      name: name.trim(),
+      launchKind: launchKind ?? 'workflow',
+      launchPayload: buildLaunchPayload?.(),
+      scheduleSpec: spec,
+      enabled: true,
+    })
+  }
   const toggleDay = (d: number) =>
     setDaysOfWeek((cur) =>
       cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => a - b),
@@ -172,136 +208,143 @@ export function ScheduleDialog({
       title={t(edit ? 'scheduled.editTitle' : 'scheduled.dialogTitle')}
       size="md"
       data-testid="schedule-dialog"
+      dismissDisabled={isPending}
       footer={
         <>
-          <button type="button" className="btn" onClick={onClose}>
+          <button type="button" className="btn" onClick={onClose} disabled={isPending}>
             {t('scheduled.cancel')}
           </button>
           <button
             type="button"
             className="btn btn--primary"
             disabled={!canSave}
-            onClick={() => save.mutate()}
+            onClick={submit}
             data-testid="schedule-save"
           >
-            {save.isPending ? t('scheduled.saving') : t('scheduled.save')}
+            {isPending ? t('scheduled.saving') : t('scheduled.save')}
           </button>
         </>
       }
     >
-      {edit === undefined && (launchKind ?? 'workflow') === 'workflow' && (
-        <div data-testid="schedule-dialog-workflow-policy">
-          <NoticeBanner
-            tone="info"
-            size="compact"
-            title={t('taskWizard.scheduledWorkflowLatestTitle')}
-          >
-            {t('taskWizard.scheduledWorkflowLatestBody')}
-          </NoticeBanner>
-        </div>
-      )}
-
-      <Field label={t('scheduled.fieldName')} required>
-        <TextInput value={name} onChange={setName} maxLength={255} data-testid="schedule-name" />
-      </Field>
-
-      <Field label={t('scheduled.fieldMode')} group>
-        <Segmented<Kind>
-          value={kind}
-          onChange={setKind}
-          ariaLabel={t('scheduled.fieldMode')}
-          testidPrefix="schedule-kind"
-          options={[
-            { value: 'interval', label: t('scheduled.modeInterval') },
-            { value: 'daily', label: t('scheduled.modeDaily') },
-            { value: 'weekly', label: t('scheduled.modeWeekly') },
-            { value: 'monthly', label: t('scheduled.modeMonthly') },
-          ]}
-        />
-      </Field>
-
-      {kind === 'interval' && (
-        <div className="schedule-dialog__row">
-          <Field label={t('scheduled.fieldEvery')}>
-            <NumberInput
-              value={every}
-              onChange={setEvery}
-              min={1}
-              max={1000}
-              data-testid="schedule-every"
-            />
-          </Field>
-          <Field label={t('scheduled.fieldUnit')}>
-            <Select<Unit>
-              value={unit}
-              onChange={setUnit}
-              options={[
-                { value: 'minutes', label: t('scheduled.unitMinutes') },
-                { value: 'hours', label: t('scheduled.unitHours') },
-                { value: 'days', label: t('scheduled.unitDays') },
-              ]}
-            />
-          </Field>
-        </div>
-      )}
-
-      {kind !== 'interval' && (
-        <Field label={t('scheduled.fieldAt')} hint={t('scheduled.tzNote', { tz: CREATOR_TZ })}>
-          <TextInput
-            value={at}
-            onChange={setAt}
-            type="text"
-            pattern="^([01]\d|2[0-3]):[0-5]\d$"
-            data-testid="schedule-at"
-          />
-        </Field>
-      )}
-
-      {kind === 'weekly' && (
-        <Field label={t('scheduled.fieldDays')} group>
-          <div className="schedule-dialog__days" role="group" aria-label={t('scheduled.fieldDays')}>
-            {[0, 1, 2, 3, 4, 5, 6].map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`btn btn--sm${daysOfWeek.includes(d) ? ' btn--primary' : ''}`}
-                aria-pressed={daysOfWeek.includes(d)}
-                onClick={() => toggleDay(d)}
-                data-testid={`schedule-dow-${d}`}
-              >
-                {t(`scheduled.dow.${d}`)}
-              </button>
-            ))}
+      <fieldset className="schedule-dialog__fieldset" disabled={isPending} aria-busy={isPending}>
+        {edit === undefined && (launchKind ?? 'workflow') === 'workflow' && (
+          <div data-testid="schedule-dialog-workflow-policy">
+            <NoticeBanner
+              tone="info"
+              size="compact"
+              title={t('taskWizard.scheduledWorkflowLatestTitle')}
+            >
+              {t('taskWizard.scheduledWorkflowLatestBody')}
+            </NoticeBanner>
           </div>
-        </Field>
-      )}
+        )}
 
-      {kind === 'monthly' && (
-        <Field label={t('scheduled.fieldDayOfMonth')} hint={t('scheduled.dayOfMonthHint')}>
-          <NumberInput
-            value={dayOfMonth}
-            onChange={setDayOfMonth}
-            min={1}
-            max={31}
-            data-testid="schedule-dom"
+        <Field label={t('scheduled.fieldName')} required>
+          <TextInput value={name} onChange={setName} maxLength={255} data-testid="schedule-name" />
+        </Field>
+
+        <Field label={t('scheduled.fieldMode')} group>
+          <Segmented<Kind>
+            value={kind}
+            onChange={setKind}
+            ariaLabel={t('scheduled.fieldMode')}
+            testidPrefix="schedule-kind"
+            options={[
+              { value: 'interval', label: t('scheduled.modeInterval') },
+              { value: 'daily', label: t('scheduled.modeDaily') },
+              { value: 'weekly', label: t('scheduled.modeWeekly') },
+              { value: 'monthly', label: t('scheduled.modeMonthly') },
+            ]}
           />
         </Field>
-      )}
 
-      <div className="schedule-dialog__preview" data-testid="schedule-preview">
-        <span className="schedule-dialog__preview-label">{t('scheduled.preview')}</span>
-        {preview.length === 0 ? (
-          <span className="muted">—</span>
-        ) : (
-          <ul>
-            {preview.map((e) => (
-              <li key={e}>{fmtPreview(e)}</li>
-            ))}
-          </ul>
+        {kind === 'interval' && (
+          <div className="schedule-dialog__row">
+            <Field label={t('scheduled.fieldEvery')}>
+              <NumberInput
+                value={every}
+                onChange={setEvery}
+                min={1}
+                max={1000}
+                data-testid="schedule-every"
+              />
+            </Field>
+            <Field label={t('scheduled.fieldUnit')}>
+              <Select<Unit>
+                value={unit}
+                onChange={setUnit}
+                options={[
+                  { value: 'minutes', label: t('scheduled.unitMinutes') },
+                  { value: 'hours', label: t('scheduled.unitHours') },
+                  { value: 'days', label: t('scheduled.unitDays') },
+                ]}
+              />
+            </Field>
+          </div>
         )}
-      </div>
 
-      {save.error != null && <ErrorBanner error={save.error} />}
+        {kind !== 'interval' && (
+          <Field label={t('scheduled.fieldAt')} hint={t('scheduled.tzNote', { tz: CREATOR_TZ })}>
+            <TextInput
+              value={at}
+              onChange={setAt}
+              type="text"
+              pattern="^([01]\d|2[0-3]):[0-5]\d$"
+              data-testid="schedule-at"
+            />
+          </Field>
+        )}
+
+        {kind === 'weekly' && (
+          <Field label={t('scheduled.fieldDays')} group>
+            <div
+              className="schedule-dialog__days"
+              role="group"
+              aria-label={t('scheduled.fieldDays')}
+            >
+              {[0, 1, 2, 3, 4, 5, 6].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  className={`btn btn--sm${daysOfWeek.includes(d) ? ' btn--primary' : ''}`}
+                  aria-pressed={daysOfWeek.includes(d)}
+                  onClick={() => toggleDay(d)}
+                  data-testid={`schedule-dow-${d}`}
+                >
+                  {t(`scheduled.dow.${d}`)}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        {kind === 'monthly' && (
+          <Field label={t('scheduled.fieldDayOfMonth')} hint={t('scheduled.dayOfMonthHint')}>
+            <NumberInput
+              value={dayOfMonth}
+              onChange={setDayOfMonth}
+              min={1}
+              max={31}
+              data-testid="schedule-dom"
+            />
+          </Field>
+        )}
+
+        <div className="schedule-dialog__preview" data-testid="schedule-preview">
+          <span className="schedule-dialog__preview-label">{t('scheduled.preview')}</span>
+          {preview.length === 0 ? (
+            <span className="muted">—</span>
+          ) : (
+            <ul>
+              {preview.map((e) => (
+                <li key={e}>{fmtPreview(e)}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </fieldset>
+
+      {visibleError != null && <ErrorBanner error={visibleError} />}
     </Dialog>
   )
 }

@@ -62,12 +62,15 @@ export async function getClarifyDraft(k: ClarifyDraftKey): Promise<ClarifyAnswer
 
 export async function setClarifyDraft(k: ClarifyDraftKey, answers: ClarifyAnswer[]): Promise<void> {
   const db = await openDb()
-  if (db === null) return
-  return new Promise((resolve) => {
+  // RFC-250 T15: callers project the latest IDB generation into visible UX.
+  // Resolving on an unavailable/failed store would falsely advance localAck.
+  if (db === null) throw new Error('clarify draft storage unavailable')
+  return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite')
-    const req = tx.objectStore(STORE).put(JSON.stringify(answers), clarifyDraftKey(k))
-    req.onsuccess = () => resolve()
-    req.onerror = () => resolve()
+    tx.objectStore(STORE).put(JSON.stringify(answers), clarifyDraftKey(k))
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('clarify draft write failed'))
+    tx.onabort = () => reject(tx.error ?? new Error('clarify draft write aborted'))
   })
 }
 
@@ -76,9 +79,12 @@ export async function deleteClarifyDraft(k: ClarifyDraftKey): Promise<void> {
   if (db === null) return
   return new Promise((resolve) => {
     const tx = db.transaction(STORE, 'readwrite')
-    const req = tx.objectStore(STORE).delete(clarifyDraftKey(k))
-    req.onsuccess = () => resolve()
-    req.onerror = () => resolve()
+    tx.objectStore(STORE).delete(clarifyDraftKey(k))
+    // Request success precedes transaction commit. Submit cleanup must not
+    // proceed while the delete can still be rolled back by a late abort.
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => resolve()
+    tx.onabort = () => resolve()
   })
 }
 

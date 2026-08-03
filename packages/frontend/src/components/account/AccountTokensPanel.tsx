@@ -1,7 +1,7 @@
 import type { PatPublic } from '@agent-workflow/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
@@ -20,6 +20,16 @@ export function AccountTokensPanel({ me }: { me: MeResponse }) {
   const [creating, setCreating] = useState(false)
   const triggerRef = useRef<HTMLElement | null>(null)
   const createTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const refreshTokenInventory = useCallback(async (): Promise<readonly PatPublic[]> => {
+    const refreshed = await api.get<MeResponse>('/api/auth/me')
+    qc.setQueriesData<MeResponse | null>({ queryKey: ACTOR_QUERY_KEY }, (current) =>
+      current?.user.id === refreshed.user.id ? refreshed : current,
+    )
+    return refreshed.pats
+  }, [qc])
+  const refreshCreatedList = useCallback(async (): Promise<void> => {
+    await refreshTokenInventory()
+  }, [refreshTokenInventory])
   const tokens = [...me.pats].sort((a, b) => {
     const activeDelta = Number(a.revokedAt !== null) - Number(b.revokedAt !== null)
     return activeDelta === 0 ? b.createdAt - a.createdAt : activeDelta
@@ -79,9 +89,12 @@ export function AccountTokensPanel({ me }: { me: MeResponse }) {
       <CreateTokenDialog
         open={creating}
         onClose={() => setCreating(false)}
+        actorId={me.user.id}
         role={me.user.role}
         triggerRef={createTriggerRef}
-        onCreated={() => qc.invalidateQueries({ queryKey: ACTOR_QUERY_KEY })}
+        visiblePats={me.pats}
+        onCreated={refreshCreatedList}
+        onRefreshInventory={refreshTokenInventory}
       />
       <ConfirmDialog
         open={revokeId !== null}

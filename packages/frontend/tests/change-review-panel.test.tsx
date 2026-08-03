@@ -173,6 +173,10 @@ function renderPanel(
   )
 }
 
+function fileSelectors(): HTMLButtonElement[] {
+  return Array.from(document.querySelectorAll<HTMLButtonElement>('.changes__file-tab'))
+}
+
 describe('ChangeReviewPanel — grouped sidebar', () => {
   test('code files group by module, docs group separately; counts + weight bars render', () => {
     renderPanel({ structuralData: structural() })
@@ -185,22 +189,19 @@ describe('ChangeReviewPanel — grouped sidebar', () => {
     expect(titles.some((x) => x.includes('ui'))).toBe(true)
     expect(titles.some((x) => /文档|Docs/.test(x))).toBe(true)
     // file rows render basenames; the full path lives on the tab title
-    const tabs = screen.getAllByRole('tab')
+    const tabs = fileSelectors()
     expect(tabs.some((el) => el.getAttribute('title') === 'src/ui/a.ts')).toBe(true)
   })
 
-  test('keyboard: ArrowDown moves selection in visual order; Space toggles viewed', () => {
+  test('keyboard: file-button ArrowDown moves selection in visual order; Space toggles viewed', () => {
     renderPanel({ structuralData: structural(), storageKey: 'T-KEY' })
-    const tablist = screen.getByRole('tablist')
-    const first = screen.getAllByRole('tab')[0]
+    const first = fileSelectors()[0]
     expect(first).toBeTruthy()
     fireEvent.click(first as HTMLElement)
-    fireEvent.keyDown(tablist, { key: 'ArrowDown' })
-    const selected = screen
-      .getAllByRole('tab')
-      .find((el) => el.getAttribute('aria-selected') === 'true')
+    fireEvent.keyDown(first as HTMLElement, { key: 'ArrowDown' })
+    const selected = fileSelectors().find((el) => el.getAttribute('aria-current') === 'true')
     expect(selected).toBeTruthy()
-    fireEvent.keyDown(tablist, { key: ' ' })
+    fireEvent.keyDown(selected as HTMLElement, { key: ' ' })
     const progress = screen.getByTestId('diff-viewed-progress')
     expect(progress.textContent).toMatch(/1\s*\/\s*6|已看 1/)
   })
@@ -226,7 +227,7 @@ diff --git a/src/x.ts b/src/x.ts
 +d
 `
     renderPanel({ diff: taskDiff(multi) })
-    const titles = screen.getAllByRole('tab').map((el) => el.getAttribute('title'))
+    const titles = fileSelectors().map((el) => el.getAttribute('title'))
     expect(titles).toContain('alpha/src/x.ts')
     expect(titles).toContain('beta/src/x.ts')
   })
@@ -238,7 +239,7 @@ describe('ChangeReviewPanel — structural degradation + empty states', () => {
     expect(screen.getByRole('status').textContent).toMatch(
       /结构分析不可用|Structural analysis is unavailable/,
     )
-    expect(screen.getAllByRole('tab').length).toBeGreaterThan(0)
+    expect(fileSelectors().length).toBeGreaterThan(0)
   })
 
   test('emptyHint differentiates scratch-space from no-changes', () => {
@@ -255,7 +256,7 @@ describe('ChangeReviewPanel — structural degradation + empty states', () => {
 describe('ChangeReviewPanel — detail pane', () => {
   test('symbol outline renders the changed method with jump affordance; added+safe rows carry no explanation', () => {
     renderPanel({ structuralData: structural() })
-    const aTab = screen.getAllByRole('tab').find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
     const outline = screen.getByTestId('symbol-outline')
     expect(within(outline).getByText('run')).toBeTruthy()
@@ -268,7 +269,7 @@ describe('ChangeReviewPanel — detail pane', () => {
     const file = s.files[0]
     if (file !== undefined) file.renamedFrom = 'src/old/a.ts'
     renderPanel({ structuralData: s })
-    const aTab = screen.getAllByRole('tab').find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
     expect(screen.getByText(/src\/old\/a\.ts/)).toBeTruthy()
     const entries = screen.getAllByRole('button', { name: /调用链|call chain/i })
@@ -299,7 +300,7 @@ describe('ChangeReviewPanel — survives-GC fallback', () => {
     renderPanel({ diff: undefined, structuralData: structural() })
     // the structural-only entry appears in the sidebar; its detail pane notes
     // the missing text diff instead of dead-ending on a loading state
-    const tab = screen.getAllByRole('tab').find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    const tab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     expect(tab).toBeTruthy()
     expect(screen.getByTestId('symbol-outline')).toBeTruthy()
     expect(screen.getByText(/文本 diff|text diff/i)).toBeTruthy()
@@ -330,6 +331,68 @@ describe('ChangeReviewPanel — impl-gate P2 regressions', () => {
     renderPanel({ structuralData: structural() })
     const header = screen.getAllByTestId('change-group')[0]
     expect((header as HTMLElement).textContent).toMatch(/\+\d/)
+  })
+})
+
+describe('RFC-250 ChangeReview semantic boundaries', () => {
+  test('group disclosures, file navigation, and viewed checkboxes are separate native controls', () => {
+    renderPanel({ structuralData: structural(), storageKey: 'T-SEMANTICS' })
+
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('tab')).toBeNull()
+    expect(screen.queryByRole('tabpanel')).toBeNull()
+    expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0)
+
+    const firstFile = fileSelectors()[0]
+    expect(firstFile?.getAttribute('aria-current')).toBe('true')
+    expect(firstFile?.getAttribute('aria-keyshortcuts')).toBe('Space')
+    const checkboxes = screen.getAllByRole('checkbox')
+    expect(checkboxes.length).toBe(fileSelectors().length)
+    expect(
+      checkboxes.every((checkbox) => checkbox.parentElement?.classList.contains('form-checkbox')),
+    ).toBe(true)
+  })
+
+  test('clicking the shared viewed checkbox does not activate the adjacent file button', () => {
+    renderPanel({ structuralData: structural(), storageKey: 'T-CLICK-BOUNDARY' })
+    const selectedBefore = fileSelectors().find((button) => button.getAttribute('aria-current'))
+    const otherRow = fileSelectors().find((button) => button !== selectedBefore)?.parentElement
+    expect(otherRow).toBeTruthy()
+    const checkbox = within(otherRow as HTMLElement).getByRole('checkbox')
+
+    fireEvent.click(checkbox)
+
+    expect(fileSelectors().find((button) => button.getAttribute('aria-current'))).toBe(
+      selectedBefore,
+    )
+    expect(screen.getByTestId('diff-viewed-progress').textContent).toMatch(/1\s*\/\s*6|已看 1/)
+  })
+
+  test('Arrow/Home/End on group headers and viewed checkboxes are not intercepted', () => {
+    renderPanel({ structuralData: structural(), storageKey: 'T-NATIVE-KEYS' })
+    const selectedBefore = fileSelectors().find((button) => button.getAttribute('aria-current'))
+    const header = screen.getAllByTestId('change-group')[0]
+    const headerButton = within(header as HTMLElement).getByRole('button', { expanded: true })
+    const checkbox = within(header as HTMLElement).getAllByRole('checkbox')[0]
+
+    expect(fireEvent.keyDown(headerButton, { key: 'End' })).toBe(true)
+    expect(fireEvent.keyDown(checkbox as HTMLElement, { key: 'ArrowDown' })).toBe(true)
+    expect(fileSelectors().find((button) => button.getAttribute('aria-current'))).toBe(
+      selectedBefore,
+    )
+  })
+
+  test('collapsing the group that contains focus returns focus to its disclosure', () => {
+    renderPanel({ structuralData: structural(), storageKey: 'T-FOLD-FOCUS' })
+    const group = screen.getAllByTestId('change-group')[0] as HTMLElement
+    const header = within(group).getByRole('button', { expanded: true })
+    const checkbox = within(group).getAllByRole('checkbox')[0] as HTMLInputElement
+
+    checkbox.focus()
+    expect(document.activeElement).toBe(checkbox)
+    fireEvent.click(header)
+    expect(document.activeElement).toBe(header)
+    expect(header.getAttribute('aria-expanded')).toBe('false')
   })
 })
 

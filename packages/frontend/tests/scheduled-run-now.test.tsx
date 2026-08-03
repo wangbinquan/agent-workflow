@@ -5,7 +5,7 @@
 // and stub fetch + the WS hook.
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -50,7 +50,10 @@ const SCHEDULE = {
   updatedAt: 1,
 }
 
-function installFetch(): FetchCall[] {
+function installFetch(
+  schedule: Record<string, unknown> = SCHEDULE,
+  runNowResponse?: () => Response | Promise<Response>,
+): FetchCall[] {
   const calls: FetchCall[] = []
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -62,9 +65,11 @@ function installFetch(): FetchCall[] {
           status,
           headers: { 'content-type': 'application/json' },
         })
-      if (url.includes('/run-now')) return json({ taskId: 'task-xyz' }, 201)
+      if (url.includes('/run-now')) {
+        return runNowResponse?.() ?? json({ taskId: 'task-xyz' }, 201)
+      }
       if (url.includes('/api/tasks')) return json([]) // run history
-      if (url.includes('/api/scheduled-tasks/sched-1')) return json(SCHEDULE)
+      if (url.includes('/api/scheduled-tasks/sched-1')) return json(schedule)
       return json({})
     },
   )
@@ -98,7 +103,7 @@ async function renderDetail() {
 }
 
 describe('RFC-159 T7 — Run now button', () => {
-  test('renders, POSTs to /run-now, and navigates to the launched task', async () => {
+  test('uses the same two-click confirmation as the list, then navigates on success', async () => {
     const calls = installFetch()
     await renderDetail()
 
@@ -106,6 +111,8 @@ describe('RFC-159 T7 — Run now button', () => {
     expect(btn.textContent).toBe('Run now')
 
     fireEvent.click(btn)
+    expect(calls.some((call) => call.url.includes('/run-now'))).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
 
     await waitFor(() => {
       expect(
@@ -118,6 +125,104 @@ describe('RFC-159 T7 — Run now button', () => {
     await waitFor(() => {
       expect(screen.getByTestId('task-page')).toBeTruthy()
     })
+  })
+
+  test('keeps the detail action in place on definitive rejection and explicitly retries', async () => {
+    let attempt = 0
+    const calls = installFetch(SCHEDULE, () => {
+      attempt += 1
+      if (attempt === 1) {
+        return new Response(JSON.stringify({ code: 'launch-rejected', message: 'cannot launch' }), {
+          status: 409,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ taskId: 'task-xyz' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    await renderDetail()
+
+    fireEvent.click(await screen.findByTestId('scheduled-run-now'))
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
+    const error = await screen.findByTestId('scheduled-run-now-error')
+    expect(screen.getByTestId('scheduled-run-now')).toBeTruthy()
+    fireEvent.click(error.querySelector('button')!)
+
+    await waitFor(() => expect(attempt).toBe(2))
+    expect(
+      calls.filter(
+        (call) =>
+          call.method === 'POST' && call.url.endsWith('/api/scheduled-tasks/sched-1/run-now'),
+      ),
+    ).toHaveLength(2)
+    await waitFor(() => expect(screen.getByTestId('task-page')).toBeTruthy())
+  })
+
+  test('locks the detail action after a 5xx outcome and directs inventory inspection without retry', async () => {
+    let attempt = 0
+    installFetch(SCHEDULE, () => {
+      attempt += 1
+      return new Response(JSON.stringify({ code: 'launch-failed', message: 'response lost' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    await renderDetail()
+
+    fireEvent.click(await screen.findByTestId('scheduled-run-now'))
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
+
+    const feedback = await screen.findByTestId('scheduled-run-now-error')
+    expect(feedback.textContent).toContain('may already have started a task')
+    expect(feedback.textContent).toContain('Do not send the request again')
+    expect(within(feedback).queryByRole('button', { name: /retry/i })).toBeNull()
+    expect(within(feedback).getByRole('link', { name: 'Inspect tasks' }).getAttribute('href')).toBe(
+      '/tasks',
+    )
+
+    const action = screen.getByTestId('scheduled-run-now') as HTMLButtonElement
+    expect(action.disabled).toBe(true)
+    fireEvent.click(action)
+    expect(attempt).toBe(1)
+  })
+
+  test('a disabled but structurally valid schedule remains manually runnable', async () => {
+    installFetch({ ...SCHEDULE, enabled: false })
+    await renderDetail()
+
+    expect(((await screen.findByTestId('scheduled-run-now')) as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
+  test.each([
+    {
+      name: 'migration-needed',
+      schedule: { ...SCHEDULE, migrationNeeded: true },
+      reason: 'repair the legacy schedule',
+    },
+    {
+      name: 'payload-missing',
+      schedule: { ...SCHEDULE, migrationNeeded: false, launchPayload: null },
+      reason: 'restore the task launch configuration',
+    },
+    {
+      name: 'spec-missing',
+      schedule: { ...SCHEDULE, migrationNeeded: false, scheduleSpec: null },
+      reason: 'restore the schedule definition',
+    },
+  ])('blocks detail run-now for $name with its specific reason', async ({ schedule, reason }) => {
+    installFetch(schedule)
+    await renderDetail()
+
+    const button = (await screen.findByTestId('scheduled-run-now')) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(button.parentElement?.getAttribute('title')).toContain(reason)
+    const descriptionId = button.getAttribute('aria-describedby')
+    expect(descriptionId).not.toBeNull()
+    expect(document.getElementById(descriptionId!)?.textContent).toContain(reason)
   })
 
   // RFC-159 — edit entry (user feedback 2026-07-10): the detail page must expose an

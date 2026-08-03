@@ -22,6 +22,37 @@ function deferred<T>(): Deferred<T> {
 }
 
 describe('<ConfirmDialog />', () => {
+  test('initial focus follows the safe semantic action for default and danger tones', async () => {
+    const { rerender } = render(
+      <ConfirmDialog
+        open
+        title="Archive"
+        description="Archive it?"
+        confirmLabel="Archive"
+        cancelLabel="Cancel"
+        onConfirm={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Archive' }))
+
+    rerender(
+      <ConfirmDialog
+        open
+        title="Delete"
+        description="Delete it?"
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        tone="danger"
+        onConfirm={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Keep' }))
+  })
+
   test('open=false renders no dialog', () => {
     render(
       <ConfirmDialog

@@ -63,11 +63,12 @@ describe('shared draft DB façade (F3)', () => {
   })
 })
 
-describe('draft stores degrade to no-ops without IndexedDB (F3 wiring)', () => {
+describe('draft stores share the IndexedDB-unavailable path (F3 wiring)', () => {
   // happy-dom has no indexedDB, so this exercises the shared-façade null path
   // end-to-end for BOTH stores — proving the review store is wired to the façade
-  // and does not throw (its ops used to just silently fail; now they degrade
-  // identically to clarify through one code path).
+  // and does not open a second DB. RFC-250 intentionally tightens Clarify's
+  // WRITE contract to reject so its generation ledger cannot claim a false
+  // local ack; review's historical no-op contract remains unchanged.
   it('the façade resolves null when IndexedDB is unavailable', async () => {
     expect(typeof indexedDB).toBe('undefined')
     expect(await openDraftDb()).toBeNull()
@@ -81,13 +82,13 @@ describe('draft stores degrade to no-ops without IndexedDB (F3 wiring)', () => {
     expect(await listDrafts({ taskId: 't' })).toEqual([])
   })
 
-  it('clarify draft ops are safe no-ops on the same null path', async () => {
+  it('clarify reads stay empty while writes reject visibly on the same null path', async () => {
     const key = { taskId: 't', intermediaryNodeRunId: 'n', roundId: 'r' }
     await expect(
       setClarifyDraft(key, [
         { questionId: 'q', selectedOptionIndices: [], selectedOptionLabels: [], customText: '' },
       ]),
-    ).resolves.toBeUndefined()
+    ).rejects.toThrow('clarify draft storage unavailable')
     expect(await getClarifyDraft(key)).toBeNull()
     expect(await listClarifyDrafts({ taskId: 't' })).toEqual([])
   })

@@ -12,6 +12,8 @@ export interface ShellNavigationProps {
   active: ActiveNav
   mode: 'desktop' | 'mobile'
   onNavigate?: (destination: string) => void
+  /** Bubble-phase close, after Link has handed the transition to the router. */
+  onNavigationHandled?: () => void
   focusTargetRef?: RefObject<HTMLAnchorElement | null>
   renderBadge?: (item: SubNavItem) => ReactNode
 }
@@ -20,6 +22,7 @@ export function ShellNavigation({
   active,
   mode,
   onNavigate,
+  onNavigationHandled,
   focusTargetRef,
   renderBadge,
 }: ShellNavigationProps) {
@@ -40,22 +43,23 @@ export function ShellNavigation({
       ) ?? null
   }, [active.activeItemTo, focusTargetRef, mode])
 
-  const captureNavigation = (event: MouseEvent<HTMLElement>) => {
-    if (onNavigate === undefined) return
-    if (
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      event.defaultPrevented
-    ) {
-      return
+  const navigationDestination = (event: MouseEvent<HTMLElement>): string | null => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return null
     }
     const target = event.target
-    if (!(target instanceof Element)) return
+    if (!(target instanceof Element)) return null
     const link = target.closest<HTMLAnchorElement>('a[href]')
-    if (link !== null) onNavigate(link.pathname)
+    return link?.pathname ?? null
+  }
+
+  const captureNavigation = (event: MouseEvent<HTMLElement>) => {
+    const destination = navigationDestination(event)
+    if (destination !== null) onNavigate?.(destination)
+  }
+
+  const completeNavigation = (event: MouseEvent<HTMLElement>) => {
+    if (navigationDestination(event) !== null) onNavigationHandled?.()
   }
 
   return (
@@ -65,6 +69,7 @@ export function ShellNavigation({
       aria-label={t('nav.brand')}
       data-testid={`shell-navigation-${mode}`}
       onClickCapture={captureNavigation}
+      onClick={completeNavigation}
     >
       <Link
         to="/"

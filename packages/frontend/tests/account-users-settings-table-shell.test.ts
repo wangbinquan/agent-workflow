@@ -40,6 +40,7 @@ describe('account and admin responsive shells', () => {
     const tokens = read('components/account/AccountTokensPanel.tsx')
     const createDialog = read('components/account/CreateTokenDialog.tsx')
     const matrix = read('components/account/TokenPermissionMatrix.tsx')
+    const styles = read('styles.css')
 
     expect(source).toContain(
       "<PageHeader title={t('account.title', { defaultValue: 'My account' })}",
@@ -72,6 +73,21 @@ describe('account and admin responsive shells', () => {
     expect(createDialog).not.toContain('<select')
     expect(matrix).toContain("import { Checkbox } from '@/components/Form'")
     expect(matrix).not.toContain('<input')
+    expect(matrix).toContain('className="token-matrix__cell-verb"')
+    expect(styles).toMatch(
+      /@media \(max-width: 720px\)\s*\{[\s\S]*?\.token-matrix\s*\{[\s\S]*?display: flex;/,
+    )
+    expect(styles).toMatch(
+      /\.token-matrix__row\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+    )
+    expect(styles).toMatch(/\.token-matrix__cell:empty\s*\{\s*display: none;/)
+    expect(styles).toMatch(/\.token-matrix__cell\s*\{[\s\S]*?min-height: 44px;/)
+    expect(styles).toMatch(
+      /\.token-create-dialog \.segmented\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+    )
+    expect(styles).toMatch(
+      /\.token-create-dialog \.segmented__option\s*\{[\s\S]*?white-space: normal;/,
+    )
 
     // The third lock survives verbatim, because its reason survives: a
     // hand-listed scope table is a second source of truth that drifts from the

@@ -58,7 +58,7 @@ export function WorkflowCanvasEdge(props: EdgeProps<InsertableEdge>) {
           <span
             className="workflow-edge-validation nodrag nopan"
             style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY + 18}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY + 18}px) scale(var(--workflow-canvas-marker-scale, 1))`,
             }}
             aria-label={[
               ...(props.data.validation.errors > 0

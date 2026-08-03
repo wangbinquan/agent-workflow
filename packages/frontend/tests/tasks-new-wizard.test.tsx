@@ -31,6 +31,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { taskWizardDraftKey, taskWizardNewDraftSourceId } from '../src/lib/task-wizard-draft'
 import '../src/i18n'
 
 vi.mock('../src/hooks/useActor', () => ({
@@ -68,6 +69,7 @@ const WORKFLOWS = [
 ]
 const AGENTS = [
   { id: 'agent-auditor', name: 'auditor', ownerUserId: 'owner-agent' },
+  { id: 'agent-builder', name: 'builder', ownerUserId: 'owner-agent' },
   {
     id: 'agent-system',
     name: '__sys_reviewer__',
@@ -187,6 +189,7 @@ beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
   window.localStorage.clear()
+  window.sessionStorage.clear()
 })
 afterEach(() => {
   cleanup()
@@ -258,6 +261,7 @@ async function renderWizard(
   options: {
     waitForWizard?: boolean
     seedQueries?: (queryClient: QueryClient) => void
+    onTaskPageRender?: () => void
   } = {},
 ) {
   const mod = await import('../src/routes/tasks.new')
@@ -271,7 +275,10 @@ async function renderWizard(
   const taskPage = createRoute({
     getParentRoute: () => rootRoute,
     path: '/tasks/$id',
-    component: () => <div data-testid="task-page" />,
+    component: () => {
+      options.onTaskPageRender?.()
+      return <div data-testid="task-page" />
+    },
   })
   const scheduledDetail = createRoute({
     getParentRoute: () => rootRoute,
@@ -311,6 +318,56 @@ async function renderWizard(
 }
 
 const next = () => fireEvent.click(screen.getByTestId('stepper-next'))
+
+const AGENT_NEW_URL = '/tasks/new?kind=agent&agentId=agent-auditor'
+const AGENT_NEW_DRAFT_KEY = taskWizardDraftKey({
+  actorId: 'me',
+  flow: 'new',
+  sourceId: taskWizardNewDraftSourceId({
+    scheduled: false,
+    entry: { kind: 'agent', resourceId: 'agent-auditor' },
+  }),
+})
+const GENERIC_NEW_DRAFT_KEY = taskWizardDraftKey({
+  actorId: 'me',
+  flow: 'new',
+  sourceId: taskWizardNewDraftSourceId({
+    scheduled: false,
+    entry: { kind: 'picker', preferredKind: 'agent' },
+  }),
+})
+
+function readAgentNewDraft(): Record<string, unknown> | null {
+  const raw = window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY)
+  return raw === null ? null : (JSON.parse(raw) as Record<string, unknown>)
+}
+
+function materialFieldset(): HTMLFieldSetElement {
+  const fieldset = screen.getByTestId('task-wizard').querySelector('fieldset.task-wizard__material')
+  if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('material fieldset not found')
+  return fieldset
+}
+
+async function fillAgentDraft(name: string, description: string, goToConfirm = false) {
+  await screen.findByTestId('wizard-scratch-hint')
+  await waitFor(() =>
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+  )
+  next()
+  fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: name } })
+  fireEvent.change(screen.getByTestId('wizard-description'), { target: { value: description } })
+  await waitFor(() => {
+    const draft = readAgentNewDraft()
+    expect((draft?.values as { taskName?: string } | undefined)?.taskName).toBe(name)
+  })
+  if (goToConfirm) {
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    await screen.findByTestId('wizard-launch')
+  }
+}
 
 async function chooseManualRepoUrl() {
   fireEvent.click(await screen.findByTestId('repo-source-recent-urls-0'))
@@ -1239,4 +1296,603 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       expect(screen.getByTestId(selectorTestId)).toBeTruthy()
     },
   )
+
+  test('RFC-250: material controls stay locked until the authoritative seed becomes the baseline', async () => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    const inventory = deferredResponse()
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      if (new URL(url).pathname === '/api/agents' && (init?.method ?? 'GET') === 'GET') {
+        return inventory.promise
+      }
+      return base(input, init)
+    })
+
+    await renderWizard(AGENT_NEW_URL)
+    expect(materialFieldset().disabled).toBe(true)
+    expect(materialFieldset().contains(screen.getByTestId('stepper-next'))).toBe(true)
+
+    await act(async () => {
+      inventory.resolve(jsonResponse(AGENTS))
+      await inventory.promise
+    })
+    await waitFor(() => expect(materialFieldset().disabled).toBe(false))
+
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), {
+      target: { value: 'First post-seed edit' },
+    })
+    await waitFor(() => {
+      const draft = readAgentNewDraft()
+      expect((draft?.values as { taskName?: string } | undefined)?.taskName).toBe(
+        'First post-seed edit',
+      )
+    })
+  })
+
+  test('RFC-250: an unreadable recovery slot stays locked and retries the read before any edit', async () => {
+    installFetch()
+    const storagePrototype = Object.getPrototypeOf(window.sessionStorage) as Storage
+    const nativeGetItem = storagePrototype.getItem
+    let readable = false
+    vi.spyOn(storagePrototype, 'getItem').mockImplementation(function (this: Storage, key) {
+      if (key === AGENT_NEW_DRAFT_KEY && !readable) {
+        throw new DOMException('storage blocked', 'SecurityError')
+      }
+      return nativeGetItem.call(this, key)
+    })
+
+    await renderWizard(AGENT_NEW_URL)
+    expect(await screen.findByTestId('wizard-draft-read-error')).toBeTruthy()
+    expect(materialFieldset().disabled).toBe(true)
+    expect(materialFieldset().contains(screen.getByTestId('stepper-next'))).toBe(true)
+
+    readable = true
+    fireEvent.click(
+      within(screen.getByTestId('wizard-draft-read-error')).getByRole('button', {
+        name: /recovery state|恢复状态/i,
+      }),
+    )
+    await waitFor(() => expect(screen.queryByTestId('wizard-draft-read-error')).toBeNull())
+    expect(materialFieldset().disabled).toBe(false)
+  })
+
+  test('RFC-250: a generic workflow draft fences vN inputs and requires explicit adoption of vN+1', async () => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    let workflowVersion = 1
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      if (new URL(url).pathname === '/api/workflows/wf-1') {
+        return Promise.resolve(
+          jsonResponse({
+            ...WF_DETAIL,
+            version: workflowVersion,
+            definition: {
+              ...WF_DETAIL.definition,
+              inputs: [
+                {
+                  ...WF_DETAIL.definition.inputs[0],
+                  sensitive: false,
+                },
+              ],
+            },
+          }),
+        )
+      }
+      return base(input, init)
+    })
+
+    await renderWizard('/tasks/new')
+    fireEvent.click(await screen.findByTestId('wizard-kind-workflow'))
+    fireEvent.click(await screen.findByTestId('wizard-object-workflow'))
+    fireEvent.mouseDown(
+      within(await screen.findByRole('listbox')).getByRole('option', { name: /My WF/ }),
+    )
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    await screen.findByTestId('wizard-scratch-hint')
+    next()
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), {
+      target: { value: 'Version-fenced run' },
+    })
+    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+      target: { value: 'Keep this input' },
+    })
+    await waitFor(() => {
+      const raw = window.sessionStorage.getItem(GENERIC_NEW_DRAFT_KEY)
+      expect(raw).not.toBeNull()
+      const saved = JSON.parse(raw ?? '{}') as {
+        values?: { selectedWorkflowVersion?: number }
+      }
+      expect(saved.values?.selectedWorkflowVersion).toBe(1)
+    })
+
+    cleanup()
+    workflowVersion = 2
+    await renderWizard('/tasks/new')
+    expect(await screen.findByTestId('wizard-draft-recovery')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('wizard-draft-restore'))
+
+    expect(await screen.findByTestId('wizard-workflow-version-mismatch')).toBeTruthy()
+    expect(materialFieldset().disabled).toBe(true)
+    expect(((await screen.findByTestId('wizard-task-name')) as HTMLInputElement).value).toBe(
+      'Version-fenced run',
+    )
+
+    fireEvent.click(screen.getByTestId('wizard-workflow-version-recover'))
+    await waitFor(() => expect(materialFieldset().disabled).toBe(false))
+    expect((screen.getByTestId('wizard-task-name') as HTMLInputElement).value).toBe(
+      'Version-fenced run',
+    )
+    expect((screen.getByLabelText(/Topic \(topic\)/) as HTMLInputElement).value).toBe(
+      'Keep this input',
+    )
+  })
+
+  test('RFC-250: a same actor/flow/source draft is offered and restored without losing material values', async () => {
+    installFetch()
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('Recovered audit', 'Inspect the recovery boundary')
+    expect(readAgentNewDraft()?.baselineFingerprint).toMatch(/^sha256:[0-9a-f]{64}$/)
+
+    cleanup()
+    await renderWizard(AGENT_NEW_URL)
+
+    expect(await screen.findByTestId('wizard-draft-recovery')).toBeTruthy()
+    expect(materialFieldset().disabled).toBe(true)
+    fireEvent.click(screen.getByTestId('wizard-draft-restore'))
+
+    await waitFor(() => expect(screen.queryByTestId('wizard-draft-recovery')).toBeNull())
+    expect(((await screen.findByTestId('wizard-task-name')) as HTMLInputElement).value).toBe(
+      'Recovered audit',
+    )
+    expect((screen.getByTestId('wizard-description') as HTMLTextAreaElement).value).toBe(
+      'Inspect the recovery boundary',
+    )
+    expect(materialFieldset().disabled).toBe(false)
+  })
+
+  test('RFC-250: deep-link resource, revision, and schedule identities never cross-restore material values', async () => {
+    installFetch()
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('Agent A only', 'Do not leak this prompt')
+    const advancedSummary = screen.getByTestId('wizard-advanced').querySelector('summary')
+    if (!(advancedSummary instanceof HTMLElement)) throw new Error('advanced summary not found')
+    fireEvent.click(advancedSummary)
+    fireEvent.change(screen.getByTestId('wizard-git-user-name'), {
+      target: { value: 'Source A User' },
+    })
+    fireEvent.change(screen.getByTestId('wizard-git-user-email'), {
+      target: { value: 'source-a@example.test' },
+    })
+    await waitFor(() =>
+      expect(
+        (readAgentNewDraft()?.values as { gitUserName?: string } | undefined)?.gitUserName,
+      ).toBe('Source A User'),
+    )
+    const sourceARaw = window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY)
+    expect(sourceARaw).not.toBeNull()
+
+    const distinctSources = [
+      {
+        label: 'another agent',
+        url: '/tasks/new?kind=agent&agentId=agent-builder',
+        contentTestId: 'wizard-description',
+      },
+      {
+        label: 'the same agent in schedule mode',
+        url: '/tasks/new?schedule=1&kind=agent&agentId=agent-auditor',
+        contentTestId: 'wizard-description',
+      },
+      {
+        label: 'an exact workflow revision',
+        url: '/tasks/new?kind=workflow&workflow=wf-1&workflowVersion=1',
+        contentTestId: 'wizard-task-name',
+      },
+      {
+        label: 'an exact workgroup revision',
+        url: '/tasks/new?kind=workgroup&workgroupId=workgroup-core&workgroupVersion=4',
+        contentTestId: 'wizard-goal',
+      },
+    ]
+
+    for (const source of distinctSources) {
+      cleanup()
+      await renderWizard(source.url)
+      await waitFor(() =>
+        expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+      )
+      expect(screen.queryByTestId('wizard-draft-recovery'), source.label).toBeNull()
+      await waitFor(() => expect(materialFieldset().disabled, source.label).toBe(false))
+      expect(materialFieldset().disabled, source.label).toBe(false)
+      next()
+      await screen.findByTestId(source.contentTestId)
+      expect((screen.getByTestId('wizard-task-name') as HTMLInputElement).value, source.label).toBe(
+        '',
+      )
+      const sourceAdvancedSummary = screen.getByTestId('wizard-advanced').querySelector('summary')
+      if (!(sourceAdvancedSummary instanceof HTMLElement)) {
+        throw new Error(`advanced summary not found for ${source.label}`)
+      }
+      fireEvent.click(sourceAdvancedSummary)
+      expect(
+        (screen.getByTestId('wizard-git-user-name') as HTMLInputElement).value,
+        source.label,
+      ).toBe('')
+      expect(window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY), source.label).toBe(sourceARaw)
+    }
+  })
+
+  test('RFC-250: discarding a same actor/flow/source recovery synchronously clears it and keeps the clean seed', async () => {
+    installFetch()
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('Discard me', 'This should not return')
+
+    cleanup()
+    await renderWizard(AGENT_NEW_URL)
+    expect(await screen.findByTestId('wizard-draft-recovery')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('wizard-draft-discard'))
+    expect(window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY)).toBeNull()
+    await waitFor(() => expect(screen.queryByTestId('wizard-draft-recovery')).toBeNull())
+    expect(materialFieldset().disabled).toBe(false)
+    expect(await screen.findByTestId('wizard-scratch-hint')).toBeTruthy()
+
+    next()
+    expect(((await screen.findByTestId('wizard-task-name')) as HTMLInputElement).value).toBe('')
+    expect((screen.getByTestId('wizard-description') as HTMLTextAreaElement).value).toBe('')
+  })
+
+  test('RFC-250: pending submission freezes every material control', async () => {
+    const calls = installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    const pending = deferredResponse()
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      const method = init?.method ?? 'GET'
+      if (url.includes('/api/agents/agent-auditor/tasks') && method === 'POST') {
+        calls.push({ url, method, body: JSON.parse(String(init?.body)) })
+        return pending.promise
+      }
+      return base(input, init)
+    })
+
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('Pending audit', 'Hold the submitted snapshot', true)
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+
+    await waitFor(() =>
+      expect(
+        calls.filter(
+          (call) => call.method === 'POST' && call.url.includes('/api/agents/agent-auditor/tasks'),
+        ),
+      ).toHaveLength(1),
+    )
+    await waitFor(() => expect(materialFieldset().disabled).toBe(true))
+    const fieldset = materialFieldset()
+    expect(fieldset.getAttribute('aria-busy')).toBe('true')
+    // A disabled fieldset disables every descendant form control except those
+    // in its first legend. Lock the structural contract too, so a future
+    // material control cannot accidentally move outside the freeze boundary.
+    expect(fieldset.querySelector('legend')).toBeNull()
+    const wizardControls = Array.from(
+      screen
+        .getByTestId('task-wizard')
+        .querySelectorAll<
+          HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+        >('button, input, select, textarea'),
+    )
+    expect(wizardControls.length).toBeGreaterThan(0)
+    expect(wizardControls.every((control) => fieldset.contains(control))).toBe(true)
+    expect((screen.getByTestId('wizard-launch') as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => {
+      pending.resolve(jsonResponse({ id: 'task-a' }, 201))
+      await pending.promise
+    })
+    expect(await screen.findByTestId('task-page')).toBeTruthy()
+  })
+
+  test('RFC-250: reconciliation marker storage failure blocks the non-idempotent request', async () => {
+    const calls = installFetch()
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('Do not duplicate', 'The marker must land before POST', true)
+
+    const storagePrototype = Object.getPrototypeOf(window.sessionStorage) as Storage
+    const nativeSetItem = storagePrototype.setItem
+    vi.spyOn(storagePrototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      const parsed = JSON.parse(value) as { reconciliation?: unknown }
+      if (key === AGENT_NEW_DRAFT_KEY && parsed.reconciliation !== undefined) {
+        throw new DOMException('quota', 'QuotaExceededError')
+      }
+      nativeSetItem.call(this, key, value)
+    })
+
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+
+    expect(await screen.findByTestId('wizard-draft-write-error')).toBeTruthy()
+    expect(
+      calls.filter(
+        (call) => call.method === 'POST' && call.url.includes('/api/agents/agent-auditor/tasks'),
+      ),
+    ).toHaveLength(0)
+    expect(materialFieldset().disabled).toBe(false)
+    expect((screen.getByTestId('wizard-launch') as HTMLButtonElement).disabled).toBe(false)
+    expect(readAgentNewDraft()?.reconciliation).toBeUndefined()
+  })
+
+  test('RFC-250: scheduled create writes its marker first and freezes both wizard and dialog until success', async () => {
+    const calls = installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    const pending = deferredResponse()
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      const method = init?.method ?? 'GET'
+      if (url.endsWith('/api/scheduled-tasks') && method === 'POST') {
+        calls.push({ url, method, body: JSON.parse(String(init?.body)) })
+        return pending.promise
+      }
+      return base(input, init)
+    })
+
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('Pending schedule', 'Freeze every submitted value', true)
+    fireEvent.click(screen.getByTestId('wizard-save-scheduled'))
+    fireEvent.change(await screen.findByTestId('schedule-name'), {
+      target: { value: 'pending nightly' },
+    })
+    fireEvent.click(screen.getByTestId('schedule-save'))
+
+    await waitFor(() =>
+      expect(
+        calls.filter((call) => call.method === 'POST' && call.url.endsWith('/api/scheduled-tasks')),
+      ).toHaveLength(1),
+    )
+    expect(readAgentNewDraft()?.reconciliation).toEqual(
+      expect.objectContaining({
+        operation: 'create-scheduled-task',
+        taskName: 'Pending schedule',
+      }),
+    )
+    expect(materialFieldset().disabled).toBe(true)
+
+    const dialog = screen.getByTestId('schedule-dialog')
+    const dialogFieldset = dialog.querySelector('fieldset.schedule-dialog__fieldset')
+    if (!(dialogFieldset instanceof HTMLFieldSetElement)) {
+      throw new Error('schedule material fieldset missing')
+    }
+    expect(dialogFieldset.disabled).toBe(true)
+    expect((screen.getByTestId('schedule-save') as HTMLButtonElement).disabled).toBe(true)
+    expect((dialog.querySelector('.dialog__close') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.mouseDown(dialog)
+    expect(screen.getByTestId('schedule-dialog')).toBeTruthy()
+
+    await act(async () => {
+      pending.resolve(jsonResponse({ id: 'schedule-created' }, 201))
+      await pending.promise
+    })
+    expect(await screen.findByTestId('scheduled-list-page')).toBeTruthy()
+    expect(window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY)).toBeNull()
+  })
+
+  test('RFC-250: schedule marker storage failure sends no POST and keeps the dialog editable', async () => {
+    const calls = installFetch()
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('No schedule duplicate', 'Marker failure must fail closed', true)
+    fireEvent.click(screen.getByTestId('wizard-save-scheduled'))
+    fireEvent.change(await screen.findByTestId('schedule-name'), {
+      target: { value: 'safe nightly' },
+    })
+
+    const storagePrototype = Object.getPrototypeOf(window.sessionStorage) as Storage
+    const nativeSetItem = storagePrototype.setItem
+    vi.spyOn(storagePrototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      const parsed = JSON.parse(value) as {
+        reconciliation?: { operation?: string }
+      }
+      if (
+        key === AGENT_NEW_DRAFT_KEY &&
+        parsed.reconciliation?.operation === 'create-scheduled-task'
+      ) {
+        throw new DOMException('quota', 'QuotaExceededError')
+      }
+      nativeSetItem.call(this, key, value)
+    })
+
+    fireEvent.click(screen.getByTestId('schedule-save'))
+
+    expect(await screen.findByTestId('wizard-draft-write-error')).toBeTruthy()
+    expect(
+      calls.filter((call) => call.method === 'POST' && call.url.endsWith('/api/scheduled-tasks')),
+    ).toHaveLength(0)
+    expect(materialFieldset().disabled).toBe(false)
+    expect((screen.getByTestId('schedule-save') as HTMLButtonElement).disabled).toBe(false)
+    expect(readAgentNewDraft()?.reconciliation).toBeUndefined()
+  })
+
+  test('RFC-250: unknown scheduled create closes the dialog into frozen inventory reconciliation without retry', async () => {
+    const calls = installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      const method = init?.method ?? 'GET'
+      if (url.endsWith('/api/scheduled-tasks') && method === 'POST') {
+        calls.push({ url, method, body: JSON.parse(String(init?.body)) })
+        return Promise.resolve(
+          jsonResponse(
+            { ok: false, code: 'schedule-response-lost', message: 'may have committed' },
+            503,
+          ),
+        )
+      }
+      return base(input, init)
+    })
+
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('Unknown schedule', 'Inspect scheduled inventory first', true)
+    fireEvent.click(screen.getByTestId('wizard-save-scheduled'))
+    fireEvent.change(await screen.findByTestId('schedule-name'), {
+      target: { value: 'unknown nightly' },
+    })
+    fireEvent.click(screen.getByTestId('schedule-save'))
+
+    const inventory = await screen.findByTestId('wizard-reconcile-inventory')
+    const warning = inventory.closest('.notice-banner')
+    if (!(warning instanceof HTMLElement)) throw new Error('schedule outcome warning missing')
+    expect(screen.queryByTestId('schedule-dialog')).toBeNull()
+    expect(materialFieldset().disabled).toBe(true)
+    expect(inventory.getAttribute('href')).toBe('/scheduled')
+    expect(within(warning).queryByRole('button', { name: /重试|retry|try again/i })).toBeNull()
+    expect(readAgentNewDraft()?.reconciliation).toEqual(
+      expect.objectContaining({
+        operation: 'create-scheduled-task',
+        taskName: 'Unknown schedule',
+      }),
+    )
+    expect(
+      calls.filter((call) => call.method === 'POST' && call.url.endsWith('/api/scheduled-tasks')),
+    ).toHaveLength(1)
+  })
+
+  test('RFC-250: a definitive 4xx keeps the draft and unlocks editing', async () => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      if (url.includes('/api/agents/agent-auditor/tasks') && (init?.method ?? 'GET') === 'POST') {
+        return Promise.resolve(
+          jsonResponse(
+            { ok: false, code: 'invalid-task', message: 'task was definitively rejected' },
+            422,
+          ),
+        )
+      }
+      return base(input, init)
+    })
+
+    await renderWizard(AGENT_NEW_URL)
+    await fillAgentDraft('Rejected audit', 'Keep these inputs', true)
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+
+    expect(await screen.findByTestId('wizard-submit-error')).toBeTruthy()
+    await waitFor(() => expect(materialFieldset().disabled).toBe(false))
+    const persisted = readAgentNewDraft()
+    expect(persisted?.reconciliation).toBeUndefined()
+    expect((persisted?.values as { taskName?: string } | undefined)?.taskName).toBe(
+      'Rejected audit',
+    )
+
+    const contentStep = screen.getByTestId('stepper-step-content') as HTMLButtonElement
+    expect(contentStep.matches(':disabled')).toBe(false)
+    fireEvent.click(contentStep)
+    expect(((await screen.findByTestId('wizard-task-name')) as HTMLInputElement).value).toBe(
+      'Rejected audit',
+    )
+    expect((screen.getByTestId('wizard-description') as HTMLTextAreaElement).value).toBe(
+      'Keep these inputs',
+    )
+    expect((screen.getByTestId('wizard-task-name') as HTMLInputElement).matches(':disabled')).toBe(
+      false,
+    )
+  })
+
+  test.each([
+    {
+      failure: 'HTTP 503',
+      response: () =>
+        Promise.resolve(
+          jsonResponse(
+            { ok: false, code: 'daemon-failed', message: 'server may have committed' },
+            503,
+          ),
+        ),
+    },
+    {
+      failure: 'transport rejection',
+      response: () => Promise.reject(new TypeError('Failed to fetch')),
+    },
+  ])(
+    'RFC-250: $failure freezes an outcome-unknown snapshot, never blind-retries, and restores its marker',
+    async ({ response }) => {
+      const calls = installFetch()
+      const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+      vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+        const url = input.toString()
+        const method = init?.method ?? 'GET'
+        if (url.includes('/api/agents/agent-auditor/tasks') && method === 'POST') {
+          calls.push({ url, method, body: JSON.parse(String(init?.body)) })
+          return response()
+        }
+        return base(input, init)
+      })
+
+      await renderWizard(AGENT_NEW_URL)
+      await fillAgentDraft('Unknown audit', 'Reconcile before retrying', true)
+      fireEvent.click(screen.getByTestId('wizard-launch'))
+
+      const reconcileInventory = await screen.findByTestId('wizard-reconcile-inventory')
+      const unknown = reconcileInventory.closest('.notice-banner')
+      if (!(unknown instanceof HTMLElement)) throw new Error('outcome-unknown banner not found')
+      expect(materialFieldset().disabled).toBe(true)
+      expect(within(unknown).queryByRole('button', { name: /重试|retry|try again/i })).toBeNull()
+      const persisted = readAgentNewDraft()
+      expect(persisted?.reconciliation).toEqual(
+        expect.objectContaining({ operation: 'create-task', taskName: 'Unknown audit' }),
+      )
+      const launch = screen.getByTestId('wizard-launch') as HTMLButtonElement
+      expect(launch.matches(':disabled')).toBe(true)
+      fireEvent.click(launch)
+      expect(
+        calls.filter(
+          (call) => call.method === 'POST' && call.url.includes('/api/agents/agent-auditor/tasks'),
+        ),
+      ).toHaveLength(1)
+
+      cleanup()
+      await renderWizard(AGENT_NEW_URL)
+      expect(await screen.findByTestId('wizard-draft-recovery')).toBeTruthy()
+      expect(materialFieldset().disabled).toBe(true)
+      expect(readAgentNewDraft()?.reconciliation).toEqual(
+        expect.objectContaining({ operation: 'create-task', taskName: 'Unknown audit' }),
+      )
+
+      fireEvent.click(screen.getByTestId('wizard-draft-restore'))
+      expect(await screen.findByTestId('wizard-reconcile-inventory')).toBeTruthy()
+      expect(materialFieldset().disabled).toBe(true)
+      expect((screen.getByTestId('wizard-launch') as HTMLButtonElement).matches(':disabled')).toBe(
+        true,
+      )
+      expect(
+        calls.filter(
+          (call) => call.method === 'POST' && call.url.includes('/api/agents/agent-auditor/tasks'),
+        ),
+      ).toHaveLength(1)
+    },
+  )
+
+  test('RFC-250: success clears the envelope synchronously before task-page navigation renders', async () => {
+    installFetch()
+    const storageSeenByTaskPage: Array<string | null> = []
+    await renderWizard(AGENT_NEW_URL, {
+      onTaskPageRender: () => {
+        storageSeenByTaskPage.push(window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY))
+      },
+    })
+    await fillAgentDraft('Successful audit', 'Clear before navigating', true)
+    expect(window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY)).not.toBeNull()
+
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+    expect(await screen.findByTestId('task-page')).toBeTruthy()
+    expect(storageSeenByTaskPage.length).toBeGreaterThan(0)
+    expect(storageSeenByTaskPage.every((value) => value === null)).toBe(true)
+    expect(window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY)).toBeNull()
+  })
 })

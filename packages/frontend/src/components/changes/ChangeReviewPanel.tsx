@@ -9,7 +9,7 @@
 // never blocks the diff (design §6). Viewed progress persists in the exact
 // pre-merge localStorage format so existing review state survives.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { StructuralDiff, TaskDiff } from '@agent-workflow/shared'
 import { buildChangeGroups, changeEntryKey, type ChangeGroup } from '@agent-workflow/shared'
@@ -19,7 +19,7 @@ import { Segmented } from '@/components/Segmented'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import { tabDomIds } from '@/components/TabBar'
+import { Checkbox } from '@/components/Form'
 import { loadViewed, saveViewed, toggleViewed, viewedProgress } from '@/lib/diffViewed'
 import { buildChangeEntries, toGroupEntries, type HunkInfo } from '@/lib/changeReview'
 import type { CallChainRoot } from '@/components/structure/CallChainView'
@@ -143,13 +143,16 @@ export function ChangeReviewPanel({
     expandedInit.current = true
     setExpanded(defaultExpanded(changeGroups, entries.length))
   }, [changeGroups, entries.length])
-  const toggleGroup = (key: string): void =>
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+  const toggleGroup = useCallback(
+    (key: string): void =>
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+      }),
+    [],
+  )
 
   // ---- narrative ----
   const narrative = useChangeNarrative(taskId, diff !== undefined)
@@ -202,21 +205,37 @@ export function ChangeReviewPanel({
     return new Set(group.files.map((f) => changeEntryKey(f.repoLabel, f.filePath)))
   }, [changeGroups, selectedKey, fileOrder])
 
-  // ---- keyboard on the sidebar tablist ----
-  const tabRefs = useRef(new Map<string, HTMLButtonElement>())
+  // ---- keyboard on the file selectors ----
+  // Group disclosures, file selectors and viewed checkboxes intentionally do
+  // not share a composite ARIA widget. Each control keeps its native keyboard
+  // behavior; the optional reading-order shortcuts live on file buttons only.
+  const fileRefs = useRef(new Map<string, HTMLButtonElement>())
+  const groupHeaderRefs = useRef(new Map<string, HTMLButtonElement>())
+  const detailHeadingId = useId()
+  const visibleFileOrder = useMemo(() => {
+    const order: string[] = []
+    for (const group of changeGroups) {
+      if (!expanded.has(group.key)) continue
+      for (const file of group.files) {
+        const key = changeEntryKey(file.repoLabel, file.filePath)
+        if (entryByKey.has(key)) order.push(key)
+      }
+    }
+    return order
+  }, [changeGroups, entryByKey, expanded])
   const selectFile = useCallback((key: string) => {
     setSelectedKey(key)
     setFocusHunk(null)
-    tabRefs.current.get(key)?.focus()
+    fileRefs.current.get(key)?.focus()
   }, [])
-  const onTablistKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLElement>) => {
+  const onFileKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>, key: string) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (fileOrder.length === 0) return
-      const currentKey = selectedKey ?? fileOrder[0]
-      const pos = fileOrder.indexOf(currentKey ?? '')
+      if (e.target !== e.currentTarget || visibleFileOrder.length === 0) return
+      const pos = visibleFileOrder.indexOf(key)
+      if (pos < 0) return
       const go = (p: number): void => {
-        const next = fileOrder[Math.max(0, Math.min(fileOrder.length - 1, p))]
+        const next = visibleFileOrder[Math.max(0, Math.min(visibleFileOrder.length - 1, p))]
         if (next !== undefined) selectFile(next)
       }
       switch (e.key) {
@@ -234,23 +253,31 @@ export function ChangeReviewPanel({
           break
         case 'End':
           e.preventDefault()
-          go(fileOrder.length - 1)
+          go(visibleFileOrder.length - 1)
           break
         case ' ':
         case 'Spacebar': {
-          const target = e.target as HTMLElement
-          if (target.tagName === 'INPUT') break
-          // Group headers are buttons too — Space must ACTIVATE them (fold),
-          // not toggle the selected file's viewed state (impl-gate P2).
-          if (target.closest('.changes__group-header') !== null) break
           e.preventDefault()
-          const cur = entryByKey.get(selectedKey ?? fileOrder[0] ?? '')
+          const cur = entryByKey.get(key)
           if (cur !== undefined) markViewed(cur.viewedKey)
           break
         }
       }
     },
-    [entryByKey, fileOrder, selectedKey, selectFile, markViewed],
+    [entryByKey, visibleFileOrder, selectFile, markViewed],
+  )
+
+  const toggleGroupWithFocus = useCallback(
+    (key: string, isOpen: boolean) => {
+      if (isOpen) {
+        const group = groupHeaderRefs.current.get(key)?.closest('.changes__group')
+        if (group?.contains(document.activeElement) === true) {
+          groupHeaderRefs.current.get(key)?.focus()
+        }
+      }
+      toggleGroup(key)
+    },
+    [toggleGroup],
   )
 
   // ---- empty / error states ----
@@ -367,13 +394,7 @@ export function ChangeReviewPanel({
           <div className="changes__progress" data-testid="diff-viewed-progress">
             {t('tasks.diffViewedProgress', { n: progress.viewed, total: progress.total })}
           </div>
-          <nav
-            role="tablist"
-            aria-label={t('tasks.diffFileSelectorLabel')}
-            aria-orientation="vertical"
-            className="changes__tablist"
-            onKeyDown={onTablistKeyDown}
-          >
+          <div className="changes__tablist">
             {changeGroups.map((g) => {
               const isOpen = expanded.has(g.key)
               const repoPrefix = g.key.startsWith('repo:')
@@ -399,7 +420,12 @@ export function ChangeReviewPanel({
                     type="button"
                     className="changes__group-header"
                     aria-expanded={isOpen}
-                    onClick={() => toggleGroup(g.key)}
+                    aria-controls={`change-group-files-${g.key}`}
+                    ref={(element) => {
+                      if (element !== null) groupHeaderRefs.current.set(g.key, element)
+                      else groupHeaderRefs.current.delete(g.key)
+                    }}
+                    onClick={() => toggleGroupWithFocus(g.key, isOpen)}
                   >
                     <span className="changes__group-fold">{isOpen ? '▾' : '▸'}</span>
                     <span className="changes__group-title" title={g.key}>
@@ -454,79 +480,76 @@ export function ChangeReviewPanel({
                   {sentence !== undefined && (
                     <div className="changes__group-sentence">{sentence}</div>
                   )}
-                  {isOpen &&
-                    g.files.map((f) => {
-                      const key = changeEntryKey(f.repoLabel, f.filePath)
-                      const entry = entryByKey.get(key)
-                      if (entry === undefined) return null
-                      const isActive = selected?.key === key
-                      const isViewed = viewed.has(entry.viewedKey)
-                      const idx = fileOrder.indexOf(key)
-                      const ids = tabDomIds('change-file', String(idx))
-                      const base = f.filePath.split('/').pop() ?? f.filePath
-                      return (
-                        <div
-                          key={key}
-                          className={`changes__file-row ${isViewed ? 'changes__file-row--viewed' : ''}`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="changes__viewed"
-                            checked={isViewed}
-                            aria-label={t('tasks.diffMarkViewed', { file: key })}
-                            onChange={() => markViewed(entry.viewedKey)}
-                          />
-                          <button
-                            type="button"
-                            role="tab"
-                            id={ids.tabId}
-                            aria-controls={ids.panelId}
-                            ref={(el) => {
-                              if (el !== null) tabRefs.current.set(key, el)
-                              else tabRefs.current.delete(key)
-                            }}
-                            tabIndex={isActive ? 0 : -1}
-                            aria-selected={isActive}
-                            title={key}
-                            className={`changes__file-tab ${isActive ? 'changes__file-tab--active' : ''}`}
-                            onClick={() => selectFile(key)}
+                  <nav
+                    id={`change-group-files-${g.key}`}
+                    aria-label={`${title} · ${t('tasks.diffFileSelectorLabel')}`}
+                    hidden={!isOpen}
+                  >
+                    <ul className="changes__file-list">
+                      {g.files.map((f) => {
+                        const key = changeEntryKey(f.repoLabel, f.filePath)
+                        const entry = entryByKey.get(key)
+                        if (entry === undefined) return null
+                        const isActive = selected?.key === key
+                        const isViewed = viewed.has(entry.viewedKey)
+                        const base = f.filePath.split('/').pop() ?? f.filePath
+                        return (
+                          <li
+                            key={key}
+                            className={`changes__file-row ${isViewed ? 'changes__file-row--viewed' : ''}`}
                           >
-                            <span className="changes__file-name">{base}</span>
-                            {entry.severity.breaking > 0 && (
-                              <span className="changes__sev-dot changes__sev-dot--breaking" />
-                            )}
-                            {entry.severity.breaking === 0 && entry.severity.risky > 0 && (
-                              <span className="changes__sev-dot changes__sev-dot--risky" />
-                            )}
-                            <span className="changes__file-stats">
-                              {entry.textStats.added > 0 && (
-                                <span className="structure__delta structure__delta--added">
-                                  +{entry.textStats.added}
-                                </span>
+                            <Checkbox
+                              checked={isViewed}
+                              aria-label={t('tasks.diffMarkViewed', { file: key })}
+                              onChange={() => markViewed(entry.viewedKey)}
+                            />
+                            <button
+                              type="button"
+                              ref={(el) => {
+                                if (el !== null) fileRefs.current.set(key, el)
+                                else fileRefs.current.delete(key)
+                              }}
+                              aria-current={isActive ? 'true' : undefined}
+                              aria-keyshortcuts="Space"
+                              title={key}
+                              className={`changes__file-tab ${isActive ? 'changes__file-tab--active' : ''}`}
+                              onClick={() => selectFile(key)}
+                              onKeyDown={(event) => onFileKeyDown(event, key)}
+                            >
+                              <span className="changes__file-name">{base}</span>
+                              {entry.severity.breaking > 0 && (
+                                <span className="changes__sev-dot changes__sev-dot--breaking" />
                               )}
-                              {entry.textStats.removed > 0 && (
-                                <span className="structure__delta structure__delta--removed">
-                                  −{entry.textStats.removed}
-                                </span>
+                              {entry.severity.breaking === 0 && entry.severity.risky > 0 && (
+                                <span className="changes__sev-dot changes__sev-dot--risky" />
                               )}
-                            </span>
-                          </button>
-                        </div>
-                      )
-                    })}
+                              <span className="changes__file-stats">
+                                {entry.textStats.added > 0 && (
+                                  <span className="structure__delta structure__delta--added">
+                                    +{entry.textStats.added}
+                                  </span>
+                                )}
+                                {entry.textStats.removed > 0 && (
+                                  <span className="structure__delta structure__delta--removed">
+                                    −{entry.textStats.removed}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </nav>
                 </div>
               )
             })}
-          </nav>
+          </div>
         </aside>
-        <section
-          className="changes__main"
-          role="tabpanel"
-          id={tabDomIds('change-file', String(fileOrder.indexOf(selected?.key ?? ''))).panelId}
-          aria-labelledby={
-            tabDomIds('change-file', String(fileOrder.indexOf(selected?.key ?? ''))).tabId
-          }
-        >
+        <section className="changes__main" aria-labelledby={detailHeadingId}>
+          <h2 id={detailHeadingId} className="sr-only">
+            {selected?.filePath ?? t('tasks.diffNoChanges')}
+          </h2>
           {selected !== undefined ? (
             <ChangeFileDetail
               taskId={taskId}

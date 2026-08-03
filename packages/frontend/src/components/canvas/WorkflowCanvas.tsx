@@ -12,6 +12,7 @@ import {
   Controls,
   type Edge,
   getBezierPath,
+  getViewportForBounds,
   MiniMap,
   type Node,
   type NodeChange,
@@ -26,6 +27,7 @@ import {
   applyNodeChanges,
   type EdgeChange,
   useReactFlow,
+  useNodesInitialized,
   useStoreApi,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -139,6 +141,20 @@ import {
   snapshotWrapperDelete,
   type WrapperDeleteSnapshot,
 } from './wrapperOps'
+import {
+  OVERVIEW_MAX_ZOOM,
+  READABLE_FOCUS_ZOOM,
+  READABLE_MIN_ZOOM,
+  canShowCanvasInlineActions,
+  canvasEdgeFocusPoint,
+  canvasFocusPointWithRightOcclusion,
+  canvasNodeFocusPoint,
+  chooseCanvasFocalNode,
+  planInitialCanvasCamera,
+  resolveCanvasZoomBand,
+  type CanvasCameraMode,
+  type CanvasZoomBand,
+} from './canvasCamera'
 
 // RFC-146: `satisfies Record<NodeKind, …>` makes a NodeKind without a canvas
 // renderer a compile error — same registry shape as KIND_INSPECTORS
@@ -173,6 +189,12 @@ export interface WorkflowCanvasProps {
    * local-only identity.
    */
   workflowId?: string
+  /**
+   * Monotonic route-owned epoch for an explicitly accepted authoritative
+   * load. Definition/query identities are intentionally not camera keys:
+   * ambient refetches and local edits must preserve the user's viewport.
+   */
+  authoritativeLoadEpoch?: number
   /** Used to look up agent.outputs when rendering agent nodes. Optional. */
   agents?: Agent[]
   onChange?: (next: WorkflowDefinition, meta?: WorkflowCanvasChangeMeta) => void
@@ -290,6 +312,18 @@ function singleCanvasSelection(
   return null
 }
 
+function workflowEntryNodeIds(definition: WorkflowDefinition): string[] {
+  const withIncoming = new Set(definition.edges.map((edge) => edge.target.nodeId))
+  return definition.nodes.filter((node) => !withIncoming.has(node.id)).map((node) => node.id)
+}
+
+function canvasCameraDuration(): number {
+  return typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 0
+    : 180
+}
+
 /**
  * Imperative handle exposed via ref on {@link WorkflowCanvas}. The parent
  * route uses `clearSelection` from inspector close buttons so the edge /
@@ -349,6 +383,7 @@ function CanvasInner({
   surface,
   definition,
   workflowId,
+  authoritativeLoadEpoch,
   agents,
   onChange,
   onStartFromTemplate,
@@ -394,6 +429,18 @@ function CanvasInner({
     [definition, validationIssues],
   )
   const rf = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
+  const editableEditor = surface === 'editor' && readOnly !== true && onChange !== undefined
+  const coarsePointerRef = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches,
+  )
+  const initialZoomBand = resolveCanvasZoomBand(1)
+  const [cameraMode, setCameraMode] = useState<CanvasCameraMode>('readable-focus')
+  const [zoomBand, setZoomBand] = useState<CanvasZoomBand>(initialZoomBand)
+  const zoomBandRef = useRef<CanvasZoomBand>(initialZoomBand)
+  const initialInlineActionsVisible = canShowCanvasInlineActions(1, coarsePointerRef.current)
+  const [inlineActionsVisible, setInlineActionsVisible] = useState(initialInlineActionsVisible)
+  const inlineActionsVisibleRef = useRef(initialInlineActionsVisible)
   // Direct handle on xyflow's internal store. Used by `clearSelection`
   // below so we go through `unselectNodesAndEdges`, which synchronously
   // mutates `nodeLookup[id].selected = false` AND fires the corresponding
@@ -482,6 +529,11 @@ function CanvasInner({
     null,
   )
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!editableEditor) return
+    wrapperRef.current?.style.setProperty('--workflow-canvas-zoom', '1')
+    wrapperRef.current?.style.setProperty('--workflow-canvas-inverse-zoom', '1')
+  }, [editableEditor])
   const nodePickerTriggerRef = useRef<HTMLElement | null>(null)
   const connectionTriggerRef = useRef<HTMLElement | null>(null)
   const menuTriggerRef = useRef<HTMLElement | null>(null)
@@ -519,7 +571,7 @@ function CanvasInner({
         handleClarifyDirectiveToggle,
         reviewNavs,
         clarifyNavs,
-        readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
+        editableEditor && inlineActionsVisible ? handleAddInsideWrapper : undefined,
         validationProjection.nodes,
         surface,
         workflowByRef,
@@ -537,6 +589,7 @@ function CanvasInner({
         readOnly,
         hasChangeHandler: onChange !== undefined,
         onInsertNode: handleInsertNodeOnEdge,
+        showInlineActions: inlineActionsVisible,
       },
       validationProjection.edges,
     ),
@@ -563,6 +616,7 @@ function CanvasInner({
   const externalCallNavsRef = useRef(callNavs)
   const externalValidationIssuesRef = useRef(validationIssues)
   const externalEdgeInsertEnabledRef = useRef(edgeInsertEnabled)
+  const externalInlineActionsVisibleRef = useRef(inlineActionsVisible)
   // RFC-243: mirror of the agents late-load guard for the child-workflow
   // resolver — the ['workflows'] query resolves after mount, and without a
   // resolver-changed arm a call-workflow node would keep zero port rows
@@ -604,6 +658,162 @@ function CanvasInner({
   useEffect(() => {
     edgesRef.current = edges
   }, [edges])
+
+  const nodeCameraPoint = useCallback(
+    (nodeId: string) => {
+      const node = rf.getInternalNode(nodeId)
+      if (node === undefined) return null
+      const width = node.measured.width ?? node.width ?? 0
+      const height = node.measured.height ?? node.height ?? 0
+      return canvasNodeFocusPoint({
+        x: node.internals.positionAbsolute.x,
+        y: node.internals.positionAbsolute.y,
+        width,
+        height,
+        kind: node.type,
+      })
+    },
+    [rf],
+  )
+
+  const focusCanvasSelection = useCallback(
+    (target: CanvasSelection): boolean => {
+      let point = target.kind === 'node' ? nodeCameraPoint(target.id) : null
+      if (target.kind === 'edge') {
+        const edge = definition.edges.find((candidate) => candidate.id === target.id)
+        if (edge !== undefined) {
+          const source = nodeCameraPoint(edge.source.nodeId)
+          const destination = nodeCameraPoint(edge.target.nodeId)
+          if (source !== null && destination !== null) {
+            point = canvasEdgeFocusPoint(source, destination)
+          }
+        }
+      }
+      if (point === null) return false
+      const canvasRect = wrapperRef.current?.getBoundingClientRect()
+      const compactInspector = document.querySelector<HTMLElement>(
+        '.workflow-editor-inspector-surface-dialog.workflow-editor-surface-dialog--compact',
+      )
+      if (canvasRect !== undefined && compactInspector !== null) {
+        const inspectorRect = compactInspector.getBoundingClientRect()
+        point = canvasFocusPointWithRightOcclusion(
+          point,
+          READABLE_FOCUS_ZOOM,
+          { left: canvasRect.left, right: canvasRect.right },
+          { left: inspectorRect.left, right: inspectorRect.right },
+        )
+      }
+      setCameraMode('readable-focus')
+      void rf.setCenter(point.x, point.y, {
+        zoom: READABLE_FOCUS_ZOOM,
+        duration: canvasCameraDuration(),
+      })
+      return true
+    },
+    [definition.edges, nodeCameraPoint, rf],
+  )
+
+  // Selecting a canvas object can synchronously mount the route-owned
+  // Inspector rail, which changes the grid width after this click handler has
+  // run. The first frame lets React commit that rail; the second lets
+  // ReactFlow's ResizeObserver publish the narrowed viewport before setCenter
+  // computes its translation. This is deliberately selection-owned rather
+  // than resize-owned: ambient refetches and arbitrary resizes must never take
+  // the camera back from the user.
+  const selectionFocusRequestRef = useRef(0)
+  const cancelPendingSelectionFocus = useCallback(() => {
+    selectionFocusRequestRef.current += 1
+  }, [])
+  const focusSelectionAfterLayout = useCallback(
+    (target: CanvasSelection) => {
+      const request = ++selectionFocusRequestRef.current
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          if (selectionFocusRequestRef.current !== request) return
+          focusCanvasSelection(target)
+        })
+      })
+    },
+    [focusCanvasSelection],
+  )
+  useEffect(() => cancelPendingSelectionFocus, [cancelPendingSelectionFocus])
+
+  const fallbackReadableNodeId = useCallback(
+    () =>
+      chooseCanvasFocalNode(
+        definition.nodes.map((node) => node.id),
+        workflowEntryNodeIds(definition),
+        selectionRef.current.nodes[0],
+      ),
+    [definition],
+  )
+
+  const returnToReadableView = useCallback(() => {
+    cancelPendingSelectionFocus()
+    const selected = singleCanvasSelection(selectionRef.current.nodes, selectionRef.current.edges)
+    if (selected !== null && focusCanvasSelection(selected)) return
+    const nodeId = fallbackReadableNodeId()
+    if (nodeId !== null) focusCanvasSelection({ kind: 'node', id: nodeId })
+  }, [cancelPendingSelectionFocus, fallbackReadableNodeId, focusCanvasSelection])
+
+  const showFullGraph = useCallback(() => {
+    if (nodesRef.current.length === 0) return
+    cancelPendingSelectionFocus()
+    setCameraMode('overview')
+    void rf.fitView({
+      padding: 0.18,
+      maxZoom: OVERVIEW_MAX_ZOOM,
+      duration: canvasCameraDuration(),
+    })
+  }, [cancelPendingSelectionFocus, rf])
+
+  const initialCameraOwnerRef = useRef<string | null>(null)
+  const applyInitialEditorCamera = useCallback((): boolean => {
+    if (!editableEditor || !nodesInitialized) return false
+    const owner = JSON.stringify([workflowId ?? '__local-editor__', authoritativeLoadEpoch ?? 0])
+    if (initialCameraOwnerRef.current === owner) return false
+    const element = wrapperRef.current
+    if (element === null) return false
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return false
+    const liveNodes = nodesRef.current
+    if (liveNodes.length === 0) {
+      initialCameraOwnerRef.current = owner
+      return true
+    }
+    const liveNodeIds = new Set(liveNodes.map((node) => node.id))
+    if (definition.nodes.some((node) => !liveNodeIds.has(node.id))) return false
+    const bounds = rf.getNodesBounds(liveNodes)
+    const fitViewport = getViewportForBounds(bounds, rect.width, rect.height, 0.2, 2, 0.18)
+    const plan = planInitialCanvasCamera({
+      allNodesFitZoom: fitViewport.zoom,
+      nodeIds: definition.nodes.map((node) => node.id),
+      entryNodeIds: workflowEntryNodeIds(definition),
+      preferredNodeId: selectionRef.current.nodes[0],
+    })
+    initialCameraOwnerRef.current = owner
+    setCameraMode(plan.mode)
+    if (plan.kind === 'fit-all') {
+      void rf.fitView({
+        padding: 0.18,
+        minZoom: READABLE_MIN_ZOOM,
+        maxZoom: plan.maxZoom,
+        duration: 0,
+      })
+    } else if (plan.kind === 'focus-node') {
+      const point = nodeCameraPoint(plan.nodeId)
+      if (point !== null) void rf.setCenter(point.x, point.y, { zoom: plan.zoom, duration: 0 })
+    }
+    return true
+  }, [
+    authoritativeLoadEpoch,
+    definition,
+    editableEditor,
+    nodeCameraPoint,
+    nodesInitialized,
+    rf,
+    workflowId,
+  ])
 
   const handleAutoLayout = useCallback(
     (layoutSelection: WorkflowLayoutSelection) => {
@@ -672,15 +882,46 @@ function CanvasInner({
    * subsequent onSelectionChange echo from reopening a render loop.
    */
   const syncCanvasSelection = useCallback(
-    (nodeIds: readonly string[], edgeIds: readonly string[]): CanvasSelection | null => {
+    (
+      nodeIds: readonly string[],
+      edgeIds: readonly string[],
+      options?: { dedupeRoute?: boolean },
+    ): CanvasSelection | null => {
       const next = buildCanvasSelectionSync(nodeIds, edgeIds)
+      const routeAlreadyEmitted = lastEmittedSelectionSig.current === next.signature
       selectionRef.current = next.local
       setSelection(next.local)
       lastEmittedSelectionSig.current = next.signature
-      onSelect?.(next.route)
+      if (options?.dedupeRoute !== true || !routeAlreadyEmitted) onSelect?.(next.route)
       return next.route
     },
     [onSelect],
+  )
+
+  /**
+   * An overview click changes zoom far enough to cross the inline-action
+   * threshold. That rebuild runs in the same React event as xyflow's click;
+   * relying on its later onSelectionChange leaves selectionRef one render
+   * behind, so the rebuild can erase the visual selection while the route has
+   * already opened the Inspector. Freeze both semantic and controlled-flow
+   * selection before moving the camera, publish the route selection once, and
+   * wait for its Inspector layout before moving the camera.
+   */
+  const activateOverviewSelection = useCallback(
+    (target: CanvasSelection) => {
+      const nodeIds = target.kind === 'node' ? [target.id] : []
+      const edgeIds = target.kind === 'edge' ? [target.id] : []
+      syncCanvasSelection(nodeIds, edgeIds, { dedupeRoute: true })
+
+      const nextNodes = applySelection(clearFlowSelection(nodesRef.current), nodeIds)
+      const nextEdges = applySelection(clearFlowSelection(edgesRef.current), edgeIds)
+      nodesRef.current = nextNodes
+      edgesRef.current = nextEdges
+      setNodes(nextNodes)
+      setEdges(nextEdges)
+      focusSelectionAfterLayout(target)
+    },
+    [focusSelectionAfterLayout, syncCanvasSelection],
   )
 
   // A canvas mounted inside a hidden tab pane (`.task-detail__pane[hidden]`
@@ -699,6 +940,14 @@ function CanvasInner({
   // first real size then redoes fitView once. A canvas that mounts visible
   // never arms this, so user pan/zoom is never clobbered.
   const refitRef = useRef<CanvasRefitState>(INITIAL_CANVAS_REFIT)
+  useEffect(() => {
+    if (!editableEditor || !nodesInitialized) return
+    const raf = window.requestAnimationFrame(() => {
+      applyInitialEditorCamera()
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [applyInitialEditorCamera, editableEditor, nodes, nodesInitialized])
+
   useEffect(() => {
     const el = wrapperRef.current
     if (el === null) return
@@ -723,7 +972,8 @@ function CanvasInner({
       // ingest the new pane dimensions + re-measured node sizes before the
       // fit computes its viewport.
       raf = requestAnimationFrame(() => {
-        void rf.fitView()
+        if (editableEditor) applyInitialEditorCamera()
+        else void rf.fitView()
       })
     })
     ro.observe(el)
@@ -738,7 +988,7 @@ function CanvasInner({
       cancelAnimationFrame(raf)
       window.clearTimeout(timer)
     }
-  }, [rf])
+  }, [applyInitialEditorCamera, editableEditor, rf])
 
   useEffect(() => {
     const defChanged = definition !== externalDefRef.current
@@ -762,6 +1012,8 @@ function CanvasInner({
     const callNavsChanged = callNavs !== externalCallNavsRef.current
     const validationChanged = validationIssues !== externalValidationIssuesRef.current
     const edgeInsertEnabledChanged = edgeInsertEnabled !== externalEdgeInsertEnabledRef.current
+    const inlineActionsVisibilityChanged =
+      inlineActionsVisible !== externalInlineActionsVisibleRef.current
     // RFC-243: resolver identity changes exactly when the ['workflows'] cache
     // entry does — repaint call-workflow port rows on child-definition edits.
     const workflowRefsChanged = workflowByRef !== externalWorkflowByRefRef.current
@@ -777,6 +1029,7 @@ function CanvasInner({
       callNavsChanged ||
       validationChanged ||
       edgeInsertEnabledChanged ||
+      inlineActionsVisibilityChanged ||
       workflowRefsChanged
     ) {
       externalDefRef.current = definition
@@ -790,6 +1043,7 @@ function CanvasInner({
       externalCallNavsRef.current = callNavs
       externalValidationIssuesRef.current = validationIssues
       externalEdgeInsertEnabledRef.current = edgeInsertEnabled
+      externalInlineActionsVisibleRef.current = inlineActionsVisible
       externalWorkflowByRefRef.current = workflowByRef
       // Preserve `selected: true` across the rebuild. Without this, an
       // inspector edit (which mints a new `definition` reference) wipes
@@ -812,7 +1066,7 @@ function CanvasInner({
               handleClarifyDirectiveToggle,
               reviewNavs,
               clarifyNavs,
-              readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
+              editableEditor && inlineActionsVisible ? handleAddInsideWrapper : undefined,
               validationProjection.nodes,
               surface,
               workflowByRef,
@@ -828,7 +1082,13 @@ function CanvasInner({
       // asynchronously once the agents query resolves (see externalAgentsRef
       // above) — without the agentsChanged arm a signal edge stays drawn as a
       // data edge until the next definition edit.
-      if (defChanged || agentsChanged || validationChanged || edgeInsertEnabledChanged)
+      if (
+        defChanged ||
+        agentsChanged ||
+        validationChanged ||
+        edgeInsertEnabledChanged ||
+        inlineActionsVisibilityChanged
+      )
         setEdges(
           applySelection(
             toFlowEdges(
@@ -840,6 +1100,7 @@ function CanvasInner({
                 readOnly,
                 hasChangeHandler: onChange !== undefined,
                 onInsertNode: handleInsertNodeOnEdge,
+                showInlineActions: inlineActionsVisible,
               },
               validationProjection.edges,
             ),
@@ -863,7 +1124,9 @@ function CanvasInner({
     // hint/cursor desyncs from the click behavior.
     callNavs,
     edgeInsertEnabled,
+    editableEditor,
     handleInsertNodeOnEdge,
+    inlineActionsVisible,
     onChange,
     readOnly,
     semanticContext,
@@ -1438,7 +1701,7 @@ function CanvasInner({
             handleClarifyDirectiveToggle,
             reviewNavs,
             clarifyNavs,
-            readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
+            editableEditor && inlineActionsVisible ? handleAddInsideWrapper : undefined,
             undefined,
             surface,
             workflowByRef,
@@ -1458,6 +1721,7 @@ function CanvasInner({
             readOnly,
             hasChangeHandler: onChange !== undefined,
             onInsertNode: handleInsertNodeOnEdge,
+            showInlineActions: inlineActionsVisible,
           },
         ),
         restoredSelection.edges,
@@ -1475,6 +1739,7 @@ function CanvasInner({
       clarifyDirectives,
       clarifyNavs,
       definition,
+      editableEditor,
       handleClarifyDirectiveToggle,
       handleAddInsideWrapper,
       handleQuestionBadgeClick,
@@ -1484,6 +1749,7 @@ function CanvasInner({
       readOnly,
       reviewNavs,
       handleInsertNodeOnEdge,
+      inlineActionsVisible,
       semanticContext,
       surface,
       syncCanvasSelection,
@@ -1961,6 +2227,7 @@ function CanvasInner({
   const selectedNodeCanConnect =
     selectedNode !== undefined &&
     computePorts(selectedNode, agentByName, definition, workflowByRef).outputs.length > 0
+  const selectedCanvasObject = singleCanvasSelection(selection.nodes, selection.edges)
 
   const openConnectionDialog = useCallback(
     (nodeId: string, trigger: HTMLElement | null) => {
@@ -2225,6 +2492,7 @@ function CanvasInner({
         onModalSurfaceChange?.(null)
       },
       clearSelection: () => {
+        cancelPendingSelectionFocus()
         storeApi.getState().unselectNodesAndEdges()
         setSelection((prev) =>
           prev.nodes.length === 0 && prev.edges.length === 0 ? prev : { nodes: [], edges: [] },
@@ -2232,6 +2500,7 @@ function CanvasInner({
         lastEmittedSelectionSig.current = 'null'
       },
       restoreSelection: (nextSelection) => {
+        cancelPendingSelectionFocus()
         storeApi.getState().unselectNodesAndEdges()
         const selectedNodes = nextSelection?.kind === 'node' ? [nextSelection.id] : []
         const selectedEdges = nextSelection?.kind === 'edge' ? [nextSelection.id] : []
@@ -2250,23 +2519,17 @@ function CanvasInner({
         setEdges((current) => applySelection(clearFlowSelection(current), selectedEdges))
         setSelection({ nodes: selectedNodes, edges: selectedEdges })
         lastEmittedSelectionSig.current = `${nextSelection.kind}:${nextSelection.id}`
-        window.requestAnimationFrame(() => {
-          const nodeIds =
-            nextSelection.kind === 'node'
-              ? [nextSelection.id]
-              : definition.edges
-                  .filter((edge) => edge.id === nextSelection.id)
-                  .flatMap((edge) => [edge.source.nodeId, edge.target.nodeId])
-          const visibleNodes = nodeIds
-            .map((id) => rf.getNode(id))
-            .filter((node): node is NonNullable<typeof node> => node !== undefined)
-          if (visibleNodes.length > 0) {
-            void rf.fitView({ nodes: visibleNodes, padding: 0.5, maxZoom: 1.25, duration: 180 })
-          }
-        })
+        focusSelectionAfterLayout(nextSelection)
       },
     }),
-    [definition.edges, onModalSurfaceChange, openConnectionDialog, rf, storeApi],
+    [
+      cancelPendingSelectionFocus,
+      definition.edges,
+      focusSelectionAfterLayout,
+      onModalSurfaceChange,
+      openConnectionDialog,
+      storeApi,
+    ],
   )
 
   return (
@@ -2274,6 +2537,8 @@ function CanvasInner({
       ref={wrapperRef}
       className="workflow-canvas"
       data-surface={surface}
+      data-camera-mode={editableEditor ? cameraMode : undefined}
+      data-zoom-band={editableEditor ? zoomBand : undefined}
       role="region"
       aria-label={t('canvas.accessibleName')}
       aria-describedby={canvasDescriptionId}
@@ -2317,6 +2582,11 @@ function CanvasInner({
           )
         }}
         onNodeClick={(_, node) => {
+          const target: CanvasSelection = { kind: 'node', id: node.id }
+          if (editableEditor && cameraMode === 'overview') {
+            activateOverviewSelection(target)
+            return
+          }
           // Click-only path; xyflow does not fire this when the gesture
           // becomes a drag. Dedupe via lastEmittedSelectionSig so a second
           // click on the same node doesn't re-emit and re-render.
@@ -2324,8 +2594,14 @@ function CanvasInner({
           if (sig === lastEmittedSelectionSig.current) return
           lastEmittedSelectionSig.current = sig
           if (onSelect !== undefined) onSelect({ kind: 'node', id: node.id })
+          if (editableEditor) focusSelectionAfterLayout(target)
         }}
         onEdgeClick={(_, edge) => {
+          const target: CanvasSelection = { kind: 'edge', id: edge.id }
+          if (editableEditor && cameraMode === 'overview') {
+            activateOverviewSelection(target)
+            return
+          }
           // Explicit edge-selection emit. xyflow's onSelectionChange path
           // sometimes does not fire for plain edge clicks (selectionOnDrag
           // + panOnDrag interplay), so we wire onEdgeClick directly to
@@ -2336,8 +2612,10 @@ function CanvasInner({
           lastEmittedSelectionSig.current = sig
           setSelection({ nodes: [], edges: [edge.id] })
           if (onSelect !== undefined) onSelect({ kind: 'edge', id: edge.id })
+          if (editableEditor) focusSelectionAfterLayout(target)
         }}
         onPaneClick={() => {
+          cancelPendingSelectionFocus()
           // Clicking empty canvas dismisses any open inspector. Without
           // this the inspector stayed open after pane clicks because
           // onSelectionChange no longer drives onSelect.
@@ -2460,9 +2738,39 @@ function CanvasInner({
         // this same callback), so the null check is what keeps the refit from
         // settling itself before the layout has finished.
         onMoveStart={(event) => {
-          if (event !== null) refitRef.current = settleCanvasRefit(refitRef.current)
+          if (event !== null) {
+            cancelPendingSelectionFocus()
+            refitRef.current = settleCanvasRefit(refitRef.current)
+          }
         }}
-        fitView
+        onMove={
+          editableEditor
+            ? (_, viewport) => {
+                wrapperRef.current?.style.setProperty(
+                  '--workflow-canvas-zoom',
+                  String(viewport.zoom),
+                )
+                wrapperRef.current?.style.setProperty(
+                  '--workflow-canvas-inverse-zoom',
+                  String(1 / viewport.zoom),
+                )
+                const nextBand = resolveCanvasZoomBand(viewport.zoom)
+                if (nextBand !== zoomBandRef.current) {
+                  zoomBandRef.current = nextBand
+                  setZoomBand(nextBand)
+                }
+                const nextInlineVisibility = canShowCanvasInlineActions(
+                  viewport.zoom,
+                  coarsePointerRef.current,
+                )
+                if (nextInlineVisibility !== inlineActionsVisibleRef.current) {
+                  inlineActionsVisibleRef.current = nextInlineVisibility
+                  setInlineActionsVisible(nextInlineVisibility)
+                }
+              }
+            : undefined
+        }
+        fitView={!editableEditor}
         minZoom={0.2}
         maxZoom={2}
         // RFC-106 T2 — tighten the connection snap so the small named input
@@ -2481,10 +2789,49 @@ function CanvasInner({
       >
         <Background />
         <MiniMap pannable zoomable />
-        <Controls showInteractive={false} />
-        {readOnly !== true && onChange !== undefined ? (
+        <Controls showFitView={!editableEditor} showInteractive={false} />
+        {editableEditor ? (
           <Panel position="top-right" className="workflow-canvas__layout-panel">
-            <div role="toolbar" aria-label={t('editor.layoutToolbar')}>
+            <div role="toolbar" aria-label={t('editor.canvasToolbar')}>
+              <button
+                type="button"
+                className="btn btn--xs btn--primary"
+                data-testid="workflow-canvas-add"
+                onClick={(event) => openNodePicker(undefined, event.currentTarget)}
+              >
+                {t('editor.canvasAdd')}
+              </button>
+              {cameraMode === 'overview' ? (
+                <button
+                  type="button"
+                  className="btn btn--xs"
+                  data-testid="workflow-camera-readable"
+                  onClick={returnToReadableView}
+                >
+                  {t('editor.cameraReturnReadable')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--xs"
+                  data-testid="workflow-camera-overview"
+                  disabled={definition.nodes.length === 0}
+                  onClick={showFullGraph}
+                >
+                  {t('editor.cameraViewFullGraph')}
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn--xs"
+                data-testid="workflow-camera-focus-selection"
+                disabled={selectedCanvasObject === null}
+                onClick={() => {
+                  if (selectedCanvasObject !== null) focusCanvasSelection(selectedCanvasObject)
+                }}
+              >
+                {t('editor.cameraFocusSelection')}
+              </button>
               <button
                 type="button"
                 className="btn btn--xs"
@@ -2508,7 +2855,7 @@ function CanvasInner({
             </div>
           </Panel>
         ) : null}
-        {readOnly !== true && onChange !== undefined && selectedNodeId !== null ? (
+        {editableEditor && selectedNodeId !== null ? (
           <NodeToolbar
             nodeId={selectedNodeId}
             isVisible
@@ -3123,6 +3470,8 @@ function toFlowEdges(
     readOnly: boolean | undefined
     hasChangeHandler: boolean
     onInsertNode: NonNullable<WorkflowCanvasEdgeData['onInsertNode']>
+    /** Omitted by legacy tests/callers; only an explicit false suppresses it. */
+    showInlineActions?: boolean
   },
   validationCounts?: Readonly<Record<string, WorkflowValidationCounts | undefined>>,
 ): Edge[] {
@@ -3132,7 +3481,8 @@ function toFlowEdges(
       edgeInsertion.surface,
       edgeInsertion.readOnly,
       edgeInsertion.hasChangeHandler,
-    )
+    ) &&
+    edgeInsertion.showInlineActions !== false
       ? edgeInsertion.onInsertNode
       : undefined
   return defEdges.map((e) => {

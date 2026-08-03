@@ -29,7 +29,7 @@ import {
 } from '@tanstack/react-router'
 import type { ScheduledTask, ScheduledTaskListItem } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
-import { runNowBlocked } from '../src/routes/scheduled'
+import { scheduleRunNowEligibility } from '../src/lib/schedule-view'
 import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
 
@@ -77,7 +77,10 @@ interface Recorded {
   calls: Array<{ url: string; method: string; body: unknown }>
 }
 
-function installFetch(rows: ScheduledTaskListItem[]): Recorded {
+function installFetch(
+  rows: ScheduledTaskListItem[],
+  runNowResponse?: () => Response | Promise<Response>,
+): Recorded {
   const rec: Recorded = { calls: [] }
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (req: RequestInfo | URL, init?: RequestInit) => {
@@ -90,7 +93,9 @@ function installFetch(rows: ScheduledTaskListItem[]): Recorded {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
-      if (url.includes('/run-now') && method === 'POST') return json({ taskId: 'task_new' })
+      if (url.includes('/run-now') && method === 'POST') {
+        return runNowResponse?.() ?? json({ taskId: 'task_new' })
+      }
       if (url.includes('/api/scheduled-tasks') && method === 'PUT') return json(rows[0])
       if (url.includes('/api/scheduled-tasks')) return json(rows)
       return json([])
@@ -131,14 +136,25 @@ async function renderPage(qc = new QueryClient({ defaultOptions: { queries: { re
   return router
 }
 
-describe('runNowBlocked — disable predicate (pure)', () => {
-  test('structural repair states block; a failed last fire does NOT', () => {
-    expect(runNowBlocked(sched('ok'))).toBe(false)
-    expect(runNowBlocked(sched('m', { migrationNeeded: true }))).toBe(true)
-    expect(runNowBlocked(sched('p', { launchPayload: null }))).toBe(true)
-    expect(runNowBlocked(sched('s', { scheduleSpec: null }))).toBe(true)
-    // Deliberately narrower than the repair badge: lastError alone ≠ blocked.
-    expect(runNowBlocked(sched('f', { lastStatus: 'failed', lastError: 'boom' }))).toBe(false)
+describe('scheduleRunNowEligibility — shared list/detail predicate', () => {
+  test('structural repair states block; disabled and failed-last-fire rows do NOT', () => {
+    expect(scheduleRunNowEligibility(sched('ok'))).toEqual({ allowed: true })
+    expect(scheduleRunNowEligibility(sched('m', { migrationNeeded: true }))).toEqual({
+      allowed: false,
+      reason: 'migration-needed',
+    })
+    expect(scheduleRunNowEligibility(sched('p', { launchPayload: null }))).toEqual({
+      allowed: false,
+      reason: 'payload-missing',
+    })
+    expect(scheduleRunNowEligibility(sched('s', { scheduleSpec: null }))).toEqual({
+      allowed: false,
+      reason: 'spec-missing',
+    })
+    expect(scheduleRunNowEligibility(sched('off', { enabled: false }))).toEqual({ allowed: true })
+    expect(
+      scheduleRunNowEligibility(sched('f', { lastStatus: 'failed', lastError: 'boom' })),
+    ).toEqual({ allowed: true })
   })
 })
 
@@ -218,9 +234,97 @@ describe('/scheduled — inline operations (RFC-192)', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/tasks/task_new'))
   })
 
-  test('repair row: run-now disabled; failed-streak row: enabled + streak chip + NO task link', async () => {
+  test('run-now pending and definitive error are row-scoped; retry targets the same schedule', async () => {
+    let attempt = 0
+    let resolveFirst!: (response: Response) => void
+    const first = new Promise<Response>((resolve) => {
+      resolveFirst = resolve
+    })
+    const rec = installFetch([sched('s1'), sched('s2')], () => {
+      attempt += 1
+      if (attempt === 1) return first
+      return new Response(JSON.stringify({ taskId: 'task_new' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const router = await renderPage()
+    const row1 = await screen.findByTestId('scheduled-row-s1')
+    const row2 = screen.getByTestId('scheduled-row-s2')
+
+    fireEvent.click(within(row1).getByRole('button', { name: 'Run now' }))
+    fireEvent.click(within(row1).getByRole('button', { name: /confirm/i }))
+    await waitFor(() => expect(attempt).toBe(1))
+    expect((screen.getByTestId('scheduled-run-now-s1') as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (within(row2).getByRole('button', { name: 'Run now' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+
+    resolveFirst(
+      new Response(JSON.stringify({ code: 'launch-rejected', message: 'cannot launch now' }), {
+        status: 409,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const error = await screen.findByTestId('scheduled-run-now-error-s1')
+    const feedbackRow = screen.getByTestId('scheduled-run-now-feedback-row-s1')
+    expect(feedbackRow.tagName).toBe('TR')
+    expect(feedbackRow.previousElementSibling).toBe(row1)
+    expect((feedbackRow.querySelector('td') as HTMLTableCellElement).colSpan).toBe(6)
+    expect(feedbackRow.contains(error)).toBe(true)
+    expect(row1.contains(error)).toBe(false)
+    expect(screen.getByTestId('scheduled-row-s1')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/scheduled')
+
+    fireEvent.click(within(error).getByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(attempt).toBe(2))
+    expect(
+      rec.calls.filter(
+        (call) => call.method === 'POST' && call.url.includes('/scheduled-tasks/s1/run-now'),
+      ),
+    ).toHaveLength(2)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/tasks/task_new'))
+  })
+
+  test('run-now transport loss locks only that row and never exposes a blind retry', async () => {
+    let attempt = 0
+    const rec = installFetch([sched('s1'), sched('s2')], () => {
+      attempt += 1
+      throw new TypeError('socket closed after request')
+    })
+    const router = await renderPage()
+    const row1 = await screen.findByTestId('scheduled-row-s1')
+    const row2 = screen.getByTestId('scheduled-row-s2')
+
+    fireEvent.click(within(row1).getByRole('button', { name: 'Run now' }))
+    fireEvent.click(within(row1).getByRole('button', { name: /confirm/i }))
+
+    const feedback = await screen.findByTestId('scheduled-run-now-error-s1')
+    expect(feedback.textContent).toContain('may already have started a task')
+    expect(feedback.textContent).toContain('Do not send the request again')
+    expect(within(feedback).queryByRole('button', { name: /retry/i })).toBeNull()
+    expect(within(feedback).getByRole('link', { name: 'Inspect tasks' }).getAttribute('href')).toBe(
+      '/tasks',
+    )
+    expect((screen.getByTestId('scheduled-run-now-s1') as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (within(row2).getByRole('button', { name: 'Run now' }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+
+    fireEvent.click(screen.getByTestId('scheduled-run-now-s1'))
+    expect(attempt).toBe(1)
+    expect(
+      rec.calls.filter(
+        (call) => call.method === 'POST' && call.url.endsWith('/api/scheduled-tasks/s1/run-now'),
+      ),
+    ).toHaveLength(1)
+    expect(router.state.location.pathname).toBe('/scheduled')
+  })
+
+  test('repair row blocks run-now; disabled and failed-streak rows remain manually runnable', async () => {
     installFetch([
       sched('bad', { migrationNeeded: true, launchPayload: null }),
+      sched('paused', { enabled: false }),
       sched('flaky', {
         lastStatus: 'failed',
         lastError: 'exploded',
@@ -230,7 +334,7 @@ describe('/scheduled — inline operations (RFC-192)', () => {
     ])
     await renderPage()
     const rows = await screen.findAllByRole('button', { name: 'Run now' })
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(3)
     const bad = screen.getByTestId('scheduled-row-bad')
     expect((bad.querySelector('.data-table__actions button') as HTMLButtonElement).disabled).toBe(
       true,
@@ -239,6 +343,10 @@ describe('/scheduled — inline operations (RFC-192)', () => {
     expect((flaky.querySelector('.data-table__actions button') as HTMLButtonElement).disabled).toBe(
       false,
     )
+    const paused = screen.getByTestId('scheduled-row-paused')
+    expect(
+      (paused.querySelector('.data-table__actions button') as HTMLButtonElement).disabled,
+    ).toBe(false)
     // Streak chip at ×3; the stale lastTaskId must NOT render as a link.
     expect(screen.getByTestId('scheduled-streak-flaky').textContent).toContain('3')
     expect(screen.queryByTestId('scheduled-last-task-flaky')).toBeNull()

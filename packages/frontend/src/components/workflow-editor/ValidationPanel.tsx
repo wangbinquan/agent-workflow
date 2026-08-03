@@ -63,6 +63,8 @@ export interface ValidationPanelProps {
   onOpenChange?: (open: boolean) => void
   validating?: boolean
   onRevalidate?: () => void
+  /** Monotonic request used by explicit Validate to announce the fresh result. */
+  focusRequest?: number
   onNavigate: (target: WorkflowValidationTarget) => void
   onAutoFitWrapper?: (wrapperId: string) => void
 }
@@ -82,7 +84,9 @@ export function ValidationPanel(props: ValidationPanelProps) {
   )
   const [targetChanged, setTargetChanged] = useState(false)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const headingRef = useRef<HTMLHeadingElement | null>(null)
   const firstIssueRef = useRef<HTMLButtonElement | null>(null)
+  const handledFocusRequestRef = useRef(0)
   const { errors, warnings } = partitionValidationIssues(props.result.issues)
 
   useEffect(() => setTargetChanged(false), [props.result, props.stale])
@@ -90,6 +94,14 @@ export function ValidationPanel(props: ValidationPanelProps) {
     if (!open || compact) return
     firstIssueRef.current?.focus()
   }, [compact, open])
+  useEffect(() => {
+    const request = props.focusRequest ?? 0
+    if (!open || request === 0 || handledFocusRequestRef.current === request) return
+    handledFocusRequestRef.current = request
+    const heading = headingRef.current
+    heading?.focus({ preventScroll: true })
+    heading?.scrollIntoView({ block: 'nearest' })
+  }, [open, props.focusRequest])
   useEffect(() => {
     if (!open || compact) return
     const onKeyDown = (event: KeyboardEvent) => {
@@ -155,7 +167,8 @@ export function ValidationPanel(props: ValidationPanelProps) {
           size="md"
           panelClassName="workflow-validation-dialog"
           triggerRef={triggerRef}
-          initialFocusRef={firstIssueRef}
+          initialFocusRef={headingRef}
+          titleRef={headingRef}
           bodyTabIndex={0}
           data-testid="workflow-validation-dialog"
         >
@@ -169,7 +182,9 @@ export function ValidationPanel(props: ValidationPanelProps) {
           data-testid="workflow-validation-overlay"
         >
           <header className="workflow-validation__header">
-            <strong>{t('editor.validationDetailsTitle')}</strong>
+            <h2 ref={headingRef} tabIndex={-1} data-testid="workflow-validation-heading">
+              {t('editor.validationDetailsTitle')}
+            </h2>
             <button
               type="button"
               className="btn btn--xs btn--ghost"

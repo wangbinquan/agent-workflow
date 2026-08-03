@@ -64,18 +64,20 @@ describe('RFC-198 AppShell source contract', () => {
     expect(mobileDialogSource).toMatch(/restoreFocusFallbackRef=\{restoreFocusFallbackRef\}/)
   })
 
-  test('prepares mobile navigation before router Link click without imperative navigation', () => {
+  test('prepares focus before Link, then closes only after its router click bubbles', () => {
     const prepareStart = appShellSource.indexOf('const prepareMobileNavigation')
-    const prepareEnd = appShellSource.indexOf('const toggleCompactInbox', prepareStart)
+    const prepareEnd = appShellSource.indexOf('const completeMobileNavigation', prepareStart)
     const prepareBody = appShellSource.slice(prepareStart, prepareEnd)
+    const completeEnd = appShellSource.indexOf('const toggleCompactInbox', prepareEnd)
+    const completeBody = appShellSource.slice(prepareEnd, completeEnd)
     expect(prepareBody.indexOf('focusStableTrigger(menuTriggerRef.current)')).toBeGreaterThan(-1)
     expect(prepareBody.indexOf('pendingNavigationRef.current = destination')).toBeGreaterThan(
       prepareBody.indexOf('focusStableTrigger(menuTriggerRef.current)'),
     )
-    expect(prepareBody.indexOf('setMobileNavOpen(false)')).toBeGreaterThan(
-      prepareBody.indexOf('pendingNavigationRef.current = destination'),
-    )
+    expect(prepareBody).not.toContain('setMobileNavOpen(false)')
+    expect(completeBody).toContain('setMobileNavOpen(false)')
     expect(navigationSource).toMatch(/onClickCapture=\{captureNavigation\}/)
+    expect(navigationSource).toMatch(/onClick=\{completeNavigation\}/)
     expect(navigationSource).not.toMatch(/location\.href|useNavigate/)
   })
 

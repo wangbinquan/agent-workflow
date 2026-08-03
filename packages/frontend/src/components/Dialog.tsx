@@ -25,6 +25,8 @@ export interface DialogProps {
   children: ReactNode
   footer?: ReactNode
   initialFocusRef?: RefObject<HTMLElement | null>
+  /** Optional focus target for result dialogs whose heading must be announced. */
+  titleRef?: RefObject<HTMLHeadingElement | null>
   /**
    * Makes the body scroll region keyboard-focusable when a phase contains no
    * naturally tabbable body controls. Keep this opt-in so ordinary form
@@ -95,6 +97,25 @@ function tryFocus(target: HTMLElement | null | undefined): boolean {
   if (target === null || target === undefined || !target.isConnected) return false
   target.focus?.()
   return document.activeElement === target
+}
+
+function isAvailableFocusTarget(target: HTMLElement | null | undefined): target is HTMLElement {
+  if (target === null || target === undefined || !target.isConnected) return false
+  if ('disabled' in target && (target as HTMLButtonElement).disabled) return false
+  return target.getAttribute('aria-disabled') !== 'true'
+}
+
+/** RFC-250: default focus starts in the task body, never on the chrome ×. */
+export function resolveInitialDialogFocus(
+  panel: HTMLElement,
+  explicit: HTMLElement | null | undefined,
+): HTMLElement {
+  if (isAvailableFocusTarget(explicit)) return explicit
+  const marked = panel.querySelector<HTMLElement>('[data-dialog-autofocus]')
+  if (isAvailableFocusTarget(marked)) return marked
+  const body = panel.querySelector<HTMLElement>('.dialog__body')
+  const bodyTarget = body?.querySelector<HTMLElement>(FOCUSABLE)
+  return isAvailableFocusTarget(bodyTarget) ? bodyTarget : panel
 }
 
 export function Dialog(props: DialogProps): ReactElement | null {
@@ -169,11 +190,10 @@ export function Dialog(props: DialogProps): ReactElement | null {
     if (!props.open) return
     restoreRef.current = document.activeElement as HTMLElement | null
     const focusTimer = window.setTimeout(() => {
-      const target =
-        props.initialFocusRef?.current ??
-        panelRef.current?.querySelector<HTMLElement>(FOCUSABLE) ??
-        panelRef.current
-      target?.focus?.()
+      const panel = panelRef.current
+      if (panel === null) return
+      const target = resolveInitialDialogFocus(panel, props.initialFocusRef?.current)
+      if (!tryFocus(target)) tryFocus(panel)
     }, 0)
     return () => {
       window.clearTimeout(focusTimer)
@@ -196,7 +216,16 @@ export function Dialog(props: DialogProps): ReactElement | null {
   // Locked by tests/dialog.test.tsx and e2e/keyboard-flows.spec.ts.
   useEffect(() => {
     if (!props.open) return
-    const yankBack = () => {
+    type TabEscapeToken = {
+      direction: 'forward' | 'backward'
+      source: HTMLElement
+      confirmed: boolean
+    }
+    let tabToken: TabEscapeToken | null = null
+    const clearTabToken = () => {
+      tabToken = null
+    }
+    const yankBack = (direction?: 'forward' | 'backward') => {
       // Nested dialogs: an inert lower layer must never fight the top
       // dialog's trap — that tug-of-war is a synchronous focusin loop.
       if (!isTopDialog()) return
@@ -205,15 +234,26 @@ export function Dialog(props: DialogProps): ReactElement | null {
       const ae = document.activeElement
       if (ae !== null && ae !== document.body && isFocusInsideDialog(panel, ae)) return
       const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
-      ;(focusables[0] ?? panel).focus?.()
+      const target =
+        direction === 'backward'
+          ? (focusables.at(-1) ?? panel)
+          : direction === 'forward'
+            ? (focusables[0] ?? panel)
+            : resolveInitialDialogFocus(panel, props.initialFocusRef?.current)
+      clearTabToken()
+      if (!tryFocus(target)) tryFocus(panel)
     }
     const onFocusIn = (e: FocusEvent) => {
       if (!isTopDialog()) return
       const panel = panelRef.current
       if (panel === null) return
       const target = e.target as Node | null
-      if (target !== null && isFocusInsideDialog(panel, target)) return
-      yankBack()
+      if (target !== null && isFocusInsideDialog(panel, target)) {
+        clearTabToken()
+        return
+      }
+      const direction = tabToken?.confirmed === true ? tabToken.direction : undefined
+      yankBack(direction)
     }
     // `focusout` safety net: Linux WebKit (Playwright WPE build) doesn't
     // reliably fire `focusin` on `body` when Tab walks past the panel's
@@ -234,16 +274,59 @@ export function Dialog(props: DialogProps): ReactElement | null {
       const panel = panelRef.current
       if (panel === null) return
       const next = e.relatedTarget as Node | null
-      if (next !== null && isFocusInsideDialog(panel, next)) return
-      queueMicrotask(yankBack)
+      if (next !== null && isFocusInsideDialog(panel, next)) {
+        clearTabToken()
+        return
+      }
+      if (tabToken !== null) {
+        if (e.target === tabToken.source) tabToken.confirmed = true
+        else clearTabToken()
+      }
+      const direction = tabToken?.confirmed === true ? tabToken.direction : undefined
+      queueMicrotask(() => yankBack(direction))
     }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!isTopDialog()) return
+      if (e.key !== 'Tab') {
+        clearTabToken()
+        return
+      }
+      const panel = panelRef.current
+      const source = document.activeElement
+      if (
+        panel === null ||
+        !(source instanceof HTMLElement) ||
+        !isFocusInsideDialog(panel, source)
+      ) {
+        clearTabToken()
+        return
+      }
+      tabToken = {
+        direction: e.shiftKey ? 'backward' : 'forward',
+        source,
+        confirmed: false,
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') clearTabToken()
+    }
+    const onPointerDown = () => clearTabToken()
+    const onWindowBlur = () => clearTabToken()
+    document.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('keyup', onKeyUp, true)
+    document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('focusin', onFocusIn)
     document.addEventListener('focusout', onFocusOut)
+    window.addEventListener('blur', onWindowBlur)
     return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('keyup', onKeyUp, true)
+      document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('focusin', onFocusIn)
       document.removeEventListener('focusout', onFocusOut)
+      window.removeEventListener('blur', onWindowBlur)
     }
-  }, [props.open])
+  }, [props.open, props.initialFocusRef])
 
   if (!props.open) return null
 
@@ -272,7 +355,13 @@ export function Dialog(props: DialogProps): ReactElement | null {
         tabIndex={-1}
       >
         <header className="dialog__header">
-          <h2 id={titleId}>{props.title}</h2>
+          <h2
+            id={titleId}
+            ref={props.titleRef}
+            tabIndex={props.titleRef === undefined ? undefined : -1}
+          >
+            {props.title}
+          </h2>
           <button
             type="button"
             className="dialog__close"

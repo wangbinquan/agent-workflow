@@ -19,7 +19,7 @@ export interface MemoryRowProps {
   /** Optional server-oracle-derived editability override. */
   editable?: boolean
   /** RFC-101: optional leading multi-select checkbox (used by the fuse picker). */
-  select?: { checked: boolean; onChange: () => void }
+  select?: { checked: boolean; onChange: () => void; disabled?: boolean }
   'data-testid'?: string
 }
 
@@ -47,6 +47,7 @@ export function MemoryRow({
             className="memory-row__select"
             checked={select.checked}
             onChange={select.onChange}
+            disabled={select.disabled}
             data-testid={`memory-row-${memory.id}-select`}
             aria-label={memory.title}
           />

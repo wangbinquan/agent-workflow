@@ -15,7 +15,11 @@
 //     the agent form no longer carries any generation-param field.
 //  5. flag-audit §8：`claudeCodeEnabled` 配置门删除后，claude 可用性 = 注册表里
 //     存在 enabled 的 claude-protocol 行；无该行时 claude 选项从 picker 消失，
-//     picker 只在还有别的可选 runtime 时保留（否则隐藏）。
+//     picker 只提供注册表里已启用的 runtime。
+//  6. RFC-250 P1 follow-up: the Runtime field is a stable part of the form.
+//     A single enabled runtime still supports inherit <-> explicit pin, while
+//     initial registry loading/error keeps a visible but inoperable selector;
+//     errors surface a retryable shared ErrorBanner.
 //
 // The ModelSelect runtime-namespace behavior (#1/#2) still matters — RFC-113's
 // RuntimeFormDialog reuses <ModelSelect> per protocol — so those tests stay.
@@ -160,13 +164,13 @@ describe('ModelSelect — runtime namespace (RFC-111)', () => {
   })
 })
 
-describe('AgentForm — runtime selector (RFC-111)', () => {
+describe('AgentForm — runtime selector (RFC-111 / RFC-250)', () => {
   test('renders a Runtime combobox defaulting to "inherit"', async () => {
     const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
     wrap(<AgentForm value={initial} onChange={() => {}} />)
 
-    // flag-audit §8: claude availability is derived from /api/runtimes (config
-    // gate deleted), so the picker mounts once the registry query resolves.
+    // RFC-250: the picker mounts immediately and stays visible while the
+    // registry query resolves; its selected value still defaults to inherit.
     const trigger = await screen.findByRole('combobox', { name: /^Runtime$/ })
     expect(trigger.textContent).toMatch(/Inherit/)
   })
@@ -176,9 +180,9 @@ describe('AgentForm — runtime selector (RFC-111)', () => {
     const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
     wrap(<AgentForm value={initial} onChange={onChange} />)
 
-    await screen.findByRole('combobox', { name: /^Runtime$/ })
-    // Registry-loaded options label by runtime name (`claude-code`); the static
-    // "Claude Code" fallback only shows before /api/runtimes resolves.
+    const trigger = await screen.findByRole('combobox', { name: /^Runtime$/ })
+    await waitFor(() => expect((trigger as HTMLButtonElement).disabled).toBe(false))
+    // Registry-loaded options label by runtime name (`claude-code`).
     clickSelectOption(/^Runtime$/, 'claude-code')
 
     expect(onChange).toHaveBeenCalledTimes(1)
@@ -207,17 +211,147 @@ describe('AgentForm — runtime selector (RFC-111)', () => {
     expect(fetchUrls.some((u) => u.includes('/api/runtime/models'))).toBe(false)
   })
 
-  test('Runtime selector hidden when no claude runtime AND only one built-in opencode', async () => {
-    // flag-audit §8: claude 不可用 = 注册表无 enabled 的 claude-protocol 行；
-    // 且只剩单个内建 opencode ⇒ 无从选择 ⇒ picker 隐藏。
-    runtimesResponse = { runtimes: [{ name: 'opencode', protocol: 'opencode', enabled: true }] }
+  test('a single enabled runtime stays visible and can be explicitly pinned', async () => {
+    // RFC-250 P1: even when inherit and pin currently resolve to the same
+    // runtime, they are different persisted states. Hiding the field made that
+    // distinction impossible to inspect or change.
+    runtimesResponse = {
+      runtimes: [
+        {
+          name: 'opencode',
+          protocol: 'opencode',
+          enabled: true,
+          isDefault: true,
+          model: 'openai/gpt-5',
+        },
+      ],
+    }
+    const onChange = vi.fn<(next: CreateAgent) => void>()
+    const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
+    wrap(<AgentForm value={initial} onChange={onChange} />)
+
+    const trigger = await screen.findByRole('combobox', { name: /^Runtime$/ })
+    await waitFor(() => expect((trigger as HTMLButtonElement).disabled).toBe(false))
+    clickSelectOption(/^Runtime$/, 'opencode')
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange.mock.calls[0]?.[0].runtime).toBe('opencode')
+  })
+
+  test('a single pinned runtime can be changed back to inherit', async () => {
+    runtimesResponse = {
+      runtimes: [
+        {
+          name: 'opencode',
+          protocol: 'opencode',
+          enabled: true,
+          isDefault: true,
+          model: 'openai/gpt-5',
+        },
+      ],
+    }
+    const onChange = vi.fn<(next: CreateAgent) => void>()
+    const initial: CreateAgent = { ...emptyAgent(), name: 'demo', runtime: 'opencode' }
+    wrap(<AgentForm value={initial} onChange={onChange} />)
+
+    const trigger = await screen.findByRole('combobox', { name: /^Runtime$/ })
+    await waitFor(() => expect((trigger as HTMLButtonElement).disabled).toBe(false))
+    clickSelectOption(/^Runtime$/, 'Inherit')
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange.mock.calls[0]?.[0].runtime).toBeUndefined()
+  })
+
+  test('an already-pinned disabled runtime remains visible and can be unpinned', async () => {
+    runtimesResponse = {
+      runtimes: [
+        {
+          name: 'opencode',
+          protocol: 'opencode',
+          enabled: true,
+          isDefault: true,
+          model: 'openai/gpt-5',
+        },
+        {
+          name: 'oc-old',
+          protocol: 'opencode',
+          enabled: false,
+          isDefault: false,
+          model: 'openai/gpt-4.1',
+        },
+      ],
+    }
+    const onChange = vi.fn<(next: CreateAgent) => void>()
+    const initial: CreateAgent = { ...emptyAgent(), name: 'demo', runtime: 'oc-old' }
+    wrap(<AgentForm value={initial} onChange={onChange} />)
+
+    const trigger = await screen.findByRole('combobox', { name: /^Runtime$/ })
+    await waitFor(() => expect((trigger as HTMLButtonElement).disabled).toBe(false))
+    expect(trigger.textContent).toContain('oc-old')
+    clickSelectOption(/^Runtime$/, 'Inherit')
+
+    expect(onChange.mock.calls[0]?.[0].runtime).toBeUndefined()
+  })
+
+  test('initial runtime-registry loading keeps an explicit disabled Runtime field', async () => {
+    await i18n.changeLanguage('en-US')
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
+      fetchUrls.push(url)
+      if (url.includes('/api/runtimes')) return await new Promise<Response>(() => {})
+      return jsonResponse([])
+    })
     const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
     wrap(<AgentForm value={initial} onChange={() => {}} />)
 
-    // Selector shows optimistically until the registry resolves, then hides.
-    await waitFor(() => {
-      expect(screen.queryByRole('combobox', { name: /^Runtime$/ })).toBeNull()
+    const trigger = screen.getByRole('combobox', { name: /^Runtime$/ }) as HTMLButtonElement
+    expect(trigger.disabled).toBe(true)
+    expect(screen.getByText('Loading runtimes…')).toBeTruthy()
+    expect(screen.queryByTestId('agent-runtime-load-error')).toBeNull()
+  })
+
+  test('runtime-registry error keeps the field visible and retry restores its choices', async () => {
+    await i18n.changeLanguage('en-US')
+    let runtimeAttempts = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
+      fetchUrls.push(url)
+      if (!url.includes('/api/runtimes')) return jsonResponse([])
+      runtimeAttempts += 1
+      if (runtimeAttempts === 1) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            code: 'runtime-registry-unavailable',
+            message: 'private daemon detail',
+          }),
+          { status: 503, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return jsonResponse({
+        runtimes: [
+          {
+            name: 'opencode',
+            protocol: 'opencode',
+            enabled: true,
+            isDefault: true,
+            model: 'openai/gpt-5',
+          },
+        ],
+      })
     })
+    const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
+    wrap(<AgentForm value={initial} onChange={() => {}} />)
+
+    const error = await screen.findByTestId('agent-runtime-load-error')
+    expect(error.textContent).toContain('Could not load the runtime list.')
+    const trigger = screen.getByRole('combobox', { name: /^Runtime$/ }) as HTMLButtonElement
+    expect(trigger.disabled).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(runtimeAttempts).toBe(2))
+    await waitFor(() => expect(trigger.disabled).toBe(false))
+    expect(screen.queryByTestId('agent-runtime-load-error')).toBeNull()
   })
 
   // With no claude runtime, the selector is the ONLY way to assign a custom
@@ -239,6 +373,7 @@ describe('AgentForm — runtime selector (RFC-111)', () => {
     // wait for the registry to load into the options (the open listbox re-renders
     // when the /api/runtimes query resolves).
     const trigger = await screen.findByRole('combobox', { name: /^Runtime$/ })
+    await waitFor(() => expect((trigger as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(trigger)
     // the custom opencode profile appears once the query resolves...
     const opt = await screen.findByRole('option', { name: 'opencode-opus' })

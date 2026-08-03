@@ -5,6 +5,10 @@
 门禁报告：
 [codex-design-gate-2026-07-29.md](./codex-design-gate-2026-07-29.md)。
 
+2026-08-03 RFC-250 全前端 UX 审计命中的 Intent 裸 JSON、archived action 与 mutation feedback 已按本
+RFC T5/T7 所有权接收，见 [rfc250-handoff-2026-08-03.md](./rfc250-handoff-2026-08-03.md)；该移交不构成
+未批准 supporting contracts 的实施授权。
+
 ## 1. 任务分解
 
 ### T1 Shared schema、migration 与持久身份

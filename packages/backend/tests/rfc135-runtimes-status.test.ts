@@ -70,9 +70,8 @@ esac
  * the direct child would leave it running and holding the stdout pipe. The
  * odd duration doubles as a unique pgrep marker for the reap assertion.
  */
-const HANG_MARKER = 'sleep 63047'
-function writeHangingBinary(path: string): void {
-  writeFileSync(path, `#!/bin/sh\n${HANG_MARKER}\n`)
+function writeHangingBinary(path: string, marker: string): void {
+  writeFileSync(path, `#!/bin/sh\n${marker}\n`)
   chmodSync(path, 0o755)
 }
 
@@ -420,11 +419,36 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     // (300ms proved flaky — spawn jitter SIGKILLed the healthy row too).
     process.env[TIMEOUT_ENV] = '2000'
     const hangBin = join(h.tmp, 'hangs')
-    writeHangingBinary(hangBin)
+    // Include the test-process pid in the sleep operand so independently
+    // isolated copies of this file never mistake one another's intentional
+    // hang for a leaked descendant during pressure runs.
+    const hangMarker = `sleep 63047.${process.pid}`
+    writeHangingBinary(hangBin, hangMarker)
     await createRuntime(h.db, { name: 'hangs', protocol: 'opencode', binaryPath: hangBin })
 
+    // Keep the row under test on the real snapshot + process-group path. The
+    // healthy control uses Bun's already-admitted native executable: macOS
+    // sandbox pressure can delay a freshly-copied temporary shell script past
+    // this case's deliberately shortened 2s timeout, which tests host script
+    // scheduling rather than per-row isolation. Production still snapshots
+    // every row, and the other cases above lock that boundary.
+    const timeoutApp = createApp({
+      token: TOKEN,
+      configPath: h.configPath,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db: h.db,
+      runtimeDiagnosticTestDependencies: {
+        ...FIXTURE_RUNTIME_DIAGNOSTICS,
+        withRuntimeOpencodeSnapshot: (command, callback) =>
+          command[0] === hangBin
+            ? FIXTURE_RUNTIME_DIAGNOSTICS.withRuntimeOpencodeSnapshot(command, callback)
+            : callback(process.execPath),
+      },
+    })
+
     const started = performance.now()
-    const res = await req(h.app)
+    const res = await req(timeoutApp)
     const elapsed = performance.now() - started
     expect(res.status).toBe(200)
     // sleep 60 would hold the response for a minute; the 2s row timeout +
@@ -439,7 +463,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     // Codex impl gate: the WHOLE process tree must be reaped, not just the
     // sh wrapper — the forked grandchild is the thing actually hanging. The
     // probe kills the detached process group, so no marker process survives.
-    const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', HANG_MARKER] })
+    const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', hangMarker] })
     expect(survivors.stdout.toString().trim()).toBe('')
   })
 

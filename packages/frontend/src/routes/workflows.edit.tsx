@@ -300,6 +300,14 @@ export function WorkflowEditorLoaded({
     connected: connection.connected,
     connectionEpoch: connection.connectionEpoch,
   })
+  const [authoritativeLoadEpoch, setAuthoritativeLoadEpoch] = useState(0)
+
+  // Only an accepted CONFLICT_LOAD_REMOTE_CONFIRMED receipt mints a new
+  // camera owner; failed/stale fetches and ambient observations resolve false.
+  const confirmAuthoritativeRemoteLoad = async (): Promise<void> => {
+    const confirmed = await controller.confirmLoadRemote()
+    if (confirmed) setAuthoritativeLoadEpoch((current) => current + 1)
+  }
   const sync = useWorkflowSync({
     workflowId,
     currentVersion: controller.state.serverRevision.version,
@@ -453,7 +461,6 @@ export function WorkflowEditorLoaded({
     focusId: string
   } | null>(null)
   const starterTriggerRef = useRef<HTMLElement | null>(null)
-  const paletteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
   const paletteSearchRef = useRef<HTMLInputElement | null>(null)
   const canvasFrameRef = useRef<HTMLDivElement | null>(null)
@@ -612,6 +619,7 @@ export function WorkflowEditorLoaded({
   const exactActionRef = useRef<'validate' | 'export' | 'copy' | 'launch' | null>(null)
   const exactActionAbortRef = useRef<AbortController | null>(null)
   const [validatePending, setValidatePending] = useState(false)
+  const [validationFocusRequest, setValidationFocusRequest] = useState(0)
   const [exportPending, setExportPending] = useState(false)
   const [copyPending, setCopyPending] = useState(false)
   const [copyActionError, setCopyActionError] = useState<unknown>(null)
@@ -707,6 +715,8 @@ export function WorkflowEditorLoaded({
     try {
       const saved = await controller.ensureSaved({ signal: abort.signal })
       await runExactValidation(saved, abort.signal)
+      setModalSurface('validation')
+      setValidationFocusRequest((request) => request + 1)
     } catch (error) {
       recordExactActionError(error)
     } finally {
@@ -884,22 +894,6 @@ export function WorkflowEditorLoaded({
         mount={{ resourceType: 'workflow', resourceId: workflowId }}
         data-testid="workflow-intent-entry"
       />
-      {/* With the palette rail visible (wide) the sidebar IS the add-step
-        entry, so the header button only renders when the rail is absent —
-        there it is the sole free-insert entry (390 mobile e2e locks this;
-        HTML5 drag is unavailable there). Header duplicate removed on wide by
-        user decision, 2026-07-21. */}
-      {!hasPaletteRail && (
-        <button
-          type="button"
-          className="btn btn--sm"
-          data-testid="workflow-add-step"
-          ref={paletteTriggerRef}
-          onClick={() => setModalSurface('palette')}
-        >
-          + {t('editor.nodePicker.addButton')}
-        </button>
-      )}
       <button
         type="button"
         className="btn btn--sm workflow-history-action"
@@ -921,6 +915,15 @@ export function WorkflowEditorLoaded({
       >
         <span aria-hidden="true">↷</span>
         <span className="workflow-history-action__label">{redoLabel}</span>
+      </button>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => void handleValidate()}
+        disabled={exactActionRef.current !== null}
+        data-testid="workflow-validate"
+      >
+        {validatePending ? t('editor.validating') : t('editor.validate')}
       </button>
       <button
         type="button"
@@ -1000,7 +1003,7 @@ export function WorkflowEditorLoaded({
     <ManagedLiveRegionProvider>
       <div className="page page--editor">
         <PageHeader
-          className="editor-page-header"
+          className="editor-page-header editor-page-header--workflow"
           title={controller.state.local.name || workflowId}
           meta={
             <div className="editor-resource-meta">
@@ -1036,7 +1039,7 @@ export function WorkflowEditorLoaded({
               state={controller.state}
               onRetryNow={controller.retry}
               onSaveCopy={controller.requestCopy}
-              onLoadRemote={controller.confirmLoadRemote}
+              onLoadRemote={confirmAuthoritativeRemoteLoad}
               onOverwriteRemote={controller.confirmOverwrite}
               onExportLocal={() => downloadWorkflowLocalDraft(controller.state.local)}
               onRetryAccess={controller.retryAccess}
@@ -1067,6 +1070,7 @@ export function WorkflowEditorLoaded({
               ref={canvasRef}
               surface="editor"
               workflowId={workflowId}
+              authoritativeLoadEpoch={authoritativeLoadEpoch}
               definition={draft}
               agents={agents.data ?? []}
               onSelect={(nextSelection) => {
@@ -1105,6 +1109,7 @@ export function WorkflowEditorLoaded({
                 onOpenChange={(open) => setModalSurface(open ? 'validation' : 'none')}
                 validating={validatePending}
                 onRevalidate={() => void handleValidate()}
+                focusRequest={validationFocusRequest}
                 onNavigate={(target) => {
                   const plan = planWorkflowIssueNavigation(target, draft)
                   if (plan.selection === null || plan.focusId === null) return
@@ -1131,7 +1136,6 @@ export function WorkflowEditorLoaded({
           onClose={() => setModalSurface('none')}
           title={t('editor.nodePicker.title')}
           initialFocusRef={paletteSearchRef}
-          triggerRef={paletteTriggerRef}
           restoreFocusFallbackRef={canvasFrameRef}
           panelClassName={`workflow-editor-surface-dialog workflow-editor-surface-dialog--${workspaceMode}`}
           data-testid="workflow-editor-palette-surface"
@@ -1152,7 +1156,7 @@ export function WorkflowEditorLoaded({
           onClose={closeInspector}
           title={inspectorDialogTitle}
           restoreFocusFallbackRef={canvasFrameRef}
-          panelClassName={`workflow-editor-surface-dialog workflow-editor-surface-dialog--${workspaceMode}`}
+          panelClassName={`workflow-editor-surface-dialog workflow-editor-inspector-surface-dialog workflow-editor-surface-dialog--${workspaceMode}`}
           data-testid="workflow-editor-inspector-surface"
         >
           {renderInspector('content')}

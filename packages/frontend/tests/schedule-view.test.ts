@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'vitest'
 import type { ScheduleSpec } from '@agent-workflow/shared'
 
-import { nextRuns, scheduleSummary } from '../src/lib/schedule-view'
+import { nextRuns, scheduleRunNowEligibility, scheduleSummary } from '../src/lib/schedule-view'
 
 const HOUR = 3_600_000
 
@@ -46,5 +46,39 @@ describe('scheduleSummary', () => {
     const spec: ScheduleSpec = { kind: 'monthly', dayOfMonth: 15, at: '23:59', timezone: 'UTC' }
     expect(scheduleSummary(spec, 'en')).toBe('monthly on day 15 at 23:59 (UTC)')
     expect(scheduleSummary(spec, 'zh')).toBe('每月 15 号 23:59（UTC）')
+  })
+})
+
+describe('RFC-250 scheduleRunNowEligibility', () => {
+  const runnable = {
+    migrationNeeded: false,
+    launchPayload: { workflowId: 'wf-1' },
+    scheduleSpec: { kind: 'daily', at: '09:00', timezone: 'UTC' } as ScheduleSpec,
+  }
+
+  test('returns one stable reason for each structurally degraded state', () => {
+    expect(scheduleRunNowEligibility({ ...runnable, migrationNeeded: true })).toEqual({
+      allowed: false,
+      reason: 'migration-needed',
+    })
+    expect(scheduleRunNowEligibility({ ...runnable, launchPayload: null })).toEqual({
+      allowed: false,
+      reason: 'payload-missing',
+    })
+    expect(scheduleRunNowEligibility({ ...runnable, scheduleSpec: null })).toEqual({
+      allowed: false,
+      reason: 'spec-missing',
+    })
+  })
+
+  test('enabled state and historical launch failure do not affect manual-run eligibility', () => {
+    expect(
+      scheduleRunNowEligibility({
+        ...runnable,
+        enabled: false,
+        lastStatus: 'failed',
+        lastError: 'previous launch failed',
+      }),
+    ).toEqual({ allowed: true })
   })
 })

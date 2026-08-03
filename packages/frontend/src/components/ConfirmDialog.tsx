@@ -45,6 +45,9 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
   const [error, setError] = useState<unknown | null>(null)
   // RFC-222 (D5) — type-to-confirm input value (empty when the mode is off).
   const [typed, setTyped] = useState('')
+  const cancelRef = useRef<HTMLButtonElement | null>(null)
+  const confirmRef = useRef<HTMLButtonElement | null>(null)
+  const confirmInputRef = useRef<HTMLInputElement | null>(null)
   const inFlightRef = useRef(false)
   const operationRef = useRef(0)
   const mountedRef = useRef(true)
@@ -116,13 +119,27 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
       triggerRef={props.triggerRef}
       restoreFocusFallbackRef={props.restoreFocusFallbackRef}
       dismissDisabled={pending}
+      initialFocusRef={
+        props.confirmInput !== undefined
+          ? confirmInputRef
+          : props.tone === 'danger'
+            ? cancelRef
+            : confirmRef
+      }
       panelClassName={panelClassName}
       footer={
         <>
-          <button type="button" className="btn" onClick={requestClose} disabled={pending}>
+          <button
+            ref={cancelRef}
+            type="button"
+            className="btn"
+            onClick={requestClose}
+            disabled={pending}
+          >
             {props.cancelLabel ?? t('common.cancel')}
           </button>
           <button
+            ref={confirmRef}
             type="button"
             className={props.tone === 'danger' ? 'btn btn--danger' : 'btn btn--primary'}
             onClick={() => void runConfirmation()}
@@ -138,11 +155,11 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
       {props.confirmInput !== undefined && (
         <Field label={props.confirmInput.label}>
           <TextInput
+            inputRef={confirmInputRef}
             value={typed}
             onChange={setTyped}
             placeholder={props.confirmInput.placeholder}
             disabled={pending}
-            autoFocus
             data-testid="confirm-input"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && confirmMatched) void runConfirmation()

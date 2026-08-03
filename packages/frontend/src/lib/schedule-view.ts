@@ -4,6 +4,29 @@
 import type { ScheduleSpec } from '@agent-workflow/shared'
 import { computeNextRunAt } from '@agent-workflow/shared'
 
+export type RunNowEligibility =
+  | { allowed: true }
+  | {
+      allowed: false
+      reason: 'migration-needed' | 'payload-missing' | 'spec-missing'
+    }
+
+interface RunNowCandidate {
+  migrationNeeded: boolean
+  launchPayload: unknown | null
+  scheduleSpec: unknown | null
+}
+
+/** Shared structural oracle used by both scheduled list and detail actions. */
+export function scheduleRunNowEligibility<T extends RunNowCandidate>(
+  schedule: T,
+): RunNowEligibility {
+  if (schedule.migrationNeeded) return { allowed: false, reason: 'migration-needed' }
+  if (schedule.launchPayload === null) return { allowed: false, reason: 'payload-missing' }
+  if (schedule.scheduleSpec === null) return { allowed: false, reason: 'spec-missing' }
+  return { allowed: true }
+}
+
 /** The next `count` fire instants strictly after `from` (epoch ms). */
 export function nextRuns(spec: ScheduleSpec, from: number, count: number): number[] {
   const out: number[] = []

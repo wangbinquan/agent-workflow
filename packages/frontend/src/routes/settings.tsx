@@ -52,6 +52,7 @@ import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
 import { RuntimeList } from '@/components/RuntimeList'
+import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
 import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
@@ -2018,6 +2019,36 @@ function OidcProviderDialog(props: {
   const [subjectClaim, setSubjectClaim] = useState(initial?.subjectClaim ?? '')
   const [testResult, setTestResult] = useState<null | OidcTestView>(null)
   const [error, setError] = useState<string | null>(null)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  // A ref closes the save/test double-click window before React Query has
+  // rendered its pending state. The draft itself remains memory-only because
+  // it contains clientSecret.
+  const operationRef = useRef<'save' | 'test' | null>(null)
+  const dirtyRef = useRef<string | null>(null)
+  const busyRef = useRef(false)
+
+  const currentDraftSignature = JSON.stringify({
+    slug,
+    displayName,
+    issuerUrl,
+    clientId,
+    clientSecret,
+    scopes,
+    provisioning,
+    allowedDomains,
+    enabled,
+    authorizationEndpoint,
+    tokenEndpoint,
+    userinfoEndpoint,
+    userinfoRequestStyle,
+    jwksUri,
+    trustEmailVerified,
+    usernameClaim,
+    subjectClaim,
+  })
+  const baselineSignatureRef = useRef(currentDraftSignature)
+  const dirty = currentDraftSignature !== baselineSignatureRef.current
+  dirtyRef.current = dirty ? `oidc-provider:${props.mode}:${initial?.id ?? 'new'}` : null
 
   // RFC-151 PR-4 — the seven scattered per-mode branches collapsed into one
   // local strategy lookup (this ternary is the only mode check left) so
@@ -2083,8 +2114,19 @@ function OidcProviderDialog(props: {
       }
       return strategy.submit(body)
     },
-    onSuccess: () => props.onSaved(),
+    onSuccess: () => {
+      // Clear the synchronous router guard before the parent closes this Dialog.
+      // A navigation racing the successful callback must not reopen a stale
+      // "discard changes" prompt for values that are already durable.
+      baselineSignatureRef.current = currentDraftSignature
+      dirtyRef.current = null
+      props.onSaved()
+    },
     onError: (e: unknown) => setError(e instanceof ApiError ? e.message : (e as Error).message),
+    onSettled: () => {
+      operationRef.current = null
+      busyRef.current = false
+    },
   })
 
   const testConnection = useMutation({
@@ -2102,418 +2144,479 @@ function OidcProviderDialog(props: {
     onSuccess: (r) => setTestResult({ kind: 'probe', result: r }),
     onError: (e: unknown) =>
       setTestResult({ kind: 'error', message: e instanceof Error ? e.message : String(e) }),
+    onSettled: () => {
+      operationRef.current = null
+      busyRef.current = false
+    },
   })
 
-  return (
-    <Dialog
-      open
-      onClose={props.onClose}
-      title={strategy.title}
-      size="lg"
-      footer={
-        <>
-          {strategy.testConnection !== null && (
-            <button
-              type="button"
-              className="btn btn--ghost"
-              disabled={testConnection.isPending}
-              onClick={() => testConnection.mutate()}
-            >
-              {testConnection.isPending
-                ? '…'
-                : t('settings.auth.testConnection', { defaultValue: 'Test connection' })}
-            </button>
-          )}
-          <button type="button" className="btn btn--ghost" onClick={props.onClose}>
-            {t('settings.auth.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="submit"
-            form="oidc-provider-form"
-            className="btn btn--primary"
-            disabled={save.isPending}
-          >
-            {save.isPending ? '…' : t('settings.auth.save', { defaultValue: 'Save' })}
-          </button>
-        </>
-      }
-    >
-      <form
-        id="oidc-provider-form"
-        className="form-grid oidc-provider-form"
-        onSubmit={(e) => {
-          e.preventDefault()
-          setError(null)
-          save.mutate()
-        }}
-      >
-        <fieldset className="oidc-form__group">
-          <legend className="oidc-form__group-title">
-            {t('settings.auth.groupProvider', { defaultValue: 'Provider' })}
-          </legend>
-          <p className="oidc-form__group-hint">
-            {t('settings.auth.groupProviderHint', {
-              defaultValue:
-                'Identifies this IdP in the URL and on the login page button. The issuer URL is what the daemon points OIDC discovery at.',
-            })}
-          </p>
-          <div className="oidc-form__row oidc-form__row--cols-2">
-            <Field
-              label={t('settings.auth.slug', { defaultValue: 'Slug' })}
-              required
-              hint={t('settings.auth.slugHint', {
-                defaultValue: 'Used in /api/auth/oidc/<slug>/callback',
-              })}
-            >
-              <TextInput
-                value={slug}
-                onChange={setSlug}
-                pattern="[a-z0-9][a-z0-9-]{0,63}"
-                required
-                placeholder="github-enterprise"
-              />
-            </Field>
-            <Field
-              label={t('settings.auth.displayName', { defaultValue: 'Display name' })}
-              required
-              hint={t('settings.auth.displayNameHint', {
-                defaultValue: 'Shown on the login page button.',
-              })}
-            >
-              <TextInput
-                value={displayName}
-                onChange={setDisplayName}
-                required
-                placeholder="GitHub Enterprise"
-              />
-            </Field>
-          </div>
-          <Field
-            label={t('settings.auth.issuerUrl', { defaultValue: 'Issuer URL' })}
-            required
-            hint={t('settings.auth.issuerUrlHint', {
-              defaultValue: 'Daemon fetches <issuer>/.well-known/openid-configuration.',
-            })}
-          >
-            <TextInput
-              type="url"
-              value={issuerUrl}
-              onChange={setIssuerUrl}
-              required
-              placeholder="https://github.corp.com"
-            />
-          </Field>
-        </fieldset>
+  const busy = save.isPending || testConnection.isPending
+  busyRef.current = busy || operationRef.current !== null
+  const discardDraft = (): boolean => {
+    if (busyRef.current) return false
+    baselineSignatureRef.current = currentDraftSignature
+    dirtyRef.current = null
+    setDiscardOpen(false)
+    return true
+  }
+  const requestClose = (): void => {
+    if (busy || operationRef.current !== null) return
+    if (dirty) {
+      setDiscardOpen(true)
+      return
+    }
+    props.onClose()
+  }
+  const runSave = (): void => {
+    if (operationRef.current !== null) return
+    operationRef.current = 'save'
+    busyRef.current = true
+    setError(null)
+    save.mutate()
+  }
+  const runTest = (): void => {
+    if (operationRef.current !== null || strategy.testConnection === null) return
+    operationRef.current = 'test'
+    busyRef.current = true
+    testConnection.mutate()
+  }
 
-        <fieldset className="oidc-form__group">
-          <legend className="oidc-form__group-title">
-            {t('settings.auth.groupManualEndpoints', {
-              defaultValue: 'Manual endpoints (optional)',
-            })}
-          </legend>
-          <p className="oidc-form__group-hint">
-            {t('settings.auth.groupManualEndpointsHint', {
-              defaultValue:
-                'Used per field when discovery fails or omits it. A pure OAuth 2.0 IdP needs at least authorize + token + userinfo.',
-            })}
-          </p>
-          <div className="oidc-form__row oidc-form__row--cols-2">
+  return (
+    <>
+      <Dialog
+        open
+        onClose={requestClose}
+        title={strategy.title}
+        size="lg"
+        dismissDisabled={busy}
+        footer={
+          <>
+            {strategy.testConnection !== null && (
+              <button type="button" className="btn btn--ghost" disabled={busy} onClick={runTest}>
+                {testConnection.isPending
+                  ? '…'
+                  : t('settings.auth.testConnection', { defaultValue: 'Test connection' })}
+              </button>
+            )}
+            <button type="button" className="btn btn--ghost" onClick={requestClose} disabled={busy}>
+              {t('settings.auth.cancel', { defaultValue: 'Cancel' })}
+            </button>
+            <button
+              type="submit"
+              form="oidc-provider-form"
+              className="btn btn--primary"
+              disabled={busy}
+            >
+              {save.isPending ? '…' : t('settings.auth.save', { defaultValue: 'Save' })}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="oidc-provider-form"
+          className="form-grid oidc-provider-form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            runSave()
+          }}
+        >
+          <fieldset className="oidc-form__group" disabled={busy}>
+            <legend className="oidc-form__group-title">
+              {t('settings.auth.groupProvider', { defaultValue: 'Provider' })}
+            </legend>
+            <p className="oidc-form__group-hint">
+              {t('settings.auth.groupProviderHint', {
+                defaultValue:
+                  'Identifies this IdP in the URL and on the login page button. The issuer URL is what the daemon points OIDC discovery at.',
+              })}
+            </p>
+            <div className="oidc-form__row oidc-form__row--cols-2">
+              <Field
+                label={t('settings.auth.slug', { defaultValue: 'Slug' })}
+                required
+                hint={t('settings.auth.slugHint', {
+                  defaultValue: 'Used in /api/auth/oidc/<slug>/callback',
+                })}
+              >
+                <TextInput
+                  value={slug}
+                  onChange={setSlug}
+                  pattern="[a-z0-9][a-z0-9-]{0,63}"
+                  required
+                  placeholder="github-enterprise"
+                />
+              </Field>
+              <Field
+                label={t('settings.auth.displayName', { defaultValue: 'Display name' })}
+                required
+                hint={t('settings.auth.displayNameHint', {
+                  defaultValue: 'Shown on the login page button.',
+                })}
+              >
+                <TextInput
+                  value={displayName}
+                  onChange={setDisplayName}
+                  required
+                  placeholder="GitHub Enterprise"
+                />
+              </Field>
+            </div>
             <Field
-              label={t('settings.auth.authorizationEndpoint', {
-                defaultValue: 'Authorization endpoint',
+              label={t('settings.auth.issuerUrl', { defaultValue: 'Issuer URL' })}
+              required
+              hint={t('settings.auth.issuerUrlHint', {
+                defaultValue: 'Daemon fetches <issuer>/.well-known/openid-configuration.',
               })}
             >
               <TextInput
                 type="url"
-                value={authorizationEndpoint}
-                onChange={setAuthorizationEndpoint}
-                placeholder="https://idp.corp.com/oauth/authorize"
+                value={issuerUrl}
+                onChange={setIssuerUrl}
+                required
+                placeholder="https://github.corp.com"
               />
             </Field>
-            <Field label={t('settings.auth.tokenEndpoint', { defaultValue: 'Token endpoint' })}>
-              <TextInput
-                type="url"
-                value={tokenEndpoint}
-                onChange={setTokenEndpoint}
-                placeholder="https://idp.corp.com/oauth/token"
-              />
-            </Field>
-          </div>
-          <div className="oidc-form__row oidc-form__row--cols-2">
+          </fieldset>
+
+          <fieldset className="oidc-form__group" disabled={busy}>
+            <legend className="oidc-form__group-title">
+              {t('settings.auth.groupManualEndpoints', {
+                defaultValue: 'Manual endpoints (optional)',
+              })}
+            </legend>
+            <p className="oidc-form__group-hint">
+              {t('settings.auth.groupManualEndpointsHint', {
+                defaultValue:
+                  'Used per field when discovery fails or omits it. A pure OAuth 2.0 IdP needs at least authorize + token + userinfo.',
+              })}
+            </p>
+            <div className="oidc-form__row oidc-form__row--cols-2">
+              <Field
+                label={t('settings.auth.authorizationEndpoint', {
+                  defaultValue: 'Authorization endpoint',
+                })}
+              >
+                <TextInput
+                  type="url"
+                  value={authorizationEndpoint}
+                  onChange={setAuthorizationEndpoint}
+                  placeholder="https://idp.corp.com/oauth/authorize"
+                />
+              </Field>
+              <Field label={t('settings.auth.tokenEndpoint', { defaultValue: 'Token endpoint' })}>
+                <TextInput
+                  type="url"
+                  value={tokenEndpoint}
+                  onChange={setTokenEndpoint}
+                  placeholder="https://idp.corp.com/oauth/token"
+                />
+              </Field>
+            </div>
+            <div className="oidc-form__row oidc-form__row--cols-2">
+              <Field
+                label={t('settings.auth.userinfoEndpoint', { defaultValue: 'Userinfo endpoint' })}
+              >
+                <TextInput
+                  type="url"
+                  value={userinfoEndpoint}
+                  onChange={setUserinfoEndpoint}
+                  placeholder="https://idp.corp.com/api/user"
+                />
+              </Field>
+              <Field label={t('settings.auth.jwksUri', { defaultValue: 'JWKS URI' })}>
+                <TextInput
+                  type="url"
+                  value={jwksUri}
+                  onChange={setJwksUri}
+                  placeholder="https://idp.corp.com/jwks.json"
+                />
+              </Field>
+            </div>
             <Field
-              label={t('settings.auth.userinfoEndpoint', { defaultValue: 'Userinfo endpoint' })}
-            >
-              <TextInput
-                type="url"
-                value={userinfoEndpoint}
-                onChange={setUserinfoEndpoint}
-                placeholder="https://idp.corp.com/api/user"
-              />
-            </Field>
-            <Field label={t('settings.auth.jwksUri', { defaultValue: 'JWKS URI' })}>
-              <TextInput
-                type="url"
-                value={jwksUri}
-                onChange={setJwksUri}
-                placeholder="https://idp.corp.com/jwks.json"
-              />
-            </Field>
-          </div>
-          <Field
-            label={t('settings.auth.userinfoRequestStyle', {
-              defaultValue: 'Userinfo request style',
-            })}
-            // group: without it Field renders a <label> wrapping BOTH radio
-            // buttons — clicking the label/hint text would proxy to the first
-            // option and silently reset a saved post_json selection.
-            group
-            labelId="oidc-userinfo-style-label"
-            hint={t('settings.auth.userinfoRequestStyleHint', {
-              defaultValue:
-                'Standard: GET with an Authorization: Bearer header. POST JSON: POST with a JSON body of { client_id, access_token, scope } and no auth header — for platforms with a non-standard userinfo API.',
-            })}
-          >
-            <Segmented<'get_bearer' | 'post_json'>
-              value={userinfoRequestStyle}
-              onChange={setUserinfoRequestStyle}
-              ariaLabel={t('settings.auth.userinfoRequestStyle', {
+              label={t('settings.auth.userinfoRequestStyle', {
                 defaultValue: 'Userinfo request style',
               })}
-              testidPrefix="oidc-userinfo-style"
-              options={[
-                {
-                  value: 'get_bearer',
-                  label: t('settings.auth.userinfoStyleGet', { defaultValue: 'GET + Bearer' }),
-                },
-                {
-                  value: 'post_json',
-                  label: t('settings.auth.userinfoStylePost', { defaultValue: 'POST JSON' }),
-                },
-              ]}
-            />
-          </Field>
-        </fieldset>
-
-        <fieldset className="oidc-form__group">
-          <legend className="oidc-form__group-title">
-            {t('settings.auth.groupCreds', { defaultValue: 'Credentials' })}
-          </legend>
-          <p className="oidc-form__group-hint">
-            {t('settings.auth.groupCredsHint', {
-              defaultValue:
-                'OAuth 2.0 client your daemon impersonates against the IdP. Secret is AES-256-GCM-sealed at rest.',
-            })}
-          </p>
-          <div className="oidc-form__row oidc-form__row--cols-2">
-            <Field label={t('settings.auth.clientId', { defaultValue: 'Client ID' })} required>
-              <TextInput value={clientId} onChange={setClientId} required />
-            </Field>
-            <Field
-              label={t('settings.auth.clientSecret', { defaultValue: 'Client secret' })}
-              required={strategy.clientSecretRequired}
+              // group: without it Field renders a <label> wrapping BOTH radio
+              // buttons — clicking the label/hint text would proxy to the first
+              // option and silently reset a saved post_json selection.
+              group
+              labelId="oidc-userinfo-style-label"
+              hint={t('settings.auth.userinfoRequestStyleHint', {
+                defaultValue:
+                  'Standard: GET with an Authorization: Bearer header. POST JSON: POST with a JSON body of { client_id, access_token, scope } and no auth header — for platforms with a non-standard userinfo API.',
+              })}
             >
-              <TextInput
-                type="password"
-                value={clientSecret}
-                onChange={setClientSecret}
+              <Segmented<'get_bearer' | 'post_json'>
+                value={userinfoRequestStyle}
+                onChange={setUserinfoRequestStyle}
+                ariaLabel={t('settings.auth.userinfoRequestStyle', {
+                  defaultValue: 'Userinfo request style',
+                })}
+                testidPrefix="oidc-userinfo-style"
+                options={[
+                  {
+                    value: 'get_bearer',
+                    label: t('settings.auth.userinfoStyleGet', { defaultValue: 'GET + Bearer' }),
+                  },
+                  {
+                    value: 'post_json',
+                    label: t('settings.auth.userinfoStylePost', { defaultValue: 'POST JSON' }),
+                  },
+                ]}
+              />
+            </Field>
+          </fieldset>
+
+          <fieldset className="oidc-form__group" disabled={busy}>
+            <legend className="oidc-form__group-title">
+              {t('settings.auth.groupCreds', { defaultValue: 'Credentials' })}
+            </legend>
+            <p className="oidc-form__group-hint">
+              {t('settings.auth.groupCredsHint', {
+                defaultValue:
+                  'OAuth 2.0 client your daemon impersonates against the IdP. Secret is AES-256-GCM-sealed at rest.',
+              })}
+            </p>
+            <div className="oidc-form__row oidc-form__row--cols-2">
+              <Field label={t('settings.auth.clientId', { defaultValue: 'Client ID' })} required>
+                <TextInput value={clientId} onChange={setClientId} required />
+              </Field>
+              <Field
+                label={t('settings.auth.clientSecret', { defaultValue: 'Client secret' })}
                 required={strategy.clientSecretRequired}
-                placeholder={strategy.clientSecretPlaceholder}
-              />
+              >
+                <TextInput
+                  type="password"
+                  value={clientSecret}
+                  onChange={setClientSecret}
+                  required={strategy.clientSecretRequired}
+                  placeholder={strategy.clientSecretPlaceholder}
+                />
+              </Field>
+            </div>
+            <Field
+              label={t('settings.auth.scopes', { defaultValue: 'Scopes' })}
+              required
+              hint={t('settings.auth.scopesHint', {
+                defaultValue: 'Space-separated. openid is required; profile + email recommended.',
+              })}
+            >
+              <TextInput value={scopes} onChange={setScopes} required />
             </Field>
-          </div>
-          <Field
-            label={t('settings.auth.scopes', { defaultValue: 'Scopes' })}
-            required
-            hint={t('settings.auth.scopesHint', {
-              defaultValue: 'Space-separated. openid is required; profile + email recommended.',
-            })}
-          >
-            <TextInput value={scopes} onChange={setScopes} required />
-          </Field>
-        </fieldset>
+          </fieldset>
 
-        <fieldset className="oidc-form__group">
-          <legend className="oidc-form__group-title">
-            {t('settings.auth.groupBehavior', { defaultValue: 'Behavior' })}
-          </legend>
-          <Field label={t('settings.auth.provisioning', { defaultValue: 'Provisioning policy' })}>
-            <Select<'auto' | 'allowlist' | 'invite'>
-              value={provisioning}
-              onChange={setProvisioning}
-              ariaLabel={t('settings.auth.provisioning', { defaultValue: 'Provisioning' })}
-              options={[
-                {
-                  value: 'invite',
-                  label: t('settings.auth.optInvite', { defaultValue: 'invite (recommended)' }),
-                  description: t('settings.auth.inviteDesc', {
-                    defaultValue:
-                      'Only pre-created users with matching verified email may sign in.',
-                  }),
-                },
-                {
-                  value: 'allowlist',
-                  label: t('settings.auth.optAllowlist', { defaultValue: 'allowlist' }),
-                  description: t('settings.auth.allowlistDesc', {
-                    defaultValue:
-                      'Auto-provision users whose verified email matches an allowed domain.',
-                  }),
-                },
-                {
-                  value: 'auto',
-                  label: t('settings.auth.optAuto', { defaultValue: 'auto' }),
-                  description: t('settings.auth.autoDesc', {
-                    defaultValue:
-                      'Auto-provision any successful IdP login. Use only with a trusted IdP.',
-                  }),
-                },
-              ]}
-              renderOption={(opt) => (
-                <span className="select__option-stack">
-                  <span className="select__option-title">{opt.label}</span>
-                  {opt.description && <span className="select__option-sub">{opt.description}</span>}
-                </span>
-              )}
-            />
-          </Field>
-          {provisioning === 'allowlist' && (
-            <Field
-              label={t('settings.auth.allowedDomains', {
-                defaultValue: 'Allowed email domains',
-              })}
-              hint={t('settings.auth.allowedDomainsHint', {
-                defaultValue:
-                  'Comma-separated, each prefixed with @. email_verified=true is also required.',
-              })}
-            >
-              <TextInput
-                value={allowedDomains}
-                onChange={setAllowedDomains}
-                placeholder="@corp.com, @subsidiary.com"
-              />
-            </Field>
-          )}
-          <Switch
-            checked={trustEmailVerified}
-            onChange={setTrustEmailVerified}
-            label={t('settings.auth.trustEmailLabel', {
-              defaultValue: 'Trust emails as verified',
-            })}
-            hint={t('settings.auth.trustEmailHint', {
-              defaultValue:
-                'Treat every email from this IdP as verified (needed for invite/allowlist with pure OAuth 2.0 IdPs). Leave off if users can set unverified emails there.',
-            })}
-          />
-          <div className="oidc-form__row oidc-form__row--cols-2">
-            <Field
-              label={t('settings.auth.usernameClaim', { defaultValue: 'Username fields' })}
-              hint={t('settings.auth.usernameClaimHint', {
-                defaultValue:
-                  'Claim names read as the presented name; space-separate several to join them in order (e.g. "name signature"). Blank = standard preferred_username. When set, the display name follows the IdP on every sign-in.',
-              })}
-            >
-              <TextInput
-                value={usernameClaim}
-                onChange={setUsernameClaim}
-                placeholder="preferred_username"
-              />
-            </Field>
-            <Field
-              label={t('settings.auth.subjectClaim', { defaultValue: 'Subject field' })}
-              hint={t('settings.auth.subjectClaimHint', {
-                defaultValue:
-                  'Userinfo field carrying the stable unique user ID (e.g. id). Blank = standard sub. Pure OAuth 2.0 only — when set, id_token verification is skipped and the field cannot change once identities exist.',
-              })}
-            >
-              <TextInput value={subjectClaim} onChange={setSubjectClaim} placeholder="sub" />
-            </Field>
-          </div>
-          <Switch
-            checked={enabled}
-            onChange={setEnabled}
-            disabled={props.preventDisable === true}
-            label={t('settings.auth.enabledLabel', { defaultValue: 'Enabled' })}
-            hint={
-              props.preventDisable === true
-                ? t('settings.auth.lastProviderRequired')
-                : t('settings.auth.enabledHint', {
-                    defaultValue: 'Visible on the login page when on; hidden when off.',
-                  })
-            }
-          />
-        </fieldset>
-
-        {testResult && testResult.kind === 'error' && (
-          <div className="oidc-form__test-result oidc-form__test-result--err">
-            <strong>✗ {t('settings.auth.testFail', { defaultValue: 'Connection failed' })}</strong>
-            <span className="oidc-form__test-detail">{testResult.message}</span>
-          </div>
-        )}
-        {testResult && testResult.kind === 'probe' && (
-          <div
-            className={`oidc-form__test-result oidc-form__test-result--${
-              testResult.result.ok ? 'ok' : 'err'
-            }`}
-          >
-            <strong>
-              {testResult.result.ok
-                ? `✓ ${t('settings.auth.testReady', {
-                    defaultValue: 'Configuration can complete a sign-in',
-                  })}`
-                : `✗ ${t('settings.auth.testNotReady', {
-                    defaultValue: 'Configuration cannot complete a sign-in',
-                  })}`}
-            </strong>
-            <span className="oidc-form__test-detail">
-              {testResult.result.discovery.ok
-                ? t('settings.auth.testDiscoveryOk', { defaultValue: 'discovery: reachable' })
-                : testResult.result.ok
-                  ? // "manual endpoints in use" is only true when the manual set
-                    // actually carries a login — a broken config must show the
-                    // real discovery failure instead (impl-gate P2).
-                    t('settings.auth.testDiscoveryDown', {
-                      defaultValue: 'discovery unavailable — manual endpoints in use',
-                    })
-                  : t('settings.auth.testDiscoveryError', {
-                      defaultValue: 'discovery unavailable: {{error}}',
-                      error: testResult.result.discovery.error ?? 'unknown error',
-                    })}
-              <br />
-              {t('settings.auth.testDetailIssuer', { defaultValue: 'issuer:' })}{' '}
-              <code>{testResult.result.issuer}</code>
-              {OIDC_ENDPOINT_KEYS.map((key) => {
-                const entry = testResult.result.endpoints[key]
-                return (
-                  <span key={key} className="oidc-form__test-endpoint">
-                    <br />
-                    {t(`settings.auth.${key}`)}{' '}
-                    {entry ? (
-                      <>
-                        <code>{entry.url}</code>{' '}
-                        {entry.source === 'manual'
-                          ? t('settings.auth.sourceManual', { defaultValue: '(manual)' })
-                          : t('settings.auth.sourceDiscovery', { defaultValue: '(discovery)' })}
-                      </>
-                    ) : (
-                      t('settings.auth.testEndpointMissing', { defaultValue: 'not configured' })
+          <fieldset className="oidc-form__group" disabled={busy}>
+            <legend className="oidc-form__group-title">
+              {t('settings.auth.groupBehavior', { defaultValue: 'Behavior' })}
+            </legend>
+            <Field label={t('settings.auth.provisioning', { defaultValue: 'Provisioning policy' })}>
+              <Select<'auto' | 'allowlist' | 'invite'>
+                value={provisioning}
+                onChange={setProvisioning}
+                ariaLabel={t('settings.auth.provisioning', { defaultValue: 'Provisioning' })}
+                options={[
+                  {
+                    value: 'invite',
+                    label: t('settings.auth.optInvite', { defaultValue: 'invite (recommended)' }),
+                    description: t('settings.auth.inviteDesc', {
+                      defaultValue:
+                        'Only pre-created users with matching verified email may sign in.',
+                    }),
+                  },
+                  {
+                    value: 'allowlist',
+                    label: t('settings.auth.optAllowlist', { defaultValue: 'allowlist' }),
+                    description: t('settings.auth.allowlistDesc', {
+                      defaultValue:
+                        'Auto-provision users whose verified email matches an allowed domain.',
+                    }),
+                  },
+                  {
+                    value: 'auto',
+                    label: t('settings.auth.optAuto', { defaultValue: 'auto' }),
+                    description: t('settings.auth.autoDesc', {
+                      defaultValue:
+                        'Auto-provision any successful IdP login. Use only with a trusted IdP.',
+                    }),
+                  },
+                ]}
+                renderOption={(opt) => (
+                  <span className="select__option-stack">
+                    <span className="select__option-title">{opt.label}</span>
+                    {opt.description && (
+                      <span className="select__option-sub">{opt.description}</span>
                     )}
                   </span>
-                )
+                )}
+              />
+            </Field>
+            {provisioning === 'allowlist' && (
+              <Field
+                label={t('settings.auth.allowedDomains', {
+                  defaultValue: 'Allowed email domains',
+                })}
+                hint={t('settings.auth.allowedDomainsHint', {
+                  defaultValue:
+                    'Comma-separated, each prefixed with @. email_verified=true is also required.',
+                })}
+              >
+                <TextInput
+                  value={allowedDomains}
+                  onChange={setAllowedDomains}
+                  placeholder="@corp.com, @subsidiary.com"
+                />
+              </Field>
+            )}
+            <Switch
+              checked={trustEmailVerified}
+              onChange={setTrustEmailVerified}
+              label={t('settings.auth.trustEmailLabel', {
+                defaultValue: 'Trust emails as verified',
               })}
-              {testResult.result.jwksReachable === false && (
-                <>
-                  <br />
-                  {t('settings.auth.testJwksUnreachable', {
-                    defaultValue:
-                      'JWKS is configured but unreachable — id_token sign-ins will fail.',
-                  })}
-                </>
-              )}
-            </span>
-          </div>
-        )}
-        {error !== null && <ErrorBanner error={error} />}
-      </form>
-    </Dialog>
+              hint={t('settings.auth.trustEmailHint', {
+                defaultValue:
+                  'Treat every email from this IdP as verified (needed for invite/allowlist with pure OAuth 2.0 IdPs). Leave off if users can set unverified emails there.',
+              })}
+            />
+            <div className="oidc-form__row oidc-form__row--cols-2">
+              <Field
+                label={t('settings.auth.usernameClaim', { defaultValue: 'Username fields' })}
+                hint={t('settings.auth.usernameClaimHint', {
+                  defaultValue:
+                    'Claim names read as the presented name; space-separate several to join them in order (e.g. "name signature"). Blank = standard preferred_username. When set, the display name follows the IdP on every sign-in.',
+                })}
+              >
+                <TextInput
+                  value={usernameClaim}
+                  onChange={setUsernameClaim}
+                  placeholder="preferred_username"
+                />
+              </Field>
+              <Field
+                label={t('settings.auth.subjectClaim', { defaultValue: 'Subject field' })}
+                hint={t('settings.auth.subjectClaimHint', {
+                  defaultValue:
+                    'Userinfo field carrying the stable unique user ID (e.g. id). Blank = standard sub. Pure OAuth 2.0 only — when set, id_token verification is skipped and the field cannot change once identities exist.',
+                })}
+              >
+                <TextInput value={subjectClaim} onChange={setSubjectClaim} placeholder="sub" />
+              </Field>
+            </div>
+            <Switch
+              checked={enabled}
+              onChange={setEnabled}
+              disabled={props.preventDisable === true}
+              label={t('settings.auth.enabledLabel', { defaultValue: 'Enabled' })}
+              hint={
+                props.preventDisable === true
+                  ? t('settings.auth.lastProviderRequired')
+                  : t('settings.auth.enabledHint', {
+                      defaultValue: 'Visible on the login page when on; hidden when off.',
+                    })
+              }
+            />
+          </fieldset>
+
+          {testResult && testResult.kind === 'error' && (
+            <div className="oidc-form__test-result oidc-form__test-result--err">
+              <strong>
+                ✗ {t('settings.auth.testFail', { defaultValue: 'Connection failed' })}
+              </strong>
+              <span className="oidc-form__test-detail">{testResult.message}</span>
+            </div>
+          )}
+          {testResult && testResult.kind === 'probe' && (
+            <div
+              className={`oidc-form__test-result oidc-form__test-result--${
+                testResult.result.ok ? 'ok' : 'err'
+              }`}
+            >
+              <strong>
+                {testResult.result.ok
+                  ? `✓ ${t('settings.auth.testReady', {
+                      defaultValue: 'Configuration can complete a sign-in',
+                    })}`
+                  : `✗ ${t('settings.auth.testNotReady', {
+                      defaultValue: 'Configuration cannot complete a sign-in',
+                    })}`}
+              </strong>
+              <span className="oidc-form__test-detail">
+                {testResult.result.discovery.ok
+                  ? t('settings.auth.testDiscoveryOk', { defaultValue: 'discovery: reachable' })
+                  : testResult.result.ok
+                    ? // "manual endpoints in use" is only true when the manual set
+                      // actually carries a login — a broken config must show the
+                      // real discovery failure instead (impl-gate P2).
+                      t('settings.auth.testDiscoveryDown', {
+                        defaultValue: 'discovery unavailable — manual endpoints in use',
+                      })
+                    : t('settings.auth.testDiscoveryError', {
+                        defaultValue: 'discovery unavailable: {{error}}',
+                        error: testResult.result.discovery.error ?? 'unknown error',
+                      })}
+                <br />
+                {t('settings.auth.testDetailIssuer', { defaultValue: 'issuer:' })}{' '}
+                <code>{testResult.result.issuer}</code>
+                {OIDC_ENDPOINT_KEYS.map((key) => {
+                  const entry = testResult.result.endpoints[key]
+                  return (
+                    <span key={key} className="oidc-form__test-endpoint">
+                      <br />
+                      {t(`settings.auth.${key}`)}{' '}
+                      {entry ? (
+                        <>
+                          <code>{entry.url}</code>{' '}
+                          {entry.source === 'manual'
+                            ? t('settings.auth.sourceManual', { defaultValue: '(manual)' })
+                            : t('settings.auth.sourceDiscovery', { defaultValue: '(discovery)' })}
+                        </>
+                      ) : (
+                        t('settings.auth.testEndpointMissing', { defaultValue: 'not configured' })
+                      )}
+                    </span>
+                  )
+                })}
+                {testResult.result.jwksReachable === false && (
+                  <>
+                    <br />
+                    {t('settings.auth.testJwksUnreachable', {
+                      defaultValue:
+                        'JWKS is configured but unreachable — id_token sign-ins will fail.',
+                    })}
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+          {error !== null && <ErrorBanner error={error} />}
+        </form>
+      </Dialog>
+      <ConfirmDialog
+        open={discardOpen}
+        title={t('settings.auth.discardTitle', { defaultValue: 'Discard provider changes?' })}
+        description={t('settings.auth.discardDescription', {
+          defaultValue: 'Your unsaved provider changes, including any client secret, will be lost.',
+        })}
+        cancelLabel={t('settings.auth.discardKeepEditing', { defaultValue: 'Keep editing' })}
+        confirmLabel={t('settings.auth.discardConfirm', { defaultValue: 'Discard changes' })}
+        tone="danger"
+        onClose={() => setDiscardOpen(false)}
+        onConfirm={() => {
+          if (discardDraft()) props.onClose()
+        }}
+      />
+      <UnsavedChangesGuard
+        dirtyRef={dirtyRef}
+        busyRef={busyRef}
+        onDiscard={discardDraft}
+        copyKeys={{
+          title: 'settings.auth.discardTitle',
+          body: 'settings.auth.discardDescription',
+          stay: 'settings.auth.discardKeepEditing',
+          discard: 'settings.auth.discardConfirm',
+        }}
+      />
+    </>
   )
 }
 

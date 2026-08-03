@@ -14,6 +14,10 @@
 
 > **状态**：In Progress（2026-07-20 起草并实施；PR-1/2/3 已合并推送 `c4574064` + `ee61b5e7`，四件套全绿）。用户已授权"RFC 完成后直接开始实现直到完成"。
 
+2026-08-03 RFC-250 全前端 UX 审计发现三卡/四线文案与 raw-click outcome 漂移；后续选择与 attempt-bound
+receipt 硬要求见 [rfc250-followup-2026-08-03.md](./rfc250-followup-2026-08-03.md)。该 finding 未 supersede
+上方权威三卡决策，也未授权新增 Skill 路线或 production 变更。
+
 ## 1. 依赖与顺序
 
 ```text

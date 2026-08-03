@@ -1,4 +1,4 @@
-// RFC-198 + RFC-219 — lock the non-package visual gate wiring that normal
+// RFC-198 + RFC-219 + RFC-250 — lock the non-package visual gate wiring that normal
 // component tests cannot observe: scene count, reproducible Linux image, and
 // direct fixtures.
 
@@ -47,7 +47,7 @@ describe('RFC-198 visual infrastructure source gates', () => {
     expect(lockfile).toContain('@playwright/test@1.60.0')
     expect(readme).toContain('mcr.microsoft.com/playwright:v1.60.0-noble')
     expect(readme).toContain('bun run test:visual -- --update-snapshots')
-    expect(readme).toContain('31 full-page + 6 component pixel baselines')
+    expect(readme).toContain('46 pixel baselines')
     expect(readme).not.toContain('RUN_VISUAL_REGRESSION=1 bun run e2e')
     expect(workflow).toContain('runs-on: ubuntu-24.04')
     expect(workflow).toContain("bun-version: '1.3.13'")
@@ -56,5 +56,36 @@ describe('RFC-198 visual infrastructure source gates', () => {
   test('path-filtered visual jobs include the terminal-task stub in push and PR gates', () => {
     const workflow = repoFile('.github/workflows/visual-regression-nightly.yml')
     expect(workflow.match(/e2e\/fixtures\/stub-opencode\.sh/g)).toHaveLength(2)
+  })
+
+  test('RFC-250 high-risk scenes are counted, invoked, and retained by hosted CI', () => {
+    const source = repoFile('e2e/rfc250-visual-states.spec.ts')
+    const workflow = repoFile('.github/workflows/visual-regression-nightly.yml')
+    const packageJson = repoFile('package.json')
+
+    expect(source).toContain('const EXPECTED_RFC250_VISUAL_SCENE_COUNT = 9')
+    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(9)
+    expect(source).toContain(
+      'declaredRfc250VisualSceneCount !== EXPECTED_RFC250_VISUAL_SCENE_COUNT',
+    )
+    for (const snapshot of [
+      'pat-permission-matrix-390.png',
+      'pat-reveal-masked.png',
+      'task-wizard-dirty-desktop.png',
+      'task-wizard-dirty-390.png',
+      'workflow-complex-readable.png',
+      'workflow-complex-overview.png',
+      'clarify-draft-local-only.png',
+      'changes-grouped-sidebar.png',
+      'agent-resource-integrity-error.png',
+    ]) {
+      expect(source).toContain(`'${snapshot}'`)
+    }
+    expect(packageJson).toContain('e2e/rfc250-visual-states.spec.ts')
+    expect(workflow.match(/e2e\/rfc250-visual-states\.spec\.ts'/g)).toHaveLength(2)
+    expect(workflow.match(/e2e\/rfc250-visual-states\.spec\.ts-snapshots\/\*\*/g)).toHaveLength(2)
+    expect(workflow).toContain('e2e/rfc250-visual-states.spec.ts-snapshots/')
+    expect(workflow.match(/e2e\/command\.ts'/g)).toHaveLength(2)
+    expect(workflow.match(/e2e\/fixtures\/stub-opencode-clarify\.sh'/g)).toHaveLength(2)
   })
 })

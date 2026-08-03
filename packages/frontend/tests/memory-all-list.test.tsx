@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { MemorySummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { MemoryAllList } from '../src/components/memory/MemoryAllList'
@@ -204,6 +204,129 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
     })
   })
 
+  test('Archive confirmation stays open and locked until fulfillment, then clears selection', async () => {
+    let resolveArchive!: (response: Response) => void
+    const archiveResponse = new Promise<Response>((resolve) => {
+      resolveArchive = resolve
+    })
+    installFetch(({ method }) => {
+      if (method === 'GET') {
+        return new Response(JSON.stringify({ items: [mkMem()] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return archiveResponse
+    })
+    wrap()
+    fireEvent.click(await screen.findByTestId('memory-row-mem_1-select'))
+    expect(screen.getByTestId('memory-fuse-button')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('memory-all-mem_1-archive'))
+    fireEvent.click(await screen.findByTestId('memory-confirm-ok'))
+    await waitFor(() => {
+      expect((screen.getByTestId('memory-confirm-ok') as HTMLButtonElement).disabled).toBe(true)
+    })
+    expect((screen.getByTestId('memory-confirm-cancel') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByTestId('memory-confirm-dialog')).toBeTruthy()
+
+    await act(async () => {
+      resolveArchive(
+        new Response(JSON.stringify({ memory: mkMem({ status: 'archived' }) }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      await archiveResponse
+    })
+    await waitFor(() => expect(screen.queryByTestId('memory-confirm-dialog')).toBeNull())
+    expect(screen.queryByTestId('memory-fuse-button')).toBeNull()
+  })
+
+  test('a submitted destructive target cannot be replaced by another row before settlement', async () => {
+    let resolveArchive!: (response: Response) => void
+    const archiveResponse = new Promise<Response>((resolve) => {
+      resolveArchive = resolve
+    })
+    const calls = installFetch(({ method }) => {
+      if (method === 'GET') {
+        return new Response(
+          JSON.stringify({ items: [mkMem({ id: 'mem_a' }), mkMem({ id: 'mem_b' })] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return archiveResponse
+    })
+    wrap()
+
+    fireEvent.click(await screen.findByTestId('memory-all-mem_a-archive'))
+    fireEvent.click(screen.getByTestId('memory-confirm-ok'))
+    // Exercise the synchronous click-to-render gap as well as the rendered
+    // disabled state. The ref lock must reject this attempted replacement.
+    fireEvent.click(screen.getByTestId('memory-all-mem_b-delete'))
+    await waitFor(() =>
+      expect((screen.getByTestId('memory-all-mem_b-delete') as HTMLButtonElement).disabled).toBe(
+        true,
+      ),
+    )
+    await act(async () => {
+      resolveArchive(
+        new Response(JSON.stringify({ memory: mkMem({ id: 'mem_a', status: 'archived' }) }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      await archiveResponse
+    })
+
+    await waitFor(() => expect(screen.queryByTestId('memory-confirm-dialog')).toBeNull())
+    expect(
+      calls.filter((call) => call.method === 'POST' && call.url.includes('/mem_a/archive')),
+    ).toHaveLength(1)
+    expect(calls.some((call) => call.method === 'DELETE' && call.url.includes('/mem_b'))).toBe(
+      false,
+    )
+    expect(await screen.findByTestId('memory-all-mem_b-delete')).toBeTruthy()
+  })
+
+  test('Archive failure stays in the dialog and Retry reuses the frozen target', async () => {
+    let attempts = 0
+    const calls = installFetch(({ method }) => {
+      if (method === 'GET') {
+        return new Response(JSON.stringify({ items: [mkMem()] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      attempts += 1
+      if (attempts === 1) {
+        return new Response(JSON.stringify({ code: 'archive-failed', message: 'archive failed' }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ memory: mkMem({ status: 'archived' }) }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    wrap()
+    fireEvent.click(await screen.findByTestId('memory-all-mem_1-archive'))
+    fireEvent.click(await screen.findByTestId('memory-confirm-ok'))
+
+    const error = await screen.findByTestId('memory-confirm-error')
+    expect(screen.getByTestId('memory-confirm-dialog')).toBeTruthy()
+    fireEvent.click(within(error).getByRole('button', { name: /retry/i }))
+
+    await waitFor(() => expect(attempts).toBe(2))
+    expect(
+      calls.filter(
+        (call) => call.method === 'POST' && call.url.includes('/api/memories/mem_1/archive'),
+      ),
+    ).toHaveLength(2)
+    await waitFor(() => expect(screen.queryByTestId('memory-confirm-dialog')).toBeNull())
+  })
+
   test('Delete also routes through the shared Dialog, not window.confirm', async () => {
     const calls = installFetch(({ method }) => {
       if (method === 'GET') {
@@ -264,6 +387,64 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
       expect(post?.url).toContain('/api/memories/mem_arc/unarchive')
     })
     expect(screen.queryByTestId('memory-confirm-dialog')).toBeNull()
+  })
+
+  test('Unarchive pending/error is target-scoped; failed row stays and retries that id', async () => {
+    let resolveFirst!: (response: Response) => void
+    const first = new Promise<Response>((resolve) => {
+      resolveFirst = resolve
+    })
+    let attempts = 0
+    const calls = installFetch(({ method, url }) => {
+      if (method === 'GET') {
+        const status = new URL(url).searchParams.get('status')
+        return new Response(
+          JSON.stringify({
+            items:
+              status === 'archived'
+                ? [
+                    mkMem({ id: 'mem_a', status: 'archived' }),
+                    mkMem({ id: 'mem_b', status: 'archived' }),
+                  ]
+                : [],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      attempts += 1
+      if (attempts === 1) return first
+      return new Response(JSON.stringify({ memory: mkMem({ id: 'mem_a' }) }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    wrap()
+    fireEvent.click(screen.getByTestId('memory-all-filter-archived'))
+    const target = (await screen.findByTestId('memory-all-mem_a-unarchive')) as HTMLButtonElement
+    const unrelated = screen.getByTestId('memory-all-mem_b-unarchive') as HTMLButtonElement
+    fireEvent.click(target)
+    await waitFor(() => expect(target.disabled).toBe(true))
+    expect(unrelated.disabled).toBe(false)
+
+    await act(async () => {
+      resolveFirst(
+        new Response(JSON.stringify({ code: 'restore-failed', message: 'restore failed' }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      await first
+    })
+    const error = await screen.findByTestId('memory-unarchive-error-mem_a')
+    expect(screen.getByTestId('memory-row-mem_a')).toBeTruthy()
+    fireEvent.click(within(error).getByRole('button', { name: /retry/i }))
+
+    await waitFor(() => expect(attempts).toBe(2))
+    expect(
+      calls.filter(
+        (call) => call.method === 'POST' && call.url.includes('/api/memories/mem_a/unarchive'),
+      ),
+    ).toHaveLength(2)
   })
 
   test('server canManage=false disables archive + unarchive across views', async () => {

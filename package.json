@@ -24,7 +24,7 @@
     "build:binary": "bun run scripts/build-binary.ts",
     "build:binary:e2e": "bun run scripts/build-binary.ts --include-e2e",
     "e2e": "playwright test",
-    "test:visual": "RUN_VISUAL_REGRESSION=1 playwright test e2e/visual-regression.spec.ts --project=chromium",
+    "test:visual": "RUN_VISUAL_REGRESSION=1 playwright test e2e/visual-regression.spec.ts e2e/rfc250-visual-states.spec.ts --project=chromium",
     "e2e:install": "playwright install --with-deps chromium",
     "record:opencode": "bun run scripts/record-opencode.ts",
     "audit:gate": "bun run scripts/audit-gate.ts",

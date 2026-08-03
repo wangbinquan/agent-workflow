@@ -11,7 +11,7 @@
 //      trap + ESC + portal + a11y.
 // Backend already exposes `?status=archived` listing + POST /unarchive.
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { MemorySummary } from '@agent-workflow/shared'
@@ -52,6 +52,16 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
     onViewChange?.(next)
   }
   const [pending, setPending] = useState<PendingConfirm>(null)
+  // Synchronous lock for the click-to-mutation render gap. React Query's
+  // isPending flag arrives on the next render; without this ref another row
+  // can replace/reset the submitted target while its request is in flight.
+  const destructiveOperationRef = useRef<Exclude<PendingConfirm, null> | null>(null)
+  const [unarchivePendingIds, setUnarchivePendingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const [unarchiveErrors, setUnarchiveErrors] = useState<ReadonlyMap<string, unknown>>(
+    () => new Map(),
+  )
   // RFC-101: approved-view multi-select → "Fuse into skill".
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [fuseOpen, setFuseOpen] = useState(false)
@@ -90,13 +100,72 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
   const submitting =
     (pending?.kind === 'archive' && archive.isPending) ||
     (pending?.kind === 'delete' && del.isPending)
+  const destructivePending = archive.isPending || del.isPending
 
-  const confirmPending = () => {
-    if (pending === null) return
-    if (pending.kind === 'archive') archive.mutate(pending.id)
-    else del.mutate(pending.id)
+  const removeSelected = (id: string) => {
+    setSelected((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
+  const openPending = (next: Exclude<PendingConfirm, null>) => {
+    if (destructiveOperationRef.current !== null || destructivePending) return
+    archive.reset()
+    del.reset()
+    setPending(next)
+  }
+
+  const closePending = () => {
+    if (destructiveOperationRef.current !== null || submitting) return
+    archive.reset()
+    del.reset()
     setPending(null)
   }
+
+  const confirmPending = async () => {
+    const target = pending
+    if (target === null || destructiveOperationRef.current !== null || submitting) return
+    destructiveOperationRef.current = target
+    try {
+      if (target.kind === 'archive') await archive.mutateAsync(target.id)
+      else await del.mutateAsync(target.id)
+      removeSelected(target.id)
+      setPending((current) =>
+        current?.kind === target.kind && current.id === target.id ? null : current,
+      )
+    } catch {
+      // useMutation owns the error rendered inside the still-open dialog.
+    } finally {
+      if (destructiveOperationRef.current === target) destructiveOperationRef.current = null
+    }
+  }
+
+  const runUnarchive = async (id: string) => {
+    setUnarchivePendingIds((prev) => new Set(prev).add(id))
+    setUnarchiveErrors((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Map(prev)
+      next.delete(id)
+      return next
+    })
+    try {
+      await unarchive.mutateAsync(id)
+    } catch (error) {
+      setUnarchiveErrors((prev) => new Map(prev).set(id, error))
+    } finally {
+      setUnarchivePendingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+  }
+
+  const confirmError =
+    pending?.kind === 'archive' ? archive.error : pending?.kind === 'delete' ? del.error : null
 
   return (
     <div className="memory-all" data-testid="memory-all">
@@ -128,12 +197,15 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
       {renderBody({
         list,
         view,
-        archivePending: archive.isPending,
-        unarchivePending: unarchive.isPending,
-        delPending: del.isPending,
-        onArchive: (id) => setPending({ kind: 'archive', id }),
-        onUnarchive: (id) => unarchive.mutate(id),
-        onDelete: (id) => setPending({ kind: 'delete', id }),
+        archivePendingId: archive.isPending ? (archive.variables ?? null) : null,
+        unarchivePendingIds,
+        deletePendingId: del.isPending ? (del.variables ?? null) : null,
+        destructivePending,
+        unarchiveErrors: view === 'archived' ? unarchiveErrors : new Map(),
+        onArchive: (id) => openPending({ kind: 'archive', id }),
+        onUnarchive: (id) => void runUnarchive(id),
+        onRetryUnarchive: (id) => void runUnarchive(id),
+        onDelete: (id) => openPending({ kind: 'delete', id }),
         onEdit: (id) => setEditingId(id),
         selected,
         onToggleSelect: toggleSelect,
@@ -153,7 +225,8 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
       {pending !== null && (
         <Dialog
           open
-          onClose={() => setPending(null)}
+          onClose={closePending}
+          dismissDisabled={submitting}
           size="sm"
           title={t(
             pending.kind === 'archive' ? 'memory.archiveDialogTitle' : 'memory.deleteDialogTitle',
@@ -165,7 +238,8 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
               <button
                 type="button"
                 className="btn btn--sm"
-                onClick={() => setPending(null)}
+                onClick={closePending}
+                disabled={submitting}
                 data-testid="memory-confirm-cancel"
               >
                 {t('memory.dialogCancel')}
@@ -175,7 +249,7 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
                 className={
                   'btn btn--sm ' + (pending.kind === 'delete' ? 'btn--danger' : 'btn--primary')
                 }
-                onClick={confirmPending}
+                onClick={() => void confirmPending()}
                 disabled={submitting}
                 data-testid="memory-confirm-ok"
               >
@@ -185,6 +259,15 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
           }
         >
           <p>{t(pending.kind === 'archive' ? 'memory.confirmArchive' : 'memory.confirmDelete')}</p>
+          <FeedbackStack variant="inline">
+            {confirmError != null && (
+              <ErrorBanner
+                error={confirmError}
+                onRetry={() => void confirmPending()}
+                testid="memory-confirm-error"
+              />
+            )}
+          </FeedbackStack>
         </Dialog>
       )}
     </div>
@@ -194,11 +277,14 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
 interface BodyArgs {
   list: ReturnType<typeof useQuery<ListResponse>>
   view: MemoryAllView
-  archivePending: boolean
-  unarchivePending: boolean
-  delPending: boolean
+  archivePendingId: string | null
+  unarchivePendingIds: ReadonlySet<string>
+  deletePendingId: string | null
+  destructivePending: boolean
+  unarchiveErrors: ReadonlyMap<string, unknown>
   onArchive: (id: string) => void
   onUnarchive: (id: string) => void
+  onRetryUnarchive: (id: string) => void
   onDelete: (id: string) => void
   onEdit?: (id: string) => void
   /** RFC-101: approved-view multi-select for the fuse picker. */
@@ -211,11 +297,14 @@ function renderBody(args: BodyArgs) {
   const {
     list,
     view,
-    archivePending,
-    unarchivePending,
-    delPending,
+    archivePendingId,
+    unarchivePendingIds,
+    deletePendingId,
+    destructivePending,
+    unarchiveErrors,
     onArchive,
     onUnarchive,
+    onRetryUnarchive,
     onDelete,
     onEdit,
     selected,
@@ -237,6 +326,14 @@ function renderBody(args: BodyArgs) {
     <>
       <FeedbackStack variant="section">
         {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
+        {Array.from(unarchiveErrors, ([id, error]) => (
+          <ErrorBanner
+            key={id}
+            error={error}
+            onRetry={() => onRetryUnarchive(id)}
+            testid={`memory-unarchive-error-${id}`}
+          />
+        ))}
       </FeedbackStack>
       {rows.length === 0 ? (
         <EmptyState
@@ -266,6 +363,7 @@ function renderBody(args: BodyArgs) {
                     ? {
                         checked: selected?.has(m.id) ?? false,
                         onChange: () => onToggleSelect(m.id),
+                        disabled: archivePendingId === m.id || deletePendingId === m.id,
                       }
                     : undefined
                 }
@@ -276,7 +374,7 @@ function renderBody(args: BodyArgs) {
                         type="button"
                         className="btn btn--xs"
                         onClick={() => onArchive(m.id)}
-                        disabled={!rowManage || archivePending}
+                        disabled={!rowManage || destructivePending}
                         data-testid={`memory-all-${m.id}-archive`}
                       >
                         {t('memory.action.archive')}
@@ -286,7 +384,7 @@ function renderBody(args: BodyArgs) {
                         type="button"
                         className="btn btn--xs"
                         onClick={() => onUnarchive(m.id)}
-                        disabled={!rowManage || unarchivePending}
+                        disabled={!rowManage || unarchivePendingIds.has(m.id)}
                         data-testid={`memory-all-${m.id}-unarchive`}
                       >
                         {t('memory.action.unarchive')}
@@ -296,7 +394,7 @@ function renderBody(args: BodyArgs) {
                       type="button"
                       className="btn btn--xs btn--danger"
                       onClick={() => onDelete(m.id)}
-                      disabled={!rowManage || delPending}
+                      disabled={!rowManage || destructivePending}
                       data-testid={`memory-all-${m.id}-delete`}
                     >
                       {t('memory.action.delete')}

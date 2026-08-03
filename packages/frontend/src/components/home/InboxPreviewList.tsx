@@ -16,11 +16,15 @@ import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import {
   INBOX_PREVIEW_LIMIT,
   formatRelativeTime,
   mergeInboxItems,
+  projectInboxPreviewState,
   type InboxPreviewItem,
+  type InboxSource,
 } from '@/lib/homepage'
 
 export const REVIEWS_HOMEPAGE_QUERY_KEY = ['reviews', 'homepage', 'pending'] as const
@@ -49,29 +53,37 @@ export function InboxPreviewList({ onCount }: InboxPreviewListProps) {
     return () => window.clearInterval(id)
   }, [])
 
-  const items = mergeInboxItems(reviews.data ?? [], clarify.data ?? [], INBOX_PREVIEW_LIMIT)
+  const projection = projectInboxPreviewState(reviews, clarify)
+  const knownItems = mergeInboxItems(reviews.data ?? [], clarify.data ?? [], INBOX_PREVIEW_LIMIT)
+  const hasKnownSource = reviews.data !== undefined || clarify.data !== undefined
   useEffect(() => {
-    onCount?.(items.length)
-  }, [items.length, onCount])
+    if (hasKnownSource) onCount?.(knownItems.length)
+  }, [hasKnownSource, knownItems.length, onCount])
 
-  const isLoading = reviews.isLoading || clarify.isLoading
-  const bothErrored = reviews.error !== null && clarify.error !== null
-  if (isLoading && items.length === 0) {
+  if (projection.kind === 'loading') {
     return <LoadingState size="compact" />
   }
-  if (bothErrored) {
-    return (
-      <ErrorBanner
-        error={reviews.error ?? clarify.error}
-        message={t('home.section.error.generic')}
-        onRetry={() => {
-          void reviews.refetch()
-          void clarify.refetch()
-        }}
-      />
-    )
+  const failedSources: InboxSource[] =
+    projection.kind === 'items'
+      ? projection.failedSources
+      : (['reviews', 'clarify'] as const).filter((source) =>
+          source === 'reviews' ? reviews.error !== null : clarify.error !== null,
+        )
+  const feedback = (
+    <InboxPreviewErrors
+      failedSources={failedSources}
+      reviewError={reviews.error}
+      clarifyError={clarify.error}
+      retryReviews={() => void reviews.refetch()}
+      retryClarify={() => void clarify.refetch()}
+      partial={projection.kind === 'items'}
+    />
+  )
+
+  if (projection.kind === 'error') {
+    return feedback
   }
-  if (items.length === 0) {
+  if (projection.kind === 'empty') {
     return (
       <EmptyState
         size="compact"
@@ -81,16 +93,76 @@ export function InboxPreviewList({ onCount }: InboxPreviewListProps) {
     )
   }
   return (
-    <div className="inbox-list">
-      {items.map((item) => (
-        <InboxPreviewRow
-          key={`${item.kind}-${item.rowKey}`}
-          item={item}
-          nowMs={nowMs}
-          navigate={navigate}
-        />
-      ))}
-    </div>
+    <>
+      {feedback}
+      <div className="inbox-list">
+        {projection.items.map((item) => (
+          <InboxPreviewRow
+            key={`${item.kind}-${item.rowKey}`}
+            item={item}
+            nowMs={nowMs}
+            navigate={navigate}
+          />
+        ))}
+      </div>
+    </>
+  )
+}
+
+function InboxPreviewErrors(props: {
+  failedSources: readonly InboxSource[]
+  reviewError: unknown | null
+  clarifyError: unknown | null
+  retryReviews: () => void
+  retryClarify: () => void
+  partial: boolean
+}) {
+  const { t } = useTranslation()
+  if (props.failedSources.length === 0) return null
+
+  return (
+    <FeedbackStack variant="section" testid="inbox-preview-errors">
+      {props.failedSources.map((source) => {
+        const reviews = source === 'reviews'
+        const feedLabel = t(reviews ? 'nav.inbox.tabReviews' : 'nav.inbox.tabClarify')
+        const message = t(reviews ? 'nav.inbox.errorReviews' : 'nav.inbox.errorClarify')
+        const retry = reviews ? props.retryReviews : props.retryClarify
+        const retryAriaLabel = t('nav.inbox.retryFeed', { feed: feedLabel })
+        if (props.partial) {
+          return (
+            <NoticeBanner
+              key={source}
+              tone="warning"
+              size="compact"
+              action={
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  aria-label={retryAriaLabel}
+                  onClick={retry}
+                >
+                  {t('nav.inbox.retry')}
+                </button>
+              }
+              testid={`inbox-preview-error-${source}`}
+            >
+              {message}
+            </NoticeBanner>
+          )
+        }
+        return (
+          <ErrorBanner
+            key={source}
+            error={reviews ? props.reviewError : props.clarifyError}
+            message={message}
+            onRetry={retry}
+            retryLabel={t('nav.inbox.retry')}
+            retryAriaLabel={retryAriaLabel}
+            testid={`inbox-preview-error-${source}`}
+          />
+        )
+      })}
+    </FeedbackStack>
   )
 }
 

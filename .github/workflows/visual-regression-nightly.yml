@@ -1,8 +1,8 @@
 # RFC-054 W2-5 — visual regression nightly + path-filtered PR gate.
 #
-# Compares ubuntu-rendered snapshots of 31 full pages
-# plus 6 focused components against the committed `*-chromium-linux.png` baselines under
-# `e2e/visual-regression.spec.ts-snapshots/`. Threshold is 0.2%
+# Compares ubuntu-rendered snapshots from the canonical visual suite plus the
+# RFC-250 high-risk interaction states against committed `*-chromium-linux.png`
+# baselines under their spec-owned snapshot directories. Threshold is 0.2%
 # per RFC-054 plan §risk 9.
 #
 # Trigger:
@@ -13,11 +13,11 @@
 #     the visual gate and its direct dependencies.
 #   * `push` — the same path-filtered gate after changes land on main.
 #
-# CI ubuntu baselines must be committed before the gate is operational.
-# The first run after this workflow lands will FAIL because the
-# `*-chromium-linux.png` files don't exist yet. A separate one-time
-# "chore(visual): seed ubuntu baselines" PR populates them — see
-# `e2e/visual-regression.README.md` for the procedure.
+# CI ubuntu baselines must be committed before the expanded gate is green.
+# An authorized main publication that adds or changes scenes intentionally
+# lets its first hosted run fail and upload the runner's actual PNGs. Review
+# those PNGs, commit only the accepted Linux baselines, then require the new
+# exact-SHA run to pass — see `e2e/visual-regression.README.md`.
 
 name: visual-regression-nightly
 
@@ -33,11 +33,15 @@ on:
       - 'packages/backend/tests/rfc224-e2e-compiled-seam.test.ts'
       - 'scripts/build-binary.ts'
       - 'e2e/ux-consistency.spec.ts'
+      - 'e2e/command.ts'
+      - 'e2e/rfc250-visual-states.spec.ts'
+      - 'e2e/rfc250-visual-states.spec.ts-snapshots/**'
       - 'e2e/visual-regression.spec.ts'
       - 'e2e/visual-regression.spec.ts-snapshots/**'
       - 'e2e/harness.ts'
       - 'e2e/inbox-fixtures.ts'
       - 'e2e/fixtures/stub-opencode.sh'
+      - 'e2e/fixtures/stub-opencode-clarify.sh'
       - 'e2e/README.md'
       - 'e2e/visual-regression.README.md'
       - 'package.json'
@@ -52,11 +56,15 @@ on:
       - 'packages/backend/tests/rfc224-e2e-compiled-seam.test.ts'
       - 'scripts/build-binary.ts'
       - 'e2e/ux-consistency.spec.ts'
+      - 'e2e/command.ts'
+      - 'e2e/rfc250-visual-states.spec.ts'
+      - 'e2e/rfc250-visual-states.spec.ts-snapshots/**'
       - 'e2e/visual-regression.spec.ts'
       - 'e2e/visual-regression.spec.ts-snapshots/**'
       - 'e2e/harness.ts'
       - 'e2e/inbox-fixtures.ts'
       - 'e2e/fixtures/stub-opencode.sh'
+      - 'e2e/fixtures/stub-opencode-clarify.sh'
       - 'e2e/README.md'
       - 'e2e/visual-regression.README.md'
       - 'package.json'
@@ -111,5 +119,6 @@ jobs:
           path: |
             test-results/
             playwright-report/
+            e2e/rfc250-visual-states.spec.ts-snapshots/
             e2e/visual-regression.spec.ts-snapshots/
           if-no-files-found: ignore

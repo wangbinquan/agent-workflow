@@ -38,8 +38,60 @@ export interface InboxPreviewItem {
   timestamp: number
 }
 
+export type InboxSource = 'reviews' | 'clarify'
+
+/** Minimal query snapshot consumed by the homepage's pure two-feed projector. */
+export interface InboxPreviewQuerySnapshot<T> {
+  data: readonly T[] | undefined
+  isLoading: boolean
+  isSuccess: boolean
+  error: unknown | null
+}
+
+export type InboxProjection =
+  | { kind: 'loading' }
+  | { kind: 'error'; errors: unknown[] }
+  | { kind: 'empty' }
+  | { kind: 'items'; items: InboxPreviewItem[]; failedSources: InboxSource[] }
+
 /** Cap on how many inbox preview items the homepage section shows. */
 export const INBOX_PREVIEW_LIMIT = 8
+
+/**
+ * Project the two independent homepage inbox feeds without turning an unknown
+ * source into a truthful-looking empty state. Cached actionable rows win over
+ * background loading/errors; otherwise loading wins until every source settles.
+ */
+export function projectInboxPreviewState(
+  reviews: InboxPreviewQuerySnapshot<ReviewSummary>,
+  clarify: InboxPreviewQuerySnapshot<ClarifyRoundSummary>,
+): InboxProjection {
+  const items = mergeInboxItems(reviews.data ?? [], clarify.data ?? [], INBOX_PREVIEW_LIMIT)
+  const failedSources: InboxSource[] = []
+  const errors: unknown[] = []
+  if (reviews.error !== null) {
+    failedSources.push('reviews')
+    errors.push(reviews.error)
+  }
+  if (clarify.error !== null) {
+    failedSources.push('clarify')
+    errors.push(clarify.error)
+  }
+
+  if (items.length > 0) return { kind: 'items', items, failedSources }
+  if (reviews.isLoading || clarify.isLoading) return { kind: 'loading' }
+  // A successful empty feed is still authoritative partial data. Keep that
+  // distinction visible and retry only the failed peer; a full error is honest
+  // only when neither source yielded any data at all.
+  if (errors.length > 0) {
+    if (reviews.data !== undefined || clarify.data !== undefined) {
+      return { kind: 'items', items: [], failedSources }
+    }
+    return { kind: 'error', errors }
+  }
+  if (reviews.isSuccess && clarify.isSuccess) return { kind: 'empty' }
+  return { kind: 'loading' }
+}
 
 /**
  * Merge pending reviews + pending clarify sessions into a single list sorted
@@ -48,8 +100,8 @@ export const INBOX_PREVIEW_LIMIT = 8
  * pass an empty array and the merge still works.
  */
 export function mergeInboxItems(
-  reviews: ReviewSummary[],
-  clarify: ClarifyRoundSummary[],
+  reviews: readonly ReviewSummary[],
+  clarify: readonly ClarifyRoundSummary[],
   limit: number = INBOX_PREVIEW_LIMIT,
 ): InboxPreviewItem[] {
   const out: InboxPreviewItem[] = []

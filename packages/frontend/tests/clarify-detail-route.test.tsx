@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -26,6 +26,8 @@ import {
   Outlet,
 } from '@tanstack/react-router'
 import type { ClarifyRound, ClarifyRoundSummary } from '@agent-workflow/shared'
+import { api, ApiError } from '../src/api/client'
+import * as clarifyDraftStore from '../src/lib/clarify/draftStore'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { ClarifyDetailPage } from '../src/routes/clarify.detail'
 import '../src/i18n'
@@ -163,6 +165,16 @@ function renderRoute(initialPath = '/clarify/nr_clarify') {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
@@ -385,6 +397,192 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
     const heading = document.querySelector('h1')?.textContent ?? ''
     expect(heading).toContain('c1')
     expect(heading).not.toContain('Ask user about the DB')
+  })
+})
+
+describe('/clarify/$nodeRunId draft durability (RFC-250 T15-T17)', () => {
+  test('rapid edit queues the immutable IDB snapshot before unmount and the writer survives cleanup', async () => {
+    const editWrite = deferred<void>()
+    const snapshots: Array<Array<{ questionId: string; selectedOptionIndices: number[] }>> = []
+    vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
+    const setDraft = vi
+      .spyOn(clarifyDraftStore, 'setClarifyDraft')
+      .mockImplementation(async (_key, answers) => {
+        snapshots.push(
+          answers.map((answer) => ({
+            questionId: answer.questionId,
+            selectedOptionIndices: [...answer.selectedOptionIndices],
+          })),
+        )
+        await editWrite.promise
+      })
+    const put = vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
+    mockApi(mkSession())
+
+    const view = renderRoute()
+    const question = await screen.findByTestId('clarify-question-q1')
+    await waitFor(() =>
+      expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saved'),
+    )
+    expect(screen.getByTestId('clarify-draft-indicator').textContent).toBe(
+      'Draft saved (safe to close the tab)',
+    )
+
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+    // No 500 ms debounce is allowed in front of local durability.
+    await waitFor(() => expect(setDraft).toHaveBeenCalledTimes(1))
+    expect(snapshots[0]).toEqual([{ questionId: 'q1', selectedOptionIndices: [0] }])
+    view.unmount()
+
+    editWrite.resolve()
+    await editWrite.promise
+    // Server sync is independent and may finish after React has unsubscribed.
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1), { timeout: 2_000 })
+  })
+
+  test('blocked navigation Save locally and leave waits for IDB but not server sync', async () => {
+    const localWrite = deferred<void>()
+    const serverWrite = deferred<void>()
+    vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockImplementation(() => localWrite.promise)
+    const put = vi.spyOn(api, 'put').mockImplementation(() => serverWrite.promise as never)
+    mockApi(mkSession(), [], { nodes: [] })
+    renderRoute()
+
+    const question = await screen.findByTestId('clarify-question-q1')
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+    await waitFor(() =>
+      expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saving'),
+    )
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1), { timeout: 2_000 })
+    fireEvent.click(await screen.findByRole('link', { name: 'fixture-task' }))
+    const guard = await screen.findByTestId('unsaved-guard-dialog')
+
+    const saveAndLeave = within(guard).getByTestId('unsaved-save-and-proceed')
+    expect(saveAndLeave.textContent).toBe('Save locally and leave')
+    fireEvent.click(saveAndLeave)
+    expect(screen.getByTestId('clarify-detail-page')).toBeTruthy()
+    localWrite.resolve()
+
+    await waitFor(() => expect(screen.queryByTestId('clarify-detail-page')).toBeNull())
+    // Still unresolved: route navigation did not wait for server synchronization.
+    serverWrite.resolve()
+  })
+
+  test('submit success waits for an active IDB transaction before deleting the draft key', async () => {
+    const localWrite = deferred<void>()
+    const session = mkSession()
+    vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockImplementation(() => localWrite.promise)
+    const deleteDraft = vi
+      .spyOn(clarifyDraftStore, 'deleteClarifyDraft')
+      .mockResolvedValue(undefined)
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
+      ok: true,
+      session: { ...session, status: 'answered' },
+      rerunNodeRunId: 'nr_rerun',
+    } as never)
+    vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
+    mockApi(session)
+    renderRoute()
+
+    const question = await screen.findByTestId('clarify-question-q1')
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+    await waitFor(() => expect(clarifyDraftStore.setClarifyDraft).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByTestId('clarify-submit-continue'))
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+    expect(deleteDraft).not.toHaveBeenCalled()
+
+    localWrite.resolve()
+    await waitFor(() =>
+      expect(deleteDraft).toHaveBeenCalledWith({
+        taskId: 'task_a',
+        intermediaryNodeRunId: 'nr_clarify',
+        roundId: 'sess_1',
+      }),
+    )
+  })
+
+  test('latest IDB failure shows error and Retry clears it only after that generation persists', async () => {
+    let writeAttempt = 0
+    vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockImplementation(async () => {
+      writeAttempt += 1
+      if (writeAttempt === 1) throw new Error('indexeddb quota exceeded')
+    })
+    vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
+    mockApi(mkSession())
+    renderRoute()
+
+    const question = await screen.findByTestId('clarify-question-q1')
+    await waitFor(() =>
+      expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saved'),
+    )
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+
+    const error = await screen.findByTestId('clarify-draft-local-error')
+    const errorIndicator = screen.getByTestId('clarify-draft-indicator')
+    expect(errorIndicator.dataset.draftStatus).toBe('error')
+    expect(errorIndicator.textContent).toBe('The latest draft was not saved. Retry before leaving.')
+    fireEvent.click(within(error).getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByTestId('clarify-draft-local-error')).toBeNull())
+    await waitFor(
+      () => expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saved'),
+      { timeout: 2_000 },
+    )
+    expect(writeAttempt).toBe(2)
+  })
+
+  test('server 409 keeps the IDB draft local-only and exposes no misleading retry', async () => {
+    vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockResolvedValue(undefined)
+    vi.spyOn(api, 'put').mockRejectedValue(
+      new ApiError(409, 'clarify-round-sealed', 'round sealed'),
+    )
+    mockApi(mkSession())
+    renderRoute()
+
+    const question = await screen.findByTestId('clarify-question-q1')
+    await waitFor(() =>
+      expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saved'),
+    )
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+
+    const warning = await screen.findByTestId('clarify-draft-local-only', undefined, {
+      timeout: 2_000,
+    })
+    expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('local-only')
+    expect(warning.textContent).toContain('Saved on this device, but not yet synced to the server.')
+    expect(within(warning).queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  test('transient server failure is local-only with Retry, then becomes fully saved', async () => {
+    let attempts = 0
+    vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockResolvedValue(undefined)
+    vi.spyOn(api, 'put').mockImplementation(async () => {
+      attempts += 1
+      if (attempts === 1) throw new ApiError(0, 'network-unreachable', 'offline')
+      return undefined as never
+    })
+    mockApi(mkSession())
+    renderRoute()
+
+    const question = await screen.findByTestId('clarify-question-q1')
+    await waitFor(() =>
+      expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saved'),
+    )
+    fireEvent.click(within(question).getAllByRole('radio')[0]!)
+
+    const warning = await screen.findByTestId('clarify-draft-local-only', undefined, {
+      timeout: 2_000,
+    })
+    fireEvent.click(within(warning).getByRole('button', { name: 'Retry' }))
+    await waitFor(
+      () => expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saved'),
+      { timeout: 2_000 },
+    )
+    expect(attempts).toBe(2)
   })
 })
 
