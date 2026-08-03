@@ -180,6 +180,24 @@ admitted topology + renderer 结果产生。
   `childBoundary:'none'`，模型可控的 shell 因此拿不到 netless 边界）。
 - closure 内 `network` 声明**必须一致**，否则启动期显式失败；不取并集——并集等于静默提权。
 
+### 4.2b 与 RFC-253 的分工（按其 `design.md:563` 的要求登记）
+
+RFC-253（脚本执行节点）并发交付**外层进程无网**的通用围栏：能力 `outerNetworkDeny`、
+profile `outer-netless-v1`（`childBoundary:'none'`）、以及**`failClosed: true` 作为 profile
+注册表字段** + coordinator `#evaluate` 的三档统一改判。其 profile id 刻意不带 `script-`
+前缀，正是为了让本 RFC 复用。
+
+- **本 RFC 不重建**上述任何一项。§4.3 的 fail-closed 由「声明 `failClosed: true`」实现，
+  coordinator 里只保留 RFC-253 那一处逻辑。**依赖顺序：RFC-253 的该字段先落地，本 RFC 的
+  PR-3（T12）才能消费**。
+- **本 RFC 仍需自建** `model-child-egress-v1` 与 `modelChildLoopbackDeny`：需求与 RFC-253
+  真正不同（一个是「完全无网」，一个是「有网但不得触达本机 loopback」），按注册表契约
+  （`containmentCoordinator.ts:13-26`）应当并列而非合并。RFC-253 `design.md:563` 也明确把
+  loopback deny 划出其范围。
+- 完整接口约定、三条待回应问题（其中 Q1：RFC-253 的 `network:'allow'` 默认档走宿主 netns
+  ⇒ 脚本可达 loopback，与本 RFC 的「拒 loopback」不对称）见
+  `rfc253-egress-interface-2026-08-03.md`。
+
 ### 4.3 fail-closed 例外（AC-8）
 
 `warn` 档的既有语义是「资格不足 ⇒ 原子降级为 none + 告警」。对 egress profile 这条**不适用**：

@@ -34,7 +34,7 @@
 | --- | --- | --- | --- |
 | **T10** | shared `AgentSchema.network` + migration（编号实现期现取）+ 路由序列化 + `agent.md` round-trip + service mapper（DB `NULL` 必须在 mapper 省略，运行期只认精确 `'allow'`） | — | 存量行行为字节不变 |
 | **T11** | coordinator 新增 `model-child-egress-v1` + 能力 `modelChildLoopbackDeny`；既有两档 profile 定义**零改动** | — | 既有 profile digest 快照锁 |
-| **T12** | egress fail-closed：抽出纯函数 `evaluateContainment(profile, mode, capabilities)`，在**两条 `off` 提前返回**与 warn-missing 路径统一返回 blocked + 新错误码 `execution-identity-egress-unavailable` | T11 | 三档各一例；含 mode 在 qualification 期间切换的用例 |
+| **T12** | egress fail-closed：**复用 RFC-253 交付的 `failClosed: true` profile 字段**（不再自建 `#evaluate` 例外），只在 `model-child-egress-v1` 上声明 + 新错误码 `execution-identity-egress-unavailable` | T11、**RFC-253 的 `failClosed` 字段先落地** | 三档各一例；含 mode 在 qualification 期间切换的用例。若 RFC-253 延期，退路是本 RFC 自建同形逻辑并在其落地后合并 |
 | **T13** | `businessContainmentProfile` 入参扩展到可见 `dependents`；按整条 closure 判定「有模型可控子进程」与 network 一致性（不一致 ⇒ 启动期显式失败） | T10,T11 | §4.2 矩阵逐行 + closure 正反例；顺带锁住「root bash deny + 成员 bash allow」不再落 `childBoundary:'none'` |
 | **T14** | manifest `egress` 字段；`codec` 升 2 且 **reader 兼容 v1**（v1 归一化为 `egress:'deny'`）——wrapper 会再次 exec 产品入口，原位升级/恢复旧任务时 v1 manifest 仍会被读到（设计门 P1） | T11 | v1/v2 双向读取用例 |
 | **T15** | macOS egress 渲染（`network-outbound` 放行 + localhost 拒 + mDNSResponder unix socket） | T14 | 渲染断言 + gated 实跑 |
