@@ -20,7 +20,19 @@
 `.git/modules/**/config`，无需枚举（设计门 P0-3 由此消解）。未覆盖的通配名族
 （`filter.*` / `diff.*.textconv` / local `credential.helper`）见 design §1.3，登记 backlog。
 
-## PR-2 · G2 macOS child 默认禁写
+## PR-2 · G2 macOS child 默认禁写 —— ✅ 已交付
+
+| ID | 任务 | 状态 |
+| --- | --- | --- |
+| **T7** | `renderNetlessSeatbeltProfile` 从 `(allow default)` 改为 `(deny file-write* (subpath "/"))` + 显式 allow-back；写例外只有 `/dev` 与 macOS per-user 临时目录（`/private/var/folders` 及其 `/var` 别名——系统库绕过 `TMPDIR` 直接用它，今天本就可写，放回不是放宽） | ✅ |
+| **T8** | 两平台共用的可写/只读/遮蔽集合断言表（`rfc252-netless-write-deny.test.ts`）：两个渲染器都派生自 `netlessWritableSubtrees`，集合逐条比对；平台差异**穷尽登记**为「macOS 写例外 + `/private` 别名」两处，出现第三处即红 | ✅ 8/8 |
+| **T9** | gated 真 `sandbox-exec` 证据（`rfc227-seatbelt-integration.test.ts`）：`/Users/Shared` 成对断言（无沙箱可写 → 有沙箱被拒且文件未生成）、`/usr/bin/true` 仍可读可执行（只读而非遮蔽）、worktree/私有 HOME 照常可写、`> /dev/null` 正常 | ✅ 本机 `RUN_SANDBOX_ITEST=1` 2/2 |
+
+**变异验证**：摘掉全局禁写基线 ⇒ 2 红；只给 Linux 加一个可写根（模拟单平台漂移）⇒ 1 红；还原 ⇒ 全绿。
+其中「masks 之外不再可写」一条最初写成「不在显式可写列表里」——摘掉基线后**依然绿**（`(allow default)`
+让一切可写却没有显式条目），是假绿断言，已改为断言**有效策略**（`seatbeltWriteAllowed`）。
+
+<!-- 原计划表保留在下方，便于回看依赖与验收口径 -->
 
 | ID | 任务 | 依赖 | 验收 |
 | --- | --- | --- | --- |
@@ -66,7 +78,7 @@ PR-3: T10 ┐
 ## 验收清单（对应 proposal AC）
 
 - [x] AC-1 / AC-2 / AC-2b → T1–T6（含变异验证与「功能未被搞坏」同批断言）
-- [ ] AC-3 → T7, T8, T9
+- [x] AC-3 → T7, T8, T9（含真 sandbox-exec 成对断言与变异验证）
 - [ ] AC-6 / AC-7 → T15, T16
 - [ ] AC-8 → T12, T17, T18
 - [ ] AC-9 → T12, T17, T19

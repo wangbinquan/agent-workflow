@@ -1103,9 +1103,36 @@ function absoluteEnvPath(manifest: NetlessSubprocessManifest, name: 'HOME' | 'TM
 }
 
 /**
+ * RFC-252 G2 — macOS 侧的写例外。全局禁写之后必须把这几处放回来，否则连
+ * `> /dev/null` 都会失败。
+ *
+ * - `/dev`：设备节点。非 root 进程无法在 `/dev` 下**新建**文件，所以这不是植入面。
+ * - `/private/var/folders` 与其 `/var` 别名：macOS 的 per-user 临时目录
+ *   （`confstr(_CS_DARWIN_USER_TEMP_DIR)`）。child 已有私有 `TMPDIR`，但系统库与部分
+ *   工具链**绕过 `TMPDIR`** 直接用它。今天（`(allow default)`）它本来就可写，放回来不是
+ *   放宽，而是保持现状——Linux 侧没有这个等价物，故两平台在此有一行显式差异。
+ */
+const SEATBELT_NETLESS_WRITE_EXCEPTIONS: readonly string[] = [
+  '/dev',
+  '/private/var/folders',
+  '/var/folders',
+]
+
+/**
  * macOS model-child profile: provider/server networking remains outside this
  * inner launcher, while shell and local MCP descendants lose all network
  * access and see only their exact workspace/scratch/private-home allow-backs.
+ *
+ * RFC-252 G2 — 基线从 `(allow default)` 改为**全局默认禁写**。此前 macOS 与 Linux 不对称：
+ * Linux child 是 `--ro-bind / /`（全盘只读 + allow-back 可写），而 macOS 只遮 masks、
+ * masks 之外一律可写。实测本机 `/opt/homebrew/bin` 是 `drwxrwxrwx`，于是 child 可以覆写
+ * 任意 brew 二进制，等用户或 daemon 下次执行即在沙箱外获得执行——这条通道在 Linux 上
+ * 根本不存在。改为默认禁写后两平台的可写集合一致，而 Linux 早已在同等约束下长期运行，
+ * 这本身就是「不会搞坏功能」的证明。
+ *
+ * SBPL 是 last-match-wins，因此顺序是承重的：
+ *   allow default → 全局禁写 → 写例外 → 网络 → masks → 可穿越祖先 → 可写 allow-back
+ *   → 只读覆盖（必须最后，才能压过它自己所在的可写子树）
  */
 export function renderNetlessSeatbeltProfile(manifest: NetlessSubprocessManifest): string {
   const parsed = NetlessSubprocessManifestSchema.parse(manifest)
@@ -1119,7 +1146,11 @@ export function renderNetlessSeatbeltProfile(manifest: NetlessSubprocessManifest
   ])
   const writable = netlessWritableSubtrees(parsed, masks)
 
-  const lines = ['(version 1)', '(allow default)', '(deny network*)']
+  const lines = ['(version 1)', '(allow default)', '(deny file-write* (subpath "/"))']
+  for (const exception of SEATBELT_NETLESS_WRITE_EXCEPTIONS) {
+    lines.push(`(allow file-write* (subpath ${sbplString(exception)}))`)
+  }
+  lines.push('(deny network*)')
   for (const mask of masks) {
     lines.push(`(deny file-read* file-write* (subpath ${sbplString(mask)}))`)
   }
