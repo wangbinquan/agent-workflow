@@ -5,11 +5,12 @@
 | 关注点 | 现有单一事实源 | 本 RFC 的动作 |
 | --- | --- | --- |
 | daemon 侧 git 调用 | `util/git.ts:runGit`（`:132-158`）、`gitRepoCache.ts:spawnGit`（`:87-95`） | 两处共用新的 `util/gitHardening.ts`，不再各自拼 argv/env |
-| 沙箱策略渲染 | `services/sandbox/policy.ts`（`computeSandboxPolicy` / `renderSeatbeltProfile` / `renderBwrapArgs`） | 扩展输入输出，新增「遮读 + 全局禁写」档 |
+| 沙箱策略渲染 | `services/sandbox/policy.ts`（`computeSandboxPolicy` / `renderSeatbeltProfile` / `renderBwrapArgs`） | **不动**（G3 已移出本 RFC，见 §3） |
 | child 边界渲染 | `runtime/opencode/sealedSubprocess.ts`（`renderNetlessSeatbeltProfile` / `renderNetlessBwrapArgs`） | macOS 改默认禁写；两平台加 egress 分支 |
 | containment 准入 | `services/sandbox/containmentCoordinator.ts`（`CONTAINMENT_REQUIREMENT_PROFILES` + `admit()`） | 新增 1 档 profile + 1 个能力名 |
 | profile 选择 | `runtime/opencode/driver.ts:businessContainmentProfile`（`:63-67`） | 接入 `agent.network` |
-| 外层 ctx 组装 | `services/runner.ts:1373-1391` + `sandbox/index.ts:buildRunSandboxCtx` | 增加 `gitCommonDirs` 与 hermetic 档位透传 |
+| 外层 ctx 组装 | `services/runner.ts:1373-1391` + `sandbox/index.ts:buildRunSandboxCtx` | **不动**（同上） |
+| submodule 更新 | `services/gitSubmodule.ts:syncSubmodules` | argv 固定 `--checkout` |
 
 **红线**：`SpawnPlan.cmd` 保持 pristine（`sandbox/index.ts:1-7` 的既有约定），沙箱仍在最后一刻包裹；
 coordinator 仍是 topology 的唯一所有者，driver 只声明 profile。
@@ -41,182 +42,66 @@ repo-local config，这两个环境变量对 local 作用域**完全无效**；�
 config 里的 `credential.helper`（macOS 的 osxkeychain 就在 system config），打断依赖本机
 凭据助手的私有仓 fetch。二者是净负收益。
 
+**子命令级修正（`-c` 压不住、但有等价的命令行开关）**：
+
+- `diff.external` —— **不能**用 `-c diff.external=`：实测 git 会去执行空命令并报
+  `cannot run : No such file or directory`，把 diff 直接搞坏。正解是给 `diff` 子命令补
+  `--no-ext-diff`；实测它是**子命令的**选项，放在子命令之前是 `unknown option`，故
+  `withExternalDiffDisabled` 插在子命令**紧后**。对没配 external diff 的仓库是 no-op，
+  且 daemon 本来就要解析 unified diff（外部 diff 程序的输出根本不可解析）——这条既是
+  安全修复也是正确性修复。
+- `submodule.<name>.update = !cmd` —— 通配名，`-c` 压不住；改为在
+  `syncSubmodules` 的 argv 固定 `--checkout`。`--checkout` 本就是 git 默认策略，
+  只是拿掉 config 覆盖它的能力，对诚实仓库零行为变化。（`gitSubmodule.ts` 的另一个
+  调用点早已传 `--checkout`，两处不得再漂移。）
+
 **不覆盖的固定名键与理由**：
 
 - `core.sshCommand` —— `nonInteractiveGitEnv()` 恒设 `GIT_SSH_COMMAND`（`util/git.ts:34-40`），
   env 优先级高于 config，已被压过。
 - `credential.helper` —— `-c credential.helper=` 会清空**全部**（含全局）helper 列表，
-  打断合法凭据链。改由 §1.2 检测。
+  打断合法凭据链。**本轮不处理**（检测层已移出），登记 backlog。
 - `core.pager` / `core.editor` —— 非交互 + 管道输出，daemon 路径不触发。
 
-### 1.2 篡改基线（detect 层）
+**实现踩坑（已写进源码注释）**：`mkdirSync(dir, { recursive: true, mode: 0o500 })` 会把
+`mode` 应用到**每一级**新建目录，父目录 `gitguard/` 随即不可写、叶子目录 EACCES 建不出来。
+必须先按默认权限建全链、再单独 `chmod` 叶子。
 
-`-c` 压不住通配名族（`filter.<n>.clean/smudge/process`、`diff.<n>.command/textconv`、
-`merge.<n>.driver`、`url.<n>.insteadOf`、`alias.*`），它们同样能在 checkout / merge /
-diff 时执行代码。对这一族采用**基线 + 校验 + 拒绝**，不改写用户仓库（D1）。
+### 1.2 检测层——本轮移出
 
-```ts
-export interface GitGuardBaseline {
-  /** hooks 目录内每个常规文件的 sha256（含非可执行位，防止先放后 chmod）。 */
-  hooks: Record<string, string>
-  /** exec 能力 local config 的 `name=value` 全集，排序后逐条记录。 */
-  execConfig: string[]
-  sealedAt: number
-}
+原设计还有一层「hooks 与 exec 类 local config 基线指纹 + 漂移即拒绝」。**已整体移出**，
+两个理由：
 
-export function execCapableConfigKey(name: string): boolean   // 纯函数，锁在单测
-export async function sealGitGuard(gitCommonDir: string, appHome: string): Promise<void>
-export async function assertGitGuard(gitCommonDir: string, appHome: string): Promise<void>
-```
+1. 用户定调「做安全不能把功能限制住」——误报一次就等于一次任务失败，而基线在真实仓库上
+   （用户自己装 husky、自己改 config）必然产生误报。
+2. 设计门 P0 指出我原本的「该仓无活跃任务时自动重封」还会**把上一个任务植入的恶意配置
+   洗白**，并与新任务启动存在竞态。修好它需要引入 per-common-dir lease，复杂度和破坏面
+   都远超收益。
 
-- **匹配集**（`execCapableConfigKey`，全部小写比较）：
-  `core.(hooksPath|fsmonitor|sshCommand|pager|editor|askpass|externalDiff|gitProxy|alternateRefsCommand)`、
-  `credential(\..+)?\.helper`、`filter\..+\.(clean|smudge|process)`、
-  `diff\..+\.(command|textconv)`、`merge\..+\.driver`、`gpg(\..+)?\.program`、
-  `ssh\.variant`、`url\..+\.insteadOf`、`protocol(\..+)?\.allow`、`init\.templateDir`、
-  `alias\..+`、`uploadpack\.packObjectsHook`。
-  **刻意不含**平台自己会写的键（`submodule.*.url`、`core.sparseCheckout`、
-  `extensions.*`、`remote.*.url`）⇒ 平台的合法写入不会触发重封。
-- **读取方式**：`git --local --list --null config`（同样带 §1.1 的 `-c` 前缀；
-  `git config` 自身不跑 hook）。
-- **落盘位置**：`<appHome>/gitguard/<sha256(realpath(gitCommonDir))>.json`，`0600`。
-  位于 appHome ⇒ 在两层沙箱的拒绝区内，agent 不可写。
-- **校验时机**：`assertGitGuard` 由 `runGit`/`spawnGit` 在 spawn 前调用。
-  廉价预检：`stat` hooks 目录与 `config` 文件的 `(ino, size, mtimeNs)`，命中缓存直接放行；
-  不命中才重新哈希。缓存为进程内 `Map<gitCommonDir, {stat, baseline}>`。
-- **封存时机（关键：避免误报）**：只在**没有任何任务对该 gitdir 持有写权限**时封存/重封——
-  即 `createWorktree` / cold clone / warm fetch 前，先查该仓是否有活跃任务
-  （`tasks.status ∈ 非终态` 且 repo 命中）。有活跃任务则**不重封**，沿用旧基线。
-  这样用户在两次任务之间对自己仓库做的合法改动会被自然吸收，而 agent 运行期的改动
-  一定被判为篡改。
-- **失败语义**：`assertGitGuard` 失败时**不抛**（保持 `runGit` "never throws" 契约），
-  返回 `{stdout:'', stderr:'git-guard-tampered: <key|hook>', exitCode: GIT_GUARD_EXIT_CODE}`
-  （与 `GIT_TIMEOUT_EXIT_CODE` 同一手法，`util/git.ts:195` 先例），并发一条任务级告警
-  + 一条 node event（`NODE_EVENT_KIND` 追加 `git-guard-tampered`，TEXT 列**无需 migration**，
-  RFC-034 先例）。调用方按既有 `exitCode !== 0` 路径失败，不需要逐点改。
+覆盖层已经吸收了这一层的多数收益：`-c` 压过**所有** config 作用域，因此
+`config.worktree` 与 `.git/modules/**/config` 这两个设计门单独点名的面**自动被覆盖**，
+无需枚举。
 
-### 1.3 覆盖不到的残留
+### 1.3 覆盖不到的残留（登记 `docs/audit-backlog.md`）
 
-`.gitattributes` 驱动的 filter/diff 若配合**全局**config 里已存在的 filter 定义仍可生效
-（agent 只需改 `.gitattributes` 即可命中用户全局的 `filter.lfs.*`）。当前仓**零 LFS 支持**
-（全仓 grep 无命中），故 v1 不处理，登记 `docs/audit-backlog.md`。
+- `filter.<n>.clean/smudge/process`、`diff.<n>.textconv`：通配名，`-c` 压不住，需要先
+  枚举再逐名覆盖。无差别关闭会打断用户全局 git-lfs 配置——那是真实功能损害，故留作
+  独立切片（正确形态：只中和 **local/worktree 作用域**的条目，system/global 不动）。
+- `credential.helper` 的 local 作用域条目：同上，`-c` 清空会连带打断合法凭据链。
+- 非 agent 触发的 daemon 侧执行面（runtime probe / MCP probe / 插件安装）：不属于本 RFC
+  的「恶意 agent」威胁模型，但确实是 daemon 身份的无沙箱执行，单独登记。
 
----
+## §3 G3 外层强档——本轮移出
 
-## §2 G2 — macOS child 默认禁写（对齐 Linux）
+原 §3 的「遮读真实 `$HOME` + appHome、全局默认禁写」**整项移出本 RFC**，理由见
+proposal §非目标：它同时具备本 RFC 最大的破坏面（`systemAgentRun` / `memoryDistiller` /
+`runtimeSmoke` 都经 `verifiedSystemPlan`，设计门 P1 指出我原本的消费者矩阵自相矛盾）
+和最小的即时收益（verified 路径的业务 agent 没有进程内 FS 工具，故它只是纵深防御）。
+设计门 P0-7 关于「`hermeticOuter` 走 plan 字段绕过 RFC-233 单一事实源」的争议也随之消失
+——重做时必须走 coordinator-owned profile/capability，`userHomeIsolation` 只能由实际
+admitted topology + renderer 结果产生。
 
-`renderNetlessSeatbeltProfile`（`sealedSubprocess.ts:1110-1150`）当前是
-`(allow default)` + 遮 masks，masks 之外可写。改为：
-
-```
-(version 1)
-(allow default)
-(deny file-write* (subpath "/"))          ; ← 新增：全局默认禁写
-(deny network*)                            ; egress 关时；开时见 §4
-(deny file-read* file-write* <每个 mask>)
-(allow file-read-metadata (literal <可穿越祖先>))
-(allow file-read* file-write* (subpath <每个 writable>))
-(allow file-write-data (literal "/dev/null"))
-(allow file-write-data (literal "/dev/dtracehelper"))
-(allow file-write* (subpath "/dev/fd"))    ; 具体白名单以 gated 实跑收敛
-(allow file-read* (subpath <bindReadOnly>))
-(deny file-write* (subpath <bindReadOnly>))
-```
-
-顺序是 SBPL last-match-wins 的：全局禁写必须在 allow-back **之前**，`/dev` 例外与
-只读覆盖必须在其**之后**。Linux 侧 `renderNetlessBwrapArgs` 已经是 `--ro-bind / /` +
-`--dev /dev`，本节不改 Linux —— 目的正是让两平台**同一组断言可以共用一张测试表**。
-
-`/dev` 白名单以真实 `sandbox-exec` 跑通 `python3 -c` / `/bin/sh` 常见写法为准
-（gated `RUN_SANDBOX_ITEST=1`），设计不预先固化全集。
-
----
-
-## §3 G3 — 外层「遮读 + 全局禁写」强档
-
-### 3.1 policy 接口扩展
-
-```ts
-export interface SandboxPolicyInput {
-  appHome: string
-  taskWorktrees: readonly string[]
-  runDir: string
-  readOnlySubtrees?: readonly string[]
-  /** RFC-252：env-hermetic 运行时才提供；提供即进入强档。 */
-  hermetic?: { realHome: string }
-  /** RFC-252：git 公共目录。path 模式仓库的 .git 在 $HOME 下，遮蔽后必须允许回来。 */
-  gitCommonDirs?: readonly string[]
-}
-
-export interface SandboxPolicy {
-  denySubtrees: string[]        // 强档下 = [appHome, realHome]
-  denyFiles: string[]
-  allowSubtrees: string[]       // + gitCommonDirs
-  allowMetadataFiles: string[]
-  readOnlySubtrees: string[]
-  /** RFC-252：true ⇒ 全局默认禁写，仅 allowSubtrees + writeExceptions 可写。 */
-  writeDenyDefault: boolean
-  /** RFC-252：临时目录与 /dev 例外（D3：本轮不私有化 /tmp）。 */
-  writeExceptions: string[]
-}
-```
-
-弱档（`hermetic` 缺省）渲染结果与今天**逐字节不变**——存量调用方（claude、legacy、
-system agent、distiller、smoke）零行为变化，这是 D4 的实现方式。
-
-### 3.2 渲染
-
-- **Seatbelt**：`(allow default)` → `(deny file-write* (subpath "/"))` →
-  `(deny file-read* file-write* (subpath appHome|realHome))` → allow-back 读写 →
-  metadata 祖先 → `writeExceptions` → RO 覆盖。
-- **bwrap**：`--die-with-parent --unshare-pid --ro-bind / / --proc /proc --dev /dev`
-  → `--tmpfs realHome` `--tmpfs appHome` → 对每个 allow-back 先 `--dir <被遮 mask 下的父链>`
-  再 `--bind`（沿用 `sealedSubprocess.ts:1044-1051` 的 `parentDirs`/`--dir` 手法）
-  → `--bind /tmp /tmp` `--bind /var/tmp /var/tmp`（writeExceptions）
-  → `--ro-bind` readOnlySubtrees。
-
-  bwrap 的 `--bind` 源路径按**原始根**解析，故「先 tmpfs 遮蔽、再 bind 其下子树」成立——
-  这正是现网 `policy.ts:195-201`（tmpfs appHome 后 bind 其下 worktree）已在用的形态。
-
-### 3.3 嵌套不变量（AC-4 的硬约束）
-
-Linux 上 child bwrap 运行在 outer bwrap **内部**，child 的 `--bind <gitCommonDir>` 源路径
-必须在 outer 的视图里存在。因此：
-
-```
-child.writable ∪ child.bindReadOnly  ⊆  outer.allowSubtrees ∪ outer.readable
-```
-
-实现上由 `verifiedPlan` 把 `gitCommonDirs`（它本来就要算给 netless manifest，
-`verifiedPlan.ts:684`）一并放进 `SpawnPlan`，runner 合入 sandbox ctx。
-加一条**纯函数断言** `assertNestedContainmentInvariant(outer, child)` 并在计划装配处调用，
-测试直接对它下断言（不依赖真跑 bwrap）。
-
-### 3.4 档位传递
-
-`SpawnPlan` 增两个可选字段（与既有 `readOnlySubtrees` / `sessionStore` 同一 seam）：
-
-```ts
-hermeticOuter?: boolean          // 仅 buildVerifiedOpencode{Business,System}Plan 置 true
-gitCommonDirs?: readonly string[]
-```
-
-`runner.ts:1373-1391` 合入 ctx；`buildRunSandboxCtx` 增加对应可选入参。
-**不新增 requirement profile**：G3 不改变准入判据，只改变同一 profile 下策略的**内容**。
-但 receipt 必须如实报告 —— `ContainmentRuntimeProjection.capabilities` 增补
-`userHomeIsolation: 'strong' | 'absent'`，由 plan 的 `hermeticOuter` 决定，
-供 Settings→Runtime 与任务告警显示。
-
-### 3.5 macOS 的已知失效面（D5）
-
-macOS 上凡 `agent.permission.bash !== 'deny'` 或有 local MCP 的节点，topology 是
-`provider-child-only`（`containmentCoordinator.ts:755-758`），外层根本不被应用
-（`sandbox/index.ts:132-134`）⇒ **G3 在这些节点上不生效**。这是本 RFC 明示接受的限制，
-必须同时：(a) 在 `diagnostics` 里保留既有 `runnerSandboxed=false`；(b) 在
-`docs/sandbox.md` 与 `docs/audit-backlog.md` 各记一条；(c) 不得让 receipt 声称
-`userHomeIsolation: strong`（此时应为 `absent`）。
-
----
+`services/sandbox/policy.ts` 与 `runner.ts` 的 sandbox ctx 组装在本 RFC 内**零改动**。
 
 ## §4 G4 — 受控出网
 
@@ -253,6 +138,17 @@ macOS 上凡 `agent.permission.bash !== 'deny'` 或有 local MCP 的节点，top
 | `deny`/缺省 | 否 | `runner-filesystem-v1`（不变） |
 | `allow` | 是 | **`model-child-egress-v1`** |
 | `allow` | 否 | `runner-filesystem-v1` + 一条「network 授权无效果」提示 |
+
+**closure 级授权（设计门 P0-5）**：`businessContainmentProfile` 当前入参是
+`Pick<BusinessNodeSpawnContext, 'agent' | 'mcps' | 'runtimeCmd'>`（`runtime/types.ts:643-645`），
+**看不见 `dependsOn` 闭包**；而 RFC-251 之后整条 closure **共用同一个 shell wrapper**
+（受控配置顶层 `shell: input.shellPath`），因此「按单个 agent 授权网络」在物理上不可实现。
+本 RFC 据此把授权提升为**整条 execution closure 的属性**：
+
+- 入参扩展为可见 `dependents`；「有模型可控子进程」按**整条 closure** 判定
+  （顺带修掉一个既有缺口：root `bash: deny` + 成员 `bash: allow` 时今天会落
+  `childBoundary:'none'`，模型可控的 shell 因此拿不到 netless 边界）。
+- closure 内 `network` 声明**必须一致**，否则启动期显式失败；不取并集——并集等于静默提权。
 
 ### 4.3 fail-closed 例外（AC-8）
 
@@ -305,43 +201,51 @@ macOS 上凡 `agent.permission.bash !== 'deny'` 或有 local MCP 的节点，top
 
 | 场景 | 行为 | 可观测 |
 | --- | --- | --- |
-| hooks/config 被改后 daemon 跑 git | 该次 git 返回 `GIT_GUARD_EXIT_CODE`，调用方按既有失败路径处理 | 任务告警 + node event `git-guard-tampered` |
-| gitguard 基线文件缺失/损坏 | 视为「无基线」⇒ 若无活跃任务则重封；有活跃任务则**拒绝**（fail closed） | 同上，理由码区分 |
-| 强档下 child bind 源不存在 | 由 `assertNestedContainmentInvariant` 在装配期拦截 | `execution-identity-store-unsafe` |
+| 仓库里存在 hook / `core.hooksPath` / `core.fsmonitor` / `diff.external` | daemon 侧 git **照常成功**，只是不执行它们 | 无（刻意不告警：告警等于把用户自己的 husky 也当攻击） |
+| `submodule.<n>.update = !cmd` | `--checkout` 固定策略，配置被忽略 | 无 |
 | egress 能力不可用 | blocked（所有 mode） | `execution-identity-egress-unavailable` + Settings→Runtime 显示 |
-| `network:'allow'` 但无模型子进程 | 正常运行，profile 退回 `runner-filesystem-v1` | 一条 info 级提示 |
-| macOS bash 节点 + G3 | 外层不生效，`userHomeIsolation: 'absent'` | receipt / Settings 如实显示 |
+| `network:'allow'` 但整条 closure 无模型子进程 | 正常运行，profile 退回 `runner-filesystem-v1` | 一条 info 级提示 |
+| closure 内 network 声明不一致 | 启动期显式失败，不静默取其一 | 明确错误信息指出冲突成员 |
+
+**刻意没有的失败模式**：G1 不引入任何新的「拒绝执行」路径。这是本 RFC 与初版设计最大的
+差别——初版的基线检测层会在误报时让任务失败，违反「做安全不能把功能限制住」。
 
 ## §6 测试策略
 
-**必写（design 门要求全绿才算交付）**：
+**G1（已交付，`packages/backend/tests/rfc252-git-hardening.test.ts`，8 用例全绿）**：
 
-1. `gitHardening` 纯函数：`execCapableConfigKey` 正反例表（含大小写、通配名、
-   平台自写键必须不命中）；`hardenedGitLeadingArgs` argv 顺序。
-2. **红→绿回归**（直接复刻 proposal §背景 的实测脚本）：真 git 仓 + hook + fsmonitor，
-   断言硬化前触发、硬化后不触发。文件顶端注明「锁 RFC-252 G1」。
-3. `sealGitGuard`/`assertGitGuard`：篡改 hook / 加 `filter.x.smudge` / 删基线 /
-   有活跃任务时不得重封 / 平台自写 `submodule.*.url` 不触发。
-4. `computeSandboxPolicy` 强弱两档快照：弱档必须**与今天逐字节相同**（防回归）；
-   强档断言 `writeDenyDefault` + realHome 进 deny + gitCommonDirs 进 allow。
-5. `renderSeatbeltProfile` / `renderBwrapArgs` 强档渲染顺序断言（禁写在 allow-back 前、
-   例外与 RO 在后）。
-6. `assertNestedContainmentInvariant` 正反例。
-7. `renderNetlessSeatbeltProfile` 默认禁写（G2）+ 与 Linux 共用的 writable/deny 断言表。
-8. coordinator：新 profile 的 required 集合、egress fail-closed 三档（enforce/warn/off 全 blocked）、
-   既有两档 profile 决策**零变化**。
-9. driver profile 选择矩阵（§4.2 四行）。
-10. shared schema + migration + 路由序列化 + 前端 AgentForm/chip + i18n 双语对称。
-11. **gated 集成**（`RUN_SANDBOX_ITEST=1`）：macOS 真 `sandbox-exec` 跑 G2/G3/egress 三组；
-    Linux 真 bwrap 跑强档 + egress（含 `python3` 真实 HTTPS + loopback 被拒）。
+1. 纯函数：`gitSubcommandIndex`（跳过 `-c`/`-C`，覆盖生产里真实存在的
+   `-c core.quotepath=false diff …` 形态）、`withExternalDiffDisabled`（只改 diff、插在
+   子命令紧后、非 diff 原样、幂等）、`hardenedGitLeadingArgs`（argv 顺序 + 空 hooks 目录
+   落在 appHome 内 + `core.fsmonitor` 必须是布尔字面量）。
+2. **成对回归**：一个装好四类陷阱（`.git/hooks/`、repo-local `core.hooksPath` 指向
+   worktree 内、`core.fsmonitor`、`diff.external`）的真 git 仓，每个用例都跑
+   「裸 git 必须触发（对照组）+ 生产 `runGit` 必须不触发」。没有对照组的用例是恒绿空断言。
+3. **功能未被搞坏**同批断言：worktree 建得出来、`status` 仍报告改动文件、`diff` 仍输出
+   可解析 unified diff（含 `-one`/`+two`）、`commit` 仍成功。
+4. `syncSubmodules` 经 `runGitImpl` seam 断言 argv 含 `--checkout`。
+5. **变异验证**（已实跑）：`hardenedGitLeadingArgs` 返回 `[]` ⇒ 5 红；
+   `withExternalDiffDisabled` 变恒等 ⇒ 2 红；还原 ⇒ 8 绿。
+
+**G2 / G4（待实现）**：
+
+6. `renderNetlessSeatbeltProfile` 默认禁写 + 与 Linux 共用的 writable/deny 断言表。
+7. coordinator：新 profile 的 required 集合、egress fail-closed 三档
+   （enforce/warn/off 全 blocked）、既有两档 profile 决策**零变化**（快照锁）。
+8. driver profile 选择矩阵（§4.2，含 closure 一致性校验的正反例）。
+9. shared schema + migration + 路由序列化 + agent.md round-trip + 前端 AgentForm/chip
+   + i18n 双语对称。
+10. **gated 集成**（`RUN_SANDBOX_ITEST=1`）：macOS 真 `sandbox-exec` 跑 G2 与 egress；
+    Linux 真 bwrap 跑 egress（`python3` 真实 HTTPS 成功 + loopback 被拒，覆盖 `127/8`、
+    `::1`、IPv4-mapped IPv6）。
 
 **不允许**：以「重跑就过了」作为通过依据（CLAUDE.md）。gated 用例必须能在本机稳定复现。
 
-## §7 未决 / 交设计门复核
+## §7 未决
 
-1. G3 的档位用 **plan 字段**（`hermeticOuter`）而非新增 requirement profile ——
-   理由是它不改变准入判据只改变策略内容，且 `readOnlySubtrees`/`sessionStore` 已是同一 seam。
-   若设计门认为必须进 capability registry，改动集中在 §3.4 一处。
-2. Linux egress 的用户态网络栈选型与嵌套可行性（§4.4）。
-3. `alias.*` 是否纳入 exec 键集：daemon 全部使用显式子命令，alias 不会被触发，
-   纳入只增误报面；当前**纳入**是保守选择，设计门可要求剔除。
+1. Linux egress 的用户态网络栈选型与嵌套可行性（§4.4）——实现期 gated 实测定稿；
+   若嵌套下 pasta / slirp4netns 均不可行，**停下回设计门**，不得自行改拓扑。
+2. G4 的 closure 一致性：mixed closure（root 与成员 network 声明不同）一律启动期失败，
+   还是取「全 closure 并集」？当前设计取**显式失败**，因为并集等于静默提权。
+3. G3（外层强档）重做时的档位形态：必须是 coordinator-owned profile/capability，
+   不得再走 plan 字段（设计门 P0-7）。

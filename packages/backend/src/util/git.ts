@@ -11,6 +11,7 @@ import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { hardenedGitLeadingArgs, withExternalDiffDisabled } from '@/util/gitHardening'
 import type { Logger } from '@/util/log'
 
 export interface GitRunResult {
@@ -135,7 +136,12 @@ export async function runGit(
   opts?: { env?: Record<string, string | undefined>; stdin?: string; timeoutMs?: number },
 ): Promise<GitRunResult> {
   const proc = Bun.spawn({
-    cmd: ['git', '-C', cwd, ...args],
+    // RFC-252 G1: every daemon-side git spawn carries the hardening overrides.
+    // `-c` outranks EVERY config scope (system/global/local/worktree/modules), so
+    // this is the only mechanism that can beat what an agent writes into the git
+    // dir it legitimately owns. See util/gitHardening.ts for the threat model and
+    // the measured evidence.
+    cmd: ['git', ...hardenedGitLeadingArgs(), '-C', cwd, ...withExternalDiffDisabled(args)],
     // Explicit env passthrough — Bun.spawn under `bun test` does not pick up
     // post-startup process.env mutations otherwise, which makes per-test env
     // injection (e.g. GIT_CONFIG_GLOBAL) unreliable. In production this is a

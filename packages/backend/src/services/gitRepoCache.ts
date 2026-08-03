@@ -35,6 +35,7 @@ import { dbTxSync } from '@/db/txSync'
 import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { classifyBaseRef, GIT_TIMEOUT_EXIT_CODE, nonInteractiveGitEnv, runGit } from '@/util/git'
+import { hardenedGitLeadingArgs, withExternalDiffDisabled } from '@/util/gitHardening'
 import { createLogger } from '@/util/log'
 import { leaseGitCredential } from '@/services/gitCredential'
 import { redactSensitiveString } from '@/util/redact'
@@ -89,7 +90,9 @@ async function spawnGit(
   opts?: { timeoutMs?: number; env?: Record<string, string> },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn({
-    cmd: ['git', ...args],
+    // RFC-252 G1: same hardening as runGit — this is the second (and only other)
+    // production git spawn point, so the two must not drift.
+    cmd: ['git', ...hardenedGitLeadingArgs(), ...withExternalDiffDisabled(args)],
     // Explicit env passthrough — see runGit() in util/git.ts for rationale.
     // nonInteractiveGitEnv() also stops ssh from hanging the daemon on first
     // connect to an unknown host (ssh reads /dev/tty, not stdin, for prompts).

@@ -58,17 +58,34 @@ A（无 FS 工具）这条面暂时无法被模型直接驱动，但它是纵深
 
 ## 目标
 
+**总纲（用户 2026-08-03 定调）：做安全不能把功能限制住。** 本 RFC 的每一项都必须对
+正常 agent 行为**零影响**，凡「为了安全而可能让任务失败」的手段一律不采用——包括
+误报即失败的检测/拒绝层。下面三项都按这条准绳裁过。
+
 1. **G1 — 关闭 daemon 侧 git 执行面**：agent 无法通过 hook / repo-local config 让
-   daemon 在沙箱外执行代码。
+   daemon 在沙箱外执行代码。手段**只用命令行覆盖**（`-c` 优先级高于所有 config 作用域
+   + 子命令级 `--no-ext-diff` / `--checkout`），每一条都经实测确认对正常 git 行为零影响。
 2. **G2 — macOS child 与 Linux 对齐**：默认禁写 + 显式 allow-back，消除 `(allow default)`
-   带来的「改写主机上任意 user-writable 二进制」通道。
-3. **G3 — 外层对 env-hermetic 运行时收紧**：遮蔽真实 `$HOME` 与 appHome 的读、全局默认
-   禁写，仅 allow-back 可写。按能力分档，只作用于声明了 env-hermetic 的运行时。
-4. **G4 — 受控出网**：agent 可显式声明 `network: 'allow'`，其模型可控子进程获得**任意公网**
-   访问，但**不得**触达 loopback。默认 `deny`，存量 agent 行为字节不变。
+   带来的「改写主机上任意 user-writable 二进制」通道。允许集与 Linux 完全相同，而 Linux
+   早已在 `--ro-bind / /` 下长期运行，等价性即功能安全性的证明。
+3. **G4 — 受控出网**：agent 可显式声明 `network: 'allow'`，其模型可控子进程获得**任意公网**
+   访问，但**不得**触达 loopback。默认 `deny`，存量 agent 行为字节不变。这是**净增功能**。
 
 ## 非目标
 
+- **外层「遮读真实 `$HOME` + 全局禁写」强档（原 G3）——本轮移出**。理由是它同时具备
+  本 RFC 里**最大的破坏面**和**最小的即时收益**：破坏面上，`systemAgentRun` /
+  `memoryDistiller` / `runtimeSmoke` 都经 `verifiedSystemPlan`，稍有不慎就会误进强档
+  （设计门 P1 已指出这条自相矛盾）；收益上，verified 路径的业务 agent **根本没有
+  进程内 FS 工具**（见背景 A），所以它只是纵深防御，而不是堵一个当前可利用的洞。
+  按「不能为安全把功能搞坏」的总纲，它应当作为独立切片单独评估。
+- **daemon 侧 git 的「基线指纹 + 漂移即拒绝」检测层（原 G1 第二层）——本轮移出**。
+  误报直接等于任务失败，且设计门 P0 指出我原本的「无活跃任务就自动重封」还会把上一个
+  任务植入的恶意配置洗白。改为纯覆盖后，这一层的多数收益已被覆盖层吸收（`-c` 压过
+  **所有**作用域，顺带覆盖 `config.worktree` 与 `.git/modules/**`，无需枚举）。
+- **`filter.<n>.clean/smudge/process` 与 `diff.<n>.textconv`**：通配名，`-c` 压不住，
+  必须先枚举再逐名覆盖；而无差别关闭会打断用户全局 git-lfs 配置（真实功能损害）。
+  登记 `docs/audit-backlog.md`，作为独立切片处理。
 - **域名白名单 / 出网代理**（原审计 ③ 的完整形态）。本轮只做「放行公网 + 拒 loopback」，
   代理白名单作为后续切片，profile 契约留好升级位。
 - **翻转 macOS 的 topology 取舍**（`provider-child-only` ⇒ server 进程不被外层包裹）。
@@ -92,21 +109,22 @@ A（无 FS 工具）这条面暂时无法被模型直接驱动，但它是纵深
 
 ## 验收标准
 
-- **AC-1**：daemon 侧任一 git 调用都携带固定的 `-c` 覆盖集；仓库内放置
-  `hooks/post-checkout`、`core.fsmonitor` 后，`worktree add` / `status` / `commit`
-  **不再**执行它（红→绿回归测试直接复刻本 RFC 背景里的实测脚本）。
-- **AC-2**：worktree/镜像创建时记录 hooks 与 exec 类 local config 基线；事后被改动时，
-  daemon 侧 git 操作**拒绝执行**并产生一条任务级告警，且**不修改用户仓库**任何内容。
+- **AC-1**：daemon 侧任一 git 调用都携带固定的 `-c` 覆盖集与子命令级修正；仓库内布置
+  `.git/hooks/post-checkout`、repo-local `core.hooksPath`、`core.fsmonitor`、
+  `diff.external` 四类陷阱后，`worktree add` / `status` / `diff` / `commit` **不再**执行
+  任何一条。每个用例必须**成对**跑「裸 git 触发（对照组）+ 生产路径不触发」，否则它是
+  恒绿的空断言。
+- **AC-2**：上述硬化对正常功能零影响——worktree 建得出来、`status` 仍报告改动文件、
+  `diff` 仍输出可解析的 unified diff、`commit` 仍成功。且**摘掉修复即变红**（变异验证）。
+- **AC-2b**：`submodule update` 固定 `--checkout` 策略，堵掉 repo-local
+  `submodule.<name>.update = !cmd`；`--checkout` 本就是 git 默认策略，对诚实仓库零行为变化。
 - **AC-3**：macOS child profile 默认禁写；child 内写 `/opt/homebrew/bin/x`、
   `/Users/Shared/x` 失败，写 worktree / scratch / 私有 HOME / gitCommonDir 成功。
   与 Linux 同一组断言共用测试表。
-- **AC-4**：G3 生效时，外层内读 `$HOME/.ssh/id_rsa`、写 `$HOME/.zshrc` 均失败；
-  worktree / runDir / store / repos / gitCommonDirs 读写正常；
-  **嵌套不变量**：child 的全部 writable 与 bindReadOnly 均是外层允许集的子集
-  （否则 Linux 上 child 的 bind 源路径不存在，spawn 直接失败）。
-- **AC-5**：claude-code 节点与未声明 hermetic 的运行时**不进入** G3 强档，行为字节不变。
 - **AC-6**：`network: 'allow'` 的 agent，其 bash 子进程内 `python3` 能完成一次真实
-  HTTPS 请求（gated 集成测试）；`network` 缺省/`'deny'` 的 agent 仍然 100% 无网。
+  HTTPS 请求（gated 集成测试）；`network` 缺省/`'deny'` 且**containment 实际生效**
+  （decision=`contained`）时无网。**不声称「100% 无网」**——`warn` 降级与 `off` 档下
+  child 本就没有 wrapper，这属于既有的、管理员显式接受的降级语义（设计门 P0-6）。
 - **AC-7**：`network: 'allow'` 时，child 内访问 `127.0.0.1:<daemon port>` 与
   `localhost` 上任意端口**失败**。
 - **AC-8**：Linux 上 loopback-deny 能力不可用（未装 pasta/slirp4netns 或探测失败）时，
@@ -121,25 +139,63 @@ A（无 FS 工具）这条面暂时无法被模型直接驱动，但它是纵深
 
 | 编号 | 决策 | 取舍 |
 | --- | --- | --- |
-| **D1** | git 硬化 = `-c` 覆盖 **+** 篡改检测拒绝 | 不采用「剥除用户仓 config 键」（会改写用户真实仓库） |
+| **D1** | git 硬化 = `-c` 覆盖 **+** 篡改检测拒绝 | 不采用「剥除用户仓 config 键」（会改写用户真实仓库）。**D1′（2026-08-03 修订）**：检测/拒绝层整体移出——用户定调「做安全不能把功能限制住」，误报即任务失败；且设计门 P0 指出原「无活跃任务就重封」会洗白上一任务植入的配置。改为纯覆盖 |
 | **D2** | 不用 `GIT_CONFIG_NOSYSTEM`/`GIT_CONFIG_GLOBAL` 做主手段 | 威胁来自 repo-local；而全局/系统 config 恰是 `credential.helper`（macOS osxkeychain 在 system config）的所在，一刀切会打断私有仓 HTTPS fetch |
-| **D3** | 外层强度 = 遮读（真实 `$HOME` + appHome）+ 全局禁写 | 不选「只禁写保留读」（`~/.ssh` 仍可读）；不选「/tmp 一并私有化」（Bun/macOS `/private/var/folders` 兼容风险） |
-| **D4** | 按能力分档，只给 env-hermetic 运行时 | claude 不动；不按 OS/厂商名分叉（RFC-227） |
-| **D5** | macOS topology 本次不翻 | G3 在 mac 上只覆盖无 bash/local-MCP 的节点，登记后续 |
+| **D3** | 外层强度 = 遮读（真实 `$HOME` + appHome）+ 全局禁写 | **D3′（2026-08-03 修订）**：整项（G3）移出本 RFC——最大破坏面 × 最小即时收益，见非目标 |
+| **D4** | 按能力分档，只给 env-hermetic 运行时 | 随 G3 一并移出；claude 不动这条保持 |
+| **D5** | macOS topology 本次不翻 | 保持。G3 移出后该限制不再影响本 RFC 的交付面 |
 | **D6** | 出网范围 = 任意公网 + 拒 loopback | 不做域名白名单代理（后续切片） |
 | **D7** | 出网开关粒度 = 按 agent 声明，默认 `deny` | 不做全局开关，不做节点级 override |
 | **D8** | ④ 的做法从「遮蔽 homebrew」升级为「默认禁写」 | 单点遮蔽治标；默认禁写与 Linux `--ro-bind /` 对齐，且 Linux 侧已长期证明可用。只读而非遮蔽 ⇒ `/opt/homebrew/bin/python3` 仍可执行 |
 
+## 设计门（Codex，2026-08-03）
+
+结论 **NEEDS ATTENTION — 7 P0 / 12 P1 / 1 P2**，从 pin 到 `4bae2aca` 的分离 worktree 跑，
+带独立的「已核查未发现问题」小节（非空洞通过）。逐条复核后的处置：
+
+**接受并已改**：
+
+- 我凭空造了 `core.externalDiff` 这个**不存在的** git 键，真键是 `diff.external`——
+  本机实测坐实（传 `core.externalDiff` 不执行、`diff.external` 执行）。已改为
+  子命令级 `--no-ext-diff`（实测：它是 diff 子命令的选项，放在子命令前会 unknown option；
+  而 `-c diff.external=` 会让 git 去执行空命令并把 diff 直接搞坏，不可用）。
+- 漏掉 `submodule.<name>.update = !cmd`：`gitSubmodule.ts:102` 的
+  `submodule update --init --recursive` **没传** `--checkout`（而 `:560` 那个调用点传了，
+  所以只有前者中招）。已补 `--checkout`。
+- 「无活跃任务就自动重封」会洗白 + 有竞态 ⇒ 整个检测层移出（D1′）。
+- AC-6 的「100% 无网」过度声称 ⇒ 已收窄为「containment 实际生效时」。
+- `hermeticOuter` 走 plan 字段绕过 RFC-233 单一事实源 ⇒ G3 整项移出，该争议随之消失。
+- `agent.network` 在 `dependsOn` closure 下不可实现（`businessContainmentProfile` 的入参
+  是 `Pick<…,'agent'|'mcps'|'runtimeCmd'>`，**看不见 dependents**；且全 closure 共用一个
+  shell wrapper）⇒ G4 的授权粒度提升为 **closure 级**，见 design §4.2。
+- proposal 原文「业务 agent 只有 bash+MCP」说过头：有 dependents 时 `task` 会重新 allow，
+  且 verified 路径会加载插件。已在背景 A 限定为「这些 built-in FS/Web 工具被 deny」。
+
+**驳回 / 降级**：
+
+- P0「Git 不是唯一可直接利用的逃逸链」降为措辞级：它举的 runtime probe / MCP probe /
+  plugin install **都不是 agent 能触发的**（需要人经 API 操作），不属于「恶意 agent →
+  主机」链路。已把措辞收紧为「**agent 可直接驱动的**唯一完整逃逸链」，并把这些作为
+  独立的、非 agent 触发的 daemon 侧执行面登记进 `docs/audit-backlog.md`。
+
+**复核期间另查出两个与本 RFC 无关的 live 问题**（已单独登记，不在本 RFC 修）：
+
+1. RFC-251 引入的 containment 空洞：profile 只看 root 的 `agent.permission.bash`，
+   root `bash: deny` + dependsOn 成员 `bash: allow` ⇒ `childBoundary:'none'` ⇒ 模型可控的
+   shell 拿不到 netless 边界。
+2. `pluginInstaller.ts:222` 实际 argv 无 `--ignore-scripts`（全仓 grep 零命中），而
+   `docs/audit-backlog.md:63` 声称 RFC-247 已加——该条记载与源码不符。
+
 ## 影响面
 
-- **对 agent 执行能力的影响**：G1/G2 对 agent 干活零影响（G2 挡的写路径今天也没有合法用途）；
-  G3 只影响「读写 worktree 之外的用户文件」——而 verified 路径的模型今天连 FS 工具都没有，
-  因此 G3 是纵深防御，不是能力收窄；G4 是**净增能力**。
+- **对 agent 执行能力的影响**：G1/G2 对 agent 干活零影响（G1 每条覆盖都经实测确认功能
+  不变；G2 挡的写路径今天也没有合法用途，且 Linux 早在同等约束下运行）；G4 是**净增能力**。
 - **python 生态实操**：child PATH = `<seal>/toolchain:/usr/bin:/bin`（`verifiedPlan.ts:152,196`），
   `/usr/bin/python3` 可用。child 的 `$HOME`/`$TMPDIR` 在 `storeRoot/{home,tmp}`
   （`hermetic.ts:388,396`）⇒ **同一条业务链持久**，`pip install --user` 可跨 run 复用；
   `scratchPath = runRoot/opencode-scratch`（`verifiedPlan.ts:445`）是每 run 新建。
   venv 建在 worktree 内会进 git diff / 快照，文档需给出建议。
-- **残留风险（显式登记）**：G4 开启后 child 可外传数据、可访问局域网；G3 在 macOS 上
-  对 bash 节点不生效；`filter.*`/`diff.*.textconv` 只被检测、不被覆盖；`warn` 档缺
-  provider 时仍降级裸跑。
+- **残留风险（显式登记）**：G4 开启后 child 可外传数据、可访问局域网；
+  `filter.*`/`diff.*.textconv` 通配名族未覆盖（见非目标）；`warn` 档缺 provider 时仍
+  降级裸跑；外层边界维持现状（G3 移出），即真实 `$HOME` 对 opencode server 进程仍可读写
+  ——但该进程没有模型可驱动的 FS 工具，故不构成 agent 可利用面。

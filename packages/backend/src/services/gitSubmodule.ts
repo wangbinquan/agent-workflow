@@ -99,7 +99,13 @@ export async function syncSubmodules(
     }
   }
 
-  const updateArgs = ['submodule', 'update', '--init', '--recursive']
+  // RFC-252 G1: `--checkout` pins the update strategy on the command line so a
+  // repo-local `submodule.<name>.update = !command` cannot execute here. `-c`
+  // cannot reach it (the key is wildcard-named) and checkout IS git's default —
+  // this only removes the config's ability to override it, so behavior for every
+  // honest repo is unchanged. The sibling call site (attachSubmodulePool below)
+  // already passes it; these two must not drift.
+  const updateArgs = ['submodule', 'update', '--init', '--checkout', '--recursive']
   // RFC-210: both flags are opt-in and appended BEFORE --jobs so that a caller
   // passing neither produces the pre-RFC-210 argv byte-for-byte (AC-10/AC-12).
   if (opts.remote === true) {

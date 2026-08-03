@@ -109,3 +109,29 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   - **为什么合并处理**：修 (P1) 要动 bwrap 的 RW/RO 叠加次序（`readOnlySubtrees` 必须是某个 `allowSubtrees` 的**严格后代**）与 Seatbelt 侧 deny-list 语义，正是 (P0) 所指的那条边界。正解是一次独立设计：插件目录该 RO bind 还是 RW、插件是否应移进 child 边界、以及在 (P0) 无法根除时产品上如何呈现「装插件 = 放弃该层隔离」。**在此之前，Linux 部署上的插件选择应视为不可用。**
   - **⚠️ 与 [RFC-252](../design/RFC-252-agent-containment-hardening-and-egress/proposal.md) 的交叉影响（两个 RFC 同日并发落地，务必一起看）**：RFC-252 的审计实证结论之一是「verified OpenCode 业务 agent **没有** read/edit/write/webfetch 等**进程内**工具」，据此把唯一可直接利用的完整逃逸链收敛到 `bash → gitCommonDirs → git hook → daemon 侧 runGit`。**该结论成立的前提是插件被 RFC-224 禁用**——而 RFC-251 已把插件恢复。插件由 OpenCode 在同一 server 进程内 `import` 且被授予 `Bun.$`，等于在 agent permission 层**之下**多了一个进程内 shell，完全绕过「工具被 deny 即被摘出模型工具列表」这条机制。RFC-252 的 proposal / design 目前**零处**提到插件（已确认），故其威胁模型需要显式纳入「已安装且被选中的插件」这一主体，否则加固后的结论会偏乐观。
 - **多代理的 skill 面是打折的（RFC-251 Codex 实现门 2026-08-03，P1，未修）**：`services/scheduler.ts` 已正确合并 `dependsOn` 闭包的 skills，但 `runtime/opencode/verifiedPlan.ts` 只把冻结的 `SKILL.md` 追加进 **root** persona，闭包成员拿到的是原始 `dep.bodyMd`，而 `skill` 工具本身在受控 permission 里是 deny ⇒ `auditor` 依赖的审计 skill，root 看得到、真正执行审计的 `auditor` 看不到。RFC-251 `design.md` §4.3 已把「不改动 skill 密封面」列为非目标（扩大密封面涉及成员间 skill 是否隔离、`SKILL.md` 冻结块如何按成员分区），故明确登记而非默认关闭。
+
+## RFC-252 残留与旁证（2026-08-03）
+
+- ⏳ **git 通配名族配置未覆盖**（RFC-252 G1 显式非目标）：`filter.<n>.clean/smudge/process`、
+  `diff.<n>.textconv`、local 作用域的 `credential.helper` 都能让 daemon 侧 git 执行外部命令，
+  但它们是**通配名**，命令行 `-c` 压不住。无差别关闭会打断用户全局 git-lfs 与凭据助手
+  （真实功能损害），正确形态是「先枚举 local/worktree 作用域条目再逐名覆盖，system/global 不动」，
+  属独立切片。已覆盖的固定名键见 `util/gitHardening.ts`。
+- ⏳ **非 agent 触发的 daemon 侧无沙箱执行面**（RFC-252 设计门 P0-1，已从「恶意 agent」
+  威胁模型中剥离、单独登记）：runtime `--version`/models 枚举（`util/opencode.ts`、
+  `util/opencode-models.ts`）、local MCP probe（`services/mcpProbe.ts`）、插件安装
+  （`services/pluginInstaller.ts`）都在 coordinator 之外以 daemon 身份裸执行。它们需要人经 API
+  触发，agent 无法直接驱动，故不属于 RFC-252 的目标；但确实是 daemon 身份的执行面。
+- ❗ **`docs/audit-backlog.md` 上文关于 `--ignore-scripts` 的记载与源码不符**（2026-08-03 实测）：
+  `services/pluginInstaller.ts:222` 的实际 argv 是
+  `npm install --prefix <dir> --no-audit --no-fund --silent <spec>`，**全仓 grep `ignore-scripts` 零命中**，
+  且 `runCommand`（`:594-603`）用 `env: process.env` 且不经任何 containment ⇒ 被安装包的生命周期
+  脚本会以 daemon 身份执行。上文「RFC-247 已加 `--ignore-scripts` 堵掉这条最直接的 RCE」是错误记载，
+  按此判断风险已消除会误导后来人。
+- ❗ **RFC-251 的 containment 空洞**（2026-08-03 RFC-252 设计门复核期间发现，属 RFC-251 在飞代码）：
+  `driver.businessContainmentProfile`（`runtime/types.ts:643-645`）的入参只有
+  `'agent' | 'mcps' | 'runtimeCmd'`，**看不见 `dependsOn` 闭包**。若 root `permission.bash = 'deny'`
+  而闭包成员 `bash: 'allow'`，profile 落 `runner-filesystem-v1` ⇒ `childBoundary:'none'` ⇒
+  netless wrapper 以 `providerId:'none'` 渲染（`sealedSubprocess.ts:1187-1193`）⇒ **模型可控的 shell
+  完全拿不到 netless 边界**（无网变有网、私有 HOME 变弱外层）。RFC-252 的 G4 会把 profile 判定提升为
+  closure 级并顺带修掉它；若 RFC-251 先上库，这条就变成存量问题。
