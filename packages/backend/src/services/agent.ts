@@ -281,6 +281,7 @@ export function commitAgentCreateInTx(tx: DbTxSync, p: PreparedAgentCreate): voi
       inputs: serializeInputs(input.inputs),
       syncOutputsOnIterate: input.syncOutputsOnIterate,
       runtime: input.runtime ?? null, // RFC-111
+      network: input.network ?? null, // RFC-252 G4：缺省落 NULL（= deny），不回填不猜测
       permission: JSON.stringify(input.permission),
       // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
       skills: serializeSkillRefs(skillRefs),
@@ -426,7 +427,10 @@ export async function prepareAgentUpdate(
   // RFC-228: sparse PATCHes cannot leave a historically dangling closure
   // hidden behind "the resource field was not touched". Validate the merged
   // final Agent; removing/replacing the bad ref makes this pass.
-  const { runtime: _runtimePatch, ...patchWithoutRuntime } = patch
+  // RFC-252 G4: `network` 与 `runtime` 同形——PATCH 允许显式 null 清回默认档，而 DTO
+  // 上没有 null 这一档（缺省即 deny）。两者都必须先摘出去，再按 null/undefined 分别处置，
+  // 否则 null 会漏进 Agent DTO（typecheck 已实证拦下）。
+  const { runtime: _runtimePatch, network: _networkPatch, ...patchWithoutRuntime } = patch
   const candidate: Agent = {
     ...existing,
     ...patchWithoutRuntime,
@@ -437,6 +441,8 @@ export async function prepareAgentUpdate(
   }
   if (patch.runtime === null) delete candidate.runtime
   else if (patch.runtime !== undefined) candidate.runtime = patch.runtime
+  if (patch.network === null) delete candidate.network
+  else if (patch.network !== undefined) candidate.network = patch.network
   if (pending.size === 0) {
     await assertAgentResourceIntegrity(db, [candidate.id], { overrides: [candidate] })
   }
@@ -453,6 +459,8 @@ export async function prepareAgentUpdate(
   // untouched (sparse-patch). Before this branch the set-builder skipped runtime
   // entirely, so the edit form could neither repoint nor un-pin an agent.
   if (patch.runtime !== undefined) set.runtime = patch.runtime
+  // RFC-252 G4：null 是显式清回默认档（deny），与 runtime 同形，直接落列。
+  if (patch.network !== undefined) set.network = patch.network
   // RFC-223 (PR-1): persist the resolved id refs / typed skill refs (deduped by
   // the resolver), never the raw name-or-id wire values.
   if (skillRefs !== undefined) set.skills = serializeSkillRefs(skillRefs)
@@ -1176,5 +1184,11 @@ function rowToAgent(row: AgentRow): Agent {
   // (built-ins 'opencode'/'claude-code' + custom). Empty/NULL stays absent (→
   // inherit config.defaultRuntime). An unknown name fail-safes at dispatch.
   if (typeof row.runtime === 'string' && row.runtime.length > 0) agent.runtime = row.runtime
+  // RFC-252 G4: only an EXACT 'allow' is a grant. A NULL column (every
+  // pre-RFC-252 row) and any other value stay ABSENT on the DTO rather than
+  // being surfaced as null — so no downstream `?? 'allow'`, truthiness check or
+  // optional-schema serialization can turn "no opinion" into egress. The
+  // storage default and the runtime default are therefore the same one value.
+  if (row.network === 'allow' || row.network === 'deny') agent.network = row.network
   return agent
 }

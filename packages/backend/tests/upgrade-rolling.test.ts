@@ -333,7 +333,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 0132_rfc248_memory_repo_group_scope，再到 133 with
     // 0133_rfc248_readonly_dirty（AC-19：只读成员被丢弃的改动处数）。
     // RFC-249 bumped to 135 with explicit group / task directory nodes.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(135)
+    // RFC-252 bumped to 136 with 0136_rfc252_agent_network（G4 受控出网的
+    // agents.network 列；**不回填**，NULL = 未表态 = deny，存量行行为字节不变）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(136)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

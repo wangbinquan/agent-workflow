@@ -249,6 +249,22 @@ export const AgentSchema = z.object({
    * registry at dispatch, and the model namespace follows the protocol.
    */
   runtime: z.string().min(1).optional(),
+  /**
+   * RFC-252 G4: does this agent's model-controlled child boundary (its shell and
+   * local MCP descendants) get network access?
+   *
+   * Absent → `'deny'`. The default is load-bearing: every pre-RFC-252 agent row
+   * has no value, and their behavior must stay byte-identical (AC-10). Only an
+   * exact `'allow'` grants egress — a NULL DB column must be OMITTED by the
+   * mapper rather than surfaced, so no code path can read a nullish value as a
+   * grant.
+   *
+   * `'allow'` means **public internet, loopback still denied** — the child must
+   * not reach the daemon's own API, local databases, or anything else on the
+   * host's loopback. That is a required capability of the profile it selects
+   * (`model-child-egress-v1`), not a best-effort hope.
+   */
+  network: z.enum(['deny', 'allow']).optional(),
   permission: AgentPermissionSchema,
   /**
    * RFC-223 (PR-1): typed skill references. `managed` refs point at a DB skill
@@ -340,6 +356,8 @@ export const CreateAgentSchema = z.object({
   /** RFC-111 / RFC-112: agent runtime — a registered runtime NAME (built-ins
    *  'opencode' / 'claude-code'; custom forks add more). Absent → inherit. */
   runtime: z.string().min(1).optional(),
+  /** RFC-252 G4 — 缺省 = `'deny'`；`'allow'` = 公网可达但仍拒 loopback。见 AgentSchema。 */
+  network: z.enum(['deny', 'allow']).optional(),
   permission: AgentPermissionSchema.default({}),
   /** RFC-223 (PR-1) — typed skill refs (managed=skillId / project=name). */
   skills: z.array(AgentSkillRefSchema).default([]),
@@ -387,6 +405,9 @@ export const UpdateAgentSchema = CreateAgentSchema.omit({ name: true })
     // explicitly CLEAR a pinned runtime back to inherit by sending null.
     // undefined = leave the current value untouched (sparse-patch semantics).
     runtime: z.string().min(1).nullable().optional(),
+    // RFC-252 G4: same shape as runtime — null explicitly clears the grant back
+    // to the default deny; undefined leaves it untouched (sparse patch).
+    network: z.enum(['deny', 'allow']).nullable().optional(),
   })
 export type UpdateAgent = z.infer<typeof UpdateAgentSchema>
 

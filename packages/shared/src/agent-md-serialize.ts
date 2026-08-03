@@ -34,6 +34,8 @@ export interface AgentMarkdownDocument {
   role?: 'normal' | 'aggregator'
   outputWrapperPortNames?: Record<string, string>
   runtime?: string
+  /** RFC-252 G4 — 缺省 = 'deny'。 */
+  network?: 'deny' | 'allow'
   frontmatterExtra?: Record<string, unknown>
   bodyMd?: string
 }
@@ -55,6 +57,7 @@ const EMIT_ORDER = [
   'role',
   'outputWrapperPortNames',
   'runtime',
+  'network',
 ] as const
 
 function skillEntryToYaml(entry: AgentSkillSelector | string): unknown {
@@ -90,6 +93,7 @@ export function serializeAgentMarkdown(doc: AgentMarkdownDocument): string {
     role: doc.role,
     outputWrapperPortNames: doc.outputWrapperPortNames,
     runtime: doc.runtime,
+    network: doc.network,
   }
   for (const key of EMIT_ORDER) {
     const v = source[key]

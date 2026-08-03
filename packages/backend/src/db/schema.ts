@@ -45,6 +45,10 @@ export const agents = sqliteTable(
     // were dropped (DROP via migration 0057) — generation params now live solely
     // on the runtime profile (RFC-113); the agent only SELECTS a runtime by name.
     runtime: text('runtime'),
+    // RFC-252 G4: 'deny' | 'allow' | NULL. NULL = 未表态 = deny（存量行全是 NULL，
+    // 行为必须字节不变）。只有精确 'allow' 才是授权：mapper 对 NULL **省略**而不是
+    // 透出 null，杜绝下游用 `?? ` / 真值判断把「没表态」读成「放行」。
+    network: text('network'),
     permission: text('permission').notNull().default('{}'), // JSON: opencode permission schema
     skills: text('skills').notNull().default('[]'), // JSON string[]
     // RFC-022: agent name list (JSON string[]) of agents this one transitively

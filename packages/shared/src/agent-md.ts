@@ -82,6 +82,9 @@ const KNOWN_KEYS = new Set<string>([
   // shape; the named runtime's existence is checked server-side at save time
   // (services/agent.ts), same policy as mcp / plugins.
   'runtime',
+  // RFC-252 G4: 'deny' | 'allow'（缺省 = deny）。任何其它形状降级进 frontmatterExtra
+  // 并告警——绝不把无法识别的值当成授权。
+  'network',
 ])
 
 // Deliberately no uniqueness refine: imported legacy duplicates must reach the
@@ -227,6 +230,19 @@ export function parseAgentMarkdown(
     } else {
       extras.runtime = data.runtime
       warnings.push('runtime must be a non-empty string; kept in frontmatterExtra')
+    }
+  }
+
+  // RFC-252 G4: network — 只接受精确的 'deny' / 'allow'。**fail safe 到 deny**：
+  // 任何其它形状（拼写错误、布尔、`true`）都降级进 frontmatterExtra 并告警，绝不被
+  // 当作授权。这与 runtime 的「降级 + 告警」策略同形，但多一层安全含义：runtime 认错
+  // 只是派发失败，network 认错会是静默放行。
+  if (data.network !== undefined) {
+    if (data.network === 'deny' || data.network === 'allow') {
+      partial.network = data.network
+    } else {
+      extras.network = data.network
+      warnings.push("network must be exactly 'deny' or 'allow'; kept in frontmatterExtra")
     }
   }
 
