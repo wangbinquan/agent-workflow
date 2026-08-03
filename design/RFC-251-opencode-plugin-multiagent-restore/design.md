@@ -267,16 +267,17 @@ Codex 实现门（[记档](./codex-impl-gate-2026-08-03.md)）指出三条**已�
 > permission 层**之下**多了一个进程内 shell，绕过「工具被 deny 即被摘出模型工具
 > 列表」这条机制。RFC-252 的威胁模型需显式纳入「已安装且被选中的插件」。
 
-### 10.2 Linux + `enforce` 下插件根本加载不了（P1）
+### 10.2 ~~Linux + `enforce` 下插件根本加载不了~~（P1，**已修复**）
+
+> **✅ 2026-08-03 已修并在真 Linux 上确证。** 下面保留原始分析作为背景；修法与
+> 证据见本节末尾。
 
 插件装在 `appHome/plugins`，而 `policy.ts` 对整个 `appHome` 打 `--tmpfs` 后只显式
 bind 回 `repos`；`allowSubtrees` 是 RFC-205 impl-gate P0-3 刻意的「deny 全部
 appHome、只放行本次运行所需」白名单，插件目录不在其中 ⇒ `file://<cachedPath>` 在
 server 内不存在，动态 import 得 `ENOENT`。
 
-**即插件功能目前只在 macOS 上真正可用；Linux 部署上应视为不可用。** 修它要动
-bwrap 的 RW/RO 叠加次序（`readOnlySubtrees` 必须是某个 `allowSubtrees` 的**严格
-后代**）与 Seatbelt 侧 deny-list 语义，正是 §10.1 所指的那条边界，应与之合并设计。
+（原判断为「只在 macOS 可用、Linux 视为不可用」，已随本节修复失效。）
 
 **这条不是读代码推断，是实证的**，且**不需要 Linux 机器**即可复跑：
 `computeSandboxPolicy` / `renderBwrapArgs` 是纯函数（`policy.ts` 注释 "Pure — no
@@ -290,10 +291,36 @@ bind   <appHome>/runs/<task>/<run>
 plugin cachedPath -> visible=false   （最深挂载仍是那层 tmpfs）
 ```
 
-见证测试：`packages/backend/tests/rfc251-linux-plugin-visibility.test.ts`。
-⚠️ 它**故意断言当前的错误行为**，作为缺陷的可执行证据；**修复时它必须变红**，
-届时应把期望反转（或删掉该文件、改锁修好后的行为）。测试里同时断言
-`repos` / `runDir` **可见**作为对照，证明这不是「helper 把所有路径都判成隐藏」。
+随后在 **Debian + bubblewrap 0.11.0 的真容器**里、用平台自己生成的 argv 复跑，
+确认 `plugin entry : ENOENT` 而 `repos marker : VISIBLE`——缺陷确证，非建模推断。
+
+#### 修法（已落地）
+
+`readOnlySubtrees` 表达不了这个需求：它是「在 RW allow 内部挖一个 RO 洞」，并被
+校验为某个 `allowSubtrees` 的**严格后代**。插件缓存按设计**没有** RW 父级（整个
+appHome 被 deny，且插件永远不该可写）。因此新增一条独立概念：
+
+- `SandboxPolicyInput.readOnlyAllowSubtrees` —— 位于**被 deny 子树内**、**不与任何
+  RW allow 重叠**的只读放行。两条约束都在 `computeSandboxPolicy` 里 fail-closed
+  校验（越界或重叠直接抛，不静默降级）。
+- bwrap：在 appHome tmpfs **之后**追加 `--ro-bind`；Seatbelt：在 deny 之后只补
+  `(allow file-read* …)`，**不发** write allow，故 last-match-wins 下写仍被 deny。
+- `verifiedPlan` 只放行**被选中插件**各自的私有安装根 `plugins/<id>`（最小权限，
+  不放行整个 `plugins/`）；`file:` spec 的 cachedPath 落在 appHome 外、本就可见，
+  按前缀判断跳过。
+
+**真 Linux 复验（同一容器、同一 argv 生成路径）**：
+
+```
+read   : OK        => plugin IS loadable
+write  : denied    => "Read-only file system"
+repos write : OK / runDir write: OK      （无回归）
+host-side integrity: 文件未被沙箱内的写入尝试篡改
+```
+
+回归锁：`packages/backend/tests/rfc251-linux-plugin-visibility.test.ts` —— 覆盖
+「不放行则不可见（缺陷的成因）/ 放行后是 ro-bind / ro-bind 排在 tmpfs 之后 /
+Seatbelt 只给读不给写 / 三条校验各自拒绝」。
 
 ### 10.3 闭包成员拿不到自己选的 skill（P1）
 

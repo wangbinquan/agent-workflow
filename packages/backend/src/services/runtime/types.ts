@@ -159,6 +159,13 @@ export interface SpawnPlan {
   containment?: PreparedContainmentPlan
   /** RFC-224 immutable runtime artifacts overlaid read-only by RFC-205. */
   readOnlySubtrees?: readonly string[]
+  /**
+   * RFC-251 — subtrees under the denied appHome that must be READABLE (never
+   * writable) and have no read-write parent to nest under. The selected plugin
+   * cache is the motivating case: without this the linux appHome tmpfs hides
+   * it and every `file://<cachedPath>` import fails with ENOENT.
+   */
+  readOnlyAllowSubtrees?: readonly string[]
   /** Explicit capture locator; consumers must not reopen the user's global DB. */
   sessionStore?: {
     root: string

@@ -123,8 +123,12 @@ T6/T7 跟随各自相关的 PR。
 
 1. **P0** 插件不受 containment 约束——「支持插件」的固有代价，用户知情决定。
    与并发的 **RFC-252** 有交叉：其「agent 无进程内工具」的审计前提因插件恢复而部分失效。
-2. **P1** Linux + `enforce` 下插件缓存被 `--tmpfs appHome` 隐藏 ⇒ **插件功能在 Linux
-   上等于没交付**；与 1 同源，应合并设计。
+   ⚠️ 第 2 条修复后，这条从「理论风险」变为**实际可达**（插件在 Linux 上真的会加载）。
+2. ~~**P1** Linux + `enforce` 下插件缓存被 `--tmpfs appHome` 隐藏~~
+   ✅ **已修复（2026-08-03）**：新增 `readOnlyAllowSubtrees`（deny 子树内、不与 RW
+   allow 重叠的只读放行），只放行被选中插件各自的私有根。真 Debian 容器
+   （bubblewrap 0.11.0）先证缺陷、后证修复：`read: OK` / `write: Read-only file
+system` / repos·runDir 无回归。见 design §10.2。
 3. **P1** 闭包成员拿不到自己选的 skill ⇒ 多代理能力打折；§4.3 已列为非目标。
 
 ## 既有测试处置结论

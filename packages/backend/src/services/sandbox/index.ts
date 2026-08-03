@@ -56,6 +56,8 @@ export interface SandboxCtx {
   runDir: string
   /** Immutable artifacts below an allowed subtree, overlaid read-only. */
   readOnlySubtrees?: readonly string[]
+  /** RFC-251 — read-only allow-backs with no RW parent (e.g. the plugin cache). */
+  readOnlyAllowSubtrees?: readonly string[]
   /** Provider-owned renderer for mechanisms added after the built-ins. */
   wrapCommand?: (cmd: readonly string[], policy: SandboxPolicy) => string[]
 }
@@ -100,6 +102,7 @@ export function wrapSandbox(cmd: readonly string[], ctx: SandboxCtx | undefined)
     taskWorktrees: ctx.taskWorktrees.map(real),
     runDir: real(ctx.runDir),
     readOnlySubtrees: ctx.readOnlySubtrees?.map(real),
+    readOnlyAllowSubtrees: ctx.readOnlyAllowSubtrees?.map(real),
   })
   if (ctx.wrapCommand !== undefined) return ctx.wrapCommand(cmd, policy)
   if (ctx.status.mechanism === 'seatbelt') {

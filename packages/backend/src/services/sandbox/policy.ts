@@ -35,6 +35,16 @@ export interface SandboxPolicyInput {
    * readable but must not be replaceable by the sandboxed process.
    */
   readOnlySubtrees?: readonly string[]
+  /**
+   * RFC-251 — subtrees inside the denied appHome that must be READABLE but
+   * never writable, and which are NOT nested below any RW allow-back.
+   *
+   * `readOnlySubtrees` cannot express this: it is an RO hole punched inside an
+   * RW allow (and is validated as a strict descendant of one). The plugin cache
+   * has no RW parent by design — the whole appHome is denied and plugins must
+   * never be writable by the model — so it needs its own read-only allow-back.
+   */
+  readOnlyAllowSubtrees?: readonly string[]
 }
 
 export interface SandboxPolicy {
@@ -48,6 +58,8 @@ export interface SandboxPolicy {
   allowMetadataFiles: string[]
   /** Read-only overlays applied after every read-write allow-back. */
   readOnlySubtrees: string[]
+  /** RFC-251 — read-only allow-backs that have no RW parent (e.g. plugin cache). */
+  readOnlyAllowSubtrees: string[]
 }
 
 function isStrictDescendant(parent: string, child: string): boolean {
@@ -123,7 +135,31 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
       throw new TypeError('sandbox readOnlySubtree must be nested below an allowed subtree')
     }
   }
-  return { denySubtrees, denyFiles, allowSubtrees, allowMetadataFiles, readOnlySubtrees }
+  // RFC-251: read-only allow-backs stand on their own — they must live INSIDE a
+  // denied subtree (otherwise they are already reachable and the entry is
+  // meaningless noise) and must not overlap an RW allow (which would silently
+  // grant write on linux, where the later RW bind wins).
+  const readOnlyAllowSubtrees = [...(input.readOnlyAllowSubtrees ?? [])]
+  const seenReadOnlyAllow = new Set<string>()
+  for (const path of readOnlyAllowSubtrees) {
+    validatePolicyPath(path, 'readOnlyAllowSubtree')
+    if (seenReadOnlyAllow.has(path)) throw new TypeError('duplicate sandbox readOnlyAllowSubtree')
+    seenReadOnlyAllow.add(path)
+    if (!denySubtrees.some((denied) => isStrictDescendant(denied, path))) {
+      throw new TypeError('sandbox readOnlyAllowSubtree must be nested below a denied subtree')
+    }
+    if (allowSubtrees.some((allowed) => allowed === path || isStrictDescendant(allowed, path))) {
+      throw new TypeError('sandbox readOnlyAllowSubtree must not overlap a read-write allow')
+    }
+  }
+  return {
+    denySubtrees,
+    denyFiles,
+    allowSubtrees,
+    allowMetadataFiles,
+    readOnlySubtrees,
+    readOnlyAllowSubtrees,
+  }
 }
 
 /** SBPL string literal escaping: backslash and double-quote. */
@@ -156,6 +192,12 @@ export function renderSeatbeltProfile(policy: SandboxPolicy): string {
   // restore read after the appHome-wide deny.
   for (const p of policy.readOnlySubtrees) {
     lines.push(`(deny file-write* (subpath ${sbplString(p)}))`)
+    lines.push(`(allow file-read* (subpath ${sbplString(p)}))`)
+  }
+  // RFC-251: read-only allow-back with no RW parent. Restore READ only — write
+  // stays covered by the enclosing appHome deny above, and we never emit an
+  // allow for it, so last-match-wins leaves writes denied.
+  for (const p of policy.readOnlyAllowSubtrees) {
     lines.push(`(allow file-read* (subpath ${sbplString(p)}))`)
   }
   return lines.join('\n')
@@ -202,6 +244,14 @@ export function renderBwrapArgs(policy: SandboxPolicy, opts: { appHome: string }
   // Mount ordering is the security boundary: a RO overlay must be stacked
   // after every enclosing RW bind or a later RW mount would silently undo it.
   for (const p of policy.readOnlySubtrees) {
+    args.push('--ro-bind', p, p)
+  }
+  // RFC-251: read-only allow-backs from under the appHome tmpfs. Without these
+  // the plugin cache simply does not exist inside the namespace and every
+  // `file://<cachedPath>` import fails with ENOENT (confirmed on real Linux
+  // with bubblewrap 0.11.0). `computeSandboxPolicy` already rejects overlap
+  // with an RW allow, so ordering against those binds cannot matter here.
+  for (const p of policy.readOnlyAllowSubtrees) {
     args.push('--ro-bind', p, p)
   }
   return args

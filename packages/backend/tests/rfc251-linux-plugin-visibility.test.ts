@@ -1,42 +1,48 @@
-// RFC-251 — WITNESS TEST for a KNOWN, UNFIXED defect (Codex impl-gate #4).
+// RFC-251 — the selected plugin cache must be READABLE (never writable) inside
+// the sandbox on both platforms.
 //
-// ⚠️ These assertions encode CURRENT BROKEN BEHAVIOUR on purpose. They are not
-// the desired contract. When the defect is fixed, this file MUST go red — that
-// is the point — and the fixer should invert the expectations (or delete the
-// file and lock the fixed behaviour instead).
+// Why this exists: RFC-251 restored plugin support, but the linux sandbox
+// denies the WHOLE appHome with `--tmpfs` and binds back only what a run needs
+// (RFC-205 impl-gate P0-3). `appHome/plugins/…` was not in that allow-back set,
+// so with containment enforced OpenCode got ENOENT on every
+// `file://<cachedPath>` — the feature was undelivered on linux. Confirmed on a
+// real Debian container with bubblewrap 0.11.0 using the platform's own argv,
+// then fixed by `readOnlyAllowSubtrees` (Codex impl-gate #4).
 //
-// The defect: RFC-251 restored plugin support, but on Linux the sandbox denies
-// the whole appHome with `--tmpfs` and binds back only what a run needs
-// (RFC-205 impl-gate P0-3). `appHome/plugins/…` is not in that allow-back set,
-// so with `sandboxMode=enforce` OpenCode gets `ENOENT` on every
-// `file://<cachedPath>` — the feature is effectively undelivered on Linux.
-//
-// Why this can be proven from macOS: `computeSandboxPolicy` and
-// `renderBwrapArgs` are pure ("Pure — no fs access", policy.ts), so the exact
-// argv Linux would use is reproducible anywhere. No bwrap, no container.
+// These assertions are reproducible from any OS: computeSandboxPolicy and the
+// two renderers are pure ("Pure — no fs access", policy.ts).
 
 import { describe, expect, test } from 'bun:test'
-import { computeSandboxPolicy, renderBwrapArgs } from '@/services/sandbox/policy'
+import {
+  computeSandboxPolicy,
+  renderBwrapArgs,
+  renderSeatbeltProfile,
+} from '@/services/sandbox/policy'
 
 const APP_HOME = '/home/aw/.agent-workflow'
 const RUN_DIR = `${APP_HOME}/runs/task-1/run-1`
 const WORKTREE = '/home/aw/wt/task-1'
-/** Where pluginInstaller actually materialises an npm/git plugin. */
-const PLUGIN_CACHED_PATH = `${APP_HOME}/plugins/01PLUGIN/node_modules/dd`
+/** A selected plugin's private install root (pluginInstaller: plugins/<id>). */
+const PLUGIN_ROOT = `${APP_HOME}/plugins/01PLUGIN`
+const PLUGIN_ENTRY = `${PLUGIN_ROOT}/generations/01OP/node_modules/dd/index.js`
 
 interface Mount {
   kind: 'tmpfs' | 'bind' | 'ro-bind'
   path: string
 }
 
-function bwrapMounts(): Mount[] {
-  const policy = computeSandboxPolicy({
+function policyFor(readOnlyAllowSubtrees?: readonly string[]) {
+  return computeSandboxPolicy({
     appHome: APP_HOME,
     taskWorktrees: [WORKTREE],
     runDir: RUN_DIR,
     readOnlySubtrees: [`${RUN_DIR}/opencode-identity-seal`],
+    ...(readOnlyAllowSubtrees === undefined ? {} : { readOnlyAllowSubtrees }),
   })
-  const args = renderBwrapArgs(policy, { appHome: APP_HOME })
+}
+
+function mountsOf(readOnlyAllowSubtrees?: readonly string[]): Mount[] {
+  const args = renderBwrapArgs(policyFor(readOnlyAllowSubtrees), { appHome: APP_HOME })
   const mounts: Mount[] = []
   for (let i = 0; i < args.length; i += 1) {
     // `--tmpfs DEST`, `--bind SRC DEST`, `--ro-bind SRC DEST`
@@ -62,38 +68,54 @@ function deepestMountFor(target: string, mounts: readonly Mount[]): Mount | null
   return best
 }
 
-function isReadable(target: string, mounts: readonly Mount[]): boolean {
-  const mount = deepestMountFor(target, mounts)
-  return mount?.kind === 'bind' || mount?.kind === 'ro-bind'
-}
-
-describe('RFC-251 — plugins are unreachable under the Linux sandbox (KNOWN DEFECT)', () => {
-  test('appHome is denied wholesale by a tmpfs', () => {
-    const mounts = bwrapMounts()
-    expect(deepestMountFor(APP_HOME, mounts)).toEqual({ kind: 'tmpfs', path: APP_HOME })
+describe('RFC-251 — plugin cache visibility under the linux sandbox', () => {
+  test('without the allow-back the plugin cache does not exist (the original defect)', () => {
+    // Kept as the regression's rationale: this is exactly what shipped first,
+    // and what a real Debian/bubblewrap run reproduced as ENOENT.
+    const mounts = mountsOf()
+    expect(deepestMountFor(PLUGIN_ENTRY, mounts)).toEqual({ kind: 'tmpfs', path: APP_HOME })
   })
 
-  test('the allow-back set does not include the plugin cache', () => {
-    const policy = computeSandboxPolicy({
-      appHome: APP_HOME,
-      taskWorktrees: [WORKTREE],
-      runDir: RUN_DIR,
-    })
-    for (const allowed of policy.allowSubtrees) {
-      expect(PLUGIN_CACHED_PATH.startsWith(allowed)).toBe(false)
-    }
+  test('with the allow-back it is bound back READ-ONLY', () => {
+    const mounts = mountsOf([PLUGIN_ROOT])
+    expect(deepestMountFor(PLUGIN_ENTRY, mounts)).toEqual({ kind: 'ro-bind', path: PLUGIN_ROOT })
+    // Control: the run's legitimate read-write areas are unaffected.
+    expect(deepestMountFor(`${APP_HOME}/repos`, mounts)?.kind).toBe('bind')
+    expect(deepestMountFor(RUN_DIR, mounts)?.kind).toBe('bind')
   })
 
-  test('⚠️ KNOWN DEFECT: the plugin cachedPath is NOT readable in the namespace', () => {
-    const mounts = bwrapMounts()
-    // Control: the two things a run legitimately needs ARE bound back, which
-    // proves the helper models bwrap correctly rather than reporting
-    // "everything is hidden".
-    expect(isReadable(`${APP_HOME}/repos`, mounts)).toBe(true)
-    expect(isReadable(RUN_DIR, mounts)).toBe(true)
+  test('the ro-bind is emitted after the appHome tmpfs, never before', () => {
+    const args = renderBwrapArgs(policyFor([PLUGIN_ROOT]), { appHome: APP_HOME })
+    const tmpfsAt = args.indexOf('--tmpfs')
+    const roAt = args.lastIndexOf(PLUGIN_ROOT)
+    expect(tmpfsAt).toBeGreaterThanOrEqual(0)
+    expect(roAt).toBeGreaterThan(tmpfsAt)
+  })
 
-    // The defect. `file://<cachedPath>` therefore resolves to ENOENT inside the
-    // OpenCode server whenever containment is enforced on Linux.
-    expect(isReadable(PLUGIN_CACHED_PATH, mounts)).toBe(false)
+  test('seatbelt restores read but never grants write', () => {
+    const profile = renderSeatbeltProfile(policyFor([PLUGIN_ROOT]))
+    expect(profile).toContain(`(allow file-read* (subpath "${PLUGIN_ROOT}"))`)
+    expect(profile).not.toContain(`(allow file-read* file-write* (subpath "${PLUGIN_ROOT}"))`)
+    // The enclosing appHome deny is still emitted before it.
+    expect(profile.indexOf(`(deny file-read* file-write* (subpath "${APP_HOME}"))`)).toBeLessThan(
+      profile.indexOf(`(allow file-read* (subpath "${PLUGIN_ROOT}"))`),
+    )
+  })
+})
+
+describe('RFC-251 — read-only allow-backs are validated, not trusted', () => {
+  test('rejects a path that is not inside a denied subtree', () => {
+    // Outside appHome it is already reachable via the base `--bind / /`; taking
+    // it would be meaningless noise that looks like a granted permission.
+    expect(() => policyFor(['/home/aw/elsewhere'])).toThrow(/nested below a denied subtree/)
+  })
+
+  test('rejects overlap with a read-write allow (linux would silently grant write)', () => {
+    expect(() => policyFor([RUN_DIR])).toThrow(/must not overlap a read-write allow/)
+    expect(() => policyFor([`${RUN_DIR}/nested`])).toThrow(/must not overlap a read-write allow/)
+  })
+
+  test('rejects duplicates', () => {
+    expect(() => policyFor([PLUGIN_ROOT, PLUGIN_ROOT])).toThrow(/duplicate/)
   })
 })

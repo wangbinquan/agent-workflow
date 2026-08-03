@@ -1388,6 +1388,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
               ...(plan.readOnlySubtrees ?? []),
             ]),
           ],
+          readOnlyAllowSubtrees: [
+            ...new Set([
+              ...(baseSandboxCtx.readOnlyAllowSubtrees ?? []),
+              ...(plan.readOnlyAllowSubtrees ?? []),
+            ]),
+          ],
         }
   const containmentDegradedReasons =
     plan.containment?.receipt.reasonCodes ??

@@ -529,6 +529,20 @@ export async function buildVerifiedOpencodeBusinessPlan(
   // id-deduped). Inventory and diagnostics describe THIS set, so they cannot
   // drift from what the controlled config actually ships.
   const shippedPlugins = selectShippedPlugins(ctx.plugins)
+  // RFC-251: each selected plugin's private install root (`plugins/<id>`, see
+  // pluginInstaller). Only rows whose cachedPath actually lives under that root
+  // need a bind — a `file:` spec resolves outside appHome and is already
+  // visible through the `--bind / /` base mount.
+  const pluginReadOnlyRoots = [
+    ...new Set(
+      shippedPlugins
+        .map((plugin) => join(appHome, 'plugins', plugin.id))
+        .filter((root, index) => {
+          const cached = shippedPlugins[index]!.cachedPath
+          return cached === root || cached.startsWith(`${root}/`)
+        }),
+    ),
+  ]
   // RFC-251: every closure member resolves its OWN runtime profile — a missing
   // or malformed model fails loudly here rather than silently inheriting the
   // root's. Members keep their raw `bodyMd`: the output-envelope protocol block
@@ -786,6 +800,13 @@ export async function buildVerifiedOpencodeBusinessPlan(
       stdin: { mode: 'ignore' },
       sandboxTopology,
       readOnlySubtrees: [sealRoot, ...layout.configRoots, ...core.readOnlySubtrees],
+      // RFC-251 (Codex impl-gate #4, confirmed on real Linux/bubblewrap 0.11.0):
+      // the linux sandbox denies the WHOLE appHome with a tmpfs and binds back
+      // only what a run needs, so the plugin cache did not exist inside the
+      // namespace at all and every `file://<cachedPath>` import got ENOENT.
+      // Bind back exactly the SELECTED plugins' private install roots, and only
+      // read-only — the model must never be able to rewrite plugin code.
+      readOnlyAllowSubtrees: pluginReadOnlyRoots,
       sessionStore: { root: storeRoot, dbPath: layout.sessionDbPath, persistent: true },
       control: {
         kind: 'opencode-session',

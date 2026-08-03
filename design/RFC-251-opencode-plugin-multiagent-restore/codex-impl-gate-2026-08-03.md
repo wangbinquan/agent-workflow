@@ -18,7 +18,13 @@ CLI 0.146.0 不兼容而绕过，见 `docs/dev-gotchas.md` §Codex）。
 | 8   | P2   | plugin/PURE 的「端到端」测试没查实际启动配置                                             | **属实**。断言的是 `manifest.expectedConfig`，而 launcher 消费的是 `manifest.serverEnv.OPENCODE_CONFIG_CONTENT`                                                                                                                                                                       | 测试改为解析 `serverEnv.OPENCODE_CONFIG_CONTENT` 断言 plugin 与 agent 注册表                                                                                                       |
 | 9   | P2   | 设置页与 `docs/OPENCODE_CONFIG.md` 仍宣称存在已删除的 attestation                        | **属实**                                                                                                                                                                                                                                                                              | 双语文案改为「两种运行时均不做启动后配置验证」；docs 加显式移除说明；连带更新锁该文案的 `rfc237-settings-intent-claude-note.test.tsx`                                              |
 
-## 未修 —— 需要产品/安全决策（3 条，已登记 `docs/audit-backlog.md`）
+## 追加修复（Codex 门后，用户要求「确认是缺陷就修改」）
+
+**#4** 已修，见下节内的批注。修完后 P0 的性质随之变化：插件在 Linux 上**能加载了**，
+所以「插件不受 containment 约束」不再是一条理论风险，而是**实际可达**的执行面——
+这一点必须与 RFC-252 一起看。
+
+## 未修 —— 需要产品/安全决策（2 条，已登记 `docs/audit-backlog.md`）
 
 **#1（P0）插件代码不受 containment 约束。** 核实属实：插件由 OpenCode 在 **server 进程内**
 `import` 并获得 `Bun.$`；而 server 在 macOS 明确不过 Seatbelt（`sandbox/index.ts:117`）、
@@ -30,7 +36,11 @@ Linux 侧也未隔离网络（`policy.ts:184`）。shell / local-MCP 的 no-netw
 宿主进程里执行的代码。RFC-224 当年禁插件的理由之一正是这个。用户已明确要求恢复该功能，
 故此处**不擅自加回限制**，改为如实登记并请用户在知情下确认。
 
-**#4（P1）Linux enforce 下插件缓存被 bwrap 隐藏。** 核实属实：插件装在 `appHome/plugins`，
+**#4（P1）Linux enforce 下插件缓存被 bwrap 隐藏 —— ✅ 已于同日修复。**
+先在真 Debian 容器（bubblewrap 0.11.0）用平台自己生成的 argv 确证缺陷，再新增
+`readOnlyAllowSubtrees`（deny 子树内、不与 RW allow 重叠的只读放行，两条约束
+fail-closed）修掉，并在同一容器复验 `read: OK` / `write: Read-only file system` /
+repos·runDir 无回归 / 宿主文件未被篡改。详见 design §10.2。以下为原始记录： 核实属实：插件装在 `appHome/plugins`，
 而 `policy.ts` 对整个 `appHome` 打 `--tmpfs` 后只显式 bind 回 `repos`；`allowSubtrees`
 是 RFC-205 刻意的「deny 全部 appHome、只放行本次运行所需」白名单，插件目录不在其中。
 ⇒ **Linux + enforce 下插件必 `ENOENT`，功能等于没交付。**
