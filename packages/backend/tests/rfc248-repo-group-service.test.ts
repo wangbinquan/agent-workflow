@@ -12,18 +12,62 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, memories, repoGroupNodes, repoGroups } from '../src/db/schema'
 import {
   RepoGroupHasReferencesError,
-  createRepoGroup,
+  createRepoGroup as createRepoGroupImpl,
   deleteRepoGroup,
   detachRepoFromAllGroups,
   getRepoGroup,
   getRepoGroupLayoutResponse,
   groupsReferencingRepo,
   listRepoGroups,
-  updateRepoGroup,
+  updateRepoGroup as updateRepoGroupImpl,
 } from '../src/services/repoGroup'
 import { DomainError } from '../src/util/errors'
+import {
+  repoGroupNodesFromAttachments,
+  type RepoGroupAttachmentSpec,
+} from './helpers/repoGroupFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+interface TestGroupWrite {
+  name: string
+  description: string
+  attachments: readonly RepoGroupAttachmentSpec[]
+}
+
+function createRepoGroup(
+  deps: Parameters<typeof createRepoGroupImpl>[0],
+  input: TestGroupWrite,
+  actorUserId: string | null,
+) {
+  return createRepoGroupImpl(
+    deps,
+    {
+      name: input.name,
+      description: input.description,
+      nodes: repoGroupNodesFromAttachments(input.attachments),
+    },
+    actorUserId,
+  )
+}
+
+function updateRepoGroup(
+  deps: Parameters<typeof updateRepoGroupImpl>[0],
+  id: string,
+  input: TestGroupWrite,
+  expectedVersion?: number,
+) {
+  return updateRepoGroupImpl(
+    deps,
+    id,
+    {
+      name: input.name,
+      description: input.description,
+      nodes: repoGroupNodesFromAttachments(input.attachments),
+    },
+    expectedVersion,
+  )
+}
 
 function makeRepo(db: DbClient, slug: string): string {
   const id = ulid()
@@ -81,7 +125,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: '全栈',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -102,10 +146,10 @@ describe('RFC-248 repo group service', () => {
       },
       'u1',
     )
-    expect(g.members).toHaveLength(2)
-    const m1 = g.members[1]
-    expect(m1?.mountPath).toBe('vendor/sdk') // DB 里存的是规范形态
-    expect(m1?.readonly).toBe(true)
+    expect(g.nodes.filter((node) => node.attachment !== null)).toHaveLength(2)
+    const sdkNode = g.nodes.find((node) => node.path === 'vendor/sdk')
+    expect(sdkNode?.path).toBe('vendor/sdk') // DB 里存的是规范形态
+    expect(sdkNode?.attachment?.readonly).toBe(true)
     expect(g.flatRepoCount).toBe(2)
   })
 
@@ -115,7 +159,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -128,8 +172,10 @@ describe('RFC-248 repo group service', () => {
       },
       null,
     )
-    const m = g.members[0]
-    expect(m?.kind === 'repo' && m.repoUrlRedacted).toBe('https://git.example/app.git')
+    const attachment = g.nodes.find((node) => node.path === '')?.attachment
+    expect(attachment?.kind === 'repo' && attachment.repoUrlRedacted).toBe(
+      'https://git.example/app.git',
+    )
     expect(JSON.stringify(g)).not.toContain('secret')
   })
 
@@ -139,7 +185,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'FullStack',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -159,7 +205,7 @@ describe('RFC-248 repo group service', () => {
           {
             name: 'fullstack',
             description: '',
-            members: [
+            attachments: [
               {
                 kind: 'repo',
                 cachedRepoId: sdkRepo,
@@ -183,7 +229,7 @@ describe('RFC-248 repo group service', () => {
         {
           name: 'g',
           description: '',
-          members: [
+          attachments: [
             {
               kind: 'repo',
               cachedRepoId: appRepo,
@@ -208,7 +254,7 @@ describe('RFC-248 repo group service', () => {
           {
             name: 'g',
             description: '',
-            members: [
+            attachments: [
               {
                 kind: 'repo',
                 cachedRepoId: appRepo,
@@ -233,7 +279,7 @@ describe('RFC-248 repo group service', () => {
           {
             name: 'g',
             description: '',
-            members: [
+            attachments: [
               {
                 kind: 'repo',
                 cachedRepoId: 'nope',
@@ -256,7 +302,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: '底座',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: sdkRepo,
@@ -274,7 +320,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: '订单域',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -303,7 +349,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -321,7 +367,7 @@ describe('RFC-248 repo group service', () => {
         updateRepoGroup(deps(), g.id, {
           name: 'g',
           description: '',
-          members: [{ kind: 'group', childGroupId: g.id, mountPath: 'x', readonly: false }],
+          attachments: [{ kind: 'group', childGroupId: g.id, mountPath: 'x', readonly: false }],
         }),
       ),
     ).toBe('repo-group-cycle')
@@ -336,7 +382,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'inner',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: sdkRepo,
@@ -354,7 +400,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'outer',
         description: '',
-        members: [
+        attachments: [
           { kind: 'group', childGroupId: inner.id, mountPath: 'base', readonly: false },
           // 外层自己占了 base/dup
           {
@@ -374,7 +420,7 @@ describe('RFC-248 repo group service', () => {
       updateRepoGroup(deps(), inner.id, {
         name: 'inner',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: sdkRepo,
@@ -403,7 +449,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -420,7 +466,7 @@ describe('RFC-248 repo group service', () => {
     const g2 = await updateRepoGroup(deps(), g.id, {
       name: 'g',
       description: '改了',
-      members: [
+      attachments: [
         {
           kind: 'repo',
           cachedRepoId: appRepo,
@@ -441,7 +487,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'inner',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: sdkRepo,
@@ -459,7 +505,9 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'outer',
         description: '',
-        members: [{ kind: 'group', childGroupId: inner.id, mountPath: 'base', readonly: false }],
+        attachments: [
+          { kind: 'group', childGroupId: inner.id, mountPath: 'base', readonly: false },
+        ],
       },
       null,
     )
@@ -477,7 +525,7 @@ describe('RFC-248 repo group service', () => {
     expect(listRepoGroups(db).map((g) => g.name)).toEqual(['outer'])
     // 外层组与原目录都保留，只解除那个挂载。
     const outer = getRepoGroup(db, listRepoGroups(db)[0]!.id)
-    expect(outer.members).toHaveLength(0)
+    expect(outer.nodes.every((node) => node.attachment === null)).toBe(true)
     expect(outer.nodes).toEqual([
       { path: '', attachment: null },
       { path: 'base', attachment: null },
@@ -490,7 +538,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -532,7 +580,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -559,7 +607,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g1',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -586,7 +634,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g2',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -604,7 +652,7 @@ describe('RFC-248 repo group service', () => {
     expect(detachRepoFromAllGroups(db, appRepo)).toBe(3) // g1 两行 + g2 一行
     expect(groupsReferencingRepo(db, appRepo)).toEqual([])
     const detached = getRepoGroup(db, g1.id)
-    expect(detached.members).toHaveLength(0)
+    expect(detached.nodes.every((node) => node.attachment === null)).toBe(true)
     expect(detached.nodes).toEqual([
       { path: '', attachment: null },
       { path: 'compare', attachment: null },
@@ -636,7 +684,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g1',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -654,7 +702,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g2',
         description: '',
-        members: [{ kind: 'group', childGroupId: g1.id, mountPath: 'a', readonly: false }],
+        attachments: [{ kind: 'group', childGroupId: g1.id, mountPath: 'a', readonly: false }],
       },
       null,
     )
@@ -686,7 +734,7 @@ describe('RFC-248 repo group service', () => {
         {
           name: 'bad',
           description: '',
-          members: [
+          attachments: [
             {
               kind: 'repo',
               cachedRepoId: appRepo,
@@ -720,7 +768,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -737,7 +785,7 @@ describe('RFC-248 repo group service', () => {
       updateRepoGroup(deps(), g.id, {
         name: 'g',
         description: '毁掉它',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -761,8 +809,8 @@ describe('RFC-248 repo group service', () => {
     const after = getRepoGroup(db, g.id)
     expect(after.version).toBe(1) // 没有自增
     expect(after.description).toBe('') // 没被改
-    expect(after.members).toHaveLength(1)
-    expect(after.members[0]?.mountPath).toBe('') // 原成员原样
+    expect(after.nodes.filter((node) => node.attachment !== null)).toHaveLength(1)
+    expect(after.nodes.find((node) => node.attachment !== null)?.path).toBe('') // 原挂载原样
   })
 
   test('H1: OCC —— expectedVersion 不匹配 ⇒ 409，且不写入', async () => {
@@ -771,7 +819,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -788,7 +836,7 @@ describe('RFC-248 repo group service', () => {
     await updateRepoGroup(deps(), g.id, {
       name: 'g',
       description: '别人的改动',
-      members: [
+      attachments: [
         {
           kind: 'repo',
           cachedRepoId: sdkRepo,
@@ -806,7 +854,7 @@ describe('RFC-248 repo group service', () => {
         {
           name: 'g',
           description: '我的改动',
-          members: [
+          attachments: [
             {
               kind: 'repo',
               cachedRepoId: appRepo,
@@ -832,7 +880,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,
@@ -879,7 +927,7 @@ describe('RFC-248 repo group service', () => {
       {
         name: 'g',
         description: '',
-        members: [
+        attachments: [
           {
             kind: 'repo',
             cachedRepoId: appRepo,

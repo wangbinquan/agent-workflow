@@ -318,7 +318,7 @@ code {
   min-width: 20px;
   height: 20px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--danger-fill);
   color: var(--on-danger);
   font-size: 11px;
@@ -21637,12 +21637,27 @@ button.status-chip {
   white-space: nowrap;
 }
 
-/* RFC-249 — one dense tree plus a contextual inspector; no duplicate preview tree. */
+/* RFC-249 — one dense tree with settings expanded directly below the selected row. */
+.repo-group-editor__fields {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
 .repo-group-editor__meta {
   display: grid;
   grid-template-columns: minmax(180px, 2fr) minmax(240px, 3fr);
   gap: var(--space-3);
   align-items: start;
+}
+.repo-group-editor__meta--compact {
+  grid-template-columns: minmax(180px, 420px) auto;
+  align-items: end;
+}
+.repo-group-editor__add-description {
+  justify-self: start;
 }
 .repo-group-editor__toolbar {
   display: flex;
@@ -21654,11 +21669,6 @@ button.status-chip {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--panel) 80%, var(--bg));
-}
-.repo-group-editor__toolbar .btn--selected {
-  color: var(--info-fg);
-  border-color: var(--info-border);
-  background: var(--info-bg);
 }
 .repo-group-editor__new-directory {
   display: flex;
@@ -21672,48 +21682,6 @@ button.status-chip {
 .repo-group-editor__target {
   margin-left: auto;
   font-size: var(--font-xs);
-}
-.repo-group-editor__bulk,
-.repo-group-editor__paste {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  align-items: start;
-  margin-top: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--info-border);
-  border-radius: var(--radius-md);
-  background: var(--info-bg);
-}
-.repo-group-editor__bulk > .form-input,
-.repo-group-editor__bulk-actions,
-.repo-group-editor__bulk-list {
-  grid-column: 1;
-}
-.repo-group-editor__bulk-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-.repo-group-editor__bulk > .btn,
-.repo-group-editor__paste > .btn {
-  grid-column: 2;
-  grid-row: 1;
-}
-.repo-group-editor__bulk-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2) var(--space-3);
-  max-height: 176px;
-  overflow: auto;
-  padding: var(--space-1);
-}
-.repo-group-editor__paste .form-textarea {
-  min-height: 84px;
-}
-.repo-group-editor__paste-error {
-  grid-column: 1;
-  margin: 0;
 }
 .repo-group-editor__batch {
   display: flex;
@@ -21737,49 +21705,43 @@ button.status-chip {
   align-items: center;
   margin-top: var(--space-2);
   font-size: var(--font-xs);
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 .repo-group-editor__status .error-banner {
   width: 100%;
 }
+.repo-group-editor__batch-notice {
+  color: var(--success-fg);
+}
+.repo-group-editor__draft-notice {
+  color: var(--warn);
+}
 .repo-group-editor__workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(270px, 320px);
-  height: clamp(260px, 42vh, 420px);
+  flex: 0 0 auto;
+  max-height: clamp(300px, 50vh, 520px);
   min-height: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow: auto;
+  overflow-x: hidden;
   background: var(--panel);
 }
-.repo-group-editor__tree-pane {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--space-1) 0;
-}
-.repo-group-editor__inspector {
-  min-height: 0;
-  overflow: auto;
-  padding: var(--space-3);
-  border-left: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 86%, var(--bg));
-}
-.repo-group-editor__inspector > * + * {
-  margin-top: var(--space-3);
-}
-.repo-group-editor__inspector-head {
+.repo-tree-editor__settings-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
   min-width: 0;
+  grid-column: 1 / -1;
 }
-.repo-group-editor__inspector-head strong {
+.repo-tree-editor__settings-head strong {
   overflow-wrap: anywhere;
 }
 .repo-tree-editor {
   margin: 0;
-  padding: 0;
+  padding: var(--space-1) 0;
+  min-width: 0;
 }
 .repo-tree-editor__row {
   display: grid;
@@ -21798,6 +21760,10 @@ button.status-chip {
   border-left-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
+.repo-tree-editor__row--error {
+  border-left-color: var(--danger);
+  background: var(--danger-bg);
+}
 .repo-tree-editor__row > .form-checkbox {
   display: flex;
   justify-content: center;
@@ -21807,6 +21773,9 @@ button.status-chip {
   height: 16px;
   display: inline-flex;
   color: var(--muted);
+}
+.repo-tree-editor__ghost-spacer {
+  width: 18px;
 }
 .repo-tree-editor__select {
   appearance: none;
@@ -21821,6 +21790,9 @@ button.status-chip {
   background: transparent;
   text-align: left;
   cursor: pointer;
+}
+.repo-tree-editor__select--static {
+  cursor: default;
 }
 .repo-tree-editor__select:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
@@ -21845,22 +21817,77 @@ button.status-chip {
   text-overflow: clip;
   white-space: normal;
 }
+.repo-tree-editor__meta-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 1px var(--space-1);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font: 500 var(--font-xs) / 1.4 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-tree-editor__item--ghost > .repo-tree-editor__row {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--info-bg) 35%, transparent);
+}
+.repo-tree-editor__inline-settings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: var(--space-2);
+  align-items: end;
+  margin: 2px var(--space-2) var(--space-2) 42px;
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+  box-shadow: var(--shadow-sm);
+}
+.repo-tree-editor__inline-settings > .form-field {
+  min-width: 0;
+  margin: 0;
+}
+.repo-tree-editor__inline-settings > .form-switch,
+.repo-tree-editor__inline-settings > .btn {
+  align-self: center;
+}
+
+.repo-bulk-add__target {
+  margin: 0 0 var(--space-2);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+.repo-bulk-add__panel {
+  min-height: 250px;
+  padding-top: var(--space-3);
+}
+.repo-bulk-add__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.repo-bulk-add__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  max-height: 300px;
+  margin-top: var(--space-2);
+  padding: var(--space-1);
+  overflow: auto;
+}
+.repo-bulk-add__list .form-checkbox {
+  min-width: 0;
+}
+.repo-bulk-add__panel .form-textarea {
+  min-height: 190px;
+}
 
 @media (max-width: 820px) {
-  .repo-group-editor__workspace {
-    grid-template-columns: minmax(0, 1fr);
-    height: auto;
-    max-height: none;
-  }
-  .repo-group-editor__tree-pane {
-    max-height: 330px;
-  }
-  .repo-group-editor__inspector {
-    border-left: 0;
-    border-top: 1px solid var(--border);
-    max-height: none;
-  }
-  .repo-group-editor__bulk-list {
+  .repo-bulk-add__list {
     grid-template-columns: minmax(0, 1fr);
   }
   .repo-group-editor__toolbar .btn,
@@ -21882,17 +21909,16 @@ button.status-chip {
     min-width: 44px;
     align-items: center;
   }
+  .repo-tree-editor__inline-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 600px) {
-  .repo-group-editor__meta,
-  .repo-group-editor__bulk,
-  .repo-group-editor__paste {
+  .repo-group-editor__meta {
     grid-template-columns: minmax(0, 1fr);
   }
-  .repo-group-editor__bulk > .btn,
-  .repo-group-editor__paste > .btn {
-    grid-column: 1;
-    grid-row: auto;
+  .repo-group-editor__meta--compact {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .repo-group-editor__target {
     width: 100%;
@@ -21904,6 +21930,22 @@ button.status-chip {
   .repo-group-editor__new-directory .form-input {
     width: auto;
     flex: 1 1 auto;
+  }
+  .repo-group-editor__workspace {
+    max-height: 52vh;
+  }
+  .repo-tree-editor__row {
+    padding-right: var(--space-1);
+  }
+  .repo-tree-editor__select {
+    gap: var(--space-1);
+  }
+  .repo-tree-editor__meta-chip {
+    display: none;
+  }
+  .repo-tree-editor__inline-settings {
+    grid-template-columns: minmax(0, 1fr);
+    margin-left: var(--space-2);
   }
 }
 

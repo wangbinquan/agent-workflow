@@ -36,6 +36,7 @@ import { createWorkflow } from '../src/services/workflow'
 import { getTask, materializeSpace, startTask } from '../src/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { DomainError } from '../src/util/errors'
+import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -98,7 +99,7 @@ function seedRepo(name: string, files: Record<string, string>): { id: string; pa
   return { id, path: dir }
 }
 
-interface MemberSpec {
+interface MountSpec {
   cachedRepoId: string
   mountPath: string
   ref?: string
@@ -106,20 +107,22 @@ interface MemberSpec {
   readonly?: boolean
 }
 
-async function makeGroup(name: string, members: MemberSpec[]): Promise<string> {
+async function makeGroup(name: string, mounts: MountSpec[]): Promise<string> {
   const g = await createRepoGroup(
     { db },
     {
       name,
       description: '',
-      members: members.map((m) => ({
-        kind: 'repo' as const,
-        cachedRepoId: m.cachedRepoId,
-        ref: m.ref ?? '',
-        subdir: m.subdir ?? '',
-        mountPath: m.mountPath,
-        readonly: m.readonly ?? false,
-      })),
+      nodes: repoGroupNodesFromAttachments(
+        mounts.map((mount) => ({
+          kind: 'repo' as const,
+          cachedRepoId: mount.cachedRepoId,
+          ref: mount.ref ?? '',
+          subdir: mount.subdir ?? '',
+          mountPath: mount.mountPath,
+          readonly: mount.readonly ?? false,
+        })),
+      ),
     },
     null,
   )

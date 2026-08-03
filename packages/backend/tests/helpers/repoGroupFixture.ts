@@ -10,8 +10,107 @@
 // 需要嵌套布局的测试自己传 `mountPaths`。
 
 import { pathToFileURL } from 'node:url'
+import {
+  normalizeRepoNodePath,
+  parentNodePath,
+  type RepoGroupNodeInput,
+} from '@agent-workflow/shared'
 import type { DbClient } from '../../src/db/client'
 import { createRepoGroup } from '../../src/services/repoGroup'
+
+export type RepoGroupAttachmentSpec =
+  | {
+      kind: 'repo'
+      cachedRepoId?: string
+      repoUrl?: string
+      ref: string
+      subdir: string
+      mountPath: string
+      readonly: boolean
+    }
+  | {
+      kind: 'group'
+      childGroupId: string
+      mountPath: string
+      readonly: boolean
+    }
+
+/**
+ * Build the explicit directory-node closure used by the RFC-249 wire contract.
+ * Keeping this adapter in tests lets older scenario descriptions stay concise
+ * without reintroducing the retired production model.
+ */
+export function repoGroupNodesFromAttachments(
+  attachments: readonly RepoGroupAttachmentSpec[],
+): RepoGroupNodeInput[] {
+  const nodes: RepoGroupNodeInput[] = [{ path: '', attachment: null }]
+  const byPath = new Map<string, RepoGroupNodeInput>([['', nodes[0]!]])
+
+  const ensureDirectory = (path: string): RepoGroupNodeInput => {
+    const folded = path.toLowerCase()
+    const existing = byPath.get(folded)
+    if (existing !== undefined) return existing
+    const parent = parentNodePath(path)
+    if (parent !== null) ensureDirectory(parent)
+    const node: RepoGroupNodeInput = { path, attachment: null }
+    nodes.push(node)
+    byPath.set(folded, node)
+    return node
+  }
+
+  for (const spec of attachments) {
+    let normalized: string
+    try {
+      normalized = normalizeRepoNodePath(spec.mountPath)
+    } catch {
+      nodes.push({
+        path: spec.mountPath,
+        attachment:
+          spec.kind === 'repo'
+            ? {
+                kind: 'repo',
+                ...(spec.cachedRepoId === undefined
+                  ? { repoUrl: spec.repoUrl }
+                  : { cachedRepoId: spec.cachedRepoId }),
+                ref: spec.ref,
+                subdir: spec.subdir,
+                readonly: spec.readonly,
+              }
+            : {
+                kind: 'group',
+                childGroupId: spec.childGroupId,
+                readonly: spec.readonly,
+              },
+      })
+      continue
+    }
+
+    const target = ensureDirectory(normalized)
+    const attachment: RepoGroupNodeInput['attachment'] =
+      spec.kind === 'repo'
+        ? {
+            kind: 'repo',
+            ...(spec.cachedRepoId === undefined
+              ? { repoUrl: spec.repoUrl }
+              : { cachedRepoId: spec.cachedRepoId }),
+            ref: spec.ref,
+            subdir: spec.subdir,
+            readonly: spec.readonly,
+          }
+        : {
+            kind: 'group',
+            childGroupId: spec.childGroupId,
+            readonly: spec.readonly,
+          }
+    if (target.attachment === null) {
+      target.path = spec.mountPath
+      target.attachment = attachment
+    } else {
+      nodes.push({ path: spec.mountPath, attachment })
+    }
+  }
+  return nodes
+}
 
 export interface GroupFixtureOptions {
   /** 每个源仓的挂载路径；默认 `r0` / `r1` / …（平铺）。 */
@@ -39,14 +138,16 @@ export async function seedRepoGroup(
     {
       name: options.name ?? `fixture-group-${sourcePaths.length}`,
       description: '',
-      members: sourcePaths.map((repoPath, i) => ({
-        kind: 'repo' as const,
-        repoUrl: pathToFileURL(repoPath).href,
-        ref: '',
-        subdir: '',
-        mountPath: options.mountPaths?.[i] ?? `r${i}`,
-        readonly: readonlySet.has(i),
-      })),
+      nodes: repoGroupNodesFromAttachments(
+        sourcePaths.map((repoPath, i) => ({
+          kind: 'repo' as const,
+          repoUrl: pathToFileURL(repoPath).href,
+          ref: '',
+          subdir: '',
+          mountPath: options.mountPaths?.[i] ?? `r${i}`,
+          readonly: readonlySet.has(i),
+        })),
+      ),
     },
     null,
   )

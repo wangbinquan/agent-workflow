@@ -17,7 +17,11 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, repoGroupNodes, repoGroups } from '../src/db/schema'
-import { previewRepoGroupLayout } from '../src/services/repoGroup'
+import { previewRepoGroupLayout as previewRepoGroupLayoutImpl } from '../src/services/repoGroup'
+import {
+  repoGroupNodesFromAttachments,
+  type RepoGroupAttachmentSpec,
+} from './helpers/repoGroupFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -42,6 +46,16 @@ function seedRepo(slug: string): string {
     })
     .run()
   return id
+}
+
+function previewRepoGroupLayout(
+  database: DbClient,
+  input: { name?: string; attachments: readonly RepoGroupAttachmentSpec[] },
+) {
+  return previewRepoGroupLayoutImpl(database, {
+    ...(input.name === undefined ? {} : { name: input.name }),
+    nodes: repoGroupNodesFromAttachments(input.attachments),
+  })
 }
 
 /** 建一个真实的组（预览里可以被 `kind:'group'` 成员引用）。 */
@@ -78,7 +92,7 @@ function seedGroup(name: string, repoIds: readonly string[]): string {
 describe('RFC-248 —— 干跑布局预览', () => {
   test('空成员表返回空布局，而不是 422', () => {
     // 用户刚点开「新建」时就是这个状态，那时报错毫无意义。
-    const r = previewRepoGroupLayout(db, { members: [] })
+    const r = previewRepoGroupLayout(db, { attachments: [] })
     expect(r.repos).toEqual([])
     expect(r.totalRepos).toBe(0)
     expect(r.pendingImports).toBe(0)
@@ -89,7 +103,7 @@ describe('RFC-248 —— 干跑布局预览', () => {
     const sdk = seedRepo('sdk')
     const r = previewRepoGroupLayout(db, {
       name: '全栈',
-      members: [
+      attachments: [
         { kind: 'repo', cachedRepoId: app, ref: '', subdir: '', mountPath: '', readonly: false },
         {
           kind: 'repo',
@@ -109,7 +123,7 @@ describe('RFC-248 —— 干跑布局预览', () => {
   test('**零副作用**：只给 URL 的成员不导入、不落库，只计入 pendingImports', () => {
     const before = db.select().from(cachedRepos).all().length
     const r = previewRepoGroupLayout(db, {
-      members: [
+      attachments: [
         {
           kind: 'repo',
           repoUrl: 'https://git.example/new.git',
@@ -133,7 +147,7 @@ describe('RFC-248 —— 干跑布局预览', () => {
     const b = seedRepo('b')
     const child = seedGroup('child', [a, b])
     const r = previewRepoGroupLayout(db, {
-      members: [{ kind: 'group', childGroupId: child, mountPath: 'sub', readonly: false }],
+      attachments: [{ kind: 'group', childGroupId: child, mountPath: 'sub', readonly: false }],
     })
     expect(r.repos.map((x) => x.mountPath).sort()).toEqual(['sub', 'sub/m1'])
     // 来源链记录它是经哪个组进来的。
@@ -144,7 +158,7 @@ describe('RFC-248 —— 干跑布局预览', () => {
     const a = seedRepo('a')
     const child = seedGroup('child', [a])
     const r = previewRepoGroupLayout(db, {
-      members: [{ kind: 'group', childGroupId: child, mountPath: 'sub', readonly: true }],
+      attachments: [{ kind: 'group', childGroupId: child, mountPath: 'sub', readonly: true }],
     })
     expect(r.repos.every((x) => x.readonly)).toBe(true)
   })
@@ -152,7 +166,7 @@ describe('RFC-248 —— 干跑布局预览', () => {
   test('引用不存在的子组 ⇒ 404（而不是静默跳过）', () => {
     expect(() =>
       previewRepoGroupLayout(db, {
-        members: [{ kind: 'group', childGroupId: 'nope', mountPath: '', readonly: false }],
+        attachments: [{ kind: 'group', childGroupId: 'nope', mountPath: '', readonly: false }],
       }),
     ).toThrow(/not found/i)
   })
@@ -163,7 +177,7 @@ describe('RFC-248 —— 干跑布局预览', () => {
     let code = ''
     try {
       previewRepoGroupLayout(db, {
-        members: [
+        attachments: [
           { kind: 'repo', cachedRepoId: a, ref: '', subdir: '', mountPath: 'x', readonly: false },
           { kind: 'repo', cachedRepoId: b, ref: '', subdir: '', mountPath: 'x', readonly: false },
         ],
@@ -181,7 +195,7 @@ describe('RFC-248 —— 干跑布局预览', () => {
     const b = seedRepo('b')
     expect(() =>
       previewRepoGroupLayout(db, {
-        members: [
+        attachments: [
           { kind: 'repo', cachedRepoId: a, ref: '', subdir: '', mountPath: '', readonly: false },
           { kind: 'repo', cachedRepoId: b, ref: '', subdir: '', mountPath: '', readonly: false },
         ],

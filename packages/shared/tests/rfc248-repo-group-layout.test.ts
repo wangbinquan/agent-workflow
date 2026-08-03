@@ -29,16 +29,19 @@ import {
   joinMountPath,
   mountDepth,
   normalizeMountPath,
+  normalizeRepoNodePath,
   orderForMaterialize,
+  parentNodePath,
   parseRepoKeyWire,
   repoKeyWire,
   splitRepoPrefix,
   type FlattenableGroup,
+  type FlattenableNode,
 } from '../src/index'
 
 // ── 测试夹具 ────────────────────────────────────────────────────────────────
 
-function repoMember(
+function repoMount(
   cachedRepoId: string,
   mountPath: string,
   extra: { ref?: string; subdir?: string; readonly?: boolean } = {},
@@ -54,12 +57,63 @@ function repoMember(
   }
 }
 
-function groupMember(childGroupId: string, mountPath: string, readonly = false) {
+function groupMount(childGroupId: string, mountPath: string, readonly = false) {
   return { kind: 'group' as const, childGroupId, mountPath, readonly }
 }
 
-function loaderFor(...groups: FlattenableGroup[]) {
-  const byId = new Map(groups.map((g) => [g.id, g]))
+type TestAttachment = ReturnType<typeof repoMount> | ReturnType<typeof groupMount>
+
+interface TestGroup {
+  id: string
+  name: string
+  attachments: readonly TestAttachment[]
+}
+
+function nodesFromAttachments(attachments: readonly TestAttachment[]): FlattenableNode[] {
+  const nodes: FlattenableNode[] = [{ path: '', attachment: null }]
+  const byPath = new Map<string, FlattenableNode>([['', nodes[0]!]])
+  const ensure = (path: string): FlattenableNode => {
+    const normalized = normalizeRepoNodePath(path)
+    const folded = normalized.toLowerCase()
+    const existing = byPath.get(folded)
+    if (existing !== undefined) return existing
+    const parent = parentNodePath(normalized)
+    if (parent !== null) ensure(parent)
+    const node: FlattenableNode = { path: normalized, attachment: null }
+    nodes.push(node)
+    byPath.set(folded, node)
+    return node
+  }
+  for (const spec of attachments) {
+    const target = ensure(spec.mountPath)
+    const attachment =
+      spec.kind === 'repo'
+        ? {
+            kind: 'repo' as const,
+            cachedRepoId: spec.cachedRepoId,
+            repoUrlRedacted: spec.repoUrlRedacted,
+            ref: spec.ref,
+            subdir: spec.subdir,
+            readonly: spec.readonly,
+          }
+        : {
+            kind: 'group' as const,
+            childGroupId: spec.childGroupId,
+            readonly: spec.readonly,
+          }
+    if (target.attachment === null) target.attachment = attachment
+    else nodes.push({ path: spec.mountPath, attachment })
+  }
+  return nodes
+}
+
+function loaderFor(...groups: TestGroup[]) {
+  const byId = new Map<string, FlattenableGroup>(
+    groups.map((group) => [
+      group.id,
+      { id: group.id, name: group.name, nodes: nodesFromAttachments(group.attachments) },
+    ]),
+  )
   return (id: string) => byId.get(id)
 }
 
@@ -206,13 +260,19 @@ describe('设计门二轮 P1 回归锁', () => {
     // 永远撞不到 MAX_FLAT_REPOS，daemon 事件循环被整个卡死。
     const WIDTH = 20
     const DEPTH = 5
-    const groups: FlattenableGroup[] = [{ id: 'leaf', name: 'leaf', members: [] }]
+    const groups: TestGroup[] = [{ id: 'leaf', name: 'leaf', attachments: [] }]
     for (let d = DEPTH; d >= 1; d--) {
       const child = d === DEPTH ? 'leaf' : `L${d + 1}`
       groups.push({
         id: `L${d}`,
         name: `L${d}`,
-        members: Array.from({ length: WIDTH }, (_, i) => groupMember(child, `m${d}_${i}`)),
+        // 每层都沿同一条 `x/x/...` 链挂 20 次。不同递归路径的段数相加后会大量
+        // 合流，因此展开目录始终少于 RFC-249 的 MAX_FLAT_NODES=256；但 group edge
+        // 访问量仍是 20^5。这样 H7 锁住的确实是独立 traversal budget，而不是被
+        // 新增的目录节点预算提前挡住。
+        attachments: Array.from({ length: WIDTH }, (_, i) =>
+          groupMount(child, Array.from({ length: i + 1 }, () => 'x').join('/')),
+        ),
       })
     }
     const started = performance.now()
@@ -310,10 +370,10 @@ describe('mountDepth', () => {
 
 describe('flattenRepoGroup', () => {
   test('平铺组：按 RFC-249 规范路径展开，无内层组时 maxDepth=0', () => {
-    const g: FlattenableGroup = {
+    const g: TestGroup = {
       id: 'g1',
       name: '全栈',
-      members: [repoMember('r-fe', 'frontend'), repoMember('r-be', 'backend')],
+      attachments: [repoMount('r-fe', 'frontend'), repoMount('r-be', 'backend')],
     }
     const { repos, maxDepth } = flattenRepoGroup('g1', loaderFor(g))
     expect(maxDepth).toBe(0)
@@ -322,13 +382,13 @@ describe('flattenRepoGroup', () => {
   })
 
   test('挂根 + 嵌套 + 三层：挂载路径逐层前缀拼接', () => {
-    const g: FlattenableGroup = {
+    const g: TestGroup = {
       id: 'g1',
       name: 'app',
-      members: [
-        repoMember('r-app', ''),
-        repoMember('r-sdk', 'vendor/sdk', { readonly: true }),
-        repoMember('r-ext', 'vendor/sdk/ext'),
+      attachments: [
+        repoMount('r-app', ''),
+        repoMount('r-sdk', 'vendor/sdk', { readonly: true }),
+        repoMount('r-ext', 'vendor/sdk/ext'),
       ],
     }
     const { repos } = flattenRepoGroup('g1', loaderFor(g))
@@ -336,15 +396,15 @@ describe('flattenRepoGroup', () => {
   })
 
   test('组套组：内层挂点被外层前缀重写，maxDepth 记实际深度', () => {
-    const inner: FlattenableGroup = {
+    const inner: TestGroup = {
       id: 'g-base',
       name: '平台底座',
-      members: [repoMember('r-core', ''), repoMember('r-proto', 'proto')],
+      attachments: [repoMount('r-core', ''), repoMount('r-proto', 'proto')],
     }
-    const outer: FlattenableGroup = {
+    const outer: TestGroup = {
       id: 'g-order',
       name: '订单域',
-      members: [repoMember('r-orders', ''), groupMember('g-base', 'base')],
+      attachments: [repoMount('r-orders', ''), groupMount('g-base', 'base')],
     }
     const { repos, maxDepth } = flattenRepoGroup('g-order', loaderFor(outer, inner))
     expect(maxDepth).toBe(1)
@@ -354,30 +414,30 @@ describe('flattenRepoGroup', () => {
   })
 
   test('D20 只读取并集：外层标只读 ⇒ 内层全部只读', () => {
-    const inner: FlattenableGroup = {
+    const inner: TestGroup = {
       id: 'g-in',
       name: 'in',
-      members: [repoMember('r-a', 'a'), repoMember('r-b', 'b', { readonly: true })],
+      attachments: [repoMount('r-a', 'a'), repoMount('r-b', 'b', { readonly: true })],
     }
-    const outer: FlattenableGroup = {
+    const outer: TestGroup = {
       id: 'g-out',
       name: 'out',
-      members: [groupMember('g-in', 'vendor', true)],
+      attachments: [groupMount('g-in', 'vendor', true)],
     }
     const { repos } = flattenRepoGroup('g-out', loaderFor(outer, inner))
     expect(repos.map((r) => r.readonly)).toEqual([true, true])
   })
 
   test('D20 外层不标只读时，内层成员保持自己的标记（不被推翻成可写）', () => {
-    const inner: FlattenableGroup = {
+    const inner: TestGroup = {
       id: 'g-in',
       name: 'in',
-      members: [repoMember('r-a', 'a'), repoMember('r-b', 'b', { readonly: true })],
+      attachments: [repoMount('r-a', 'a'), repoMount('r-b', 'b', { readonly: true })],
     }
-    const outer: FlattenableGroup = {
+    const outer: TestGroup = {
       id: 'g-out',
       name: 'out',
-      members: [groupMember('g-in', 'vendor', false)],
+      attachments: [groupMount('g-in', 'vendor', false)],
     }
     const { repos } = flattenRepoGroup('g-out', loaderFor(outer, inner))
     expect(repos.map((r) => r.readonly)).toEqual([false, true])
@@ -386,40 +446,40 @@ describe('flattenRepoGroup', () => {
   test('同一个内层组被两处引用**不是**环——展平两次落两个挂点', () => {
     // 这条锁的是「环检测必须用当前递归链而不是全局 visited」。用 visited
     // 集会把这个合法用法误判成环。
-    const inner: FlattenableGroup = {
+    const inner: TestGroup = {
       id: 'g-lib',
       name: 'lib',
-      members: [repoMember('r-lib', '')],
+      attachments: [repoMount('r-lib', '')],
     }
-    const outer: FlattenableGroup = {
+    const outer: TestGroup = {
       id: 'g-out',
       name: 'out',
-      members: [groupMember('g-lib', 'a/lib'), groupMember('g-lib', 'b/lib')],
+      attachments: [groupMount('g-lib', 'a/lib'), groupMount('g-lib', 'b/lib')],
     }
     const { repos } = flattenRepoGroup('g-out', loaderFor(outer, inner))
     expect(repos.map((r) => r.mountPath)).toEqual(['a/lib', 'b/lib'])
   })
 
   test('自引用成环被拒', () => {
-    const g: FlattenableGroup = { id: 'g1', name: 'g1', members: [groupMember('g1', 'x')] }
+    const g: TestGroup = { id: 'g1', name: 'g1', attachments: [groupMount('g1', 'x')] }
     expect(codeOf(() => flattenRepoGroup('g1', loaderFor(g)))).toBe('repo-group-cycle')
   })
 
   test('互引用成环被拒', () => {
-    const a: FlattenableGroup = { id: 'a', name: 'a', members: [groupMember('b', 'b')] }
-    const b: FlattenableGroup = { id: 'b', name: 'b', members: [groupMember('a', 'a')] }
+    const a: TestGroup = { id: 'a', name: 'a', attachments: [groupMount('b', 'b')] }
+    const b: TestGroup = { id: 'b', name: 'b', attachments: [groupMount('a', 'a')] }
     expect(codeOf(() => flattenRepoGroup('a', loaderFor(a, b)))).toBe('repo-group-cycle')
   })
 
   test(`嵌套深度超过 ${MAX_GROUP_DEPTH} 被拒`, () => {
     // 造一条 depth = MAX+1 的链：g0 → g1 → … → g(MAX+1)
-    const groups: FlattenableGroup[] = []
+    const groups: TestGroup[] = []
     for (let i = 0; i <= MAX_GROUP_DEPTH + 1; i++) {
       groups.push({
         id: `g${i}`,
         name: `g${i}`,
-        members:
-          i === MAX_GROUP_DEPTH + 1 ? [repoMember('r', '')] : [groupMember(`g${i + 1}`, `l${i}`)],
+        attachments:
+          i === MAX_GROUP_DEPTH + 1 ? [repoMount('r', '')] : [groupMount(`g${i + 1}`, `l${i}`)],
       })
     }
     expect(codeOf(() => flattenRepoGroup('g0', loaderFor(...groups)))).toBe(
@@ -428,16 +488,16 @@ describe('flattenRepoGroup', () => {
   })
 
   test(`展平后超过 ${MAX_FLAT_REPOS} 个仓被拒（按展平后算，不是直接成员数）`, () => {
-    const inner: FlattenableGroup = {
+    const inner: TestGroup = {
       id: 'g-in',
       name: 'in',
-      members: Array.from({ length: 20 }, (_, i) => repoMember(`r${i}`, `r${i}`)),
+      attachments: Array.from({ length: 20 }, (_, i) => repoMount(`r${i}`, `r${i}`)),
     }
-    const outer: FlattenableGroup = {
+    const outer: TestGroup = {
       id: 'g-out',
       name: 'out',
       // 直接成员只有 2 个，但展平后是 40 个 > 32。
-      members: [groupMember('g-in', 'a'), groupMember('g-in', 'b')],
+      attachments: [groupMount('g-in', 'a'), groupMount('g-in', 'b')],
     }
     expect(codeOf(() => flattenRepoGroup('g-out', loaderFor(outer, inner)))).toBe(
       'repo-group-too-many-repos',
@@ -445,20 +505,20 @@ describe('flattenRepoGroup', () => {
   })
 
   test('引用不存在的组 ⇒ member-not-found', () => {
-    const g: FlattenableGroup = { id: 'g1', name: 'g1', members: [groupMember('nope', 'x')] }
+    const g: TestGroup = { id: 'g1', name: 'g1', attachments: [groupMount('nope', 'x')] }
     expect(codeOf(() => flattenRepoGroup('g1', loaderFor(g)))).toBe('repo-group-member-not-found')
   })
 
   test('展平后的挂载点冲突会被集合级校验抓住', () => {
-    const inner: FlattenableGroup = { id: 'g-in', name: 'in', members: [repoMember('r', '')] }
-    const outer: FlattenableGroup = {
+    const inner: TestGroup = { id: 'g-in', name: 'in', attachments: [repoMount('r', 'child')] }
+    const outer: TestGroup = {
       id: 'g-out',
       name: 'out',
-      // 两条都落到 `x`：一条来自内层组的根成员，一条是外层自己的仓。
-      members: [groupMember('g-in', 'x'), repoMember('r2', 'x')],
+      // 两条都落到 `x/child`：一条来自内层组，一条是外层节点自己的仓。
+      attachments: [groupMount('g-in', 'x'), repoMount('r2', 'x/child')],
     }
     expect(codeOf(() => flattenRepoGroup('g-out', loaderFor(outer, inner)))).toBe(
-      'mount-path-duplicate',
+      'repo-group-attachment-conflict',
     )
   })
 })

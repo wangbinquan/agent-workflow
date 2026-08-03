@@ -870,27 +870,6 @@ export const repoGroupNodes = sqliteTable(
   }),
 )
 
-/**
- * Deprecated ORM-only shape retained so migration-focused RFC-248 tests can
- * describe the pre-0134 table. Production code must use `repoGroupNodes`;
- * the latest migrated database no longer contains this table.
- */
-export const repoGroupMembers = sqliteTable(
-  'repo_group_members',
-  {
-    groupId: text('group_id').notNull(),
-    memberIndex: integer('member_index').notNull(),
-    kind: text('kind', { enum: ['repo', 'group'] }).notNull(),
-    cachedRepoId: text('cached_repo_id'),
-    ref: text('ref').notNull().default(''),
-    subdir: text('subdir').notNull().default(''),
-    childGroupId: text('child_group_id'),
-    mountPath: text('mount_path').notNull().default(''),
-    readonly: integer('readonly', { mode: 'boolean' }).notNull().default(false),
-  },
-  (t) => ({ pk: primaryKey({ columns: [t.groupId, t.memberIndex] }) }),
-)
-
 // -----------------------------------------------------------------------------
 // tasks — one row per `POST /api/tasks`. Holds workflow snapshot for replay safety.
 // -----------------------------------------------------------------------------

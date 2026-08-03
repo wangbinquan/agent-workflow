@@ -55,6 +55,115 @@ export function repoOperationsFixture() {
   }))
 }
 
+function repoNode(index: number, path: string, readonly = false) {
+  const repo = repoOperationsFixture()[index - 1]!
+  return {
+    path,
+    attachment: {
+      kind: 'repo' as const,
+      cachedRepoId: repo.id,
+      repoUrlRedacted: repo.urlRedacted,
+      ref: index % 4 === 0 ? 'release/next' : '',
+      subdir: index === 3 ? 'packages/core' : '',
+      readonly,
+    },
+  }
+}
+
+export function repoGroupOperationsFixture() {
+  const flatNodes = [
+    { path: '', attachment: null },
+    ...Array.from({ length: 20 }, (_, index) => repoNode(index + 1, `service-${index + 1}`)),
+  ]
+  const nestedNodes = [
+    { path: '', attachment: null },
+    { path: 'apps', attachment: null },
+    repoNode(1, 'apps/web'),
+    { path: 'docs', attachment: null },
+    { path: 'vendor', attachment: null },
+    repoNode(2, 'vendor/sdk', true),
+    repoNode(3, 'vendor/sdk/ext'),
+  ]
+  const base = {
+    description: '',
+    version: 1,
+    schemaVersion: 2,
+    createdByUserId: 'owner-1',
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T12:00:00.000Z',
+    boundMemories: 0,
+  }
+  return [
+    {
+      ...base,
+      id: 'group-flat-20',
+      name: 'Product platform · 20 repositories',
+      description: 'A dense flat workspace for day-to-day product changes',
+      nodes: flatNodes,
+      directNodeCount: flatNodes.length,
+      flatRepoCount: 20,
+    },
+    {
+      ...base,
+      id: 'group-nested-3',
+      name: 'Platform with nested SDK',
+      description: 'Apps, documentation, and a three-level vendor subtree',
+      nodes: nestedNodes,
+      directNodeCount: nestedNodes.length,
+      flatRepoCount: 3,
+    },
+  ]
+}
+
+function layoutForNodes(nodes: Array<{ path: string; attachment: unknown }>, groupName: string) {
+  const reposById = new Map(repoOperationsFixture().map((repo) => [repo.id, repo]))
+  const repos = nodes.flatMap((node) => {
+    const attachment = node.attachment as {
+      kind: 'repo'
+      cachedRepoId?: string
+      repoUrl?: string
+      ref?: string
+      subdir?: string
+      readonly?: boolean
+    } | null
+    if (attachment?.kind !== 'repo') return []
+    const cached = reposById.get(attachment.cachedRepoId ?? '')
+    return [
+      {
+        cachedRepoId: attachment.cachedRepoId ?? `pending:${node.path}`,
+        repoUrlRedacted: cached?.urlRedacted ?? attachment.repoUrl ?? '',
+        ref: attachment.ref ?? '',
+        subdir: attachment.subdir ?? '',
+        mountPath: node.path,
+        readonly: attachment.readonly ?? false,
+        viaGroups: [{ id: 'visual-group', name: groupName }],
+      },
+    ]
+  })
+  return {
+    groupId: 'visual-group',
+    groupName,
+    nodes: nodes.map((node) => ({
+      path: node.path,
+      origins: [
+        {
+          groupId: 'visual-group',
+          groupName,
+          viaGroups: [{ id: 'visual-group', name: groupName }],
+        },
+      ],
+    })),
+    repos,
+    totalRepos: repos.length,
+    totalNodes: nodes.length,
+    maxDepth: 0,
+    pendingImports: repos.filter((repo) => repo.cachedRepoId.startsWith('pending:')).length,
+    pendingRepoPaths: repos
+      .filter((repo) => repo.cachedRepoId.startsWith('pending:'))
+      .map((repo) => repo.mountPath),
+  }
+}
+
 export async function routeOperationsSurfaceFixtures(page: Page): Promise<void> {
   await page.route(/\/api\/scheduled-tasks(?:\?.*)?$/, async (route) => {
     if (route.request().method() === 'GET') {
@@ -67,6 +176,38 @@ export async function routeOperationsSurfaceFixtures(page: Page): Promise<void> 
     if (route.request().method() === 'GET') {
       await route.fulfill({ json: { items: repoOperationsFixture() } })
       return
+    }
+    await route.continue()
+  })
+  await page.route(/\/api\/repo-groups(?:\?.*)?$/, async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: { items: repoGroupOperationsFixture() } })
+      return
+    }
+    await route.continue()
+  })
+  await page.route(/\/api\/repo-groups\/preview(?:\?.*)?$/, async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as {
+        name?: string
+        nodes: Array<{ path: string; attachment: unknown }>
+      }
+      await route.fulfill({ json: layoutForNodes(body.nodes, body.name ?? 'Unsaved group') })
+      return
+    }
+    await route.continue()
+  })
+  await page.route(/\/api\/repo-groups\/([^/?]+)\/layout(?:\?.*)?$/, async (route) => {
+    if (route.request().method() === 'GET') {
+      const id = route
+        .request()
+        .url()
+        .match(/\/api\/repo-groups\/([^/?]+)\/layout/)?.[1]
+      const group = repoGroupOperationsFixture().find((item) => item.id === id)
+      if (group !== undefined) {
+        await route.fulfill({ json: layoutForNodes(group.nodes, group.name) })
+        return
+      }
     }
     await route.continue()
   })

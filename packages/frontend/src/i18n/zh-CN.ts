@@ -1063,25 +1063,21 @@ export interface Resources {
       editTitle: string
       name: string
       description: string
-      members: string
-      preview: string
-      kindRepo: string
-      kindGroup: string
+      addDescription: string
       pickRepo: string
-      pasteUrl: string
       pickGroup: string
-      mountPlaceholder: string
       refPlaceholder: string
       subdirPlaceholder: string
       readonly: string
-      addRepo: string
-      addGroup: string
       pendingImports: string
-      incompleteRows: string
       emptyDirectory: string
       pendingRepo: string
       selectNode: string
       bulkAddRepos: string
+      bulkDialogTitle: string
+      cachedReposTab: string
+      urlsTab: string
+      bulkMode: string
       pasteUrls: string
       selectAllAttachments: string
       newDirectoryPlaceholder: string
@@ -1093,16 +1089,22 @@ export interface Resources {
       addSelected: string
       pasteUrlsPlaceholder: string
       invalidUrlLines: string
+      duplicateUrlsIgnored: string
       addUrls: string
       selectedCount: string
+      batchApplied: string
+      batchMoved: string
       markReadonly: string
       markWritable: string
       detach: string
       moveTo: string
       move: string
       validating: string
+      finishDraftBeforeSave: string
       layoutSummary: string
-      nodeSettings: string
+      settingsFor: string
+      inherited: string
+      inheritedFrom: string
       deleteSubtree: string
       deleteSubtreeTitle: string
       deleteSubtreeDescription: string
@@ -5467,25 +5469,21 @@ export const zhCN: Resources = {
       editTitle: '编辑仓库组',
       name: '名称',
       description: '描述',
-      members: '成员',
-      preview: '布局预览',
-      kindRepo: '仓库',
-      kindGroup: '组',
+      addDescription: '添加说明',
       pickRepo: '— 选择一个已缓存仓 —',
-      pasteUrl: '或粘一个仓库 URL（保存时导入）',
       pickGroup: '— 选择一个仓库组 —',
-      mountPlaceholder: '挂载路径（留空 = 任务根）',
       refPlaceholder: 'ref（留空 = 默认分支）',
       subdirPlaceholder: '仓内子目录（留空 = 整仓）',
       readonly: '只读',
-      addRepo: '+ 添加仓库',
-      addGroup: '+ 添加组',
       pendingImports: '还有 {{count}} 个仓按 URL 填写，将在保存时导入',
-      incompleteRows: '{{count}} 行还没选仓库 / 组，填完才会出现在预览里',
       emptyDirectory: '空目录',
       pendingRepo: '待导入仓库',
       selectNode: '选择节点 {{path}}',
       bulkAddRepos: '批量加仓',
+      bulkDialogTitle: '添加代码仓',
+      cachedReposTab: '已缓存仓库',
+      urlsTab: '仓库 URL',
+      bulkMode: '仓库来源',
       pasteUrls: '粘贴 URL',
       selectAllAttachments: '全选挂载',
       newDirectoryPlaceholder: '新目录名',
@@ -5497,16 +5495,22 @@ export const zhCN: Resources = {
       addSelected: '添加选中的 {{count}} 个',
       pasteUrlsPlaceholder: '每行一个 Git URL',
       invalidUrlLines: '第 {{lines}} 行不是支持的 Git URL',
+      duplicateUrlsIgnored: '已忽略 {{count}} 个重复 URL',
       addUrls: '添加这些 URL',
       selectedCount: '已选 {{count}} 个节点',
+      batchApplied: '已更新 {{count}} 个挂载，跳过 {{skipped}} 个空目录节点',
+      batchMoved: '已移动 {{count}} 棵子树',
       markReadonly: '设为只读',
       markWritable: '设为可写',
       detach: '摘除挂载',
       moveTo: '移动到目录',
       move: '移动',
       validating: '正在校验布局…',
+      finishDraftBeforeSave: '请先应用或清空尚未完成的编辑，再保存。',
       layoutSummary: '{{nodes}} 个目录节点 · {{repos}} 个仓库',
-      nodeSettings: '节点设置',
+      settingsFor: '{{path}} 的设置',
+      inherited: '继承',
+      inheritedFrom: '继承自 {{group}}',
       deleteSubtree: '删除子树',
       deleteSubtreeTitle: '删除目录子树',
       deleteSubtreeDescription:

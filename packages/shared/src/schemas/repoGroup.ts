@@ -92,75 +92,17 @@ export const RepoGroupNodeSchema = z.object({
 })
 export type RepoGroupNode = z.infer<typeof RepoGroupNodeSchema>
 
-// ── RFC-248 read-only compatibility projection ──────────────────────────────
-// v2 写接口明确拒绝 members；GET 暂留这份从 attachment nodes 无损派生的投影，
-// 让既有只读客户端与回归测试平滑升级。它不是持久化事实源，也无法写回。
-export const RepoGroupMemberInputSchema = z
-  .discriminatedUnion('kind', [
-    z.object({
-      kind: z.literal('repo'),
-      cachedRepoId: z.string().min(1).optional(),
-      repoUrl: z.string().min(1).optional(),
-      ref: z.string().default(''),
-      subdir: z.string().default(''),
-      mountPath: z.string().default(''),
-      readonly: z.boolean().default(false),
-    }),
-    z.object({
-      kind: z.literal('group'),
-      childGroupId: z.string().min(1),
-      mountPath: z.string().default(''),
-      readonly: z.boolean().default(false),
-    }),
-  ])
-  .superRefine((value, ctx) => {
-    if (value.kind !== 'repo') return
-    if ((value.cachedRepoId === undefined) === (value.repoUrl === undefined)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'exactly one of cachedRepoId / repoUrl is required',
-        path: ['cachedRepoId'],
-      })
-    }
-  })
-export type RepoGroupMemberInput = z.infer<typeof RepoGroupMemberInputSchema>
-
-export const RepoGroupMemberSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('repo'),
-    memberIndex: z.number().int().nonnegative(),
-    cachedRepoId: z.string(),
-    repoUrlRedacted: z.string(),
-    ref: z.string(),
-    subdir: z.string(),
-    mountPath: z.string(),
-    readonly: z.boolean(),
-  }),
-  z.object({
-    kind: z.literal('group'),
-    memberIndex: z.number().int().nonnegative(),
-    childGroupId: z.string(),
-    childGroupName: z.string(),
-    mountPath: z.string(),
-    readonly: z.boolean(),
-  }),
-])
-export type RepoGroupMember = z.infer<typeof RepoGroupMemberSchema>
-
 export const RepoGroupSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
   version: z.number().int().positive(),
-  schemaVersion: z.number().int().positive().optional(),
+  schemaVersion: z.number().int().positive(),
   createdByUserId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  /** v2 canonical definition. Optional only so pre-v2 fixture objects remain readable. */
-  nodes: z.array(RepoGroupNodeSchema).optional(),
-  /** Deprecated read-only projection; v2 write routes reject this key. */
-  members: z.array(RepoGroupMemberSchema),
-  directNodeCount: z.number().int().nonnegative().optional(),
+  nodes: z.array(RepoGroupNodeSchema),
+  directNodeCount: z.number().int().nonnegative(),
   flatRepoCount: z.number().int().nonnegative(),
   boundMemories: z.number().int().nonnegative(),
 })
@@ -207,21 +149,13 @@ export const UpdateRepoGroupSchema = CreateRepoGroupSchema.extend({
 })
 export type UpdateRepoGroup = z.infer<typeof UpdateRepoGroupSchema>
 
-/** 仅供内部兼容测试/过渡 helper；公开 v2 route 不解析该形态。 */
-export interface LegacyRepoGroupWrite {
-  name: string
-  description: string
-  members: RepoGroupMemberInput[]
-}
-
 export const RepoGroupLayoutResponseSchema = z.object({
   groupId: z.string(),
   groupName: z.string(),
   repos: z.array(PlannedRepoSchema),
-  /** v2 explicit directory tree; optional only for pre-v2 response fixtures. */
-  nodes: z.array(PlannedDirectoryNodeSchema).optional(),
+  nodes: z.array(PlannedDirectoryNodeSchema),
   totalRepos: z.number().int().nonnegative(),
-  totalNodes: z.number().int().nonnegative().optional(),
+  totalNodes: z.number().int().nonnegative(),
   maxDepth: z.number().int().nonnegative(),
 })
 export type RepoGroupLayoutResponse = z.infer<typeof RepoGroupLayoutResponseSchema>

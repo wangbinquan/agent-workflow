@@ -14,10 +14,10 @@
 //   packages/backend/tests/rfc248-materialize-group.test.ts
 //   packages/backend/tests/rfc248-legacy-multi-repo-retired.test.ts
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type Route as PlaywrightRoute } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
@@ -175,6 +175,50 @@ async function seedRepoGroup(
   return ((await res.json()) as { id: string }).id
 }
 
+async function importCachedRepos(daemon: DaemonHandle, fixtures: readonly RepoFixture[]) {
+  const headers = {
+    Authorization: `Bearer ${daemon.token}`,
+    'Content-Type': 'application/json',
+  }
+  const started = await fetch(`${daemon.baseUrl}/api/cached-repos/batch-import`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ urls: fixtures.map((fixture) => pathToFileURL(fixture.repoDir).href) }),
+  })
+  if (!started.ok) throw new Error(`batch import: ${started.status} ${await started.text()}`)
+  let snapshot = (await started.json()) as {
+    batchId: string
+    state: 'running' | 'completed'
+    rows: Array<{ status: string; message: string | null }>
+  }
+  const deadline = Date.now() + 20_000
+  while (snapshot.state !== 'completed' && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const response = await fetch(`${daemon.baseUrl}/api/cached-repos/imports/${snapshot.batchId}`, {
+      headers,
+    })
+    if (!response.ok) throw new Error(`batch status: ${response.status}`)
+    snapshot = (await response.json()) as typeof snapshot
+  }
+  if (snapshot.state !== 'completed' || snapshot.rows.some((row) => row.status !== 'done')) {
+    throw new Error(`batch import did not finish successfully: ${JSON.stringify(snapshot.rows)}`)
+  }
+}
+
+async function waitTaskTerminal(daemon: DaemonHandle, taskId: string): Promise<void> {
+  const deadline = Date.now() + 25_000
+  while (Date.now() < deadline) {
+    const response = await fetch(`${daemon.baseUrl}/api/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${daemon.token}` },
+    })
+    if (!response.ok) throw new Error(`task status: ${response.status}`)
+    const task = (await response.json()) as { status: string }
+    if (['done', 'failed', 'canceled'].includes(task.status)) return
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+  throw new Error(`task ${taskId} did not reach a terminal state`)
+}
+
 test.describe('RFC-248 —— 仓库组多仓启动', () => {
   let daemon: DaemonHandle | undefined
   const repos: RepoFixture[] = []
@@ -285,5 +329,266 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     await expect(page.getByTestId('repo-source-ref-0')).toHaveCount(0)
     await page.getByTestId('repo-source-url-0').fill(pathToFileURL(repoA.repoDir).toString())
     await expect(page.getByTestId('repo-source-ref-0')).toBeVisible()
+  })
+
+  test('/repos tab 由 strict URL 驱动，并支持刷新与 Back/Forward', async ({ page }) => {
+    const d = daemon!
+    await primeAuthLocalStorage(page, d)
+    await page.goto(`${d.baseUrl}/repos?q=sdk&tab=groups#inventory`)
+    await expect(page.getByTestId('repos-tab-groups')).toHaveAttribute('aria-selected', 'true')
+
+    await page.getByTestId('repos-tab-repos').click()
+    await expect(page).toHaveURL(/\/repos\?q=sdk&tab=repos#inventory$/)
+    await page.reload()
+    await expect(page.getByTestId('repos-tab-repos')).toHaveAttribute('aria-selected', 'true')
+
+    await page.getByTestId('repos-tab-groups').click()
+    await expect(page).toHaveURL(/tab=groups/)
+    await page.goBack()
+    await expect(page.getByTestId('repos-tab-repos')).toHaveAttribute('aria-selected', 'true')
+    await page.goForward()
+    await expect(page.getByTestId('repos-tab-groups')).toHaveAttribute('aria-selected', 'true')
+
+    await page.goto(`${d.baseUrl}/repos?q=sdk&tab=GROUPS#inventory`)
+    await expect(page).toHaveURL(/\/repos\?q=sdk&tab=repos#inventory$/)
+    await expect(page.getByTestId('repos-tab-repos')).toHaveAttribute('aria-selected', 'true')
+  })
+
+  test('仓库组编辑草稿覆盖 dismiss、Back、URL 草稿、保存 pending 与失败保留', async ({ page }) => {
+    const d = daemon!
+    const repoA = makeFixtureRepo('dirty-A')
+    const repoB = makeFixtureRepo('dirty-B')
+    repos.push(repoA, repoB)
+    const groupName = `rfc249-dirty-${Date.now() % 100000}`
+    const groupId = await seedRepoGroup(d, [repoA, repoB], groupName)
+
+    await primeAuthLocalStorage(page, d)
+    await page.goto(`${d.baseUrl}/repos?tab=repos`)
+    await page.getByTestId('repos-tab-groups').click()
+    await page.getByTestId(`repo-group-edit-${groupId}`).click()
+
+    const editor = page.getByTestId('repo-group-editor-dialog')
+    const nameInput = page.getByTestId('repo-group-name')
+    await nameInput.fill(`${groupName}-draft`)
+
+    // × / Esc / overlay all stay inside the editor until the user explicitly
+    // discards. "Stay" must preserve the exact draft every time.
+    for (const dismiss of [
+      async () => editor.getByRole('button', { name: 'Close' }).click(),
+      async () => page.keyboard.press('Escape'),
+      async () => editor.dispatchEvent('mousedown'),
+    ]) {
+      await dismiss()
+      await expect(page.getByRole('heading', { name: 'Unsaved changes' })).toBeVisible()
+      await page.getByRole('button', { name: 'Stay on page' }).click()
+      await expect(nameInput).toHaveValue(`${groupName}-draft`)
+    }
+
+    // Restore the material field, then prove the residual new-directory draft
+    // alone blocks browser Back and disables Save.
+    await nameInput.fill(groupName)
+    const pendingDirectory = page.getByTestId('repo-group-new-directory')
+    await pendingDirectory.fill('not-applied-yet')
+    await expect(page.getByTestId('repo-group-save')).toBeDisabled()
+    await expect(editor).toContainText('Finish or clear the pending edit before saving.')
+    await page.evaluate(() => window.history.back())
+    await expect(page.getByTestId('unsaved-guard-dialog')).toBeVisible()
+    await page.getByTestId('unsaved-stay').click()
+    await expect(pendingDirectory).toHaveValue('not-applied-yet')
+    await pendingDirectory.fill('')
+
+    // An unblurred rename draft is guarded too. Escape first cancels that one
+    // field instead of bubbling through and closing the whole editor.
+    await page.getByTestId('repo-group-node-select-vendor').click()
+    const directoryName = page.getByTestId('repo-group-directory-name')
+    await directoryName.fill('vendor-escape')
+    await directoryName.press('Escape')
+    await expect(directoryName).toHaveValue('vendor')
+    await expect(editor).toBeVisible()
+
+    await directoryName.fill('vendor-draft')
+    await page.evaluate(() => window.history.back())
+    await expect(page.getByTestId('unsaved-guard-dialog')).toBeVisible()
+    await page.getByTestId('unsaved-stay').click()
+    // Moving focus into the guard commits the valid rename draft via the
+    // editor's normal blur path; importantly it is preserved, not discarded.
+    await expect(directoryName).toHaveValue('vendor-draft')
+    await directoryName.fill('vendor')
+    await directoryName.press('Enter')
+    await expect(page.getByTestId('repo-group-node-vendor')).toBeVisible()
+
+    // Nested URL entry has its own discard boundary and also feeds the route
+    // guard so Back cannot silently erase pasted lines.
+    await page.getByTestId('repo-group-paste-urls').click()
+    const urlDraft = page.getByTestId('repo-group-bulk-urls')
+    await urlDraft.fill('https://git.example/acme/not-applied.git')
+    await page.evaluate(() => window.history.back())
+    await expect(page.getByTestId('unsaved-guard-dialog')).toBeVisible()
+    await page.getByTestId('unsaved-stay').click()
+    await expect(urlDraft).toHaveValue('https://git.example/acme/not-applied.git')
+    await page.getByTestId('repo-group-bulk-dialog').getByRole('button', { name: 'Cancel' }).click()
+    await expect(page.getByRole('heading', { name: 'Unsaved changes' })).toBeVisible()
+    await page.getByRole('button', { name: 'Discard changes' }).click()
+    await expect(page.getByTestId('repo-group-bulk-dialog')).toBeHidden()
+
+    // While PUT is in flight every dismiss path and every material control is
+    // frozen. Let the real request continue afterwards so the success close is
+    // still covered end to end.
+    let releaseSave!: () => void
+    const saveReleased = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const delayedSave = async (route: PlaywrightRoute) => {
+      const requestUrl = new URL(route.request().url())
+      if (
+        route.request().method() === 'PUT' &&
+        requestUrl.pathname === `/api/repo-groups/${groupId}`
+      ) {
+        await saveReleased
+      }
+      await route.continue()
+    }
+    await page.route('**/api/repo-groups/**', delayedSave)
+    const savedName = `${groupName}-saved`
+    await nameInput.fill(savedName)
+    await expect(page.getByTestId('repo-group-save')).toBeEnabled()
+    await page.getByTestId('repo-group-save').click()
+    await expect(page.getByTestId('repo-group-cancel')).toBeDisabled()
+    await expect(nameInput).toBeDisabled()
+    await expect(editor.getByRole('button', { name: 'Close' })).toBeDisabled()
+    await page.keyboard.press('Escape')
+    await expect(editor).toBeVisible()
+    releaseSave()
+    await expect(editor).toBeHidden()
+    await page.unroute('**/api/repo-groups/**', delayedSave)
+
+    // A definitive failure unlocks the editor without replacing the draft.
+    await page.getByTestId(`repo-group-edit-${groupId}`).click()
+    await page.getByTestId('repo-group-name').fill(`${savedName}-failure-draft`)
+    const failSave = async (route: PlaywrightRoute) => {
+      const requestUrl = new URL(route.request().url())
+      if (
+        route.request().method() === 'PUT' &&
+        requestUrl.pathname === `/api/repo-groups/${groupId}`
+      ) {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'test-save-failed', message: 'save failed on purpose' }),
+        })
+        return
+      }
+      await route.continue()
+    }
+    await page.route('**/api/repo-groups/**', failSave)
+    await page.getByTestId('repo-group-save').click()
+    await expect(editor).toContainText('save failed on purpose')
+    await expect(page.getByTestId('repo-group-name')).toHaveValue(`${savedName}-failure-draft`)
+    await expect(page.getByTestId('repo-group-cancel')).toBeEnabled()
+    await page.getByTestId('repo-group-cancel').click()
+    await page.getByRole('button', { name: 'Discard changes' }).click()
+    await expect(editor).toBeHidden()
+    await page.unroute('**/api/repo-groups/**', failSave)
+  })
+
+  test('UI 新建平铺组→整理层级→保存重开→启动→详情→sourceTask 重跑', async ({ page }) => {
+    const d = daemon!
+    const repoA = makeFixtureRepo('tree-A')
+    const repoB = makeFixtureRepo('tree-B')
+    repos.push(repoA, repoB)
+    await importCachedRepos(d, [repoA, repoB])
+    const wfId = await seedLinearWorkflow(d)
+    const groupName = `rfc249-ui-${Date.now() % 100000}`
+    const repoAName = basename(repoA.repoDir)
+    const repoBName = basename(repoB.repoDir)
+
+    await primeAuthLocalStorage(page, d)
+    await page.goto(`${d.baseUrl}/repos?tab=groups`)
+    await page.getByTestId('repo-groups-new').click()
+    await page.getByTestId('repo-group-name').fill(groupName)
+
+    await page.getByTestId('repo-group-bulk-repos').click()
+    const search = page.getByTestId('repo-group-bulk-search')
+    const repoList = page.getByTestId('repo-group-bulk-repo-list')
+    await search.fill(repoAName)
+    await repoList.locator('label', { hasText: repoAName }).click()
+    await search.fill(repoBName)
+    await repoList.locator('label', { hasText: repoBName }).click()
+    await page.getByTestId('repo-group-bulk-submit').click()
+
+    await page.getByTestId('repo-group-new-directory').fill('vendor')
+    await page.getByTestId('repo-group-add-directory').click()
+    await page.getByTestId(`repo-group-node-select-${repoBName}`).click()
+    await page.getByTestId('repo-group-parent-directory').click()
+    await page.getByRole('option', { name: 'vendor', exact: true }).click()
+    await expect(page.getByTestId(`repo-group-node-vendor/${repoBName}`)).toBeVisible()
+
+    await expect(page.getByTestId('repo-group-save')).toBeEnabled()
+    await page.getByTestId('repo-group-save').click()
+    const groupRow = page.getByRole('row', { name: new RegExp(groupName) })
+    await expect(groupRow).toBeVisible()
+    await groupRow.getByRole('button', { name: 'Edit', exact: true }).click()
+    await expect(page.getByTestId(`repo-group-node-${repoAName}`)).toBeVisible()
+    await expect(page.getByTestId(`repo-group-node-vendor/${repoBName}`)).toBeVisible()
+    await page.getByTestId('repo-group-cancel').click()
+
+    await page.goto(`${d.baseUrl}/workflows/${wfId}/launch`)
+    await page.getByTestId('wizard-space-remote').click()
+    await page.getByTestId('repo-source-recent-urls-0').click()
+    await page.getByRole('option', { name: new RegExp(`${groupName}.*group`, 'i') }).click()
+    await page.getByTestId('stepper-next').click()
+    await page.getByTestId('wizard-task-name').fill('rfc249-full-chain')
+    await page
+      .locator('label.form-field', { hasText: 'Topic (topic)' })
+      .locator('input.form-input')
+      .fill('directory-tree')
+    await page.getByTestId('stepper-next').click()
+    await page.getByRole('button', { name: 'Start task', exact: true }).click()
+    await page.waitForURL(/\/tasks\/[A-Z0-9]{26}/i)
+    const firstTaskId = page.url().match(/\/tasks\/([A-Z0-9]{26})/i)![1]!
+
+    await page.locator('[data-task-detail-section-link="details"]').click()
+    await page.getByTestId('task-detail-multi-repo').locator('summary').click()
+    await expect(page.getByTestId(`task-detail-repo-layout-row-vendor/${repoBName}`)).toBeVisible()
+    await waitTaskTerminal(d, firstTaskId)
+    await page.reload()
+    await page.getByTestId('task-detail-relaunch').click()
+    await page.waitForURL(new RegExp(`/tasks/new\\?relaunchFrom=${firstTaskId}`))
+
+    let sawReplaySpace = false
+    for (let step = 0; step < 4; step += 1) {
+      if (
+        await page
+          .getByTestId('wizard-space-replay')
+          .isVisible()
+          .catch(() => false)
+      ) {
+        sawReplaySpace = true
+      }
+      const start = page.getByRole('button', { name: 'Start task', exact: true })
+      if (await start.isVisible().catch(() => false)) break
+      const next = page.getByTestId('stepper-next')
+      await expect(next).toBeEnabled()
+      await next.click()
+    }
+    expect(sawReplaySpace).toBe(true)
+    await page.getByRole('button', { name: 'Start task', exact: true }).click()
+    await page.waitForURL(/\/tasks\/[A-Z0-9]{26}/i)
+    const secondTaskId = page.url().match(/\/tasks\/([A-Z0-9]{26})/i)![1]!
+    expect(secondTaskId).not.toBe(firstTaskId)
+
+    const replayResponse = await fetch(`${d.baseUrl}/api/tasks/${secondTaskId}`, {
+      headers: { Authorization: `Bearer ${d.token}` },
+    })
+    expect(replayResponse.ok).toBe(true)
+    const replay = (await replayResponse.json()) as {
+      repos: Array<{ mountPath: string }>
+      spaceNodes: Array<{ path: string }>
+    }
+    expect(replay.repos.map((item) => item.mountPath).sort()).toEqual([
+      repoAName,
+      `vendor/${repoBName}`,
+    ])
+    expect(replay.spaceNodes.map((item) => item.path)).toContain('vendor')
   })
 })

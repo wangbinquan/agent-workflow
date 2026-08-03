@@ -967,7 +967,7 @@ function TaskDetailPage() {
                     标记在这里全看不出来，而组编辑器与组列表里都看得到。
                     冻结的 task_repos 行适配成 PlannedRepo 形状即可。 */}
                 <RepoLayoutTree
-                  nodes={tk.spaceNodes}
+                  nodes={tk.spaceNodes ?? []}
                   repos={tk.repos.map((r) => ({
                     cachedRepoId: r.cachedRepoId ?? '',
                     repoUrlRedacted: r.repoUrl ?? '',

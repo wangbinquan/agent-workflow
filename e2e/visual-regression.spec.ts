@@ -39,7 +39,7 @@ import {
 import { routeTaskOperationsFixture } from './task-operations-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 27
+const EXPECTED_VISUAL_SCENE_COUNT = 31
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -564,6 +564,72 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.getByTestId('repos-row-repo-ux-01')).toBeVisible()
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('repos.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-249 repo group editor · 20 flat repositories · 1440', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeOperationsSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/repos?tab=groups`)
+    await page.getByTestId('repo-group-edit-group-flat-20').click()
+    await expect(page.getByTestId('repo-group-node-service-20')).toBeAttached()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('repo-group-flat-20-1440.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-249 repo group editor · three-level tree · 1440', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeOperationsSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/repos?tab=groups`)
+    await page.getByTestId('repo-group-edit-group-nested-3').click()
+    await page.getByTestId('repo-group-node-select-vendor/sdk/ext').click()
+    await expect(page.getByTestId('repo-group-node-settings-vendor/sdk/ext')).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('repo-group-nested-1440.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-249 repo group editor · inline settings · 736', async ({ page }) => {
+    await page.setViewportSize({ width: 736, height: 900 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeOperationsSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/repos?tab=groups`)
+    await page.getByTestId('repo-group-edit-group-nested-3').click()
+    await page.getByTestId('repo-group-node-select-apps/web').click()
+    await expect(page.getByTestId('repo-group-node-settings-apps/web')).toBeVisible()
+    // The compact shell intentionally hides the desktop user menu. The dialog
+    // content above is the stable authenticated-state anchor for this scene.
+    await page.waitForLoadState('networkidle')
+    await expect(page).toHaveScreenshot('repo-group-inline-736.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-249 repo group editor · batch mode · 390', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeOperationsSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/repos?tab=groups`)
+    // TableViewport is the intentional keyboard/touch overflow surface on a
+    // phone. Reproduce the user's horizontal swipe before opening the editor.
+    await page.getByRole('region', { name: 'Repo groups' }).evaluate((element) => {
+      element.scrollLeft = element.scrollWidth
+    })
+    const editButton = page.getByTestId('repo-group-edit-group-flat-20')
+    await expect(editButton).toBeVisible()
+    // The scene exercises the editor rather than TableViewport's already
+    // covered pointer mechanics; dispatch after the explicit swipe setup.
+    await editButton.dispatchEvent('click')
+    for (const path of ['service-1', 'service-2', 'service-3']) {
+      const checkbox = page.getByTestId(`repo-group-node-${path}`).locator('input[type="checkbox"]')
+      await checkbox.scrollIntoViewIfNeeded()
+      await checkbox.click()
+    }
+    await expect(page.getByTestId('repo-group-batch-bar')).toBeVisible()
+    await page.waitForLoadState('networkidle')
+    await expect(page).toHaveScreenshot('repo-group-batch-390.png', SNAPSHOT_OPTS)
   })
 
   test('/scheduled list', async ({ page }) => {

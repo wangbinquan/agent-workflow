@@ -51,7 +51,7 @@ function LayoutRow({ groupId }: { groupId: string }) {
     >
       {() => (
         <RepoLayoutTree
-          nodes={layout.data?.nodes}
+          nodes={layout.data?.nodes ?? []}
           repos={layout.data?.repos ?? []}
           testidPrefix={`repo-group-layout-${groupId}`}
         />

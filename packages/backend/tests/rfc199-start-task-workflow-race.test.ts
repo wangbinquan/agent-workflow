@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, tasks } from '../src/db/schema'
+import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
 import { materializingSpaces } from '../src/services/gc'
 import {
   createWorkflow,
@@ -207,14 +208,16 @@ describe('RFC-199 startTask workflow delete/version race', () => {
       {
         name: 'rfc199-multi',
         description: '',
-        members: harness.sourcePaths.map((repoPath, i) => ({
-          kind: 'repo' as const,
-          repoUrl: pathToFileURL(repoPath).href,
-          ref: '',
-          subdir: '',
-          mountPath: `r${i}`,
-          readonly: false,
-        })),
+        nodes: repoGroupNodesFromAttachments(
+          harness.sourcePaths.map((repoPath, i) => ({
+            kind: 'repo' as const,
+            repoUrl: pathToFileURL(repoPath).href,
+            ref: '',
+            subdir: '',
+            mountPath: `r${i}`,
+            readonly: false,
+          })),
+        ),
       },
       null,
     )
@@ -387,14 +390,16 @@ describe('RFC-199 startTask workflow delete/version race', () => {
       {
         name: 'rfc199-partial',
         description: '',
-        members: harness.sourcePaths.map((repoPath, i) => ({
-          kind: 'repo' as const,
-          repoUrl: pathToFileURL(repoPath).href,
-          ref: '',
-          subdir: '',
-          mountPath: `r${i}`,
-          readonly: false,
-        })),
+        nodes: repoGroupNodesFromAttachments(
+          harness.sourcePaths.map((repoPath, i) => ({
+            kind: 'repo' as const,
+            repoUrl: pathToFileURL(repoPath).href,
+            ref: '',
+            subdir: '',
+            mountPath: `r${i}`,
+            readonly: false,
+          })),
+        ),
       },
       null,
     )

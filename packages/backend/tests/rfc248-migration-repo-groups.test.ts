@@ -17,9 +17,28 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
+import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, memories, repoGroupMembers, repoGroups } from '../src/db/schema'
+import { cachedRepos, memories, repoGroups } from '../src/db/schema'
+
+// Historical 0131-only ORM projection. The current production schema no
+// longer exports the table removed by migration 0134.
+const legacyRepoGroupAttachments = sqliteTable(
+  'repo_group_members',
+  {
+    groupId: text('group_id').notNull(),
+    memberIndex: integer('member_index').notNull(),
+    kind: text('kind', { enum: ['repo', 'group'] }).notNull(),
+    cachedRepoId: text('cached_repo_id'),
+    ref: text('ref').notNull().default(''),
+    subdir: text('subdir').notNull().default(''),
+    childGroupId: text('child_group_id'),
+    mountPath: text('mount_path').notNull().default(''),
+    readonly: integer('readonly', { mode: 'boolean' }).notNull().default(false),
+  },
+  (table) => ({ pk: primaryKey({ columns: [table.groupId, table.memberIndex] }) }),
+)
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const legacyMigrations = mkdtempSync(join(tmpdir(), 'rfc248-through-0133-'))
@@ -73,13 +92,13 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
   test('kind=repo 必须带 cached_repo_id 且不带 child_group_id', () => {
     const g = makeGroup(db, 'g')
     const r = makeRepo(db, 'app')
-    db.insert(repoGroupMembers)
+    db.insert(legacyRepoGroupAttachments)
       .values({ groupId: g, memberIndex: 0, kind: 'repo', cachedRepoId: r, mountPath: '' })
       .run()
     // 两个都给 → CHECK 失败
     expect(() =>
       db
-        .insert(repoGroupMembers)
+        .insert(legacyRepoGroupAttachments)
         .values({
           groupId: g,
           memberIndex: 1,
@@ -93,7 +112,7 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
     // 都不给 → CHECK 失败
     expect(() =>
       db
-        .insert(repoGroupMembers)
+        .insert(legacyRepoGroupAttachments)
         .values({ groupId: g, memberIndex: 2, kind: 'repo', mountPath: 'y' })
         .run(),
     ).toThrow()
@@ -102,7 +121,7 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
   test('kind=group 不得携带 ref / subdir（D19：内层组的 ref 听它自己的）', () => {
     const outer = makeGroup(db, 'outer')
     const inner = makeGroup(db, 'inner')
-    db.insert(repoGroupMembers)
+    db.insert(legacyRepoGroupAttachments)
       .values({
         groupId: outer,
         memberIndex: 0,
@@ -113,7 +132,7 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
       .run()
     expect(() =>
       db
-        .insert(repoGroupMembers)
+        .insert(legacyRepoGroupAttachments)
         .values({
           groupId: outer,
           memberIndex: 1,
@@ -142,21 +161,21 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
   test('删组级联删成员行', () => {
     const g = makeGroup(db, 'g')
     const r = makeRepo(db, 'app')
-    db.insert(repoGroupMembers)
+    db.insert(legacyRepoGroupAttachments)
       .values({ groupId: g, memberIndex: 0, kind: 'repo', cachedRepoId: r, mountPath: '' })
       .run()
     db.run(sql`PRAGMA foreign_keys = ON`)
     db.delete(repoGroups)
       .where(sql`id = ${g}`)
       .run()
-    expect(db.select().from(repoGroupMembers).all()).toHaveLength(0)
+    expect(db.select().from(legacyRepoGroupAttachments).all()).toHaveLength(0)
   })
 
   test('cached_repo_id **不**级联——删仓必须走显式守卫（D13）', () => {
     // 静默级联会让组悄悄少一个仓，用户下次启动才发现。
     const g = makeGroup(db, 'g')
     const r = makeRepo(db, 'app')
-    db.insert(repoGroupMembers)
+    db.insert(legacyRepoGroupAttachments)
       .values({ groupId: g, memberIndex: 0, kind: 'repo', cachedRepoId: r, mountPath: '' })
       .run()
     db.run(sql`PRAGMA foreign_keys = ON`)

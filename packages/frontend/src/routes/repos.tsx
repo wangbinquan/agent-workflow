@@ -8,7 +8,7 @@ import type {
   RepoGroup,
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute } from '@tanstack/react-router'
+import { createRoute, useRouterState } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -50,15 +50,58 @@ interface RepoFilterDraft {
   autoRefresh: RepoAutoRefreshFilter
 }
 
+type RepoResourceTab = 'repos' | 'groups'
+
+interface ReposSearch extends Record<string, unknown> {
+  tab?: RepoResourceTab
+}
+
+function isRepoResourceTab(value: unknown): value is RepoResourceTab {
+  return value === 'repos' || value === 'groups'
+}
+
+export function validateReposSearch(search: Record<string, unknown>): ReposSearch {
+  const { tab: _tab, ...adjacent } = search
+  return isRepoResourceTab(search.tab) ? { ...adjacent, tab: search.tab } : adjacent
+}
+
+export function withRepoResourceTab<T extends Record<string, unknown>>(
+  previous: T,
+  tab: RepoResourceTab,
+): T & { tab: RepoResourceTab } {
+  return { ...previous, tab }
+}
+
+export function repoResourceTabFromUrl(href: string): {
+  tab: RepoResourceTab
+  invalid: boolean
+} {
+  const value = new URL(href, 'http://localhost').searchParams.get('tab')
+  if (value === null) return { tab: 'repos', invalid: false }
+  if (value === 'repos' || value === 'groups') return { tab: value, invalid: false }
+  return { tab: 'repos', invalid: true }
+}
+
+export function hrefForRepoResourceTab(href: string, tab: RepoResourceTab): string {
+  const url = new URL(href, 'http://localhost')
+  url.searchParams.set('tab', tab)
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
 export const ReposRoute = createRoute({
   getParentRoute: () => RootRoute,
   path: '/repos',
+  validateSearch: validateReposSearch,
   component: ReposPage,
 })
 
 function ReposPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const routeSearch = ReposRoute.useSearch()
+  const navigateRepos = ReposRoute.useNavigate()
+  const routeHref = useRouterState({ select: (state) => state.location.href })
+  const routeHash = useRouterState({ select: (state) => state.location.hash })
   const list = useQuery<ListCachedReposResponse>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
@@ -131,10 +174,24 @@ function ReposPage() {
     setFilterOpen(false)
   }
 
-  // RFC-248 T37: 「远端仓库 | 仓库组」分段。两者是同一类资源的两个视图
-  // （组就是「一组仓怎么摆」），所以共用这一页而不是新开一条路由——用户在
-  // 侧栏里找「仓库」时不该还要猜「组在哪」。
-  const [tab, setTab] = useState<'repos' | 'groups'>('repos')
+  // RFC-249 T31: page-level view state is a strict URL contract. Deep links,
+  // refresh and browser history must restore the same resource surface.
+  const tab = isRepoResourceTab(routeSearch.tab) ? routeSearch.tab : 'repos'
+  useEffect(() => {
+    if (!repoResourceTabFromUrl(routeHref).invalid) return
+    void navigateRepos({
+      search: (previous) => withRepoResourceTab(previous, 'repos'),
+      hash: routeHash,
+      replace: true,
+    })
+  }, [navigateRepos, routeHash, routeHref])
+  const selectTab = (next: RepoResourceTab) => {
+    if (next === tab) return
+    void navigateRepos({
+      search: (previous) => withRepoResourceTab(previous, next),
+      hash: routeHash,
+    })
+  }
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<RepoGroup | undefined>(undefined)
   const groupList = useQuery<{ items: RepoGroup[] }>({
@@ -221,7 +278,7 @@ function ReposPage() {
 
         <TabBar<'repos' | 'groups'>
           active={tab}
-          onSelect={setTab}
+          onSelect={selectTab}
           ariaLabel={t('repoGroups.tabAria')}
           idPrefix="repos-resource"
           rootTestid="repos-tab"

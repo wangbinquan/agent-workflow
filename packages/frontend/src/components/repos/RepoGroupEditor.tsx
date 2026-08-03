@@ -1,14 +1,13 @@
 // RFC-249 — compact explicit directory-tree editor. Repos/groups are optional
 // attachments on directory nodes; root is an ordinary node, never a "main repo".
 
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type {
   CachedRepo,
   RepoGroup,
   RepoGroupLayoutResponse,
-  RepoGroupNodeAttachmentInput,
   RepoGroupNodeInput,
 } from '@agent-workflow/shared'
 import {
@@ -23,18 +22,23 @@ import {
   moveNodeSubtree,
   nodeName,
   parentNodePath,
-  parseGitUrl,
   renameNodeSubtree,
+  repoNodeNameFromUrl,
   validateRepoGroupNodes,
 } from '@agent-workflow/shared'
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { Checkbox, Field, Switch, TextArea, TextInput } from '@/components/Form'
-import { FOLDER_ICON, REPO_ICON, WORKGROUP_ICON } from '@/components/icons/resourceIcons'
+import { Field, Switch, TextInput } from '@/components/Form'
+import {
+  RepoBulkAddDialog,
+  type RepoBulkAddItem,
+  type RepoBulkAddMode,
+} from '@/components/repos/RepoBulkAddDialog'
+import { RepoTreeEditor, type RepoTreeNodeError } from '@/components/repos/RepoTreeEditor'
 import { Select } from '@/components/Select'
-import { StatusChip } from '@/components/StatusChip'
+import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 
 export interface RepoGroupEditorProps {
   open: boolean
@@ -44,59 +48,33 @@ export interface RepoGroupEditorProps {
 
 function fromGroup(group: RepoGroup | undefined): RepoGroupNodeInput[] {
   if (group === undefined) return [{ path: '', attachment: null }]
-  if (group.nodes !== undefined) {
-    return group.nodes.map((node) => ({
-      path: node.path,
-      attachment:
-        node.attachment === null
-          ? null
-          : node.attachment.kind === 'repo'
-            ? {
-                kind: 'repo',
-                cachedRepoId: node.attachment.cachedRepoId,
-                ref: node.attachment.ref,
-                subdir: node.attachment.subdir,
-                readonly: node.attachment.readonly,
-              }
-            : {
-                kind: 'group',
-                childGroupId: node.attachment.childGroupId,
-                readonly: node.attachment.readonly,
-              },
-    }))
-  }
+  return group.nodes.map((node) => ({
+    path: node.path,
+    attachment:
+      node.attachment === null
+        ? null
+        : node.attachment.kind === 'repo'
+          ? {
+              kind: 'repo',
+              cachedRepoId: node.attachment.cachedRepoId,
+              ref: node.attachment.ref,
+              subdir: node.attachment.subdir,
+              readonly: node.attachment.readonly,
+            }
+          : {
+              kind: 'group',
+              childGroupId: node.attachment.childGroupId,
+              readonly: node.attachment.readonly,
+            },
+  }))
+}
 
-  // Rolling-upgrade fallback only. The current API always returns nodes.
-  const byPath = new Map<string, RepoGroupNodeInput>()
-  const ensure = (path: string): RepoGroupNodeInput => {
-    const key = path.toLowerCase()
-    const existing = byPath.get(key)
-    if (existing !== undefined) return existing
-    const parent = parentNodePath(path)
-    if (parent !== null) ensure(parent)
-    const created = { path, attachment: null }
-    byPath.set(key, created)
-    return created
-  }
-  ensure('')
-  for (const member of group.members) {
-    const node = ensure(member.mountPath)
-    node.attachment =
-      member.kind === 'repo'
-        ? {
-            kind: 'repo',
-            cachedRepoId: member.cachedRepoId,
-            ref: member.ref,
-            subdir: member.subdir,
-            readonly: member.readonly,
-          }
-        : {
-            kind: 'group',
-            childGroupId: member.childGroupId,
-            readonly: member.readonly,
-          }
-  }
-  return [...byPath.values()]
+function draftFingerprint(
+  name: string,
+  description: string,
+  nodes: readonly RepoGroupNodeInput[],
+): string {
+  return JSON.stringify({ name, description, nodes })
 }
 
 function topLevelSelection(paths: readonly string[]): string[] {
@@ -105,125 +83,16 @@ function topLevelSelection(paths: readonly string[]): string[] {
   )
 }
 
-function DraftTree({
-  nodes,
-  selectedPath,
-  checked,
-  repoById,
-  groupById,
-  onSelect,
-  onCheck,
-  onMove,
-}: {
-  nodes: readonly RepoGroupNodeInput[]
-  selectedPath: string
-  checked: ReadonlySet<string>
-  repoById: ReadonlyMap<string, CachedRepo>
-  groupById: ReadonlyMap<string, RepoGroup>
-  onSelect: (path: string) => void
-  onCheck: (path: string, checked: boolean) => void
-  onMove: (path: string, parent: string) => void
-}) {
-  const { t } = useTranslation()
-  const byParent = new Map<string | null, RepoGroupNodeInput[]>()
-  for (const node of nodes) {
-    const parent = parentNodePath(node.path)
-    const children = byParent.get(parent) ?? []
-    children.push(node)
-    byParent.set(parent, children)
+function previewNodeError(error: unknown): RepoTreeNodeError | null {
+  if (!(error instanceof ApiError)) return null
+  if (typeof error.details !== 'object' || error.details === null || Array.isArray(error.details)) {
+    return null
   }
-  for (const children of byParent.values()) {
-    children.sort((a, b) => compareRepoNodePath(a.path, b.path))
-  }
-
-  const rows = (parent: string | null, depth: number): ReactNode =>
-    (byParent.get(parent) ?? []).map((node) => {
-      const attachment = node.attachment
-      const repo =
-        attachment?.kind === 'repo' && attachment.cachedRepoId !== undefined
-          ? repoById.get(attachment.cachedRepoId)
-          : undefined
-      const group =
-        attachment?.kind === 'group' ? groupById.get(attachment.childGroupId) : undefined
-      const attachedLabel =
-        attachment === null
-          ? t('repoGroups.editor.emptyDirectory')
-          : attachment.kind === 'group'
-            ? (group?.name ?? attachment.childGroupId)
-            : (repo?.urlRedacted ?? attachment.repoUrl ?? t('repoGroups.editor.pendingRepo'))
-      const childRows = rows(node.path, depth + 1)
-      const hasChildren = (byParent.get(node.path)?.length ?? 0) > 0
-      return (
-        <div
-          key={node.path}
-          role="treeitem"
-          aria-level={depth + 1}
-          aria-selected={selectedPath === node.path}
-          aria-expanded={hasChildren ? true : undefined}
-        >
-          <div
-            className={`repo-tree-editor__row${selectedPath === node.path ? ' repo-tree-editor__row--selected' : ''}`}
-            style={{ paddingInlineStart: `${Math.min(depth, 5) * 14 + 6}px` }}
-            draggable={node.path !== ''}
-            onDragStart={(event: DragEvent<HTMLDivElement>) => {
-              event.dataTransfer.effectAllowed = 'move'
-              event.dataTransfer.setData('text/plain', node.path)
-            }}
-            onDragOver={(event) => {
-              event.preventDefault()
-              event.dataTransfer.dropEffect = 'move'
-            }}
-            onDrop={(event) => {
-              event.preventDefault()
-              const source = event.dataTransfer.getData('text/plain')
-              if (source !== '') onMove(source, node.path)
-            }}
-            data-testid={`repo-group-node-${node.path === '' ? '.' : node.path}`}
-          >
-            <Checkbox
-              checked={checked.has(node.path)}
-              onChange={(value) => onCheck(node.path, value)}
-              disabled={node.path === ''}
-              aria-label={t('repoGroups.editor.selectNode', {
-                path: node.path === '' ? t('repoGroups.layout.rootMount') : node.path,
-              })}
-            />
-            <span className="repo-tree-editor__icon" aria-hidden="true">
-              {attachment === null
-                ? FOLDER_ICON
-                : attachment.kind === 'group'
-                  ? WORKGROUP_ICON
-                  : REPO_ICON}
-            </span>
-            <button
-              type="button"
-              className="repo-tree-editor__select"
-              onClick={() => onSelect(node.path)}
-              aria-pressed={selectedPath === node.path}
-            >
-              <code title={node.path === '' ? t('repoGroups.layout.rootMount') : node.path}>
-                {node.path === '' ? t('repoGroups.layout.rootMount') : nodeName(node.path)}
-              </code>
-              <span className="repo-tree-editor__attachment" title={attachedLabel}>
-                {attachedLabel}
-              </span>
-            </button>
-            {attachment?.readonly === true && (
-              <StatusChip kind="neutral" size="sm">
-                {t('repoGroups.layout.readonlyChip')}
-              </StatusChip>
-            )}
-          </div>
-          {hasChildren && <div role="group">{childRows}</div>}
-        </div>
-      )
-    })
-
-  return (
-    <div className="repo-tree-editor" role="tree" data-testid="repo-group-nodes">
-      {rows(null, 0)}
-    </div>
+  const details = error.details as Record<string, unknown>
+  const path = [details.nodePath, details.path, details.mountPath].find(
+    (value): value is string => typeof value === 'string',
   )
+  return path === undefined ? null : { path, message: error.message }
 }
 
 export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) {
@@ -231,35 +100,51 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
   const qc = useQueryClient()
   const [name, setName] = useState(group?.name ?? '')
   const [description, setDescription] = useState(group?.description ?? '')
+  const [showDescription, setShowDescription] = useState((group?.description ?? '') !== '')
   const [nodes, setNodes] = useState<RepoGroupNodeInput[]>(() => fromGroup(group))
   const [selectedPath, setSelectedPath] = useState('')
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [localError, setLocalError] = useState<string | null>(null)
   const [newDirectory, setNewDirectory] = useState('')
-  const [bulkOpen, setBulkOpen] = useState(false)
-  const [bulkSearch, setBulkSearch] = useState('')
-  const [bulkRepoIds, setBulkRepoIds] = useState<Set<string>>(new Set())
-  const [pasteOpen, setPasteOpen] = useState(false)
-  const [pastedUrls, setPastedUrls] = useState('')
+  const [bulkMode, setBulkMode] = useState<RepoBulkAddMode | null>(null)
+  const [bulkDraftDirty, setBulkDraftDirty] = useState(false)
   const [batchParent, setBatchParent] = useState('')
+  const [batchNotice, setBatchNotice] = useState<string | null>(null)
   const [directoryNameDraft, setDirectoryNameDraft] = useState('')
   const [deleteIntent, setDeleteIntent] = useState<{
     paths: string[]
     nodeCount: number
     attachmentCount: number
   } | null>(null)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const initialDraftRef = useRef(
+    draftFingerprint(group?.name ?? '', group?.description ?? '', fromGroup(group)),
+  )
+  const dirtyRef = useRef<string | null>(null)
+  const busyRef = useRef(false)
 
   useEffect(() => {
     if (!open) return
     setName(group?.name ?? '')
     setDescription(group?.description ?? '')
-    setNodes(fromGroup(group))
+    setShowDescription((group?.description ?? '') !== '')
+    const seededNodes = fromGroup(group)
+    setNodes(seededNodes)
+    initialDraftRef.current = draftFingerprint(
+      group?.name ?? '',
+      group?.description ?? '',
+      seededNodes,
+    )
+    dirtyRef.current = null
+    busyRef.current = false
     setSelectedPath('')
     setChecked(new Set())
     setLocalError(null)
-    setBulkOpen(false)
-    setPasteOpen(false)
+    setBulkMode(null)
+    setBulkDraftDirty(false)
+    setBatchNotice(null)
     setDeleteIntent(null)
+    setDiscardOpen(false)
   }, [open, group])
 
   useEffect(() => {
@@ -317,8 +202,8 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
   })
 
   const save = useMutation({
-    mutationFn: async () => {
-      const body = { name, description, nodes }
+    mutationFn: async (submittedNodes: RepoGroupNodeInput[]) => {
+      const body = { name, description, nodes: submittedNodes }
       if (group === undefined) return api.post('/api/repo-groups', body)
       return api.put(`/api/repo-groups/${group.id}`, { ...body, expectedVersion: group.version })
     },
@@ -327,6 +212,8 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
       if (group !== undefined) {
         await qc.invalidateQueries({ queryKey: ['repo-group-layout', group.id] })
       }
+      dirtyRef.current = null
+      busyRef.current = false
       onClose()
     },
   })
@@ -381,13 +268,20 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
     }
   }
 
-  const addRepos = (
-    items: Array<{ source: string; attachment: RepoGroupNodeAttachmentInput }>,
-  ): boolean =>
+  const addRepos = (items: RepoBulkAddItem[]): boolean =>
     commitNodes(() => {
-      const next = [...nodes]
+      const next = nodes.map((node) => ({ ...node }))
       const occupied = next.map((node) => node.path)
       for (const item of items) {
+        const preferredPath = joinNodePath(selectedPath, repoNodeNameFromUrl(item.source))
+        const emptyTarget = next.find(
+          (node) =>
+            node.path.toLowerCase() === preferredPath.toLowerCase() && node.attachment === null,
+        )
+        if (emptyTarget !== undefined) {
+          emptyTarget.attachment = item.attachment
+          continue
+        }
         const path = allocateRepoNodePath(selectedPath, item.source, occupied)
         occupied.push(path)
         next.push({ path, attachment: item.attachment })
@@ -420,6 +314,10 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
 
   const applyBatch = (kind: 'readonly' | 'writable' | 'detach' | 'move') => {
     const selectedPaths = topLevelSelection([...checked])
+    const attachmentCount = nodes.filter(
+      (node) => checked.has(node.path) && node.attachment !== null,
+    ).length
+    const skippedDirectories = checked.size - attachmentCount
     const committed = commitNodes(() => {
       if (kind === 'readonly' || kind === 'writable' || kind === 'detach') {
         return nodes.map((node) => {
@@ -435,51 +333,85 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
       for (const path of selectedPaths) next = moveNodeSubtree(next, path, batchParent)
       return next
     })
-    if (committed !== null) setChecked(new Set())
+    if (committed !== null) {
+      setChecked(new Set())
+      setBatchNotice(
+        kind === 'move'
+          ? t('repoGroups.editor.batchMoved', { count: selectedPaths.length })
+          : t('repoGroups.editor.batchApplied', {
+              count: attachmentCount,
+              skipped: skippedDirectories,
+            }),
+      )
+    }
   }
 
+  const hasUnappliedDraft =
+    newDirectory !== '' || directoryNameDraft !== nodeName(selectedPath) || bulkDraftDirty
   const canSave =
     name.trim().length > 0 &&
     (preview.data?.totalRepos ?? 0) > 0 &&
     !preview.isError &&
     !preview.isFetching &&
+    !hasUnappliedDraft &&
     !save.isPending
-  const filteredRepos = (repos.data?.items ?? []).filter((repo) =>
-    repo.urlRedacted.toLowerCase().includes(bulkSearch.trim().toLowerCase()),
-  )
   const selectableAttachmentPaths = nodes
     .filter((node) => node.path !== '' && node.attachment !== null)
     .map((node) => node.path)
-  const pastedUrlEntries = pastedUrls
-    .split(/\r?\n/)
-    .map((url, index) => ({ url: url.trim(), line: index + 1 }))
-    .filter((entry) => entry.url !== '')
-  const invalidPastedLines = pastedUrlEntries
-    .filter((entry) => parseGitUrl(entry.url) === null)
-    .map((entry) => entry.line)
-  const uniquePastedUrls = [...new Set(pastedUrlEntries.map((entry) => entry.url))]
+  const materialDirty =
+    draftFingerprint(name, description, nodes) !== initialDraftRef.current || hasUnappliedDraft
+  dirtyRef.current = open && materialDirty ? `repo-group:${group?.id ?? 'new'}` : null
+  busyRef.current = open && save.isPending
+
+  const discardAndClose = (): boolean => {
+    if (busyRef.current) return false
+    dirtyRef.current = null
+    setBulkMode(null)
+    setBulkDraftDirty(false)
+    setDeleteIntent(null)
+    setDiscardOpen(false)
+    onClose()
+    return true
+  }
+
+  const requestClose = (): void => {
+    if (busyRef.current) return
+    if (dirtyRef.current !== null) {
+      setDiscardOpen(true)
+      return
+    }
+    onClose()
+  }
 
   return (
     <>
       <Dialog
         open={open}
-        onClose={onClose}
+        onClose={requestClose}
         title={
           group === undefined
             ? t('repoGroups.editor.createTitle')
             : t('repoGroups.editor.editTitle')
         }
         size="lg"
+        dismissDisabled={save.isPending}
+        data-testid="repo-group-editor-dialog"
         footer={
           <>
-            <button type="button" className="btn" onClick={onClose} data-testid="repo-group-cancel">
+            <button
+              type="button"
+              className="btn"
+              disabled={save.isPending}
+              onClick={requestClose}
+              data-testid="repo-group-cancel"
+            >
               {t('common.cancel')}
             </button>
             <button
               type="button"
               className="btn btn--primary"
               disabled={!canSave}
-              onClick={() => save.mutate()}
+              onClick={() => save.mutate(nodes)}
               data-testid="repo-group-save"
             >
               {t('common.save')}
@@ -490,256 +422,159 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
         {save.error !== null && save.error !== undefined && <ErrorBanner error={save.error} />}
         {localError !== null && <ErrorBanner error={new Error(localError)} />}
 
-        <div className="repo-group-editor__meta">
-          <Field label={t('repoGroups.editor.name')} required>
-            <TextInput value={name} onChange={setName} data-testid="repo-group-name" />
-          </Field>
-          <Field label={t('repoGroups.editor.description')}>
-            <TextInput
-              value={description}
-              onChange={setDescription}
-              data-testid="repo-group-desc"
-            />
-          </Field>
-        </div>
-
-        <div className="repo-group-editor__toolbar" role="toolbar">
-          <button
-            type="button"
-            className={`btn btn--sm${bulkOpen ? ' btn--selected' : ''}`}
-            onClick={() => setBulkOpen((value) => !value)}
-            data-testid="repo-group-bulk-repos"
+        <fieldset className="repo-group-editor__fields" disabled={save.isPending}>
+          <div
+            className={`repo-group-editor__meta${showDescription ? '' : ' repo-group-editor__meta--compact'}`}
           >
-            {t('repoGroups.editor.bulkAddRepos')}
-          </button>
-          <button
-            type="button"
-            className={`btn btn--sm${pasteOpen ? ' btn--selected' : ''}`}
-            onClick={() => setPasteOpen((value) => !value)}
-            data-testid="repo-group-paste-urls"
-          >
-            {t('repoGroups.editor.pasteUrls')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--sm"
-            disabled={selectableAttachmentPaths.length === 0}
-            onClick={() => setChecked(new Set(selectableAttachmentPaths))}
-            data-testid="repo-group-select-all-attachments"
-          >
-            {t('repoGroups.editor.selectAllAttachments')}
-          </button>
-          <div className="repo-group-editor__new-directory">
-            <TextInput
-              value={newDirectory}
-              onChange={setNewDirectory}
-              placeholder={t('repoGroups.editor.newDirectoryPlaceholder')}
-              aria-label={t('repoGroups.editor.newDirectoryPlaceholder')}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  addDirectory()
-                }
-              }}
-            />
-            <button type="button" className="btn btn--sm" onClick={addDirectory}>
-              {t('repoGroups.editor.addDirectory')}
-            </button>
-          </div>
-          <span className="repo-group-editor__target data-table__muted">
-            {t('repoGroups.editor.addTo', {
-              path: selectedPath === '' ? t('repoGroups.layout.rootMount') : selectedPath,
-            })}
-          </span>
-        </div>
-
-        {bulkOpen && (
-          <section className="repo-group-editor__bulk" data-testid="repo-group-bulk-panel">
-            <TextInput
-              value={bulkSearch}
-              onChange={setBulkSearch}
-              type="search"
-              placeholder={t('repoGroups.editor.searchRepos')}
-              aria-label={t('repoGroups.editor.searchRepos')}
-            />
-            <div className="repo-group-editor__bulk-actions" role="toolbar">
+            <Field label={t('repoGroups.editor.name')} required>
+              <TextInput value={name} onChange={setName} data-testid="repo-group-name" />
+            </Field>
+            {showDescription ? (
+              <Field label={t('repoGroups.editor.description')}>
+                <TextInput
+                  value={description}
+                  onChange={setDescription}
+                  data-testid="repo-group-desc"
+                />
+              </Field>
+            ) : (
               <button
                 type="button"
-                className="btn btn--xs"
-                disabled={filteredRepos.length === 0}
-                onClick={() =>
-                  setBulkRepoIds((current) => {
-                    const next = new Set(current)
-                    for (const repo of filteredRepos) next.add(repo.id)
-                    return next
-                  })
-                }
+                className="btn btn--sm repo-group-editor__add-description"
+                onClick={() => setShowDescription(true)}
+                data-testid="repo-group-add-description"
               >
-                {t('repoGroups.editor.selectVisibleRepos', { count: filteredRepos.length })}
+                {t('repoGroups.editor.addDescription')}
+              </button>
+            )}
+          </div>
+
+          {checked.size === 0 ? (
+            <div className="repo-group-editor__toolbar" role="toolbar">
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setBulkMode('repos')}
+                data-testid="repo-group-bulk-repos"
+              >
+                {t('repoGroups.editor.bulkAddRepos')}
               </button>
               <button
                 type="button"
-                className="btn btn--xs"
-                disabled={bulkRepoIds.size === 0}
-                onClick={() => setBulkRepoIds(new Set())}
+                className="btn btn--sm"
+                onClick={() => setBulkMode('urls')}
+                data-testid="repo-group-paste-urls"
               >
+                {t('repoGroups.editor.pasteUrls')}
+              </button>
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={selectableAttachmentPaths.length === 0}
+                onClick={() => setChecked(new Set(selectableAttachmentPaths))}
+                data-testid="repo-group-select-all-attachments"
+              >
+                {t('repoGroups.editor.selectAllAttachments')}
+              </button>
+              <div className="repo-group-editor__new-directory">
+                <TextInput
+                  value={newDirectory}
+                  onChange={setNewDirectory}
+                  placeholder={t('repoGroups.editor.newDirectoryPlaceholder')}
+                  aria-label={t('repoGroups.editor.newDirectoryPlaceholder')}
+                  data-testid="repo-group-new-directory"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      addDirectory()
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={addDirectory}
+                  data-testid="repo-group-add-directory"
+                >
+                  {t('repoGroups.editor.addDirectory')}
+                </button>
+              </div>
+              <span className="repo-group-editor__target data-table__muted">
+                {t('repoGroups.editor.addTo', {
+                  path: selectedPath === '' ? t('repoGroups.layout.rootMount') : selectedPath,
+                })}
+              </span>
+            </div>
+          ) : (
+            <div className="repo-group-editor__batch" data-testid="repo-group-batch-bar">
+              <strong>{t('repoGroups.editor.selectedCount', { count: checked.size })}</strong>
+              <button type="button" className="btn btn--xs" onClick={() => applyBatch('readonly')}>
+                {t('repoGroups.editor.markReadonly')}
+              </button>
+              <button type="button" className="btn btn--xs" onClick={() => applyBatch('writable')}>
+                {t('repoGroups.editor.markWritable')}
+              </button>
+              <button type="button" className="btn btn--xs" onClick={() => applyBatch('detach')}>
+                {t('repoGroups.editor.detach')}
+              </button>
+              <button type="button" className="btn btn--xs" onClick={() => setChecked(new Set())}>
                 {t('repoGroups.editor.clearSelection')}
               </button>
-            </div>
-            <div className="repo-group-editor__bulk-list">
-              {filteredRepos.map((repo) => (
-                <Checkbox
-                  key={repo.id}
-                  checked={bulkRepoIds.has(repo.id)}
-                  onChange={(value) =>
-                    setBulkRepoIds((current) => {
-                      const next = new Set(current)
-                      if (value) next.add(repo.id)
-                      else next.delete(repo.id)
-                      return next
-                    })
-                  }
-                  label={repo.urlRedacted}
-                  hint={repo.defaultBranch ?? undefined}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              className="btn btn--sm btn--primary"
-              disabled={bulkRepoIds.size === 0}
-              onClick={() => {
-                const selectedRepos = (repos.data?.items ?? []).filter((repo) =>
-                  bulkRepoIds.has(repo.id),
-                )
-                const added = addRepos(
-                  selectedRepos.map((repo) => ({
-                    source: repo.urlRedacted,
-                    attachment: {
-                      kind: 'repo',
-                      cachedRepoId: repo.id,
-                      ref: '',
-                      subdir: '',
-                      readonly: false,
-                    },
-                  })),
-                )
-                if (added) {
-                  setBulkRepoIds(new Set())
-                  setBulkOpen(false)
-                }
-              }}
-            >
-              {t('repoGroups.editor.addSelected', { count: bulkRepoIds.size })}
-            </button>
-          </section>
-        )}
-
-        {pasteOpen && (
-          <section className="repo-group-editor__paste" data-testid="repo-group-paste-panel">
-            <TextArea
-              value={pastedUrls}
-              onChange={setPastedUrls}
-              placeholder={t('repoGroups.editor.pasteUrlsPlaceholder')}
-            />
-            {invalidPastedLines.length > 0 && (
-              <p
-                className="form-field__error repo-group-editor__paste-error"
-                role="alert"
-                data-testid="repo-group-paste-errors"
+              <Select
+                value={batchParent}
+                onChange={setBatchParent}
+                ariaLabel={t('repoGroups.editor.moveTo')}
+                options={batchParentOptions}
+              />
+              <button type="button" className="btn btn--xs" onClick={() => applyBatch('move')}>
+                {t('repoGroups.editor.move')}
+              </button>
+              <button
+                type="button"
+                className="btn btn--xs btn--danger"
+                onClick={() => requestDelete([...checked])}
               >
-                {t('repoGroups.editor.invalidUrlLines', {
-                  lines: invalidPastedLines.join(', '),
-                })}
-              </p>
-            )}
-            <button
-              type="button"
-              className="btn btn--sm btn--primary"
-              disabled={uniquePastedUrls.length === 0 || invalidPastedLines.length > 0}
-              onClick={() => {
-                const added = addRepos(
-                  uniquePastedUrls.map((url) => ({
-                    source: url,
-                    attachment: {
-                      kind: 'repo',
-                      repoUrl: url,
-                      ref: '',
-                      subdir: '',
-                      readonly: false,
-                    },
-                  })),
-                )
-                if (added) {
-                  setPastedUrls('')
-                  setPasteOpen(false)
-                }
-              }}
-            >
-              {t('repoGroups.editor.addUrls')}
-            </button>
-          </section>
-        )}
-
-        {checked.size > 0 && (
-          <div className="repo-group-editor__batch" data-testid="repo-group-batch-bar">
-            <strong>{t('repoGroups.editor.selectedCount', { count: checked.size })}</strong>
-            <button type="button" className="btn btn--xs" onClick={() => applyBatch('readonly')}>
-              {t('repoGroups.editor.markReadonly')}
-            </button>
-            <button type="button" className="btn btn--xs" onClick={() => applyBatch('writable')}>
-              {t('repoGroups.editor.markWritable')}
-            </button>
-            <button type="button" className="btn btn--xs" onClick={() => applyBatch('detach')}>
-              {t('repoGroups.editor.detach')}
-            </button>
-            <button type="button" className="btn btn--xs" onClick={() => setChecked(new Set())}>
-              {t('repoGroups.editor.clearSelection')}
-            </button>
-            <Select
-              value={batchParent}
-              onChange={setBatchParent}
-              ariaLabel={t('repoGroups.editor.moveTo')}
-              options={batchParentOptions}
-            />
-            <button type="button" className="btn btn--xs" onClick={() => applyBatch('move')}>
-              {t('repoGroups.editor.move')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--xs btn--danger"
-              onClick={() => requestDelete([...checked])}
-            >
-              {t('common.delete')}
-            </button>
-          </div>
-        )}
-
-        <div className="repo-group-editor__status" aria-live="polite">
-          {preview.isFetching ? (
-            <span className="data-table__muted">{t('repoGroups.editor.validating')}</span>
-          ) : preview.error !== null && preview.error !== undefined ? (
-            <ErrorBanner error={preview.error} />
-          ) : (
-            <span className="data-table__muted">
-              {t('repoGroups.editor.layoutSummary', {
-                nodes: preview.data?.totalNodes ?? nodes.length,
-                repos: preview.data?.totalRepos ?? 0,
-              })}
-              {(preview.data?.pendingImports ?? 0) > 0 &&
-                ` · ${t('repoGroups.editor.pendingImports', { count: preview.data?.pendingImports ?? 0 })}`}
-            </span>
+                {t('common.delete')}
+              </button>
+            </div>
           )}
-        </div>
 
-        <div className="repo-group-editor__workspace">
-          <section className="repo-group-editor__tree-pane">
-            <DraftTree
+          <div className="repo-group-editor__status" aria-live="polite">
+            {preview.isFetching ? (
+              <span className="data-table__muted">{t('repoGroups.editor.validating')}</span>
+            ) : preview.error !== null && preview.error !== undefined ? (
+              <ErrorBanner error={preview.error} />
+            ) : (
+              <span className="data-table__muted">
+                {t('repoGroups.editor.layoutSummary', {
+                  nodes: preview.data?.totalNodes ?? nodes.length,
+                  repos: preview.data?.totalRepos ?? 0,
+                })}
+                {(preview.data?.pendingImports ?? 0) > 0 &&
+                  ` · ${t('repoGroups.editor.pendingImports', { count: preview.data?.pendingImports ?? 0 })}`}
+              </span>
+            )}
+            {batchNotice !== null && (
+              <span className="repo-group-editor__batch-notice">{batchNotice}</span>
+            )}
+            {hasUnappliedDraft && (
+              <span className="repo-group-editor__draft-notice">
+                {t('repoGroups.editor.finishDraftBeforeSave')}
+              </span>
+            )}
+          </div>
+
+          <div className="repo-group-editor__workspace">
+            <RepoTreeEditor
               nodes={nodes}
               selectedPath={selectedPath}
               checked={checked}
               repoById={repoById}
               groupById={groupById}
+              previewNodes={preview.data?.nodes}
+              previewRepos={preview.data?.repos}
+              nodeError={previewNodeError(preview.error)}
+              disabled={save.isPending}
               onSelect={setSelectedPath}
               onCheck={(path, value) =>
                 setChecked((current) => {
@@ -749,215 +584,239 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
                   return next
                 })
               }
-              onMove={(path, parent) => commitNodes(() => moveNodeSubtree(nodes, path, parent))}
-            />
-          </section>
+              onMove={(path, parent) => {
+                const nextRoot = joinNodePath(parent, nodeName(path))
+                if (commitNodes(() => moveNodeSubtree(nodes, path, parent)) === null) return
+                if (selectedPath === path) setSelectedPath(nextRoot)
+                else if (isUnder(path, selectedPath)) {
+                  setSelectedPath(`${nextRoot}${selectedPath.slice(path.length)}`)
+                }
+              }}
+              renderSettings={() => (
+                <>
+                  <div className="repo-tree-editor__settings-head">
+                    <strong>
+                      {selectedPath === '' ? t('repoGroups.layout.rootMount') : selectedPath}
+                    </strong>
+                    {selectedPath !== '' && (
+                      <button
+                        type="button"
+                        className="btn btn--xs btn--danger"
+                        onClick={() => requestDelete([selectedPath])}
+                      >
+                        {t('repoGroups.editor.deleteSubtree')}
+                      </button>
+                    )}
+                  </div>
 
-          <aside
-            className="repo-group-editor__inspector"
-            aria-label={t('repoGroups.editor.nodeSettings')}
-          >
-            <div className="repo-group-editor__inspector-head">
-              <strong>
-                {selectedPath === '' ? t('repoGroups.layout.rootMount') : selectedPath}
-              </strong>
-              {selectedPath !== '' && (
-                <button
-                  type="button"
-                  className="btn btn--xs btn--danger"
-                  onClick={() => requestDelete([selectedPath])}
-                >
-                  {t('repoGroups.editor.deleteSubtree')}
-                </button>
+                  {selectedPath !== '' && (
+                    <>
+                      <Field label={t('repoGroups.editor.directoryName')}>
+                        <TextInput
+                          value={directoryNameDraft}
+                          onChange={setDirectoryNameDraft}
+                          data-testid="repo-group-directory-name"
+                          onBlur={commitDirectoryRename}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              event.currentTarget.blur()
+                            } else if (event.key === 'Escape') {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              setDirectoryNameDraft(nodeName(selectedPath))
+                            }
+                          }}
+                        />
+                      </Field>
+                      <Field label={t('repoGroups.editor.parentDirectory')}>
+                        <Select
+                          value={parentNodePath(selectedPath) ?? ''}
+                          onChange={(parent) => {
+                            const nextPath = joinNodePath(parent, nodeName(selectedPath))
+                            if (
+                              commitNodes(() => moveNodeSubtree(nodes, selectedPath, parent)) !==
+                              null
+                            ) {
+                              setSelectedPath(nextPath)
+                            }
+                          }}
+                          ariaLabel={t('repoGroups.editor.parentDirectory')}
+                          data-testid="repo-group-parent-directory"
+                          options={eligibleParents}
+                        />
+                      </Field>
+                    </>
+                  )}
+
+                  {selectedAttachment === null ? (
+                    <>
+                      <Field label={t('repoGroups.editor.attachRepo')}>
+                        <Select
+                          value=""
+                          onChange={(repoId) => {
+                            if (repoId === '') return
+                            commitNodes(() =>
+                              attachAtNode(nodes, selectedPath, {
+                                kind: 'repo',
+                                cachedRepoId: repoId,
+                                ref: '',
+                                subdir: '',
+                                readonly: false,
+                              }),
+                            )
+                          }}
+                          ariaLabel={t('repoGroups.editor.attachRepo')}
+                          placeholder={t('repoGroups.editor.pickRepo')}
+                          options={[
+                            { value: '', label: t('repoGroups.editor.pickRepo') },
+                            ...(repos.data?.items ?? []).map((repo) => ({
+                              value: repo.id,
+                              label: repo.urlRedacted,
+                            })),
+                          ]}
+                        />
+                      </Field>
+                      <Field label={t('repoGroups.editor.attachGroup')}>
+                        <Select
+                          value=""
+                          onChange={(groupId) => {
+                            if (groupId === '') return
+                            commitNodes(() =>
+                              attachAtNode(nodes, selectedPath, {
+                                kind: 'group',
+                                childGroupId: groupId,
+                                readonly: false,
+                              }),
+                            )
+                          }}
+                          ariaLabel={t('repoGroups.editor.attachGroup')}
+                          placeholder={t('repoGroups.editor.pickGroup')}
+                          options={[
+                            { value: '', label: t('repoGroups.editor.pickGroup') },
+                            ...(groups.data?.items ?? [])
+                              .filter((item) => item.id !== group?.id)
+                              .map((item) => ({ value: item.id, label: item.name })),
+                          ]}
+                        />
+                      </Field>
+                    </>
+                  ) : selectedAttachment.kind === 'repo' ? (
+                    <>
+                      <Field label={t('repoGroups.editor.attachedRepo')}>
+                        <Select
+                          value={selectedAttachment.cachedRepoId ?? ''}
+                          onChange={(repoId) => {
+                            if (repoId === '') return
+                            commitNodes(() =>
+                              attachAtNode(nodes, selectedPath, {
+                                ...selectedAttachment,
+                                cachedRepoId: repoId,
+                                repoUrl: undefined,
+                              }),
+                            )
+                          }}
+                          ariaLabel={t('repoGroups.editor.attachedRepo')}
+                          options={(repos.data?.items ?? []).map((repo) => ({
+                            value: repo.id,
+                            label: repo.urlRedacted,
+                          }))}
+                        />
+                      </Field>
+                      <Field label={t('repoGroups.editor.ref')}>
+                        <TextInput
+                          value={selectedAttachment.ref}
+                          onChange={(ref) =>
+                            commitNodes(() =>
+                              attachAtNode(nodes, selectedPath, { ...selectedAttachment, ref }),
+                            )
+                          }
+                          placeholder={t('repoGroups.editor.refPlaceholder')}
+                        />
+                      </Field>
+                      <Field label={t('repoGroups.editor.subdir')}>
+                        <TextInput
+                          value={selectedAttachment.subdir}
+                          onChange={(subdir) =>
+                            commitNodes(() =>
+                              attachAtNode(nodes, selectedPath, { ...selectedAttachment, subdir }),
+                            )
+                          }
+                          placeholder={t('repoGroups.editor.subdirPlaceholder')}
+                        />
+                      </Field>
+                      <Switch
+                        checked={selectedAttachment.readonly}
+                        onChange={(readonly) =>
+                          commitNodes(() =>
+                            attachAtNode(nodes, selectedPath, { ...selectedAttachment, readonly }),
+                          )
+                        }
+                        label={t('repoGroups.editor.readonly')}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        onClick={() => commitNodes(() => detachAtNode(nodes, selectedPath))}
+                      >
+                        {t('repoGroups.editor.detach')}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Field label={t('repoGroups.editor.attachedGroup')}>
+                        <Select
+                          value={selectedAttachment.childGroupId}
+                          onChange={(childGroupId) =>
+                            commitNodes(() =>
+                              attachAtNode(nodes, selectedPath, {
+                                ...selectedAttachment,
+                                childGroupId,
+                              }),
+                            )
+                          }
+                          ariaLabel={t('repoGroups.editor.attachedGroup')}
+                          options={(groups.data?.items ?? [])
+                            .filter((item) => item.id !== group?.id)
+                            .map((item) => ({ value: item.id, label: item.name }))}
+                        />
+                      </Field>
+                      <Switch
+                        checked={selectedAttachment.readonly}
+                        onChange={(readonly) =>
+                          commitNodes(() =>
+                            attachAtNode(nodes, selectedPath, { ...selectedAttachment, readonly }),
+                          )
+                        }
+                        label={t('repoGroups.editor.readonly')}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        onClick={() => commitNodes(() => detachAtNode(nodes, selectedPath))}
+                      >
+                        {t('repoGroups.editor.detach')}
+                      </button>
+                    </>
+                  )}
+                </>
               )}
-            </div>
-
-            {selectedPath !== '' && (
-              <>
-                <Field label={t('repoGroups.editor.directoryName')}>
-                  <TextInput
-                    value={directoryNameDraft}
-                    onChange={setDirectoryNameDraft}
-                    onBlur={commitDirectoryRename}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        event.currentTarget.blur()
-                      } else if (event.key === 'Escape') {
-                        setDirectoryNameDraft(nodeName(selectedPath))
-                        event.currentTarget.blur()
-                      }
-                    }}
-                  />
-                </Field>
-                <Field label={t('repoGroups.editor.parentDirectory')}>
-                  <Select
-                    value={parentNodePath(selectedPath) ?? ''}
-                    onChange={(parent) => {
-                      const nextPath = joinNodePath(parent, nodeName(selectedPath))
-                      if (
-                        commitNodes(() => moveNodeSubtree(nodes, selectedPath, parent)) !== null
-                      ) {
-                        setSelectedPath(nextPath)
-                      }
-                    }}
-                    ariaLabel={t('repoGroups.editor.parentDirectory')}
-                    options={eligibleParents}
-                  />
-                </Field>
-              </>
-            )}
-
-            {selectedAttachment === null ? (
-              <>
-                <Field label={t('repoGroups.editor.attachRepo')}>
-                  <Select
-                    value=""
-                    onChange={(repoId) => {
-                      if (repoId === '') return
-                      commitNodes(() =>
-                        attachAtNode(nodes, selectedPath, {
-                          kind: 'repo',
-                          cachedRepoId: repoId,
-                          ref: '',
-                          subdir: '',
-                          readonly: false,
-                        }),
-                      )
-                    }}
-                    ariaLabel={t('repoGroups.editor.attachRepo')}
-                    placeholder={t('repoGroups.editor.pickRepo')}
-                    options={[
-                      { value: '', label: t('repoGroups.editor.pickRepo') },
-                      ...(repos.data?.items ?? []).map((repo) => ({
-                        value: repo.id,
-                        label: repo.urlRedacted,
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Field label={t('repoGroups.editor.attachGroup')}>
-                  <Select
-                    value=""
-                    onChange={(groupId) => {
-                      if (groupId === '') return
-                      commitNodes(() =>
-                        attachAtNode(nodes, selectedPath, {
-                          kind: 'group',
-                          childGroupId: groupId,
-                          readonly: false,
-                        }),
-                      )
-                    }}
-                    ariaLabel={t('repoGroups.editor.attachGroup')}
-                    placeholder={t('repoGroups.editor.pickGroup')}
-                    options={[
-                      { value: '', label: t('repoGroups.editor.pickGroup') },
-                      ...(groups.data?.items ?? [])
-                        .filter((item) => item.id !== group?.id)
-                        .map((item) => ({ value: item.id, label: item.name })),
-                    ]}
-                  />
-                </Field>
-              </>
-            ) : selectedAttachment.kind === 'repo' ? (
-              <>
-                <Field label={t('repoGroups.editor.attachedRepo')}>
-                  <Select
-                    value={selectedAttachment.cachedRepoId ?? ''}
-                    onChange={(repoId) => {
-                      if (repoId === '') return
-                      commitNodes(() =>
-                        attachAtNode(nodes, selectedPath, {
-                          ...selectedAttachment,
-                          cachedRepoId: repoId,
-                          repoUrl: undefined,
-                        }),
-                      )
-                    }}
-                    ariaLabel={t('repoGroups.editor.attachedRepo')}
-                    options={(repos.data?.items ?? []).map((repo) => ({
-                      value: repo.id,
-                      label: repo.urlRedacted,
-                    }))}
-                  />
-                </Field>
-                <Field label={t('repoGroups.editor.ref')}>
-                  <TextInput
-                    value={selectedAttachment.ref}
-                    onChange={(ref) =>
-                      commitNodes(() =>
-                        attachAtNode(nodes, selectedPath, { ...selectedAttachment, ref }),
-                      )
-                    }
-                    placeholder={t('repoGroups.editor.refPlaceholder')}
-                  />
-                </Field>
-                <Field label={t('repoGroups.editor.subdir')}>
-                  <TextInput
-                    value={selectedAttachment.subdir}
-                    onChange={(subdir) =>
-                      commitNodes(() =>
-                        attachAtNode(nodes, selectedPath, { ...selectedAttachment, subdir }),
-                      )
-                    }
-                    placeholder={t('repoGroups.editor.subdirPlaceholder')}
-                  />
-                </Field>
-                <Switch
-                  checked={selectedAttachment.readonly}
-                  onChange={(readonly) =>
-                    commitNodes(() =>
-                      attachAtNode(nodes, selectedPath, { ...selectedAttachment, readonly }),
-                    )
-                  }
-                  label={t('repoGroups.editor.readonly')}
-                />
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => commitNodes(() => detachAtNode(nodes, selectedPath))}
-                >
-                  {t('repoGroups.editor.detach')}
-                </button>
-              </>
-            ) : (
-              <>
-                <Field label={t('repoGroups.editor.attachedGroup')}>
-                  <Select
-                    value={selectedAttachment.childGroupId}
-                    onChange={(childGroupId) =>
-                      commitNodes(() =>
-                        attachAtNode(nodes, selectedPath, { ...selectedAttachment, childGroupId }),
-                      )
-                    }
-                    ariaLabel={t('repoGroups.editor.attachedGroup')}
-                    options={(groups.data?.items ?? [])
-                      .filter((item) => item.id !== group?.id)
-                      .map((item) => ({ value: item.id, label: item.name }))}
-                  />
-                </Field>
-                <Switch
-                  checked={selectedAttachment.readonly}
-                  onChange={(readonly) =>
-                    commitNodes(() =>
-                      attachAtNode(nodes, selectedPath, { ...selectedAttachment, readonly }),
-                    )
-                  }
-                  label={t('repoGroups.editor.readonly')}
-                />
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => commitNodes(() => detachAtNode(nodes, selectedPath))}
-                >
-                  {t('repoGroups.editor.detach')}
-                </button>
-              </>
-            )}
-          </aside>
-        </div>
+            />
+          </div>
+        </fieldset>
       </Dialog>
+      <RepoBulkAddDialog
+        open={bulkMode !== null}
+        initialMode={bulkMode ?? 'repos'}
+        repos={repos.data?.items ?? []}
+        targetLabel={selectedPath === '' ? t('repoGroups.layout.rootMount') : selectedPath}
+        onClose={() => {
+          setBulkMode(null)
+          setBulkDraftDirty(false)
+        }}
+        onAdd={addRepos}
+        onDraftDirtyChange={setBulkDraftDirty}
+      />
       <ConfirmDialog
         open={deleteIntent !== null}
         title={t('repoGroups.editor.deleteSubtreeTitle')}
@@ -972,6 +831,19 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
           if (deleteIntent !== null) deleteSubtrees(deleteIntent.paths)
         }}
       />
+      <ConfirmDialog
+        open={discardOpen}
+        title={t('splitPage.unsavedTitle')}
+        description={t('splitPage.unsavedBody')}
+        cancelLabel={t('splitPage.unsavedStay')}
+        confirmLabel={t('splitPage.unsavedDiscard')}
+        tone="danger"
+        onClose={() => setDiscardOpen(false)}
+        onConfirm={() => {
+          discardAndClose()
+        }}
+      />
+      <UnsavedChangesGuard dirtyRef={dirtyRef} busyRef={busyRef} onDiscard={discardAndClose} />
     </>
   )
 }

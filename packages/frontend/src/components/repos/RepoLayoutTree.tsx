@@ -3,7 +3,6 @@
 import { useTranslation } from 'react-i18next'
 import {
   compareRepoNodePath,
-  mountDepth,
   nodeName,
   parentNodePath,
   type PlannedDirectoryNode,
@@ -14,7 +13,7 @@ import { StatusChip } from '@/components/StatusChip'
 
 export interface RepoLayoutTreeProps {
   /** Canonical source. Includes pure directories that cannot be inferred from repos. */
-  nodes?: readonly PlannedDirectoryNode[]
+  nodes: readonly PlannedDirectoryNode[]
   repos: readonly PlannedRepo[]
   testidPrefix?: string
   /** Hide URL and provenance while retaining the full directory hierarchy. */
@@ -28,38 +27,13 @@ export interface LayoutTreeNode {
   children: LayoutTreeNode[]
 }
 
-/** Compatibility only for old task/layout payloads that predate node snapshots. */
-function inferMinimalNodes(repos: readonly PlannedRepo[]): PlannedDirectoryNode[] {
-  const paths = new Map<string, string>()
-  if (repos.length > 0) paths.set('', '')
-  for (const repo of repos) {
-    let current = ''
-    for (const segment of repo.mountPath.split('/').filter(Boolean)) {
-      current = current === '' ? segment : `${current}/${segment}`
-      if (!paths.has(current.toLowerCase())) paths.set(current.toLowerCase(), current)
-    }
-  }
-  return [...paths.values()]
-    .sort((a, b) => mountDepth(a) - mountDepth(b) || compareRepoNodePath(a, b))
-    .map((path) => ({ path, origins: [] }))
-}
-
 /** Build from explicit nodes; repos only decorate the node at the same path. */
 export function buildLayoutTree(
+  nodes: readonly PlannedDirectoryNode[],
   repos: readonly PlannedRepo[],
-  explicitNodes?: readonly PlannedDirectoryNode[],
 ): LayoutTreeNode[] {
-  const inferred = inferMinimalNodes(repos)
-  const byPath = new Map<string, PlannedDirectoryNode>()
-  for (const node of explicitNodes ?? []) byPath.set(node.path.toLowerCase(), node)
-  // Additive fallback for rolling-upgrade/legacy payloads. Explicit pure nodes remain intact.
-  for (const node of inferred) {
-    if (!byPath.has(node.path.toLowerCase())) byPath.set(node.path.toLowerCase(), node)
-  }
   const repoByPath = new Map(repos.map((repo) => [repo.mountPath.toLowerCase(), repo]))
-  const ordered = [...byPath.values()].sort(
-    (a, b) => mountDepth(a.path) - mountDepth(b.path) || compareRepoNodePath(a.path, b.path),
-  )
+  const ordered = [...nodes].sort((a, b) => compareRepoNodePath(a.path, b.path))
   const treeByPath = new Map<string, LayoutTreeNode>()
   const roots: LayoutTreeNode[] = []
 
@@ -149,7 +123,7 @@ function Row({
 
 export function RepoLayoutTree({ nodes, repos, testidPrefix, compact }: RepoLayoutTreeProps) {
   const prefix = testidPrefix ?? 'repo-layout-tree'
-  const tree = buildLayoutTree(repos, nodes)
+  const tree = buildLayoutTree(nodes, repos)
   return (
     <ul className="repo-layout-tree" data-testid={prefix}>
       {tree.map((item) => (

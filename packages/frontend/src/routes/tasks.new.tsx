@@ -1511,7 +1511,7 @@ function TaskWizardPage() {
                       >
                         {() => (
                           <RepoLayoutTree
-                            nodes={groupLayout.data?.nodes}
+                            nodes={groupLayout.data?.nodes ?? []}
                             repos={groupLayout.data?.repos ?? []}
                             testidPrefix="wizard-space-group-layout"
                             compact

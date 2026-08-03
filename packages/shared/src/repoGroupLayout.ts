@@ -470,17 +470,11 @@ export interface FlattenableNode {
   attachment: FlattenableAttachment | null
 }
 
-/** RFC-248 compatibility shape. Production v2 groups populate `nodes`, not members. */
-export type FlattenableMember =
-  | (Extract<FlattenableAttachment, { kind: 'repo' }> & { mountPath: string })
-  | (Extract<FlattenableAttachment, { kind: 'group' }> & { mountPath: string })
-
 /** 展平所需的最小组视图——注入式，便于后端用 DB 行、测试用内存图。 */
 export interface FlattenableGroup {
   id: string
   name: string
-  nodes?: ReadonlyArray<FlattenableNode>
-  members?: ReadonlyArray<FlattenableMember>
+  nodes: ReadonlyArray<FlattenableNode>
 }
 
 export interface FlattenResult {
@@ -488,49 +482,6 @@ export interface FlattenResult {
   nodes: PlannedDirectoryNode[]
   /** 实际达到的最大组嵌套深度（0 = 没有内层组）。 */
   maxDepth: number
-}
-
-/** Convert an RFC-248 member list into explicit attachment nodes + ancestor closure. */
-export function legacyMembersToNodes(members: readonly FlattenableMember[]): FlattenableNode[] {
-  const byPath = new Map<string, FlattenableNode>()
-  const ensure = (path: string): FlattenableNode => {
-    const normalized = normalizeRepoNodePath(path)
-    const folded = normalized.toLowerCase()
-    const existing = byPath.get(folded)
-    if (existing !== undefined) return existing
-    const parent = parentNodePath(normalized)
-    if (parent !== null) ensure(parent)
-    const created: FlattenableNode = { path: normalized, attachment: null }
-    byPath.set(folded, created)
-    return created
-  }
-  ensure('')
-  for (const member of members) {
-    const node = ensure(member.mountPath)
-    if (node.attachment !== null) {
-      throw new RepoGroupLayoutError(
-        'mount-path-duplicate',
-        `duplicate mount path: ${member.mountPath || '<root>'}`,
-        { mountPath: member.mountPath },
-      )
-    }
-    node.attachment =
-      member.kind === 'repo'
-        ? {
-            kind: 'repo',
-            cachedRepoId: member.cachedRepoId,
-            repoUrlRedacted: member.repoUrlRedacted,
-            ref: member.ref,
-            subdir: member.subdir,
-            readonly: member.readonly,
-          }
-        : {
-            kind: 'group',
-            childGroupId: member.childGroupId,
-            readonly: member.readonly,
-          }
-  }
-  return [...byPath.values()]
 }
 
 /**
@@ -548,10 +499,7 @@ export function flattenRepoGroup(
 ): FlattenResult {
   const repos: PlannedRepo[] = []
   const nodeByPath = new Map<string, PlannedDirectoryNode>()
-  const repoOriginByPath = new Map<
-    string,
-    { legacy: boolean; viaGroups: Array<{ id: string; name: string }> }
-  >()
+  const repoOriginByPath = new Map<string, Array<{ id: string; name: string }>>()
   let maxDepth = 0
   // 只在「追加了一个真实 repo」时计预算是不够的：走 group 边不产出 repo，于是
   // 一个**零产出**的菱形图可以在深度 5 下展开出 32^5 ≈ 3400 万次同步递归而永远
@@ -599,9 +547,7 @@ export function flattenRepoGroup(
     }
     if (depth > maxDepth) maxDepth = depth
     const nextChain = [...chain, { id: group.id, name: group.name }]
-    const legacy = group.nodes === undefined
-    const rawNodes = group.nodes ?? legacyMembersToNodes(group.members ?? [])
-    const groupNodes = validateRepoGroupNodes(rawNodes)
+    const groupNodes = validateRepoGroupNodes(group.nodes)
 
     for (const node of groupNodes) {
       const mount = joinMountPath(prefix, node.path)
@@ -616,7 +562,7 @@ export function flattenRepoGroup(
         nodeByPath.set(folded, { path: mount, origins: [origin] })
         if (nodeByPath.size > MAX_FLAT_NODES) {
           throw new RepoGroupLayoutError(
-            legacy ? 'repo-group-too-many-repos' : 'repo-group-node-limit',
+            'repo-group-node-limit',
             `flattened repo group exceeds ${MAX_FLAT_NODES} directory nodes`,
             { limit: MAX_FLAT_NODES, actual: nodeByPath.size, phase: 'flatten' },
           )
@@ -640,15 +586,8 @@ export function flattenRepoGroup(
         if (prior !== undefined) {
           const detail = {
             nodePath: mount,
-            firstViaGroups: prior.viaGroups,
+            firstViaGroups: prior,
             secondViaGroups: nextChain,
-          }
-          if (legacy || prior.legacy) {
-            throw new RepoGroupLayoutError(
-              'mount-path-duplicate',
-              `duplicate mount path: ${mount || '<root>'}`,
-              detail,
-            )
           }
           throw new RepoGroupLayoutError(
             'repo-group-attachment-conflict',
@@ -656,7 +595,7 @@ export function flattenRepoGroup(
             detail,
           )
         }
-        repoOriginByPath.set(folded, { legacy, viaGroups: nextChain })
+        repoOriginByPath.set(folded, nextChain)
         repos.push({
           cachedRepoId: attachment.cachedRepoId,
           repoUrlRedacted: attachment.repoUrlRedacted,

@@ -28,6 +28,14 @@ const TREE_SRC = readFileSync(
   resolve(__dirname, '..', 'src', 'components', 'repos', 'RepoLayoutTree.tsx'),
   'utf8',
 )
+const TREE_EDITOR_SRC = readFileSync(
+  resolve(__dirname, '..', 'src', 'components', 'repos', 'RepoTreeEditor.tsx'),
+  'utf8',
+)
+const BULK_SRC = readFileSync(
+  resolve(__dirname, '..', 'src', 'components', 'repos', 'RepoBulkAddDialog.tsx'),
+  'utf8',
+)
 const REPOS_SRC = readFileSync(resolve(__dirname, '..', 'src', 'routes', 'repos.tsx'), 'utf8')
 
 /**
@@ -48,11 +56,12 @@ function group(over: Partial<RepoGroup> = {}): RepoGroup {
     name: '全栈',
     description: '前后端一起跑',
     version: 1,
+    schemaVersion: 2,
     createdByUserId: null,
     createdAt: '2026-08-02T00:00:00.000Z',
     updatedAt: '2026-08-02T00:00:00.000Z',
     nodes: [{ path: '', attachment: null }],
-    members: [],
+    directNodeCount: 1,
     flatRepoCount: 3,
     boundMemories: 2,
     ...over,
@@ -166,7 +175,7 @@ describe('RepoGroupsPane —— 列表行为', () => {
 describe('RFC-249 —— 紧凑目录树编辑主路径', () => {
   test('写接口只发送显式 nodes，root 是普通节点而非主仓', () => {
     expect(EDITOR_SRC).toContain("return [{ path: '', attachment: null }]")
-    expect(EDITOR_SRC).toContain('const body = { name, description, nodes }')
+    expect(EDITOR_SRC).toContain('const body = { name, description, nodes: submittedNodes }')
     expect(EDITOR_SRC).toContain('{ nodes: debouncedNodes }')
     expect(codeOnly(EDITOR_SRC)).not.toContain('members: wire')
   })
@@ -175,11 +184,12 @@ describe('RFC-249 —— 紧凑目录树编辑主路径', () => {
     expect(EDITOR_SRC).toContain('repo-group-bulk-repos')
     expect(EDITOR_SRC).toContain('repo-group-paste-urls')
     expect(EDITOR_SRC).toContain('allocateRepoNodePath')
-    expect(EDITOR_SRC).toContain('bulkRepoIds')
     expect(EDITOR_SRC).toContain('repo-group-select-all-attachments')
-    expect(EDITOR_SRC).toContain('selectVisibleRepos')
-    expect(EDITOR_SRC).toContain('parseGitUrl')
-    expect(EDITOR_SRC).toContain('repo-group-paste-errors')
+    expect(EDITOR_SRC).toContain('<RepoBulkAddDialog')
+    expect(BULK_SRC).toContain('selectedRepoIds')
+    expect(BULK_SRC).toContain('selectVisibleRepos')
+    expect(BULK_SRC).toContain('parseGitUrl')
+    expect(BULK_SRC).toContain('repo-group-paste-errors')
   })
 
   test('多选节点支持只读、可写、摘挂载、移动与删除', () => {
@@ -190,6 +200,17 @@ describe('RFC-249 —— 紧凑目录树编辑主路径', () => {
     expect(EDITOR_SRC).toContain('repo-group-batch-bar')
   })
 
+  test('批量工具条替换普通工具条，残余草稿与保存中状态都进入防丢合同', () => {
+    expect(EDITOR_SRC).toContain('checked.size === 0 ? (')
+    expect(EDITOR_SRC).toContain('const hasUnappliedDraft =')
+    expect(EDITOR_SRC).toContain('newDirectory !==')
+    expect(EDITOR_SRC).toContain('directoryNameDraft !== nodeName(selectedPath)')
+    expect(EDITOR_SRC).toContain('bulkDraftDirty')
+    expect(EDITOR_SRC).toContain('<UnsavedChangesGuard')
+    expect(EDITOR_SRC).toContain('dismissDisabled={save.isPending}')
+    expect(EDITOR_SRC).toContain('disabled={save.isPending}')
+  })
+
   test('删除子树先显示节点与挂载影响数，再原子删除', () => {
     expect(EDITOR_SRC).toContain("from '@/components/ConfirmDialog'")
     expect(EDITOR_SRC).toContain('<ConfirmDialog')
@@ -198,9 +219,9 @@ describe('RFC-249 —— 紧凑目录树编辑主路径', () => {
   })
 
   test('桌面拖放与键盘可达的上级目录选择共用 moveNodeSubtree', () => {
-    expect(EDITOR_SRC).toContain('onDragStart')
-    expect(EDITOR_SRC).toContain('onDrop')
-    expect(EDITOR_SRC.match(/moveNodeSubtree/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
+    expect(TREE_EDITOR_SRC).toContain('onDragStart')
+    expect(TREE_EDITOR_SRC).toContain('onDrop')
+    expect(EDITOR_SRC.match(/moveNodeSubtree/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
     expect(EDITOR_SRC).toContain("t('repoGroups.editor.parentDirectory')")
   })
 })
@@ -208,6 +229,7 @@ describe('RFC-249 —— 紧凑目录树编辑主路径', () => {
 describe('RFC-248 设计系统兜底（源代码层）', () => {
   test('编辑器走 <Dialog>，不自造 overlay / panel chrome', () => {
     expect(EDITOR_SRC).toContain("from '@/components/Dialog'")
+    expect(BULK_SRC).toContain("from '@/components/Dialog'")
     expect(EDITOR_SRC).not.toMatch(/className="[^"]*__overlay/)
     expect(EDITOR_SRC).not.toMatch(/className="[^"]*__panel/)
   })
@@ -224,7 +246,7 @@ describe('RFC-248 设计系统兜底（源代码层）', () => {
   })
 
   test('三个新组件都不自写错误 / 空 / 加载态', () => {
-    for (const src of [EDITOR_SRC, PANE_SRC, TREE_SRC]) {
+    for (const src of [EDITOR_SRC, PANE_SRC, TREE_SRC, TREE_EDITOR_SRC, BULK_SRC]) {
       expect(codeOnly(src)).not.toMatch(/className="error-box"/)
       expect(codeOnly(src)).not.toMatch(/<div className="muted">\s*\{t\(/)
     }
@@ -237,6 +259,8 @@ describe('RFC-248 设计系统兜底（源代码层）', () => {
   test('只读布局树由组列表与任务详情共用；编辑器不再重复画预览树', () => {
     expect(PANE_SRC).toContain("from '@/components/repos/RepoLayoutTree'")
     expect(EDITOR_SRC).not.toContain("from '@/components/repos/RepoLayoutTree'")
+    expect(EDITOR_SRC).toContain('<RepoTreeEditor')
+    expect(EDITOR_SRC).toContain('renderSettings=')
     expect(EDITOR_SRC).toContain('repo-group-editor__workspace')
   })
 

@@ -1,18 +1,15 @@
 // RFC-249 — 仓库组目录树 CRUD、展平、预览与引用守卫。
-// DB 的唯一事实源是 repo_group_nodes；members 只作为内部/只读兼容投影存在。
+// DB 与公开 wire 的唯一事实源都是 repo_group_nodes；旧 members 模型已完全退役。
 
 import type {
   CreateRepoGroup,
   FlattenableAttachment,
   FlattenableGroup,
   FlattenableNode,
-  LegacyRepoGroupWrite,
   PlannedDirectoryNode,
   PlannedRepo,
   RepoGroup,
   RepoGroupLayoutResponse,
-  RepoGroupMember,
-  RepoGroupMemberInput,
   RepoGroupNode,
   RepoGroupNodeInput,
 } from '@agent-workflow/shared'
@@ -20,8 +17,6 @@ import {
   RepoGroupLayoutError,
   flattenRepoGroup,
   normalizeMountPath,
-  normalizeRepoNodePath,
-  parentNodePath,
   redactGitUrl,
   validateRepoGroupNodes,
 } from '@agent-workflow/shared'
@@ -82,63 +77,14 @@ interface RawNodeRow {
   readonly: boolean
 }
 
-type RepoGroupWrite = CreateRepoGroup | LegacyRepoGroupWrite
-type RepoGroupPreviewWrite =
-  | { name?: string; nodes: readonly RepoGroupNodeInput[] }
-  | { name?: string; members: readonly RepoGroupMemberInput[] }
+type RepoGroupWrite = CreateRepoGroup
+type RepoGroupPreviewWrite = { name?: string; nodes: readonly RepoGroupNodeInput[] }
 
 function asValidation(error: unknown): never {
   if (error instanceof RepoGroupLayoutError) {
     throw new ValidationError(error.code, error.message, error.detail)
   }
   throw error
-}
-
-function legacyInputToNodes(members: readonly RepoGroupMemberInput[]): RepoGroupNodeInput[] {
-  const byPath = new Map<string, RepoGroupNodeInput>()
-  const ensure = (path: string): RepoGroupNodeInput => {
-    const normalized = normalizeRepoNodePath(path)
-    const folded = normalized.toLowerCase()
-    const existing = byPath.get(folded)
-    if (existing !== undefined) return existing
-    const parent = parentNodePath(normalized)
-    if (parent !== null) ensure(parent)
-    const node: RepoGroupNodeInput = { path: normalized, attachment: null }
-    byPath.set(folded, node)
-    return node
-  }
-  ensure('')
-  for (const member of members) {
-    const node = ensure(member.mountPath)
-    if (node.attachment !== null) {
-      throw new ValidationError(
-        'mount-path-duplicate',
-        `duplicate mount path: ${member.mountPath || '<root>'}`,
-        { mountPath: member.mountPath },
-      )
-    }
-    node.attachment =
-      member.kind === 'repo'
-        ? {
-            kind: 'repo',
-            ...(member.cachedRepoId !== undefined
-              ? { cachedRepoId: member.cachedRepoId }
-              : { repoUrl: member.repoUrl! }),
-            ref: member.ref,
-            subdir: member.subdir,
-            readonly: member.readonly,
-          }
-        : {
-            kind: 'group',
-            childGroupId: member.childGroupId,
-            readonly: member.readonly,
-          }
-  }
-  return [...byPath.values()]
-}
-
-function writeNodes(input: RepoGroupWrite | RepoGroupPreviewWrite): readonly RepoGroupNodeInput[] {
-  return 'nodes' in input ? input.nodes : legacyInputToNodes(input.members)
 }
 
 function loadAllGroups(db: DbClient): Map<string, FlattenableGroup> {
@@ -222,7 +168,7 @@ export function previewRepoGroupLayout(
 
   let normalized: Array<{ path: string; attachment: RepoGroupNodeInput['attachment'] }>
   try {
-    normalized = validateRepoGroupNodes(writeNodes(input))
+    normalized = validateRepoGroupNodes(input.nodes)
   } catch (error) {
     asValidation(error)
   }
@@ -345,34 +291,6 @@ function toDto(db: DbClient, row: RawGroupRow, all: Map<string, FlattenableGroup
       },
     }
   })
-  const members: RepoGroupMember[] = []
-  for (const node of nodes) {
-    const attachment = node.attachment
-    if (attachment === null) continue
-    const memberIndex = members.length
-    if (attachment.kind === 'repo') {
-      members.push({
-        kind: 'repo',
-        memberIndex,
-        cachedRepoId: attachment.cachedRepoId,
-        repoUrlRedacted: attachment.repoUrlRedacted,
-        ref: attachment.ref,
-        subdir: attachment.subdir,
-        mountPath: node.path,
-        readonly: attachment.readonly,
-      })
-    } else {
-      members.push({
-        kind: 'group',
-        memberIndex,
-        childGroupId: attachment.childGroupId,
-        childGroupName: attachment.childGroupName,
-        mountPath: node.path,
-        readonly: attachment.readonly,
-      })
-    }
-  }
-
   let flatRepoCount = 0
   try {
     flatRepoCount = flattenRepoGroup(row.id, (id) => all.get(id)).repos.length
@@ -389,7 +307,6 @@ function toDto(db: DbClient, row: RawGroupRow, all: Map<string, FlattenableGroup
     createdAt: new Date(row.createdAt).toISOString(),
     updatedAt: new Date(row.updatedAt).toISOString(),
     nodes,
-    members,
     directNodeCount: nodes.length,
     flatRepoCount,
     boundMemories: boundMemoryCount(db, row.id),
@@ -415,7 +332,7 @@ export function getRepoGroup(db: DbClient, id: string): RepoGroup {
 async function materializeNodes(deps: RepoGroupDeps, input: RepoGroupWrite): Promise<RawNodeRow[]> {
   let normalized: Array<{ path: string; attachment: RepoGroupNodeInput['attachment'] }>
   try {
-    normalized = validateRepoGroupNodes(writeNodes(input))
+    normalized = validateRepoGroupNodes(input.nodes)
   } catch (error) {
     asValidation(error)
   }
