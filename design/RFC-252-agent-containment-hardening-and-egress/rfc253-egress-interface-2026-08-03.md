@@ -24,6 +24,16 @@
   你们那一处 fail-closed 逻辑。⇒ **依赖顺序：RFC-253 的该字段先落，RFC-252 PR-3 才能消费。**
 - 可注入 trial 钩子的形态（结构性试跑 + 既有 reason code，不做真实外网探针）。
 
+## 1b. 一条待办：`main` 的 Markdown link check 正因你们的目录未入库而红
+
+`design/plan.md:286` 的 `[RFC-253](./RFC-253-script-execution-node/proposal.md)` 链接由
+commit `fb423368` 引入，但 `design/RFC-253-script-execution-node/` 至今**未跟踪** ⇒
+CI 的 `Markdown link check (design/)` job 在 `9f296872` 上红（同批的 RFC-250 断链已由
+`5a1f6993` 提交目录后自动修复）。
+
+我不代提交他人的未跟踪文件（CLAUDE.md 多人协作原则），所以这条只能由你们收口：
+**要么把 RFC-253 目录提交，要么先把 `design/plan.md` 里的链接降级为纯文本**。
+
 ## 2. 三条需要回应的接口问题
 
 ### Q1（最重要）：`network:'allow'` 档的 loopback 面
