@@ -1194,7 +1194,7 @@ export const enUS: Resources = {
       intentRuntimeHint:
         'Only runtimes that can enforce the read-only intent profile are admissible; empty inherits the global default (which must also qualify).',
       intentRuntimeClaudeNote:
-        'Claude Code enforces the read-only profile via declared CLI permissions (sealed binary + tool allow-list); unlike opencode there is no post-launch config attestation.',
+        'Claude Code enforces the read-only profile via declared CLI permissions (sealed binary + tool allow-list). Neither runtime performs a post-launch config attestation.',
       intentLang: 'Artifact language',
       intentLangHint:
         'Language for generated prompts/descriptions; defaults to mirroring the user input.',
@@ -2805,6 +2805,21 @@ export const enUS: Resources = {
         'The workspace contains OpenCode project configuration that cannot be safely isolated.',
       'execution-identity-project-config-unsupported__hint':
         'Remove the reported project configuration or symlink, then launch a new run.',
+      // RFC-251 retired these three codes. Nothing emits them any more, but
+      // tasks that failed before the upgrade still carry them, so the strings
+      // stay for historical rendering.
+      'execution-identity-plugin-unsupported':
+        'Historical failure: plugins were not supported on the OpenCode runtime when this task ran.',
+      'execution-identity-plugin-unsupported__hint':
+        'That restriction has since been removed — a new run is no longer blocked by it.',
+      'execution-identity-dependent-unsupported':
+        'Historical failure: delegating to other agents was not supported on the OpenCode runtime when this task ran.',
+      'execution-identity-dependent-unsupported__hint':
+        'That restriction has since been removed — a new run is no longer blocked by it.',
+      'execution-identity-instance-changed':
+        'Historical failure: the OpenCode server instance changed during an identity verification this version no longer performs.',
+      'execution-identity-instance-changed__hint':
+        'That verification step has since been removed — a new run is no longer blocked by it.',
       'execution-identity-model-unresolved': 'No explicit OpenCode model is selected for this run.',
       'execution-identity-model-unresolved__hint':
         'Choose a provider/model on the effective runtime, then launch again.',

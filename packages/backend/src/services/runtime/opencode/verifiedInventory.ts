@@ -41,11 +41,25 @@ const VerifiedMcpInventorySchema = z
   })
   .strict()
 
+/**
+ * RFC-251 — plugins are selectable again, so the inventory reports the frozen
+ * selection instead of a structural `[]`. `specifier` is the sealed
+ * `file://<cachedPath>` actually handed to OpenCode (never the user-supplied
+ * npm/git spec) and `source` is the record's `sourceKind`.
+ */
+const VerifiedPluginInventorySchema = z
+  .object({
+    specifier: z.string().min(1).max(4096),
+    source: z.string().min(1).max(64),
+  })
+  .strict()
+
 const VerifiedInventoryEnabledPlanSchema = z
   .object({
     enabled: z.literal(true),
     frozenSkills: z.array(VerifiedFrozenSkillInventorySchema).max(256),
     mcps: z.array(VerifiedMcpInventorySchema).max(256),
+    plugins: z.array(VerifiedPluginInventorySchema).max(256),
   })
   .strict()
 
@@ -103,6 +117,8 @@ export function buildVerifiedInventoryPlan(input: {
   enabled: boolean
   frozenSkills: readonly { name: string; skillId: string; treeDigest: string }[]
   mcps: readonly { name: string; type: 'local' | 'remote'; enabled: boolean }[]
+  /** RFC-251 — the encoded plugin selection actually shipped to OpenCode. */
+  plugins?: readonly { specifier: string; source: string }[]
 }): VerifiedInventoryPlan {
   if (!input.enabled) return { enabled: false }
   const parsed = VerifiedInventoryPlanSchema.safeParse({
@@ -114,6 +130,9 @@ export function buildVerifiedInventoryPlan(input: {
       .filter((mcp) => mcp.enabled)
       .map((mcp) => ({ name: mcp.name, type: mcp.type }))
       .sort((left, right) => compareCodePoints(left.name, right.name)),
+    plugins: (input.plugins ?? [])
+      .map((plugin) => ({ ...plugin }))
+      .sort((left, right) => compareCodePoints(left.specifier, right.specifier)),
   })
   if (!parsed.success) {
     return executionIdentityFailure('execution-identity-mismatch')
@@ -214,7 +233,10 @@ export function buildVerifiedInventorySnapshot(input: {
       status: 'configured',
       hint: null,
     })),
-    plugins: [],
+    plugins: input.plan.plugins.map((plugin) => ({
+      specifier: plugin.specifier,
+      source: plugin.source,
+    })),
   })
   if (!snapshot.success) {
     return executionIdentityFailure('execution-identity-mismatch')

@@ -71,7 +71,10 @@ describe('RFC-237 intent runtime claude-code enforcement note', () => {
     mockFetch()
     renderTab(mkConfig({ intentBuilderRuntime: 'claude-code' }))
     await waitFor(() => {
-      expect(screen.getByTestId(NOTE_TESTID).textContent).toContain('no post-launch config')
+      // RFC-251 reworded this note: the attestation was removed from the
+      // OpenCode path too, so it is no longer a difference between runtimes.
+      // What the note must still convey is claude-code's enforcement mechanism.
+      expect(screen.getByTestId(NOTE_TESTID).textContent).toContain('declared CLI permissions')
     })
   })
 

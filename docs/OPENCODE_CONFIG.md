@@ -52,8 +52,13 @@ SHA-256 只证明“本次执行的是已冻结的这些 bytes”，不是 OpenC
 
 verified launcher 在同一个 byte-frozen server instance 上完成：
 
-- final `/config` 与 selected provider/model 检查；
-- ordered `/agent` inventory 双读一致性；
+> **RFC-251（2026-08-03）起，启动后的配置比对（attestation）已移除**：launcher
+> 不再重读 `/config`、不再对 `/agent` 做双读一致性比对，因此**不再证明**最终生效
+> 配置未被篡改。下面保留的各项是单次直读的事实校验（能发现「选中的 provider /
+> skill 确实不存在」这类真实错误），以及与 attestation 无关的会话/协议校验。
+
+- selected provider/model 存在性检查（单次读 `/config/providers`）；
+- `/agent` 单次读用于 verified inventory（不再双读比对）；
 - selected managed skill、MCP 与 source fingerprint 校验；
 - fresh/resume session identity 校验；
 - SSE 在 prompt POST 之前订阅；

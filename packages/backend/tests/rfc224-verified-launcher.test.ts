@@ -1015,6 +1015,7 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
           },
         ],
         mcps: [{ name: 'docs', type: 'remote' }],
+        plugins: [{ specifier: 'file:///tmp/aw-plugins/dd', source: 'npm' }],
       },
     })
     if (manifest.storeKind !== 'business') throw new Error('fixture narrowing failed')
@@ -1042,7 +1043,10 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
     expect(writes[0]!.callsAtWrite).toEqual(['providers', 'agents', 'skills'])
     expect(writes[0]!.snapshot).toMatchObject({
       captured: true,
-      plugins: [],
+      // RFC-251 (Codex impl-gate P1): plugins are reported from the frozen
+      // selection instead of the old structural `[]`, so a selected plugin no
+      // longer renders as "Plugins·0" in run details.
+      plugins: [{ specifier: 'file:///tmp/aw-plugins/dd', source: 'npm' }],
       mcps: [{ name: 'docs', type: 'remote', status: 'configured', hint: null }],
     })
     expect(client.calls.indexOf('create')).toBeGreaterThan(client.calls.lastIndexOf('agents'))
@@ -1051,7 +1055,7 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
   test('a failed same-instance skill gate never writes inventory', async () => {
     const manifest = VerifiedLaunchManifestSchema.parse({
       ...businessManifest(),
-      inventory: { enabled: true, frozenSkills: [], mcps: [] },
+      inventory: { enabled: true, frozenSkills: [], mcps: [], plugins: [] },
     })
     if (manifest.storeKind !== 'business') throw new Error('fixture narrowing failed')
     const client = new InventoryClient(manifest.sessionTitle)

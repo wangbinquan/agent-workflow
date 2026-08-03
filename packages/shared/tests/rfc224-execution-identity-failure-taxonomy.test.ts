@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   EXECUTION_IDENTITY_FAILURE_CODES,
+  LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
   FAILURE_CODES,
   FOLLOWUP_FAILURE_CODES,
   FailureCodeSchema,
@@ -48,8 +49,37 @@ describe('RFC-224 execution identity failure taxonomy', () => {
     expect(new Set(EXECUTION_IDENTITY_FAILURE_CODES).size).toBe(
       EXECUTION_IDENTITY_FAILURE_CODES.length,
     )
-    expect(FAILURE_CODES).toEqual([...FOLLOWUP_FAILURE_CODES, ...EXECUTION_IDENTITY_FAILURE_CODES])
+    expect(FAILURE_CODES).toEqual([
+      ...FOLLOWUP_FAILURE_CODES,
+      ...EXECUTION_IDENTITY_FAILURE_CODES,
+      ...LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
+    ])
     expect(new Set(FAILURE_CODES).size).toBe(FAILURE_CODES.length)
+  })
+
+  // RFC-251 (Codex impl-gate P1): the retired codes must stay READABLE.
+  //
+  // `failure_code` is plain TEXT with no migration, and the task page is
+  // validated with a strict enum over the WHOLE payload — so one historical row
+  // carrying a retired code would fail the parse for the entire page, not
+  // degrade that row. Emitting them is gone; parsing them is not.
+  test('retired codes are absent from the emit domain but still parse', () => {
+    expect(LEGACY_EXECUTION_IDENTITY_FAILURE_CODES).toEqual([
+      'execution-identity-plugin-unsupported',
+      'execution-identity-dependent-unsupported',
+      'execution-identity-instance-changed',
+    ])
+    for (const code of LEGACY_EXECUTION_IDENTITY_FAILURE_CODES) {
+      // Not emittable: absent from the live vocabulary…
+      expect(EXECUTION_IDENTITY_FAILURE_CODES as readonly string[]).not.toContain(code)
+      // …but a persisted row still round-trips through the strict schema.
+      expect(FailureCodeSchema.parse(code)).toBe(code)
+      // And it is still classified as a permanent identity failure, so retry
+      // policy treats an old row the same way it did before the retirement.
+      expect(isExecutionIdentityFailureCode(code)).toBe(true)
+      expect(isPermanentRuntimeFailure(code)).toBe(true)
+      expect(followupPolicyForFailure(code)).toBeUndefined()
+    }
   })
 
   test('schema and guards accept every identity code while transient stream loss stays retryable', () => {

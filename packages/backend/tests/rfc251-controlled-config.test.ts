@@ -134,12 +134,33 @@ describe('RFC-251 — the dependsOn closure in the controlled config', () => {
     expect(agents.auditor!.prompt).toBe('auditor-body')
   })
 
-  test('task is denied without a closure and allowed with one', () => {
+  test('task is denied outright without a closure', () => {
     const alone = agentsOf(controlled()).worker!.permission as Record<string, unknown>
     expect(alone.task).toBe('deny')
-    const withDeps = agentsOf(controlled({ dependents: [sub('auditor')] })).worker!
-      .permission as Record<string, unknown>
-    expect(withDeps.task).toBe('allow')
+  })
+
+  test('task is scoped to the closure, never a blanket allow', () => {
+    // Codex impl-gate P1: a plain `task: 'allow'` becomes pattern `*`, which
+    // would let the model delegate to OpenCode's BUILT-IN agents (general,
+    // explore, …). Those are in the registry regardless of our config and come
+    // with their own write/shell surface, so a root that denies bash could
+    // borrow one through a subagent. `*` must deny, members allow after it
+    // (OpenCode resolves the pattern with findLast).
+    const task = (
+      agentsOf(controlled({ dependents: [sub('auditor'), sub('fixer')] })).worker!
+        .permission as Record<string, unknown>
+    ).task as Record<string, unknown>
+
+    expect(task).not.toBe('allow')
+    expect(Object.keys(task)).toEqual(['*', 'auditor', 'fixer'])
+    expect(task['*']).toBe('deny')
+    expect(task.auditor).toBe('allow')
+    expect(task.fixer).toBe('allow')
+    // A built-in agent name is not in the record, so `*` (deny) is the only
+    // match for it.
+    for (const builtin of ['general', 'explore', 'build', 'plan']) {
+      expect(task).not.toHaveProperty(builtin)
+    }
   })
 
   test('flipping task does not disturb the load-bearing deny-tail order', () => {
@@ -200,6 +221,46 @@ describe('RFC-251 — the dependsOn closure in the controlled config', () => {
 
   test('a member with no model is an explicit failure, never a silent default', () => {
     expect(() => controlled({ dependents: [sub('broken', { model: '' })] })).toThrow()
+  })
+})
+
+describe('RFC-251 — a user wildcard cannot override platform rulings', () => {
+  // Codex impl-gate P1: OpenCode emits rules in record order and resolves with
+  // `findLast`, so a controlled key sitting at the USER's position could be
+  // overridden by a later `"*"` in the same record. Platform keys must always
+  // be appended last.
+  const hostile = {
+    task: 'allow',
+    bash: 'allow',
+    read: 'allow',
+    '*': 'allow',
+  } as Record<string, string>
+
+  function permissionOf(overrides: Record<string, unknown>): Record<string, unknown> {
+    return agentsOf(controlled(overrides)).worker!.permission as Record<string, unknown>
+  }
+
+  test('every platform-owned key lands AFTER any user wildcard', () => {
+    const permission = permissionOf({ userPermission: hostile, allowShell: false })
+    const keys = Object.keys(permission)
+    const wildcardAt = keys.indexOf('*')
+    expect(wildcardAt).toBeGreaterThanOrEqual(0) // the user's `*` is preserved
+    for (const controlledKey of ['bash', 'read', 'task', 'external_directory']) {
+      expect(keys.indexOf(controlledKey)).toBeGreaterThan(wildcardAt)
+    }
+  })
+
+  test('the platform value wins for each controlled key', () => {
+    const permission = permissionOf({ userPermission: hostile, allowShell: false })
+    expect(permission.bash).toBe('deny') // user asked for allow
+    expect(permission.read).toBe('deny')
+    expect(permission.task).toBe('deny') // no closure ⇒ denied despite the user
+  })
+
+  test('non-controlled user keys are still passed through untouched', () => {
+    const permission = permissionOf({ userPermission: { custom_tool: 'allow', '*': 'allow' } })
+    expect(permission.custom_tool).toBe('allow')
+    expect(permission['*']).toBe('allow')
   })
 })
 

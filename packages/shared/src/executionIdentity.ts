@@ -32,11 +32,30 @@ export const EXECUTION_IDENTITY_FAILURE_CODES = [
   'execution-identity-store-unsafe',
 ] as const
 
-export type ExecutionIdentityFailureCode = (typeof EXECUTION_IDENTITY_FAILURE_CODES)[number]
+/**
+ * RFC-251 — codes no production path can emit any more, kept ONLY so persisted
+ * rows written before the upgrade still parse.
+ *
+ * `failure_code` is plain TEXT with no migration (RFC-224 §8), and the task
+ * page is validated with a strict `z.enum` over the whole payload — so a single
+ * historical row carrying a retired code would fail the parse for the ENTIRE
+ * page, not degrade that one row. They therefore stay in the read domain while
+ * being absent from the emit domain above.
+ */
+export const LEGACY_EXECUTION_IDENTITY_FAILURE_CODES = [
+  'execution-identity-plugin-unsupported',
+  'execution-identity-dependent-unsupported',
+  'execution-identity-instance-changed',
+] as const
 
-const EXECUTION_IDENTITY_FAILURE_CODE_SET: ReadonlySet<string> = new Set(
-  EXECUTION_IDENTITY_FAILURE_CODES,
-)
+export type ExecutionIdentityFailureCode =
+  | (typeof EXECUTION_IDENTITY_FAILURE_CODES)[number]
+  | (typeof LEGACY_EXECUTION_IDENTITY_FAILURE_CODES)[number]
+
+const EXECUTION_IDENTITY_FAILURE_CODE_SET: ReadonlySet<string> = new Set<string>([
+  ...EXECUTION_IDENTITY_FAILURE_CODES,
+  ...LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
+])
 
 export function isExecutionIdentityFailureCode(
   value: unknown,

@@ -1,7 +1,10 @@
 // Task schemas. Mirrors design.md §3 (tasks table) + plan.md P-1-14.
 
 import { z } from 'zod'
-import { EXECUTION_IDENTITY_FAILURE_CODES } from '../executionIdentity'
+import {
+  EXECUTION_IDENTITY_FAILURE_CODES,
+  LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
+} from '../executionIdentity'
 import { hasQueryCredential } from '../git-url'
 import { InjectedMemorySnapshotSchema } from './memory'
 import { PlannedDirectoryNodeSchema } from './repoGroup'
@@ -251,6 +254,9 @@ export type FollowupFailureCode = (typeof FOLLOWUP_FAILURE_CODES)[number]
 export const FAILURE_CODES = [
   ...FOLLOWUP_FAILURE_CODES,
   ...EXECUTION_IDENTITY_FAILURE_CODES,
+  // RFC-251: retired codes stay in the READ domain. No path emits them, but
+  // rows written before the upgrade must not fail the strict page parse.
+  ...LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
 ] as const
 export const FailureCodeSchema = z.enum(FAILURE_CODES)
 export type FailureCode = z.infer<typeof FailureCodeSchema>

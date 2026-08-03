@@ -591,6 +591,18 @@ const DENIED_TOOLS = [
  * construction (Codex design-gate P0-1 — no arbitrary permission pass-through).
  */
 export const SYSTEM_READ_ONLY_TOOLS = ['read', 'grep', 'glob'] as const
+
+/**
+ * RFC-251 — permission keys the platform decides unconditionally. A user
+ * override for any of these is dropped rather than merged, so the platform's
+ * value is always the LAST rule for that key in the emitted record (OpenCode
+ * resolves with `findLast`).
+ */
+const CONTROLLED_PERMISSION_KEYS: ReadonlySet<string> = new Set<string>([
+  'bash',
+  'external_directory',
+  ...DENIED_TOOLS,
+])
 export type SystemReadOnlyTool = (typeof SYSTEM_READ_ONLY_TOOLS)[number]
 
 export interface BuildControlledAgentConfigInput {
@@ -692,14 +704,37 @@ export function buildControlledOpencodeConfig(
         return executionIdentityFailure('execution-identity-mismatch')
       }
     }
-    const permission: Record<string, IdentityJson> = { ...(member.userPermission ?? {}) }
+    // RFC-251 (Codex impl-gate P1): platform-owned keys must be APPENDED after
+    // everything the user supplied, never merged in place.
+    //
+    // OpenCode turns this record into an ordered ruleset and resolves a tool
+    // with `findLast` (permission/index.ts:28-34). Re-assigning an existing key
+    // does not move it, so the previous `{...userPermission}` + overwrite kept
+    // a controlled key at the USER's position — a later `"*": "allow"` in the
+    // same record would then win over it. Dropping the controlled keys first
+    // and appending the platform values last makes the platform ruling final
+    // regardless of what the user wrote, without changing the effective value
+    // for any config that has no wildcard.
+    const permission: Record<string, IdentityJson> = {}
+    for (const [key, value] of Object.entries(member.userPermission ?? {})) {
+      if (CONTROLLED_PERMISSION_KEYS.has(key)) continue
+      permission[key] = value
+    }
     permission.bash = member.allowShell ? 'allow' : 'deny'
     for (const tool of DENIED_TOOLS) {
       permission[tool] = allowedReadOnly.has(tool) ? 'allow' : 'deny'
     }
-    // RFC-251: re-assigning an EXISTING key does not move it, so the qualified
-    // deny-tail insertion order is unchanged — only `task`'s value flips.
-    if (allowTask) permission.task = 'allow'
+    // RFC-251 (Codex impl-gate P1): `task: 'allow'` would become pattern `*`,
+    // letting the model delegate to OpenCode's BUILT-IN agents (general,
+    // explore, …) which are in the registry regardless of our config and carry
+    // their own default write/shell surface. Scope the allow to the resolved
+    // closure instead: `*` denies first, each member name allows after it, and
+    // `findLast` picks the specific name only for a real closure member.
+    if (allowTask) {
+      const byName: Record<string, IdentityJson> = { '*': 'deny' }
+      for (const dep of allowedTaskTargets) byName[dep] = 'allow'
+      permission.task = byName
+    }
     permission.external_directory = {
       [input.toolOutputPattern]: 'deny',
       '*': 'deny',
@@ -707,7 +742,10 @@ export function buildControlledOpencodeConfig(
     return permission
   }
 
-  const permission = buildPermission(input, dependents.length > 0)
+  const allowedTaskTargets = dependents
+    .map((dep) => dep.name)
+    .filter((name) => name.length > 0 && name !== input.name)
+  const permission = buildPermission(input, allowedTaskTargets.length > 0)
 
   const agent: Record<string, IdentityJson> = {
     prompt: input.prompt,

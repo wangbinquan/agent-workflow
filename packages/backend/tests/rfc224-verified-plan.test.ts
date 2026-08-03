@@ -798,6 +798,13 @@ describe('RFC-251 verified plan restores plugins and multi-agent', () => {
       expect(manifest.expectedConfig.plugin).toEqual(['file:///tmp/aw-plugins/dd'])
       // The silent-failure guard: PURE would empty plugin_origins before load.
       expect(manifest.serverEnv).not.toHaveProperty('OPENCODE_PURE')
+      // Codex impl-gate P2: the launcher spawns the server from serverEnv, NOT
+      // from expectedConfig — assert the bytes the server actually receives, or
+      // a serialization gap would keep this green while production loads none.
+      const shipped = JSON.parse(manifest.serverEnv.OPENCODE_CONFIG_CONTENT!) as {
+        plugin: unknown
+      }
+      expect(shipped.plugin).toEqual(['file:///tmp/aw-plugins/dd'])
     } finally {
       await done(plan)
     }
@@ -819,12 +826,20 @@ describe('RFC-251 verified plan restores plugins and multi-agent', () => {
     try {
       expect(Object.keys(manifest.expectedConfig.agent)).toEqual(['worker', 'auditor'])
       expect(manifest.expectedConfig.agent.auditor!.mode).toBe('subagent')
+      // Same reason as the plugin case: assert what the server is actually given.
+      const shipped = JSON.parse(manifest.serverEnv.OPENCODE_CONFIG_CONTENT!) as {
+        agent: Record<string, { mode: string }>
+      }
+      expect(Object.keys(shipped.agent)).toEqual(['worker', 'auditor'])
+      expect(shipped.agent.auditor!.mode).toBe('subagent')
       const rootPermission = (
         manifest.expectedConfig.agent.worker as unknown as {
           permission: Record<string, unknown>
         }
       ).permission
-      expect(rootPermission.task).toBe('allow')
+      // RFC-251 (Codex impl-gate P1): scoped to the closure, not a blanket
+      // allow — a `*` allow would reach OpenCode's built-in agents.
+      expect(rootPermission.task).toEqual({ '*': 'deny', auditor: 'allow' })
     } finally {
       await done(plan)
     }

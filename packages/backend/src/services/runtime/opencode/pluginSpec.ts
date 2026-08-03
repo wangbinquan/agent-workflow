@@ -35,15 +35,34 @@ export type PluginSpec = string | [string, Record<string, unknown>]
  * that case rather than emitting an empty array.
  */
 export function buildPluginSpecArray(plugins: readonly Plugin[]): PluginSpec[] {
-  const specs: PluginSpec[] = []
+  return selectShippedPlugins(plugins).map((p) => {
+    const pathSpec = pluginFileSpec(p)
+    const opts = p.options && Object.keys(p.options).length > 0 ? p.options : undefined
+    return opts === undefined ? pathSpec : [pathSpec, opts]
+  })
+}
+
+/**
+ * The plugin records that actually reach OpenCode, in emission order — the
+ * single source of the enabled-filter and id-dedupe rules.
+ *
+ * RFC-251: inventory/diagnostics must describe exactly this set. Deriving them
+ * from the raw selection instead would drift the moment a row is disabled or
+ * reached twice through the closure.
+ */
+export function selectShippedPlugins(plugins: readonly Plugin[]): Plugin[] {
+  const shipped: Plugin[] = []
   const seen = new Set<string>()
   for (const p of plugins) {
     if (p.enabled === false) continue
     if (seen.has(p.id)) continue
     seen.add(p.id)
-    const pathSpec = p.cachedPath.startsWith('file://') ? p.cachedPath : `file://${p.cachedPath}`
-    const opts = p.options && Object.keys(p.options).length > 0 ? p.options : undefined
-    specs.push(opts === undefined ? pathSpec : [pathSpec, opts])
+    shipped.push(p)
   }
-  return specs
+  return shipped
+}
+
+/** The sealed `file://` specifier — never the user-supplied npm/git spec. */
+export function pluginFileSpec(plugin: Plugin): string {
+  return plugin.cachedPath.startsWith('file://') ? plugin.cachedPath : `file://${plugin.cachedPath}`
 }

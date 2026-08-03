@@ -5833,7 +5833,7 @@ export const zhCN: Resources = {
       intentRuntimeHint:
         '仅可选能实施只读意图构建 profile 的运行时；留空继承全局默认（默认值同样须满足）。',
       intentRuntimeClaudeNote:
-        'Claude Code 通过声明式 CLI 权限实施只读（封印二进制 + 工具白名单）；与 opencode 不同：启动后无配置验证（attestation）。',
+        'Claude Code 通过声明式 CLI 权限实施只读（封印二进制 + 工具白名单）。两种运行时均不做启动后的配置验证（attestation）。',
       intentLang: '产物语言',
       intentLangHint: '生成的 prompt/描述所用语言；默认跟随使用者输入语言。',
       intentLangDefault: '跟随输入',
@@ -7344,6 +7344,17 @@ export const zhCN: Resources = {
         '工作区含有无法安全隔离的 OpenCode 项目配置。',
       'execution-identity-project-config-unsupported__hint':
         '请移除错误详情指出的项目配置或符号链接，再发起新运行。',
+      // RFC-251 已废弃下面三个码：现在没有任何路径会产生它们，但升级前失败的
+      // 任务仍带着它们，故保留文案用于历史渲染。
+      'execution-identity-plugin-unsupported':
+        '历史失败：这个任务运行时，OpenCode 运行时还不支持插件。',
+      'execution-identity-plugin-unsupported__hint': '该限制已经移除，重新运行不会再被它挡住。',
+      'execution-identity-dependent-unsupported':
+        '历史失败：这个任务运行时，OpenCode 运行时还不支持调用其他代理。',
+      'execution-identity-dependent-unsupported__hint': '该限制已经移除，重新运行不会再被它挡住。',
+      'execution-identity-instance-changed':
+        '历史失败：当时的身份校验发现 OpenCode server 实例发生了变化；该校验已不再执行。',
+      'execution-identity-instance-changed__hint': '该校验步骤已经移除，重新运行不会再被它挡住。',
       'execution-identity-model-unresolved': '本次运行没有显式选择 OpenCode 模型。',
       'execution-identity-model-unresolved__hint':
         '请为生效运行时选择 provider/model，再重新发起。',

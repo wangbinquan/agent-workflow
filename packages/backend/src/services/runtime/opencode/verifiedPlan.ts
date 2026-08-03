@@ -14,6 +14,7 @@ import {
   resolveStrictProviderAuth,
   type HermeticOpencodeLayout,
 } from './hermetic'
+import { pluginFileSpec, selectShippedPlugins } from './pluginSpec'
 import { inspectRuntimeOpencodeBinary, snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
@@ -524,6 +525,10 @@ export async function buildVerifiedOpencodeBusinessPlan(
     ...(ctx.gitUserEmail == null ? {} : { GIT_COMMITTER_EMAIL: ctx.gitUserEmail }),
   }
   const plannedMcp = await planMcpConfig(ctx, { sealRoot })
+  // RFC-251: the exact plugin records that reach OpenCode (enabled-filtered,
+  // id-deduped). Inventory and diagnostics describe THIS set, so they cannot
+  // drift from what the controlled config actually ships.
+  const shippedPlugins = selectShippedPlugins(ctx.plugins)
   // RFC-251: every closure member resolves its OWN runtime profile — a missing
   // or malformed model fails loudly here rather than silently inheriting the
   // root's. Members keep their raw `bodyMd`: the output-envelope protocol block
@@ -762,6 +767,12 @@ export async function buildVerifiedOpencodeBusinessPlan(
           treeDigest: skill.inspection.treeDigest,
         })),
         mcps: ctx.mcps,
+        // RFC-251: the sealed file:// specifiers actually shipped, paired with
+        // the record's sourceKind — never the user-supplied npm/git spec.
+        plugins: shippedPlugins.map((plugin) => ({
+          specifier: pluginFileSpec(plugin),
+          source: plugin.sourceKind,
+        })),
       }),
       bootstrapTimeoutMs: DEFAULT_BOOTSTRAP_TIMEOUT_MS,
       runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
@@ -801,7 +812,8 @@ export async function buildVerifiedOpencodeBusinessPlan(
         inlineModel: `${selectedModel.providerID}/${selectedModel.modelID}`,
         inlineVariant: selectedModel.variant ?? null,
         mcpCount: Object.keys(plannedMcp.config).length,
-        pluginCount: 0,
+        // RFC-251: report the encoded selection, not a structural zero.
+        pluginCount: shippedPlugins.length,
       },
       cleanup: async () => {
         await assertOpencodeStoreUnlocked(layout.sessionDbPath)
