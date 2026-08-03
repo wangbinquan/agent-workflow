@@ -1085,6 +1085,11 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(preview.locator('.react-flow__node')).toHaveCount(3)
     await waitForStableAuthenticatedShell(page)
     await expect(page.getByTestId('task-members-dialog-button')).toBeVisible()
+    // WorkflowCanvas deliberately keeps a 1200ms one-shot refit window while
+    // the surrounding task-detail layout settles. Lock pixels only after that
+    // window closes; otherwise this screenshot can capture the transient
+    // pre-refit camera even though the final canvas geometry is deterministic.
+    await page.waitForTimeout(1300)
     await expect(preview).toHaveScreenshot(
       'dynamic-workflow-preview-canvas.png',
       COMPONENT_SNAPSHOT_OPTS,

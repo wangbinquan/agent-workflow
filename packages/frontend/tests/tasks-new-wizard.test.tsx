@@ -185,6 +185,24 @@ const RELAUNCH_MEMBERS = {
   users: [],
 }
 
+function stubDelegatingSessionStorage(overrides: Partial<Storage>): void {
+  const nativeStorage = window.sessionStorage
+  // Route code resolves sessionStorage at call time. Give it one explicit
+  // Storage double instead of spying on happy-dom's wrapper prototype: the
+  // latter can be replaced while a shuffled CI worker restores global state.
+  const storage: Storage = {
+    get length() {
+      return overrides.length ?? nativeStorage.length
+    },
+    clear: overrides.clear ?? (() => nativeStorage.clear()),
+    getItem: overrides.getItem ?? ((key) => nativeStorage.getItem(key)),
+    key: overrides.key ?? ((index) => nativeStorage.key(index)),
+    removeItem: overrides.removeItem ?? ((key) => nativeStorage.removeItem(key)),
+    setItem: overrides.setItem ?? ((key, value) => nativeStorage.setItem(key, value)),
+  }
+  vi.stubGlobal('sessionStorage', storage)
+}
+
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
@@ -194,6 +212,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 function installFetch(): FetchCall[] {
@@ -1336,14 +1355,15 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
 
   test('RFC-250: an unreadable recovery slot stays locked and retries the read before any edit', async () => {
     installFetch()
-    const storagePrototype = Object.getPrototypeOf(window.sessionStorage) as Storage
-    const nativeGetItem = storagePrototype.getItem
+    const storage = window.sessionStorage
     let readable = false
-    vi.spyOn(storagePrototype, 'getItem').mockImplementation(function (this: Storage, key) {
-      if (key === AGENT_NEW_DRAFT_KEY && !readable) {
-        throw new DOMException('storage blocked', 'SecurityError')
-      }
-      return nativeGetItem.call(this, key)
+    stubDelegatingSessionStorage({
+      getItem: (key) => {
+        if (key === AGENT_NEW_DRAFT_KEY && !readable) {
+          throw new DOMException('storage blocked', 'SecurityError')
+        }
+        return storage.getItem(key)
+      },
     })
 
     await renderWizard(AGENT_NEW_URL)
@@ -1605,14 +1625,15 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     await renderWizard(AGENT_NEW_URL)
     await fillAgentDraft('Do not duplicate', 'The marker must land before POST', true)
 
-    const storagePrototype = Object.getPrototypeOf(window.sessionStorage) as Storage
-    const nativeSetItem = storagePrototype.setItem
-    vi.spyOn(storagePrototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
-      const parsed = JSON.parse(value) as { reconciliation?: unknown }
-      if (key === AGENT_NEW_DRAFT_KEY && parsed.reconciliation !== undefined) {
-        throw new DOMException('quota', 'QuotaExceededError')
-      }
-      nativeSetItem.call(this, key, value)
+    const storage = window.sessionStorage
+    stubDelegatingSessionStorage({
+      setItem: (key, value) => {
+        const parsed = JSON.parse(value) as { reconciliation?: unknown }
+        if (key === AGENT_NEW_DRAFT_KEY && parsed.reconciliation !== undefined) {
+          throw new DOMException('quota', 'QuotaExceededError')
+        }
+        storage.setItem(key, value)
+      },
     })
 
     fireEvent.click(screen.getByTestId('wizard-launch'))
@@ -1692,19 +1713,20 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       target: { value: 'safe nightly' },
     })
 
-    const storagePrototype = Object.getPrototypeOf(window.sessionStorage) as Storage
-    const nativeSetItem = storagePrototype.setItem
-    vi.spyOn(storagePrototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
-      const parsed = JSON.parse(value) as {
-        reconciliation?: { operation?: string }
-      }
-      if (
-        key === AGENT_NEW_DRAFT_KEY &&
-        parsed.reconciliation?.operation === 'create-scheduled-task'
-      ) {
-        throw new DOMException('quota', 'QuotaExceededError')
-      }
-      nativeSetItem.call(this, key, value)
+    const storage = window.sessionStorage
+    stubDelegatingSessionStorage({
+      setItem: (key, value) => {
+        const parsed = JSON.parse(value) as {
+          reconciliation?: { operation?: string }
+        }
+        if (
+          key === AGENT_NEW_DRAFT_KEY &&
+          parsed.reconciliation?.operation === 'create-scheduled-task'
+        ) {
+          throw new DOMException('quota', 'QuotaExceededError')
+        }
+        storage.setItem(key, value)
+      },
     })
 
     fireEvent.click(screen.getByTestId('schedule-save'))
