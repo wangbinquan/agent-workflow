@@ -278,6 +278,23 @@ server 内不存在，动态 import 得 `ENOENT`。
 bwrap 的 RW/RO 叠加次序（`readOnlySubtrees` 必须是某个 `allowSubtrees` 的**严格
 后代**）与 Seatbelt 侧 deny-list 语义，正是 §10.1 所指的那条边界，应与之合并设计。
 
+**这条不是读代码推断，是实证的**，且**不需要 Linux 机器**即可复跑：
+`computeSandboxPolicy` / `renderBwrapArgs` 是纯函数（`policy.ts` 注释 "Pure — no
+fs access"），所以 Linux 会用的那串 bwrap argv 在任何平台上都能确定性生成。按
+argv 顺序重建挂载命名空间后，实测结果：
+
+```
+tmpfs  <appHome>                 ← 整个 appHome 被盖住
+bind   <appHome>/repos           ← 只有这两处被 bind 回来
+bind   <appHome>/runs/<task>/<run>
+plugin cachedPath -> visible=false   （最深挂载仍是那层 tmpfs）
+```
+
+见证测试：`packages/backend/tests/rfc251-linux-plugin-visibility.test.ts`。
+⚠️ 它**故意断言当前的错误行为**，作为缺陷的可执行证据；**修复时它必须变红**，
+届时应把期望反转（或删掉该文件、改锁修好后的行为）。测试里同时断言
+`repos` / `runDir` **可见**作为对照，证明这不是「helper 把所有路径都判成隐藏」。
+
 ### 10.3 闭包成员拿不到自己选的 skill（P1）
 
 `services/scheduler.ts` 已正确合并 `dependsOn` 闭包的 skills，但 `verifiedPlan` 只把

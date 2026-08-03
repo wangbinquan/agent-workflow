@@ -50,6 +50,7 @@
 - **推 `migrations/`/`_journal.json` 前跑完整 backend `bun test`**（不只迁移子集）——journal↔files 失配（含并发 orphan 条目）级联数千 DB 测试红而子集绿。
 - **表达式唯一索引**（如 `COALESCE(owner,'')`,name）用 `PRAGMA index_list`/`index_xinfo`/`sqlite_master` 验证，**不能**用 `table_info`。
 - **`file:…?immutable=1` 在 Linux 抛**（macOS 可）；checkpoint+close 后 `-wal/-shm` 仍在，plain `{readonly:true}` 足够。
+- **跨平台的沙箱缺陷可以在本平台被确定性证伪/证实——只要 policy 是纯函数**（RFC-251 实证）：`services/sandbox/policy.ts` 的 `computeSandboxPolicy` / `renderBwrapArgs` 明确是 pure（no fs access），所以「Linux 上会生成什么 bwrap argv」在 macOS 上就能算出来。把 argv 按顺序还原成挂载表（`--tmpfs DEST` / `--bind SRC DEST` / `--ro-bind SRC DEST`，**最深的挂载点决定可见性**），就能对任意路径回答「在命名空间里看不看得见」。定式：**永远同时断言一个「应该可见」的对照路径**（如 `appHome/repos`），否则「全都不可见」的建模 bug 会伪装成真实缺陷。别因为「手上没有 Linux」就把这类问题降级成推断。
 - **从闭集枚举里删一个值 ≠ 可以删——存量行还在，而严格 schema 会炸整页**（RFC-251 Codex 实现门 P1）：像 `failure_code` 这种「无迁移的普通 TEXT + 应用层 `z.enum`」列，删掉一个码之后，升级前写入该码的**任一**历史行都会让读取端 `.parse()` 失败；如果读取端是**整页/整列表**一次 parse（本仓 `useTaskOperationsPage.ts` 就是），后果是**整页打不开**，而不是那一行降级显示。定式：把**发射域**与**读取域**拆开——可产生的闭集里删掉，另立一个 `LEGACY_*` 只读常量并入解析用的 union，配套保留 i18n 文案（改成「历史失败」语气），并加一条「退役码不可产生但仍可解析」的回归锁。凡是「删枚举值」的改动都要先问：这个值有没有可能已经躺在用户的 DB 里？
 
 ## opencode / runtime
