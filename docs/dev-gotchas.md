@@ -152,6 +152,13 @@
 - **删 i18n 键别用「缩进+键名」字符串 `replace`**：`"    generate: 'Generate',\n"` 会命中**更深缩进**的同名键（6 空格行天然包含 4 空格模式），把别人域里的键吃掉并粘连成一行。RFC-247 删 `account.generate` 时误删 `intent.journey.generate`，`tsc` 与 i18n parity 全绿（两文件+类型被对称吃掉），只有一条渲染断言变红。改 i18n 一律**带上下文锚定**（前后各一行一起匹配）并 `assert count == 1`，删完 `git diff | grep '^-'` 逐行过一遍。
 - **`t('缺失.键')` 不报错，直接把 key 当文案渲染**：i18next miss 时返回 key 本身——没有异常、没有 warning，`tsc` 也看不见（键在**类型**里声明了、只是**值**没写，两个 locale 的值块是两处）。测试也抓不到，因为大家都用 testid / role 找按钮。守卫在 `tests/i18n-key-resolution.test.ts`：扫全部 `t('字面量')` 并在两个 locale 里 resolve，同时拒绝解析成对象的键（`t('a.b')` 指到命名空间会渲染 `[object Object]`）。带 `defaultValue` 的豁免；模板字面量键静态不可解，归各组件自己的测试。
 
+## 依赖与审计门
+
+- **跨大版本的扁平 `overrides` 会打破按旧 API 调用的消费者**：审计门报 `brace-expansion` 高危时，把它在根 `overrides` 里一刀切钉成 `5.0.9`，结果 eslint 全线 `TypeError: expand is not a function` —— v1 是 `module.exports = expand`、v5 换了导出形态，而 eslint 依赖链上的 `minimatch@3` 按 v1 调用。**先看公告命中的是不是多条不同大版本的线**（这次是 `<1.1.18` 与 `>=4.0.0 <5.0.9` 两条），是的话扁平 override 必错。
+- **多数「传递依赖高危」根本不需要 override，`bun install` 重解析就够**：上例里两条线的 semver 范围（`^1.1.7` / `^5.0.5`）本来就允许补丁版本，旧 lock 只是钉在过期版本上；删掉 override 重装即得 `1.1.18` 与 `5.0.9`，各自留在自己的大版本里，公告两条命中同时消失。**先试重解析，再考虑 override，最后才是 IGNORED_ADVISORIES。**
+- **依赖改动后本地 lint 绿不作数**：本机 `node_modules` 带着旧解析的残留，改 `overrides` 后 `bun install` 可能不会重链每一条路径，于是本地 lint 全绿而 CI 的干净安装立刻红。凡是动 `package.json` / lock 的改动，**以 CI 为权威**，别拿本地绿当结论。
+- **代码没变而审计门突然红 = 新公告落到既有依赖上**，不是你这次改动引入的。判据：找一个**已经绿过**、且包含同一批依赖的提交（本次是引入 CodeMirror 的那个），确认它当时绿 ⇒ 归属为公告漂移。
+
 ## dev-env / daemon
 
 - **`bun dev` 中编辑 `packages/backend/src/**`触发`--watch` 重启**，race 30s graceful-shutdown flock → daemon 常 **DOWN\*\*（浏览器空白 + 503 + 误导「token 无权限」横幅），非崩溃；重启复活。纯前端编辑不掉。
