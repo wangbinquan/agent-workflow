@@ -172,7 +172,9 @@ describe('TaskQuestionList board', () => {
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/e1/stage', { staged: true }),
     )
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/tasks/task-1/questions'))
+    await waitFor(() =>
+      expect(get.mock.calls.some(([url]) => url === '/api/tasks/task-1/questions')).toBe(true),
+    )
   })
 
   // RFC-162: retired — collapse (and its `tq-collapse-notice` knowledge text) plus the
@@ -929,7 +931,9 @@ describe('TaskQuestionList RFC-163 分组卡（下发前一问一卡）', () => 
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/s/stage', { staged: true })
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/d/stage', { staged: true })
     })
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/tasks/task-1/questions'))
+    await waitFor(() =>
+      expect(get.mock.calls.some(([url]) => url === '/api/tasks/task-1/questions')).toBe(true),
+    )
   })
 
   test('批量下发展开整组：staged 组的 entryIds 含 asker+designer（filter 到 asker 节点也不裁掉 off-filter designer——P1 保全组）', async () => {
