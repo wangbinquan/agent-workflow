@@ -164,6 +164,11 @@ async function primeAuthLocalStorage(page: Page, d: DaemonHandle): Promise<void>
   )
 }
 
+async function chooseManualRepoUrl(page: Page): Promise<void> {
+  await page.getByTestId('repo-source-recent-urls-0').click()
+  await page.getByRole('option', { name: 'Enter a new Git URL…', exact: true }).click()
+}
+
 test('happy path: agents → workflow → launch → task done → outputs visible', async ({ page }) => {
   await primeAuthLocalStorage(page, daemon)
 
@@ -190,9 +195,10 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   // workflow pre-picked, landing on Step 2 (workspace).
   await expect(page.getByTestId('task-wizard')).toBeVisible()
 
-  // Step 2 — scratch is the default space (用户 2026-07-11); pick remote, then
-  // feed the fixture repo as a file:// URL into the URL-only row.
+  // Step 2 — scratch is the default space (用户 2026-07-11); pick remote,
+  // explicitly choose the manual-URL entry, then feed it the fixture repo.
   await page.getByTestId('wizard-space-remote').click()
+  await chooseManualRepoUrl(page)
   await page.fill('[data-testid="repo-source-url-0"]', pathToFileURL(fixtures.repoPath).href)
   await page.fill('[data-testid="repo-source-ref-0"]', 'main')
   await page.getByTestId('stepper-next').click()
@@ -482,8 +488,9 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
   // RFC-165: legacy launcher URL redirects into the wizard (Step 2).
   await page.goto(`${daemon.baseUrl}/workflows/${wf.id}/launch`)
 
-  // Step 2 — pick remote (scratch is the default), then fill the URL field.
+  // Step 2 — pick remote (scratch is the default), opt into manual URL, then fill it.
   await page.getByTestId('wizard-space-remote').click()
+  await chooseManualRepoUrl(page)
   await page.fill('[data-testid="repo-source-url-0"]', remoteUrl)
   await page.getByTestId('stepper-next').click()
 
