@@ -112,6 +112,16 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 ## RFC-252 残留与旁证（2026-08-03）
 
+- ⏳ **`commit` 子命令豁免 hooksPath 压制**（RFC-252 G1，用户 2026-08-03 拍板的功能优先取舍）：
+  daemon 侧自动 commit&push 仍会以 daemon 身份、在沙箱外执行仓库的 `pre-commit` /
+  `commit-msg` / `post-commit`。豁免的理由是本仓**有意**依赖该交互——
+  `rfc210-publish-failure-hard-fails.test.ts` 用「钩子拒绝自动提交」当触发源锁「发布失败必须
+  硬失败，否则 agent 工作的唯一副本会被删」，注释称之为 *an everyday setup*；
+  `rfc165-scratch-space.test.ts` S4b 同理。**这是本模块唯一留下的口子，且可达**（agent 写
+  `.git/hooks/pre-commit`，等一次自动 commit&push）。根治办法是把自动提交挪进沙箱内执行
+  （钩子照跑但在边界内），属独立切片。其余子命令（含 `worktree add` 的 `post-checkout`）
+  已压制。
+
 - ⏳ **git 通配名族配置未覆盖**（RFC-252 G1 显式非目标）：`filter.<n>.clean/smudge/process`、
   `diff.<n>.textconv`、local 作用域的 `credential.helper` 都能让 daemon 侧 git 执行外部命令，
   但它们是**通配名**，命令行 `-c` 压不住。无差别关闭会打断用户全局 git-lfs 与凭据助手

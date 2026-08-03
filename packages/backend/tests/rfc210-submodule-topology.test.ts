@@ -146,22 +146,37 @@ describe('RFC-210 ref naming safety', () => {
   })
 })
 
+// RFC-252 G1 (2026-08-03): the baseline gained one token — `--checkout`. It pins
+// the update strategy on the command line so a repo-local
+// `submodule.<name>.update = !command` (agent-writable, `-c` cannot reach a
+// wildcard-named key) cannot execute as the daemon. `--checkout` IS git's default
+// strategy, so this only removes the config's ability to override it; behavior for
+// every honest repo is unchanged. The baseline still exists to catch ACCIDENTAL
+// drift — this drift was deliberate.
 describe('RFC-210 syncSubmodules argv byte baseline', () => {
   const base = { mode: 'always' as const, jobs: 1 }
 
-  test('no new options ⟹ argv identical to pre-RFC-210', async () => {
+  test('no new options ⟹ argv identical to pre-RFC-210 plus the RFC-252 --checkout pin', async () => {
     const { calls, impl } = stubGit('')
     await syncSubmodules('/repo', { ...base, runGitImpl: impl })
     expect(calls).toEqual([
       ['submodule', 'sync', '--recursive'],
-      ['submodule', 'update', '--init', '--recursive'],
+      ['submodule', 'update', '--init', '--checkout', '--recursive'],
     ])
   })
 
   test('jobs > 1 still appends --jobs last', async () => {
     const { calls, impl } = stubGit('')
     await syncSubmodules('/repo', { ...base, jobs: 8, runGitImpl: impl })
-    expect(calls[1]).toEqual(['submodule', 'update', '--init', '--recursive', '--jobs', '8'])
+    expect(calls[1]).toEqual([
+      'submodule',
+      'update',
+      '--init',
+      '--checkout',
+      '--recursive',
+      '--jobs',
+      '8',
+    ])
   })
 
   test('remote / referencePool are appended before --jobs', async () => {
@@ -177,6 +192,7 @@ describe('RFC-210 syncSubmodules argv byte baseline', () => {
       'submodule',
       'update',
       '--init',
+      '--checkout',
       '--recursive',
       '--remote',
       '--reference',

@@ -61,15 +61,43 @@ export function ensureGitHooksVoidDir(home: string = appHome()): string {
 }
 
 /**
- * 每一次 daemon 侧 git 调用都必须前置的 `-c` 覆盖集。
+ * 用户可依赖既有行为、因此**豁免** hooksPath 压制的子命令。
  *
- * `core.fsmonitor=false` 用布尔字面量而非空串：空串会让 git 认为配置了一个空命令。
- * 同理这里**不**加 `-c diff.external=` —— 实测 git 会去执行空命令并报
+ * 目前只有 `commit`。取舍由用户 2026-08-03 拍板（「做安全不能把功能限制住」）：
+ * `rfc210-publish-failure-hard-fails.test.ts` 锁的是「子仓自动提交失败必须硬失败，
+ * 否则 merge-back 报 clean、随后 discardNodeIso 把 agent 工作的**唯一副本**删掉」，
+ * 它用「仓库 `pre-commit` 拒绝平台的自动提交」当触发源，并在注释里称之为
+ * *an everyday setup* —— 即本仓把「仓库钩子 gate 平台自动提交」当作正常生产场景。
+ * 压制它属于行为变更，故豁免。
+ *
+ * **代价（已登记 `docs/audit-backlog.md`）**：`pre-commit` / `commit-msg` /
+ * `post-commit` 仍会以 daemon 身份在沙箱外执行，是本模块**唯一**留下的那条口子，
+ * 且它可达（agent 写 `.git/hooks/pre-commit`，等一次自动 commit&push）。根治办法是
+ * 把自动提交挪进沙箱内执行，属独立切片。
+ *
+ * 其余全部子命令（`worktree add` 的 `post-checkout`、`merge` 的 `post-merge` 等）
+ * 照常压制 —— 本 RFC 实测的那条 `worktree add → post-checkout` 逃逸链仍然堵死。
+ */
+const HOOK_EXEMPT_SUBCOMMANDS: ReadonlySet<string> = new Set(['commit'])
+
+/**
+ * daemon 侧 git 调用的 `-c` 覆盖集。
+ *
+ * `core.fsmonitor=false` **无条件**生效（含 `commit`）：fsmonitor 是索引刷新助手，
+ * 不是用户会依赖的 gate，压制它零功能影响。用布尔字面量而非空串：空串会让 git 认为
+ * 配置了一个空命令。
+ *
+ * 这里**不**加 `-c diff.external=` —— 实测 git 会去执行空命令并报
  * `cannot run : No such file or directory`，把 diff 直接搞坏；`diff.external` 改由
  * `--no-ext-diff` 处理（见 withExternalDiffDisabled）。
  */
-export function hardenedGitLeadingArgs(home: string = appHome()): string[] {
-  return ['-c', `core.hooksPath=${ensureGitHooksVoidDir(home)}`, '-c', 'core.fsmonitor=false']
+export function hardenedGitLeadingArgs(
+  subcommand: string | undefined,
+  home: string = appHome(),
+): string[] {
+  const leading = ['-c', 'core.fsmonitor=false']
+  if (subcommand !== undefined && HOOK_EXEMPT_SUBCOMMANDS.has(subcommand)) return leading
+  return ['-c', `core.hooksPath=${ensureGitHooksVoidDir(home)}`, ...leading]
 }
 
 /**
@@ -110,7 +138,15 @@ export function withExternalDiffDisabled(args: readonly string[]): string[] {
   return [...args.slice(0, index + 1), '--no-ext-diff', ...args.slice(index + 1)]
 }
 
-/** daemon 侧 git 的完整参数硬化：前置覆盖集 + 子命令级修正。 */
+/**
+ * daemon 侧 git 的完整参数硬化：前置覆盖集 + 子命令级修正。
+ *
+ * 传入的 argv 必须包含 `-C <cwd>` 等 git 自身选项在内的**完整**尾部，因为覆盖集要按
+ * 子命令决定（`commit` 豁免 hooksPath），而子命令只能从完整 argv 里定位。
+ */
 export function hardenGitArgs(args: readonly string[], home: string = appHome()): string[] {
-  return [...hardenedGitLeadingArgs(home), ...withExternalDiffDisabled(args)]
+  const normalized = withExternalDiffDisabled(args)
+  const index = gitSubcommandIndex(normalized)
+  const subcommand = index >= 0 ? normalized[index] : undefined
+  return [...hardenedGitLeadingArgs(subcommand, home), ...normalized]
 }

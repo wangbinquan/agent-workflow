@@ -67,6 +67,36 @@ config 里的 `credential.helper`（macOS 的 osxkeychain 就在 system config�
 `mode` 应用到**每一级**新建目录，父目录 `gitguard/` 随即不可写、叶子目录 EACCES 建不出来。
 必须先按默认权限建全链、再单独 `chmod` 叶子。
 
+### 1.1b `commit` 豁免——本 RFC 对功能面的零变更承诺
+
+初版实现对**所有**子命令压制 hooksPath，全量测试立刻抓出两处真实回归，且它们都不是
+「测试写得脆」，而是本仓**有意**依赖的既有行为：
+
+1. `rfc165-scratch-space.test.ts` S4b 用 `GIT_TEMPLATE_DIR` 装一个 `exit 1` 的
+   `pre-commit` 模拟「scratch 根提交失败」，压制后该提交转为成功 ⇒ 5 条用例连锁红。
+2. `rfc210-publish-failure-hard-fails.test.ts` 锁的是 RFC-210 实现门 critical #1：
+   子仓自动提交失败必须**硬失败**，否则父仓快照只记旧 gitlink、merge-back 报 clean、
+   随后 `discardNodeIso` 把 agent 工作的**唯一副本**删掉。它的触发源正是「仓库
+   `pre-commit` 拒绝平台的自动提交」，注释原文称之为 *an everyday setup*。
+
+⇒ 「仓库钩子 gate 平台的自动提交」在本仓是被当作**正常生产场景**对待的。用户
+2026-08-03 拍板：**`commit` 子命令豁免 hooksPath 压制**，功能面零变更，两个既有测试
+一行不改。
+
+| 子命令 | `core.hooksPath` | `core.fsmonitor` |
+| --- | --- | --- |
+| `commit` | **豁免**（仓库钩子照常跑） | 压制 |
+| 其余全部（`worktree`/`status`/`diff`/`merge`/`checkout`/`stash`…） | 压制 | 压制 |
+
+- `fsmonitor` **不豁免**：它是索引刷新助手，不是用户会依赖的 gate，压制它零功能影响。
+- 实测的那条 `worktree add → post-checkout` 逃逸链**仍然堵死**（`worktree` 不在豁免集）。
+- **代价（已登记 backlog）**：`pre-commit` / `commit-msg` / `post-commit` 仍以 daemon 身份
+  在沙箱外执行，是本模块唯一留下的口子，且可达（agent 写 `.git/hooks/pre-commit`，
+  等一次自动 commit&push）。**根治办法是把自动提交挪进沙箱内执行**——钩子照跑但在边界内，
+  属独立切片。
+- 豁免本身由 `rfc252-git-hardening.test.ts` 显式锁住（断言 `commit` 仍触发仓库
+  `pre-commit`、且 `fsmonitor` 不触发），避免它被后人当成疏漏「顺手补上」。
+
 ### 1.2 检测层——本轮移出
 
 原设计还有一层「hooks 与 exec 类 local config 基线指纹 + 漂移即拒绝」。**已整体移出**，

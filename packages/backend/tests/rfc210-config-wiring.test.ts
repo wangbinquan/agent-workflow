@@ -103,6 +103,14 @@ describe('RFC-210 settings → submodule params', () => {
     const { mode, jobs } = resolveSubmoduleParams('always', undefined)
     const spy = argvSpy()
     await syncSubmodules('/repo', { mode, jobs, runGitImpl: spy.impl })
-    expect(spy.calls[1]).toEqual(['submodule', 'update', '--init', '--recursive', '--jobs', '16'])
+    expect(spy.calls[1]).toEqual([
+      'submodule',
+      'update',
+      '--init',
+      '--checkout',
+      '--recursive',
+      '--jobs',
+      '16',
+    ])
   })
 })

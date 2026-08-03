@@ -22,6 +22,7 @@ import {
   gitHooksVoidDir,
   gitSubcommandIndex,
   hardenedGitLeadingArgs,
+  hardenGitArgs,
   withExternalDiffDisabled,
 } from '@/util/gitHardening'
 import { syncSubmodules } from '@/services/gitSubmodule'
@@ -90,6 +91,9 @@ async function armedRepo(): Promise<Fixture> {
   const evil = join(repo, 'evil-hooks')
   mkdirSync(evil, { recursive: true })
   writeFileSync(join(evil, 'post-checkout'), trap('HOOKS_PATH'), { mode: 0o755 })
+  // pre-commit 单独一条：`commit` 是**豁免**子命令（用户 2026-08-03 拍板），这条必须
+  // 仍然被执行。exit 0 以便同一用例还能断言提交本身成功。
+  writeFileSync(join(evil, 'pre-commit'), trap('PRE_COMMIT'), { mode: 0o755 })
   await rawGit(repo, ['config', 'core.hooksPath', evil])
 
   // 陷阱 3：core.fsmonitor —— 任何一次索引刷新（status/diff/add/commit）都会跑它。
@@ -165,14 +169,29 @@ describe('RFC-252 G1 · 纯函数', () => {
     expect(withExternalDiffDisabled(['diff', '--no-ext-diff'])).toEqual(['diff', '--no-ext-diff'])
   })
 
-  test('hardenedGitLeadingArgs 覆盖 hooksPath 与 fsmonitor，且 hooks 空目录落在 appHome 内', () => {
-    const args = hardenedGitLeadingArgs()
-    expect(args).toEqual([
+  test('commit 豁免 hooksPath 压制，但 fsmonitor 无条件压制', () => {
+    // 用户 2026-08-03 拍板：仓库钩子继续 gate 平台的自动 commit&push
+    // （rfc210-publish-failure-hard-fails 把它当 everyday setup）。fsmonitor 不是
+    // 用户会依赖的 gate，压制它零功能影响，故不豁免。
+    expect(hardenedGitLeadingArgs('commit')).toEqual(['-c', 'core.fsmonitor=false'])
+    for (const sub of ['worktree', 'status', 'diff', 'merge', 'checkout', 'stash']) {
+      expect(hardenedGitLeadingArgs(sub)).toContain(`core.hooksPath=${gitHooksVoidDir()}`)
+    }
+    // 定位不到子命令时按最严处理。
+    expect(hardenedGitLeadingArgs(undefined)).toContain(`core.hooksPath=${gitHooksVoidDir()}`)
+  })
+
+  test('hardenGitArgs 端到端：非豁免子命令带完整覆盖集，且 hooks 空目录落在 appHome 内', () => {
+    const args = hardenGitArgs(['-C', '/repo', 'status', '--porcelain'])
+    expect(args.slice(0, 4)).toEqual([
       '-c',
       `core.hooksPath=${gitHooksVoidDir()}`,
       '-c',
       'core.fsmonitor=false',
     ])
+    expect(args.slice(4)).toEqual(['-C', '/repo', 'status', '--porcelain'])
+    // diff 仍会拿到子命令级修正。
+    expect(hardenGitArgs(['-C', '/repo', 'diff'])).toContain('--no-ext-diff')
     // appHome 在两层沙箱里都是拒绝区；放到 /tmp 之类 agent 可写的位置等于把
     // hooksPath 又交回给它。
     expect(gitHooksVoidDir().startsWith(home)).toBe(true)
@@ -244,7 +263,7 @@ describe('RFC-252 G1 · 回归：agent 植入的可执行 git 配置不得由 da
     }
   })
 
-  test('commit 不再触发 fsmonitor / hooks，且提交本身成功', async () => {
+  test('commit 是豁免子命令：仓库 pre-commit 仍然执行，但 fsmonitor 被压制', async () => {
     const f = await armedRepo()
     try {
       // 对照组：裸 git 的索引刷新照样中招。
@@ -263,7 +282,11 @@ describe('RFC-252 G1 · 回归：agent 植入的可执行 git 配置不得由 da
         'x',
       ])
       expect(r.exitCode).toBe(0)
-      expect(f.hits()).toEqual([])
+      // 豁免生效：仓库自己的 pre-commit 照常跑 —— rfc210-publish-failure-hard-fails
+      // 的「钩子拒绝自动提交 ⇒ 硬失败」链路因此完好无损。
+      expect(f.hits()).toContain('PRE_COMMIT')
+      // 但 fsmonitor 仍被压制（它不是用户会依赖的 gate）。
+      expect(f.hits()).not.toContain('FSMONITOR')
       const log = await runGit(f.repo, ['log', '--oneline', '-1'])
       expect(log.stdout).toContain('x')
     } finally {

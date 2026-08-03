@@ -111,9 +111,11 @@ A（无 FS 工具）这条面暂时无法被模型直接驱动，但它是纵深
 
 - **AC-1**：daemon 侧任一 git 调用都携带固定的 `-c` 覆盖集与子命令级修正；仓库内布置
   `.git/hooks/post-checkout`、repo-local `core.hooksPath`、`core.fsmonitor`、
-  `diff.external` 四类陷阱后，`worktree add` / `status` / `diff` / `commit` **不再**执行
-  任何一条。每个用例必须**成对**跑「裸 git 触发（对照组）+ 生产路径不触发」，否则它是
-  恒绿的空断言。
+  `diff.external` 四类陷阱后，`worktree add` / `status` / `diff` **不再**执行任何一条。
+  每个用例必须**成对**跑「裸 git 触发（对照组）+ 生产路径不触发」，否则它是恒绿的空断言。
+- **AC-1b（功能优先的显式豁免，D9）**：`commit` 子命令**保留**仓库钩子执行能力
+  （`fsmonitor` 仍压制）。它必须被**正向**锁住——断言 `commit` 仍触发仓库 `pre-commit`——
+  以免后人把它当疏漏「顺手补上」，从而悄悄改掉 RFC-210 的数据保护链路。
 - **AC-2**：上述硬化对正常功能零影响——worktree 建得出来、`status` 仍报告改动文件、
   `diff` 仍输出可解析的 unified diff、`commit` 仍成功。且**摘掉修复即变红**（变异验证）。
 - **AC-2b**：`submodule update` 固定 `--checkout` 策略，堵掉 repo-local
@@ -146,6 +148,7 @@ A（无 FS 工具）这条面暂时无法被模型直接驱动，但它是纵深
 | **D5** | macOS topology 本次不翻 | 保持。G3 移出后该限制不再影响本 RFC 的交付面 |
 | **D6** | 出网范围 = 任意公网 + 拒 loopback | 不做域名白名单代理（后续切片） |
 | **D7** | 出网开关粒度 = 按 agent 声明，默认 `deny` | 不做全局开关，不做节点级 override |
+| **D9** | `commit` 子命令**豁免** hooksPath 压制（2026-08-03，实现期实测后拍板） | 初版全面压制被全量测试抓出两处真实回归：`rfc165` S4b 与 `rfc210-publish-failure-hard-fails`——后者锁的是「子仓自动提交失败必须硬失败，否则 agent 工作的唯一副本会被 `discardNodeIso` 删掉」，其触发源正是仓库 `pre-commit` 拒绝平台自动提交，注释称之为 *an everyday setup*。⇒ 本仓**有意**依赖该交互，压制它属功能损害。代价是 `pre-commit`/`commit-msg` 这条可达口子留下，已登记 backlog，根治靠「自动提交挪进沙箱内执行」独立切片 |
 | **D8** | ④ 的做法从「遮蔽 homebrew」升级为「默认禁写」 | 单点遮蔽治标；默认禁写与 Linux `--ro-bind /` 对齐，且 Linux 侧已长期证明可用。只读而非遮蔽 ⇒ `/opt/homebrew/bin/python3` 仍可执行 |
 
 ## 设计门（Codex，2026-08-03）

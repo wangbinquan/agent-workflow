@@ -90,7 +90,7 @@ describe('syncSubmodules mode=auto', () => {
     expect(result.hasGitmodules).toBe(true)
     expect(calls).toEqual([
       ['submodule', 'sync', '--recursive'],
-      ['submodule', 'update', '--init', '--recursive', '--jobs', '8'],
+      ['submodule', 'update', '--init', '--checkout', '--recursive', '--jobs', '8'],
     ])
   })
 
@@ -105,7 +105,7 @@ describe('syncSubmodules mode=auto', () => {
         return { stdout: '', stderr: '', exitCode: 0 }
       },
     })
-    expect(calls[1]).toEqual(['submodule', 'update', '--init', '--recursive'])
+    expect(calls[1]).toEqual(['submodule', 'update', '--init', '--checkout', '--recursive'])
   })
 })
 
