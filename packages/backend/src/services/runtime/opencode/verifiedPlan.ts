@@ -475,6 +475,13 @@ export async function buildVerifiedOpencodeBusinessPlan(
   }
 
   const skillTargets = new Set<string>()
+  // RFC-251 §10.3: `ctx.skills` is the dependsOn closure UNION (scheduler
+  // `resolveClosureSkills`), but only the root persona used to receive the
+  // frozen SKILL.md blocks — a closure member got a bare `bodyMd` while the
+  // `skill` tool is denied, so the agent that actually does the audit could not
+  // see the audit skill it declared. Index the frozen blocks by skill id so
+  // each member can be given back exactly the ones IT declared.
+  const frozenSkillBlockById = new Map<string, { name: string; digest: string; markdown: string }>()
   for (const skill of ctx.skills) {
     if (
       skill.sourcePath === undefined ||
@@ -511,6 +518,11 @@ export async function buildVerifiedOpencodeBusinessPlan(
       inspection.treeDigest,
       inspection.skillMarkdown,
     )
+    frozenSkillBlockById.set(skill.skillId, {
+      name: skill.name,
+      digest: inspection.treeDigest,
+      markdown: inspection.skillMarkdown,
+    })
   }
 
   const realHome = safeAbsoluteHome(process.env.HOME)
@@ -551,9 +563,29 @@ export async function buildVerifiedOpencodeBusinessPlan(
   const controlledDependents = ctx.dependents.map((dep) => {
     const depProfile = ctx.resolvedParamsByAgent.get(dep.name)
     const depModel = parseSelectedModel(depProfile?.model, depProfile?.variant ?? null)
+    // RFC-251 §10.3: give the member back the frozen SKILL.md blocks for the
+    // skills IT declared. The root keeps receiving the whole union (unchanged —
+    // narrowing that is a separate product decision), so this is additive.
+    let depPrompt = dep.bodyMd
+    for (const ref of dep.skills) {
+      // Only `managed` reaches the verified path at all (repo/global skills are
+      // rejected upstream), so a non-managed ref here means the member declared
+      // something this path never sealed.
+      if (ref.kind !== 'managed') {
+        return executionIdentityFailure('execution-identity-skill-mismatch')
+      }
+      const block = frozenSkillBlockById.get(ref.skillId)
+      // The scheduler unions every member's skills into ctx.skills, so a miss is
+      // a real closure/seal inconsistency — fail closed rather than silently
+      // handing the member a prompt without the skill it asked for.
+      if (block === undefined) {
+        return executionIdentityFailure('execution-identity-skill-mismatch')
+      }
+      depPrompt = appendFrozenBlock(depPrompt, 'skill', block.name, block.digest, block.markdown)
+    }
     return {
       name: dep.name,
-      prompt: dep.bodyMd,
+      prompt: depPrompt,
       description: dep.description,
       model: `${depModel.providerID}/${depModel.modelID}`,
       variant: depModel.variant,

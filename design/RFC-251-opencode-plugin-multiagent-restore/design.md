@@ -322,7 +322,17 @@ host-side integrity: 文件未被沙箱内的写入尝试篡改
 「不放行则不可见（缺陷的成因）/ 放行后是 ro-bind / ro-bind 排在 tmpfs 之后 /
 Seatbelt 只给读不给写 / 三条校验各自拒绝」。
 
-### 10.3 闭包成员拿不到自己选的 skill（P1）
+### 10.3 ~~闭包成员拿不到自己选的 skill~~（P1，**已修复**）
+
+> **✅ 2026-08-03 已修。** 修法：`ctx.skills`（scheduler 已解析的闭包并集）在密封
+> 时按 `skillId` 建索引，成员的 prompt 追加**它自己声明的** managed skill 的冻结
+> 块。**只增不减**——root 仍收整个并集（收窄它是独立的产品决策，会改变现有行为）。
+> 成员声明了并集里没有的 skill ⇒ `execution-identity-skill-mismatch` fail-closed，
+> 而不是静默给一个没有 skill 的 prompt。回归锁见
+> `rfc224-verified-plan.test.ts` 的「closure members receive their own frozen
+> skills」：成员含自己的 marker、**不含** root 的 marker、root 仍含两者。
+>
+> 下面保留原始分析作为背景。
 
 `services/scheduler.ts` 已正确合并 `dependsOn` 闭包的 skills，但 `verifiedPlan` 只把
 冻结的 `SKILL.md` 追加进 **root** persona，成员拿到的是原始 `dep.bodyMd`，而 `skill`

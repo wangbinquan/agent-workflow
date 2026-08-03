@@ -109,6 +109,8 @@ function verifiedContext(input: {
   /** RFC-251: closure members / plugin selection reaching the controlled config. */
   dependents?: readonly Agent[]
   plugins?: readonly Plugin[]
+  /** RFC-251 §10.3: the dependsOn closure's managed-skill union. */
+  skills?: BusinessNodeSpawnContext['skills']
 }): BusinessNodeSpawnContext {
   const dependents = input.dependents ?? []
   return {
@@ -145,7 +147,7 @@ function verifiedContext(input: {
           ] as const,
       ),
     ]),
-    skills: [],
+    skills: input.skills ?? [],
     ...(input.owner === undefined
       ? {}
       : {
@@ -843,5 +845,116 @@ describe('RFC-251 verified plan restores plugins and multi-agent', () => {
     } finally {
       await done(plan)
     }
+  })
+})
+
+// RFC-251 §10.3 — a dependsOn closure member must receive the frozen SKILL.md
+// blocks for the skills IT declared.
+//
+// Codex impl-gate #5: the scheduler already unions the closure's skills into
+// `ctx.skills`, but only the ROOT persona got the frozen blocks — a member was
+// handed a bare `bodyMd` while the `skill` tool is denied, so the agent that
+// actually performs an audit could not see the audit skill it declared. The fix
+// is additive: the root still receives the whole union (narrowing that is a
+// separate product decision), members additionally get their own.
+describe('RFC-251 closure members receive their own frozen skills', () => {
+  async function managedSkill(input: { id: string; name: string; body: string }) {
+    const dir = mkdtempSync(join(tmpdir(), `rfc251-skill-${input.id}-`))
+    roots.push(dir)
+    await writeFile(join(dir, 'SKILL.md'), input.body, { mode: 0o600 })
+    return {
+      name: input.name,
+      sourceKind: 'managed' as const,
+      sourcePath: dir,
+      skillId: input.id,
+      contentVersion: 1,
+      readContentVersion: async () => 1,
+    }
+  }
+
+  async function planWithSkills(
+    nodeRunId: string,
+    extra: {
+      dependents?: readonly Agent[]
+      skills?: BusinessNodeSpawnContext['skills']
+    },
+  ) {
+    const root = mkdtempSync(join(tmpdir(), 'rfc251-skills-'))
+    roots.push(root)
+    const appHome = join(root, 'app')
+    const worktreePath = join(root, 'worktree')
+    const runRoot = join(appHome, 'runs', 'task-1', nodeRunId)
+    await mkdir(worktreePath, { recursive: true })
+    await activateVerifiedMac(appHome)
+    const plan = await buildVerifiedOpencodeBusinessPlan(
+      verifiedContext({
+        appHome,
+        worktreePath,
+        runRoot,
+        nodeRunId,
+        bash: 'allow',
+        nonceChar: 'c',
+        ...extra,
+      }),
+      ['opencode'],
+      PLAN_DEPENDENCIES,
+    )
+    const manifest = JSON.parse(
+      await readFile(join(runRoot, 'opencode-verified-manifest.json'), 'utf8'),
+    ) as { expectedConfig: { agent: Record<string, { prompt: string }> } }
+    return { plan, agents: manifest.expectedConfig.agent }
+  }
+
+  test('a member gets its own skill, and only its own', async () => {
+    const auditSkill = await managedSkill({
+      id: 'skill-audit',
+      name: 'audit',
+      body: '# audit skill\nAUDIT-MARKER',
+    })
+    const rootSkill = await managedSkill({
+      id: 'skill-root',
+      name: 'rooting',
+      body: '# root skill\nROOT-MARKER',
+    })
+    const auditor: Agent = {
+      ...agent(),
+      id: 'agent-auditor',
+      name: 'auditor',
+      bodyMd: 'auditor persona',
+      skills: [{ kind: 'managed', skillId: 'skill-audit' }],
+    }
+
+    const { plan, agents } = await planWithSkills('run-skill-split', {
+      dependents: [auditor],
+      // The scheduler's closure union: root's skill + the member's.
+      skills: [rootSkill, auditSkill],
+    })
+    try {
+      // The member can finally see the skill it declared…
+      expect(agents.auditor!.prompt).toContain('AUDIT-MARKER')
+      // …and does NOT get the root's unrelated one.
+      expect(agents.auditor!.prompt).not.toContain('ROOT-MARKER')
+      expect(agents.auditor!.prompt.startsWith('auditor persona')).toBe(true)
+      // Root behaviour is unchanged: it still receives the whole union.
+      expect(agents.worker!.prompt).toContain('ROOT-MARKER')
+      expect(agents.worker!.prompt).toContain('AUDIT-MARKER')
+    } finally {
+      await plan.cleanup?.()
+      await removeHermeticOpencodeLayout(plan.sessionStore!.root)
+    }
+  })
+
+  test('a member declaring an unsealed skill fails closed', async () => {
+    const auditor: Agent = {
+      ...agent(),
+      id: 'agent-auditor',
+      name: 'auditor',
+      // Declared, but absent from the closure union the scheduler resolved —
+      // a real inconsistency, never a silently skill-less prompt.
+      skills: [{ kind: 'managed', skillId: 'skill-missing' }],
+    }
+    await expect(
+      planWithSkills('run-skill-missing', { dependents: [auditor], skills: [] }),
+    ).rejects.toMatchObject({ code: 'execution-identity-skill-mismatch' })
   })
 })

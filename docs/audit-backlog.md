@@ -112,7 +112,7 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   - ✅ **(P1，已修复 2026-08-03) 反过来，Linux + `enforce` 下插件根本加载不了**：插件装在 `appHome/plugins`，而 `policy.ts` 对整个 `appHome` 打 `--tmpfs` 后只显式 bind 回 `repos`；`allowSubtrees` 是 RFC-205 impl-gate P0-3 刻意的「deny 全部 appHome、只放行本次运行所需」白名单，插件目录不在其中 ⇒ `file://<cachedPath>` 在 server 内不存在，动态 import 得 `ENOENT`。**即插件功能目前在 Linux 上等于没交付。\*\***已实证，非推断**：`computeSandboxPolicy`/`renderBwrapArgs` 是纯函数，Linux 的 bwrap argv 可在任意平台确定性重建；按 argv 顺序还原挂载后，插件路径的最深挂载仍是那层 tmpfs（`visible=false`），而 `repos`/`runDir` 为 `visible=true` 作对照。**修法**：新增 `SandboxPolicyInput.readOnlyAllowSubtrees`——位于被 deny 子树内、不与任何 RW allow 重叠的**只读**放行（两条约束 fail-closed 校验）；bwrap 在 appHome tmpfs 之后追加 `--ro-bind`，Seatbelt 只补 `(allow file-read* …)` 不发 write allow；`verifiedPlan` 只放行**被选中插件\*\*各自的私有根 `plugins/<id>`（最小权限）。真容器复验：`read: OK` / `write: Read-only file system` / repos·runDir 仍可写 / 宿主文件未被篡改。回归锁 `packages/backend/tests/rfc251-linux-plugin-visibility.test.ts`。
   - **为什么合并处理**：修 (P1) 要动 bwrap 的 RW/RO 叠加次序（`readOnlySubtrees` 必须是某个 `allowSubtrees` 的**严格后代**）与 Seatbelt 侧 deny-list 语义，正是 (P0) 所指的那条边界。正解是一次独立设计：插件目录该 RO bind 还是 RW、插件是否应移进 child 边界、以及在 (P0) 无法根除时产品上如何呈现「装插件 = 放弃该层隔离」。**在此之前，Linux 部署上的插件选择应视为不可用。**
   - **⚠️ 与 [RFC-252](../design/RFC-252-agent-containment-hardening-and-egress/proposal.md) 的交叉影响（两个 RFC 同日并发落地，务必一起看）**：RFC-252 的审计实证结论之一是「verified OpenCode 业务 agent **没有** read/edit/write/webfetch 等**进程内**工具」，据此把唯一可直接利用的完整逃逸链收敛到 `bash → gitCommonDirs → git hook → daemon 侧 runGit`。**该结论成立的前提是插件被 RFC-224 禁用**——而 RFC-251 已把插件恢复。插件由 OpenCode 在同一 server 进程内 `import` 且被授予 `Bun.$`，等于在 agent permission 层**之下**多了一个进程内 shell，完全绕过「工具被 deny 即被摘出模型工具列表」这条机制。RFC-252 的 proposal / design 目前**零处**提到插件（已确认），故其威胁模型需要显式纳入「已安装且被选中的插件」这一主体，否则加固后的结论会偏乐观。
-- **多代理的 skill 面是打折的（RFC-251 Codex 实现门 2026-08-03，P1，未修）**：`services/scheduler.ts` 已正确合并 `dependsOn` 闭包的 skills，但 `runtime/opencode/verifiedPlan.ts` 只把冻结的 `SKILL.md` 追加进 **root** persona，闭包成员拿到的是原始 `dep.bodyMd`，而 `skill` 工具本身在受控 permission 里是 deny ⇒ `auditor` 依赖的审计 skill，root 看得到、真正执行审计的 `auditor` 看不到。RFC-251 `design.md` §4.3 已把「不改动 skill 密封面」列为非目标（扩大密封面涉及成员间 skill 是否隔离、`SKILL.md` 冻结块如何按成员分区），故明确登记而非默认关闭。
+- ✅ **（已修复 2026-08-03）多代理的 skill 面是打折的（RFC-251 Codex 实现门 2026-08-03，P1，未修）**：`services/scheduler.ts` 已正确合并 `dependsOn` 闭包的 skills，但 `runtime/opencode/verifiedPlan.ts` 只把冻结的 `SKILL.md` 追加进 **root** persona，闭包成员拿到的是原始 `dep.bodyMd`，而 `skill` 工具本身在受控 permission 里是 deny ⇒ `auditor` 依赖的审计 skill，root 看得到、真正执行审计的 `auditor` 看不到。**已修（2026-08-03）**：密封时按 `skillId` 给冻结块建索引，成员 prompt 追加**它自己声明的** managed skill 冻结块；**只增不减**——root 仍收整个并集（收窄它会改变现有行为，属独立产品决策）。成员声明了并集里没有的 skill ⇒ `execution-identity-skill-mismatch` fail-closed，不静默给无 skill 的 prompt。**没有扩大密封面**（`ctx.skills` 集合未变，只是把已密封的块按归属分发），故原先「需独立设计」的顾虑不适用。回归锁见 `rfc224-verified-plan.test.ts` 的「closure members receive their own frozen skills」。
 
 ## RFC-252 残留与旁证（2026-08-03）
 
@@ -120,7 +120,7 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   daemon 侧自动 commit&push 仍会以 daemon 身份、在沙箱外执行仓库的 `pre-commit` /
   `commit-msg` / `post-commit`。豁免的理由是本仓**有意**依赖该交互——
   `rfc210-publish-failure-hard-fails.test.ts` 用「钩子拒绝自动提交」当触发源锁「发布失败必须
-  硬失败，否则 agent 工作的唯一副本会被删」，注释称之为 *an everyday setup*；
+  硬失败，否则 agent 工作的唯一副本会被删」，注释称之为 _an everyday setup_；
   `rfc165-scratch-space.test.ts` S4b 同理。**这是本模块唯一留下的口子，且可达**（agent 写
   `.git/hooks/pre-commit`，等一次自动 commit&push）。根治办法是把自动提交挪进沙箱内执行
   （钩子照跑但在边界内），属独立切片。其余子命令（含 `worktree add` 的 `post-checkout`）
