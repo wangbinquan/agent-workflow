@@ -47,7 +47,16 @@ const RUN_INTEGRATION = process.env.RUN_OPENCODE_INTEGRATION === '1'
 const OPENCODE_BIN = process.env.OPENCODE_BIN ?? 'opencode'
 const PINNED_MODEL = Object.freeze({ providerID: 'openai', modelID: 'gpt-5' })
 const LISTEN_LINE = /^opencode server listening on http:\/\/127\.0\.0\.1:([1-9]\d{0,4})$/
-const ORPHAN_READY_TIMEOUT_MS = 5_000
+// Per-PHASE budget (fixture readiness / ARM ack / freeze rejection), not a
+// total. 5s was enough locally but flaked on the loaded macOS CI runner: the
+// self-exit case failed at 5083ms — i.e. it burned the phase budget waiting for
+// a python3 fixture to come up, never reaching the causal assertions. Every
+// phase is still clamped by ORPHAN_HARD_TIMEOUT_MS via phaseDeadline(), so
+// raising this cannot extend the fixture's 25s cleanup deadline; it only stops
+// a slow host from being reported as a protocol violation. The assertions
+// themselves remain causal (TARGET_EXIT PRETERM / exit 137 / group reaped) —
+// no wall-clock delay was substituted for a kernel outcome.
+const ORPHAN_READY_TIMEOUT_MS = 12_000
 const ORPHAN_STOP_GRACE_MS = 250
 const ORPHAN_REAP_TIMEOUT_MS = 2_000
 const ORPHAN_HARD_TIMEOUT_MS = 25_000

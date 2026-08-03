@@ -55,7 +55,8 @@ export const IGNORED_ADVISORIES: readonly IgnoreEntry[] = [
     id: 'GHSA-w7jw-789q-3m8p',
     package: 'shell-quote',
     why: '传递依赖，dev/工具链专用——经 drizzle-orm/drizzle-kit › gel（EdgeDB/Gel 驱动）引入，平台运行时是 bun:sqlite，从不使用它，也不在发布的单二进制里。',
-    removeWhen: 'drizzle 把传递的 shell-quote 提过该公告范围（当前安装的 1.8.3 已是满足区间的最新版，尚无可升级目标）。',
+    removeWhen:
+      'drizzle 把传递的 shell-quote 提过该公告范围（当前安装的 1.8.3 已是满足区间的最新版，尚无可升级目标）。',
   },
   {
     id: 'GHSA-395f-4hp3-45gv',
@@ -64,28 +65,10 @@ export const IGNORED_ADVISORIES: readonly IgnoreEntry[] = [
     removeWhen: '同上，drizzle 传递依赖升级后。',
   },
   {
-    id: 'GHSA-3jxr-9vmj-r5cp',
-    package: 'brace-expansion',
-    why: 'lint 工具链传递依赖：eslint / eslint-plugin-react / typescript-eslint › minimatch，只在开发期跑。',
-    removeWhen: 'ESLint 系把 minimatch/brace-expansion 提过该范围。',
-  },
-  {
     id: 'GHSA-52cp-r559-cp3m',
     package: 'js-yaml',
     why: 'merge-key 二次 CPU 消耗，经 eslint › @eslint/eslintrc 引入，仅 lint 工具链。',
     removeWhen: 'ESLint 升级到 js-yaml >= 4.3.0 之后。',
-  },
-  {
-    id: 'GHSA-v2hh-gcrm-f6hx',
-    package: 'fast-uri',
-    why: '反斜杠 authority 混淆。经 @modelcontextprotocol/sdk 与 eslint › ajv 传入；v3 线尚无修复版，强推 v4 会跨大版本改 ajv/MCP SDK 的运行时解析。本仓 fast-uri 只解析受信配置的 MCP URL 与 JSON-schema format，不面向敌意 URI。',
-    removeWhen: '上游发布 3.1.4+ 后，bump 根 overrides 并删除本条。',
-  },
-  {
-    id: 'GHSA-mh99-v99m-4gvg',
-    package: 'brace-expansion',
-    why: 'unbounded expansion OOM，覆盖 <=5.0.7。minimatch@10 链已在 bun.lock 升到 5.0.8；剩余 1.1.14 只来自 ESLint / @eslint/eslintrc / eslint-plugin-react 的 minimatch@3。其上游仍约束 ^1.1.7，而 v5 的 CommonJS API 从 callable export 改成 named `expand`，全局 override 会直接打断 minimatch@3。',
-    removeWhen: 'ESLint 系迁到兼容的修复版本之后。',
   },
 ]
 
