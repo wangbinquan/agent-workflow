@@ -28,7 +28,7 @@
     "e2e:install": "playwright install --with-deps chromium",
     "record:opencode": "bun run scripts/record-opencode.ts",
     "audit:gate": "bun run scripts/audit-gate.ts",
-    "depcheck": "depcruise --config .dependency-cruiser.cjs packages/frontend/src packages/backend/src packages/shared/src"
+    "depcheck": "bun run scripts/depcheck.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

@@ -10,6 +10,15 @@
 //       undefined under an unlucky init order; only build:binary caught it).
 //   (d) production code never re-grows the cycle edge by importing the
 //       sentinel constants from workgroup/launch again.
+//   (e) **the gate can actually SEE the graph** — added 2026-08-03 (架构审视
+//       A1 / WP-0). (a)-(d) were all green while `tsConfig.fileName` pointed
+//       at `tsconfig.base.json`, which has no `paths`: every `@/…` import
+//       resolved to nothing and 62.5% of the dependency edges were silently
+//       dropped, so `depcheck` reported 0 violations against a graph missing
+//       most of itself (19 real violations appeared the moment it was fixed).
+//       The resolution ratchet + the known-violation allowlist live in
+//       `depcheck-gate.test.ts`; this file only asserts the wiring below so
+//       the two cannot drift apart.
 //
 // Every lock here has been mutation-verified (break it → this file reds).
 
@@ -33,6 +42,17 @@ describe('rfc217 G1 — no-circular guard is real', () => {
   test('CI wires depcheck (a rule nobody runs is not a lock)', () => {
     const ci = read('.github/workflows/ci.yml')
     expect(ci).toContain('bun run depcheck')
+  })
+
+  test('depcheck resolves per-package tsconfig (a rule that sees nothing is not a lock)', () => {
+    // (e) — 2026-08-03. `depcheck` must go through scripts/depcheck.ts, which
+    // feeds depcruise a per-package tsconfig carrying `@/*`. Point it back at
+    // a paths-less tsconfig and the whole graph collapses to unresolved edges
+    // while every assertion above stays green — that is exactly what happened
+    // for two years. Judgment lives in depcheck-gate.test.ts.
+    const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> }
+    expect(pkg.scripts.depcheck).toContain('scripts/depcheck.ts')
+    expect(read('.dependency-cruiser.cjs')).toContain('DEPCRUISE_TSCONFIG')
   })
 
   test('workgroup/constants.ts is a zero-import leaf module', () => {

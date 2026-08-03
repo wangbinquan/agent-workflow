@@ -4,16 +4,17 @@
 
 ## 审计报告索引（`design/`）
 
-| 报告                                                              | 主题             | 状态 / 未决                                                                                |
-| ----------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------ |
-| `design/scheduler-audit-2026-06-10.md`                            | 调度专项深查     | 2 P0 + 9 P1；WP-1~10 路线；重构走 RFC                                                      |
-| `design/dedup-audit-2026-06-13.md`                                | 全仓重复实现     | 68 确认 + 4 伪重复；9 处已漂成 bug；路线 §5                                                |
-| `design/flag-audit-2026-07-07.md`                                 | 标志位控流       | 六大 P0 + ≥12 真 bug + RFC-G1~G10；**§8 有 3 决策点待用户拍板**                            |
-| `design/frontend-primitive-audit-2026-07-21.md`                   | 前端公共原语     | 160 确认 / 91 驳回；头号=三态闸门 + ErrorBanner 缺 onRetry；5-RFC 路线（部分已落 RFC-214） |
-| `design/test-guard-audit-2026-07-21/`                             | 测试防护缺口     | 131 缺口 / 9 逃逸机制 / 15 结构守卫；加固批已落 + RFC-212（WS 授权撤销，方案 D）           |
-| `design/ux-audit.md` · `design/ux-functional-audit-2026-07-16.md` | UX / 功能        | 见报告                                                                                     |
-| `design/workgroup-e2e-audit.md`                                   | 工作组 e2e       | 见报告                                                                                     |
-| `design/codex-impl-gate-misc-2026-07-22.md`                       | Codex 实现门杂项 | 见报告                                                                                     |
+| 报告                                                              | 主题                 | 状态 / 未决                                                                                                     |
+| ----------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `design/scheduler-audit-2026-06-10.md`                            | 调度专项深查         | 2 P0 + 9 P1；WP-1~10 路线；重构走 RFC                                                                           |
+| `design/task-execution-architecture-audit-2026-08-03.md`          | 任务执行**架构**审视 | 7 维 + 对抗复核；72 存活 → 12 issue（2 P0）+ 5 根因 + WP-0~10 路线；**WP-0 是一行配置修依赖门禁失明，必须先做** |
+| `design/dedup-audit-2026-06-13.md`                                | 全仓重复实现         | 68 确认 + 4 伪重复；9 处已漂成 bug；路线 §5                                                                     |
+| `design/flag-audit-2026-07-07.md`                                 | 标志位控流           | 六大 P0 + ≥12 真 bug + RFC-G1~G10；**§8 有 3 决策点待用户拍板**                                                 |
+| `design/frontend-primitive-audit-2026-07-21.md`                   | 前端公共原语         | 160 确认 / 91 驳回；头号=三态闸门 + ErrorBanner 缺 onRetry；5-RFC 路线（部分已落 RFC-214）                      |
+| `design/test-guard-audit-2026-07-21/`                             | 测试防护缺口         | 131 缺口 / 9 逃逸机制 / 15 结构守卫；加固批已落 + RFC-212（WS 授权撤销，方案 D）                                |
+| `design/ux-audit.md` · `design/ux-functional-audit-2026-07-16.md` | UX / 功能            | 见报告                                                                                                          |
+| `design/workgroup-e2e-audit.md`                                   | 工作组 e2e           | 见报告                                                                                                          |
+| `design/codex-impl-gate-misc-2026-07-22.md`                       | Codex 实现门杂项     | 见报告                                                                                                          |
 
 ## 运行时 / 沙箱能力收口盘点（2026-07-31，RFC-237 root 事故后自查）
 
@@ -101,4 +102,3 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 - **`dynamic-workflow-preview` 的 **darwin** 视觉基线漂移（RFC-248 实现期实测发现，非本 RFC 引入）**：本地 `bun run test:visual` 跑 `RFC-199 deterministic dynamic-workflow preview (light)` 稳定差 **8652 px（ratio 0.01 > 阈值 0.002）**。已用「pin 到 RFC-248 之前的父提交 `ad5d2963` 的分离 worktree + 独立 `bun install` + 独立 `build:binary --include-e2e`」实测过：**改动前后像素差完全相同**，且同一份代码在 **CI ubuntu 的全量视觉跑里 26 passed / 只有 `/repos` 一条红**（`/repos` 那条是 RFC-248 新增分段控件的预期变更，已刷两平台基线）。所以这条是 **darwin 基线自身的漂移**，最后一次刷新它的是 `48eb3df7`（他人的移动端导航改动），推测在字体栈 / OS 版本不同的机器上生成。**未扫进 RFC-248 的 commit**——它不是本 RFC 的改动，按多人协作原则不替他人刷基线。谁下次动这个场景时顺手在自己机器上刷一次 darwin 基线即可；在那之前本地跑全量 `test:visual` 会看到这一条红，**不是回归**。
   - 顺带记一个刷基线的真坑：`bun run build:binary` **不产** e2e 二进制，必须 `-- --include-e2e`（e2e harness 用的是 `dist/agent-workflow-e2e-*`，不是 `dist/agent-workflow-macos-arm64`）。不加这个 flag 就是拿**旧** e2e 二进制刷图——测试会「通过」，但刷出来的基线是旧页面（本次实测踩到：删掉 png 重生成后与旧图**字节完全相同**，才发现渲染的根本不是新代码）。
-
