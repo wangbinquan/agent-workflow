@@ -819,9 +819,8 @@ export const cachedRepos = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
-// repo_groups / repo_group_members — RFC-248. 一个可命名、可复用、可绑定记忆的
-// 执行空间定义：哪几个仓 + 各自 checkout 什么 + 在运行目录里怎么摆。
-// 取代 RFC-066 的「启动表单手填多仓 + basename 平铺」。
+// repo_groups / repo_group_nodes — RFC-249. 仓库组是一棵显式目录树；repo/group
+// 是目录节点上的可选 attachment，root path=''，纯目录也会持久化。
 // -----------------------------------------------------------------------------
 export const repoGroups = sqliteTable('repo_groups', {
   id: text('id').primaryKey(), // ULID
@@ -839,37 +838,57 @@ export const repoGroups = sqliteTable('repo_groups', {
   schemaVersion: integer('schema_version').notNull().default(1),
 })
 
-export const repoGroupMembers = sqliteTable(
-  'repo_group_members',
+export const repoGroupNodes = sqliteTable(
+  'repo_group_nodes',
   {
     groupId: text('group_id')
       .notNull()
       .references(() => repoGroups.id, { onDelete: 'cascade' }),
-    /** 0..N-1，稳定排序键；也是展平后同深度的次序来源。 */
-    memberIndex: integer('member_index').notNull(),
-    kind: text('kind', { enum: ['repo', 'group'] }).notNull(),
+    /** 相对组根的规范目录路径；'' = 显式 root。 */
+    path: text('path').notNull(),
+    /** NULL = 纯目录；一个节点至多挂 repo/group 之一。 */
+    attachmentKind: text('attachment_kind', { enum: ['repo', 'group'] }),
     /**
      * kind='repo'。**刻意不加** onDelete cascade：删仓走 gitRepoCache 的显式
      * 守卫（409 列出引用它的组 + `force=1` 摘除，D13）。静默级联会让组悄悄
      * 变形，用户下次启动才发现少了一个仓。
      */
     cachedRepoId: text('cached_repo_id').references(() => cachedRepos.id),
-    /** '' = 该仓默认分支。D6：存在组里，启动时不可改。 */
+    /** repo attachment：'' = 默认分支。 */
     ref: text('ref').notNull().default(''),
-    /** '' = 整仓；否则 sparse 只检出这个仓内子目录（D17，非 cone 模式）。 */
+    /** repo attachment：'' = 整仓；否则 sparse checkout。 */
     subdir: text('subdir').notNull().default(''),
-    /** kind='group'。同样不 cascade——删组也走显式守卫。 */
+    /** group attachment。同样不 cascade——删组走显式 detach。 */
     childGroupId: text('child_group_id'),
-    /** '' = 挂在根（cwd 本身就是那个仓的 worktree）。至多一个成员可以挂根（D2）。 */
-    mountPath: text('mount_path').notNull().default(''),
-    /** D11/D20：只读成员不快照 / 不进 diff / 不推送；向内传播取并集。 */
+    /** repo/group attachment 的只读标记；纯目录恒 false。 */
     readonly: integer('readonly', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.groupId, t.memberIndex] }),
-    cachedRepoIdx: index('idx_rgm_cached_repo').on(t.cachedRepoId),
-    childGroupIdx: index('idx_rgm_child_group').on(t.childGroupId),
+    pk: primaryKey({ columns: [t.groupId, t.path] }),
+    cachedRepoIdx: index('idx_rgn_cached_repo').on(t.cachedRepoId),
+    childGroupIdx: index('idx_rgn_child_group').on(t.childGroupId),
   }),
+)
+
+/**
+ * Deprecated ORM-only shape retained so migration-focused RFC-248 tests can
+ * describe the pre-0134 table. Production code must use `repoGroupNodes`;
+ * the latest migrated database no longer contains this table.
+ */
+export const repoGroupMembers = sqliteTable(
+  'repo_group_members',
+  {
+    groupId: text('group_id').notNull(),
+    memberIndex: integer('member_index').notNull(),
+    kind: text('kind', { enum: ['repo', 'group'] }).notNull(),
+    cachedRepoId: text('cached_repo_id'),
+    ref: text('ref').notNull().default(''),
+    subdir: text('subdir').notNull().default(''),
+    childGroupId: text('child_group_id'),
+    mountPath: text('mount_path').notNull().default(''),
+    readonly: integer('readonly', { mode: 'boolean' }).notNull().default(false),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.groupId, t.memberIndex] }) }),
 )
 
 // -----------------------------------------------------------------------------
@@ -1202,6 +1221,20 @@ export const taskRepos = sqliteTable(
     // listed cache row — unindexed it degenerates into repeated full scans.
     cachedRepoIdIdx: index('idx_task_repos_cached_repo_id').on(t.cachedRepoId),
   }),
+)
+
+// RFC-249 — frozen explicit directory tree. Old tasks have zero rows and are
+// replayed from task_repos.mount_path + ancestor closure.
+export const taskSpaceNodes = sqliteTable(
+  'task_space_nodes',
+  {
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    nodePath: text('node_path').notNull(),
+    schemaVersion: integer('schema_version').notNull().default(1),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.taskId, t.nodePath] }) }),
 )
 
 // -----------------------------------------------------------------------------

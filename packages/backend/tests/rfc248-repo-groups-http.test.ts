@@ -102,11 +102,30 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     sdkRepo = seedRepo(h.db, 'sdk')
   })
 
-  const repoMember = (
-    cachedRepoId: string,
-    mountPath: string,
-    extra: Record<string, unknown> = {},
-  ) => ({ kind: 'repo', cachedRepoId, mountPath, ...extra })
+  const repoNode = (cachedRepoId: string, path: string, extra: Record<string, unknown> = {}) => ({
+    path,
+    attachment: { kind: 'repo', cachedRepoId, ref: '', subdir: '', readonly: false, ...extra },
+  })
+
+  const groupNode = (childGroupId: string, path: string) => ({
+    path,
+    attachment: { kind: 'group', childGroupId, readonly: false },
+  })
+
+  const nodeTree = (...attachments: Array<{ path: string; attachment: unknown }>) => {
+    const nodes = new Map<string, { path: string; attachment: unknown }>([
+      ['', { path: '', attachment: null }],
+    ])
+    for (const node of attachments) {
+      const segments = node.path.split('/').filter(Boolean)
+      for (let depth = 1; depth < segments.length; depth += 1) {
+        const path = segments.slice(0, depth).join('/')
+        if (!nodes.has(path)) nodes.set(path, { path, attachment: null })
+      }
+      nodes.set(node.path, node)
+    }
+    return [...nodes.values()]
+  }
 
   test('GET 空列表', async () => {
     const res = await req(h.app, '/api/repo-groups')
@@ -119,13 +138,13 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
       method: 'POST',
       body: JSON.stringify({
         name: '全栈',
-        members: [repoMember(appRepo, ''), repoMember(sdkRepo, 'vendor/sdk', { readonly: true })],
+        nodes: nodeTree(repoNode(appRepo, ''), repoNode(sdkRepo, 'vendor/sdk', { readonly: true })),
       }),
     })
     expect(res.status).toBe(201)
-    const body = (await res.json()) as { id: string; flatRepoCount: number; members: unknown[] }
+    const body = (await res.json()) as { id: string; flatRepoCount: number; nodes: unknown[] }
     expect(body.flatRepoCount).toBe(2)
-    expect(body.members).toHaveLength(2)
+    expect(body.nodes).toHaveLength(3)
     expect(JSON.stringify(body)).not.toContain('secret')
     expect(JSON.stringify(body)).toContain('https://git.example/app.git')
   })
@@ -134,11 +153,21 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     // 这条是 `repo-group-invalid` 的具名处（见文件头注释）。
     const res = await req(h.app, '/api/repo-groups', {
       method: 'POST',
-      body: JSON.stringify({ name: '', members: [] }),
+      body: JSON.stringify({ name: '', nodes: [] }),
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code?: string; error?: { code?: string } }
     expect(body.code ?? body.error?.code).toBe('repo-group-invalid')
+  })
+
+  test('POST 退役 members 字段 → 422 repo-group-members-retired', async () => {
+    const res = await req(h.app, '/api/repo-groups', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'legacy', members: [] }),
+    })
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { code?: string; error?: { code?: string } }
+    expect(body.code ?? body.error?.code).toBe('repo-group-members-retired')
   })
 
   test('POST 完全不是 JSON → 同样 422 repo-group-invalid（不是 500）', async () => {
@@ -152,13 +181,13 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     const created = await (
       await req(h.app, '/api/repo-groups', {
         method: 'POST',
-        body: JSON.stringify({ name: 'g', members: [repoMember(appRepo, '')] }),
+        body: JSON.stringify({ name: 'g', nodes: nodeTree(repoNode(appRepo, '')) }),
       })
     ).json()
     const id = (created as { id: string }).id
     const res = await req(h.app, `/api/repo-groups/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name: 'g' }), // members 缺失
+      body: JSON.stringify({ name: 'g' }), // nodes 缺失
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code?: string; error?: { code?: string } }
@@ -168,7 +197,10 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
   test('非法挂载路径 → 422，错误码来自布局层', async () => {
     const res = await req(h.app, '/api/repo-groups', {
       method: 'POST',
-      body: JSON.stringify({ name: 'g', members: [repoMember(appRepo, '../escape')] }),
+      body: JSON.stringify({
+        name: 'g',
+        nodes: [{ path: '', attachment: null }, repoNode(appRepo, '../escape')],
+      }),
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code?: string; error?: { code?: string } }
@@ -186,7 +218,7 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
         method: 'POST',
         body: JSON.stringify({
           name: 'g',
-          members: [repoMember(appRepo, ''), repoMember(sdkRepo, 'vendor/sdk')],
+          nodes: nodeTree(repoNode(appRepo, ''), repoNode(sdkRepo, 'vendor/sdk')),
         }),
       })
     ).json()) as { id: string }
@@ -194,11 +226,15 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
       totalRepos: number
+      totalNodes: number
       maxDepth: number
+      nodes: Array<{ path: string }>
       repos: Array<{ mountPath: string }>
     }
     expect(body.totalRepos).toBe(2)
+    expect(body.totalNodes).toBe(3)
     expect(body.maxDepth).toBe(0)
+    expect(body.nodes.map((node) => node.path)).toEqual(['', 'vendor', 'vendor/sdk'])
     expect(body.repos.map((r) => r.mountPath)).toEqual(['', 'vendor/sdk'])
   })
 
@@ -206,7 +242,7 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     const created = (await (
       await req(h.app, '/api/repo-groups', {
         method: 'POST',
-        body: JSON.stringify({ name: 'g', members: [repoMember(appRepo, '')] }),
+        body: JSON.stringify({ name: 'g', nodes: nodeTree(repoNode(appRepo, '')) }),
       })
     ).json()) as { id: string; version: number }
     expect(created.version).toBe(1)
@@ -215,23 +251,23 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
       body: JSON.stringify({
         name: 'g',
         description: '改了',
-        members: [repoMember(appRepo, ''), repoMember(sdkRepo, 'sdk')],
+        nodes: nodeTree(repoNode(appRepo, ''), repoNode(sdkRepo, 'sdk')),
       }),
     })
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { version: number; members: unknown[] }
+    const body = (await res.json()) as { version: number; nodes: unknown[] }
     expect(body.version).toBe(2)
-    expect(body.members).toHaveLength(2)
+    expect(body.nodes).toHaveLength(2)
   })
 
   test('名字冲突 → 409', async () => {
     await req(h.app, '/api/repo-groups', {
       method: 'POST',
-      body: JSON.stringify({ name: 'Dup', members: [repoMember(appRepo, '')] }),
+      body: JSON.stringify({ name: 'Dup', nodes: nodeTree(repoNode(appRepo, '')) }),
     })
     const res = await req(h.app, '/api/repo-groups', {
       method: 'POST',
-      body: JSON.stringify({ name: 'dup', members: [repoMember(sdkRepo, '')] }),
+      body: JSON.stringify({ name: 'dup', nodes: nodeTree(repoNode(sdkRepo, '')) }),
     })
     expect(res.status).toBe(409)
   })
@@ -240,7 +276,7 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     const created = (await (
       await req(h.app, '/api/repo-groups', {
         method: 'POST',
-        body: JSON.stringify({ name: 'g', members: [repoMember(appRepo, '')] }),
+        body: JSON.stringify({ name: 'g', nodes: nodeTree(repoNode(appRepo, '')) }),
       })
     ).json()) as { id: string }
     const res = await req(h.app, `/api/repo-groups/${created.id}`, { method: 'DELETE' })
@@ -259,14 +295,14 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     const inner = (await (
       await req(h.app, '/api/repo-groups', {
         method: 'POST',
-        body: JSON.stringify({ name: 'inner', members: [repoMember(sdkRepo, '')] }),
+        body: JSON.stringify({ name: 'inner', nodes: nodeTree(repoNode(sdkRepo, '')) }),
       })
     ).json()) as { id: string }
     await req(h.app, '/api/repo-groups', {
       method: 'POST',
       body: JSON.stringify({
         name: 'outer',
-        members: [{ kind: 'group', childGroupId: inner.id, mountPath: 'base' }],
+        nodes: nodeTree(groupNode(inner.id, 'base')),
       }),
     })
     const blocked = await req(h.app, `/api/repo-groups/${inner.id}`, { method: 'DELETE' })

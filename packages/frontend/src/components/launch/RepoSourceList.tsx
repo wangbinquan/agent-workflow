@@ -15,6 +15,7 @@
 //   - optional banner explains why Start is disabled (wrapper-git / upload)
 
 import { useTranslation } from 'react-i18next'
+import type { ReactNode } from 'react'
 import { MULTI_REPO_MAX } from '@agent-workflow/shared'
 import { RepoSourceRow } from '@/components/launch/RepoSourceRow'
 import {
@@ -38,6 +39,9 @@ export interface RepoSourceListProps {
   maxCount?: number
   /** RFC-248: 透传给每一行——给了就在下拉里同列仓库组。 */
   onSelectGroup?: (groupId: string) => void
+  /** RFC-249: selected group remains represented by the first shared row. */
+  selectedGroupId?: string
+  selectedGroupDetails?: ReactNode
 }
 
 export function RepoSourceList({
@@ -46,6 +50,8 @@ export function RepoSourceList({
   multiRepoBlockedReason,
   maxCount,
   onSelectGroup,
+  selectedGroupId,
+  selectedGroupDetails,
 }: RepoSourceListProps) {
   const { t } = useTranslation()
   const max = maxCount ?? MULTI_REPO_MAX
@@ -75,6 +81,9 @@ export function RepoSourceList({
           onRemove={() => removeAt(i)}
           previewDirName={isMulti ? (previewNames[i] ?? null) : null}
           {...(onSelectGroup !== undefined && i === 0 ? { onSelectGroup } : {})}
+          {...(selectedGroupId !== undefined && i === 0
+            ? { selectedGroupId, details: selectedGroupDetails }
+            : {})}
         />
       ))}
       {/* RFC-248: 只在还允许多行时渲染「+ 添加仓库」。组模式（onSelectGroup

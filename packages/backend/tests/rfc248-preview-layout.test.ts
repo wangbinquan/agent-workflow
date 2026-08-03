@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, repoGroupMembers, repoGroups } from '../src/db/schema'
+import { cachedRepos, repoGroupNodes, repoGroups } from '../src/db/schema'
 import { previewRepoGroupLayout } from '../src/services/repoGroup'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -60,16 +60,14 @@ function seedGroup(name: string, repoIds: readonly string[]): string {
     })
     .run()
   repoIds.forEach((rid, i) => {
-    db.insert(repoGroupMembers)
+    db.insert(repoGroupNodes)
       .values({
         groupId: id,
-        memberIndex: i,
-        kind: 'repo',
+        path: i === 0 ? '' : `m${i}`,
+        attachmentKind: 'repo',
         cachedRepoId: rid,
-        childGroupId: null,
         ref: '',
         subdir: '',
-        mountPath: i === 0 ? '' : `m${i}`,
         readonly: false,
       })
       .run()

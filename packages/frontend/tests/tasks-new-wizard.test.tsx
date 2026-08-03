@@ -312,6 +312,11 @@ async function renderWizard(
 
 const next = () => fireEvent.click(screen.getByTestId('stepper-next'))
 
+async function chooseManualRepoUrl() {
+  fireEvent.click(await screen.findByTestId('repo-source-recent-urls-0'))
+  fireEvent.mouseDown(await screen.findByRole('option', { name: /^Enter a new Git URL…$/ }))
+}
+
 describe('RFC-165 T12 — /tasks/new wizard', () => {
   test('W1+W4+W5: workflow arm — gating, backlink, launch POST /api/tasks', async () => {
     const calls = installFetch()
@@ -330,10 +335,11 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
     next()
 
-    // Step 2 — scratch is the default space now; pick remote, then Next is
-    // gated until the URL parses (W4).
+    // Step 2 — scratch is the default space now; pick remote and opt into the
+    // manual URL field, then Next is gated until the URL parses (W4).
     fireEvent.click(await screen.findByTestId('wizard-space-remote'))
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+    await chooseManualRepoUrl()
     const urlInput = await screen.findByTestId('repo-source-url-0')
     fireEvent.change(urlInput, { target: { value: 'https://github.com/o/r.git' } })
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
@@ -678,6 +684,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     next()
 
     fireEvent.click(await screen.findByTestId('wizard-space-remote'))
+    await chooseManualRepoUrl()
     fireEvent.change(await screen.findByTestId('repo-source-url-0'), {
       target: { value: 'https://github.com/o/r.git' },
     })

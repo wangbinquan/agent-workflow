@@ -275,6 +275,8 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 
 > RFC-235 发布说明（2026-07-29）：用户已单独授权“基于当前设计先做一版”。首版仅交付目标优先/响应式/双栏 UX 与 Intent turn Session 持久化、权限、WS/poll、共享 renderer 切片；它不等同于批准或完成表中 v21 的 mutation ledger、artifact recovery/restore authority、分步提交及全部 supporting contracts，故完整 RFC 状态继续保持 Draft。
 
+**[RFC-249](./RFC-249-repo-group-directory-tree/proposal.md) · 仓库组目录树**：显式目录节点取代成员行 + `mountPath`；根只是普通目录节点，仓库/子组作为可选挂载。平铺场景支持批量选仓与批量 URL，树上支持批量只读、移动、摘挂载和删除。**状态：Approved / Core Implementation Complete（2026-08-03），Chromium / WebKit 启动 E2E 已过；完整编辑链、hosted visual 与独立实现门待补。**
+
 ---
 
 ## M0 — 项目准备

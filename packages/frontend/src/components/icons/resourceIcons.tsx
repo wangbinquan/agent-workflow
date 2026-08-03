@@ -151,6 +151,14 @@ export const REPO_ICON: ReactNode = (
   </IconSvg>
 )
 
+/** Folder — a plain directory node with no repo attachment. */
+export const FOLDER_ICON: ReactNode = (
+  <IconSvg name="folder">
+    <path d="M2 4.2h4l1.2 1.5H14v6.8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />
+    <path d="M2 6h12" />
+  </IconSvg>
+)
+
 /** Task — a compact checklist for one execution record. */
 export const TASK_ICON: ReactNode = (
   <IconSvg name="task">

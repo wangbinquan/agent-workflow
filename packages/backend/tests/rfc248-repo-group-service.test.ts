@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, memories, repoGroupMembers, repoGroups } from '../src/db/schema'
+import { cachedRepos, memories, repoGroupNodes, repoGroups } from '../src/db/schema'
 import {
   RepoGroupHasReferencesError,
   createRepoGroup,
@@ -394,7 +394,7 @@ describe('RFC-248 repo group service', () => {
         ],
       }),
     )
-    expect(code).toBe('mount-path-duplicate')
+    expect(code).toBe('repo-group-attachment-conflict')
   })
 
   test('PUT 让 version 自增', async () => {
@@ -475,8 +475,13 @@ describe('RFC-248 repo group service', () => {
     const r = deleteRepoGroup(db, inner.id, { force: true })
     expect(r.detachedReferences).toBe(1)
     expect(listRepoGroups(db).map((g) => g.name)).toEqual(['outer'])
-    // 外层组本身保留，只是少了那个成员。
-    expect(getRepoGroup(db, listRepoGroups(db)[0]!.id).members).toHaveLength(0)
+    // 外层组与原目录都保留，只解除那个挂载。
+    const outer = getRepoGroup(db, listRepoGroups(db)[0]!.id)
+    expect(outer.members).toHaveLength(0)
+    expect(outer.nodes).toEqual([
+      { path: '', attachment: null },
+      { path: 'base', attachment: null },
+    ])
   })
 
   test('设计门 G5：删组把绑在它上面的记忆置 archived（不硬删），并回报条数', async () => {
@@ -598,7 +603,12 @@ describe('RFC-248 repo group service', () => {
     expect(refs.map((r) => r.name).sort()).toEqual(['g1', 'g2'])
     expect(detachRepoFromAllGroups(db, appRepo)).toBe(3) // g1 两行 + g2 一行
     expect(groupsReferencingRepo(db, appRepo)).toEqual([])
-    expect(getRepoGroup(db, g1.id).members).toHaveLength(0)
+    const detached = getRepoGroup(db, g1.id)
+    expect(detached.members).toHaveLength(0)
+    expect(detached.nodes).toEqual([
+      { path: '', attachment: null },
+      { path: 'compare', attachment: null },
+    ])
   })
 
   test('外键挡住悬空的 child_group_id——坏数据进不了库', () => {
@@ -606,13 +616,12 @@ describe('RFC-248 repo group service', () => {
     // 让「并发删组留下悬空引用」这件事在存储层就不可能发生。
     expect(() =>
       db
-        .insert(repoGroupMembers)
+        .insert(repoGroupNodes)
         .values({
           groupId: ulid(),
-          memberIndex: 0,
-          kind: 'group',
+          path: 'x',
+          attachmentKind: 'group',
           childGroupId: 'ghost',
-          mountPath: 'x',
         })
         .run(),
     ).toThrow()
@@ -650,13 +659,12 @@ describe('RFC-248 repo group service', () => {
       null,
     )
     // 绕过服务层的保存期环检测，直写一条把 g1 → g2 的边补上，成环。
-    db.insert(repoGroupMembers)
+    db.insert(repoGroupNodes)
       .values({
         groupId: g1.id,
-        memberIndex: 1,
-        kind: 'group',
+        path: 'b',
+        attachmentKind: 'group',
         childGroupId: g2.id,
-        mountPath: 'b',
       })
       .run()
 
@@ -703,7 +711,7 @@ describe('RFC-248 repo group service', () => {
     )
     expect(code).toBe('mount-path-duplicate')
     expect(listRepoGroups(db)).toHaveLength(0)
-    expect(db.select().from(repoGroupMembers).all()).toHaveLength(0)
+    expect(db.select().from(repoGroupNodes).all()).toHaveLength(0)
   })
 
   test('H1: 改组校验失败 ⇒ 成员列表与 version 完全不变', async () => {
@@ -885,7 +893,7 @@ describe('RFC-248 repo group service', () => {
       null,
     )
     deleteRepoGroup(db, g.id)
-    expect(db.select().from(repoGroupMembers).all()).toHaveLength(0)
+    expect(db.select().from(repoGroupNodes).all()).toHaveLength(0)
     expect(db.select().from(repoGroups).all()).toHaveLength(0)
   })
 })

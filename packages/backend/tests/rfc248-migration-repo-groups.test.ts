@@ -12,14 +12,25 @@
 // 成 `memories` 时 SQLite 是否重写这两条自引用**依赖 legacy_alter_table 模式**，
 // 而 daemon 迁移期跑在 foreign_keys=OFF、直连 migrator 与测试跑在 ON。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, memories, repoGroupMembers, repoGroups } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const legacyMigrations = mkdtempSync(join(tmpdir(), 'rfc248-through-0133-'))
+cpSync(MIGRATIONS, legacyMigrations, { recursive: true })
+const legacyJournalPath = join(legacyMigrations, 'meta', '_journal.json')
+const legacyJournal = JSON.parse(readFileSync(legacyJournalPath, 'utf8')) as {
+  entries: Array<{ idx: number }>
+}
+legacyJournal.entries = legacyJournal.entries.filter((entry) => entry.idx <= 132)
+writeFileSync(legacyJournalPath, `${JSON.stringify(legacyJournal, null, 2)}\n`)
+afterAll(() => rmSync(legacyMigrations, { recursive: true, force: true }))
 
 function makeRepo(db: DbClient, slug: string): string {
   const id = ulid()
@@ -48,7 +59,7 @@ function makeGroup(db: DbClient, name: string): string {
 describe('migration 0131 — repo_groups / repo_group_members', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb(legacyMigrations)
   })
 
   test('组名大小写不敏感唯一', () => {
@@ -181,7 +192,7 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
 describe('T19c —— migration ↔ ORM schema 一致性（设计门二轮 P2-1）', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb(legacyMigrations)
   })
 
   // drizzle 的 `schema.ts` **表达不了**下面这几样东西：表达式唯一索引

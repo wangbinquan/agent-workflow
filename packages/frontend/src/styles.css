@@ -12538,6 +12538,11 @@ mark.prior-comment-anchor[data-active='true'] {
   font-size: 12px;
   font-family: var(--font-mono, monospace);
 }
+.repo-source-row__details {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
 
 /* RFC-066 PR-C — task detail multi-repo summary block. Single-repo tasks
    render nothing here (byte-baseline). */
@@ -20461,6 +20466,26 @@ button.status-chip {
   line-height: 1.35;
 }
 
+/* RFC-249: resource-view navigation is a calm underline tab strip, not a
+   high-emphasis form toggle. It sits on the same 22px content grid as the
+   header and operations toolbar. */
+.repo-kind-tabs {
+  gap: var(--space-4);
+  margin: 0 22px 16px;
+}
+
+.repo-kind-tabs .tabs__tab {
+  min-height: 38px;
+  padding: 4px 2px 8px;
+}
+
+.repo-kind-tabs__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
 .operations-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -20909,6 +20934,11 @@ button.status-chip {
 @media (max-width: 720px) {
   .operations-surface__header {
     padding: 16px 16px 12px;
+  }
+
+  .repo-kind-tabs {
+    margin-inline: 16px;
+    margin-bottom: 14px;
   }
 
   .operations-toolbar {
@@ -21551,71 +21581,345 @@ button.status-chip {
   margin-left: auto;
 }
 
-/* RFC-248 —— 仓库组布局树。缩进用 inline padding（由组件按深度计算），行内元素
-   用 flex 排，与 `.data-table` 的行高 / 字号保持一致。 */
+/* The group layout unfolds within the persistent repository picker row. */
+.wizard-space-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.wizard-space-layout__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--font-sm);
+}
+
+/* RFC-249 — compact explicit directory projection shared by group/task surfaces. */
 .repo-layout-tree {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 1px;
 }
 .repo-layout-tree__row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  gap: var(--space-1);
+  flex-wrap: nowrap;
   font-size: var(--font-sm);
-  min-height: 24px;
+  min-height: 28px;
+  min-width: 0;
+  border-radius: var(--radius-sm);
+}
+.repo-layout-tree__row--directory {
+  color: var(--muted);
+}
+.repo-layout-tree__icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: inline-flex;
 }
 .repo-layout-tree__mount {
   font-weight: 600;
+  white-space: nowrap;
 }
 .repo-layout-tree__url,
 .repo-layout-tree__via {
   font-size: var(--font-xs);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* RFC-248 —— 仓库组编辑器。左成员表 / 右布局预览两栏，窄屏折成一栏。
-   行内控件用 flex 排；所有 chrome（overlay / panel / 表单边框）都来自
-   <Dialog> 与 Form 原语，这里只补编辑器特有的排版。 */
-.repo-group-editor__split {
+/* RFC-249 — one dense tree plus a contextual inspector; no duplicate preview tree. */
+.repo-group-editor__meta {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--space-4);
+  grid-template-columns: minmax(180px, 2fr) minmax(240px, 3fr);
+  gap: var(--space-3);
+  align-items: start;
 }
-@media (max-width: 900px) {
-  .repo-group-editor__split {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.repo-group-editor__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.repo-group-editor__member {
+.repo-group-editor__toolbar {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
   flex-wrap: wrap;
-}
-.repo-group-editor__actions {
-  display: flex;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  padding: var(--space-2);
+  margin-top: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--panel) 80%, var(--bg));
 }
-.repo-group-editor__preview {
+.repo-group-editor__toolbar .btn--selected {
+  color: var(--info-fg);
+  border-color: var(--info-border);
+  background: var(--info-bg);
+}
+.repo-group-editor__new-directory {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.repo-group-editor__new-directory .form-input {
+  width: 150px;
+  min-height: 30px;
+}
+.repo-group-editor__target {
+  margin-left: auto;
+  font-size: var(--font-xs);
+}
+.repo-group-editor__bulk,
+.repo-group-editor__paste {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: start;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--info-border);
+  border-radius: var(--radius-md);
+  background: var(--info-bg);
+}
+.repo-group-editor__bulk > .form-input,
+.repo-group-editor__bulk-actions,
+.repo-group-editor__bulk-list {
+  grid-column: 1;
+}
+.repo-group-editor__bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.repo-group-editor__bulk > .btn,
+.repo-group-editor__paste > .btn {
+  grid-column: 2;
+  grid-row: 1;
+}
+.repo-group-editor__bulk-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  max-height: 176px;
+  overflow: auto;
+  padding: var(--space-1);
+}
+.repo-group-editor__paste .form-textarea {
+  min-height: 84px;
+}
+.repo-group-editor__paste-error {
+  grid-column: 1;
+  margin: 0;
+}
+.repo-group-editor__batch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+.repo-group-editor__batch .select {
+  min-width: 150px;
+  max-width: 220px;
+}
+.repo-group-editor__status {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  margin-top: var(--space-2);
+  font-size: var(--font-xs);
+}
+.repo-group-editor__status .error-banner {
+  width: 100%;
+}
+.repo-group-editor__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 320px);
+  height: clamp(260px, 42vh, 420px);
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--panel);
+}
+.repo-group-editor__tree-pane {
   min-width: 0;
-  overflow-x: auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-1) 0;
+}
+.repo-group-editor__inspector {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3);
+  border-left: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 86%, var(--bg));
+}
+.repo-group-editor__inspector > * + * {
+  margin-top: var(--space-3);
+}
+.repo-group-editor__inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.repo-group-editor__inspector-head strong {
+  overflow-wrap: anywhere;
+}
+.repo-tree-editor {
+  margin: 0;
+  padding: 0;
+}
+.repo-tree-editor__row {
+  display: grid;
+  grid-template-columns: 18px 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 34px;
+  padding-block: 2px;
+  padding-right: var(--space-2);
+  border-left: 2px solid transparent;
+}
+.repo-tree-editor__row:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.repo-tree-editor__row--selected {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.repo-tree-editor__row > .form-checkbox {
+  display: flex;
+  justify-content: center;
+}
+.repo-tree-editor__icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  color: var(--muted);
+}
+.repo-tree-editor__select {
+  appearance: none;
+  border: 0;
+  padding: 3px var(--space-1);
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.repo-tree-editor__select:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
+  border-radius: var(--radius-sm);
+}
+.repo-tree-editor__select code {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+.repo-tree-editor__attachment {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-tree-editor__row--selected .repo-tree-editor__attachment {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+@media (max-width: 820px) {
+  .repo-group-editor__workspace {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    max-height: none;
+  }
+  .repo-group-editor__tree-pane {
+    max-height: 330px;
+  }
+  .repo-group-editor__inspector {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    max-height: none;
+  }
+  .repo-group-editor__bulk-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .repo-group-editor__toolbar .btn,
+  .repo-group-editor__batch .btn,
+  .repo-group-editor__batch .select,
+  .repo-group-editor__new-directory .form-input {
+    min-height: 44px;
+  }
+  .repo-tree-editor__row {
+    grid-template-columns: 44px 18px minmax(0, 1fr) auto;
+    min-height: 44px;
+    padding-block: 0;
+  }
+  .repo-tree-editor__row > .form-checkbox,
+  .repo-tree-editor__select {
+    min-height: 44px;
+  }
+  .repo-tree-editor__row > .form-checkbox {
+    min-width: 44px;
+    align-items: center;
+  }
+}
+@media (max-width: 600px) {
+  .repo-group-editor__meta,
+  .repo-group-editor__bulk,
+  .repo-group-editor__paste {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .repo-group-editor__bulk > .btn,
+  .repo-group-editor__paste > .btn {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .repo-group-editor__target {
+    width: 100%;
+    margin-left: 0;
+  }
+  .repo-group-editor__new-directory {
+    flex: 1 1 100%;
+  }
+  .repo-group-editor__new-directory .form-input {
+    width: auto;
+    flex: 1 1 auto;
+  }
 }
 
 /* RFC-248 —— 组列表的搜索行。与远端仓那边的工具条同一档间距。 */
 .repo-groups-pane__toolbar {
   margin-bottom: var(--space-3);
   max-width: 420px;
+}
+
+.repo-groups-pane__name-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.repo-groups-pane__name-copy {
+  min-width: 0;
+  padding-block: 2px;
 }

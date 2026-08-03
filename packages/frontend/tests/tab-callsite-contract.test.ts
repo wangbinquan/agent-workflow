@@ -168,6 +168,7 @@ const TRUE_TAB_CALLSITES = [
   'routes/auth.tsx::auth-method',
   'routes/mcps.detail.tsx::mcps-detail',
   'routes/plugins.detail.tsx::plugins-detail',
+  'routes/repos.tsx::repos-resource',
   'routes/skills.detail.tsx::skills-detail',
   'routes/skills.new.tsx::skills-new',
 ] as const

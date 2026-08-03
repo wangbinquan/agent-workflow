@@ -3669,6 +3669,7 @@ async function launchCallChild(
     baseCommit: primary?.baseSnapshot ?? null,
     earlyError: null,
     resolvedSources: [],
+    nodePaths: [],
     cleanup: { taskId: childId, ownedRoot: null, worktrees: [], state: 'owned', report: null },
     repos: iso.repos.map((r, i) => ({
       repoIndex: i,
@@ -3854,6 +3855,7 @@ async function launchCallWorkgroupChild(
     baseCommit: primary?.baseSnapshot ?? null,
     earlyError: null,
     resolvedSources: [],
+    nodePaths: [],
     cleanup: { taskId: childId, ownedRoot: null, worktrees: [], state: 'owned', report: null },
     repos: iso.repos.map((r, i) => ({
       repoIndex: i,

@@ -7,6 +7,8 @@ import type { ReactNode, RefObject } from 'react'
 import { TextInput } from '@/components/Form'
 import { Segmented } from '@/components/Segmented'
 
+export { OperationsChevronIcon } from './OperationsExpandButton'
+
 export interface OperationsViewOption<V extends string> {
   value: V
   label: ReactNode
@@ -49,14 +51,6 @@ function FilterIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 6h16M7 12h10M10 18h4" />
-    </svg>
-  )
-}
-
-export function OperationsChevronIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m9 18 6-6-6-6" />
     </svg>
   )
 }

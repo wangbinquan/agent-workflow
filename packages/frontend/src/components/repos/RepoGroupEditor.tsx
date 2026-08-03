@@ -1,72 +1,229 @@
-// RFC-248 T36 —— 仓库组编辑器。
-//
-// 严格复用公共原语（CLAUDE.md 强制条款）：`<Dialog>` 出 modal chrome、
-// `<Field>` / `<TextInput>` / `<TextArea>` / `<Switch>` 出表单、`<Select>` 出
-// 下拉（**不用**原生 `<select>`）、`<StatusChip>` 出标记、`<ErrorBanner>` 出
-// 错误。本文件不自写任何 overlay / panel / border / focus ring。
-//
-// 右侧是**实时布局预览**：成员表每次变动 debounce 400ms 打一次
-// `POST /api/repo-groups/preview`（纯读干跑，不导入任何仓）。预览用的是服务端
-// 真正的展平实现，所以组套组 / 深度上限 / 循环 / 只读并集 / 挂载点冲突全都按
-// 真实语义报出来——而不是前端另写一套近似逻辑，然后在保存时才发现两边不一致。
+// RFC-249 — compact explicit directory-tree editor. Repos/groups are optional
+// attachments on directory nodes; root is an ordinary node, never a "main repo".
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type {
   CachedRepo,
   RepoGroup,
   RepoGroupLayoutResponse,
-  RepoGroupMemberInput,
+  RepoGroupNodeAttachmentInput,
+  RepoGroupNodeInput,
+} from '@agent-workflow/shared'
+import {
+  allocateRepoNodePath,
+  attachAtNode,
+  compareRepoNodePath,
+  deleteNodeSubtree,
+  detachAtNode,
+  isUnder,
+  joinNodePath,
+  mountDepth,
+  moveNodeSubtree,
+  nodeName,
+  parentNodePath,
+  parseGitUrl,
+  renameNodeSubtree,
+  validateRepoGroupNodes,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { Field, TextArea, TextInput, Switch } from '@/components/Form'
-import { QueryState } from '@/components/QueryState'
+import { Checkbox, Field, Switch, TextArea, TextInput } from '@/components/Form'
+import { FOLDER_ICON, REPO_ICON, WORKGROUP_ICON } from '@/components/icons/resourceIcons'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
-import { RepoLayoutTree } from '@/components/repos/RepoLayoutTree'
-
-/** 编辑器里的一行成员。与 wire 的 `RepoGroupMemberInput` 同构，外加一个本地 key。 */
-type DraftMember = RepoGroupMemberInput & { localKey: string }
 
 export interface RepoGroupEditorProps {
   open: boolean
   onClose: () => void
-  /** 传入即为「编辑」，否则为「新建」。 */
   group?: RepoGroup
 }
 
-let seq = 0
-const nextKey = (): string => `m${(seq += 1)}`
+function fromGroup(group: RepoGroup | undefined): RepoGroupNodeInput[] {
+  if (group === undefined) return [{ path: '', attachment: null }]
+  if (group.nodes !== undefined) {
+    return group.nodes.map((node) => ({
+      path: node.path,
+      attachment:
+        node.attachment === null
+          ? null
+          : node.attachment.kind === 'repo'
+            ? {
+                kind: 'repo',
+                cachedRepoId: node.attachment.cachedRepoId,
+                ref: node.attachment.ref,
+                subdir: node.attachment.subdir,
+                readonly: node.attachment.readonly,
+              }
+            : {
+                kind: 'group',
+                childGroupId: node.attachment.childGroupId,
+                readonly: node.attachment.readonly,
+              },
+    }))
+  }
 
-function toDraft(g: RepoGroup | undefined): DraftMember[] {
-  if (g === undefined) return []
-  return g.members.map((m) =>
-    m.kind === 'repo'
-      ? {
-          localKey: nextKey(),
-          kind: 'repo' as const,
-          cachedRepoId: m.cachedRepoId,
-          ref: m.ref,
-          subdir: m.subdir,
-          mountPath: m.mountPath,
-          readonly: m.readonly,
-        }
-      : {
-          localKey: nextKey(),
-          kind: 'group' as const,
-          childGroupId: m.childGroupId,
-          mountPath: m.mountPath,
-          readonly: m.readonly,
-        },
+  // Rolling-upgrade fallback only. The current API always returns nodes.
+  const byPath = new Map<string, RepoGroupNodeInput>()
+  const ensure = (path: string): RepoGroupNodeInput => {
+    const key = path.toLowerCase()
+    const existing = byPath.get(key)
+    if (existing !== undefined) return existing
+    const parent = parentNodePath(path)
+    if (parent !== null) ensure(parent)
+    const created = { path, attachment: null }
+    byPath.set(key, created)
+    return created
+  }
+  ensure('')
+  for (const member of group.members) {
+    const node = ensure(member.mountPath)
+    node.attachment =
+      member.kind === 'repo'
+        ? {
+            kind: 'repo',
+            cachedRepoId: member.cachedRepoId,
+            ref: member.ref,
+            subdir: member.subdir,
+            readonly: member.readonly,
+          }
+        : {
+            kind: 'group',
+            childGroupId: member.childGroupId,
+            readonly: member.readonly,
+          }
+  }
+  return [...byPath.values()]
+}
+
+function topLevelSelection(paths: readonly string[]): string[] {
+  return paths.filter(
+    (path) => !paths.some((candidate) => candidate !== path && isUnder(candidate, path)),
   )
 }
 
-/** 去掉本地 key，得到可直接上 wire 的成员表。 */
-function toWire(members: readonly DraftMember[]): RepoGroupMemberInput[] {
-  return members.map(({ localKey: _localKey, ...rest }) => rest)
+function DraftTree({
+  nodes,
+  selectedPath,
+  checked,
+  repoById,
+  groupById,
+  onSelect,
+  onCheck,
+  onMove,
+}: {
+  nodes: readonly RepoGroupNodeInput[]
+  selectedPath: string
+  checked: ReadonlySet<string>
+  repoById: ReadonlyMap<string, CachedRepo>
+  groupById: ReadonlyMap<string, RepoGroup>
+  onSelect: (path: string) => void
+  onCheck: (path: string, checked: boolean) => void
+  onMove: (path: string, parent: string) => void
+}) {
+  const { t } = useTranslation()
+  const byParent = new Map<string | null, RepoGroupNodeInput[]>()
+  for (const node of nodes) {
+    const parent = parentNodePath(node.path)
+    const children = byParent.get(parent) ?? []
+    children.push(node)
+    byParent.set(parent, children)
+  }
+  for (const children of byParent.values()) {
+    children.sort((a, b) => compareRepoNodePath(a.path, b.path))
+  }
+
+  const rows = (parent: string | null, depth: number): ReactNode =>
+    (byParent.get(parent) ?? []).map((node) => {
+      const attachment = node.attachment
+      const repo =
+        attachment?.kind === 'repo' && attachment.cachedRepoId !== undefined
+          ? repoById.get(attachment.cachedRepoId)
+          : undefined
+      const group =
+        attachment?.kind === 'group' ? groupById.get(attachment.childGroupId) : undefined
+      const attachedLabel =
+        attachment === null
+          ? t('repoGroups.editor.emptyDirectory')
+          : attachment.kind === 'group'
+            ? (group?.name ?? attachment.childGroupId)
+            : (repo?.urlRedacted ?? attachment.repoUrl ?? t('repoGroups.editor.pendingRepo'))
+      const childRows = rows(node.path, depth + 1)
+      const hasChildren = (byParent.get(node.path)?.length ?? 0) > 0
+      return (
+        <div
+          key={node.path}
+          role="treeitem"
+          aria-level={depth + 1}
+          aria-selected={selectedPath === node.path}
+          aria-expanded={hasChildren ? true : undefined}
+        >
+          <div
+            className={`repo-tree-editor__row${selectedPath === node.path ? ' repo-tree-editor__row--selected' : ''}`}
+            style={{ paddingInlineStart: `${Math.min(depth, 5) * 14 + 6}px` }}
+            draggable={node.path !== ''}
+            onDragStart={(event: DragEvent<HTMLDivElement>) => {
+              event.dataTransfer.effectAllowed = 'move'
+              event.dataTransfer.setData('text/plain', node.path)
+            }}
+            onDragOver={(event) => {
+              event.preventDefault()
+              event.dataTransfer.dropEffect = 'move'
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              const source = event.dataTransfer.getData('text/plain')
+              if (source !== '') onMove(source, node.path)
+            }}
+            data-testid={`repo-group-node-${node.path === '' ? '.' : node.path}`}
+          >
+            <Checkbox
+              checked={checked.has(node.path)}
+              onChange={(value) => onCheck(node.path, value)}
+              disabled={node.path === ''}
+              aria-label={t('repoGroups.editor.selectNode', {
+                path: node.path === '' ? t('repoGroups.layout.rootMount') : node.path,
+              })}
+            />
+            <span className="repo-tree-editor__icon" aria-hidden="true">
+              {attachment === null
+                ? FOLDER_ICON
+                : attachment.kind === 'group'
+                  ? WORKGROUP_ICON
+                  : REPO_ICON}
+            </span>
+            <button
+              type="button"
+              className="repo-tree-editor__select"
+              onClick={() => onSelect(node.path)}
+              aria-pressed={selectedPath === node.path}
+            >
+              <code title={node.path === '' ? t('repoGroups.layout.rootMount') : node.path}>
+                {node.path === '' ? t('repoGroups.layout.rootMount') : nodeName(node.path)}
+              </code>
+              <span className="repo-tree-editor__attachment" title={attachedLabel}>
+                {attachedLabel}
+              </span>
+            </button>
+            {attachment?.readonly === true && (
+              <StatusChip kind="neutral" size="sm">
+                {t('repoGroups.layout.readonlyChip')}
+              </StatusChip>
+            )}
+          </div>
+          {hasChildren && <div role="group">{childRows}</div>}
+        </div>
+      )
+    })
+
+  return (
+    <div className="repo-tree-editor" role="tree" data-testid="repo-group-nodes">
+      {rows(null, 0)}
+    </div>
+  )
 }
 
 export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) {
@@ -74,15 +231,40 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
   const qc = useQueryClient()
   const [name, setName] = useState(group?.name ?? '')
   const [description, setDescription] = useState(group?.description ?? '')
-  const [members, setMembers] = useState<DraftMember[]>(() => toDraft(group))
+  const [nodes, setNodes] = useState<RepoGroupNodeInput[]>(() => fromGroup(group))
+  const [selectedPath, setSelectedPath] = useState('')
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [localError, setLocalError] = useState<string | null>(null)
+  const [newDirectory, setNewDirectory] = useState('')
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkSearch, setBulkSearch] = useState('')
+  const [bulkRepoIds, setBulkRepoIds] = useState<Set<string>>(new Set())
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pastedUrls, setPastedUrls] = useState('')
+  const [batchParent, setBatchParent] = useState('')
+  const [directoryNameDraft, setDirectoryNameDraft] = useState('')
+  const [deleteIntent, setDeleteIntent] = useState<{
+    paths: string[]
+    nodeCount: number
+    attachmentCount: number
+  } | null>(null)
 
-  // 每次重开对话框都从 props 重新播种——否则编辑完 A 再开 B 会看到 A 的残留。
   useEffect(() => {
     if (!open) return
     setName(group?.name ?? '')
     setDescription(group?.description ?? '')
-    setMembers(toDraft(group))
+    setNodes(fromGroup(group))
+    setSelectedPath('')
+    setChecked(new Set())
+    setLocalError(null)
+    setBulkOpen(false)
+    setPasteOpen(false)
+    setDeleteIntent(null)
   }, [open, group])
+
+  useEffect(() => {
+    setDirectoryNameDraft(nodeName(selectedPath))
+  }, [selectedPath])
 
   const repos = useQuery<{ items: CachedRepo[] }>({
     queryKey: ['cached-repos'],
@@ -94,54 +276,54 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
     enabled: open,
   })
+  const repoById = useMemo(
+    () => new Map((repos.data?.items ?? []).map((repo) => [repo.id, repo])),
+    [repos.data?.items],
+  )
+  const groupById = useMemo(
+    () => new Map((groups.data?.items ?? []).map((item) => [item.id, item])),
+    [groups.data?.items],
+  )
 
-  // debounce 400ms：拖挂载点时每个按键都打一次预览既吵又没意义。
-  const wire = useMemo(() => toWire(members), [members])
+  const commitNodes = (producer: () => RepoGroupNodeInput[]): RepoGroupNodeInput[] | null => {
+    try {
+      const next = validateRepoGroupNodes(producer()) as RepoGroupNodeInput[]
+      setNodes(next)
+      const live = new Set(next.map((node) => node.path))
+      if (!live.has(selectedPath)) setSelectedPath('')
+      setChecked((current) => new Set([...current].filter((path) => live.has(path))))
+      setLocalError(null)
+      return next
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : String(error))
+      return null
+    }
+  }
 
-  /**
-   * 「这一行还没填完」——刚点完「+ 添加仓库 / + 添加组」、仓还没选的状态。
-   *
-   * 它**不是错误**：用户什么都还没做错。之前整份成员表原样发去干跑预览，
-   * 服务端的 XOR 校验判它非法回 422，右侧就弹一个红框——用户点一下「添加」
-   * 就先挨一记报错，纯属噪音。
-   */
-  const isIncomplete = (m: RepoGroupMemberInput): boolean =>
-    m.kind === 'group'
-      ? m.childGroupId === ''
-      : (m.cachedRepoId ?? '') === '' && (m.repoUrl ?? '') === ''
-
-  const incompleteCount = wire.filter(isIncomplete).length
-  // 只把**填完的**行拿去预览（服务端对「只给 URL」的行也是同样思路——不导入、
-  // 只计 pendingImports）。这样预览始终展示「已经确定下来的那部分布局」，
-  // 而挂载点冲突 / 成环 / 超深度这些**真**错误照样会红。
-  const previewWire = useMemo(() => wire.filter((m) => !isIncomplete(m)), [wire])
-
-  const [debounced, setDebounced] = useState<RepoGroupMemberInput[]>(previewWire)
+  const wireKey = useMemo(() => JSON.stringify(nodes), [nodes])
+  const [debouncedNodes, setDebouncedNodes] = useState(nodes)
   useEffect(() => {
-    const id = setTimeout(() => setDebounced(previewWire), 400)
+    const id = setTimeout(() => setDebouncedNodes(nodes), 350)
     return () => clearTimeout(id)
-  }, [previewWire])
-
+  }, [wireKey, nodes])
   const preview = useQuery<RepoGroupLayoutResponse & { pendingImports: number }>({
-    queryKey: ['repo-group-preview', JSON.stringify(debounced)],
+    // Layout validity depends only on the tree. The group's display name is
+    // deliberately not a cache identity component (RFC-223).
+    queryKey: ['repo-group-preview-v2', JSON.stringify(debouncedNodes)],
     queryFn: ({ signal }) =>
-      api.post('/api/repo-groups/preview', { name, members: debounced }, signal),
+      api.post('/api/repo-groups/preview', { nodes: debouncedNodes }, signal),
     enabled: open,
-    // 预览失败是**用户输入**的问题（成环 / 挂载点冲突 / 超深度），不是网络抖动。
-    // 重试只会把同一条 422 再打三遍。
     retry: false,
   })
 
   const save = useMutation({
     mutationFn: async () => {
-      const body = { name, description, members: wire }
+      const body = { name, description, nodes }
       if (group === undefined) return api.post('/api/repo-groups', body)
       return api.put(`/api/repo-groups/${group.id}`, { ...body, expectedVersion: group.version })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['repo-groups'] })
-      // 组列表里那一行可能正展开着布局树（`['repo-group-layout', id]`）。只失效
-      // 列表的话，那棵树还挂在缓存里显示**改之前**的布局（实现门 P2）。
       if (group !== undefined) {
         await qc.invalidateQueries({ queryKey: ['repo-group-layout', group.id] })
       }
@@ -149,224 +331,647 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
     },
   })
 
-  const patchAt = (i: number, patch: Partial<DraftMember>): void => {
-    setMembers((prev) => prev.map((m, j) => (j === i ? ({ ...m, ...patch } as DraftMember) : m)))
-  }
-  const removeAt = (i: number): void => setMembers((prev) => prev.filter((_, j) => j !== i))
-  const addRepo = (): void =>
-    setMembers((prev) => [
-      ...prev,
-      { localKey: nextKey(), kind: 'repo', ref: '', subdir: '', mountPath: '', readonly: false },
-    ])
-  const addGroup = (): void =>
-    setMembers((prev) => [
-      ...prev,
-      { localKey: nextKey(), kind: 'group', childGroupId: '', mountPath: '', readonly: false },
-    ])
+  const selected = nodes.find((node) => node.path === selectedPath) ?? nodes[0]!
+  const selectedAttachment = selected.attachment
+  const directoryOptions = nodes
+    .slice()
+    .sort((a, b) => compareRepoNodePath(a.path, b.path))
+    .map((node) => ({
+      value: node.path,
+      label: node.path === '' ? t('repoGroups.layout.rootMount') : node.path,
+    }))
+  const eligibleParents = directoryOptions.filter(
+    (option) =>
+      option.value !== selectedPath &&
+      !isUnder(selectedPath, option.value) &&
+      (selectedPath === '' || option.value !== parentNodePath(selectedPath)),
+  )
+  const checkedRoots = topLevelSelection([...checked])
+  const batchParentOptions = directoryOptions.filter(
+    (option) =>
+      !checkedRoots.some(
+        (checkedPath) => option.value === checkedPath || isUnder(checkedPath, option.value),
+      ),
+  )
 
-  const nameOk = name.trim().length > 0
-  // 未填完的行也挡住保存——让用户点了保存再吃 422 是把校验推给服务端，
-  // 而这个条件前端完全判得出来。
-  const canSave = nameOk && members.length > 0 && incompleteCount === 0 && !save.isPending
+  const commitDirectoryRename = (): void => {
+    if (selectedPath === '') return
+    const value = directoryNameDraft.trim()
+    if (value === '') {
+      setDirectoryNameDraft(nodeName(selectedPath))
+      return
+    }
+    if (value === nodeName(selectedPath)) return
+    const nextPath = joinNodePath(parentNodePath(selectedPath) ?? '', value)
+    if (commitNodes(() => renameNodeSubtree(nodes, selectedPath, value)) !== null) {
+      setSelectedPath(nextPath)
+    }
+  }
+
+  const addDirectory = (): void => {
+    const value = newDirectory.trim()
+    if (value === '') return
+    if (
+      commitNodes(() => [
+        ...nodes,
+        { path: joinNodePath(selectedPath, value), attachment: null },
+      ]) !== null
+    ) {
+      setNewDirectory('')
+    }
+  }
+
+  const addRepos = (
+    items: Array<{ source: string; attachment: RepoGroupNodeAttachmentInput }>,
+  ): boolean =>
+    commitNodes(() => {
+      const next = [...nodes]
+      const occupied = next.map((node) => node.path)
+      for (const item of items) {
+        const path = allocateRepoNodePath(selectedPath, item.source, occupied)
+        occupied.push(path)
+        next.push({ path, attachment: item.attachment })
+      }
+      return next
+    }) !== null
+
+  const requestDelete = (paths: readonly string[]): void => {
+    const roots = topLevelSelection(paths).filter((path) => path !== '')
+    if (roots.length === 0) return
+    const affected = nodes.filter((node) =>
+      roots.some((root) => node.path === root || isUnder(root, node.path)),
+    )
+    setDeleteIntent({
+      paths: roots,
+      nodeCount: affected.length,
+      attachmentCount: affected.filter((node) => node.attachment !== null).length,
+    })
+  }
+
+  const deleteSubtrees = (paths: readonly string[]): void => {
+    const roots = [...paths].sort((a, b) => mountDepth(b) - mountDepth(a))
+    const committed = commitNodes(() => {
+      let next = [...nodes]
+      for (const path of roots) next = deleteNodeSubtree(next, path)
+      return next
+    })
+    if (committed !== null) setChecked(new Set())
+  }
+
+  const applyBatch = (kind: 'readonly' | 'writable' | 'detach' | 'move') => {
+    const selectedPaths = topLevelSelection([...checked])
+    const committed = commitNodes(() => {
+      if (kind === 'readonly' || kind === 'writable' || kind === 'detach') {
+        return nodes.map((node) => {
+          if (!checked.has(node.path) || node.attachment === null) return node
+          if (kind === 'detach') return { ...node, attachment: null }
+          return {
+            ...node,
+            attachment: { ...node.attachment, readonly: kind === 'readonly' },
+          }
+        })
+      }
+      let next = [...nodes]
+      for (const path of selectedPaths) next = moveNodeSubtree(next, path, batchParent)
+      return next
+    })
+    if (committed !== null) setChecked(new Set())
+  }
+
+  const canSave =
+    name.trim().length > 0 &&
+    (preview.data?.totalRepos ?? 0) > 0 &&
+    !preview.isError &&
+    !preview.isFetching &&
+    !save.isPending
+  const filteredRepos = (repos.data?.items ?? []).filter((repo) =>
+    repo.urlRedacted.toLowerCase().includes(bulkSearch.trim().toLowerCase()),
+  )
+  const selectableAttachmentPaths = nodes
+    .filter((node) => node.path !== '' && node.attachment !== null)
+    .map((node) => node.path)
+  const pastedUrlEntries = pastedUrls
+    .split(/\r?\n/)
+    .map((url, index) => ({ url: url.trim(), line: index + 1 }))
+    .filter((entry) => entry.url !== '')
+  const invalidPastedLines = pastedUrlEntries
+    .filter((entry) => parseGitUrl(entry.url) === null)
+    .map((entry) => entry.line)
+  const uniquePastedUrls = [...new Set(pastedUrlEntries.map((entry) => entry.url))]
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title={
-        group === undefined ? t('repoGroups.editor.createTitle') : t('repoGroups.editor.editTitle')
-      }
-      size="lg"
-      footer={
-        <>
-          <button type="button" className="btn" onClick={onClose} data-testid="repo-group-cancel">
-            {t('common.cancel')}
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        title={
+          group === undefined
+            ? t('repoGroups.editor.createTitle')
+            : t('repoGroups.editor.editTitle')
+        }
+        size="lg"
+        footer={
+          <>
+            <button type="button" className="btn" onClick={onClose} data-testid="repo-group-cancel">
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!canSave}
+              onClick={() => save.mutate()}
+              data-testid="repo-group-save"
+            >
+              {t('common.save')}
+            </button>
+          </>
+        }
+      >
+        {save.error !== null && save.error !== undefined && <ErrorBanner error={save.error} />}
+        {localError !== null && <ErrorBanner error={new Error(localError)} />}
+
+        <div className="repo-group-editor__meta">
+          <Field label={t('repoGroups.editor.name')} required>
+            <TextInput value={name} onChange={setName} data-testid="repo-group-name" />
+          </Field>
+          <Field label={t('repoGroups.editor.description')}>
+            <TextInput
+              value={description}
+              onChange={setDescription}
+              data-testid="repo-group-desc"
+            />
+          </Field>
+        </div>
+
+        <div className="repo-group-editor__toolbar" role="toolbar">
+          <button
+            type="button"
+            className={`btn btn--sm${bulkOpen ? ' btn--selected' : ''}`}
+            onClick={() => setBulkOpen((value) => !value)}
+            data-testid="repo-group-bulk-repos"
+          >
+            {t('repoGroups.editor.bulkAddRepos')}
           </button>
           <button
             type="button"
-            className="btn btn--primary"
-            disabled={!canSave}
-            onClick={() => save.mutate()}
-            data-testid="repo-group-save"
+            className={`btn btn--sm${pasteOpen ? ' btn--selected' : ''}`}
+            onClick={() => setPasteOpen((value) => !value)}
+            data-testid="repo-group-paste-urls"
           >
-            {t('common.save')}
+            {t('repoGroups.editor.pasteUrls')}
           </button>
-        </>
-      }
-    >
-      {save.error !== null && save.error !== undefined && <ErrorBanner error={save.error} />}
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={selectableAttachmentPaths.length === 0}
+            onClick={() => setChecked(new Set(selectableAttachmentPaths))}
+            data-testid="repo-group-select-all-attachments"
+          >
+            {t('repoGroups.editor.selectAllAttachments')}
+          </button>
+          <div className="repo-group-editor__new-directory">
+            <TextInput
+              value={newDirectory}
+              onChange={setNewDirectory}
+              placeholder={t('repoGroups.editor.newDirectoryPlaceholder')}
+              aria-label={t('repoGroups.editor.newDirectoryPlaceholder')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  addDirectory()
+                }
+              }}
+            />
+            <button type="button" className="btn btn--sm" onClick={addDirectory}>
+              {t('repoGroups.editor.addDirectory')}
+            </button>
+          </div>
+          <span className="repo-group-editor__target data-table__muted">
+            {t('repoGroups.editor.addTo', {
+              path: selectedPath === '' ? t('repoGroups.layout.rootMount') : selectedPath,
+            })}
+          </span>
+        </div>
 
-      <Field label={t('repoGroups.editor.name')} required>
-        <TextInput value={name} onChange={setName} data-testid="repo-group-name" />
-      </Field>
-      <Field label={t('repoGroups.editor.description')}>
-        <TextArea value={description} onChange={setDescription} data-testid="repo-group-desc" />
-      </Field>
-
-      <div className="repo-group-editor__split">
-        <section className="repo-group-editor__members">
-          <Field label={t('repoGroups.editor.members')} group>
-            <ul className="repo-group-editor__list" data-testid="repo-group-members">
-              {members.map((m, i) => (
-                <li
-                  key={m.localKey}
-                  className="repo-group-editor__member"
-                  data-testid={`repo-group-member-${i}`}
-                >
-                  <StatusChip kind="neutral" size="sm">
-                    {m.kind === 'repo'
-                      ? t('repoGroups.editor.kindRepo')
-                      : t('repoGroups.editor.kindGroup')}
-                  </StatusChip>
-                  {m.kind === 'repo' ? (
-                    <Select<string>
-                      value={m.cachedRepoId ?? ''}
-                      onChange={(id) =>
-                        patchAt(i, {
-                          cachedRepoId: id === '' ? undefined : id,
-                          repoUrl: undefined,
-                        } as Partial<DraftMember>)
-                      }
-                      ariaLabel={t('repoGroups.editor.pickRepo')}
-                      placeholder={t('repoGroups.editor.pickRepo')}
-                      data-testid={`repo-group-member-repo-${i}`}
-                      options={[
-                        { value: '', label: t('repoGroups.editor.pickRepo') },
-                        ...(repos.data?.items ?? []).map((r) => ({
-                          value: r.id,
-                          label: r.urlRedacted,
-                        })),
-                      ]}
-                    />
-                  ) : (
-                    <Select<string>
-                      value={m.childGroupId}
-                      onChange={(id) => patchAt(i, { childGroupId: id } as Partial<DraftMember>)}
-                      ariaLabel={t('repoGroups.editor.pickGroup')}
-                      placeholder={t('repoGroups.editor.pickGroup')}
-                      data-testid={`repo-group-member-group-${i}`}
-                      options={[
-                        { value: '', label: t('repoGroups.editor.pickGroup') },
-                        // 自己不能引用自己——那是一条一眼可见的环，没必要让用户
-                        // 选完再被服务端拒。
-                        ...(groups.data?.items ?? [])
-                          .filter((g) => g.id !== group?.id)
-                          .map((g) => ({ value: g.id, label: g.name })),
-                      ]}
-                    />
-                  )}
-                  {m.kind === 'repo' && (
-                    // RFC-248（实现门 P2）：只给「已导入」下拉的话，API 支持的
-                    // `repoUrl` 形态与预览的 `pendingImports` 在 UI 上完全够不着
-                    // ——用户得先离开编辑器去别处导入一遍再回来。粘 URL 与选已有
-                    // 仓是互斥的两种指定方式，填了 URL 就清掉 id。
-                    <TextInput
-                      value={m.repoUrl ?? ''}
-                      onChange={(v) =>
-                        patchAt(i, {
-                          repoUrl: v === '' ? undefined : v,
-                          ...(v === '' ? {} : { cachedRepoId: undefined }),
-                        } as Partial<DraftMember>)
-                      }
-                      placeholder={t('repoGroups.editor.pasteUrl')}
-                      data-testid={`repo-group-member-url-${i}`}
-                    />
-                  )}
-                  <TextInput
-                    value={m.mountPath}
-                    onChange={(v) => patchAt(i, { mountPath: v })}
-                    placeholder={t('repoGroups.editor.mountPlaceholder')}
-                    data-testid={`repo-group-member-mount-${i}`}
-                  />
-                  {m.kind === 'repo' && (
-                    <>
-                      <TextInput
-                        value={m.ref}
-                        onChange={(v) => patchAt(i, { ref: v } as Partial<DraftMember>)}
-                        placeholder={t('repoGroups.editor.refPlaceholder')}
-                        data-testid={`repo-group-member-ref-${i}`}
-                      />
-                      <TextInput
-                        value={m.subdir}
-                        onChange={(v) => patchAt(i, { subdir: v } as Partial<DraftMember>)}
-                        placeholder={t('repoGroups.editor.subdirPlaceholder')}
-                        data-testid={`repo-group-member-subdir-${i}`}
-                      />
-                    </>
-                  )}
-                  <Switch
-                    checked={m.readonly}
-                    onChange={(v) => patchAt(i, { readonly: v })}
-                    label={t('repoGroups.editor.readonly')}
-                    data-testid={`repo-group-member-readonly-${i}`}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--xs btn--danger"
-                    onClick={() => removeAt(i)}
-                    data-testid={`repo-group-member-remove-${i}`}
-                  >
-                    {t('common.delete')}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="repo-group-editor__actions">
+        {bulkOpen && (
+          <section className="repo-group-editor__bulk" data-testid="repo-group-bulk-panel">
+            <TextInput
+              value={bulkSearch}
+              onChange={setBulkSearch}
+              type="search"
+              placeholder={t('repoGroups.editor.searchRepos')}
+              aria-label={t('repoGroups.editor.searchRepos')}
+            />
+            <div className="repo-group-editor__bulk-actions" role="toolbar">
               <button
                 type="button"
-                className="btn btn--sm"
-                onClick={addRepo}
-                data-testid="repo-group-add-repo"
+                className="btn btn--xs"
+                disabled={filteredRepos.length === 0}
+                onClick={() =>
+                  setBulkRepoIds((current) => {
+                    const next = new Set(current)
+                    for (const repo of filteredRepos) next.add(repo.id)
+                    return next
+                  })
+                }
               >
-                {t('repoGroups.editor.addRepo')}
+                {t('repoGroups.editor.selectVisibleRepos', { count: filteredRepos.length })}
               </button>
               <button
                 type="button"
-                className="btn btn--sm"
-                onClick={addGroup}
-                data-testid="repo-group-add-group"
+                className="btn btn--xs"
+                disabled={bulkRepoIds.size === 0}
+                onClick={() => setBulkRepoIds(new Set())}
               >
-                {t('repoGroups.editor.addGroup')}
+                {t('repoGroups.editor.clearSelection')}
               </button>
             </div>
-          </Field>
-        </section>
-
-        <section className="repo-group-editor__preview">
-          <Field label={t('repoGroups.editor.preview')} group>
-            {/* 加载 / 错误 / 空三态全部交给 `<QueryState>`——这是本仓表达
-                「查询的三态」的唯一原语（RFC-214 Lock B）。预览的错误就是
-                用户输入的错误（成环 / 挂载点冲突 / 超深度），原样展示。 */}
-            <QueryState
-              query={preview}
-              data={preview.data?.repos ?? []}
-              emptyText={t('repoGroups.layout.empty')}
-              testid="repo-group-preview-state"
+            <div className="repo-group-editor__bulk-list">
+              {filteredRepos.map((repo) => (
+                <Checkbox
+                  key={repo.id}
+                  checked={bulkRepoIds.has(repo.id)}
+                  onChange={(value) =>
+                    setBulkRepoIds((current) => {
+                      const next = new Set(current)
+                      if (value) next.add(repo.id)
+                      else next.delete(repo.id)
+                      return next
+                    })
+                  }
+                  label={repo.urlRedacted}
+                  hint={repo.defaultBranch ?? undefined}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              disabled={bulkRepoIds.size === 0}
+              onClick={() => {
+                const selectedRepos = (repos.data?.items ?? []).filter((repo) =>
+                  bulkRepoIds.has(repo.id),
+                )
+                const added = addRepos(
+                  selectedRepos.map((repo) => ({
+                    source: repo.urlRedacted,
+                    attachment: {
+                      kind: 'repo',
+                      cachedRepoId: repo.id,
+                      ref: '',
+                      subdir: '',
+                      readonly: false,
+                    },
+                  })),
+                )
+                if (added) {
+                  setBulkRepoIds(new Set())
+                  setBulkOpen(false)
+                }
+              }}
             >
-              {(repos) => (
-                <>
-                  <RepoLayoutTree repos={repos} testidPrefix="repo-group-preview" />
-                  {(preview.data?.pendingImports ?? 0) > 0 && (
-                    <StatusChip kind="info" size="sm" data-testid="repo-group-preview-pending">
-                      {t('repoGroups.editor.pendingImports', {
-                        count: preview.data?.pendingImports ?? 0,
-                      })}
-                    </StatusChip>
-                  )}
-                </>
-              )}
-            </QueryState>
-            {/* 挂在 `QueryState` **外面**：所有行都没填完时它走 emptyText 分支
-                （「这个组还没有成员」），而那恰恰是最需要这条提示的时候——
-                明明加了一行，却被告知没有成员。 */}
-            {incompleteCount > 0 && (
-              <StatusChip kind="neutral" size="sm" data-testid="repo-group-preview-incomplete">
-                {t('repoGroups.editor.incompleteRows', { count: incompleteCount })}
-              </StatusChip>
+              {t('repoGroups.editor.addSelected', { count: bulkRepoIds.size })}
+            </button>
+          </section>
+        )}
+
+        {pasteOpen && (
+          <section className="repo-group-editor__paste" data-testid="repo-group-paste-panel">
+            <TextArea
+              value={pastedUrls}
+              onChange={setPastedUrls}
+              placeholder={t('repoGroups.editor.pasteUrlsPlaceholder')}
+            />
+            {invalidPastedLines.length > 0 && (
+              <p
+                className="form-field__error repo-group-editor__paste-error"
+                role="alert"
+                data-testid="repo-group-paste-errors"
+              >
+                {t('repoGroups.editor.invalidUrlLines', {
+                  lines: invalidPastedLines.join(', '),
+                })}
+              </p>
             )}
-          </Field>
-        </section>
-      </div>
-    </Dialog>
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              disabled={uniquePastedUrls.length === 0 || invalidPastedLines.length > 0}
+              onClick={() => {
+                const added = addRepos(
+                  uniquePastedUrls.map((url) => ({
+                    source: url,
+                    attachment: {
+                      kind: 'repo',
+                      repoUrl: url,
+                      ref: '',
+                      subdir: '',
+                      readonly: false,
+                    },
+                  })),
+                )
+                if (added) {
+                  setPastedUrls('')
+                  setPasteOpen(false)
+                }
+              }}
+            >
+              {t('repoGroups.editor.addUrls')}
+            </button>
+          </section>
+        )}
+
+        {checked.size > 0 && (
+          <div className="repo-group-editor__batch" data-testid="repo-group-batch-bar">
+            <strong>{t('repoGroups.editor.selectedCount', { count: checked.size })}</strong>
+            <button type="button" className="btn btn--xs" onClick={() => applyBatch('readonly')}>
+              {t('repoGroups.editor.markReadonly')}
+            </button>
+            <button type="button" className="btn btn--xs" onClick={() => applyBatch('writable')}>
+              {t('repoGroups.editor.markWritable')}
+            </button>
+            <button type="button" className="btn btn--xs" onClick={() => applyBatch('detach')}>
+              {t('repoGroups.editor.detach')}
+            </button>
+            <button type="button" className="btn btn--xs" onClick={() => setChecked(new Set())}>
+              {t('repoGroups.editor.clearSelection')}
+            </button>
+            <Select
+              value={batchParent}
+              onChange={setBatchParent}
+              ariaLabel={t('repoGroups.editor.moveTo')}
+              options={batchParentOptions}
+            />
+            <button type="button" className="btn btn--xs" onClick={() => applyBatch('move')}>
+              {t('repoGroups.editor.move')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--xs btn--danger"
+              onClick={() => requestDelete([...checked])}
+            >
+              {t('common.delete')}
+            </button>
+          </div>
+        )}
+
+        <div className="repo-group-editor__status" aria-live="polite">
+          {preview.isFetching ? (
+            <span className="data-table__muted">{t('repoGroups.editor.validating')}</span>
+          ) : preview.error !== null && preview.error !== undefined ? (
+            <ErrorBanner error={preview.error} />
+          ) : (
+            <span className="data-table__muted">
+              {t('repoGroups.editor.layoutSummary', {
+                nodes: preview.data?.totalNodes ?? nodes.length,
+                repos: preview.data?.totalRepos ?? 0,
+              })}
+              {(preview.data?.pendingImports ?? 0) > 0 &&
+                ` · ${t('repoGroups.editor.pendingImports', { count: preview.data?.pendingImports ?? 0 })}`}
+            </span>
+          )}
+        </div>
+
+        <div className="repo-group-editor__workspace">
+          <section className="repo-group-editor__tree-pane">
+            <DraftTree
+              nodes={nodes}
+              selectedPath={selectedPath}
+              checked={checked}
+              repoById={repoById}
+              groupById={groupById}
+              onSelect={setSelectedPath}
+              onCheck={(path, value) =>
+                setChecked((current) => {
+                  const next = new Set(current)
+                  if (value) next.add(path)
+                  else next.delete(path)
+                  return next
+                })
+              }
+              onMove={(path, parent) => commitNodes(() => moveNodeSubtree(nodes, path, parent))}
+            />
+          </section>
+
+          <aside
+            className="repo-group-editor__inspector"
+            aria-label={t('repoGroups.editor.nodeSettings')}
+          >
+            <div className="repo-group-editor__inspector-head">
+              <strong>
+                {selectedPath === '' ? t('repoGroups.layout.rootMount') : selectedPath}
+              </strong>
+              {selectedPath !== '' && (
+                <button
+                  type="button"
+                  className="btn btn--xs btn--danger"
+                  onClick={() => requestDelete([selectedPath])}
+                >
+                  {t('repoGroups.editor.deleteSubtree')}
+                </button>
+              )}
+            </div>
+
+            {selectedPath !== '' && (
+              <>
+                <Field label={t('repoGroups.editor.directoryName')}>
+                  <TextInput
+                    value={directoryNameDraft}
+                    onChange={setDirectoryNameDraft}
+                    onBlur={commitDirectoryRename}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        event.currentTarget.blur()
+                      } else if (event.key === 'Escape') {
+                        setDirectoryNameDraft(nodeName(selectedPath))
+                        event.currentTarget.blur()
+                      }
+                    }}
+                  />
+                </Field>
+                <Field label={t('repoGroups.editor.parentDirectory')}>
+                  <Select
+                    value={parentNodePath(selectedPath) ?? ''}
+                    onChange={(parent) => {
+                      const nextPath = joinNodePath(parent, nodeName(selectedPath))
+                      if (
+                        commitNodes(() => moveNodeSubtree(nodes, selectedPath, parent)) !== null
+                      ) {
+                        setSelectedPath(nextPath)
+                      }
+                    }}
+                    ariaLabel={t('repoGroups.editor.parentDirectory')}
+                    options={eligibleParents}
+                  />
+                </Field>
+              </>
+            )}
+
+            {selectedAttachment === null ? (
+              <>
+                <Field label={t('repoGroups.editor.attachRepo')}>
+                  <Select
+                    value=""
+                    onChange={(repoId) => {
+                      if (repoId === '') return
+                      commitNodes(() =>
+                        attachAtNode(nodes, selectedPath, {
+                          kind: 'repo',
+                          cachedRepoId: repoId,
+                          ref: '',
+                          subdir: '',
+                          readonly: false,
+                        }),
+                      )
+                    }}
+                    ariaLabel={t('repoGroups.editor.attachRepo')}
+                    placeholder={t('repoGroups.editor.pickRepo')}
+                    options={[
+                      { value: '', label: t('repoGroups.editor.pickRepo') },
+                      ...(repos.data?.items ?? []).map((repo) => ({
+                        value: repo.id,
+                        label: repo.urlRedacted,
+                      })),
+                    ]}
+                  />
+                </Field>
+                <Field label={t('repoGroups.editor.attachGroup')}>
+                  <Select
+                    value=""
+                    onChange={(groupId) => {
+                      if (groupId === '') return
+                      commitNodes(() =>
+                        attachAtNode(nodes, selectedPath, {
+                          kind: 'group',
+                          childGroupId: groupId,
+                          readonly: false,
+                        }),
+                      )
+                    }}
+                    ariaLabel={t('repoGroups.editor.attachGroup')}
+                    placeholder={t('repoGroups.editor.pickGroup')}
+                    options={[
+                      { value: '', label: t('repoGroups.editor.pickGroup') },
+                      ...(groups.data?.items ?? [])
+                        .filter((item) => item.id !== group?.id)
+                        .map((item) => ({ value: item.id, label: item.name })),
+                    ]}
+                  />
+                </Field>
+              </>
+            ) : selectedAttachment.kind === 'repo' ? (
+              <>
+                <Field label={t('repoGroups.editor.attachedRepo')}>
+                  <Select
+                    value={selectedAttachment.cachedRepoId ?? ''}
+                    onChange={(repoId) => {
+                      if (repoId === '') return
+                      commitNodes(() =>
+                        attachAtNode(nodes, selectedPath, {
+                          ...selectedAttachment,
+                          cachedRepoId: repoId,
+                          repoUrl: undefined,
+                        }),
+                      )
+                    }}
+                    ariaLabel={t('repoGroups.editor.attachedRepo')}
+                    options={(repos.data?.items ?? []).map((repo) => ({
+                      value: repo.id,
+                      label: repo.urlRedacted,
+                    }))}
+                  />
+                </Field>
+                <Field label={t('repoGroups.editor.ref')}>
+                  <TextInput
+                    value={selectedAttachment.ref}
+                    onChange={(ref) =>
+                      commitNodes(() =>
+                        attachAtNode(nodes, selectedPath, { ...selectedAttachment, ref }),
+                      )
+                    }
+                    placeholder={t('repoGroups.editor.refPlaceholder')}
+                  />
+                </Field>
+                <Field label={t('repoGroups.editor.subdir')}>
+                  <TextInput
+                    value={selectedAttachment.subdir}
+                    onChange={(subdir) =>
+                      commitNodes(() =>
+                        attachAtNode(nodes, selectedPath, { ...selectedAttachment, subdir }),
+                      )
+                    }
+                    placeholder={t('repoGroups.editor.subdirPlaceholder')}
+                  />
+                </Field>
+                <Switch
+                  checked={selectedAttachment.readonly}
+                  onChange={(readonly) =>
+                    commitNodes(() =>
+                      attachAtNode(nodes, selectedPath, { ...selectedAttachment, readonly }),
+                    )
+                  }
+                  label={t('repoGroups.editor.readonly')}
+                />
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => commitNodes(() => detachAtNode(nodes, selectedPath))}
+                >
+                  {t('repoGroups.editor.detach')}
+                </button>
+              </>
+            ) : (
+              <>
+                <Field label={t('repoGroups.editor.attachedGroup')}>
+                  <Select
+                    value={selectedAttachment.childGroupId}
+                    onChange={(childGroupId) =>
+                      commitNodes(() =>
+                        attachAtNode(nodes, selectedPath, { ...selectedAttachment, childGroupId }),
+                      )
+                    }
+                    ariaLabel={t('repoGroups.editor.attachedGroup')}
+                    options={(groups.data?.items ?? [])
+                      .filter((item) => item.id !== group?.id)
+                      .map((item) => ({ value: item.id, label: item.name }))}
+                  />
+                </Field>
+                <Switch
+                  checked={selectedAttachment.readonly}
+                  onChange={(readonly) =>
+                    commitNodes(() =>
+                      attachAtNode(nodes, selectedPath, { ...selectedAttachment, readonly }),
+                    )
+                  }
+                  label={t('repoGroups.editor.readonly')}
+                />
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => commitNodes(() => detachAtNode(nodes, selectedPath))}
+                >
+                  {t('repoGroups.editor.detach')}
+                </button>
+              </>
+            )}
+          </aside>
+        </div>
+      </Dialog>
+      <ConfirmDialog
+        open={deleteIntent !== null}
+        title={t('repoGroups.editor.deleteSubtreeTitle')}
+        description={t('repoGroups.editor.deleteSubtreeDescription', {
+          nodes: deleteIntent?.nodeCount ?? 0,
+          attachments: deleteIntent?.attachmentCount ?? 0,
+        })}
+        confirmLabel={t('repoGroups.editor.deleteSubtreeConfirm')}
+        tone="danger"
+        onClose={() => setDeleteIntent(null)}
+        onConfirm={() => {
+          if (deleteIntent !== null) deleteSubtrees(deleteIntent.paths)
+        }}
+      />
+    </>
   )
 }

@@ -959,7 +959,7 @@ function TaskDetailPage() {
                 })}
               </div>
             )}
-            {tk.repoCount > 1 && (
+            {(tk.repoCount > 1 || (tk.spaceNodes?.length ?? 0) > 1) && (
               <details className="task-detail__multi-repo" data-testid="task-detail-multi-repo">
                 <summary>{t('tasks.multiRepoSummary', { count: tk.repoCount })}</summary>
                 {/* RFC-248（实现门 P2）：用**共享**的 `RepoLayoutTree` 渲染，
@@ -967,6 +967,7 @@ function TaskDetailPage() {
                     标记在这里全看不出来，而组编辑器与组列表里都看得到。
                     冻结的 task_repos 行适配成 PlannedRepo 形状即可。 */}
                 <RepoLayoutTree
+                  nodes={tk.spaceNodes}
                   repos={tk.repos.map((r) => ({
                     cachedRepoId: r.cachedRepoId ?? '',
                     repoUrlRedacted: r.repoUrl ?? '',

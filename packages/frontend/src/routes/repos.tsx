@@ -26,10 +26,11 @@ import { BatchImportDialog } from '@/components/repos/BatchImportDialog'
 import { SubmoduleBadge } from '@/components/repos/SubmoduleBadge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Segmented } from '@/components/Segmented'
+import { TabBar, tabDomIds } from '@/components/TabBar'
 import { RepoGroupEditor } from '@/components/repos/RepoGroupEditor'
 import { RepoGroupsPane } from '@/components/repos/RepoGroupsPane'
 import { TableViewport } from '@/components/TableViewport'
-import { REPO_ICON } from '@/components/icons/resourceIcons'
+import { FOLDER_ICON, REPO_ICON } from '@/components/icons/resourceIcons'
 import {
   REPO_OPERATIONS_VIEWS,
   filterRepoOperations,
@@ -200,32 +201,61 @@ function ReposPage() {
       {t('repos.batchImport.button')}
     </button>
   )
+  const reposPanelIds = tabDomIds('repos-resource', 'repos')
+  const groupsPanelIds = tabDomIds('repos-resource', 'groups')
 
   return (
     <div className="page page--operations repos-page page--repo-operations">
       <div className="operations-surface">
         <PageHeader
-          title={t('repos.title')}
+          title={t('repos.pageTitle')}
           actions={
             tab === 'groups' ? newGroupAction : isInitialEmpty ? undefined : batchImportAction
           }
           className="operations-surface__header"
         >
-          <p className="operations-surface__subtitle">{t('repos.operations.subtitle')}</p>
+          <p className="operations-surface__subtitle">
+            {tab === 'groups' ? t('repoGroups.subtitle') : t('repos.operations.subtitle')}
+          </p>
         </PageHeader>
 
-        <Segmented<'repos' | 'groups'>
-          value={tab}
-          onChange={setTab}
+        <TabBar<'repos' | 'groups'>
+          active={tab}
+          onSelect={setTab}
           ariaLabel={t('repoGroups.tabAria')}
-          testidPrefix="repos-tab"
-          options={[
-            { value: 'repos', label: t('repos.title') },
-            { value: 'groups', label: t('repoGroups.tabLabel') },
+          idPrefix="repos-resource"
+          rootTestid="repos-tab"
+          className="repo-kind-tabs"
+          tabs={[
+            {
+              key: 'repos',
+              testid: 'repos-tab-repos',
+              label: (
+                <span className="repo-kind-tabs__label">
+                  {REPO_ICON}
+                  {t('repos.remoteTab')}
+                </span>
+              ),
+            },
+            {
+              key: 'groups',
+              testid: 'repos-tab-groups',
+              label: (
+                <span className="repo-kind-tabs__label">
+                  {FOLDER_ICON}
+                  {t('repoGroups.tabLabel')}
+                </span>
+              ),
+            },
           ]}
         />
 
-        {tab === 'groups' && (
+        <div
+          role="tabpanel"
+          id={groupsPanelIds.panelId}
+          aria-labelledby={groupsPanelIds.tabId}
+          hidden={tab !== 'groups'}
+        >
           <RepoGroupsPane
             list={groupList}
             search={groupSearch}
@@ -242,12 +272,12 @@ function ReposPage() {
             deleteError={removeGroup.error}
             newAction={newGroupAction}
           />
-        )}
-        {deleteReport !== null && (
-          <div className="info-box" role="status" data-testid="repo-group-delete-report">
-            {deleteReport}
-          </div>
-        )}
+          {deleteReport !== null && (
+            <div className="info-box" role="status" data-testid="repo-group-delete-report">
+              {deleteReport}
+            </div>
+          )}
+        </div>
         <ConfirmDialog
           open={pendingGroupDelete !== null}
           title={t('repoGroups.deleteTitle')}
@@ -281,35 +311,40 @@ function ReposPage() {
           {...(editing !== undefined ? { group: editing } : {})}
         />
 
-        {tab === 'repos' && !isInitialEmpty && (
-          <OperationsToolbar<RepoOperationsView>
-            view={view}
-            onViewChange={setView}
-            views={REPO_OPERATIONS_VIEWS.map((value) => ({
-              value,
-              label: t(`repos.operations.views.${value}`),
-              count: facets[value],
-            }))}
-            viewAria={t('repos.operations.viewAria')}
-            searchValue={search}
-            onSearchChange={setSearch}
-            searchPlaceholder={t('repos.operations.searchPlaceholder')}
-            searchLabel={t('repos.operations.searchLabel')}
-            filterLabel={t('repos.operations.filters')}
-            activeFilterCount={advancedFilterCount}
-            activeFiltersLabel={(count) => t('repos.operations.activeFilters', { count })}
-            onOpenFilters={openFilters}
-            showClear={hasAnyFilter}
-            clearLabel={t('common.clearFilters')}
-            onClear={clearFilters}
-            testidPrefix="repos"
-            disabled={list.isLoading}
-            searchRef={searchRef}
-            filterButtonRef={filterButtonRef}
-          />
-        )}
+        <div
+          role="tabpanel"
+          id={reposPanelIds.panelId}
+          aria-labelledby={reposPanelIds.tabId}
+          hidden={tab !== 'repos'}
+        >
+          {!isInitialEmpty && (
+            <OperationsToolbar<RepoOperationsView>
+              view={view}
+              onViewChange={setView}
+              views={REPO_OPERATIONS_VIEWS.map((value) => ({
+                value,
+                label: t(`repos.operations.views.${value}`),
+                count: facets[value],
+              }))}
+              viewAria={t('repos.operations.viewAria')}
+              searchValue={search}
+              onSearchChange={setSearch}
+              searchPlaceholder={t('repos.operations.searchPlaceholder')}
+              searchLabel={t('repos.operations.searchLabel')}
+              filterLabel={t('repos.operations.filters')}
+              activeFilterCount={advancedFilterCount}
+              activeFiltersLabel={(count) => t('repos.operations.activeFilters', { count })}
+              onOpenFilters={openFilters}
+              showClear={hasAnyFilter}
+              clearLabel={t('common.clearFilters')}
+              onClear={clearFilters}
+              testidPrefix="repos"
+              disabled={list.isLoading}
+              searchRef={searchRef}
+              filterButtonRef={filterButtonRef}
+            />
+          )}
 
-        {tab === 'repos' && (
           <>
             <FeedbackStack variant="section">
               {list.error !== null && list.error !== undefined && (
@@ -449,7 +484,7 @@ function ReposPage() {
               </TableViewport>
             )}
           </>
-        )}
+        </div>
       </div>
 
       <BatchImportDialog

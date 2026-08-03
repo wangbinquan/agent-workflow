@@ -157,11 +157,17 @@ async function seedRepoGroup(
     body: JSON.stringify({
       name,
       description: '',
-      // 一个挂根、一个挂 vendor/sdk —— 嵌套布局才是 RFC-248 的重点，
-      // 平铺两仓 RFC-066 时代就能做到。
-      members: [
-        { kind: 'repo', repoUrl: pathToFileURL(repos[0]!.repoDir).href, mountPath: '' },
-        { kind: 'repo', repoUrl: pathToFileURL(repos[1]!.repoDir).href, mountPath: 'vendor/sdk' },
+      // RFC-249：root / 纯目录 / 仓库挂载都由同一棵显式树表达。
+      nodes: [
+        {
+          path: '',
+          attachment: { kind: 'repo', repoUrl: pathToFileURL(repos[0]!.repoDir).href },
+        },
+        { path: 'vendor', attachment: null },
+        {
+          path: 'vendor/sdk',
+          attachment: { kind: 'repo', repoUrl: pathToFileURL(repos[1]!.repoDir).href },
+        },
       ],
     }),
   })
@@ -197,6 +203,8 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     // Scratch 是默认空间（用户 2026-07-11）——先切到「仓库」。
     await page.getByTestId('wizard-space-remote').click()
     await expect(page.getByTestId('repo-source-row-0')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('repo-source-url-0')).toHaveCount(0)
+    await expect(page.getByTestId('repo-source-ref-0')).toHaveCount(0)
 
     // RFC-248: 多仓不再靠加行——「+ 添加仓库」在向导里已下线。
     await expect(page.getByTestId('repo-source-add')).toHaveCount(0)
@@ -205,10 +213,11 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     await page.getByTestId('repo-source-recent-urls-0').click()
     await page.getByRole('option', { name: new RegExp(`${groupName}.*group`, 'i') }).click()
 
-    // 选中组 ⇒ 空间切成组空间：组名 + 展平仓数。
+    // 选中组后同一选择行保持挂载，只在行内展开目录布局。
+    await expect(page.getByTestId('repo-source-row-0')).toBeVisible()
+    await expect(page.getByTestId('repo-source-recent-urls-0')).toContainText(groupName)
     const groupCard = page.getByTestId('wizard-space-group')
     await expect(groupCard).toBeVisible()
-    await expect(groupCard).toContainText(groupName)
     await expect(groupCard).toContainText('2')
 
     // Step 3 — 任务名 + 输入。
@@ -241,7 +250,7 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     expect(task.repos.map((r) => r.mountPath).sort()).toEqual(['', 'vendor/sdk'])
   })
 
-  test('切回其他空间后组卡片消失（「更换」回到仓库选择）', async ({ page }) => {
+  test('在同一选择器里从仓库组切回仓库输入', async ({ page }) => {
     const d = daemon!
     const repoA = makeFixtureRepo('C')
     const repoB = makeFixtureRepo('D')
@@ -259,9 +268,22 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     await page.getByRole('option', { name: new RegExp(`${groupName}.*group`, 'i') }).click()
     await expect(page.getByTestId('wizard-space-group')).toBeVisible()
 
-    // 「更换」退回单仓选择行——组卡片消失，行回来。
-    await page.getByTestId('wizard-space-group-change').click()
+    // 同一个下拉里选回占位项：布局收起，回到只有一个选择器的紧凑初始态。
+    await page.getByTestId('repo-source-recent-urls-0').click()
+    await page
+      .getByRole('option', { name: '— select a repository or repo group —', exact: true })
+      .click()
     await expect(page.getByTestId('wizard-space-group')).toHaveCount(0)
     await expect(page.getByTestId('repo-source-row-0')).toBeVisible()
+    await expect(page.getByTestId('repo-source-url-0')).toHaveCount(0)
+    await expect(page.getByTestId('repo-source-ref-0')).toHaveCount(0)
+
+    // 只有明确选择手工 URL 入口，第二个输入框才按需展开；仓库有效后再显示分支。
+    await page.getByTestId('repo-source-recent-urls-0').click()
+    await page.getByRole('option', { name: 'Enter a new Git URL…', exact: true }).click()
+    await expect(page.getByTestId('repo-source-url-0')).toBeVisible()
+    await expect(page.getByTestId('repo-source-ref-0')).toHaveCount(0)
+    await page.getByTestId('repo-source-url-0').fill(pathToFileURL(repoA.repoDir).toString())
+    await expect(page.getByTestId('repo-source-ref-0')).toBeVisible()
   })
 })

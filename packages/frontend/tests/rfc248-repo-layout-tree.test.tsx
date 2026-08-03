@@ -12,7 +12,7 @@
 
 import { describe, expect, test } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import type { PlannedRepo } from '@agent-workflow/shared'
+import type { PlannedDirectoryNode, PlannedRepo } from '@agent-workflow/shared'
 import { RepoLayoutTree, buildLayoutTree } from '@/components/repos/RepoLayoutTree'
 
 function repo(mountPath: string, over: Partial<PlannedRepo> = {}): PlannedRepo {
@@ -30,15 +30,15 @@ function repo(mountPath: string, over: Partial<PlannedRepo> = {}): PlannedRepo {
 
 /** 树 → `mountPath` 的嵌套数组，方便一眼断言结构。 */
 function shape(nodes: ReturnType<typeof buildLayoutTree>): unknown[] {
-  return nodes.map((n) =>
-    n.children.length === 0 ? n.repo.mountPath : [n.repo.mountPath, shape(n.children)],
-  )
+  return nodes.map((n) => (n.children.length === 0 ? n.path : [n.path, shape(n.children)]))
 }
+
+const node = (path: string): PlannedDirectoryNode => ({ path, origins: [] })
 
 describe('buildLayoutTree —— 挂载路径的父子投影', () => {
   test('挂根成员是所有人的父', () => {
     expect(shape(buildLayoutTree([repo(''), repo('vendor/sdk'), repo('tools')]))).toEqual([
-      ['', ['tools', 'vendor/sdk']],
+      ['', ['tools', ['vendor', ['vendor/sdk']]]],
     ])
   })
 
@@ -54,14 +54,13 @@ describe('buildLayoutTree —— 挂载路径的父子投影', () => {
 
   test('段边界：`vendor/sdkx` 不是 `vendor/sdk` 的孩子', () => {
     const tree = buildLayoutTree([repo('vendor/sdk'), repo('vendor/sdkx')])
-    // 两者都没有祖先 ⇒ 都是根。裸 startsWith 会把 sdkx 挂到 sdk 下面。
-    expect(shape(tree)).toEqual(['vendor/sdk', 'vendor/sdkx'])
+    // 显式目录闭包补出共同的 vendor 父；两仓仍是兄弟，不能互相吞并。
+    expect(shape(tree)).toEqual([['', [['vendor', ['vendor/sdk', 'vendor/sdkx']]]]])
   })
 
   test('没有挂根成员时，多个顶层挂载点并列', () => {
     expect(shape(buildLayoutTree([repo('frontend'), repo('backend')]))).toEqual([
-      'frontend',
-      'backend',
+      ['', ['backend', 'frontend']],
     ])
   })
 
@@ -69,7 +68,7 @@ describe('buildLayoutTree —— 挂载路径的父子投影', () => {
     // 服务端的排除计划用的是**折叠**比较（`isUnder`），树这边如果区分大小写就
     // 会把实际嵌套的两个仓画成兄弟——用户看到的结构与真正物化出来的不一样。
     expect(shape(buildLayoutTree([repo('Vendor'), repo('vendor/sdk')]))).toEqual([
-      ['Vendor', ['vendor/sdk']],
+      ['', [['Vendor', ['vendor/sdk']]]],
     ])
   })
 
@@ -81,7 +80,24 @@ describe('buildLayoutTree —— 挂载路径的父子投影', () => {
 
   test('输入顺序不影响结果（深度排序在内部完成）', () => {
     const deep = buildLayoutTree([repo('vendor/sdk/ext'), repo(''), repo('vendor/sdk')])
-    expect(shape(deep)).toEqual([['', [['vendor/sdk', ['vendor/sdk/ext']]]]])
+    expect(shape(deep)).toEqual([['', [['vendor', [['vendor/sdk', ['vendor/sdk/ext']]]]]]])
+  })
+
+  test('RFC-249：没有仓挂载的纯目录也保留在树中', () => {
+    const tree = buildLayoutTree(
+      [repo('apps/web')],
+      [node(''), node('apps'), node('apps/web'), node('docs'), node('docs/adr')],
+    )
+    expect(shape(tree)).toEqual([
+      [
+        '',
+        [
+          ['apps', ['apps/web']],
+          ['docs', ['docs/adr']],
+        ],
+      ],
+    ])
+    expect(tree[0]?.children.find((child) => child.path === 'docs')?.repo).toBeNull()
   })
 })
 

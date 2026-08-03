@@ -1,15 +1,15 @@
-// RFC-248 — 仓库组的管理面。
+// RFC-248/249 — 仓库组目录树的管理面。
 //
-// GET    /api/repo-groups              列表（含成员数与展平仓数）
-// POST   /api/repo-groups              建组（成员可给 URL，不在缓存里就现场导入）
-// GET    /api/repo-groups/:id          详情（成员原始定义，URL 只出脱敏形态）
-// GET    /api/repo-groups/:id/layout   展平预览（PlannedRepo[] + 总数 + 深度）
-// PUT    /api/repo-groups/:id          全量替换成员，version 自增
+// GET    /api/repo-groups              列表（含目录节点与展平仓数）
+// POST   /api/repo-groups              建组（节点挂 URL 时现场导入缓存）
+// GET    /api/repo-groups/:id          详情（显式 nodes 定义，URL 只出脱敏形态）
+// GET    /api/repo-groups/:id/layout   展平预览（nodes + repos + 总数 + 深度）
+// PUT    /api/repo-groups/:id          全量替换 nodes，version 自增
 // DELETE /api/repo-groups/:id          ?force=1 摘除引用；同事务归档组记忆
 //
 // 权限（D5）：仓库组与 cached_repos 同类，**复用 `repos:*` 权限点**，不新增
 // 授权矩阵行、不进 RFC-099 的 per-resource ACL。注意 `repos:update` 是本 RFC
-// 新引入的点——在此之前 repos 域没有任何 PUT/PATCH 路由。
+// 由 RFC-248 引入的点——在此之前 repos 域没有任何 PUT/PATCH 路由。
 
 import {
   CreateRepoGroupSchema,
@@ -33,6 +33,20 @@ import {
 import type { AppDeps } from '@/server'
 import { ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
+
+function assertNoRetiredMembers(raw: unknown): void {
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    !Array.isArray(raw) &&
+    Object.prototype.hasOwnProperty.call(raw, 'members')
+  ) {
+    throw new ValidationError(
+      'repo-group-members-retired',
+      "'members' is retired; send the explicit directory tree in 'nodes'",
+    )
+  }
+}
 
 export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
   /** 建组 / 改组共用：URL→id 的现场导入要走缓存服务，超时沿用 git clone 配置。 */
@@ -67,6 +81,7 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const raw = (await c.req.json().catch(() => null)) as unknown
+      assertNoRetiredMembers(raw)
       const parsed = CreateRepoGroupSchema.safeParse(raw)
       if (!parsed.success) {
         throw new ValidationError('repo-group-invalid', parsed.error.message, {
@@ -110,7 +125,9 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
       // 用 safeParse：编辑器每加一行都会先出现一个「还没选仓」的中间态，
       // `.parse()` 抛出的 ZodError 到中央 handler 会渲染成 **500**——把用户
       // 正常的输入过程报成服务端故障（实现门 P2）。
-      const parsed = PreviewRepoGroupSchema.safeParse(await c.req.json().catch(() => null))
+      const raw = (await c.req.json().catch(() => null)) as unknown
+      assertNoRetiredMembers(raw)
+      const parsed = PreviewRepoGroupSchema.safeParse(raw)
       if (!parsed.success) {
         throw new ValidationError('repo-group-invalid', parsed.error.message, {
           issues: parsed.error.issues,
@@ -146,6 +163,7 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const raw = (await c.req.json().catch(() => null)) as unknown
+      assertNoRetiredMembers(raw)
       const parsed = UpdateRepoGroupSchema.safeParse(raw)
       if (!parsed.success) {
         throw new ValidationError('repo-group-invalid', parsed.error.message, {

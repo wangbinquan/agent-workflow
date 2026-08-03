@@ -2,6 +2,7 @@
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
 import type {
+  PlannedDirectoryNode,
   PlannedRepo,
   FailureCode,
   NodeKind,
@@ -44,9 +45,9 @@ import type {
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
 import { and, asc, count, desc, eq, gt, inArray, isNull, type SQL } from 'drizzle-orm'
-import { existsSync, mkdirSync, readdirSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { isAbsolute, join, relative } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { insertWorkgroupTaskStateTx, setDwStateTx } from '@/services/workgroup/state'
@@ -61,6 +62,7 @@ import {
   nodeRuns,
   taskCollaborators,
   taskRepos,
+  taskSpaceNodes,
   tasks,
   users,
   workflows,
@@ -880,6 +882,8 @@ export interface MaterializedSpace {
   earlyError: string | null
   resolvedSources: ResolvedRepoSource[]
   repos: MaterializedRepo[]
+  /** RFC-249: frozen canonical directory paths; empty for non-group legacy handoffs. */
+  nodePaths: string[]
   /** Explicit ownership lease consumed by startTask or the multipart route. */
   cleanup: MaterializedSpaceCleanup
 }
@@ -1084,7 +1088,25 @@ function workflowLaunchHookEvent(
  *    悄悄少物化一个仓。
  *  - **顺序按 repo_index**：与当初物化时一致，分支后缀（D14 同源多份）才对得上。
  */
-function loadFrozenLayout(db: DbClient, sourceTaskId: string): PlannedRepo[] {
+interface PlannedSpaceLayout {
+  repos: PlannedRepo[]
+  nodes: PlannedDirectoryNode[]
+}
+
+/** Old task snapshots only have repo mounts. Rebuild the smallest provable tree. */
+function minimalNodePaths(mountPaths: readonly string[]): string[] {
+  const paths = new Map<string, string>([['', '']])
+  for (const mountPath of mountPaths) {
+    let current = ''
+    for (const segment of mountPath.split('/').filter(Boolean)) {
+      current = current === '' ? segment : `${current}/${segment}`
+      paths.set(current.toLowerCase(), current)
+    }
+  }
+  return [...paths.values()].sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
+}
+
+function loadFrozenSpaceLayout(db: DbClient, sourceTaskId: string): PlannedSpaceLayout {
   const rows = db
     .select()
     .from(taskRepos)
@@ -1105,7 +1127,7 @@ function loadFrozenLayout(db: DbClient, sourceTaskId: string): PlannedRepo[] {
         'its space cannot be replayed (relaunch by picking a repo or repo group instead)',
     )
   }
-  return rows.map((r) => ({
+  const repos = rows.map((r) => ({
     cachedRepoId: r.cachedRepoId as string,
     repoUrlRedacted: r.repoUrl ?? '',
     ref: r.baseBranch,
@@ -1114,6 +1136,73 @@ function loadFrozenLayout(db: DbClient, sourceTaskId: string): PlannedRepo[] {
     readonly: r.readonly,
     viaGroups: [],
   }))
+  const frozenNodes = db
+    .select({ path: taskSpaceNodes.nodePath })
+    .from(taskSpaceNodes)
+    .where(eq(taskSpaceNodes.taskId, sourceTaskId))
+    .all()
+  const nodePaths =
+    frozenNodes.length > 0
+      ? frozenNodes
+          .map((row) => row.path)
+          .sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
+      : minimalNodePaths(repos.map((repo) => repo.mountPath))
+  return {
+    repos,
+    nodes: nodePaths.map((path) => ({ path, origins: [] })),
+  }
+}
+
+/**
+ * Materialize explicit directories without following a symlink out of the
+ * launch-owned group root. Missing segments are created one at a time so each
+ * existing or newly-created component can be checked before descending.
+ */
+function ensureExplicitDirectoryNodes(groupRoot: string, nodePaths: readonly string[]): void {
+  const rootStat = lstatSync(groupRoot)
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+    throw new ValidationError(
+      'repo-group-directory-occupied',
+      `repo group root '${groupRoot}' is not a real directory`,
+      { nodePath: '', occupiedPath: groupRoot },
+    )
+  }
+  const realRoot = realpathSync(groupRoot)
+
+  for (const nodePath of [...nodePaths].sort(
+    (a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b),
+  )) {
+    let current = groupRoot
+    for (const segment of nodePath.split('/').filter(Boolean)) {
+      current = join(current, segment)
+      if (existsSync(current)) {
+        const stat = lstatSync(current)
+        if (stat.isSymbolicLink() || !stat.isDirectory()) {
+          throw new ValidationError(
+            'repo-group-directory-occupied',
+            `directory node '${nodePath}' is occupied by a symlink or non-directory at '${current}'`,
+            { nodePath, occupiedPath: current },
+          )
+        }
+      } else {
+        mkdirSync(current)
+      }
+
+      const actual = realpathSync(current)
+      const fromRoot = relative(realRoot, actual)
+      if (
+        fromRoot === '..' ||
+        fromRoot.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) ||
+        isAbsolute(fromRoot)
+      ) {
+        throw new ValidationError(
+          'repo-group-directory-occupied',
+          `directory node '${nodePath}' resolves outside the repo group root`,
+          { nodePath, occupiedPath: current },
+        )
+      }
+    }
+  }
 }
 
 /**
@@ -1131,6 +1220,7 @@ function loadFrozenLayout(db: DbClient, sourceTaskId: string): PlannedRepo[] {
  */
 async function materializeGroupSpace(opts: {
   planned: readonly PlannedRepo[]
+  nodePaths: readonly string[]
   resolvedSources: ResolvedRepoSource[]
   taskId: string
   appHome: string
@@ -1138,7 +1228,7 @@ async function materializeGroupSpace(opts: {
   gitUserName: string | null
   gitUserEmail: string | null
 }): Promise<MaterializedSpace> {
-  const { planned, resolvedSources, taskId, appHome } = opts
+  const { planned, nodePaths, resolvedSources, taskId, appHome } = opts
   // `resolvedSources` 与 `planned` **同序**（它是按 repoSpecs 逐个 resolve 出来
   // 的），但物化要按挂载深度重排。先把两者**配对**再排序——只排 planned、然后
   // 用重排后的下标去索引 resolvedSources 会张冠李戴：sparse 成员会拿到别的仓的
@@ -1305,9 +1395,19 @@ async function materializeGroupSpace(opts: {
           rec.gitignoreCommit = preset.commitSha
           // D1: base_commit 指向预置 commit ⇒ 审计 diff 里没有 .gitignore 那一笔。
           rec.baseCommit = preset.commitSha
+          // `worktree add` 时记下的 CAS 终值是原始 base commit；预置
+          // commit 是平台自己对同一分支做的后续移动，回滚所有权也要
+          // 跟着移到新 HEAD。否则此后任何失败都会因 expected SHA 过时
+          // 而拒绝删除 launch-owned 临时分支。
+          const provenance = cleanup.worktrees.find(
+            (item) => item.worktreePath === rec.worktreePath,
+          )
+          if (provenance !== undefined) provenance.branchAfter = preset.commitSha
         }
       }
     }
+
+    ensureExplicitDirectoryNodes(groupRoot, nodePaths)
 
     const head0 = repos[0]
     return {
@@ -1321,11 +1421,13 @@ async function materializeGroupSpace(opts: {
       earlyError: null,
       resolvedSources,
       repos,
+      nodePaths: [...nodePaths],
       cleanup,
     }
   } catch (error) {
-    // 回收按挂载深度倒序（design §4.3）——lease 里的顺序就是建的顺序，反转即可。
-    cleanup.worktrees.reverse()
+    // lease 按创建顺序记录；统一 cleanup consumer 会自行倒序回收。
+    // 这里不能再 reverse 一次，否则外层 worktree 会先被删除，内层
+    // 注册随之变成 prunable，第二次 remove 就会误报清理不完整。
     const report = await cleanupMaterializedSpaceLease(cleanup)
     throw withWorkspaceCleanupReport(error, report)
   }
@@ -1374,6 +1476,7 @@ export async function materializeSpace(
         baseCommit: init.rootCommit,
         earlyError: null,
         resolvedSources: [],
+        nodePaths: [],
         cleanup,
         repos: [
           {
@@ -1426,6 +1529,7 @@ export async function materializeSpace(
       earlyError: init.error,
       resolvedSources: [],
       repos: [],
+      nodePaths: [],
       cleanup,
     }
   }
@@ -1437,29 +1541,35 @@ export async function materializeSpace(
   // 没有任何 `task_repos` 的组根目录、`repoCount` 记成 1，然后任务在一个**不是
   // git 仓库**的目录里跑——agent 的每一条 git 命令都会失败，而失败原因与真正的
   // 起因（组是空的）隔了十万八千里。
-  const assertNonEmptyLayout = (repos: PlannedRepo[], source: string): PlannedRepo[] => {
-    if (repos.length === 0) {
+  const assertNonEmptyLayout = (layout: PlannedSpaceLayout, source: string): PlannedSpaceLayout => {
+    if (layout.repos.length === 0) {
       throw new ValidationError(
         'repo-group-empty',
         `${source} flattens to zero repos; a task needs at least one repo to run in`,
       )
     }
-    return repos
+    return layout
   }
 
-  const groupPlanned: PlannedRepo[] | null =
-    typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0
-      ? assertNonEmptyLayout(
-          resolveRepoGroupLayout(deps.db, input.repoGroupId).repos,
-          `repo group ${input.repoGroupId}`,
-        )
-      : typeof input.sourceTaskId === 'string' && input.sourceTaskId.length > 0
-        ? // RFC-248 H9（重启）：按源任务**冻结的** task_repos 快照重放布局。
-          // 刻意**不**读 `repo_groups`——组可能已被改动或删除，而重启的语义是
-          // 「再跑一次刚才那个」。快照与组定义同构（挂载点 / subdir / 只读 /
-          // 镜像 id / ref 都在行上），所以能喂进同一条物化管线。
-          loadFrozenLayout(deps.db, input.sourceTaskId)
-        : null
+  const groupLayout: PlannedSpaceLayout | null = (() => {
+    if (typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0) {
+      const layout = resolveRepoGroupLayout(deps.db, input.repoGroupId)
+      return assertNonEmptyLayout(
+        { repos: layout.repos, nodes: layout.nodes },
+        `repo group ${input.repoGroupId}`,
+      )
+    }
+    if (typeof input.sourceTaskId === 'string' && input.sourceTaskId.length > 0) {
+      // RFC-249: replay BOTH frozen repos and explicit directories. Never read
+      // the current repo-group definition, which may have changed or vanished.
+      return assertNonEmptyLayout(
+        loadFrozenSpaceLayout(deps.db, input.sourceTaskId),
+        `source task ${input.sourceTaskId}`,
+      )
+    }
+    return null
+  })()
+  const groupPlanned = groupLayout?.repos ?? null
 
   const repoSpecs =
     deps.internalSource !== undefined
@@ -1504,14 +1614,17 @@ export async function materializeSpace(
   // RFC-248: 仓库组路径。展平后**恰好一个成员且挂根**时落回单仓分支——
   // 那是「单仓是多仓的特例」这条产品判断的实现兑现（AC-10 要求路径 / `tasks.*`
   // 列 / cwd 与今天字节级一致），所以这里只在 >1 或非根挂载时才走组物化。
-  if (groupPlanned !== null) {
-    const onlyRootMember =
+  if (groupPlanned !== null && groupLayout !== null) {
+    const onlyRootRepo =
       groupPlanned.length === 1 &&
       groupPlanned[0]!.mountPath === '' &&
-      groupPlanned[0]!.subdir === ''
-    if (!onlyRootMember) {
+      groupPlanned[0]!.subdir === '' &&
+      groupLayout.nodes.length === 1 &&
+      groupLayout.nodes[0]!.path === ''
+    if (!onlyRootRepo) {
       return await materializeGroupSpace({
         planned: groupPlanned,
+        nodePaths: groupLayout.nodes.map((node) => node.path),
         resolvedSources,
         taskId,
         appHome,
@@ -1578,6 +1691,7 @@ export async function materializeSpace(
       baseCommit: wt.baseCommit,
       earlyError: wt.earlyError,
       resolvedSources,
+      nodePaths: groupLayout?.nodes.map((node) => node.path) ?? [],
       cleanup,
       repos: [
         {
@@ -1903,6 +2017,7 @@ async function startTaskImpl(
       baseCommit: pre.baseCommit,
       earlyError: null,
       resolvedSources: [source],
+      nodePaths: [],
       cleanup: ownership.cleanup ?? cleanupFromPreCreated(pre),
       repos: [
         {
@@ -2152,6 +2267,21 @@ async function startTaskImpl(
               hasSubmodules: r.hasSubmodules,
               submoduleInitOk: r.submoduleInitOk,
               submoduleInitError: r.submoduleInitError,
+              schemaVersion: 1,
+            })),
+          )
+          .run()
+      }
+
+      // RFC-249: freeze the explicit directory tree atomically with task +
+      // repo rows. Repository metadata stays in task_repos; these rows retain
+      // pure directories that cannot be reconstructed from mount paths.
+      if (space.nodePaths.length > 0) {
+        tx.insert(taskSpaceNodes)
+          .values(
+            space.nodePaths.map((nodePath) => ({
+              taskId,
+              nodePath,
               schemaVersion: 1,
             })),
           )
@@ -3537,7 +3667,18 @@ export async function getTask(db: DbClient, id: string): Promise<Task | null> {
     .orderBy(asc(taskRepos.repoIndex))
   const repos: TaskRepo[] =
     repoRows.length > 0 ? repoRows.map(mapTaskRepoRow) : [synthesizeRepoFromTaskRow(row.task)]
-  const task = rowToTask(row.task, row.workflowName, repos)
+  const frozenNodeRows = await db
+    .select({ path: taskSpaceNodes.nodePath })
+    .from(taskSpaceNodes)
+    .where(eq(taskSpaceNodes.taskId, id))
+  const nodePaths =
+    frozenNodeRows.length > 0
+      ? frozenNodeRows
+          .map((node) => node.path)
+          .sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
+      : minimalNodePaths(repos.map((repo) => repo.mountPath))
+  const spaceNodes: PlannedDirectoryNode[] = nodePaths.map((path) => ({ path, origins: [] }))
+  const task = rowToTask(row.task, row.workflowName, repos, spaceNodes)
   // RFC-203 T4: task-level failure-code projection (failed-run oracle).
   const codes = await loadTaskFailureCodes(db, [
     { id: row.task.id, status: row.task.status, failedNodeId: row.task.failedNodeId },
@@ -4223,6 +4364,7 @@ function rowToTask(
   row: typeof tasks.$inferSelect,
   workflowName: string | null,
   repos: TaskRepo[],
+  spaceNodes: PlannedDirectoryNode[],
 ): Task {
   let snapshot: unknown
   try {
@@ -4304,6 +4446,7 @@ function rowToTask(
     // RFC-175 (§2e): stable agent id (NULL for non-agent + pre-0091 tasks).
     sourceAgentId: row.sourceAgentId ?? null,
     repos,
+    spaceNodes,
   }
 }
 

@@ -309,7 +309,7 @@ describe('mountDepth', () => {
 // ── §1.1 展平 ───────────────────────────────────────────────────────────────
 
 describe('flattenRepoGroup', () => {
-  test('平铺组：原样展开，无内层组时 maxDepth=0', () => {
+  test('平铺组：按 RFC-249 规范路径展开，无内层组时 maxDepth=0', () => {
     const g: FlattenableGroup = {
       id: 'g1',
       name: '全栈',
@@ -317,7 +317,7 @@ describe('flattenRepoGroup', () => {
     }
     const { repos, maxDepth } = flattenRepoGroup('g1', loaderFor(g))
     expect(maxDepth).toBe(0)
-    expect(repos.map((r) => r.mountPath)).toEqual(['frontend', 'backend'])
+    expect(repos.map((r) => r.mountPath)).toEqual(['backend', 'frontend'])
     expect(repos.every((r) => r.viaGroups.length === 1)).toBe(true)
   })
 
@@ -479,9 +479,9 @@ describe('orderForMaterialize', () => {
     ])
   })
 
-  test('同深度保持展平序，让 repo_index 稳定可预期', () => {
+  test('RFC-249：同深度按规范路径稳定排序，不再依赖手工成员顺序', () => {
     const planned = [{ mountPath: 'b' }, { mountPath: 'a' }, { mountPath: 'c' }]
-    expect(orderForMaterialize(planned).map((p) => p.mountPath)).toEqual(['b', 'a', 'c'])
+    expect(orderForMaterialize(planned).map((p) => p.mountPath)).toEqual(['a', 'b', 'c'])
   })
 })
 

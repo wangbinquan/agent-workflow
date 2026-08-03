@@ -38,7 +38,11 @@ import { LoadingState } from '@/components/LoadingState'
 import { ManagedLiveRegionProvider, useManagedLiveRegion } from '@/components/ManagedLiveRegion'
 import { MultiSelect } from '@/components/MultiSelect'
 import { NoticeBanner } from '@/components/NoticeBanner'
-import { OperationsChevronIcon, OperationsToolbar } from '@/components/operations/OperationsToolbar'
+import {
+  OperationsChevronIcon,
+  OperationsExpandButton,
+} from '@/components/operations/OperationsExpandButton'
+import { OperationsToolbar } from '@/components/operations/OperationsToolbar'
 import { OwnerLabel } from '@/components/OwnerLabel'
 import { PageHeader } from '@/components/PageHeader'
 import { RelativeTime } from '@/components/RelativeTime'
@@ -760,20 +764,15 @@ function TaskOperationsRow(props: {
           {props.branchId === undefined ? (
             <span className="task-operations__expand-spacer" aria-hidden="true" />
           ) : (
-            <button
-              type="button"
-              className="task-operations__expand-button"
-              aria-expanded={props.expanded}
-              aria-controls={props.branchId}
-              aria-label={t(
-                props.expanded ? 'tasks.collapseChildren' : 'tasks.expandChildrenCount',
-                { count: item.listContext.qualifyingChildCount },
-              )}
-              data-testid={`task-expand-${item.id}`}
-              onClick={props.onToggle}
-            >
-              <OperationsChevronIcon />
-            </button>
+            <OperationsExpandButton
+              expanded={props.expanded}
+              controls={props.branchId}
+              label={t(props.expanded ? 'tasks.collapseChildren' : 'tasks.expandChildrenCount', {
+                count: item.listContext.qualifyingChildCount,
+              })}
+              testid={`task-expand-${item.id}`}
+              onToggle={props.onToggle}
+            />
           )}
           <div className="task-operations__task-copy">
             <div className="task-operations__name-line">

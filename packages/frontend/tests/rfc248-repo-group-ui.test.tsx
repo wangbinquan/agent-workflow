@@ -51,6 +51,7 @@ function group(over: Partial<RepoGroup> = {}): RepoGroup {
     createdByUserId: null,
     createdAt: '2026-08-02T00:00:00.000Z',
     updatedAt: '2026-08-02T00:00:00.000Z',
+    nodes: [{ path: '', attachment: null }],
     members: [],
     flatRepoCount: 3,
     boundMemories: 2,
@@ -106,6 +107,29 @@ describe('RepoGroupsPane —— 列表行为', () => {
     expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }))
   })
 
+  test('展开目录树复用任务列表按钮，并暴露可访问的展开状态', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ nodes: [{ path: '', origins: [] }], repos: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    try {
+      renderPane()
+      const button = screen.getByTestId('repo-group-expand-g1')
+      expect(button.classList.contains('task-operations__expand-button')).toBe(true)
+      expect(button.getAttribute('aria-expanded')).toBe('false')
+
+      fireEvent.click(button)
+      expect(button.getAttribute('aria-expanded')).toBe('true')
+      expect(document.getElementById(button.getAttribute('aria-controls') ?? '')).not.toBeNull()
+      expect(await screen.findByTestId('repo-group-layout-g1')).not.toBeNull()
+      expect(PANE_SRC).toContain("from '@/components/operations/OperationsExpandButton'")
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
   test('搜索过滤名称与描述（大小写不敏感）', () => {
     renderPane({
       list: {
@@ -139,39 +163,45 @@ describe('RepoGroupsPane —— 列表行为', () => {
   })
 })
 
-describe('RFC-248 —— 编辑器：未填完的行不是错误（真实使用中发现）', () => {
-  // 症状：点一下「+ 添加仓库」、还没选仓，右侧预览区立刻弹红框
-  // 「members.0.cachedRepoId: exactly one of cachedRepoId / repoUrl is required」。
-  // 成因：整份成员表被 debounce 后原样发去干跑预览，服务端的 XOR 校验判它非法。
-  // 但「一行还没填完」根本不是错误——用户什么都还没做错。
-  //
-  // 修法：未填完的行**不参与预览**（与服务端对「只给 URL」的行同样思路），
-  // 并且挡住保存（这个条件前端完全判得出来，不该推给服务端回 422）。
-
-  test('预览请求里剔除未填完的行', () => {
-    // 送去预览的是 `previewWire`（已过滤），不是原始 `wire`。
-    expect(EDITOR_SRC).toContain('const previewWire')
-    expect(EDITOR_SRC).toContain('wire.filter((m) => !isIncomplete(m))')
-    expect(EDITOR_SRC).toContain('setDebounced(previewWire)')
-    // 且**不能**再把未过滤的 wire 直接塞进 debounce。
-    expect(codeOnly(EDITOR_SRC)).not.toMatch(/setDebounced\(wire\)/)
+describe('RFC-249 —— 紧凑目录树编辑主路径', () => {
+  test('写接口只发送显式 nodes，root 是普通节点而非主仓', () => {
+    expect(EDITOR_SRC).toContain("return [{ path: '', attachment: null }]")
+    expect(EDITOR_SRC).toContain('const body = { name, description, nodes }')
+    expect(EDITOR_SRC).toContain('{ nodes: debouncedNodes }')
+    expect(codeOnly(EDITOR_SRC)).not.toContain('members: wire')
   })
 
-  test('「未填完」的判据对仓与组两种成员都成立', () => {
-    // 组成员看 childGroupId，仓成员看 cachedRepoId ⊕ repoUrl 是否都空。
-    expect(EDITOR_SRC).toContain("m.childGroupId === ''")
-    expect(EDITOR_SRC).toContain("(m.cachedRepoId ?? '') === '' && (m.repoUrl ?? '') === ''")
+  test('平铺大量仓库有批量选择与批量 URL 两条快速入口', () => {
+    expect(EDITOR_SRC).toContain('repo-group-bulk-repos')
+    expect(EDITOR_SRC).toContain('repo-group-paste-urls')
+    expect(EDITOR_SRC).toContain('allocateRepoNodePath')
+    expect(EDITOR_SRC).toContain('bulkRepoIds')
+    expect(EDITOR_SRC).toContain('repo-group-select-all-attachments')
+    expect(EDITOR_SRC).toContain('selectVisibleRepos')
+    expect(EDITOR_SRC).toContain('parseGitUrl')
+    expect(EDITOR_SRC).toContain('repo-group-paste-errors')
   })
 
-  test('有未填完的行时保存被挡住', () => {
-    expect(EDITOR_SRC).toContain('incompleteCount === 0')
+  test('多选节点支持只读、可写、摘挂载、移动与删除', () => {
+    for (const operation of ['readonly', 'writable', 'detach', 'move']) {
+      expect(EDITOR_SRC).toContain(`applyBatch('${operation}')`)
+    }
+    expect(EDITOR_SRC).toContain('requestDelete([...checked])')
+    expect(EDITOR_SRC).toContain('repo-group-batch-bar')
   })
 
-  test('未填完用中性 chip 提示，不是 ErrorBanner', () => {
-    expect(EDITOR_SRC).toContain('repo-group-preview-incomplete')
-    const at = EDITOR_SRC.indexOf('repo-group-preview-incomplete')
-    // 提示挂在 StatusChip 上（中性），附近不该是错误横幅。
-    expect(EDITOR_SRC.slice(at - 200, at)).toContain('StatusChip')
+  test('删除子树先显示节点与挂载影响数，再原子删除', () => {
+    expect(EDITOR_SRC).toContain("from '@/components/ConfirmDialog'")
+    expect(EDITOR_SRC).toContain('<ConfirmDialog')
+    expect(EDITOR_SRC).toContain('attachmentCount')
+    expect(EDITOR_SRC).toContain('deleteSubtrees(deleteIntent.paths)')
+  })
+
+  test('桌面拖放与键盘可达的上级目录选择共用 moveNodeSubtree', () => {
+    expect(EDITOR_SRC).toContain('onDragStart')
+    expect(EDITOR_SRC).toContain('onDrop')
+    expect(EDITOR_SRC.match(/moveNodeSubtree/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
+    expect(EDITOR_SRC).toContain("t('repoGroups.editor.parentDirectory')")
   })
 })
 
@@ -198,22 +228,24 @@ describe('RFC-248 设计系统兜底（源代码层）', () => {
       expect(codeOnly(src)).not.toMatch(/className="error-box"/)
       expect(codeOnly(src)).not.toMatch(/<div className="muted">\s*\{t\(/)
     }
-    // 空态与加载态经共享原语表达。
+    // 空态与加载态经共享原语表达；编辑器的校验失败走 ErrorBanner。
     expect(PANE_SRC).toContain('EmptyState')
     expect(PANE_SRC).toContain('LoadingState')
-    expect(EDITOR_SRC).toContain('QueryState')
+    expect(EDITOR_SRC).toContain('ErrorBanner')
   })
 
-  test('布局树是三处共用的**同一个**组件，不是各画一棵', () => {
-    // 编辑器预览、组列表展开行、任务详情都 import 它——任何一处 fork 都会让
-    // 三个界面的树慢慢长歪。
-    expect(EDITOR_SRC).toContain("from '@/components/repos/RepoLayoutTree'")
+  test('只读布局树由组列表与任务详情共用；编辑器不再重复画预览树', () => {
     expect(PANE_SRC).toContain("from '@/components/repos/RepoLayoutTree'")
+    expect(EDITOR_SRC).not.toContain("from '@/components/repos/RepoLayoutTree'")
+    expect(EDITOR_SRC).toContain('repo-group-editor__workspace')
   })
 
-  test('/repos 的视图切换走 <Segmented>，不自写 radio 组', () => {
-    expect(REPOS_SRC).toContain("from '@/components/Segmented'")
-    expect(REPOS_SRC).toContain('testidPrefix="repos-tab"')
+  test('/repos 的资源视图走标准下划线 <TabBar>，不再做成表单分段按钮', () => {
+    expect(REPOS_SRC).toContain("from '@/components/TabBar'")
+    expect(REPOS_SRC).toContain('rootTestid="repos-tab"')
+    expect(REPOS_SRC).toContain('idPrefix="repos-resource"')
+    expect(REPOS_SRC).toContain("tabDomIds('repos-resource', 'repos')")
+    expect(REPOS_SRC).toContain('className="repo-kind-tabs"')
     expect(codeOnly(REPOS_SRC)).not.toMatch(/type="radio"/)
   })
 })

@@ -7,7 +7,7 @@
 // 展开一行显示 `RepoLayoutTree` —— 与编辑器的实时预览、任务详情的布局块是
 // **同一个组件**，三处的树长得一模一样。
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
@@ -19,6 +19,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { TextInput } from '@/components/Form'
 import { QueryState } from '@/components/QueryState'
 import { TableViewport } from '@/components/TableViewport'
+import { OperationsExpandButton } from '@/components/operations/OperationsExpandButton'
 import { RepoLayoutTree } from '@/components/repos/RepoLayoutTree'
 
 export interface RepoGroupsPaneProps {
@@ -44,11 +45,17 @@ function LayoutRow({ groupId }: { groupId: string }) {
   return (
     <QueryState
       query={layout}
-      data={layout.data?.repos ?? []}
+      data={layout.data?.nodes ?? layout.data?.repos ?? []}
       emptyText={t('repoGroups.layout.empty')}
       testid={`repo-group-layout-state-${groupId}`}
     >
-      {(repos) => <RepoLayoutTree repos={repos} testidPrefix={`repo-group-layout-${groupId}`} />}
+      {() => (
+        <RepoLayoutTree
+          nodes={layout.data?.nodes}
+          repos={layout.data?.repos ?? []}
+          testidPrefix={`repo-group-layout-${groupId}`}
+        />
+      )}
     </QueryState>
   )
 }
@@ -124,55 +131,65 @@ export function RepoGroupsPane({
               </tr>
             </thead>
             <tbody>
-              {items.map((g) => (
-                <>
-                  <tr key={g.id} data-testid={`repo-group-row-${g.id}`}>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn--xs"
-                        onClick={() => setExpanded((cur) => (cur === g.id ? null : g.id))}
-                        data-testid={`repo-group-expand-${g.id}`}
-                      >
-                        {expanded === g.id ? '▾' : '▸'}
-                      </button>{' '}
-                      {g.name}
-                      {g.description !== '' && (
-                        <div className="data-table__muted">{g.description}</div>
-                      )}
-                    </td>
-                    <td>{g.flatRepoCount}</td>
-                    <td>{g.boundMemories}</td>
-                    <td>
-                      <div className="data-table__actions">
-                        <button
-                          type="button"
-                          className="btn btn--sm"
-                          onClick={() => onEdit(g)}
-                          data-testid={`repo-group-edit-${g.id}`}
-                        >
-                          {t('common.edit')}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--sm btn--danger"
-                          onClick={() => onDelete(g)}
-                          data-testid={`repo-group-delete-${g.id}`}
-                        >
-                          {t('common.delete')}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {expanded === g.id && (
-                    <tr key={`${g.id}-layout`}>
-                      <td colSpan={4}>
-                        <LayoutRow groupId={g.id} />
+              {items.map((g) => {
+                const isExpanded = expanded === g.id
+                const layoutId = `repo-group-layout-panel-${g.id}`
+                return (
+                  <Fragment key={g.id}>
+                    <tr data-testid={`repo-group-row-${g.id}`}>
+                      <td>
+                        <div className="repo-groups-pane__name-cell">
+                          <OperationsExpandButton
+                            expanded={isExpanded}
+                            controls={layoutId}
+                            label={t(
+                              isExpanded ? 'repoGroups.collapseLayout' : 'repoGroups.expandLayout',
+                              { name: g.name },
+                            )}
+                            testid={`repo-group-expand-${g.id}`}
+                            onToggle={() => setExpanded((cur) => (cur === g.id ? null : g.id))}
+                          />
+                          <div className="repo-groups-pane__name-copy">
+                            <div>{g.name}</div>
+                            {g.description !== '' && (
+                              <div className="data-table__muted">{g.description}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td>{g.flatRepoCount}</td>
+                      <td>{g.boundMemories}</td>
+                      <td>
+                        <div className="data-table__actions">
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            onClick={() => onEdit(g)}
+                            data-testid={`repo-group-edit-${g.id}`}
+                          >
+                            {t('common.edit')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--sm btn--danger"
+                            onClick={() => onDelete(g)}
+                            data-testid={`repo-group-delete-${g.id}`}
+                          >
+                            {t('common.delete')}
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </>
-              ))}
+                    {isExpanded && (
+                      <tr id={layoutId}>
+                        <td colSpan={4}>
+                          <LayoutRow groupId={g.id} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </TableViewport>

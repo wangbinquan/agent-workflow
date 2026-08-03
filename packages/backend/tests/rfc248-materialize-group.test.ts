@@ -15,15 +15,25 @@
 // 单仓任务的行为都被这个 RFC 改掉了。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import type { RepoGroupNodeInput } from '@agent-workflow/shared'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos } from '../src/db/schema'
-import { createRepoGroup } from '../src/services/repoGroup'
-import { materializeSpace } from '../src/services/task'
+import { cachedRepos, taskSpaceNodes } from '../src/db/schema'
+import { createRepoGroup, updateRepoGroup } from '../src/services/repoGroup'
+import { createWorkflow } from '../src/services/workflow'
+import { getTask, materializeSpace, startTask } from '../src/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { DomainError } from '../src/util/errors'
 
@@ -31,11 +41,15 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let tmp = ''
 let db: DbClient
+const priorAppHome = process.env.AGENT_WORKFLOW_HOME
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'aw-rfc248-mat-'))
+  process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
   db = createInMemoryDb(MIGRATIONS)
 })
 afterEach(() => {
+  if (priorAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+  else process.env.AGENT_WORKFLOW_HOME = priorAppHome
   if (tmp !== '') rmSync(tmp, { recursive: true, force: true })
 })
 
@@ -112,6 +126,11 @@ async function makeGroup(name: string, members: MemberSpec[]): Promise<string> {
   return g.id
 }
 
+async function makeTreeGroup(name: string, nodes: RepoGroupNodeInput[]): Promise<string> {
+  const group = await createRepoGroup({ db }, { name, description: '', nodes }, null)
+  return group.id
+}
+
 function materialize(repoGroupId: string) {
   return materializeSpace(
     // 只需要 materializeSpace 读到的那几个字段；其余由 StartTaskSchema 在真实
@@ -126,6 +145,11 @@ function lsVisible(dir: string): string[] {
   return readdirSync(dir)
     .filter((n) => n !== '.git')
     .sort()
+}
+
+function localHeads(dir: string): string[] {
+  const output = git(dir, 'for-each-ref', '--format=%(refname):%(objectname)', 'refs/heads')
+  return output.trim() === '' ? [] : output.trim().split('\n').sort()
 }
 
 async function codeOfAsync(fn: () => Promise<unknown>): Promise<string> {
@@ -162,14 +186,13 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     expect(space.repos).toHaveLength(5)
 
     const byMount = new Map(space.repos.map((r) => [r.mountPath, r]))
-    // ① 物化顺序按挂载深度升序（外层必须先于内层建），**同深度保持展平序**
-    // ——即用户在组里排的成员顺序，不是字典序。这样 repo_index 稳定可预期，
-    // 用户在组编辑器里看到的次序与任务详情里的一致。
+    // ① RFC-249：物化顺序按挂载深度升序；同深度按规范路径稳定排序。
+    // 目录树没有手工 display order，预览、落库重开与任务 repo_index 必须一致。
     expect(space.repos.map((r) => r.mountPath)).toEqual([
       '', //              深度 0
-      'vendor/sdk', //    深度 2，成员序 #1
-      'site/docs', //     深度 2，成员序 #3
-      'compare/main', //  深度 2，成员序 #4
+      'compare/main', //  深度 2，路径序
+      'site/docs',
+      'vendor/sdk',
       'vendor/sdk/ext', // 深度 3
     ])
 
@@ -270,6 +293,149 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     expect(space.repos[0]!.mountPath).toBe('')
     // 单仓没有嵌套子成员 ⇒ 不该有预置 commit。
     expect(space.repos[0]!.gitignoreCommit).toBeNull()
+    expect(space.nodePaths).toEqual([''])
+  })
+
+  test('RFC-249：纯目录进入 group 工作区与冻结 nodePaths，不触发单仓快路径', async () => {
+    const app = seedRepo('tree-app', { 'src/main.ts': 'app' })
+    const gid = await makeTreeGroup('目录树', [
+      {
+        path: '',
+        attachment: {
+          kind: 'repo',
+          cachedRepoId: app.id,
+          ref: '',
+          subdir: '',
+          readonly: false,
+        },
+      },
+      { path: 'docs', attachment: null },
+      { path: 'docs/decisions', attachment: null },
+      { path: 'scratch', attachment: null },
+    ])
+
+    const space = await materialize(gid)
+    expect(space.kind).toBe('group')
+    expect(space.nodePaths).toEqual(['', 'docs', 'docs/decisions', 'scratch'])
+    expect(existsSync(join(space.worktreePath, 'docs', 'decisions'))).toBe(true)
+    expect(existsSync(join(space.worktreePath, 'scratch'))).toBe(true)
+    // Pure directories are ordinary writable paths in the root repo, not
+    // nested-repo exclusions; they therefore remain visible to git.
+    writeFileSync(join(space.worktreePath, 'docs', 'decisions', 'adr.md'), 'ADR')
+    expect(git(space.worktreePath, 'status', '--porcelain')).toContain('docs/')
+  })
+
+  test('RFC-249：纯目录被文件或 symlink 占用时结构化拒绝并回收 worktree', async () => {
+    const occupied = seedRepo('tree-file', { blocked: 'not a directory' })
+    const occupiedHeads = localHeads(occupied.path)
+    const fileGroup = await makeTreeGroup('文件占位', [
+      {
+        path: '',
+        attachment: {
+          kind: 'repo',
+          cachedRepoId: occupied.id,
+          ref: '',
+          subdir: '',
+          readonly: false,
+        },
+      },
+      { path: 'blocked', attachment: null },
+    ])
+    expect(await codeOfAsync(() => materialize(fileGroup))).toBe('repo-group-directory-occupied')
+    expect(git(occupied.path, 'worktree', 'list').trim().split('\n')).toHaveLength(1)
+    expect(localHeads(occupied.path)).toEqual(occupiedHeads)
+
+    const linked = seedRepo('tree-link', { 'src/main.ts': 'app' })
+    symlinkSync(tmpdir(), join(linked.path, 'linked'))
+    git(linked.path, 'add', 'linked')
+    git(linked.path, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'link')
+    const linkedHeads = localHeads(linked.path)
+    const linkGroup = await makeTreeGroup('链接占位', [
+      {
+        path: '',
+        attachment: {
+          kind: 'repo',
+          cachedRepoId: linked.id,
+          ref: '',
+          subdir: '',
+          readonly: false,
+        },
+      },
+      { path: 'linked', attachment: null },
+    ])
+    expect(await codeOfAsync(() => materialize(linkGroup))).toBe('repo-group-directory-occupied')
+    expect(git(linked.path, 'worktree', 'list').trim().split('\n')).toHaveLength(1)
+    expect(localHeads(linked.path)).toEqual(linkedHeads)
+  })
+
+  test('RFC-249：任务原子冻结纯目录，组改动后 sourceTaskId 仍按旧树重跑', async () => {
+    const app = seedRepo('snapshot-app', { 'src/main.ts': 'app' })
+    const gid = await makeTreeGroup('快照树', [
+      {
+        path: '',
+        attachment: {
+          kind: 'repo',
+          cachedRepoId: app.id,
+          ref: '',
+          subdir: '',
+          readonly: false,
+        },
+      },
+      { path: 'docs', attachment: null },
+      { path: 'docs/decisions', attachment: null },
+    ])
+    const workflow = await createWorkflow(db, {
+      name: 'empty',
+      description: '',
+      definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
+    })
+
+    const first = await startTask(
+      { workflowId: workflow.id, name: 'first', inputs: {}, repoGroupId: gid },
+      { db, appHome: join(tmp, 'home') },
+    )
+    expect(
+      db
+        .select({ path: taskSpaceNodes.nodePath })
+        .from(taskSpaceNodes)
+        .all()
+        .map((row) => row.path)
+        .sort(),
+    ).toEqual(['', 'docs', 'docs/decisions'])
+    expect((await getTask(db, first.id))?.spaceNodes?.map((node) => node.path)).toEqual([
+      '',
+      'docs',
+      'docs/decisions',
+    ])
+
+    await updateRepoGroup(
+      { db },
+      gid,
+      {
+        name: '快照树',
+        description: '',
+        nodes: [
+          {
+            path: '',
+            attachment: {
+              kind: 'repo',
+              cachedRepoId: app.id,
+              ref: '',
+              subdir: '',
+              readonly: false,
+            },
+          },
+        ],
+      },
+      1,
+    )
+
+    const replay = await startTask(
+      { workflowId: workflow.id, name: 'replay', inputs: {}, sourceTaskId: first.id },
+      { db, appHome: join(tmp, 'home') },
+    )
+    expect(replay.spaceNodes?.map((node) => node.path)).toEqual(['', 'docs', 'docs/decisions'])
+    expect(existsSync(join(replay.worktreePath, 'docs', 'decisions'))).toBe(true)
   })
 
   test('单成员但带 subdir ⇒ 走组物化（单仓分支不支持 sparse）', async () => {

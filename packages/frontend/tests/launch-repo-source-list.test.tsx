@@ -13,7 +13,8 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 
 import { MULTI_REPO_MAX } from '@agent-workflow/shared'
 import { RepoSourceList } from '../src/components/launch/RepoSourceList'
@@ -42,6 +43,9 @@ function renderList(props: {
   repos: RepoSource[]
   onChange?: (next: RepoSource[]) => void
   multiRepoBlockedReason?: 'wrapper-git' | 'upload' | null
+  onSelectGroup?: (groupId: string) => void
+  selectedGroupId?: string
+  selectedGroupDetails?: ReactNode
 }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const onChange = props.onChange ?? (() => {})
@@ -51,6 +55,9 @@ function renderList(props: {
         repos={props.repos}
         onChange={onChange}
         multiRepoBlockedReason={props.multiRepoBlockedReason ?? null}
+        onSelectGroup={props.onSelectGroup}
+        selectedGroupId={props.selectedGroupId}
+        selectedGroupDetails={props.selectedGroupDetails}
       />
     </QueryClientProvider>,
   )
@@ -163,5 +170,72 @@ describe('RepoSourceList — RFC-066 PR-C UI contract', () => {
     const { getByTestId } = renderList({ repos })
     const preview1 = getByTestId('repo-source-preview-1')
     expect((preview1.textContent ?? '').includes('utils-2')).toBe(true)
+  })
+
+  test('F7 selected group stays in the same picker row and can switch back in-place', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = String(input)
+      const items = url.includes('/api/repo-groups')
+        ? [
+            {
+              id: 'group-1',
+              name: 'Platform',
+              flatRepoCount: 12,
+            },
+          ]
+        : []
+      return new Response(JSON.stringify({ items }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const onChange = vi.fn()
+
+    const { queryByTestId } = renderList({
+      repos: [defaultRepoSource()],
+      onChange,
+      onSelectGroup: () => {},
+      selectedGroupId: 'group-1',
+      selectedGroupDetails: <div data-testid="selected-group-layout">layout</div>,
+    })
+
+    const picker = await screen.findByTestId('repo-source-recent-urls-0')
+    await waitFor(() => expect(picker.textContent).toContain('Platform'))
+    expect(queryByTestId('repo-source-row-0')).not.toBeNull()
+    expect(queryByTestId('repo-source-url-0')).toBeNull()
+    expect(queryByTestId('repo-source-ref-0')).toBeNull()
+    expect(queryByTestId('selected-group-layout')).not.toBeNull()
+
+    fireEvent.click(picker)
+    fireEvent.mouseDown(
+      await screen.findByRole('option', {
+        name: /select a repository or repo group|选择代码仓库或仓库组/i,
+      }),
+    )
+    expect(onChange).toHaveBeenCalledWith([defaultRepoSource()])
+  })
+
+  test('F8 an unselected repository/group shows only the shared picker', async () => {
+    const { queryByTestId, rerender } = renderList({
+      repos: [defaultRepoSource()],
+      onSelectGroup: () => {},
+    })
+    expect(queryByTestId('repo-source-url-0')).toBeNull()
+    expect(queryByTestId('repo-source-ref-0')).toBeNull()
+    expect(queryByTestId('repo-source-url-auto-sync-0')).toBeNull()
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    rerender(
+      <QueryClientProvider client={qc}>
+        <RepoSourceList
+          repos={[{ kind: 'url', repoUrl: 'git@github.com:org/repo.git', ref: '' }]}
+          onChange={() => {}}
+          multiRepoBlockedReason={null}
+          onSelectGroup={() => {}}
+        />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(queryByTestId('repo-source-url-0')).not.toBeNull())
+    expect(queryByTestId('repo-source-ref-0')).not.toBeNull()
   })
 })

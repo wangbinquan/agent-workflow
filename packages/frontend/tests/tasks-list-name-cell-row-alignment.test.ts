@@ -40,7 +40,7 @@ describe('routes/tasks.tsx — operations-grid row alignment', () => {
       SRC.indexOf('function executionDetail'),
     )
     expect(row).toMatch(
-      /task-operations__task-main[\s\S]*task-operations__expand-button[\s\S]*task-operations__name/,
+      /task-operations__task-main[\s\S]*OperationsExpandButton[\s\S]*task-operations__name/,
     )
     expect(row).toMatch(/task-operations__owner[\s\S]*task-operations__nav/)
   })

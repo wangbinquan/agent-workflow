@@ -1042,6 +1042,7 @@ export interface Resources {
   }
   repoGroups: {
     tabLabel: string
+    subtitle: string
     searchPlaceholder: string
     noMatchesDescription: string
     deleteTitle: string
@@ -1054,6 +1055,8 @@ export interface Resources {
     loading: string
     empty: string
     emptyDescription: string
+    expandLayout: string
+    collapseLayout: string
     columns: { name: string; repoCount: string; memories: string }
     editor: {
       createTitle: string
@@ -1075,6 +1078,43 @@ export interface Resources {
       addGroup: string
       pendingImports: string
       incompleteRows: string
+      emptyDirectory: string
+      pendingRepo: string
+      selectNode: string
+      bulkAddRepos: string
+      pasteUrls: string
+      selectAllAttachments: string
+      newDirectoryPlaceholder: string
+      addDirectory: string
+      addTo: string
+      searchRepos: string
+      selectVisibleRepos: string
+      clearSelection: string
+      addSelected: string
+      pasteUrlsPlaceholder: string
+      invalidUrlLines: string
+      addUrls: string
+      selectedCount: string
+      markReadonly: string
+      markWritable: string
+      detach: string
+      moveTo: string
+      move: string
+      validating: string
+      layoutSummary: string
+      nodeSettings: string
+      deleteSubtree: string
+      deleteSubtreeTitle: string
+      deleteSubtreeDescription: string
+      deleteSubtreeConfirm: string
+      directoryName: string
+      parentDirectory: string
+      attachRepo: string
+      attachGroup: string
+      attachedRepo: string
+      attachedGroup: string
+      ref: string
+      subdir: string
     }
     layout: {
       rootMount: string
@@ -1086,6 +1126,8 @@ export interface Resources {
   }
   repos: {
     title: string
+    pageTitle: string
+    remoteTab: string
     operations: {
       subtitle: string
       viewAria: string
@@ -3011,6 +3053,7 @@ export interface Resources {
     spaceGroupChange: string
     spaceGroupSummary: string
     spaceGroupRepoCount: string
+    spaceGroupLayoutTitle: string
     contentDescription: string
     contentDescriptionHint: string
     agentPortsBlocked: string
@@ -3084,12 +3127,16 @@ export interface Resources {
       url: string
       urlField: string
       urlHint: string
+      spaceField: string
+      spaceHint: string
       urlPlaceholder: string
       urlInvalid: string
       refField: string
       refHint: string
       refPlaceholder: string
       recentUrlsPlaceholder: string
+      spacePlaceholder: string
+      manualUrlOption: string
       /** RFC-248: 下拉里的仓库组条目标签 */
       groupOption: string
       cloningHint: string
@@ -5395,6 +5442,7 @@ export const zhCN: Resources = {
   },
   repoGroups: {
     tabLabel: '仓库组',
+    subtitle: '用目录树组织多个代码仓，创建可复用的任务工作空间',
     searchPlaceholder: '搜索组名或描述…',
     noMatchesDescription: '没有匹配的仓库组。',
     deleteTitle: '删除仓库组',
@@ -5411,6 +5459,8 @@ export const zhCN: Resources = {
     empty: '还没有仓库组',
     emptyDescription:
       '仓库组描述「哪几个仓 + 各自 checkout 什么 + 在运行目录里怎么摆」，是多仓任务的唯一启动方式。',
+    expandLayout: '展开「{{name}}」的目录树',
+    collapseLayout: '收起「{{name}}」的目录树',
     columns: { name: '名称', repoCount: '展平仓数', memories: '绑定记忆' },
     editor: {
       createTitle: '新建仓库组',
@@ -5430,19 +5480,59 @@ export const zhCN: Resources = {
       readonly: '只读',
       addRepo: '+ 添加仓库',
       addGroup: '+ 添加组',
-      pendingImports: '还有 {{count}} 个仓按 URL 填写，将在保存时导入（预览不含它们）',
+      pendingImports: '还有 {{count}} 个仓按 URL 填写，将在保存时导入',
       incompleteRows: '{{count}} 行还没选仓库 / 组，填完才会出现在预览里',
+      emptyDirectory: '空目录',
+      pendingRepo: '待导入仓库',
+      selectNode: '选择节点 {{path}}',
+      bulkAddRepos: '批量加仓',
+      pasteUrls: '粘贴 URL',
+      selectAllAttachments: '全选挂载',
+      newDirectoryPlaceholder: '新目录名',
+      addDirectory: '添加目录',
+      addTo: '添加到 {{path}}',
+      searchRepos: '搜索已缓存仓库…',
+      selectVisibleRepos: '全选当前 {{count}} 个',
+      clearSelection: '清空选择',
+      addSelected: '添加选中的 {{count}} 个',
+      pasteUrlsPlaceholder: '每行一个 Git URL',
+      invalidUrlLines: '第 {{lines}} 行不是支持的 Git URL',
+      addUrls: '添加这些 URL',
+      selectedCount: '已选 {{count}} 个节点',
+      markReadonly: '设为只读',
+      markWritable: '设为可写',
+      detach: '摘除挂载',
+      moveTo: '移动到目录',
+      move: '移动',
+      validating: '正在校验布局…',
+      layoutSummary: '{{nodes}} 个目录节点 · {{repos}} 个仓库',
+      nodeSettings: '节点设置',
+      deleteSubtree: '删除子树',
+      deleteSubtreeTitle: '删除目录子树',
+      deleteSubtreeDescription:
+        '本次编辑将删除 {{nodes}} 个目录节点，其中包含 {{attachments}} 个仓库或仓库组挂载。保存前仍可取消整次编辑。',
+      deleteSubtreeConfirm: '删除这些节点',
+      directoryName: '目录名',
+      parentDirectory: '上级目录',
+      attachRepo: '挂载已缓存仓库',
+      attachGroup: '挂载仓库组',
+      attachedRepo: '已挂载仓库',
+      attachedGroup: '已挂载仓库组',
+      ref: 'Ref',
+      subdir: '仓内子目录',
     },
     layout: {
       rootMount: '（任务根）',
       subdirChip: '子目录：{{subdir}}',
       readonlyChip: '只读',
       via: '经由 {{chain}}',
-      empty: '这个组还没有成员。',
+      empty: '这个组还没有目录节点。',
     },
   },
   repos: {
     title: '远端仓缓存',
+    pageTitle: '代码仓库',
+    remoteTab: '远端仓库',
     operations: {
       subtitle: '集中查看缓存新鲜度、使用情况与仓库健康状态',
       viewAria: '远端仓业务视图',
@@ -7767,6 +7857,7 @@ export const zhCN: Resources = {
     spaceGroupChange: '更换',
     spaceGroupSummary: '仓库组：{{name}}',
     spaceGroupRepoCount: '展平后共 {{count}} 个仓库',
+    spaceGroupLayoutTitle: '目录布局',
     contentDescription: '任务描述',
     contentDescriptionHint: '将作为提示词直接交给 Agent。',
     agentPortsBlocked: '该 Agent 的输入端口声明阻止手动启动：',
@@ -7844,12 +7935,16 @@ export const zhCN: Resources = {
       url: '远端 URL',
       urlField: 'Git URL',
       urlHint: '支持 SSH（git@host:org/repo.git）与 HTTP/HTTPS（公开仓 / URL 中可携带 token）。',
+      spaceField: '代码仓库或仓库组',
+      spaceHint: '选择已缓存仓库或仓库组；需要时可选择“输入新的 Git URL…”。',
       urlPlaceholder: 'git@github.com:org/repo.git',
       urlInvalid: 'URL 格式无法识别（应为 SSH 或 HTTP/HTTPS）',
       refField: '分支 / tag / commit（可选）',
       refHint: '留空则使用克隆后的默认分支。',
       refPlaceholder: 'main / v1.2.0 / a3f9c…',
       recentUrlsPlaceholder: '— 从已缓存仓里挑一个 —',
+      spacePlaceholder: '— 选择代码仓库或仓库组 —',
+      manualUrlOption: '输入新的 Git URL…',
       groupOption: '{{name}}（组 · {{count}} 仓）',
       cloningHint: '首次克隆可能耗时数分钟；下次启动会复用本地缓存。',
       urlAutoSync: '本地镜像会在启动前自动同步到远端（fetch + 所选分支 fast-forward）。',

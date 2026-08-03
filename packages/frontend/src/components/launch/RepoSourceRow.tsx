@@ -7,13 +7,14 @@
 // escape hatch for local repos.
 
 import { useQuery } from '@tanstack/react-query'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CachedRepo } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Field, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import type { RepoGroup } from '@agent-workflow/shared'
-import { validateRepoUrl, type RepoSource } from '@/lib/launch-repo-source'
+import { defaultRepoSource, validateRepoUrl, type RepoSource } from '@/lib/launch-repo-source'
 
 export interface RepoSourceRowProps {
   source: RepoSource
@@ -37,15 +38,22 @@ export interface RepoSourceRowProps {
    * 所以走独立通道而不是塞进 `onChange`。不给则完全维持旧行为（只列仓库）。
    */
   onSelectGroup?: (groupId: string) => void
+  /** RFC-249: the selected group's compact layout stays inside this same row. */
+  details?: ReactNode
+  /** Keeps the shared selector selected while the parent space is a repo group. */
+  selectedGroupId?: string
 }
 
 /** 下拉里区分「组条目」与「仓库条目」的值前缀（仓库值是裸 ULID）。 */
 export const GROUP_OPTION_PREFIX = 'group:'
+export const MANUAL_URL_OPTION = 'manual-url'
 
 export function RepoSourceRow({
   source,
   onChange,
   onSelectGroup,
+  details,
+  selectedGroupId,
   showRemove,
   onRemove,
   previewDirName,
@@ -66,6 +74,24 @@ export function RepoSourceRow({
   })
 
   const idxSuffix = typeof index === 'number' ? `-${index}` : ''
+  const groupSelected = selectedGroupId !== undefined && selectedGroupId !== ''
+  const [manualUrl, setManualUrl] = useState(
+    () => source.cachedRepoId === undefined && source.repoUrl.trim() !== '',
+  )
+  const manualUrlActive =
+    !groupSelected &&
+    (source.cachedRepoId === undefined || source.cachedRepoId === '') &&
+    (manualUrl || source.repoUrl.trim() !== '')
+  const showUrlInput = onSelectGroup === undefined || manualUrlActive
+  const repositorySelected =
+    !groupSelected &&
+    (onSelectGroup === undefined ||
+      (source.cachedRepoId !== undefined && source.cachedRepoId !== '') ||
+      (manualUrlActive && source.repoUrl.trim() !== ''))
+  const showSourcePicker =
+    onSelectGroup !== undefined
+      ? cached.data !== undefined || groups.data !== undefined
+      : (cached.data?.items.length ?? 0) > 0
 
   return (
     <div className="repo-source-row" data-testid={`repo-source-row${idxSuffix}`}>
@@ -92,19 +118,61 @@ export function RepoSourceRow({
         </div>
       )}
 
-      <Field label={t('launch.repoSource.urlField')} required hint={t('launch.repoSource.urlHint')}>
-        {cached.data !== undefined && cached.data.items.length > 0 && (
+      <Field
+        label={
+          onSelectGroup === undefined
+            ? t('launch.repoSource.urlField')
+            : t('launch.repoSource.spaceField')
+        }
+        required
+        hint={
+          onSelectGroup === undefined
+            ? t('launch.repoSource.urlHint')
+            : t('launch.repoSource.spaceHint')
+        }
+      >
+        {showSourcePicker && (
           <Select<string>
             data-testid={`repo-source-recent-urls${idxSuffix}`}
-            ariaLabel={t('launch.repoSource.recentUrlsPlaceholder')}
-            placeholder={t('launch.repoSource.recentUrlsPlaceholder')}
-            value={source.cachedRepoId ?? ''}
+            ariaLabel={
+              onSelectGroup === undefined
+                ? t('launch.repoSource.recentUrlsPlaceholder')
+                : t('launch.repoSource.spacePlaceholder')
+            }
+            placeholder={
+              onSelectGroup === undefined
+                ? t('launch.repoSource.recentUrlsPlaceholder')
+                : t('launch.repoSource.spacePlaceholder')
+            }
+            value={
+              groupSelected
+                ? `${GROUP_OPTION_PREFIX}${selectedGroupId}`
+                : manualUrlActive
+                  ? MANUAL_URL_OPTION
+                  : (source.cachedRepoId ?? '')
+            }
             onChange={(id) => {
               if (id.startsWith(GROUP_OPTION_PREFIX)) {
+                setManualUrl(false)
                 onSelectGroup?.(id.slice(GROUP_OPTION_PREFIX.length))
                 return
               }
+              if (id === MANUAL_URL_OPTION) {
+                setManualUrl(true)
+                onChange(defaultRepoSource())
+                return
+              }
+              if (id === '') {
+                // The placeholder is the light-weight way back to the compact,
+                // unselected state from either a group or manual URL mode.
+                if (groupSelected || manualUrlActive) {
+                  setManualUrl(false)
+                  onChange(defaultRepoSource())
+                }
+                return
+              }
               if (id !== '') {
+                setManualUrl(false)
                 // RFC-204: reuse by id — the credentialed URL is never sent to
                 // the client, so we carry the id and show the redacted label.
                 const hit = cached.data?.items.find((it) => it.id === id)
@@ -117,8 +185,17 @@ export function RepoSourceRow({
               }
             }}
             options={[
-              { value: '', label: t('launch.repoSource.recentUrlsPlaceholder') },
-              ...cached.data.items.map((it) => ({ value: it.id, label: it.urlRedacted })),
+              {
+                value: '',
+                label:
+                  onSelectGroup === undefined
+                    ? t('launch.repoSource.recentUrlsPlaceholder')
+                    : t('launch.repoSource.spacePlaceholder'),
+              },
+              ...(cached.data?.items ?? []).map((it) => ({
+                value: it.id,
+                label: it.urlRedacted,
+              })),
               ...(onSelectGroup !== undefined
                 ? (groups.data?.items ?? []).map((g) => ({
                     value: `${GROUP_OPTION_PREFIX}${g.id}`,
@@ -128,33 +205,52 @@ export function RepoSourceRow({
                     }),
                   }))
                 : []),
+              ...(onSelectGroup !== undefined
+                ? [
+                    {
+                      value: MANUAL_URL_OPTION,
+                      label: t('launch.repoSource.manualUrlOption'),
+                    },
+                  ]
+                : []),
             ]}
           />
         )}
-        <TextInput
-          value={source.repoUrl}
-          onChange={(v) => onChange({ kind: 'url', repoUrl: v, ref: source.ref })}
-          placeholder={t('launch.repoSource.urlPlaceholder')}
-          data-testid={`repo-source-url${idxSuffix}`}
-        />
-        {validateRepoUrl(source.repoUrl) === 'invalid' && (
-          <div className="form-input__error" data-testid={`repo-source-url-error${idxSuffix}`}>
-            {t('launch.repoSource.urlInvalid')}
-          </div>
+        {!groupSelected && showUrlInput && (
+          <>
+            <TextInput
+              value={source.repoUrl}
+              onChange={(v) => onChange({ kind: 'url', repoUrl: v, ref: source.ref })}
+              placeholder={t('launch.repoSource.urlPlaceholder')}
+              data-testid={`repo-source-url${idxSuffix}`}
+            />
+            {validateRepoUrl(source.repoUrl) === 'invalid' && (
+              <div className="form-input__error" data-testid={`repo-source-url-error${idxSuffix}`}>
+                {t('launch.repoSource.urlInvalid')}
+              </div>
+            )}
+          </>
         )}
       </Field>
-      <Field label={t('launch.repoSource.refField')} hint={t('launch.repoSource.refHint')}>
-        <TextInput
-          value={source.ref}
-          onChange={(v) => onChange({ ...source, ref: v })}
-          placeholder={t('launch.repoSource.refPlaceholder')}
-          data-testid={`repo-source-ref${idxSuffix}`}
-        />
-      </Field>
-      {/* RFC-068: FF sync is always automatic for remote workspaces — make that visible. */}
-      <div className="form-field__hint" data-testid={`repo-source-url-auto-sync${idxSuffix}`}>
-        {t('launch.repoSource.urlAutoSync')}
-      </div>
+      {repositorySelected && (
+        <>
+          <Field label={t('launch.repoSource.refField')} hint={t('launch.repoSource.refHint')}>
+            <TextInput
+              value={source.ref}
+              onChange={(v) => onChange({ ...source, ref: v })}
+              placeholder={t('launch.repoSource.refPlaceholder')}
+              data-testid={`repo-source-ref${idxSuffix}`}
+            />
+          </Field>
+          {/* RFC-068: FF sync is always automatic for remote workspaces — make that visible. */}
+          <div className="form-field__hint" data-testid={`repo-source-url-auto-sync${idxSuffix}`}>
+            {t('launch.repoSource.urlAutoSync')}
+          </div>
+        </>
+      )}
+      {groupSelected && details !== undefined && (
+        <div className="repo-source-row__details">{details}</div>
+      )}
     </div>
   )
 }

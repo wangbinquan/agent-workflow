@@ -57,7 +57,7 @@ import { StatusChip } from '@/components/StatusChip'
 import { UploadPicker } from '@/components/launch/UploadPicker'
 import { useActor } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
-import { resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
+import { defaultRepoSource, resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
 import { resourceOptionLabel } from '@/lib/resource-option-label'
 import {
   buildAgentStartBody,
@@ -1479,52 +1479,48 @@ function TaskWizardPage() {
                 </div>
                 <div className="muted">{t('taskWizard.spaceReplayHint')}</div>
               </div>
-            ) : space.kind === 'group' ? (
-              // RFC-248: 已选中仓库组——展示组名 + 展平仓数 + 挂载布局预览，
-              // 「更换」退回仓库/组选择列表。
-              <div className="info-box" data-testid="wizard-space-group">
-                <div className="wizard-space-group__head">
-                  <StatusChip kind="info" size="sm">
-                    {t('taskWizard.spaceGroupChip')}
-                  </StatusChip>
-                  <strong>{selectedGroup?.name ?? space.groupId}</strong>
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    data-testid="wizard-space-group-change"
-                    onClick={() => setSpace(defaultWizardSpace('remote'))}
-                  >
-                    {t('taskWizard.spaceGroupChange')}
-                  </button>
-                </div>
-                {selectedGroup !== undefined && (
-                  <div className="muted">
-                    {t('taskWizard.spaceGroupRepoCount', { count: selectedGroup.flatRepoCount })}
-                  </div>
-                )}
-                {/* RFC-248（实现门 P2）：光有组名与仓数，用户无法在启动**之前**
-                    确认挂载路径 / ref / sparse 子目录 / 只读成员。这些恰恰是
-                    「任务会跑在什么样的目录里」的全部内容，必须看得见再决定。 */}
-                <QueryState
-                  query={groupLayout}
-                  data={groupLayout.data?.repos ?? []}
-                  emptyText={t('repoGroups.layout.empty')}
-                  testid="wizard-space-group-layout-state"
-                >
-                  {(repos) => (
-                    <RepoLayoutTree
-                      repos={repos}
-                      testidPrefix="wizard-space-group-layout"
-                      compact
-                    />
-                  )}
-                </QueryState>
-              </div>
-            ) : space.kind === 'remote' ? (
+            ) : space.kind === 'group' || space.kind === 'remote' ? (
               <RepoSourceList
-                repos={space.repos}
+                // RFC-249: repo and group are two values of the same picker,
+                // not two mutually replacing cards. Keeping row key 0 mounted
+                // removes the visual jump and makes switching reversible in
+                // the exact control where the choice was made.
+                repos={space.kind === 'remote' ? space.repos : [defaultRepoSource()]}
                 onChange={(repos) => setSpace({ kind: 'remote', repos })}
                 onSelectGroup={(groupId) => setSpace({ kind: 'group', groupId })}
+                selectedGroupId={space.kind === 'group' ? space.groupId : undefined}
+                selectedGroupDetails={
+                  space.kind === 'group' ? (
+                    <section className="wizard-space-layout" data-testid="wizard-space-group">
+                      <div className="wizard-space-layout__head">
+                        <strong>{t('taskWizard.spaceGroupLayoutTitle')}</strong>
+                        {selectedGroup !== undefined && (
+                          <span className="muted">
+                            {t('taskWizard.spaceGroupRepoCount', {
+                              count: selectedGroup.flatRepoCount,
+                            })}
+                          </span>
+                        )}
+                      </div>
+                      {/* RFC-248（实现门 P2）：启动前展示完整挂载布局。 */}
+                      <QueryState
+                        query={groupLayout}
+                        data={groupLayout.data?.nodes ?? groupLayout.data?.repos ?? []}
+                        emptyText={t('repoGroups.layout.empty')}
+                        testid="wizard-space-group-layout-state"
+                      >
+                        {() => (
+                          <RepoLayoutTree
+                            nodes={groupLayout.data?.nodes}
+                            repos={groupLayout.data?.repos ?? []}
+                            testidPrefix="wizard-space-group-layout"
+                            compact
+                          />
+                        )}
+                      </QueryState>
+                    </section>
+                  ) : undefined
+                }
                 maxCount={1}
               />
             ) : (

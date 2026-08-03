@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { EXECUTION_IDENTITY_FAILURE_CODES } from '../executionIdentity'
 import { hasQueryCredential } from '../git-url'
 import { InjectedMemorySnapshotSchema } from './memory'
+import { PlannedDirectoryNodeSchema } from './repoGroup'
 import { OwnerIdentitySchema } from './user'
 
 export const TASK_STATUS = [
@@ -84,8 +85,8 @@ export function isLooseValidBranchName(name: string): boolean {
 
 // RFC-248 T32: `StartTaskRepoSchema` / `StartTaskRepo` 已删除——它们只服务于
 // 退役的 `repos[]` 数组项。单仓来源的字段规则仍由下面的 `refineRepoSourceFields`
-// 直接作用在顶层 body 上；多仓来源是 `repoGroupId`，其成员形状归
-// `schemas/repoGroup.ts` 的 `RepoGroupMemberInputSchema`。
+// 直接作用在顶层 body 上；多仓来源是 `repoGroupId`，其显式目录树形状归
+// `schemas/repoGroup.ts` 的 `RepoGroupNodeInputSchema`。
 
 /**
  * RFC-204 — per-repo-source rules defined ONCE and reused by both
@@ -343,6 +344,8 @@ export const TaskSchema = z.object({
   repoCount: z.number().int().positive().default(1),
   /** RFC-066: per-repo detail, length == repoCount, sorted by repoIndex asc. */
   repos: z.array(TaskRepoSchema).default([]),
+  /** RFC-249: frozen explicit directory tree, including pure directories. */
+  spaceNodes: z.array(PlannedDirectoryNodeSchema).optional(),
   /**
    * RFC-248: 用哪个仓库组启动的（null = 单仓 / scratch）。名字是**快照**（设计
    * 门 G5）——组删掉后详情页仍渲染名字，不退化成一个悬空 id。
