@@ -40,6 +40,26 @@ export const CONTAINMENT_REQUIREMENT_PROFILES = {
     optional: ['descendantLifetimeBound'],
     childBoundary: 'model-controlled',
   },
+  // RFC-253 — the OUTER process itself must have no network. Named for the
+  // requirement, not the consumer (RFC-253's script node is the first caller,
+  // but an agent-side egress control wanting the same bundle must reuse this
+  // entry rather than mint a parallel one).
+  //
+  // `failClosed` is the deliberate exception to the mode table: for every other
+  // profile a missing capability under `warn` degrades loudly and runs anyway,
+  // which is the right trade when containment is defence in depth. Here the
+  // capability IS the feature — a node that declared "no network" and then ran
+  // WITH network has been silently escalated, so degrading is worse than
+  // failing. Owning the rule here (rather than letting the caller re-read the
+  // receipt and decide) keeps RFC-233's single admission authority intact.
+  'outer-netless-v1': {
+    id: 'outer-netless-v1',
+    revision: '1',
+    required: ['platformHomeIsolation', 'immutableArtifactView', 'outerNetworkDeny'],
+    optional: ['descendantLifetimeBound'],
+    childBoundary: 'none',
+    failClosed: true,
+  },
 } as const
 
 export type ContainmentRequirementProfileId = keyof typeof CONTAINMENT_REQUIREMENT_PROFILES
@@ -185,6 +205,10 @@ function absentCapabilities(): Record<string, ContainmentCapabilityStrength> {
     platformHomeIsolation: 'absent',
     immutableArtifactView: 'absent',
     modelChildNetworkDeny: 'absent',
+    // RFC-253 — the OUTER process's own network fence, distinct from the
+    // model-child one: that bundle fences a child the model controls, this one
+    // fences the contained process itself.
+    outerNetworkDeny: 'absent',
     descendantLifetimeBound: 'absent',
   }
 }
@@ -256,6 +280,9 @@ function bwrapSandbox(
     platformHomeIsolation: 'strong',
     immutableArtifactView: 'strong',
     modelChildNetworkDeny: 'strong',
+    // bwrap renders `--unshare-net` + the /run masks (policy.ts); a provider
+    // that qualified at all has the user-namespace machinery both rely on.
+    outerNetworkDeny: 'strong',
     descendantLifetimeBound: 'strong',
   },
 ): SandboxProvider {
@@ -289,6 +316,9 @@ function seatbeltSandbox(base: SandboxProvider, mode: SandboxMode): SandboxProvi
         platformHomeIsolation: 'strong',
         immutableArtifactView: 'strong',
         modelChildNetworkDeny: 'strong',
+        // SBPL `(deny network*)` is part of the profile language itself — if
+        // sandbox-exec runs at all, the fence renders.
+        outerNetworkDeny: 'strong',
         descendantLifetimeBound: 'best-effort',
       },
       childProviderPlan: { sandboxExecPath: '/usr/bin/sandbox-exec' },
@@ -495,6 +525,10 @@ export class ContainmentCoordinator {
             platformHomeIsolation: 'strong',
             immutableArtifactView: 'strong',
             modelChildNetworkDeny: fullTopology ? 'strong' : 'absent',
+            // Tied to the SAME full-topology trial as the child fence: both are
+            // namespace operations, so a host where the full trial failed
+            // cannot be claimed to deliver either.
+            outerNetworkDeny: fullTopology ? 'strong' : 'absent',
             descendantLifetimeBound: 'strong',
           }
           const sandbox = bwrapSandbox(this.#provider, this.#mode, bwrapPath, capabilities)
@@ -617,7 +651,12 @@ export class ContainmentCoordinator {
     const modeBeforeProbe = this.#mode
     const policyGenerationBeforeProbe = this.#policyGeneration
     const admissionGeneration = incrementAdmission ? ++this.#admissionGeneration : 0
-    if (modeBeforeProbe === 'off') {
+    // RFC-253 — a fail-closed profile never takes the `off` shortcut: `off`
+    // would hand back a plan with no fence at all, which for this bundle is
+    // exactly the silent escalation the flag exists to prevent. It falls
+    // through to full qualification and is judged on capability alone.
+    const failClosed = 'failClosed' in profile && profile.failClosed === true
+    if (modeBeforeProbe === 'off' && !failClosed) {
       const capabilities = Object.freeze(absentCapabilities())
       const receipt = freezeReceipt({
         coordinatorBootId: this.#bootId,
@@ -660,7 +699,7 @@ export class ContainmentCoordinator {
     // governs this admission. The provider evidence itself is mode-independent.
     const mode = this.#mode
     const policyGeneration = this.#policyGeneration
-    if (mode === 'off') {
+    if (mode === 'off' && !failClosed) {
       const capabilities = Object.freeze(absentCapabilities())
       const receipt = freezeReceipt({
         coordinatorBootId: this.#bootId,
@@ -714,7 +753,10 @@ export class ContainmentCoordinator {
     const qualified = isQualified(qualification.result) && missing.length === 0
     const decision: ContainmentDecision = qualified
       ? 'contained'
-      : mode === 'enforce'
+      : // RFC-253 — fail-closed bundles block in EVERY mode, including `warn`
+        // and `off`. See the profile comment: degrading a declared network
+        // fence is a privilege escalation, not a reduced safety margin.
+        failClosed || mode === 'enforce'
         ? 'blocked'
         : 'degraded'
     const providerId = qualification.result.providerId

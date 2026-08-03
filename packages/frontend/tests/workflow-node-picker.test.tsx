@@ -53,11 +53,13 @@ describe('WorkflowNodePicker', () => {
     expect(search.getAttribute('type')).toBe('search')
     expect(search.getAttribute('aria-label')).not.toBeNull()
     expect(getByRole('tablist', { name: /node type|节点类型/ })).toBeTruthy()
-    expect(getByTestId('workflow-node-picker-category-all').textContent).toMatch(/11/)
+    expect(getByTestId('workflow-node-picker-category-all').textContent).toMatch(/12/)
     expect(getByTestId('workflow-node-picker-category-agents').textContent).toMatch(/1/)
     expect(getByTestId('workflow-node-picker-category-wrappers').textContent).toMatch(/3/)
     // RFC-243 — call-workflow + call-workgroup entries in the Calls category.
     expect(getByTestId('workflow-node-picker-category-calls').textContent).toMatch(/2/)
+    // RFC-253 — the single generic script entry in the Scripts category.
+    expect(getByTestId('workflow-node-picker-category-scripts').textContent).toMatch(/1/)
     expect(getByTestId('workflow-node-picker-category-io').textContent).toMatch(/2/)
     expect(getByTestId('workflow-node-picker-category-human').textContent).toMatch(/3/)
     expect(getAllByText(/Recommended|推荐/).length).toBeGreaterThan(0)

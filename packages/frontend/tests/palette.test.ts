@@ -158,14 +158,22 @@ describe('buildPalette', () => {
   // pin the exact i18n keys this module emits without booting the bundle.
   const identityT = (key: string) => key
 
-  test('groups agents into Agents + Wrappers + Calls + IO + Human sections (RFC-243 added Calls)', () => {
+  test('groups agents into Agents + Wrappers + Calls + Scripts + IO + Human sections (RFC-243 added Calls, RFC-253 added Scripts)', () => {
     const sections = buildPalette([AGENT_A], identityT)
-    expect(sections.map((s) => s.key)).toEqual(['agents', 'wrappers', 'calls', 'io', 'human'])
+    expect(sections.map((s) => s.key)).toEqual([
+      'agents',
+      'wrappers',
+      'calls',
+      'scripts',
+      'io',
+      'human',
+    ])
     const labels = sections.map((s) => s.label)
     expect(labels).toEqual([
       'editor.paletteAgents',
       'editor.paletteWrappers',
       'editor.paletteCalls',
+      'editor.paletteScripts',
       'editor.paletteIo',
       'editor.paletteHuman',
     ])

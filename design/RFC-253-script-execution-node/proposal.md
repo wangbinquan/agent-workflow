@@ -1,0 +1,229 @@
+# RFC-253 · 脚本执行节点（Script Execution Node）
+
+> 产品视角。技术设计见 [design.md](./design.md)，任务分解见 [plan.md](./plan.md)。
+> 状态：**Draft（2026-08-03）** —— 三件套已落档，按 CLAUDE.md 需先过 Codex 设计门 + 用户批准才进入实现。
+
+## 1. 背景
+
+平台今天的执行单位只有两类：**跑模型的节点**（`agent-single`，以及它的容器 `wrapper-git` / `wrapper-loop` /
+`wrapper-fanout`）和**不跑任何进程的节点**（`input` / `output` / `review` / `clarify` 家族）。RFC-243 新增的
+`call-workflow` / `call-workgroup` 也只是把「跑模型」这件事推给了子任务。
+
+结果是：凡是**确定性的、机器可判定的**工作——跑一遍测试、把 agent 吐的 JSON 重排成清单、按规则筛出需要审计的
+文件、调一次内部 API 把结论发出去——今天都只能塞给一个 agent 去做。这有三个真实代价：
+
+1. **贵且慢**：一次 `python -c "json.load(...)"` 级别的变换，要花掉一整个模型会话的 token 与分钟级延迟。
+2. **不确定**：模型每次的输出格式都可能飘，下游要靠信封协议 + 端口 kind 校验 + RFC-042 的重试兜底才敢用。
+3. **不可判定**：「测试是否通过」本来是一个退出码，交给模型就变成了一段需要再解析的自然语言。
+
+本仓的产品愿景（`proposal/init.md`）是**用确定性的框架级管道编排多个 agent 进程**。管道里缺一块拼图：
+**确定性计算本身**。本 RFC 补上它。
+
+## 2. 目标
+
+新增一类工作流节点 **`script`**：在任务工作区里执行一段用户内联编写的 **python / bash / node** 脚本，
+不启动任何模型进程；上游端口的值以环境变量注入，脚本的输出成为下游端口的值。
+
+具体地：
+
+- **G1** 画布上可拖入脚本节点，右侧抽屉里直接写代码（CodeMirror 编辑器，语法高亮 / 行号）。
+- **G2** 脚本能读到所有上游端口的值，能读写任务工作区，改动与 agent 的改动**同等地**进入 `wrapper-git`
+  的 `git_diff`、进入结构化 diff、进入自动提交推送。
+- **G3** 脚本的输出能作为普通端口喂给任何下游节点——包括作为 `wrapper-fanout` 的分片源、作为多文档 review
+  的输入（所以端口要能声明 kind）。
+- **G4** 脚本能声明第三方依赖（pip / npm），平台负责在受控边界内预装并跨运行复用缓存。
+- **G5** 脚本能带自己的环境变量 / 密钥，且这些值在读路径、YAML 导出、诊断输出里被脱敏。
+- **G6** 脚本进程与 agent 进程**同档**受 containment 约束（RFC-205/227/233），并可按节点关闭出网。
+- **G7** 「谁能往工作流里塞可执行代码」是一个显式权限，默认只有 admin 与 manager 有，且**任何 PAT / MCP 令牌都拿不到**。
+
+## 3. 非目标
+
+- **不做**「脚本」这一类独立平台资源（无 owner/visibility/grants/列表页/详情页）。脚本正文内联在节点里，
+  随工作流版本与 YAML 走（D1）。跨工作流复用 = 复制粘贴，或用 `call-workflow` 把含脚本的工作流当子流程调。
+- **不做**任意解释器命令行。语言是固定枚举，路径由平台解析（D2/D13）。「让用户填 `uv run python`」等价于
+  任意命令执行，语言限制形同虚设。
+- **不做**长驻服务 / 后台守护型脚本。脚本是一次性进程，退出即节点终态。
+- **不做**跨迭代脚本状态。与 wrapper-loop 现状一致：跨迭代状态只经工作区文件传递。
+- **不做**脚本级的人工环节。脚本不参与 clarify（不能反问）、不产生 opencode/claude session、不计 token。
+  需要人工判定就在脚本下游接 `review` 节点。
+- **不做**源码包构建。依赖预装只接受预编译产物（D14），装不上的包报明确错误而不是回落到执行 `setup.py`。
+- **不做** `wrapper-fanout` **内部**的脚本节点（设计门 F7）：fanout 的分片派发器在类型与运行期都硬要求内节点是 agent
+  （`scheduler.ts:6198,6448,6808`），支持它等于改写扇出派发链。v1 由校验器**显式拒绝**这个组合而不是留一个静默
+  坏掉的形态。US-3（脚本**算出**清单再喂给 fanout 的 shardSource）不受影响——那才是真实价值场景。
+- **不做** `path<…>` / `list<path<…>>` 族的脚本输出端口（设计门 P1）：这类端口的正确性依赖 RFC-193 的
+  emit-time 归档链（`portArtifacts.ts`），否则 iso 工作区被回收后端口内容直接断链。v1 校验器显式拒绝该 kind，
+  归档链留作后续切片——比「看起来支持、GC 后断链」诚实。
+- **不做** daemon 侧 git 执行面的通配名收口（`filter.*` / `diff.*.textconv`）。它是 RFC-252 G1 自己登记的残留
+  （`util/gitHardening.ts:29-33`），本 RFC 只是它的第二个消费者，不擅自扩大他人 RFC 的范围。
+- **不做** agent 侧的出网围栏改造。本 RFC 只把通用围栏机制建进 containment 能力/profile 体系并由脚本节点
+  首先消费；agent 侧归 RFC-252（D17，用户明确划界）。
+- **不做** runner.ts 的重构。新抽的受控 spawn 原语供脚本执行器使用并留出 runner 迁移口子，但迁移本身
+  是架构审视 WP-2 的独立切片（见 §7 后续工作）。
+
+## 4. 用户故事
+
+- **US-1（确定性验收）** 我在 Fix 节点后面挂一个脚本节点跑 `pytest -q`，退出码非零就让任务变红——不需要
+  一个 agent 去「读测试输出并判断是否通过」。
+- **US-2（数据变换）** 上游 agent 产出一份 JSON 报告，我用 20 行 python 把它筛选、排序、去重成一份 markdown
+  清单再喂给下游，而不是再起一个模型会话做这件确定的事。
+- **US-3（分片源）** 我用一段 python 算出「本次改动里需要深审的文件清单」，声明成 `list<path<md>>` 端口，
+  直接接进 `wrapper-fanout` 的 shardSource，扇出并行审计。
+- **US-4（外部集成）** 收尾节点用 python 调内部 API，把审计结论推到工单系统。为此我在节点上配 `API_TOKEN`
+  环境变量，它在工作流详情、YAML 导出和错误信息里都显示为脱敏值。
+- **US-5（带依赖但不许外传）** 我要用 `pandas` 做数据处理，但这段脚本处理的是敏感代码，我把节点标成
+  `network: deny`——依赖照装（预装阶段独立放网），用户代码跑起来时无网。
+- **US-6（管理员视角）** 平台有十几个用户都能建工作流。我不希望其中任何一个能往里塞一段在宿主上跑的代码，
+  所以脚本正文的编写权限默认只有我有；他们照常编排、照常启动含脚本的工作流。
+
+## 5. 决策清单
+
+### 5.1 用户拍板（四轮反问，逐条）
+
+| # | 决策点 | 结论 |
+|---|--------|------|
+| **D1** | 脚本正文形态 | **内联在节点里**：作为节点字段存进 `workflow.definition` JSON，随工作流版本自增、随 YAML 导入导出。不新建资源域 / ACL / 列表页。 |
+| **D2** | 解释器来源 | **语言枚举 + 平台解析路径**：节点上选 `python` / `bash` / `node`，平台在宿主 PATH 上解析，管理员可在设置里覆盖绝对路径。 |
+| **D3** | 输出协议 | **stdout 单端口 + 可选多端口协议**：节点未声明 `outputs` ⇒ 整个 stdout 即唯一端口的值；声明了 `outputs` ⇒ 要求脚本打印平台既有的 `<workflow-output>` 信封（与 agent 字节级同构，last-wins + RFC-200 nonce 防伪）。 |
+| **D4** | 隔离与出网默认 | **容器化但默认允许出网**：文件边界复用 RFC-205/227/233 containment；网络默认放开（脚本节点的典型用途就是调 API / 拉数据）。 |
+| **D5** | 入参方式 | **环境变量为主，大值落文件**：每个上游端口注入 `AW_PORT_<NAME>`；超阈值的值改写到 `$AW_INPUT_DIR/<name>` 并以 `AW_PORT_FILE_<NAME>` 给路径（避开 `E2BIG`）。**脚本正文不做任何模板替换**。 |
+| **D6** | 作者权限 | **新增权限点**：只有持点者能新建 / 修改脚本正文及其执行语义字段；其他人照常编排工作流其余部分、照常启动。角色基线见 D19（admin + manager）。 |
+| **D7** | 失败与重试 | **完全对齐 agent**：exit≠0 ⇒ 节点 failed；自动重试沿用全局 `config.defaultNodeRetries`；超时沿用全局 per-node timeout。 |
+| **D8** | 写入语义 | **RFC-130 iso 工作区 + merge-back**，节点可标 `readonly`（只读跑，不建 iso、不合回）。 |
+| **D9** | 第三方依赖 | **节点声明依赖，平台预装**：按依赖列表哈希建缓存环境并跨运行复用。 |
+| **D10** | 密钥 / 环境变量 | **节点自带 env 映射表 + 读路径脱敏**：沿用 MCP local 的 env 先例与 RFC-234 secret-slot 脱敏体系。 |
+| **D11** | 端口 kind | **支持，复用现有 kind 语法**（`string` / `markdown` / `markdown_file` / `path<…>` / `list<…>`），从而可直接喂 fanout 分片与多文档 review。 |
+| **D12** | 代码编辑 UI | **引入 CodeMirror 6**，封装为公共 `<CodeEditor>` 原语。 |
+| **D13** | 语言范围 | **python + bash + node**（依赖预装只需接 pip 与 npm 两个包管理器；bash 无依赖档）。 |
+| **D14** | 预装执行边界 | **容器内跑包管理器 + 只许预编译包**：pip 加 `--only-binary=:all:`，npm 加 `--ignore-scripts`；源码包的 `setup.py` / `postinstall` 一律不执行。 |
+| **D15** | 预装阶段出网 | **独立放网**：预装是平台行为、发生在用户代码之前，单独一个允许出网的安装阶段；装完封存环境，再按节点的 `network` 档跑用户代码。这样「可用三方库但不准外传数据」才成立。 |
+| **D16** | 编辑器铺开范围 | **新增公共 `<CodeEditor>` + 顺手替换存量 JSON / YAML 输入框**（MCP 配置、插件 options、工作流 YAML 导入、通用 `JsonField`）。散文类 monospace 输入框（提示词、markdown、记忆正文、文件路径）**不动**。 |
+| **D17** | 出网围栏归属 | **本 RFC 建通用围栏**（进 containment 能力 + requirement profile 体系，不做旁路包装），RFC-252 只管 agent 节点。用户原话：「你做你的节点，252 应该只会做 agent 节点」。 |
+| **D18** | 交付节奏 | **单 RFC，按层切 5 个 PR**（与 RFC-247 / RFC-248 先例一致）。 |
+
+### 5.2 设计推导决策（需在批准时一并确认）
+
+| # | 决策点 | 结论与理由 |
+|---|--------|-----------|
+| **D19** | 权限点命名与归域 | 点名 **`scripts:author`**，归 **系统域**（`SYSTEM_DOMAIN_POINTS`）⇒ **永不进 PAT / MCP 令牌面**；角色基线为 **admin + manager**（进 `MANAGER_EXTRA`，**不**进 `MANAGER_DENIED_PERMISSIONS`），不进 `USER_BASELINE`。理由：它不是某个资源的 CRUD 动词，而是「在宿主上执行代码」的能力，RFC-247 D7 已确立系统域点不进令牌，一枚泄漏的 PAT 因此不能变成 RCE。**归系统域与「manager 也有」并不冲突**——`account:self` / `users:search` / `intent:*` 同为系统域点且在 `USER_BASELINE` 里（`permission.ts` USER_BASELINE），系统域约束的是令牌面而非角色面。<br>**用户更正记录（2026-08-03）**：反问第二轮的选项文案曾说「权限可由 admin 下放给信任用户」，这是**错的**——本仓权限点只能由角色推导（`ROLE_PERMISSIONS`），没有 per-user 授点表；因此可选范围只有「仅 admin」/「admin + manager」/「新建 per-user 授点机制（独立 RFC 体量）」。用户拍板 **admin + manager**。 |
+| **D20** | 权限校验粒度 | 只有**脚本敏感投影**变化才要点：`language` / `script` / `dependencies` / `env` / `network` / `readonly` / `outputs`，以及脚本节点的**新增与删除**。位置、标题、连线、其他节点的任何改动都不要点——否则无权者连挪一下画布都存不了盘。投影做规范化哈希，前后一致即放行。 |
+| **D21** | 复制不要点 | RFC-231 的工作流复制是服务端原样搬运一份已存在的修订，不引入任何新的可执行内容，因此**不**要求 `scripts:author`。复制出来的工作流里脚本节点可运行、不可编辑。 |
+| **D22** | 单端口模式的端口名 | 固定为 **`stdout`**。不让用户改名——改名的需求等价于「我要声明端口」，那条路已经有了（信封模式）。 |
+| **D23** | 围栏不可用时 fail closed | 节点声明 `network: 'deny'` 而围栏能力不可用时，**`enforce` / `warn` / `off` 三档一律阻断**。与 RFC-252 D8 同构：此处降级等于提权，是 coordinator 决策表的例外。`network: 'allow'`（默认）仍走现有三档语义。 |
+| **D24** | 重试的副作用边界 | 自动重试（D7）对**文件副作用天然安全**：fresh retry 会 `discardNodeIso` + 重新从 canonical 分叉（`scheduler.ts:4462-4494`），脚本上一轮写的文件不会叠加。**外部副作用不回滚**（发出去的 HTTP 请求、推送的工单）。这一点必须写进节点 UI 的说明文案与 `docs/` —— 非幂等脚本要自己做幂等键。 |
+| **D25** | 不进模型侧机制 | 脚本节点不注入记忆（RFC-041）、不参与 clarify / cross-clarify、不产生 session、`node_runs.tok_*` 保持 NULL、不进 RFC-029 inventory 快照。 |
+| **D26** | 行为矩阵取值 | `NODE_KIND_BEHAVIORS.script = { retryCascade: 'mint-placeholder', isProcess: true, isAgent: false, settlesWithoutRow: false }`——它是真进程、参与重试级联、不拥有会话、总是写 node_run 行。 |
+| **D27** | 端口值上限 | 沿用 agent 侧现有上限语义（`MAX_AGENT_TEXT_CHARS` = 8 MiB，`appendBoundedTail` 尾部截断）。超限截断而不是失败，并在事件流里留显式截断标记。 |
+| **D28** | `$schema_version` 不 bump | 沿用 RFC-243 / RFC-060 先例：新增节点 kind 是纯增量，旧文档从不携带新 kind，bump 只会制造无意义的迁移面。 |
+
+## 6. 验收标准
+
+### 执行
+
+- **AC-1** 画布上从「脚本」分区拖出一个脚本节点，选 python、写 `print("hello")`、连到 output 节点，启动任务，
+  任务 done 且 output 节点拿到 `hello`。
+- **AC-2** 上游 agent 的 `report` 端口连进脚本节点，脚本内 `os.environ["AW_PORT_REPORT"]` 拿到与 agent 输出
+  **逐字节相同**的值。
+- **AC-3** 一个 12 MiB 的上游端口值不再走环境变量：`AW_PORT_<NAME>` 缺席、`AW_PORT_FILE_<NAME>` 指向
+  `$AW_INPUT_DIR` 下的文件，内容逐字节相同；进程不因 `E2BIG` 起不来。
+- **AC-4** 声明了 `outputs: [{name:'files', kind:'list<path<md>>'}]` 的脚本节点，打印带正确 nonce 的
+  `<workflow-output>` 信封后，`files` 端口可直接接 `wrapper-fanout` 的 shardSource 并真实扇出。
+- **AC-5** 脚本打印的信封若不带本次运行的 nonce，一律不采信；节点按「缺信封」失败并触发重试。
+  **边界（设计门 P2）**：nonce 防的是**运行前的上游注入**——脚本把上游端口值原样回显、其中夹带伪造信封的情形。
+  它**不**防脚本作者伪造：脚本自己能读到 `AW_ENVELOPE_NONCE`，构造合法信封是它的正常能力。
+- **AC-5b** 声明 `outputs` 却少打印某个端口 ⇒ 节点按 `script-port-missing` 失败（parser 会把缺失端口补成空串
+  并单独报告，光复用它不会失败——设计门 F9）。信封本身破损 ⇒ `script-envelope-malformed`。
+- **AC-5c** 单端口模式下端口值是**原始 stdout 字节**，空行与尾换行逐字保留（设计门 F8：现有行泵会把
+  `a\n\nb\n` 压成 `a\nb`，端口值必须与事件流分开累加）。
+- **AC-6** 脚本 `exit 3` ⇒ 节点 failed、`exit_code` 记 3；重试次数用尽后任务 failed。
+- **AC-7** 脚本死循环 ⇒ 到全局 per-node timeout 时 SIGTERM，宽限后 SIGKILL，节点 failed 且无残留孤儿进程。
+- **AC-8** 任务取消 ⇒ 脚本进程被杀，节点 canceled。
+- **AC-9** 脚本在工作区新建 / 修改文件，外层 `wrapper-git` 的 `git_diff` 包含这些改动，与 agent 改动无区别。
+- **AC-10** 节点标 `readonly` ⇒ 不建 iso 工作区、不合并回写；脚本对 canonical 工作区的写入尝试被容器边界拒绝。
+- **AC-11** 脚本节点可放进 `wrapper-git` / `wrapper-loop` 内部并正确参与 diff 与迭代。放进 `wrapper-fanout`
+  内部 ⇒ **校验器报错、任务起不来**（非目标，fail closed）。
+- **AC-11b** 脚本节点声明 `path<…>` / `list<path<…>>` 输出端口 ⇒ 校验器报错（非目标，fail closed）。
+
+### 隔离与出网
+
+- **AC-12** 默认（`network` 未声明或为 `allow`）脚本能访问外网。
+- **AC-13** 节点声明 `network: 'deny'` ⇒ **脚本进程**内任何出网尝试失败（Linux 网络命名空间 / macOS Seatbelt
+  网络 deny 各自实测），而**同一次运行**里事先声明的依赖已可用。
+  **边界（设计门 P0-1/P0-2，如实声明而非宣称完备）**：
+  ① Linux `--unshare-net` 只隔离 abstract Unix socket；pathname socket（`/run/user/$UID/bus`、`docker.sock`）
+  受 mount namespace 管，故 netless 档额外 `--tmpfs /run` `--tmpfs /var/run`，但这仍是 best-effort 边界。
+  ② 围栏围的是**脚本进程**。脚本改 `.gitattributes` + repo-local `filter.<n>.clean` 后，daemon 侧后续的
+  `git add -A`（快照 / 合回）会在**沙箱外以 daemon 身份**执行该 filter —— 这是 `gitHardening.ts:29-33` 自己
+  登记的平台级残留，归 RFC-252 的独立切片，不由本 RFC 关闭。该链的现实价值是防**依赖供应链**（三方包做坏事），
+  而不是防脚本作者——按 D19 作者本就是 admin/manager。
+- **AC-14** `network: 'deny'` 且围栏能力不可用（无 bwrap / Seatbelt / 探针失败）⇒ 节点在产生任何副作用之前
+  被阻断，三档模式一致，错误码明确。
+- **AC-15** 脚本读不到 `~/.agent-workflow/db.sqlite`、`secret.key`、`token`、其他任务的 iso 工作区。
+  **边界（设计门 F4）**：外层沙箱**不是 jail** —— appHome 之外的宿主路径脚本仍可写，与**今天的 agent 完全同档**
+  （`policy.ts` 的 Linux `--bind / /` 与 macOS `(allow default)`）。收紧它是 RFC-252 G2/G3 的范围。
+- **AC-16** 脚本进程的环境是最小集：不继承 daemon 的完整 `process.env`；`HOME` 指向本次运行的私有目录。
+  **平台键最终覆盖用户键**（设计门 P1 翻转了原设计）：节点 `env` 不得覆盖 `PATH` / `HOME` / `TMPDIR` /
+  `PYTHONPATH` / `NODE_PATH` / `NODE_OPTIONS` / `AW_*` / `GIT_*` 等保留键——`mcpEnvIssues` 显式放行
+  `PYTHONPATH` 与 `NODE_OPTIONS`，光复用它护不住脚本的 ABI 与依赖只读边界。
+
+### 依赖
+
+- **AC-17** 声明 `dependencies: ['requests==2.32.3']` 的 python 脚本首次运行会预装并缓存；第二次运行**不再联网
+  安装**（命中缓存），两次都能 `import requests`。
+- **AC-18** 声明一个只有源码分发的包 ⇒ 安装失败、节点失败、错误信息明确指出「只接受预编译包」，且**没有**任何
+  `setup.py` 被执行。
+- **AC-19** 依赖条目里出现 `--index-url=…` / `-r req.txt` / `git+https://…` / 含 shell 元字符的值 ⇒ 保存工作流时
+  即被校验器拒绝（不是运行期才炸）。语法**按语言分档**校验（pip 与 npm 的版本比较符不是一套，设计门 F10）。
+- **AC-19b** 依赖必须**精确钉版本**（pip `pkg==1.2.3`、npm `pkg@1.2.3`）；范围/裸名在保存期即被拒。理由（设计门 P1）：
+  环境按依赖列表哈希缓存，冷缓存时才联网解析——不钉版本会让同一份「已授权」的定义在不同时间解析到不同的包字节。
+  确定性本来就是脚本节点的立身之本。解析结果（版本 + 产物摘要）写进 manifest 与运行记录。
+- **AC-20** 依赖缓存目录以只读方式挂进脚本运行边界；脚本对它的写入被拒绝（防止污染其他节点的环境）。
+- **AC-21** 两个节点并发首次使用同一依赖集合 ⇒ 只产生一份缓存环境，且两个节点都成功。
+
+### 权限与密钥
+
+- **AC-22** 无 `scripts:author` 的用户新增脚本节点 / 改脚本正文 / 改依赖 / 改 env / 改 network ⇒ 保存被拒（403，
+  错误码明确）。门落在**持久化原语**（`insertWorkflowInTx` / `prepareWorkflowSave`）而非仅 HTTP 入口——
+  intent 的创建路径直呼前者（设计门 P1），只守 HTTP 会被内部 caller 静默绕过。
+- **AC-23** 同一用户挪动脚本节点位置、改标题、编辑同一工作流里**与脚本无关**的其他节点 ⇒ 保存成功。
+- **AC-23b** 但**改指向脚本节点的入边**、或**把脚本挪进/挪出 wrapper**、或**改包含它的 loop 的 `maxIterations`**
+  ⇒ 需要权限点（设计门 P1）：入边决定 `AW_PORT_*` 的键与值，wrapper 归属与迭代上限决定它跑几次——
+  这些都改变「宿主会执行什么」，把它们排除在投影外等于留一个改语义不改正文的绕过。
+- **AC-24** 无 `scripts:author` 的用户**启动**含脚本节点的工作流 ⇒ 成功（运行不受限）。
+- **AC-25** YAML 导入一份含脚本节点的工作流，无点者被拒；持点者成功。
+- **AC-26** 一枚具备全部矩阵权限的 PAT 也无法经 REST / MCP 写入脚本正文（系统域点不进令牌）。
+- **AC-27** 节点 env 里的值在工作流详情响应、YAML 导出、校验器消息、错误信息、诊断输出里全部脱敏；
+  同时脚本进程内拿到的是**明文**。
+- **AC-28** 节点 env 的键名校验拒绝非法标识符、NUL 字节与动态加载器变量（`LD_PRELOAD` 等），复用 MCP 的同一
+  校验函数。
+
+### 前端
+
+- **AC-29** 脚本节点抽屉里的编辑器有语法高亮与行号，深浅色主题都可读，键盘可达（Tab 不吞焦点导致无法离开）。
+- **AC-30** 无 `scripts:author` 的用户看到的是**只读**编辑器与明确的「需要脚本编写权限」提示，而不是一个能改
+  但存不上的输入框。
+- **AC-31** 画布卡片显示语言、依赖数、`network: deny` 与 `readonly` 标记，一眼可辨。
+- **AC-32** 存量 JSON / YAML 输入框（MCP 配置、插件 options、工作流 YAML 导入、`JsonField`）换成新组件后，
+  既有 e2e 与视觉回归全绿。
+
+### 可观测
+
+- **AC-33** 任务详情里能看到脚本的 stdout / stderr（实时流式，与 agent 节点的事件流同一时间线组件）。
+- **AC-34** 依赖安装的输出也在同一事件流里，带可辨识的阶段标记。
+- **AC-35** 节点 run 记录里能看到本次冻结的解释器绝对路径与依赖环境哈希（可审计）——**含读投影**：
+  它必须出现在任务详情的 NodeRun DTO 里，光写库不算（设计门 P1）。
+- **AC-36** spawn 之后立即持久化 `pid` + `spawn_binary_path`；kill -9 daemon 再重启，boot reaper 能定位到
+  遗留的脚本进程（设计门 P0-3：没有 pid 就是 `no-pid`，孤儿进程永远收不掉）。
+
+## 7. 风险与后续
+
+| 风险 | 处置 |
+|------|------|
+| **脚本节点 = 宿主代码执行**，是平台迄今最强的单点能力 | D6/D19：默认只有 admin；系统域点不进令牌；D14 关掉包安装期的代码执行；容器边界与 agent 同档 |
+| 自动重试遇上非幂等脚本 | D24：文件副作用被 iso 重建天然回滚；外部副作用写进 UI 文案与文档，要求脚本自带幂等键 |
+| 依赖预装引入供应链面 | D14 只装预编译产物 + D9 依赖条目严格字符集校验 + 安装在容器内 + 缓存只读挂载（AC-18/19/20） |
+| 新抽的受控 spawn 原语与 runner.ts 形成两套 | 加**棘轮测试**：新增 `Bun.spawn` 站点必须进登记表；runner 迁移登记为架构审视 WP-2 的后续切片，不在本 RFC |
+| 与 RFC-252 在 containment 层撞车 | D17 已划界（本 RFC 建通用围栏、252 只做 agent 侧）。落地时在 RFC-252 的 G4 章节登记「机制由 RFC-253 交付」，避免重复建设 |
+| CodeMirror 引入 + 存量替换扩大回归面 | D18 把它切成独立 PR-5，视觉回归与 e2e 单独跑；散文类输入框明确不动 |
+
+**后续工作（不在本 RFC）**：runner.ts 迁移到同一受控 spawn 原语（架构审视 WP-2）；脚本作为可复用平台资源
+（若跨工作流复用真的成为高频诉求）；源码包依赖的受控构建；脚本节点的 dry-run / 本地试跑面板。

@@ -73,6 +73,21 @@ import {
 } from '@/services/fanout'
 import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
+// RFC-253 — script node execution.
+import { mkdirSync } from 'node:fs'
+import {
+  readScriptDependencies,
+  readScriptLanguage,
+  resolveScriptNetwork,
+  resolveScriptReadonly,
+  SCRIPT_PERMANENT_FAILURE_CODES,
+  type ScriptLanguage,
+} from '@agent-workflow/shared'
+import { runRootFor } from './inventory'
+import { buildRunSandboxCtx, ContainmentAdmissionAborted, type SandboxCtx } from './sandbox'
+import { ensureScriptDepsEnv, ScriptDepsInstallError, type ScriptDepsEnv } from './scriptDepsEnv'
+import { extractScriptPorts } from './scriptPorts'
+import { resolveScriptInterpreter, runScriptProcess } from './scriptRun'
 import type { DbClient } from '@/db/client'
 import type { ContainmentCoordinator } from '@/services/sandbox'
 import {
@@ -281,6 +296,13 @@ export interface RunTaskOptions {
    * Replaces the per-node `retries` override; `?? 3` fallback for mock/unwired.
    */
   defaultNodeRetries?: number
+  /**
+   * RFC-253 — administrator interpreter overrides for script nodes. Absent
+   * entries resolve from the daemon's PATH.
+   */
+  scriptInterpreters?: Partial<Record<ScriptLanguage, string>>
+  /** RFC-253 — wall clock for one dependency-environment build. */
+  scriptDepsInstallTimeoutMs?: number
   /** Daemon-wide concurrency limit shared by agent nodes across tasks. Default 4. */
   maxConcurrentNodes?: number
   /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
@@ -3909,6 +3931,534 @@ async function launchCallWorkgroupChild(
   )
 }
 
+// ---------------------------------------------------------------------------
+// RFC-253 — script node dispatch.
+//
+// Structurally parallel to the agent branch below, but it cannot SHARE that
+// code: the agent path's semaphore/iso/retry block sits after the
+// `kind !== 'agent-single'` guard, so a script node never reaches it
+// (design-gate F6). What IS shared are the primitives — globalSem, the RFC-130
+// isolation helpers, mintNodeRun, setNodeRunStatus, the envelope parser — which
+// is where the invariants actually live.
+// ---------------------------------------------------------------------------
+
+async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
+  const { db, task, taskId, definition, opts, log, globalSem, writeSem } = state
+  const { node, iteration } = args
+
+  const language = readScriptLanguage(node)
+  if (language === undefined) {
+    return { kind: 'failed', summary: `script node ${node.id} has no language`, message: 'invalid' }
+  }
+  const isReadonly = resolveScriptReadonly(node)
+  const networkDeny = resolveScriptNetwork(node) === 'deny'
+
+  const { inputs: upstreamInputs, consumed: consumedUpstream } = await resolveUpstreamInputs(
+    db,
+    taskId,
+    definition.edges,
+    node.id,
+    iteration,
+    log,
+    definition,
+    state.containerOf,
+  )
+  const consumedUpstreamJson = JSON.stringify(consumedUpstream)
+
+  // Row selection mirrors the agent branch: adopt a pending row if one exists,
+  // otherwise mint the next retry index.
+  const sameNodeIterRuns = await db
+    .select()
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, taskId),
+        eq(nodeRuns.nodeId, node.id),
+        eq(nodeRuns.iteration, iteration),
+      ),
+    )
+    .orderBy(asc(nodeRuns.startedAt))
+  let latestExisting: (typeof sameNodeIterRuns)[number] | undefined
+  for (const r of sameNodeIterRuns) {
+    if (r.parentNodeRunId !== null) continue
+    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
+  }
+  const pendingExisting = sameNodeIterRuns.find(
+    (r) => r.status === 'pending' && r.parentNodeRunId === null,
+  )
+  let retryIndex = 0
+  let nodeRunId: string
+  if (pendingExisting !== undefined) {
+    nodeRunId = pendingExisting.id
+    retryIndex = pendingExisting.retryIndex
+    await db
+      .update(nodeRuns)
+      .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
+      .where(eq(nodeRuns.id, nodeRunId))
+  } else {
+    retryIndex =
+      sameNodeIterRuns.length === 0 ? 0 : Math.max(...sameNodeIterRuns.map((r) => r.retryIndex)) + 1
+    nodeRunId = await mintNodeRun(db, {
+      taskId,
+      nodeId: node.id,
+      status: 'pending',
+      cause: schedulerMintCause(latestExisting),
+      retryIndex,
+      iteration,
+      overrides: {
+        shardKey: latestExisting?.shardKey ?? null,
+        parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
+        consumedUpstreamRunsJson: consumedUpstreamJson,
+      },
+    })
+  }
+  broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
+
+  const interpreter = await resolveScriptInterpreter(language, opts.scriptInterpreters ?? {})
+  if (interpreter === null) {
+    await setNodeRunStatus({
+      db,
+      nodeRunId,
+      to: 'failed',
+      allowedFrom: ['pending'],
+      reason: 'script-interpreter-missing',
+      extra: {
+        finishedAt: Date.now(),
+        errorMessage: `no ${language} interpreter available on this host`,
+        failureCode: 'script-interpreter-missing',
+      },
+    })
+    broadcastNodeStatus(taskId, nodeRunId, node.id, 'failed')
+    return {
+      kind: 'failed',
+      summary: `script node ${node.id}: ${language} interpreter not found`,
+      message: 'script-interpreter-missing',
+    }
+  }
+
+  const maxRetries = opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
+  const releaseGlobal = await globalSem.acquire()
+
+  // A readonly script runs IN PLACE against the canonical worktree with the
+  // whole tree (and the git common dir) mounted read-only, so there is nothing
+  // to isolate and nothing to merge back.
+  let isoHandle: IsoHandle | null = null
+  const isoKeyRunId = nodeRunId
+  if (!isReadonly) {
+    try {
+      isoHandle = await createIsoUnderLock({
+        writeSem,
+        appHome: opts.appHome,
+        taskId,
+        db,
+        isoKeyRunId,
+        canonRepos: state.repos,
+        log,
+      })
+    } catch (err) {
+      releaseGlobal()
+      log.warn('script iso worktree setup failed', {
+        nodeId: node.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return {
+        kind: 'failed',
+        summary: 'isolated worktree setup failed',
+        message: 'iso-setup-failed',
+      }
+    }
+  }
+
+  let lastFailure: { code: string; message: string } | null = null
+  let succeeded = false
+
+  try {
+    if (isoHandle !== null) await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
+
+    for (let attempt = retryIndex; attempt <= retryIndex + maxRetries; attempt++) {
+      if (opts.signal?.aborted === true) {
+        return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
+      }
+      if (attempt > retryIndex) {
+        // Fresh retry: throw the iso away and re-branch from the CURRENT
+        // canonical state, so the previous attempt's file writes do not stack
+        // (D24 — this is what makes retrying a file-writing script safe).
+        if (isoHandle !== null) {
+          await discardNodeIso(isoHandle, log, writeSem)
+          try {
+            isoHandle = await createIsoUnderLock({
+              writeSem,
+              appHome: opts.appHome,
+              taskId,
+              db,
+              isoKeyRunId,
+              canonRepos: state.repos,
+              log,
+            })
+          } catch (err) {
+            lastFailure = {
+              code: 'iso-recreate-failed',
+              message: err instanceof Error ? err.message : String(err),
+            }
+            break
+          }
+        }
+        nodeRunId = await mintNodeRun(db, {
+          taskId,
+          nodeId: node.id,
+          status: 'pending',
+          cause: 'process-retry',
+          retryIndex: attempt,
+          iteration,
+          overrides: { consumedUpstreamRunsJson: consumedUpstreamJson },
+        })
+        broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
+        if (isoHandle !== null) await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
+      }
+
+      const outcome = await runOneScriptAttempt(state, {
+        node,
+        nodeRunId,
+        iteration,
+        retryIndex: attempt,
+        inputs: upstreamInputs,
+        interpreter,
+        isoHandle,
+        isReadonly,
+        networkDeny,
+        language,
+      })
+      if (outcome.kind === 'done') {
+        succeeded = true
+        break
+      }
+      if (outcome.kind === 'canceled') {
+        return { kind: 'canceled', summary: 'task canceled', message: outcome.message }
+      }
+      lastFailure = { code: outcome.message, message: outcome.summary }
+      // Permanent failures gain nothing from another attempt.
+      if ((SCRIPT_PERMANENT_FAILURE_CODES as readonly string[]).includes(outcome.message)) {
+        break
+      }
+    }
+
+    if (succeeded && isoHandle !== null && !isoHandle.passthrough) {
+      const merge = await mergeBackAndSettle({
+        db,
+        writeSem,
+        handle: isoHandle,
+        nodeRunId,
+        repoCount: task.repoCount,
+        via: 'live',
+        conflictResolver: (conflicts, containerPath) =>
+          resolveMergeConflicts(state, {
+            conflicts,
+            containerPath,
+            conflictNodeRunId: nodeRunId,
+            nodeId: node.id,
+            iteration,
+          }),
+        log,
+      })
+      if (merge.kind === 'conflict-human') {
+        return {
+          kind: 'awaiting_human',
+          summary: `merge conflict unresolved: ${merge.detail}`,
+          message: 'merge-conflict',
+        }
+      }
+    }
+  } finally {
+    releaseGlobal()
+    if (isoHandle !== null && !succeeded) {
+      await discardNodeIso(isoHandle, log, writeSem).catch(() => {})
+    }
+  }
+
+  if (succeeded) return { kind: 'ok', summary: '', message: '' }
+  return {
+    kind: 'failed',
+    summary: lastFailure?.message ?? `script node ${node.id} failed`,
+    message: lastFailure?.code ?? 'script-nonzero-exit',
+  }
+}
+
+interface ScriptAttemptArgs {
+  node: WorkflowNode
+  nodeRunId: string
+  iteration: number
+  retryIndex: number
+  inputs: Record<string, string>
+  interpreter: Awaited<ReturnType<typeof resolveScriptInterpreter>> & object
+  isoHandle: IsoHandle | null
+  isReadonly: boolean
+  networkDeny: boolean
+  language: ScriptLanguage
+}
+
+type ScriptAttemptOutcome =
+  | { kind: 'done' }
+  | { kind: 'failed'; summary: string; message: string }
+  | { kind: 'canceled'; message: string }
+
+/** One attempt: containment → deps → spawn → ports → terminal row. */
+async function runOneScriptAttempt(
+  state: SchedulerState,
+  a: ScriptAttemptArgs,
+): Promise<ScriptAttemptOutcome> {
+  const { db, task, taskId, opts, log } = state
+  const runDir = runRootFor(taskId, a.nodeRunId)
+  mkdirSync(runDir, { recursive: true })
+
+  const worktreePath = a.isoHandle?.repos[0]?.isoWorktreePath ?? task.worktreePath
+
+  // Containment first: for a netless node the profile is fail-closed, so an
+  // unavailable fence throws here — BEFORE the process exists and before any
+  // side effect (D23).
+  let sandboxCtx: SandboxCtx | undefined
+  if (opts.containmentCoordinator !== undefined) {
+    try {
+      const plan = await opts.containmentCoordinator.admit(
+        a.networkDeny ? 'outer-netless-v1' : 'runner-filesystem-v1',
+        { ...(opts.signal === undefined ? {} : { signal: opts.signal }) },
+      )
+      const base = buildRunSandboxCtx(plan.sandbox, taskId, worktreePath, runDir)
+      if (base !== undefined) {
+        sandboxCtx = {
+          ...base,
+          ...(a.networkDeny ? { networkDeny: true } : {}),
+        }
+      }
+    } catch (err) {
+      if (err instanceof ContainmentAdmissionAborted) {
+        return { kind: 'canceled', message: 'containment-admission-aborted' }
+      }
+      const message = err instanceof Error ? err.message : String(err)
+      await setNodeRunStatus({
+        db,
+        nodeRunId: a.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['pending', 'running'],
+        reason: 'script-network-fence-unavailable',
+        extra: {
+          finishedAt: Date.now(),
+          errorMessage: message,
+          failureCode: 'script-network-fence-unavailable',
+        },
+      })
+      broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
+      return {
+        kind: 'failed',
+        summary: `containment unavailable: ${message}`,
+        message: 'script-network-fence-unavailable',
+      }
+    }
+  }
+
+  // Dependencies: installed with network access even when the node itself is
+  // netless (D15) — the install happens before the author's code runs.
+  let depsEnv: ScriptDepsEnv | null = null
+  const specs = readScriptDependencies(a.node)
+  if (specs.length > 0) {
+    try {
+      depsEnv = await ensureScriptDepsEnv({
+        appHome: opts.appHome,
+        language: a.language,
+        interpreterPath: a.interpreter.path,
+        interpreterVersion: a.interpreter.version,
+        specs,
+        timeoutMs: opts.scriptDepsInstallTimeoutMs ?? 10 * 60 * 1000,
+        ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+        onLine: async (stream: 'stdout' | 'stderr', line: string) => {
+          await db.insert(nodeRunEvents).values({
+            nodeRunId: a.nodeRunId,
+            ts: Date.now(),
+            kind: stream === 'stderr' ? 'stderr' : 'text',
+            payload: JSON.stringify({ phase: 'deps-install', line }),
+          })
+        },
+        log,
+      })
+    } catch (err) {
+      const detail = err instanceof ScriptDepsInstallError ? err.detail : String(err)
+      const message = err instanceof Error ? err.message : String(err)
+      await setNodeRunStatus({
+        db,
+        nodeRunId: a.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['pending', 'running'],
+        reason: 'script-deps-install-failed',
+        extra: {
+          finishedAt: Date.now(),
+          errorMessage: `${message}\n${detail}`.slice(0, 4000),
+          failureCode: 'script-deps-install-failed',
+        },
+      })
+      broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
+      return { kind: 'failed', summary: message, message: 'script-deps-install-failed' }
+    }
+    // The prepared environment is mounted READ-ONLY: two nodes can share one
+    // environment, so a writable mount would be a cross-node injection channel.
+    if (depsEnv !== null && sandboxCtx !== undefined) {
+      sandboxCtx = {
+        ...sandboxCtx,
+        readOnlyAllowSubtrees: [...(sandboxCtx.readOnlyAllowSubtrees ?? []), depsEnv.rootDir],
+      }
+    }
+  }
+
+  const envelopeNonce = await loadRunEnvelopeNonce(db, a.nodeRunId)
+
+  // DB first, then broadcast — a client must never observe `running` for a row
+  // the database still calls `pending`.
+  await setNodeRunStatus({
+    db,
+    nodeRunId: a.nodeRunId,
+    to: 'running',
+    allowedFrom: ['pending'],
+    reason: 'script-dispatch',
+    extra: { startedAt: Date.now() },
+  })
+  broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'running')
+
+  const outcome = await runScriptProcess({
+    node: a.node,
+    inputs: a.inputs,
+    runDir,
+    worktreePath,
+    repos: state.repos.map((r) => ({ name: r.worktreeDirName, path: r.worktreePath })),
+    taskId,
+    nodeId: a.node.id,
+    nodeRunId: a.nodeRunId,
+    iteration: a.iteration,
+    retryIndex: a.retryIndex,
+    shardKey: null,
+    envelopeNonce,
+    interpreter: a.interpreter,
+    depsEnv,
+    ...(opts.defaultPerNodeTimeoutMs === undefined
+      ? {}
+      : { timeoutMs: opts.defaultPerNodeTimeoutMs }),
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+    ...(sandboxCtx === undefined ? {} : { sandbox: sandboxCtx }),
+    gitUserName: task.gitUserName,
+    gitUserEmail: task.gitUserEmail,
+    onSpawned: async ({ pid, spawnBinaryPath }) => {
+      // Persist before reading a single byte of output: a daemon crash after
+      // this point leaves the boot reaper something to match (design-gate P0-3).
+      await db
+        .update(nodeRuns)
+        .set({
+          pid,
+          spawnBinaryPath,
+          runtimeParamsJson: JSON.stringify({
+            script: {
+              interpreter: a.interpreter.path,
+              interpreterVersion: a.interpreter.version,
+              depsHash: depsEnv?.hash ?? null,
+            },
+          }),
+        })
+        .where(eq(nodeRuns.id, a.nodeRunId))
+    },
+    onStdoutLine: async (line) => {
+      await db.insert(nodeRunEvents).values({
+        nodeRunId: a.nodeRunId,
+        ts: Date.now(),
+        kind: 'text',
+        payload: JSON.stringify({ line }),
+      })
+    },
+    onStderrLine: async (line) => {
+      await db.insert(nodeRunEvents).values({
+        nodeRunId: a.nodeRunId,
+        ts: Date.now(),
+        kind: 'stderr',
+        payload: JSON.stringify({ line }),
+      })
+    },
+    log,
+  })
+
+  if (outcome.result.outcome === 'aborted') {
+    const daemonShutdown = opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
+    await setNodeRunStatus({
+      db,
+      nodeRunId: a.nodeRunId,
+      to: daemonShutdown ? 'interrupted' : 'canceled',
+      allowedFrom: ['running'],
+      reason: 'script-aborted',
+      extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
+    })
+    broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, daemonShutdown ? 'interrupted' : 'canceled')
+    return { kind: 'canceled', message: daemonShutdown ? 'daemon-shutdown' : 'canceled' }
+  }
+
+  if (outcome.result.truncated.stdout) {
+    await db.insert(nodeRunEvents).values({
+      nodeRunId: a.nodeRunId,
+      ts: Date.now(),
+      kind: 'error',
+      payload: JSON.stringify({ truncated: 'stdout' }),
+    })
+  }
+
+  let failureCode = outcome.failureCode
+  let errorMessage: string | null =
+    failureCode === null ? null : outcome.result.stderrTail.slice(-2000)
+  const ports: Record<string, string> = {}
+
+  if (failureCode === null) {
+    const extraction = extractScriptPorts({
+      node: a.node,
+      rawStdout: outcome.result.rawStdout,
+      nonce: envelopeNonce,
+    })
+    if (extraction.kind === 'ok') {
+      Object.assign(ports, extraction.ports)
+    } else {
+      failureCode = extraction.code
+      errorMessage = extraction.detail
+    }
+  }
+
+  if (failureCode !== null) {
+    await setNodeRunStatus({
+      db,
+      nodeRunId: a.nodeRunId,
+      to: 'failed',
+      allowedFrom: ['running'],
+      reason: failureCode,
+      extra: {
+        finishedAt: Date.now(),
+        exitCode: outcome.result.exitCode,
+        errorMessage,
+        failureCode,
+      },
+    })
+    broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
+    return {
+      kind: 'failed',
+      summary: errorMessage ?? `script exited ${String(outcome.result.exitCode)}`,
+      message: failureCode,
+    }
+  }
+
+  for (const [portName, content] of Object.entries(ports)) {
+    await db.insert(nodeRunOutputs).values({ nodeRunId: a.nodeRunId, portName, content })
+  }
+  await setNodeRunStatus({
+    db,
+    nodeRunId: a.nodeRunId,
+    to: 'done',
+    allowedFrom: ['running'],
+    reason: 'script-done',
+    extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
+  })
+  broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'done')
+  return { kind: 'done' }
+}
+
 async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
   const { db, task, taskId, definition, opts, inputsMap, globalSem, writeSem, log } = state
   const { node, iteration } = args
@@ -4170,6 +4720,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // globalSem (design §6.1 — the child's own nodes compete for it).
   if (node.kind === 'call-workflow' || node.kind === 'call-workgroup') {
     return await runCallWorkflowNode(state, args)
+  }
+  // RFC-253 — script node: a real subprocess, no model. Deliberately BEFORE the
+  // agent fall-through guard, same as the call kinds.
+  if (node.kind === 'script') {
+    return await runScriptNode(state, args)
   }
   if (node.kind !== 'agent-single') {
     return {

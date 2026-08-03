@@ -39,12 +39,16 @@ export type PaletteItem =
   // RFC-243 PR-4 — call-workgroup mirrors call-workflow: one generic Calls
   // row, the referenced workgroup is picked in the Inspector after the drop.
   | { kind: 'call-workgroup' }
+  // RFC-253 — one generic Scripts row; language and body are edited in the
+  // Inspector after the drop (a palette row per language would be three rows
+  // that differ only by a default value).
+  | { kind: 'script' }
 
 /** mime carried in HTML5 dataTransfer. Custom to avoid colliding with files. */
 export const PALETTE_MIME = 'application/x-agent-workflow-node'
 
 /** Sidebar section a kind's palette entry renders under. */
-export type PaletteSectionKey = 'agents' | 'wrappers' | 'calls' | 'io' | 'human'
+export type PaletteSectionKey = 'agents' | 'wrappers' | 'calls' | 'scripts' | 'io' | 'human'
 
 interface PaletteDescriptor {
   section: PaletteSectionKey
@@ -194,7 +198,49 @@ export const PALETTE_DESCRIPTORS = {
     // call-workgroup rules block launch until both are set.
     makeDefaults: () => ({ workgroupName: '', goalTemplate: '' }),
   },
+  // RFC-253 — a fresh script node starts on python with a runnable template
+  // rather than an empty buffer: an empty editor gives the author no clue that
+  // upstream ports arrive as `AW_PORT_*` environment variables.
+  script: {
+    section: 'scripts',
+    glyph: '\u25b6',
+    labelKey: 'editor.paletteScriptLabel',
+    descKey: 'editor.paletteScriptDesc',
+    idPrefix: 'script',
+    makeDefaults: () => ({ language: 'python', script: SCRIPT_STARTER_TEMPLATES.python }),
+  },
 } as const satisfies Record<NodeKind, PaletteDescriptor>
+
+/**
+ * Starter bodies, one per language. The bash template carries
+ * `set -euo pipefail` because the platform deliberately does NOT inject flags
+ * into a user's script (design §3) — a bash node that silently succeeds after
+ * an internal failure is the classic footgun, so the default template opts in
+ * and the author can delete it.
+ */
+export const SCRIPT_STARTER_TEMPLATES: Record<'python' | 'bash' | 'node', string> = {
+  python: [
+    'import os',
+    '',
+    '# Upstream ports arrive as AW_PORT_<PORT_NAME>; large values spill to',
+    '# AW_PORT_FILE_<PORT_NAME> (a path under $AW_INPUT_DIR).',
+    "print('hello from python')",
+    '',
+  ].join('\n'),
+  bash: [
+    '#!/usr/bin/env bash',
+    'set -euo pipefail',
+    '',
+    '# Upstream ports arrive as AW_PORT_<PORT_NAME>.',
+    "echo 'hello from bash'",
+    '',
+  ].join('\n'),
+  node: [
+    '// Upstream ports arrive as process.env.AW_PORT_<PORT_NAME>.',
+    "console.log('hello from node')",
+    '',
+  ].join('\n'),
+}
 
 /** Canvas chip / palette leading icon per kind — one projection of the
  *  descriptor table (node components import this instead of hardcoding). */
@@ -315,6 +361,8 @@ export const PALETTE_SECTIONS = [
   // RFC-243 — Calls: nodes that invoke another platform resource as an
   // independent child task (call-workflow + call-workgroup).
   { key: 'calls', labelKey: 'editor.paletteCalls' },
+  // RFC-253 — Scripts: deterministic compute that runs no model.
+  { key: 'scripts', labelKey: 'editor.paletteScripts' },
   { key: 'io', labelKey: 'editor.paletteIo' },
   { key: 'human', labelKey: 'editor.paletteHuman' },
 ] as const satisfies ReadonlyArray<{ key: PaletteSectionKey; labelKey: string }>

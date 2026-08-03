@@ -88,14 +88,19 @@ describe('RFC-146 NODE_KIND_BEHAVIORS — 全真表', () => {
     }
   })
 
-  test('结构关系：isAgent ⊂ isProcess；isProcess = agent ∪ wrapper ∪ call；settlesWithoutRow ∩ isProcess = ∅', () => {
+  test('结构关系：isAgent ⊂ isProcess；isProcess = agent ∪ wrapper ∪ call ∪ script；settlesWithoutRow ∩ isProcess = ∅', () => {
     // RFC-243：call 节点是第三类 process 载体——真实执行体是独立子任务，
     // 自身无 session（isAgent=false）也非容器（不入 WRAPPER_NODE_KINDS）。
+    // RFC-253：script 是第四类——它自己就是那个进程（有 pid、有退出码），
+    // 但不拥有模型 session（isAgent=false），也不是容器。
     const isCallKind = (k: string): boolean => k === 'call-workflow' || k === 'call-workgroup'
+    const isScriptKind = (k: string): boolean => k === 'script'
     for (const k of NODE_KIND) {
       const row = NODE_KIND_BEHAVIORS[k]
       if (row.isAgent) expect(row.isProcess).toBe(true)
-      expect(row.isProcess).toBe(row.isAgent || isWrapperKind(k) || isCallKind(k))
+      expect(row.isProcess).toBe(
+        row.isAgent || isWrapperKind(k) || isCallKind(k) || isScriptKind(k),
+      )
       if (row.settlesWithoutRow) expect(row.isProcess).toBe(false)
       // RFC-052 语义：级联恰是 process 家族。
       expect(row.retryCascade === 'mint-placeholder').toBe(row.isProcess)

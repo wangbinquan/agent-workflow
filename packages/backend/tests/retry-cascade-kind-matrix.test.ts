@@ -134,6 +134,11 @@ async function seedTaskWithEdge(
           workgroupName: 'child-wg',
           goalTemplate: 'do {{out}}',
         }
+      case 'script':
+        // RFC-253 — a script node runs a real subprocess, so it shares the
+        // process-bearing retry-cascade row: an upstream retry mints it a
+        // placeholder exactly like an agent or a wrapper.
+        return { id: downstreamNodeId, kind: 'script', language: 'bash', script: 'echo hi' }
       default: {
         const _exhaustive: never = downstreamKind
         throw new Error(`unexpected kind ${_exhaustive as string}`)

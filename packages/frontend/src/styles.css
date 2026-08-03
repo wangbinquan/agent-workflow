@@ -80,6 +80,18 @@
   --info-bg: color-mix(in srgb, var(--info-fg) 10%, var(--panel));
   --info-border: color-mix(in srgb, var(--info-fg) 36%, var(--border));
 
+  /* RFC-253 — syntax tokens for <CodeEditor>. They live here, next to every
+     other themed color, so the dark overrides below are the ONLY other place
+     that has to change; the component itself carries no literal colors. */
+  --code-keyword: #a626a4;
+  --code-string: #3f7f2f;
+  --code-comment: #8a8f98;
+  --code-number: #8a5a00;
+  --code-function: #1f5fda;
+  --code-type: #9a6700;
+  --code-operator: #01709c;
+  --code-property: #c2402f;
+
   --focus-ring-color: var(--accent);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
@@ -136,6 +148,17 @@
   --info: var(--info-fg);
   --info-fill: #275988;
   --on-info: #ffffff;
+
+  /* RFC-253 — dark syntax palette. Raised lightness across the board: the
+     light-theme values sit at ~4:1 on #f8f9fb and drop below 3:1 on #15181d. */
+  --code-keyword: #d99fe0;
+  --code-string: #8fd18f;
+  --code-comment: #8b93a1;
+  --code-number: #e6b872;
+  --code-function: #8eb8ff;
+  --code-type: #e3c07b;
+  --code-operator: #67cdea;
+  --code-property: #ff9c8f;
 }
 
 :root[data-theme='light'] {
@@ -22286,4 +22309,80 @@ button.status-chip {
 .repo-groups-pane__name-copy {
   min-width: 0;
   padding-block: 2px;
+}
+
+/* --- RFC-253 script node ------------------------------------------------- */
+
+/* The CodeMirror host. Sizing/colors live in the component's own theme (they
+   have to, CodeMirror renders into a shadow-free subtree it owns); this rule
+   only makes the host participate in form layout like any other control. */
+.code-editor {
+  width: 100%;
+  min-width: 0;
+}
+
+.code-editor .cm-editor {
+  border-radius: var(--radius-md);
+}
+
+.canvas-node__script-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.canvas-node__script-lang,
+.canvas-node__script-badge {
+  font-size: var(--font-xs);
+  line-height: 1.6;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.canvas-node__script-lang {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.canvas-node__script-badge--deny {
+  border-color: var(--warn-border);
+  color: var(--warn-fg);
+}
+
+/* port → env-var mapping hints in the inspector */
+.script-input-hints {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+
+.script-input-hints code {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.script-env-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.script-env-table__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.script-env-table__row .form-error {
+  grid-column: 1 / -1;
 }

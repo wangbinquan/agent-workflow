@@ -172,6 +172,13 @@ export const PERMISSIONS = [
   // RFC-234 intent builder — explicitly out of the RFC-247 token surface.
   'intent:read',
   'intent:write',
+  // RFC-253 — authoring the INLINE BODY of a script node, i.e. code the daemon
+  // host will execute. It is not a CRUD verb on a resource domain (there is no
+  // "script" resource — D1 keeps the body inline in the workflow), it is a
+  // capability: "may cause arbitrary host execution". It therefore lives in the
+  // system domain and never rides a token, so a leaked PAT with every matrix
+  // grant still cannot write a script body.
+  'scripts:author',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
@@ -209,6 +216,9 @@ export const SYSTEM_DOMAIN_POINTS: ReadonlyArray<Permission> = [
   'account:self',
   'intent:read',
   'intent:write',
+  // RFC-253 — see the catalog entry: host code execution is a system-domain
+  // capability, so no token may carry it (AC-26).
+  'scripts:author',
 ]
 
 /**
@@ -349,6 +359,11 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
 // resource bypass is NOT here (it's the isResourceAdminRole identity predicate).
 // Repos are out of the ACL model, so the repos points are plain points here.
 const MANAGER_EXTRA: ReadonlyArray<Permission> = [
+  // RFC-253 (D19) — script authoring is admin + manager. Being a SYSTEM-domain
+  // point does not imply "admin only": `account:self`, `users:search` and
+  // `intent:*` are system-domain and sit in USER_BASELINE. The system domain
+  // bounds the TOKEN surface, not the role surface.
+  'scripts:author',
   'repos:create',
   'repos:update', // RFC-248 D5/G4 —— 仓库组走 repos:* 这一档
   'repos:delete',

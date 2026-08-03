@@ -766,6 +766,9 @@ async function applyInner(
               },
             ])
             const row = insertWorkflowInTx(tx, {
+              // RFC-253 — the intent builder reaches this primitive DIRECTLY (no
+              // route in between), which is exactly why the gate lives here.
+              scriptPrincipal: { kind: 'actor', actor },
               id: item.op.resourceId,
               name: (item.op.payload as { name: string }).name,
               description: (item.op.payload as { description: string }).description,

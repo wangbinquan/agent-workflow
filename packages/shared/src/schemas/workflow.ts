@@ -42,6 +42,7 @@ export const NODE_KIND = [
   'clarify-cross-agent', // RFC-056: downstream questioner reverse-feeds upstream designer via human gate
   'call-workflow', // RFC-243: invoke another workflow as an independent child task
   'call-workgroup', // RFC-243: hand a DAG stage to a workgroup as an independent child task
+  'script', // RFC-253: run an inline python/bash/node script — no model process
 ] as const
 // RFC-060 PR-E: 'agent-multi' was the M3 fan-out kind; superseded by
 // wrapper-fanout (RFC-060). Its node_runs / row shape are no longer minted by
@@ -455,6 +456,10 @@ export const WORKFLOW_NODE_FIELD_KEYS = [
   'call-goal-template', // RFC-243 (call-workgroup): goal template
   'call-limits', // RFC-243: child task limit overrides
   'call-ports', // RFC-243: input/output port mapping issues
+  'script', // RFC-253: the inline script body + its language
+  'script-outputs', // RFC-253: declared output ports
+  'script-dependencies', // RFC-253: declared dependency specs
+  'script-env', // RFC-253: the process env overlay
 ] as const
 export const WorkflowNodeFieldKeySchema = z.enum(WORKFLOW_NODE_FIELD_KEYS)
 export type WorkflowNodeFieldKey = z.infer<typeof WorkflowNodeFieldKeySchema>
@@ -810,3 +815,63 @@ export const CallWorkgroupNodeSchema = WorkflowNodeSchema.extend({
     .optional(),
 }).passthrough()
 export type CallWorkgroupNode = z.infer<typeof CallWorkgroupNodeSchema>
+
+// --- RFC-253 Script node -----------------------------------------------------
+//
+// Runs an inline script in the task worktree. No model process, no session, no
+// tokens. Upstream port values arrive as `AW_PORT_*` environment variables
+// (never templated INTO the body — see D5: splicing an upstream agent's output
+// into code is the textbook injection surface); the script's stdout becomes the
+// downstream port value.
+
+/** D13 — the closed interpreter set. A new language is a code change, on purpose. */
+export const SCRIPT_LANGUAGES = ['python', 'bash', 'node'] as const
+export const ScriptLanguageSchema = z.enum(SCRIPT_LANGUAGES)
+export type ScriptLanguage = z.infer<typeof ScriptLanguageSchema>
+
+/** D22 — the fixed port name in single-port mode. Renaming it is what declaring
+ *  `outputs` is for; two ways to do the same thing would only add ambiguity. */
+export const SCRIPT_DEFAULT_OUTPUT_PORT = 'stdout' as const
+
+/** D4 — network posture. Absent resolves to 'allow' (see resolveScriptNetwork). */
+export const ScriptNetworkSchema = z.enum(['allow', 'deny'])
+export type ScriptNetwork = z.infer<typeof ScriptNetworkSchema>
+
+export const SCRIPT_BODY_MAX = 256 * 1024
+export const SCRIPT_MAX_OUTPUT_PORTS = 32
+export const SCRIPT_MAX_DEPENDENCIES = 64
+export const SCRIPT_DEPENDENCY_MAX_LEN = 200
+
+// D14/AC-19/AC-19b — the dependency spec grammars are PER LANGUAGE and live in
+// `scriptNode.ts` (`scriptDependencyIssue`): pip and npm do not share a version
+// syntax, and a single pattern serving both matched neither cleanly (it rejected
+// `@scope/pkg@1.2.3` while accepting the pip-invalid `pkg^1.2.3`).
+
+export const ScriptOutputPortSchema = z
+  .object({
+    name: z.string().min(1).max(64),
+    /** AgentOutputKind grammar string; absent ⇒ plain text (D11). */
+    kind: z.string().min(1).max(128).optional(),
+  })
+  .strict()
+export type ScriptOutputPort = z.infer<typeof ScriptOutputPortSchema>
+
+export const ScriptNodeSchema = WorkflowNodeSchema.extend({
+  kind: z.literal('script'),
+  language: ScriptLanguageSchema,
+  /** Inline body (D1). The platform NEVER substitutes into it (D5). */
+  script: z.string().max(SCRIPT_BODY_MAX),
+  /** Absent/empty ⇒ single-port mode; non-empty ⇒ envelope mode (D3). */
+  outputs: z.array(ScriptOutputPortSchema).max(SCRIPT_MAX_OUTPUT_PORTS).optional(),
+  /** Pre-installed dependencies (D9); must be empty for `bash`. */
+  dependencies: z
+    .array(z.string().min(1).max(SCRIPT_DEPENDENCY_MAX_LEN))
+    .max(SCRIPT_MAX_DEPENDENCIES)
+    .optional(),
+  /** Process env overlay (D10); key rules reuse the MCP validator. */
+  env: z.record(z.string(), z.string()).optional(),
+  network: ScriptNetworkSchema.optional(),
+  /** true ⇒ no iso worktree, no merge-back, worktree mounted read-only (D8). */
+  readonly: z.boolean().optional(),
+}).passthrough()
+export type ScriptNode = z.infer<typeof ScriptNodeSchema>

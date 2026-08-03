@@ -123,6 +123,23 @@
 
 - **进程级注册表 + 测试夹具 = 只在共享进程下才炸的碰撞**：`bun test` 的项目脚本带 `--isolate`，每个文件独立进程；**手敲 `bun test`（不带 flag）则全部文件共享一个进程**。RFC-247 的路由元数据注册表是模块级单例（它描述「本仓有哪些路由」这一静态事实），于是一个测试夹具若拿**生产路径**当例子（当时用了 `/api/whoami`），共享进程下就会和真实声明撞成「同路径不同契约」并抛错——而带 `--isolate` 跑永远绿。**夹具一律用合成路径**（`/api/__x_fixture__`），别借生产路径当例子；另外**本地复现 CI 请用 `bun run test` 而不是 `bun test`**，两者的进程模型不同。
 
+## 新增 NodeKind（RFC-253 实测）
+
+- **「加一个 NodeKind 要改几处」不要靠人肉清点——让编译器数**。仓内目前有 **8 处**穷尽点，`satisfies Record<NodeKind,…>` / `never` 守卫会逐个把你逼红：`shared/node-kind-behavior.ts`、`shared/nodePorts.ts`、`shared/workflow-node-references.ts`、`backend/services/runLiveness.ts`（`livenessSourceOfKind` 的 `never` 分支）、`frontend/canvas/WorkflowCanvas.tsx`、`NodeInspector.tsx`、`nodePalette.ts`、`canvas/wrapperFit.ts`。RFC-253 的设计门（外部评审）只列出前 7 处，第 8 处是 typecheck 报出来的——**清单会过期，编译器不会**。
+- **但仍有不受类型约束的手写表**：`WorkflowNodePicker.tsx` 的 `categoryTabs` 是手写数组（`categoryLabels` / `categoryCounts` 是 `Record<…>` 会红，tabs 数组不会）⇒ 新分区能通过 typecheck 却在 UI 里**没有页签**。只有组件测试抓得到。新增 palette 分区时记得一并加。
+- **新增 palette 分区 / 失败码 / 校验码会触发一批"覆盖棘轮"测试**，它们是设计如此、必须显式更新：`palette.test.ts`（分区 key 与 label 列表）、`palette-icon-coverage.test.ts`（glyph 白名单）、`i18n-phase-b.test.ts`、`workflow-node-picker*.test.ts`（分类计数与 `all` 总数）、`permission.test.ts`（`PERMISSIONS.length` 与 manager/admin 快照）、`rfc203-task-failure.test.ts`（每个 `FAILURE_CODE` 必须有本地化文案，否则降级成 `generic`）、`rfc203-validation-copy.test.ts`（每个 validator code 必须有精确词条）、`rfc224-execution-identity-failure-taxonomy.test.ts`（`FAILURE_CODES` 的组合顺序）。
+- **`unmanagedReferenceWarnings` 的引用识别是按键名启发式（`/nodeId$/i` 等）**，对**用户可控键名**的字段会误报：一个叫 `FOO_NODEID` 的普通环境变量就会触发 `action:'abort'` 并卡住复制粘贴。正解是给描述符加 `opaqueFields` 显式声明「此子树是用户数据、按构造不含引用」，而不是让启发式去猜用户起的名字。
+- **i18n 的 `zh-CN.ts` 里 `interface Resources` 与 `const zhCN` 是两段**，同一个键名在文件里出现两次。用脚本插入键时 `re.search` 会命中**接口**那一份（在前面），结果是把字符串字面量写进了类型声明。改 i18n 一律分别定位两段，改完 `bun run typecheck` 立刻能看出来。
+
+## 子进程与沙箱（RFC-253 实测）
+
+- **`pumpLines` 的行流不能用来还原 stdout**：它 `if (line.length > 0)` 丢空行、也丢尾换行，所以 `a\n\nb\n` 会变成 `a\nb`。对 JSON 事件流无所谓，对「stdout 就是端口值」这类语义是**静默的数据损坏**。需要原文就单独开一条原始字节累加器，与行流分开。
+- **`--unshare-net` 不等于无网**：它只隔离 **abstract** unix socket；pathname socket 归 mount namespace 管，而 `--bind / /` 会把 `/run/user/$UID/bus`（D-Bus，可经 systemd 执行命令）和 `/var/run/docker.sock` 一并带进来。真要断网还得 `--tmpfs /run --tmpfs /var/run`，且这仍是 best-effort（根仍是 RW bind）。
+- **外层沙箱不是 jail**：Linux `--bind / /` 可写、macOS `(allow default)`，两者只遮 appHome 与几个 crown jewel 文件。任何「进程只能写 X 目录」的断言在写之前先去 `policy.ts` 核一遍。
+- **`Bun.spawn` 只在退出后返回，所以 pid 必须在 spawn 瞬间落库**：靠 `await child.exited` 之后再写，daemon 中途被 `kill -9` 就永远拿不到 pid，boot reaper 判 `no-pid`、孤儿进程活到天荒地老。用 `onSpawned` 回执在读取任何输出前写 `pid` + `spawn_binary_path`。
+- **`mcpEnvIssues` 显式放行 `PYTHONPATH` / `NODE_OPTIONS`**（对 MCP 子进程合理），复用它去守别的进程时会漏：这两个变量正是「在用户代码第一行之前加载任意模块」的入口。另外「平台键最后覆盖用户键」只对平台**真的会设**的键成立——平台不设时用户值照样存活。要么剔除保留键，要么无条件写入。
+- **argv 不过 shell，所以别把 `<` `>` 当 shell 元字符拒掉**：它们是 pip 的合法版本比较符，误拒会给用户一条完全误导的报错。真正该拒的是 flag 前缀、URL/VCS/路径形态与 `;&|\`$()` 这类。
+
 ## 前端
 
 - **CSS 改动别肉眼跳过**：最小 repro HTML + `python3 -m http.server`（chrome MCP 拒 `file://`）+ chrome 截图 light&dark 验像素再推。

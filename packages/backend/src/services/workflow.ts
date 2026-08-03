@@ -33,6 +33,7 @@ import {
 import { and, eq } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
+import { assertScriptAuthorAllowed, type ScriptAuthorPrincipal } from './scriptAuthorGate'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
@@ -197,6 +198,10 @@ export async function createWorkflow(
       ownerUserId,
       builtin: opts?.builtin === true,
       now,
+      // A null actor is a platform-internal seed (builtin workflows, fixtures),
+      // not an anonymous user: those paths are trusted by construction.
+      scriptPrincipal:
+        actor === null ? { kind: 'system', reason: 'no-actor' } : { kind: 'actor', actor },
     })
   })
   // RFC-199: the create response is derived from INSERT RETURNING. A post-insert
@@ -286,6 +291,9 @@ export async function copyWorkflow(
       ownerUserId: actor.user.id,
       builtin: false,
       now: Date.now(),
+      // RFC-253 D21 — a copy re-persists one stored revision verbatim; it adds
+      // no executable content the platform did not already accept.
+      scriptPrincipal: { kind: 'verbatim-copy' },
     })
   })
 
@@ -348,6 +356,18 @@ export async function prepareWorkflowSave(
     await assertPrincipalCanWritePreflight(db, principal, preflightRow)
     const preflightWorkflow = rowToWorkflow(preflightRow)
     assertChangedWorkflowName(preflightWorkflow.name, normalizedSnapshot.name)
+    // RFC-253 — the save path's script gate. Compares the sensitive projection
+    // of the STORED definition against the submitted one, so an author without
+    // `scripts:author` can still move nodes and edit unrelated parts of a
+    // workflow that happens to contain a script.
+    assertScriptAuthorAllowed({
+      next: normalizedSnapshot.definition,
+      previous: preflightWorkflow.definition,
+      principal:
+        principal.kind === 'actor'
+          ? { kind: 'actor', actor: principal.actor }
+          : { kind: 'system', reason: principal.reason },
+    })
     const newIds = diffNewNames(
       extractWorkflowAgentRefs(preflightWorkflow.definition),
       extractWorkflowAgentRefs(normalizedSnapshot.definition),
@@ -739,8 +759,18 @@ export function insertWorkflowInTx(
     ownerUserId: string | null
     builtin: boolean
     now: number
+    /**
+     * RFC-253 — who is introducing this definition's executable content.
+     *
+     * REQUIRED, deliberately: this function is the single insert path for a
+     * workflow document (routes, YAML import and the intent builder all land
+     * here), so making provenance a mandatory parameter is what stops a future
+     * caller from forgetting the script gate. There is no default.
+     */
+    scriptPrincipal: ScriptAuthorPrincipal
   },
 ): WorkflowRow {
+  assertScriptAuthorAllowed({ next: input.definition, principal: input.scriptPrincipal })
   const initialAcl = input.builtin
     ? initialBuiltinResourceAcl(input.ownerUserId)
     : initialPrivateResourceAcl(input.ownerUserId)

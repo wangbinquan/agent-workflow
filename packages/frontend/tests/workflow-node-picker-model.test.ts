@@ -36,11 +36,13 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
     })
 
     expect(model.categoryCounts).toEqual({
-      all: 60,
+      all: 61,
       agents: 50,
       wrappers: 3,
       // RFC-243 — call-workflow + call-workgroup entries in the Calls category.
       calls: 2,
+      // RFC-253 — the single generic script entry.
+      scripts: 1,
       io: 2,
       human: 3,
     })
@@ -49,10 +51,11 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
       'agents',
       'wrappers',
       'calls',
+      'scripts',
       'io',
       'human',
     ])
-    expect(model.visibleEntryCount).toBe(60)
+    expect(model.visibleEntryCount).toBe(61)
   })
 
   test('opens Wrapper and Human directly without any Agent rows', () => {
@@ -187,7 +190,8 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
     })
 
     expect(model.categoryCounts.agents).toBe(0)
-    expect(model.categoryCounts.all).toBe(10)
+    // RFC-253 added the Scripts entry ⇒ 10 → 11 non-agent palette rows.
+    expect(model.categoryCounts.all).toBe(11)
     expect(model.groups).toEqual([])
     expect(model.visibleEntryCount).toBe(0)
   })

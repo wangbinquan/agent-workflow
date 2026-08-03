@@ -38,6 +38,7 @@ import {
   NODE_KIND,
   type NodeKind,
 } from './schemas/workflow'
+import { declaredScriptOutputs } from './scriptNode'
 import { deriveWrapperFanoutOutputs, resolveNodeAgent, type AgentLookup } from './wrapperFanout'
 import { REVIEW_APPROVAL_META_PORT, reviewApprovedPortName } from './reviewMultiDoc'
 
@@ -269,6 +270,14 @@ const PORT_DERIVERS = {
   'call-workgroup': (): DeclaredPorts => ({
     ...NO_PORTS,
     dataOutputs: [{ name: 'result', kind: 'text' }],
+  }),
+  // RFC-253 §2 — script inputs are edge-derived (agent precedent: the incoming
+  // edge's target portName IS the variable name, so nothing is declared);
+  // outputs are the node's declared ports, or the single implicit `stdout`
+  // outlet when none are declared (D3/D22).
+  script: ({ node }: DeriverCtx): DeclaredPorts => ({
+    ...NO_PORTS,
+    dataOutputs: declaredScriptOutputs(node),
   }),
 } as const satisfies Record<NodeKind, (ctx: DeriverCtx) => DeclaredPorts>
 

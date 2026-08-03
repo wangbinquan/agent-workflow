@@ -132,6 +132,11 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:fb48c4e605ca4f31e9b4\u001f1\u001fportable-selector\u001frowByName.has(r.name)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:706b83acba3567b64491\u001f1\u001fportable-selector\u001fnew Set(rootWorkgroupRefs.map((r) => r.workgroupName))',
   'collection-name-identity\u001fpackages/shared/src/workflowCalls.ts\u001fcollectExecutionRefs\u001fNewExpression:017208639753c8f14b05\u001f1\u001fportable-selector\u001fnew Set(collectWorkgroupCallRefs(defn).map((r) => r.workgroupName))',
+  // RFC-253: the key here is a workflow PORT name, not a resource name — it is
+  // the protocol identifier the envelope itself carries and the only thing a
+  // downstream edge can bind to. There is no id form of a port to prefer, so
+  // this sink is reviewed-and-allowed rather than migrated.
+  'frontend-name-key\u001fpackages/backend/src/services/scriptPorts.ts\u001fextractScriptPorts\u001fBinaryExpression:f2e0585546fad134fd5c\u001f1\u001fportable-selector\u001fports[name] = content',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fBinaryExpression:b7eb66bf361458a26852\u001f1\u001fportable-selector\u001ffrozenWorkgroups[name] = { id: row.id, version: row.version, group }',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fkeepWorkgroupsOf\u001fBinaryExpression:f7a5f661ceac0065c5fe\u001f1\u001fportable-selector\u001fkept.workgroups[ref.workgroupName] = g',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fparseCallClosure\u001fBinaryExpression:0dfb50f5c2f57f92e91c\u001f1\u001fportable-selector\u001fout.workgroups[name] = { id: r.id, version: r.version, group: r.group }',
@@ -344,7 +349,10 @@ describe('RFC-223 T15 structural identity guard', () => {
     // (parseAgentRegistry / buildAgentRegistrySeal / verifyExecutionIdentity,
     // one of which occurred twice); restoring plugins and the dependsOn closure
     // added two, both reviewed above as OpenCode protocol registry keys.
-    expect(findings.length).toBe(136)
+    // RFC-253: 136 → 137. The script envelope writes its parsed ports into a
+    // record keyed by PORT name — a protocol identifier with no id form, so it
+    // is reviewed-and-allowed above rather than migrated to an id.
+    expect(findings.length).toBe(137)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

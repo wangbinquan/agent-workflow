@@ -2863,6 +2863,7 @@ export interface Resources {
       categoryWrapper: string
       /** RFC-243 — Calls category (call-workflow). */
       categoryCalls: string
+      categoryScripts: string
       categoryIo: string
       categoryHuman: string
       noMatches: string
@@ -2972,6 +2973,10 @@ export interface Resources {
     paletteClarifyLabel: string
     paletteClarifyDesc: string
     /** RFC-243 — Calls palette section + call-workflow entry. */
+    /** RFC-253 — Scripts section (deterministic compute, no model). */
+    paletteScripts: string
+    paletteScriptLabel: string
+    paletteScriptDesc: string
     paletteCalls: string
     paletteCallWorkflowLabel: string
     paletteCallWorkflowDesc: string
@@ -4082,6 +4087,42 @@ export interface Resources {
   }
   /** RFC-243 PR-4 — canvas chip label + unset-reference line for
    *  call-workgroup nodes (⬡ icon). */
+  scriptNode: {
+    label: string
+    dependencyCount_one: string
+    dependencyCount_other: string
+    networkDeny: string
+    readonly: string
+  }
+  scriptInspector: {
+    language: string
+    languageHint: string
+    sectionCode: string
+    body: string
+    bodyHint: string
+    retryWarning: string
+    sectionInputs: string
+    noInputs: string
+    sectionOutputs: string
+    outputSingle: string
+    outputEnvelope: string
+    outputPorts: string
+    outputPortsHint: string
+    sectionRuntime: string
+    dependencies: string
+    dependenciesHint: string
+    env: string
+    envHint: string
+    envKey: string
+    envValue: string
+    envAdd: string
+    envRemove: string
+    networkDeny: string
+    networkDenyHint: string
+    readonly: string
+    readonlyHint: string
+    noAuthorPermission: string
+  }
   callWorkgroupNode: {
     label: string
     unsetWorkgroup: string
@@ -7319,6 +7360,16 @@ export const zhCN: Resources = {
     resumeLaunchLink: '启动新任务 →',
     failure: {
       generic: '任务执行失败。',
+      'script-nonzero-exit': '脚本以非零退出码结束。',
+      'script-timeout': '脚本超时被终止。',
+      'script-envelope-missing': '脚本没有输出带本次运行 nonce 的 <workflow-output> 信封。',
+      'script-envelope-malformed': '脚本输出的信封结构破损。',
+      'script-port-missing': '脚本的信封里缺少已声明的输出端口。',
+      'script-interpreter-missing': '宿主上找不到该脚本语言的解释器。',
+      'script-deps-install-failed': '脚本依赖安装失败。',
+      'script-network-fence-unavailable':
+        '该节点声明了禁止出网，但宿主无法提供网络围栏，已拒绝执行。',
+      'script-spawn-failed': '脚本进程无法启动。',
       'envelope-missing': '代理没有按约定格式输出结果（缺少输出信封）。',
       'envelope-missing__hint': '通常是模型没有遵循输出协议——可点「继续任务」重试该节点。',
       'clarify-and-output-both': '代理同时提交了反问与结果，格式冲突。',
@@ -7758,6 +7809,7 @@ export const zhCN: Resources = {
       categoryAgent: 'Agent',
       categoryWrapper: '包装器',
       categoryCalls: '调用',
+      categoryScripts: '脚本',
       categoryIo: '输入输出',
       categoryHuman: '人工节点',
       noMatches: '没有匹配的步骤。',
@@ -7865,6 +7917,10 @@ export const zhCN: Resources = {
     paletteReviewDesc: '挂在 markdown port 下游，让人评审后再继续。',
     paletteClarifyLabel: '反问',
     paletteClarifyDesc: '让 agent 在无法决断时主动反问；从节点左侧 input 端往 agent 上拖即可挂接。',
+    paletteScripts: '脚本',
+    paletteScriptLabel: '脚本',
+    paletteScriptDesc:
+      '在任务工作区里跑一段内联的 python / bash / node，不起模型、不计 token。上游端口以 AW_PORT_* 环境变量注入。',
     paletteCalls: '调用',
     paletteCallWorkflowLabel: '调用工作流',
     paletteCallWorkflowDesc: '把另一个工作流作为独立子任务执行；端口与被引工作流的输入/输出一致。',
@@ -8962,6 +9018,46 @@ export const zhCN: Resources = {
     label: '调用工作流',
     unsetWorkflow: '（未选择工作流）',
   },
+  scriptNode: {
+    label: '脚本',
+    // 中文无单复数变化，两档同文——与仓内 wgRow_one/_other 先例一致。
+    dependencyCount_one: '{{count}} 个依赖',
+    dependencyCount_other: '{{count}} 个依赖',
+    networkDeny: '无网络',
+    readonly: '只读',
+  },
+  scriptInspector: {
+    language: '语言',
+    languageHint: '决定用哪个解释器执行。切换语言时，未改动过的初始模板会一并替换。',
+    sectionCode: '脚本',
+    body: '脚本正文',
+    bodyHint: '在任务工作区里执行。平台不会往这段文本里替换任何内容。',
+    retryWarning:
+      '失败会自动重试。文件改动随隔离工作区一起回滚，但外部副作用（HTTP 调用、通知）不会——非幂等的脚本要自己做幂等保护。',
+    sectionInputs: '输入',
+    noInputs: '还没有入边。连一个上游端口即可把值传进来。',
+    sectionOutputs: '输出',
+    outputSingle: '整个 stdout 作为「{{port}}」端口的值。',
+    outputEnvelope:
+      '声明了端口后，需要在 stdout 打印 <workflow-output nonce="$AW_ENVELOPE_NONCE"> 信封。',
+    outputPorts: '声明输出端口',
+    outputPortsHint: '留空则把 stdout 作为单一端口输出。',
+    sectionRuntime: '运行时',
+    dependencies: '依赖',
+    dependenciesHint:
+      '必须精确钉版本（requests==2.32.3 / lodash@4.17.21）。只安装一次，落进只读缓存环境。',
+    env: '环境变量',
+    envHint: '值在所有展示位置都会脱敏。平台变量不可覆盖。',
+    envKey: '变量名',
+    envValue: '值',
+    envAdd: '新增变量',
+    envRemove: '删除变量',
+    networkDeny: '禁止访问网络',
+    networkDenyHint: '依赖照常安装；脚本本身在无网环境下执行。',
+    readonly: '只读工作区',
+    readonlyHint: '不建隔离工作区、不合并回写。脚本无法修改仓库文件。',
+    noAuthorPermission: '你可以查看这段脚本但不能修改——编辑脚本内容需要 scripts:author 权限。',
+  },
   callWorkgroupNode: {
     label: '调用工作组',
     unsetWorkgroup: '（未选择工作组）',
@@ -9056,6 +9152,20 @@ export const zhCN: Resources = {
       'upload-input-target-dir-invalid': '上传输入的目标目录必须是仓库内相对路径。',
       'wrapper-children-outside-bounds': '包装器内有节点超出了包装器边界。',
       'wrapper-child-duplicate': '包装器重复列出了同一个直接子节点。',
+      'script-body-empty': '脚本节点的正文为空。',
+      'script-language-invalid': '脚本节点的语言必须是 python、bash 或 node。',
+      'script-in-fanout-unsupported':
+        '脚本节点不能放在扇出包装器内部——请把清单计算放在扇出的上游。',
+      'script-output-name-duplicate': '脚本节点的输出端口重名。',
+      'script-output-kind-path-unsupported':
+        '脚本节点暂不支持 path 类端口（归档链未接通，内容会在工作区回收后失效）。',
+      'script-port-env-collision': '两个输入端口会映射到同一个环境变量名，请重命名其一。',
+      'script-dependencies-unsupported': 'bash 脚本不能声明依赖。',
+      'script-dependency-malformed': '依赖条目不是合法的包名。',
+      'script-dependency-version-unpinned':
+        '依赖必须精确钉版本（如 requests==2.32.3 / lodash@4.17.21）。',
+      'script-env-key-invalid': '环境变量名不合法。',
+      'script-env-key-reserved': '该环境变量名由平台保留，不能覆盖。',
       'wrapper-child-multiple-parents': '同一个节点不能直接属于多个包装器。',
       'wrapper-child-node-missing': '包装器引用了不存在的子节点。',
       'wrapper-containment-cycle': '包装器包含关系不能形成环。',

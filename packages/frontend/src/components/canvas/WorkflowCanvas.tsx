@@ -96,6 +96,7 @@ import {
 } from './nodePalette'
 import { OutputNode } from './nodes/OutputNode'
 import { ReviewNode } from './nodes/ReviewNode'
+import { ScriptNode } from './nodes/ScriptNode'
 import {
   INBOUND_HANDLE_ID,
   type CanvasNodeData,
@@ -175,6 +176,8 @@ const NODE_TYPES = {
   'call-workflow': CallWorkflowNode,
   // RFC-243 PR-4 — call-workgroup hands the stage to a workgroup child task.
   'call-workgroup': CallWorkgroupNode,
+  // RFC-253 — script node card.
+  script: ScriptNode,
 } satisfies Record<NodeKind, ComponentType<never>>
 
 const EDGE_TYPES = { 'workflow-insertable': WorkflowCanvasEdge }

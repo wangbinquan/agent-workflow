@@ -86,6 +86,28 @@ export const ConfigSchema = z.object({
   // "no retries"; default 3 matches RFC-042's former hard-coded fallback.
   defaultNodeRetries: z.number().int().nonnegative(),
 
+  // --- RFC-253 script nodes ---
+  /**
+   * Absolute interpreter paths overriding PATH resolution. Administrators use
+   * this when the daemon's PATH is not the one they want scripts to run under
+   * (a pyenv shim, a homebrew node, a container-provided bash).
+   */
+  scriptInterpreters: z
+    .object({
+      python: z.string().optional(),
+      bash: z.string().optional(),
+      node: z.string().optional(),
+    })
+    .default({}),
+  /** Wall clock for one dependency-environment build. */
+  scriptDepsInstallTimeoutMs: z
+    .number()
+    .int()
+    .positive()
+    .default(10 * 60 * 1000),
+  /** Prepared dependency environments unused for this long are collected. */
+  scriptEnvTtlDays: z.number().int().positive().default(30),
+
   // --- RFC-108 task auto-check & recovery (all default-safe; auto-execution OFF) ---
   /** T18: auto-resume daemon-restart-interrupted tasks at boot. Default OFF. */
   autoResumeOnBoot: z.boolean().default(false),
@@ -508,6 +530,9 @@ export const DEFAULT_CONFIG: Config = {
   // so every node has a hard-timeout floor; was defined-but-never-threaded before.
   defaultPerNodeTimeoutMs: 30 * 60 * 1000, // 30 min
   defaultNodeRetries: 3, // RFC-115 — was RFC-042's hard-coded `?? 3` in scheduler
+  scriptInterpreters: {}, // RFC-253 — empty ⇒ resolve every language from PATH
+  scriptDepsInstallTimeoutMs: 10 * 60 * 1000,
+  scriptEnvTtlDays: 30,
   // RFC-108 auto-recovery knobs — auto-execution OFF by default (decision D1).
   autoResumeOnBoot: false,
   autoRepair: {},

@@ -196,7 +196,11 @@ describe('RFC-199 strict workflow validation targets', () => {
     // fanout containment, self/graph cycles, ref-missing ×2, upload, output
     // collision, input unwired). Every new site must still carry a strict
     // navigation target.
-    expect(emissions).toHaveLength(116)
+    // RFC-253 adds nine script-node emissions (language, empty body, fan-out
+    // placement, duplicate/path output kinds, port→env collision, bash-with-
+    // dependencies, dependency grammar, env key invalid/reserved) — each with a
+    // strict node or node-field target.
+    expect(emissions).toHaveLength(125)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

@@ -33,6 +33,7 @@ import { CrossClarifyEdit } from './inspector/CrossClarifyEdit'
 import { InputEdit } from './inspector/InputEdit'
 import { OutputEdit } from './inspector/OutputEdit'
 import { ReviewEdit } from './inspector/ReviewEdit'
+import { ScriptEdit } from './inspector/ScriptEdit'
 import { WrapperFanoutEdit } from './inspector/WrapperFanoutEdit'
 import { WrapperGitLoopEdit } from './inspector/WrapperGitLoopEdit'
 import type { InspectorChangeMeta } from './inspector/historyMeta'
@@ -93,6 +94,8 @@ const KIND_INSPECTORS = {
   'call-workflow': CallWorkflowEdit,
   // RFC-243 PR-4 — call-workgroup: workgroup selector + goalTemplate + limits.
   'call-workgroup': CallWorkgroupEdit,
+  // RFC-253 — script node: language + inline body + runtime knobs.
+  script: ScriptEdit,
 } as const satisfies Record<NodeKind, FC<EditProps>>
 
 export function NodeInspector({

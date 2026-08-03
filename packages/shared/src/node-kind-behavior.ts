@@ -174,6 +174,17 @@ export const NODE_KIND_BEHAVIORS = {
     isAgent: false,
     settlesWithoutRow: false,
   },
+  // RFC-253 — a script node runs a real subprocess in the task worktree, so it
+  // cascades on retry and is process-bearing. It owns NO model session (no
+  // prompt, no inventory, no transcript — `isAgent: false` keeps it out of
+  // every agent-only path: inventory capture, memory injection, clarify), and
+  // it always writes its own node_run row.
+  script: {
+    retryCascade: 'mint-placeholder',
+    isProcess: true,
+    isAgent: false,
+    settlesWithoutRow: false,
+  },
 } as const satisfies Record<NodeKind, NodeKindBehavior>
 
 // ---------------------------------------------------------------------------

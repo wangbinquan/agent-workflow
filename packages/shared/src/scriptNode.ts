@@ -1,0 +1,440 @@
+// RFC-253 — the script node's pure oracles. No IO, browser-safe: the canvas
+// Inspector, the validator, the permission gate and the executor all read
+// their answers from HERE so the four can never drift.
+//
+// Field readers are tolerant (`WorkflowNodeSchema` is `.passthrough()`, so a
+// stored node is a bag of unknowns until the strict `ScriptNodeSchema` runs at
+// the write boundary): a malformed field degrades to its default rather than
+// throwing inside a canvas render.
+
+import {
+  isWrapperKind,
+  SCRIPT_DEFAULT_OUTPUT_PORT,
+  SCRIPT_DEPENDENCY_MAX_LEN,
+  SCRIPT_LANGUAGES,
+  type ScriptLanguage,
+  type ScriptNetwork,
+  type ScriptOutputPort,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from './schemas/workflow'
+import { canonicalJson } from './workflow-canonical'
+
+// ---------------------------------------------------------------------------
+// Field readers
+// ---------------------------------------------------------------------------
+
+function record(node: WorkflowNode): Record<string, unknown> {
+  return node as unknown as Record<string, unknown>
+}
+
+export function readScriptLanguage(node: WorkflowNode): ScriptLanguage | undefined {
+  const raw = record(node).language
+  return typeof raw === 'string' && (SCRIPT_LANGUAGES as readonly string[]).includes(raw)
+    ? (raw as ScriptLanguage)
+    : undefined
+}
+
+export function readScriptBody(node: WorkflowNode): string {
+  const raw = record(node).script
+  return typeof raw === 'string' ? raw : ''
+}
+
+/** Declared output ports in declaration order, dropping malformed rows. */
+export function readScriptOutputPorts(node: WorkflowNode): ScriptOutputPort[] {
+  const raw = record(node).outputs
+  if (!Array.isArray(raw)) return []
+  const out: ScriptOutputPort[] = []
+  for (const entry of raw) {
+    const row = entry as { name?: unknown; kind?: unknown } | null
+    if (typeof row?.name !== 'string' || row.name.length === 0) continue
+    out.push(typeof row.kind === 'string' ? { name: row.name, kind: row.kind } : { name: row.name })
+  }
+  return out
+}
+
+export function readScriptDependencies(node: WorkflowNode): string[] {
+  const raw = record(node).dependencies
+  if (!Array.isArray(raw)) return []
+  return raw.filter((entry): entry is string => typeof entry === 'string')
+}
+
+export function readScriptEnv(node: WorkflowNode): Record<string, string> {
+  const raw = record(node).env
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'string') out[key] = value
+  }
+  return out
+}
+
+/** D4 — absent resolves to 'allow'. */
+export function resolveScriptNetwork(node: WorkflowNode): ScriptNetwork {
+  return record(node).network === 'deny' ? 'deny' : 'allow'
+}
+
+/** D8 — absent resolves to false (writable + iso + merge-back). */
+export function resolveScriptReadonly(node: WorkflowNode): boolean {
+  return record(node).readonly === true
+}
+
+// ---------------------------------------------------------------------------
+// Output shape (D3 / D22)
+// ---------------------------------------------------------------------------
+
+export type ScriptOutputMode = 'single' | 'envelope'
+
+/**
+ * D3 — the mode is decided by ONE observable fact: did the author declare
+ * output ports? No second knob, so "which protocol does this node speak" is
+ * never ambiguous to the author, the validator or the executor.
+ */
+export function scriptOutputMode(node: WorkflowNode): ScriptOutputMode {
+  return readScriptOutputPorts(node).length > 0 ? 'envelope' : 'single'
+}
+
+/** The node's outlets: declared ports, or the implicit single `stdout`. */
+export function declaredScriptOutputs(node: WorkflowNode): Array<{ name: string; kind?: string }> {
+  const declared = readScriptOutputPorts(node)
+  if (declared.length === 0) return [{ name: SCRIPT_DEFAULT_OUTPUT_PORT }]
+  // Dedup by name so a duplicate (which the validator rejects) still renders a
+  // stable handle set instead of colliding React keys.
+  const seen = new Set<string>()
+  const out: Array<{ name: string; kind?: string }> = []
+  for (const port of declared) {
+    if (seen.has(port.name)) continue
+    seen.add(port.name)
+    out.push(port.kind === undefined ? { name: port.name } : { name: port.name, kind: port.kind })
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Port → environment variable mapping (D5)
+// ---------------------------------------------------------------------------
+
+export const SCRIPT_ENV_VALUE_PREFIX = 'AW_PORT_'
+export const SCRIPT_ENV_FILE_PREFIX = 'AW_PORT_FILE_'
+
+/** Single-value inline ceiling; larger values spill to `$AW_INPUT_DIR`. */
+export const SCRIPT_ENV_INLINE_LIMIT = 32 * 1024
+/** Ceiling on the SUM of inline values — the real `E2BIG` risk is aggregate. */
+export const SCRIPT_ENV_TOTAL_LIMIT = 256 * 1024
+
+/**
+ * Port name → environment variable suffix. Uppercased, every character outside
+ * `[A-Z0-9_]` folded to `_`, digit-leading names prefixed so the result is a
+ * POSIX-legal identifier.
+ *
+ * The folding is lossy ON PURPOSE (a legible `AW_PORT_MY_PORT` beats an escaped
+ * mangling), which means two distinct port names CAN land on the same suffix —
+ * `scriptPortEnvCollisions` exists so the validator rejects that at save time
+ * instead of letting one value silently shadow the other at run time.
+ */
+export function scriptEnvSuffix(portName: string): string {
+  const folded = portName.toUpperCase().replace(/[^A-Z0-9_]/g, '_')
+  return /^[0-9]/.test(folded) ? `_${folded}` : folded
+}
+
+export interface ScriptPortEnvCollision {
+  suffix: string
+  /** The colliding port names, in input order. */
+  portNames: string[]
+}
+
+/** Every suffix claimed by more than one port name. */
+export function scriptPortEnvCollisions(portNames: readonly string[]): ScriptPortEnvCollision[] {
+  const bySuffix = new Map<string, string[]>()
+  for (const name of portNames) {
+    const suffix = scriptEnvSuffix(name)
+    const list = bySuffix.get(suffix)
+    if (list === undefined) bySuffix.set(suffix, [name])
+    else if (!list.includes(name)) list.push(name)
+  }
+  const out: ScriptPortEnvCollision[] = []
+  for (const [suffix, names] of bySuffix) {
+    if (names.length > 1) out.push({ suffix, portNames: names })
+  }
+  return out
+}
+
+export interface ScriptPortEnvPlan {
+  /** `AW_PORT_<SUFFIX>` → value, for values kept inline. */
+  inline: Record<string, string>
+  /** Values that must be written to `$AW_INPUT_DIR/<portName>` instead. */
+  spilled: Array<{ portName: string; envName: string; value: string }>
+  /** Original port name → suffix, published to the script as `AW_PORT_NAMES`. */
+  suffixByPort: Record<string, string>
+}
+
+/**
+ * UTF-8 byte length without `TextEncoder`/`Buffer` — this package is isomorphic
+ * and its tsconfig carries neither the DOM nor the Node lib. Surrogate pairs are
+ * counted once (4 bytes), which is what the OS argv/env accounting sees.
+ */
+function utf8ByteLength(value: string): number {
+  let bytes = 0
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+    if (code < 0x80) bytes += 1
+    else if (code < 0x800) bytes += 2
+    else if (code >= 0xd800 && code <= 0xdbff && i + 1 < value.length) {
+      const next = value.charCodeAt(i + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4
+        i++
+        continue
+      }
+      bytes += 3
+    } else bytes += 3
+  }
+  return bytes
+}
+
+/**
+ * Decide which upstream values ride in the environment and which spill to disk.
+ *
+ * Ordering is deterministic (sorted by port name) so the same inputs always
+ * produce the same plan — an aggregate-limit decision that depended on object
+ * key order would make "did my 30 KiB value spill?" unanswerable.
+ *
+ * A spilled value sets ONLY `AW_PORT_FILE_<SUFFIX>`; the inline variable is
+ * left absent rather than truncated, so a script can never silently read half
+ * a value and believe it read all of it.
+ */
+export function planScriptPortEnv(inputs: Record<string, string>): ScriptPortEnvPlan {
+  const plan: ScriptPortEnvPlan = { inline: {}, spilled: [], suffixByPort: {} }
+  let inlineBytes = 0
+  for (const portName of Object.keys(inputs).sort()) {
+    const value = inputs[portName] ?? ''
+    const suffix = scriptEnvSuffix(portName)
+    plan.suffixByPort[portName] = suffix
+    const bytes = utf8ByteLength(value)
+    if (bytes > SCRIPT_ENV_INLINE_LIMIT || inlineBytes + bytes > SCRIPT_ENV_TOTAL_LIMIT) {
+      plan.spilled.push({ portName, envName: `${SCRIPT_ENV_FILE_PREFIX}${suffix}`, value })
+      continue
+    }
+    inlineBytes += bytes
+    plan.inline[`${SCRIPT_ENV_VALUE_PREFIX}${suffix}`] = value
+  }
+  return plan
+}
+
+// ---------------------------------------------------------------------------
+// Dependency specs (D14 / AC-19 / AC-19b)
+// ---------------------------------------------------------------------------
+
+/**
+ * pip: `name[extra,extra]==1.2.3`. npm: `[@scope/]name@1.2.3`.
+ *
+ * The two grammars are SEPARATE (design-gate F10): a single pattern that tried
+ * to serve both matched neither cleanly — it rejected `@scope/pkg@1.2.3` while
+ * accepting `pkg^1.2.3`, which pip does not understand.
+ */
+const PIP_SPEC_RE =
+  /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\[[A-Za-z0-9][A-Za-z0-9,._-]*\])?==[A-Za-z0-9][A-Za-z0-9.*+_-]*$/
+const NPM_SPEC_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*@[0-9][A-Za-z0-9.+-]*$/
+
+/**
+ * The single reason a dependency spec is refused, or null when it is fine.
+ *
+ * Exact pins are MANDATORY (AC-19b): the prepared environment is cached by a
+ * hash of this list and only resolved on a cold cache, so an unpinned spec
+ * means the same authorized definition can install different bytes at different
+ * times. Determinism is the whole reason a script node exists.
+ */
+export function scriptDependencyIssue(language: ScriptLanguage, spec: string): string | null {
+  if (language === 'bash') return `bash scripts cannot declare dependencies`
+  if (spec.length === 0) return 'dependency spec is empty'
+  if (spec.length > SCRIPT_DEPENDENCY_MAX_LEN) {
+    return `dependency spec is too long (max ${SCRIPT_DEPENDENCY_MAX_LEN})`
+  }
+  // Checked before the grammar so the message names the actual problem rather
+  // than the generic "malformed".
+  if (spec.startsWith('-')) return `dependency '${spec}' looks like a command-line flag`
+  // `<` and `>` are deliberately NOT in this set: they are pip's own range
+  // comparators, and the argv the platform builds never passes through a shell,
+  // so they cannot do anything here. Rejecting them as "shell metacharacters"
+  // would give the author a misleading reason for what is really an unpinned
+  // version — the grammar check below produces the accurate message.
+  if (/[\s;&|`$(){}'"\\]/.test(spec)) return `dependency '${spec}' contains shell metacharacters`
+  if (/[/:]/.test(spec) && !spec.startsWith('@')) {
+    return `dependency '${spec}' looks like a URL, path or VCS spec — only packages from the default index are accepted`
+  }
+  if (language === 'python') {
+    if (!PIP_SPEC_RE.test(spec)) {
+      return /[<>~^!]|(?:^[^=]*$)/.test(spec)
+        ? `dependency '${spec}' must pin an exact version, e.g. 'requests==2.32.3'`
+        : `dependency '${spec}' is not a plain package name with an exact '==' version`
+    }
+    return null
+  }
+  if (!NPM_SPEC_RE.test(spec)) {
+    return /[<>~^]|(?:^[^@]*$)|(?:^@[^@]*$)/.test(spec)
+      ? `dependency '${spec}' must pin an exact version, e.g. 'lodash@4.17.21'`
+      : `dependency '${spec}' is not a plain package name with an exact '@' version`
+  }
+  return null
+}
+
+/** Canonical spec list: trimmed, deduped, sorted — order must not change the
+ *  cache identity of an otherwise identical environment. */
+export function normalizeScriptDependencies(specs: readonly string[]): string[] {
+  return [...new Set(specs.map((s) => s.trim()).filter((s) => s.length > 0))].sort()
+}
+
+/**
+ * Canonical bytes identifying one prepared dependency environment. The CALLER
+ * hashes it (`workflow-canonical.ts` precedent: shared owns canonicalization,
+ * crypto stays at the boundary that has it).
+ *
+ * The interpreter identity participates: the same specs under a different
+ * python are a different ABI and must not share a cache directory.
+ */
+export const SCRIPT_DEPS_ENV_DOMAIN_V1 = 'script-deps-env/v1\n'
+export function serializeScriptDepsEnvKeyV1(input: {
+  language: ScriptLanguage
+  interpreterPath: string
+  interpreterVersion: string
+  specs: readonly string[]
+}): string {
+  return `${SCRIPT_DEPS_ENV_DOMAIN_V1}${canonicalJson({
+    language: input.language,
+    interpreterPath: input.interpreterPath,
+    interpreterVersion: input.interpreterVersion,
+    specs: normalizeScriptDependencies(input.specs),
+  })}`
+}
+
+// ---------------------------------------------------------------------------
+// Sensitive projection (D20)
+// ---------------------------------------------------------------------------
+
+export const SCRIPT_SENSITIVE_PROJECTION_DOMAIN_V1 = 'workflow-script-sensitive/v1\n'
+
+/**
+ * D20 — the exact slice of a definition that `scripts:author` governs.
+ *
+ * Everything that changes what the host will EXECUTE is in; everything that is
+ * mere editing (position, title, edges, other node kinds) is out, so a user
+ * without the point can still lay out and rewire a workflow that happens to
+ * contain a script.
+ *
+ * Returns canonical BYTES, not a hash: the gate compares strings, which is
+ * exact by construction — no collision surface to reason about, and a mismatch
+ * can be diffed when someone has to debug a 403.
+ *
+ * `id` participates so that moving a body between two nodes (which swaps which
+ * node executes what) is a change, and node order is normalized so that merely
+ * reordering `nodes[]` is not.
+ */
+export function serializeScriptSensitiveProjectionV1(definition: WorkflowDefinition): string {
+  const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
+  const rows = definition.nodes
+    .filter((node) => node.kind === 'script')
+    .map((node) => {
+      // Incoming edges decide the NAMES and VALUES of the `AW_PORT_*` variables
+      // the script reads, so rewiring one changes what the host executes even
+      // though the body is untouched (design-gate P1).
+      const inbound = definition.edges
+        .filter((edge) => edge.target.nodeId === node.id)
+        .map((edge) => ({
+          from: `${edge.source.nodeId}.${edge.source.portName}`,
+          to: edge.target.portName,
+        }))
+        .sort((a, b) => cmp(a.to + a.from, b.to + b.from))
+
+      // Wrapper membership decides WHETHER and HOW MANY TIMES it runs — moving
+      // a script into a 50-iteration loop is an execution-semantics change.
+      const wrappers = definition.nodes
+        .filter((candidate) => {
+          if (!isWrapperKind(candidate.kind)) return false
+          const ids = (candidate as unknown as Record<string, unknown>).nodeIds
+          return Array.isArray(ids) && ids.includes(node.id)
+        })
+        .map((wrapper) => {
+          const raw = (wrapper as unknown as Record<string, unknown>).maxIterations
+          return {
+            id: wrapper.id,
+            kind: wrapper.kind,
+            maxIterations: typeof raw === 'number' ? raw : null,
+          }
+        })
+        .sort((a, b) => cmp(a.id, b.id))
+
+      return {
+        id: node.id,
+        language: readScriptLanguage(node) ?? null,
+        script: readScriptBody(node),
+        outputs: readScriptOutputPorts(node).map((port) => ({
+          name: port.name,
+          kind: port.kind ?? null,
+        })),
+        dependencies: readScriptDependencies(node),
+        env: Object.fromEntries(Object.entries(readScriptEnv(node)).sort(([a], [b]) => cmp(a, b))),
+        network: resolveScriptNetwork(node),
+        readonly: resolveScriptReadonly(node),
+        inbound,
+        wrappers,
+      }
+    })
+    .sort((a, b) => cmp(a.id, b.id))
+  return `${SCRIPT_SENSITIVE_PROJECTION_DOMAIN_V1}${canonicalJson(rows)}`
+}
+
+/** True when the definition contains at least one script node. */
+export function definitionHasScriptNode(definition: WorkflowDefinition): boolean {
+  return definition.nodes.some((node) => node.kind === 'script')
+}
+
+// ---------------------------------------------------------------------------
+// Reserved environment keys (design-gate P1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Keys a node's `env` map may NOT set.
+ *
+ * `mcpEnvIssues` is reused for the generic rules (legal identifier, no NUL, no
+ * dynamic-loader variables) but it deliberately ALLOWS `PYTHONPATH` and
+ * `NODE_OPTIONS` — reasonable for an MCP child, fatal here: those two are
+ * exactly how a script would escape the read-only dependency boundary or load
+ * arbitrary code before its own first line runs. `HOME`/`TMPDIR` would undo the
+ * private-run-directory guarantee (AC-16), and `PATH` would re-point the
+ * interpreter itself.
+ *
+ * The platform writes its own keys LAST regardless, so this table is the
+ * save-time diagnostic that tells the author why their variable was refused
+ * instead of letting it be silently overwritten at run time.
+ */
+export const SCRIPT_RESERVED_ENV_KEYS: readonly string[] = [
+  'PATH',
+  'HOME',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'PYTHONPATH',
+  'PYTHONHOME',
+  'PYTHONSTARTUP',
+  'NODE_PATH',
+  'NODE_OPTIONS',
+  'LANG',
+  'LC_ALL',
+]
+
+export const SCRIPT_RESERVED_ENV_PREFIXES: readonly string[] = ['AW_', 'GIT_']
+
+/** Why this env key is refused for a script node, or null when it is fine. */
+export function scriptReservedEnvKeyIssue(key: string): string | null {
+  const upper = key.toUpperCase()
+  if (SCRIPT_RESERVED_ENV_KEYS.includes(upper)) {
+    return `env key '${key}' is reserved by the platform and cannot be overridden`
+  }
+  for (const prefix of SCRIPT_RESERVED_ENV_PREFIXES) {
+    if (upper.startsWith(prefix)) {
+      return `env key '${key}' uses the reserved '${prefix}' prefix`
+    }
+  }
+  return null
+}

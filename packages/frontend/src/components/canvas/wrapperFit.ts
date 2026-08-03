@@ -35,6 +35,9 @@ export const DEFAULT_NODE_SIZE_BY_KIND: Record<NodeKind, { width: number; height
   'call-workflow': { width: 280, height: 180 },
   // RFC-243 PR-4 — call-workgroup shares the same agent-shaped card chrome.
   'call-workgroup': { width: 280, height: 180 },
+  // RFC-253 — agent-shaped card (header + badge row + port rows on both
+  // sides), so it shares agent-single's generous default.
+  script: { width: 280, height: 180 },
 }
 
 /** Header strip height (matches `.canvas-node__header`). */

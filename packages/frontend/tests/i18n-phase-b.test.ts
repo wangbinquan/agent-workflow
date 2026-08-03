@@ -65,7 +65,14 @@ describe('buildPalette with real i18n', () => {
     // updates the IO labels to ship a leading kind-icon glyph so every
     // palette row starts with an icon column. RFC-243 added the Calls
     // section (call-workflow).
-    expect(sections.map((s) => s.label)).toEqual(['Agents', 'Wrappers', 'Calls', 'IO', 'Human'])
+    expect(sections.map((s) => s.label)).toEqual([
+      'Agents',
+      'Wrappers',
+      'Calls',
+      'Scripts',
+      'IO',
+      'Human',
+    ])
     // Built-in wrapper + IO labels come through too.
     const ioSection = sections.find((s) => s.label === 'IO')
     const ioItems = ioSection?.items.map((i) => i.label) ?? []

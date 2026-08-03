@@ -143,6 +143,8 @@ function WorkflowNodePickerCatalogBody({
       wrappers: t('editor.nodePicker.categoryWrapper'),
       // RFC-243 — call-workflow lives in its own Calls category.
       calls: t('editor.nodePicker.categoryCalls'),
+      // RFC-253 — scripts run deterministic compute with no model process.
+      scripts: t('editor.nodePicker.categoryScripts'),
       io: t('editor.nodePicker.categoryIo'),
       human: t('editor.nodePicker.categoryHuman'),
     }),
@@ -188,6 +190,13 @@ function WorkflowNodePickerCatalogBody({
         label: categoryLabels.calls,
         badge: model.categoryCounts.calls,
         testid: 'workflow-node-picker-category-calls',
+      },
+      {
+        // RFC-253 — scripts run deterministic compute with no model process.
+        key: 'scripts',
+        label: categoryLabels.scripts,
+        badge: model.categoryCounts.scripts,
+        testid: 'workflow-node-picker-category-scripts',
       },
       {
         key: 'io',

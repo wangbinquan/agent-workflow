@@ -2775,6 +2775,18 @@ export const enUS: Resources = {
     resumeLaunchLink: 'Launch a new task →',
     failure: {
       generic: 'Task execution failed.',
+      'script-nonzero-exit': 'The script exited with a non-zero status.',
+      'script-timeout': 'The script was killed at the timeout.',
+      'script-envelope-missing':
+        'The script printed no <workflow-output> envelope carrying this run’s nonce.',
+      'script-envelope-malformed': 'The script’s envelope framing is corrupted.',
+      'script-port-missing': 'The script’s envelope omitted a declared output port.',
+      'script-interpreter-missing':
+        'No interpreter for that script language is available on this host.',
+      'script-deps-install-failed': 'Installing the script’s dependencies failed.',
+      'script-network-fence-unavailable':
+        'The node declared no network access but the host cannot provide a network fence, so it was refused.',
+      'script-spawn-failed': 'The script process could not be started.',
       'envelope-missing':
         'The agent did not produce output in the agreed format (missing output envelope).',
       'envelope-missing__hint':
@@ -3256,6 +3268,7 @@ export const enUS: Resources = {
       categoryAgent: 'Agent',
       categoryWrapper: 'Wrapper',
       categoryCalls: 'Calls',
+      categoryScripts: 'Scripts',
       categoryIo: 'I/O',
       categoryHuman: 'Human',
       noMatches: 'No matching steps.',
@@ -3367,6 +3380,10 @@ export const enUS: Resources = {
     paletteClarifyLabel: 'clarify',
     paletteClarifyDesc:
       'Lets an agent ask back when stuck; drag from this node’s input handle onto the agent to wire it.',
+    paletteScripts: 'Scripts',
+    paletteScriptLabel: 'script',
+    paletteScriptDesc:
+      'Run an inline python / bash / node script in the task worktree — no model, no tokens. Upstream ports arrive as AW_PORT_* environment variables.',
     paletteCalls: 'Calls',
     paletteCallWorkflowLabel: 'call workflow',
     paletteCallWorkflowDesc:
@@ -4542,6 +4559,49 @@ export const enUS: Resources = {
     label: 'call workflow',
     unsetWorkflow: '(no workflow selected)',
   },
+  scriptNode: {
+    label: 'script',
+    dependencyCount_one: '{{count}} dep',
+    dependencyCount_other: '{{count}} deps',
+    networkDeny: 'offline',
+    readonly: 'read-only',
+  },
+  scriptInspector: {
+    language: 'Language',
+    languageHint:
+      'Which interpreter runs this node. Switching it also swaps an untouched starter template.',
+    sectionCode: 'Script',
+    body: 'Script body',
+    bodyHint: 'Runs in the task worktree. The platform never substitutes anything into this text.',
+    retryWarning:
+      'A failed run is retried automatically. File changes are rolled back with the isolated worktree, but external side effects (HTTP calls, notifications) are not — make non-idempotent scripts guard themselves.',
+    sectionInputs: 'Inputs',
+    noInputs: 'No inbound edges yet. Connect an upstream port to pass values in.',
+    sectionOutputs: 'Outputs',
+    outputSingle: 'Whole stdout becomes the “{{port}}” port.',
+    outputEnvelope:
+      'Declared ports require a <workflow-output nonce="$AW_ENVELOPE_NONCE"> envelope on stdout.',
+    outputPorts: 'Declared output ports',
+    outputPortsHint: 'Leave empty to emit stdout as a single port.',
+    sectionRuntime: 'Runtime',
+    dependencies: 'Dependencies',
+    dependenciesHint:
+      'Exact pins only (requests==2.32.3 / lodash@4.17.21). Installed once into a cached, read-only environment.',
+    env: 'Environment variables',
+    envHint:
+      'Values are redacted everywhere they are displayed. Platform variables cannot be overridden.',
+    envKey: 'Variable name',
+    envValue: 'Value',
+    envAdd: 'Add variable',
+    envRemove: 'Remove variable',
+    networkDeny: 'Deny network access',
+    networkDenyHint: 'Dependencies still install; the script itself runs with no network.',
+    readonly: 'Read-only worktree',
+    readonlyHint:
+      'Skips the isolated worktree and merge-back. The script cannot modify repository files.',
+    noAuthorPermission:
+      'You can view this script but not change it — editing script content requires the scripts:author permission.',
+  },
   callWorkgroupNode: {
     label: 'call workgroup',
     unsetWorkgroup: '(no workgroup selected)',
@@ -4657,6 +4717,21 @@ export const enUS: Resources = {
         'The upload input target dir must be a repo-relative path.',
       'wrapper-children-outside-bounds': 'An inner node sits outside the wrapper visual bounds.',
       'wrapper-child-duplicate': 'The wrapper lists the same direct child more than once.',
+      'script-body-empty': 'The script node has an empty body.',
+      'script-language-invalid': 'The script language must be python, bash or node.',
+      'script-in-fanout-unsupported':
+        'A script node cannot sit inside a fan-out wrapper — compute the shard list upstream of it instead.',
+      'script-output-name-duplicate': 'The script node declares duplicate output ports.',
+      'script-output-kind-path-unsupported':
+        'Script nodes cannot emit path-valued ports yet — the artifact archival chain is not wired for them.',
+      'script-port-env-collision':
+        'Two input ports map to the same environment variable name; rename one.',
+      'script-dependencies-unsupported': 'bash scripts cannot declare dependencies.',
+      'script-dependency-malformed': 'A dependency entry is not a plain package name.',
+      'script-dependency-version-unpinned':
+        'Dependencies must pin an exact version (requests==2.32.3 / lodash@4.17.21).',
+      'script-env-key-invalid': 'The environment variable name is not valid.',
+      'script-env-key-reserved': 'That environment variable name is reserved by the platform.',
       'wrapper-child-multiple-parents': 'A node cannot belong directly to more than one wrapper.',
       'wrapper-child-node-missing': 'The wrapper references an unknown child node.',
       'wrapper-containment-cycle': 'Wrapper containment must not contain a cycle.',

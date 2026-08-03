@@ -72,6 +72,9 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
   mergeAgent?: { model?: string; runtime?: string } // RFC-130: built-in merge resolver
   maxActiveChildTasks?: number // RFC-243 §3.2: global active-child-task cap
   maxInvocationDepth?: number // RFC-243 §3.2: invocation-chain depth ceiling
+  // RFC-253 script nodes.
+  scriptInterpreters?: { python?: string; bash?: string; node?: string }
+  scriptDepsInstallTimeoutMs?: number
 } {
   const out: {
     commitPush?: {
@@ -88,6 +91,8 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     mergeAgent?: { model?: string; runtime?: string } // RFC-130: built-in merge resolver
     maxActiveChildTasks?: number // RFC-243
     maxInvocationDepth?: number // RFC-243
+    scriptInterpreters?: { python?: string; bash?: string; node?: string } // RFC-253
+    scriptDepsInstallTimeoutMs?: number // RFC-253
   } = {}
   const commitPush = resolveCommitPushConfig(configPath)
   if (commitPush !== undefined) out.commitPush = commitPush
@@ -100,6 +105,11 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     if (cfg.defaultRuntime !== undefined) out.defaultRuntime = cfg.defaultRuntime
     // RFC-115: global per-node retry budget (no `> 0` guard — 0 disables retries).
     if (cfg.defaultNodeRetries !== undefined) out.defaultNodeRetries = cfg.defaultNodeRetries
+    // RFC-253: administrator interpreter overrides + dependency build budget.
+    if (cfg.scriptInterpreters !== undefined && Object.keys(cfg.scriptInterpreters).length > 0)
+      out.scriptInterpreters = cfg.scriptInterpreters
+    if (cfg.scriptDepsInstallTimeoutMs !== undefined && cfg.scriptDepsInstallTimeoutMs > 0)
+      out.scriptDepsInstallTimeoutMs = cfg.scriptDepsInstallTimeoutMs
     // RFC-130 §6.1: built-in merge-conflict resolver runtime (profile wins over model).
     if (cfg.mergeAgentModel !== undefined || cfg.mergeAgentRuntime !== undefined) {
       out.mergeAgent = {

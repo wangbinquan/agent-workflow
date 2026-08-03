@@ -18,6 +18,7 @@ import {
   followupPolicyForFailure,
   isExecutionIdentityFailureCode,
   isPermanentRuntimeFailure,
+  SCRIPT_FAILURE_CODES,
   isTransientRuntimeFailure,
 } from '../src'
 
@@ -49,11 +50,19 @@ describe('RFC-224 execution identity failure taxonomy', () => {
     expect(new Set(EXECUTION_IDENTITY_FAILURE_CODES).size).toBe(
       EXECUTION_IDENTITY_FAILURE_CODES.length,
     )
+    // RFC-253 composes the script vocabulary in between. It is deliberately NOT
+    // part of FOLLOWUP_FAILURE_CODES: a "follow-up" re-prompts a model inside
+    // the same session, which has no meaning for a process that either exited
+    // or did not — a script retry is always a fresh run.
     expect(FAILURE_CODES).toEqual([
       ...FOLLOWUP_FAILURE_CODES,
+      ...SCRIPT_FAILURE_CODES,
       ...EXECUTION_IDENTITY_FAILURE_CODES,
       ...LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
     ])
+    for (const code of SCRIPT_FAILURE_CODES) {
+      expect(FOLLOWUP_FAILURE_CODES).not.toContain(code)
+    }
     expect(new Set(FAILURE_CODES).size).toBe(FAILURE_CODES.length)
   })
 

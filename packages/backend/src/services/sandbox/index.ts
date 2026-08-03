@@ -58,6 +58,12 @@ export interface SandboxCtx {
   readOnlySubtrees?: readonly string[]
   /** RFC-251 — read-only allow-backs with no RW parent (e.g. the plugin cache). */
   readOnlyAllowSubtrees?: readonly string[]
+  /**
+   * RFC-253 — deny ALL network access for this process. Only set by a caller
+   * that admitted through a fail-closed netless profile, so the fence and the
+   * admission decision can never disagree.
+   */
+  networkDeny?: boolean
   /** Provider-owned renderer for mechanisms added after the built-ins. */
   wrapCommand?: (cmd: readonly string[], policy: SandboxPolicy) => string[]
 }
@@ -103,6 +109,7 @@ export function wrapSandbox(cmd: readonly string[], ctx: SandboxCtx | undefined)
     runDir: real(ctx.runDir),
     readOnlySubtrees: ctx.readOnlySubtrees?.map(real),
     readOnlyAllowSubtrees: ctx.readOnlyAllowSubtrees?.map(real),
+    networkDeny: ctx.networkDeny === true,
   })
   if (ctx.wrapCommand !== undefined) return ctx.wrapCommand(cmd, policy)
   if (ctx.status.mechanism === 'seatbelt') {

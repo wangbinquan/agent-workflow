@@ -105,6 +105,11 @@ export function livenessSourceOfKind(kind: NodeKind): 'process' | 'delegated' {
     case 'review':
     case 'clarify':
     case 'clarify-cross-agent':
+    case 'script': // RFC-253 — see the note below
+      // RFC-253: a script node spawns its own subprocess and the executor
+      // writes `pid` + `spawn_binary_path` on the same update as every agent
+      // run, so its liveness is direct process evidence — never delegated (it
+      // owns no inner rows and no child task).
       return 'process'
     // RFC-243: a call node's liveness is carried by its independent child
     // task (the childTaskId probe in resolveRunLiveness, which outranks this

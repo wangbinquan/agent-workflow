@@ -20,6 +20,20 @@ export interface WorkflowNodeReferenceDescriptor {
   embeddedPortRefs: readonly string[]
   /** Arrays of `{ ..., bind: PortRef }`, e.g. output.ports / loop.outputBindings. */
   bindingLists: readonly string[]
+  /**
+   * RFC-253 — fields whose subtree is OPAQUE USER DATA and can never contain a
+   * node/port reference, so the unmanaged-field ratchet must not walk into it.
+   *
+   * The ratchet identifies references heuristically, by key NAME
+   * (`/nodeId$/i`, `/nodeIds?$/i`, `/rerunnable/i`). That is sound while every
+   * key in a definition is authored by us — but a script node's `env` map is
+   * keyed by the USER, and a perfectly ordinary variable called `FOO_NODEID`
+   * would match `/nodeId$/i` and raise a bogus `action: 'abort'` warning that
+   * blocks copy/paste of a valid workflow. Declaring the field opaque is the
+   * honest fix: the guarantee is "no references live here", stated once, rather
+   * than a heuristic guessing at user-chosen names.
+   */
+  opaqueFields?: readonly string[]
 }
 
 const NO_NODE_REFERENCES = {
@@ -75,6 +89,17 @@ export const WORKFLOW_NODE_REFERENCE_INVENTORY = {
   // scalar walk never mistakes them for node ids.
   'call-workflow': NO_NODE_REFERENCES,
   'call-workgroup': NO_NODE_REFERENCES,
+  // RFC-253: a script node references no other node — its inputs arrive over
+  // ordinary edges and its outputs are declared inline. `env` is user-keyed and
+  // `script` is arbitrary source text, so both are declared opaque (see
+  // `opaqueFields`) rather than walked by the key-name heuristic.
+  script: {
+    nodeIdLists: [],
+    directPortRefs: [],
+    embeddedPortRefs: [],
+    bindingLists: [],
+    opaqueFields: ['env', 'script'],
+  },
 } as const satisfies Record<NodeKind, WorkflowNodeReferenceDescriptor>
 
 export type WorkflowNodeReferenceWarningCode =
@@ -324,6 +349,7 @@ function malformedInventoriedReferenceWarnings(node: WorkflowNode): WorkflowNode
 
 function unmanagedReferenceWarnings(node: WorkflowNode): WorkflowNodeReferenceWarning[] {
   const descriptor = descriptorFor(node)
+  const opaqueFields = new Set(descriptor.opaqueFields ?? [])
   const knownNodeIdLists = new Set(descriptor.nodeIdLists)
   const knownPortRefPaths = new Set([
     ...descriptor.directPortRefs,
@@ -390,6 +416,9 @@ function unmanagedReferenceWarnings(node: WorkflowNode): WorkflowNodeReferenceWa
   const record = node as Record<string, unknown>
   for (const [field, value] of Object.entries(record)) {
     if (field === 'id' || field === 'kind') continue
+    // RFC-253: declared-opaque subtrees carry user-chosen keys; the key-name
+    // heuristic below would produce false positives inside them.
+    if (opaqueFields.has(field)) continue
     if (typeof value === 'string' && /nodeId$/i.test(field)) {
       report(field, value)
       continue

@@ -251,8 +251,41 @@ export type FollowupFailureCode = (typeof FOLLOWUP_FAILURE_CODES)[number]
  * `followupPolicyForFailure`) rather than treating every persisted code as
  * retryable.
  */
+/**
+ * RFC-253 — script node failures.
+ *
+ * They are deliberately NOT part of `FOLLOWUP_FAILURE_CODES`: a follow-up is
+ * "re-prompt the model inside the same session", which has no meaning for a
+ * process that either exited or did not. A script retry is always a fresh run.
+ *
+ * The four `retryable: false` members below are wired into the scheduler's
+ * permanent-failure predicate — without that, "retry is pointless" is a comment
+ * rather than a behavior (design-gate P1).
+ */
+export const SCRIPT_FAILURE_CODES = [
+  'script-nonzero-exit',
+  'script-timeout',
+  'script-envelope-missing',
+  'script-envelope-malformed',
+  'script-port-missing',
+  'script-interpreter-missing',
+  'script-deps-install-failed',
+  'script-network-fence-unavailable',
+  'script-spawn-failed',
+] as const
+export type ScriptFailureCode = (typeof SCRIPT_FAILURE_CODES)[number]
+
+/** Script failures where another attempt cannot change the outcome. */
+export const SCRIPT_PERMANENT_FAILURE_CODES: ReadonlyArray<ScriptFailureCode> = [
+  'script-interpreter-missing',
+  'script-deps-install-failed',
+  'script-network-fence-unavailable',
+  'script-spawn-failed',
+]
+
 export const FAILURE_CODES = [
   ...FOLLOWUP_FAILURE_CODES,
+  ...SCRIPT_FAILURE_CODES,
   ...EXECUTION_IDENTITY_FAILURE_CODES,
   // RFC-251: retired codes stay in the READ domain. No path emits them, but
   // rows written before the upgrade must not fail the strict page parse.

@@ -45,6 +45,15 @@ export interface SandboxPolicyInput {
    * never be writable by the model — so it needs its own read-only allow-back.
    */
   readOnlyAllowSubtrees?: readonly string[]
+  /**
+   * RFC-253 — deny ALL network access for the contained process.
+   *
+   * Off by default: the outer sandbox has never restricted the network (this
+   * was verified, not assumed — neither renderer emitted a single network
+   * rule before this flag), and turning it on unconditionally would break
+   * every agent that reaches a model API.
+   */
+  networkDeny?: boolean
 }
 
 export interface SandboxPolicy {
@@ -60,6 +69,8 @@ export interface SandboxPolicy {
   readOnlySubtrees: string[]
   /** RFC-251 — read-only allow-backs that have no RW parent (e.g. plugin cache). */
   readOnlyAllowSubtrees: string[]
+  /** RFC-253 — render a total network fence for this process. */
+  networkDeny: boolean
 }
 
 function isStrictDescendant(parent: string, child: string): boolean {
@@ -159,6 +170,7 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
     allowMetadataFiles,
     readOnlySubtrees,
     readOnlyAllowSubtrees,
+    networkDeny: input.networkDeny === true,
   }
 }
 
@@ -200,6 +212,13 @@ export function renderSeatbeltProfile(policy: SandboxPolicy): string {
   for (const p of policy.readOnlyAllowSubtrees) {
     lines.push(`(allow file-read* (subpath ${sbplString(p)}))`)
   }
+  // RFC-253 — total network fence. MUST be last: SBPL is last-match-wins and
+  // the profile opens with `(allow default)`, so a deny emitted earlier would
+  // be overridden by nothing here but would be fragile against any future rule
+  // appended below it. `network*` covers network-outbound/inbound/bind.
+  if (policy.networkDeny) {
+    lines.push('(deny network*)')
+  }
   return lines.join('\n')
 }
 
@@ -234,6 +253,19 @@ export function renderBwrapArgs(policy: SandboxPolicy, opts: { appHome: string }
     '--dev',
     '/dev',
   ]
+  // RFC-253 — total network fence.
+  //
+  // `--unshare-net` alone is NOT enough: it isolates the network namespace,
+  // which covers ABSTRACT unix sockets, while PATHNAME sockets are governed by
+  // the mount namespace. `--bind / /` maps the host root in, so without the two
+  // tmpfs mounts below a "netless" process could still reach the session D-Bus
+  // (`/run/user/<uid>/bus`, which can execute commands via systemd) or
+  // `/var/run/docker.sock`. Masking those two directories closes the local-RPC
+  // side door. This remains a best-effort boundary — the root is still bound —
+  // and the RFC says so rather than claiming full isolation.
+  if (policy.networkDeny) {
+    args.push('--unshare-net', '--tmpfs', '/run', '--tmpfs', '/var/run')
+  }
   args.push('--tmpfs', opts.appHome)
   // The mirrors dir is an allow in spirit but lives OUTSIDE the deny list on
   // darwin (deny-list model) — on linux the tmpfs hides it, so bind it back.

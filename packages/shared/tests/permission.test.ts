@@ -42,7 +42,9 @@ describe('PERMISSIONS catalog', () => {
     // (36 → 58).
     // RFC-248 加 `repos:update`（`PUT /api/repo-groups/:id` —— repos 域第一条
     // PUT/PATCH 路由）⇒ 59。
-    expect(PERMISSIONS.length).toBe(59)
+    // RFC-253 加 `scripts:author`（脚本节点正文 = 宿主代码执行；系统域点，
+    // 永不进令牌，角色基线 admin + manager）⇒ 60。
+    expect(PERMISSIONS.length).toBe(60)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -138,6 +140,9 @@ describe('PERMISSIONS catalog', () => {
       'tasks:read:all',
       // RFC-222 — task deletion is admin-only (NOT manager, NOT user).
       'tasks:delete',
+      // RFC-253 — 脚本正文编写。它同时也在 manager 基线里（见下面的
+      // MANAGER_DENIED 断言不含它），但相对 user 仍是 admin-only。
+      'scripts:author',
     ]
     for (const p of adminOnly) {
       expect(ROLE_PERMISSIONS.user.includes(p)).toBe(false)
@@ -362,6 +367,9 @@ describe('RFC-222 manager role', () => {
       'repos:delete',
       'repos:execute',
       'tasks:read:all',
+      // RFC-253 D19 — 脚本正文编写下放到 manager（资源管理员），但依然是
+      // 系统域点，任何 PAT 都拿不到。
+      'scripts:author',
     ]
     expect([...ROLE_PERMISSIONS.manager].sort()).toEqual([...new Set(expected)].sort())
   })

@@ -52,10 +52,20 @@ import {
   isNodeInsideWorkflowWrapper,
   isReviewableBodyKind,
   isWrapperKind,
+  mcpEnvIssues,
   readContinueOnMaxIterations,
+  readScriptBody,
+  readScriptDependencies,
+  readScriptEnv,
+  readScriptLanguage,
+  readScriptOutputPorts,
   REVIEW_INPUT_PORT_NAME,
   resolveNodeAgent,
   resolveWorkflowSourceRef,
+  scriptDependencyIssue,
+  scriptPortEnvCollisions,
+  scriptReservedEnvKeyIssue,
+  SCRIPT_LANGUAGES,
   serializeWorkflowDefinitionCandidateV1,
   tryParseKind,
   WorkflowDefinitionSchema,
@@ -1137,6 +1147,127 @@ export function validateWorkflowDef(
         target: target.node(node.id),
         severity: 'warning',
       })
+    }
+  }
+
+  // 3b. RFC-253 script nodes ---------------------------------------------------
+  //
+  // Every rule here fails CLOSED: a combination the runtime cannot honour is
+  // rejected at save time rather than shipped as a node that quietly does the
+  // wrong thing at 2am.
+  for (const node of nodes) {
+    if (node.kind !== 'script') continue
+
+    const language = readScriptLanguage(node)
+    if (language === undefined) {
+      issues.push({
+        code: 'script-language-invalid',
+        message: `node '${node.id}': script language must be one of ${SCRIPT_LANGUAGES.join(', ')}`,
+        pointer: node.id,
+        target: target.nodeField(node.id, 'script'),
+      })
+    }
+    if (readScriptBody(node).trim().length === 0) {
+      issues.push({
+        code: 'script-body-empty',
+        message: `node '${node.id}': the script body is empty`,
+        pointer: node.id,
+        target: target.nodeField(node.id, 'script'),
+      })
+    }
+
+    // A script inside a fan-out is a NON-GOAL, not an oversight: the fan-out
+    // dispatcher requires an agent for every inner node, so allowing the
+    // combination would produce a node that never runs.
+    const containerId = innerToWrapper.get(node.id)
+    const container = containerId !== undefined ? nodeById.get(containerId) : undefined
+    if (container?.kind === 'wrapper-fanout') {
+      issues.push({
+        code: 'script-in-fanout-unsupported',
+        message: `node '${node.id}' is a script inside wrapper-fanout '${containerId}'. Fan-out shards dispatch agents only; compute the shard list in a script UPSTREAM of the fan-out instead.`,
+        pointer: node.id,
+        target: target.node(node.id),
+      })
+    }
+
+    const declared = readScriptOutputPorts(node)
+    const seenPorts = new Set<string>()
+    for (const port of declared) {
+      if (seenPorts.has(port.name)) {
+        issues.push({
+          code: 'script-output-name-duplicate',
+          message: `node '${node.id}': duplicate output port '${port.name}'`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'script-outputs'),
+        })
+      }
+      seenPorts.add(port.name)
+      if (port.kind !== undefined && /(^|<)path</.test(port.kind)) {
+        // A path port's content is a file reference whose durability depends on
+        // the RFC-193 archival chain; without it the value dangles the moment
+        // the isolation worktree is collected.
+        issues.push({
+          code: 'script-output-kind-path-unsupported',
+          message: `node '${node.id}': output port '${port.name}' declares '${port.kind}'. Script nodes cannot emit path-valued ports yet — the artifact archival chain is not wired for them, so the value would dangle once the isolated worktree is collected.`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'script-outputs'),
+        })
+      }
+    }
+
+    const inboundPortNames = [
+      ...new Set(edges.filter((e) => e.target.nodeId === node.id).map((e) => e.target.portName)),
+    ]
+    for (const collision of scriptPortEnvCollisions(inboundPortNames)) {
+      issues.push({
+        code: 'script-port-env-collision',
+        message: `node '${node.id}': input ports ${collision.portNames.map((n) => `'${n}'`).join(' and ')} both map to the environment variable AW_PORT_${collision.suffix}; rename one so the script can read both.`,
+        pointer: node.id,
+        target: target.node(node.id),
+      })
+    }
+
+    const deps = readScriptDependencies(node)
+    if (language === 'bash' && deps.length > 0) {
+      issues.push({
+        code: 'script-dependencies-unsupported',
+        message: `node '${node.id}': bash scripts cannot declare dependencies`,
+        pointer: node.id,
+        target: target.nodeField(node.id, 'script-dependencies'),
+      })
+    } else if (language !== undefined) {
+      for (const spec of deps) {
+        const issue = scriptDependencyIssue(language, spec)
+        if (issue === null) continue
+        issues.push({
+          code: /must pin an exact version/.test(issue)
+            ? 'script-dependency-version-unpinned'
+            : 'script-dependency-malformed',
+          message: `node '${node.id}': ${issue}`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'script-dependencies'),
+        })
+      }
+    }
+
+    for (const [key] of Object.entries(readScriptEnv(node))) {
+      for (const envIssue of mcpEnvIssues({ [key]: '' })) {
+        issues.push({
+          code: 'script-env-key-invalid',
+          message: `node '${node.id}': ${envIssue.message}`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'script-env'),
+        })
+      }
+      const reserved = scriptReservedEnvKeyIssue(key)
+      if (reserved !== null) {
+        issues.push({
+          code: 'script-env-key-reserved',
+          message: `node '${node.id}': ${reserved}`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'script-env'),
+        })
+      }
     }
   }
 

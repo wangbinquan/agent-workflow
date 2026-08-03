@@ -82,6 +82,7 @@ export * from './shardingRegistry'
 export * from './signalPromptGuard'
 export * from './wrapperFanout'
 export * from './nodePorts'
+export * from './scriptNode' // RFC-253
 export * from './workflowCalls'
 export * from './systemChannelPorts'
 export * from './scheduleTime' // RFC-159
