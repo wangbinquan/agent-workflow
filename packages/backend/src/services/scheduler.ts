@@ -4227,6 +4227,10 @@ async function runOneScriptAttempt(
         sandboxCtx = {
           ...base,
           ...(a.networkDeny ? { networkDeny: true } : {}),
+          // A readonly node has no isolated worktree — it runs against
+          // canonical — so the read-only promise has to be a boundary, not a
+          // convention the script is trusted to keep.
+          ...(a.isReadonly ? { readOnlyWorktrees: true } : {}),
         }
       }
     } catch (err) {

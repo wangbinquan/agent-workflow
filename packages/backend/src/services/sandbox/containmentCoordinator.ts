@@ -65,19 +65,32 @@ export const CONTAINMENT_REQUIREMENT_PROFILES = {
 export type ContainmentRequirementProfileId = keyof typeof CONTAINMENT_REQUIREMENT_PROFILES
 export type ContainmentDecision = 'contained' | 'degraded' | 'off' | 'blocked'
 export type ContainmentCapabilityStrength = 'strong' | 'best-effort' | 'absent'
-export type ContainmentReasonCode =
-  | 'platform-unsupported'
-  | 'provider-not-found'
-  | 'provider-path-not-canonical'
-  | 'provider-owner-unsafe'
-  | 'provider-mode-unsafe'
-  | 'provider-parent-unsafe'
-  | 'provider-trial-rejected'
-  | 'provider-trial-timeout'
-  | 'provider-lifecycle-unproven'
-  | 'provider-contract-invalid'
-  | 'provider-internal-error'
-  | 'required-capability-missing'
+/**
+ * The closed reason vocabulary, as an ARRAY so consumers that need a runtime
+ * list (the verified-launch manifest's zod enum) derive it instead of hand
+ * copying it. RFC-253 found the copy in verifiedManifest.ts drifting the moment
+ * a code was added — the same "never re-listed" rule its neighbouring field
+ * already documents.
+ */
+export const CONTAINMENT_REASON_CODES = [
+  'platform-unsupported',
+  'provider-not-found',
+  'provider-path-not-canonical',
+  'provider-owner-unsafe',
+  'provider-mode-unsafe',
+  'provider-parent-unsafe',
+  'provider-trial-rejected',
+  'provider-trial-timeout',
+  'provider-lifecycle-unproven',
+  'provider-contract-invalid',
+  'provider-internal-error',
+  'required-capability-missing',
+  // RFC-253 — a fail-closed bundle was demanded while containment is switched
+  // OFF. The capability may well be present; what is missing is any layer that
+  // would APPLY it, so this is distinct from `required-capability-missing`.
+  'containment-mode-off',
+] as const
+export type ContainmentReasonCode = (typeof CONTAINMENT_REASON_CODES)[number]
 
 export type ContainmentTopology =
   | 'none'
@@ -744,13 +757,23 @@ export class ContainmentCoordinator {
         ? []
         : [...(qualification.result.reasonCodes ?? [])]
       : [...qualification.result.reasonCodes]
+    // RFC-253 — `off` cannot DELIVER a fail-closed bundle even on a host whose
+    // provider qualifies for it: the mode travels into the returned
+    // SandboxProvider, `sandboxActive()` is false for `off`, and `wrapSandbox`
+    // then returns the argv untouched. Admitting `contained` here would hand
+    // back a receipt saying "fenced" for a process that runs with no fence at
+    // all — the same escalation the flag exists to prevent, reached from the
+    // other direction. Capability presence is irrelevant when nothing applies it.
+    const fenceUndeliverable = failClosed && mode === 'off'
     const reasonCodes = Object.freeze([
       ...new Set<ContainmentReasonCode>([
         ...qualificationReasons,
         ...(missing.length > 0 ? (['required-capability-missing'] as const) : []),
+        ...(fenceUndeliverable ? (['containment-mode-off'] as const) : []),
       ]),
     ])
-    const qualified = isQualified(qualification.result) && missing.length === 0
+    const qualified =
+      isQualified(qualification.result) && missing.length === 0 && !fenceUndeliverable
     const decision: ContainmentDecision = qualified
       ? 'contained'
       : // RFC-253 — fail-closed bundles block in EVERY mode, including `warn`

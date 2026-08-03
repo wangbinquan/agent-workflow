@@ -328,3 +328,63 @@ describe('RFC-233 containment coordinator', () => {
     expect(calls).toBe(1)
   })
 })
+
+// RFC-253 implementation-gate finding (2026-08-04).
+//
+// A `failClosed` profile must never come back `contained` under `off`. The
+// mode travels into the returned provider, `sandboxActive()` is false for
+// `off`, and `wrapSandbox` then returns the argv untouched — so a `contained`
+// verdict there describes a process that runs with no fence whatsoever. The
+// first implementation only overrode the `warn` branch and left this one open.
+describe('RFC-253 fail-closed profiles under a mode that applies nothing', () => {
+  test('off blocks even when the provider fully qualifies', async () => {
+    const coordinator = new ContainmentCoordinator({
+      provider: provider('off'),
+      // Qualification SUCCEEDS here: the point is that capability presence is
+      // not enough when no layer will apply it.
+      qualifyBwrap: async () => '/usr/bin/bwrap',
+      qualifyBwrapFilesystem: async () => '/usr/bin/bwrap',
+      qualifyBwrapFull: async () => {},
+      bootId: 'boot-off-failclosed',
+      now: () => 7,
+    })
+
+    await expect(coordinator.admit('outer-netless-v1')).rejects.toBeInstanceOf(
+      ContainmentAdmissionError,
+    )
+  })
+
+  test('the block names the mode, not a missing capability', async () => {
+    const coordinator = new ContainmentCoordinator({
+      provider: provider('off'),
+      qualifyBwrap: async () => '/usr/bin/bwrap',
+      qualifyBwrapFilesystem: async () => '/usr/bin/bwrap',
+      qualifyBwrapFull: async () => {},
+      bootId: 'boot-off-reason',
+      now: () => 7,
+    })
+    try {
+      await coordinator.admit('outer-netless-v1')
+      throw new Error('expected the admission to be refused')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ContainmentAdmissionError)
+      const receipt = (err as ContainmentAdmissionError).receipt
+      expect(receipt.decision).toBe('blocked')
+      // An operator told "required capability missing" would go hunting for a
+      // bwrap that is present and qualified.
+      expect(receipt.reasonCodes).toContain('containment-mode-off')
+      expect(receipt.reasonCodes).not.toContain('required-capability-missing')
+    }
+  })
+
+  test('a NON fail-closed profile still degrades under off, unchanged', async () => {
+    const coordinator = new ContainmentCoordinator({
+      provider: provider('off'),
+      qualifyBwrap: async () => '/usr/bin/bwrap',
+      bootId: 'boot-off-plain',
+      now: () => 7,
+    })
+    const plan = await coordinator.admit('runner-filesystem-v1')
+    expect(plan.receipt.decision).toBe('off')
+  })
+})

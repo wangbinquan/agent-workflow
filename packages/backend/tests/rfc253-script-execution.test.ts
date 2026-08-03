@@ -16,7 +16,7 @@
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { extractScriptPorts } from '@/services/scriptPorts'
 import { runContainedProcess } from '@/services/execution/containedSpawn'
@@ -27,9 +27,11 @@ import {
   renderSeatbeltProfile,
 } from '@/services/sandbox/policy'
 import {
+  CONTAINMENT_REASON_CODES,
   CONTAINMENT_REQUIREMENT_PROFILES,
   containmentRequirementDigest,
 } from '@/services/sandbox/containmentCoordinator'
+import { sandboxActive, wrapSandbox } from '@/services/sandbox'
 
 const NONCE = 'abc123'
 
@@ -289,5 +291,140 @@ describe('contained spawn', () => {
       killEscalationGraceMs: 200,
     })
     expect(result.outcome).toBe('timeout')
+  })
+})
+
+// Implementation-gate finding (2026-08-04): `off` mode could deliver a
+// "contained" verdict for a fail-closed bundle.
+//
+// The chain: `failClosed` skipped both `off` early-returns so the admission
+// fell through to qualification; on a host whose provider qualifies, the
+// decision came back `contained` and `admit()` did not throw — but the plan it
+// returned carries `mode: 'off'`, `sandboxActive()` is false for `off`, and
+// `wrapSandbox` therefore returns the argv untouched. A node that declared
+// `network: 'deny'` would have run with NO fence at all while the receipt said
+// it was fenced. That is the same privilege escalation D23 exists to prevent,
+// reached from the opposite direction of the `warn` case.
+describe('fail-closed admission cannot be satisfied by a mode that applies nothing', () => {
+  test('off mode leaves sandboxActive false, so a "contained" verdict would be a lie', () => {
+    // The invariant that makes the coordinator fix necessary: no matter how
+    // capable the provider is, `off` means the wrapper is a no-op.
+    const ctx = {
+      mode: 'off' as const,
+      status: { mechanism: 'bwrap' as const, available: true, detail: null },
+      appHome: '/home/u/.agent-workflow',
+      taskWorktrees: ['/home/u/.agent-workflow/worktrees/r/t1'],
+      runDir: '/home/u/.agent-workflow/runs/t1/r1',
+      networkDeny: true,
+    }
+    expect(sandboxActive(ctx)).toBe(false)
+    expect(wrapSandbox(['/usr/bin/python3', 's.py'], ctx)).toEqual(['/usr/bin/python3', 's.py'])
+  })
+
+  test('the netless profile declares failClosed, and the reason vocabulary can name this case', () => {
+    expect(CONTAINMENT_REQUIREMENT_PROFILES['outer-netless-v1'].failClosed).toBe(true)
+    // A distinct code matters: the capability may be perfectly present, so
+    // reporting `required-capability-missing` would send an operator hunting
+    // for a missing bwrap that is right there.
+    expect(CONTAINMENT_REASON_CODES).toContain('containment-mode-off')
+    expect(CONTAINMENT_REASON_CODES).toContain('required-capability-missing')
+  })
+
+  test('the reason vocabulary has exactly one definition (no hand-copied list)', () => {
+    // The manifest codec used to re-list these by hand and silently omitted the
+    // first code added after it was written.
+    const manifestSource = readFileSync(
+      resolve(import.meta.dir, '..', 'src/services/runtime/opencode/verifiedManifest.ts'),
+      'utf8',
+    )
+    expect(manifestSource).toContain('z.enum(CONTAINMENT_REASON_CODES)')
+    expect(manifestSource).not.toContain("'provider-lifecycle-unproven'")
+  })
+})
+
+// Implementation-gate findings (2026-08-04), both real:
+//
+//   A. `readonly: true` skipped the isolated worktree but left the canonical
+//      worktree as a read-WRITE allow-back — so the flag made a node MORE
+//      dangerous than the default (writes canonical with no merge-back
+//      discipline) while AC-10 claimed the boundary refused them.
+//   B. the spill file was named after the raw port name, which an author
+//      controls through an edge's target port — `../../..` would place a
+//      daemon-owned write outside the run directory.
+describe('readonly is a boundary, not a convention', () => {
+  const base = {
+    appHome: '/home/u/.agent-workflow',
+    taskWorktrees: ['/home/u/.agent-workflow/worktrees/r/t1'],
+    runDir: '/home/u/.agent-workflow/runs/t1/r1',
+  }
+
+  test('default: the worktree and the git mirror are writable', () => {
+    const policy = computeSandboxPolicy(base)
+    expect(policy.allowSubtrees).toContain('/home/u/.agent-workflow/worktrees/r/t1')
+    expect(policy.allowSubtrees).toContain('/home/u/.agent-workflow/repos')
+    expect(policy.readOnlyAllowSubtrees).not.toContain('/home/u/.agent-workflow/worktrees/r/t1')
+  })
+
+  test('readonly: only the private run dir stays writable', () => {
+    const policy = computeSandboxPolicy({ ...base, readOnlyWorktrees: true })
+    expect(policy.allowSubtrees).toEqual(['/home/u/.agent-workflow/runs/t1/r1'])
+    expect(policy.readOnlyAllowSubtrees).toContain('/home/u/.agent-workflow/worktrees/r/t1')
+    // The git mirror travels with it: leaving `repos` writable would still
+    // allow `git update-ref` and repo-config writes.
+    expect(policy.readOnlyAllowSubtrees).toContain('/home/u/.agent-workflow/repos')
+  })
+
+  test('readonly renders no read-write bind for the worktree on Linux', () => {
+    const args = renderBwrapArgs(computeSandboxPolicy({ ...base, readOnlyWorktrees: true }), {
+      appHome: base.appHome,
+    })
+    const wt = '/home/u/.agent-workflow/worktrees/r/t1'
+    const mirror = '/home/u/.agent-workflow/repos'
+    for (const path of [wt, mirror]) {
+      // A later `--bind` of the same path would silently undo the ro-bind, so
+      // the read-write form must be absent entirely rather than merely earlier.
+      const rw = args.findIndex((a, i) => a === '--bind' && args[i + 1] === path)
+      const ro = args.findIndex((a, i) => a === '--ro-bind' && args[i + 1] === path)
+      expect(rw).toBe(-1)
+      expect(ro).toBeGreaterThan(-1)
+    }
+  })
+
+  test('readonly denies writes on macOS while keeping reads', () => {
+    const profile = renderSeatbeltProfile(
+      computeSandboxPolicy({ ...base, readOnlyWorktrees: true }),
+    )
+    const wt = '/home/u/.agent-workflow/worktrees/r/t1'
+    expect(profile).toContain(`(allow file-read* (subpath "${wt}"))`)
+    expect(profile).not.toContain(`(allow file-read* file-write* (subpath "${wt}"))`)
+  })
+})
+
+describe('spilled port files cannot escape the run directory', () => {
+  test('a port named with traversal segments still lands inside AW_INPUT_DIR', () => {
+    const big = 'x'.repeat(64 * 1024)
+    const { env, spillFiles } = assembleScriptEnv({
+      node: node({ language: 'python' }),
+      inputs: { '../../../../tmp/evil': big },
+      runDir: '/run/dir',
+      inputDir: '/run/dir/inputs',
+      worktreePath: '/wt',
+      repos: [{ name: '', path: '/wt' }],
+      taskId: 'T1',
+      nodeId: 's1',
+      nodeRunId: 'R1',
+      iteration: 0,
+      retryIndex: 0,
+      shardKey: null,
+      envelopeNonce: NONCE,
+      interpreterPath: '/usr/bin/python3',
+      depsEnv: null,
+    })
+    expect(spillFiles).toHaveLength(1)
+    const target = spillFiles[0]!.path
+    expect(target.startsWith('/run/dir/inputs/')).toBe(true)
+    expect(target).not.toContain('..')
+    // The script can still find it: AW_PORT_NAMES maps the original name.
+    expect(JSON.parse(env.AW_PORT_NAMES!)['../../../../tmp/evil']).toBeDefined()
   })
 })

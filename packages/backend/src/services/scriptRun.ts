@@ -20,6 +20,7 @@ import {
   readScriptLanguage,
   resolveScriptNetwork,
   resolveScriptReadonly,
+  scriptEnvSuffix,
   scriptOutputMode,
   scriptReservedEnvKeyIssue,
   SCRIPT_DEFAULT_OUTPUT_PORT,
@@ -163,7 +164,15 @@ export function assembleScriptEnv(input: {
 
   const spillFiles: Array<{ path: string; content: string }> = []
   for (const spill of plan.spilled) {
-    const target = join(input.inputDir, spill.portName)
+    // Implementation-gate finding (2026-08-04): the port NAME must never be a
+    // path component. It comes from an edge's target port, which the workflow
+    // author controls, so a port called `../../..` would place this write —
+    // with attacker-chosen content, as the daemon — outside the run directory.
+    // The env suffix is already folded to `[A-Z0-9_]` and is unique per port by
+    // construction (the validator rejects two ports that fold together), so it
+    // is both safe and injective. `AW_PORT_NAMES` still carries the original
+    // name → suffix map, so a script can find its file.
+    const target = join(input.inputDir, scriptEnvSuffix(spill.portName))
     env[spill.envName] = target
     spillFiles.push({ path: target, content: spill.value })
   }

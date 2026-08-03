@@ -14,6 +14,7 @@ import { FffCapabilityProbeSchema } from './fffCapability'
 import { VerifiedInventoryPlanSchema } from './verifiedInventory'
 import { RuntimeChildProviderPlanSchema, RuntimeContainmentReceiptSchema } from './containment'
 import {
+  CONTAINMENT_REASON_CODES,
   CONTAINMENT_REQUIREMENT_PROFILES,
   containmentRequirementDigest,
   type ContainmentRequirementProfileId,
@@ -30,20 +31,10 @@ const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/)
 const NonceSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/)
 const EnvSchema = z.record(z.string().refine((value) => !value.includes('\0')))
 const ContainmentCapabilityStrengthSchema = z.enum(['strong', 'best-effort', 'absent'])
-const ContainmentReasonCodeSchema = z.enum([
-  'platform-unsupported',
-  'provider-not-found',
-  'provider-path-not-canonical',
-  'provider-owner-unsafe',
-  'provider-mode-unsafe',
-  'provider-parent-unsafe',
-  'provider-trial-rejected',
-  'provider-trial-timeout',
-  'provider-lifecycle-unproven',
-  'provider-contract-invalid',
-  'provider-internal-error',
-  'required-capability-missing',
-])
+// RFC-253: derived from the closed registry, never re-listed — the hand-copied
+// literal this replaces silently omitted the first code added after it, which is
+// exactly the drift the neighbouring capability field already guards against.
+const ContainmentReasonCodeSchema = z.enum(CONTAINMENT_REASON_CODES)
 const ContainmentAdmissionReceiptSchema = z
   .object({
     coordinatorBootId: z.string().min(1).max(128),

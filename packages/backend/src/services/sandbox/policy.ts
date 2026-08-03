@@ -54,6 +54,19 @@ export interface SandboxPolicyInput {
    * every agent that reaches a model API.
    */
   networkDeny?: boolean
+  /**
+   * RFC-253 — the process may READ the task worktrees and the git mirror but
+   * must not write either.
+   *
+   * A read-only script node skips the isolated worktree entirely and runs
+   * against the canonical tree, so "read-only" cannot be a convention the
+   * script is trusted to honour — without this the canonical worktree is a
+   * read-WRITE allow-back and a `readonly: true` node is strictly more
+   * dangerous than a normal one (it writes canonical with no merge-back
+   * discipline). The git mirror travels with it: leaving `repos` writable
+   * would still allow `git update-ref` and repo-config writes.
+   */
+  readOnlyWorktrees?: boolean
 }
 
 export interface SandboxPolicy {
@@ -127,7 +140,13 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
   ]
   // Allow back: this run's worktree(s) + run dir, and the shared git mirror (the
   // object store git commit reads/writes — credential-free after RFC-204 sealing).
-  const allowSubtrees = [...input.taskWorktrees, input.runDir, join(h, 'repos')]
+  //
+  // RFC-253: a read-only consumer keeps ONLY its private run dir writable; the
+  // worktrees and the mirror move to the read-only allow-back list below.
+  const readOnlyWorktrees = input.readOnlyWorktrees === true
+  const allowSubtrees = readOnlyWorktrees
+    ? [input.runDir]
+    : [...input.taskWorktrees, input.runDir, join(h, 'repos')]
   // Seatbelt's appHome-wide deny also blocks lstat/realpath on parent
   // directories. The verified store boundary deliberately walks every
   // ancestor to reject symlink substitution, so restore metadata access to
@@ -150,7 +169,10 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
   // denied subtree (otherwise they are already reachable and the entry is
   // meaningless noise) and must not overlap an RW allow (which would silently
   // grant write on linux, where the later RW bind wins).
-  const readOnlyAllowSubtrees = [...(input.readOnlyAllowSubtrees ?? [])]
+  const readOnlyAllowSubtrees = [
+    ...(input.readOnlyAllowSubtrees ?? []),
+    ...(readOnlyWorktrees ? [...input.taskWorktrees, join(h, 'repos')] : []),
+  ]
   const seenReadOnlyAllow = new Set<string>()
   for (const path of readOnlyAllowSubtrees) {
     validatePolicyPath(path, 'readOnlyAllowSubtree')
@@ -269,7 +291,15 @@ export function renderBwrapArgs(policy: SandboxPolicy, opts: { appHome: string }
   args.push('--tmpfs', opts.appHome)
   // The mirrors dir is an allow in spirit but lives OUTSIDE the deny list on
   // darwin (deny-list model) — on linux the tmpfs hides it, so bind it back.
-  args.push('--bind', join(opts.appHome, 'repos'), join(opts.appHome, 'repos'))
+  //
+  // RFC-253: when the policy moved the mirror to the read-only list, binding it
+  // read-write here would undo that below — the ro-bind loop runs after this
+  // one, but re-binding the same path read-write first is exactly the mount
+  // ordering trap this file warns about. Skip it and let the ro-bind provide it.
+  const mirrorDir = join(opts.appHome, 'repos')
+  if (!policy.readOnlyAllowSubtrees.includes(mirrorDir)) {
+    args.push('--bind', mirrorDir, mirrorDir)
+  }
   for (const p of policy.allowSubtrees) {
     args.push('--bind', p, p)
   }

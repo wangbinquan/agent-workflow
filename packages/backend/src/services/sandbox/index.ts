@@ -17,6 +17,7 @@ import {
 import type { SandboxStatus } from './probe'
 
 export {
+  CONTAINMENT_REASON_CODES,
   CONTAINMENT_REQUIREMENT_PROFILES,
   ContainmentAdmissionAborted,
   ContainmentAdmissionError,
@@ -64,6 +65,13 @@ export interface SandboxCtx {
    * admission decision can never disagree.
    */
   networkDeny?: boolean
+  /**
+   * RFC-253 — task worktrees + the git mirror are readable but NOT writable.
+   * Set for a `readonly` script node, which skips isolation and runs against
+   * the canonical tree: without this, "read-only" would be a convention the
+   * script is trusted to honour rather than a boundary.
+   */
+  readOnlyWorktrees?: boolean
   /** Provider-owned renderer for mechanisms added after the built-ins. */
   wrapCommand?: (cmd: readonly string[], policy: SandboxPolicy) => string[]
 }
@@ -110,6 +118,7 @@ export function wrapSandbox(cmd: readonly string[], ctx: SandboxCtx | undefined)
     readOnlySubtrees: ctx.readOnlySubtrees?.map(real),
     readOnlyAllowSubtrees: ctx.readOnlyAllowSubtrees?.map(real),
     networkDeny: ctx.networkDeny === true,
+    readOnlyWorktrees: ctx.readOnlyWorktrees === true,
   })
   if (ctx.wrapCommand !== undefined) return ctx.wrapCommand(cmd, policy)
   if (ctx.status.mechanism === 'seatbelt') {
