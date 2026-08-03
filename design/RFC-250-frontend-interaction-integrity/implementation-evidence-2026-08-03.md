@@ -1,10 +1,11 @@
 # RFC-250 · 实现与验收证据（2026-08-03）
 
-- 状态：**Implementation Complete / Publication In Progress**
+- 状态：**Done / Published**
 - 用户批准：2026-08-03 已明确批准 production 实施
 - 设计门：[design-gate-2026-08-03.md](./design-gate-2026-08-03.md)，最终 0 P0 / 0 P1
 - 独立实现门：[implementation-gate-2026-08-03.md](./implementation-gate-2026-08-03.md)，最终 0 P0 / 0 P1
-- 发布边界：用户已授权“完整实现之后提交上库”；stage、commit、push、exact-SHA CI 与 hosted visual 尚待执行
+- 发布证据：最终实现 SHA `bfb1ed9c9420e9bde3bf9c4c7b9534f9c92a8773` 已推送；exact-SHA CI
+  `30829695953` 28/28 jobs success；hosted visual `30829696055` 40/40 pass
 
 ## 1. 结论
 
@@ -13,9 +14,9 @@ Chromium 50/50 + WebKit 50/50、Darwin visual 40/40 和独立实现门 0 P0 / 0 
 用户另行报告“选中远端仓时无法切换到记忆界面”；该问题属于 RFC-249 T31 的 `/repos` URL 边界，本轮按
 显式反馈补了最小关闭增量，并在当前二进制的 Chromium、WebKit 390px 中通过。
 
-RFC 当前为 Implementation Complete，但尚不能标 `Done / Published`：T46 的 commit、push、remote
-ancestry、exact-SHA CI 与 hosted visual 尚未完成。冻结基线的 backend 红项已定位为 RFC-252 G1 回归，
-与 RFC-250 staged paths 无交集；共享 main 后继 `9f296872` 已修，发布 SHA 由 exact-SHA CI 复核。
+RFC 当前为 `Done / Published`：T46 的精确路径 staging、AI co-author trailer、commit、push、remote
+ancestry、exact-SHA CI 与 hosted visual 已全部完成。冻结基线的 backend 红项已定位为 RFC-252 G1
+回归，与 RFC-250 staged paths 无交集；共享 main 后继 `9f296872` 已修，最终 exact-SHA CI 已复核。
 
 ## 2. AC1–AC19 映射
 
@@ -114,6 +115,7 @@ SHA 的 workspace full 由 T46 exact-SHA CI 给出终局回执。
 
 ## 7. 发布边界
 
-用户已明确要求完整实现后提交上库，因此 RFC-250-T46 已获授权。仍须按精确路径 staging、真实 AI
-co-author trailer、remote ancestry、exact-SHA CI 与 hosted visual 完成 publication closure；任一项未完成
-都不得把本节改写为发布成功。
+RFC-250-T46 已关闭：最终实现 SHA `bfb1ed9c9420e9bde3bf9c4c7b9534f9c92a8773` 包含 RFC-250
+production、Linux baseline 与跨平台门禁稳定性修复；该 SHA 已推送并验证为远端 `main` 祖先。提交的真实
+AI co-author trailer 已用 `git show -s --format=%B HEAD` 核验；CI run `30829695953` 为 28/28 jobs
+success，hosted visual run `30829696055` 为 40/40 pass。

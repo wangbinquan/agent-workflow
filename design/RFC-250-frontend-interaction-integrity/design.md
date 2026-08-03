@@ -1,6 +1,6 @@
 # RFC-250 · 技术设计：前端交互完整性与一致性
 
-- 状态：Implementation Complete / Publication In Progress（自有范围与独立实现门已闭环；远端发布门执行中）
+- 状态：Done / Published（自有范围、独立实现门与远端发布门已闭环）
 - 配套：`proposal.md`、`plan.md`
 - 约束：优先改共享原语与纯投影；除现有 endpoint 的正常调用外不改 backend/shared wire
 - 实现证据：`implementation-evidence-2026-08-03.md`
@@ -529,7 +529,8 @@ PAT 权限矩阵优先在窄屏改为 capability group cards；若保留横向�
   0.55/0.75/1.10 阈值边界。
 - 视觉：PAT matrix/reveal、Task Wizard dirty dialog、Clarify local-only/error、complex Workflow
   readable/overview、Changes sidebar、blocker ErrorBanner；Darwin baseline 与人工查看是 implementation
-  Done 门。只有用户另行授权提交/推送时，才运行 hosted Ubuntu exact-SHA baseline 作为发布门。
+  Done 门。用户授权提交/推送后，hosted Ubuntu baseline 已在最终实现 SHA
+  `bfb1ed9c9420e9bde3bf9c4c7b9534f9c92a8773` 上以 40/40 通过发布门。
 
 ## 13. 失败回退与兼容
 

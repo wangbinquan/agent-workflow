@@ -58,6 +58,6 @@
 
 ## 5. 发布判定
 
-RFC-250 自有实现门 **APPROVED**。当前状态为 `Implementation Complete / Publication In Progress`；只有
-commit、push、remote ancestry、exact-SHA CI 与 hosted visual 全部完成后，T46 才可勾选并改为
-`Done / Published`。
+RFC-250 自有实现门 **APPROVED**，发布状态为 `Done / Published`。T46 已在最终实现 SHA
+`bfb1ed9c9420e9bde3bf9c4c7b9534f9c92a8773` 上完成 commit、push、remote ancestry、exact-SHA CI
+（run `30829695953`，28/28 jobs success）与 hosted visual（run `30829696055`，40/40 pass）。

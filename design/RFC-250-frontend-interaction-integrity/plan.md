@@ -1,6 +1,6 @@
 # RFC-250 · 实施计划：前端交互完整性与一致性
 
-- 状态：Implementation Complete / Publication In Progress（本地实现闭环；T46 远端发布门执行中）
+- 状态：Done / Published（实现、独立实现门与 T46 远端发布门全部闭环）
 - 日期：2026-08-03
 - 交付方式：同一 RFC 分三批，每批测试先行、独立验收；用户已授权完成后精确提交并上库
 
@@ -162,9 +162,11 @@
 - [x] **RFC-250-T48**：移动导航抽屉把 focus/pending destination 的 capture 准备与抽屉关闭的 bubble
   完成拆开，确保 TanStack Link 先接管 transition、`UnsavedChangesGuard` 可阻断；桌面与 390px 的
   Stay/Discard/reload 恢复流程均由真实浏览器回归锁定。
-- [ ] **RFC-250-T46**：仅在用户另行要求提交/上库后，精确路径 staging，使用真实 AI co-author trailer，
+- [x] **RFC-250-T46**：仅在用户另行要求提交/上库后，精确路径 staging，使用真实 AI co-author trailer，
   提交前验证 `git show -s --format=%B HEAD`；push 后验证远端 ancestry、exact-SHA CI 与 hosted visual。
-  用户已于 2026-08-03 要求完整实现后提交上库；未完成 T46 不得宣称发布闭环。
+  用户已于 2026-08-03 要求完整实现后提交上库；最终实现 SHA
+  `bfb1ed9c9420e9bde3bf9c4c7b9534f9c92a8773` 已推送并验证远端 ancestry，CI run
+  `30829695953` 为 28/28 jobs success，hosted visual run `30829696055` 为 40/40 pass。
 
 ## 5. 测试文件建议
 

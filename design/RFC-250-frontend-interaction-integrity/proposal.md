@@ -1,6 +1,6 @@
 # RFC-250 · 全局前端交互完整性与一致性收口
 
-- 状态：Implementation Complete / Publication In Progress（自有范围与独立实现门已闭环；远端发布门执行中）
+- 状态：Done / Published（自有范围、独立实现门与远端发布门已闭环）
 - 日期：2026-08-03
 - 触发：用户要求审视整个系统前端，并按审计建议执行整改
 - 相关 RFC：RFC-113/118（Agent 运行时选择）、RFC-169（未保存防丢）、RFC-198（全局 UI 基座）、RFC-199（工作流编辑器）、
@@ -285,5 +285,6 @@ B3 增加 Intent、Tour、Repos 或全站术语 production change。
 [独立设计门](./design-gate-2026-08-03.md)，并于 2026-08-03 获用户明确批准，现可按 B1 → B2 → B3
 修改 production code。该批准表示同意上述三批范围与跨 RFC 移交边界；不批准 RFC-211 follow-up、RFC-235 未完成任务或
 RFC-249 新增 production change，也不自动授权提交、推送或发布。用户随后于 2026-08-03 明确要求
-“完整实现之后提交上库”，因此 publication gate 已获授权，但只有 T46 的远端 ancestry、exact-SHA CI 与
-hosted visual 全部成功后才可声明发布闭环。
+“完整实现之后提交上库”，因此 publication gate 已获授权。T46 已在最终实现 SHA
+`bfb1ed9c9420e9bde3bf9c4c7b9534f9c92a8773` 上完成远端 ancestry、exact-SHA CI 与 hosted visual，
+RFC-250 现为 `Done / Published`。
