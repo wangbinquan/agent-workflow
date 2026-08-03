@@ -49,9 +49,15 @@
       短路，PAT 分支恒收窄（关闭 `docs/audit-backlog.md:61`）。
 - [x] **RFC-247-T6**：`resolveTokenPermissions` 纯函数（design §2.2 公式）+ 表驱动测试；
       角色点集快照测试重写（`ADMIN_ONLY_PERMISSIONS` / `MANAGER_DENIED_PERMISSIONS`）。
-- [x] **RFC-247-T7**：`verbForRoute` 映射表逐行测试；`routeMetaCoverage` 断言生产 app 无缺漏；
+- [x] **RFC-247-T7**：~~`verbForRoute` 映射表逐行测试~~；`routeMetaCoverage` 断言生产 app 无缺漏；
       每个域各一条「窄令牌被拒」集成测试；**跨域副作用族五条专属回归**（AC-29），文件名与顶部注释写明它锁的是
       「A 域路由产生 B 域副作用」这一族。
+  - **2026-08-03 架构审视 G0 修正**：T4 只删了 `auth/permissions.ts` 的**挂载**、没删实现。该层
+    202 行（7 个导出）此后全仓零生产引用，仅由 `rfc247-verb-for-route.test.ts` 这一条逐行测试
+    续命——`verbForRoute` 因此成了「路由 → 权限点」的第二份、无人执行、无人比对的事实源（机械
+    重放全部 `registerRoute` 声明与它分歧 7 条），其文件头还在断言 server.ts 里早已删除的手挂
+    网关「still runs alongside」。整层 + 该逐行测试**已删除**，新增
+    `tests/route-gate-single-source.test.ts` 锁住「不复辟 + 无第二套门」。T7 其余三项不变。
 - [x] **RFC-247-T8**：在 `docs/audit-backlog.md` 记录收口——`:60`（workgroups 无 method 点）、
       `:61`（空 scope 全权）、`:62`（任务操作面无写点 + cancel 死点）三条随本 RFC 关闭；
       `:63`（review 评论不验作者）**不关**，本 RFC 只是把它从 `tasks:delete` 的误归中解开。
@@ -459,11 +465,11 @@ MCP 在结构上**不可能**成为第二个更弱的授权面。实测立刻兑
 
 #### 全量套件揭示的三条（PR-3〜PR-5 收尾）
 
-| 测试 | 现象 | 归属与处置 |
-| --- | --- | --- |
+| 测试                                | 现象                                 | 归属与处置                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `rfc165-scheduled-kinds.test.ts` K6 | narrow PAT 删除定时任务由 200 变 422 | **本 RFC 有意**。K6 锁的是「删除**不需要**启动权限」——那条**仍然成立**；T20 加的是「令牌必须**指名**要删的东西」，两条正交（一条讲权限、一条讲意图）。测试改为先断 422 `delete-confirm-required`、再带 `confirm` 断成功，**原意完整保留**。存量令牌已被 migration 0129 全部吊销，故此 break 无活跃调用方。 |
-| `api-contract-coverage.test.ts` | 5 条新端点未登记 | 该守卫正常工作。登记 `/api/auth/pats/audit`、`/api/tokens`、`/api/tokens/audit`、`/api/docs/api`、`/.well-known/mcp`（最后一条标 `public`）。 |
-| `plugin-install` timeout kill | 全量套件下红、单独跑 17/17 绿 | **不属本 RFC**（未触及 `pluginInstaller`）；是 `timeoutMs` 杀子进程的时序敏感用例在满载下抖动。按 CLAUDE.md **不以「重跑就过」作为通过依据**——如实记录于此，留待其 owner 判定是真 flaky 还是真 bug。 |
+| `api-contract-coverage.test.ts`     | 5 条新端点未登记                     | 该守卫正常工作。登记 `/api/auth/pats/audit`、`/api/tokens`、`/api/tokens/audit`、`/api/docs/api`、`/.well-known/mcp`（最后一条标 `public`）。                                                                                                                                                              |
+| `plugin-install` timeout kill       | 全量套件下红、单独跑 17/17 绿        | **不属本 RFC**（未触及 `pluginInstaller`）；是 `timeoutMs` 杀子进程的时序敏感用例在满载下抖动。按 CLAUDE.md **不以「重跑就过」作为通过依据**——如实记录于此，留待其 owner 判定是真 flaky 还是真 bug。                                                                                                       |
 
 顺带把 dispatcher 改为**首次使用时**才构建：它会把整张 `/api` 路由表挂进第二个 Hono app，
 对一个从不收 MCP 请求的守护进程（或测试）是纯浪费——测试套件会建几百个 app。
@@ -524,8 +530,9 @@ typecheck / lint / format 全绿。
    只有外部评审能抓。**这就是双门存在的理由**——CI 全绿、自测全绿，契约仍然是错的。
 
 **12 条已修**（两批，各带红绿变异实证）：三个失败操作 + `list_repair_options` + 路径穿越编码
-+ 401 + `snapshot_failed`（migration 0130）+ 三扇门脱敏 + plugin spec + `describe_resource`
-派生 JSON Schema + `launch_task` 补 7 字段 + AC-20 快照时序。
+
+- 401 + `snapshot_failed`（migration 0130）+ 三扇门脱敏 + plugin spec + `describe_resource`
+  派生 JSON Schema + `launch_task` 补 7 字段 + AC-20 快照时序。
 
 **12 条登记 `docs/audit-backlog.md`** 并写明 defer 理由：收敛工具非 CRUD 面、review 逐文档 /
 clarify 子集、审计查询下推 SQL、反代下 origin 推导、wiki 缺请求体 schema、discovery 不反映

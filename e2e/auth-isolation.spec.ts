@@ -2,7 +2,7 @@
 //
 // LOCKS: Tasks owned by user A must not be visible to unrelated user B
 // (canViewTask gate in /api/tasks/:id); admin-only endpoints must reject
-// regular users (resourcePermissionGate / requirePermission); RFC-221 must
+// regular users (the route-metadata gate, routes/registry.ts); RFC-221 must
 // keep PAT creation disabled. A regression in any of these means user A's
 // data leaks to user B without the user reporting it — the kind of silent
 // breakage W1-5 exists to catch.

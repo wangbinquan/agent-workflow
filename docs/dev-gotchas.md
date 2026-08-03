@@ -16,6 +16,7 @@
 - **`长任务 | tail -N` 会让你全程失明**：tail 要等 EOF 才吐字节，后台跑的全量测试在结束前输出文件恒为 0 字节，「没输出」看起来和「还在跑」一模一样。长任务全量落盘再取尾（`> log 2>&1` 后 `tail`）。判断进程死活看 **`ps -o etime=`**，不看输出有没有内容。
 - **结构守卫必做变异实证**：加 grep/AST 守卫后，改坏源码断言必须看它变红；否则守卫是空的。表级锁（一次锁一类）优于文件级——注释里的字面量也会踩表级锁（RFC-072 事故）。
 - **「写了规则 + 单测绿」≠「接上了」**：脱敏/校验这类横切规则，单测测的是**函数**，接线是另一件事。RFC-247 里 `redactMcpRecord` 与 `redactStdout` **各自**都是「定义了、单测了、零调用方」——`GET /api/mcps/:id` 一直原样吐 `config.env`/`oauth.clientSecret`。单测不会红，因为它没在测出口。**收尾必须从 AC/需求反查「谁调它」**（`grep -rn '<fn>' src | grep -v '<定义文件>'`，命中为空即未接线），或把出口写成唯一入口（`serializeXForActor(record, source)`）让调用方无从绕过。
+- **上一条的镜像：迁移「只删调用方、不删实现」，残骸会被它自己的测试续命**。RFC-247 T4 把权限门迁到 `registerRoute` 后删的是 `server.ts` 里的**挂载**，`auth/permissions.ts` 那 202 行实现原封留下；此后全仓零生产引用，唯一 import 是 `rfc247-verb-for-route.test.ts` 那条逐行测试——覆盖率报表上它一直是绿的、看起来还像一条权限不变量锁。代价是它**在教育后来人**：文件头断言「server.ts 的手挂网关 still runs alongside 迁移后的路由」（同一时刻 server.ts 明写 GONE），而 `verbForRoute` 悄悄成了「路由 → 权限点」的第二份、无人执行、无人比对的事实源（与真实声明分歧 7 条）。**判据**：迁移收尾时对被替换的模块跑 `rg -n "<导出名>" packages e2e scripts | grep -v "<自身文件>"`，若命中**只剩测试文件**，那不是「还有人用」，是死码 + 假合格证，删。删完补一条「不复辟」ratchet（`tests/route-gate-single-source.test.ts` 是范本）并做变异实证。2026-08-03 架构审视 G0。
 - **改符号前先 grep 测试源码锁**：改函数/常量名前全量盘「锁住旧接线的测试」，定向重跑集 = grep 命中集；否则本地绿、CI 红（他人 source-lock 锁了旧名，2026-07-08 三连事故）。
 - **`e2e/` 在 workspace typecheck 之外**：删/改 wire 字段能过所有本地门却红 Playwright CI；推前 grep `e2e/` 找该字段（inline response 类型 + 断言都要改）。
 - **CI 根 `bun test` 只跑 backend**（bunfig `root=packages/backend/tests`）；shared 测试单独跑且含一个**已知陈旧** `memory-schema` 红（RFC-101 `fused`，在 CI 之外）——忽略它，别「修」他人代码。

@@ -18,6 +18,11 @@
 // So: every route declares its own metadata, the framework derives the gate
 // from that declaration, and a startup self-check refuses to boot when the
 // declaration set and the mounted route set disagree — in EITHER direction.
+// The whole legacy layer that used to hold those three mechanisms
+// (`backend/src/auth/permissions.ts`: `requirePermission` / `requireAdmin` /
+// `requireResourceAdmin` / `ensurePermission` / `resourcePermissionGate` /
+// `verbForRoute`) is DELETED, so there is exactly one route gate to reason
+// about. `tests/route-gate-single-source.test.ts` keeps it that way.
 //
 // The reverse direction matters as much as the forward one: a permission point
 // that no route references still shows up on the account page's token matrix,

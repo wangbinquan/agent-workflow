@@ -1,7 +1,9 @@
-// RFC-036 — permission catalog. Routes use `requirePermission(perm)` against
-// these literals; roles are mapped to permission sets via ROLE_PERMISSIONS. To
-// add a new role (auditor / viewer / team_lead etc.) we only add a new key to
-// ROLE_PERMISSIONS — business code does not key off the role string.
+// RFC-036 — permission catalog. Routes declare the points they need in their
+// `registerRoute` metadata (backend routes/registry.ts) and the framework
+// derives the gate from that declaration; roles are mapped to permission sets
+// via ROLE_PERMISSIONS. To add a new role (auditor / viewer / team_lead etc.)
+// we only add a new key to ROLE_PERMISSIONS — business code does not key off
+// the role string.
 //
 // RFC-222 — third role `manager` (中文「资源管理员」): manager = admin minus
 // user management, system settings/ops, and task deletion. It gets every
@@ -10,7 +12,8 @@
 // coarse route points repos:* / tasks:read:all.
 //
 // RFC-247 — the `资源:write` point is GONE. It used to cover POST/PUT/PATCH/
-// DELETE alike (auth/permissions.ts resourcePermissionGate), which made
+// DELETE alike (the `resourcePermissionGate` middleware, since deleted along
+// with the whole legacy `backend/src/auth/permissions.ts` layer), which made
 // "can modify but not delete" and "can create but not modify" inexpressible —
 // exactly what a self-issued API token needs to express. Every matrix-domain
 // resource now carries explicit `:create` / `:update` / `:delete` / `:execute`

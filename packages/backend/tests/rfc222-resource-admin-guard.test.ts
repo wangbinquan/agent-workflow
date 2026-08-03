@@ -2,7 +2,9 @@
 //
 // The resource-domain admin bypass (admin ∪ manager) must funnel through ONE
 // predicate: shared `isResourceAdminRole` → services/resourceAcl.ts
-// `isResourceAdminActor` → middleware `requireResourceAdmin`. Two drifts this
+// `isResourceAdminActor` → the route gate's `identity: 'resource-admin'` door
+// (routes/registry.ts `routeMetaGate`; the old `requireResourceAdmin`
+// middleware died with the legacy auth/permissions.ts layer). Two drifts this
 // pins:
 //
 //   1. `isAdminActor` (the SYSTEM-admin predicate) must not reappear in a

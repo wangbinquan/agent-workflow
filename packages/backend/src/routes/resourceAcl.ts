@@ -1,7 +1,7 @@
 // RFC-099 — generic GET/PUT /api/{resource}/:key/acl endpoints, mounted once
-// per resource by the five resource route modules. The route gate
-// (resourcePermissionGate in server.ts) already maps GET→{res}:read and
-// PUT→{res}:write; per-row owner enforcement happens in updateResourceAcl.
+// per resource by the five resource route modules. Both routes declare their
+// own coarse gate below (GET→`{res}:read`, PUT→`{res}:update`); per-row owner
+// enforcement happens in updateResourceAcl.
 //
 // "Row missing" and "row invisible" deliberately produce the SAME 404 payload
 // so a non-granted user cannot probe existence (D1).

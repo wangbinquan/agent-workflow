@@ -65,8 +65,9 @@ export class UnauthorizedError extends DomainError {
 }
 
 /**
- * RFC-036 — raised by requirePermission / canViewTask when the resolved actor
- * lacks the required permission point. `code` differentiates the specific
+ * RFC-036 — raised by the route-metadata gate (routes/registry.ts
+ * `routeMetaGate`) / canViewTask when the resolved actor lacks the required
+ * permission point or identity. `code` differentiates the specific
  * failure (e.g. 'forbidden' / 'task-not-visible' / 'not-reviewer'); `details`
  * may carry `{ requiredPermission, actorPermissions[] }` for admin debugging.
  */

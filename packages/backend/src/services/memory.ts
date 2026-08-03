@@ -11,10 +11,12 @@
 //     `db.transaction(async …)` form COMMITted at its first await and provided
 //     no such guarantee — audit S-10.)
 //
-// Authorization is enforced by `requirePermission` at the route layer; this
-// module does not re-check permissions but does require the caller to pass
-// `adminUserId` for write paths so the audit trail (`approved_by_user_id`)
-// is always populated.
+// The coarse `memory:*` gate is enforced by each route's own `registerRoute`
+// declaration (routes/registry.ts); the CRUD helpers below do not re-check it,
+// but they do require the caller to pass `adminUserId` for write paths so the
+// audit trail (`approved_by_user_id`) is always populated. Row-level rights are
+// a separate concern owned by this module: see canViewMemory / canManageMemory
+// (RFC-099 D12), which follow the scope resource's ACL.
 
 import { and, desc, eq, gt, inArray, like, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
