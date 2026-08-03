@@ -583,13 +583,19 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     expect(overflow.root).toBeLessThanOrEqual(1)
   })
 
-  test('react-flow controls panel renders zoom / fit-view buttons', async ({ page }) => {
+  test('react-flow controls panel keeps zoom controls and exposes the canonical camera action', async ({
+    page,
+  }) => {
     await openEditor(page)
-    // xyflow's Controls subcomponent renders 4 default buttons:
-    // zoom in, zoom out, fit-view, lock interactivity.
+    // RFC-250 owns fit/overview in the labelled canvas toolbar so the same
+    // camera transition is reachable on desktop and compact layouts. Keep
+    // xyflow's unlabelled control stack limited to zoom in/out.
     await expect(page.locator('.react-flow__controls')).toBeVisible()
     const controlButtons = page.locator('.react-flow__controls button')
-    expect(await controlButtons.count()).toBeGreaterThanOrEqual(3)
+    await expect(controlButtons).toHaveCount(2)
+    await expect(page.locator('.react-flow__controls-zoomin')).toBeVisible()
+    await expect(page.locator('.react-flow__controls-zoomout')).toBeVisible()
+    await expect(page.getByTestId('workflow-camera-overview')).toBeVisible()
   })
 
   test('editor URL reflects the current workflow id', async ({ page }) => {
@@ -803,6 +809,14 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await openEditor(page, 2)
     await page.locator('.react-flow__node[data-id="left"]').click()
     await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+    // RFC-250 focuses an explicitly selected node, so selecting `left` to
+    // mount the Inspector intentionally occupies the readable-view centre.
+    // Return to the full graph before zooming so this projection test keeps
+    // its original empty-centre premise instead of exercising collision
+    // displacement (covered separately by workflow-placement.test.ts).
+    await page.getByTestId('workflow-camera-overview').click()
+    await expect(page.locator('.workflow-canvas')).toHaveAttribute('data-camera-mode', 'overview')
+    await page.waitForTimeout(250)
 
     const pane = page.locator('.react-flow__pane')
     const zoomIn = page.locator('.react-flow__controls-zoomin')
@@ -822,6 +836,18 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     const paneCenter = {
       x: paneBox.x + paneBox.width / 2,
       y: paneBox.y + paneBox.height / 2,
+    }
+    const matrixParts = transform
+      .match(/matrix\(([^)]+)\)/)?.[1]
+      ?.split(',')
+      .map(Number)
+    if (matrixParts === undefined || matrixParts.length !== 6) {
+      throw new Error(`unexpected viewport transform: ${transform}`)
+    }
+    const scale = matrixParts[0]!
+    const flowCenter = {
+      x: (paneCenter.x - paneBox.x - matrixParts[4]!) / scale,
+      y: (paneCenter.y - paneBox.y - matrixParts[5]!) / scale,
     }
 
     await page.getByTestId('workflow-canvas-add').click()
@@ -847,23 +873,11 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // DEFAULT_NODE_SIZE_BY_KIND for the pre-measure size — agent-single is
     // 280×180, so the flow top-left is the projected centre minus (140, 90).
     // Assert in FLOW space (the node element's translate()) so rendered card
-    // size cannot skew the anchor check; zoom-projection drift is what this
-    // case isolates.
-    const viewportMatrix = await page
-      .locator('.react-flow__viewport')
-      .evaluate((element) => getComputedStyle(element).transform)
-    const matrixParts = viewportMatrix
-      .match(/matrix\(([^)]+)\)/)?.[1]
-      ?.split(',')
-      .map(Number)
-    if (matrixParts === undefined || matrixParts.length !== 6) {
-      throw new Error(`unexpected viewport transform: ${viewportMatrix}`)
-    }
-    const scale = matrixParts[0]!
-    const flowCenter = {
-      x: (paneCenter.x - paneBox.x - matrixParts[4]!) / scale,
-      y: (paneCenter.y - paneBox.y - matrixParts[5]!) / scale,
-    }
+    // size cannot skew the anchor check. The projection is intentionally
+    // captured before the picker opens: RFC-250 may resize the canvas when it
+    // hands the Inspector rail off to the modal palette, and selection focus
+    // may move the camera after insertion. Neither may rewrite the click-time
+    // target stored in the picker intent.
     const nodeTransform = await page
       .locator(`.react-flow__node[data-id="${insertedId}"]`)
       .evaluate((element) => element.style.transform)
