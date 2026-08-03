@@ -1101,6 +1101,7 @@ export interface Resources {
       move: string
       validating: string
       finishDraftBeforeSave: string
+      error: string
       layoutSummary: string
       settingsFor: string
       inherited: string
@@ -5507,6 +5508,7 @@ export const zhCN: Resources = {
       move: '移动',
       validating: '正在校验布局…',
       finishDraftBeforeSave: '请先应用或清空尚未完成的编辑，再保存。',
+      error: '错误',
       layoutSummary: '{{nodes}} 个目录节点 · {{repos}} 个仓库',
       settingsFor: '{{path}} 的设置',
       inherited: '继承',

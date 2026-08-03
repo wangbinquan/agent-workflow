@@ -6,6 +6,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { enUS } from '../src/i18n/en-US'
@@ -27,10 +35,9 @@ vi.mock('../src/api/client', async () => {
   }
 })
 
-// The repos route imports __root which pulls in the TanStack router shell —
-// rather than mount the route, render the bare component by importing the
-// hidden export.
-import { ReposRoute } from '../src/routes/repos'
+// The page owns URL-driven tabs, so its focused harness below clones the real
+// /repos route id instead of bypassing the TanStack router context.
+import { ReposRoute, validateReposSearch } from '../src/routes/repos'
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -51,12 +58,22 @@ afterEach(() => {
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const opts = ReposRoute.options as unknown as { component: any }
-  const Component = opts.component as React.ComponentType
+  const rootRoute = createRootRoute({ component: () => <Outlet /> })
+  const reposRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/repos',
+    validateSearch: validateReposSearch,
+    component: ReposRoute.options.component,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([reposRoute]),
+    history: createMemoryHistory({ initialEntries: ['/repos?tab=repos'] }),
+  })
   return render(
     <QueryClientProvider client={qc}>
-      <Component />
+      {/* The focused test tree intentionally differs from the generated app tree. */}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
 }

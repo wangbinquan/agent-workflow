@@ -15,11 +15,11 @@ function repoFile(path: string): string {
 }
 
 describe('RFC-198 visual infrastructure source gates', () => {
-  test('visual spec declares exactly 27 counted scenes', () => {
+  test('visual spec declares exactly 31 counted scenes', () => {
     const source = repoFile('e2e/visual-regression.spec.ts')
-    expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 27')
+    expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 31')
     expect(source).toContain('const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)')
-    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(27)
+    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(31)
     expect(source).toContain('declaredVisualSceneCount !== EXPECTED_VISUAL_SCENE_COUNT')
     expect(source).toContain('async function waitForStableAuthenticatedShell(page: Page)')
     expect(source).toContain("await expect(userMenu).toContainText('e2e_admin')")
@@ -47,7 +47,7 @@ describe('RFC-198 visual infrastructure source gates', () => {
     expect(lockfile).toContain('@playwright/test@1.60.0')
     expect(readme).toContain('mcr.microsoft.com/playwright:v1.60.0-noble')
     expect(readme).toContain('bun run test:visual -- --update-snapshots')
-    expect(readme).toContain('27 full-page + 6 component pixel baselines')
+    expect(readme).toContain('31 full-page + 6 component pixel baselines')
     expect(readme).not.toContain('RUN_VISUAL_REGRESSION=1 bun run e2e')
     expect(workflow).toContain('runs-on: ubuntu-24.04')
     expect(workflow).toContain("bun-version: '1.3.13'")

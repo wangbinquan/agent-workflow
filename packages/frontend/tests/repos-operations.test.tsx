@@ -3,12 +3,19 @@
 
 import type { CachedRepo } from '@agent-workflow/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { ComponentType } from 'react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import '../src/i18n'
-import { ReposRoute } from '../src/routes/repos'
+import { ReposRoute, validateReposSearch } from '../src/routes/repos'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 function repo(id: string, overrides: Partial<CachedRepo> = {}): CachedRepo {
@@ -51,10 +58,22 @@ function installFetch(items: CachedRepo[]): RecordedCall[] {
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const Component = ReposRoute.options.component as ComponentType
+  const rootRoute = createRootRoute({ component: () => <Outlet /> })
+  const reposRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/repos',
+    validateSearch: validateReposSearch,
+    component: ReposRoute.options.component,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([reposRoute]),
+    history: createMemoryHistory({ initialEntries: ['/repos?tab=repos'] }),
+  })
   render(
     <QueryClientProvider client={client}>
-      <Component />
+      {/* The focused test tree intentionally differs from the generated app tree. */}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
   return client

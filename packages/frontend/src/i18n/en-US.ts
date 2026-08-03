@@ -928,6 +928,7 @@ export const enUS: Resources = {
       move: 'Move',
       validating: 'Validating layout…',
       finishDraftBeforeSave: 'Finish or clear the pending edit before saving.',
+      error: 'Error',
       layoutSummary: '{{nodes}} directory nodes · {{repos}} repos',
       settingsFor: 'Settings for {{path}}',
       inherited: 'Inherited',

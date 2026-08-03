@@ -305,7 +305,7 @@ export function RepoTreeEditor({
             </button>
             {hasError ? (
               <StatusChip kind="danger" size="sm" title={nodeError?.message}>
-                {t('common.error')}
+                {t('repoGroups.editor.error')}
               </StatusChip>
             ) : (
               attachment?.readonly === true && (

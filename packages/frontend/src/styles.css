@@ -318,7 +318,7 @@ code {
   min-width: 20px;
   height: 20px;
   padding: 0 7px;
-  border-radius: var(--radius-pill);
+  border-radius: 999px;
   background: var(--danger-fill);
   color: var(--on-danger);
   font-size: 11px;
