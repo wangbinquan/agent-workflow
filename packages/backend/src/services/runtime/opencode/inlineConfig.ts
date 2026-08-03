@@ -11,6 +11,7 @@
 
 import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
+import { buildPluginSpecArray } from './pluginSpec'
 
 /** RFC-113: a profile that omits all params (the binary uses its own defaults). */
 export const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
@@ -166,20 +167,9 @@ export function buildInlineConfig(
   }
   if (Object.keys(mcpMap).length > 0) out.mcp = mcpMap
   // RFC-031: emit the plugin array only when at least one ENABLED entry
-  // resolves. RFC-223 PR-6: dedupe by canonical plugin id (closure may visit
-  // the same row via multiple agents); distinct same-name rows remain distinct.
-  // Each element is `file://<cachedPath>` so opencode's
-  // `resolvePathPluginTarget` handles it without npm.
-  const pluginArr: Array<string | [string, Record<string, unknown>]> = []
-  const pluginSeen = new Set<string>()
-  for (const p of plugins) {
-    if (p.enabled === false) continue
-    if (pluginSeen.has(p.id)) continue
-    pluginSeen.add(p.id)
-    const pathSpec = p.cachedPath.startsWith('file://') ? p.cachedPath : `file://${p.cachedPath}`
-    const opts = p.options && Object.keys(p.options).length > 0 ? p.options : undefined
-    pluginArr.push(opts === undefined ? pathSpec : [pathSpec, opts])
-  }
+  // resolves. RFC-251 moved the encoding rules to `pluginSpec.ts` so the
+  // verified path's controlled config (hermetic.ts) shares one implementation.
+  const pluginArr = buildPluginSpecArray(plugins)
   if (pluginArr.length > 0) out.plugin = pluginArr
   return out
 }

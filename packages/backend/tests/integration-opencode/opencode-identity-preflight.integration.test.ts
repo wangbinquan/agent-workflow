@@ -18,7 +18,6 @@ import {
   validateSessionIdentity,
 } from '@/services/runtime/opencode/directApiSchemas'
 import { OpencodeDirectClient } from '@/services/runtime/opencode/directClient'
-import { verifyExecutionIdentity } from '@/services/runtime/opencode/executionIdentity'
 import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
@@ -1291,20 +1290,13 @@ describe.skipIf(!RUN_INTEGRATION)('RFC-227 real-binary no-LLM execution identity
             budgets: { maxJsonBytes: 4 * 1024 * 1024, requestTimeoutMs: 10_000 },
           })
 
-          const effectiveConfig = await client.getConfig()
+          // RFC-251: no same-instance attestation. Still assert the direct
+          // facts a real launch depends on — the controlled agent is actually
+          // registered by this server, and the selected provider/skills exist.
           const providers = await client.getConfigProviders()
-          const agents = await client.getAgents()
+          const agents = (await client.getAgents()) as Array<{ name?: unknown }>
           const skills = await client.getSkills()
-          const secondAgents = await client.getAgents()
-          const proof = verifyExecutionIdentity({
-            expectedInlineConfig: controlledConfig,
-            effectiveConfig,
-            agents,
-            secondAgents,
-            selectedAgentName: 'aw-rfc224-official',
-            permissionHome: layout.home,
-          })
-          expect(proof.controlledAgentNames).toEqual(['aw-rfc224-official'])
+          expect(agents.some((info) => info.name === 'aw-rfc224-official')).toBe(true)
           verifySelectedProviderInventory(providers, PINNED_MODEL)
           verifyPinnedSkillInventory(skills)
 
@@ -1407,21 +1399,13 @@ describe.skipIf(!RUN_INTEGRATION)('RFC-227 real-binary no-LLM execution identity
             budgets: { maxJsonBytes: 4 * 1024 * 1024, requestTimeoutMs: 10_000 },
           })
           const effectiveConfig = await client.getConfig()
-          const agents = await client.getAgents()
-          const secondAgents = await client.getAgents()
-          const proof = verifyExecutionIdentity({
-            expectedInlineConfig: controlledConfig,
-            effectiveConfig,
-            agents,
-            secondAgents,
-            selectedAgentName: 'aw-intent-builder',
-            permissionHome: layout.home,
-          })
-          expect(proof.controlledAgentNames).toEqual(['aw-intent-builder'])
-          // Belt-and-braces readable lock on the attested AGENT permission
-          // object (the profile flips live on the agent, not the global
-          // baseline): read/grep/glob allow, write/exec surface deny, bash
-          // closed.
+          const agents = (await client.getAgents()) as Array<{ name?: unknown }>
+          // RFC-251: no attestation, but the system profile's live permission
+          // shape is still worth locking against a real server.
+          expect(agents.some((info) => info.name === 'aw-intent-builder')).toBe(true)
+          // Readable lock on the effective AGENT permission object (the profile
+          // flips live on the agent, not the global baseline): read/grep/glob
+          // allow, write/exec surface deny, bash closed.
           const permission = (
             effectiveConfig as {
               agent?: Record<string, { permission?: Record<string, unknown> }>

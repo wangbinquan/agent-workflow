@@ -40,7 +40,6 @@ import {
   businessOpencodeIdentityDigest,
   ExecutionIdentityError,
   identityDigest,
-  verifyExecutionIdentity,
 } from './executionIdentity'
 import { ExecutionIdentityFailure, executionIdentityFailure } from './failure'
 import { PINNED_BUILTIN_SKILL, assertBundledProviderImplementation } from './hermetic'
@@ -85,7 +84,10 @@ export interface VerifiedLauncherServerProcess {
 }
 
 export interface VerifiedLauncherClient {
-  getConfig(signal?: AbortSignal): Promise<unknown>
+  // RFC-251: no `getConfig` — the launcher stopped re-reading /config when the
+  // same-instance attestation was removed. OpencodeDirectClient still exposes
+  // it for diagnostics/integration use; this interface lists only what the
+  // launch path actually calls.
   getConfigProviders(signal?: AbortSignal): Promise<unknown>
   getAgents(signal?: AbortSignal): Promise<unknown>
   getSkills(signal?: AbortSignal): Promise<unknown>
@@ -128,7 +130,6 @@ export interface VerifiedLauncherDependencies {
     password: string
     budgets: Partial<DirectClientBudgets>
   }) => VerifiedLauncherClient
-  verifyIdentity?: typeof verifyExecutionIdentity
   verifyProviderInventory?: typeof verifySelectedProviderInventory
   verifySkillInventory?: typeof verifyPinnedSkillInventory
   writeInventory?: typeof writeVerifiedInventorySnapshot
@@ -1004,7 +1005,6 @@ export async function launchVerifiedOpencodeManifest(
   const scrubStore = dependencies.scrubStore ?? scrubOpencodeStoreAccountState
   const spawnServer = dependencies.spawnServer ?? defaultSpawnServer
   const createClient = dependencies.createClient ?? defaultCreateClient
-  const verifyIdentity = dependencies.verifyIdentity ?? verifyExecutionIdentity
   const verifyProviderInventory =
     dependencies.verifyProviderInventory ?? verifySelectedProviderInventory
   const verifySkillInventory = dependencies.verifySkillInventory ?? verifyPinnedSkillInventory
@@ -1134,29 +1134,25 @@ export async function launchVerifiedOpencodeManifest(
       (bootstrapSignal) =>
         guardedByServer(
           (async () => {
-            const effectiveConfig = await directClient.getConfig(bootstrapSignal)
+            // RFC-251 removed the same-instance config attestation that stood
+            // here (the second /agent read plus the byte comparison against
+            // manifest.expectedConfig). The remaining reads are single, direct
+            // fact-gathering: they still catch a selected provider or pinned
+            // skill that genuinely is not present, but they no longer claim to
+            // prove the effective config was not tampered with.
             const providers = await directClient.getConfigProviders(bootstrapSignal)
             const agents = await directClient.getAgents(bootstrapSignal)
             const skills = await directClient.getSkills(bootstrapSignal)
-            const secondAgents = await directClient.getAgents(bootstrapSignal)
-            verifyIdentity({
-              expectedInlineConfig: manifest.expectedConfig,
-              effectiveConfig,
-              agents,
-              secondAgents,
-              selectedAgentName: manifest.selectedAgent,
-              permissionHome: manifest.serverEnv.HOME,
-            })
             verifyProviderInventory(providers, manifest.selectedModel)
             verifySkillInventory(skills)
             const sourceAfter = await scanSource(manifest.worktreePath)
             assertSourceFingerprintUnchanged(sourceBefore, sourceAfter)
             if (manifest.storeKind === 'business' && manifest.inventory.enabled) {
               const snapshot = buildVerifiedInventorySnapshot({
-                // The second response is the one closest to the write. The
-                // identity verifier has already proven its full canonical seal
-                // equal to the first response from this same server instance.
-                agents: secondAgents,
+                // RFC-251: a single read is the source. There is no longer a
+                // second response to prefer, and nothing claims the inventory
+                // was proven identical across two reads of the same instance.
+                agents,
                 plan: manifest.inventory,
                 capturedAt: now(),
               })

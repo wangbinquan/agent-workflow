@@ -22,31 +22,27 @@ export function throwExecutionPolicyViolation(violation: ExecutionPolicyViolatio
 
 export function assertResolvedExecutionPolicy(
   runtime: Pick<ResolvedRuntime, 'protocol' | 'model'>,
-  resources: { enabledPluginCount?: number; dependentAgentCount?: number } = {},
 ): void {
   const violation = executionPolicyViolations({
     protocol: runtime.protocol,
     model: runtime.model,
-    ...resources,
   })[0]
   if (violation !== undefined) throwExecutionPolicyViolation(violation)
 }
 
+/**
+ * RFC-251: plugins and `dependsOn` are supported on the OpenCode path again,
+ * so this gate no longer inspects an agent's resource selection — only the
+ * runtime it resolves to. The parameter stays agent-shaped because every call
+ * site already has the row and the resolution still depends on its `runtime`.
+ */
 export async function assertAgentExecutionPolicy(
   db: DbClient,
-  agent: {
-    id?: string
-    runtime?: string | null
-    plugins: readonly string[]
-    dependsOn: readonly string[]
-  },
+  agent: { id?: string; runtime?: string | null },
   defaultRuntime?: string | null,
 ): Promise<ResolvedRuntime> {
   const runtime = await resolveAgentRuntime(db, agent.runtime, defaultRuntime)
-  assertResolvedExecutionPolicy(runtime, {
-    enabledPluginCount: agent.plugins.length,
-    dependentAgentCount: agent.dependsOn.length,
-  })
+  assertResolvedExecutionPolicy(runtime)
   return runtime
 }
 

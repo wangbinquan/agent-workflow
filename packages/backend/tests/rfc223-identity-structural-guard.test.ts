@@ -87,11 +87,13 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/netlessMcp.ts\u001fmaterializeClaudeNetlessMcp\u001fCallExpression:708e2e853dc145b836c2\u001f1\u001fruntime-protocol\u001fwrapperByName.has(mcp.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/injectionIdentity.ts\u001ffirstConflict\u001fCallExpression:0e951b1e1d97a1b0dc0c\u001f1\u001fruntime-protocol\u001ffirstIdByName.set(row.name, row.id)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/injectionIdentity.ts\u001ffirstConflict\u001fCallExpression:70a6aca824745ed4770c\u001f1\u001fruntime-protocol\u001ffirstIdByName.get(row.name)',
-  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fparseAgentRegistry\u001fCallExpression:eab39a265e40820fafc0\u001f1\u001fopencode-protocol\u001fNATIVE_AGENT_NAMES.has(name)',
-  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fverifyExecutionIdentity\u001fCallExpression:eab39a265e40820fafc0\u001f2\u001fopencode-protocol\u001fNATIVE_AGENT_NAMES.has(name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fCallExpression:2298356755d45d318dac\u001f1\u001fruntime-protocol\u001fparamsByAgent.get(dep.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fCallExpression:d17bc30fe13a7ef152fc\u001f1\u001fruntime-protocol\u001fparamsByAgent.get(agent.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:3ce3c61b32b67a48fc00\u001f1\u001fopencode-protocol\u001fagentNames.has(agent.name)',
+  // RFC-251: each closure member resolves its OWN frozen runtime profile from
+  // the same name-keyed map the root uses (built by runner.ts, allowed above).
+  // A missing entry fails the plan loudly rather than inheriting the root model.
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fbuildVerifiedOpencodeBusinessPlan\u001fCallExpression:45c9d77f467fff73c42a\u001f1\u001fopencode-protocol\u001fctx.resolvedParamsByAgent.get(dep.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fbuildVerifiedOpencodeBusinessPlan\u001fCallExpression:d6aa73917b11a05318bb\u001f1\u001fopencode-protocol\u001fctx.resolvedParamsByAgent.get(ctx.agent.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtimeRegistry.ts\u001f<root>\u001fNewExpression:9428766592cce6b364b9\u001f1\u001fruntime-global\u001fnew Set(BUILTIN_RUNTIMES.map((b) => b.name))',
   'collection-name-identity\u001fpackages/backend/src/services/skill-zip.ts\u001fcommitSkillZipBuffer\u001fCallExpression:96b8ace641a82608112d\u001f1\u001fimport-name-boundary\u001fclaimedNames.has(targetName)',
@@ -177,9 +179,12 @@ const EXACT_ALLOWANCE_ROWS = [
   // the raw entry above, only its value changes (wrapper instead of raw command).
   'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeMcpConfig\u001fBinaryExpression:8204e61aa23755d0dffc\u001f1\u001fruntime-protocol\u001fservers[m.name] = { command: wrapperPath, args: [] }',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/driver.ts\u001fbuildSpawn\u001fComputedPropertyName:efd90113b17bce420ca3\u001f1\u001fruntime-protocol\u001f[ctx.agentName]',
-  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fbuildAgentRegistrySeal\u001fBinaryExpression:8ef5532133c5ce2aca8d\u001f1\u001fopencode-protocol\u001fseal[name] = registry.byName[name] as { [key: string]: IdentityJson }',
-  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fparseAgentRegistry\u001fBinaryExpression:7c0ac997b9d2636bc2f3\u001f1\u001fopencode-protocol\u001fbyName[name] = info',
-  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fverifyExecutionIdentity\u001fBinaryExpression:c19a3650c063b97ef729\u001f1\u001fopencode-protocol\u001fcontrolledEntries[name] = normalizedExpected',
+  // RFC-251: the closure member's entry in OpenCode's agent registry. That
+  // registry IS name-keyed by protocol — `task` addresses a subagent by name and
+  // fails outright on an unknown one (opencode tool/task.ts:131-134) — so the
+  // name is the correct key. Root shadowing and prototype-valued names are
+  // rejected explicitly at the write site.
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/hermetic.ts\u001fbuildControlledOpencodeConfig\u001fBinaryExpression:687e5cb3407a2a67f269\u001f1\u001fopencode-protocol\u001fagents[dep.name] = entry',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/hermetic.ts\u001fbuildControlledOpencodeConfig\u001fComputedPropertyName:cb3554142d91da05955c\u001f1\u001fopencode-protocol\u001f[input.name]',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fBinaryExpression:1b704a7eef75f83fad16\u001f1\u001fruntime-protocol\u001fmcpMap[m.name] = buildInlineMcpEntry(m)',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fBinaryExpression:a27576c85b1ba417ea2d\u001f1\u001fruntime-protocol\u001fmap[dep.name] = buildInlineAgentEntry(dep, paramsByAgent.get(dep.name))',
@@ -335,7 +340,11 @@ describe('RFC-223 T15 structural identity guard', () => {
   test('production source matches the exact reviewed fingerprint multiset', () => {
     const findings = scanProductionSources()
     expect(allowanceDiagnostics(findings, EXACT_ALLOWANCES)).toEqual([])
-    expect(findings.length).toBe(140)
+    // RFC-251: 140 → 136. Removing the attestation dropped six name-keyed sinks
+    // (parseAgentRegistry / buildAgentRegistrySeal / verifyExecutionIdentity,
+    // one of which occurred twice); restoring plugins and the dependsOn closure
+    // added two, both reviewed above as OpenCode protocol registry keys.
+    expect(findings.length).toBe(136)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

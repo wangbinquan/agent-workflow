@@ -277,6 +277,10 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 
 **[RFC-249](./RFC-249-repo-group-directory-tree/proposal.md) · 仓库组目录树**：显式目录节点取代成员行 + `mountPath`；根只是普通目录节点，仓库/子组作为可选挂载。平铺场景支持批量选仓与批量 URL，树上支持批量只读、移动、摘挂载和删除。**状态：Approved / Core Implementation Complete（2026-08-03），Chromium / WebKit 启动 E2E 已过；完整编辑链、hosted visual 与独立实现门待补。**
 
+**[RFC-250](./RFC-250-frontend-interaction-integrity/proposal.md) · 全局前端交互完整性与一致性收口**：不重做 RFC-198 UI 基座，集中修复一次性凭据/高成本草稿防丢、mutation 与部分失败反馈、Dialog/Select/Changes/触控可达性、复杂 Workflow 可读相机与 Validate 回归；Intent、Onboarding finding 分别移交 RFC-235/211，最终用户报告的 `/repos → /memory` 回归按 RFC-249 T31 所有权补最小关闭增量。**状态：Implementation Complete / Verification Exception Documented（2026-08-03；设计门与实现门均 0 P0 / 0 P1；frontend 695 files / 5896 tests、当前 binary 双浏览器与 Darwin 人工检查通过；backend full 2 项瞬时失败且隔离重跑 36/36 通过，故 T42/Done 未关闭；未授权提交或推送）。**
+
+**[RFC-251](./RFC-251-opencode-plugin-multiagent-restore/proposal.md) · 恢复 OpenCode 运行时的插件与多代理支持**：RFC-224 以三条 opencode 行为论断为由，在 OpenCode 运行时上整体禁用了已完工的 RFC-022（`dependsOn` 多代理）与 RFC-031（`plugins` 插件）。对 opencode v1.18.4 源码逐条核验，三条论断**两条与源码不符、一条系误读**（V2 插件遵守 `OPENCODE_PURE`；未知 subagent 直接 fail 而非静默回退；`bypassAgentCheck` 跳过的是权限询问而非身份校验），唯一成立的 legacy 工具目录扫描在受控私有目录下本就为空。本 RFC 把插件闭包并集与 `dependsOn` 闭包注入接回 verified 配置构建器、条件放行 `task` 工具，并按用户拍板移除「启动后回头核对配置」的 attestation 层；containment、直接 API、session 归属、skill/MCP 现状均不动。**状态：Implementation Complete（2026-08-03）——T1–T7 全部落地；typecheck / lint / format:check / depcheck 全绿，frontend 696 files·5909 tests 全绿，backend 全量仅余两项**属于并发 RFC-250 未提交改动**的 test-suite-policy 失败（`e2e/rfc250-visual-states.spec.ts` 未追踪 skip、`package.json` 缺 RUN_VISUAL_REGRESSION 标记），与本 RFC 无关且按多人协作原则不代改。**
+
 ---
 
 ## M0 — 项目准备

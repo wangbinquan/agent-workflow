@@ -883,6 +883,29 @@ export interface Resources {
       shownOnceDescription: string
       copied: string
       copyFailed: string
+      markerClearFailed: string
+      markerUnavailable: string
+      inventoryRefreshFailed: string
+      inventoryRefreshRetry: string
+      inventoryRefreshing: string
+      reconcileTitle: string
+      reconcileRefresh: string
+      reconcileDone: string
+      reconcileWarningTitle: string
+      reconcileWarningDescription: string
+      reconcileInvalidMarker: string
+      reconcileCandidatesTitle: string
+      reconcileNoCandidates: string
+      reconcileCandidateCount: string
+      reconcileCandidateAction: string
+      leaveTitle: string
+      leaveRevealBody: string
+      leaveUnknownBody: string
+      leaveCreatingBody: string
+      leaveStay: string
+      leaveDiscard: string
+      leaveForce: string
+      leaveForceWarning: string
     }
     pleaseSignIn: string
     pleaseSignInDescription: string
@@ -1371,6 +1394,10 @@ export interface Resources {
       testConnection: string
       cancel: string
       save: string
+      discardTitle: string
+      discardDescription: string
+      discardKeepEditing: string
+      discardConfirm: string
       groupProvider: string
       groupProviderHint: string
       slug: string
@@ -1510,6 +1537,8 @@ export interface Resources {
     searchEllipsis: string
     searchCards: string
     noMatches: string
+    noAvailableOptions: string
+    allOptionsUnavailable: string
     retry: string
     clearSearch: string
     clearFilters: string
@@ -1606,6 +1635,8 @@ export interface Resources {
     unsavedForceLeaveWarning: string
     unsavedStay: string
     unsavedDiscard: string
+    unsavedSaveAndProceed: string
+    unsavedSaveFailed: string
     emptyPaneTitle: string
     emptyPaneHint: string
   }
@@ -2309,6 +2340,14 @@ export interface Resources {
     noRuns: string
     autoDisabled: string
     runNow: string
+    runNowBlocked: {
+      'migration-needed': string
+      'payload-missing': string
+      'spec-missing': string
+    }
+    runNowUnknownTitle: string
+    runNowUnknownBody: string
+    runNowUnknownInspect: string
     edit: string
     editTitle: string
     enable: string
@@ -2948,6 +2987,11 @@ export interface Resources {
     menuDecompose: string
     boxSelectHint: string
     layoutToolbar: string
+    canvasToolbar: string
+    canvasAdd: string
+    cameraViewFullGraph: string
+    cameraReturnReadable: string
+    cameraFocusSelection: string
     layoutAll: string
     layoutSelection: string
     menuSelectedCount: string
@@ -3088,6 +3132,35 @@ export interface Resources {
     workflowLaunchVersionMismatchBody: string
     scheduledWorkflowLatestTitle: string
     scheduledWorkflowLatestBody: string
+    draftStorageUnavailable: string
+    draftTooLarge: string
+    draftExpired: string
+    draftInvalid: string
+    draftCollaboratorsChanged: string
+    draftSourceChanged: string
+    draftWriteFailed: string
+    draftReadFailed: string
+    draftReadRetry: string
+    draftReentryTitle: string
+    draftReentryBody: string
+    draftRecoveryTitle: string
+    draftRecoveryBody: string
+    draftRecoveryUnknownBody: string
+    draftRestore: string
+    draftDiscard: string
+    outcomeUnknownTitle: string
+    outcomeUnknownBody: string
+    outcomeUnknownInspect: string
+    outcomeUnknownFinish: string
+    unnamedTask: string
+    unsavedTitle: string
+    unsavedBody: string
+    unsavedUnknownBody: string
+    unsavedBusyBody: string
+    unsavedStay: string
+    unsavedDiscard: string
+    unsavedForceLeave: string
+    unsavedForceLeaveWarning: string
   }
   stepper: {
     progress: string
@@ -3599,6 +3672,8 @@ export interface Resources {
     fieldRuntime: string
     fieldRuntimeHint: string
     runtimeInherit: string
+    runtimeLoading: string
+    runtimeLoadFailed: string
     runtimeOpencode: string
     runtimeClaudeCode: string
     fieldPermission: string
@@ -4074,6 +4149,8 @@ export interface Resources {
       submitDisabledRequired: string
       draftSaving: string
       draftSaved: string
+      draftLocalOnly: string
+      draftSaveFailed: string
       roundSealedFooter: string
       recommendedChip: string
       back: string
@@ -4588,6 +4665,7 @@ export interface Resources {
     answerPaneEmpty: string
     answerPaneHint: string
     answerPaneResubmitHint: string
+    answerPanePartialFailed: string
     answerPaneSubmit: string
     answerPaneSubmitCount: string
     author: {
@@ -5285,6 +5363,33 @@ export const zhCN: Resources = {
       shownOnceDescription: '关闭后无法再次查看。现在就把它存到密钥管理器或 CI 变量里。',
       copied: '已复制',
       copyFailed: '复制失败，请手动选中上方文本。',
+      markerClearFailed: '未能清除本次创建的恢复标记。请先重试“完成”，再创建下一枚令牌。',
+      markerUnavailable: '无法保存安全恢复标记，因此尚未发送创建请求。请检查浏览器存储权限后重试。',
+      inventoryRefreshFailed: '令牌已创建，但令牌列表刷新失败。请保留当前密钥显示并重试刷新。',
+      inventoryRefreshRetry: '重试刷新令牌列表',
+      inventoryRefreshing: '正在刷新令牌列表…',
+      reconcileTitle: '检查令牌创建结果',
+      reconcileRefresh: '再次检查令牌列表',
+      reconcileDone: '我已完成检查',
+      reconcileWarningTitle: '创建结果暂时未知',
+      reconcileWarningDescription:
+        '服务端可能已经创建令牌，但其一次性密钥无法恢复。请勿再次创建；先检查下方候选项，完成后再从列表吊销不需要的令牌。',
+      reconcileInvalidMarker:
+        '保存的创建记录无法读取，系统不能安全定位本次请求。请手动检查令牌列表；完成检查前不要再次创建。',
+      reconcileCandidatesTitle: '可能新建的令牌',
+      reconcileNoCandidates: '当前没有完全匹配的候选项，但这不能证明令牌未被创建。',
+      reconcileCandidateCount: '完全匹配的候选项：{{count}} 个。',
+      reconcileCandidateAction:
+        '如有不需要的候选项，请完成本次检查后从令牌列表吊销，再创建新令牌。',
+      leaveTitle: '离开令牌创建流程？',
+      leaveRevealBody: '这枚密钥只显示一次；离开会永久清除当前密钥，即使你还没有复制。',
+      leaveUnknownBody: '离开会结束结果检查并清除安全恢复标记。只有确认已检查令牌列表后才应继续。',
+      leaveCreatingBody: '令牌创建请求仍在等待结果。请留在本页，直到结果明确。',
+      leaveStay: '留在这里',
+      leaveDiscard: '确认离开并清除',
+      leaveForce: '停止等待并离开',
+      leaveForceWarning:
+        '这只会终止浏览器等待，无法证明服务端没有创建令牌。安全恢复标记会保留，下次进入令牌管理时必须先检查结果。',
     },
     pleaseSignIn: '请先登录。',
     pleaseSignInDescription: '登录后即可查看账户资料与安全设置。',
@@ -5797,6 +5902,10 @@ export const zhCN: Resources = {
       testConnection: '测试连接',
       cancel: '取消',
       save: '保存',
+      discardTitle: '放弃提供商更改？',
+      discardDescription: '未保存的提供商更改（包括客户端密钥）将丢失。',
+      discardKeepEditing: '继续编辑',
+      discardConfirm: '放弃更改',
       groupProvider: '提供商',
       groupProviderHint:
         '在 URL 和登录页按钮上标识该 IdP。Issuer URL 是 daemon 拉取 OIDC discovery 的起点。',
@@ -5991,6 +6100,8 @@ export const zhCN: Resources = {
     searchEllipsis: '搜索…',
     searchCards: '搜索名称、描述或配置…',
     noMatches: '无匹配项',
+    noAvailableOptions: '当前没有可用选项',
+    allOptionsUnavailable: '当前选项均不可用',
     retry: '重试',
     clearSearch: '清除搜索',
     clearFilters: '清除筛选',
@@ -6085,6 +6196,8 @@ export const zhCN: Resources = {
       '这次写入已经明显卡住。离开会取消等待，但无法确定服务端是否已经写入成功——离开后请刷新确认实际结果，再决定是否重试。',
     unsavedStay: '留在本页',
     unsavedDiscard: '放弃修改',
+    unsavedSaveAndProceed: '保存到本机并离开',
+    unsavedSaveFailed: '最新草稿未能保存，你仍停留在本页。',
     emptyPaneTitle: '未选择任何项',
     emptyPaneHint: '从列表中选择一项以查看详情。',
   },
@@ -7027,6 +7140,15 @@ export const zhCN: Resources = {
     noRuns: '还没有触发记录。',
     autoDisabled: '连续启动失败已自动停用。重新启用可恢复。',
     runNow: '立即运行一次',
+    runNowBlocked: {
+      'migration-needed': '暂时无法立即运行：请先修复旧版定时配置。',
+      'payload-missing': '暂时无法立即运行：请先恢复任务启动配置。',
+      'spec-missing': '暂时无法立即运行：请先恢复定时规则。',
+    },
+    runNowUnknownTitle: '立即运行结果暂时未知',
+    runNowUnknownBody:
+      '服务端可能已经启动了一个任务。请勿再次发送请求；先检查任务列表中是否出现了新的运行记录，再决定下一步。',
+    runNowUnknownInspect: '检查任务列表',
     edit: '编辑名称与周期',
     editTitle: '编辑定时任务',
     enable: '启用',
@@ -7222,10 +7344,6 @@ export const zhCN: Resources = {
         '工作区含有无法安全隔离的 OpenCode 项目配置。',
       'execution-identity-project-config-unsupported__hint':
         '请移除错误详情指出的项目配置或符号链接，再发起新运行。',
-      'execution-identity-plugin-unsupported': '已验证的 OpenCode 执行路径不支持插件。',
-      'execution-identity-plugin-unsupported__hint': '请先从代理配置中移除插件，再保存或运行。',
-      'execution-identity-dependent-unsupported': '已验证的 OpenCode 执行路径不支持依赖代理。',
-      'execution-identity-dependent-unsupported__hint': '请先移除依赖代理，再保存或运行。',
       'execution-identity-model-unresolved': '本次运行没有显式选择 OpenCode 模型。',
       'execution-identity-model-unresolved__hint':
         '请为生效运行时选择 provider/model，再重新发起。',
@@ -7238,8 +7356,6 @@ export const zhCN: Resources = {
       'execution-identity-bootstrap-failed__hint': '请查看运行时诊断，修复主机环境后重新发起。',
       'execution-identity-mismatch': 'OpenCode 最终解析的执行配置与密封配置不一致。',
       'execution-identity-mismatch__hint': '请移除外部覆盖、修正运行时配置后重新发起新运行。',
-      'execution-identity-instance-changed': '身份校验期间 OpenCode server 实例发生了变化。',
-      'execution-identity-instance-changed__hint': '请检查运行时是否被替换或干扰，再重新发起。',
       'execution-identity-source-changed': '启动期间工作区的执行身份来源发生了变化。',
       'execution-identity-source-changed__hint': '请停止并发配置修改，再重新发起新运行。',
       'execution-identity-skill-mismatch': '生成不可变快照期间，所选托管技能发生了变化。',
@@ -7753,6 +7869,11 @@ export const zhCN: Resources = {
     menuDecompose: '解组 wrapper',
     boxSelectHint: '按住 Shift 框选',
     layoutToolbar: '画布布局',
+    canvasToolbar: '画布工具',
+    canvasAdd: '添加步骤',
+    cameraViewFullGraph: '查看全图',
+    cameraReturnReadable: '返回可读视图',
+    cameraFocusSelection: '定位所选',
     layoutAll: '整理全图',
     layoutSelection: '整理所选',
     menuSelectedCount: '已选 {{n}} 个',
@@ -7899,6 +8020,38 @@ export const zhCN: Resources = {
     scheduledWorkflowLatestTitle: '计划执行时使用最新工作流',
     scheduledWorkflowLatestBody:
       '定时任务不会固定当前工作流版本；每次触发时都会加载并校验当时最新的可用版本。',
+    draftStorageUnavailable: '当前浏览器无法访问同标签页草稿存储。',
+    draftTooLarge: '草稿过大，无法安全写入恢复存储；当前内容仍在内存中受保护。',
+    draftExpired: '已清理一份过期的任务草稿。',
+    draftInvalid: '已清理一份不兼容或损坏的任务草稿。',
+    draftCollaboratorsChanged: '部分恢复的协作者已不可用，提交前请重新检查权限。',
+    draftSourceChanged: '草稿保存后来源已变化；提交前请重新检查对象版本、执行空间和协作者。',
+    draftWriteFailed: '无法写入恢复草稿。请保持本标签页打开，或明确放弃内存中的更改。',
+    draftReadFailed: '无法确认已有恢复状态。为避免重复请求，任务设置将保持锁定。',
+    draftReadRetry: '重新检查恢复状态',
+    draftReentryTitle: '部分内容需要重新输入',
+    draftReentryBody:
+      '为保护凭据与本地文件，这些内容不会恢复（仓库：{{repo}}，输入：{{inputs}}，上传：{{uploads}}）。',
+    draftRecoveryTitle: '恢复任务设置？',
+    draftRecoveryBody: '这个精确任务流程存在一份更新的同标签页草稿。',
+    draftRecoveryUnknownBody:
+      '上一次请求没有可信的结果。请恢复冻结草稿，先检查服务端列表，再执行其他操作。',
+    draftRestore: '恢复草稿',
+    draftDiscard: '放弃草稿',
+    outcomeUnknownTitle: '任务请求结果不确定',
+    outcomeUnknownBody:
+      '「{{name}}」的请求于 {{time}} 发出，但响应无法证明是否已提交。已冻结本次提交草稿；请检查列表并处理可能的重复项，再结束核对。',
+    outcomeUnknownInspect: '检查列表',
+    outcomeUnknownFinish: '我已检查，结束核对',
+    unnamedTask: '未命名任务',
+    unsavedTitle: '离开任务设置？',
+    unsavedBody: '离开前将丢弃这份同标签页恢复草稿。',
+    unsavedUnknownBody: '上一次请求可能已提交。离开会丢弃核对标记；请先检查服务端列表。',
+    unsavedBusyBody: '任务请求仍在进行中，请等待结果后再离开。',
+    unsavedStay: '留在任务设置',
+    unsavedDiscard: '放弃设置并离开',
+    unsavedForceLeave: '停止等待并离开',
+    unsavedForceLeaveWarning: '停止浏览器等待无法取消服务端提交；核对标记会保留到下次进入。',
   },
   stepper: {
     progress: '创建步骤',
@@ -8398,6 +8551,8 @@ export const zhCN: Resources = {
     fieldRuntimeHint:
       '驱动该代理的 CLI 运行时。选"继承"则跟随全局默认。Claude Code 有独立的模型命名空间，且不支持 variant / temperature。',
     runtimeInherit: '继承（全局默认）',
+    runtimeLoading: '正在加载运行时…',
+    runtimeLoadFailed: '无法加载运行时列表。',
     runtimeOpencode: 'opencode',
     runtimeClaudeCode: 'Claude Code',
     fieldPermission: 'Permission JSON',
@@ -8976,14 +9131,6 @@ export const zhCN: Resources = {
       '$t(tasks.failure.execution-identity-project-config-unsupported)',
     'execution-identity-project-config-unsupported__hint':
       '$t(tasks.failure.execution-identity-project-config-unsupported__hint)',
-    'execution-identity-plugin-unsupported':
-      '$t(tasks.failure.execution-identity-plugin-unsupported)',
-    'execution-identity-plugin-unsupported__hint':
-      '$t(tasks.failure.execution-identity-plugin-unsupported__hint)',
-    'execution-identity-dependent-unsupported':
-      '$t(tasks.failure.execution-identity-dependent-unsupported)',
-    'execution-identity-dependent-unsupported__hint':
-      '$t(tasks.failure.execution-identity-dependent-unsupported__hint)',
     'execution-identity-model-unresolved': '$t(tasks.failure.execution-identity-model-unresolved)',
     'execution-identity-model-unresolved__hint':
       '$t(tasks.failure.execution-identity-model-unresolved__hint)',
@@ -8999,9 +9146,6 @@ export const zhCN: Resources = {
       '$t(tasks.failure.execution-identity-bootstrap-failed__hint)',
     'execution-identity-mismatch': '$t(tasks.failure.execution-identity-mismatch)',
     'execution-identity-mismatch__hint': '$t(tasks.failure.execution-identity-mismatch__hint)',
-    'execution-identity-instance-changed': '$t(tasks.failure.execution-identity-instance-changed)',
-    'execution-identity-instance-changed__hint':
-      '$t(tasks.failure.execution-identity-instance-changed__hint)',
     'execution-identity-source-changed': '$t(tasks.failure.execution-identity-source-changed)',
     'execution-identity-source-changed__hint':
       '$t(tasks.failure.execution-identity-source-changed__hint)',
@@ -9437,6 +9581,8 @@ export const zhCN: Resources = {
       submitDisabledRequired: '请先回答所有"推荐"题',
       draftSaving: '正在保存草稿…',
       draftSaved: '草稿已保存（关 tab 不丢）',
+      draftLocalOnly: '已保存在本机，尚未同步到服务端。',
+      draftSaveFailed: '最新草稿未保存；请重试后再离开。',
       roundSealedFooter: '本轮已封存，无需回答。',
       recommendedChip: '推荐',
       back: '← 返回列表',
@@ -10061,6 +10207,7 @@ export const zhCN: Resources = {
     answerPaneEmpty: '没有待回答的问题。',
     answerPaneHint: '在此回答所有待指派问题；提交后进入「待指派」，再到看板选择处理 agent 并下发。',
     answerPaneResubmitHint: '该问题已回答——已预填原答案，重新提交将覆盖。',
+    answerPanePartialFailed: '{{count}} 轮提交失败；成功的轮次已保存。',
     answerPaneSubmit: '提交答案',
     answerPaneSubmitCount: '提交答案（{{count}}）',
     author: {

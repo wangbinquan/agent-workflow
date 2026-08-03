@@ -692,6 +692,40 @@ export const enUS: Resources = {
         'You cannot look it up again after closing. Store it in your secret manager or CI variables now.',
       copied: 'Copied',
       copyFailed: 'Copy failed — select the text above manually.',
+      markerClearFailed:
+        'The creation recovery marker could not be cleared. Retry Done before creating another token.',
+      markerUnavailable:
+        'The safety recovery marker could not be stored, so no create request was sent. Check browser storage access and try again.',
+      inventoryRefreshFailed:
+        'The token was created, but the token list could not be refreshed. Keep this secret visible and retry the refresh.',
+      inventoryRefreshRetry: 'Retry token list refresh',
+      inventoryRefreshing: 'Refreshing token list…',
+      reconcileTitle: 'Check token creation result',
+      reconcileRefresh: 'Check token list again',
+      reconcileDone: 'I finished checking',
+      reconcileWarningTitle: 'The creation result is unknown',
+      reconcileWarningDescription:
+        'The server may have created the token, but its one-time secret cannot be recovered. Do not create another yet. Check the candidates below, then revoke any unwanted token from the list.',
+      reconcileInvalidMarker:
+        'The saved creation receipt is unreadable, so this request cannot be identified safely. Inspect the token list manually and do not create another token until you finish.',
+      reconcileCandidatesTitle: 'Possible new tokens',
+      reconcileNoCandidates:
+        'No exact candidate is visible yet. This does not prove that no token was created.',
+      reconcileCandidateCount: 'Exact matching candidates: {{count}}.',
+      reconcileCandidateAction:
+        'If a candidate is unwanted, finish this check and revoke it from the token list before creating another token.',
+      leaveTitle: 'Leave token creation?',
+      leaveRevealBody:
+        'This secret is shown only once. Leaving permanently clears it even if you have not copied it.',
+      leaveUnknownBody:
+        'Leaving ends the result check and clears its safety receipt. Continue only after you have inspected the token list.',
+      leaveCreatingBody:
+        'The token creation request is still awaiting a result. Stay here until the outcome is known.',
+      leaveStay: 'Stay here',
+      leaveDiscard: 'Leave and clear',
+      leaveForce: 'Stop waiting and leave',
+      leaveForceWarning:
+        'This only stops the browser wait; it cannot prove that the server did not create a token. The safety receipt remains, so the result check will reopen next time.',
     },
     pleaseSignIn: 'Please sign in.',
     pleaseSignInDescription: 'Sign in to view your profile and security settings.',
@@ -1237,6 +1271,11 @@ export const enUS: Resources = {
       testConnection: 'Test connection',
       cancel: 'Cancel',
       save: 'Save',
+      discardTitle: 'Discard provider changes?',
+      discardDescription:
+        'Your unsaved provider changes, including any client secret, will be lost.',
+      discardKeepEditing: 'Keep editing',
+      discardConfirm: 'Discard changes',
       groupProvider: 'Provider',
       groupProviderHint:
         'Identifies this IdP in the URL and on the login page button. The issuer URL is what the daemon points OIDC discovery at.',
@@ -1438,6 +1477,8 @@ export const enUS: Resources = {
     searchEllipsis: 'Search…',
     searchCards: 'Search names, descriptions, or details…',
     noMatches: 'No matches',
+    noAvailableOptions: 'No available options',
+    allOptionsUnavailable: 'All current options are unavailable',
     retry: 'Retry',
     clearSearch: 'Clear search',
     clearFilters: 'Clear filters',
@@ -1533,6 +1574,8 @@ export const enUS: Resources = {
       'This write has clearly stalled. Leaving cancels the wait, but cannot tell you whether the server already applied it — reload to check the real outcome before retrying.',
     unsavedStay: 'Stay on page',
     unsavedDiscard: 'Discard changes',
+    unsavedSaveAndProceed: 'Save locally and leave',
+    unsavedSaveFailed: 'The latest draft could not be saved. You are still on this page.',
     emptyPaneTitle: 'Nothing selected',
     emptyPaneHint: 'Select an item from the list to view its details.',
   },
@@ -2550,6 +2593,15 @@ export const enUS: Resources = {
     noRuns: 'No runs yet.',
     autoDisabled: 'Auto-disabled after repeated launch failures. Re-enable to resume.',
     runNow: 'Run now',
+    runNowBlocked: {
+      'migration-needed': 'Run now unavailable: repair the legacy schedule first.',
+      'payload-missing': 'Run now unavailable: restore the task launch configuration first.',
+      'spec-missing': 'Run now unavailable: restore the schedule definition first.',
+    },
+    runNowUnknownTitle: 'Run-now result is unknown',
+    runNowUnknownBody:
+      'The server may already have started a task. Do not send the request again; inspect the task list for a new run before deciding what to do next.',
+    runNowUnknownInspect: 'Inspect tasks',
     edit: 'Edit name & schedule',
     editTitle: 'Edit scheduled task',
     enable: 'Enable',
@@ -2753,14 +2805,6 @@ export const enUS: Resources = {
         'The workspace contains OpenCode project configuration that cannot be safely isolated.',
       'execution-identity-project-config-unsupported__hint':
         'Remove the reported project configuration or symlink, then launch a new run.',
-      'execution-identity-plugin-unsupported':
-        'Plugins are not supported by the verified OpenCode execution path.',
-      'execution-identity-plugin-unsupported__hint':
-        'Remove the plugin selection from the agent before saving or launching.',
-      'execution-identity-dependent-unsupported':
-        'Dependent agents are not supported by the verified OpenCode execution path.',
-      'execution-identity-dependent-unsupported__hint':
-        'Remove the dependent-agent selection before saving or launching.',
       'execution-identity-model-unresolved': 'No explicit OpenCode model is selected for this run.',
       'execution-identity-model-unresolved__hint':
         'Choose a provider/model on the effective runtime, then launch again.',
@@ -2780,10 +2824,6 @@ export const enUS: Resources = {
         'The resolved OpenCode execution settings differ from the sealed settings.',
       'execution-identity-mismatch__hint':
         'Remove external overrides and launch a new run after correcting the runtime configuration.',
-      'execution-identity-instance-changed':
-        'The OpenCode server instance changed during identity verification.',
-      'execution-identity-instance-changed__hint':
-        'Check for runtime replacement or interference, then launch a new run.',
       'execution-identity-source-changed': 'The workspace identity surface changed during startup.',
       'execution-identity-source-changed__hint':
         'Stop concurrent configuration changes and launch a new run.',
@@ -3328,6 +3368,11 @@ export const enUS: Resources = {
     menuDecompose: 'Decompose wrapper',
     boxSelectHint: 'Hold Shift to box-select',
     layoutToolbar: 'Canvas layout',
+    canvasToolbar: 'Canvas tools',
+    canvasAdd: 'Add step',
+    cameraViewFullGraph: 'View full graph',
+    cameraReturnReadable: 'Return to readable view',
+    cameraFocusSelection: 'Focus selection',
     layoutAll: 'Layout all',
     layoutSelection: 'Layout selection',
     menuSelectedCount: '{{n}} selected',
@@ -3485,6 +3530,45 @@ export const enUS: Resources = {
     scheduledWorkflowLatestTitle: 'Scheduled runs use the latest workflow',
     scheduledWorkflowLatestBody:
       'The current workflow version is not pinned. Each scheduled occurrence loads and validates the latest available version when it starts.',
+    draftStorageUnavailable: 'This browser cannot access same-tab draft storage.',
+    draftTooLarge: 'This draft is too large to store safely; it remains protected in memory.',
+    draftExpired: 'An expired task draft was removed.',
+    draftInvalid: 'An incompatible or invalid task draft was removed.',
+    draftCollaboratorsChanged:
+      'Some restored collaborators are no longer available. Review access before submitting.',
+    draftSourceChanged:
+      'The source changed since this draft was saved. Review the object version, workspace and collaborators before submitting.',
+    draftWriteFailed:
+      'The recovery draft could not be saved. Keep this tab open or discard the in-memory changes explicitly.',
+    draftReadFailed:
+      'The existing recovery state could not be checked. Task setup stays locked to prevent a duplicate request.',
+    draftReadRetry: 'Check recovery state again',
+    draftReentryTitle: 'Some values must be entered again',
+    draftReentryBody:
+      'For safety, credentials and files are never restored (repository: {{repo}}, inputs: {{inputs}}, uploads: {{uploads}}).',
+    draftRecoveryTitle: 'Recover task setup?',
+    draftRecoveryBody: 'A newer same-tab draft exists for this exact task flow.',
+    draftRecoveryUnknownBody:
+      'A previous request ended without a trustworthy response. Restore the frozen draft and inspect the server inventory before doing anything else.',
+    draftRestore: 'Restore draft',
+    draftDiscard: 'Discard draft',
+    outcomeUnknownTitle: 'Task request result is unknown',
+    outcomeUnknownBody:
+      'The request for “{{name}}” started at {{time}}, but the response did not prove whether it committed. The submitted draft is frozen; inspect the inventory and revoke/resolve any duplicate before ending reconciliation.',
+    outcomeUnknownInspect: 'Inspect inventory',
+    outcomeUnknownFinish: 'I checked; end reconciliation',
+    unnamedTask: 'unnamed task',
+    unsavedTitle: 'Leave task setup?',
+    unsavedBody: 'Your same-tab recovery draft will be discarded before leaving.',
+    unsavedUnknownBody:
+      'The last request may have committed. Leaving will discard this recovery marker; inspect the server inventory first.',
+    unsavedBusyBody:
+      'A task request is still in progress. Wait for its result before leaving this setup.',
+    unsavedStay: 'Stay on setup',
+    unsavedDiscard: 'Discard setup and leave',
+    unsavedForceLeave: 'Stop waiting and leave',
+    unsavedForceLeaveWarning:
+      'Stopping the browser wait cannot cancel a server commit. The reconciliation marker will remain for your next visit.',
   },
   stepper: {
     progress: 'Steps',
@@ -4023,6 +4107,8 @@ export const enUS: Resources = {
     fieldRuntimeHint:
       'Which CLI runtime drives this agent. Leave on "inherit" to follow the global default. Claude Code has its own model namespace and ignores variant / temperature.',
     runtimeInherit: 'Inherit (global default)',
+    runtimeLoading: 'Loading runtimes…',
+    runtimeLoadFailed: 'Could not load the runtime list.',
     runtimeOpencode: 'opencode',
     runtimeClaudeCode: 'Claude Code',
     fieldPermission: 'Permission JSON',
@@ -4651,14 +4737,6 @@ export const enUS: Resources = {
       '$t(tasks.failure.execution-identity-project-config-unsupported)',
     'execution-identity-project-config-unsupported__hint':
       '$t(tasks.failure.execution-identity-project-config-unsupported__hint)',
-    'execution-identity-plugin-unsupported':
-      '$t(tasks.failure.execution-identity-plugin-unsupported)',
-    'execution-identity-plugin-unsupported__hint':
-      '$t(tasks.failure.execution-identity-plugin-unsupported__hint)',
-    'execution-identity-dependent-unsupported':
-      '$t(tasks.failure.execution-identity-dependent-unsupported)',
-    'execution-identity-dependent-unsupported__hint':
-      '$t(tasks.failure.execution-identity-dependent-unsupported__hint)',
     'execution-identity-model-unresolved': '$t(tasks.failure.execution-identity-model-unresolved)',
     'execution-identity-model-unresolved__hint':
       '$t(tasks.failure.execution-identity-model-unresolved__hint)',
@@ -4674,9 +4752,6 @@ export const enUS: Resources = {
       '$t(tasks.failure.execution-identity-bootstrap-failed__hint)',
     'execution-identity-mismatch': '$t(tasks.failure.execution-identity-mismatch)',
     'execution-identity-mismatch__hint': '$t(tasks.failure.execution-identity-mismatch__hint)',
-    'execution-identity-instance-changed': '$t(tasks.failure.execution-identity-instance-changed)',
-    'execution-identity-instance-changed__hint':
-      '$t(tasks.failure.execution-identity-instance-changed__hint)',
     'execution-identity-source-changed': '$t(tasks.failure.execution-identity-source-changed)',
     'execution-identity-source-changed__hint':
       '$t(tasks.failure.execution-identity-source-changed__hint)',
@@ -5179,6 +5254,8 @@ export const enUS: Resources = {
       submitDisabledRequired: 'Answer every "Recommended" question first',
       draftSaving: 'Saving draft…',
       draftSaved: 'Draft saved (safe to close the tab)',
+      draftLocalOnly: 'Saved on this device, but not yet synced to the server.',
+      draftSaveFailed: 'The latest draft was not saved. Retry before leaving.',
       roundSealedFooter: 'This round is sealed; no answer is needed.',
       recommendedChip: 'Recommended',
       back: '← Back to list',
@@ -5832,6 +5909,8 @@ export const enUS: Resources = {
       'Answer all pending questions here; on submit they enter "To assign", then pick a handler agent on the board and dispatch.',
     answerPaneResubmitHint:
       'Already answered — prefilled with the committed answer; resubmitting overwrites it.',
+    answerPanePartialFailed:
+      '{{count}} round failed to submit. Successful rounds have already been saved.',
     answerPaneSubmit: 'Submit answers',
     answerPaneSubmitCount: 'Submit answers ({{count}})',
     author: {

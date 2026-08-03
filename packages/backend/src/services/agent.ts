@@ -191,11 +191,7 @@ export async function prepareAgentCreate(
   if (opts?.executionPolicy !== undefined) {
     await assertAgentExecutionPolicy(
       db,
-      {
-        ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
-        plugins: pluginIds,
-        dependsOn: dependsOnIds,
-      },
+      { ...(input.runtime !== undefined ? { runtime: input.runtime } : {}) },
       opts.executionPolicy.defaultRuntime,
     )
   }
@@ -422,11 +418,7 @@ export async function prepareAgentUpdate(
     const nextRuntime = patch.runtime !== undefined ? patch.runtime : existing.runtime
     await assertAgentExecutionPolicy(
       db,
-      {
-        ...(nextRuntime !== undefined ? { runtime: nextRuntime } : {}),
-        plugins: pluginIds ?? existing.plugins,
-        dependsOn: dependsOnIds ?? existing.dependsOn,
-      },
+      { ...(nextRuntime !== undefined ? { runtime: nextRuntime } : {}) },
       hooks.executionPolicy.defaultRuntime,
     )
   }

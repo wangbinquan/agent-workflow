@@ -3,7 +3,12 @@ import { chmod, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { DEFAULT_CONFIG_DIR_PROFILE, type Agent, type Mcp } from '@agent-workflow/shared'
+import {
+  DEFAULT_CONFIG_DIR_PROFILE,
+  type Agent,
+  type Mcp,
+  type Plugin,
+} from '@agent-workflow/shared'
 import { ContainmentCoordinator, type PreparedContainmentPlan } from '@/services/sandbox'
 import { createLogger } from '@/util/log'
 import type { BusinessNodeSpawnContext } from '@/services/runtime/types'
@@ -101,14 +106,18 @@ function verifiedContext(input: {
   nonceChar: string
   owner?: NonNullable<BusinessNodeSpawnContext['opencodeResumeOwner']>
   repoWorktreePaths?: readonly string[]
+  /** RFC-251: closure members / plugin selection reaching the controlled config. */
+  dependents?: readonly Agent[]
+  plugins?: readonly Plugin[]
 }): BusinessNodeSpawnContext {
+  const dependents = input.dependents ?? []
   return {
     agent: agentWithBash(input.bash),
     prompt: 'do stable work',
     injectedMemoryBlock: null,
-    dependents: [],
+    dependents,
     mcps: input.mcp === undefined ? [] : [input.mcp],
-    plugins: [],
+    plugins: input.plugins ?? [],
     resolvedParamsByAgent: new Map([
       [
         'worker',
@@ -120,6 +129,21 @@ function verifiedContext(input: {
           maxSteps: null,
         },
       ],
+      // RFC-251: every member resolves its own profile; the plan fails loudly
+      // when one is missing rather than inheriting the root's model.
+      ...dependents.map(
+        (dep) =>
+          [
+            dep.name,
+            {
+              model: 'openai/gpt-5.6',
+              variant: null,
+              temperature: null,
+              steps: null,
+              maxSteps: null,
+            },
+          ] as const,
+      ),
     ]),
     skills: [],
     ...(input.owner === undefined
@@ -700,5 +724,109 @@ describe('RFC-224 verified business-plan owner barrier', () => {
     }
     await fresh.cleanup?.()
     await removeHermeticOpencodeLayout(fresh.sessionStore!.root)
+  })
+})
+
+// RFC-251 — plugins and the dependsOn closure reach the verified plan again.
+//
+// Why this block exists: RFC-224 rejected both at this exact entry point, but
+// NO backend test ever locked those rejections — only the shared code-table
+// enumerated them. So the removal alone would have been invisible here. These
+// cases assert the positive direction end-to-end, off the manifest the launcher
+// actually consumes, so a future regression that silently drops either feature
+// (or re-sets OPENCODE_PURE while plugins are selected) turns this red.
+describe('RFC-251 verified plan restores plugins and multi-agent', () => {
+  function testPlugin(name: string): Plugin {
+    return {
+      id: 'p-' + name,
+      name,
+      spec: `${name}@1.0.0`,
+      options: {},
+      description: '',
+      enabled: true,
+      sourceKind: 'npm',
+      cachedPath: `/tmp/aw-plugins/${name}`,
+      resolvedVersion: '1.0.0',
+      installedAt: 0,
+      schemaVersion: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    }
+  }
+
+  async function planWith(
+    nodeRunId: string,
+    extra: { dependents?: readonly Agent[]; plugins?: readonly Plugin[] },
+  ) {
+    const root = mkdtempSync(join(tmpdir(), 'rfc251-verified-'))
+    roots.push(root)
+    const appHome = join(root, 'app')
+    const worktreePath = join(root, 'worktree')
+    const runRoot = join(appHome, 'runs', 'task-1', nodeRunId)
+    await mkdir(worktreePath, { recursive: true })
+    await activateVerifiedMac(appHome)
+    const plan = await buildVerifiedOpencodeBusinessPlan(
+      verifiedContext({
+        appHome,
+        worktreePath,
+        runRoot,
+        nodeRunId,
+        bash: 'allow',
+        nonceChar: 'c',
+        ...extra,
+      }),
+      ['opencode'],
+      PLAN_DEPENDENCIES,
+    )
+    const manifest = JSON.parse(
+      await readFile(join(runRoot, 'opencode-verified-manifest.json'), 'utf8'),
+    ) as {
+      expectedConfig: { plugin: unknown; agent: Record<string, { mode: string }> }
+      serverEnv: Record<string, string>
+    }
+    return { plan, manifest }
+  }
+
+  async function done(plan: Awaited<ReturnType<typeof planWith>>['plan']): Promise<void> {
+    await plan.cleanup?.()
+    await removeHermeticOpencodeLayout(plan.sessionStore!.root)
+  }
+
+  test('a selected plugin reaches the manifest and turns OPENCODE_PURE off', async () => {
+    const { plan, manifest } = await planWith('run-plugin', { plugins: [testPlugin('dd')] })
+    try {
+      expect(manifest.expectedConfig.plugin).toEqual(['file:///tmp/aw-plugins/dd'])
+      // The silent-failure guard: PURE would empty plugin_origins before load.
+      expect(manifest.serverEnv).not.toHaveProperty('OPENCODE_PURE')
+    } finally {
+      await done(plan)
+    }
+  })
+
+  test('no plugin selection keeps the historical empty array and PURE on', async () => {
+    const { plan, manifest } = await planWith('run-noplugin', {})
+    try {
+      expect(manifest.expectedConfig.plugin).toEqual([])
+      expect(manifest.serverEnv.OPENCODE_PURE).toBe('1')
+    } finally {
+      await done(plan)
+    }
+  })
+
+  test('closure members are registered as subagents and root gains task', async () => {
+    const auditor: Agent = { ...agent(), id: 'agent-auditor', name: 'auditor' }
+    const { plan, manifest } = await planWith('run-closure', { dependents: [auditor] })
+    try {
+      expect(Object.keys(manifest.expectedConfig.agent)).toEqual(['worker', 'auditor'])
+      expect(manifest.expectedConfig.agent.auditor!.mode).toBe('subagent')
+      const rootPermission = (
+        manifest.expectedConfig.agent.worker as unknown as {
+          permission: Record<string, unknown>
+        }
+      ).permission
+      expect(rootPermission.task).toBe('allow')
+    } finally {
+      await done(plan)
+    }
   })
 })

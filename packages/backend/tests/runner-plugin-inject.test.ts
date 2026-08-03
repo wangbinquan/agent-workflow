@@ -146,11 +146,13 @@ describe('buildInlineConfig — RFC-031 plugin injection', () => {
 })
 
 describe('runner source anchor — RFC-031 regression guards', () => {
-  test('buildInlineConfig source mentions `file://` and `enabled` filtering', () => {
-    // RFC-143 PR-4: buildInlineConfig moved to runtime/opencode/inlineConfig.ts
-    // (runner re-exports); the lock follows the definition site.
+  test('plugin spec encoding source mentions `file://` and `enabled` filtering', () => {
+    // The lock follows the definition site. RFC-143 PR-4 moved buildInlineConfig
+    // to runtime/opencode/inlineConfig.ts (runner re-exports); RFC-251 then
+    // lifted the plugin-spec encoding itself into pluginSpec.ts so the verified
+    // path's controlled config shares one implementation.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'inlineConfig.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'pluginSpec.ts'),
       'utf-8',
     )
     // file:// prefix is the contract with opencode's resolvePathPluginTarget;
@@ -158,5 +160,16 @@ describe('runner source anchor — RFC-031 regression guards', () => {
     expect(src).toContain('file://')
     // enabled-false filter must stay in place; the comment alone is not enough.
     expect(src).toContain('p.enabled === false')
+  })
+
+  test('inlineConfig still delegates to the shared encoder (no re-inlined copy)', () => {
+    // RFC-251: if a future edit re-inlines the loop here, the two assemblers can
+    // drift again and opencode would silently load a different plugin set.
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'inlineConfig.ts'),
+      'utf-8',
+    )
+    expect(src).toContain('buildPluginSpecArray')
+    expect(src).not.toContain('p.enabled === false')
   })
 })

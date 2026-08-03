@@ -337,10 +337,9 @@ class FakeClient implements VerifiedLauncherClient {
     this.title = title
   }
 
-  async getConfig(): Promise<unknown> {
-    this.calls.push('config')
-    return {}
-  }
+  // RFC-251: no getConfig stub — the launcher no longer reads /config, and
+  // keeping a recording stub here would let a re-introduced read go unnoticed
+  // in the `calls` assertions.
 
   async getConfigProviders(): Promise<unknown> {
     this.calls.push('providers')
@@ -672,11 +671,7 @@ function dependencies(
     },
     spawnServer: () => server.process,
     createClient: () => client,
-    verifyIdentity: () => ({
-      configDigest: 'd'.repeat(64),
-      agentInfoSeal: 'e'.repeat(64),
-      controlledAgentNames: ['worker'],
-    }),
+    // RFC-251 removed the verifyIdentity seam along with the attestation step.
     verifyProviderInventory: () => undefined,
     verifySkillInventory: () => undefined,
     randomBytes: (size) => new Uint8Array(size),
@@ -900,12 +895,12 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
 
     await launchVerifiedOpencodeManifest(manifest, harness.deps)
 
+    // RFC-251: the attestation reads are gone — no /config fetch and no second
+    // /agent. What remains is single-read fact gathering before session create.
     expect(client.calls).toEqual([
-      'config',
       'providers',
       'agents',
       'skills',
-      'agents',
       'create',
       'subscribe',
       'history',
@@ -1042,7 +1037,9 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
 
     expect(writes).toHaveLength(1)
     expect(writes[0]!.root).toBe(manifest.runRoot)
-    expect(writes[0]!.callsAtWrite).toEqual(['config', 'providers', 'agents', 'skills', 'agents'])
+    // RFC-251: inventory is derived from the single /agent read, and is still
+    // written before session creation (asserted below).
+    expect(writes[0]!.callsAtWrite).toEqual(['providers', 'agents', 'skills'])
     expect(writes[0]!.snapshot).toMatchObject({
       captured: true,
       plugins: [],

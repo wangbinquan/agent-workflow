@@ -2,8 +2,10 @@ import { randomBytes } from 'node:crypto'
 import { chmod, lstat, mkdir, open, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import type { Plugin } from '@agent-workflow/shared'
 import { executionIdentityFailure } from './failure'
 import { canonicalizeIdentity, type IdentityJson } from './executionIdentity'
+import { buildPluginSpecArray } from './pluginSpec'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 
 export const OPENCODE_FFF_CAPABILITY_CODEC = 1 as const
@@ -102,8 +104,14 @@ const SAFE_FORWARD_ENV = [
   'GIT_COMMITTER_EMAIL',
 ] as const
 
+// RFC-251: OPENCODE_PURE is NOT in this table — it is derived per-run from the
+// controlled config (see buildHermeticServerEnv). Every flag here is
+// unconditional.
+//
+// OPENCODE_DISABLE_DEFAULT_PLUGINS stays unconditional on purpose: it gates
+// opencode's own `internalPlugins` (plugin/index.ts:166), which is a different
+// axis from the operator's selected plugins (`cfg.plugin_origins`, :177).
 const OPENCODE_FLAGS = Object.freeze({
-  OPENCODE_PURE: '1',
   OPENCODE_DISABLE_PROJECT_CONFIG: '1',
   OPENCODE_DISABLE_EXTERNAL_SKILLS: '1',
   OPENCODE_DISABLE_MODELS_FETCH: '1',
@@ -505,6 +513,18 @@ export interface HermeticServerEnvInput {
   sourceEnv?: Readonly<Record<string, string | undefined>>
 }
 
+/**
+ * RFC-251 — does this controlled config actually select any plugin? Drives
+ * OPENCODE_PURE so the flag and the config are always consistent by
+ * construction. Defensive about shape: anything that is not a non-empty array
+ * means "no plugins", i.e. keep the strictest flag.
+ */
+function configSelectsPlugins(config: IdentityJson): boolean {
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) return false
+  const plugin = (config as { [key: string]: IdentityJson }).plugin
+  return Array.isArray(plugin) && plugin.length > 0
+}
+
 export function buildHermeticServerEnv(input: HermeticServerEnvInput): Record<string, string> {
   if (input.auth.providerID !== input.providerID) {
     return executionIdentityFailure('execution-identity-auth-invalid')
@@ -516,6 +536,14 @@ export function buildHermeticServerEnv(input: HermeticServerEnvInput): Record<st
     if (typeof value === 'string' && value !== '' && !value.includes('\0')) env[key] = value
   }
   Object.assign(env, OPENCODE_FLAGS)
+  // RFC-251 — the load-bearing half of plugin support. `OPENCODE_PURE` empties
+  // `cfg.plugin_origins` BEFORE any external plugin loads (opencode
+  // plugin/index.ts:177), so leaving it on while the controlled config selects
+  // plugins drops them SILENTLY: no error, no log, just a different plugin set
+  // than the operator chose. Derived from the config itself rather than passed
+  // in separately, so the env flag and the config can never disagree.
+  // With no plugins selected this restores the historical PURE=1 exactly.
+  if (!configSelectsPlugins(input.config)) env.OPENCODE_PURE = '1'
   env.PATH = '/usr/bin:/bin'
   env.HOME = input.layout.home
   env.PWD = input.layout.root
@@ -587,6 +615,51 @@ export interface BuildControlledAgentConfigInput {
    * tail keeps its qualified shape.
    */
   allowedReadOnlyTools?: readonly SystemReadOnlyTool[]
+  /**
+   * RFC-251 — the agent's selected plugin closure (union over the `dependsOn`
+   * closure, already resolved by the runner). Encoded by the shared
+   * `buildPluginSpecArray` so this path and the legacy inline path cannot
+   * drift. Omitted/empty keeps the historical byte-identical `plugin: []`.
+   *
+   * NOTE: emitting plugins here is only half the contract — `OPENCODE_PURE`
+   * must also be off, or opencode discards `plugin_origins` before loading
+   * anything (see buildHermeticServerEnv).
+   */
+  plugins?: readonly Plugin[]
+  /**
+   * RFC-251 — the resolved `dependsOn` closure (BFS order, root excluded).
+   * Each member is registered as a `mode: 'subagent'` entry so opencode's
+   * `task` tool can reach it by name; the root's `task` permission is opened
+   * only when this list is non-empty.
+   *
+   * Each member carries its OWN shell/permission surface rather than
+   * inheriting the root's: opencode re-derives a child ruleset at spawn time
+   * (`agent/subagent-permissions.ts:14`) that unions the PARENT session's deny
+   * rules on top of whatever the subagent declares. A member that declared
+   * nothing would therefore end up with every tool denied and be unable to do
+   * any work at all.
+   */
+  dependents?: readonly ControlledSubagentInput[]
+}
+
+/**
+ * RFC-251 — one `dependsOn` closure member as it enters the controlled config.
+ * Deliberately mirrors the root's fields instead of reusing the platform
+ * `Agent` row, so this module stays free of DB shapes and the caller does the
+ * runtime-profile resolution (model/variant/temperature) exactly once.
+ */
+export interface ControlledSubagentInput {
+  name: string
+  prompt: string
+  description: string
+  model: string
+  variant?: string | null
+  temperature?: number | null
+  steps?: number | null
+  options?: Record<string, IdentityJson>
+  userPermission?: Record<string, IdentityJson>
+  allowShell: boolean
+  allowedReadOnlyTools?: readonly SystemReadOnlyTool[]
 }
 
 /**
@@ -605,21 +678,36 @@ export function buildControlledOpencodeConfig(
   ) {
     return executionIdentityFailure('execution-identity-mismatch')
   }
-  const allowedReadOnly = new Set<string>(input.allowedReadOnlyTools ?? [])
-  for (const tool of allowedReadOnly) {
-    if (!(SYSTEM_READ_ONLY_TOOLS as readonly string[]).includes(tool)) {
-      return executionIdentityFailure('execution-identity-mismatch')
+  const dependents = input.dependents ?? []
+  const buildPermission = (
+    member: Pick<
+      BuildControlledAgentConfigInput,
+      'userPermission' | 'allowShell' | 'allowedReadOnlyTools'
+    >,
+    allowTask: boolean,
+  ): Record<string, IdentityJson> => {
+    const allowedReadOnly = new Set<string>(member.allowedReadOnlyTools ?? [])
+    for (const tool of allowedReadOnly) {
+      if (!(SYSTEM_READ_ONLY_TOOLS as readonly string[]).includes(tool)) {
+        return executionIdentityFailure('execution-identity-mismatch')
+      }
     }
+    const permission: Record<string, IdentityJson> = { ...(member.userPermission ?? {}) }
+    permission.bash = member.allowShell ? 'allow' : 'deny'
+    for (const tool of DENIED_TOOLS) {
+      permission[tool] = allowedReadOnly.has(tool) ? 'allow' : 'deny'
+    }
+    // RFC-251: re-assigning an EXISTING key does not move it, so the qualified
+    // deny-tail insertion order is unchanged — only `task`'s value flips.
+    if (allowTask) permission.task = 'allow'
+    permission.external_directory = {
+      [input.toolOutputPattern]: 'deny',
+      '*': 'deny',
+    }
+    return permission
   }
-  const permission: Record<string, IdentityJson> = { ...(input.userPermission ?? {}) }
-  permission.bash = input.allowShell ? 'allow' : 'deny'
-  for (const tool of DENIED_TOOLS) {
-    permission[tool] = allowedReadOnly.has(tool) ? 'allow' : 'deny'
-  }
-  permission.external_directory = {
-    [input.toolOutputPattern]: 'deny',
-    '*': 'deny',
-  }
+
+  const permission = buildPermission(input, dependents.length > 0)
 
   const agent: Record<string, IdentityJson> = {
     prompt: input.prompt,
@@ -633,6 +721,37 @@ export function buildControlledOpencodeConfig(
   if (input.variant != null && input.variant !== '') agent.variant = input.variant
   if (input.temperature != null) agent.temperature = input.temperature
   if (input.steps != null) agent.steps = input.steps
+
+  // RFC-251: register the closure so `task` can address each member by name.
+  // opencode fails a task call with an unknown agent type outright
+  // (tool/task.ts:131-134) — there is no silent fallback to a default agent.
+  const agents: Record<string, IdentityJson> = { [input.name]: agent }
+  for (const dep of dependents) {
+    // The root must never be shadowed by a closure member, and resource names
+    // are external keys — `constructor` is a legal agent name, so a prototype
+    // lookup would mistake it for an existing entry and drop the member.
+    if (dep.name === input.name) continue
+    if (Object.hasOwn(agents, dep.name)) continue
+    if (dep.name.length === 0 || dep.model.length === 0) {
+      return executionIdentityFailure('execution-identity-mismatch')
+    }
+    const entry: Record<string, IdentityJson> = {
+      prompt: dep.prompt,
+      description: dep.description,
+      model: dep.model,
+      mode: 'subagent',
+      hidden: false,
+      // Never `allowTask` for a member: v1 does not do nested delegation, and
+      // opencode independently denies `task` to any subagent that does not
+      // declare it (agent/subagent-permissions.ts:25).
+      permission: buildPermission(dep, false),
+      options: dep.options ?? {},
+    }
+    if (dep.variant != null && dep.variant !== '') entry.variant = dep.variant
+    if (dep.temperature != null) entry.temperature = dep.temperature
+    if (dep.steps != null) entry.steps = dep.steps
+    agents[dep.name] = entry
+  }
 
   return {
     share: 'disabled',
@@ -648,14 +767,18 @@ export function buildControlledOpencodeConfig(
     // accepting an upstream-added field.
     compaction: { auto: false, prune: false },
     shell: input.shellPath,
-    plugin: [],
+    // Plugin `options` is a DB-shaped Record<string, unknown>; the whole config
+    // is validated as real JSON by canonicalizeIdentity downstream, so the
+    // compile-time narrowing follows the same convention as the other
+    // DB-sourced fields (e.g. agent outputs in verifiedPlan).
+    plugin: buildPluginSpecArray(input.plugins ?? []) as unknown as IdentityJson,
     mcp: input.mcp ?? {},
     permission: {
       question: 'deny',
       plan_enter: 'deny',
       plan_exit: 'deny',
     },
-    agent: { [input.name]: agent },
+    agent: agents,
   }
 }
 

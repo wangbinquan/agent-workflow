@@ -17,12 +17,15 @@ import { useQuery } from '@tanstack/react-query'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { AGENT_NAME_RE } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { hasEnabledClaudeRuntime } from '@/hooks/useRuntimesList'
 import { AgentDependsPicker } from './AgentDependsPicker'
 import { DependencyAutodetectButton } from './agents/DependencyAutodetectButton'
 import { DependencyTreePreview } from './agents/DependencyTreePreview'
 import { mergeAgentDeps } from '@/lib/agent-dep-detect'
 import { Field, Switch, TextInput } from './Form'
+import { ErrorBanner } from './ErrorBanner'
+import { FeedbackStack } from './FeedbackStack'
+import { LoadingState } from './LoadingState'
+import { NoticeBanner } from './NoticeBanner'
 import { JsonField, jsonFieldChangeFromValue, type JsonFieldChange } from './JsonField'
 import { MarkdownEditor } from './MarkdownEditor'
 import { McpsPicker } from './McpsPicker'
@@ -248,7 +251,6 @@ export function AgentForm({
     staleTime: 30_000,
   })
   const registeredRuntimes = runtimesQuery.data?.runtimes ?? []
-  const claudeEnabled = hasEnabledClaudeRuntime(registeredRuntimes)
   // RFC-118: drop DISABLED runtimes from the picker — EXCEPT the one this agent
   // already pins (keep it visible so editing other fields doesn't silently switch the
   // runtime; the backend allows KEEPING an already-pinned disabled runtime, D6).
@@ -260,25 +262,35 @@ export function AgentForm({
       ? registeredRuntimes.find((runtime) => runtime.name === value.runtime)
       : registeredRuntimes.find((runtime) => runtime.isDefault)) ?? null
   const effectiveOpencode = effectiveRuntime?.protocol === 'opencode'
-  const runtimePolicyBlockers = effectiveOpencode
-    ? [
-        ...(typeof effectiveRuntime.model !== 'string' || effectiveRuntime.model.trim() === ''
-          ? [t('tasks.failure.execution-identity-model-unresolved')]
-          : []),
-        ...((value.plugins?.length ?? 0) > 0
-          ? [t('tasks.failure.execution-identity-plugin-unsupported')]
-          : []),
-        ...((value.dependsOn?.length ?? 0) > 0
-          ? [t('tasks.failure.execution-identity-dependent-unsupported')]
-          : []),
-      ]
-    : []
-  // RFC-113: the runtime selector is the ONLY per-agent profile control, so show it
-  // whenever there's a real choice — claude available, the agent already pins a
-  // runtime, or custom (non-built-in) opencode profiles exist (e.g. opencode-opus /
-  // opencode-haiku on a claude-disabled install). Only a single built-in opencode
-  // and claude off ⇒ nothing to choose ⇒ hide.
-  const showRuntime = claudeEnabled || value.runtime != null || selectableRuntimes.length > 1
+  // RFC-251: plugins and collaborating agents are supported on the OpenCode
+  // runtime again (both are assembled into the controlled config), so an
+  // explicit model is the only remaining execution-policy blocker.
+  const runtimePolicyBlockers =
+    effectiveOpencode &&
+    (typeof effectiveRuntime.model !== 'string' || effectiveRuntime.model.trim() === '')
+      ? [t('tasks.failure.execution-identity-model-unresolved')]
+      : []
+  // RFC-250 P1 follow-up: inherit and an explicit pin are different persisted
+  // states even when only one runtime is enabled. Keep the field stable instead
+  // of making it disappear based on async inventory cardinality. Until the
+  // initial inventory resolves, preserve the visible current value but freeze
+  // the selector; an unavailable registry cannot safely validate a new pin.
+  const runtimeRegistryUnavailable = runtimesQuery.data === undefined
+  const runtimeRegistryLoading = runtimeRegistryUnavailable && runtimesQuery.isFetching
+  const runtimeRegistryError =
+    runtimeRegistryUnavailable && runtimesQuery.isError && !runtimesQuery.isFetching
+  const runtimeOptions = [
+    { value: '', label: t('agentForm.runtimeInherit') },
+    ...selectableRuntimes.map((runtime) => ({ value: runtime.name, label: runtime.name })),
+  ]
+  if (
+    value.runtime !== undefined &&
+    !runtimeOptions.some((option) => option.value === value.runtime)
+  ) {
+    // Loading/error has no registry row yet. Keeping the pin visible avoids a
+    // blank trigger; the whole Select remains disabled until a registry arrives.
+    runtimeOptions.push({ value: value.runtime, label: value.runtime })
+  }
 
   const portCount = portBadgeCount(value)
   const refCount = resourceRefCount(value)
@@ -368,37 +380,46 @@ export function AgentForm({
       </Field>
 
       {/* RFC-111: per-agent runtime override. Empty = inherit the global
-          default. Hidden only when claude is explicitly disabled in config
-          (and the agent doesn't already pin a runtime). */}
-      {showRuntime && (
-        <Field label={t('agentForm.fieldRuntime')} hint={t('agentForm.fieldRuntimeHint')}>
-          {/* RFC-112: options are the registered runtimes (built-ins + custom
-              forks) by name, plus the inherit-default sentinel. */}
-          <Select<string>
-            value={value.runtime ?? ''}
-            ariaLabel={t('agentForm.fieldRuntime')}
-            onChange={(v) => patch('runtime', v === '' ? undefined : v)}
-            options={[
-              { value: '', label: t('agentForm.runtimeInherit') },
-              // Loaded registry wins; while it's empty (query in flight) fall back
-              // to the built-in name(s) — both when claude is on, opencode-only
-              // when it's off (mirrors the claude-protocol filter above).
-              ...(selectableRuntimes.length > 0
-                ? selectableRuntimes.map((r) => ({ value: r.name, label: r.name }))
-                : claudeEnabled
-                  ? [
-                      { value: 'opencode', label: t('agentForm.runtimeOpencode') },
-                      { value: 'claude-code', label: t('agentForm.runtimeClaudeCode') },
-                    ]
-                  : [{ value: 'opencode', label: t('agentForm.runtimeOpencode') }]),
-            ]}
+          default. RFC-250: this field is always present, including a single-
+          runtime install and initial registry loading/error. */}
+      <Field label={t('agentForm.fieldRuntime')} hint={t('agentForm.fieldRuntimeHint')}>
+        {/* RFC-112: options are registered runtimes by name, plus the
+            inherit-default sentinel. */}
+        <Select<string>
+          value={value.runtime ?? ''}
+          ariaLabel={t('agentForm.fieldRuntime')}
+          disabled={runtimeRegistryUnavailable}
+          onChange={(v) => patch('runtime', v === '' ? undefined : v)}
+          options={runtimeOptions}
+        />
+        {runtimeRegistryLoading && (
+          <LoadingState
+            size="compact"
+            label={t('agentForm.runtimeLoading')}
+            data-testid="agent-runtime-loading"
           />
-        </Field>
+        )}
+      </Field>
+      {runtimeRegistryError && (
+        <FeedbackStack>
+          <ErrorBanner
+            error={runtimesQuery.error}
+            message={t('agentForm.runtimeLoadFailed')}
+            onRetry={() => {
+              void runtimesQuery.refetch()
+            }}
+            testid="agent-runtime-load-error"
+          />
+        </FeedbackStack>
       )}
       {runtimePolicyBlockers.length > 0 && (
-        <div className="error-banner" role="alert" data-testid="agent-opencode-execution-policy">
-          {runtimePolicyBlockers.join(' ')}
-        </div>
+        <FeedbackStack>
+          <ErrorBanner
+            error={runtimePolicyBlockers.join(' ')}
+            message={runtimePolicyBlockers.join(' ')}
+            testid="agent-opencode-execution-policy"
+          />
+        </FeedbackStack>
       )}
     </>
   )
@@ -444,16 +465,22 @@ export function AgentForm({
   const resources = (
     <>
       {resourceIssueCount > 0 && (
-        <div className="error-banner" role="alert" data-testid="agent-resource-integrity-error">
-          <strong>{t('agentForm.resourceValidationTitle')}</strong>
-          <ul>
-            {resourceStatus?.issues.map((issue, index) => (
-              <li key={`${issue.code}:${issue.refId ?? 'hidden'}:${index}`}>
-                {agentResourceIssueLabel(issue, t)}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <FeedbackStack>
+          <NoticeBanner
+            tone="error"
+            size="compact"
+            title={t('agentForm.resourceValidationTitle')}
+            testid="agent-resource-integrity-error"
+          >
+            <ul>
+              {resourceStatus?.issues.map((issue, index) => (
+                <li key={`${issue.code}:${issue.refId ?? 'hidden'}:${index}`}>
+                  {agentResourceIssueLabel(issue, t)}
+                </li>
+              ))}
+            </ul>
+          </NoticeBanner>
+        </FeedbackStack>
       )}
       <p className="agent-resources__intro">{t('agentForm.resourcesIntro')}</p>
       {/* RFC-173: two labelled groups so the two kinds of relationship read

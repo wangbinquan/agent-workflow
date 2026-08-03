@@ -387,12 +387,9 @@ export async function buildVerifiedOpencodeBusinessPlan(
   }
   const admission = runtimeContainmentAdmissionFromPrepared(preparedContainment)
   const { sandbox } = admission
-  if (ctx.dependents.length > 0) {
-    return executionIdentityFailure('execution-identity-dependent-unsupported')
-  }
-  if (ctx.plugins.some((plugin) => plugin.enabled !== false)) {
-    return executionIdentityFailure('execution-identity-plugin-unsupported')
-  }
+  // RFC-251 removed the plugin and dependent-agent rejections that stood here.
+  // Both are now assembled into the controlled config instead: plugins via
+  // `buildPluginSpecArray`, the dependsOn closure via the agent registry.
   if (ctx.skills.some((skill) => skill.sourceKind !== 'managed')) {
     return executionIdentityFailure('execution-identity-project-config-unsupported')
   }
@@ -527,6 +524,27 @@ export async function buildVerifiedOpencodeBusinessPlan(
     ...(ctx.gitUserEmail == null ? {} : { GIT_COMMITTER_EMAIL: ctx.gitUserEmail }),
   }
   const plannedMcp = await planMcpConfig(ctx, { sealRoot })
+  // RFC-251: every closure member resolves its OWN runtime profile — a missing
+  // or malformed model fails loudly here rather than silently inheriting the
+  // root's. Members keep their raw `bodyMd`: the output-envelope protocol block
+  // belongs to the node's selected agent, not to agents it delegates to (same
+  // split the legacy inline path uses in `buildInlineAgentEntry`).
+  const controlledDependents = ctx.dependents.map((dep) => {
+    const depProfile = ctx.resolvedParamsByAgent.get(dep.name)
+    const depModel = parseSelectedModel(depProfile?.model, depProfile?.variant ?? null)
+    return {
+      name: dep.name,
+      prompt: dep.bodyMd,
+      description: dep.description,
+      model: `${depModel.providerID}/${depModel.modelID}`,
+      variant: depModel.variant,
+      temperature: depProfile?.temperature,
+      steps: depProfile?.steps ?? depProfile?.maxSteps,
+      options: { outputs: dep.outputs as unknown as IdentityJson },
+      userPermission: dep.permission as Record<string, IdentityJson>,
+      allowShell: dep.permission.bash !== 'deny',
+    }
+  })
   const controlledConfig = buildControlledOpencodeConfig({
     name: ctx.agent.name,
     prompt: persona,
@@ -541,6 +559,11 @@ export async function buildVerifiedOpencodeBusinessPlan(
     shellPath,
     allowShell: ctx.agent.permission.bash !== 'deny',
     mcp: plannedMcp.config,
+    // RFC-251: the resolved plugin closure (union over dependsOn) reaches the
+    // controlled config again. buildHermeticServerEnv derives OPENCODE_PURE
+    // from the result, so a non-empty selection also turns that flag off.
+    plugins: ctx.plugins,
+    dependents: controlledDependents,
   })
   const auth = await resolveStrictProviderAuth(selectedModel.providerID, sourceEnv)
   const username = `aw-${randomBytes(12).toString('base64url')}`

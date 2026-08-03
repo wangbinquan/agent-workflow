@@ -10,14 +10,18 @@ export const EXECUTION_IDENTITY_FAILURE_CODES = [
   /** Legacy read compatibility; new containment admission writes the code above. */
   'execution-identity-sandbox-required',
   'execution-identity-project-config-unsupported',
-  'execution-identity-plugin-unsupported',
-  'execution-identity-dependent-unsupported',
   'execution-identity-model-unresolved',
   'execution-identity-auth-invalid',
   'execution-identity-provider-untrusted',
   'execution-identity-bootstrap-failed',
+  /**
+   * RFC-251 note: this no longer means "the effective config differed from the
+   * sealed one" — that attestation is gone. It now reports an INVALID INPUT to
+   * the controlled-config builder / identity digest (hermetic.ts, and the
+   * resume digest path), which is why it survives while
+   * `execution-identity-instance-changed` did not.
+   */
   'execution-identity-mismatch',
-  'execution-identity-instance-changed',
   'execution-identity-source-changed',
   'execution-identity-skill-mismatch',
   'execution-identity-session-mismatch',
@@ -62,18 +66,20 @@ export interface EffectiveExecutionPolicyInput {
   protocol: string
   /** Resolved/frozen runtime model. */
   model: string | null | undefined
-  enabledPluginCount?: number
-  dependentAgentCount?: number
 }
 
 export interface ExecutionPolicyViolation {
   code: ExecutionIdentityFailureCode
-  field: 'model' | 'plugins' | 'dependsOn'
+  field: 'model'
 }
 
 /**
  * One pure policy table for every product boundary. Callers decide whether to
  * render, reject a save, or throw; they must not reimplement the conditions.
+ *
+ * RFC-251 removed the plugin and dependent-agent rules: both features are now
+ * supported on the OpenCode path (assembled into the controlled config), so an
+ * explicit model is the only remaining requirement.
  */
 export function executionPolicyViolations(
   input: EffectiveExecutionPolicyInput,
@@ -82,12 +88,6 @@ export function executionPolicyViolations(
   const violations: ExecutionPolicyViolation[] = []
   if (typeof input.model !== 'string' || input.model.trim() === '') {
     violations.push({ code: 'execution-identity-model-unresolved', field: 'model' })
-  }
-  if ((input.enabledPluginCount ?? 0) > 0) {
-    violations.push({ code: 'execution-identity-plugin-unsupported', field: 'plugins' })
-  }
-  if ((input.dependentAgentCount ?? 0) > 0) {
-    violations.push({ code: 'execution-identity-dependent-unsupported', field: 'dependsOn' })
   }
   return violations
 }

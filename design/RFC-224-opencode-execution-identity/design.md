@@ -44,6 +44,15 @@ MDM、legacy mode 与 `OPENCODE_PERMISSION`。Agent registry 按 name 合并；
 
 ### 1.2 plugin/custom tool 不能在 bootstrap 后自证
 
+> **⚠️ 已被 [RFC-251](../RFC-251-opencode-plugin-multiagent-restore/proposal.md) 推翻（2026-08-03）。**
+> 本节第二条论断（V2 `ConfigExternalPlugin` 不遵守 `OPENCODE_PURE`）与 opencode
+> **v1.18.4** 源码不符：`plugin/index.ts:177` 是
+> `flags.pure ? [] : (cfg.plugin_origins ?? [])`，**遵守** pure；`:166` 另有
+> `disableDefaultPlugins` 独立门控内置插件。仍成立的只有 legacy
+> `{tool,tools}/*.{js,ts}` 扫描（`tool/registry.ts:180`），而它作用于
+> `config.directories()`——受控私有目录下该集合本就为空。
+> 插件已在 verified 路径恢复支持；`OPENCODE_PURE` 改为按受控配置是否选中插件派生。
+
 - V1 external plugin 在 `/config` preflight 前 import；`OPENCODE_PURE=1` 才会
   从物理上跳过全部 V1 external。
 - V2 `ConfigExternalPlugin` 不遵守 PURE，会从 core V2 `Config.entries()` 的
@@ -56,6 +65,15 @@ attestation。launcher 让 legacy directories hermetic，并在 server 前/promp
 锁定 V2 project surface。
 
 ### 1.3 task 与 attach 不能补丁式修复
+
+> **⚠️ 已被 [RFC-251](../RFC-251-opencode-plugin-multiagent-restore/proposal.md) 推翻（2026-08-03）。**
+> 本节两条论断经 opencode **v1.18.4** 源码复核不成立：①未知 subagent
+> **直接 fail**（`tool/task.ts:131-134` `Unknown agent type`），不存在静默回退默认
+> agent；②`bypassAgentCheck` 跳过的是**权限询问**（`tool/task.ts:119-129` 的
+> `ctx.ask`），agent 身份仍走 `agent.get()`。opencode 另有子代理深度上限
+> （`:111-117`）与父→子权限收敛（`agent/subagent-permissions.ts:14`）。
+> `dependsOn` 已在 verified 路径恢复支持：闭包成员注册为 `mode:'subagent'`，
+> `task` 工具在闭包非空时放行。
 
 官方 task resume 只按 `task_id` 取旧 session；HTTP `SubtaskPartInput` 又能
 `bypassAgentCheck`。官方 `run --attach` 的第三次 `/agent` lookup 失败会回退默认

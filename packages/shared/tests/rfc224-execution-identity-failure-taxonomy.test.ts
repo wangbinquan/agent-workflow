@@ -27,14 +27,15 @@ describe('RFC-224 execution identity failure taxonomy', () => {
       'execution-identity-containment-required',
       'execution-identity-sandbox-required',
       'execution-identity-project-config-unsupported',
-      'execution-identity-plugin-unsupported',
-      'execution-identity-dependent-unsupported',
+      // RFC-251 removed plugin-unsupported / dependent-unsupported (both
+      // features are supported again) and instance-changed (its attestation
+      // no longer exists). `mismatch` stays: it now reports an invalid input
+      // to the controlled-config builder and the resume digest.
       'execution-identity-model-unresolved',
       'execution-identity-auth-invalid',
       'execution-identity-provider-untrusted',
       'execution-identity-bootstrap-failed',
       'execution-identity-mismatch',
-      'execution-identity-instance-changed',
       'execution-identity-source-changed',
       'execution-identity-skill-mismatch',
       'execution-identity-session-mismatch',
