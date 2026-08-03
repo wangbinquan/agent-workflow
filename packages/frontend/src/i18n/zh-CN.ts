@@ -1074,6 +1074,7 @@ export interface Resources {
       addRepo: string
       addGroup: string
       pendingImports: string
+      incompleteRows: string
     }
     layout: {
       rootMount: string
@@ -5430,6 +5431,7 @@ export const zhCN: Resources = {
       addRepo: '+ 添加仓库',
       addGroup: '+ 添加组',
       pendingImports: '还有 {{count}} 个仓按 URL 填写，将在保存时导入（预览不含它们）',
+      incompleteRows: '{{count}} 行还没选仓库 / 组，填完才会出现在预览里',
     },
     layout: {
       rootMount: '（任务根）',

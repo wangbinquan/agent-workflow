@@ -139,6 +139,42 @@ describe('RepoGroupsPane —— 列表行为', () => {
   })
 })
 
+describe('RFC-248 —— 编辑器：未填完的行不是错误（真实使用中发现）', () => {
+  // 症状：点一下「+ 添加仓库」、还没选仓，右侧预览区立刻弹红框
+  // 「members.0.cachedRepoId: exactly one of cachedRepoId / repoUrl is required」。
+  // 成因：整份成员表被 debounce 后原样发去干跑预览，服务端的 XOR 校验判它非法。
+  // 但「一行还没填完」根本不是错误——用户什么都还没做错。
+  //
+  // 修法：未填完的行**不参与预览**（与服务端对「只给 URL」的行同样思路），
+  // 并且挡住保存（这个条件前端完全判得出来，不该推给服务端回 422）。
+
+  test('预览请求里剔除未填完的行', () => {
+    // 送去预览的是 `previewWire`（已过滤），不是原始 `wire`。
+    expect(EDITOR_SRC).toContain('const previewWire')
+    expect(EDITOR_SRC).toContain('wire.filter((m) => !isIncomplete(m))')
+    expect(EDITOR_SRC).toContain('setDebounced(previewWire)')
+    // 且**不能**再把未过滤的 wire 直接塞进 debounce。
+    expect(codeOnly(EDITOR_SRC)).not.toMatch(/setDebounced\(wire\)/)
+  })
+
+  test('「未填完」的判据对仓与组两种成员都成立', () => {
+    // 组成员看 childGroupId，仓成员看 cachedRepoId ⊕ repoUrl 是否都空。
+    expect(EDITOR_SRC).toContain("m.childGroupId === ''")
+    expect(EDITOR_SRC).toContain("(m.cachedRepoId ?? '') === '' && (m.repoUrl ?? '') === ''")
+  })
+
+  test('有未填完的行时保存被挡住', () => {
+    expect(EDITOR_SRC).toContain('incompleteCount === 0')
+  })
+
+  test('未填完用中性 chip 提示，不是 ErrorBanner', () => {
+    expect(EDITOR_SRC).toContain('repo-group-preview-incomplete')
+    const at = EDITOR_SRC.indexOf('repo-group-preview-incomplete')
+    // 提示挂在 StatusChip 上（中性），附近不该是错误横幅。
+    expect(EDITOR_SRC.slice(at - 200, at)).toContain('StatusChip')
+  })
+})
+
 describe('RFC-248 设计系统兜底（源代码层）', () => {
   test('编辑器走 <Dialog>，不自造 overlay / panel chrome', () => {
     expect(EDITOR_SRC).toContain("from '@/components/Dialog'")

@@ -97,11 +97,30 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
 
   // debounce 400ms：拖挂载点时每个按键都打一次预览既吵又没意义。
   const wire = useMemo(() => toWire(members), [members])
-  const [debounced, setDebounced] = useState<RepoGroupMemberInput[]>(wire)
+
+  /**
+   * 「这一行还没填完」——刚点完「+ 添加仓库 / + 添加组」、仓还没选的状态。
+   *
+   * 它**不是错误**：用户什么都还没做错。之前整份成员表原样发去干跑预览，
+   * 服务端的 XOR 校验判它非法回 422，右侧就弹一个红框——用户点一下「添加」
+   * 就先挨一记报错，纯属噪音。
+   */
+  const isIncomplete = (m: RepoGroupMemberInput): boolean =>
+    m.kind === 'group'
+      ? m.childGroupId === ''
+      : (m.cachedRepoId ?? '') === '' && (m.repoUrl ?? '') === ''
+
+  const incompleteCount = wire.filter(isIncomplete).length
+  // 只把**填完的**行拿去预览（服务端对「只给 URL」的行也是同样思路——不导入、
+  // 只计 pendingImports）。这样预览始终展示「已经确定下来的那部分布局」，
+  // 而挂载点冲突 / 成环 / 超深度这些**真**错误照样会红。
+  const previewWire = useMemo(() => wire.filter((m) => !isIncomplete(m)), [wire])
+
+  const [debounced, setDebounced] = useState<RepoGroupMemberInput[]>(previewWire)
   useEffect(() => {
-    const id = setTimeout(() => setDebounced(wire), 400)
+    const id = setTimeout(() => setDebounced(previewWire), 400)
     return () => clearTimeout(id)
-  }, [wire])
+  }, [previewWire])
 
   const preview = useQuery<RepoGroupLayoutResponse & { pendingImports: number }>({
     queryKey: ['repo-group-preview', JSON.stringify(debounced)],
@@ -146,7 +165,9 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
     ])
 
   const nameOk = name.trim().length > 0
-  const canSave = nameOk && members.length > 0 && !save.isPending
+  // 未填完的行也挡住保存——让用户点了保存再吃 422 是把校验推给服务端，
+  // 而这个条件前端完全判得出来。
+  const canSave = nameOk && members.length > 0 && incompleteCount === 0 && !save.isPending
 
   return (
     <Dialog
@@ -335,6 +356,14 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
                 </>
               )}
             </QueryState>
+            {/* 挂在 `QueryState` **外面**：所有行都没填完时它走 emptyText 分支
+                （「这个组还没有成员」），而那恰恰是最需要这条提示的时候——
+                明明加了一行，却被告知没有成员。 */}
+            {incompleteCount > 0 && (
+              <StatusChip kind="neutral" size="sm" data-testid="repo-group-preview-incomplete">
+                {t('repoGroups.editor.incompleteRows', { count: incompleteCount })}
+              </StatusChip>
+            )}
           </Field>
         </section>
       </div>

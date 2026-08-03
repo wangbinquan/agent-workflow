@@ -902,6 +902,8 @@ export const enUS: Resources = {
       addGroup: '+ Add group',
       pendingImports:
         '{{count}} repo(s) given by URL will be imported on save (not in this preview)',
+      incompleteRows:
+        '{{count}} row(s) have no repo/group selected yet — they appear here once filled in',
     },
     layout: {
       rootMount: '(task root)',
