@@ -2,12 +2,12 @@
 
 ## 1. 现状：拦截点分三层
 
-| 层 | 位置 | 行为 |
-| --- | --- | --- |
-| ① 策略表（唯一事实源） | `packages/shared/src/executionIdentity.ts:86-91` | `enabledPluginCount > 0` → `plugin-unsupported`；`dependentAgentCount > 0` → `dependent-unsupported`。`:81` 对非 `opencode` 协议直接返回 `[]` |
-| ② 产品边界调用点 | `services/executionPolicy.ts` 的 `assertAgentExecutionPolicy` → `agent.ts:192`（create）/ `agent.ts:423`（update）/ `agentLaunch.ts:362` / `scheduledTasks.ts:287,317` / `workgroup/launch.ts:264,405` | 违规抛 `ValidationError(permanent)` |
-| ③ 运行期最终门 | `services/runtime/opencode/verifiedPlan.ts:390-395` | `ctx.dependents.length > 0` 与 `ctx.plugins.some(enabled !== false)` 各自 `executionIdentityFailure` |
-| ④ UI | `components/AgentForm.tsx:266-278` | 渲染 `agent-opencode-execution-policy` blocker banner |
+| 层                     | 位置                                                                                                                                                                                                   | 行为                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| ① 策略表（唯一事实源） | `packages/shared/src/executionIdentity.ts:86-91`                                                                                                                                                       | `enabledPluginCount > 0` → `plugin-unsupported`；`dependentAgentCount > 0` → `dependent-unsupported`。`:81` 对非 `opencode` 协议直接返回 `[]` |
+| ② 产品边界调用点       | `services/executionPolicy.ts` 的 `assertAgentExecutionPolicy` → `agent.ts:192`（create）/ `agent.ts:423`（update）/ `agentLaunch.ts:362` / `scheduledTasks.ts:287,317` / `workgroup/launch.ts:264,405` | 违规抛 `ValidationError(permanent)`                                                                                                           |
+| ③ 运行期最终门         | `services/runtime/opencode/verifiedPlan.ts:390-395`                                                                                                                                                    | `ctx.dependents.length > 0` 与 `ctx.plugins.some(enabled !== false)` 各自 `executionIdentityFailure`                                          |
+| ④ UI                   | `components/AgentForm.tsx:266-278`                                                                                                                                                                     | 渲染 `agent-opencode-execution-policy` blocker banner                                                                                         |
 
 注意 ② 中 `routes/config.ts:123,140,169` 走的是 `assertResolvedExecutionPolicy(runtime)`
 **不带** `resources` 参数——只校验 model，不受本 RFC 影响；`config.ts:172` 走
@@ -53,11 +53,24 @@
 
 ### 4.1 `task` 工具放行
 
-`DENIED_TOOLS`（`hermetic.ts:545-557`）中的 `'task'` 改为**条件放行**：
-`dependents.length > 0` 时 `permission.task = 'allow'`，否则维持 `'deny'`。
+`DENIED_TOOLS`（`hermetic.ts`）中的 `'task'` 改为**条件放行**：闭包非空时放行，
+否则维持 `'deny'`。不做无条件放行——没有依赖闭包的代理拿到 `task` 只会得到
+"未知 agent"错误，放行没有收益，deny 更贴合最小权限。
 
-不做无条件放行——没有依赖闭包的代理拿到 `task` 只会得到"未知 agent"错误，
-放行没有收益，deny 更贴合最小权限。
+**放行形态必须是 pattern 映射，不能是 `'allow'`（Codex 实现门 P1，已修）**：
+
+```
+task: { '*': 'deny', <闭包成员 1>: 'allow', <闭包成员 2>: 'allow', … }
+```
+
+裸 `task: 'allow'` 会展开成 pattern `*`。OpenCode 的 `task` 工具随后对**任意**
+`subagent_type` 调 `agent.get()`，而它的**内置** agent（`general`/`explore`/
+`build`/`plan`…）始终在注册表里、不受我们 config 控制，各自带默认的写/shell 面。
+于是「一个自身禁了 bash 的 root」可以委派给 `general` 借到能力——而父 session 只
+向子会话传播三条非工具 deny（§4.2），拦不住。
+
+映射形态下 `'*': 'deny'` 在前、成员名在后，`findLast` 让具体成员名赢、其余一律落
+到 deny。
 
 ### 4.2 闭包成员注册进 agent 注册表
 
@@ -76,6 +89,14 @@ agent: {
 
 成员条目不从 root 的 agent 条目继承任何东西，所以「什么都不声明」= 什么权限都没有。
 必须自带完整 permission。
+
+**受控键必须追加在用户覆盖之后（Codex 实现门 P1，已修）**：原实现是
+`{...userPermission}` 再逐个赋值，但**给已存在的键赋值不会移动它**——用户写
+`{"task":"allow","*":"allow"}` 时，平台把 `task` 改成 `deny` 却仍留在 `*` 之前，
+`findLast` 选中后面的 `*` 从而放行。现引入 `CONTROLLED_PERMISSION_KEYS`
+（`bash` + `DENIED_TOOLS` + `external_directory`）：先**丢弃**用户对这些键的覆盖，
+再把平台值**追加到末尾**。用户的其它键（含 `*`）原样保留在前，故无 wildcard 的
+合法配置最终值完全不变。
 
 **运行期合并链（逐条源码核实，勿凭记忆）**：
 
@@ -145,19 +166,33 @@ RFC-224 的 verified inventory 是"同实例 attestation 通过后，从第二�
 
 ### 5.4 failure code 处置
 
-| code | 处置 | 理由 |
-| --- | --- | --- |
-| `plugin-unsupported` | **删** | 功能恢复 |
-| `dependent-unsupported` | **删** | 功能恢复 |
-| `instance-changed` | **删** | attestation 专用 |
-| `mismatch` | **保留** | ⚠️ 不只是 attestation 结果码——`hermetic.ts:606,611` 用它表示**受控配置构建输入非法**。删掉会留下无码可报的分支。实现时确认是否改名更清晰（改名会牵动 i18n + DB 历史值，倾向保留原名） |
-| `skill-mismatch` / `provider-untrusted` | **保留** | 按 §5.3 改为直读校验，仍是真实错误 |
-| `source-changed` / `project-config-unsupported` | **保留** | 属 sourceGuard，非目标 |
-| `untrusted-binary` / `containment-required` / `sandbox-required` / `bootstrap-failed` / `auth-invalid` / `model-unresolved` / `session-*` / `control-failed` / `stream-failed` / `timeout` / `store-unsafe` | **保留** | 与 attestation 无关 |
+| code                                                                                                                                                                                                        | 处置             | 理由                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugin-unsupported`                                                                                                                                                                                        | **退役**（见下） | 功能恢复                                                                                                                                                                              |
+| `dependent-unsupported`                                                                                                                                                                                     | **退役**（见下） | 功能恢复                                                                                                                                                                              |
+| `instance-changed`                                                                                                                                                                                          | **退役**（见下） | attestation 专用                                                                                                                                                                      |
+| `mismatch`                                                                                                                                                                                                  | **保留**         | ⚠️ 不只是 attestation 结果码——`hermetic.ts:606,611` 用它表示**受控配置构建输入非法**。删掉会留下无码可报的分支。实现时确认是否改名更清晰（改名会牵动 i18n + DB 历史值，倾向保留原名） |
+| `skill-mismatch` / `provider-untrusted`                                                                                                                                                                     | **保留**         | 按 §5.3 改为直读校验，仍是真实错误                                                                                                                                                    |
+| `source-changed` / `project-config-unsupported`                                                                                                                                                             | **保留**         | 属 sourceGuard，非目标                                                                                                                                                                |
+| `untrusted-binary` / `containment-required` / `sandbox-required` / `bootstrap-failed` / `auth-invalid` / `model-unresolved` / `session-*` / `control-failed` / `stream-failed` / `timeout` / `store-unsafe` | **保留**         | 与 attestation 无关                                                                                                                                                                   |
 
-删除的码必须同步清理：`shared/src/executionIdentity.ts` union、
-`shared/tests/rfc224-execution-identity-failure-taxonomy.test.ts:25-46` 的有序断言、
-`i18n/en-US.ts` + `zh-CN.ts` 的 message/hint/别名共 3 处/码。
+**「退役」≠「删除」（Codex 实现门 P1 修正）**：本节最初写的是从闭集里删除，实现时
+也确实那样做了——但 `failure_code` 是**无迁移的普通 TEXT**，而任务列表页用严格
+`z.enum` 对**整个 payload** `.parse()`（`useTaskOperationsPage.ts:33`）。⇒ 升级前
+因插件/依赖被拒而留下的**任一**历史任务，会让**整页解析失败**，不是那一行降级。
+
+最终形态是把发射域与读取域拆开：
+
+- `EXECUTION_IDENTITY_FAILURE_CODES`（可产生）：删掉这三个；
+- `LEGACY_EXECUTION_IDENTITY_FAILURE_CODES`（**新增，只读**）：三个退役码，
+  并入 `FAILURE_CODES` 供 schema 解析，且 `isExecutionIdentityFailureCode` /
+  `isPermanentRuntimeFailure` 对它们仍返回真（旧行的重试语义不变）；
+- i18n 保留三条**「历史失败」语气**的双语文案，让存量任务仍可读。
+
+同步清理面：`shared/src/executionIdentity.ts` 两个 union、
+`shared/tests/rfc224-execution-identity-failure-taxonomy.test.ts` 的有序断言与新增的
+「退役码不可产生但仍可解析」回归锁、`i18n/en-US.ts` + `zh-CN.ts` 的 message/hint。
+`errors.*` 命名空间的别名**不恢复**——那是 API 错误面，已无路径产生这三个码。
 
 ## 6. 策略表与 UI
 
@@ -172,12 +207,12 @@ RFC-224 的 verified inventory 是"同实例 attestation 通过后，从第二�
 
 ## 7. 失败模式
 
-| 场景 | 表现 |
-| --- | --- |
+| 场景                    | 表现                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | 插件文件缺失 / 加载抛错 | opencode 走 `publishPluginError`（`plugin/index.ts:194-208`）；平台侧 RFC-031 既有的 `[rfc031/plugin-load-failed]` stderr tag → RFC-027 事件流 |
-| 子代理名未注册 | opencode `tool/task.ts:133` 返回 `Unknown agent type`，作为工具错误回到模型 |
-| 子代理深度超限 | opencode `tool/task.ts:111-117`；如需 >1 层需显式设 `subagent_depth`，**本 RFC 不改默认值** |
-| 插件试图联网 | containment 边界（RFC-227）仍然生效，不因本 RFC 放宽 |
+| 子代理名未注册          | opencode `tool/task.ts:133` 返回 `Unknown agent type`，作为工具错误回到模型                                                                    |
+| 子代理深度超限          | opencode `tool/task.ts:111-117`；如需 >1 层需显式设 `subagent_depth`，**本 RFC 不改默认值**                                                    |
+| 插件试图联网            | containment 边界（RFC-227）仍然生效，不因本 RFC 放宽                                                                                           |
 
 ## 8. 测试策略
 
@@ -208,3 +243,47 @@ RFC-224 / RFC-227 **不整体作废**——其二进制冻结、来源守卫、c
 session 归属部分继续有效。本 RFC 只推翻其中"插件 / 多代理不支持"与"启动后配置比对"
 两项决定。落地后需在 `RFC-224/design.md` §1.2、§1.3、§8 与 `CLAUDE.md`
 「Architecture concepts」相关段落加注指向 RFC-251，避免后续 session 按过期论断行事。
+
+## 10. 已知限制（交付时明确未解决）
+
+Codex 实现门（[记档](./codex-impl-gate-2026-08-03.md)）指出三条**已核实属实、本 RFC
+未修**的问题。它们不是遗漏，而是需要独立设计或产品决策；全部登记在
+`docs/audit-backlog.md`。**读本 RFC 的人必须知道这三条，否则会高估交付面。**
+
+### 10.1 插件不受 containment 约束（P0）
+
+插件由 OpenCode 在 **server 进程内** `import` 并被授予 `Bun.$`；而 server 在 macOS
+明确不过 Seatbelt（`services/sandbox/index.ts`）、Linux 侧也未隔离网络
+（`services/sandbox/policy.ts`）。shell / local-MCP 的 no-network child wrapper 完全
+不介入。⇒ 恶意或被攻陷的插件可读工作区、起进程、联网外传，`sandboxMode=enforce`
+也拦不住。
+
+这不是本 RFC 引入的缺陷，而是**「支持插件」这一产品决定的固有代价**——插件按定义
+就是宿主进程内执行的代码，RFC-224 当年禁它的理由之一正是这个。用户在知情下要求恢复
+该功能，故不擅自加回限制。
+
+> **与 RFC-252 的交叉影响**：RFC-252 的审计结论「业务 agent 没有 read/edit/write/
+> webfetch 等**进程内**工具」成立的前提是插件被禁用。插件恢复后，等于在 agent
+> permission 层**之下**多了一个进程内 shell，绕过「工具被 deny 即被摘出模型工具
+> 列表」这条机制。RFC-252 的威胁模型需显式纳入「已安装且被选中的插件」。
+
+### 10.2 Linux + `enforce` 下插件根本加载不了（P1）
+
+插件装在 `appHome/plugins`，而 `policy.ts` 对整个 `appHome` 打 `--tmpfs` 后只显式
+bind 回 `repos`；`allowSubtrees` 是 RFC-205 impl-gate P0-3 刻意的「deny 全部
+appHome、只放行本次运行所需」白名单，插件目录不在其中 ⇒ `file://<cachedPath>` 在
+server 内不存在，动态 import 得 `ENOENT`。
+
+**即插件功能目前只在 macOS 上真正可用；Linux 部署上应视为不可用。** 修它要动
+bwrap 的 RW/RO 叠加次序（`readOnlySubtrees` 必须是某个 `allowSubtrees` 的**严格
+后代**）与 Seatbelt 侧 deny-list 语义，正是 §10.1 所指的那条边界，应与之合并设计。
+
+### 10.3 闭包成员拿不到自己选的 skill（P1）
+
+`services/scheduler.ts` 已正确合并 `dependsOn` 闭包的 skills，但 `verifiedPlan` 只把
+冻结的 `SKILL.md` 追加进 **root** persona，成员拿到的是原始 `dep.bodyMd`，而 `skill`
+工具本身在受控 permission 里是 deny。⇒ `auditor` 依赖的审计 skill，root 看得到、
+真正执行审计的 `auditor` 看不到，**多代理能力因此是打折的**。
+
+§4.3 已把「不改动 skill 密封面」列为非目标（扩大密封面涉及成员间 skill 是否隔离、
+`SKILL.md` 冻结块如何按成员分区），故明确登记而非默认关闭。

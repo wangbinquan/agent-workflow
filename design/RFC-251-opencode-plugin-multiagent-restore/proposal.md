@@ -15,11 +15,11 @@
 对本机 opencode 源码（**v1.18.4**；RFC-224 的论断基于 v1.18.3）逐条核验，三条论断
 **两条与源码不符、一条系误读**：
 
-| RFC-224 `design.md` 的论断 | opencode v1.18.4 源码实际 |
-| --- | --- |
-| §1.2 V2 `ConfigExternalPlugin` 不遵守 `OPENCODE_PURE` | `plugin/index.ts:177` —— `flags.pure ? [] : (cfg.plugin_origins ?? [])`，**遵守**；`:166` 另有 `disableDefaultPlugins` 可关内置插件 |
-| §1.3 官方 `run --attach` 第三次 `/agent` lookup 失败会回退默认 agent | `tool/task.ts:131-134` —— 未知 agent **直接 fail**（`Unknown agent type: ... is not a valid agent type`），不存在静默回退 |
-| §1.3 HTTP `SubtaskPartInput` 能 `bypassAgentCheck` | `tool/task.ts:119-129` —— 该标志跳过的是**权限询问**（`ctx.ask`），agent 身份仍走 `agent.get()`；名字有误导性 |
+| RFC-224 `design.md` 的论断                                           | opencode v1.18.4 源码实际                                                                                                           |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| §1.2 V2 `ConfigExternalPlugin` 不遵守 `OPENCODE_PURE`                | `plugin/index.ts:177` —— `flags.pure ? [] : (cfg.plugin_origins ?? [])`，**遵守**；`:166` 另有 `disableDefaultPlugins` 可关内置插件 |
+| §1.3 官方 `run --attach` 第三次 `/agent` lookup 失败会回退默认 agent | `tool/task.ts:131-134` —— 未知 agent **直接 fail**（`Unknown agent type: ... is not a valid agent type`），不存在静默回退           |
+| §1.3 HTTP `SubtaskPartInput` 能 `bypassAgentCheck`                   | `tool/task.ts:119-129` —— 该标志跳过的是**权限询问**（`ctx.ask`），agent 身份仍走 `agent.get()`；名字有误导性                       |
 
 opencode 自身对子代理另有深度上限（`tool/task.ts:111-117`，默认 `subagent_depth: 1`）
 与父→子权限收敛（`:139-155`）。三条论断里唯一仍成立的是 legacy 工具目录扫描
@@ -71,4 +71,17 @@ opencode 自身对子代理另有深度上限（`tool/task.ts:111-117`，默认 
 见 RFC-224 `design.md:41-43`）在理论上仍可改变最终配置而不被发现。
 
 这是**用户在 2026-08-03 明确拍板的取舍**：功能可用性优先于该层证明。
-进程隔离（containment）作为独立防线保留不变，仍然限制被执行代码的实际能力边界。
+
+> **⚠️ 上面这段最初还写着「进程隔离（containment）作为独立防线保留不变，仍然限制被
+> 执行代码的实际能力边界」——Codex 实现门证明该句对插件不成立，已删。**
+>
+> 插件由 OpenCode 在 **server 进程内** `import` 且被授予 `Bun.$`，而 server 在 macOS
+> 明确不过 Seatbelt、Linux 侧也未隔离网络；shell / local-MCP 的 no-network child
+> wrapper 完全不介入。⇒ **插件不受 containment 约束**，`sandboxMode=enforce` 也拦不住。
+> 这是「支持插件」的固有代价（插件按定义就是宿主进程内执行的代码），不是本 RFC 可以
+> 顺手补上的。完整分析与另两条已知限制见 [design §10](./design.md#10-已知限制交付时明确未解决)，
+> 未决项登记在 `docs/audit-backlog.md`。
+>
+> 由此还引出一条**跨 RFC 影响**：并发落档的 RFC-252 的审计结论「业务 agent 没有
+> read/edit/write/webfetch 等**进程内**工具」，其成立前提正是插件被 RFC-224 禁用；
+> 插件恢复后该前提部分失效，其威胁模型需显式纳入「已安装且被选中的插件」。

@@ -108,26 +108,35 @@ T6/T7 跟随各自相关的 PR。
 - [x] 保存/启动入口的 OpenCode 代理带插件 / 带 dependsOn 均可保存 + 启动
       （`rfc251-product-boundary.test.ts`：create / update / workflow launch gate /
       scheduled create，另加 `model-unresolved` 仍拒的反向锁）
-- [x] `OPENCODE_PURE` 与插件选择一致（双向显式断言，`rfc251-controlled-config.test.ts`
-      + `rfc224-verified-plan.test.ts` 的 manifest 端到端断言）
+- [x] `OPENCODE_PURE` 与插件选择一致（双向显式断言，`rfc251-controlled-config.test.ts` + `rfc224-verified-plan.test.ts` 的 manifest 端到端断言）
 - [x] session resume digest 校验未被 T4 波及（`rfc224-execution-identity.test.ts`
       保留 `businessOpencodeIdentityDigest` 稳定性/敏感性/脱敏三组锁）
 - [x] 既有测试逐个处置，无 skip（见下）
 - [x] `typecheck` / `lint` / `format:check` / `depcheck` 全绿；frontend 696 files ·
       5909 tests 全绿；backend 全量余 2 项属于并发 RFC-250 未提交改动的失败
-- [ ] 提交 + 推送后按 exact SHA 查 CI 绿
-- [ ] Codex 实现门跑过并修完 findings
+- [x] Codex 实现门跑过（判定 needs-attention：1×P0 + 6×P1 + 2×P2，逐条核实全部
+      属实）；**已修 6 条**，3 条需产品/安全决策的登记进 `docs/audit-backlog.md`
+      并写入 design §10「已知限制」。记档：[codex-impl-gate-2026-08-03.md](./codex-impl-gate-2026-08-03.md)
+- [ ] 推送后按 exact SHA 查 CI 绿（**未推送**）
+
+## 交付时未解决（design §10）
+
+1. **P0** 插件不受 containment 约束——「支持插件」的固有代价，用户知情决定。
+   与并发的 **RFC-252** 有交叉：其「agent 无进程内工具」的审计前提因插件恢复而部分失效。
+2. **P1** Linux + `enforce` 下插件缓存被 `--tmpfs appHome` 隐藏 ⇒ **插件功能在 Linux
+   上等于没交付**；与 1 同源，应合并设计。
+3. **P1** 闭包成员拿不到自己选的 skill ⇒ 多代理能力打折；§4.3 已列为非目标。
 
 ## 既有测试处置结论
 
-| 文件 | 处置 | 理由 |
-| --- | --- | --- |
-| `rfc224-execution-identity.test.ts` | **改写** | 删 attestation 比对套件（final config identity / Agent.Info / same-instance seal）与 `makeInput` fixture；保留 canonical JSON 编解码与 `businessOpencodeIdentityDigest`；secret-safe 断言**改挂到仍存在的 digest 路径**而非删除 |
-| `rfc224-verified-launcher.test.ts` | **改写** | 删 `verifyIdentity` seam 与 fake client 的 `getConfig` 录制桩；调用序列断言 `['config','providers','agents','skills','agents']` → `['providers','agents','skills']`（两处） |
-| `rfc224-verified-plan.test.ts` | **扩写** | fixture 支持 `dependents` / `plugins`；新增 3 条端到端正向用例（读 manifest 断言 `plugin` 数组、`PURE` 缺席/存在、闭包注册与 root `task: allow`） |
-| `rfc223-identity-structural-guard.test.ts` | **改写** | 删 6 个随 attestation 消失的 name-keyed sink 允许项，新增 2 条（`agents[dep.name]`、`resolvedParamsByAgent.get(dep.name)`）并附审阅理由；总数 140 → 136 |
-| `rfc224-execution-identity-failure-taxonomy.test.ts`（shared） | **改写** | 有序码表删 3 项 |
-| `opencode-identity-preflight.integration.test.ts` | **改写** | 两处 `verifyExecutionIdentity` 调用删除；改为断言受控 agent 确实注册 + 保留 RFC-234 system profile 的 live permission 断言 |
-| `agent-form-opencode-execution-policy.test.tsx`（frontend） | **改写** | 本轮先加的 blocker 断言反转为「不再出现 blocker」回归锁；保留 `model-unresolved` 与 claude-code 不拦覆盖 |
-| `runner-plugin-inject.test.ts` | **改写** | 源码文本锚点跟随 `pluginSpec.ts`；新增「inlineConfig 仍委托、未重新内联」反向锚点 |
-| 其余 RFC-224/227 文件（direct-* / sealed-* / source-guard / store-hygiene / official-builds / fff-capability / rfc227-* / 3 个 migration 等） | **不动** | 与 attestation 无关，全部原样通过 |
+| 文件                                                                                                                                           | 处置     | 理由                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rfc224-execution-identity.test.ts`                                                                                                            | **改写** | 删 attestation 比对套件（final config identity / Agent.Info / same-instance seal）与 `makeInput` fixture；保留 canonical JSON 编解码与 `businessOpencodeIdentityDigest`；secret-safe 断言**改挂到仍存在的 digest 路径**而非删除 |
+| `rfc224-verified-launcher.test.ts`                                                                                                             | **改写** | 删 `verifyIdentity` seam 与 fake client 的 `getConfig` 录制桩；调用序列断言 `['config','providers','agents','skills','agents']` → `['providers','agents','skills']`（两处）                                                     |
+| `rfc224-verified-plan.test.ts`                                                                                                                 | **扩写** | fixture 支持 `dependents` / `plugins`；新增 3 条端到端正向用例（读 manifest 断言 `plugin` 数组、`PURE` 缺席/存在、闭包注册与 root `task: allow`）                                                                               |
+| `rfc223-identity-structural-guard.test.ts`                                                                                                     | **改写** | 删 6 个随 attestation 消失的 name-keyed sink 允许项，新增 2 条（`agents[dep.name]`、`resolvedParamsByAgent.get(dep.name)`）并附审阅理由；总数 140 → 136                                                                         |
+| `rfc224-execution-identity-failure-taxonomy.test.ts`（shared）                                                                                 | **改写** | 有序码表删 3 项                                                                                                                                                                                                                 |
+| `opencode-identity-preflight.integration.test.ts`                                                                                              | **改写** | 两处 `verifyExecutionIdentity` 调用删除；改为断言受控 agent 确实注册 + 保留 RFC-234 system profile 的 live permission 断言                                                                                                      |
+| `agent-form-opencode-execution-policy.test.tsx`（frontend）                                                                                    | **改写** | 本轮先加的 blocker 断言反转为「不再出现 blocker」回归锁；保留 `model-unresolved` 与 claude-code 不拦覆盖                                                                                                                        |
+| `runner-plugin-inject.test.ts`                                                                                                                 | **改写** | 源码文本锚点跟随 `pluginSpec.ts`；新增「inlineConfig 仍委托、未重新内联」反向锚点                                                                                                                                               |
+| 其余 RFC-224/227 文件（direct-_ / sealed-_ / source-guard / store-hygiene / official-builds / fff-capability / rfc227-\* / 3 个 migration 等） | **不动** | 与 attestation 无关，全部原样通过                                                                                                                                                                                               |
