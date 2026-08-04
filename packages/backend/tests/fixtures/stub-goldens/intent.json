@@ -1,0 +1,86 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode intent-build\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-intent: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing nonce exits 3": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-intent: prompt is missing the RFC-200 envelope nonce\n",
+        "exitCode": 3,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "default (agent) variant": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"summary\\\">stub intent build: one auditor agent</port>\\n  <port name=\\\"changeset\\\">{\\\"$schema_version\\\":1,\\\"ops\\\":[{\\\"opId\\\":\\\"op-1\\\",\\\"action\\\":\\\"create\\\",\\\"resourceType\\\":\\\"agent\\\",\\\"tempRef\\\":\\\"$new:e2e-auditor\\\",\\\"payload\\\":{\\\"name\\\":\\\"e2e-auditor\\\",\\\"description\\\":\\\"audits code for e2e\\\",\\\"outputs\\\":[\\\"findings\\\"],\\\"bodyMd\\\":\\\"You audit.\\\"}}]}</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "workflow variant": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"summary\\\">stub intent build: workflow preview</port>\\n  <port name=\\\"changeset\\\">{\\\"$schema_version\\\":1,\\\"ops\\\":[{\\\"opId\\\":\\\"op-1\\\",\\\"action\\\":\\\"create\\\",\\\"resourceType\\\":\\\"agent\\\",\\\"tempRef\\\":\\\"$new:e2e-workflow-worker\\\",\\\"payload\\\":{\\\"name\\\":\\\"e2e-workflow-worker\\\",\\\"description\\\":\\\"handles and reviews workflow requests\\\",\\\"outputs\\\":[\\\"draft\\\",\\\"answer\\\"],\\\"bodyMd\\\":\\\"Complete the requested work.\\\"}},{\\\"opId\\\":\\\"op-2\\\",\\\"action\\\":\\\"create\\\",\\\"resourceType\\\":\\\"workflow\\\",\\\"tempRef\\\":\\\"$new:e2e-workflow\\\",\\\"payload\\\":{\\\"name\\\":\\\"e2e-workflow-preview\\\",\\\"description\\\":\\\"workflow graph preview fixture\\\",\\\"definition\\\":{\\\"$schema_version\\\":4,\\\"inputs\\\":[],\\\"nodes\\\":[{\\\"id\\\":\\\"worker\\\",\\\"kind\\\":\\\"agent-single\\\",\\\"agentRef\\\":\\\"$new:e2e-workflow-worker\\\",\\\"promptTemplate\\\":\\\"Produce a draft.\\\",\\\"position\\\":{\\\"x\\\":20,\\\"y\\\":120}},{\\\"id\\\":\\\"reviewer\\\",\\\"kind\\\":\\\"agent-single\\\",\\\"agentRef\\\":\\\"$new:e2e-workflow-worker\\\",\\\"promptTemplate\\\":\\\"Review the draft: {{draft}}\\\",\\\"position\\\":{\\\"x\\\":320,\\\"y\\\":120}},{\\\"id\\\":\\\"final_output\\\",\\\"kind\\\":\\\"output\\\",\\\"ports\\\":[{\\\"name\\\":\\\"answer\\\",\\\"bind\\\":{\\\"nodeId\\\":\\\"reviewer\\\",\\\"portName\\\":\\\"answer\\\"}}],\\\"position\\\":{\\\"x\\\":640,\\\"y\\\":120}}],\\\"edges\\\":[{\\\"id\\\":\\\"worker_to_reviewer\\\",\\\"source\\\":{\\\"nodeId\\\":\\\"worker\\\",\\\"portName\\\":\\\"draft\\\"},\\\"target\\\":{\\\"nodeId\\\":\\\"reviewer\\\",\\\"portName\\\":\\\"draft\\\"}},{\\\"id\\\":\\\"reviewer_to_output\\\",\\\"source\\\":{\\\"nodeId\\\":\\\"reviewer\\\",\\\"portName\\\":\\\"answer\\\"},\\\"target\\\":{\\\"nodeId\\\":\\\"final_output\\\",\\\"portName\\\":\\\"answer\\\"}}]}}}]}</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "the old intent-workflow launcher, reproduced by the same mode": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"summary\\\">stub intent build: workflow preview</port>\\n  <port name=\\\"changeset\\\">{\\\"$schema_version\\\":1,\\\"ops\\\":[{\\\"opId\\\":\\\"op-1\\\",\\\"action\\\":\\\"create\\\",\\\"resourceType\\\":\\\"agent\\\",\\\"tempRef\\\":\\\"$new:e2e-workflow-worker\\\",\\\"payload\\\":{\\\"name\\\":\\\"e2e-workflow-worker\\\",\\\"description\\\":\\\"handles and reviews workflow requests\\\",\\\"outputs\\\":[\\\"draft\\\",\\\"answer\\\"],\\\"bodyMd\\\":\\\"Complete the requested work.\\\"}},{\\\"opId\\\":\\\"op-2\\\",\\\"action\\\":\\\"create\\\",\\\"resourceType\\\":\\\"workflow\\\",\\\"tempRef\\\":\\\"$new:e2e-workflow\\\",\\\"payload\\\":{\\\"name\\\":\\\"e2e-workflow-preview\\\",\\\"description\\\":\\\"workflow graph preview fixture\\\",\\\"definition\\\":{\\\"$schema_version\\\":4,\\\"inputs\\\":[],\\\"nodes\\\":[{\\\"id\\\":\\\"worker\\\",\\\"kind\\\":\\\"agent-single\\\",\\\"agentRef\\\":\\\"$new:e2e-workflow-worker\\\",\\\"promptTemplate\\\":\\\"Produce a draft.\\\",\\\"position\\\":{\\\"x\\\":20,\\\"y\\\":120}},{\\\"id\\\":\\\"reviewer\\\",\\\"kind\\\":\\\"agent-single\\\",\\\"agentRef\\\":\\\"$new:e2e-workflow-worker\\\",\\\"promptTemplate\\\":\\\"Review the draft: {{draft}}\\\",\\\"position\\\":{\\\"x\\\":320,\\\"y\\\":120}},{\\\"id\\\":\\\"final_output\\\",\\\"kind\\\":\\\"output\\\",\\\"ports\\\":[{\\\"name\\\":\\\"answer\\\",\\\"bind\\\":{\\\"nodeId\\\":\\\"reviewer\\\",\\\"portName\\\":\\\"answer\\\"}}],\\\"position\\\":{\\\"x\\\":640,\\\"y\\\":120}}],\\\"edges\\\":[{\\\"id\\\":\\\"worker_to_reviewer\\\",\\\"source\\\":{\\\"nodeId\\\":\\\"worker\\\",\\\"portName\\\":\\\"draft\\\"},\\\"target\\\":{\\\"nodeId\\\":\\\"reviewer\\\",\\\"portName\\\":\\\"draft\\\"}},{\\\"id\\\":\\\"reviewer_to_output\\\",\\\"source\\\":{\\\"nodeId\\\":\\\"reviewer\\\",\\\"portName\\\":\\\"answer\\\"},\\\"target\\\":{\\\"nodeId\\\":\\\"final_output\\\",\\\"portName\\\":\\\"answer\\\"}}]}}}]}</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  }
+}

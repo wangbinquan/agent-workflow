@@ -1,0 +1,76 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode 999.0.0\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-commit: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "commit agent role (prompt mentions commit_message)": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"commit_message\\\">feat: e2e stub commit</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" please produce a commit_message for this diff",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "e2e-change.txt": false
+    }
+  },
+  "worker role dirties the worktree": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">stub e2e output</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" do some work",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "e2e-change.txt": true
+    }
+  },
+  "missing nonce still exits 3": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-commit: prompt is missing the RFC-200 envelope nonce\n",
+        "exitCode": 3,
+        "promptOut": "no envelope marker here",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  }
+}

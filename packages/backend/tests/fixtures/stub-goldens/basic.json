@@ -1,0 +1,198 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode custom-build\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "-v": {
+    "steps": [
+      {
+        "stdout": "stub-opencode custom-build\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode custom-build\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode: unsupported mode: frobnicate\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "no args at all": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode: unsupported mode: <no args>\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "plain run": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "do the thing <workflow-output nonce=\"aw-nonce-differential-1234\">",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "run with inventory drop requested": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "do the thing <workflow-output nonce=\"aw-nonce-differential-1234\">",
+        "inventory": "{\n  \"schemaVersion\": 1,\n  \"capturedAt\": 1700000000000,\n  \"agents\": [\n    {\"name\": \"e2e-stub-coder\", \"mode\": \"primary\", \"modelProviderId\": \"anthropic\", \"modelId\": \"claude-opus-4-7\", \"readonly\": true, \"source\": \"inline\"}\n  ],\n  \"skills\": [\n    {\"name\": \"fixture-skill\", \"source\": \"managed\", \"path\": \"/tmp/skills/fixture-skill\", \"description\": \"stub e2e skill\"}\n  ],\n  \"mcps\": [\n    {\"name\": \"fixture-mcp-ok\", \"type\": \"local\", \"status\": \"connected\", \"hint\": null},\n    {\"name\": \"fixture-mcp-warn\", \"type\": \"remote\", \"status\": \"needs_auth\", \"hint\": \"token missing\"}\n  ],\n  \"plugins\": [\n    {\"specifier\": \"file:///tmp/plugins/aw-inventory-dump.mjs\", \"source\": \"inline\"}\n  ]\n}\n"
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "prompt without a nonce (exit 3 path)": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode: prompt is missing the RFC-200 envelope nonce\n",
+        "exitCode": 3,
+        "promptOut": "do the thing with no envelope marker",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "workgroup leader (wg_decision)": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_assignments\\\">[]</port>\\n  <port name=\\\"wg_decision\\\">{\\\"action\\\":\\\"done\\\",\\\"summary\\\":\\\"stub e2e leader done\\\"}</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" protocol <port name=\"wg_decision\">",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "workgroup batch (wg_task_results, batch of 3)": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_task_results\\\">[{\\\"task\\\":1,\\\"summary\\\":\\\"stub e2e batch task 1 done\\\"},{\\\"task\\\":2,\\\"summary\\\":\\\"stub e2e batch task 2 done\\\"},{\\\"task\\\":3,\\\"summary\\\":\\\"stub e2e batch task 3 done\\\"}]</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" batch of 3 <port name=\"wg_task_results\">",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "workgroup batch without an explicit count defaults to 1": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_task_results\\\">[{\\\"task\\\":1,\\\"summary\\\":\\\"stub e2e batch task 1 done\\\"}]</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" <port name=\"wg_task_results\">",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "workgroup member (wg_result)": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_result\\\">{\\\"summary\\\":\\\"stub e2e member result\\\"}</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" <port name=\"wg_result\">",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "batch declaration wins over a prose mention of wg_result": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_task_results\\\">[{\\\"task\\\":1,\\\"summary\\\":\\\"stub e2e batch task 1 done\\\"},{\\\"task\\\":2,\\\"summary\\\":\\\"stub e2e batch task 2 done\\\"}]</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" batch of 2 <port name=\"wg_task_results\"> ... mentions wg_result in prose",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "LAST nonce wins when the prompt quotes an earlier envelope": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "quoted nonce=\"stale-one\" ... real nonce=\"aw-nonce-differential-1234\"",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  }
+}

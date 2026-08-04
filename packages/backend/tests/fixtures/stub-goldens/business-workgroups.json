@@ -1,0 +1,74 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode business-workgroups\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workgroups: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing --agent": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workgroups: missing --agent\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing nonce": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workgroups: prompt is missing the RFC-200 nonce\n",
+        "exitCode": 3,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "an unrecognised turn exits 14": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workgroups: unexpected agent 'anyone'\n",
+        "exitCode": 11,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {
+      "BUSINESS_WORKGROUP_STATE_DIR/prompts.jsonl": "{\"agent\":\"anyone\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+    },
+    "logs": {},
+    "sideEffects": {}
+  }
+}

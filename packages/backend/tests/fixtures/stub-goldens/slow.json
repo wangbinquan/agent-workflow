@@ -1,0 +1,128 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode 0.9.0\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-slow: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing nonce exits 3": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-slow: prompt is missing the RFC-200 envelope nonce\n",
+        "exitCode": 3,
+        "promptOut": "no marker",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "plain run": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "sub-second sleep is floored to zero (shell integer division)": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "no-envelope path": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "non-zero exit path": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 7,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "no envelope AND non-zero exit": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "",
+        "exitCode": 9,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "inventory drop requested": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
+        "inventory": "{\n  \"schemaVersion\": 1,\n  \"capturedAt\": 1700000000000,\n  \"agents\": [\n    {\"name\": \"e2e-stub-coder\", \"mode\": \"primary\", \"modelProviderId\": \"anthropic\", \"modelId\": \"claude-opus-4-7\", \"readonly\": true, \"source\": \"inline\"}\n  ],\n  \"skills\": [],\n  \"mcps\": [],\n  \"plugins\": []\n}\n"
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  }
+}

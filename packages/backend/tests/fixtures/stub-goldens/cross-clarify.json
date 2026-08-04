@@ -1,0 +1,147 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode 1.18.4\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {
+      "CROSS_CLARIFY_PROMPT_LOG": null
+    },
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-cross-clarify: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {
+      "CROSS_CLARIFY_PROMPT_LOG": null
+    },
+    "sideEffects": {}
+  },
+  "missing nonce exits 3": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-cross-clarify: prompt is missing the RFC-200 envelope nonce\n",
+        "exitCode": 3,
+        "promptOut": "no marker",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {
+      "CROSS_CLARIFY_PROMPT_LOG": null
+    },
+    "sideEffects": {}
+  },
+  "the RFC-162 sequence: designer once, questioner asks twice then finalises": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design v1</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" design it",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-redis\\\",\\\"title\\\":\\\"Should we use Redis for caching?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"Yes\\\",\\\"No\\\",\\\"Maybe\\\"]}]}</workflow-clarify>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" review it",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-redis\\\",\\\"title\\\":\\\"Should we use Redis for caching?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"Yes\\\",\\\"No\\\",\\\"Maybe\\\"]}]}</workflow-clarify>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" review it ## Clarify Q&A",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"main\\\">questioner v3: all good</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" review it ## Clarify Q&A",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "CROSS_CLARIFY_STUB_STATE/questioner.count": "3",
+      "CROSS_CLARIFY_STUB_STATE/designer.count": "1"
+    },
+    "logs": {
+      "CROSS_CLARIFY_PROMPT_LOG": "=== designer round 1 ===\nnonce=\"aw-nonce-differential-1234\" design it\n=== END designer round 1 ===\n=== questioner round 1 ===\nnonce=\"aw-nonce-differential-1234\" review it\n=== END questioner round 1 ===\n=== questioner round 2 ===\nnonce=\"aw-nonce-differential-1234\" review it ## Clarify Q&A\n=== END questioner round 2 ===\n=== questioner round 3 ===\nnonce=\"aw-nonce-differential-1234\" review it ## Clarify Q&A\n=== END questioner round 3 ===\n"
+    },
+    "sideEffects": {}
+  },
+  "an unknown agent takes the `other vN` branch and keeps its own count": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">other v1</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">other v2</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "CROSS_CLARIFY_STUB_STATE/someone-else.count": "2"
+    },
+    "logs": {
+      "CROSS_CLARIFY_PROMPT_LOG": "=== someone-else round 1 ===\nnonce=\"aw-nonce-differential-1234\" go\n=== END someone-else round 1 ===\n=== someone-else round 2 ===\nnonce=\"aw-nonce-differential-1234\" go\n=== END someone-else round 2 ===\n"
+    },
+    "sideEffects": {}
+  },
+  "the designer never asks, however many times it runs": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design v1</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design v2</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design v3</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "CROSS_CLARIFY_STUB_STATE/designer.count": "3"
+    },
+    "logs": {
+      "CROSS_CLARIFY_PROMPT_LOG": "=== designer round 1 ===\nnonce=\"aw-nonce-differential-1234\" go\n=== END designer round 1 ===\n=== designer round 2 ===\nnonce=\"aw-nonce-differential-1234\" go\n=== END designer round 2 ===\n=== designer round 3 ===\nnonce=\"aw-nonce-differential-1234\" go\n=== END designer round 3 ===\n"
+    },
+    "sideEffects": {}
+  }
+}

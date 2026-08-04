@@ -1,0 +1,821 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode workflow-matrix\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workflow-matrix: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing nonce exits 3": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workflow-matrix: prompt is missing the RFC-200 envelope nonce\n",
+        "exitCode": 3,
+        "promptOut": "no marker",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "no MATRIX_* marker exits 4": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workflow-matrix: no MATRIX_* marker in prompt\n",
+        "exitCode": 4,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" plain prompt",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "inventory drop is compact, not pretty": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"part\\\">alpha-fragment</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SOURCE_A",
+        "inventory": "{\"schemaVersion\":1,\"capturedAt\":1700000000000,\"agents\":[],\"skills\":[],\"mcps\":[],\"plugins\":[]}\n"
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_SOURCE_A": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"part\\\">alpha-fragment</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SOURCE_A",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_SOURCE_B": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"part\\\">beta-fragment</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SOURCE_B",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_MERGE": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">merged-alpha-beta</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MERGE",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_GIT_SUMMARY": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">git-summary-complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_GIT_SUMMARY",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_GIT_NOOP": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">observed-without-changes</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_GIT_NOOP",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_FANOUT_AGG": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"report\\\">aggregated-fanout-report</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_AGG",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_CROSS_DESIGN": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"design\\\">cross-design-v1</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_CROSS_DESIGN",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_LOOP_EXHAUST": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">still-pending</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EXHAUST",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_PROMPT_INPUTS with every required fragment present": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"report\\\">prompt-input-context-ok</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_PROMPT_INPUTS\nliteral {{auto_text}}\nthorough\n## auto_text\nauto-appended\n## files\ndocs/a.md\ndocs/b.md\n## tags\n[\"api\",\"docs\"]\n## branch\n{\"kind\":\"branch\",\"ref\":\"main\"}\nnode=prompt_auditor iteration=0 repo_count=1",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_PROMPT_INPUTS missing a fragment exits 10 and names it": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workflow-matrix: prompt missing expected content: thorough\n",
+        "exitCode": 10,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_PROMPT_INPUTS\nliteral {{auto_text}}",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_UPLOAD_INPUT without the uploaded files exits 11": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "missing uploaded file matrix-uploads/one.md\n",
+        "exitCode": 11,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_UPLOAD_INPUT\nmatrix-uploads/one.md",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_OUTPUT_KINDS writes both generated files and emits every port kind": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"text\\\">plain-value</port><port name=\\\"markdown\\\"># Inline document</port><port name=\\\"file\\\">matrix-generated/kinds/one.md</port><port name=\\\"names\\\">alpha\\nbeta</port><port name=\\\"documents\\\"># First document\\n<!-- @@aw-doc-boundary@@ -->\\n# Second document</port><port name=\\\"files\\\">matrix-generated/kinds/one.md\\nmatrix-generated/kinds/two.md</port><port name=\\\"done_signal\\\">ignored-signal-body</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_OUTPUT_KINDS",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/kinds/one.md": true,
+      "matrix-generated/kinds/two.md": true
+    }
+  },
+  "MATRIX_GIT_MUTATE dirties the worktree": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">git-mutation-complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_GIT_MUTATE",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/source.txt": true,
+      "matrix-generated/docs/report.md": true
+    }
+  },
+  "MATRIX_LOOP_EMPTY: iteration 0 continues, iteration 1 empties the port": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">alpha\\nbeta</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EMPTY\niteration=0",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\"></port><port name=\\\"items\\\">complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EMPTY\niteration=1",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_LOOP_EQUALS switches on iteration": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">alpha\\nbeta</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EQUALS\niteration=0",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">done</port><port name=\\\"items\\\">complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EQUALS\niteration=2",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_LOOP_COUNT switches on iteration": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">alpha\\nbeta\\ngamma</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_COUNT\niteration=0",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">done</port><port name=\\\"items\\\">only-one</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_COUNT\niteration=1",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_LOOP_FANOUT_AGG switches on iteration": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"report\\\">fanout-generation-0</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_FANOUT_AGG\niteration=0",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">done</port><port name=\\\"report\\\">fanout-generation-1</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_FANOUT_AGG\niteration=1",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_NESTED_CHECK switches on iteration": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">pending</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_CHECK\niteration=0",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">done</port><port name=\\\"items\\\">complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_CHECK\niteration=3",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_NESTED_MUTATE names its file after the iteration": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">nested-mutation-complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_MUTATE\niteration=2",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/nested/iter-2.txt": true,
+      "matrix-generated/nested/iter-0.txt": false
+    }
+  },
+  "an absent iteration marker reads as 0": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">nested-mutation-complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_MUTATE",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/nested/iter-0.txt": true
+    }
+  },
+  "the LAST iteration= on the first matching line wins": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">nested-mutation-complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_MUTATE\nprior iteration=0 now iteration=5",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/nested/iter-5.txt": true,
+      "matrix-generated/nested/iter-0.txt": false
+    }
+  },
+  "MATRIX_FANOUT_WORKER reads its shard from the aw-input block": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"finding\\\">finding:docs/ok.md</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_WORKER\n<aw-input name=\"doc\">\ndocs/ok.md",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_FANOUT_WORKER with no doc input falls back to `unknown`": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"finding\\\">finding:unknown</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_WORKER",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_FANOUT_WORKER fails shard docs/fail.md with exit 9": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "intentional fanout shard failure: docs/fail.md\n",
+        "exitCode": 9,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_WORKER\n<aw-input name=\"doc\">\ndocs/fail.md",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_FANOUT_MUTATE strips the directory and the .md suffix": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"finding\\\">mutated:docs/deep/note.md</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_MUTATE\n<aw-input name=\"doc\">\ndocs/deep/note.md",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/fanout/note.txt": true
+    }
+  },
+  "MATRIX_MIXED_DRAFT: clarify, then answer, then the rejection rerun": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-mixed\\\",\\\"title\\\":\\\"Deployment target?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"staging\\\",\\\"production\\\"]}]}</workflow-clarify>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">mixed-document-v1 target=staging</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT\nDeployment target?\n## Clarify Q&A\nstaging",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">mixed-document-v2 target=staging</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT\n## Review Rejection\npreserve the clarified target and revise the implementation\n## Prior Output\nmixed-document-v1 target=staging",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/mixed/release.md": true,
+      "matrix-generated/mixed/checks.md": true
+    }
+  },
+  "MATRIX_MIXED_DRAFT: the rejection block outranks a quoted clarify question": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">mixed-document-v2 target=staging</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT\nDeployment target?\n## Clarify Q&A\n## Review Rejection\npreserve the clarified target and revise the implementation\n## Prior Output\nmixed-document-v1 target=staging",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/mixed/release.md": true
+    }
+  },
+  "MATRIX_MIXED_DRAFT rejection missing its prior output exits 10": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workflow-matrix: prompt missing expected content: preserve the clarified target and revise the implementation\n",
+        "exitCode": 10,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT\n## Review Rejection",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_MIXED_AUDIT accepts a matching shard key": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"finding\\\">audited:src/a.ts</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_AUDIT\n<aw-input name=\"changed_file\">\nsrc/a.ts\n<aw-input name=\"shared_goal\">\nship the reviewed release\n<aw-input name=\"shard-key\">\nsrc/a.ts",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_MIXED_AUDIT rejects a shard key that disagrees with the input (exit 15)": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "mixed audit shard-key mismatch: input=src/a.ts shard=src/b.ts\n",
+        "exitCode": 15,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_AUDIT\n<aw-input name=\"changed_file\">\nsrc/a.ts\n<aw-input name=\"shared_goal\">\nship the reviewed release\n<aw-input name=\"shard-key\">\nsrc/b.ts",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_MIXED_AUDIT with no shard path exits 15": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "missing mixed audit shard path\n",
+        "exitCode": 15,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_AUDIT",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_MIXED_AUDIT with the wrong broadcast goal exits 15": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "missing mixed audit broadcast goal\n",
+        "exitCode": 15,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_AUDIT\n<aw-input name=\"changed_file\">\nsrc/a.ts\n<aw-input name=\"shared_goal\">\nsomething else",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_MIXED_SUMMARY requires both upstream fragments": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">mixed-release-summary</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_SUMMARY\naggregated-fanout-report\nship the reviewed release",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_MIXED_SUMMARY missing a fragment exits 10": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workflow-matrix: prompt missing expected content: ship the reviewed release\n",
+        "exitCode": 10,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_SUMMARY\naggregated-fanout-report",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_SELF_CLARIFY asks, then finalises once the question is echoed": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-self\\\",\\\"title\\\":\\\"Choose a delivery mode\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"safe\\\",\\\"fast\\\"]}]}</workflow-clarify>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SELF_CLARIFY",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">self-clarify-complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SELF_CLARIFY\nChoose a delivery mode\nsafe",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_CROSS_QUESTION asks, then finalises": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-cross\\\",\\\"title\\\":\\\"Which trade-off should win?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":false,\\\"options\\\":[\\\"latency\\\",\\\"consistency\\\"]}]}</workflow-clarify>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_CROSS_QUESTION",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">cross-clarify-complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_CROSS_QUESTION\nWhich trade-off should win?\nlatency",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_REVIEW_WRITE switches on the rejection block": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">review-ready-document-v1</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_REVIEW_WRITE",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">review-ready-document-v2</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_REVIEW_WRITE\n## Review Rejection",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_RUNTIME retry: first attempt exits 12, the retry succeeds": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "intentional first-attempt failure\n",
+        "exitCode": 12,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry\ntask=alpha",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"result\\\">retry-recovered</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry\ntask=alpha",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "MATRIX_STATE_DIR/retry-alpha": ""
+    },
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_RUNTIME retry keys the marker per task": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "intentional first-attempt failure\n",
+        "exitCode": 12,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry\ntask=alpha",
+        "inventory": null
+      },
+      {
+        "stdout": "",
+        "stderr": "intentional first-attempt failure\n",
+        "exitCode": 12,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry\ntask=beta",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "MATRIX_STATE_DIR/retry-alpha": "",
+      "MATRIX_STATE_DIR/retry-beta": ""
+    },
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_RUNTIME retry with no task= falls back to `unknown`": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "intentional first-attempt failure\n",
+        "exitCode": 12,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"result\\\">retry-recovered</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "MATRIX_STATE_DIR/retry-unknown": ""
+    },
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_RUNTIME fail exits 13": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "intentional permanent runtime failure\n",
+        "exitCode": 13,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nfail",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_RUNTIME with an unknown mode exits 14": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "unknown MATRIX_RUNTIME mode: frobnicate\n",
+        "exitCode": 14,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nfrobnicate",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_RUNTIME with no mode input at all exits 14": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "unknown MATRIX_RUNTIME mode: \n",
+        "exitCode": 14,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_RUNTIME timeout sleeps ~10s before emitting": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"result\\\">unexpected-slow-completion</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\ntimeout",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_RUNTIME cancel takes the same sleeping branch": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"result\\\">unexpected-slow-completion</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\ncancel",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  }
+}

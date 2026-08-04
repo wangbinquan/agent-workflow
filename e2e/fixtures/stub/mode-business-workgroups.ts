@@ -30,7 +30,13 @@ export function run(argv: readonly string[]): void {
   if (agent.length === 0) fail('missing --agent')
 
   const separator = argv.indexOf('--')
-  const prompt = separator >= 0 ? argv.slice(separator + 1).join(' ') : (argv[1] ?? '')
+  // RFC-254 T28b — the prompt is the SINGLE positional after `--`, so it is
+  // indexed, not joined. `slice(separator + 1).join(' ')` happened to agree
+  // while the layout had exactly one trailing argument, but it is the same
+  // whole-argv fold that 191bc32c's regression turned into a mass e2e failure,
+  // and `e2e-stub-argv-contract.test.ts` now refuses it. The golden replay
+  // confirms this changed no observable behaviour.
+  const prompt = separator >= 0 ? (argv[separator + 1] ?? '') : (argv[1] ?? '')
   const nonce = [...prompt.matchAll(/\bnonce="([^"]+)"/g)].at(-1)?.[1]
   if (nonce === undefined || nonce.length === 0) fail('prompt is missing the RFC-200 nonce', 3)
 

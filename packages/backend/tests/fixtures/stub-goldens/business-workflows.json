@@ -1,0 +1,127 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode business-workflows\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode business-workflows\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workflows: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing --agent": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workflows: missing --agent\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing nonce": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workflows: prompt is missing the RFC-200 nonce\n",
+        "exitCode": 3,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "an unknown agent is rejected rather than answered": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workflows: unrecognized agent: not-a-business-agent\n",
+        "exitCode": 4,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {
+      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"not-a-business-agent\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+    },
+    "logs": {},
+    "sideEffects": {}
+  },
+  "every prompt is appended to the shared prompts.jsonl": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workflows: business-code-auditor prompt missing expected content: BUSINESS_FIX_AUDIT\n",
+        "exitCode": 10,
+        "promptOut": null,
+        "inventory": null
+      },
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workflows: business-code-auditor prompt missing expected content: BUSINESS_FIX_AUDIT\n",
+        "exitCode": 10,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {
+      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+    },
+    "logs": {},
+    "sideEffects": {}
+  },
+  "inventory drop": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-business-workflows: business-code-auditor prompt missing expected content: BUSINESS_FIX_AUDIT\n",
+        "exitCode": 10,
+        "promptOut": null,
+        "inventory": "{\"schemaVersion\":1,\"capturedAt\":1700000000000,\"agents\":[],\"skills\":[],\"mcps\":[],\"plugins\":[]}\n"
+      }
+    ],
+    "state": {
+      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+    },
+    "logs": {},
+    "sideEffects": {}
+  }
+}

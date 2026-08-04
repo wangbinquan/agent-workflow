@@ -1,0 +1,98 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode 1.18.3\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {
+      "CLARIFY_INLINE_ARGV_LOG": null,
+      "CLARIFY_INLINE_SESSION_LOG": null
+    },
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-clarify-inline: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {
+      "CLARIFY_INLINE_ARGV_LOG": null,
+      "CLARIFY_INLINE_SESSION_LOG": null
+    },
+    "sideEffects": {}
+  },
+  "missing nonce exits 3 (but still logs argv)": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-clarify-inline: prompt is missing the RFC-200 envelope nonce\n",
+        "exitCode": 3,
+        "promptOut": "no marker",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {
+      "CLARIFY_INLINE_ARGV_LOG": "run --agent coder --format json -- no marker\n",
+      "CLARIFY_INLINE_SESSION_LOG": null
+    },
+    "sideEffects": {}
+  },
+  "round 0 asks and mints a session; round 1 resumes it and finalises": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"session.created\",\"sessionID\":\"opc_e2e_designer\",\"timestamp\":0}\n{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-db\\\",\\\"title\\\":\\\"Which database should we use?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"Postgres\\\",\\\"SQLite\\\"]}]}</workflow-clarify>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" design it",
+        "inventory": null
+      },
+      {
+        "stdout": "{\"type\":\"session.created\",\"sessionID\":\"opc_e2e_designer\",\"timestamp\":0}\n{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design after inline-clarify designer (session=opc_e2e_designer)</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" design it",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "CLARIFY_STUB_STATE/designer": "xx"
+    },
+    "logs": {
+      "CLARIFY_INLINE_ARGV_LOG": "run --agent designer --format json -- nonce=\"aw-nonce-differential-1234\" design it\nrun --agent designer --session opc_e2e_designer --format json -- nonce=\"aw-nonce-differential-1234\" design it\n",
+      "CLARIFY_INLINE_SESSION_LOG": "\nopc_e2e_designer\n"
+    },
+    "sideEffects": {}
+  },
+  "the session log records the PARSED flag, not a prompt that mentions it": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"session.created\",\"sessionID\":\"opc_e2e_designer\",\"timestamp\":0}\n{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-db\\\",\\\"title\\\":\\\"Which database should we use?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"Postgres\\\",\\\"SQLite\\\"]}]}</workflow-clarify>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" pass --session opc_e2e_fake to it",
+        "inventory": null
+      }
+    ],
+    "state": {
+      "CLARIFY_STUB_STATE/designer": "x"
+    },
+    "logs": {
+      "CLARIFY_INLINE_ARGV_LOG": "run --agent designer --format json -- nonce=\"aw-nonce-differential-1234\" pass --session opc_e2e_fake to it\n",
+      "CLARIFY_INLINE_SESSION_LOG": "\n"
+    },
+    "sideEffects": {}
+  }
+}

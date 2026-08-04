@@ -1,5 +1,11 @@
-// Guard: the Playwright e2e SHELL stubs must extract the prompt from the SAME
-// argv layout that runtime/opencode/spawn.ts's buildCommand actually emits.
+// Guard: the Playwright e2e stub must extract the prompt from the SAME argv
+// layout that runtime/opencode/spawn.ts's buildCommand actually emits.
+//
+// RFC-254 T28b replaced the shell stubs with one compiled TypeScript stub whose
+// behaviour is selected by `AW_STUB_MODE` (Windows cannot execute a `#!/bin/sh`
+// file). The guard follows them: it now drives each MODE through the same real
+// argv. The escape it exists to prevent is unchanged, and so is its shape —
+// derive the argv from the producer, run the consumer, assert the extraction.
 //
 // WHY THIS EXISTS (design/test-guard-audit-2026-07-21 — a live escape)
 // -------------------------------------------------------------------
@@ -29,13 +35,13 @@
 
 import { afterAll, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { buildCommand } from '../src/services/runtime/opencode/spawn'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
-const STUB_DIR = resolve(REPO_ROOT, 'e2e', 'fixtures')
+const STUB = resolve(REPO_ROOT, 'e2e', 'fixtures', 'stub', 'dispatch.ts')
 
 const NONCE = 'AWNONCE_argv_contract_9f3c'
 // A realistic prompt: multi-line, leads with `-` (the exact shape that forced the
@@ -57,30 +63,34 @@ afterAll(() => {
 })
 
 /**
- * Spawn one shell stub with the argv that spawn.ts's buildCommand REALLY emits
- * (only the leading binary is swapped for `/bin/sh <stub>`), returning its exit
- * code and stdout. Deriving argv from buildCommand is the whole point: the
- * layout under test is the production layout, not a hand-copied guess.
+ * Run one stub MODE with the argv that spawn.ts's buildCommand REALLY emits
+ * (only the leading binary is swapped for `bun run <dispatch.ts>`), returning
+ * its exit code and stdout. Deriving argv from buildCommand is the whole point:
+ * the layout under test is the production layout, not a hand-copied guess.
  */
 function runStub(
-  stub: string,
+  mode: string,
   opts: { env?: Record<string, string>; cwd?: string; agentName?: string } = {},
 ): { code: number | null; stdout: string; stderr: string; extractedPrompt: string | null } {
-  const stubPath = resolve(STUB_DIR, stub)
-  // AW_STUB_PROMPT_OUT makes every stub write the prompt it EXTRACTED to this
-  // file, so the test can assert the stub parsed the real `--` positional rather
+  // AW_STUB_PROMPT_OUT makes the stub write the prompt it EXTRACTED to this
+  // file, so the test can assert it parsed the real `--` positional rather
   // than a flag or the whole argv (the nonce alone can't tell those apart).
   const promptOut = resolve(tmp(), 'extracted-prompt')
-  // opencodeCmd replaces `head`, so cmd = ['/bin/sh', stubPath, 'run', '--agent',
+  // opencodeCmd replaces `head`, so cmd = ['bun', 'run', STUB, 'run', '--agent',
   // 'x', '--format', 'json', '--thinking', '--dangerously-skip-permissions',
   // '--', PROMPT] — byte-identical flag order to a real opencode spawn.
   const cmd = buildCommand(
-    { agent: { name: opts.agentName ?? 'x' }, opencodeCmd: ['/bin/sh', stubPath] },
+    { agent: { name: opts.agentName ?? 'x' }, opencodeCmd: [process.execPath, 'run', STUB] },
     PROMPT,
   )
   const r = spawnSync(cmd[0]!, cmd.slice(1), {
     cwd: opts.cwd ?? tmp(),
-    env: { ...process.env, AW_STUB_PROMPT_OUT: promptOut, ...(opts.env ?? {}) },
+    env: {
+      ...process.env,
+      AW_STUB_MODE: mode,
+      AW_STUB_PROMPT_OUT: promptOut,
+      ...(opts.env ?? {}),
+    },
     encoding: 'utf8',
   })
   let extractedPrompt: string | null = null
@@ -92,17 +102,17 @@ function runStub(
   return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', extractedPrompt }
 }
 
-describe('e2e shell stubs parse the buildCommand argv layout (post-191bc32c `--` regression guard)', () => {
-  // Every stub: MUST NOT exit 3 (the "prompt missing nonce" sentinel), MUST
+describe('the e2e stub parses the buildCommand argv layout (post-191bc32c `--` regression guard)', () => {
+  // Every mode: MUST NOT exit 3 (the "prompt missing nonce" sentinel), MUST
   // exit 0, and MUST echo the nonce back in an envelope it emitted.
   const cases: Array<{ name: string; env?: () => Record<string, string> }> = [
-    { name: 'stub-opencode.sh' },
-    { name: 'stub-opencode-commit.sh' },
-    { name: 'stub-opencode-slow.sh' },
-    { name: 'stub-opencode-clarify.sh', env: () => ({ CLARIFY_STUB_STATE: tmp() }) },
-    { name: 'stub-opencode-cross-clarify.sh', env: () => ({ CROSS_CLARIFY_STUB_STATE: tmp() }) },
+    { name: 'basic' },
+    { name: 'commit' },
+    { name: 'slow' },
+    { name: 'clarify', env: () => ({ CLARIFY_STUB_STATE: tmp() }) },
+    { name: 'cross-clarify', env: () => ({ CROSS_CLARIFY_STUB_STATE: tmp() }) },
     {
-      name: 'stub-opencode-clarify-inline.sh',
+      name: 'clarify-inline',
       env: () => {
         const d = tmp()
         return { CLARIFY_STUB_STATE: d, CLARIFY_INLINE_ARGV_LOG: resolve(d, 'argv.log') }
@@ -126,6 +136,29 @@ describe('e2e shell stubs parse the buildCommand argv layout (post-191bc32c `--`
     })
   }
 
+  // `intent` is absent from the list above because its original never wrote
+  // AW_STUB_PROMPT_OUT, so there is nothing to compare the extracted value
+  // against — and the port did not add the hook, because a port that grows
+  // behaviour cannot be checked against what it replaced. What covers it
+  // instead is the structural fact below: after RFC-254 T28b there is exactly
+  // ONE extraction, shared by every mode, so proving it for the modes that can
+  // report it proves it for the ones that cannot. This assertion is what keeps
+  // that "exactly one" true.
+  test('no mode folds an argv slice into its prompt', () => {
+    // The failure shape 191bc32c produced, in source form. `$*` in shell and
+    // `argv.slice(i).join(' ')` in TypeScript are the same mistake: they read
+    // MORE than the single trailing positional, so they keep "working" until
+    // the layout grows an argument and then silently return the wrong string.
+    // Three modes carried it in from the TypeScript stubs they were ported from.
+    const modeDir = resolve(REPO_ROOT, 'e2e', 'fixtures', 'stub')
+    const offenders: string[] = []
+    for (const name of readdirSync(modeDir).filter((f) => f.startsWith('mode-'))) {
+      const source = readFileSync(resolve(modeDir, name), 'utf8')
+      if (/argv\s*\.slice\([^)]*\)\s*\.join\(/.test(source)) offenders.push(name)
+    }
+    expect(offenders).toEqual([])
+  })
+
   test('buildCommand still delivers the prompt as a trailing `--` positional (contract anchor)', () => {
     // If this ever changes, the spawns above are what verify the stubs kept up;
     // this assertion documents the coupling so a reader knows why the stubs care.
@@ -146,7 +179,7 @@ describe('e2e shell stubs parse the buildCommand argv layout (post-191bc32c `--`
     // PROMPT carries no `commit_message` text of its own, so a worker run must emit
     // the `answer` port even when `--agent commit_message` sits in argv. A `$*` stub
     // sees the flag and wrongly emits the commit_message port.
-    const r = runStub('stub-opencode-commit.sh', { agentName: 'commit_message' })
+    const r = runStub('commit', { agentName: 'commit_message' })
     expect(r.code).toBe(0)
     expect(r.stdout).toContain('name=\\"answer\\"')
     expect(r.stdout).not.toContain('name=\\"commit_message\\"')
@@ -159,7 +192,7 @@ describe('e2e shell stubs parse the buildCommand argv layout (post-191bc32c `--`
   // MUST be empty even though this PROMPT body carries `--session opc_...`.
   test('clarify-inline stub reads --session from the FLAG, immune to prompt body text', () => {
     const sessionLog = resolve(tmp(), 'session.log')
-    const r = runStub('stub-opencode-clarify-inline.sh', {
+    const r = runStub('clarify-inline', {
       env: { CLARIFY_STUB_STATE: tmp(), CLARIFY_INLINE_SESSION_LOG: sessionLog },
     })
     expect(r.code).toBe(0)

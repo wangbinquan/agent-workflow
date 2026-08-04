@@ -51,7 +51,7 @@ const CANONICAL = [
   'packages/backend/src/util/opencode*.ts',
   'packages/backend/src/opencode-plugin/**',
   'packages/backend/tests/integration-opencode/**',
-  'e2e/fixtures/stub-opencode*.sh',
+  'e2e/fixtures/stub/**',
   '.github/workflows/integration-opencode.yml',
 ].sort()
 

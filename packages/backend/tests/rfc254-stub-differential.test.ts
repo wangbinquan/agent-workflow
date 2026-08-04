@@ -1,23 +1,35 @@
-// RFC-254 T28b — differential proof that the ported stub matches the shell one.
+// RFC-254 T28b — the ported e2e stub must reproduce the behaviour of the stub
+// it replaced, byte for byte.
 //
 // The design gate (P1-5) was explicit: a mapping table is not a contract, and
 // the migration is only safe if the NEW implementation is compared against the
-// OLD one on identical inputs before the old one is deleted. So this runs both,
-// on the same argv and env, and compares stdout / stderr / exit code / side
-// effects byte-for-byte.
+// OLD one on identical inputs before the old one is deleted.
+//
+// HOW THE PROOF SURVIVED THE DELETION
+// -----------------------------------
+// The originals were nine `#!/bin/sh` scripts and three `bun run` files. They
+// could not stay: a shell script is not executable on Windows, which is the
+// whole reason for the port. So before deleting them their actual observable
+// behaviour — stdout, stderr, exit code, state files, log files, worktree side
+// effects, across every case below — was RECORDED into
+// `fixtures/stub-goldens/`, and this suite now replays the ported stub against
+// those recordings. The comparison is the same one that ran against the live
+// originals; only the other side of it is now a file.
+//
+// Re-record with `UPDATE_STUB_GOLDENS=1`, which runs the ORIGINAL — so it works
+// only in a checkout that still has them, i.e. it is not a way to bless a
+// regression. Deleting a golden is not a way either: a missing one fails.
 //
 // Several stubs are ROUND-DRIVEN: what they emit depends on how many times they
 // have already been called for a given key. A single invocation would only ever
 // exercise round 1 and would call the port proven while the interesting half —
 // the state file naming, the counter arithmetic, the round-2 branch — went
 // unobserved. Those cases therefore run a SEQUENCE of invocations against one
-// state directory per side, and compare the whole transcript plus the resulting
-// state files.
+// state directory, and the whole transcript plus the resulting state is what
+// gets compared.
 //
-// It runs on POSIX only — the shell stub cannot execute on Windows, which is
-// the entire reason for the port. That is not a coverage gap: what Windows
-// needs proven is that the PORTED stub works there, which the Windows CI job
-// and the real-machine acceptance cover.
+// Unlike the live-comparison form, this runs on Windows too: replaying a
+// recording needs no `sh`.
 
 import { describe, expect, test } from 'bun:test'
 import {
@@ -28,12 +40,13 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
-const shellStub = (name: string): string => join(REPO_ROOT, 'e2e', 'fixtures', name)
+const originalStub = (name: string): string => join(REPO_ROOT, 'e2e', 'fixtures', name)
 const PORTED_STUB = join(REPO_ROOT, 'e2e', 'fixtures', 'stub', 'dispatch.ts')
 
 interface Capture {
@@ -98,6 +111,13 @@ interface DiffCase {
   steps?: Step[]
   /** Files, relative to the run cwd, whose presence must match on both sides. */
   sideEffects?: string[]
+  /**
+   * Record this case against a DIFFERENT original than the mode's own.
+   * `intent-workflow-opencode.sh` was two lines — export a variant, exec the
+   * intent stub — so the ported mode has to reproduce it too, and that is what
+   * lets the launcher be deleted rather than ported.
+   */
+  originalScript?: string
 }
 
 interface ModeSpec {
@@ -191,60 +211,86 @@ async function runSide(
 const maskTimestamps = (text: string): string =>
   text.replaceAll(/"timestamp":\d+/g, '"timestamp":T')
 
+const GOLDEN_DIR = join(import.meta.dir, 'fixtures', 'stub-goldens')
+const RECORDING = process.env.UPDATE_STUB_GOLDENS === '1'
+
+/** Everything about a run that the comparison looks at, in a JSON-safe shape. */
+type Golden = Record<string, SideResult>
+
+function goldenPath(mode: string): string {
+  return join(GOLDEN_DIR, `${mode}.json`)
+}
+
+function readGolden(mode: string): Golden {
+  const path = goldenPath(mode)
+  if (!existsSync(path)) {
+    throw new Error(
+      `missing golden ${path}. It records what the stub this mode replaced actually did; ` +
+        `re-create it with UPDATE_STUB_GOLDENS=1 in a checkout that still has the original.`,
+    )
+  }
+  return JSON.parse(readFileSync(path, 'utf8')) as Golden
+}
+
 /**
- * Register the differential suite for one mode.
+ * Register the suite for one mode.
  *
  * Every assertion is byte-exact, INCLUDING stderr: the ported stubs are handed
  * their diagnostic name explicitly (see `skeleton.parseInvocation`) precisely so
  * that this comparison can be exact rather than "both produced something".
  */
 function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
-  describe.skipIf(process.platform === 'win32')(
-    `RFC-254 T28b — \`${spec.mode}\` mode matches ${spec.script}`,
-    () => {
-      for (const testCase of cases) {
-        test(`byte-identical: ${testCase.name}`, async () => {
-          // The three that were already TypeScript were run as `bun run <file>`.
-          const original = spec.script.endsWith('.ts')
-            ? [process.execPath, 'run', shellStub(spec.script)]
-            : [shellStub(spec.script)]
-          const [shell, ported] = await Promise.all([
-            runSide(original, {}, spec, testCase),
-            runSide(
-              [process.execPath, 'run', PORTED_STUB],
-              { AW_STUB_MODE: spec.mode },
-              spec,
-              testCase,
-            ),
-          ])
+  describe(`RFC-254 T28b — \`${spec.mode}\` mode reproduces ${spec.script}`, () => {
+    const recorded: Golden = {}
 
-          expect(ported.steps.length, 'step count').toBe(shell.steps.length)
-          for (const [index, expected] of shell.steps.entries()) {
-            const actual = ported.steps[index]
-            const at = `step ${index + 1}`
-            expect(actual?.exitCode, `${at} exit code`).toBe(expected.exitCode)
-            const norm = spec.normalizeStdout ?? ((text: string) => text)
-            expect(norm(actual?.stdout ?? ''), `${at} stdout`).toBe(norm(expected.stdout))
-            expect(actual?.stderr, `${at} stderr`).toBe(expected.stderr)
-            expect(actual?.promptOut, `${at} AW_STUB_PROMPT_OUT`).toBe(expected.promptOut)
-            if (expected.inventory === null) {
-              expect(actual?.inventory, `${at} inventory not written`).toBeNull()
-            } else {
-              expect(JSON.parse(actual?.inventory ?? 'null'), `${at} inventory`).toEqual(
-                JSON.parse(expected.inventory),
-              )
-            }
+    for (const testCase of cases) {
+      test(`byte-identical: ${testCase.name}`, async () => {
+        if (RECORDING) {
+          // The three that were already TypeScript were run as `bun run <file>`.
+          const script = testCase.originalScript ?? spec.script
+          const original = script.endsWith('.ts')
+            ? [process.execPath, 'run', originalStub(script)]
+            : [originalStub(script)]
+          recorded[testCase.name] = await runSide(original, {}, spec, testCase)
+          writeFileSync(goldenPath(spec.mode), `${JSON.stringify(recorded, null, 2)}\n`)
+          return
+        }
+
+        const expectedRun = readGolden(spec.mode)[testCase.name]
+        expect(expectedRun, `golden entry for "${testCase.name}"`).toBeDefined()
+        const ported = await runSide(
+          [process.execPath, 'run', PORTED_STUB],
+          { AW_STUB_MODE: spec.mode },
+          spec,
+          testCase,
+        )
+
+        expect(ported.steps.length, 'step count').toBe(expectedRun!.steps.length)
+        for (const [index, expected] of expectedRun!.steps.entries()) {
+          const actual = ported.steps[index]
+          const at = `step ${index + 1}`
+          expect(actual?.exitCode, `${at} exit code`).toBe(expected.exitCode)
+          const norm = spec.normalizeStdout ?? ((text: string) => text)
+          expect(norm(actual?.stdout ?? ''), `${at} stdout`).toBe(norm(expected.stdout))
+          expect(actual?.stderr, `${at} stderr`).toBe(expected.stderr)
+          expect(actual?.promptOut, `${at} AW_STUB_PROMPT_OUT`).toBe(expected.promptOut)
+          if (expected.inventory === null) {
+            expect(actual?.inventory, `${at} inventory not written`).toBeNull()
+          } else {
+            expect(JSON.parse(actual?.inventory ?? 'null'), `${at} inventory`).toEqual(
+              JSON.parse(expected.inventory),
+            )
           }
-          // The state files ARE the round counter: if the two sides name or
-          // fill them differently then "round 2" means different things on
-          // each side, and the transcript above only agreed by luck.
-          expect(ported.state, 'state files').toEqual(shell.state)
-          expect(ported.logs, 'log files').toEqual(shell.logs)
-          expect(ported.sideEffects, 'cwd side effects').toEqual(shell.sideEffects)
-        }, 60_000)
-      }
-    },
-  )
+        }
+        // The state files ARE the round counter: if the port names or fills
+        // them differently then "round 2" means something different, and the
+        // transcript above only agreed by luck.
+        expect(ported.state, 'state files').toEqual(expectedRun!.state)
+        expect(ported.logs, 'log files').toEqual(expectedRun!.logs)
+        expect(ported.sideEffects, 'cwd side effects').toEqual(expectedRun!.sideEffects)
+      }, 60_000)
+    }
+  })
 }
 
 const NONCE = 'aw-nonce-differential-1234'
@@ -324,9 +370,15 @@ differentialSuite({ mode: 'intent', script: 'stub-opencode-intent.sh' }, [
   { name: 'missing nonce exits 3', args: runArgs('no marker') },
   { name: 'default (agent) variant', args: runArgs(`nonce="${NONCE}" build me an auditor`) },
   {
-    name: 'workflow variant (the old intent-workflow launcher)',
+    name: 'workflow variant',
     args: runArgs(`nonce="${NONCE}" build me a workflow`),
     env: { STUB_INTENT_VARIANT: 'workflow' },
+  },
+  {
+    name: 'the old intent-workflow launcher, reproduced by the same mode',
+    args: runArgs(`nonce="${NONCE}" build me a workflow`),
+    env: { STUB_INTENT_VARIANT: 'workflow' },
+    originalScript: 'intent-workflow-opencode.sh',
   },
 ])
 
@@ -949,34 +1001,31 @@ differentialSuite(
   ],
 )
 
-describe.skipIf(process.platform === 'win32')(
-  'RFC-254 T28b — where the shell original had no single answer',
-  () => {
-    test('a non-ASCII agent name still lands on ONE state file across rounds', async () => {
-      // The shell derived its state-file name with `tr -c 'A-Za-z0-9._-' '_'`,
-      // whose granularity is locale-dependent: BSD tr under a UTF-8 locale folds
-      // `设计者` to 3 underscores, the same tr under LC_ALL=C — and GNU tr always
-      // — folds it to 9. A differential assertion here would only be pinning
-      // whichever shell happened to run, so what is asserted instead is the
-      // property the counter actually needs: two calls for one agent must share
-      // one file, so round 2 finalises rather than asking again forever.
-      const root = mkdtempSync(join(tmpdir(), 'aw-stub-fold-'))
-      try {
-        const args = runArgs(`nonce="${NONCE}" go`, '设计者')
-        const env = { AW_STUB_MODE: 'clarify', CLARIFY_STUB_STATE: root }
-        const first = await capture([process.execPath, 'run', PORTED_STUB], args, env)
-        const second = await capture([process.execPath, 'run', PORTED_STUB], args, env)
-        expect(first.stdout).toContain('<workflow-clarify')
-        expect(second.stdout).toContain('<workflow-output')
-        expect(Object.keys(readTree(root)), 'exactly one counter file').toHaveLength(1)
-      } finally {
-        rmSync(root, { recursive: true, force: true })
-      }
-    }, 30_000)
-  },
-)
+describe('RFC-254 T28b — where the shell original had no single answer', () => {
+  test('a non-ASCII agent name still lands on ONE state file across rounds', async () => {
+    // The shell derived its state-file name with `tr -c 'A-Za-z0-9._-' '_'`,
+    // whose granularity is locale-dependent: BSD tr under a UTF-8 locale folds
+    // `设计者` to 3 underscores, the same tr under LC_ALL=C — and GNU tr always
+    // — folds it to 9. A differential assertion here would only be pinning
+    // whichever shell happened to run, so what is asserted instead is the
+    // property the counter actually needs: two calls for one agent must share
+    // one file, so round 2 finalises rather than asking again forever.
+    const root = mkdtempSync(join(tmpdir(), 'aw-stub-fold-'))
+    try {
+      const args = runArgs(`nonce="${NONCE}" go`, '设计者')
+      const env = { AW_STUB_MODE: 'clarify', CLARIFY_STUB_STATE: root }
+      const first = await capture([process.execPath, 'run', PORTED_STUB], args, env)
+      const second = await capture([process.execPath, 'run', PORTED_STUB], args, env)
+      expect(first.stdout).toContain('<workflow-clarify')
+      expect(second.stdout).toContain('<workflow-output')
+      expect(Object.keys(readTree(root)), 'exactly one counter file').toHaveLength(1)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 30_000)
+})
 
-describe.skipIf(process.platform === 'win32')('RFC-254 T28b — dispatcher', () => {
+describe('RFC-254 T28b — dispatcher', () => {
   test('refuses an unknown mode instead of falling back', async () => {
     // A spec that forgets AW_STUB_MODE must fail loudly. Silently running
     // `basic` would produce a green test over the wrong stub.
@@ -989,19 +1038,19 @@ describe.skipIf(process.platform === 'win32')('RFC-254 T28b — dispatcher', () 
     expect(missing.exitCode).toBe(2)
   }, 30_000)
 
-  test('the workflow launcher is the same mode with a variable, not a separate stub', async () => {
-    // `intent-workflow-opencode.sh` was two lines: export the variant, exec the
-    // intent stub. Proving the ported mode reproduces IT too is what lets the
-    // launcher file be deleted rather than ported.
-    const args = runArgs(`nonce="${NONCE}" build me a workflow`)
-    const [launcher, ported] = await Promise.all([
-      capture([shellStub('intent-workflow-opencode.sh')], args, {}),
-      capture([process.execPath, 'run', PORTED_STUB], args, {
-        AW_STUB_MODE: 'intent',
-        STUB_INTENT_VARIANT: 'workflow',
-      }),
-    ])
-    expect(ported.stdout).toBe(launcher.stdout)
-    expect(ported.exitCode).toBe(launcher.exitCode)
-  }, 30_000)
+  test('every mode has a golden, and every golden has a mode', () => {
+    // A mode with no recording is unproven; a recording with no mode is a
+    // deleted behaviour nobody noticed. Both are silent by default.
+    const modes = new Set(
+      [...readFileSync(PORTED_STUB, 'utf8').matchAll(/^\s*'?([a-z-]+)'?: run[A-Z]/gm)].map(
+        (match) => match[1],
+      ),
+    )
+    const goldens = new Set(
+      readdirSync(GOLDEN_DIR)
+        .filter((name) => name.endsWith('.json'))
+        .map((name) => name.slice(0, -'.json'.length)),
+    )
+    expect([...modes].sort()).toEqual([...goldens].sort())
+  })
 })

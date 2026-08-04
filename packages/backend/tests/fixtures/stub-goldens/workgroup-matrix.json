@@ -1,0 +1,90 @@
+{
+  "--version": {
+    "steps": [
+      {
+        "stdout": "stub-opencode workgroup-matrix\n",
+        "stderr": "",
+        "exitCode": 0,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "unsupported mode": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workgroup-matrix: unsupported mode: nope\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing --agent": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workgroup-matrix: missing --agent\n",
+        "exitCode": 2,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "missing nonce": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workgroup-matrix: prompt is missing the RFC-200 nonce\n",
+        "exitCode": 3,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "an unexpected agent exits 15": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workgroup-matrix: unexpected agent 'nobody'\n",
+        "exitCode": 15,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {
+      "WORKGROUP_MATRIX_STATE_DIR/prompts.jsonl": "{\"agent\":\"nobody\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+    },
+    "logs": {},
+    "sideEffects": {}
+  },
+  "the researcher turn": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "stub-opencode-workgroup-matrix: showcase-wg-researcher prompt missing expected content: Title: research-release\n",
+        "exitCode": 10,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {
+      "WORKGROUP_MATRIX_STATE_DIR/prompts.jsonl": "{\"agent\":\"showcase-wg-researcher\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" <port name=\\\"wg_result\\\"> go\"}\n"
+    },
+    "logs": {},
+    "sideEffects": {}
+  }
+}
