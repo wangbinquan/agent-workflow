@@ -73,6 +73,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // (activated on the macOS CI shards; the test re-probes and no-ops where
   // the mechanism is unusable).
   'packages/backend/tests/rfc205-sandbox-integration.test.ts#skip': 1,
+  // 2026-08-04 沙箱审计：脚本节点 `network:'deny'` 的真围栏证据（被围栏进程出网被拒
+  // **且** 工作树仍可写，外加一条不加围栏的对照组）。同一条已审阅的 RUN_SANDBOX_ITEST
+  // 门，macOS 每个后端分片都激活；此前该承诺只有 argv / 渲染层断言。
+  'packages/backend/tests/script-netless-real-fence-2026-08-04.test.ts#skip': 1,
   // RFC-242 T5: the REAL no-network evidence for claude's local-MCP children
   // (curl denied / worktree IO preserved) shares the same reviewed
   // RUN_SANDBOX_ITEST gate and is activated on every macOS backend shard. The

@@ -280,6 +280,11 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   `bwrap`），断言「出网被拒 **且** 工作树仍可写」，并带一条不加围栏的对照组——否则在本来就
   没网的环境里第一条是假绿。
 
+**另外两条此前只靠推理的 Linux 断言，本轮一并在容器里实证**：①`--bind` 源缺失确实中止整个
+spawn（`bwrap: Can't find source path …: No such file or directory`）——这是 `appHome/repos`
+那条 P0 的前提；②appHome 打 tmpfs 后，sibling 仓路径在沙箱内 `mkdir -p` + 写入**全部成功、
+读回也是新内容**，退出后宿主上仍是旧内容——多仓 P0 描述的「静默蒸发」通道由此从推断变成实测。
+
 **仍未修，各有明确理由**：
 
 - ⏳ **opencode 本地 MCP 拒绝 PATH token / 不解析解释器链**（上面 P1 条）——修法是复用
@@ -294,12 +299,14 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   非空 `network` 显式告警，避免它看起来像个已生效的开关。
 - ⏳ **`sourceGuard` 祖先黑名单扫到文件系统根**——诊断半已修（错误里给出命中的绝对路径）；
   **收窄扫描范围是安全决策**，需 RFC-224 owner 拍板（收窄 = 放宽一条 opencode 配置继承面）。
-- ⏳ **Linux bwrap 下取消的 SIGTERM 宽限塌缩为即时 SIGKILL**——**唯一一条本轮仍未修的**。
-  机制链读源码成立（组杀同时命中 bwrap monitor，monitor 退出后 `--die-with-parent` 对
-  namespace init 直接 SIGKILL），但两个候选修法（wrapper 里做信号代理 / 宽限期内先经 control
-  通道请求 launcher 自退、超时再组杀）都必须在真 Linux 上验证：改错会让**取消整体失效**，
-  那比宽限窗口偏短严重得多。已在 `runner.ts:KILL_ESCALATION_GRACE_MS` 的注释里如实标注该
-  常量在 Linux 上名不副实，不再让代码给出一个它兑现不了的承诺。
+- ✅ **(已修 2026-08-04，Docker 实证) Linux bwrap 下取消的 SIGTERM 宽限塌缩为即时 SIGKILL**：
+  在 Debian bookworm + bubblewrap 0.8.0 容器里用**平台自己的 `killProcessTree`** 做 A/B——
+  旧行为下内层探针只留下 `INNER_STARTED`（连收到 TERM 都没来得及记），修复后完整走完
+  `INNER_GOT_TERM → INNER_CLEAN_EXIT`。成因即组杀同时命中 bwrap monitor，monitor 在 TERM 上
+  退出，`--die-with-parent` 随即 SIGKILL 掉 PID namespace 的 init。修法：优雅信号投给组内
+  **除组长外**的成员（bwrap 在其子进程退出后自行退出），升级信号仍走整组；置位条件从**渲染
+  出 argv 的拓扑**推导（`mechanism==='bwrap'` 且非 `provider-child-only`），而不是按 OS 名——
+  macOS 的 `sandbox-exec` 原地 exec，组长就是运行时本身，放过它等于永远不发 TERM。
 - ⏳ **claude 的四个 containment 告警码只进 daemon 日志**、**设置页不展示 reasonCodes /
   CLI 指引从 UI 不可达**、**脚本 `network:'deny'` 的真围栏无 real-mechanism 测试**——
   三条都是呈现/覆盖增强，不改执行语义，排入下一轮。
@@ -309,7 +316,8 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 `readonly` 档的 `git status`/`diff`/`log` 实测正常（git 拿不到 index 锁不致命，`add`/`stash` 如期失败）；
 opencode 的 HOME/XDG/TMPDIR/store 全在 storeRoot 下且被并进放行集，**session resume 不会因 tmpfs 丢失**；
 `--unshare-pid` 不破坏组杀（monitor argv 含内层命令，shape gate 命中）；32 仓的 Seatbelt profile 与 bwrap argv
-离 `ARG_MAX` 还差三个数量级；`--unshare-net` 的 netns 有 lo（Linux 侧默认 down，需实测）；
+离 `ARG_MAX` 还差三个数量级；`--unshare-net` 的 netns 里 **lo 是 UP 且带 127.0.0.1**（bubblewrap 0.8.0 容器实测，
+此前 backlog 猜「默认 down」是错的——netless 脚本在 Linux 上可以用 localhost）；
 `maskDiagnosticsText` 不会误屏蔽沙箱错误文本（反而欠屏蔽 `NAME=value` 形态）；
 Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` / `getcwd`（只影响逐级 stat 路径前缀的实现）；
 `limits.ts` 不统计进程树（只算时长与 token），与沙箱拓扑无关；沙箱多一跳不造成 stdout 缓冲丢尾。

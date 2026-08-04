@@ -29,8 +29,52 @@ export function isProcessAlive(pid: number): boolean {
  * exit, EPERM, or a pre-RFC-098 pid that is not a group leader). Returns
  * false when no signal could be delivered at all.
  */
-export function killProcessTree(pid: number, signal: KillTreeSignal): boolean {
+export function killProcessTree(
+  pid: number,
+  signal: KillTreeSignal,
+  opts?: {
+    /**
+     * True when `pid` is a sandbox MONITOR that merely supervises the real
+     * child (Linux bwrap outer wrapper), not the runtime itself.
+     *
+     * 2026-08-04, verified in a Debian container with bubblewrap 0.8.0 rather
+     * than reasoned about: a plain group SIGTERM reaches the monitor at the
+     * same instant as the runtime, the monitor exits on TERM, and
+     * `--die-with-parent` then SIGKILLs the PID namespace's init — taking the
+     * whole namespace with it. The probe process observed `INNER_GOT_TERM` and
+     * was killed BEFORE finishing a 0.3 s cleanup, so the advertised 10 s grace
+     * was worth roughly zero: no session abort, no session-DB flush, no final
+     * stdout. macOS (sandbox-exec execs in place, no supervisor) honoured the
+     * full window — two OSes, two cancellation semantics.
+     *
+     * With this flag the graceful phase signals every OTHER member of the group
+     * and leaves the monitor alone; bwrap exits by itself once its child does.
+     * Same container, same probe: `INNER_GOT_TERM` AND `INNER_CLEAN_EXIT`.
+     *
+     * Only meaningful for a graceful signal — the escalation must still take
+     * the monitor down, so SIGKILL always goes to the whole group.
+     */
+    groupLeaderIsSandboxMonitor?: boolean
+  },
+): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false
+  if (opts?.groupLeaderIsSandboxMonitor === true && signal !== 'SIGKILL') {
+    const members = processGroupMembers(pid).filter((member) => member !== pid)
+    if (members.length > 0) {
+      let delivered = false
+      for (const member of members) {
+        try {
+          process.kill(member, signal)
+          delivered = true
+        } catch {
+          // Already gone; other members may still be signalable.
+        }
+      }
+      if (delivered) return true
+    }
+    // No enumerable members (ps unavailable, or the child already exited) —
+    // fall through to the group signal rather than delivering nothing.
+  }
   try {
     process.kill(-pid, signal)
     return true
@@ -41,6 +85,24 @@ export function killProcessTree(pid: number, signal: KillTreeSignal): boolean {
     } catch {
       return false
     }
+  }
+}
+
+/** Host pids sharing `pid`'s process group. Empty when `ps` is unavailable. */
+export function processGroupMembers(pid: number): number[] {
+  try {
+    const out = Bun.spawnSync(['ps', '-e', '-o', 'pid=,pgid='])
+    if (out.exitCode !== 0) return []
+    const members: number[] = []
+    for (const line of new TextDecoder().decode(out.stdout).split('\n')) {
+      const [rawPid, rawPgid] = line.trim().split(/\s+/)
+      if (rawPid === undefined || rawPgid === undefined) continue
+      const memberPid = Number(rawPid)
+      if (Number.isInteger(memberPid) && Number(rawPgid) === pid) members.push(memberPid)
+    }
+    return members
+  } catch {
+    return []
   }
 }
 

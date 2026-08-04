@@ -66,8 +66,15 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
     // precondition for `-pid` group signals reaching grandchildren.
     expect(countNonCommentMatches(runnerSrc, /detached: true/g)).toBe(1)
 
-    // killTree = process.kill(-pid, sig) with single-process fallback.
-    expect(countNonCommentMatches(runnerSrc, /process\.kill\(-pid, signal\)/g)).toBe(1)
+    // killTree delegates the group signal to `killProcessTree` (util/process),
+    // keeping the single-process `safeKill` fallback.
+    //
+    // 2026-08-04: the group kill moved out of this file. It is no longer a bare
+    // `process.kill(-pid, …)` because the graceful phase must be able to spare a
+    // bwrap MONITOR: verified in a Debian/bubblewrap container that a plain group
+    // SIGTERM kills the monitor, and `--die-with-parent` then SIGKILLs the PID
+    // namespace — collapsing the advertised 10 s grace to ~0.
+    expect(countNonCommentMatches(runnerSrc, /killProcessTree\(pid, signal, \{/g)).toBe(1)
     expect(countNonCommentMatches(runnerSrc, /safeKill\(child, signal\)/g)).toBe(1)
   })
 
@@ -80,7 +87,11 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
     expect(armStart).toBeGreaterThan(-1)
     expect(armEnd).toBeGreaterThan(armStart)
     const armSrc = runnerSrc.slice(armStart, armEnd)
-    expect(countNonCommentMatches(armSrc, /killTree\(child, 'SIGTERM'\)/g)).toBe(1)
+    // The TERM call now carries the monitor flag; the KILL call must NOT (the
+    // escalation always takes the whole group, monitor included).
+    expect(
+      countNonCommentMatches(armSrc, /killTree\(child, 'SIGTERM', groupLeaderIsSandboxMonitor\)/g),
+    ).toBe(1)
     expect(countNonCommentMatches(armSrc, /killTree\(child, 'SIGKILL'\)/g)).toBe(1)
 
     // Every ordinary kill initiator routes through the same idempotent

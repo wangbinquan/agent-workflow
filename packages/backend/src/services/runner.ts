@@ -121,6 +121,7 @@ import {
   type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { isProductionOpencodeCommand } from '@/util/opencode'
+import { killProcessTree } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
@@ -1652,6 +1653,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     let aborted = false
     let timedOut = false
     const graceMs = opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS
+    // True only when the pid we hold is a bwrap MONITOR supervising the real
+    // runtime (Linux outer wrapper). macOS `sandbox-exec` execs in place, so
+    // the group leader IS the runtime and must receive the graceful signal
+    // itself; an unwrapped spawn is the same. Getting this backwards would mean
+    // never TERMing the runtime at all, so it is derived from the topology that
+    // actually rendered the argv, not from the OS name.
+    const outerBwrapMonitor =
+      sandboxCtx !== undefined &&
+      sandboxActive(sandboxCtx) &&
+      sandboxCtx.status.mechanism === 'bwrap' &&
+      plan.sandboxTopology !== 'provider-child-only'
 
     let reapDeadlineTimer: ReturnType<typeof setTimeout> | null = null
     spawnedCleanupHooks.push(() => {
@@ -1672,7 +1684,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     let escalation = null as { cancel: () => void } | null
     spawnedCleanupHooks.push(() => escalation?.cancel())
     const startKill = (): void => {
-      if (escalation === null) escalation = armKillEscalation(child, log, graceMs)
+      if (escalation === null) {
+        escalation = armKillEscalation(child, log, graceMs, outerBwrapMonitor)
+      }
       armReapDeadline()
     }
 
@@ -2787,15 +2801,20 @@ const FINAL_REAP_MARGIN_MS = 5_000
  * kills a bash child's forked sleep). Falls back to the single-process
  * safeKill when the group signal fails (ESRCH after exit / EPERM).
  */
-function killTree(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
+function killTree(
+  child: Bun.Subprocess,
+  signal: 'SIGTERM' | 'SIGKILL',
+  groupLeaderIsSandboxMonitor = false,
+): void {
   const pid = child.pid
   if (typeof pid === 'number' && pid > 0) {
-    try {
-      process.kill(-pid, signal)
-      return
-    } catch {
-      // fall back to the single-process kill below
-    }
+    // 2026-08-04 (verified in a Debian container, bubblewrap 0.8.0): a plain
+    // group SIGTERM under the bwrap OUTER wrapper collapses the grace window to
+    // ~0 — the monitor dies on TERM and `--die-with-parent` SIGKILLs the PID
+    // namespace's init, cutting the runtime off mid-cleanup. Signalling every
+    // member EXCEPT the monitor gives the runtime its full window; the
+    // escalation still takes the whole group.
+    if (killProcessTree(pid, signal, { groupLeaderIsSandboxMonitor })) return
   }
   safeKill(child, signal)
 }
@@ -2847,8 +2866,9 @@ function armKillEscalation(
   child: Bun.Subprocess,
   log: Logger,
   graceMs: number,
+  groupLeaderIsSandboxMonitor = false,
 ): { cancel: () => void } {
-  killTree(child, 'SIGTERM')
+  killTree(child, 'SIGTERM', groupLeaderIsSandboxMonitor)
   const timer = setTimeout(() => {
     log.warn('child ignored SIGTERM past grace; escalating to SIGKILL', {
       pid: child.pid,

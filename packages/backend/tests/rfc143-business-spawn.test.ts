@@ -270,6 +270,12 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         mcpKeys: ['search'],
         pluginCount: 1,
         pluginNames: ['tracer'],
+        // 2026-08-04 审计 P2-9：能力**被移除**的事实此前只在 daemon 日志里。
+        // diagnostics 本就是「这次 spawn 装配里实际落了什么」的通道。
+        businessTools: 'Bash',
+        businessToolWarnings: [],
+        declaredNetwork: null,
+        networkEnforced: false,
       })
     } finally {
       rmSync(runRoot, { recursive: true, force: true })
@@ -304,6 +310,12 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         mcpKeys: [],
         pluginCount: 0,
         pluginNames: [],
+        // 2026-08-04 审计 P2-9：能力**被移除**的事实此前只在 daemon 日志里。
+        // diagnostics 本就是「这次 spawn 装配里实际落了什么」的通道。
+        businessTools: 'Bash',
+        businessToolWarnings: [],
+        declaredNetwork: null,
+        networkEnforced: false,
       })
     } finally {
       rmSync(runRoot, { recursive: true, force: true })
