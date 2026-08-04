@@ -150,7 +150,11 @@ async function main(): Promise<void> {
     case 'stop': {
       const result = await stopCommand()
       process.stdout.write(result.message + '\n')
-      if (result.status === 'timeout') process.exit(1)
+      // RFC-254 T7: `forced` means the daemon was killed rather than drained.
+      // It exits non-zero for the same reason `timeout` does — a caller that
+      // scripts `stop && start` must not treat "I had to terminate it" as a
+      // clean stop, because the next start has interrupted rows to reap.
+      if (result.status === 'timeout' || result.status === 'forced') process.exit(1)
       break
     }
 

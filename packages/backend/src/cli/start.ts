@@ -59,6 +59,7 @@ import { probeCatalogCollisionWith } from '@/services/runtime/opencode/catalogPr
 import { listOpencodeModelsHermetic } from '@/services/runtime/opencode/models'
 import { markProductionOpencodeCommand } from '@/util/opencode'
 import { Paths } from '@/util/paths'
+import { startControlListener } from '@/services/controlListener'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { isBootstrapRequired } from '@/services/authLoginPolicy'
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -910,6 +911,20 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     lock.release()
     process.exit(0)
   }
+  // RFC-254 T7 — the same graceful request over a transport Windows has.
+  //
+  // Node accepts the NAME `SIGTERM` on Windows without throwing, but delivers
+  // `TerminateProcess`: a hard kill, mid-write, with no drain. So `stop` there
+  // asks over loopback instead, and this is what answers. POSIX keeps the
+  // signal path byte-for-byte; the listener is simply a second door to the
+  // SAME `shutdown()`.
+  const controlListener = startControlListener({
+    controlFilePath: Paths.controlFile,
+    onShutdown: () => {
+      removeDaemonInfo()
+      void shutdown('control-shutdown')
+    },
+  })
   process.on('SIGTERM', () => {
     // unlink synchronously the instant the signal fires; the async shutdown
     // continues in the background.
@@ -925,6 +940,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // and runs on every normal termination path.
   process.on('exit', () => {
     removeDaemonInfo()
+    // The nonce must not outlive the process that minted it: a stale control
+    // file is a secret on disk that authorizes nothing, and the next start
+    // would have to reason about which of two files is current.
+    controlListener.close()
     lock.release()
   })
 

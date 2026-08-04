@@ -37,6 +37,14 @@ export const Paths = {
   get daemonInfo() {
     return join(appHome(), '.daemon.info')
   },
+  /**
+   * RFC-254 T7 — loopback control endpoint + shutdown nonce, written by `start`
+   * and read by `stop`. Carries an AT-REST SECRET (the nonce): private mode on
+   * POSIX, per-user ACL on Windows. Removed when the daemon exits.
+   */
+  get controlFile() {
+    return join(appHome(), '.daemon.control')
+  },
   get logsDir() {
     return join(appHome(), 'logs')
   },

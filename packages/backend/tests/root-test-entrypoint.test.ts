@@ -357,7 +357,7 @@ describe('repository test entrypoint', () => {
     // these steps contain a pipeline — checked when this was introduced).
     const ci = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
     const offenders: string[] = []
-    for (const jobBlock of ci.split(/\n  (?=[a-z0-9-]+:\n)/)) {
+    for (const jobBlock of ci.split(/\n {2}(?=[a-z0-9-]+:\n)/)) {
       if (!jobBlock.includes('os: [') || !jobBlock.includes('runs-on: ${{ matrix.os }}')) continue
       const jobName = jobBlock.split('\n')[0]?.replace(':', '') ?? '?'
       for (const step of jobBlock.split('\n      - name: ').slice(1)) {
