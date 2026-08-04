@@ -727,7 +727,13 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: agent-workflow-e2e-${{ matrix.os }}
-          path: dist/agent-workflow-e2e-*
+          # RFC-254 T28b — the compiled e2e stub rides along. `opencodePath` has
+          # to name something the OS can execute, so the model stand-in is a
+          # binary now rather than nine shell scripts, and the e2e job resolves
+          # it from `dist/` exactly like the daemon artifact.
+          path: |
+            dist/agent-workflow-e2e-*
+            dist/stub-opencode-*
           if-no-files-found: error
 
   e2e:
@@ -789,17 +795,25 @@ jobs:
         # under test comes from the downloaded artifact below, not this install.
         run: bun install --frozen-lockfile
 
-      - name: Download test-only e2e binary from build-binary
-        # Reuse the separately compiled test artifact. Its compile-time-only
-        # OpenCode dependency seam is absent from the shipped binary.
+      - name: Download test-only e2e binary + stub from build-binary
+        # Reuse the separately compiled test artifacts. The daemon binary's
+        # compile-time-only OpenCode dependency seam is absent from the shipped
+        # binary; the stub is the compiled model stand-in (RFC-254 T28b).
         uses: actions/download-artifact@v8
         with:
           name: agent-workflow-e2e-${{ matrix.os }}
           path: dist
 
-      - name: Restore executable bit on the e2e binary
-        # upload/download-artifact does not preserve the +x mode bit.
-        run: chmod +x dist/agent-workflow-e2e-*
+      - name: Restore executable bit on the e2e binary and stub
+        # upload/download-artifact does not preserve the +x mode bit. Both are
+        # spawned — the stub by the daemon as `opencodePath` — so both need it,
+        # and a missing stub must fail HERE rather than as an unexplained
+        # "daemon closed before printing ready line" in every spec.
+        run: |
+          set -euo pipefail
+          chmod +x dist/agent-workflow-e2e-*
+          test -n "$(find dist -maxdepth 1 -type f -name 'stub-opencode-*')"
+          chmod +x dist/stub-opencode-*
 
       - name: Cache Playwright browsers
         id: pw-cache

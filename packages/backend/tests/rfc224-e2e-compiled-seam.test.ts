@@ -57,7 +57,7 @@ describe('RFC-224 compiled Playwright seam', () => {
     expect(ci).toContain('run: bun run build:binary:e2e')
     expect(ci).toContain("! -name 'agent-workflow-e2e-*'")
     expect(ci).toContain('name: agent-workflow-e2e-${{ matrix.os }}')
-    expect(ci).toContain('path: dist/agent-workflow-e2e-*')
+    expect(ci).toContain('dist/agent-workflow-e2e-*')
 
     for (const path of [
       '.github/workflows/visual-regression-nightly.yml',
@@ -69,6 +69,35 @@ describe('RFC-224 compiled Playwright seam', () => {
     const release = source('.github/workflows/release.yml')
     expect(release).toContain('run: bun run build:binary')
     expect(release).not.toContain('build:binary:e2e')
+  })
+
+  test('the compiled e2e stub is built, shipped to the e2e shards, and made executable', () => {
+    // RFC-254 T28b — the model stand-in became a compiled binary because
+    // `opencodePath` must name something the OS can execute and Windows cannot
+    // run a `#!/bin/sh` file. That created a three-link chain that is silent
+    // when it breaks: build → artifact → download. A missing stub does not say
+    // "missing stub"; it says "daemon closed with code 1 before printing ready
+    // line" in every single spec, which is where an afternoon goes.
+    const build = source('scripts/build-binary.ts')
+    const harness = source('e2e/harness.ts')
+    const ci = source('.github/workflows/ci.yml')
+
+    // Built only alongside the e2e artifact, never in a release build.
+    expect(build).toContain('stub-opencode-${platformSuffix()}${executableExtension()}')
+    expect(build).toContain("join(repoRoot, 'e2e', 'fixtures', 'stub', 'dispatch.ts')")
+
+    // Named identically on both sides of the seam.
+    expect(harness).toContain('stub-opencode-${platformSuffix()}${executableExtension()}')
+
+    // Uploaded WITH the daemon binary — asserted as the two-line upload path
+    // list, not as a bare mention: `dist/stub-opencode-*` also appears on the
+    // chmod line below, so a loose `toContain` stays green with the upload
+    // removed (measured — the first version of this assertion did exactly
+    // that).
+    expect(ci).toContain('            dist/agent-workflow-e2e-*\n            dist/stub-opencode-*')
+    expect(ci).toContain('chmod +x dist/stub-opencode-*')
+    // …and its ABSENCE fails on the download step rather than in every spec.
+    expect(ci).toContain(`test -n "$(find dist -maxdepth 1 -type f -name 'stub-opencode-*')"`)
   })
 
   test('visual pixels stub only the diagnostic presentation, not production policy', () => {
