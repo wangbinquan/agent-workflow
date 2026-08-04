@@ -165,6 +165,15 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 | T13 | `12110b8d` | 受控 config 在 win32 不写 `shell` 键，**缺席本身是身份的一部分**；另附 Windows 真机验证脚本 |
 | T29 | `86ebbf2d` | e2e fixture SQL 改 `bun:sqlite`——**硬前提**（windows runner 无 sqlite3 CLI），顺带消掉一个真实 flake 的成因 |
 | T25b | `cc4dadea` | 归档链路的 Windows 前提。核实后风险面比预想小得多：**macOS 的 `tar` 就是 bsdtar/libarchive**，与 Windows 自带同一实现 ⇒ 方言已被 macOS CI 腿覆盖，只需补「tar 缺失」的显式检查 |
+| T28b（骨架 / basic / commit） | `1141f82d` | 编译式 stub 的骨架与**差分验证机制**：同一 argv+env 同时跑新旧，逐字节比对 stdout / exit / 副作用。一个产物含全部 mode——`bun build --compile` 内嵌整个 Bun 运行时（真机实测 123.9 MiB），一 mode 一二进制每次 CI 要一 GB 以上 |
+| T28b（intent / slow） | `ab7a575c` | `intent-workflow-opencode.sh` **不单独成 mode**——差分证明它就是同一 mode 加一个变量。slow 保留 shell 的「秒」粒度睡眠（原文整数除法，500ms 等于不睡），改成真毫秒会悄悄改掉所有既有 spec 的时序 |
+| T28b（三个 clarify） | `56954531` | 轮次驱动 ⇒ 先把比对升级成**调用序列**（每侧独立 state 目录，比对整段 transcript + 状态文件 + 日志 + cwd 副作用），单次调用只能验证第 1 轮。stderr 升级为逐字节。发现两条：intent 原件**没有** prompt 钩子（我第一版夹带了）；`tr -c` 折叠粒度**取决于 locale**，shell 原件与自己都不一致 ⇒ 改按码点折叠并写明 |
+| T28b（workflow-matrix） | `80448bd2` | 最后一个 shell stub：24 个分支、8 个各有含义的退出码。顺带修 dispatch 没 await——sleeping 的 mode 只是靠 pending timer 撑住事件循环 |
+| **e2e 加载期回归修复** + T28b 接线 | `6e9e1450` | **T29 把四个 e2e shard 打挂了四个提交**：Playwright 在 **Node** 上加载 spec，解不了 `bun:` ⇒ 加载期就死、且报成 "No tests found"。Bun 的 SQLite 保留但挪进子进程；顺带删掉一处 `writefile()` 绕行（sqlite3 CLI 的扩展函数，换引擎时静默丢了）并补 `querySqlite`。harness 从「传路径」改成「声明 mode」 |
+| T28b（删旧件） | `35bd4c5a` | 删 12 个原件前把它们的**实际可观测行为录成 golden**（129 个用例），比对改为回放录音——证明链留在仓库里，且**在 Windows 上也能跑**。argv 契约门跟随迁到 mode，途中发现三个 TS 系 mode 各自留着 `argv.slice().join(' ')`（即 `$*` 折叠的 TS 版），改掉并加源码规则 |
+| T28b（Windows 腿） | `931b971e` | golden 回放接上 windows-platform 作业；修两处会让 POSIX 录音在 Windows 上必然对不上的路径归一（状态文件 key 的分隔符、遮蔽没盖 cwd） |
+| T29 锁 + T30 | `2ad40f56` | 源码锁跟随进程边界（并**反过来**禁止父侧再 import `bun:sqlite`）；build-binary 冒烟段三处 POSIX 前提跨平台化，改后把 CI 那段脚本抽出在本机验证等价 |
+| T28b（遥测矩阵） | `769a1057` | RFC-224 的版本遥测矩阵按 mode 枚举，覆盖面从 8 个 .sh 扩到 11 个 mode |
 
 **Windows CI 首跑的价值（`e3081c73`）**——一次抓到三件事，全是我这边的问题：
 ① **Job Object 的 FFI 在真实内核上一次成功**（最重要的正面结论：函数声明、
@@ -179,10 +188,26 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 谓词）、以及 verified 存储的 TOCTOU 栅栏**零行为覆盖**（已补逻辑 + 接线覆盖，行为覆盖
 登记 audit-backlog）。
 
+**T28b 的一条方法论**（值得复用）：删掉一份「参照实现」之前先把它的行为录成
+golden，否则差分证明会随旧实现一起消失。配套三条断言缺一不可——重录必须跑**旧
+实现**（因此只在还有旧实现的 checkout 里能重录，不是给回归开绿灯的口子）、缺
+golden 直接报错、以及「每个 mode 都有 golden、每个 golden 都有 mode」的双向核对。
+意外收获是录音**在旧实现跑不起来的平台上照样回放**：shell stub 在 Windows 上不
+能执行，它的录音能。
+
 **未完成且需要 Windows 环境才能验证的**：T4/T4b（Job Object，需 FFI 实测）、
 T7（shutdown control listener）、T11b/T11c（verified artifact layout + 注入缝）、
-T14b（本地 MCP wrapperless 物化）、T28/T29（e2e stub 编译化 + sqlite fixture）、
-T31–T35（CI 矩阵与视觉基线）、T25b–T25d（D24 四子系统）。
+T14b（本地 MCP wrapperless 物化）、T31–T35（CI 矩阵与视觉基线）、
+T25c–T25d（D24 剩余子系统）。
+
+**T31–T35 的现实评估（2026-08-04）**：把 `windows-latest` 直接加进 ci.yml 的四个
+矩阵，会让约 8600 条按 POSIX 假设写的后端测试同时变红——这正是当初把 Windows
+验证拆成独立定向作业的原因（见 `.github/workflows/windows-platform.yml` 头部）。
+T31/T32 的实质工作量是**逐条分类那 8600 条**（真缺陷 / 需 win32 分支 / 合理 skip
+并登记），属于新的一轮切片而不是本轮的收尾动作；T33 的 46 张 win32 视觉基线还需
+要先有一条能跑起来的 windows e2e 腿。当前定向作业已覆盖：平台原语七套 + golden
+回放 + argv 契约 + Node 兼容守门 + shared 套件 + typecheck + 单二进制与 stub 的
+构建冒烟 + doctor。
 
 ## 交付前必过清单
 

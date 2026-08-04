@@ -17,6 +17,7 @@
 - **用错 runner 的表现是「挂死」不是报错**：`cd packages/frontend && bun test`（上一条说的那个错法）不会干脆失败，而是刷 `ReferenceError: document is not defined` 后长时间不退——正确的 `bun run --filter @agent-workflow/frontend test` 全量只要 ~60s。**跑套件卡住先怀疑 runner 用错，别当 flaky**（RFC-230 session 因此空等 2h37m）。
 - **`长任务 | tail -N` 会让你全程失明**：tail 要等 EOF 才吐字节，后台跑的全量测试在结束前输出文件恒为 0 字节，「没输出」看起来和「还在跑」一模一样。长任务全量落盘再取尾（`> log 2>&1` 后 `tail`）。判断进程死活看 **`ps -o etime=`**，不看输出有没有内容。
 - **结构守卫必做变异实证**：加 grep/AST 守卫后，改坏源码断言必须看它变红；否则守卫是空的。表级锁（一次锁一类）优于文件级——注释里的字面量也会踩表级锁（RFC-072 事故）。
+- **做变异实证时别用 `git checkout` 还原「未跟踪文件」**：新写的文件还没进版本库，`git checkout <file>` 报 `did not match any file`——配上顺手加的 `|| true` 就**静默什么也没做**，于是下一轮「restored」跑出来的其实是**带着变异**的结果，你会照着它报一个假的通过。还原用 `cp` 备份（变异前先 `cp x /tmp/x.bak`），并让最后那次「restored」跑出的数字与基线**逐个数字核对**——对不上就是没还原干净。
 - **「写了规则 + 单测绿」≠「接上了」**：脱敏/校验这类横切规则，单测测的是**函数**，接线是另一件事。RFC-247 里 `redactMcpRecord` 与 `redactStdout` **各自**都是「定义了、单测了、零调用方」——`GET /api/mcps/:id` 一直原样吐 `config.env`/`oauth.clientSecret`。单测不会红，因为它没在测出口。**收尾必须从 AC/需求反查「谁调它」**（`grep -rn '<fn>' src | grep -v '<定义文件>'`，命中为空即未接线），或把出口写成唯一入口（`serializeXForActor(record, source)`）让调用方无从绕过。
 - **上一条的镜像：迁移「只删调用方、不删实现」，残骸会被它自己的测试续命**。RFC-247 T4 把权限门迁到 `registerRoute` 后删的是 `server.ts` 里的**挂载**，`auth/permissions.ts` 那 202 行实现原封留下；此后全仓零生产引用，唯一 import 是 `rfc247-verb-for-route.test.ts` 那条逐行测试——覆盖率报表上它一直是绿的、看起来还像一条权限不变量锁。代价是它**在教育后来人**：文件头断言「server.ts 的手挂网关 still runs alongside 迁移后的路由」（同一时刻 server.ts 明写 GONE），而 `verbForRoute` 悄悄成了「路由 → 权限点」的第二份、无人执行、无人比对的事实源（与真实声明分歧 7 条）。**判据**：迁移收尾时对被替换的模块跑 `rg -n "<导出名>" packages e2e scripts | grep -v "<自身文件>"`，若命中**只剩测试文件**，那不是「还有人用」，是死码 + 假合格证，删。删完补一条「不复辟」ratchet（`tests/route-gate-single-source.test.ts` 是范本）并做变异实证。2026-08-03 架构审视 G0。
 - **改符号前先 grep 测试源码锁**：改函数/常量名前全量盘「锁住旧接线的测试」，定向重跑集 = grep 命中集；否则本地绿、CI 红（他人 source-lock 锁了旧名，2026-07-08 三连事故）。
@@ -24,6 +25,9 @@
 - **CI 根 `bun test` 只跑 backend**（bunfig `root=packages/backend/tests`）；shared 测试单独跑且含一个**已知陈旧** `memory-schema` 红（RFC-101 `fused`，在 CI 之外）——忽略它，别「修」他人代码。
 - **本机 `protocol.file.allow=always` 掩盖 submodule CI 红**：`file://` submodule 测试本机恒绿、CI 恒红；测试须自注入 `GIT_CONFIG_GLOBAL`，复现用 `GIT_CONFIG_GLOBAL=/dev/null bun test <单文件>`。
 - **`sqlite3` CLI 默认 `busy_timeout=0`，直写运行中 daemon 的 DB 必炸**：e2e 用 `sqlite3` 往活着的 daemon 的 `db.sqlite` 里种状态（`e2e/command.ts:runSqlite`，diagnose-repair / lifecycle-diagnose / rfc229 / business-workgroup 都在用）。daemon 侧有 `PRAGMA busy_timeout = 5000`（`db/client.ts`）会等写锁，**CLI 侧不等**——只要 daemon 那一刻在写，fixture 立刻 `Error: stepping, database is locked (5)`，表现为「随机某个 shard 红、重试还红」（nightly e2e-webkit run 30440683412：`diagnose-repair` 的 `afterEach` 清理撞上刚点下去的 repair 写）。**测试进程直连生产 DB 文件一律显式设 busy_timeout**，且要小于命令自身的超时，否则 wedge 时拿到的是 SIGTERM 而不是 SQLite 诊断。注意 WAL 不救这一类：WAL 只解耦读写，写-写仍然互斥。
+- **`bun run e2e` 把 spec 跑在 NODE 上，不是 Bun**：Playwright 用它自己的 Node runner 加载 spec **及其全部 import**，所以 `e2e/*.ts` 里出现 `import … from 'bun:sqlite'`（或任何 `Bun.` 全局）不是「某条断言红」，是**加载期整套死**——`Error: Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. Received protocol 'bun:'`，随后 Playwright 打印 **`No tests found`**，读起来像过滤器写错了而不是坏了。RFC-254 T29 就这样让四个 e2e shard 连红四个提交，因为 `bun run test` 到 `git push` 之间没有任何一环会看 e2e 还能不能加载。**要用 Bun 独有能力就放进子进程**（`e2e/fixtures/sqlite-exec.ts` ← `e2e/command.ts` 拉起，SQL 走 stdin），并加一条源码守卫（`rfc254-e2e-node-runtime-guard.test.ts`）。**通用判据**：改了 `e2e/` 下任何被 spec import 的文件，推之前至少跑一条 spec，别只跑 `bun run test`。
+- **`writefile()` 不是 SQLite 的函数，是 `sqlite3` CLI 的 fileio 扩展**：把 fixture 的 SQL 从 CLI 换成任何**库**（bun:sqlite / better-sqlite3 / node:sqlite）都会丢掉它，报 `no such function: writefile`。这类「把查询结果写进文件再读回来」的绕行，本身是因为老 helper 只能执行不能查询；换引擎时正解是**补上查询能力**（参数绑定，别拼字符串），把绕行整段删掉，而不是找替代的 writefile。
+- **删掉一份「参照实现」之前，先把它的行为录成 golden**：差分测试（新旧同时跑、逐字节比对）只在旧实现还在时才成立，删了旧实现就等于把证明一起删了。做法是先把旧实现在全部用例上的**可观测行为**（stdout / stderr / exit / 状态文件 / 日志 / 副作用）录进仓库，再删旧实现，测试改为回放录音。三条配套断言缺一不可：重录必须跑**旧实现**（所以只在还有旧实现的 checkout 里能重录，不是给回归开绿灯的口子）、缺 golden 直接报错、以及「每个实现都有 golden、每个 golden 都有实现」的双向核对。副作用往往是意外之喜：录音在旧实现跑不起来的平台上照样回放（RFC-254 里 shell stub 在 Windows 上不能执行，但它的录音能）。
 - **源码里裸 `0x00` 让 grep/rg 静默跳过整文件**（却过 tsc/prettier/eslint/build/tests）；`file` / `tr -cd '\000'` 检测，改回 `\x00`；守卫 `no-nul-bytes-in-source`（注释里的字面量也会踩）。
   **最常见的引入方式是「拿 NUL 当分隔符」**：`return `${a}\0${b}`` 拼 Map key 看着很合理（NUL 不会出现在业务字符串里），但它把裸 0x00 写进了源码。正解是 `JSON.stringify([a, b])` —— 既没有分隔符问题，也不碰 NUL。**另注意检测姿势**：`grep -q $'\000' file` 在 zsh 下退化成空模式、对每个文件都返回真，别拿它当判据；用 `tr -cd '\000' < file | wc -c`。
 
@@ -40,6 +44,8 @@
 - **混合文件提交前查交叉依赖**：`git commit -- <混了他人 hunk 的文件>` 前，确认并发 hunk 不引用**其他未提交文件**的符号、且无 HEAD 测试锁了旧接线；写完测试后重跑 `typecheck`（`bun test` 跳 tsc，RFC-161 事故）。
 - **子代理完成通知非终态**：子代理可能继续推翻出 v2；`git add` 它的文件前必查 untracked import，否则提交半截（`87ac52d3` 事故）。
 - **`design/` 与 `STATE.md` 在 prettier 作用域外**：在那跑 `prettier --write` 会 reflow 他人表格行、坏 markdown 转义（`next_run_at`→`next*run_at`）、剥掉 blockquote 续行的 `> `；**只手改**。实测代价：一次顺手格式化把 `design/plan.md` 整张 RFC 索引表重排成 ~500 行 diff（全是别人 RFC 的行）（RFC-247 复犯）。改完 `git diff --stat` 对一眼行数是否与改动量相称。
+
+- **zsh 不对未加引号的变量做分词**：`P="a.ts b.ts"; git commit -- $P` 会把整串当**一个** pathspec，报 `did not match any files`（bash 下反而"能用"，于是这类脚本在两个 shell 间行为不一致）。本仓强制按路径精确提交，路径一多就用 `git add --pathspec-from-file=<file>` / `git commit --pathspec-from-file=<file>`，一行一条，彻底绕开分词。**另注意**：`git add --pathspec-from-file` 对**已删除**的路径会失败（磁盘上没有该文件）——删除由 `git rm` 暂存即可，`git commit --pathspec-from-file` 认得它。
 
 ## 迁移（Drizzle + bun:sqlite）
 
@@ -150,6 +156,9 @@
 - **Windows 上「存在某个 `bash.exe`」从来不是充分证据**：`System32\bash.exe` 是 **WSL 启动器**，裸 `which('bash')` 找到它会把脚本跑进另一个操作系统、面对另一份文件系统视图；windows-2025 runner 上还额外装着 MSYS2 的第三个 bash。正解是从 `git` 推导（`<root>\cmd\git.exe` → `<root>\bin\bash.exe`，OpenCode 自己就这么做），推不出来就显式失败、不猜路径。
 - **POSIX 上「agent 有 git」是白拿的，别的平台不是**：受控 PATH 写 `/usr/bin:/bin` 时 `git` 顺带就在里面，所以从来没人设计过它；Windows 把 git 装在 `C:\Program Files\Git\cmd`，不在任何系统目录下 ⇒ 只用系统目录拼的受控 PATH 会让 agent 的每一次 git 调用都失败。**通用判据**：受控/白名单式 PATH 每加一个平台，都要重新问一遍「这个平台上，我依赖的每个工具分别在哪」，而不是套用另一个平台的目录表。
 - **Windows 环境变量名大小写不敏感 ⇒ 精确匹配的黑白名单是安全缺陷而非移植问题**，且方向因表而异：白名单只认 `PATH` 会**丢掉** OS 给的 `Path`（要求全大写的正则还会丢掉 `SystemRoot`，子进程连 winsock 都起不来）；黑名单只认 `NODE_OPTIONS` 会**放行** `Node_Options`。折叠必须收在一个单点上，各表一律走它。**配置校验类**的比较建议无条件折叠（不只 win32）——配置是跨平台流动的数据，在 Linux 上被接受、到 Windows 变成冲突是最难查的形态。
+
+- **`tr -c` 的折叠粒度取决于 locale，不只取决于平台**：同一台 macOS 上 `printf '设计者' | tr -c 'A-Za-z0-9._-' '_'` 在 `LANG=zh_CN.UTF-8` 下折出 **3** 个下划线（按字符），在 `LC_ALL=C` 下折出 **9** 个（按字节）；GNU tr 恒按字节。所以「照抄 shell 的 tr 行为」这个目标本身是不存在的——移植时要**选一个**并写明依据，同时把测试从「逐字节等于 shell」改成断言真正要成立的性质（例如「同一个名字两次必须落到同一个状态文件」）。
+- **块注释里出现 `*/` 会提前闭合注释**：把 sed 表达式（`s/.*iteration=\([0-9]*\).*/\1/p`）原样抄进 JSDoc 时，中间的 `.*/` 就是一个 `*/`，报 `SyntaxError: Invalid character` 且指的是注释中间。转义没用（注释里不解析转义），只能改写措辞。
 
 ## 平台面守卫（RFC-254 实测）
 
