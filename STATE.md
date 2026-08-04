@@ -103,6 +103,19 @@ CLI 的 fileio 扩展函数、不属于 SQLite 核心，换引擎时静默丢了
 后恰好一个位置参数，但当年出事的就是这个假设）；以及 T30 把 build-binary 冒烟段
 的三处 POSIX 前提跨平台化。
 
+**定向 Windows 作业在本轮抓到一条 P0**（也是「不要等全矩阵、先要一条真 Windows 腿」
+这个决定的最大一次回报）：`windowsJobObject.ts` 的 `ACTIVE_PROCESSES_OFFSET` 原本
+写成 `48 - 4 - 8 - 8 - 8` = 20，是从结构大小**倒着减**推出来的；按 Win32 正向排布
+`ActiveProcesses` 在 40，20 落在 `ThisPeriodTotalUserTime` 中间、对刚起的进程恒为
+0。它喂的是 `isProcessTreeAlive` ⇒ runtime store 能否回收，读成 0 就是**后代还持有
+store 时把 store 释放给别人复用**——设计门 P0-D 要防的那个数据损坏。三道关都没拦住
+它：macOS 没有这条 FFI 路径、ARM64 真机上 `dlopen` 不可用走降级分支、而**错误的
+FFI 偏移不会抛异常，只会从另一个字段返回一个看着合理的数**。修法因此不止改数：
+偏移逐字段正向写出并导出，测试按字段大小正向累加独立推导后比对（四处变异全部能
+变红）。另修一条：golden 回放在 Windows 上被 **8.3 短路径**打穿（子进程记录的 cwd
+是 `C:\Users\RUNNER~1\...`，而遮蔽表里是长路径），追加一层按临时目录**名字**的
+遮蔽解决。
+
 **剩余：T31–T35** CI 全矩阵与 46 张 win32 视觉基线。**现实评估**：把
 `windows-latest` 直接加进 ci.yml 四个矩阵会让约 8600 条按 POSIX 假设写的后端测试
 同时变红——这正是当初把 Windows 验证拆成独立定向作业的原因。T31/T32 的实质工作量

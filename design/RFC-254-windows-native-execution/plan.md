@@ -174,6 +174,24 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 | T28b（Windows 腿） | `931b971e` | golden 回放接上 windows-platform 作业；修两处会让 POSIX 录音在 Windows 上必然对不上的路径归一（状态文件 key 的分隔符、遮蔽没盖 cwd） |
 | T29 锁 + T30 | `2ad40f56` | 源码锁跟随进程边界（并**反过来**禁止父侧再 import `bun:sqlite`）；build-binary 冒烟段三处 POSIX 前提跨平台化，改后把 CI 那段脚本抽出在本机验证等价 |
 | T28b（遥测矩阵） | `769a1057` | RFC-224 的版本遥测矩阵按 mode 枚举，覆盖面从 8 个 .sh 扩到 11 个 mode |
+| T36 | `71da93c2` | Windows 四条未决项登记（无 containment provider / 缺 DPAPI / `.cmd` 不自动解包 / 系统代理孤儿缝）+ `sandbox.md`「尚无发行二进制」订正 + `OPENCODE_CONFIG.md` 维护清单 |
+| — | `78b7205f` | 两条 e2e 红的**逐格构建实证归因**（均非本 RFC）：`focus-ring-clip` 本就不绿（4 个），被 `01d3e541` 推到 108；`rfc250-workflow-camera` 在 `6e9e1450` 上通过 ⇒ 归并发画布改动 |
+| **P0 修复** | `a486b79c` / `29ed4880` | **Job Object 的 `ActiveProcesses` 偏移读错字段** —— 见下 |
+| — | `ba54c779` | golden 回放在 Windows 上被 **8.3 短路径**打穿（子进程记录的 cwd 是 `C:\Users\RUNNER~1\...`，遮蔽表里是长路径）⇒ 追加一层按临时目录**名字**的遮蔽（前缀是我们自己定的，与 OS 拼法无关），并用 windows-latest 上实际写出的那行字符串在 macOS 上直接验证 |
+
+**x64 Windows CI 腿第一次真正执行 Job Object 就抓到一条 P0**：
+`ACTIVE_PROCESSES_OFFSET` 原本写成 `48 - 4 - 8 - 8 - 8` = **20**，是从结构大小
+**倒着减**推出来的；按 Win32 正向排布 `ActiveProcesses` 在 **40**，20 落在
+`ThisPeriodTotalUserTime` 中间、对刚起的进程恒为 0。它喂的是
+`isProcessTreeAlive` ⇒ runtime store 能否回收（RFC-224），读成 0 = 「树已死」=
+**后代还持有 store 时就把 store 释放给别人复用**，正是设计门 P0-D 要防的数据损坏。
+
+**为什么此前三道关都没拦住**：macOS 根本没有这条 FFI 路径；ARM64 真机上 Bun 构建
+禁用 TinyCC、`dlopen` 直接抛，走的是降级分支；代码审查看不出来，因为**错误的 FFI
+偏移不会抛异常，它只会从另一个字段返回一个看着合理的数**。修法因此不止改数：偏移
+逐字段正向写出并导出，测试用「按字段大小正向累加」独立推导后比对，四处变异（原始
+的 20 / 差四字节的 36 / LimitFlags / extended 结构大小）全部能变红。这条是「定向
+Windows 作业」这个决定本身的最大一次回报。
 
 **Windows CI 首跑的价值（`e3081c73`）**——一次抓到三件事，全是我这边的问题：
 ① **Job Object 的 FFI 在真实内核上一次成功**（最重要的正面结论：函数声明、
