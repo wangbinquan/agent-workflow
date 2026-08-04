@@ -7,7 +7,8 @@
 // → the argv passes through untouched.
 
 import { existsSync, realpathSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
+import { resolveGitCommonDirSync } from '@/util/git'
 import {
   computeSandboxPolicy,
   renderBwrapArgs,
@@ -76,6 +77,13 @@ export interface SandboxCtx {
   wrapCommand?: (cmd: readonly string[], policy: SandboxPolicy) => string[]
 }
 
+/** True when `child` is `parent` itself or a descendant of it. */
+function isInside(parent: string, child: string): boolean {
+  if (parent === child) return true
+  const rel = relative(parent, child)
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel)
+}
+
 /** Should this spawn be wrapped at all? (off / unavailable → no) */
 export function sandboxActive(ctx: SandboxCtx | undefined): boolean {
   return ctx !== undefined && ctx.mode !== 'off' && ctx.status.available
@@ -111,21 +119,27 @@ export function wrapSandbox(cmd: readonly string[], ctx: SandboxCtx | undefined)
       return p
     }
   }
+  const appHome = real(ctx.appHome)
   const policy = computeSandboxPolicy({
-    appHome: real(ctx.appHome),
+    appHome,
     taskWorktrees: ctx.taskWorktrees.map(real),
     runDir: real(ctx.runDir),
     readOnlySubtrees: ctx.readOnlySubtrees?.map(real),
     readOnlyAllowSubtrees: ctx.readOnlyAllowSubtrees?.map(real),
     networkDeny: ctx.networkDeny === true,
     readOnlyWorktrees: ctx.readOnlyWorktrees === true,
+    // bwrap aborts the spawn when a --bind SOURCE is missing, and the mirror
+    // root only appears once something has been cloned. Probe it here (the one
+    // place in this module that is allowed to touch the filesystem) rather than
+    // letting a repo-less deployment fail every sandboxed spawn.
+    gitMirrorPresent: existsSync(join(appHome, 'repos')),
   })
   if (ctx.wrapCommand !== undefined) return ctx.wrapCommand(cmd, policy)
   if (ctx.status.mechanism === 'seatbelt') {
     return ['/usr/bin/sandbox-exec', '-p', renderSeatbeltProfile(policy), ...cmd]
   }
   if (ctx.status.mechanism === 'bwrap') {
-    return ['bwrap', ...renderBwrapArgs(policy, { appHome: ctx.appHome }), '--', ...cmd]
+    return ['bwrap', ...renderBwrapArgs(policy), '--', ...cmd]
   }
   return [...cmd]
 }
@@ -173,36 +187,71 @@ export interface SandboxProvider {
 }
 
 /**
- * Per-run ctx. Worktree allow-scope rule: a multi-repo node's cwd is
- * `worktrees/multi/{taskId}/{repo}` — allow the whole task dir (its siblings
- * are the SAME task's other repos); a single-repo cwd IS the task dir
- * (`worktrees/{slug}/{taskId}`). Detected by "parent dir named after the task".
+ * Per-run ctx.
+ *
+ * Worktree allow-scope used to be GUESSED from the cwd's path shape: "parent
+ * dir named after the task ⇒ allow the whole parent". That was written for the
+ * pre-RFC-130 canonical layout `worktrees/multi/{taskId}/{repo}` and is wrong
+ * for the layout production actually runs, `iso/{taskId}/{nodeRunId}/{member}`
+ * — the parent is named after the NODE RUN, so a multi-repo task allowed only
+ * `repos[0]` while the prompt handed the agent every member's path. On macOS
+ * the siblings failed EPERM; on Linux they were masked by the appHome tmpfs,
+ * which is itself writable, so writes "succeeded" and evaporated at exit and
+ * merge-back silently produced an empty delta (2026-08-04 audit, three
+ * independent finders).
+ *
+ * The heuristic is kept only as the fallback for single-worktree callers; any
+ * run with more than one worktree root MUST pass `worktreeRoots` (the iso
+ * handle's members, or the container that holds them).
  */
 export function buildRunSandboxCtx(
   p: SandboxProvider | null,
   taskId: string,
   worktreePath: string,
   runDir: string,
+  /** Every worktree root this run may touch — all repos, not just the primary. */
+  worktreeRoots: readonly string[] = [],
 ): SandboxCtx | undefined {
   if (p === null) return undefined
   const parent = dirname(worktreePath)
-  const taskWorktrees = basename(parent) === taskId ? [parent] : [worktreePath]
-  // Scratch-space tasks are the one case where the task's BASE repo lives
-  // INSIDE appHome (scratch/{taskId}) — an RFC-130 iso worktree's `.git` file
-  // points at scratch/{taskId}/.git/worktrees/{runId}, so without this
-  // allow-back every git command in the agent's cwd dies EPERM under the
-  // appHome-wide deny while file writes still succeed (2026-07-22 task
-  // …QGENNV: members declared the workspace unusable and worked in the
-  // user's REAL repo instead, which sits outside the boundary). Allow back
-  // ONLY the git common dir, NOT the canonical working tree: canonical files
-  // are writable solely through the daemon's writeSem merge-back, and an iso
-  // agent handed the whole canonical tree could race sibling nodes or leave
-  // dirt that survives a failed run (RFC-130 boundary; Codex impl-gate P1
-  // 2026-07-22). Gated on existence: non-scratch tasks have no such dir, and
-  // bwrap `--bind` of a missing source path errors the spawn.
-  const scratchGitDir = join(p.appHome, 'scratch', taskId, '.git')
-  if (existsSync(scratchGitDir) && !taskWorktrees.includes(scratchGitDir)) {
-    taskWorktrees.push(scratchGitDir)
+  const taskWorktrees = [
+    ...new Set([basename(parent) === taskId ? parent : worktreePath, ...worktreeRoots]),
+  ]
+  // A task whose BASE repository lives INSIDE appHome needs its git COMMON dir
+  // allowed back, or every git command in the agent's cwd dies under the
+  // appHome-wide deny while file writes still succeed (2026-07-22 task …QGENNV:
+  // members declared the workspace unusable and went to work in the user's REAL
+  // repo, outside the boundary).
+  //
+  // This used to be the literal string `scratch/{taskId}/.git`, which covered
+  // exactly ONE of the three shapes that hit it. Derive it instead — from the
+  // worktree's own on-disk pointers — so a skill-fusion engine task
+  // (`fusions/{id}/iter{n}/work`) and a call-workflow child of a scratch parent
+  // (common dir carries the PARENT task id) are covered by construction rather
+  // than by a third hand-written literal (2026-08-04 audit).
+  //
+  // Only the common dir, never the canonical working tree: canonical files are
+  // writable solely through the daemon's writeSem merge-back, and an iso agent
+  // handed the whole canonical tree could race sibling nodes or leave dirt that
+  // survives a failed run (RFC-130 boundary; Codex impl-gate P1 2026-07-22).
+  // Gated on existence + on living inside appHome: a common dir outside appHome
+  // is not denied in the first place, and bwrap `--bind` of a missing source
+  // path errors the spawn.
+  //
+  // Probe the ACTUAL worktrees, not the (possibly broadened) allow roots: the
+  // heuristic widens `iso/{taskId}/{runId}` to `iso/{taskId}`, which holds no
+  // `.git` pointer of its own.
+  for (const root of new Set([worktreePath, ...worktreeRoots])) {
+    const commonDir = resolveGitCommonDirSync(root)
+    if (
+      commonDir === null ||
+      !isInside(p.appHome, commonDir) ||
+      !existsSync(commonDir) ||
+      taskWorktrees.some((allowed) => allowed === commonDir || isInside(allowed, commonDir))
+    ) {
+      continue
+    }
+    taskWorktrees.push(commonDir)
   }
   return {
     mode: p.mode,

@@ -95,7 +95,7 @@ describe('renderSeatbeltProfile', () => {
 
 describe('renderBwrapArgs', () => {
   test('order: bind / first, tmpfs appHome, then repos + allow binds', () => {
-    const args = renderBwrapArgs(computeSandboxPolicy(input), { appHome: HOME })
+    const args = renderBwrapArgs(computeSandboxPolicy(input))
     const tmpfsIdx = args.indexOf('--tmpfs')
     expect(args[tmpfsIdx + 1]).toBe(HOME)
     const bindPairs: string[] = []
@@ -115,7 +115,7 @@ describe('renderBwrapArgs', () => {
   // RFC-205 impl-gate P0-5 (Codex 2026-07-22): private PID namespace + fresh /proc
   // so an agent can't read /proc/<daemonPid>/{root,fd}/… to bypass the tmpfs.
   test('unshares the PID namespace and mounts a fresh /proc AFTER the root bind', () => {
-    const args = renderBwrapArgs(computeSandboxPolicy(input), { appHome: HOME })
+    const args = renderBwrapArgs(computeSandboxPolicy(input))
     expect(args).toContain('--unshare-pid')
     const procIdx = args.indexOf('--proc')
     expect(procIdx).toBeGreaterThan(-1)

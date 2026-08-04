@@ -4211,7 +4211,27 @@ async function runOneScriptAttempt(
   const runDir = runRootFor(taskId, a.nodeRunId)
   mkdirSync(runDir, { recursive: true })
 
-  const worktreePath = a.isoHandle?.repos[0]?.isoWorktreePath ?? task.worktreePath
+  // 2026-08-04 audit: a readonly node has no iso handle, and falling back to
+  // `task.worktreePath` put it in the TOP-LEVEL tree — inside a git/loop
+  // wrapper the canonical for this scope is `state.scopeRoot` (§D9 above calls
+  // using task.worktreePath there "the exact bug this RFC roots out"). The
+  // node then read stale content that predates whatever the wrapper's earlier
+  // nodes wrote, with no error, and the sandbox allowed the wrong tree.
+  const worktreePath = a.isoHandle?.repos[0]?.isoWorktreePath ?? state.scopeRoot
+  // Every repo this attempt may touch — the boundary must match the paths
+  // `AW_REPOS_JSON` hands the script, not just the primary one.
+  //
+  // `name` is the RFC-248 canonical repo key (the mount path), not the legacy
+  // `worktreeDirName` — the latter loses the nesting for a repo-group member
+  // mounted at `a/b`.
+  const repoProjection =
+    a.isoHandle === null
+      ? state.repos.map((r) => ({ name: r.mountPath, path: r.worktreePath }))
+      : a.isoHandle.repos.map((r, i) => ({
+          name: state.repos[i]?.mountPath ?? r.worktreeDirName,
+          path: r.isoWorktreePath,
+        }))
+  const worktreeRoots = repoProjection.map((r) => r.path)
 
   // Containment first: for a netless node the profile is fail-closed, so an
   // unavailable fence throws here — BEFORE the process exists and before any
@@ -4238,7 +4258,7 @@ async function runOneScriptAttempt(
       // its network posture — dependencies must install even for a netless node
       // (D15), so the netless flag is deliberately not carried over.
       installerSandbox = plan.sandbox
-      const base = buildRunSandboxCtx(plan.sandbox, taskId, worktreePath, runDir)
+      const base = buildRunSandboxCtx(plan.sandbox, taskId, worktreePath, runDir, worktreeRoots)
       if (base !== undefined) {
         sandboxCtx = {
           ...base,
@@ -4355,7 +4375,14 @@ async function runOneScriptAttempt(
     inputs: a.inputs,
     runDir,
     worktreePath,
-    repos: state.repos.map((r) => ({ name: r.worktreeDirName, path: r.worktreePath })),
+    // 2026-08-04 audit: hand the script the paths it is actually allowed to
+    // touch. This used to be the CANONICAL worktree while a non-readonly node
+    // runs in its iso copy — so a script that followed the documented
+    // `AW_REPOS_JSON` contract wrote outside its isolation: EPERM on macOS,
+    // and on Linux a silent write into the appHome tmpfs that evaporated at
+    // exit. The agent path next door already resolves iso paths for the same
+    // reason (`{{__repos__}}` below).
+    repos: repoProjection.map((r) => ({ name: r.name, path: r.path })),
     taskId,
     nodeId: a.node.id,
     nodeRunId: a.nodeRunId,

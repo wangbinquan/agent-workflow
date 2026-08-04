@@ -6,10 +6,10 @@
 
 import type { GitRef } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { hardenGitArgs } from '@/util/gitHardening'
 import type { Logger } from '@/util/log'
@@ -244,6 +244,52 @@ export async function isGitWorkTree(path: string): Promise<boolean> {
   if (!existsSync(path)) return false
   const r = await runGit(path, ['rev-parse', '--is-inside-work-tree'])
   return r.exitCode === 0 && r.stdout.trim() === 'true'
+}
+
+/**
+ * Resolve a worktree's git COMMON dir (the `objects/` + `refs/` store every
+ * linked worktree shares) by reading the on-disk pointers, with no subprocess.
+ *
+ * `services/runtime/netlessProjection.ts` does the same job with
+ * `git rev-parse --git-common-dir` for the child boundary; the OUTER sandbox
+ * decides its allow-back set inside a synchronous, per-spawn hot path where
+ * forking git is not acceptable, so it reads the two files git itself reads:
+ *
+ *   <worktree>/.git            dir  → that IS the common dir (a normal repo)
+ *                              file → `gitdir: <admin dir>` (a linked worktree)
+ *   <admin dir>/commondir      → path (usually relative) to the common dir
+ *
+ * Why the outer sandbox needs this at all: the allow-back list used to name
+ * `scratch/{taskId}/.git` LITERALLY, which covered exactly one of the three
+ * task shapes whose base repository lives inside the denied appHome. The other
+ * two — a skill-fusion engine task (`fusions/{id}/iter{n}/work`) and a
+ * call-workflow child of a scratch parent (whose common dir carries the PARENT
+ * task id) — resolved to a masked path, so every git command an agent ran in
+ * its isolated worktree died with `fatal: not a git repository` (2026-08-04
+ * audit; the literal form was itself the patch for the 2026-07-22 incident
+ * where members declared the workspace unusable and went to work elsewhere).
+ *
+ * Returns null when the path is not a worktree or the pointers are unreadable —
+ * callers treat that as "nothing extra to allow", never as an error.
+ */
+export function resolveGitCommonDirSync(worktreePath: string): string | null {
+  try {
+    const dotGit = join(worktreePath, '.git')
+    const stats = statSync(dotGit)
+    if (stats.isDirectory()) return dotGit
+    if (!stats.isFile()) return null
+    const pointer = readFileSync(dotGit, 'utf8').trim()
+    const match = /^gitdir:\s*(.+)$/.exec(pointer)
+    if (match === null) return null
+    const adminDir = resolve(worktreePath, match[1]!.trim())
+    const commonDirFile = join(adminDir, 'commondir')
+    if (!existsSync(commonDirFile)) return adminDir
+    const commonDir = readFileSync(commonDirFile, 'utf8').trim()
+    if (commonDir === '') return adminDir
+    return resolve(adminDir, commonDir)
+  } catch {
+    return null
+  }
 }
 
 /**

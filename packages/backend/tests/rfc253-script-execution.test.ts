@@ -165,14 +165,12 @@ describe('network fence rendering', () => {
 
   test('off by default — the outer sandbox has never restricted the network', () => {
     const policy = computeSandboxPolicy(base)
-    expect(renderBwrapArgs(policy, { appHome: base.appHome })).not.toContain('--unshare-net')
+    expect(renderBwrapArgs(policy)).not.toContain('--unshare-net')
     expect(renderSeatbeltProfile(policy)).not.toContain('(deny network*)')
   })
 
   test('Linux masks the pathname-socket directories alongside --unshare-net', () => {
-    const args = renderBwrapArgs(computeSandboxPolicy({ ...base, networkDeny: true }), {
-      appHome: base.appHome,
-    })
+    const args = renderBwrapArgs(computeSandboxPolicy({ ...base, networkDeny: true }))
     expect(args).toContain('--unshare-net')
     // `--unshare-net` only isolates ABSTRACT unix sockets; /run/user/<uid>/bus
     // and /var/run/docker.sock arrive through `--bind / /`.
@@ -375,9 +373,7 @@ describe('readonly is a boundary, not a convention', () => {
   })
 
   test('readonly renders no read-write bind for the worktree on Linux', () => {
-    const args = renderBwrapArgs(computeSandboxPolicy({ ...base, readOnlyWorktrees: true }), {
-      appHome: base.appHome,
-    })
+    const args = renderBwrapArgs(computeSandboxPolicy({ ...base, readOnlyWorktrees: true }))
     const wt = '/home/u/.agent-workflow/worktrees/r/t1'
     const mirror = '/home/u/.agent-workflow/repos'
     for (const path of [wt, mirror]) {

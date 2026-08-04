@@ -24,7 +24,7 @@ function policy(readOnlySubtrees: readonly string[] = [SEAL]) {
 
 describe('RFC-224 sandbox readOnlySubtrees', () => {
   test('bwrap stacks every RO overlay after all RW allow-backs', () => {
-    const args = renderBwrapArgs(policy(), { appHome: APP_HOME })
+    const args = renderBwrapArgs(policy())
     const lastRwBind = args.lastIndexOf('--bind')
     const roBind = args.indexOf('--ro-bind')
     expect(roBind).toBeGreaterThan(lastRwBind)

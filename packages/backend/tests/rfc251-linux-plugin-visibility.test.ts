@@ -42,7 +42,7 @@ function policyFor(readOnlyAllowSubtrees?: readonly string[]) {
 }
 
 function mountsOf(readOnlyAllowSubtrees?: readonly string[]): Mount[] {
-  const args = renderBwrapArgs(policyFor(readOnlyAllowSubtrees), { appHome: APP_HOME })
+  const args = renderBwrapArgs(policyFor(readOnlyAllowSubtrees))
   const mounts: Mount[] = []
   for (let i = 0; i < args.length; i += 1) {
     // `--tmpfs DEST`, `--bind SRC DEST`, `--ro-bind SRC DEST`
@@ -85,7 +85,7 @@ describe('RFC-251 — plugin cache visibility under the linux sandbox', () => {
   })
 
   test('the ro-bind is emitted after the appHome tmpfs, never before', () => {
-    const args = renderBwrapArgs(policyFor([PLUGIN_ROOT]), { appHome: APP_HOME })
+    const args = renderBwrapArgs(policyFor([PLUGIN_ROOT]))
     const tmpfsAt = args.indexOf('--tmpfs')
     const roAt = args.lastIndexOf(PLUGIN_ROOT)
     expect(tmpfsAt).toBeGreaterThanOrEqual(0)

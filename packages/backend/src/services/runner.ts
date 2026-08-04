@@ -1371,7 +1371,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // degraded plans deliberately project an inactive sandbox.
   const baseSandboxCtx =
     opts.sandbox ??
-    buildRunSandboxCtx(plan.containment?.sandbox ?? null, opts.taskId, opts.worktreePath, runRoot)
+    buildRunSandboxCtx(
+      plan.containment?.sandbox ?? null,
+      opts.taskId,
+      opts.worktreePath,
+      runRoot,
+      // 2026-08-04 audit: EVERY repo this run may touch, not just the primary.
+      // `templateMeta.repos[].worktreePath` is the same iso path the prompt
+      // hands the agent, so the boundary and the instructions cannot disagree;
+      // the old cwd-shape heuristic allowed only repos[0] for a multi-repo run.
+      opts.templateMeta?.repos?.map((repo) => repo.worktreePath) ?? [],
+    )
   const sandboxCtx =
     baseSandboxCtx === undefined
       ? undefined

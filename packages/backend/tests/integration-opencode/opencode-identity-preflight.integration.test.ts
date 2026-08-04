@@ -136,7 +136,7 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
     const child = Bun.spawn({
       cmd: [
         bwrapPath,
-        ...renderBwrapArgs(outerPolicy, { appHome }),
+        ...renderBwrapArgs(outerPolicy),
         '--',
         bwrapPath,
         ...renderNetlessBwrapArgs(innerManifest, [

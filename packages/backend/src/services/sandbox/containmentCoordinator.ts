@@ -327,7 +327,7 @@ function bwrapSandbox(
     // Outer and model-child layers consume the same canonical executable.
     wrapCommand: (cmd: readonly string[], policy: SandboxPolicy): string[] => [
       bwrapPath,
-      ...renderBwrapArgs(policy, { appHome: base.appHome }),
+      ...renderBwrapArgs(policy),
       '--',
       ...cmd,
     ],

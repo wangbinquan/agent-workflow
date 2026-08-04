@@ -67,9 +67,24 @@ export interface SandboxPolicyInput {
    * would still allow `git update-ref` and repo-config writes.
    */
   readOnlyWorktrees?: boolean
+  /**
+   * False when `<appHome>/repos` does not exist on disk.
+   *
+   * The mirror root is created lazily by the FIRST repository clone
+   * (`gitRepoCache.ts`), so a deployment that has never cloned anything — a
+   * fresh install running its first Runtime Test, a scratch-only or
+   * distiller-only workload — does not have it. bwrap aborts the whole spawn
+   * when a `--bind` SOURCE is missing, so binding it unconditionally turned
+   * "no repositories cached yet" into "every sandboxed spawn dies", blamed on
+   * the runtime binary (2026-08-04 audit, three independent finders). Defaults
+   * to present so pure-function callers and tests keep the historical shape.
+   */
+  gitMirrorPresent?: boolean
 }
 
 export interface SandboxPolicy {
+  /** Canonical (realpath'd) appHome — the one root both renderers must use. */
+  appHome: string
   /** Deny read+write on these whole subtrees. */
   denySubtrees: string[]
   /** Deny read+write on these single files (literal paths). */
@@ -144,17 +159,11 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
   // RFC-253: a read-only consumer keeps ONLY its private run dir writable; the
   // worktrees and the mirror move to the read-only allow-back list below.
   const readOnlyWorktrees = input.readOnlyWorktrees === true
+  const mirrorDir = join(h, 'repos')
+  const mirrorDirs = input.gitMirrorPresent === false ? [] : [mirrorDir]
   const allowSubtrees = readOnlyWorktrees
     ? [input.runDir]
-    : [...input.taskWorktrees, input.runDir, join(h, 'repos')]
-  // Seatbelt's appHome-wide deny also blocks lstat/realpath on parent
-  // directories. The verified store boundary deliberately walks every
-  // ancestor to reject symlink substitution, so restore metadata access to
-  // those exact literals only. This does not grant directory enumeration,
-  // file contents, or writes, and bwrap does not consume this field.
-  const allowMetadataFiles = [
-    ...new Set(allowSubtrees.flatMap((path) => metadataAncestors(h, path))),
-  ]
+    : [...input.taskWorktrees, input.runDir, ...mirrorDirs]
   const readOnlySubtrees = [...(input.readOnlySubtrees ?? [])]
   const unique = new Set<string>()
   for (const path of readOnlySubtrees) {
@@ -171,7 +180,7 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
   // grant write on linux, where the later RW bind wins).
   const readOnlyAllowSubtrees = [
     ...(input.readOnlyAllowSubtrees ?? []),
-    ...(readOnlyWorktrees ? [...input.taskWorktrees, join(h, 'repos')] : []),
+    ...(readOnlyWorktrees ? [...input.taskWorktrees, ...mirrorDirs] : []),
   ]
   const seenReadOnlyAllow = new Set<string>()
   for (const path of readOnlyAllowSubtrees) {
@@ -185,7 +194,26 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
       throw new TypeError('sandbox readOnlyAllowSubtree must not overlap a read-write allow')
     }
   }
+  // Seatbelt's appHome-wide deny also blocks lstat/realpath on parent
+  // directories. The verified store boundary deliberately walks every
+  // ancestor to reject symlink substitution, so restore metadata access to
+  // those exact literals only. This does not grant directory enumeration,
+  // file contents, or writes, and bwrap does not consume this field.
+  //
+  // 2026-08-04 audit: this MUST cover the read-only allow-backs too. A
+  // `readOnlyWorktrees` run (RFC-253 readonly script node) collapses
+  // `allowSubtrees` to just the run dir and moves the worktree into
+  // `readOnlyAllowSubtrees`, so deriving the ancestors from `allowSubtrees`
+  // alone silently dropped every worktree ancestor — and macOS `/bin/sh`'s
+  // `cd`, git's upward repo probe and any other tool that stats each path
+  // prefix then failed with an unactionable "Not a directory".
+  const allowMetadataFiles = [
+    ...new Set(
+      [...allowSubtrees, ...readOnlyAllowSubtrees].flatMap((path) => metadataAncestors(h, path)),
+    ),
+  ]
   return {
+    appHome: h,
     denySubtrees,
     denyFiles,
     allowSubtrees,
@@ -256,7 +284,7 @@ export function renderSeatbeltProfile(policy: SandboxPolicy): string {
  * need no explicit handling on linux — they live under appHome and the tmpfs
  * already hides them.
  */
-export function renderBwrapArgs(policy: SandboxPolicy, opts: { appHome: string }): string[] {
+export function renderBwrapArgs(policy: SandboxPolicy): string[] {
   // RFC-205 impl-gate P0-5 (Codex 2026-07-22): `--bind / /` maps the host root
   // (incl. /proc) into the namespace, so without a private PID namespace + a fresh
   // /proc an agent could read /proc/<daemonPid>/root/.../secret.key or
@@ -288,18 +316,17 @@ export function renderBwrapArgs(policy: SandboxPolicy, opts: { appHome: string }
   if (policy.networkDeny) {
     args.push('--unshare-net', '--tmpfs', '/run', '--tmpfs', '/var/run')
   }
-  args.push('--tmpfs', opts.appHome)
-  // The mirrors dir is an allow in spirit but lives OUTSIDE the deny list on
-  // darwin (deny-list model) — on linux the tmpfs hides it, so bind it back.
-  //
-  // RFC-253: when the policy moved the mirror to the read-only list, binding it
-  // read-write here would undo that below — the ro-bind loop runs after this
-  // one, but re-binding the same path read-write first is exactly the mount
-  // ordering trap this file warns about. Skip it and let the ro-bind provide it.
-  const mirrorDir = join(opts.appHome, 'repos')
-  if (!policy.readOnlyAllowSubtrees.includes(mirrorDir)) {
-    args.push('--bind', mirrorDir, mirrorDir)
-  }
+  // 2026-08-04 audit: the tmpfs target comes from the POLICY, which was built
+  // from the realpath'd appHome. It used to be a second, un-realpath'd copy
+  // handed in by the caller, so a symlinked appHome masked one path while the
+  // allow-backs bound another — and the `readOnlyAllowSubtrees.includes(...)`
+  // string compare that guarded the mirror bind silently missed, re-binding
+  // the mirror read-WRITE under a policy that had moved it to read-only.
+  args.push('--tmpfs', policy.appHome)
+  // The git mirror is a plain member of allowSubtrees / readOnlyAllowSubtrees
+  // (computeSandboxPolicy owns that decision, including whether it exists at
+  // all); it used to ALSO be bound here, which emitted the same mount twice
+  // and duplicated the read-only decision in a second place.
   for (const p of policy.allowSubtrees) {
     args.push('--bind', p, p)
   }
