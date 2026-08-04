@@ -27,8 +27,7 @@ import { Route as intentSessionsRoute } from '@/routes/intent'
 import { Route as intentSessionDetailRoute } from '@/routes/intent.detail'
 import { Route as scheduledRoute } from '@/routes/scheduled'
 import { Route as scheduledDetailRoute } from '@/routes/scheduled.$id'
-import { Route as webhookTriggersRoute } from '@/routes/webhook-triggers'
-import { Route as webhookDeliveriesRoute } from '@/routes/webhook-deliveries'
+import { Route as webhooksRoute } from '@/routes/webhooks'
 import { Route as taskDetailRoute } from '@/routes/tasks.detail'
 import { Route as taskPreviewRoute } from '@/routes/tasks.preview'
 import { Route as reviewsRoute } from '@/routes/reviews'
@@ -81,10 +80,9 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
   setupAdminRoute,
-  // RFC-257: webhook trigger management + delivery audit. Reached from the
-  // settings card links (not the persistent sidebar), same as /scheduled.
-  webhookTriggersRoute,
-  webhookDeliveriesRoute,
+  // RFC-257 UI 修订: webhook 配置单页（端点/触发器/投递三 tab），侧栏
+  // 「运行与仓库」组 adminOnly 项。
+  webhooksRoute,
   // RFC-211: the guided tour. Intentionally NOT in the sidebar — it is entered
   // from the homepage, so `resolveActiveNav` leaves it unhighlighted the same
   // way it does for /tasks/new.

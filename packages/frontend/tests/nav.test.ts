@@ -26,6 +26,8 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       ['/tasks', 'task'],
       ['/scheduled', 'schedule'],
       ['/repos', 'repo'],
+      // RFC-257 UI 修订：webhook 配置单页（adminOnly 项，ShellNavigation 过滤）。
+      ['/webhooks', 'webhook'],
       ['/memory', 'memory'],
     ])
   })

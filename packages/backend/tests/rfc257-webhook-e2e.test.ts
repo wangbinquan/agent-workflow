@@ -40,7 +40,7 @@ async function harness() {
   const owner = await createUser(db, {
     username: 'owner',
     displayName: 'Owner',
-    role: 'user',
+    role: 'admin',
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()

@@ -1,8 +1,7 @@
-// RFC-257 T12 — webhook 投递历史页（端点级审计，manage 权限；触发器 owner
-// 的排障入口是触发器页的 fires——F-13 分层）。列表 + 详情 Dialog + 重放。
+// RFC-257 UI 修订 — 投递审计面板（/webhooks 单页的 deliveries tab；原独立
+// 路由 /webhook-deliveries 并入）。列表 + 详情 Dialog + 重放。
 import type { WebhookDeliveryReason, WebhookDeliveryStatus } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -10,18 +9,13 @@ import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
-import { PageHeader } from '@/components/PageHeader'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
-import { Route as RootRoute } from './__root'
-
-export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/webhook-deliveries',
-  component: WebhookDeliveriesPage,
-})
 
 type DeliveryRow = {
   id: string
@@ -54,12 +48,13 @@ type StatusFilter = 'all' | WebhookDeliveryStatus
 
 const STATUS_FILTERS: StatusFilter[] = ['all', 'matched', 'ignored', 'rejected', 'failed']
 
-function WebhookDeliveriesPage() {
+export function DeliveriesPanel() {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [status, setStatus] = useState<StatusFilter>('all')
   const [detailId, setDetailId] = useState<string | null>(null)
   const [error, setError] = useState<unknown>(null)
+  const [replayedDeliveryId, setReplayedDeliveryId] = useState<string | null>(null)
 
   const list = useQuery({
     queryKey: ['webhook-deliveries', status],
@@ -74,8 +69,9 @@ function WebhookDeliveriesPage() {
   const replay = useMutation({
     mutationFn: (id: string) =>
       api.post<{ deliveryId: string }>(`/api/webhook-deliveries/${encodeURIComponent(id)}/replay`),
-    onSuccess: () => {
+    onSuccess: ({ deliveryId }) => {
       setError(null)
+      setReplayedDeliveryId(deliveryId)
       void qc.invalidateQueries({ queryKey: ['webhook-deliveries'] })
     },
     onError: setError,
@@ -85,11 +81,15 @@ function WebhookDeliveriesPage() {
   const isInitialEmpty = !list.isLoading && list.data !== undefined && rows.length === 0
 
   return (
-    <div className="page">
-      <PageHeader title={t('webhookDeliveries.title')}>
-        <p className="muted">{t('webhookDeliveries.subtitle')}</p>
-      </PageHeader>
-      <div className="page__section">
+    <section className="webhook-panel" data-testid="webhook-deliveries-panel">
+      <div className="webhook-panel__intro">
+        <div>
+          <span className="webhook-panel__eyebrow">{t('webhookDeliveries.eyebrow')}</span>
+          <h2>{t('webhookDeliveries.title')}</h2>
+          <p>{t('webhookDeliveries.subtitle')}</p>
+        </div>
+      </div>
+      <div className="webhook-filterbar">
         <Segmented<StatusFilter>
           value={status}
           onChange={setStatus}
@@ -102,20 +102,48 @@ function WebhookDeliveriesPage() {
                 : t(`webhookDeliveries.statuses.${value}`),
           }))}
         />
+        {!list.isLoading && (
+          <span className="muted">
+            {t('webhookDeliveries.resultCount', { count: rows.length })}
+          </span>
+        )}
       </div>
-      {error !== null && <ErrorBanner error={error} />}
-      {list.error != null && <ErrorBanner error={list.error} />}
+      <FeedbackStack variant="section">
+        {error !== null && <ErrorBanner error={error} />}
+        {list.error != null && <ErrorBanner error={list.error} />}
+        {replayedDeliveryId !== null && (
+          <NoticeBanner
+            tone="success"
+            size="compact"
+            dismiss={{
+              label: t('common.close'),
+              onDismiss: () => setReplayedDeliveryId(null),
+            }}
+          >
+            {t('webhookDeliveries.replaySuccess', { id: replayedDeliveryId })}
+          </NoticeBanner>
+        )}
+      </FeedbackStack>
       {list.isLoading && <LoadingState data-testid="webhook-deliveries-loading" />}
       {isInitialEmpty && (
         <EmptyState
-          title={t('webhookDeliveries.empty')}
-          description={t('webhookDeliveries.emptyDescription')}
+          title={t(
+            status === 'all' ? 'webhookDeliveries.empty' : 'webhookDeliveries.filteredEmpty',
+          )}
+          description={t(
+            status === 'all'
+              ? 'webhookDeliveries.emptyDescription'
+              : 'webhookDeliveries.filteredEmptyDescription',
+          )}
           data-testid="webhook-deliveries-empty"
         />
       )}
       {rows.length > 0 && (
         <TableViewport label={t('webhookDeliveries.title')}>
-          <table className="data-table" data-testid="webhook-deliveries-table">
+          <table
+            className="data-table webhook-deliveries-table"
+            data-testid="webhook-deliveries-table"
+          >
             <thead>
               <tr>
                 <th>{t('webhookDeliveries.columns.event')}</th>
@@ -133,7 +161,13 @@ function WebhookDeliveriesPage() {
                   data-testid={`webhook-delivery-${row.id}`}
                 >
                   <td>
-                    <strong>{row.eventType ?? row.objectKind ?? t('common.emDash')}</strong>
+                    <strong>
+                      {row.eventType === null
+                        ? (row.objectKind ?? t('common.emDash'))
+                        : t(`webhookTriggers.events.${row.eventType}`, {
+                            defaultValue: row.eventType,
+                          })}
+                    </strong>
                     {row.attemptCount > 1 && <span className="muted"> ×{row.attemptCount}</span>}
                     {row.replayedFromDeliveryId !== null && (
                       <StatusChip kind="info" size="sm">
@@ -155,7 +189,9 @@ function WebhookDeliveriesPage() {
                       </span>
                     )}
                   </td>
-                  <td className="muted">{new Date(row.receivedAt).toLocaleString()}</td>
+                  <td className="muted">
+                    <RelativeTime ts={row.receivedAt} />
+                  </td>
                   <td className="data-table__actions">
                     <button
                       type="button"
@@ -194,7 +230,7 @@ function WebhookDeliveriesPage() {
       {detailId !== null && (
         <DeliveryDetailDialog id={detailId} onClose={() => setDetailId(null)} />
       )}
-    </div>
+    </section>
   )
 }
 
@@ -220,18 +256,67 @@ function DeliveryDetailDialog(props: { id: string; onClose: () => void }) {
       {detail.isLoading && <LoadingState />}
       {detail.error != null && <ErrorBanner error={detail.error} />}
       {detail.data !== undefined && (
-        <div className="form-grid">
-          <p className="muted">
-            {detail.data.gitlabEventHeader ?? ''} · {detail.data.eventUuid ?? t('common.emDash')} ·{' '}
-            {detail.data.streamHint ?? ''}
-          </p>
-          <pre className="task-output-card__body" data-testid="webhook-delivery-body">
-            {detail.data.bodyJson === null
-              ? t('webhookDeliveries.bodyPruned')
-              : detail.data.bodyJson}
-          </pre>
+        <div className="form-grid webhook-delivery-detail">
+          <dl className="webhook-facts webhook-delivery-detail__facts">
+            <div>
+              <dt>{t('webhookDeliveries.detail.status')}</dt>
+              <dd>
+                <StatusChip kind={STATUS_CHIP[detail.data.status]} size="sm">
+                  {t(`webhookDeliveries.statuses.${detail.data.status}`)}
+                </StatusChip>
+              </dd>
+            </div>
+            <div>
+              <dt>{t('webhookDeliveries.detail.event')}</dt>
+              <dd>
+                {detail.data.eventType === null
+                  ? (detail.data.objectKind ?? t('common.emDash'))
+                  : t(`webhookTriggers.events.${detail.data.eventType}`, {
+                      defaultValue: detail.data.eventType,
+                    })}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('webhookDeliveries.detail.repo')}</dt>
+              <dd>{detail.data.repoPath ?? t('common.emDash')}</dd>
+            </div>
+            <div>
+              <dt>{t('webhookDeliveries.detail.received')}</dt>
+              <dd>{new Date(detail.data.receivedAt).toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt>{t('webhookDeliveries.detail.uuid')}</dt>
+              <dd>
+                <code>{detail.data.eventUuid ?? t('common.emDash')}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{t('webhookDeliveries.detail.stream')}</dt>
+              <dd>
+                <code>{detail.data.streamHint ?? t('common.emDash')}</code>
+              </dd>
+            </div>
+          </dl>
+          <div>
+            <h3 className="webhook-delivery-detail__body-title">
+              {t('webhookDeliveries.detail.payload')}
+            </h3>
+            <pre className="task-output-card__body" data-testid="webhook-delivery-body">
+              {detail.data.bodyJson === null
+                ? t('webhookDeliveries.bodyPruned')
+                : formatPayload(detail.data.bodyJson)}
+            </pre>
+          </div>
         </div>
       )}
     </Dialog>
   )
+}
+
+function formatPayload(value: string): string {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
 }

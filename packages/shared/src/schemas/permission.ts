@@ -70,8 +70,8 @@ export const PERMISSIONS = [
   'workflows:read',
   'workgroups:read',
   'scheduled-tasks:read',
-  // RFC-257 — webhook triggers are owner-model rows like scheduled-tasks
-  // (row-level visibility in the service; these points are the method gate).
+  // RFC-257（UI 修订收紧）— webhook 配置整面 admin-only：四个 trigger 动词
+  // 与 endpoints:manage 都只在 admin 全集里，user/manager 基线一律没有。
   'webhook-triggers:read',
   'repos:read',
   'memory:read',
@@ -298,7 +298,6 @@ const USER_RESOURCE_READS: ReadonlyArray<Permission> = [
   'workflows:read',
   'workgroups:read',
   'scheduled-tasks:read',
-  'webhook-triggers:read',
   'repos:read',
   'runtime:read',
 ]
@@ -333,12 +332,6 @@ const USER_RESOURCE_WRITES: ReadonlyArray<Permission> = [
   'scheduled-tasks:create',
   'scheduled-tasks:update',
   'scheduled-tasks:delete',
-  // RFC-257 — same arming semantics as schedules: any user may create a
-  // trigger (owner-model rows; the create route additionally gates on
-  // tasks:execute, mirroring the schedule create gate).
-  'webhook-triggers:create',
-  'webhook-triggers:update',
-  'webhook-triggers:delete',
 ]
 
 // Execute points. Pre-RFC-247 these were reached either through `tasks:launch`
@@ -384,9 +377,6 @@ const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   // `intent:*` are system-domain and sit in USER_BASELINE. The system domain
   // bounds the TOKEN surface, not the role surface.
   'scripts:author',
-  // RFC-257 (D19) — endpoint management is admin + manager (same rationale as
-  // scripts:author: system-domain bounds the TOKEN surface, not the role one).
-  'webhook-endpoints:manage',
   'repos:create',
   'repos:update', // RFC-248 D5/G4 —— 仓库组走 repos:* 这一档
   'repos:delete',

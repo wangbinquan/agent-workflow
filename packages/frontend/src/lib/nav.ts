@@ -12,6 +12,12 @@ export interface SubNavItem {
   to: string
   i18nKey: string
   icon: ResourceIconKey
+  /**
+   * RFC-257 UI 修订：仅 admin 角色渲染（webhook 配置面）。过滤发生在
+   * ShellNavigation（唯一消费点）；resolveActiveNav 不看这个字段——非 admin
+   * 直接输入 URL 时页面自身再守卫。
+   */
+  adminOnly?: boolean
 }
 
 export interface NavGroupEntry {
@@ -59,6 +65,9 @@ export const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/tasks', i18nKey: 'nav.tasks', icon: 'task' },
       { to: '/scheduled', i18nKey: 'nav.scheduled', icon: 'schedule' },
       { to: '/repos', i18nKey: 'nav.repos', icon: 'repo' },
+      // RFC-257 UI 修订：webhook 配置（端点/触发器/投递）挂在远端仓下方，
+      // 仅 admin 可见。
+      { to: '/webhooks', i18nKey: 'nav.webhooks', icon: 'webhook', adminOnly: true },
     ],
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so

@@ -100,11 +100,6 @@ describe('PERMISSIONS catalog', () => {
       'scheduled-tasks:create',
       'scheduled-tasks:update',
       'scheduled-tasks:delete',
-      // RFC-257 — webhook triggers mirror the schedule reach (owner-model rows).
-      'webhook-triggers:read',
-      'webhook-triggers:create',
-      'webhook-triggers:update',
-      'webhook-triggers:delete',
       // execute — formerly reached via `tasks:launch` or the resource's `:write`
       'mcps:execute',
       'plugins:execute',
@@ -125,7 +120,7 @@ describe('PERMISSIONS catalog', () => {
       'intent:write',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
-    expect(ROLE_PERMISSIONS.user.length).toBe(50)
+    expect(ROLE_PERMISSIONS.user.length).toBe(46)
   })
 
   test('user role does NOT include any admin-only point (snapshot guard)', () => {
@@ -151,8 +146,13 @@ describe('PERMISSIONS catalog', () => {
       // RFC-253 — 脚本正文编写。它同时也在 manager 基线里（见下面的
       // MANAGER_DENIED 断言不含它），但相对 user 仍是 admin-only。
       'scripts:author',
-      // RFC-257 — 入站验签 secret 面；同 scripts:author 档（admin+manager）。
+      // RFC-257（UI 修订收紧）— webhook 全面 admin-only：触发器四动词与
+      // 端点 manage 都不在 user 基线。
       'webhook-endpoints:manage',
+      'webhook-triggers:read',
+      'webhook-triggers:create',
+      'webhook-triggers:update',
+      'webhook-triggers:delete',
     ]
     for (const p of adminOnly) {
       expect(ROLE_PERMISSIONS.user.includes(p)).toBe(false)
@@ -380,8 +380,6 @@ describe('RFC-222 manager role', () => {
       // RFC-253 D19 — 脚本正文编写下放到 manager（资源管理员），但依然是
       // 系统域点，任何 PAT 都拿不到。
       'scripts:author',
-      // RFC-257 D19 — 端点（验签 secret）管理同档；系统域点，PAT 拿不到。
-      'webhook-endpoints:manage',
     ]
     expect([...ROLE_PERMISSIONS.manager].sort()).toEqual([...new Set(expected)].sort())
   })

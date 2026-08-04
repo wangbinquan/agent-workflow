@@ -39,7 +39,7 @@ async function mkUser(db: DbClient, username: string, role: 'admin' | 'user'): P
 async function harness() {
   const db = createInMemoryDb(MIGRATIONS)
   const admin = await mkUser(db, 'root', 'admin')
-  const alice = await mkUser(db, 'alice', 'user')
+  const alice = await mkUser(db, 'alice', 'admin')
   const bob = await mkUser(db, 'bob', 'user')
   const dispatched: string[] = []
   const dispatcher: WebhookDispatcher = {
@@ -142,7 +142,7 @@ describe('RFC-257 T7 · 端点管理', () => {
     expect((rows[0]!['secretHint'] as string).length).toBe(4)
     expect((created['secret'] as string).endsWith(rows[0]!['secretHint'] as string)).toBe(true)
     // 普通用户无 manage 权限
-    const denied = await call(h.app, h.alice, 'GET', '/api/webhook-endpoints')
+    const denied = await call(h.app, h.bob, 'GET', '/api/webhook-endpoints')
     expect(denied.status).toBe(403)
   })
 
@@ -201,15 +201,14 @@ describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
       await call(h.app, h.alice, 'GET', '/api/webhook-triggers')
     ).json()) as unknown[]
     expect(mine.length).toBe(1)
-    // 他人：列表过滤 + 详情 404 与不存在同形
-    const other = (await (
-      await call(h.app, h.bob, 'GET', '/api/webhook-triggers')
-    ).json()) as unknown[]
-    expect(other.length).toBe(0)
-    const notFound = await call(h.app, h.bob, 'GET', `/api/webhook-triggers/${tid}`)
-    const missing = await call(h.app, h.bob, 'GET', '/api/webhook-triggers/does-not-exist')
-    expect(notFound.status).toBe(404)
-    expect(await notFound.text()).toBe(await missing.text())
+    // UI 修订收紧：webhook 面 admin-only —— user 角色连方法门都过不去（403），
+    // 行级 owner 语义只在 admin 间保留（resource-admin 旁路全可见）。
+    expect((await call(h.app, h.bob, 'GET', '/api/webhook-triggers')).status).toBe(403)
+    expect((await call(h.app, h.bob, 'GET', `/api/webhook-triggers/${tid}`)).status).toBe(403)
+    expect(
+      (await call(h.app, h.bob, 'POST', '/api/webhook-triggers', triggerBody('ep-x', 'wf-x')))
+        .status,
+    ).toBe(403)
     // admin 旁路
     expect((await call(h.app, h.admin, 'GET', `/api/webhook-triggers/${tid}`)).status).toBe(200)
   })
@@ -276,15 +275,17 @@ describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
       }),
     )
     expect(enumMapped.status).toBe(422)
-    // 目标 workflow 对保存者不可见（bob 看不到 alice 的 private workflow）
-    const invisible = await call(
+    // 目标 workflow 不存在 → 彩排 gate 404（admin 对存量全可见，剩余拒绝面
+    // 是存在性/builtin/upload——「保存者身份」在 admin-only 下由 gate 的
+    // canViewResource 继续承载）
+    const missingTarget = await call(
       h.app,
-      h.bob,
+      h.alice,
       'POST',
       '/api/webhook-triggers',
-      triggerBody(ep.id, h.workflowId),
+      triggerBody(ep.id, 'missing-wf'),
     )
-    expect(invisible.status).toBe(404)
+    expect(missingTarget.status).toBe(404)
   })
 
   test('PUT：kind/endpoint 不可变 422；合法 patch 生效；DELETE 级联 fires/streams', async () => {
@@ -386,7 +387,7 @@ describe('RFC-257 T9 · 投递观测与重放', () => {
     const h = await harness()
     const ep = await createEndpoint(h.app, h.admin)
     const id = await seedDelivery(h.db, ep.id)
-    const denied = await call(h.app, h.alice, 'GET', '/api/webhook-deliveries')
+    const denied = await call(h.app, h.bob, 'GET', '/api/webhook-deliveries')
     expect(denied.status).toBe(403)
     const list = (await (
       await call(h.app, h.admin, 'GET', '/api/webhook-deliveries')

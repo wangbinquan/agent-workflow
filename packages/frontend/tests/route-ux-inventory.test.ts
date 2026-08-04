@@ -560,27 +560,13 @@ export const ROUTE_UX_INVENTORY = {
     owners: [rendered('scheduled-list-inline.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/scheduled.tsx', primitive: 'PageHeader' },
   },
-  // RFC-257 webhook trigger management + delivery audit (reached from the
-  // settings Webhook Endpoints card, like /scheduled is from tasks).
-  '@/routes/webhook-triggers#Route': {
-    surface: '/webhook-triggers',
+  // RFC-257 UI 修订：webhook 配置单页（端点/触发器/投递三 tab），侧栏
+  // 「运行与仓库」组 adminOnly 项；非 admin 渲染拒绝态。
+  '@/routes/webhooks#Route': {
+    surface: '/webhooks',
     classification: 'standard',
     owners: [rendered('rfc257-webhook-pages-inline.test.tsx')],
-    header: {
-      mode: 'direct',
-      sourceFile: 'routes/webhook-triggers.tsx',
-      primitive: 'PageHeader',
-    },
-  },
-  '@/routes/webhook-deliveries#Route': {
-    surface: '/webhook-deliveries',
-    classification: 'standard',
-    owners: [rendered('rfc257-webhook-pages-inline.test.tsx')],
-    header: {
-      mode: 'direct',
-      sourceFile: 'routes/webhook-deliveries.tsx',
-      primitive: 'PageHeader',
-    },
+    header: { mode: 'direct', sourceFile: 'routes/webhooks.tsx', primitive: 'PageHeader' },
   },
   // RFC-234 intent builder.
   '@/routes/intent#Route': {

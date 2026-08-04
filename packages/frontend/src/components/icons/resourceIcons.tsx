@@ -19,6 +19,7 @@ export type ResourceIconKey =
   | 'task'
   | 'schedule'
   | 'repo'
+  | 'webhook'
   | 'user'
   | 'review'
   | 'clarify'
@@ -151,6 +152,15 @@ export const REPO_ICON: ReactNode = (
   </IconSvg>
 )
 
+// RFC-257 UI 修订 — webhook：入站事件的「插头 + 波」形。
+export const WEBHOOK_ICON: ReactNode = (
+  <IconSvg name="webhook">
+    <circle cx="8" cy="8" r="1.6" />
+    <path d="M8 6.4V2.6M8 9.6c0 2.2 1.8 3.6 4 3.6M8 9.6c0 2.2-1.8 3.6-4 3.6" />
+    <path d="M4.4 4.4c-1 1-1.6 2.2-1.6 3.6M11.6 4.4c1 1 1.6 2.2 1.6 3.6" />
+  </IconSvg>
+)
+
 /** Folder — a plain directory node with no repo attachment. */
 export const FOLDER_ICON: ReactNode = (
   <IconSvg name="folder">
@@ -209,6 +219,7 @@ const RESOURCE_ICONS: Record<ResourceIconKey, ReactNode> = {
   task: TASK_ICON,
   schedule: SCHEDULE_ICON,
   repo: REPO_ICON,
+  webhook: WEBHOOK_ICON,
   user: USER_ICON,
   review: REVIEW_ICON,
   clarify: CLARIFY_ICON,

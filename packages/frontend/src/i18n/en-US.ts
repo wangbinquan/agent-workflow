@@ -190,6 +190,7 @@ export const enUS: Resources = {
     reviews: 'Reviews',
     clarify: 'Clarify',
     repos: 'Repos',
+    webhooks: 'Webhooks',
     settings: 'Settings',
     brand: 'Agent Workflow',
     openMenu: 'Open navigation menu',
@@ -1073,8 +1074,6 @@ export const enUS: Resources = {
   settings: {
     webhookEndpoints: {
       title: 'Webhook Endpoints',
-      triggersLink: 'Triggers',
-      deliveriesLink: 'Deliveries',
       add: 'New endpoint',
       hint: 'Your code host (GitLab) delivers events for hundreds of repos to one endpoint; the secret is shown only once on create/rotate.',
       empty: 'No webhook endpoints yet.',
@@ -2600,6 +2599,16 @@ export const enUS: Resources = {
       dynamicNoHumanMembers:
         'Dynamic-workflow groups allow agent members only — remove the human members before saving.',
     },
+  },
+  webhooksPage: {
+    title: 'Webhooks',
+    subtitle:
+      'Code-host event ingress: endpoints, routing triggers and delivery audit (admin only).',
+    tabAria: 'Webhook configuration sections',
+    forbiddenTitle: 'Admins only',
+    forbiddenDescription:
+      'Webhook configuration (secrets, trigger rules, delivery audit) is limited to admins.',
+    tabs: { endpoints: 'Endpoints', triggers: 'Triggers', deliveries: 'Deliveries' },
   },
   webhookTriggers: {
     title: 'Webhook Triggers',

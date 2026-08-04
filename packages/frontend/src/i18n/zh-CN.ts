@@ -184,6 +184,7 @@ export interface Resources {
     reviews: string
     clarify: string
     repos: string
+    webhooks: string
     settings: string
     brand: string
     openMenu: string
@@ -1227,8 +1228,6 @@ export interface Resources {
   settings: {
     webhookEndpoints: {
       title: string
-      triggersLink: string
-      deliveriesLink: string
       add: string
       hint: string
       empty: string
@@ -2340,6 +2339,14 @@ export interface Resources {
       maxRoundsInvalid: string
       dynamicNoHumanMembers: string
     }
+  }
+  webhooksPage: {
+    title: string
+    subtitle: string
+    tabAria: string
+    forbiddenTitle: string
+    forbiddenDescription: string
+    tabs: { endpoints: string; triggers: string; deliveries: string }
   }
   webhookTriggers: {
     title: string
@@ -5077,6 +5084,7 @@ export const zhCN: Resources = {
     reviews: '评审',
     clarify: '反问',
     repos: '远端仓',
+    webhooks: 'Webhook',
     settings: '设置',
     brand: 'Agent Workflow',
     openMenu: '打开导航菜单',
@@ -5917,8 +5925,6 @@ export const zhCN: Resources = {
   settings: {
     webhookEndpoints: {
       title: 'Webhook 端点',
-      triggersLink: '触发器',
-      deliveriesLink: '投递历史',
       add: '新建端点',
       hint: '代码平台（GitLab）把几百个仓库的事件投递到同一个端点；验签 Secret 只在创建/轮换时展示一次。',
       empty: '还没有 webhook 端点。',
@@ -7344,6 +7350,14 @@ export const zhCN: Resources = {
       maxRoundsInvalid: '最大轮数须为 1–1000 的整数。',
       dynamicNoHumanMembers: '动态工作流模式仅允许 agent 成员——请先移除人类成员再保存。',
     },
+  },
+  webhooksPage: {
+    title: 'Webhook',
+    subtitle: '代码平台事件入口：接收端点、分流触发器与投递审计（仅管理员）。',
+    tabAria: 'Webhook 配置分区',
+    forbiddenTitle: '仅管理员可见',
+    forbiddenDescription: 'Webhook 配置（验签密钥、触发规则、投递审计）只对 admin 开放。',
+    tabs: { endpoints: '端点', triggers: '触发器', deliveries: '投递审计' },
   },
   webhookTriggers: {
     title: 'Webhook 触发器',

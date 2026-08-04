@@ -135,9 +135,10 @@ const OVERLAY_CALLSITES = {
   'components/skills/ImportZipPanel.tsx': { family: 'resource-management', count: 1 },
   'routes/repos.tsx': { family: 'resource-management', count: 3 },
   'routes/scheduled.tsx': { family: 'resource-management', count: 1 },
-  // RFC-257: trigger editor + per-trigger fires; delivery raw-body detail.
-  'routes/webhook-triggers.tsx': { family: 'resource-management', count: 2 },
-  'routes/webhook-deliveries.tsx': { family: 'resource-management', count: 1 },
+  // RFC-257: trigger editor + per-trigger fires; delivery raw-body detail
+  // (panels of the /webhooks single page).
+  'components/webhooks/TriggersPanel.tsx': { family: 'resource-management', count: 2 },
+  'components/webhooks/DeliveriesPanel.tsx': { family: 'resource-management', count: 1 },
 
   // RFC-239: the changes pane's deep views (graph/impact/call-chain/deps) overlay.
   'components/changes/DrilldownOverlay.tsx': { family: 'task-execution', count: 1 },
