@@ -316,6 +316,24 @@ T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
 三轮的轨迹：213/7 → 216/5 → 216/3。**T33/T34 的技术阻塞基本清除**——剩下的是把
 最后一条查掉、把 4 条 flaky 定性，然后接腿并生成 46 张 win32 基线。
 
+**第四轮：219 通过 / 2 失败 / 2 flaky —— Windows 特有的 e2e 失败已归零。**
+两条失败正是 `focus-ring-clip` 与 `rfc250-workflow-camera`，**在 POSIX 上同样红**、
+已逐格构建实证归属他人提交并记入 audit-backlog。四轮轨迹：
+**213/7 → 216/5 → 216/3 → 219/2**，每一步都由一次测量驱动：
+
+| 修的东西 | 性质 |
+|---|---|
+| 端口相对路径的分隔符 | **生产缺陷** |
+| git `autocrlf` / `eol` | **生产缺陷** |
+| 取色断言与主题应用赛跑 | 测试同步 |
+| 三处 `networkidle`（常驻 WS ⇒ 网络永不 idle） | 测试同步 |
+
+**接腿的前置条件已清楚**：ci.yml 的 `e2e` job `needs: build-binary`，而后者的
+RFC-224 supervisor 冒烟驱动的是 **bwrap**（Linux 概念）且载荷是 `/usr/bin/true`
+——两者在 Windows 上都不存在。所以加 windows 腿要先给那一步做平台闸门，且要先决定
+那两条**他人负责的既有红**怎么处理（等作者修 / 暂时排除 / 接受红腿）——这是个需要
+拍板的点，不是技术障碍。
+
 **下一簇的线索（RFC-224，70+ 条）**：`rfc224-sealed-subprocess.test.ts` 用
 `providerId: 'linux-bwrap'` + `/usr/bin/bwrap`，是 **Linux 专属**的能力证明；
 Windows 上的失败形态是「12 秒等不到 supervisor 的 ACK 写入」。12 秒已相当宽裕，
