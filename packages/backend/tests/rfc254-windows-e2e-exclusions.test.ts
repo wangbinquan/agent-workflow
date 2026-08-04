@@ -68,7 +68,9 @@ describe('RFC-254 T31 — windows e2e exclusions stay honest', () => {
       // Zero means a rename slipped past and the leg goes red for a reason the
       // list claims to cover. More than declared means the fragment silently
       // widened and is dropping tests nobody decided to drop.
-      expect(matchCount(fragment), `exclusion "${fragment}"`).toBe(EXPECTED_REMOVALS[fragment])
+      expect(matchCount(fragment), `exclusion "${fragment}"`).toBe(
+        EXPECTED_REMOVALS[fragment] ?? -1,
+      )
     }
   })
 
