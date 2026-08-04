@@ -33,7 +33,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
 
@@ -279,7 +279,14 @@ function allProductionTypeScript(): Array<{ path: string; text: string }> {
       const path = join(directory, entry)
       if (statSync(path).isDirectory()) walk(path)
       else if (entry.endsWith('.ts')) {
-        files.push({ path: relative(SRC_ROOT, path), text: readFileSync(path, 'utf8') })
+        // Normalize to posix separators: `relative()` yields `\` on Windows,
+        // and every allowance/exemption in this file is written with `/`.
+        // (Found by the Windows CI job on its first run — the guard itself had
+        // the very portability defect it exists to catch.)
+        files.push({
+          path: relative(SRC_ROOT, path).split(sep).join('/'),
+          text: readFileSync(path, 'utf8'),
+        })
       }
     }
   }

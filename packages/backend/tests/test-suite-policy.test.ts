@@ -41,6 +41,12 @@ const FORBIDDEN_ALIASES = new Set(['fit', 'fdescribe', 'ftest', 'xit', 'xdescrib
 // or opt-in visual/chaos environment. Any addition/removal changes this exact
 // inventory and therefore requires an intentional review of this policy.
 const ALLOWED_SKIP_COUNTS: Record<string, number> = {
+  // RFC-254 T4: two assertions describe the POSIX process-GROUP model, which
+  // Windows has no equivalent of — the group signal, and the fact that a
+  // non-leader pid leads no tree. The Windows behaviour they mirror is covered
+  // in the same file by the branch that runs ONLY on win32 (Job Object
+  // adoption, live count, atomic terminate), so no platform loses coverage.
+  'packages/backend/tests/rfc254-process-tree-ownership.test.ts#skipIf': 2,
   'e2e/clarify.spec.ts#skip': 1,
   // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
   // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can

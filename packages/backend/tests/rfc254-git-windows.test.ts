@@ -16,6 +16,7 @@
 import { describe, expect, test } from 'bun:test'
 import { hardenGitArgs, hardenedGitLeadingArgs } from '@/util/gitHardening'
 import { nullDevice } from '@/util/platformExec'
+import { join } from 'node:path'
 
 const HOME = '/tmp/aw-rfc254-git-test-home'
 
@@ -50,7 +51,7 @@ describe('RFC-254 T18 — git on Windows', () => {
     // this asserts T18 added a branch rather than reordering the existing one.
     expect(posix).toEqual([
       '-c',
-      `core.hooksPath=${HOME}/gitguard/empty-hooks`,
+      `core.hooksPath=${join(HOME, 'gitguard', 'empty-hooks')}`,
       '-c',
       'core.fsmonitor=false',
     ])
@@ -60,7 +61,10 @@ describe('RFC-254 T18 — git on Windows', () => {
     // If a second injection point ever appears, the two copies drift — that is
     // exactly how RFC-242 lost three of three checks in a duplicated projection.
     const args = hardenGitArgs(['-C', '/repo', 'status'], HOME, 'win32')
-    expect(args.slice(0, 2)).toEqual(['-c', `core.hooksPath=${HOME}/gitguard/empty-hooks`])
+    expect(args.slice(0, 2)).toEqual([
+      '-c',
+      `core.hooksPath=${join(HOME, 'gitguard', 'empty-hooks')}`,
+    ])
     expect(args).toContain('core.longpaths=true')
     expect(args).toContain('core.fsmonitor=false')
     // ...and the caller's own args still follow, unmodified and in order.
