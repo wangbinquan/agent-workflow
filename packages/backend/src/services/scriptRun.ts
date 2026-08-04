@@ -11,7 +11,7 @@
 // minting — which is where the real invariants live.
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join, win32 } from 'node:path'
 import {
   planScriptPortEnv,
   readScriptBody,
@@ -30,6 +30,7 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import type { Logger } from '@/util/log'
+import { buildScriptPath } from '@/util/platformExec'
 import type { SandboxCtx } from './sandbox'
 import { runContainedProcess, type ContainedSpawnResult } from './execution/containedSpawn'
 import type { ScriptDepsEnv } from './scriptDepsEnv'
@@ -44,6 +45,46 @@ const INTERPRETER_SPEC: Record<
   python: { binary: 'python3', ext: 'py', argv: (bin, s) => [bin, '-u', s] },
   bash: { binary: 'bash', ext: 'sh', argv: (bin, s) => [bin, s] },
   node: { binary: 'node', ext: 'mjs', argv: (bin, s) => [bin, s] },
+}
+
+/**
+ * RFC-254 T22 (D3) — where each interpreter actually lives on Windows.
+ *
+ * python: there is no `python3` on Windows. Real installs expose `python`, and
+ * the Microsoft Store ships a `python3` App Execution Alias that is NOT an
+ * interpreter — it exits non-zero and opens the Store — so the `--version`
+ * probe each candidate already goes through is what filters it out. `py` (the
+ * PEP-397 launcher) is the last resort because it is present even when neither
+ * name is on PATH.
+ *
+ * bash: resolved from GIT, never from a bare `which('bash')`. Windows ships
+ * `System32\bash.exe`, which is the WSL launcher — finding it would silently
+ * run the author's script inside a DIFFERENT OPERATING SYSTEM, with a different
+ * filesystem view of the worktree. The Git for Windows shell sits two levels
+ * up from `git.exe` (`<root>\cmd\git.exe` → `<root>\bin\bash.exe`), which is
+ * exactly how OpenCode itself locates it (`core/src/shell.ts:123-130`).
+ * windows-2025 runners additionally carry an MSYS2 bash, so "some bash exists"
+ * is never sufficient evidence.
+ */
+export const WINDOWS_INTERPRETER_CANDIDATES: Readonly<Record<ScriptLanguage, string[]>> = {
+  python: ['python3', 'python', 'py'],
+  bash: [],
+  node: ['node'],
+}
+
+/**
+ * Derive Git for Windows' `bash.exe` from a resolved `git` path.
+ * Returns null when the shape does not match, rather than guessing.
+ */
+export function gitBashFromGitPath(
+  gitPath: string,
+  dirnameOf: (p: string) => string,
+): string | null {
+  if (gitPath.length === 0) return null
+  const cmdDir = dirnameOf(gitPath)
+  const root = dirnameOf(cmdDir)
+  if (root.length === 0 || root === cmdDir) return null
+  return `${root}\\bin\\bash.exe`
 }
 
 /** Deadline for the one-shot `--version` probe (impl-gate 3.4). */
@@ -68,8 +109,56 @@ export async function resolveScriptInterpreter(
 ): Promise<ResolvedInterpreter | null> {
   const spec = INTERPRETER_SPEC[language]
   const override = overrides[language]
-  const path = override !== undefined && override.length > 0 ? override : Bun.which(spec.binary)
-  if (path === null || path === undefined || path.length === 0) return null
+  const candidates =
+    override !== undefined && override.length > 0
+      ? [override]
+      : interpreterCandidatePaths(language, process.platform, spec.binary, (cmd) => Bun.which(cmd))
+  for (const candidate of candidates) {
+    const probed = await probeInterpreter(candidate)
+    if (probed !== null) return probed
+  }
+  return null
+}
+
+/**
+ * The ordered list of paths to try for `language` on this platform.
+ *
+ * POSIX yields the single conventional name, exactly as before. Windows yields
+ * the D3 candidate chain (python3 → python → py), and for bash yields ONLY the
+ * path derived from `git` — never a bare `which('bash')`, which on Windows
+ * finds `System32\bash.exe`, the WSL launcher, and would run the author's
+ * script inside a different operating system entirely.
+ */
+export function interpreterCandidatePaths(
+  language: ScriptLanguage,
+  platform: NodeJS.Platform,
+  posixBinary: string,
+  which: (cmd: string) => string | null,
+): string[] {
+  if (platform !== 'win32') {
+    const resolved = which(posixBinary)
+    return resolved === null || resolved.length === 0 ? [] : [resolved]
+  }
+  if (language === 'bash') {
+    const git = which('git')
+    if (git === null || git.length === 0) return []
+    // `win32.dirname`, NOT the ambient `dirname`: `node:path`'s default export
+    // is the HOST's flavour, so on a POSIX box it sees no separators in
+    // `C:\...\git.exe` and returns '.'. Windows paths need the win32 parser
+    // regardless of who is doing the parsing.
+    const bash = gitBashFromGitPath(git, win32.dirname)
+    return bash === null ? [] : [bash]
+  }
+  const out: string[] = []
+  for (const name of WINDOWS_INTERPRETER_CANDIDATES[language]) {
+    const resolved = which(name)
+    if (resolved !== null && resolved.length > 0 && !out.includes(resolved)) out.push(resolved)
+  }
+  return out
+}
+
+async function probeInterpreter(path: string): Promise<ResolvedInterpreter | null> {
+  if (path.length === 0) return null
   if (!existsSync(path)) return null
   try {
     const proc = Bun.spawn({ cmd: [path, '--version'], stdout: 'pipe', stderr: 'pipe' })
@@ -155,12 +244,31 @@ export function assembleScriptEnv(input: {
   }
 
   // 2. platform keys, last-write-wins.
-  const interpreterDir = input.interpreterPath.slice(0, input.interpreterPath.lastIndexOf('/'))
-  env.PATH = [interpreterDir, '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
-    .filter((p) => p.length > 0)
-    .join(':')
-  env.HOME = join(input.runDir, 'home')
-  env.TMPDIR = join(input.runDir, 'tmp')
+  // RFC-254 T23: `dirname`, not string surgery on '/' — the old
+  // `lastIndexOf('/')` returns -1 for a `\`-separated Windows path and silently
+  // takes the whole string as the directory.
+  const interpreterDir = dirname(input.interpreterPath)
+  env.PATH = buildScriptPath(interpreterDir, process.platform, process.env.SystemRoot)
+  const privateHome = join(input.runDir, 'home')
+  const privateTmp = join(input.runDir, 'tmp')
+  env.HOME = privateHome
+  env.TMPDIR = privateTmp
+  if (process.platform === 'win32') {
+    // Windows resolves the user profile from USERPROFILE (and HOMEDRIVE +
+    // HOMEPATH for older tooling); leaving those pointed at the real profile
+    // while HOME points into the run directory means half the script's tooling
+    // writes outside the sandboxed run.
+    env.USERPROFILE = privateHome
+    env.TEMP = privateTmp
+    env.TMP = privateTmp
+    for (const key of ['SystemRoot', 'SystemDrive', 'COMSPEC', 'PATHEXT'] as const) {
+      const value = process.env[key]
+      if (typeof value === 'string' && value.length > 0) env[key] = value
+    }
+    // Windows Python defaults to the legacy code page for stdout, which would
+    // corrupt the "stdout IS the port value" contract for any non-ASCII output.
+    env.PYTHONUTF8 = '1'
+  }
   env.LANG = 'C.UTF-8'
   env.LC_ALL = 'C.UTF-8'
   env.AW_TASK_ID = input.taskId

@@ -459,6 +459,24 @@ export const SCRIPT_RESERVED_ENV_KEYS: readonly string[] = [
   'NODE_OPTIONS',
   'LANG',
   'LC_ALL',
+  // RFC-254 T23 — the Windows half. These are set by the platform for every
+  // script run (private profile + temp, plus the system variables a child
+  // needs to start at all), so an author-supplied value would either be
+  // silently overwritten or, worse, survive and redirect the run outside its
+  // sandboxed directory. Listed unconditionally rather than per-platform: a
+  // workflow definition is portable data, and a node that is valid on Linux
+  // must not become an override on Windows.
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'SYSTEMROOT',
+  'SYSTEMDRIVE',
+  'WINDIR',
+  'COMSPEC',
+  'PATHEXT',
+  'PYTHONUTF8',
 ]
 
 export const SCRIPT_RESERVED_ENV_PREFIXES: readonly string[] = [

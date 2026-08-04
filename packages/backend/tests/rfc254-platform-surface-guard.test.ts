@@ -260,22 +260,6 @@ const ALLOWANCES: readonly Allowance[] = [
     why: 'script-node dependency installer PATH; migrates with the script-node win32 env (RFC-254 T23/T24)',
     closedBy: 'RFC-254-T24',
   },
-  {
-    rule: 'posix-path-list',
-    file: 'services/scriptRun.ts',
-    match: ".join(':')",
-    count: 1,
-    why: 'script-node runtime PATH; migrates with the script-node win32 env',
-    closedBy: 'RFC-254-T23',
-  },
-  {
-    rule: 'posix-dirname',
-    file: 'services/scriptRun.ts',
-    match: "lastIndexOf('/')",
-    count: 1,
-    why: 'takes the interpreter directory by string surgery; migrates with the script-node win32 env',
-    closedBy: 'RFC-254-T23',
-  },
 ]
 
 function allProductionTypeScript(): Array<{ path: string; text: string }> {

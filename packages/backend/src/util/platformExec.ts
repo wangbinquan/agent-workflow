@@ -185,7 +185,13 @@ export function buildControlledPath(
 }
 
 export function buildControlledPathForHost(extraLeading: readonly string[] = []): string {
-  const git = resolveGitToolDirectory(process.platform, (cmd) => Bun.which(cmd), dirname)
+  // Parse with the TARGET platform's rules, not the host's. `node:path`'s
+  // default `dirname` is the host flavour, so on a POSIX box it finds no
+  // separator in `C:\Program Files\Git\cmd\git.exe` and answers '.' — which
+  // would put a bogus entry on the controlled PATH. (Caught by a T22 test that
+  // exercised the same mistake in the script-node resolver.)
+  const dirnameFor = process.platform === 'win32' ? win32.dirname : dirname
+  const git = resolveGitToolDirectory(process.platform, (cmd) => Bun.which(cmd), dirnameFor)
   return buildControlledPath(
     git === null ? extraLeading : [...extraLeading, git],
     process.platform,
@@ -215,4 +221,27 @@ export function resolveGitToolDirectory(
   const resolved = which('git')
   if (resolved === null || resolved.length === 0) return null
   return dirnameOf(resolved)
+}
+
+/**
+ * RFC-254 T23 — the PATH a script node's interpreter runs with.
+ *
+ * Same capability-whitelist principle as the agent's controlled PATH: the
+ * interpreter's own directory first (so the resolved interpreter wins over any
+ * same-named binary on the system path), then the platform's base directories.
+ * POSIX keeps the historical five-entry list byte-for-byte.
+ */
+export function buildScriptPath(
+  interpreterDir: string,
+  platform: NodeJS.Platform,
+  systemRoot: string | undefined,
+): string {
+  const base =
+    platform === 'win32'
+      ? controlledSystemPathEntries('win32', systemRoot)
+      : ['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
+  return pathListJoin(
+    [interpreterDir, ...base].filter((p) => p.length > 0),
+    platform,
+  )
 }
