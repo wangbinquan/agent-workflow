@@ -18,6 +18,8 @@ import {
   writeInventoryIfRequested,
 } from './skeleton'
 
+const NAME = 'stub-opencode-slow'
+
 const INVENTORY = {
   schemaVersion: 1,
   capturedAt: 1700000000000,
@@ -37,13 +39,13 @@ const INVENTORY = {
 }
 
 export async function run(argv: readonly string[]): Promise<void> {
-  const call = parseInvocation(argv)
+  const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
     process.stdout.write('stub-opencode 0.9.0\n')
     process.exit(0)
   }
   emitPromptForContractTest(call.prompt)
-  const open = requireOutputOpen(call.prompt)
+  const open = requireOutputOpen(call.prompt, NAME)
 
   const sleepMs = Number(process.env.STUB_OPENCODE_SLEEP_MS ?? '0')
   const sleepSeconds = Number.isFinite(sleepMs) ? Math.floor(sleepMs / 1000) : 0

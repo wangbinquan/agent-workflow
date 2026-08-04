@@ -12,6 +12,8 @@ import {
   writeInventoryIfRequested,
 } from './skeleton'
 
+const NAME = 'stub-opencode'
+
 const INVENTORY = {
   schemaVersion: 1,
   capturedAt: 1700000000000,
@@ -41,13 +43,13 @@ const INVENTORY = {
 }
 
 export function run(argv: readonly string[]): void {
-  const call = parseInvocation(argv)
+  const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
     process.stdout.write('stub-opencode custom-build\n')
     process.exit(0)
   }
   emitPromptForContractTest(call.prompt)
-  const open = requireOutputOpen(call.prompt)
+  const open = requireOutputOpen(call.prompt, NAME)
 
   // RFC-187 T11 (audit TRAP-3) — be WORKGROUP-AWARE.
   //

@@ -10,6 +10,9 @@
 // the wrong thing" this whole RFC keeps running into.
 
 import { run as runBasic } from './mode-basic'
+import { run as runClarify } from './mode-clarify'
+import { run as runClarifyInline } from './mode-clarify-inline'
+import { run as runCrossClarify } from './mode-cross-clarify'
 import { run as runCommit } from './mode-commit'
 import { run as runIntent } from './mode-intent'
 import { run as runSlow } from './mode-slow'
@@ -18,6 +21,9 @@ type ModeRunner = (argv: readonly string[]) => void | Promise<void>
 
 const MODES: Record<string, ModeRunner> = {
   basic: runBasic,
+  clarify: runClarify,
+  'clarify-inline': runClarifyInline,
+  'cross-clarify': runCrossClarify,
   commit: runCommit,
   intent: runIntent,
   slow: runSlow,

@@ -18,14 +18,16 @@ import {
   requireOutputOpen,
 } from './skeleton'
 
+const NAME = 'stub-opencode-commit'
+
 export function run(argv: readonly string[]): void {
-  const call = parseInvocation(argv)
+  const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
     process.stdout.write('stub-opencode 999.0.0\n')
     process.exit(0)
   }
   emitPromptForContractTest(call.prompt)
-  const open = requireOutputOpen(call.prompt)
+  const open = requireOutputOpen(call.prompt, NAME)
 
   if (call.prompt.includes('commit_message')) {
     emitTextEvent(
