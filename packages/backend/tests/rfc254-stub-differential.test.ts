@@ -515,6 +515,337 @@ differentialSuite(
   ],
 )
 
+const matrixPrompt = (marker: string, extra = ''): string =>
+  `nonce="${NONCE}" ${marker}${extra === '' ? '' : `\n${extra}`}`
+
+/** An `<aw-input>` block the way the framework renders one: tag line, then value. */
+const awInput = (name: string, value: string): string => `<aw-input name="${name}">\n${value}`
+
+differentialSuite(
+  {
+    mode: 'workflow-matrix',
+    script: 'stub-opencode-workflow-matrix.sh',
+    stateDirEnv: ['MATRIX_STATE_DIR'],
+  },
+  [
+    { name: '--version', args: ['--version'] },
+    { name: 'unsupported mode', args: ['nope'] },
+    { name: 'missing nonce exits 3', args: runArgs('no marker') },
+    // The catch-all: a prompt the framework routed to this stub with no marker
+    // is a workflow wiring bug, and it must not look like a passing run.
+    { name: 'no MATRIX_* marker exits 4', args: runArgs(`nonce="${NONCE}" plain prompt`) },
+    {
+      name: 'inventory drop is compact, not pretty',
+      args: runArgs(matrixPrompt('MATRIX_SOURCE_A')),
+      env: { WANT_INVENTORY: '1' },
+    },
+
+    { name: 'MATRIX_SOURCE_A', args: runArgs(matrixPrompt('MATRIX_SOURCE_A')) },
+    { name: 'MATRIX_SOURCE_B', args: runArgs(matrixPrompt('MATRIX_SOURCE_B')) },
+    { name: 'MATRIX_MERGE', args: runArgs(matrixPrompt('MATRIX_MERGE')) },
+    { name: 'MATRIX_GIT_SUMMARY', args: runArgs(matrixPrompt('MATRIX_GIT_SUMMARY')) },
+    { name: 'MATRIX_GIT_NOOP', args: runArgs(matrixPrompt('MATRIX_GIT_NOOP')) },
+    { name: 'MATRIX_FANOUT_AGG', args: runArgs(matrixPrompt('MATRIX_FANOUT_AGG')) },
+    { name: 'MATRIX_CROSS_DESIGN', args: runArgs(matrixPrompt('MATRIX_CROSS_DESIGN')) },
+    { name: 'MATRIX_LOOP_EXHAUST', args: runArgs(matrixPrompt('MATRIX_LOOP_EXHAUST')) },
+
+    {
+      name: 'MATRIX_PROMPT_INPUTS with every required fragment present',
+      args: runArgs(
+        matrixPrompt(
+          'MATRIX_PROMPT_INPUTS',
+          [
+            'literal {{auto_text}}',
+            'thorough',
+            '## auto_text',
+            'auto-appended',
+            '## files',
+            'docs/a.md',
+            'docs/b.md',
+            '## tags',
+            '["api","docs"]',
+            '## branch',
+            '{"kind":"branch","ref":"main"}',
+            'node=prompt_auditor iteration=0 repo_count=1',
+          ].join('\n'),
+        ),
+      ),
+    },
+    {
+      name: 'MATRIX_PROMPT_INPUTS missing a fragment exits 10 and names it',
+      args: runArgs(matrixPrompt('MATRIX_PROMPT_INPUTS', 'literal {{auto_text}}')),
+    },
+    {
+      name: 'MATRIX_UPLOAD_INPUT without the uploaded files exits 11',
+      args: runArgs(matrixPrompt('MATRIX_UPLOAD_INPUT', 'matrix-uploads/one.md')),
+    },
+    {
+      name: 'MATRIX_OUTPUT_KINDS writes both generated files and emits every port kind',
+      args: runArgs(matrixPrompt('MATRIX_OUTPUT_KINDS')),
+      sideEffects: ['matrix-generated/kinds/one.md', 'matrix-generated/kinds/two.md'],
+    },
+    {
+      name: 'MATRIX_GIT_MUTATE dirties the worktree',
+      args: runArgs(matrixPrompt('MATRIX_GIT_MUTATE')),
+      sideEffects: ['matrix-generated/source.txt', 'matrix-generated/docs/report.md'],
+    },
+
+    {
+      name: 'MATRIX_LOOP_EMPTY: iteration 0 continues, iteration 1 empties the port',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_LOOP_EMPTY', 'iteration=0')) },
+        { args: runArgs(matrixPrompt('MATRIX_LOOP_EMPTY', 'iteration=1')) },
+      ],
+    },
+    {
+      name: 'MATRIX_LOOP_EQUALS switches on iteration',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_LOOP_EQUALS', 'iteration=0')) },
+        { args: runArgs(matrixPrompt('MATRIX_LOOP_EQUALS', 'iteration=2')) },
+      ],
+    },
+    {
+      name: 'MATRIX_LOOP_COUNT switches on iteration',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_LOOP_COUNT', 'iteration=0')) },
+        { args: runArgs(matrixPrompt('MATRIX_LOOP_COUNT', 'iteration=1')) },
+      ],
+    },
+    {
+      name: 'MATRIX_LOOP_FANOUT_AGG switches on iteration',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_LOOP_FANOUT_AGG', 'iteration=0')) },
+        { args: runArgs(matrixPrompt('MATRIX_LOOP_FANOUT_AGG', 'iteration=1')) },
+      ],
+    },
+    {
+      name: 'MATRIX_NESTED_CHECK switches on iteration',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_NESTED_CHECK', 'iteration=0')) },
+        { args: runArgs(matrixPrompt('MATRIX_NESTED_CHECK', 'iteration=3')) },
+      ],
+    },
+    {
+      name: 'MATRIX_NESTED_MUTATE names its file after the iteration',
+      args: runArgs(matrixPrompt('MATRIX_NESTED_MUTATE', 'iteration=2')),
+      sideEffects: ['matrix-generated/nested/iter-2.txt', 'matrix-generated/nested/iter-0.txt'],
+    },
+    {
+      name: 'an absent iteration marker reads as 0',
+      args: runArgs(matrixPrompt('MATRIX_NESTED_MUTATE')),
+      sideEffects: ['matrix-generated/nested/iter-0.txt'],
+    },
+    {
+      name: 'the LAST iteration= on the first matching line wins',
+      // A prompt that quotes an earlier iteration before stating its own must
+      // not be read as the quoted one.
+      args: runArgs(matrixPrompt('MATRIX_NESTED_MUTATE', 'prior iteration=0 now iteration=5')),
+      sideEffects: ['matrix-generated/nested/iter-5.txt', 'matrix-generated/nested/iter-0.txt'],
+    },
+
+    {
+      name: 'MATRIX_FANOUT_WORKER reads its shard from the aw-input block',
+      args: runArgs(matrixPrompt('MATRIX_FANOUT_WORKER', awInput('doc', 'docs/ok.md'))),
+    },
+    {
+      name: 'MATRIX_FANOUT_WORKER with no doc input falls back to `unknown`',
+      args: runArgs(matrixPrompt('MATRIX_FANOUT_WORKER')),
+    },
+    {
+      name: 'MATRIX_FANOUT_WORKER fails shard docs/fail.md with exit 9',
+      args: runArgs(matrixPrompt('MATRIX_FANOUT_WORKER', awInput('doc', 'docs/fail.md'))),
+    },
+    {
+      name: 'MATRIX_FANOUT_MUTATE strips the directory and the .md suffix',
+      args: runArgs(matrixPrompt('MATRIX_FANOUT_MUTATE', awInput('doc', 'docs/deep/note.md'))),
+      sideEffects: ['matrix-generated/fanout/note.txt'],
+    },
+
+    {
+      name: 'MATRIX_MIXED_DRAFT: clarify, then answer, then the rejection rerun',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_MIXED_DRAFT')) },
+        {
+          args: runArgs(
+            matrixPrompt('MATRIX_MIXED_DRAFT', 'Deployment target?\n## Clarify Q&A\nstaging'),
+          ),
+        },
+        {
+          args: runArgs(
+            matrixPrompt(
+              'MATRIX_MIXED_DRAFT',
+              [
+                '## Review Rejection',
+                'preserve the clarified target and revise the implementation',
+                '## Prior Output',
+                'mixed-document-v1 target=staging',
+              ].join('\n'),
+            ),
+          ),
+        },
+      ],
+      sideEffects: ['matrix-generated/mixed/release.md', 'matrix-generated/mixed/checks.md'],
+    },
+    {
+      name: 'MATRIX_MIXED_DRAFT: the rejection block outranks a quoted clarify question',
+      // The shell tested `## Review Rejection` FIRST, so a rerun prompt that
+      // still carries the earlier Q&A must take the rejection branch and emit
+      // v2 — not re-answer the question and emit v1 again, which would loop.
+      args: runArgs(
+        matrixPrompt(
+          'MATRIX_MIXED_DRAFT',
+          [
+            'Deployment target?',
+            '## Clarify Q&A',
+            '## Review Rejection',
+            'preserve the clarified target and revise the implementation',
+            '## Prior Output',
+            'mixed-document-v1 target=staging',
+          ].join('\n'),
+        ),
+      ),
+      sideEffects: ['matrix-generated/mixed/release.md'],
+    },
+    {
+      name: 'MATRIX_MIXED_DRAFT rejection missing its prior output exits 10',
+      args: runArgs(matrixPrompt('MATRIX_MIXED_DRAFT', '## Review Rejection')),
+    },
+    {
+      name: 'MATRIX_MIXED_AUDIT accepts a matching shard key',
+      args: runArgs(
+        matrixPrompt(
+          'MATRIX_MIXED_AUDIT',
+          [
+            awInput('changed_file', 'src/a.ts'),
+            awInput('shared_goal', 'ship the reviewed release'),
+            awInput('shard-key', 'src/a.ts'),
+          ].join('\n'),
+        ),
+      ),
+    },
+    {
+      name: 'MATRIX_MIXED_AUDIT rejects a shard key that disagrees with the input (exit 15)',
+      args: runArgs(
+        matrixPrompt(
+          'MATRIX_MIXED_AUDIT',
+          [
+            awInput('changed_file', 'src/a.ts'),
+            awInput('shared_goal', 'ship the reviewed release'),
+            awInput('shard-key', 'src/b.ts'),
+          ].join('\n'),
+        ),
+      ),
+    },
+    {
+      name: 'MATRIX_MIXED_AUDIT with no shard path exits 15',
+      args: runArgs(matrixPrompt('MATRIX_MIXED_AUDIT')),
+    },
+    {
+      name: 'MATRIX_MIXED_AUDIT with the wrong broadcast goal exits 15',
+      args: runArgs(
+        matrixPrompt(
+          'MATRIX_MIXED_AUDIT',
+          [awInput('changed_file', 'src/a.ts'), awInput('shared_goal', 'something else')].join(
+            '\n',
+          ),
+        ),
+      ),
+    },
+    {
+      name: 'MATRIX_MIXED_SUMMARY requires both upstream fragments',
+      args: runArgs(
+        matrixPrompt('MATRIX_MIXED_SUMMARY', 'aggregated-fanout-report\nship the reviewed release'),
+      ),
+    },
+    {
+      name: 'MATRIX_MIXED_SUMMARY missing a fragment exits 10',
+      args: runArgs(matrixPrompt('MATRIX_MIXED_SUMMARY', 'aggregated-fanout-report')),
+    },
+
+    {
+      name: 'MATRIX_SELF_CLARIFY asks, then finalises once the question is echoed',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_SELF_CLARIFY')) },
+        { args: runArgs(matrixPrompt('MATRIX_SELF_CLARIFY', 'Choose a delivery mode\nsafe')) },
+      ],
+    },
+    {
+      name: 'MATRIX_CROSS_QUESTION asks, then finalises',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_CROSS_QUESTION')) },
+        {
+          args: runArgs(
+            matrixPrompt('MATRIX_CROSS_QUESTION', 'Which trade-off should win?\nlatency'),
+          ),
+        },
+      ],
+    },
+    {
+      name: 'MATRIX_REVIEW_WRITE switches on the rejection block',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_REVIEW_WRITE')) },
+        { args: runArgs(matrixPrompt('MATRIX_REVIEW_WRITE', '## Review Rejection')) },
+      ],
+    },
+
+    {
+      name: 'MATRIX_RUNTIME retry: first attempt exits 12, the retry succeeds',
+      // The marker file is the whole point — it lives in MATRIX_STATE_DIR so a
+      // worktree rollback between attempts cannot erase it.
+      steps: [
+        {
+          args: runArgs(matrixPrompt('MATRIX_RUNTIME', `${awInput('mode', 'retry')}\ntask=alpha`)),
+        },
+        {
+          args: runArgs(matrixPrompt('MATRIX_RUNTIME', `${awInput('mode', 'retry')}\ntask=alpha`)),
+        },
+      ],
+    },
+    {
+      name: 'MATRIX_RUNTIME retry keys the marker per task',
+      steps: [
+        {
+          args: runArgs(matrixPrompt('MATRIX_RUNTIME', `${awInput('mode', 'retry')}\ntask=alpha`)),
+        },
+        {
+          args: runArgs(matrixPrompt('MATRIX_RUNTIME', `${awInput('mode', 'retry')}\ntask=beta`)),
+        },
+      ],
+    },
+    {
+      name: 'MATRIX_RUNTIME retry with no task= falls back to `unknown`',
+      steps: [
+        { args: runArgs(matrixPrompt('MATRIX_RUNTIME', awInput('mode', 'retry'))) },
+        { args: runArgs(matrixPrompt('MATRIX_RUNTIME', awInput('mode', 'retry'))) },
+      ],
+    },
+    {
+      name: 'MATRIX_RUNTIME fail exits 13',
+      args: runArgs(matrixPrompt('MATRIX_RUNTIME', awInput('mode', 'fail'))),
+    },
+    {
+      name: 'MATRIX_RUNTIME with an unknown mode exits 14',
+      args: runArgs(matrixPrompt('MATRIX_RUNTIME', awInput('mode', 'frobnicate'))),
+    },
+    {
+      name: 'MATRIX_RUNTIME with no mode input at all exits 14',
+      args: runArgs(matrixPrompt('MATRIX_RUNTIME')),
+    },
+    {
+      // Deliberately the slowest case in the file: it is the only one that
+      // proves the ported stub actually WAITS. The timeout / cancel specs work
+      // by killing this branch mid-sleep, so a port that returned immediately
+      // would turn both of them green against nothing.
+      name: 'MATRIX_RUNTIME timeout sleeps ~10s before emitting',
+      args: runArgs(matrixPrompt('MATRIX_RUNTIME', awInput('mode', 'timeout'))),
+    },
+    {
+      name: 'MATRIX_RUNTIME cancel takes the same sleeping branch',
+      args: runArgs(matrixPrompt('MATRIX_RUNTIME', awInput('mode', 'cancel'))),
+    },
+  ],
+)
+
 describe.skipIf(process.platform === 'win32')(
   'RFC-254 T28b — where the shell original had no single answer',
   () => {

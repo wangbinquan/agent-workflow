@@ -12,10 +12,11 @@
 import { run as runBasic } from './mode-basic'
 import { run as runClarify } from './mode-clarify'
 import { run as runClarifyInline } from './mode-clarify-inline'
-import { run as runCrossClarify } from './mode-cross-clarify'
 import { run as runCommit } from './mode-commit'
+import { run as runCrossClarify } from './mode-cross-clarify'
 import { run as runIntent } from './mode-intent'
 import { run as runSlow } from './mode-slow'
+import { run as runWorkflowMatrix } from './mode-workflow-matrix'
 
 type ModeRunner = (argv: readonly string[]) => void | Promise<void>
 
@@ -23,13 +24,14 @@ const MODES: Record<string, ModeRunner> = {
   basic: runBasic,
   clarify: runClarify,
   'clarify-inline': runClarifyInline,
-  'cross-clarify': runCrossClarify,
   commit: runCommit,
+  'cross-clarify': runCrossClarify,
   intent: runIntent,
   slow: runSlow,
+  'workflow-matrix': runWorkflowMatrix,
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const mode = process.env.AW_STUB_MODE ?? ''
   const runner = MODES[mode]
   if (runner === undefined) {
@@ -39,7 +41,11 @@ function main(): void {
     )
     process.exit(2)
   }
-  runner(process.argv.slice(2))
+  // Awaited, not fired and forgotten. The sleeping modes only survive an
+  // un-awaited call because a pending timer happens to hold the event loop
+  // open; anything that awaits I/O instead would exit early and silently skip
+  // its own output.
+  await runner(process.argv.slice(2))
 }
 
-main()
+await main()
