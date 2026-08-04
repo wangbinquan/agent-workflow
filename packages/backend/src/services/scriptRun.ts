@@ -34,6 +34,7 @@ import { buildScriptPath } from '@/util/platformExec'
 import type { SandboxCtx } from './sandbox'
 import { runContainedProcess, type ContainedSpawnResult } from './execution/containedSpawn'
 import type { ScriptDepsEnv } from './scriptDepsEnv'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 /** File extension + argv shape per language. */
 const INTERPRETER_SPEC: Record<
@@ -161,7 +162,12 @@ async function probeInterpreter(path: string): Promise<ResolvedInterpreter | nul
   if (path.length === 0) return null
   if (!existsSync(path)) return null
   try {
-    const proc = Bun.spawn({ cmd: [path, '--version'], stdout: 'pipe', stderr: 'pipe' })
+    const proc = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
+      cmd: [path, '--version'],
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
     // impl-gate 3.4: this runs BEFORE the scheduler's concurrency permit and had
     // no deadline, so an administrator override pointing at anything that waits
     // for input (an interactive wrapper, a shim that prompts) wedged the node's

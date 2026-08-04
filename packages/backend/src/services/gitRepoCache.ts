@@ -49,6 +49,7 @@ import { detachRepoFromAllGroups, groupsReferencingRepo } from '@/services/repoG
 // resolveSubmoduleParams through the existing dynamic import.
 import { loadConfig } from '@/config'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 const log = createLogger('git-repo-cache')
 
@@ -90,6 +91,7 @@ async function spawnGit(
   opts?: { timeoutMs?: number; env?: Record<string, string> },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn({
+    ...platformSpawnOptionsForHost(),
     // RFC-252 G1: same hardening as runGit — this is the second (and only other)
     // production git spawn point, so the two must not drift.
     cmd: ['git', ...hardenGitArgs(args)],

@@ -144,6 +144,13 @@
 - **argv 不过 shell，所以别把 `<` `>` 当 shell 元字符拒掉**：它们是 pip 的合法版本比较符，误拒会给用户一条完全误导的报错。真正该拒的是 flag 前缀、URL/VCS/路径形态与 `;&|\`$()` 这类。
 - **`Bun.spawn` 的 posix_spawn ENOENT 会冠名 argv[0]，即使真正缺的是 cwd**（2026-08-04 实测：`Bun.spawn({cmd:['/bin/echo'],cwd:'/不存在'})` 报 `ENOENT ... posix_spawn '/bin/echo'`）。沙箱包装下 argv[0] 是 bwrap/sandbox-exec，于是「任务 worktree 目录没了」显示成「bwrap 不存在」，把排查引向完全无辜的对象（真实事故：canonical worktree 指向已清理的 `iso/` 目录）。排查 spawn ENOENT **先查 cwd 再查可执行文件**；平台侧 runner/runtimeSmoke/systemAgentRun 的 spawn catch 已统一过 `util/spawnDiagnostics.ts:explainSpawnEnoent` 翻译，新 spawn 现场照接。另注意 bare 名与绝对路径的报错形态不同（bare 名缺失是 `Executable not found in $PATH`，不带 ENOENT）。
 
+## 跨平台（RFC-254 实测）
+
+- **`node:path` 的默认导出是「宿主口味」，解析别的平台的路径必须显式 `path.win32` / `path.posix`**：在 macOS 上 `dirname('C:\\Program Files\\Git\\cmd\\git.exe')` 返回 `'.'`（它看不见反斜杠分隔符），于是「从 git 推导 bash 路径」「把 git 目录加进受控 PATH」这类逻辑会静默算出垃圾值而不报错。RFC-254 里同一个陷阱在两处独立出现，是**测试**先抓到的（生产代码 typecheck 全绿）。凡是处理「另一个平台的路径字符串」，一律 `win32.dirname` / `win32.join`。
+- **Windows 上「存在某个 `bash.exe`」从来不是充分证据**：`System32\bash.exe` 是 **WSL 启动器**，裸 `which('bash')` 找到它会把脚本跑进另一个操作系统、面对另一份文件系统视图；windows-2025 runner 上还额外装着 MSYS2 的第三个 bash。正解是从 `git` 推导（`<root>\cmd\git.exe` → `<root>\bin\bash.exe`，OpenCode 自己就这么做），推不出来就显式失败、不猜路径。
+- **POSIX 上「agent 有 git」是白拿的，别的平台不是**：受控 PATH 写 `/usr/bin:/bin` 时 `git` 顺带就在里面，所以从来没人设计过它；Windows 把 git 装在 `C:\Program Files\Git\cmd`，不在任何系统目录下 ⇒ 只用系统目录拼的受控 PATH 会让 agent 的每一次 git 调用都失败。**通用判据**：受控/白名单式 PATH 每加一个平台，都要重新问一遍「这个平台上，我依赖的每个工具分别在哪」，而不是套用另一个平台的目录表。
+- **Windows 环境变量名大小写不敏感 ⇒ 精确匹配的黑白名单是安全缺陷而非移植问题**，且方向因表而异：白名单只认 `PATH` 会**丢掉** OS 给的 `Path`（要求全大写的正则还会丢掉 `SystemRoot`，子进程连 winsock 都起不来）；黑名单只认 `NODE_OPTIONS` 会**放行** `Node_Options`。折叠必须收在一个单点上，各表一律走它。**配置校验类**的比较建议无条件折叠（不只 win32）——配置是跨平台流动的数据，在 Linux 上被接受、到 Windows 变成冲突是最难查的形态。
+
 ## 平台面守卫（RFC-254 实测）
 
 - **守卫规则要锁「被禁形态的字面量」，不要锁「使用它的调用形状」**：RFC-254 的第一版规则写成 `startsWith(\`${x}/\`)`，跑起来当场对**同一个文件里四行之外**的两步式写法失明——`const prefix = \`${ctx.worktreePath}/\`` 然后 `.startsWith(prefix)`。锁调用形状的守卫，换个变量名就绕过；锁 `` `${x}/` `` 这个**路径前缀字面量**本身则绕不过。通用判据：问一句「把这行拆成两句还会不会被抓」，答否就说明锁错了层。

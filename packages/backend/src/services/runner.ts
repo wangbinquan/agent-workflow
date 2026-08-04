@@ -123,6 +123,7 @@ import {
 import { isProductionOpencodeCommand } from '@/util/opencode'
 import { killProcessTree } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
@@ -1544,6 +1545,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const spawnCmd = wrapSpawnPlanSandbox(cmd, sandboxCtx, plan.sandboxTopology)
   const trySpawn = (): Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> =>
     Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd: spawnCmd,
       cwd: opts.worktreePath,
       env,

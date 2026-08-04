@@ -65,6 +65,7 @@ import {
 } from './verifiedManifest'
 import { runFffCapabilityProbe } from './fffCapability'
 import { buildVerifiedInventorySnapshot, writeVerifiedInventorySnapshot } from './verifiedInventory'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 const LISTEN_LINE_RE = /^opencode server listening on http:\/\/127\.0\.0\.1:([1-9]\d{0,4})$/
 const MAX_SERVER_STDOUT_LINE_BYTES = 1024
@@ -208,6 +209,7 @@ function defaultSleep(milliseconds: number, signal?: AbortSignal): Promise<void>
 function defaultSpawnServer(input: SpawnVerifiedServerInput): VerifiedLauncherServerProcess {
   try {
     const child = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd: [...input.command],
       cwd: input.cwd,
       env: { ...input.env },

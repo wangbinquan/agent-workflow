@@ -1,3 +1,4 @@
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 // RFC-083 PR-E — SCIP indexer registry + discovery. The deep engine shells out
 // to an external per-language indexer (scip-typescript / scip-python / …),
 // discovered on PATH (or a settings override), exactly like the daemon already
@@ -120,6 +121,7 @@ export async function probeIndexer(
   const bin = resolveIndexerBin(spec, overrides)
   try {
     const proc = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd: [bin, '--version'],
       stdout: 'pipe',
       stderr: 'ignore',

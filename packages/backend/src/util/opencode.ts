@@ -7,6 +7,7 @@ import { createLogger } from './log'
 import { loadConfig } from '@/config'
 import { extractVersion } from './semver'
 import { recordOpencodeBinaryVersion } from './opencode-version-registry'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 // RFC-143 PR-5: extractVersion/compareSemver live in ./semver (single copy,
 // shared with the claude probe); re-exported so existing import sites
@@ -106,6 +107,7 @@ export async function probeOpencode(
     // a hung wrapper's grandchild alive and leaking once per poll (Codex impl
     // gate). Without a timeout the historical flat spawn is kept byte-for-byte.
     const proc = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd: [binary, '--version'],
       stdout: 'pipe',
       stderr: 'pipe',

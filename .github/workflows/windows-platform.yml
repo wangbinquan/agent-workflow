@@ -1,0 +1,126 @@
+# RFC-254 — Windows platform verification.
+#
+# Why a separate workflow (vs. adding `windows-latest` to ci.yml's matrices):
+#   * The full backend suite is ~8600 tests written against POSIX assumptions
+#     that this RFC has not finished porting. Turning them all on at once buries
+#     the signal we actually want under hundreds of expected failures, and every
+#     unrelated PR would then be red.
+#   * What we DO need immediately is a real Windows kernel for the handful of
+#     things that cannot be verified anywhere else. Windows containers need a
+#     Windows host, so Docker on a macOS/Linux dev box cannot substitute — and
+#     Wine emulates Job Object / kernel32 semantics too incompletely to be
+#     evidence for a process-lifetime boundary.
+#   * So: a narrow, fast, honest job now; the full matrix lands with the rest of
+#     the port (RFC-254 T31-T35).
+#
+# This workflow is ADDITIVE and never gates unrelated work: it runs on demand,
+# nightly, and on pushes that touch the platform surface it covers.
+
+name: windows-platform
+
+on:
+  schedule:
+    # 06:15 UTC — ahead of the other nightlies so a Windows regression is the
+    # first thing visible in the morning rather than queued behind them.
+    - cron: '15 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/backend/src/util/platformExec.ts'
+      - 'packages/backend/src/util/fileTrust.ts'
+      - 'packages/backend/src/util/process.ts'
+      - 'packages/backend/src/util/git.ts'
+      - 'packages/backend/src/util/gitHardening.ts'
+      - 'packages/shared/src/platformEnv.ts'
+      - 'packages/backend/src/services/scriptRun.ts'
+      - 'packages/backend/tests/rfc254-*.test.ts'
+      - 'packages/backend/src/util/windowsJobObject.ts'
+      - 'scripts/build-binary.ts'
+      - '.github/workflows/windows-platform.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/backend/src/util/platformExec.ts'
+      - 'packages/backend/src/util/fileTrust.ts'
+      - 'packages/backend/src/util/process.ts'
+      - 'packages/shared/src/platformEnv.ts'
+      - 'packages/backend/src/services/scriptRun.ts'
+      - 'packages/backend/tests/rfc254-*.test.ts'
+      - 'scripts/build-binary.ts'
+      - '.github/workflows/windows-platform.yml'
+
+concurrency:
+  group: windows-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  platform:
+    name: Windows platform surface
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The point of this job. These suites assert win32 behaviour through an
+      # injected platform on every OS; running them on a REAL Windows kernel is
+      # what proves the injected model matches the actual one.
+      - name: RFC-254 platform suites
+        run: bun test --isolate packages/backend/tests/rfc254-platform-exec.test.ts packages/backend/tests/rfc254-file-trust.test.ts packages/backend/tests/rfc254-env-case-folding.test.ts packages/backend/tests/rfc254-git-windows.test.ts packages/backend/tests/rfc254-script-node-windows.test.ts packages/backend/tests/rfc254-process-tree-ownership.test.ts packages/backend/tests/rfc254-platform-surface-guard.test.ts
+
+      - name: Shared package suite
+        run: bun run --filter @agent-workflow/shared test
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      # Reports what the host actually provides, so the interpreter-resolution
+      # and controlled-PATH designs are checked against reality rather than
+      # against what the RFC assumed. Never fails the job — it is evidence.
+      - name: Report host toolchain (evidence, non-gating)
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "== git =="; where git || true; git --version || true
+          echo "== git bash (must come from git, never System32) =="
+          ls "C:/Program Files/Git/bin/bash.exe" || true
+          where bash || true
+          echo "== python candidates (python3 -> python -> py) =="
+          where python3 || true; where python || true; where py || true
+          echo "== node =="; where node || true
+          echo "== sqlite3 (expected ABSENT; see RFC-254 D15) =="
+          where sqlite3 || echo "sqlite3 not on PATH (as expected)"
+          echo "== SystemRoot =="; echo "$SystemRoot"
+
+      # Proves the artifact naming (`windows-x86_64` + `.exe`) and that the
+      # compiled binary actually starts on Windows. `build:binary` runs its own
+      # `version` smoke at the end.
+      - name: Build single binary
+        run: bun run build:binary
+
+      - name: Show artifact
+        shell: bash
+        run: ls -lh dist/
+
+      - name: Daemon doctor on Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary=$(find dist -maxdepth 1 -type f -name 'agent-workflow-windows-*' | head -n 1)
+          test -n "$binary"
+          # `doctor` reports containment status, so on Windows it is also the
+          # check that the platform reports "no provider" honestly rather than
+          # crashing or claiming a boundary it does not have.
+          "$binary" doctor || true
+          "$binary" version

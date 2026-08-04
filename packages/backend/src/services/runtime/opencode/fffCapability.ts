@@ -15,6 +15,7 @@ import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
 import { executionIdentityFailure } from './failure'
 import { verifiedSelfCommand } from './sealedSubprocess'
 import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 const PROBE_BASENAME_RE = /^aw-fff-[0-9a-f]{32}\.txt$/
 const MAX_PROBE_OUTPUT_BYTES = 4 * 1024
@@ -602,6 +603,7 @@ export async function runFffCapabilityProbeSupervisor(
   let stderr: Uint8Array = new Uint8Array()
   try {
     const child = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd: [...command],
       cwd,
       env: {},
@@ -767,6 +769,7 @@ function spawnFffCapabilityProbeSupervisor(
   const nonce = randomUUID()
   const watchdogMilliseconds = timeoutMs + FFF_CAPABILITY_SUPERVISOR_WATCHDOG_MARGIN_MS
   const child = Bun.spawn({
+    ...platformSpawnOptionsForHost(),
     cmd: verifiedSelfCommand(FFF_CAPABILITY_SUPERVISOR_SUBCOMMAND, [
       '--nonce',
       nonce,

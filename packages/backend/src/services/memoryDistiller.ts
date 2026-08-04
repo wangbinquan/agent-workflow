@@ -64,6 +64,7 @@ import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distill
 import { appHome } from '@/util/paths'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import {
   ExecutionIdentityFailure,
   executionIdentityFailure,
@@ -1174,6 +1175,7 @@ export async function defaultDistillerSpawn(
       plan.sandboxTopology,
     )
     child = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd,
       cwd: worktreeDir,
       env: plan.env,

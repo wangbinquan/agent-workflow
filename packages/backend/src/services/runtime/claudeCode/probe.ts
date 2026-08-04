@@ -7,6 +7,7 @@ import { createLogger } from '@/util/log'
 import type { ProbeOpts } from '@/util/opencode'
 // RFC-143 PR-5: single semver helper pair (was a byte-for-byte local copy).
 import { compareSemver, extractVersion } from '@/util/semver'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 const log = createLogger('claude-code')
 
@@ -50,6 +51,7 @@ export async function probeClaudeCode(
     // Detached process group on the timeout path so SIGKILL reaps the whole
     // tree, not just a hung wrapper (see util/opencode.ts, same shape).
     const proc = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd: [binary, '--version'],
       stdout: 'pipe',
       stderr: 'pipe',

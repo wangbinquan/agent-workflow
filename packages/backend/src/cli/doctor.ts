@@ -15,6 +15,7 @@ import type { SandboxMode } from '@/services/sandbox/guidance'
 import { probeSandboxMechanism } from '@/services/sandbox/probe'
 import { Paths } from '@/util/paths'
 import { makeBoundedSpawn } from './sandbox'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 export interface CheckResult {
   name: string
@@ -369,7 +370,12 @@ export function evaluateGitCheck(rawVersionOutput: string): CheckResult {
 
 async function checkGit(): Promise<CheckResult> {
   try {
-    const proc = Bun.spawn({ cmd: ['git', '--version'], stdout: 'pipe', stderr: 'pipe' })
+    const proc = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
+      cmd: ['git', '--version'],
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
     const [out, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
     if (exitCode !== 0) {
       return { name: 'git', ok: false, message: 'git --version failed' }

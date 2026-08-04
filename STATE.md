@@ -28,7 +28,7 @@
 
 ✅ **2026-08-04 生产事故诊断 + 修复（非 RFC：bug 修复直落）：任务 canonical worktree 消失 → 误导性 `posix_spawn '/usr/bin/bwrap'` ENOENT 风暴**。Linux 部署机（claude-code 协议 + `codeagentcli`/GLM-5.1-NN fork）日志定案：某任务 `tasks.worktree_path` 指向**临时 iso 空间** `iso/{taskId}/{旧 nodeRunId}`（已被清理），`createNodeIso` 把死路径当"非 git repo"走了 mock-harness passthrough，死 cwd 传进 runner spawn；**实测 Bun 在 cwd 缺失时 posix_spawn ENOENT 冠名 argv[0]**（= 沙箱包装 bwrap，bwrap 全程无辜、containment 正常 contained），且失败点在 mainline 重试循环内 ⇒ ~1.4s/发风暴。四处修复（各带回归测试）：①`createNodeIso` 对缺失 canonical（逐 repo 探测）抛 `CanonicalWorktreeMissingError` fail-fast——落点在重试循环/admission/spawn **之前**，顺带消灭风暴；exists-but-not-git 的 mock 门保留；②新 `util/spawnDiagnostics.ts:explainSpawnEnoent` 探测 cwd/argv[0] 谁缺失并接进 runner/runtimeSmoke/systemAgentRun 三个 spawn catch（源码层 wiring 锁）；③runtime 冒烟的兜底分类（`stream-nonconforming` 两分支）detail 附 `maskDiagnosticsText` 后的 stdout/stderr 尾巴——此前订阅限额/GLM 网关类**非英文签名表**错误被吞成裸 "nonce missing"（同日事故的错误 A）；④`outputTail` 单行化+ANSI 剥离+尾部截断。测试：`workspace-missing-fail-fast.test.ts`(7)、`spawn-diagnostics.test.ts`(10)、`runtime-smoke.test.ts` 新增未识别错误文本 case。通用坑进 `docs/dev-gotchas.md`（Bun ENOENT 冠名规律），两条未决进 `docs/audit-backlog.md`（存量 iso-canonical 成因待部署侧 SQL 确认；runNode 内确定性 spawn 失败仍烧重试）。**同日续三刀**：⑤冒烟证据补 **result 行头部**（claude 方言错误正文在行首、usage blob 在行尾，纯尾巴窗口只见 `"modelUsage":{}`——上线后实机立刻吐出真因 `您暂无该模型的使用权限【TM.00001005】`，`8af2b6d3`）；⑥错误 A 定案 = **探测未传 model → fork 落自身默认模型 → 网关无该模型权限**（业务面一直传 inlineModel 所以从没坏）：MODEL_FAIL 签名补网关模型许可类（CJK 双语序 + OpenAI 风格）、证据扩展到全部失败分支、无 model 时 detail 显式指路 runtime model 字段（`a6fc106c`）；⑦**per-runtime `extraArgs`**（用户拍板"直接改"，`b2214b26`+`4d83ac00`）：迁移 0137 `runtimes.extra_args_json`、`validateExtraArgs` fail-closed 写门（**驱动能力声明** `acceptsExtraArgs` 而非协议字面量——RFC-143 旁路清零棘轮真实命中一次后重构；平台 flag 保留集 `CLAUDE_PLATFORM_OWNED_FLAGS` 带"spawn 模块全部 flag 字面量必须在集内"棘轮；裸 token 非长 flag 值位拒绝防吃 prompt 位置参数）、随 `runtime_params_json` 冻结（resume 不回读）、claude argv 末尾注入（业务=frozen rootParams / 探测=行值，系统面不注入）、前端 ChipsInput + 中英文案；首个消费者 = CodeAgent fork 的 `--skip-safe-check`（每 run 私有配置目录 ⇒ 信任快检必弹的消音）。测试 +14（写门矩阵/冻结不回读/argv 金锁安全/保留集棘轮/smoke argv 捕获/前端 PUT 断言）。
 
-🚧 **进行中 RFC（Draft / 设计门已闭环，待用户批准，2026-08-04）：[RFC-254 Windows 原生执行支持](design/RFC-254-windows-native-execution/proposal.md)** —— 用户要求「让本平台支持 windows 执行」。四路并行研究（仓内平台代码盘点 / containment 准入架构 / CI 发版链路 / opencode v1.18.4 源码 Windows 现状 + multica 参考仓实战模式）后四问澄清拍板 D1–D4：**v1 不做隔离 provider**（warn/off 可跑 + 如实降级呈现，enforce 与脚本节点 failClosed 档拒绝——win32 现状判定语义即目标语义，只做呈现收口）、**CI/发行一步到位全矩阵**（release windows x64 + 四矩阵 job + 第三套视觉基线）、脚本节点 python/node 原生 + bash 靠 Git for Windows（从 `which('git')` 推导，规避 System32 WSL bash）、有 x64 真机验收。派生 D5–D20（`stop` 走 HTTP shutdown、askpass 子命令化三平台统一、e2e stub 编译化、sqlite CLI 换 bun:sqlite、env 大小写折叠安全单点、argv 32767 平台守卫等）。三件套已落档并**经双路设计门修订**（记档 [design-gate-2026-08-04.md](design/RFC-254-windows-native-execution/design-gate-2026-08-04.md)：Codex 6×P0 + 独立子代理 1×P0，两路**均判定不通过**；逐条实读源码核实后**属实 24 条、驳回 1 条、计数订正 8 条**，全部折入）。现为 8 PR / T0–T38。
+🚧 **进行中 RFC（In Progress / 已批准并持续交付，2026-08-04）：[RFC-254 Windows 原生执行支持](design/RFC-254-windows-native-execution/proposal.md)** —— 用户要求「让本平台支持 windows 执行」。四路并行研究（仓内平台代码盘点 / containment 准入架构 / CI 发版链路 / opencode v1.18.4 源码 Windows 现状 + multica 参考仓实战模式）后四问澄清拍板 D1–D4：**v1 不做隔离 provider**（warn/off 可跑 + 如实降级呈现，enforce 与脚本节点 failClosed 档拒绝——win32 现状判定语义即目标语义，只做呈现收口）、**CI/发行一步到位全矩阵**（release windows x64 + 四矩阵 job + 第三套视觉基线）、脚本节点 python/node 原生 + bash 靠 Git for Windows（从 `which('git')` 推导，规避 System32 WSL bash）、有 x64 真机验收。派生 D5–D20（`stop` 走 HTTP shutdown、askpass 子命令化三平台统一、e2e stub 编译化、sqlite CLI 换 bun:sqlite、env 大小写折叠安全单点、argv 32767 平台守卫等）。三件套已落档并**经双路设计门修订**（记档 [design-gate-2026-08-04.md](design/RFC-254-windows-native-execution/design-gate-2026-08-04.md)：Codex 6×P0 + 独立子代理 1×P0，两路**均判定不通过**；逐条实读源码核实后**属实 24 条、驳回 1 条、计数订正 8 条**，全部折入）。现为 8 PR / T0–T38。
 
 **设计门改变了三处核心认知**：①**Job Object 进 v1**（P0-D）——`verifiedLauncher.ts:206,928,1237` 以**进程组**为 runtime store 的所有权单位，group 不存活即标记 reaped 并**释放 store 供复用**；初稿的「taskkill + 单 pid 判活」会在后代仍持有 store 时错误释放 = 数据损坏，故 Job Object 的 kill-on-close + 权威存活计数是**正确性必需**（属进程生命周期治理，与用户拍板的 D1「不做隔离 provider」不冲突，但**改变了 D9 的技术前提**）。②**verified 链路要动三层**（P0-B/C/F）——不是「不写一个 shell 键」：win32 artifact layout（`HOME` vs `USERPROFILE`、`.exe` 后缀、`/bin/false` 等价禁用命令）+ **跨平台存储信任原语**（现有 exact-mode / `dev`+`ino` / `O_NOFOLLOW` 在 Windows 上既可能误拒也可能给出**错误的安全证明**，散点跳过 = receipt 说已验证而实际零验证）+ 本地 MCP 的 wrapperless 物化（`model-child-netless-v1` **不是** failClosed，warn/off 下是降级直跑而非失败，但 `sealedSubprocess.ts:928` 又无条件物化 `#!/bin/sh`）。③**受控 PATH 无 git**（P0-A）——POSIX 侧 `/usr/bin:/bin` 天然含 `/usr/bin/git`，agent 的 git 一直是白拿的；win32 表里没有 git 目录 ⇒ agent 进程内 `git` 全部失败 ⇒ Code→Audit→Fix 主线不成立，而初稿 AC-11/AC-14 都测不到。
 
@@ -36,7 +36,30 @@
 
 **自查另确证两条评审都没提的**：pin 的 Bun 1.3.13 **能**交叉编译到 windows x64/arm64（本机实测产出合法 PE32+）⇒ arm64 缺席是政策问题不是能力问题；windows-2025 runner **不预装 sqlite3 CLI** ⇒ D15 从「顺手清理」升级为硬性前提，且 runner 上还有 MSYS2 的第二个 bash（更坐实「从 git 推导、绝不裸 `which('bash')`」）。
 
-**下一步：请用户批准（含 D9 前提变化与范围扩大的知情确认），未批准不动生产代码。**
+**用户已批准并授权自主排序交付。已推送 9 批**（每批带回归测试 + 变异实证）：
+T1 平台原语 + **全仓负向扫描守卫**（`01c6f67e`）→ T0a 文件信任原语（`7b6e039f`）→
+T18 git NUL + longpaths（`f3cb3f8d`）→ T0a 续 storeHygiene + 身份规则（`2185a7e3`）→
+T0b 六文件身份栅栏收拢（`f870746d`）→ T12 受控 PATH win32 形态 + **设计门 P0-A**（`82920ad2`）→
+T2 env 大小写折叠单点（`1728b779`）→ T22/T23 脚本节点 win32（`74373d66`）→ T5/T26/T27 构建发行。
+
+**守卫是本轮最大的方法论收益**：它上线即证明手写清单不可信（`${root}/` 前缀 我写 4 /
+外部评审 6 / 实扫 **10**；PATH 4 / 7 / **10**），并在此后每一批里**强制**删除已完成的
+豁免条目（迁移做完却留着豁免 = 把口子留给未来的违规复用）。它还抓到我脚本迁移
+`windowsHide` 时漏掉的两处单行 spawn。
+
+**过程中发现并单独修掉三条既有缺陷**（均非本 RFC 引入）：`memory-distill-scheduler` 与
+`rfc224-fff-capability` 的墙钟时序 flake（第二次尤其值得记：我第一版修复**轮询了错误的
+谓词**——`calls` 在 spawn 开始时就自增而非完成时，于是把超时 flake 换成了顺序 flake）；
+以及 verified 存储的 TOCTOU 身份栅栏**零行为覆盖**（变异实证时把检查改恒真，`storeHygiene`
+与 `sourceGuard` 都没有任何测试变红）。已补逻辑与接线覆盖，行为覆盖登记 audit-backlog。
+
+**测试还当场抓到一个真 bug**：生产代码用 `node:path` 的 `dirname` 解析 Windows 路径，
+而它是**宿主口味**的——在 macOS 上对 `C:\...\git.exe` 返回 `'.'`。同一陷阱在两处存在。
+
+**剩余需 Windows 环境验证**：T4/T4b（Job Object，需 FFI 实测）、T7（shutdown control
+listener）、T11b/T11c（verified artifact layout + 平台注入缝）、T14b（本地 MCP wrapperless
+物化）、T28/T29（e2e stub 编译化 + sqlite fixture）、T31–T35（CI 矩阵与视觉基线）、
+T25b–T25d（D24 四子系统）。详见 `design/RFC-254-windows-native-execution/plan.md` 实现进度表。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 

@@ -73,10 +73,24 @@ export const PLUGIN_FILES: Record<string, string> = {}
 export const GRAMMAR_FILES: Record<string, string> = {}
 `
 
+/**
+ * RFC-254 T26 — `win32` is spelled `windows` in the artifact name, matching how
+ * every other project (including OpenCode itself) names its release assets.
+ */
 function platformSuffix(): string {
-  const platform = process.platform === 'darwin' ? 'macos' : process.platform
+  const raw = process.platform
+  const platform = raw === 'darwin' ? 'macos' : raw === 'win32' ? 'windows' : raw
   const arch = process.arch === 'x64' ? 'x86_64' : process.arch
   return `${platform}-${arch}`
+}
+
+/**
+ * The extension an executable must carry to BE executable on this platform.
+ * Without `.exe`, Windows will not run the file at all — and the failure looks
+ * like "file not found", not "not executable".
+ */
+function executableExtension(): string {
+  return process.platform === 'win32' ? '.exe' : ''
 }
 
 function walkFiles(root: string): string[] {
@@ -268,8 +282,8 @@ async function main(): Promise<void> {
   )
 
   // 3. bun build --compile.
-  const outfile = join(outDir, `agent-workflow-${platformSuffix()}`)
-  const e2eOutfile = join(outDir, `agent-workflow-e2e-${platformSuffix()}`)
+  const outfile = join(outDir, `agent-workflow-${platformSuffix()}${executableExtension()}`)
+  const e2eOutfile = join(outDir, `agent-workflow-e2e-${platformSuffix()}${executableExtension()}`)
   // RFC-213 impl-gate P1-3: stamp a real binary identity into the executable so
   // the pre-migration restore gate can tell two releases apart (util/version.ts).
   // git describe gives the tag on releases and tag-N-gSHA on intermediate builds;

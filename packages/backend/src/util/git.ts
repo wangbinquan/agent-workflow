@@ -14,6 +14,7 @@ import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/ut
 import { hardenGitArgs } from '@/util/gitHardening'
 import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
 import type { Logger } from '@/util/log'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 export interface GitRunResult {
   stdout: string
@@ -137,6 +138,7 @@ export async function runGit(
   opts?: { env?: Record<string, string | undefined>; stdin?: string; timeoutMs?: number },
 ): Promise<GitRunResult> {
   const proc = Bun.spawn({
+    ...platformSpawnOptionsForHost(),
     // RFC-252 G1: every daemon-side git spawn carries the hardening overrides.
     // `-c` outranks EVERY config scope (system/global/local/worktree/modules), so
     // this is the only mechanism that can beat what an agent writes into the git

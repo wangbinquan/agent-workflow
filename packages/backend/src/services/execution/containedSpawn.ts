@@ -28,6 +28,7 @@
 import type { Logger } from '@/util/log'
 import { killProcessTree } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import {
   sandboxEnforceBlocked,
   wrapSpawnPlanSandbox,
@@ -236,6 +237,7 @@ export async function runContainedProcess(
   let child: Bun.Subprocess
   try {
     child = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd: cmd as string[],
       cwd: req.cwd,
       env: req.env,

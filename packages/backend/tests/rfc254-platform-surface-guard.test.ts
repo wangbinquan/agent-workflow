@@ -43,6 +43,7 @@ type RuleId =
   | 'posix-dirname'
   | 'posix-path-prefix'
   | 'posix-file-identity'
+  | 'spawn-without-platform-options'
 
 interface Rule {
   readonly id: RuleId
@@ -73,6 +74,15 @@ const RULES: readonly Rule[] = [
     id: 'posix-file-identity',
     why: 'NTFS `ino` is 0/unstable through Node, so a private dev+ino comparison silently equates unrelated files on Windows; use assertSameFileIdentity()',
     pattern: /\.(?:dev|ino) (?:!==|===) /g,
+  },
+  {
+    id: 'spawn-without-platform-options',
+    why: 'a production spawn that omits platformSpawnOptions() flashes a console window per child on Windows — and for a long-running agent, one per grandchild',
+    // Object-form spawns whose literal does not spread the platform options.
+    // Deliberately anchored on the OPENING of the call plus a bounded lookahead
+    // rather than trying to parse the whole object: the failure it guards is
+    // "somebody added a new spawn and forgot", which shows up right here.
+    pattern: /Bun\.spawn(?:Sync)?\(\{(?![\s\S]{0,120}platformSpawnOptions)/g,
   },
   {
     id: 'posix-path-prefix',

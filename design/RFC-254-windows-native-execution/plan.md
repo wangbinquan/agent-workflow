@@ -143,6 +143,31 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 8. 深路径仓（>260 字符路径）checkout + 构建。
 9. （可选）arm64 机器上 x64 产物 Prism 冒烟。
 
+## 实现进度（2026-08-04，滚动更新）
+
+**已交付并推送**（每批各带回归测试 + 变异实证，逐条见 git log）：
+
+| 任务 | commit | 要点 |
+|---|---|---|
+| T1 | `01c6f67e` | 平台执行原语 + **全仓负向扫描守卫**（D23）。守卫立刻证明手写清单不可信：`${root}/` 前缀 我写 4 / 评审 6 / 实扫 **10**；PATH 4 / 7 / **10**。迁移的 4 处含两处真实功能破坏（插件 GC 误删、seed 路径全拒） |
+| T0a | `7b6e039f` | 文件信任原语（私有性 / 非链接 / 同一对象），win32 显式 `platform-unsupported` 失败而非静默跳过 |
+| T18 | `f3cb3f8d` | git 的 NUL 空设备（5 处）+ win32 `core.longpaths` |
+| T0a 续 | `2185a7e3` | storeHygiene 接原语 + **文件身份**负向扫描规则 |
+| T0b | `f870746d` | 六个 verified 存储文件的身份栅栏全部收拢；typecheck 逼出 bigint stat 表示差异 |
+| T12 | `82920ad2` | 受控 PATH 的 win32 形态 + **设计门 P0-A**（受控 PATH 必须含 git，否则主线工作流不成立） |
+| T2 | `1728b779` | env 键大小写折叠单点（D12），AC-2 的 oracle 是**子进程实际 environ** |
+| T22/T23 | `74373d66` | 脚本节点 win32：bash 只从 git 推导（**绝不**裸 `which('bash')`——那是 WSL 启动器）、python 候选链、私有 profile/temp、`PYTHONUTF8` |
+
+**过程中发现并单独修掉的三条既有缺陷**（均非本 RFC 引入）：`memory-distill-scheduler`
+与 `rfc224-fff-capability` 的墙钟时序 flake（两次，第二次是我第一版修复轮询了错误的
+谓词）、以及 verified 存储的 TOCTOU 栅栏**零行为覆盖**（已补逻辑 + 接线覆盖，行为覆盖
+登记 audit-backlog）。
+
+**未完成且需要 Windows 环境才能验证的**：T4/T4b（Job Object，需 FFI 实测）、
+T7（shutdown control listener）、T11b/T11c（verified artifact layout + 注入缝）、
+T14b（本地 MCP wrapperless 物化）、T28/T29（e2e stub 编译化 + sqlite fixture）、
+T31–T35（CI 矩阵与视觉基线）、T25b–T25d（D24 四子系统）。
+
 ## 交付前必过清单
 
 - [ ] `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿（每 PR）。

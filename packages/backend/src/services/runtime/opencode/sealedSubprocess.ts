@@ -15,6 +15,7 @@ import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 import { IS_EMBEDDED } from '@/embed'
 import { executionIdentityFailure } from './failure'
 import { RuntimeChildProviderPlanSchema, type RuntimeChildProviderPlan } from './containment'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 const SAFE_ENV_NAME =
   /^(?:LANG|LC_ALL|LC_CTYPE|TERM|TZ|GIT_AUTHOR_NAME|GIT_AUTHOR_EMAIL|GIT_COMMITTER_NAME|GIT_COMMITTER_EMAIL|[A-Z][A-Z0-9_]{0,127})$/
@@ -425,6 +426,7 @@ export async function runRootOwnedBwrapCapabilitySupervisor(
   let code = 125
   try {
     const child = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
       cmd: [...command],
       cwd: '/',
       env: {},
@@ -457,6 +459,7 @@ function spawnRootOwnedBwrapCapability(
 ): RootOwnedBwrapCapabilityProcess {
   const nonce = randomUUID()
   const child = Bun.spawn({
+    ...platformSpawnOptionsForHost(),
     cmd: verifiedSelfCommand(BWRAP_CAPABILITY_SUPERVISOR_SUBCOMMAND, [
       '--nonce',
       nonce,
@@ -1304,6 +1307,7 @@ export async function runNetlessSubprocess(
   // the fence already makes it writable.
   const invocation = renderNetlessInvocation(manifest, passthroughArgs, process.cwd())
   const child = Bun.spawn({
+    ...platformSpawnOptionsForHost(),
     cmd: [...invocation.cmd],
     cwd: invocation.cwd,
     env: { ...invocation.env },

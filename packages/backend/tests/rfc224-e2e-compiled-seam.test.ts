@@ -32,14 +32,20 @@ describe('RFC-224 compiled Playwright seam', () => {
     expect(build.match(/--define=AW_E2E_UNVERIFIED_OPENCODE=false/g)).toHaveLength(1)
     expect(build.match(/--define=AW_E2E_UNVERIFIED_OPENCODE=true/g)).toHaveLength(1)
     expect(build).toContain("Bun.argv.includes('--include-e2e')")
-    expect(build).toContain('`agent-workflow-e2e-${platformSuffix()}`')
+    // RFC-254 T26: the artifact name now carries a platform-dependent
+    // extension (`.exe` on Windows, empty elsewhere). What this lock protects
+    // is unchanged — build and harness must construct the SAME name — so it
+    // follows the construction rather than pinning the old literal.
+    expect(build).toContain('`agent-workflow-e2e-${platformSuffix()}${executableExtension()}`')
+    expect(build).toContain("raw === 'win32' ? 'windows' : raw")
     expect(pkg.scripts?.['build:binary']).toBe('bun run scripts/build-binary.ts')
     expect(pkg.scripts?.['build:binary:e2e']).toBe('bun run scripts/build-binary.ts --include-e2e')
   })
 
   test('harness selects only the e2e artifact and seeds a complete model policy', () => {
     const harness = source('e2e/harness.ts')
-    expect(harness).toContain('`agent-workflow-e2e-${platformSuffix()}`')
+    expect(harness).toContain('`agent-workflow-e2e-${platformSuffix()}${executableExtension()}`')
+    expect(harness).toContain("raw === 'win32' ? 'windows' : raw")
     expect(harness).toContain('async function seedE2eExecutionPolicy(')
     expect(harness).toContain('fetch(`${ready.baseUrl}/api/runtimes/opencode`')
     expect(harness).toContain("const E2E_OPENCODE_MODEL = 'test/model'")

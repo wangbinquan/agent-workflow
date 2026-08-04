@@ -15,6 +15,7 @@
 import type { OpencodeModel } from '@agent-workflow/shared'
 import { createLogger } from './log'
 import { killProcessTree } from './process'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 const log = createLogger('opencode-models')
 
@@ -169,6 +170,7 @@ export async function listOpencodeModels(
   // open and block the drain past the timeout (CI caught this — a plain
   // `proc.kill` left the grandchild alive). Mirrors runtimeSmoke.
   const proc = Bun.spawn({
+    ...platformSpawnOptionsForHost(),
     cmd,
     ...(opts?.env !== undefined ? { env: opts.env } : {}),
     ...(opts?.cwd !== undefined ? { cwd: opts.cwd } : {}),

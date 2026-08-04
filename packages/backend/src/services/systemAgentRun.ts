@@ -43,6 +43,7 @@ import {
   type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { parseExecutionIdentityFailureOutput } from '@/services/runtime/opencode/failure'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import type {
   SessionCaptureIncompleteReason,
   SystemAgentEventSinkV1,
@@ -504,6 +505,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           plan.sandboxTopology,
         )
         child = Bun.spawn({
+          ...platformSpawnOptionsForHost(),
           cmd: spawnCmd,
           cwd: worktreeDir,
           env: plan.env,

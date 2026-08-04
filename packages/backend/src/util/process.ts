@@ -1,3 +1,6 @@
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { adoptProcessTree, type ProcessTreeOwnership } from '@/util/windowsJobObject'
+
 // RFC-098 WP-8 (scheduler audit S-15) — process-tree governance primitives.
 //
 // `isProcessAlive` moved here from util/lock.ts (still re-exported there for
@@ -58,6 +61,12 @@ export function killProcessTree(
   },
 ): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false
+  // RFC-254 T4: Windows has no process groups, so everything below — the group
+  // signal, the monitor-aware graceful phase, `ps`-based enumeration — has no
+  // equivalent. The whole path diverges here rather than being patched
+  // in-line, which also keeps the POSIX behaviour (including the RFC-252
+  // sandbox-monitor semantics verified in a Debian container) byte-identical.
+  if (process.platform === 'win32') return killProcessTreeWin32(pid)
   if (opts?.groupLeaderIsSandboxMonitor === true && signal !== 'SIGKILL') {
     const members = processGroupMembers(pid).filter((member) => member !== pid)
     if (members.length > 0) {
@@ -85,6 +94,97 @@ export function killProcessTree(
     } catch {
       return false
     }
+  }
+}
+
+/**
+ * RFC-254 T4 (design gate P0-D) — the Windows tree-kill path.
+ *
+ * Preference order, and why:
+ *   1. The run's Job Object, when one was adopted at spawn. Termination is
+ *      atomic over the whole job, so nothing forked mid-call escapes.
+ *   2. `taskkill /T /F` otherwise. That walks a SNAPSHOT of the tree, so a
+ *      process spawned during the walk survives. It is best-effort cleanup and
+ *      — per the design gate — must never be treated as proof that a runtime
+ *      store may be reclaimed.
+ *
+ * The signal is deliberately not forwarded: Windows draws no SIGTERM/SIGKILL
+ * distinction for a non-console child, and the caller's grace window has
+ * already elapsed by the time this runs. Upstream OpenCode simplifies the same
+ * way (`core/src/shell.ts:35-45`).
+ */
+function killProcessTreeWin32(pid: number): boolean {
+  const owned = ownedTrees.get(pid)
+  if (owned !== undefined) {
+    owned.terminate()
+    ownedTrees.delete(pid)
+    return true
+  }
+  try {
+    const res = Bun.spawnSync({
+      ...platformSpawnOptionsForHost(),
+      cmd: ['taskkill', '/pid', String(pid), '/T', '/F'],
+      stdout: 'ignore',
+      stderr: 'ignore',
+    })
+    return res.exitCode === 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Job Objects adopted at spawn, keyed by the pid the caller already knows.
+ *
+ * Keyed by pid rather than threaded through every spawn site because the kill
+ * and liveness paths are pid-keyed already: both `killProcessTree` and the
+ * orphan reaper start from a pid read back out of the database.
+ */
+const ownedTrees = new Map<number, ProcessTreeOwnership>()
+
+/**
+ * Adopt a freshly spawned pid into a kill-on-close Job Object (win32 only).
+ *
+ * Returns true when the strong guarantee is in force. False means the caller
+ * falls back to enumerative cleanup and MUST NOT claim the tree was provably
+ * reaped — that distinction is the whole point of P0-D.
+ */
+export function adoptSpawnedProcessTree(pid: number): boolean {
+  if (process.platform !== 'win32') return false
+  const owned = adoptProcessTree(pid)
+  if (owned === null) return false
+  ownedTrees.set(pid, owned)
+  return true
+}
+
+export function releaseProcessTreeOwnership(pid: number): void {
+  ownedTrees.delete(pid)
+}
+
+/**
+ * Authoritative "is this tree still alive" answer.
+ *
+ * POSIX: the process group IS the tree, so signalling it with 0 is exact.
+ * Windows: the answer is the Job Object's active-process count; WITHOUT a job
+ * there is no authoritative answer at all, which is why `null` is a distinct
+ * outcome from `false`. A caller deciding whether to reclaim a runtime store
+ * must treat "cannot tell" as "not safe" — reclaiming while a descendant still
+ * holds the store is the data-corruption path the design gate identified.
+ */
+export function isProcessTreeAlive(pid: number): boolean | null {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  if (process.platform === 'win32') {
+    const owned = ownedTrees.get(pid)
+    if (owned === undefined) return null
+    const count = owned.liveCount()
+    return count === null ? null : count > 0
+  }
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException
+    return e.code === 'EPERM'
   }
 }
 

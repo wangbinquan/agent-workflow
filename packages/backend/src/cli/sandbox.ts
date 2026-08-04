@@ -27,6 +27,7 @@ import { probeSandboxMechanism, type ProbeSpawnFn } from '@/services/sandbox/pro
 import type { ContainmentReasonCode } from '@/services/sandbox'
 import { killProcessTree } from '@/util/process'
 import { Paths } from '@/util/paths'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 export interface SandboxCliResult {
   output: string
@@ -60,6 +61,7 @@ const defaultRawSpawn: RawSpawn = (cmd) =>
   // The ONLY Bun.spawn in the sandbox CLI. detached → own process group so a
   // timeout / finally can SIGKILL the whole tree (grandchildren included).
   Bun.spawn({
+    ...platformSpawnOptionsForHost(),
     cmd,
     stdout: 'ignore',
     stderr: 'pipe',

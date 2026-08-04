@@ -189,13 +189,13 @@ history.
 
 ## Requirements
 
-| Dependency      | Requirement                                      | Notes                                                                                                                                                              |
-| --------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **OS**          | macOS on Apple Silicon, or Linux on x86_64/arm64 | Windows release binaries are not shipped yet; the runtime containment interface is provider-extensible.                                                            |
-| **git**         | **2.38.0 or newer**                              | Required for isolated merge-back via `git merge-tree --write-tree`.                                                                                                |
-| **opencode**    | Optional; no version pin                         | The reported version is telemetry only. Actual use freezes the selected executable bytes and qualifies direct-API behavior; set `opencodePath` to override `PATH`. |
-| **Claude Code** | **2.0.0 or newer**, optional                     | Additional runtime; set `claudeCodePath` or a runtime profile to use it.                                                                                           |
-| **Bun**         | **1.3.0 or newer**, source builds only           | Release binaries bundle Bun.                                                                                                                                       |
+| Dependency      | Requirement                                                         | Notes                                                                                                                                                                                                                                                   |
+| --------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OS**          | macOS on Apple Silicon, Linux on x86_64/arm64, or Windows on x86_64 | Windows runs without process containment — tasks execute unsandboxed under `warn`/`off`, and `enforce` (plus script-node no-network / read-only modes) is refused. The containment interface is provider-extensible; a Windows provider is future work. |
+| **git**         | **2.38.0 or newer**                                                 | Required for isolated merge-back via `git merge-tree --write-tree`.                                                                                                                                                                                     |
+| **opencode**    | Optional; no version pin                                            | The reported version is telemetry only. Actual use freezes the selected executable bytes and qualifies direct-API behavior; set `opencodePath` to override `PATH`.                                                                                      |
+| **Claude Code** | **2.0.0 or newer**, optional                                        | Additional runtime; set `claudeCodePath` or a runtime profile to use it.                                                                                                                                                                                |
+| **Bun**         | **1.3.0 or newer**, source builds only                              | Release binaries bundle Bun.                                                                                                                                                                                                                            |
 
 Run `agent-workflow doctor` for a full environment check covering OpenCode, Git,
 the data directory, config, token-file permissions, migrations, and lifecycle
@@ -229,6 +229,20 @@ curl -L \
 chmod +x agent-workflow
 ./agent-workflow doctor
 ```
+
+On Windows (x86_64), download `agent-workflow-windows-x86_64.exe` from the same
+release page — there is no `chmod` step, the executable bit is the `.exe`
+extension:
+
+```powershell
+Invoke-WebRequest `
+  https://github.com/wangbinquan/agent-workflow/releases/latest/download/agent-workflow-windows-x86_64.exe `
+  -OutFile agent-workflow.exe
+.\agent-workflow.exe doctor
+```
+
+`doctor` reports the platform's containment status, so it is the fastest way to
+see what a Windows install does and does not enforce.
 
 Each release is a self-contained executable containing the daemon, SPA, Bun
 runtime, and database migrations.

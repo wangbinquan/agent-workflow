@@ -92,15 +92,23 @@ export interface SpawnOptions {
   authMode?: 'admin-session' | 'bootstrap'
 }
 
+// RFC-254 T26 — must stay in lockstep with scripts/build-binary.ts; the two are
+// locked together by rfc224-e2e-compiled-seam.test.ts because a divergence here
+// means the harness looks for an artifact the build never produced.
 function platformSuffix(): string {
-  const plat = process.platform === 'darwin' ? 'macos' : process.platform
+  const raw = process.platform
+  const plat = raw === 'darwin' ? 'macos' : raw === 'win32' ? 'windows' : raw
   const arch = process.arch === 'x64' ? 'x86_64' : process.arch
   return `${plat}-${arch}`
 }
 
+function executableExtension(): string {
+  return process.platform === 'win32' ? '.exe' : ''
+}
+
 export function defaultBinaryPath(): string {
   if (process.env.AGENT_WORKFLOW_E2E_BINARY) return process.env.AGENT_WORKFLOW_E2E_BINARY
-  return resolve(repoRoot, 'dist', `agent-workflow-e2e-${platformSuffix()}`)
+  return resolve(repoRoot, 'dist', `agent-workflow-e2e-${platformSuffix()}${executableExtension()}`)
 }
 
 function isExecutableFile(path: string): boolean {

@@ -33,6 +33,7 @@ import {
 } from '@agent-workflow/shared'
 import { parseExecutionIdentityFailureOutput } from '@/services/runtime/opencode/failure'
 import { explainSpawnEnoent, outputTail } from '@/util/spawnDiagnostics'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 export type SmokeOutcome =
   | 'conforms'
@@ -377,6 +378,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
           plan.sandboxTopology,
         )
         child = Bun.spawn({
+          ...platformSpawnOptionsForHost(),
           cmd: spawnCmd,
           cwd: worktreeDir,
           env: plan.env,

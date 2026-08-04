@@ -80,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -97,13 +97,18 @@ jobs:
         run: bun run build:binary
 
       - name: Show artifact size
+        shell: bash
         run: ls -lh dist/
 
       # Upload the freshly built binary to the draft release. `gh release
       # upload --clobber` only POSTs the asset (it does not touch the release
       # body/metadata), so the three matrix jobs never contend, and re-runs
       # overwrite the asset cleanly instead of erroring on a duplicate.
+      # RFC-254 T27: `shell: bash` is explicit because the Windows runner would
+      # otherwise use PowerShell, where none of this syntax parses. Git Bash
+      # ships on the windows-latest image, so the script itself is unchanged.
       - name: Upload release asset
+        shell: bash
         run: |
           set -euo pipefail
           file=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' | head -n 1)
