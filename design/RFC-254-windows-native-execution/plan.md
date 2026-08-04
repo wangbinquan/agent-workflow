@@ -308,6 +308,14 @@ T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
 `hardenedGitLeadingArgs` 钉死 `core.autocrlf=false` + `core.eol=lf`（`c8e01df6`）。
 修完后 e2e 侧应只剩三条**在 POSIX 上也红**的既有问题。
 
+**第三轮（含 CRLF 修复）：216 通过 / 3 失败 / 4 flaky。** 两条 workgroup-matrix 消失，
+确认 CRLF 是它们的根因。三条剩余里**两条在 POSIX 上也红**（`focus-ring-clip`、
+`rfc250-workflow-camera`，均已实证归属他人改动），所以 **Windows 特有的 e2e 失败已从
+首轮的 5 条降到 1 条**（`ux-consistency:1142` Skill ZIP，待查）。
+
+三轮的轨迹：213/7 → 216/5 → 216/3。**T33/T34 的技术阻塞基本清除**——剩下的是把
+最后一条查掉、把 4 条 flaky 定性，然后接腿并生成 46 张 win32 基线。
+
 **下一簇的线索（RFC-224，70+ 条）**：`rfc224-sealed-subprocess.test.ts` 用
 `providerId: 'linux-bwrap'` + `/usr/bin/bwrap`，是 **Linux 专属**的能力证明；
 Windows 上的失败形态是「12 秒等不到 supervisor 的 ACK 写入」。12 秒已相当宽裕，
