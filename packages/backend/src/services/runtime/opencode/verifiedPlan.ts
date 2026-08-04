@@ -69,7 +69,7 @@ import {
 import { isProductionOpencodeCommand } from '@/util/opencode'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 import { buildVerifiedInventoryPlan } from './verifiedInventory'
-import { platformHomeEnv, EXECUTABLE_SUFFIX_FOR_HOST } from '@/util/platformExec'
+import { platformHomeEnvForHost, EXECUTABLE_SUFFIX_FOR_HOST } from '@/util/platformExec'
 import {
   buildVerifiedOpencodePlan,
   type VerifiedOpencodePlanDependencies,
@@ -607,7 +607,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
 
   // RFC-254 T11b: Windows populates USERPROFILE, not HOME. Reading HOME alone
   // makes every verified plan fail to assemble on a stock Windows install.
-  const realHome = safeAbsoluteHome(platformHomeEnv(process.env, process.platform))
+  const realHome = safeAbsoluteHome(platformHomeEnvForHost())
   const shellDir = join(sealRoot, 'shell')
   const shellPath = join(shellDir, 'sh')
   const shellManifestPath = join(shellDir, 'netless.json')

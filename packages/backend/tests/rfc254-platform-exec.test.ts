@@ -8,6 +8,8 @@
 // the silent, non-throwing defects live.
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   isLexicallyInside,
   nullDevice,
@@ -257,5 +259,28 @@ describe('RFC-254 T11b — verified artifact shape', () => {
       expect(platformHomeEnv({}, 'win32')).toBeUndefined()
       expect(platformHomeEnv({}, 'linux')).toBeUndefined()
     })
+  })
+})
+
+describe('RFC-254 T11c — platform truth is injected, never re-derived', () => {
+  test('the guarded plan modules read platform facts only through helpers', () => {
+    // RFC-233 forbids `process.platform` inside the OpenCode plan core so that
+    // platform truth arrives with the prepared admission plan instead of being
+    // rediscovered. That guard caught the first draft of T11b doing exactly
+    // what it forbids, so this asserts the POSITIVE shape as well: the plan
+    // modules use the host-frozen wrappers, and the platform branch lives in
+    // platformExec where it can be exercised with an injected platform.
+    const guarded = [
+      'services/runtime/opencode/verifiedPlan.ts',
+      'services/runtime/opencode/verifiedSystemPlan.ts',
+      'services/runtime/opencode/verifiedMcpTestPlan.ts',
+    ]
+    for (const rel of guarded) {
+      const text = readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
+      expect(text, rel).not.toContain('process.platform')
+      // ...and they DO consume the platform-shaped values, so this is not
+      // vacuously true because the feature was removed.
+      expect(/ForHost|EXECUTABLE_SUFFIX_FOR_HOST/.test(text), rel).toBe(true)
+    }
   })
 })

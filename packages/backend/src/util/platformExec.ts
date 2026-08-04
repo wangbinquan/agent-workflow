@@ -300,3 +300,17 @@ export function platformHomeEnv(
   if (platform !== 'win32') return env.HOME
   return env.USERPROFILE ?? env.HOME
 }
+
+/**
+ * Host-frozen home lookup.
+ *
+ * Exists as a wrapper so the verified-plan modules never spell
+ * `process.platform` themselves: RFC-233's source guard forbids it there
+ * precisely so platform truth cannot be re-derived inside the plan core, and
+ * the rule caught this file's first draft doing exactly that.
+ */
+export function platformHomeEnvForHost(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined {
+  return platformHomeEnv(env, process.platform)
+}
