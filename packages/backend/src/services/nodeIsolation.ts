@@ -147,6 +147,23 @@ export interface CanonRepo {
   baseBranch: string
 }
 
+/**
+ * 2026-08-04 incident: a task whose canonical worktree VANISHED from disk (the
+ * observed row pointed into the ephemeral `iso/` space, which is cleaned after
+ * runs) must fail its node runs loudly at iso-setup time. Letting the dead path
+ * fall through to the spawn produced an ENOENT that Bun blames on argv[0] — the
+ * sandbox wrapper (`posix_spawn '/usr/bin/bwrap'`) — plus a per-retry failure
+ * storm, because the runner-level spawn failure sits INSIDE the retry loop
+ * while iso-setup failures fail the node once, before admission/spawn.
+ */
+export class CanonicalWorktreeMissingError extends Error {
+  readonly code = 'workspace-missing' as const
+  constructor(readonly worktreePath: string) {
+    super(`workspace-missing: canonical worktree does not exist: ${worktreePath}`)
+    this.name = 'CanonicalWorktreeMissingError'
+  }
+}
+
 /** Absolute iso worktree path — always OUTSIDE any canonical worktree (D14). */
 export function isoWorktreePathFor(
   appHome: string,
@@ -190,9 +207,19 @@ export async function createNodeIso(opts: {
   submoduleJobs?: number
   log?: Logger
 }): Promise<IsoHandle> {
-  // Passthrough fallback: if the canonical worktree isn't a git repo (only ever
-  // true in mock test harnesses), skip isolation and run in place — the node's
-  // writes go straight to the canonical worktree as they did pre-RFC-130.
+  // 2026-08-04 incident gate: a canonical worktree that does not EXIST fails
+  // fast here — before the retry loop, containment admission and the spawn.
+  // The passthrough below used to swallow it (missing ⇒ "not a git repo") and
+  // hand the dead path to the runner as cwd, where Bun's ENOENT names argv[0]
+  // (the sandbox wrapper) instead of the missing directory. Probed for EVERY
+  // repo, not just the primary — any missing member breaks the run the same way.
+  for (const repo of opts.canonRepos) {
+    if (!existsSync(repo.worktreePath)) throw new CanonicalWorktreeMissingError(repo.worktreePath)
+  }
+  // Passthrough fallback: if the canonical worktree EXISTS but isn't a git repo
+  // (only ever true in mock test harnesses), skip isolation and run in place —
+  // the node's writes go straight to the canonical worktree as they did
+  // pre-RFC-130. A MISSING canonical is never passthrough — see the gate above.
   const primary = opts.canonRepos[0]
   if (primary === undefined || !(await isGitWorkTree(primary.worktreePath))) {
     opts.log?.warn('canonical worktree is not a git repo — skipping isolation (passthrough)', {

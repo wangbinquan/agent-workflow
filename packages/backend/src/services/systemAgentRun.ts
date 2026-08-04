@@ -35,6 +35,7 @@ import {
   type SandboxCtx,
 } from '@/services/sandbox'
 import { createLogger, type Logger } from '@/util/log'
+import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import {
   isExecutionIdentityFailureCode,
   maskDiagnosticsText,
@@ -484,9 +485,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         })
       }
 
+      let spawnCmd: string[] | undefined
       try {
         await plan.preSpawnVerify?.()
-        const spawnCmd = wrapSpawnPlanSandbox(
+        spawnCmd = wrapSpawnPlanSandbox(
           plan.cmd,
           systemSandboxCtx(worktreeDir, runDir, plan),
           plan.sandboxTopology,
@@ -518,9 +520,14 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         // generic start failure.
         const failureCode = identityFailureCode(err)
         if (failureCode !== null) return fail('identity-failed', { failureCode })
+        // 2026-08-04: Bun's posix_spawn ENOENT names argv[0] even when the
+        // missing path is the cwd — probe both so the tail blames the right one.
         return fail('spawn-failed', {
           stderrTail: maskDiagnosticsText(
-            `binary failed to start: ${err instanceof Error ? err.message : String(err)}`,
+            `binary failed to start: ${explainSpawnEnoent(
+              err instanceof Error ? err.message : String(err),
+              { argv0: spawnCmd?.[0] ?? plan.cmd[0], cwd: worktreeDir },
+            )}`,
           ),
         })
       }

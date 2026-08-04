@@ -120,6 +120,7 @@ import {
   type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { isProductionOpencodeCommand } from '@/util/opencode'
+import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
@@ -1522,9 +1523,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const identityFailure =
       executionIdentityFailureCodeOf(err) ??
       (opencodeControl === undefined ? undefined : ('execution-identity-bootstrap-failed' as const))
+    // 2026-08-04: Bun's posix_spawn ENOENT names argv[0] (here: the sandbox
+    // wrapper) even when the missing path is the cwd — probe both and say
+    // which one is actually gone instead of letting bwrap take the blame.
     const errorMessage =
       identityFailure ??
-      `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
+      `spawn ${runtime} failed: ${explainSpawnEnoent(
+        err instanceof Error ? err.message : String(err),
+        { argv0: spawnCmd[0], cwd: opts.worktreePath },
+      )}`
     log.warn('runtime-spawn-failed', {
       nodeRunId: opts.nodeRunId,
       runtime,

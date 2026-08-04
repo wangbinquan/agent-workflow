@@ -326,6 +326,33 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
     SMOKE_TIMEOUT,
   )
 
+  // 2026-08-04 incident: an error text OUTSIDE the EN signature tables (a
+  // subscription usage-limit message, a claude-protocol fork / GLM-gateway
+  // error, often non-English) lands on the fallback branch. The detail used to
+  // be a bare "(exit 1, nonce missing)" with the child's actual words
+  // swallowed — the operator had to guess. The fallback now carries a capped
+  // stdout/stderr tail so the real reason is readable in the probe result.
+  test(
+    'claude that fails with an UNRECOGNIZED error text → stream-nonconforming with the text surfaced in detail',
+    async () => {
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-sess-unclassified'
+      process.env.MOCK_CLAUDE_IS_ERROR = '1'
+      process.env.MOCK_CLAUDE_EXIT_CODE = '1'
+      process.env.MOCK_CLAUDE_RESULT_TEXT = 'Claude AI usage limit reached — resets 3am'
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        bridgeCredentials: false,
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('stream-nonconforming')
+      expect(r.conforms).toBe(false)
+      expect(r.detail).toContain('nonce missing')
+      expect(r.detail).toContain('usage limit reached')
+    },
+    SMOKE_TIMEOUT,
+  )
+
   // RFC-116: a pure OS/transport network failure (no auth word at all) → network-blocked.
   test(
     'claude that emits a pure network error on stdout → network-blocked',

@@ -28,9 +28,11 @@ import {
 import { createLogger, type Logger } from '@/util/log'
 import {
   isExecutionIdentityFailureCode,
+  maskDiagnosticsText,
   type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { parseExecutionIdentityFailureOutput } from '@/services/runtime/opencode/failure'
+import { explainSpawnEnoent, outputTail } from '@/util/spawnDiagnostics'
 
 export type SmokeOutcome =
   | 'conforms'
@@ -348,13 +350,15 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
         }
       }
 
+      let spawnCmd: string[] | undefined
       try {
+        spawnCmd = wrapSpawnPlanSandbox(
+          plan.cmd,
+          smokeSandboxCtx(worktreeDir, runDir, plan),
+          plan.sandboxTopology,
+        )
         child = Bun.spawn({
-          cmd: wrapSpawnPlanSandbox(
-            plan.cmd,
-            smokeSandboxCtx(worktreeDir, runDir, plan),
-            plan.sandboxTopology,
-          ),
+          cmd: spawnCmd,
           cwd: worktreeDir,
           env: plan.env,
           stdout: 'pipe',
@@ -363,10 +367,15 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
           detached: true,
         })
       } catch (err) {
+        // 2026-08-04: Bun's posix_spawn ENOENT names argv[0] even when the
+        // missing path is the cwd — probe both so the detail blames the right one.
         return {
           outcome: 'spawn-failed',
           conforms: false,
-          detail: `binary failed to start: ${err instanceof Error ? err.message : String(err)}`,
+          detail: `binary failed to start: ${explainSpawnEnoent(
+            err instanceof Error ? err.message : String(err),
+            { argv0: spawnCmd?.[0] ?? plan.cmd[0], cwd: worktreeDir },
+          )}`,
           sawNonce: false,
           sawEnvelope: false,
           exitCode: null,
@@ -559,6 +568,21 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
         }
       }
 
+      // 2026-08-04: the fallback classifications used to swallow the child's
+      // actual error text — a fork/gateway error outside the EN signature table
+      // (e.g. "usage limit reached", a GLM error string) landed as a bare
+      // "nonce missing" and the operator had to guess. Surface a masked,
+      // capped tail of BOTH streams on the nonconforming branches. The probe
+      // route is admin-only; maskDiagnosticsText scrubs credential shapes.
+      const evidence = [
+        stderrText.trim().length > 0 ? `stderr tail: ${outputTail(stderrText)}` : null,
+        stdoutText.trim().length > 0 ? `stdout tail: ${outputTail(stdoutText)}` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(' | ')
+      const withEvidence = (base: string): string =>
+        evidence.length === 0 ? base : `${base} — ${maskDiagnosticsText(evidence)}`
+
       let outcome: SmokeOutcome
       let detail: string
       if (conformed) {
@@ -580,12 +604,14 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
         detail = 'binary started + authed but the model call failed (rate limit / unavailable)'
       } else if (!sawEvent) {
         outcome = 'stream-nonconforming'
-        detail = `no parseable ${opts.protocol} events on stdout (exit ${exitCode})`
+        detail = withEvidence(`no parseable ${opts.protocol} events on stdout (exit ${exitCode})`)
       } else {
         outcome = 'stream-nonconforming'
-        detail = `emitted events but did not complete the protocol turn (exit ${exitCode}, nonce ${
-          sawNonce ? 'seen' : 'missing'
-        })`
+        detail = withEvidence(
+          `emitted events but did not complete the protocol turn (exit ${exitCode}, nonce ${
+            sawNonce ? 'seen' : 'missing'
+          })`,
+        )
       }
 
       return {
