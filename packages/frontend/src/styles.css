@@ -6733,6 +6733,20 @@ details.form-section[open] > summary {
   color: color-mix(in srgb, #7a4ea6 72%, var(--text));
 }
 
+/* Deterministic execution is its own teal-blue family. Keep the picker row
+ * and the resulting canvas card on the same accent, exactly like Calls and
+ * Human nodes, so the Scripts section never falls back to a generic row. */
+.workflow-node-picker__item[data-category='scripts'] {
+  border-inline-start-width: 3px;
+  border-inline-start-color: #0e7490;
+}
+
+.workflow-node-picker__type-chip[data-category='scripts'] {
+  border-color: color-mix(in srgb, #0e7490 45%, var(--border));
+  background: color-mix(in srgb, #0e7490 10%, var(--panel));
+  color: color-mix(in srgb, #0e7490 72%, var(--text));
+}
+
 /* Resource calls are one catalog category, but the two cards should retain
  * the resource identity users already know from the workflow/workgroup
  * galleries and from their canvas nodes. `data-node-kind` keeps that visual
@@ -7862,6 +7876,10 @@ details.form-section[open] > summary {
 
 .canvas-node--card[data-node-kind='output'] {
   --node-accent: #0369a1;
+}
+
+.canvas-node--card[data-node-kind='script'] {
+  --node-accent: #0e7490;
 }
 
 .canvas-node--card[data-node-kind='review'],
@@ -22329,27 +22347,31 @@ button.status-chip {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
-  padding: 0 var(--space-3) var(--space-2);
+  margin-top: 9px;
+  padding: 0;
 }
 
 .canvas-node__script-lang,
 .canvas-node__script-badge {
   font-size: var(--font-xs);
-  line-height: 1.6;
-  padding: 0 6px;
+  line-height: 1.4;
+  padding: 1px 7px;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--node-accent) 24%, var(--border));
+  background: color-mix(in srgb, var(--node-accent) 6%, var(--bg));
+  color: color-mix(in srgb, var(--node-accent) 58%, var(--text));
   white-space: nowrap;
 }
 
 .canvas-node__script-lang {
   font-family: var(--font-mono);
-  color: var(--text);
+  font-weight: 600;
+  color: color-mix(in srgb, var(--node-accent) 72%, var(--text));
 }
 
 .canvas-node__script-badge--deny {
   border-color: var(--warn-border);
+  background: var(--warn-bg);
   color: var(--warn-fg);
 }
 
