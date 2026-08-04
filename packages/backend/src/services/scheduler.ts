@@ -85,7 +85,12 @@ import {
   type ScriptLanguage,
 } from '@agent-workflow/shared'
 import { runRootFor } from './inventory'
-import { buildRunSandboxCtx, ContainmentAdmissionAborted, type SandboxCtx } from './sandbox'
+import {
+  buildRunSandboxCtx,
+  ContainmentAdmissionAborted,
+  ContainmentAdmissionError,
+  type SandboxCtx,
+} from './sandbox'
 import { ensureScriptDepsEnv, ScriptDepsInstallError, type ScriptDepsEnv } from './scriptDepsEnv'
 import { extractScriptPorts } from './scriptPorts'
 import { resolveScriptInterpreter, runScriptProcess } from './scriptRun'
@@ -171,7 +176,13 @@ import {
   wrapperExternalUpstreamSources,
   wrapperRevivalEvidence,
 } from '@/services/dispatchFrontier'
-import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
+import {
+  alertSandboxDegradedOnce,
+  resolveSandboxDegradedIfHealthy,
+  runNode,
+  type ResolvedSkill,
+  type RunResult,
+} from '@/services/runner'
 import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArtifacts'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import {
@@ -4269,28 +4280,56 @@ async function runOneScriptAttempt(
           ...(a.isReadonly ? { readOnlyWorktrees: true } : {}),
         }
       }
+      // 2026-08-04 audit: a degraded `warn` admission was announced on the
+      // agent path and completely silent here, so a script node could run with
+      // no boundary and leave no user-visible trace at all. Same alert, same
+      // per-task dedupe.
+      if (
+        sandboxCtx !== undefined &&
+        sandboxCtx.mode === 'warn' &&
+        (!sandboxCtx.status.available || plan.receipt.reasonCodes.length > 0)
+      ) {
+        await alertSandboxDegradedOnce(
+          db,
+          taskId,
+          plan.receipt.reasonCodes.join(', ') || sandboxCtx.status.detail,
+          log,
+        )
+      } else if (sandboxCtx !== undefined && sandboxCtx.status.available) {
+        await resolveSandboxDegradedIfHealthy(db, taskId, log)
+      }
     } catch (err) {
       if (err instanceof ContainmentAdmissionAborted) {
         return { kind: 'canceled', message: 'containment-admission-aborted' }
       }
       const message = err instanceof Error ? err.message : String(err)
+      // 2026-08-04 audit: name the boundary THIS node demanded. All three
+      // profiles used to report the network fence, so a readonly node was told
+      // a mechanism it never requested was unavailable.
+      const failureCode = a.networkDeny
+        ? ('script-network-fence-unavailable' as const)
+        : a.isReadonly
+          ? ('script-readonly-fence-unavailable' as const)
+          : ('script-containment-unavailable' as const)
+      // The receipt's reason codes are the only thing that distinguishes
+      // "install bubblewrap" from "containment is switched off" — dropping
+      // them left the operator with no route back.
+      const reasonCodes =
+        err instanceof ContainmentAdmissionError ? err.receipt.reasonCodes.join(', ') : ''
+      const detail = reasonCodes === '' ? message : `${message} (${reasonCodes})`
       await setNodeRunStatus({
         db,
         nodeRunId: a.nodeRunId,
         to: 'failed',
         allowedFrom: ['pending', 'running'],
-        reason: 'script-network-fence-unavailable',
-        extra: {
-          finishedAt: Date.now(),
-          errorMessage: message,
-          failureCode: 'script-network-fence-unavailable',
-        },
+        reason: failureCode,
+        extra: { finishedAt: Date.now(), errorMessage: detail, failureCode },
       })
       broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
       return {
         kind: 'failed',
-        summary: `containment unavailable: ${message}`,
-        message: 'script-network-fence-unavailable',
+        summary: `containment unavailable: ${detail}`,
+        message: failureCode,
       }
     }
   }
@@ -4474,8 +4513,16 @@ async function runOneScriptAttempt(
   ) {
     failureCode = 'script-output-truncated'
   }
+  // 2026-08-04 audit: `spawnError` had NO reader anywhere in the repo, and a
+  // spawn that never started has an empty stderr tail — so "the script process
+  // could not start" reached the user with a blank detail and nothing to act
+  // on. Prefer the spawn reason (already translated by `explainSpawnEnoent`,
+  // so a missing cwd is not reported as a missing bwrap) and fall back to the
+  // stderr tail for processes that did start.
   let errorMessage: string | null =
-    failureCode === null ? null : outcome.result.stderrTail.slice(-2000)
+    failureCode === null
+      ? null
+      : (outcome.result.spawnError ?? outcome.result.stderrTail.slice(-2000))
   const ports: Record<string, string> = {}
 
   if (failureCode === null) {

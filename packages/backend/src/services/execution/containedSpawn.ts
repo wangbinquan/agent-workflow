@@ -27,6 +27,7 @@
 
 import type { Logger } from '@/util/log'
 import { killProcessTree } from '@/util/process'
+import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import {
   sandboxEnforceBlocked,
   wrapSpawnPlanSandbox,
@@ -82,7 +83,13 @@ export interface ContainedSpawnResult {
   /** Rolling tail of stderr, for error messages. */
   stderrTail: string
   truncated: { stdout: boolean; stderr: boolean }
-  /** argv[0] AFTER sandbox wrapping — what actually got exec'd. */
+  /**
+   * argv[0] BEFORE sandbox wrapping — the binary the reaper must match a live
+   * pid against. `sandbox-exec` execs in place and never shows up in `ps`, so
+   * recording the wrapper made every stale-process check report a pid mismatch
+   * and skip the kill entirely (2026-08-04 audit). Same convention as
+   * `runner.ts`, which records `plan.cmd[0]` for exactly this reason.
+   */
   spawnBinaryPath: string
   /** null when the child never started. */
   pid: number | null
@@ -214,7 +221,17 @@ export async function runContainedProcess(
   }
 
   const cmd = wrapSpawnPlanSandbox(req.argv, req.sandbox, req.sandboxTopology)
-  const spawnBinaryPath = cmd[0] ?? ''
+  // 2026-08-04 audit: the RECORDED binary is the UNWRAPPED argv[0], matching
+  // `runner.ts` (whose comment spells out why: the stale-process reaper matches
+  // a live pid against this exact binary). Recording the wrapper instead broke
+  // that on macOS, where `sandbox-exec` execs in place and therefore never
+  // appears in `ps` — `pidCommandContainsBinary` then returned false forever,
+  // `killStaleRunProcessTree` reported `command-mismatch` and sent NO signal,
+  // and the boot reaper flipped the row to `interrupted` and let startup
+  // proceed while the script kept writing. Resume/retry's "kill the live
+  // writer before rolling back" precondition was silently bypassed — the
+  // healthier the containment, the less killable the process.
+  const spawnBinaryPath = req.argv[0] ?? ''
 
   let child: Bun.Subprocess
   try {
@@ -230,7 +247,10 @@ export async function runContainedProcess(
       detached: true,
     })
   } catch (err) {
-    // A missing binary makes Bun.spawn THROW rather than return 127.
+    // A missing binary makes Bun.spawn THROW rather than return 127 — and Bun
+    // names argv[0] in the ENOENT even when the missing path is the cwd, so
+    // under a sandbox wrapper "the worktree is gone" reads as "bwrap is gone"
+    // (`docs/dev-gotchas.md`, 2026-08-04 incident). Translate before reporting.
     return {
       outcome: 'spawn-failed',
       exitCode: null,
@@ -239,7 +259,10 @@ export async function runContainedProcess(
       truncated: { stdout: false, stderr: false },
       spawnBinaryPath,
       pid: null,
-      spawnError: err instanceof Error ? err.message : String(err),
+      spawnError: explainSpawnEnoent(err instanceof Error ? err.message : String(err), {
+        argv0: cmd[0] ?? spawnBinaryPath,
+        cwd: req.cwd,
+      }),
     }
   }
 

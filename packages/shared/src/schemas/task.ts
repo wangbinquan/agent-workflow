@@ -271,6 +271,13 @@ export const SCRIPT_FAILURE_CODES = [
   'script-interpreter-missing',
   'script-deps-install-failed',
   'script-network-fence-unavailable',
+  // 2026-08-04 audit: containment admission fails for THREE different reasons
+  // and all three used to be reported as "the network fence is unavailable" —
+  // so a `readonly` node (which never asked for a network fence) sent its
+  // operator hunting a mechanism the workflow does not even use. One code per
+  // demanded boundary; the message can then name the boundary honestly.
+  'script-readonly-fence-unavailable',
+  'script-containment-unavailable',
   'script-spawn-failed',
   // impl-gate M5: stdout exceeded the retained window in single-port mode, so
   // the port value would be missing its head. Distinct from a crash: the
@@ -284,6 +291,8 @@ export const SCRIPT_PERMANENT_FAILURE_CODES: ReadonlyArray<ScriptFailureCode> = 
   'script-interpreter-missing',
   'script-deps-install-failed',
   'script-network-fence-unavailable',
+  'script-readonly-fence-unavailable',
+  'script-containment-unavailable',
   'script-spawn-failed',
   // Retrying cannot shrink the output; the author has to declare ports or emit
   // less.

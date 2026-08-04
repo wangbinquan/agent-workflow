@@ -2556,6 +2556,7 @@ export interface Resources {
         S4: string
         S5: string
         S6: string
+        'sandbox-degraded': string
       }
       // RFC-057: UI strings for the repair dialog + confirm modal. The
       // option-specific labels (R1.approveRun.label / etc.) live at root
@@ -4632,6 +4633,11 @@ export interface Resources {
       }
       // RFC-108 T14: S6 (awaiting_* with no active member) — acknowledge only.
       S6: {
+        acknowledge: { label: string; desc: string }
+      }
+      // RFC-205 / 2026-08-04 audit: degraded containment — the fix is on the
+      // host or in Settings, so the in-product option is an acknowledge.
+      'sandbox-degraded': {
         acknowledge: { label: string; desc: string }
       }
     }
@@ -7371,6 +7377,10 @@ export const zhCN: Resources = {
       'script-deps-install-failed': '脚本依赖安装失败。',
       'script-network-fence-unavailable':
         '该节点声明了禁止出网，但宿主无法提供网络围栏，已拒绝执行。',
+      'script-readonly-fence-unavailable':
+        '该节点声明了只读，但宿主无法提供只读边界，已拒绝执行——只读节点直接跑在规范工作区上，边界缺失时它比普通节点更危险。',
+      'script-containment-unavailable':
+        '隔离机制不可用，而当前档位要求强制隔离，已拒绝执行。可在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引。',
       'script-spawn-failed': '脚本进程无法启动。',
       'envelope-missing': '代理没有按约定格式输出结果（缺少输出信封）。',
       'envelope-missing__hint': '通常是模型没有遵循输出协议——可点「继续任务」重试该节点。',
@@ -7415,7 +7425,7 @@ export const zhCN: Resources = {
       'execution-identity-auth-invalid__hint': '请更新 provider API 凭据后重新发起新运行。',
       'execution-identity-provider-untrusted': '所选模型 provider 与已验证的运行时清单不一致。',
       'execution-identity-provider-untrusted__hint':
-        '请选择当前 OpenCode 运行时实际提供的 provider/model。',
+        '请选择当前 OpenCode 运行时实际提供的 provider/model；若使用自定义 provider，请检查它是否仍存在、端点与模型清单是否与配置一致。',
       'execution-identity-bootstrap-failed': 'OpenCode 在模型执行前未通过启动完整性检查。',
       'execution-identity-bootstrap-failed__hint': '请查看运行时诊断，修复主机环境后重新发起。',
       'execution-identity-mismatch': 'OpenCode 最终解析的执行配置与密封配置不一致。',
@@ -7438,6 +7448,9 @@ export const zhCN: Resources = {
       'execution-identity-store-unsafe': 'OpenCode 私有会话存储未通过安全检查。',
       'execution-identity-store-unsafe__hint':
         '确认没有活动运行后，修复或移除错误详情指出的私有存储。',
+      'execution-identity-custom-provider-disabled': '所选模型属于已停用的自定义 provider。',
+      'execution-identity-custom-provider-disabled__hint':
+        '在「设置 → 自定义 provider」里重新启用它，或为该节点改选其它模型。',
       summary: {
         snapshotLost: '任务的工作区快照丢失，无法从原位置继续。',
         snapshotInvalid: '任务的工作区快照已失效。',
@@ -7507,6 +7520,8 @@ export const zhCN: Resources = {
         S4: 'task 长时间处于 pending，调度器未拣选',
         S5: 'task 在 running 且存在活跃 node_run，但事件流长时间停滞',
         S6: 'task 在 awaiting_review/awaiting_human，但所有成员（属主+协作者）均非活跃，无人可应答',
+        'sandbox-degraded':
+          '隔离档位为 warn，但宿主无法提供隔离边界，本任务在边界被削弱（或缺失）的情况下运行过',
       },
       repair: {
         openButton: '修复…',
@@ -9294,6 +9309,10 @@ export const zhCN: Resources = {
     'execution-identity-store-unsafe': '$t(tasks.failure.execution-identity-store-unsafe)',
     'execution-identity-store-unsafe__hint':
       '$t(tasks.failure.execution-identity-store-unsafe__hint)',
+    'execution-identity-custom-provider-disabled':
+      '$t(tasks.failure.execution-identity-custom-provider-disabled)',
+    'execution-identity-custom-provider-disabled__hint':
+      '$t(tasks.failure.execution-identity-custom-provider-disabled__hint)',
     'invalid-json': '请求内容不是有效 JSON。',
     'invalid-body': '请求内容不合法。',
     'import-ref-unresolved': '导入内容引用了当前不可用的资源。',
@@ -10256,6 +10275,12 @@ export const zhCN: Resources = {
         acknowledge: {
           label: '确认知悉（不改数据）',
           desc: '该任务所有成员（属主+协作者）均非活跃，无人能应答 review/clarify。恢复需重新启用被停用的用户、邀请新协作者或转移属主——属于用户管理操作，不在修复引擎内。确认仅关闭该告警。',
+        },
+      },
+      'sandbox-degraded': {
+        acknowledge: {
+          label: '确认知悉（不改数据）',
+          desc: '隔离档位为 warn 且宿主无法提供边界，本任务在边界被削弱的情况下跑过。真正的修法在宿主侧：在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引（Linux 装 bubblewrap、开启非特权用户命名空间），或到「设置 → 运行时」改隔离档位。确认仅关闭该告警。',
         },
       },
     },

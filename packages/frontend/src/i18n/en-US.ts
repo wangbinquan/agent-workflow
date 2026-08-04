@@ -2788,6 +2788,10 @@ export const enUS: Resources = {
       'script-deps-install-failed': 'Installing the script’s dependencies failed.',
       'script-network-fence-unavailable':
         'The node declared no network access but the host cannot provide a network fence, so it was refused.',
+      'script-readonly-fence-unavailable':
+        'The node declared read-only but the host cannot provide a read-only boundary, so it was refused — a read-only node runs directly against the canonical workspace, which makes it more dangerous than a normal one without that boundary.',
+      'script-containment-unavailable':
+        'Containment is unavailable while the current mode requires it, so the node was refused. Run `agent-workflow sandbox` on the server for install/fix guidance.',
       'script-spawn-failed': 'The script process could not be started.',
       'envelope-missing':
         'The agent did not produce output in the agreed format (missing output envelope).',
@@ -2844,7 +2848,7 @@ export const enUS: Resources = {
       'execution-identity-provider-untrusted':
         'The selected model provider does not match the verified runtime inventory.',
       'execution-identity-provider-untrusted__hint':
-        'Choose a provider/model exposed by the selected OpenCode runtime.',
+        'Choose a provider/model exposed by the selected OpenCode runtime; for a custom provider, check that it still exists and that its endpoint and model list match the configuration.',
       'execution-identity-bootstrap-failed':
         'OpenCode failed its verified startup check before model execution.',
       'execution-identity-bootstrap-failed__hint':
@@ -2883,6 +2887,10 @@ export const enUS: Resources = {
         'The private OpenCode session store failed its safety check.',
       'execution-identity-store-unsafe__hint':
         'Repair or remove the reported private store after confirming no run is active.',
+      'execution-identity-custom-provider-disabled':
+        'The selected model belongs to a custom provider that is currently disabled.',
+      'execution-identity-custom-provider-disabled__hint':
+        'Re-enable it under Settings → Custom providers, or pick a different model for this node.',
       summary: {
         snapshotLost: "The task's workspace snapshot is gone; it cannot continue in place.",
         snapshotInvalid: "The task's workspace snapshot is no longer valid.",
@@ -2956,6 +2964,8 @@ export const enUS: Resources = {
         S4: 'Task pending without scheduler pickup',
         S5: 'Task running with active node_run(s) but events stopped landing',
         S6: 'Task awaiting review/clarify but every member (owner + collaborators) is inactive — nobody can answer',
+        'sandbox-degraded':
+          'Containment mode is warn but the host could not provide a boundary; this task ran with a reduced (or absent) one',
       },
       repair: {
         openButton: 'Repair…',
@@ -4869,6 +4879,10 @@ export const enUS: Resources = {
     'execution-identity-store-unsafe': '$t(tasks.failure.execution-identity-store-unsafe)',
     'execution-identity-store-unsafe__hint':
       '$t(tasks.failure.execution-identity-store-unsafe__hint)',
+    'execution-identity-custom-provider-disabled':
+      '$t(tasks.failure.execution-identity-custom-provider-disabled)',
+    'execution-identity-custom-provider-disabled__hint':
+      '$t(tasks.failure.execution-identity-custom-provider-disabled__hint)',
     'invalid-json': 'The request body is not valid JSON.',
     'invalid-body': 'Invalid request body.',
     'import-ref-unresolved': 'An imported resource reference is not available.',
@@ -5915,6 +5929,12 @@ export const enUS: Resources = {
         acknowledge: {
           label: 'Acknowledge (no DB change)',
           desc: 'Every member (owner + collaborators) of this task is inactive, so nobody can answer the review/clarify. Recover by re-activating a disabled user, inviting a collaborator, or transferring ownership — a user-management action outside the repair engine. Acknowledging only resolves the alert.',
+        },
+      },
+      'sandbox-degraded': {
+        acknowledge: {
+          label: 'Acknowledge (no DB change)',
+          desc: 'Containment mode is warn and the host could not provide a boundary, so this task ran with a reduced one. The real fix is on the host: run `agent-workflow sandbox` on the server for install/repair guidance (install bubblewrap, enable unprivileged user namespaces on Linux), or change Settings → Runtime → sandbox mode. Acknowledging only resolves the alert.',
         },
       },
     },

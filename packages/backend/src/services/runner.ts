@@ -151,13 +151,51 @@ export async function alertSandboxDegradedOnce(
       id: ulid(),
       taskId,
       rule: 'sandbox-degraded',
-      severity: 'warn',
+      // 'warning', not 'warn': `LifecycleAlertSeverity` has only 'warning' |
+      // 'error', so the old value fell through every severity lookup and the
+      // panel showed the bare key `tasks.diagnose.severity.warn`.
+      severity: 'warning',
       detail: JSON.stringify({ reason: detail ?? 'sandbox mechanism unavailable' }),
       detectedAt: Date.now(),
     })
   } catch (err) {
     // Alerting must never take a run down.
     log.warn('sandbox-degraded alert failed', {
+      taskId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+/**
+ * Close this task's open `sandbox-degraded` alert once a spawn is admitted with
+ * the boundary intact.
+ *
+ * 2026-08-04 audit: nothing ever resolved this rule. The invariant/stuck
+ * reconcilers only touch their own `ownedRules`, the runner only deduped, and
+ * the repair endpoint 500'd — so a task that degraded ONCE kept a warning
+ * banner forever, including after the operator installed bubblewrap and
+ * including on tasks that had long since finished. An alert nobody can clear is
+ * an alert everybody learns to ignore.
+ */
+export async function resolveSandboxDegradedIfHealthy(
+  db: DbClient,
+  taskId: string,
+  log: Logger,
+): Promise<void> {
+  try {
+    await db
+      .update(lifecycleAlerts)
+      .set({ resolvedAt: Date.now() })
+      .where(
+        and(
+          eq(lifecycleAlerts.taskId, taskId),
+          eq(lifecycleAlerts.rule, 'sandbox-degraded'),
+          isNull(lifecycleAlerts.resolvedAt),
+        ),
+      )
+  } catch (err) {
+    log.warn('sandbox-degraded resolve failed', {
       taskId,
       error: err instanceof Error ? err.message : String(err),
     })
@@ -1427,6 +1465,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       containmentDegradedReasons.join(', ') || sandboxCtx.status.detail,
       log,
     )
+  } else if (sandboxCtx !== undefined && sandboxCtx.status.available) {
+    // The boundary is back (host repaired, or the mode changed). Close the open
+    // alert — nothing else in the system ever did, so it used to outlive both
+    // the problem and the task.
+    await resolveSandboxDegradedIfHealthy(opts.db, opts.taskId, log)
   }
 
   log.info('spawning agent runtime', {
