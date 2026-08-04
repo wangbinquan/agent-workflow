@@ -19,15 +19,12 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import type { StructuralDiff } from '@agent-workflow/shared'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { initGitRepo } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 import { scheduledOperationsFixture } from './operations-surface-fixtures'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const stubClarify = resolve(here, 'fixtures', 'stub-opencode-clarify.sh')
 
 let daemon: DaemonHandle | undefined
 let ownedTempDirs: string[] = []
@@ -437,7 +434,7 @@ test.describe('RFC-250 interaction-integrity browser closure', () => {
       const stubState = mkdtempSync(join(tmpdir(), 'aw-rfc250-interaction-clarify-state-'))
       ownedTempDirs.push(stubState)
       daemon = await startDaemon({
-        stubOpencode: stubClarify,
+        stubMode: 'clarify',
         extraEnv: { CLARIFY_STUB_STATE: stubState },
       })
       return

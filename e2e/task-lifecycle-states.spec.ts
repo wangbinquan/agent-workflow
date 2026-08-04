@@ -18,15 +18,11 @@
 import { test, expect, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { initGitRepo } from './command'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const SLOW_STUB = resolve(here, 'fixtures', 'stub-opencode-slow.sh')
-const CLARIFY_STUB = resolve(here, 'fixtures', 'stub-opencode-clarify.sh')
 
 // Each case rebuilds its own daemon + fixture repo + AGENT_WORKFLOW_HOME for
 // isolation. Serial mode is for port allocation hygiene only.
@@ -450,7 +446,7 @@ async function waitForWsStatus(
 test('task lifecycle: running (slow stub + dispatch)', async ({ page }) => {
   const repo = makeFixtureRepo()
   const daemon = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '20000' },
   })
   try {
@@ -486,7 +482,7 @@ test('task lifecycle: running (slow stub + dispatch)', async ({ page }) => {
 test('task lifecycle: done (fast stub happy path)', async ({ page }) => {
   const repo = makeFixtureRepo()
   const daemon = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '0' },
   })
   try {
@@ -516,7 +512,7 @@ test('task lifecycle: done (fast stub happy path)', async ({ page }) => {
 test('task lifecycle: failed (stub exit 1, retries=0)', async ({ page }) => {
   const repo = makeFixtureRepo()
   const daemon = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '0', STUB_OPENCODE_EXIT_CODE: '1' },
   })
   try {
@@ -546,7 +542,7 @@ test('task lifecycle: failed (stub exit 1, retries=0)', async ({ page }) => {
 test('task lifecycle: canceled (POST /api/tasks/:id/cancel mid-running)', async ({ page }) => {
   const repo = makeFixtureRepo()
   const daemon = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '20000' },
   })
   try {
@@ -584,7 +580,7 @@ test('task lifecycle: canceled (POST /api/tasks/:id/cancel mid-running)', async 
 test('task lifecycle: interrupted (SIGKILL → restart → orphan reap)', async ({ page }) => {
   const repo = makeFixtureRepo()
   const daemonA = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '20000' },
   })
   const home = daemonA.home
@@ -597,7 +593,7 @@ test('task lifecycle: interrupted (SIGKILL → restart → orphan reap)', async 
 
     const daemonB = await startDaemon({
       home,
-      stubOpencode: SLOW_STUB,
+      stubMode: 'slow',
       extraEnv: { STUB_OPENCODE_SLEEP_MS: '0' },
     })
     try {
@@ -628,7 +624,7 @@ test('task lifecycle: interrupted (SIGKILL → restart → orphan reap)', async 
 test('task lifecycle: awaiting_review (agent → review node)', async ({ page }) => {
   const repo = makeFixtureRepo()
   const daemon = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '0' },
   })
   try {
@@ -665,7 +661,7 @@ test('task lifecycle: awaiting_human (clarify stub asks question)', async ({ pag
   const repo = makeFixtureRepo()
   const clarifyState = mkdtempSync(join(tmpdir(), 'aw-e2e-clarify-state-'))
   const daemon = await startDaemon({
-    stubOpencode: CLARIFY_STUB,
+    stubMode: 'clarify',
     extraEnv: { CLARIFY_STUB_STATE: clarifyState },
   })
   try {

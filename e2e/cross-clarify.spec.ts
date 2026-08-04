@@ -30,14 +30,11 @@
 import { test, expect } from '@playwright/test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { initGitRepo } from './command'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const stubCrossClarify = resolve(here, 'fixtures', 'stub-opencode-cross-clarify.sh')
 
 interface CrossClarifyInboxEntry {
   // RFC-058 T14/T16: REST /api/clarify now returns ClarifyRoundSummary
@@ -130,7 +127,7 @@ test.describe('RFC-056 cross-clarify e2e — A1 happy path', () => {
     stubState = mkdtempSync(join(tmpdir(), 'aw-e2e-cross-clarify-state-'))
     promptLog = join(stubState, 'prompt.log')
     daemon = await startDaemon({
-      stubOpencode: stubCrossClarify,
+      stubMode: 'cross-clarify',
       extraEnv: {
         CROSS_CLARIFY_STUB_STATE: stubState,
         CROSS_CLARIFY_PROMPT_LOG: promptLog,

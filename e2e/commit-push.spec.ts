@@ -12,13 +12,11 @@
 import { test, expect } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { initBareGitRepo, initGitRepo, runGit } from './command'
-
-const STUB = resolve(import.meta.dirname, 'fixtures', 'stub-opencode-commit.sh')
 
 let daemon: DaemonHandle
 let repo: string
@@ -36,7 +34,7 @@ test.beforeAll(async () => {
   runGit(['remote', 'add', 'origin', remote], repo)
   runGit(['push', '-q', '-u', 'origin', 'main'], repo)
 
-  daemon = await startDaemon({ stubOpencode: STUB })
+  daemon = await startDaemon({ stubMode: 'commit' })
 })
 
 test.afterAll(async () => {

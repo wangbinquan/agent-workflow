@@ -10,6 +10,8 @@
 // the wrong thing" this whole RFC keeps running into.
 
 import { run as runBasic } from './mode-basic'
+import { run as runBusinessWorkflows } from './mode-business-workflows'
+import { run as runBusinessWorkgroups } from './mode-business-workgroups'
 import { run as runClarify } from './mode-clarify'
 import { run as runClarifyInline } from './mode-clarify-inline'
 import { run as runCommit } from './mode-commit'
@@ -17,11 +19,14 @@ import { run as runCrossClarify } from './mode-cross-clarify'
 import { run as runIntent } from './mode-intent'
 import { run as runSlow } from './mode-slow'
 import { run as runWorkflowMatrix } from './mode-workflow-matrix'
+import { run as runWorkgroupMatrix } from './mode-workgroup-matrix'
 
 type ModeRunner = (argv: readonly string[]) => void | Promise<void>
 
 const MODES: Record<string, ModeRunner> = {
   basic: runBasic,
+  'business-workflows': runBusinessWorkflows,
+  'business-workgroups': runBusinessWorkgroups,
   clarify: runClarify,
   'clarify-inline': runClarifyInline,
   commit: runCommit,
@@ -29,6 +34,7 @@ const MODES: Record<string, ModeRunner> = {
   intent: runIntent,
   slow: runSlow,
   'workflow-matrix': runWorkflowMatrix,
+  'workgroup-matrix': runWorkgroupMatrix,
 }
 
 async function main(): Promise<void> {

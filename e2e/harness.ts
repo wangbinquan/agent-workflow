@@ -60,12 +60,11 @@ export interface SpawnOptions {
    */
   binary?: string
   /**
-   * Override the stub-opencode shim path. Defaults to e2e/fixtures/stub-opencode.sh
-   * (the fixed-output stub used by main.spec.ts + review.spec.ts). Tests that
-   * need round-driven behaviour (clarify.spec.ts) pass stub-opencode-clarify.sh
-   * here.
+   * Which behaviour the compiled stub should take. Defaults to `basic` (the
+   * fixed-output stub used by main.spec.ts + review.spec.ts). Tests that need
+   * round-driven behaviour (clarify.spec.ts) ask for `clarify`, and so on.
    */
-  stubOpencode?: string
+  stubMode?: StubMode
   /**
    * Extra env vars merged into the daemon (and inherited by every opencode
    * subprocess). The clarify e2e uses CLARIFY_STUB_STATE +
@@ -110,6 +109,34 @@ export function defaultBinaryPath(): string {
   if (process.env.AGENT_WORKFLOW_E2E_BINARY) return process.env.AGENT_WORKFLOW_E2E_BINARY
   return resolve(repoRoot, 'dist', `agent-workflow-e2e-${platformSuffix()}${executableExtension()}`)
 }
+
+/**
+ * RFC-254 T28b — the compiled e2e model stand-in.
+ *
+ * There is ONE artifact for every behaviour; `AW_STUB_MODE` selects between the
+ * modes in `e2e/fixtures/stub/`. It is compiled rather than scripted because
+ * `opencodePath` has to name something the OS can execute, and Windows cannot
+ * execute a `#!/bin/sh` file — nor a `.cmd` shim, which would hand the argv back
+ * to cmd.exe to re-tokenize.
+ */
+export function defaultStubPath(): string {
+  if (process.env.AGENT_WORKFLOW_E2E_STUB) return process.env.AGENT_WORKFLOW_E2E_STUB
+  return resolve(repoRoot, 'dist', `stub-opencode-${platformSuffix()}${executableExtension()}`)
+}
+
+/** Behaviours the compiled stub can be asked for. Mirrors `stub/dispatch.ts`. */
+export type StubMode =
+  | 'basic'
+  | 'clarify'
+  | 'clarify-inline'
+  | 'commit'
+  | 'cross-clarify'
+  | 'intent'
+  | 'slow'
+  | 'workflow-matrix'
+  | 'business-workflows'
+  | 'business-workgroups'
+  | 'workgroup-matrix'
 
 function isExecutableFile(path: string): boolean {
   try {
@@ -362,10 +389,14 @@ async function startDaemonWithPortAllocator(
     )
   }
 
-  const stubOpencode = opts.stubOpencode ?? resolve(here, 'fixtures', 'stub-opencode.sh')
+  const stubOpencode = defaultStubPath()
   if (!isExecutableFile(stubOpencode)) {
-    throw new Error(`e2e/harness: stub-opencode not executable: ${stubOpencode}`)
+    throw new Error(
+      `e2e/harness: compiled stub-opencode not found at ${stubOpencode}\n` +
+        `  Run \`bun run build:binary:e2e\` to produce it, or set AGENT_WORKFLOW_E2E_STUB.`,
+    )
   }
+  const stubMode: StubMode = opts.stubMode ?? 'basic'
 
   // RFC-054 W1-3 — accept an existing home so the crash-recovery spec can
   // SIGKILL daemon A and spawn daemon B against the same SQLite + worktrees.
@@ -423,6 +454,9 @@ async function startDaemonWithPortAllocator(
             ...process.env,
             AGENT_WORKFLOW_HOME: home,
             LANG: 'en_US.UTF-8',
+            // The mode goes in FIRST so a spec cannot silently point the stub
+            // at a different behaviour than the one it declared.
+            AW_STUB_MODE: stubMode,
             ...(opts.extraEnv ?? {}),
           },
           stdio: ['ignore', 'pipe', 'pipe'],

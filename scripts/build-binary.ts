@@ -34,6 +34,8 @@ const backendSrc = join(repoRoot, 'packages', 'backend', 'src')
 const pluginsDir = join(backendSrc, 'opencode-plugin')
 const generatedPath = join(backendSrc, 'embed.generated.ts')
 const mainEntry = join(backendSrc, 'main.ts')
+// RFC-254 T28b — the e2e opencode stand-in, compiled alongside the test binary.
+const stubEntry = join(repoRoot, 'e2e', 'fixtures', 'stub', 'dispatch.ts')
 const outDir = join(repoRoot, 'dist')
 
 const STUB_CONTENTS = `// P-5-05 single-binary embed table.
@@ -129,9 +131,14 @@ function hashCode(s: string): number {
   return h
 }
 
-async function run(cmd: string[], cwd: string): Promise<void> {
+async function run(cmd: string[], cwd: string, env?: Record<string, string>): Promise<void> {
   process.stdout.write(`\n$ ${cmd.join(' ')}\n`)
-  const proc = Bun.spawn(cmd, { cwd, stdout: 'inherit', stderr: 'inherit' })
+  const proc = Bun.spawn(cmd, {
+    cwd,
+    stdout: 'inherit',
+    stderr: 'inherit',
+    ...(env === undefined ? {} : { env: { ...process.env, ...env } }),
+  })
   const code = await proc.exited
   if (code !== 0) {
     throw new Error(`command failed (${code}): ${cmd.join(' ')}`)
@@ -284,6 +291,7 @@ async function main(): Promise<void> {
   // 3. bun build --compile.
   const outfile = join(outDir, `agent-workflow-${platformSuffix()}${executableExtension()}`)
   const e2eOutfile = join(outDir, `agent-workflow-e2e-${platformSuffix()}${executableExtension()}`)
+  const stubOutfile = join(outDir, `stub-opencode-${platformSuffix()}${executableExtension()}`)
   // RFC-213 impl-gate P1-3: stamp a real binary identity into the executable so
   // the pre-migration restore gate can tell two releases apart (util/version.ts).
   // git describe gives the tag on releases and tag-N-gSHA on intermediate builds;
@@ -332,6 +340,30 @@ async function main(): Promise<void> {
       process.stdout.write(
         `\nbuilt test-only: ${e2eOutfile} (${(e2eSize / 1024 / 1024).toFixed(1)} MiB)\n`,
       )
+      // RFC-254 T28b — the e2e model stand-in, compiled for the same reason the
+      // daemon is: `opencodePath` must name something the OS can execute, and
+      // Windows cannot execute a `#!/bin/sh` script (nor a `.cmd` shim, which
+      // would let cmd.exe re-tokenize the argv the runner carefully built).
+      //
+      // ONE artifact for every mode. `bun build --compile` embeds a whole Bun
+      // runtime, so a binary per stub would be well over a gigabyte per CI run;
+      // the modes are bundled and `AW_STUB_MODE` selects between them.
+      await run(
+        [
+          'bun',
+          'build',
+          stubEntry,
+          '--compile',
+          '--target=bun',
+          '--minify',
+          `--outfile=${stubOutfile}`,
+        ],
+        repoRoot,
+      )
+      const stubSize = statSync(stubOutfile).size
+      process.stdout.write(
+        `\nbuilt e2e stub: ${stubOutfile} (${(stubSize / 1024 / 1024).toFixed(1)} MiB)\n`,
+      )
     }
   } finally {
     // 4. Always restore the stub so dev mode is unaffected.
@@ -344,6 +376,10 @@ async function main(): Promise<void> {
   if (includeE2eBinary) {
     await run([e2eOutfile, 'version'], repoRoot)
     process.stdout.write(`\nsmoke ok: ${e2eOutfile} version\n`)
+    // The stub answers `--version` in every mode, so this also proves the
+    // dispatcher survived compilation with its mode table intact.
+    await run([stubOutfile, '--version'], repoRoot, { AW_STUB_MODE: 'basic' })
+    process.stdout.write(`\nsmoke ok: ${stubOutfile} --version\n`)
   }
 }
 

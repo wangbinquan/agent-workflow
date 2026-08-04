@@ -31,14 +31,11 @@
 import { test, expect } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { initGitRepo } from './command'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const FAST_STUB = resolve(here, 'fixtures', 'stub-opencode.sh')
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(120_000)
@@ -261,7 +258,7 @@ async function getTaskAs(
 // LOCKS: cross-user task visibility (the headline canViewTask gate).
 test("regular bob can NOT see admin alice's task → 403 task-not-visible", async () => {
   const repo = makeFixtureRepo()
-  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  const daemon = await startDaemon({ stubMode: 'basic' })
   try {
     const alice = await createUserAndLogin(daemon, {
       username: 'alice',
@@ -296,7 +293,7 @@ test("regular bob can NOT see admin alice's task → 403 task-not-visible", asyn
 // LOCKS: admin sees all (tasks:read:all permission grants cross-user view).
 test("admin alice CAN see regular bob's task → 200", async () => {
   const repo = makeFixtureRepo()
-  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  const daemon = await startDaemon({ stubMode: 'basic' })
   try {
     const alice = await createUserAndLogin(daemon, {
       username: 'alice',
@@ -331,7 +328,7 @@ test("admin alice CAN see regular bob's task → 200", async () => {
 // LOCKS: cross-regular task visibility (no leakage between same-role users).
 test("regular bob can NOT see another regular carol's task → 403", async () => {
   const repo = makeFixtureRepo()
-  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  const daemon = await startDaemon({ stubMode: 'basic' })
   try {
     const bob = await createUserAndLogin(daemon, {
       username: 'bob',
@@ -366,7 +363,7 @@ test("regular bob can NOT see another regular carol's task → 403", async () =>
 // targeted, not a daemon-wide block on every regular user).
 test('regular bob CAN see own task → 200 (control)', async () => {
   const repo = makeFixtureRepo()
-  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  const daemon = await startDaemon({ stubMode: 'basic' })
   try {
     const bob = await createUserAndLogin(daemon, {
       username: 'bob',
@@ -394,7 +391,7 @@ test('regular bob CAN see own task → 200 (control)', async () => {
 
 // LOCKS: admin-only /api/config (settings:read missing on user baseline).
 test('regular bob can NOT GET /api/config → 403 forbidden', async () => {
-  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  const daemon = await startDaemon({ stubMode: 'basic' })
   try {
     const bob = await createUserAndLogin(daemon, {
       username: 'bob',
@@ -425,7 +422,7 @@ test('regular bob can NOT GET /api/config → 403 forbidden', async () => {
 
 // LOCKS: admin-only users management (users:write missing on user baseline).
 test('regular bob can NOT POST /api/users → 403 forbidden', async () => {
-  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  const daemon = await startDaemon({ stubMode: 'basic' })
   try {
     const bob = await createUserAndLogin(daemon, {
       username: 'bob',
@@ -464,7 +461,7 @@ test('regular bob can NOT POST /api/users → 403 forbidden', async () => {
 // pieces (issue → hash → present → resolve → gate) which only an end-to-end run
 // exercises together, so this test now proves the chain instead of its absence.
 test('a minted PAT holds exactly its matrix — reads on, unticked verbs off', async () => {
-  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  const daemon = await startDaemon({ stubMode: 'basic' })
   try {
     const alice = await createUserAndLogin(daemon, {
       username: 'alice',
@@ -556,7 +553,7 @@ test('a minted PAT holds exactly its matrix — reads on, unticked verbs off', a
 // RFC-247 D2 — the purpose axis, end to end. An `mcp_only` token authenticates
 // (it is a valid credential) and is then refused at the REST channel.
 test('an mcp_only PAT authenticates but cannot use the REST API', async () => {
-  const daemon = await startDaemon({ stubOpencode: FAST_STUB })
+  const daemon = await startDaemon({ stubMode: 'basic' })
   try {
     const alice = await createUserAndLogin(daemon, {
       username: 'alice',

@@ -15,18 +15,12 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { startDaemon, type DaemonHandle } from './harness'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const stubIntent = resolve(here, 'fixtures', 'stub-opencode-intent.sh')
-const stubIntentWorkflow = resolve(here, 'fixtures', 'intent-workflow-opencode.sh')
 
 let daemon: DaemonHandle
 
 test.beforeAll(async () => {
-  daemon = await startDaemon({ stubOpencode: stubIntent })
+  daemon = await startDaemon({ stubMode: 'intent' })
 })
 test.afterAll(async () => {
   await daemon.stop()
@@ -126,7 +120,11 @@ test('US-6: modify entry pre-mounts the target resource in a new session', async
 test('workflow draft makes the node graph a primary, expandable review surface', async ({
   page,
 }) => {
-  const workflowDaemon = await startDaemon({ stubOpencode: stubIntentWorkflow })
+  const workflowDaemon = await startDaemon({
+    stubMode: 'intent',
+    // The old `intent-workflow-opencode.sh` was this stub plus this variable.
+    extraEnv: { STUB_INTENT_VARIANT: 'workflow' },
+  })
   try {
     await authPage(page, workflowDaemon)
     await createSessionAndAwaitDraft(page, 'build a request-to-worker workflow', workflowDaemon)

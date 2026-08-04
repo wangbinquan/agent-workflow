@@ -21,8 +21,14 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { harnessTestApi, type DaemonHandle, type SpawnOptions } from '../../../e2e/harness'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const stubOpencode = resolve(here, '../../../e2e/fixtures/stub-opencode.sh')
 const fixtureRoots: string[] = []
+
+// RFC-254 T28b — the harness now resolves ONE compiled stub instead of taking a
+// path per call, and it refuses to start when that artifact is missing. These
+// tests never launch a real daemon, so they point the override at a file that
+// certainly exists rather than requiring `bun run build:binary:e2e` before
+// `bun run test`.
+const stubOverride = resolve(here, '../../../e2e/harness.ts')
 
 function createFixture(binaryBody: string): {
   root: string
@@ -50,12 +56,19 @@ async function withHarnessTmp<T>(homes: string, run: () => Promise<T>): Promise<
   }
 }
 
-function startDaemonForTest(opts: SpawnOptions): Promise<DaemonHandle> {
+async function startDaemonForTest(opts: SpawnOptions): Promise<DaemonHandle> {
   let nextPort = 45_000
-  return harnessTestApi.startDaemonWithPortAllocator(
-    { ...opts, authMode: opts.authMode ?? 'bootstrap' },
-    async () => nextPort++,
-  )
+  const previous = process.env.AGENT_WORKFLOW_E2E_STUB
+  process.env.AGENT_WORKFLOW_E2E_STUB = stubOverride
+  try {
+    return await harnessTestApi.startDaemonWithPortAllocator(
+      { ...opts, authMode: opts.authMode ?? 'bootstrap' },
+      async () => nextPort++,
+    )
+  } finally {
+    if (previous === undefined) delete process.env.AGENT_WORKFLOW_E2E_STUB
+    else process.env.AGENT_WORKFLOW_E2E_STUB = previous
+  }
 }
 
 afterEach(() => {
@@ -88,7 +101,6 @@ setInterval(() => {}, 1_000)
       handle = await withHarnessTmp(homes, () =>
         startDaemonForTest({
           binary,
-          stubOpencode,
           extraEnv: { HARNESS_ATTEMPT_FILE: attemptFile },
         }),
       )
@@ -111,9 +123,9 @@ process.stderr.write('intentional startup failure\\n')
 process.exit(1)
 `)
 
-    await expect(
-      withHarnessTmp(homes, () => startDaemonForTest({ binary, stubOpencode })),
-    ).rejects.toThrow('intentional startup failure')
+    await expect(withHarnessTmp(homes, () => startDaemonForTest({ binary }))).rejects.toThrow(
+      'intentional startup failure',
+    )
     expect(readdirSync(homes)).toEqual([])
   })
 
@@ -125,7 +137,7 @@ process.exit(1)
     const externalHome = join(root, 'existing-home')
     mkdirSync(externalHome)
 
-    await expect(startDaemonForTest({ binary, stubOpencode, home: externalHome })).rejects.toThrow(
+    await expect(startDaemonForTest({ binary, home: externalHome })).rejects.toThrow(
       'intentional recovery startup failure',
     )
     expect(existsSync(externalHome)).toBe(true)

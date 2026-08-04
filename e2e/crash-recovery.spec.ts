@@ -29,14 +29,11 @@
 import { test, expect, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { initGitRepo } from './command'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const SLOW_STUB = resolve(here, 'fixtures', 'stub-opencode-slow.sh')
 
 // Crash-recovery loop touches the database multiple times across daemon
 // restarts; default 90s timeout is enough but bump locally if the e2e box
@@ -221,7 +218,7 @@ test('SIGKILL daemon mid-task → restart → task=interrupted → click Resume 
 
   // Daemon A: slow stub so the task is still running when we kill.
   const daemonA = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '15000' },
   })
   const home = daemonA.home
@@ -241,7 +238,7 @@ test('SIGKILL daemon mid-task → restart → task=interrupted → click Resume 
     // completes promptly.
     const daemonB = await startDaemon({
       home,
-      stubOpencode: SLOW_STUB,
+      stubMode: 'slow',
       extraEnv: { STUB_OPENCODE_SLEEP_MS: '0' },
     })
 
@@ -288,7 +285,7 @@ test('SIGTERM (graceful) → task ends interrupted and remains resumable', async
   const repo = makeFixtureRepo()
 
   const daemonA = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '15000' },
   })
   const home = daemonA.home
@@ -310,7 +307,7 @@ test('SIGTERM (graceful) → task ends interrupted and remains resumable', async
     // endpoint and prove the original task can still reach done.
     const daemonB = await startDaemon({
       home,
-      stubOpencode: SLOW_STUB,
+      stubMode: 'slow',
       extraEnv: { STUB_OPENCODE_SLEEP_MS: '0' },
     })
     try {
@@ -350,7 +347,7 @@ test('multiple SIGKILL → restart cycles, final resume reaches done (idempotent
 
   // Cycle 1: launch + kill A.
   const daemonA = await startDaemon({
-    stubOpencode: SLOW_STUB,
+    stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '15000' },
   })
   const home = daemonA.home
@@ -365,7 +362,7 @@ test('multiple SIGKILL → restart cycles, final resume reaches done (idempotent
     // we kill again.
     const daemonB = await startDaemon({
       home,
-      stubOpencode: SLOW_STUB,
+      stubMode: 'slow',
       extraEnv: { STUB_OPENCODE_SLEEP_MS: '15000' },
     })
     expect(await getTaskStatus(daemonB, taskId)).toBe('interrupted')
@@ -382,7 +379,7 @@ test('multiple SIGKILL → restart cycles, final resume reaches done (idempotent
     // Cycle 3: fast stub so the final resume actually completes.
     const daemonC = await startDaemon({
       home,
-      stubOpencode: SLOW_STUB,
+      stubMode: 'slow',
       extraEnv: { STUB_OPENCODE_SLEEP_MS: '0' },
     })
 

@@ -6,18 +6,19 @@
 // non-interactive, and covered by a hard deadline here.
 
 import { execFileSync } from 'node:child_process'
-import { Database } from 'bun:sqlite'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const COMMAND_TIMEOUT_MS = 15_000
 
-// Fixture SQL runs against the DB file of a LIVE daemon, which holds the same
-// file in WAL with `PRAGMA busy_timeout = 5000` (packages/backend/src/db/client.ts).
-// The `sqlite3` CLI defaults to busy_timeout = 0, so before this every daemon
-// write that overlapped a fixture write failed the shard instantly with
-// "stepping, database is locked (5)" (nightly e2e-webkit run 30440683412).
-// Kept under COMMAND_TIMEOUT_MS so a genuinely wedged writer still surfaces as
-// our own deadline rather than a SIGTERM with no SQLite diagnosis.
-const SQLITE_BUSY_TIMEOUT_MS = 10_000
+// THIS FILE IS LOADED BY NODE. Playwright runs the specs (and everything they
+// import) on its own Node runner, so nothing here may import a `bun:` module or
+// touch the `Bun` global — both exist only inside the Bun runtime, and the
+// failure is not a graceful one: the suite dies at LOAD time, before a single
+// test runs, with "Only URLs with a scheme in: file, data, and node are
+// supported by the default ESM loader". Bun-only work goes in a child process
+// (see `runSqlite`).
+const SQLITE_EXEC = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'sqlite-exec.ts')
 
 function nonInteractiveGitEnv(): NodeJS.ProcessEnv {
   return {
@@ -71,8 +72,8 @@ export function cloneBareGitRepo(sourcePath: string, destinationPath: string): v
 }
 
 export function runSqlite(dbPath: string, sql: string): void {
-  // RFC-254 T29 — uses Bun's embedded SQLite rather than shelling out to the
-  // `sqlite3` CLI. Two reasons, in order of importance:
+  // RFC-254 T29 — Bun's embedded SQLite rather than the `sqlite3` CLI. Two
+  // reasons, in order of importance:
   //
   //   1. The CLI is NOT on the windows-latest runner image (verified against
   //      the published software list), so every fixture that plants state this
@@ -81,17 +82,34 @@ export function runSqlite(dbPath: string, sql: string): void {
   //      the direct cause of a nightly e2e flake: the daemon holds the write
   //      lock (its own connection sets 5 s), and the CLI would not wait for it.
   //
-  // The busy_timeout is still set FIRST on this connection and the statements
-  // still run as one group, so a caller opening `BEGIN IMMEDIATE` acquires its
-  // write lock under the same timeout as before — the semantics the previous
-  // implementation documented are preserved exactly.
-  // `readwrite` without `create`: the database must already exist (a fixture
-  // that silently creates an empty one would plant state nowhere and pass).
-  const db = new Database(dbPath, { readwrite: true })
-  try {
-    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`)
-    db.exec(sql)
-  } finally {
-    db.close()
-  }
+  // It runs in a Bun CHILD because this module itself is loaded by Node — see
+  // the note at the top of the file. `bun` is already a hard prerequisite of
+  // the repo, so this adds no dependency the suite did not already have.
+  //
+  // The SQL travels on stdin, not in argv: fixture statements embed repo paths
+  // and branch names, and a command line is the wrong place for either.
+  sqliteExec(['exec', dbPath], sql)
+}
+
+/**
+ * Read rows out of a fixture database.
+ *
+ * Before RFC-254 T29 there was no way to do this: the helper could only execute
+ * SQL, so a fixture that needed an answer back had to `SELECT writefile(...)` —
+ * a function of the `sqlite3` CLI's fileio extension, not of SQLite — into a
+ * temp file and parse it as TSV. That trick died with the CLI, and it should
+ * have: results come back as rows now, and `params` are bound rather than
+ * interpolated into the statement.
+ */
+export function querySqlite<T>(dbPath: string, sql: string, params: string[] = []): T[] {
+  return JSON.parse(sqliteExec(['query', dbPath, ...params], sql)) as T[]
+}
+
+function sqliteExec(args: string[], sql: string): string {
+  return execFileSync(process.env.AGENT_WORKFLOW_E2E_BUN ?? 'bun', ['run', SQLITE_EXEC, ...args], {
+    encoding: 'utf8',
+    input: sql,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    timeout: COMMAND_TIMEOUT_MS,
+  })
 }

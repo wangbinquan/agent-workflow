@@ -26,14 +26,11 @@
 import { test, expect } from '@playwright/test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 import { initGitRepo } from './command'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const stubClarify = resolve(here, 'fixtures', 'stub-opencode-clarify.sh')
 
 interface ClarifySessionRow {
   // RFC-058 T14/T16: REST returns ClarifyRoundSummary; field paths renamed:
@@ -151,7 +148,7 @@ test.describe('RFC-023 clarify e2e — agent-single happy path', () => {
   test.beforeAll(async () => {
     stubState = mkdtempSync(join(tmpdir(), 'aw-e2e-clarify-state-'))
     daemon = await startDaemon({
-      stubOpencode: stubClarify,
+      stubMode: 'clarify',
       extraEnv: { CLARIFY_STUB_STATE: stubState },
     })
 
@@ -460,7 +457,7 @@ test.describe
   test.beforeAll(async () => {
     stubState = mkdtempSync(join(tmpdir(), 'aw-e2e-clarify-multi-state-'))
     daemon = await startDaemon({
-      stubOpencode: stubClarify,
+      stubMode: 'clarify',
       extraEnv: {
         CLARIFY_STUB_STATE: stubState,
         // Only shard "b/x.md" asks back. The diff splitter uses per-file as
@@ -675,8 +672,6 @@ test.describe
 // row carries the same `opencodeSessionId` value the stub emitted.
 // ---------------------------------------------------------------------------
 
-const stubClarifyInline = resolve(here, 'fixtures', 'stub-opencode-clarify-inline.sh')
-
 test.describe('RFC-026 clarify e2e — inline session resume', () => {
   let daemon: DaemonHandle
   let repoDir: string
@@ -690,7 +685,7 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
     argvLog = join(stubState, 'argv.log')
     sessionLog = join(stubState, 'session.log')
     daemon = await startDaemon({
-      stubOpencode: stubClarifyInline,
+      stubMode: 'clarify-inline',
       extraEnv: {
         CLARIFY_STUB_STATE: stubState,
         CLARIFY_INLINE_ARGV_LOG: argvLog,

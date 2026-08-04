@@ -9,8 +9,7 @@
 import { expect, test } from '@playwright/test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 import {
   seedShowcase,
@@ -20,9 +19,6 @@ import {
   type ShowcaseWorkgroupKey,
 } from '../examples/workgroups/showcase/seed'
 import { startDaemon, type DaemonHandle } from './harness'
-
-const HERE = dirname(fileURLToPath(import.meta.url))
-const MATRIX_STUB = join(HERE, 'fixtures', 'stub-opencode-workgroup-matrix.ts')
 
 interface TaskRow {
   id: string
@@ -110,7 +106,7 @@ test.setTimeout(180_000)
 test.beforeAll(async () => {
   stateDir = mkdtempSync(join(tmpdir(), 'aw-workgroup-matrix-state-'))
   daemon = await startDaemon({
-    stubOpencode: MATRIX_STUB,
+    stubMode: 'workgroup-matrix',
     extraEnv: { WORKGROUP_MATRIX_STATE_DIR: stateDir },
     configOverrides: {
       defaultNodeRetries: 1,

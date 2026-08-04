@@ -8,19 +8,15 @@
 import { expect, test } from '@playwright/test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 import {
   BUSINESS_OPERATIONS_TASK,
   seedBusinessOperationsScenario,
   type BusinessOperationsSeedResult,
 } from '../examples/workgroups/scenarios/business-operations'
-import { runSqlite } from './command'
+import { querySqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
-
-const HERE = dirname(fileURLToPath(import.meta.url))
-const BUSINESS_STUB = join(HERE, 'fixtures', 'stub-opencode-business-workgroups.ts')
 
 interface TaskRow {
   id: string
@@ -113,7 +109,7 @@ test.setTimeout(180_000)
 test.beforeAll(async () => {
   stateDir = mkdtempSync(join(tmpdir(), 'aw-business-workgroup-state-'))
   daemon = await startDaemon({
-    stubOpencode: BUSINESS_STUB,
+    stubMode: 'business-workgroups',
     extraEnv: { BUSINESS_WORKGROUP_STATE_DIR: stateDir },
     configOverrides: {
       defaultNodeRetries: 1,
@@ -222,44 +218,12 @@ function batchAssignmentIds(shardKey: string | null): string[] {
 }
 
 function persistedAssignmentAttempts(taskId: string): Map<string, number> {
-  const safeTaskId = taskId.replaceAll("'", "''")
-  const outputPath = join(
-    stateDir,
-    `assignment-attempts-${Date.now()}-${Math.random().toString(36).slice(2)}.tsv`,
-  )
-  const safeOutputPath = outputPath.replaceAll("'", "''")
-  runSqlite(
+  const rows = querySqlite<{ id: string; attempt_count: number }>(
     join(daemon.home, 'db.sqlite'),
-    `SELECT writefile(
-       '${safeOutputPath}',
-       CAST(COALESCE((
-         SELECT group_concat(id || char(9) || attempt_count, char(10))
-         FROM (
-           SELECT id, attempt_count
-           FROM workgroup_assignments
-           WHERE task_id='${safeTaskId}'
-           ORDER BY id
-         )
-       ), '') AS BLOB)
-     );`,
+    'SELECT id, attempt_count FROM workgroup_assignments WHERE task_id = ? ORDER BY id',
+    [taskId],
   )
-  try {
-    return new Map(
-      readFileSync(outputPath, 'utf8')
-        .trim()
-        .split('\n')
-        .filter((line) => line.length > 0)
-        .map((line) => {
-          const [id, rawCount] = line.split('\t')
-          if (id === undefined || rawCount === undefined) {
-            throw new Error(`unexpected workgroup assignment row: ${line}`)
-          }
-          return [id, Number(rawCount)] as const
-        }),
-    )
-  } finally {
-    rmSync(outputPath, { force: true })
-  }
+  return new Map(rows.map((row) => [row.id, row.attempt_count]))
 }
 
 test('业务场景 seed：只复用契约完全一致的 Agent 与 Workgroup', async () => {

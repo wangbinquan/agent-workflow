@@ -18,7 +18,6 @@ import { startDaemon, type DaemonHandle } from './harness'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const CATALOG_DIR = join(HERE, '..', 'examples', 'workflows', 'e2e')
-const MATRIX_STUB = join(HERE, 'fixtures', 'stub-opencode-workflow-matrix.sh')
 
 const CATALOG_FILES = [
   'prompt-input-kinds.yaml',
@@ -268,7 +267,7 @@ test.setTimeout(180_000)
 test.beforeAll(async () => {
   matrixStateDir = mkdtempSync(join(tmpdir(), 'aw-workflow-matrix-state-'))
   daemon = await startDaemon({
-    stubOpencode: MATRIX_STUB,
+    stubMode: 'workflow-matrix',
     extraEnv: { MATRIX_STATE_DIR: matrixStateDir },
     configOverrides: {
       defaultNodeRetries: 1,

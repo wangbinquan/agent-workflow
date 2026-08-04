@@ -20,7 +20,15 @@
 // and the real-machine acceptance cover.
 
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -101,6 +109,12 @@ interface ModeSpec {
   stateDirEnv?: string[]
   /** Env vars the stub appends to as a LOG FILE; contents compared per side. */
   logFileEnv?: string[]
+  /**
+   * Rewrite stdout before comparing. Needed only where the ORIGINAL stub was
+   * already non-deterministic — the three TypeScript ones stamp `Date.now()`
+   * into every event. Scoped per mode so it cannot quietly loosen the others.
+   */
+  normalizeStdout?: (text: string) => string
 }
 
 interface SideResult {
@@ -132,6 +146,16 @@ async function runSide(
   const root = mkdtempSync(join(tmpdir(), 'aw-stub-side-'))
   const cwd = join(root, 'cwd')
   mkdirSync(cwd)
+  // Each side runs under its own temp root, so any path a stub records differs
+  // between them BY CONSTRUCTION. Mask this side's own root — and its realpath,
+  // because macOS resolves /var to /private/var and `process.cwd()` returns the
+  // resolved form while `mkdtemp` returned the symlinked one.
+  const roots = [realpathSync(root), root]
+  const redact = (text: string): string => {
+    let out = text
+    for (const path of roots) out = out.replaceAll(path, '<SIDE_ROOT>')
+    return out
+  }
   const sharedEnv: Record<string, string> = { ...modeEnv }
   // Deliberately NOT pre-created: the stubs `mkdir -p` their own state, and a
   // pre-made directory would hide a port that forgot to.
@@ -140,18 +164,19 @@ async function runSide(
   try {
     const steps: Capture[] = []
     for (const step of testCase.steps ?? [{ args: testCase.args ?? [], env: testCase.env }]) {
-      steps.push(await capture(cmd, step.args, { ...sharedEnv, ...step.env }, cwd))
+      const run = await capture(cmd, step.args, { ...sharedEnv, ...step.env }, cwd)
+      steps.push({ ...run, stdout: redact(run.stdout), stderr: redact(run.stderr) })
     }
     const state: Record<string, string> = {}
     for (const name of spec.stateDirEnv ?? []) {
       for (const [path, contents] of Object.entries(readTree(sharedEnv[name] ?? ''))) {
-        state[`${name}/${path}`] = contents
+        state[`${name}/${path}`] = redact(contents)
       }
     }
     const logs: Record<string, string | null> = {}
     for (const name of spec.logFileEnv ?? []) {
       const path = sharedEnv[name] ?? ''
-      logs[name] = existsSync(path) ? readFileSync(path, 'utf8') : null
+      logs[name] = existsSync(path) ? redact(readFileSync(path, 'utf8')) : null
     }
     const sideEffects: Record<string, boolean> = {}
     for (const file of testCase.sideEffects ?? []) sideEffects[file] = existsSync(join(cwd, file))
@@ -160,6 +185,11 @@ async function runSide(
     rmSync(root, { recursive: true, force: true })
   }
 }
+
+// The TypeScript stubs stamp a real clock into every event. That was fine when
+// each was its own program; comparing two runs of it needs the clock masked.
+const maskTimestamps = (text: string): string =>
+  text.replaceAll(/"timestamp":\d+/g, '"timestamp":T')
 
 /**
  * Register the differential suite for one mode.
@@ -174,8 +204,12 @@ function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
     () => {
       for (const testCase of cases) {
         test(`byte-identical: ${testCase.name}`, async () => {
+          // The three that were already TypeScript were run as `bun run <file>`.
+          const original = spec.script.endsWith('.ts')
+            ? [process.execPath, 'run', shellStub(spec.script)]
+            : [shellStub(spec.script)]
           const [shell, ported] = await Promise.all([
-            runSide([shellStub(spec.script)], {}, spec, testCase),
+            runSide(original, {}, spec, testCase),
             runSide(
               [process.execPath, 'run', PORTED_STUB],
               { AW_STUB_MODE: spec.mode },
@@ -189,7 +223,8 @@ function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
             const actual = ported.steps[index]
             const at = `step ${index + 1}`
             expect(actual?.exitCode, `${at} exit code`).toBe(expected.exitCode)
-            expect(actual?.stdout, `${at} stdout`).toBe(expected.stdout)
+            const norm = spec.normalizeStdout ?? ((text: string) => text)
+            expect(norm(actual?.stdout ?? ''), `${at} stdout`).toBe(norm(expected.stdout))
             expect(actual?.stderr, `${at} stderr`).toBe(expected.stderr)
             expect(actual?.promptOut, `${at} AW_STUB_PROMPT_OUT`).toBe(expected.promptOut)
             if (expected.inventory === null) {
@@ -842,6 +877,74 @@ differentialSuite(
     {
       name: 'MATRIX_RUNTIME cancel takes the same sleeping branch',
       args: runArgs(matrixPrompt('MATRIX_RUNTIME', awInput('mode', 'cancel'))),
+    },
+  ],
+)
+
+differentialSuite(
+  {
+    mode: 'business-workflows',
+    script: 'stub-opencode-business-workflows.ts',
+    stateDirEnv: ['BUSINESS_WORKFLOW_STATE_DIR'],
+    normalizeStdout: maskTimestamps,
+  },
+  [
+    { name: '--version', args: ['--version'] },
+    { name: 'version', args: ['version'] },
+    { name: 'unsupported mode', args: ['nope'] },
+    { name: 'missing --agent', args: ['run', '--', 'x'] },
+    { name: 'missing nonce', args: runArgs('no marker', 'business-fix-engineer') },
+    {
+      name: 'an unknown agent is rejected rather than answered',
+      args: runArgs(`nonce="${NONCE}" go`, 'not-a-business-agent'),
+    },
+    {
+      name: 'every prompt is appended to the shared prompts.jsonl',
+      steps: [
+        { args: runArgs(`nonce="${NONCE}" go`, 'business-code-auditor') },
+        { args: runArgs(`nonce="${NONCE}" go`, 'business-code-auditor') },
+      ],
+    },
+    {
+      name: 'inventory drop',
+      args: runArgs(`nonce="${NONCE}" go`, 'business-code-auditor'),
+      env: { WANT_INVENTORY: '1' },
+    },
+  ],
+)
+
+differentialSuite(
+  {
+    mode: 'business-workgroups',
+    script: 'stub-opencode-business-workgroups.ts',
+    stateDirEnv: ['BUSINESS_WORKGROUP_STATE_DIR'],
+    normalizeStdout: maskTimestamps,
+  },
+  [
+    { name: '--version', args: ['--version'] },
+    { name: 'unsupported mode', args: ['nope'] },
+    { name: 'missing --agent', args: ['run', '--', 'x'] },
+    { name: 'missing nonce', args: runArgs('no marker', 'anyone') },
+    { name: 'an unrecognised turn exits 14', args: runArgs(`nonce="${NONCE}" go`, 'anyone') },
+  ],
+)
+
+differentialSuite(
+  {
+    mode: 'workgroup-matrix',
+    script: 'stub-opencode-workgroup-matrix.ts',
+    stateDirEnv: ['WORKGROUP_MATRIX_STATE_DIR'],
+    normalizeStdout: maskTimestamps,
+  },
+  [
+    { name: '--version', args: ['--version'] },
+    { name: 'unsupported mode', args: ['nope'] },
+    { name: 'missing --agent', args: ['run', '--', 'x'] },
+    { name: 'missing nonce', args: runArgs('no marker', 'showcase-wg-lead') },
+    { name: 'an unexpected agent exits 15', args: runArgs(`nonce="${NONCE}" go`, 'nobody') },
+    {
+      name: 'the researcher turn',
+      args: runArgs(`nonce="${NONCE}" <port name="wg_result"> go`, 'showcase-wg-researcher'),
     },
   ],
 )

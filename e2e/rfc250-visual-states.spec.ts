@@ -11,7 +11,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import type { StructuralDiff } from '@agent-workflow/shared'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { initGitRepo } from './command'
@@ -20,8 +20,6 @@ import { startDaemon, type DaemonHandle } from './harness'
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
 const EXPECTED_RFC250_VISUAL_SCENE_COUNT = 9
 const TASK_WIZARD_DRAFT_PREFIX = 'aw:task-wizard-draft:v1:'
-const here = dirname(fileURLToPath(import.meta.url))
-const stubClarify = resolve(here, 'fixtures', 'stub-opencode-clarify.sh')
 
 const SNAPSHOT_OPTS = {
   maxDiffPixelRatio: 0.002,
@@ -539,7 +537,7 @@ test.describe('RFC-250 §12.3 high-risk visual states', () => {
       const stubState = mkdtempSync(join(tmpdir(), 'aw-rfc250-visual-clarify-state-'))
       ownedTempDirs.push(stubState)
       daemon = await startDaemon({
-        stubOpencode: stubClarify,
+        stubMode: 'clarify',
         extraEnv: { CLARIFY_STUB_STATE: stubState },
       })
       return

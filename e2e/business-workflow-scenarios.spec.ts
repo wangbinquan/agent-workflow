@@ -16,7 +16,6 @@ import { startDaemon, type DaemonHandle } from './harness'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BUSINESS_DIR = join(HERE, '..', 'examples', 'workflows', 'business')
-const BUSINESS_STUB = join(HERE, 'fixtures', 'stub-opencode-business-workflows.ts')
 
 const WORKFLOW_FILES = [
   'defect-fix-controlled-release.yaml',
@@ -160,7 +159,7 @@ test.setTimeout(180_000)
 test.beforeAll(async () => {
   stateDir = mkdtempSync(join(tmpdir(), 'aw-business-workflow-state-'))
   daemon = await startDaemon({
-    stubOpencode: BUSINESS_STUB,
+    stubMode: 'business-workflows',
     extraEnv: { BUSINESS_WORKFLOW_STATE_DIR: stateDir },
     configOverrides: {
       defaultNodeRetries: 0,
