@@ -535,3 +535,23 @@ RFC-254 交付的是「Windows 上跑得起来且如实呈现」，下面四条�
 `e2e/rfc250-workflow-camera.spec.ts:823` 在 `6e9e1450` 上**通过**、在当前 main 上
 失败，区间内只有画布 / 样式面的并发改动（`75fc8cdd fix(frontend): improve workflow
 wrapper drag feedback` 一线）。同上，未单方面修改。
+
+## `.session-role-badge` 的对比度不达 WCAG AA（RFC-027 起既有，2026-08-04 实测）
+
+`.session-role-badge__label` 是 11px **粗体白字**压在角色色上，assistant 那档是
+`#16a34a` ⇒ 对比度 **3.29:1**，AA 要求 4.5:1（axe `color-contrast`，
+`e2e/intent-builder.spec.ts:193` 的 a11y 扫描实报）。徽章色自 `86e4a1b6`
+（RFC-027）起就是这样，与任何近期改动无关。
+
+**为什么现在才被看见**：这条断言扫的是「那一刻页面上有什么」，而徽章由
+`ConversationFlow.tsx` 随会话转录渲染 ⇒ 扫描时转录渲染到哪一步决定了徽章在不在。
+同一个提交（`190d9111`）**在 CI 上通过、在本机必现失败**，就是这个差异。因此它
+既不是 flaky（本机隔离下稳定复现），也不是回归——是一条**间歇性可见的既有缺陷**。
+
+- ⏳ **(P2) 一行修复已实测可行**：`--rfc027-accent: #16a34a` → `#15803d`（白字
+  对比度 5.01:1），改后 `intent-builder.spec.ts` 四条全过（本机实测）。其余四档
+  （`--user #2563eb` / `--tool #ea580c` / `--subagent #9333ea` /
+  `--reasoning #64748b`）未逐一测算，应一并核对——**11px 粗体白字**这个组合对
+  几乎所有中等明度色都不达标。
+- 未代改的原因：徽章配色是有归属的视觉设计 token，且 `styles.css` 正被并发
+  session 编辑；本轮（RFC-254 Windows）不应顺手改产品配色。
