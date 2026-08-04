@@ -10,6 +10,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { lstat, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join, parse, resolve } from 'node:path'
+import { isLexicallyInsideForHost } from '@/util/platformExec'
 import type { ExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import {
   AscendingMessageIdGenerator,
@@ -509,7 +510,13 @@ function resolveStoreRoot(manifest: VerifiedLaunchManifest): string {
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
   const storeRoot = dirname(xdgData)
-  if (storeRoot === dirname(storeRoot) || !manifest.sessionDbPath.startsWith(`${storeRoot}/`)) {
+  // Strictly BELOW storeRoot: the db must not be storeRoot itself, so this
+  // keeps the `!==` half that isLexicallyInside() deliberately admits.
+  if (
+    storeRoot === dirname(storeRoot) ||
+    manifest.sessionDbPath === storeRoot ||
+    !isLexicallyInsideForHost(storeRoot, manifest.sessionDbPath)
+  ) {
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
   return storeRoot

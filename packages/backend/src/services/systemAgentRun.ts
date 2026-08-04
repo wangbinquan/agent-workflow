@@ -36,6 +36,7 @@ import {
 } from '@/services/sandbox'
 import { createLogger, type Logger } from '@/util/log'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
+import { isLexicallyInsideForHost } from '@/util/platformExec'
 import {
   isExecutionIdentityFailureCode,
   maskDiagnosticsText,
@@ -205,8 +206,10 @@ export function assertSafeSeedPath(worktreeDir: string, relPath: string): string
   if (relPath.length === 0 || isAbsolute(relPath)) {
     throw new Error(`unsafe seed path: ${relPath}`)
   }
+  // RFC-254 T1: `resolve()` yields `\`-separated paths on Windows, so the old
+  // `${worktreeDir}/` prefix test rejected every legitimate seed path there.
   const abs = resolve(worktreeDir, relPath)
-  if (abs !== worktreeDir && !abs.startsWith(`${worktreeDir}/`)) {
+  if (!isLexicallyInsideForHost(worktreeDir, abs)) {
     throw new Error(`unsafe seed path: ${relPath}`)
   }
   return abs

@@ -30,6 +30,7 @@ import { ulid } from 'ulid'
 import { redactSensitiveString } from '@/util/redact'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
+import { isLexicallyInsideForHost } from '@/util/platformExec'
 
 const log = createLogger('plugin-installer')
 
@@ -559,8 +560,12 @@ export async function garbageCollectPluginGenerations(opts: {
     for (const generation of generations) {
       if (!generation.isDirectory()) continue
       const generationDir = join(generationsRoot, generation.name)
-      const isReferenced = [...opts.referencedCachedPaths, ...active].some(
-        (path) => path === generationDir || path.startsWith(`${generationDir}/`),
+      // RFC-254 T1: `generationDir` comes from join(), so on Windows it is
+      // `\`-separated and the old `${dir}/` prefix test answered false for
+      // EVERY referenced path — this GC would have deleted plugin generations
+      // that are still in use.
+      const isReferenced = [...opts.referencedCachedPaths, ...active].some((path) =>
+        isLexicallyInsideForHost(generationDir, path),
       )
       if (isReferenced) continue
       let age = 0

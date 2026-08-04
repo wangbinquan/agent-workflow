@@ -10,6 +10,7 @@ import { chmod, lstat, mkdir, open, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { mcpEnvEntryProblem } from '@agent-workflow/shared'
+import { isLexicallyInsideForHost } from '@/util/platformExec'
 import { IS_EMBEDDED } from '@/embed'
 import { executionIdentityFailure } from './failure'
 import { RuntimeChildProviderPlanSchema, type RuntimeChildProviderPlan } from './containment'
@@ -1059,7 +1060,7 @@ export function resolveNetlessCwd(
     return manifest.worktreePath
   }
   for (const allowed of writable) {
-    if (requested === allowed || requested.startsWith(`${allowed}/`)) return requested
+    if (isLexicallyInsideForHost(allowed, requested)) return requested
   }
   return manifest.worktreePath
 }

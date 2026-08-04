@@ -25,6 +25,7 @@
 - **本机 `protocol.file.allow=always` 掩盖 submodule CI 红**：`file://` submodule 测试本机恒绿、CI 恒红；测试须自注入 `GIT_CONFIG_GLOBAL`，复现用 `GIT_CONFIG_GLOBAL=/dev/null bun test <单文件>`。
 - **`sqlite3` CLI 默认 `busy_timeout=0`，直写运行中 daemon 的 DB 必炸**：e2e 用 `sqlite3` 往活着的 daemon 的 `db.sqlite` 里种状态（`e2e/command.ts:runSqlite`，diagnose-repair / lifecycle-diagnose / rfc229 / business-workgroup 都在用）。daemon 侧有 `PRAGMA busy_timeout = 5000`（`db/client.ts`）会等写锁，**CLI 侧不等**——只要 daemon 那一刻在写，fixture 立刻 `Error: stepping, database is locked (5)`，表现为「随机某个 shard 红、重试还红」（nightly e2e-webkit run 30440683412：`diagnose-repair` 的 `afterEach` 清理撞上刚点下去的 repair 写）。**测试进程直连生产 DB 文件一律显式设 busy_timeout**，且要小于命令自身的超时，否则 wedge 时拿到的是 SIGTERM 而不是 SQLite 诊断。注意 WAL 不救这一类：WAL 只解耦读写，写-写仍然互斥。
 - **源码里裸 `0x00` 让 grep/rg 静默跳过整文件**（却过 tsc/prettier/eslint/build/tests）；`file` / `tr -cd '\000'` 检测，改回 `\x00`；守卫 `no-nul-bytes-in-source`（注释里的字面量也会踩）。
+  **最常见的引入方式是「拿 NUL 当分隔符」**：`return `${a}\0${b}`` 拼 Map key 看着很合理（NUL 不会出现在业务字符串里），但它把裸 0x00 写进了源码。正解是 `JSON.stringify([a, b])` —— 既没有分隔符问题，也不碰 NUL。**另注意检测姿势**：`grep -q $'\000' file` 在 zsh 下退化成空模式、对每个文件都返回真，别拿它当判据；用 `tr -cd '\000' < file | wc -c`。
 
 ## git / 多人协作（共享工作树）
 
@@ -142,6 +143,13 @@
 - **`mcpEnvIssues` 显式放行 `PYTHONPATH` / `NODE_OPTIONS`**（对 MCP 子进程合理），复用它去守别的进程时会漏：这两个变量正是「在用户代码第一行之前加载任意模块」的入口。另外「平台键最后覆盖用户键」只对平台**真的会设**的键成立——平台不设时用户值照样存活。要么剔除保留键，要么无条件写入。
 - **argv 不过 shell，所以别把 `<` `>` 当 shell 元字符拒掉**：它们是 pip 的合法版本比较符，误拒会给用户一条完全误导的报错。真正该拒的是 flag 前缀、URL/VCS/路径形态与 `;&|\`$()` 这类。
 - **`Bun.spawn` 的 posix_spawn ENOENT 会冠名 argv[0]，即使真正缺的是 cwd**（2026-08-04 实测：`Bun.spawn({cmd:['/bin/echo'],cwd:'/不存在'})` 报 `ENOENT ... posix_spawn '/bin/echo'`）。沙箱包装下 argv[0] 是 bwrap/sandbox-exec，于是「任务 worktree 目录没了」显示成「bwrap 不存在」，把排查引向完全无辜的对象（真实事故：canonical worktree 指向已清理的 `iso/` 目录）。排查 spawn ENOENT **先查 cwd 再查可执行文件**；平台侧 runner/runtimeSmoke/systemAgentRun 的 spawn catch 已统一过 `util/spawnDiagnostics.ts:explainSpawnEnoent` 翻译，新 spawn 现场照接。另注意 bare 名与绝对路径的报错形态不同（bare 名缺失是 `Executable not found in $PATH`，不带 ENOENT）。
+
+## 平台面守卫（RFC-254 实测）
+
+- **守卫规则要锁「被禁形态的字面量」，不要锁「使用它的调用形状」**：RFC-254 的第一版规则写成 `startsWith(\`${x}/\`)`，跑起来当场对**同一个文件里四行之外**的两步式写法失明——`const prefix = \`${ctx.worktreePath}/\`` 然后 `.startsWith(prefix)`。锁调用形状的守卫，换个变量名就绕过；锁 `` `${x}/` `` 这个**路径前缀字面量**本身则绕不过。通用判据：问一句「把这行拆成两句还会不会被抓」，答否就说明锁错了层。
+- **手写的「全量站点清单」必然是错的，而且三方会错出三个不同的数**：同一份 RFC 的站点盘点，作者写 4 处、外部评审 A 查出 6 处、负向扫描守卫实际扫出 10 处；PATH 那类同样是 4 / 7 / 10。最毒的是漏项**不是**风格问题——其中两处是真缺陷（插件 GC 会误删仍被引用的 generation；系统代理的 seed 路径校验会拒绝一切合法路径）。**清单驱动的改造 = 实现与测试共享同一个错误前提**，正解是先写「禁形态负向扫描 + 逐条注明理由的豁免表」，让计数由守卫产出，文档里一个数字都不写。
+- **豁免表按「(规则, 文件, 匹配文本)」三元组精确匹配，并配陈旧棘轮**（条目不再命中就让门禁红）——与 `scripts/depcheck.ts` 的 `KNOWN_VIOLATIONS` 同形。按**文件**豁免会连带放过该文件未来的每一处新违规，正是这条老写法在 depcheck 里被修掉的原因。
+- **扫描器必须自证「它真的看见了代码」**：加一条 sanity 断言（走查到的文件数 > N，且某个已知存在的形态确实被找到）。dependency-cruiser 曾因拿错 tsconfig 静默失明两年、期间一直报 0 违规——绿灯不等于干净。
 
 ## 前端
 
