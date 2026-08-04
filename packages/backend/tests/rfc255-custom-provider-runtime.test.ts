@@ -21,6 +21,7 @@ import {
   listUsableCustomProviders,
 } from '@/services/runtime/opencode/customProvider'
 import { buildControlledOpencodeConfig } from '@/services/runtime/opencode/hermetic'
+import { businessOpencodeIdentityDigest } from '@/services/runtime/opencode/executionIdentity'
 import { CUSTOM_PROVIDER_NPM, type CustomProviderEntryWire } from '@agent-workflow/shared'
 
 const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 7))
@@ -190,5 +191,54 @@ describe('RFC-255 admission recovery', () => {
     expect(admittedCustomFromExpectedConfig({ provider: { mygw: 'x' } }, 'mygw')).toBeUndefined()
     // `constructor` is a legal provider id; a prototype hit must not pass.
     expect(admittedCustomFromExpectedConfig({ provider: {} }, 'constructor')).toBeUndefined()
+  })
+})
+
+// AC-6 — the headline identity contract, asserted directly on the digest.
+//
+// Why this test exists: the whole reason the credential travels outside the
+// config, and the display name never enters the runtime section, is so that
+// rotating a key or renaming a gateway does not invalidate a running task's
+// resume. Nothing else locks that; a future refactor that "tidied" the key or
+// the name into the provider section would break resume for every in-flight
+// task and no test would notice.
+describe('RFC-255 execution identity semantics', () => {
+  const digestFor = (e: CustomProviderEntryWire): string =>
+    businessOpencodeIdentityDigest({
+      config: buildControlledOpencodeConfig({
+        name: 'auditor',
+        prompt: 'p',
+        description: 'd',
+        model: 'mygw/deepseek-v3',
+        toolOutputPattern: '/tmp/out/*',
+        // The digest requires the shell to live inside the run seal.
+        shellPath: '/tmp/seal/shell/sh',
+        allowShell: false,
+        customProvider: buildControlledProviderSection(e),
+      }),
+      agent: 'auditor',
+      model: { providerID: 'mygw', modelID: 'deepseek-v3' },
+      binaryDigest: 'a'.repeat(64),
+      sealRoot: '/tmp/seal',
+    })
+
+  const baseline = () => digestFor(entry)
+
+  test('rotating the credential leaves the identity untouched — resume survives', () => {
+    expect(digestFor({ ...entry, apiKey: secretBox.seal('sk-rotated') })).toBe(baseline())
+  })
+
+  test('renaming the gateway or a model leaves the identity untouched', () => {
+    expect(digestFor({ ...entry, name: 'Renamed Gateway' })).toBe(baseline())
+    expect(
+      digestFor({ ...entry, models: [{ id: 'deepseek-v3', name: 'DS v3' }, { id: 'qwen-max' }] }),
+    ).toBe(baseline())
+  })
+
+  test('changing the endpoint or the model list IS an identity change — resume is refused', () => {
+    expect(digestFor({ ...entry, baseURL: 'https://gw.internal.example/v2' })).not.toBe(baseline())
+    // A trailing slash is a different endpoint, exactly as admission treats it.
+    expect(digestFor({ ...entry, baseURL: 'https://gw.internal.example/v1/' })).not.toBe(baseline())
+    expect(digestFor({ ...entry, models: [{ id: 'deepseek-v3' }] })).not.toBe(baseline())
   })
 })

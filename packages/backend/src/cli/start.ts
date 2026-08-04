@@ -52,6 +52,8 @@ import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
+import { probeCatalogCollisionWith } from '@/services/runtime/opencode/catalogProbe'
+import { listOpencodeModelsHermetic } from '@/services/runtime/opencode/models'
 import { markProductionOpencodeCommand } from '@/util/opencode'
 import { Paths } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
@@ -526,6 +528,21 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     secretBox,
     containmentCoordinator,
+    // RFC-255 layer 2: an id that is not in the static catalog snapshot is
+    // probed against the actual runtime before it can be saved. Without this
+    // wiring the "two-layer" collision check in the design would be one layer
+    // and would go stale with every OpenCode catalog release.
+    probeCatalogCollision: (providerID) =>
+      probeCatalogCollisionWith(providerID, {
+        enumerate: (provider) =>
+          listOpencodeModelsHermetic(
+            getRuntimeDriver('opencode').defaultBinary(loadConfig(Paths.config))[0]!,
+            {
+              refresh: true,
+              injectedProviderSection: provider,
+            },
+          ),
+      }),
   })
 
   const bindHost = opts.host ?? config.bindHost

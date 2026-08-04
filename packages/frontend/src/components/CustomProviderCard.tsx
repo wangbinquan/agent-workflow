@@ -74,13 +74,15 @@ export function CustomProviderCard(): React.ReactElement {
   const client = useQueryClient()
   const [draft, setDraft] = useState<DraftState | null>(null)
   const [pendingDelete, setPendingDelete] = useState<CustomProviderEntryWire | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
 
   const configQuery = useQuery({
     queryKey: getConfigQueryKey(),
     queryFn: ({ signal }) => queryConfig(signal),
   })
-  const providers: CustomProviderEntryWire[] = configQuery.data?.customProviders ?? []
+  // The config schema keeps entries as `unknown` so one hand-edited row cannot
+  // stop the daemon booting; the save gate is what enforces the shape.
+  const providers = (configQuery.data?.customProviders ?? []) as CustomProviderEntryWire[]
 
   const save = useMutation({
     mutationFn: async (next: CustomProviderEntryWire[]) => {
@@ -93,7 +95,10 @@ export function CustomProviderCard(): React.ReactElement {
       await client.invalidateQueries({ queryKey: getConfigQueryKey() })
     },
     onError: (err: unknown) => {
-      setError(err instanceof Error ? err.message : String(err))
+      // Pass the ApiError through untouched: stringifying it here would strip
+      // the .code the localizer resolves, and the user would see the raw
+      // English validation code instead of a translated message.
+      setError(err)
     },
   })
 
@@ -107,8 +112,13 @@ export function CustomProviderCard(): React.ReactElement {
       return t('settings.customProviders.errors.baseURL')
     }
     if (value.models.length === 0) return t('settings.customProviders.errors.models')
-    // A brand-new entry (or a renamed one) has no stored secret to fall back on.
-    if (value.apiKey.trim() === '' && value.originalId !== value.id) {
+    // Nothing to fall back on for a new entry or a renamed one — and moving an
+    // existing entry to a different endpoint is deliberately the same case, so
+    // a stored credential can never be delivered somewhere it was not issued
+    // for.
+    const previous = providers.find((entry) => entry.id === value.originalId)
+    const movedEndpoint = previous !== undefined && previous.baseURL !== value.baseURL
+    if (value.apiKey.trim() === '' && (value.originalId !== value.id || movedEndpoint)) {
       return t('settings.customProviders.errors.apiKeyRequired')
     }
     return null

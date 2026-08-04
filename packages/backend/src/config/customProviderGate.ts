@@ -120,6 +120,21 @@ export async function resolveCustomProvidersForSave(
     }
     if (isPreservedApiKey(entry.apiKey)) {
       const previous = stored.get(entry.id)
+      // "Keep the stored key" is a statement about a gateway, not about a name.
+      // Swapping two ids in one submission, or repointing an id at a different
+      // vendor, keeps every id in `knownIds` while sending each credential to
+      // an endpoint its owner never issued it for. Preservation therefore
+      // requires the endpoint to be unchanged too.
+      if (previous !== undefined && previous.baseURL !== entry.baseURL) {
+        throwIssues([
+          {
+            code: 'config-custom-provider-apikey-required',
+            field: 'apiKey',
+            detail: entry.id,
+            index: submitted.indexOf(entry),
+          },
+        ])
+      }
       // validateCustomProviders already rejected "preserve" with nothing to
       // preserve; this is the type-level tail of that guarantee.
       if (previous?.apiKey === undefined) {

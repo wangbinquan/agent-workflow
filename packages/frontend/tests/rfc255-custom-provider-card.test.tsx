@@ -90,20 +90,43 @@ describe('RFC-255 custom provider card', () => {
     expect(await screen.findByText('No custom providers configured yet.')).toBeTruthy()
   })
 
-  test('editing the endpoint keeps the stored credential', async () => {
+  test('editing metadata keeps the stored credential', async () => {
     wrap(<CustomProviderCard />)
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
     // The key field starts blank — the stored secret is never rendered.
     const keyInput = screen.getByTestId('custom-provider-apikey') as HTMLInputElement
     expect(keyInput.value).toBe('')
-    const urlInput = screen.getByTestId('custom-provider-baseurl')
-    fireEvent.change(urlInput, { target: { value: 'https://gw.internal.example/v2' } })
+    fireEvent.change(screen.getByTestId('custom-provider-models-input'), {
+      target: { value: 'extra-model' },
+    })
+    fireEvent.keyDown(screen.getByTestId('custom-provider-models-input'), { key: 'Enter' })
     fireEvent.click(screen.getByTestId('custom-provider-save'))
     await waitFor(() => expect(configPutBodies.length).toBe(1))
     const saved = lastPatch()[0]!
-    expect(saved.baseURL).toBe('https://gw.internal.example/v2')
+    expect(saved.models).toEqual([{ id: 'deepseek-v3' }, { id: 'qwen-max' }, { id: 'extra-model' }])
     // The mask is what "keep the stored key" looks like on the wire.
     expect(saved.apiKey).toBe(CUSTOM_PROVIDER_API_KEY_MASK)
+  })
+
+  // Moving a gateway to a different endpoint is the one metadata edit that
+  // cannot reuse the stored credential: an admin who cannot READ the key could
+  // otherwise have it delivered to a server of their choosing.
+  test('changing the endpoint demands the key again', async () => {
+    wrap(<CustomProviderCard />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    fireEvent.change(screen.getByTestId('custom-provider-baseurl'), {
+      target: { value: 'https://elsewhere.example/v1' },
+    })
+    fireEvent.click(screen.getByTestId('custom-provider-save'))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(configPutBodies.length).toBe(0)
+
+    fireEvent.change(screen.getByTestId('custom-provider-apikey'), {
+      target: { value: 'sk-for-new-endpoint' },
+    })
+    fireEvent.click(screen.getByTestId('custom-provider-save'))
+    await waitFor(() => expect(configPutBodies.length).toBe(1))
+    expect(lastPatch()[0]!.apiKey).toBe('sk-for-new-endpoint')
   })
 
   test('typing a new key sends that key, not the mask', async () => {

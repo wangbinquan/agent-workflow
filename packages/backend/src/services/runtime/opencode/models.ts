@@ -16,6 +16,7 @@ import { listOpencodeModels, opencodeModelsCacheKey } from '@/util/opencode-mode
 import { loadConfig } from '@/config'
 import { Paths } from '@/util/paths'
 import { buildEnumerationProviderSection, customProvidersProjection } from './customProvider'
+import type { IdentityJson } from './executionIdentity'
 import { withRuntimeOpencodeSnapshot } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
 
@@ -63,14 +64,22 @@ export async function listOpencodeModelsHermetic(
     // credential present, so the section injected here carries display names
     // but never a key — the enumeration surface stays credential-free.
     const cfg = (opts.loadCustomProviderConfig ?? (() => loadConfig(Paths.config)))()
-    const providerSection = buildEnumerationProviderSection(cfg)
+    // The catalog probe supplies its own single-entry section and must not be
+    // answered from (or written into) the configured-gateway cache slot.
+    const probing = opts.injectedProviderSection !== undefined
+    const providerSection = probing
+      ? (opts.injectedProviderSection as Record<string, IdentityJson>)
+      : buildEnumerationProviderSection(cfg)
     const hasCustomProviders = Object.keys(providerSection).length > 0
     const sourceBefore = await scanOpencodeProjectSurface(cwd)
     const result = await listOpencodeModels(snapshot, {
       refresh,
       // The projection joins the key so an edit to any gateway invalidates the
       // cached list; a key rotation deliberately leaves it unchanged.
-      cacheKey: opencodeModelsCacheKey(binary, customProvidersProjection(cfg)),
+      cacheKey: opencodeModelsCacheKey(
+        binary,
+        probing ? `probe:${JSON.stringify(providerSection)}` : customProvidersProjection(cfg),
+      ),
       cwd,
       env: {
         ...(hasCustomProviders

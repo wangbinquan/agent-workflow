@@ -5823,7 +5823,7 @@ export const zhCN: Resources = {
         id: 'ID 只能用小写字母、数字与 . _ -，且以字母或数字开头。',
         idReserved: '该 ID 属于 OpenCode 内置目录 provider，占用它会改写内置 provider 的端点。',
         idDuplicate: '已存在同名 provider ID。',
-        baseURL: '请填写 http(s) 绝对地址，且不能包含 ${} 变量。',
+        baseURL: '请填写 http(s) 绝对地址，且不能包含变量占位符。',
         models: '至少填写一个模型 id。',
         apiKeyRequired: '新建或更名 provider 必须填写 API 密钥。',
       },
@@ -9394,7 +9394,7 @@ export const zhCN: Resources = {
     'config-custom-provider-name-invalid': '显示名不合法。',
     'config-custom-provider-npm-unsupported': 'v1 仅支持 OpenAI 兼容实现。',
     'config-custom-provider-baseurl-invalid':
-      '接口地址必须是 http(s) 绝对地址，且不能包含 ${} 变量。',
+      '接口地址必须是 http(s) 绝对地址，且不能包含变量占位符。',
     'config-custom-provider-apikey-invalid': 'API 密钥不合法。',
     'config-custom-provider-apikey-required':
       '新建 provider、更名或更换接口地址时必须重新填写 API 密钥。',

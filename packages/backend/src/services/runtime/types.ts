@@ -272,6 +272,12 @@ export interface ListModelsOpts {
    * Production reads the real config file.
    */
   loadCustomProviderConfig?: () => { customProviders?: unknown }
+  /**
+   * RFC-255 catalog probe: enumerate with THIS provider section instead of the
+   * configured gateways, and skip the cache. Used to detect an id that would
+   * merge into a built-in catalog provider.
+   */
+  injectedProviderSection?: Record<string, unknown>
   /** RFC-224 diagnostic subprocess environment (OpenCode only). */
   env?: Record<string, string>
   /** RFC-224 private, source-guarded diagnostic working directory. */

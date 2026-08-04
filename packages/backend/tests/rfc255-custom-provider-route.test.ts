@@ -24,6 +24,7 @@ import {
   CUSTOM_PROVIDER_NPM,
   DEFAULT_CONFIG,
   type Config,
+  type CustomProviderEntryWire,
 } from '@agent-workflow/shared'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -45,8 +46,16 @@ const entry = {
   enabled: true,
 }
 
-function storedConfig(): Config {
-  return JSON.parse(readFileSync(configPath, 'utf-8')) as Config
+// The stored shape is validated by the save gate, not by the config schema
+// (which keeps entries as `unknown` so one bad row cannot brick the daemon).
+function storedConfig(): { customProviders: CustomProviderEntryWire[] } {
+  return JSON.parse(readFileSync(configPath, 'utf-8')) as {
+    customProviders: CustomProviderEntryWire[]
+  }
+}
+
+function respondedProviders(body: unknown): CustomProviderEntryWire[] {
+  return (body as { customProviders: CustomProviderEntryWire[] }).customProviders
 }
 
 async function put(body: unknown): Promise<Response> {
@@ -102,30 +111,40 @@ describe('RFC-255 PUT /api/config', () => {
     const getRes = await app.request('/api/config', {
       headers: { authorization: `Bearer ${DAEMON_TOKEN}` },
     })
-    const getBody = (await getRes.json()) as Config
-    expect(getBody.customProviders[0]?.apiKey).toBe(CUSTOM_PROVIDER_API_KEY_MASK)
+    expect(respondedProviders(await getRes.json())[0]?.apiKey).toBe(CUSTOM_PROVIDER_API_KEY_MASK)
 
     const putRes = await put({ logLevel: 'info' })
-    const putBody = (await putRes.json()) as Config
-    expect(putBody.customProviders[0]?.apiKey).toBe(CUSTOM_PROVIDER_API_KEY_MASK)
+    const putBody = await putRes.json()
+    expect(respondedProviders(putBody)[0]?.apiKey).toBe(CUSTOM_PROVIDER_API_KEY_MASK)
     expect(JSON.stringify(putBody)).not.toContain(PLAINTEXT)
     expect(JSON.stringify(putBody)).not.toContain(entry.apiKey)
   })
 
-  test('a masked round trip edits the endpoint and keeps the credential', async () => {
+  test('a masked round trip edits metadata and keeps the credential', async () => {
+    const res = await put({
+      customProviders: [
+        { ...entry, apiKey: CUSTOM_PROVIDER_API_KEY_MASK, name: 'Renamed Gateway' },
+      ],
+    })
+    expect(res.status).toBe(200)
+    const saved = storedConfig().customProviders[0]!
+    expect(saved.name).toBe('Renamed Gateway')
+    expect(secretBox.unseal(saved.apiKey!)).toBe(PLAINTEXT)
+  })
+
+  test('moving the endpoint with only the mask is refused', async () => {
     const res = await put({
       customProviders: [
         {
           ...entry,
           apiKey: CUSTOM_PROVIDER_API_KEY_MASK,
-          baseURL: 'https://gw.internal.example/v2',
+          baseURL: 'https://attacker.example/v1',
         },
       ],
     })
-    expect(res.status).toBe(200)
-    const saved = storedConfig().customProviders[0]!
-    expect(saved.baseURL).toBe('https://gw.internal.example/v2')
-    expect(secretBox.unseal(saved.apiKey!)).toBe(PLAINTEXT)
+    expect(res.status).toBe(422)
+    expect(JSON.stringify(await res.json())).toContain('config-custom-provider-apikey-required')
+    expect(storedConfig().customProviders[0]?.baseURL).toBe(entry.baseURL)
   })
 
   test('a new key is sealed before it reaches disk', async () => {

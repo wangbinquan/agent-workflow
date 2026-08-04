@@ -223,6 +223,11 @@ const EXACT_ALLOWANCE_ROWS = [
   "frontend-name-key\u001fpackages/frontend/src/lib/skill-zip-import.ts\u001fbuildDecisionMap\u001fBinaryExpression:9efd51bc06107824e2eb\u001f1\u001fimport-name-boundary\u001fout[row.candidate.name] = { action: 'rename', newName: d.newName }",
   "id-name-fallback\u001fpackages/backend/src/services/workflow.validator.ts\u001fcompareResourceIdentity\u001fBinaryExpression:7b849ec1de6e0f779e2e\u001f1\u001fdeterministic-order\u001fleft.name.localeCompare(right.name) || (left.id ?? '').localeCompare(right.id ?? '')",
   'id-name-fallback\u001fpackages/frontend/src/components/TaskSubjectLink.tsx\u001fTaskSubjectLink\u001fBinaryExpression:c120a3667d253ef16d68\u001f1\u001fdisplay-fallback\u001ftask.workflowName ?? task.workflowId',
+  // RFC-255: a custom provider's display name is optional metadata; the id is
+  // what every other surface (model strings, admission, identity digest) uses.
+  // Rendering the id when no name was given is display-only — the row is keyed
+  // by id, and nothing here resolves a resource by name.
+  'id-name-fallback\u001fpackages/frontend/src/components/CustomProviderCard.tsx\u001fCustomProviderCard\u001fBinaryExpression:082844845531ae8a8683\u001f1\u001fdisplay-fallback\u001fentry.name ?? entry.id',
   'id-name-fallback\u001fpackages/frontend/src/routes/clarify.tsx\u001fClarifyListPage\u001fConditionalExpression:316e1cfa80f0184b921b\u001f2\u001fdisplay-fallback\u001fitems[0]?.taskName && items[0].taskName.length > 0 ? items[0].taskName : taskId',
   'id-name-fallback\u001fpackages/frontend/src/routes/tasks.new.tsx\u001fTaskWizardPage\u001fBinaryExpression:1f916ee84daf6fb858bd\u001f1\u001fdisplay-fallback\u001fagentOptions.find((option) => option.value === agentId)?.label ?? agentName',
   'id-name-fallback\u001fpackages/frontend/src/routes/tasks.new.tsx\u001fTaskWizardPage\u001fBinaryExpression:319d4111d8d2188ff79e\u001f1\u001fdisplay-fallback\u001fworkgroupOptions.find((option) => option.value === workgroupId)?.label ?? workgroupName',
@@ -352,7 +357,9 @@ describe('RFC-223 T15 structural identity guard', () => {
     // RFC-253: 136 → 137. The script envelope writes its parsed ports into a
     // record keyed by PORT name — a protocol identifier with no id form, so it
     // is reviewed-and-allowed above rather than migrated to an id.
-    expect(findings.length).toBe(137)
+    // RFC-255: 137 → 138. The custom-provider card renders a gateway's optional
+    // display name and falls back to its id — display-only, reviewed above.
+    expect(findings.length).toBe(138)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

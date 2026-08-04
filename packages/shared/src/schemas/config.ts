@@ -145,7 +145,15 @@ export const ConfigSchema = z.object({
    * secretBox-sealed on disk and masked on every outbound path; the runtime
    * planners inject only the SELECTED entry, without the key or display name.
    */
-  customProviders: z.array(CustomProviderEntrySchema).default([]),
+  //
+  // Typed as unknown[] on PURPOSE. A strict element schema here would make one
+  // hand-edited entry fail `ConfigSchema.safeParse`, and `readConfig` throws on
+  // that — taking the whole daemon down over a single malformed provider. The
+  // strict shape is enforced where it can fail safely instead: the save gate
+  // rejects a bad submission, and `isUsableEntry` treats a bad stored row as
+  // absent. This is also the config's first array-of-objects key, so a future
+  // required field would otherwise become an unbootable-config migration.
+  customProviders: z.array(z.unknown()).default([]),
 
   // --- RFC-108 task auto-check & recovery (all default-safe; auto-execution OFF) ---
   /** T18: auto-resume daemon-restart-interrupted tasks at boot. Default OFF. */

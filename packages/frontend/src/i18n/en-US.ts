@@ -1101,7 +1101,7 @@ export const enUS: Resources = {
         idReserved:
           'That id belongs to a built-in OpenCode catalog provider; claiming it would re-point that provider.',
         idDuplicate: 'A provider with this id already exists.',
-        baseURL: 'Enter an absolute http(s) URL with no ${} placeholder.',
+        baseURL: 'Enter an absolute http(s) URL with no variable placeholder.',
         models: 'List at least one model id.',
         apiKeyRequired: 'A new or renamed provider must carry its API key.',
       },
@@ -4922,6 +4922,27 @@ export const enUS: Resources = {
       '$t(tasks.failure.execution-identity-custom-provider-disabled)',
     'execution-identity-custom-provider-disabled__hint':
       '$t(tasks.failure.execution-identity-custom-provider-disabled__hint)',
+    'config-custom-provider-malformed': 'The custom provider entry is malformed.',
+    'config-custom-provider-id-invalid':
+      'Provider ids use lowercase letters, digits and . _ -, starting with a letter or digit.',
+    'config-custom-provider-id-reserved':
+      'That id belongs to a built-in OpenCode catalog provider; claiming it would re-point that provider.',
+    'config-custom-provider-id-catalog':
+      'The runtime probe reports that id as a built-in catalog provider; claiming it would re-point that provider.',
+    'config-custom-provider-id-duplicate': 'A provider with this id already exists.',
+    'config-custom-provider-name-invalid': 'The display name is invalid.',
+    'config-custom-provider-npm-unsupported':
+      'Only the OpenAI-compatible implementation is supported in v1.',
+    'config-custom-provider-baseurl-invalid':
+      'The endpoint must be an absolute http(s) URL with no variable placeholder.',
+    'config-custom-provider-apikey-invalid': 'The API key is invalid.',
+    'config-custom-provider-apikey-required':
+      'Creating a provider, renaming it or changing its endpoint requires re-entering the API key.',
+    'config-custom-provider-models-empty': 'List at least one model id.',
+    'config-custom-provider-model-invalid': 'A model id is invalid.',
+    'config-custom-provider-model-duplicate': 'Duplicate model id.',
+    'config-custom-provider-unavailable':
+      'The daemon secret key is missing, so provider credentials cannot be stored safely.',
     'invalid-json': 'The request body is not valid JSON.',
     'invalid-body': 'Invalid request body.',
     'import-ref-unresolved': 'An imported resource reference is not available.',

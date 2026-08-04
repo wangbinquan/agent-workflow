@@ -194,6 +194,16 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         // fresh plaintext and seal it a second time, so an unrelated settings
         // change (a log level, a theme) would silently corrupt every gateway
         // credential on the box.
+        if (body.customProviders !== undefined && deps.secretBox === undefined) {
+          // Without the seal there is no way to store a credential safely, and
+          // writing the submission through would put a plaintext key on disk
+          // with none of the id/mask checks applied. Refuse instead.
+          throw new ValidationError(
+            'config-custom-provider-unavailable',
+            'custom providers require the daemon secret key',
+            { field: 'customProviders', permanent: true },
+          )
+        }
         const providerPatch =
           deps.secretBox === undefined || body.customProviders === undefined
             ? {}
