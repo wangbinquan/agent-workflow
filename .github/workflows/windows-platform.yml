@@ -42,14 +42,20 @@ on:
       - '.github/workflows/windows-platform.yml'
   pull_request:
     branches: [main]
+    # Kept IDENTICAL to the push list above. They had drifted (windowsJobObject,
+    # git, gitHardening were watched on push only), and the existing guard only
+    # checks push ⊇ pull_request, so it structurally cannot see the reverse.
     paths:
       - 'packages/backend/src/util/platformExec.ts'
       - 'packages/backend/src/util/fileTrust.ts'
       - 'packages/backend/src/util/process.ts'
+      - 'packages/backend/src/util/git.ts'
+      - 'packages/backend/src/util/gitHardening.ts'
       - 'packages/shared/src/platformEnv.ts'
       - 'packages/backend/src/services/scriptRun.ts'
       - 'packages/backend/tests/rfc254-*.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
+      - 'packages/backend/src/util/windowsJobObject.ts'
       - 'e2e/fixtures/stub/**'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'

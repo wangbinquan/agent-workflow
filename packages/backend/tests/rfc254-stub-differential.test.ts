@@ -43,7 +43,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const originalStub = (name: string): string => join(REPO_ROOT, 'e2e', 'fixtures', name)
@@ -55,6 +55,14 @@ interface Capture {
   exitCode: number | null
   promptOut: string | null
   inventory: string | null
+  /**
+   * Wall time. NOT compared against the golden — it is machine-dependent — but
+   * without it the sleeping cases assert nothing: deleting `await Bun.sleep`
+   * from `mode-workflow-matrix` left the suite at 132 pass while the run got
+   * 20 seconds shorter, even though that case's comment claimed it was the one
+   * thing proving the stub waits.
+   */
+  durationMs: number
 }
 
 async function capture(
@@ -63,6 +71,7 @@ async function capture(
   env: Record<string, string>,
   cwd?: string,
 ): Promise<Capture> {
+  const startedAt = performance.now()
   const dir = mkdtempSync(join(tmpdir(), 'aw-stub-diff-'))
   const promptOut = join(dir, 'prompt.txt')
   const inventoryOut = join(dir, 'inventory.json')
@@ -88,6 +97,7 @@ async function capture(
       stdout,
       stderr,
       exitCode,
+      durationMs: performance.now() - startedAt,
       promptOut: existsSync(promptOut) ? readFileSync(promptOut, 'utf8') : null,
       inventory: existsSync(inventoryOut) ? readFileSync(inventoryOut, 'utf8') : null,
     }
@@ -109,8 +119,15 @@ interface DiffCase {
   env?: Record<string, string>
   /** Several invocations sharing one state directory, in order. */
   steps?: Step[]
-  /** Files, relative to the run cwd, whose presence must match on both sides. */
+  /** Files to create in the run cwd BEFORE the stub runs, as `path -> contents`. */
+  preCreate?: Record<string, string>
+  /** Files, relative to the run cwd, whose CONTENTS must match on both sides. */
   sideEffects?: string[]
+  /**
+   * Lower bound on this case's own wall time, in ms. Only for cases whose whole
+   * point is that the stub waits; deliberately not part of the golden.
+   */
+  minDurationMs?: number
   /**
    * Record this case against a DIFFERENT original than the mode's own.
    * `intent-workflow-opencode.sh` was two lines — export a variant, exec the
@@ -118,6 +135,12 @@ interface DiffCase {
    * lets the launcher be deleted rather than ported.
    */
   originalScript?: string
+  /**
+   * Replay the ported side with `STUB_INTENT_VARIANT` set while RECORDING the
+   * original without it. Only for the launcher case, whose entire content was
+   * exporting that variable.
+   */
+  comparesToVariant?: string
 }
 
 interface ModeSpec {
@@ -143,7 +166,7 @@ interface SideResult {
   state: Record<string, string>
   /** Env var name → log contents (null when the stub never wrote it). */
   logs: Record<string, string | null>
-  sideEffects: Record<string, boolean>
+  sideEffects: Record<string, string | null>
 }
 
 /**
@@ -194,6 +217,11 @@ async function runSide(
   const root = mkdtempSync(join(tmpdir(), 'aw-stub-side-'))
   const cwd = join(root, 'cwd')
   mkdirSync(cwd)
+  for (const [path, contents] of Object.entries(testCase.preCreate ?? {})) {
+    const absolute = join(cwd, path)
+    mkdirSync(dirname(absolute), { recursive: true })
+    writeFileSync(absolute, contents)
+  }
   // Each side runs under its own temp root, so any path a stub records differs
   // between them BY CONSTRUCTION. Mask this side's own root — and its realpath,
   // because macOS resolves /var to /private/var and `process.cwd()` returns the
@@ -211,7 +239,9 @@ async function runSide(
   const redact = (text: string): string => {
     let out = text
     for (const [path, token] of masks) out = out.replaceAll(path, token)
-    return maskByTempName(out)
+    // The commit stub stamps its own pid into the file it writes; that is the
+    // one genuinely per-run value in any compared content.
+    return maskByTempName(out).replaceAll(/e2e change \d+/g, 'e2e change <PID>')
   }
   const sharedEnv: Record<string, string> = { ...modeEnv }
   // Deliberately NOT pre-created: the stubs `mkdir -p` their own state, and a
@@ -235,8 +265,14 @@ async function runSide(
       const path = sharedEnv[name] ?? ''
       logs[name] = existsSync(path) ? redact(readFileSync(path, 'utf8')) : null
     }
-    const sideEffects: Record<string, boolean> = {}
-    for (const file of testCase.sideEffects ?? []) sideEffects[file] = existsSync(join(cwd, file))
+    // CONTENTS, not presence. Comparing booleans let every generated file's
+    // bytes change without a single case going red — and `workflow-matrix.spec`
+    // reads some of those files back out through `file`/`files` ports.
+    const sideEffects: Record<string, string | null> = {}
+    for (const file of testCase.sideEffects ?? []) {
+      const path = join(cwd, file)
+      sideEffects[file] = existsSync(path) ? redact(readFileSync(path, 'utf8')) : null
+    }
     return { steps, state, logs, sideEffects }
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -297,7 +333,12 @@ function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
         expect(expectedRun, `golden entry for "${testCase.name}"`).toBeDefined()
         const ported = await runSide(
           [process.execPath, 'run', PORTED_STUB],
-          { AW_STUB_MODE: spec.mode },
+          {
+            AW_STUB_MODE: spec.mode,
+            ...(testCase.comparesToVariant === undefined
+              ? {}
+              : { STUB_INTENT_VARIANT: testCase.comparesToVariant }),
+          },
           spec,
           testCase,
         )
@@ -311,13 +352,10 @@ function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
           expect(norm(actual?.stdout ?? ''), `${at} stdout`).toBe(norm(expected.stdout))
           expect(actual?.stderr, `${at} stderr`).toBe(expected.stderr)
           expect(actual?.promptOut, `${at} AW_STUB_PROMPT_OUT`).toBe(expected.promptOut)
-          if (expected.inventory === null) {
-            expect(actual?.inventory, `${at} inventory not written`).toBeNull()
-          } else {
-            expect(JSON.parse(actual?.inventory ?? 'null'), `${at} inventory`).toEqual(
-              JSON.parse(expected.inventory),
-            )
-          }
+          // BYTE-for-byte. Parsing both sides first made the one case named
+          // "inventory drop is compact, not pretty" structurally unable to see
+          // prettiness — the only property it is named for.
+          expect(actual?.inventory, `${at} inventory`).toBe(expected.inventory)
         }
         // The state files ARE the round counter: if the port names or fills
         // them differently then "round 2" means something different, and the
@@ -325,8 +363,21 @@ function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
         expect(ported.state, 'state files').toEqual(expectedRun!.state)
         expect(ported.logs, 'log files').toEqual(expectedRun!.logs)
         expect(ported.sideEffects, 'cwd side effects').toEqual(expectedRun!.sideEffects)
+        if (testCase.minDurationMs !== undefined) {
+          const slowest = Math.max(...ported.steps.map((step) => step.durationMs))
+          expect(slowest, 'wall time').toBeGreaterThan(testCase.minDurationMs)
+        }
       }, 60_000)
     }
+
+    test('the recording covers exactly these cases — no orphans, no gaps', () => {
+      // A missing golden ENTRY fails its own case, but a golden entry with no
+      // case is never read: deleting a `DiffCase` silently dropped its coverage
+      // and left an orphaned recording behind, which is the same "green over
+      // nothing" this whole file is built to refuse.
+      if (RECORDING) return
+      expect(Object.keys(readGolden(spec.mode)).sort()).toEqual(cases.map((c) => c.name).sort())
+    })
   })
 }
 
@@ -368,6 +419,15 @@ differentialSuite({ mode: 'basic', script: 'stub-opencode.sh' }, [
   {
     name: 'workgroup batch without an explicit count defaults to 1',
     args: runArgs(`nonce="${NONCE}" <port name="wg_task_results">`),
+  },
+  {
+    // LAST `batch of N` wins, like the shell's greedy sed. Reachable: the
+    // assignments header renders one and a quoted failure line in the
+    // blackboard above it can carry another, so a retry turn has two.
+    name: 'two `batch of N` mentions: the LAST one wins',
+    args: runArgs(
+      `nonce="${NONCE}" batch of 3 task(s) for @x failed ... batch of 5 <port name="wg_task_results">`,
+    ),
   },
   {
     name: 'workgroup member (wg_result)',
@@ -412,10 +472,15 @@ differentialSuite({ mode: 'intent', script: 'stub-opencode-intent.sh' }, [
     env: { STUB_INTENT_VARIANT: 'workflow' },
   },
   {
-    name: 'the old intent-workflow launcher, reproduced by the same mode',
+    // Recorded against the LAUNCHER with no variable of its own — setting
+    // `STUB_INTENT_VARIANT` here would supply the only thing the launcher did,
+    // making the case a byte-identical duplicate of the one above. What this
+    // pins is that the variable was its ONLY content, i.e. that deleting the
+    // file lost nothing else.
+    name: 'the old intent-workflow launcher differs from bare intent only by its variable',
     args: runArgs(`nonce="${NONCE}" build me a workflow`),
-    env: { STUB_INTENT_VARIANT: 'workflow' },
     originalScript: 'intent-workflow-opencode.sh',
+    comparesToVariant: 'workflow',
   },
 ])
 
@@ -428,6 +493,16 @@ differentialSuite({ mode: 'slow', script: 'stub-opencode-slow.sh' }, [
     name: 'sub-second sleep is floored to zero (shell integer division)',
     args: runArgs(`nonce="${NONCE}" work`),
     env: { STUB_OPENCODE_SLEEP_MS: '500' },
+  },
+  {
+    // The branch every crash-recovery and lifecycle spec depends on: they drive
+    // 15000/20000 and SIGKILL the daemon mid-sleep. With only the 500 ms case
+    // above (which floors to zero) the whole `await Bun.sleep` line was dead as
+    // far as the recording was concerned — deleting it changed nothing.
+    name: 'a whole-second sleep actually sleeps',
+    args: runArgs(`nonce="${NONCE}" work`),
+    env: { STUB_OPENCODE_SLEEP_MS: '1000' },
+    minDurationMs: 900,
   },
   {
     name: 'no-envelope path',
@@ -547,6 +622,19 @@ differentialSuite(
         {
           args: runArgs(`nonce="${NONCE}" Audit two.ts and one.ts.`, 'auditor'),
           env: { CLARIFY_STUB_ASK_SHARDS: 'one.ts  two.ts' },
+        },
+      ],
+    },
+    {
+      // Non-empty but blank: the shell tested `[ -n "$ask_list" ]` BEFORE
+      // word-splitting, so it entered the branch with an empty loop and
+      // finalised. Testing the split list instead flips this to a clarify
+      // pause — a different envelope KIND, i.e. a different terminal state.
+      name: 'a whitespace-only ASK_SHARDS still suppresses the question',
+      steps: [
+        {
+          args: runArgs(`nonce="${NONCE}" Audit zzz.ts.`, 'auditor'),
+          env: { CLARIFY_STUB_ASK_SHARDS: '   ' },
         },
       ],
     },
@@ -704,6 +792,16 @@ differentialSuite(
       args: runArgs(matrixPrompt('MATRIX_UPLOAD_INPUT', 'matrix-uploads/one.md')),
     },
     {
+      // Both DISK checks precede both PROMPT checks. The distinguishing input
+      // needs one upload present and the other absent, with the prompt naming
+      // only the absent one: ordered → exit 11 "missing uploaded file two.md";
+      // interleaved → exit 10 "prompt missing content one.md". Those codes are
+      // the contract this mode's header calls out, so the swap is not cosmetic.
+      name: 'MATRIX_UPLOAD_INPUT reports the missing FILE before the missing prompt text',
+      preCreate: { 'matrix-uploads/one.md': '# one\n' },
+      args: runArgs(matrixPrompt('MATRIX_UPLOAD_INPUT', 'matrix-uploads/two.md')),
+    },
+    {
       name: 'MATRIX_OUTPUT_KINDS writes both generated files and emits every port kind',
       args: runArgs(matrixPrompt('MATRIX_OUTPUT_KINDS')),
       sideEffects: ['matrix-generated/kinds/one.md', 'matrix-generated/kinds/two.md'],
@@ -758,6 +856,15 @@ differentialSuite(
       name: 'an absent iteration marker reads as 0',
       args: runArgs(matrixPrompt('MATRIX_NESTED_MUTATE')),
       sideEffects: ['matrix-generated/nested/iter-0.txt'],
+    },
+    {
+      // The iteration is also a FILENAME, so it keeps the spelling it was
+      // written in: `007` named `iter-007.txt` in the shell, and a `Number()`
+      // round-trip would silently rename it to `iter-7.txt` — a path
+      // `workflow-matrix.spec.ts` asserts on.
+      name: 'a zero-padded iteration keeps its spelling in the filename',
+      args: runArgs(matrixPrompt('MATRIX_NESTED_MUTATE', 'iteration=007')),
+      sideEffects: ['matrix-generated/nested/iter-007.txt', 'matrix-generated/nested/iter-7.txt'],
     },
     {
       name: 'the LAST iteration= on the first matching line wins',
@@ -962,6 +1069,7 @@ differentialSuite(
       // would turn both of them green against nothing.
       name: 'MATRIX_RUNTIME timeout sleeps ~10s before emitting',
       args: runArgs(matrixPrompt('MATRIX_RUNTIME', awInput('mode', 'timeout'))),
+      minDurationMs: 9_000,
     },
     {
       name: 'MATRIX_RUNTIME cancel takes the same sleeping branch',
@@ -986,6 +1094,24 @@ differentialSuite(
     {
       name: 'an unknown agent is rejected rather than answered',
       args: runArgs(`nonce="${NONCE}" go`, 'not-a-business-agent'),
+    },
+    {
+      // Until this case existed, EVERY recorded step for this mode had an empty
+      // stdout and a non-zero exit — the goldens covered the CLI preamble and
+      // not one emitting branch, so `normalizeStdout: maskTimestamps` was dead
+      // too (no step ever produced a `timestamp`).
+      name: 'the fix engineer reaches its emitting branch and writes its fixtures',
+      args: runArgs(
+        [
+          `nonce="${NONCE}"`,
+          'BUSINESS_FIX_IMPLEMENT',
+          'round cents correctly and reject invalid subtotals',
+          'NO_PUSH',
+          'iteration=0',
+        ].join('\n'),
+        'business-fix-engineer',
+      ),
+      sideEffects: ['src/checkout.ts', 'tests/checkout.contract.md'],
     },
     {
       name: 'every prompt is appended to the shared prompts.jsonl',
@@ -1014,7 +1140,28 @@ differentialSuite(
     { name: 'unsupported mode', args: ['nope'] },
     { name: 'missing --agent', args: ['run', '--', 'x'] },
     { name: 'missing nonce', args: runArgs('no marker', 'anyone') },
-    { name: 'an unrecognised turn exits 14', args: runArgs(`nonce="${NONCE}" go`, 'anyone') },
+    {
+      // Named for what it ACTUALLY records: this dies at the unexpected-agent
+      // guard with exit 11, 130 lines before the exit-14 line the old name
+      // claimed. Renaming a case that never reached the branch it was named for
+      // is the point — a wrong name is a coverage claim nobody re-checks.
+      name: 'an unexpected agent exits 11',
+      args: runArgs(`nonce="${NONCE}" go`, 'anyone'),
+    },
+    {
+      name: 'the planner reaches its emitting branch',
+      args: runArgs(
+        [
+          `nonce="${NONCE}"`,
+          'BUSINESS_MIGRATION_CHARTER',
+          'BUSINESS_MIGRATION_GOAL',
+          '125000-record',
+          'exact record-count match',
+          '## Initial planning turn',
+        ].join('\n'),
+        'business-migration-planner',
+      ),
+    },
   ],
 )
 
@@ -1032,8 +1179,17 @@ differentialSuite(
     { name: 'missing nonce', args: runArgs('no marker', 'showcase-wg-lead') },
     { name: 'an unexpected agent exits 15', args: runArgs(`nonce="${NONCE}" go`, 'nobody') },
     {
-      name: 'the researcher turn',
+      // Was named 'the researcher turn' but recorded exit 10 at a missing
+      // `Title: research-release` — it never got near the researcher's emit.
+      name: 'the researcher turn without its charter exits 10',
       args: runArgs(`nonce="${NONCE}" <port name="wg_result"> go`, 'showcase-wg-researcher'),
+    },
+    {
+      name: 'the researcher reaches its emitting branch',
+      args: runArgs(
+        `nonce="${NONCE}"\nWG_MATRIX_CHARTER\nTitle: research-release`,
+        'showcase-wg-researcher',
+      ),
     },
   ],
 )

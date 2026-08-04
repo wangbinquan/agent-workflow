@@ -49,8 +49,23 @@
 // `isProcessTreeAlive` therefore answers `null` ("cannot tell"), never `false`.
 //
 // The x64 Bun build does ship dlopen, which is why the release target
-// (windows x86_64, RFC-254 D6) keeps the strong guarantee. Anyone extending
+// (windows x86_64, RFC-254 D6) CAN keep the strong guarantee. Anyone extending
 // support to ARM64 has to close this first.
+//
+// ⚠️ NOT WIRED YET (2026-08-04, found by the implementation gate)
+// ---------------------------------------------------------------
+// Nothing in production calls `adoptSpawnedProcessTree` — `grep` it and the
+// only hit outside `util/process.ts` is its own test. So on a real Windows
+// daemon today `ownedTrees` is permanently empty, `killProcessTree` always
+// takes the enumerative `taskkill /T /F` branch, and `isProcessTreeAlive`
+// always answers `null`.
+//
+// That state is SAFE but DEGRADED, and it is safe for the reason P0-D asked
+// for: `null` means "cannot tell", and a caller deciding whether to reclaim a
+// runtime store must treat that as "not safe to reclaim". What is missing is
+// the strong guarantee, not the protection against the corruption. Do not read
+// the paragraphs above as saying the guarantee is in force — it is available,
+// and the spawn sites have to opt in. Tracked in `docs/audit-backlog.md`.
 
 // `bun:ffi` itself is available on every platform Bun runs on — only the
 // `dlopen('kernel32.dll')` call is Windows-specific, and that is guarded — so a
@@ -60,11 +75,18 @@ import { dlopen, ptr } from 'bun:ffi'
 /** Ownership handle for one spawned tree. Opaque outside this module. */
 export interface ProcessTreeOwnership {
   readonly kind: 'windows-job-object' | 'posix-process-group' | 'none'
-  /** Terminate every process in the tree. Idempotent. */
-  terminate: () => void
+  /** Terminate every process in the tree. Idempotent. Returns false when the
+   * syscall itself failed — the caller must not then claim the tree is gone. */
+  terminate: () => boolean
   /** Live process count, or null when this platform cannot answer. */
   liveCount: () => number | null
-  /** Release the handle WITHOUT killing (used when ownership transfers). */
+  /**
+   * Stop tracking AND stop the tree.
+   *
+   * NOT "release without killing": this is the only handle, and closing the
+   * last handle of a KILL_ON_JOB_CLOSE job terminates every member. A real
+   * transfer of ownership would have to duplicate the handle first.
+   */
   dispose: () => void
 }
 
@@ -242,13 +264,20 @@ export function adoptProcessTree(pid: number): ProcessTreeOwnership | null {
     return {
       kind: 'windows-job-object',
       terminate: () => {
-        if (closed) return
+        if (closed) return true
+        let ok = false
         try {
-          k32.symbols.TerminateJobObject(handle, 1)
+          ok = k32.symbols.TerminateJobObject(handle, 1) !== 0
         } finally {
           closed = true
           k32.symbols.CloseHandle(handle)
         }
+        // The return value is the whole point: a caller that treats a failed
+        // syscall as "definitely dead" is making exactly the claim this module
+        // exists to make trustworthy. (Closing the last handle of a
+        // KILL_ON_JOB_CLOSE job very likely kills the tree anyway — but
+        // "likely" is not the answer being asked for.)
+        return ok
       },
       liveCount: () => {
         if (closed) return 0

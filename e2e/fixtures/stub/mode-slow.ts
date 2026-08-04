@@ -20,23 +20,18 @@ import {
 
 const NAME = 'stub-opencode-slow'
 
-const INVENTORY = {
-  schemaVersion: 1,
-  capturedAt: 1700000000000,
-  agents: [
-    {
-      name: 'e2e-stub-coder',
-      mode: 'primary',
-      modelProviderId: 'anthropic',
-      modelId: 'claude-opus-4-7',
-      readonly: true,
-      source: 'inline',
-    },
+/** Byte-identical to the heredoc the shell stub wrote. */
+const INVENTORY = `{
+  "schemaVersion": 1,
+  "capturedAt": 1700000000000,
+  "agents": [
+    {"name": "e2e-stub-coder", "mode": "primary", "modelProviderId": "anthropic", "modelId": "claude-opus-4-7", "readonly": true, "source": "inline"}
   ],
-  skills: [],
-  mcps: [],
-  plugins: [],
+  "skills": [],
+  "mcps": [],
+  "plugins": []
 }
+`
 
 export async function run(argv: readonly string[]): Promise<void> {
   const call = parseInvocation(argv, NAME)

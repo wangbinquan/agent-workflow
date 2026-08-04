@@ -48,9 +48,15 @@ export function run(argv: readonly string[]): void {
   // env, so the shard is recovered from the prompt body instead: the fan-out
   // spec's template renders `Audit <shard_key>.`, and a shard named in
   // CLARIFY_STUB_ASK_SHARDS whose text appears there is the one asking.
-  const askList = (process.env.CLARIFY_STUB_ASK_SHARDS ?? '').split(/\s+/).filter((s) => s !== '')
+  // The shell tested `[ -n "$ask_list" ]` BEFORE word-splitting, so a value of
+  // "   " entered the branch with an empty loop and left should_ask=0. Testing
+  // the split list instead inverts the outcome for that input — and it is an
+  // inversion between two different ENVELOPE KINDS (a clarify pause versus a
+  // final output), i.e. two different terminal task states.
+  const askRaw = process.env.CLARIFY_STUB_ASK_SHARDS ?? ''
+  const askList = askRaw.split(/\s+/).filter((s) => s !== '')
   let shouldAsk = true
-  if (askList.length > 0) {
+  if (askRaw.length > 0) {
     shouldAsk = false
     const matched = askList.find((candidate) => call.prompt.includes(`Audit ${candidate}`))
     if (matched !== undefined) {

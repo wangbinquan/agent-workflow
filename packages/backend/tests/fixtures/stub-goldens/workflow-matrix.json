@@ -5,6 +5,7 @@
         "stdout": "stub-opencode workflow-matrix\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 475.8949169999996,
         "promptOut": null,
         "inventory": null
       }
@@ -19,6 +20,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workflow-matrix: unsupported mode: nope\n",
         "exitCode": 2,
+        "durationMs": 4.242957999999817,
         "promptOut": null,
         "inventory": null
       }
@@ -33,6 +35,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workflow-matrix: prompt is missing the RFC-200 envelope nonce\n",
         "exitCode": 3,
+        "durationMs": 8.29345900000044,
         "promptOut": "no marker",
         "inventory": null
       }
@@ -47,6 +50,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workflow-matrix: no MATRIX_* marker in prompt\n",
         "exitCode": 4,
+        "durationMs": 12.200875000000451,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" plain prompt",
         "inventory": null
       }
@@ -61,6 +65,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"part\\\">alpha-fragment</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.188457999999628,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SOURCE_A",
         "inventory": "{\"schemaVersion\":1,\"capturedAt\":1700000000000,\"agents\":[],\"skills\":[],\"mcps\":[],\"plugins\":[]}\n"
       }
@@ -75,6 +80,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"part\\\">alpha-fragment</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.598541999999725,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SOURCE_A",
         "inventory": null
       }
@@ -89,6 +95,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"part\\\">beta-fragment</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.842458000000079,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SOURCE_B",
         "inventory": null
       }
@@ -103,6 +110,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">merged-alpha-beta</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.9540420000003,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MERGE",
         "inventory": null
       }
@@ -117,6 +125,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">git-summary-complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.475209000000177,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_GIT_SUMMARY",
         "inventory": null
       }
@@ -131,6 +140,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">observed-without-changes</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.372125000000779,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_GIT_NOOP",
         "inventory": null
       }
@@ -145,6 +155,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"report\\\">aggregated-fanout-report</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.721040999999786,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_AGG",
         "inventory": null
       }
@@ -159,6 +170,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"design\\\">cross-design-v1</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.482334000000264,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_CROSS_DESIGN",
         "inventory": null
       }
@@ -173,6 +185,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">still-pending</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.332250000000386,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EXHAUST",
         "inventory": null
       }
@@ -187,6 +200,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"report\\\">prompt-input-context-ok</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.165957999999591,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_PROMPT_INPUTS\nliteral {{auto_text}}\nthorough\n## auto_text\nauto-appended\n## files\ndocs/a.md\ndocs/b.md\n## tags\n[\"api\",\"docs\"]\n## branch\n{\"kind\":\"branch\",\"ref\":\"main\"}\nnode=prompt_auditor iteration=0 repo_count=1",
         "inventory": null
       }
@@ -201,6 +215,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workflow-matrix: prompt missing expected content: thorough\n",
         "exitCode": 10,
+        "durationMs": 11.268624999999702,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_PROMPT_INPUTS\nliteral {{auto_text}}",
         "inventory": null
       }
@@ -215,7 +230,23 @@
         "stdout": "",
         "stderr": "missing uploaded file matrix-uploads/one.md\n",
         "exitCode": 11,
+        "durationMs": 10.957875000000058,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_UPLOAD_INPUT\nmatrix-uploads/one.md",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "MATRIX_UPLOAD_INPUT reports the missing FILE before the missing prompt text": {
+    "steps": [
+      {
+        "stdout": "",
+        "stderr": "missing uploaded file matrix-uploads/two.md\n",
+        "exitCode": 11,
+        "durationMs": 12.135291999999936,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_UPLOAD_INPUT\nmatrix-uploads/two.md",
         "inventory": null
       }
     ],
@@ -229,6 +260,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"text\\\">plain-value</port><port name=\\\"markdown\\\"># Inline document</port><port name=\\\"file\\\">matrix-generated/kinds/one.md</port><port name=\\\"names\\\">alpha\\nbeta</port><port name=\\\"documents\\\"># First document\\n<!-- @@aw-doc-boundary@@ -->\\n# Second document</port><port name=\\\"files\\\">matrix-generated/kinds/one.md\\nmatrix-generated/kinds/two.md</port><port name=\\\"done_signal\\\">ignored-signal-body</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 13.406041999999616,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_OUTPUT_KINDS",
         "inventory": null
       }
@@ -236,8 +268,8 @@
     "state": {},
     "logs": {},
     "sideEffects": {
-      "matrix-generated/kinds/one.md": true,
-      "matrix-generated/kinds/two.md": true
+      "matrix-generated/kinds/one.md": "# One file\n",
+      "matrix-generated/kinds/two.md": "# Two file\n"
     }
   },
   "MATRIX_GIT_MUTATE dirties the worktree": {
@@ -246,6 +278,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">git-mutation-complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 13.103042000000642,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_GIT_MUTATE",
         "inventory": null
       }
@@ -253,8 +286,8 @@
     "state": {},
     "logs": {},
     "sideEffects": {
-      "matrix-generated/source.txt": true,
-      "matrix-generated/docs/report.md": true
+      "matrix-generated/source.txt": "generated source\n",
+      "matrix-generated/docs/report.md": "# generated document\n"
     }
   },
   "MATRIX_LOOP_EMPTY: iteration 0 continues, iteration 1 empties the port": {
@@ -263,6 +296,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">alpha\\nbeta</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.436791000000085,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EMPTY\niteration=0",
         "inventory": null
       },
@@ -270,6 +304,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\"></port><port name=\\\"items\\\">complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.597209000000475,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EMPTY\niteration=1",
         "inventory": null
       }
@@ -284,6 +319,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">alpha\\nbeta</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.167292000000089,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EQUALS\niteration=0",
         "inventory": null
       },
@@ -291,6 +327,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">done</port><port name=\\\"items\\\">complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.9877919999999,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_EQUALS\niteration=2",
         "inventory": null
       }
@@ -305,6 +342,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">alpha\\nbeta\\ngamma</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.210500000000138,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_COUNT\niteration=0",
         "inventory": null
       },
@@ -312,6 +350,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">done</port><port name=\\\"items\\\">only-one</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.972708999999668,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_COUNT\niteration=1",
         "inventory": null
       }
@@ -326,6 +365,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"report\\\">fanout-generation-0</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.062957999999526,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_FANOUT_AGG\niteration=0",
         "inventory": null
       },
@@ -333,6 +373,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">done</port><port name=\\\"report\\\">fanout-generation-1</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.321124999999483,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_LOOP_FANOUT_AGG\niteration=1",
         "inventory": null
       }
@@ -347,6 +388,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">continue</port><port name=\\\"items\\\">pending</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.0732909999997,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_CHECK\niteration=0",
         "inventory": null
       },
@@ -354,6 +396,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"status\\\">done</port><port name=\\\"items\\\">complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.395791999999346,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_CHECK\niteration=3",
         "inventory": null
       }
@@ -368,6 +411,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">nested-mutation-complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.922040999999808,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_MUTATE\niteration=2",
         "inventory": null
       }
@@ -375,8 +419,8 @@
     "state": {},
     "logs": {},
     "sideEffects": {
-      "matrix-generated/nested/iter-2.txt": true,
-      "matrix-generated/nested/iter-0.txt": false
+      "matrix-generated/nested/iter-2.txt": "nested iteration 2\n",
+      "matrix-generated/nested/iter-0.txt": null
     }
   },
   "an absent iteration marker reads as 0": {
@@ -385,6 +429,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">nested-mutation-complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.566792000000532,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_MUTATE",
         "inventory": null
       }
@@ -392,7 +437,25 @@
     "state": {},
     "logs": {},
     "sideEffects": {
-      "matrix-generated/nested/iter-0.txt": true
+      "matrix-generated/nested/iter-0.txt": "nested iteration 0\n"
+    }
+  },
+  "a zero-padded iteration keeps its spelling in the filename": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">nested-mutation-complete</port></workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 14.203333000000384,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_MUTATE\niteration=007",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {
+      "matrix-generated/nested/iter-007.txt": "nested iteration 007\n",
+      "matrix-generated/nested/iter-7.txt": null
     }
   },
   "the LAST iteration= on the first matching line wins": {
@@ -401,6 +464,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"note\\\">nested-mutation-complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.505208000000493,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_NESTED_MUTATE\nprior iteration=0 now iteration=5",
         "inventory": null
       }
@@ -408,8 +472,8 @@
     "state": {},
     "logs": {},
     "sideEffects": {
-      "matrix-generated/nested/iter-5.txt": true,
-      "matrix-generated/nested/iter-0.txt": false
+      "matrix-generated/nested/iter-5.txt": "nested iteration 5\n",
+      "matrix-generated/nested/iter-0.txt": null
     }
   },
   "MATRIX_FANOUT_WORKER reads its shard from the aw-input block": {
@@ -418,6 +482,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"finding\\\">finding:docs/ok.md</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 14.266999999999825,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_WORKER\n<aw-input name=\"doc\">\ndocs/ok.md",
         "inventory": null
       }
@@ -432,6 +497,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"finding\\\">finding:unknown</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 14.441082999999708,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_WORKER",
         "inventory": null
       }
@@ -446,6 +512,7 @@
         "stdout": "",
         "stderr": "intentional fanout shard failure: docs/fail.md\n",
         "exitCode": 9,
+        "durationMs": 14.574832999999671,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_WORKER\n<aw-input name=\"doc\">\ndocs/fail.md",
         "inventory": null
       }
@@ -460,6 +527,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"finding\\\">mutated:docs/deep/note.md</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 18.10441600000013,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_FANOUT_MUTATE\n<aw-input name=\"doc\">\ndocs/deep/note.md",
         "inventory": null
       }
@@ -467,7 +535,7 @@
     "state": {},
     "logs": {},
     "sideEffects": {
-      "matrix-generated/fanout/note.txt": true
+      "matrix-generated/fanout/note.txt": "generated from docs/deep/note.md\n"
     }
   },
   "MATRIX_MIXED_DRAFT: clarify, then answer, then the rejection rerun": {
@@ -476,6 +544,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-mixed\\\",\\\"title\\\":\\\"Deployment target?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"staging\\\",\\\"production\\\"]}]}</workflow-clarify>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.228707999999642,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT",
         "inventory": null
       },
@@ -483,6 +552,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">mixed-document-v1 target=staging</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 13.223124999999527,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT\nDeployment target?\n## Clarify Q&A\nstaging",
         "inventory": null
       },
@@ -490,6 +560,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">mixed-document-v2 target=staging</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.8609579999993,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT\n## Review Rejection\npreserve the clarified target and revise the implementation\n## Prior Output\nmixed-document-v1 target=staging",
         "inventory": null
       }
@@ -497,8 +568,8 @@
     "state": {},
     "logs": {},
     "sideEffects": {
-      "matrix-generated/mixed/release.md": true,
-      "matrix-generated/mixed/checks.md": true
+      "matrix-generated/mixed/release.md": "release v2\n",
+      "matrix-generated/mixed/checks.md": "checks v2\n"
     }
   },
   "MATRIX_MIXED_DRAFT: the rejection block outranks a quoted clarify question": {
@@ -507,6 +578,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">mixed-document-v2 target=staging</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 13.658709000000272,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT\nDeployment target?\n## Clarify Q&A\n## Review Rejection\npreserve the clarified target and revise the implementation\n## Prior Output\nmixed-document-v1 target=staging",
         "inventory": null
       }
@@ -514,7 +586,7 @@
     "state": {},
     "logs": {},
     "sideEffects": {
-      "matrix-generated/mixed/release.md": true
+      "matrix-generated/mixed/release.md": "release v2\n"
     }
   },
   "MATRIX_MIXED_DRAFT rejection missing its prior output exits 10": {
@@ -523,6 +595,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workflow-matrix: prompt missing expected content: preserve the clarified target and revise the implementation\n",
         "exitCode": 10,
+        "durationMs": 10.967499999999745,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_DRAFT\n## Review Rejection",
         "inventory": null
       }
@@ -537,6 +610,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"finding\\\">audited:src/a.ts</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 21.468958000000384,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_AUDIT\n<aw-input name=\"changed_file\">\nsrc/a.ts\n<aw-input name=\"shared_goal\">\nship the reviewed release\n<aw-input name=\"shard-key\">\nsrc/a.ts",
         "inventory": null
       }
@@ -551,6 +625,7 @@
         "stdout": "",
         "stderr": "mixed audit shard-key mismatch: input=src/a.ts shard=src/b.ts\n",
         "exitCode": 15,
+        "durationMs": 22.123999999999796,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_AUDIT\n<aw-input name=\"changed_file\">\nsrc/a.ts\n<aw-input name=\"shared_goal\">\nship the reviewed release\n<aw-input name=\"shard-key\">\nsrc/b.ts",
         "inventory": null
       }
@@ -565,6 +640,7 @@
         "stdout": "",
         "stderr": "missing mixed audit shard path\n",
         "exitCode": 15,
+        "durationMs": 19.4424999999992,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_AUDIT",
         "inventory": null
       }
@@ -579,6 +655,7 @@
         "stdout": "",
         "stderr": "missing mixed audit broadcast goal\n",
         "exitCode": 15,
+        "durationMs": 19.248790999999983,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_AUDIT\n<aw-input name=\"changed_file\">\nsrc/a.ts\n<aw-input name=\"shared_goal\">\nsomething else",
         "inventory": null
       }
@@ -593,6 +670,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">mixed-release-summary</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.721583000000464,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_SUMMARY\naggregated-fanout-report\nship the reviewed release",
         "inventory": null
       }
@@ -607,6 +685,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workflow-matrix: prompt missing expected content: ship the reviewed release\n",
         "exitCode": 10,
+        "durationMs": 10.652208000000428,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_MIXED_SUMMARY\naggregated-fanout-report",
         "inventory": null
       }
@@ -621,6 +700,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-self\\\",\\\"title\\\":\\\"Choose a delivery mode\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"safe\\\",\\\"fast\\\"]}]}</workflow-clarify>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.730792000000292,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SELF_CLARIFY",
         "inventory": null
       },
@@ -628,6 +708,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">self-clarify-complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.66820800000005,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_SELF_CLARIFY\nChoose a delivery mode\nsafe",
         "inventory": null
       }
@@ -642,6 +723,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-cross\\\",\\\"title\\\":\\\"Which trade-off should win?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":false,\\\"options\\\":[\\\"latency\\\",\\\"consistency\\\"]}]}</workflow-clarify>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.27349999999933,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_CROSS_QUESTION",
         "inventory": null
       },
@@ -649,6 +731,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">cross-clarify-complete</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.925333000000137,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_CROSS_QUESTION\nWhich trade-off should win?\nlatency",
         "inventory": null
       }
@@ -663,6 +746,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">review-ready-document-v1</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.539457999999286,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_REVIEW_WRITE",
         "inventory": null
       },
@@ -670,6 +754,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"answer\\\">review-ready-document-v2</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.643667000000278,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_REVIEW_WRITE\n## Review Rejection",
         "inventory": null
       }
@@ -684,6 +769,7 @@
         "stdout": "",
         "stderr": "intentional first-attempt failure\n",
         "exitCode": 12,
+        "durationMs": 18.343708999999762,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry\ntask=alpha",
         "inventory": null
       },
@@ -691,6 +777,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"result\\\">retry-recovered</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 18.430249999999432,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry\ntask=alpha",
         "inventory": null
       }
@@ -707,6 +794,7 @@
         "stdout": "",
         "stderr": "intentional first-attempt failure\n",
         "exitCode": 12,
+        "durationMs": 19.303249999999935,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry\ntask=alpha",
         "inventory": null
       },
@@ -714,6 +802,7 @@
         "stdout": "",
         "stderr": "intentional first-attempt failure\n",
         "exitCode": 12,
+        "durationMs": 18.836333999999624,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry\ntask=beta",
         "inventory": null
       }
@@ -731,6 +820,7 @@
         "stdout": "",
         "stderr": "intentional first-attempt failure\n",
         "exitCode": 12,
+        "durationMs": 18.90637500000048,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry",
         "inventory": null
       },
@@ -738,6 +828,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"result\\\">retry-recovered</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 18.18658400000004,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nretry",
         "inventory": null
       }
@@ -754,6 +845,7 @@
         "stdout": "",
         "stderr": "intentional permanent runtime failure\n",
         "exitCode": 13,
+        "durationMs": 17.990458999999646,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nfail",
         "inventory": null
       }
@@ -768,6 +860,7 @@
         "stdout": "",
         "stderr": "unknown MATRIX_RUNTIME mode: frobnicate\n",
         "exitCode": 14,
+        "durationMs": 16.269249999999374,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\nfrobnicate",
         "inventory": null
       }
@@ -782,6 +875,7 @@
         "stdout": "",
         "stderr": "unknown MATRIX_RUNTIME mode: \n",
         "exitCode": 14,
+        "durationMs": 17.439041999999972,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME",
         "inventory": null
       }
@@ -796,6 +890,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"result\\\">unexpected-slow-completion</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10026.887666999999,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\ntimeout",
         "inventory": null
       }
@@ -810,6 +905,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\"><port name=\\\"result\\\">unexpected-slow-completion</port></workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10037.577083,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" MATRIX_RUNTIME\n<aw-input name=\"mode\">\ncancel",
         "inventory": null
       }

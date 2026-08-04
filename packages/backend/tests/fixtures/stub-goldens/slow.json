@@ -5,6 +5,7 @@
         "stdout": "stub-opencode 0.9.0\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 463.6309159999996,
         "promptOut": null,
         "inventory": null
       }
@@ -19,6 +20,7 @@
         "stdout": "",
         "stderr": "stub-opencode-slow: unsupported mode: nope\n",
         "exitCode": 2,
+        "durationMs": 6.700624999999945,
         "promptOut": null,
         "inventory": null
       }
@@ -33,6 +35,7 @@
         "stdout": "",
         "stderr": "stub-opencode-slow: prompt is missing the RFC-200 envelope nonce\n",
         "exitCode": 3,
+        "durationMs": 11.76108400000021,
         "promptOut": "no marker",
         "inventory": null
       }
@@ -47,6 +50,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 9.75891700000011,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
         "inventory": null
       }
@@ -61,6 +65,22 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 8.899041000000125,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "a whole-second sleep actually sleeps": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 1018.0335419999997,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
         "inventory": null
       }
@@ -75,6 +95,7 @@
         "stdout": "",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 16.81833400000005,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
         "inventory": null
       }
@@ -89,6 +110,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 7,
+        "durationMs": 10.200207999999748,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
         "inventory": null
       }
@@ -103,6 +125,7 @@
         "stdout": "",
         "stderr": "",
         "exitCode": 9,
+        "durationMs": 9.452625000000353,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
         "inventory": null
       }
@@ -117,6 +140,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.567207999999937,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" work",
         "inventory": "{\n  \"schemaVersion\": 1,\n  \"capturedAt\": 1700000000000,\n  \"agents\": [\n    {\"name\": \"e2e-stub-coder\", \"mode\": \"primary\", \"modelProviderId\": \"anthropic\", \"modelId\": \"claude-opus-4-7\", \"readonly\": true, \"source\": \"inline\"}\n  ],\n  \"skills\": [],\n  \"mcps\": [],\n  \"plugins\": []\n}\n"
       }

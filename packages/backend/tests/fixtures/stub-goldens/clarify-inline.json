@@ -5,6 +5,7 @@
         "stdout": "stub-opencode 1.18.3\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 482.8615,
         "promptOut": null,
         "inventory": null
       }
@@ -22,6 +23,7 @@
         "stdout": "",
         "stderr": "stub-opencode-clarify-inline: unsupported mode: nope\n",
         "exitCode": 2,
+        "durationMs": 5.315583000000515,
         "promptOut": null,
         "inventory": null
       }
@@ -39,6 +41,7 @@
         "stdout": "",
         "stderr": "stub-opencode-clarify-inline: prompt is missing the RFC-200 envelope nonce\n",
         "exitCode": 3,
+        "durationMs": 10.3618749999996,
         "promptOut": "no marker",
         "inventory": null
       }
@@ -56,6 +59,7 @@
         "stdout": "{\"type\":\"session.created\",\"sessionID\":\"opc_e2e_designer\",\"timestamp\":0}\n{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-db\\\",\\\"title\\\":\\\"Which database should we use?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"Postgres\\\",\\\"SQLite\\\"]}]}</workflow-clarify>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 19.844083000000865,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" design it",
         "inventory": null
       },
@@ -63,6 +67,7 @@
         "stdout": "{\"type\":\"session.created\",\"sessionID\":\"opc_e2e_designer\",\"timestamp\":0}\n{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design after inline-clarify designer (session=opc_e2e_designer)</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 20.29441599999973,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" design it",
         "inventory": null
       }
@@ -82,6 +87,7 @@
         "stdout": "{\"type\":\"session.created\",\"sessionID\":\"opc_e2e_designer\",\"timestamp\":0}\n{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-db\\\",\\\"title\\\":\\\"Which database should we use?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"Postgres\\\",\\\"SQLite\\\"]}]}</workflow-clarify>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 17.035666000000674,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" pass --session opc_e2e_fake to it",
         "inventory": null
       }

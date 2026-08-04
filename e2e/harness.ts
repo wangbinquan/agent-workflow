@@ -12,7 +12,15 @@
 // node:child_process rather than Bun.spawn.
 
 import { type ChildProcessByStdio, spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  accessSync,
+  constants,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -140,8 +148,15 @@ export type StubMode =
 
 function isExecutableFile(path: string): boolean {
   try {
-    const st = statSync(path)
-    return st.isFile()
+    if (!statSync(path).isFile()) return false
+    // The name has to mean what it says now: the stub arrives via
+    // `actions/download-artifact`, which does NOT preserve the +x bit (ci.yml
+    // restores it explicitly). Checking only `isFile` would let a missing
+    // `chmod` through, and the symptom would be EACCES deep inside the runner
+    // instead of this function's actionable "run build:binary:e2e" message.
+    // Windows has no execute bit; `X_OK` there is equivalent to `F_OK`.
+    if (process.platform !== 'win32') accessSync(path, constants.X_OK)
+    return true
   } catch {
     return false
   }
@@ -454,10 +469,12 @@ async function startDaemonWithPortAllocator(
             ...process.env,
             AGENT_WORKFLOW_HOME: home,
             LANG: 'en_US.UTF-8',
-            // The mode goes in FIRST so a spec cannot silently point the stub
-            // at a different behaviour than the one it declared.
-            AW_STUB_MODE: stubMode,
             ...(opts.extraEnv ?? {}),
+            // LAST, so it wins. Placed first it was overridable by `extraEnv`,
+            // which is the one remaining way to run a different stub than the
+            // one the spec declared — and unlike `dispatch.ts`'s unknown-mode
+            // check, that failure is silent.
+            AW_STUB_MODE: stubMode,
           },
           stdio: ['ignore', 'pipe', 'pipe'],
         },

@@ -360,7 +360,12 @@ describe('repository test entrypoint', () => {
     expect(e2eCommandHelper).not.toContain("from 'bun:sqlite'")
     expect(e2eCommandHelper).not.toContain("execFileSync('sqlite3'")
     expect(e2eCommandHelper).toContain('sqlite-exec.ts')
-    expect(e2eCommandHelper).toContain('timeout: COMMAND_TIMEOUT_MS')
+    // BOTH children are bounded — `runGit` and `sqliteExec`. A bare
+    // `toContain` is satisfied by whichever one still has it, so deleting the
+    // deadline from the new child left this green while reintroducing exactly
+    // the unbounded-child shard wedge the header of this file exists to
+    // prevent. Count them.
+    expect(e2eCommandHelper.match(/timeout: COMMAND_TIMEOUT_MS/g) ?? []).toHaveLength(2)
     expect(e2eSqliteRunner).toContain("from 'bun:sqlite'")
     // Fixture SQL races the live daemon for the write lock. Behaviour is locked
     // by e2e-sqlite-fixture-lock-contention.test.ts — this only pins that the

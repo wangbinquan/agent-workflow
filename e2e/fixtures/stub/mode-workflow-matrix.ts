@@ -20,6 +20,7 @@ import {
   ensureStateDir,
   parseInvocation,
   requireEnvelopeOpen,
+  writeInventoryIfRequested,
 } from './skeleton'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
@@ -51,12 +52,12 @@ function promptInput(prompt: string, name: string): string {
  * took the first line that matched. Its leading `.` `*` is GREEDY, so within
  * that line the LAST occurrence wins. No match anywhere ⇒ 0.
  */
-function iterationOf(prompt: string): number {
+function iterationOf(prompt: string): string {
   for (const line of `${prompt}\n`.split('\n')) {
     const match = /^.*iteration=(\d+)/.exec(line)
-    if (match !== null) return Number(match[1])
+    if (match !== null) return match[1] ?? '0'
   }
-  return 0
+  return '0'
 }
 
 /** First line starting with `task=`, with the prefix stripped. */
@@ -82,14 +83,10 @@ export async function run(argv: readonly string[]): Promise<void> {
   const open = requireEnvelopeOpen(call.prompt, NAME)
   const prompt = call.prompt
 
-  const inventoryOut = process.env.OPENCODE_AW_INVENTORY_OUT
-  if (inventoryOut !== undefined && inventoryOut.length > 0) {
-    // Compact, one line — deliberately unlike the `basic` stub's pretty form.
-    writeFileSync(
-      inventoryOut,
-      '{"schemaVersion":1,"capturedAt":1700000000000,"agents":[],"skills":[],"mcps":[],"plugins":[]}\n',
-    )
-  }
+  // Compact, one line — deliberately unlike the `basic` stub's pretty form.
+  writeInventoryIfRequested(
+    '{"schemaVersion":1,"capturedAt":1700000000000,"agents":[],"skills":[],"mcps":[],"plugins":[]}\n',
+  )
 
   const ports = (body: string): never => {
     emitTextEvent(`${open.output}${body}</workflow-output>`)
@@ -104,7 +101,12 @@ export async function run(argv: readonly string[]): Promise<void> {
       die(10, `${NAME}: prompt missing expected content: ${needle}`)
     }
   }
+  // Kept as the STRING it was written as, because it is also a filename:
+  // `iteration=007` named `iter-007.txt` in the shell and `iter-7.txt` after a
+  // `Number()` round-trip, and `workflow-matrix.spec.ts` asserts those paths.
+  // Comparisons below go through `Number()` explicitly.
   const iteration = iterationOf(prompt)
+  const iterationNumber = Number(iteration)
 
   if (prompt.includes('MATRIX_PROMPT_INPUTS')) {
     for (const needle of [
@@ -129,10 +131,15 @@ export async function run(argv: readonly string[]): Promise<void> {
   }
 
   if (prompt.includes('MATRIX_UPLOAD_INPUT')) {
-    for (const file of ['matrix-uploads/one.md', 'matrix-uploads/two.md']) {
+    // Both disk checks FIRST, then both prompt checks — the shell's order, and
+    // the two branches have different exit codes (11 vs 10) that the specs read
+    // as different diagnoses. Interleaving them silently swapped which one a
+    // half-present upload reports.
+    const uploads = ['matrix-uploads/one.md', 'matrix-uploads/two.md']
+    for (const file of uploads) {
       if (!existsSync(file)) die(11, `missing uploaded file ${file}`)
-      require_(file)
     }
+    for (const file of uploads) require_(file)
     ports('<port name="report">upload-roundtrip-ok</port>')
   }
 
@@ -165,21 +172,21 @@ export async function run(argv: readonly string[]): Promise<void> {
 
   if (prompt.includes('MATRIX_LOOP_EMPTY')) {
     ports(
-      iteration === 0
+      iterationNumber === 0
         ? '<port name="status">continue</port><port name="items">alpha\nbeta</port>'
         : '<port name="status"></port><port name="items">complete</port>',
     )
   }
   if (prompt.includes('MATRIX_LOOP_EQUALS')) {
     ports(
-      iteration === 0
+      iterationNumber === 0
         ? '<port name="status">continue</port><port name="items">alpha\nbeta</port>'
         : '<port name="status">done</port><port name="items">complete</port>',
     )
   }
   if (prompt.includes('MATRIX_LOOP_COUNT')) {
     ports(
-      iteration === 0
+      iterationNumber === 0
         ? '<port name="status">continue</port><port name="items">alpha\nbeta\ngamma</port>'
         : '<port name="status">done</port><port name="items">only-one</port>',
     )
@@ -194,7 +201,7 @@ export async function run(argv: readonly string[]): Promise<void> {
   }
   if (prompt.includes('MATRIX_NESTED_CHECK')) {
     ports(
-      iteration === 0
+      iterationNumber === 0
         ? '<port name="status">continue</port><port name="items">pending</port>'
         : '<port name="status">done</port><port name="items">complete</port>',
     )
@@ -215,7 +222,7 @@ export async function run(argv: readonly string[]): Promise<void> {
   }
   if (prompt.includes('MATRIX_LOOP_FANOUT_AGG')) {
     ports(
-      iteration === 0
+      iterationNumber === 0
         ? '<port name="status">continue</port><port name="report">fanout-generation-0</port>'
         : '<port name="status">done</port><port name="report">fanout-generation-1</port>',
     )

@@ -5,6 +5,7 @@
         "stdout": "stub-opencode workgroup-matrix\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 153.9305409999979,
         "promptOut": null,
         "inventory": null
       }
@@ -19,6 +20,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workgroup-matrix: unsupported mode: nope\n",
         "exitCode": 2,
+        "durationMs": 149.38516600000003,
         "promptOut": null,
         "inventory": null
       }
@@ -33,6 +35,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workgroup-matrix: missing --agent\n",
         "exitCode": 2,
+        "durationMs": 145.41562499999782,
         "promptOut": null,
         "inventory": null
       }
@@ -47,6 +50,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workgroup-matrix: prompt is missing the RFC-200 nonce\n",
         "exitCode": 3,
+        "durationMs": 145.16245899999922,
         "promptOut": null,
         "inventory": null
       }
@@ -61,6 +65,7 @@
         "stdout": "",
         "stderr": "stub-opencode-workgroup-matrix: unexpected agent 'nobody'\n",
         "exitCode": 15,
+        "durationMs": 152.79987499999697,
         "promptOut": null,
         "inventory": null
       }
@@ -71,18 +76,36 @@
     "logs": {},
     "sideEffects": {}
   },
-  "the researcher turn": {
+  "the researcher turn without its charter exits 10": {
     "steps": [
       {
         "stdout": "",
         "stderr": "stub-opencode-workgroup-matrix: showcase-wg-researcher prompt missing expected content: Title: research-release\n",
         "exitCode": 10,
+        "durationMs": 153.25512499999968,
         "promptOut": null,
         "inventory": null
       }
     ],
     "state": {
       "WORKGROUP_MATRIX_STATE_DIR/prompts.jsonl": "{\"agent\":\"showcase-wg-researcher\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" <port name=\\\"wg_result\\\"> go\"}\n"
+    },
+    "logs": {},
+    "sideEffects": {}
+  },
+  "the researcher reaches its emitting branch": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":1785854583275,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n<port name=\\\"wg_result\\\">{\\\"summary\\\":\\\"research complete\\\"}</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 145.94966600000043,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {
+      "WORKGROUP_MATRIX_STATE_DIR/prompts.jsonl": "{\"agent\":\"showcase-wg-researcher\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\"\\nWG_MATRIX_CHARTER\\nTitle: research-release\"}\n"
     },
     "logs": {},
     "sideEffects": {}

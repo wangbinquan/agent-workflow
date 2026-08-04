@@ -35,17 +35,30 @@ function nodeLoadedFiles(): string[] {
     .sort()
 }
 
-const BUN_MODULE_IMPORT = /\bfrom\s+['"]bun:[^'"]+['"]/
-// `Bun.` as a real reference — not the word inside a comment or a string.
-const BUN_GLOBAL_USE = /(?<![\w.'"`])Bun\s*\.\s*[A-Za-z]/
+// Every spelling that reaches a `bun:` module, not just the static one:
+//   import x from 'bun:sqlite'   /   import 'bun:sqlite'   /   await import('bun:sqlite')
+// The dynamic form matters most — it is what someone reaches for after being
+// told "no static bun: import here", and it fails at the FIRST FIXTURE CALL
+// rather than at load, which is strictly harder to diagnose than the outage
+// this guard commemorates.
+const BUN_MODULE_IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"]bun:[^'"]+['"]/
+// The `Bun` global by any route: `Bun.spawn`, `Bun['spawn']`, `globalThis.Bun`,
+// and `const { spawn } = Bun`. Requiring a literal dot (the first version did)
+// let the bracket and destructuring forms through, and all of them are
+// `undefined` under Node.
+const BUN_GLOBAL_USE = /(?<![\w$])Bun\s*(?:\.\s*[A-Za-z$_]|\[)|=\s*Bun\b/
 
 function withoutCommentsOrStrings(source: string): string {
-  return source
-    .replaceAll(/\/\*[\s\S]*?\*\//g, ' ')
-    .replaceAll(/(^|[^:])\/\/.*$/gm, '$1')
-    .replaceAll(/'(?:[^'\\\n]|\\.)*'/g, "''")
-    .replaceAll(/"(?:[^"\\\n]|\\.)*"/g, '""')
-    .replaceAll(/`(?:[^`\\]|\\.)*`/g, '``')
+  return (
+    source
+      .replaceAll(/\/\*[\s\S]*?\*\//g, ' ')
+      .replaceAll(/(^|[^:])\/\/.*$/gm, '$1')
+      .replaceAll(/'(?:[^'\\\n]|\\.)*'/g, "''")
+      .replaceAll(/"(?:[^"\\\n]|\\.)*"/g, '""')
+      // Template literals keep their `${…}` contents: those are CODE, and
+      // blanking the whole literal hid `` `${Bun.version}` `` from the scan.
+      .replaceAll(/`(?:[^`\\$]|\\.|\$(?!\{))*`/g, '``')
+  )
 }
 
 describe('RFC-254 — the Playwright-loaded e2e files stay Node-compatible', () => {
@@ -68,6 +81,18 @@ describe('RFC-254 — the Playwright-loaded e2e files stay Node-compatible', () 
       BUN_GLOBAL_USE.test(withoutCommentsOrStrings(readFileSync(join(E2E_DIR, name), 'utf8'))),
     )
     expect(offenders, '`Bun` is undefined under Node — spawn `bun` instead').toEqual([])
+  })
+
+  test('no Playwright-loaded file imports out of the fixtures directory', () => {
+    // `e2e/fixtures/**` is exempt from the two rules above BECAUSE it is
+    // executed by Bun — `sqlite-exec.ts` imports `bun:sqlite` two directories
+    // from that boundary. The exemption only holds while nothing Node loads
+    // pulls a fixture into its import graph, and a single
+    // `import { x } from './fixtures/…'` in a spec reopens the outage.
+    const offenders = nodeLoadedFiles().filter((name) =>
+      /\bfrom\s*['"]\.[./]*\/?fixtures\//.test(readFileSync(join(E2E_DIR, name), 'utf8')),
+    )
+    expect(offenders, 'fixtures are executed by Bun — Node must not import them').toEqual([])
   })
 
   test('the Bun-side runner it delegates to is still there', () => {

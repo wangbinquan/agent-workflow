@@ -5,6 +5,7 @@
         "stdout": "stub-opencode business-workgroups\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 147.5669170000001,
         "promptOut": null,
         "inventory": null
       }
@@ -19,6 +20,7 @@
         "stdout": "",
         "stderr": "stub-opencode-business-workgroups: unsupported mode: nope\n",
         "exitCode": 2,
+        "durationMs": 151.3161250000012,
         "promptOut": null,
         "inventory": null
       }
@@ -33,6 +35,7 @@
         "stdout": "",
         "stderr": "stub-opencode-business-workgroups: missing --agent\n",
         "exitCode": 2,
+        "durationMs": 152.00379099999918,
         "promptOut": null,
         "inventory": null
       }
@@ -47,6 +50,7 @@
         "stdout": "",
         "stderr": "stub-opencode-business-workgroups: prompt is missing the RFC-200 nonce\n",
         "exitCode": 3,
+        "durationMs": 156.12429100000008,
         "promptOut": null,
         "inventory": null
       }
@@ -55,18 +59,36 @@
     "logs": {},
     "sideEffects": {}
   },
-  "an unrecognised turn exits 14": {
+  "an unexpected agent exits 11": {
     "steps": [
       {
         "stdout": "",
         "stderr": "stub-opencode-business-workgroups: unexpected agent 'anyone'\n",
         "exitCode": 11,
+        "durationMs": 161.35533299999952,
         "promptOut": null,
         "inventory": null
       }
     ],
     "state": {
       "BUSINESS_WORKGROUP_STATE_DIR/prompts.jsonl": "{\"agent\":\"anyone\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+    },
+    "logs": {},
+    "sideEffects": {}
+  },
+  "the planner reaches its emitting branch": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":1785854582222,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n<port name=\\\"wg_result\\\">{\\\"summary\\\":\\\"Migration controls decomposed into three independently auditable cards.\\\"}</port>\\n<port name=\\\"wg_tasks_add\\\">[{\\\"title\\\":\\\"Freeze source schema\\\",\\\"brief\\\":\\\"Create migration/schema-map.md with the frozen source-to-target field mapping.\\\"},{\\\"title\\\":\\\"Validate encrypted export\\\",\\\"brief\\\":\\\"Validate the encrypted export checksum and record the result in migration/export-validation.txt.\\\"},{\\\"title\\\":\\\"Prepare rollback runbook\\\",\\\"brief\\\":\\\"Create migration/rollback-runbook.md with abort criteria and restore steps.\\\"}]</port>\\n<port name=\\\"wg_messages\\\">[{\\\"to\\\":null,\\\"body\\\":\\\"MIGRATION_WINDOW: schema freeze, encrypted-export evidence, and rollback readiness are independent release controls.\\\"}]</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 155.875082999999,
+        "promptOut": null,
+        "inventory": null
+      }
+    ],
+    "state": {
+      "BUSINESS_WORKGROUP_STATE_DIR/prompts.jsonl": "{\"agent\":\"business-migration-planner\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\"\\nBUSINESS_MIGRATION_CHARTER\\nBUSINESS_MIGRATION_GOAL\\n125000-record\\nexact record-count match\\n## Initial planning turn\"}\n"
     },
     "logs": {},
     "sideEffects": {}

@@ -5,6 +5,7 @@
         "stdout": "stub-opencode 1.18.4\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 455.71191700000054,
         "promptOut": null,
         "inventory": null
       }
@@ -21,6 +22,7 @@
         "stdout": "",
         "stderr": "stub-opencode-cross-clarify: unsupported mode: nope\n",
         "exitCode": 2,
+        "durationMs": 6.615125000000262,
         "promptOut": null,
         "inventory": null
       }
@@ -37,6 +39,7 @@
         "stdout": "",
         "stderr": "stub-opencode-cross-clarify: prompt is missing the RFC-200 envelope nonce\n",
         "exitCode": 3,
+        "durationMs": 14.295000000000073,
         "promptOut": "no marker",
         "inventory": null
       }
@@ -53,6 +56,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design v1</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 16.50629200000003,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" design it",
         "inventory": null
       },
@@ -60,6 +64,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-redis\\\",\\\"title\\\":\\\"Should we use Redis for caching?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"Yes\\\",\\\"No\\\",\\\"Maybe\\\"]}]}</workflow-clarify>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 14.24120799999946,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" review it",
         "inventory": null
       },
@@ -67,6 +72,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify nonce=\\\"aw-nonce-differential-1234\\\">{\\\"questions\\\":[{\\\"id\\\":\\\"q-redis\\\",\\\"title\\\":\\\"Should we use Redis for caching?\\\",\\\"kind\\\":\\\"single\\\",\\\"recommended\\\":true,\\\"options\\\":[\\\"Yes\\\",\\\"No\\\",\\\"Maybe\\\"]}]}</workflow-clarify>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 15.116958000000523,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" review it ## Clarify Q&A",
         "inventory": null
       },
@@ -74,6 +80,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"main\\\">questioner v3: all good</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 15.398041999999805,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" review it ## Clarify Q&A",
         "inventory": null
       }
@@ -93,6 +100,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">other v1</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 14.621458999999959,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
         "inventory": null
       },
@@ -100,6 +108,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">other v2</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 14.463125000000218,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
         "inventory": null
       }
@@ -118,6 +127,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design v1</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 14.059500000000298,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
         "inventory": null
       },
@@ -125,6 +135,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design v2</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 14.526207999999315,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
         "inventory": null
       },
@@ -132,6 +143,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"design\\\">design v3</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 14.738792000000103,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" go",
         "inventory": null
       }

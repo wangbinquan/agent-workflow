@@ -5,6 +5,7 @@
         "stdout": "stub-opencode custom-build\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 789.524,
         "promptOut": null,
         "inventory": null
       }
@@ -19,6 +20,7 @@
         "stdout": "stub-opencode custom-build\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 8.241540999999984,
         "promptOut": null,
         "inventory": null
       }
@@ -33,6 +35,7 @@
         "stdout": "stub-opencode custom-build\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 6.100165999999945,
         "promptOut": null,
         "inventory": null
       }
@@ -47,6 +50,7 @@
         "stdout": "",
         "stderr": "stub-opencode: unsupported mode: frobnicate\n",
         "exitCode": 2,
+        "durationMs": 4.256958000000054,
         "promptOut": null,
         "inventory": null
       }
@@ -61,6 +65,7 @@
         "stdout": "",
         "stderr": "stub-opencode: unsupported mode: <no args>\n",
         "exitCode": 2,
+        "durationMs": 6.035582999999974,
         "promptOut": null,
         "inventory": null
       }
@@ -75,6 +80,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 10.048333999999954,
         "promptOut": "do the thing <workflow-output nonce=\"aw-nonce-differential-1234\">",
         "inventory": null
       }
@@ -89,6 +95,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 13.671333000000004,
         "promptOut": "do the thing <workflow-output nonce=\"aw-nonce-differential-1234\">",
         "inventory": "{\n  \"schemaVersion\": 1,\n  \"capturedAt\": 1700000000000,\n  \"agents\": [\n    {\"name\": \"e2e-stub-coder\", \"mode\": \"primary\", \"modelProviderId\": \"anthropic\", \"modelId\": \"claude-opus-4-7\", \"readonly\": true, \"source\": \"inline\"}\n  ],\n  \"skills\": [\n    {\"name\": \"fixture-skill\", \"source\": \"managed\", \"path\": \"/tmp/skills/fixture-skill\", \"description\": \"stub e2e skill\"}\n  ],\n  \"mcps\": [\n    {\"name\": \"fixture-mcp-ok\", \"type\": \"local\", \"status\": \"connected\", \"hint\": null},\n    {\"name\": \"fixture-mcp-warn\", \"type\": \"remote\", \"status\": \"needs_auth\", \"hint\": \"token missing\"}\n  ],\n  \"plugins\": [\n    {\"specifier\": \"file:///tmp/plugins/aw-inventory-dump.mjs\", \"source\": \"inline\"}\n  ]\n}\n"
       }
@@ -103,6 +110,7 @@
         "stdout": "",
         "stderr": "stub-opencode: prompt is missing the RFC-200 envelope nonce\n",
         "exitCode": 3,
+        "durationMs": 9.928666000000021,
         "promptOut": "do the thing with no envelope marker",
         "inventory": null
       }
@@ -117,6 +125,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_assignments\\\">[]</port>\\n  <port name=\\\"wg_decision\\\">{\\\"action\\\":\\\"done\\\",\\\"summary\\\":\\\"stub e2e leader done\\\"}</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 8.705459000000019,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" protocol <port name=\"wg_decision\">",
         "inventory": null
       }
@@ -131,6 +140,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_task_results\\\">[{\\\"task\\\":1,\\\"summary\\\":\\\"stub e2e batch task 1 done\\\"},{\\\"task\\\":2,\\\"summary\\\":\\\"stub e2e batch task 2 done\\\"},{\\\"task\\\":3,\\\"summary\\\":\\\"stub e2e batch task 3 done\\\"}]</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 11.893625000000043,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" batch of 3 <port name=\"wg_task_results\">",
         "inventory": null
       }
@@ -145,7 +155,23 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_task_results\\\">[{\\\"task\\\":1,\\\"summary\\\":\\\"stub e2e batch task 1 done\\\"}]</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 12.922707999999943,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" <port name=\"wg_task_results\">",
+        "inventory": null
+      }
+    ],
+    "state": {},
+    "logs": {},
+    "sideEffects": {}
+  },
+  "two `batch of N` mentions: the LAST one wins": {
+    "steps": [
+      {
+        "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_task_results\\\">[{\\\"task\\\":1,\\\"summary\\\":\\\"stub e2e batch task 1 done\\\"},{\\\"task\\\":2,\\\"summary\\\":\\\"stub e2e batch task 2 done\\\"},{\\\"task\\\":3,\\\"summary\\\":\\\"stub e2e batch task 3 done\\\"},{\\\"task\\\":4,\\\"summary\\\":\\\"stub e2e batch task 4 done\\\"},{\\\"task\\\":5,\\\"summary\\\":\\\"stub e2e batch task 5 done\\\"}]</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 11.96145899999999,
+        "promptOut": "nonce=\"aw-nonce-differential-1234\" batch of 3 task(s) for @x failed ... batch of 5 <port name=\"wg_task_results\">",
         "inventory": null
       }
     ],
@@ -159,6 +185,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_result\\\">{\\\"summary\\\":\\\"stub e2e member result\\\"}</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 9.999917000000096,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" <port name=\"wg_result\">",
         "inventory": null
       }
@@ -173,6 +200,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"wg_task_results\\\">[{\\\"task\\\":1,\\\"summary\\\":\\\"stub e2e batch task 1 done\\\"},{\\\"task\\\":2,\\\"summary\\\":\\\"stub e2e batch task 2 done\\\"}]</port>\\n  <port name=\\\"wg_tasks_add\\\">[]</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 15.230000000000018,
         "promptOut": "nonce=\"aw-nonce-differential-1234\" batch of 2 <port name=\"wg_task_results\"> ... mentions wg_result in prose",
         "inventory": null
       }
@@ -187,6 +215,7 @@
         "stdout": "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output nonce=\\\"aw-nonce-differential-1234\\\">\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}\n",
         "stderr": "",
         "exitCode": 0,
+        "durationMs": 8.98879199999999,
         "promptOut": "quoted nonce=\"stale-one\" ... real nonce=\"aw-nonce-differential-1234\"",
         "inventory": null
       }

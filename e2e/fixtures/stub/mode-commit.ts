@@ -17,6 +17,7 @@ import {
   parseInvocation,
   requireOutputOpen,
 } from './skeleton'
+import { writeFileSync } from 'node:fs'
 
 const NAME = 'stub-opencode-commit'
 
@@ -37,7 +38,16 @@ export function run(argv: readonly string[]): void {
   }
 
   // cwd is the task worktree; a dirty file is what makes a commit warranted.
-  Bun.write('e2e-change.txt', `e2e change ${process.pid}\n`)
+  // SYNCHRONOUS, per the rule at the top of skeleton.ts: this file was the one
+  // place that still used `Bun.write` before `process.exit`.
+  //
+  // Deliberately NOT covered by a differential case, because it CANNOT be: at
+  // this payload's 17 bytes the async write lands every time, so reverting this
+  // line leaves the suite green (measured). What does not land is an 8 MiB one
+  // — that probe showed the file simply never appearing — which is the shape
+  // that surfaces first on a loaded runner and never on a developer's machine.
+  // The justification here is the rule plus that probe, not a red test.
+  writeFileSync('e2e-change.txt', `e2e change ${process.pid}\n`)
   emitTextEvent(`${open}<port name="answer">stub e2e output</port></workflow-output>`)
   process.exit(0)
 }

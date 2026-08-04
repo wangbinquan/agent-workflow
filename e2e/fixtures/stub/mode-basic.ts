@@ -14,33 +14,25 @@ import {
 
 const NAME = 'stub-opencode'
 
-const INVENTORY = {
-  schemaVersion: 1,
-  capturedAt: 1700000000000,
-  agents: [
-    {
-      name: 'e2e-stub-coder',
-      mode: 'primary',
-      modelProviderId: 'anthropic',
-      modelId: 'claude-opus-4-7',
-      readonly: true,
-      source: 'inline',
-    },
+/** Byte-identical to the heredoc the shell stub wrote. */
+const INVENTORY = `{
+  "schemaVersion": 1,
+  "capturedAt": 1700000000000,
+  "agents": [
+    {"name": "e2e-stub-coder", "mode": "primary", "modelProviderId": "anthropic", "modelId": "claude-opus-4-7", "readonly": true, "source": "inline"}
   ],
-  skills: [
-    {
-      name: 'fixture-skill',
-      source: 'managed',
-      path: '/tmp/skills/fixture-skill',
-      description: 'stub e2e skill',
-    },
+  "skills": [
+    {"name": "fixture-skill", "source": "managed", "path": "/tmp/skills/fixture-skill", "description": "stub e2e skill"}
   ],
-  mcps: [
-    { name: 'fixture-mcp-ok', type: 'local', status: 'connected', hint: null },
-    { name: 'fixture-mcp-warn', type: 'remote', status: 'needs_auth', hint: 'token missing' },
+  "mcps": [
+    {"name": "fixture-mcp-ok", "type": "local", "status": "connected", "hint": null},
+    {"name": "fixture-mcp-warn", "type": "remote", "status": "needs_auth", "hint": "token missing"}
   ],
-  plugins: [{ specifier: 'file:///tmp/plugins/aw-inventory-dump.mjs', source: 'inline' }],
+  "plugins": [
+    {"specifier": "file:///tmp/plugins/aw-inventory-dump.mjs", "source": "inline"}
+  ]
 }
+`
 
 export function run(argv: readonly string[]): void {
   const call = parseInvocation(argv, NAME)
@@ -76,8 +68,14 @@ export function run(argv: readonly string[]): void {
     // RFC-215 fc TASK-BATCH run: one entry per Task number (1..N). Matched
     // BEFORE wg_result so the batch protocol's prose mention of wg_result can
     // never shadow this branch.
-    const batch = /batch of (\d+)/.exec(call.prompt)
-    const n = batch === null ? 1 : Number(batch[1])
+    // LAST match, like the shell's `sed 's/.*batch of \([0-9]*\).*/\1/'` whose
+    // greedy prefix reached the final occurrence. A retry turn can legitimately
+    // carry two: `prompts.ts` renders `## Your assignments (batch of N)` and
+    // `freeCollab.ts` quotes `batch of N task(s) for @X failed` into the
+    // blackboard above it — the same "prompt quotes upstream content" hazard the
+    // nonce and the wg_result branch already guard for.
+    const batch = [...call.prompt.matchAll(/batch of (\d+)/g)].at(-1)
+    const n = batch === undefined ? 1 : Number(batch[1])
     const entries = Array.from(
       { length: n },
       (_, i) => `{"task":${i + 1},"summary":"stub e2e batch task ${i + 1} done"}`,

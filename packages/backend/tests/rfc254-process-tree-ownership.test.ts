@@ -26,6 +26,19 @@ import {
 } from '@/util/windowsJobObject'
 import { adoptSpawnedProcessTree, isProcessTreeAlive, killProcessTree } from '@/util/process'
 
+/**
+ * Ask the OS whether a pid still exists, independently of anything under test.
+ * `process.kill(pid, 0)` throws ESRCH when it does not.
+ */
+function isProcessAliveOnHost(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 describe('RFC-254 T4 — process tree ownership', () => {
   test('POSIX needs no job object to answer authoritatively', () => {
     expect(processTreeOwnershipAvailable('linux')).toBe(true)
@@ -66,8 +79,15 @@ describe('RFC-254 T4 — process tree ownership', () => {
           expect(owned).not.toBeNull()
           expect(owned?.kind).toBe('windows-job-object')
           expect(owned?.liveCount()).toBeGreaterThan(0)
-          owned?.terminate()
-          expect(owned?.liveCount()).toBe(0)
+          // The syscall's own verdict, not a discarded boolean: a caller that
+          // treats a failed TerminateJobObject as "definitely dead" is making
+          // the one claim this module exists to make trustworthy.
+          expect(owned?.terminate()).toBe(true)
+          // Deliberately NOT `liveCount()` here — it short-circuits on the
+          // `closed` flag, so asserting it after terminate() reads a boolean
+          // this test just set rather than the kernel. Ask the OS instead.
+          await Bun.sleep(200)
+          expect(isProcessAliveOnHost(child.pid)).toBe(false)
         }
       } else {
         expect(owned).toBeNull()

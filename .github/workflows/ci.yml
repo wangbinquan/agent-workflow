@@ -533,13 +533,15 @@ jobs:
                   "--watchdog-ms",
                   "10000",
                   "--",
-                  // RFC-254 T30: a no-op subcommand of the binary itself rather than
-                  // `/usr/bin/true`, which does not exist off POSIX. What the
-                  // supervisor is being driven over is the protocol, not the
-                  // payload, so any harmless exec will do — and this one is
-                  // guaranteed present because it is the artifact under test.
-                  binary,
-                  "version",
+                  // RFC-254 T30 tried the binary's own `version` subcommand here
+                  // so the payload would exist off POSIX too. Reverted: this
+                  // job's matrix is ubuntu + macOS (the supervisor under test is
+                  // the BWRAP one, a Linux concept), so the portability was
+                  // never exercised — while the cost was three extra cold
+                  // starts of a ~120 MiB compiled binary, each inside the 5 s
+                  // deadline that wraps the EXIT line. A windows entry, if one
+                  // is ever added, must bring its own payload.
+                  "/usr/bin/true",
                 ],
                 cwd: outsideRepo,
                 env: {},

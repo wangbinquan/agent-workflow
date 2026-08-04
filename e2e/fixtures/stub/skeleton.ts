@@ -197,11 +197,17 @@ export function envelope(outputOpen: string, ports: Array<[string, string]>): st
 /**
  * RFC-029: simulate what the real `aw-inventory-dump` plugin would have
  * written, but only when the framework actually asked for a drop.
+ *
+ * Takes the exact TEXT rather than an object to serialise. The originals wrote
+ * a shell heredoc whose layout `JSON.stringify(x, null, 2)` does not reproduce
+ * (their array elements sit on one line), so re-serialising made the ported
+ * stub write different BYTES for the same inventory. That was invisible while
+ * the comparison parsed both sides as JSON; it is not invisible now.
  */
-export function writeInventoryIfRequested(payload: unknown): void {
+export function writeInventoryIfRequested(text: string): void {
   const target = process.env.OPENCODE_AW_INVENTORY_OUT
   if (target === undefined || target.length === 0) return
-  writeFileSync(target, `${JSON.stringify(payload, null, 2)}\n`)
+  writeFileSync(target, text)
 }
 
 /**

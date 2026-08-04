@@ -158,7 +158,16 @@ export function adoptSpawnedProcessTree(pid: number): boolean {
 }
 
 export function releaseProcessTreeOwnership(pid: number): void {
+  const owned = ownedTrees.get(pid)
+  if (owned === undefined) return
   ownedTrees.delete(pid)
+  // Dropping the map entry is not enough: `bun:ffi` hands back a bare number,
+  // so nothing finalizes the Win32 handle and it would leak for the daemon's
+  // whole lifetime — and a KILL_ON_JOB_CLOSE job whose last handle is never
+  // closed also never fires. `dispose()` closes it, which for this job kind
+  // means "stop tracking AND stop the tree" (see its doc); callers reach here
+  // only after the tree is finished.
+  owned.dispose()
 }
 
 /**
