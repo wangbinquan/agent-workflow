@@ -2,6 +2,8 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+🚧 **进行中 RFC（Draft / 设计门进行中，待用户批准，2026-08-04）：[RFC-257 代码平台 Webhook 触发器](design/RFC-257-code-host-webhook-triggers/proposal.md)** —— 用户要求「支持代码平台的 hook 回调机制」。两路调研（仓内能力盘点：webhook 属有产品愿景零工程规划的处女地，`scheduled_tasks`+`fireSchedule`+`startExecution` 是最佳复用模板；multica 参考：`webhook_delivery` 五态机/去重索引排除 rejected/状态码语义表/channel 四件套抽象可抄，GitLab 集成与出站回写它没有）+ 四轮反问拍板 D1–D12：**仅入站**（出站回写只留 `ReportSink` 接口占位）、**零 GitLab REST API**（CI 失败上下文靠 agent 在 worktree 重跑复现）、通用 provider 抽象 + **自建 GitLab** 参考实现、**几百仓共用一个 group/system hook**（分流=触发器规则匹配+repo 动态解析，触发器绑规则不绑仓）、修到绿循环（pipeline_failed 反复触发+熔断）、supersede 并发语义、评论指令不鉴权（授权主体=触发器 owner，每次触发重建 actor 重校验）、人审沿现状挂起、目标三形态 workflow/agent/workgroup（镜像 scheduled_tasks launchKind 封套）。推导 D13–D24。三件套已落档并**经设计门闭环**（对抗子代理判定 needs-changes：**2 P0 + 8 P1 + 10 P2，逐条核实全部属实零驳回、全部折入**，记档 [design-gate-2026-08-04.md](design/RFC-257-code-host-webhook-triggers/design-gate-2026-08-04.md)）。**两条 P0 都是真实设计错误**：①熔断计数结构性死亡——忽略名单同时当命中过滤与重置条件 ⇒ 计数封顶 1 熔断永不可达，且 bot 入名单会把修到绿循环第 2 轮掐断（bot push 引发的 pipeline_failed 作者是 bot）⇒ 修法 = 名单**作用域化**（pipeline 类事件不过滤命中）+ 重置判定与命中解耦（bot 作者累加、人类作者清零）；②streamKey 缺 repo 维度——GitLab MR iid 是 per-project 序号 ⇒ 几百仓 prefix 范围下 `mr:42` 跨仓互相 supersede 误杀、`branch:main` 全仓共享熔断桶 ⇒ `repo|mr:<iid>`。P1 要点：**自建 GitLab 失败投递不自动重试**且持续 4xx/5xx 会 auto-disable 唯一 group hook（「500 让对端重投」的 multica 语义不成立 ⇒ 三段式异步分发挤进 10s 超时 + received/processing/interrupted 中间态 + 平台 replay 为主恢复路径）；`scheduledPayloadSchemaFor` 不能直接复用（StartTask superRefine 强制 repo 三态与「模板留空 fire 注入」矛盾 ⇒ 新派生封套 schema）；RFC-243 门面锁是硬编码 `CALL_FACES` 清单不自动覆盖新调用面；tasks 归属两列须进迁移 0138；同流并发需 keyed-mutex；**D19 改判**：触发器从「第七类 ACL」改 **owner 制**（grants 写权 = 改绑 launch_ref 后以 owner 身份跑高权 workflow 的提权通道；`scheduled_tasks` 当年同因有意弃用 ACL，schema.ts:1091-1092）；模板对 packed kind 输入改「分支来自事件」结构化代包 + `{{event_json}}` ≤32KiB + 运行期渲染后全量校验。**下一步：用户批准（须知悉 D19 改判与 GitLab auto-disable 部署风险五条影响清单）→ T1–T14 三批提交实现。未批准不动生产代码。**
+
 ✅ **2026-08-04 沙箱 / containment 功能性全面审计 + 修复（非 RFC：bug 修复直落，7 个 commit）**。用户报「沙箱 RFC 之后引入了一堆功能问题」，按切片切 **8 路 fan-out** 并行审计（策略渲染器 / 准入协调器 / 进程治理 / 工作区×git / opencode 受控链 / claude 驱动与系统 agent / 脚本节点 / 前端与测试覆盖），主 session 对每条 P0/P1 独立复核（真实 `git worktree` 复现、`claude --help` 实测、纯函数重建 bwrap argv）。**前提**：`sandboxMode` 默认 `warn`、warn 只在机制不可用时才降级 ⇒ Linux 装了 bubblewrap 即全量包裹，以下每条都命中默认部署形态。全清单与四条根因见 [`docs/audit-backlog.md` §沙箱 / containment 功能性审计](docs/audit-backlog.md)。
 
 **四条根因**：①放行集是从 cwd 的**路径形状猜**出来的（派生 4 条缺陷）；②**能力收缩没有影响清单**——收窄动作打掉了目标用户自己的功能且零告警（派生 6 条，正是 `CLAUDE.md` 今日新增门槛要防的）；③**沙箱自己出的错记到别人头上**（全仓无一处识别 bwrap 1/125/126/127 与 sandbox-exec 64/65，同一根因在四条链路给出四种互相矛盾且都错的分类）；④测试落点在纯函数层、真实 bwrap 在主 CI 零覆盖。
@@ -36,30 +38,47 @@
 
 **自查另确证两条评审都没提的**：pin 的 Bun 1.3.13 **能**交叉编译到 windows x64/arm64（本机实测产出合法 PE32+）⇒ arm64 缺席是政策问题不是能力问题；windows-2025 runner **不预装 sqlite3 CLI** ⇒ D15 从「顺手清理」升级为硬性前提，且 runner 上还有 MSYS2 的第二个 bash（更坐实「从 git 推导、绝不裸 `which('bash')`」）。
 
-**用户已批准并授权自主排序交付。已推送 9 批**（每批带回归测试 + 变异实证）：
-T1 平台原语 + **全仓负向扫描守卫**（`01c6f67e`）→ T0a 文件信任原语（`7b6e039f`）→
-T18 git NUL + longpaths（`f3cb3f8d`）→ T0a 续 storeHygiene + 身份规则（`2185a7e3`）→
-T0b 六文件身份栅栏收拢（`f870746d`）→ T12 受控 PATH win32 形态 + **设计门 P0-A**（`82920ad2`）→
-T2 env 大小写折叠单点（`1728b779`）→ T22/T23 脚本节点 win32（`74373d66`）→ T5/T26/T27 构建发行。
+**用户已批准并授权自主排序交付。已推送 22 个 commit**（每批带回归测试 + 变异实证）。
+核心平台层与 verified 执行链路**已完整落地**：T1 平台原语 + 全仓负向扫描守卫、
+T0a/T0b 文件信任原语与身份栅栏收拢、T2 env 大小写折叠单点、T4 Job Object、
+T5 spawn 选项、T11b/T11c verified artifact layout 与平台注入缝、T12 受控 PATH（含
+设计门唯一那条「不修则主线不成立」的 P0-A：**受控 PATH 必须含 git**）、T13/T14b
+shell 键与本地 MCP wrapperless、T18 git NUL + longpaths、T22/T23 脚本节点、
+T25b/T25c 归档与 indexer、T26/T27 产物与 release 矩阵、T29 e2e 换 bun:sqlite、
+定向 Windows CI job、T28a stub 契约冻结。
 
-**守卫是本轮最大的方法论收益**：它上线即证明手写清单不可信（`${root}/` 前缀 我写 4 /
-外部评审 6 / 实扫 **10**；PATH 4 / 7 / **10**），并在此后每一批里**强制**删除已完成的
-豁免条目（迁移做完却留着豁免 = 把口子留给未来的违规复用）。它还抓到我脚本迁移
-`windowsHide` 时漏掉的两处单行 spawn。
+**已在真实 Windows 11（build 26200，ARM64，Bun 1.3.14）上验收**（记档
+[acceptance-real-machine-2026-08-04.md](design/RFC-254-windows-native-execution/acceptance-real-machine-2026-08-04.md)）：
+RFC-254 平台套件 **84 pass / 0 fail**、三包 typecheck 全绿、单二进制编译出
+`agent-workflow-windows-arm64.exe`（123.9 MiB）且冒烟通过、`doctor` 逐条兑现设计
+——**sandbox 那行如实报出 `platform-unsupported,required-capability-missing`
+并说明 warn 档降级运行**（D1/D20 在真机上成立），app home 落在 `%USERPROFILE%`。
 
-**过程中发现并单独修掉三条既有缺陷**（均非本 RFC 引入）：`memory-distill-scheduler` 与
-`rfc224-fff-capability` 的墙钟时序 flake（第二次尤其值得记：我第一版修复**轮询了错误的
-谓词**——`calls` 在 spawn 开始时就自增而非完成时，于是把超时 flake 换成了顺序 flake）；
-以及 verified 存储的 TOCTOU 身份栅栏**零行为覆盖**（变异实证时把检查改恒真，`storeHygiene`
-与 `sourceGuard` 都没有任何测试变红）。已补逻辑与接线覆盖，行为覆盖登记 audit-backlog。
+**真机抓到三条 CI 与 macOS 都抓不到的**：①**Windows ARM64 的 Bun 构建禁用
+TinyCC ⇒ `bun:ffi dlopen()` 不可用**，推翻了 Job Object 的一条隐含前提——生产
+代码本来就正确降级，错的是我断言「win32 上必然可用」的测试；已改为「可用性是
+Bun **构建**的属性而非 Windows 的属性」，并反过来断言降级的诚实性
+（liveness 返回 `null` 而非 `false`）。x64 构建带 dlopen 且 x64 是发行目标，
+故发行产物保有强保证；扩到 ARM64 发行前必须先解决，已登记 audit-backlog。
+②`new URL(...).pathname` 在 Windows 上产出 `/C:/...`，`Bun.file` 打不开。
+③`bun install` 在 UNC 网络盘上崩溃（Bun 自身问题，但用 Parallels 共享目录
+直接开发者必撞）。
 
-**测试还当场抓到一个真 bug**：生产代码用 `node:path` 的 `dirname` 解析 Windows 路径，
-而它是**宿主口味**的——在 macOS 上对 `C:\...\git.exe` 返回 `'.'`。同一陷阱在两处存在。
+**守卫是本轮最大的方法论收益**：上线即证明手写清单不可信（`${root}/` 前缀
+我写 4 / 外部评审 6 / 实扫 **10**；PATH 4 / 7 / **10**），此后每一批**强制**
+删除已完成的豁免，并抓到我脚本迁移时漏掉的两处单行 spawn、以及数组形式
+`Bun.spawn([...], opts)` 这一整类盲区。
 
-**剩余需 Windows 环境验证**：T4/T4b（Job Object，需 FFI 实测）、T7（shutdown control
-listener）、T11b/T11c（verified artifact layout + 平台注入缝）、T14b（本地 MCP wrapperless
-物化）、T28/T29（e2e stub 编译化 + sqlite fixture）、T31–T35（CI 矩阵与视觉基线）、
-T25b–T25d（D24 四子系统）。详见 `design/RFC-254-windows-native-execution/plan.md` 实现进度表。
+**过程中发现并单独修掉四条既有缺陷**（均非本 RFC 引入）：两条墙钟时序 flake
+（第二条尤其值得记——我第一版修复**轮询了错误的谓词**，把超时 flake 换成了
+顺序 flake）、verified 存储的 TOCTOU 栅栏**零行为覆盖**、以及 RFC-223 身份
+指纹的逐条复核。
+
+**剩余（下一个 session 的完整工作面）**：**T28b** 实现单一参数化 stub
+（契约已冻结在 plan.md，含五条共有骨架 + 逐 stub 独有行为 + 不得跳步的交付
+顺序；必须先跑新旧差分 golden transcript，POSIX 全绿后才删旧 stub）；
+**T31–T35** CI 全矩阵与 46 张 win32 视觉基线（依赖 T28b，因为 e2e 在 Windows
+上需要可执行的 stub）。这两块是长尾收敛工作而非明确缺陷。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
