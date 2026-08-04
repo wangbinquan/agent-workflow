@@ -23,6 +23,7 @@ import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { createLogger, type Logger } from '@/util/log'
 import type { SpawnPlan, SystemPermissionProfile } from '../types'
 import { type ClaudeSkillInjection, prepareClaudeConfigDir } from './config'
+import { canonicalEnvKey, envNameMatches } from '@agent-workflow/shared'
 
 export interface ClaudeSpawnContext {
   /** Override `['claude']` (tests pass `['bun','run',mock]`). */
@@ -147,8 +148,11 @@ export function claudeControlledInheritEnv(
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(source)) {
     if (value === undefined) continue
-    if (CLAUDE_INTERNAL_ENV_MARKERS.has(key)) continue
-    if (key.startsWith('CLAUDECODE_')) continue
+    // RFC-254 T2: platform-aware name comparison. On Windows the environment
+    // block is case-insensitive, so an inherited `ClaudeCode` would slip past
+    // a byte-exact Set lookup and re-enter the controlled child.
+    if (envNameMatches(CLAUDE_INTERNAL_ENV_MARKERS, key, process.platform)) continue
+    if (canonicalEnvKey(key, process.platform).startsWith('CLAUDECODE_')) continue
     env[key] = value
   }
   return env

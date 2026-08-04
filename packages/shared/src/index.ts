@@ -115,3 +115,4 @@ export * from './changeGroups'
 // 零 fs 依赖，前端编辑与后端物化共用，两边不可能算出不同的布局。
 export * from './schemas/repoGroup'
 export * from './repoGroupLayout'
+export * from './platformEnv'

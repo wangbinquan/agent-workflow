@@ -75,6 +75,15 @@ export function configDirNameProblem(trimmed: string): 'invalid-leaf' | null {
 
 export function configDirEnvProblem(trimmed: string): 'invalid-name' | 'reserved' | null {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) return 'invalid-name'
-  if (RESERVED_SPAWN_ENV.has(trimmed)) return 'reserved'
+  // RFC-254 T2: the collision check is case-INSENSITIVE on every platform, not
+  // just Windows. This is CONFIG VALIDATION, and config is data that travels —
+  // a name accepted on Linux and later run on a Windows daemon (where the
+  // environment block folds case) would become a silent collision with the
+  // reserved variable it shadows. Rejecting `Pwd` everywhere costs nothing;
+  // every reserved name is conventionally all-caps anyway.
+  const folded = trimmed.toUpperCase()
+  for (const reserved of RESERVED_SPAWN_ENV) {
+    if (reserved.toUpperCase() === folded) return 'reserved'
+  }
   return null
 }

@@ -12,6 +12,7 @@
 
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { compareSemver, extractVersion } from '@/util/semver'
+import { envRecordDelete } from '@agent-workflow/shared'
 
 /** Minimal shape buildCommand needs (a structural subset of RunNodeOptions). */
 export interface OpencodeCommandOptions {
@@ -174,7 +175,7 @@ export function buildOpencodeEnv(ctx: OpencodeEnvContext): Record<string, string
       "runtime-config-dir-env-reserved: config_dir_env must not be 'OPENCODE_PERMISSION'",
     )
   }
-  const env: Record<string, string> = {
+  let env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     // opencode 1.14.51+ resolves its root via `process.env.PWD ?? process.cwd()`;
     // Bun.spawn's `cwd:` updates cwd but leaves PWD inherited from the daemon,
@@ -188,14 +189,22 @@ export function buildOpencodeEnv(ctx: OpencodeEnvContext): Record<string, string
   // RFC-223 PR-6: opencode merges OPENCODE_PERMISSION after
   // OPENCODE_CONFIG_CONTENT. Never let a daemon-level value silently alter a
   // managed child run. Full effective-config attestation remains RFC-224.
-  delete env.OPENCODE_PERMISSION
-  // RFC-154 (Codex impl-gate P2): with a CUSTOM key, scrub the protocol default
-  // inherited from the daemon's own environment — otherwise the child carries
-  // BOTH keys and a fork that still consults the default one lands in a stale
-  // dir. Default-key spawns are untouched (we just wrote it ourselves).
-  if (configDirEnv !== DEFAULT_CONFIG_DIR_PROFILE.opencode.env) {
-    delete env[DEFAULT_CONFIG_DIR_PROFILE.opencode.env]
-  }
+  // RFC-254 T2: removal goes through the platform-aware comparison. `delete
+  // env.X` matches the property name byte-for-byte, so on Windows — where the
+  // environment block is case-INSENSITIVE — a variable the OS spelled
+  // `OpenCode_Permission` would survive a deletion meant to remove it.
+  const scrub = [
+    'OPENCODE_PERMISSION',
+    // RFC-154 (Codex impl-gate P2): with a CUSTOM key, scrub the protocol
+    // default inherited from the daemon's own environment — otherwise the
+    // child carries BOTH keys and a fork that still consults the default one
+    // lands in a stale dir. Default-key spawns are untouched (we just wrote it
+    // ourselves).
+    ...(configDirEnv === DEFAULT_CONFIG_DIR_PROFILE.opencode.env
+      ? []
+      : [DEFAULT_CONFIG_DIR_PROFILE.opencode.env]),
+  ]
+  env = envRecordDelete(env, scrub, process.platform) as Record<string, string>
   // RFC-029: tell the dump plugin where to write the snapshot file. Set only
   // when the plugin was actually injected — otherwise leaving it unset keeps
   // any externally-set value (mock-opencode) from being hijacked.

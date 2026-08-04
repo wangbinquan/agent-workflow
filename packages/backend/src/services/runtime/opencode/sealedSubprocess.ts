@@ -9,7 +9,7 @@ import { constants } from 'node:fs'
 import { chmod, lstat, mkdir, open, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { mcpEnvEntryProblem } from '@agent-workflow/shared'
+import { canonicalEnvKey, mcpEnvEntryProblem } from '@agent-workflow/shared'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
 import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 import { IS_EMBEDDED } from '@/embed'
@@ -152,7 +152,12 @@ export function sanitizeNetlessEnvironment(
     if (
       typeof value !== 'string' ||
       value.includes('\0') ||
-      !SAFE_ENV_NAME.test(name) ||
+      // RFC-254 T2: match the name in its platform-canonical form. The
+      // whitelist demands an ALL-CAPS name, which is right on POSIX but drops
+      // every legitimately mixed-case Windows variable — `SystemRoot`, `Temp`,
+      // `ProgramData` — and a child without `SystemRoot` cannot even
+      // initialise winsock. The ORIGINAL spelling is what gets forwarded.
+      !SAFE_ENV_NAME.test(canonicalEnvKey(name, process.platform)) ||
       DANGEROUS_ENV_NAME.test(name)
     ) {
       if (value !== undefined && DANGEROUS_ENV_NAME.test(name)) {
