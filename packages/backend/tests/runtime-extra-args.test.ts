@@ -40,6 +40,7 @@ import {
   validateExtraArgs,
 } from '../src/services/runtimeRegistry'
 import { resolveFrozenRuntime } from '../src/services/nodeRunMint'
+import { getRuntimeDriver } from '../src/services/runtime'
 import {
   buildClaudeSpawn,
   CLAUDE_PLATFORM_OWNED_FLAGS,
@@ -76,6 +77,11 @@ async function seedRun(db: DbClient): Promise<string> {
 }
 
 describe('validateExtraArgs — fail-closed write gate', () => {
+  test('capability declaration: claude driver opts in, opencode stays fail-closed', () => {
+    expect(getRuntimeDriver('claude-code').acceptsExtraArgs).toBe(true)
+    expect(getRuntimeDriver('opencode').acceptsExtraArgs).toBeUndefined()
+  })
+
   test('null / empty → NULL (no column value)', () => {
     expect(validateExtraArgs('claude-code', null)).toBeNull()
     expect(validateExtraArgs('claude-code', undefined)).toBeNull()
@@ -84,7 +90,7 @@ describe('validateExtraArgs — fail-closed write gate', () => {
 
   test('opencode protocol rejects extraArgs entirely', () => {
     expect(() => validateExtraArgs('opencode', ['--skip-safe-check'])).toThrow(
-      /extra-args|only supported/i,
+      /extra-args|not supported/i,
     )
   })
 
@@ -158,7 +164,7 @@ describe('registry persistence + frozen snapshot', () => {
         protocol: 'opencode',
         extraArgs: ['--flag'],
       }),
-    ).rejects.toThrow(/only supported/i)
+    ).rejects.toThrow(/not supported/i)
   })
 
   test('update validates against the ROW protocol and flips the execution profile', async () => {
@@ -183,7 +189,7 @@ describe('registry persistence + frozen snapshot', () => {
     expect(cleared.probeFence).toBeGreaterThan(updated.probeFence)
     // and an update on an opencode row rejects extraArgs
     await expect(updateRuntime(db, 'opencode', { extraArgs: ['--x'] })).rejects.toThrow(
-      /only supported/i,
+      /not supported/i,
     )
   })
 

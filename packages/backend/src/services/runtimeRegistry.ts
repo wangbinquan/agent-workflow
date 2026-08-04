@@ -24,7 +24,7 @@ import { agents, runtimes } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { RuntimeKind } from '@/services/runtime'
-import { RUNTIME_KINDS } from '@/services/runtime'
+import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'
 import { createLogger } from '@/util/log'
 import { evictOpencodeModelsCache } from '@/util/opencode-models'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
@@ -192,10 +192,12 @@ export function validateExtraArgs(
   input: readonly string[] | null | undefined,
 ): string | null {
   if (input == null || input.length === 0) return null
-  if (protocol !== 'claude-code') {
+  // RFC-143 bypass-zero: capability declaration, not a protocol literal — a
+  // third runtime opts in by declaring acceptsExtraArgs on its driver.
+  if (getRuntimeDriver(protocol).acceptsExtraArgs !== true) {
     throw new ValidationError(
       'runtime-extra-args-protocol',
-      'extraArgs is only supported for claude-code protocol runtimes',
+      `extraArgs is not supported by the '${protocol}' runtime driver (only drivers declaring acceptsExtraArgs consume it)`,
     )
   }
   if (input.length > RUNTIME_EXTRA_ARGS_MAX) {

@@ -663,6 +663,14 @@ export interface RuntimeDriver {
    */
   readonly narrowedSystemPermissionProfiles: readonly Exclude<SystemPermissionProfile, 'all-deny'>[]
   /**
+   * 2026-08-04 — whether this driver's spawn consumes per-runtime `extraArgs`
+   * (fork-private CLI tokens appended to the argv). The registry's
+   * validateExtraArgs consults THIS declaration instead of discriminating on
+   * protocol literals (RFC-143 bypass-zero); an undeclared driver stays
+   * fail-closed (opencode: the verified serve argv is sealed — no seam).
+   */
+  readonly acceptsExtraArgs?: true
+  /**
    * Business descriptor refinement from the exact frozen child surfaces.
    * System callers use the filesystem-only profile directly.
    */

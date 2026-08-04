@@ -57,6 +57,9 @@ export const claudeCodeDriver: RuntimeDriver = {
   // dontAsk; design §2). Admission gates consult this set; anything not
   // declared here still fails closed in buildSpawn below.
   narrowedSystemPermissionProfiles: ['intent-read-v1'],
+  // 2026-08-04 — claude forks carry private flags (CodeAgent's
+  // --skip-safe-check); the registry-validated extraArgs land at the argv tail.
+  acceptsExtraArgs: true,
   // RFC-242 T5 — a node that fences its local MCP demands the model-child
   // no-network bundle: claude forks the platform's wrapper, which needs the
   // admitted child provider to build a boundary at all. WHICH nodes those are
