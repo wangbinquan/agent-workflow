@@ -322,6 +322,43 @@ async function waitForVisualCanvasViewportSettled(
     .toBeGreaterThanOrEqual(3)
 }
 
+/**
+ * Wait until the React Flow viewport stops moving, with no prior movement
+ * required.
+ *
+ * `waitForVisualCanvasViewportSettled` above deliberately waits for the
+ * viewport to MOVE first — it exists for "click a node, the canvas pans,
+ * then it settles". A page that merely finishes loading never satisfies that
+ * first poll, so a load-time screenshot had no settle step at all: the shot
+ * could land mid-`fitView`, and the nodes came out a few pixels off their
+ * final position. That is what made `mobile-task-detail.png` fail on the CI
+ * runner while passing locally — a race, not a baseline drift, so raising the
+ * pixel threshold would only have hidden it.
+ */
+async function waitForVisualCanvasViewportStable(page: Page): Promise<void> {
+  let previous: VisualCanvasViewport | null = null
+  let stableSamples = 0
+  await expect
+    .poll(
+      async () => {
+        const current = await readVisualCanvasViewport(page)
+        const delta =
+          previous === null
+            ? Number.POSITIVE_INFINITY
+            : Math.max(
+                Math.abs(current.x - previous.x),
+                Math.abs(current.y - previous.y),
+                Math.abs(current.zoom - previous.zoom) * 100,
+              )
+        stableSamples = delta <= 0.05 ? stableSamples + 1 : 0
+        previous = current
+        return stableSamples
+      },
+      { intervals: Array.from({ length: 20 }, () => 40) },
+    )
+    .toBeGreaterThanOrEqual(3)
+}
+
 async function expectSelectedNodeCanvasMargin(
   page: Page,
   nodeId: string,
@@ -940,6 +977,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.getByRole('heading', { name: /Mobile visual task/ })).toBeVisible()
     await expect(page.locator('.status-chip', { hasText: /^done$/i }).first()).toBeVisible()
     await expect(page.locator('.canvas-node--agent').first()).toBeVisible()
+    // A visible node is not a settled canvas: React Flow is still running
+    // fitView at that point, so the shot could catch the nodes a few pixels
+    // short of their final position.
+    await waitForVisualCanvasViewportStable(page)
     await expect(page).toHaveScreenshot('mobile-task-detail.png', {
       ...SNAPSHOT_OPTS,
       mask: [page.locator('.task-detail__id code')],
