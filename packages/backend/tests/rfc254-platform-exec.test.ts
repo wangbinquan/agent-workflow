@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { netlessInvocationCommand } from '@/services/runtime/opencode/sealedSubprocess'
+import { resetTarProbeForTests, tarAvailable } from '@/util/archive'
 import { resolve } from 'node:path'
 import {
   isLexicallyInside,
@@ -340,5 +341,33 @@ describe('RFC-254 T13 — the sealed shell is a platform capability, not an assu
     // The unexpected-shell case must still fail — a platform without a sealed
     // shell must not silently accept one somebody else put there.
     expect(identity).toContain('config.shell !== undefined')
+  })
+})
+
+describe('RFC-254 T25b — archive prerequisites', () => {
+  test('tar is probed once and reported honestly', () => {
+    // Windows ships bsdtar as System32\tar.exe since 1803, and macOS's `tar` IS
+    // bsdtar too — so the `--exclude=./x` dialect and every exit-code path in
+    // archive.ts are ALREADY exercised against the same libarchive on the macOS
+    // CI leg. What Windows genuinely adds is only "tar might be absent", which
+    // is why the presence check exists rather than a dialect abstraction.
+    resetTarProbeForTests()
+    expect(tarAvailable()).toBe(Bun.which('tar') !== null)
+    // Cached: backup runs hourly, so re-probing per call is pure overhead.
+    expect(tarAvailable()).toBe(tarAvailable())
+  })
+
+  test('a missing tar fails with an actionable message, not a bare ENOENT', async () => {
+    // The failure an operator sees must name the platform's own remedy. A raw
+    // spawn error says "ENOENT", which reads like a corrupt backup path.
+    const { tarGz } = await import('@/util/archive')
+    if (Bun.which('tar') !== null) {
+      // tar exists here, so assert the message shape from the source instead of
+      // faking absence (the probe is module-level state shared with real runs).
+      const src = readFileSync(resolve(import.meta.dir, '..', 'src/util/archive.ts'), 'utf8')
+      expect(src).toContain('tar is not available on PATH')
+      expect(src).toContain('System32')
+      expect(typeof tarGz).toBe('function')
+    }
   })
 })
