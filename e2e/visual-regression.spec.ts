@@ -26,7 +26,7 @@
 // where the gate actually runs, on ubuntu only (matching the committed
 // `-linux.png` baselines).
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -357,6 +357,25 @@ async function waitForVisualCanvasViewportStable(page: Page): Promise<void> {
       { intervals: Array.from({ length: 20 }, () => 40) },
     )
     .toBeGreaterThanOrEqual(3)
+}
+
+/**
+ * Re-fit a read-only canvas only after fonts and ResizeObserver measurements
+ * have settled. The component owns a bounded automatic-refit window, but a
+ * screenshot must not depend on whether the hosted runner delivered its last
+ * measurement just before or just after that window closed.
+ */
+async function fitVisualCanvasAtSettledGeometry(page: Page, canvas: Locator): Promise<void> {
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
+  })
+  const fitView = canvas.locator('.react-flow__controls-fitview')
+  await expect(fitView).toBeVisible()
+  await fitView.click()
+  await waitForVisualCanvasViewportStable(page)
 }
 
 async function expectSelectedNodeCanvasMargin(
@@ -977,10 +996,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.getByRole('heading', { name: /Mobile visual task/ })).toBeVisible()
     await expect(page.locator('.status-chip', { hasText: /^done$/i }).first()).toBeVisible()
     await expect(page.locator('.canvas-node--agent').first()).toBeVisible()
-    // A visible node is not a settled canvas: React Flow is still running
-    // fitView at that point, so the shot could catch the nodes a few pixels
-    // short of their final position.
-    await waitForVisualCanvasViewportStable(page)
+    // A visible node is not a settled canvas: async fonts/node measurements
+    // can land on either side of the component's bounded auto-refit window.
+    // Re-fit once from the final measured geometry before locking pixels.
+    await fitVisualCanvasAtSettledGeometry(page, page.locator('.workflow-canvas'))
     await expect(page).toHaveScreenshot('mobile-task-detail.png', {
       ...SNAPSHOT_OPTS,
       mask: [page.locator('.task-detail__id code')],
@@ -1126,11 +1145,12 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(preview.locator('.react-flow__node')).toHaveCount(3)
     await waitForStableAuthenticatedShell(page)
     await expect(page.getByTestId('task-members-dialog-button')).toBeVisible()
-    // WorkflowCanvas deliberately keeps a 1200ms one-shot refit window while
-    // the surrounding task-detail layout settles. Lock pixels only after that
-    // window closes; otherwise this screenshot can capture the transient
-    // pre-refit camera even though the final canvas geometry is deterministic.
+    // WorkflowCanvas deliberately keeps a 1200ms refit window while the
+    // surrounding task-detail layout settles. Close that window, then perform
+    // one explicit fit from the final measured geometry: CI has demonstrated
+    // that the last ResizeObserver delivery can straddle the timeout.
     await page.waitForTimeout(1300)
+    await fitVisualCanvasAtSettledGeometry(page, preview)
     await expect(preview).toHaveScreenshot(
       'dynamic-workflow-preview-canvas.png',
       COMPONENT_SNAPSHOT_OPTS,
