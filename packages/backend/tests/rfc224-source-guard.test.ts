@@ -23,16 +23,25 @@ const INTEGRATION_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'integra
 const VISUAL_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'visual-regression-nightly.yml')
 const WEBKIT_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'e2e-webkit-nightly.yml')
 const E2E_FIXTURE_ROOT = resolve(REPO_ROOT, 'e2e', 'fixtures')
+const E2E_STUB_MODE_ROOT = resolve(E2E_FIXTURE_ROOT, 'stub')
+// RFC-254 T28b: the nine shell stubs became modes of one compiled program, so
+// the matrix is keyed by mode file. Each still reports a DISTINCT string, and
+// several are deliberately not semver — that variety is the point: RFC-224
+// treats the reported version as telemetry, never as a trust boundary, and a
+// fixture set that all looked like `1.2.3` would stop exercising it.
 const E2E_STUB_VERSIONS: Readonly<Record<string, string>> = Object.freeze({
-  'stub-opencode-clarify-inline.sh': '1.18.3',
-  'stub-opencode-clarify.sh': '1.17.9',
-  'stub-opencode-commit.sh': '999.0.0',
-  'stub-opencode-cross-clarify.sh': '1.18.4',
+  'mode-basic.ts': 'custom-build',
+  'mode-business-workflows.ts': 'business-workflows',
+  'mode-business-workgroups.ts': 'business-workgroups',
+  'mode-clarify-inline.ts': '1.18.3',
+  'mode-clarify.ts': '1.17.9',
+  'mode-commit.ts': '999.0.0',
+  'mode-cross-clarify.ts': '1.18.4',
   // RFC-234: intent-builder e2e stub — telemetry stays deliberately non-semver.
-  'stub-opencode-intent.sh': 'intent-build',
-  'stub-opencode-slow.sh': '0.9.0',
-  'stub-opencode-workflow-matrix.sh': 'workflow-matrix',
-  'stub-opencode.sh': 'custom-build',
+  'mode-intent.ts': 'intent-build',
+  'mode-slow.ts': '0.9.0',
+  'mode-workflow-matrix.ts': 'workflow-matrix',
+  'mode-workgroup-matrix.ts': 'workgroup-matrix',
 })
 
 const roots: string[] = []
@@ -312,45 +321,22 @@ describe('RFC-224 release platform source guard', () => {
   })
 
   test('keeps the e2e stubs on an explicit version-neutral telemetry matrix', () => {
-    const stubs = readdirSync(E2E_FIXTURE_ROOT)
-      .filter((name) => /^stub-opencode.*\.sh$/.test(name))
+    const modes = readdirSync(E2E_STUB_MODE_ROOT)
+      .filter((name) => name.startsWith('mode-'))
       .sort()
-    expect(stubs).toEqual([
-      'stub-opencode-clarify-inline.sh',
-      'stub-opencode-clarify.sh',
-      'stub-opencode-commit.sh',
-      'stub-opencode-cross-clarify.sh',
-      'stub-opencode-intent.sh',
-      'stub-opencode-slow.sh',
-      'stub-opencode-workflow-matrix.sh',
-      'stub-opencode.sh',
-    ])
+    // Enumerated, not derived: a NEW mode has to be added here deliberately,
+    // which is when someone decides what it should report.
+    expect(modes).toEqual(Object.keys(E2E_STUB_VERSIONS).sort())
 
-    for (const stub of stubs) {
-      const expectedVersion = E2E_STUB_VERSIONS[stub]
-      if (expectedVersion === undefined) {
-        throw new Error(`missing version-neutral fixture entry for ${stub}`)
-      }
-      const source = readFileSync(resolve(E2E_FIXTURE_ROOT, stub), 'utf8')
-      const versionArms = [
-        ...source.matchAll(
-          /^[ \t]*--version\s*\|\s*-v\s*\|\s*version\)\s*\n([\s\S]*?)^[ \t]*;;\s*$/gm,
-        ),
-      ]
-      expect(versionArms, stub).toHaveLength(1)
-      expect(
-        versionArms[0]![1]!
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean),
-        stub,
-      ).toEqual([`echo "stub-opencode ${expectedVersion}"`, 'exit 0'])
-
-      const advertisedVersions = [...source.matchAll(/\bstub-opencode ([^\s"'`]+)/g)].map(
+    for (const mode of modes) {
+      const expectedVersion = E2E_STUB_VERSIONS[mode]!
+      const source = readFileSync(resolve(E2E_STUB_MODE_ROOT, mode), 'utf8')
+      // Exactly one place writes it, and it writes exactly that.
+      const advertised = [...source.matchAll(/'stub-opencode ([^\n']+)\\n'/g)].map(
         (match) => match[1]!,
       )
-      expect(advertisedVersions, stub).toEqual([expectedVersion])
+      expect(advertised, mode).toEqual([expectedVersion])
     }
-    expect(new Set(Object.values(E2E_STUB_VERSIONS)).size).toBe(stubs.length)
+    expect(new Set(Object.values(E2E_STUB_VERSIONS)).size).toBe(modes.length)
   })
 })
