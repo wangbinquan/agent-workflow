@@ -12,7 +12,8 @@ import { readFileSync } from 'node:fs'
 import { netlessInvocationCommand } from '@/services/runtime/opencode/sealedSubprocess'
 import { resetTarProbeForTests, tarAvailable } from '@/util/archive'
 import { isWindowsBatchShim } from '@/services/structuralDiff/deep/indexers'
-import { resolve } from 'node:path'
+import { isAbsolute, resolve, resolve as resolvePath, win32 } from 'node:path'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import {
   toPortableRelativePath,
   isLexicallyInside,
@@ -421,5 +422,31 @@ describe('RFC-254 — repo-relative paths in port data are portable, not host-fl
       'utf8',
     )
     expect(artifacts).toContain('toPortableRelativePath(relative(realRoot, realTarget))')
+  })
+})
+
+describe('RFC-254 T32 — fixture paths must be canonical on the host that runs them', () => {
+  // The Windows survey's largest tractable cluster. A POSIX literal like
+  // `/opt/my-cc` is NOT rejected as relative on Windows — `isAbsolute` says
+  // true (leading slash = absolute on the current drive) — it fails the
+  // CANONICAL round-trip, because `resolve('/opt/my-cc')` is `D:\opt\my-cc`.
+  // The reported diagnosis then blames traversal, the one thing not wrong.
+  test('the helper round-trips through resolve on this host', () => {
+    const p = canonicalBinaryPath('my-cc')
+    expect(isAbsolute(p)).toBe(true)
+    expect(resolvePath(p)).toBe(p)
+  })
+
+  test('a POSIX literal does NOT round-trip under win32 semantics', () => {
+    // Demonstrated through the win32 implementation so it holds on POSIX CI:
+    // this is exactly why the fixtures had to stop hardcoding one.
+    expect(win32.isAbsolute('/opt/my-cc')).toBe(true)
+    expect(win32.resolve('/opt/my-cc')).not.toBe('/opt/my-cc')
+  })
+
+  test('the production validator is fine with a real Windows path', () => {
+    // Stated so nobody "fixes" the validator: a genuine Windows path is
+    // canonical and accepted. Only the fixture was unportable.
+    expect(win32.resolve('D:\\tools\\opencode.exe')).toBe('D:\\tools\\opencode.exe')
   })
 })

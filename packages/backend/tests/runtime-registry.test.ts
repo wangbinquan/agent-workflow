@@ -7,6 +7,7 @@
 // binary) so the registry stays mutable (tested in PR-C).
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -297,7 +298,7 @@ describe('resolution: name → (protocol, binary) (RFC-112 PR-A)', () => {
     await createRuntime(db, {
       name: 'my-claude',
       protocol: 'claude-code',
-      binaryPath: '/opt/my-cc',
+      binaryPath: canonicalBinaryPath('my-cc'),
     })
   })
 
@@ -313,7 +314,7 @@ describe('resolution: name → (protocol, binary) (RFC-112 PR-A)', () => {
     expect(await resolveRuntimeByName(db, 'my-claude')).toMatchObject({
       name: 'my-claude',
       protocol: 'claude-code',
-      binaryPath: '/opt/my-cc',
+      binaryPath: canonicalBinaryPath('my-cc'),
     })
   })
 
@@ -395,9 +396,12 @@ describe('migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)',
 
   test('backfills binary onto the canonical rows (protocol matches)', async () => {
     await seedBuiltinRuntimes(db)
-    await migrateConfigIntoBuiltins(db, { opencodePath: '/opt/oc', claudeCodePath: '/opt/cc' })
-    expect((await getRuntime(db, 'opencode'))!.binaryPath).toBe('/opt/oc')
-    expect((await getRuntime(db, 'claude-code'))!.binaryPath).toBe('/opt/cc')
+    await migrateConfigIntoBuiltins(db, {
+      opencodePath: canonicalBinaryPath('oc'),
+      claudeCodePath: canonicalBinaryPath('cc'),
+    })
+    expect((await getRuntime(db, 'opencode'))!.binaryPath).toBe(canonicalBinaryPath('oc'))
+    expect((await getRuntime(db, 'claude-code'))!.binaryPath).toBe(canonicalBinaryPath('cc'))
   })
 
   test('does NOT write the opencode binary into a user row reusing the name under claude-code protocol', async () => {
@@ -407,7 +411,7 @@ describe('migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)',
       protocol: 'claude-code',
       binaryPath: null,
     })
-    await migrateConfigIntoBuiltins(db, { opencodePath: '/opt/oc' })
+    await migrateConfigIntoBuiltins(db, { opencodePath: canonicalBinaryPath('oc') })
     // protocol mismatch (claude-code !== opencode) → binary stays NULL.
     expect((await getRuntime(db, 'opencode'))!.binaryPath).toBeNull()
   })
