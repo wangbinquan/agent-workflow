@@ -7360,6 +7360,8 @@ export const zhCN: Resources = {
     resumeLaunchLink: '启动新任务 →',
     failure: {
       generic: '任务执行失败。',
+      'script-output-truncated':
+        '脚本的 stdout 超出保留窗口，单端口模式无法保证端口值完整，已判失败。',
       'script-nonzero-exit': '脚本以非零退出码结束。',
       'script-timeout': '脚本超时被终止。',
       'script-envelope-missing': '脚本没有输出带本次运行 nonce 的 <workflow-output> 信封。',
@@ -9152,6 +9154,8 @@ export const zhCN: Resources = {
       'upload-input-target-dir-invalid': '上传输入的目标目录必须是仓库内相对路径。',
       'wrapper-children-outside-bounds': '包装器内有节点超出了包装器边界。',
       'wrapper-child-duplicate': '包装器重复列出了同一个直接子节点。',
+      'script-node-invalid':
+        '脚本节点的字段不合法（正文过长、端口或依赖数量超上限、字段形状不对）。',
       'script-body-empty': '脚本节点的正文为空。',
       'script-language-invalid': '脚本节点的语言必须是 python、bash 或 node。',
       'script-in-fanout-unsupported':

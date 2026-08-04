@@ -2775,6 +2775,8 @@ export const enUS: Resources = {
     resumeLaunchLink: 'Launch a new task →',
     failure: {
       generic: 'Task execution failed.',
+      'script-output-truncated':
+        'The script’s stdout exceeded the retained window, so the single-port value could not be delivered intact.',
       'script-nonzero-exit': 'The script exited with a non-zero status.',
       'script-timeout': 'The script was killed at the timeout.',
       'script-envelope-missing':
@@ -4717,6 +4719,8 @@ export const enUS: Resources = {
         'The upload input target dir must be a repo-relative path.',
       'wrapper-children-outside-bounds': 'An inner node sits outside the wrapper visual bounds.',
       'wrapper-child-duplicate': 'The wrapper lists the same direct child more than once.',
+      'script-node-invalid':
+        'The script node has invalid fields (body too long, too many ports or dependencies, or a malformed shape).',
       'script-body-empty': 'The script node has an empty body.',
       'script-language-invalid': 'The script language must be python, bash or node.',
       'script-in-fanout-unsupported':
