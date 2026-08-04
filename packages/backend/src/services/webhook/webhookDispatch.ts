@@ -24,7 +24,7 @@ import {
   webhookTriggers,
   webhookTriggerStreams,
 } from '@/db/schema'
-import type { WebhookDispatcher, WebhookEndpointRow } from '@/routes/webhooks'
+import type { WebhookDispatcher, WebhookEndpointRow } from '@/services/webhook/dispatcherTypes'
 import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'

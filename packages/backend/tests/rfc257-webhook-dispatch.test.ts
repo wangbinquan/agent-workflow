@@ -29,7 +29,7 @@ import {
   resolveRepoForEvent,
   type WebhookDispatchDeps,
 } from '../src/services/webhook/webhookDispatch'
-import type { WebhookEndpointRow } from '../src/routes/webhooks'
+import type { WebhookEndpointRow } from '../src/services/webhook/dispatcherTypes'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 9))

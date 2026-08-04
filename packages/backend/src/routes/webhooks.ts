@@ -27,28 +27,12 @@ import {
 } from '@/services/webhook/deliveryStore'
 import { streamKeyOf } from '@/services/webhook/matching'
 import { createWebhookRateLimiters, type WebhookRateLimiters } from '@/services/webhook/rateLimiter'
-import type { CodeHostEvent } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('webhook-ingress')
 
 /** HTTP 层 body 上限（流式截断；入库另有 256KiB 截断）。 */
 export const WEBHOOK_BODY_MAX_BYTES = 1024 * 1024
-
-export type WebhookEndpointRow = typeof webhookEndpoints.$inferSelect
-
-/**
- * 异步分发器（T6 webhookDispatch 实装）。契约：接手 received 行后负责推进
- * processing → 终态（matched/ignored/failed）；本路由对 dispatch 的 Promise
- * 只 catch 标 failed，绝不 await 在响应路径上。
- */
-export interface WebhookDispatcher {
-  dispatch(input: {
-    deliveryId: string
-    endpoint: WebhookEndpointRow
-    event: CodeHostEvent
-  }): Promise<void>
-}
 
 /** 流式读 body，超限返回 null（→ 413）。 */
 async function readBodyLimited(req: Request, limitBytes: number): Promise<string | null> {

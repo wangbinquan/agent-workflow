@@ -18,7 +18,7 @@ import {
   webhookTriggerStreams,
   workflows,
 } from '../src/db/schema'
-import type { WebhookDispatcher } from '../src/routes/webhooks'
+import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 5))
