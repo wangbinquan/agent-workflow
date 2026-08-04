@@ -111,6 +111,17 @@ jobs:
         with:
           bun-version: '1.3.13'
 
+      # ci.yml's matrix jobs do this, so a survey that does not is measuring a
+      # DIFFERENT environment than the one it is predicting for. The runtime
+      # playground offers a runtime per available binary, so without it that
+      # spec fails for a reason the matrix leg would never hit.
+      - name: Install current opencode (matches ci.yml's matrix jobs)
+        shell: bash
+        run: |
+          bun install -g opencode-ai@latest
+          export PATH="$HOME/.bun/bin:$PATH"
+          opencode --version
+
       - name: Install dependencies
         shell: bash
         run: bun install --frozen-lockfile
