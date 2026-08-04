@@ -299,6 +299,15 @@ T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
 （`030d7f6d` / `24ef0e27`），另记下两类**不得转换**的：必须是真二进制的
 （`/bin/echo`）、以及故意畸形的负向字面量——两者都被它们自己的测试当场抓住。
 
+**第二轮 e2e 勘测（含路径修复）：216 通过 / 5 失败**（首轮 213 / 7）。路径修复清掉了
+`workflow-matrix output kinds` 与 `business-workflow-scenarios`，`mcp-runtime-playground`
+退为 flaky。剩下两条 Windows 特有的 workgroup-matrix，根因是 **CRLF**：stub 写进
+`...gate rejection\n`、读回来是 `...\r\n`。中间只经过 git——Git for Windows 默认
+`core.autocrlf=true`。**框架的 worktree 不是开发者的 checkout**：agent 往里写字节、
+框架提交并重新物化、那些字节再作为端口值 / diff / 模型读到的内容离开。已在
+`hardenedGitLeadingArgs` 钉死 `core.autocrlf=false` + `core.eol=lf`（`c8e01df6`）。
+修完后 e2e 侧应只剩三条**在 POSIX 上也红**的既有问题。
+
 **下一簇的线索（RFC-224，70+ 条）**：`rfc224-sealed-subprocess.test.ts` 用
 `providerId: 'linux-bwrap'` + `/usr/bin/bwrap`，是 **Linux 专属**的能力证明；
 Windows 上的失败形态是「12 秒等不到 supervisor 的 ACK 写入」。12 秒已相当宽裕，
