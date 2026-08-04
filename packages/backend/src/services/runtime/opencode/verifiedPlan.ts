@@ -5,18 +5,23 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { chmod, lstat, mkdir, realpath, rm } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { loadConfig } from '@/config'
+import { readConfig } from '@/config'
 import { Paths } from '@/util/paths'
 import type { BusinessNodeSpawnContext, SpawnPlan } from '../types'
 import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
   deriveHermeticOpencodeLayout,
+  machineConfigDeclaredPluginCount,
   removeHermeticOpencodeLayout,
   type HermeticOpencodeLayout,
 } from './hermetic'
 import { pluginFileSpec, selectShippedPlugins } from './pluginSpec'
-import { resolveProviderCredential, type CustomProviderPlanDependencies } from './customProvider'
+import {
+  inheritsMachineOpencodeConfig,
+  resolveProviderCredential,
+  type CustomProviderPlanDependencies,
+} from './customProvider'
 import { inspectRuntimeOpencodeBinary, snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
@@ -216,8 +221,12 @@ async function snapshotBusinessToolchain(
   // read-only and only because an administrator listed them.
   const readOnlyDirs: string[] = []
   const declared =
+    // `readConfig`, never `loadConfig`: the latter MATERIALIZES a defaults file
+    // when none exists, and this runs on every business spawn — a plan builder
+    // must not create `~/.agent-workflow/config.json` as a side effect. (The
+    // full suite caught it: the write leaked across test files sharing appHome.)
     dependencies.loadBusinessToolchainPaths?.() ??
-    loadConfig(Paths.config).businessToolchainPaths ??
+    readConfig(Paths.config)?.businessToolchainPaths ??
     []
   for (const entry of declared) {
     // Re-check at spawn time: the schema validated the SHAPE when it was
@@ -666,6 +675,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
       allowShell: dep.permission.bash !== 'deny',
     }
   })
+  const inheritMachineConfig = inheritsMachineOpencodeConfig(dependencies.customProvider)
   // RFC-255: resolved BEFORE the config is built — a custom gateway contributes
   // a `provider` section to that config, and a disabled one must fail here
   // rather than fall through to the generic credential channels.
@@ -706,6 +716,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
     username,
     password,
     sourceEnv,
+    inheritMachineConfig,
   })
   serverEnv.PWD = canonicalWorktree
   const buildDigest = (await (dependencies.inspectBinary ?? inspectRuntimeOpencodeBinary)(command))
@@ -949,6 +960,13 @@ export async function buildVerifiedOpencodeBusinessPlan(
           sandboxTopology === 'runner-outer' && containment.mode !== 'off' && containment.available,
         inlineModel: `${selectedModel.providerID}/${selectedModel.modelID}`,
         inlineVariant: selectedModel.variant ?? null,
+        // RFC-256: the operator's own OpenCode config is readable again, but
+        // plugins declared there are still not loaded. Report the count so that
+        // limit is visible in the run log instead of looking like a silent
+        // no-op (0 when inheritance is off or nothing is declared).
+        machineConfigIgnoredPlugins: inheritMachineConfig
+          ? machineConfigDeclaredPluginCount(join(safeAbsoluteHome(sourceEnv.HOME), '.config', 'opencode'))
+          : 0,
         mcpCount: Object.keys(plannedMcp.config).length,
         // RFC-251: report the encoded selection, not a structural zero.
         pluginCount: shippedPlugins.length,
