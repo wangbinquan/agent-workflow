@@ -36,6 +36,7 @@ import {
 } from './sealedInputs'
 import {
   materializeNetlessWrapper,
+  netlessInvocationCommand,
   sanitizeMcpAuthoredEnvironment,
   sanitizeNetlessEnvironment,
   type NetlessSubprocessManifest,
@@ -376,7 +377,9 @@ async function planMcpConfig(
     result[mcp.name] = {
       type: 'local',
       enabled: true,
-      command: [wrapperPath],
+      // RFC-254 T14b: shape comes from the shared helper, so the config block
+      // and the materializer cannot drift apart across platforms.
+      command: netlessInvocationCommand(wrapperPath, wrapperManifestPath),
       ...(mcp.config.timeoutMs === undefined ? {} : { timeout: mcp.config.timeoutMs }),
     }
   }

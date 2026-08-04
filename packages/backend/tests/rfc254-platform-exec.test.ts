@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { netlessInvocationCommand } from '@/services/runtime/opencode/sealedSubprocess'
 import { resolve } from 'node:path'
 import {
   isLexicallyInside,
@@ -282,5 +283,40 @@ describe('RFC-254 T11c — platform truth is injected, never re-derived', () => 
       // vacuously true because the feature was removed.
       expect(/ForHost|EXECUTABLE_SUFFIX_FOR_HOST/.test(text), rel).toBe(true)
     }
+  })
+})
+
+describe('RFC-254 T14b — netless invocation shape (design gate P0-F / D21)', () => {
+  test('POSIX collapses to the single wrapper path, exactly as before', () => {
+    expect(
+      netlessInvocationCommand('/seal/mcp/x/run', '/seal/mcp/x/netless.json', 'linux'),
+    ).toEqual(['/seal/mcp/x/run'])
+  })
+
+  test('Windows spawns the self-command directly, with the manifest as an argument', () => {
+    // No `.cmd` shim on purpose: cmd.exe RE-TOKENIZES what it forwards, and an
+    // MCP invocation carries JSON and paths — re-tokenization is data
+    // corruption, which is the argv-mangling failure multica hit driving the
+    // same CLI. And no shebang exists on Windows, so the POSIX shape is simply
+    // unavailable.
+    const cmd = netlessInvocationCommand(
+      'C:\\seal\\mcp\\x\\run',
+      'C:\\seal\\mcp\\x\\netless.json',
+      'win32',
+    )
+    expect(cmd.length).toBeGreaterThan(1)
+    expect(cmd).toContain('--manifest')
+    expect(cmd).toContain('C:\\seal\\mcp\\x\\netless.json')
+    expect(cmd).toContain('__opencode-netless-subprocess')
+    // The wrapper path must NOT appear — nothing is materialized there.
+    expect(cmd).not.toContain('C:\\seal\\mcp\\x\\run')
+  })
+
+  test('both platforms still route through the SAME fence entry point', () => {
+    // The manifest is what actually carries the fence; only the way the process
+    // is entered differs. If these ever named different subcommands, one
+    // platform would be running an unfenced child.
+    const win = netlessInvocationCommand('/w/run', '/w/netless.json', 'win32')
+    expect(win).toContain('__opencode-netless-subprocess')
   })
 })

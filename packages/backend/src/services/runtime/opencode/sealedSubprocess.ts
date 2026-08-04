@@ -935,9 +935,28 @@ export interface MaterializeNetlessWrapperInput {
   manifest: NetlessSubprocessManifest
 }
 
+/**
+ * The argv a consumer must spawn to enter the netless fence.
+ *
+ * Single source of truth shared with `materializeNetlessWrapper`: the MCP
+ * config block is assembled BEFORE materialization runs, so both sides have to
+ * agree on the shape without one calling the other. POSIX collapses to the
+ * wrapper path; Windows spawns the self-command directly (see D21 — a `.cmd`
+ * shim would let cmd.exe re-tokenize the arguments).
+ */
+export function netlessInvocationCommand(
+  wrapperPath: string,
+  manifestPath: string,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  if (platform !== 'win32') return [wrapperPath]
+  return verifiedSelfCommand('__opencode-netless-subprocess', ['--manifest', manifestPath])
+}
+
 export async function materializeNetlessWrapper(
   input: MaterializeNetlessWrapperInput,
-): Promise<void> {
+  platform: NodeJS.Platform = process.platform,
+): Promise<{ command: string[] }> {
   const manifest = NetlessSubprocessManifestSchema.parse(input.manifest)
   if (!contained(dirname(input.wrapperPath), input.manifestPath)) {
     return executionIdentityFailure('execution-identity-store-unsafe')
@@ -947,8 +966,24 @@ export async function materializeNetlessWrapper(
     '--manifest',
     input.manifestPath,
   ])
+  // RFC-254 T14b (design gate P0-F / D21) — WRAPPERLESS on Windows.
+  //
+  // The POSIX shape collapses the self-command into one executable path so
+  // consumers can treat it as a single argv element. Windows has no shebang,
+  // and the obvious substitute — a `.cmd` shim — is actively wrong here: cmd.exe
+  // RE-TOKENIZES the arguments it forwards, which is the argv-mangling failure
+  // the multica reference implementation hit driving the same CLI. An MCP
+  // invocation carries JSON and paths, so re-tokenization is data corruption.
+  //
+  // So on Windows nothing is materialized beyond the manifest, and the caller
+  // receives the full argv to spawn directly. The manifest — the part that
+  // actually carries the fence — is written identically on both platforms.
+  if (platform === 'win32') {
+    return { command: netlessInvocationCommand(input.wrapperPath, input.manifestPath, platform) }
+  }
   const script = `#!/bin/sh\nexec ${command.map(shellQuote).join(' ')} "$@"\n`
   await writeExclusiveRegular(input.wrapperPath, script, 0o500)
+  return { command: netlessInvocationCommand(input.wrapperPath, input.manifestPath, platform) }
 }
 
 async function readManifest(path: string): Promise<NetlessSubprocessManifest> {
