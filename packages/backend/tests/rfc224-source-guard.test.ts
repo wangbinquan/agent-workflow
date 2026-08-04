@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -92,16 +99,52 @@ describe('RFC-224 project source guard', () => {
     },
   )
 
-  test('rejects a forbidden surface at an ancestor, matching upstream search scope', async () => {
-    const parent = root()
-    const worktree = join(parent, 'nested', 'worktree')
-    await mkdir(worktree, { recursive: true })
-    await writeFile(join(parent, 'opencode.json'), '{}')
+  // 2026-08-04 审计订正：这条原本断言「祖先目录里的 opencode.json 也要拒」，标题还写着
+  // 「matching upstream search scope」——去 opencode v1.18.x 源码逐条核对后**不成立**：
+  //   config/paths.ts:28-32   up({targets:['.opencode'], start: directory, stop: worktree})
+  //   skill/index.ts:196-197  up({targets: externalDirs, start: directory, stop: worktree})
+  //   util/filesystem.ts:213-226  `if (stop === current) break`（只有 stop 永不命中时才爬到 /）
+  // 两条向上遍历都**以工作树封顶**；唯一无界的读是 `join(global.home, dir)`，而它跟随
+  // `HOME`，受控配置把 HOME 指向私有 hermetic home，所以 daemon 用户的真实家目录根本不在
+  // opencode 的搜索域里。
+  //
+  // 而这条多余的严格性有真实代价：工作树在 `~/.agent-workflow/` 下 ⇒ `$HOME` 必被扫，
+  // daemon 用户只要有 `~/.opencode` 或 `~/.claude/skills`，**所有** verified 节点永久失败。
+  test('工作树内的禁用面照拒（真实搜索域）', async () => {
+    const worktree = root()
+    await writeFile(join(worktree, 'opencode.json'), '{}')
     try {
       await scanOpencodeProjectSurface(worktree)
       throw new Error('expected failure')
     } catch (error) {
       expectCode(error, 'execution-identity-project-config-unsupported')
+    }
+  })
+
+  test('祖先目录里的同名面不再拒——它不在 opencode 的搜索域内', async () => {
+    const parent = root()
+    const worktree = join(parent, 'nested', 'worktree')
+    await mkdir(worktree, { recursive: true })
+    await writeFile(join(parent, 'opencode.json'), '{}')
+    // 不抛即通过；祖先链仍被指纹化（下面 source-changed 那组用例锁的就是它）。
+    const fingerprint = await scanOpencodeProjectSurface(worktree)
+    expect(fingerprint).toBeDefined()
+  })
+
+  test('拒绝时给出命中的绝对路径，而不是裸的相对名', async () => {
+    const worktree = root()
+    const hit = join(worktree, '.opencode')
+    await mkdir(hit, { recursive: true })
+    try {
+      await scanOpencodeProjectSurface(worktree)
+      throw new Error('expected failure')
+    } catch (error) {
+      expectCode(error, 'execution-identity-project-config-unsupported')
+      // guard 对工作树做 realpath（Seatbelt 匹配的是内核路径），所以指针也是规范路径：
+      // macOS 上 /var → /private/var。断言规范化后的形态，而不是 tmpdir 的原样字符串。
+      expect(String((error as { pointer?: unknown }).pointer ?? '')).toBe(
+        join(realpathSync(worktree), '.opencode'),
+      )
     }
   })
 

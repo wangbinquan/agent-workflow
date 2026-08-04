@@ -2758,6 +2758,24 @@ function safeKill(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
 }
 
 /** RFC-098 WP-8: SIGTERM → SIGKILL escalation grace. */
+/**
+ * SIGTERM → SIGKILL grace for a node's process group.
+ *
+ * 2026-08-04 audit — KNOWN GAP, deliberately not "fixed" blind: on Linux with
+ * the bwrap outer wrapper this grace is largely nominal. The group kill reaches
+ * the bwrap monitor at the same instant as everything else; the monitor exits on
+ * SIGTERM, and `--die-with-parent` then SIGKILLs the namespace's init, which
+ * takes the whole PID namespace with it. So the inner runtime gets milliseconds,
+ * not 10 s, to abort its session, flush its session DB and finish its last
+ * stdout — while macOS (exec-in-place, no intermediate process) honours the full
+ * window. Two OSes, two cancellation semantics.
+ *
+ * Not changed here because every candidate fix (signal proxy in the wrapper, or
+ * asking the launcher to exit via the control channel before falling back to the
+ * group kill) has to be validated on a real Linux host: getting it wrong breaks
+ * cancellation outright, which is strictly worse than a short grace window. See
+ * `docs/audit-backlog.md` for the fix options.
+ */
 const KILL_ESCALATION_GRACE_MS = 10_000
 /** RFC-098 WP-8: margin on top of the grace for the final reap deadline. */
 const FINAL_REAP_MARGIN_MS = 5_000

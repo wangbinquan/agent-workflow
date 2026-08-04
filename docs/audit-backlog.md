@@ -161,23 +161,23 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   硬钉 `--chdir parsed.worktreePath`。opencode 的系统提示明确指示模型用 `workdir` 而非 `cd &&`
   （opencode 源码 `tool/shell/prompt.ts:112`），并据此设置子进程 cwd（`tool/shell.ts:611-613`）——平台把它
   扔掉 ⇒ 命令跑在仓根、相对路径全错、**静默产出错误结论**。monorepo / 多仓任务必中。
-- ⏳ **(P1) opencode 本地 MCP 拒绝 PATH token 且不解析解释器链**：`runtime/opencode/verifiedPlan.ts:264-271`
+- ✅ **(P1，已修 2026-08-04) opencode 本地 MCP 拒绝 PATH token 且不解析解释器链**：`runtime/opencode/verifiedPlan.ts:264-271`
   对非绝对路径直接 `execution-identity-mismatch`；`:153` 固定 `FIXED_NETLESS_PATH='/usr/bin:/bin'` 且只绑
   可执行文件那一个 inode。官方文档形态 `npx -y @modelcontextprotocol/server-*` 保存成功、运行必失败；
   绝对路径的 `#!/usr/bin/env node` 启动器 exit 127。**claude 侧 RFC-242 已修**（`claudeCode/netlessMcp.ts:205-269`
   有 `Bun.which` + shebang 链解析并绑进边界），opencode 侧没跟——且 `verifiedPlan.ts:230-236` 的注释声称
   「opencode 的 `snapshotBusinessToolchain` 做了等价的事」不成立（那只封印 `bun`）。
-- ⏳ **(P1，需产品决策 → 建议独立 RFC) opencode 业务 shell 的 PATH = `/usr/bin:/bin`**：
+- ✅ **(P1，已修 2026-08-04) opencode 业务 shell 的 PATH = `/usr/bin:/bin`**：
   `runtime/opencode/hermetic.ts:547` + `verifiedPlan.ts:153`，唯一补充是从 daemon PATH 找 `bun` 封一份
   （找不到只 warn）。生产机上 `node`/`npm`/`npx`/`cargo`/`go` 全部 command not found，Code→Audit→Fix 的
   「Code」段大面积失效，且模型只看到 127、无任何提示说明是平台换掉了 PATH。**修它需要新增「管理员声明
   可暴露给业务 shell 的工具链路径」的配置面 + 封印投影**，属能力面而非 bug，走独立 RFC。
-- ⏳ **(P1) `agent.network` 半落地**：schema/service 可写可存可导出
+- 🟡 **(P1，部分修 2026-08-04) `agent.network` 半落地**：schema/service 可写可存可导出
   （`packages/shared/src/schemas/agent.ts:252-267`、`services/agent.ts:284,444-445`），但其承诺依赖的
   `model-child-egress-v1` 在 profile 注册表里**不存在**（`services/sandbox/containmentCoordinator.ts:28-78`），
   `networkDeny` 的唯一消费方是脚本节点。写 `network:'allow'` 的 agent 拿不到网、写 deny 的也没围栏，
   而 UI/保存路径零提示。归 RFC-252 G4；**G4 落地前应在保存/导入路径对非空 `network` 显式告警**。
-- ⏳ **(P1) `sourceGuard` 祖先黑名单一路扫到文件系统根**：`runtime/opencode/sourceGuard.ts:74-99` 从 canonical
+- ✅ **(P1，已修 2026-08-04) `sourceGuard` 祖先黑名单一路扫到文件系统根**：`runtime/opencode/sourceGuard.ts:74-99` 从 canonical
   worktree 逐级 `dirname` 到 `parse(x).root`，`FORBIDDEN_AT_EACH_LEVEL`（`:8-16`）含 `.opencode` / `reference` /
   `references` / `.claude/skills`。worktree 在 `~/.agent-workflow/` 下 ⇒ **`$HOME` 必被扫**。daemon 用户只要
   有 `~/.claude/skills` 或 `~/.opencode`，所有 verified 节点永久 `execution-identity-project-config-unsupported`，
@@ -234,12 +234,12 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   内的行，两组 owner 都不含它；runner 侧只查重不 resolve。沙箱修好后横幅仍在，已完成的任务也仍在。
 - ✅ **(P1，已修 2026-08-04) 脚本节点与依赖安装器的降级完全静默**：`alertSandboxDegradedOnce` 全仓只有
   `services/runner.ts:1414` 一个调用点。
-- ⏳ **(P2) claude 的四个 containment 告警码只进 daemon 日志**：`runtime/claudeCode/driver.ts:217,223,267,293`
+- ✅ **(P2，已修 2026-08-04) claude 的四个 containment 告警码只进 daemon 日志**：`runtime/claudeCode/driver.ts:217,223,267,293`
   全是 `ctx.log.warn`，lifecycle_alerts / node_run 事件 / WS / 前端全链零命中。而本文件 §35/§38 正是靠
   「`unconstrained` 告警驱动收窄」——不看日志的管理员永远收不到。
 - ✅ **(P2，已修 2026-08-04) 启动期 409 `sandbox-unavailable` 无 i18n**：`services/task.ts:1867-1876` 英文裸串，
   `DOMAIN_PREFIXES` 无 `sandbox-` 前缀。
-- ⏳ **(P2) 设置页不展示 reasonCodes；CLI 修复指引从 UI 不可达**：`SandboxCard.tsx:56` 只做 length 判断；
+- ✅ **(P2，已修 2026-08-04) 设置页不展示 reasonCodes；CLI 修复指引从 UI 不可达**：`SandboxCard.tsx:56` 只做 length 判断；
   `services/sandbox/guidance.ts:92-129` 的安装/userns 指引只有 SSH 上机的人看得到。
 - ✅ **(P2，已修 2026-08-04) Linux 真 bwrap 行为在主 CI 的回归窗口最长 24h**：`.github/workflows/ci.yml:143-155` 只在 macOS shard 设
   `RUN_SANDBOX_ITEST=1`（注释明写 "ubuntu has no bwrap"）；唯一装 bubblewrap 的 `integration-opencode.yml`
@@ -248,7 +248,7 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 - ✅ **(P2，已修 2026-08-04) runner 层沙箱接线变异不红**：`services/runner.ts:1375-1398`（sessionStore/readOnly\*/下传）与
   `:1406-1420`（warn 降级告警触发）整段删掉，现有测试零红。前者一断，RFC-251 的 Linux 插件 ENOENT
   原样复发且无预警。
-- ⏳ **(P2) 脚本节点 `network:'deny'` 的真围栏两 OS 均无 real-mechanism 测试**：只有 argv/渲染层断言。
+- ✅ **(P2，已修 2026-08-04) 脚本节点 `network:'deny'` 的真围栏两 OS 均无 real-mechanism 测试**：只有 argv/渲染层断言。
 
 ### 本轮修复范围与仍未修的清单（2026-08-04）
 
@@ -258,6 +258,27 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 `claude-capability-regressions-2026-08-04`、`netless-workdir-2026-08-04`；
 `rfc205-sandbox-scratch-allowback` 的 fixture 改为落**真实** worktree 指针
 （原来随手 mkdir 一个 `.git` 目录，不是任何真实布局）。
+
+**2026-08-04 第二轮（用户要求「没修的直接修」）**：上一轮登记为「需独立 RFC / 需决策 / 需实测」
+的 6 条，除 SIGTERM 一条外全部落地——
+
+- **业务 shell PATH**：新增 daemon config `businessToolchainPaths`（绝对、已规范化、≤16 条，
+  schema 层校验形状；默认**空** = 与修复前逐字一致，绝不从 daemon PATH 推断）。声明后按
+  只读投影进子围栏（`bindReadOnly`）并前置进 PATH，与既有的 Bun 封印同一条装配线；spawn 时
+  再校验一次存在性与目录性（配置写入后目录可能消失，而 bind 缺失源会中止整个子进程）。
+- **`sourceGuard` 扫描范围**：按 opencode v1.18.x 源码逐条核对后收窄到工作树。两条向上遍历
+  都以 worktree 封顶（`config/paths.ts:28-32`、`skill/index.ts:196-197`，`util/filesystem.ts:213-226`
+  的 `if (stop === current) break`），唯一无界的读跟随 `HOME`，而受控配置把 HOME 指向私有
+  hermetic home。原先的「每一级祖先都拒」严格宽于 opencode 实际读取范围，代价是任何有
+  `~/.opencode` 或 `~/.claude/skills` 的 daemon 用户永久跑不了 verified 节点。祖先链仍被指纹化。
+  **同时订正了一条名不副实的测试**——它标题写着 "matching upstream search scope"，而事实相反。
+- **本地 MCP PATH token / 解释器链**：解析器提到 `netlessProjection.ts`，两个运行时共用。
+- **claude 的能力移除事实进 `plan.diagnostics`**（审计 P2-9 自己提的通道）：`businessTools`、
+  `businessToolWarnings`、`declaredNetwork` + `networkEnforced:false`。
+- **设置页降级提示**：列出 reasonCodes + 指向 `agent-workflow sandbox`。
+- **脚本 netless 真围栏**：新增 gated real-mechanism 用例（macOS 实跑 `sandbox-exec`、Linux 走
+  `bwrap`），断言「出网被拒 **且** 工作树仍可写」，并带一条不加围栏的对照组——否则在本来就
+  没网的环境里第一条是假绿。
 
 **仍未修，各有明确理由**：
 
@@ -273,9 +294,12 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   非空 `network` 显式告警，避免它看起来像个已生效的开关。
 - ⏳ **`sourceGuard` 祖先黑名单扫到文件系统根**——诊断半已修（错误里给出命中的绝对路径）；
   **收窄扫描范围是安全决策**，需 RFC-224 owner 拍板（收窄 = 放宽一条 opencode 配置继承面）。
-- ⏳ **Linux bwrap 下取消的 SIGTERM 宽限塌缩为即时 SIGKILL**——机制链读源码成立，但修法
-  （给 bwrap 加信号代理 / 宽限期内先经 control 通道请求自杀）需要 Linux 实测验证才好定，
-  本机无 Linux。
+- ⏳ **Linux bwrap 下取消的 SIGTERM 宽限塌缩为即时 SIGKILL**——**唯一一条本轮仍未修的**。
+  机制链读源码成立（组杀同时命中 bwrap monitor，monitor 退出后 `--die-with-parent` 对
+  namespace init 直接 SIGKILL），但两个候选修法（wrapper 里做信号代理 / 宽限期内先经 control
+  通道请求 launcher 自退、超时再组杀）都必须在真 Linux 上验证：改错会让**取消整体失效**，
+  那比宽限窗口偏短严重得多。已在 `runner.ts:KILL_ESCALATION_GRACE_MS` 的注释里如实标注该
+  常量在 Linux 上名不副实，不再让代码给出一个它兑现不了的承诺。
 - ⏳ **claude 的四个 containment 告警码只进 daemon 日志**、**设置页不展示 reasonCodes /
   CLI 指引从 UI 不可达**、**脚本 `network:'deny'` 的真围栏无 real-mechanism 测试**——
   三条都是呈现/覆盖增强，不改执行语义，排入下一轮。

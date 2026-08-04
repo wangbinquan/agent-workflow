@@ -378,6 +378,20 @@ export const claudeCodeDriver: RuntimeDriver = {
         mcpKeys: claudeMcp !== null ? Object.keys(claudeMcp.mcpServers) : [],
         pluginCount: ctx.plugins.filter((p) => p.enabled !== false).length,
         pluginNames: ctx.plugins.filter((p) => p.enabled !== false).map((p) => p.name),
+        // 2026-08-04 audit (P2-9): diagnostics existed to answer "what actually
+        // landed in this spawn assembly", but carried none of the decisions that
+        // silently REMOVE capability — so "this node loaded zero tools", "its
+        // MCP children got no fence" and "its declared network posture is not
+        // enforced yet" were invisible outside a daemon log nobody reads.
+        // Names and enums only, never config bodies (docs/OPENCODE_CONFIG.md §6).
+        businessTools: gate === null ? 'unconstrained' : claudeToolsValue(gate),
+        businessToolWarnings: gate?.warnings ?? [],
+        // RFC-252 G4 is not landed: `agent.network` is persisted and exported
+        // but NOTHING enforces it. Report the declaration next to the fact that
+        // it is inert, so a workflow author cannot read the saved value as a
+        // working switch.
+        declaredNetwork: ctx.agent.network ?? null,
+        networkEnforced: false,
       },
     }
   },

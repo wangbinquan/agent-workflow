@@ -217,6 +217,45 @@ export const ConfigSchema = z.object({
    *  unavailable; 'warn' (default) = degrade to unsandboxed with a loud alert;
    *  'off' = never wrap (pre-RFC-205 behaviour). */
   sandboxMode: z.enum(['enforce', 'warn', 'off']).default('warn'),
+  /**
+   * Absolute directories exposed READ-ONLY to a business agent's shell and its
+   * local MCP children, and prepended to their PATH.
+   *
+   * 2026-08-04 sandbox audit: the fenced child's PATH is a fixed
+   * `/usr/bin:/bin` plus one sealed copy of Bun. On a normal deployment that
+   * means `node`, `npm`, `npx`, `cargo`, `go` and every version-manager shim
+   * are simply absent, so the "Code" half of Code→Audit→Fix answers `command
+   * not found` — and the model only sees exit 127, with nothing saying the
+   * platform replaced its PATH. Declaring the toolchain here is the supported
+   * way to give it back.
+   *
+   * EMPTY BY DEFAULT: this widens what model-controlled processes may execute,
+   * so it is an explicit administrator decision, never inferred from the
+   * daemon's own PATH. Entries are validated here (absolute, normalized, no
+   * `..`, not the filesystem root) and re-checked at spawn time; the child
+   * boundary additionally refuses any entry that would contain the private
+   * home / appHome / tmp masks, which rules out `/` and `/home`.
+   */
+  businessToolchainPaths: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .refine(
+          (value) =>
+            value.startsWith('/') &&
+            value !== '/' &&
+            !value.includes('\0') &&
+            !value.split('/').includes('..') &&
+            !value.endsWith('/'),
+          {
+            message:
+              'must be an absolute, normalized directory path without ".." and without a trailing slash',
+          },
+        ),
+    )
+    .max(16)
+    .default([]),
   /** Take a raw (byte-copy) pre-migration backup before applying pending
    *  migrations on boot, so a botched upgrade can be rolled back. */
   backupOnMigration: z.boolean().default(true),
@@ -599,6 +638,7 @@ export const DEFAULT_CONFIG: Config = {
   backupRetentionDays: 30,
   backupMaxTotalBytes: 0,
   sandboxMode: 'warn',
+  businessToolchainPaths: [],
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 0,

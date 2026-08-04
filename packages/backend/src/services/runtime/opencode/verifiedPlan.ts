@@ -3,8 +3,10 @@
 // behind explicit test dependency injection.
 
 import { createHash, randomBytes } from 'node:crypto'
-import { chmod, lstat, mkdir, rm } from 'node:fs/promises'
+import { chmod, lstat, mkdir, realpath, rm } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { loadConfig } from '@/config'
+import { Paths } from '@/util/paths'
 import type { BusinessNodeSpawnContext, SpawnPlan } from '../types'
 import {
   buildControlledOpencodeConfig,
@@ -158,6 +160,8 @@ const FIXED_NETLESS_PATH = '/usr/bin:/bin'
 
 interface BusinessToolchainSnapshot {
   executablePaths: string[]
+  /** Administrator-declared toolchain DIRECTORIES, exposed read-only. */
+  readOnlyDirs: string[]
   path: string
 }
 
@@ -166,6 +170,11 @@ export interface VerifiedBusinessPlanDependencies extends VerifiedOpencodePlanDe
   resolveToolchainBinary?: (token: string) => string | null
   /** Freeze a resolved tool into the private per-run seal before exposing it. */
   snapshotToolchainBinary?: typeof snapshotRuntimeOpencodeBinary
+  /**
+   * Test seam for the administrator-declared toolchain directories. Production
+   * reads the real daemon config (same shape as RFC-255's provider seam).
+   */
+  loadBusinessToolchainPaths?: () => readonly string[]
   /** RFC-255 — inject the daemon config / secret key for custom providers. */
   customProvider?: CustomProviderPlanDependencies
 }
@@ -184,23 +193,54 @@ async function snapshotBusinessToolchain(
   const resolveToolchainBinary =
     dependencies.resolveToolchainBinary ?? ((token: string) => Bun.which(token))
   const sourcePath = resolveToolchainBinary('bun')
-  if (sourcePath === null) return null
-
-  const snapshotPath = join(sealRoot, 'toolchain', 'bun')
-  try {
-    const snapshot = await (dependencies.snapshotToolchainBinary ?? snapshotRuntimeOpencodeBinary)({
-      command: [sourcePath],
-      snapshotPath,
-    })
-    if (snapshot.snapshotPath !== snapshotPath || !/^[0-9a-f]{64}$/.test(snapshot.digest)) {
-      return null
+  const executablePaths: string[] = []
+  const pathEntries: string[] = []
+  if (sourcePath !== null) {
+    const snapshotPath = join(sealRoot, 'toolchain', 'bun')
+    try {
+      const snapshot = await (
+        dependencies.snapshotToolchainBinary ?? snapshotRuntimeOpencodeBinary
+      )({ command: [sourcePath], snapshotPath })
+      if (snapshot.snapshotPath === snapshotPath && /^[0-9a-f]{64}$/.test(snapshot.digest)) {
+        executablePaths.push(snapshotPath)
+        pathEntries.push(dirname(snapshotPath))
+      }
+    } catch {
+      // Missing/unsealable Bun stays non-fatal (a compiled deployment may not
+      // ship it); the administrator toolchain below is independent of it.
     }
-  } catch {
-    return null
   }
+  // 2026-08-04 audit: without this the fenced child's PATH is `/usr/bin:/bin`
+  // plus the sealed Bun, so `node` / `npm` / `cargo` / any version-manager shim
+  // are absent and the model gets a bare 127. These directories are exposed
+  // read-only and only because an administrator listed them.
+  const readOnlyDirs: string[] = []
+  const declared =
+    dependencies.loadBusinessToolchainPaths?.() ??
+    loadConfig(Paths.config).businessToolchainPaths ??
+    []
+  for (const entry of declared) {
+    // Re-check at spawn time: the schema validated the SHAPE when it was
+    // written, but the directory can disappear afterwards, and binding a
+    // missing source aborts the whole child spawn.
+    if (!isAbsolute(entry) || resolve(entry) !== entry) continue
+    let real: string
+    try {
+      const metadata = await lstat(entry)
+      if (metadata.isSymbolicLink() || !metadata.isDirectory()) continue
+      real = await realpath(entry)
+    } catch {
+      continue
+    }
+    if (readOnlyDirs.includes(real)) continue
+    readOnlyDirs.push(real)
+    pathEntries.push(real)
+  }
+  if (executablePaths.length === 0 && readOnlyDirs.length === 0) return null
   return {
-    executablePaths: [snapshotPath],
-    path: `${dirname(snapshotPath)}:${FIXED_NETLESS_PATH}`,
+    executablePaths,
+    readOnlyDirs,
+    path: [...pathEntries, FIXED_NETLESS_PATH].join(':'),
   }
 }
 
@@ -379,6 +419,7 @@ async function materializeMcpWrappers(input: {
         ...new Set([
           ...input.frozenSkillPaths,
           ...(input.toolchain?.executablePaths ?? []),
+          ...(input.toolchain?.readOnlyDirs ?? []),
           wrapper.executable,
           // Without the interpreters the fence exposes only the launcher's own
           // inode, and an `#!/usr/bin/env node` launcher exits 127 inside it.
@@ -771,7 +812,13 @@ export async function buildVerifiedOpencodeBusinessPlan(
         appHome,
         realHome,
         gitCommonDirs,
-        bindReadOnly: [...new Set([...frozenSkillPaths, ...(toolchain?.executablePaths ?? [])])],
+        bindReadOnly: [
+          ...new Set([
+            ...frozenSkillPaths,
+            ...(toolchain?.executablePaths ?? []),
+            ...(toolchain?.readOnlyDirs ?? []),
+          ]),
+        ],
         env: {
           ...netlessBaseEnv(layout, sourceEnv, toolchain?.path),
           PWD: canonicalWorktree,

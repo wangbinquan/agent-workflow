@@ -82,18 +82,31 @@ export async function scanOpencodeProjectSurface(
       ino: metadata.ino.toString(),
       mode: Number(metadata.mode & 0o7777n),
     })
-    for (const candidate of FORBIDDEN_AT_EACH_LEVEL) {
+    // 2026-08-04 audit — the REJECTION applies to the worktree only; the walk
+    // above it continues purely to fingerprint the ancestor chain.
+    //
+    // Rejecting at every ancestor was strictly broader than what OpenCode can
+    // actually read, and the difference was not academic: worktrees live under
+    // `~/.agent-workflow/`, so `$HOME` was ALWAYS scanned, and a daemon user who
+    // had ever run opencode (`~/.opencode`) or installed Claude Code skills
+    // (`~/.claude/skills`) failed EVERY verified node forever — under an error
+    // that says "project config unsupported", which points nowhere near a home
+    // directory.
+    //
+    // Verified in opencode v1.18.x source rather than assumed: BOTH upward walks
+    // are bounded by the worktree —
+    //   config/paths.ts:28-32   up({targets:['.opencode'], start: directory, stop: worktree})
+    //   skill/index.ts:196-197  up({targets: externalDirs, start: directory, stop: worktree})
+    // and `util/filesystem.ts:213-226` breaks the loop at `stop` (it only climbs
+    // to `/` when `stop` never matches). The one unbounded read is
+    // `path.join(global.home, dir)`, which follows `HOME` — and the controlled
+    // config points `HOME` at the private hermetic home, so the daemon user's
+    // real home is not on OpenCode's search domain at all.
+    for (const candidate of cursor === canonicalWorktree ? FORBIDDEN_AT_EACH_LEVEL : []) {
       const hit = join(cursor, candidate)
       if (await existsUnsafe(hit)) {
-        // 2026-08-04 audit: the pointer used to be the bare RELATIVE name
-        // (`/.opencode`, `/references`), which is useless the moment the hit is
-        // not in the worktree — and it usually is not. This walk climbs every
-        // ancestor up to the filesystem root, and worktrees live under
-        // `~/.agent-workflow/`, so `$HOME` is ALWAYS scanned: a daemon user who
-        // has ever run opencode (`~/.opencode`) or installed Claude Code skills
-        // (`~/.claude/skills`) fails EVERY verified node forever, under an error
-        // that says "project config unsupported". Naming the absolute path is
-        // the difference between a five-second fix and an unfalsifiable outage.
+        // Name the ABSOLUTE path: the old pointer was the bare relative name
+        // (`/.opencode`), which tells an operator nothing about where to look.
         return executionIdentityFailure('execution-identity-project-config-unsupported', hit)
       }
     }
