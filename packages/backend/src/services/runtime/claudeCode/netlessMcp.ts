@@ -38,8 +38,12 @@ import type { Mcp } from '@agent-workflow/shared'
 import type { PreparedContainmentPlan } from '@/services/sandbox'
 import type { Logger } from '@/util/log'
 import {
+  canonicalExecutable,
   canonicalNetlessDirectory,
+  canonicalRegularFile,
   ensurePrivateNetlessDirectory,
+  FIXED_NETLESS_PATH,
+  resolveInterpreterChain,
   resolveNetlessGitCommonDirs,
 } from '../netlessProjection'
 import { runtimeContainmentAdmissionFromPrepared } from '../opencode/containment'
@@ -57,7 +61,6 @@ import {
  * prepended so a `#!/usr/bin/env node` launcher still resolves; nothing else is
  * added, and NOTHING from the daemon's PATH leaks.
  */
-const FIXED_NETLESS_PATH = '/usr/bin:/bin'
 
 /** Names must be safe path/JSON keys before any of them reaches a wrapper dir. */
 const SAFE_MCP_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,127}$/i
@@ -66,7 +69,6 @@ const SAFE_MCP_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,127}$/i
 const SHEBANG_PROBE_BYTES = 512
 
 /** `#!/usr/bin/env node` → node → its own interpreter … a cycle is a failure. */
-const MAX_INTERPRETER_HOPS = 4
 
 export interface ClaudeNetlessFenceDecision {
   fence: boolean
@@ -172,133 +174,6 @@ async function frozenFileDigest(path: string, expectedMode: number): Promise<str
   return createHash('sha256')
     .update(await readFile(path))
     .digest('hex')
-}
-
-/** Canonical, regular, non-symlink file — the only shape allowed to be executed or bound. */
-async function canonicalRegularFile(path: string): Promise<string> {
-  const canonical = await realpath(path)
-  if (resolve(canonical) !== canonical || canonical.includes('\0')) {
-    return executionIdentityFailure('execution-identity-store-unsafe')
-  }
-  const metadata = await lstat(canonical)
-  if (metadata.isSymbolicLink() || !metadata.isFile()) {
-    return executionIdentityFailure('execution-identity-mismatch')
-  }
-  return canonical
-}
-
-/**
- * Resolve the configured command head to one canonical regular file.
- *
- * Three shapes, matching what claude itself did before the fence existed:
- *   - absolute (`/opt/x/server`) — taken as is;
- *   - PATH-relative bare token (`npx`) — looked up in the DAEMON's PATH, the
- *     only sane reading of a name typed into the MCP form. The MANIFEST still
- *     carries the canonical absolute path, because the child's own PATH is the
- *     fixed netless one and a bare token would simply not resolve inside the
- *     boundary;
- *   - worktree-relative (`./tools/server`, `tools/server`) — resolved against
- *     the TASK WORKTREE, which is the cwd claude forked it with. `Bun.which`
- *     resolves such a token against the DAEMON's cwd, which either fails or —
- *     worse — finds an unrelated same-named file inside the install directory.
- */
-async function canonicalExecutable(
-  token: string,
-  sourceEnv: Readonly<Record<string, string | undefined>>,
-  canonicalWorktree: string,
-): Promise<string> {
-  if (token.length === 0 || token.includes('\0')) {
-    return executionIdentityFailure('execution-identity-mismatch')
-  }
-  const located = isAbsolute(token)
-    ? token
-    : token.includes('/')
-      ? resolve(canonicalWorktree, token)
-      : // Bun.which honors the supplied PATH; the daemon's own PATH is the only
-        // sane interpretation of a bare token the user typed in the MCP form.
-        (Bun.which(token, { PATH: sourceEnv.PATH ?? FIXED_NETLESS_PATH }) ?? null)
-  if (located === null || !isAbsolute(located)) {
-    return executionIdentityFailure('execution-identity-mismatch')
-  }
-  return canonicalRegularFile(located)
-}
-
-/**
- * The interpreters an executable needs at exec time, canonical and in order.
- *
- * A local MCP is very often an interpreted launcher: `npx` on this machine is
- * `…/npm/bin/npx-cli.js` with `#!/usr/bin/env node`, and NO `node` beside it.
- * Binding only the launcher's own inode and PATH-ing only its own directory
- * therefore produced `exit 127` inside the fence — claude reported
- * `mcp_servers:[{status:"failed"}]` and the node still finished `is_error:false`
- * with its tools silently missing. Resolve the `#!` chain (opencode's
- * `snapshotBusinessToolchain` does the equivalent for Bun) so the boundary
- * exposes exactly the interpreters the command needs and nothing else.
- */
-async function resolveInterpreterChain(
-  executable: string,
-  sourceEnv: Readonly<Record<string, string | undefined>>,
-): Promise<string[]> {
-  const chain: string[] = []
-  let cursor = executable
-  for (let hop = 0; hop < MAX_INTERPRETER_HOPS; hop += 1) {
-    const interpreterToken = await readShebangInterpreter(cursor)
-    if (interpreterToken === null) return chain
-    const located = isAbsolute(interpreterToken)
-      ? interpreterToken
-      : (Bun.which(interpreterToken, { PATH: sourceEnv.PATH ?? FIXED_NETLESS_PATH }) ?? null)
-    if (located === null) {
-      // The interpreter is not resolvable from the daemon's own PATH either, so
-      // the command could not have run before the fence. Fail closed rather
-      // than materialize a wrapper that is guaranteed to exit 127.
-      return executionIdentityFailure('execution-identity-mismatch')
-    }
-    const canonical = await canonicalRegularFile(located)
-    // An interpreter that already lives on the fixed netless PATH (`/bin/sh`,
-    // `/usr/bin/python3`) needs nothing: those directories are on the child's
-    // PATH and inside the read-only root bind. Only a toolchain OUTSIDE them
-    // (Homebrew / nvm / asdf `node`) has to be projected in.
-    if (FIXED_NETLESS_PATH.split(':').includes(dirname(canonical))) return chain
-    if (chain.includes(canonical) || canonical === executable) {
-      return executionIdentityFailure('execution-identity-mismatch')
-    }
-    chain.push(canonical)
-    cursor = canonical
-  }
-  return executionIdentityFailure('execution-identity-mismatch')
-}
-
-/**
- * The interpreter a `#!` line names, or null for a real binary. `#!/usr/bin/env
- * node` yields `node` (the tool `env` will look up), any other form yields the
- * interpreter path itself; optional flags are ignored because they are the
- * interpreter's own argv, not another file.
- */
-async function readShebangInterpreter(path: string): Promise<string | null> {
-  const handle = await open(
-    path,
-    constants.O_RDONLY | (typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0),
-  )
-  try {
-    const buffer = Buffer.alloc(SHEBANG_PROBE_BYTES)
-    const { bytesRead } = await handle.read(buffer, 0, SHEBANG_PROBE_BYTES, 0)
-    const head = buffer.subarray(0, bytesRead).toString('binary')
-    if (!head.startsWith('#!')) return null
-    const newline = head.indexOf('\n')
-    const line = (newline < 0 ? head : head.slice(0, newline)).slice(2).trim()
-    const tokens = line.split(/\s+/).filter((entry) => entry.length > 0)
-    const first = tokens[0]
-    if (first === undefined || first.includes('\0')) return null
-    if (!/^(?:\/usr\/bin\/env|\/bin\/env|env)$/.test(first)) return first
-    // `env` may carry its own options (`-S`, `-i`, `NAME=value`); the first
-    // plain token after them is the real interpreter.
-    const tool = tokens
-      .slice(1)
-      .find((entry) => !entry.startsWith('-') && !entry.includes('=') && !entry.includes('/'))
-    return tool ?? null
-  } finally {
-    await handle.close()
-  }
 }
 
 /**

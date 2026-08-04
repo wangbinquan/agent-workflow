@@ -12,7 +12,13 @@
 // 采纳，其余（或未请求）一律退回工作树。
 
 import { describe, expect, test } from 'bun:test'
-import { join } from 'node:path'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { isAbsolute, join } from 'node:path'
+import {
+  canonicalExecutable,
+  resolveInterpreterChain,
+} from '../src/services/runtime/netlessProjection'
 import {
   resolveNetlessCwd,
   type NetlessSubprocessManifest,
@@ -63,5 +69,57 @@ describe('resolveNetlessCwd — 采纳 workdir，但只在围栏内', () => {
 
   test('私有 scratch（HOME/TMPDIR 所在）⇒ 采纳，它本就是可写子树', () => {
     expect(resolveNetlessCwd(manifest, SCRATCH)).toBe(SCRATCH)
+  })
+})
+
+// -----------------------------------------------------------------------------
+// 2026-08-04 审计 P1：opencode 的本地 MCP 直接拒绝 PATH token、且不解析解释器链。
+//
+// 官方文档形态 `npx -y @modelcontextprotocol/server-*` 保存成功、每次运行都以不可读的
+// `execution-identity-mismatch` 整节点失败；绝对路径的 `#!/usr/bin/env node` 启动器则在
+// 围栏内 exit 127（opencode 只把该 server 记为 failed，节点照常「完成」但少了全部工具）。
+// claude 侧 RFC-242 早已解决这两件事——修法是**共用**那套解析，而不是留一个更弱的第二实现。
+// 两个 helper 因此从 `claudeCode/netlessMcp.ts` 提到运行时中立的 `netlessProjection.ts`。
+// -----------------------------------------------------------------------------
+describe('共享的可执行文件解析（两个运行时同一实现）', () => {
+  test('bare PATH token 被解析成绝对规范路径，而不是直接拒绝', async () => {
+    const resolved = await canonicalExecutable('sh', { PATH: '/bin:/usr/bin' }, '/tmp')
+    expect(isAbsolute(resolved)).toBe(true)
+    expect(resolved.endsWith('/sh')).toBe(true)
+  })
+
+  test('工作树相对 token 以工作树为基准（而不是 daemon 的 cwd）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aw-mcp-rel-'))
+    try {
+      const bin = join(dir, 'server')
+      writeFileSync(bin, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+      expect(await canonicalExecutable('./server', {}, dir)).toBe(realpathSync(bin))
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('`#!` 链被解析出来（/bin/sh 已在固定 netless PATH 上 ⇒ 无需额外投影）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aw-mcp-shebang-'))
+    try {
+      const launcher = join(dir, 'launcher')
+      writeFileSync(launcher, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+      expect(await resolveInterpreterChain(realpathSync(launcher), {})).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('解析不出的解释器 ⇒ fail closed（不物化一个注定 127 的 wrapper）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aw-mcp-badshebang-'))
+    try {
+      const launcher = join(dir, 'launcher')
+      writeFileSync(launcher, '#!/usr/bin/env definitely-not-installed-xyz\n', { mode: 0o755 })
+      await expect(
+        resolveInterpreterChain(realpathSync(launcher), { PATH: '/bin:/usr/bin' }),
+      ).rejects.toThrow()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

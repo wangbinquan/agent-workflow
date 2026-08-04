@@ -43,7 +43,11 @@ import {
   type IdentityJson,
 } from './executionIdentity'
 import { executionIdentityFailure } from './failure'
-import { resolveNetlessGitCommonDirs } from '../netlessProjection'
+import {
+  canonicalExecutable,
+  resolveInterpreterChain,
+  resolveNetlessGitCommonDirs,
+} from '../netlessProjection'
 import {
   OPENCODE_DIRECT_PROTOCOL_CODEC,
   ROOT_SESSION_PERMISSION_RULES,
@@ -224,6 +228,8 @@ function netlessBaseEnv(
 
 interface PlannedLocalMcpWrapper {
   executable: string
+  /** The `#!` chain the executable needs at exec time (RFC-242 shape). */
+  interpreters: readonly string[]
   args: readonly string[]
   wrapperPath: string
   wrapperManifestPath: string
@@ -242,7 +248,13 @@ interface PlannedMcpConfig {
  */
 async function planMcpConfig(
   ctx: BusinessNodeSpawnContext,
-  input: { sealRoot: string },
+  input: {
+    sealRoot: string
+    /** Daemon env — the only sane PATH for resolving a bare command token. */
+    sourceEnv: Readonly<Record<string, string | undefined>>
+    /** Base for a worktree-relative command token (the cwd it will run in). */
+    canonicalWorktree: string
+  },
 ): Promise<PlannedMcpConfig> {
   const result: Record<string, IdentityJson> = Object.create(null) as Record<string, IdentityJson>
   const localWrappers: PlannedLocalMcpWrapper[] = []
@@ -264,18 +276,23 @@ async function planMcpConfig(
     }
 
     const command = mcp.config.command
-    if (
-      command.length === 0 ||
-      command.some((entry) => entry.length === 0 || entry.includes('\0')) ||
-      !isAbsolute(command[0]!)
-    ) {
+    if (command.length === 0 || command.some((entry) => entry.length === 0)) {
       return executionIdentityFailure('execution-identity-mismatch')
     }
-    const executable = await realpath(command[0]!)
-    const executableMetadata = await lstat(executable)
-    if (executableMetadata.isSymbolicLink() || !executableMetadata.isFile()) {
-      return executionIdentityFailure('execution-identity-mismatch')
-    }
+    // 2026-08-04 audit: this used to REJECT any non-absolute command head, so
+    // the officially documented MCP shape (`npx -y @modelcontextprotocol/…`)
+    // saved fine and then failed EVERY run with an unreadable
+    // `execution-identity-mismatch`; and binding only the launcher's own inode
+    // made an absolute `#!/usr/bin/env node` launcher exit 127 inside the fence
+    // (opencode logged the server as failed and the node still "finished",
+    // silently missing its tools). RFC-242 already solved both for Claude —
+    // share that resolution instead of keeping a weaker second variant.
+    const executable = await canonicalExecutable(
+      command[0]!,
+      input.sourceEnv,
+      input.canonicalWorktree,
+    )
+    const interpreters = await resolveInterpreterChain(executable, input.sourceEnv)
     const args = command.slice(1)
     // Reject dangerous MCP-authored env before an owner mismatch can touch
     // the persistent store. The full semantic descriptor becomes the stable
@@ -290,6 +307,7 @@ async function planMcpConfig(
       codec: 1,
       name: mcp.name,
       executable,
+      interpreters,
       args,
       configuredEnv,
       timeoutMs: mcp.config.timeoutMs ?? null,
@@ -299,6 +317,7 @@ async function planMcpConfig(
     const wrapperManifestPath = join(wrapperDir, 'netless.json')
     localWrappers.push({
       executable,
+      interpreters,
       args,
       wrapperPath,
       wrapperManifestPath,
@@ -334,7 +353,12 @@ async function materializeMcpWrappers(input: {
     const mcpEnv = {
       ...netlessBaseEnv(input.layout, input.sourceEnv, input.toolchain?.path),
       ...wrapper.configuredEnv,
-      PATH: input.toolchain?.path ?? FIXED_NETLESS_PATH,
+      // The interpreters' directories must be reachable too — same reason the
+      // Claude fence assembles its PATH this way.
+      PATH: [
+        ...new Set(wrapper.interpreters.map((entry) => dirname(entry))),
+        input.toolchain?.path ?? FIXED_NETLESS_PATH,
+      ].join(':'),
       HOME: input.layout.home,
       TMPDIR: input.layout.tmp,
       PWD: input.worktreePath,
@@ -356,6 +380,9 @@ async function materializeMcpWrappers(input: {
           ...input.frozenSkillPaths,
           ...(input.toolchain?.executablePaths ?? []),
           wrapper.executable,
+          // Without the interpreters the fence exposes only the launcher's own
+          // inode, and an `#!/usr/bin/env node` launcher exits 127 inside it.
+          ...wrapper.interpreters,
         ]),
       ],
       env: mcpEnv,
@@ -538,7 +565,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
     ...(ctx.gitUserName == null ? {} : { GIT_COMMITTER_NAME: ctx.gitUserName }),
     ...(ctx.gitUserEmail == null ? {} : { GIT_COMMITTER_EMAIL: ctx.gitUserEmail }),
   }
-  const plannedMcp = await planMcpConfig(ctx, { sealRoot })
+  const plannedMcp = await planMcpConfig(ctx, { sealRoot, sourceEnv, canonicalWorktree })
   // RFC-251: the exact plugin records that reach OpenCode (enabled-filtered,
   // id-deduped). Inventory and diagnostics describe THIS set, so they cannot
   // drift from what the controlled config actually ships.
