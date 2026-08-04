@@ -70,7 +70,11 @@ import {
 import { isProductionOpencodeCommand } from '@/util/opencode'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 import { buildVerifiedInventoryPlan } from './verifiedInventory'
-import { platformHomeEnvForHost, EXECUTABLE_SUFFIX_FOR_HOST } from '@/util/platformExec'
+import {
+  platformHomeEnvForHost,
+  EXECUTABLE_SUFFIX_FOR_HOST,
+  SEALED_SHELL_SUPPORTED,
+} from '@/util/platformExec'
 import {
   buildVerifiedOpencodePlan,
   type VerifiedOpencodePlanDependencies,
@@ -374,11 +378,11 @@ async function planMcpConfig(
       wrapperManifestPath,
       configuredEnv,
     })
+    // RFC-254 T14b: the invocation shape comes from the shared helper, so this
+    // config block and the materializer cannot drift apart across platforms.
     result[mcp.name] = {
       type: 'local',
       enabled: true,
-      // RFC-254 T14b: shape comes from the shared helper, so the config block
-      // and the materializer cannot drift apart across platforms.
       command: netlessInvocationCommand(wrapperPath, wrapperManifestPath),
       ...(mcp.config.timeoutMs === undefined ? {} : { timeout: mcp.config.timeoutMs }),
     }
@@ -612,7 +616,8 @@ export async function buildVerifiedOpencodeBusinessPlan(
   // makes every verified plan fail to assemble on a stock Windows install.
   const realHome = safeAbsoluteHome(platformHomeEnvForHost())
   const shellDir = join(sealRoot, 'shell')
-  const shellPath = join(shellDir, 'sh')
+  // RFC-254 T13/T14b: no sealed shell on Windows — see hermetic's `shell` key.
+  const shellPath = SEALED_SHELL_SUPPORTED ? join(shellDir, 'sh') : null
   const shellManifestPath = join(shellDir, 'netless.json')
   const sourceEnv: Record<string, string | undefined> = {
     ...process.env,
@@ -817,32 +822,33 @@ export async function buildVerifiedOpencodeBusinessPlan(
         return executionIdentityFailure('execution-identity-skill-mismatch')
       }
     }
-    await materializeNetlessWrapper({
-      wrapperPath: shellPath,
-      manifestPath: shellManifestPath,
-      manifest: {
-        codec: 1,
-        mode: 'shell',
-        provider: childProvider,
-        worktreePath: canonicalWorktree,
-        scratchPath,
-        appHome,
-        realHome,
-        gitCommonDirs,
-        bindReadOnly: [
-          ...new Set([
-            ...frozenSkillPaths,
-            ...(toolchain?.executablePaths ?? []),
-            ...(toolchain?.readOnlyDirs ?? []),
-          ]),
-        ],
-        env: {
-          ...netlessBaseEnv(layout, sourceEnv, toolchain?.path),
-          PWD: canonicalWorktree,
+    if (shellPath !== null)
+      await materializeNetlessWrapper({
+        wrapperPath: shellPath,
+        manifestPath: shellManifestPath,
+        manifest: {
+          codec: 1,
+          mode: 'shell',
+          provider: childProvider,
+          worktreePath: canonicalWorktree,
+          scratchPath,
+          appHome,
+          realHome,
+          gitCommonDirs,
+          bindReadOnly: [
+            ...new Set([
+              ...frozenSkillPaths,
+              ...(toolchain?.executablePaths ?? []),
+              ...(toolchain?.readOnlyDirs ?? []),
+            ]),
+          ],
+          env: {
+            ...netlessBaseEnv(layout, sourceEnv, toolchain?.path),
+            PWD: canonicalWorktree,
+          },
+          command: ['/bin/sh'],
         },
-        command: ['/bin/sh'],
-      },
-    })
+      })
     await materializeMcpWrappers({
       planned: plannedMcp,
       childProvider,

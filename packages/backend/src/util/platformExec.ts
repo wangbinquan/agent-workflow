@@ -314,3 +314,14 @@ export function platformHomeEnvForHost(
 ): string | undefined {
   return platformHomeEnv(env, process.platform)
 }
+
+/**
+ * Can this host materialize the sealed `sh` wrapper the verified plan uses as
+ * the model's shell?
+ *
+ * Windows cannot: there is no shebang, and the substitute (`.cmd`) re-tokenizes
+ * arguments. The consequence is deliberate and visible — the controlled config
+ * then declares no `shell` at all, and OpenCode falls back to its own probe
+ * chain. See RFC-254 T13/T14b.
+ */
+export const SEALED_SHELL_SUPPORTED = process.platform !== 'win32'

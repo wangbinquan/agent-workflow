@@ -157,6 +157,20 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 | T12 | `82920ad2` | 受控 PATH 的 win32 形态 + **设计门 P0-A**（受控 PATH 必须含 git，否则主线工作流不成立） |
 | T2 | `1728b779` | env 键大小写折叠单点（D12），AC-2 的 oracle 是**子进程实际 environ** |
 | T22/T23 | `74373d66` | 脚本节点 win32：bash 只从 git 推导（**绝不**裸 `which('bash')`——那是 WSL 启动器）、python 候选链、私有 profile/temp、`PYTHONUTF8` |
+| T4/T5/T26/T27 | `e3081c73` | **Job Object**（P0-D，v1 必需）+ 全部生产 spawn 的 `windowsHide` + 产物 `.exe` 与 release 矩阵 + **定向 Windows CI job** |
+| — | `7e8d1305` | 真实 Windows CI 首跑抓到的三条，逐条修（见下） |
+| T11b | `fd99a0be` | verified artifact layout 的 win32 形态（P0-B）：`USERPROFILE`、禁用命令、`.exe` 后缀 |
+| T11c | `9c22bfde` | 平台事实经注入；守卫当场抓住我第一版直接读 `process.platform` |
+| T14b | `f082770b` | 本地 MCP wrapperless 物化（P0-F/D21）；**不用 `.cmd`**——cmd.exe 会重新分词 |
+| T13 | 本批 | 受控 config 在 win32 不写 `shell` 键，**缺席本身是身份的一部分** |
+
+**Windows CI 首跑的价值（`e3081c73`）**——一次抓到三件事，全是我这边的问题：
+① **Job Object 的 FFI 在真实内核上一次成功**（最重要的正面结论：函数声明、
+结构体偏移、标志常量全对，这是 macOS 上无论如何证明不了的）；
+② 但我把**测试进程自己的 pid** adopt 进了 `KILL_ON_JOB_CLOSE` 的 job，
+句柄一关就杀掉测试运行本身；
+③ **守卫自己带着它要抓的那个缺陷**——`relative()` 在 Windows 上产出反斜杠，
+而豁免表全用 `/` 写，扫描器在 Windows 上一条都匹配不上。
 
 **过程中发现并单独修掉的三条既有缺陷**（均非本 RFC 引入）：`memory-distill-scheduler`
 与 `rfc224-fff-capability` 的墙钟时序 flake（两次，第二次是我第一版修复轮询了错误的

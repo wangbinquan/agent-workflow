@@ -724,7 +724,7 @@ export interface BuildControlledAgentConfigInput {
   options?: Record<string, IdentityJson>
   userPermission?: Record<string, IdentityJson>
   toolOutputPattern: string
-  shellPath: string
+  shellPath: string | null
   allowShell: boolean
   mcp?: Record<string, IdentityJson>
   /**
@@ -804,7 +804,7 @@ export function buildControlledOpencodeConfig(
   if (
     input.name.length === 0 ||
     input.model.length === 0 ||
-    !isAbsolute(input.shellPath) ||
+    (input.shellPath !== null && !isAbsolute(input.shellPath)) ||
     !isAbsolute(input.toolOutputPattern)
   ) {
     return executionIdentityFailure('execution-identity-mismatch')
@@ -923,7 +923,13 @@ export function buildControlledOpencodeConfig(
     // same-instance comparator proves the complete effective value instead of
     // accepting an upstream-added field.
     compaction: { auto: false, prune: false },
-    shell: input.shellPath,
+    // RFC-254 T13: `null` means DO NOT DECLARE a shell. On Windows the sealed
+    // sh wrapper does not exist (T14b — there is no shebang, and a .cmd shim
+    // would re-tokenize arguments), so declaring a path to it would point
+    // OpenCode at a missing file. Omitting the key instead lets OpenCode use
+    // its own probe chain (pwsh -> powershell -> git-bash -> cmd), which is the
+    // honest state on a platform with no child fence to enter anyway.
+    ...(input.shellPath === null ? {} : { shell: input.shellPath }),
     // Plugin `options` is a DB-shaped Record<string, unknown>; the whole config
     // is validated as real JSON by canonicalizeIdentity downstream, so the
     // compile-time narrowing follows the same convention as the other

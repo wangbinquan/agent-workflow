@@ -23,6 +23,7 @@ import {
   disabledShellCommand,
   executableSuffix,
   platformHomeEnv,
+  SEALED_SHELL_SUPPORTED,
 } from '@/util/platformExec'
 
 describe('RFC-254 platformExec', () => {
@@ -318,5 +319,26 @@ describe('RFC-254 T14b — netless invocation shape (design gate P0-F / D21)', (
     // platform would be running an unfenced child.
     const win = netlessInvocationCommand('/w/run', '/w/netless.json', 'win32')
     expect(win).toContain('__opencode-netless-subprocess')
+  })
+})
+
+describe('RFC-254 T13 — the sealed shell is a platform capability, not an assumption', () => {
+  test('the flag matches the platform that can actually host a shebang script', () => {
+    expect(SEALED_SHELL_SUPPORTED).toBe(process.platform !== 'win32')
+  })
+
+  test('the controlled config omits `shell` exactly when it cannot be sealed', () => {
+    // Absence is part of the identity: the controlled config is a CLOSED
+    // construction, so "no shell key" is as much a fact as "shell equals X".
+    // Declaring a path to a wrapper that T14b no longer materializes would
+    // point OpenCode at a missing file instead.
+    const identity = readFileSync(
+      resolve(import.meta.dir, '..', 'src/services/runtime/opencode/executionIdentity.ts'),
+      'utf8',
+    )
+    expect(identity).toContain('SEALED_SHELL_SUPPORTED')
+    // The unexpected-shell case must still fail — a platform without a sealed
+    // shell must not silently accept one somebody else put there.
+    expect(identity).toContain('config.shell !== undefined')
   })
 })

@@ -196,7 +196,12 @@ const EXACT_ALLOWANCE_ROWS = [
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fComputedPropertyName:a2e3850c47204f0d2b3c\u001f1\u001fruntime-protocol\u001f[agent.name]',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/sealedSubprocess.ts\u001fsanitizeNetlessEnvironment\u001fBinaryExpression:d0b6cf3d8e4f97cf166b\u001f1\u001fenvironment-variable\u001foutput[name] = value',
   "frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fplanMcpConfig\u001fBinaryExpression:a00eae65c26271a9d7bf\u001f1\u001fopencode-protocol\u001fresult[mcp.name] = { type: 'remote', enabled: true, url: mcp.config.url, ...(mcp.config.headers === undefined ? {} : { headers: mcp.config.headers }), ...(mcp.config.oauth === undefined ? {} : { oauth: mcp.config.oauth }), ...(mcp.config.ti",
-  "frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fplanMcpConfig\u001fBinaryExpression:dbcbde9861f2f01a98e2\u001f1\u001fopencode-protocol\u001fresult[mcp.name] = { type: 'local', enabled: true, command: [wrapperPath], ...(mcp.config.timeoutMs === undefined ? {} : { timeout: mcp.config.timeoutMs }), }",
+  // RFC-254 T14b re-review: same sink, same key (`mcp.name` is an OpenCode
+  // protocol name), same reviewed reason. Only the command SHAPE changed —
+  // `[wrapperPath]` became a shared helper so the config block and the
+  // wrapper materializer cannot disagree about how the netless fence is
+  // entered on a platform without shebangs.
+  "frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fplanMcpConfig\u001fBinaryExpression:a53a2df157dfca7a49e1\u001f1\u001fopencode-protocol\u001fresult[mcp.name] = { type: 'local', enabled: true, command: netlessInvocationCommand(wrapperPath, wrapperManifestPath), ...(mcp.config.timeoutMs === undefined ? {} : { timeout: mcp.config.timeoutMs }), }",
   "frontend-name-key\u001fpackages/backend/src/services/scheduler.ts\u001fresolveUpstreamInputs\u001fBinaryExpression:4adcb682bade24ff4c1c\u001f1\u001fport-or-protocol-name\u001finputs[name] = values.length === 1 ? (values[0] ?? '') : values.join('\\n\\n---\\n\\n')",
   "frontend-name-key\u001fpackages/frontend/src/components/agent-ports/AgentPortValidationSummary.tsx\u001fAgentPortValidationSummary\u001fJsxAttribute:9e83221af9cc15d1292e\u001f1\u001fport-or-protocol-name\u001fkey={`${issue.code}-${issue.key ?? issue.name ?? ''}-${issue.index ?? index}`}",
   'frontend-name-key\u001fpackages/frontend/src/components/agent/AgentCapabilityCard.tsx\u001fPortRow\u001fJsxAttribute:e964b9930f12f17e125a\u001f1\u001fport-or-protocol-name\u001fkey={`${p.name}-${index}`}',

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ExecutionIdentityFailureCode } from '@agent-workflow/shared'
+import { SEALED_SHELL_SUPPORTED } from '@/util/platformExec'
 
 /**
  * RFC-224's identity codec is deliberately narrower than JavaScript values:
@@ -188,9 +189,17 @@ export function businessOpencodeIdentityDigest(input: {
     fail('')
   }
   const config = JSON.parse(canonicalizeIdentity(input.config)) as Record<string, IdentityJson>
-  const expectedShell = join(input.sealRoot, 'shell', 'sh')
-  if (config.shell !== expectedShell) fail('/config/shell')
-  config.shell = `${LOGICAL_ATTEMPT_SEAL}/shell/sh`
+  // RFC-254 T13: a platform without a sealed shell declares NO `shell` key, and
+  // its ABSENCE is part of the identity — the controlled config is a closed
+  // construction, so "key missing" is as much a fact as "key equals X". A
+  // present-but-unexpected shell must still fail.
+  if (SEALED_SHELL_SUPPORTED) {
+    const expectedShell = join(input.sealRoot, 'shell', 'sh')
+    if (config.shell !== expectedShell) fail('/config/shell')
+    config.shell = `${LOGICAL_ATTEMPT_SEAL}/shell/sh`
+  } else if (config.shell !== undefined) {
+    fail('/config/shell')
+  }
 
   const mcp = config.mcp
   if (mcp === null || Array.isArray(mcp) || typeof mcp !== 'object') {
