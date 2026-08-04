@@ -533,9 +533,9 @@ jobs:
                   "--watchdog-ms",
                   "10000",
                   "--",
-                  // RFC-254 T30 tried the binary's own `version` subcommand here
+                  // RFC-254 T30 tried a subcommand of the binary itself here
                   // so the payload would exist off POSIX too. Reverted: this
-                  // job's matrix is ubuntu + macOS (the supervisor under test is
+                  // matrix for this job is ubuntu + macOS (the supervisor under test is
                   // the BWRAP one, a Linux concept), so the portability was
                   // never exercised — while the cost was three extra cold
                   // starts of a ~120 MiB compiled binary, each inside the 5 s

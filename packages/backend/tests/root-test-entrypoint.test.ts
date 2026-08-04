@@ -345,6 +345,30 @@ describe('repository test entrypoint', () => {
     expect(sourceGrepRegression).toContain('throw error')
   })
 
+  test('no apostrophe hides inside a single-quoted `bun -e` block in a workflow', () => {
+    // Twice now a JS comment containing an English possessive ("the binary's
+    // own …") has terminated the SHELL's single-quoted string that wraps the
+    // script, turning the rest of the JS into shell commands. It does not look
+    // like a quoting bug in review — it looks like a sentence — and the symptom
+    // is a wall of shellcheck SC1127s plus a build-smoke failure whose message
+    // never mentions quotes.
+    for (const file of readdirSync(resolve(root, '.github', 'workflows')).filter((n) =>
+      n.endsWith('.yml'),
+    )) {
+      const source = readFileSync(resolve(root, '.github', 'workflows', file), 'utf8')
+      for (const block of source.matchAll(/bun -e '([\s\S]*?)\n\s*'\n/g)) {
+        const offenders = (block[1] ?? '')
+          .split('\n')
+          .map((line, index) => ({ line, index }))
+          .filter((entry) => entry.line.includes("'"))
+        expect(
+          offenders.map((entry) => `${file}:+${entry.index + 1} ${entry.line.trim()}`),
+          'an apostrophe here ends the shell string early',
+        ).toEqual([])
+      }
+    }
+  })
+
   test('every Playwright fixture command uses the shared shell-free bounded boundary', () => {
     expect(e2eCommandHelper).toContain("execFileSync('git'")
     // RFC-254 T29: fixture SQL runs through Bun's EMBEDDED SQLite, not the
