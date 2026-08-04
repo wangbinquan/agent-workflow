@@ -11,12 +11,16 @@
 
 import { run as runBasic } from './mode-basic'
 import { run as runCommit } from './mode-commit'
+import { run as runIntent } from './mode-intent'
+import { run as runSlow } from './mode-slow'
 
-type ModeRunner = (argv: readonly string[]) => void
+type ModeRunner = (argv: readonly string[]) => void | Promise<void>
 
 const MODES: Record<string, ModeRunner> = {
   basic: runBasic,
   commit: runCommit,
+  intent: runIntent,
+  slow: runSlow,
 }
 
 function main(): void {

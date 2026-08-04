@@ -82,7 +82,13 @@ const RULES: readonly Rule[] = [
     // Deliberately anchored on the OPENING of the call plus a bounded lookahead
     // rather than trying to parse the whole object: the failure it guards is
     // "somebody added a new spawn and forgot", which shows up right here.
-    pattern: /Bun\.spawn(?:Sync)?\(\{(?![\s\S]{0,120}platformSpawnOptions)/g,
+    // Covers BOTH call shapes. The first draft only matched the object form
+    // `Bun.spawn({...})` and therefore missed `Bun.spawn([argv], {opts})`
+    // entirely — archive.ts sat unnoticed with two un-hidden spawns until a
+    // manual read found them, which is precisely the gap this scan exists to
+    // remove.
+    pattern:
+      /Bun\.spawn(?:Sync)?\(\s*(?:\{(?![\s\S]{0,140}platformSpawnOptions)|\[[\s\S]{0,200}?\]\s*,\s*\{(?![\s\S]{0,140}platformSpawnOptions))/g,
   },
   {
     id: 'posix-path-prefix',

@@ -230,3 +230,112 @@ describe.skipIf(process.platform === 'win32')(
     }
   },
 )
+
+const INTENT_CASES: Array<{ name: string; args: string[]; env: Record<string, string> }> = [
+  { name: '--version', args: ['--version'], env: {} },
+  { name: 'unsupported mode', args: ['nope'], env: {} },
+  { name: 'missing nonce exits 3', args: runArgs('no marker'), env: {} },
+  {
+    name: 'default (agent) variant',
+    args: runArgs(`nonce="${NONCE}" build me an auditor`),
+    env: {},
+  },
+  {
+    name: 'workflow variant (the old intent-workflow launcher)',
+    args: runArgs(`nonce="${NONCE}" build me a workflow`),
+    env: { STUB_INTENT_VARIANT: 'workflow' },
+  },
+]
+
+describe.skipIf(process.platform === 'win32')(
+  'RFC-254 T28b — intent mode matches its shell stub',
+  () => {
+    for (const testCase of INTENT_CASES) {
+      test(`byte-identical: ${testCase.name}`, async () => {
+        const [shell, ported] = await Promise.all([
+          capture([shellStub('stub-opencode-intent.sh')], testCase.args, testCase.env),
+          capture([process.execPath, 'run', PORTED_STUB], testCase.args, {
+            ...testCase.env,
+            AW_STUB_MODE: 'intent',
+          }),
+        ])
+        expect(ported.exitCode, 'exit code').toBe(shell.exitCode)
+        expect(ported.stdout, 'stdout').toBe(shell.stdout)
+        expect(ported.stderr.length > 0, 'produced stderr').toBe(shell.stderr.length > 0)
+      }, 30_000)
+    }
+
+    test('the workflow launcher is the same mode with a variable, not a separate stub', async () => {
+      // `intent-workflow-opencode.sh` was two lines: export the variant, exec
+      // the intent stub. Proving the ported mode reproduces IT too is what lets
+      // the launcher file be deleted rather than ported.
+      const args = runArgs(`nonce="${NONCE}" build me a workflow`)
+      const [launcher, ported] = await Promise.all([
+        capture([shellStub('intent-workflow-opencode.sh')], args, {}),
+        capture([process.execPath, 'run', PORTED_STUB], args, {
+          AW_STUB_MODE: 'intent',
+          STUB_INTENT_VARIANT: 'workflow',
+        }),
+      ])
+      expect(ported.stdout).toBe(launcher.stdout)
+      expect(ported.exitCode).toBe(launcher.exitCode)
+    }, 30_000)
+  },
+)
+
+const SLOW_CASES: Array<{ name: string; args: string[]; env: Record<string, string> }> = [
+  { name: '--version', args: ['--version'], env: {} },
+  { name: 'unsupported mode', args: ['nope'], env: {} },
+  { name: 'missing nonce exits 3', args: runArgs('no marker'), env: {} },
+  { name: 'plain run', args: runArgs(`nonce="${NONCE}" work`), env: {} },
+  {
+    name: 'sub-second sleep is floored to zero (shell integer division)',
+    args: runArgs(`nonce="${NONCE}" work`),
+    env: { STUB_OPENCODE_SLEEP_MS: '500' },
+  },
+  {
+    name: 'no-envelope path',
+    args: runArgs(`nonce="${NONCE}" work`),
+    env: { STUB_OPENCODE_SKIP_ENVELOPE: '1' },
+  },
+  {
+    name: 'non-zero exit path',
+    args: runArgs(`nonce="${NONCE}" work`),
+    env: { STUB_OPENCODE_EXIT_CODE: '7' },
+  },
+  {
+    name: 'no envelope AND non-zero exit',
+    args: runArgs(`nonce="${NONCE}" work`),
+    env: { STUB_OPENCODE_SKIP_ENVELOPE: '1', STUB_OPENCODE_EXIT_CODE: '9' },
+  },
+  {
+    name: 'inventory drop requested',
+    args: runArgs(`nonce="${NONCE}" work`),
+    env: { WANT_INVENTORY: '1' },
+  },
+]
+
+describe.skipIf(process.platform === 'win32')(
+  'RFC-254 T28b — slow mode matches its shell stub',
+  () => {
+    for (const testCase of SLOW_CASES) {
+      test(`byte-identical: ${testCase.name}`, async () => {
+        const [shell, ported] = await Promise.all([
+          capture([shellStub('stub-opencode-slow.sh')], testCase.args, testCase.env),
+          capture([process.execPath, 'run', PORTED_STUB], testCase.args, {
+            ...testCase.env,
+            AW_STUB_MODE: 'slow',
+          }),
+        ])
+        expect(ported.exitCode, 'exit code').toBe(shell.exitCode)
+        expect(ported.stdout, 'stdout').toBe(shell.stdout)
+        expect(ported.promptOut, 'prompt hook').toBe(shell.promptOut)
+        if (shell.inventory !== null) {
+          expect(JSON.parse(ported.inventory ?? 'null')).toEqual(JSON.parse(shell.inventory))
+        } else {
+          expect(ported.inventory).toBeNull()
+        }
+      }, 30_000)
+    }
+  },
+)
