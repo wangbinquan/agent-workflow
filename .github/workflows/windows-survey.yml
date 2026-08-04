@@ -1,0 +1,150 @@
+# RFC-254 T31–T34 — Windows survey (measurement, never a gate).
+#
+# The full backend and e2e suites have never run on Windows. Guessing which of
+# their ~400 POSIX-carrying files actually break is how a port turns into a
+# blind sweep, so these jobs run the suites and publish the failure lists as
+# artifacts for the triage.
+#
+# Why its own workflow rather than a job inside `windows-platform.yml`:
+#   * these runs take up to 90 minutes, and that file's `cancel-in-progress`
+#     killed the first attempt the moment the next commit landed — on a repo
+#     with several sessions pushing to main, a long non-gating job needs a
+#     concurrency group that does NOT cancel;
+#   * it also keeps the gating Windows job fast and its result unambiguous.
+#
+# Deleted once the matrix legs in ci.yml take over (T35).
+
+name: windows-survey
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 05:30 UTC — before the other nightlies, so the triage list is ready first.
+    - cron: '30 5 * * *'
+
+concurrency:
+  group: windows-survey
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # RFC-254 T31/T32 — the SURVEY.
+  #
+  # The full backend suite has never run on Windows. ~403 of its 1023 files
+  # carry at least one POSIX-only construct (hardcoded /tmp and /usr/bin, mode
+  # bits, `#!/bin/sh` fixtures, process groups, symlinks), and a failure in a
+  # shared `beforeAll` fails every test in its file — so the blast radius is
+  # measured in files, not lines. Guessing which of them actually break is how
+  # a port turns into a 400-file blind sweep.
+  #
+  # This job runs the whole suite and publishes the failure list as an artifact.
+  # It NEVER gates: `continue-on-error` plus a non-failing shell, because its
+  # output is data for the triage, not a verdict on the branch. It is deleted
+  # once the matrix legs in ci.yml take over (T35).
+  survey:
+    name: Windows full-suite survey (non-gating)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run the full backend suite and record what fails
+        shell: bash
+        run: |
+          # `|| true`: a red suite is the expected outcome and the POINT of this
+          # job. What must not happen is the step exploding before the summary
+          # is written.
+          bun run test:backend > backend-windows.log 2>&1 || true
+          {
+            echo "## Windows backend survey"
+            echo
+            echo '```'
+            grep -aE "^ *[0-9]+ (pass|fail|skip)|Ran [0-9]+ tests across" backend-windows.log | tail -4 || true
+            echo '```'
+            echo
+            echo "### Failing tests"
+            echo '```'
+            grep -aE "^\(fail\)" backend-windows.log | sed 's/ \[[0-9.]*m*s\]$//' | sort -u || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "--- failing files ---"
+          grep -aE "^##\[group\]|^\(fail\)" backend-windows.log | head -400 || true
+
+      - name: Upload the survey log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-backend-survey
+          path: backend-windows.log
+          if-no-files-found: warn
+
+  # RFC-254 T33/T34 — the e2e SURVEY, same measure-first discipline as `survey`.
+  #
+  # The e2e suite is far less exposed than the backend one: T28b removed the
+  # nine shell stubs, and a scan finds POSIX-only constructs in just 4 of 49
+  # spec files — two of which are display-only strings that never touch disk.
+  # What is left is signal semantics (Windows maps SIGTERM to TerminateProcess,
+  # so the graceful-shutdown path cannot be driven by a signal there).
+  #
+  # Non-gating, for the same reason as `survey`: this is data for the triage.
+  e2e-survey:
+    name: Windows e2e survey (non-gating)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Build the daemon + the compiled stub
+        shell: bash
+        run: bun run build:binary:e2e
+
+      - name: Install Playwright chromium
+        shell: bash
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run the e2e suite and record what fails
+        shell: bash
+        run: |
+          bun run e2e -- --reporter=line > e2e-windows.log 2>&1 || true
+          {
+            echo "## Windows e2e survey"
+            echo
+            echo '```'
+            grep -aE "^ *[0-9]+ (passed|failed|skipped)" e2e-windows.log | tail -4 || true
+            echo '```'
+            echo
+            echo "### Failing specs"
+            echo '```'
+            grep -aE "^\s+\[chromium\]" e2e-windows.log | sort -u || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -60 e2e-windows.log || true
+
+      - name: Upload the e2e survey log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-e2e-survey
+          path: e2e-windows.log
+          if-no-files-found: warn
