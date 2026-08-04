@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
+import { TabPanels } from '@/components/split/TabPanels'
 import { TabBar } from '@/components/TabBar'
 import { WebhookEndpointCard } from '@/components/WebhookEndpointCard'
 import { DeliveriesPanel } from '@/components/webhooks/DeliveriesPanel'
@@ -107,9 +108,27 @@ function WebhooksPage() {
           ]}
         />
 
-        {tab === 'endpoints' && <WebhookEndpointCard />}
-        {tab === 'triggers' && <TriggersPanel />}
-        {tab === 'deliveries' && <DeliveriesPanel />}
+        <TabPanels<WebhooksTab>
+          active={tab}
+          idPrefix="webhooks"
+          panels={[
+            {
+              key: 'endpoints',
+              testid: 'webhooks-panel-endpoints',
+              content: <WebhookEndpointCard />,
+            },
+            {
+              key: 'triggers',
+              testid: 'webhooks-panel-triggers',
+              content: <TriggersPanel />,
+            },
+            {
+              key: 'deliveries',
+              testid: 'webhooks-panel-deliveries',
+              content: <DeliveriesPanel />,
+            },
+          ]}
+        />
       </div>
     </div>
   )

@@ -172,6 +172,7 @@ const TRUE_TAB_CALLSITES = [
   'routes/repos.tsx::repos-resource',
   'routes/skills.detail.tsx::skills-detail',
   'routes/skills.new.tsx::skills-new',
+  'routes/webhooks.tsx::webhooks',
 ] as const
 
 const FILTER_SEGMENTED_CALLSITES = [

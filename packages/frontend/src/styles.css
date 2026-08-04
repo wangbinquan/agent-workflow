@@ -22591,7 +22591,7 @@ button.status-chip {
 }
 
 .webhook-trigger-dialog .stepper__body {
-  min-height: 26rem;
+  min-height: 14rem;
 }
 
 .webhook-step__lead {
@@ -22726,7 +22726,17 @@ button.status-chip {
   }
 
   .webhook-trigger-dialog .stepper__body {
-    min-height: 20rem;
+    min-height: 12rem;
+  }
+
+  .webhook-trigger-dialog .stepper__header {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .webhook-trigger-dialog .stepper__step {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .webhook-trigger-dialog .wizard-summary__row {
