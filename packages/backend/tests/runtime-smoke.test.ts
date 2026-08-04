@@ -378,6 +378,72 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
     SMOKE_TIMEOUT,
   )
 
+  // 2026-08-04 GLM-gateway incident: a private gateway rejecting the model for
+  // LICENSING reasons ("您暂无该模型的使用权限…【TM.00001005】") must classify
+  // as model-call-failed (not the bare fallback), keep the verbatim vendor text
+  // in the detail (evidence now rides along on EVERY failure branch), and —
+  // when the probe carried no model — say explicitly that the binary fell back
+  // to its own default model and the fix is the runtime's model field.
+  test(
+    'gateway model-permission error (CJK) → model-call-failed + verbatim text + no-model hint',
+    async () => {
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-sess-glm-perm'
+      process.env.MOCK_CLAUDE_IS_ERROR = '1'
+      process.env.MOCK_CLAUDE_EXIT_CODE = '1'
+      process.env.MOCK_CLAUDE_RESULT_TEXT =
+        '您暂无该模型的使用权限，请联系产品FSE开通或使用其它模型【TM.00001005】'
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        bridgeCredentials: false,
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('model-call-failed')
+      expect(r.detail).toContain('您暂无该模型的使用权限')
+      expect(r.detail).toContain('no --model was passed')
+    },
+    SMOKE_TIMEOUT,
+  )
+
+  test(
+    'same gateway error WITH an explicit model → model-call-failed without the no-model hint',
+    async () => {
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-sess-glm-perm-model'
+      process.env.MOCK_CLAUDE_IS_ERROR = '1'
+      process.env.MOCK_CLAUDE_EXIT_CODE = '1'
+      process.env.MOCK_CLAUDE_RESULT_TEXT = '无权使用该模型'
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        model: 'GLM-5.1-NN',
+        bridgeCredentials: false,
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('model-call-failed')
+      expect(r.detail).not.toContain('no --model was passed')
+    },
+    SMOKE_TIMEOUT,
+  )
+
+  test(
+    'OpenAI-style "does not have access to model" → model-call-failed',
+    async () => {
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-sess-oai-perm'
+      process.env.MOCK_CLAUDE_IS_ERROR = '1'
+      process.env.MOCK_CLAUDE_EXIT_CODE = '1'
+      process.env.MOCK_CLAUDE_RESULT_TEXT =
+        'API Error: 403 Project does not have access to model gpt-x'
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        bridgeCredentials: false,
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('model-call-failed')
+    },
+    SMOKE_TIMEOUT,
+  )
+
   // RFC-116: a pure OS/transport network failure (no auth word at all) → network-blocked.
   test(
     'claude that emits a pure network error on stdout → network-blocked',

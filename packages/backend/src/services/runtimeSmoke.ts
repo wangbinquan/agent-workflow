@@ -82,8 +82,14 @@ const CHILD_TERM_GRACE_MS = 2_000
 const CHILD_REAP_DEADLINE_MS = 2_000
 const AUTH_SIGNATURES =
   /not logged in|unauthorized|authentication|invalid api key|please run .*login|no api key|anthropic_api_key|log ?in to/i
+// 2026-08-04 (GLM-gateway incident): private Anthropic/OpenAI-compatible
+// gateways report "model not licensed for this account" in vendor wording —
+// observed live: "您暂无该模型的使用权限，请联系产品FSE开通或使用其它模型
+// 【TM.00001005】". Cover both CJK orders (暂无/无权…模型 and 模型…权限) plus
+// the OpenAI-style English phrase, so these land as model-call-failed instead
+// of the bare stream-nonconforming fallback.
 const MODEL_FAIL_SIGNATURES =
-  /rate limit|overloaded|quota|model .*not found|insufficient|too many requests|503|529/i
+  /rate limit|overloaded|quota|model .*not found|insufficient|too many requests|503|529|does not have access to model|(?:暂无|无权).{0,10}模型|模型.{0,12}权限/i
 // RFC-116: endpoint reachability failures — the binary speaks the protocol but the
 // request to the model API is refused/unreachable: 403 region block, connection
 // refused/reset/timeout, DNS failure, no route, broken proxy tunnel. Checked BEFORE
@@ -585,12 +591,13 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
         }
       }
 
-      // 2026-08-04: the fallback classifications used to swallow the child's
-      // actual error text — a fork/gateway error outside the EN signature table
+      // 2026-08-04: the classifications used to swallow the child's actual
+      // error text — a fork/gateway error outside the EN signature table
       // (e.g. "usage limit reached", a GLM error string) landed as a bare
       // "nonce missing" and the operator had to guess. Surface a masked,
-      // capped tail of BOTH streams on the nonconforming branches. The probe
-      // route is admin-only; maskDiagnosticsText scrubs credential shapes.
+      // capped excerpt on EVERY failure branch (curated guidance stays, the
+      // verbatim vendor text rides along). The probe route is admin-only;
+      // maskDiagnosticsText scrubs credential shapes.
       // The result line is quoted from its HEAD (error text precedes the usage
       // blob), the raw streams from their TAILS (errors come last there).
       const resultHead = lastResultLine.replace(/\s+/g, ' ').trim()
@@ -613,18 +620,22 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
         detail = `binary speaks the ${opts.protocol} protocol (session captured, nonce echoed)`
       } else if (timedOut) {
         outcome = 'model-call-failed'
-        detail = `timed out after ${timeoutMs}ms`
+        detail = withEvidence(`timed out after ${timeoutMs}ms`)
       } else if (networkHit) {
         outcome = 'network-blocked'
-        detail =
-          'binary started but the model endpoint is unreachable (e.g. 403 Request not allowed / connection failed). Check the daemon network/proxy (HTTP(S)_PROXY) so it can reach the model API, then re-probe.'
+        detail = withEvidence(
+          'binary started but the model endpoint is unreachable (e.g. 403 Request not allowed / connection failed). Check the daemon network/proxy (HTTP(S)_PROXY) so it can reach the model API, then re-probe.',
+        )
       } else if (authHit) {
         outcome = 'auth-missing'
-        detail =
-          'binary started but authentication failed (may still conform once credentials exist)'
+        detail = withEvidence(
+          'binary started but authentication failed (may still conform once credentials exist)',
+        )
       } else if (modelHit) {
         outcome = 'model-call-failed'
-        detail = 'binary started + authed but the model call failed (rate limit / unavailable)'
+        detail = withEvidence(
+          'binary started + authed but the model call failed (rate limit / unavailable / model not licensed)',
+        )
       } else if (!sawEvent) {
         outcome = 'stream-nonconforming'
         detail = withEvidence(`no parseable ${opts.protocol} events on stdout (exit ${exitCode})`)
@@ -635,6 +646,17 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
             sawNonce ? 'seen' : 'missing'
           })`,
         )
+      }
+      // 2026-08-04 (GLM-gateway incident): with no --model the binary falls
+      // back to its OWN default model — for a fork wrapping a private gateway
+      // that default is often unlicensed. Say so at the failure site: the fix
+      // is the runtime's model field, not credentials or the binary.
+      if (
+        opts.model === undefined &&
+        (outcome === 'model-call-failed' || outcome === 'stream-nonconforming')
+      ) {
+        detail +=
+          ' [no --model was passed (runtime model field is empty) — the binary used its own default model; set the runtime model and re-probe]'
       }
 
       return {
