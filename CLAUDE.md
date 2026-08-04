@@ -32,6 +32,10 @@ When a batch of issues completes, commit + push and update `STATE.md` so the nex
 4. **STATE.md 同步**：RFC 落档同时在 `STATE.md` 顶部追加一行"进行中 RFC"指向新目录。RFC 完工后把状态改为 Done 并在 `STATE.md` 已完成 issue 表里加一行（与 P-X-XX 同等级）。
 5. **PR**：单个 RFC 默认对应单个 PR，commit message 前缀写明 `feat(scope): RFC-NNN 标题`；如确实需要拆分，在 `plan.md` 里说明并分别立 PR。
 6. **不走 RFC 的例外**：拼写 / 单行 bug 修复、纯重命名、依赖升级、文档增删、测试补充、CI 微调。这些可以直接改 + 提交。
+7. **能力收缩型 RFC 的附加门槛（RFC-224 事故沉淀）**：凡以安全 / 隔离 / 密封为由**关闭或收缩既有能力**（含「新路径不再继承旧路径的能力」）的 RFC：
+   - `proposal.md` 必须含**「能力影响清单」**章节：逐项列出被关闭的既有能力与受影响的部署形态，作为 breaking change **呈用户逐项确认**——不得以「安全默认」名义静默移除（RFC-224 曾静默切断自定义 provider 网关部署，生产无预警全挂，事后只能以 RFC-251 / RFC-255 逐个受控恢复）；
+   - 每条禁用 / 拒绝分支**必须有测试覆盖**（禁用分支与正向功能同等对待，见 `docs/dev-gotchas.md` 对应教训）；
+   - 关闭判据必须是可复跑的外部源码引用（`file:line`），接手复核规则同 `docs/dev-gotchas.md` §「RFC / design 里对 opencode 行为的既有断言」。
 
 新 session 接手 RFC 时也按 `proposal → design → plan` 顺序读，规则与 `design/*.md` 一致。
 
