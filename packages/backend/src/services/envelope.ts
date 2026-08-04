@@ -24,6 +24,7 @@
 // resolution + traversal hardening before the content lands in
 // node_run_outputs.
 
+import { toPortableRelativePath } from '@/util/platformExec'
 import { readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import {
@@ -134,7 +135,9 @@ const NODE_VALIDATE_IO: ValidateIO = {
     // non-existent target falls back to the lexical verdict — existence is
     // checked separately by the handler.
     let insideWorktree = targetAbs === rootAbs || targetAbs.startsWith(rootAbs + sep)
-    let relativePath = relative(rootAbs, targetAbs)
+    // Portable spelling: this value is persisted, interpolated into prompts and
+    // read by downstream nodes, so it must not vary by host separator.
+    let relativePath = toPortableRelativePath(relative(rootAbs, targetAbs))
     if (insideWorktree) {
       try {
         const realTarget = realpathSync(targetAbs)
@@ -158,7 +161,7 @@ const NODE_VALIDATE_IO: ValidateIO = {
         if (realTarget === realRoot || realTarget.startsWith(realRoot + sep)) {
           insideWorktree = true
           targetAbs = realTarget
-          relativePath = relative(realRoot, realTarget)
+          relativePath = toPortableRelativePath(relative(realRoot, realTarget))
         }
       } catch {
         // unresolvable → keep the lexical (outside) verdict.

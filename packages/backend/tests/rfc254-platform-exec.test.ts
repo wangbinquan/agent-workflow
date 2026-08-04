@@ -14,6 +14,7 @@ import { resetTarProbeForTests, tarAvailable } from '@/util/archive'
 import { isWindowsBatchShim } from '@/services/structuralDiff/deep/indexers'
 import { resolve } from 'node:path'
 import {
+  toPortableRelativePath,
   isLexicallyInside,
   nullDevice,
   pathListJoin,
@@ -387,5 +388,38 @@ describe('RFC-254 T25c — indexer availability is diagnosable', () => {
     expect(isWindowsBatchShim('/usr/local/bin/scip-typescript')).toBe(false)
     // Not fooled by the extension appearing mid-path.
     expect(isWindowsBatchShim('C:\\cmd\\tool')).toBe(false)
+  })
+})
+
+describe('RFC-254 — repo-relative paths in port data are portable, not host-flavoured', () => {
+  // FOUND BY THE WINDOWS e2e SURVEY. `output kinds` and `mcp-runtime-playground`
+  // both failed with `matrix-generated\kinds\one.md` where every other platform
+  // produces `matrix-generated/kinds/one.md`. That value is not a display
+  // string: it is persisted as the port's content, interpolated into the next
+  // node's prompt, and matched by downstream workflow logic — so the same
+  // workflow was producing different DATA depending on the host.
+  test('backslashes become forward slashes; forward slashes are untouched', () => {
+    expect(toPortableRelativePath('docs\\a.md')).toBe('docs/a.md')
+    expect(toPortableRelativePath('matrix-generated\\kinds\\one.md')).toBe(
+      'matrix-generated/kinds/one.md',
+    )
+    expect(toPortableRelativePath('docs/a.md')).toBe('docs/a.md')
+    expect(toPortableRelativePath('')).toBe('')
+  })
+
+  test('it is applied where the value becomes port data', () => {
+    // Both sites take a `relative()` result that is stored and consumed, so a
+    // future one added without the wrapper reintroduces the split.
+    const envelope = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'envelope.ts'),
+      'utf8',
+    )
+    expect(envelope).toContain('toPortableRelativePath(relative(rootAbs, targetAbs))')
+    expect(envelope).toContain('toPortableRelativePath(relative(realRoot, realTarget))')
+    const artifacts = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'portArtifacts.ts'),
+      'utf8',
+    )
+    expect(artifacts).toContain('toPortableRelativePath(relative(realRoot, realTarget))')
   })
 })

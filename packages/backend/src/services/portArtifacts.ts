@@ -33,6 +33,7 @@ import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitListItems } from '@agent-wo
 import type { DbClient } from '@/db/client'
 import { nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger } from '@/util/log'
+import { toPortableRelativePath } from '@/util/platformExec'
 
 const log = createLogger('port-artifacts')
 
@@ -226,7 +227,9 @@ export function archivePortArtifacts(opts: {
         const realTarget = realpathSync(it.sourceAbs)
         const realRoot = realpathSync(opts.worktreeRootAbs)
         if (realTarget === realRoot || realTarget.startsWith(realRoot + sep)) {
-          const targetRepoRel = relative(realRoot, realTarget)
+          // Portable spelling: this is stored as a port file path and shown as
+          // the link target, i.e. data rather than an OS path.
+          const targetRepoRel = toPortableRelativePath(relative(realRoot, realTarget))
           portFilePaths.push(targetRepoRel)
           const last = items[items.length - 1]
           if (last !== undefined) {

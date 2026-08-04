@@ -325,3 +325,22 @@ export function platformHomeEnvForHost(
  * chain. See RFC-254 T13/T14b.
  */
 export const SEALED_SHELL_SUPPORTED = process.platform !== 'win32'
+
+/**
+ * Normalize a repository- or worktree-RELATIVE path into its portable form.
+ *
+ * These paths are DATA, not OS paths: they are persisted in port values, fed to
+ * agents inside prompts, matched against workflow definitions, and consumed by
+ * downstream nodes. `node:path.relative` returns backslashes on Windows, so
+ * without this the same workflow produced `docs\a.md` on one platform and
+ * `docs/a.md` on another — a difference that reaches the model's input and the
+ * stored output, not just a display string. (Found by the RFC-254 Windows e2e
+ * survey: `output kinds` and `mcp-runtime-playground` both failed on exactly
+ * this, and both are production behaviour rather than test formatting.)
+ *
+ * Forward slash is the portable spelling: Windows APIs accept it, and every
+ * other consumer in this repo already assumes it.
+ */
+export function toPortableRelativePath(relativePath: string): string {
+  return relativePath.replaceAll('\\', '/')
+}
