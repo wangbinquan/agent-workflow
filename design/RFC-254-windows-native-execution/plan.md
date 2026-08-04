@@ -193,8 +193,61 @@ T31–T35（CI 矩阵与视觉基线）、T25b–T25d（D24 四子系统）。
 - [ ] Codex 设计门（RFC 批准前）与实现门（declare done 前）各一次，findings 逐条核实折入；分离 worktree 从 pin 跑。
 - [ ] `STATE.md` / `design/plan.md` 索引同步；真机记录落档。
 
-## stub 迁移对照表（T28 维护，初始为空）
+## T28a · stub 行为契约（冻结于 2026-08-04，实现前）
 
-| 旧 stub | mode 名 | 覆盖 spec | 状态 |
+> 设计门 P1-5 明确要求：这张表是**实现的输入**，不是实现完之后回填的产物——
+> 让实现者事后填表当验收 oracle，等于实现与测试共用同一个前提。
+
+**为什么必须合并成一个产物**：每个 `bun build --compile` 产物都内嵌完整 Bun
+运行时（实测单二进制 123.9 MiB）。12 个 stub 各编一个 ≈ 1.2 GB，CI 每次都要
+构建与上传——所以「单一参数化 stub + `AW_STUB_MODE` 选行为」不是审美偏好，
+是可行性前提。
+
+### 全部 12 个 stub 共有的骨架（迁移时必须逐条保持）
+
+1. **两种 CLI 模式**：`--version|-v|version` 打印一行版本串后 `exit 0`；
+   `run` 进入正常路径；其余一律 stderr 报错 + **`exit 2`**。
+2. **prompt 是 `--` 之后的唯一位置参**（不是 `$*`）。这条被
+   `e2e-shell-stub-argv-contract.test.ts` 锁死：读 `$*` 会把所有 flag 折进
+   prompt，从而对 argv 布局回归**失明**。
+3. **`AW_STUB_PROMPT_OUT`** 若已设置，把解析出的 prompt **逐字**写入该文件
+   —— 契约测试据此断言 stub 解析到的是真 prompt 而非某个 flag。
+4. **RFC-200 nonce 回显**：从 prompt 里 `nonce="..."` 取**最后一个**，写回
+   响应信封；取不到时各 stub 有自己的降级分支。
+5. 输出形态：`--format json` 的事件流，daemon 侧拼接 `part.text`。
+
+### 逐 stub 差异（这才是合并的风险面）
+
+| 旧 stub | 建议 mode | 独有行为（**迁移时最易丢的**） | 覆盖 spec |
 |---|---|---|---|
-| （实现期逐行填写） | | | |
+| `stub-opencode.sh` | `basic` | 固定单端口 `answer`；版本串**故意非 semver**（telemetry 归一化用例） | 基础任务链 |
+| `stub-opencode-commit.sh` | `commit` | **按 prompt 判角色**：提到 `commit_message` → 发提交信息且不写盘；否则**弄脏工作树**触发 diff 驱动提交 | RFC-075 自动提交推送 |
+| `stub-opencode-clarify.sh` | `clarify` | **轮次驱动**：按 `$CLARIFY_STUB_STATE` 计数文件 + (agent, shard_key) 决定发问还是收尾 | RFC-023 反问 |
+| `stub-opencode-clarify-inline.sh` | `clarify-inline` | **总是先发 `session.created` 事件**（runner 要捕获 sessionId）；轮次状态按 key 分档 | RFC-026 同 session 反问 |
+| `stub-opencode-cross-clarify.sh` | `cross-clarify` | 只按 (agent, 调用次数) 决策，**不锁定轮次顺序**——RFC-162 改成重跑提问者后仍要工作 | RFC-056 跨节点反问 |
+| `stub-opencode-intent.sh` | `intent` | intent 协议信封（`summary` + `changeset` 双端口，含一条建 agent 的 op）；额外的 **`exit 3`** 分支 | RFC-234 intent |
+| `intent-workflow-opencode.sh` | `intent-workflow` | **先写变体环境变量再 exec 上一个**；名字**刻意排除**在版本遥测矩阵之外 | intent 工作流草稿 |
+| `stub-opencode-slow.sh` | `slow` | 可控 **sleep**（撑住 running 状态好 SIGKILL daemon）；失败 / 无信封 / 非零退出三条路径；写 `AW_INVENTORY_OUT` | 崩溃恢复、任务生命周期 |
+| `stub-opencode-workflow-matrix.sh` | `workflow-matrix` | 按 prompt 里的 `MATRIX_*` marker 选分支；prompt 断言、上传、**重试退出码**、timeout；`exit 10` | 工作流矩阵 |
+| `stub-opencode-business-workflows.ts` | `business-workflows` | 已是 TS（423 行），业务工作流全链路 | 业务工作流 |
+| `stub-opencode-business-workgroups.ts` | `business-workgroups` | 已是 TS（239 行） | 业务工作组 |
+| `stub-opencode-workgroup-matrix.ts` | `workgroup-matrix` | 已是 TS（347 行） | 工作组矩阵 |
+
+### 实现前必须先回答的两个问题（设计门 P2-2）
+
+- **`AW_STUB_MODE` 怎么送达**：stub 由 daemon spawn，legacy 路径继承 daemon
+  env 可行——但这依赖「e2e 永远走 legacy」这一前提（见 P0-5：编译 e2e 件按
+  构造走 legacy 分支）。若将来给 e2e 开 verified，受控 env 白名单会**剥掉**
+  这个变量。
+- **粒度**：`AW_STUB_MODE` 是 per-daemon 的。若某个 spec 需要**同一次运行里
+  不同节点用不同 stub 行为**，这个机制不够——需要按 agent 名或 prompt marker
+  二级分派（`workflow-matrix` 已经是这个形态，可作范本）。
+
+### 交付顺序（不得跳步）
+
+1. 冻结本表（**已完成**）。
+2. 实现单一 TS stub，逐 mode 对照本表。
+3. **POSIX 上跑新旧差分 golden transcript**——同一 spec、同一输入，比对新旧
+   stub 的 stdout/exit/副作用逐字节一致。
+4. POSIX e2e 全量绿之后，才删旧 stub。
+5. 最后接 Windows 腿。
