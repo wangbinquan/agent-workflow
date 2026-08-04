@@ -365,7 +365,15 @@ describe('RFC-223 T15 structural identity guard', () => {
     // RFC-255: 137 → 138. The custom-provider card renders a gateway's optional
     // display name and falls back to its id — display-only, reviewed above.
     expect(findings.length).toBe(138)
-  })
+    // An explicit budget, because bun's default 5 s is not a meaningful one for
+    // this test: it parses and walks EVERY production source file, so its cost
+    // grows with the repository, and it runs on a shared runner alongside three
+    // other shards. Measured ~1.6 s on an idle machine; it timed out on
+    // macos-latest shard 1/4 (CI run 30922363088) with no assertion involved.
+    // This is a wall-clock allowance, not a tolerance for the guard being slow —
+    // if it ever approaches this, the scanner needs work rather than a bigger
+    // number.
+  }, 60_000)
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {
     const findings = analyzeIdentitySource(

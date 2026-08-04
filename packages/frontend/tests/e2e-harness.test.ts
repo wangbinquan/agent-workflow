@@ -14,21 +14,31 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, test } from 'vitest'
+import { join } from 'node:path'
+import { afterAll, afterEach, describe, expect, test } from 'vitest'
 
 import { harnessTestApi, type DaemonHandle, type SpawnOptions } from '../../../e2e/harness'
 
-const here = dirname(fileURLToPath(import.meta.url))
 const fixtureRoots: string[] = []
 
 // RFC-254 T28b — the harness now resolves ONE compiled stub instead of taking a
-// path per call, and it refuses to start when that artifact is missing. These
-// tests never launch a real daemon, so they point the override at a file that
-// certainly exists rather than requiring `bun run build:binary:e2e` before
-// `bun run test`.
-const stubOverride = resolve(here, '../../../e2e/harness.ts')
+// path per call, and it refuses to start when that artifact is missing OR is
+// not executable. These tests never launch a real daemon, so rather than
+// requiring `bun run build:binary:e2e` before `bun run test` they point the
+// override at a throwaway file that is BOTH — pointing it at a source file
+// satisfied the old existence-only check and stopped satisfying the real one.
+// Created ONCE at module load, before any test swaps TMPDIR: `withHarnessTmp`
+// repoints TMPDIR at the fixture's `homes` directory and a sibling assertion
+// requires that directory to end up empty, so minting this inside a test would
+// leave a stray entry there.
+const stubRoot = mkdtempSync(join(tmpdir(), 'aw-harness-stub-'))
+const stubOverride = (() => {
+  const dir = stubRoot
+  const path = join(dir, 'stub-opencode')
+  writeFileSync(path, '#!/bin/sh\nexit 0\n', 'utf8')
+  chmodSync(path, 0o755)
+  return path
+})()
 
 function createFixture(binaryBody: string): {
   root: string
@@ -70,6 +80,10 @@ async function startDaemonForTest(opts: SpawnOptions): Promise<DaemonHandle> {
     else process.env.AGENT_WORKFLOW_E2E_STUB = previous
   }
 }
+
+afterAll(() => {
+  rmSync(stubRoot, { recursive: true, force: true })
+})
 
 afterEach(() => {
   while (fixtureRoots.length > 0) {
