@@ -1071,6 +1071,41 @@ export const enUS: Resources = {
     },
   },
   settings: {
+    customProviders: {
+      title: 'Custom providers',
+      hint: 'Connect an OpenAI-compatible private gateway (one-api / new-api / vLLM). Credentials are sealed by the daemon before they reach disk; every read surface returns a mask.',
+      add: 'Add provider',
+      empty: 'No custom providers configured yet.',
+      enabled: 'Enabled',
+      modelCount: '{{count}} models',
+      dialogCreate: 'Add custom provider',
+      dialogEdit: 'Edit custom provider',
+      deleteTitle: 'Delete custom provider',
+      deleteMessage:
+        'After deleting "{{id}}", nodes that still reference it will fail at launch. Delete anyway?',
+      fields: {
+        id: 'Provider ID',
+        name: 'Display name',
+        baseURL: 'Endpoint',
+        baseURLHint:
+          'Full URL of the OpenAI-compatible endpoint, e.g. https://gw.example.com/v1. Not normalized \u2014 a trailing slash is a different endpoint.',
+        apiKey: 'API key',
+        apiKeyHint: 'Entered once here; never shown again after saving.',
+        apiKeyKeepHint: 'Leave empty to keep the stored key; type a value to replace it.',
+        models: 'Model list',
+        modelsHint:
+          'Enter model ids manually (Enter or comma). Only the models listed here can be selected.',
+      },
+      errors: {
+        id: 'Use lowercase letters, digits and . _ -, starting with a letter or digit.',
+        idReserved:
+          'That id belongs to a built-in OpenCode catalog provider; claiming it would re-point that provider.',
+        idDuplicate: 'A provider with this id already exists.',
+        baseURL: 'Enter an absolute http(s) URL with no ${} placeholder.',
+        models: 'List at least one model id.',
+        apiKeyRequired: 'A new or renamed provider must carry its API key.',
+      },
+    },
     title: 'Settings',
     sectionNavLabel: 'Settings sections',
     sectionGroups: {

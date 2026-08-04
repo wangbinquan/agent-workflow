@@ -1225,6 +1225,37 @@ export interface Resources {
     }
   }
   settings: {
+    customProviders: {
+      title: string
+      hint: string
+      add: string
+      empty: string
+      enabled: string
+      modelCount: string
+      dialogCreate: string
+      dialogEdit: string
+      deleteTitle: string
+      deleteMessage: string
+      fields: {
+        id: string
+        name: string
+        baseURL: string
+        baseURLHint: string
+        apiKey: string
+        apiKeyHint: string
+        apiKeyKeepHint: string
+        models: string
+        modelsHint: string
+      }
+      errors: {
+        id: string
+        idReserved: string
+        idDuplicate: string
+        baseURL: string
+        models: string
+        apiKeyRequired: string
+      }
+    }
     title: string
     sectionNavLabel: string
     sectionGroups: {
@@ -5763,6 +5794,38 @@ export const zhCN: Resources = {
     },
   },
   settings: {
+    customProviders: {
+      title: '自定义 provider',
+      hint: '接入 OpenAI 兼容的私有网关（one-api / new-api / vLLM 等）。凭据由守护进程加密后落盘，任何读取接口只返回掩码。',
+      add: '添加 provider',
+      empty: '尚未配置自定义 provider。',
+      enabled: '启用',
+      modelCount: '{{count}} 个模型',
+      dialogCreate: '添加自定义 provider',
+      dialogEdit: '编辑自定义 provider',
+      deleteTitle: '删除自定义 provider',
+      deleteMessage: '删除 “{{id}}” 后，仍引用它的节点在发起时会失败。确定删除？',
+      fields: {
+        id: 'Provider ID',
+        name: '显示名',
+        baseURL: '接口地址',
+        baseURLHint:
+          'OpenAI 兼容端点的完整地址，例如 https://gw.example.com/v1（不做归一化，尾部斜杠算不同地址）。',
+        apiKey: 'API 密钥',
+        apiKeyHint: '仅在此处录入一次；保存后不再回显。',
+        apiKeyKeepHint: '留空则保留已存密钥；填写则替换。',
+        models: '模型清单',
+        modelsHint: '手动录入模型 id，回车或逗号分隔。只有列在这里的模型可被选用。',
+      },
+      errors: {
+        id: 'ID 只能用小写字母、数字与 . _ -，且以字母或数字开头。',
+        idReserved: '该 ID 属于 OpenCode 内置目录 provider，占用它会改写内置 provider 的端点。',
+        idDuplicate: '已存在同名 provider ID。',
+        baseURL: '请填写 http(s) 绝对地址，且不能包含 ${} 变量。',
+        models: '至少填写一个模型 id。',
+        apiKeyRequired: '新建或更名 provider 必须填写 API 密钥。',
+      },
+    },
     title: '设置',
     sectionNavLabel: '设置分区',
     sectionGroups: {

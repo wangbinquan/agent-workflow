@@ -78,6 +78,8 @@ const OVERLAY_CALLSITES = {
   'components/split/UnsavedChangesGuard.tsx': { family: 'primitive-and-guard', count: 1 },
 
   'components/AclPanel.tsx': { family: 'access-and-settings', count: 2 },
+  // RFC-255 — the custom-provider card's edit form + delete confirmation.
+  'components/CustomProviderCard.tsx': { family: 'access-and-settings', count: 2 },
   'components/account/AccountSecurityPanel.tsx': {
     family: 'access-and-settings',
     count: 1,

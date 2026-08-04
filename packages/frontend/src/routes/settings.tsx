@@ -51,6 +51,7 @@ import { SandboxCard } from '@/components/settings/SandboxCard'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
+import { CustomProviderCard } from '@/components/CustomProviderCard'
 import { RuntimeList } from '@/components/RuntimeList'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
@@ -458,6 +459,11 @@ export function RuntimeTab({
       <SandboxCard />
       <div className="stack-top--md">
         <RuntimeList showHeading={false} restoreFocusFallbackRef={focusFallbackRef} />
+      </div>
+      {/* RFC-255: custom gateways belong with the runtimes — they decide which
+          models those runtimes can reach at all. */}
+      <div className="stack-top--md">
+        <CustomProviderCard />
       </div>
     </div>
   )
