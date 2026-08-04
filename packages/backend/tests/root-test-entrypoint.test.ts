@@ -106,6 +106,9 @@ const loggerRegression = readFileSync(
   'utf8',
 )
 const e2eCommandHelper = readFileSync(resolve(root, 'e2e', 'command.ts'), 'utf8')
+// RFC-254 T29 fix: the Bun-only half lives in a child process now, because
+// Playwright loads `e2e/*.ts` under NODE and `bun:` is unresolvable there.
+const e2eSqliteRunner = readFileSync(resolve(root, 'e2e', 'fixtures', 'sqlite-exec.ts'), 'utf8')
 const e2eSpecSources = readE2eSpecSources(resolve(root, 'e2e'))
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
@@ -136,9 +139,9 @@ function occurrenceCount(source: string, marker: string): number {
 }
 
 /** Numeric literal of a `const NAME = 12_345` declaration in the e2e helper. */
-function e2eCommandConstant(name: string): number {
-  const literal = e2eCommandHelper.match(new RegExp(`const ${name} = ([\\d_]+)`))?.[1]
-  if (literal === undefined) throw new Error(`Missing ${name} in e2e/command.ts`)
+function e2eConstant(source: string, name: string, where: string): number {
+  const literal = source.match(new RegExp(`const ${name} = ([\\d_]+)`))?.[1]
+  if (literal === undefined) throw new Error(`Missing ${name} in ${where}`)
   return Number(literal.replaceAll('_', ''))
 }
 
@@ -347,20 +350,26 @@ describe('repository test entrypoint', () => {
     // RFC-254 T29: fixture SQL runs through Bun's EMBEDDED SQLite, not the
     // `sqlite3` CLI — the CLI is absent from the windows-latest runner image,
     // and it defaulted to `busy_timeout = 0` against a live daemon holding the
-    // write lock. What this lock protects is unchanged (no shell, bounded,
-    // timeout inside the command deadline); in-process is strictly stronger
-    // than "shell-free subprocess".
-    expect(e2eCommandHelper).toContain("from 'bun:sqlite'")
+    // write lock.
+    //
+    // It runs one process boundary away, and that placement is itself the
+    // subject of a lock: `e2e/command.ts` is loaded by Playwright's NODE runner,
+    // where importing `bun:sqlite` kills the whole suite at load time (it did —
+    // 86ebbf2d, four shards down for four commits). So the engine belongs to the
+    // child and the parent may only spawn it.
+    expect(e2eCommandHelper).not.toContain("from 'bun:sqlite'")
     expect(e2eCommandHelper).not.toContain("execFileSync('sqlite3'")
+    expect(e2eCommandHelper).toContain('sqlite-exec.ts')
     expect(e2eCommandHelper).toContain('timeout: COMMAND_TIMEOUT_MS')
-    // Fixture SQL races the live daemon for the write lock; the CLI defaults to
-    // busy_timeout = 0. Behaviour is locked by
-    // e2e-sqlite-fixture-lock-contention.test.ts — this only pins that the
-    // timeout stays inside the command deadline so a wedge is still bounded.
-    expect(e2eCommandHelper).toContain('PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};')
-    expect(e2eCommandConstant('SQLITE_BUSY_TIMEOUT_MS')).toBeLessThan(
-      e2eCommandConstant('COMMAND_TIMEOUT_MS'),
-    )
+    expect(e2eSqliteRunner).toContain("from 'bun:sqlite'")
+    // Fixture SQL races the live daemon for the write lock. Behaviour is locked
+    // by e2e-sqlite-fixture-lock-contention.test.ts — this only pins that the
+    // wait stays inside the parent's command deadline so a wedge is still
+    // bounded, across the process boundary that now separates the two.
+    expect(e2eSqliteRunner).toContain('PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};')
+    expect(
+      e2eConstant(e2eSqliteRunner, 'SQLITE_BUSY_TIMEOUT_MS', 'e2e/fixtures/sqlite-exec.ts'),
+    ).toBeLessThan(e2eConstant(e2eCommandHelper, 'COMMAND_TIMEOUT_MS', 'e2e/command.ts'))
     expect(e2eCommandHelper).toContain("GIT_TERMINAL_PROMPT: '0'")
     expect(e2eCommandHelper).toContain("GCM_INTERACTIVE: 'never'")
     expect(e2eCommandHelper).toContain("'commit.gpgsign=false'")

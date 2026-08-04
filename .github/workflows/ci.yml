@@ -440,6 +440,9 @@ jobs:
         run: ls -lh dist/
 
       - name: Smoke-run binary (version + doctor + hidden RFC-224 entrypoints)
+        # RFC-254 T30 — declared explicitly because the default shell on a
+        # windows runner is pwsh, and every line below is POSIX sh.
+        shell: bash
         # `ls -lh` only checks the artifact exists; a build can succeed yet
         # produce a binary that crashes at startup (broken bundle, missing
         # native bindings, stripped permissions). Exec the binary to catch
@@ -458,7 +461,12 @@ jobs:
         # though the canonical asset names here never contain any.
         run: |
           set -euxo pipefail
-          bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' ! -name 'agent-workflow-e2e-*' | head -n 1)
+          bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' ! -name 'agent-workflow-e2e-*' ! -name '*.exe' | head -n 1)
+          # RFC-254 T30: on Windows the executable IS the `.exe`, and the
+          # extensionless name above does not exist.
+          if [ -z "$bin" ]; then
+            bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*.exe' ! -name 'agent-workflow-e2e-*' | head -n 1)
+          fi
           bin="$PWD/$bin"
           chmod +x "$bin"
           "$bin" version
@@ -490,10 +498,16 @@ jobs:
           # JS template literals must reach Bun verbatim.
           # shellcheck disable=SC2016
           RFC224_SMOKE_BIN="$bin" bun -e '
+            const { isAbsolute, parse } = require("node:path")
             const binary = process.env.RFC224_SMOKE_BIN
-            if (binary === undefined || !binary.startsWith("/")) {
+            // RFC-254 T30: `startsWith("/")` is not what "absolute" means on
+            // Windows, where it is `C:\\...`.
+            if (binary === undefined || !isAbsolute(binary)) {
               throw new Error("compiled RFC-224 smoke requires an absolute binary path")
             }
+            // A directory that exists on every platform and is NOT the repo:
+            // the filesystem root, spelled the way this platform spells it.
+            const outsideRepo = parse(process.cwd()).root
 
             async function beforeDeadline(promise, label) {
               let timer
@@ -519,9 +533,15 @@ jobs:
                   "--watchdog-ms",
                   "10000",
                   "--",
-                  "/usr/bin/true",
+                  // RFC-254 T30: the binary's own no-op subcommand rather than
+                  // `/usr/bin/true`, which does not exist off POSIX. What the
+                  // supervisor is being driven over is the protocol, not the
+                  // payload, so any harmless exec will do — and this one is
+                  // guaranteed present because it is the artifact under test.
+                  binary,
+                  "version",
                 ],
-                cwd: "/",
+                cwd: outsideRepo,
                 env: {},
                 stdin: "pipe",
                 stdout: "pipe",
