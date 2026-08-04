@@ -171,6 +171,19 @@ const leaderRunCount = async (db: DbClient, taskId: string): Promise<number> =>
     (r) => r.nodeId === '__wg_leader__',
   ).length
 
+// RFC-254 T31 — EXPLICIT wall-clock budgets on the three cases below.
+//
+// They each drive a real workgroup turn through a spawned subprocess, and the
+// FILE takes ~5.9 s on an idle machine — i.e. every one of them sat right on
+// bun's 5 s default. Under any concurrent load (a full-suite run, another
+// suite in parallel, a shared CI runner) they tip over and report
+// `timed out after 5000ms` with no assertion involved, which reads as a
+// mysterious failure rather than as "the budget was never realistic".
+//
+// 30 s is a wall-clock ALLOWANCE, not a tolerance for these turns getting
+// slower: if one ever approaches it, the turn is what needs looking at.
+// Windows makes this concrete — process spawning there is slower still, and
+// the matrix leg would have inherited the same too-tight default.
 describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to max_rounds)', () => {
   test('leader clarify → awaiting_human (leader-clarify) with exactly ONE leader run → answer → done', async () => {
     const h = harness()
@@ -227,7 +240,7 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
     } finally {
       h.cleanup()
     }
-  })
+  }, 30_000)
 })
 
 describe('RFC-187 §3-7 — maxRounds with completed work wraps up (does not hard-fail)', () => {
@@ -249,7 +262,7 @@ describe('RFC-187 §3-7 — maxRounds with completed work wraps up (does not har
     } finally {
       h.cleanup()
     }
-  })
+  }, 30_000)
 })
 
 describe('RFC-187 §4 — zero canonical delta on done posts a warn', () => {
@@ -272,5 +285,5 @@ describe('RFC-187 §4 — zero canonical delta on done posts a warn', () => {
     } finally {
       h.cleanup()
     }
-  })
+  }, 30_000)
 })

@@ -34,7 +34,18 @@ const actor = buildActor({
   source: 'daemon',
 })
 
-async function waitFor(check: () => boolean | Promise<boolean>, timeoutMs = 5_000): Promise<void> {
+/**
+ * RFC-254 T31 — the internal poll budget must fit INSIDE the test's own budget,
+ * not undercut it.
+ *
+ * This helper defaulted to 5 s while the test that uses it declares 15 s, so
+ * the outer allowance could never be reached: a real Claude turn that ran a
+ * little long failed here as `condition timed out` rather than as a timeout,
+ * which reads like a product assertion. 12 s leaves headroom under the 15 s
+ * while still failing well before it — and Windows, where process spawning is
+ * slower, would have inherited the tighter one.
+ */
+async function waitFor(check: () => boolean | Promise<boolean>, timeoutMs = 12_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error('condition timed out')
