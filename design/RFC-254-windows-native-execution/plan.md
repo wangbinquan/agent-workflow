@@ -162,7 +162,9 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 | T11b | `fd99a0be` | verified artifact layout 的 win32 形态（P0-B）：`USERPROFILE`、禁用命令、`.exe` 后缀 |
 | T11c | `9c22bfde` | 平台事实经注入；守卫当场抓住我第一版直接读 `process.platform` |
 | T14b | `f082770b` | 本地 MCP wrapperless 物化（P0-F/D21）；**不用 `.cmd`**——cmd.exe 会重新分词 |
-| T13 | 本批 | 受控 config 在 win32 不写 `shell` 键，**缺席本身是身份的一部分** |
+| T13 | `12110b8d` | 受控 config 在 win32 不写 `shell` 键，**缺席本身是身份的一部分**；另附 Windows 真机验证脚本 |
+| T29 | `86ebbf2d` | e2e fixture SQL 改 `bun:sqlite`——**硬前提**（windows runner 无 sqlite3 CLI），顺带消掉一个真实 flake 的成因 |
+| T25b | `cc4dadea` | 归档链路的 Windows 前提。核实后风险面比预想小得多：**macOS 的 `tar` 就是 bsdtar/libarchive**，与 Windows 自带同一实现 ⇒ 方言已被 macOS CI 腿覆盖，只需补「tar 缺失」的显式检查 |
 
 **Windows CI 首跑的价值（`e3081c73`）**——一次抓到三件事，全是我这边的问题：
 ① **Job Object 的 FFI 在真实内核上一次成功**（最重要的正面结论：函数声明、

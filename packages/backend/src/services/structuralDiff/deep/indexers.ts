@@ -110,6 +110,29 @@ export interface IndexerProbe {
   available: boolean
   bin: string
   version: string | null
+  /**
+   * RFC-254 T25c — why an unavailable indexer is unavailable.
+   *
+   * `not-found` and `shim-not-executable` look identical to the caller
+   * otherwise, and they need OPPOSITE remedies: install it, versus point the
+   * override at the native executable. On Windows the npm-installed indexers
+   * resolve to `.cmd` shims, which CreateProcess cannot execute at all — so
+   * "the tool is installed and still reported missing" is the DEFAULT
+   * experience there unless the difference is spelled out.
+   */
+  reason?: 'not-found' | 'shim-not-executable' | 'version-probe-failed'
+}
+
+/**
+ * Does this resolved path name a Windows batch shim rather than a real
+ * executable?
+ *
+ * `.cmd`/`.bat` run through cmd.exe, which both refuses direct CreateProcess
+ * invocation and re-tokenizes arguments — the argv mangling RFC-254 D17 rejects
+ * everywhere, not only here.
+ */
+export function isWindowsBatchShim(path: string): boolean {
+  return /\.(?:cmd|bat)$/i.test(path)
 }
 
 /** Probe `<bin> --version` (mirrors probeOpencode). Absent binary → available
@@ -119,6 +142,12 @@ export async function probeIndexer(
   overrides?: DeepIndexerOverrides,
 ): Promise<IndexerProbe> {
   const bin = resolveIndexerBin(spec, overrides)
+  const resolved = Bun.which(bin)
+  if (resolved !== null && isWindowsBatchShim(resolved)) {
+    // Distinguishable on purpose: the operator has the tool, and the fix is to
+    // point the override at the real executable next to the shim.
+    return { available: false, bin, version: null, reason: 'shim-not-executable' }
+  }
   try {
     const proc = Bun.spawn({
       ...platformSpawnOptionsForHost(),
@@ -128,9 +157,9 @@ export async function probeIndexer(
       stdin: 'ignore',
     })
     const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
-    if (code !== 0) return { available: false, bin, version: null }
+    if (code !== 0) return { available: false, bin, version: null, reason: 'version-probe-failed' }
     return { available: true, bin, version: out.trim().split('\n')[0] ?? null }
   } catch {
-    return { available: false, bin, version: null }
+    return { available: false, bin, version: null, reason: 'not-found' }
   }
 }

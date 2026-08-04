@@ -11,6 +11,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { netlessInvocationCommand } from '@/services/runtime/opencode/sealedSubprocess'
 import { resetTarProbeForTests, tarAvailable } from '@/util/archive'
+import { isWindowsBatchShim } from '@/services/structuralDiff/deep/indexers'
 import { resolve } from 'node:path'
 import {
   isLexicallyInside,
@@ -369,5 +370,22 @@ describe('RFC-254 T25b — archive prerequisites', () => {
       expect(src).toContain('System32')
       expect(typeof tarGz).toBe('function')
     }
+  })
+})
+
+describe('RFC-254 T25c — indexer availability is diagnosable', () => {
+  test('a .cmd/.bat shim is recognised as such', () => {
+    // On Windows the npm-installed SCIP indexers resolve to batch shims, which
+    // CreateProcess cannot execute — so "the tool is installed and still
+    // reported missing" is the DEFAULT experience there. The two states need
+    // opposite remedies (install it, vs. point the override at the real exe),
+    // which is why they are distinguishable rather than both "unavailable".
+    expect(isWindowsBatchShim('C:\\npm\\scip-typescript.cmd')).toBe(true)
+    expect(isWindowsBatchShim('C:\\npm\\scip-typescript.CMD')).toBe(true)
+    expect(isWindowsBatchShim('C:\\npm\\scip-typescript.bat')).toBe(true)
+    expect(isWindowsBatchShim('C:\\tools\\scip-typescript.exe')).toBe(false)
+    expect(isWindowsBatchShim('/usr/local/bin/scip-typescript')).toBe(false)
+    // Not fooled by the extension appearing mid-path.
+    expect(isWindowsBatchShim('C:\\cmd\\tool')).toBe(false)
   })
 })
