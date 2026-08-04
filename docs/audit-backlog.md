@@ -378,6 +378,22 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   全部不可达。恢复 = 受控 env 透传白名单 + 逐 provider 行为资格。
 - ⏳ **(P3) wellknown 凭据**：并入 OAuth RFC。
 
+## RFC-255 实现门未决项（2026-08-04）
+
+门档：`design/RFC-255-custom-openai-compatible-provider/implementation-gate-2026-08-04.md`
+（1 P1 + 5 P2 已折入；下列为显式记录不做的部分）：
+
+- ⏳ **(P2) T4 行为 fixture 与 T7 gated e2e**：AC-4/5 现由单元 + 路由测试覆盖，缺
+  qualified 二进制下的 `/config/providers` 报告形状固定，以及 `127.0.0.1` OpenAI-compatible
+  stub 网关的全链路（含 key 轮换 resume 绿 / baseURL 变更 resume 拒）。
+- ⏳ **(P2) 三计划面接线的直接断言**：`credential.customProvider` 进受控 config、
+  `credential.auth` 进 serverEnv 目前只有类型保证；`dependencies.customProvider` seam 已在，补测成本低。
+- ⏳ **(P3) 计划面/枚举面的 `loadConfig` 写盘副作用**：两处新调用在配置文件缺失时会写默认配置
+  （daemon 启动早已创建，故实际无影响），与 `readConfig` 的「只读诊断」语义统一时一并处理。
+- ⏳ **(P3) 模型枚举缓存在 (binary, projection) 维度无累积上界**：`evictOpencodeModelsCache`
+  只保证逐出**完整**，不限制两次运行时变更之间的累积。
+- ⏳ **(P3) 自定义 provider 卡片整表提交**：并发管理员的编辑会被 last-write-wins 静默丢弃。
+
 ## 凭据 at-rest 收口（RFC-255 起，2026-08-04）
 
 RFC-255 把自定义 provider 的 `apiKey` 做成了 secretBox 密封（RFC-036 同一平台密钥）+
