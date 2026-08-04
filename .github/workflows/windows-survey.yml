@@ -22,9 +22,10 @@ on:
     # 05:30 UTC — before the other nightlies, so the triage list is ready first.
     - cron: '30 5 * * *'
 
-concurrency:
-  group: windows-survey
-  cancel-in-progress: false
+# NOT a workflow-level group: the backend survey runs for hours and the e2e one
+# for ~10 minutes, so a shared group queues every quick e2e verification behind
+# a long backend run. They measure independent suites; they queue independently.
+# (Per-job `concurrency` below.)
 
 permissions:
   contents: read
@@ -45,6 +46,9 @@ jobs:
   # once the matrix legs in ci.yml take over (T35).
   survey:
     name: Windows full-suite survey (non-gating)
+    concurrency:
+      group: windows-survey-backend
+      cancel-in-progress: false
     runs-on: windows-latest
     # 90 minutes was not enough: the first run was killed at the deadline with
     # the suite still going (POSIX finishes in ~17). Windows process creation is
@@ -104,6 +108,9 @@ jobs:
   # Non-gating, for the same reason as `survey`: this is data for the triage.
   e2e-survey:
     name: Windows e2e survey (non-gating)
+    concurrency:
+      group: windows-survey-e2e
+      cancel-in-progress: false
     runs-on: windows-latest
     timeout-minutes: 90
     continue-on-error: true
