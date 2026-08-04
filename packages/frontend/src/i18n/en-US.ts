@@ -1074,7 +1074,7 @@ export const enUS: Resources = {
     customProviders: {
       title: 'Custom providers',
       hint: 'Connect an OpenAI-compatible private gateway (one-api / new-api / vLLM). Credentials are sealed by the daemon before they reach disk; every read surface returns a mask.',
-      add: 'Add provider',
+      add: '+ Add provider',
       empty: 'No custom providers configured yet.',
       enabled: 'Enabled',
       modelCount: '{{count}} models',

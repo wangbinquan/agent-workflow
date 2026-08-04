@@ -5799,7 +5799,7 @@ export const zhCN: Resources = {
     customProviders: {
       title: '自定义 provider',
       hint: '接入 OpenAI 兼容的私有网关（one-api / new-api / vLLM 等）。凭据由守护进程加密后落盘，任何读取接口只返回掩码。',
-      add: '添加 provider',
+      add: '+ 添加 provider',
       empty: '尚未配置自定义 provider。',
       enabled: '启用',
       modelCount: '{{count}} 个模型',
