@@ -18,6 +18,7 @@ import {
   followupPolicyForFailure,
   isExecutionIdentityFailureCode,
   isPermanentRuntimeFailure,
+  RUNTIME_FAILURE_CODES,
   SCRIPT_FAILURE_CODES,
   isTransientRuntimeFailure,
 } from '../src'
@@ -60,11 +61,16 @@ describe('RFC-224 execution identity failure taxonomy', () => {
     // or did not — a script retry is always a fresh run.
     expect(FAILURE_CODES).toEqual([
       ...FOLLOWUP_FAILURE_CODES,
+      // 2026-08-04 沙箱审计：运行时**自陈**的终止错误（claude 的
+      // `{type:'result', is_error:true}`——鉴权被拒 / 用量额度 / 网关错误）自成一族。
+      // 不并进 FOLLOWUP：那一族每条都要有 follow-up 策略行（`FOLLOWUP_POLICY`），
+      // 告诉 agent 怎么重试；而对一个鉴权被拒的 agent 无话可说。
+      ...RUNTIME_FAILURE_CODES,
       ...SCRIPT_FAILURE_CODES,
       ...EXECUTION_IDENTITY_FAILURE_CODES,
       ...LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
     ])
-    for (const code of SCRIPT_FAILURE_CODES) {
+    for (const code of [...SCRIPT_FAILURE_CODES, ...RUNTIME_FAILURE_CODES]) {
       expect(FOLLOWUP_FAILURE_CODES).not.toContain(code)
     }
     expect(new Set(FAILURE_CODES).size).toBe(FAILURE_CODES.length)

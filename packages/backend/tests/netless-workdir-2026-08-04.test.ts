@@ -12,7 +12,7 @@
 // 采纳，其余（或未请求）一律退回工作树。
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import {
@@ -85,7 +85,10 @@ describe('共享的可执行文件解析（两个运行时同一实现）', () =
   test('bare PATH token 被解析成绝对规范路径，而不是直接拒绝', async () => {
     const resolved = await canonicalExecutable('sh', { PATH: '/bin:/usr/bin' }, '/tmp')
     expect(isAbsolute(resolved)).toBe(true)
-    expect(resolved.endsWith('/sh')).toBe(true)
+    // 断言的是「解析成了一个真实存在的规范文件」，不是它的 basename：多数 Linux 发行版上
+    // /bin/sh 是指向 dash 的符号链接，而这里刻意做 realpath（要绑定的必须是真 inode）。
+    expect(existsSync(resolved)).toBe(true)
+    expect(realpathSync(resolved)).toBe(resolved)
   })
 
   test('工作树相对 token 以工作树为基准（而不是 daemon 的 cwd）', async () => {

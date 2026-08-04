@@ -6094,7 +6094,7 @@ export const zhCN: Resources = {
       modeHint:
         '强制（enforce）：沙箱机制不可用时拒绝启动新任务；告警（warn）：不可用时降级为无沙箱运行并发出告警；关闭（off）：从不启用沙箱。',
       enforceUnavailable:
-        '当前 provider 未满足全部必要隔离能力；强制档位下**新任务与在跑任务的后续节点**都会被拒绝。',
+        '当前 provider 未满足全部必要隔离能力；强制档位下，新任务与在跑任务的后续节点都会被拒绝。',
       warnDegraded:
         '隔离能力已降级。告警档位仍允许执行，但模型可触达的子进程可能访问宿主资源或网络。',
       lifetimeBestEffort:
@@ -9383,6 +9383,25 @@ export const zhCN: Resources = {
       '$t(tasks.failure.execution-identity-custom-provider-disabled)',
     'execution-identity-custom-provider-disabled__hint':
       '$t(tasks.failure.execution-identity-custom-provider-disabled__hint)',
+    'config-custom-provider-malformed': '自定义 provider 配置格式不合法。',
+    'config-custom-provider-id-invalid':
+      'Provider ID 只能用小写字母、数字与 . _ -，且以字母或数字开头。',
+    'config-custom-provider-id-reserved':
+      '该 ID 属于 OpenCode 内置目录 provider，占用它会改写该 provider 的端点。',
+    'config-custom-provider-id-catalog':
+      '该 ID 经运行时探测属于内置目录 provider，占用它会改写该 provider 的端点。',
+    'config-custom-provider-id-duplicate': '已存在同名 provider ID。',
+    'config-custom-provider-name-invalid': '显示名不合法。',
+    'config-custom-provider-npm-unsupported': 'v1 仅支持 OpenAI 兼容实现。',
+    'config-custom-provider-baseurl-invalid':
+      '接口地址必须是 http(s) 绝对地址，且不能包含 ${} 变量。',
+    'config-custom-provider-apikey-invalid': 'API 密钥不合法。',
+    'config-custom-provider-apikey-required':
+      '新建 provider、更名或更换接口地址时必须重新填写 API 密钥。',
+    'config-custom-provider-models-empty': '至少填写一个模型 id。',
+    'config-custom-provider-model-invalid': '模型 id 不合法。',
+    'config-custom-provider-model-duplicate': '模型 id 重复。',
+    'config-custom-provider-unavailable': '守护进程缺少密钥文件，无法安全保存 provider 凭据。',
     'invalid-json': '请求内容不是有效 JSON。',
     'invalid-body': '请求内容不合法。',
     'import-ref-unresolved': '导入内容引用了当前不可用的资源。',

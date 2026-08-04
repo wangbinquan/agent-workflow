@@ -30,17 +30,15 @@
 // paths: it has no child process to contain.
 
 import { createHash } from 'node:crypto'
-import { constants } from 'node:fs'
-import { lstat, mkdir, open, readFile, realpath, rm } from 'node:fs/promises'
+import { lstat, mkdir, readFile, realpath, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Mcp } from '@agent-workflow/shared'
 import type { PreparedContainmentPlan } from '@/services/sandbox'
 import type { Logger } from '@/util/log'
 import {
   canonicalExecutable,
   canonicalNetlessDirectory,
-  canonicalRegularFile,
   ensurePrivateNetlessDirectory,
   FIXED_NETLESS_PATH,
   resolveInterpreterChain,
@@ -64,9 +62,6 @@ import {
 
 /** Names must be safe path/JSON keys before any of them reaches a wrapper dir. */
 const SAFE_MCP_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,127}$/i
-
-/** Bytes of a candidate executable read to find a `#!` line. */
-const SHEBANG_PROBE_BYTES = 512
 
 /** `#!/usr/bin/env node` → node → its own interpreter … a cycle is a failure. */
 

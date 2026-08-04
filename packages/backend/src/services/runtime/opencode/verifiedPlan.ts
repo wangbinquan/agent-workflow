@@ -3,7 +3,7 @@
 // behind explicit test dependency injection.
 
 import { createHash, randomBytes } from 'node:crypto'
-import { chmod, lstat, mkdir, realpath, rm } from 'node:fs/promises'
+import { chmod, lstat, mkdir, rm } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { BusinessNodeSpawnContext, SpawnPlan } from '../types'
 import {
