@@ -243,12 +243,46 @@ T7（shutdown control listener）、T11b/T11c（verified artifact layout + 注�
 T14b（本地 MCP wrapperless 物化）、T31–T35（CI 矩阵与视觉基线）、
 T25c–T25d（D24 剩余子系统）。
 
-**T31–T35 的现实评估（2026-08-04）**：把 `windows-latest` 直接加进 ci.yml 的四个
-矩阵，会让约 8600 条按 POSIX 假设写的后端测试同时变红——这正是当初把 Windows
-验证拆成独立定向作业的原因（见 `.github/workflows/windows-platform.yml` 头部）。
-T31/T32 的实质工作量是**逐条分类那 8600 条**（真缺陷 / 需 win32 分支 / 合理 skip
-并登记），属于新的一轮切片而不是本轮的收尾动作；T33 的 46 张 win32 视觉基线还需
-要先有一条能跑起来的 windows e2e 腿。当前定向作业已覆盖：平台原语七套 + golden
+## T31–T34 · Windows 勘测实测结论（2026-08-05）
+
+翻矩阵之前先测量，而不是照着 403 个含 POSIX 构造的文件盲扫。两个非门禁勘测作业
+落在 `.github/workflows/windows-survey.yml`（`cancel-in-progress: false`——第一次
+尝试被我自己的下一次推送砍掉了：90 分钟的非门禁作业放在会取消的并发组里基本跑不完）。
+
+**e2e：270 条里 213 通过、45 skip、7 失败、2 flaky。** 比预期好得多，直接原因是
+T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
+
+| 用例 | 根因 | 归属 |
+|---|---|---|
+| `workflow-matrix` output kinds | **路径分隔符** | 本 RFC，已修 `c345d948` |
+| `business-workflow-scenarios` 文档批处理 | **路径分隔符** | 同上 |
+| `workgroup-matrix` ×2 | 同形 `toBe` 断言，疑同源 | 待重跑确认 |
+| `mcp-runtime-playground` | locator 不可见 | 待查 |
+| `focus-ring-clip` | **POSIX 上也红**（既有缺陷，`01d3e541` 把它从 4 推到 100+） | 非本 RFC |
+| `rfc250-workflow-camera` | **POSIX 上也红**（并发画布改动） | 非本 RFC |
+| `intent-builder` a11y（flaky） | 既有对比度缺陷（RFC-027 起） | 非本 RFC，已登记 |
+
+**路径分隔符那条是本轮最有价值的发现，而且是生产缺陷不是测试格式问题**：
+`envelope.ts` 与 `portArtifacts.ts` 的 `relative()` 在 Windows 上返回反斜杠，而那个
+值会**落库成端口内容、插进下游节点的 prompt 交给模型、被工作流逻辑匹配**——同一个
+工作流在不同宿主上产出不同的数据，分歧一路走到模型输入里。收进单点
+`toPortableRelativePath()`。
+
+**T31 的前置已就位**：四个矩阵 job 的每个 `run` 步骤显式声明 `shell: bash`
+（Windows 默认 pwsh；POSIX 侧行为等价——唯一差别是 `pipefail`，而这些步骤无管道），
+并加了棘轮：矩阵 job 里不声明 shell 的步骤直接红。
+
+**后端全量的现实评估（2026-08-05 订正）**：此前写的「约 8600 条会同时变红」把**全套
+总数**当成了受影响数，不成立。实测口径：1023 个测试文件里 **403 个**（39%）至少含
+一处 POSIX 专有构造，涉及约 3500 条声明——且这是**上限**，一个文件里出现一次
+`/tmp/` 不代表它每条用例都会红。**爆炸半径以文件计**：共享 `beforeAll` 里挂一行会
+带走整个文件的用例，所以「403 个文件各错一行」在报表上呈现为数千条红。把
+`windows-latest` 直接加进四个矩阵，仍会一次性暴露那 403 个文件——这正是当初把
+Windows 验证拆成独立定向作业的原因（见 `.github/workflows/windows-platform.yml`
+头部）。T31/T32 的实质工作量是**逐条分类**（真缺陷 / 需 win32 分支 / 合理 skip 并
+按 `ALLOWED_SKIP_COUNTS` 逐条登记理由），勘测产物就是那份清单的输入。T33 的 46 张
+win32 视觉基线现在**不再被阻塞**——e2e 已能在 Windows 上跑，剩的是把那几条真失败
+清零后接腿。当前定向作业已覆盖：平台原语七套 + golden
 回放 + argv 契约 + Node 兼容守门 + shared 套件 + typecheck + 单二进制与 stub 的
 构建冒烟 + doctor。
 
