@@ -54,6 +54,24 @@ export function SandboxCard() {
   const effectiveMode = sandbox?.effectiveMode ?? sandbox?.mode ?? configuredMode
   const degraded =
     sandbox !== undefined && (!sandbox.available || (sandbox.degradedReasons?.length ?? 0) > 0)
+  // 2026-08-04 audit: the card knew only that SOMETHING was degraded — the
+  // reason codes (`provider-not-found` / `provider-parent-unsafe` /
+  // `required-capability-missing` / `containment-mode-off`) were computed,
+  // shipped to the client and then dropped, and the install/userns guidance
+  // that answers them existed ONLY in the `agent-workflow sandbox` CLI. So the
+  // UI could say "unavailable" and never say why or what to do.
+  const degradedDetail =
+    (sandbox?.degradedReasons?.length ?? 0) > 0 ? (
+      <>
+        {' '}
+        {t('settings.sandbox.reasonCodes', {
+          codes: sandbox?.degradedReasons?.join(', ') ?? '',
+        })}{' '}
+        {t('settings.sandbox.cliHint')}
+      </>
+    ) : (
+      <> {t('settings.sandbox.cliHint')}</>
+    )
   const lifetimeBestEffort =
     effectiveMode !== 'off' &&
     sandbox?.available === true &&
@@ -159,6 +177,7 @@ export function SandboxCard() {
           testid="sandbox-enforce-unavailable"
         >
           {t('settings.sandbox.enforceUnavailable')}
+          {degradedDetail}
         </NoticeBanner>
       )}
       {mode === 'warn' && degraded && (
@@ -170,6 +189,7 @@ export function SandboxCard() {
           testid="sandbox-warn-degraded"
         >
           {t('settings.sandbox.warnDegraded')}
+          {degradedDetail}
         </NoticeBanner>
       )}
       {lifetimeBestEffort && (

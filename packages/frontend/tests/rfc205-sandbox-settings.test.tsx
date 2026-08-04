@@ -314,3 +314,34 @@ describe('RFC-205 RuntimeTab wiring', () => {
     await screen.findByTestId('sandbox-status-chip')
   })
 })
+
+// 2026-08-04 沙箱审计：设置页此前只知道「有东西降级了」——reasonCodes 被算出来、随
+// 状态一路送到前端、然后原样丢弃；而回答这些码的安装 / userns 指引只存在于
+// `agent-workflow sandbox` CLI 里，只有 SSH 上机的人看得到。于是 UI 能说「不可用」，
+// 却说不出为什么、更说不出怎么修。
+describe('降级提示必须给出原因码与自救入口', () => {
+  test('warn + 有 reasonCodes ⇒ 列出原因码并指向 CLI 指引', async () => {
+    mockFetch({
+      sandbox: {
+        mode: 'warn',
+        mechanism: 'bwrap',
+        available: false,
+        degradedReasons: ['provider-not-found', 'required-capability-missing'],
+      },
+    })
+    render(<SandboxCard />, { wrapper: wrap(newQc()) })
+    const banner = await screen.findByTestId('sandbox-warn-degraded')
+    expect(banner.textContent).toContain('provider-not-found')
+    expect(banner.textContent).toContain('required-capability-missing')
+    expect(banner.textContent).toContain('agent-workflow sandbox')
+  })
+
+  test('enforce + 无 reasonCodes ⇒ 至少仍给出 CLI 指引', async () => {
+    mockFetch({
+      sandbox: { mode: 'enforce', mechanism: null, available: false, degradedReasons: [] },
+    })
+    render(<SandboxCard />, { wrapper: wrap(newQc()) })
+    const banner = await screen.findByTestId('sandbox-enforce-unavailable')
+    expect(banner.textContent).toContain('agent-workflow sandbox')
+  })
+})

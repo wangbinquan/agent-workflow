@@ -1388,11 +1388,13 @@ export const enUS: Resources = {
       modeHint:
         'Enforce: refuse to launch new tasks while the sandbox mechanism is unavailable; Warn: degrade to unsandboxed runs with an alert; Off: never sandbox.',
       enforceUnavailable:
-        'The active provider does not satisfy every required containment capability — under Enforce, new task launches will be refused.',
+        'The active provider does not satisfy every required containment capability — under Enforce, both new launches AND the next node of a running task are refused.',
       warnDegraded:
         'Containment is degraded. Runs are permitted in Warn mode, but model-reachable child processes may access host resources or the network.',
       lifetimeBestEffort:
         'This provider enforces the filesystem and network baseline, but descendant lifetime cleanup is best effort on this platform.',
+      reasonCodes: 'Reason: {{codes}}',
+      cliHint: 'Run `agent-workflow sandbox` on the server for install/fix guidance.',
       mismatchTitle: 'Saved and effective modes differ',
       mismatchBody:
         'Saved mode is {{configured}}, while this daemon is still using {{effective}}. Apply the saved mode now or restart the daemon.',

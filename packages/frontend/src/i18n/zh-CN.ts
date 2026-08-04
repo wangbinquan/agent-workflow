@@ -1497,6 +1497,8 @@ export interface Resources {
       modeOff: string
       modeHint: string
       enforceUnavailable: string
+      reasonCodes: string
+      cliHint: string
       warnDegraded: string
       lifetimeBestEffort: string
       mismatchTitle: string
@@ -6091,11 +6093,14 @@ export const zhCN: Resources = {
       modeOff: '关闭',
       modeHint:
         '强制（enforce）：沙箱机制不可用时拒绝启动新任务；告警（warn）：不可用时降级为无沙箱运行并发出告警；关闭（off）：从不启用沙箱。',
-      enforceUnavailable: '当前 provider 未满足全部必要隔离能力；强制档位下新任务启动将被拒绝。',
+      enforceUnavailable:
+        '当前 provider 未满足全部必要隔离能力；强制档位下**新任务与在跑任务的后续节点**都会被拒绝。',
       warnDegraded:
         '隔离能力已降级。告警档位仍允许执行，但模型可触达的子进程可能访问宿主资源或网络。',
       lifetimeBestEffort:
         '当前 provider 已启用文件系统与网络隔离基线，但此平台对子孙进程生命周期的清理仅为尽力而为。',
+      reasonCodes: '原因：{{codes}}',
+      cliHint: '在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引。',
       mismatchTitle: '已保存模式与当前生效模式不一致',
       mismatchBody:
         '配置文件保存的是 {{configured}}，当前 daemon 仍使用 {{effective}}。可立即应用已保存模式，或重启 daemon。',
