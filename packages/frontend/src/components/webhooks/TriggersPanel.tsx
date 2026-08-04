@@ -242,6 +242,7 @@ export function TriggersPanel() {
         save.reset()
         setDraft({ ...EMPTY_DRAFT, endpointId: endpoints.data?.[0]?.id ?? '' })
       }}
+      disabled={endpoints.isLoading}
       data-testid="webhook-trigger-new"
     >
       {t('webhookTriggers.new')}
@@ -507,11 +508,7 @@ function TriggerDialog(props: {
         : t('webhookTriggers.scopeExact', { n: draft.scopePaths.length })
   const selectedTarget = targetOptions.find((option) => option.value === draft.launchRefId)?.label
   const targetQuery =
-    draft.launchKind === 'workflow'
-      ? workflows
-      : draft.launchKind === 'agent'
-        ? agents
-        : workgroups
+    draft.launchKind === 'workflow' ? workflows : draft.launchKind === 'agent' ? agents : workgroups
 
   return (
     <>
@@ -744,7 +741,7 @@ function TriggerDialog(props: {
                   group
                 >
                   {workflowDetail.isLoading ? (
-                    <LoadingState size="sm" />
+                    <LoadingState size="compact" />
                   ) : workflowDetail.error != null ? (
                     <ErrorBanner error={workflowDetail.error} />
                   ) : workflowInputs.length === 0 ? (

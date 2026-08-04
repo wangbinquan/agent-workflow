@@ -22418,3 +22418,319 @@ button.status-chip {
 .script-env-table__row .form-error {
   grid-column: 1 / -1;
 }
+
+/* --- RFC-257 webhook journey -------------------------------------------- */
+
+.webhook-panel {
+  padding: var(--space-1) var(--space-5) var(--space-5);
+}
+
+.webhook-panel__intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-2) 0 var(--space-5);
+}
+
+.webhook-panel__intro > div {
+  min-width: 0;
+}
+
+.webhook-panel__intro h2 {
+  margin: var(--space-1) 0 var(--space-1);
+  font-size: clamp(1.15rem, 2vw, 1.35rem);
+  line-height: 1.3;
+}
+
+.webhook-panel__intro p {
+  max-width: 52rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  line-height: 1.65;
+}
+
+.webhook-panel__eyebrow {
+  color: var(--accent);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.webhook-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+  gap: var(--space-4);
+}
+
+.webhook-endpoint-card,
+.webhook-trigger-card {
+  min-width: 0;
+  height: 100%;
+}
+
+.webhook-endpoint-card > .card__body,
+.webhook-trigger-card > .card__body {
+  gap: var(--space-4);
+}
+
+.webhook-endpoint-card > .card__footer,
+.webhook-trigger-card > .card__footer {
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.webhook-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.webhook-card__footer .page__actions,
+.webhook-trigger-card__status,
+.webhook-chip-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.webhook-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+}
+
+.webhook-facts > div {
+  min-width: 0;
+}
+
+.webhook-facts dt,
+.webhook-trigger__flow span,
+.webhook-endpoint__url span {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 550;
+}
+
+.webhook-facts dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-sm);
+  font-weight: 550;
+}
+
+.webhook-endpoint__url {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+}
+
+.webhook-endpoint__url > div {
+  min-width: 0;
+}
+
+.webhook-endpoint__url span {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.webhook-endpoint__url code,
+.webhook-secret-dialog__url {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.webhook-secret-dialog__url {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  font-size: var(--font-sm);
+  user-select: all;
+}
+
+.webhook-trigger__flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.webhook-trigger__flow > div {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.webhook-trigger__flow strong {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  font-size: var(--font-sm);
+  line-height: 1.4;
+}
+
+.webhook-trigger__flow-arrow {
+  align-self: center;
+  color: var(--muted);
+  font-size: var(--font-lg);
+}
+
+.webhook-trigger-dialog .stepper__body {
+  min-height: 26rem;
+}
+
+.webhook-step__lead {
+  margin: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  line-height: 1.6;
+}
+
+.webhook-event-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.webhook-event-grid .form-checkbox {
+  min-height: 42px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.webhook-protection-grid {
+  align-items: start;
+}
+
+.webhook-filterbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.webhook-filterbar > .segmented {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.webhook-deliveries-table td:first-child strong {
+  display: inline-block;
+  margin-right: var(--space-1);
+}
+
+.webhook-deliveries-table td:nth-child(2),
+.webhook-delivery-detail dd,
+.webhook-delivery-detail code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.webhook-delivery-detail__facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.webhook-delivery-detail__body-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-sm);
+}
+
+@media (max-width: 720px) {
+  .webhook-panel {
+    padding: var(--space-1) var(--space-3) var(--space-4);
+  }
+
+  .webhook-panel__intro {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .webhook-panel__intro > .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .webhook-card__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .webhook-card__footer .page__actions,
+  .webhook-card__footer .page__actions > .btn,
+  .webhook-card__footer .page__actions > .confirm-button {
+    flex: 1 1 auto;
+  }
+
+  .webhook-card__footer .page__actions > .btn {
+    min-height: 44px;
+  }
+
+  .webhook-trigger__flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .webhook-trigger__flow-arrow {
+    justify-self: center;
+    line-height: 1;
+    transform: rotate(90deg);
+  }
+
+  .webhook-event-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .webhook-filterbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .webhook-delivery-detail__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .webhook-facts,
+  .webhook-event-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .webhook-endpoint__url {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .webhook-endpoint__url .btn {
+    min-height: 44px;
+  }
+
+  .webhook-trigger-dialog .stepper__body {
+    min-height: 20rem;
+  }
+
+  .webhook-trigger-dialog .wizard-summary__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}

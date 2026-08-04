@@ -25,6 +25,7 @@ function jsonResponse(body: unknown): Response {
 let role: 'admin' | 'user' = 'admin'
 let triggers: unknown[] = []
 let deliveries: unknown[] = []
+let endpoints: unknown[] = []
 
 function meResponse() {
   return {
@@ -70,12 +71,31 @@ beforeEach(async () => {
   role = 'admin'
   triggers = []
   deliveries = []
+  endpoints = [
+    {
+      id: 'ep1',
+      name: 'Internal GitLab',
+      provider: 'gitlab',
+      urlToken: 'aw_whk_tok1',
+      enabled: true,
+      preferredCloneProtocol: 'http',
+      hasSecret: true,
+      secretHint: 'ab12',
+      lastDeliveryAt: null,
+      createdAt: 1,
+      updatedAt: 1,
+      ingressUrl: 'https://aw.example.com/webhooks/gitlab/aw_whk_tok1',
+    },
+  ]
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     if (url.includes('/api/auth/me')) return jsonResponse(meResponse())
     if (url.includes('/api/webhook-triggers')) return jsonResponse(triggers)
-    if (url.includes('/api/webhook-endpoints')) return jsonResponse([])
+    if (url.includes('/api/webhook-endpoints')) return jsonResponse(endpoints)
     if (url.includes('/api/webhook-deliveries')) return jsonResponse(deliveries)
+    if (url.includes('/api/workflows')) return jsonResponse([])
+    if (url.includes('/api/agents')) return jsonResponse([])
+    if (url.includes('/api/workgroups')) return jsonResponse([])
     return jsonResponse([])
   })
 })
@@ -89,7 +109,7 @@ describe('RFC-257 · /webhooks page (admin)', () => {
   test('renders the header, the three tabs, and the endpoints tab by default', async () => {
     await renderWebhooks()
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Webhooks' })).toBeTruthy()
+      expect(screen.getByRole('heading', { name: 'Webhook Automation' })).toBeTruthy()
     })
     expect(screen.getByTestId('webhooks-tab-endpoints')).toBeTruthy()
     expect(screen.getByTestId('webhooks-tab-triggers')).toBeTruthy()
@@ -165,6 +185,35 @@ describe('RFC-257 · /webhooks page (admin)', () => {
     await waitFor(() => expect(screen.getByTestId('webhooks-tab-triggers')).toBeTruthy())
     fireEvent.click(screen.getByTestId('webhooks-tab-triggers'))
     await waitFor(() => expect(screen.getByTestId('webhook-triggers-panel')).toBeTruthy())
+  })
+
+  test('new rule is a gated four-step flow and protects an unsaved draft on close', async () => {
+    await renderWebhooks('?tab=triggers')
+    await screen.findByTestId('webhook-trigger-new')
+    await waitFor(() =>
+      expect((screen.getByTestId('webhook-trigger-new') as HTMLButtonElement).disabled).toBe(false),
+    )
+    fireEvent.click(screen.getByTestId('webhook-trigger-new'))
+
+    expect(await screen.findByTestId('webhook-trigger-stepper')).toBeTruthy()
+    expect(screen.getByTestId('stepper-step-scope')).toBeTruthy()
+    expect(screen.getByTestId('stepper-step-events')).toBeTruthy()
+    expect(screen.getByTestId('stepper-step-target')).toBeTruthy()
+    expect(screen.getByTestId('stepper-step-review')).toBeTruthy()
+    expect(screen.getByTestId('webhook-trigger-step-scope')).toBeTruthy()
+    expect(screen.queryByTestId('webhook-trigger-step-events')).toBeNull()
+
+    const next = screen.getByTestId('stepper-next') as HTMLButtonElement
+    expect(next.disabled).toBe(true)
+    fireEvent.change(screen.getByTestId('wt-name'), { target: { value: 'Repair failures' } })
+    fireEvent.change(screen.getByTestId('wt-scope-prefix'), { target: { value: 'platform/' } })
+    await waitFor(() => expect(next.disabled).toBe(false))
+    fireEvent.click(next)
+    expect(await screen.findByTestId('webhook-trigger-step-events')).toBeTruthy()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(await screen.findByRole('heading', { name: 'Discard unsaved changes?' })).toBeTruthy()
+    expect(screen.getByTestId('webhook-trigger-dialog')).toBeTruthy()
   })
 })
 

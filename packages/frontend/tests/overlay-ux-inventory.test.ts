@@ -109,7 +109,7 @@ const OVERLAY_CALLSITES = {
   'routes/settings.tsx': { family: 'access-and-settings', count: 5 },
   'routes/users.tsx': { family: 'access-and-settings', count: 2 },
   // RFC-257: endpoint create + one-time secret reveal.
-  'components/WebhookEndpointCard.tsx': { family: 'access-and-settings', count: 2 },
+  'components/WebhookEndpointCard.tsx': { family: 'access-and-settings', count: 3 },
 
   'components/AgentImportDialog.tsx': { family: 'resource-management', count: 1 },
   // RFC-222 (D5): the shared resource-detail header owns the type-to-confirm
@@ -137,7 +137,7 @@ const OVERLAY_CALLSITES = {
   'routes/scheduled.tsx': { family: 'resource-management', count: 1 },
   // RFC-257: trigger editor + per-trigger fires; delivery raw-body detail
   // (panels of the /webhooks single page).
-  'components/webhooks/TriggersPanel.tsx': { family: 'resource-management', count: 2 },
+  'components/webhooks/TriggersPanel.tsx': { family: 'resource-management', count: 3 },
   'components/webhooks/DeliveriesPanel.tsx': { family: 'resource-management', count: 1 },
 
   // RFC-239: the changes pane's deep views (graph/impact/call-chain/deps) overlay.

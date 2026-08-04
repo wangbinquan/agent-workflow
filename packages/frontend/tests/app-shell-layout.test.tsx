@@ -100,6 +100,9 @@ vi.mock('@/components/LanguageSwitch', async () => {
 
 vi.mock('@/hooks/useActor', () => ({
   usePermission: () => harness.permissionAllowed,
+  // RFC-257 UI 修订：ShellNavigation 用 useActor 过滤 adminOnly 项（/webhooks）。
+  // 这里返回未加载态 —— adminOnly 项不渲染，本文件的既有 nav 断言维持原集合。
+  useActor: () => ({ data: null, isLoading: false }),
 }))
 
 vi.mock('@/components/shell/SettingsGearButton', async () => {

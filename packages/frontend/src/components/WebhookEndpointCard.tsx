@@ -123,9 +123,7 @@ export function WebhookEndpointCard(): React.ReactElement {
     <section className="webhook-panel" data-testid="webhook-endpoints">
       <div className="webhook-panel__intro">
         <div>
-          <span className="webhook-panel__eyebrow">
-            {t('settings.webhookEndpoints.eyebrow')}
-          </span>
+          <span className="webhook-panel__eyebrow">{t('settings.webhookEndpoints.eyebrow')}</span>
           <h2>{t('settings.webhookEndpoints.title')}</h2>
           <p>{t('settings.webhookEndpoints.hint')}</p>
         </div>
@@ -249,9 +247,7 @@ export function WebhookEndpointCard(): React.ReactElement {
                   <div className="webhook-endpoint__url">
                     <div>
                       <span>{t('settings.webhookEndpoints.urlLabel')}</span>
-                      <code data-testid={`webhook-endpoint-url-${row.id}`}>
-                        {row.ingressUrl}
-                      </code>
+                      <code data-testid={`webhook-endpoint-url-${row.id}`}>{row.ingressUrl}</code>
                     </div>
                     <button
                       type="button"
@@ -357,11 +353,7 @@ export function WebhookEndpointCard(): React.ReactElement {
         dismissDisabled
         data-testid="webhook-endpoint-secret-dialog"
         footer={
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => setMinted(null)}
-          >
+          <button type="button" className="btn btn--primary" onClick={() => setMinted(null)}>
             {t('settings.webhookEndpoints.secretDone')}
           </button>
         }
@@ -390,10 +382,7 @@ export function WebhookEndpointCard(): React.ReactElement {
                   </span>
                 )}
                 {secretCopyState === 'failed' && (
-                  <span
-                    className="token-reveal__status token-reveal__status--error"
-                    role="status"
-                  >
+                  <span className="token-reveal__status token-reveal__status--error" role="status">
                     {t('settings.webhookEndpoints.copyFailed')}
                   </span>
                 )}

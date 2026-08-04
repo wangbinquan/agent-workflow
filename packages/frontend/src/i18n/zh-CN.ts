@@ -1227,18 +1227,30 @@ export interface Resources {
   }
   settings: {
     webhookEndpoints: {
+      eyebrow: string
       title: string
       add: string
       hint: string
       empty: string
+      emptyDescription: string
       enabled: string
       disabled: string
       enabledSwitch: string
+      providerLabel: string
+      lastDeliveryLabel: string
+      neverDelivered: string
+      noPublicBaseUrlTitle: string
       noPublicBaseUrl: string
       secretHint: string
       createSubmit: string
+      createDescription: string
       copyUrl: string
+      urlCopied: string
+      copyFailed: string
       rotateSecret: string
+      rotateConfirmTitle: string
+      rotateConfirmDescription: string
+      rotateConfirmAction: string
       deleteConfirm: string
       addTitle: string
       nameLabel: string
@@ -1246,10 +1258,12 @@ export interface Resources {
       protocolLabel: string
       protocolHint: string
       secretTitle: string
+      secretOnceTitle: string
       secretDone: string
       secretOnce: string
       secretLabel: string
       copySecret: string
+      secretCopied: string
       urlLabel: string
       secretPasteHint: string
     }
@@ -2349,6 +2363,7 @@ export interface Resources {
     tabs: { endpoints: string; triggers: string; deliveries: string }
   }
   webhookTriggers: {
+    eyebrow: string
     title: string
     subtitle: string
     new: string
@@ -2357,6 +2372,7 @@ export interface Resources {
     corruptBadge: string
     scopeAll: string
     scopeExact: string
+    scopePrefix: string
     enabledSwitch: string
     firesButton: string
     deleteConfirm: string
@@ -2365,9 +2381,36 @@ export interface Resources {
     firesTitle: string
     firesEmpty: string
     resetCircuit: string
+    eventCount: string
+    flowAria: string
+    saveAction: string
+    discardTitle: string
+    discardDescription: string
+    discardAction: string
     columns: { name: string; rule: string; target: string; state: string }
     kinds: { workflow: string; agent: string; workgroup: string }
+    kindDescriptions: { workflow: string; agent: string; workgroup: string }
+    inputKinds: { text: string; files: string; enum: string; git: string; upload: string }
     last: { launched: string; failed: string }
+    outcomes: {
+      launched: string
+      'launch-failed': string
+      'skipped-circuit-open': string
+      'skipped-repo-unregistered': string
+      'skipped-owner-invalid': string
+      'skipped-trigger-disabled': string
+    }
+    flow: { scope: string; events: string; target: string }
+    steps: { scope: string; events: string; target: string; review: string }
+    stepLeads: { scope: string; events: string; target: string; review: string }
+    review: {
+      endpoint: string
+      scope: string
+      events: string
+      target: string
+      separator: string
+      safetyNote: string
+    }
     events: {
       push: string
       tag_push: string
@@ -2386,8 +2429,10 @@ export interface Resources {
       endpointPlaceholder: string
       endpointImmutable: string
       scope: string
+      scopeHint: string
       events: string
       eventsHint: string
+      pipelineException: string
       branchFilter: string
       branchFilterHint: string
       commandPrefix: string
@@ -2415,18 +2460,32 @@ export interface Resources {
     firesColumns: { stream: string; outcome: string; time: string }
   }
   webhookDeliveries: {
+    eyebrow: string
     title: string
     subtitle: string
     filterAria: string
     empty: string
     emptyDescription: string
+    filteredEmpty: string
+    filteredEmptyDescription: string
+    resultCount: string
     filterAll: string
     replay: string
     replayBadge: string
+    replaySuccess: string
     rejectedNotReplayable: string
     detailTitle: string
     bodyPruned: string
     columns: { event: string; repo: string; status: string; time: string }
+    detail: {
+      status: string
+      event: string
+      repo: string
+      received: string
+      uuid: string
+      stream: string
+      payload: string
+    }
     statuses: {
       received: string
       processing: string
@@ -2434,6 +2493,16 @@ export interface Resources {
       ignored: string
       matched: string
       failed: string
+    }
+    reasons: {
+      'invalid-token': string
+      'missing-token': string
+      'endpoint-disabled': string
+      'no-trigger-matched': string
+      'unsupported-event': string
+      'parse-failed': string
+      'internal-error': string
+      interrupted: string
     }
   }
   scheduled: {
@@ -5924,30 +5993,45 @@ export const zhCN: Resources = {
   },
   settings: {
     webhookEndpoints: {
-      title: 'Webhook 端点',
+      eyebrow: '接收事件',
+      title: '接收端点',
       add: '新建端点',
-      hint: '代码平台（GitLab）把几百个仓库的事件投递到同一个端点；验签 Secret 只在创建/轮换时展示一次。',
-      empty: '还没有 webhook 端点。',
+      hint: '为 GitLab 创建一个稳定的事件入口。创建后，把 URL 和 Secret 一起粘贴到 GitLab Webhook。',
+      empty: '还没有接收端点',
+      emptyDescription: '先创建端点，拿到只显示一次的 Secret，再回到 GitLab 完成连接。',
       enabled: '已启用',
       disabled: '已禁用',
       enabledSwitch: '启用',
-      noPublicBaseUrl: '未配置 publicBaseUrl —— 请在 config 中配置后获取完整 URL（路径：{{path}}）',
+      providerLabel: '代码平台',
+      lastDeliveryLabel: '最近投递',
+      neverDelivered: '尚未收到事件',
+      noPublicBaseUrlTitle: '还不能复制完整 URL',
+      noPublicBaseUrl: '请先在网络设置中配置 publicBaseUrl。端点路径已保留：{{path}}',
       secretHint: 'Secret（尾 4 位：{{hint}}）',
       createSubmit: '创建',
+      createDescription: '端点负责接收并验签事件；具体启动什么任务由下一步的触发规则决定。',
       copyUrl: '复制 URL',
+      urlCopied: 'Webhook URL 已复制。',
+      copyFailed: '复制失败，请手动选中文本复制。',
       rotateSecret: '轮换 Secret',
+      rotateConfirmTitle: '轮换 Secret？',
+      rotateConfirmDescription:
+        '“{{name}}” 的旧 Secret 会立即失效。轮换后必须立刻把新 Secret 更新到 GitLab，否则后续投递都会验签失败。',
+      rotateConfirmAction: '确认轮换',
       deleteConfirm: '确认删除？',
       addTitle: '新建 Webhook 端点',
       nameLabel: '名称',
       namePlaceholder: '内网 GitLab',
       protocolLabel: '自动注册用协议',
-      protocolHint: '事件仓未导入平台时按此协议选 clone URL',
+      protocolHint: '事件仓库尚未导入时，平台会优先使用这种地址自动拉取。',
       secretTitle: 'Secret Token（仅此一次）',
+      secretOnceTitle: '现在保存，关闭后不再显示',
       secretDone: '我已保存',
       secretOnce:
         '以下 Secret 只显示这一次，请立即复制并粘贴到 GitLab webhook 配置的 Secret token 字段。',
       secretLabel: 'Secret Token',
       copySecret: '复制',
+      secretCopied: '已复制',
       urlLabel: 'Webhook URL',
       secretPasteHint: '在 GitLab：Settings → Webhooks，把 URL 与 Secret token 一起粘贴保存。',
     },
@@ -7352,23 +7436,24 @@ export const zhCN: Resources = {
     },
   },
   webhooksPage: {
-    title: 'Webhook',
-    subtitle: '代码平台事件入口：接收端点、分流触发器与投递审计（仅管理员）。',
+    title: 'Webhook 自动化',
+    subtitle: '把 GitLab 事件接进平台，按规则启动工作，并从投递记录快速定位问题。',
     tabAria: 'Webhook 配置分区',
     forbiddenTitle: '仅管理员可见',
     forbiddenDescription: 'Webhook 配置（验签密钥、触发规则、投递审计）只对 admin 开放。',
-    tabs: { endpoints: '端点', triggers: '触发器', deliveries: '投递审计' },
+    tabs: { endpoints: '接收端点', triggers: '触发规则', deliveries: '投递记录' },
   },
   webhookTriggers: {
-    title: 'Webhook 触发器',
-    subtitle:
-      '代码平台事件按规则分流：repo 范围 × 事件类型 × 分支 × 指令 → 启动工作流 / Agent / 工作组。',
-    new: '新建触发器',
-    empty: '还没有触发器。',
-    emptyDescription: '先在 设置 → Webhook 端点 配好入站端点，再创建触发器绑定规则与目标。',
+    eyebrow: '决定何时运行',
+    title: '触发规则',
+    subtitle: '选择哪些仓库与事件需要响应，再指定要启动的工作流、Agent 或工作组。',
+    new: '新建规则',
+    empty: '还没有触发规则',
+    emptyDescription: '先准备一个接收端点，再创建规则，决定事件命中后启动什么工作。',
     corruptBadge: '配置损坏',
     scopeAll: '全部仓库',
     scopeExact: '{{n}} 个仓库',
+    scopePrefix: '{{prefix}}*',
     enabledSwitch: '启用',
     firesButton: '触发记录',
     deleteConfirm: '确认删除？',
@@ -7377,9 +7462,51 @@ export const zhCN: Resources = {
     firesTitle: '触发记录 · {{name}}',
     firesEmpty: '还没有触发记录。',
     resetCircuit: '重置熔断',
+    eventCount: '{{count}} 类事件',
+    flowAria: '规则执行路径',
+    saveAction: '保存规则',
+    discardTitle: '放弃未保存的修改？',
+    discardDescription: '当前规则还没有保存，关闭后这些修改会丢失。',
+    discardAction: '放弃修改',
     columns: { name: '名称', rule: '规则', target: '目标', state: '状态' },
     kinds: { workflow: '工作流', agent: 'Agent', workgroup: '工作组' },
+    kindDescriptions: {
+      workflow: '运行完整编排，适合审计、修复等多阶段流程。',
+      agent: '直接启动一个 Agent，适合单一、快速任务。',
+      workgroup: '让多个成员协作处理同一个目标。',
+    },
+    inputKinds: {
+      text: '文本',
+      files: '文件列表',
+      enum: '选项',
+      git: 'Git 分支',
+      upload: '上传文件',
+    },
     last: { launched: '上次成功', failed: '上次失败' },
+    outcomes: {
+      launched: '已启动',
+      'launch-failed': '启动失败',
+      'skipped-circuit-open': '已暂停：连续触发达到上限',
+      'skipped-repo-unregistered': '已跳过：仓库尚未导入',
+      'skipped-owner-invalid': '已跳过：规则负责人不可用',
+      'skipped-trigger-disabled': '已跳过：规则已停用',
+    },
+    flow: { scope: '仓库范围', events: '响应事件', target: '启动目标' },
+    steps: { scope: '范围', events: '事件', target: '执行', review: '复核' },
+    stepLeads: {
+      scope: '先给规则命名，并限定它接收哪个端点、覆盖哪些仓库。',
+      events: '选择会触发自动化的事件；可继续用分支、评论指令和 bot 账号缩小范围。',
+      target: '选择事件命中后要启动的资源，并把事件内容映射成执行输入。',
+      review: '确认路由方向与安全边界。保存后，后续新事件会按这条规则执行。',
+    },
+    review: {
+      endpoint: '接收端点',
+      scope: '仓库范围',
+      events: '响应事件',
+      target: '启动目标',
+      separator: '→',
+      safetyNote: '同一 MR 或分支连续触发 {{count}} 次后会暂停，避免自动化循环失控。',
+    },
     events: {
       push: 'Push',
       tag_push: 'Tag Push',
@@ -7396,51 +7523,67 @@ export const zhCN: Resources = {
       name: '名称',
       endpoint: '端点',
       endpointPlaceholder: '选择端点',
-      endpointImmutable: '端点创建后不可更换（如需更换请重建触发器）',
+      endpointImmutable: '保存后不能更换接收端点；需要换端点时请新建规则。',
       scope: '仓库范围',
+      scopeHint: '可覆盖全部仓库、一个路径前缀，或明确列出的仓库。',
       events: '事件类型',
       eventsHint: '流水线类事件不受忽略名单过滤（修到绿循环的前提）',
-      branchFilter: '分支过滤（glob）',
-      branchFilterHint: 'MR 类事件按目标分支匹配，其余按事件分支；留空不过滤',
+      pipelineException:
+        '流水线事件始终会被接收，即使作者在忽略名单中；连续触发上限负责阻止修复循环失控。',
+      branchFilter: '只响应这些分支',
+      branchFilterHint: '支持通配符，例如 release/*。MR 按目标分支判断；留空表示全部分支。',
       commandPrefix: '评论指令前缀',
-      commandPrefixHint: '仅 MR 评论事件生效，如 /fix',
-      ignoreUsernames: '忽略用户名单',
-      ignoreUsernamesHint:
-        '这些 GitLab 用户的 push / MR / 评论事件不触发（填 bot 账号防自触发）；流水线事件不受此名单影响',
+      commandPrefixHint: '仅对 MR 评论生效，例如 /fix；留空则响应所有评论。',
+      ignoreUsernames: '忽略这些 GitLab 用户',
+      ignoreUsernamesHint: '常用于填写自动化 bot 账号，避免自己的 push、MR 或评论再次触发规则。',
       launchKind: '目标类型',
-      kindImmutable: '目标类型创建后不可更换',
+      kindImmutable: '目标类型保存后不能更换；需要更换时请新建规则。',
       target: '目标',
       targetPlaceholder: '选择目标',
       inputMappings: '输入映射',
-      inputMappingsHint: '把事件字段映射到工作流输入；git 类输入固定取事件分支',
+      inputMappingsHint: '把仓库、分支、MR 等事件内容交给工作流；Git 输入会自动使用事件分支。',
       noInputs: '该工作流没有声明输入。',
       eventBranch: '分支来自事件',
-      templatePlaceholder: '支持模板变量（如 mr_iid、branch，写法为双花括号包裹）',
-      unmappable: '该输入类型无法从事件映射（保存时将被拒绝）',
+      templatePlaceholder: '例如：检查这个 MR 的失败原因',
+      unmappable: 'Webhook 事件不能提供这种输入，请改用其他目标或调整工作流。',
       description: '任务提示词模板',
       goal: '工作组目标模板',
       templateVarsHint:
         '可用变量：event_type / repo_path / branch / target_branch / mr_iid / mr_title / commit_sha / comment_text / comment_author / pipeline_status / event_json',
       maxFires: '连续触发上限',
-      maxFiresHint: '同一 MR/分支连续触发达到上限后熔断（人工重置或人类作者事件恢复）',
+      maxFiresHint: '同一 MR 或分支达到上限后暂停，防止自动化反复触发自己。',
       autoRegister: '自动注册仓库',
-      autoRegisterLabel: '事件仓未导入平台时按 URL 自动 clone',
+      autoRegisterLabel: '事件仓库尚未导入时，允许平台自动拉取并登记',
     },
     firesColumns: { stream: '流', outcome: '结果', time: '时间' },
   },
   webhookDeliveries: {
-    title: 'Webhook 投递历史',
-    subtitle: '端点级审计：每次 HTTP 投递一行；触发结果见各触发器的触发记录。',
+    eyebrow: '观察与排障',
+    title: '投递记录',
+    subtitle: '查看 GitLab 事件是否到达、是否通过验签，以及有没有匹配到触发规则。',
     filterAria: '按状态过滤',
-    empty: '还没有投递记录。',
-    emptyDescription: '在 GitLab 配好 webhook 后，事件会出现在这里。',
+    empty: '还没有投递记录',
+    emptyDescription: '在 GitLab 保存 Webhook 后，新事件会自动出现在这里。',
+    filteredEmpty: '当前筛选没有记录',
+    filteredEmptyDescription: '换一个状态，或清除筛选查看全部投递。',
+    resultCount: '{{count}} 条记录',
     filterAll: '全部',
     replay: '重放',
     replayBadge: '重放',
-    rejectedNotReplayable: '验签失败的投递不可重放（先修正 Secret）',
+    replaySuccess: '已创建重放投递 {{id}}，结果会自动刷新。',
+    rejectedNotReplayable: 'Secret 验证失败的请求不可信，不能重放；请先修正 GitLab 中的 Secret。',
     detailTitle: '投递详情',
     bodyPruned: '（原始 body 已按保留策略清理）',
     columns: { event: '事件', repo: '仓库', status: '状态', time: '时间' },
+    detail: {
+      status: '处理状态',
+      event: '事件类型',
+      repo: '仓库',
+      received: '接收时间',
+      uuid: '事件 UUID',
+      stream: '事件流',
+      payload: '事件内容',
+    },
     statuses: {
       received: '已接收',
       processing: '分发中',
@@ -7448,6 +7591,16 @@ export const zhCN: Resources = {
       ignored: '已忽略',
       matched: '已分发',
       failed: '失败',
+    },
+    reasons: {
+      'invalid-token': 'Secret 不匹配',
+      'missing-token': '缺少 Secret',
+      'endpoint-disabled': '端点已停用',
+      'no-trigger-matched': '没有规则命中',
+      'unsupported-event': '暂不支持该事件',
+      'parse-failed': '请求内容无法解析',
+      'internal-error': '平台内部错误',
+      interrupted: '服务重启时中断',
     },
   },
   scheduled: {

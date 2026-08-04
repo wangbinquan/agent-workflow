@@ -10,7 +10,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { WebhookEndpointCard } from '../src/components/WebhookEndpointCard'
@@ -40,6 +40,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 let endpoints: unknown[] = []
+let rotateCalls = 0
 
 function renderCard() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -76,11 +77,20 @@ beforeEach(async () => {
   setBaseUrl(`http://webhook-endpoint-${crypto.randomUUID()}.test`)
   setToken('tok')
   endpoints = [LISTED]
+  rotateCalls = 0
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     const method = init?.method ?? 'GET'
     if (url.includes('/api/webhook-endpoints') && method === 'GET') {
       return jsonResponse(endpoints)
+    }
+    if (url.includes('/rotate-secret') && method === 'POST') {
+      rotateCalls += 1
+      return jsonResponse({
+        ...LISTED,
+        secretHint: 'rt99',
+        secret: 'rotated-one-time-secret-rt99',
+      })
     }
     if (url.includes('/api/webhook-endpoints') && method === 'POST') {
       // 创建响应：一次性明文 secret（列表 GET 永远没有这个字段）
@@ -110,7 +120,7 @@ describe('RFC-257 · WebhookEndpointCard', () => {
       expect(screen.getByTestId('webhook-endpoint-ep1')).toBeTruthy()
     })
     expect(screen.getByTestId('webhook-endpoint-url-ep1').textContent).toBe(LISTED.ingressUrl)
-    expect(screen.getByText(/last 4: ab12/i)).toBeTruthy()
+    expect(screen.getByText(/•••• ab12/)).toBeTruthy()
     expect(document.body.textContent).not.toContain('one-time-secret')
   })
 
@@ -123,11 +133,33 @@ describe('RFC-257 · WebhookEndpointCard', () => {
     fireEvent.click(screen.getByTestId('webhook-endpoint-create-submit'))
     const secretEl = await screen.findByTestId('webhook-endpoint-secret-value')
     expect(secretEl.textContent).toBe('one-time-secret-value-zz99')
+    // 一次性密钥不能被 Escape 或遮罩误关掉。
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByTestId('webhook-endpoint-secret-value')).toBeTruthy()
     // 关闭一次性 Dialog 后明文不再出现在任何地方（列表只有 hint）
     fireEvent.click(screen.getByRole('button', { name: /I saved it/i }))
     await waitFor(() => {
       expect(screen.queryByTestId('webhook-endpoint-secret-value')).toBeNull()
     })
     expect(document.body.textContent).not.toContain('one-time-secret-value-zz99')
+  })
+
+  test('轮换 secret 必须先确认破坏性后果，确认前后端零写入', async () => {
+    renderCard()
+    await waitFor(() => expect(screen.getByTestId('webhook-endpoint-rotate-ep1')).toBeTruthy())
+
+    fireEvent.click(screen.getByTestId('webhook-endpoint-rotate-ep1'))
+
+    expect(await screen.findByRole('heading', { name: 'Rotate this secret?' })).toBeTruthy()
+    expect(screen.getByText(/old secret.*stop working immediately/i)).toBeTruthy()
+    expect(rotateCalls).toBe(0)
+
+    const confirmDialog = screen.getByRole('dialog', { name: 'Rotate this secret?' })
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Rotate secret' }))
+
+    await waitFor(() => expect(rotateCalls).toBe(1))
+    expect((await screen.findByTestId('webhook-endpoint-secret-value')).textContent).toBe(
+      'rotated-one-time-secret-rt99',
+    )
   })
 })
