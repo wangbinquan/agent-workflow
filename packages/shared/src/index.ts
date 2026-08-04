@@ -102,6 +102,7 @@ export * from './structuralDiffGraph'
 // reserved spawn env keys). Dependency-free leaf.
 export * from './runtimeConfigDir'
 export * from './executionIdentity' // RFC-224
+export * from './customProvider' // RFC-255
 // RFC-239 — RFC-088 breaking-risk semantics, hoisted from the frontend so the
 // change-group model computes severity identically on both ends. Dependency-free
 // leaf (type-only import from the structural-diff schema).

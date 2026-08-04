@@ -46,6 +46,10 @@ describe('RFC-224 execution identity failure taxonomy', () => {
       'execution-identity-stream-failed',
       'execution-identity-timeout',
       'execution-identity-store-unsafe',
+      // RFC-255: a disabled custom provider fails in the planner rather than
+      // falling through to the generic credential lookup, whose outcome depends
+      // on leftover host state and is therefore unactionable.
+      'execution-identity-custom-provider-disabled',
     ])
     expect(new Set(EXECUTION_IDENTITY_FAILURE_CODES).size).toBe(
       EXECUTION_IDENTITY_FAILURE_CODES.length,

@@ -3,8 +3,39 @@
 // backfilled by the backend on load.
 
 import { z } from 'zod'
+import { CUSTOM_PROVIDER_ID_RE, CUSTOM_PROVIDER_NPM } from '../customProvider'
 
 export const CONFIG_SCHEMA_VERSION = 1
+
+/**
+ * RFC-255 — one administrator-configured OpenAI-compatible gateway.
+ *
+ * This is the WIRE shape: `apiKey` is optional because omitting it (or sending
+ * back the mask this schema deliberately does NOT reject) means "keep the
+ * stored credential". The route's semantic gate, not this schema, decides
+ * whether a given submission is allowed to omit it — a base schema that
+ * rejected the mask would make the frontend's own GET response unparseable
+ * (it validates GET and PUT responses with the very same schema).
+ *
+ * Deep semantic checks (reserved ids, `${` in the URL, duplicate model ids)
+ * live in `validateCustomProviders` so the route, the CLI and the tests share
+ * one implementation with stable issue codes.
+ */
+export const CustomProviderModelSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+})
+
+export const CustomProviderEntrySchema = z.object({
+  id: z.string().regex(CUSTOM_PROVIDER_ID_RE),
+  name: z.string().optional(),
+  npm: z.literal(CUSTOM_PROVIDER_NPM),
+  baseURL: z.string().min(1),
+  apiKey: z.string().optional(),
+  models: z.array(CustomProviderModelSchema).min(1),
+  enabled: z.boolean(),
+})
+export type CustomProviderEntrySchemaType = z.infer<typeof CustomProviderEntrySchema>
 
 export const LogLevelSchema = z.enum(['debug', 'info', 'warn', 'error'])
 export const LanguageSchema = z.enum(['zh-CN', 'en-US'])
@@ -107,6 +138,14 @@ export const ConfigSchema = z.object({
     .default(10 * 60 * 1000),
   /** Prepared dependency environments unused for this long are collected. */
   scriptEnvTtlDays: z.number().int().positive().default(30),
+
+  // --- RFC-255 custom OpenAI-compatible providers ---
+  /**
+   * Administrator-configured gateways, global to the daemon. Stored keys are
+   * secretBox-sealed on disk and masked on every outbound path; the runtime
+   * planners inject only the SELECTED entry, without the key or display name.
+   */
+  customProviders: z.array(CustomProviderEntrySchema).default([]),
 
   // --- RFC-108 task auto-check & recovery (all default-safe; auto-execution OFF) ---
   /** T18: auto-resume daemon-restart-interrupted tasks at boot. Default OFF. */
@@ -533,6 +572,7 @@ export const DEFAULT_CONFIG: Config = {
   scriptInterpreters: {}, // RFC-253 — empty ⇒ resolve every language from PATH
   scriptDepsInstallTimeoutMs: 10 * 60 * 1000,
   scriptEnvTtlDays: 30,
+  customProviders: [], // RFC-255 — empty ⇒ only built-in catalog providers
   // RFC-108 auto-recovery knobs — auto-execution OFF by default (decision D1).
   autoResumeOnBoot: false,
   autoRepair: {},

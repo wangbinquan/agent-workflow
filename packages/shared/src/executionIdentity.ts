@@ -30,6 +30,16 @@ export const EXECUTION_IDENTITY_FAILURE_CODES = [
   'execution-identity-stream-failed',
   'execution-identity-timeout',
   'execution-identity-store-unsafe',
+  /**
+   * RFC-255 — the selected model belongs to a custom provider the administrator
+   * has disabled. Emitted by the planners BEFORE credential resolution, because
+   * falling through to the generic three-channel lookup produces an unactionable
+   * outcome: a leftover entry in the host's native auth.json passes planning and
+   * fails much later as `provider-untrusted`, and an id that collides with the
+   * credential-env table would quietly run against the vendor's own endpoint
+   * with the daemon's real key.
+   */
+  'execution-identity-custom-provider-disabled',
 ] as const
 
 /**
