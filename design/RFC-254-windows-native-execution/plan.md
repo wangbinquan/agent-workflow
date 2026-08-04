@@ -290,7 +290,23 @@ T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
 | 9 | RFC-014 iterate sibling cascade |
 | 8 | /api/plugins install path（PATH 注入的 fake npm） |
 
-集中在 **RFC-224 verified 执行链路**与**运行时解析 / 插件安装**两簇，与前文
+**已处理的第一簇（RFC-112，21 条）**：根因**不是**预判的「自写假二进制」——是夹具
+写死 `binaryPath: '/opt/my-cc'` 这类 POSIX 字面量。陷阱在于它在 Windows 上不是被当
+成相对路径拒绝：`isAbsolute('/opt/x')` 为 true（前导斜杠即绝对、落在当前驱动器），
+它顺利通过绝对检查、再栽在规范性回环上（`resolve` 得 `D:\opt\x`），而报出的诊断
+指向 traversal——唯一没错的那件事。**生产校验器本身是对的**，真 Windows 路径规范
+且被接受；不可移植的是夹具。已加 `canonicalBinaryPath()` 并全量转换 16 个文件
+（`030d7f6d` / `24ef0e27`），另记下两类**不得转换**的：必须是真二进制的
+（`/bin/echo`）、以及故意畸形的负向字面量——两者都被它们自己的测试当场抓住。
+
+**下一簇的线索（RFC-224，70+ 条）**：`rfc224-sealed-subprocess.test.ts` 用
+`providerId: 'linux-bwrap'` + `/usr/bin/bwrap`，是 **Linux 专属**的能力证明；
+Windows 上的失败形态是「12 秒等不到 supervisor 的 ACK 写入」。12 秒已相当宽裕，
+所以**必须先分清「慢」还是「根本没起来」**再决定是加 `skipIf` 登记还是修——
+supervisor 是真被 spawn 的（编译产物的隐藏子命令），不是纯注入。这一步需要在
+Windows 上单独查，不该照着猜下结论。
+
+原始聚类集中在 **RFC-224 verified 执行链路**与**运行时解析 / 插件安装**两簇，与前文
 「27 个单测自写 `#!/bin/sh` 假二进制」的预判吻合：`opencodePath` 在生产侧是**单个
 字符串**，Windows 上必须指向真可执行文件，而这些测试写的是 shell 脚本。这是 T32
 分类的第一批，且**需要一个设计决定**（给测试提供真 .exe / 改用别的 seam / 登记
