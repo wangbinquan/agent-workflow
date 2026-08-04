@@ -300,7 +300,11 @@ test('SIGTERM (graceful) → task ends interrupted and remains resumable', async
     // RFC-202 records this as daemon-restart/interrupted, not a user cancel,
     // so the existing task remains resumable after the daemon returns.
     // 35s SIGKILL fallback gives the 30s graceful budget headroom.
-    await daemonA.killChild('SIGTERM', 35_000)
+    // RFC-254 T7: ask for a DRAIN, not a signal. Windows has no SIGTERM —
+    // `child.kill('SIGTERM')` there delivers TerminateProcess — so a spec that
+    // signalled would be testing a crash while asserting the graceful outcome.
+    // On POSIX this is still exactly `SIGTERM`.
+    await daemonA.requestGracefulShutdown(35_000)
 
     // LOCKS: a daemon-owned shutdown must not masquerade as a user cancel.
     // The harness disables boot auto-resume, so exercise the explicit resume

@@ -15,8 +15,10 @@ import { type ChildProcessByStdio, spawn } from 'node:child_process'
 import {
   accessSync,
   constants,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -56,6 +58,17 @@ export interface DaemonHandle {
    * 30s graceful-shutdown budget can complete).
    */
   killChild: (signal?: NodeJS.Signals, fallbackTimeoutMs?: number) => Promise<void>
+  /**
+   * RFC-254 T7 — ask the daemon to DRAIN, the way `agent-workflow stop` does.
+   *
+   * On POSIX this is SIGTERM, identical to `killChild('SIGTERM')`. On Windows
+   * there is no SIGTERM: Node accepts the name but delivers `TerminateProcess`,
+   * a hard kill, so a spec that asked for a graceful shutdown there would
+   * silently be testing a crash instead — and would then assert the WRONG
+   * terminal state. This routes through the loopback control endpoint on that
+   * platform, which is what the product does.
+   */
+  requestGracefulShutdown: (timeoutMs?: number) => Promise<void>
   /** True if the home dir was provided externally (don't wipe on stop). */
   keepHome: boolean
 }
@@ -177,6 +190,42 @@ function appendOutputTail(current: string, chunk: string): string {
 
 function isPortCollisionError(error: unknown): boolean {
   return error instanceof Error && /EADDRINUSE|address already in use/i.test(error.message)
+}
+
+/**
+ * Wait for a child that has ALREADY been asked to exit by some other means.
+ *
+ * Split out of `signalChildAndWait` so the RFC-254 T7 control-endpoint path can
+ * reuse the same waiting discipline without also sending a signal — on Windows
+ * a signal is exactly what must not be sent.
+ */
+async function waitForChildExit(child: DaemonChild, timeoutMs: number): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  await new Promise<void>((resolveExit) => {
+    let settled = false
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      child.off('exit', finish)
+      resolveExit()
+    }
+    const timer = setTimeout(finish, timeoutMs)
+    child.once('exit', finish)
+    if (child.exitCode !== null || child.signalCode !== null) finish()
+  })
+}
+
+/** The control endpoint a daemon publishes for `stop` (RFC-254 T7). */
+function readControlEndpoint(path: string): { url: string; nonce: string } | null {
+  try {
+    if (!existsSync(path)) return null
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { url?: string; nonce?: string }
+    if (typeof parsed.url !== 'string' || typeof parsed.nonce !== 'string') return null
+    return { url: parsed.url, nonce: parsed.nonce }
+  } catch {
+    return null
+  }
 }
 
 async function signalChildAndWait(
@@ -509,6 +558,28 @@ async function startDaemonWithPortAllocator(
         // RFC-054 W1-3 — direct signal helper for crash-recovery spec. Sends
         // `signal` (default SIGKILL) and waits for the child to exit. Pass
         // ≥ 35s with SIGTERM when the daemon's 30s graceful budget must run.
+        const requestGracefulShutdown = async (timeoutMs = 35_000): Promise<void> => {
+          if (process.platform !== 'win32') {
+            await signalChildAndWait(startedChild, 'SIGTERM', timeoutMs)
+            return
+          }
+          const control = readControlEndpoint(join(home, '.daemon.control'))
+          if (control === null) {
+            throw new Error(
+              `e2e/harness: no control endpoint under ${home}. On Windows a graceful ` +
+                `shutdown cannot be requested with a signal, so this spec cannot run ` +
+                `against a daemon that did not publish one (RFC-254 T7).`,
+            )
+          }
+          const response = await fetch(`${control.url}/shutdown`, {
+            method: 'POST',
+            headers: { 'x-agent-workflow-control': control.nonce },
+          })
+          if (response.status !== 202) {
+            throw new Error(`e2e/harness: control shutdown refused (${response.status})`)
+          }
+          await waitForChildExit(startedChild, timeoutMs)
+        }
         const killChild = async (
           signal: NodeJS.Signals = 'SIGKILL',
           fallbackTimeoutMs: number = 5_000,
@@ -522,6 +593,7 @@ async function startDaemonWithPortAllocator(
           stubOpencode,
           stop,
           killChild,
+          requestGracefulShutdown,
           keepHome,
         }
       } catch (error) {
