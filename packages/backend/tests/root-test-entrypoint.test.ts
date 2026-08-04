@@ -224,14 +224,28 @@ describe('repository test entrypoint', () => {
     expect(frontendJob).toContain('shard: [1, 2, 3]')
     expect(occurrenceCount(frontendJob, `--shard=\${{ matrix.shard }}/3`)).toBe(1)
 
+    // RFC-254 T31 — the e2e CHAIN carries the windows leg; the unit matrices do
+    // not yet. That split is deliberate and measured, not an oversight: four
+    // Windows e2e surveys drove the suite from 213 pass / 7 fail to 219 / 2,
+    // with the last two failing on POSIX as well, while the backend suite still
+    // has ~386 failures and does not finish inside 90 minutes there. Flipping
+    // `test-backend` before that triage lands would make main red for everyone.
     expect(buildBinaryJob).toContain('fail-fast: false')
-    expect(buildBinaryJob).toContain('os: [ubuntu-latest, macos-latest]')
+    expect(buildBinaryJob).toContain('os: [ubuntu-latest, macos-latest, windows-latest]')
+    // The RFC-224 supervisor smoke drives the BWRAP supervisor with
+    // `/usr/bin/true`; neither exists on Windows, so the windows leg takes the
+    // artifact and skips that step. `windows-platform.yml` drives `doctor` and
+    // the compiled stub there instead.
+    expect(buildBinaryJob).toContain("if: runner.os != 'Windows'")
 
     expect(e2eJob).toContain('needs: build-binary')
     expect(e2eJob).toContain('fail-fast: false')
-    expect(e2eJob).toContain('os: [ubuntu-latest, macos-latest]')
+    expect(e2eJob).toContain('os: [ubuntu-latest, macos-latest, windows-latest]')
     expect(e2eJob).toContain('shard: [1, 2, 3, 4]')
-    expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/4`)).toBe(1)
+    // TWO invocations now — the windows branch and the POSIX one — and both must
+    // keep the shard denominator, which is what this count is really guarding.
+    expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/4`)).toBe(2)
+    expect(e2eJob).toContain('AW_E2E_WINDOWS_EXCLUDE')
   })
 
   test('the known sync-child regression has hard deadlines', () => {

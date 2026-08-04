@@ -415,7 +415,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
@@ -461,6 +461,13 @@ jobs:
         run: ls -lh dist/
 
       - name: Smoke-run binary (version + doctor + hidden RFC-224 entrypoints)
+        # RFC-254 T31 — POSIX only. The block below drives the **bwrap**
+        # capability supervisor, a Linux concept, and hands it `/usr/bin/true`
+        # as its payload; neither exists on Windows. What the windows leg needs
+        # from this job is the ARTIFACT, and `build:binary:e2e` already runs its
+        # own `version` smoke on every platform. `windows-platform.yml`
+        # separately drives `doctor` and the compiled stub there.
+        if: runner.os != 'Windows'
         # RFC-254 T30 — declared explicitly because the default shell on a
         # windows runner is pwsh, and every line below is POSIX sh.
         shell: bash
@@ -787,7 +794,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         shard: [1, 2, 3, 4]
     runs-on: ${{ matrix.os }}
     # Cold browser/system-dependency installation needs more headroom than the
@@ -863,8 +870,34 @@ jobs:
       - name: Run e2e (shard ${{ matrix.shard }}/4)
         env:
           CI: 'true'
+          # RFC-254 T31 — the windows leg skips two specs, and ONLY these two.
+          #
+          # Both fail on POSIX as well, and both were attributed by building at
+          # each commit in turn: `focus-ring-clip` has been red since `01d3e541`
+          # took its clipped-ring count from 4 to 108, and
+          # `rfc250-workflow-camera` since the wrapper-drag work. Neither is a
+          # Windows problem and neither is this RFC's to fix, so letting them
+          # make a NEW leg red would mean shipping a gate that is red on arrival
+          # — which is how a gate gets ignored.
+          #
+          # Matched by TEST TITLE, not by file. Playwright's grep also matches
+          # the file path, and excluding by filename here would have quietly
+          # dropped 10 tests instead of 2 — the other 8 in those two files pass
+          # on Windows (measured).
+          #
+          # This is a registered exclusion, not a silent one: it is listed in
+          # `docs/audit-backlog.md` and pinned by
+          # `rfc254-windows-e2e-exclusions.test.ts`, which fails if either title
+          # stops naming exactly one test. Delete it when those two go green.
+          AW_E2E_WINDOWS_EXCLUDE: 'focus rings are not clipped anywhere|desktop complex workflow keeps camera readable'
         shell: bash
-        run: bun run e2e -- --shard=${{ matrix.shard }}/4
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun run e2e -- --shard=${{ matrix.shard }}/4 \
+              --grep-invert "$AW_E2E_WINDOWS_EXCLUDE"
+          else
+            bun run e2e -- --shard=${{ matrix.shard }}/4
+          fi
 
       - name: Upload Playwright trace on failure
         if: failure()

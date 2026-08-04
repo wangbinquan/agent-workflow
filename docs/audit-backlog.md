@@ -578,3 +578,26 @@ wrapper drag feedback` 一线）。同上，未单方面修改。
 - 注意接线后 `isProcessTreeAlive` 才会开始返回 `true`/`false`，届时所有把
   `null` 当「不安全」的调用方逻辑要重新过一遍——**语义变了**（从「永远判不了」
   变成「大多数时候能判」），沉默的分支会第一次被执行到。
+
+## Windows e2e 腿的两条排除（RFC-254 T31，2026-08-05）
+
+`ci.yml` 的 windows e2e 腿跳过**恰好两条**测试，两条都**在 POSIX 上同样红**、都不是
+本 RFC 引入的：
+
+- `focus rings are not clipped anywhere` —— 见上文「`focus-ring-clip` 从 4 个涨到
+  108 个」，归 `01d3e541`；
+- `desktop complex workflow keeps camera readable` —— 见上文
+  `rfc250-workflow-camera` 条目，归并发的画布改动。
+
+**为什么排除而不是让腿红着**：这是一条**新接的**门禁。红着上线的门禁没人看，一周后
+就成了背景噪音；而这两条的所有者、根因、复现方式都已经查清并登记在案，不该由一条
+新腿替它们背锅。
+
+**排除按测试标题匹配、不按文件名**：Playwright 的 grep 也匹配文件路径，按文件名会
+连带砍掉那两个文件里另外 8 条**在 Windows 上通过**的测试（实测 270 → 260 而不是
+268）。
+
+- ⏳ **(P2) 这两条一旦转绿就立刻删掉排除**。
+  `packages/backend/tests/rfc254-windows-e2e-exclusions.test.ts` 双向盯着它：标题被
+  改名（排除失效、腿会为一个自称已处理的原因变红）或清单变长（用减法维持绿）都会红，
+  且要求每条都登记在本文件里。
