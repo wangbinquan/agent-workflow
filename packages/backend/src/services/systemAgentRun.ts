@@ -229,6 +229,13 @@ function systemSandboxCtx(
     ],
     runDir,
     ...(plan.readOnlySubtrees === undefined ? {} : { readOnlySubtrees: plan.readOnlySubtrees }),
+    // 2026-08-04 audit: this field was silently DROPPED by three of the four
+    // SandboxCtx assemblers (only `runner.ts` consumed it). It is latent today
+    // because no system plan ships plugins — the moment one does, RFC-251's
+    // Linux `file://<cachedPath>` ENOENT returns with no assertion to catch it.
+    ...(plan.readOnlyAllowSubtrees === undefined
+      ? {}
+      : { readOnlyAllowSubtrees: plan.readOnlyAllowSubtrees }),
     ...(provider.wrapCommand === undefined ? {} : { wrapCommand: provider.wrapCommand }),
   }
 }

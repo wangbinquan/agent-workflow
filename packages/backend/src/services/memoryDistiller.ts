@@ -965,7 +965,9 @@ export async function validateAndPersistCandidate(
 export function distillerSandboxCtx(
   cwd: string,
   runDir = cwd,
-  plan?: Partial<Pick<SpawnPlan, 'readOnlySubtrees' | 'sessionStore' | 'containment'>>,
+  plan?: Partial<
+    Pick<SpawnPlan, 'readOnlySubtrees' | 'readOnlyAllowSubtrees' | 'sessionStore' | 'containment'>
+  >,
 ): SandboxCtx | undefined {
   const p = plan?.containment?.sandbox
   if (p === undefined) return undefined
@@ -976,6 +978,11 @@ export function distillerSandboxCtx(
     taskWorktrees: [cwd, ...(plan?.sessionStore === undefined ? [] : [plan.sessionStore.root])],
     runDir,
     ...(plan?.readOnlySubtrees === undefined ? {} : { readOnlySubtrees: plan.readOnlySubtrees }),
+    // 2026-08-04 audit: see runtimeSmoke.ts — three of four assemblers dropped
+    // this, which is the exact shape of the RFC-251 Linux plugin ENOENT.
+    ...(plan?.readOnlyAllowSubtrees === undefined
+      ? {}
+      : { readOnlyAllowSubtrees: plan.readOnlyAllowSubtrees }),
     ...(p.wrapCommand === undefined ? {} : { wrapCommand: p.wrapCommand }),
   }
 }

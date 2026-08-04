@@ -117,7 +117,7 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 ### 根因 1 —— 放行集靠猜
 
-- ⏳ **(P0) 多仓 / 仓库组任务在沙箱下只放行 `repos[0]`**（三路独立命中）：`isoWorktreePathFor`
+- ✅ **(P0，已修 2026-08-04) 多仓 / 仓库组任务在沙箱下只放行 `repos[0]`**（三路独立命中）：`isoWorktreePathFor`
   （`services/nodeIsolation.ts:167-176`）对多仓生成 `iso/{taskId}/{nodeRunId}/{挂载路径}`，父目录名是
   **nodeRunId**，永不等于 taskId ⇒ `buildRunSandboxCtx`（`services/sandbox/index.ts:186-189`）只放行第一个仓；
   而 prompt 的 `{{__repos__}}`（`services/scheduler.ts:5583-5592`）照旧把全部成员 iso 路径喂给 agent。
@@ -126,38 +126,38 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   挂根成员作 `repos[0]` 的组因路径少一层恰好蒙对，故存活至今。既有测试
   `tests/rfc205-sandbox-scratch-allowback.test.ts:60-63` 锁的是 canonical 形状 `worktrees/multi/{taskId}/repoA`
   （父目录名确实等于 taskId），**iso × 多仓这一格零覆盖**。
-- ⏳ **(P1) 基仓在 appHome 内的另两类任务 git 全废**：同处只写了 `scratch/{taskId}/.git` 一个特例
+- ✅ **(P1，已修 2026-08-04) 基仓在 appHome 内的另两类任务 git 全废**：同处只写了 `scratch/{taskId}/.git` 一个特例
   （2026-07-22 QGENNV 事故补丁）。未覆盖：①**技能融合引擎任务**基仓在 `fusions/{id}/iter{n}/work`
   （`services/fusion.ts:418,570`），iso 的 `.git` 指向 `fusions/.../work/.git/worktrees/{runId}`，遮蔽后
   `git status`/`rev-parse` 一律 `fatal: not a git repository`（本机真实 git 已复现）；
   ②**scratch 父任务的 call-workflow 子任务** common dir 是 `scratch/{父taskId}/.git`，而 allow-back 按**子**
   taskId 拼路径必然查不到。反证：`tests/rfc205-sandbox-policy.test.ts:57` 专门断言 `fusions` 必须被 deny，
   却没人问过融合任务自己还用不用 git。
-- ⏳ **(P1) 脚本节点 `AW_REPOS_JSON` 恒发 canonical 路径**：`services/scheduler.ts:4357` 传
+- ✅ **(P1，已修 2026-08-04) 脚本节点 `AW_REPOS_JSON` 恒发 canonical 路径**：`services/scheduler.ts:4357` 传
   `r.worktreePath`，而非 readonly 脚本 cwd 在 iso。agent 路径在同文件 `:5583-5592` 就做对了（换成
   `isoWorktreePath`，注释写「otherwise the agent would be told to edit a path outside its isolation」）。
   按 `design/RFC-253-*/design.md:164` 文档使用该变量的脚本，Linux 静默蒸发 / macOS EPERM。
-- ⏳ **(P0) `readonly:true` 脚本节点在 wrapper 内跑在错误工作树**：`services/scheduler.ts:4214` 是
+- ✅ **(P0，已修 2026-08-04) `readonly:true` 脚本节点在 wrapper 内跑在错误工作树**：`services/scheduler.ts:4214` 是
   `a.isoHandle?.repos[0]?.isoWorktreePath ?? task.worktreePath`，readonly 档 `isoHandle` 恒 null（`:4046`）
   ⇒ 回落顶层 `task.worktreePath`；而同文件 `:418-427` 明文规定 wrapper 内 canonical 是 `state.scopeRoot`
   并称用 `task.worktreePath` 是「the exact bug this RFC roots out」。wrapper 内先跑节点写的东西只读脚本
   看不见，无报错，静默产出错误结论。
-- ⏳ **(P2) 四个 `SandboxCtx` 装配点是四份手抄，三份丢字段**：只有 `services/runner.ts:1392` 消费
+- ✅ **(P2，已修 2026-08-04) 四个 `SandboxCtx` 装配点是四份手抄，三份丢字段**：只有 `services/runner.ts:1392` 消费
   `plan.readOnlyAllowSubtrees`；`runtimeSmoke.ts:240` / `systemAgentRun.ts:222` / `memoryDistiller.ts:972`
   静默丢弃它（及 `networkDeny`/`readOnlyWorktrees`）。今天不炸只因系统计划暂不带插件——一旦带上就原样
   复现 RFC-251 的 Linux 插件 ENOENT，且无任何断言会红。
 
 ### 根因 2 —— 能力收缩无影响清单
 
-- ⏳ **(P0) claude 受控节点的 skills 被整体关闭**：`runtime/claudeCode/spawn.ts:230` 无条件发
+- ✅ **(P0，已修 2026-08-04) claude 受控节点的 skills 被整体关闭**：`runtime/claudeCode/spawn.ts:230` 无条件发
   `--disable-slash-commands`，而 `claude --help`（本机 2.x 实测）该 flag 的官方释义就是 **"Disable all skills"**
   ——不是注释写的「defense-in-depth against config-dir skills」。同一次 spawn 里还照常 stage skill 整树
   （`spawn.ts:245`）并把 `skill:'allow'` 翻成 `--tools …,Skill`（`permissionMap.ts:72`）。三者互相矛盾。
-- ⏳ **(P0) claude 的部分 permission 声明 ⇒ 零工具且无告警**：`permissionMap.ts:110-155` 无 `'*'` 键时
+- ✅ **(P0，已修 2026-08-04) claude 的部分 permission 声明 ⇒ 零工具且无告警**：`permissionMap.ts:110-155` 无 `'*'` 键时
   baseline 为 deny，且纯 deny 声明**不产生任何 warning**。一份从 opencode 直译的 `{bash:'deny'}` 变成
   `--tools ""`（help 原文 "Use \"\" to disable all tools"）。opencode 侧内置 defaults 是 `{"*":"allow",…}`
   后再 merge 用户声明，同一份定义两个运行时语义相反。
-- ⏳ **(P1) opencode netless wrapper 丢弃模型给的 `workdir`**：`runtime/opencode/sealedSubprocess.ts:1052`
+- ✅ **(P1，已修 2026-08-04) opencode netless wrapper 丢弃模型给的 `workdir`**：`runtime/opencode/sealedSubprocess.ts:1052`
   硬钉 `--chdir parsed.worktreePath`。opencode 的系统提示明确指示模型用 `workdir` 而非 `cd &&`
   （opencode 源码 `tool/shell/prompt.ts:112`），并据此设置子进程 cwd（`tool/shell.ts:611-613`）——平台把它
   扔掉 ⇒ 命令跑在仓根、相对路径全错、**静默产出错误结论**。monorepo / 多仓任务必中。
@@ -186,7 +186,7 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 ### 根因 3 —— 沙箱的错记到别人头上
 
-- ⏳ **(P0) `appHome/repos` 不存在时 Linux 每次沙箱 spawn 都硬挂**（三路独立命中）：
+- ✅ **(P0，已修 2026-08-04) `appHome/repos` 不存在时 Linux 每次沙箱 spawn 都硬挂**（三路独立命中）：
   `services/sandbox/policy.ts:299-302` 无条件 `--bind appHome/repos`（`:149` 还把它放进 `allowSubtrees`，
   于是 argv 里出现两对相同 bind），而该目录**只在首次 clone 时创建**（`services/gitRepoCache.ts:617` 是全仓
   唯一 mkdir 点）。全新装机跑 Runtime Test、纯 scratch 部署、记忆蒸馏、脚本依赖安装全都没有它。
@@ -196,21 +196,21 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   64/65。verified 路径 → `execution-identity-control-failed`（**永久**失败、不重试、语义指向「控制协议被篡改」）；
   claude/unverified → `${runtime} exited with code 1` 且烧满重试；脚本 → `script-nonzero-exit`；
   冒烟 → `stream-nonconforming`（「二进制不讲协议」）。
-- ⏳ **(P1) claude 的 `is_error` 终局结果业务路径零消费**：`parseTerminalResultError`（driver 已实现，
+- ✅ **(P1，已修 2026-08-04) claude 的 `is_error` 终局结果业务路径零消费**：`parseTerminalResultError`（driver 已实现，
   `runtime/claudeCode/driver.ts:81`）全仓只有 `services/systemAgentRun.ts:680` 一个调用点。生产上鉴权失败 /
   订阅额度 / 网关错误被报成 `envelope-missing`（「没有输出信封」）并**先烧满重试**。这是 2026-08-04 事故
   「错误被吞成裸 nonce missing」的另一半——冒烟侧当天修了，业务侧没修。
-- ⏳ **(P1) 脚本节点的 `spawnError` 零读取方**：`services/execution/containedSpawn.ts:89,212,242` 产出，
+- ✅ **(P1，已修 2026-08-04) 脚本节点的 `spawnError` 零读取方**：`services/execution/containedSpawn.ts:89,212,242` 产出，
   全仓 0 处消费；scheduler 只取 `stderrTail`（spawn 失败时恒空串）⇒ 用户看到「脚本进程无法启动」+**空详情**。
   且 `containedSpawn` **未接** 2026-08-04 新增的 `util/spawnDiagnostics.ts:explainSpawnEnoent`
   （wiring 锁 `tests/workspace-missing-fail-fast.test.ts:121-134` 只覆盖 runner/runtimeSmoke/systemAgentRun），
   所以同款「怪罪 bwrap」事故能在脚本节点原样复发，且这次连误导信息都没有。
-- ⏳ **(P2) 三档 profile 的准入失败一律报 `script-network-fence-unavailable`**：
+- ✅ **(P2，已修 2026-08-04) 三档 profile 的准入失败一律报 `script-network-fence-unavailable`**：
   `services/scheduler.ts:4262-4273`——`readonly` 节点被拦时被告知「网络围栏不可用」，用户根本没勾网络。
-- ⏳ **(P2) `/api/runtimes/status` 的 containment 状态只算 opencode 行**：`routes/runtimes.ts:234-243` 带
+- ✅ **(P2，已修 2026-08-04) `/api/runtimes/status` 的 containment 状态只算 opencode 行**：`routes/runtimes.ts:234-243` 带
   `row.protocol === 'opencode'` 前置，而 `sandboxEnforceBlocked` 与 containment 准入对所有运行时生效
   ⇒ **claude 行永远不显示被拦**（正是生产机型），首页说可用、任务却接连失败。
-- ⏳ **(P1) macOS 脚本节点的 `spawn_binary_path` 记的是沙箱壳，收割器永远杀不掉真实进程**：
+- ✅ **(P1，已修 2026-08-04) macOS 脚本节点的 `spawn_binary_path` 记的是沙箱壳，收割器永远杀不掉真实进程**：
   `services/execution/containedSpawn.ts:216` 记**包装后**的 `cmd[0]`，而 `services/runner.ts:1587` 记**未包装**的
   （注释明写是为了让 reaper 能匹配）。macOS 上该值 = `/usr/bin/sandbox-exec`，而 sandbox-exec 是 exec-in-place、
   `ps` 里根本没有它 ⇒ `pidCommandContainsBinary` 恒 false ⇒ `killStaleRunProcessTree` 返回 `command-mismatch`
@@ -223,32 +223,62 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 ### 根因 4 —— 自救链断头 + 测试/CI 缺口
 
-- ⏳ **(P1) `sandbox-degraded` 告警点「修复」必然 500**：`services/lifecycleRepair.ts:78-93` 的 `REPAIR_OPTIONS`
+- ✅ **(P1，已修 2026-08-04) `sandbox-degraded` 告警点「修复」必然 500**：`services/lifecycleRepair.ts:78-93` 的 `REPAIR_OPTIONS`
   只有 `R1 R2 C1 T1 T2 T3 U1 S1–S6` 十四键，`:137` 是无校验强转 ⇒ 取到 `undefined`，下一行
   `for (const def of defs)` TypeError。而前端对每行**无条件**渲染修复按钮
   （`components/tasks/TaskDiagnosePanel.tsx:183-191`）。
-- ⏳ **(P1) 同一告警的 rule/severity 都不在 canonical 枚举里**：`services/runner.ts:152-154` 写
+- ✅ **(P1，已修 2026-08-04) 同一告警的 rule/severity 都不在 canonical 枚举里**：`services/runner.ts:152-154` 写
   `rule:'sandbox-degraded'` + `severity:'warn'`，而 `packages/shared/src/lifecycle-alerts.ts:7-32` 的枚举无此 rule、
   severity 只有 `'warning'|'error'` ⇒ UI 逐字显示 `tasks.diagnose.rule.sandbox-degraded` 这样的裸键路径。
-- ⏳ **(P1) 该告警永不 resolve**：`services/lifecycleInvariants.ts:531-543` 的 reconcile 只处理 `ownedRules`
+- ✅ **(P1，已修 2026-08-04) 该告警永不 resolve**：`services/lifecycleInvariants.ts:531-543` 的 reconcile 只处理 `ownedRules`
   内的行，两组 owner 都不含它；runner 侧只查重不 resolve。沙箱修好后横幅仍在，已完成的任务也仍在。
-- ⏳ **(P1) 脚本节点与依赖安装器的降级完全静默**：`alertSandboxDegradedOnce` 全仓只有
+- ✅ **(P1，已修 2026-08-04) 脚本节点与依赖安装器的降级完全静默**：`alertSandboxDegradedOnce` 全仓只有
   `services/runner.ts:1414` 一个调用点。
 - ⏳ **(P2) claude 的四个 containment 告警码只进 daemon 日志**：`runtime/claudeCode/driver.ts:217,223,267,293`
   全是 `ctx.log.warn`，lifecycle_alerts / node_run 事件 / WS / 前端全链零命中。而本文件 §35/§38 正是靠
   「`unconstrained` 告警驱动收窄」——不看日志的管理员永远收不到。
-- ⏳ **(P2) 启动期 409 `sandbox-unavailable` 无 i18n**：`services/task.ts:1867-1876` 英文裸串，
+- ✅ **(P2，已修 2026-08-04) 启动期 409 `sandbox-unavailable` 无 i18n**：`services/task.ts:1867-1876` 英文裸串，
   `DOMAIN_PREFIXES` 无 `sandbox-` 前缀。
 - ⏳ **(P2) 设置页不展示 reasonCodes；CLI 修复指引从 UI 不可达**：`SandboxCard.tsx:56` 只做 length 判断；
   `services/sandbox/guidance.ts:92-129` 的安装/userns 指引只有 SSH 上机的人看得到。
-- ⏳ **(P2) Linux 真 bwrap 行为在主 CI 零覆盖**：`.github/workflows/ci.yml:143-155` 只在 macOS shard 设
+- ✅ **(P2，已修 2026-08-04) Linux 真 bwrap 行为在主 CI 的回归窗口最长 24h**：`.github/workflows/ci.yml:143-155` 只在 macOS shard 设
   `RUN_SANDBOX_ITEST=1`（注释明写 "ubuntu has no bwrap"）；唯一装 bubblewrap 的 `integration-opencode.yml`
   其 push path filter（`:42-58`）**不含** `services/sandbox/**`、`services/execution/**`、
   `services/runtime/netlessProjection.ts` ⇒ 这些文件的 Linux 行为回归窗口最长 24h（nightly 才红）。
-- ⏳ **(P2) runner 层沙箱接线变异不红**：`services/runner.ts:1375-1398`（sessionStore/readOnly*/下传）与
+- ✅ **(P2，已修 2026-08-04) runner 层沙箱接线变异不红**：`services/runner.ts:1375-1398`（sessionStore/readOnly*/下传）与
   `:1406-1420`（warn 降级告警触发）整段删掉，现有测试零红。前者一断，RFC-251 的 Linux 插件 ENOENT
   原样复发且无预警。
 - ⏳ **(P2) 脚本节点 `network:'deny'` 的真围栏两 OS 均无 real-mechanism 测试**：只有 argv/渲染层断言。
+
+### 本轮修复范围与仍未修的清单（2026-08-04）
+
+**已修**（4 个 commit，见 `git log` 的 `f568deb6` → 本批；每条带回归锁，关键处做过突变实证）：
+上面标 ✅ 的 21 条。新增测试文件：`sandbox-allowback-audit-2026-08-04`（含 runner 合并缝的
+源码层锁）、`sandbox-multirepo-allowback-2026-08-04`、`sandbox-diagnosability-2026-08-04`、
+`claude-capability-regressions-2026-08-04`、`netless-workdir-2026-08-04`；
+`rfc205-sandbox-scratch-allowback` 的 fixture 改为落**真实** worktree 指针
+（原来随手 mkdir 一个 `.git` 目录，不是任何真实布局）。
+
+**仍未修，各有明确理由**：
+
+- ⏳ **opencode 本地 MCP 拒绝 PATH token / 不解析解释器链**（上面 P1 条）——修法是复用
+  claude 侧现成的 `netlessMcp.ts:canonicalExecutable` + `resolveInterpreterChain`，但落点在
+  `runtime/opencode/verifiedPlan.ts`，该文件当前有**并发 session 的 RFC-255 未提交改动**。
+  按 `CLAUDE.md` 多人协作原则不在别人在飞的文件上动刀；RFC-255 落库后单独一提交。
+- ⏳ **opencode 业务 shell 的 PATH = `/usr/bin:/bin`**（上面 P1 条）——修它要新增「管理员
+  声明可暴露给业务 shell 的工具链路径」的配置面 + 封印投影，属**能力面**而非 bug，按
+  `CLAUDE.md` 走独立 RFC。这是本轮影响面最大的未修项：Code→Audit→Fix 的「Code」段在生产上
+  大面积 `command not found`。
+- ⏳ **`agent.network` 半落地**——归 RFC-252 G4（已排期）。G4 落地前建议在保存/导入路径对
+  非空 `network` 显式告警，避免它看起来像个已生效的开关。
+- ⏳ **`sourceGuard` 祖先黑名单扫到文件系统根**——诊断半已修（错误里给出命中的绝对路径）；
+  **收窄扫描范围是安全决策**，需 RFC-224 owner 拍板（收窄 = 放宽一条 opencode 配置继承面）。
+- ⏳ **Linux bwrap 下取消的 SIGTERM 宽限塌缩为即时 SIGKILL**——机制链读源码成立，但修法
+  （给 bwrap 加信号代理 / 宽限期内先经 control 通道请求自杀）需要 Linux 实测验证才好定，
+  本机无 Linux。
+- ⏳ **claude 的四个 containment 告警码只进 daemon 日志**、**设置页不展示 reasonCodes /
+  CLI 指引从 UI 不可达**、**脚本 `network:'deny'` 的真围栏无 real-mechanism 测试**——
+  三条都是呈现/覆盖增强，不改执行语义，排入下一轮。
 
 ### 附：本轮已求证**不成立**的假设（勿重复挖）
 
