@@ -28,24 +28,47 @@ function excludedTitles(): string[] {
   return (line![1] ?? '').split('|').filter((part) => part.length > 0)
 }
 
-function specTitles(): string[] {
+/** Every `{spec file} › {test title}` pair Playwright's grep can match. */
+function specEntries(): Array<{ file: string; title: string }> {
   return readdirSync(E2E_DIR)
     .filter((name) => name.endsWith('.spec.ts'))
-    .flatMap((name) => [
-      ...readFileSync(join(E2E_DIR, name), 'utf8').matchAll(/^\s*test(?:\.\w+)?\(\s*'([^']+)'/gm),
-    ])
-    .map((match) => match[1] ?? '')
+    .flatMap((name) =>
+      [
+        ...readFileSync(join(E2E_DIR, name), 'utf8').matchAll(/^\s*test(?:\.\w+)?\(\s*'([^']+)'/gm),
+      ].map((match) => ({ file: name, title: match[1] ?? '' })),
+    )
+}
+
+/**
+ * How many tests a fragment removes. Playwright's grep matches the FILE PATH as
+ * well as the title, which is what makes a file-shaped fragment exclude a whole
+ * file — the behaviour one of the two entries relies on and the other must not
+ * accidentally trigger.
+ */
+function matchCount(fragment: string): number {
+  return specEntries().filter((e) => e.file.includes(fragment) || e.title.includes(fragment)).length
 }
 
 describe('RFC-254 T31 — windows e2e exclusions stay honest', () => {
-  test('every excluded title still names exactly one test', () => {
-    const titles = specTitles()
-    for (const fragment of excludedTitles()) {
-      const hits = titles.filter((title) => title.includes(fragment))
-      // Zero means a rename slipped past and the leg will go red for a reason
-      // the list claims to cover. More than one means the fragment is too broad
-      // and is silently dropping tests nobody decided to drop.
-      expect(hits, `exclusion "${fragment}"`).toHaveLength(1)
+  // Each entry declares HOW MANY tests it is allowed to remove, because the two
+  // are deliberately different shapes and only the reader knows which is which:
+  //   * `focus-ring-clip` — one broken test among six healthy ones ⇒ by title.
+  //   * `rfc250-workflow-camera` — all three blocked by one canvas defect;
+  //     excluding just the first promotes the second to the failure (measured on
+  //     POSIX) ⇒ by file, and honestly counted as three.
+  const EXPECTED_REMOVALS: Record<string, number> = {
+    'focus rings are not clipped anywhere': 1,
+    'rfc250-workflow-camera': 3,
+  }
+
+  test('every exclusion removes exactly the tests it declares', () => {
+    const fragments = excludedTitles()
+    expect(fragments.sort()).toEqual(Object.keys(EXPECTED_REMOVALS).sort())
+    for (const fragment of fragments) {
+      // Zero means a rename slipped past and the leg goes red for a reason the
+      // list claims to cover. More than declared means the fragment silently
+      // widened and is dropping tests nobody decided to drop.
+      expect(matchCount(fragment), `exclusion "${fragment}"`).toBe(EXPECTED_REMOVALS[fragment])
     }
   })
 

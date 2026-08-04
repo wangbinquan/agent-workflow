@@ -586,8 +586,8 @@ wrapper drag feedback` 一线）。同上，未单方面修改。
 
 - `focus rings are not clipped anywhere` —— 见上文「`focus-ring-clip` 从 4 个涨到
   108 个」，归 `01d3e541`；
-- `desktop complex workflow keeps camera readable` —— 见上文
-  `rfc250-workflow-camera` 条目，归并发的画布改动。
+- **整个 `rfc250-workflow-camera.spec.ts`（3 条）** —— 见上文
+  `rfc250-workflow-camera` 条目，归并发的画布改动。**按文件排除而非按标题**：三条同源，只排掉第一条会把第二条顶上来变成新的失败（POSIX 上实测：排掉 `:823` 后 `:831` 就红）——那不是修，是把问题往后挪一格。
 
 **为什么排除而不是让腿红着**：这是一条**新接的**门禁。红着上线的门禁没人看，一周后
 就成了背景噪音；而这两条的所有者、根因、复现方式都已经查清并登记在案，不该由一条

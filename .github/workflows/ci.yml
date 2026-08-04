@@ -880,16 +880,22 @@ jobs:
           # make a NEW leg red would mean shipping a gate that is red on arrival
           # — which is how a gate gets ignored.
           #
-          # Matched by TEST TITLE, not by file. Playwright's grep also matches
-          # the file path, and excluding by filename here would have quietly
-          # dropped 10 tests instead of 2 — the other 8 in those two files pass
-          # on Windows (measured).
+          # The two entries are deliberately DIFFERENT shapes, because the two
+          # files are:
+          #   * `focus-ring-clip` — one broken test, six healthy ones. Matched by
+          #     TITLE, so the six keep running. (Playwright's grep also matches
+          #     the file path, and a filename here would have dropped all seven.)
+          #   * `rfc250-workflow-camera` — all THREE tests are blocked by the
+          #     same canvas defect; excluding only the first just promotes the
+          #     second to the failure. Measured on POSIX: exclude `:823` and
+          #     `:831` fails in its place. So the FILE is excluded, honestly,
+          #     rather than pretending one test is the problem.
           #
           # This is a registered exclusion, not a silent one: it is listed in
           # `docs/audit-backlog.md` and pinned by
           # `rfc254-windows-e2e-exclusions.test.ts`, which fails if either title
           # stops naming exactly one test. Delete it when those two go green.
-          AW_E2E_WINDOWS_EXCLUDE: 'focus rings are not clipped anywhere|desktop complex workflow keeps camera readable'
+          AW_E2E_WINDOWS_EXCLUDE: 'focus rings are not clipped anywhere|rfc250-workflow-camera'
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
