@@ -278,6 +278,38 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(testBinary.disabled).toBe(false)
   })
 
+  // 2026-08-04 — per-runtime extraArgs (fork-private CLI flags, e.g. CodeAgent's
+  // --skip-safe-check). claude-code rows expose a ChipsInput; the PUT body
+  // carries the tokens; opencode rows never show the field (backend rejects it
+  // for that protocol and the UI must not invite it).
+  test('claude-code edit dialog exposes extraArgs chips and PUTs them; opencode hides the field', async () => {
+    wrap(<RuntimeList />)
+    await screen.findByText('my-oc')
+    // rows render opencode / claude-code / my-oc — Edit[1] = claude-code.
+    fireEvent.click(screen.getAllByRole('button', { name: /^Edit$/ })[1]!)
+    const dialog = await screen.findByRole('dialog', { name: 'Edit runtime' })
+    const chipsInput = within(dialog).getByTestId('runtime-extra-args-input')
+    fireEvent.change(chipsInput, { target: { value: '--skip-safe-check' } })
+    fireEvent.keyDown(chipsInput, { key: 'Enter' })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/ }))
+    await waitFor(() => {
+      const putCall = vi
+        .mocked(globalThis.fetch)
+        .mock.calls.find(
+          ([input, init]) =>
+            String(input).includes('/api/runtimes/claude-code') && init?.method === 'PUT',
+        )
+      expect(putCall).toBeTruthy()
+      const body = JSON.parse(String(putCall![1]?.body)) as { extraArgs?: string[] | null }
+      expect(body.extraArgs).toEqual(['--skip-safe-check'])
+    })
+
+    // opencode edit dialog: the field is absent.
+    fireEvent.click(screen.getAllByRole('button', { name: /^Edit$/ })[0]!)
+    const ocDialog = await screen.findByRole('dialog', { name: 'Edit runtime' })
+    expect(within(ocDialog).queryByTestId('runtime-extra-args-input')).toBeNull()
+  })
+
   // RFC-116: a network-blocked smoke result renders the "endpoint unreachable"
   // label (NOT "auth missing") as a warn/amber chip — signalling the operator to
   // fix the daemon's network/proxy, not the credentials.

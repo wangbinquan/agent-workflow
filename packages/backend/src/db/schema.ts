@@ -149,6 +149,15 @@ export const runtimes = sqliteTable('runtimes', {
   // mutable columns.
   configDirEnv: text('config_dir_env'),
   configDirName: text('config_dir_name'),
+  /**
+   * 2026-08-04 (CodeAgent/GLM fork deployment): extra argv tokens appended to
+   * every spawn of this runtime (JSON string array; NULL = none). claude-code
+   * protocol only — forks carry private flags (`--skip-safe-check`) official
+   * binaries reject, while opencode's verified serve argv is sealed and takes
+   * no user tokens. Platform-owned flags are rejected at write time
+   * (validateExtraArgs); frozen into runtime_params_json like the profile.
+   */
+  extraArgsJson: text('extra_args_json'),
   // RFC-112/RFC-224: target-bound deep-smoke receipt (JSON); NULL = never
   // probed/invalidated. Display-only — conformance is advisory (an admin may
   // save an auth-unverified custom runtime).

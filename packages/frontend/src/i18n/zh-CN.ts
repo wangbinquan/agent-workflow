@@ -1700,6 +1700,8 @@ export interface Resources {
     fieldConfigDirEnvHint: string
     fieldConfigDirName: string
     fieldConfigDirNameHint: string
+    fieldExtraArgs: string
+    fieldExtraArgsHint: string
     configDirEnvInvalid: string
     configDirEnvReserved: string
     configDirNameInvalid: string
@@ -6345,6 +6347,9 @@ export const zhCN: Resources = {
     fieldConfigDirEnvHint: '自定义二进制读取配置目录路径所用的环境变量名。留空则用协议默认。',
     fieldConfigDirName: '配置目录名',
     fieldConfigDirNameHint: '每次运行根目录下的配置目录叶子名（单层目录名）。留空则用协议默认。',
+    fieldExtraArgs: '附加命令行参数',
+    fieldExtraArgsHint:
+      '追加到该运行时每次启动 argv 末尾的 fork 私有参数（如 --skip-safe-check）。平台保留的参数会在保存时被拒绝。仅 claude-code 协议可用。',
     configDirEnvInvalid: '必须是合法的环境变量名（字母、数字、下划线，不以数字开头）。',
     configDirEnvReserved: '该变量名被平台保留（会与注入机制冲突），请换一个。',
     configDirNameInvalid: '必须是单层目录名：不能含路径分隔符，也不能是 "." 或 ".."。',

@@ -7,7 +7,7 @@
 // no parseable events → stream-nonconforming; a missing path → spawn-failed.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { finalizeSmokeAttempt, smokeRuntime, smokeSandboxCtx } from '../src/services/runtimeSmoke'
@@ -30,6 +30,7 @@ function wrapperFor(mockFile: string): string {
 }
 
 const SET_ENV_KEYS = [
+  'MOCK_CLAUDE_CAPTURE_ARGV_TO',
   'MOCK_CLAUDE_ECHO_PROMPT',
   'MOCK_CLAUDE_SESSION_ID',
   'MOCK_CLAUDE_SKIP_ENVELOPE',
@@ -374,6 +375,33 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       })
       expect(r.outcome).toBe('stream-nonconforming')
       expect(r.detail).toContain('GATEWAY_ERR_HEAD')
+    },
+    SMOKE_TIMEOUT,
+  )
+
+  // 2026-08-04 — per-runtime extraArgs must reach the probed binary's argv, so
+  // Test reproduces the exact shape a dispatch would use (a fork that needs
+  // `--skip-safe-check` is probed WITH it).
+  test(
+    'probe passes runtime extraArgs through to the spawned argv',
+    async () => {
+      const captureDir = mkdtempSync(join(tmpdir(), 'aw-smoke-argv-'))
+      const captureFile = join(captureDir, 'argv.json')
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-sess-extra-args'
+      process.env.MOCK_CLAUDE_ECHO_PROMPT = '1'
+      process.env.MOCK_CLAUDE_CAPTURE_ARGV_TO = captureFile
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        extraArgs: ['--skip-safe-check'],
+        bridgeCredentials: false,
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('conforms')
+      const argv = JSON.parse(
+        readFileSync(captureFile, 'utf8').trim().split('\n').at(-1)!,
+      ) as string[]
+      expect(argv.at(-1)).toBe('--skip-safe-check')
     },
     SMOKE_TIMEOUT,
   )

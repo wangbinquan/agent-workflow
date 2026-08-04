@@ -103,6 +103,14 @@ export interface ClaudeSpawnContext {
    * only bites the RFC-242 §2 gated shape.
    */
   mcpServerNames?: readonly string[]
+  /**
+   * 2026-08-04 — per-runtime extra argv tokens (registry-validated: claude-code
+   * protocol only, platform-owned flags rejected). Appended LAST so the
+   * platform's own flag groups stay byte-stable for the golden locks. First
+   * consumer: CodeAgent's `--skip-safe-check` (its per-run trust prompt fires
+   * every spawn because the platform hands it a fresh private config dir).
+   */
+  extraArgs?: readonly string[]
   log?: Logger
 }
 
@@ -175,6 +183,45 @@ export const CLAUDE_HEADLESS_BASE_ARGV: readonly string[] = Object.freeze([
   '--output-format',
   'stream-json',
   '--verbose',
+])
+
+/**
+ * 2026-08-04 (runtime extraArgs) — flags the PLATFORM owns on a Claude argv:
+ * everything this module can emit plus their close aliases. A runtime's
+ * `extraArgs` (fork-private flags like `--skip-safe-check`) must never be able
+ * to override the transport, the permission shape, the sealed prompt/MCP
+ * material or session identity — the registry rejects these at write time
+ * (`validateExtraArgs`), keyed off this single set so a new platform flag
+ * cannot be forgotten in a second copy.
+ */
+export const CLAUDE_PLATFORM_OWNED_FLAGS: ReadonlySet<string> = new Set([
+  '-p',
+  '--print',
+  '--output-format',
+  '--input-format',
+  '--verbose',
+  '--model',
+  '--append-system-prompt-file',
+  '--append-system-prompt',
+  '--system-prompt',
+  '--system-prompt-file',
+  '--mcp-config',
+  '--strict-mcp-config',
+  '--agents',
+  '--resume',
+  '--continue',
+  '--session-id',
+  '--fork-session',
+  '--permission-mode',
+  '--dangerously-skip-permissions',
+  '--tools',
+  '--allowedTools',
+  '--allowed-tools',
+  '--disallowedTools',
+  '--disallowed-tools',
+  '--setting-sources',
+  '--settings',
+  '--disable-slash-commands',
 ])
 
 /** RFC-237 — the intent read-only load set (hands-on verified on 2.1.220). */
@@ -331,6 +378,12 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   }
   if (ctx.resumeSessionId !== undefined && ctx.resumeSessionId.length > 0) {
     cmd.push('--resume', ctx.resumeSessionId)
+  }
+  // 2026-08-04 — runtime extraArgs, appended LAST: the platform flag groups
+  // above stay byte-stable (golden locks) and the registry has already
+  // rejected platform-owned flags, so nothing here can override them.
+  if (ctx.extraArgs !== undefined && ctx.extraArgs.length > 0) {
+    cmd.push(...ctx.extraArgs)
   }
 
   // RFC-242 T2: every DECLARED-CONTROL shape (system agents, intent, and a

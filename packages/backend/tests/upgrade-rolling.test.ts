@@ -335,7 +335,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-249 bumped to 135 with explicit group / task directory nodes.
     // RFC-252 bumped to 136 with 0136_rfc252_agent_network（G4 受控出网的
     // agents.network 列；**不回填**，NULL = 未表态 = deny，存量行行为字节不变）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(136)
+    // 2026-08-04 runtime extraArgs bumped to 137 with 0137_runtime_extra_args
+    // （fork 私有 flag 注入：runtimes.extra_args_json，NULL = 无附加 argv）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(137)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

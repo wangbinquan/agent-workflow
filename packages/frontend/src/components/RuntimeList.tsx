@@ -26,6 +26,7 @@ import {
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { ChipsInput } from '@/components/ChipsInput'
 import { Field, NumberInput, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { ModelSelect } from '@/components/ModelSelect'
@@ -74,6 +75,8 @@ interface RuntimeView {
   temperature: number | null
   steps: number | null
   maxSteps: number | null
+  /** 2026-08-04 — extra argv tokens (claude-code forks only, e.g. --skip-safe-check). */
+  extraArgs?: string[] | null
   // RFC-154: config-dir injection overrides (null = protocol default).
   configDirEnv: string | null
   configDirName: string | null
@@ -419,6 +422,9 @@ function RuntimeFormDialog(props: {
   // / leaf dir they read their config dir through). Empty = protocol default.
   const [configDirEnv, setConfigDirEnv] = useState(props.existing?.configDirEnv ?? '')
   const [configDirName, setConfigDirName] = useState(props.existing?.configDirName ?? '')
+  // 2026-08-04: extra argv tokens (claude-code forks only — e.g. CodeAgent's
+  // --skip-safe-check). The backend validateExtraArgs is the semantic gate.
+  const [extraArgs, setExtraArgs] = useState<string[]>(props.existing?.extraArgs ?? [])
   // Inline form gate (Codex impl-gate P3) — same shared predicates the backend
   // validators throw from, so the two layers can't drift. Empty = unset = valid.
   const envProblem = configDirEnv.trim() === '' ? null : configDirEnvProblem(configDirEnv.trim())
@@ -446,6 +452,9 @@ function RuntimeFormDialog(props: {
     // RFC-154: empty → null (unset = protocol default).
     configDirEnv: configDirEnv.trim() === '' ? null : configDirEnv.trim(),
     configDirName: configDirName.trim() === '' ? null : configDirName.trim(),
+    // 2026-08-04: claude-code only (backend rejects it on opencode) — mirror
+    // the variant/temperature pattern and null it out on protocol switch.
+    extraArgs: !isOpencode && extraArgs.length > 0 ? extraArgs : null,
   })
 
   const test = useMutation({
@@ -454,6 +463,7 @@ function RuntimeFormDialog(props: {
         protocol,
         binaryPath: binaryPath.trim(),
         ...(model !== undefined && model.trim() !== '' ? { model: model.trim() } : {}),
+        ...(!isOpencode && extraArgs.length > 0 ? { extraArgs } : {}),
       }),
     onSuccess: (r) => setSmoke(r.smoke),
   })
@@ -606,6 +616,18 @@ function RuntimeFormDialog(props: {
           </p>
         )}
       </Field>
+      {/* 2026-08-04: fork-private extra argv tokens (claude-code only). The
+          backend rejects platform-owned flags; here we only collect tokens. */}
+      {!isOpencode && (
+        <Field label={t('runtimes.fieldExtraArgs')} hint={t('runtimes.fieldExtraArgsHint')}>
+          <ChipsInput
+            value={extraArgs}
+            onChange={setExtraArgs}
+            placeholder="--skip-safe-check"
+            testidPrefix="runtime-extra-args"
+          />
+        </Field>
+      )}
       {isOpencode && (
         <div className="form-grid form-grid--cols-2">
           <Field label={t('runtimes.fieldVariant')}>

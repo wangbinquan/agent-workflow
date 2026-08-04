@@ -365,6 +365,14 @@ export interface SystemAgentSpawnContext {
   model?: string | null
   /** User prompt — opencode positional argv / claude stdin. */
   prompt: string
+  /**
+   * 2026-08-04 — per-runtime extra argv tokens (registry-validated, claude
+   * fork flags). Consumed by the claude driver only; passed by the SMOKE so a
+   * probe reproduces the runtime's real shape. System features (distiller /
+   * commit-push …) deliberately do not pass it — their declared-control argv
+   * stays sealed.
+   */
+  extraArgs?: readonly string[]
   /** Subprocess cwd (distiller: a throwaway temp dir). */
   worktreePath: string
   /** Config dir (opencode: OPENCODE_CONFIG_DIR; claude: attempt dir holding .claude/). */

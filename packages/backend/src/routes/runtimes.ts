@@ -18,6 +18,7 @@ import {
   deleteRuntime,
   getRuntime,
   listRuntimes,
+  parseRuntimeExtraArgs,
   RUNTIME_PROTOCOLS,
   runtimeProbeTargetOf,
   runtimeRowToView,
@@ -40,6 +41,10 @@ const ProbeBody = z.object({
   protocol: ProtocolSchema,
   binaryPath: z.string().min(1),
   model: z.string().min(1).optional(),
+  // 2026-08-04 — shape-only here; the registry's validateExtraArgs is the
+  // semantic gate (protocol / reserved flags / token rules) at save time. A
+  // pre-save probe passes them through so Test reproduces the future dispatch.
+  extraArgs: z.array(z.string().min(1)).max(16).optional(),
 })
 
 // RFC-113: per-runtime execution profile params.
@@ -65,12 +70,14 @@ const CreateBody = z.object({
   binaryPath: z.string().min(1).optional(),
   /** run the deep-smoke probe before saving (default true when a path is given). */
   probe: z.boolean().optional(),
+  extraArgs: z.array(z.string().min(1)).max(16).nullable().optional(),
   ...ProfileFields,
   ...ConfigDirFields,
 })
 
 const UpdateBody = z.object({
   binaryPath: z.string().nullable().optional(),
+  extraArgs: z.array(z.string().min(1)).max(16).nullable().optional(),
   ...ProfileFields,
   ...ConfigDirFields,
 })
@@ -330,6 +337,9 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         binaryPath: body.binaryPath,
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
         ...(body.model !== undefined ? { model: body.model } : {}),
+        ...(body.extraArgs !== undefined && body.extraArgs.length > 0
+          ? { extraArgs: body.extraArgs }
+          : {}),
         bridgeCredentials: true,
         ...(deps.containmentCoordinator === undefined
           ? {}
@@ -364,6 +374,9 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           binaryPath: body.binaryPath,
           config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
           ...(typeof body.model === 'string' ? { model: body.model } : {}),
+          ...(Array.isArray(body.extraArgs) && body.extraArgs.length > 0
+            ? { extraArgs: body.extraArgs }
+            : {}),
           bridgeCredentials: true,
           ...(deps.containmentCoordinator === undefined
             ? {}
@@ -384,6 +397,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           temperature: body.temperature,
           steps: body.steps,
           maxSteps: body.maxSteps,
+          extraArgs: body.extraArgs,
         },
         { enforceExecutionPolicy: true },
       )
@@ -426,6 +440,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           ...(body.binaryPath !== undefined ? { binaryPath: body.binaryPath } : {}),
           ...(body.configDirEnv !== undefined ? { configDirEnv: body.configDirEnv } : {}),
           ...(body.configDirName !== undefined ? { configDirName: body.configDirName } : {}),
+          ...(body.extraArgs !== undefined ? { extraArgs: body.extraArgs } : {}),
           model: body.model,
           variant: body.variant,
           temperature: body.temperature,
@@ -519,11 +534,13 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       const cfg = loadConfig(deps.configPath)
       const binaryPath = resolveRuntimeBinary(row, cfg)
       const probeTarget = runtimeProbeTargetOf(row, binaryPath)
+      const rowExtraArgs = parseRuntimeExtraArgs(row.extraArgsJson)
       const smoke = await smokeRuntime({
         protocol: row.protocol,
         binaryPath,
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
         ...(row.model !== null ? { model: row.model } : {}),
+        ...(rowExtraArgs !== null ? { extraArgs: rowExtraArgs } : {}),
         bridgeCredentials: true,
         ...(deps.containmentCoordinator === undefined
           ? {}

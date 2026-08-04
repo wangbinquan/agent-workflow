@@ -32,6 +32,7 @@ import {
   transitionInheritedRuntimeTestsInTx,
   transitionRuntimeTestsInTx,
 } from '@/services/mcpRuntimeTestTransitions'
+import { CLAUDE_PLATFORM_OWNED_FLAGS } from '@/services/runtime/claudeCode/spawn'
 
 const log = createLogger('runtimeRegistry')
 
@@ -63,6 +64,13 @@ export interface RuntimeProfile {
   temperature: number | null
   steps: number | null
   maxSteps: number | null
+  /**
+   * 2026-08-04 — extra argv tokens appended to every spawn (claude-code
+   * protocol only; fork-private flags like CodeAgent's `--skip-safe-check`).
+   * Optional so historical frozen-params JSON and profile literals stay valid;
+   * absent ≡ null ≡ none. Platform-owned flags are rejected at write time.
+   */
+  extraArgs?: readonly string[] | null
 }
 
 export interface RuntimeRow extends RuntimeProfile {
@@ -75,6 +83,8 @@ export interface RuntimeRow extends RuntimeProfile {
   /** RFC-154: config-dir injection overrides — NULL = protocol default. */
   configDirEnv: string | null
   configDirName: string | null
+  /** 2026-08-04 — raw JSON column behind RuntimeProfile.extraArgs (NULL = none). */
+  extraArgsJson: string | null
   lastProbeJson: string | null
   /** Persisted execution-target generation for long-running probe CAS. */
   probeFence: number
@@ -140,6 +150,97 @@ const NULL_PROFILE: RuntimeProfile = {
   temperature: null,
   steps: null,
   maxSteps: null,
+  extraArgs: null,
+}
+
+/** Parse the raw extra_args_json column: string[] or null (invalid → null). */
+export function parseRuntimeExtraArgs(json: string | null | undefined): string[] | null {
+  if (json == null || json.length === 0) return null
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every((t): t is string => typeof t === 'string')
+    ) {
+      return parsed
+    }
+  } catch {
+    /* fall through */
+  }
+  return null
+}
+
+/** 2026-08-04 — extraArgs write-time validation caps. */
+export const RUNTIME_EXTRA_ARGS_MAX = 16
+export const RUNTIME_EXTRA_ARG_MAX_LENGTH = 200
+
+/**
+ * Validate a runtime's extraArgs and normalize to the stored JSON (or NULL).
+ * Fail-closed on:
+ *  - non-claude protocols (opencode's verified serve argv is sealed — no seam);
+ *  - platform-owned flags (CLAUDE_PLATFORM_OWNED_FLAGS, exact or `=`-joined) —
+ *    extraArgs must never override transport / permission shape / session
+ *    identity;
+ *  - a bare value token in first position or after another bare token (it
+ *    would be consumed as claude's positional PROMPT argument and break the
+ *    stdin prompt contract) — values are only legal directly after a `--flag`;
+ *  - control characters, empties, and size caps.
+ */
+export function validateExtraArgs(
+  protocol: RuntimeProtocol,
+  input: readonly string[] | null | undefined,
+): string | null {
+  if (input == null || input.length === 0) return null
+  if (protocol !== 'claude-code') {
+    throw new ValidationError(
+      'runtime-extra-args-protocol',
+      'extraArgs is only supported for claude-code protocol runtimes',
+    )
+  }
+  if (input.length > RUNTIME_EXTRA_ARGS_MAX) {
+    throw new ValidationError(
+      'runtime-extra-args-invalid',
+      `extraArgs accepts at most ${RUNTIME_EXTRA_ARGS_MAX} tokens`,
+    )
+  }
+  let previousWasLongFlag = false
+  for (const token of input) {
+    if (typeof token !== 'string' || token.trim().length === 0) {
+      throw new ValidationError('runtime-extra-args-invalid', 'extraArgs tokens must be non-empty')
+    }
+    if (token.length > RUNTIME_EXTRA_ARG_MAX_LENGTH) {
+      throw new ValidationError(
+        'runtime-extra-args-invalid',
+        `extraArgs token exceeds ${RUNTIME_EXTRA_ARG_MAX_LENGTH} characters`,
+      )
+    }
+    // eslint-disable-next-line no-control-regex -- rejecting control bytes IS the check
+    if (/[\u0000-\u001f\u007f]/.test(token)) {
+      throw new ValidationError(
+        'runtime-extra-args-invalid',
+        'extraArgs tokens must not contain control characters',
+      )
+    }
+    const isFlag = token.startsWith('-')
+    if (!isFlag && !previousWasLongFlag) {
+      throw new ValidationError(
+        'runtime-extra-args-invalid',
+        `bare token '${token}' would be consumed as the prompt positional — values are only legal directly after a --flag`,
+      )
+    }
+    if (isFlag) {
+      const bareFlag = token.includes('=') ? token.slice(0, token.indexOf('=')) : token
+      if (CLAUDE_PLATFORM_OWNED_FLAGS.has(bareFlag)) {
+        throw new ValidationError(
+          'runtime-extra-args-reserved',
+          `'${bareFlag}' is platform-owned and cannot be overridden via extraArgs`,
+        )
+      }
+    }
+    previousWasLongFlag = isFlag && token.startsWith('--') && !token.includes('=')
+  }
+  return JSON.stringify(input)
 }
 
 /**
@@ -183,13 +284,19 @@ export interface RuntimeView extends RuntimeProfile {
 }
 
 /** Extract just the execution params from a row. */
-export function runtimeProfileOf(row: RuntimeProfile): RuntimeProfile {
+export function runtimeProfileOf(
+  row: RuntimeProfile & { extraArgsJson?: string | null },
+): RuntimeProfile {
   return {
     model: row.model,
     variant: row.variant,
     temperature: row.temperature,
     steps: row.steps,
     maxSteps: row.maxSteps,
+    // A DB row carries the raw column; an already-materialized profile (frozen
+    // params) carries the array. Either way the output always has the key, so
+    // probe fingerprints and views stay shape-stable.
+    extraArgs: row.extraArgs ?? parseRuntimeExtraArgs(row.extraArgsJson ?? null),
   }
 }
 
@@ -538,11 +645,16 @@ export interface RuntimeProfileInput {
   temperature?: number | null
   steps?: number | null
   maxSteps?: number | null
+  /** 2026-08-04 — extra argv tokens; validated against the protocol in
+   *  create/update (NOT in profilePatch, which has no protocol context). */
+  extraArgs?: string[] | null
 }
 
-/** Validate + normalize profile params into the row columns (only present keys). */
-function profilePatch(input: RuntimeProfileInput): Partial<RuntimeProfile> {
-  const out: Partial<RuntimeProfile> = {}
+/** Validate + normalize profile params into the row columns (only present keys).
+ *  extraArgs is deliberately NOT handled here — its validation needs the
+ *  protocol, so create/update call validateExtraArgs themselves. */
+function profilePatch(input: RuntimeProfileInput): Partial<Omit<RuntimeProfile, 'extraArgs'>> {
+  const out: Partial<Omit<RuntimeProfile, 'extraArgs'>> = {}
   const str = (v: string | null | undefined): string | null =>
     typeof v === 'string' && v.trim().length > 0 ? v.trim() : null
   if (input.model !== undefined) out.model = str(input.model)
@@ -598,6 +710,7 @@ export async function createRuntime(
   const binaryPath = validateBinaryPath(input.binaryPath)
   const configDirEnv = validateConfigDirEnv(input.configDirEnv)
   const configDirName = validateConfigDirName(input.configDirName)
+  const extraArgsJson = validateExtraArgs(input.protocol as RuntimeProtocol, input.extraArgs)
   const existing = await getRuntime(db, input.name)
   if (existing !== null)
     throw new ConflictError('runtime-exists', `runtime '${input.name}' already exists`)
@@ -608,6 +721,7 @@ export async function createRuntime(
     binaryPath,
     configDirEnv,
     configDirName,
+    extraArgsJson,
     lastProbeJson: input.lastProbeJson ?? null,
     createdBy: input.createdBy ?? null,
     ...profile,
@@ -654,6 +768,12 @@ export async function updateRuntime(
     (profile.temperature !== undefined && profile.temperature !== row.temperature) ||
     (profile.steps !== undefined && profile.steps !== row.steps) ||
     (profile.maxSteps !== undefined && profile.maxSteps !== row.maxSteps)
+  if (input.extraArgs !== undefined) {
+    const extraArgsJson = validateExtraArgs(row.protocol, input.extraArgs)
+    patch.extraArgsJson = extraArgsJson
+    // Argv changes the runtime's execution meaning — invalidate cached probes.
+    executionProfileChanged ||= extraArgsJson !== row.extraArgsJson
+  }
   if (input.binaryPath !== undefined) {
     const binaryPath = validateBinaryPath(input.binaryPath)
     patch.binaryPath = binaryPath

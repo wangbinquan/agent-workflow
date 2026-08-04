@@ -189,6 +189,9 @@ export const claudeCodeDriver: RuntimeDriver = {
       gitUserName: ctx.gitUserName ?? null,
       gitUserEmail: ctx.gitUserEmail ?? null,
       ...(profile !== undefined ? { systemPermissionProfile: profile } : {}),
+      ...(ctx.extraArgs !== undefined && ctx.extraArgs.length > 0
+        ? { extraArgs: ctx.extraArgs }
+        : {}),
       ...(ctx.log !== undefined ? { log: ctx.log } : {}),
     })
     return preSpawnVerify === undefined ? plan : { ...plan, preSpawnVerify }
@@ -354,6 +357,12 @@ export const claudeCodeDriver: RuntimeDriver = {
           }
         : {}),
       ...(claudeAgents !== null ? { agentsJson: JSON.stringify(claudeAgents) } : {}),
+      // 2026-08-04 — frozen per-runtime extraArgs (fork-private flags). Root
+      // params only: claude subagents share this one process, so per-process
+      // argv can only come from the root's runtime.
+      ...(rootParams?.extraArgs != null && rootParams.extraArgs.length > 0
+        ? { extraArgs: rootParams.extraArgs }
+        : {}),
       // bridge subscription creds only on REAL claude runs (tests set runtimeCmd).
       bridgeCredentials: ctx.runtimeCmd === undefined,
       log: ctx.log,

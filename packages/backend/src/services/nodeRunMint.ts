@@ -392,12 +392,28 @@ function parseFrozenParams(json: string | null | undefined): RuntimeProfile {
         temperature: p.temperature ?? null,
         steps: p.steps ?? null,
         maxSteps: p.maxSteps ?? null,
+        // 2026-08-04 — frozen extraArgs (claude fork flags). Whitelist-shape
+        // checked: anything but a non-empty string[] degrades to null, so a
+        // tampered/legacy JSON can never smuggle argv.
+        extraArgs:
+          Array.isArray(p.extraArgs) &&
+          p.extraArgs.length > 0 &&
+          p.extraArgs.every((t): t is string => typeof t === 'string')
+            ? p.extraArgs
+            : null,
       }
     } catch {
       /* fall through to empty */
     }
   }
-  return { model: null, variant: null, temperature: null, steps: null, maxSteps: null }
+  return {
+    model: null,
+    variant: null,
+    temperature: null,
+    steps: null,
+    maxSteps: null,
+    extraArgs: null,
+  }
 }
 
 /**
@@ -499,6 +515,7 @@ export async function resolveFrozenRuntime(
             temperature: r.temperature,
             steps: r.steps,
             maxSteps: r.maxSteps,
+            extraArgs: r.extraArgs ?? null,
           },
           configDir: r.configDir,
         }))

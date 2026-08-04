@@ -61,6 +61,9 @@ export interface SmokeOptions {
   binaryPath: string
   config?: { opencodePath?: string | null; claudeCodePath?: string | null }
   model?: string
+  /** 2026-08-04 — the runtime row's extraArgs, so a probe reproduces the exact
+   *  argv a dispatch would use (fork flags like `--skip-safe-check`). */
+  extraArgs?: readonly string[]
   timeoutMs?: number
   /**
    * Bridge the claude subscription credential into the temp config dir (real
@@ -216,6 +219,7 @@ async function buildSmokePlan(
   runDir: string,
   prompt: string,
   model: string | undefined,
+  extraArgs: readonly string[] | undefined,
   bridgeCredentials: boolean,
   log: Logger,
   testOnlyUnverifiedRuntime: boolean,
@@ -225,6 +229,7 @@ async function buildSmokePlan(
     agentName: 'aw-smoke',
     systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
     ...(model !== undefined ? { model } : {}),
+    ...(extraArgs !== undefined && extraArgs.length > 0 ? { extraArgs } : {}),
     prompt,
     worktreePath: worktreeDir,
     runDir,
@@ -328,6 +333,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
           runDir,
           prompt,
           opts.model,
+          opts.extraArgs,
           opts.bridgeCredentials === true,
           log,
           opts.testOnlyUnverifiedRuntime === true,

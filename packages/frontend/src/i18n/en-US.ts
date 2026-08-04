@@ -1649,6 +1649,9 @@ export const enUS: Resources = {
     fieldConfigDirName: 'Config dir name',
     fieldConfigDirNameHint:
       'Leaf directory name under each run root (single path segment). Empty = protocol default.',
+    fieldExtraArgs: 'Extra CLI args',
+    fieldExtraArgsHint:
+      'Fork-private flags appended to every spawn of this runtime (e.g. --skip-safe-check). Platform-owned flags are rejected on save. claude-code protocol only.',
     configDirEnvInvalid:
       'Must be a legal env var name (letters, digits, underscores; not starting with a digit).',
     configDirEnvReserved: 'This variable name is reserved by the platform — pick another.',
