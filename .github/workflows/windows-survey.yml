@@ -46,7 +46,11 @@ jobs:
   survey:
     name: Windows full-suite survey (non-gating)
     runs-on: windows-latest
-    timeout-minutes: 90
+    # 90 minutes was not enough: the first run was killed at the deadline with
+    # the suite still going (POSIX finishes in ~17). Windows process creation is
+    # much slower and this suite spawns constantly — which is itself a finding
+    # for T31: the matrix leg needs a budget of this order, or finer shards.
+    timeout-minutes: 240
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
