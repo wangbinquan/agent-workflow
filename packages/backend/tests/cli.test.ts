@@ -105,9 +105,14 @@ describe('CLI subcommands (P-1-05)', () => {
     // invasive. Instead, just verify token-file mode check works:
     writeFileSync(join(tmp, 'token'), 'a'.repeat(64), { mode: 0o644 })
     const result = await doctorCommand()
-    const tokenCheck = result.checks.find((c) => c.name === 'token file mode')
-    expect(tokenCheck?.ok).toBe(false)
-    expect(tokenCheck?.message).toContain('600')
+    // RFC-254 T7/D19: the check now covers every at-rest secret and reports the
+    // protection the PLATFORM actually offers. On POSIX that is still mode 600
+    // and a 644 token still fails; on Windows the same file is not insecure and
+    // must not be reported as such (see rfc254-control-listener.test.ts).
+    const secretCheck = result.checks.find((c) => c.name === 'secret file protection')
+    expect(secretCheck?.ok).toBe(false)
+    expect(secretCheck?.message).toContain('600')
+    expect(secretCheck?.message).toContain('token')
   })
 
   // --- status / stop (require a real daemon subprocess) ---

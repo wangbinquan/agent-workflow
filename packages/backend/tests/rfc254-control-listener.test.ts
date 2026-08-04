@@ -267,3 +267,31 @@ describe('RFC-254 T7 — the daemon publishes and retracts the endpoint', () => 
     expect(paths).toContain('AT-REST SECRET')
   })
 })
+
+describe('RFC-254 T7 / D19 — doctor reports the protection that is actually in force', () => {
+  const doctor = readFileSync(join(import.meta.dir, '..', 'src', 'cli', 'doctor.ts'), 'utf8')
+
+  test('the mode-600 assertion is gated on the platform that HAS mode bits', () => {
+    // Windows carries no POSIX permission bits — `statSync().mode & 0o777`
+    // there reports something like 666 whatever the ACL says. The previous
+    // check asserted 600 unconditionally, so every Windows box that had ever
+    // started the daemon failed `doctor` on a file that was not insecure.
+    expect(doctor).toContain('statMetadataIsAuthoritative(platform)')
+    const guarded = doctor.split('statMetadataIsAuthoritative(platform)')[1] ?? ''
+    // The win32 message must name the protection that IS in force rather than
+    // claiming the POSIX one, and must not overstate what it verified.
+    expect(guarded).toContain('per-user ACL')
+    expect(guarded).toContain('does not verify the DACL')
+  })
+
+  test('the shutdown nonce is one of the secrets it covers', () => {
+    expect(doctor).toContain('Paths.controlFile')
+    expect(doctor).toContain('shutdown nonce')
+  })
+
+  test('a POSIX host still fails on a world-readable secret', () => {
+    // The looser platform branch must not have loosened the strict one.
+    expect(doctor).toContain('!== 0o600')
+    expect(doctor).toContain('ok: false')
+  })
+})

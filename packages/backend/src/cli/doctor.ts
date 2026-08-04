@@ -5,6 +5,7 @@ import { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSecretBox } from '@/auth/secretBox'
+import { statMetadataIsAuthoritative } from '@/util/fileTrust'
 import { loadConfig, readConfig } from '@/config'
 import { quickCheckDbFile } from '@/db/integrity'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
@@ -68,8 +69,8 @@ export async function doctorCommand(): Promise<DoctorResult> {
   // 4. config loads
   checks.push(checkConfig())
 
-  // 5. token file (if present) has mode 0600
-  checks.push(checkTokenFileMode())
+  // 5. at-rest secrets carry the protection this platform actually offers
+  checks.push(checkSecretFileProtection())
 
   // 6. migrations present
   checks.push(checkMigrations())
@@ -418,22 +419,65 @@ function checkConfig(): CheckResult {
   }
 }
 
-function checkTokenFileMode(): CheckResult {
-  if (!existsSync(Paths.tokenFile)) {
-    return { name: 'token file', ok: true, message: '(will be created on first daemon start)' }
-  }
-  try {
-    const mode = statSync(Paths.tokenFile).mode & 0o777
-    if (mode !== 0o600) {
-      return {
-        name: 'token file mode',
-        ok: false,
-        message: `${Paths.tokenFile} has mode ${mode.toString(8)} (expected 600)`,
-      }
+/**
+ * RFC-254 T7 / D19 — report the protection that is ACTUALLY in force on each
+ * at-rest secret, per platform.
+ *
+ * The previous version asserted mode 600 unconditionally. Windows does not
+ * carry POSIX permission bits — `statSync().mode & 0o777` there reports
+ * something like 666 regardless of the ACL — so on any Windows box that had
+ * ever started the daemon, `doctor` failed on a file that was not actually
+ * insecure. Reporting a protection the platform does not implement is the
+ * mirror of the mistake D19 forbids: it must say which one is in force, not
+ * pretend every platform has the same one.
+ */
+function checkSecretFileProtection(platform: NodeJS.Platform = process.platform): CheckResult {
+  // Every at-rest secret the daemon writes into the app home. The control file
+  // carries the shutdown nonce (RFC-254 T7) and belongs in this list for the
+  // same reason the token does.
+  const secrets: Array<[string, string]> = [
+    ['token', Paths.tokenFile],
+    ['control (shutdown nonce)', Paths.controlFile],
+  ]
+  const present = secrets.filter(([, path]) => existsSync(path))
+  if (present.length === 0) {
+    return {
+      name: 'secret file protection',
+      ok: true,
+      message: '(created on first daemon start)',
     }
-    return { name: 'token file mode', ok: true, message: 'mode 600 ✓' }
-  } catch (err) {
-    return { name: 'token file', ok: false, message: (err as Error).message }
+  }
+
+  if (!statMetadataIsAuthoritative(platform)) {
+    // Honest, not reassuring: the mode bits exist but mean nothing here, so the
+    // confidentiality comes from the per-user ACL on the app home. Say that,
+    // and say it is not verified by this check.
+    return {
+      name: 'secret file protection',
+      ok: true,
+      message:
+        `per-user ACL on ${Paths.root} (win32 has no POSIX mode bits; ` +
+        `this check does not verify the DACL — see docs/audit-backlog.md) ` +
+        `[${present.map(([label]) => label).join(', ')}]`,
+    }
+  }
+
+  const wrong: string[] = []
+  for (const [label, path] of present) {
+    try {
+      const mode = statSync(path).mode & 0o777
+      if (mode !== 0o600) wrong.push(`${label} has mode ${mode.toString(8)} (expected 600)`)
+    } catch (err) {
+      wrong.push(`${label}: ${(err as Error).message}`)
+    }
+  }
+  if (wrong.length > 0) {
+    return { name: 'secret file protection', ok: false, message: wrong.join('; ') }
+  }
+  return {
+    name: 'secret file protection',
+    ok: true,
+    message: `mode 600 ✓ [${present.map(([label]) => label).join(', ')}]`,
   }
 }
 
