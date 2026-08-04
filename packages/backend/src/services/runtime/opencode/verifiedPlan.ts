@@ -12,16 +12,11 @@ import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
   deriveHermeticOpencodeLayout,
-  machineConfigDeclaredPluginCount,
   removeHermeticOpencodeLayout,
   type HermeticOpencodeLayout,
 } from './hermetic'
 import { pluginFileSpec, selectShippedPlugins } from './pluginSpec'
-import {
-  inheritsMachineOpencodeConfig,
-  resolveProviderCredential,
-  type CustomProviderPlanDependencies,
-} from './customProvider'
+import { resolveProviderCredential, type CustomProviderPlanDependencies } from './customProvider'
 import { inspectRuntimeOpencodeBinary, snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
@@ -675,7 +670,6 @@ export async function buildVerifiedOpencodeBusinessPlan(
       allowShell: dep.permission.bash !== 'deny',
     }
   })
-  const inheritMachineConfig = inheritsMachineOpencodeConfig(dependencies.customProvider)
   // RFC-255: resolved BEFORE the config is built — a custom gateway contributes
   // a `provider` section to that config, and a disabled one must fail here
   // rather than fall through to the generic credential channels.
@@ -716,7 +710,6 @@ export async function buildVerifiedOpencodeBusinessPlan(
     username,
     password,
     sourceEnv,
-    inheritMachineConfig,
   })
   serverEnv.PWD = canonicalWorktree
   const buildDigest = (await (dependencies.inspectBinary ?? inspectRuntimeOpencodeBinary)(command))
@@ -960,13 +953,6 @@ export async function buildVerifiedOpencodeBusinessPlan(
           sandboxTopology === 'runner-outer' && containment.mode !== 'off' && containment.available,
         inlineModel: `${selectedModel.providerID}/${selectedModel.modelID}`,
         inlineVariant: selectedModel.variant ?? null,
-        // RFC-256: the operator's own OpenCode config is readable again, but
-        // plugins declared there are still not loaded. Report the count so that
-        // limit is visible in the run log instead of looking like a silent
-        // no-op (0 when inheritance is off or nothing is declared).
-        machineConfigIgnoredPlugins: inheritMachineConfig
-          ? machineConfigDeclaredPluginCount(join(safeAbsoluteHome(sourceEnv.HOME), '.config', 'opencode'))
-          : 0,
         mcpCount: Object.keys(plannedMcp.config).length,
         // RFC-251: report the encoded selection, not a structural zero.
         pluginCount: shippedPlugins.length,
