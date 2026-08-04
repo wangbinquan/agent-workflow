@@ -192,6 +192,23 @@ export interface ClaudeDeclaredControlArgv {
   mcpConfigFile?: string
   /** `--allowedTools` pattern (e.g. one MCP namespace); omitted → flag absent. */
   allowedTools?: string
+  /**
+   * True when the load set grants the `Skill` tool, i.e. this node is SUPPOSED
+   * to be able to use its managed skills.
+   *
+   * 2026-08-04 audit: `--disable-slash-commands` was emitted unconditionally on
+   * the strength of a comment calling it "defense-in-depth against config-dir
+   * skills". The CLI's own help text says otherwise — the flag's documented
+   * effect is **"Disable all skills"**. So a node that declared permissions,
+   * selected managed skills, had the whole tree staged into its private config
+   * dir (`prepareClaudeConfigDir`) and had `skill: 'allow'` translated into
+   * `--tools …,Skill` then had every one of those skills switched off, with no
+   * warning anywhere. Three parts of one spawn contradicting each other.
+   *
+   * Default false keeps the historical shape for every caller that grants no
+   * Skill tool (system surfaces, the read-only intent set, the MCP playground).
+   */
+  skillsGranted?: boolean
 }
 
 /**
@@ -212,7 +229,11 @@ export interface ClaudeDeclaredControlArgv {
  *    zero MCP servers; with one it means exactly that file and nothing
  *    inherited;
  *  - `--setting-sources ""` — cuts user/project/local settings;
- *  - `--disable-slash-commands` — defense-in-depth against config-dir skills.
+ *  - `--disable-slash-commands` — the CLI's documented effect is "Disable all
+ *    skills", so it is emitted ONLY when the load set grants no `Skill` tool.
+ *    Sending it while ALSO staging the node's managed skills and granting
+ *    `Skill` (which is what happened until 2026-08-04) silently deleted the
+ *    node's skill capability.
  *
  * Flag ORDER is part of the contract (argv golden locks); callers append their
  * own model/prompt/session flags after this group.
@@ -227,7 +248,7 @@ export function claudeDeclaredControlArgv(input: ClaudeDeclaredControlArgv): str
     '--strict-mcp-config',
     '--setting-sources',
     '',
-    '--disable-slash-commands',
+    ...(input.skillsGranted === true ? [] : ['--disable-slash-commands']),
     ...(input.allowedTools === undefined ? [] : ['--allowedTools', input.allowedTools]),
   ]
 }
@@ -284,6 +305,11 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
               ? (ctx.businessTools as string)
               : CLAUDE_ALL_DENY_TOOLS,
           ...(businessGated && mcpAllowedTools.length > 0 ? { allowedTools: mcpAllowedTools } : {}),
+          // Only the business gate can grant Skill; the read-only intent set
+          // and the all-deny system surface never do.
+          ...(businessGated && /(^|,)Skill(,|$)/.test(ctx.businessTools ?? '')
+            ? { skillsGranted: true }
+            : {}),
         })
       : [
           // multica-proven non-interactive form; RFC-242 §2 replaces this with

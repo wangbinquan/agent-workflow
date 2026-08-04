@@ -151,8 +151,23 @@ export function mapAgentPermissionToClaudeTools(permission: AgentPermission): Cl
     else for (const tool of mapped) granted.delete(tool)
   }
 
+  // 2026-08-04 audit: an agent that declares ONLY denials (the natural
+  // translation of an OpenCode permission map, where the built-in default is
+  // `{"*": "allow", …}` and a declaration only subtracts) lands here with an
+  // EMPTY grant set and — until this warning — no diagnostic at all. `--tools ""`
+  // is the CLI's documented "disable all tools", so the node starts, the model
+  // talks, and not one tool is loaded. Every other lossy translation in this
+  // function already warns; the total loss did not.
+  const tools = GRANTABLE.filter((tool) => granted.has(tool))
+  if (tools.length === 0 && Object.keys(permission).length > 0) {
+    warnings.push(
+      'permission grants no claude built-in tool: the node will load NONE ' +
+        "(claude's baseline is deny-unless-granted, unlike opencode's allow-unless-denied). " +
+        "Add '*': 'allow' to keep the opencode-style semantics, or grant the tools explicitly.",
+    )
+  }
   // Table order, so the produced argv is deterministic.
-  return { tools: GRANTABLE.filter((tool) => granted.has(tool)), warnings }
+  return { tools, warnings }
 }
 
 /** `--tools` argv value for a gate (empty string = no built-ins at all). */

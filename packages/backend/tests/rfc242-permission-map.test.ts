@@ -45,12 +45,33 @@ describe('RFC-242 permission mapping — per-key contract', () => {
     }
   })
 
-  test('keys with no claude counterpart grant nothing but are NOT warnings', () => {
+  test('keys with no claude counterpart grant nothing and raise no PER-KEY warning', () => {
     for (const key of ['list', 'external_directory', 'todowrite', 'question', 'lsp', 'doom_loop']) {
       const result = gate({ [key]: 'allow' })
       expect(result.tools).toEqual([])
-      expect(result.warnings).toEqual([])
+      // No per-key complaint (these are recognized keys that simply have no
+      // claude counterpart). 2026-08-04 audit: the GATE-level warning below is
+      // expected and load-bearing — a declaration that grants zero tools makes
+      // claude start with `--tools ""`, i.e. no tools at all, and that used to
+      // happen with no diagnostic anywhere.
+      expect(result.warnings).toEqual([
+        "permission grants no claude built-in tool: the node will load NONE (claude's baseline is deny-unless-granted, unlike opencode's allow-unless-denied). Add '*': 'allow' to keep the opencode-style semantics, or grant the tools explicitly.",
+      ])
     }
+  })
+
+  // 2026-08-04 audit P0: an OpenCode-style `{bash:'deny'}` (whose built-in
+  // default is `{"*":"allow", …}`, so a declaration only SUBTRACTS) mapped to an
+  // empty claude load set — node starts, model talks, zero tools loaded, and the
+  // existing warning paths (unknown / ask / patterned) all stayed silent.
+  test('a deny-only declaration warns that it grants NOTHING', () => {
+    const result = gate({ bash: 'deny' })
+    expect(result.tools).toEqual([])
+    expect(result.warnings.some((w) => w.includes('grants no claude built-in tool'))).toBe(true)
+  })
+
+  test('an empty declaration does NOT warn (it never reached the gate as a claim)', () => {
+    expect(gate({}).warnings).toEqual([])
   })
 })
 

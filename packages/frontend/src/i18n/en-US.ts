@@ -2793,6 +2793,8 @@ export const enUS: Resources = {
       'script-containment-unavailable':
         'Containment is unavailable while the current mode requires it, so the node was refused. Run `agent-workflow sandbox` on the server for install/fix guidance.',
       'script-spawn-failed': 'The script process could not be started.',
+      'runtime-result-error':
+        'The runtime reported a terminal error (auth rejected, usage limit, or a gateway error) — not a prompt or output-protocol problem. See the error detail; retrying the same input will not change it.',
       'envelope-missing':
         'The agent did not produce output in the agreed format (missing output envelope).',
       'envelope-missing__hint':

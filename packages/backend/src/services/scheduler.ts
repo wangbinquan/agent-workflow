@@ -1419,6 +1419,11 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
  * loop's retry-consumption contract has a direct unit oracle.
  */
 export function shouldRetryNodeFailure(failureCode: FailureCode | null | undefined): boolean {
+  // 2026-08-04 audit: a terminal error the RUNTIME reported about itself (auth
+  // rejected, usage limit, gateway error) does not become true by replaying the
+  // same inputs. It is not an execution-identity code, so the identity-scoped
+  // predicate below would call it retryable and burn the whole budget.
+  if (failureCode === 'runtime-result-error') return false
   return !isPermanentRuntimeFailure(failureCode)
 }
 

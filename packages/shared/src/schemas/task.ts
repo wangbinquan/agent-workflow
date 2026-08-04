@@ -299,8 +299,29 @@ export const SCRIPT_PERMANENT_FAILURE_CODES: ReadonlyArray<ScriptFailureCode> = 
   'script-output-truncated',
 ]
 
+/**
+ * Failures the RUNTIME reported about ITSELF, outside the envelope protocol and
+ * outside the execution-identity contract.
+ *
+ * Kept as its own group rather than folded into `FOLLOWUP_FAILURE_CODES`: those
+ * all carry a follow-up policy row (`FOLLOWUP_POLICY`) telling the agent how to
+ * try again, and there is nothing to tell an agent whose auth was rejected.
+ */
+export const RUNTIME_FAILURE_CODES = [
+  /**
+   * claude's terminal `{type:'result', is_error:true}` — auth rejected,
+   * subscription/usage limit, a gateway error from a fork. 2026-08-04 audit:
+   * the driver has parsed this since RFC-242 but only `systemAgentRun` consumed
+   * it, so on the business path these surfaced as `envelope-missing` ("the
+   * agent produced no output envelope") AFTER burning the whole retry budget.
+   */
+  'runtime-result-error',
+] as const
+export type RuntimeFailureCode = (typeof RUNTIME_FAILURE_CODES)[number]
+
 export const FAILURE_CODES = [
   ...FOLLOWUP_FAILURE_CODES,
+  ...RUNTIME_FAILURE_CODES,
   ...SCRIPT_FAILURE_CODES,
   ...EXECUTION_IDENTITY_FAILURE_CODES,
   // RFC-251: retired codes stay in the READ domain. No path emits them, but

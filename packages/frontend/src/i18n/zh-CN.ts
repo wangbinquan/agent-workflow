@@ -7382,6 +7382,8 @@ export const zhCN: Resources = {
       'script-containment-unavailable':
         '隔离机制不可用，而当前档位要求强制隔离，已拒绝执行。可在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引。',
       'script-spawn-failed': '脚本进程无法启动。',
+      'runtime-result-error':
+        '运行时报告了终止错误（鉴权被拒 / 用量额度 / 网关错误），不是提示词或输出协议的问题。详情见错误信息；重试同样的输入不会改变结果。',
       'envelope-missing': '代理没有按约定格式输出结果（缺少输出信封）。',
       'envelope-missing__hint': '通常是模型没有遵循输出协议——可点「继续任务」重试该节点。',
       'clarify-and-output-both': '代理同时提交了反问与结果，格式冲突。',

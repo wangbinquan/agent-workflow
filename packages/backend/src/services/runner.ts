@@ -117,6 +117,7 @@ import {
 } from './runtime/opencode/failure'
 import {
   isExecutionIdentityFailureCode,
+  maskDiagnosticsText,
   type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { isProductionOpencodeCommand } from '@/util/opencode'
@@ -1730,6 +1731,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // historical best-effort behavior.
     const fencedMcpServers = new Set(plan.fencedMcpServers ?? [])
     let fencedMcpFailure: string | undefined
+    /** claude's terminal `{type:'result', is_error:true}` message, if any. */
+    let terminalResultError: string | undefined
     /** The inventory arrives once, in the runtime's first event. */
     let fencedMcpInventorySeen = false
     const failControlBarrier = (): void => {
@@ -1795,6 +1798,18 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
       // routes them through the raw-text fallback exactly as the old inline
       // opencode `if (evt) {...} else {...}` selection did.
+      // 2026-08-04 audit: claude's TERMINAL result carries `is_error: true` on a
+      // clean exit 0 — auth failure, subscription/usage limit, a gateway error
+      // from a fork. The driver has parsed that since RFC-242, but only
+      // `systemAgentRun` ever called it, so on the BUSINESS path those runs
+      // surfaced as `envelope-missing` ("the agent produced no output
+      // envelope") AFTER burning the node's whole retry budget. Same disease as
+      // the 2026-08-04 incident's "swallowed into a bare nonce missing", which
+      // was fixed on the smoke path only.
+      const resultError = driver.parseTerminalResultError?.(line)
+      if (resultError !== undefined && resultError !== null && terminalResultError === undefined) {
+        terminalResultError = resultError
+      }
       const ev = driver.parseEvent(line)
       if (ev) {
         if (ev.sessionId !== undefined) {
@@ -2103,6 +2118,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       status = 'failed'
       failureCode = controlFailureCode
       errorMessage = controlFailureCode
+    } else if (terminalResultError !== undefined) {
+      // The runtime told us WHY it stopped. Report that instead of the generic
+      // "no envelope", and treat it as permanent: auth / quota / gateway
+      // rejections do not become true by retrying, and the old path burned the
+      // full retry budget on every one of them.
+      status = 'failed'
+      failureCode = 'runtime-result-error'
+      errorMessage = `runtime-result-error: ${maskDiagnosticsText(terminalResultError).slice(0, 2000)}`
     } else if (fencedMcpFailure !== undefined) {
       // No failureCode on purpose: this is retryable (claude freezes MCP
       // availability at init, so a slow first start can resolve on the next

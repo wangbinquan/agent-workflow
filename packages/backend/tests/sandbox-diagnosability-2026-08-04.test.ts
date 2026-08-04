@@ -85,7 +85,9 @@ describe('sandbox-degraded 是一条一等公民 rule', () => {
     expect(defs.length).toBeGreaterThan(0)
     expect(defs[0]?.id).toBe('sandbox-degraded.acknowledge')
     // 选项 id 必须与 shared 的静态目录一致——两侧漂移正是本条最初的成因。
-    expect([...REPAIR_OPTION_IDS['sandbox-degraded']]).toEqual(defs.map((d) => d.id))
+    const ids: string[] = defs.map((d) => d.id)
+    const expected: string[] = [...REPAIR_OPTION_IDS['sandbox-degraded']]
+    expect(ids).toEqual(expected)
   })
 
   test('每条 canonical rule 都能取到非空选项（穷尽，不留第二个 undefined 坑）', () => {
