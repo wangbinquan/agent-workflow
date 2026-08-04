@@ -15,6 +15,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { identityDigest } from './executionIdentity'
 import { executionIdentityFailure } from './failure'
+import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 const DEFAULT_MAX_FILES = 2_048
 const DEFAULT_MAX_FILE_BYTES = 16 * 1024 * 1024
@@ -200,9 +201,7 @@ async function captureTree(
       try {
         const opened = await handle.stat()
         if (
-          !opened.isFile() ||
-          opened.dev !== metadata.dev ||
-          opened.ino !== metadata.ino ||
+          !assertSameFileIdentityForHost(metadata, opened).trusted ||
           opened.size !== metadata.size
         ) {
           return executionIdentityFailure('execution-identity-source-changed')
@@ -210,8 +209,7 @@ async function captureTree(
         contents = await handle.readFile()
         const after = await handle.stat()
         if (
-          after.dev !== opened.dev ||
-          after.ino !== opened.ino ||
+          !assertSameFileIdentityForHost(opened, after).trusted ||
           after.size !== opened.size ||
           after.mtimeMs !== opened.mtimeMs
         ) {

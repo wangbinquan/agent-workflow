@@ -151,6 +151,44 @@ describe('RFC-254 file trust primitive', () => {
     })
   })
 
+  describe('bigint stats (Node { bigint: true } variant)', () => {
+    // sourceGuard and hermetic stat with `bigint: true` to keep the full
+    // permission word. The typechecker found this when the primitive first
+    // landed with number-only fields — a reminder that "same shape" is not the
+    // same as "same representation".
+    const big = (o: Partial<Record<'dev' | 'ino' | 'mode' | 'size', bigint>> = {}): TrustStats => ({
+      isFile: () => true,
+      isSymbolicLink: () => false,
+      mode: o.mode ?? 0o100600n,
+      dev: o.dev ?? 1n,
+      ino: o.ino ?? 2n,
+      size: o.size ?? 10n,
+    })
+
+    test('privacy verdict is identical for bigint and number modes', () => {
+      expect(assertPrivateRegularFile(big(), 'linux')).toEqual({ trusted: true })
+      expect(assertPrivateRegularFile(big({ mode: 0o100666n }), 'linux')).toEqual({
+        trusted: false,
+        reason: 'not-private',
+      })
+    })
+
+    test('identity compares bigint pairs by value', () => {
+      expect(assertSameFileIdentity(big(), big(), 'linux')).toEqual({ trusted: true })
+      expect(assertSameFileIdentity(big(), big({ ino: 999n }), 'linux')).toEqual({
+        trusted: false,
+        reason: 'identity-changed',
+      })
+    })
+
+    test('the size ceiling works against a bigint size', () => {
+      expect(assertUnopenedPrivateFile(big({ size: 201n }), 'linux', { maxBytes: 200 })).toEqual({
+        trusted: false,
+        reason: 'size-changed',
+      })
+    })
+  })
+
   test('PRIVATE_FILE_MODE is the mode the verified store actually writes', () => {
     expect(PRIVATE_FILE_MODE).toBe(0o600)
     expect(SEALED_EXEC_MODE).toBe(0o500)

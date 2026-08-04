@@ -11,6 +11,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { mcpEnvEntryProblem } from '@agent-workflow/shared'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
+import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 import { IS_EMBEDDED } from '@/embed'
 import { executionIdentityFailure } from './failure'
 import { RuntimeChildProviderPlanSchema, type RuntimeChildProviderPlan } from './containment'
@@ -953,7 +954,7 @@ async function readManifest(path: string): Promise<NetlessSubprocessManifest> {
   )
   try {
     const opened = await handle.stat()
-    if (opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size) {
+    if (!assertSameFileIdentityForHost(before, opened).trusted || opened.size !== before.size) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
     const value = JSON.parse(await handle.readFile('utf8')) as unknown

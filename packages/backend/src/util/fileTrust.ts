@@ -63,14 +63,29 @@ export type FileTrustVerdict = { trusted: true } | { trusted: false; reason: Fil
 const TRUSTED: FileTrustVerdict = { trusted: true }
 const deny = (reason: FileTrustFailure): FileTrustVerdict => ({ trusted: false, reason })
 
+/**
+ * The minimal identity pair. Callers that persisted an identity across
+ * process boundaries (the claude netless projection stores `dev`/`ino` as
+ * scalars in its manifest) have this without a live `Stats`.
+ */
+export interface FileIdentity {
+  // `number | bigint` because Node's `bigint: true` stat variant is in use in
+  // parts of this codebase (sourceGuard/hermetic read mode as bigint to keep
+  // the full permission word). Comparison is by value, so mixing the two
+  // representations of the SAME identity would be a false mismatch — callers
+  // must not compare a bigint stat against a number stat, and in practice
+  // never do: both operands always come from the same stat call style.
+  dev: number | bigint
+  ino: number | bigint
+}
+
 /** The subset of `fs.Stats` these assertions read. */
-export interface TrustStats {
+export interface TrustStats extends FileIdentity {
   isFile: () => boolean
   isSymbolicLink: () => boolean
-  mode: number
-  dev: number
-  ino: number
-  size: number
+  /** `bigint` when the caller used Node's `{ bigint: true }` stat variant. */
+  mode: number | bigint
+  size: number | bigint
 }
 
 /**
@@ -97,7 +112,7 @@ export function assertPrivateRegularFile(
 ): FileTrustVerdict {
   if (!statMetadataIsAuthoritative(platform)) return deny('platform-unsupported')
   if (!stats.isFile()) return deny('not-regular-file')
-  if ((stats.mode & 0o777) !== expectedMode) return deny('not-private')
+  if (Number(BigInt(stats.mode) & 0o777n) !== expectedMode) return deny('not-private')
   return TRUSTED
 }
 
@@ -122,10 +137,10 @@ export function assertUnopenedPrivateFile(
   if (!statMetadataIsAuthoritative(platform)) return deny('platform-unsupported')
   if (stats.isSymbolicLink()) return deny('is-link')
   if (!stats.isFile()) return deny('not-regular-file')
-  if ((stats.mode & 0o777) !== (expectation.expectedMode ?? PRIVATE_FILE_MODE)) {
+  if (Number(BigInt(stats.mode) & 0o777n) !== (expectation.expectedMode ?? PRIVATE_FILE_MODE)) {
     return deny('not-private')
   }
-  if (expectation.maxBytes !== undefined && stats.size > expectation.maxBytes) {
+  if (expectation.maxBytes !== undefined && Number(stats.size) > expectation.maxBytes) {
     return deny('size-changed')
   }
   return TRUSTED
@@ -142,7 +157,7 @@ export function assertUnopenedPrivateFile(
  * either rule in here would silently retighten or loosen the other.
  */
 export function assertSameFileIdentity(
-  before: TrustStats,
+  before: FileIdentity,
   opened: TrustStats,
   platform: NodeJS.Platform,
 ): FileTrustVerdict {
@@ -169,7 +184,7 @@ export function assertUnopenedPrivateFileForHost(
 }
 
 export function assertSameFileIdentityForHost(
-  before: TrustStats,
+  before: FileIdentity,
   opened: TrustStats,
 ): FileTrustVerdict {
   return assertSameFileIdentity(before, opened, process.platform)

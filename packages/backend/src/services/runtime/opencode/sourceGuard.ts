@@ -4,6 +4,7 @@ import { lstat, open, realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, join, parse, relative, sep } from 'node:path'
 import { identityDigest } from './executionIdentity'
 import { executionIdentityFailure } from './failure'
+import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 const FORBIDDEN_AT_EACH_LEVEL = [
   'opencode.json',
@@ -162,12 +163,7 @@ export async function readFrozenInstruction(
   let bytes: Uint8Array
   try {
     const opened = await handle.stat()
-    if (
-      !opened.isFile() ||
-      opened.dev !== before.dev ||
-      opened.ino !== before.ino ||
-      opened.size !== before.size
-    ) {
+    if (!assertSameFileIdentityForHost(before, opened).trusted || opened.size !== before.size) {
       return executionIdentityFailure('execution-identity-source-changed')
     }
     bytes = await handle.readFile()
@@ -176,8 +172,9 @@ export async function readFrozenInstruction(
     }
     const after = await handle.stat()
     if (
-      after.dev !== opened.dev ||
-      after.ino !== opened.ino ||
+      // `after` fstats the SAME open handle, so its isFile() is necessarily
+      // still true — the primitive's extra check is a no-op tightening here.
+      !assertSameFileIdentityForHost(opened, after).trusted ||
       after.size !== opened.size ||
       after.mtimeMs !== opened.mtimeMs
     ) {

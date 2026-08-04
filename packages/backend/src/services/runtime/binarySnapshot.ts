@@ -14,6 +14,7 @@ import { constants, createReadStream, mkdtempSync, rmSync, type Stats } from 'no
 import { chmod, copyFile, lstat, mkdir, realpath, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
+import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 export const RUNTIME_BINARY_SNAPSHOT_ERROR_CODE = 'execution-identity-untrusted-binary' as const
 
@@ -187,8 +188,7 @@ export async function snapshotRuntimeBinary(
     if (
       sourceAfter.isSymbolicLink() ||
       !executableFile(sourceAfter) ||
-      sourceAfter.dev !== sourceBefore.dev ||
-      sourceAfter.ino !== sourceBefore.ino ||
+      !assertSameFileIdentityForHost(sourceBefore, sourceAfter).trusted ||
       sourceAfter.size !== sourceBefore.size ||
       sourceAfter.mtimeMs !== sourceBefore.mtimeMs ||
       sourceAfter.ctimeMs !== sourceBefore.ctimeMs ||

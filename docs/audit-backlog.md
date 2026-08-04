@@ -442,3 +442,22 @@ config.json 0600，与 OIDC client_secret / repo 凭据的既有姿态一致。*
 - ⏳ **(P2) `mcps.config.headers` 迁移 secretBox**：remote MCP 的 `Authorization` 仍明文入库，
   且随 `--mcp-config` inline JSON 进 claude 的 argv（宿主 `ps` 可见，见上文 RFC-242 残留项）。
   两件事要一起收：入库密封 + 出 argv。迁移需带存量行的读时兼容（明文 ⇒ 密封的一次性 backfill）。
+
+## verified 存储的 TOCTOU 身份栅栏无行为覆盖（RFC-254 T0a/T0b 实测，2026-08-04）
+
+把散在各处的 `dev`/`ino` 相等判断收拢进 `util/fileTrust.ts` 时，对**每一处**做了变异实证
+（把身份检查改成恒真），结果 **`storeHygiene` 与 `sourceGuard` 都没有任何测试变红**。
+也就是说：这些「打开后必须还是同一个对象」的栅栏，此前既没有逻辑覆盖也没有接线覆盖，
+它们在代码里看着承重，实际是活是死无人知晓。
+
+**已经补上的那半**：
+- 判定逻辑本身现由 `rfc254-file-trust.test.ts` 覆盖（18 例，含 win32 fail-closed 与
+  bigint stat 两种表示）；
+- 「调用方确实接了原语」由 `rfc254-platform-surface-guard.test.ts` 的
+  `posix-file-identity` 规则锁住（把私有比较写回去 ⇒ 守卫变红，已变异实证）。
+
+- ⏳ **(P2) 仍缺行为覆盖：栅栏是否真的拒绝被掉包的文件**。需要在 `lstat` 与 `open` 之间
+  真实替换目标（rename 一个不同 inode 的同名文件），断言各调用方返回
+  `execution-identity-source-changed` / `store-unsafe`。当前实现直接用 `node:fs`，
+  没有可注入的 seam，故要么加注入点、要么用真实临时目录做时序编排。
+  **注意**：这是**既有**缺口而非 RFC-254 引入——迁移只是把它照了出来。

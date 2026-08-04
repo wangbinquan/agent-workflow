@@ -46,6 +46,7 @@ import {
 } from '../netlessProjection'
 import { runtimeContainmentAdmissionFromPrepared } from '../opencode/containment'
 import { executionIdentityFailure } from '../opencode/failure'
+import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 import {
   materializeNetlessWrapper,
   sanitizeMcpAuthoredEnvironment,
@@ -350,9 +351,10 @@ export async function materializeClaudeNetlessMcp(
         const executableMetadata = await lstat(entry.executable)
         if (
           executableMetadata.isSymbolicLink() ||
-          !executableMetadata.isFile() ||
-          executableMetadata.dev !== entry.executableDev ||
-          executableMetadata.ino !== entry.executableIno
+          !assertSameFileIdentityForHost(
+            { dev: entry.executableDev, ino: entry.executableIno },
+            executableMetadata,
+          ).trusted
         ) {
           return executionIdentityFailure('execution-identity-mismatch')
         }

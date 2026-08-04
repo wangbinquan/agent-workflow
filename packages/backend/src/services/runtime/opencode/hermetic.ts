@@ -9,6 +9,7 @@ import { canonicalizeIdentity, type IdentityJson } from './executionIdentity'
 import { buildPluginSpecArray } from './pluginSpec'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
+import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 export const OPENCODE_FFF_CAPABILITY_CODEC = 1 as const
 export const PINNED_BUILTIN_SKILL = Object.freeze({
@@ -252,9 +253,11 @@ function sameOpenedFile(
   before: Awaited<ReturnType<typeof lstat>>,
   after: Awaited<ReturnType<typeof lstat>>,
 ): boolean {
+  // Identity via the shared primitive (RFC-254 T0b); size/mtime/ctime stay
+  // here because this helper's contract is "utterly unchanged", which is
+  // stricter than identity alone.
   return (
-    before.dev === after.dev &&
-    before.ino === after.ino &&
+    assertSameFileIdentityForHost(before, after).trusted &&
     before.size === after.size &&
     before.mtimeMs === after.mtimeMs &&
     before.ctimeMs === after.ctimeMs
