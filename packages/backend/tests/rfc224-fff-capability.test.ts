@@ -297,7 +297,13 @@ describe('RFC-224 FFF capability execution proof', () => {
       expect(stdout, args.join(' ')).toBe('')
       expect(stderr, args.join(' ')).toBe('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
     }
-  })
+    // Explicit budget: this case spawns SEVEN real subprocesses (one `help`
+    // plus six argv-drift probes), each a full `bun run src/main.ts`. bun's
+    // 5s default is a wall-clock bet against runner load, and CI run
+    // 30888287151 (macos shard 1/4) lost it by 8ms while the whole file takes
+    // ~3.3s locally. Raising the ceiling does not weaken any assertion — a
+    // genuine hang still fails, just later.
+  }, 60_000)
 
   test('uses an authenticated supervisor release before exposing probe output', async () => {
     const cwd = root()
