@@ -8,6 +8,7 @@ import { executionIdentityFailure } from './failure'
 import { canonicalizeIdentity, type IdentityJson } from './executionIdentity'
 import { buildPluginSpecArray } from './pluginSpec'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
+import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
 
 export const OPENCODE_FFF_CAPABILITY_CODEC = 1 as const
 export const PINNED_BUILTIN_SKILL = Object.freeze({
@@ -667,7 +668,7 @@ export function buildHermeticServerEnv(input: HermeticServerEnvInput): Record<st
   env.OPENCODE_SERVER_USERNAME = input.username ?? `aw-${randomBytes(12).toString('base64url')}`
   env.OPENCODE_SERVER_PASSWORD = input.password ?? randomBytes(32).toString('base64url')
   env.GIT_CONFIG_NOSYSTEM = '1'
-  env.GIT_CONFIG_GLOBAL = '/dev/null'
+  env.GIT_CONFIG_GLOBAL = NULL_DEVICE_FOR_HOST
   return env
 }
 

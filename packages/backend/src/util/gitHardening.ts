@@ -94,8 +94,24 @@ const HOOK_EXEMPT_SUBCOMMANDS: ReadonlySet<string> = new Set(['commit'])
 export function hardenedGitLeadingArgs(
   subcommand: string | undefined,
   home: string = appHome(),
+  platform: NodeJS.Platform = process.platform,
 ): string[] {
-  const leading = ['-c', 'core.fsmonitor=false']
+  // RFC-254 D18 — Windows path handling, not hardening.
+  //
+  // Git for Windows refuses paths past the legacy MAX_PATH (260 chars) unless
+  // `core.longpaths` is on, and this platform's task layout is inherently deep:
+  // `%USERPROFILE%\.agent-workflow\worktrees\<repo-slug>\<task-id>\<mount>\...`
+  // already spends ~120 characters before any repository content. Setting it
+  // via `-c` rather than in a config file keeps it, like every other flag here,
+  // immune to whatever the repository's own config says.
+  //
+  // It rides along in this function because these leading args are the ONE
+  // place every daemon-side git invocation passes through; a second injection
+  // point is how the two copies of a rule drift apart (RFC-242's lesson).
+  const leading =
+    platform === 'win32'
+      ? ['-c', 'core.longpaths=true', '-c', 'core.fsmonitor=false']
+      : ['-c', 'core.fsmonitor=false']
   if (subcommand !== undefined && HOOK_EXEMPT_SUBCOMMANDS.has(subcommand)) return leading
   return ['-c', `core.hooksPath=${ensureGitHooksVoidDir(home)}`, ...leading]
 }
@@ -144,9 +160,13 @@ export function withExternalDiffDisabled(args: readonly string[]): string[] {
  * 传入的 argv 必须包含 `-C <cwd>` 等 git 自身选项在内的**完整**尾部，因为覆盖集要按
  * 子命令决定（`commit` 豁免 hooksPath），而子命令只能从完整 argv 里定位。
  */
-export function hardenGitArgs(args: readonly string[], home: string = appHome()): string[] {
+export function hardenGitArgs(
+  args: readonly string[],
+  home: string = appHome(),
+  platform: NodeJS.Platform = process.platform,
+): string[] {
   const normalized = withExternalDiffDisabled(args)
   const index = gitSubcommandIndex(normalized)
   const subcommand = index >= 0 ? normalized[index] : undefined
-  return [...hardenedGitLeadingArgs(subcommand, home), ...normalized]
+  return [...hardenedGitLeadingArgs(subcommand, home, platform), ...normalized]
 }

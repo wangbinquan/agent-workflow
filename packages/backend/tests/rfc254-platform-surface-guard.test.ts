@@ -258,38 +258,6 @@ const ALLOWANCES: readonly Allowance[] = [
     why: 'takes the interpreter directory by string surgery; migrates with the script-node win32 env',
     closedBy: 'RFC-254-T23',
   },
-  {
-    rule: 'null-device',
-    file: 'util/git.ts',
-    match: "'/dev/null'",
-    count: 2,
-    why: '`git diff --no-index` argv; migrates with the git win32 leg',
-    closedBy: 'RFC-254-T18',
-  },
-  {
-    rule: 'null-device',
-    file: 'services/runtime/opencode/hermetic.ts',
-    match: "'/dev/null'",
-    count: 1,
-    why: 'GIT_CONFIG_GLOBAL sink; migrates with the git win32 leg',
-    closedBy: 'RFC-254-T18',
-  },
-  {
-    rule: 'null-device',
-    file: 'services/runtime/opencode/models.ts',
-    match: "'/dev/null'",
-    count: 1,
-    why: 'GIT_CONFIG_GLOBAL sink; migrates with the git win32 leg',
-    closedBy: 'RFC-254-T18',
-  },
-  {
-    rule: 'null-device',
-    file: 'services/runtime/opencode/fffCapability.ts',
-    match: "'/dev/null'",
-    count: 1,
-    why: 'GIT_CONFIG_GLOBAL sink inside the Linux-bwrap-only FFF probe; constant-ized with the git win32 leg without behaviour change',
-    closedBy: 'RFC-254-T18',
-  },
 ]
 
 function allProductionTypeScript(): Array<{ path: string; text: string }> {
@@ -398,6 +366,12 @@ describe('RFC-254 platform surface guard', () => {
     const files = allProductionTypeScript()
     expect(files.length).toBeGreaterThan(200)
     const occurrences = scan()
-    expect(occurrences.some((o) => o.file === 'util/git.ts' && o.rule === 'null-device')).toBe(true)
+    // Anchor on a form that is DELIBERATELY permanent (a synthesized unified
+    // diff header), not on one awaiting migration — otherwise finishing that
+    // migration silently turns this sanity check into a no-op, which is the
+    // exact way a scanner goes blind while still reporting green.
+    expect(
+      occurrences.some((o) => o.file === 'services/skillVersion.ts' && o.rule === 'null-device'),
+    ).toBe(true)
   })
 })

@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { hardenGitArgs } from '@/util/gitHardening'
+import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
 import type { Logger } from '@/util/log'
 
 export interface GitRunResult {
@@ -1490,7 +1491,9 @@ export async function gitDiffSnapshot(worktreePath: string, fromCommit: string):
       '--no-index',
       '--binary',
       '--',
-      '/dev/null',
+      // RFC-254 T18: the empty side of a "whole file is an addition" diff.
+      // Windows has no /dev/null; the reserved device name is NUL.
+      NULL_DEVICE_FOR_HOST,
       name,
     ])
     // `git diff --no-index` exits 0 when files are identical, 1 when they
@@ -1991,7 +1994,7 @@ export async function gitDiffNumstat(
         '--numstat',
         '-z',
         '--',
-        '/dev/null',
+        NULL_DEVICE_FOR_HOST,
         name,
       ])
       if (one.exitCode > 1) continue
