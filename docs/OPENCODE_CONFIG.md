@@ -205,6 +205,12 @@ Resume 比较 digest + codec + canonical identity，不比较 reported version�
 - containment truth table 与 Windows provider contract test；
 - Linux bwrap/FFF gated evidence；
 - macOS Seatbelt gated evidence；
+- **RFC-254 的平台面套件**（`packages/backend/tests/rfc254-*.test.ts`）——受控 PATH、
+  env 键折叠、artifact layout、文件信任原语、脚本节点解释器解析都在里面，且**每一条
+  都以注入的 platform 断言 win32 分支**，所以在 POSIX 上改这些也照样能被验到；
+- **平台面负向扫描守卫**（`rfc254-platform-surface-guard.test.ts`）——新增的
+  `Bun.spawn` / 路径前缀 / PATH 拼接 / 空设备 / 文件身份写法若绕开原语会在这里红，
+  豁免须逐条写明理由；
 - backend/shared/frontend 全量 test、typecheck、lint、format、depcheck 与 binary smoke。
 
 禁止在当前 production graph 重新引入：
@@ -214,6 +220,9 @@ Resume 比较 digest + codec + canonical identity，不比较 reported version�
 - 单 release hash allowlist；
 - `platform !== "linux"` 的 core admission；
 - 把 digest 描述为 vendor authenticity proof；
-- 把 `warn/off` 描述为仍具备 host/network containment。
+- 把 `warn/off` 描述为仍具备 host/network containment；
+- 直接读 `process.platform` 做平台判断（平台事实经注入，见 RFC-254 T11c）；
+- 在 win32 的受控 config 里写 `shell` 键——**缺席本身是身份的一部分**（RFC-254 T13）；
+- 经由 `.cmd` 垫片启动任何子进程——cmd.exe 会对 argv 重新分词（RFC-254 D17）。
 
 历史合同保存在 RFC-224；RFC-227 是上述版本与平台条款的当前 supersession。

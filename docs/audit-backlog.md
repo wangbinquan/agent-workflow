@@ -478,3 +478,29 @@ Windows **ARM64** 的 Bun 发行构建禁用了 TinyCC，`bun:ffi dlopen()` 直�
   等上游为 ARM64 启用 TinyCC、或改用不依赖 FFI 的机制（例如把 Job Object 的
   创建挪进一个随产物分发的小型原生 helper —— 但那与「单一自包含可执行文件」
   的分发形态冲突，需要产品决策）。
+
+## Windows 平台的四条未决项（RFC-254 T36 登记，2026-08-04）
+
+RFC-254 交付的是「Windows 上跑得起来且如实呈现」，下面四条是它**明确没做**的，
+逐条写清代价与触发条件，避免被后来人当成已解决。
+
+- ⏳ **(P1) 没有 containment provider**。Linux 有 bwrap、macOS 有 Seatbelt，Windows
+  一个都没有：`enforce` 档直接拒绝启动、`warn` 档原子降级到无边界并出告警、`off`
+  档不做合格判定。RFC-205/227/233 的 provider 合同是按**能力**而非 OS 名写的，所以
+  未来的 Job Object / AppContainer provider 可以直接接进去，不需要动核心准入。
+  **触发条件**：任何要在 Windows 上以 `enforce` 运行的部署。属独立 RFC 的体量。
+- ⏳ **(P2) 凭据 at-rest 在 Windows 上没有平台密钥保护**。macOS/Linux 侧的收口见
+  上文「凭据 at-rest 收口」；Windows 的对应物是 **DPAPI**（`CryptProtectData`，
+  按用户或按机器），目前未接入 ⇒ Windows 上的静态凭据保护等同于文件权限。
+  与上面 ARM64 那条同一个技术前提：DPAPI 也要走 `bun:ffi`。
+- ⏳ **(P3) npm 的 `.cmd` 垫片不自动解包**。RFC-254 D17 的结论是**绝不**经由
+  `.cmd` 启动子进程——cmd.exe 会对 argv 重新分词，把精心构造的命令行改掉。因此
+  本地 MCP 一律 wrapperless 物化。代价是：如果操作者配了一个只以 `.cmd` 形式存在
+  的 MCP 命令（npm 全局包的常见形态），平台会拒绝而不是替他解开垫片指向真正的
+  `node <script>`。自动解包是可做的（读 `.cmd` 找到目标脚本），但要先想清楚
+  「解析别人的批处理文件」这件事本身的信任边界。
+- ⏳ **(P3) win32 系统代理的孤儿缝**。POSIX 侧靠进程组回收；Windows 侧靠 Job
+  Object，而 Job Object 在 ARM64 上不可用（见上一条）。这两者都覆盖不到的路径是
+  **daemon 自身被 SIGKILL 后**留下的系统代理子进程——POSIX 上同样存在，但
+  Windows 上没有 `/proc` 可供下一次启动时做可靠的孤儿识别。需要一个平台无关的
+  「上次运行留下的 pid + 启动时间」记账，而不是靠内核设施。

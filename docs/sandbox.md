@@ -83,8 +83,12 @@ agent-workflow sandbox --help
 
 - 通用 RFC-205 外层边界不隔离网络；verified OpenCode 的 shell/local-MCP 子进程另有
   provider 级 no-network 边界。daemon 自身不在沙箱内。
-- Windows 尚无发行二进制和真实 Job Object/AppContainer provider；当前交付的是开放
-  provider/renderer 合同，不宣称 Windows 产品已完成。
+- Windows **有**发行二进制（x64，RFC-254）与 Job Object 进程树治理，但**没有
+  containment provider**：`enforce` 档拒绝启动、`warn` 档原子降级到无边界并出
+  告警、`off` 档不做合格判定。provider 合同按**能力**而非 OS 名写，未来的
+  Job Object / AppContainer provider 可直接接入而不动核心准入。真机实测的
+  `doctor` 输出见 `design/RFC-254-windows-native-execution/acceptance-real-machine-2026-08-04.md`；
+  未决项逐条见 `docs/audit-backlog.md` 的「Windows 平台的四条未决项」。
 - 进程侧信道（ps / /proc）不遮蔽——凭据已不入 argv/env，残余为低敏路径信息。
 - `off` / 降级态与 RFC-205 之前等同（威胁未消除，仅可见）。
 - bwrap 缺失的发行版需装 bubblewrap（跑 `agent-workflow sandbox` 拿发行版感知的精确
