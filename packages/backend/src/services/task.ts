@@ -322,6 +322,13 @@ export interface StartTaskDeps {
    */
   scheduledTaskId?: string
   /**
+   * RFC-257 — webhook-trigger attribution (`tasks.webhook_trigger_id` /
+   * `webhook_fire_id`), stamped atomically like scheduledTaskId. Set by the
+   * executor facade from the `webhook` invoker; omitted everywhere else.
+   */
+  webhookTriggerId?: string
+  webhookFireId?: string
+  /**
    * RFC-164: workgroup launch payload. `snapshotJson` REPLACES the workflow
    * row's definition as the frozen workflow_snapshot (the builtin host row is
    * an FK anchor; the real per-launch structure is synthesized — design §2/§3).
@@ -2208,6 +2215,9 @@ async function startTaskImpl(
           // manual). Stamped atomically with the row so the schedule's run history is
           // durable regardless of any later bookkeeping write.
           scheduledTaskId: deps.scheduledTaskId ?? null,
+          // RFC-257: webhook-trigger attribution, same atomic-stamp discipline.
+          webhookTriggerId: deps.webhookTriggerId ?? null,
+          webhookFireId: deps.webhookFireId ?? null,
           // RFC-164: workgroup link + runtime config copy (NULL = not a workgroup task).
           workgroupId: deps.workgroupLaunch?.workgroupId ?? null,
           workgroupConfigJson: deps.workgroupLaunch?.configJson ?? null,

@@ -44,7 +44,10 @@ describe('PERMISSIONS catalog', () => {
     // PUT/PATCH 路由）⇒ 59。
     // RFC-253 加 `scripts:author`（脚本节点正文 = 宿主代码执行；系统域点，
     // 永不进令牌，角色基线 admin + manager）⇒ 60。
-    expect(PERMISSIONS.length).toBe(60)
+    // RFC-257 加 webhook-triggers 四动词（owner 制行，路由粗门 + 服务行级判定，
+    // 对齐 scheduled-tasks）与 `webhook-endpoints:manage`（入站验签 secret 面；
+    // 系统域点，永不进令牌，角色基线 admin + manager）⇒ 65。
+    expect(PERMISSIONS.length).toBe(65)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -97,6 +100,11 @@ describe('PERMISSIONS catalog', () => {
       'scheduled-tasks:create',
       'scheduled-tasks:update',
       'scheduled-tasks:delete',
+      // RFC-257 — webhook triggers mirror the schedule reach (owner-model rows).
+      'webhook-triggers:read',
+      'webhook-triggers:create',
+      'webhook-triggers:update',
+      'webhook-triggers:delete',
       // execute — formerly reached via `tasks:launch` or the resource's `:write`
       'mcps:execute',
       'plugins:execute',
@@ -117,7 +125,7 @@ describe('PERMISSIONS catalog', () => {
       'intent:write',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
-    expect(ROLE_PERMISSIONS.user.length).toBe(46)
+    expect(ROLE_PERMISSIONS.user.length).toBe(50)
   })
 
   test('user role does NOT include any admin-only point (snapshot guard)', () => {
@@ -143,6 +151,8 @@ describe('PERMISSIONS catalog', () => {
       // RFC-253 — 脚本正文编写。它同时也在 manager 基线里（见下面的
       // MANAGER_DENIED 断言不含它），但相对 user 仍是 admin-only。
       'scripts:author',
+      // RFC-257 — 入站验签 secret 面；同 scripts:author 档（admin+manager）。
+      'webhook-endpoints:manage',
     ]
     for (const p of adminOnly) {
       expect(ROLE_PERMISSIONS.user.includes(p)).toBe(false)
@@ -246,7 +256,7 @@ describe('RFC-247 point classification', () => {
     expect([...DELETE_POINTS].sort()).toEqual(
       PERMISSIONS.filter((p) => p.endsWith(':delete')).sort(),
     )
-    expect(DELETE_POINTS.length).toBe(10)
+    expect(DELETE_POINTS.length).toBe(11)
   })
 
   test('MATRIX_DOMAIN_POINTS = PERMISSIONS − SYSTEM_DOMAIN_POINTS', () => {
@@ -370,6 +380,8 @@ describe('RFC-222 manager role', () => {
       // RFC-253 D19 — 脚本正文编写下放到 manager（资源管理员），但依然是
       // 系统域点，任何 PAT 都拿不到。
       'scripts:author',
+      // RFC-257 D19 — 端点（验签 secret）管理同档；系统域点，PAT 拿不到。
+      'webhook-endpoints:manage',
     ]
     expect([...ROLE_PERMISSIONS.manager].sort()).toEqual([...new Set(expected)].sort())
   })

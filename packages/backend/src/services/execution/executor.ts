@@ -27,6 +27,15 @@ function depsForInvoker(deps: StartTaskDeps, req: StartExecutionRequest): StartT
   if (invoker.type === 'scheduled') {
     return { ...deps, scheduledTaskId: invoker.scheduledTaskId }
   }
+  if (invoker.type === 'webhook') {
+    // RFC-257: mirror the scheduled stamp — the launch service writes both ids
+    // onto the task row atomically with the INSERT.
+    return {
+      ...deps,
+      webhookTriggerId: invoker.webhookTriggerId,
+      webhookFireId: invoker.webhookFireId,
+    }
+  }
   if (invoker.type === 'node') {
     // PR-3: the scheduler's call-node launcher supplies the full child deps
     // (callLaunch + synthesized inherited space). The facade only asserts the

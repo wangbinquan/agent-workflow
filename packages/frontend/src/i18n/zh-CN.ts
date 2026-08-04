@@ -1225,6 +1225,35 @@ export interface Resources {
     }
   }
   settings: {
+    webhookEndpoints: {
+      title: string
+      triggersLink: string
+      deliveriesLink: string
+      add: string
+      hint: string
+      empty: string
+      enabled: string
+      disabled: string
+      enabledSwitch: string
+      noPublicBaseUrl: string
+      secretHint: string
+      createSubmit: string
+      copyUrl: string
+      rotateSecret: string
+      deleteConfirm: string
+      addTitle: string
+      nameLabel: string
+      namePlaceholder: string
+      protocolLabel: string
+      protocolHint: string
+      secretTitle: string
+      secretDone: string
+      secretOnce: string
+      secretLabel: string
+      copySecret: string
+      urlLabel: string
+      secretPasteHint: string
+    }
     customProviders: {
       title: string
       hint: string
@@ -2310,6 +2339,94 @@ export interface Resources {
       leaderMustBeAgent: string
       maxRoundsInvalid: string
       dynamicNoHumanMembers: string
+    }
+  }
+  webhookTriggers: {
+    title: string
+    subtitle: string
+    new: string
+    empty: string
+    emptyDescription: string
+    corruptBadge: string
+    scopeAll: string
+    scopeExact: string
+    enabledSwitch: string
+    firesButton: string
+    deleteConfirm: string
+    dialogCreate: string
+    dialogEdit: string
+    firesTitle: string
+    firesEmpty: string
+    resetCircuit: string
+    columns: { name: string; rule: string; target: string; state: string }
+    kinds: { workflow: string; agent: string; workgroup: string }
+    last: { launched: string; failed: string }
+    events: {
+      push: string
+      tag_push: string
+      mr_opened: string
+      mr_updated: string
+      mr_merged: string
+      mr_closed: string
+      note: string
+      pipeline_failed: string
+      pipeline_succeeded: string
+    }
+    scope: { all: string; prefix: string; exact: string; exactPlaceholder: string }
+    fields: {
+      name: string
+      endpoint: string
+      endpointPlaceholder: string
+      endpointImmutable: string
+      scope: string
+      events: string
+      eventsHint: string
+      branchFilter: string
+      branchFilterHint: string
+      commandPrefix: string
+      commandPrefixHint: string
+      ignoreUsernames: string
+      ignoreUsernamesHint: string
+      launchKind: string
+      kindImmutable: string
+      target: string
+      targetPlaceholder: string
+      inputMappings: string
+      inputMappingsHint: string
+      noInputs: string
+      eventBranch: string
+      templatePlaceholder: string
+      unmappable: string
+      description: string
+      goal: string
+      templateVarsHint: string
+      maxFires: string
+      maxFiresHint: string
+      autoRegister: string
+      autoRegisterLabel: string
+    }
+    firesColumns: { stream: string; outcome: string; time: string }
+  }
+  webhookDeliveries: {
+    title: string
+    subtitle: string
+    filterAria: string
+    empty: string
+    emptyDescription: string
+    filterAll: string
+    replay: string
+    replayBadge: string
+    rejectedNotReplayable: string
+    detailTitle: string
+    bodyPruned: string
+    columns: { event: string; repo: string; status: string; time: string }
+    statuses: {
+      received: string
+      processing: string
+      rejected: string
+      ignored: string
+      matched: string
+      failed: string
     }
   }
   scheduled: {
@@ -5798,6 +5915,36 @@ export const zhCN: Resources = {
     },
   },
   settings: {
+    webhookEndpoints: {
+      title: 'Webhook 端点',
+      triggersLink: '触发器',
+      deliveriesLink: '投递历史',
+      add: '新建端点',
+      hint: '代码平台（GitLab）把几百个仓库的事件投递到同一个端点；验签 Secret 只在创建/轮换时展示一次。',
+      empty: '还没有 webhook 端点。',
+      enabled: '已启用',
+      disabled: '已禁用',
+      enabledSwitch: '启用',
+      noPublicBaseUrl: '未配置 publicBaseUrl —— 请在 config 中配置后获取完整 URL（路径：{{path}}）',
+      secretHint: 'Secret（尾 4 位：{{hint}}）',
+      createSubmit: '创建',
+      copyUrl: '复制 URL',
+      rotateSecret: '轮换 Secret',
+      deleteConfirm: '确认删除？',
+      addTitle: '新建 Webhook 端点',
+      nameLabel: '名称',
+      namePlaceholder: '内网 GitLab',
+      protocolLabel: '自动注册用协议',
+      protocolHint: '事件仓未导入平台时按此协议选 clone URL',
+      secretTitle: 'Secret Token（仅此一次）',
+      secretDone: '我已保存',
+      secretOnce:
+        '以下 Secret 只显示这一次，请立即复制并粘贴到 GitLab webhook 配置的 Secret token 字段。',
+      secretLabel: 'Secret Token',
+      copySecret: '复制',
+      urlLabel: 'Webhook URL',
+      secretPasteHint: '在 GitLab：Settings → Webhooks，把 URL 与 Secret token 一起粘贴保存。',
+    },
     customProviders: {
       title: '自定义 provider',
       hint: '接入 OpenAI 兼容的私有网关（one-api / new-api / vLLM 等）。凭据由守护进程加密后落盘，任何读取接口只返回掩码。',
@@ -7196,6 +7343,97 @@ export const zhCN: Resources = {
       leaderMustBeAgent: 'Leader 只能是 agent 成员。',
       maxRoundsInvalid: '最大轮数须为 1–1000 的整数。',
       dynamicNoHumanMembers: '动态工作流模式仅允许 agent 成员——请先移除人类成员再保存。',
+    },
+  },
+  webhookTriggers: {
+    title: 'Webhook 触发器',
+    subtitle:
+      '代码平台事件按规则分流：repo 范围 × 事件类型 × 分支 × 指令 → 启动工作流 / Agent / 工作组。',
+    new: '新建触发器',
+    empty: '还没有触发器。',
+    emptyDescription: '先在 设置 → Webhook 端点 配好入站端点，再创建触发器绑定规则与目标。',
+    corruptBadge: '配置损坏',
+    scopeAll: '全部仓库',
+    scopeExact: '{{n}} 个仓库',
+    enabledSwitch: '启用',
+    firesButton: '触发记录',
+    deleteConfirm: '确认删除？',
+    dialogCreate: '新建触发器',
+    dialogEdit: '编辑触发器',
+    firesTitle: '触发记录 · {{name}}',
+    firesEmpty: '还没有触发记录。',
+    resetCircuit: '重置熔断',
+    columns: { name: '名称', rule: '规则', target: '目标', state: '状态' },
+    kinds: { workflow: '工作流', agent: 'Agent', workgroup: '工作组' },
+    last: { launched: '上次成功', failed: '上次失败' },
+    events: {
+      push: 'Push',
+      tag_push: 'Tag Push',
+      mr_opened: 'MR 打开',
+      mr_updated: 'MR 更新',
+      mr_merged: 'MR 合并',
+      mr_closed: 'MR 关闭',
+      note: 'MR 评论',
+      pipeline_failed: '流水线失败',
+      pipeline_succeeded: '流水线成功',
+    },
+    scope: { all: '全部', prefix: '前缀', exact: '精确清单', exactPlaceholder: 'group/sub/repo' },
+    fields: {
+      name: '名称',
+      endpoint: '端点',
+      endpointPlaceholder: '选择端点',
+      endpointImmutable: '端点创建后不可更换（如需更换请重建触发器）',
+      scope: '仓库范围',
+      events: '事件类型',
+      eventsHint: '流水线类事件不受忽略名单过滤（修到绿循环的前提）',
+      branchFilter: '分支过滤（glob）',
+      branchFilterHint: 'MR 类事件按目标分支匹配，其余按事件分支；留空不过滤',
+      commandPrefix: '评论指令前缀',
+      commandPrefixHint: '仅 MR 评论事件生效，如 /fix',
+      ignoreUsernames: '忽略用户名单',
+      ignoreUsernamesHint:
+        '这些 GitLab 用户的 push / MR / 评论事件不触发（填 bot 账号防自触发）；流水线事件不受此名单影响',
+      launchKind: '目标类型',
+      kindImmutable: '目标类型创建后不可更换',
+      target: '目标',
+      targetPlaceholder: '选择目标',
+      inputMappings: '输入映射',
+      inputMappingsHint: '把事件字段映射到工作流输入；git 类输入固定取事件分支',
+      noInputs: '该工作流没有声明输入。',
+      eventBranch: '分支来自事件',
+      templatePlaceholder: '支持模板变量（如 mr_iid、branch，写法为双花括号包裹）',
+      unmappable: '该输入类型无法从事件映射（保存时将被拒绝）',
+      description: '任务提示词模板',
+      goal: '工作组目标模板',
+      templateVarsHint:
+        '可用变量：event_type / repo_path / branch / target_branch / mr_iid / mr_title / commit_sha / comment_text / comment_author / pipeline_status / event_json',
+      maxFires: '连续触发上限',
+      maxFiresHint: '同一 MR/分支连续触发达到上限后熔断（人工重置或人类作者事件恢复）',
+      autoRegister: '自动注册仓库',
+      autoRegisterLabel: '事件仓未导入平台时按 URL 自动 clone',
+    },
+    firesColumns: { stream: '流', outcome: '结果', time: '时间' },
+  },
+  webhookDeliveries: {
+    title: 'Webhook 投递历史',
+    subtitle: '端点级审计：每次 HTTP 投递一行；触发结果见各触发器的触发记录。',
+    filterAria: '按状态过滤',
+    empty: '还没有投递记录。',
+    emptyDescription: '在 GitLab 配好 webhook 后，事件会出现在这里。',
+    filterAll: '全部',
+    replay: '重放',
+    replayBadge: '重放',
+    rejectedNotReplayable: '验签失败的投递不可重放（先修正 Secret）',
+    detailTitle: '投递详情',
+    bodyPruned: '（原始 body 已按保留策略清理）',
+    columns: { event: '事件', repo: '仓库', status: '状态', time: '时间' },
+    statuses: {
+      received: '已接收',
+      processing: '分发中',
+      rejected: '验签失败',
+      ignored: '已忽略',
+      matched: '已分发',
+      failed: '失败',
     },
   },
   scheduled: {

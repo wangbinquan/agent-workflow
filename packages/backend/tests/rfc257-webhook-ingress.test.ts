@@ -1,0 +1,315 @@
+// RFC-257 T5 — 入站端点集成锁：状态码语义矩阵逐行（design §3.3 / AC-1..5）+
+// 三段式（响应先于分发完成返回）+ 去重（AC-3 含 rejected 后重投可落地）+
+// 限流 fake clock + 未认证可达（本文件所有请求都不带任何平台凭据——路由在
+// /api/* 之外、经 publicReason 声明公开，若有人把它挪进鉴权面，整个文件红）。
+import { afterEach, describe, expect, test } from 'bun:test'
+import { resolve } from 'node:path'
+
+import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createApp } from '../src/server'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { webhookDeliveries, webhookEndpoints } from '../src/db/schema'
+import type { WebhookDispatcher } from '../src/routes/webhooks'
+import { createWebhookRateLimiters } from '../src/services/webhook/rateLimiter'
+import { recoverInterruptedDeliveries } from '../src/services/webhook/deliveryStore'
+import { eq } from 'drizzle-orm'
+
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const SECRET = 's3cret-token-for-gitlab'
+const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
+
+type DispatchCall = { deliveryId: string }
+
+function fakeDispatcher(): { dispatcher: WebhookDispatcher; calls: DispatchCall[] } {
+  const calls: DispatchCall[] = []
+  return {
+    calls,
+    dispatcher: {
+      dispatch: async (input) => {
+        calls.push({ deliveryId: input.deliveryId })
+      },
+    },
+  }
+}
+
+const cleanups: Array<() => void> = []
+afterEach(() => {
+  for (const fn of cleanups.splice(0)) fn()
+})
+
+async function harness(opts?: {
+  dispatcher?: WebhookDispatcher
+  enabled?: boolean
+  omitDispatcher?: boolean
+}): Promise<{
+  db: DbClient
+  app: ReturnType<typeof createApp>
+  calls: DispatchCall[]
+}> {
+  const db = createInMemoryDb(MIGRATIONS)
+  const fake = fakeDispatcher()
+  await db.insert(webhookEndpoints).values({
+    id: 'ep-1',
+    name: 'gitlab',
+    provider: 'gitlab',
+    urlToken: 'aw_whk_tok1',
+    secretEnc: box.seal(SECRET),
+    enabled: opts?.enabled ?? true,
+  })
+  const app = createApp({
+    token: 'a'.repeat(64),
+    configPath: '',
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    db,
+    secretBox: box,
+    ...(opts?.omitDispatcher ? {} : { webhookDispatcher: opts?.dispatcher ?? fake.dispatcher }),
+  })
+  return { db, app, calls: fake.calls }
+}
+
+function pushBody(): string {
+  return JSON.stringify({
+    object_kind: 'push',
+    ref: 'refs/heads/feature/x',
+    after: 'abc123',
+    user_username: 'dev-a',
+    project: {
+      path_with_namespace: 'platform/api',
+      git_http_url: 'https://gitlab.example.com/platform/api.git',
+      git_ssh_url: 'git@gitlab.example.com:platform/api.git',
+    },
+  })
+}
+
+function post(
+  app: ReturnType<typeof createApp>,
+  path: string,
+  body: string,
+  headers: Record<string, string> = {},
+): Promise<Response> {
+  return Promise.resolve(app.request(path, { method: 'POST', body, headers }))
+}
+
+const URL_OK = '/webhooks/gitlab/aw_whk_tok1'
+const H_OK = { 'x-gitlab-token': SECRET, 'x-gitlab-event-uuid': 'uuid-1' }
+
+async function deliveryRows(db: DbClient) {
+  return db.select().from(webhookDeliveries)
+}
+
+describe('RFC-257 T5 · 状态码语义矩阵', () => {
+  test('404 同形：provider 未知 / token 不存在 / provider 与端点不匹配', async () => {
+    const { app } = await harness()
+    const bodies: string[] = []
+    for (const path of ['/webhooks/github/aw_whk_tok1', '/webhooks/gitlab/nope']) {
+      const res = await post(app, path, pushBody(), H_OK)
+      expect(res.status).toBe(404)
+      bodies.push(await res.text())
+    }
+    expect(new Set(bodies).size).toBe(1) // 同形：响应体逐字节一致，不泄露端点存在性
+  })
+
+  test('401 + rejected 行：token 错 / token 缺（AC-1）', async () => {
+    const { app, db, calls } = await harness()
+    const bad = await post(app, URL_OK, pushBody(), { 'x-gitlab-token': 'wrong' })
+    expect(bad.status).toBe(401)
+    const missing = await post(app, URL_OK, pushBody(), {})
+    expect(missing.status).toBe(401)
+    const rows = await deliveryRows(db)
+    expect(rows.map((r) => [r.status, r.statusReason]).sort()).toEqual([
+      ['rejected', 'invalid-token'],
+      ['rejected', 'missing-token'],
+    ])
+    expect(calls.length).toBe(0)
+  })
+
+  test('端点禁用 → 200 + ignored（绝不 4xx：GitLab auto-disable）', async () => {
+    const { app, db, calls } = await harness({ enabled: false })
+    const res = await post(app, URL_OK, pushBody(), H_OK)
+    expect(res.status).toBe(200)
+    const rows = await deliveryRows(db)
+    expect(rows[0]?.status).toBe('ignored')
+    expect(rows[0]?.statusReason).toBe('endpoint-disabled')
+    expect(calls.length).toBe(0)
+  })
+
+  test('不支持的事件 → 200 + ignored(unsupported-event)；非 JSON → 400 + parse-failed', async () => {
+    const { app, db } = await harness()
+    const running = JSON.stringify({
+      object_kind: 'pipeline',
+      user: { username: 'u' },
+      project: JSON.parse(pushBody()).project,
+      object_attributes: { ref: 'x', status: 'running' },
+    })
+    const r1 = await post(app, URL_OK, running, H_OK)
+    expect(r1.status).toBe(200)
+    const r2 = await post(app, URL_OK, 'not-json{{', {
+      'x-gitlab-token': SECRET,
+      'x-gitlab-event-uuid': 'uuid-2',
+    })
+    expect(r2.status).toBe(400)
+    const rows = await deliveryRows(db)
+    expect(rows.map((r) => r.statusReason).sort()).toEqual(['parse-failed', 'unsupported-event'])
+  })
+
+  test('body 超限 → 413，不落行', async () => {
+    const { app, db } = await harness()
+    const big = `{"pad":"${'x'.repeat(1024 * 1024 + 10)}"}`
+    const res = await post(app, URL_OK, big, H_OK)
+    expect(res.status).toBe(413)
+    expect((await deliveryRows(db)).length).toBe(0)
+  })
+})
+
+describe('RFC-257 T5 · 三段式与去重', () => {
+  test('接收成功：200 + received 行 + dispatcher 收到分发（AC-5 前半）', async () => {
+    const { app, db, calls } = await harness()
+    const res = await post(app, URL_OK, pushBody(), H_OK)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { deliveryId: string; status: string }
+    expect(body.status).toBe('received')
+    const rows = await deliveryRows(db)
+    expect(rows[0]?.status).toBe('received')
+    expect(rows[0]?.eventType).toBe('push')
+    expect(rows[0]?.repoPath).toBe('platform/api')
+    expect(rows[0]?.streamHint).toBe('platform/api|branch:feature/x')
+    // 异步分发在微任务里排队；推进事件循环一拍后应已到达 fake dispatcher
+    await new Promise((r) => setTimeout(r, 10))
+    expect(calls.map((c) => c.deliveryId)).toEqual([body.deliveryId])
+  })
+
+  test('响应先于分发完成返回（AC-5：dispatch 挂起时响应已回）', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((r) => (release = r))
+    let started = false
+    const { app } = await harness({
+      dispatcher: {
+        dispatch: async () => {
+          started = true
+          await gate
+        },
+      },
+    })
+    const res = await post(app, URL_OK, pushBody(), H_OK)
+    expect(res.status).toBe(200) // dispatch 永久挂起中，响应已经回来了
+    await new Promise((r) => setTimeout(r, 10))
+    expect(started).toBe(true)
+    release()
+  })
+
+  test('同 UUID 重投：不重复分发、原行 bump（AC-3）', async () => {
+    const { app, db, calls } = await harness()
+    const r1 = await post(app, URL_OK, pushBody(), H_OK)
+    const id1 = ((await r1.json()) as { deliveryId: string }).deliveryId
+    const r2 = await post(app, URL_OK, pushBody(), H_OK)
+    expect(r2.status).toBe(200)
+    const body2 = (await r2.json()) as { deliveryId: string; status: string; attemptCount: number }
+    expect(body2.status).toBe('duplicate')
+    expect(body2.deliveryId).toBe(id1)
+    expect(body2.attemptCount).toBe(2)
+    await new Promise((r) => setTimeout(r, 10))
+    expect(calls.length).toBe(1)
+    expect((await deliveryRows(db)).length).toBe(1)
+  })
+
+  test('rejected 后同 UUID 重投能落地（AC-3 · 去重索引排除 rejected）', async () => {
+    const { app, db } = await harness()
+    const bad = await post(app, URL_OK, pushBody(), {
+      'x-gitlab-token': 'wrong',
+      'x-gitlab-event-uuid': 'uuid-R',
+    })
+    expect(bad.status).toBe(401)
+    const good = await post(app, URL_OK, pushBody(), {
+      'x-gitlab-token': SECRET,
+      'x-gitlab-event-uuid': 'uuid-R',
+    })
+    expect(good.status).toBe(200)
+    expect(((await good.json()) as { status: string }).status).toBe('received')
+    const rows = await deliveryRows(db)
+    expect(rows.map((r) => r.status).sort()).toEqual(['received', 'rejected'])
+  })
+
+  test('UUID 缺失 → 无去重，逐条处理（F-18 降级模式）', async () => {
+    const { app, db, calls } = await harness()
+    for (let i = 0; i < 2; i++) {
+      const res = await post(app, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
+      expect(((await res.json()) as { status: string }).status).toBe('received')
+    }
+    await new Promise((r) => setTimeout(r, 10))
+    expect((await deliveryRows(db)).length).toBe(2)
+    expect(calls.length).toBe(2)
+  })
+})
+
+describe('RFC-257 T5 · 限流（fake clock）与装配自我跳过', () => {
+  test('per-endpoint 300/min：超限 429，时间前进后恢复', async () => {
+    let now = 1_000_000
+    const limiters = createWebhookRateLimiters(() => now)
+    const db = createInMemoryDb(MIGRATIONS)
+    await db.insert(webhookEndpoints).values({
+      id: 'ep-1',
+      name: 'gitlab',
+      provider: 'gitlab',
+      urlToken: 'aw_whk_tok1',
+      secretEnc: box.seal(SECRET),
+      enabled: true,
+    })
+    // 直接用路由模块 + 自建 app 注入 fake clock 限流器
+    const { Hono } = await import('hono')
+    const { mountWebhookIngressRoutes } = await import('../src/routes/webhooks')
+    const fake = fakeDispatcher()
+    const app = new Hono()
+    mountWebhookIngressRoutes(
+      app,
+      {
+        token: 'a'.repeat(64),
+        configPath: '',
+        opencodeVersion: 'x',
+        dbVersion: 1,
+        db,
+        secretBox: box,
+        webhookDispatcher: fake.dispatcher,
+      } as Parameters<typeof mountWebhookIngressRoutes>[1],
+      { limiters },
+    )
+    for (let i = 0; i < 300; i++) {
+      const res = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
+      expect(res.status).toBe(200)
+    }
+    const blocked = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
+    expect(blocked.status).toBe(429)
+    now += 61_000 // fake clock 前进一个窗口
+    const recovered = await post(app as never, URL_OK, pushBody(), { 'x-gitlab-token': SECRET })
+    expect(recovered.status).toBe(200)
+  })
+
+  test('装配缺 dispatcher → 路由不挂载（部分装配不暴露必 500 公开路由）', async () => {
+    const { app } = await harness({ omitDispatcher: true })
+    const res = await post(app, URL_OK, pushBody(), H_OK)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('RFC-257 T5 · daemon 重启恢复（D23）', () => {
+  test('遗留 received/processing → failed(interrupted)；终态不动', async () => {
+    const { db, app } = await harness()
+    await post(app, URL_OK, pushBody(), H_OK) // received（fake dispatcher 不推进状态）
+    await db
+      .update(webhookDeliveries)
+      .set({ status: 'processing' })
+      .where(eq(webhookDeliveries.status, 'received'))
+    await post(app, URL_OK, pushBody(), {
+      'x-gitlab-token': 'wrong',
+      'x-gitlab-event-uuid': 'uuid-X',
+    }) // rejected（终态）
+    const n = await recoverInterruptedDeliveries(db)
+    expect(n).toBe(1)
+    const rows = await deliveryRows(db)
+    const byStatus = rows.map((r) => [r.status, r.statusReason]).sort()
+    expect(byStatus).toEqual([
+      ['failed', 'interrupted'],
+      ['rejected', 'invalid-token'],
+    ])
+  })
+})

@@ -47,6 +47,9 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
     'routes/agents.ts',
     'routes/workgroups.ts',
     'services/scheduleLaunch.ts',
+    // RFC-257 (design gate F-7): the webhook fan-out is a launch call face —
+    // this list is hand-maintained, new faces MUST be registered here.
+    'services/webhook/webhookDispatch.ts',
   ]
   for (const rel of CALL_FACES) {
     test(`${rel} has no direct start* launch call`, () => {

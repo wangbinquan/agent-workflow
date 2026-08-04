@@ -108,6 +108,8 @@ const OVERLAY_CALLSITES = {
   // restore, and password-login policy confirmation.
   'routes/settings.tsx': { family: 'access-and-settings', count: 5 },
   'routes/users.tsx': { family: 'access-and-settings', count: 2 },
+  // RFC-257: endpoint create + one-time secret reveal.
+  'components/WebhookEndpointCard.tsx': { family: 'access-and-settings', count: 2 },
 
   'components/AgentImportDialog.tsx': { family: 'resource-management', count: 1 },
   // RFC-222 (D5): the shared resource-detail header owns the type-to-confirm
@@ -133,6 +135,9 @@ const OVERLAY_CALLSITES = {
   'components/skills/ImportZipPanel.tsx': { family: 'resource-management', count: 1 },
   'routes/repos.tsx': { family: 'resource-management', count: 3 },
   'routes/scheduled.tsx': { family: 'resource-management', count: 1 },
+  // RFC-257: trigger editor + per-trigger fires; delivery raw-body detail.
+  'routes/webhook-triggers.tsx': { family: 'resource-management', count: 2 },
+  'routes/webhook-deliveries.tsx': { family: 'resource-management', count: 1 },
 
   // RFC-239: the changes pane's deep views (graph/impact/call-chain/deps) overlay.
   'components/changes/DrilldownOverlay.tsx': { family: 'task-execution', count: 1 },

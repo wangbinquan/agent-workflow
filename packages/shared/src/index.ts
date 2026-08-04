@@ -116,3 +116,8 @@ export * from './changeGroups'
 export * from './schemas/repoGroup'
 export * from './repoGroupLayout'
 export * from './platformEnv'
+// RFC-257 — 代码平台 webhook 触发器：事件信封 / 触发器规则 / 三形态启动参数
+// 模板封套 / 投递与触发 closed enum，以及模板变量的纯函数面（保存期静态校验
+// 与运行期渲染同源）。零 DB / 零 fs 依赖，前后端共用。
+export * from './schemas/webhook'
+export * from './webhookTemplate'

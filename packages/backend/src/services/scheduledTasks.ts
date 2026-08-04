@@ -249,8 +249,12 @@ export async function getScheduledTaskRow(db: DbClient, id: string): Promise<Row
  * be visible to the actor, and not be builtin. Full launch validation
  * (host snapshot / readiness / space rules) runs at fire time via the
  * kind's launch service.
+ *
+ * RFC-257 (design §5.2, gate F-19): exported — webhook fires re-run the SAME
+ * gate against the trigger owner's rebuilt actor on every event, deliberately
+ * mirroring fireSchedule rather than the JSON-route assertWorkflowLaunchable.
  */
-async function assertScheduledTargetUsable(
+export async function assertScheduledTargetUsable(
   db: DbClient,
   actor: Actor,
   kind: ScheduledLaunchKind,

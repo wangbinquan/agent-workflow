@@ -33,6 +33,9 @@ export type ExecutionInvoker =
   | { type: 'user' }
   | { type: 'scheduled'; scheduledTaskId: string }
   | { type: 'node'; parentTaskId: string; parentNodeRunId: string; invocationDepth: number }
+  // RFC-257 — a webhook trigger fire (stamps tasks.webhook_trigger_id /
+  // webhook_fire_id, same run-history-attribution discipline as `scheduled`).
+  | { type: 'webhook'; webhookTriggerId: string; webhookFireId: string }
 
 /**
  * Kind-discriminated start request (top-level `kind` discriminant so TS

@@ -25,6 +25,7 @@ import { mountConfigRoutes } from '@/routes/config'
 import { mountDaemonRoutes } from '@/routes/daemon'
 import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
+import { mountWebhookIngressRoutes, type WebhookDispatcher } from '@/routes/webhooks'
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
@@ -48,6 +49,9 @@ import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/sys
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
+import { mountWebhookEndpointRoutes } from '@/routes/webhookEndpoints'
+import { mountWebhookTriggerRoutes } from '@/routes/webhookTriggers'
+import { mountWebhookDeliveryRoutes } from '@/routes/webhookDeliveries'
 import { mountWorkflowRoutes } from '@/routes/workflows'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
@@ -103,6 +107,13 @@ export interface AppDeps {
    * can omit it; the OIDC routes refuse to mount without it.
    */
   secretBox?: SecretBox
+  /**
+   * RFC-257 — async webhook dispatch (the T6 fan-out engine). The public
+   * ingress route refuses to mount without BOTH this and secretBox (same
+   * self-skip discipline as OIDC) so a partially-wired app never exposes a
+   * guaranteed-500 public route.
+   */
+  webhookDispatcher?: WebhookDispatcher
   /**
    * RFC-255 — decide whether a provider id is a built-in OpenCode catalog id.
    *
@@ -161,6 +172,9 @@ export function createApp(deps: AppDeps): Hono {
   mountHealthRoutes(app, deps)
   // RFC-247 D18 — discovery must answer before any credential exists.
   mountWellKnownRoutes(app, deps)
+  // RFC-257 — code-host webhook ingress. Public by design (caller is GitLab);
+  // authenticated by per-endpoint secret + URL token inside the handler.
+  mountWebhookIngressRoutes(app, deps)
 
   // Authenticated routes — three-track auth (RFC-036): session token / PAT /
   // legacy daemon token. Daemon token still maps to the seeded __system__
@@ -313,6 +327,9 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
   mountTaskRoutes(app, deps)
   mountScheduledTaskRoutes(app, deps) // RFC-159
+  mountWebhookEndpointRoutes(app, deps) // RFC-257 T7
+  mountWebhookTriggerRoutes(app, deps) // RFC-257 T8
+  mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9
   mountBackupRoutes(app, deps)
   mountRestoreRoutes(app, deps)
   mountWorktreeFilesRoutes(app, deps)

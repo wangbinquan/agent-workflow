@@ -122,6 +122,27 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/docs/api' },
   // Discovery: answers before any credential exists, by definition.
   { method: 'GET', path: '/.well-known/mcp', public: true },
+  // RFC-257 — code-host webhook ingress: public by design (caller is GitLab),
+  // authenticated by per-endpoint secret + URL token inside the handler.
+  { method: 'POST', path: '/webhooks/:provider/:urlToken', public: true },
+  // RFC-257 — management surfaces (T7 endpoints / T8 triggers / T9 deliveries).
+  { method: 'GET', path: '/api/webhook-endpoints' },
+  { method: 'POST', path: '/api/webhook-endpoints' },
+  { method: 'GET', path: '/api/webhook-endpoints/:id' },
+  { method: 'PUT', path: '/api/webhook-endpoints/:id' },
+  { method: 'DELETE', path: '/api/webhook-endpoints/:id' },
+  { method: 'POST', path: '/api/webhook-endpoints/:id/rotate-secret' },
+  { method: 'POST', path: '/api/webhook-endpoints/:id/rotate-url-token' },
+  { method: 'GET', path: '/api/webhook-triggers' },
+  { method: 'POST', path: '/api/webhook-triggers' },
+  { method: 'GET', path: '/api/webhook-triggers/:id' },
+  { method: 'PUT', path: '/api/webhook-triggers/:id' },
+  { method: 'DELETE', path: '/api/webhook-triggers/:id' },
+  { method: 'GET', path: '/api/webhook-triggers/:id/fires' },
+  { method: 'POST', path: '/api/webhook-triggers/:id/streams/reset' },
+  { method: 'GET', path: '/api/webhook-deliveries' },
+  { method: 'GET', path: '/api/webhook-deliveries/:id' },
+  { method: 'POST', path: '/api/webhook-deliveries/:id/replay' },
 
   // ---- oidc-auth (mixed: providers list + login flow are public) ----
   { method: 'GET', path: '/api/auth/oidc/providers', public: true },

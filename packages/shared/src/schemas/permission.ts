@@ -70,6 +70,9 @@ export const PERMISSIONS = [
   'workflows:read',
   'workgroups:read',
   'scheduled-tasks:read',
+  // RFC-257 — webhook triggers are owner-model rows like scheduled-tasks
+  // (row-level visibility in the service; these points are the method gate).
+  'webhook-triggers:read',
   'repos:read',
   'memory:read',
   'tasks:read',
@@ -91,6 +94,7 @@ export const PERMISSIONS = [
   'workflows:create',
   'workgroups:create',
   'scheduled-tasks:create',
+  'webhook-triggers:create',
   'repos:create',
   'memory:create',
   // NOTE: no `tasks:create` — launching a task is an EXECUTE verb (RFC-247 D11).
@@ -105,6 +109,7 @@ export const PERMISSIONS = [
   'workflows:update',
   'workgroups:update',
   'scheduled-tasks:update',
+  'webhook-triggers:update',
   'memory:update',
   'tasks:update',
   // RFC-248: `repos:update` 由 `PUT /api/repo-groups/:id` 引入——在此之前 repos
@@ -124,6 +129,7 @@ export const PERMISSIONS = [
   'workflows:delete',
   'workgroups:delete',
   'scheduled-tasks:delete',
+  'webhook-triggers:delete',
   'repos:delete',
   'memory:delete',
   'tasks:delete',
@@ -179,6 +185,11 @@ export const PERMISSIONS = [
   // system domain and never rides a token, so a leaked PAT with every matrix
   // grant still cannot write a script body.
   'scripts:author',
+  // RFC-257 (D19) — managing webhook ENDPOINTS (the verification secret and the
+  // public URL token). Platform infrastructure, not a work resource: a leaked
+  // PAT must never be able to read or rotate the ingress secret, so the point
+  // is system-domain (admin + manager role surface, zero token surface).
+  'webhook-endpoints:manage',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
@@ -219,6 +230,8 @@ export const SYSTEM_DOMAIN_POINTS: ReadonlyArray<Permission> = [
   // RFC-253 — see the catalog entry: host code execution is a system-domain
   // capability, so no token may carry it (AC-26).
   'scripts:author',
+  // RFC-257 — see the catalog entry: the ingress secret surface never rides a token.
+  'webhook-endpoints:manage',
 ]
 
 /**
@@ -285,6 +298,7 @@ const USER_RESOURCE_READS: ReadonlyArray<Permission> = [
   'workflows:read',
   'workgroups:read',
   'scheduled-tasks:read',
+  'webhook-triggers:read',
   'repos:read',
   'runtime:read',
 ]
@@ -319,6 +333,12 @@ const USER_RESOURCE_WRITES: ReadonlyArray<Permission> = [
   'scheduled-tasks:create',
   'scheduled-tasks:update',
   'scheduled-tasks:delete',
+  // RFC-257 — same arming semantics as schedules: any user may create a
+  // trigger (owner-model rows; the create route additionally gates on
+  // tasks:execute, mirroring the schedule create gate).
+  'webhook-triggers:create',
+  'webhook-triggers:update',
+  'webhook-triggers:delete',
 ]
 
 // Execute points. Pre-RFC-247 these were reached either through `tasks:launch`
@@ -364,6 +384,9 @@ const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   // `intent:*` are system-domain and sit in USER_BASELINE. The system domain
   // bounds the TOKEN surface, not the role surface.
   'scripts:author',
+  // RFC-257 (D19) — endpoint management is admin + manager (same rationale as
+  // scripts:author: system-domain bounds the TOKEN surface, not the role one).
+  'webhook-endpoints:manage',
   'repos:create',
   'repos:update', // RFC-248 D5/G4 —— 仓库组走 repos:* 这一档
   'repos:delete',

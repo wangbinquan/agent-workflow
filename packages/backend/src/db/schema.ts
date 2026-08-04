@@ -1000,6 +1000,11 @@ export const tasks = sqliteTable(
     // run history + count derive from this column (stamped atomically inside the
     // task INSERT), so a failed post-launch bookkeeping write can't orphan the task.
     scheduledTaskId: text('scheduled_task_id'),
+    // RFC-257 (设计门 F-8): the webhook trigger/fire that auto-launched this task.
+    // NULL = not webhook-launched. Same durable-link discipline as scheduledTaskId
+    // (stamped inside the task INSERT); soft links, no FK — mirrors RFC-159.
+    webhookTriggerId: text('webhook_trigger_id'),
+    webhookFireId: text('webhook_fire_id'),
     /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
     workgroupId: text('workgroup_id'),
     /** RFC-164: launch snapshot + mid-run-editable copy of the group config
@@ -1082,6 +1087,7 @@ export const tasks = sqliteTable(
     ),
     workflowIdx: index('idx_tasks_workflow').on(t.workflowId, t.startedAt),
     schedTaskIdx: index('idx_tasks_scheduled_task').on(t.scheduledTaskId), // RFC-159
+    webhookTriggerIdx: index('idx_tasks_webhook_trigger').on(t.webhookTriggerId), // RFC-257
   }),
 )
 
@@ -1121,6 +1127,165 @@ export const scheduledTasks = sqliteTable(
   (t) => ({
     dueIdx: index('idx_scheduled_tasks_due').on(t.enabled, t.nextRunAt), // poll scan surface
     ownerIdx: index('idx_scheduled_tasks_owner').on(t.ownerUserId),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-257 — 代码平台 webhook 触发器（入站事件驱动任务）。
+// webhook_endpoints: 全局接收端点（预期 1 行）；url_token 是寻址 + 弱凭据，
+//   secret_enc（secretBox 密封）才是验签锚。删除 restrict（有 triggers 引用拒删，
+//   服务层查询 + FK 兜底）。
+// webhook_triggers: owner 制（沿 scheduled_tasks——设计门 F-9：fire 以 owner 身份
+//   执行，ACL grants 写权 = 改绑目标后借 owner 身份的提权通道，故与 RFC-099 五类
+//   ACL 明确划开）。规则列 repo_scope/event_types/ignore_usernames 是 JSON。
+// webhook_deliveries: HTTP 投递一行（received/processing 中间态，D23 三段式）。
+//   去重部分唯一索引在迁移 0138 手写（drizzle 索引声明不表达 partial WHERE）：
+//   UNIQUE(endpoint_id,event_uuid) WHERE event_uuid IS NOT NULL
+//     AND status NOT IN ('rejected','failed')
+// webhook_trigger_fires: delivery × trigger 命中一行（outcome/supersede/task 链）。
+// webhook_trigger_streams: (trigger, stream) 熔断计数（D22 三重置源）。
+// fires/streams 对 trigger 是 ON DELETE CASCADE（运行时 foreign_keys=ON，
+//   client.ts:121）；deliveries 无 FK——endpoint 删除后审计行保留待 GC。
+// -----------------------------------------------------------------------------
+export const webhookEndpoints = sqliteTable(
+  'webhook_endpoints',
+  {
+    id: text('id').primaryKey(), // ULID
+    name: text('name').notNull(),
+    provider: text('provider', { enum: ['gitlab'] }).notNull(),
+    urlToken: text('url_token').notNull(),
+    secretEnc: text('secret_enc').notNull(), // secretBox.seal(secret)
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    preferredCloneProtocol: text('preferred_clone_protocol', { enum: ['http', 'ssh'] })
+      .notNull()
+      .default('http'),
+    lastDeliveryAt: integer('last_delivery_at'),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    urlTokenUq: uniqueIndex('idx_webhook_endpoints_url_token').on(t.urlToken),
+  }),
+)
+
+export const webhookTriggers = sqliteTable(
+  'webhook_triggers',
+  {
+    id: text('id').primaryKey(), // ULID
+    name: text('name').notNull(),
+    endpointId: text('endpoint_id')
+      .notNull()
+      .references(() => webhookEndpoints.id),
+    ownerUserId: text('owner_user_id').notNull(), // fire launches as this user
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    repoScope: text('repo_scope').notNull(), // JSON WebhookRepoScope
+    eventTypes: text('event_types').notNull(), // JSON CodeHostEventType[]
+    branchFilter: text('branch_filter'), // glob; NULL = no filter
+    commandPrefix: text('command_prefix'), // note-event command; NULL = none
+    ignoreUsernames: text('ignore_usernames').notNull().default('[]'), // JSON string[]
+    launchKind: text('launch_kind', { enum: ['workflow', 'agent', 'workgroup'] }).notNull(),
+    launchRefId: text('launch_ref_id').notNull(), // workflowId/agentId/workgroupId（单一事实源）
+    launchPayload: text('launch_payload').notNull(), // JSON 模板封套（webhookPayloadTemplateSchemaFor）
+    maxConsecutiveFires: integer('max_consecutive_fires').notNull().default(3),
+    autoRegisterRepos: integer('auto_register_repos', { mode: 'boolean' }).notNull().default(true),
+    lastFiredAt: integer('last_fired_at'),
+    lastStatus: text('last_status', { enum: ['launched', 'failed'] }),
+    lastError: text('last_error'),
+    lastTaskId: text('last_task_id'),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0), // 启动失败计数 ≠ 熔断 fire 计数
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    endpointEnabledIdx: index('idx_webhook_triggers_endpoint_enabled').on(t.endpointId, t.enabled),
+    ownerIdx: index('idx_webhook_triggers_owner').on(t.ownerUserId),
+  }),
+)
+
+export const webhookDeliveries = sqliteTable(
+  'webhook_deliveries',
+  {
+    id: text('id').primaryKey(), // ULID
+    endpointId: text('endpoint_id').notNull(), // soft link（endpoint 删除后审计行保留）
+    eventUuid: text('event_uuid'), // X-Gitlab-Event-UUID；NULL = 无去重（降级）/重放行
+    attemptCount: integer('attempt_count').notNull().default(1), // 同 UUID 重投 bump（F-11）
+    gitlabEventHeader: text('gitlab_event_header'),
+    objectKind: text('object_kind'),
+    eventType: text('event_type'), // 归一化摘要列（列表页免解析 body）
+    repoPath: text('repo_path'),
+    streamHint: text('stream_hint'),
+    status: text('status', {
+      enum: ['received', 'processing', 'rejected', 'ignored', 'matched', 'failed'],
+    }).notNull(),
+    statusReason: text('status_reason'),
+    bodyJson: text('body_json'), // ≤256KiB 截断入库；保留期后置空（F-12 GC）
+    replayedFromDeliveryId: text('replayed_from_delivery_id'),
+    receivedAt: integer('received_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    // 去重 partial unique index 在迁移 0138 手写（见表头注释）；这里只声明查询索引。
+    endpointTimeIdx: index('idx_webhook_deliveries_endpoint_time').on(t.endpointId, t.receivedAt),
+    statusIdx: index('idx_webhook_deliveries_status').on(t.status),
+  }),
+)
+
+export const webhookTriggerFires = sqliteTable(
+  'webhook_trigger_fires',
+  {
+    id: text('id').primaryKey(), // ULID
+    deliveryId: text('delivery_id').notNull(), // soft link（delivery 90 天 GC 不级联）
+    triggerId: text('trigger_id')
+      .notNull()
+      .references(() => webhookTriggers.id, { onDelete: 'cascade' }),
+    streamKey: text('stream_key').notNull(), // `${repoPath}|mr:${iid}` / `${repoPath}|branch:${branch}`（F-2：必含 repo 维度）
+    outcome: text('outcome', {
+      enum: [
+        'launched',
+        'launch-failed',
+        'skipped-circuit-open',
+        'skipped-repo-unregistered',
+        'skipped-owner-invalid',
+        'skipped-trigger-disabled',
+      ],
+    }).notNull(),
+    supersededTaskId: text('superseded_task_id'), // 本次 fire 取消的旧任务
+    taskId: text('task_id'),
+    error: text('error'),
+    firedAt: integer('fired_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    triggerTimeIdx: index('idx_webhook_fires_trigger_time').on(t.triggerId, t.firedAt),
+    deliveryIdx: index('idx_webhook_fires_delivery').on(t.deliveryId),
+    streamIdx: index('idx_webhook_fires_stream').on(t.triggerId, t.streamKey, t.firedAt), // supersede 查询面
+  }),
+)
+
+export const webhookTriggerStreams = sqliteTable(
+  'webhook_trigger_streams',
+  {
+    triggerId: text('trigger_id')
+      .notNull()
+      .references(() => webhookTriggers.id, { onDelete: 'cascade' }),
+    streamKey: text('stream_key').notNull(),
+    consecutiveFires: integer('consecutive_fires').notNull().default(0),
+    lastFireAt: integer('last_fire_at'),
+    resetAt: integer('reset_at'),
+    resetBy: text('reset_by'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.triggerId, t.streamKey] }),
   }),
 )
 

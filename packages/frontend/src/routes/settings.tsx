@@ -52,6 +52,7 @@ import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
 import { CustomProviderCard } from '@/components/CustomProviderCard'
+import { WebhookEndpointCard } from '@/components/WebhookEndpointCard'
 import { RuntimeList } from '@/components/RuntimeList'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
@@ -356,7 +357,14 @@ function SettingsPage() {
         {tab === 'recovery' && <RecoveryTab config={config.data} />}
         {tab === 'git' && <GitTab config={config.data} />}
         {tab === 'gc' && <GcTab config={config.data} />}
-        {tab === 'network' && <NetworkTab config={config.data} />}
+        {tab === 'network' && (
+          <>
+            <NetworkTab config={config.data} />
+            {/* RFC-257: ingress endpoints live with the network surface —
+                bindHost/publicBaseUrl decide whether GitLab can reach them. */}
+            <WebhookEndpointCard />
+          </>
+        )}
         {tab === 'appearance' && <AppearanceTab config={config.data} />}
         {tab === 'rendering' && <RenderingTab config={config.data} />}
         {tab === 'authentication' && <AuthenticationTab />}

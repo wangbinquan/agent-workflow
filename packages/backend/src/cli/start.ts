@@ -9,6 +9,9 @@ import { getSandboxStatus } from '@/services/sandbox/probe'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
+import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
+import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
+import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
 import { cachedRepos, tasks } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -515,6 +518,21 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   await mcpRuntimeTests.start()
 
+  // RFC-257 — webhook 分流器 + 三段式重启恢复：上个进程遗留的 received/
+  // processing 投递标 failed/interrupted（GitLab 对失败投递不自动重试，恢复
+  // 路径 = 投递历史页手动 replay——design §1.3/D23）。
+  const recoveredDeliveries = await recoverInterruptedDeliveries(db)
+  if (recoveredDeliveries > 0) {
+    log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
+  }
+  const webhookDispatcher = createWebhookDispatcher({
+    db,
+    configPath: Paths.config,
+    secretBox,
+    containmentCoordinator,
+    getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
+  })
+
   // 7. HTTP server.
   const app = createApp({
     token,
@@ -527,6 +545,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     dbVersion,
     db,
     secretBox,
+    webhookDispatcher,
     containmentCoordinator,
     // RFC-255 layer 2: an id that is not in the static catalog snapshot is
     // probed against the actual runtime before it can be saved. Without this
@@ -613,6 +632,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   //    + RFC-033 batch-import retention GC).
   const limitsTicker = startLimitsTicker(db)
   const gcTicker = startWorktreeGc(db, () => loadConfig(Paths.config), undefined, Paths.root)
+  // RFC-257 (设计门 F-12) — deliveries 保留 GC：30 天置空 body、90 天删行。
+  const webhookGcTicker = startWebhookDeliveryGc(db)
   const archiveTicker = startEventsArchiver(db, () => loadConfig(Paths.config), Paths.logsDir)
   // RFC-213: scheduled backup + retention (disabled by default — backupIntervalMs=0).
   const backupTicker = startBackupScheduler({
@@ -861,6 +882,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     log.info('shutting down', { signal })
     limitsTicker.stop()
     gcTicker.stop()
+    webhookGcTicker.stop()
     archiveTicker.stop()
     backupTicker.stop()
     walCheckpointTicker.stop()

@@ -337,7 +337,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // agents.network 列；**不回填**，NULL = 未表态 = deny，存量行行为字节不变）。
     // 2026-08-04 runtime extraArgs bumped to 137 with 0137_runtime_extra_args
     // （fork 私有 flag 注入：runtimes.extra_args_json，NULL = 无附加 argv）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(137)
+    // RFC-257 bumped to 138 with 0138_rfc257_webhook_triggers（webhook 触发器
+    // 五表 + tasks 归属两列；去重 partial unique index 排除 rejected/failed）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(138)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {
