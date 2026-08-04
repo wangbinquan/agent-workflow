@@ -1,25 +1,32 @@
 # RFC-254 · Windows 原生执行支持 —— 技术设计
 
-> 决策编号（D1–D20）见 `proposal.md §5`。本文锚点均以仓库当前 HEAD（2026-08-04）为准；opencode 锚点以本机 checkout v1.18.4（`packages/opencode/package.json:3`）为准。
+> 决策编号（D1–D24）见 `proposal.md §5`。本文锚点均以仓库当前 HEAD（2026-08-04）为准；opencode 锚点以本机 checkout `cb562b2c`（`packages/opencode/package.json:3` = 1.18.4，该 commit 无对应 tag，故同时记 SHA）为准。
+>
+> **本文已折入 2026-08-04 双路设计门的全部 findings**（记档 [`design-gate-2026-08-04.md`](./design-gate-2026-08-04.md)：Codex 6×P0 + 独立子代理 1×P0，除 1 条驳回外逐条实读源码核实属实）。
+>
+> **计数不写死**：本文所有「N 处站点」一律以 §12 的**全仓负向扫描守卫实测**为准；文中枚举是**已知起点**而非全量断言。设计门实证：按人工清单驱动实现，清单错误会直接传导成实现缺陷 + 假绿测试。
 
 ## 0. 既有锚点（研究结论索引）
 
 **准入核心（不动）**：
 
-- Profile 注册表 `containmentCoordinator.ts:28-79`（`runner-filesystem-v1` / `model-child-netless-v1` / `outer-readonly-v1` / `outer-netless-v1`，后两者 `failClosed`）；能力词表 `:232-243`；reason codes 含 `platform-unsupported`（`:92`）。
-- 无 provider 平台的现状行为（win32 已验证路径）：`probeSandboxMechanism` → `{mechanism:null}`（`sandbox/probe.ts:72`）；组装根 else→null（`containmentComposition.ts:35`）；daemon **正常启动**（`cli/start.ts:175-178` "Startup always remains soft"）；每次 admission 落 `['platform-unsupported','required-capability-missing']`；`warn`=degraded 放行 + 每任务一条 `sandbox-degraded` 告警（`runner.ts:1406-1419`）；`enforce`=blocked（任务启动 409 `sandbox-unavailable`，`task.ts:1866-1875`）；failClosed profile 三模式全拒（`containmentCoordinator.ts:687,793-800`）。**这套语义就是 D1 要的，本 RFC 只做呈现收口，不改判定。**
+- Profile 注册表 `containmentCoordinator.ts:28-79`（`runner-filesystem-v1` / `model-child-netless-v1` / `outer-readonly-v1` / `outer-netless-v1`，**只有后两者** `failClosed`——`model-child-netless-v1` **不是** failClosed，这一点决定了本地 MCP 的 win32 语义，见 §5.5）；能力词表 `:232-243`；reason codes 含 `platform-unsupported`（`:92`）。
+- 无 provider 平台的现状行为（win32 已验证路径）：`probeSandboxMechanism` → `{mechanism:null}`（`sandbox/probe.ts:72`）；组装根 else→null（`containmentComposition.ts:35`）；daemon **正常启动**（`cli/start.ts:217` "Startup always remains soft"）；`warn`=degraded 放行 + 每任务一条 `sandbox-degraded` 告警（`runner.ts:1406-1419`）；`enforce`=blocked（任务启动 409 `sandbox-unavailable`，`task.ts:1866-1875`）；failClosed profile 三模式全拒（`containmentCoordinator.ts:687,793-800`）。**这套语义就是 D1 要的，本 RFC 只做呈现收口，不改判定。**
+- **reasonCodes 随模式而变，不是恒定两条**（设计门 F1）：`warn` + 普通 profile 才是 `['platform-unsupported','required-capability-missing']`；`off` + 普通 profile 返回 `[]`（`containmentCoordinator.ts:688,731`）；failClosed 在 `off` 下多一条 `containment-mode-off`（`:783`）。
 - Windows provider 接缝（保持绿）：`registerNetlessSubprocessProvider`（`sealedSubprocess.ts:80-98`）；contract tests `rfc233-containment-coordinator.test.ts:206-274`（`windows-appcontainer-v1`）、`rfc227-containment-provider.test.ts:63-105`（`windows-job-object-fixture`）。RFC-227 §5.3（design.md:271-286）列明未来 provider 义务。
 
-**opencode（上游事实，均为 v1.18.4 源码）**：
+**opencode（上游事实，checkout `cb562b2c` = 1.18.4）**：
 
-- Windows 一等公民：`script/build.ts:100-112` 三个 win32 target、`:127` bunfs 根 `B:/~BUN/root/`、publish workflow Azure 签名（`.github/workflows/publish.yml:120-163`）；CI windows-2025（`test.yml:28-34,83-92`）。
-- shell 无需 POSIX：`core/src/shell.ts:98-106` 候选 `pwsh → powershell → gitbash → COMSPEC/cmd.exe`；`:119` `select()` 兜底 `win()[0]`；gitbash 从 `which("git")` 推 `../../bin/bash.exe`（`:123-130`），**不裸找 `bash`**（避开 System32 的 WSL 启动器）。
+- Windows 一等公民：`script/build.ts:102` 起三个 win32 target、`:161` bunfs 根 `B:/~BUN/root/`、publish workflow Azure 签名（`.github/workflows/publish.yml:120-163`）；CI windows-2025（`test.yml:28-34,83-92`）。
+- shell 无需 POSIX：`core/src/shell.ts:98-106` 候选 `pwsh → powershell → gitbash → COMSPEC/cmd.exe`；`:119` `select()` 兜底 `win()[0]`；gitbash 从 `which("git")` 推 `../../bin/bash.exe`（`:123-130`），**不裸找 `bash`**（避开 System32 的 WSL 启动器；windows-2025 runner 上另有 MSYS2 的第二个 `bash.exe`，见下）。已有显式覆盖 `OPENCODE_GIT_BASH_PATH`（`:125`）——§7.1 复用它而非自造新变量。
 - 配置目录 = XDG-in-USERPROFILE：`core/src/global.ts:1-31` + `xdg-basedir@5`（无平台特化）→ `XDG_*` 环境变量在 **任意平台**都被认；`os.homedir()` 在 win32 读 `USERPROFILE`。`OPENCODE_CONFIG_CONTENT` 合并顺位与 POSIX 同形（`config/config.ts:361-534`）。
-- `serve` 纯 TCP loopback（`server/server.ts:117-214`），无 unix socket。
+- `serve` 走 TCP（`server/server.ts:117-214`），无 unix socket。**「纯 loopback」是我们配置出来的、不是源码保证**：CLI 默认 hostname `127.0.0.1`（`cli/network.ts:12`），但 config/mDNS 路径允许 `0.0.0.0`（`:62`、`server.ts:117`）——设计门 F11。
 - 进程终止：win32 走 `taskkill /pid <pid> /T /F`（`cross-spawn-spawner.ts:297-305`、`util/process.ts:147-156`）；**MCP 子孙清理在 win32 是 no-op**（`mcp/index.ts:419-421`）。
-- 已知弱项：FFF 在 win32 默认关（`flag.ts:34`）；PTY/自身 worktree 端点/snapshot 测试在 win32 skip；官方口径「可原生跑，推荐 WSL」。
+- 已知弱项：FFF 在 win32 默认关（`flag.ts:34`）；PTY/自身 worktree 端点/snapshot 测试在 win32 skip；官方口径「可原生跑，推荐 WSL」（`packages/web/src/content/docs/windows-wsl.mdx:8`、`index.mdx:93-95`——设计门曾指此句无源码依据，实读后**驳回**，锚点确凿）。
 
-**Bun（本仓 pin 1.3.13）**：`Bun.spawn` 支持 `detached`（win32 = UV_PROCESS_DETACHED）、`windowsHide`、`windowsVerbatimArguments`（`bun-types/bun.d.ts:6688-6701,6878-6883`）。
+**Bun（本仓 pin 1.3.13）**：`Bun.spawn` 支持 `detached`（win32 = UV_PROCESS_DETACHED）、`windowsHide`、`windowsVerbatimArguments`（`bun-types/bun.d.ts:6688-6701,6878-6883`）。**交叉编译到 Windows 今天就能用**——本机实测 `bun build --compile --target=bun-windows-x64` 与 `--target=bun-windows-arm64` 均产出合法 PE32+（x86-64 / Aarch64）；坚持 windows runner 原生构建的理由是**仓库既定不交叉编译方针 + 构建冒烟要真的执行产物**，不是工具链缺失（设计门 F14 自查）。另有 Windows 产物元数据 flag 可用：`--windows-icon` / `--windows-title` / `--windows-publisher` / `--windows-version` / `--windows-description` / `--windows-copyright` / `--windows-hide-console`（daemon 是 CLI，不用最后一个）。
+
+**windows-2025 runner 预装**（actions/runner-images，设计门 F15 自查）：Python 3.12.10、Node 22.23.1、Git 2.55（**Git Bash 在 `C:\Program Files\Git\bin\bash.exe`** ⇒ §7.1 的 git 推导在 runner 上按构造成立，workflow 步骤也可用 `shell: bash`）；**不预装 sqlite3 CLI** ⇒ D15 是硬性前提而非可选清理；另预装 MSYS2 的第二个 `bash.exe`（`C:\msys64\usr\bin\bash.exe`，不在 PATH）。
 
 **multica（参考仓实战）**：`.cmd` shim 会截断 argv → 解析原生 exe 直接 spawn（`server/pkg/agent/opencode.go:396-418`）；Windows 无进程组 → `TerminateProcess`/taskkill；隐藏 console 防弹窗风暴（`proc_windows.go`，CREATE_NEW_CONSOLE + HideWindow，upstream issue #1521）。
 
@@ -55,26 +62,29 @@ export function isLexicallyInside(root: string, p: string): boolean  // sep 感�
 export function platformSpawnOptions(): { windowsHide?: true }        // win32 恒 windowsHide
 ```
 
-替换站点（全量）：
+替换站点（**已知起点，不是全量断言**——全量由 §12 的负向扫描守卫产出并随代码演进；设计门证明人工清单必然漏且漏项会变成真实缺陷）：
 
-| 类别 | 站点 |
-|---|---|
-| `/dev/null` → `NULL_DEVICE` | `util/git.ts:1447,1948`（`git diff --no-index`）；`hermetic.ts:569`、`util/opencode-models.ts:88` 的 `GIT_CONFIG_GLOBAL`（`fffCapability.ts:345` 为 Linux provider 专属路径，常量化但行为不变） |
-| PATH `:` 拼接 → `pathListJoin` | `services/scriptRun.ts:159`；`hermetic.ts:545` 与 `verifiedPlan.ts:153`、`claudeCode/netlessMcp.ts:60` 的 `FIXED_NETLESS_PATH`（后两处 provider 专属，win32 不可达，仍统一） |
-| `lastIndexOf('/')` → `dirname()` | `services/scriptRun.ts:158` |
-| `startsWith(root+'/')` → `isLexicallyInside` | `verifiedPlan.ts:425,554`、`verifiedSystemPlan.ts:133`、`verifiedLauncher.ts:480` |
-| 豁免（posix-by-contract，加注释不改） | git 输出解析（`util/git.ts:789,796,1610,2782`、`util/diffSplit.ts:143-145`——git 在 win32 也输出 `/`）；embed URL 路径（`scripts/build-binary.ts:131,162,171,181` 已显式 posix 归一） |
+| 类别 | 已知站点 | 备注 |
+|---|---|---|
+| `/dev/null` → `NULL_DEVICE` | `util/git.ts:1447,1948`（`git diff --no-index`）；`services/runtime/opencode/models.ts:88`、`hermetic.ts:569` 的 `GIT_CONFIG_GLOBAL`；`fffCapability.ts:345`（Linux provider 专属，常量化不改行为） | 设计门 F3：曾误写成 `util/opencode-models.ts:88`——那是**另一个真实文件** |
+| PATH `:` 拼接 → `pathListJoin` | `services/scriptRun.ts:159`；**`services/scriptDepsEnv.ts:199`**（直接决定 AC-19）；`hermetic.ts:547`；`services/runtime/opencode/models.ts:64`；**`services/runtime/mcpTestExecutionMaterial.ts:203`**；`verifiedPlan.ts:153` 与 `claudeCode/netlessMcp.ts:60` 的 `FIXED_NETLESS_PATH` | 设计门 ★4：初稿只列 4 处，实为 7 处；粗体两处是新补且落在业务链路上 |
+| `lastIndexOf('/')` → `dirname()` | `services/scriptRun.ts:158` | 核实为唯一本地路径站点 |
+| `startsWith(root+'/')` → `isLexicallyInside` | `verifiedPlan.ts:425,554`、`verifiedSystemPlan.ts:133`、`verifiedLauncher.ts:480`；**`services/pluginInstaller.ts:563`**、**`services/systemAgentRun.ts:208`** | 设计门 ★4：粗体两处是**真实功能破坏**而非清单不全——前者是 GC 引用判定（win32 上 `join()` 出反斜杠 ⇒ 恒不匹配 ⇒ **被引用的插件 generation 会被误删**），后者是 `assertSafeSeedPath`（`resolve()` 出反斜杠 ⇒ **win32 上一切合法 seed 路径被拒**，系统代理 seeding 全坏） |
+| 豁免（posix-by-contract，加注释不改） | git 输出解析（`util/git.ts:789,796,1610,2782`、`util/diffSplit.ts:143-145`——git 在 win32 也输出 `/`）；embed URL 路径（`scripts/build-binary.ts:131,162,171,181` 已显式 posix 归一）；`skillVersion.ts:146-147` 的 `/dev/null` 是**合成 diff 头文本**不是设备路径；`skillIdentityPaths.ts:176` 等 | 豁免必须逐条带注释，由守卫的白名单机制承认 |
 
 `util/safePath.ts:25-33` 拒反斜杠相对路径的前瞻防线**保持**（它守的是跨机器传输的 repo-relative 路径，语义仍然正确）。
 
+**前端**：`launch-repo-source.ts:245` 的 `Math.max(lastIndexOf('/'), lastIndexOf(':'))` 对 `C:\dev\repo` 形态会切出错误 basename——该输入面是否可达未确证（当前用途是 URL/scp 形态解析），实现期先确证再决定改不改（设计门 P2-7）。
+
 ### 2.2 env 键大小写折叠单点（新 shared 纯函数 + 全站点接入）
 
-Windows 的进程环境块键**大小写不敏感**；本仓现有精确匹配存在安全语义漏洞面：
+Windows 的进程环境块键**大小写不敏感**；本仓现有精确匹配存在安全语义漏洞面（**已知起点，全量由守卫扫描**）：
 
 - `SAFE_ENV_NAME` 要求全大写（`sealedSubprocess.ts:18`）→ win32 下 `Path`/`Temp` 被静默丢弃；
-- `buildOpencodeEnv` 的 `delete env.OPENCODE_PERMISSION`（`runtime/opencode/spawn.ts:190`）删不掉 `OpenCode_Permission` 形态的键；
-- `CLAUDE_INTERNAL_ENV_MARKERS` Set 精确匹配（`claudeCode/spawn.ts:125-147`）同理；
+- `buildOpencodeEnv` 的 `delete env.OPENCODE_PERMISSION`（`runtime/opencode/spawn.ts:190`）删不掉 `OpenCode_Permission` 形态的键；**同函数 `:197` 还有第二处** `delete env[DEFAULT_CONFIG_DIR_PROFILE.opencode.env]`（设计门 F6 补），而基底是 `{...process.env}` 全量继承（`:177-186`）；
+- `CLAUDE_INTERNAL_ENV_MARKERS` Set 精确匹配（`claudeCode/spawn.ts:125-147`）同理；**`claudeCode/spawn.ts:380` 是同型删除**（设计门 F6 补）；
 - `RESERVED_SPAWN_ENV`（`shared/runtimeConfigDir.ts:43-53`）同理；
+- **不需要改的**：黑名单 `DANGEROUS_ENV_NAME`（`sealedSubprocess.ts:19-20`）已带 `/i`（设计门 F6：plan 原写「白/黑名单都接折叠」，对黑名单是冗余表述）；
 - 唯一做对的先例：`shared/scriptNode.ts` 保留键用 `key.toUpperCase()` 比较（`:449-491`）。
 
 设计：`packages/shared/src/platformEnv.ts` 提供
@@ -103,16 +113,22 @@ Windows `CreateProcess` 的命令行是**单一 UTF-16 字符串，总长 ≤ 32
 
 现状：`killProcessTree(pid, sig)` = `process.kill(-pid, sig)`（`util/process.ts:32-45`），且 **13 个文件在各自内联同样的 `process.kill(-pid)`**（`runner.ts:2688-2701`、`containedSpawn.ts:178-186`、`memoryDistiller.ts:987`、`runtimeSmoke.ts:99`、`verifiedLauncher.ts:218-241`、`opencodeStoreRecovery.ts:118`、`util/git.ts:179-181`、`util/opencode.ts:159-166`、`util/opencode-models.ts:146`、`cli/sandbox.ts:60-67` 等）。
 
+**⚠️ 设计门 P0-D 推翻了初稿的「taskkill 枚举 + 单 pid 判活」方案。** 判据链：`verifiedLauncher.ts:206` 以**进程组**为所有权单位；`:928` `stopServer` 只在 child settled **且 group 不存活**后才认为已停；`:1237` 随即标记 reaped、清理并**释放 SQLite store 供复用**。若 win32 把 `isGroupAlive` 降级成单 pid 探测，就会在**后代仍持有 store 时错误宣称已回收并释放复用**——这是数据损坏面，不是纵深防御的取舍。
+
+⇒ **Job Object 进入 v1 范围**（D9 修订）。它属**进程生命周期治理**，与 D1「不做隔离 provider」不冲突：不提供文件系统/网络隔离，不注册 containment provider，不改准入判定。
+
 设计：
 
-1. `util/process.ts` 成为**唯一**杀树/存活探测权威：
-   - `killProcessTree(pid, sig)`：POSIX 行为不变；win32 → `Bun.spawnSync(['taskkill','/pid',String(pid),'/T','/F'], {windowsHide:true, timeout})`，sig 参数在 win32 无差别（TERM/KILL 均为强杀——与 opencode `cross-spawn-spawner.ts:297-305`、multica `proc_windows.go` 同模式）。失败回退 `process.kill(pid)`（单进程 TerminateProcess）。
-   - `isGroupAlive(pid)`：POSIX `process.kill(-pid,0)`；win32 用单 pid 存活探测（组概念不存在，语义降级注释明示）。
-   - `pidCommandLine(pid)`（替换 `pidCommandLooksLikeAgentChild`/`pidCommandContainsBinary` 的 `ps -p` 内核，`util/process.ts:59-85`）：POSIX 保持 `ps`；win32 → `powershell -NoProfile -NonInteractive -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=<n>').CommandLine"`，bounded timeout；`wmic` 不用（新 Windows 已移除）、`tasklist` 不用（无命令行列）。
-2. **内联组杀全部迁移到该权威**（机械重构 + 逐站点回归锁）。唯一例外：`sealedSubprocess.ts:346-354` `killCurrentProcessGroup`（bwrap supervisor 自杀，Linux provider 专属路径，win32 不可达，不动）。
-3. SIGTERM→grace→SIGKILL 升级序列（`util/process.ts:111-153`、`containedSpawn.ts:286-297`）在 win32 收敛为「一次 taskkill /T /F + 存活复查」；grace 预算语义仅在 POSIX 有意义，win32 文档明示（子进程无优雅终止——上游 opencode 同样如此）。
+1. **`util/process.ts` 成为唯一杀树/存活/归属权威**，win32 实现建立在 Job Object 上：
+   - **spawn 时把子进程放进一个 per-run Job**，设 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`：句柄关闭即原子杀光整棵树，无枚举竞态。这是「组」在 Windows 上的正确对应物。
+   - `killProcessTree(pid, sig)`：POSIX 行为不变；win32 → 关闭该 run 的 Job 句柄（原子）；**仅当 Job 不可用时**回退 `taskkill /pid <pid> /T /F`（`windowsHide:true` + bounded timeout），且回退状态必须**进入 receipt**——回退档不得用于支撑 store 回收证明。
+   - `isGroupAlive(pid)` → 泛化为 `isOwnedTreeAlive(handle)`：POSIX 保持 `process.kill(-pid,0)`；win32 查 Job 的活动进程数（`QueryInformationJobObject` / `JOBOBJECT_BASIC_ACCOUNTING_INFORMATION`）。**这是 store 回收的唯一合法证据**。
+   - `pidCommandLine(pid)`（替换 `pidCommandLooksLikeAgentChild`/`pidCommandContainsBinary` 的 `ps -p` 内核，`util/process.ts:59-85`）：POSIX 保持 `ps`；win32 → `Get-CimInstance Win32_Process` 查询，bounded timeout；`wmic` 不用（新 Windows 已移除）、`tasklist` 不用（无命令行列）。
+   - **实现载体**：Bun FFI 直接 `dlopen kernel32.dll`（`CreateJobObjectW` / `AssignProcessToJobObject` / `SetInformationJobObject` / `QueryInformationJobObject`）——上游 opencode 已有同形先例（`packages/tui/src/terminal-win32.ts` 用 Bun FFI 调 kernel32）。**不引第三方原生依赖**（单二进制分发不能带 .node 附件）。竞态注意：`Bun.spawn` 返回后才拿到 pid，此刻子进程已在跑 ⇒ 需要 `CREATE_SUSPENDED` 或接受「assign 前的极短窗口」，实现期以真机实测定档并写进 receipt 语义（若无法消除窗口，则该 run 的回收证明降级为 best-effort 并显式标注）。
+2. **内联组杀全部迁移到该权威**（机械重构 + 逐站点回归锁）。当前已知：**13 个文件 / 22 处调用**，扣两处 supervisor 自杀例外后 **20 处需迁移**——两处例外是 `sealedSubprocess.ts:348` **与 `fffCapability.ts:516`**（初稿只列前者，设计门 F4 补），均为 Linux provider 专属路径。**注意 `containedSpawn.ts:178` 与 `cli/sandbox.ts:62` 不在迁移清单里**：前者已走权威（`:29,:180`），后者根本不是组杀而是 spawn（设计门 F4 驳回初稿的两条假条目）。精确清单以 §12 守卫产出为准。
+3. SIGTERM→grace→SIGKILL 升级序列（`util/process.ts:111-153`、`containedSpawn.ts:286-297`）在 win32 收敛为「grace 等待 + Job 关闭」；子进程无优雅终止语义（上游 opencode 同样如此），文档明示。
 
-已知限制（登记 D20 清单）：taskkill 是**枚举式**杀树，存在竞态窗口（fork-then-exit 孙进程可漏）；原子 kill-on-close 需要 Job Object，属后续 provider RFC。兜底是既有的周期孤儿回收 + 启动回收。
+已知限制（登记 D20 清单）：Job 覆盖的是**我们 spawn 的树**；若子进程自行 `CREATE_BREAKAWAY_FROM_JOB`（需 Job 允许，我们不允许）则不适用。taskkill 回退档的枚举竞态如实标注且不支撑回收证明。
 
 ### 3.2 spawn 选项
 
@@ -123,15 +139,20 @@ Windows `CreateProcess` 的命令行是**单一 UTF-16 字符串，总长 ≤ 32
 ### 3.3 孤儿回收与启动回收
 
 - 周期回收与 boot reaper（`services/orphans.ts`、`cli/start.ts:333-360`）：判活/杀灭改走 §3.1 权威后自动获得 win32 语义；pid-reuse 防护换 `pidCommandLine` 判据。
-- `orphans.ts:188-190` 的「系统 spawn 由 bwrap `--die-with-parent` 契约覆盖」证明在 win32 不成立（无 provider）→ win32 上 daemon 硬杀后**短命系统代理进程可能残活**：如实登记（D20 + audit-backlog），v1 不引入平台级子进程注册表（代价/收益不成比）。
+- `orphans.ts:188-190` 的「系统 spawn 由 bwrap `--die-with-parent` 契约覆盖」证明在 win32 不成立（无 provider）——但 **Job Object 的 kill-on-close 提供了等价甚至更强的覆盖**（daemon 进程退出 ⇒ 句柄关闭 ⇒ 整树被内核杀掉），故 win32 的孤儿面比初稿评估的**更小**，不是更大。跨 daemon 重启的残留仍由 boot reaper 兜底。
 - `isProcessAlive`（`util/process.ts:12-21`，`process.kill(pid,0)`）在 win32 可用（Node/Bun 映射 OpenProcess；EPERM 视为存活）；补 win32 CI 用例。
 
 ### 3.4 优雅关停与 stop（D10）
 
+**⚠️ 设计门 P0-4 证伪了初稿的认证方案**：`.daemon.info` 只有 `{pid,host,port,url,startedAt}`（`daemonInfo.ts:15-21`、`start.ts:895-903`），**没有 token**；且 bootstrap 后 daemon token 被拒（`auth/session.ts:171`）、`tokenAccess:'never'` 明确阻止令牌调用（`routes/registry.ts:164,209`）、admin 身份仍需会话、主服务还可能绑非 loopback（`start.ts:531`）。「复用业务路由 + 现有认证模型」这条路走不通。
+
+修正设计：
+
 - daemon 内：`process.on('SIGINT')` 在 win32 可用（Ctrl+C）；`SIGTERM` 挂钩保留（win32 收不到，无害）。
-- 新增 loopback 管理端点 `POST /api/daemon/shutdown`：走 RFC-247 `registerRoute` 元数据（admin 身份 + `tokenAccess:'never'`，双向穷尽自检会强制登记）；触发既有 `gracefulShutdown(db,30_000)` 序列（`cli/start.ts:819-900`）。
-- `cli/stop.ts`：win32 → 读 `.daemon.info` url + 本地 token → POST shutdown → 轮询退出（预算 35s）→ 超时 fallback `taskkill /T /F`；POSIX 路径逐字节不变（SIGTERM）。
-- e2e harness 关停（`e2e/harness.ts:445-479` SIGTERM→SIGKILL）：win32 分支走 stop 命令或 taskkill；daemon 优雅关停语义由专门 stop 测试覆盖，不靠 harness teardown 证明。
+- **独立的 loopback control listener**（不挂业务 app、强制绑 `127.0.0.1`），只暴露 shutdown 一个操作，触发既有 `gracefulShutdown(db,30_000)` 序列（`cli/start.ts:819-900`）。认证 = **每次启动随机生成的 shutdown nonce**，写进私有 control 文件（POSIX `0600`；win32 走 §5.1 的信任原语按当前用户 ACL 保护），daemon 退出即失效、绝不复用。该 nonce 是**新增的落盘秘密**，必须进 §10 秘密清单与 D19/D20 的呈现（初稿漏登记）。
+- `cli/stop.ts`：win32 → 读 control 文件的 endpoint + nonce → POST shutdown → 轮询退出（预算 35s）→ 超时 fallback 关 Job / `taskkill /T /F` 并**明确输出「非优雅关停」**；POSIX 路径逐字节不变（SIGTERM）。
+- 为何不用 Windows 控制事件或命名管道：控制事件对 detached/hidden daemon 不可靠；命名管道有 ACL/生命周期成本。HTTP **传输**没问题，错的是复用业务路由与业务认证。
+- e2e harness 关停（`e2e/harness.ts:445-479` SIGTERM→SIGKILL）：win32 分支走 stop 命令或关 Job；daemon 优雅关停语义由专门 stop 测试覆盖，不靠 harness teardown 证明。
 
 ### 3.5 单实例锁
 
@@ -155,13 +176,41 @@ Windows `CreateProcess` 的命令行是**单一 UTF-16 字符串，总长 ≤ 32
 
 ## 5. L4 · opencode 运行链路
 
-### 5.1 runtime binary seal（`services/runtime/binarySnapshot.ts`）
+> **本节是设计门改动最大的一节。** 初稿只处理了「不写 `config.shell`」，设计门 P0-B/P0-C/P0-F 证明 verified 链路在 Windows 上要动**三层**：artifact layout（§5.1b）、信任原语（§5.1a）、子进程物化（§5.5）。
+
+### 5.1a verified 存储信任原语（P0-C，**新增，本 RFC 的第二大工作块**）
+
+verified store/identity 的安全证明散落在多处，且全部建立在 POSIX 语义上：exact `0600`/`0500` mode、`dev`/`ino`、`O_NOFOLLOW`——`verifiedManifest.ts:309`、`controlProtocol.ts:185`、`storeHygiene.ts:328`、`sealedInputs.ts:196,265`、`sourceGuard.ts:125`、`binarySnapshot.ts:190-191`。在 Windows 上这些值**既可能拒绝合法文件，也可能给出错误的安全证明**：mode 位无意义（Node 报 `0666`/`0444`），NTFS 经 Node 的 number 型 `ino` 不稳定，`O_NOFOLLOW` 不覆盖 reparse point（junction / symlink / mount point）。
+
+⇒ 抽出**单一跨平台 verified-storage 信任原语**（新模块），把「这个路径可信吗 / 安全打开」变成一个平台内实现的问题：
+
+| 断言 | POSIX 实现（现状语义不变） | win32 实现 |
+|---|---|---|
+| 私有性 | exact mode `0600`/`0500`/`0700` | owner 是当前用户 + DACL 不含其他 SID 的写权（`GetNamedSecurityInfo`）|
+| 非链接 | `lstat().isSymbolicLink()` / `O_NOFOLLOW` | `FILE_ATTRIBUTE_REPARSE_POINT` 检查 + `FILE_FLAG_OPEN_REPARSE_POINT` 打开后拒绝 |
+| 文件身份（TOCTOU） | `dev` + `ino` | `FileIndex` + `VolumeSerialNumber`（`GetFileInformationByHandle`），**不用 Node 的 `ino`** |
+| 内容 | sha256 | 同 POSIX（跨平台主防线） |
+
+**这条原语必须先于其他 win32 verified 工作落地**——它是 §5.1b、§3.4 control 文件、seal 的共同地基。**绝不允许**「win32 跳过 mode 检查」式的散点跳过继续扩散：那等于让 receipt 说「已验证」而实际零验证（RFC-253 F1 同型教训）。若实现期证明 DACL 路径不可行，**正确的处置是显式阻断 win32 verified 并把它变成产品级 blocker**，而不是静默降级。
+
+### 5.1b verified artifact layout 的 win32 形态（P0-B）
+
+初稿只改了 business plan 的 `shell` 键，实际会在**构造/启动阶段**失败的还有（设计门实证）：
+
+| 站点 | 现状 | win32 处置 |
+|---|---|---|
+| `verifiedPlan.ts:99,528` | 无条件读 `process.env.HOME`，缺失即拒绝 | Windows 原生常只有 `USERPROFILE` ⇒ 改为平台感知的 home 解析（经注入，见 §5.3 的注入缝） |
+| `verifiedPlan.ts:724` | 物化 seal 内 sh wrapper | 见 §5.5（wrapperless 命令形态） |
+| `verifiedSystemPlan.ts:170`、`verifiedMcpTestPlan.ts:220` | 写 `/bin/false` 作禁用命令 | win32 等价禁用命令（不存在的路径不行——需真实的「立即失败且无副作用」可执行；候选 `%SystemRoot%\System32\cmd.exe /c exit 1`，实现期实测定档） |
+| `verifiedPlan.ts:440`、`verifiedSystemPlan.ts:140`、`verifiedMcpTestPlan.ts:172` | snapshot 目标丢 `.exe` 后缀 | 保后缀（Windows 上无后缀文件不可执行） |
+
+### 5.1c runtime binary seal（`services/runtime/binarySnapshot.ts`）
 
 已有 win32 守卫：exec 位判定跳过（`:84-86`）、目录/快照 mode 校验跳过（`:176,183,228`）。补齐：
 
-- `:190-191` 的 `dev`/`ino` TOCTOU 复核条件在 win32 改为 `digest + size + mtimeMs`（NTFS 经 Node 的 number 型 `ino` 不可靠）；digest 复验（`:184,195`）是主防线，保持。
+- `:190-191` 的 `dev`/`ino` TOCTOU 复核改走 §5.1a 的信任原语（win32 用 `FileIndex`+`VolumeSerialNumber`）；digest 复验（`:184,195`）是主防线，保持。
+- mode 的 win32 跳过**改为经信任原语的 DACL 断言**，不再是纯跳过——否则 `immutableArtifactView` 相关声明在 win32 就是空头支票（RFC-227 design.md:130 明写「只 chmod/read-only attribute 不能单独作为 strong」）。
 - `.exe` 解析：`resolveSingleExecutable`（`:95-127`）拒含分隔符 PATH token 的规则不变；win32 下 `Bun.which` 认 `PATHEXT`，管理员填 `opencode` 或绝对 `opencode.exe` 均可。**`.cmd`/`.bat` 一律拒绝**（D17）：报错指引用户填原生 exe（npm 安装场景给出 `opencode-windows-x64` 包内真身路径提示；multica 的 shim 自动解析留作后续改进）。
-- seal 在 win32 无只读位保护 → doctor + docs 明示（D20）；digest 复验兜底 TOCTOU。
 
 ### 5.2 受控 env 的 win32 形态（`hermetic.ts:528-571` 平台分支）
 
@@ -172,20 +221,29 @@ Windows `CreateProcess` 的命令行是**单一 UTF-16 字符串，总长 ≤ 32
 | `USERPROFILE`、`HOME`、`HOMEDRIVE`+`HOMEPATH` | 私有 store home（`os.homedir()` 读 `USERPROFILE`；`HOME` 供 git-bash/移植工具；三者一致） |
 | `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_CACHE_HOME` / `XDG_STATE_HOME` | 私有 store 子目录（opencode 的 `xdg-basedir` 任意平台优先认 env，`global.ts:1-31`——**私有化机制与 POSIX 完全同构**） |
 | `TEMP`、`TMP`（替代 `TMPDIR`） | 私有 tmp |
-| `PATH` | `pathListJoin([sealToolchainDir, %SystemRoot%\System32, %SystemRoot%, %SystemRoot%\System32\Wbem, %SystemRoot%\System32\WindowsPowerShell\v1.0])`——最后一项让 opencode 的 `powershell` 候选可达 |
+| `PATH` | `pathListJoin([sealToolchainDir, **<解析到的 git 安装 bin/cmd 目录>**, %SystemRoot%\System32, %SystemRoot%, %SystemRoot%\System32\Wbem, %SystemRoot%\System32\WindowsPowerShell\v1.0])`——倒数第一项让 opencode 的 `powershell` 候选可达；**git 目录是设计门 P0-A 补的，缺了它整条主线工作流不成立**（见下） |
 | `SystemRoot`、`windir`、`SystemDrive`、`COMSPEC`、`PATHEXT` | 从 daemon env 透传（winsock/cmd 初始化依赖；`PATHEXT` 给显式默认值） |
 | `OPENCODE_*` 组 | 与 POSIX 同形（`OPENCODE_CONFIG_CONTENT` 等） |
 | `GIT_CONFIG_NOSYSTEM=1`、`GIT_CONFIG_GLOBAL=NULL_DEVICE` | 同 POSIX（NUL） |
 
 `SAFE_FORWARD_ENV` 转发（`:89-108`）经 §2.2 折叠。对照断言：受控 env 不含 daemon 继承的任何未列键（现有断言模式扩展到 win32 键集）。
 
+**⚠️ P0-A · 受控 PATH 必须含 git，否则核心工作流不成立。** POSIX 侧 `hermetic.ts:547` 是 `/usr/bin:/bin`，而 `git` 就在 `/usr/bin/git` ⇒ **agent 进程内的 git 一直是白拿的**，从没人需要显式设计它。Windows 上 Git 装在 `C:\Program Files\Git\cmd`（runner 与常规安装均如此），不在任何系统目录里 ⇒ 若不显式放行，agent 的 `git status/diff/commit` 全部 `'git' is not recognized`，Code→Audit→Fix 这条主线直接断；连带 opencode 自己的 `gitbash()`（靠 `which("git")`，`core/src/shell.ts:126`）也失败，shell 链退化。
+
+设计：git 目录**经与 runtime binary 同源的解析 + 冻结**进入受控 PATH——即 daemon 侧解析出 `git.exe` 的绝对路径（`Bun.which('git')` + realpath），取其目录，随该次 run 冻结进 manifest（与 `sealToolchainDir` 同等地位，dev-gotchas「verified plan 的 PATH 是能力白名单」那条的直接延伸：需要 Bun 时要显式放行 Bun，需要 git 时同理）。**信任边界论证**：git 是平台自身已经在 daemon 身份下执行的二进制（`util/git.ts` 全链路），把它暴露给受控 shell 不引入新的信任主体；但 **不得**因此暴露用户 `PATH` 的其余部分或 home 目录。POSIX 侧维持现状（`/usr/bin` 已含），**不新增放行**。
+
 ### 5.3 shell 键与身份断言（D13 关联）
 
-POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verifiedPlan.ts:530,741`）——那是 **netless provider 边界**的一部分。win32 无 provider：
+POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verifiedPlan.ts:530`；`:741` 是 MCP wrapper 的 `command: ['/bin/sh']`，是另一处）——那是 **netless provider 边界**的一部分。win32 无 provider：
 
 - 受控 config **不写 `shell` 键** → opencode 走自身 `pwsh → powershell → gitbash → cmd` 链（`shell.ts:119`），ShellPrompt 会向模型说明当前 shell 方言（`tool/shell/prompt.ts:43-70`）。
 - `executionIdentity.ts:191-193` 的 `config.shell === join(sealRoot,'shell','sh')` 断言改为平台分支：POSIX 不变；win32 断言 `shell` 键**不存在**（受控 config 是闭合构造，缺席即是身份的一部分）。
-- netless wrapper 物化（`sealedSubprocess.ts:928-942` `#!/bin/sh`）、`SEATBELT_NETLESS_*`、FFF 探针全部是 provider 路径，win32 按 `childProvider:'none'` 天然不可达（`verifiedPlanCore.ts:112-119` null 分支、`verifiedManifest.ts:260-273` 非 linux-bwrap 禁 FFF 证明——**零改动**，但补一条 win32 注入平台的「不可达性」测试）。
+
+**⚠️ 平台信息的注入缝（设计门 ★8/P1-6，初稿完全没写）**：`verifiedPlan.ts` 今天**零** platform 输入，且 `rfc233-containment-source-guard.test.ts:38-48` 禁止 `containment.ts` / `verifiedPlan.ts` / `verifiedPlanCore.ts` / `verifiedSystemPlan.ts` 出现 `process.platform`（`rfc227-source-guard.test.ts:51` 另保护 `verifiedManifest.ts`）。⇒ 直接加平台分支**会违反守卫**；实现者若无缝可用只有两条歧路：违规，或自行发明缝。
+
+设计：平台事实**随准入计划下行**——`PreparedContainmentPlan` 已是「计划核唯一可信输入」的既有形态，故把「目标执行平台 + 其派生的执行形态约定（home 变量名、可执行后缀、禁用命令、shell 键是否存在）」冻结成 plan 的一个字段，由 composition root（唯一允许读 `process.platform` 的层）填充。计划核只消费冻结值，守卫因此**继续成立且更强**（连带让 win32 语义在 Linux CI 上可被注入直测——这正是 §12 第 1 层测试要的）。具体字段形状在实现期与 `containmentContract.ts` 的既有 JSON 约束一起定型。
+
+- netless wrapper 物化、`SEATBELT_NETLESS_*`、FFF 探针在 win32 的可达性**见 §5.5——初稿在这里写错了**（写成「天然不可达」，实为 provider 为 `none` 时直接执行）。FFF 部分正确：`verifiedPlanCore.ts:112-119` null 分支 + `verifiedManifest.ts:260-273` 非 `linux-bwrap` 禁 FFF 证明确实零改动，补一条注入平台的不可达性测试即可。
 
 ### 5.4 直接 API / session / envelope
 
@@ -194,7 +252,12 @@ POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verified
 ### 5.5 MCP / 插件 / claude-code
 
 - **远端 MCP**：HTTP，无平台面。
-- **本地 stdio MCP**（探测 `services/mcpProbe.ts` 与 legacy 运行路径）：win32 上用户配置 `npx …` 会解析到 `npx.cmd`——CreateProcess 不直接执行 `.cmd`，且 shim 有 argv 重整形风险（multica 实证）。D17 解析助手：`resolveWindowsCommand(token)` 处理 `PATHEXT`；命中 `.cmd/.bat` → **定向拒绝**，报错文案给出改法（填原生 exe / `node <真身.js>`）。verified 路径的本地 MCP 本就走 provider 边界，win32 无 provider 时按既有「本地 MCP 需要 containment」判定失败——如实（D20）。
+- **本地 stdio MCP**：**⚠️ 初稿这一段两句话都是错的（设计门 P0-F）**，纠正如下：
+  - 「win32 无 provider 时按既有判定失败」**不成立**——`model-child-netless-v1` **不是** failClosed profile（`containmentCoordinator.ts:28-79`），warn/off 下是 degraded 放行；且 provider 为 `none` 时 `sealedSubprocess.ts:1218` **直接执行子命令**。所以现状语义是「无隔离直跑」，不是失败。
+  - 但 `sealedSubprocess.ts:928-942` **无条件**物化 `#!/bin/sh` wrapper ⇒ Windows 上会在真正跑起来之前就因 shell 资产失败。所以 proposal 初稿 AC-15 写的「原生 exe 正常」同样**不成立**。
+  - ⇒ **需要产品决策**（列入 proposal D21）：(a) 允许 warn/off 下无隔离执行，并实现 **win32 原生 direct-child materialization**（wrapperless：直接以 `{cmd,cwd,env}` 形态执行，不经 sh wrapper）；或 (b) 新增 failClosed profile 明确阻断 win32 本地 MCP。**推荐 (a)**：与 D1「不做隔离 provider 但功能可用」一致，且 (b) 会让「装了本地 MCP 的 agent 在 Windows 上完全不能跑」。
+  - D17 解析助手仍需要：`resolveWindowsCommand(token)` 处理 `PATHEXT`；命中 `.cmd/.bat` → **定向拒绝**并给改法（填原生 exe / `node <真身.js>`）。注意拦截**落点**：`mcpProbe.ts:443-449` 走的是 SDK 的 `StdioClientTransport`（node child_process 系），不是本仓 `Bun.spawn` ⇒ 拦截必须在 `command[0]` 预检层，不能只在 spawn 包装里（设计门 P2-4）。
+  - **三条入口各自验收**（AC-15 初稿只覆盖 `.cmd` 拒绝 + 远端 MCP）：inventory probe / 交互 runtime test / 业务 session。
 - **插件**：`pluginInstaller.ts:600` 以 `node:child_process` spawn `npm`——win32 经 D17 解析（`npm.cmd` → `node npm-cli.js` 直呼真身，唯一自动解包 shim 的地方，因为 npm 是我们自己的受控调用而非用户输入）；插件运行在 opencode server 进程内，win32 与 POSIX 同样不受 containment（RFC-251 已知代价，D20 清单沿用）。
 - **claude-code runtime**：`claudeCode/config.ts:59` darwin→Keychain、else→`~/.claude/.credentials.json`（win32 = `%USERPROFILE%\.claude\...`，正确）；`spawn.ts:162-169` `getuid` 在 win32 为 undefined 自然走非 root 分支；netless MCP 面 provider 缺失自然降级。win32 冒烟（CI stub + 真机真 CLI，AC-16）。
 
@@ -202,7 +265,14 @@ POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verified
 
 - **NUL**：§2.1 两处 argv + env 处。
 - **longpaths（D18）**：`gitHardening.ts` 的 `hardenedGitLeadingArgs`（`:94-101`）win32 追加 `-c core.longpaths=true`；README/doctor 建议系统级 `LongPathsEnabled`。硬化既有语义（hooksPath 空目录 + `core.fsmonitor=false` + `--no-ext-diff`）平台无关；`ensureGitHooksVoidDir` 的 `chmod 0o500`（`:52-56`）win32 no-op——空目录防 hook 的主机制仍成立，写保护缺失进 D20 清单。
-- **凭据（D11）**：`services/gitCredential.ts` 的 `#!/bin/sh` askpass helper（`:23-41`）替换为平台自身二进制隐藏子命令（`verifiedSelfCommand` 模式，`sealedSubprocess.ts:108-115` 先例）：`agent-workflow __git-credential` 读一次性凭据文件（0600/私有目录语义按平台）。接线形态取 `-c credential.helper=!…` 引号形式（gitconfig 值经 git 的 sh 引用规则，可正确携带含空格的 exe 路径；`GIT_ASKPASS` 直连含空格路径在 win32 的引用行为不可靠）。**三平台统一切换到该单实现**；一次性文件生命周期、redact 链路不变。此处引用规则是实现期重点验证项（CI windows + 真机，plan T 列出）。
+- **凭据（D11）**：`services/gitCredential.ts` 的 `#!/bin/sh` askpass helper（`:23-41`）替换为平台自身二进制隐藏子命令（`verifiedSelfCommand` 模式，`sealedSubprocess.ts:108-115` 先例）：`agent-workflow __git-credential`。**三平台统一切换到该单实现**。设计门补齐的完整契约（初稿只说「生命周期与 redact 不变」，会导致安全回归）：
+
+  1. **host 绑定是硬性迁移义务**（★3）。现 helper 明写着 impl-gate P0-2 的理由：git 会为**每一个** remote 调用 helper，含恶意 `.gitmodules` 控制 remote 的递归 submodule fetch；无 host 检查就等于把父仓 PAT 交给任意 host。新子命令必须**只在 host（及路径前缀）精确匹配 lease 时**返回凭据。
+  2. **credential-helper 协议 ≠ askpass 协议**。`credential.helper=!<cmd>` 是「作为 shell snippet 执行」并**追加 `get`/`store`/`erase` 参数**，字段经 **stdin** 传入（`gitcredentials.7:338,378,455`），而 askpass 是 argv 里一句 prompt 文本。子命令必须解析 operation + stdin 协议：只有 `get` 且 host 匹配才输出；`store`/`erase` 静默成功且不写日志。
+  3. **先置空再追加**。`credential.helper` 是**追加**语义，而本仓 daemon 侧 git 有意不隔离 system/global 配置（`gitHardening.ts:21` 明写理由），Git for Windows 默认启用 GCM ⇒ 不置空就会被抢答或弹窗。接线为 `-c credential.helper= -c credential.helper=!<quoted>`。**仅在带 lease 的调用上置空**；无凭据路径保留环境自带 helper（不改用户既有行为）。
+  4. **路径 quoting**：值被 git 交给 sh 执行 ⇒ 必须按 sh 规则引用，覆盖含空格（`C:\Program Files\...`）、单引号、反斜杠三类路径。这是实现期重点验证项，**必须用真机 + CI windows 双档实测**（design §13.3 保留回退方案）。
+  5. 一次性文件生命周期（`gitCredential.ts:79`、`gitRepoCache.ts:484` 的 finally 清理）与 redact 链路不变。
+  6. 回归必测：递归 submodule（恶意 remote 拿不到凭据）、host mismatch、含空格安装路径。既有锁 `rfc205-git-credential.test.ts:45` 锁着 sh helper 与可执行位，须同步改写。
 - **ssh**：`GIT_SSH_COMMAND` 假定 `ssh` 在 PATH（`util/git.ts:32-44`）——Windows 10+ 自带 OpenSSH 客户端；doctor 增探测提示。
 - **worktree/stash/submodule**：git 输出 posix 分隔符（含 win32），解析零改动；临时 index 用 `join(tmpdir(),…)` 已可移植。
 - **`sqlite3`/`git` CLI 前置**：README 平台前置清单（git 必装；bash 可选；ssh 可选）。
@@ -230,6 +300,17 @@ POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verified
 - pip 改 `<resolvedPython> -m pip`（避开 `pip.exe` 路径/多版本歧义，三平台统一）；npm 经 D17 解析真身。
 - 安装器 containment：win32 无 provider → 与业务 spawn 同为未隔离（第二轮实现门修的「安装器必须进 containment」在有 provider 平台继续成立；win32 的缺失进 D20 清单与事件呈现）。
 
+## 7b. 设计门补入：初稿完全遗漏的子系统（★5）
+
+三份文档初稿零提及、但在 Windows 上会坏的生产子系统。**全部纳入范围**（违反 D20 的「语义缺失必须可见」是本 RFC 自己的原则）：
+
+| 子系统 | 站点 | win32 失败形态 | 处置 |
+|---|---|---|---|
+| **备份 / 恢复 / 归档** | `util/archive.ts:5-6,27,43`（注释自认 tar「present on macOS + Linux, **the only shipped targets**」）；消费方 `backup.ts:73`、`restore.ts:169`、`rawDbSnapshot.ts`、`worktreeBackup.ts:229`；`start.ts:600` 定时备份 | 无 bsdtar 即硬失败；有 bsdtar 时 `--exclude=./x` 方言、长路径、「file changed as we read it」重试逻辑（`:34-36`，GNU 文案）行为未验证 | 探测 + doctor 项 + README 前置清单；bsdtar 方言差异实测定档；**备份→恢复端到端进 win32 验收** |
+| **结构化 diff / SCIP** | `deep/indexers.ts:102,122`（裸 `Bun.spawn([bin,'--version'])`，默认 bin 是 `scip-typescript` 等 npm 包 ⇒ win32 即 `.cmd` shim）；`deep/runner.ts:20`（注入式默认 spawn）、`:36`（超时只 kill 直接进程） | `.cmd` 不可直接执行 ⇒ 探测静默 `available:false` ⇒ 深度索引**静默降级**为 `build-failed/timeout`，用户看不出原因 | 接 D17 解析 + `windowsHide` + 杀树权威；**静默降级改为可见**（D20 清单 + 事件） |
+| **记忆蒸馏** | `memoryDistiller.ts:989`（内联组杀）、`:1169`（detached spawn）；worker 由 `start.ts:649` 启动 | 走同一 runtime driver ⇒ 继承 §5 全部问题；组杀在 win32 抛错 | 随 §3.1/§5 修好；**distill/resume 进 win32 验收**（初稿 AC 只验交互工作流） |
+| **定时任务** | ticker 由 `start.ts:777` 启动 | 定时启动走同一执行链 | **定时启动 + 恢复进 win32 验收** |
+
 ## 8. L7/L8 · 构建、发行、CI
 
 ### 8.1 build-binary（`scripts/build-binary.ts`）
@@ -243,6 +324,8 @@ POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verified
 
 - 现状：9 个 `#!/bin/sh` stub + 3 个 `#!/usr/bin/env bun` `.ts` stub（`e2e/fixtures/`；harness 校验 `stub-opencode.sh` 可执行，`e2e/harness.ts:357-360`）。
 - 设计：合并为**单一参数化 TS stub**（行为由 `AW_STUB_MODE=<mode>` 选择，模式集合 = 既有 9+3 个行为的枚举），`build:binary:e2e` 顺带 `bun build --compile` 出 `dist/stub-opencode-<platform后缀>[.exe]`。收益：①win32 无 shebang 问题；②「runtime 可执行文件」约束三平台同构（seal/选择器不需要例外）；③stub 行为集中一处可测。
+- **⚠️ 设计门 P1-5：「12 个文件映射成 mode」不是契约，行为等价性必须先冻结再实现。** 现有 stub 副作用差异巨大：`stub-opencode.sh:20`（version / nonce / workgroup / inventory 分支）、`stub-opencode-clarify-inline.sh:33`（round/session 状态 + 原始 argv）、`stub-opencode-commit.sh:26`（按 prompt 判角色并写 `e2e-change.txt`）、`stub-opencode-workflow-matrix.sh`（prompt 断言 / 上传 / 重试退出码 / timeout）、`intent-workflow-opencode.sh`（先写变体 env 再 exec），三个 TS stub 也各不相同。⇒ **实现前**逐文件冻结契约（mode / version / argv / env / stdout / stderr / exit / sleep / state·log·worktree 副作用 / 对应 spec）；删旧 stub 前在 POSIX 上对新旧实现跑**差分 golden transcript**。**不得**让实现者事后填 plan 的迁移表当验收 oracle（那是实现与测试共享同一 oracle）。
+- **`AW_STUB_MODE` 的送达通道需先验证**（设计门 P2-2）：stub 由 daemon spawn，legacy 路径继承 daemon env（`buildOpencodeEnv` 的 `{...process.env}`）可行，但这依赖「e2e 永远走 legacy」这一前提；且粒度是 per-daemon，若某 spec 需要节点间不同 stub 行为则机制不够。T28 第一步就验这两点。
 - 迁移法：逐 spec 对照表（plan 列 12 个 stub → mode 映射），**POSIX 腿先切换并全绿**，再接 windows 腿（proposal R7）。
 - `e2e/command.ts` 已有 win32 范式（`GCM_INTERACTIVE`/`NUL`，`:20-29`）保持；`runSqlite`（`:32-40`，`execFileSync('sqlite3')`）替换为 bun:sqlite 内联执行（显式 `PRAGMA busy_timeout`，小于命令超时——dev-gotchas:26 的坑一并收口），同步改 `root-test-entrypoint.test.ts:346-347` 源码锁。
 
@@ -254,7 +337,7 @@ POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verified
   - `build-binary` 的 ~250 行 smoke（`:441-694`）去 POSIX 化：`/usr/bin/true` → 用被测二进制自身的无害子命令；`cwd:"/"` / `startsWith("/")` → `node:path` 平台判据；`mktemp`/`chmod +x` → bash 内可用（git-bash）但对 `.exe` 的 chmod 变 no-op（保留无害）。
   - backend windows 腿的 opencode 全局安装步（`:99-107`）验证 `bun install -g` 在 windows runner 的产物可执行性（plan 实测项）。
   - `perf` / `scans` / `docs` / `lint` 保持 ubuntu 单腿（非矩阵 job，与平台无关或明确单平台门）。
-- **visual**（`visual-regression-nightly.yml`）：加 windows-latest 腿，比对第三套 `*-chromium-win32.png`（48 场景）；**权威判定仍是 ubuntu-24.04 腿**（基线漂移控制不变，`:83-85`）；首刷流程按 `e2e/visual-regression.README.md:80-102` option-A（先红 → 下 artifact → 审阅提交）。
+- **visual**（`visual-regression-nightly.yml`）：加 windows-latest 腿，比对第三套 `*-chromium-win32.png`（**40 个场景 / 每平台 46 张 PNG**——两个 spec 明示 31+9 个场景，部分场景多截图，设计门 F7 订正）；**权威判定仍是 ubuntu-24.04 腿**（基线漂移控制不变，`:83-85`）；首刷流程按 `e2e/visual-regression.README.md:80-102` option-A（先红 → 下 artifact → 审阅提交）。
 - **e2e-webkit-nightly**：矩阵加 windows（Playwright WebKit 支持 win32）；若首月 flaky 超阈值按 dev-gotchas flaky 纪律显式登记处理（不静默摘腿）。
 - **integration-opencode**（bwrap 专属）与 **git-protocols**（docker）保持 Linux，rationale 注释进 workflow 头。
 
@@ -264,6 +347,12 @@ POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verified
 |---|---|
 | `root-test-entrypoint.test.ts:215-231` | 四个 job 的 `os:` 逐字断言 → 更新为三 OS 列表；shard/`--shard=` 出现次数（backend 2→3 腿） |
 | `root-test-entrypoint.test.ts:372-394` | job 名集合 + timeout map（如拆 job 需同步） |
+| **`rfc224-source-guard.test.ts:191,205-207,218`** | 读四个 workflow 并**精确断言** `opencodeInstallTargets(ci)===['latest','latest']` + visual/webkit 的 not-contain ⇒ T31 若给 windows 腿加独立 opencode 安装步即红（设计门 ★6 补） |
+| **`e2e-sqlite-fixture-lock-contention.test.ts`** | 整条锁的对象就是 `e2e/command.ts:runSqlite` 的 sqlite3 CLI busy_timeout 边界，D15 迁 bun:sqlite 后该锁**失去对象** ⇒ 必须同步改写为新形态的等价锁（**不是删掉**——它锁的主题「fixture 侧必须等写锁」依然有效）（★6 补） |
+| **`e2e-shell-stub-argv-contract.test.ts:60`** | 锁 e2e shell stub 的 argv 契约 ⇒ D16 stub 编译化必改（★6 补） |
+| **`rfc205-git-credential.test.ts:45`** | 锁 askpass sh helper 与可执行位 ⇒ D11 子命令化必改（★6 补） |
+| **`rfc208-boot-and-external-timeouts.test.ts:120`** | 逐字断言 `process.kill(-proc.pid, 'SIGKILL')` ⇒ T4 杀树权威迁移必改（★6 补） |
+| **`rfc227-source-guard.test.ts:51`** | 另保护 `verifiedManifest.ts` 不读 `process.platform` ⇒ §5.3 的注入缝必须覆盖它（★6 补） |
 | `root-test-entrypoint.test.ts:146-161` | 新增 workflow 腿的 `bun-version` 钉必须等于 `packageManager` |
 | `root-test-entrypoint.test.ts:181-189` | backend shard `run:` 命令逐字锁（新增 `shell: bash` 声明时同步） |
 | `root-test-entrypoint.test.ts:346-347` | `sqlite3` fixture 锁 → bun:sqlite 新形态 |
@@ -284,11 +373,11 @@ POSIX verified 计划把 `config.shell` 指向 seal 内 `sh` wrapper（`verified
 win32 v1 相对 POSIX 的语义降级，全部「跳过 + 呈现」，登记如下：
 
 1. **零隔离**：业务 agent / 系统 agent / 脚本 / 安装器均以 daemon 用户权限直跑（= POSIX 把 sandboxMode 设 off/warn 且无机制可用）；enforce 与 failClosed 档拒绝执行。
-2. **seal 无只读位**：digest 复验仍在（TOCTOU 主防线），文件系统级防篡改缺失。
-3. **秘密文件无 POSIX mode**：token / secret.key / db.sqlite / 一次性凭据依赖 `%USERPROFILE%` 默认 ACL；doctor 的 mode 检查（`cli/doctor.ts:420-421`）win32 跳过并明示（D19）；DPAPI 加固 → audit-backlog。
+2. **seal 的写保护**：走 §5.1a 信任原语的 DACL 断言（**不是**纯跳过 chmod）；digest 复验仍是 TOCTOU 主防线。若实现期证明 DACL 路径不可行 ⇒ 显式阻断 win32 verified，不静默降级。
+3. **秘密文件的保护形态**：token / secret.key / db.sqlite / 一次性凭据 / **新增的 shutdown nonce（§3.4）** 在 win32 由 §5.1a 的 owner+DACL 断言承担，不再是「跳过 mode 检查、依赖默认 ACL」；doctor 如实呈现采用的是哪一档（D19）；DPAPI 加固 → audit-backlog。
 4. **git 硬化的写保护弱化**：hooksPath 空目录仍防 hook 执行，但目录本身可写（chmod no-op）。
-5. **杀树非原子**：taskkill 枚举竞态；Job Object 待 provider RFC。
-6. **daemon 硬杀后系统代理进程可能残活**（§3.3）。
+5. **杀树语义**：主档是 Job Object kill-on-close（原子）；仅在 Job 不可用时回退 taskkill 枚举，**回退档进 receipt 且不支撑 store 回收证明**（§3.1）。若 spawn→assign 的窗口无法消除，该 run 的回收证明降级为 best-effort 并显式标注。
+6. **daemon 硬杀**：Job kill-on-close 覆盖我们 spawn 的整树（比 POSIX 现状更强）；跨 daemon 重启的残留由 boot reaper 兜底。
 7. **上游弱项**：opencode 在 win32 的 MCP 子孙清理 no-op、FFF 默认关闭。
 8. **env 大小写折叠是新增安全面**：所有黑白名单经 §2.2 单点，混合大小写绕过在三平台测试锁定。
 
@@ -308,12 +397,19 @@ win32 v1 相对 POSIX 的语义降级，全部「跳过 + 呈现」，登记如�
 
 ## 12. 测试策略
 
-按 CLAUDE.md test-with-every-change，每个 PR 自带用例；分四层：
+按 CLAUDE.md test-with-every-change，每个 PR 自带用例。
 
-1. **纯函数直测（任意 OS 可跑，平台以参数注入）**：`platformExec` 常量/助手正反例；env 折叠（混合大小写命中/删除/转发去重 + POSIX 恒等）；argv 限长计算（win32 序列化长度边界）；taskkill/Get-CimInstance argv 构造；解释器候选表（含 WSL bash 规避断言：win32 分支绝不产生 `System32\bash.exe` 候选）；hermetic env win32 形态（键集全量快照 + 「不含意外继承键」对照）；guidance win32 渲染。**每条新守卫做变异实证**（改坏源码看红）。
+**⚠️ 设计门 ★7 定的第一原则：每个断言都要有独立于实现算法的 observable oracle。** 初稿把 AC-1/2/4 建立在「实施者维护的 grep 清单」上，而清单本身已被证明是错的 ⇒ 实现与测试会共享同一个错误前提（本仓 RFC-247 犯过三次的同型错误）。据此两条硬性要求：
+
+- **平台面守卫一律是「全仓禁形态负向扫描 + 显式豁免注释白名单」**，不是按 design 表逐站点 grep。计数由守卫实测产出并作为棘轮，**文档不写死数字**。豁免必须逐条带注释说明为何是 posix-by-contract。
+- **凡是「我们自己算」的东西，不能用「我们自己算的结果」验证**：argv 长度序列化必须用**真实 Windows 子进程**做边界实测（手写 serializer 与单测共享同一算法就等于没测）；受控 env 用**子进程实际看到的 environ** 验证；console 无弹窗用真机观察（AC-4）。
+
+分五层：
+
+1. **纯函数直测（任意 OS 可跑，平台以参数注入）**：**helper 必须接 `platform` 参数或导出以 platform 为参数的纯 factory**（设计门 P2-1：初稿的 `NULL_DEVICE` 常量与无参 helper 会绑定测试机当前 OS，Linux CI 根本执行不到 win32 分支），生产入口再冻结当前平台。`platformExec` 常量/助手正反例；env 折叠（混合大小写命中/删除/转发去重 + POSIX 恒等）；argv 限长计算（win32 序列化长度边界）；taskkill/Get-CimInstance argv 构造；解释器候选表（含 WSL bash 规避断言：win32 分支绝不产生 `System32\bash.exe` 候选）；hermetic env win32 形态（键集全量快照 + 「不含意外继承键」对照）；guidance win32 渲染。**每条新守卫做变异实证**（改坏源码看红）。
 2. **既有回归零漂移**：POSIX 行为逐字节不变的断言（杀树权威迁移后既有 kill 相关套件全绿；受控 env POSIX 快照不变；`verifiedPlan` 身份断言 POSIX 分支不变）。
-3. **windows CI 真实行为**（跑在 windows-latest 腿）：spawn/杀树/孤儿回收/锁/stop 端到端；git clone→worktree→stash→diff（NUL、longpaths）；凭据子命令注入链；脚本节点三语言真实执行（runner 预装 python/node/git-bash）；编译 stub 的 opencode verified 链路；`bun install -g opencode-ai` 产物可执行性。POSIX-only 用例 skip 登记进配额表（§8.4）。
-4. **e2e / 视觉**：windows 四 shard；第三套基线 48 张（option-A 流程）；webkit nightly windows 腿。
+3. **windows CI 真实行为**（跑在 windows-latest 腿；备份→恢复、SCIP 成功/timeout、定时启动、distill/resume 按 §7b 一并纳入）：spawn/杀树/孤儿回收/锁/stop 端到端；git clone→worktree→stash→diff（NUL、longpaths）；凭据子命令注入链；脚本节点三语言真实执行（runner 预装 python/node/git-bash）；编译 stub 的 opencode verified 链路；`bun install -g opencode-ai` 产物可执行性。POSIX-only 用例 skip 登记进配额表（§8.4）。
+4. **e2e / 视觉**：windows 四 shard；第三套基线 46 张 / 40 场景（option-A 流程）；webkit nightly windows 腿。
 5. **真机验收**（D4，AC-28）：CI 无法证明的项——console 无弹窗、Prism 下 x64 产物、真 opencode/claude CLI 业务工作流、长路径仓、Git Bash 探测在非 runner 环境（用户自装 Git for Windows 路径变体）。清单见 plan。
 
 ## 13. 开放问题
