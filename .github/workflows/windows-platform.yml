@@ -127,6 +127,66 @@ jobs:
           path: backend-windows.log
           if-no-files-found: warn
 
+  # RFC-254 T33/T34 — the e2e SURVEY, same measure-first discipline as `survey`.
+  #
+  # The e2e suite is far less exposed than the backend one: T28b removed the
+  # nine shell stubs, and a scan finds POSIX-only constructs in just 4 of 49
+  # spec files — two of which are display-only strings that never touch disk.
+  # What is left is signal semantics (Windows maps SIGTERM to TerminateProcess,
+  # so the graceful-shutdown path cannot be driven by a signal there).
+  #
+  # Non-gating, for the same reason as `survey`: this is data for the triage.
+  e2e-survey:
+    name: Windows e2e survey (non-gating)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Build the daemon + the compiled stub
+        shell: bash
+        run: bun run build:binary:e2e
+
+      - name: Install Playwright chromium
+        shell: bash
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run the e2e suite and record what fails
+        shell: bash
+        run: |
+          bun run e2e -- --reporter=line > e2e-windows.log 2>&1 || true
+          {
+            echo "## Windows e2e survey"
+            echo
+            echo '```'
+            grep -aE "^ *[0-9]+ (passed|failed|skipped)" e2e-windows.log | tail -4 || true
+            echo '```'
+            echo
+            echo "### Failing specs"
+            echo '```'
+            grep -aE "^\s+\[chromium\]" e2e-windows.log | sort -u || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -60 e2e-windows.log || true
+
+      - name: Upload the e2e survey log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-e2e-survey
+          path: e2e-windows.log
+          if-no-files-found: warn
+
   platform:
     name: Windows platform surface
     runs-on: windows-latest
