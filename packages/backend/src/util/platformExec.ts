@@ -245,3 +245,58 @@ export function buildScriptPath(
     platform,
   )
 }
+
+/**
+ * RFC-254 T11b — the executable suffix a sealed artifact must carry.
+ *
+ * Windows decides "is this runnable" from the extension, so a sealed copy
+ * written without `.exe` cannot be executed at all — and the failure surfaces
+ * as "file not found", not "not executable", which sends the diagnosis in
+ * entirely the wrong direction.
+ */
+export function executableSuffix(platform: NodeJS.Platform): string {
+  return platform === 'win32' ? '.exe' : ''
+}
+
+export const EXECUTABLE_SUFFIX_FOR_HOST = executableSuffix(process.platform)
+
+/**
+ * A command that exists, starts, does nothing and fails — the "shell" handed to
+ * plans that must not have one.
+ *
+ * POSIX uses `/bin/false`. Windows has no such binary; the closest reliable
+ * equivalent is cmd's built-in `exit 1`, which requires no file of our own and
+ * cannot be shadowed by anything on PATH because it is addressed absolutely.
+ *
+ * Why not simply a nonexistent path: the plan's own validation requires an
+ * ABSOLUTE, existing command, and a missing file would be indistinguishable
+ * from a mis-assembled plan. "Present but immediately failing" keeps the
+ * disabled-shell state legible.
+ */
+export function disabledShellCommand(
+  platform: NodeJS.Platform,
+  systemRoot: string | undefined,
+): string {
+  if (platform !== 'win32') return '/bin/false'
+  const root = systemRoot !== undefined && systemRoot.length > 0 ? systemRoot : 'C:\\Windows'
+  return `${root}\\System32\\cmd.exe`
+}
+
+export function disabledShellCommandForHost(): string {
+  return disabledShellCommand(process.platform, process.env.SystemRoot)
+}
+
+/**
+ * The user's home directory, from whichever variable this platform uses.
+ *
+ * Windows populates `USERPROFILE`; `HOME` is only present when some POSIX-ish
+ * tool put it there. Reading `HOME` alone makes every verified plan fail to
+ * assemble on a stock Windows install.
+ */
+export function platformHomeEnv(
+  env: Readonly<Record<string, string | undefined>>,
+  platform: NodeJS.Platform,
+): string | undefined {
+  if (platform !== 'win32') return env.HOME
+  return env.USERPROFILE ?? env.HOME
+}

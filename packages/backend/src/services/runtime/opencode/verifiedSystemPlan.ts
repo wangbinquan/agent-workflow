@@ -39,6 +39,7 @@ import {
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 import { buildVerifiedOpencodePlan } from './verifiedPlanCore'
 import { runtimeContainmentAdmissionFromPrepared } from './containment'
+import { disabledShellCommandForHost, EXECUTABLE_SUFFIX_FOR_HOST } from '@/util/platformExec'
 
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30_000
 const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
@@ -145,7 +146,7 @@ export async function buildVerifiedOpencodeSystemPlan(
   const invocationId = `s_${random(32).toString('base64url')}`
   const storeRoot = join(systemStoreParent, invocationId)
   const sealRoot = join(ctx.runDir, 'opencode-system-seal')
-  const binaryPath = join(sealRoot, 'bin', 'opencode')
+  const binaryPath = join(sealRoot, 'bin', `opencode${EXECUTABLE_SUFFIX_FOR_HOST}`)
   const manifestPath = join(ctx.runDir, 'opencode-verified-manifest.json')
   const fffProbeRoot = join(ctx.runDir, 'opencode-fff-probe')
   let succeeded = false
@@ -197,7 +198,9 @@ export async function buildVerifiedOpencodeSystemPlan(
       options: {},
       userPermission: {},
       toolOutputPattern: join(layout.xdgData, 'opencode', 'tool-output', '*'),
-      shellPath: '/bin/false',
+      // RFC-254 T11b: the "present but immediately failing" command; Windows
+      // has no /bin/false (see disabledShellCommand).
+      shellPath: disabledShellCommandForHost(),
       allowShell: false,
       mcp: {},
       customProvider: credential.customProvider,

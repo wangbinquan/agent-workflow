@@ -17,6 +17,9 @@ import {
   buildControlledPath,
   controlledSystemPathEntries,
   resolveGitToolDirectory,
+  disabledShellCommand,
+  executableSuffix,
+  platformHomeEnv,
 } from '@/util/platformExec'
 
 describe('RFC-254 platformExec', () => {
@@ -205,6 +208,54 @@ describe('RFC-254 T12 — controlled PATH', () => {
       expect(path.split(';')).toContain(gitDir)
       // ...and ahead of the system entries, so a seal always wins.
       expect(path.split(';')[0]).toBe(gitDir)
+    })
+  })
+})
+
+describe('RFC-254 T11b — verified artifact shape', () => {
+  test('a sealed executable keeps .exe on Windows only', () => {
+    // Windows decides "runnable" from the extension, so a sealed copy written
+    // without `.exe` cannot be executed — and it fails as "file not found",
+    // which points the diagnosis in completely the wrong direction.
+    expect(executableSuffix('linux')).toBe('')
+    expect(executableSuffix('darwin')).toBe('')
+    expect(executableSuffix('win32')).toBe('.exe')
+  })
+
+  test('the disabled shell is a command that exists and fails', () => {
+    // Plans that must NOT have a shell still have to name an absolute, existing
+    // command — the assembly validates that. A nonexistent path would be
+    // indistinguishable from a mis-assembled plan, so the disabled state is
+    // "present but immediately failing" instead.
+    expect(disabledShellCommand('linux', undefined)).toBe('/bin/false')
+    expect(disabledShellCommand('win32', 'C:\\Windows')).toBe('C:\\Windows\\System32\\cmd.exe')
+    expect(disabledShellCommand('win32', undefined)).toBe('C:\\Windows\\System32\\cmd.exe')
+  })
+
+  describe('home resolution', () => {
+    test('POSIX reads HOME and nothing else', () => {
+      expect(platformHomeEnv({ HOME: '/home/u', USERPROFILE: 'C:\\Users\\u' }, 'linux')).toBe(
+        '/home/u',
+      )
+      expect(platformHomeEnv({ USERPROFILE: 'C:\\Users\\u' }, 'linux')).toBeUndefined()
+    })
+
+    test('Windows prefers USERPROFILE, which is the one that actually exists', () => {
+      // A stock Windows install has no HOME at all; reading it alone made every
+      // verified plan fail to assemble (design gate P0-B).
+      expect(platformHomeEnv({ USERPROFILE: 'C:\\Users\\u' }, 'win32')).toBe('C:\\Users\\u')
+      expect(platformHomeEnv({ USERPROFILE: 'C:\\Users\\u', HOME: '/msys/home' }, 'win32')).toBe(
+        'C:\\Users\\u',
+      )
+    })
+
+    test('Windows still accepts HOME when a POSIX-ish tool set it', () => {
+      expect(platformHomeEnv({ HOME: 'C:\\msys\\home\\u' }, 'win32')).toBe('C:\\msys\\home\\u')
+    })
+
+    test('neither variable present yields undefined, not a guess', () => {
+      expect(platformHomeEnv({}, 'win32')).toBeUndefined()
+      expect(platformHomeEnv({}, 'linux')).toBeUndefined()
     })
   })
 })

@@ -35,6 +35,7 @@ import {
 } from './verifiedPlanCore'
 import { runtimeContainmentAdmissionFromPrepared } from './containment'
 import { removeSealedTree } from './sealedInputs'
+import { disabledShellCommandForHost, EXECUTABLE_SUFFIX_FOR_HOST } from '@/util/platformExec'
 
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30_000
 const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
@@ -177,7 +178,7 @@ export async function buildVerifiedOpencodeMcpTestPlan(
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
   const sealRoot = join(ctx.runDir, 'opencode-mcp-test-seal')
-  const binaryPath = join(sealRoot, 'bin', 'opencode')
+  const binaryPath = join(sealRoot, 'bin', `opencode${EXECUTABLE_SUFFIX_FOR_HOST}`)
   const manifestPath = join(ctx.runDir, 'opencode-verified-manifest.json')
   const ackPath = join(ctx.runDir, 'opencode-control.ack')
   const fffProbeRoot = join(ctx.runDir, 'opencode-fff-probe')
@@ -249,7 +250,9 @@ export async function buildVerifiedOpencodeMcpTestPlan(
       [mcpPattern]: 'allow',
     },
     toolOutputPattern: join(plannedLayout.xdgData, 'opencode', 'tool-output', '*'),
-    shellPath: '/bin/false',
+    // RFC-254 T11b: the "present but immediately failing" command; Windows
+    // has no /bin/false (see disabledShellCommand).
+    shellPath: disabledShellCommandForHost(),
     allowShell: false,
     mcp: {
       [ctx.executionMaterial.runtimeKey]: ctx.executionMaterial.opencodeEntry as IdentityJson,
