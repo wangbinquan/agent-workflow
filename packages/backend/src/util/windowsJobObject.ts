@@ -32,8 +32,25 @@
 // It uses Bun FFI against kernel32 rather than a native module because the
 // product ships as ONE self-contained executable; a `.node` addon cannot ride
 // along. OpenCode itself does the same thing for its console handling
-// (`packages/tui/src/terminal-win32.ts`), so the approach is proven on the same
-// runtime and platform.
+// (`packages/tui/src/terminal-win32.ts`).
+//
+// ⚠️ MEASURED LIMITATION (Windows 11 ARM64, Bun 1.3.14, 2026-08-04)
+// -----------------------------------------------------------------
+// `bun:ffi`'s `dlopen()` is NOT present in every Bun build. On the Windows
+// ARM64 build it throws
+//
+//     bun:ffi dlopen() is not available in this build (TinyCC is disabled)
+//
+// so this whole module degrades to unavailable there — verified by running the
+// FFI directly on a real VM, not inferred. The consequence is deliberate and
+// must stay visible: `adoptSpawnedProcessTree` returns false, the caller falls
+// back to `taskkill /T /F`, and — per design gate P0-D — a taskkill-only
+// cleanup MUST NOT be treated as proof that a runtime store may be reclaimed.
+// `isProcessTreeAlive` therefore answers `null` ("cannot tell"), never `false`.
+//
+// The x64 Bun build does ship dlopen, which is why the release target
+// (windows x86_64, RFC-254 D6) keeps the strong guarantee. Anyone extending
+// support to ARM64 has to close this first.
 
 // `bun:ffi` itself is available on every platform Bun runs on — only the
 // `dlopen('kernel32.dll')` call is Windows-specific, and that is guarded — so a
@@ -231,4 +248,23 @@ export function adoptProcessTree(pid: number): ProcessTreeOwnership | null {
 /** True when this platform can provide an authoritative tree-liveness answer. */
 export function processTreeOwnershipAvailable(platform: NodeJS.Platform): boolean {
   return platform !== 'win32' || loadKernel32() !== null
+}
+
+/**
+ * Why job objects are unavailable, for diagnostics that must not conflate
+ * "this Bun build cannot do FFI at all" with "kernel32 rejected our calls".
+ *
+ * The distinction is not hypothetical: on Windows ARM64 the shipped Bun build
+ * has TinyCC disabled, so `dlopen` throws before any Win32 call happens. A
+ * report of "Job Object setup failed" there would send someone hunting struct
+ * offsets that are perfectly correct.
+ */
+export function processTreeOwnershipDiagnosis(): {
+  available: boolean
+  reason: 'available' | 'not-windows' | 'ffi-unavailable'
+} {
+  if (process.platform !== 'win32') return { available: false, reason: 'not-windows' }
+  return loadKernel32() === null
+    ? { available: false, reason: 'ffi-unavailable' }
+    : { available: true, reason: 'available' }
 }

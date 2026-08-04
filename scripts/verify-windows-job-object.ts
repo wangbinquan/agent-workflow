@@ -22,7 +22,10 @@
 //
 // Run from the repo root on Windows:  bun run scripts/verify-windows-job-object.ts
 
-import { adoptProcessTree } from '../packages/backend/src/util/windowsJobObject'
+import {
+  adoptProcessTree,
+  processTreeOwnershipDiagnosis,
+} from '../packages/backend/src/util/windowsJobObject'
 
 function fail(message: string): never {
   process.stderr.write(`FAIL: ${message}\n`)
@@ -53,6 +56,22 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write('Job Object end-to-end (RFC-254 T4 / design gate P0-D)\n')
+
+  // Separate "this Bun build cannot do FFI" from "the FFI is wrong". Measured
+  // on Windows 11 ARM64 + Bun 1.3.14: dlopen throws because TinyCC is disabled
+  // in that build, and reporting it as a broken Job Object would send someone
+  // hunting struct offsets that are correct.
+  const diagnosis = processTreeOwnershipDiagnosis()
+  if (!diagnosis.available) {
+    process.stdout.write(
+      `\nSKIPPED: job objects unavailable (${diagnosis.reason}).\n` +
+        'On Windows ARM64 the shipped Bun build disables TinyCC, so bun:ffi dlopen()\n' +
+        'is absent. The platform then falls back to taskkill, which per design gate\n' +
+        'P0-D must NOT be treated as proof that a runtime store can be reclaimed.\n' +
+        'Re-run on the x64 build (the RFC-254 D6 release target) to exercise this.\n',
+    )
+    process.exit(0)
+  }
 
   // A parent that spawns a DETACHED grandchild and then just waits. The
   // grandchild is what a snapshot-walking taskkill can miss and what a

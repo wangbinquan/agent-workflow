@@ -18,7 +18,11 @@
 //     corruption P0-D identified.
 
 import { describe, expect, test } from 'bun:test'
-import { adoptProcessTree, processTreeOwnershipAvailable } from '@/util/windowsJobObject'
+import {
+  adoptProcessTree,
+  processTreeOwnershipAvailable,
+  processTreeOwnershipDiagnosis,
+} from '@/util/windowsJobObject'
 import { adoptSpawnedProcessTree, isProcessTreeAlive, killProcessTree } from '@/util/process'
 
 describe('RFC-254 T4 — process tree ownership', () => {
@@ -41,14 +45,29 @@ describe('RFC-254 T4 — process tree ownership', () => {
     try {
       const owned = adoptProcessTree(child.pid)
       if (process.platform === 'win32') {
-        // Proves the FFI contract end to end: CreateJobObjectW +
-        // SetInformationJobObject(KILL_ON_JOB_CLOSE) + OpenProcess +
-        // AssignProcessToJobObject all succeeded against a real kernel.
-        expect(owned).not.toBeNull()
-        expect(owned?.kind).toBe('windows-job-object')
-        expect(owned?.liveCount()).toBeGreaterThan(0)
-        owned?.terminate()
-        expect(owned?.liveCount()).toBe(0)
+        // Availability is a property of the BUN BUILD, not of Windows: the
+        // ARM64 build ships with TinyCC disabled, so `bun:ffi dlopen()` throws
+        // and job objects are simply absent (measured on Windows 11 ARM64 +
+        // Bun 1.3.14 — the first draft of this test asserted they must exist
+        // and failed on a machine where the production code was behaving
+        // exactly as designed).
+        const diagnosis = processTreeOwnershipDiagnosis()
+        if (!diagnosis.available) {
+          expect(diagnosis.reason).toBe('ffi-unavailable')
+          // The degradation must stay honest: no job means no authoritative
+          // liveness answer, which is `null` and never `false`.
+          expect(owned).toBeNull()
+          expect(isProcessTreeAlive(child.pid)).toBeNull()
+        } else {
+          // Proves the FFI contract end to end: CreateJobObjectW +
+          // SetInformationJobObject(KILL_ON_JOB_CLOSE) + OpenProcess +
+          // AssignProcessToJobObject all succeeded against a real kernel.
+          expect(owned).not.toBeNull()
+          expect(owned?.kind).toBe('windows-job-object')
+          expect(owned?.liveCount()).toBeGreaterThan(0)
+          owned?.terminate()
+          expect(owned?.liveCount()).toBe(0)
+        }
       } else {
         expect(owned).toBeNull()
         expect(adoptSpawnedProcessTree(child.pid)).toBe(false)
@@ -127,6 +146,8 @@ describe('RFC-254 T4 — process tree ownership', () => {
     // On Windows an unadopted pid is exactly the `null` case; on POSIX the
     // group answer is always definite. Both are correct — what must never
     // happen is `null` and `false` being treated as the same thing.
+    // On Windows an unadopted pid has no authoritative answer at all; on POSIX
+    // the group answer is always definite.
     expect(verdict === null).toBe(process.platform === 'win32')
   })
 })

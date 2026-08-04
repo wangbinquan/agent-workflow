@@ -16,7 +16,7 @@
 import { describe, expect, test } from 'bun:test'
 import { hardenGitArgs, hardenedGitLeadingArgs } from '@/util/gitHardening'
 import { nullDevice } from '@/util/platformExec'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const HOME = '/tmp/aw-rfc254-git-test-home'
 
@@ -32,9 +32,10 @@ describe('RFC-254 T18 — git on Windows', () => {
     // a long function that is awkward to drive directly, and the whole point of
     // T18 is that NO literal survives. A behavioural test that only covered one
     // of the two would have let the other rot.
-    const source = Bun.file(
-      new URL('../src/util/git.ts', import.meta.url).pathname,
-    ).text() as unknown as Promise<string>
+    // `new URL(...).pathname` yields `/C:/...` on Windows, which `Bun.file`
+    // cannot open. `import.meta.dir` + `resolve` is separator-correct
+    // everywhere (docs/dev-gotchas.md: cwd-sensitive source locks).
+    const source = Bun.file(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts')).text()
     return source.then((text) => {
       expect(text).not.toContain("'/dev/null'")
       expect(text).toContain('NULL_DEVICE_FOR_HOST')

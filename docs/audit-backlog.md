@@ -461,3 +461,20 @@ config.json 0600，与 OIDC client_secret / repo 凭据的既有姿态一致。*
   `execution-identity-source-changed` / `store-unsafe`。当前实现直接用 `node:fs`，
   没有可注入的 seam，故要么加注入点、要么用真实临时目录做时序编排。
   **注意**：这是**既有**缺口而非 RFC-254 引入——迁移只是把它照了出来。
+
+## Windows ARM64 无 Job Object（RFC-254 真机实测，2026-08-04）
+
+Windows **ARM64** 的 Bun 发行构建禁用了 TinyCC，`bun:ffi dlopen()` 直接抛
+`not available in this build`（Windows 11 build 26200 + Bun 1.3.14 实测，
+见 `design/RFC-254-windows-native-execution/acceptance-real-machine-2026-08-04.md`）。
+
+后果：该平台上 `util/windowsJobObject.ts` 整体不可用 ⇒ 杀树回退 `taskkill /T /F`
+（枚举式，有竞态窗口），而按 RFC-254 设计门 P0-D，taskkill-only 的清理**不得**
+被当作 runtime store 可回收的证据 —— `isProcessTreeAlive` 因此返回 `null`
+（「无法判定」）而非 `false`，调用方必须把「判不了」当成「不安全」。
+
+- ⏳ **(P2) 若要把发行目标扩到 windows-arm64，必须先解决这一条**。当前发行目标是
+  x64（D6），而 x64 的 Bun 构建带 dlopen，所以发行产物保有强保证。可选路径：
+  等上游为 ARM64 启用 TinyCC、或改用不依赖 FFI 的机制（例如把 Job Object 的
+  创建挪进一个随产物分发的小型原生 helper —— 但那与「单一自包含可执行文件」
+  的分发形态冲突，需要产品决策）。
