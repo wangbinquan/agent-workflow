@@ -377,7 +377,13 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await page.goto(`${daemon.baseUrl}/`)
     // On a clean daemon `/` renders the first-run Onboarding (RFC-190 split:
     // the seeded dashboard gets its own case below).
-    await page.waitForLoadState('networkidle')
+    // NOT `waitForLoadState('networkidle')`: this app holds WebSocket
+    // subscriptions open, so the network may never go idle and the wait simply
+    // burns its 30 s and throws — measured on the Windows survey, where the
+    // homepage case failed with exactly that timeout while the page was
+    // already rendered. A deterministic element assertion is both faster and
+    // the thing actually being waited for.
+    await expect(page.getByTestId('onboarding-hero')).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/ (onboarding)')
   })
 
@@ -391,7 +397,12 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
   test('/onboarding (guided tour) passes a11y', async ({ page }) => {
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/onboarding`)
-    await page.waitForLoadState('networkidle')
+    // NOT `waitForLoadState('networkidle')`: this app holds WebSocket
+    // subscriptions open, so the network may never go idle and the wait simply
+    // burns its 30 s and throws — measured on the Windows survey, where the
+    // homepage case failed with exactly that timeout while the page was
+    // already rendered. A deterministic element assertion is both faster and
+    // the thing actually being waited for.
     await expect(page.getByTestId('guide-page')).toBeVisible()
     // Scan the launcher landing (the three flow cards) first...
     await expectNoCriticalOrSeriousAxeViolations(page, '/onboarding (launcher)')
@@ -433,8 +444,13 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     })
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/`)
+    // NOT `waitForLoadState('networkidle')`: this app holds WebSocket
+    // subscriptions open, so the network may never go idle and the wait simply
+    // burns its 30 s and throws — measured on the Windows survey, where the
+    // homepage case failed with exactly that timeout while the page was
+    // already rendered. A deterministic element assertion is both faster and
+    // the thing actually being waited for.
     await expect(page.locator('[data-testid="homepage"]')).toBeVisible()
-    await page.waitForLoadState('networkidle')
     await expectNoCriticalOrSeriousAxeViolations(page, '/ (seeded homepage)')
   })
 
