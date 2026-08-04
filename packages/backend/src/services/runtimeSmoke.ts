@@ -425,6 +425,13 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
       // proxy/region-blocked, claude misclassifies as `stream-nonconforming` when it
       // actually spoke the protocol fine and just couldn't reach/authenticate the API.
       let stdoutText = ''
+      // 2026-08-04 second round: the terminal `result` event puts the error
+      // text NEAR THE HEAD of the line (`"is_error":true,"result":"…"`) and a
+      // fat usage blob at the end — a tail-capped excerpt shows only the blob
+      // (observed live: the GLM-fork probe surfaced `"modelUsage":{}` while
+      // the actual reason stayed hidden). Keep the LAST result-shaped line so
+      // the evidence can quote its head.
+      let lastResultLine = ''
       const activeReaders = new Set<{ cancel: () => Promise<void> | void }>()
 
       const readStream = async (
@@ -479,6 +486,9 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
           // raw line (capped) feeds the auth/model classifier — claude's error is
           // here, not on stderr (see stdoutText decl).
           if (stdoutText.length < 8_192) stdoutText += line + '\n'
+          if (line.includes('"type":"result"') || line.includes('"is_error":true')) {
+            lastResultLine = line
+          }
           const ev = driver.parseEvent(line)
           if (ev !== null) {
             sawEvent = true
@@ -574,7 +584,13 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
       // "nonce missing" and the operator had to guess. Surface a masked,
       // capped tail of BOTH streams on the nonconforming branches. The probe
       // route is admin-only; maskDiagnosticsText scrubs credential shapes.
+      // The result line is quoted from its HEAD (error text precedes the usage
+      // blob), the raw streams from their TAILS (errors come last there).
+      const resultHead = lastResultLine.replace(/\s+/g, ' ').trim()
       const evidence = [
+        resultHead.length > 0
+          ? `result: ${resultHead.length > 400 ? `${resultHead.slice(0, 400)}…` : resultHead}`
+          : null,
         stderrText.trim().length > 0 ? `stderr tail: ${outputTail(stderrText)}` : null,
         stdoutText.trim().length > 0 ? `stdout tail: ${outputTail(stdoutText)}` : null,
       ]

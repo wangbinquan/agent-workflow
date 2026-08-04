@@ -353,6 +353,31 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
     SMOKE_TIMEOUT,
   )
 
+  // 2026-08-04 second round: the terminal `result` event carries the error
+  // text near the HEAD of the line and a fat usage blob at the end. A
+  // tail-only excerpt shows the blob and hides the reason (observed live:
+  // `"modelUsage":{}` visible, actual GLM-gateway error invisible). The
+  // evidence must quote the result line's head, so an error text pushed
+  // beyond the 300-char tail window by the usage blob stays readable.
+  test(
+    'a long error result line still surfaces its HEAD (error text) in detail',
+    async () => {
+      process.env.MOCK_CLAUDE_SESSION_ID = 'smoke-sess-longresult'
+      process.env.MOCK_CLAUDE_IS_ERROR = '1'
+      process.env.MOCK_CLAUDE_EXIT_CODE = '1'
+      process.env.MOCK_CLAUDE_RESULT_TEXT = `GATEWAY_ERR_HEAD ${'x'.repeat(600)}`
+      const r = await smokeRuntime({
+        protocol: 'claude-code',
+        binaryPath: wrapperFor(MOCK_CLAUDE),
+        bridgeCredentials: false,
+        timeoutMs: SMOKE_TIMEOUT,
+      })
+      expect(r.outcome).toBe('stream-nonconforming')
+      expect(r.detail).toContain('GATEWAY_ERR_HEAD')
+    },
+    SMOKE_TIMEOUT,
+  )
+
   // RFC-116: a pure OS/transport network failure (no auth word at all) → network-blocked.
   test(
     'claude that emits a pure network error on stdout → network-blocked',
