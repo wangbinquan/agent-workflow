@@ -4,18 +4,18 @@
 
 ## 审计报告索引（`design/`）
 
-| 报告                                                              | 主题                 | 状态 / 未决                                                                                                     |
-| ----------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `design/scheduler-audit-2026-06-10.md`                            | 调度专项深查         | 2 P0 + 9 P1；WP-1~10 路线；重构走 RFC                                                                           |
-| `design/task-execution-architecture-audit-2026-08-03.md`          | 任务执行**架构**审视 | 7 维 + 对抗复核；72 存活 → 12 issue（2 P0）+ 5 根因 + WP-0~10 路线；**WP-0 是一行配置修依赖门禁失明，必须先做** |
-| `design/dedup-audit-2026-06-13.md`                                | 全仓重复实现         | 68 确认 + 4 伪重复；9 处已漂成 bug；路线 §5                                                                     |
-| `design/flag-audit-2026-07-07.md`                                 | 标志位控流           | 六大 P0 + ≥12 真 bug + RFC-G1~G10；**§8 有 3 决策点待用户拍板**                                                 |
-| `design/frontend-primitive-audit-2026-07-21.md`                   | 前端公共原语         | 160 确认 / 91 驳回；头号=三态闸门 + ErrorBanner 缺 onRetry；5-RFC 路线（部分已落 RFC-214）                      |
-| `design/test-guard-audit-2026-07-21/`                             | 测试防护缺口         | 131 缺口 / 9 逃逸机制 / 15 结构守卫；加固批已落 + RFC-212（WS 授权撤销，方案 D）                                |
-| `design/ux-audit.md` · `design/ux-functional-audit-2026-07-16.md` | UX / 功能            | 见报告                                                                                                          |
-| `design/workgroup-e2e-audit.md`                                   | 工作组 e2e           | 见报告                                                                                                          |
-| `design/codex-impl-gate-misc-2026-07-22.md`                       | Codex 实现门杂项     | 见报告                                                                                                          |
-| `design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md` | RFC-224 能力回退全量裁决 | 6 实锤事故史 + 16 收尾修复；裁决 A/B/C 三栏；4 条 B 候选挂本文末节；RFC-255 进行中 |
+| 报告                                                                                   | 主题                     | 状态 / 未决                                                                                                     |
+| -------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `design/scheduler-audit-2026-06-10.md`                                                 | 调度专项深查             | 2 P0 + 9 P1；WP-1~10 路线；重构走 RFC                                                                           |
+| `design/task-execution-architecture-audit-2026-08-03.md`                               | 任务执行**架构**审视     | 7 维 + 对抗复核；72 存活 → 12 issue（2 P0）+ 5 根因 + WP-0~10 路线；**WP-0 是一行配置修依赖门禁失明，必须先做** |
+| `design/dedup-audit-2026-06-13.md`                                                     | 全仓重复实现             | 68 确认 + 4 伪重复；9 处已漂成 bug；路线 §5                                                                     |
+| `design/flag-audit-2026-07-07.md`                                                      | 标志位控流               | 六大 P0 + ≥12 真 bug + RFC-G1~G10；**§8 有 3 决策点待用户拍板**                                                 |
+| `design/frontend-primitive-audit-2026-07-21.md`                                        | 前端公共原语             | 160 确认 / 91 驳回；头号=三态闸门 + ErrorBanner 缺 onRetry；5-RFC 路线（部分已落 RFC-214）                      |
+| `design/test-guard-audit-2026-07-21/`                                                  | 测试防护缺口             | 131 缺口 / 9 逃逸机制 / 15 结构守卫；加固批已落 + RFC-212（WS 授权撤销，方案 D）                                |
+| `design/ux-audit.md` · `design/ux-functional-audit-2026-07-16.md`                      | UX / 功能                | 见报告                                                                                                          |
+| `design/workgroup-e2e-audit.md`                                                        | 工作组 e2e               | 见报告                                                                                                          |
+| `design/codex-impl-gate-misc-2026-07-22.md`                                            | Codex 实现门杂项         | 见报告                                                                                                          |
+| `design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md` | RFC-224 能力回退全量裁决 | 6 实锤事故史 + 16 收尾修复；裁决 A/B/C 三栏；4 条 B 候选挂本文末节；RFC-255 进行中                              |
 
 ## 运行时 / 沙箱能力收口盘点（2026-07-31，RFC-237 root 事故后自查）
 
@@ -245,7 +245,7 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   `RUN_SANDBOX_ITEST=1`（注释明写 "ubuntu has no bwrap"）；唯一装 bubblewrap 的 `integration-opencode.yml`
   其 push path filter（`:42-58`）**不含** `services/sandbox/**`、`services/execution/**`、
   `services/runtime/netlessProjection.ts` ⇒ 这些文件的 Linux 行为回归窗口最长 24h（nightly 才红）。
-- ✅ **(P2，已修 2026-08-04) runner 层沙箱接线变异不红**：`services/runner.ts:1375-1398`（sessionStore/readOnly*/下传）与
+- ✅ **(P2，已修 2026-08-04) runner 层沙箱接线变异不红**：`services/runner.ts:1375-1398`（sessionStore/readOnly\*/下传）与
   `:1406-1420`（warn 降级告警触发）整段删掉，现有测试零红。前者一断，RFC-251 的 Linux 插件 ENOENT
   原样复发且无预警。
 - ⏳ **(P2) 脚本节点 `network:'deny'` 的真围栏两 OS 均无 real-mechanism 测试**：只有 argv/渲染层断言。
@@ -377,3 +377,12 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   `SAFE_FORWARD_ENV` 15 键白名单 + HOME 重定向使 `AWS_*`、ADC、`AZURE_RESOURCE_NAME` 等
   全部不可达。恢复 = 受控 env 透传白名单 + 逐 provider 行为资格。
 - ⏳ **(P3) wellknown 凭据**：并入 OAuth RFC。
+
+## 凭据 at-rest 收口（RFC-255 起，2026-08-04）
+
+RFC-255 把自定义 provider 的 `apiKey` 做成了 secretBox 密封（RFC-036 同一平台密钥）+
+config.json 0600，与 OIDC client_secret / repo 凭据的既有姿态一致。**剩下的明文面**：
+
+- ⏳ **(P2) `mcps.config.headers` 迁移 secretBox**：remote MCP 的 `Authorization` 仍明文入库，
+  且随 `--mcp-config` inline JSON 进 claude 的 argv（宿主 `ps` 可见，见上文 RFC-242 残留项）。
+  两件事要一起收：入库密封 + 出 argv。迁移需带存量行的读时兼容（明文 ⇒ 密封的一次性 backfill）。

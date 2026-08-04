@@ -91,6 +91,23 @@ reported version 可以写入 status/owner 作为 nullable telemetry，但：
 - selected agent/model/provider/skill/MCP 与 source fingerprint 都加入 canonical
   execution identity。
 
+**RFC-255（自定义 OpenAI-compatible provider）**在这条边界上新增**唯一一条**受控入口：
+
+- 管理员在 daemon config 的 `customProviders` 声明网关（id / baseURL / 手动模型清单 /
+  enabled），平台据此为**选中的那一个**构造 `provider` 段并注入受控配置。段内
+  `api` 与 `options.baseURL` 同源写入——前者是报告面 `model.api.url`，后者是 SDK 实际
+  拨号地址，写一个漏一个即意味着「验的端点」与「跑的端点」可以不同。
+- 段内**不含密钥、不含显示名**：密钥仅经 `OPENCODE_AUTH_CONTENT` 以 strict `{type:'api'}`
+  形态下发（⇒ 轮换密钥不改 identity digest、不破 resume），显示名只进模型枚举
+  （⇒ 改名不破 resume）。
+- `npm` 是 closed enum（`@ai-sdk/openai-compatible`），`PINNED_BUNDLED_PROVIDER_NPM`
+  未放宽——opencode 对非 bundled npm 会运行时 `Npm.add` 下载实现包，该面必须保持不存在。
+- boot 后按 `manifest.expectedConfig.provider` 同源推导准入值，逐字节校验报告面的
+  `source==='config'` / `npm` / `api.url` / `options.baseURL`，并要求报告模型键集
+  **⊆** 管理员清单（该 ⊆ 检查是安全锁：与内置目录 id 冲突的可观测症状正是模型超集）。
+- 自定义 id 禁止命中内置目录 id（静态快照 + canary 探针双层），否则 config 段会把该
+  内置 provider 整体改指网关。凭据 at-rest 走 secretBox，config.json 0600。
+
 完整配置不是“兼容任意 OpenCode 行为”的承诺；行为 codec 不匹配仍应 fail closed。
 
 ## 5. Containment provider

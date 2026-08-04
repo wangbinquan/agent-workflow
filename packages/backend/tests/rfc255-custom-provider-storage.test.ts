@@ -181,6 +181,21 @@ describe('RFC-255 save gate', () => {
     expect(probedIds).toEqual([])
   })
 
+  // Regression: the first implementation sealed anything that was not the mask,
+  // so the stored (already sealed) value coming back around got sealed a second
+  // time. Unsealing then yielded ciphertext, the gateway rejected every
+  // request, and nothing in the platform pointed at the config write that did
+  // it. Both layers of the fix are locked: the value-identity check here, and
+  // the route's "only when the patch carries the key" gate.
+  test('an already-sealed value passed back through is not sealed twice', async () => {
+    const sealed = secretBox.seal(PLAINTEXT)
+    const current = cfgWith([{ ...wireEntry, apiKey: sealed }])
+    // Exactly what mergePatch produces for a PUT that never mentions providers.
+    const saved = await resolveCustomProvidersForSave(current, current, secretBox)
+    expect(saved[0]?.apiKey).toBe(sealed)
+    expect(secretBox.unseal(saved[0]!.apiKey!)).toBe(PLAINTEXT)
+  })
+
   test('validation issues surface with a stable code and the entry index', async () => {
     const attempt = resolveCustomProvidersForSave(
       cfgWith([]),

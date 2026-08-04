@@ -186,11 +186,16 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         // valid display receipt, but can never leave a stale green one behind.
         await invalidateInheritedRuntimeProbeReceipts(deps.db, changedBinaryProtocols)
         // RFC-255: seal new credentials, carry preserved ones over, and reject
-        // an id that would re-point a built-in catalog provider. Runs on the
-        // MERGED value, so a patch that never mentions customProviders is a
-        // no-op here rather than a re-seal.
+        // an id that would re-point a built-in catalog provider.
+        //
+        // Gated on the patch actually CARRYING customProviders. The merged
+        // config always contains the stored entries, whose keys are already
+        // sealed — running the gate over those would treat each sealed value as
+        // fresh plaintext and seal it a second time, so an unrelated settings
+        // change (a log level, a theme) would silently corrupt every gateway
+        // credential on the box.
         const providerPatch =
-          deps.secretBox === undefined
+          deps.secretBox === undefined || body.customProviders === undefined
             ? {}
             : {
                 customProviders: await resolveCustomProvidersForSave(

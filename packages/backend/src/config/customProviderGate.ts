@@ -110,6 +110,14 @@ export async function resolveCustomProvidersForSave(
   }
 
   return submitted.map((entry) => {
+    const previousKey = stored.get(entry.id)?.apiKey
+    // Byte-identical to what is already stored ⇒ this is the stored (sealed)
+    // value coming back around, not a new secret. Sealing it again would
+    // produce a double-sealed credential that unseals to ciphertext, and the
+    // gateway would reject every request with no hint as to why.
+    if (previousKey !== undefined && entry.apiKey === previousKey) {
+      return { ...entry, apiKey: previousKey }
+    }
     if (isPreservedApiKey(entry.apiKey)) {
       const previous = stored.get(entry.id)
       // validateCustomProviders already rejected "preserve" with nothing to
