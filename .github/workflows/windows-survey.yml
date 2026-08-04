@@ -163,10 +163,37 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           tail -60 e2e-windows.log || true
 
+      # RFC-254 T34 — measure BEFORE adding the webkit nightly's windows leg.
+      # A nightly that is red on arrival is the same "gate nobody reads" the
+      # chromium leg's exclusion rationale argues against, so webkit gets the
+      # same treatment chromium got: survey first, flip second.
+      - name: Install Playwright webkit
+        shell: bash
+        continue-on-error: true
+        run: bunx playwright install --with-deps webkit
+
+      - name: Run the webkit suite and record what fails
+        shell: bash
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_WEBKIT: '1'
+        run: |
+          bun run e2e -- --project=webkit --reporter=line > e2e-windows-webkit.log 2>&1 || true
+          {
+            echo "## Windows e2e survey — WEBKIT"
+            echo
+            echo '```'
+            grep -aE "^ *[0-9]+ (passed|failed|flaky|skipped)" e2e-windows-webkit.log | tail -4 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -40 e2e-windows-webkit.log || true
+
       - name: Upload the e2e survey log
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: windows-e2e-survey
-          path: e2e-windows.log
+          path: |
+            e2e-windows.log
+            e2e-windows-webkit.log
           if-no-files-found: warn
