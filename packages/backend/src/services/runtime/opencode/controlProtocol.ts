@@ -12,6 +12,11 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { timingSafeEqual } from 'node:crypto'
+import {
+  assertPrivateRegularFileForHost,
+  assertSameFileIdentityForHost,
+  assertUnopenedPrivateFileForHost,
+} from '@/util/fileTrust'
 import { z } from 'zod'
 import {
   OPENCODE_DIRECT_PROTOCOL_CODEC,
@@ -194,7 +199,7 @@ export function writeControlAckExclusive(path: string, ack: ControlAck): void {
     writeFileSync(fd, content, { encoding: 'utf8' })
     fsyncSync(fd)
     const stat = fstatSync(fd)
-    if (!stat.isFile() || (stat.mode & 0o777) !== 0o600) {
+    if (!assertPrivateRegularFileForHost(stat).trusted) {
       throw new ControlProtocolError('unsafe-ack-file')
     }
   } catch (error) {
@@ -209,20 +214,16 @@ export function readControlAck(path: string, expectedNonce: string): ControlAck 
   let fd: number | undefined
   try {
     const before = lstatSync(path)
-    if (
-      !before.isFile() ||
-      before.isSymbolicLink() ||
-      (before.mode & 0o777) !== 0o600 ||
-      before.size > MAX_CONTROL_ACK_BYTES
-    ) {
+    if (!assertUnopenedPrivateFileForHost(before, { maxBytes: MAX_CONTROL_ACK_BYTES }).trusted) {
       throw new ControlProtocolError('unsafe-ack-file')
     }
     fd = openSync(path, constants.O_RDONLY | noFollowFlag())
     const opened = fstatSync(fd)
+    // The size rule here is a CEILING, not equality: the writer may still be
+    // appending when we first read. Kept at the call site precisely because it
+    // differs from the manifest's byte-exact rule.
     if (
-      !opened.isFile() ||
-      opened.dev !== before.dev ||
-      opened.ino !== before.ino ||
+      !assertSameFileIdentityForHost(before, opened).trusted ||
       opened.size > MAX_CONTROL_ACK_BYTES
     ) {
       throw new ControlProtocolError('ack-file-changed')

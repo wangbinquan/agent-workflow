@@ -9,6 +9,11 @@ import { z } from 'zod'
 import { JsonValueSchema, OPENCODE_DIRECT_PROTOCOL_CODEC } from './directApiSchemas'
 import { verifiedSelfCommand } from './sealedSubprocess'
 import { executionIdentityFailure } from './failure'
+import {
+  assertPrivateRegularFileForHost,
+  assertSameFileIdentityForHost,
+  assertUnopenedPrivateFileForHost,
+} from '@/util/fileTrust'
 import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
 import { FffCapabilityProbeSchema } from './fffCapability'
 import { VerifiedInventoryPlanSchema } from './verifiedInventory'
@@ -324,7 +329,10 @@ export async function writeVerifiedLaunchManifest(
     await handle.writeFile(bytes)
     await handle.sync()
     const metadata = await handle.stat()
-    if (!metadata.isFile() || (metadata.mode & 0o777) !== 0o600) {
+    // RFC-254 T0a: the privacy proof lives in one place now. On a platform
+    // that cannot prove it from stat metadata the verdict is an explicit
+    // `platform-unsupported`, not a silent pass.
+    if (!assertPrivateRegularFileForHost(metadata).trusted) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
   } finally {
@@ -339,16 +347,15 @@ export async function readAndUnlinkVerifiedLaunchManifest(
   try {
     const before = await lstat(path)
     if (
-      before.isSymbolicLink() ||
-      !before.isFile() ||
-      (before.mode & 0o777) !== 0o600 ||
-      before.size > MAX_VERIFIED_MANIFEST_BYTES
+      !assertUnopenedPrivateFileForHost(before, { maxBytes: MAX_VERIFIED_MANIFEST_BYTES }).trusted
     ) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
     handle = await open(path, constants.O_RDONLY | noFollow())
     const opened = await handle.stat()
-    if (opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size) {
+    // Size equality is this caller's own rule (see assertSameFileIdentity):
+    // the manifest was just written and must not have been rewritten.
+    if (!assertSameFileIdentityForHost(before, opened).trusted || opened.size !== before.size) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
     const bytes = await handle.readFile()
