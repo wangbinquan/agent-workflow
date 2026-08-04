@@ -6,6 +6,7 @@
 // (mirrors resolveRuntimeByName, unlike the fail-loud validateRuntimeReference).
 
 import { describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createRuntime, resolveInternalAgentRuntime } from '../src/services/runtimeRegistry'
@@ -21,7 +22,7 @@ describe('resolveInternalAgentRuntime (RFC-117)', () => {
     await createRuntime(db, {
       name: 'oc-haiku',
       protocol: 'opencode',
-      binaryPath: '/usr/bin/oc-haiku',
+      binaryPath: canonicalBinaryPath('oc-haiku'),
       model: 'anthropic/haiku',
     })
     const rt = await resolveInternalAgentRuntime(db, {
@@ -31,7 +32,7 @@ describe('resolveInternalAgentRuntime (RFC-117)', () => {
     })
     expect(rt.name).toBe('oc-haiku')
     expect(rt.protocol).toBe('opencode')
-    expect(rt.binaryPath).toBe('/usr/bin/oc-haiku')
+    expect(rt.binaryPath).toBe(canonicalBinaryPath('oc-haiku'))
     expect(rt.model).toBe('anthropic/haiku')
   })
 
@@ -62,7 +63,7 @@ describe('resolveInternalAgentRuntime (RFC-117)', () => {
     await createRuntime(db, {
       name: 'cc-default',
       protocol: 'claude-code',
-      binaryPath: '/opt/cc',
+      binaryPath: canonicalBinaryPath('cc'),
       model: 'claude-sonnet',
     })
     const rt = await resolveInternalAgentRuntime(db, {

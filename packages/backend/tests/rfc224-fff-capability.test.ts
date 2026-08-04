@@ -3,6 +3,7 @@
 // one-file/no-network/no-rg proof and its fail-closed decoder.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { chmod, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -204,7 +205,7 @@ describe('RFC-224 FFF capability artifact seal', () => {
   test('renders the exact no-network command without an rg-capable PATH', async () => {
     const value = await fixture()
     const command = renderFffCapabilityProbeCommand({
-      binaryPath: '/sealed/opencode',
+      binaryPath: canonicalBinaryPath('opencode'),
       probe: value.probe,
     })
     expect(command[0]).toBe('/usr/bin/bwrap')
@@ -216,7 +217,7 @@ describe('RFC-224 FFF capability artifact seal', () => {
     expect(command[pathIndex + 2]).toBe(join(value.probe.root, 'path'))
     expect(command.join('\n')).not.toContain('OPENCODE_DISABLE_FFF')
     expect(command.slice(-5)).toEqual([
-      '/sealed/opencode',
+      canonicalBinaryPath('opencode'),
       'debug',
       'file',
       'search',
@@ -235,7 +236,7 @@ describe('RFC-224 FFF capability artifact seal', () => {
     await expectBootstrapFailure(
       runFffCapabilityProbe(
         {
-          binaryPath: '/sealed/opencode',
+          binaryPath: canonicalBinaryPath('opencode'),
           runRoot: value.runRoot,
           probe: value.probe,
           timeoutMs: 1_000,
@@ -508,7 +509,7 @@ describe('RFC-224 FFF capability execution proof', () => {
     const value = await fixture()
     let spawned = false
     const input = {
-      binaryPath: '/sealed/opencode',
+      binaryPath: canonicalBinaryPath('opencode'),
       runRoot: value.runRoot,
       probe: value.probe,
       timeoutMs: 1_000,
@@ -547,7 +548,7 @@ describe('RFC-224 FFF capability execution proof', () => {
     let spawnedCwd = ''
     await runFffCapabilityProbe(
       {
-        binaryPath: '/sealed/opencode',
+        binaryPath: canonicalBinaryPath('opencode'),
         runRoot: value.runRoot,
         probe: value.probe,
         timeoutMs: 1_000,
@@ -565,7 +566,7 @@ describe('RFC-224 FFF capability execution proof', () => {
 
     expect(spawnedCwd).toBe(join(value.probe.root, 'cwd'))
     expect(spawnedCommand.slice(-5)).toEqual([
-      '/sealed/opencode',
+      canonicalBinaryPath('opencode'),
       'debug',
       'file',
       'search',
@@ -584,7 +585,7 @@ describe('RFC-224 FFF capability execution proof', () => {
       await expectBootstrapFailure(
         runFffCapabilityProbe(
           {
-            binaryPath: '/sealed/opencode',
+            binaryPath: canonicalBinaryPath('opencode'),
             runRoot: value.runRoot,
             probe: value.probe,
             timeoutMs: 1_000,
@@ -605,7 +606,7 @@ describe('RFC-224 FFF capability execution proof', () => {
     await expectBootstrapFailure(
       runFffCapabilityProbe(
         {
-          binaryPath: '/sealed/opencode',
+          binaryPath: canonicalBinaryPath('opencode'),
           runRoot: value.runRoot,
           probe: value.probe,
           timeoutMs: 1_000,
@@ -651,7 +652,7 @@ describe('RFC-224 FFF capability execution proof', () => {
     await expectBootstrapFailure(
       runFffCapabilityProbe(
         {
-          binaryPath: '/sealed/opencode',
+          binaryPath: canonicalBinaryPath('opencode'),
           runRoot: value.runRoot,
           probe: value.probe,
           timeoutMs: 1_000,
@@ -694,7 +695,7 @@ describe('RFC-224 FFF capability execution proof', () => {
     await expectBootstrapFailure(
       runFffCapabilityProbe(
         {
-          binaryPath: '/sealed/opencode',
+          binaryPath: canonicalBinaryPath('opencode'),
           runRoot: value.runRoot,
           probe: value.probe,
           timeoutMs: 1_000,

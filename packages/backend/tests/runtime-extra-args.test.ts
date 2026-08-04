@@ -23,6 +23,7 @@
 //      itself emits — the reserved set cannot silently fall behind the argv.
 
 import { describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -147,13 +148,13 @@ describe('registry persistence + frozen snapshot', () => {
     await createRuntime(db, {
       name: 'codeagent',
       protocol: 'claude-code',
-      binaryPath: '/usr/local/bin/codeagentcli',
+      binaryPath: canonicalBinaryPath('codeagentcli'),
       model: 'GLM-5.1-NN',
       extraArgs: ['--skip-safe-check'],
     })
     const row = await getRuntime(db, 'codeagent')
     expect(row?.extraArgsJson).toBe('["--skip-safe-check"]')
-    const view = runtimeRowToView(row!, null, '/usr/local/bin/codeagentcli')
+    const view = runtimeRowToView(row!, null, canonicalBinaryPath('codeagentcli'))
     expect(view.extraArgs).toEqual(['--skip-safe-check'])
     const resolved = await resolveRuntimeByName(db, 'codeagent')
     expect(resolved.extraArgs).toEqual(['--skip-safe-check'])
@@ -173,7 +174,7 @@ describe('registry persistence + frozen snapshot', () => {
     await createRuntime(db, {
       name: 'codeagent',
       protocol: 'claude-code',
-      binaryPath: '/usr/local/bin/codeagentcli',
+      binaryPath: canonicalBinaryPath('codeagentcli'),
     })
     const before = await getRuntime(db, 'codeagent')
     const updated = await updateRuntime(db, 'codeagent', {

@@ -68,7 +68,7 @@ describe('seedBuiltinRuntimes (RFC-112 PR-A)', () => {
       id: ulid(),
       name: 'opencode',
       protocol: 'claude-code',
-      binaryPath: '/usr/local/bin/oc',
+      binaryPath: canonicalBinaryPath('oc'),
       model: 'opus',
     })
     await seedBuiltinRuntimes(db)
@@ -76,7 +76,7 @@ describe('seedBuiltinRuntimes (RFC-112 PR-A)', () => {
     expect(rows.length).toBe(1) // no claude-code added
     const oc = rows[0]!
     expect(oc.protocol).toBe('claude-code') // NOT corrected — no identity reset anymore
-    expect(oc.binaryPath).toBe('/usr/local/bin/oc')
+    expect(oc.binaryPath).toBe(canonicalBinaryPath('oc'))
     expect(oc.model).toBe('opus')
   })
 })
@@ -92,12 +92,12 @@ describe('createRuntime (RFC-112 PR-A)', () => {
     const row = await createRuntime(db, {
       name: 'my-oc',
       protocol: 'opencode',
-      binaryPath: '/usr/local/bin/my-oc',
+      binaryPath: canonicalBinaryPath('my-oc'),
       createdBy: 'admin-1',
     })
     expect(row.name).toBe('my-oc')
     expect(row.protocol).toBe('opencode')
-    expect(row.binaryPath).toBe('/usr/local/bin/my-oc')
+    expect(row.binaryPath).toBe(canonicalBinaryPath('my-oc'))
     expect(row.createdBy).toBe('admin-1')
   })
 
@@ -135,7 +135,11 @@ describe('createRuntime (RFC-112 PR-A)', () => {
 
   test('rejects a multi-line binary path (no shell injection)', async () => {
     await expect(
-      createRuntime(db, { name: 'evil', protocol: 'opencode', binaryPath: '/bin/x\nrm -rf /' }),
+      createRuntime(db, {
+        name: 'evil',
+        protocol: 'opencode',
+        binaryPath: '/usr/bin/x\nrm -rf /',
+      }),
     ).rejects.toMatchObject({ code: 'runtime-binary-invalid' })
   })
 })
@@ -145,12 +149,19 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
   beforeEach(async () => {
     db = freshDb()
     await seedBuiltinRuntimes(db)
-    await createRuntime(db, { name: 'my-oc', protocol: 'opencode', binaryPath: '/a' })
+    await createRuntime(db, {
+      name: 'my-oc',
+      protocol: 'opencode',
+      binaryPath: canonicalBinaryPath('a'),
+    })
   })
 
   test('built-in update of binary/model is ALLOWED (RFC-113 D8 — config面 editable)', async () => {
-    const updated = await updateRuntime(db, 'opencode', { binaryPath: '/x', model: 'opus' })
-    expect(updated.binaryPath).toBe('/x')
+    const updated = await updateRuntime(db, 'opencode', {
+      binaryPath: canonicalBinaryPath('x'),
+      model: 'opus',
+    })
+    expect(updated.binaryPath).toBe(canonicalBinaryPath('x'))
     expect(updated.model).toBe('opus')
     expect(updated.protocol).toBe('opencode') // identity still immutable
   })
@@ -163,8 +174,11 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
   })
 
   test('custom update changes binary_path + profile', async () => {
-    const updated = await updateRuntime(db, 'my-oc', { binaryPath: '/b', temperature: 0.5 })
-    expect(updated.binaryPath).toBe('/b')
+    const updated = await updateRuntime(db, 'my-oc', {
+      binaryPath: canonicalBinaryPath('b'),
+      temperature: 0.5,
+    })
+    expect(updated.binaryPath).toBe(canonicalBinaryPath('b'))
     expect(updated.temperature).toBe(0.5)
     expect(updated.protocol).toBe('opencode') // immutable
   })
@@ -173,7 +187,7 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
     const receipt = JSON.stringify({ outcome: 'conforms', conforms: true })
     await updateRuntime(db, 'my-oc', { lastProbeJson: receipt })
 
-    const unchanged = await updateRuntime(db, 'my-oc', { binaryPath: '/a' })
+    const unchanged = await updateRuntime(db, 'my-oc', { binaryPath: canonicalBinaryPath('a') })
     expect(unchanged.lastProbeJson).toBe(receipt)
     expect(unchanged.probeFence).toBe(0)
 
@@ -429,9 +443,9 @@ describe('binaryPath save-time validation mirrors the seal contract', () => {
     const abs = await createRuntime(db, {
       name: 'abs-fork',
       protocol: 'opencode',
-      binaryPath: '/opt/forks/opencode',
+      binaryPath: canonicalBinaryPath('opencode'),
     })
-    expect(abs.binaryPath).toBe('/opt/forks/opencode')
+    expect(abs.binaryPath).toBe(canonicalBinaryPath('opencode'))
     const token = await createRuntime(db, {
       name: 'token-fork',
       protocol: 'claude-code',
@@ -461,7 +475,11 @@ describe('binaryPath save-time validation mirrors the seal contract', () => {
     }
     // The historical newline guard is unchanged.
     await expect(
-      createRuntime(db, { name: 'bad-nl', protocol: 'opencode', binaryPath: '/bin/x\nrm -rf /' }),
+      createRuntime(db, {
+        name: 'bad-nl',
+        protocol: 'opencode',
+        binaryPath: '/usr/bin/x\nrm -rf /',
+      }),
     ).rejects.toThrow(/single path/)
   })
 })

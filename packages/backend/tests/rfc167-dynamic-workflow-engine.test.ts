@@ -26,6 +26,7 @@
 //               generated DAG as a reusable workflows row.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -132,7 +133,7 @@ async function seedPoolAgents(db: DbClient): Promise<void> {
       id: ulid(),
       name: 'aw-test-broken-rt',
       protocol: 'opencode',
-      binaryPath: '/nonexistent-aw-test-binary',
+      binaryPath: canonicalBinaryPath('nonexistent-aw-test-binary'),
     })
     .onConflictDoNothing()
   const base = {

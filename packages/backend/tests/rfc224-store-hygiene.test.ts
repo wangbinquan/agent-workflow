@@ -4,6 +4,7 @@
 // being mistaken for a clean store.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { Database } from 'bun:sqlite'
 import { lstat, mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -122,7 +123,7 @@ describe('RFC-224 OpenCode store lifecycle lock', () => {
     const lock = await acquireOpencodeStoreLifecycleLock(dbPath, 'D'.repeat(43))
     const server = {
       pidNamespace: 17,
-      binaryPath: '/private/runtime-seal/opencode',
+      binaryPath: canonicalBinaryPath('opencode'),
       runtimeBinaryDigest: 'a'.repeat(64),
       startedAt: 123,
       sessionStoreKey: 'b_chain',

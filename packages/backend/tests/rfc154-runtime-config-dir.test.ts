@@ -22,6 +22,7 @@
 //       that reference the REAL ~/.claude, not our per-run dir).
 
 import { describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -128,7 +129,7 @@ describe('RFC-154 resolve — NULL → protocol default, overrides win', () => {
     await createRuntime(db, {
       name: 'myfork',
       protocol: 'opencode',
-      binaryPath: '/opt/myfork',
+      binaryPath: canonicalBinaryPath('myfork'),
       configDirEnv: 'MYFORK_CONFIG_DIR',
       configDirName: '.myfork',
     })

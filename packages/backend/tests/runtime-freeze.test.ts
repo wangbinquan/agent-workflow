@@ -6,6 +6,7 @@
 // wrong driver or binary.
 
 import { describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -98,37 +99,49 @@ describe('resolveFrozenRuntime — custom runtimes freeze a (protocol, binary) s
   test('first dispatch of a custom runtime freezes its protocol + binary', async () => {
     const { db, id } = await seedRun()
     await seedBuiltinRuntimes(db)
-    await createRuntime(db, { name: 'my-cc', protocol: 'claude-code', binaryPath: '/opt/my-cc' })
+    await createRuntime(db, {
+      name: 'my-cc',
+      protocol: 'claude-code',
+      binaryPath: canonicalBinaryPath('my-cc'),
+    })
     const r = await resolveFrozenRuntime(db, id, 'my-cc', undefined)
     expect(r.protocol).toBe('claude-code')
-    expect(r.binary).toBe('/opt/my-cc')
+    expect(r.binary).toBe(canonicalBinaryPath('my-cc'))
     const cols = await frozenCols(db, id)
     expect(cols.runtime).toBe('claude-code')
-    expect(cols.binary).toBe('/opt/my-cc')
+    expect(cols.binary).toBe(canonicalBinaryPath('my-cc'))
   })
 
   test('resume reads the frozen binary snapshot even after the runtime is re-pointed (registry-independent)', async () => {
     const { db, id } = await seedRun()
     await seedBuiltinRuntimes(db)
-    await createRuntime(db, { name: 'my-cc', protocol: 'claude-code', binaryPath: '/opt/v1' })
+    await createRuntime(db, {
+      name: 'my-cc',
+      protocol: 'claude-code',
+      binaryPath: canonicalBinaryPath('v1'),
+    })
     await resolveFrozenRuntime(db, id, 'my-cc', undefined) // freeze /opt/v1
     // the runtime is later re-pointed to a new binary — resume must NOT pick it up.
-    await updateRuntime(db, 'my-cc', { binaryPath: '/opt/v2' })
+    await updateRuntime(db, 'my-cc', { binaryPath: canonicalBinaryPath('v2') })
     const r = await resolveFrozenRuntime(db, id, 'my-cc', undefined)
     expect(r.protocol).toBe('claude-code')
-    expect(r.binary).toBe('/opt/v1') // the frozen snapshot, not the mutated registry
+    expect(r.binary).toBe(canonicalBinaryPath('v1')) // the frozen snapshot, not the mutated registry
   })
 
   test('a deleted custom runtime still resumes on its frozen snapshot', async () => {
     const { db, id } = await seedRun()
     await seedBuiltinRuntimes(db)
-    await createRuntime(db, { name: 'my-oc', protocol: 'opencode', binaryPath: '/opt/oc' })
+    await createRuntime(db, {
+      name: 'my-oc',
+      protocol: 'opencode',
+      binaryPath: canonicalBinaryPath('oc'),
+    })
     await resolveFrozenRuntime(db, id, 'my-oc', undefined) // freeze
     // (the registry guard blocks deleting an in-use runtime, but a node_run that
     //  finished + is being re-examined is snapshot-safe regardless.)
     const r = await resolveFrozenRuntime(db, id, 'my-oc', undefined)
     expect(r.protocol).toBe('opencode')
-    expect(r.binary).toBe('/opt/oc')
+    expect(r.binary).toBe(canonicalBinaryPath('oc'))
   })
 })
 
@@ -137,11 +150,15 @@ describe('resume inherits the session owner’s frozen runtime (RFC-112 Codex im
     const { db, id } = await seedRun()
     await db
       .update(nodeRuns)
-      .set({ runtime: 'claude-code', runtimeBinary: '/opt/my-cc', opencodeSessionId: 'sess-X' })
+      .set({
+        runtime: 'claude-code',
+        runtimeBinary: canonicalBinaryPath('my-cc'),
+        opencodeSessionId: 'sess-X',
+      })
       .where(eq(nodeRuns.id, id))
     expect(await frozenRuntimeOfSession(db, 'sess-X')).toMatchObject({
       protocol: 'claude-code',
-      binary: '/opt/my-cc',
+      binary: canonicalBinaryPath('my-cc'),
     })
     expect(await frozenRuntimeOfSession(db, 'no-such-session')).toBeNull()
   })
@@ -174,7 +191,7 @@ describe('resume inherits the session owner’s frozen runtime (RFC-112 Codex im
       nodeId: 'n1',
       status: 'done',
       runtime: 'claude-code',
-      runtimeBinary: '/opt/v1',
+      runtimeBinary: canonicalBinaryPath('v1'),
       opencodeSessionId: 'sess-S',
     })
     // the custom runtime is later DELETED / the agent flipped to opencode.
@@ -185,7 +202,7 @@ describe('resume inherits the session owner’s frozen runtime (RFC-112 Codex im
     const frozen = await resolveFrozenRuntime(db, r2, 'opencode', 'opencode', inherited)
     // re-resolving 'opencode' would have mispaired the claude session S with the
     // opencode driver; inheriting keeps (claude-code, /opt/v1).
-    expect(frozen).toMatchObject({ protocol: 'claude-code', binary: '/opt/v1' })
+    expect(frozen).toMatchObject({ protocol: 'claude-code', binary: canonicalBinaryPath('v1') })
     const row = (
       await db
         .select({ runtime: nodeRuns.runtime, binary: nodeRuns.runtimeBinary })
@@ -193,7 +210,7 @@ describe('resume inherits the session owner’s frozen runtime (RFC-112 Codex im
         .where(eq(nodeRuns.id, r2))
     )[0]
     expect(row?.runtime).toBe('claude-code')
-    expect(row?.binary).toBe('/opt/v1')
+    expect(row?.binary).toBe(canonicalBinaryPath('v1'))
   })
 })
 
@@ -204,7 +221,7 @@ describe('resolveFrozenRuntime — freezes the runtime PARAMS too (RFC-113 Codex
     await createRuntime(db, {
       name: 'cc-opus',
       protocol: 'claude-code',
-      binaryPath: '/opt/cc',
+      binaryPath: canonicalBinaryPath('cc'),
       model: 'opus',
       temperature: 0.5,
     })

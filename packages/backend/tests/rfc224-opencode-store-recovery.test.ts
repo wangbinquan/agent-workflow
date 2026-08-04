@@ -5,6 +5,7 @@
 // scrub the pinned account schema before reuse, and repair leases by triple CAS.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
 import {
@@ -249,7 +250,7 @@ function businessServer(input: {
     // This is intentionally different from node_runs.pid. It is an inner PID
     // namespace value and must never reach host liveness proof.
     pidNamespace: input.pidNamespace ?? 7,
-    binaryPath: '/private/runtime-seal/opencode',
+    binaryPath: canonicalBinaryPath('opencode'),
     runtimeBinaryDigest: input.runtimeBinaryDigest ?? BUILD_DIGEST,
     startedAt: 100,
     sessionStoreKey: input.storeKey,
@@ -559,7 +560,7 @@ describe('RFC-224 OpenCode boot store recovery', () => {
       nonce: 'S'.repeat(43),
       server: {
         pidNamespace: 11,
-        binaryPath: '/private/runtime-seal/opencode',
+        binaryPath: canonicalBinaryPath('opencode'),
         runtimeBinaryDigest: BUILD_DIGEST,
         startedAt: 100,
         sessionStoreKey: key,

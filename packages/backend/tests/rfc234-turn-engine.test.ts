@@ -6,6 +6,7 @@
 //  (P2-1), boot recovery and scratch GC.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -675,7 +676,7 @@ describe('RFC-237 claude-code intent turn', () => {
     const claudeRuntime = {
       name: 'claude-code',
       protocol: 'claude-code',
-      binaryPath: '/opt/claude/bin/claude',
+      binaryPath: canonicalBinaryPath('claude'),
       model: 'anthropic/claude-sonnet-5',
       configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
     } as unknown as ResolvedRuntime
@@ -697,7 +698,7 @@ describe('RFC-237 claude-code intent turn', () => {
     )
     expect(outcome.kind).toBe('changeset')
     expect(seen?.protocol).toBe('claude-code')
-    expect(seen?.runtimeBinary).toBe('/opt/claude/bin/claude')
+    expect(seen?.runtimeBinary).toBe(canonicalBinaryPath('claude'))
     expect(seen?.systemPermissionProfile).toBe('intent-read-v1')
     expect(seen?.configDirEnv).toBe('CLAUDE_CONFIG_DIR')
     expect(seen?.configDirName).toBe('.claude')

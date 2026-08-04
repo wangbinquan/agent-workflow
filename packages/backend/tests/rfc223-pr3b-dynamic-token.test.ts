@@ -20,6 +20,7 @@
 // profiles crossing generate → execute without a name-based mis-selection.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -78,7 +79,7 @@ async function seedTwoAgents(db: DbClient): Promise<{ writerId: string; auditorI
       id: ulid(),
       name: 'aw-test-broken-rt',
       protocol: 'opencode',
-      binaryPath: '/nonexistent-aw-test-binary',
+      binaryPath: canonicalBinaryPath('nonexistent-aw-test-binary'),
     })
     .onConflictDoNothing()
   const base = {

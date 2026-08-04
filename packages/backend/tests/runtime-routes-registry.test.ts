@@ -5,6 +5,7 @@
 // probe:false to stay fast and not spawn.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -146,7 +147,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       body: JSON.stringify({
         name: 'my-oc',
         protocol: 'opencode',
-        binaryPath: '/a/my-oc',
+        binaryPath: canonicalBinaryPath('my-oc'),
         model: 'openai/gpt-5.6',
         probe: false,
       }),
@@ -164,7 +165,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       body: JSON.stringify({
         name: 'create-probed',
         protocol: 'claude-code',
-        binaryPath: '/fixture-claude',
+        binaryPath: canonicalBinaryPath('fixture-claude'),
         probe: true,
       }),
     })
@@ -184,7 +185,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
         id: stored!.id,
         name: 'create-probed',
         probeFence: 0,
-        resolvedBinaryPath: '/fixture-claude',
+        resolvedBinaryPath: canonicalBinaryPath('fixture-claude'),
       },
       smoke: CONFORMING_SMOKE,
     })
@@ -216,20 +217,24 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   })
 
   test('PUT /api/runtimes/:name updates a custom binary; built-in PUT now ALLOWED (RFC-113 D8)', async () => {
-    await createRuntime(h.db, { name: 'my-oc', protocol: 'opencode', binaryPath: '/a' })
+    await createRuntime(h.db, {
+      name: 'my-oc',
+      protocol: 'opencode',
+      binaryPath: canonicalBinaryPath('a'),
+    })
     const ok = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/my-oc', {
       method: 'PUT',
-      body: JSON.stringify({ binaryPath: '/b', model: 'opus' }),
+      body: JSON.stringify({ binaryPath: canonicalBinaryPath('b'), model: 'opus' }),
     })
     expect(ok.status).toBe(200)
     const okJson = (await ok.json()) as { runtime: { binaryPath: string; model: string } }
-    expect(okJson.runtime.binaryPath).toBe('/b')
+    expect(okJson.runtime.binaryPath).toBe(canonicalBinaryPath('b'))
     expect(okJson.runtime.model).toBe('opus')
 
     // RFC-113: built-in binary/model IS editable (config面). Only identity/delete locked.
     const builtin = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/opencode', {
       method: 'PUT',
-      body: JSON.stringify({ binaryPath: '/x', model: 'sonnet' }),
+      body: JSON.stringify({ binaryPath: canonicalBinaryPath('x'), model: 'sonnet' }),
     })
     expect(builtin.status).toBe(200)
     expect(((await builtin.json()) as { runtime: { model: string } }).runtime.model).toBe('sonnet')
@@ -366,7 +371,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     await createRuntime(h.db, {
       name: 'probe-profile-race',
       protocol: 'opencode',
-      binaryPath: '/old-opencode',
+      binaryPath: canonicalBinaryPath('old-opencode'),
       model: 'openai/gpt-5.6',
     })
     const entered = deferred<void>()
@@ -390,7 +395,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     })
     await entered.promise
     expect(probed).toMatchObject({
-      binaryPath: '/old-opencode',
+      binaryPath: canonicalBinaryPath('old-opencode'),
       model: 'openai/gpt-5.6',
     })
 
@@ -402,7 +407,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     })
     expect(changed.status).toBe(200)
     const changedRow = (await getRuntime(h.db, 'probe-profile-race'))!
-    expect(changedRow.binaryPath).toBe('/old-opencode')
+    expect(changedRow.binaryPath).toBe(canonicalBinaryPath('old-opencode'))
     expect(changedRow.probeFence).toBe(1)
     finish.resolve(CONFORMING_SMOKE)
 
@@ -419,7 +424,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     const original = await createRuntime(h.db, {
       name: 'probe-recreate-race',
       protocol: 'claude-code',
-      binaryPath: '/same-binary',
+      binaryPath: canonicalBinaryPath('same-binary'),
     })
     const entered = deferred<void>()
     const finish = deferred<SmokeResult>()
@@ -436,7 +441,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     const replacement = await createRuntime(h.db, {
       name: 'probe-recreate-race',
       protocol: 'claude-code',
-      binaryPath: '/same-binary',
+      binaryPath: canonicalBinaryPath('same-binary'),
     })
     expect(replacement.id).not.toBe(original.id)
     finish.resolve(CONFORMING_SMOKE)
@@ -461,7 +466,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       method: 'PUT',
       body: JSON.stringify({ model: 'openai/gpt-5.6' }),
     })
-    applyConfigPatch(h.configPath, { opencodePath: '/old-config-opencode' })
+    applyConfigPatch(h.configPath, { opencodePath: canonicalBinaryPath('old-config-opencode') })
 
     const entered = deferred<void>()
     const finish = deferred<SmokeResult>()
@@ -475,7 +480,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       method: 'POST',
     })
     await entered.promise
-    expect(probed).toMatchObject({ binaryPath: '/old-config-opencode' })
+    expect(probed).toMatchObject({ binaryPath: canonicalBinaryPath('old-config-opencode') })
 
     const changed = await reqAs(app, DAEMON_TOKEN, '/api/config', {
       method: 'PUT',
@@ -641,7 +646,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     await createRuntime(h.db, {
       name: 'probe-noop-race',
       protocol: 'claude-code',
-      binaryPath: '/same-binary',
+      binaryPath: canonicalBinaryPath('same-binary'),
     })
     const entered = deferred<void>()
     const finish = deferred<SmokeResult>()
@@ -656,7 +661,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     await entered.promise
     const unchanged = await reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-noop-race', {
       method: 'PUT',
-      body: JSON.stringify({ binaryPath: '/same-binary' }),
+      body: JSON.stringify({ binaryPath: canonicalBinaryPath('same-binary') }),
     })
     expect(unchanged.status).toBe(200)
     finish.resolve(CONFORMING_SMOKE)
@@ -673,7 +678,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
         id: stored!.id,
         name: 'probe-noop-race',
         probeFence: stored!.probeFence,
-        resolvedBinaryPath: '/same-binary',
+        resolvedBinaryPath: canonicalBinaryPath('same-binary'),
       },
       smoke: CONFORMING_SMOKE,
     })

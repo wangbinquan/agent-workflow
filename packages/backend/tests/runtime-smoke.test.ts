@@ -7,6 +7,7 @@
 // no parseable events → stream-nonconforming; a missing path → spawn-failed.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -514,7 +515,7 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       const r = await smokeRuntime({
         protocol: 'opencode',
         testOnlyUnverifiedRuntime: true,
-        binaryPath: '/definitely/not/a/real/binary/aw-xyz',
+        binaryPath: canonicalBinaryPath('aw-xyz'),
         timeoutMs: SMOKE_TIMEOUT,
       })
       expect(r.outcome).toBe('spawn-failed')

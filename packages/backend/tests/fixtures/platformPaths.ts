@@ -35,3 +35,17 @@ import { tmpdir } from 'node:os'
 export function canonicalBinaryPath(name: string): string {
   return resolve(tmpdir(), 'aw-fixture-bin', name)
 }
+
+// TWO CLASSES THIS HELPER MUST NOT REPLACE — both were converted by a
+// too-broad sweep and caught by their own tests:
+//
+//   1. Paths that must name a REAL executable. `runtime-smoke` points at
+//      `/bin/echo` precisely because it exists and emits nothing parseable;
+//      a canonical path to a file that is not there proves something else.
+//   2. Deliberately MALFORMED literals in negative cases —
+//      `/usr/bin/../bin/opencode`, `/usr/local/bin/`, an embedded newline.
+//      Canonicalizing the input of a test that asserts non-canonical input is
+//      rejected removes the only thing it was testing.
+//
+// The rule: convert a path that is INCIDENTALLY absolute, never one whose
+// exact spelling is the subject.

@@ -4,6 +4,7 @@
 // under test.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { createHash } from 'node:crypto'
 import { chmod, lstat, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -125,7 +126,7 @@ function commonManifest(title: string) {
   return {
     codec: 4 as const,
     protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
-    binaryPath: '/private/rfc224/seal/opencode',
+    binaryPath: canonicalBinaryPath('opencode'),
     binaryDigest: buildDigest,
     containmentAdmission: {
       coordinatorBootId: 'rfc224-test-boot',

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -69,7 +70,7 @@ async function seed(): Promise<{
       id: 'runtime-1',
       name: 'test-opencode',
       protocol: 'opencode',
-      binaryPath: '/mock/opencode',
+      binaryPath: canonicalBinaryPath('opencode'),
       model: 'openai/test-model',
       enabled: true,
     })
@@ -150,7 +151,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 10 + runs,
           spawnedAt: now,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'b'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-session')
@@ -230,7 +231,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 20 + runIndex,
           spawnedAt: now,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'c'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-cancel')
@@ -297,7 +298,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 25,
           spawnedAt: 1,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'c'.repeat(64),
         })
         return await new Promise<SystemAgentRunResult>((resolveRun) => {
@@ -354,7 +355,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 30,
           spawnedAt: 1,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'd'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-idempotent')
@@ -433,7 +434,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 300 + runs,
           spawnedAt: runs,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'd'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-message-replay')
@@ -667,7 +668,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned({
           pid: 7331,
           spawnedAt: now,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           rawCommandDigest: 'c'.repeat(64),
           spawnCommandDigest: 'd'.repeat(64),
         })
@@ -699,7 +700,7 @@ describe('RFC-238 MCP runtime test service', () => {
       status: 'timed_out',
       failureCode: 'mcp-test-turn-timeout',
       pid: null,
-      spawnBinaryPath: '/mock/opencode',
+      spawnBinaryPath: canonicalBinaryPath('opencode'),
       rawCommandDigest: 'c'.repeat(64),
       spawnCommandDigest: 'd'.repeat(64),
     })
@@ -718,7 +719,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 4241 + runs,
           spawnedAt: 1,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'e'.repeat(64),
         })
         if (runs > 1) {
@@ -820,7 +821,7 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeProtocol: 'opencode',
         runtimeSnapshotJson: '{}',
         runtimeFingerprint: 'b'.repeat(64),
-        runtimeBinaryPath: '/mock/opencode',
+        runtimeBinaryPath: canonicalBinaryPath('opencode'),
         nativeSessionState: 'pending',
         inFlightTurnId: 'orphan-turn',
         turnSeq: 1,
@@ -844,7 +845,7 @@ describe('RFC-238 MCP runtime test service', () => {
         captureState: 'live',
         pid: 5151,
         spawnedAt: 910,
-        spawnBinaryPath: '/mock/opencode',
+        spawnBinaryPath: canonicalBinaryPath('opencode'),
         spawnCommandDigest: 'c'.repeat(64),
         startedAt: 905,
         createdAt: 900,
@@ -914,7 +915,7 @@ describe('RFC-238 MCP runtime test service', () => {
         runtimeProtocol: 'opencode',
         runtimeSnapshotJson: '{}',
         runtimeFingerprint: 'b'.repeat(64),
-        runtimeBinaryPath: '/mock/opencode',
+        runtimeBinaryPath: canonicalBinaryPath('opencode'),
         runtimeBinaryDigest: 'c'.repeat(64),
         mcpExecutionDigest: 'd'.repeat(64),
         sessionContractDigest: 'e'.repeat(64),
@@ -943,7 +944,7 @@ describe('RFC-238 MCP runtime test service', () => {
         captureState: 'complete',
         pid: 8181,
         spawnedAt: 910,
-        spawnBinaryPath: '/mock/opencode',
+        spawnBinaryPath: canonicalBinaryPath('opencode'),
         spawnCommandDigest: 'f'.repeat(64),
         startedAt: 905,
         createdAt: 900,
@@ -1003,7 +1004,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 6161,
           spawnedAt: 10,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'f'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-shutdown')
@@ -1063,7 +1064,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 6262,
           spawnedAt: 10,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'f'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-ending-shutdown')
@@ -1122,7 +1123,7 @@ describe('RFC-238 MCP runtime test service', () => {
         await opts.onSpawned?.({
           pid: 7171,
           spawnedAt: now,
-          spawnBinaryPath: '/mock/opencode',
+          spawnBinaryPath: canonicalBinaryPath('opencode'),
           spawnCommandDigest: 'e'.repeat(64),
         })
         await opts.eventSink?.setRootSessionId('native-timeout')

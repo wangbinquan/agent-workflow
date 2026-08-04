@@ -9,6 +9,7 @@
 // The route now runs the gate only when the patch actually carries the key.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -79,7 +80,7 @@ beforeEach(async () => {
     id: 'rt-rfc255',
     name: 'opencode',
     protocol: 'opencode',
-    binaryPath: '/nonexistent-rfc255-binary',
+    binaryPath: canonicalBinaryPath('nonexistent-rfc255-binary'),
     model: 'anthropic/opus',
   })
   app = createApp({
