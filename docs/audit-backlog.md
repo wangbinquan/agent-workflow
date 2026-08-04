@@ -504,3 +504,34 @@ RFC-254 交付的是「Windows 上跑得起来且如实呈现」，下面四条�
   **daemon 自身被 SIGKILL 后**留下的系统代理子进程——POSIX 上同样存在，但
   Windows 上没有 `/proc` 可供下一次启动时做可靠的孤儿识别。需要一个平台无关的
   「上次运行留下的 pid + 启动时间」记账，而不是靠内核设施。
+
+## `focus-ring-clip` 从 4 个涨到 108 个（`01d3e541` 引入，2026-08-04）
+
+`e2e/focus-ring-clip.spec.ts:941` 目前是 main 上 `Playwright e2e (shard 1/4)` 变红
+的原因。**这条测试本来就不是绿的**（长期有 4 个被裁剪的 focus ring），但
+`01d3e541 fix(frontend): keep task list scrolling local` 把它推到了 108。
+
+逐点实测（每格都是独立 detached worktree + 完整 `build:binary:e2e` 后跑该 spec）：
+
+| 提交 | clipped focus ring |
+|---|---|
+| `01d3e541~1` | **4** |
+| `01d3e541` | **108** |
+| `6e9e1450`（其后第一个我方提交） | 108 |
+| 当前 main | 104 |
+
+`01d3e541..6e9e1450` 之间**没有任何**前端提交，所以区间归因是唯一的。之后的画布
+改动把它从 108 微降到 104，量级未变。
+
+- ⏳ **(P1) 归 `01d3e541` 的作者处理**。RFC-254 这一路只动了 e2e harness / stub /
+  `e2e/command.ts`，与 focus ring 的裁剪无因果关系（上表 `01d3e541~1` 已排除）。
+  未单方面修改：该文件所在的画布 / 样式面此刻正被并发 session 持续改动
+  （`75fc8cdd`、`dc9930e9`），在其上改动会造成真实冲突。
+- 复现：`bunx playwright test e2e/focus-ring-clip.spec.ts`，失败信息直接列出每个
+  被裁剪元素的选择器与祖先 overflow 链。
+
+## `rfc250-workflow-camera` 桌面复杂工作流用例（并发画布改动引入，2026-08-04）
+
+`e2e/rfc250-workflow-camera.spec.ts:823` 在 `6e9e1450` 上**通过**、在当前 main 上
+失败，区间内只有画布 / 样式面的并发改动（`75fc8cdd fix(frontend): improve workflow
+wrapper drag feedback` 一线）。同上，未单方面修改。
