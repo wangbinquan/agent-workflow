@@ -1045,8 +1045,20 @@ export function resolveNetlessCwd(
 ): string {
   if (requestedCwd === undefined || !isAbsolute(requestedCwd)) return manifest.worktreePath
   const requested = resolve(requestedCwd)
-  const masks = uniqueMaskRoots([manifest.realHome, manifest.appHome, '/tmp', '/var/tmp'])
-  for (const allowed of netlessWritableSubtrees(manifest, masks)) {
+  if (requested === manifest.worktreePath) return manifest.worktreePath
+  let writable: readonly string[]
+  try {
+    const masks = uniqueMaskRoots([manifest.realHome, manifest.appHome, '/tmp', '/var/tmp'])
+    writable = netlessWritableSubtrees(manifest, masks)
+  } catch {
+    // The writable-subtree computation is itself a validator and throws on a
+    // manifest it considers unsafe. Deciding a CWD is not the place to surface
+    // that — the renderer below runs the same computation and will fail loudly
+    // there. Here, "cannot prove the request is inside the fence" means fall
+    // back to the pinned worktree, i.e. the pre-2026-08-04 behaviour.
+    return manifest.worktreePath
+  }
+  for (const allowed of writable) {
     if (requested === allowed || requested.startsWith(`${allowed}/`)) return requested
   }
   return manifest.worktreePath
