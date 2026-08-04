@@ -202,7 +202,7 @@ describe('RFC-255 planner credential resolution', () => {
   test('an enabled gateway supplies both the section and the credential', async () => {
     const resolved = await resolveProviderCredential('mygw', {}, deps([entry]))
     expect(resolved.customProvider).toEqual(buildControlledProviderSection(entry))
-    expect(JSON.parse(resolved.auth.serialized)).toEqual({
+    expect(JSON.parse(resolved.auth!.serialized)).toEqual({
       mygw: { type: 'api', key: 'sk-gateway' },
     })
   })
@@ -234,14 +234,42 @@ describe('RFC-255 planner credential resolution', () => {
       deps([entry]),
     )
     expect(resolved.customProvider).toBeUndefined()
-    expect(JSON.parse(resolved.auth.serialized)).toEqual({
+    expect(JSON.parse(resolved.auth!.serialized)).toEqual({
       openai: { type: 'api', key: 'sk-openai' },
     })
   })
 
-  test('a deleted gateway behaves exactly like a provider that never existed', async () => {
-    await expect(resolveProviderCredential('mygw', {}, deps([]))).rejects.toThrow(
+  // RFC-256 changed what "the platform has no key for this provider" means.
+  //
+  // With machine-config inheritance on (the default, and how the platform
+  // behaved before RFC-224), the platform is not the party authenticating: the
+  // operator's own opencode.json can declare the provider with an inline key.
+  // Refusing to launch because the PLATFORM could not find a credential is the
+  // regression itself. With inheritance off there is nowhere else to look, so
+  // the strict failure stands.
+  test('an unknown provider defers to OpenCode when machine config is inherited', async () => {
+    const resolved = await resolveProviderCredential('mygw', {}, deps([]))
+    expect(resolved.auth).toBeUndefined()
+    expect(resolved.customProvider).toBeUndefined()
+  })
+
+  test('with inheritance off, an unknown provider still fails closed', async () => {
+    const sealed = {
+      loadCustomProviderConfig: () =>
+        ({ customProviders: [], inheritMachineOpencodeConfig: false }) as never,
+      secretBox,
+    }
+    await expect(resolveProviderCredential('mygw', {}, sealed)).rejects.toThrow(
       'execution-identity-auth-invalid',
     )
+  })
+
+  test('a platform credential still wins when one exists', async () => {
+    // Inheritance is a fallback, not a replacement: an explicitly configured
+    // key must keep reaching OpenCode as the frozen single-provider entry.
+    const resolved = await resolveProviderCredential('openai', { OPENAI_API_KEY: 'sk-x' }, deps([]))
+    expect(JSON.parse(resolved.auth!.serialized)).toEqual({
+      openai: { type: 'api', key: 'sk-x' },
+    })
   })
 })

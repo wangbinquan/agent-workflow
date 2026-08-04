@@ -139,6 +139,28 @@ export const ConfigSchema = z.object({
   /** Prepared dependency environments unused for this long are collected. */
   scriptEnvTtlDays: z.number().int().positive().default(30),
 
+  // --- RFC-256 machine opencode config inheritance ---
+  /**
+   * Let the platform's OpenCode processes read the operator's own global
+   * OpenCode configuration (`~/.config/opencode/`, `$HOME/.opencode/`) again.
+   *
+   * RFC-224 sealed this off, which silently broke two things at once: models
+   * declared in a machine `opencode.json` disappeared from every picker (the
+   * probe runs in a private HOME/XDG sandbox and therefore sees an empty
+   * config), and runs against a provider defined there failed with
+   * `auth-invalid`. Both had worked since the platform existed.
+   *
+   * What this does NOT re-open: repository `.opencode/` and `opencode.json`
+   * stay rejected (source guard + OPENCODE_DISABLE_PROJECT_CONFIG) — a cloned
+   * repo injecting config into an agent process is the surface RFC-224 was
+   * actually written for. Session store, cache and state stay private, so
+   * session ownership and resume are unaffected.
+   *
+   * Set false for a deployment that wants the fully sealed posture back,
+   * accepting that only platform-declared runtimes and providers will work.
+   */
+  inheritMachineOpencodeConfig: z.boolean().default(true),
+
   // --- RFC-255 custom OpenAI-compatible providers ---
   /**
    * Administrator-configured gateways, global to the daemon. Stored keys are
@@ -620,6 +642,7 @@ export const DEFAULT_CONFIG: Config = {
   scriptDepsInstallTimeoutMs: 10 * 60 * 1000,
   scriptEnvTtlDays: 30,
   customProviders: [], // RFC-255 — empty ⇒ only built-in catalog providers
+  inheritMachineOpencodeConfig: true, // RFC-256 — pre-RFC-224 behavior restored
   // RFC-108 auto-recovery knobs — auto-execution OFF by default (decision D1).
   autoResumeOnBoot: false,
   autoRepair: {},

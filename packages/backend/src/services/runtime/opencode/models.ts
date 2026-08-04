@@ -17,6 +17,7 @@ import { loadConfig } from '@/config'
 import { Paths } from '@/util/paths'
 import { buildEnumerationProviderSection, customProvidersProjection } from './customProvider'
 import type { IdentityJson } from './executionIdentity'
+import { machineConfigEnvOverrides } from './hermetic'
 import { withRuntimeOpencodeSnapshot } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
 
@@ -64,6 +65,8 @@ export async function listOpencodeModelsHermetic(
     // credential present, so the section injected here carries display names
     // but never a key — the enumeration surface stays credential-free.
     const cfg = (opts.loadCustomProviderConfig ?? (() => loadConfig(Paths.config)))()
+    const inheritMachineConfig =
+      (cfg as { inheritMachineOpencodeConfig?: unknown }).inheritMachineOpencodeConfig !== false
     // The catalog probe supplies its own single-entry section and must not be
     // answered from (or written into) the configured-gateway cache slot.
     const probing = opts.injectedProviderSection !== undefined
@@ -110,6 +113,12 @@ export async function listOpencodeModelsHermetic(
         OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: '1',
         GIT_CONFIG_NOSYSTEM: '1',
         GIT_CONFIG_GLOBAL: '/dev/null',
+        // RFC-256: the probe is the surface an operator judges "does the
+        // platform see my models" by. Sealed off, it reports an empty catalog
+        // for every model declared in the machine's own opencode.json — which
+        // is what made the pickers go blank after RFC-224. Repository config
+        // stays disabled above; only the operator's global roots come back.
+        ...(inheritMachineConfig ? machineConfigEnvOverrides(process.env) : {}),
       },
       beforeCacheWrite: async () => {
         const sourceAfter = await scanOpencodeProjectSurface(cwd)

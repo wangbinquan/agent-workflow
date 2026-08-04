@@ -39,7 +39,11 @@ import { removeSealedTree } from './sealedInputs'
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30_000
 const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
 
-import { resolveProviderCredential, type CustomProviderPlanDependencies } from './customProvider'
+import {
+  inheritsMachineOpencodeConfig,
+  resolveProviderCredential,
+  type CustomProviderPlanDependencies,
+} from './customProvider'
 
 export interface VerifiedMcpTestPlanDependencies extends VerifiedOpencodePlanDependencies {
   random?: (size: number) => Buffer
@@ -262,6 +266,7 @@ export async function buildVerifiedOpencodeMcpTestPlan(
     username: `aw-${random(12).toString('base64url')}`,
     password: random(32).toString('base64url'),
     sourceEnv,
+    inheritMachineConfig: inheritsMachineOpencodeConfig(dependencies.customProvider),
   })
   serverEnv.PWD = canonicalWorktree
 

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { chmod, lstat, mkdir, open, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -506,11 +507,94 @@ export async function removeHermeticOpencodeLayout(rootPath: string): Promise<vo
 export interface HermeticServerEnvInput {
   layout: HermeticOpencodeLayout
   providerID: string
-  auth: StrictProviderAuth
+  /**
+   * The selected provider's credential, or undefined to let OpenCode resolve
+   * one itself from the operator's own configuration (RFC-256). Undefined is
+   * only produced when machine-config inheritance is on and no platform
+   * channel supplied a key — a provider declared in the operator's
+   * `opencode.json` with an inline `apiKey` needs no auth store at all.
+   */
+  auth?: StrictProviderAuth
   config: IdentityJson
   username?: string
   password?: string
   sourceEnv?: Readonly<Record<string, string | undefined>>
+  /**
+   * RFC-256 — expose the operator's own global OpenCode config directories to
+   * this process. Repository config stays blocked either way; see
+   * `machineConfigEnvOverrides` for exactly which variables change.
+   */
+  inheritMachineConfig?: boolean
+}
+
+/**
+ * RFC-256 — the env delta that makes a sealed OpenCode process read the
+ * operator's own global configuration.
+ *
+ * Deliberately narrow. OpenCode discovers global config through
+ * `XDG_CONFIG_HOME` (→ `<xdg>/opencode`) and `OPENCODE_TEST_HOME`
+ * (→ `$HOME/.opencode`), and discovers REPOSITORY config through a separate
+ * switch (`OPENCODE_DISABLE_PROJECT_CONFIG`, opencode `config/paths.ts:23-40`).
+ * Restoring the first two therefore brings back "the models I configured on
+ * this machine" without bringing back "any repo I clone can configure my
+ * agents".
+ *
+ * Data, state and cache roots stay private on purpose: the session database
+ * lives under `XDG_DATA_HOME`, and platform session ownership, store locking
+ * and resume are all built on it being per-chain.
+ *
+ * `OPENCODE_PURE` is dropped as well — it empties `plugin_origins` before any
+ * external plugin loads, so leaving it on would silently ignore plugins the
+ * operator declared in that very config.
+ */
+/**
+ * RFC-256 — does the operator's own OpenCode config declare plugins that this
+ * platform will NOT load?
+ *
+ * Machine-config inheritance restores config discovery but keeps
+ * `OPENCODE_PURE` on, so `plugin_origins` is emptied before any external plugin
+ * loads (opencode `plugin/index.ts:177`). That is a deliberate scope limit, but
+ * a limit the operator cannot see: OpenCode reports no error, it simply runs
+ * without them. This predicate lets the caller say so out loud.
+ *
+ * Returns the declared plugin count, or 0 when the file is absent/unreadable/
+ * malformed — this is a diagnostic, never a gate.
+ */
+export function machineConfigDeclaredPluginCount(configDir: string): number {
+  for (const name of ['opencode.json', 'opencode.jsonc']) {
+    try {
+      const raw = readFileSync(join(configDir, name), 'utf8')
+      // Tolerate JSONC line comments; a parse failure is OpenCode's to report.
+      const parsed: unknown = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, ''))
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const plugin = (parsed as { plugin?: unknown }).plugin
+        if (Array.isArray(plugin)) return plugin.length
+      }
+    } catch {
+      // absent, unreadable or not JSON — nothing to report
+    }
+  }
+  return 0
+}
+
+export function machineConfigEnvOverrides(
+  sourceEnv: Readonly<Record<string, string | undefined>>,
+  home = homedir(),
+): Record<string, string> {
+  const overrides: Record<string, string> = {}
+  const realHome =
+    typeof sourceEnv.HOME === 'string' && isAbsolute(sourceEnv.HOME) ? sourceEnv.HOME : home
+  const configured = sourceEnv.XDG_CONFIG_HOME
+  const xdgConfig =
+    typeof configured === 'string' && configured !== '' && isAbsolute(configured)
+      ? configured
+      : join(realHome, '.config')
+  if (!realHome.includes('\0') && isAbsolute(realHome)) {
+    overrides.HOME = realHome
+    overrides.OPENCODE_TEST_HOME = realHome
+  }
+  if (!xdgConfig.includes('\0') && isAbsolute(xdgConfig)) overrides.XDG_CONFIG_HOME = xdgConfig
+  return overrides
 }
 
 /**
@@ -526,7 +610,11 @@ function configSelectsPlugins(config: IdentityJson): boolean {
 }
 
 export function buildHermeticServerEnv(input: HermeticServerEnvInput): Record<string, string> {
-  if (input.auth.providerID !== input.providerID) {
+  if (input.auth !== undefined && input.auth.providerID !== input.providerID) {
+    return executionIdentityFailure('execution-identity-auth-invalid')
+  }
+  if (input.auth === undefined && input.inheritMachineConfig !== true) {
+    // A sealed process has no other place to get a credential from.
     return executionIdentityFailure('execution-identity-auth-invalid')
   }
   const source = input.sourceEnv ?? process.env
@@ -562,7 +650,20 @@ export function buildHermeticServerEnv(input: HermeticServerEnvInput): Record<st
   // deny ahead of the exact Truncate.GLOB deny and change effective policy.
   canonicalizeIdentity(input.config)
   env.OPENCODE_CONFIG_CONTENT = JSON.stringify(input.config)
-  env.OPENCODE_AUTH_CONTENT = input.auth.serialized
+  if (input.auth !== undefined) env.OPENCODE_AUTH_CONTENT = input.auth.serialized
+  if (input.inheritMachineConfig === true) {
+    // Applied AFTER the private layout so the operator's roots win.
+    //
+    // `OPENCODE_PURE` is deliberately LEFT ALONE. Clearing it would also load
+    // plugins declared in that machine config, and a plugin runs inside the
+    // OpenCode server process with no containment — a far larger step than
+    // "read the models I configured". Providers need no plugin (the
+    // openai-compatible SDK is bundled), so the restoration does not require
+    // it. The cost is that a plugin declared there is ignored rather than
+    // refused; `machineConfigPluginNotice` exists so that is reported, not
+    // silent.
+    Object.assign(env, machineConfigEnvOverrides(source))
+  }
   env.OPENCODE_SERVER_USERNAME = input.username ?? `aw-${randomBytes(12).toString('base64url')}`
   env.OPENCODE_SERVER_PASSWORD = input.password ?? randomBytes(32).toString('base64url')
   env.GIT_CONFIG_NOSYSTEM = '1'

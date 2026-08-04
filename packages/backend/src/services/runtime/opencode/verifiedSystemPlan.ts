@@ -15,7 +15,11 @@ import {
   buildHermeticServerEnv,
   removeHermeticOpencodeLayout,
 } from './hermetic'
-import { resolveProviderCredential, type CustomProviderPlanDependencies } from './customProvider'
+import {
+  inheritsMachineOpencodeConfig,
+  resolveProviderCredential,
+  type CustomProviderPlanDependencies,
+} from './customProvider'
 import type { snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
 import { removeSealedTree } from './sealedInputs'
@@ -205,6 +209,7 @@ export async function buildVerifiedOpencodeSystemPlan(
       auth,
       config: controlledConfig,
       sourceEnv,
+      inheritMachineConfig: inheritsMachineOpencodeConfig(dependencies.customProvider),
     })
     serverEnv.PWD = canonicalWorktree
 

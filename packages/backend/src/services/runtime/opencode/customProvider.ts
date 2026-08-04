@@ -192,8 +192,14 @@ export interface CustomProviderPlanDependencies {
 }
 
 export interface ResolvedProviderCredential {
-  auth: StrictProviderAuth
-  /** Present only for a custom provider; goes into the controlled config. */
+  /**
+   * Undefined means "let OpenCode resolve it" — reachable only with RFC-256
+   * machine-config inheritance on, where the provider is typically declared in
+   * the operator's own `opencode.json` with an inline `apiKey` and no platform
+   * channel has (or needs) a key for it.
+   */
+  auth?: StrictProviderAuth
+  /** Present only for a platform-configured gateway; enters the frozen config. */
   customProvider?: Record<string, IdentityJson>
 }
 
@@ -214,9 +220,23 @@ export async function resolveProviderCredential(
   dependencies: CustomProviderPlanDependencies = {},
 ): Promise<ResolvedProviderCredential> {
   const loadCfg = dependencies.loadCustomProviderConfig ?? (() => loadConfig(Paths.config))
-  const lookup = findCustomProvider(loadCfg(), providerID)
+  const cfg = loadCfg()
+  const lookup = findCustomProvider(cfg, providerID)
   if (lookup.state === 'absent') {
-    return { auth: await resolveStrictProviderAuth(providerID, sourceEnv) }
+    // RFC-256: with machine-config inheritance on, a provider the operator
+    // declared in their own opencode.json carries its own credential (an
+    // inline `options.apiKey`, or their auth store). Failing here would be the
+    // pre-RFC-256 regression itself — the platform refusing to launch because
+    // IT could not find a key, for a provider it is not the one authenticating.
+    const inherit = (cfg as { inheritMachineOpencodeConfig?: unknown }).inheritMachineOpencodeConfig
+    if (inherit === false) {
+      return { auth: await resolveStrictProviderAuth(providerID, sourceEnv) }
+    }
+    try {
+      return { auth: await resolveStrictProviderAuth(providerID, sourceEnv) }
+    } catch {
+      return {}
+    }
   }
   if (lookup.state === 'disabled') {
     return executionIdentityFailure('execution-identity-custom-provider-disabled')
@@ -226,6 +246,22 @@ export async function resolveProviderCredential(
     auth: buildCustomProviderAuth(lookup.entry, secretBox),
     customProvider: buildControlledProviderSection(lookup.entry),
   }
+}
+
+/**
+ * RFC-256 — is machine-config inheritance on for this daemon?
+ *
+ * Read through the same seam the credential resolver uses so a test can flip it
+ * without touching the real config file. Defaults to ON: that is the behavior
+ * the platform had before RFC-224 sealed it off.
+ */
+export function inheritsMachineOpencodeConfig(
+  dependencies: CustomProviderPlanDependencies = {},
+): boolean {
+  const loadCfg = dependencies.loadCustomProviderConfig ?? (() => loadConfig(Paths.config))
+  const value = (loadCfg() as { inheritMachineOpencodeConfig?: unknown })
+    .inheritMachineOpencodeConfig
+  return value !== false
 }
 
 /** Admission values as the launcher sees them, recovered from the sealed plan. */
