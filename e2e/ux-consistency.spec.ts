@@ -1148,6 +1148,14 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.goto(`${daemon.baseUrl}/skills/new`)
     await page.getByTestId('skills-tab-zip').click()
 
+    // The theme is applied ASYNCHRONOUSLY after load, so "the button is
+    // visible" does not mean "the dark palette is in force" — the colour
+    // assertions below were racing the theme, and on a slower host they lost.
+    // (Measured: the Windows survey read the LIGHT primary here, and the
+    // sibling equality check still passed because BOTH controls were light.)
+    // Every other theme case in this file already waits on this attribute; this
+    // one did not.
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     const zipPrimary = page.getByTestId('zip-parse-button')
     const globalPrimary = page.getByTestId('split-new-button')
     await expect(zipPrimary).toBeVisible()
