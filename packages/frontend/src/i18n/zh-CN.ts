@@ -9602,6 +9602,9 @@ export const zhCN: Resources = {
     'workgroup-config-conflict__hint': '刷新房间后重新调整成员。',
     'workgroup-member-running': '该成员仍在执行派单，暂时不能移除。',
     'workgroup-config-empty': '没有任何改动可保存。',
+    'sandbox-unavailable': '隔离机制在本机不可用，而当前档位要求强制隔离，任务未启动。',
+    'sandbox-unavailable__hint':
+      '在服务器上运行 `agent-workflow sandbox` 查看安装 / 修复指引（Linux 装 bubblewrap、开启非特权用户命名空间），或到「设置 → 运行时」把隔离档位调为 warn。',
     // --- repo / git / worktree（用户可触发子集，其余走域兜底） ---
     'repo-url-invalid': '仓库地址不受支持或格式错误。',
     'repo-clone-failed': 'git clone 失败。',

@@ -83,11 +83,18 @@ export async function scanOpencodeProjectSurface(
       mode: Number(metadata.mode & 0o7777n),
     })
     for (const candidate of FORBIDDEN_AT_EACH_LEVEL) {
-      if (await existsUnsafe(join(cursor, candidate))) {
-        return executionIdentityFailure(
-          'execution-identity-project-config-unsupported',
-          `/${candidate.split(sep).join('/')}`,
-        )
+      const hit = join(cursor, candidate)
+      if (await existsUnsafe(hit)) {
+        // 2026-08-04 audit: the pointer used to be the bare RELATIVE name
+        // (`/.opencode`, `/references`), which is useless the moment the hit is
+        // not in the worktree — and it usually is not. This walk climbs every
+        // ancestor up to the filesystem root, and worktrees live under
+        // `~/.agent-workflow/`, so `$HOME` is ALWAYS scanned: a daemon user who
+        // has ever run opencode (`~/.opencode`) or installed Claude Code skills
+        // (`~/.claude/skills`) fails EVERY verified node forever, under an error
+        // that says "project config unsupported". Naming the absolute path is
+        // the difference between a five-second fix and an unfalsifiable outage.
+        return executionIdentityFailure('execution-identity-project-config-unsupported', hit)
       }
     }
     if (cursor === filesystemRoot) break

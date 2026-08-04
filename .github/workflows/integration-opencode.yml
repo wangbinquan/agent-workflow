@@ -49,6 +49,16 @@ on:
       # version-registry/flag utils + the shell stubs — a CLI-flag rename here
       # (e.g. 1964a0d0) must trigger the live sweep, not slip through.
       - 'packages/backend/src/services/runtime/opencode/**'
+      # 2026-08-04 sandbox audit: this workflow is the ONLY CI job that installs
+      # bubblewrap, so it is the only place real Linux containment behaviour is
+      # exercised — `RUN_SANDBOX_ITEST` is set on the macOS shard alone. Without
+      # these three paths in the filter, a change to the bwrap renderer, the
+      # contained-spawn primitive or the netless projection was green on push
+      # and only went red in the nightly cron, up to 24h later and in a workflow
+      # with no obvious link to the commit.
+      - 'packages/backend/src/services/sandbox/**'
+      - 'packages/backend/src/services/execution/**'
+      - 'packages/backend/src/services/runtime/netlessProjection.ts'
       - 'packages/backend/src/util/opencode*.ts'
       - 'packages/backend/src/opencode-plugin/**'
       - 'packages/backend/tests/integration-opencode/**'
@@ -64,6 +74,16 @@ on:
       # version-registry/flag utils + the shell stubs — a CLI-flag rename here
       # (e.g. 1964a0d0) must trigger the live sweep, not slip through.
       - 'packages/backend/src/services/runtime/opencode/**'
+      # 2026-08-04 sandbox audit: this workflow is the ONLY CI job that installs
+      # bubblewrap, so it is the only place real Linux containment behaviour is
+      # exercised — `RUN_SANDBOX_ITEST` is set on the macOS shard alone. Without
+      # these three paths in the filter, a change to the bwrap renderer, the
+      # contained-spawn primitive or the netless projection was green on push
+      # and only went red in the nightly cron, up to 24h later and in a workflow
+      # with no obvious link to the commit.
+      - 'packages/backend/src/services/sandbox/**'
+      - 'packages/backend/src/services/execution/**'
+      - 'packages/backend/src/services/runtime/netlessProjection.ts'
       - 'packages/backend/src/util/opencode*.ts'
       - 'packages/backend/src/opencode-plugin/**'
       - 'packages/backend/tests/integration-opencode/**'

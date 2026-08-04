@@ -5228,6 +5228,10 @@ export const enUS: Resources = {
     'workgroup-member-running':
       'This member still owns a running assignment and cannot be removed.',
     'workgroup-config-empty': 'There are no changes to save.',
+    'sandbox-unavailable':
+      'Containment is unavailable on this host while the current mode requires it, so the task was not started.',
+    'sandbox-unavailable__hint':
+      'Run `agent-workflow sandbox` on the server for install/fix guidance (install bubblewrap and enable unprivileged user namespaces on Linux), or set Settings → Runtime → sandbox mode to warn.',
     // --- repo / git / worktree（用户可触发子集，其余走域兜底） ---
     'repo-url-invalid': 'Unsupported or malformed Git URL.',
     'repo-clone-failed': 'git clone failed.',

@@ -3,8 +3,8 @@
 // failure it prevents, so a future refactor that turns one red can tell whether
 // it broke a boundary or merely moved one.
 //
-// Covered here (policy layer only — the ctx/derivation fixes live in
-// sandbox-allowback-derivation.test.ts):
+// Covered here (policy layer + the runner's plan→ctx merge seam; the multi-repo
+// derivation lives in sandbox-multirepo-allowback-2026-08-04.test.ts):
 //   1. `<appHome>/repos` is created lazily by the FIRST clone, so a repo-less
 //      deployment used to emit `--bind <missing>` and bwrap aborted EVERY
 //      sandboxed spawn — blamed on the runtime binary (three independent
@@ -19,6 +19,7 @@
 //      read-WRITE under a policy that had moved it to read-only.
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   computeSandboxPolicy,
@@ -112,5 +113,33 @@ describe('the bwrap renderer reads the appHome off the policy', () => {
     const args = renderBwrapArgs(computeSandboxPolicy({ ...base, readOnlyWorktrees: true }))
     expect(bindPairs(args, '--bind')).not.toContain(MIRROR)
     expect(bindPairs(args, '--ro-bind')).toContain(MIRROR)
+  })
+})
+
+// -----------------------------------------------------------------------------
+// runner 的 SpawnPlan → SandboxCtx 合并缝
+//
+// 2026-08-04 审计的测试覆盖抽查结论：把 `runner.ts` 里那段合并整段删掉，全仓现有
+// 测试**零红**——而它一断，RFC-251 那个「Linux 上插件目录不在 namespace 里、
+// `file://<cachedPath>` 全 ENOENT」的事故会原样复发且无任何预警。
+// 这里用源码层文本断言兜底（运行时巨型函数难直接覆盖时的既定做法）。
+// -----------------------------------------------------------------------------
+describe('runner 必须把 plan 的三类子树下传给沙箱', () => {
+  const runnerSrc = readFileSync(
+    join(import.meta.dirname, '..', 'src', 'services', 'runner.ts'),
+    'utf8',
+  )
+
+  test('sessionStore.root 并入 taskWorktrees（否则 opencode 私有 store 不可写）', () => {
+    expect(runnerSrc).toContain('plan.sessionStore === undefined ? [] : [plan.sessionStore.root]')
+  })
+
+  test('plan.readOnlySubtrees 与 plan.readOnlyAllowSubtrees 都下传', () => {
+    expect(runnerSrc).toContain('...(plan.readOnlySubtrees ?? [])')
+    expect(runnerSrc).toContain('...(plan.readOnlyAllowSubtrees ?? [])')
+  })
+
+  test('多仓根从 templateMeta.repos 取，而不是只靠 cwd 形状猜', () => {
+    expect(runnerSrc).toContain('opts.templateMeta?.repos?.map((repo) => repo.worktreePath)')
   })
 })

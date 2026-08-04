@@ -231,10 +231,17 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
               : probe.ran === true && probe.compatible
                 ? ('ready' as const)
                 : ('not-found' as const)
+          // 2026-08-04 audit: containment is a RUNTIME-NEUTRAL axis (RFC-227
+          // forbids OS/vendor names as capability criteria), and
+          // `sandboxEnforceBlocked` + the coordinator's admission apply to every
+          // protocol — claude business nodes even request the same
+          // `model-child-netless-v1` bundle. Gating this projection on
+          // `protocol === 'opencode'` meant the claude row NEVER showed
+          // blocked/degraded: the status page said "available" while every task
+          // on that runtime failed at dispatch. That is the exact deployment
+          // shape of the 2026-08-04 production incident.
           const state =
-            row.protocol === 'opencode' &&
-            availabilityState === 'available-unverified' &&
-            containment !== null
+            availabilityState === 'available-unverified' && containment !== null
               ? containment.mode === 'enforce' && containment.degradedReasons.length > 0
                 ? ('containment-blocked' as const)
                 : containment.mode === 'warn' && containment.degradedReasons.length > 0
@@ -252,7 +259,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
             version: probe.version,
             reportedVersion: probe.version,
             state,
-            ...(row.protocol === 'opencode' && containment !== null ? { containment } : {}),
+            ...(containment !== null ? { containment } : {}),
             isDefault: row.name === defaultName,
             ...(isExecutionIdentityFailureCode(probe.incompatibleReason)
               ? { failureCode: probe.incompatibleReason }

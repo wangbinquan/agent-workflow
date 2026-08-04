@@ -1019,9 +1019,43 @@ function netlessWritableSubtrees(
   return [...new Set(writable)]
 }
 
+/**
+ * The directory the fenced child should start in.
+ *
+ * 2026-08-04 audit: this used to be hard-pinned to `manifest.worktreePath`,
+ * which silently DISCARDED the directory the model asked for. OpenCode's shell
+ * tool takes a `workdir` parameter and its own system prompt tells the model to
+ * prefer it over `cd <dir> && <cmd>` (opencode
+ * `packages/opencode/src/tool/shell/prompt.ts`), then starts the shell — our
+ * wrapper — with that cwd (`tool/shell.ts`). Overriding it meant
+ * `workdir: packages/x` + `command: pytest tests` ran at the repository root:
+ * relative paths resolved elsewhere, the command "succeeded" or failed for an
+ * unrelated reason, and the model reasoned on from a wrong result. No log, no
+ * warning — the worst failure shape there is, and a monorepo or repo-group task
+ * hits it every time.
+ *
+ * The boundary is preserved by CONSTRUCTION rather than by pinning: a requested
+ * directory is honoured only when it sits inside a subtree the fence already
+ * makes writable. Anything else (or nothing requested) falls back to the
+ * worktree.
+ */
+export function resolveNetlessCwd(
+  manifest: NetlessSubprocessManifest,
+  requestedCwd: string | undefined,
+): string {
+  if (requestedCwd === undefined || !isAbsolute(requestedCwd)) return manifest.worktreePath
+  const requested = resolve(requestedCwd)
+  const masks = uniqueMaskRoots([manifest.realHome, manifest.appHome, '/tmp', '/var/tmp'])
+  for (const allowed of netlessWritableSubtrees(manifest, masks)) {
+    if (requested === allowed || requested.startsWith(`${allowed}/`)) return requested
+  }
+  return manifest.worktreePath
+}
+
 export function renderNetlessBwrapArgs(
   manifest: NetlessSubprocessManifest,
   passthroughArgs: readonly string[],
+  requestedCwd?: string,
 ): string[] {
   const parsed = NetlessSubprocessManifestSchema.parse(manifest)
   if (passthroughArgs.some((entry) => entry.includes('\0'))) {
@@ -1049,7 +1083,7 @@ export function renderNetlessBwrapArgs(
   }
   for (const target of writable) args.push('--bind', target, target)
   for (const target of parsed.bindReadOnly) args.push('--ro-bind', target, target)
-  args.push('--chdir', parsed.worktreePath)
+  args.push('--chdir', resolveNetlessCwd(parsed, requestedCwd))
   // RFC-242 — the environment is deliberately NOT rendered into argv. `bwrap`
   // has no `--clearenv` here, so it hands its OWN environment to the child;
   // `renderNetlessInvocation` therefore spawns bwrap WITH `manifest.env` and the
@@ -1190,13 +1224,15 @@ export function renderNetlessSeatbeltProfile(manifest: NetlessSubprocessManifest
 export function renderNetlessInvocation(
   manifest: NetlessSubprocessManifest,
   passthroughArgs: readonly string[],
+  requestedCwd?: string,
 ): NetlessSubprocessInvocation {
   const provider = RuntimeChildProviderPlanSchema.parse(manifest.provider)
+  const cwd = resolveNetlessCwd(manifest, requestedCwd)
   if (provider.providerId === 'linux-bwrap') {
     const config = LinuxBwrapProviderConfigSchema.parse(provider.config)
     return {
-      cmd: [config.bwrapPath, ...renderNetlessBwrapArgs(manifest, passthroughArgs)],
-      cwd: manifest.worktreePath,
+      cmd: [config.bwrapPath, ...renderNetlessBwrapArgs(manifest, passthroughArgs, requestedCwd)],
+      cwd,
       // bwrap without `--clearenv` passes its own environment through, so this
       // IS the child's environment — and it never touches any argv.
       env: manifest.env,
@@ -1211,7 +1247,7 @@ export function renderNetlessInvocation(
         renderNetlessSeatbeltProfile(manifest),
         ...netlessCommand(manifest, passthroughArgs),
       ],
-      cwd: manifest.worktreePath,
+      cwd,
       env: manifest.env,
     }
   }
@@ -1219,7 +1255,7 @@ export function renderNetlessInvocation(
     NoContainmentProviderConfigSchema.parse(provider.config)
     return {
       cmd: netlessCommand(manifest, passthroughArgs),
-      cwd: manifest.worktreePath,
+      cwd,
       env: manifest.env,
     }
   }
@@ -1243,7 +1279,11 @@ export async function runNetlessSubprocess(
   passthroughArgs: readonly string[],
 ): Promise<number> {
   const manifest = await readManifest(manifestPath)
-  const invocation = renderNetlessInvocation(manifest, passthroughArgs)
+  // The runtime started THIS wrapper in the directory the model asked for
+  // (opencode's shell tool resolves its `workdir` parameter into the shell's
+  // cwd), so our own cwd is the request. `resolveNetlessCwd` keeps it only if
+  // the fence already makes it writable.
+  const invocation = renderNetlessInvocation(manifest, passthroughArgs, process.cwd())
   const child = Bun.spawn({
     cmd: [...invocation.cmd],
     cwd: invocation.cwd,

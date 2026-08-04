@@ -67,7 +67,10 @@ const DOMAIN_PREFIXES: ReadonlyArray<readonly [readonly string[], ErrorDomain]> 
   [['memory-', 'distill-', 'supersede-'], 'memory'],
   [['scheduled-', 'schedule-'], 'schedule'],
   [['fusion-'], 'fusion'],
-  [['runtime-', 'opencode-'], 'runtime'],
+  // 2026-08-04 audit: the launch-time 409 (`sandbox-unavailable`) and the
+  // script-node containment codes had no domain, so they fell through to the
+  // generic fallback and a zh-CN user saw the raw English backend string.
+  [['runtime-', 'opencode-', 'sandbox-'], 'runtime'],
   [['upload-'], 'upload'],
   [
     [
