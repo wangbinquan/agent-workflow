@@ -779,7 +779,14 @@ describe('startMemoryDistillLoop reentrancy', () => {
 
       // Release; the tick finishes both heads sequentially, no duplicates.
       release()
-      await new Promise((r) => setTimeout(r, 80))
+      // POLL for the second claim rather than sleeping a fixed 80ms. The
+      // negative assertion above legitimately needs a wall-clock wait — you
+      // cannot poll for "nothing else happened" — but this one is positive, and
+      // a fixed wait against a 5ms interval loop is a wall-clock bet that a
+      // loaded runner loses: CI run 30886241395 (macos shard 3/4) saw calls===1
+      // here while five consecutive local runs passed.
+      const deadline = Date.now() + 5_000
+      while (calls < 2 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5))
       expect(maxInFlight).toBe(1)
       expect(calls).toBe(2)
     } finally {
