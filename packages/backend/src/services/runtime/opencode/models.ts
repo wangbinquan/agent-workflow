@@ -20,7 +20,7 @@ import type { IdentityJson } from './executionIdentity'
 import { machineConfigEnvOverrides } from './hermetic'
 import { withRuntimeOpencodeSnapshot } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
-import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
+import { NULL_DEVICE_FOR_HOST, buildControlledPathForHost } from '@/util/platformExec'
 
 export async function listOpencodeModelsHermetic(
   binary: string,
@@ -89,7 +89,7 @@ export async function listOpencodeModelsHermetic(
         ...(hasCustomProviders
           ? { OPENCODE_CONFIG_CONTENT: JSON.stringify({ provider: providerSection }) }
           : {}),
-        PATH: '/usr/bin:/bin',
+        PATH: buildControlledPathForHost(),
         HOME: home,
         TMPDIR: tmp,
         XDG_CONFIG_HOME: xdgConfig,

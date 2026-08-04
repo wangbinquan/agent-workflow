@@ -19,6 +19,7 @@ import {
 } from './opencode/sealedSubprocess'
 import { runtimeContainmentAdmissionFromPrepared } from './opencode/containment'
 import { executionIdentityFailure } from './opencode/failure'
+import { buildControlledPathForHost } from '@/util/platformExec'
 
 const SAFE_RUNTIME_KEY = /^[a-z0-9][a-z0-9_-]{0,127}$/
 
@@ -200,7 +201,7 @@ export async function prepareMcpTestExecutionMaterial(
       bindReadOnly: [snapshotPath],
       env: {
         ...configuredEnv,
-        PATH: '/usr/bin:/bin',
+        PATH: buildControlledPathForHost(),
         HOME: wrapperHome,
         TMPDIR: wrapperTmp,
         PWD: input.worktreePath,

@@ -8,7 +8,7 @@ import { executionIdentityFailure } from './failure'
 import { canonicalizeIdentity, type IdentityJson } from './executionIdentity'
 import { buildPluginSpecArray } from './pluginSpec'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
-import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
+import { NULL_DEVICE_FOR_HOST, buildControlledPathForHost } from '@/util/platformExec'
 import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 export const OPENCODE_FFF_CAPABILITY_CODEC = 1 as const
@@ -636,7 +636,10 @@ export function buildHermeticServerEnv(input: HermeticServerEnvInput): Record<st
   // in separately, so the env flag and the config can never disagree.
   // With no plugins selected this restores the historical PURE=1 exactly.
   if (!configSelectsPlugins(input.config)) env.OPENCODE_PURE = '1'
-  env.PATH = '/usr/bin:/bin'
+  // RFC-254 T12 / design gate P0-A: capability whitelist, platform-aware,
+  // and on Windows it must carry the resolved git directory or the agent has
+  // no `git` at all (see buildControlledPath).
+  env.PATH = buildControlledPathForHost()
   env.HOME = input.layout.home
   env.PWD = input.layout.root
   env.TMPDIR = input.layout.tmp

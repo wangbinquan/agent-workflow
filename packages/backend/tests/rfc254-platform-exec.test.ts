@@ -14,6 +14,9 @@ import {
   pathListJoin,
   pathListSplit,
   platformSpawnOptions,
+  buildControlledPath,
+  controlledSystemPathEntries,
+  resolveGitToolDirectory,
 } from '@/util/platformExec'
 
 describe('RFC-254 platformExec', () => {
@@ -108,6 +111,100 @@ describe('RFC-254 platformExec', () => {
       // Documented limitation, asserted so nobody later mistakes this for a
       // containment proof: callers must canonicalize first.
       expect(isLexicallyInside('/a/b', '/a/b/../../etc', 'linux')).toBe(true)
+    })
+  })
+})
+
+describe('RFC-254 T12 — controlled PATH', () => {
+  test('POSIX keeps exactly the historical two entries', () => {
+    // Byte-for-byte identical to the `'/usr/bin:/bin'` literal it replaced;
+    // anything else would silently widen (or narrow) the sealed capability set
+    // on the two platforms that already ship.
+    expect(buildControlledPath([], 'linux', undefined)).toBe('/usr/bin:/bin')
+    expect(buildControlledPath([], 'darwin', undefined)).toBe('/usr/bin:/bin')
+  })
+
+  test('POSIX puts run-scoped seal directories ahead of the system ones', () => {
+    expect(buildControlledPath(['/run/seal/toolchain'], 'linux', undefined)).toBe(
+      '/run/seal/toolchain:/usr/bin:/bin',
+    )
+  })
+
+  test('Windows covers the four directories a child actually needs', () => {
+    const entries = controlledSystemPathEntries('win32', 'C:\\Windows')
+    expect(entries).toEqual([
+      'C:\\Windows\\System32',
+      'C:\\Windows',
+      'C:\\Windows\\System32\\Wbem',
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0',
+    ])
+    // PowerShell's presence is load-bearing: OpenCode probes pwsh → powershell
+    // → git-bash → cmd, so dropping it silently downgrades the agent's shell.
+    expect(entries.some((e) => e.endsWith('WindowsPowerShell\\v1.0'))).toBe(true)
+  })
+
+  test('Windows joins with ; and honours %SystemRoot%', () => {
+    const path = buildControlledPath([], 'win32', 'D:\\Win')
+    expect(path.split(';')[0]).toBe('D:\\Win\\System32')
+    expect(path).not.toContain(':/')
+  })
+
+  test('a missing %SystemRoot% falls back rather than emitting empty entries', () => {
+    // An empty PATH entry means "current directory" to some Windows resolvers —
+    // a search-order hazard, so the fallback is a literal default.
+    expect(controlledSystemPathEntries('win32', undefined)[0]).toBe('C:\\Windows\\System32')
+    expect(controlledSystemPathEntries('win32', '')[0]).toBe('C:\\Windows\\System32')
+  })
+
+  test('duplicate entries collapse, case-insensitively on Windows only', () => {
+    expect(buildControlledPath(['C:\\WINDOWS\\SYSTEM32'], 'win32', 'C:\\Windows')).toBe(
+      'C:\\WINDOWS\\SYSTEM32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0',
+    )
+    // POSIX is case-SENSITIVE, so these are genuinely different directories.
+    expect(buildControlledPath(['/USR/BIN'], 'linux', undefined)).toBe('/USR/BIN:/usr/bin:/bin')
+  })
+
+  describe('git reachability (design gate P0-A)', () => {
+    // The gate's only "core workflow does not work at all" finding: POSIX gets
+    // the agent's git for free from /usr/bin, Windows installs it somewhere no
+    // system directory covers, so a controlled PATH without it leaves every
+    // `git status`/`diff`/`commit` failing.
+    test('POSIX resolves nothing — /usr/bin already carries git', () => {
+      expect(
+        resolveGitToolDirectory(
+          'linux',
+          () => '/usr/bin/git',
+          () => '/usr/bin',
+        ),
+      ).toBeNull()
+    })
+
+    test('Windows resolves the directory of the real git executable', () => {
+      expect(
+        resolveGitToolDirectory(
+          'win32',
+          () => 'C:\\Program Files\\Git\\cmd\\git.exe',
+          () => 'C:\\Program Files\\Git\\cmd',
+        ),
+      ).toBe('C:\\Program Files\\Git\\cmd')
+    })
+
+    test('Windows without git resolves null rather than inventing a path', () => {
+      expect(
+        resolveGitToolDirectory(
+          'win32',
+          () => null,
+          () => '',
+        ),
+      ).toBeNull()
+    })
+
+    test('the resolved git directory lands ON the controlled PATH', () => {
+      const gitDir = 'C:\\Program Files\\Git\\cmd'
+      const path = buildControlledPath([gitDir], 'win32', 'C:\\Windows')
+      expect(path.split(';')).toContain(gitDir)
+      // ...and ahead of the system entries, so a seal always wins.
+      expect(path.split(';')[0]).toBe(gitDir)
     })
   })
 })
