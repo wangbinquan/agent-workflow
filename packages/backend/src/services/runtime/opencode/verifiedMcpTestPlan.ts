@@ -12,7 +12,6 @@ import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
   deriveHermeticOpencodeLayout,
-  resolveStrictProviderAuth,
 } from './hermetic'
 import { inspectRuntimeOpencodeBinary, type snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
@@ -40,8 +39,12 @@ import { removeSealedTree } from './sealedInputs'
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30_000
 const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
 
+import { resolveProviderCredential, type CustomProviderPlanDependencies } from './customProvider'
+
 export interface VerifiedMcpTestPlanDependencies extends VerifiedOpencodePlanDependencies {
   random?: (size: number) => Buffer
+  /** RFC-255 — inject the daemon config / secret key for custom providers. */
+  customProvider?: CustomProviderPlanDependencies
   inspectBinary?: typeof inspectRuntimeOpencodeBinary
   snapshotBinary?: typeof snapshotRuntimeOpencodeBinary
   sourceEnv?: Readonly<Record<string, string | undefined>>
@@ -219,6 +222,15 @@ export async function buildVerifiedOpencodeMcpTestPlan(
     ensurePrivateDirectory(join(ctx.appHome, 'opencode-stores', 'mcp-test')),
   ])
   const mcpPattern = `${ctx.executionMaterial.runtimeKey}_*`
+  const sourceEnv = dependencies.sourceEnv ?? process.env
+  // RFC-255: resolved BEFORE the config is built — a custom gateway contributes
+  // a `provider` section to it, and a disabled one fails here instead of
+  // falling through to the generic credential channels.
+  const credential = await resolveProviderCredential(
+    selectedModel.providerID,
+    sourceEnv,
+    dependencies.customProvider,
+  )
   const controlledConfig = buildControlledOpencodeConfig({
     name: ctx.agentName,
     prompt: ctx.systemPrompt,
@@ -238,9 +250,9 @@ export async function buildVerifiedOpencodeMcpTestPlan(
     mcp: {
       [ctx.executionMaterial.runtimeKey]: ctx.executionMaterial.opencodeEntry as IdentityJson,
     },
+    customProvider: credential.customProvider,
   })
-  const sourceEnv = dependencies.sourceEnv ?? process.env
-  const auth = await resolveStrictProviderAuth(selectedModel.providerID, sourceEnv)
+  const auth = credential.auth
   const random = dependencies.random ?? randomBytes
   const serverEnv = buildHermeticServerEnv({
     layout: plannedLayout,

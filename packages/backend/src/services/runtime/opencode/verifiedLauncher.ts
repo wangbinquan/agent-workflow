@@ -43,6 +43,7 @@ import {
 } from './executionIdentity'
 import { ExecutionIdentityFailure, executionIdentityFailure } from './failure'
 import { PINNED_BUILTIN_SKILL, assertBundledProviderImplementation } from './hermetic'
+import { admittedCustomFromExpectedConfig, type AdmittedCustomProvider } from './customProvider'
 import { RuntimeOpencodeBinaryError, verifyRuntimeOpencodeSnapshot } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
@@ -300,7 +301,11 @@ function safeMismatch(code: ExecutionIdentityFailureCode = 'execution-identity-m
  * endpoint is already bounded to finite plain JSON by DirectClient; this
  * closes identity-bearing outer/provider/model fields without logging values.
  */
-export function verifySelectedProviderInventory(value: unknown, selected: SelectedModel): void {
+export function verifySelectedProviderInventory(
+  value: unknown,
+  selected: SelectedModel,
+  admittedCustom?: AdmittedCustomProvider,
+): void {
   if (
     !isPlainRecord(value) ||
     !exactKeys(value, ['providers', 'default']) ||
@@ -373,6 +378,33 @@ export function verifySelectedProviderInventory(value: unknown, selected: Select
     (!isPlainRecord(model.variants) || !Object.hasOwn(model.variants, selected.variant))
   ) {
     return executionIdentityFailure('execution-identity-provider-untrusted')
+  }
+  if (admittedCustom !== undefined) {
+    // RFC-255 — the reported endpoint must be the admitted one, byte for byte.
+    // `api.url` is what the report claims and `options.baseURL` is what the SDK
+    // dials (opencode provider.ts:1450 / :1693-1695); comparing only one of
+    // them would let the verified endpoint differ from the served one.
+    if (
+      selectedProvider.source !== 'config' ||
+      model.api.npm !== admittedCustom.npm ||
+      model.api.url !== admittedCustom.baseURL ||
+      (selectedProvider.options as Record<string, unknown>).baseURL !== admittedCustom.baseURL
+    ) {
+      return executionIdentityFailure('execution-identity-provider-untrusted')
+    }
+    // The reported model set must not exceed what the administrator listed.
+    //
+    // This is a security lock, not a shape check: an id colliding with a
+    // catalog provider makes OpenCode merge the whole catalog into this entry
+    // and re-point every one of its models at the gateway. Widening this
+    // comparison would turn that collision into a silent redirect, which is
+    // exactly what the reserved-id validation exists to prevent.
+    const admittedModels = new Set(admittedCustom.modelIds)
+    for (const reported of Object.keys(models)) {
+      if (!admittedModels.has(reported)) {
+        return executionIdentityFailure('execution-identity-provider-untrusted')
+      }
+    }
   }
 }
 
@@ -1143,7 +1175,16 @@ export async function launchVerifiedOpencodeManifest(
             const providers = await directClient.getConfigProviders(bootstrapSignal)
             const agents = await directClient.getAgents(bootstrapSignal)
             const skills = await directClient.getSkills(bootstrapSignal)
-            verifyProviderInventory(providers, manifest.selectedModel)
+            verifyProviderInventory(
+              providers,
+              manifest.selectedModel,
+              // RFC-255: admission values come from the manifest's own frozen
+              // config, so what is checked is by construction what was sent.
+              admittedCustomFromExpectedConfig(
+                manifest.expectedConfig,
+                manifest.selectedModel.providerID,
+              ),
+            )
             verifySkillInventory(skills)
             const sourceAfter = await scanSource(manifest.worktreePath)
             assertSourceFingerprintUnchanged(sourceBefore, sourceAfter)

@@ -12,7 +12,10 @@
 import { dirname, join } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import type { ListModelsOpts, RuntimeModelList } from '../types'
-import { listOpencodeModels } from '@/util/opencode-models'
+import { listOpencodeModels, opencodeModelsCacheKey } from '@/util/opencode-models'
+import { loadConfig } from '@/config'
+import { Paths } from '@/util/paths'
+import { buildEnumerationProviderSection, customProvidersProjection } from './customProvider'
 import { withRuntimeOpencodeSnapshot } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
 
@@ -55,12 +58,24 @@ export async function listOpencodeModelsHermetic(
     // frozen executable alone is therefore insufficient: run it from a
     // private source-guarded cwd with every config/auth root redirected,
     // so a repo/V2 plugin or host account cannot execute during inventory.
+    // RFC-255: administrator-configured gateways must appear in every model
+    // picker. Enumeration is measured to list config-defined providers with no
+    // credential present, so the section injected here carries display names
+    // but never a key — the enumeration surface stays credential-free.
+    const cfg = (opts.loadCustomProviderConfig ?? (() => loadConfig(Paths.config)))()
+    const providerSection = buildEnumerationProviderSection(cfg)
+    const hasCustomProviders = Object.keys(providerSection).length > 0
     const sourceBefore = await scanOpencodeProjectSurface(cwd)
     const result = await listOpencodeModels(snapshot, {
       refresh,
-      cacheKey: binary,
+      // The projection joins the key so an edit to any gateway invalidates the
+      // cached list; a key rotation deliberately leaves it unchanged.
+      cacheKey: opencodeModelsCacheKey(binary, customProvidersProjection(cfg)),
       cwd,
       env: {
+        ...(hasCustomProviders
+          ? { OPENCODE_CONFIG_CONTENT: JSON.stringify({ provider: providerSection }) }
+          : {}),
         PATH: '/usr/bin:/bin',
         HOME: home,
         TMPDIR: tmp,

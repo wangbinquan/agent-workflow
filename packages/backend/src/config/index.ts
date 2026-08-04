@@ -10,7 +10,15 @@ import {
   type Config,
   type ConfigPatch,
 } from '@agent-workflow/shared'
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -113,9 +121,20 @@ export function saveConfigRaw(path: string, cfg: Config): void {
   assertConfigPath(path)
   mkdirSync(dirname(path), { recursive: true })
   const tmp = join(dirname(path), `.config.json.tmp-${process.pid}-${Date.now()}`)
-  writeFileSync(tmp, JSON.stringify(cfg, null, 2) + '\n', 'utf-8')
+  // RFC-255: 0600 like secret.key and db.sqlite. This file now carries sealed
+  // provider credentials, and the default 0644 would have made it readable by
+  // every local account — weaker than the opencode auth store it replaces.
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 })
   try {
     renameSync(tmp, path)
+    // rename preserves the tempfile's mode, but an inherited-umask file from an
+    // older daemon version keeps its old permissions until rewritten — chmod
+    // here so an upgrade tightens existing installs too.
+    try {
+      chmodSync(path, 0o600)
+    } catch {
+      // best-effort: a config on a filesystem without POSIX modes still works
+    }
   } catch (err) {
     // A failed rename must never orphan the tempfile in dirname(path).
     try {

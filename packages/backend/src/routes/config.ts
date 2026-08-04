@@ -4,6 +4,7 @@
 
 import type { Hono } from 'hono'
 import { applyConfigPatch, loadConfig, previewConfigPatch } from '@/config'
+import { maskConfigForOutput, resolveCustomProvidersForSave } from '@/config/customProviderGate'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import {
@@ -63,8 +64,8 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Read daemon configuration',
     },
     (c) => {
-      const cfg = loadConfig(deps.configPath)
-      return c.json(cfg)
+      // RFC-255: sealed gateway credentials never leave the daemon.
+      return c.json(maskConfigForOutput(loadConfig(deps.configPath)))
     },
   )
 
@@ -184,13 +185,28 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         // same fence as probe finalization. A failed file write may discard a
         // valid display receipt, but can never leave a stale green one behind.
         await invalidateInheritedRuntimeProbeReceipts(deps.db, changedBinaryProtocols)
-        const updated = applyConfigPatch(deps.configPath, body)
+        // RFC-255: seal new credentials, carry preserved ones over, and reject
+        // an id that would re-point a built-in catalog provider. Runs on the
+        // MERGED value, so a patch that never mentions customProviders is a
+        // no-op here rather than a re-seal.
+        const providerPatch =
+          deps.secretBox === undefined
+            ? {}
+            : {
+                customProviders: await resolveCustomProvidersForSave(
+                  currentConfig,
+                  nextConfig,
+                  deps.secretBox,
+                  { probeCatalogCollision: deps.probeCatalogCollision },
+                ),
+              }
+        const updated = applyConfigPatch(deps.configPath, { ...body, ...providerPatch })
         await runtimeTests.reconcileDurableIntents()
         // RFC-233 linearization point: once this response can be observed, every
         // future admission sees the saved mode generation. Existing immutable
         // admissions are intentionally not rewritten.
         deps.containmentCoordinator?.setMode(updated.sandboxMode)
-        return c.json(updated)
+        return c.json(maskConfigForOutput(updated))
       })
     },
   )

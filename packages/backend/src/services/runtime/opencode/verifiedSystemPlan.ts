@@ -14,8 +14,8 @@ import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
   removeHermeticOpencodeLayout,
-  resolveStrictProviderAuth,
 } from './hermetic'
+import { resolveProviderCredential, type CustomProviderPlanDependencies } from './customProvider'
 import type { snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
 import { removeSealedTree } from './sealedInputs'
@@ -43,6 +43,8 @@ export interface VerifiedSystemPlanDependencies {
   random?: (size: number) => Buffer
   snapshotBinary?: typeof snapshotRuntimeOpencodeBinary
   sourceEnv?: Readonly<Record<string, string | undefined>>
+  /** RFC-255 — inject the daemon config / secret key for custom providers. */
+  customProvider?: CustomProviderPlanDependencies
 }
 
 function parseSelectedModel(model: string | null | undefined): SelectedModel {
@@ -167,6 +169,22 @@ export async function buildVerifiedOpencodeSystemPlan(
     if (profile !== 'all-deny' && profile !== 'intent-read-v1') {
       return executionIdentityFailure('execution-identity-mismatch')
     }
+    const sourceEnv: Record<string, string | undefined> = {
+      ...(dependencies.sourceEnv ?? process.env),
+      ...(ctx.gitUserName == null ? {} : { GIT_AUTHOR_NAME: ctx.gitUserName }),
+      ...(ctx.gitUserEmail == null ? {} : { GIT_AUTHOR_EMAIL: ctx.gitUserEmail }),
+      ...(ctx.gitUserName == null ? {} : { GIT_COMMITTER_NAME: ctx.gitUserName }),
+      ...(ctx.gitUserEmail == null ? {} : { GIT_COMMITTER_EMAIL: ctx.gitUserEmail }),
+    }
+    // RFC-255: resolved BEFORE the config is built — a custom gateway
+    // contributes a `provider` section to it, and a disabled one fails here
+    // instead of falling through to the generic credential channels.
+    const credential = await resolveProviderCredential(
+      selectedModel.providerID,
+      sourceEnv,
+      dependencies.customProvider,
+    )
+    const auth = credential.auth
     const controlledConfig = buildControlledOpencodeConfig({
       name: ctx.agentName,
       prompt: ctx.systemPrompt,
@@ -178,16 +196,9 @@ export async function buildVerifiedOpencodeSystemPlan(
       shellPath: '/bin/false',
       allowShell: false,
       mcp: {},
+      customProvider: credential.customProvider,
       ...(profile === 'intent-read-v1' ? { allowedReadOnlyTools: SYSTEM_READ_ONLY_TOOLS } : {}),
     })
-    const sourceEnv: Record<string, string | undefined> = {
-      ...(dependencies.sourceEnv ?? process.env),
-      ...(ctx.gitUserName == null ? {} : { GIT_AUTHOR_NAME: ctx.gitUserName }),
-      ...(ctx.gitUserEmail == null ? {} : { GIT_AUTHOR_EMAIL: ctx.gitUserEmail }),
-      ...(ctx.gitUserName == null ? {} : { GIT_COMMITTER_NAME: ctx.gitUserName }),
-      ...(ctx.gitUserEmail == null ? {} : { GIT_COMMITTER_EMAIL: ctx.gitUserEmail }),
-    }
-    const auth = await resolveStrictProviderAuth(selectedModel.providerID, sourceEnv)
     const serverEnv = buildHermeticServerEnv({
       layout,
       providerID: selectedModel.providerID,

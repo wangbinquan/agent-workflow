@@ -11,10 +11,10 @@ import {
   buildHermeticServerEnv,
   deriveHermeticOpencodeLayout,
   removeHermeticOpencodeLayout,
-  resolveStrictProviderAuth,
   type HermeticOpencodeLayout,
 } from './hermetic'
 import { pluginFileSpec, selectShippedPlugins } from './pluginSpec'
+import { resolveProviderCredential, type CustomProviderPlanDependencies } from './customProvider'
 import { inspectRuntimeOpencodeBinary, snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
@@ -162,6 +162,8 @@ export interface VerifiedBusinessPlanDependencies extends VerifiedOpencodePlanDe
   resolveToolchainBinary?: (token: string) => string | null
   /** Freeze a resolved tool into the private per-run seal before exposing it. */
   snapshotToolchainBinary?: typeof snapshotRuntimeOpencodeBinary
+  /** RFC-255 — inject the daemon config / secret key for custom providers. */
+  customProvider?: CustomProviderPlanDependencies
 }
 
 /**
@@ -596,6 +598,14 @@ export async function buildVerifiedOpencodeBusinessPlan(
       allowShell: dep.permission.bash !== 'deny',
     }
   })
+  // RFC-255: resolved BEFORE the config is built — a custom gateway contributes
+  // a `provider` section to that config, and a disabled one must fail here
+  // rather than fall through to the generic credential channels.
+  const credential = await resolveProviderCredential(
+    selectedModel.providerID,
+    sourceEnv,
+    dependencies.customProvider,
+  )
   const controlledConfig = buildControlledOpencodeConfig({
     name: ctx.agent.name,
     prompt: persona,
@@ -615,8 +625,9 @@ export async function buildVerifiedOpencodeBusinessPlan(
     // from the result, so a non-empty selection also turns that flag off.
     plugins: ctx.plugins,
     dependents: controlledDependents,
+    customProvider: credential.customProvider,
   })
-  const auth = await resolveStrictProviderAuth(selectedModel.providerID, sourceEnv)
+  const auth = credential.auth
   const username = `aw-${randomBytes(12).toString('base64url')}`
   const password = randomBytes(32).toString('base64url')
   const serverEnv = buildHermeticServerEnv({

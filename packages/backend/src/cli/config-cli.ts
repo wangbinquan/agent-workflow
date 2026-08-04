@@ -8,10 +8,13 @@
 // Top-level keys only; for nested fields, set the whole nested object as JSON.
 
 import { applyConfigPatch, loadConfig } from '@/config'
+import { maskConfigForOutput } from '@/config/customProviderGate'
 import { Paths } from '@/util/paths'
 
 export function configGetCommand(args: string[]): { output: string } {
-  const cfg = loadConfig(Paths.config)
+  // RFC-255: same masking the HTTP surface applies — printing config must not
+  // print gateway credentials, whether or not a terminal is watching.
+  const cfg = maskConfigForOutput(loadConfig(Paths.config))
   if (args.length === 0) {
     return { output: JSON.stringify(cfg, null, 2) + '\n' }
   }
@@ -36,8 +39,18 @@ export function configSetCommand(args: string[]): { output: string } {
     throw new Error('usage: agent-workflow config set <key> <value>')
   }
   const parsedValue = parseValue(rawValue)
+  // RFC-255: the CLI writes the very same file the API does, so it must not be
+  // a way around the API's provider validation (reserved ids, mask handling,
+  // credential sealing). Routing this key through the CLI is refused outright
+  // rather than half-validated: sealing here would need the secret key and
+  // duplicate the route's gate.
+  if (key === 'customProviders') {
+    throw new Error(
+      'config set customProviders is not supported — manage custom providers through the Settings UI or PUT /api/config, which seals credentials and validates provider ids',
+    )
+  }
   const updated = applyConfigPatch(Paths.config, { [key]: parsedValue })
-  const newValue = (updated as Record<string, unknown>)[key]
+  const newValue = (maskConfigForOutput(updated) as Record<string, unknown>)[key]
   return { output: `${key} = ${formatValue(newValue)}\n` }
 }
 

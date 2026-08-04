@@ -267,6 +267,11 @@ export interface ListModelsOpts {
    * verified snapshot. Execution still always uses `binary`.
    */
   cacheKey?: string
+  /**
+   * RFC-255 test seam: supply the daemon config that names custom providers.
+   * Production reads the real config file.
+   */
+  loadCustomProviderConfig?: () => { customProviders?: unknown }
   /** RFC-224 diagnostic subprocess environment (OpenCode only). */
   env?: Record<string, string>
   /** RFC-224 private, source-guarded diagnostic working directory. */
