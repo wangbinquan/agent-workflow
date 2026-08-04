@@ -117,7 +117,16 @@ import {
   wrapperDescendantIds,
   type WrapperHitInput,
 } from './wrapperMembership'
-import { DEFAULT_NODE_SIZE_BY_KIND, fitWrapperToInner } from './wrapperFit'
+import {
+  buildWrapperPortMinimumSizes,
+  DEFAULT_NODE_SIZE_BY_KIND,
+  fitWrapperToInner,
+} from './wrapperFit'
+import {
+  applyWrapperDragPreviews,
+  clearWrapperDragPreviews,
+  computeWrapperDragPreviews,
+} from './wrapperDragPreview'
 import {
   centerAnchoredTopLeft,
   effectiveWorkflowNodePosition,
@@ -1174,6 +1183,37 @@ function CanvasInner({
     [commitChange, definition, onChange, readOnly, t],
   )
 
+  const handleNodeDrag = useCallback(
+    (_event: React.MouseEvent, _node: Node, draggedNodes: Node[]) => {
+      if (readOnly === true || onChange === undefined || draggedNodes.length === 0) return
+      // onNodesChange normally updates nodesRef before this callback, but keep
+      // the event's dragged positions authoritative when React batches both
+      // callbacks in the same frame.
+      const draggedById = new Map(draggedNodes.map((node) => [node.id, node] as const))
+      const positioned = nodesRef.current.map((node) => {
+        const dragged = draggedById.get(node.id)
+        if (dragged === undefined) return node
+        if (node.position.x === dragged.position.x && node.position.y === dragged.position.y) {
+          return node
+        }
+        return { ...node, position: dragged.position, dragging: dragged.dragging }
+      })
+      const clean = clearWrapperDragPreviews(positioned)
+      const measured = buildMeasuredSizesFromXyflowNodes(clean)
+      const previews = computeWrapperDragPreviews({
+        definition,
+        flowNodes: clean,
+        draggedNodeIds: draggedNodes.map((node) => node.id),
+        measuredSizes: measured,
+      })
+      const next = applyWrapperDragPreviews(clean, previews)
+      if (next === nodesRef.current) return
+      nodesRef.current = next
+      setNodes(next)
+    },
+    [definition, onChange, readOnly],
+  )
+
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       if (readOnly === true) return
@@ -1960,7 +2000,8 @@ function CanvasInner({
       if (!hasCanonicalPaletteIdentity(item)) return
       const existingIds = new Set(definition.nodes.map((n) => n.id))
       const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
-      const wrappers = resolveWrappers(definition, measured)
+      const minimumSizes = buildWrapperPortMinimumSizes(nodesRef.current)
+      const wrappers = resolveWrappers(definition, measured, minimumSizes)
       const parentMap = buildParentMap(wrappers)
       let openPosition: { x: number; y: number }
       try {
@@ -2087,7 +2128,8 @@ function CanvasInner({
       let position = desiredPoint
       if (avoidCollisions) {
         const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
-        const wrappers = resolveWrappers(definition, measured)
+        const minimumSizes = buildWrapperPortMinimumSizes(nodesRef.current)
+        const wrappers = resolveWrappers(definition, measured, minimumSizes)
         const parentMap = buildParentMap(wrappers)
         try {
           position = findOpenPlacement({
@@ -2166,7 +2208,10 @@ function CanvasInner({
         }
       } else if (intent.kind === 'inside-wrapper') {
         const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
-        const wrapper = resolveWrappers(definition, measured).get(intent.wrapperNodeId)
+        const minimumSizes = buildWrapperPortMinimumSizes(nodesRef.current)
+        const wrapper = resolveWrappers(definition, measured, minimumSizes).get(
+          intent.wrapperNodeId,
+        )
         if (wrapper !== undefined) {
           insertPaletteItem(
             item,
@@ -2253,7 +2298,8 @@ function CanvasInner({
   const openAfterNodePicker = useCallback(
     (nodeId: string, trigger: HTMLElement) => {
       const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
-      const parent = buildParentMap(resolveWrappers(definition, measured)).get(nodeId)
+      const minimumSizes = buildWrapperPortMinimumSizes(nodesRef.current)
+      const parent = buildParentMap(resolveWrappers(definition, measured, minimumSizes)).get(nodeId)
       openNodePicker(
         {
           kind: 'after-node',
@@ -2626,6 +2672,7 @@ function CanvasInner({
           lastEmittedSelectionSig.current = 'null'
           if (onSelect !== undefined) onSelect(null)
         }}
+        onNodeDrag={handleNodeDrag}
         onNodeDragStop={(_evt, _node, draggedNodes) => {
           // Commit final positions once when the drag ends, instead of on
           // every position change. `affectsDefinition` excludes 'position'
@@ -2634,16 +2681,27 @@ function CanvasInner({
           // because toDefinition computes a complete next-state.
           if (readOnly === true || onChange === undefined) return
           if (draggedNodes.length === 0) return
+          const draggedById = new Map(draggedNodes.map((node) => [node.id, node] as const))
+          const positioned = nodesRef.current.map((node) => {
+            const dragged = draggedById.get(node.id)
+            return dragged === undefined
+              ? node
+              : { ...node, position: dragged.position, dragging: false }
+          })
+          const liveNodes = clearWrapperDragPreviews(positioned)
+          nodesRef.current = liveNodes
+          setNodes(liveNodes)
           // RFC-016: with positions about to be committed, decide whether any
           // dragged node also changed wrapper membership (hit a new wrapper
           // rect or left its current one). The membership patches go through
           // applyMembershipPatch on the post-positions definition so the
           // wrapper.nodeIds list stays in lock-step with the visible layout.
-          const measured = buildMeasuredSizesFromXyflowNodes(nodes)
-          let nextDef = toDefinition(definition, nodes, edges, measured)
-          const absoluteNodes = projectXyflowPositionsToAbsolute(definition, nodes, measured)
+          const measured = buildMeasuredSizesFromXyflowNodes(liveNodes)
+          const minimumSizes = buildWrapperPortMinimumSizes(liveNodes)
+          let nextDef = toDefinition(definition, liveNodes, edgesRef.current, measured)
+          const absoluteNodes = projectXyflowPositionsToAbsolute(definition, liveNodes, measured)
           const wrappers: WrapperHitInput[] = []
-          for (const fn of nodes) {
+          for (const fn of liveNodes) {
             if (!isWrapperKind(fn.type)) continue
             const style = fn.style as { width?: unknown; height?: unknown } | undefined
             const w = typeof style?.width === 'number' ? style.width : 200
@@ -2710,7 +2768,7 @@ function CanvasInner({
             if (wid !== undefined) toFit.add(wid)
           }
           for (const wid of toFit) {
-            nextDef = fitWrapperToInner(nextDef, wid, measured)
+            nextDef = fitWrapperToInner(nextDef, wid, measured, minimumSizes)
           }
           const primaryDragged = draggedNodes[0]?.id
           commitChange(nextDef, {

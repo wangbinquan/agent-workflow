@@ -26,6 +26,7 @@ import { PortHandles } from './PortHandles'
 import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
 import { NodeValidationBadge } from './NodeValidationBadge'
 import { NodeConfigurationSummary } from './NodeConfigurationSummary'
+import type { WrapperDragPreview } from '../wrapperDragPreview'
 
 /** Extra fields the canvas injects beyond the shared CanvasNodeData. */
 export interface WrapperNodeData extends CanvasNodeData {
@@ -39,6 +40,8 @@ export interface WrapperNodeData extends CanvasNodeData {
   /** Fanout only — name of the shard-source input port (singleton); used to
    * tag the corresponding port row with shard-source chrome. */
   shardSourcePort?: string
+  /** Local-only drag target feedback. Never persisted into a workflow. */
+  wrapperDragPreview?: WrapperDragPreview
 }
 
 interface Props extends NodeProps {
@@ -66,6 +69,7 @@ function WrapperHeaderPill({ kind }: { kind: 'git' | 'loop' | 'fanout' }) {
  *  whether to render the loop-only catch-all left handle. */
 export function GroupWrapperNode({ data, selected }: Props) {
   const { t } = useTranslation()
+  const dragPreview = data.wrapperDragPreview
   const kind: 'git' | 'loop' | 'fanout' =
     data.kind === 'wrapper-loop' ? 'loop' : data.kind === 'wrapper-fanout' ? 'fanout' : 'git'
   const label =
@@ -87,12 +91,26 @@ export function GroupWrapperNode({ data, selected }: Props) {
         'canvas-node--wrapper-group',
         `canvas-node--wrapper-group--${kind}`,
         selected ? 'canvas-node--selected' : '',
+        dragPreview?.state === 'accept' ? 'canvas-node--wrapper-group--drop-hover' : '',
+        dragPreview?.state === 'leave' ? 'canvas-node--wrapper-group--leave-hint' : '',
       ]
         .filter(Boolean)
         .join(' ')}
       data-status={data.status ?? 'default'}
       data-loop-body={data.loopBody ? 'true' : undefined}
       data-surface={data.surface}
+      data-wrapper-drop-preview={dragPreview?.state}
+      style={
+        dragPreview?.state === 'accept' &&
+        dragPreview.width !== undefined &&
+        dragPreview.height !== undefined
+          ? {
+              width: dragPreview.width,
+              height: dragPreview.height,
+              transform: `translate(${dragPreview.offsetX ?? 0}px, ${dragPreview.offsetY ?? 0}px)`,
+            }
+          : undefined
+      }
     >
       <NodeValidationBadge data={data} />
       <div className="canvas-node__header">

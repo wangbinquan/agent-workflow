@@ -1,7 +1,8 @@
 // RFC-016: hit-test + nodeIds patch primitives for the canvas group container
-// UX. resolveMembershipOnDragStop decides "where did the user drop the node"
-// from the rectangles snapshotted at drag-start; applyMembershipPatch turns
-// that decision into a non-mutating WorkflowDefinition update.
+// UX. resolveWrapperDropTargetId is the shared live-preview / drag-stop hit
+// oracle; resolveMembershipOnDragStop adds the current-membership delta and
+// applyMembershipPatch turns that decision into a non-mutating
+// WorkflowDefinition update.
 //
 // Hit rule (proposal §2.1 #2): a wrapper is hit iff the *center point* of the
 // dragged node falls inside its rect — avoids edge-jitter when corners brush.
@@ -68,6 +69,32 @@ function rectArea(r: Rect): number {
   return r.width * r.height
 }
 
+/** Resolve the wrapper that would accept the dragged node at this point.
+ * Both the live drag preview and the final drag-stop commit call this oracle,
+ * so the highlighted wrapper can never disagree with the eventual drop.
+ * Nested hits pick the smallest rectangle (the innermost wrapper). */
+export function resolveWrapperDropTargetId(args: {
+  draggedNodeId: string
+  draggedCenter: { x: number; y: number }
+  wrappers: WrapperHitInput[]
+  /** Wrappers that cannot accept this node (for wrapper drags: descendants). */
+  blockedWrapperIds?: ReadonlySet<string>
+}): string | null {
+  const { draggedNodeId, draggedCenter, wrappers, blockedWrapperIds } = args
+  const hits = wrappers.filter(
+    (wrapper) =>
+      wrapper.id !== draggedNodeId &&
+      blockedWrapperIds?.has(wrapper.id) !== true &&
+      pointInRect(draggedCenter, wrapper.rect),
+  )
+  hits.sort((a, b) => {
+    const da = rectArea(a.rect) - rectArea(b.rect)
+    if (da !== 0) return da
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
+  return hits[0]?.id ?? null
+}
+
 /** Decide which wrapper (if any) the dropped node should now belong to, plus
  * which wrapper it just left. Returns both `null` when no patch is needed (the
  * common case where a node was just moved inside its current wrapper). */
@@ -83,14 +110,11 @@ export function resolveMembershipOnDragStop(args: {
   const others = wrappers.filter(
     (w) => w.id !== draggedNodeId && blockedWrapperIds?.has(w.id) !== true,
   )
-  const hits = others.filter((w) => pointInRect(draggedCenter, w.rect))
-  // Innermost = smallest-area hit; deterministic tie-break by id.
-  hits.sort((a, b) => {
-    const da = rectArea(a.rect) - rectArea(b.rect)
-    if (da !== 0) return da
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  const joinWrapperId = resolveWrapperDropTargetId({
+    draggedNodeId,
+    draggedCenter,
+    wrappers: others,
   })
-  const joinTarget = hits[0] ?? null
 
   let currentWrapperId: string | null = null
   for (const w of others) {
@@ -100,7 +124,6 @@ export function resolveMembershipOnDragStop(args: {
     }
   }
 
-  const joinWrapperId = joinTarget?.id ?? null
   const leaveWrapperId = currentWrapperId
   if (joinWrapperId === leaveWrapperId) {
     return { draggedNodeId, joinWrapperId: null, leaveWrapperId: null }

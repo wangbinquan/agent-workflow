@@ -131,6 +131,34 @@ describe('GroupWrapperNode', () => {
     expect((container.textContent ?? '').includes('Drop nodes here')).toBe(false)
   })
 
+  test('accept preview expands the visible wrapper and applies target feedback', () => {
+    const { container } = renderNode(
+      gitData({
+        wrapperDragPreview: {
+          state: 'accept',
+          offsetX: -46,
+          offsetY: -42,
+          width: 392,
+          height: 282,
+        },
+      }),
+    )
+    const root = container.querySelector<HTMLElement>('.canvas-node--wrapper-group')
+    expect(root?.classList.contains('canvas-node--wrapper-group--drop-hover')).toBe(true)
+    expect(root?.getAttribute('data-wrapper-drop-preview')).toBe('accept')
+    expect(root?.style.width).toBe('392px')
+    expect(root?.style.height).toBe('282px')
+    expect(root?.style.transform).toBe('translate(-46px, -42px)')
+  })
+
+  test('leave preview changes the border hint without resizing the wrapper', () => {
+    const { container } = renderNode(gitData({ wrapperDragPreview: { state: 'leave' } }))
+    const root = container.querySelector<HTMLElement>('.canvas-node--wrapper-group')
+    expect(root?.classList.contains('canvas-node--wrapper-group--leave-hint')).toBe(true)
+    expect(root?.getAttribute('data-wrapper-drop-preview')).toBe('leave')
+    expect(root?.getAttribute('style')).toBeNull()
+  })
+
   // Locks in the i18n bug fix from 2026-05-24: wrapper-fanout used to silently
   // fall through to the git label/icon because the kind branch only knew
   // about 'git' and 'loop'. The three assertions below pin the fanout chip

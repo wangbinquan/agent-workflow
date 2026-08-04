@@ -253,4 +253,14 @@ describe('WorkflowCanvas wrapper drag wiring', () => {
     expect(src).not.toMatch(/if \(isWrapperKind\(dn\.type\)\) continue/)
     expect(src).toMatch(/wrapperDescendantIds\(nextDef, dn\.id\)/)
   })
+
+  test('live drag frames compute local wrapper previews and clear them before commit', () => {
+    const src = readFileSync(
+      resolve(import.meta.dirname, '..', 'src', 'components', 'canvas', 'WorkflowCanvas.tsx'),
+      'utf8',
+    )
+    expect(src).toMatch(/onNodeDrag={handleNodeDrag}/)
+    expect(src).toMatch(/computeWrapperDragPreviews\(\{/)
+    expect(src).toMatch(/const liveNodes = clearWrapperDragPreviews\(positioned\)/)
+  })
 })

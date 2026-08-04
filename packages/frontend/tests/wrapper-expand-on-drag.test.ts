@@ -19,6 +19,7 @@
 import { describe, expect, test } from 'vitest'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import {
+  buildWrapperPortMinimumSizes,
   DEFAULT_NODE_SIZE_BY_KIND,
   WRAPPER_DEFAULT_PADDING,
   WRAPPER_HEADER_HEIGHT,
@@ -66,6 +67,36 @@ function sizedWrapperById(d: WorkflowDefinition, id: string): SizedWrapper {
 }
 
 describe('fitWrapperToInner', () => {
+  test('never shrinks a port-heavy loop below its intrinsic output row width', () => {
+    const loop = {
+      ...wrapper('w', ['a'], { x: 0, y: 0 }, { width: 900, height: 600 }),
+      kind: 'wrapper-loop',
+      outputBindings: ['1', '2', '3', '4', '5', '6'].map((suffix) => ({
+        name: `result_${suffix}`,
+        bind: { nodeId: 'a', portName: 'out' },
+      })),
+    } as unknown as WorkflowNode
+    const minimumSizes = buildWrapperPortMinimumSizes([
+      {
+        id: 'w',
+        type: 'wrapper-loop',
+        data: {
+          inputPorts: [],
+          outputPorts: ['result_1', 'result_2', 'result_3', 'result_4', 'result_5', 'result_6'],
+        },
+      },
+    ])
+    const next = fitWrapperToInner(
+      def([loop, agent('a', { x: 100, y: 100 })]),
+      'w',
+      undefined,
+      minimumSizes,
+    )
+    const fitted = sizedWrapperById(next, 'w')
+    expect(fitted.size.width).toBe(532)
+    expect(fitted.position.x).toBe(100 - LEFT_CLEAR)
+  })
+
   test('returns prevDef by reference when the wrapper id is missing', () => {
     const d = def([agent('a', { x: 0, y: 0 })])
     expect(fitWrapperToInner(d, 'nope')).toBe(d)

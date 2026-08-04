@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'vitest'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import {
+  buildWrapperPortMinimumSizes,
   computeFitBounds,
   DEFAULT_NODE_SIZE_BY_KIND,
   WRAPPER_DEFAULT_PADDING,
@@ -22,6 +23,41 @@ function agentSingle(id: string, pos: { x: number; y: number }): WorkflowNode {
 }
 
 describe('computeFitBounds', () => {
+  test('port-heavy loop contributes an intrinsic width before any child is added', () => {
+    const w = {
+      ...wrapper('loop', [], { x: 100, y: 200 }),
+      kind: 'wrapper-loop',
+    } as unknown as WorkflowNode
+    const minimumSizes = buildWrapperPortMinimumSizes([
+      {
+        id: 'loop',
+        type: 'wrapper-loop',
+        data: {
+          inputPorts: [],
+          outputPorts: ['result_1', 'result_2', 'result_3', 'result_4', 'result_5', 'result_6'],
+        },
+      },
+    ])
+    expect(minimumSizes.get('loop')).toEqual({ width: 532, height: 120 })
+
+    const fit = computeFitBounds(w, [w], undefined, undefined, minimumSizes)
+    expect(fit).toEqual({ width: 532, height: 120, offset: { x: 100, y: 200 } })
+  })
+
+  test('fanout side-port count contributes an intrinsic height', () => {
+    const minimumSizes = buildWrapperPortMinimumSizes([
+      {
+        id: 'fan',
+        type: 'wrapper-fanout',
+        data: {
+          inputPorts: ['shards'],
+          outputPorts: ['a', 'b', 'c', 'd', 'e', 'f'],
+        },
+      },
+    ])
+    expect(minimumSizes.get('fan')).toEqual({ width: 200, height: 234 })
+  })
+
   test('empty nodeIds returns the empty fallback rect at the wrapper position', () => {
     const w = wrapper('w1', [], { x: 100, y: 200 })
     const b = computeFitBounds(w, [w])

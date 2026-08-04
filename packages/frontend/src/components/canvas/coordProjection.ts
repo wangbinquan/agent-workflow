@@ -26,7 +26,11 @@
 import type { Node } from '@xyflow/react'
 import { isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { computeFitBounds } from './wrapperFit'
+import {
+  buildWrapperPortMinimumSizes,
+  computeFitBounds,
+  type WrapperMinimumSizes,
+} from './wrapperFit'
 import { effectiveWorkflowNodePosition } from '../../lib/workflow-placement'
 
 // flag-audit W0: the private wrapper-kind predicate that once lived here (and
@@ -78,6 +82,7 @@ interface WrapperResolved {
 export function resolveWrappers(
   definition: WorkflowDefinition,
   measuredSizes?: Map<string, { width: number; height: number }>,
+  minimumSizes?: WrapperMinimumSizes,
 ): Map<string, WrapperResolved> {
   const out = new Map<string, WrapperResolved>()
   for (const [index, n] of definition.nodes.entries()) {
@@ -95,15 +100,16 @@ export function resolveWrappers(
       typeof sizeRec.height === 'number'
     ) {
       const pos = effectiveWorkflowNodePosition(n, index)
+      const minimum = sizeRec.sizeLocked === true ? undefined : minimumSizes?.get(n.id)
       out.set(n.id, {
         id: n.id,
         position: { x: pos.x, y: pos.y },
-        width: sizeRec.width,
-        height: sizeRec.height,
+        width: Math.max(sizeRec.width, minimum?.width ?? 0),
+        height: Math.max(sizeRec.height, minimum?.height ?? 0),
         innerIds: ids,
       })
     } else {
-      const fit = computeFitBounds(n, definition.nodes, undefined, measuredSizes)
+      const fit = computeFitBounds(n, definition.nodes, undefined, measuredSizes, minimumSizes)
       out.set(n.id, {
         id: n.id,
         position: { x: fit.offset.x, y: fit.offset.y },
@@ -165,7 +171,8 @@ export function projectDefinitionForXyflow(
   flowNodes: Node[],
   measuredSizes?: Map<string, { width: number; height: number }>,
 ): Node[] {
-  const wrappers = resolveWrappers(definition, measuredSizes)
+  const minimumSizes = buildWrapperPortMinimumSizes(flowNodes)
+  const wrappers = resolveWrappers(definition, measuredSizes, minimumSizes)
   const parentMap = buildParentMap(wrappers)
   const out: Node[] = []
   for (const fn of flowNodes) {
@@ -222,7 +229,8 @@ export function projectXyflowPositionsToAbsolute(
   flowNodes: Node[],
   measuredSizes?: Map<string, { width: number; height: number }>,
 ): Node[] {
-  const wrapperMembership = buildParentMap(resolveWrappers(definition, measuredSizes))
+  const minimumSizes = buildWrapperPortMinimumSizes(flowNodes)
+  const wrapperMembership = buildParentMap(resolveWrappers(definition, measuredSizes, minimumSizes))
   const flowById = new Map(flowNodes.map((node) => [node.id, node] as const))
   const absoluteById = new Map<string, { x: number; y: number }>()
   const resolving = new Set<string>()

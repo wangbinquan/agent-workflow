@@ -34,8 +34,13 @@ function wrap(
 function child(id: string, pos: { x: number; y: number }): WorkflowNode {
   return { id, kind: 'agent-single', position: pos, agentName: 'a' } as unknown as WorkflowNode
 }
-function flowNode(id: string, kind: string, pos: { x: number; y: number }): Node {
-  return { id, type: kind, position: pos, data: {} } as Node
+function flowNode(
+  id: string,
+  kind: string,
+  pos: { x: number; y: number },
+  data: Record<string, unknown> = {},
+): Node {
+  return { id, type: kind, position: pos, data } as Node
 }
 
 describe('coordProjection', () => {
@@ -222,6 +227,68 @@ describe('coordProjection', () => {
     expect(w1.position).toEqual({ x: 44, y: 38 })
     expect(w1.style?.width).toBeGreaterThan(0)
     expect(w1.style?.height).toBeGreaterThan(0)
+  })
+
+  test('port-heavy loop expands its projected shell so bottom handles stay inside', () => {
+    const outputPorts = ['result_1', 'result_2', 'result_3', 'result_4', 'result_5', 'result_6']
+    const d = def([
+      wrap('loop', 'wrapper-loop', [], {
+        position: { x: 100, y: 100 },
+        size: { width: 200, height: 160 },
+      }),
+    ])
+    const projected = projectDefinitionForXyflow(d, [
+      flowNode('loop', 'wrapper-loop', { x: 100, y: 100 }, { inputPorts: [], outputPorts }),
+    ])
+    const loop = projected.find((node) => node.id === 'loop')!
+    expect(loop.style?.width).toBe(532)
+    expect(loop.style?.height).toBe(160)
+    expect(loop.position).toEqual({ x: 100, y: 100 })
+  })
+
+  test('explicit size lock remains authoritative over the intrinsic port minimum', () => {
+    const outputPorts = ['result_1', 'result_2', 'result_3', 'result_4', 'result_5', 'result_6']
+    const d = def([
+      wrap('loop', 'wrapper-loop', [], {
+        position: { x: 100, y: 100 },
+        size: { width: 200, height: 160, sizeLocked: true },
+      }),
+    ])
+    const projected = projectDefinitionForXyflow(d, [
+      flowNode('loop', 'wrapper-loop', { x: 100, y: 100 }, { inputPorts: [], outputPorts }),
+    ])
+    expect(projected.find((node) => node.id === 'loop')?.style?.width).toBe(200)
+  })
+
+  test('port-heavy fanout expands its projected height for every side handle row', () => {
+    const outputPorts = ['a', 'b', 'c', 'd', 'e', 'f']
+    const d: WorkflowDefinition = {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        {
+          id: 'fan',
+          kind: 'wrapper-fanout',
+          position: { x: 100, y: 100 },
+          nodeIds: [],
+          inputs: [{ name: 'shards', kind: 'list<string>', isShardSource: true }],
+          size: { width: 240, height: 120 },
+        } as unknown as WorkflowNode,
+      ],
+      edges: [],
+    }
+    const projected = projectDefinitionForXyflow(d, [
+      flowNode(
+        'fan',
+        'wrapper-fanout',
+        { x: 100, y: 100 },
+        { inputPorts: ['shards'], outputPorts },
+      ),
+    ])
+    expect(projected.find((node) => node.id === 'fan')?.style).toMatchObject({
+      width: 240,
+      height: 234,
+    })
   })
 
   test('topoSortByParent puts parent wrapper before its children', () => {

@@ -160,9 +160,12 @@ describe('WorkflowCanvas camera integration backstop', () => {
     )
   })
 
-  test('semantic zoom preserves geometry and coarse-pointer actions have 44px boxes', () => {
-    expect(css).toMatch(
-      /data-zoom-band='overview'[\s\S]{0,1000}visibility: hidden;[\s\S]{0,120}pointer-events: none/,
+  test('semantic zoom keeps node content visible and coarse-pointer actions have 44px boxes', () => {
+    expect(css).not.toMatch(
+      /data-zoom-band='topology'\]\s+\.canvas-node\s*>\s*:not\(\.canvas-node__validation\)/,
+    )
+    expect(css).not.toMatch(
+      /data-zoom-band='overview'\][\s\S]{0,800}\.canvas-node__port-label[\s\S]{0,300}visibility:\s*hidden/,
     )
     expect(css).toMatch(
       /@media \(pointer: coarse\), \(max-width: 520px\)[\s\S]{0,220}\.workflow-edge-insert[\s\S]{0,100}width: 44px;[\s\S]{0,80}height: 44px/,

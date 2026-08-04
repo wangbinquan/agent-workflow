@@ -6927,37 +6927,12 @@ details.form-section[open] > summary {
   outline: none;
 }
 
-/* RFC-250 semantic zoom is editor-only. `visibility`/`opacity` preserve node
-   geometry, so changing bands never feeds a new size back into the camera. */
-.workflow-canvas[data-surface='editor'][data-zoom-band='overview']
-  :is(
-    .canvas-node__configuration,
-    .canvas-node__port-label,
-    .canvas-node__port-tag,
-    .canvas-node__description,
-    .canvas-node__input-source,
-    .canvas-node__call-reference,
-    .canvas-node__call-nav,
-    .canvas-node__review-nav,
-    .canvas-node__clarify-nav,
-    .canvas-node__clarify-directive,
-    .canvas-node__cross-clarify-handle-label,
-    .canvas-node__wrapper-empty-hint
-  ) {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
+/* RFC-250 zoom bands must never turn a node into an empty shell. The viewport
+   transform already scales dense content; keep the node's identity, summaries,
+   labels, and handles rendered at every zoom so zooming out loses detail only
+   through physical scale, never through an abrupt visibility threshold.
 
-.workflow-canvas[data-surface='editor'][data-zoom-band='topology']
-  .canvas-node
-  > :not(.canvas-node__validation) {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Selection and validation are orientation markers, not flow-space content.
+   Selection and validation are orientation markers, not flow-space content.
    Cancel the viewport scale below readable zoom so each marker retains at
    least an 8px screen-space footprint even at React Flow's 0.2 minZoom. */
 .workflow-canvas[data-surface='editor'][data-zoom-band='overview'],
@@ -8551,6 +8526,8 @@ details.form-section[open] > summary {
  * `Position.Bottom` handle (bottom: -3px, left: 50%) lands centered on the
  * wrapper's outer edge regardless of inner content height. */
 .canvas-node__bottom-ports {
+  /* Keep these values in sync with buildWrapperPortMinimumSizes(): the
+     projection expands the xyflow shell before this single row can overflow. */
   position: absolute;
   left: 0;
   right: 0;
@@ -8566,6 +8543,7 @@ details.form-section[open] > summary {
 .canvas-node__bottom-port {
   position: relative;
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   align-items: center;
   pointer-events: auto;

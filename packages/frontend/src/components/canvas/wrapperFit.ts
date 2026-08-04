@@ -50,6 +50,102 @@ export const WRAPPER_DEFAULT_PADDING = 40
 export const WRAPPER_EMPTY_MIN_WIDTH = 200
 export const WRAPPER_EMPTY_MIN_HEIGHT = 120
 
+export interface WrapperMinimumSize {
+  width: number
+  height: number
+}
+
+export type WrapperMinimumSizes = ReadonlyMap<string, WrapperMinimumSize>
+
+// Wrapper-git / wrapper-loop output handles sit in one bottom row. These
+// values mirror `.canvas-node__bottom-ports` and `.canvas-node__port-label`:
+// 10px horizontal container padding, 16px gap, a 140px label cap, and 4px
+// label padding on each side. The label font is 13px monospace; 8px per ASCII
+// glyph (13px for wide Unicode glyphs) is a conservative layout estimate.
+const BOTTOM_PORTS_HORIZONTAL_PADDING = 20
+const BOTTOM_PORT_GAP = 16
+const PORT_LABEL_HORIZONTAL_PADDING = 8
+const PORT_LABEL_MAX_WIDTH = 140
+const PORT_LABEL_ASCII_GLYPH_WIDTH = 8
+const PORT_LABEL_WIDE_GLYPH_WIDTH = 13
+
+// Wrapper-fanout boundary ports stack down each side. The rendered row is
+// 22px high plus 2px padding and a 1px border on both vertical sides; the
+// column starts 30px below the header, ends 6px above the bottom, and uses a
+// 6px gap. Keep the wrapper tall enough for whichever side has more rows.
+const SIDE_PORT_ROW_HEIGHT = 28
+const SIDE_PORT_GAP = 6
+const SIDE_PORT_TOP = 30
+const SIDE_PORT_BOTTOM = 6
+
+function portNames(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((port): port is string => typeof port === 'string')
+    : []
+}
+
+function estimatedPortLabelWidth(port: string): number {
+  let contentWidth = 0
+  for (const glyph of Array.from(port)) {
+    contentWidth += /^[\x20-\x7e]$/.test(glyph)
+      ? PORT_LABEL_ASCII_GLYPH_WIDTH
+      : PORT_LABEL_WIDE_GLYPH_WIDTH
+  }
+  return (
+    Math.min(PORT_LABEL_MAX_WIDTH, Math.max(PORT_LABEL_ASCII_GLYPH_WIDTH, contentWidth)) +
+    PORT_LABEL_HORIZONTAL_PADDING
+  )
+}
+
+/** Derive intrinsic wrapper chrome constraints from the ports that the canvas
+ * actually renders. This stays presentation-only: no workflow size, lock, or
+ * undo state is mutated. */
+export function buildWrapperPortMinimumSizes(
+  flowNodes: ReadonlyArray<{
+    id: string
+    type?: string
+    data: unknown
+  }>,
+): Map<string, WrapperMinimumSize> {
+  const out = new Map<string, WrapperMinimumSize>()
+  for (const node of flowNodes) {
+    if (!isWrapperKind(node.type)) continue
+    const data =
+      node.data !== null && typeof node.data === 'object'
+        ? (node.data as Record<string, unknown>)
+        : {}
+    const inputs = portNames(data.inputPorts)
+    const outputs = portNames(data.outputPorts)
+    let width = WRAPPER_EMPTY_MIN_WIDTH
+    let height = WRAPPER_EMPTY_MIN_HEIGHT
+
+    if (node.type === 'wrapper-fanout') {
+      const sideCount = Math.max(inputs.length, outputs.length)
+      if (sideCount > 0) {
+        height = Math.max(
+          height,
+          SIDE_PORT_TOP +
+            SIDE_PORT_BOTTOM +
+            sideCount * SIDE_PORT_ROW_HEIGHT +
+            Math.max(0, sideCount - 1) * SIDE_PORT_GAP,
+        )
+      }
+    } else if (outputs.length > 0) {
+      width = Math.max(
+        width,
+        BOTTOM_PORTS_HORIZONTAL_PADDING +
+          outputs.reduce((sum, port) => sum + estimatedPortLabelWidth(port), 0) +
+          Math.max(0, outputs.length - 1) * BOTTOM_PORT_GAP,
+      )
+    }
+
+    if (width > WRAPPER_EMPTY_MIN_WIDTH || height > WRAPPER_EMPTY_MIN_HEIGHT) {
+      out.set(node.id, { width: Math.round(width), height: Math.round(height) })
+    }
+  }
+  return out
+}
+
 interface XY {
   x: number
   y: number
@@ -112,6 +208,34 @@ function hasPersistedSize(node: WorkflowNode): boolean {
   )
 }
 
+function hasLockedSize(node: WorkflowNode): boolean {
+  const size = (node as Record<string, unknown>).size as { sizeLocked?: unknown } | undefined
+  return size?.sizeLocked === true
+}
+
+function applyMinimumSize(
+  node: WorkflowNode,
+  size: { width: number; height: number },
+  minimumSizes: WrapperMinimumSizes | undefined,
+): { width: number; height: number } {
+  if (!isWrapperKind(node.kind) || hasLockedSize(node)) return size
+  const minimum = minimumSizes?.get(node.id)
+  if (minimum === undefined) return size
+  return {
+    width: Math.max(size.width, minimum.width),
+    height: Math.max(size.height, minimum.height),
+  }
+}
+
+function applyMinimumFit(
+  wrapper: WorkflowNode,
+  fit: FitBounds,
+  minimumSizes: WrapperMinimumSizes | undefined,
+): FitBounds {
+  const size = applyMinimumSize(wrapper, fit, minimumSizes)
+  return size.width === fit.width && size.height === fit.height ? fit : { ...fit, ...size }
+}
+
 /** Resolve the rectangle a node actually occupies in canonical absolute
  * coordinates. Unsized wrappers do not render at their stale persisted
  * `position`; projection renders them at computeFitBounds' offset instead.
@@ -122,6 +246,7 @@ function resolveNodeRect(
   padding: number,
   measuredSizes: Map<string, { width: number; height: number }> | undefined,
   resolvingWrappers: Set<string>,
+  minimumSizes: WrapperMinimumSizes | undefined,
 ): NodeRect {
   if (isWrapperKind(node.kind) && !hasPersistedSize(node)) {
     if (!resolvingWrappers.has(node.id)) {
@@ -132,6 +257,7 @@ function resolveNodeRect(
         padding,
         measuredSizes,
         resolvingWrappers,
+        minimumSizes,
       )
       resolvingWrappers.delete(node.id)
       return { x: fit.offset.x, y: fit.offset.y, width: fit.width, height: fit.height }
@@ -141,7 +267,7 @@ function resolveNodeRect(
   }
 
   const position = effectivePositionInDefinition(node, allNodes)
-  const size = nodeSize(node, measuredSizes)
+  const size = applyMinimumSize(node, nodeSize(node, measuredSizes), minimumSizes)
   return { x: position.x, y: position.y, width: size.width, height: size.height }
 }
 
@@ -151,6 +277,7 @@ function computeFitBoundsInternal(
   padding: number,
   measuredSizes: Map<string, { width: number; height: number }> | undefined,
   resolvingWrappers: Set<string>,
+  minimumSizes: WrapperMinimumSizes | undefined,
 ): FitBounds {
   const innerIds = (wrapper as Record<string, unknown>).nodeIds
   const ids = Array.isArray(innerIds)
@@ -161,11 +288,15 @@ function computeFitBoundsInternal(
 
   if (inner.length === 0) {
     const pos = effectivePositionInDefinition(wrapper, allNodes)
-    return {
-      width: WRAPPER_EMPTY_MIN_WIDTH,
-      height: WRAPPER_EMPTY_MIN_HEIGHT,
-      offset: { x: pos.x, y: pos.y },
-    }
+    return applyMinimumFit(
+      wrapper,
+      {
+        width: WRAPPER_EMPTY_MIN_WIDTH,
+        height: WRAPPER_EMPTY_MIN_HEIGHT,
+        offset: { x: pos.x, y: pos.y },
+      },
+      minimumSizes,
+    )
   }
 
   let minX = Number.POSITIVE_INFINITY
@@ -173,7 +304,14 @@ function computeFitBoundsInternal(
   let maxX = Number.NEGATIVE_INFINITY
   let maxY = Number.NEGATIVE_INFINITY
   for (const node of inner) {
-    const rect = resolveNodeRect(node, allNodes, padding, measuredSizes, resolvingWrappers)
+    const rect = resolveNodeRect(
+      node,
+      allNodes,
+      padding,
+      measuredSizes,
+      resolvingWrappers,
+      minimumSizes,
+    )
     if (rect.x < minX) minX = rect.x
     if (rect.y < minY) minY = rect.y
     if (rect.x + rect.width > maxX) maxX = rect.x + rect.width
@@ -195,7 +333,7 @@ function computeFitBoundsInternal(
     x: Math.round(minX - padding - HANDLE_SLACK),
     y: Math.round(minY - padding - WRAPPER_HEADER_HEIGHT),
   }
-  return { width, height, offset }
+  return applyMinimumFit(wrapper, { width, height, offset }, minimumSizes)
 }
 
 export function computeFitBounds(
@@ -203,8 +341,16 @@ export function computeFitBounds(
   allNodes: WorkflowNode[],
   padding: number = WRAPPER_DEFAULT_PADDING,
   measuredSizes?: Map<string, { width: number; height: number }>,
+  minimumSizes?: WrapperMinimumSizes,
 ): FitBounds {
-  return computeFitBoundsInternal(wrapper, allNodes, padding, measuredSizes, new Set([wrapper.id]))
+  return computeFitBoundsInternal(
+    wrapper,
+    allNodes,
+    padding,
+    measuredSizes,
+    new Set([wrapper.id]),
+    minimumSizes,
+  )
 }
 
 /** Target clearance from each inner-node edge to the wrapper's visible
@@ -242,8 +388,8 @@ export const AUTO_FIT_BOTTOM_CLEARANCE = WRAPPER_DEFAULT_PADDING
  *   - the wrapper has no persisted `size` yet (computeFitBounds already
  *     produces an adequately-padded rect for the initial render, so
  *     there is nothing to re-fit against)
- *   - the wrapper has zero inner nodes (the persisted size is the
- *     empty-fallback; shrinking it further has nothing to anchor to)
+ *   - the wrapper has zero inner nodes and already satisfies any intrinsic
+ *     port-chrome minimum (there is no child bbox to anchor a shrink to)
  *   - the current rect already matches the target clearance
  *
  * Inner-node absolute positions are NOT moved — only the wrapper's
@@ -256,6 +402,7 @@ export function fitWrapperToInner(
   prevDef: WorkflowDefinition,
   wrapperId: string,
   measuredSizes?: Map<string, { width: number; height: number }>,
+  minimumSizes?: WrapperMinimumSizes,
 ): WorkflowDefinition {
   const target = prevDef.nodes.find((n) => n.id === wrapperId)
   if (target === undefined) return prevDef
@@ -272,7 +419,29 @@ export function fitWrapperToInner(
   const innerIds = Array.isArray(innerIdsRaw)
     ? innerIdsRaw.filter((s): s is string => typeof s === 'string')
     : []
-  if (innerIds.length === 0) return prevDef
+  if (innerIds.length === 0) {
+    const minimum = minimumSizes?.get(wrapperId)
+    if (
+      minimum === undefined ||
+      (sizeRec.width >= minimum.width && sizeRec.height >= minimum.height)
+    ) {
+      return prevDef
+    }
+    return {
+      ...prevDef,
+      nodes: prevDef.nodes.map((node) =>
+        node.id === wrapperId
+          ? ({
+              ...(node as unknown as Record<string, unknown>),
+              size: {
+                width: Math.max(sizeRec.width as number, minimum.width),
+                height: Math.max(sizeRec.height as number, minimum.height),
+              },
+            } as unknown as WorkflowNode)
+          : node,
+      ),
+    }
+  }
   const innerIdSet = new Set(innerIds)
   const inner = prevDef.nodes.filter((n) => innerIdSet.has(n.id))
   if (inner.length === 0) return prevDef
@@ -290,6 +459,7 @@ export function fitWrapperToInner(
       WRAPPER_DEFAULT_PADDING,
       measuredSizes,
       resolvingWrappers,
+      minimumSizes,
     )
     if (rect.x < minX) minX = rect.x
     if (rect.y < minY) minY = rect.y
@@ -300,8 +470,13 @@ export function fitWrapperToInner(
   // Snap each side to exactly inner_extreme ± clearance — bidirectional.
   const needLeft = minX - AUTO_FIT_LEFT_CLEARANCE
   const needTop = minY - AUTO_FIT_TOP_CLEARANCE
-  const needRight = maxX + AUTO_FIT_RIGHT_CLEARANCE
-  const needBottom = maxY + AUTO_FIT_BOTTOM_CLEARANCE
+  let needRight = maxX + AUTO_FIT_RIGHT_CLEARANCE
+  let needBottom = maxY + AUTO_FIT_BOTTOM_CLEARANCE
+  const minimum = minimumSizes?.get(wrapperId)
+  if (minimum !== undefined) {
+    needRight = Math.max(needRight, needLeft + minimum.width)
+    needBottom = Math.max(needBottom, needTop + minimum.height)
+  }
 
   const pos = effectivePositionInDefinition(target, prevDef.nodes)
   const curLeft = pos.x
