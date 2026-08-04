@@ -272,7 +272,31 @@ T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
 （Windows 默认 pwsh；POSIX 侧行为等价——唯一差别是 `pipefail`，而这些步骤无管道），
 并加了棘轮：矩阵 job 里不声明 shell 的步骤直接红。
 
-**后端全量的现实评估（2026-08-05 订正）**：此前写的「约 8600 条会同时变红」把**全套
+**后端全量的首次 Windows 实测（2026-08-05）**：勘测**跑满 90 分钟被超时终止**，
+这本身就是 T31 的第一条数据——**这套在 Windows 上跑不完**（POSIX 上约 17 分钟）。
+主因是它大量 spawn 子进程，而 Windows 的进程创建慢得多。矩阵腿要么给远大于 90 分
+钟的预算，要么按现有 4 分片继续切细。
+
+截至超时已产出 **386 条失败**，按 describe 聚类的前几名（同族多半共根因）：
+
+| 条数 | describe |
+|---|---|
+| 21 | RFC-224 sealed model-reachable subprocess boundary |
+| 16 | RFC-224 OpenCode account hygiene |
+| 15 | RFC-224 launcher lifecycle and direct protocol ordering |
+| 14 | updateRuntime / deleteRuntime guards（RFC-112） |
+| 10 | runSystemAgent |
+| 9 | RFC-224 verified business-plan owner barrier / FFF capability proof |
+| 9 | RFC-014 iterate sibling cascade |
+| 8 | /api/plugins install path（PATH 注入的 fake npm） |
+
+集中在 **RFC-224 verified 执行链路**与**运行时解析 / 插件安装**两簇，与前文
+「27 个单测自写 `#!/bin/sh` 假二进制」的预判吻合：`opencodePath` 在生产侧是**单个
+字符串**，Windows 上必须指向真可执行文件，而这些测试写的是 shell 脚本。这是 T32
+分类的第一批，且**需要一个设计决定**（给测试提供真 .exe / 改用别的 seam / 登记
+skip），不是机械替换。
+
+**旧的估算口径（2026-08-04 订正）**：此前写的「约 8600 条会同时变红」把**全套
 总数**当成了受影响数，不成立。实测口径：1023 个测试文件里 **403 个**（39%）至少含
 一处 POSIX 专有构造，涉及约 3500 条声明——且这是**上限**，一个文件里出现一次
 `/tmp/` 不代表它每条用例都会红。**爆炸半径以文件计**：共享 `beforeAll` 里挂一行会
