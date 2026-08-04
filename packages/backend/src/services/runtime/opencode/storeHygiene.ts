@@ -11,6 +11,7 @@ import { chmod, lstat, mkdir, open, realpath, unlink, type FileHandle } from 'no
 import { basename, dirname, isAbsolute, join, normalize, parse, relative, sep } from 'node:path'
 import { Database } from 'bun:sqlite'
 import { ExecutionIdentityFailure, executionIdentityFailure } from './failure'
+import { assertPrivateRegularFileForHost, assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 export const OPENCODE_STORE_LOCK_BASENAME = '.agent-workflow-store.lock'
 const LEGACY_STORE_LOCK_CODEC = 1 as const
@@ -173,12 +174,23 @@ async function regularArtifact(path: string): Promise<Stats | null> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw error
   }
+  // Link/regular-file rejection via the shared primitive; the mode check stays
+  // at each call site because they use different expectations (0600 payloads
+  // vs. other artifacts).
   if (metadata.isSymbolicLink() || !metadata.isFile()) unsafe()
   return metadata
 }
 
+/**
+ * RFC-254 T0a: delegates to the shared identity primitive rather than keeping a
+ * private copy of `dev`/`ino` equality. A second copy of a trust rule is how
+ * the two drift — RFC-242 lost all three checks of a duplicated projection that
+ * way. It also means a platform that cannot prove identity from stat metadata
+ * (Windows: NTFS `ino` is 0/unstable through Node) fails here instead of
+ * quietly comparing two zeroes and calling them equal.
+ */
 function sameFile(a: Stats, b: Stats): boolean {
-  return a.dev === b.dev && a.ino === b.ino
+  return assertSameFileIdentityForHost(a, b).trusted
 }
 
 async function readHandleExactly(handle: FileHandle, bytes: number): Promise<string> {
@@ -329,7 +341,8 @@ async function readRegularLockPayload(
   lockPath: string,
 ): Promise<{ payload: StoreLockPayload; metadata: Stats }> {
   const before = await regularArtifact(lockPath)
-  if (before === null || (before.mode & 0o777) !== 0o600 || before.size > 4_096) unsafe()
+  if (before === null || !assertPrivateRegularFileForHost(before).trusted || before.size > 4_096)
+    unsafe()
   const handle = await open(lockPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
     const descriptor = await handle.stat()
@@ -367,7 +380,7 @@ async function writeInternalLockPayload(
   if (
     pathnameBefore === null ||
     !sameFile(descriptorBefore, pathnameBefore) ||
-    (pathnameBefore.mode & 0o777) !== 0o600
+    !assertPrivateRegularFileForHost(pathnameBefore).trusted
   ) {
     unsafe()
   }
@@ -383,7 +396,7 @@ async function writeInternalLockPayload(
     !sameFile(descriptorAfter, pathnameAfter) ||
     descriptorAfter.size !== bytes.byteLength ||
     pathnameAfter.size !== bytes.byteLength ||
-    (pathnameAfter.mode & 0o777) !== 0o600 ||
+    !assertPrivateRegularFileForHost(pathnameAfter).trusted ||
     (await readHandleExactly(lock.handle, bytes.byteLength)) !== serialized
   ) {
     unsafe()
@@ -426,7 +439,7 @@ export async function acquireOpencodeStoreLifecycleLock(
         !sameFile(descriptor, pathname) ||
         descriptor.size !== Buffer.byteLength(payload) ||
         pathname.size !== Buffer.byteLength(payload) ||
-        (pathname.mode & 0o777) !== 0o600
+        !assertPrivateRegularFileForHost(pathname).trusted
       ) {
         unsafe()
       }
@@ -545,7 +558,7 @@ export async function removeAbandonedOpencodeStoreLock(input: {
     unsafe()
   }
   const before = await regularArtifact(inspected.lockPath)
-  if (before === null || (before.mode & 0o777) !== 0o600) unsafe()
+  if (before === null || !assertPrivateRegularFileForHost(before).trusted) unsafe()
   const handle = await open(inspected.lockPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
     const descriptor = await handle.stat()

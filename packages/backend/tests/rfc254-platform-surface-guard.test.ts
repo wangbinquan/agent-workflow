@@ -37,7 +37,12 @@ import { join, relative, resolve } from 'node:path'
 
 const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
 
-type RuleId = 'null-device' | 'posix-path-list' | 'posix-dirname' | 'posix-path-prefix'
+type RuleId =
+  | 'null-device'
+  | 'posix-path-list'
+  | 'posix-dirname'
+  | 'posix-path-prefix'
+  | 'posix-file-identity'
 
 interface Rule {
   readonly id: RuleId
@@ -63,6 +68,11 @@ const RULES: readonly Rule[] = [
     id: 'posix-dirname',
     why: "`lastIndexOf('/')` misses `\\`-separated Windows paths; use `dirname()`",
     pattern: /lastIndexOf\(['"]\/['"]\)/g,
+  },
+  {
+    id: 'posix-file-identity',
+    why: 'NTFS `ino` is 0/unstable through Node, so a private dev+ino comparison silently equates unrelated files on Windows; use assertSameFileIdentity()',
+    pattern: /\.(?:dev|ino) (?:!==|===) /g,
   },
   {
     id: 'posix-path-prefix',
@@ -131,6 +141,134 @@ const ALLOWANCES: readonly Allowance[] = [
   },
 
   // --- pending migration (must only shrink) ----------------------------------
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/opencode/sourceGuard.ts',
+    match: '.dev !== ',
+    count: 2,
+    why: 'source-fingerprint TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/opencode/sourceGuard.ts',
+    match: '.ino !== ',
+    count: 2,
+    why: 'source-fingerprint TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/opencode/sealedInputs.ts',
+    match: '.dev !== ',
+    count: 2,
+    why: 'sealed-input TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/opencode/sealedInputs.ts',
+    match: '.ino !== ',
+    count: 2,
+    why: 'sealed-input TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/opencode/sealedSubprocess.ts',
+    match: '.dev !== ',
+    count: 1,
+    why: 'netless manifest TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/opencode/sealedSubprocess.ts',
+    match: '.ino !== ',
+    count: 1,
+    why: 'netless manifest TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/opencode/hermetic.ts',
+    match: '.dev === ',
+    count: 1,
+    why: 'controlled-layout TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/opencode/hermetic.ts',
+    match: '.ino === ',
+    count: 1,
+    why: 'controlled-layout TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/binarySnapshot.ts',
+    match: '.dev !== ',
+    count: 1,
+    why: 'runtime-binary seal TOCTOU fence; its win32 branch additionally needs FileIndex rather than ino (design 5.1c)',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/binarySnapshot.ts',
+    match: '.ino !== ',
+    count: 1,
+    why: 'runtime-binary seal TOCTOU fence; its win32 branch additionally needs FileIndex rather than ino (design 5.1c)',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/claudeCode/netlessMcp.ts',
+    match: '.dev !== ',
+    count: 1,
+    why: 'claude netless projection TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/runtime/claudeCode/netlessMcp.ts',
+    match: '.ino !== ',
+    count: 1,
+    why: 'claude netless projection TOCTOU fence; migrates with the rest of the verified store',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/skill.ts',
+    match: '.dev === ',
+    count: 1,
+    why: 'skill directory identity on a case-insensitive filesystem; outside the verified store, needs its own review',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/skill.ts',
+    match: '.ino === ',
+    count: 1,
+    why: 'skill directory identity on a case-insensitive filesystem; outside the verified store, needs its own review',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/skillMigrateOp.ts',
+    match: '.dev === ',
+    count: 1,
+    why: 'skill migration identity; outside the verified store, needs its own review',
+    closedBy: 'RFC-254-T0b',
+  },
+  {
+    rule: 'posix-file-identity',
+    file: 'services/skillMigrateOp.ts',
+    match: '.ino === ',
+    count: 1,
+    why: 'skill migration identity; outside the verified store, needs its own review',
+    closedBy: 'RFC-254-T0b',
+  },
   //
   // The verifiedPlan/verifiedSystemPlan entries below are deferred for a
   // COLLABORATION reason, not a technical one: both files carry in-flight
@@ -290,7 +428,9 @@ interface Occurrence {
 function scan(): Occurrence[] {
   const found: Occurrence[] = []
   for (const { path, text } of allProductionTypeScript()) {
-    if (path === 'util/platformExec.ts') continue // the destination defines the forms it replaces
+    // The destination modules necessarily CONTAIN the forms they replace —
+    // that is what makes them the single implementation.
+    if (path === 'util/platformExec.ts' || path === 'util/fileTrust.ts') continue
     const code = text.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/(^|[^:])\/\/[^\n]*/g, '$1')
     for (const rule of RULES) {
       for (const match of code.matchAll(rule.pattern)) {
