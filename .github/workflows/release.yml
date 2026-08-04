@@ -91,9 +91,11 @@ jobs:
           bun-version: '1.3.13'
 
       - name: Install dependencies
+        shell: bash
         run: bun install --frozen-lockfile
 
       - name: Build single-binary
+        shell: bash
         run: bun run build:binary
 
       - name: Show artifact size

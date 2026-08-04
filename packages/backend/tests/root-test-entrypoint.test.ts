@@ -355,11 +355,20 @@ describe('repository test entrypoint', () => {
     // Declaring `shell: bash` is behaviour-preserving on the POSIX legs (the
     // only delta versus the implicit default is `-o pipefail`, and none of
     // these steps contain a pipeline — checked when this was introduced).
-    const ci = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+    // EVERY workflow, not just ci.yml: the nightlies carry OS matrices too, and
+    // the trap springs the moment one of them grows a windows entry.
+    const workflowsDir = resolve(root, '.github', 'workflows')
     const offenders: string[] = []
-    for (const jobBlock of ci.split(/\n {2}(?=[a-z0-9-]+:\n)/)) {
+    const blocks = readdirSync(workflowsDir)
+      .filter((name) => name.endsWith('.yml'))
+      .flatMap((name) =>
+        readFileSync(resolve(workflowsDir, name), 'utf8')
+          .split(/\n {2}(?=[a-z0-9-]+:\n)/)
+          .map((block) => ({ name, block })),
+      )
+    for (const { name: workflowName, block: jobBlock } of blocks) {
       if (!jobBlock.includes('os: [') || !jobBlock.includes('runs-on: ${{ matrix.os }}')) continue
-      const jobName = jobBlock.split('\n')[0]?.replace(':', '') ?? '?'
+      const jobName = `${workflowName}:${jobBlock.split('\n')[0]?.replace(':', '') ?? '?'}`
       for (const step of jobBlock.split('\n      - name: ').slice(1)) {
         const body = step.split('\n      - name:')[0] ?? ''
         if (!/^\s+run:/m.test(body)) continue
