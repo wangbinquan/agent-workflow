@@ -20775,6 +20775,38 @@ button.status-chip {
   min-width: 0;
 }
 
+/* The task index is a viewport workspace: its title and filters stay put while
+ * only the potentially long result list scrolls. Keep every flex ancestor at
+ * `min-height: 0`; otherwise the list's min-content height grows `.content`
+ * and silently hands scrolling back to the whole page. */
+.content:has(.page--task-operations) {
+  overflow: hidden;
+}
+
+.page--task-operations {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page--task-operations .operations-surface,
+.page--task-operations .task-operations {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.page--task-operations .task-operations__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
 .operations-surface {
   min-width: 0;
   overflow: hidden;

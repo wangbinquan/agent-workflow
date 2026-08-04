@@ -1,4 +1,6 @@
 // RFC-244 — browser acceptance for the high-density task operations view.
+// The 2026-08-04 scroll-owner regression is pinned here too: task rows scroll
+// inside the operations surface while the page title and filters remain fixed.
 
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
@@ -58,6 +60,64 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await daemon?.stop()
+})
+
+test('task rows own vertical scrolling without moving the page title or filters', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await openOperations(page)
+
+  const before = await page.evaluate(() => {
+    const content = document.querySelector<HTMLElement>('[data-testid="app-shell-main"]')
+    const header = document.querySelector<HTMLElement>('.operations-surface__header')
+    const toolbar = document.querySelector<HTMLElement>('.operations-toolbar')
+    const list = document.querySelector<HTMLOListElement>('.task-operations__list')
+    if (content === null || header === null || toolbar === null || list === null) return null
+    return {
+      contentOverflowY: getComputedStyle(content).overflowY,
+      contentScrollTop: content.scrollTop,
+      headerTop: header.getBoundingClientRect().top,
+      toolbarTop: toolbar.getBoundingClientRect().top,
+      listClientHeight: list.clientHeight,
+      listScrollHeight: list.scrollHeight,
+      listOverflowY: getComputedStyle(list).overflowY,
+    }
+  })
+  expect(before).not.toBeNull()
+  expect(before!.contentOverflowY).toBe('hidden')
+  expect(before!.contentScrollTop).toBe(0)
+  expect(before!.listOverflowY).toBe('auto')
+  expect(before!.listScrollHeight).toBeGreaterThan(before!.listClientHeight)
+
+  await page.locator('.task-operations__list').evaluate((list) => {
+    list.scrollTop = list.scrollHeight
+  })
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const content = document.querySelector<HTMLElement>('[data-testid="app-shell-main"]')
+        const header = document.querySelector<HTMLElement>('.operations-surface__header')
+        const toolbar = document.querySelector<HTMLElement>('.operations-toolbar')
+        const list = document.querySelector<HTMLOListElement>('.task-operations__list')
+        if (content === null || header === null || toolbar === null || list === null) return null
+        return {
+          contentScrollTop: content.scrollTop,
+          documentScrollTop: document.documentElement.scrollTop,
+          headerTop: header.getBoundingClientRect().top,
+          toolbarTop: toolbar.getBoundingClientRect().top,
+          listScrolled: list.scrollTop > 0,
+        }
+      }),
+    )
+    .toEqual({
+      contentScrollTop: 0,
+      documentScrollTop: 0,
+      headerTop: before!.headerTop,
+      toolbarTop: before!.toolbarTop,
+      listScrolled: true,
+    })
 })
 
 test('1280px keeps 30+ tasks dense and paginates roots and child branches independently', async ({
