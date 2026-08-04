@@ -14,7 +14,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { agents, lifecycleAlerts, runtimes, tasks, workflows } from '../src/db/schema'
 import { ulid } from 'ulid'
 import { createLogger } from '../src/util/log'
-import { alertSandboxDegradedOnce } from '../src/services/runner'
+import { alertSandboxDegradedOnce, resolveSandboxDegradedIfHealthy } from '../src/services/runner'
 import {
   ContainmentCoordinator,
   ContainmentProviderQualificationError,
@@ -51,7 +51,40 @@ describe('sandbox-degraded alert (warn + unavailable)', () => {
     const rows = await db.select().from(lifecycleAlerts).where(eq(lifecycleAlerts.taskId, taskId))
     expect(rows).toHaveLength(1)
     expect(rows[0]?.rule).toBe('sandbox-degraded')
-    expect(rows[0]?.severity).toBe('warn')
+    // 2026-08-04 audit: 'warning', not 'warn'. `LifecycleAlertSeverity` only has
+    // 'warning' | 'error', so the old value fell through every severity lookup
+    // and the diagnose panel rendered the bare key
+    // `tasks.diagnose.severity.warn`.
+    expect(rows[0]?.severity).toBe('warning')
+  })
+
+  test('边界恢复后告警被 resolve（此前全仓无人 resolve ⇒ 横幅永久留着）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const wfId = ulid()
+    db.insert(workflows).values({ id: wfId, name: 'wf', definition: '{}' }).run()
+    const taskId = ulid()
+    await db.insert(tasks).values({
+      id: taskId,
+      name: 't',
+      workflowId: wfId,
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/x',
+      worktreePath: '/tmp/x-wt',
+      baseBranch: 'main',
+      branch: 'b',
+      status: 'running',
+      inputs: '{}',
+      startedAt: Date.now(),
+    })
+    await alertSandboxDegradedOnce(db, taskId, 'bwrap not found', log)
+    await resolveSandboxDegradedIfHealthy(db, taskId, log)
+    const rows = await db.select().from(lifecycleAlerts).where(eq(lifecycleAlerts.taskId, taskId))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.resolvedAt).not.toBeNull()
+    // 再次降级要能重新开一条（resolve 掉的不参与去重）。
+    await alertSandboxDegradedOnce(db, taskId, 'bwrap not found', log)
+    const after = await db.select().from(lifecycleAlerts).where(eq(lifecycleAlerts.taskId, taskId))
+    expect(after).toHaveLength(2)
   })
 })
 
