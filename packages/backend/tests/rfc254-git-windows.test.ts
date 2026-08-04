@@ -14,6 +14,7 @@
 // leave the Windows half untested until a Windows runner existed.
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { hardenGitArgs, hardenedGitLeadingArgs } from '@/util/gitHardening'
 import { nullDevice } from '@/util/platformExec'
 import { join, resolve } from 'node:path'
@@ -81,5 +82,34 @@ describe('RFC-254 T18 — git on Windows', () => {
     expect(posixExempt.join(' ')).not.toContain('core.hooksPath')
     expect(winExempt.join(' ')).not.toContain('core.hooksPath')
     expect(winExempt).toContain('core.longpaths=true')
+  })
+})
+
+describe('RFC-254 — the framework pins line endings on Windows', () => {
+  // MEASURED, not theorized: the Windows e2e survey caught
+  // `implementation v2 after gate rejection\n` coming back as `...\r\n`
+  // (workgroup-matrix.spec.ts:370). Git for Windows defaults to
+  // `core.autocrlf=true`, and the framework's worktrees are not a developer's
+  // checkout — an agent writes bytes, the framework commits and re-materializes
+  // them, and those exact bytes leave again as port values, as diffs fed to the
+  // next node, and as content the model reads.
+  test('win32 pins autocrlf=false and eol=lf; POSIX needs neither', () => {
+    const win = hardenedGitLeadingArgs(undefined, HOME, 'win32')
+    expect(win).toContain('core.autocrlf=false')
+    expect(win).toContain('core.eol=lf')
+    const posix = hardenedGitLeadingArgs(undefined, HOME, 'linux')
+    expect(posix.join(' ')).not.toContain('autocrlf')
+  })
+
+  test('they ride in the SAME leading args every daemon-side git call passes through', () => {
+    // A second injection point is how two copies of one rule drift apart.
+    const source = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'util', 'gitHardening.ts'),
+      'utf8',
+    )
+    // Comments here DISCUSS autocrlf at length — that is the behaviour being
+    // explained — so counting raw occurrences counts the explanation too.
+    const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, ' ').replaceAll(/(^|[^:])\/\/.*$/gm, '$1')
+    expect(code.match(/core\.autocrlf/g) ?? []).toHaveLength(1)
   })
 })

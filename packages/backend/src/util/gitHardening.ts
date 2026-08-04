@@ -108,9 +108,32 @@ export function hardenedGitLeadingArgs(
   // It rides along in this function because these leading args are the ONE
   // place every daemon-side git invocation passes through; a second injection
   // point is how the two copies of a rule drift apart (RFC-242's lesson).
+  // RFC-254 — line endings, also not hardening but a correctness property.
+  //
+  // Git for Windows installs default to `core.autocrlf=true`, which rewrites LF
+  // to CRLF on checkout. The framework's worktrees are not a developer's
+  // checkout: an agent writes bytes into them, the framework commits and
+  // re-materializes them, and those exact bytes come back out as port values,
+  // as diffs fed to the next node, and as file content the model reads. Letting
+  // the host's git preference rewrite them means the SAME workflow produces
+  // different content on Windows — measured, not theorized: the Windows e2e
+  // survey caught `implementation v2 after gate rejection\n` coming back as
+  // `...\r\n` (workgroup-matrix.spec.ts:370).
+  //
+  // Pinned via `-c` for the same reason as everything else here: it must not
+  // depend on what the repository's or the user's config happens to say.
   const leading =
     platform === 'win32'
-      ? ['-c', 'core.longpaths=true', '-c', 'core.fsmonitor=false']
+      ? [
+          '-c',
+          'core.longpaths=true',
+          '-c',
+          'core.autocrlf=false',
+          '-c',
+          'core.eol=lf',
+          '-c',
+          'core.fsmonitor=false',
+        ]
       : ['-c', 'core.fsmonitor=false']
   if (subcommand !== undefined && HOOK_EXEMPT_SUBCOMMANDS.has(subcommand)) return leading
   return ['-c', `core.hooksPath=${ensureGitHooksVoidDir(home)}`, ...leading]
