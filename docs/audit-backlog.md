@@ -15,6 +15,7 @@
 | `design/ux-audit.md` · `design/ux-functional-audit-2026-07-16.md` | UX / 功能            | 见报告                                                                                                          |
 | `design/workgroup-e2e-audit.md`                                   | 工作组 e2e           | 见报告                                                                                                          |
 | `design/codex-impl-gate-misc-2026-07-22.md`                       | Codex 实现门杂项     | 见报告                                                                                                          |
+| `design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md` | RFC-224 能力回退全量裁决 | 6 实锤事故史 + 16 收尾修复；裁决 A/B/C 三栏；4 条 B 候选挂本文末节；RFC-255 进行中 |
 
 ## 运行时 / 沙箱能力收口盘点（2026-07-31，RFC-237 root 事故后自查）
 
@@ -97,6 +98,19 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 
 ## 其他 backlog
 
+- ⏳ **存量任务的 canonical worktree 指向 `iso/` 的成因未定（2026-08-04 Linux 部署事故）**：真实
+  部署日志显示某任务的 `tasks.worktree_path` 落在 `~/.agent-workflow/iso/{taskId}/{nodeRunId}`
+  （每次运行后清理的临时隔离空间），目录消失后节点以误导性的
+  `posix_spawn '/usr/bin/bwrap'` ENOENT 风暴式失败。**当前 HEAD 无任何代码把 iso 路径写回
+  canonical 列**（已 grep 证实只读不写），成因待部署侧确认（DB 是否从旧机器/旧版本迁移、repo
+  是否直接登记了 iso 路径、或旧版本 bug）。防线已落：`createNodeIso` 对缺失 canonical 抛
+  `CanonicalWorktreeMissingError` fail-fast（`workspace-missing-fail-fast.test.ts` 锁定），存量坏行
+  的处置是 cancel 后重建任务。若部署侧证据指向仍在产的写入路径，需回溯补修。
+- ⏳ **runNode 内的确定性 spawn 失败仍按节点配置烧满重试**：iso-setup 类失败已在重试循环**之前**
+  fail-fast（2026-08-04 修复），但「runtime 二进制被删 / binaryPath 配错」这类发生在 runNode
+  **内部**的 spawn 失败位于 mainline 重试循环里，每次重试都重新 admission + spawn 再失败（事故中
+  为 ~1.4s/发）。如需收敛，应在重试决策处识别确定性失败形态（spawn ENOENT 且探针证实可执行文件
+  缺失）提前终止；注意别把瞬态（NFS 抖动、二进制正在替换）误判为确定性。
 - **`worktreeFiles.ts` symlink TOCTOU（RFC-239 设计门二轮 Codex 发现,P0 级模式)**:`packages/backend/src/services/worktreeFiles.ts:184-215` 是 check-then-reopen——先 realpath containment 检查、随后按原路径重新 open;非终态任务的 agent 可在两步之间把路径换成 symlink 实现越界读。RFC-239 T7 会引入句柄内检查的 `openContainedFile`(open 后在同一 fd 上 fstat/containment/size/NUL 再读)供新端点使用;**存量 `worktreeFiles.ts` 迁移到该 helper 待办**(含检查后换链的 seam 测试)。
 - **依赖漏洞门禁「无数据放行」**（RFC-230 期间发现并修）：`scripts/audit-gate.ts` 取不到可解析的 audit 报告时（registry 返回空 / 请求失败 / bun 解压失败且救不回来），**重试 3 次后放行并打 `::warning::`**。bun 不给结构化信号，无法区分「真的没有公告」与「请求没成功」，若改成 fail-closed，一次 registry 抖动就会卡住所有合并。代价：那一次构建等于没扫。**正解**是换一个能明确区分二者的数据源（GitHub Dependabot alerts API / osv-scanner），届时改成 fail-closed。
 - **CI 提速**：macOS `check`(870s) 是瓶颈且 gate 一切；backend 738 文件串行（`--parallel` 死锁全套，daemon flock）；安全赢 = 跨 runner 分片 + lint/typecheck 移出 macOS。
@@ -151,3 +165,21 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   netless wrapper 以 `providerId:'none'` 渲染（`sealedSubprocess.ts:1187-1193`）⇒ **模型可控的 shell
   完全拿不到 netless 边界**（无网变有网、私有 HOME 变弱外层）。RFC-252 的 G4 会把 profile 判定提升为
   closure 级并顺带修掉它；若 RFC-251 先上库，这条就变成存量问题。
+
+## RFC-224 能力回退审计未决项（2026-08-04）
+
+裁决全文：`design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md`。
+以下 4 条为「受控恢复候选」，按需求触发立项，每条须独立 RFC 且受 `CLAUDE.md` RFC workflow
+第 7 条（能力影响清单）约束：
+
+- ⏳ **(P2) OAuth / 订阅凭据受控恢复**：strict 契约现拒一切 `type:'oauth'`（openai ChatGPT
+  Plus/Pro、github-copilot、opencode Console、xai 等有完整流；anthropic 流在当前 opencode
+  源码未找到——见审计 §3 存疑）。恢复形态 = refresh token 写回密封 store + 内置 auth 插件
+  受控加载（现被 `OPENCODE_DISABLE_DEFAULT_PLUGINS` 一刀切）。
+- ⏳ **(P2) api+`metadata` 凭据条目受控放行**：provider 插件 callback 会写 `metadata`
+  （opencode `provider/auth.ts:203-209`），strictApiEntry 多一键即拒。最小修 = 已知形状校验
+  且不透传（或逐 provider 白名单）。
+- ⏳ **(P2) 云凭据链 provider（bedrock / vertex / azure / gitlab / cloudflare）**：
+  `SAFE_FORWARD_ENV` 15 键白名单 + HOME 重定向使 `AWS_*`、ADC、`AZURE_RESOURCE_NAME` 等
+  全部不可达。恢复 = 受控 env 透传白名单 + 逐 provider 行为资格。
+- ⏳ **(P3) wellknown 凭据**：并入 OAuth RFC。
