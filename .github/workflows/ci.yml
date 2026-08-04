@@ -57,6 +57,7 @@ jobs:
         run: bun run typecheck
 
       - name: Test (shared, bun:test)
+        shell: bash
         run: bun run --filter @agent-workflow/shared test
 
   test-backend:
@@ -101,12 +102,19 @@ jobs:
         # and runtime-diagnostic tests intentionally exercise a real PATH
         # binary, so CI follows the current npm channel without defining an
         # application version floor or ceiling.
+        # RFC-254 T31: declared, because the default shell on a windows runner
+        # is pwsh and every line here is POSIX sh. The command is unchanged —
+        # `opencodeInstallTargets` in rfc224-source-guard.test.ts counts exactly
+        # these two `bun install -g` lines and must keep seeing two, so a
+        # windows leg shares them rather than adding a third.
+        shell: bash
         run: |
           bun install -g opencode-ai@latest
           export PATH="$HOME/.bun/bin:$PATH"
           opencode --version
 
       - name: Install dependencies
+        shell: bash
         run: bun install --frozen-lockfile
 
       # Keep random order coverage while making a wedged run reproducible. Bun
@@ -133,6 +141,7 @@ jobs:
         # Codecov consumes lcov. The redundant text table is large enough to
         # make Bun's stdout writer fail with WriteFailed on otherwise-green
         # shards, so keep the machine-readable report only.
+        shell: bash
         run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4 --coverage --coverage-reporter=lcov
         env:
           # Real-git-clone (file:// + recursive submodules) and external MCP-spawn
@@ -146,6 +155,7 @@ jobs:
 
       - name: Test backend (macOS shard — no coverage)
         if: matrix.os != 'ubuntu-latest'
+        shell: bash
         run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4
         env:
           RUN_GIT_NETWORK: '1'
@@ -198,9 +208,11 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
+        shell: bash
         run: bun install --frozen-lockfile
 
       - name: Test (frontend, vitest shard)
+        shell: bash
         run: bun run --filter @agent-workflow/frontend test -- --shard=${{ matrix.shard }}/3
 
   scans:
@@ -425,18 +437,27 @@ jobs:
         # RFC-227 intentionally treats a truly missing executable as unhealthy
         # while accepting any reported version. Give the compiled `doctor`
         # smoke a real current binary on both supported CI hosts.
+        # RFC-254 T31: declared, because the default shell on a windows runner
+        # is pwsh and every line here is POSIX sh. The command is unchanged —
+        # `opencodeInstallTargets` in rfc224-source-guard.test.ts counts exactly
+        # these two `bun install -g` lines and must keep seeing two, so a
+        # windows leg shares them rather than adding a third.
+        shell: bash
         run: |
           bun install -g opencode-ai@latest
           export PATH="$HOME/.bun/bin:$PATH"
           opencode --version
 
       - name: Install dependencies
+        shell: bash
         run: bun install --frozen-lockfile
 
       - name: Build production + test-only e2e binaries
+        shell: bash
         run: bun run build:binary:e2e
 
       - name: Show artifact size
+        shell: bash
         run: ls -lh dist/
 
       - name: Smoke-run binary (version + doctor + hidden RFC-224 entrypoints)
@@ -795,6 +816,7 @@ jobs:
       - name: Install dependencies
         # Playwright (the test runner) lives in devDependencies; the binary
         # under test comes from the downloaded artifact below, not this install.
+        shell: bash
         run: bun install --frozen-lockfile
 
       - name: Download test-only e2e binary + stub from build-binary
@@ -811,6 +833,7 @@ jobs:
         # spawned — the stub by the daemon as `opencodePath` — so both need it,
         # and a missing stub must fail HERE rather than as an unexplained
         # "daemon closed before printing ready line" in every spec.
+        shell: bash
         run: |
           set -euo pipefail
           chmod +x dist/agent-workflow-e2e-*
@@ -826,6 +849,7 @@ jobs:
 
       - name: Install Playwright browsers (+ system deps)
         if: steps.pw-cache.outputs.cache-hit != 'true'
+        shell: bash
         run: bunx playwright install --with-deps chromium
 
       - name: Install Playwright system deps (cache hit, Linux only)
@@ -833,11 +857,13 @@ jobs:
         # runners (they aren't part of the cached browser dir). macOS needs no
         # system deps, so this is Linux-gated.
         if: steps.pw-cache.outputs.cache-hit == 'true' && runner.os == 'Linux'
+        shell: bash
         run: bunx playwright install-deps chromium
 
       - name: Run e2e (shard ${{ matrix.shard }}/4)
         env:
           CI: 'true'
+        shell: bash
         run: bun run e2e -- --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright trace on failure

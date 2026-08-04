@@ -345,6 +345,31 @@ describe('repository test entrypoint', () => {
     expect(sourceGrepRegression).toContain('throw error')
   })
 
+  test('every run step in an OS-matrix job declares its shell', () => {
+    // RFC-254 T31 — the default shell on a windows runner is pwsh, on
+    // ubuntu/macOS it is bash. A step in a job whose matrix spans operating
+    // systems therefore runs under two different LANGUAGES unless it says
+    // which one it wants, and the POSIX-shaped ones simply fail on the windows
+    // leg with a syntax error that names neither the shell nor the matrix.
+    //
+    // Declaring `shell: bash` is behaviour-preserving on the POSIX legs (the
+    // only delta versus the implicit default is `-o pipefail`, and none of
+    // these steps contain a pipeline — checked when this was introduced).
+    const ci = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+    const offenders: string[] = []
+    for (const jobBlock of ci.split(/\n  (?=[a-z0-9-]+:\n)/)) {
+      if (!jobBlock.includes('os: [') || !jobBlock.includes('runs-on: ${{ matrix.os }}')) continue
+      const jobName = jobBlock.split('\n')[0]?.replace(':', '') ?? '?'
+      for (const step of jobBlock.split('\n      - name: ').slice(1)) {
+        const body = step.split('\n      - name:')[0] ?? ''
+        if (!/^\s+run:/m.test(body)) continue
+        if (/^\s+shell:\s/m.test(body)) continue
+        offenders.push(`${jobName}: ${step.split('\n')[0]}`)
+      }
+    }
+    expect(offenders, 'an OS-matrix step must say which shell it speaks').toEqual([])
+  })
+
   test('no apostrophe hides inside a single-quoted `bun -e` block in a workflow', () => {
     // Twice now a JS comment containing an English possessive ("the binary's
     // own …") has terminated the SHELL's single-quoted string that wraps the
