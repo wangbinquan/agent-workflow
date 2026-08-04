@@ -66,7 +66,7 @@
       }
     ],
     "state": {
-      "WORKGROUP_MATRIX_STATE_DIR/prompts.jsonl": "{\"agent\":\"nobody\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+      "WORKGROUP_MATRIX_STATE_DIR/prompts.jsonl": "{\"agent\":\"nobody\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
     },
     "logs": {},
     "sideEffects": {}
@@ -82,7 +82,7 @@
       }
     ],
     "state": {
-      "WORKGROUP_MATRIX_STATE_DIR/prompts.jsonl": "{\"agent\":\"showcase-wg-researcher\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" <port name=\\\"wg_result\\\"> go\"}\n"
+      "WORKGROUP_MATRIX_STATE_DIR/prompts.jsonl": "{\"agent\":\"showcase-wg-researcher\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" <port name=\\\"wg_result\\\"> go\"}\n"
     },
     "logs": {},
     "sideEffects": {}

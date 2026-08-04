@@ -66,7 +66,7 @@
       }
     ],
     "state": {
-      "BUSINESS_WORKGROUP_STATE_DIR/prompts.jsonl": "{\"agent\":\"anyone\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+      "BUSINESS_WORKGROUP_STATE_DIR/prompts.jsonl": "{\"agent\":\"anyone\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
     },
     "logs": {},
     "sideEffects": {}

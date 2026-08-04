@@ -43,7 +43,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const originalStub = (name: string): string => join(REPO_ROOT, 'e2e', 'fixtures', name)
@@ -152,7 +152,16 @@ function readTree(root: string): Record<string, string> {
   for (const entry of readdirSync(root, { withFileTypes: true, recursive: true })) {
     if (!entry.isFile()) continue
     const full = join(entry.parentPath, entry.name)
-    out[full.slice(root.length + 1)] = readFileSync(full, 'utf8')
+    // Forward slashes in the KEY: a golden recorded on POSIX is replayed on
+    // Windows, where `join` yields backslashes and every entry would otherwise
+    // miss. (The platform-surface guard had this exact defect — the one it
+    // exists to catch — until Windows CI found it.)
+    out[
+      full
+        .slice(root.length + 1)
+        .split(sep)
+        .join('/')
+    ] = readFileSync(full, 'utf8')
   }
   return out
 }
@@ -170,10 +179,19 @@ async function runSide(
   // between them BY CONSTRUCTION. Mask this side's own root — and its realpath,
   // because macOS resolves /var to /private/var and `process.cwd()` returns the
   // resolved form while `mkdtemp` returned the symlinked one.
-  const roots = [realpathSync(root), root]
+  // Longest first: the cwd is INSIDE the root, so replacing the root first
+  // would leave a bare `/cwd` (or `\\cwd`) behind and the two platforms would
+  // still disagree. The stubs record their cwd — the business ones write it
+  // into prompts.jsonl — so it has to become a stable token too.
+  const masks: Array<[string, string]> = [
+    [realpathSync(cwd), '<SIDE_CWD>'],
+    [cwd, '<SIDE_CWD>'],
+    [realpathSync(root), '<SIDE_ROOT>'],
+    [root, '<SIDE_ROOT>'],
+  ]
   const redact = (text: string): string => {
     let out = text
-    for (const path of roots) out = out.replaceAll(path, '<SIDE_ROOT>')
+    for (const [path, token] of masks) out = out.replaceAll(path, token)
     return out
   }
   const sharedEnv: Record<string, string> = { ...modeEnv }

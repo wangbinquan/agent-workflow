@@ -35,7 +35,9 @@ on:
       - 'packages/shared/src/platformEnv.ts'
       - 'packages/backend/src/services/scriptRun.ts'
       - 'packages/backend/tests/rfc254-*.test.ts'
+      - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/src/util/windowsJobObject.ts'
+      - 'e2e/fixtures/stub/**'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'
   pull_request:
@@ -47,6 +49,8 @@ on:
       - 'packages/shared/src/platformEnv.ts'
       - 'packages/backend/src/services/scriptRun.ts'
       - 'packages/backend/tests/rfc254-*.test.ts'
+      - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
+      - 'e2e/fixtures/stub/**'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'
 
@@ -79,6 +83,15 @@ jobs:
       - name: RFC-254 platform suites
         run: bun test --isolate packages/backend/tests/rfc254-platform-exec.test.ts packages/backend/tests/rfc254-file-trust.test.ts packages/backend/tests/rfc254-env-case-folding.test.ts packages/backend/tests/rfc254-git-windows.test.ts packages/backend/tests/rfc254-script-node-windows.test.ts packages/backend/tests/rfc254-process-tree-ownership.test.ts packages/backend/tests/rfc254-platform-surface-guard.test.ts
 
+      # RFC-254 T28b — the e2e model stand-in used to be nine `#!/bin/sh` files,
+      # which is why it had to become one compiled program. These two suites are
+      # what says the port is faithful, and they are RUNNABLE HERE because the
+      # comparison replays a recording rather than the (unexecutable) original.
+      # Windows is where a stub bug would otherwise surface as an unexplained
+      # e2e failure much later.
+      - name: e2e stub — golden replay + argv contract
+        run: bun test --isolate packages/backend/tests/rfc254-stub-differential.test.ts packages/backend/tests/e2e-stub-argv-contract.test.ts packages/backend/tests/rfc254-e2e-node-runtime-guard.test.ts
+
       - name: Shared package suite
         run: bun run --filter @agent-workflow/shared test
 
@@ -106,8 +119,11 @@ jobs:
       # Proves the artifact naming (`windows-x86_64` + `.exe`) and that the
       # compiled binary actually starts on Windows. `build:binary` runs its own
       # `version` smoke at the end.
-      - name: Build single binary
-        run: bun run build:binary
+      - name: Build single binary + the e2e stub
+        # `--include-e2e` also compiles `e2e/fixtures/stub/dispatch.ts`, so this
+        # proves the stub cross-compiles and starts on Windows — the artifact
+        # `opencodePath` will point at once the e2e leg lands (T31-T35).
+        run: bun run build:binary:e2e
 
       - name: Show artifact
         shell: bash
@@ -124,3 +140,21 @@ jobs:
           # crashing or claiming a boundary it does not have.
           "$binary" doctor || true
           "$binary" version
+
+      - name: The compiled stub answers on Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          stub=$(find dist -maxdepth 1 -type f -name 'stub-opencode-windows-*' | head -n 1)
+          test -n "$stub"
+          # Every mode answers `--version`, so this also proves the dispatcher
+          # survived compilation with its mode table intact.
+          AW_STUB_MODE=basic "$stub" --version
+          AW_STUB_MODE=clarify "$stub" --version
+          # ...and that an unknown mode still fails loudly rather than falling
+          # back to `basic` (a silent fallback is how a spec ends up green over
+          # the wrong stub).
+          if AW_STUB_MODE=nope "$stub" --version; then
+            echo "unknown mode should have failed" >&2
+            exit 1
+          fi

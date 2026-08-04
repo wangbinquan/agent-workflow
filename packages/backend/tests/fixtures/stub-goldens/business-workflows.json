@@ -80,7 +80,7 @@
       }
     ],
     "state": {
-      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"not-a-business-agent\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"not-a-business-agent\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
     },
     "logs": {},
     "sideEffects": {}
@@ -103,7 +103,7 @@
       }
     ],
     "state": {
-      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
     },
     "logs": {},
     "sideEffects": {}
@@ -119,7 +119,7 @@
       }
     ],
     "state": {
-      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_ROOT>/cwd\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
+      "BUSINESS_WORKFLOW_STATE_DIR/prompts.jsonl": "{\"agent\":\"business-code-auditor\",\"cwd\":\"<SIDE_CWD>\",\"prompt\":\"nonce=\\\"aw-nonce-differential-1234\\\" go\"}\n"
     },
     "logs": {},
     "sideEffects": {}
