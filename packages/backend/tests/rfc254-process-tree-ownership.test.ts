@@ -22,6 +22,7 @@ import {
   adoptProcessTree,
   processTreeOwnershipAvailable,
   processTreeOwnershipDiagnosis,
+  WIN32_JOB_LAYOUT,
 } from '@/util/windowsJobObject'
 import { adoptSpawnedProcessTree, isProcessTreeAlive, killProcessTree } from '@/util/process'
 
@@ -81,6 +82,52 @@ describe('RFC-254 T4 — process tree ownership', () => {
       await child.exited
     }
   }, 30_000)
+
+  test('the win32 struct offsets match the documented Win32 layout', () => {
+    // A wrong FFI offset does not throw. It reads a DIFFERENT field and returns
+    // a plausible number — which is exactly how `ActiveProcesses` shipped at
+    // offset 20 (inside `ThisPeriodTotalUserTime`, therefore 0 for a
+    // just-started process) and made `liveCount()` report a running tree as
+    // dead. That answer decides whether a runtime store may be reclaimed, so it
+    // was a release-while-in-use, not a cosmetic bug. It survived macOS (no
+    // FFI) and the ARM64 real machine (no dlopen in that Bun build); only the
+    // x64 Windows CI leg executed it.
+    //
+    // These offsets are therefore derived here from FORWARD field sizes — the
+    // same way one reads the struct definition — rather than restated.
+    const LARGE_INTEGER = 8
+    const DWORD = 4
+    const SIZE_T = 8
+
+    // JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
+    const totalUserTime = 0
+    const totalKernelTime = totalUserTime + LARGE_INTEGER
+    const thisPeriodUser = totalKernelTime + LARGE_INTEGER
+    const thisPeriodKernel = thisPeriodUser + LARGE_INTEGER
+    const totalPageFaultCount = thisPeriodKernel + LARGE_INTEGER
+    const totalProcesses = totalPageFaultCount + DWORD
+    const activeProcesses = totalProcesses + DWORD
+    const totalTerminated = activeProcesses + DWORD
+    expect(WIN32_JOB_LAYOUT.activeProcessesOffset).toBe(activeProcesses)
+    expect(WIN32_JOB_LAYOUT.accountingStructBytes).toBe(totalTerminated + DWORD)
+
+    // JOBOBJECT_BASIC_LIMIT_INFORMATION, then _EXTENDED_ around it.
+    const limitFlags = LARGE_INTEGER * 2
+    expect(WIN32_JOB_LAYOUT.basicLimitFlagsOffset).toBe(limitFlags)
+    const basicLimitBytes =
+      LARGE_INTEGER * 2 + // PerProcess/PerJob user time limits
+      DWORD + // LimitFlags
+      DWORD + // (padding to the SIZE_T that follows)
+      SIZE_T * 2 + // Minimum/MaximumWorkingSetSize
+      DWORD + // ActiveProcessLimit
+      DWORD + // (padding)
+      SIZE_T + // Affinity
+      DWORD * 2 // PriorityClass, SchedulingClass
+    const ioCounters = 8 * 6 // six ULONGLONGs
+    expect(WIN32_JOB_LAYOUT.extendedLimitStructBytes).toBe(
+      basicLimitBytes + ioCounters + SIZE_T * 4,
+    )
+  })
 
   test('invalid pids are rejected before any syscall', () => {
     expect(adoptProcessTree(0)).toBeNull()

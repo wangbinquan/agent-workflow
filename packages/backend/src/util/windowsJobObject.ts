@@ -93,11 +93,44 @@ const EXTENDED_LIMIT_STRUCT_BYTES = 144
 const BASIC_LIMIT_FLAGS_OFFSET = 16
 
 /**
- * Byte offset of ActiveProcesses inside JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
- * (x64): six LARGE_INTEGERs precede it.
+ * JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, laid out FORWARDS (x64):
+ *
+ *   0  LARGE_INTEGER TotalUserTime
+ *   8  LARGE_INTEGER TotalKernelTime
+ *  16  LARGE_INTEGER ThisPeriodTotalUserTime
+ *  24  LARGE_INTEGER ThisPeriodTotalKernelTime
+ *  32  DWORD         TotalPageFaultCount
+ *  36  DWORD         TotalProcesses
+ *  40  DWORD         ActiveProcesses      ← the only field read
+ *  44  DWORD         TotalTerminatedProcesses
+ *  48  (end)
+ *
+ * The first version of this computed the offset by SUBTRACTING trailing field
+ * sizes from the struct size (`48 - 4 - 8 - 8 - 8`) and landed on 20 — inside
+ * `ThisPeriodTotalUserTime`, which reads 0 for a process that has just started.
+ * So `liveCount()` said "nothing alive" while the tree was running, and since
+ * that answer decides whether a runtime store may be reclaimed
+ * (`util/process.ts` → RFC-224), it is the exact release-while-in-use the
+ * design gate's P0-D exists to prevent. It survived every macOS run (no FFI
+ * there) and the ARM64 real machine (no dlopen in that Bun build); the x64
+ * Windows CI leg caught it on its first execution. Offsets are written out
+ * field by field now, and `rfc254-process-tree-ownership.test.ts` asserts each
+ * one against this table.
  */
 const ACCOUNTING_STRUCT_BYTES = 48
-const ACTIVE_PROCESSES_OFFSET = 48 - 4 - 8 - 8 - 8
+const ACTIVE_PROCESSES_OFFSET = 40
+
+/**
+ * The struct offsets above, exported so they can be asserted rather than
+ * trusted. A wrong offset does not throw — it returns a plausible number from
+ * the wrong field, which is how the `ActiveProcesses` bug survived review.
+ */
+export const WIN32_JOB_LAYOUT = {
+  extendedLimitStructBytes: EXTENDED_LIMIT_STRUCT_BYTES,
+  basicLimitFlagsOffset: BASIC_LIMIT_FLAGS_OFFSET,
+  accountingStructBytes: ACCOUNTING_STRUCT_BYTES,
+  activeProcessesOffset: ACTIVE_PROCESSES_OFFSET,
+} as const
 
 type Kernel32 = {
   symbols: {
