@@ -6,6 +6,7 @@
 // non-interactive, and covered by a hard deadline here.
 
 import { execFileSync } from 'node:child_process'
+import { Database } from 'bun:sqlite'
 
 const COMMAND_TIMEOUT_MS = 15_000
 
@@ -70,13 +71,27 @@ export function cloneBareGitRepo(sourcePath: string, destinationPath: string): v
 }
 
 export function runSqlite(dbPath: string, sql: string): void {
-  // Prepended rather than passed as `-cmd .timeout`: the pragma is ordered
-  // with the caller's own statements on the same connection, so a caller that
-  // opens an explicit transaction (`BEGIN IMMEDIATE`) still acquires its write
-  // lock under this timeout. Statement grouping stays the caller's choice.
-  execFileSync('sqlite3', [dbPath, `PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};\n${sql}`], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: COMMAND_TIMEOUT_MS,
-  })
+  // RFC-254 T29 — uses Bun's embedded SQLite rather than shelling out to the
+  // `sqlite3` CLI. Two reasons, in order of importance:
+  //
+  //   1. The CLI is NOT on the windows-latest runner image (verified against
+  //      the published software list), so every fixture that plants state this
+  //      way would fail there. Bun ships SQLite in-process on every platform.
+  //   2. It removes a system dependency whose default `busy_timeout = 0` was
+  //      the direct cause of a nightly e2e flake: the daemon holds the write
+  //      lock (its own connection sets 5 s), and the CLI would not wait for it.
+  //
+  // The busy_timeout is still set FIRST on this connection and the statements
+  // still run as one group, so a caller opening `BEGIN IMMEDIATE` acquires its
+  // write lock under the same timeout as before — the semantics the previous
+  // implementation documented are preserved exactly.
+  // `readwrite` without `create`: the database must already exist (a fixture
+  // that silently creates an empty one would plant state nowhere and pass).
+  const db = new Database(dbPath, { readwrite: true })
+  try {
+    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`)
+    db.exec(sql)
+  } finally {
+    db.close()
+  }
 }

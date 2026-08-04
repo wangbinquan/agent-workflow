@@ -344,7 +344,14 @@ describe('repository test entrypoint', () => {
 
   test('every Playwright fixture command uses the shared shell-free bounded boundary', () => {
     expect(e2eCommandHelper).toContain("execFileSync('git'")
-    expect(e2eCommandHelper).toContain("execFileSync('sqlite3'")
+    // RFC-254 T29: fixture SQL runs through Bun's EMBEDDED SQLite, not the
+    // `sqlite3` CLI — the CLI is absent from the windows-latest runner image,
+    // and it defaulted to `busy_timeout = 0` against a live daemon holding the
+    // write lock. What this lock protects is unchanged (no shell, bounded,
+    // timeout inside the command deadline); in-process is strictly stronger
+    // than "shell-free subprocess".
+    expect(e2eCommandHelper).toContain("from 'bun:sqlite'")
+    expect(e2eCommandHelper).not.toContain("execFileSync('sqlite3'")
     expect(e2eCommandHelper).toContain('timeout: COMMAND_TIMEOUT_MS')
     // Fixture SQL races the live daemon for the write lock; the CLI defaults to
     // busy_timeout = 0. Behaviour is locked by

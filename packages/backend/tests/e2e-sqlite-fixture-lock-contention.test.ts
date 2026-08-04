@@ -3,18 +3,23 @@
 //
 // WHY THIS EXISTS (nightly e2e-webkit run 30440683412, 2026-07-29)
 // ----------------------------------------------------------------
-// `e2e/command.ts:runSqlite` shells out to the `sqlite3` CLI against the
-// DB file of a LIVE daemon (diagnose-repair, lifecycle-diagnose,
+// `e2e/command.ts:runSqlite` writes to the DB file of a LIVE daemon
+// (diagnose-repair, lifecycle-diagnose,
 // rfc229-workgroup-message-quotes, business-workgroup-scenarios all plant
 // state that way). The daemon opens the same file in WAL with
 // `PRAGMA busy_timeout = 5000` (packages/backend/src/db/client.ts) so it
-// waits for the write lock — but the `sqlite3` CLI defaults to
-// `busy_timeout = 0`, so the fixture side did NOT. Any daemon write
+// waits for the write lock — but the fixture side did NOT. Any daemon write
 // overlapping a fixture write failed instantly with
 // `Error: stepping, database is locked (5)`, and the shard went red:
 //
 //   diagnose-repair.spec.ts › R1 happy: approve-run resolves the alert
-//     at clearStuckState (afterEach) → runSql → runSqlite → execFileSync
+//     at clearStuckState (afterEach) → runSql → runSqlite
+//
+// RFC-254 T29 replaced the `sqlite3` CLI with Bun's embedded SQLite (the CLI
+// is absent from the windows-latest runner image). The SUBJECT of this guard is
+// unchanged and still load-bearing: whatever the fixture boundary is built on,
+// it must set busy_timeout FIRST and wait the concurrent writer out rather than
+// failing the shard.
 //
 // It reproduced on the retry too, because the repair the test had just
 // applied leaves the daemon writing while `afterEach` cleans up. The same
