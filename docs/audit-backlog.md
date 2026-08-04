@@ -555,3 +555,26 @@ wrapper drag feedback` 一线）。同上，未单方面修改。
   几乎所有中等明度色都不达标。
 - 未代改的原因：徽章配色是有归属的视觉设计 token，且 `styles.css` 正被并发
   session 编辑；本轮（RFC-254 Windows）不应顺手改产品配色。
+
+## Job Object 实现了但**没有接线**（RFC-254 实现门发现，2026-08-04）
+
+`util/windowsJobObject.ts` 与 `util/process.ts` 的 `adoptSpawnedProcessTree` /
+`isProcessTreeAlive` / `releaseProcessTreeOwnership` 已实现且经真机与 x64 CI 验证
+（FFI 声明、结构偏移、标志常量全部正确），但**没有任何生产代码调用它们**——
+`rg adoptSpawnedProcessTree packages e2e scripts` 除定义外只命中它自己的测试。
+
+因此在真实 Windows daemon 上：`ownedTrees` 恒空 ⇒ `killProcessTree` 恒走
+`taskkill /T /F`（枚举式，有竞态窗口）⇒ `isProcessTreeAlive` 恒返回 `null`。
+
+**这个状态是安全的，但只是降级安全**：`null` 表示「判不了」，而设计门 P0-D 要求
+调用方把「判不了」当「不可回收」，所以**数据损坏的防护在**；缺的是**强保证**
+（真正拿到 Job Object 的权威存活计数）。文件头原本在断言强保证已生效，已订正。
+
+- ⏳ **(P1) 接线**：在 win32 的 spawn 路径上 `adoptSpawnedProcessTree(child.pid)`，
+  收尾时 `releaseProcessTreeOwnership(pid)`。候选点：`services/runner.ts` 的
+  opencode 子进程、`execution/containedSpawn.ts` 的脚本节点、
+  `runtime/opencode/verifiedLauncher.ts`。这些都是 RFC-224/227 的受控执行面，
+  改动需自带回归测试与变异实证，属独立一轮切片而非顺手补。
+- 注意接线后 `isProcessTreeAlive` 才会开始返回 `true`/`false`，届时所有把
+  `null` 当「不安全」的调用方逻辑要重新过一遍——**语义变了**（从「永远判不了」
+  变成「大多数时候能判」），沉默的分支会第一次被执行到。
