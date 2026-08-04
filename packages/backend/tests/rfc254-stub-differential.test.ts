@@ -146,6 +146,25 @@ interface SideResult {
   sideEffects: Record<string, boolean>
 }
 
+/**
+ * Second redaction pass, by the temp-dir NAME rather than by its path.
+ *
+ * The path-based masks below cannot see every spelling of their own directory:
+ * on Windows a child's `process.cwd()` comes back in 8.3 SHORT form
+ * (`C:\Users\RUNNER~1\AppData\...`) while `mkdtemp` returned the long one, so
+ * the business stubs — which record their cwd into `prompts.jsonl` — wrote a
+ * string the mask never matched and every golden comparison failed on Windows.
+ *
+ * The prefix is ours, so matching on it works regardless of how the OS spelled
+ * the rest. Applied AFTER the path masks, this is additive: on POSIX there is
+ * nothing left for it to match, which is why the recordings stay valid.
+ */
+function maskByTempName(text: string): string {
+  return text
+    .replaceAll(/[^"\s]*aw-stub-side-[A-Za-z0-9]+[\\/]+cwd/g, '<SIDE_CWD>')
+    .replaceAll(/[^"\s]*aw-stub-side-[A-Za-z0-9]+/g, '<SIDE_ROOT>')
+}
+
 function readTree(root: string): Record<string, string> {
   if (!existsSync(root)) return {}
   const out: Record<string, string> = {}
@@ -192,7 +211,7 @@ async function runSide(
   const redact = (text: string): string => {
     let out = text
     for (const [path, token] of masks) out = out.replaceAll(path, token)
-    return out
+    return maskByTempName(out)
   }
   const sharedEnv: Record<string, string> = { ...modeEnv }
   // Deliberately NOT pre-created: the stubs `mkdir -p` their own state, and a
@@ -1041,6 +1060,29 @@ describe('RFC-254 T28b — where the shell original had no single answer', () =>
       rmSync(root, { recursive: true, force: true })
     }
   }, 30_000)
+})
+
+describe('RFC-254 T28b — the golden comparison masks paths on every platform', () => {
+  test('a Windows 8.3 short path is masked even though no mask holds it', () => {
+    // The exact string a business stub wrote on windows-latest. The path masks
+    // hold the LONG spelling, so without the name-based pass this reached the
+    // comparison verbatim and failed every case.
+    const windowsLine =
+      '{"agent":"a","cwd":"C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aw-stub-side-Ab12Cd\\cwd","prompt":"x"}'
+    expect(maskByTempName(windowsLine)).toBe('{"agent":"a","cwd":"<SIDE_CWD>","prompt":"x"}')
+  })
+
+  test('the root and the cwd inside it get distinct tokens', () => {
+    expect(maskByTempName('/var/folders/x/aw-stub-side-Ab12Cd/cwd')).toBe('<SIDE_CWD>')
+    expect(maskByTempName('/var/folders/x/aw-stub-side-Ab12Cd/state-FOO')).toBe(
+      '<SIDE_ROOT>/state-FOO',
+    )
+  })
+
+  test('already-masked text is left alone (the pass is additive)', () => {
+    const masked = '{"cwd":"<SIDE_CWD>","other":"<SIDE_ROOT>/x"}'
+    expect(maskByTempName(masked)).toBe(masked)
+  })
 })
 
 describe('RFC-254 T28b — dispatcher', () => {
