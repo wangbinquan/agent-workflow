@@ -125,12 +125,17 @@ const ACTIVE_PROCESSES_OFFSET = 40
  * trusted. A wrong offset does not throw — it returns a plausible number from
  * the wrong field, which is how the `ActiveProcesses` bug survived review.
  */
-export const WIN32_JOB_LAYOUT = {
+export const WIN32_JOB_LAYOUT: {
+  extendedLimitStructBytes: number
+  basicLimitFlagsOffset: number
+  accountingStructBytes: number
+  activeProcessesOffset: number
+} = {
   extendedLimitStructBytes: EXTENDED_LIMIT_STRUCT_BYTES,
   basicLimitFlagsOffset: BASIC_LIMIT_FLAGS_OFFSET,
   accountingStructBytes: ACCOUNTING_STRUCT_BYTES,
   activeProcessesOffset: ACTIVE_PROCESSES_OFFSET,
-} as const
+}
 
 type Kernel32 = {
   symbols: {
