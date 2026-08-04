@@ -89,8 +89,15 @@ export interface EnsureDepsInput {
   interpreterVersion: string
   specs: readonly string[]
   timeoutMs: number
-  /** Installer containment. Network is ALLOWED here even when the node denies it. */
-  sandbox?: SandboxCtx
+  /**
+   * Builds the installer's containment context for a given build directory.
+   *
+   * A factory rather than a ready-made ctx (impl-gate M3): the ONLY writable
+   * root the installer may have is the build directory, and that path is
+   * chosen in here. Network stays ALLOWED even when the node itself denies it
+   * — the install happens before the author's code runs (D15).
+   */
+  sandboxFor?: (buildDir: string) => SandboxCtx | undefined
   signal?: AbortSignal
   onLine?: (stream: 'stdout' | 'stderr', line: string) => Promise<void> | void
   log?: Logger
@@ -125,7 +132,11 @@ export async function ensureScriptDepsEnv(input: EnsureDepsInput): Promise<Scrip
     .digest('hex')
 
   const rootDir = envDirFor(input.appHome, input.language, hash)
-  const libDir = join(rootDir, 'lib')
+  // impl-gate 4.2: the search path is per package manager. `pip --target lib`
+  // puts packages directly in `lib/`, while `npm --prefix <dir>` writes
+  // `<dir>/node_modules` — pointing NODE_PATH at `lib/` gave every node script
+  // an empty search path, so `language: 'node'` + dependencies never worked.
+  const libDir = join(rootDir, input.language === 'node' ? 'node_modules' : 'lib')
 
   const existing = readManifest(rootDir)
   if (existing !== null) {
@@ -191,7 +202,10 @@ export async function ensureScriptDepsEnv(input: EnsureDepsInput): Promise<Scrip
         LANG: 'C.UTF-8',
       },
       timeoutMs: input.timeoutMs,
-      ...(input.sandbox === undefined ? {} : { sandbox: input.sandbox }),
+      ...(() => {
+        const ctx = input.sandboxFor?.(buildDir)
+        return ctx === undefined ? {} : { sandbox: ctx }
+      })(),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
       ...(input.log === undefined ? {} : { log: input.log }),
       onStdoutLine: (line) => input.onLine?.('stdout', line),
@@ -243,8 +257,14 @@ export async function ensureScriptDepsEnv(input: EnsureDepsInput): Promise<Scrip
 }
 
 /**
- * Collect environments unused for longer than `ttlDays`. Called from the
- * daemon's hourly maintenance pass.
+ * Collect environments unused for longer than `ttlDays`.
+ *
+ * ⚠ HONEST STATUS (impl-gate M6, 2026-08-04): this previously said "called from
+ * the daemon's hourly maintenance pass". It is not called from anywhere — the
+ * cache currently grows without bound. Wiring it up must also teach it to skip
+ * in-flight `.build-*` directories, which have no manifest and would therefore
+ * be collected immediately, deleting a running install out from under itself.
+ * Tracked as plan.md T25 / docs/audit-backlog.md.
  */
 export function collectScriptDepsEnvs(input: { appHome: string; ttlDays: number; now?: number }): {
   removed: string[]

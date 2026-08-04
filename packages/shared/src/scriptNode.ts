@@ -232,9 +232,13 @@ export function planScriptPortEnv(inputs: Record<string, string>): ScriptPortEnv
  * to serve both matched neither cleanly — it rejected `@scope/pkg@1.2.3` while
  * accepting `pkg^1.2.3`, which pip does not understand.
  */
+// impl-gate (Codex 7): these previously accepted `requests==2.*`, `lodash@4`
+// and `lodash@4.17` — none of which pin anything. "Exact" now means a full
+// dotted release: at least major.minor.patch, and no wildcard segment.
 const PIP_SPEC_RE =
-  /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\[[A-Za-z0-9][A-Za-z0-9,._-]*\])?==[A-Za-z0-9][A-Za-z0-9.*+_-]*$/
-const NPM_SPEC_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*@[0-9][A-Za-z0-9.+-]*$/
+  /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\[[A-Za-z0-9][A-Za-z0-9,._-]*\])?==[0-9]+(?:\.[0-9]+){2,}(?:[A-Za-z0-9.+_-]*)$/
+const NPM_SPEC_RE =
+  /^(?:@[a-z0-9][a-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*@[0-9]+(?:\.[0-9]+){2}(?:[A-Za-z0-9.+-]*)$/
 
 /**
  * The single reason a dependency spec is refused, or null when it is fine.
@@ -316,10 +320,20 @@ export const SCRIPT_SENSITIVE_PROJECTION_DOMAIN_V1 = 'workflow-script-sensitive/
 /**
  * D20 — the exact slice of a definition that `scripts:author` governs.
  *
- * Everything that changes what the host will EXECUTE is in; everything that is
- * mere editing (position, title, edges, other node kinds) is out, so a user
- * without the point can still lay out and rewire a workflow that happens to
- * contain a script.
+ * What is in: the node's own execution fields, the SHAPE of its inputs (which
+ * ports feed it, from where) and its wrapper ancestry with the loop terms that
+ * decide how many times it runs. What is out: position, title, and edits to
+ * other node kinds — so a user without the point can still lay out a workflow
+ * that happens to contain a script.
+ *
+ * ⚠ Scope limit, stated rather than implied (impl-gate 1.2): this governs the
+ * SHAPE of what runs, NOT the CONTENT that flows in. Rewriting an upstream
+ * agent's prompt changes the bytes that arrive in `AW_PORT_*` while leaving
+ * this projection identical, and that is inherent — every upstream node's
+ * output is data this script consumes, so "govern the content too" would mean
+ * `scripts:author` governs the entire graph. A script that pipes an input into
+ * a shell is therefore as trusted as its upstream; that is a property of the
+ * script, and the node's own body IS gated.
  *
  * Returns canonical BYTES, not a hash: the gate compares strings, which is
  * exact by construction — no collision surface to reason about, and a mismatch
@@ -348,18 +362,42 @@ export function serializeScriptSensitiveProjectionV1(definition: WorkflowDefinit
 
       // Wrapper membership decides WHETHER and HOW MANY TIMES it runs — moving
       // a script into a 50-iteration loop is an execution-semantics change.
-      const wrappers = definition.nodes
-        .filter((candidate) => {
-          if (!isWrapperKind(candidate.kind)) return false
+      //
+      // impl-gate 1.2: this must follow the FULL ancestry, not just the direct
+      // container. Wrapper containment is transitive, so wrapping the script's
+      // own 1-iteration loop inside a fresh 50-iteration loop changed the run
+      // count by 50× while the projection stayed byte-identical. The loop's
+      // exit terms belong here for the same reason: flipping `exitCondition`
+      // to something that never holds turns one run into `maxIterations` runs
+      // without touching a count.
+      const ancestry = new Set<string>()
+      for (;;) {
+        const before = ancestry.size
+        for (const candidate of definition.nodes) {
+          if (!isWrapperKind(candidate.kind) || ancestry.has(candidate.id)) continue
           const ids = (candidate as unknown as Record<string, unknown>).nodeIds
-          return Array.isArray(ids) && ids.includes(node.id)
-        })
+          if (!Array.isArray(ids)) continue
+          if (
+            ids.includes(node.id) ||
+            ids.some((id) => typeof id === 'string' && ancestry.has(id))
+          ) {
+            ancestry.add(candidate.id)
+          }
+        }
+        // Fixed point; also terminates on a malformed cyclic containment graph.
+        if (ancestry.size === before) break
+      }
+      const wrappers = definition.nodes
+        .filter((candidate) => ancestry.has(candidate.id))
         .map((wrapper) => {
-          const raw = (wrapper as unknown as Record<string, unknown>).maxIterations
+          const rec = wrapper as unknown as Record<string, unknown>
+          const raw = rec.maxIterations
           return {
             id: wrapper.id,
             kind: wrapper.kind,
             maxIterations: typeof raw === 'number' ? raw : null,
+            exitCondition: rec.exitCondition ?? null,
+            continueOnMaxIterations: rec.continueOnMaxIterations ?? null,
           }
         })
         .sort((a, b) => cmp(a.id, b.id))
@@ -423,7 +461,19 @@ export const SCRIPT_RESERVED_ENV_KEYS: readonly string[] = [
   'LC_ALL',
 ]
 
-export const SCRIPT_RESERVED_ENV_PREFIXES: readonly string[] = ['AW_', 'GIT_']
+export const SCRIPT_RESERVED_ENV_PREFIXES: readonly string[] = [
+  'AW_',
+  'GIT_',
+  // impl-gate 4.3: the loader families were only refused at SAVE time by
+  // `mcpEnvIssues`, so the runtime filter — the layer this file's own comment
+  // calls "defence in depth" — had no second line for exactly the variables
+  // that load arbitrary code before the script's first statement.
+  'LD_',
+  'DYLD_',
+]
+
+/** Shell startup files run before the script body; bash reads these. */
+const SCRIPT_RESERVED_SHELL_STARTUP: readonly string[] = ['BASH_ENV', 'ENV']
 
 /** Why this env key is refused for a script node, or null when it is fine. */
 export function scriptReservedEnvKeyIssue(key: string): string | null {
@@ -435,6 +485,9 @@ export function scriptReservedEnvKeyIssue(key: string): string | null {
     if (upper.startsWith(prefix)) {
       return `env key '${key}' uses the reserved '${prefix}' prefix`
     }
+  }
+  if (SCRIPT_RESERVED_SHELL_STARTUP.includes(upper)) {
+    return `env key '${key}' would make the shell run a startup file before the script`
   }
   return null
 }

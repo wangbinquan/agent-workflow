@@ -272,6 +272,10 @@ export const SCRIPT_FAILURE_CODES = [
   'script-deps-install-failed',
   'script-network-fence-unavailable',
   'script-spawn-failed',
+  // impl-gate M5: stdout exceeded the retained window in single-port mode, so
+  // the port value would be missing its head. Distinct from a crash: the
+  // script succeeded, the platform simply cannot honour "the value IS stdout".
+  'script-output-truncated',
 ] as const
 export type ScriptFailureCode = (typeof SCRIPT_FAILURE_CODES)[number]
 
@@ -281,6 +285,9 @@ export const SCRIPT_PERMANENT_FAILURE_CODES: ReadonlyArray<ScriptFailureCode> = 
   'script-deps-install-failed',
   'script-network-fence-unavailable',
   'script-spawn-failed',
+  // Retrying cannot shrink the output; the author has to declare ports or emit
+  // less.
+  'script-output-truncated',
 ]
 
 export const FAILURE_CODES = [

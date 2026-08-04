@@ -78,6 +78,7 @@ import { mkdirSync } from 'node:fs'
 import {
   readScriptDependencies,
   readScriptLanguage,
+  scriptOutputMode,
   resolveScriptNetwork,
   resolveScriptReadonly,
   SCRIPT_PERMANENT_FAILURE_CODES,
@@ -4216,12 +4217,27 @@ async function runOneScriptAttempt(
   // unavailable fence throws here — BEFORE the process exists and before any
   // side effect (D23).
   let sandboxCtx: SandboxCtx | undefined
+  let installerSandbox: Parameters<typeof buildRunSandboxCtx>[0] = null
   if (opts.containmentCoordinator !== undefined) {
     try {
-      const plan = await opts.containmentCoordinator.admit(
-        a.networkDeny ? 'outer-netless-v1' : 'runner-filesystem-v1',
-        { ...(opts.signal === undefined ? {} : { signal: opts.signal }) },
-      )
+      // impl-gate M1: the profile must reflect EVERY boundary this node is
+      // relying on, not just the network one. A readonly node skipped its
+      // isolated worktree because the read-only mount was promised — so that
+      // mount has to be fail-closed too, or `off`/degraded silently produces
+      // "no isolation AND no boundary". `outer-netless-v1` already carries the
+      // filesystem requirements, so it covers the both-flags case.
+      const profileId = a.networkDeny
+        ? 'outer-netless-v1'
+        : a.isReadonly
+          ? 'outer-readonly-v1'
+          : 'runner-filesystem-v1'
+      const plan = await opts.containmentCoordinator.admit(profileId, {
+        ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+      })
+      // impl-gate M3: the installer reuses THIS admission's provider but never
+      // its network posture — dependencies must install even for a netless node
+      // (D15), so the netless flag is deliberately not carried over.
+      installerSandbox = plan.sandbox
       const base = buildRunSandboxCtx(plan.sandbox, taskId, worktreePath, runDir)
       if (base !== undefined) {
         sandboxCtx = {
@@ -4272,6 +4288,15 @@ async function runOneScriptAttempt(
         interpreterVersion: a.interpreter.version,
         specs,
         timeoutMs: opts.scriptDepsInstallTimeoutMs ?? 10 * 60 * 1000,
+        // impl-gate M3: the installer used to run with NO containment at all
+        // — pip/npm as the daemon, with `secret.key` and `db.sqlite` readable.
+        // The build directory takes the `runDir` slot because that slot IS
+        // "the one private writable root", which is exactly the installer's
+        // requirement; no task worktree is reachable, and network stays on.
+        sandboxFor: (buildDir) =>
+          installerSandbox === null
+            ? undefined
+            : buildRunSandboxCtx(installerSandbox, taskId, buildDir, buildDir),
         ...(opts.signal === undefined ? {} : { signal: opts.signal }),
         onLine: async (stream: 'stdout' | 'stderr', line: string) => {
           await db.insert(nodeRunEvents).values({
@@ -4408,6 +4433,20 @@ async function runOneScriptAttempt(
   }
 
   let failureCode = outcome.failureCode
+  // impl-gate M5: single-port mode promises the port value IS stdout, byte for
+  // byte. The rolling tail keeps the END and discards the HEAD, so a truncated
+  // capture would hand downstream a value silently missing its beginning — a
+  // JSON or CSV payload turned into an illegal fragment — while the node
+  // reported success. Envelope mode already fails closed here (no opening tag
+  // ⇒ `script-envelope-missing`); single-port mode needs the same treatment
+  // rather than being the one place this product corrupts data quietly.
+  if (
+    failureCode === null &&
+    outcome.result.truncated.stdout &&
+    scriptOutputMode(a.node) === 'single'
+  ) {
+    failureCode = 'script-output-truncated'
+  }
   let errorMessage: string | null =
     failureCode === null ? null : outcome.result.stderrTail.slice(-2000)
   const ports: Record<string, string> = {}

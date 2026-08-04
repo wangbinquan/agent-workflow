@@ -3,9 +3,14 @@
 // Before this component the repo had exactly one way to edit code-shaped text:
 // `<TextArea monospace>`. That is fine for a two-line JSON blob and hostile for
 // a hundred-line python script, so RFC-253 introduces CodeMirror 6 ONCE, here,
-// as a shared primitive — the script node, the MCP config field, the plugin
-// options field and the workflow YAML import all render this rather than each
-// growing their own editor (CLAUDE.md §Frontend UI consistency).
+// as a shared primitive.
+//
+// ⚠ HONEST STATUS (impl-gate Codex 10, 2026-08-04): this previously said the
+// MCP config field, the plugin options field and the workflow YAML import all
+// render it. They do not — every one of them is still a `<TextArea>`; only the
+// script node uses this component. The migration is RFC-253 D16's unfinished
+// half, tracked in plan.md T39 and docs/audit-backlog.md. Written in the shape
+// a second caller can adopt, but it does not yet have one.
 //
 // Design constraints that are load-bearing, not decoration:
 //   - Theme follows the PLATFORM's CSS variables (--bg / --text / --border /

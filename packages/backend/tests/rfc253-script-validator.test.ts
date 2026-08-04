@@ -128,3 +128,35 @@ describe('script node validation', () => {
     ).toEqual([])
   })
 })
+
+// Implementation-gate M4 (2026-08-04): `ScriptNodeSchema` had ZERO callers, so
+// every bound it declared was decorative. The dependency count matters most —
+// the executor splices the whole list into one pip/npm argv, so an unbounded
+// list is an argv-length denial of service reachable from a saved definition.
+describe('the strict node schema is actually enforced', () => {
+  test('an oversized dependency list is rejected at save time', () => {
+    const deps = Array.from({ length: 200 }, (_, i) => `pkg${i}==1.0.0`)
+    expect(codesFor([script({ dependencies: deps })])).toContain('script-node-invalid')
+  })
+
+  test('an oversized body is rejected', () => {
+    expect(codesFor([script({ script: 'x'.repeat(300 * 1024) })])).toContain('script-node-invalid')
+  })
+
+  test('too many declared output ports are rejected', () => {
+    const outputs = Array.from({ length: 40 }, (_, i) => ({ name: `p${i}` }))
+    expect(codesFor([script({ outputs })])).toContain('script-node-invalid')
+  })
+
+  test('an unknown field on the node is rejected (strict output port shape)', () => {
+    expect(codesFor([script({ outputs: [{ name: 'a', bogus: 1 }] })])).toContain(
+      'script-node-invalid',
+    )
+  })
+
+  test('a well-formed node still passes', () => {
+    expect(codesFor([script({ dependencies: ['requests==2.32.3'] })])).not.toContain(
+      'script-node-invalid',
+    )
+  })
+})

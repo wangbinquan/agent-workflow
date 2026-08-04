@@ -7,12 +7,17 @@
 // knowledge is currently welded into a 1900-line function that also renders
 // prompts and parses model events, so the script node cannot reuse it.
 //
-// This module is that knowledge, extracted as an independent primitive. It is
-// NOT a second implementation for its own sake: `containedSpawnRegistry.ts`
-// carries a ratchet that forces every new `Bun.spawn` site in the backend to
-// either come through here or be explicitly registered, and runner.ts's own
-// sites are registered with a `removeWhen` note pointing at the architecture
-// audit's WP-2 migration. The debt is booked, not hidden.
+// This module is that knowledge, extracted as an independent primitive.
+//
+// ⚠ HONEST STATUS (impl-gate M2, 2026-08-04): this file previously claimed a
+// `containedSpawnRegistry.ts` ratchet forced every new `Bun.spawn` site through
+// here. That file was never written — the claim was aspirational and shipped as
+// if it were fact. It is the ONE thing that would have justified a second spawn
+// implementation living beside runner.ts, so without it this IS a second
+// implementation, and `scriptRun.ts:resolveScriptInterpreter` already added a
+// bare `Bun.spawn` site that such a ratchet would have caught. The work is
+// tracked as plan.md T11 and in docs/audit-backlog.md; until it lands, treat
+// "runner.ts will migrate to this" as an intention, not a booked debt.
 //
 // One deliberate difference from runner.ts (design-gate F8): the caller can ask
 // for the RAW stdout bytes in addition to the line stream. The line pump drops
@@ -279,6 +284,10 @@ export async function runContainedProcess(
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined
 
   const escalate = (): void => {
+    // impl-gate 3.2: a second escalation (cancel, then the timeout firing during
+    // the grace window) used to overwrite `killTimer`, leaving the first timer
+    // to fire later at a pid that may already be recycled.
+    if (killTimer !== undefined) return
     killTree(child, 'SIGTERM')
     killTimer = setTimeout(() => {
       log.warn('child ignored SIGTERM past grace; escalating to SIGKILL', { pid, graceMs })
@@ -297,7 +306,11 @@ export async function runContainedProcess(
   }
   if (req.timeoutMs !== undefined && req.timeoutMs > 0) {
     timeoutTimer = setTimeout(() => {
-      outcome = 'timeout'
+      // impl-gate 3.2: guarded like `onAbort`. Without it, "user cancels →
+      // SIGTERM → timeout fires during the 10s grace" relabels a cancellation
+      // as a timeout, and the caller then writes `failed` instead of
+      // `canceled`/`interrupted`.
+      if (outcome === 'exited') outcome = 'timeout'
       escalate()
     }, req.timeoutMs)
     timeoutTimer.unref()

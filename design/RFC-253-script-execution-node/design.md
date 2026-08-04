@@ -7,28 +7,28 @@
 
 写代码前必须先读的现状，全部是本 RFC 的耦合点：
 
-| 机制 | 锚点 | 与本 RFC 的关系 |
-|------|------|----------------|
-| NodeKind 枚举 | `packages/shared/src/schemas/workflow.ts:33-45` | 加 `'script'` |
-| 行为矩阵 | `packages/shared/src/node-kind-behavior.ts:100-177` | `satisfies Record<NodeKind,…>` ⇒ 不填就编译不过 |
-| 端口声明矩阵 | `packages/shared/src/nodePorts.ts:151-273` | 同上 |
-| 节点引用清单 | `packages/shared/src/workflow-node-references.ts:37-78` | 同上；另需新增 `opaqueFields` 描述符（见 §1.2） |
-| 画布组件表 | `packages/frontend/src/components/canvas/WorkflowCanvas.tsx:159-178` | 同上 |
-| Inspector 表 | `packages/frontend/src/components/canvas/NodeInspector.tsx:96` | 同上 |
-| 调色板表 | `packages/frontend/src/components/canvas/nodePalette.ts:65-197` | 同上 |
-| 节点默认尺寸 | `packages/frontend/src/components/canvas/wrapperFit.ts:20` | 同上 |
-| 调度分发 | `services/scheduler.ts:3912-4180`（`runOneNode`） | 新增 `script` 分支，落在 RFC-146 穷尽性守卫之前 |
-| 上游取值 | `services/scheduler.ts:8438-8500`（`resolveUpstreamInputs`） | **原样复用**：按 `edge.target.portName` 聚合，同名多入以 `\n\n---\n\n` 拼接 |
-| iso 工作区 | `services/isolatedAgentRun.ts:57`（`createIsoUnderLock`）/ `:88`（`persistIsoBase`）/ `services/nodeIsolation.ts:928`（`mergeBackNodeIso`）/ `:1252`（`discardNodeIso`） | 原样复用 |
-| 信封解析 | `services/envelope.ts:240`（`extractLastEnvelope`）/ `:357`（`parseEnvelope`）/ `:509`（`resolvePortContentDetailed`） | 原样复用（含 RFC-200 nonce） |
-| 容器化 | `services/sandbox/index.ts:84`（`wrapSandbox`）/ `policy.ts` / `sandbox/containmentCoordinator.ts:28-43,777` | **复用** `policy.readOnlyAllowSubtrees`（RFC-251 并发提交 `37496943` 已引入）与 `runner-filesystem-v1`；只新增出网围栏能力 + **一个** netless profile |
-| daemon 侧 git 收口 | `packages/backend/src/util/gitHardening.ts`（RFC-252 G1，提交 `40535c0e`） | 本 RFC 是它的第二个消费者；`filter.*` / `diff.*.textconv` 残留由它自己登记，不在本 RFC 关闭 |
-| 活性证据链 | `services/runLiveness.ts:100`（`livenessSourceOfKind`） | **第 8 处**穷尽点（设计门只列到 7 处，编译器逼出的这处不在其中） |
-| 权限目录 | `packages/shared/src/schemas/permission.ts:62-177,351-401` | 新增 `scripts:author` |
-| MCP env 校验 | `packages/shared/src/schemas/mcp.ts:47-80` | **原样复用**（键名 / NUL / 动态加载器变量） |
-| 密钥脱敏 | `packages/shared/src/intentSecretSlots.ts` | 新增脚本节点 env 的 carrier |
-| run 私有目录 | `services/inventory.ts:133`（`runRootFor`） | 脚本正文与输入落盘位置 |
-| 流式截断 | `services/runner.ts:2782-2808`（`MAX_STREAM_LINE_CHARS` / `MAX_AGENT_TEXT_CHARS` / `appendBoundedTail` / `pumpLines`） | 抽进受控 spawn 原语共享 |
+| 机制               | 锚点                                                                                                                                                                     | 与本 RFC 的关系                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NodeKind 枚举      | `packages/shared/src/schemas/workflow.ts:33-45`                                                                                                                          | 加 `'script'`                                                                                                                                         |
+| 行为矩阵           | `packages/shared/src/node-kind-behavior.ts:100-177`                                                                                                                      | `satisfies Record<NodeKind,…>` ⇒ 不填就编译不过                                                                                                       |
+| 端口声明矩阵       | `packages/shared/src/nodePorts.ts:151-273`                                                                                                                               | 同上                                                                                                                                                  |
+| 节点引用清单       | `packages/shared/src/workflow-node-references.ts:37-78`                                                                                                                  | 同上；另需新增 `opaqueFields` 描述符（见 §1.2）                                                                                                       |
+| 画布组件表         | `packages/frontend/src/components/canvas/WorkflowCanvas.tsx:159-178`                                                                                                     | 同上                                                                                                                                                  |
+| Inspector 表       | `packages/frontend/src/components/canvas/NodeInspector.tsx:96`                                                                                                           | 同上                                                                                                                                                  |
+| 调色板表           | `packages/frontend/src/components/canvas/nodePalette.ts:65-197`                                                                                                          | 同上                                                                                                                                                  |
+| 节点默认尺寸       | `packages/frontend/src/components/canvas/wrapperFit.ts:20`                                                                                                               | 同上                                                                                                                                                  |
+| 调度分发           | `services/scheduler.ts:3912-4180`（`runOneNode`）                                                                                                                        | 新增 `script` 分支，落在 RFC-146 穷尽性守卫之前                                                                                                       |
+| 上游取值           | `services/scheduler.ts:8438-8500`（`resolveUpstreamInputs`）                                                                                                             | **原样复用**：按 `edge.target.portName` 聚合，同名多入以 `\n\n---\n\n` 拼接                                                                           |
+| iso 工作区         | `services/isolatedAgentRun.ts:57`（`createIsoUnderLock`）/ `:88`（`persistIsoBase`）/ `services/nodeIsolation.ts:928`（`mergeBackNodeIso`）/ `:1252`（`discardNodeIso`） | 原样复用                                                                                                                                              |
+| 信封解析           | `services/envelope.ts:240`（`extractLastEnvelope`）/ `:357`（`parseEnvelope`）/ `:509`（`resolvePortContentDetailed`）                                                   | 原样复用（含 RFC-200 nonce）                                                                                                                          |
+| 容器化             | `services/sandbox/index.ts:84`（`wrapSandbox`）/ `policy.ts` / `sandbox/containmentCoordinator.ts:28-43,777`                                                             | **复用** `policy.readOnlyAllowSubtrees`（RFC-251 并发提交 `37496943` 已引入）与 `runner-filesystem-v1`；只新增出网围栏能力 + **一个** netless profile |
+| daemon 侧 git 收口 | `packages/backend/src/util/gitHardening.ts`（RFC-252 G1，提交 `40535c0e`）                                                                                               | 本 RFC 是它的第二个消费者；`filter.*` / `diff.*.textconv` 残留由它自己登记，不在本 RFC 关闭                                                           |
+| 活性证据链         | `services/runLiveness.ts:100`（`livenessSourceOfKind`）                                                                                                                  | **第 8 处**穷尽点（设计门只列到 7 处，编译器逼出的这处不在其中）                                                                                      |
+| 权限目录           | `packages/shared/src/schemas/permission.ts:62-177,351-401`                                                                                                               | 新增 `scripts:author`                                                                                                                                 |
+| MCP env 校验       | `packages/shared/src/schemas/mcp.ts:47-80`                                                                                                                               | **原样复用**（键名 / NUL / 动态加载器变量）                                                                                                           |
+| 密钥脱敏           | `packages/shared/src/intentSecretSlots.ts`                                                                                                                               | 新增脚本节点 env 的 carrier                                                                                                                           |
+| run 私有目录       | `services/inventory.ts:133`（`runRootFor`）                                                                                                                              | 脚本正文与输入落盘位置                                                                                                                                |
+| 流式截断           | `services/runner.ts:2782-2808`（`MAX_STREAM_LINE_CHARS` / `MAX_AGENT_TEXT_CHARS` / `appendBoundedTail` / `pumpLines`）                                                   | 抽进受控 spawn 原语共享                                                                                                                               |
 
 ## 1. 节点模型
 
@@ -38,20 +38,23 @@
 `CallWorkflowNodeSchema` 的先例单列一个 schema，由服务层写入校验消费）：
 
 ```ts
-export const SCRIPT_LANGUAGES = ['python', 'bash', 'node'] as const          // D13
+export const SCRIPT_LANGUAGES = ['python', 'bash', 'node'] as const // D13
 export const ScriptLanguageSchema = z.enum(SCRIPT_LANGUAGES)
 
 /** 单端口模式的固定端口名（D22）。 */
 export const SCRIPT_DEFAULT_OUTPUT_PORT = 'stdout' as const
 
 /** 依赖条目：仅「名字[比较符版本]」与 npm scope 形态；显式拒绝 flag / URL / 路径 / VCS（D14, AC-19）。 */
-export const SCRIPT_DEPENDENCY_RE = /^(@[a-z0-9][\w.-]*\/)?[A-Za-z0-9][\w.-]*(\[[\w,.-]+\])?([=<>!~^]=?[\w.*+-]+)?$/
+export const SCRIPT_DEPENDENCY_RE =
+  /^(@[a-z0-9][\w.-]*\/)?[A-Za-z0-9][\w.-]*(\[[\w,.-]+\])?([=<>!~^]=?[\w.*+-]+)?$/
 
-export const ScriptOutputPortSchema = z.object({
-  name: z.string().min(1).max(64),
-  /** AgentOutputKind 语法串；缺省即 'string'（D11）。 */
-  kind: z.string().min(1).optional(),
-}).strict()
+export const ScriptOutputPortSchema = z
+  .object({
+    name: z.string().min(1).max(64),
+    /** AgentOutputKind 语法串；缺省即 'string'（D11）。 */
+    kind: z.string().min(1).optional(),
+  })
+  .strict()
 
 export const ScriptNodeSchema = WorkflowNodeSchema.extend({
   kind: z.literal('script'),
@@ -121,10 +124,10 @@ AW_PORT_FILE_<suffix>   端口值文件的绝对路径（落盘档）
 
 ### 2.2 出参（D3）
 
-| 模式 | 触发条件 | 行为 |
-|------|---------|------|
-| 单端口 | `outputs` 缺省 / 空 | **原始 stdout 字节**（按 D27 截断后）写进端口 `stdout` |
-| 信封 | `outputs` 非空 | 用 `extractLastEnvelope(stdout, nonce)` + `parseEnvelope` 解析；每个声明端口按其 kind 走 `resolvePortContentDetailed`（RFC-049/080 的同一条校验链） |
+| 模式   | 触发条件            | 行为                                                                                                                                                |
+| ------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 单端口 | `outputs` 缺省 / 空 | **原始 stdout 字节**（按 D27 截断后）写进端口 `stdout`                                                                                              |
+| 信封   | `outputs` 非空      | 用 `extractLastEnvelope(stdout, nonce)` + `parseEnvelope` 解析；每个声明端口按其 kind 走 `resolvePortContentDetailed`（RFC-049/080 的同一条校验链） |
 
 信封模式下 nonce 是**强制**的（AC-5）：脚本从 `AW_ENVELOPE_NONCE` 读取，打印
 `<workflow-output nonce="$AW_ENVELOPE_NONCE">…</workflow-output>`。理由与 RFC-200 一致，且对脚本更硬——
@@ -149,24 +152,24 @@ follow-up**（`decideEnvelopeFollowup` 是模型语义），脚本一律 fresh r
 
 进程环境是**最小集**（AC-16），不继承 daemon 的 `process.env`：
 
-| 变量 | 值 |
-|------|-----|
-| `PATH` | 平台构造的最小 PATH（解释器目录 + 系统标准目录） |
-| `HOME` | `runRootFor(taskId,nodeRunId)/home`（私有，非真实 `$HOME`） |
-| `TMPDIR` | `runRootFor(…)/tmp` |
-| `LANG` / `LC_ALL` | `C.UTF-8` |
-| `AW_TASK_ID` / `AW_NODE_ID` / `AW_NODE_RUN_ID` | 标识 |
-| `AW_ITERATION` / `AW_RETRY_INDEX` / `AW_SHARD_KEY` | loop 迭代号 / 重试序号 / fanout 分片键（无分片时为空） |
-| `AW_WORKTREE` | 进程 cwd（本节点的 iso 工作区；`readonly` 档为 canonical 工作区） |
-| `AW_REPOS_JSON` | 多仓布局 JSON（`[{name,path}]`），单仓也给 |
-| `AW_RUN_DIR` / `AW_INPUT_DIR` | run 私有目录 / 输入落盘目录 |
-| `AW_PORT_*` / `AW_PORT_FILE_*` / `AW_PORT_NAMES` | §2.1 |
-| `AW_OUTPUT_MODE` | `'stdout'` \| `'envelope'` |
-| `AW_ENVELOPE_NONCE` | 信封模式下的 nonce |
-| `AW_DEPS_DIR` | 依赖环境目录（只读挂载），无依赖时缺席 |
-| `PYTHONPATH` / `NODE_PATH` | 由 `AW_DEPS_DIR` 派生（对应语言才设） |
-| `GIT_AUTHOR_*` / `GIT_COMMITTER_*` | RFC-067 任务级身份，条件与 runner 一致（`runner.ts:447-461`） |
-| 节点 `env` 映射表 | 只能设**保留集合之外**的键；平台键**最后覆盖**用户键（见下） |
+| 变量                                               | 值                                                                |
+| -------------------------------------------------- | ----------------------------------------------------------------- |
+| `PATH`                                             | 平台构造的最小 PATH（解释器目录 + 系统标准目录）                  |
+| `HOME`                                             | `runRootFor(taskId,nodeRunId)/home`（私有，非真实 `$HOME`）       |
+| `TMPDIR`                                           | `runRootFor(…)/tmp`                                               |
+| `LANG` / `LC_ALL`                                  | `C.UTF-8`                                                         |
+| `AW_TASK_ID` / `AW_NODE_ID` / `AW_NODE_RUN_ID`     | 标识                                                              |
+| `AW_ITERATION` / `AW_RETRY_INDEX` / `AW_SHARD_KEY` | loop 迭代号 / 重试序号 / fanout 分片键（无分片时为空）            |
+| `AW_WORKTREE`                                      | 进程 cwd（本节点的 iso 工作区；`readonly` 档为 canonical 工作区） |
+| `AW_REPOS_JSON`                                    | 多仓布局 JSON（`[{name,path}]`），单仓也给                        |
+| `AW_RUN_DIR` / `AW_INPUT_DIR`                      | run 私有目录 / 输入落盘目录                                       |
+| `AW_PORT_*` / `AW_PORT_FILE_*` / `AW_PORT_NAMES`   | §2.1                                                              |
+| `AW_OUTPUT_MODE`                                   | `'stdout'` \| `'envelope'`                                        |
+| `AW_ENVELOPE_NONCE`                                | 信封模式下的 nonce                                                |
+| `AW_DEPS_DIR`                                      | 依赖环境目录（只读挂载），无依赖时缺席                            |
+| `PYTHONPATH` / `NODE_PATH`                         | 由 `AW_DEPS_DIR` 派生（对应语言才设）                             |
+| `GIT_AUTHOR_*` / `GIT_COMMITTER_*`                 | RFC-067 任务级身份，条件与 runner 一致（`runner.ts:447-461`）     |
+| 节点 `env` 映射表                                  | 只能设**保留集合之外**的键；平台键**最后覆盖**用户键（见下）      |
 
 **平台键胜出，不是用户键胜出（设计门 P1 翻转了原设计）**：`mcpEnvIssues` 只拒非法名 / NUL / `LD_*` / `DYLD_*`，
 并**显式放行** `PYTHONPATH` 与 `NODE_OPTIONS`（`shared/schemas/mcp.ts:35`）。若让用户键最后覆盖，一条
@@ -180,11 +183,11 @@ follow-up**（`decideEnvelopeFollowup` 是模型语义），脚本一律 fresh r
 
 argv：
 
-| 语言 | argv |
-|------|------|
+| 语言   | argv                                                          |
+| ------ | ------------------------------------------------------------- |
 | python | `[<python>, '-u', <scriptPath>]`（`-u` 保证 stdout 实时可读） |
-| bash | `[<bash>, <scriptPath>]` |
-| node | `[<node>, <scriptPath>]` |
+| bash   | `[<bash>, <scriptPath>]`                                      |
+| node   | `[<node>, <scriptPath>]`                                      |
 
 脚本正文**逐字节**写进 `runRootFor(…)/script.<py\|sh\|mjs>`（**不在工作区里**，否则会进 `git_diff`）。
 平台**不注入任何前缀**（不注入 `set -euo pipefail`）——注入等于偷改用户代码；编辑器的 bash **默认模板**里
@@ -211,7 +214,7 @@ export interface ContainedSpawnRequest {
 export interface ContainedSpawnResult {
   exitCode: number | null
   outcome: 'exited' | 'timeout' | 'aborted' | 'spawn-failed' | 'child-unkillable'
-  stdoutTail: string          // 按 MAX_AGENT_TEXT_CHARS 截断
+  stdoutTail: string // 按 MAX_AGENT_TEXT_CHARS 截断
   stderrTail: string
   truncated: { stdout: boolean; stderr: boolean }
   spawnBinaryPath: string
@@ -414,13 +417,13 @@ PAT 的授权集合，AC-26）**并**进 `MANAGER_EXTRA`（⇒ 角色基线 = ad
 > 两者不冲突：系统域约束的是**令牌面**而非角色面——`account:self` / `users:search` / `intent:read` /
 > `intent:write` 同为系统域点且都在 `USER_BASELINE` 里。测试要把这条正交性显式锁住，防止后人把
 > 「系统域 ⇒ 仅 admin」当成不变量。它是 handler 直接消费的点（门在服务层、不在某条路由的元数据上），因此按 RFC-247 的规矩
-登记进 `HANDLER_CONSUMED_POINTS` 一类的豁免名单并**带上消费处的 file:line**，否则启动期的反向自检会判它是死点。
+> 登记进 `HANDLER_CONSUMED_POINTS` 一类的豁免名单并**带上消费处的 file:line**，否则启动期的反向自检会判它是死点。
 
 ### 7.2 敏感投影与门位置
 
 ```ts
 // shared：规范化投影 + 哈希（纯函数，前后端共用）
-export function scriptSensitiveProjection(def: WorkflowDefinition): string  // sha256
+export function scriptSensitiveProjection(def: WorkflowDefinition): string // sha256
 // 覆盖每个 script 节点的 { id, language, script, outputs, dependencies, env, network, readonly }
 // 按 node.id 排序；不含 position / title / 边 / 其他 kind 的节点（D20）
 ```
@@ -429,13 +432,13 @@ export function scriptSensitiveProjection(def: WorkflowDefinition): string  // s
 而它的**创建**路径直接调用导出的 `insertWorkflowInTx`（`services/intent/applyChangeset.ts:759` →
 `services/workflow.ts:729`）。门落在这两个原子边界上，任何未来的内部 caller 都绕不过去：
 
-| 入口 | 判定 |
-|------|------|
-| `POST /api/workflows`（新建） | 定义里存在任何脚本节点 ⇒ 需要点 |
-| `PUT /api/workflows/:id`（保存） | 新旧投影哈希不同 ⇒ 需要点 |
-| `POST /api/workflows/import`（YAML，new / overwrite 两档） | 同上（overwrite 与库中现值比） |
-| `POST /api/workflows/:id/copy`（RFC-231） | **不要点**（D21：服务端原样搬运既有修订）——以显式 provenance 参数放行，而不是靠「这条路径碰巧没调门」 |
-| RFC-234 intent 应用路径（create 与 update 两个不同原语） | 产出定义里出现脚本节点 ⇒ 需要点（否则模型可代写代码绕过 D6） |
+| 入口                                                       | 判定                                                                                                  |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `POST /api/workflows`（新建）                              | 定义里存在任何脚本节点 ⇒ 需要点                                                                       |
+| `PUT /api/workflows/:id`（保存）                           | 新旧投影哈希不同 ⇒ 需要点                                                                             |
+| `POST /api/workflows/import`（YAML，new / overwrite 两档） | 同上（overwrite 与库中现值比）                                                                        |
+| `POST /api/workflows/:id/copy`（RFC-231）                  | **不要点**（D21：服务端原样搬运既有修订）——以显式 provenance 参数放行，而不是靠「这条路径碰巧没调门」 |
+| RFC-234 intent 应用路径（create 与 update 两个不同原语）   | 产出定义里出现脚本节点 ⇒ 需要点（否则模型可代写代码绕过 D6）                                          |
 
 > 投影**不只含脚本节点自身字段**（设计门 P1）：指向脚本节点的**入边**决定 `AW_PORT_*` 的键与值，
 > 包含脚本节点的 **wrapper 归属**与 loop 的 `maxIterations` 决定它跑不跑、跑几次。把它们排除在外，
@@ -489,39 +492,39 @@ export function scriptSensitiveProjection(def: WorkflowDefinition): string  // s
 
 `services/workflow.validator.ts` 新增（全部带稳定 kebab code + `target.nodeField` 定位）：
 
-| code | 触发 |
-|------|------|
-| `script-body-empty` | 正文为空白 |
-| `script-language-invalid` | 语言不在枚举 |
-| `script-dependencies-unsupported` | `language==='bash'` 却声明了依赖 |
-| `script-dependency-malformed` | 条目不匹配 `SCRIPT_DEPENDENCY_RE` |
-| `script-output-name-duplicate` | 声明端口重名 |
-| `script-output-kind-invalid` | kind 串解析失败（复用既有 kind 解析器） |
-| `script-port-env-collision` | 入边端口名规范化后撞车 |
-| `script-env-key-invalid` | `mcpEnvIssues` 报错（逐条透传原文案） |
-| `script-network-invalid` | 值不在 `allow`/`deny` |
-| `script-signal-port-in-input`（warning） | 入边来自 `signal` kind 端口（值恒为空，多半是接错线） |
-| `script-in-fanout-unsupported` | 脚本节点位于 `wrapper-fanout` 内（非目标，fail closed —— 设计门 F7） |
-| `script-output-kind-path-unsupported` | 声明了 `path<…>` / `list<path<…>>` 族 kind（非目标，fail closed） |
-| `script-env-key-reserved` | env 键命中脚本保留表或 `AW_`/`GIT_` 前缀（§3） |
-| `script-dependency-version-unpinned` | 依赖未精确钉版本（AC-19b） |
+| code                                     | 触发                                                                 |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| `script-body-empty`                      | 正文为空白                                                           |
+| `script-language-invalid`                | 语言不在枚举                                                         |
+| `script-dependencies-unsupported`        | `language==='bash'` 却声明了依赖                                     |
+| `script-dependency-malformed`            | 条目不匹配 `SCRIPT_DEPENDENCY_RE`                                    |
+| `script-output-name-duplicate`           | 声明端口重名                                                         |
+| `script-output-kind-invalid`             | kind 串解析失败（复用既有 kind 解析器）                              |
+| `script-port-env-collision`              | 入边端口名规范化后撞车                                               |
+| `script-env-key-invalid`                 | `mcpEnvIssues` 报错（逐条透传原文案）                                |
+| `script-network-invalid`                 | 值不在 `allow`/`deny`                                                |
+| `script-signal-port-in-input`（warning） | 入边来自 `signal` kind 端口（值恒为空，多半是接错线）                |
+| `script-in-fanout-unsupported`           | 脚本节点位于 `wrapper-fanout` 内（非目标，fail closed —— 设计门 F7） |
+| `script-output-kind-path-unsupported`    | 声明了 `path<…>` / `list<path<…>>` 族 kind（非目标，fail closed）    |
+| `script-env-key-reserved`                | env 键命中脚本保留表或 `AW_`/`GIT_` 前缀（§3）                       |
+| `script-dependency-version-unpinned`     | 依赖未精确钉版本（AC-19b）                                           |
 
 ## 10. 失败模式与错误码
 
 新增 `failure_code`（`shared/schemas/task.ts:254` 的 `FAILURE_CODES` 组合域里加一支
 `SCRIPT_FAILURE_CODES`，**只进读域与 emit 域、不进 `FOLLOWUP_FAILURE_CODES`**——脚本没有 same-session 补救）：
 
-| code | 含义 | 是否重试 |
-|------|------|---------|
-| `script-nonzero-exit` | 退出码非零 | 是（D7） |
-| `script-timeout` | 超时被杀 | 是 |
-| `script-envelope-missing` | 信封模式下没解析到本次 nonce 的信封 | 是 |
-| `script-envelope-malformed` | 信封 framing 破损（parser 的 `malformedPorts`） | 是 |
-| `script-port-missing` | 信封里缺声明端口（parser 的 `missingDeclared`，**不会**自动失败，须显式判） | 是 |
-| `script-interpreter-missing` | 解释器解析不到 | 否（重试无益，需管理员处理） |
-| `script-deps-install-failed` | 依赖预装失败 | 否 |
-| `script-network-fence-unavailable` | `deny` 但围栏能力不可用（D23） | 否 |
-| `script-spawn-failed` | 进程起不来 | 否 |
+| code                               | 含义                                                                        | 是否重试                     |
+| ---------------------------------- | --------------------------------------------------------------------------- | ---------------------------- |
+| `script-nonzero-exit`              | 退出码非零                                                                  | 是（D7）                     |
+| `script-timeout`                   | 超时被杀                                                                    | 是                           |
+| `script-envelope-missing`          | 信封模式下没解析到本次 nonce 的信封                                         | 是                           |
+| `script-envelope-malformed`        | 信封 framing 破损（parser 的 `malformedPorts`）                             | 是                           |
+| `script-port-missing`              | 信封里缺声明端口（parser 的 `missingDeclared`，**不会**自动失败，须显式判） | 是                           |
+| `script-interpreter-missing`       | 解释器解析不到                                                              | 否（重试无益，需管理员处理） |
+| `script-deps-install-failed`       | 依赖预装失败                                                                | 否                           |
+| `script-network-fence-unavailable` | `deny` 但围栏能力不可用（D23）                                              | 否                           |
+| `script-spawn-failed`              | 进程起不来                                                                  | 否                           |
 
 > **RFC-251 教训**：删/加 failure code 要分清 **emit 域**与**读域**——任务列表整页用 `z.enum` 解析，读域缺一个
 > 历史码会让整页炸。新增码同时进两域即可，但测试要覆盖「历史行 + 新码」的混合分页解析。

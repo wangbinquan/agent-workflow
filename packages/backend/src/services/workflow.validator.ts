@@ -66,6 +66,7 @@ import {
   scriptPortEnvCollisions,
   scriptReservedEnvKeyIssue,
   SCRIPT_LANGUAGES,
+  ScriptNodeSchema,
   serializeWorkflowDefinitionCandidateV1,
   tryParseKind,
   WorkflowDefinitionSchema,
@@ -1158,6 +1159,23 @@ export function validateWorkflowDef(
   for (const node of nodes) {
     if (node.kind !== 'script') continue
 
+    // impl-gate M4: the strict schema had ZERO callers, so `SCRIPT_BODY_MAX`,
+    // `SCRIPT_MAX_OUTPUT_PORTS` and `SCRIPT_MAX_DEPENDENCIES` were decorative —
+    // a definition could declare ten thousand dependency specs (each one
+    // individually legal) and the executor would splice them all into one pip
+    // argv. Running it here makes every one of those bounds real.
+    const strict = ScriptNodeSchema.safeParse(node)
+    if (!strict.success) {
+      for (const issue of strict.error.issues) {
+        issues.push({
+          code: 'script-node-invalid',
+          message: `node '${node.id}': ${issue.path.join('.')} ${issue.message}`,
+          pointer: node.id,
+          target: target.node(node.id),
+        })
+      }
+    }
+
     const language = readScriptLanguage(node)
     if (language === undefined) {
       issues.push({
@@ -1179,9 +1197,23 @@ export function validateWorkflowDef(
     // A script inside a fan-out is a NON-GOAL, not an oversight: the fan-out
     // dispatcher requires an agent for every inner node, so allowing the
     // combination would produce a node that never runs.
-    const containerId = innerToWrapper.get(node.id)
-    const container = containerId !== undefined ? nodeById.get(containerId) : undefined
-    if (container?.kind === 'wrapper-fanout') {
+    // impl-gate (Codex 5): wrapper containment is TRANSITIVE, so checking only
+    // the direct container let `fanout → git → script` through static
+    // validation and fail at dispatch instead. The call-node rule in this same
+    // file already walks the ancestry; this now matches it.
+    let ancestorId = innerToWrapper.get(node.id)
+    let fanoutAncestor: string | undefined
+    const seenAncestors = new Set<string>()
+    while (ancestorId !== undefined && !seenAncestors.has(ancestorId)) {
+      seenAncestors.add(ancestorId)
+      if (nodeById.get(ancestorId)?.kind === 'wrapper-fanout') {
+        fanoutAncestor = ancestorId
+        break
+      }
+      ancestorId = innerToWrapper.get(ancestorId)
+    }
+    const containerId = fanoutAncestor
+    if (fanoutAncestor !== undefined) {
       issues.push({
         code: 'script-in-fanout-unsupported',
         message: `node '${node.id}' is a script inside wrapper-fanout '${containerId}'. Fan-out shards dispatch agents only; compute the shard list in a script UPSTREAM of the fan-out instead.`,
@@ -1239,19 +1271,33 @@ export function validateWorkflowDef(
       for (const spec of deps) {
         const issue = scriptDependencyIssue(language, spec)
         if (issue === null) continue
-        issues.push({
-          code: /must pin an exact version/.test(issue)
-            ? 'script-dependency-version-unpinned'
-            : 'script-dependency-malformed',
-          message: `node '${node.id}': ${issue}`,
-          pointer: node.id,
-          target: target.nodeField(node.id, 'script-dependencies'),
-        })
+        // impl-gate (Codex 6.2): these were ONE push whose `code` was a ternary.
+        // The RFC-199 strict-target ratchet scans for literal `code:` values, so
+        // that emission was invisible to it — the only non-literal `code:` in
+        // the whole validator, and therefore a blind spot by construction.
+        // Two pushes with literal codes keep the ratchet honest.
+        if (/must pin an exact version/.test(issue)) {
+          issues.push({
+            code: 'script-dependency-version-unpinned',
+            message: `node '${node.id}': ${issue}`,
+            pointer: node.id,
+            target: target.nodeField(node.id, 'script-dependencies'),
+          })
+        } else {
+          issues.push({
+            code: 'script-dependency-malformed',
+            message: `node '${node.id}': ${issue}`,
+            pointer: node.id,
+            target: target.nodeField(node.id, 'script-dependencies'),
+          })
+        }
       }
     }
 
-    for (const [key] of Object.entries(readScriptEnv(node))) {
-      for (const envIssue of mcpEnvIssues({ [key]: '' })) {
+    for (const [key, value] of Object.entries(readScriptEnv(node))) {
+      // impl-gate 4.4: this passed `''` as the value, so mcpEnvIssues' NUL-byte
+      // check on VALUES could never fire and a NUL-bearing value reached spawn.
+      for (const envIssue of mcpEnvIssues({ [key]: value })) {
         issues.push({
           code: 'script-env-key-invalid',
           message: `node '${node.id}': ${envIssue.message}`,

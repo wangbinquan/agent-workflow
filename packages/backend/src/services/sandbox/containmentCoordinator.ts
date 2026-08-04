@@ -52,6 +52,22 @@ export const CONTAINMENT_REQUIREMENT_PROFILES = {
   // WITH network has been silently escalated, so degrading is worse than
   // failing. Owning the rule here (rather than letting the caller re-read the
   // receipt and decide) keeps RFC-233's single admission authority intact.
+  // RFC-253 impl-gate M1 — the read-only worktree bundle. Same required
+  // capabilities as `runner-filesystem-v1`, but fail-closed, and that
+  // difference is a REAL divergence in demand rather than a consumer label:
+  // for an ordinary run containment is defence in depth, whereas a `readonly`
+  // script node has already given up its isolated worktree on the strength of
+  // this boundary. Degrading it does not reduce a safety margin, it hands the
+  // node write access to the canonical tree with no merge-back discipline —
+  // strictly worse than not setting the flag at all.
+  'outer-readonly-v1': {
+    id: 'outer-readonly-v1',
+    revision: '1',
+    required: ['platformHomeIsolation', 'immutableArtifactView'],
+    optional: ['descendantLifetimeBound'],
+    childBoundary: 'none',
+    failClosed: true,
+  },
   'outer-netless-v1': {
     id: 'outer-netless-v1',
     revision: '1',

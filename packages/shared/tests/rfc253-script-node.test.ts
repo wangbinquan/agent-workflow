@@ -280,3 +280,117 @@ describe('sensitive projection (the scripts:author gate oracle)', () => {
     )
   })
 })
+
+// Implementation-gate 1.2 (2026-08-04): the projection covered only the DIRECT
+// wrapper and only its `maxIterations`, so two constructions changed how many
+// times a script ran while leaving the gated bytes identical.
+describe('projection covers the full wrapper ancestry and its exit terms', () => {
+  const script = { id: 's1', kind: 'script', language: 'bash', script: 'echo hi' } as WorkflowNode
+  const inner = {
+    id: 'w_inner',
+    kind: 'wrapper-loop',
+    nodeIds: ['s1'],
+    maxIterations: 1,
+  } as WorkflowNode
+  const base: WorkflowDefinition = {
+    $schema_version: 4,
+    inputs: [],
+    nodes: [script, inner],
+    edges: [],
+  }
+
+  test('wrapping the direct loop in an outer loop is a gated change', () => {
+    // The script's own loop still says maxIterations: 1 — the 50× multiplier
+    // comes from a container one level up.
+    const nested: WorkflowDefinition = {
+      ...base,
+      nodes: [
+        script,
+        inner,
+        {
+          id: 'w_outer',
+          kind: 'wrapper-loop',
+          nodeIds: ['w_inner'],
+          maxIterations: 50,
+        } as WorkflowNode,
+      ],
+    }
+    expect(serializeScriptSensitiveProjectionV1(nested)).not.toBe(
+      serializeScriptSensitiveProjectionV1(base),
+    )
+  })
+
+  test('changing a containing loop’s exit condition is a gated change', () => {
+    const withExit: WorkflowDefinition = {
+      ...base,
+      nodes: [
+        script,
+        { ...(inner as object), exitCondition: { kind: 'port-empty' } } as WorkflowNode,
+      ],
+    }
+    const flipped: WorkflowDefinition = {
+      ...base,
+      nodes: [
+        script,
+        {
+          ...(inner as object),
+          exitCondition: { kind: 'port-equals', value: 'never' },
+        } as unknown as WorkflowNode,
+      ],
+    }
+    expect(serializeScriptSensitiveProjectionV1(flipped)).not.toBe(
+      serializeScriptSensitiveProjectionV1(withExit),
+    )
+  })
+
+  test('a cyclic containment graph terminates instead of hanging', () => {
+    const cyclic: WorkflowDefinition = {
+      ...base,
+      nodes: [
+        script,
+        { id: 'a', kind: 'wrapper-loop', nodeIds: ['s1', 'b'] } as WorkflowNode,
+        { id: 'b', kind: 'wrapper-loop', nodeIds: ['a'] } as WorkflowNode,
+      ],
+    }
+    expect(typeof serializeScriptSensitiveProjectionV1(cyclic)).toBe('string')
+  })
+})
+
+// Implementation-gate 4.3: the runtime reserved table is the second line for
+// variables that load code before the script's first statement. It had none.
+describe('reserved env keys cover the pre-execution load surface', () => {
+  test('dynamic loader families are refused at runtime, not only at save time', () => {
+    for (const key of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES']) {
+      expect(scriptReservedEnvKeyIssue(key)).not.toBeNull()
+    }
+  })
+
+  test('shell startup files are refused', () => {
+    expect(scriptReservedEnvKeyIssue('BASH_ENV')).not.toBeNull()
+    expect(scriptReservedEnvKeyIssue('ENV')).not.toBeNull()
+  })
+})
+
+// Implementation-gate Codex 7 (2026-08-04): "exact pin" accepted specs that pin
+// nothing. AC-19b's whole argument is that a cold cache resolves at install
+// time, so `requests==2.*` would install different bytes on different days
+// while presenting as authorized.
+describe('exact pins must actually be exact', () => {
+  test('wildcard and partial versions are refused', () => {
+    for (const [lang, spec] of [
+      ['python', 'requests==2.*'],
+      ['python', 'requests==2'],
+      ['node', 'lodash@4'],
+      ['node', 'lodash@4.17'],
+    ] as const) {
+      expect(scriptDependencyIssue(lang, spec)).not.toBeNull()
+    }
+  })
+
+  test('full releases still pass, including pre-release and local suffixes', () => {
+    expect(scriptDependencyIssue('python', 'requests==2.32.3')).toBeNull()
+    expect(scriptDependencyIssue('python', 'torch==2.3.0+cpu')).toBeNull()
+    expect(scriptDependencyIssue('node', 'lodash@4.17.21')).toBeNull()
+    expect(scriptDependencyIssue('node', '@scope/pkg@1.2.3-beta.1')).toBeNull()
+  })
+})

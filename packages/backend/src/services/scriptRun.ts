@@ -46,6 +46,9 @@ const INTERPRETER_SPEC: Record<
   node: { binary: 'node', ext: 'mjs', argv: (bin, s) => [bin, s] },
 }
 
+/** Deadline for the one-shot `--version` probe (impl-gate 3.4). */
+export const INTERPRETER_PROBE_TIMEOUT_MS = 10_000
+
 export interface ResolvedInterpreter {
   path: string
   /** `--version` output, first line, trimmed. Participates in the deps env key. */
@@ -70,11 +73,24 @@ export async function resolveScriptInterpreter(
   if (!existsSync(path)) return null
   try {
     const proc = Bun.spawn({ cmd: [path, '--version'], stdout: 'pipe', stderr: 'pipe' })
+    // impl-gate 3.4: this runs BEFORE the scheduler's concurrency permit and had
+    // no deadline, so an administrator override pointing at anything that waits
+    // for input (an interactive wrapper, a shim that prompts) wedged the node's
+    // dispatch forever and did so outside every concurrency bound.
+    const deadline = setTimeout(() => {
+      try {
+        proc.kill(9)
+      } catch {
+        // Already gone.
+      }
+    }, INTERPRETER_PROBE_TIMEOUT_MS)
+    deadline.unref()
     const [out, err] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
     ])
     await proc.exited
+    clearTimeout(deadline)
     // python2 and some bash builds print the version on stderr.
     const version = (out.trim().length > 0 ? out : err).split('\n')[0]?.trim() ?? ''
     return { path, version }
@@ -304,6 +320,10 @@ export function classifyScriptOutcome(result: ContainedSpawnResult): ScriptFailu
       // A cancel is not a failure of the script; the caller writes `canceled`.
       return null
     case 'child-unkillable':
+      // impl-gate (Codex 6): a surviving descendant holding the pipes open is
+      // never a success, even when the parent exited 0 — output may be
+      // truncated and something is still running in the worktree.
+      return 'script-spawn-failed'
     case 'exited':
       return result.exitCode === 0 ? null : 'script-nonzero-exit'
   }

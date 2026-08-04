@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   buildRunSandboxCtx,
+  CONTAINMENT_REQUIREMENT_PROFILES,
   ContainmentAdmissionAborted,
   ContainmentAdmissionError,
   ContainmentCoordinator,
@@ -386,5 +387,55 @@ describe('RFC-253 fail-closed profiles under a mode that applies nothing', () =>
     })
     const plan = await coordinator.admit('runner-filesystem-v1')
     expect(plan.receipt.decision).toBe('off')
+  })
+})
+
+// RFC-253 implementation-gate M1 (2026-08-04).
+//
+// The first `readonly` fix only touched the RENDERER. Profile selection still
+// asked for `runner-filesystem-v1`, which is not fail-closed, so under `off` or
+// a degraded `warn` the admission succeeded, `sandboxActive()` was false, and
+// the read-only mount was never emitted — leaving a node that had ALREADY given
+// up its isolated worktree writing canonical with no boundary at all. These
+// tests go through admission rather than the renderer, which is precisely what
+// the earlier renderer-only tests could not catch.
+describe('RFC-253 readonly worktrees demand a fail-closed bundle', () => {
+  test('the readonly profile exists and is fail-closed', () => {
+    const profile = CONTAINMENT_REQUIREMENT_PROFILES['outer-readonly-v1']
+    expect(profile.failClosed).toBe(true)
+    expect(profile.required).toContain('platformHomeIsolation')
+    expect(profile.required).toContain('immutableArtifactView')
+  })
+
+  test('off blocks it, exactly like the netless bundle', async () => {
+    const coordinator = new ContainmentCoordinator({
+      provider: provider('off'),
+      qualifyBwrap: async () => '/usr/bin/bwrap',
+      qualifyBwrapFilesystem: async () => '/usr/bin/bwrap',
+      qualifyBwrapFull: async () => {},
+      bootId: 'boot-ro-off',
+      now: () => 9,
+    })
+    await expect(coordinator.admit('outer-readonly-v1')).rejects.toBeInstanceOf(
+      ContainmentAdmissionError,
+    )
+  })
+
+  test('warn with an unqualified provider blocks instead of degrading', async () => {
+    const coordinator = new ContainmentCoordinator({
+      provider: provider('warn'),
+      qualifyBwrap: async () => {
+        throw new ContainmentProviderQualificationError('provider-trial-rejected')
+      },
+      bootId: 'boot-ro-warn',
+      now: () => 9,
+    })
+    // An ordinary bundle degrades here; this one must not, because the node
+    // already traded away its isolated worktree for this boundary.
+    await expect(coordinator.admit('outer-readonly-v1')).rejects.toBeInstanceOf(
+      ContainmentAdmissionError,
+    )
+    const plain = await coordinator.admit('runner-filesystem-v1')
+    expect(plain.receipt.decision).toBe('degraded')
   })
 })
