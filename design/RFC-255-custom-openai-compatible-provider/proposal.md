@@ -14,8 +14,10 @@
   （私有 HOME/XDG + `OPENCODE_DISABLE_PROJECT_CONFIG`），受控 config 由
   `buildControlledOpencodeConfig` 从零构建且**没有 `provider` 段**
   （`packages/backend/src/services/runtime/opencode/hermetic.ts`）。
-- 因此自定义 provider 在密封子进程里**不存在**：凭据解析三通道（`OPENCODE_AUTH_CONTENT` /
-  provider 专属 env / 原生 auth.json）对自定义 id 全部落空 → plan 阶段 `auth-invalid`；
+- 因此自定义 provider 在密封子进程里**不存在**：本次故障机的 key 在机器级 opencode.json 的
+  `options.apiKey`，凭据解析三通道（`OPENCODE_AUTH_CONTENT` / provider 专属 env / 原生
+  auth.json）确实全部落空 → plan 阶段 `auth-invalid`（注意这不是普适断言——若宿主 auth.json
+  残留该 id 条目会晚至 boot 后以 `provider-untrusted` 失败，两分支语义见 design §6）；
   即便硬塞凭据，boot 后 `/config/providers` 校验（provider 存在性 + npm 白名单）与
   「baseURL 无法跨界」也会继续拦截。**受控路径现状只能使用 opencode 内置目录 provider 的
   官方端点。**
@@ -53,6 +55,20 @@
   挡死自由 npm 串——opencode 对未捆绑 npm 会**运行时从 npm 下载实现包**
   （opencode `provider/provider.ts:1765-1780`），这个面必须继续不存在。
 
+以下 D9–D13 为 **2026-08-04 设计门后修订拍板**（记档 `design-gate-2026-08-04.md`）：
+
+- **D9（P1-4）key v1 即以 secretBox 密封落盘**（复用 RFC-036 `auth/secretBox.ts`，与 OIDC
+  client_secret 同一平台密钥），config 文件补 0600；原案「明文 + 加密进 backlog」作废。
+- **D10（P1-1）新增失败码 `execution-identity-custom-provider-disabled`**：禁用态在计划面
+  显式失败，不依赖 fall-through（fall-through 会因宿主机器态产生 provider-untrusted 晚失败
+  甚至凭据错置，语义不可指认）。
+- **D11（P0-1）内置 id 冲突改双层校验**：静态快照集即时拒 + 新增/改 id 时 canary 探针。
+  依据：密封枚举在零凭据下**不含**目录 provider（设计门实测只见 `opencode/*` 免费档），
+  拿枚举结果当冲突全集无效。
+- **D12（P2-2）运行段不带显示名**：`name` 只进枚举段（picker 显示用）；改显示名不破 resume。
+- **D13（P2-8）不做 URL 归一化**：唯一性仅按 id，同 baseURL / 尾斜杠差异条目合法——
+  报告面「逐字节一致」承诺优先。
+
 ## 3. 目标
 
 1. 管理员在 Settings 配置自定义 OpenAI-compatible provider：
@@ -71,8 +87,8 @@
 - OpenAI-compatible 之外的 npm 实现（Anthropic-compatible / bedrock / vertex 等）。
 - per-user ACL 化（六类资源同款 owner/visibility/grants）。
 - OAuth / wellknown 凭据类型；网关健康检查、用量与计费。
-- at-rest 加密（与 `mcps.config.headers` 现状同姿态明文落盘；作为未决项进
-  `docs/audit-backlog.md`，与既有凭据面一起收口）。
+- 全仓既有明文凭据面（`mcps.config.headers`）的统一迁移——本 RFC 只密封**自身新增面**
+  （apiKey secretBox v1 即做，D9）；迁移项挂 `docs/audit-backlog.md`（T9）。
 - claude-code 驱动路径（本 RFC 只覆盖 opencode 驱动）。
 
 ## 5. 用户故事
@@ -86,20 +102,26 @@
 
 ## 6. 验收标准
 
-- **AC-1 配置 CRUD**：PUT /api/config 校验——id 正则 `^[a-z0-9][a-z0-9._-]*$`、互相唯一、
-  不得与密封枚举出的内置目录 provider id 冲突；baseURL 为 http(s) 绝对 URL、无 `${`、无
-  NUL；模型清单非空、id 去重非空；key 非空无 NUL。违规返回结构化 ValidationError。
-- **AC-2 掩码语义**：GET 返回固定掩码串；PUT 收到掩码串或省略 key 字段 → 保留存量值；
-  收到新串 → 替换。读-改-写回环不会把 key 覆盖成掩码。
+- **AC-1 配置 CRUD**：PUT /api/config 校验——id 正则 `^[a-z0-9][a-z0-9._-]*$`、互相唯一
+  （**仅按 id**，同 baseURL / 尾斜杠差异条目合法、不做 URL 归一化，D13）、不得命中内置
+  目录 id（**双层**：静态快照集即时拒 + 新增/改 id 时 canary 探针，D11）；baseURL 为
+  http(s) 绝对 URL、无 `${`、无 NUL；模型清单非空、id 去重非空；**新条目 / 改 id 必须携带
+  真 key**（掩码串不得作为新值，语义门拒收）。违规返回结构化 ValidationError。
+- **AC-2 掩码语义**：**任何 /api/config 响应（GET 与 PUT 响应）与 CLI `config get` 输出**
+  一律掩码；`config set` 与路由共用同一语义门（无旁路）。省略 / 掩码 → 保留存量；新串 →
+  secretBox 密封替换（D9，磁盘不存明文）。读-改-写回环不丢 key。
 - **AC-3 模型枚举**：enabled 条目的模型出现在 listModels；禁用后消失；枚举缓存键随
   customProviders 投影摘要变化；枚举 env / 注入 config 中无 key（文本断言级锁）。
 - **AC-4 受控运行**：选中自定义模型的业务节点端到端跑通；system plan 与 MCP-test plan
   不回归且同样可选自定义模型。
 - **AC-5 准入校验**：报告的 provider `source === 'config'`、`model.api.npm` 与
   `model.api.url` 与准入值逐字节一致、报告模型键集 ⊆ 准入清单，否则
-  `execution-identity-provider-untrusted`。
-- **AC-6 身份语义**：key 轮换后 resume 成功；baseURL / 模型清单变更后 resume 拒绝。
-- **AC-7 失败路径**：禁用 / 删除后发起 → 既有失败码语义（design §6），i18n hint 补充自定义
-  provider 检查指引；保存冲突 / 校验失败给出可指认错误码（中英双语）。
+  `execution-identity-provider-untrusted`。**⊆ 检查为不可放宽的安全锁**（P0-1 次生面）。
+- **AC-6 身份语义**：key 轮换后 resume 成功；修改显示名 `name` 后 resume 成功（D12）；
+  baseURL / 模型清单变更后 resume 拒绝。
+- **AC-7 失败路径**：禁用后发起 → 新码 `execution-identity-custom-provider-disabled`
+  （D10，闭集 + 双语 + 棘轮测试全套同步）；删除后发起 → design §6 两分支语义，
+  `provider-untrusted` 的 i18n hint 增补自定义 provider 指引；保存校验失败给出可指认
+  错误码（中英双语）。
 - **AC-8 文档**：`docs/OPENCODE_CONFIG.md` 契约段落更新；`docs/audit-backlog.md` 增补
   at-rest 加密未决项。
