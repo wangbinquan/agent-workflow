@@ -103,17 +103,23 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 > 属能力面/机制改动——**改前须走设计门 + 改后重跑 identity/containment 资格套件**；本两条
 > 是设计门的输入，不得边写边改。触点已 turnkey 测绘（见各条与 `docs/audit-backlog.md`）。
 
-- **T39 · verified-path 快照可执行性（Windows）**——`snapshotRuntimeBinary` 把源二进制
-  copy 成无扩展名副本再执行，Windows 上不可执行 ⇒ opencode/claude verified launch 与
-  `--version` 探测在 Windows 全挂（rfc135 8 条、runtime-smoke 一部分、verified 链路整片）。
-  正解：win32 快照保留源扩展名（`.exe`/`.cmd`，须 resolve 后取）并返回实际路径。**打破的
-  不变量**「snapshot 落在传入确切路径上」贯穿 6+ 处，必须一起放宽（不得在调用方预算绕开）：
-  `binarySnapshot.ts`（copy/chmod/verify/unlink/return + `effectiveSnapshotPath` 提外层）、
-  `withRuntimeBinarySnapshot`、**`verifiedPlanCore.ts:104` FATAL 守卫**、`verifiedPlan.ts:215`
-  toolchain 守卫、`claudeCode/driver.ts:159/:247`、`verifiedSystemPlan`/`verifiedMcpTestPlan`/
-  `mcpTestExecutionMaterial.ts:179`。digest 是字节哈希、不含文件名，故信任边界不动（这是
-  能力**恢复**而非收缩，RFC-224 事故沉淀的收缩门不适用；但机制改动的资格套件门适用）。
-  试改已完成并回滚（证实触点清单准确），未入库。
+- **T39 · verified-path 快照可执行性（Windows）· 扩展名部分已入库（2026-08-06），Windows
+  仍待 T40**——`snapshotRuntimeBinary` 把源二进制 copy 成副本再执行，win32 上一个无扩展名
+  副本不可执行。**已修**：抽出纯函数 `snapshotExecutableExtension(snapshotPath,
+resolvedSource, platform)`——win32 且调用方路径未带源扩展名时追加，否则 ''；POSIX 恒 ''
+  （严格 no-op）。**关键订正**：不变量并非「6+ 处都要放宽」——verified opencode/system/mcp
+  路径**早已**用 `EXECUTABLE_SUFFIX_FOR_HOST` 预置 `.exe`，所以 `endsWith` 判据让它们**不
+  追加**、`snapshotPath === input.binaryPath` 守卫**原样通过**、`verifiedPlanCore.ts` /
+  `verifiedPlan.ts` / `verifiedSystemPlan` / `verifiedMcpTestPlan` **一处不用改**。实际改动
+  面收敛到 4 处：`binarySnapshot.ts`（helper + `effectiveSnapshotPath`）、
+  `withRuntimeBinarySnapshot`（用 `identity.snapshotPath`）、`claudeCode/driver.ts` ×2
+  （`claude-sealed` 无预置后缀，改用 `identity.snapshotPath`）、fixture helper
+  `runtimeOpencodeFixture.ts`。digest 是字节哈希、不含文件名，信任边界不动。纯函数 6 例单测
+  （双平台注入 + 防双后缀 + 源派生），RFC-224/227 资格套件 116/0，POSIX 全量 no-op。
+  **但 rfc135 在 Windows 上仍红**：实测证明快照**还**卡在 `binarySnapshot.ts:233` 的源
+  身份复检 `assertSameFileIdentityForHost`——即 T40 的同一 win32 file-trust 缺口
+  （`reason:'changed'`）。故 T39 是必要前置、单独入库正确，但**任何 Windows verified/probe
+  测试变绿都要等 T40**；rfc135 的 `.cmd` 夹具改动因此暂不入库（随 T40 一起）。
 - **T40 · win32 file-trust 原语**——`assertPrivateRegularFileForHost` /
   `assertSameFileIdentityForHost` 在 win32 返回 not-trusted（`util/fileTrust.ts` 明写「a
   win32 implementation is a separate task」，即 T0d 的显式延期），`storeHygiene.ts` 全程

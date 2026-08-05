@@ -215,10 +215,17 @@ describe('RFC-224 verified OpenCode source reachability', () => {
     // RFC-237: the snapshot-then-verify-then-execute discipline lives in the
     // runtime-neutral module now; the opencode file keeps the legacy names as
     // aliases and delegates its diagnostic helper to the shared one.
+    // RFC-254 T39: withRuntimeBinarySnapshot now verifies + executes the path
+    // the snapshot ACTUALLY wrote (`identity.snapshotPath`) — on win32 that
+    // carries the source extension so the copy is runnable; on POSIX it is
+    // === snapshotPath. The snapshot-then-verify-then-execute discipline this
+    // lock exists for is unchanged; only the variable it threads did.
     const binarySnapshot = source('services/runtime/binarySnapshot.ts')
-    expect(binarySnapshot).toContain('await snapshotRuntimeBinary({ command, snapshotPath })')
-    expect(binarySnapshot).toContain('await verifyRuntimeBinarySnapshot(snapshotPath')
-    expect(binarySnapshot).toContain('return await callback(snapshotPath, identity)')
+    expect(binarySnapshot).toContain(
+      'const identity = await snapshotRuntimeBinary({ command, snapshotPath })',
+    )
+    expect(binarySnapshot).toContain('await verifyRuntimeBinarySnapshot(identity.snapshotPath')
+    expect(binarySnapshot).toContain('return await callback(identity.snapshotPath, identity)')
     const runtimeBinary = source('services/runtime/opencode/runtimeBinary.ts')
     expect(runtimeBinary).toContain('snapshotRuntimeBinary as snapshotRuntimeOpencodeBinary')
     expect(runtimeBinary).toContain("withRuntimeBinarySnapshot(command, callback, 'opencode')")

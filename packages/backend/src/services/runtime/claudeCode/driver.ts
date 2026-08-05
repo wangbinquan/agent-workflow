@@ -160,10 +160,13 @@ export const claudeCodeDriver: RuntimeDriver = {
         command: sourceHead ?? ['claude'],
         snapshotPath: sealPath,
       })
-      claudeCmd = [sealPath]
+      // RFC-254 T39: execute the path the snapshot ACTUALLY wrote — on win32 it
+      // carries the resolved source extension so the copy is runnable; on POSIX
+      // it is === sealPath.
+      claudeCmd = [identity.snapshotPath]
       // Design-gate P1-3: re-verify at the spawn boundary (systemAgentRun
       // awaits this immediately before Bun.spawn).
-      preSpawnVerify = () => verifyRuntimeBinarySnapshot(sealPath, identity.digest)
+      preSpawnVerify = () => verifyRuntimeBinarySnapshot(identity.snapshotPath, identity.digest)
     }
     // Design-gate P1-1 — bridge decision internalized for the declared-control
     // branch (same shape as buildBusinessSpawn: absent test seam = real run →
@@ -248,8 +251,10 @@ export const claudeCodeDriver: RuntimeDriver = {
         command: businessHead ?? ['claude'],
         snapshotPath: sealPath,
       })
-      sealedHead = [sealPath]
-      preSpawnChecks.push(() => verifyRuntimeBinarySnapshot(sealPath, identity.digest))
+      // RFC-254 T39: win32 snapshot carries the resolved source extension; run
+      // and re-verify the path actually written (POSIX === sealPath).
+      sealedHead = [identity.snapshotPath]
+      preSpawnChecks.push(() => verifyRuntimeBinarySnapshot(identity.snapshotPath, identity.digest))
     }
     // RFC-242 T5 — fence the model's local MCP children: claude is told to fork
     // the platform's 0500 wrapper, which re-enters this binary and applies the

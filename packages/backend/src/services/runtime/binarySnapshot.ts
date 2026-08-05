@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto'
 import { constants, createReadStream, mkdtempSync, rmSync, type Stats } from 'node:fs'
 import { chmod, copyFile, lstat, mkdir, realpath, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, extname, isAbsolute, join } from 'node:path'
 import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 export const RUNTIME_BINARY_SNAPSHOT_ERROR_CODE = 'execution-identity-untrusted-binary' as const
@@ -86,6 +86,35 @@ function executableFile(metadata: Stats, platform = process.platform): boolean {
   return metadata.isFile() && (platform === 'win32' || (metadata.mode & 0o111) !== 0)
 }
 
+/**
+ * RFC-254 T39 — the executable extension a byte-frozen snapshot copy must carry
+ * so the OS will run it, given where the caller asked the copy to land
+ * (`snapshotPath`) and the realpath-resolved source it is copied from.
+ *
+ * Pure so both platform branches are exercised on any host. Rules:
+ *   - POSIX: always '' (an extension is not what makes a file executable there;
+ *     the 0500 mode is). Strict no-op vs. the pre-T39 behaviour.
+ *   - win32, caller path already ends with the source extension: '' — the
+ *     verified opencode/mcp/system paths pre-suffix via EXECUTABLE_SUFFIX_FOR_HOST
+ *     (`opencode.exe`), and appending again would both double the suffix and
+ *     break the `snapshotPath === input.binaryPath` admission guard.
+ *   - win32, caller path lacks it (`claude-sealed`, the rfc135 fixture's
+ *     `opencode`): the resolved source extension, so the inert extensionless
+ *     copy becomes runnable.
+ * The extension is derived from the RESOLVED source, never caller/attacker
+ * input, so the trust boundary (the byte digest) is untouched.
+ */
+export function snapshotExecutableExtension(
+  snapshotPath: string,
+  resolvedSourcePath: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (platform !== 'win32') return ''
+  const sourceExtension = extname(resolvedSourcePath)
+  if (sourceExtension === '') return ''
+  return snapshotPath.toLowerCase().endsWith(sourceExtension.toLowerCase()) ? '' : sourceExtension
+}
+
 function failureFor(error: unknown): RuntimeBinarySnapshotFailureReason {
   if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
     return 'not-found'
@@ -154,6 +183,10 @@ export async function snapshotRuntimeBinary(
 ): Promise<RuntimeBinaryIdentity & { snapshotPath: string }> {
   const deps = { ...DEFAULT_DEPENDENCIES, ...dependencies }
   let copied = false
+  // Hoisted so the catch's cleanup unlinks the SAME path the copy wrote. On
+  // POSIX this stays === options.snapshotPath (extension is ''); on win32 it may
+  // carry the resolved source extension so the copy is executable — see below.
+  let effectiveSnapshotPath = options.snapshotPath
   try {
     if (!isAbsolute(options.snapshotPath)) return fail()
     if (options.expectedDigest !== undefined && !isSha256Digest(options.expectedDigest)) {
@@ -179,10 +212,19 @@ export async function snapshotRuntimeBinary(
       return fail()
     }
 
-    await deps.copyFile(inspected.resolvedPath, options.snapshotPath, constants.COPYFILE_EXCL)
+    // RFC-254 T39: a byte-frozen COPY must be OS-executable; on win32 that needs
+    // a recognized extension, which some callers' snapshot basenames lack. See
+    // `snapshotExecutableExtension` for the full rule (POSIX no-op; win32 append
+    // only when absent, so the pre-suffixed verified opencode path is untouched).
+    effectiveSnapshotPath = `${options.snapshotPath}${snapshotExecutableExtension(
+      options.snapshotPath,
+      inspected.resolvedPath,
+    )}`
+
+    await deps.copyFile(inspected.resolvedPath, effectiveSnapshotPath, constants.COPYFILE_EXCL)
     copied = true
-    if (process.platform !== 'win32') await deps.chmod(options.snapshotPath, 0o500)
-    await verifyRuntimeBinarySnapshot(options.snapshotPath, inspected.digest, deps)
+    if (process.platform !== 'win32') await deps.chmod(effectiveSnapshotPath, 0o500)
+    await verifyRuntimeBinarySnapshot(effectiveSnapshotPath, inspected.digest, deps)
     const sourceAfter = await deps.lstat(inspected.resolvedPath)
     const sourceDigestAfter = await deps.hashFile(inspected.resolvedPath)
     if (
@@ -196,11 +238,11 @@ export async function snapshotRuntimeBinary(
     ) {
       return fail('changed')
     }
-    return { ...inspected, snapshotPath: options.snapshotPath }
+    return { ...inspected, snapshotPath: effectiveSnapshotPath }
   } catch (error) {
     if (copied) {
       try {
-        await deps.unlink(options.snapshotPath)
+        await deps.unlink(effectiveSnapshotPath)
       } catch {
         // Rejected bytes are never returned or executed.
       }
@@ -246,9 +288,12 @@ export async function withRuntimeBinarySnapshot<T>(
   const root = mkdtempSync(join(tmpdir(), 'aw-runtime-binary-'))
   const snapshotPath = join(root, snapshotBasename)
   try {
+    // RFC-254 T39: snapshotRuntimeBinary may append a resolved source extension
+    // on win32 so the copy is executable — use the path it ACTUALLY wrote for
+    // verify + the callback, not the pre-extension basename. POSIX no-op.
     const identity = await snapshotRuntimeBinary({ command, snapshotPath })
-    await verifyRuntimeBinarySnapshot(snapshotPath, identity.digest)
-    return await callback(snapshotPath, identity)
+    await verifyRuntimeBinarySnapshot(identity.snapshotPath, identity.digest)
+    return await callback(identity.snapshotPath, identity)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

@@ -19,8 +19,12 @@ export async function withFixtureOpencodeSnapshot<T>(
   const root = mkdtempSync(join(tmpdir(), 'aw-opencode-fixture-snapshot-'))
   const snapshotPath = join(root, 'opencode')
   try {
-    await snapshotRuntimeOpencodeBinary({ command, snapshotPath })
-    return await callback(snapshotPath)
+    // RFC-254 T39: the snapshot may carry a source extension on win32 (an
+    // extensionless copy of `opencode.exe`/`.cmd` is inert there) — execute the
+    // path it ACTUALLY wrote, mirroring production's withRuntimeBinarySnapshot.
+    // POSIX no-op (identity.snapshotPath === snapshotPath).
+    const identity = await snapshotRuntimeOpencodeBinary({ command, snapshotPath })
+    return await callback(identity.snapshotPath)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
