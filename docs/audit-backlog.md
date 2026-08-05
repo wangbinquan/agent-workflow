@@ -530,7 +530,25 @@ RFC-254 交付的是「Windows 上跑得起来且如实呈现」，下面四条�
 - 复现：`bunx playwright test e2e/focus-ring-clip.spec.ts`，失败信息直接列出每个
   被裁剪元素的选择器与祖先 overflow 链。
 
-## `rfc250-workflow-camera` 桌面复杂工作流用例（并发画布改动引入，2026-08-04）
+## `rfc250-workflow-camera` 三条用例（并发画布改动引入，2026-08-04；2026-08-05 补根因）
+
+**根因已查清，但修法需要画布作者的设计意图**：该 spec 断言在 `topology` 缩放档下
+节点标题**不可见**。查证结果——
+
+- `data-zoom-band='topology'` 属性本身是对的（那条断言通过）；
+- 但 `styles.css` 里**从来没有**过「topology 档隐藏 `.canvas-node__title`」的规则
+  （`git log -S` 全历史为空），画布组件里也没有按 band 的条件渲染；
+- 所以这条断言依赖的是**几何效应**：缩到那么小的时候标题的包围盒塌成 0×0，
+  Playwright 因而判定「不可见」。
+
+也就是说，画布改动里有什么让标题在该缩放下**仍然可测量**（例如某个 min 尺寸、或
+把 inverse-zoom 的 marker scale 施加到了文字上）。要恢复是让它继续塌陷、还是补一条
+显式的 LOD 规则（更稳但改变了现有实现路径），是**设计选择**——不该由旁人猜。
+
+- ⏳ **(P1) 归画布作者**。三条同源：只修/排掉第一条会把第二条顶上来（POSIX 实测：
+  排掉 `:823` 后 `:831` 当场变红）。
+
+## （原条目）
 
 `e2e/rfc250-workflow-camera.spec.ts:823` 在 `6e9e1450` 上**通过**、在当前 main 上
 失败，区间内只有画布 / 样式面的并发改动（`75fc8cdd fix(frontend): improve workflow
