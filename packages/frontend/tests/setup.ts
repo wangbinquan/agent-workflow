@@ -94,7 +94,18 @@ function restoreBrowserShell(snapshot: BrowserShellSnapshot): void {
 // window is not defined" inside react-dom's scheduler. Draining one
 // macrotask + microtask cycle after each test gives React a chance to finish.
 import { afterEach, beforeEach, vi } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
+
+// RFC-254: Testing Library's `findBy*` / `waitFor` default to a 1000ms retry
+// window. On the windows-latest CI runner an async fetch → re-render (e.g. a
+// child-page auto-expand, a Select popover opening) legitimately outlasts that,
+// so `findByTestId`/`findByRole` throw "Unable to find element" even though the
+// element does appear a beat later (tasks-list-children + mcps-split-page hit
+// this). This is the retry CEILING, not the expected latency: a correct query
+// still resolves on the first poll everywhere, and a query for a truly-absent
+// element still fails — just after a longer wait. Kept well under the 20000ms
+// testTimeout so an exhausted findBy reports as itself, not as a test timeout.
+configure({ asyncUtilTimeout: 5000 })
 import {
   installUnexpectedNetworkGuard,
   resetUnexpectedNetworkRequests,
