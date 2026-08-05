@@ -136,7 +136,7 @@ resolvedSource, platform)`——win32 且调用方路径未带源扩展名时追
   隐私检查（batch 09 rfc224 store-hygiene 簇）在 Windows 仍红的根因。**注意** ARM64 Bun 禁用
   TinyCC ⇒ `bun:ffi dlopen()` 不可用（见 STATE），须带 dlopen 不可用时的诚实降级（要么改用
   per-user appHome 目录 ACL 继承——`controlListener.ts` 已如此依赖——要么 fail-closed 明示）。
-  工作量最大、需独立研究 + 设计门。
+  工作量最大、需独立研究 + 设计门。**架构决定已落 [design-T40b-win32-privacy.md](design-T40b-win32-privacy.md)**：否决 advapi32-FFI（ARM64 无 dlopen ⇒ 降级后隐私仍 fail-closed，等于没做）与逐文件 icacls（十几次 spawn + 本地化脆），**采 trust-by-construction**——建根一次用 icacls+SID 设受保护 DACL（用户+SYSTEM+Administrators，`(OI)(CI)` 继承），逐文件隐私改结构判据（普通文件 + 词法在封根内 + 非 reparse）。含真机 ACL 往返验收清单，**未过清单不得声称完成/合入**（headless 无法验证 DACL 语义）。
 
 ## AC → 测试追踪表
 
