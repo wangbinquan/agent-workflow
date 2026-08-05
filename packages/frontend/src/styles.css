@@ -6958,6 +6958,19 @@ details.form-section[open] > summary {
   transform: translate(50%, -50%);
 }
 
+/* RFC-250 level-of-detail, made EXPLICIT.
+ *
+ * The topology band is defined as "shape only, no labels", and until now that
+ * held only as a geometric accident: at that zoom the title's box collapsed to
+ * 0x0 and was therefore invisible. That is not a rule, it is a coincidence —
+ * any change that keeps the text measurable (a min size, an inverse-zoom scale
+ * reaching the text) silently restores labels the band says should be gone, and
+ * the only thing that noticed was `rfc250-workflow-camera`. State the intent
+ * instead of relying on the arithmetic. */
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology'] .canvas-node__title {
+  visibility: hidden;
+}
+
 .workflow-canvas[data-surface='editor'][data-zoom-band='overview'] .canvas-node__validation,
 .workflow-canvas[data-surface='editor'][data-zoom-band='topology'] .canvas-node__validation {
   transform: scale(var(--workflow-canvas-marker-scale));
