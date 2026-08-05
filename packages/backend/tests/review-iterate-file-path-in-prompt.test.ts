@@ -19,7 +19,7 @@
 // the source_file_path column.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -72,7 +72,7 @@ function startTaskWithLocalRepo(
 interface Harness {
   db: DbClient
   appHome: string
-  stubOpencode: string
+  stubOpencode: string[]
   taskId: string
   reviewNodeRunId: string
   sourcePath: string
@@ -88,43 +88,41 @@ let runIdx = 0
 // Stub-opencode that, on each `run`, writes the design body into the task
 // worktree (cwd) at SOURCE_PATH and emits an envelope whose `design` port
 // content is the relative path — i.e. the markdown_file kind contract.
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const v1 = REVIEW_DOC_V1.replace(/\n/g, '\\n')
-  const v2 = REVIEW_DOC_V2.replace(/\n/g, '\\n')
+//
+// RFC-254 T32: a COMMAND ARRAY (`[bun, script.ts]`), not a fake executable —
+// the `#!/usr/bin/env bash` form cannot run on Windows (EFTYPE) and every
+// flow test here died looking like a scheduler defect. Same seam-change as
+// review-state-machine; see that file's stub for the full rationale.
+function makeStubOpencode(dir: string): string[] {
+  const path = join(dir, 'stub-opencode.ts')
   const counterFile = join(dir, '.invoke-counter')
   writeFileSync(counterFile, '0')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then
-  echo 'stub-opencode 1.14.99'
-  exit 0
-fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  COUNTER_FILE='${counterFile}'
-  N=$(cat "$COUNTER_FILE")
-  N=$((N + 1))
-  echo $N > "$COUNTER_FILE"
-  if [[ $N -eq 1 ]]; then
-    BODY='${v1}'
-  else
-    BODY='${v2}'
-  fi
-  mkdir -p "$(dirname "${SOURCE_PATH}")"
-  printf '%b' "$BODY" > '${SOURCE_PATH}'
-  ENV="$OPEN"'<port name="design">${SOURCE_PATH}</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-echo "unknown subcommand $1"
-exit 1
+  const script = `import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+const argv = Bun.argv.slice(2)
+if (argv[0] === '--version') {
+  console.log('stub-opencode 1.14.99')
+  process.exit(0)
+}
+if (argv[0] === 'run') {
+  const nonce = /nonce="([^"]*)"/.exec(argv.join('\\n'))?.[1] ?? ''
+  const open = nonce.length > 0 ? \`<workflow-output nonce="\${nonce}">\` : '<workflow-output>'
+  const counterFile = ${JSON.stringify(counterFile)}
+  const n = Number(readFileSync(counterFile, 'utf8').trim()) + 1
+  writeFileSync(counterFile, String(n))
+  const body = n === 1 ? ${JSON.stringify(REVIEW_DOC_V1)} : ${JSON.stringify(REVIEW_DOC_V2)}
+  const sourcePath = join(process.cwd(), ${JSON.stringify(SOURCE_PATH)})
+  mkdirSync(dirname(sourcePath), { recursive: true })
+  writeFileSync(sourcePath, body)
+  const text = \`\${open}<port name="design">${SOURCE_PATH}</port></workflow-output>\`
+  console.log(JSON.stringify({ type: 'text', ts: Math.floor(Date.now() / 1000), text }))
+  process.exit(0)
+}
+console.log(\`unknown subcommand \${argv[0]}\`)
+process.exit(1)
 `
   writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+  return [process.execPath, path]
 }
 
 async function buildHarness(): Promise<Harness> {
@@ -211,7 +209,7 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
   )
 
   const reviewRuns = await db
@@ -335,7 +333,7 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: [h.stubOpencode],
+      opencodeCmd: h.stubOpencode,
     })
 
     const designerRuns = await h.db

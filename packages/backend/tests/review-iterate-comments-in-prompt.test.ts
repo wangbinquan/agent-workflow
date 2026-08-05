@@ -21,7 +21,7 @@
 //     call before runNode in BOTH the agent-single and agent-multi paths).
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -29,6 +29,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -74,7 +75,7 @@ function startTaskWithLocalRepo(
 interface Harness {
   db: DbClient
   appHome: string
-  stubOpencode: string
+  stubOpencode: string[]
   taskId: string
   reviewNodeRunId: string
   cleanup: () => Promise<void>
@@ -86,44 +87,11 @@ const REVIEW_DOC_V2 =
 
 let runIdx = 0
 
-function makeStubOpencode(dir: string): string {
-  // First call → v1 markdown; later calls → v2. Same shape as the
-  // review-state-machine harness (kept independent so this regression can be
-  // run + understood in isolation).
-  const path = join(dir, 'stub-opencode.sh')
-  const v1 = REVIEW_DOC_V1.replace(/\n/g, '\\n')
-  const v2 = REVIEW_DOC_V2.replace(/\n/g, '\\n')
-  const counterFile = join(dir, '.invoke-counter')
-  writeFileSync(counterFile, '0')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then
-  echo 'stub-opencode 1.14.99'
-  exit 0
-fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  COUNTER_FILE='${counterFile}'
-  N=$(cat "$COUNTER_FILE")
-  N=$((N + 1))
-  echo $N > "$COUNTER_FILE"
-  if [[ $N -eq 1 ]]; then
-    BODY='${v1}'
-  else
-    BODY='${v2}'
-  fi
-  ENV="$OPEN"'<port name="design">'"$BODY"'</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-echo "unknown subcommand $1"
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+// RFC-254 T32: shared command-array stub (see fixtures/versionedStubOpencode.ts
+// for why the bash fake binary had to go — Windows EFTYPE killed every flow
+// test here with a message that pointed at the scheduler).
+function makeStubOpencode(dir: string): string[] {
+  return makeVersionedStubOpencode(dir, { v1: REVIEW_DOC_V1, v2: REVIEW_DOC_V2 })
 }
 
 async function buildHarness(): Promise<Harness> {
@@ -209,7 +177,7 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
   )
 
   const reviewRuns = await db
@@ -289,7 +257,7 @@ describe('RFC-005 review iterate — comments reach the upstream re-run prompt',
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: [h.stubOpencode],
+      opencodeCmd: h.stubOpencode,
     })
 
     const designerRuns = await h.db

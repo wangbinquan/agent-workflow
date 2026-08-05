@@ -14,7 +14,7 @@
 //     rfc223-owner-transfer.test.ts
 
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
@@ -123,26 +123,32 @@ async function waitForTaskTerminal(db: DbClient, taskId: string): Promise<string
   throw new Error(`task '${taskId}' did not become terminal`)
 }
 
-function makeClarifyStub(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const clarifyBody =
-    '{\\"questions\\":[{\\"id\\":\\"q1\\",\\"title\\":\\"Proceed?\\",\\"kind\\":\\"single\\",\\"options\\":[{\\"label\\":\\"yes\\"},{\\"label\\":\\"no\\"}]}]}</workflow-clarify>'
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s\\n' "$@" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-clarify>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-clarify nonce=\\"'"$NONCE"'\\">'; fi
-  ENV="$OPEN"'${clarifyBody}'
-  TS=$(date +%s)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+// RFC-254 T32: a COMMAND ARRAY (`[bun, script.ts]`), not a fake executable —
+// same clarify-stub shape as fusion-engine.test.ts and the same reason: a bash
+// file is not executable on Windows (EFTYPE), and this stub must PARSE argv to
+// recover the nonce, so a `.cmd` shim cannot stand in.
+function makeClarifyStub(dir: string): string[] {
+  const path = join(dir, 'stub-opencode.ts')
+  writeFileSync(
+    path,
+    `const argv = Bun.argv.slice(2)
+if (argv[0] === '--version') {
+  console.log('stub-opencode 1.14.99')
+  process.exit(0)
+}
+if (argv[0] === 'run') {
+  const nonce = /nonce="([^"]*)"/.exec(argv.join('\\n'))?.[1] ?? ''
+  const open = nonce.length > 0 ? \`<workflow-clarify nonce="\${nonce}">\` : '<workflow-clarify>'
+  const questions =
+    '{"questions":[{"id":"q1","title":"Proceed?","kind":"single","options":[{"label":"yes"},{"label":"no"}]}]}'
+  const text = \`\${open}\${questions}</workflow-clarify>\`
+  console.log(JSON.stringify({ type: 'text', ts: Math.floor(Date.now() / 1000), text }))
+  process.exit(0)
+}
+process.exit(1)
+`,
+  )
+  return [process.execPath, path]
 }
 
 function approvedGlobalMemory(db: DbClient, title: string): string {
@@ -305,7 +311,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     const deps: FusionDeps = {
       db,
       appHome,
-      opencodeCmd: [makeClarifyStub(root)],
+      opencodeCmd: makeClarifyStub(root),
       awaitScheduler: true,
     }
     const fsOpts: SkillFsOptions = { appHome }

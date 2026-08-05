@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
@@ -19,6 +19,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { taskRepos, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { createWorkflow } from '../src/services/workflow'
 import {
   abortAllActiveTasks,
@@ -86,27 +87,14 @@ interface Harness {
   appHome: string
   repoPath: string
   db: DbClient
-  stubOpencode: string
+  stubOpencode: string[]
   wfId: string
 }
 
-function makeStub(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  ENV="$OPEN"'<port name="out">ok</port></workflow-output>'
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$(date +%s%3N)" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+// RFC-254 T32: shared command-array stub (see fixtures/versionedStubOpencode.ts
+// for why the bash fake binary had to go — Windows EFTYPE).
+function makeStub(dir: string): string[] {
+  return makeVersionedStubOpencode(dir, { v1: 'ok', port: 'out' })
 }
 
 async function setup(): Promise<Harness> {
@@ -187,7 +175,7 @@ describe('RFC-075 — startTask working branch', () => {
         inputs: { topic: 't' },
         ...extra,
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: h.stubOpencode, awaitScheduler: true },
     )
   }
 

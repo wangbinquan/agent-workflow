@@ -33,7 +33,7 @@
 // in runner.ts.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -87,7 +87,7 @@ function startTaskWithLocalRepo(
 interface Harness {
   db: DbClient
   appHome: string
-  stubOpencode: string
+  stubOpencode: string[]
   taskId: string
   designerDoneRunId: string
   reviewNodeRunId: string
@@ -99,49 +99,45 @@ const DESIGN_BODY_V2 = '# Design v2\n\nKept Postgres, addressed reviewer comment
 
 let runIdx = 0
 
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const v1 = DESIGN_BODY_V1.replace(/\n/g, '\\n')
-  const v2 = DESIGN_BODY_V2.replace(/\n/g, '\\n')
+// RFC-254 T32: a COMMAND ARRAY (`[bun, script.ts]`) instead of a bash fake
+// binary — Windows EFTYPE killed every flow here (see
+// fixtures/versionedStubOpencode.ts for the family rationale). This variant is
+// deliberately NOT the shared fixture: call 1 answers on the CLARIFY channel
+// (RFC-100 mandatory ask-back), calls 2+ answer on the output channel, which
+// is the sequencing this regression exists to exercise.
+function makeStubOpencode(dir: string): string[] {
+  const path = join(dir, 'stub-opencode.ts')
   const counterFile = join(dir, '.invoke-counter')
   writeFileSync(counterFile, '0')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then
-  echo 'stub-opencode 1.14.99'
-  exit 0
-fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OUTPUT_OPEN='<workflow-output>'; CLARIFY_OPEN='<workflow-clarify>'
-  if [[ -n "$NONCE" ]]; then
-    OUTPUT_OPEN='<workflow-output nonce="'"$NONCE"'">'
-    CLARIFY_OPEN='<workflow-clarify nonce="'"$NONCE"'">'
-  fi
-  COUNTER_FILE='${counterFile}'
-  N=$(cat "$COUNTER_FILE")
-  N=$((N + 1))
-  echo $N > "$COUNTER_FILE"
-  if [[ $N -eq 1 ]]; then
-    # RFC-100: clarify channel ⇒ mandatory ask-back on the designer's first reply.
-    ENV="$CLARIFY_OPEN"'{"questions":[{"id":"q-db","title":"Which database?","kind":"single","options":["Postgres","MySQL"]}]}</workflow-clarify>'
-  elif [[ $N -eq 2 ]]; then
-    BODY='${v1}'
-    ENV="$OUTPUT_OPEN"'<port name="design">'"$BODY"'</port></workflow-output>'
-  else
-    BODY='${v2}'
-    ENV="$OUTPUT_OPEN"'<port name="design">'"$BODY"'</port></workflow-output>'
-  fi
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-echo "unknown subcommand $1"
-exit 1
+  const script = `import { readFileSync, writeFileSync } from 'node:fs'
+const argv = Bun.argv.slice(2)
+if (argv[0] === '--version') {
+  console.log('stub-opencode 1.14.99')
+  process.exit(0)
+}
+if (argv[0] === 'run') {
+  const nonce = /nonce="([^"]*)"/.exec(argv.join('\\n'))?.[1] ?? ''
+  const outputOpen = nonce.length > 0 ? \`<workflow-output nonce="\${nonce}">\` : '<workflow-output>'
+  const clarifyOpen = nonce.length > 0 ? \`<workflow-clarify nonce="\${nonce}">\` : '<workflow-clarify>'
+  const counterFile = ${JSON.stringify(counterFile)}
+  const n = Number(readFileSync(counterFile, 'utf8').trim()) + 1
+  writeFileSync(counterFile, String(n))
+  let text
+  if (n === 1) {
+    // RFC-100: clarify channel — mandatory ask-back on the designer's first reply.
+    text = \`\${clarifyOpen}{"questions":[{"id":"q-db","title":"Which database?","kind":"single","options":["Postgres","MySQL"]}]}</workflow-clarify>\`
+  } else {
+    const body = n === 2 ? ${JSON.stringify(DESIGN_BODY_V1)} : ${JSON.stringify(DESIGN_BODY_V2)}
+    text = \`\${outputOpen}<port name="design">\${body}</port></workflow-output>\`
+  }
+  console.log(JSON.stringify({ type: 'text', ts: Math.floor(Date.now() / 1000), text }))
+  process.exit(0)
+}
+console.log(\`unknown subcommand \${argv[0]}\`)
+process.exit(1)
 `
   writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+  return [process.execPath, path]
 }
 
 const CLARIFY_ANSWER: ClarifyAnswer = {
@@ -240,7 +236,7 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
   )
 
   // RFC-100: the designer has a clarify channel, so its FIRST reply is a
@@ -262,7 +258,7 @@ async function buildHarness(): Promise<Harness> {
     actor: { userId: 'u1', role: 'owner' },
   })
   await reenterScheduler(db, task.id)
-  await runTask({ taskId: task.id, db, appHome, opencodeCmd: [stubOpencode] })
+  await runTask({ taskId: task.id, db, appHome, opencodeCmd: stubOpencode })
 
   const designerRows = await db
     .select()
@@ -360,7 +356,7 @@ describe('review-iterate rerun drops prior clarify Q&A from the prompt', () => {
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: [h.stubOpencode],
+      opencodeCmd: h.stubOpencode,
     })
 
     const designerRuns = await h.db

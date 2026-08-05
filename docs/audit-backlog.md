@@ -1064,12 +1064,19 @@ daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环
      在其余 rfc224 文件里为零，它们的红另有根因。
   2. `review-state-machine` 15 条——A 类 `.sh` 假二进制，按 fusion 的换缝修法移植为
      `[bun, stub.ts]`，**两平台 15/15 绿**（Windows 61s）。
-     ⏳ **(P1) review 家族同形待移植还剩 12 个文件**（`grep -rln 'stub-opencode.sh'
-packages/backend/tests/`）：review-iterate ×4、reviews-iterate-mints-new-run、
-     rerun-prior-output-e2e、rfc107-url-upload-multipart、start-task-url、
-     task-start-working-branch、tasks-multipart、rfc223-pr9-cross-tenant-adversarial、
-     rfc254-stub-differential（最后这个是差分测试自身，见其文件头再定）。修法已验证
-     可复制，逐个照搬 review-state-machine 的形态即可。
+     **review 家族 A 类已全部清零（2026-08-06）**：10 个文件移植完成并在 Windows 上
+     45/45 全绿（review-iterate ×4、reviews-iterate-mints-new-run、
+     rerun-prior-output-e2e、start-task-url、task-start-working-branch、
+     tasks-multipart、rfc223-pr9-cross-tenant-adversarial）。标准 v1/v2 形态收进公共
+     夹具 `fixtures/versionedStubOpencode.ts`（支持 port 名、单/双版本、markdown_file
+     写盘）；clarify 轮次与三端口两个特殊形态按 fusion 先例内联。两条甄别记录：
+     - `rfc254-stub-differential` **无需动**——`script:` 字段只是 golden 标签，真
+       spawn 的是编译产物，文件头自证 runs on Windows too。
+     - ⏳ **(P2)** `rfc107-url-upload-multipart` **换缝不适用、已回滚**：它的 stub 走
+       runtime registry 的 `binaryPath`（必须是单个可执行文件，`validateBinaryPath`
+       会 `.trim()`）与 config.json 的 `opencodePath`，不是 `opencodeCmd` 数组。
+       Windows 修法要么给测试注入编译版 stub（同 e2e 的 dist 产物，但单测套件不依赖
+       build 产物是现行约定）、要么给 registry 加测试缝，属独立改动。
 
 - **batch 08 从来不是第三个 wedge**：拆开实测是 rfc210 submodule 簇的真 I/O
   （`rfc210-new-submodule-topology` 单文件 **194s**），720s 的批 ceiling 纯粹不够，

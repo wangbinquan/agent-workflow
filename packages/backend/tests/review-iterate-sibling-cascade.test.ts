@@ -24,7 +24,7 @@
 //   - check buildSiblingOutputsBlock for the `__sibling_outputs__` payload
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq, desc } from 'drizzle-orm'
@@ -78,32 +78,35 @@ let runIdx = 0
  * Stub opencode that emits all three markdown ports in one envelope. Same
  * payload every call; the test cares about cascade state, not body contents.
  */
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const escape = (s: string) => s.replace(/\n/g, '\\n')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then
-  echo 'stub-opencode 1.14.99'
-  exit 0
-fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  ENV='<workflow-output>'; if [[ -n "$NONCE" ]]; then ENV='<workflow-output nonce="'"$NONCE"'">'; fi
-  ENV="$ENV"'<port name="proposal">${escape(PROPOSAL_DOC)}</port>'
-  ENV="$ENV"'<port name="design">${escape(DESIGN_DOC)}</port>'
-  ENV="$ENV"'<port name="plan">${escape(PLAN_DOC)}</port>'
-  ENV="$ENV"'</workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-echo "unknown subcommand $1"
-exit 1
+// RFC-254 T32: a COMMAND ARRAY (`[bun, script.ts]`) instead of a bash fake
+// binary — Windows EFTYPE killed every flow here (family rationale in
+// fixtures/versionedStubOpencode.ts). Inline rather than the shared fixture:
+// this stub emits THREE ports in one envelope, which is the tri-review
+// topology this regression is about.
+function makeStubOpencode(dir: string): string[] {
+  const path = join(dir, 'stub-opencode.ts')
+  const script = `const argv = Bun.argv.slice(2)
+if (argv[0] === '--version') {
+  console.log('stub-opencode 1.14.99')
+  process.exit(0)
+}
+if (argv[0] === 'run') {
+  const nonce = /nonce="([^"]*)"/.exec(argv.join('\\n'))?.[1] ?? ''
+  const open = nonce.length > 0 ? \`<workflow-output nonce="\${nonce}">\` : '<workflow-output>'
+  const text =
+    open +
+    \`<port name="proposal">\` + ${JSON.stringify(PROPOSAL_DOC)} + '</port>' +
+    \`<port name="design">\` + ${JSON.stringify(DESIGN_DOC)} + '</port>' +
+    \`<port name="plan">\` + ${JSON.stringify(PLAN_DOC)} + '</port>' +
+    '</workflow-output>'
+  console.log(JSON.stringify({ type: 'text', ts: Math.floor(Date.now() / 1000), text }))
+  process.exit(0)
+}
+console.log(\`unknown subcommand \${argv[0]}\`)
+process.exit(1)
 `
   writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+  return [process.execPath, path]
 }
 
 interface Harness {
@@ -210,7 +213,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
   )
 
   const idFor = async (nodeId: string): Promise<string> => {

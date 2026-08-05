@@ -9,7 +9,7 @@
 // branch is out of lock-step with RFC-011 design §3.1.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -17,6 +17,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -74,30 +75,9 @@ const REVIEW_DOC = '# Design v1\n\nThe `order_status` enum should include partia
 
 let runIdx = 0
 
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const body = REVIEW_DOC.replace(/\n/g, '\\n')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then
-  echo 'stub-opencode 1.14.99'
-  exit 0
-fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  BODY='${body}'
-  ENV="$OPEN"'<port name="design">'"$BODY"'</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-echo "unknown subcommand $1"
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+// RFC-254 T32: shared command-array stub (see fixtures/versionedStubOpencode.ts).
+function makeStubOpencode(dir: string): string[] {
+  return makeVersionedStubOpencode(dir, { v1: REVIEW_DOC })
 }
 
 async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
@@ -202,7 +182,7 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
   )
 
   const reviewRuns = await db

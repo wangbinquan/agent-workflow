@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
@@ -17,6 +17,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { createWorkflow } from '../src/services/workflow'
 import { abortAllActiveTasks, isTaskActive, startTask as startTaskBase } from '../src/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
@@ -75,24 +76,10 @@ function startTask(
   })
 }
 
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  ENV="$OPEN"'<port name="out">hello</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+// RFC-254 T32: shared command-array stub (see fixtures/versionedStubOpencode.ts
+// for why the bash fake binary had to go — Windows EFTYPE).
+function makeStubOpencode(dir: string): string[] {
+  return makeVersionedStubOpencode(dir, { v1: 'hello', port: 'out' })
 }
 
 async function setup() {
@@ -167,7 +154,7 @@ describe('startTask URL mode (RFC-024)', () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const task = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'orders' } },
-      { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+      { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
     )
     expect(task.repoUrl).toBe(remoteUrl)
     expect(task.repoPath.startsWith(join(appHome, 'repos'))).toBe(true)
@@ -203,11 +190,11 @@ describe('startTask URL mode (RFC-024)', () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const t1 = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'a' } },
-      { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+      { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
     )
     const t2 = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'b' } },
-      { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+      { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
     )
     expect(t1.repoPath).toBe(t2.repoPath)
     expect(db.select().from(cachedRepos).all().length).toBe(1)
@@ -225,7 +212,7 @@ describe('startTask URL mode (RFC-024)', () => {
           ref: 'this-ref-does-not-exist',
           inputs: { topic: 'orders' },
         },
-        { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+        { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
       )
     } catch (e) {
       err = e

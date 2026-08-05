@@ -9,13 +9,14 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import type { Hono } from 'hono'
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
@@ -76,24 +77,10 @@ function git(...args: string[]): void {
   })
 }
 
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  ENV="$OPEN"'<port name="out">ok</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+// RFC-254 T32: shared command-array stub (see fixtures/versionedStubOpencode.ts
+// for why the bash fake binary had to go — Windows EFTYPE).
+function makeStubOpencode(dir: string): string[] {
+  return makeVersionedStubOpencode(dir, { v1: 'ok', port: 'out' })
 }
 
 interface Harness {
