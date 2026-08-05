@@ -730,8 +730,25 @@ spawn opencode failed: EFTYPE: inappropriate file type or format, uv_spawn
 `bun <script.ts> %*`，但 `%*` 过 cmd.exe 会遇到本文件上一条记录的**重新切词**问题，
 而那个提示词里带引号——需要先实测 argv 完整性再决定，不该硬上。
 
-- ⏳ **(P1) 下一步**：在 Windows 上用**真实提示词**测 `%*` 转发的 argv 完整性；
-  完整则落薄壳形态，不完整则按主语归类守起并说明。
+**薄壳方案已实测排除**（2026-08-05，Windows 11 真机）。用真实形态的提示词测
+`stub.cmd` → `bun impl.ts %*` 的 argv 完整性：
+
+```
+SENT: ["run","--print-logs","Please answer.\n<workflow-clarify nonce=\"abc123\">ok</workflow-clarify>","a & b","has \"quotes\" inside","100% done"]
+GOT : ["run","--print-logs","Please answer."]
+```
+
+提示词在**换行处被截断**，其后连同其余全部参数一起消失（`<` `>` 会被当重定向、
+`&` 当命令分隔、`%` 当变量）。所以「薄壳 `.cmd` 转发」不是可选项，不是调调引号的
+问题。
+
+- ⏳ **(P1) 剩下的路只有两条**，且第二条更可取：
+  1. 给这两条测试一个**真的 `.exe`**（回到编译产物，代价是给后端单测挂构建步骤）；
+  2. **换缝**——让测试注入一个假 runtime，而不是伪造一个可执行文件。fusion 的
+     `h.deps` 已经是注入点，若 runtime spawn 能从那里注入，这两条测试根本不需要
+     进程，也就与平台无关了。这正是 plan 里「改用别的 seam」那一项。
+- **不要**为了让它们变绿而按主语归类守起：它们测的是 fusion 的取消语义，不是 POSIX
+  机制，守起来会真丢 Windows 覆盖。
 
 ## Windows 上删不掉临时目录：EBUSY 不是「等一下就好」（RFC-254 T32，2026-08-05，未解）
 
