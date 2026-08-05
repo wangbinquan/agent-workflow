@@ -334,6 +334,22 @@ RFC-224 supervisor 冒烟驱动的是 **bwrap**（Linux 概念）且载荷是 `/
 那两条**他人负责的既有红**怎么处理（等作者修 / 暂时排除 / 接受红腿）——这是个需要
 拍板的点，不是技术障碍。
 
+## T31（e2e 链）· 完成，Windows 五条腿全绿（2026-08-05）
+
+CI run 30961487674：`build-binary (windows-latest)` 与四个 `Playwright e2e` 分片
+**全部 success**。同一 run 里仅有的两条红在 **POSIX** 腿上，正是 `focus-ring-clip`
+与 `rfc250-workflow-camera` 这两条既有问题。
+
+**只翻 e2e 这条链**（`build-binary` + `e2e`）；`test-backend` / `test-frontend` 保持
+两腿，直到后端那 386 条完成分类——先翻会让 main 对所有人变红。
+
+途中一条值得记的判断错误：**排除只排掉第一条，第二条就顶上来**。首次门禁跑出来
+shard 3 仍红，查下来 `--grep-invert` 执行正常，红的是同文件的另一条；POSIX 上实测
+确认那三条同源于一个画布缺陷，原先只是被「首条失败后同文件其余不再运行」掩盖着。
+于是两条排除做成**两种形状**——`focus-ring-clip` 按标题（一条坏六条好，实测其余全过）、
+`rfc250-workflow-camera` 按文件（三条同源，如实计为 3）——并让棘轮要求每条**声明自己
+被允许移除多少条**，按 Playwright 的真实匹配语义（文件路径 + 标题都算）核对。
+
 **下一簇的线索（RFC-224，70+ 条）**：`rfc224-sealed-subprocess.test.ts` 用
 `providerId: 'linux-bwrap'` + `/usr/bin/bwrap`，是 **Linux 专属**的能力证明；
 Windows 上的失败形态是「12 秒等不到 supervisor 的 ACK 写入」。12 秒已相当宽裕，
