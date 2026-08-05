@@ -1168,3 +1168,23 @@ Windows 特例，把 `npmBin` 指向脚本入口在生产上同样合法（npm �
 - ⏳ **(P2，夹具)** `git source kind goes through same npm path` 传 `github:org/repo`，
   `fake-npm.ts` 照搬 `${SPEC%@*}` 后去 `mkdir node_modules/github:org` —— `:` 在
   Windows 文件名里非法，报 `ENOTDIR`。夹具需要把 spec 里的非法字符归一后再落盘。
+
+## Windows e2e shard 4/4 两条超时红（2026-08-05，commit `5c8dabe6`，未归因于代码）
+
+CI run `31012398133`（本 commit 为纯前端「结构变更」页签视图修复 + 测试 + 文档,
+不触及工作流执行/编辑器挂载路径）唯一红腿 = Playwright e2e windows shard 4/4,
+其余全部 job（三 OS 前后端矩阵、其余 e2e shard、visual-regression）全绿：
+
+- `workflow-matrix.spec.ts:661` output kinds round-trip：`kind_producer` 节点
+  `node-timeout: exceeded 2000ms`（首跑任务 failed；retry 因同名 node_run 已有
+  2 行直接断言失败——retry 语义对「上一轮已超时重试过」的现场不幂等）。该 spec
+  在 RFC-254 曾因路径分隔符红过（`c345d948` 已修），本次是**新根因**：fixture 里
+  2000ms 的节点预算贴着 Windows 共享 runner 的噪音线。与 T32「时间预算」同族,
+  但在 e2e YAML fixture 层而非 bun 5s 默认层。
+- `workflow-editor.spec.ts:218` editor mounts：`.workflow-canvas` 15s 不可见 +
+  60s test timeout,**retry #1 26.6s 通过**——慢机首跑超时型。
+
+两条的 owning surface（工作流执行语义 / 编辑器挂载）与 `5c8dabe6` 的 diff 零重叠,
+按归属纪律未代改。处置建议归 RFC-254 Windows e2e 预算治理：output-kinds fixture 的
+per-node timeout 需要按 Windows 腿放宽（或 fixture 声明平台预算）,并查 retry 路径
+对「超时已产生重试行」现场的幂等性。
