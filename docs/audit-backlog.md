@@ -1072,6 +1072,26 @@ daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环
   **rfc135 的换缝改动已回滚**（8 条改到 6 条真红 + 2 gated 后，剩下的 6 条全部撞这条产品缺陷，
   不该用一个依赖未修产品路径的测试去掩盖它）；该文件的 A 类移植待此缺陷修复后再做。
 
+  ### ⏳ **(P1) 剩余 ~400 条的性质盘点：多数不是「测试可移植性」，是产品/平台缺口**
+
+  2026-08-06 逐簇实测三个大簇后订正一个此前偏乐观的口径——**能靠改测试清掉的 A 类/路径
+  字面量类已基本清完（累计 ~105+）；剩下的大头卡在产品侧，逐个改测试清不动**：
+  - `rfc224-store-hygiene`(19) 及 RFC-224 launcher/hygiene 家族一大片：撞 **win32 file-trust
+    未实现**——`assertPrivateRegularFileForHost` / `assertSameFileIdentityForHost` 在 win32
+    返回 not-trusted（`util/fileTrust.ts` 明写「a win32 implementation is a separate task」），
+    而 `storeHygiene.ts` 全程走 `...ForHost` 绑定（无注入缝），生产代码 fail-closed 正确、
+    测试走的就是这条真路径。**需要 win32 file-trust 原语（T0 的显式延期项），不是测试问题。**
+  - `runtime-smoke`(14 条 mock-backed) + `rfc107` + `rfc135`：撞 **`smokeRuntime`/registry 只收
+    `binaryPath: string`（单个可执行文件），没有 `opencodeCmd` 那样的命令数组注入缝**。
+    实测把 `wrapperFor` 的 `#!/bin/sh` 换成 `.cmd` 跑 `bun run <mock>` **更糟**——每条撞 30s
+    smoke 超时（cmd→`bun run` 的管道 stdout 不回流）。真正的修法是给这条路径加命令数组缝，
+    属 verified-path 生产改动、要走 RFC 门。runtime-smoke 里 3 条纯路径校验/非协议二进制的
+    子用例可换缝（本轮验证过 macOS 21/21），但与 14 条 mock 用例混在一个文件、单独提交价值
+    低，**已整体回滚**待随 seam 一起做。
+  - **结论**：`design/plan.md` 说「逐条分类那 8600 条」的下一轮切片，实际是**先补两个产品缺口**
+    （win32 file-trust 原语；verified-path 的命令数组/可执行注入缝，含上面的快照丢扩展名），
+    再回来清测试。这两项本身够格各立一个 RFC-254 子任务（能力面 + 证据门），不是测试收尾。
+
   **已从清单里清掉的两个大簇（2026-08-05 同日）**：
   1. `rfc224-verified-launcher` 21 条（清单最大单点）——两层夹具根因（POSIX 字面量过
      不了 canonical 校验 + sealed-shell 键的平台事实），**两平台 21/21 绿**；同形字面量
