@@ -8,7 +8,7 @@
 //   - multi-repo isolates + merges per-repo (AC-13)
 //   - failed node (no merge-back) leaves canonical untouched (AC-6/I-5)
 
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +20,16 @@ import {
   type CanonRepo,
 } from '../src/services/nodeIsolation'
 import { runGit } from '../src/util/git'
+
+// RFC-254 T32: every case here is REAL git — init canonical repos, snapshot full
+// state, `worktree add` an iso, merge back. On a quiet Windows host the slowest
+// was 4947ms against bun's 5s default, i.e. 99% of the budget; with that host's
+// four cores held busy, three of these went red purely on the clock. Timeouts in
+// a suite that owns git worktrees do not fail politely either — bun reaps the
+// test's children mid-`git`, and the fallout gets reported as a git defect
+// (see fusion-engine.test.ts for the case where that cost a wrong P1). Budget is
+// deliberately generous: nothing here gets slower except by doing more git.
+setDefaultTimeout(60_000)
 
 async function initCanon(seed: Record<string, string> = { 'base.txt': 'base\n' }): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-iso-canon-'))

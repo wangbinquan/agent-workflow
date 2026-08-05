@@ -190,10 +190,13 @@ WebSocket 让 `networkidle` 永不到达）。
 iso 从一个已删除的目录上建，报出那四行**点名 git 的**错误。修法 `setDefaultTimeout(60_000)`
 （仓内已有先例），**同一负载下复测 32 pass / 0 fail**。
 **判据留档**：Windows 上再见到「git 报路径不存在 / 对象解析不了」，先查同批日志里有没有
-`exited 143` 或 `this test timed out`——有就说明主语是预算不是 git。**同形态的下一批已量
-出来但本轮没改**（都还绿）：`rfc130-node-isolation`(最慢 4947ms，≈默认的 99%)、
-`rfc210-git-diff-subrepo-paths`(4749)、`clarify-inline-isolated-parity`(4729)、
-`git-repo-cache`(4645)、`task-start-git-identity`(4463)，已登记。
+`exited 143` 或 `this test timed out`——有就说明主语是预算不是 git。**同形态的下一批已按
+同一负载逐个实测**（推翻了「贴着上限 ⇒ 会红」的直觉）：五个候选里只有
+`rfc130-node-isolation`（安静时最慢 4947ms ≈ 默认的 99%）真红 3 条、**已修并同负载复测
+5 pass / 0 fail**；`rfc210-git-diff-subrepo-paths` / `clarify-inline-isolated-parity` /
+`git-repo-cache` 扛住了留 P2。**并订正一处**：`task-start-git-identity` 的 3 条红不是预算
+（它本就有预算），是 `stub-opencode-env.sh` 这个 `.sh` 假二进制 EFTYPE——即「**A 类清零**」
+只在当时取样到的文件上成立、**不是全仓成立**，`tests/` 下写 shell shebang 的还有几十个。
 **相邻套件另有 7 条真红（安静机器上就红），已修并在 Windows 上复测 80 pass / 0 fail**：
 `rfc213-worktree-capture` 的 5 条 EBUSY 拆卸（换 `removeTempDirSync` + 逐目录 try/catch
 ——旧写法在第一个忙目录就中断循环）、同文件 1 条真断言失败（`chmod 000` 在 Windows 上是

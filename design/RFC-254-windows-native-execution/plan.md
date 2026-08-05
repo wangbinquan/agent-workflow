@@ -479,10 +479,17 @@ iso 从一个已被删除的目录上建，于是报出那四行**点名 git 的
 > **判据留给下次**：Windows 上再见到「git 报路径不存在 / 对象解析不了」，先查同一批
 > 日志里有没有 `exited 143` 或 `this test timed out`——有就说明主语是预算不是 git。
 
-**同形态的下一批已量出来、本轮没改**（都还是绿的，故留成边界清楚的后续工作）：整簇
-复扫里贴着 5s 默认跑的有 `rfc130-node-isolation`（最慢 **4947ms**，≈默认的 99%）、
-`rfc210-git-diff-subrepo-paths`(4749)、`clarify-inline-isolated-parity`(4729)、
-`git-repo-cache`(4645)、`task-start-git-identity`(4463)。已登记 backlog。
+**同形态的下一批已按同一负载逐个实测**，结果推翻了「贴着上限 ⇒ 会红」的直觉：五个
+候选里只有 `rfc130-node-isolation`（安静时最慢 **4947ms**，≈默认的 99%）真红 3 条，
+**已加 `setDefaultTimeout(60_000)`，同负载复测 5 pass / 0 fail**；
+`rfc210-git-diff-subrepo-paths`(4749) / `clarify-inline-isolated-parity`(4729) /
+`git-repo-cache`(4645) 扛住了，留 P2。
+
+**顺带订正一处既有记录**：`task-start-git-identity` 那 3 条红**不是预算问题**（它本就
+声明了预算），真因是 `stub-opencode-env.sh` 这个 `.sh` 假二进制在 Windows 上 `EFTYPE`
+——即上文「**A 类清零**」只在当时取样到的那几个文件上成立，**不是全仓成立**。
+`packages/backend/tests` 下写 shell shebang 的文件仍有几十个，哪些会真被 spawn 需要
+逐个判，不能按文件名猜。
 
 **这一簇另有 7 条真红（安静机器上就红，与 fusion 无关），均已修**（Windows 复测：
 上述 8 个文件 + `callgraph-multirepo-prefix` + `gettask-multi-repo` 共 10 个，
