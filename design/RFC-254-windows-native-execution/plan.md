@@ -537,6 +537,27 @@ fusion 两件、`rfc213-worktree-capture`、`rfc130-iso-*` 三件**全部为零�
    （`pluginInstaller.ts:295`，正解 `fileURLToPath`）。另两条是断言写死 `/` 分隔符，
    一条是 `fake-npm.ts` 拿 `github:org` 当目录名（`:` 在 Windows 非法）。
 
+## T31 前端矩阵腿：**已翻开**（2026-08-05）
+
+`test-frontend` 的 `os:` 加 `windows-latest`，是四个测试矩阵里第一条翻开的 Windows 腿。
+翻之前先在真机上把它跑到零红——**138 fail / 35 文件 → 0 fail / 702 文件 / 5957 条**，
+三处修复**全部在测试侧、无一条产品代码**：
+
+| 根因 | 影响 | 处置 |
+|---|---|---|
+| `new URL(import.meta.url).pathname` | **125 条**（一个根因占 90%）。Windows 上得到 `/C:/aw/...`，再 resolve 就成了 `C:\C:\aw\...` | 全仓换 `fileURLToPath`（35 个文件），并加**负向扫描守卫** `rfc254-file-url-pathname-guard.test.ts`（含变异实证：改回旧写法即红）。仓内 `vite.config.ts`/`vitest.config.ts` 本来就用对了，测试是掉队的那批 |
+| `path.relative()` 结果当 key 去比 `/` 拼的清单 | 4 个文件 | 新增 `tests/portable-path.ts`（后端 `toPortableRelativePath` 的孪生——前端测试不能 import 后端源码，依赖门禁禁止该缝） |
+| 夹具 `execSync('grep …')` | 1 个文件 | 改进程内扫描。顺带修掉一个 POSIX 上也存在的隐患：`root` 未加引号，装在带空格的路径下同样空结果 |
+| 夹具写 `#!/usr/bin/env node` 假二进制 | 1 个文件 3 条 | `e2e/harness.ts` 的 `binary` 支持**命令数组**（与 fusion 那次「换缝而不是伪造可执行文件」同形），夹具改传 `[process.execPath, script]` |
+
+**timeout 从 15 提到 20 分钟**：Windows 腿同样的活确实更慢（真机全量 373s vs macOS
+~160s），是**随腿一起调**的，不是被超时逼的。`root-test-entrypoint` 的两条逐字锁
+（`os:` 列表、timeout 表）按 §8.4 同步更新并写明理由。
+
+**取样时又踩了一个自造的坑**（已并入 dev-gotchas）：用 macOS `tar` 打包同步到 VM 会带上
+`._*` AppleDouble 文件，被 vitest 当测试文件加载并报 `Unexpected "\x00"`——一次多出 20 个
+假失败。打包加 `COPYFILE_DISABLE=1`。
+
 ## T31 后端矩阵腿：真实障碍不是「预算不够」，是两道逐字锁（2026-08-05 调研）
 
 先纠正一个一直被误传的口径：**`ci.yml` 的 job timeout 是 15 分钟**（`ci.yml:84` /

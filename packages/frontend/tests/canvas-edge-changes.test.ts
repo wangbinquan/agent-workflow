@@ -3,6 +3,7 @@
 // from opening the EdgeInspector; we lock the fixes in here so future
 // refactors can't silently re-break them.
 
+import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 import { applyEdgeChanges, type Edge, type EdgeChange } from '@xyflow/react'
 import {
@@ -117,7 +118,7 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
   test('`selectionOnDrag` prop is absent from WorkflowCanvas source', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(
       path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf8',
@@ -131,7 +132,7 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
   test('editable canvas accepts left-button pane dragging for panning', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(
       path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf8',
@@ -147,7 +148,7 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
   test('canvas renders the Shift box-select hint in editable mode', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(
       path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf8',
@@ -164,7 +165,7 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
   test('WorkflowCanvas threads applySelection through the def-sync rebuild', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(
       path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf8',
@@ -204,7 +205,7 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
     // JSDOM is brittle; the regex survives prettier reformatting.
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(
       path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf8',
@@ -380,7 +381,7 @@ describe('workflows.edit.tsx wires clearSelection into inspector close', () => {
   test('route source calls canvasRef.current?.clearSelection() and uses it on both Edge + Node onClose', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(path.join(here, '../src/routes/workflows.edit.tsx'), 'utf8')
     expect(src).toMatch(/canvasRef\.current\?\.clearSelection\(\)/)
     // Both inspectors share the `closeInspector` helper; it must be

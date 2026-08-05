@@ -21,6 +21,7 @@ import { render } from '@testing-library/react'
 import { ReactFlowProvider } from '@xyflow/react'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { canvasStatus } from '../src/routes/tasks.detail'
 import { ReviewNode } from '../src/components/canvas/nodes/ReviewNode'
 import { ClarifyNode } from '../src/components/canvas/nodes/ClarifyNode'
@@ -116,7 +117,7 @@ describe('nodes render the parked-for-human data-status', () => {
 
 describe('awaiting pulse styling (styles.css)', () => {
   async function styles(): Promise<string> {
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     return fs.readFile(path.join(here, '../src/styles.css'), 'utf8')
   }
 

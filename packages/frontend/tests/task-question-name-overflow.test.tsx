@@ -29,10 +29,11 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, test } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { TaskQuestionList, type TaskQuestionEntry } from '../src/components/tasks/TaskQuestionList'
 import '../src/i18n'
 
-const STYLES_SRC = path.join(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css')
+const STYLES_SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/styles.css')
 const LONG_NODE_ID = 'auditor-long'
 const LONG_LABEL =
   '代码审计与修复建议汇总处理节点-auditor-shard-aggregator-with-a-very-long-name-20260707'

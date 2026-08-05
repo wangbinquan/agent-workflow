@@ -40,19 +40,25 @@ const stubOverride = (() => {
   return path
 })()
 
+// RFC-254 T32: the fake daemon is handed over as a COMMAND ARRAY
+// (`[process.execPath, script]`) rather than as a fake executable. A
+// `#!/usr/bin/env node` file is only runnable where a shebang is honoured, so
+// on Windows this fixture used to die with `spawn EFTYPE` and three tests
+// reported a harness bug that did not exist. Passing argv means no shebang, no
+// execute bit, no shell — and it exercises the same harness code path on every
+// platform. See SpawnOptions.binary in e2e/harness.ts.
 function createFixture(binaryBody: string): {
   root: string
   homes: string
-  binary: string
+  binary: string[]
 } {
   const root = mkdtempSync(join(tmpdir(), 'aw-harness-vitest-'))
   fixtureRoots.push(root)
   const homes = join(root, 'homes')
-  const binary = join(root, 'fake-daemon.cjs')
+  const script = join(root, 'fake-daemon.cjs')
   mkdirSync(homes)
-  writeFileSync(binary, `#!/usr/bin/env node\n${binaryBody}`, 'utf8')
-  chmodSync(binary, 0o755)
-  return { root, homes, binary }
+  writeFileSync(script, binaryBody, 'utf8')
+  return { root, homes, binary: [process.execPath, script] }
 }
 
 async function withHarnessTmp<T>(homes: string, run: () => Promise<T>): Promise<T> {

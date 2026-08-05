@@ -9,6 +9,7 @@
 
 import { readFileSync } from 'node:fs'
 import path, { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createRef, useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -455,7 +456,7 @@ describe('<Segmented> — stopPointerPropagation (canvas contract)', () => {
 describe('segmented option nowrap (RFC-192)', () => {
   test('.segmented__option declares white-space: nowrap', () => {
     const css = readFileSync(
-      resolve(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css'),
+      resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/styles.css'),
       'utf8',
     )
     const block = css.match(/^\.segmented__option\s*\{[^}]*\}/m)

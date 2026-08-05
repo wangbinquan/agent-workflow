@@ -9,10 +9,9 @@
 // does, and Skip always stops the tour.
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { execSync } from 'node:child_process'
 import { getTour, ALL_TOUR_IDS } from '../src/components/tour/tourScript'
 import { TourProvider, useTour } from '../src/components/tour/SpotlightTour'
 
@@ -30,18 +29,28 @@ afterEach(() => {
  * step may anchor on either — reusing an existing testid is cheaper than adding
  * a bespoke tour attribute, and both are equally stable identifiers.
  */
+// RFC-254 T32: this used to shell out to `execSync("grep -rhoE … " + root)`.
+// Two problems, one of which was live: Windows has no `grep`, so the spawn threw,
+// the `catch` swallowed it into an empty set, and every anchor read as undefined
+// — the guard failed for a reason that had nothing to do with the tour. The
+// other is latent on POSIX too: `root` was interpolated unquoted, so an install
+// path containing a space would have produced the same empty result. Scanning
+// in-process removes both and is faster than a subprocess besides.
 function definedAnchors(): Set<string> {
   const root = resolve(__dirname, '..', 'src')
   const out = new Set<string>()
-  let hits = ''
-  try {
-    hits = execSync(`grep -rhoE 'data-(tour|testid)="[^"]+"' ${root}`, { encoding: 'utf8' })
-  } catch {
-    hits = ''
-  }
-  for (const line of hits.split('\n')) {
-    const m = /data-(?:tour|testid)="([^"]+)"/.exec(line)
-    if (m?.[1] !== undefined) out.add(m[1])
+  const pattern = /data-(?:tour|testid)="([^"]+)"/g
+  const stack: string[] = [root]
+  while (stack.length > 0) {
+    const dir = stack.pop()!
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const abs = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        stack.push(abs)
+      } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+        for (const m of readFileSync(abs, 'utf8').matchAll(pattern)) out.add(m[1]!)
+      }
+    }
   }
   return out
 }

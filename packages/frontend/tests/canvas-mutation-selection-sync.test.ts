@@ -3,6 +3,7 @@
 // Previously paste/duplicate/wrap only called setSelection, leaving the
 // immediate definition rebuild and parent onSelect on stale subjects.
 
+import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 import { applySelection, buildCanvasSelectionSync } from '../src/components/canvas/WorkflowCanvas'
 
@@ -42,7 +43,7 @@ describe('WorkflowCanvas mutation selection wiring', () => {
   test('paste, duplicate, wrap, and palette insert reuse the same local/route publisher', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(
       path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf8',

@@ -13061,6 +13061,17 @@ mark.prior-comment-anchor[data-active='true'] {
   font-style: italic;
 }
 
+/* RFC-254 T35 — CONTRACT: white text sits on --rfc027-accent in three places
+   (.session-block__details-tag, .session-role-badge, .session-subagent__toggle),
+   all of them small and bold, so WCAG AA wants 4.5:1 and the large-text
+   exemption does NOT apply (that needs >=18pt, or >=14pt bold; these are
+   10-11px). Every value below must therefore clear 4.5:1 against #fff.
+   Measured: gray #6b7280 4.83 · blue #2563eb 5.17 · green #15803d 5.02 ·
+   orange #c2410c 5.18 · purple #9333ea 5.38 · slate #64748b 4.76.
+   Green and orange used to be #16a34a (3.30) and #ea580c (3.56) — both failing;
+   axe only ever caught the green one because the tool badge has to be rendered
+   to be scanned, which is also why the e2e red looked intermittent and
+   platform-specific. Do not brighten these back without re-measuring. */
 .session-block {
   --rfc027-accent: #6b7280;
   background: var(--panel);
@@ -13074,12 +13085,12 @@ mark.prior-comment-anchor[data-active='true'] {
   background-color: color-mix(in srgb, #2563eb 8%, var(--panel));
 }
 .session-block--assistant {
-  --rfc027-accent: #16a34a;
-  background-color: color-mix(in srgb, #16a34a 8%, var(--panel));
+  --rfc027-accent: #15803d;
+  background-color: color-mix(in srgb, #15803d 8%, var(--panel));
 }
 .session-block--tool {
-  --rfc027-accent: #ea580c;
-  background-color: color-mix(in srgb, #ea580c 8%, var(--panel));
+  --rfc027-accent: #c2410c;
+  background-color: color-mix(in srgb, #c2410c 8%, var(--panel));
 }
 .session-block--subagent {
   --rfc027-accent: #9333ea;
@@ -13168,10 +13179,10 @@ mark.prior-comment-anchor[data-active='true'] {
   --rfc027-accent: #2563eb;
 }
 .session-role-badge--assistant {
-  --rfc027-accent: #16a34a;
+  --rfc027-accent: #15803d;
 }
 .session-role-badge--tool {
-  --rfc027-accent: #ea580c;
+  --rfc027-accent: #c2410c;
 }
 .session-role-badge--subagent {
   --rfc027-accent: #9333ea;
@@ -15599,6 +15610,18 @@ mark.prior-comment-anchor[data-active='true'] {
   border-radius: 8px;
   overflow: hidden;
   background: var(--bg);
+  /* flex column so the xyflow root below gets its height from FLEX, not from
+     its inline `height:100%` — inside the RFC-239 drilldown Dialog every
+     ancestor is content-sized (auto), and a percentage height resolves to 0
+     there (graph renders but is clipped to nothing). */
+  display: flex;
+  flex-direction: column;
+}
+/* the xyflow root must size via flex (basis 0), never via its own inline
+   `height:100%` percentage — see the .structure-graph comment above. */
+.structure-graph > .react-flow {
+  flex: 1 1 0%;
+  min-height: 0;
 }
 /* strip xyflow's default-node chrome — our card supplies its own */
 .structure-graph .react-flow__node {

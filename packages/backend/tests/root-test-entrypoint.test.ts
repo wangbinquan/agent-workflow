@@ -220,7 +220,11 @@ describe('repository test entrypoint', () => {
     expect(occurrenceCount(backendJob, `--shard=\${{ matrix.shard }}/4`)).toBe(2)
 
     expect(frontendJob).toContain('fail-fast: false')
-    expect(frontendJob).toContain('os: [ubuntu-latest, macos-latest]')
+    // RFC-254 T31: the frontend leg is the first test matrix to gain Windows.
+    // It went in only after the suite was measured green on a real Windows host
+    // (702 files / 5957 tests, 0 fail); the backend matrix deliberately stays
+    // two-OS below until the same is true there.
+    expect(frontendJob).toContain('os: [ubuntu-latest, macos-latest, windows-latest]')
     expect(frontendJob).toContain('shard: [1, 2, 3]')
     expect(occurrenceCount(frontendJob, `--shard=\${{ matrix.shard }}/3`)).toBe(1)
 
@@ -466,7 +470,11 @@ describe('repository test entrypoint', () => {
     const expectedCiDeadlines = new Map<string, number>([
       ['lint', 15],
       ['test-backend', 15],
-      ['test-frontend', 15],
+      // RFC-254 T31: 20 because the Windows leg is genuinely slower at the same
+      // work — measured 373s wall for the full suite on a real Windows host vs
+      // ~160s on macOS, and a CI shard carries install + cache on top. Raised
+      // deliberately with the leg, not in response to a timeout.
+      ['test-frontend', 20],
       ['scans', 15],
       ['perf', 15],
       ['docs', 15],

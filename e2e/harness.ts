@@ -78,8 +78,17 @@ export interface SpawnOptions {
    * Path to the agent-workflow binary. Defaults to
    * dist/agent-workflow-e2e-<plat>-<arch>.
    * If the file does not exist, harness throws — tell the engineer to build first.
+   *
+   * RFC-254 T32: may also be a COMMAND ARRAY (`[interpreter, script, …]`), in
+   * which case element 0 is spawned and the rest are prepended to the daemon
+   * args. Real runs always pass a single compiled artifact; the array form
+   * exists for fixtures, which otherwise have to fabricate a fake executable —
+   * and a `#!/usr/bin/env node` file is not executable on Windows, so those
+   * fixtures failed there with `spawn EFTYPE`. Handing over argv instead of a
+   * fake binary keeps the fixture platform-independent and never touches a
+   * shell.
    */
-  binary?: string
+  binary?: string | readonly string[]
   /**
    * Which behaviour the compiled stub should take. Defaults to `basic` (the
    * fixed-output stub used by main.spec.ts + review.spec.ts). Tests that need
@@ -445,7 +454,12 @@ async function startDaemonWithPortAllocator(
   opts: SpawnOptions,
   portAllocator: PortAllocator,
 ): Promise<DaemonHandle> {
-  const binary = opts.binary ?? defaultBinaryPath()
+  const binarySpec = opts.binary ?? defaultBinaryPath()
+  // Element 0 is what gets spawned and what must be executable; any remaining
+  // elements are argv the daemon args are appended to (see SpawnOptions.binary).
+  const binaryCmd: readonly string[] = typeof binarySpec === 'string' ? [binarySpec] : binarySpec
+  const binary = binaryCmd[0] ?? ''
+  const binaryPrefixArgs = binaryCmd.slice(1)
   if (!isExecutableFile(binary)) {
     throw new Error(
       `e2e/harness: binary not found at ${binary}\n` +
@@ -511,7 +525,7 @@ async function startDaemonWithPortAllocator(
 
       const attemptChild: DaemonChild = spawn(
         binary,
-        ['start', '--host', '127.0.0.1', '--port', String(bindPort)],
+        [...binaryPrefixArgs, 'start', '--host', '127.0.0.1', '--port', String(bindPort)],
         {
           cwd: repoRoot,
           env: {

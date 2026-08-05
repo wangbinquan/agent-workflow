@@ -16,6 +16,7 @@
 
 import { existsSync } from 'node:fs'
 import path, { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -32,7 +33,7 @@ import { useResourceList } from '../src/hooks/useResourceList'
 import { ResourceBadges, type OwnerLookup } from '../src/components/ResourceBadges'
 import '../src/i18n'
 
-const FRONTEND_SRC_DIR = resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'src')
+const FRONTEND_SRC_DIR = resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src')
 
 interface Row {
   id: string

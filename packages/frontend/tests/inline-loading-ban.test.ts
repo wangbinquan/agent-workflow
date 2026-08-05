@@ -10,6 +10,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
+import { toPortableRelativePath } from './portable-path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
@@ -46,7 +47,7 @@ describe('inline common.loading ban', () => {
   test('only the allowlisted files may reference common.loading', () => {
     const offenders: string[] = []
     for (const abs of walk(SRC)) {
-      const rel = path.relative(SRC, abs)
+      const rel = toPortableRelativePath(path.relative(SRC, abs))
       // i18n bundles define the key itself (`loading: '…'`), they don't
       // reference it — and they never match the dotted form anyway.
       if (!readFileSync(abs, 'utf8').includes('common.loading')) continue

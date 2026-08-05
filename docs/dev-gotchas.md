@@ -20,6 +20,7 @@
 - **用错 runner 的表现是「挂死」不是报错**：`cd packages/frontend && bun test`（上一条说的那个错法）不会干脆失败，而是刷 `ReferenceError: document is not defined` 后长时间不退——正确的 `bun run --filter @agent-workflow/frontend test` 全量只要 ~60s。**跑套件卡住先怀疑 runner 用错，别当 flaky**（RFC-230 session 因此空等 2h37m）。
 - **`长任务 | tail -N` 会让你全程失明**：tail 要等 EOF 才吐字节，后台跑的全量测试在结束前输出文件恒为 0 字节，「没输出」看起来和「还在跑」一模一样。长任务全量落盘再取尾（`> log 2>&1` 后 `tail`）。判断进程死活看 **`ps -o etime=`**，不看输出有没有内容。
 - **给「遍历全部源码」型守卫显式的墙钟预算**：这类测试（AST 全树扫描、依赖图、指纹多重集）的成本随仓库增长，而 bun 的默认 5s 是个与它无关的数字。空闲机器 1.6s 看着很安全，四分片并行的共享 runner 上就会超时——报出来是 `timed out after 5000ms`，**不带任何断言信息**，读起来像挂了而不是像慢了。写显式预算并注明「这是墙钟允许量，不是对扫描器变慢的容忍」。
+- **断言只打印「违规的名字」= 失败时什么都没说，而且会把人引向错误的子系统**。`expect(blocking.map((v) => v.id)).toEqual([])` 读起来很干净，红的时候只给你 `+ Array [ "color-contrast" ]`：哪个元素、什么前景/背景色、实测多少、要求多少，一个都没有。RFC-254 里这条造成的代价是：**四次 CI 红 + 两版 backlog 记录 + 一个「Windows 渲染差异」的假设**，而真相是一条谁都能复现的 WCAG AA 违规（白字压 `#16a34a` = 3.29:1，要 4.5:1）——把节点与颜色打出来之后**本机第一次跑就红了**。判据：**任何「断言某个集合为空」的守卫，失败消息必须带够定位信息**（元素 / 数值 / 来源），否则它只能告诉你「有问题」，不能告诉你「是什么问题」，而人会拿观察到的巧合（只在某条腿红、时红时绿）去补那个空白，补出来的多半是错的。本仓的 axe 侧已收进 `e2e/axe-blocking.ts` 的 `describeBlocking()`。
 - **bun 报表里的每条耗时**含* beforeEach/afterEach*，**而默认 5s 超时只管 test body**——所以别拿报表数字给「哪些测试贴着上限」排序。直接探针实测：3s `beforeEach` + 3s body，报表打印 **6.02s，测试照样 pass**。真实后果两个方向都有：把重活放 `beforeEach` 的文件报表数字很大而风险低（`git-repo-cache` / `clarify-inline-isolated-parity` 在 CPU 打满的 Windows 上报表 5.5–6.0s，两轮都没红）；反过来在 body 里做真 I/O 的文件报表值≈body 值，4947ms 那条就是真的会红（`rfc130-node-isolation`，同负载 3 条超时）。**判据是「body 里做了多少真 I/O」，报表数字只配当粗筛。**
 - **上一条的严重版：超时的测试如果「持有一块工作区」，它会把还在跑的东西一起带走，而报错点名的是错的子系统**。bun 判超时后会**回收该测试的子进程**，于是 RFC-254 T32 里出现这条链：在飞的 `git rev-list` 收 SIGTERM（`exited 143`）→ `seedWorktree` 认为基线解析失败并抛错 → `createFusion` 的 `finally` 删掉它仍持有的 fusion work dir → 而**该测试此前已经启动的任务还在被调度**，于是 iso 从一个已被删除的目录上建，报出 `git worktree add (iso): fatal: cannot change to '…'` / `workspace-missing: canonical worktree does not exist` / `TypeError: … 'task.worktreePath'`。**这四行点名的全是 git，真正的主语却是「这个测试文件没声明预算」**——它一度被立成一条「Windows 上 git worktree 坏了」的 P1。**判据**：看到 git 报「路径不存在 / 对象解析不了」，先查同一批日志里有没有 `exited 143` 或 `this test timed out`；有就先修预算再谈缺陷。**预防**：凡是「真的起任务 / 真的建仓 / 真的拉子进程」的用例，文件顶上写 `setDefaultTimeout(60_000)`（先例：`task-start-pre-worktree` / `clarify-review-combination-scenarios` / `fusion-engine`），别让它贴着默认 5s 跑——安静机器上 1.5–3.4s 看着安全，那已经是预算的 30–70%。
 - **结构守卫必做变异实证**：加 grep/AST 守卫后，改坏源码断言必须看它变红；否则守卫是空的。表级锁（一次锁一类）优于文件级——注释里的字面量也会踩表级锁（RFC-072 事故）。
@@ -265,6 +266,11 @@
 配套教训一：**ssh 到 Windows 的引号转义不值得斗**。zsh → ssh → cmd → PowerShell 四层
 下来，`$_.Line` 这种会被逐层吃掉。稳的做法是**只在远端重定向到文件，把文件取回本地
 再过滤**——本地有 grep/sed，且结果可复查。
+
+配套教训四：**用 macOS 的 `tar` 往取样机同步，会带上 `._*` AppleDouble 文件**，vitest 把
+它们当测试文件加载并报 `ERROR: Unexpected "\x00"`——一次凭空多出 20 个「失败文件」，而它们
+根本不是仓库内容。打包时加 `COPYFILE_DISABLE=1`（或 `--no-mac-metadata`），并且看到
+`._` 开头的文件名就该立刻认出是同步工具留下的，不是被测代码的问题。
 
 配套教训三：**`FORCE_COLOR` 会让 `bun run test` 多出一条与你无关的红**。Claude Code
 （以及不少现代终端）在环境里设 `FORCE_COLOR=3`，于是被测子进程的 `console.error`

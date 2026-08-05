@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import {
   clearWrapperSize,
@@ -189,7 +190,7 @@ describe('wrapper delete confirmation snapshot', () => {
 // menu closure. Red here means the right-click entries have regressed.
 describe('WorkflowCanvas menu source-level guards', () => {
   test('menuItems references wrapperNode.fitToChildren / unwrap / deleteWithInner + new callbacks', async () => {
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(
       path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf8',

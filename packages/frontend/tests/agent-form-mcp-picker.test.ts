@@ -11,9 +11,10 @@
 
 import { readFileSync, existsSync } from 'node:fs'
 import path, { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
-const TEST_DIR = path.dirname(new URL(import.meta.url).pathname)
+const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const FRONTEND_SRC = resolve(TEST_DIR, '..', 'src')
 const read = (rel: string): string => readFileSync(resolve(FRONTEND_SRC, rel), 'utf-8')
 

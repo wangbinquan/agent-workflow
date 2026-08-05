@@ -24,6 +24,7 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { eq, inArray } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
@@ -412,14 +413,14 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
     // dispatch share ONE lock-B holding (dispatchDeferredTaskQuestions), else a concurrent
     // unstage between the select and the dispatch would still dispatch the withdrawn entry.
     const auto = await Bun.file(
-      new URL('../src/services/clarifyAutoDispatch.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../src/services/clarifyAutoDispatch.ts', import.meta.url)),
     ).text()
     const fnBody = auto.slice(auto.indexOf('export async function autoDispatchDeferredQuestions'))
     expect(fnBody.split('dispatchDeferredTaskQuestions(').length - 1).toBe(1)
     expect(fnBody).not.toContain('.select(') // no pre-lock selection in the tick entry
     // ONE full-set dispatch — per-home splitting breaks the upstream frontier (design-gate R3 P1).
     const dispatch = await Bun.file(
-      new URL('../src/services/taskQuestionDispatch.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../src/services/taskQuestionDispatch.ts', import.meta.url)),
     ).text()
     const deferredFn = dispatch.slice(
       dispatch.indexOf('export async function dispatchDeferredTaskQuestions'),
@@ -431,7 +432,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
 
   test('stage/unstage 与 dispatch 串行（锁 B）：dispatch 锁获取点在读条目之前（源级文本锁）', async () => {
     const src = await Bun.file(
-      new URL('../src/services/taskQuestionDispatch.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../src/services/taskQuestionDispatch.ts', import.meta.url)),
     ).text()
     // The public wrapper acquires lock B and delegates to the locked pipeline — the read/plan
     // phase must NOT run before the lock (Codex design-gate rounds 3-4: a stage/unstage inter-
@@ -443,7 +444,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
     expect(wrapper).toContain('getTaskQuestionWriteSem(taskId).run')
     expect(wrapper).not.toContain('.select()') // no reads before the lock
     const stageSrc = await Bun.file(
-      new URL('../src/services/taskQuestions.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../src/services/taskQuestions.ts', import.meta.url)),
     ).text()
     const stageFn = stageSrc.slice(
       stageSrc.indexOf('export async function stageTaskQuestion'),

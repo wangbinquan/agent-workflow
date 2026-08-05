@@ -8,8 +8,9 @@
 import { describe, expect, test } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const STYLES_CSS = path.join(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css')
+const STYLES_CSS = path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/styles.css')
 
 describe('/tasks list — ID cell and status chip stay on a single line', () => {
   test('.status-chip declares white-space: nowrap', async () => {

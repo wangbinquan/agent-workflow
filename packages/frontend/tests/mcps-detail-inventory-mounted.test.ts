@@ -11,10 +11,11 @@
 
 import { readFileSync } from 'node:fs'
 import path, { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
 const SRC = resolve(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   '..',
   'src',
   'routes',

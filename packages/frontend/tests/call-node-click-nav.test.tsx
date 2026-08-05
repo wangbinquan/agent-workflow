@@ -29,6 +29,7 @@ import { I18nextProvider } from 'react-i18next'
 import { ReactFlowProvider } from '@xyflow/react'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { NodeRun, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { WorkflowCanvas } from '../src/components/canvas/WorkflowCanvas'
 import i18n from '../src/i18n'
@@ -304,7 +305,7 @@ describe('toFlowNodes callNav propagation (golden-lock)', () => {
 
 // --- group 5-9: wiring + route + table + CSS + i18n source locks -----------
 
-const FRONTEND = path.dirname(new URL(import.meta.url).pathname)
+const FRONTEND = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string) => fs.readFile(path.join(FRONTEND, '..', rel), 'utf8')
 
 describe('WorkflowCanvas repaints on a callNavs-ONLY change (design-gate P1-3)', () => {

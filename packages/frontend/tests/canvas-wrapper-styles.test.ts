@@ -8,14 +8,15 @@
 import { describe, expect, test } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 async function styles(): Promise<string> {
-  const here = path.dirname(new URL(import.meta.url).pathname)
+  const here = path.dirname(fileURLToPath(import.meta.url))
   return fs.readFile(path.join(here, '../src/styles.css'), 'utf8')
 }
 
 async function wrapperNodes(): Promise<string> {
-  const here = path.dirname(new URL(import.meta.url).pathname)
+  const here = path.dirname(fileURLToPath(import.meta.url))
   return fs.readFile(path.join(here, '../src/components/canvas/nodes/WrapperNodes.tsx'), 'utf8')
 }
 

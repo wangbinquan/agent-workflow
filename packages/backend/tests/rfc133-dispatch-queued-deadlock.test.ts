@@ -21,6 +21,7 @@
 import { createClarifyRound } from '../src/services/clarify/service'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
@@ -496,7 +497,7 @@ describe('RFC-133 quick-channel mint guards — same-cause queued entry no longe
 // alien-cause collapse without failing any type check (the param is optional on the oracle).
 test('source lock: taskQuestionDispatch threads mintCauseByTarget into BOTH gate call sites', async () => {
   const src = await Bun.file(
-    new URL('../src/services/taskQuestionDispatch.ts', import.meta.url).pathname,
+    fileURLToPath(new URL('../src/services/taskQuestionDispatch.ts', import.meta.url)),
   ).text()
   const matches = src.match(/mintCauseByTarget/g) ?? []
   expect(matches.length).toBeGreaterThanOrEqual(4) // decl + assertNoInFlightDispatch + in-tx recheck + param

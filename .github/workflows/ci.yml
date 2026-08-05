@@ -188,10 +188,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # RFC-254 T31 — windows-latest joined here once the suite was measured
+        # green on a real Windows host (702 files / 5957 tests, 0 failures).
+        # Getting there took three portability fixes, all in tests rather than
+        # product code: `new URL(import.meta.url).pathname` (125 failures from
+        # one root cause — now banned by rfc254-file-url-pathname-guard),
+        # `path.relative` results compared against `/`-spelled allowlists, and
+        # a fixture that shelled out to `grep`. The backend matrix is NOT here
+        # yet — see docs/audit-backlog.md.
+        os: [ubuntu-latest, macos-latest, windows-latest]
         shard: [1, 2, 3]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 

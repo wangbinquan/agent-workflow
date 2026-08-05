@@ -7,6 +7,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path, { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type * as RouterModule from '@tanstack/react-router'
@@ -184,7 +185,7 @@ describe('RFC-195 InboxDrawer', () => {
   test('delegates modal lifecycle to the shared Dialog primitive', () => {
     const source = readFileSync(
       resolve(
-        path.dirname(new URL(import.meta.url).pathname),
+        path.dirname(fileURLToPath(import.meta.url)),
         '../src/components/shell/InboxDrawer.tsx',
       ),
       'utf8',

@@ -14,9 +14,10 @@
 
 import { readFileSync } from 'node:fs'
 import path, { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
-const TEST_DIR = path.dirname(new URL(import.meta.url).pathname)
+const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const CSS = readFileSync(resolve(TEST_DIR, '..', 'src', 'styles.css'), 'utf-8')
 
 function block(selector: string): string {

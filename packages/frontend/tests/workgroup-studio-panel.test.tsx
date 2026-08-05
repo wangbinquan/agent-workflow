@@ -31,6 +31,7 @@ import {
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import path, { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   serializeWorkgroupEditableSnapshotV1,
   type SaveWorkgroupReceipt,
@@ -43,7 +44,7 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 
-const FRONTEND_SRC = resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'src')
+const FRONTEND_SRC = resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src')
 const readSrc = (rel: string): string => readFileSync(resolve(FRONTEND_SRC, rel), 'utf-8')
 
 beforeEach(() => {

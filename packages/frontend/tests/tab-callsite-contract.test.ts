@@ -11,6 +11,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
+import { toPortableRelativePath } from './portable-path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, test } from 'vitest'
@@ -75,7 +76,7 @@ const units: SourceUnit[] = listTsxFiles(SRC).map((absoluteFile) => {
     ts.ScriptKind.TSX,
   )
   return {
-    file: path.relative(SRC, absoluteFile),
+    file: toPortableRelativePath(path.relative(SRC, absoluteFile)),
     source,
     ast,
     constants: stringConstants(ast),

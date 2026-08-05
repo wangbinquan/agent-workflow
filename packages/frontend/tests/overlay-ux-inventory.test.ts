@@ -7,6 +7,7 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve, relative } from 'node:path'
+import { toPortableRelativePath } from './portable-path'
 import ts from 'typescript'
 import { describe, expect, test } from 'vitest'
 
@@ -275,7 +276,7 @@ function findOverlayCallsites(): Map<string, number> {
       ts.forEachChild(node, visit)
     }
     visit(source)
-    if (count > 0) result.set(relative(SRC_ROOT, file), count)
+    if (count > 0) result.set(toPortableRelativePath(relative(SRC_ROOT, file)), count)
   }
 
   return result

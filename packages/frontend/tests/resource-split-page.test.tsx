@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { useRef, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -378,7 +379,7 @@ describe('ResourceSplitPage — structure & three states', () => {
 
   test('compact cards keep keyboard focus, two-line descriptions, and semantic summary chrome', () => {
     const css = readFileSync(
-      path.resolve(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css'),
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/styles.css'),
       'utf8',
     )
     expect(css).toContain('.split-card:focus-visible')
@@ -402,7 +403,7 @@ describe('ResourceSplitPage — structure & three states', () => {
 describe('ResourceSplitPage — mobile list/detail DOM contract', () => {
   test('CSS switches exactly one split pane at the 1080px compact breakpoint', () => {
     const css = readFileSync(
-      path.resolve(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css'),
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/styles.css'),
       'utf8',
     )
     expect(css).toMatch(/@media \(max-width: 1080px\)[\s\S]*?data-mobile-view='list'/)

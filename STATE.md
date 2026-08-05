@@ -203,12 +203,18 @@ iso 从一个已删除的目录上建，报出那四行**点名 git 的**错误�
 **并订正一处**：`task-start-git-identity` 的 3 条红不是预算
 （它本就有预算），是 `stub-opencode-env.sh` 这个 `.sh` 假二进制 EFTYPE——即「**A 类清零**」
 只在当时取样到的文件上成立、**不是全仓成立**，`tests/` 下写 shell shebang 的还有几十个。
-**CI 判定**：本轮四个 commit 里，`c2096da9`（含前两个）与 `0c6c701e` **全绿**；
-`28d32465` 与 `d149da58` 的唯一红都是 Windows e2e 的 `intent-builder` axe
-`color-contrast`（`e2e/intent-builder.spec.ts:193`，首跑 + retry 都红）。**四次观察三红
-一绿，四次的 diff 都不含 `packages/frontend/src` 与 `e2e/`** ⇒ 高频间歇、无代码可归因、
-只在 Windows 腿，正在反复把 `main` 打红。已登记（含观察表）；**下一步是先让那条断言
-打印节点与前景/背景色**再谈处置——现在只打印 `v.id`，三次红都拿不到可定性的证据。
+**Windows e2e 那条 `color-contrast` 已结案，而且此前的定性全错**：按「先让它可诊断」
+把断言换成打印节点与颜色后，**本机 macOS 一跑就红**——`.session-role-badge__label`
+白字压 `#16a34a` 实测 **3.29:1**，11px bold 要 4.5:1。**与平台无关**；看起来「只在
+Windows 腿、还时红时绿」是因为 Assistant 徽章要等助手消息渲染出来才被扫到（时序），
+而这个 spec 落在哪条腿上又决定了谁看得见。三条观察都真、合起来的结论却是错的。
+修复面比 axe 报的大：白字坐在 `--rfc027-accent` 上的有三处，所以**每个 accent 都必须
+对白色 ≥4.5:1**，逐个实测后**两个**不合格——assistant `#16a34a`(3.30)→`#15803d`(5.02)、
+tool `#ea580c`(3.56)→`#c2410c`(5.18)；`tool` 那条 axe 从没报过（要有工具消息才扫得到），
+只修被点名的那个等于留雷。诊断层收进 `e2e/axe-blocking.ts`（16 处 spec 此前各自
+`.map(v => v.id)`，失败时等于什么都没说）。验证：intent-builder 4/4、本机 e2e 全量
+225 passed / 45 skipped / 0 failed、视觉基线 40 张全绿（无场景含角色徽章）、前端
+702 文件 5957 条全绿。
 **相邻套件另有 7 条真红（安静机器上就红），已修并在 Windows 上复测 80 pass / 0 fail**：
 `rfc213-worktree-capture` 的 5 条 EBUSY 拆卸（换 `removeTempDirSync` + 逐目录 try/catch
 ——旧写法在第一个忙目录就中断循环）、同文件 1 条真断言失败（`chmod 000` 在 Windows 上是
@@ -226,6 +232,22 @@ backup|fusion` 命名的 55 个文件）**429 pass / 9 skip / 22 fail**，fusion
 `installFilePlugin` 用 `new URL(spec).pathname` 解 `file:` spec，Windows 上必失败
 （`pluginInstaller.ts:295`，正解 `fileURLToPath`）。以上全部登记 `docs/audit-backlog.md`。
 
+**2026-08-05 续四 · T31 前端矩阵腿已翻开 + T35 的 e2e 常驻红已根治**：
+①**`test-frontend` 加 `windows-latest`**——翻之前先在真机跑到零红：**138 fail / 35 文件
+→ 0 fail / 702 文件 / 5957 条**，三处修复全在测试侧。最大的一条是
+`new URL(import.meta.url).pathname`（**125 条红出自这一个根因**：Windows 上得 `/C:/aw/...`，
+resolve 后成 `C:\C:\aw\...`），全仓 35 个文件换 `fileURLToPath` 并加负向扫描守卫
+`rfc254-file-url-pathname-guard.test.ts`（变异实证：改回旧写法即红）；另两条是
+`path.relative` 结果当 key 去比 `/` 拼的清单（新增 `tests/portable-path.ts`，后端
+`toPortableRelativePath` 的孪生）、夹具 `execSync('grep …')`（Windows 无 grep，且 POSIX 上
+路径带空格同样空结果）与夹具写 `#!/usr/bin/env node` 假二进制（`e2e/harness.ts` 的
+`binary` 支持命令数组，同 fusion 那次「换缝不伪造可执行文件」）。timeout 15→20 是随腿一起
+调（真机 373s vs macOS ~160s），两条逐字锁按 design §8.4 同步。
+②**Windows e2e 那条 `color-contrast` 结案，且此前定性全错**——不是平台问题，是真实的
+WCAG AA 违规（白字压 `#16a34a` = 3.29:1，要 4.5:1）。按自己写的「先让它可诊断」把断言
+换成打印节点与颜色（`e2e/axe-blocking.ts`），**本机 macOS 一跑就红**。修复面比 axe 报的
+大：白字坐在 `--rfc027-accent` 上的有三处 ⇒ 每个取值都要 ≥4.5:1，实测**两个**不合格
+（assistant 3.30、tool 3.56），tool 那条 axe 从没报过（要有工具消息才扫得到）。
 **剩余：T31 的后端矩阵、T32 其余、T33–T35。** T33 **不再被阻塞**——e2e 已能在
 Windows 上跑，剩的是把那几条真失败清零后接腿。**现实评估**：把
 `windows-latest` 直接加进 ci.yml 四个矩阵会让约 8600 条按 POSIX 假设写的后端测试

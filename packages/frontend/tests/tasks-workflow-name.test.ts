@@ -2,9 +2,10 @@
 
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
-const HERE = path.dirname(new URL(import.meta.url).pathname)
+const HERE = path.dirname(fileURLToPath(import.meta.url))
 const LIST_SRC = path.join(HERE, '../src/routes/tasks.tsx')
 const DETAIL_SRC = path.join(HERE, '../src/routes/tasks.detail.tsx')
 const SUBJECT_SRC = path.join(HERE, '../src/components/TaskSubjectLink.tsx')

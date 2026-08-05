@@ -4,6 +4,7 @@
 //   * AclPanel — manage vs read-only render, visibility toggle → PUT body,
 //     hidden entirely under the daemon-token actor (D19)
 
+import { fileURLToPath } from 'node:url'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -352,7 +353,7 @@ describe('workflows editor header — one primary plus visible Validate and More
   test('Launch is unique primary; Validate and More are full-size secondaries', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(path.join(here, '../src/routes/workflows.edit.tsx'), 'utf8')
     const start = src.indexOf('const headerActions')
     expect(start).toBeGreaterThan(-1)

@@ -20,9 +20,10 @@
 import { describe, expect, test } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const SRC = path.join(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   '../src/components/canvas/WorkflowCanvas.tsx',
 )
 

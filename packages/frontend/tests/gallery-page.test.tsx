@@ -19,6 +19,7 @@
 
 import { readFileSync } from 'node:fs'
 import path, { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -41,7 +42,7 @@ import {
 import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
 
-const TEST_DIR = path.dirname(new URL(import.meta.url).pathname)
+const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const FRONTEND_SRC = resolve(TEST_DIR, '..', 'src')
 
 function readSrc(rel: string): string {

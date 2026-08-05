@@ -16,6 +16,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { startDaemon, type DaemonHandle } from './harness'
+import { describeBlocking } from './axe-blocking'
 
 let daemon: DaemonHandle
 
@@ -195,10 +196,10 @@ test('a11y + mobile dark: /intent list and session detail', async ({ page }) => 
   await page.goto(`${daemon.baseUrl}/intent`)
   await expect(page.getByRole('heading', { name: 'Intent Builder' }).first()).toBeVisible()
   const listScan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
-  const listBlocking = listScan.violations.filter(
-    (v) => v.impact === 'critical' || v.impact === 'serious',
-  )
-  expect(listBlocking.map((v) => v.id)).toEqual([])
+  // RFC-254 T35: assert on the described form, not on `.map(v => v.id)` — same
+  // empty-array contract, but a failure names the element and its colours.
+  // See e2e/axe-blocking.ts for why (three Windows reds that proved nothing).
+  expect(describeBlocking(listScan)).toEqual([])
 
   // Self-contained session for the detail scan (no coupling to other tests).
   const createdSession = await fetch(`${daemon.baseUrl}/api/intent-sessions`, {
@@ -241,8 +242,5 @@ test('a11y + mobile dark: /intent list and session detail', async ({ page }) => 
     reviewFollowsBuild: true,
   })
   const detailScan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
-  const detailBlocking = detailScan.violations.filter(
-    (v) => v.impact === 'critical' || v.impact === 'serious',
-  )
-  expect(detailBlocking.map((v) => v.id)).toEqual([])
+  expect(describeBlocking(detailScan)).toEqual([])
 })

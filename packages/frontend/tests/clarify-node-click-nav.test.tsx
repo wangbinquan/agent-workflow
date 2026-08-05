@@ -20,6 +20,7 @@ import { render } from '@testing-library/react'
 import { ReactFlowProvider } from '@xyflow/react'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { NodeRun } from '@agent-workflow/shared'
 import { deriveClarifyNodeNav } from '../src/lib/clarify-node-nav'
 import { ClarifyNode } from '../src/components/canvas/nodes/ClarifyNode'
@@ -240,7 +241,7 @@ describe('toFlowNodes clarifyNav propagation (golden-lock)', () => {
 
 // --- group 4/5/6: wiring + WS + CSS + i18n source locks --------------------
 
-const FRONTEND = path.dirname(new URL(import.meta.url).pathname)
+const FRONTEND = path.dirname(fileURLToPath(import.meta.url))
 const read = (rel: string) => fs.readFile(path.join(FRONTEND, '..', rel), 'utf8')
 
 describe('tasks.detail clarify-node wiring', () => {

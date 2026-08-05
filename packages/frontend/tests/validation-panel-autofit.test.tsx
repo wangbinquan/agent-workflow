@@ -3,6 +3,7 @@
 // must invoke the onAutoFitWrapper callback with the wrapper id from the
 // issue's pointer. Locks both the visibility contract and the wire-up.
 
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import '../src/i18n'
@@ -127,7 +128,7 @@ describe('workflows.edit source guard (RFC-016 T9 wiring)', () => {
   test('routes/workflows.edit.tsx wires onAutoFitWrapper → clearWrapperSize', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const here = path.dirname(new URL(import.meta.url).pathname)
+    const here = path.dirname(fileURLToPath(import.meta.url))
     const src = await fs.readFile(path.join(here, '../src/routes/workflows.edit.tsx'), 'utf8')
     const panelSrc = await fs.readFile(
       path.join(here, '../src/components/workflow-editor/ValidationPanel.tsx'),
