@@ -12,6 +12,7 @@ import { basename, dirname, isAbsolute, join, normalize, parse, relative, sep } 
 import { Database } from 'bun:sqlite'
 import { ExecutionIdentityFailure, executionIdentityFailure } from './failure'
 import { assertPrivateRegularFileForHost, assertSameFileIdentityForHost } from '@/util/fileTrust'
+import { sealDirectoryOwnerOnly } from '@/util/win32Acl'
 
 export const OPENCODE_STORE_LOCK_BASENAME = '.agent-workflow-store.lock'
 const LEGACY_STORE_LOCK_CODEC = 1 as const
@@ -341,7 +342,11 @@ async function readRegularLockPayload(
   lockPath: string,
 ): Promise<{ payload: StoreLockPayload; metadata: Stats }> {
   const before = await regularArtifact(lockPath)
-  if (before === null || !assertPrivateRegularFileForHost(before).trusted || before.size > 4_096)
+  if (
+    before === null ||
+    !(await assertPrivateRegularFileForHost(lockPath, before)).trusted ||
+    before.size > 4_096
+  )
     unsafe()
   const handle = await open(lockPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
@@ -380,7 +385,7 @@ async function writeInternalLockPayload(
   if (
     pathnameBefore === null ||
     !sameFile(descriptorBefore, pathnameBefore) ||
-    !assertPrivateRegularFileForHost(pathnameBefore).trusted
+    !(await assertPrivateRegularFileForHost(lock.lockPath, pathnameBefore)).trusted
   ) {
     unsafe()
   }
@@ -396,7 +401,7 @@ async function writeInternalLockPayload(
     !sameFile(descriptorAfter, pathnameAfter) ||
     descriptorAfter.size !== bytes.byteLength ||
     pathnameAfter.size !== bytes.byteLength ||
-    !assertPrivateRegularFileForHost(pathnameAfter).trusted ||
+    !(await assertPrivateRegularFileForHost(lock.lockPath, pathnameAfter)).trusted ||
     (await readHandleExactly(lock.handle, bytes.byteLength)) !== serialized
   ) {
     unsafe()
@@ -420,6 +425,11 @@ export async function acquireOpencodeStoreLifecycleLock(
     const storeDir = dirname(dbPath)
     await ensureNoSymlinkDirectory(storeDir)
     await chmod(storeDir, 0o700)
+    // RFC-254 T40b: on win32 `chmod 0o700` is a near-noop and the dir inherits
+    // whatever DACL its parent carries (e.g. a broad `%TEMP%` grants Users +
+    // Authenticated Users). Seal it to owner+TCB with inheritance so the lock and
+    // every store file created below prove private. POSIX keeps the mode above.
+    if (process.platform === 'win32' && !(await sealDirectoryOwnerOnly(storeDir)).trusted) unsafe()
     const lockPath = join(storeDir, OPENCODE_STORE_LOCK_BASENAME)
     const handle = await open(
       lockPath,
@@ -439,7 +449,7 @@ export async function acquireOpencodeStoreLifecycleLock(
         !sameFile(descriptor, pathname) ||
         descriptor.size !== Buffer.byteLength(payload) ||
         pathname.size !== Buffer.byteLength(payload) ||
-        !assertPrivateRegularFileForHost(pathname).trusted
+        !(await assertPrivateRegularFileForHost(lockPath, pathname)).trusted
       ) {
         unsafe()
       }
@@ -558,7 +568,11 @@ export async function removeAbandonedOpencodeStoreLock(input: {
     unsafe()
   }
   const before = await regularArtifact(inspected.lockPath)
-  if (before === null || !assertPrivateRegularFileForHost(before).trusted) unsafe()
+  if (
+    before === null ||
+    !(await assertPrivateRegularFileForHost(inspected.lockPath, before)).trusted
+  )
+    unsafe()
   const handle = await open(inspected.lockPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
     const descriptor = await handle.stat()

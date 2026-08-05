@@ -12,9 +12,14 @@ import {
   PRIVATE_FILE_MODE,
   SEALED_EXEC_MODE,
   assertPrivateRegularFile,
+  assertPrivateRegularFileByPath,
+  assertPrivateRegularFileByPathSync,
   assertSameFileIdentity,
   assertUnopenedPrivateFile,
+  assertUnopenedPrivateFileByPath,
+  assertUnopenedPrivateFileByPathSync,
   statMetadataIsAuthoritative,
+  type FileTrustVerdict,
   type TrustStats,
 } from '@/util/fileTrust'
 
@@ -214,5 +219,143 @@ describe('RFC-254 file trust primitive', () => {
   test('PRIVATE_FILE_MODE is the mode the verified store actually writes', () => {
     expect(PRIVATE_FILE_MODE).toBe(0o600)
     expect(SEALED_EXEC_MODE).toBe(0o500)
+  })
+})
+
+// RFC-254 T40b: the PATH-aware privacy variants. On POSIX they route to the
+// existing mode arithmetic (the win32 DACL reader is never consulted); on win32
+// they apply the stat-based guards (regular file, not a link, size) and then
+// defer to the injected reader. The reader is injected here so both branches run
+// on any OS — the real reader (`win32Acl.ts`) is proven on a Windows VM.
+describe('RFC-254 path-aware privacy (T40b)', () => {
+  const READER_VERDICT: FileTrustVerdict = { trusted: false, reason: 'is-link' }
+  function spyReader() {
+    const calls: string[] = []
+    const reader = (path: string) => {
+      calls.push(path)
+      return READER_VERDICT
+    }
+    return { calls, reader }
+  }
+
+  describe('POSIX routes to mode arithmetic, never the DACL reader', () => {
+    test('async: private mode trusted, reader untouched', async () => {
+      const { calls, reader } = spyReader()
+      expect(
+        await assertPrivateRegularFileByPath('/x', stats(), 'linux', async (p) => reader(p)),
+      ).toEqual({ trusted: true })
+      expect(
+        await assertPrivateRegularFileByPath('/x', stats({ mode: 0o100666 }), 'linux', async (p) =>
+          reader(p),
+        ),
+      ).toEqual({
+        trusted: false,
+        reason: 'not-private',
+      })
+      expect(calls).toEqual([])
+    })
+
+    test('sync: same verdict, reader untouched', () => {
+      const { calls, reader } = spyReader()
+      expect(assertPrivateRegularFileByPathSync('/x', stats(), 'linux', reader)).toEqual({
+        trusted: true,
+      })
+      expect(calls).toEqual([])
+    })
+
+    test('unopened async/sync honor link + size on POSIX without the reader', () => {
+      const { calls, reader } = spyReader()
+      const link = stats({ isSymbolicLink: () => true })
+      expect(assertUnopenedPrivateFileByPathSync('/x', link, 'linux', reader)).toEqual({
+        trusted: false,
+        reason: 'is-link',
+      })
+      expect(calls).toEqual([])
+    })
+  })
+
+  describe('win32 applies stat guards, THEN the DACL reader', () => {
+    test('a non-regular file is rejected before the reader runs', async () => {
+      const { calls, reader } = spyReader()
+      expect(
+        await assertPrivateRegularFileByPath(
+          '/x',
+          stats({ isFile: () => false }),
+          'win32',
+          async (p) => reader(p),
+        ),
+      ).toEqual({ trusted: false, reason: 'not-regular-file' })
+      expect(calls).toEqual([])
+    })
+
+    test('a symlink is reported as a link before the reader runs (unopened)', () => {
+      const { calls, reader } = spyReader()
+      const link = stats({ isSymbolicLink: () => true })
+      expect(assertUnopenedPrivateFileByPathSync('/x', link, 'win32', reader)).toEqual({
+        trusted: false,
+        reason: 'is-link',
+      })
+      expect(calls).toEqual([])
+    })
+
+    test('an oversize file fails the ceiling before the reader runs (unopened)', () => {
+      const { calls, reader } = spyReader()
+      expect(
+        assertUnopenedPrivateFileByPathSync('/x', stats({ size: 999 }), 'win32', reader, {
+          maxBytes: 100,
+        }),
+      ).toEqual({ trusted: false, reason: 'size-changed' })
+      expect(calls).toEqual([])
+    })
+
+    test('async unopened: guards pass -> reader decides (and a symlink short-circuits it)', async () => {
+      const { calls, reader } = spyReader()
+      // symlink short-circuits before the reader
+      const link = stats({ isSymbolicLink: () => true })
+      expect(
+        await assertUnopenedPrivateFileByPath('/x', link, 'win32', async (p) => reader(p)),
+      ).toEqual({ trusted: false, reason: 'is-link' })
+      // a clean regular file reaches the reader
+      expect(
+        await assertUnopenedPrivateFileByPath('C:\\store\\ack.json', stats(), 'win32', async (p) =>
+          reader(p),
+        ),
+      ).toBe(READER_VERDICT)
+      expect(calls).toEqual(['C:\\store\\ack.json'])
+    })
+
+    test('guards passed -> the DACL reader decides, and gets the path', async () => {
+      const { calls, reader } = spyReader()
+      const asyncVerdict = await assertPrivateRegularFileByPath(
+        'C:\\store\\manifest.json',
+        stats(),
+        'win32',
+        async (p) => reader(p),
+      )
+      expect(asyncVerdict).toBe(READER_VERDICT)
+      const syncVerdict = assertPrivateRegularFileByPathSync(
+        'C:\\store\\ack.json',
+        stats(),
+        'win32',
+        reader,
+      )
+      expect(syncVerdict).toBe(READER_VERDICT)
+      expect(calls).toEqual(['C:\\store\\manifest.json', 'C:\\store\\ack.json'])
+    })
+
+    test('the win32 branch ignores the synthesized mode (0o666 is fine here)', () => {
+      const { reader } = spyReader()
+      // A win32 file always reports 0o666; the DACL reader — not the mode — decides.
+      const trustingReader = () => ({ trusted: true }) as FileTrustVerdict
+      expect(
+        assertPrivateRegularFileByPathSync(
+          '/x',
+          stats({ mode: 0o100666 }),
+          'win32',
+          trustingReader,
+        ),
+      ).toEqual({ trusted: true })
+      void reader
+    })
   })
 })

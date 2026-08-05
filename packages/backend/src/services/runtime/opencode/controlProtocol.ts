@@ -13,9 +13,9 @@ import {
 } from 'node:fs'
 import { timingSafeEqual } from 'node:crypto'
 import {
-  assertPrivateRegularFileForHost,
+  assertPrivateRegularFileForHostSync,
   assertSameFileIdentityForHost,
-  assertUnopenedPrivateFileForHost,
+  assertUnopenedPrivateFileForHostSync,
 } from '@/util/fileTrust'
 import { z } from 'zod'
 import {
@@ -199,7 +199,7 @@ export function writeControlAckExclusive(path: string, ack: ControlAck): void {
     writeFileSync(fd, content, { encoding: 'utf8' })
     fsyncSync(fd)
     const stat = fstatSync(fd)
-    if (!assertPrivateRegularFileForHost(stat).trusted) {
+    if (!assertPrivateRegularFileForHostSync(path, stat).trusted) {
       throw new ControlProtocolError('unsafe-ack-file')
     }
   } catch (error) {
@@ -214,7 +214,10 @@ export function readControlAck(path: string, expectedNonce: string): ControlAck 
   let fd: number | undefined
   try {
     const before = lstatSync(path)
-    if (!assertUnopenedPrivateFileForHost(before, { maxBytes: MAX_CONTROL_ACK_BYTES }).trusted) {
+    if (
+      !assertUnopenedPrivateFileForHostSync(path, before, { maxBytes: MAX_CONTROL_ACK_BYTES })
+        .trusted
+    ) {
       throw new ControlProtocolError('unsafe-ack-file')
     }
     fd = openSync(path, constants.O_RDONLY | noFollowFlag())

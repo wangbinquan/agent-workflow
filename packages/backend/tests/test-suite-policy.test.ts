@@ -55,6 +55,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // platform loses the "runaway child is reaped" guarantee. The rest of the
   // file now runs on Windows (T39/T40a made the version-probe snapshot work).
   'packages/backend/tests/rfc135-runtimes-status.test.ts#skipIf': 2,
+  // RFC-254 T40b: the REAL icacls/whoami DACL round-trip proves the win32
+  // file-privacy primitive on a Windows machine (verified on ARM64). Its six
+  // cases depend on the actual Windows ACL subsystem, so they run ONLY on win32;
+  // the SDDL parsing + whitelist verdict they exercise are covered platform-
+  // agnostically by the pure suite rfc254-win32-acl.test.ts.
+  'packages/backend/tests/rfc254-win32-acl-integration.test.ts#skipIf': 1,
   'e2e/clarify.spec.ts#skip': 1,
   // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
   // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can

@@ -9,6 +9,7 @@ import { Database } from 'bun:sqlite'
 import { lstat, mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { assertWindowsFilePrivate } from '@/util/win32Acl'
 import {
   acquireOpencodeStoreLifecycleLock,
   bindOpencodeStoreServerProcess,
@@ -102,7 +103,14 @@ describe('RFC-224 OpenCode store lifecycle lock', () => {
     const nonce = 'A'.repeat(43)
     const lock = await acquireOpencodeStoreLifecycleLock(dbPath, nonce)
     expect(lock.nonceDigest).toHaveLength(64)
-    expect((await lstat(lock.lockPath)).mode & 0o777).toBe(0o600)
+    // RFC-254 T40b: POSIX proves privacy from the mode; win32 synthesizes 0o666
+    // for every writable file, so there the proof is the DACL the store sealed —
+    // exactly what acquireOpencodeStoreLifecycleLock enforces on that platform.
+    if (process.platform === 'win32') {
+      expect(await assertWindowsFilePrivate(lock.lockPath)).toEqual({ trusted: true })
+    } else {
+      expect((await lstat(lock.lockPath)).mode & 0o777).toBe(0o600)
+    }
     expect(JSON.parse((await readFile(lock.lockPath, 'utf8')).trim())).toEqual({
       codec: 2,
       nonce,

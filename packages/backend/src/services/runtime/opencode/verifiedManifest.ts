@@ -329,10 +329,10 @@ export async function writeVerifiedLaunchManifest(
     await handle.writeFile(bytes)
     await handle.sync()
     const metadata = await handle.stat()
-    // RFC-254 T0a: the privacy proof lives in one place now. On a platform
-    // that cannot prove it from stat metadata the verdict is an explicit
-    // `platform-unsupported`, not a silent pass.
-    if (!assertPrivateRegularFileForHost(metadata).trusted) {
+    // RFC-254 T0a/T40b: the privacy proof lives in one place now. POSIX proves it
+    // from `mode`; win32 reads the DACL by path. A platform that cannot prove it
+    // returns `platform-unsupported`, never a silent pass.
+    if (!(await assertPrivateRegularFileForHost(path, metadata)).trusted) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
   } finally {
@@ -347,7 +347,11 @@ export async function readAndUnlinkVerifiedLaunchManifest(
   try {
     const before = await lstat(path)
     if (
-      !assertUnopenedPrivateFileForHost(before, { maxBytes: MAX_VERIFIED_MANIFEST_BYTES }).trusted
+      !(
+        await assertUnopenedPrivateFileForHost(path, before, {
+          maxBytes: MAX_VERIFIED_MANIFEST_BYTES,
+        })
+      ).trusted
     ) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }

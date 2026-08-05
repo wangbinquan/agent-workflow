@@ -35,6 +35,12 @@
 // Every function is pure over a `Stats`-shaped input plus an explicit
 // `platform`, so both branches are exercised on whatever OS runs the suite.
 
+// The win32 DACL readers for the path-aware privacy wrappers. Imported only by the
+// `...ForHost` wrappers below; the pure `assert*` functions and their tests never
+// touch them, so this module's testability is unchanged. Both a Promise-returning
+// and a sync twin exist because the control-ACK path is synchronous.
+import { assertWindowsFilePrivate, assertWindowsFilePrivateSync } from './win32Acl'
+
 /** The only mode a platform-private file may carry on POSIX. */
 export const PRIVATE_FILE_MODE = 0o600
 /** The only mode a sealed (read+execute, never writable) tree may carry. */
@@ -189,20 +195,148 @@ export function assertSameFileIdentity(
   return TRUSTED
 }
 
+// --- path-aware privacy (RFC-254 T40b) --------------------------------------
+//
+// PRIVACY is the one proof win32 cannot answer from stat metadata (its `mode` is
+// synthesized). There the answer lives in the DACL, read by PATH — so these
+// variants take the path and, on win32 only, defer to an injected reader that
+// inspects the actual ACL (`util/win32Acl.ts:assertWindowsFilePrivate` in
+// production). The reader is a parameter, not an import, so this module stays pure
+// and BOTH branches run on any OS: a POSIX test passes a fake win32 reader.
+//
+// IDENTITY (dev/ino) and the link/size checks remain stat-based and are applied
+// here too, so the win32 path still rejects a symlink or an oversize file before
+// ever consulting the DACL.
+
+export type WindowsFilePrivacyReader = (path: string) => Promise<FileTrustVerdict>
+export type WindowsFilePrivacyReaderSync = (path: string) => FileTrustVerdict
+
+/**
+ * The non-DACL half of the win32 privacy checks — the guards that are identical
+ * for the sync and async variants. Returns a verdict to short-circuit with, or
+ * `null` to mean "guards passed, now consult the DACL reader".
+ */
+function win32PrivacyGuards(
+  stats: TrustStats,
+  checkLink: boolean,
+  expectation?: UnopenedFileExpectation,
+): FileTrustVerdict | null {
+  if (checkLink && stats.isSymbolicLink()) return deny('is-link')
+  if (!stats.isFile()) return deny('not-regular-file')
+  if (expectation?.maxBytes !== undefined && Number(stats.size) > expectation.maxBytes) {
+    return deny('size-changed')
+  }
+  return null
+}
+
+export async function assertPrivateRegularFileByPath(
+  path: string,
+  stats: TrustStats,
+  platform: NodeJS.Platform,
+  win32Reader: WindowsFilePrivacyReader,
+  expectedMode: number = PRIVATE_FILE_MODE,
+): Promise<FileTrustVerdict> {
+  if (platform !== 'win32') return assertPrivateRegularFile(stats, platform, expectedMode)
+  return win32PrivacyGuards(stats, false) ?? win32Reader(path)
+}
+
+export async function assertUnopenedPrivateFileByPath(
+  path: string,
+  stats: TrustStats,
+  platform: NodeJS.Platform,
+  win32Reader: WindowsFilePrivacyReader,
+  expectation: UnopenedFileExpectation = {},
+): Promise<FileTrustVerdict> {
+  if (platform !== 'win32') return assertUnopenedPrivateFile(stats, platform, expectation)
+  // Link rejection first (same ordering as the POSIX path) so a planted symlink
+  // reports as a link rather than as whatever its target's ACL happens to be.
+  return win32PrivacyGuards(stats, true, expectation) ?? win32Reader(path)
+}
+
+export function assertPrivateRegularFileByPathSync(
+  path: string,
+  stats: TrustStats,
+  platform: NodeJS.Platform,
+  win32Reader: WindowsFilePrivacyReaderSync,
+  expectedMode: number = PRIVATE_FILE_MODE,
+): FileTrustVerdict {
+  if (platform !== 'win32') return assertPrivateRegularFile(stats, platform, expectedMode)
+  return win32PrivacyGuards(stats, false) ?? win32Reader(path)
+}
+
+export function assertUnopenedPrivateFileByPathSync(
+  path: string,
+  stats: TrustStats,
+  platform: NodeJS.Platform,
+  win32Reader: WindowsFilePrivacyReaderSync,
+  expectation: UnopenedFileExpectation = {},
+): FileTrustVerdict {
+  if (platform !== 'win32') return assertUnopenedPrivateFile(stats, platform, expectation)
+  return win32PrivacyGuards(stats, true, expectation) ?? win32Reader(path)
+}
+
 // --- host-frozen wrappers ----------------------------------------------------
+//
+// The privacy wrappers are async and path-aware because their win32 branch reads
+// the DACL (I/O). Identity stays sync — dev/ino need no ACL (RFC-254 T40a).
 
 export function assertPrivateRegularFileForHost(
+  path: string,
   stats: TrustStats,
   expectedMode?: number,
-): FileTrustVerdict {
-  return assertPrivateRegularFile(stats, process.platform, expectedMode)
+): Promise<FileTrustVerdict> {
+  return assertPrivateRegularFileByPath(
+    path,
+    stats,
+    process.platform,
+    assertWindowsFilePrivate,
+    expectedMode,
+  )
 }
 
 export function assertUnopenedPrivateFileForHost(
+  path: string,
+  stats: TrustStats,
+  expectation?: UnopenedFileExpectation,
+): Promise<FileTrustVerdict> {
+  return assertUnopenedPrivateFileByPath(
+    path,
+    stats,
+    process.platform,
+    assertWindowsFilePrivate,
+    expectation,
+  )
+}
+
+// Sync twins for the control-ACK path (`controlProtocol.ts` uses `openSync`/
+// `fstatSync`). Same verdict as the async wrappers; only the win32 DACL read is
+// synchronous (`spawnSync icacls`), which runs once per launch.
+export function assertPrivateRegularFileForHostSync(
+  path: string,
+  stats: TrustStats,
+  expectedMode?: number,
+): FileTrustVerdict {
+  return assertPrivateRegularFileByPathSync(
+    path,
+    stats,
+    process.platform,
+    assertWindowsFilePrivateSync,
+    expectedMode,
+  )
+}
+
+export function assertUnopenedPrivateFileForHostSync(
+  path: string,
   stats: TrustStats,
   expectation?: UnopenedFileExpectation,
 ): FileTrustVerdict {
-  return assertUnopenedPrivateFile(stats, process.platform, expectation)
+  return assertUnopenedPrivateFileByPathSync(
+    path,
+    stats,
+    process.platform,
+    assertWindowsFilePrivateSync,
+    expectation,
+  )
 }
 
 export function assertSameFileIdentityForHost(
