@@ -377,6 +377,51 @@ win32 视觉基线现在**不再被阻塞**——e2e 已能在 Windows 上跑，
 回放 + argv 契约 + Node 兼容守门 + shared 套件 + typecheck + 单二进制与 stub 的
 构建冒烟 + doctor。
 
+## T32 分类结果（2026-08-05，Windows 11 真机实测）
+
+用 Parallels 上的 Windows 11 虚拟机（`10.211.55.3`）跑后端全量，把「386 条失败」的
+估算换成了**逐条实测**。首要发现是：**当初那份勘测清单里有相当比例是取样器的假阳性**
+——VM 上是 T29 之前的旧快照（`.sh` 老 stub 还在、编译版 stub 源没同步过去），
+17 条 stub argv 失败全部出自此，与 Windows 无关。清干净重跑后剩 **约 32 条**。
+
+**「慢还是根本没起来」这个悬案已结**：两者都不是。RFC-224 那簇在 Windows 上是
+**秒级失败**（`bindReadOnly` 的 zod 校验、进程组语义），不是超时；12 秒预算从来
+不是瓶颈。本机基线也佐证：整个文件 26 条 1.58 秒跑完。
+
+已处理（含各自的正/反向验证）：
+
+- **B 类·POSIX provider 专属（29 条）** —— 断言的**主语**就是 POSIX 隔离机制
+  （root-owned bwrap 命名空间试探、supervisor 的进程组归属与 PGID 信号阶梯、
+  bwrap bind/mask 投影、macOS Seatbelt profile 文本）。RFC-254 v1 明确不给 Windows
+  任何 provider，这些路径在该平台上**不是没测，是不存在**。判据抽成单一事实源
+  `packages/backend/tests/fixtures/platformScope.ts`，逐条登记进
+  `ALLOWED_SKIP_COUNTS`。**不可达本身有正面断言**：`rfc205-sandbox-probe-wrap.test.ts`
+  注入 `'win32'` 断言 mechanism 为 null、unavailable，且它在每个平台都跑。
+  实测：macOS 40 pass / 0 skip；Windows 11 pass / 29 skip / 0 fail。
+- **env 消毒的平台分歧（1 条）** —— 不是缺陷，是 T2 的直接后果，因此**两个平台的
+  答案都断言**而不是跳过一个。Windows 环境变量名大小写不敏感，`lower` 与 `LOWER`
+  本就是同一个变量，折叠后放行不构成额外暴露。
+- **两处真实生产缺陷** —— 见 `docs/audit-backlog.md`「Windows 真机勘测发现的两处
+  生产缺陷」：仓库缓存目录名把整条源路径编进去导致 `git clone` 报
+  `fatal: '$GIT_DIR' too big`（已修，且刻意不动哈希以免存量缓存重键）；
+  `spawn('npm')` 撞 `.cmd` 垫片使插件安装在 Windows 上整体不可用（未修，需独立改动，
+  且**不得**用 `shell: true`）。
+- **测试设施的可移植性缺陷（1 条）** —— `test-suite-policy.test.ts` 用宿主分隔符拼
+  清单 key，Windows 上**每一条**都对不上，报表呈现为「整份已审阅清单同时缺失且多余」。
+
+剩余待办（已定性，未修）：
+
+| 类 | 条数 | 处理方式 |
+|---|---|---|
+| A `.sh` 假二进制夹具（`listOpencodeModels` 等） | ~9 | 同 T29：换成真正跨平台的可执行 stub |
+| C 源码文本 grep 守卫（NUL 字节 / cross-clarify / nodeRuns） | 5 | 待查 |
+| D 杂项（worktree 建删、MCP sdk 解析、`nonInteractiveGitEnv`） | ~9 | 逐条 |
+
+**取样器本身的教训**（已同步 `docs/dev-gotchas.md` 的候选）：拿一台真机做勘测时，
+**先证明树与 HEAD 一致**再信它的失败清单；两次全量并发写同一个输出文件会得到
+无法归属的混合结果；wipe 掉 `packages/` 会连 workspace 内的 `node_modules` 一起带走，
+表现为 `Cannot find package 'zod'` 这种与改动无关的加载失败。
+
 ## 交付前必过清单
 
 - [ ] `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿（每 PR）。

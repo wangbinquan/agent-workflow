@@ -309,12 +309,43 @@ function lastPathSegment(p: string): string {
   let r = normalizePath(p)
   if (r.endsWith('/')) r = r.slice(0, -1)
   if (r.endsWith('.git')) r = r.slice(0, -4)
-  const idx = r.lastIndexOf('/')
+  // RFC-254 T32: `\` is a separator too when the path came from a Windows
+  // `file://` URL. Splitting on `/` alone made the ENTIRE path the "last
+  // segment" there, and since the next line rewrites every unsafe character to
+  // `-`, the cache directory was named after the whole source path:
+  //   70dbb423-C--Users-…-Temp-aw-cached-repos-…-remote-01KZ….partial-01KZ…
+  // git then failed the clone outright with `fatal: '$GIT_DIR' too big` — a
+  // limit `core.longpaths` does NOT lift, because it is git's own buffer for
+  // GIT_DIR rather than a Win32 MAX_PATH check.
+  //
+  // Only the SLUG is treated this way, never `canonicalForHash` — the hash is
+  // a stable cache key and re-deriving it would silently re-key every existing
+  // cached repo. The slug is cosmetic: it participates in the directory NAME,
+  // and existing rows carry their own `localPath`, so changing how new names
+  // are spelled leaves cached rows working.
+  const idx = Math.max(r.lastIndexOf('/'), r.lastIndexOf('\\'))
   const seg = idx >= 0 ? r.slice(idx + 1) : r
   // Strip filesystem-unsafe chars; keep alnum, dash, dot, underscore.
   const slug = seg.replace(/[^A-Za-z0-9._-]/g, '-').replace(/^-+|-+$/g, '')
-  return slug.length > 0 ? slug : 'repo'
+  // Bound it regardless of how it was derived. The separator fix above removes
+  // the known way an unbounded slug arose, but the slug is one component of a
+  // path that also carries an 8-char hash, a `.partial-` marker and a ULID, and
+  // nothing upstream promises a short final segment. Truncating here keeps that
+  // whole name inside what git and Win32 accept, whatever the input looked like.
+  const bounded = slug.slice(0, MAX_CACHE_SLUG_LENGTH).replace(/-+$/g, '')
+  return bounded.length > 0 ? bounded : 'repo'
 }
+
+/**
+ * Longest slug admitted into a cache directory name.
+ *
+ * The full name is `<8-char hash>-<slug>.partial-<26-char ULID>`, so the fixed
+ * parts already cost ~45 characters before the cache root is prepended. 64
+ * leaves an ordinary repository name completely intact — the longest real one
+ * this bounds is far past anything a `git clone` produces — while capping the
+ * pathological case.
+ */
+const MAX_CACHE_SLUG_LENGTH = 64
 
 /**
  * Stable per-URL cache directory key: `sha1(canonical).slice(0,8) + '-' + slug`.

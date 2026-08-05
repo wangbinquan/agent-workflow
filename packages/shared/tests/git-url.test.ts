@@ -205,6 +205,41 @@ describe('gitUrlCacheKeyWith', () => {
     for (const k of keys) expect(k.hash).toBe(first.hash)
   })
 
+  // RFC-254 T32 regression. Measured on Windows: cloning a `file://` repo died
+  // with `fatal: '$GIT_DIR' too big`, because the slug is derived from the last
+  // path segment by splitting on `/` — and a Windows path separates with `\`,
+  // so the ENTIRE path came back as one segment. Every unsafe character is then
+  // rewritten to `-`, producing a cache directory named after the whole source
+  // path. `core.longpaths` does not help: that limit is git's own GIT_DIR
+  // buffer, not a Win32 MAX_PATH check.
+  test('a Windows file:// path slugs to its last segment, not the whole path', () => {
+    const parsed = parseGitUrl('file://C:\\Users\\op\\AppData\\Local\\Temp\\aw-x\\remote-01KZ.git')
+    expect(parsed).not.toBeNull()
+    const { slug } = gitUrlCacheKeyWith(parsed!, sha1Hex)
+    expect(slug).toBe('remote-01KZ')
+  })
+
+  test('the slug is bounded however long the final segment is', () => {
+    const parsed = parseGitUrl(`https://github.com/foo/${'a'.repeat(300)}.git`)
+    expect(parsed).not.toBeNull()
+    const { slug } = gitUrlCacheKeyWith(parsed!, sha1Hex)
+    expect(slug.length).toBeLessThanOrEqual(64)
+    expect(slug).toBe('a'.repeat(64))
+  })
+
+  // The separator fix must never reach `canonicalForHash`. The hash is the
+  // stable cache key that existing `cached_repos` rows were written under, so
+  // re-deriving it would silently re-key every cached repo on disk. These two
+  // pin the hash against a spelling change made for the slug's benefit.
+  test('the slug fix does not move any hash', () => {
+    const posix = gitUrlCacheKeyWith(parseGitUrl('file:///srv/repos/bar.git')!, sha1Hex)
+    expect(posix.hash).toBe(sha1Hex(posix.canonical).slice(0, 8))
+    const backslashInPosixName = gitUrlCacheKeyWith(parseGitUrl('file:///srv/a\\b.git')!, sha1Hex)
+    // `\` is a LEGAL character in a POSIX filename, so it must not change what
+    // is hashed — only how the display slug is cut.
+    expect(backslashInPosixName.canonical).toContain('a\\b')
+  })
+
   test('https with different user:pass for same repo collapse to same hash', () => {
     const a = gitUrlCacheKeyWith(parseGitUrl('https://github.com/foo/bar.git')!, sha1Hex)
     const b = gitUrlCacheKeyWith(parseGitUrl('https://u:p@github.com/foo/bar.git')!, sha1Hex)

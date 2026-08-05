@@ -18,6 +18,7 @@ import {
   wrapSpawnPlanSandbox,
   type SandboxCtx,
 } from '../src/services/sandbox/index'
+import { NO_POSIX_CONTAINMENT } from './fixtures/platformScope'
 
 afterEach(() => resetSandboxStatusForTest())
 
@@ -107,7 +108,13 @@ describe('sandboxEnforceBlocked (RFC-205 P0-1 — enforce fails closed)', () => 
   })
 })
 
-describe('wrapSandbox (spawn-boundary)', () => {
+// RFC-254 T32: this describe builds the argv HEAD for `sandbox-exec` and
+// `bwrap` — provider-scoped in exactly the sense `platformScope.ts` describes.
+// The other two describes in this file stay ungated on purpose: one of them
+// carries the win32 injection ('unsupported platform → null mechanism,
+// unavailable') that is the POSITIVE evidence the whole scoping story rests
+// on, and it must keep running on Windows for that citation to mean anything.
+describe.skipIf(NO_POSIX_CONTAINMENT)('wrapSandbox (spawn-boundary)', () => {
   const cmd = ['opencode', 'run', '--agent', 'x', '--', 'prompt'] as const
 
   test('no ctx → pass-through, NEW array, input untouched', () => {

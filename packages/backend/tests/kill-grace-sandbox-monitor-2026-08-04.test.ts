@@ -17,6 +17,7 @@ import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { killProcessTree, processGroupMembers } from '../src/util/process'
+import { NO_POSIX_CONTAINMENT } from './fixtures/platformScope'
 
 const spawned: Bun.Subprocess[] = []
 
@@ -62,7 +63,7 @@ const alive = (pid: number): boolean => {
   }
 }
 
-describe('killProcessTree — 优雅信号放过沙箱 monitor', () => {
+describe.skipIf(NO_POSIX_CONTAINMENT)('killProcessTree — 优雅信号放过沙箱 monitor', () => {
   test('processGroupMembers 能枚举出组长与其后代', async () => {
     const child = spawnGroup()
     await Bun.sleep(300)

@@ -10,6 +10,7 @@ import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import ts from 'typescript'
+import { toPortableRelativePath } from '@/util/platformExec'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const TEST_ROOTS = [
@@ -72,6 +73,34 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/integration-opencode/opencode-live.integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,
+  // RFC-254 T32: the three entries below all carry `NO_POSIX_CONTAINMENT`, and
+  // the full reasoning — including why this is scoping rather than a Windows
+  // bug to fix, and what asserts the absence positively — lives in
+  // `fixtures/platformScope.ts`, next to the predicate itself.
+  //
+  // Twenty assertions whose SUBJECT is a POSIX containment provider: the
+  // root-owned bwrap namespace trial, the supervisor's process-GROUP ownership
+  // and its PGID signal ladder, the bwrap bind/mask projection, and the macOS
+  // Seatbelt profile text. The other six tests in the file run everywhere,
+  // including the env rebuild, which asserts BOTH platforms' answers rather
+  // than skipping one.
+  'packages/backend/tests/rfc224-sealed-subprocess.test.ts#skipIf': 20,
+  // The POSIX process GROUP and its TERM/KILL ladder: whether the group leader
+  // is spared during the grace period is a statement about `kill(-pgid)`, which
+  // Windows has no equivalent of. Guarded at the describe, so the count is 1.
+  'packages/backend/tests/kill-grace-sandbox-monitor-2026-08-04.test.ts#skipIf': 1,
+  // Three describes rendering provider input: the sandbox policy, the macOS
+  // Seatbelt profile text, and the Linux bwrap argv. Guarded whole rather than
+  // per-failing-assertion — a Seatbelt profile rendered from Windows paths is
+  // not evidence about anything, so a test of it passing there is incidental.
+  'packages/backend/tests/rfc205-sandbox-policy.test.ts#skipIf': 3,
+  // One describe only — the `sandbox-exec` / `bwrap` argv head. The other two
+  // describes in that file stay ungated deliberately, because one of them holds
+  // the win32-injected 'unsupported platform → null mechanism, unavailable'
+  // assertion that every entry above cites as its positive evidence. Guarding
+  // the file wholesale would have silently removed the proof while leaving the
+  // citations pointing at it.
+  'packages/backend/tests/rfc205-sandbox-probe-wrap.test.ts#skipIf': 1,
   // RFC-227: the REAL macOS Seatbelt provider test shares the reviewed
   // RUN_SANDBOX_ITEST gate and is activated on every macOS backend shard.
   'packages/backend/tests/rfc227-seatbelt-integration.test.ts#skip': 1,
@@ -245,7 +274,14 @@ function collectTestModifiers(): {
   const gates: OptInGateUse[] = []
 
   for (const absolute of TEST_ROOTS.flatMap(listTestFiles)) {
-    const file = relative(REPO_ROOT, absolute)
+    // RFC-254 T32: the repo-relative path is this inventory's KEY, and the
+    // inventory is checked in with `/`. `relative` returns the HOST spelling,
+    // so on Windows every key came back as `packages\backend\tests\...` and not
+    // one of them matched — the policy reported the entire reviewed inventory
+    // as both missing and unexpected, which reads like a mass regression rather
+    // than a separator. The counts were right all along; only the spelling was
+    // not, so the path is normalized once, here, where it becomes a key.
+    const file = toPortableRelativePath(relative(REPO_ROOT, absolute))
     const parsed = parseTestModifiers(file, readFileSync(absolute, 'utf8'))
     modifiers.push(...parsed.modifiers)
     aliases.push(...parsed.aliases)
@@ -290,6 +326,23 @@ describe('repository test-suite policy', () => {
       FORBIDDEN_MODIFIERS.has(modifier),
     )
     expect([...forbidden, ...inventory.aliases]).toEqual([])
+  })
+
+  // RFC-254 T32 regression guard. The reviewed inventory above is keyed by a
+  // repo-relative path spelled with `/`, but the keys are DISCOVERED with
+  // `path.relative`, which answers in the host spelling. On Windows that made
+  // every single key miss, so the policy declared the whole reviewed inventory
+  // simultaneously missing and unexpected — a diff that looks like a mass
+  // regression and is really one separator.
+  //
+  // This guard is only capable of going red on a host whose separator is `\`,
+  // which is exactly the host that had the bug; on POSIX it passes trivially
+  // and simply costs nothing.
+  test('discovered inventory keys are spelled portably, not host-natively', () => {
+    const hostSpelled = [...inventory.modifiers, ...inventory.aliases, ...inventory.gates]
+      .map(({ file }) => file)
+      .filter((file) => file.includes('\\'))
+    expect(hostSpelled).toEqual([])
   })
 
   test('every skip is an explicitly reviewed environment-gated exception', () => {

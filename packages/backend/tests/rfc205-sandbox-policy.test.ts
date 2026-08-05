@@ -13,6 +13,7 @@ import {
   renderBwrapArgs,
   renderSeatbeltProfile,
 } from '../src/services/sandbox/policy'
+import { NO_POSIX_CONTAINMENT } from './fixtures/platformScope'
 
 const HOME = '/h/.agent-workflow'
 const input = {
@@ -21,7 +22,7 @@ const input = {
   runDir: join(HOME, 'runs', 't1', 'n1'),
 }
 
-describe('computeSandboxPolicy', () => {
+describe.skipIf(NO_POSIX_CONTAINMENT)('computeSandboxPolicy', () => {
   // RFC-205 impl-gate P0-3 (Codex 2026-07-22): the whole appHome is denied — an
   // enumerated deny-list missed iso/ (cross-task read/write) and .gitcred-* leases.
   test('deny WHOLE appHome; own dirs + mirror allowed back; secrets stay denied', () => {
@@ -60,7 +61,7 @@ describe('computeSandboxPolicy', () => {
   })
 })
 
-describe('renderSeatbeltProfile', () => {
+describe.skipIf(NO_POSIX_CONTAINMENT)('renderSeatbeltProfile', () => {
   test('allow default first, denies, then allow-backs LAST (last-match-wins)', () => {
     const prof = renderSeatbeltProfile(computeSandboxPolicy(input))
     const lines = prof.split('\n')
@@ -93,7 +94,7 @@ describe('renderSeatbeltProfile', () => {
   })
 })
 
-describe('renderBwrapArgs', () => {
+describe.skipIf(NO_POSIX_CONTAINMENT)('renderBwrapArgs', () => {
   test('order: bind / first, tmpfs appHome, then repos + allow binds', () => {
     const args = renderBwrapArgs(computeSandboxPolicy(input))
     const tmpfsIdx = args.indexOf('--tmpfs')

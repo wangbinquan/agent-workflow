@@ -622,3 +622,70 @@ wrapper drag feedback` 一线）。同上，未单方面修改。
   `packages/backend/tests/rfc254-windows-e2e-exclusions.test.ts` 双向盯着它：标题被
   改名（排除失效、腿会为一个自称已处理的原因变红）或清单变长（用减法维持绿）都会红，
   且要求每条都登记在本文件里。
+
+## Windows 真机勘测发现的两处生产缺陷（RFC-254 T32，2026-08-05）
+
+在 Windows 11 真机上跑后端全量时暴露的、**与测试写法无关的生产代码缺陷**。两条都不是
+Windows 专属写法问题，而是既有实现对「非 POSIX 路径 / 非 POSIX 可执行文件」的假设。
+
+### ① 仓库缓存目录名把整条源路径编进去 → `git clone` 直接失败（已修）
+
+`packages/shared/src/git-url.ts` 的 `lastPathSegment` 只按 `/` 切最后一段。Windows 的
+`file://C:\Users\…\remote-01KZ.git` 用 `\` 分隔，于是**整条路径成了「最后一段」**；
+紧接着每个不安全字符被换成 `-`，缓存目录名变成
+
+```
+70dbb423-C--Users-…-Temp-aw-cached-repos-…-remote-01KZ….partial-01KZ…
+```
+
+git 随即以 `fatal: '$GIT_DIR' too big` 拒绝克隆。**注意这不是 `core.longpaths` 能解的
+那个限制**——它是 git 自己的 GIT_DIR 缓冲上限，不是 Win32 的 MAX_PATH 检查，所以
+RFC-254 已经加的 `-c core.longpaths=true` 对它无效。
+
+修复只动 **slug**（目录名的可读部分），**不动 `canonicalForHash`**：hash 是存量
+`cached_repos` 行的稳定键，重新推导会静默把每个已缓存仓库重键。同时给 slug 加了 64
+字符上限——分隔符只是已知的一种越界途径，而这一段本来就没有任何上游保证其长度。
+回归测试见 `packages/shared/tests/git-url.test.ts`（含一条专门盯住「hash 不得随之移动」）。
+
+### ② 插件安装在 Windows 上整体不可用 —— `spawn('npm')` 撞 `.cmd` 垫片（未修，需独立改动）
+
+`packages/backend/src/services/pluginInstaller.ts:599` 的 `runCommand` 直接
+`spawn(bin, args)`，`bin` 取值 `'npm'`（`:141` 探活、`:221` 实际安装）。Windows 上 npm
+是 `npm.cmd`，`child_process.spawn` 不经 shell 无法执行批处理垫片，报
+
+```
+EFTYPE: inappropriate file type or format, uv_spawn
+```
+
+即**插件安装/探活在 Windows 上没有一条能走通**。
+
+- ⏳ **(P1) 修的时候不要用 `shell: true`**。那会让 cmd.exe 重新切词整条命令行，正是
+  D17 记录的危险面（插件名 / 版本号里的元字符会被解释）。可行方向是绕过垫片直接执行其
+  JS 入口（`node <npm-cli.js>`），或用一个显式的垫片解析层——两者都需要自己的测试。
+- 现状**没有测试会发现它**：后端矩阵还没接 Windows（T31 后端侧未完成），POSIX 上这条
+  路径完全正常。修好前不得声称 Windows 支持插件安装。
+
+## `prose-code-mermaid-theme` 的 flake 修在了错的一层（2026-08-05 观测）
+
+`packages/frontend/tests/prose-code-mermaid-theme.test.tsx:75`
+（`toggling <html data-theme> dark→light re-invokes MermaidBlock.render`）在**全量前端
+套件**下三次跑挂了两次，单独跑该文件 3/3 通过、耗时 33ms。报错是
+
+```
+Error: Test timed out in 5000ms.
+```
+
+**注意这不是断言失败，也不是 `waitFor` 超时**。`f37ef44d` 曾专门治过这条 flake，注释
+写得很清楚：MutationObserver → setState → useEffect 这条链在慢 runner 上会错过 1 秒
+默认预算，所以把 `waitFor` 的显式预算提到 5000ms。问题在于**外层 vitest 测试预算也是
+默认的 5000ms**：内层等待永远等不满就被外层掐断，于是
+
+- 内层那个 5000ms 实际上不可达，等于没提；
+- 失败呈现为「测试超时」而不是作者想要的「renderSpy 最后一次调用不是 dark」诊断，
+  下一个接手的人看不到真正有用的信息；
+- 该测试里有**两个**各 5000ms 的 `waitFor`，预算算术从一开始就不自洽。
+
+- ⏳ **(P2) 修法**：给这条 `test()` 一个大于内层等待之和的超时（vitest 的第三个参数），
+  或把内层预算降到显著小于外层。**不要**只是再调大内层——那正是上次踩的坑。
+- **CI 现在是绿的**，因为前端在 CI 里是分片跑的，负载形态与本地全量不同；这条只在
+  全量同跑时暴露，属于「门禁看不见但真实存在」的一类。
