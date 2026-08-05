@@ -10,6 +10,8 @@ import {
   listOpencodeModels,
   parseModelsOutput,
 } from '../src/util/opencode-models'
+import { fakeBinaryPath, writeFakeBinary } from './fixtures/fakeBinary'
+import { NO_POSIX_CONTAINMENT } from './fixtures/platformScope'
 
 describe('parseModelsOutput', () => {
   test('extracts name from verbose JSON block', () => {
@@ -76,7 +78,7 @@ describe('listOpencodeModels cache', () => {
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'aw-opencode-stub-'))
-    stub = join(tmp, 'stub-opencode.sh')
+    stub = fakeBinaryPath(tmp, 'stub-opencode')
     writeStub(stub, '/* default */')
     clearOpencodeModelsCache()
   })
@@ -98,7 +100,7 @@ describe('listOpencodeModels cache', () => {
   test('different binary path bypasses cache', async () => {
     writeStub(stub, 'anthropic/foo')
     await listOpencodeModels(stub)
-    const otherStub = join(tmp, 'stub-other.sh')
+    const otherStub = fakeBinaryPath(tmp, 'stub-other')
     writeStub(otherStub, 'openai/bar')
     const result = await listOpencodeModels(otherStub)
     expect(result.cached).toBe(false)
@@ -151,7 +153,7 @@ describe('listOpencodeModels cache', () => {
   // must NOT evict A. The old single-slot cache returned cached:false on the 2nd A.
   test('different binaries cache independently — an intervening binary does not evict (D4)', async () => {
     writeStub(stub, 'anthropic/a')
-    const otherStub = join(tmp, 'stub-other.sh')
+    const otherStub = fakeBinaryPath(tmp, 'stub-other')
     writeStub(otherStub, 'openai/b')
     expect((await listOpencodeModels(stub)).cached).toBe(false) // A: miss
     expect((await listOpencodeModels(otherStub)).cached).toBe(false) // B: miss
@@ -162,7 +164,7 @@ describe('listOpencodeModels cache', () => {
   // RFC-114 P3-6: evicting one binary's slot forces a re-run for it only.
   test('evictOpencodeModelsCache drops one binary, leaving others cached', async () => {
     writeStub(stub, 'anthropic/a')
-    const otherStub = join(tmp, 'stub-other2.sh')
+    const otherStub = fakeBinaryPath(tmp, 'stub-other2')
     writeStub(otherStub, 'openai/b')
     await listOpencodeModels(stub)
     await listOpencodeModels(otherStub)
@@ -174,9 +176,8 @@ describe('listOpencodeModels cache', () => {
   // RFC-114 P2-3: a hung fork binary must be killed by the timeout, not wedge the
   // daemon. With a 200ms timeout against a `sleep 5` stub, the call rejects fast.
   test('a hung binary is killed by the timeout', async () => {
-    const hung = join(tmp, 'stub-hung.sh')
-    writeFileSync(hung, '#!/bin/sh\nsleep 5\n')
-    chmodSync(hung, 0o755)
+    const hung = fakeBinaryPath(tmp, 'stub-hung')
+    writeFakeBinary(hung, { sleepSeconds: 5 })
     const t0 = Date.now()
     let threw: Error | null = null
     try {
@@ -188,12 +189,20 @@ describe('listOpencodeModels cache', () => {
     expect(Date.now() - t0).toBeLessThan(3_000) // killed well before the 5s sleep
   })
 
-  test('a wrapper that exits after forking a closed-stdio helper still has its group reaped', async () => {
-    const forking = join(tmp, 'stub-forking.sh')
-    const leakMarker = join(tmp, 'descendant-survived')
-    writeFileSync(
-      forking,
-      `#!/bin/sh
+  // RFC-254 T32: the SUBJECT here is POSIX process-group reaping — a wrapper
+  // exits, its detached descendant keeps running, and the group kill is what
+  // must still reach it. Windows has no process groups; the equivalent is a Job
+  // Object, which RFC-254 v1 deliberately did NOT wire (the primitive exists and
+  // is tested, but nothing spawns into a job yet). So this is scoped rather than
+  // ported: there is no mechanism on that platform for it to be about.
+  test.skipIf(NO_POSIX_CONTAINMENT)(
+    'a wrapper that exits after forking a closed-stdio helper still has its group reaped',
+    async () => {
+      const forking = join(tmp, 'stub-forking.sh')
+      const leakMarker = join(tmp, 'descendant-survived')
+      writeFileSync(
+        forking,
+        `#!/bin/sh
 (
   trap '' HUP
   sleep 1
@@ -202,28 +211,28 @@ describe('listOpencodeModels cache', () => {
 printf 'openai/reaped-helper\n'
 exit 0
 `,
-    )
-    chmodSync(forking, 0o755)
+      )
+      chmodSync(forking, 0o755)
 
-    expect(await listOpencodeModels(forking)).toMatchObject({
-      cached: false,
-      models: [{ id: 'openai/reaped-helper' }],
-    })
-    await Bun.sleep(1_200)
-    expect(existsSync(leakMarker)).toBe(false)
-  })
+      expect(await listOpencodeModels(forking)).toMatchObject({
+        cached: false,
+        models: [{ id: 'openai/reaped-helper' }],
+      })
+      await Bun.sleep(1_200)
+      expect(existsSync(leakMarker)).toBe(false)
+    },
+  )
 })
 
+// RFC-254 T32: the sh script this used to build is not executable on Windows at
+// all, so every test here died with EFTYPE. `writeFakeBinary` emits the right
+// shape per platform and carries the payload in a file rather than escaping it
+// into the script — see `fixtures/fakeBinary.ts` for what that buys and what
+// the Windows form costs.
 function writeStub(
   path: string,
   body: string,
   opts: { exitCode?: number; stderr?: string; recordArgs?: boolean } = {},
 ): void {
-  const { exitCode = 0, stderr = '', recordArgs = false } = opts
-  const escapedBody = body.replace(/'/g, `'\\''`)
-  const escapedStderr = stderr.replace(/'/g, `'\\''`)
-  const argsLog = recordArgs ? `echo "$@" >> "$(dirname "$0")/args.log"\n` : ''
-  const script = `#!/bin/sh\n${argsLog}printf '%s' '${escapedBody}'\nif [ -n '${escapedStderr}' ]; then printf '%s' '${escapedStderr}' >&2; fi\nexit ${exitCode}\n`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
+  writeFakeBinary(path, { stdout: body, ...opts })
 }

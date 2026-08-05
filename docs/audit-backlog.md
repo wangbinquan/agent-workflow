@@ -713,10 +713,25 @@ spawn opencode failed: EFTYPE: inappropriate file type or format, uv_spawn
 - 生产 API 收的是**单个路径字符串**（`listOpencodeModels(binary)`），所以假二进制
   必须是「一个能被直接 spawn 的文件」，不能是 `bun script.js` 这种两段式。
 
-- ⏳ **(P1) 正解 = 沿用 T29 给 e2e stub 的做法**：编译**一个**跨平台 stub 可执行文件，
-  行为由它旁边的数据文件 / 环境变量选择，测试只负责写数据文件。T29 已经证明这条路
-  可行（11 种模式、golden 回放），差别只是要为后端单测再挂一个构建产物。
-- 在此之前**不得**声称这些路径在 Windows 上被覆盖。
+### 2026-08-05 进展：9/11 已修，不需要编译产物
+
+实测推翻了「必须编译一个 stub 可执行文件」的前提：**`Bun.spawn` 能直接执行 `.cmd`**
+（与 `node:child_process.spawn` 不同，后者对批处理 `EFTYPE` 拒绝）。所以后端单测的
+假二进制只要按平台换形态即可，不必给单测挂构建产物。
+
+已落地 `packages/backend/tests/fixtures/fakeBinary.ts`：按平台产出 `.cmd` / sh，
+**输出走数据文件而非往脚本里转义**（两平台字节一致，且免掉批处理对 `%&<>^` 的转义
+地狱）。`opencode-models.test.ts` 9 条已全绿（Windows 实测 13 pass / 1 skip / 0 fail），
+其中 1 条按主语归类守起——它测的是 POSIX 进程组回收，Windows 对应的 Job Object
+按 RFC-254 v1 决定未接线。
+
+**剩 `fusion-engine.test.ts` 2 条**，卡在一个具体障碍上：该 stub 要**解析 argv**
+（用 sed 从提示词里抽 nonce），批处理做不了。可行形态是薄壳 `.cmd` 转发给
+`bun <script.ts> %*`，但 `%*` 过 cmd.exe 会遇到本文件上一条记录的**重新切词**问题，
+而那个提示词里带引号——需要先实测 argv 完整性再决定，不该硬上。
+
+- ⏳ **(P1) 下一步**：在 Windows 上用**真实提示词**测 `%*` 转发的 argv 完整性；
+  完整则落薄壳形态，不完整则按主语归类守起并说明。
 
 ## Windows 上删不掉临时目录：EBUSY 不是「等一下就好」（RFC-254 T32，2026-08-05，未解）
 
@@ -771,3 +786,29 @@ repo-group-flat-20-1440 / repo-group-nested-1440 / workflow-complex-overview
 - **这条腿红着直接挡住 RFC-254 的 T35**（收敛判据 = 连续 3 次 main push 零未登记红）。
 - 教训同 `dev-gotchas.md`：**改共享 chrome（侧栏 / 页头 / 全局样式）必须同批重生成
   视觉基线**，否则代价由下一个碰 CI 的人承担，而且会被误判成他引入的。
+
+## 实测：`Bun.spawn` 执行 `.cmd` 会经 cmd.exe 重新切词（RFC-254 T32，2026-08-05）
+
+在 Windows 11 真机上实测，**不需要 `shell: true`**——Windows 执行批处理本身就要过
+cmd.exe，所以 `Bun.spawn({cmd:['x.cmd', ...args]})` 的 args 会被重新解析：
+
+| 传入 | 子进程实际看到 / 发生了什么 |
+|---|---|
+| `['a&whoami']` | 参数变成 `[a]`，**`whoami` 被执行了**（输出机器名\用户名） |
+| `['x\|y','p>q']` | 管道与重定向被解释，输出为空 |
+| `['%PATH%']` | 环境变量被展开，并按空格拆成 30 多个参数 |
+| `['plain','two words']` | 正常（含空格的整参数得以保留） |
+
+**两条直接结论**：
+
+1. **`node:child_process.spawn` 与 `Bun.spawn` 行为不同**。前者对 `.cmd` 直接
+   `EFTYPE` 拒绝（插件安装那条缺陷的成因），后者接受并交给 cmd.exe。所以「改用
+   `Bun.spawn` 就好了」**能让 `npm --version` 跑通**（实测 code=0 / 11.17.0），
+   但那是用一个注入面换一个报错，**不是修复**——插件名与版本号是用户可控输入。
+2. 测试夹具里用 `.cmd` 假二进制是**可以的**，因为那里的 argv 由测试自己写死
+   （`models --verbose` 之类）。但这个豁免不得外溢到生产：判据是「参数是否可能
+   来自用户/DB/仓库内容」，不是「这里方便」。
+
+- ⏳ **(P1) 插件安装的正解仍是绕开垫片**（直接执行 npm 的 JS 入口），或对参数做严格
+  白名单校验后再走垫片。本条实测把「不得用 `shell: true`」的告诫升级为**有证据的
+  硬约束**，且范围扩大到「任何 `.cmd`/`.bat` 目标」。

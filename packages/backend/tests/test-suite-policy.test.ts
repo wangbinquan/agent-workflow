@@ -92,6 +92,13 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // `provider-parent-unsafe` — a diagnostic regression on its face, and really
   // `/usr/bin/bwrap` resolving to `D:\usr\bin\bwrap`.
   'packages/backend/tests/bwrap-qualification-diagnostics.test.ts#skipIf': 1,
+  // POSIX process-group REAPING: a wrapper exits, its detached descendant keeps
+  // running, and the group kill must still reach it. Windows has no process
+  // groups; the equivalent is a Job Object, which RFC-254 v1 deliberately did
+  // not wire — the primitive exists and is tested, but nothing spawns into a job
+  // yet, so there is no mechanism there for this to be about. The rest of the
+  // file runs on Windows now that its fake binaries are platform-appropriate.
+  'packages/backend/tests/opencode-models.test.ts#skipIf': 1,
   // The POSIX process GROUP and its TERM/KILL ladder: whether the group leader
   // is spared during the grace period is a statement about `kill(-pgid)`, which
   // Windows has no equivalent of. Guarded at the describe, so the count is 1.
