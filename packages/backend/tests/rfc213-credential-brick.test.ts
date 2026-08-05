@@ -10,7 +10,8 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, unlinkSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -29,10 +30,25 @@ function tmp(): string {
   return d
 }
 const savedHome = process.env.AGENT_WORKFLOW_HOME
+// RFC-254 T32: same teardown shape as rfc213-worktree-capture — each temp dir
+// holds an open `db.sqlite`, and on Windows an open handle makes the delete
+// fail outright (measured: all four of this file's tests reported EBUSY
+// teardown failures with their assertions already green). `removeTempDirSync`
+// retries then warns on win32 only; every dir is attempted and the first real
+// error re-thrown AFTER the loop so a POSIX host that cannot delete its own
+// temp dir still fails loudly.
 afterEach(() => {
   if (savedHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
   else process.env.AGENT_WORKFLOW_HOME = savedHome
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  let first: unknown
+  for (const d of tmps.splice(0)) {
+    try {
+      removeTempDirSync(d)
+    } catch (error) {
+      first ??= error
+    }
+  }
+  if (first !== undefined) throw first
 })
 
 /** Seed a DB with one cached_repos row sealed by the key at appHome/secret.key. */
