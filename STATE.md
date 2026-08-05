@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-🚧 **进行中 RFC（In Progress，2026-08-05，用户预批准直接实现）：[RFC-259 GitHub Webhook Adapter](design/RFC-259-github-webhook-adapter/proposal.md)** —— webhook 触发器补 GitHub 支持：provider 枚举 +`github`（零迁移，0138 provider 列无 CHECK）、X-Hub-Signature-256 HMAC 验签（verify 接口扩原始字节，GitLab 逐字节不变）、GitHub 事件归一化进既有 9 类（PR/评论双源 note/workflow_run→pipeline；普通 PR 评论无分支为显式接受限制 D7'）、adapter 接口 provider 化收口（路由层四处 GitLab 专有知识下沉）、前端端点卡 provider 选择 + per-provider 指引、docs GitHub 接入节。匹配/熔断/supersede/dispatch 零改动；rfc257-* 全套为回归门。用户指示「写好 RFC 直接开始扩展」。
+🚧 **进行中 RFC（In Progress，2026-08-05，用户预批准直接实现）：[RFC-259 GitHub Webhook Adapter](design/RFC-259-github-webhook-adapter/proposal.md)** —— webhook 触发器补 GitHub 支持：provider 枚举 +`github`（零迁移，0138 provider 列无 CHECK）、X-Hub-Signature-256 HMAC 验签（verify 接口扩原始字节，GitLab 逐字节不变）、GitHub 事件归一化进既有 9 类（PR/评论双源 note/workflow_run→pipeline；普通 PR 评论无分支为显式接受限制 D7'）、adapter 接口 provider 化收口（路由层四处 GitLab 专有知识下沉）、前端端点卡 provider 选择 + per-provider 指引、docs GitHub 接入节。匹配/熔断/supersede/dispatch 零改动；rfc257-\* 全套为回归门。用户指示「写好 RFC 直接开始扩展」。
 
 🚧 **进行中 RFC（Draft，2026-08-05，三件套已落档待设计门+用户批准）：[RFC-258 源码审阅器与符号跳转](design/RFC-258-source-viewer-symbol-navigation/proposal.md)** —— 结构变更页签的代码呈现升级:「全文」视图档(shiki 全文高亮+变更行标注+折叠)、标识符点击→定义/引用菜单、双引擎(SCIP occurrence 精确 / baseline 三源兜底)、图码联动(全屏下钻 Dialog 右侧源码栏)、面板内导航+面包屑历史栈。地基零新依赖(shiki/file-content/extractSymbols/ScipGraph.bySymbol 全部现成);新端点 file-symbols + code-intel;SCIP index 按 contentDigest LRU 缓存(顺带消 deep 每查重跑 indexer)。用户四问拍板:三块全做单 RFC / 双引擎 / 面板内导航 / 定义+引用都做。
 
@@ -264,11 +264,16 @@ unref 的 deadline 兜一个永不 settle 的 promise ⇒ runner 冻死；原记
 `util/timeoutSignal.ts`；守卫 `rfc254-no-unref-deadline-guard.test.ts` 双禁两形态（上线即
 抓到手数漏掉的两处，变异实证两类都做）。**Windows 复测：两个必卡文件 + 守卫 39 pass /
 0 fail / 2.05s 干净退出**（修前 12 分钟 wedge）；batch 03 复跑 68.9s 出数（此前 720s 杀）。
-分批 sweep 12/13 批已出数（合计 ~340+19 红，`rfc224-store-hygiene`/`review-state-machine`/
-`rfc253-script-execution` 为大头），最后两批复跑中，收全后按 platformScope 判据逐条定性。
-另：Windows e2e 腿在 `eda1067b` 上有三条**新观察**（crash-recovery / focus-ring-clip:682 /
-insecure-context-save，shard 1；上一 run 12 条全绿），机理上都与行尾无关，待定性未登记为
-缺陷。
+**13/13 批全部出数——RFC-254 首份完整 Windows 后端清单：8359 pass / ~506 fail / 1034
+文件**（此前「386 条」「约 32 条」两个口径都作废，均系坏取样；批表与逐条定性入口在
+backlog）。batch 08 从来不是第三个 wedge：拆开实测是 rfc210 submodule 簇的真 I/O
+（单文件 194s），720s ceiling 不够，「无 summary=wedge」判据把被杀当卡死（判据订正进
+dev-gotchas）。已定性第一条真缺陷候选：`rfc210-new-submodule-topology` 在 Windows 上
+`subBases` 丢 attached-but-unstaged submodule 的 key。credential-brick 的 EBUSY 拆卸
+已修（`164ca517`）。**CI 判定：`164ca517`（含 unref 修复 + 守卫 + credential-brick）
+全绿**，12 条 e2e 全过——`eda1067b` 上那三条 e2e 新观察（crash-recovery /
+focus-ring-clip:682 / insecure-context-save）未复现，坐实间歇、与行尾无关，待定性未登记
+为缺陷。
 
 **剩余：T31 的后端矩阵、T32 其余、T33–T35。** T33 **不再被阻塞**——e2e 已能在
 Windows 上跑，剩的是把那几条真失败清零后接腿。**现实评估**：把

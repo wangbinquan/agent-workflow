@@ -1033,11 +1033,34 @@ daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环
 上线即抓到手数漏掉的两处，两类变异实证均做。**Windows 复测：两个必卡文件 + 守卫
 39 pass / 0 fail / 2.05s 干净退出**（修前 12 分钟 wedge）。
 
-- 已取到的部分清单（修 wedge 前 9 个完成批，合计 **约 340 条红**）最集中：
-  `rfc224-store-hygiene`(19)、`review-state-machine`(15)、`rfc253-script-execution`(13)、
-  `review-iterate-sibling-cascade`(9)、`rfc135-runtimes-status`(8)、`plugins-http`(8)。
-  batch 09 一批就 143 条，说明 rfc224/253 簇是下一个大头。完整 13/13 批清单在四个
-  wedged batch 复跑完后收账（见 STATE）。
+### 首份**完整**的 Windows 后端清单（2026-08-05，wedge 根治后 13/13 批全出数）
+
+**8359 pass / 约 506 fail / 1034 文件**（分批计数按批汇总行相加；此前的「386 条」
+与「约 32 条」都作废——前者是坏取样的估算，后者只覆盖了当时看过的套件）。批分布：
+
+| 批  | pass/fail | 批  | pass/fail                          |
+| --- | --------- | --- | ---------------------------------- |
+| 01  | 867/1     | 08  | 613/77（40min ceiling 下正常跑完） |
+| 02  | 705/1     | 09  | 622/**143**                        |
+| 03  | 487/19    | 10  | 841/51                             |
+| 04  | 441/37    | 11  | 430/47                             |
+| 05  | 567/37    | 12  | 631/40                             |
+| 06  | 932/12    | 13  | 627/18                             |
+| 07  | 596/23    |     |                                    |
+
+- 原始批输出在取样机 `C:\tmp\batches\batch-*.txt`（每批含 FILES 清单与完整 stdout/
+  stderr），逐条定性以它为准——stdout/stderr 交错使朴素 per-file 归属只能扫到 177/506，
+  **不要**拿归属脚本的数字当总账。
+- ⏳ **(P1) 下一轮切片：506 条逐条定性**（真缺陷 / 测试可移植性 / 平台无此机制），判据
+  同 `tests/fixtures/platformScope.ts`。大头：batch 09 的 rfc22x 簇 143 条、batch 08 的
+  rfc21x/22x 簇 77 条。已定性的第一条：`rfc210-new-submodule-topology` 的
+  「NEXT node does not delete it」在 Windows 上 `subBases['newsub']` 为 undefined——
+  **真缺陷候选**（attached-but-unstaged submodule 的拓扑捕获在 Windows 上没认出来，
+  方向大概率是 `.git` 文件 gitdir 指针或路径拼写），不是测试卫生。
+- **batch 08 从来不是第三个 wedge**：拆开实测是 rfc210 submodule 簇的真 I/O
+  （`rfc210-new-submodule-topology` 单文件 **194s**），720s 的批 ceiling 纯粹不够，
+  「无 summary=wedge」的判据把被杀当成了卡死（判据订正见 dev-gotchas 勘测坑第 5 条）。
+  真 wedge 只有两个，都已根治（见上）。
 
 ## `test-command-helper` 在设了 `FORCE_COLOR` 的环境里必红（2026-08-05）
 
