@@ -5,6 +5,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
+import { SEALED_SHELL_SUPPORTED } from '@/util/platformExec'
 import { createHash } from 'node:crypto'
 import { chmod, lstat, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -56,7 +57,20 @@ function id(prefix: 'ses' | 'msg' | 'prt' | 'evt', time: number, counter = 1): s
 
 const sessionID = id('ses', 1)
 const model = { providerID: 'openai', modelID: 'gpt-5.6' }
-const worktreePath = '/private/rfc224/worktree'
+// RFC-254 T32: host-canonical fixture roots. The manifest schema demands
+// canonical absolute paths (`resolve(v) === v`), and the old POSIX literals
+// (`/private/rfc224/...`) pass `isAbsolute` on Windows but fail the round-trip
+// (`resolve` prefixes the drive), so EVERY test in this file died in fixture
+// construction there — the largest single cluster in the first full Windows
+// inventory. The validator is right; only the spelling was unportable. The
+// structural relationships (seal/probe/ack under runRoot; the outside-run-root
+// negative case staying OUTSIDE it) are preserved by construction.
+const FIXTURE_ROOT = resolve(tmpdir(), 'aw-rfc224-fixture')
+const RUN_ROOT = join(FIXTURE_ROOT, 'run')
+const STORE_ROOT = join(FIXTURE_ROOT, 'store')
+const worktreePath = join(FIXTURE_ROOT, 'worktree')
+const SEAL_ROOT = join(RUN_ROOT, 'opencode-identity-seal')
+const BWRAP_PATH = canonicalBinaryPath('bwrap')
 const sourceDigest = 'b'.repeat(64)
 const buildDigest = 'a'.repeat(64)
 
@@ -84,7 +98,13 @@ function commonManifest(title: string) {
     formatter: false,
     lsp: false,
     compaction: { auto: false },
-    shell: '/private/rfc224/run/opencode-identity-seal/shell/sh',
+    // RFC-254 T13: the sealed-shell key is a PLATFORM fact of the controlled
+    // config — POSIX seals a shell, win32 declares none, and the identity
+    // check treats absence as identity too. The fixture must describe the
+    // config THIS host's identity rules expect, or every business-manifest
+    // test dies in `businessOpencodeIdentityDigest` (`/config/shell`) before
+    // asserting anything.
+    ...(SEALED_SHELL_SUPPORTED ? { shell: join(SEAL_ROOT, 'shell', 'sh') } : {}),
     instructions: [],
     skills: { paths: [], urls: [] },
     plugin: [],
@@ -168,16 +188,16 @@ function commonManifest(title: string) {
     },
     childProvider: {
       providerId: 'linux-bwrap',
-      config: { bwrapPath: '/usr/bin/bwrap' },
+      config: { bwrapPath: BWRAP_PATH },
     },
     worktreePath,
-    runRoot: '/private/rfc224/run',
-    sessionDbPath: '/private/store/xdg-data/opencode/opencode.db',
+    runRoot: RUN_ROOT,
+    sessionDbPath: join(STORE_ROOT, 'xdg-data', 'opencode', 'opencode.db'),
     sessionStoreKey: 'store_0123456789abcdef',
     serverEnv: {
-      HOME: '/private/store/home',
+      HOME: join(STORE_ROOT, 'home'),
       PWD: worktreePath,
-      XDG_DATA_HOME: '/private/store/xdg-data',
+      XDG_DATA_HOME: join(STORE_ROOT, 'xdg-data'),
       OPENCODE_SERVER_USERNAME: 'aw-user',
       OPENCODE_SERVER_PASSWORD: 'server-secret',
     },
@@ -197,10 +217,10 @@ function commonManifest(title: string) {
     }),
     fffCapabilityCodec: 1 as const,
     fffProbe: {
-      root: '/private/rfc224/run/fff-probe',
+      root: join(RUN_ROOT, 'fff-probe'),
       basename: 'aw-fff-0123456789abcdef0123456789abcdef.txt',
       fileDigest: 'f'.repeat(64),
-      bwrapPath: '/usr/bin/bwrap',
+      bwrapPath: BWRAP_PATH,
     },
     bootstrapTimeoutMs: 1_000,
     runTimeoutMs: 1_000,
@@ -226,7 +246,7 @@ function businessManifest(): VerifiedLaunchManifest {
       agent: common.selectedAgent,
       model: common.selectedModel,
       binaryDigest: common.binaryDigest,
-      sealRoot: '/private/rfc224/run/opencode-identity-seal',
+      sealRoot: SEAL_ROOT,
     }),
     storeKind: 'business',
     mode: 'new',
@@ -234,7 +254,7 @@ function businessManifest(): VerifiedLaunchManifest {
     nodeRunId: 'run-1',
     taskId: 'task-1',
     nodeId: 'node-1',
-    controlAckPath: '/private/rfc224/run/control.ack',
+    controlAckPath: join(RUN_ROOT, 'control.ack'),
     leaseNonce,
     leaseNonceDigest: createHash('sha256').update(leaseNonce).digest('hex'),
     inventory: { enabled: false },
@@ -251,7 +271,7 @@ function resumeManifest(): VerifiedLaunchManifest {
       agent: common.selectedAgent,
       model: common.selectedModel,
       binaryDigest: common.binaryDigest,
-      sealRoot: '/private/rfc224/run/opencode-identity-seal',
+      sealRoot: SEAL_ROOT,
     }),
     storeKind: 'business',
     mode: 'resume',
@@ -261,7 +281,7 @@ function resumeManifest(): VerifiedLaunchManifest {
     nodeRunId: 'run-2',
     taskId: 'task-1',
     nodeId: 'node-1',
-    controlAckPath: '/private/rfc224/run/control.ack',
+    controlAckPath: join(RUN_ROOT, 'control.ack'),
     leaseNonce,
     leaseNonceDigest: createHash('sha256').update(leaseNonce).digest('hex'),
     inventory: { enabled: false },
@@ -297,7 +317,7 @@ function mcpTestManifest(mode: 'new' | 'resume' = 'new'): VerifiedLaunchManifest
           expectedProjectId: 'project-1',
         }
       : {}),
-    controlAckPath: '/private/rfc224/run/mcp-test-control.ack',
+    controlAckPath: join(RUN_ROOT, 'mcp-test-control.ack'),
     leaseNonce,
     leaseNonceDigest: createHash('sha256').update(leaseNonce).digest('hex'),
     mcpExecutionDigest,
@@ -651,7 +671,7 @@ function dependencies(
   const removed: string[] = []
   const lock: OpencodeStoreLifecycleLock = {
     dbPath: manifest.sessionDbPath,
-    lockPath: '/private/store/lock',
+    lockPath: join(STORE_ROOT, 'lock'),
     nonceDigest: 'c'.repeat(64),
     release: async () => undefined,
   }
@@ -712,7 +732,7 @@ describe('RFC-224 verified launcher manifest split', () => {
     expect(() =>
       VerifiedLaunchManifestSchema.parse({
         ...manifest,
-        fffProbe: { ...manifest.fffProbe!, root: '/private/outside-run-root' },
+        fffProbe: { ...manifest.fffProbe!, root: join(FIXTURE_ROOT, 'outside-run-root') },
       }),
     ).toThrow()
     expect(() =>
@@ -1202,7 +1222,7 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
       }),
       acquireStoreLock: async () => ({
         dbPath: manifest.sessionDbPath,
-        lockPath: '/private/store/lock',
+        lockPath: join(STORE_ROOT, 'lock'),
         nonceDigest: 'c'.repeat(64),
         release: async () => {
           releases += 1
