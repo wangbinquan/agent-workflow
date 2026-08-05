@@ -1057,6 +1057,20 @@ daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环
   「NEXT node does not delete it」在 Windows 上 `subBases['newsub']` 为 undefined——
   **真缺陷候选**（attached-but-unstaged submodule 的拓扑捕获在 Windows 上没认出来，
   方向大概率是 `.git` 文件 gitdir 指针或路径拼写），不是测试卫生。
+
+  **已从清单里清掉的两个大簇（2026-08-05 同日）**：
+  1. `rfc224-verified-launcher` 21 条（清单最大单点）——两层夹具根因（POSIX 字面量过
+     不了 canonical 校验 + sealed-shell 键的平台事实），**两平台 21/21 绿**；同形字面量
+     在其余 rfc224 文件里为零，它们的红另有根因。
+  2. `review-state-machine` 15 条——A 类 `.sh` 假二进制，按 fusion 的换缝修法移植为
+     `[bun, stub.ts]`，**两平台 15/15 绿**（Windows 61s）。
+     ⏳ **(P1) review 家族同形待移植还剩 12 个文件**（`grep -rln 'stub-opencode.sh'
+packages/backend/tests/`）：review-iterate ×4、reviews-iterate-mints-new-run、
+     rerun-prior-output-e2e、rfc107-url-upload-multipart、start-task-url、
+     task-start-working-branch、tasks-multipart、rfc223-pr9-cross-tenant-adversarial、
+     rfc254-stub-differential（最后这个是差分测试自身，见其文件头再定）。修法已验证
+     可复制，逐个照搬 review-state-machine 的形态即可。
+
 - **batch 08 从来不是第三个 wedge**：拆开实测是 rfc210 submodule 簇的真 I/O
   （`rfc210-new-submodule-topology` 单文件 **194s**），720s 的批 ceiling 纯粹不够，
   「无 summary=wedge」的判据把被杀当成了卡死（判据订正见 dev-gotchas 勘测坑第 5 条）。

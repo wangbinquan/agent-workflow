@@ -9,15 +9,7 @@
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -78,7 +70,7 @@ interface Harness {
   db: DbClient
   appHome: string
   repoPath: string
-  stubOpencode: string
+  stubOpencode: string[]
   taskId: string
   reviewNodeRunId: string
   cleanup: () => Promise<void>
@@ -90,43 +82,43 @@ const REVIEW_DOC_V2 =
 
 let runIdx = 0
 
-function makeStubOpencode(dir: string): string {
+// RFC-254 T32: a COMMAND ARRAY (`[bun, script.ts]`), not a fake executable —
+// the previous `#!/usr/bin/env bash` file cannot run on Windows (EFTYPE), so
+// every flow test here died with "review node_run not created by scheduler",
+// which reads like a scheduler defect and is only a missing interpreter. Same
+// seam-change as fusion-engine's stub: `opencodeCmd` is already an argv array
+// that goes straight to spawn, so no fake binary, no shell, no platform branch
+// — and the stub logic is type-checked with the suite. It must PARSE argv to
+// recover the nonce, which is exactly why a `.cmd` shim cannot stand in
+// (measured: cmd.exe truncates the prompt at its first newline).
+function makeStubOpencode(dir: string): string[] {
   // Stub emits a markdown design payload via the workflow-output envelope.
   // First call returns v1; subsequent calls return v2 to simulate a regen.
-  const path = join(dir, 'stub-opencode.sh')
-  const v1 = REVIEW_DOC_V1.replace(/\n/g, '\\n')
-  const v2 = REVIEW_DOC_V2.replace(/\n/g, '\\n')
+  const path = join(dir, 'stub-opencode.ts')
   const counterFile = join(dir, '.invoke-counter')
   writeFileSync(counterFile, '0')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then
-  echo 'stub-opencode 1.14.99'
-  exit 0
-fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  COUNTER_FILE='${counterFile}'
-  N=$(cat "$COUNTER_FILE")
-  N=$((N + 1))
-  echo $N > "$COUNTER_FILE"
-  if [[ $N -eq 1 ]]; then
-    BODY='${v1}'
-  else
-    BODY='${v2}'
-  fi
-  ENV="$OPEN"'<port name="design">'"$BODY"'</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-echo "unknown subcommand $1"
-exit 1
+  const script = `import { readFileSync, writeFileSync } from 'node:fs'
+const argv = Bun.argv.slice(2)
+if (argv[0] === '--version') {
+  console.log('stub-opencode 1.14.99')
+  process.exit(0)
+}
+if (argv[0] === 'run') {
+  const nonce = /nonce="([^"]*)"/.exec(argv.join('\\n'))?.[1] ?? ''
+  const open = nonce.length > 0 ? \`<workflow-output nonce="\${nonce}">\` : '<workflow-output>'
+  const counterFile = ${JSON.stringify(counterFile)}
+  const n = Number(readFileSync(counterFile, 'utf8').trim()) + 1
+  writeFileSync(counterFile, String(n))
+  const body = n === 1 ? ${JSON.stringify(REVIEW_DOC_V1)} : ${JSON.stringify(REVIEW_DOC_V2)}
+  const text = \`\${open}<port name="design">\${body}</port></workflow-output>\`
+  console.log(JSON.stringify({ type: 'text', ts: Math.floor(Date.now() / 1000), text }))
+  process.exit(0)
+}
+console.log(\`unknown subcommand \${argv[0]}\`)
+process.exit(1)
 `
   writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+  return [process.execPath, path]
 }
 
 async function buildHarness(): Promise<Harness> {
@@ -212,7 +204,7 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubOpencode, awaitScheduler: true },
   )
 
   // Locate the review node_run row.
@@ -491,7 +483,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: [h.stubOpencode],
+      opencodeCmd: h.stubOpencode,
     })
 
     const dvs = await h.db
