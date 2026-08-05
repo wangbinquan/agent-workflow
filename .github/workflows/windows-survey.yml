@@ -188,6 +188,43 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           tail -40 e2e-windows-webkit.log || true
 
+      # RFC-254 T33 — generate the win32 visual baselines for HUMAN review.
+      #
+      # option-A from the plan: never auto-commit generated pixels. This job
+      # produces them and uploads them; a person compares them against the
+      # linux/darwin sets and commits the ones that are right. The authoritative
+      # leg stays ubuntu — this third set exists so the windows leg has
+      # something to compare against, not to become a second source of truth.
+      #
+      # `--update-snapshots` writes into the same `*-snapshots/` directories, so
+      # the upload below picks up exactly the new `*-chromium-win32.png` files.
+      - name: Generate win32 visual baselines (for review, never auto-committed)
+        shell: bash
+        continue-on-error: true
+        env:
+          RUN_VISUAL_REGRESSION: '1'
+        run: |
+          bunx playwright test e2e/visual-regression.spec.ts e2e/rfc250-visual-states.spec.ts \
+            --project=chromium --update-snapshots > visual-windows.log 2>&1 || true
+          {
+            echo "## Windows visual baselines (T33)"
+            echo
+            echo '```'
+            git status --porcelain -- 'e2e/*-snapshots/*win32*' | head -60 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -30 visual-windows.log || true
+
+      - name: Upload the generated win32 baselines
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-visual-baselines
+          path: |
+            e2e/**/*-chromium-win32.png
+            visual-windows.log
+          if-no-files-found: warn
+
       - name: Upload the e2e survey log
         if: always()
         uses: actions/upload-artifact@v6
