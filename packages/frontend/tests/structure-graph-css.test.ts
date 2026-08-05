@@ -53,6 +53,22 @@ describe('structure-graph container height', () => {
     expect(graphCss).toMatch(/flex:\s*1/)
     expect(graphCss).toMatch(/min-height:\s*\d{3}px/)
   })
+
+  // regression (RFC-239 drilldown Dialog): every Dialog ancestor is
+  // content-sized (height:auto), so the xyflow root's inline `height:100%`
+  // resolved to 0px — nodes rendered into a zero-height clipped box and the
+  // graph looked completely empty (no console error, DOM nodes present).
+  // The container must be a flex column and the xyflow root must size via
+  // FLEX (basis 0), never via its inline percentage height.
+  test('xyflow root sizes via flex, not via its inline percentage height', () => {
+    expect(graphCss).toMatch(/display:\s*flex/)
+    expect(graphCss).toMatch(/flex-direction:\s*column/)
+    const i = css.indexOf('.structure-graph > .react-flow {')
+    expect(i).toBeGreaterThan(-1)
+    const rule = css.slice(i, css.indexOf('}', i))
+    expect(rule).toMatch(/flex:\s*1 1 0%/)
+    expect(rule).toMatch(/min-height:\s*0/)
+  })
 })
 
 describe('structure-graph card styling', () => {

@@ -12226,6 +12226,22 @@ mark.prior-comment-anchor[data-active='true'] {
   flex: 1;
   min-height: 400px;
 }
+.changes__drill-back {
+  align-self: flex-start;
+}
+/* keep-alive pane around the graph (hidden via inline display:none while the
+   call chain is shown) — reproduces the flex column the graph sat in */
+.changes__drill-graphpane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.changes__narrative-fold {
+  align-self: flex-start;
+  font-weight: 600;
+}
 .changes__impact-caller {
   background: none;
   border: none;
@@ -13741,6 +13757,24 @@ mark.prior-comment-anchor[data-active='true'] {
 
 .dialog--lg .dialog__panel {
   width: min(100%, 760px);
+}
+
+/* full = the whole canvas: for content that IS a canvas (relation graph /
+   call-chain drilldowns), where the lg dialog left the diagram in a cramped
+   ~420px box. The panel pins to the viewport minus a slim margin; height is
+   EXPLICIT (not just max-height) so the flex chain inside (drill → graph →
+   xyflow root) resolves to the full available space. */
+.dialog--full {
+  padding: 24px;
+}
+.dialog--full .dialog__panel {
+  width: calc(100vw - 48px);
+  height: calc(100vh - 48px);
+  max-height: none;
+}
+.dialog--full .changes__drill {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .dialog__header {

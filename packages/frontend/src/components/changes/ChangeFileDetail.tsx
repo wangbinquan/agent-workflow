@@ -310,17 +310,24 @@ function SymbolOutline({
         const key = g.container === '' ? '(top)' : g.container
         const memberCount = g.members.length
         const collapsed = allAdded && !expanded.has(key) && memberCount > 0
+        // The top-level group (container '') has no container symbol to act as
+        // its header. When allAdded collapses it, it MUST still render a fold
+        // header — otherwise its members are hidden with no way to expand them
+        // (an all-new file of top-level functions showed an empty outline and
+        // no ⎇ call-chain entry at all).
+        const foldable = allAdded && memberCount > 0
         return (
           <div key={key} className="structure__group">
-            {(g.container !== '' || g.containerChange !== undefined) && (
+            {(g.container !== '' || g.containerChange !== undefined || foldable) && (
               <div className="structure__group-header">
-                {allAdded && memberCount > 0 ? (
+                {foldable ? (
                   <button
                     type="button"
                     className="changes__outline-fold"
                     onClick={() => toggle(key)}
                   >
-                    {collapsed ? '▸' : '▾'} {key}
+                    {collapsed ? '▸' : '▾'}{' '}
+                    {g.container === '' ? t('tasks.changesTopLevelGroup') : key}
                     <span className="changes__outline-count">
                       {t('tasks.changesContainerCollapsed', { n: memberCount })}
                     </span>

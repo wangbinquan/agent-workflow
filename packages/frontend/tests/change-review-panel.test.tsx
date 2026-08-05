@@ -40,6 +40,8 @@ vi.mock('../src/api/client', async () => {
 })
 
 import { ChangeReviewPanel } from '../src/components/changes/ChangeReviewPanel'
+import { ChangeNarrativeCard } from '../src/components/changes/ChangeNarrativeCard'
+import { DrilldownOverlay } from '../src/components/changes/DrilldownOverlay'
 import { validateTaskDetailSearch } from '../src/lib/task-detail-route-tabs'
 
 afterEach(() => {
@@ -280,13 +282,54 @@ describe('ChangeReviewPanel — detail pane', () => {
   })
 })
 
+describe('ChangeReviewPanel — all-added top-level fold', () => {
+  // Locks the "nothing rendered" fix (debugged on task 01KZ0E7GT332N8K0G3JG73CRN8):
+  // an all-new file whose symbols are ALL top-level (container '') collapsed
+  // them under a group with NO header — no fold button, no symbol rows and no
+  // ⎇ call-chain entry anywhere. The top-level group must render a labeled
+  // fold header when allAdded collapses it; expanding reveals the rows + ⎇.
+  test('all-added file: top-level group gets a fold header; expanding reveals ⎇ rows', () => {
+    const files: StructuralDiff['files'] = [
+      {
+        filePath: 'src/ui/a.ts',
+        lang: 'typescript',
+        status: 'ok',
+        edges: [],
+        impact: [],
+        changes: [
+          { changeType: 'added', kind: 'function', after: sym('verifyManifest', 'function') },
+          {
+            changeType: 'added',
+            kind: 'function',
+            after: sym('isObject', 'function', 'src/ui/a.ts', 5),
+          },
+        ],
+      },
+    ]
+    renderPanel({ structuralData: structural({ files, summary: computeSummary(files, []) }) })
+    const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    fireEvent.click(aTab as HTMLElement)
+    const outline = screen.getByTestId('symbol-outline')
+    // collapsed by default (allAdded de-noising) — rows hidden, header present
+    expect(within(outline).queryByText('verifyManifest')).toBeNull()
+    const fold = within(outline).getByRole('button', { name: /顶层符号|Top-level symbols/ })
+    fireEvent.click(fold)
+    expect(within(outline).getByText('verifyManifest')).toBeTruthy()
+    const entries = within(outline).getAllByRole('button', { name: /调用链|call chain/i })
+    expect(entries.some((el) => el.classList.contains('structure__callchain-entry'))).toBe(true)
+  })
+})
+
 describe('ChangeReviewPanel — drilldown gating + narrative states', () => {
-  test('impact/deps buttons appear only with data; graph opens a dialog', () => {
+  test('impact/deps buttons appear only with data; graph opens a FULL-size dialog', () => {
     renderPanel({ structuralData: structural() })
     expect(screen.queryByRole('button', { name: /影响面|Impact/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /依赖变更|Dependency changes/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /关系图|Graph/ }))
     expect(screen.getByTestId('drilldown-graph')).toBeTruthy()
+    // canvas-like drilldowns use the whole viewport ("弹窗太小" feedback):
+    // graph/callchain get size=full; the list drilldowns stay lg.
+    expect(document.querySelector('.dialog--full')).toBeTruthy()
   })
 
   test('narrative starts in the button state (404 → generate CTA)', async () => {
@@ -393,6 +436,94 @@ describe('RFC-250 ChangeReview semantic boundaries', () => {
     fireEvent.click(header)
     expect(document.activeElement).toBe(header)
     expect(header.getAttribute('aria-expanded')).toBe('false')
+  })
+})
+
+describe('DrilldownOverlay — call-chain back navigation', () => {
+  // User feedback: ⎇ inside the GRAPH dialog swapped the content to the call
+  // chain with no way back — closing and reopening was the only "return".
+  // When (and only when) the chain was entered from the graph, a back button
+  // must restore the graph drilldown.
+  test('back button renders only with onBackToGraph and fires it', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const onBack = vi.fn()
+    const props = {
+      kind: 'callchain' as const,
+      onClose: () => {},
+      data: structural(),
+      taskId: 't1',
+      callRoot: { ref: 'src/ui/a.ts#A.run', label: 'run()' },
+      currentFileKey: null,
+    }
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <DrilldownOverlay {...props} onBackToGraph={onBack} />
+      </QueryClientProvider>,
+    )
+    const back = screen.getByRole('button', { name: /返回关系图|Back to graph/ })
+    fireEvent.click(back)
+    expect(onBack).toHaveBeenCalledTimes(1)
+    // entered from the ⎇ of a symbol row (not the graph): no back affordance
+    rerender(
+      <QueryClientProvider client={qc}>
+        <DrilldownOverlay {...props} />
+      </QueryClientProvider>,
+    )
+    expect(screen.queryByRole('button', { name: /返回关系图|Back to graph/ })).toBeNull()
+  })
+
+  // Follow-up feedback: "返回" landed on a REMOUNTED default graph (package
+  // level, all-focus) instead of the pre-jump view. The graph pane must stay
+  // mounted (hidden) while the chain is shown so its state survives.
+  test('graph pane stays mounted (hidden) under the call chain when it can go back', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const props = {
+      kind: 'callchain' as const,
+      onClose: () => {},
+      data: structural(),
+      taskId: 't1',
+      callRoot: { ref: 'src/ui/a.ts#A.run', label: 'run()' },
+      currentFileKey: null,
+    }
+    render(
+      <QueryClientProvider client={qc}>
+        <DrilldownOverlay {...props} onBackToGraph={() => {}} />
+      </QueryClientProvider>,
+    )
+    const pane = document.querySelector('.changes__drill-graphpane') as HTMLElement
+    expect(pane).toBeTruthy()
+    expect(pane.style.display).toBe('none')
+  })
+})
+
+describe('ChangeNarrativeCard — collapsible', () => {
+  // User feedback: the AI walkthrough box is tall and cannot be put away once
+  // read. The ready card gets a fold header; the fold is remembered per task.
+  test('ready card folds/unfolds and remembers the fold per task', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const status = {
+      status: 'ready',
+      narrative: {
+        overview: 'OVERVIEW-SENTENCE',
+        readingOrder: [{ ref: 'src/ui/a.ts', why: 'start here' }],
+        groups: [],
+        inputDigest: 'digest-1',
+      },
+    } as never
+    const view = (
+      <QueryClientProvider client={qc}>
+        <ChangeNarrativeCard taskId="t-fold" status={status} contentDigest="digest-1" />
+      </QueryClientProvider>
+    )
+    const r = render(view)
+    expect(screen.getByText('OVERVIEW-SENTENCE')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /AI 导读|AI walkthrough/ }))
+    expect(screen.queryByText('OVERVIEW-SENTENCE')).toBeNull()
+    // remembered: a fresh mount for the same task starts folded
+    r.unmount()
+    render(view)
+    expect(screen.queryByText('OVERVIEW-SENTENCE')).toBeNull()
+    expect(screen.getByRole('button', { name: /AI 导读|AI walkthrough/ })).toBeTruthy()
   })
 })
 

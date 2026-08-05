@@ -4,6 +4,9 @@
 
 import { describe, expect, test, afterEach } from 'vitest'
 import { cleanup, render, fireEvent } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { computeSummary, type StructuralDiff, type SymbolNode } from '@agent-workflow/shared'
 import '../src/i18n'
 import { StructuralGraph } from '../src/components/structure/StructuralGraph'
@@ -96,5 +99,43 @@ describe('<StructuralGraph />', () => {
     const { container } = render(<StructuralGraph data={empty} />)
     expect(container.querySelector('.structure-graph__empty')).toBeTruthy()
     expect(container.querySelector('.sg-card')).toBeNull()
+  })
+
+  // Regression ×2 (user-reported "调用的线不渲染"): (a) 'calls' now defaults ON —
+  // it started unchecked as "noisiest", which left graphs with no classEdges
+  // rendering as unconnected boxes; (b) at class level the edge state was
+  // seeded ONCE from useEdgesState(initialEdges) and never re-synced, so the
+  // 调用/继承/引用 checkboxes rebuilt the graph but the rendered edges stayed
+  // frozen at the mount-time set.
+  test('调用 defaults ON (caller card present); toggling it off re-syncs the graph', () => {
+    const { container } = render(<StructuralGraph data={sampleDiff()} />)
+    const classBtn = [...container.querySelectorAll('.structure-graph__level button')].find((b) =>
+      /类级|Classes/.test(b.textContent ?? ''),
+    )
+    fireEvent.click(classBtn as Element)
+    // calls on by default: the caller-only class (Checkout) is materialised
+    expect(container.textContent).toContain('Checkout')
+    const callsToggle = [...container.querySelectorAll('.structure-graph__edge-toggle')].find((l) =>
+      /调用|calls/i.test(l.textContent ?? ''),
+    )
+    const cb = callsToggle?.querySelector('input') as HTMLInputElement
+    expect(cb.checked).toBe(true)
+    fireEvent.click(cb)
+    // graph rebuilt: the caller-only card is gone again
+    expect(container.textContent).not.toContain('Checkout')
+    // Edge DOM can't be asserted under jsdom (xyflow only draws edges after
+    // real node measurement), so the edge half of the regression is locked at
+    // the source level: edges must be UNCONTROLLED (derived straight from the
+    // graph memo). useEdgesState both froze the mount-time set (checkboxes had
+    // no effect) and permanently applied xyflow's transient edge-REMOVAL
+    // changes (a forever edge-less graph).
+    const src = readFileSync(
+      path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        '../src/components/structure/StructuralGraph.tsx',
+      ),
+      'utf8',
+    )
+    expect(src).not.toMatch(/useEdgesState|onEdgesChange/)
   })
 })

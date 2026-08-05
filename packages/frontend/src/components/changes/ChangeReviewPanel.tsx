@@ -161,9 +161,21 @@ export function ChangeReviewPanel({
   // ---- drilldown ----
   const [drill, setDrill] = useState<DrilldownKind | null>(null)
   const [callRoot, setCallRoot] = useState<CallChainRoot | null>(null)
-  const openCallChain = useCallback((root: CallChainRoot) => {
-    setCallRoot(root)
-    setDrill('callchain')
+  // ⎇ inside the GRAPH dialog replaces its content with the call chain; keep
+  // where it came from so the chain view can offer a way BACK to the graph
+  // (user feedback: "切换到调用链之后无法返回类图").
+  const [chainFrom, setChainFrom] = useState<'graph' | null>(null)
+  const openCallChain = useCallback(
+    (root: CallChainRoot) => {
+      setChainFrom(drill === 'graph' ? 'graph' : null)
+      setCallRoot(root)
+      setDrill('callchain')
+    },
+    [drill],
+  )
+  const backToGraph = useCallback(() => {
+    setChainFrom(null)
+    setDrill('graph')
   }, [])
   const jumpToFile = useCallback(
     (structuralFilePath: string) => {
@@ -564,7 +576,10 @@ export function ChangeReviewPanel({
       </div>
       <DrilldownOverlay
         kind={drill}
-        onClose={() => setDrill(null)}
+        onClose={() => {
+          setChainFrom(null)
+          setDrill(null)
+        }}
         data={structural.data}
         taskId={taskId}
         callRoot={callRoot}
@@ -572,6 +587,7 @@ export function ChangeReviewPanel({
         currentGroupKeys={selectedGroupKeys}
         onOpenCallChain={openCallChain}
         onJumpToFile={jumpToFile}
+        onBackToGraph={chainFrom === 'graph' ? backToGraph : undefined}
       />
     </div>
   )

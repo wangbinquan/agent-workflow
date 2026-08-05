@@ -53,6 +53,30 @@ describe('SequenceDiagram', () => {
     expect(Number(label.getAttribute('x'))).toBe(99 + 8)
   })
 
+  // Regression (sequence "renders garbled"): a module-level owner (`file::`,
+  // empty qn) drew an EMPTY head box, and a long top-level function name
+  // overflowed its fixed-width head rect + the svg's left edge. Heads must fall
+  // back to the file basename and truncate with a hover <title> full name.
+  test('module-level owner shows the file basename; long names truncate with a full-name title', () => {
+    const long = 'test_parse_cutoff_drops_older'
+    const model = buildSequence(`tests/test_solidot.py::${long}`, [
+      {
+        ownerClass: 'src/sources/solidot.py::',
+        method: '_items()',
+        resolution: 'resolved',
+        children: [],
+      },
+    ])
+    render(<SequenceDiagram model={model} />)
+    // module-level participant: file basename, never an empty head
+    expect(screen.getByText('solidot.py')).toBeTruthy()
+    // long root name: drawn truncated; the ONLY node carrying the full name is
+    // the <title> hover element, not a rendered label
+    expect(screen.getByText(/^test_parse.*…$/)).toBeTruthy()
+    const fullNode = screen.getByText(long)
+    expect(fullNode.tagName.toLowerCase()).toBe('title')
+  })
+
   // Regression: nested-call labels used to carry `'  '.repeat(depth)` leading
   // spaces; with white-space:pre + left-alignment that pushed the visible method
   // name far to the right of its arrow. Labels must render verbatim, no indent.

@@ -2,8 +2,11 @@
 // user toggles): PACKAGE overview (one box per package + aggregated edges — the
 // readable architecture view, default) and CLASS detail (class cards grouped in
 // package boxes). Edge kinds (inherits / references / calls) are filterable;
-// 'calls' is off by default since it's the noisiest. Class cards have variable
-// size, so the class flow measures them then re-runs dagre (else edges float).
+// all three are ON by default — 'calls' used to start unchecked as "noisiest",
+// but with call edges hidden the graph rendered as unconnected boxes and read
+// as broken (user feedback), so the default is now everything visible and the
+// checkboxes are for pruning. Class cards have variable size, so the class
+// flow measures them then re-runs dagre (else edges float).
 
 import {
   ReactFlow,
@@ -15,7 +18,6 @@ import {
   Position,
   MarkerType,
   useNodesState,
-  useEdgesState,
   useNodesInitialized,
   useReactFlow,
   type Node,
@@ -300,11 +302,18 @@ function ClassFlow({
     ],
     [graph],
   )
+  // Edges are UNCONTROLLED (plain memo from the graph, never edge state) — the
+  // same shape PackageFlow uses. Keeping them in xyflow-managed state caused
+  // two real bugs: (a) xyflow dispatches edge-REMOVAL changes while nodes are
+  // briefly unmeasured/absent, and once applied the edges never came back → a
+  // permanently edge-less class graph; (b) the state was seeded once at mount,
+  // so the 调用/继承/引用 checkboxes rebuilt the graph but the edge set never
+  // re-synced. Deriving straight from `graph` fixes both; locked by
+  // structure-graph-render.test.tsx.
   const initialEdges = useMemo<Edge[]>(() => graph.edges.map(edgeFor), [graph])
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [baseEdges, , onEdgesChange] = useEdgesState(initialEdges)
   const { edges, highlightedMembers, onEdgeClick, onNodeClick, onPaneClick } = useEdgeHighlight(
-    baseEdges,
+    initialEdges,
     graph.edges,
   )
   const initialized = useNodesInitialized()
@@ -348,7 +357,6 @@ function ClassFlow({
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
           onEdgeClick={onEdgeClick}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
@@ -390,7 +398,7 @@ export function StructuralGraph({
   const { t } = useTranslation()
   const [level, setLevel] = useState<'package' | 'class'>('package')
   const [edgeKinds, setEdgeKinds] = useState<Set<EdgeKind>>(
-    () => new Set<EdgeKind>(['inherits', 'references']),
+    () => new Set<EdgeKind>(['inherits', 'references', 'calls']),
   )
   const classGraph = useMemo(() => buildStructureGraph(data, edgeKinds), [data, edgeKinds])
   const pkgGraph = useMemo(() => aggregatePackageGraph(classGraph), [classGraph])

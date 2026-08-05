@@ -5,10 +5,14 @@
 // mismatch against the CURRENT structural response marks the narrative stale
 // (both values are backend-computed — the frontend only compares).
 
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { ChangeNarrative, ChangeNarrativeStatus } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+
+/** localStorage key remembering the fold, per task. */
+const collapseKey = (taskId: string): string => `aw:changes-narrative-collapsed:${taskId}`
 
 export function useChangeNarrative(taskId: string, enabled: boolean) {
   return useQuery<ChangeNarrativeStatus | null>({
@@ -51,6 +55,25 @@ export function ChangeNarrativeCard({
       api.post(`/api/tasks/${encodeURIComponent(taskId)}/change-narrative`, { scope: 'task' }),
     onSettled: () => qc.invalidateQueries({ queryKey: ['tasks', taskId, 'change-narrative'] }),
   })
+  // Collapsible (user feedback: the walkthrough box eats vertical space once
+  // read). Folded state is remembered per task.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(collapseKey(taskId)) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleCollapsed = (): void =>
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(collapseKey(taskId), next ? '1' : '0')
+      } catch {
+        /* private mode — session-only fold */
+      }
+      return next
+    })
 
   if (status === undefined) return null // query disabled / initial
   if (status === null || status.status === 'failed') {
@@ -90,8 +113,16 @@ export function ChangeNarrativeCard({
   const stale = contentDigest !== undefined && n.inputDigest !== contentDigest
   return (
     <div className="changes__narrative" data-testid="change-narrative">
-      <div className="changes__narrative-overview">{n.overview}</div>
-      {n.readingOrder.length > 0 && (
+      <button
+        type="button"
+        className="changes__outline-fold changes__narrative-fold"
+        aria-expanded={!collapsed}
+        onClick={toggleCollapsed}
+      >
+        {collapsed ? '▸' : '▾'} {t('tasks.changesNarrativeTitle')}
+      </button>
+      {!collapsed && <div className="changes__narrative-overview">{n.overview}</div>}
+      {!collapsed && n.readingOrder.length > 0 && (
         <ol className="changes__narrative-order">
           {n.readingOrder.map((step, i) => (
             <li key={`${step.ref}-${i}`}>
@@ -111,7 +142,7 @@ export function ChangeNarrativeCard({
           ))}
         </ol>
       )}
-      {stale && (
+      {!collapsed && stale && (
         <div className="changes__narrative-stale">
           {t('tasks.changesNarrativeStale')}
           <button

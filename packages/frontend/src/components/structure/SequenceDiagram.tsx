@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import {
   classDisplay,
   seqDiagramLayout,
+  seqHeadLabel,
   seqMessageLabel,
   SEQ_COL_W as COL_W,
   SEQ_HEAD_H as HEAD_H,
@@ -38,6 +39,8 @@ export function SequenceDiagram({ model }: { model: SequenceModel }) {
         {model.participants.map((p, i) => {
           const x = PAD + i * COL_W + COL_W / 2
           const unresolved = p === UNRESOLVED_LIFELINE
+          const full = classDisplay(p)
+          const drawn = seqHeadLabel(full)
           return (
             <g key={p} className={`seqdiag__life${unresolved ? ' seqdiag__life--unresolved' : ''}`}>
               <rect
@@ -54,7 +57,9 @@ export function SequenceDiagram({ model }: { model: SequenceModel }) {
                 textAnchor="middle"
                 className="seqdiag__head-label"
               >
-                {classDisplay(p)}
+                {/* truncated to the fixed column; full name via <title> hover */}
+                {drawn !== full && <title>{full}</title>}
+                {drawn}
               </text>
               <line x1={x} y1={chartTop} x2={x} y2={height - PAD} className="seqdiag__lifeline" />
             </g>

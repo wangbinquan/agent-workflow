@@ -3343,6 +3343,9 @@ export const enUS: Resources = {
     changesJumpToHunk: 'Jump to the change',
     changesImportsAggregated: 'Import changes ({{n}})',
     changesContainerCollapsed: '{{n}} members',
+    changesTopLevelGroup: 'Top-level symbols',
+    changesDrillBackToGraph: 'Back to graph',
+    changesNarrativeTitle: 'AI walkthrough',
     changesPureMove: 'Moved from {{from}} with no content change.',
     changesTextUnavailable:
       'The text diff is unavailable (worktree pruned or truncated); structural info only.',

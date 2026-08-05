@@ -32,11 +32,19 @@ export interface SequenceModel {
   messages: SeqMessage[]
 }
 
-/** Leaf class name for a lifeline id (`file::a.b.C` → `C`). */
+/** Leaf class name for a lifeline id (`file::a.b.C` → `C`). A MODULE-LEVEL
+ *  owner (`file::` with an empty qn — e.g. a Python top-level function's owner)
+ *  falls back to the file's basename, so its lifeline head is never an empty
+ *  box (sequence-diagram "renders garbled" fix). */
 export function classDisplay(ownerClass: string): string {
   if (ownerClass === UNRESOLVED_LIFELINE) return ownerClass
-  const qn = ownerClass.includes('::') ? (ownerClass.split('::')[1] ?? ownerClass) : ownerClass
-  return qn.split('.').pop() ?? qn
+  const sep = ownerClass.indexOf('::')
+  const file = sep < 0 ? '' : ownerClass.slice(0, sep)
+  const qn = sep < 0 ? ownerClass : ownerClass.slice(sep + 2)
+  const leaf = qn.split('.').pop() ?? qn
+  if (leaf !== '') return leaf
+  const base = file.split('/').pop() ?? file
+  return base !== '' ? base : ownerClass
 }
 
 /** Build the sequence model. `rootClass` is the root method's owner-class id; its
@@ -81,6 +89,18 @@ export const SEQ_LABEL_GAP = 8
 export const SEQ_CHAR_W = 6.7
 /** approx glyph advance of the 12px head label. */
 export const SEQ_HEAD_CHAR_W = 7.3
+/** chars that fit the fixed head rect (COL_W−16 wide, 8px inner padding). A
+ *  longer name (e.g. a top-level test function used as its own lifeline) used
+ *  to overflow the rect and even the svg's LEFT edge on the first column,
+ *  where it got clipped mid-glyph. */
+export const SEQ_HEAD_MAX_CHARS = Math.floor((SEQ_COL_W - 16 - 8) / SEQ_HEAD_CHAR_W)
+
+/** Head label as drawn: ellipsis-truncated to the fixed column width. The
+ *  renderer adds a `<title>` with the full name (SVG text has no CSS
+ *  text-overflow, so this is the manual equivalent). */
+export function seqHeadLabel(name: string): string {
+  return name.length > SEQ_HEAD_MAX_CHARS ? `${name.slice(0, SEQ_HEAD_MAX_CHARS - 1)}…` : name
+}
 
 /** Label string exactly as drawn. No depth indentation: labels are left-aligned
  *  flush to their arrow's left end, and leading spaces (white-space:pre) would
@@ -109,8 +129,11 @@ export function seqDiagramLayout(model: SequenceModel): SeqLayout {
   // PAD is added below so the base equals the old PAD*2 + n*COL_W width.
   let maxRight = SEQ_PAD + model.participants.length * SEQ_COL_W
   for (const p of model.participants) {
-    // head label is textAnchor=middle, so it spreads half its width each side.
-    const right = seqCenterX(model, p) + (classDisplay(p).length * SEQ_HEAD_CHAR_W) / 2
+    // head label is textAnchor=middle, so it spreads half its width each side;
+    // measured on the TRUNCATED label (what is actually drawn), which also
+    // keeps a long first-column name from poking past the svg's left edge.
+    const right =
+      seqCenterX(model, p) + (seqHeadLabel(classDisplay(p)).length * SEQ_HEAD_CHAR_W) / 2
     if (right > maxRight) maxRight = right
   }
   for (const m of model.messages) {

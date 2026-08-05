@@ -57,4 +57,16 @@ describe('Dialog scroll layout', () => {
     expect(rule('.dialog__header')).toMatch(/flex-shrink:\s*0/)
     expect(rule('.dialog__footer')).toMatch(/flex-shrink:\s*0/)
   })
+
+  // size="full" — canvas-like drilldowns (relation graph / call chain) render
+  // in the whole viewport. Height must be EXPLICIT (not only max-height): the
+  // graph's flex chain resolves percentages/flex against it; with max-height
+  // alone the panel stays content-sized and the canvas collapses back to its
+  // min-height floor.
+  test('.dialog--full pins the panel to the viewport with an explicit height', () => {
+    const panel = rule('.dialog--full .dialog__panel')
+    expect(panel).toMatch(/width:\s*calc\(100vw/)
+    expect(panel).toMatch(/height:\s*calc\(100vh/)
+    expect(panel).toMatch(/max-height:\s*none/)
+  })
 })

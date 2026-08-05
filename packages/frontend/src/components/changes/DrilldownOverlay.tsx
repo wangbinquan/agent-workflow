@@ -136,6 +136,7 @@ export function DrilldownOverlay({
   currentGroupKeys,
   onOpenCallChain,
   onJumpToFile,
+  onBackToGraph,
 }: {
   kind: DrilldownKind | null
   onClose: () => void
@@ -149,6 +150,9 @@ export function DrilldownOverlay({
   currentGroupKeys?: ReadonlySet<string> | null
   onOpenCallChain?: (root: CallChainRoot) => void
   onJumpToFile?: (filePath: string) => void
+  /** Present only when the call chain was entered FROM the graph dialog —
+   *  renders a back affordance so ⎇ isn't a one-way trip. */
+  onBackToGraph?: () => void
 }) {
   const { t } = useTranslation()
   const [focus, setFocus] = useState<'all' | 'group' | 'file'>('all')
@@ -156,7 +160,9 @@ export function DrilldownOverlay({
   // diff. Pure pre-filter — the graph model itself is untouched.
   const graphData = useMemo<StructuralDiff | undefined>(() => {
     if (data === undefined) return undefined
-    if (kind !== 'graph' || focus === 'all') return data
+    // Filter follows `focus` alone (not `kind`): the graph stays mounted while
+    // the call chain covers it, and must not silently reset to the full graph.
+    if (focus === 'all') return data
     const keepKeys =
       focus === 'group'
         ? (currentGroupKeys ?? (currentFileKey === null ? null : new Set([currentFileKey])))
@@ -179,14 +185,23 @@ export function DrilldownOverlay({
         return f !== null && keep.has(f)
       }),
     }
-  }, [data, kind, focus, currentFileKey, currentGroupKeys])
+  }, [data, focus, currentFileKey, currentGroupKeys])
 
   if (kind === null || data === undefined) return null
+  // Canvas-like views (graph / call chain) get the whole viewport; the two
+  // list views stay at lg, where a full-screen dialog would be mostly empty.
+  const size = kind === 'graph' || kind === 'callchain' ? 'full' : 'lg'
   return (
-    <Dialog open onClose={onClose} title={t(KIND_TITLE[kind])} size="lg">
+    <Dialog open onClose={onClose} title={t(KIND_TITLE[kind])} size={size}>
       <div className="changes__drill" data-testid={`drilldown-${kind}`}>
-        {kind === 'graph' && (
-          <>
+        {/* The graph KEEPS its mount while a ⎇ jump shows the call chain, so
+            "返回关系图" restores the exact pre-jump view (level / edge kinds /
+            zoom) instead of a remounted default — hidden, not unmounted. */}
+        {(kind === 'graph' || (kind === 'callchain' && onBackToGraph !== undefined)) && (
+          <div
+            className="changes__drill-graphpane"
+            style={kind !== 'graph' ? { display: 'none' } : undefined}
+          >
             {currentFileKey !== null && (
               <Segmented<'all' | 'group' | 'file'>
                 value={focus}
@@ -205,10 +220,23 @@ export function DrilldownOverlay({
             <div className="changes__drill-graph">
               <StructuralGraph data={graphData ?? data} onOpenCallChain={onOpenCallChain} />
             </div>
-          </>
+          </div>
         )}
         {kind === 'impact' && <ImpactPanel impact={data.impact} onJumpToFile={onJumpToFile} />}
-        {kind === 'callchain' && <CallChainView taskId={taskId} root={callRoot} />}
+        {kind === 'callchain' && (
+          <>
+            {onBackToGraph !== undefined && (
+              <button
+                type="button"
+                className="btn btn--sm changes__drill-back"
+                onClick={onBackToGraph}
+              >
+                ← {t('tasks.changesDrillBackToGraph')}
+              </button>
+            )}
+            <CallChainView taskId={taskId} root={callRoot} />
+          </>
+        )}
         {kind === 'deps' && <DependencyChangesPanel changes={data.dependencyChanges} />}
       </div>
     </Dialog>

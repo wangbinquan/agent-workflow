@@ -2882,6 +2882,9 @@ export interface Resources {
     changesJumpToHunk: string
     changesImportsAggregated: string
     changesContainerCollapsed: string
+    changesTopLevelGroup: string
+    changesDrillBackToGraph: string
+    changesNarrativeTitle: string
     changesPureMove: string
     changesTextUnavailable: string
     changesDocRendered: string
@@ -8096,6 +8099,9 @@ export const zhCN: Resources = {
     changesJumpToHunk: '跳转到对应改动',
     changesImportsAggregated: '导入变更({{n}})',
     changesContainerCollapsed: '{{n}} 个成员',
+    changesTopLevelGroup: '顶层符号',
+    changesDrillBackToGraph: '返回关系图',
+    changesNarrativeTitle: 'AI 导读',
     changesPureMove: '文件自 {{from}} 移动,内容未修改。',
     changesTextUnavailable: '文本 diff 不可用(工作区已回收或超出截断上限),以下为结构信息。',
     changesDocRendered: '渲染',

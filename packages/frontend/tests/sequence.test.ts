@@ -6,7 +6,10 @@ import {
   buildSequence,
   classDisplay,
   seqDiagramLayout,
+  seqHeadLabel,
   SEQ_COL_W,
+  SEQ_HEAD_CHAR_W,
+  SEQ_HEAD_MAX_CHARS,
   SEQ_PAD,
   UNRESOLVED_LIFELINE,
   type SeqCallNode,
@@ -56,6 +59,44 @@ describe('classDisplay', () => {
   test('leaf class name from a lifeline id', () => {
     expect(classDisplay('src/A.java::com.x.OrderService')).toBe('OrderService')
     expect(classDisplay(UNRESOLVED_LIFELINE)).toBe(UNRESOLVED_LIFELINE)
+  })
+
+  // Regression (sequence diagram "renders garbled"): a Python module-level
+  // function's owner is `file::` with an EMPTY qn — classDisplay returned ''
+  // and the lifeline head rendered as an empty box. Fall back to the file's
+  // basename.
+  test('module-level owner (empty qn) falls back to the file basename', () => {
+    expect(classDisplay('src/sources/solidot.py::')).toBe('solidot.py')
+    expect(classDisplay('solidot.py::')).toBe('solidot.py')
+  })
+})
+
+// Regression (sequence diagram "renders garbled"): a 29-char top-level test
+// function used as its own lifeline overflowed the fixed 134px head rect and
+// even the svg's LEFT edge, where it was clipped mid-glyph. Heads are now
+// ellipsis-truncated to the fixed column width (full name via <title>).
+describe('seqHeadLabel', () => {
+  test('short names pass through untouched', () => {
+    expect(seqHeadLabel('OrderService')).toBe('OrderService')
+  })
+
+  test('long names truncate to the column budget with an ellipsis', () => {
+    const long = 'test_parse_cutoff_drops_older'
+    const out = seqHeadLabel(long)
+    expect(out.endsWith('…')).toBe(true)
+    expect(out.length).toBeLessThanOrEqual(SEQ_HEAD_MAX_CHARS)
+    // the drawn run must fit inside the head rect (COL_W − 16, minus padding)
+    expect(out.length * SEQ_HEAD_CHAR_W).toBeLessThanOrEqual(SEQ_COL_W - 16)
+  })
+
+  test('layout measures the truncated label, so a long FIRST-column name no longer widens or overflows', () => {
+    const long = 'test_parse_cutoff_drops_older_and_even_longer'
+    const model = buildSequence(`t.py::${long}`, [node('f::B', 'x()', 'resolved')])
+    const { width } = seqDiagramLayout(model)
+    expect(width).toBe(SEQ_PAD * 2 + 2 * SEQ_COL_W)
+    // and the truncated half-width stays inside the first column (no x<0 clip)
+    const halfW = (seqHeadLabel(long).length * SEQ_HEAD_CHAR_W) / 2
+    expect(SEQ_PAD + SEQ_COL_W / 2 - halfW).toBeGreaterThanOrEqual(0)
   })
 })
 

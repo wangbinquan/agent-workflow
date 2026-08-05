@@ -15,7 +15,7 @@ import { useEffect, useId, useRef, type ReactElement, type ReactNode, type RefOb
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
-export type DialogSize = 'sm' | 'md' | 'lg'
+export type DialogSize = 'sm' | 'md' | 'lg' | 'full'
 
 export interface DialogProps {
   open: boolean
