@@ -96,40 +96,67 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 - **T37** `design/plan.md` RFC 索引状态更新 + `STATE.md` 收尾条目。
 - **T38** 真机验收执行与记录（下表），发现项回修或登记。
 
+## PR-8 · Windows 后端矩阵的两个产品前置（2026-08-06 从 T32 逐簇实测中析出）
+
+> T32 逐簇清完 A 类/路径字面量类（~105+）后确认：剩余 ~400 条后端红的**大头不是测试
+> 可移植性，是两个 verified-path 产品缺口**。它们都在 RFC-224/227 执行链上，按 CLAUDE.md
+> 属能力面/机制改动——**改前须走设计门 + 改后重跑 identity/containment 资格套件**；本两条
+> 是设计门的输入，不得边写边改。触点已 turnkey 测绘（见各条与 `docs/audit-backlog.md`）。
+
+- **T39 · verified-path 快照可执行性（Windows）**——`snapshotRuntimeBinary` 把源二进制
+  copy 成无扩展名副本再执行，Windows 上不可执行 ⇒ opencode/claude verified launch 与
+  `--version` 探测在 Windows 全挂（rfc135 8 条、runtime-smoke 一部分、verified 链路整片）。
+  正解：win32 快照保留源扩展名（`.exe`/`.cmd`，须 resolve 后取）并返回实际路径。**打破的
+  不变量**「snapshot 落在传入确切路径上」贯穿 6+ 处，必须一起放宽（不得在调用方预算绕开）：
+  `binarySnapshot.ts`（copy/chmod/verify/unlink/return + `effectiveSnapshotPath` 提外层）、
+  `withRuntimeBinarySnapshot`、**`verifiedPlanCore.ts:104` FATAL 守卫**、`verifiedPlan.ts:215`
+  toolchain 守卫、`claudeCode/driver.ts:159/:247`、`verifiedSystemPlan`/`verifiedMcpTestPlan`/
+  `mcpTestExecutionMaterial.ts:179`。digest 是字节哈希、不含文件名，故信任边界不动（这是
+  能力**恢复**而非收缩，RFC-224 事故沉淀的收缩门不适用；但机制改动的资格套件门适用）。
+  试改已完成并回滚（证实触点清单准确），未入库。
+- **T40 · win32 file-trust 原语**——`assertPrivateRegularFileForHost` /
+  `assertSameFileIdentityForHost` 在 win32 返回 not-trusted（`util/fileTrust.ts` 明写「a
+  win32 implementation is a separate task」，即 T0d 的显式延期），`storeHygiene.ts` 全程
+  走 `...ForHost`（无注入缝）⇒ store-hygiene/launcher hygiene 家族在 Windows fail-closed
+  一大片（batch 09 rfc224 簇的主因）。正解：owner+DACL / `FileIndex`+`VolumeSerialNumber`
+  经 Bun FFI 调 advapi32+kernel32（T0a 已为此留了双分支结构，仅 win32 实现待补）。**注意**
+  真机实测 Windows ARM64 Bun 构建禁用 TinyCC ⇒ `bun:ffi dlopen()` 不可用（见 STATE），故
+  该实现须带 dlopen 不可用时的诚实降级路径（不是静默信任）。这条工作量最大、需独立研究 pass。
+
 ## AC → 测试追踪表
 
-| AC | 载体（计划文件名 / 既有套件） |
-|---|---|
-| AC-1/2 | `platform-exec.test.ts`、`platform-env-folding.test.ts`（纯函数 + 站点接线 grep 守卫 + 变异实证） |
-| AC-3/4 | `process-kill-authority.test.ts`（argv 构造纯测 + POSIX 零漂移）+ win32 CI `windows-process-governance.test.ts`；AC-4 弹窗=真机项 |
-| AC-5 | `daemon-shutdown-endpoint.test.ts` + win32 CI stop 端到端 |
-| AC-6 | `lock` 既有套件 + win32 用例 |
-| AC-7 | 既有 containment 判定套件（win32 平台注入腿）+ guidance/409 快照 |
-| AC-8 | RFC-253 failClosed 既有锁的 win32 注入腿 |
-| AC-9 | `rfc233-containment-coordinator.test.ts:206-274`、`rfc227-containment-provider.test.ts:63-105`（不许改语义） |
-| AC-10 | guidance/doctor/sandbox CLI win32 渲染快照（双语） |
-| AC-11 | win32 CI 编译 stub verified 链路 spec + 真机真 opencode（AC-28 表） |
-| AC-12/13 | `hermetic-env-win32.test.ts` 键集快照 + `executionIdentity` 平台分支用例 |
-| AC-14 | git 套件 win32 腿（NUL/longpaths/worktree/stash）+ `git-credential-subcommand.test.ts` |
-| AC-15 | `mcpProbe` `.cmd` 拒绝用例 + 远端 MCP 既有套件 |
-| AC-16 | claude-code win32 冒烟（CI）+ 真机项 |
-| AC-17/18 | `script-interpreter-win32.test.ts`（候选链/WSL 规避/假 alias 淘汰）+ env 形态快照 + `PYTHONUTF8` 端到端（win32 CI 跑真 python） |
-| AC-19 | deps 安装 win32 CI 用例 + 事件呈现断言 |
-| AC-20/21 | `build-binary` 后缀锁 + release workflow 锁（`rfc224-e2e-compiled-seam` 更新态） |
-| AC-22 | `root-test-entrypoint` 全量更新态 + 四腿 CI 绿（exact-SHA 查证） |
-| AC-23 | e2e windows 四 shard 绿 + stub 迁移对照表全勾 + sqlite fixture 新锁 |
-| AC-24 | visual windows 腿绿 + 48 png 提交记录 |
-| AC-25 | `test-suite-policy` 更新态（配额逐条理由） |
-| AC-26 | i18n 守卫套件 |
-| AC-27 | docs diff + audit-backlog 条目 |
-| AC-29 | `argv-platform-limit.test.ts`（纯计算）+ **win32 CI 真实子进程边界用例**（超限/贴边各一） |
-| AC-30 | `verified-storage-trust.test.ts`（三断言正反例 + 变异实证）；win32 CI 的 reparse point / 他人可写 DACL 拒绝用例 |
-| AC-31 | win32 CI 三入口各一条（inventory probe / runtime test / 业务 session）跑真实原生 exe MCP |
-| AC-32 | `shutdown-nonce.test.ts`（重生成 / 旧 nonce 被拒 / 退出即失效）+ win32 CI stop 端到端 |
-| AC-33 | win32 CI：备份→恢复往返、SCIP 成功与 timeout 两路、distill+resume、定时启动+恢复 |
-| AC-13b/c | `verified-plan-win32-layout.test.ts`（注入平台）+ **agent 进程内 `git --version` 真实执行**（win32 CI） |
-| AC-3b | 「父退出孙仍在」场景：断言不判可回收（摘掉 Job 改回单 pid 必须变红） |
-| AC-28 | 真机记录（下表）落 `design/RFC-254-*/acceptance-real-machine.md` |
+| AC       | 载体（计划文件名 / 既有套件）                                                                                                     |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| AC-1/2   | `platform-exec.test.ts`、`platform-env-folding.test.ts`（纯函数 + 站点接线 grep 守卫 + 变异实证）                                 |
+| AC-3/4   | `process-kill-authority.test.ts`（argv 构造纯测 + POSIX 零漂移）+ win32 CI `windows-process-governance.test.ts`；AC-4 弹窗=真机项 |
+| AC-5     | `daemon-shutdown-endpoint.test.ts` + win32 CI stop 端到端                                                                         |
+| AC-6     | `lock` 既有套件 + win32 用例                                                                                                      |
+| AC-7     | 既有 containment 判定套件（win32 平台注入腿）+ guidance/409 快照                                                                  |
+| AC-8     | RFC-253 failClosed 既有锁的 win32 注入腿                                                                                          |
+| AC-9     | `rfc233-containment-coordinator.test.ts:206-274`、`rfc227-containment-provider.test.ts:63-105`（不许改语义）                      |
+| AC-10    | guidance/doctor/sandbox CLI win32 渲染快照（双语）                                                                                |
+| AC-11    | win32 CI 编译 stub verified 链路 spec + 真机真 opencode（AC-28 表）                                                               |
+| AC-12/13 | `hermetic-env-win32.test.ts` 键集快照 + `executionIdentity` 平台分支用例                                                          |
+| AC-14    | git 套件 win32 腿（NUL/longpaths/worktree/stash）+ `git-credential-subcommand.test.ts`                                            |
+| AC-15    | `mcpProbe` `.cmd` 拒绝用例 + 远端 MCP 既有套件                                                                                    |
+| AC-16    | claude-code win32 冒烟（CI）+ 真机项                                                                                              |
+| AC-17/18 | `script-interpreter-win32.test.ts`（候选链/WSL 规避/假 alias 淘汰）+ env 形态快照 + `PYTHONUTF8` 端到端（win32 CI 跑真 python）   |
+| AC-19    | deps 安装 win32 CI 用例 + 事件呈现断言                                                                                            |
+| AC-20/21 | `build-binary` 后缀锁 + release workflow 锁（`rfc224-e2e-compiled-seam` 更新态）                                                  |
+| AC-22    | `root-test-entrypoint` 全量更新态 + 四腿 CI 绿（exact-SHA 查证）                                                                  |
+| AC-23    | e2e windows 四 shard 绿 + stub 迁移对照表全勾 + sqlite fixture 新锁                                                               |
+| AC-24    | visual windows 腿绿 + 48 png 提交记录                                                                                             |
+| AC-25    | `test-suite-policy` 更新态（配额逐条理由）                                                                                        |
+| AC-26    | i18n 守卫套件                                                                                                                     |
+| AC-27    | docs diff + audit-backlog 条目                                                                                                    |
+| AC-29    | `argv-platform-limit.test.ts`（纯计算）+ **win32 CI 真实子进程边界用例**（超限/贴边各一）                                         |
+| AC-30    | `verified-storage-trust.test.ts`（三断言正反例 + 变异实证）；win32 CI 的 reparse point / 他人可写 DACL 拒绝用例                   |
+| AC-31    | win32 CI 三入口各一条（inventory probe / runtime test / 业务 session）跑真实原生 exe MCP                                          |
+| AC-32    | `shutdown-nonce.test.ts`（重生成 / 旧 nonce 被拒 / 退出即失效）+ win32 CI stop 端到端                                             |
+| AC-33    | win32 CI：备份→恢复往返、SCIP 成功与 timeout 两路、distill+resume、定时启动+恢复                                                  |
+| AC-13b/c | `verified-plan-win32-layout.test.ts`（注入平台）+ **agent 进程内 `git --version` 真实执行**（win32 CI）                           |
+| AC-3b    | 「父退出孙仍在」场景：断言不判可回收（摘掉 Job 改回单 pid 必须变红）                                                              |
+| AC-28    | 真机记录（下表）落 `design/RFC-254-*/acceptance-real-machine.md`                                                                  |
 
 ## 真机验收清单（D4 / AC-28，Windows x64）
 
@@ -147,37 +174,37 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 
 **已交付并推送**（每批各带回归测试 + 变异实证，逐条见 git log）：
 
-| 任务 | commit | 要点 |
-|---|---|---|
-| T1 | `01c6f67e` | 平台执行原语 + **全仓负向扫描守卫**（D23）。守卫立刻证明手写清单不可信：`${root}/` 前缀 我写 4 / 评审 6 / 实扫 **10**；PATH 4 / 7 / **10**。迁移的 4 处含两处真实功能破坏（插件 GC 误删、seed 路径全拒） |
-| T0a | `7b6e039f` | 文件信任原语（私有性 / 非链接 / 同一对象），win32 显式 `platform-unsupported` 失败而非静默跳过 |
-| T18 | `f3cb3f8d` | git 的 NUL 空设备（5 处）+ win32 `core.longpaths` |
-| T0a 续 | `2185a7e3` | storeHygiene 接原语 + **文件身份**负向扫描规则 |
-| T0b | `f870746d` | 六个 verified 存储文件的身份栅栏全部收拢；typecheck 逼出 bigint stat 表示差异 |
-| T12 | `82920ad2` | 受控 PATH 的 win32 形态 + **设计门 P0-A**（受控 PATH 必须含 git，否则主线工作流不成立） |
-| T2 | `1728b779` | env 键大小写折叠单点（D12），AC-2 的 oracle 是**子进程实际 environ** |
-| T22/T23 | `74373d66` | 脚本节点 win32：bash 只从 git 推导（**绝不**裸 `which('bash')`——那是 WSL 启动器）、python 候选链、私有 profile/temp、`PYTHONUTF8` |
-| T4/T5/T26/T27 | `e3081c73` | **Job Object**（P0-D，v1 必需）+ 全部生产 spawn 的 `windowsHide` + 产物 `.exe` 与 release 矩阵 + **定向 Windows CI job** |
-| — | `7e8d1305` | 真实 Windows CI 首跑抓到的三条，逐条修（见下） |
-| T11b | `fd99a0be` | verified artifact layout 的 win32 形态（P0-B）：`USERPROFILE`、禁用命令、`.exe` 后缀 |
-| T11c | `9c22bfde` | 平台事实经注入；守卫当场抓住我第一版直接读 `process.platform` |
-| T14b | `f082770b` | 本地 MCP wrapperless 物化（P0-F/D21）；**不用 `.cmd`**——cmd.exe 会重新分词 |
-| T13 | `12110b8d` | 受控 config 在 win32 不写 `shell` 键，**缺席本身是身份的一部分**；另附 Windows 真机验证脚本 |
-| T29 | `86ebbf2d` | e2e fixture SQL 改 `bun:sqlite`——**硬前提**（windows runner 无 sqlite3 CLI），顺带消掉一个真实 flake 的成因 |
-| T25b | `cc4dadea` | 归档链路的 Windows 前提。核实后风险面比预想小得多：**macOS 的 `tar` 就是 bsdtar/libarchive**，与 Windows 自带同一实现 ⇒ 方言已被 macOS CI 腿覆盖，只需补「tar 缺失」的显式检查 |
-| T28b（骨架 / basic / commit） | `1141f82d` | 编译式 stub 的骨架与**差分验证机制**：同一 argv+env 同时跑新旧，逐字节比对 stdout / exit / 副作用。一个产物含全部 mode——`bun build --compile` 内嵌整个 Bun 运行时（真机实测 123.9 MiB），一 mode 一二进制每次 CI 要一 GB 以上 |
-| T28b（intent / slow） | `ab7a575c` | `intent-workflow-opencode.sh` **不单独成 mode**——差分证明它就是同一 mode 加一个变量。slow 保留 shell 的「秒」粒度睡眠（原文整数除法，500ms 等于不睡），改成真毫秒会悄悄改掉所有既有 spec 的时序 |
-| T28b（三个 clarify） | `56954531` | 轮次驱动 ⇒ 先把比对升级成**调用序列**（每侧独立 state 目录，比对整段 transcript + 状态文件 + 日志 + cwd 副作用），单次调用只能验证第 1 轮。stderr 升级为逐字节。发现两条：intent 原件**没有** prompt 钩子（我第一版夹带了）；`tr -c` 折叠粒度**取决于 locale**，shell 原件与自己都不一致 ⇒ 改按码点折叠并写明 |
-| T28b（workflow-matrix） | `80448bd2` | 最后一个 shell stub：24 个分支、8 个各有含义的退出码。顺带修 dispatch 没 await——sleeping 的 mode 只是靠 pending timer 撑住事件循环 |
-| **e2e 加载期回归修复** + T28b 接线 | `6e9e1450` | **T29 把四个 e2e shard 打挂了四个提交**：Playwright 在 **Node** 上加载 spec，解不了 `bun:` ⇒ 加载期就死、且报成 "No tests found"。Bun 的 SQLite 保留但挪进子进程；顺带删掉一处 `writefile()` 绕行（sqlite3 CLI 的扩展函数，换引擎时静默丢了）并补 `querySqlite`。harness 从「传路径」改成「声明 mode」 |
-| T28b（删旧件） | `35bd4c5a` | 删 12 个原件前把它们的**实际可观测行为录成 golden**（129 个用例），比对改为回放录音——证明链留在仓库里，且**在 Windows 上也能跑**。argv 契约门跟随迁到 mode，途中发现三个 TS 系 mode 各自留着 `argv.slice().join(' ')`（即 `$*` 折叠的 TS 版），改掉并加源码规则 |
-| T28b（Windows 腿） | `931b971e` | golden 回放接上 windows-platform 作业；修两处会让 POSIX 录音在 Windows 上必然对不上的路径归一（状态文件 key 的分隔符、遮蔽没盖 cwd） |
-| T29 锁 + T30 | `2ad40f56` | 源码锁跟随进程边界（并**反过来**禁止父侧再 import `bun:sqlite`）；build-binary 冒烟段三处 POSIX 前提跨平台化，改后把 CI 那段脚本抽出在本机验证等价 |
-| T28b（遥测矩阵） | `769a1057` | RFC-224 的版本遥测矩阵按 mode 枚举，覆盖面从 8 个 .sh 扩到 11 个 mode |
-| T36 | `71da93c2` | Windows 四条未决项登记（无 containment provider / 缺 DPAPI / `.cmd` 不自动解包 / 系统代理孤儿缝）+ `sandbox.md`「尚无发行二进制」订正 + `OPENCODE_CONFIG.md` 维护清单 |
-| — | `78b7205f` | 两条 e2e 红的**逐格构建实证归因**（均非本 RFC）：`focus-ring-clip` 本就不绿（4 个），被 `01d3e541` 推到 108；`rfc250-workflow-camera` 在 `6e9e1450` 上通过 ⇒ 归并发画布改动 |
-| **P0 修复** | `a486b79c` / `29ed4880` | **Job Object 的 `ActiveProcesses` 偏移读错字段** —— 见下 |
-| — | `ba54c779` | golden 回放在 Windows 上被 **8.3 短路径**打穿（子进程记录的 cwd 是 `C:\Users\RUNNER~1\...`，遮蔽表里是长路径）⇒ 追加一层按临时目录**名字**的遮蔽（前缀是我们自己定的，与 OS 拼法无关），并用 windows-latest 上实际写出的那行字符串在 macOS 上直接验证 |
+| 任务                               | commit                  | 要点                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1                                 | `01c6f67e`              | 平台执行原语 + **全仓负向扫描守卫**（D23）。守卫立刻证明手写清单不可信：`${root}/` 前缀 我写 4 / 评审 6 / 实扫 **10**；PATH 4 / 7 / **10**。迁移的 4 处含两处真实功能破坏（插件 GC 误删、seed 路径全拒）                                                                                                      |
+| T0a                                | `7b6e039f`              | 文件信任原语（私有性 / 非链接 / 同一对象），win32 显式 `platform-unsupported` 失败而非静默跳过                                                                                                                                                                                                                |
+| T18                                | `f3cb3f8d`              | git 的 NUL 空设备（5 处）+ win32 `core.longpaths`                                                                                                                                                                                                                                                             |
+| T0a 续                             | `2185a7e3`              | storeHygiene 接原语 + **文件身份**负向扫描规则                                                                                                                                                                                                                                                                |
+| T0b                                | `f870746d`              | 六个 verified 存储文件的身份栅栏全部收拢；typecheck 逼出 bigint stat 表示差异                                                                                                                                                                                                                                 |
+| T12                                | `82920ad2`              | 受控 PATH 的 win32 形态 + **设计门 P0-A**（受控 PATH 必须含 git，否则主线工作流不成立）                                                                                                                                                                                                                       |
+| T2                                 | `1728b779`              | env 键大小写折叠单点（D12），AC-2 的 oracle 是**子进程实际 environ**                                                                                                                                                                                                                                          |
+| T22/T23                            | `74373d66`              | 脚本节点 win32：bash 只从 git 推导（**绝不**裸 `which('bash')`——那是 WSL 启动器）、python 候选链、私有 profile/temp、`PYTHONUTF8`                                                                                                                                                                             |
+| T4/T5/T26/T27                      | `e3081c73`              | **Job Object**（P0-D，v1 必需）+ 全部生产 spawn 的 `windowsHide` + 产物 `.exe` 与 release 矩阵 + **定向 Windows CI job**                                                                                                                                                                                      |
+| —                                  | `7e8d1305`              | 真实 Windows CI 首跑抓到的三条，逐条修（见下）                                                                                                                                                                                                                                                                |
+| T11b                               | `fd99a0be`              | verified artifact layout 的 win32 形态（P0-B）：`USERPROFILE`、禁用命令、`.exe` 后缀                                                                                                                                                                                                                          |
+| T11c                               | `9c22bfde`              | 平台事实经注入；守卫当场抓住我第一版直接读 `process.platform`                                                                                                                                                                                                                                                 |
+| T14b                               | `f082770b`              | 本地 MCP wrapperless 物化（P0-F/D21）；**不用 `.cmd`**——cmd.exe 会重新分词                                                                                                                                                                                                                                    |
+| T13                                | `12110b8d`              | 受控 config 在 win32 不写 `shell` 键，**缺席本身是身份的一部分**；另附 Windows 真机验证脚本                                                                                                                                                                                                                   |
+| T29                                | `86ebbf2d`              | e2e fixture SQL 改 `bun:sqlite`——**硬前提**（windows runner 无 sqlite3 CLI），顺带消掉一个真实 flake 的成因                                                                                                                                                                                                   |
+| T25b                               | `cc4dadea`              | 归档链路的 Windows 前提。核实后风险面比预想小得多：**macOS 的 `tar` 就是 bsdtar/libarchive**，与 Windows 自带同一实现 ⇒ 方言已被 macOS CI 腿覆盖，只需补「tar 缺失」的显式检查                                                                                                                                |
+| T28b（骨架 / basic / commit）      | `1141f82d`              | 编译式 stub 的骨架与**差分验证机制**：同一 argv+env 同时跑新旧，逐字节比对 stdout / exit / 副作用。一个产物含全部 mode——`bun build --compile` 内嵌整个 Bun 运行时（真机实测 123.9 MiB），一 mode 一二进制每次 CI 要一 GB 以上                                                                                 |
+| T28b（intent / slow）              | `ab7a575c`              | `intent-workflow-opencode.sh` **不单独成 mode**——差分证明它就是同一 mode 加一个变量。slow 保留 shell 的「秒」粒度睡眠（原文整数除法，500ms 等于不睡），改成真毫秒会悄悄改掉所有既有 spec 的时序                                                                                                               |
+| T28b（三个 clarify）               | `56954531`              | 轮次驱动 ⇒ 先把比对升级成**调用序列**（每侧独立 state 目录，比对整段 transcript + 状态文件 + 日志 + cwd 副作用），单次调用只能验证第 1 轮。stderr 升级为逐字节。发现两条：intent 原件**没有** prompt 钩子（我第一版夹带了）；`tr -c` 折叠粒度**取决于 locale**，shell 原件与自己都不一致 ⇒ 改按码点折叠并写明 |
+| T28b（workflow-matrix）            | `80448bd2`              | 最后一个 shell stub：24 个分支、8 个各有含义的退出码。顺带修 dispatch 没 await——sleeping 的 mode 只是靠 pending timer 撑住事件循环                                                                                                                                                                            |
+| **e2e 加载期回归修复** + T28b 接线 | `6e9e1450`              | **T29 把四个 e2e shard 打挂了四个提交**：Playwright 在 **Node** 上加载 spec，解不了 `bun:` ⇒ 加载期就死、且报成 "No tests found"。Bun 的 SQLite 保留但挪进子进程；顺带删掉一处 `writefile()` 绕行（sqlite3 CLI 的扩展函数，换引擎时静默丢了）并补 `querySqlite`。harness 从「传路径」改成「声明 mode」        |
+| T28b（删旧件）                     | `35bd4c5a`              | 删 12 个原件前把它们的**实际可观测行为录成 golden**（129 个用例），比对改为回放录音——证明链留在仓库里，且**在 Windows 上也能跑**。argv 契约门跟随迁到 mode，途中发现三个 TS 系 mode 各自留着 `argv.slice().join(' ')`（即 `$*` 折叠的 TS 版），改掉并加源码规则                                               |
+| T28b（Windows 腿）                 | `931b971e`              | golden 回放接上 windows-platform 作业；修两处会让 POSIX 录音在 Windows 上必然对不上的路径归一（状态文件 key 的分隔符、遮蔽没盖 cwd）                                                                                                                                                                          |
+| T29 锁 + T30                       | `2ad40f56`              | 源码锁跟随进程边界（并**反过来**禁止父侧再 import `bun:sqlite`）；build-binary 冒烟段三处 POSIX 前提跨平台化，改后把 CI 那段脚本抽出在本机验证等价                                                                                                                                                            |
+| T28b（遥测矩阵）                   | `769a1057`              | RFC-224 的版本遥测矩阵按 mode 枚举，覆盖面从 8 个 .sh 扩到 11 个 mode                                                                                                                                                                                                                                         |
+| T36                                | `71da93c2`              | Windows 四条未决项登记（无 containment provider / 缺 DPAPI / `.cmd` 不自动解包 / 系统代理孤儿缝）+ `sandbox.md`「尚无发行二进制」订正 + `OPENCODE_CONFIG.md` 维护清单                                                                                                                                         |
+| —                                  | `78b7205f`              | 两条 e2e 红的**逐格构建实证归因**（均非本 RFC）：`focus-ring-clip` 本就不绿（4 个），被 `01d3e541` 推到 108；`rfc250-workflow-camera` 在 `6e9e1450` 上通过 ⇒ 归并发画布改动                                                                                                                                   |
+| **P0 修复**                        | `a486b79c` / `29ed4880` | **Job Object 的 `ActiveProcesses` 偏移读错字段** —— 见下                                                                                                                                                                                                                                                      |
+| —                                  | `ba54c779`              | golden 回放在 Windows 上被 **8.3 短路径**打穿（子进程记录的 cwd 是 `C:\Users\RUNNER~1\...`，遮蔽表里是长路径）⇒ 追加一层按临时目录**名字**的遮蔽（前缀是我们自己定的，与 OS 拼法无关），并用 windows-latest 上实际写出的那行字符串在 macOS 上直接验证                                                         |
 
 **x64 Windows CI 腿第一次真正执行 Job Object 就抓到一条 P0**：
 `ACTIVE_PROCESSES_OFFSET` 原本写成 `48 - 4 - 8 - 8 - 8` = **20**，是从结构大小
@@ -252,15 +279,15 @@ T25c–T25d（D24 剩余子系统）。
 **e2e：270 条里 213 通过、45 skip、7 失败、2 flaky。** 比预期好得多，直接原因是
 T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
 
-| 用例 | 根因 | 归属 |
-|---|---|---|
-| `workflow-matrix` output kinds | **路径分隔符** | 本 RFC，已修 `c345d948` |
-| `business-workflow-scenarios` 文档批处理 | **路径分隔符** | 同上 |
-| `workgroup-matrix` ×2 | 同形 `toBe` 断言，疑同源 | 待重跑确认 |
-| `mcp-runtime-playground` | locator 不可见 | 待查 |
-| `focus-ring-clip` | **POSIX 上也红**（既有缺陷，`01d3e541` 把它从 4 推到 100+） | 非本 RFC |
-| `rfc250-workflow-camera` | **POSIX 上也红**（并发画布改动） | 非本 RFC |
-| `intent-builder` a11y（flaky） | 既有对比度缺陷（RFC-027 起） | 非本 RFC，已登记 |
+| 用例                                     | 根因                                                        | 归属                    |
+| ---------------------------------------- | ----------------------------------------------------------- | ----------------------- |
+| `workflow-matrix` output kinds           | **路径分隔符**                                              | 本 RFC，已修 `c345d948` |
+| `business-workflow-scenarios` 文档批处理 | **路径分隔符**                                              | 同上                    |
+| `workgroup-matrix` ×2                    | 同形 `toBe` 断言，疑同源                                    | 待重跑确认              |
+| `mcp-runtime-playground`                 | locator 不可见                                              | 待查                    |
+| `focus-ring-clip`                        | **POSIX 上也红**（既有缺陷，`01d3e541` 把它从 4 推到 100+） | 非本 RFC                |
+| `rfc250-workflow-camera`                 | **POSIX 上也红**（并发画布改动）                            | 非本 RFC                |
+| `intent-builder` a11y（flaky）           | 既有对比度缺陷（RFC-027 起）                                | 非本 RFC，已登记        |
 
 **路径分隔符那条是本轮最有价值的发现，而且是生产缺陷不是测试格式问题**：
 `envelope.ts` 与 `portArtifacts.ts` 的 `relative()` 在 Windows 上返回反斜杠，而那个
@@ -279,16 +306,16 @@ T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
 
 截至超时已产出 **386 条失败**，按 describe 聚类的前几名（同族多半共根因）：
 
-| 条数 | describe |
-|---|---|
-| 21 | RFC-224 sealed model-reachable subprocess boundary |
-| 16 | RFC-224 OpenCode account hygiene |
-| 15 | RFC-224 launcher lifecycle and direct protocol ordering |
-| 14 | updateRuntime / deleteRuntime guards（RFC-112） |
-| 10 | runSystemAgent |
-| 9 | RFC-224 verified business-plan owner barrier / FFF capability proof |
-| 9 | RFC-014 iterate sibling cascade |
-| 8 | /api/plugins install path（PATH 注入的 fake npm） |
+| 条数 | describe                                                            |
+| ---- | ------------------------------------------------------------------- |
+| 21   | RFC-224 sealed model-reachable subprocess boundary                  |
+| 16   | RFC-224 OpenCode account hygiene                                    |
+| 15   | RFC-224 launcher lifecycle and direct protocol ordering             |
+| 14   | updateRuntime / deleteRuntime guards（RFC-112）                     |
+| 10   | runSystemAgent                                                      |
+| 9    | RFC-224 verified business-plan owner barrier / FFF capability proof |
+| 9    | RFC-014 iterate sibling cascade                                     |
+| 8    | /api/plugins install path（PATH 注入的 fake npm）                   |
 
 **已处理的第一簇（RFC-112，21 条）**：根因**不是**预判的「自写假二进制」——是夹具
 写死 `binaryPath: '/opt/my-cc'` 这类 POSIX 字面量。陷阱在于它在 Windows 上不是被当
@@ -321,12 +348,12 @@ T28b 已经把九个 shell stub 拿掉了。7 条逐条归因：
 已逐格构建实证归属他人提交并记入 audit-backlog。四轮轨迹：
 **213/7 → 216/5 → 216/3 → 219/2**，每一步都由一次测量驱动：
 
-| 修的东西 | 性质 |
-|---|---|
-| 端口相对路径的分隔符 | **生产缺陷** |
-| git `autocrlf` / `eol` | **生产缺陷** |
-| 取色断言与主题应用赛跑 | 测试同步 |
-| 三处 `networkidle`（常驻 WS ⇒ 网络永不 idle） | 测试同步 |
+| 修的东西                                      | 性质         |
+| --------------------------------------------- | ------------ |
+| 端口相对路径的分隔符                          | **生产缺陷** |
+| git `autocrlf` / `eol`                        | **生产缺陷** |
+| 取色断言与主题应用赛跑                        | 测试同步     |
+| 三处 `networkidle`（常驻 WS ⇒ 网络永不 idle） | 测试同步     |
 
 **接腿的前置条件已清楚**：ci.yml 的 `e2e` job `needs: build-binary`，而后者的
 RFC-224 supervisor 冒烟驱动的是 **bwrap**（Linux 概念）且载荷是 `/usr/bin/true`
@@ -415,15 +442,15 @@ win32 视觉基线现在**不再被阻塞**——e2e 已能在 Windows 上跑，
 加载失败，与 Windows 无关。重装依赖并**比对文件哈希确认树与 HEAD 一致**后重跑，真正
 的 C/D 类如下，均已修并在两平台验证：
 
-| 失败 | 真因 | 处理 |
-|---|---|---|
-| `api-contract-coverage` | `f.split('/')` 手写取 basename，Windows 上整条路径成了文件名，守卫报「零个已知盲点」 | 改用 `basename()` |
-| 调用图 `ref` | `relative()` 返回宿主拼写，而 ref 是**可移植标识符**：输入 `/`、输出 `\`，自己产出的 ref 喂不回自己 | **生产修复**（`expandService.ts`）+ 变异证明 |
-| `toPortableRelativePath` | 无条件替换 `\`，而 POSIX 上它是**合法文件名字符**，会悄悄指向另一个路径 | 加平台判据；同时改进 T31 既有调用点 |
-| `auth-token` / `daemon-start` | 断言 0o600，但 Windows 上 `chmod` 是 no-op、`stat` 恒报 0o666 | 走既有 `statMetadataIsAuthoritative`，两平台各断言其真值 |
-| `git-noninteractive-env` | 对 `process.env` 展开结果取 `.PATH`（真实键是 `Path`） | 用 shared 折叠取值器；**已查证生产侧无缺陷**（两处写 PATH 的地方都从 `{}` 干净构建，无重复键隐患） |
-| `agent-multi-grep-guard` | 扫三个 `src/` 树，本机 107ms、Windows 超 5s（≈47×，逐文件实时扫描） | 按实测给显式预算 |
-| `bwrap 诊断` | POSIX provider 专属 | 守 describe + 登记棘轮 |
+| 失败                          | 真因                                                                                                | 处理                                                                                               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `api-contract-coverage`       | `f.split('/')` 手写取 basename，Windows 上整条路径成了文件名，守卫报「零个已知盲点」                | 改用 `basename()`                                                                                  |
+| 调用图 `ref`                  | `relative()` 返回宿主拼写，而 ref 是**可移植标识符**：输入 `/`、输出 `\`，自己产出的 ref 喂不回自己 | **生产修复**（`expandService.ts`）+ 变异证明                                                       |
+| `toPortableRelativePath`      | 无条件替换 `\`，而 POSIX 上它是**合法文件名字符**，会悄悄指向另一个路径                             | 加平台判据；同时改进 T31 既有调用点                                                                |
+| `auth-token` / `daemon-start` | 断言 0o600，但 Windows 上 `chmod` 是 no-op、`stat` 恒报 0o666                                       | 走既有 `statMetadataIsAuthoritative`，两平台各断言其真值                                           |
+| `git-noninteractive-env`      | 对 `process.env` 展开结果取 `.PATH`（真实键是 `Path`）                                              | 用 shared 折叠取值器；**已查证生产侧无缺陷**（两处写 PATH 的地方都从 `{}` 干净构建，无重复键隐患） |
+| `agent-multi-grep-guard`      | 扫三个 `src/` 树，本机 107ms、Windows 超 5s（≈47×，逐文件实时扫描）                                 | 按实测给显式预算                                                                                   |
+| `bwrap 诊断`                  | POSIX provider 专属                                                                                 | 守 describe + 登记棘轮                                                                             |
 
 **A 类比原估计大，且原先的归类有一条是错的**：`fusion-engine.test.ts` 两条报的是
 「取消后应为 canceled，实得 failed」，看着像取消语义在 Windows 上不同——实际是紧邻
@@ -437,11 +464,11 @@ win32 视觉基线现在**不再被阻塞**——e2e 已能在 Windows 上跑，
 
 剩余待办（已定性，未修）：
 
-| 类 | 条数 | 处理方式 |
-|---|---|---|
-| A `.sh` 假二进制夹具（`opencode-models` 9 + `fusion-engine` 2 + …） | ~11 | 同 T29：编译一个跨平台 stub，行为由数据文件选择 |
-| EBUSY 拆卸（`db` / `cli` / `gettask-multi-repo`） | ~6 | 先定位句柄持有者 |
-| `agent.plugins`（`spawn('npm')` 撞 `.cmd` 垫片） | 4 | 生产缺陷，需独立改动且不得用 `shell: true` |
+| 类                                                                  | 条数 | 处理方式                                        |
+| ------------------------------------------------------------------- | ---- | ----------------------------------------------- |
+| A `.sh` 假二进制夹具（`opencode-models` 9 + `fusion-engine` 2 + …） | ~11  | 同 T29：编译一个跨平台 stub，行为由数据文件选择 |
+| EBUSY 拆卸（`db` / `cli` / `gettask-multi-repo`）                   | ~6   | 先定位句柄持有者                                |
+| `agent.plugins`（`spawn('npm')` 撞 `.cmd` 垫片）                    | 4    | 生产缺陷，需独立改动且不得用 `shell: true`      |
 
 上表三行**已全部结案**（见下方第二、三轮）：A 类清零（`fusion-engine` 换缝 +
 `fake-npm` 移植为 TS）；EBUSY 定位到根因（`close()` 没真关上，句柄不可排空）并按
@@ -505,11 +532,11 @@ iso 从一个已被删除的目录上建，于是报出那四行**点名 git 的
 上述 8 个文件 + `callgraph-multirepo-prefix` + `gettask-multi-repo` 共 10 个，
 **80 pass / 0 fail**）：
 
-| 失败 | 真因 | 处理 |
-|---|---|---|
-| `rfc213-worktree-capture` ×5 | `afterEach` 的裸 `rmSync` 撞 EBUSY——目录里有开着的 `db.sqlite`，即 `fixtures/tempDir.ts` 记的「Bun 的 sqlite `close()` 没真关上」 | 换 `removeTempDirSync`，循环改成**每个目录都试、第一个真错误留到循环后再抛**：旧写法在第一个忙目录就中断循环，后面的连试都没试过。留着「循环后再抛」是有意的——POSIX 上 `tempDir.ts` 仍照抛，就地吞掉等于悄悄撤销那条 |
-| `rfc213-worktree-capture` ×1 | `chmod 000` 造「读不了的文件」让 tar 失败——Windows 上**是空操作**（实测文件照读、tar 退 0），断言的 skip 从未发生；它此前还要一个 `getuid()===0` 逃生口 | 改成让坏 worktree 的路径**存在但不是目录**：`tar -C <文件>` chdir 失败退非零，**四种 tar 全部实测**（bsdtar 3.5.3 macOS / bsdtar Windows 11 / GNU tar 1.35 CI ubuntu / busybox 1.37 alpine），无权限、无特权判定、无平台分支 |
-| `rfc130-iso-worktree-primitives` ×1 | `hasDirtySubmoduleContent` 是三个 `git init` 加一次真 clone、约二十次 git spawn，撞 5s 默认预算 | 显式 60s 预算（同 `callgraph-multirepo-prefix` / `gettask-multi-repo`） |
+| 失败                                | 真因                                                                                                                                                    | 处理                                                                                                                                                                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rfc213-worktree-capture` ×5        | `afterEach` 的裸 `rmSync` 撞 EBUSY——目录里有开着的 `db.sqlite`，即 `fixtures/tempDir.ts` 记的「Bun 的 sqlite `close()` 没真关上」                       | 换 `removeTempDirSync`，循环改成**每个目录都试、第一个真错误留到循环后再抛**：旧写法在第一个忙目录就中断循环，后面的连试都没试过。留着「循环后再抛」是有意的——POSIX 上 `tempDir.ts` 仍照抛，就地吞掉等于悄悄撤销那条         |
+| `rfc213-worktree-capture` ×1        | `chmod 000` 造「读不了的文件」让 tar 失败——Windows 上**是空操作**（实测文件照读、tar 退 0），断言的 skip 从未发生；它此前还要一个 `getuid()===0` 逃生口 | 改成让坏 worktree 的路径**存在但不是目录**：`tar -C <文件>` chdir 失败退非零，**四种 tar 全部实测**（bsdtar 3.5.3 macOS / bsdtar Windows 11 / GNU tar 1.35 CI ubuntu / busybox 1.37 alpine），无权限、无特权判定、无平台分支 |
+| `rfc130-iso-worktree-primitives` ×1 | `hasDirtySubmoduleContent` 是三个 `git init` 加一次真 clone、约二十次 git spawn，撞 5s 默认预算                                                         | 显式 60s 预算（同 `callgraph-multirepo-prefix` / `gettask-multi-repo`）                                                                                                                                                      |
 
 **整簇复扫**（`worktree|iso|git|backup|fusion` 命名的全部 **55 个文件**，
 `--isolate --randomize`，Windows）：**429 pass / 9 skip / 22 fail**，其中
@@ -543,12 +570,12 @@ fusion 两件、`rfc213-worktree-capture`、`rfc130-iso-*` 三件**全部为零�
 翻之前先在真机上把它跑到零红——**138 fail / 35 文件 → 0 fail / 702 文件 / 5957 条**，
 三处修复**全部在测试侧、无一条产品代码**：
 
-| 根因 | 影响 | 处置 |
-|---|---|---|
-| `new URL(import.meta.url).pathname` | **125 条**（一个根因占 90%）。Windows 上得到 `/C:/aw/...`，再 resolve 就成了 `C:\C:\aw\...` | 全仓换 `fileURLToPath`（35 个文件），并加**负向扫描守卫** `rfc254-file-url-pathname-guard.test.ts`（含变异实证：改回旧写法即红）。仓内 `vite.config.ts`/`vitest.config.ts` 本来就用对了，测试是掉队的那批 |
-| `path.relative()` 结果当 key 去比 `/` 拼的清单 | 4 个文件 | 新增 `tests/portable-path.ts`（后端 `toPortableRelativePath` 的孪生——前端测试不能 import 后端源码，依赖门禁禁止该缝） |
-| 夹具 `execSync('grep …')` | 1 个文件 | 改进程内扫描。顺带修掉一个 POSIX 上也存在的隐患：`root` 未加引号，装在带空格的路径下同样空结果 |
-| 夹具写 `#!/usr/bin/env node` 假二进制 | 1 个文件 3 条 | `e2e/harness.ts` 的 `binary` 支持**命令数组**（与 fusion 那次「换缝而不是伪造可执行文件」同形），夹具改传 `[process.execPath, script]` |
+| 根因                                           | 影响                                                                                        | 处置                                                                                                                                                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `new URL(import.meta.url).pathname`            | **125 条**（一个根因占 90%）。Windows 上得到 `/C:/aw/...`，再 resolve 就成了 `C:\C:\aw\...` | 全仓换 `fileURLToPath`（35 个文件），并加**负向扫描守卫** `rfc254-file-url-pathname-guard.test.ts`（含变异实证：改回旧写法即红）。仓内 `vite.config.ts`/`vitest.config.ts` 本来就用对了，测试是掉队的那批 |
+| `path.relative()` 结果当 key 去比 `/` 拼的清单 | 4 个文件                                                                                    | 新增 `tests/portable-path.ts`（后端 `toPortableRelativePath` 的孪生——前端测试不能 import 后端源码，依赖门禁禁止该缝）                                                                                     |
+| 夹具 `execSync('grep …')`                      | 1 个文件                                                                                    | 改进程内扫描。顺带修掉一个 POSIX 上也存在的隐患：`root` 未加引号，装在带空格的路径下同样空结果                                                                                                            |
+| 夹具写 `#!/usr/bin/env node` 假二进制          | 1 个文件 3 条                                                                               | `e2e/harness.ts` 的 `binary` 支持**命令数组**（与 fusion 那次「换缝而不是伪造可执行文件」同形），夹具改传 `[process.execPath, script]`                                                                    |
 
 **timeout 从 15 提到 20 分钟**：Windows 腿同样的活确实更慢（真机全量 373s vs macOS
 ~160s），是**随腿一起调**的，不是被超时逼的。`root-test-entrypoint` 的两条逐字锁
@@ -624,20 +651,20 @@ fusion 两件、`rfc213-worktree-capture`、`rfc130-iso-*` 三件**全部为零�
 
 ### 逐 stub 差异（这才是合并的风险面）
 
-| 旧 stub | 建议 mode | 独有行为（**迁移时最易丢的**） | 覆盖 spec |
-|---|---|---|---|
-| `stub-opencode.sh` | `basic` | 固定单端口 `answer`；版本串**故意非 semver**（telemetry 归一化用例） | 基础任务链 |
-| `stub-opencode-commit.sh` | `commit` | **按 prompt 判角色**：提到 `commit_message` → 发提交信息且不写盘；否则**弄脏工作树**触发 diff 驱动提交 | RFC-075 自动提交推送 |
-| `stub-opencode-clarify.sh` | `clarify` | **轮次驱动**：按 `$CLARIFY_STUB_STATE` 计数文件 + (agent, shard_key) 决定发问还是收尾 | RFC-023 反问 |
-| `stub-opencode-clarify-inline.sh` | `clarify-inline` | **总是先发 `session.created` 事件**（runner 要捕获 sessionId）；轮次状态按 key 分档 | RFC-026 同 session 反问 |
-| `stub-opencode-cross-clarify.sh` | `cross-clarify` | 只按 (agent, 调用次数) 决策，**不锁定轮次顺序**——RFC-162 改成重跑提问者后仍要工作 | RFC-056 跨节点反问 |
-| `stub-opencode-intent.sh` | `intent` | intent 协议信封（`summary` + `changeset` 双端口，含一条建 agent 的 op）；额外的 **`exit 3`** 分支 | RFC-234 intent |
-| `intent-workflow-opencode.sh` | `intent-workflow` | **先写变体环境变量再 exec 上一个**；名字**刻意排除**在版本遥测矩阵之外 | intent 工作流草稿 |
-| `stub-opencode-slow.sh` | `slow` | 可控 **sleep**（撑住 running 状态好 SIGKILL daemon）；失败 / 无信封 / 非零退出三条路径；写 `AW_INVENTORY_OUT` | 崩溃恢复、任务生命周期 |
-| `stub-opencode-workflow-matrix.sh` | `workflow-matrix` | 按 prompt 里的 `MATRIX_*` marker 选分支；prompt 断言、上传、**重试退出码**、timeout；`exit 10` | 工作流矩阵 |
-| `stub-opencode-business-workflows.ts` | `business-workflows` | 已是 TS（423 行），业务工作流全链路 | 业务工作流 |
-| `stub-opencode-business-workgroups.ts` | `business-workgroups` | 已是 TS（239 行） | 业务工作组 |
-| `stub-opencode-workgroup-matrix.ts` | `workgroup-matrix` | 已是 TS（347 行） | 工作组矩阵 |
+| 旧 stub                                | 建议 mode             | 独有行为（**迁移时最易丢的**）                                                                                | 覆盖 spec               |
+| -------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `stub-opencode.sh`                     | `basic`               | 固定单端口 `answer`；版本串**故意非 semver**（telemetry 归一化用例）                                          | 基础任务链              |
+| `stub-opencode-commit.sh`              | `commit`              | **按 prompt 判角色**：提到 `commit_message` → 发提交信息且不写盘；否则**弄脏工作树**触发 diff 驱动提交        | RFC-075 自动提交推送    |
+| `stub-opencode-clarify.sh`             | `clarify`             | **轮次驱动**：按 `$CLARIFY_STUB_STATE` 计数文件 + (agent, shard_key) 决定发问还是收尾                         | RFC-023 反问            |
+| `stub-opencode-clarify-inline.sh`      | `clarify-inline`      | **总是先发 `session.created` 事件**（runner 要捕获 sessionId）；轮次状态按 key 分档                           | RFC-026 同 session 反问 |
+| `stub-opencode-cross-clarify.sh`       | `cross-clarify`       | 只按 (agent, 调用次数) 决策，**不锁定轮次顺序**——RFC-162 改成重跑提问者后仍要工作                             | RFC-056 跨节点反问      |
+| `stub-opencode-intent.sh`              | `intent`              | intent 协议信封（`summary` + `changeset` 双端口，含一条建 agent 的 op）；额外的 **`exit 3`** 分支             | RFC-234 intent          |
+| `intent-workflow-opencode.sh`          | `intent-workflow`     | **先写变体环境变量再 exec 上一个**；名字**刻意排除**在版本遥测矩阵之外                                        | intent 工作流草稿       |
+| `stub-opencode-slow.sh`                | `slow`                | 可控 **sleep**（撑住 running 状态好 SIGKILL daemon）；失败 / 无信封 / 非零退出三条路径；写 `AW_INVENTORY_OUT` | 崩溃恢复、任务生命周期  |
+| `stub-opencode-workflow-matrix.sh`     | `workflow-matrix`     | 按 prompt 里的 `MATRIX_*` marker 选分支；prompt 断言、上传、**重试退出码**、timeout；`exit 10`                | 工作流矩阵              |
+| `stub-opencode-business-workflows.ts`  | `business-workflows`  | 已是 TS（423 行），业务工作流全链路                                                                           | 业务工作流              |
+| `stub-opencode-business-workgroups.ts` | `business-workgroups` | 已是 TS（239 行）                                                                                             | 业务工作组              |
+| `stub-opencode-workgroup-matrix.ts`    | `workgroup-matrix`    | 已是 TS（347 行）                                                                                             | 工作组矩阵              |
 
 ### 实现前必须先回答的两个问题（设计门 P2-2）
 
