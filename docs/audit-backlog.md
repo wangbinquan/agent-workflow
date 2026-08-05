@@ -779,6 +779,32 @@ EBUSY: resource busy or locked, rm 'C:\...\Temp\aw-db-xxxxxx'
   尤其可疑）。用 `handle.exe` / `Get-Process` 之类直接看持有者，比继续调重试参数有用。
 - **不要把重试预算再调大**当作修复——那只会把「永不释放」伪装成「很慢」。
 
+### 已定位（2026-08-05）：`close()` 根本没关上
+
+直接在 Windows 上探测，上面的候选 ② 成立：
+
+```
+files after open : t.sqlite, t.sqlite-shm, t.sqlite-wal
+close() 返回      → 三个文件仍在，且全部 unlink 失败（EBUSY）
+close(true) 抛    → "database is locked"
+```
+
+`close(true)` 是「报错而非推迟」的那一种，它抛 `database is locked` = SQLITE_BUSY，
+说明**仍有未 finalize 的预处理语句持有连接**（drizzle 的语句缓存），连接从未真正关闭；
+`-wal`/`-shm` 还在也印证了这点——干净关闭会 checkpoint 并删掉它们。**所以等待永远
+没用，这不是时序问题。**
+
+**处置**：拆卸的职责是清理卫生、不是断言。在运行时确实释放不了句柄的平台上，把
+「重试耗尽后仍失败」降级为**可见告警**而非抛出——它此前把一个已经通过的测试报成
+`(unnamed)` 失败，是最具误导性的一类结果。范围收窄到 win32、且只在耗尽全部重试之后；
+POSIX 仍然照抛，因为在那里删不掉自己的临时目录是真问题。见
+`packages/backend/tests/fixtures/tempDir.ts`。
+
+- ⏳ **(P2) 真正的根治**是让 drizzle 释放语句缓存后再 close；目前没有公开 API 可用。
+  若将来 Bun 或 drizzle 提供 finalize-all，这条降级应当撤掉。
+- **生产含义**：守护进程在 Windows 上同样关不干净这个 SQLite 连接。目前靠进程退出
+  兜底，热重启 / 同进程内换库的路径需要单独验。
+
 ## 视觉回归权威腿自 2026-08-04 15:25 起一直红（归属 `a5c7e94d`，非 RFC-254）
 
 `visual-regression-nightly` 的 ubuntu 权威腿**每次 push 都红，9 条**，从

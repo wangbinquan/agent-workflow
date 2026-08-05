@@ -13,6 +13,8 @@ import { migrateCommand } from '../src/cli/migrate'
 import { statusCommand, formatStatus } from '../src/cli/status'
 import { stopCommand } from '../src/cli/stop'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
+import { readControlFile, requestShutdown } from '../src/services/controlListener'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')
 
@@ -111,8 +113,17 @@ describe('CLI subcommands (P-1-05)', () => {
     // and a 644 token still fails; on Windows the same file is not insecure and
     // must not be reported as such (see rfc254-control-listener.test.ts).
     const secretCheck = result.checks.find((c) => c.name === 'secret file protection')
-    expect(secretCheck?.ok).toBe(false)
-    expect(secretCheck?.message).toContain('600')
+    // RFC-254 T32: the comment above already stated the platform semantics; this
+    // assertion had not been wired to them yet, so it demanded a POSIX verdict
+    // on Windows and failed for being right.
+    if (statMetadataIsAuthoritative(process.platform)) {
+      expect(secretCheck?.ok).toBe(false)
+      expect(secretCheck?.message).toContain('600')
+    } else {
+      // Mode bits are not the guarantee there, so a 0o644 token is NOT a finding
+      // — reporting one would be a false alarm an operator cannot act on.
+      expect(secretCheck?.ok).toBe(true)
+    }
     expect(secretCheck?.message).toContain('token')
   })
 
@@ -197,9 +208,27 @@ describe('CLI subcommands (P-1-05)', () => {
       expect(typeof info.url).toBe('string')
 
       // token file mode 0600 (sanity, since doctor checks this too).
-      expect(statSync(join(tmp, 'token')).mode & 0o777).toBe(0o600)
+      // RFC-254 T32: 0o600 is only a fact where `stat` is authoritative; Windows
+      // synthesizes 0o666 for every file (see auth-token.test.ts).
+      expect(statSync(join(tmp, 'token')).mode & 0o777).toBe(
+        statMetadataIsAuthoritative(process.platform) ? 0o600 : 0o666,
+      )
     } finally {
-      child.kill('SIGTERM')
+      // RFC-254 T7/T32: ask the daemon to DRAIN by whichever mechanism the
+      // platform has. `kill('SIGTERM')` is a graceful request on POSIX and a
+      // hard TerminateProcess on Windows — Node accepts the name there but maps
+      // it to the same thing as SIGKILL — so on Windows the daemon never ran its
+      // shutdown and `.daemon.info` was still on disk when the assertion below
+      // looked. That is the exact failure T7 built the loopback control listener
+      // for, and routing through it here makes this test PROVE the Windows
+      // graceful path end to end instead of asserting a POSIX-only outcome.
+      if (process.platform === 'win32') {
+        const endpoint = readControlFile(join(tmp, '.daemon.control'))
+        expect(endpoint).not.toBeNull()
+        expect(await requestShutdown(endpoint!)).toBe('accepted')
+      } else {
+        child.kill('SIGTERM')
+      }
       await child.exited
     }
     expect(existsSync(join(tmp, '.daemon.info'))).toBe(false)
