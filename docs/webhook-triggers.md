@@ -1,7 +1,8 @@
-# Webhook 触发器运维指引（RFC-257）
+# Webhook 触发器运维指引（RFC-257 / RFC-259）
 
-面向**商用内网部署**（自建 GitLab + 几百个仓库）的接入手册。产品/技术契约见
-`design/RFC-257-code-host-webhook-triggers/`。
+面向**商用内网部署**（自建 GitLab + 几百个仓库）的接入手册；§6 为 GitHub
+（github.com / GHES，RFC-259）接入。产品/技术契约见
+`design/RFC-257-code-host-webhook-triggers/` 与 `design/RFC-259-github-webhook-adapter/`。
 
 ## 1. 一次性接入（管理员）
 
@@ -77,3 +78,68 @@
 这个目标」），每次触发都重建 owner 身份并重校验目标权限；GitLab 侧评论者
 身份不做平台侧鉴权（内网全员可信，D10）。端点 Secret 面走
 `webhook-endpoints:manage`（admin/manager，任何 PAT 拿不到）。
+
+## 6. GitHub 接入（RFC-259）
+
+触发器 / 投递审计 / 熔断 / supersede 与 GitLab 完全同一套；差异只在端点与
+GitHub 侧配置。
+
+### 6.1 平台侧
+
+设置 → Webhook → 端点 → 新建，**代码平台选 GitHub**。其余同 §1.1（`publicBaseUrl`
+必配；**github.com 的出站 webhook 要求该地址公网可达**——内网 daemon 用隧道转发
+（smee.io / `cloudflared` 等，转发必须原样保留 header 与 body 字节，HMAC 按字节
+验签）；GHES 内网部署与 GitLab 场景同形，无需公网）。
+
+### 6.2 GitHub 侧
+
+- 单仓：**Repo → Settings → Webhooks → Add webhook**；多仓共用一个 hook：
+  **Org → Settings → Webhooks**（免费；对应 GitLab 的 group hook）。
+- Payload URL = 平台给的完整 URL；**Content type 必须选 `application/json`**
+  （GitHub 默认 form-urlencoded——忘改的症状：投递历史 `ignored(parse-failed)`、
+  GitHub Recent Deliveries 显示 400）；Secret 粘贴平台一次性 Secret。
+- 事件勾选（Let me select individual events）：Pushes / Pull requests /
+  Issue comments / Pull request review comments / Workflow runs。
+- 保存后 GitHub 发 `ping`：平台投递历史出现一条 `ignored(unsupported-event)`
+  （HTTP 200，GitHub UI 绿勾）即连通。
+
+### 6.3 与 GitLab 的行为差异（运维要点）
+
+- **事件对应**：PR ↔ MR（同一套内部事件类型）；GitHub Actions run 完成后按
+  conclusion 归 `pipeline_failed`（含 `timed_out`——GitLab 把超时判 failed，语义
+  对齐）/ `pipeline_succeeded`；tag push 是 push 事件的 `refs/tags/` 前缀。
+- **流水线事件基数（重要）**：GitLab 每 commit 一条 pipeline 事件；GitHub 是
+  **每条 workflow 一个 run 事件**——一次 push 跑 N 条 workflow 就到达 N 个
+  completed。同 commit 的兄弟 workflow 失败会落同一流：互相 supersede（后到的
+  失败取消上一条刚起的修复任务重新起）、熔断计数按 push×N 消耗（bot 迭代
+  约 ⌈上限/N⌉ 轮即跳闸）。**多 workflow 仓建议只让一条主 CI workflow 参与
+  修到绿**（合并成一条聚合 workflow，或按需上调触发器的连续触发上限）。
+- **评论指令的分支限制**：PR **普通评论**（issue_comment）的 payload 不含分支
+  （零平台 API 拿不到）→ 该类事件不带源/目标分支——**评论指令触发器要罩
+  GitHub 普通评论就把分支过滤留空**。分支缺省的后果按目标形态分两种：
+  目标**不含 git 输入映射**（agent / workgroup / 纯 text 输入的 workflow）时任务
+  跑在仓库**默认分支**；目标 workflow 带**「分支来自事件」的 git 输入映射**时
+  该组合**必然 launch-failed**（代包渲染出空分支，保存期彩排拦不住）——这类
+  触发器不要勾 GitHub 普通评论事件。要让指令带上 PR 源分支上下文，用
+  **diff 行内评论**（Files changed 页上的 review comment），其 payload 带完整
+  PR 对象。
+- **fork PR**：workflow_run 的 `pull_requests` 为空 → 修到绿循环按分支维度
+  串流，且修复产出 push 不进 fork 仓——**不建议对 fork PR 接修到绿**。
+- **Redeliver**：GitHub 的 Redeliver 复用同一 `X-GitHub-Delivery` → 平台按去重
+  bump、不重复分发（与 GitLab Resend 同语义）；失败投递 GitHub 同样**不自动
+  重试**，恢复主路径仍是平台投递历史页的重放按钮。
+- **bot 凭据**：修复 push 回 PR 源分支需要 daemon 宿主机 git 凭据对 GitHub 仓库
+  有写权限（bot 账号 PAT 配 credential helper，或机器 ssh key）；bot username
+  照 §1.3 填进触发器忽略名单（pipeline 类事件不受名单过滤的语义相同）。
+
+### 6.4 排障补充（对照 §3）
+
+| 现象 | 看哪里 | 处置 |
+|---|---|---|
+| GitHub Recent Deliveries 红 401 | 平台投递历史 `rejected(invalid-token)` | Secret 不一致：平台轮换后重贴 GitHub |
+| 投递历史 `ignored(parse-failed)` + GitHub 显示 400 | —— | **Content type 是 form-urlencoded**，改成 application/json |
+| 事件到了但没起任务 | `ignored(no-trigger-matched)` | 规则没罩住该仓（GitHub 的 repo path 是 `owner/repo` 形态）/事件类型/分支 |
+| 评论指令没触发且触发器带分支过滤 | 触发器规则 | 普通 PR 评论无目标分支（§6.3）：分支过滤留空或改用行内评论 |
+| 普通 PR 评论触发后 fire 显示 `launch-failed`（git-value-invalid） | 触发器 → 触发记录 | 目标 workflow 带「分支来自事件」映射而普通评论无分支（§6.3 必败组合）：改用行内评论或换无 git 映射的目标 |
+| GitHub Recent Deliveries 显 413 | —— | 批量 push 超平台 1 MiB body 上限被拒（GitHub 不重试，该事件丢失）；GitHub push 的 commits 数组可达千级，远超 GitLab 的 20 条。罕见；频繁出现请开 issue 评估 per-provider 上限 |
+| 修到绿频繁跳闸熔断 | 触发器 → 触发记录 `skipped-circuit-open` | 多 workflow 仓的事件基数放大（§6.3）：收敛到单条主 CI workflow 或上调连续触发上限 |

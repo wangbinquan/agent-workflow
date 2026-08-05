@@ -4,7 +4,11 @@
 // fixture 为准回改。
 import { describe, expect, test } from 'bun:test'
 
-import { gitlabNormalize, gitlabVerify, CODE_HOST_ADAPTERS } from '@/services/webhook/gitlabAdapter'
+import { gitlabNormalize, gitlabVerify } from '@/services/webhook/gitlabAdapter'
+import { CODE_HOST_ADAPTERS } from '@/services/webhook/codeHostAdapter'
+
+/** 接口 v2（RFC-259 D2）为 GitHub HMAC 加的字节参——GitLab 明文比对不消费。 */
+const NO_BODY = new Uint8Array(0)
 
 const PROJECT = {
   id: 42,
@@ -87,11 +91,11 @@ function pipelinePayload(status: string, withMr: boolean): Record<string, unknow
 
 describe('RFC-257 T3 · gitlabVerify（明文常量时间比对，非 HMAC）', () => {
   test('三态：valid / invalid / missing', () => {
-    expect(gitlabVerify({ 'x-gitlab-token': 's3cret' }, 's3cret')).toBe('valid')
-    expect(gitlabVerify({ 'x-gitlab-token': 'wrong' }, 's3cret')).toBe('invalid')
-    expect(gitlabVerify({ 'x-gitlab-token': 's3cret-longer' }, 's3cret')).toBe('invalid')
-    expect(gitlabVerify({}, 's3cret')).toBe('missing')
-    expect(gitlabVerify({ 'x-gitlab-token': '' }, 's3cret')).toBe('missing')
+    expect(gitlabVerify({ 'x-gitlab-token': 's3cret' }, NO_BODY, 's3cret')).toBe('valid')
+    expect(gitlabVerify({ 'x-gitlab-token': 'wrong' }, NO_BODY, 's3cret')).toBe('invalid')
+    expect(gitlabVerify({ 'x-gitlab-token': 's3cret-longer' }, NO_BODY, 's3cret')).toBe('invalid')
+    expect(gitlabVerify({}, NO_BODY, 's3cret')).toBe('missing')
+    expect(gitlabVerify({ 'x-gitlab-token': '' }, NO_BODY, 's3cret')).toBe('missing')
   })
 })
 
@@ -199,8 +203,11 @@ describe('RFC-257 T3 · gitlabNormalize（design §2.3 映射表）', () => {
     if (!r.ok) expect(r.reason).toBe('unsupported-event')
   })
 
-  test('注册表：gitlab 在册且 verify/normalize 同源', () => {
+  test('注册表：gitlab/github 双 provider 在册（RFC-259 起）', () => {
+    // RFC-259 显式翻转：原断言锁「注册表只有 gitlab」，该前提正是 RFC-259
+    // 推翻的对象（proposal AC-12 记档的唯一断言变更）。
     expect(CODE_HOST_ADAPTERS['gitlab']?.provider).toBe('gitlab')
-    expect(CODE_HOST_ADAPTERS['github']).toBeUndefined()
+    expect(CODE_HOST_ADAPTERS['github']?.provider).toBe('github')
+    expect(CODE_HOST_ADAPTERS['gitea']).toBeUndefined()
   })
 })

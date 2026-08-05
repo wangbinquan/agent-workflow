@@ -6,35 +6,17 @@
 //
 // 验签是 GitLab 语义：X-Gitlab-Token 与配置 secret 的**明文常量时间比对**
 // （不是 GitHub 的 HMAC 签名——该差异被 CodeHostAdapter.verify 接口封装，
-// 未来 GitHub adapter 在同一接口下实现 HMAC）。
+// githubAdapter.ts 在同一接口下实现 HMAC）。接口与注册表在 RFC-259 迁至
+// codeHostAdapter.ts；本文件只剩 GitLab 实现，行为与 RFC-257 逐字节相同。
 import { timingSafeEqual } from 'node:crypto'
 
-import type { CodeHostEvent, CodeHostEventType } from '@agent-workflow/shared'
+import type { CodeHostEventType } from '@agent-workflow/shared'
 
-export type HeaderBag = Readonly<Record<string, string | undefined>>
-
-export type NormalizeResult =
-  | { ok: true; event: CodeHostEvent }
-  | { ok: false; reason: 'unsupported-event' | 'parse-failed'; detail: string }
-
-export interface CodeHostAdapter {
-  readonly provider: 'gitlab'
-  verify(headers: HeaderBag, secret: string): 'valid' | 'invalid' | 'missing'
-  normalize(headers: HeaderBag, body: unknown): NormalizeResult
-}
-
-/**
- * RFC-257 出站回写占位（D1/proposal 非目标）：v1 零实现、零调用。后续回写
- * RFC 在同一 provider 注册表下实装；接口先定义以冻结抽象边界。
- */
-export interface CodeHostReportSink {
-  postMrComment(ref: { repoPath: string; mrIid: string }, body: string): Promise<void>
-  setCommitStatus(
-    ref: { repoPath: string; commitSha: string },
-    state: string,
-    description: string,
-  ): Promise<void>
-}
+import type {
+  CodeHostAdapter,
+  HeaderBag,
+  NormalizeResult,
+} from '@/services/webhook/codeHostAdapter'
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.length > 0 ? v : undefined
@@ -51,8 +33,16 @@ function stripRefPrefix(ref: string | undefined, prefix: string): string | undef
   return ref.startsWith(prefix) ? ref.slice(prefix.length) : ref
 }
 
-/** 常量时间比对（长度不同必然 invalid，但仍走一次定长比较避免早退时序面）。 */
-export function gitlabVerify(headers: HeaderBag, secret: string): 'valid' | 'invalid' | 'missing' {
+/**
+ * 常量时间比对（长度不同必然 invalid，但仍走一次定长比较避免早退时序面）。
+ * rawBody 是接口 v2（RFC-259 D2）为 GitHub HMAC 加的参数——GitLab 明文
+ * token 比对不消费它。
+ */
+export function gitlabVerify(
+  headers: HeaderBag,
+  _rawBody: Uint8Array,
+  secret: string,
+): 'valid' | 'invalid' | 'missing' {
   const presented = headers['x-gitlab-token']
   if (presented === undefined || presented.length === 0) return 'missing'
   const a = Buffer.from(presented, 'utf8')
@@ -269,13 +259,19 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
   }
 }
 
-export const gitlabAdapter: CodeHostAdapter = {
-  provider: 'gitlab',
-  verify: gitlabVerify,
-  normalize: gitlabNormalize,
+/** 摘要判别符（原 routes/webhooks.ts objectKindOf，RFC-259 迁入；类型窄化零 cast——routes-no-cast 锁）。 */
+export function gitlabSummaryKindOf(_headers: HeaderBag, parsed: unknown): string | null {
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+  const value = Object.entries(parsed).find(([k]) => k === 'object_kind')?.[1]
+  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-/** provider 注册表（路径段 /webhooks/:provider/:urlToken 直接选 adapter）。 */
-export const CODE_HOST_ADAPTERS: Readonly<Record<string, CodeHostAdapter>> = {
-  gitlab: gitlabAdapter,
+export const gitlabAdapter: CodeHostAdapter = {
+  provider: 'gitlab',
+  headerAllowlist: ['x-gitlab-token', 'x-gitlab-event-uuid', 'x-gitlab-event'],
+  deliveryIdHeader: 'x-gitlab-event-uuid',
+  eventHeader: 'x-gitlab-event',
+  summaryKindOf: gitlabSummaryKindOf,
+  verify: gitlabVerify,
+  normalize: gitlabNormalize,
 }

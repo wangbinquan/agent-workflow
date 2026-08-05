@@ -1255,6 +1255,8 @@ export interface Resources {
       addTitle: string
       nameLabel: string
       namePlaceholder: string
+      providerHintGitlab: string
+      providerHintGithub: string
       protocolLabel: string
       protocolHint: string
       secretTitle: string
@@ -1265,7 +1267,8 @@ export interface Resources {
       copySecret: string
       secretCopied: string
       urlLabel: string
-      secretPasteHint: string
+      secretPasteHintGitlab: string
+      secretPasteHintGithub: string
     }
     customProviders: {
       title: string
@@ -2885,6 +2888,27 @@ export interface Resources {
     changesTopLevelGroup: string
     changesDrillBackToGraph: string
     changesNarrativeTitle: string
+    codeViewerOversized: string
+    codeViewerBinary: string
+    codeViewerGone: string
+    codeViewerMissing: string
+    codeViewerOutsideDiff: string
+    codeViewerFoldedLines: string
+    codeIntelMenuLabel: string
+    codeIntelLoading: string
+    codeIntelEngineDeep: string
+    codeIntelEngineBaseline: string
+    codeIntelDegraded: string
+    codeIntelNoResult: string
+    codeIntelDefinitions: string
+    codeIntelReferences: string
+    codeIntelRefsGuessed: string
+    codeIntelInferred: string
+    codeIntelTruncated: string
+    codeNavBack: string
+    changesCodeViewHunk: string
+    changesCodeViewFull: string
+    changesCodeViewLabel: string
     changesPureMove: string
     changesTextUnavailable: string
     changesDocRendered: string
@@ -5999,9 +6023,9 @@ export const zhCN: Resources = {
       eyebrow: '接收事件',
       title: '接收端点',
       add: '新建端点',
-      hint: '为 GitLab 创建一个稳定的事件入口。创建后，把 URL 和 Secret 一起粘贴到 GitLab Webhook。',
+      hint: '为 GitLab / GitHub 创建一个稳定的事件入口。创建后，把 URL 和 Secret 一起粘贴到代码平台的 Webhook 配置。',
       empty: '还没有接收端点',
-      emptyDescription: '先创建端点，拿到只显示一次的 Secret，再回到 GitLab 完成连接。',
+      emptyDescription: '先创建端点，拿到只显示一次的 Secret，再回到代码平台完成连接。',
       enabled: '已启用',
       disabled: '已禁用',
       enabledSwitch: '启用',
@@ -6019,24 +6043,30 @@ export const zhCN: Resources = {
       rotateSecret: '轮换 Secret',
       rotateConfirmTitle: '轮换 Secret？',
       rotateConfirmDescription:
-        '“{{name}}” 的旧 Secret 会立即失效。轮换后必须立刻把新 Secret 更新到 GitLab，否则后续投递都会验签失败。',
+        '“{{name}}” 的旧 Secret 会立即失效。轮换后必须立刻把新 Secret 更新到代码平台，否则后续投递都会验签失败。',
       rotateConfirmAction: '确认轮换',
       deleteConfirm: '确认删除？',
       addTitle: '新建 Webhook 端点',
       nameLabel: '名称',
-      namePlaceholder: '内网 GitLab',
+      namePlaceholder: '内网 GitLab / GitHub.com',
+      providerHintGitlab: '按 GitLab 语义验签（Secret token 明文比对）。',
+      providerHintGithub:
+        '按 GitHub 语义验签（HMAC 签名）。在 GitHub 侧 Content type 必须选 application/json。',
       protocolLabel: '自动注册用协议',
       protocolHint: '事件仓库尚未导入时，平台会优先使用这种地址自动拉取。',
       secretTitle: 'Secret Token（仅此一次）',
       secretOnceTitle: '现在保存，关闭后不再显示',
       secretDone: '我已保存',
       secretOnce:
-        '以下 Secret 只显示这一次，请立即复制并粘贴到 GitLab webhook 配置的 Secret token 字段。',
+        '以下 Secret 只显示这一次，请立即复制并粘贴到 {{provider}} webhook 配置的 Secret 字段。',
       secretLabel: 'Secret Token',
       copySecret: '复制',
       secretCopied: '已复制',
       urlLabel: 'Webhook URL',
-      secretPasteHint: '在 GitLab：Settings → Webhooks，把 URL 与 Secret token 一起粘贴保存。',
+      secretPasteHintGitlab:
+        '在 GitLab：Settings → Webhooks，把 URL 与 Secret token 一起粘贴保存。',
+      secretPasteHintGithub:
+        '在 GitHub：Settings → Webhooks → Add webhook——粘贴 Payload URL 与 Secret，Content type 选 application/json。',
     },
     customProviders: {
       title: '自定义 provider',
@@ -7513,11 +7543,11 @@ export const zhCN: Resources = {
     events: {
       push: 'Push',
       tag_push: 'Tag Push',
-      mr_opened: 'MR 打开',
-      mr_updated: 'MR 更新',
-      mr_merged: 'MR 合并',
-      mr_closed: 'MR 关闭',
-      note: 'MR 评论',
+      mr_opened: 'MR / PR 打开',
+      mr_updated: 'MR / PR 更新',
+      mr_merged: 'MR / PR 合并',
+      mr_closed: 'MR / PR 关闭',
+      note: 'MR / PR 评论',
       pipeline_failed: '流水线失败',
       pipeline_succeeded: '流水线成功',
     },
@@ -8102,6 +8132,27 @@ export const zhCN: Resources = {
     changesTopLevelGroup: '顶层符号',
     changesDrillBackToGraph: '返回关系图',
     changesNarrativeTitle: 'AI 导读',
+    codeViewerOversized: '文件过大,无法渲染源码视图',
+    codeViewerBinary: '二进制文件没有源码视图',
+    codeViewerGone: '工作区已回收',
+    codeViewerMissing: '该侧不存在此文件',
+    codeViewerOutsideDiff: '任务外文件',
+    codeViewerFoldedLines: '{{n}} 行未变更',
+    codeIntelMenuLabel: '符号跳转',
+    codeIntelLoading: '解析中…',
+    codeIntelEngineDeep: '精确',
+    codeIntelEngineBaseline: '基线',
+    codeIntelDegraded: '已降级',
+    codeIntelNoResult: '未在本任务符号范围内',
+    codeIntelDefinitions: '定义({{n}})',
+    codeIntelReferences: '引用({{n}})',
+    codeIntelRefsGuessed: '推测——可能漏报或误报',
+    codeIntelInferred: '推测',
+    codeIntelTruncated: '引用列表已截断',
+    codeNavBack: '返回',
+    changesCodeViewHunk: '改动',
+    changesCodeViewFull: '全文',
+    changesCodeViewLabel: '代码视图',
     changesPureMove: '文件自 {{from}} 移动,内容未修改。',
     changesTextUnavailable: '文本 diff 不可用(工作区已回收或超出截断上限),以下为结构信息。',
     changesDocRendered: '渲染',

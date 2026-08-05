@@ -28,8 +28,12 @@ import { copyText } from '@/lib/clipboard'
 type EndpointWire = WebhookEndpoint & { ingressUrl: string | null }
 type EndpointWithSecret = EndpointWire & { secret: string }
 type CopyState = 'idle' | 'ok' | 'failed'
+type Provider = WebhookEndpoint['provider']
 
 const QUERY_KEY = ['webhook-endpoints']
+
+/** 平台专名不进 i18n（两个 locale 同形）。 */
+const PROVIDER_NAMES: Record<Provider, string> = { gitlab: 'GitLab', github: 'GitHub' }
 
 export function WebhookEndpointCard(): React.ReactElement {
   const { t } = useTranslation()
@@ -37,6 +41,7 @@ export function WebhookEndpointCard(): React.ReactElement {
   const [error, setError] = useState<unknown>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
+  const [provider, setProvider] = useState<Provider>('gitlab')
   const [protocol, setProtocol] = useState<'http' | 'ssh'>('http')
   const [rotateTarget, setRotateTarget] = useState<EndpointWire | null>(null)
   const [urlCopyState, setUrlCopyState] = useState<CopyState>('idle')
@@ -54,6 +59,7 @@ export function WebhookEndpointCard(): React.ReactElement {
     mutationFn: () =>
       api.post<EndpointWithSecret>('/api/webhook-endpoints', {
         name,
+        provider,
         preferredCloneProtocol: protocol,
       }),
     onSuccess: (created) => {
@@ -219,7 +225,9 @@ export function WebhookEndpointCard(): React.ReactElement {
                 <dl className="webhook-facts">
                   <div>
                     <dt>{t('settings.webhookEndpoints.providerLabel')}</dt>
-                    <dd>GitLab</dd>
+                    <dd data-testid={`webhook-endpoint-provider-${row.id}`}>
+                      {PROVIDER_NAMES[row.provider]}
+                    </dd>
                   </div>
                   <div>
                     <dt>{t('settings.webhookEndpoints.protocolLabel')}</dt>
@@ -313,6 +321,25 @@ export function WebhookEndpointCard(): React.ReactElement {
             />
           </Field>
           <Field
+            label={t('settings.webhookEndpoints.providerLabel')}
+            hint={
+              provider === 'github'
+                ? t('settings.webhookEndpoints.providerHintGithub')
+                : t('settings.webhookEndpoints.providerHintGitlab')
+            }
+            group
+          >
+            <Segmented<Provider>
+              value={provider}
+              onChange={setProvider}
+              ariaLabel={t('settings.webhookEndpoints.providerLabel')}
+              options={[
+                { value: 'gitlab', label: PROVIDER_NAMES.gitlab },
+                { value: 'github', label: PROVIDER_NAMES.github },
+              ]}
+            />
+          </Field>
+          <Field
             label={t('settings.webhookEndpoints.protocolLabel')}
             hint={t('settings.webhookEndpoints.protocolHint')}
             group
@@ -362,7 +389,11 @@ export function WebhookEndpointCard(): React.ReactElement {
           <div className="form-grid">
             <NoticeBanner tone="warning">
               <strong>{t('settings.webhookEndpoints.secretOnceTitle')}</strong>
-              <p>{t('settings.webhookEndpoints.secretOnce')}</p>
+              <p>
+                {t('settings.webhookEndpoints.secretOnce', {
+                  provider: PROVIDER_NAMES[minted.provider],
+                })}
+              </p>
             </NoticeBanner>
             <Field label={t('settings.webhookEndpoints.secretLabel')}>
               <code className="token-reveal" data-testid="webhook-endpoint-secret-value">
@@ -393,7 +424,11 @@ export function WebhookEndpointCard(): React.ReactElement {
                 <code className="webhook-secret-dialog__url">{minted.ingressUrl}</code>
               </Field>
             )}
-            <p className="muted">{t('settings.webhookEndpoints.secretPasteHint')}</p>
+            <p className="muted" data-testid="webhook-endpoint-paste-hint">
+              {minted.provider === 'github'
+                ? t('settings.webhookEndpoints.secretPasteHintGithub')
+                : t('settings.webhookEndpoints.secretPasteHintGitlab')}
+            </p>
           </div>
         )}
       </Dialog>

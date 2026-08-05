@@ -5,8 +5,9 @@
 //
 // 三段式（D23）：同步段做 限流→端点查找→body 上限→验签→解析→去重→插
 // received 行→**立即 200**；分发（supersede 的 cancel 轮询最多 5s、auto-register
-// clone 分钟级）交给注入的 dispatcher 异步跑——GitLab webhook ~10s 超时且失败
-// **不自动重试**（设计门 F-4/F-6），同步分发必然超时且重投无门。
+// clone 分钟级）交给注入的 dispatcher 异步跑——GitLab 与 GitHub 均 ~10s 超时且
+// 失败**不自动重试**（设计门 F-4/F-6；GitHub 官方文档同证，RFC-259），同步分发
+// 必然超时且重投无门。
 //
 // 状态码语义（design §3.3，proposal D20）：凡「平台侧决定不处理」一律 200——
 // 对 GitLab 回 4xx/5xx 会累积 auto-disable，把几百仓共用的唯一 group hook 整个
@@ -18,7 +19,7 @@ import { eq } from 'drizzle-orm'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { webhookEndpoints } from '@/db/schema'
-import { CODE_HOST_ADAPTERS, type HeaderBag } from '@/services/webhook/gitlabAdapter'
+import { CODE_HOST_ADAPTERS, type HeaderBag } from '@/services/webhook/codeHostAdapter'
 import {
   insertDelivery,
   markDelivery,
@@ -34,10 +35,15 @@ const log = createLogger('webhook-ingress')
 /** HTTP 层 body 上限（流式截断；入库另有 256KiB 截断）。 */
 export const WEBHOOK_BODY_MAX_BYTES = 1024 * 1024
 
-/** 流式读 body，超限返回 null（→ 413）。 */
-async function readBodyLimited(req: Request, limitBytes: number): Promise<string | null> {
+type LimitedBody = { bytes: Uint8Array; text: string }
+
+/**
+ * 流式读 body，超限返回 null（→ 413）。字节与文本双持有（RFC-259 D2）：
+ * GitHub HMAC 对**原始字节**验签，JSON 解析与入库用 utf8 文本。
+ */
+async function readBodyLimited(req: Request, limitBytes: number): Promise<LimitedBody | null> {
   const body = req.body
-  if (body === null) return ''
+  if (body === null) return { bytes: new Uint8Array(0), text: '' }
   const reader = body.getReader()
   const chunks: Uint8Array[] = []
   let total = 0
@@ -51,17 +57,11 @@ async function readBodyLimited(req: Request, limitBytes: number): Promise<string
     }
     chunks.push(value)
   }
-  return Buffer.concat(chunks).toString('utf8')
+  const merged = Buffer.concat(chunks)
+  return { bytes: merged, text: merged.toString('utf8') }
 }
 
 const NOT_FOUND = { error: 'not-found' } as const
-
-/** 摘要列用的 object_kind 提取（类型窄化，零 cast——routes-no-cast 锁）。 */
-function objectKindOf(parsed: unknown): string {
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return ''
-  const value = Object.entries(parsed).find(([k]) => k === 'object_kind')?.[1]
-  return typeof value === 'string' ? value : ''
-}
 
 export function mountWebhookIngressRoutes(
   app: Hono,
@@ -84,7 +84,7 @@ export function mountWebhookIngressRoutes(
       path: '/webhooks/:provider/:urlToken',
       permissions: [],
       publicReason:
-        'code-host webhook ingress; the caller is GitLab, not a platform user — authenticated by the per-endpoint secret token (constant-time compare) plus the high-entropy URL token, never by session/PAT',
+        'code-host webhook ingress; the caller is the code host (GitLab/GitHub), not a platform user — authenticated by the per-endpoint secret (constant-time token compare or HMAC signature) plus the high-entropy URL token, never by session/PAT',
       tokenAccess: 'allow',
       summary: 'Receive a code-host webhook delivery (RFC-257)',
     },
@@ -120,18 +120,18 @@ export function mountWebhookIngressRoutes(
       const rawBody = await readBodyLimited(c.req.raw, WEBHOOK_BODY_MAX_BYTES)
       if (rawBody === null) return c.json({ error: 'payload-too-large' }, 413)
 
-      const headers: HeaderBag = {
-        'x-gitlab-token': c.req.header('x-gitlab-token'),
-        'x-gitlab-event-uuid': c.req.header('x-gitlab-event-uuid'),
-      }
-      const eventUuid = headers['x-gitlab-event-uuid'] ?? null
-      const gitlabEventHeader = c.req.header('x-gitlab-event') ?? null
+      // provider 头知识全在 adapter（RFC-259 D9）：按 allowlist 构造 HeaderBag，
+      // 去重 id / 原始事件头 / 摘要判别符走 adapter 方法，此处零 provider 分支。
+      const headers: HeaderBag = Object.fromEntries(
+        adapter.headerAllowlist.map((h) => [h, c.req.header(h)]),
+      )
+      const eventUuid = headers[adapter.deliveryIdHeader] ?? null
 
       const baseRow: Omit<InsertDeliveryInput, 'status' | 'statusReason'> = {
         endpointId: endpoint.id,
         eventUuid,
-        gitlabEventHeader,
-        bodyJson: rawBody,
+        gitlabEventHeader: headers[adapter.eventHeader] ?? null,
+        bodyJson: rawBody.text,
       }
 
       let secret: string
@@ -143,7 +143,7 @@ export function mountWebhookIngressRoutes(
         return c.json({ error: 'internal-error' }, 500)
       }
 
-      const verdict = adapter.verify(headers, secret)
+      const verdict = adapter.verify(headers, rawBody.bytes, secret)
       if (verdict !== 'valid') {
         // rejected 行不占去重索引位（迁移 0138 partial index）：修正 secret 后
         // 同 UUID 的手工 Resend 能真正落地（AC-3）。
@@ -157,13 +157,14 @@ export function mountWebhookIngressRoutes(
 
       let parsed: unknown
       try {
-        parsed = JSON.parse(rawBody === '' ? 'null' : rawBody)
+        parsed = JSON.parse(rawBody.text === '' ? 'null' : rawBody.text)
       } catch {
         parsed = undefined
       }
       if (parsed === undefined || parsed === null) {
-        // 非 JSON body：真实 GitLab 不会发——400 不喂 auto-disable 计数的前提
-        // 是它只来自扫描器/误配置调用方。
+        // 非 JSON body：真实 code host 不这么发——常见来源是扫描器/误配置调用方
+        // （GitHub 侧典型 = content type 忘改 application/json，body 是
+        // `payload=<urlencoded>`；验签会过、解析在此终结，排障表写明）。
         await insertDelivery(deps.db, {
           ...baseRow,
           status: 'ignored',
@@ -173,13 +174,13 @@ export function mountWebhookIngressRoutes(
       }
 
       const normalized = adapter.normalize(headers, parsed)
-      const objectKind = objectKindOf(parsed)
+      const objectKind = adapter.summaryKindOf(headers, parsed)
       if (!normalized.ok) {
         // 合法 GitLab 投递但平台不处理（未支持的事件/中间态/缺字段）→ 一律
         // 200 + ignored：4xx 会累积 GitLab auto-disable（proposal §6.5）。
         const insert = await insertDelivery(deps.db, {
           ...baseRow,
-          objectKind: objectKind || null,
+          objectKind,
           status: 'ignored',
           statusReason:
             normalized.reason === 'unsupported-event' ? 'unsupported-event' : 'parse-failed',
@@ -191,7 +192,7 @@ export function mountWebhookIngressRoutes(
       if (!endpoint.enabled) {
         const insert = await insertDelivery(deps.db, {
           ...baseRow,
-          objectKind: objectKind || null,
+          objectKind,
           eventType: event.eventType,
           repoPath: event.repoPath,
           streamHint: streamKeyOf(event),

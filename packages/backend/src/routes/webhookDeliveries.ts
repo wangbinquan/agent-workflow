@@ -12,7 +12,7 @@ import { WEBHOOK_DELIVERY_STATUSES } from '@agent-workflow/shared'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { webhookDeliveries, webhookEndpoints } from '@/db/schema'
-import { CODE_HOST_ADAPTERS } from '@/services/webhook/gitlabAdapter'
+import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
 import { insertDelivery } from '@/services/webhook/deliveryStore'
 import { streamKeyOf } from '@/services/webhook/matching'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -142,7 +142,10 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       } catch {
         throw new ValidationError('webhook-delivery-body-invalid', 'stored body is not JSON')
       }
-      const normalized = adapter.normalize({}, parsed)
+      // RFC-259：事件头从审计列重建——GitHub 的事件种类判别在 X-GitHub-Event
+      // 头里不在 body 里，空 HeaderBag 会把每条 GitHub 投递的 replay 判成
+      // parse-failed（GitLab 判别在 body.object_kind，重建对它是 no-op）。
+      const normalized = adapter.normalize(replayHeaders(adapter, row.gitlabEventHeader), parsed)
       if (!normalized.ok) {
         throw new ValidationError('webhook-delivery-unsupported', normalized.detail)
       }

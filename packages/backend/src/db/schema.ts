@@ -1152,7 +1152,8 @@ export const webhookEndpoints = sqliteTable(
   {
     id: text('id').primaryKey(), // ULID
     name: text('name').notNull(),
-    provider: text('provider', { enum: ['gitlab'] }).notNull(),
+    // RFC-259：值域扩 github。TS 层 enum；DB 列无 CHECK（迁移 0138），扩值零迁移。
+    provider: text('provider', { enum: ['gitlab', 'github'] }).notNull(),
     urlToken: text('url_token').notNull(),
     secretEnc: text('secret_enc').notNull(), // secretBox.seal(secret)
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),

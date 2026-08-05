@@ -1,5 +1,5 @@
-// RFC-257 — 代码平台 Webhook 触发器的 shared 契约层。
-// 三块内容：①归一化事件信封（provider 无关，GitLab adapter 产出）；②触发器
+// RFC-257 — 代码平台 Webhook 触发器的 shared 契约层（RFC-259 扩 github provider）。
+// 三块内容：①归一化事件信封（provider 无关，各 provider adapter 产出）；②触发器
 // 规则与三形态启动参数「模板封套」（对齐 scheduled_tasks 的 launchKind 模型，
 // 但 repo 源/ref/name 由 fire 时按事件注入——设计门 F-3：不能直接复用
 // scheduledPayloadSchemaFor，StartTaskSchema 的 repo 三态 superRefine 与
@@ -11,7 +11,7 @@ import { z } from 'zod'
 // Provider 与事件类型
 // ---------------------------------------------------------------------------
 
-export const CODE_HOST_PROVIDERS = ['gitlab'] as const
+export const CODE_HOST_PROVIDERS = ['gitlab', 'github'] as const
 export const CodeHostProviderSchema = z.enum(CODE_HOST_PROVIDERS)
 export type CodeHostProvider = z.infer<typeof CodeHostProviderSchema>
 
@@ -56,7 +56,7 @@ export const AUTHOR_FILTERED_EVENT_TYPES: ReadonlyArray<CodeHostEventType> = [
  */
 export const CodeHostEventSchema = z.object({
   provider: CodeHostProviderSchema,
-  /** X-Gitlab-Event-UUID；可空 —— 缺失时该投递无去重（降级模式，设计门 F-18）。 */
+  /** 投递去重 id（X-Gitlab-Event-UUID / X-GitHub-Delivery）；可空 —— 缺失时该投递无去重（降级模式，设计门 F-18）。 */
   eventUuid: z.string().nullable(),
   eventType: CodeHostEventTypeSchema,
   /** project.path_with_namespace，规则匹配的主键（如 `platform/backend/api`）。 */
