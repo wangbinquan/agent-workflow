@@ -11,7 +11,6 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -61,27 +60,48 @@ const adminActor: Actor = {
   permissions: new Set(),
 }
 
-/** Stub opencode that always asks one clarify question (parks the task). */
-function makeClarifyStub(dir: string): string {
-  const path = pjoin(dir, 'stub-opencode.sh')
-  const env =
-    '{\\"questions\\":[{\\"id\\":\\"q1\\",\\"title\\":\\"Proceed?\\",\\"kind\\":\\"single\\",\\"options\\":[{\\"label\\":\\"yes\\"},{\\"label\\":\\"no\\"}]}]}</workflow-clarify>'
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s\\n' "$@" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-clarify>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-clarify nonce=\\"'"$NONCE"'\\">'; fi
-  ENV="$OPEN"'${env}'
-  TS=$(date +%s)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+/**
+ * Stub opencode that always asks one clarify question (parks the task).
+ *
+ * RFC-254 T32: this returns a COMMAND ARRAY (`[bun, script.ts]`), not a path to
+ * a fake executable, and that is the whole fix. The previous version wrote a
+ * `#!/usr/bin/env bash` script — unrunnable on Windows, where the spawn failed
+ * with EFTYPE and the task terminalized as `failed`, so the cancel tests
+ * reported "expected canceled, received failed" and looked like a cancel-
+ * semantics bug rather than a missing interpreter.
+ *
+ * Writing a `.cmd` instead does not work HERE (it does for simpler fakes, see
+ * `fixtures/fakeBinary.ts`) because this stub has to PARSE its argv to recover
+ * the nonce, and Windows runs a batch file through cmd.exe. Measured on a real
+ * host, a `.cmd` shim forwarding `%*` truncated the prompt at its first newline
+ * and dropped every argument after it.
+ *
+ * `opencodeCmd` was already `string[]`, so the array goes straight to spawn as
+ * argv and never meets a shell. No fake binary, no interpreter, no platform
+ * branch — and the stub's logic is now type-checked with the rest of the suite.
+ */
+function makeClarifyStub(dir: string): string[] {
+  const path = pjoin(dir, 'stub-opencode.ts')
+  writeFileSync(
+    path,
+    `const argv = Bun.argv.slice(2)
+if (argv[0] === '--version') {
+  console.log('stub-opencode 1.14.99')
+  process.exit(0)
+}
+if (argv[0] === 'run') {
+  const nonce = /nonce="([^"]*)"/.exec(argv.join('\\n'))?.[1] ?? ''
+  const open = nonce.length > 0 ? \`<workflow-clarify nonce="\${nonce}">\` : '<workflow-clarify>'
+  const questions =
+    '{"questions":[{"id":"q1","title":"Proceed?","kind":"single","options":[{"label":"yes"},{"label":"no"}]}]}'
+  const text = \`\${open}\${questions}</workflow-clarify>\`
+  console.log(JSON.stringify({ type: 'text', ts: Math.floor(Date.now() / 1000), text }))
+  process.exit(0)
+}
+process.exit(1)
+`,
+  )
+  return [process.execPath, path]
 }
 
 interface H {
@@ -102,7 +122,7 @@ async function build(): Promise<H> {
   const deps: FusionDeps = {
     db,
     appHome,
-    opencodeCmd: [makeClarifyStub(tmp)],
+    opencodeCmd: makeClarifyStub(tmp),
     awaitScheduler: true,
     defaultRuntime: VALID_OPENCODE_RUNTIME,
   }

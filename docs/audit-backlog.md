@@ -829,3 +829,43 @@ cmd.exe，所以 `Bun.spawn({cmd:['x.cmd', ...args]})` 的 args 会被重新解�
 - ⏳ **(P1) 插件安装的正解仍是绕开垫片**（直接执行 npm 的 JS 入口），或对参数做严格
   白名单校验后再走垫片。本条实测把「不得用 `shell: true`」的告诫升级为**有证据的
   硬约束**，且范围扩大到「任何 `.cmd`/`.bat` 目标」。
+
+## fusion 的 git worktree 在 Windows 上是坏的（RFC-254 T32，2026-08-05，新揭开）
+
+把 `fusion-engine.test.ts` 的假二进制换成 `opencodeCmd: [bun, stub.ts]` 后（`opencodeCmd`
+本来就是**命令数组**，argv 直接进 spawn、不过 shell，所以既不需要假二进制也不受
+cmd.exe 切词影响），Windows 上的 spawn 通了——日志里能看到 `bin=…\bun.exe` 被拉起。
+
+**于是下一层暴露出来**，失败数从 2 涨到 7。这不是变糟，是原先 spawn 早早失败、后面
+的流程根本没跑到：
+
+```
+git reset --mixed (iso): fatal: Could not parse object '<sha>'
+workspace-missing: canonical worktree does not exist: …\fusions\…\iter1\work
+git worktree remove failed: cannot change to '…': No such file or directory
+TypeError: null is not an object (evaluating 'task.worktreePath')
+```
+
+- ⏳ **(P1)** fusion 的 iso worktree 建立/移除链路要在 Windows 上单独查。`Could not
+  parse object` 与 `canonical worktree does not exist` 指向 worktree 建立阶段就没成，
+  后续 `task.worktreePath` 为 null 只是它的下游。
+- **记账口径**：这 7 条不该记在「换缝改动」头上；换缝本身是正解（无假二进制、stub
+  逻辑随套件一起类型检查、与平台无关），它的作用是把真实缺陷从掩盖中拿出来。
+
+## Windows e2e 腿首次出现 `color-contrast` 违规（2026-08-05，未归因）
+
+`ci.yml` 的 Windows e2e shard 2/4 在 run `30978755780` 红，失败点
+`e2e/intent-builder.spec.ts:247` 的 axe 扫描，违规 **`color-contrast` ×3**。
+
+**没有代码可以归因**：该 run 与前一个全绿 run 之间只有三个提交，全部是文档与后端
+测试夹具（`36e10aad` / `9f3d265e` / `01829d51`），**无一触及 `packages/frontend/src`**。
+紧邻的前两次 CI 各 12 个 e2e 分片全绿。
+
+**因此这是首次出现、无变更可归因、且只在 Windows 腿上**。按仓规不能以「重跑就过了」
+结案，所以先如实登记：
+
+- ⏳ **(P1) 下次 Windows e2e 再红时先看是不是同一条**。若复现，方向是 axe 的
+  `color-contrast` 在无法仅凭 CSS 判定背景时会采样渲染像素，而 Windows 的字体平滑
+  与 linux/macOS 不同——那属于「该断言在该平台上不稳」，处理方式是让扫描排除该规则
+  并说明，而不是调阈值。
+- 若长期不复现，也**不要**默默删掉本条；改成注明观察窗口与结论。
