@@ -143,8 +143,30 @@ describe('RFC-254 file trust primitive', () => {
       })
     })
 
-    test('win32 fails closed', () => {
-      expect(assertSameFileIdentity(stats(), stats(), 'win32')).toEqual({
+    // RFC-254 T40a: identity IS authoritative on win32 — Bun populates dev/ino
+    // from GetFileInformationByHandle (VolumeSerialNumber + FileIndex), measured
+    // reliable on NTFS. Unlike the mode-based PRIVACY assertions above (which
+    // stay win32 fail-closed pending the DACL), the identity check compares the
+    // real index there.
+    test('win32 accepts a matching nonzero dev/ino (authoritative via file index)', () => {
+      expect(assertSameFileIdentity(stats(), stats(), 'win32')).toEqual({ trusted: true })
+    })
+
+    test('win32 rejects a swapped index just like POSIX', () => {
+      expect(assertSameFileIdentity(stats(), stats({ ino: 999 }), 'win32')).toEqual({
+        trusted: false,
+        reason: 'identity-changed',
+      })
+    })
+
+    test('win32 fails CLOSED when the filesystem supplied no index (0 = FAT / some shares)', () => {
+      // Two indexless "0" objects must never be treated as the same file.
+      expect(assertSameFileIdentity(stats({ ino: 0 }), stats({ ino: 0 }), 'win32')).toEqual({
+        trusted: false,
+        reason: 'platform-unsupported',
+      })
+      // A zero on either side is unprovable, even if the other side has an index.
+      expect(assertSameFileIdentity(stats({ ino: 0 }), stats(), 'win32')).toEqual({
         trusted: false,
         reason: 'platform-unsupported',
       })

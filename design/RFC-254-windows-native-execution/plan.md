@@ -115,19 +115,28 @@ resolvedSource, platform)`——win32 且调用方路径未带源扩展名时追
   `withRuntimeBinarySnapshot`（用 `identity.snapshotPath`）、`claudeCode/driver.ts` ×2
   （`claude-sealed` 无预置后缀，改用 `identity.snapshotPath`）、fixture helper
   `runtimeOpencodeFixture.ts`。digest 是字节哈希、不含文件名，信任边界不动。纯函数 6 例单测
-  （双平台注入 + 防双后缀 + 源派生），RFC-224/227 资格套件 116/0，POSIX 全量 no-op。
-  **但 rfc135 在 Windows 上仍红**：实测证明快照**还**卡在 `binarySnapshot.ts:233` 的源
-  身份复检 `assertSameFileIdentityForHost`——即 T40 的同一 win32 file-trust 缺口
-  （`reason:'changed'`）。故 T39 是必要前置、单独入库正确，但**任何 Windows verified/probe
-  测试变绿都要等 T40**；rfc135 的 `.cmd` 夹具改动因此暂不入库（随 T40 一起）。
-- **T40 · win32 file-trust 原语**——`assertPrivateRegularFileForHost` /
-  `assertSameFileIdentityForHost` 在 win32 返回 not-trusted（`util/fileTrust.ts` 明写「a
-  win32 implementation is a separate task」，即 T0d 的显式延期），`storeHygiene.ts` 全程
-  走 `...ForHost`（无注入缝）⇒ store-hygiene/launcher hygiene 家族在 Windows fail-closed
-  一大片（batch 09 rfc224 簇的主因）。正解：owner+DACL / `FileIndex`+`VolumeSerialNumber`
-  经 Bun FFI 调 advapi32+kernel32（T0a 已为此留了双分支结构，仅 win32 实现待补）。**注意**
-  真机实测 Windows ARM64 Bun 构建禁用 TinyCC ⇒ `bun:ffi dlopen()` 不可用（见 STATE），故
-  该实现须带 dlopen 不可用时的诚实降级路径（不是静默信任）。这条工作量最大、需独立研究 pass。
+  （双平台注入 + 防双后缀 + 源派生），RFC-224/227 资格套件 116/0，POSIX 全量 no-op。**已入库
+  `b5657792`**。单独不足以让 Windows 测试变绿——需与下面的 T40a 组合（快照的源身份复检）。
+- **T40a · file IDENTITY 在 win32 转为 authoritative（无 FFI）· 已完成（2026-08-06）**——
+  研究先行推翻了 `fileTrust.ts` 头部「ino 在 NTFS 上为 0/不稳」的旧断言：**实测 Bun 1.3.14 /
+  Windows 11** 上 `statSync(path,{bigint:true})` 的 `dev`/`ino` 非零、跨 stat 稳定、逐文件
+  相异、且 fstat==lstat 一致（Bun 从 `GetFileInformationByHandle` 的
+  VolumeSerialNumber+FileIndex 填充）——正是身份复检需要的 TOCTOU 对。故**身份**半不需要
+  DACL/FFI，只有**隐私**半（`mode` 被合成）才需要。`assertSameFileIdentity` 改为 win32 也
+  authoritative（比对真 index），并对 `ino===0`（FAT/网络盘无 index）fail closed。POSIX 严格
+  no-op。**这正是 T39 的解锁件**：`binarySnapshot` 只依赖身份半（隐私半它不用），所以
+  T39+T40a 一组合，快照在 Windows 上从 `reason:'changed'` 变为成功——实测
+  `rfc135-runtimes-status` + `rfc254-file-trust` + `rfc254-snapshot-executable-extension`
+  在 Windows 上 **37 pass / 2 skip / 0 fail**（rfc135 此前 8 红），**首个变绿的 Windows
+  verified/probe 测试簇**。rfc135 的 `.cmd` 夹具改动随本条一起入库。
+- **T40b · win32 file PRIVACY 原语（DACL，仍待做）**——`assertPrivateRegularFileForHost` /
+  `assertUnopenedPrivateFileForHost` 仍 win32 fail-closed：`mode` 在 Windows 是合成的（可写
+  文件恒报 0o666，与 ACL 无关），必须读 DACL 才能证明「仅属主可读写」。这才是真正需要
+  owner+DACL / Bun FFI 调 advapi32（`GetNamedSecurityInfoW`）的部分，也是 `storeHygiene`
+  隐私检查（batch 09 rfc224 store-hygiene 簇）在 Windows 仍红的根因。**注意** ARM64 Bun 禁用
+  TinyCC ⇒ `bun:ffi dlopen()` 不可用（见 STATE），须带 dlopen 不可用时的诚实降级（要么改用
+  per-user appHome 目录 ACL 继承——`controlListener.ts` 已如此依赖——要么 fail-closed 明示）。
+  工作量最大、需独立研究 + 设计门。
 
 ## AC → 测试追踪表
 

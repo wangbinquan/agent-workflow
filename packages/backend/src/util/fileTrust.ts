@@ -147,8 +147,26 @@ export function assertUnopenedPrivateFile(
 }
 
 /**
- * The TOCTOU half: the object behind the handle must be the one `lstat`
- * described. `dev`+`ino` is the POSIX identity pair.
+ * RFC-254 T40a — file IDENTITY is authoritative wherever the filesystem
+ * actually supplies it, which now includes win32.
+ *
+ * POSIX carries identity as `dev`/`ino`. Windows carries the SAME fact as
+ * `VolumeSerialNumber`/`FileIndex`, and Bun populates `fs.Stats.dev`/`ino` from
+ * `GetFileInformationByHandle` with exactly those — MEASURED on Bun 1.3.14 /
+ * Windows 11 to be non-zero, stable across stats, distinct per file, and equal
+ * between an open handle's `fstat` and the path's `lstat` (the precise TOCTOU
+ * pair this check needs). The module header's older "ino is 0/unstable on
+ * NTFS" note predates that and is corrected here — it holds only for
+ * filesystems that supply no index (FAT, some network shares), which report 0.
+ *
+ * So identity does NOT need the DACL/FFI that PRIVACY still does
+ * (`statMetadataIsAuthoritative` stays win32-false for the mode-based privacy
+ * assertions above; only this identity check is now win32-authoritative). The
+ * FileIndex-reuse-after-delete window is identical to POSIX inode reuse — the
+ * same guarantee, not a weaker one.
+ *
+ * Fail closed when the index is absent: a `0` pair means the filesystem gave
+ * no identity, and two "0" objects must NOT be treated as the same file.
  *
  * Size is deliberately NOT part of this. Callers disagree about it on purpose
  * — the launch manifest demands byte-exact equality (it was just written and
@@ -161,8 +179,12 @@ export function assertSameFileIdentity(
   opened: TrustStats,
   platform: NodeJS.Platform,
 ): FileTrustVerdict {
-  if (!statMetadataIsAuthoritative(platform)) return deny('platform-unsupported')
   if (!opened.isFile()) return deny('not-regular-file')
+  if (platform === 'win32' && (BigInt(opened.ino) === 0n || BigInt(before.ino) === 0n)) {
+    // Filesystem supplied no file index (FAT / some network shares): cannot
+    // prove identity, so fail closed rather than match another indexless object.
+    return deny('platform-unsupported')
+  }
   if (opened.dev !== before.dev || opened.ino !== before.ino) return deny('identity-changed')
   return TRUSTED
 }

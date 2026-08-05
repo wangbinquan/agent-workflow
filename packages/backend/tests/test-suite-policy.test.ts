@@ -48,6 +48,13 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // in the same file by the branch that runs ONLY on win32 (Job Object
   // adoption, live count, atomic terminate), so no platform loses coverage.
   'packages/backend/tests/rfc254-process-tree-ownership.test.ts#skipIf': 2,
+  // RFC-254 T32: two RFC-135 status-probe cases whose assertions ARE the POSIX
+  // process-group reap (fork-without-exec grandchild via `#!/bin/sh`, PGID
+  // signal, `pgrep -f`). The win32 descendant-lifetime boundary is the Job
+  // Object, covered by rfc254-process-tree-ownership's win32 branch — so no
+  // platform loses the "runaway child is reaped" guarantee. The rest of the
+  // file now runs on Windows (T39/T40a made the version-probe snapshot work).
+  'packages/backend/tests/rfc135-runtimes-status.test.ts#skipIf': 2,
   'e2e/clarify.spec.ts#skip': 1,
   // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
   // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can

@@ -15,6 +15,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { fakeBinaryPath, writeFakeBinary } from './fixtures/fakeBinary'
+import { NO_POSIX_CONTAINMENT } from './fixtures/platformScope'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
@@ -49,19 +51,18 @@ interface Harness {
   claudeBin: string
 }
 
-/** Minimal `--version`-only stub; non-version args exit 99. */
-function writeVersionBinary(path: string, stdout: string, exit = 0): void {
-  const escaped = stdout.replace(/'/g, `'\\''`)
-  writeFileSync(
-    path,
-    `#!/bin/sh
-case "$1" in
-  --version|-v) printf '%s\\n' '${escaped}'; exit ${exit} ;;
-  *) echo "unknown: $*" >&2; exit 99 ;;
-esac
+// RFC-254 T32/T39/T40a: a version stub via the shared cross-platform fake
+// binary rather than `#!/bin/sh` (unrunnable on Windows). Returns the ACTUAL
+// path written (`.cmd` on win32) — the row assertions compare `runtime.binary`
+// against it, and T39 preserves that extension across the byte-frozen snapshot
+// while T40a lets the snapshot's identity re-check pass on win32.
+function writeVersionBinary(dir: string, base: string, stdout: string): string {
+  const path = fakeBinaryPath(dir, base)
+  writeFakeBinary(path, {
+    stdout: `${stdout}
 `,
-  )
-  chmodSync(path, 0o755)
+  })
+  return path
 }
 
 /**
@@ -79,10 +80,8 @@ async function makeHarness(): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc135-'))
   const configPath = join(tmp, 'config.json')
   loadConfig(configPath) // write defaults
-  const opencodeBin = join(tmp, 'opencode-stub')
-  const claudeBin = join(tmp, 'claude-stub')
-  writeVersionBinary(opencodeBin, 'stub-opencode 1.18.3')
-  writeVersionBinary(claudeBin, '2.1.193 (Claude Code)')
+  const opencodeBin = writeVersionBinary(tmp, 'opencode-stub', 'stub-opencode 1.18.3')
+  const claudeBin = writeVersionBinary(tmp, 'claude-stub', '2.1.193 (Claude Code)')
   // Pin BOTH protocol defaults to controlled stubs — the machine running the
   // tests may or may not have real opencode/claude on PATH.
   applyConfigPatch(configPath, { opencodePath: opencodeBin, claudeCodePath: claudeBin })
@@ -228,8 +227,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   })
 
   test('fixture-admitted row probes ITS binaryPath, not the protocol default', async () => {
-    const forkBin = join(h.tmp, 'my-fork')
-    writeVersionBinary(forkBin, 'myfork 9.9.9')
+    const forkBin = writeVersionBinary(h.tmp, 'my-fork', 'myfork 9.9.9')
     await createRuntime(h.db, { name: 'my-fork', protocol: 'opencode', binaryPath: forkBin })
     const json = await bodyOf(await req(h.app))
     const fork = json.runtimes.find((r) => r.name === 'my-fork')
@@ -241,8 +239,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   })
 
   test('older reported version remains available-unverified', async () => {
-    const oldBin = join(h.tmp, 'old-opencode')
-    writeVersionBinary(oldBin, 'stub-opencode 1.17.9')
+    const oldBin = writeVersionBinary(h.tmp, 'old-opencode', 'stub-opencode 1.17.9')
     await createRuntime(h.db, { name: 'old-opencode', protocol: 'opencode', binaryPath: oldBin })
     const json = await bodyOf(await req(h.app))
     const old = json.runtimes.find((r) => r.name === 'old-opencode')
@@ -252,8 +249,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   })
 
   test('non-semver reported version remains available-unverified', async () => {
-    const weirdBin = join(h.tmp, 'weird-fork')
-    writeVersionBinary(weirdBin, 'fork build fortytwo')
+    const weirdBin = writeVersionBinary(h.tmp, 'weird-fork', 'fork build fortytwo')
     await createRuntime(h.db, { name: 'weird-fork', protocol: 'opencode', binaryPath: weirdBin })
     const json = await bodyOf(await req(h.app))
     const weird = json.runtimes.find((r) => r.name === 'weird-fork')
@@ -413,75 +409,84 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     expect(deniedBody.details?.requiredPermission).toBe('runtime:read')
   })
 
-  test('hung binary is timed out per-row without stalling the batch', async () => {
-    // 2s: far below the 60s hang (the thing being tested) but generous enough
-    // that the parallel healthy stubs never trip it on a loaded CI machine
-    // (300ms proved flaky — spawn jitter SIGKILLed the healthy row too).
-    process.env[TIMEOUT_ENV] = '2000'
-    const hangBin = join(h.tmp, 'hangs')
-    // Include the test-process pid in the sleep operand so independently
-    // isolated copies of this file never mistake one another's intentional
-    // hang for a leaked descendant during pressure runs.
-    const hangMarker = `sleep 63047.${process.pid}`
-    writeHangingBinary(hangBin, hangMarker)
-    await createRuntime(h.db, { name: 'hangs', protocol: 'opencode', binaryPath: hangBin })
+  // RFC-254 T32: gated on the POSIX process-group reap SUBJECT (fork-without-exec
+  // grandchild via `#!/bin/sh`, PGID signal, `pgrep -f`); win32's descendant-
+  // lifetime boundary is the Job Object (rfc254-process-tree-ownership win32).
+  test.skipIf(NO_POSIX_CONTAINMENT)(
+    'hung binary is timed out per-row without stalling the batch',
+    async () => {
+      // 2s: far below the 60s hang (the thing being tested) but generous enough
+      // that the parallel healthy stubs never trip it on a loaded CI machine
+      // (300ms proved flaky — spawn jitter SIGKILLed the healthy row too).
+      process.env[TIMEOUT_ENV] = '2000'
+      const hangBin = join(h.tmp, 'hangs')
+      // Include the test-process pid in the sleep operand so independently
+      // isolated copies of this file never mistake one another's intentional
+      // hang for a leaked descendant during pressure runs.
+      const hangMarker = `sleep 63047.${process.pid}`
+      writeHangingBinary(hangBin, hangMarker)
+      await createRuntime(h.db, { name: 'hangs', protocol: 'opencode', binaryPath: hangBin })
 
-    // Keep the row under test on the real snapshot + process-group path. The
-    // healthy control uses Bun's already-admitted native executable: macOS
-    // sandbox pressure can delay a freshly-copied temporary shell script past
-    // this case's deliberately shortened 2s timeout, which tests host script
-    // scheduling rather than per-row isolation. Production still snapshots
-    // every row, and the other cases above lock that boundary.
-    const timeoutApp = createApp({
-      token: TOKEN,
-      configPath: h.configPath,
-      opencodeVersion: null,
-      dbVersion: 1,
-      db: h.db,
-      runtimeDiagnosticTestDependencies: {
-        ...FIXTURE_RUNTIME_DIAGNOSTICS,
-        withRuntimeOpencodeSnapshot: (command, callback) =>
-          command[0] === hangBin
-            ? FIXTURE_RUNTIME_DIAGNOSTICS.withRuntimeOpencodeSnapshot(command, callback)
-            : callback(process.execPath),
-      },
-    })
+      // Keep the row under test on the real snapshot + process-group path. The
+      // healthy control uses Bun's already-admitted native executable: macOS
+      // sandbox pressure can delay a freshly-copied temporary shell script past
+      // this case's deliberately shortened 2s timeout, which tests host script
+      // scheduling rather than per-row isolation. Production still snapshots
+      // every row, and the other cases above lock that boundary.
+      const timeoutApp = createApp({
+        token: TOKEN,
+        configPath: h.configPath,
+        opencodeVersion: null,
+        dbVersion: 1,
+        db: h.db,
+        runtimeDiagnosticTestDependencies: {
+          ...FIXTURE_RUNTIME_DIAGNOSTICS,
+          withRuntimeOpencodeSnapshot: (command, callback) =>
+            command[0] === hangBin
+              ? FIXTURE_RUNTIME_DIAGNOSTICS.withRuntimeOpencodeSnapshot(command, callback)
+              : callback(process.execPath),
+        },
+      })
 
-    const started = performance.now()
-    const res = await req(timeoutApp)
-    const elapsed = performance.now() - started
-    expect(res.status).toBe(200)
-    // sleep 60 would hold the response for a minute; the 2s row timeout +
-    // SIGKILL must return well under that (generous CI margin).
-    expect(elapsed).toBeLessThan(10_000)
+      const started = performance.now()
+      const res = await req(timeoutApp)
+      const elapsed = performance.now() - started
+      expect(res.status).toBe(200)
+      // sleep 60 would hold the response for a minute; the 2s row timeout +
+      // SIGKILL must return well under that (generous CI margin).
+      expect(elapsed).toBeLessThan(10_000)
 
-    const json = await bodyOf(res)
-    expect(json.runtimes.find((r) => r.name === 'hangs')!.ok).toBe(false)
-    // The other rows in the same batch are unaffected.
-    expect(json.runtimes.find((r) => r.name === 'opencode')!.ok).toBe(true)
+      const json = await bodyOf(res)
+      expect(json.runtimes.find((r) => r.name === 'hangs')!.ok).toBe(false)
+      // The other rows in the same batch are unaffected.
+      expect(json.runtimes.find((r) => r.name === 'opencode')!.ok).toBe(true)
 
-    // Codex impl gate: the WHOLE process tree must be reaped, not just the
-    // sh wrapper — the forked grandchild is the thing actually hanging. The
-    // probe kills the detached process group, so no marker process survives.
-    const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', hangMarker] })
-    expect(survivors.stdout.toString().trim()).toBe('')
-  })
+      // Codex impl gate: the WHOLE process tree must be reaped, not just the
+      // sh wrapper — the forked grandchild is the thing actually hanging. The
+      // probe kills the detached process group, so no marker process survives.
+      const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', hangMarker] })
+      expect(survivors.stdout.toString().trim()).toBe('')
+    },
+  )
 
-  test('wrapper that forks then exits BEFORE the timeout still gets its descendants reaped', async () => {
-    // Codex impl gate round 2: exiting non-zero clears the timer, so the
-    // timeout path never fires — the finally-side unconditional group reap is
-    // what prevents this from leaking one forked child per homepage poll.
-    const marker = 'sleep 63053'
-    const bin = join(h.tmp, 'forks-and-dies')
-    writeFileSync(bin, `#!/bin/sh\n${marker} &\nexit 7\n`)
-    chmodSync(bin, 0o755)
-    await createRuntime(h.db, { name: 'forks-and-dies', protocol: 'opencode', binaryPath: bin })
+  test.skipIf(NO_POSIX_CONTAINMENT)(
+    'wrapper that forks then exits BEFORE the timeout still gets its descendants reaped',
+    async () => {
+      // Codex impl gate round 2: exiting non-zero clears the timer, so the
+      // timeout path never fires — the finally-side unconditional group reap is
+      // what prevents this from leaking one forked child per homepage poll.
+      const marker = 'sleep 63053'
+      const bin = join(h.tmp, 'forks-and-dies')
+      writeFileSync(bin, `#!/bin/sh\n${marker} &\nexit 7\n`)
+      chmodSync(bin, 0o755)
+      await createRuntime(h.db, { name: 'forks-and-dies', protocol: 'opencode', binaryPath: bin })
 
-    const res = await req(h.app)
-    expect(res.status).toBe(200)
-    expect((await bodyOf(res)).runtimes.find((r) => r.name === 'forks-and-dies')!.ok).toBe(false)
+      const res = await req(h.app)
+      expect(res.status).toBe(200)
+      expect((await bodyOf(res)).runtimes.find((r) => r.name === 'forks-and-dies')!.ok).toBe(false)
 
-    const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', marker] })
-    expect(survivors.stdout.toString().trim()).toBe('')
-  })
+      const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', marker] })
+      expect(survivors.stdout.toString().trim()).toBe('')
+    },
+  )
 })
