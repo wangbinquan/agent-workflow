@@ -1254,3 +1254,13 @@ per-node timeout 需要按 Windows 腿放宽（或 fixture 声明平台预算）
 间歇超时是**环境性**(bun/vitest 默认 5s 预算贴共享 runner 噪音线),与上一条
 e2e shard 的超时同族。均归 RFC-254 T32 预算治理域;两个文件此前不在其"贴上限
 候选"名单里,治理时按同一负载法补测。
+
+
+### 第三次复现(2026-08-06,superseding run 31026903962,commit 48dd201a)
+
+六红中四条仍是本谱系:Windows frontend shard 1/3+3/3 三条既有 vitest 超时
+(unsaved-guard/detail-header-actions/reviews-list-expand)、Windows e2e
+crash-recovery、macOS RFC-227 Seatbelt 真实沙箱 5015ms 贴 5s 预算。另两条
+owning=a231432c(RFC-258):⑥ 权重测试 240 万 occurrence fixture 自伤超预算
+(已改注入式小预算)、T15 指纹随实现门代码修复漂移(已按新指纹重登记)——
+两条同 commit 已修。

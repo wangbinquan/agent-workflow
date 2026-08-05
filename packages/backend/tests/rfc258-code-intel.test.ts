@@ -270,8 +270,9 @@ describe('ScipIndexCache (F-02/F-15)', () => {
 
 describe('ScipIndexCache — weight eviction and oversize refusal (P1-9⑥)', () => {
   test('weight-bounded LRU evicts the oldest entry, never the one just built', async () => {
-    // Each fixture graph carries ~1.1M occurrences of weight? No — mint two
-    // graphs whose occurrence counts straddle the 2M budget.
+    // Small graphs + an injected budget: the eviction LOGIC is what's under
+    // test, and a production-sized fixture (1.2M occurrences × 2) blew the CI
+    // runner's per-test budget (RFC-254 lesson: real work near bun's 5s cap).
     const heavy = (n: number, file: string) =>
       encodeScipFixture([
         {
@@ -288,8 +289,9 @@ describe('ScipIndexCache — weight eviction and oversize refusal (P1-9⑥)', ()
       probeIndexer: availableProbe,
       runIndexer: async () => ({
         ok: true,
-        scipBytes: which++ === 0 ? heavy(1_200_000, 'a.ts') : heavy(1_200_000, 'b.ts'),
+        scipBytes: which++ === 0 ? heavy(600, 'a.ts') : heavy(600, 'b.ts'),
       }),
+      maxTotalWeight: 1000,
     })
     const base = {
       taskId: 't1',
@@ -301,9 +303,9 @@ describe('ScipIndexCache — weight eviction and oversize refusal (P1-9⑥)', ()
     expect(a.ok).toBe(true)
     const b = await cache.get({ ...base, snapshotDigest: 'd2' })
     expect(b.ok).toBe(true)
-    // total 2.4M > 2M budget → the older d1 entry was evicted, d2 kept
+    // total 1200 > 1000 budget → the older d1 entry was evicted, d2 kept
     expect(cache.stats().entries).toBe(1)
-    expect(cache.stats().totalWeight).toBeLessThanOrEqual(2_000_000)
+    expect(cache.stats().totalWeight).toBeLessThanOrEqual(1000)
   })
 
   test('a single index above the byte cap is refused, not cached', async () => {

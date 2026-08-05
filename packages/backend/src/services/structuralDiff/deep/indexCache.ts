@@ -34,6 +34,9 @@ export interface IndexCacheDeps {
   timeoutMs?: number
   /** Injectable clock for negative-cache expiry tests. */
   now?: () => number
+  /** Injectable weight budget (tests exercise eviction with small graphs —
+   *  a production-sized fixture blew the CI runner's test budget). */
+  maxTotalWeight?: number
 }
 
 export type IndexAnswer = { ok: true; graph: ScipGraph } | { ok: false; reason: string }
@@ -175,7 +178,8 @@ export class ScipIndexCache {
     const weight = Math.max(1, graphWeight(graph))
     this.entries.set(key, { key, graph, weight, lastUsed: ++this.seq, indexerVersion })
     this.totalWeight += weight
-    while (this.totalWeight > MAX_TOTAL_WEIGHT && this.entries.size > 1) {
+    const budget = this.deps.maxTotalWeight ?? MAX_TOTAL_WEIGHT
+    while (this.totalWeight > budget && this.entries.size > 1) {
       let oldest: CacheEntry | null = null
       for (const e of this.entries.values()) {
         if (e.key === key) continue // never evict what we just built
