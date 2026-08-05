@@ -89,6 +89,31 @@ agent-workflow sandbox --help
   Job Object / AppContainer provider 可直接接入而不动核心准入。真机实测的
   `doctor` 输出见 `design/RFC-254-windows-native-execution/acceptance-real-machine-2026-08-04.md`；
   未决项逐条见 `docs/audit-backlog.md` 的「Windows 平台的四条未决项」。
+
+  **win32 v1 相对 POSIX 的语义降级清单（D20）**——唯一事实源是
+  `design/RFC-254-windows-native-execution/design.md` §10，此处是它的运维视角摘要，
+  两处不一致时以 design.md 为准：
+
+  1. **零隔离**：业务 agent / 系统 agent / 脚本 / 安装器都以 daemon 用户权限直跑，
+     等价于 POSIX 上把 sandboxMode 设成 off/warn 且无机制可用；`enforce` 与脚本节点
+     的 failClosed 档**拒绝执行**而不是降级。
+  2. **seal 的写保护**走 owner+DACL 断言，不是「跳过 chmod」；digest 复验仍是
+     TOCTOU 的主防线。
+  3. **秘密文件**（token / secret.key / db.sqlite / 一次性凭据 / shutdown nonce）
+     在 win32 由 owner+DACL 承担保护，`doctor` 如实呈现当前是哪一档；DPAPI 加固仍在
+     backlog。**注意 `stat` 的 mode 位在 Windows 上不是事实**——它对每个文件都报
+     0o666，所以「mode 600」既不能作为保证也不该被报成发现项。
+  4. **git 硬化的写保护弱化**：`hooksPath` 指向空目录仍能防 hook 执行，但该目录本身
+     可写（chmod 是 no-op）。
+  5. **杀树语义**：设计主档是 Job Object 的 kill-on-close（原子）。**v1 尚未接线**
+     ——原语已实现并有测试，但还没有任何 spawn 进入 job，实际回退到 `taskkill /T /F`
+     枚举，因此**进程树回收是 best-effort，不支撑运行时 store 的回收证明**。
+  6. **daemon 硬杀**：`stop` 在 win32 走 loopback 控制通道请求优雅关停；请求投递不了
+     时才强杀，且**明确输出「这不是优雅关停」**（`SIGTERM` 在 Windows 等同强杀，旧
+     行为会一边硬杀一边报告 stopped）。跨 daemon 重启的残留由 boot reaper 兜底。
+  7. **上游弱项**：opencode 在 win32 的 MCP 子孙清理是 no-op，FFF 默认关闭。
+  8. **env 名的大小写折叠是新增安全面**：Windows 环境变量名大小写不敏感，所有黑白
+     名单都经单点折叠，混合大小写绕过在三平台都有测试锁定。
 - 进程侧信道（ps / /proc）不遮蔽——凭据已不入 argv/env，残余为低敏路径信息。
 - `off` / 降级态与 RFC-205 之前等同（威胁未消除，仅可见）。
 - bwrap 缺失的发行版需装 bubblewrap（跑 `agent-workflow sandbox` 拿发行版感知的精确

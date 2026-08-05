@@ -169,7 +169,7 @@ FFI 偏移不会抛异常，只会从另一个字段返回一个看着合理的�
 WebSocket 让 `networkidle` 永不到达）。
 
 **只翻 e2e 这条链**（`build-binary` + `e2e`），`test-backend` / `test-frontend` 保持
-两腿——后端在 Windows 上仍有约 386 条失败且 90 分钟跑不完，先翻会让 main 对所有人
+两腿——后端在 Windows 上勘测跑满 90 分钟被终止、彼时计 386 条失败（**该数字已于 2026-08-05 作废**：清干净取样环境后实测约 32 条，且多数已修，见 RFC plan「T32 分类结果」），先翻会让 main 对所有人
 变红。配套：`build-binary` 的 bwrap supervisor 冒烟按平台闸门（Linux 概念 +
 `/usr/bin/true` 载荷）；windows 腿排除**恰好两条**他人负责的既有红，**按测试标题而非
 文件名**（按文件名会连带砍掉那两个文件里另外 8 条在 Windows 上通过的测试），并由

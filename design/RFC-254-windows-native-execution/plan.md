@@ -448,6 +448,38 @@ win32 视觉基线现在**不再被阻塞**——e2e 已能在 Windows 上跑，
 无法归属的混合结果；wipe 掉 `packages/` 会连 workspace 内的 `node_modules` 一起带走，
 表现为 `Cannot find package 'zod'` 这种与改动无关的加载失败。
 
+## T31 后端矩阵腿：真实障碍不是「预算不够」，是两道逐字锁（2026-08-05 调研）
+
+先纠正一个一直被误传的口径：**`ci.yml` 的 job timeout 是 15 分钟**（`ci.yml:84` /
+`:194`，全文件最大值是 e2e 的 20 分钟）。90 与 240 都来自 `windows-survey.yml` 的
+**勘测**作业，不是门禁。所以差距不是「240 压进 90」，而是「Windows 后端跑不完 90 分钟，
+而门禁每分片只有 15 分钟」——比先前说的大得多。
+
+分片方式是 **bun 原生 `--shard`**（`ci.yml:145` / `:159`），不经任何脚本，所以调分片数
+本身很便宜。真正的障碍是 `packages/backend/tests/root-test-entrypoint.test.ts` 里的
+逐字锁，它让**两条常规路子都走不通**：
+
+- `:476` `expect(workflowJobNames(ciWorkflow)).toEqual([...])` —— 逐字锁死 ci.yml 的
+  8 个 job 名与顺序 ⇒ **不能新开一个 `test-backend-windows` job**。
+- `:479` 锁「每个 job 只能出现一处 `timeout-minutes:`」、`:480` 锁字面量
+  `timeout-minutes: 15` ⇒ **不能在同一 job 里给 windows 一个不同的 timeout**
+  （`timeout-minutes: ${{ matrix.timeout }}` 能过计数那条，过不了字面量那条）。
+
+其余需要同步的锁：`:218-220`（backend 的 os 数组 / shard 数组 / `--shard=…/4` 出现
+次数必须 === 2）、`:184-189`（两条 `run:` 整行逐字，含种子与分母）、`:223-225`
+（frontend 三条）、`:227-232`（「暂不带 windows 是刻意的」那段注释会失真）、
+`rfc224-source-guard.test.ts:257`（`opencodeInstallTargets` 精确两条 ⇒ windows 腿不能
+加独立 opencode 安装步）。
+
+**仓内既有的「给 Windows 单独预算」做法是独立 workflow**（`windows-platform.yml`
+25 分钟），它不受上面 job 名锁约束——那条锁只作用于 ci.yml 与 visual workflow。
+
+**因此接腿前要先做一个决定**：是放宽 `:476` / `:480` 这两条锁（并说明为什么放宽是
+安全的），还是沿用独立 workflow 的既有形态。这属于设计决定，不该由实现顺手改锁。
+
+**注意 `design.md:344-362` §8.4 那张「改矩阵必红」表的行号已过期**（写的是
+`:215-231` / `:372-394`，实际当前是 `:208-249` / `:465-487`），照着改会找错地方。
+
 ## 交付前必过清单
 
 - [ ] `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿（每 PR）。
