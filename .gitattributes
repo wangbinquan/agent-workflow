@@ -1,0 +1,47 @@
+# RFC-254 T31 — line endings are part of this repository's contract, not a
+# per-developer preference.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Git for Windows installs default to `core.autocrlf=true`, and so does the
+# `windows-latest` GitHub runner. Without this file, checking the repo out
+# there rewrites every LF to CRLF, and that is not cosmetic:
+#
+#   * Source-lock tests match source text against regexes that spell `\n`
+#     literally. Under CRLF the byte before the newline is `\r`, so the pattern
+#     misses and the test reports a *product* defect ("clearSelection no longer
+#     resets the dedupe sig") when nothing about the product changed. That is
+#     precisely how the first Windows frontend leg went red — after the same
+#     suite had been measured green on a real Windows host, where the tree had
+#     arrived by tarball and kept its LF.
+#   * All 4405 tracked files are LF today (verified: `git grep -Il $'\r'`
+#     returns nothing), so declaring LF changes no content — it only stops the
+#     checkout from changing it.
+#
+# The framework already pins `core.autocrlf=false` for the git operations it
+# performs itself (`util/gitHardening.ts`), because CRLF rewriting reaches port
+# values and model input. This file extends the same rule to the repository's
+# own checkout, which that pin cannot cover.
+#
+# `eol=lf` is deliberate rather than `text=auto` alone: `auto` normalizes what
+# goes INTO the object database but still honours the platform default coming
+# out. Only `eol=lf` makes the working tree identical everywhere.
+* text=auto eol=lf
+
+# Binary assets must never be touched. `text=auto` usually detects these, but
+# the visual-regression baselines are compared byte-for-byte across three
+# platforms — an accidental newline rewrite there would be reported as a UI
+# change, so make the exclusion explicit rather than relying on detection.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.node binary
+*.exe binary

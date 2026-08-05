@@ -101,6 +101,26 @@ describe('RFC-254 — the framework pins line endings on Windows', () => {
     expect(posix.join(' ')).not.toContain('autocrlf')
   })
 
+  // RFC-254 T31 — the pin above covers git calls the FRAMEWORK makes. It cannot
+  // cover the checkout of this repository itself, which the runner's own git
+  // performs before any of our code exists: `windows-latest` defaults to
+  // `core.autocrlf=true`, so every LF in the tree became CRLF and the
+  // source-lock tests — which match against regexes spelling `\n` literally —
+  // started reporting product defects that did not exist. `.gitattributes` is
+  // the only thing that overrides that, and it is one deletion away from
+  // silently un-fixing the whole Windows leg.
+  test('the repository pins its own checkout to LF via .gitattributes', () => {
+    const repoRoot = resolve(import.meta.dir, '..', '..', '..')
+    const attributes = readFileSync(join(repoRoot, '.gitattributes'), 'utf8')
+    // `text=auto` alone normalizes what enters the object database but still
+    // honours the platform default on the way out; only `eol=lf` makes the
+    // working tree identical on every host.
+    expect(attributes).toMatch(/^\*\s+text=auto\s+eol=lf$/m)
+    // Baselines are compared byte-for-byte across three platforms; a newline
+    // rewrite there would be reported as a UI change.
+    expect(attributes).toMatch(/^\*\.png\s+binary$/m)
+  })
+
   test('they ride in the SAME leading args every daemon-side git call passes through', () => {
     // A second injection point is how two copies of one rule drift apart.
     const source = readFileSync(
