@@ -1069,8 +1069,30 @@ daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环
   `.cmd` 独立 spawn 实测 exit 0 stdout 精确；是**快照路径本身在 Windows 上落地了一个跑不起来
   的副本**。因为它在 RFC-224/227 的 verified 执行链上（不只探测），影响面到 opencode
   正常拉起，需按能力收缩型 RFC 的证据门核实后修（快照名保留源扩展名 / 或按平台补扩展）。
-  **rfc135 的换缝改动已回滚**（8 条改到 6 条真红 + 2 gated 后，剩下的 6 条全部撞这条产品缺陷，
-  不该用一个依赖未修产品路径的测试去掩盖它）；该文件的 A 类移植待此缺陷修复后再做。
+
+  **2026-08-06 追加：试改后确认这是 verified-path 结构改动，不是单点修复——完整触点已测绘**。
+  在 `snapshotRuntimeBinary` 里「win32 追加源扩展名 + 返回实际路径」是对的（digest 是字节
+  哈希、不含文件名，信任边界不动），但它打破了一条贯穿 verified-path 的不变量
+  **「snapshot 落在传入的确切路径上」**，下列每处都要一起改（漏一处 = Windows 上静默拉不起）：
+  - `binarySnapshot.ts`：copy/chmod/verify/unlink/return 全走 `effectiveSnapshotPath`，且
+    `effectiveSnapshotPath` 须提到函数外层（catch 清理要用，try 内 `const` catch 不可见）；
+  - `withRuntimeBinarySnapshot`（同文件）：verify + callback 改用 `identity.snapshotPath` 而非
+    预算的 basename；
+  - **`verifiedPlanCore.ts:104` 是 FATAL 守卫** `binaryIdentity.snapshotPath !== input.binaryPath
+⇒ execution-identity-untrusted-binary`——win32 追扩展名后必触发，须放宽为「等于 input 或
+    input+已知扩展名」，且**下游执行路径与 containment bind 投影要用实际 snapshotPath**；
+  - `verifiedPlan.ts:215` 的 toolchain-bun 守卫 `snapshot.snapshotPath === snapshotPath`（非
+    fatal，但会静默丢掉沙盒 bun 使受控 PATH 缺 bun）；
+  - `claudeCode/driver.ts:159` 与 `:247`：`claudeCmd/sealedHead = [sealPath]` 及
+    `verifyRuntimeBinarySnapshot(sealPath,…)` 全改用 `identity.snapshotPath`；
+  - `verifiedSystemPlan.ts` / `verifiedMcpTestPlan.ts` / `mcpTestExecutionMaterial.ts:179`：
+    平行结构，同样从 snapshotPath 构造执行 cmd，逐个核。
+  - **扩展名必须在 resolve 之后取**（`.exe` vs `.cmd` 不同、猜错照样不可执行），所以不能在
+    调用方预算路径绕开——不变量只能放宽，不能规避。
+    因此这条从「单点缺陷」升级为 **RFC-254 子任务：verified-path 快照可执行性（Windows）**，
+    改前须走设计门 + 改后重跑 RFC-224/227 identity/containment 资格套件（试改已回滚，未入库）。
+    **rfc135 的换缝改动已回滚**（8 条改到 6 条真红 + 2 gated 后，剩下的 6 条全部撞这条产品缺陷，
+    不该用一个依赖未修产品路径的测试去掩盖它）；该文件的 A 类移植待此缺陷修复后再做。
 
   ### ⏳ **(P1) 剩余 ~400 条的性质盘点：多数不是「测试可移植性」，是产品/平台缺口**
 
