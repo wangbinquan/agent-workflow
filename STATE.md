@@ -2,6 +2,8 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+🚧 **进行中 RFC（Draft，2026-08-05，三件套已落档待设计门+用户批准）：[RFC-258 源码审阅器与符号跳转](design/RFC-258-source-viewer-symbol-navigation/proposal.md)** —— 结构变更页签的代码呈现升级:「全文」视图档(shiki 全文高亮+变更行标注+折叠)、标识符点击→定义/引用菜单、双引擎(SCIP occurrence 精确 / baseline 三源兜底)、图码联动(全屏下钻 Dialog 右侧源码栏)、面板内导航+面包屑历史栈。地基零新依赖(shiki/file-content/extractSymbols/ScipGraph.bySymbol 全部现成);新端点 file-symbols + code-intel;SCIP index 按 contentDigest LRU 缓存(顺带消 deep 每查重跑 indexer)。用户四问拍板:三块全做单 RFC / 双引擎 / 面板内导航 / 定义+引用都做。
+
 ✅ **已完成 RFC（Done，2026-08-04，已推送）：[RFC-257 代码平台 Webhook 触发器](design/RFC-257-code-host-webhook-triggers/proposal.md)** **+UI 修订（同日，`a5c7e94d`+`f621b46f`）**：用户指示 webhook 配置整合为侧栏「运行与仓库」组「远端仓」下方的单页三 tab（端点/触发器/投递审计，repos 同款 TabBar+operations-surface），**仅 admin**——导航项 `SubNavItem.adminOnly` + ShellNavigation 按 actor 过滤 + 页面级拒绝态兜底 + **权限点收紧**（webhook 五点全部退出 user/manager 基线，穷尽表 user 46 同步，后端方法门对 user 直接 403）；旧 `/webhook-triggers`、`/webhook-deliveries` 路由删除（降为 `components/webhooks/*Panel` 并入单页），设置页网络 tab 卡片挂载移除。**多 session 协同**：另一 session 同步做 UX 增强（触发器编辑分步向导/轮换二次确认/一次性 secret 防误关/样式区块），经用户授权随本 session commit 顺带快照+收敛提交；本 session 一处衍生修复 = app-shell-layout 的 useActor 部分 mock 缺新导出致 14 条 shell 测试崩（mock 补未加载态）。同步面：nav 图标快照、route/overlay inventory、页面测试重写（含非 admin 拒绝态断言）。 —— 提交 `20906843`（主体，56 文件）+ `19f435ac`（CI 收口：depcheck no-services-to-routes 拆边——dispatcher 契约类型下沉 `services/webhook/dispatcherTypes.ts`；route-error-code-coverage——19 个新错误码逐个行为触发断言，唯一不可行为触发的 token-mint 三连碰撞以源码点名记载；**该锁只扫 git tracked 文件**，新测试须 add 后才计入）。**CI 判定（superseding run `190d9111`，含本 RFC 两 commit）**：lint/typecheck/format/depcheck、backend 全 shard、frontend 全 shard、visual-regression 全绿；唯一红 = `focus-ring-clip` e2e（`/tasks` 页 `.operations-surface` 104 处夹环），owning commit 为并发 session 的 `01d3e541`（task list scrolling local，动了 styles.css），本 RFC 对 styles.css 与该 spec 零改动，按归属纪律未代改。**待部署侧验收**：fixtures 五项实测清单（`tests/fixtures/gitlab-webhooks/README.md`——pipeline user 语义 / Resend UUID / 无自动重试 / auto-disable 阈值 / system hook 事件覆盖），实测不符处以 fixture 为准回改 adapter 与 design §2.3。T1–T14 已全部落地（三批：入站与分流核心 / 管理面与前端 / 文档与 e2e）。**实现要点**：shared 契约层（事件信封 / 三形态模板封套——repo 源禁填由 fire 注入 / closed enum / 模板变量矩阵，15 测）；迁移 0138 五表 + `tasks` 归属两列 + 去重 partial unique index（rejected/failed 不占位，5 测）；GitLab adapter（明文 timingSafeEqual 验签 + 九类归一化 + fixtures README 五项实测清单，9 测）；匹配引擎（忽略名单**作用域化**（pipeline 不过滤）/ streamKey 含 repo 维度 / 熔断三重置源——两条设计门 P0 各有专门回归锁，12 测）；入站端点（三段式：插行即 200、分发异步；状态码语义矩阵；限流 fake clock；interrupted 重启恢复，13 测）；分流服务（KeyedSerialQueue 同流互斥 / supersede / 熔断落库 / owner 每次触发重建 + `assertScheduledTargetUsable`（已 export）/ repo 双 key 解析 + unseal 防碰撞复核 / `startExecution` 唯一收口——`ExecutionInvoker` 新增 `webhook` 成员并**显式登记进 rfc243 `CALL_FACES`**，15 测）；管理面（端点 manage 权限 + secret 一次性明文/掩码 hint/PUT 保留语义；触发器 owner 制 404 同形 + 保存期三层校验（模板变量 ⊆ 交集可用集、workflow 映射 kind-aware、**彩排渲染 + 完整 gate**）；deliveries 列表/详情/replay 三规则 + 保留 GC ticker，9 测）；前端（设置 network tab 端点卡片 + `/webhook-triggers`、`/webhook-deliveries` 两页,全公共原语 + 双语 i18n，6 测）；权限点 5 个（webhook-triggers 四动词矩阵域 + `webhook-endpoints:manage` system 域——permission 穷尽表 60→65 已同步）；全链路 e2e（HTTP → 真 dispatcher → tasks 归属列 + supersede，1 测）；`docs/webhook-triggers.md` 运维指引。**实现期命中并折入的仓内棘轮 9 处**：RFC-054 契约注册表（19 endpoint 条目）、routes-no-cast（6 处 cast 重构清零：保存期彩排下沉服务层 / objectKindOf 窄化 / zod 校验 query）、journal 137→138、i18n key resolution、clipboard copyText 单点、overlay/route UX inventory 登记、RFC-214 Lock B（FiresDialog 改 QueryState）、sandbox 卡片顺序（webhook 卡从 runtime tab 移到 network tab）。**已知非本 RFC 红**：`rfc254-stub-differential.test.ts#skipIf` 未登记 skip（并发 RFC-254 工作树，未代改）；RFC-056 四条为全量并发下真实 spawn 超时 flaky（单独复跑全绿）。原始需求与设计门记录：两路调研（仓内能力盘点：webhook 属有产品愿景零工程规划的处女地，`scheduled_tasks`+`fireSchedule`+`startExecution` 是最佳复用模板；multica 参考：`webhook_delivery` 五态机/去重索引排除 rejected/状态码语义表/channel 四件套抽象可抄，GitLab 集成与出站回写它没有）+ 四轮反问拍板 D1–D12：**仅入站**（出站回写只留 `ReportSink` 接口占位）、**零 GitLab REST API**（CI 失败上下文靠 agent 在 worktree 重跑复现）、通用 provider 抽象 + **自建 GitLab** 参考实现、**几百仓共用一个 group/system hook**（分流=触发器规则匹配+repo 动态解析，触发器绑规则不绑仓）、修到绿循环（pipeline_failed 反复触发+熔断）、supersede 并发语义、评论指令不鉴权（授权主体=触发器 owner，每次触发重建 actor 重校验）、人审沿现状挂起、目标三形态 workflow/agent/workgroup（镜像 scheduled_tasks launchKind 封套）。推导 D13–D24。三件套已落档并**经设计门闭环**（对抗子代理判定 needs-changes：**2 P0 + 8 P1 + 10 P2，逐条核实全部属实零驳回、全部折入**，记档 [design-gate-2026-08-04.md](design/RFC-257-code-host-webhook-triggers/design-gate-2026-08-04.md)）。**两条 P0 都是真实设计错误**：①熔断计数结构性死亡——忽略名单同时当命中过滤与重置条件 ⇒ 计数封顶 1 熔断永不可达，且 bot 入名单会把修到绿循环第 2 轮掐断（bot push 引发的 pipeline_failed 作者是 bot）⇒ 修法 = 名单**作用域化**（pipeline 类事件不过滤命中）+ 重置判定与命中解耦（bot 作者累加、人类作者清零）；②streamKey 缺 repo 维度——GitLab MR iid 是 per-project 序号 ⇒ 几百仓 prefix 范围下 `mr:42` 跨仓互相 supersede 误杀、`branch:main` 全仓共享熔断桶 ⇒ `repo|mr:<iid>`。P1 要点：**自建 GitLab 失败投递不自动重试**且持续 4xx/5xx 会 auto-disable 唯一 group hook（「500 让对端重投」的 multica 语义不成立 ⇒ 三段式异步分发挤进 10s 超时 + received/processing/interrupted 中间态 + 平台 replay 为主恢复路径）；`scheduledPayloadSchemaFor` 不能直接复用（StartTask superRefine 强制 repo 三态与「模板留空 fire 注入」矛盾 ⇒ 新派生封套 schema）；RFC-243 门面锁是硬编码 `CALL_FACES` 清单不自动覆盖新调用面；tasks 归属两列须进迁移 0138；同流并发需 keyed-mutex；**D19 改判**：触发器从「第七类 ACL」改 **owner 制**（grants 写权 = 改绑 launch_ref 后以 owner 身份跑高权 workflow 的提权通道；`scheduled_tasks` 当年同因有意弃用 ACL，schema.ts:1091-1092）；模板对 packed kind 输入改「分支来自事件」结构化代包 + `{{event_json}}` ≤32KiB + 运行期渲染后全量校验。（用户已批准 D1–D24 全部决策含 D19 改判与五条部署影响。）
 
 ✅ **2026-08-04 沙箱 / containment 功能性全面审计 + 修复（非 RFC：bug 修复直落，7 个 commit）**。用户报「沙箱 RFC 之后引入了一堆功能问题」，按切片切 **8 路 fan-out** 并行审计（策略渲染器 / 准入协调器 / 进程治理 / 工作区×git / opencode 受控链 / claude 驱动与系统 agent / 脚本节点 / 前端与测试覆盖），主 session 对每条 P0/P1 独立复核（真实 `git worktree` 复现、`claude --help` 实测、纯函数重建 bwrap argv）。**前提**：`sandboxMode` 默认 `warn`、warn 只在机制不可用时才降级 ⇒ Linux 装了 bubblewrap 即全量包裹，以下每条都命中默认部署形态。全清单与四条根因见 [`docs/audit-backlog.md` §沙箱 / containment 功能性审计](docs/audit-backlog.md)。
@@ -248,6 +250,24 @@ WCAG AA 违规（白字压 `#16a34a` = 3.29:1，要 4.5:1）。按自己写的�
 换成打印节点与颜色（`e2e/axe-blocking.ts`），**本机 macOS 一跑就红**。修复面比 axe 报的
 大：白字坐在 `--rfc027-accent` 上的有三处 ⇒ 每个取值都要 ≥4.5:1，实测**两个**不合格
 （assistant 3.30、tool 3.56），tool 那条 axe 从没报过（要有工具消息才扫得到）。
+**2026-08-05 续五 · 「后端全量卡死」根因抓到并修掉——unref 的 deadline 定时器**：
+Windows 的 Bun 上**事件循环空了之后 unref 掉的定时器永远不触发**（15 行探针可复现，
+macOS 22ms 过 / Windows 无限卡）；`AbortSignal.timeout` 是同一 bug 的第二张脸。这解释了
+①「全量卡死在 181/1033」（`memory-distiller.test.ts` 的 store-destruction barrier 靠
+unref 的 deadline 兜一个永不 settle 的 promise ⇒ runner 冻死；原记录「位置随机」是错的，
+分批排序跑停在同一文件）；②分批 sweep 的 batch 07/08/11 wedge（`rfc208` 的 PlantUML
+测试走 `AbortSignal.timeout`）；③**生产语义更糟**：SIGKILL 升级链的定时器自己不触发
+（子进程 wedge 时杀不掉）、对外 fetch 在空闲 daemon 里永不超时。
+修法：12 处（6 文件）deadline 去 unref + settle 路径 clear；`AbortSignal.timeout` 全下换
+`util/timeoutSignal.ts`；守卫 `rfc254-no-unref-deadline-guard.test.ts` 双禁两形态（上线即
+抓到手数漏掉的两处，变异实证两类都做）。**Windows 复测：两个必卡文件 + 守卫 39 pass /
+0 fail / 2.05s 干净退出**（修前 12 分钟 wedge）；batch 03 复跑 68.9s 出数（此前 720s 杀）。
+分批 sweep 12/13 批已出数（合计 ~340+19 红，`rfc224-store-hygiene`/`review-state-machine`/
+`rfc253-script-execution` 为大头），最后两批复跑中，收全后按 platformScope 判据逐条定性。
+另：Windows e2e 腿在 `eda1067b` 上有三条**新观察**（crash-recovery / focus-ring-clip:682 /
+insecure-context-save，shard 1；上一 run 12 条全绿），机理上都与行尾无关，待定性未登记为
+缺陷。
+
 **剩余：T31 的后端矩阵、T32 其余、T33–T35。** T33 **不再被阻塞**——e2e 已能在
 Windows 上跑，剩的是把那几条真失败清零后接腿。**现实评估**：把
 `windows-latest` 直接加进 ci.yml 四个矩阵会让约 8600 条按 POSIX 假设写的后端测试
@@ -256,7 +276,8 @@ Windows 上跑，剩的是把那几条真失败清零后接腿。**现实评估*
 轮切片而不是本轮的收尾动作；T33 的视觉基线还需要先有一条能跑起来的 windows e2e
 腿。当前定向作业（`windows-platform.yml`）已覆盖：平台原语七套 + golden 回放 +
 argv 契约 + Node 兼容守门 + shared 套件 + typecheck + 单二进制与 stub 的构建冒烟
-+ doctor。
+
+- doctor。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 

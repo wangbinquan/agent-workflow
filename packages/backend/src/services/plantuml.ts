@@ -15,6 +15,7 @@
 // "is this a PlantUML diagnostic" check to stop the fallback chain.
 
 import { deflateRawSync } from 'node:zlib'
+import { timeoutSignal } from '@/util/timeoutSignal'
 
 /** Max source bytes accepted by the proxy (defensive abuse cap). */
 export const PLANTUML_SOURCE_MAX = 100 * 1024
@@ -114,18 +115,34 @@ export async function renderPlantuml(opts: {
   const baseFetch = opts.fetchImpl ?? fetch
   // Bound the body read as well as the request: a stalled host can send headers
   // and then stop, leaving `.text()` waiting on an EOF that never comes.
-  const doFetch = ((url: string, init?: RequestInit) =>
-    baseFetch(url, { ...init, signal: AbortSignal.timeout(attemptMs) })) as typeof fetch
-  const textOf = async (r: Response): Promise<string> =>
-    await Promise.race([
-      r.text(),
-      new Promise<string>((_ok, reject) =>
-        setTimeout(() => {
-          void r.body?.cancel().catch(() => {})
-          reject(new Error(`plantuml body read timed out after ${attemptMs}ms`))
-        }, attemptMs),
-      ),
-    ])
+  // RFC-254: the per-attempt abort is a ref'd timeoutSignal — the platform
+  // one-liner never fires on Windows Bun when the loop is otherwise idle (see
+  // util/timeoutSignal.ts; this exact function's never-settling-endpoint test
+  // is the one that froze the Windows suite).
+  const doFetch = (async (url: string, init?: RequestInit) => {
+    const deadline = timeoutSignal(attemptMs)
+    try {
+      return await baseFetch(url, { ...init, signal: deadline.signal })
+    } finally {
+      deadline.cancel()
+    }
+  }) as typeof fetch
+  const textOf = async (r: Response): Promise<string> => {
+    let bodyTimer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        r.text(),
+        new Promise<string>((_ok, reject) => {
+          bodyTimer = setTimeout(() => {
+            void r.body?.cancel().catch(() => {})
+            reject(new Error(`plantuml body read timed out after ${attemptMs}ms`))
+          }, attemptMs)
+        }),
+      ])
+    } finally {
+      if (bodyTimer !== undefined) clearTimeout(bodyTimer)
+    }
+  }
   const headers: Record<string, string> = {}
   if (opts.authHeader !== undefined && opts.authHeader.length > 0) {
     headers['Authorization'] = opts.authHeader

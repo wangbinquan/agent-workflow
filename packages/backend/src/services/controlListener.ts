@@ -41,6 +41,7 @@
 import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { platformSpawnOptions } from '@/util/platformExec'
+import { timeoutSignal } from '@/util/timeoutSignal'
 
 /** What the control file carries. Written by `start`, read by `stop`. */
 export interface ControlEndpoint {
@@ -191,17 +192,23 @@ export async function requestShutdown(
   endpoint: ControlEndpoint,
   timeoutMs = 5_000,
 ): Promise<'accepted' | 'unauthorized' | 'unreachable'> {
+  // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows Bun
+  // when the loop is otherwise idle (see util/timeoutSignal.ts). This is the
+  // `stop` CLI's channel, exactly the process most likely to have an idle loop.
+  const deadline = timeoutSignal(timeoutMs)
   try {
     const response = await fetch(`${endpoint.url}/shutdown`, {
       method: 'POST',
       headers: { 'x-agent-workflow-control': endpoint.nonce },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: deadline.signal,
     })
     if (response.status === 202) return 'accepted'
     if (response.status === 401) return 'unauthorized'
     return 'unreachable'
   } catch {
     return 'unreachable'
+  } finally {
+    deadline.cancel()
   }
 }
 

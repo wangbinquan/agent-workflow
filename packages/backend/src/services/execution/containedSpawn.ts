@@ -352,13 +352,17 @@ export async function runContainedProcess(
 
   // Bound the wait on the pipes: a surviving grandchild can hold the write end
   // open forever, and `done` would never settle.
+  let drainTimer: ReturnType<typeof setTimeout> | undefined
   const drained = await Promise.race([
     Promise.all([stdoutPump.done, stderrPump.done]).then(() => true),
     new Promise<boolean>((resolve) => {
-      const t = setTimeout(() => resolve(false), Math.max(1_000, graceMs))
-      t.unref()
+      // RFC-254: this deadline must stay ref'd — the await depends on it, and
+      // unref'd timers never fire on Windows Bun once the loop is otherwise
+      // idle (see rfc254-no-unref-deadline-guard.test.ts).
+      drainTimer = setTimeout(() => resolve(false), Math.max(1_000, graceMs))
     }),
   ])
+  if (drainTimer !== undefined) clearTimeout(drainTimer)
   if (!drained) {
     stdoutPump.cancel()
     stderrPump.cancel()

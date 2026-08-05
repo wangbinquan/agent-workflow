@@ -17,6 +17,7 @@ import { dbTxSync } from '@/db/txSync'
 import { authLoginPolicy, oidcProviders, userIdentities } from '@/db/schema'
 import { resolveEndpoints, type EndpointSource } from '@/auth/oidc/endpoints'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { timeoutSignal } from '@/util/timeoutSignal'
 
 type Row = typeof oidcProviders.$inferSelect
 
@@ -299,10 +300,13 @@ export function createOidcProvidersService(deps: {
       const subjectMode = provider.subjectClaim !== null
       let jwksReachable: boolean | undefined
       if (!subjectMode && eff.jwksUri !== null) {
+        // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows
+        // Bun when the loop is otherwise idle (see util/timeoutSignal.ts).
+        const deadline = timeoutSignal(10_000)
         try {
           const res = await fetcher(eff.jwksUri, {
             method: 'GET',
-            signal: AbortSignal.timeout(10_000),
+            signal: deadline.signal,
           })
           // A 200 with an HTML/empty/malformed body would still fail every
           // id-token verification — "reachable" means "serves a JWKS", so the
@@ -317,6 +321,8 @@ export function createOidcProvidersService(deps: {
           }
         } catch {
           jwksReachable = false
+        } finally {
+          deadline.cancel()
         }
       }
       const identityChannelReady = subjectMode

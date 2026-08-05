@@ -194,11 +194,13 @@ function defaultSleep(milliseconds: number, signal?: AbortSignal): Promise<void>
       signal?.removeEventListener('abort', abort)
       reject(new LauncherCancelledError())
     }
+    // RFC-254: this sleep resolves ONLY via the timer, so it must stay ref'd —
+    // unref'd timers never fire on Windows Bun once the loop is otherwise idle
+    // (see rfc254-no-unref-deadline-guard.test.ts). Abort clears it.
     const timer = setTimeout(() => {
       signal?.removeEventListener('abort', abort)
       resolve()
     }, milliseconds)
-    timer.unref?.()
     signal?.addEventListener('abort', abort, { once: true })
     void Promise.resolve().then(() => {
       if (signal?.aborted === true) abort()
@@ -1012,13 +1014,20 @@ async function settleWithin(
     () => ({ status: 'fulfilled' }) as const,
     (error: unknown) => ({ status: 'rejected', error }) as const,
   )
-  return Promise.race([
-    observed,
-    new Promise<BoundedSettlement>((resolve) => {
-      const timer = setTimeout(() => resolve({ status: 'timeout' }), milliseconds)
-      timer.unref?.()
-    }),
-  ])
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      observed,
+      new Promise<BoundedSettlement>((resolve) => {
+        // RFC-254: deadline an await depends on — must stay ref'd (unref'd
+        // timers never fire on Windows Bun once the loop is otherwise idle;
+        // see rfc254-no-unref-deadline-guard.test.ts). Cleared in finally.
+        timer = setTimeout(() => resolve({ status: 'timeout' }), milliseconds)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
 }
 
 function stableFailureCode(error: unknown): ExecutionIdentityFailureCode {

@@ -187,8 +187,10 @@ async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Prom
         () => false,
       ),
       new Promise<false>((resolveRace) => {
+        // RFC-254: deadline an await depends on — must stay ref'd (unref'd
+        // timers never fire on Windows Bun once the loop is otherwise idle;
+        // see rfc254-no-unref-deadline-guard.test.ts). Cleared in finally.
         timeoutHandle = setTimeout(() => resolveRace(false), timeoutMs)
-        timeoutHandle.unref?.()
       }),
     ])
   } finally {
@@ -555,6 +557,11 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       const liveChild = child
       const activePlan = plan as SpawnPlan
       let terminating = false
+      // RFC-254: every timer in this escalation chain must stay REF'D — the
+      // race can only settle through the END of the chain, and the SIGKILL in
+      // the middle must actually fire. Unref'd timers never fire on Windows
+      // Bun once nothing ref'd remains on the loop (see
+      // rfc254-no-unref-deadline-guard.test.ts). All cleared on settle.
       const escalate = (): void => {
         if (terminating) return
         terminating = true
@@ -565,9 +572,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
             terminationAlreadyExhausted = true
             resolveReapDeadline({ kind: 'unreaped' })
           }, CHILD_REAP_DEADLINE_MS)
-          reapDeadlineTimer.unref?.()
         }, CHILD_TERM_GRACE_MS)
-        sigkillTimer.unref?.()
       }
       let resolveReapDeadline: (v: { kind: 'unreaped' }) => void = () => {}
       const reapDeadline = new Promise<{ kind: 'unreaped' }>((resolveRace) => {
@@ -576,7 +581,6 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           timedOut = true
           escalate()
         }, timeoutMs)
-        timer.unref?.()
       })
       if (opts.abortSignal !== undefined) {
         if (opts.abortSignal.aborted) {

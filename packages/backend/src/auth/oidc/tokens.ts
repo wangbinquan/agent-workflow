@@ -4,6 +4,7 @@
 // the callback handler can render a friendly 400.
 
 import { jwtVerify, type createRemoteJWKSet, type JWTPayload } from 'jose'
+import { timeoutSignal } from '@/util/timeoutSignal'
 
 export interface TokenResponse {
   access_token: string
@@ -127,6 +128,9 @@ export interface FetchUserinfoInput {
  */
 export async function fetchUserinfo(input: FetchUserinfoInput): Promise<unknown> {
   const fetcher = input.fetcher ?? globalThis.fetch
+  // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows Bun
+  // when the loop is otherwise idle (see util/timeoutSignal.ts).
+  const deadline = timeoutSignal(USERINFO_TIMEOUT_MS)
   const request: RequestInit =
     input.requestStyle === 'post_json'
       ? {
@@ -140,7 +144,7 @@ export async function fetchUserinfo(input: FetchUserinfoInput): Promise<unknown>
             access_token: input.accessToken,
             scope: input.scope ?? '',
           }),
-          signal: AbortSignal.timeout(USERINFO_TIMEOUT_MS),
+          signal: deadline.signal,
         }
       : {
           method: 'GET',
@@ -148,21 +152,31 @@ export async function fetchUserinfo(input: FetchUserinfoInput): Promise<unknown>
             authorization: `Bearer ${input.accessToken}`,
             accept: 'application/json',
           },
-          signal: AbortSignal.timeout(USERINFO_TIMEOUT_MS),
+          signal: deadline.signal,
         }
   let res: Response
+  let raw: string
   try {
-    res = await fetcher(input.userinfoEndpoint, request)
-  } catch (err) {
-    throw new OidcTokenError(
-      `userinfo-fetch-failed transport: ${err instanceof Error ? err.message : String(err)}`,
-      'userinfo-fetch-failed',
-    )
+    try {
+      res = await fetcher(input.userinfoEndpoint, request)
+    } catch (err) {
+      throw new OidcTokenError(
+        `userinfo-fetch-failed transport: ${err instanceof Error ? err.message : String(err)}`,
+        'userinfo-fetch-failed',
+      )
+    }
+    if (!res.ok) {
+      throw new OidcTokenError(
+        `userinfo-fetch-failed status=${res.status}`,
+        'userinfo-fetch-failed',
+      )
+    }
+    // The signal covers the BODY read too (a stalled host can send headers and
+    // stop), so the timer stays armed until the body is fully in hand.
+    raw = await readBodyCapped(res, USERINFO_MAX_BODY_BYTES)
+  } finally {
+    deadline.cancel()
   }
-  if (!res.ok) {
-    throw new OidcTokenError(`userinfo-fetch-failed status=${res.status}`, 'userinfo-fetch-failed')
-  }
-  const raw = await readBodyCapped(res, USERINFO_MAX_BODY_BYTES)
   let json: unknown
   try {
     json = JSON.parse(raw)

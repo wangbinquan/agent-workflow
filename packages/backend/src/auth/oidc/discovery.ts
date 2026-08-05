@@ -5,6 +5,8 @@
 // and /test moved to the resolver-backed probe (services/oidcProviders.ts).
 // Pure HTTP; no DB writes.
 
+import { timeoutSignal } from '@/util/timeoutSignal'
+
 export interface OidcMetadata {
   issuer: string
   authorization_endpoint: string
@@ -34,19 +36,27 @@ export async function fetchDiscoveryDocument(
 ): Promise<Partial<OidcMetadata>> {
   const trimmed = issuerUrl.replace(/\/$/, '')
   const url = `${trimmed}/.well-known/openid-configuration`
-  const res = await fetcher(url, {
-    method: 'GET',
-    headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-  })
-  if (!res.ok) {
-    throw new Error(`oidc-discovery-failed status=${res.status}`)
-  }
+  // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows Bun
+  // when the loop is otherwise idle (see util/timeoutSignal.ts). Covers the
+  // body read too, hence cancelled only after json() settles.
+  const deadline = timeoutSignal(DISCOVERY_TIMEOUT_MS)
   let json: unknown
   try {
-    json = await res.json()
-  } catch {
-    throw new Error('oidc-discovery-not-json')
+    const res = await fetcher(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+      signal: deadline.signal,
+    })
+    if (!res.ok) {
+      throw new Error(`oidc-discovery-failed status=${res.status}`)
+    }
+    try {
+      json = await res.json()
+    } catch {
+      throw new Error('oidc-discovery-not-json')
+    }
+  } finally {
+    deadline.cancel()
   }
   if (typeof json !== 'object' || json === null || Array.isArray(json)) {
     throw new Error('oidc-discovery-not-object')

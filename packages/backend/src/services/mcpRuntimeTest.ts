@@ -637,8 +637,10 @@ export class McpRuntimeTestService {
       await Promise.race([
         Promise.allSettled(pending),
         new Promise<void>((resolvePromise) => {
+          // RFC-254: deadline an await depends on — must stay ref'd (unref'd
+          // timers never fire on Windows Bun once the loop is otherwise idle;
+          // see rfc254-no-unref-deadline-guard.test.ts). Cleared just below.
           timer = setTimeout(resolvePromise, Math.max(0, budgetMs))
-          timer.unref?.()
         }),
       ])
       if (timer !== undefined) clearTimeout(timer)

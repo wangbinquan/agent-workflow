@@ -1061,8 +1061,14 @@ async function settlesDistillerWithin(
         () => false,
       ),
       new Promise<false>((resolve) => {
+        // RFC-254: this deadline must stay REF'D. The await above cannot settle
+        // until either the child exits or this timer fires; unref'ing it told
+        // the event loop "don't stay alive for me", and on Windows Bun an
+        // unref'd timer never fires once nothing ref'd remains — the race
+        // wedged forever (bun test froze mid-suite; 15-line repro in
+        // rfc254-no-unref-deadline-guard.test.ts). The timer is cleared in the
+        // finally below, so it holds the loop for at most timeoutMs.
         timeoutHandle = setTimeout(() => resolve(false), timeoutMs)
-        timeoutHandle.unref?.()
       }),
     ])
   } finally {
@@ -1207,6 +1213,11 @@ export async function defaultDistillerSpawn(
   let stderr = ''
   let cleanupHandedOff = false
   try {
+    // RFC-254: every timer in this escalation chain must stay REF'D — the race
+    // below can only settle through the end of the chain, and the SIGKILL in
+    // the middle must actually fire. Unref'd timers never fire on Windows Bun
+    // once nothing ref'd remains on the loop (see
+    // rfc254-no-unref-deadline-guard.test.ts). All cleared in the finally.
     const reapDeadline = new Promise<{ kind: 'unreaped' }>((resolve) => {
       timeoutHandle = setTimeout(() => {
         timedOut = true
@@ -1217,11 +1228,8 @@ export async function defaultDistillerSpawn(
             terminationAlreadyExhausted = true
             resolve({ kind: 'unreaped' })
           }, DISTILLER_REAP_DEADLINE_MS)
-          reapDeadlineHandle.unref?.()
         }, DISTILLER_DRAIN_GRACE_MS)
-        sigkillHandle.unref?.()
       }, input.timeoutMs)
-      timeoutHandle.unref?.()
     })
     stdoutPump = startCappedDistillerStream(child.stdout as ReadableStream<Uint8Array>)
     stderrPump = startCappedDistillerStream(child.stderr as ReadableStream<Uint8Array>)
@@ -1243,13 +1251,16 @@ export async function defaultDistillerSpawn(
     }
     childReaped = true
     exitCode = exitOutcome.code
+    let drainTimer: ReturnType<typeof setTimeout> | null = null
     ;[stdout, stderr] = await Promise.race([
       Promise.all([stdoutPump.done, stderrPump.done]),
       new Promise<[string, string]>((resolve) => {
-        const timer = setTimeout(() => resolve(['', '']), DISTILLER_DRAIN_GRACE_MS)
-        timer.unref?.()
+        // RFC-254: deadline an await depends on — must stay ref'd (see
+        // rfc254-no-unref-deadline-guard.test.ts). Cleared just below.
+        drainTimer = setTimeout(() => resolve(['', '']), DISTILLER_DRAIN_GRACE_MS)
       }),
     ])
+    if (drainTimer !== null) clearTimeout(drainTimer)
     if (timedOut) {
       throw new Error(`distiller timeout after ${input.timeoutMs}ms`)
     }

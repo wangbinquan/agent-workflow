@@ -132,8 +132,10 @@ async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Prom
         () => false,
       ),
       new Promise<false>((resolve) => {
+        // RFC-254: deadline an await depends on — must stay ref'd (unref'd
+        // timers never fire on Windows Bun once the loop is otherwise idle;
+        // see rfc254-no-unref-deadline-guard.test.ts). Cleared in finally.
         timeoutHandle = setTimeout(() => resolve(false), timeoutMs)
-        timeoutHandle.unref?.()
       }),
     ])
   } finally {
@@ -413,6 +415,14 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
       }
 
       const liveChild = child
+      // RFC-254: every timer in this escalation chain must stay REF'D. The
+      // race below can only settle through `resolve({kind:'unreaped'})`, which
+      // sits at the END of the chain — and the SIGKILL in the middle is a side
+      // effect that must actually fire. On Windows Bun an unref'd timer never
+      // fires once nothing ref'd remains on the loop, so unref'ing these meant
+      // "if the child wedges quietly, neither the kill nor the bound happens"
+      // (see rfc254-no-unref-deadline-guard.test.ts). All three are cleared on
+      // the settle path, so they hold the loop only while a reap is in flight.
       const reapDeadline = new Promise<{ kind: 'unreaped' }>((resolve) => {
         timer = setTimeout(() => {
           timedOut = true
@@ -425,11 +435,8 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
               terminationAlreadyExhausted = true
               resolve({ kind: 'unreaped' })
             }, CHILD_REAP_DEADLINE_MS)
-            reapDeadlineTimer.unref?.()
           }, CHILD_TERM_GRACE_MS)
-          sigkillTimer.unref?.()
         }, timeoutMs)
-        timer.unref?.()
       })
 
       // drain stdout (parse events) + stderr (auth/model signatures), both capped.
