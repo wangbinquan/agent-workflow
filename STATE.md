@@ -303,6 +303,28 @@ argv 契约 + Node 兼容守门 + shared 套件 + typecheck + 单二进制与 st
 
 - doctor。
 
+**2026-08-06 · verified-path 首簇在 Windows 上变绿（T39 + T40a）**：把「不写一个 shell
+键」证伪后长期挂着的两条 verified-path 产品前置落地。**T39（`b5657792`）**——`snapshotRuntimeBinary`
+在 win32 保留源扩展名（`.exe`/`.cmd`/`.ps1`），digest 仍是字节哈希不含文件名、信任边界不动；
+纯函数 `snapshotExecutableExtension` 带 `endsWith` 防双后缀（verified opencode 已经 EXECUTABLE_SUFFIX_FOR_HOST
+预置后缀，不能再叠），6 例双平台单测，RFC-224/227 资格套件 116/0，POSIX 全量 no-op。**T40a
+（`e804dfff`）**——研究**推翻** `fileTrust.ts` 头部「ino 在 NTFS 上为 0/不稳」旧断言：实测 Bun
+1.3.14 / Win 11 上 `statSync(path,{bigint:true})` 的 `dev`/`ino` 非零、跨 stat 稳定、逐文件相异、
+fstat==lstat 一致（Bun 从 `GetFileInformationByHandle` 的 VolumeSerialNumber+FileIndex 填充，正是
+TOCTOU 身份复检要的对）。故**身份**半无需 DACL/FFI——`assertSameFileIdentity` 改 win32 也
+authoritative（比对真 index，`ino===0` FAT/网络盘 fail-closed），POSIX 严格 no-op。**这正是 T39
+的解锁件**：`binarySnapshot` 只依赖身份半，两者组合后快照在 Windows 上从 `reason:'changed'` 变成功。
+**实测 Windows：rfc135-runtimes-status + rfc254-file-trust + rfc254-snapshot-executable-extension
+= 37 pass / 2 skip / 0 fail**（rfc135 此前 8 红）——**首个变绿的 Windows verified/probe 测试簇**。
+POSIX 后端全量 8986 pass / 0 fail 复验 no-op。**同轮清掉前端 windows 假红（`26d4a778`）**：新加的
+`windows-latest` 前端 job 跑 OS 无关的 happy-dom 测试但 runner 慢 ~2-4x，三条（session-attempts-picker
+撞 5000ms testTimeout、tasks-list-children / mcps-split-page 撞 TL 1000ms asyncUtilTimeout）撞默认
+超时——抬高天花板（testTimeout/hookTimeout→20000、asyncUtilTimeout→5000）全平台一致，非掩盖（正确
+测试首帧即解析、真卡死仍失败）。**剩余最大阻塞 = T40b（win32 file PRIVACY，DACL/FFI）**：`mode` 在
+Windows 合成（可写文件恒 0o666 与 ACL 无关），privacy 断言仍 win32 fail-closed ⇒ store-hygiene/launcher-hygiene
+簇（batch 09 rfc224 约 19 条）在 Windows 仍红，须读 DACL（advapi32 `GetNamedSecurityInfoW`），含 ARM64
+`bun:ffi dlopen()` 不可用的诚实降级——工作量最大、需独立研究 + 设计门。plan T39/T40a/T40b 已分列。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
