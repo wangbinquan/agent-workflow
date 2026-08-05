@@ -1007,24 +1007,36 @@ P1——而它们全是 bun 自己那个超时回收的下游。** 这类误导�
   整份算到**最后一个文件**头上（本次 `rfc205-git-credential` 一度显示 25 = 自身 3 +
   汇总 22）。归属统计要截到**最后一个文件标记之前**。
 
-## Windows 上后端全量跑会**卡死**，因此至今没有一份完整的 Windows 失败清单（2026-08-05）
+## ~~Windows 上后端全量跑会卡死~~ → **根因已抓到并修掉：unref 的 deadline 定时器**（2026-08-05，**已修**）
 
-`bun test --isolate --randomize packages/backend/tests` 在取样机上跑到 **181/1033 个文件**
-就停住：父进程还在、**在烧 CPU**，但**没有子进程**、输出文件几分钟一字不增。这不是某个
-测试超时（超时会打印并继续），是 runner 本身卡在换文件的缝上。上一节提到的三个被遗弃的
-进程是同一个形态的历史残留（其中两个跑了近 6 小时），也就是说**此前每一次「全量取样」
-大概率都没跑完，只是没人回头看它退没退**。
+原记录：`bun test --isolate --randomize` 跑到 181/1033 个文件停住，父进程烧 CPU、无子进程、
+输出冻结；三个被遗弃的 6 小时进程是同一形态。原条目还写了「卡住的位置随 `--randomize` 变，
+不要按最后打印的文件归因」——**这句是错的**：分批 sweep（排序、非随机）在同一个文件停下，
+单独跑该文件 12 分钟必卡，位置从来不是随机的，是 `memory-distiller.test.ts`。
 
-- ⏳ **(P1)** 想要可信的 Windows 全量清单，先改成**分批跑**（把文件列表切成 ~100 个一批、
-  每批各写各的输出文件、批间确认进程已退出）。卡死只损失一批，且能定位到批。
-- 卡住的位置随 `--randomize` 变（本次停在 `memory-distiller.test.ts` 之后），所以**不要**
-  按「最后一个打印的文件」去归因某个测试文件。
-- 已取到的 181 个文件里有 **89 条红**，红最集中的是：`rfc224-store-hygiene`(19)、
-  `rfc253-script-execution`(13)、`rfc248-materialize-group`(8)、
-  `sandbox-allowback-audit-2026-08-04`(7)、`rfc252-git-hardening`(6)、
-  `rfc223-pr5-boot-restore-wiring`(6)、`rfc255-custom-provider-enumeration`(5)、
-  `migration-0138-rfc257-webhook-triggers`(5)。这是**部分**清单，只能当作下一批工作的
-  入口，不能当作总数。
+**根因（15 行可复现，Bun 平台 bug 的两张脸）**：Windows 的 Bun 上，**事件循环上不再有
+ref 住的东西时，unref 掉的定时器永远不触发**——
+①`Promise.race` 里 unref 的 deadline（`settlesDistillerWithin` 形态）永不 settle，
+`bun test` 冻死（macOS 同用例 22ms 过）；
+②`AbortSignal.timeout` 内部定时器同为 unref 语义且不给句柄，只 await 它的 abort 同样
+冻死（`rfc208` 的 PlantUML never-settling 测试即此，batch 07/08/11 的 wedge 源）。
+
+**生产语义比测试更糟**：这些 unref 的 deadline 里有 SIGKILL 升级链（runtimeSmoke /
+systemAgentRun / memoryDistiller）——子进程 wedge 时**杀它的定时器自己也不触发**；还有
+全部对外 fetch 超时（OIDC ×3 / PlantUML / stop 控制通道）——黑洞主机上的 fetch 在空闲
+daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环通常另有 ref 的东西掩着。
+
+**修法**：12 处（6 文件）deadline 去 unref + settle 路径 clear；`AbortSignal.timeout`
+全下，换 `util/timeoutSignal.ts`（ref 定时器 + 显式 cancel）；守卫
+`rfc254-no-unref-deadline-guard.test.ts` 双禁（配对形态 + `AbortSignal.timeout`），
+上线即抓到手数漏掉的两处，两类变异实证均做。**Windows 复测：两个必卡文件 + 守卫
+39 pass / 0 fail / 2.05s 干净退出**（修前 12 分钟 wedge）。
+
+- 已取到的部分清单（修 wedge 前 9 个完成批，合计 **约 340 条红**）最集中：
+  `rfc224-store-hygiene`(19)、`review-state-machine`(15)、`rfc253-script-execution`(13)、
+  `review-iterate-sibling-cascade`(9)、`rfc135-runtimes-status`(8)、`plugins-http`(8)。
+  batch 09 一批就 143 条，说明 rfc224/253 簇是下一个大头。完整 13/13 批清单在四个
+  wedged batch 复跑完后收账（见 STATE）。
 
 ## `test-command-helper` 在设了 `FORCE_COLOR` 的环境里必红（2026-08-05）
 
@@ -1188,3 +1200,12 @@ CI run `31012398133`（本 commit 为纯前端「结构变更」页签视图修�
 按归属纪律未代改。处置建议归 RFC-254 Windows e2e 预算治理：output-kinds fixture 的
 per-node timeout 需要按 Windows 腿放宽（或 fixture 声明平台预算）,并查 retry 路径
 对「超时已产生重试行」现场的幂等性。
+
+### 次日内第二次复现(同日,`37838d53`,纯文档 diff)
+
+`37838d53`(+20 行 markdown,零代码)CI 唯一红 = **Windows** frontend shard 1/3,
+两条既有 vitest 用例 5s 超时:`clarify-detail-route.test.tsx:222` 与
+`skills-split-page.test.tsx:421`。纯文档 diff 也能把 Windows 腿打红,坐实该腿的
+间歇超时是**环境性**(bun/vitest 默认 5s 预算贴共享 runner 噪音线),与上一条
+e2e shard 的超时同族。均归 RFC-254 T32 预算治理域;两个文件此前不在其"贴上限
+候选"名单里,治理时按同一负载法补测。
