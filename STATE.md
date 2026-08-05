@@ -203,9 +203,12 @@ iso 从一个已删除的目录上建，报出那四行**点名 git 的**错误�
 **并订正一处**：`task-start-git-identity` 的 3 条红不是预算
 （它本就有预算），是 `stub-opencode-env.sh` 这个 `.sh` 假二进制 EFTYPE——即「**A 类清零**」
 只在当时取样到的文件上成立、**不是全仓成立**，`tests/` 下写 shell shebang 的还有几十个。
-**CI 判定**：`28d32465` 的 CI 唯一红是 Windows e2e 的 `intent-builder` axe `color-contrast`
-（前端与 `e2e/` 零改动，不可归因，已登记）；`c2096da9`（含本轮两个 commit）**全绿**
-——所以那条是**间歇**红不是常驻红（已观察 2 红 1 绿），backlog 口径已按此订正。
+**CI 判定**：本轮四个 commit 里，`c2096da9`（含前两个）与 `0c6c701e` **全绿**；
+`28d32465` 与 `d149da58` 的唯一红都是 Windows e2e 的 `intent-builder` axe
+`color-contrast`（`e2e/intent-builder.spec.ts:193`，首跑 + retry 都红）。**四次观察三红
+一绿，四次的 diff 都不含 `packages/frontend/src` 与 `e2e/`** ⇒ 高频间歇、无代码可归因、
+只在 Windows 腿，正在反复把 `main` 打红。已登记（含观察表）；**下一步是先让那条断言
+打印节点与前景/背景色**再谈处置——现在只打印 `v.id`，三次红都拿不到可定性的证据。
 **相邻套件另有 7 条真红（安静机器上就红），已修并在 Windows 上复测 80 pass / 0 fail**：
 `rfc213-worktree-capture` 的 5 条 EBUSY 拆卸（换 `removeTempDirSync` + 逐目录 try/catch
 ——旧写法在第一个忙目录就中断循环）、同文件 1 条真断言失败（`chmod 000` 在 Windows 上是
