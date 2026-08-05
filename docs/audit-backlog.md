@@ -1058,6 +1058,20 @@ daemon 里**永不超时**，恰是这些超时存在的目的。POSIX 上循环
   **真缺陷候选**（attached-but-unstaged submodule 的拓扑捕获在 Windows 上没认出来，
   方向大概率是 `.git` 文件 gitdir 指针或路径拼写），不是测试卫生。
 
+  ### ⏳ **(P1，真缺陷候选) verified 二进制快照在 Windows 上丢扩展名 ⇒ 快照副本不可执行**
+
+  查 `rfc135-runtimes-status` 那 8 条红时挖到的，**比测试更深**：`snapshotRuntimeOpencodeBinary`
+  （`services/runtime/binarySnapshot.ts:182`）把 `command[0]` 用 `copyFile` 原样拷到
+  `snapshotPath` 后**重新执行那份副本**，而快照名是无扩展名的 `opencode`
+  （`helpers/runtimeOpencodeFixture.ts:20`）。POSIX 上无扩展照跑；Windows 上一个内容是
+  批处理/可执行、但**没有 `.exe`/`.cmd` 扩展名**的文件既进不了 PATHEXT 也不被 `CreateProcess`
+  当可执行，于是 `--version` 探测失败、整行 `ok:false`。这不是 rfc135 夹具的问题——夹具的
+  `.cmd` 独立 spawn 实测 exit 0 stdout 精确；是**快照路径本身在 Windows 上落地了一个跑不起来
+  的副本**。因为它在 RFC-224/227 的 verified 执行链上（不只探测），影响面到 opencode
+  正常拉起，需按能力收缩型 RFC 的证据门核实后修（快照名保留源扩展名 / 或按平台补扩展）。
+  **rfc135 的换缝改动已回滚**（8 条改到 6 条真红 + 2 gated 后，剩下的 6 条全部撞这条产品缺陷，
+  不该用一个依赖未修产品路径的测试去掩盖它）；该文件的 A 类移植待此缺陷修复后再做。
+
   **已从清单里清掉的两个大簇（2026-08-05 同日）**：
   1. `rfc224-verified-launcher` 21 条（清单最大单点）——两层夹具根因（POSIX 字面量过
      不了 canonical 校验 + sealed-shell 键的平台事实），**两平台 21/21 绿**；同形字面量
@@ -1254,7 +1268,6 @@ per-node timeout 需要按 Windows 腿放宽（或 fixture 声明平台预算）
 间歇超时是**环境性**(bun/vitest 默认 5s 预算贴共享 runner 噪音线),与上一条
 e2e shard 的超时同族。均归 RFC-254 T32 预算治理域;两个文件此前不在其"贴上限
 候选"名单里,治理时按同一负载法补测。
-
 
 ### 第三次复现(2026-08-06,superseding run 31026903962,commit 48dd201a)
 
