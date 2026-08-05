@@ -49,6 +49,11 @@ import {
 const HighlightedMembers = createContext<ReadonlySet<string>>(new Set())
 // RFC-085 — opens the call-chain (5th tab) rooted at a changed method row (⎇);
 // undefined when the host doesn't offer call chains (keeps the graph standalone).
+// RFC-258 — graph→source linking: member rows offer a ‹› jump when a handler
+// is mounted (the full-screen drilldown's source pane).
+const OpenSourceEntry = createContext<
+  ((target: { structuralPath: string; qualifiedName: string }) => void) | undefined
+>(undefined)
 const CallChainEntry = createContext<((root: { ref: string; label: string }) => void) | undefined>(
   undefined,
 )
@@ -69,6 +74,7 @@ function CardNode({ data }: NodeProps) {
   const card = data.card as GraphCard
   const hlMembers = useContext(HighlightedMembers)
   const openCallChain = useContext(CallChainEntry)
+  const openSource = useContext(OpenSourceEntry)
   const ctClass = card.changeType !== undefined ? ` sg-card--ct-${card.changeType}` : ''
   const changedClass = card.isChanged ? ' sg-card--changed' : ' sg-card--caller'
   // RFC-086 — anonymous types (title already reads `«anonymous» <base>`) get a
@@ -131,6 +137,25 @@ function CardNode({ data }: NodeProps) {
                             ⎇
                           </button>
                         )}
+                      {openSource !== undefined && (
+                        <button
+                          type="button"
+                          className="sg-card__callchain"
+                          title={t('tasks.structOpenSource')}
+                          aria-label={t('tasks.structOpenSource')}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const ref = refFromMemberId(m.id)
+                            const hash = ref.indexOf('#')
+                            openSource({
+                              structuralPath: hash < 0 ? ref : ref.slice(0, hash),
+                              qualifiedName: hash < 0 ? '' : ref.slice(hash + 1),
+                            })
+                          }}
+                        >
+                          ‹›
+                        </button>
+                      )}
                     </li>
                   )
                 })}
@@ -273,9 +298,11 @@ function PackageFlow({ graph }: { graph: PackageGraph }) {
 function ClassFlow({
   graph,
   onOpenCallChain,
+  onOpenSource,
 }: {
   graph: StructureGraph
   onOpenCallChain?: (root: { ref: string; label: string }) => void
+  onOpenSource?: (target: { structuralPath: string; qualifiedName: string }) => void
 }) {
   const initialNodes = useMemo<Node[]>(
     () => [
@@ -352,37 +379,39 @@ function ClassFlow({
 
   return (
     <HighlightedMembers.Provider value={highlightedMembers}>
-      <CallChainEntry.Provider value={onOpenCallChain}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgeClick={onEdgeClick}
-          onNodeClick={onNodeClick}
-          onPaneClick={onPaneClick}
-          nodeTypes={CLASS_NODE_TYPES}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-          fitView
-          fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
-          minZoom={0.15}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background />
-          <MiniMap
-            pannable
-            zoomable
-            ariaLabel={null}
-            nodeColor={(n) =>
-              n.type === 'card'
-                ? changeTypeColor((n.data?.card as GraphCard | undefined)?.changeType)
-                : 'transparent'
-            }
-          />
-          <Controls showInteractive={false} />
-        </ReactFlow>
-      </CallChainEntry.Provider>
+      <OpenSourceEntry.Provider value={onOpenSource}>
+        <CallChainEntry.Provider value={onOpenCallChain}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgeClick={onEdgeClick}
+            onNodeClick={onNodeClick}
+            onPaneClick={onPaneClick}
+            nodeTypes={CLASS_NODE_TYPES}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+            fitView
+            fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
+            minZoom={0.15}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background />
+            <MiniMap
+              pannable
+              zoomable
+              ariaLabel={null}
+              nodeColor={(n) =>
+                n.type === 'card'
+                  ? changeTypeColor((n.data?.card as GraphCard | undefined)?.changeType)
+                  : 'transparent'
+              }
+            />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        </CallChainEntry.Provider>
+      </OpenSourceEntry.Provider>
     </HighlightedMembers.Provider>
   )
 }
@@ -390,10 +419,13 @@ function ClassFlow({
 export function StructuralGraph({
   data,
   onOpenCallChain,
+  onOpenSource,
 }: {
   data: StructuralDiff
   /** RFC-085 — open the call chain rooted at a changed method row (⎇). */
   onOpenCallChain?: (root: { ref: string; label: string }) => void
+  /** RFC-258 — open the split source pane at a member's definition (‹›). */
+  onOpenSource?: (target: { structuralPath: string; qualifiedName: string }) => void
 }) {
   const { t } = useTranslation()
   const [level, setLevel] = useState<'package' | 'class'>('package')
@@ -460,7 +492,11 @@ export function StructuralGraph({
           {level === 'package' ? (
             <PackageFlow graph={pkgGraph} />
           ) : (
-            <ClassFlow graph={classGraph} onOpenCallChain={onOpenCallChain} />
+            <ClassFlow
+              graph={classGraph}
+              onOpenCallChain={onOpenCallChain}
+              onOpenSource={onOpenSource}
+            />
           )}
         </ReactFlowProvider>
       </div>

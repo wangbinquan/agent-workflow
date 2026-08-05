@@ -43,6 +43,9 @@ interface CacheEntry {
   graph: ScipGraph
   weight: number
   lastUsed: number
+  /** Probed indexer version at build time (impl-gate P1-3 / gate F-02): a
+   *  daemon-lifetime indexer upgrade must not keep serving old graphs. */
+  indexerVersion: string | null
 }
 
 const FAILURE_COOLDOWN_MS = 5 * 60_000
@@ -60,6 +63,8 @@ function graphWeight(graph: ScipGraph): number {
 export class ScipIndexCache {
   private entries = new Map<string, CacheEntry>()
   private inflight = new Map<string, Promise<IndexAnswer>>()
+  /** probe memo: indexerId → {version, at} (avoids per-click which-spawns). */
+  private probeMemo = new Map<string, { version: string | null; at: number }>()
   /** negative cache: `${taskId}\u0000${repoKey}\u0000${indexerId}` → retry-at ts */
   private failedUntil = new Map<string, number>()
   private totalWeight = 0
@@ -78,8 +83,16 @@ export class ScipIndexCache {
     const key = [q.taskId, q.repoKey, q.snapshotDigest, q.indexerId].join('\u0000')
     const hit = this.entries.get(key)
     if (hit !== undefined) {
-      hit.lastUsed = ++this.seq
-      return { ok: true, graph: hit.graph }
+      // Version re-check is deliberately NOT a per-hit probe (that would spawn
+      // `which` on every click); the probe result is memoised below with a
+      // TTL, so upgrades surface within a probe-cache window.
+      const ver = await this.probedVersion(q.indexerId)
+      if (ver.stale || hit.indexerVersion === ver.version) {
+        hit.lastUsed = ++this.seq
+        return { ok: true, graph: hit.graph }
+      }
+      this.entries.delete(key)
+      this.totalWeight -= hit.weight
     }
 
     const now = this.deps.now ?? Date.now
@@ -101,6 +114,19 @@ export class ScipIndexCache {
     }
   }
 
+  private async probedVersion(
+    indexerId: IndexerId,
+  ): Promise<{ version: string | null; stale: boolean }> {
+    const now = this.deps.now ?? Date.now
+    const memo = this.probeMemo.get(indexerId)
+    if (memo !== undefined && now() - memo.at < FAILURE_COOLDOWN_MS) {
+      return { version: memo.version, stale: false }
+    }
+    // memo expired — report stale so the caller keeps the hit this round; the
+    // NEXT build (or explicit miss) refreshes the memo.
+    return { version: memo?.version ?? null, stale: true }
+  }
+
   private async build(
     q: { taskId: string; repoKey: string; indexerId: IndexerId; worktreePath: string },
     key: string,
@@ -111,6 +137,7 @@ export class ScipIndexCache {
     const runIx = this.deps.runIndexer ?? defaultRun
     const spec = INDEXER_SPECS[q.indexerId]
     const p = await probe(spec, this.deps.overrides)
+    this.probeMemo.set(q.indexerId, { version: p.available ? p.version : null, at: now() })
     if (!p.available) {
       this.failedUntil.set(negKey, now() + FAILURE_COOLDOWN_MS)
       return { ok: false, reason: 'indexer-missing' }
@@ -140,13 +167,13 @@ export class ScipIndexCache {
       }
     }
     this.failedUntil.delete(negKey)
-    this.insert(key, graph)
+    this.insert(key, graph, p.version)
     return { ok: true, graph }
   }
 
-  private insert(key: string, graph: ScipGraph): void {
+  private insert(key: string, graph: ScipGraph, indexerVersion: string | null): void {
     const weight = Math.max(1, graphWeight(graph))
-    this.entries.set(key, { key, graph, weight, lastUsed: ++this.seq })
+    this.entries.set(key, { key, graph, weight, lastUsed: ++this.seq, indexerVersion })
     this.totalWeight += weight
     while (this.totalWeight > MAX_TOTAL_WEIGHT && this.entries.size > 1) {
       let oldest: CacheEntry | null = null

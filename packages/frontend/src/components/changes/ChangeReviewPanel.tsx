@@ -9,10 +9,25 @@
 // never blocks the diff (design §6). Viewed progress persists in the exact
 // pre-merge localStorage format so existing review state survives.
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { StructuralDiff, TaskDiff } from '@agent-workflow/shared'
-import { buildChangeGroups, changeEntryKey, type ChangeGroup } from '@agent-workflow/shared'
+import type {
+  CodePosition,
+  StructuralDiff,
+  SymbolResolution,
+  TaskDiff,
+} from '@agent-workflow/shared'
+import {
+  buildChangeGroups,
+  changeEntryKey,
+  repoKeyWire,
+  type ChangeGroup,
+} from '@agent-workflow/shared'
+import { api } from '@/api/client'
+import { CODE_NAV_EMPTY, codeNavReducer, codeNavTop, type CodeNavEntry } from '@/lib/codeNav'
+import { CodeViewer } from '@/components/code/CodeViewer'
+import { SymbolMenu } from '@/components/code/SymbolMenu'
 import { splitByRepo } from '@/components/DiffViewer'
 import { Select } from '@/components/Select'
 import { Segmented } from '@/components/Segmented'
@@ -178,11 +193,28 @@ export function ChangeReviewPanel({
     setDrill('graph')
   }, [])
   const jumpToFile = useCallback(
-    (structuralFilePath: string) => {
+    (structuralFilePath: string, line?: number) => {
       setDrill(null)
-      if (entryByKey.has(structuralFilePath)) setSelectedKey(structuralFilePath)
+      if (entryByKey.has(structuralFilePath)) {
+        setSelectedKey(structuralFilePath)
+        setExternalFile(null) // impl-gate P2-9 — leave the external view
+        // RFC-258 — impact rows carry the caller's line: land in the full view
+        // focused on it instead of the top of the hunk list.
+        if (line !== undefined) {
+          setCodeView('full')
+          setFullFocus(line)
+        }
+      } else {
+        // impl-gate P1-5 — deep impact callers are OFTEN unchanged files;
+        // show them read-only instead of silently doing nothing.
+        const entry = entries.find((e) => e.key === structuralFilePath)
+        const repoKey = entry?.repoLabel ?? ''
+        setExternalFile({ repoKey, filePath: structuralFilePath, side: 'worktree' })
+        setCodeView('full')
+        setFullFocus(line ?? null)
+      }
     },
-    [entryByKey],
+    [entryByKey, entries],
   )
   const jumpToRef = useCallback(
     (ref: string) => {
@@ -202,6 +234,182 @@ export function ChangeReviewPanel({
       if (hit !== undefined) setSelectedKey(hit.key)
     },
     [changeGroups, entries, entryByKey],
+  )
+
+  // ---- RFC-258: source navigation session + symbol menu ----
+  const [codeView, setCodeView] = useState<'hunk' | 'full'>('hunk')
+  const [fullFocus, setFullFocus] = useState<number | null>(null)
+  /** Task-external file rendered read-only in the detail area (breadcrumb is
+   *  the only way in/out). */
+  const [externalFile, setExternalFile] = useState<{
+    repoKey: string
+    filePath: string
+    side: 'base' | 'worktree'
+  } | null>(null)
+  const [nav, dispatchNav] = useReducer(codeNavReducer, CODE_NAV_EMPTY)
+  const [menu, setMenu] = useState<{
+    anchor: { x: number; y: number }
+    params: {
+      path: string
+      /** canonical repo key ('' = root; wire-encoded on send — P0-2/F-04). */
+      repo: string
+      side: 'base' | 'worktree'
+      line: number
+      col: number
+      name: string
+    }
+  } | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  // leaving the session: switching files by sidebar clears the whole stack
+  const selectFromSidebar = useCallback((key: string) => {
+    setSelectedKey(key)
+    setExternalFile(null)
+    setCodeView('hunk')
+    setFullFocus(null)
+    setMenu(null)
+    dispatchNav({ type: 'clear' })
+  }, [])
+  useEffect(() => {
+    setMenu(null)
+    dispatchNav({ type: 'clear' })
+    setExternalFile(null)
+  }, [taskId])
+
+  const intel = useQuery<SymbolResolution>({
+    queryKey: [
+      'codeIntel',
+      taskId,
+      repoKeyWire(menu?.params.repo ?? ''),
+      menu?.params.path,
+      menu?.params.side,
+      menu?.params.line,
+      menu?.params.col,
+      menu?.params.name,
+      engineMode,
+      structural.data?.contentDigest ?? '', // snapshot hint (F-16)
+    ],
+    queryFn: ({ signal }) => {
+      const p = menu?.params
+      if (p === undefined) throw new Error('unreachable')
+      const qs = new URLSearchParams({
+        path: p.path,
+        side: p.side,
+        line: String(p.line),
+        col: String(p.col),
+        name: p.name,
+        mode: engineMode,
+      })
+      qs.set('repo', repoKeyWire(p.repo))
+      return api.get(
+        `/api/tasks/${encodeURIComponent(taskId)}/code-intel?${qs.toString()}`,
+        undefined,
+        signal,
+      )
+    },
+    enabled: menu !== null,
+    retry: false,
+  })
+
+  const currentNavEntry = useCallback((): CodeNavEntry => {
+    // impl-gate P1-8 — snapshot the live scroll offset of whichever view is
+    // showing, so pop restores the exact reading position (F-17).
+    const scrollEl = panelRef.current?.querySelector('.changes__diff, .code-viewer__scroll')
+    const scrollTop = scrollEl instanceof HTMLElement ? scrollEl.scrollTop : undefined
+    if (externalFile !== null) {
+      return { ...externalFile, viewMode: 'full', line: fullFocus ?? undefined, scrollTop }
+    }
+    const entry = selectedKey !== null ? entryByKey.get(selectedKey) : undefined
+    return {
+      repoKey: entry?.repoLabel ?? '',
+      side: 'worktree',
+      filePath: entry?.filePath ?? '',
+      viewMode: codeView,
+      line: fullFocus ?? undefined,
+      scrollTop,
+    }
+  }, [externalFile, selectedKey, entryByKey, codeView, fullFocus])
+
+  const navigateTo = useCallback(
+    (pos: CodePosition) => {
+      dispatchNav({ type: 'push', from: currentNavEntry() })
+      setMenu(null)
+      const key = changeEntryKey(pos.repoKey === '' ? null : pos.repoKey, pos.filePath)
+      if (pos.side === 'worktree' && entryByKey.has(key)) {
+        setSelectedKey(key)
+        setExternalFile(null)
+        setCodeView('full')
+        setFullFocus(pos.startLine)
+      } else {
+        setExternalFile({ repoKey: pos.repoKey, filePath: pos.filePath, side: pos.side })
+        setCodeView('full')
+        setFullFocus(pos.startLine)
+      }
+    },
+    [currentNavEntry, entryByKey],
+  )
+
+  const navigateBack = useCallback(() => {
+    const top = codeNavTop(nav)
+    if (top === null) return
+    dispatchNav({ type: 'pop' })
+    setMenu(null)
+    const key = changeEntryKey(top.repoKey === '' ? null : top.repoKey, top.filePath)
+    if (top.side === 'worktree' && entryByKey.has(key)) {
+      setSelectedKey(key)
+      setExternalFile(null)
+      setCodeView(top.viewMode)
+      setFullFocus(top.line ?? null)
+    } else {
+      setExternalFile({ repoKey: top.repoKey, filePath: top.filePath, side: top.side })
+      setCodeView('full')
+      setFullFocus(top.line ?? null)
+    }
+    // restore the snapshotted scroll offset once the view remounts (P1-8)
+    if (top.scrollTop !== undefined) {
+      requestAnimationFrame(() => {
+        const el = panelRef.current?.querySelector('.changes__diff, .code-viewer__scroll')
+        if (el instanceof HTMLElement) el.scrollTop = top.scrollTop ?? 0
+      })
+    }
+  }, [nav, entryByKey])
+
+  const onIdentifier = useCallback(
+    (hit: {
+      side: 'base' | 'worktree'
+      line: number
+      col: number
+      name: string
+      clientX: number
+      clientY: number
+    }) => {
+      const source =
+        externalFile ?? (selectedKey !== null ? entryByKey.get(selectedKey) : undefined)
+      if (source === undefined || source === null) return
+      const filePath = 'filePath' in source ? source.filePath : ''
+      // Keep the ROOT repo's '' explicit (impl-gate P0-2 / gate F-04): the
+      // wire layer encodes it as '.'; collapsing it to null made every
+      // out-of-diff root-repo click 400 on multi-repo tasks.
+      const repo =
+        externalFile !== null
+          ? externalFile.repoKey
+          : (entryByKey.get(selectedKey ?? '')?.repoLabel ?? '')
+      const rect = panelRef.current?.getBoundingClientRect()
+      setMenu({
+        anchor: {
+          x: hit.clientX - (rect?.left ?? 0) + 4,
+          y: hit.clientY - (rect?.top ?? 0) + 4,
+        },
+        params: {
+          path: filePath,
+          repo,
+          side: hit.side,
+          line: hit.line,
+          col: hit.col,
+          name: hit.name,
+        },
+      })
+    },
+    [externalFile, selectedKey, entryByKey],
   )
 
   // Structural keys of every file in the currently-selected file's group
@@ -235,11 +443,14 @@ export function ChangeReviewPanel({
     }
     return order
   }, [changeGroups, entryByKey, expanded])
-  const selectFile = useCallback((key: string) => {
-    setSelectedKey(key)
-    setFocusHunk(null)
-    fileRefs.current.get(key)?.focus()
-  }, [])
+  const selectFile = useCallback(
+    (key: string) => {
+      selectFromSidebar(key)
+      setFocusHunk(null)
+      fileRefs.current.get(key)?.focus()
+    },
+    [selectFromSidebar],
+  )
   const onFileKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLButtonElement>, key: string) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -558,19 +769,57 @@ export function ChangeReviewPanel({
             })}
           </div>
         </aside>
-        <section className="changes__main" aria-labelledby={detailHeadingId}>
+        <section className="changes__main" aria-labelledby={detailHeadingId} ref={panelRef}>
           <h2 id={detailHeadingId} className="sr-only">
-            {selected?.filePath ?? t('tasks.diffNoChanges')}
+            {externalFile?.filePath ?? selected?.filePath ?? t('tasks.diffNoChanges')}
           </h2>
-          {selected !== undefined ? (
+          {nav.stack.length > 0 && (
+            <div className="changes__crumbs" data-testid="code-nav-crumbs">
+              <button type="button" className="btn btn--xs" onClick={navigateBack}>
+                ← {t('tasks.codeNavBack')}
+              </button>
+              <span className="changes__crumbs-path">
+                {externalFile?.filePath ?? selected?.filePath ?? ''}
+              </span>
+            </div>
+          )}
+          {externalFile !== null ? (
+            <CodeViewer
+              taskId={taskId}
+              repoKey={externalFile.repoKey}
+              filePath={externalFile.filePath}
+              side={externalFile.side}
+              focus={fullFocus !== null ? { line: fullFocus } : null}
+              onIdentifierClick={(hit) => onIdentifier({ side: externalFile.side, ...hit })}
+              readonlyBadge
+            />
+          ) : selected !== undefined ? (
             <ChangeFileDetail
               taskId={taskId}
               entry={selected}
               focusHunk={focusHunk}
               onOpenCallChain={openCallChain}
+              codeView={codeView}
+              onCodeViewChange={(v) => {
+                setCodeView(v)
+                if (v === 'hunk') setFullFocus(null)
+              }}
+              fullFocus={fullFocus}
+              onFullFocusChange={(line) => setFullFocus(line)}
+              onIdentifier={onIdentifier}
             />
           ) : (
             <EmptyState title={t('tasks.diffNoChanges')} />
+          )}
+          {menu !== null && (
+            <SymbolMenu
+              resolution={intel.data ?? null}
+              loading={intel.isLoading}
+              error={intel.isError}
+              anchor={menu.anchor}
+              onSelect={navigateTo}
+              onClose={() => setMenu(null)}
+            />
           )}
         </section>
       </div>
@@ -588,6 +837,7 @@ export function ChangeReviewPanel({
         onOpenCallChain={openCallChain}
         onJumpToFile={jumpToFile}
         onBackToGraph={chainFrom === 'graph' ? backToGraph : undefined}
+        engineMode={engineMode}
       />
     </div>
   )

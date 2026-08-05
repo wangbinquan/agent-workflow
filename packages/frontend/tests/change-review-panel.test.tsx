@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '../src/i18n'
 import {
   computeSummary,
@@ -28,6 +28,9 @@ vi.mock('../src/api/client', async () => {
       get: vi.fn().mockImplementation((url: string) => {
         if (url.includes('/change-narrative')) {
           return Promise.reject(new actual.ApiError(404, 'narrative-not-found', 'none'))
+        }
+        if (url.includes('/file-symbols')) {
+          return Promise.resolve({ lang: 'typescript', status: 'ok', symbols: [] })
         }
         if (url.includes('/file-content')) {
           return Promise.resolve({ exists: true, content: '# doc\n', size: 6 })
@@ -436,6 +439,81 @@ describe('RFC-250 ChangeReview semantic boundaries', () => {
     fireEvent.click(header)
     expect(document.activeElement).toBe(header)
     expect(header.getAttribute('aria-expanded')).toBe('false')
+  })
+})
+
+describe('RFC-258 — full-file view + line-level impact jumps', () => {
+  test('code files get the 改动/全文 Segmented; switching renders the CodeViewer shell', async () => {
+    renderPanel({ structuralData: structural() })
+    const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    fireEvent.click(aTab as HTMLElement)
+    const fullBtn = screen.getByRole('radio', { name: /全文|Full file/ })
+    fireEvent.click(fullBtn)
+    await waitFor(() => expect(document.querySelector('.code-viewer')).toBeTruthy())
+    // switching back restores the hunk view
+    fireEvent.click(screen.getByRole('radio', { name: /改动|Changes/ }))
+    expect(document.querySelector('.code-viewer')).toBeNull()
+  })
+
+  test('graph member ‹› opens the split source pane WITHOUT unmounting the graph (F-12 keep-alive)', async () => {
+    renderPanel({ structuralData: structural() })
+    fireEvent.click(screen.getByRole('button', { name: /关系图|Graph/ }))
+    // class level so member rows render
+    const classBtn = [...document.querySelectorAll('.structure-graph__level button')].find((b) =>
+      /类级|Classes/.test(b.textContent ?? ''),
+    )
+    fireEvent.click(classBtn as Element)
+    const src = [...document.querySelectorAll('.sg-card__callchain')].find((b) =>
+      /查看源码|View source/.test(b.getAttribute('title') ?? ''),
+    )
+    expect(src).toBeTruthy()
+    const vpBefore =
+      document.querySelector<HTMLElement>('.react-flow__viewport')?.style.transform ?? ''
+    fireEvent.click(src as Element)
+    expect(await screen.findByTestId('drill-source-pane')).toBeTruthy()
+    // the graph pane is still mounted beside the source pane
+    expect(document.querySelector('.changes__drill-graphpane')).toBeTruthy()
+    expect(document.querySelector('.changes__drill--split')).toBeTruthy()
+    // P1-9① — keep-alive means the viewport transform is BYTE-identical
+    const vpAfter =
+      document.querySelector<HTMLElement>('.react-flow__viewport')?.style.transform ?? ''
+    expect(vpAfter).toBe(vpBefore)
+    // P1-9② — closing the dialog resets the pane (kind→null explicit reset)
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: /关系图|Graph/ }))
+    expect(screen.queryByTestId('drill-source-pane')).toBeNull()
+  })
+
+  test('hunk-owner click keeps its single existing action — no code-intel query (P1-9③/F-11)', async () => {
+    const apiModule = await import('../src/api/client')
+    const spy = apiModule.api.get as ReturnType<typeof vi.fn>
+    renderPanel({ structuralData: structural() })
+    const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    fireEvent.click(aTab as HTMLElement)
+    const owner = document.querySelector('.changes__hunk-owner') as HTMLElement
+    expect(owner).toBeTruthy()
+    const callsBefore = spy.mock.calls.filter((c) => String(c[0]).includes('code-intel')).length
+    fireEvent.click(owner)
+    const callsAfter = spy.mock.calls.filter((c) => String(c[0]).includes('code-intel')).length
+    expect(callsAfter).toBe(callsBefore)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  test('impact drilldown rows carry the caller LINE (filePath:line jump)', () => {
+    renderPanel({
+      structuralData: structural({
+        impact: [
+          {
+            changedSymbolId: 'src/ui/a.ts#A.run:method:1',
+            confidence: 'inferred',
+            callers: [{ filePath: 'src/ui/b.ts', range: { startLine: 3, endLine: 4 } }],
+          },
+        ],
+      }),
+    })
+    fireEvent.click(screen.getByRole('button', { name: /影响面|Impact/ }))
+    const caller = document.querySelector('.changes__impact-caller') as HTMLElement
+    expect(caller.getAttribute('title')).toBe('src/ui/b.ts:3')
   })
 })
 

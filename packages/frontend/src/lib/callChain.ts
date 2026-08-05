@@ -49,6 +49,7 @@ export async function walkChainTree(
         ownerClass: tg.ownerClass ?? null,
         method: tg.label,
         resolution: tg.resolution,
+        ...(tg.ref !== undefined ? { ref: tg.ref } : {}),
         children,
       })
     }

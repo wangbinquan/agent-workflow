@@ -198,6 +198,8 @@
 - **只读 xyflow 图的 edges 千万别放进 `useEdgesState`**：它只在**首渲染** seed 一次——之后 graph 重算（如边类型 checkbox）新边集**永远进不去**；且 xyflow 会在节点短暂未测量时派发 edge-REMOVAL changes，一旦被 `onEdgesChange` 应用，边被永久清空且无人恢复。只读图一律**非受控**：`edges` 直接传 graph 派生的 memo、不传 `onEdgesChange`（`PackageFlow`/`ClassFlow` 现行形态，`structure-graph-render.test.tsx` 源码级锁定）。受控 nodes（measure→layout 需要 `setNodes`）不受此限。
 - **内容高度驱动（auto-height）的 Dialog 里放 xyflow 会得到 0 高画布**：xyflow 根节点 inline `height:100%`，而 Dialog 祖先链全是内容驱动高度，百分比解析不出来 → 图渲染进 0 高 `overflow:hidden` 盒子里，**DOM 全在、视觉全空、无任何报错**。修法不是加 min-height（那只救容器不救百分比子级），是把容器做成 flex column 并让 xyflow 根 `flex:1 1 0%; min-height:0` 从 flex 拿高度（`.structure-graph` 现行形态，`structure-graph-css.test.ts` 锁定）；真正的画布类 Dialog 直接用 `size="full"`（显式 `height: calc(100vh - 48px)`，`dialog-scroll-layout.test.ts` 锁定）。
 
+- **源码里嵌真实 NUL 字节(0x00)会让 grep/ugrep 把整个文件当二进制静默跳过**:AI/脚本生成代码时想写 NUL 分隔符,若落成真实字节而非 \u0000 转义,后果不是编译错——是 grep 对该文件**零输出无警告**,git diff 显示 Binary file,肉眼像文件没改。RFC-258 实现期连中三个文件(scip.ts/snapshot.ts/indexCache.ts),表现为「明明 Edit 成功了 grep 却找不到」。判据:grep 突然对某文件全哑 → python 查 chr(0) in src;修法统一写 \u0000 转义序列。
+
 ## 依赖与审计门
 
 - **跨大版本的扁平 `overrides` 会打破按旧 API 调用的消费者**：审计门报 `brace-expansion` 高危时，把它在根 `overrides` 里一刀切钉成 `5.0.9`，结果 eslint 全线 `TypeError: expand is not a function` —— v1 是 `module.exports = expand`、v5 换了导出形态，而 eslint 依赖链上的 `minimatch@3` 按 v1 调用。**先看公告命中的是不是多条不同大版本的线**（这次是 `<1.1.18` 与 `>=4.0.0 <5.0.9` 两条），是的话扁平 override 必错。

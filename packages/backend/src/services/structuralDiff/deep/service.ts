@@ -20,6 +20,8 @@ import {
   type IndexerSpec,
 } from './indexers'
 import { runIndexer as defaultRun, type DeepDegradedReason, type IndexerRunResult } from './runner'
+import { scipIndexCache, type ScipIndexCache } from './indexCache'
+import { worktreeSnapshotDigest } from '@/services/codeIntel/snapshot'
 
 export class DeepUnavailableError extends Error {
   constructor(
@@ -38,6 +40,11 @@ export interface ResolvedDeepConfig {
 
 export interface DeepDeps {
   deepCfg?: ResolvedDeepConfig
+  /** RFC-258 (impl-gate P1-2) — reuse the click path's index cache so a deep
+   *  structural diff and code-intel clicks share ONE indexer run per snapshot.
+   *  Callers that can name the cache scope pass it; tests with injected
+   *  probe/run seams keep the direct path. */
+  cacheScope?: { taskId: string; repoKey: string; cache?: ScipIndexCache }
   /** injection seams for tests (stub probe/run, no real indexer). */
   probeIndexer?: (spec: IndexerSpec, overrides?: DeepIndexerOverrides) => Promise<IndexerProbe>
   runIndexer?: (opts: {
@@ -61,6 +68,45 @@ export async function computeDeepStructuralDiff(args: {
   const needed = indexersForFiles(baseline.files.map((f) => f.filePath))
   if (needed.length === 0) {
     throw new DeepUnavailableError('indexer-missing', 'no indexer covers the changed languages')
+  }
+
+  // RFC-258 (P1-2) — cache-backed path: one graph per (snapshot, indexer),
+  // shared with code-intel. Only taken when the caller identifies the scope
+  // AND no test seams are injected (the seams exercise the direct path).
+  if (
+    deps.cacheScope !== undefined &&
+    deps.probeIndexer === undefined &&
+    deps.runIndexer === undefined
+  ) {
+    const cache = deps.cacheScope.cache ?? scipIndexCache()
+    const snapshotDigest = await worktreeSnapshotDigest(worktreePath)
+    const graphs: ScipGraph[] = []
+    let lastReason: DeepDegradedReason = 'indexer-missing'
+    let anyAvailable = false
+    for (const id of needed) {
+      const answer = await cache.get({
+        taskId: deps.cacheScope.taskId,
+        repoKey: deps.cacheScope.repoKey,
+        snapshotDigest,
+        indexerId: id,
+        worktreePath,
+      })
+      if (answer.ok) {
+        anyAvailable = true
+        graphs.push(answer.graph)
+      } else if (answer.reason !== 'indexer-missing' && answer.reason !== 'indexer-cooldown') {
+        anyAvailable = true
+        lastReason = answer.reason as DeepDegradedReason
+      }
+    }
+    if (graphs.length === 0) {
+      throw new DeepUnavailableError(
+        anyAvailable ? lastReason : 'indexer-missing',
+        anyAvailable ? 'all available indexers failed' : 'no SCIP indexer installed',
+      )
+    }
+    const impact = preciseImpactFromBaseline(mergeScipGraphs(graphs), baseline.files)
+    return { ...baseline, engine: 'deep', impact, degradedReason: undefined }
   }
 
   // Run EVERY available indexer the changed languages need (a diff can span

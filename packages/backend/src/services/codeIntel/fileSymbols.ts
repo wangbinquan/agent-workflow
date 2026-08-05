@@ -11,7 +11,7 @@ import { readBlobAtRef } from '@/util/git'
 import type { DbClient } from '@/db/client'
 import { getTask } from '@/services/task'
 import { canonicalRepoKeys } from '@/services/repoLabels'
-import { openContainedFile } from '@/services/worktreeFileContent'
+import { FILE_CONTENT_MAX_BYTES, openContainedFile } from '@/services/worktreeFileContent'
 import { resolveLang } from '@/services/structuralDiff/lang/grammars'
 import { extractSymbols } from '@/services/structuralDiff/lang/extract'
 
@@ -100,6 +100,9 @@ export async function getTaskFileSymbols(
     const blob = await readBlobAtRef(worktreePath, baseCommit, q.path)
     if (blob === null) {
       throw new NotFoundError('file-symbols-not-found', `'${basename(q.path)}' not in base`)
+    }
+    if (blob.length > FILE_CONTENT_MAX_BYTES) {
+      throw new DomainError('file-symbols-oversized', 'file exceeds the analyzable limit', 413)
     }
     if (blob.includes('\x00')) return toResult(null, 'unsupported')
     source = blob

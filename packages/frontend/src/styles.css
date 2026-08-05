@@ -12238,9 +12238,250 @@ mark.prior-comment-anchor[data-active='true'] {
   flex: 1 1 auto;
   min-height: 0;
 }
+/* RFC-258 — graph↔source split: the drill's existing children live in a main
+   column; the source pane sits beside it. min-width:0 on the main column is
+   the anti-crush contract (same family as the xyflow zero-height bug). */
+.changes__drill-maincol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+.changes__drill--split {
+  flex-direction: row;
+  gap: 12px;
+}
+.source-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 40%;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+  position: relative;
+}
+.source-pane__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+.source-pane__spacer {
+  flex: 1 1 auto;
+}
+.callchain__source {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--accent);
+  padding: 0 4px;
+  font: inherit;
+}
 .changes__narrative-fold {
   align-self: flex-start;
   font-weight: 600;
+}
+
+/* RFC-258 — read-only source viewer (CodeViewer). Flex column with a
+   min-height:0 scroll body — the anti-collapse contract the structural graph
+   already learned the hard way (locked in rfc258-code-viewer tests). */
+.code-viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.code-viewer__badges {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.code-viewer__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 6px 0;
+}
+.cv__line {
+  display: flex;
+  white-space: pre;
+}
+.cv__ln {
+  flex: 0 0 3.5em;
+  text-align: right;
+  padding-right: 10px;
+  color: var(--muted);
+  user-select: none;
+}
+.cv__code {
+  flex: 1 1 auto;
+  padding-right: 12px;
+}
+.cv__line--added {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+.cv__line--modified {
+  background: color-mix(in srgb, #d99100 12%, transparent);
+}
+.cv__line--flash {
+  animation: cv-flash 1.5s ease-out;
+}
+@keyframes cv-flash {
+  0% {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.cv__fold {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 2px 10px 2px 4.5em;
+  border: none;
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cv__fold:hover {
+  color: var(--text);
+}
+/* RFC-258 — source-nav breadcrumb bar + menu positioning context */
+.changes__main {
+  position: relative;
+}
+.changes__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 8px;
+}
+.changes__crumbs-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* RFC-258 — full-view symbol anchor bar (P1-6) */
+.changes__anchorbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 8px;
+}
+.changes__anchor {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+  cursor: pointer;
+}
+.changes__anchor:hover,
+.changes__anchor:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* RFC-258 — symbol navigation popover */
+.symbol-menu {
+  position: absolute;
+  z-index: 30;
+  min-width: 240px;
+  max-width: 380px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  font-size: 12px;
+}
+.symbol-menu__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px 6px;
+}
+.symbol-menu__reason {
+  color: var(--muted);
+}
+.symbol-menu__group-title {
+  padding: 4px 6px;
+  color: var(--muted);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.symbol-menu__caveat {
+  font-weight: 400;
+}
+.symbol-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 6px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.symbol-menu__item:hover,
+.symbol-menu__item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.symbol-menu__loc {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.symbol-menu__preview {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.symbol-menu__note {
+  padding: 4px 6px;
+  color: var(--muted);
+}
+
+/* shiki dual-theme tokens (same mechanism as prose.css): default light,
+   dark under [data-theme='dark'] / the media fallback. */
+.code-viewer [style*='--shiki-light'] {
+  color: var(--shiki-light);
+}
+:root[data-theme='dark'] .code-viewer [style*='--shiki-dark'] {
+  color: var(--shiki-dark);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .code-viewer [style*='--shiki-dark'] {
+    color: var(--shiki-dark);
+  }
 }
 .changes__impact-caller {
   background: none;

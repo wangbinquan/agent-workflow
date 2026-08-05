@@ -7,8 +7,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { SymbolChange } from '@agent-workflow/shared'
-import { classifyBreaking, explainChange, type Severity } from '@agent-workflow/shared'
+import type {
+  FileSymbolsResult as FileSymbolsResultWire,
+  SymbolChange,
+} from '@agent-workflow/shared'
+import { classifyBreaking, explainChange, repoKeyWire, type Severity } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { DiffFileBody } from '@/components/DiffViewer'
 import { MarkdownDiffView } from '@/components/review/MarkdownDiffView'
@@ -19,6 +22,10 @@ import { hunkForSymbol, symbolForHunk } from '@/lib/hunkSymbolMap'
 import { buildDiffSegments } from '@/lib/changeReview'
 import type { ChangeFileEntry, HunkInfo } from '@/lib/changeReview'
 import type { CallChainRoot } from '@/components/structure/CallChainView'
+import { CodeViewer } from '@/components/code/CodeViewer'
+import { resolveIdentifierClick } from '@/lib/identifierClick'
+import { hunkPointToFilePoint } from '@/lib/hunkPoint'
+import { fullFileRanges } from '@/lib/fullFileRanges'
 
 const SEVERITY_LABEL: Record<Severity, string> = {
   breaking: 'tasks.structSevBreaking',
@@ -379,6 +386,7 @@ function AnnotatedDiff({
   focusHunk,
   scrollRef,
   onOwnerClick,
+  onIdentifier,
 }: {
   entry: ChangeFileEntry
   focusHunk: HunkInfo | null
@@ -386,6 +394,16 @@ function AnnotatedDiff({
   /** Reverse jump (impl-gate P2): click a hunk's owner → highlight + scroll
    *  the matching outline row. */
   onOwnerClick?: (qualifiedName: string) => void
+  /** RFC-258 — identifier click inside a hunk body, already converted to a
+   *  (side, file line/col) point (gate F-05). */
+  onIdentifier?: (hit: {
+    side: 'base' | 'worktree'
+    line: number
+    col: number
+    name: string
+    clientX: number
+    clientY: number
+  }) => void
 }) {
   const { t } = useTranslation()
   const changes = useMemo(() => entry.structural?.changes ?? [], [entry.structural?.changes])
@@ -418,13 +436,37 @@ function AnnotatedDiff({
     setCurrentSymbol(ownerName)
   }, [changes, entry.hunks, scrollRef])
 
+  const handleIdentifierClick = useCallback(
+    (ev: React.MouseEvent) => {
+      if (onIdentifier === undefined || entry.block === undefined) return
+      const hit = resolveIdentifierClick(ev, 'data-hunkrow')
+      if (hit === null) return
+      const target = ev.target as Element
+      const rowEl = target.closest('[data-hunkrow]')
+      const hunkIdx = Number(rowEl?.getAttribute('data-hunk'))
+      const hunk = entry.hunks.find((h) => h.headerIndex === hunkIdx)
+      if (hunk === undefined) return
+      // resolveIdentifierClick's `line` is the 1-based body row; convert to a
+      // (side, file line, col) point through the F-05 state machine.
+      const point = hunkPointToFilePoint(entry.block.lines, hunk, hit.line - 1, hit.col)
+      if (point === null) return
+      onIdentifier({ ...point, name: hit.name, clientX: ev.clientX, clientY: ev.clientY })
+    },
+    [onIdentifier, entry.block, entry.hunks],
+  )
+
   if (entry.block === undefined) {
     return <div className="changes__outline-note muted">{t('tasks.changesTextUnavailable')}</div>
   }
   const lines = entry.block.lines
   const segments = buildDiffSegments(lines, entry.hunks)
   return (
-    <div className="changes__diff" onScroll={onScroll} ref={scrollRef}>
+    <div
+      className="changes__diff"
+      onScroll={onScroll}
+      ref={scrollRef}
+      onClick={handleIdentifierClick}
+    >
       {currentSymbol !== null && (
         <div className="changes__sticky-symbol" data-testid="sticky-symbol">
           {currentSymbol}
@@ -456,7 +498,15 @@ function AnnotatedDiff({
             )}
             <pre className="diff__body">
               {lines.slice(seg.start, seg.end).map((line, j) => (
-                <span key={j} className={lineClassOf(line)}>
+                <span
+                  key={j}
+                  className={lineClassOf(line)}
+                  // RFC-258 — body rows carry their hunk + 1-based body row so
+                  // the identifier layer can run the F-05 coordinate machine.
+                  {...(seg.hunk !== null && j > 0
+                    ? { 'data-hunk': seg.hunk.headerIndex, 'data-hunkrow': j }
+                    : {})}
+                >
                   {line === '' ? ' ' : line}
                   {'\n'}
                 </span>
@@ -480,16 +530,90 @@ function lineClassOf(line: string): string {
   return 'diff__line'
 }
 
+/** RFC-258 §4.2 (impl-gate P1-6) — the full view's symbol anchor bar: every
+ *  symbol of the CURRENT worktree file (not just changed ones) as a jump
+ *  chip, plus the honest completeness badge when the table is degraded /
+ *  unsupported / parse-error (gate F-09). Also the keyboard-reachable jump
+ *  path AC-2 promises (real buttons). */
+function FileSymbolAnchorBar({
+  taskId,
+  repoKey,
+  filePath,
+  onJumpToLine,
+}: {
+  taskId: string
+  repoKey: string
+  filePath: string
+  onJumpToLine: (line: number) => void
+}) {
+  const { t } = useTranslation()
+  const symbols = useQuery<FileSymbolsResultWire>({
+    queryKey: ['rfc258FileSymbols', taskId, repoKeyWire(repoKey), filePath],
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/tasks/${encodeURIComponent(taskId)}/file-symbols?path=${encodeURIComponent(filePath)}&repo=${encodeURIComponent(repoKeyWire(repoKey))}&side=worktree`,
+        undefined,
+        signal,
+      ),
+    retry: false,
+  })
+  const data = symbols.data
+  const rows = data?.symbols ?? []
+  if (data === undefined || (rows.length === 0 && data.status === 'ok')) return null
+  return (
+    <div className="changes__anchorbar" data-testid="symbol-anchor-bar">
+      {data.status !== 'ok' && (
+        <span className="structure__tag" title={data.status}>
+          {t('tasks.fileSymbolsIncomplete')}
+        </span>
+      )}
+      {rows.map((s, i) => (
+        <button
+          key={`${s.qualifiedName}-${i}`}
+          type="button"
+          className="changes__anchor"
+          title={`${s.qualifiedName} · ${s.kind}`}
+          onClick={() => onJumpToLine(s.range.startLine)}
+        >
+          {s.name}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function ChangeFileDetail({
   taskId,
   entry,
   focusHunk,
   onOpenCallChain,
+  codeView = 'hunk',
+  onCodeViewChange,
+  fullFocus = null,
+  onFullFocusChange,
+  onIdentifier,
 }: {
   taskId: string
   entry: ChangeFileEntry
   focusHunk: HunkInfo | null
   onOpenCallChain?: (root: CallChainRoot) => void
+  /** RFC-258 — hunk ↔ full-file source view; controlled by the panel so the
+   *  navigation session can restore the pre-jump view (gate F-17). */
+  codeView?: 'hunk' | 'full'
+  onCodeViewChange?: (view: 'hunk' | 'full') => void
+  /** Line to focus in the full view (jump arrival / outline anchor). */
+  fullFocus?: number | null
+  /** Anchor-bar jumps report the picked line back to the panel (P1-6). */
+  onFullFocusChange?: (line: number) => void
+  /** Identifier click from either view (full view reports side='worktree'). */
+  onIdentifier?: (hit: {
+    side: 'base' | 'worktree'
+    line: number
+    col: number
+    name: string
+    clientX: number
+    clientY: number
+  }) => void
 }) {
   const { t } = useTranslation()
   const [docView, setDocView] = useState<'rendered' | 'text'>('rendered')
@@ -576,6 +700,18 @@ export function ChangeFileDetail({
             className="changes__doc-toggle"
           />
         )}
+        {!isDoc && onCodeViewChange !== undefined && (
+          <Segmented<'hunk' | 'full'>
+            value={codeView}
+            onChange={onCodeViewChange}
+            options={[
+              { value: 'hunk', label: t('tasks.changesCodeViewHunk') },
+              { value: 'full', label: t('tasks.changesCodeViewFull') },
+            ]}
+            ariaLabel={t('tasks.changesCodeViewLabel')}
+            className="changes__doc-toggle"
+          />
+        )}
       </div>
       <SymbolOutline
         entry={entry}
@@ -583,7 +719,33 @@ export function ChangeFileDetail({
         onOpenCallChain={onOpenCallChain}
         focusQualifiedName={outlineFocus}
       />
-      {wantRendered && !renderedFailed ? (
+      {!isDoc && codeView === 'full' && onCodeViewChange !== undefined ? (
+        <>
+          <FileSymbolAnchorBar
+            taskId={taskId}
+            repoKey={entry.repoLabel ?? ''}
+            filePath={entry.filePath}
+            onJumpToLine={(line) => onFullFocusChange?.(line)}
+          />
+          <CodeViewer
+            taskId={taskId}
+            repoKey={entry.repoLabel ?? ''}
+            filePath={entry.filePath}
+            side="worktree"
+            focus={fullFocus !== null ? { line: fullFocus } : null}
+            changedRanges={fullFileRanges(entry.hunks)}
+            onIdentifierClick={
+              onIdentifier === undefined
+                ? undefined
+                : (hit) => {
+                    // The full view renders the worktree side (F-05); the caret
+                    // layer already produced file-line coordinates.
+                    onIdentifier({ side: 'worktree', ...hit })
+                  }
+            }
+          />
+        </>
+      ) : wantRendered && !renderedFailed ? (
         renderedReady ? (
           <MarkdownDiffView
             left={baseContent.data.exists ? (baseContent.data.content ?? '') : ''}
@@ -613,6 +775,7 @@ export function ChangeFileDetail({
               focusHunk={pendingFocus}
               scrollRef={scrollRef}
               onOwnerClick={(qn) => setOutlineFocus(qn)}
+              onIdentifier={onIdentifier}
             />
           )}
         </>

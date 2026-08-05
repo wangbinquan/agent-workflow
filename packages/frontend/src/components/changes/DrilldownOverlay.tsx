@@ -5,7 +5,7 @@
 // ImpactPanel + DependencyChangesPanel migrated from the deleted
 // StructuralDiffView shell (RFC-083/088) with behavior otherwise unchanged.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   DependencyChange,
@@ -17,6 +17,7 @@ import { Dialog } from '@/components/Dialog'
 import { Segmented } from '@/components/Segmented'
 import { StructuralGraph } from '@/components/structure/StructuralGraph'
 import { CallChainView, type CallChainRoot } from '@/components/structure/CallChainView'
+import { SourcePane, type SourceTarget } from '@/components/code/SourcePane'
 import { badgeClass, badgeSymbol } from '@/lib/structureView'
 
 export type DrilldownKind = 'graph' | 'impact' | 'callchain' | 'deps'
@@ -39,8 +40,9 @@ export function ImpactPanel({
   onJumpToFile,
 }: {
   impact: ImpactItem[]
-  /** RFC-239 — rows are jumps now: select the caller's file in the sidebar. */
-  onJumpToFile?: (filePath: string) => void
+  /** RFC-239 — rows are jumps; RFC-258 upgrades them to LINE-level source
+   *  jumps (the caller's range start). */
+  onJumpToFile?: (filePath: string, line?: number) => void
 }) {
   const { t } = useTranslation()
   const precise = impact.some((i) => i.confidence === 'extracted')
@@ -65,8 +67,8 @@ export function ImpactPanel({
                     key={`${c.filePath}-${j}`}
                     type="button"
                     className="changes__impact-caller"
-                    title={c.filePath}
-                    onClick={() => onJumpToFile(c.filePath)}
+                    title={`${c.filePath}:${c.range.startLine}`}
+                    onClick={() => onJumpToFile(c.filePath, c.range.startLine)}
                   >
                     {label}
                   </button>
@@ -137,6 +139,7 @@ export function DrilldownOverlay({
   onOpenCallChain,
   onJumpToFile,
   onBackToGraph,
+  engineMode = 'baseline',
 }: {
   kind: DrilldownKind | null
   onClose: () => void
@@ -149,13 +152,22 @@ export function DrilldownOverlay({
    *  impl-gate P2 — design §4 promises all/group/file). */
   currentGroupKeys?: ReadonlySet<string> | null
   onOpenCallChain?: (root: CallChainRoot) => void
-  onJumpToFile?: (filePath: string) => void
+  onJumpToFile?: (filePath: string, line?: number) => void
   /** Present only when the call chain was entered FROM the graph dialog —
    *  renders a back affordance so ⎇ isn't a one-way trip. */
   onBackToGraph?: () => void
+  /** RFC-258 — engine for the split source pane's code-intel queries. */
+  engineMode?: 'baseline' | 'deep'
 }) {
   const { t } = useTranslation()
   const [focus, setFocus] = useState<'all' | 'group' | 'file'>('all')
+  // RFC-258 — the graph↔source split pane. The overlay component stays
+  // mounted with kind=null (gate F-12), so the pane resets EXPLICITLY when
+  // the dialog closes.
+  const [sourceTarget, setSourceTarget] = useState<SourceTarget | null>(null)
+  useEffect(() => {
+    if (kind === null) setSourceTarget(null)
+  }, [kind])
   // Graph focus filter (design §4): feed StructuralGraph a file-subset of the
   // diff. Pure pre-filter — the graph model itself is untouched.
   const graphData = useMemo<StructuralDiff | undefined>(() => {
@@ -193,51 +205,83 @@ export function DrilldownOverlay({
   const size = kind === 'graph' || kind === 'callchain' ? 'full' : 'lg'
   return (
     <Dialog open onClose={onClose} title={t(KIND_TITLE[kind])} size={size}>
-      <div className="changes__drill" data-testid={`drilldown-${kind}`}>
-        {/* The graph KEEPS its mount while a ⎇ jump shows the call chain, so
+      <div
+        className={`changes__drill${sourceTarget !== null ? ' changes__drill--split' : ''}`}
+        data-testid={`drilldown-${kind}`}
+      >
+        <div className="changes__drill-maincol">
+          {/* The graph KEEPS its mount while a ⎇ jump shows the call chain, so
             "返回关系图" restores the exact pre-jump view (level / edge kinds /
             zoom) instead of a remounted default — hidden, not unmounted. */}
-        {(kind === 'graph' || (kind === 'callchain' && onBackToGraph !== undefined)) && (
-          <div
-            className="changes__drill-graphpane"
-            style={kind !== 'graph' ? { display: 'none' } : undefined}
-          >
-            {currentFileKey !== null && (
-              <Segmented<'all' | 'group' | 'file'>
-                value={focus}
-                onChange={setFocus}
-                options={[
-                  { value: 'all', label: t('tasks.changesDrillFocusAll') },
-                  ...(currentGroupKeys != null && currentGroupKeys.size > 1
-                    ? [{ value: 'group' as const, label: t('tasks.changesDrillFocusGroup') }]
-                    : []),
-                  { value: 'file', label: t('tasks.changesDrillFocusFile') },
-                ]}
-                ariaLabel={t('tasks.changesDrillFocusLabel')}
-                className="changes__drill-focus"
-              />
-            )}
-            <div className="changes__drill-graph">
-              <StructuralGraph data={graphData ?? data} onOpenCallChain={onOpenCallChain} />
+          {(kind === 'graph' || (kind === 'callchain' && onBackToGraph !== undefined)) && (
+            <div
+              className="changes__drill-graphpane"
+              style={kind !== 'graph' ? { display: 'none' } : undefined}
+            >
+              {currentFileKey !== null && (
+                <Segmented<'all' | 'group' | 'file'>
+                  value={focus}
+                  onChange={setFocus}
+                  options={[
+                    { value: 'all', label: t('tasks.changesDrillFocusAll') },
+                    ...(currentGroupKeys != null && currentGroupKeys.size > 1
+                      ? [{ value: 'group' as const, label: t('tasks.changesDrillFocusGroup') }]
+                      : []),
+                    { value: 'file', label: t('tasks.changesDrillFocusFile') },
+                  ]}
+                  ariaLabel={t('tasks.changesDrillFocusLabel')}
+                  className="changes__drill-focus"
+                />
+              )}
+              <div className="changes__drill-graph">
+                <StructuralGraph
+                  data={graphData ?? data}
+                  onOpenCallChain={onOpenCallChain}
+                  onOpenSource={(tg) =>
+                    setSourceTarget({
+                      structuralPath: tg.structuralPath,
+                      qualifiedName: tg.qualifiedName,
+                    })
+                  }
+                />
+              </div>
             </div>
-          </div>
+          )}
+          {kind === 'impact' && <ImpactPanel impact={data.impact} onJumpToFile={onJumpToFile} />}
+          {kind === 'callchain' && (
+            <>
+              {onBackToGraph !== undefined && (
+                <button
+                  type="button"
+                  className="btn btn--sm changes__drill-back"
+                  onClick={onBackToGraph}
+                >
+                  ← {t('tasks.changesDrillBackToGraph')}
+                </button>
+              )}
+              <CallChainView
+                taskId={taskId}
+                root={callRoot}
+                onOpenSource={(tg) =>
+                  setSourceTarget({
+                    structuralPath: tg.structuralPath,
+                    qualifiedName: tg.qualifiedName,
+                  })
+                }
+              />
+            </>
+          )}
+          {kind === 'deps' && <DependencyChangesPanel changes={data.dependencyChanges} />}
+        </div>
+        {sourceTarget !== null && (
+          <SourcePane
+            taskId={taskId}
+            data={data}
+            target={sourceTarget}
+            engineMode={engineMode}
+            onClose={() => setSourceTarget(null)}
+          />
         )}
-        {kind === 'impact' && <ImpactPanel impact={data.impact} onJumpToFile={onJumpToFile} />}
-        {kind === 'callchain' && (
-          <>
-            {onBackToGraph !== undefined && (
-              <button
-                type="button"
-                className="btn btn--sm changes__drill-back"
-                onClick={onBackToGraph}
-              >
-                ← {t('tasks.changesDrillBackToGraph')}
-              </button>
-            )}
-            <CallChainView taskId={taskId} root={callRoot} />
-          </>
-        )}
-        {kind === 'deps' && <DependencyChangesPanel changes={data.dependencyChanges} />}
       </div>
     </Dialog>
   )

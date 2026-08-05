@@ -136,6 +136,11 @@ const EXACT_ALLOWANCE_ROWS = [
   // the protocol identifier the envelope itself carries and the only thing a
   // downstream edge can bind to. There is no id form of a port to prefer, so
   // this sink is reviewed-and-allowed rather than migrated.
+  // RFC-258 - code-intel react-query keys carry the CLICKED IDENTIFIER text
+  // (a source-code symbol name, the protocol own lookup key) alongside the
+  // full positional/engine key; no resource identity is involved.
+  "frontend-name-key\u001fpackages/frontend/src/components/changes/ChangeReviewPanel.tsx\u001fChangeReviewPanel\u001fPropertyAssignment:24ca7a357ba9c20ed487\u001f1\u001fcode-symbol\u001fqueryKey: [ 'codeIntel', taskId, menu?.params.repo ?? '.', menu?.params.path, menu?.params.side, menu?.params.line, menu?.params.col, menu?.params.name, engineMode, structural.data?.contentDigest ?? '', // snapshot hint (F-16) ]",
+  "frontend-name-key\u001fpackages/frontend/src/components/code/SourcePane.tsx\u001fSourcePane\u001fPropertyAssignment:35c08a3c02207f52cb6f\u001f1\u001fcode-symbol\u001fqueryKey: [ 'codeIntel', taskId, repoKeyWire(current.repoKey), current.filePath, menu?.params.side, menu?.params.line, menu?.params.col, menu?.params.name, engineMode, 'pane', ]",
   'frontend-name-key\u001fpackages/backend/src/services/scriptPorts.ts\u001fextractScriptPorts\u001fBinaryExpression:f2e0585546fad134fd5c\u001f1\u001fportable-selector\u001fports[name] = content',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fBinaryExpression:b7eb66bf361458a26852\u001f1\u001fportable-selector\u001ffrozenWorkgroups[name] = { id: row.id, version: row.version, group }',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fkeepWorkgroupsOf\u001fBinaryExpression:f7a5f661ceac0065c5fe\u001f1\u001fportable-selector\u001fkept.workgroups[ref.workgroupName] = g',
@@ -364,7 +369,10 @@ describe('RFC-223 T15 structural identity guard', () => {
     // is reviewed-and-allowed above rather than migrated to an id.
     // RFC-255: 137 → 138. The custom-provider card renders a gateway's optional
     // display name and falls back to its id — display-only, reviewed above.
-    expect(findings.length).toBe(138)
+    // RFC-258: 138 → 140. Two code-intel react-query keys carry the CLICKED
+    // IDENTIFIER text — a source-code symbol name that IS the protocol's
+    // lookup key (code-symbol), reviewed above; no resource identity involved.
+    expect(findings.length).toBe(140)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

@@ -97,3 +97,35 @@ export function shikiLangFor(lang: z.infer<typeof langIdSchema> | null): string 
   if (lang === null) return null
   return SHIKI_LANG[lang] ?? null
 }
+
+/** Extension → LangId, mirroring the backend grammar registry's extension set
+ *  (lang/grammars.ts EXT_RESOLUTION — that table additionally carries grammar
+ *  wasm files, which the frontend never needs). */
+const EXT_LANG: Record<string, z.infer<typeof langIdSchema>> = {
+  '.py': 'python',
+  '.pyi': 'python',
+  '.go': 'go',
+  '.ts': 'typescript',
+  '.mts': 'typescript',
+  '.cts': 'typescript',
+  '.tsx': 'typescript',
+  '.js': 'javascript',
+  '.jsx': 'javascript',
+  '.mjs': 'javascript',
+  '.cjs': 'javascript',
+  '.java': 'java',
+  '.rs': 'rust',
+  '.cpp': 'cpp',
+  '.cc': 'cpp',
+  '.cxx': 'cpp',
+  '.hpp': 'cpp',
+  '.hh': 'cpp',
+  '.hxx': 'cpp',
+  '.scala': 'scala',
+  '.sc': 'scala',
+}
+export function langIdForPath(path: string): z.infer<typeof langIdSchema> | null {
+  const dot = path.lastIndexOf('.')
+  if (dot < 0) return null
+  return EXT_LANG[path.slice(dot).toLowerCase()] ?? null
+}

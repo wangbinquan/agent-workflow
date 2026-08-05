@@ -14,19 +14,25 @@ import { runGit } from '@/util/git'
 /** Files reported dirty/untracked by `status --porcelain -z`. */
 function dirtyPaths(porcelainZ: string): string[] {
   const out: string[] = []
-  for (const entry of porcelainZ.split('\u0000')) {
+  const records = porcelainZ.split('\u0000')
+  for (let i = 0; i < records.length; i++) {
+    const entry = records[i] ?? ''
     if (entry.length < 4) continue
-    // "XY <path>" — rename entries ("R  new\0old") put the NEW path here and
-    // the old path in the NEXT z-record; the old path fails the stat below and
-    // is skipped harmlessly.
     out.push(entry.slice(3))
+    // R/C records are followed by a bare ORIG-path z-record — consume it here
+    // so it is never mis-sliced as a status row (impl-gate P2-6).
+    const x = entry[0]
+    if (x === 'R' || x === 'C') i += 1
   }
   return out
 }
 
 export async function worktreeSnapshotDigest(worktreePath: string): Promise<string> {
   const head = (await runGit(worktreePath, ['rev-parse', 'HEAD'])).stdout.trim()
-  const porcelain = (await runGit(worktreePath, ['status', '--porcelain', '-z'])).stdout
+  // -uall: an untracked DIRECTORY otherwise reports one `?? dir/` row and the
+  // files inside it would never contribute content prints — a stale-graph
+  // hole (impl-gate P0-3, the F-01 failure mode through a different door).
+  const porcelain = (await runGit(worktreePath, ['status', '--porcelain', '-uall', '-z'])).stdout
   const h = createHash('sha256')
   h.update(head)
   h.update('\u0000')

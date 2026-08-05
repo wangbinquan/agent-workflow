@@ -12,6 +12,9 @@ export interface SeqCallNode {
   /** display label, e.g. `charge()`. */
   method: string
   resolution: 'resolved' | 'external' | 'unresolved'
+  /** RFC-258 (gate F-06) — the callee's method ref (`file#qualifiedName`),
+   *  kept so graph↔source linking has a position to resolve. */
+  ref?: string
   children: SeqCallNode[]
 }
 
@@ -24,6 +27,8 @@ export interface SeqMessage {
   /** nesting depth (0 = direct call of the root). */
   depth: number
   resolution: 'resolved' | 'external' | 'unresolved'
+  /** RFC-258 (F-06) — callee ref for source linking (absent when unresolved). */
+  ref?: string
 }
 
 export interface SequenceModel {
@@ -61,7 +66,14 @@ export function buildSequence(rootClass: string, children: readonly SeqCallNode[
     for (const n of nodes) {
       const to = n.ownerClass ?? UNRESOLVED_LIFELINE
       add(to)
-      messages.push({ from: parentClass, to, label: n.method, depth, resolution: n.resolution })
+      messages.push({
+        from: parentClass,
+        to,
+        label: n.method,
+        depth,
+        resolution: n.resolution,
+        ...(n.ref !== undefined ? { ref: n.ref } : {}),
+      })
       if (n.resolution === 'resolved' && n.children.length > 0) walk(to, n.children, depth + 1)
     }
   }

@@ -137,6 +137,26 @@ describe('getTaskFileSymbols — worktree side', () => {
   })
 })
 
+describe('getTaskFileSymbols — remaining language matrix (P1-9⑦)', () => {
+  const CASES: Array<[string, string, string]> = [
+    ['m.go', 'package m\nfunc GoFn() {}\n', 'GoFn'],
+    ['l.rs', 'pub fn rust_fn() {}\n', 'rust_fn'],
+    ['J.java', 'class J { void javaFn() {} }\n', 'javaFn'],
+    ['c.cpp', 'void cppFn() {}\n', 'cppFn'],
+    ['S.scala', 'object S { def scalaFn(): Int = 1 }\n', 'scalaFn'],
+  ]
+  for (const [file, source, symbol] of CASES) {
+    test(`${file} extracts ${symbol}`, async () => {
+      const d = db()
+      const repo = await makeRepo({ [file]: source })
+      const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
+      const res = await getTaskFileSymbols(d, taskId, { path: file, side: 'worktree' })
+      expect(res.status === 'ok' || res.status === 'degraded').toBe(true)
+      expect(res.symbols.map((s) => s.name)).toContain(symbol)
+    })
+  }
+})
+
 describe('getTaskFileSymbols — base side (F-05)', () => {
   test('reads the base commit blob, not the edited worktree', async () => {
     const d = db()

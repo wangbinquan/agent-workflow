@@ -95,7 +95,14 @@ export async function getCodeIntel(
   q: CodeIntelQuery,
   deps: CodeIntelDeps = {},
 ): Promise<SymbolResolution> {
-  if (q.path === '' || q.name === '' || q.line < 1 || q.col < 1) {
+  if (
+    q.path === '' ||
+    q.name === '' ||
+    !Number.isInteger(q.line) ||
+    !Number.isInteger(q.col) ||
+    q.line < 1 ||
+    q.col < 1
+  ) {
     throw new ValidationError(
       'code-intel-missing-params',
       'path, name and 1-based line/col query params are required',
@@ -201,6 +208,7 @@ async function baseline(
   const definitions: CodePosition[] = []
   const references: CodeReference[] = []
   const seenDef = new Set<string>()
+  const seenRef = new Set<string>()
 
   // Source 1 — the clicked file's own symbol table (both sides supported).
   try {
@@ -251,10 +259,19 @@ async function baseline(
       }
       if (q.side === 'worktree') {
         for (const item of stored.impact) {
-          const leaf = item.changedSymbolId.split('#')[1]?.split(':')[0]?.split('.').pop()
+          // #private-safe (impl-gate P2-2): ids are `file#qn:kind:line` where
+          // qn may itself contain '#'. Take everything after the FIRST '#',
+          // strip the ':kind:line' tail, then the dotted leaf.
+          const afterFile = item.changedSymbolId.slice(item.changedSymbolId.indexOf('#') + 1)
+          const qn = afterFile.replace(/:[a-z-]+:\d+$/, '')
+          const dot = qn.lastIndexOf('.')
+          const leaf = dot >= 0 ? qn.slice(dot + 1) : qn
           if (leaf !== q.name) continue
           for (const caller of item.callers) {
             if (references.length >= REFERENCE_CAP) break
+            const dupKey = `${caller.filePath}\u0000${caller.range.startLine}`
+            if (seenRef.has(dupKey)) continue
+            seenRef.add(dupKey)
             references.push({
               repoKey,
               filePath: caller.filePath,

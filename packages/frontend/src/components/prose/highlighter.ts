@@ -20,6 +20,14 @@ const SUPPORTED_LANGS = [
   'sql',
   'python',
   'diff',
+  // RFC-258 — the structural-diff baseline languages (gate F-13: the exact
+  // extractor set, so the full-file source view highlights whatever the
+  // symbol engine can parse; ts/js/python already above).
+  'go',
+  'rust',
+  'java',
+  'cpp',
+  'scala',
 ] as const
 
 const SUPPORTED_THEMES = ['github-light', 'github-dark'] as const

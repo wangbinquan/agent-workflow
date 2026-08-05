@@ -16,6 +16,7 @@
 
 import { closeSync, constants, fstatSync, openSync, readSync, realpathSync } from 'node:fs'
 import { basename, isAbsolute, join, resolve, sep } from 'node:path'
+import { parseRepoKeyWire } from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { readBlobAtRef } from '@/util/git'
 import type { DbClient } from '@/db/client'
@@ -149,7 +150,10 @@ export async function getTaskFileContent(
       )
     }
     const labels = canonicalRepoKeys(task.repos)
-    const idx = labels.indexOf(q.repo)
+    // RFC-258 (gate F-04): the ROOT repo's canonical key is '' which a query
+    // param cannot carry — accept its RFC-248 wire alias '.' here too, so the
+    // source viewer can read root-repo files in a multi-repo task.
+    const idx = labels.indexOf(parseRepoKeyWire(q.repo))
     const repo = idx >= 0 ? task.repos[idx] : undefined
     if (repo === undefined) {
       throw new NotFoundError('file-content-repo-not-found', `repo '${q.repo}' not found`)

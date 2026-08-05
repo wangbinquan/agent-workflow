@@ -2905,10 +2905,15 @@ export interface Resources {
     codeIntelRefsGuessed: string
     codeIntelInferred: string
     codeIntelTruncated: string
+    codeIntelError: string
     codeNavBack: string
     changesCodeViewHunk: string
     changesCodeViewFull: string
     changesCodeViewLabel: string
+    fileSymbolsIncomplete: string
+    structOpenSource: string
+    drillSourceClose: string
+    drillSourceSymbolMissing: string
     changesPureMove: string
     changesTextUnavailable: string
     changesDocRendered: string
@@ -8149,10 +8154,15 @@ export const zhCN: Resources = {
     codeIntelRefsGuessed: '推测——可能漏报或误报',
     codeIntelInferred: '推测',
     codeIntelTruncated: '引用列表已截断',
+    codeIntelError: '查询失败,请重试',
     codeNavBack: '返回',
     changesCodeViewHunk: '改动',
     changesCodeViewFull: '全文',
     changesCodeViewLabel: '代码视图',
+    fileSymbolsIncomplete: '符号表不完整',
+    structOpenSource: '查看源码',
+    drillSourceClose: '关闭源码栏',
+    drillSourceSymbolMissing: '符号未在当前文件符号表中',
     changesPureMove: '文件自 {{from}} 移动,内容未修改。',
     changesTextUnavailable: '文本 diff 不可用(工作区已回收或超出截断上限),以下为结构信息。',
     changesDocRendered: '渲染',

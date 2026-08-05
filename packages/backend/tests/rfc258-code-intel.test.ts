@@ -185,7 +185,7 @@ describe('ScipIndexCache (F-02/F-15)', () => {
 
   test('concurrent first clicks singleflight into ONE indexer run', async () => {
     let runs = 0
-    let release: (() => void) | null = null
+    let release: () => void = () => {}
     const gate = new Promise<void>((r) => {
       release = r
     })
@@ -206,7 +206,7 @@ describe('ScipIndexCache (F-02/F-15)', () => {
     }
     const p1 = cache.get(base)
     const p2 = cache.get(base)
-    release?.()
+    release()
     const [a, b] = await Promise.all([p1, p2])
     expect(a.ok && b.ok).toBe(true)
     expect(runs).toBe(1)
@@ -265,6 +265,62 @@ describe('ScipIndexCache (F-02/F-15)', () => {
     })
     expect(seen).toEqual(['/root', '/sub']) // second repo built its own graph
     expect(cache.stats().entries).toBe(2)
+  })
+})
+
+describe('ScipIndexCache — weight eviction and oversize refusal (P1-9⑥)', () => {
+  test('weight-bounded LRU evicts the oldest entry, never the one just built', async () => {
+    // Each fixture graph carries ~1.1M occurrences of weight? No — mint two
+    // graphs whose occurrence counts straddle the 2M budget.
+    const heavy = (n: number, file: string) =>
+      encodeScipFixture([
+        {
+          relativePath: file,
+          occurrences: Array.from({ length: n }, (_, i) => ({
+            symbol: `scip . . X#f${i}().`,
+            range: [i, 0, 3],
+            isDefinition: i % 2 === 0,
+          })),
+        },
+      ])
+    let which = 0
+    const cache = new ScipIndexCache({
+      probeIndexer: availableProbe,
+      runIndexer: async () => ({
+        ok: true,
+        scipBytes: which++ === 0 ? heavy(1_200_000, 'a.ts') : heavy(1_200_000, 'b.ts'),
+      }),
+    })
+    const base = {
+      taskId: 't1',
+      repoKey: '',
+      indexerId: 'scip-typescript' as const,
+      worktreePath: '/wt',
+    }
+    const a = await cache.get({ ...base, snapshotDigest: 'd1' })
+    expect(a.ok).toBe(true)
+    const b = await cache.get({ ...base, snapshotDigest: 'd2' })
+    expect(b.ok).toBe(true)
+    // total 2.4M > 2M budget → the older d1 entry was evicted, d2 kept
+    expect(cache.stats().entries).toBe(1)
+    expect(cache.stats().totalWeight).toBeLessThanOrEqual(2_000_000)
+  })
+
+  test('a single index above the byte cap is refused, not cached', async () => {
+    const cache = new ScipIndexCache({
+      probeIndexer: availableProbe,
+      runIndexer: async () => ({ ok: true, scipBytes: new Uint8Array(65 * 1024 * 1024) }),
+    })
+    const res = await cache.get({
+      taskId: 't1',
+      repoKey: '',
+      snapshotDigest: 'd1',
+      indexerId: 'scip-typescript',
+      worktreePath: '/wt',
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.reason).toBe('index-oversized')
+    expect(cache.stats().entries).toBe(0)
   })
 })
 

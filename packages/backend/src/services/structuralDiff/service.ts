@@ -41,6 +41,8 @@ async function withDeep(
   deepOpts: DeepOpts | undefined,
   worktreePath: string,
   computeBaseline: () => Promise<StructuralDiff>,
+  /** RFC-258 (impl-gate P1-2) — share the code-intel index cache per repo. */
+  cacheScope?: { taskId: string; repoKey: string },
 ): Promise<StructuralDiff> {
   const baseline = await computeBaseline()
   if (deepOpts?.mode !== 'deep') return baseline
@@ -48,7 +50,10 @@ async function withDeep(
     return await computeDeepStructuralDiff({
       baseline,
       worktreePath,
-      deps: { deepCfg: deepOpts.deepCfg },
+      deps: {
+        deepCfg: deepOpts.deepCfg,
+        ...(cacheScope !== undefined ? { cacheScope } : {}),
+      },
     })
   } catch (err) {
     const reason = err instanceof DeepUnavailableError ? err.reason : 'build-failed'
@@ -100,13 +105,17 @@ export async function getTaskStructuralDiff(
     const baseCommit = task.baseCommit
     const diff = withContentDigest(
       withEmptyHint(
-        await withDeep(deepOpts, task.worktreePath, () =>
-          computeFromWorktree({
-            taskId,
-            scope,
-            worktreePath: task.worktreePath,
-            fromRef: baseCommit,
-          }),
+        await withDeep(
+          deepOpts,
+          task.worktreePath,
+          () =>
+            computeFromWorktree({
+              taskId,
+              scope,
+              worktreePath: task.worktreePath,
+              fromRef: baseCommit,
+            }),
+          { taskId, repoKey: '' },
         ),
         task.spaceKind,
       ),

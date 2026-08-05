@@ -25,7 +25,16 @@ export interface CallChainRoot {
 
 type ChainMode = 'tree' | 'sequence'
 
-export function CallChainView({ taskId, root }: { taskId: string; root: CallChainRoot | null }) {
+export function CallChainView({
+  taskId,
+  root,
+  onOpenSource,
+}: {
+  taskId: string
+  root: CallChainRoot | null
+  /** RFC-258 — jump to a resolved callee's definition in the source pane. */
+  onOpenSource?: (target: { structuralPath: string; qualifiedName: string }) => void
+}) {
   const { t } = useTranslation()
   const [mode, setMode] = useState<ChainMode>('tree')
   if (root === null) {
@@ -52,9 +61,15 @@ export function CallChainView({ taskId, root }: { taskId: string; root: CallChai
         />
       </div>
       {mode === 'tree' ? (
-        <CallLevel taskId={taskId} parentRef={root.ref} ancestors={new Set([root.ref])} depth={1} />
+        <CallLevel
+          taskId={taskId}
+          parentRef={root.ref}
+          ancestors={new Set([root.ref])}
+          depth={1}
+          onOpenSource={onOpenSource}
+        />
       ) : (
-        <SequencePane taskId={taskId} root={root} />
+        <SequencePane taskId={taskId} root={root} onOpenSource={onOpenSource} />
       )}
     </div>
   )
@@ -87,7 +102,15 @@ function fetchChainTree(
   return walkChainTree(rootRef, fetcher)
 }
 
-function SequencePane({ taskId, root }: { taskId: string; root: CallChainRoot }) {
+function SequencePane({
+  taskId,
+  root,
+  onOpenSource,
+}: {
+  taskId: string
+  root: CallChainRoot
+  onOpenSource?: (target: { structuralPath: string; qualifiedName: string }) => void
+}) {
   const { t } = useTranslation()
   const q = useQuery({
     queryKey: ['chainTree', taskId, root.ref],
@@ -101,7 +124,7 @@ function SequencePane({ taskId, root }: { taskId: string; root: CallChainRoot })
       {q.data?.truncated === true && (
         <div className="callchain__empty muted">{t('tasks.structCallSeqTruncated')}</div>
       )}
-      <SequenceDiagram model={model} />
+      <SequenceDiagram model={model} onOpenSource={onOpenSource} />
     </div>
   )
 }
@@ -112,11 +135,13 @@ function CallLevel({
   parentRef,
   ancestors,
   depth,
+  onOpenSource,
 }: {
   taskId: string
   parentRef: string
   ancestors: ReadonlySet<string>
   depth: number
+  onOpenSource?: (target: { structuralPath: string; qualifiedName: string }) => void
 }) {
   const { t } = useTranslation()
   const q = useQuery<{ targets: CallTarget[] }>({
@@ -143,6 +168,7 @@ function CallLevel({
           target={tg}
           ancestors={ancestors}
           depth={depth}
+          onOpenSource={onOpenSource}
         />
       ))}
     </ul>
@@ -160,11 +186,13 @@ function CallNode({
   target,
   ancestors,
   depth,
+  onOpenSource,
 }: {
   taskId: string
   target: CallTarget
   ancestors: ReadonlySet<string>
   depth: number
+  onOpenSource?: (target: { structuralPath: string; qualifiedName: string }) => void
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -189,6 +217,26 @@ function CallNode({
           </span>
         )}
         <span className="callchain__label">{target.label}</span>
+        {onOpenSource !== undefined &&
+          target.resolution === 'resolved' &&
+          target.ref !== undefined && (
+            <button
+              type="button"
+              className="callchain__source"
+              title={t('tasks.structOpenSource')}
+              aria-label={t('tasks.structOpenSource')}
+              onClick={() => {
+                const ref = target.ref ?? ''
+                const hash = ref.indexOf('#')
+                onOpenSource({
+                  structuralPath: hash < 0 ? ref : ref.slice(0, hash),
+                  qualifiedName: hash < 0 ? '' : ref.slice(hash + 1),
+                })
+              }}
+            >
+              ‹›
+            </button>
+          )}
         {target.resolution === 'external' && (
           <span className="callchain__tag callchain__tag--external">
             {t('tasks.structCallExternal')}
@@ -210,6 +258,7 @@ function CallNode({
             parentRef={target.ref}
             ancestors={new Set([...ancestors, target.ref])}
             depth={depth + 1}
+            onOpenSource={onOpenSource}
           />
         </div>
       )}

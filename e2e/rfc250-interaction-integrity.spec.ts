@@ -890,6 +890,88 @@ test.describe('RFC-250 interaction-integrity browser closure', () => {
     await expectNoSeriousAxeViolations(page, '[data-testid="change-review"]')
   })
 
+  test('RFC-258: identifier click → symbol menu → jump to an out-of-diff definition → breadcrumb back', async ({
+    page,
+  }) => {
+    const taskId = await seedChangesTask()
+    await page.route(`**/api/tasks/${taskId}/diff`, async (route) => {
+      await route.fulfill({
+        json: {
+          diff: CHANGES_DIFF,
+          baseCommit: '1111111111111111111111111111111111111111',
+          truncated: false,
+        },
+      })
+    })
+    await page.route(`**/api/tasks/${taskId}/structural-diff?*`, async (route) => {
+      await route.fulfill({ json: changesStructuralFixture(taskId) })
+    })
+    await page.route(`**/api/tasks/${taskId}/change-narrative`, async (route) => {
+      await route.fulfill({
+        status: 404,
+        json: { code: 'narrative-not-found', message: 'No narrative yet.' },
+      })
+    })
+    // the definition lives OUTSIDE the diff — the read-only viewer must open it
+    await page.route(`**/api/tasks/${taskId}/code-intel?*`, async (route) => {
+      await route.fulfill({
+        json: {
+          requestedEngine: 'baseline',
+          engine: 'baseline',
+          symbol: 'accountState',
+          definitions: [
+            {
+              repoKey: '',
+              filePath: 'src/lib/state.ts',
+              side: 'worktree',
+              startLine: 2,
+            },
+          ],
+          references: [],
+        },
+      })
+    })
+    await page.route(`**/api/tasks/${taskId}/file-content?*`, async (route) => {
+      const url = new URL(route.request().url())
+      if (url.searchParams.get('path') === 'src/lib/state.ts') {
+        await route.fulfill({
+          json: {
+            exists: true,
+            content: '// state module\nexport const accountState = 1\n',
+            size: 44,
+          },
+        })
+        return
+      }
+      await route.continue()
+    })
+
+    await primePage(page)
+    await page.goto(`${requireDaemon().baseUrl}/tasks/${taskId}?tab=changes`)
+    const panel = page.getByTestId('change-review')
+    await expect(panel).toBeVisible()
+
+    // select the account.ts entry, then click the identifier inside its added
+    // row (real caret APIs resolve the column)
+    await panel.locator('.changes__file-tab[title="src/ui/account.ts"]').click()
+    const addedRow = panel.locator('[data-hunkrow]', { hasText: 'accountState' }).nth(1)
+    await addedRow.getByText(/accountState/).click()
+    const menu = page.getByRole('menu')
+    await expect(menu).toBeVisible()
+    await menu.getByRole('menuitem', { name: /state\.ts:2/ }).click()
+
+    // out-of-diff read-only viewer, focused on the definition line
+    await expect(page.locator('.code-viewer')).toBeVisible()
+    await expect(page.getByText(/任务外文件|Outside the diff/)).toBeVisible()
+    const crumbs = page.getByTestId('code-nav-crumbs')
+    await expect(crumbs).toBeVisible()
+
+    // breadcrumb returns to the pre-jump hunk view
+    await crumbs.getByRole('button', { name: /返回|Back/ }).click()
+    await expect(page.locator('.code-viewer')).toBeHidden()
+    await expect(panel.locator('.changes__diff')).toBeVisible()
+  })
+
   test('736 zh-CN Inbox keeps long known content when the peer source fails', async ({ page }) => {
     await createAgent('rfc250-inbox-non-first-run-agent')
     const longWorkflowName =
