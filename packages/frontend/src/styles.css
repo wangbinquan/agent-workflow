@@ -20777,6 +20777,15 @@ button.status-chip {
   min-height: 0;
 }
 
+/* This layout makes the surface flush against an `overflow: hidden` ancestor,
+ * so its drop shadow is painted into nothing — already invisible to a user, and
+ * counted as a clipped ring by the focus-ring audit (RFC-206). Dropping it here
+ * changes nothing on screen and clears the audit; the surface keeps its border,
+ * which is what actually delineates it in this view. */
+.page--task-operations .operations-surface {
+  box-shadow: none;
+}
+
 .page--task-operations .task-operations__list {
   flex: 1 1 auto;
   min-height: 0;

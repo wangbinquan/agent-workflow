@@ -145,8 +145,13 @@ test('offers both runtimes, remains usable at 390px, restores focus, and renders
   await reopened.getByRole('button', { name: 'Start test', exact: true }).click()
 
   await expect(reopened.getByText(prompt, { exact: true })).toBeVisible()
+  // The issue panel only renders once the turn reaches a TERMINAL state, and
+  // reaching it means actually spawning a runtime process. That is slower on
+  // Windows (process creation there costs far more), so the default expect
+  // timeout raced it: green on POSIX, flaky and then red on the windows leg.
+  // The budget is for the spawn, not a tolerance for the panel being slow.
   const turnIssue = reopened.getByTestId('mcp-runtime-test-turn-issue')
-  await expect(turnIssue).toBeVisible()
+  await expect(turnIssue).toBeVisible({ timeout: 30_000 })
   await expect(turnIssue.getByText('Diagnostic code:', { exact: false })).toBeVisible()
 
   await requestJson('/api/config', {
