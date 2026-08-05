@@ -1277,3 +1277,8 @@ crash-recovery、macOS RFC-227 Seatbelt 真实沙箱 5015ms 贴 5s 预算。另�
 owning=a231432c(RFC-258):⑥ 权重测试 240 万 occurrence fixture 自伤超预算
 (已改注入式小预算)、T15 指纹随实现门代码修复漂移(已按新指纹重登记)——
 两条同 commit 已修。
+
+第四次观察(同日,run 31029066635,3d61d686):RFC-258 收口两修复零红确认
+生效;仅余三条本谱系超时(Windows skills-split-page 复现/Windows
+markdown-diff-table-word 新成员/macOS unsaved-guard——上轮在 Windows 腿,
+证明是共享 runner 负载家族而非单 OS)。RFC-258 归属面 CI 判定闭合。
