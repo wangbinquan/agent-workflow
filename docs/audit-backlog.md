@@ -746,3 +746,28 @@ EBUSY: resource busy or locked, rm 'C:\...\Temp\aw-db-xxxxxx'
   ②Bun 的 `bun:sqlite` 在 Windows 上 `close()` 后不立即释放文件（WAL 的 `-wal`/`-shm`
   尤其可疑）。用 `handle.exe` / `Get-Process` 之类直接看持有者，比继续调重试参数有用。
 - **不要把重试预算再调大**当作修复——那只会把「永不释放」伪装成「很慢」。
+
+## 视觉回归权威腿自 2026-08-04 15:25 起一直红（归属 `a5c7e94d`，非 RFC-254）
+
+`visual-regression-nightly` 的 ubuntu 权威腿**每次 push 都红，9 条**，从
+`ed1ee666`（14:52 最后一次绿）到 `e1cadebf`（15:25 首红）之间开始。
+
+**归属与机制**：`a5c7e94d`（RFC-257 webhook UI 修订）给 `ShellNavigation.tsx` 加了
+「Webhooks」侧栏导航项，但**没有重生成视觉基线**。这 9 条全是含侧栏的整页或对话框
+截图，多一个导航项就整体位移：
+
+```
+repo-group-flat-20-1440 / repo-group-nested-1440 / workflow-complex-overview
+/memory list / RFC-195 inbox empty·populated(light)·populated(dark)
+390 mobile home with navigation / RFC-199 editor 1536 three-rail workspace
+```
+
+**顺带修正一条 RFC-254 的判断**：`390 mobile home with navigation` 在 Windows 上
+装不下，我起初单归因于 Segoe UI 的字体度量——**说少了一半**。导航本身多了一项，
+这是所有平台共同变高的原因；字体度量只决定 Windows 是唯一越过临界点的那个。
+
+- ⏳ **(P1) 要么重生成这 9 张基线，要么说明该 UI 变更不该改变它们**。这是 RFC-257
+  作者的判断（导航项的最终形态是否已定），不该由旁人代拍。
+- **这条腿红着直接挡住 RFC-254 的 T35**（收敛判据 = 连续 3 次 main push 零未登记红）。
+- 教训同 `dev-gotchas.md`：**改共享 chrome（侧栏 / 页头 / 全局样式）必须同批重生成
+  视觉基线**，否则代价由下一个碰 CI 的人承担，而且会被误判成他引入的。
