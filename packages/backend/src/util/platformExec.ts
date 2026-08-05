@@ -340,7 +340,18 @@ export const SEALED_SHELL_SUPPORTED = process.platform !== 'win32'
  *
  * Forward slash is the portable spelling: Windows APIs accept it, and every
  * other consumer in this repo already assumes it.
+ *
+ * ONLY WINDOWS IS REWRITTEN, and that is not a shortcut — it is the correct
+ * rule. `\` is a SEPARATOR only there; on POSIX it is a perfectly legal
+ * character inside a filename, so rewriting it would not normalize the path,
+ * it would silently name a DIFFERENT one (`a\b.md`, one file, becomes `a/b.md`,
+ * a file in a directory). Gating costs nothing, because the case it protects
+ * cannot arise on the platform being rewritten.
  */
-export function toPortableRelativePath(relativePath: string): string {
+export function toPortableRelativePath(
+  relativePath: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (platform !== 'win32') return relativePath
   return relativePath.replaceAll('\\', '/')
 }

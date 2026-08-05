@@ -69,6 +69,17 @@ describe("RFC-060 PR-E — 'agent-multi' grep guard", () => {
     ).toThrow()
   })
 
+  // RFC-254 T32: this guard READS every source file in three packages, so its
+  // cost is real I/O rather than computation. Measured: 107ms for the whole
+  // file on macOS, and over 5000ms for this one test on Windows — roughly a
+  // 47x penalty, which is what per-file real-time scanning does to a few
+  // thousand small opens. The default 5s budget therefore expires on Windows
+  // while the guard is doing exactly what it is supposed to.
+  //
+  // The budget is deliberately generous rather than "just above what was
+  // measured": a guard that flakes near its own deadline is worse than one that
+  // takes a few seconds, and nothing here gets slower except by scanning more
+  // files, which is the point.
   test('production src/ has no live agent-multi references (comments excluded)', () => {
     const srcDirs = [
       resolve(REPO_ROOT, 'packages/shared/src'),
@@ -113,5 +124,5 @@ describe("RFC-060 PR-E — 'agent-multi' grep guard", () => {
       }
     }
     expect(offenders).toEqual([])
-  })
+  }, 60_000)
 })

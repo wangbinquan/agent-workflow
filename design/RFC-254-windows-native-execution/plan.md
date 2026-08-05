@@ -409,13 +409,39 @@ win32 视觉基线现在**不再被阻塞**——e2e 已能在 Windows 上跑，
 - **测试设施的可移植性缺陷（1 条）** —— `test-suite-policy.test.ts` 用宿主分隔符拼
   清单 key，Windows 上**每一条**都对不上，报表呈现为「整份已审阅清单同时缺失且多余」。
 
+### 第二轮：C / D 类修完，A 类定性订正（同日）
+
+**C 类原先那 5 条是环境假阳性**——是 VM 上 `bun install` 之前 `zod` 缺失导致整文件
+加载失败，与 Windows 无关。重装依赖并**比对文件哈希确认树与 HEAD 一致**后重跑，真正
+的 C/D 类如下，均已修并在两平台验证：
+
+| 失败 | 真因 | 处理 |
+|---|---|---|
+| `api-contract-coverage` | `f.split('/')` 手写取 basename，Windows 上整条路径成了文件名，守卫报「零个已知盲点」 | 改用 `basename()` |
+| 调用图 `ref` | `relative()` 返回宿主拼写，而 ref 是**可移植标识符**：输入 `/`、输出 `\`，自己产出的 ref 喂不回自己 | **生产修复**（`expandService.ts`）+ 变异证明 |
+| `toPortableRelativePath` | 无条件替换 `\`，而 POSIX 上它是**合法文件名字符**，会悄悄指向另一个路径 | 加平台判据；同时改进 T31 既有调用点 |
+| `auth-token` / `daemon-start` | 断言 0o600，但 Windows 上 `chmod` 是 no-op、`stat` 恒报 0o666 | 走既有 `statMetadataIsAuthoritative`，两平台各断言其真值 |
+| `git-noninteractive-env` | 对 `process.env` 展开结果取 `.PATH`（真实键是 `Path`） | 用 shared 折叠取值器；**已查证生产侧无缺陷**（两处写 PATH 的地方都从 `{}` 干净构建，无重复键隐患） |
+| `agent-multi-grep-guard` | 扫三个 `src/` 树，本机 107ms、Windows 超 5s（≈47×，逐文件实时扫描） | 按实测给显式预算 |
+| `bwrap 诊断` | POSIX provider 专属 | 守 describe + 登记棘轮 |
+
+**A 类比原估计大，且原先的归类有一条是错的**：`fusion-engine.test.ts` 两条报的是
+「取消后应为 canceled，实得 failed」，看着像取消语义在 Windows 上不同——实际是紧邻
+日志里的 `runtime-spawn-failed`（`stub-opencode.sh` → `EFTYPE`）让任务先以 `failed`
+收场。**该「取消语义缺陷」判断已证伪**。A 类正解与判据见
+`docs/audit-backlog.md`「A 类：后端测试自写 `#!/bin/sh` 假二进制」。
+
+**EBUSY 一类未解**：两步尝试都被证伪（Bun 不实现 Node 的 `rmSync` 重试选项；显式重试
+确实在跑但一秒不够），说明句柄在 `close()` 后仍存活。下一步是查「谁还开着」而不是
+继续加预算——见 backlog 同名条目。
+
 剩余待办（已定性，未修）：
 
 | 类 | 条数 | 处理方式 |
 |---|---|---|
-| A `.sh` 假二进制夹具（`listOpencodeModels` 等） | ~9 | 同 T29：换成真正跨平台的可执行 stub |
-| C 源码文本 grep 守卫（NUL 字节 / cross-clarify / nodeRuns） | 5 | 待查 |
-| D 杂项（worktree 建删、MCP sdk 解析、`nonInteractiveGitEnv`） | ~9 | 逐条 |
+| A `.sh` 假二进制夹具（`opencode-models` 9 + `fusion-engine` 2 + …） | ~11 | 同 T29：编译一个跨平台 stub，行为由数据文件选择 |
+| EBUSY 拆卸（`db` / `cli` / `gettask-multi-repo`） | ~6 | 先定位句柄持有者 |
+| `agent.plugins`（`spawn('npm')` 撞 `.cmd` 垫片） | 4 | 生产缺陷，需独立改动且不得用 `shell: true` |
 
 **取样器本身的教训**（已同步 `docs/dev-gotchas.md` 的候选）：拿一台真机做勘测时，
 **先证明树与 HEAD 一致**再信它的失败清单；两次全量并发写同一个输出文件会得到

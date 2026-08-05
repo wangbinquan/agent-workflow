@@ -8,7 +8,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
@@ -19,6 +19,7 @@ import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { basename } from 'node:path'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -57,9 +58,13 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     db,
     appHome,
     repos,
+    // RFC-254 T32: Windows refuses to delete a path that still has an open
+    // handle, so a plain `rmSync` here failed the whole test with EBUSY after
+    // its assertions had already passed. The helper retries the short window
+    // where a released handle has not yet been reclaimed.
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      removeTempDirSync(appHome)
+      removeTempDirSync(reposParent)
     },
   }
 }

@@ -15,6 +15,7 @@ import { isGitWorkTree } from '@/util/git'
 import { resolveLang } from '../lang/grammars'
 import { scanClassDecls, buildClassIndex } from './classIndex'
 import { expandMethod, type ExpandCtx } from './service'
+import { toPortableRelativePath } from '@/util/platformExec'
 
 const IGNORE_DIRS = new Set([
   '.git',
@@ -43,7 +44,13 @@ async function listSourceFiles(root: string): Promise<string[]> {
       if (e.isDirectory()) {
         if (!IGNORE_DIRS.has(e.name) && !e.name.startsWith('.')) await walk(join(dir, e.name))
       } else if (e.isFile() && resolveLang(e.name) !== null) {
-        out.push(relative(root, join(dir, e.name)))
+        // RFC-254 T32: these relative paths ARE the identifier. They become the
+        // `ref` (`src/A.java#A.run`) and `ownerClass` that callers pass back in,
+        // store, and display — and `relative` answers in the HOST spelling, so
+        // on Windows the index produced `src\A.java#A.run` while every caller
+        // and fixture spells it with `/`. A ref this service emitted could not
+        // be fed back to it on the platform that emitted it.
+        out.push(toPortableRelativePath(relative(root, join(dir, e.name))))
       }
     }
   }

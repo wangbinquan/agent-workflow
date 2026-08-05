@@ -933,17 +933,32 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await waitForStableAuthenticatedShell(page)
     const memoryLink = mobileNav.locator('a[href="/memory?tab=all"]')
     await expect(memoryLink).toBeVisible()
+    // RFC-254 T33: wait for the nav list to STOP MOVING, not for it to FIT.
+    //
+    // The previous wait required the last entry's bottom to sit inside
+    // `.dialog__body`. That holds at 390×844 with Linux/macOS font metrics and
+    // is NEVER true on Windows, where Segoe UI renders the list taller and the
+    // body legitimately overflows — it is a scroll region by design, so the
+    // assertion was simply stricter than the requirement. Untouched, the wait
+    // burned its full 15s and the test died before either screenshot, which is
+    // why Windows produced 44 of the 46 baselines rather than 46.
+    //
+    // Scrolling the item into view first was tried and REJECTED: it is not a
+    // no-op where the item already fits — it shifted the macOS rendering and
+    // broke the existing darwin baselines. Settling is what this wait is
+    // actually for, so it now asks for exactly that: two consecutive samples
+    // agreeing on the box. No platform scrolls, no existing baseline moves, and
+    // the win32 shot records what a Windows user genuinely sees.
+    let previousBottom = Number.NaN
     await expect
-      .poll(() =>
-        memoryLink.evaluate((element) => {
-          const scrollRegion = element.closest<HTMLElement>('.dialog__body')
-          if (scrollRegion === null) return false
-          return (
-            element.getBoundingClientRect().bottom <=
-            scrollRegion.getBoundingClientRect().bottom + 0.5
-          )
-        }),
-      )
+      .poll(async () => {
+        const bottom = await memoryLink.evaluate(
+          (element) => element.getBoundingClientRect().bottom,
+        )
+        const settled = bottom === previousBottom
+        previousBottom = bottom
+        return settled
+      })
       .toBe(true)
     await expect(mobileNav).toHaveScreenshot('mobile-nav-open.png', COMPONENT_SNAPSHOT_OPTS)
     await expect(page).toHaveScreenshot('mobile-home-nav.png', SNAPSHOT_OPTS)

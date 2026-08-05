@@ -13,6 +13,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { nonInteractiveGitEnv } from '@/util/git'
+import { envRecordGet } from '@agent-workflow/shared'
 
 describe('nonInteractiveGitEnv()', () => {
   test('forces ssh BatchMode + accept-new and disables git terminal prompt', () => {
@@ -41,7 +42,20 @@ describe('nonInteractiveGitEnv()', () => {
 
   test('passes through unrelated env (e.g. PATH)', () => {
     const env = nonInteractiveGitEnv()
-    expect(env.PATH).toBe(process.env.PATH)
+    // RFC-254 T32: look the name up CASE-FOLDED, because Windows spells it
+    // `Path`. `process.env` there is a case-insensitive proxy, so
+    // `process.env.PATH` reads fine — but `nonInteractiveGitEnv` SPREADS it
+    // into a plain object, and a plain object keeps only the real key. `.PATH`
+    // on the result was therefore `undefined` on Windows while the value was
+    // sitting right there under `Path`.
+    //
+    // The production code is correct as written: it forwards every real key, so
+    // git receives the platform's own spelling and finds its PATH. Only this
+    // assertion assumed the POSIX one.
+    expect(envRecordGet(env, 'PATH', process.platform)).toBe(
+      envRecordGet(process.env, 'PATH', process.platform),
+    )
+    expect(envRecordGet(env, 'PATH', process.platform)).not.toBeUndefined()
   })
 })
 

@@ -85,6 +85,13 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // including the env rebuild, which asserts BOTH platforms' answers rather
   // than skipping one.
   'packages/backend/tests/rfc224-sealed-subprocess.test.ts#skipIf': 20,
+  // `requireRootOwnedBwrap` is the Linux bwrap qualifier, so each diagnostic
+  // names a POSIX condition (root ownership, parent-directory safety, setuid
+  // bits). On Windows the fixtures' POSIX paths fail the CANONICAL check first,
+  // so the suite reported `provider-path-not-canonical` where it expected
+  // `provider-parent-unsafe` — a diagnostic regression on its face, and really
+  // `/usr/bin/bwrap` resolving to `D:\usr\bin\bwrap`.
+  'packages/backend/tests/bwrap-qualification-diagnostics.test.ts#skipIf': 1,
   // The POSIX process GROUP and its TERM/KILL ladder: whether the group leader
   // is spared during the grace period is a statement about `kill(-pgid)`, which
   // Windows has no equivalent of. Guarded at the describe, so the count is 1.

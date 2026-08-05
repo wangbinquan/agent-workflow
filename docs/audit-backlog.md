@@ -689,3 +689,60 @@ Error: Test timed out in 5000ms.
   或把内层预算降到显著小于外层。**不要**只是再调大内层——那正是上次踩的坑。
 - **CI 现在是绿的**，因为前端在 CI 里是分片跑的，负载形态与本地全量不同；这条只在
   全量同跑时暴露，属于「门禁看不见但真实存在」的一类。
+
+## A 类：后端测试自写 `#!/bin/sh` 假二进制（RFC-254 T32，2026-08-05）
+
+Windows 后端全量里剩下的最大一簇，**根因单一**：测试写一个 `#!/bin/sh` 脚本当作
+「opencode 可执行文件」，再交给生产代码去 spawn。Windows 上 `uv_spawn` 拒绝它：
+
+```
+spawn opencode failed: EFTYPE: inappropriate file type or format, uv_spawn
+```
+
+**这一簇比最初估计的大**，因为它的失败会伪装成别的东西。`fusion-engine.test.ts`
+两条报的是「取消后任务状态应为 canceled，实得 failed」，看起来像取消语义在 Windows
+上不同——实际是 runtime spawn 失败让任务先以 `failed` 收场。**先前把它归为「取消
+语义缺陷」的判断已证伪**；判据是同一条日志里紧邻的 `runtime-spawn-failed`。
+已知成员：`opencode-models.test.ts`（9）、`fusion-engine.test.ts`（2），以及任何
+以 `stub-opencode.sh` 形态出现的夹具。
+
+**为什么不能机械替换**：
+
+- 换 `.cmd`/`.bat` 没用——`uv_spawn` 同样拒绝批处理垫片（这正是插件安装那条
+  D17 缺陷的机制），除非经 shell，而经 shell 会引入 argv 重新切词的危险面；
+- 生产 API 收的是**单个路径字符串**（`listOpencodeModels(binary)`），所以假二进制
+  必须是「一个能被直接 spawn 的文件」，不能是 `bun script.js` 这种两段式。
+
+- ⏳ **(P1) 正解 = 沿用 T29 给 e2e stub 的做法**：编译**一个**跨平台 stub 可执行文件，
+  行为由它旁边的数据文件 / 环境变量选择，测试只负责写数据文件。T29 已经证明这条路
+  可行（11 种模式、golden 回放），差别只是要为后端单测再挂一个构建产物。
+- 在此之前**不得**声称这些路径在 Windows 上被覆盖。
+
+## Windows 上删不掉临时目录：EBUSY 不是「等一下就好」（RFC-254 T32，2026-08-05，未解）
+
+`db.test.ts` / `cli.test.ts` / `gettask-multi-repo.test.ts` 在 Windows 上于**拆卸阶段**
+失败：
+
+```
+EBUSY: resource busy or locked, rm 'C:\...\Temp\aw-db-xxxxxx'
+```
+
+失败落在 `afterAll` / `cleanup`，所以报表把它记成 `db client > (unnamed)` 这种条目，
+而该 describe 的真实用例全部通过——归因极具误导性。
+
+**已做且被证伪的两步**（记下来，免得下一个人重走）：
+
+1. **委托给 Node 的 `rmSync({ maxRetries, retryDelay })`——无效**。本套件跑在 Bun 下，
+   Bun 的 `node:fs.rmSync` **接受这两个选项但不实现重试**，调用看起来在重试，实际只
+   试了一次。判据：加上后拆卸耗时纹丝不动（0.6ms）。
+2. **改成显式重试循环（约 1 秒，见 `tests/fixtures/tempDir.ts`）——仍失败**。这次重试
+   确实在跑（拆卸耗时 0.6ms → ~1376ms，把预算烧满了），但目录依旧删不掉。
+
+所以句柄在 `$client.close()` 之后**存活超过一秒**。`$client` 确实存在且是 `Database`
+实例（已实测 `'$client' in db === true`），close 也确实被调用。
+
+- ⏳ **(P1) 下一步该查的是「谁还开着」，而不是「再等久一点」**：候选是 ①`cli.test.ts`
+  spawn 的 CLI 子进程未退出（其 cwd / 打开的文件会锁住目录，POSIX 上完全看不见）；
+  ②Bun 的 `bun:sqlite` 在 Windows 上 `close()` 后不立即释放文件（WAL 的 `-wal`/`-shm`
+  尤其可疑）。用 `handle.exe` / `Get-Process` 之类直接看持有者，比继续调重试参数有用。
+- **不要把重试预算再调大**当作修复——那只会把「永不释放」伪装成「很慢」。

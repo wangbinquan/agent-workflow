@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { applyConfigPatch, loadConfig } from '../src/config'
+import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')
 
@@ -216,7 +217,15 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
     // Token file mode preserved across restarts.
     const tokenFile = join(tmp, 'token')
     expect(existsSync(tokenFile)).toBe(true)
-    expect(statSync(tokenFile).mode & 0o777).toBe(0o600)
+    // RFC-254 T32: same reasoning as `auth-token.test.ts` — on Windows `chmod`
+    // is a no-op and `stat` synthesizes 0o666 for everything, so 0o600 is not a
+    // fact about this file there. What this assertion is really for — that a
+    // restart PRESERVES the token file rather than recreating it wide open — is
+    // asserted on both platforms by pinning whichever value the platform can
+    // actually report.
+    expect(statSync(tokenFile).mode & 0o777).toBe(
+      statMetadataIsAuthoritative(process.platform) ? 0o600 : 0o666,
+    )
 
     // Daemon log accumulated info.
     const logFile = join(tmp, 'logs', 'daemon.log')

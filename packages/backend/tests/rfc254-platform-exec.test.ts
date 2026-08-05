@@ -400,12 +400,26 @@ describe('RFC-254 — repo-relative paths in port data are portable, not host-fl
   // node's prompt, and matched by downstream workflow logic — so the same
   // workflow was producing different DATA depending on the host.
   test('backslashes become forward slashes; forward slashes are untouched', () => {
-    expect(toPortableRelativePath('docs\\a.md')).toBe('docs/a.md')
-    expect(toPortableRelativePath('matrix-generated\\kinds\\one.md')).toBe(
+    expect(toPortableRelativePath('docs\\a.md', 'win32')).toBe('docs/a.md')
+    expect(toPortableRelativePath('matrix-generated\\kinds\\one.md', 'win32')).toBe(
       'matrix-generated/kinds/one.md',
     )
-    expect(toPortableRelativePath('docs/a.md')).toBe('docs/a.md')
-    expect(toPortableRelativePath('')).toBe('')
+    expect(toPortableRelativePath('docs/a.md', 'win32')).toBe('docs/a.md')
+    expect(toPortableRelativePath('', 'win32')).toBe('')
+  })
+
+  // RFC-254 T32: the rewrite is gated on the platform where `\` IS a separator.
+  // POSIX allows `\` inside a filename, so rewriting it there does not normalize
+  // the path — it names a different one: `a\b.md` is ONE file, `a/b.md` is a
+  // file inside a directory. A port value, a call-graph ref or a prompt built
+  // from the rewritten form would point somewhere that does not exist.
+  test('POSIX keeps a backslash, because there it is part of the NAME', () => {
+    expect(toPortableRelativePath('a\\b.md', 'linux')).toBe('a\\b.md')
+    expect(toPortableRelativePath('a\\b.md', 'darwin')).toBe('a\\b.md')
+    // And the ordinary case is still untouched on every platform.
+    for (const platform of ['linux', 'darwin', 'win32'] as const) {
+      expect(toPortableRelativePath('docs/a.md', platform)).toBe('docs/a.md')
+    }
   })
 
   test('it is applied where the value becomes port data', () => {
@@ -422,6 +436,25 @@ describe('RFC-254 — repo-relative paths in port data are portable, not host-fl
       'utf8',
     )
     expect(artifacts).toContain('toPortableRelativePath(relative(realRoot, realTarget))')
+    // RFC-254 T32: the call-graph index is the third such site, and it is the
+    // one where the split was most damaging — the relative path IS the `ref`
+    // (`src/A.java#A.run`) and the `ownerClass` that callers pass BACK IN. On
+    // Windows the service emitted `src\A.java#A.run` while every caller and
+    // fixture spells it with `/`, so a ref it produced could not be fed to it
+    // on the platform that produced it.
+    const expandService = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'services',
+        'structuralDiff',
+        'callGraph',
+        'expandService.ts',
+      ),
+      'utf8',
+    )
+    expect(expandService).toContain('toPortableRelativePath(relative(root, join(dir, e.name)))')
   })
 })
 

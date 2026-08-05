@@ -4,7 +4,7 @@
 // status which need a real daemon, spawn one subprocess per scenario.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { configGetCommand, configSetCommand } from '../src/cli/config-cli'
@@ -12,6 +12,7 @@ import { doctorCommand, formatDoctor } from '../src/cli/doctor'
 import { migrateCommand } from '../src/cli/migrate'
 import { statusCommand, formatStatus } from '../src/cli/status'
 import { stopCommand } from '../src/cli/stop'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')
 
@@ -28,7 +29,7 @@ describe('CLI subcommands (P-1-05)', () => {
   afterEach(() => {
     if (origHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
     else process.env.AGENT_WORKFLOW_HOME = origHome
-    rmSync(tmp, { recursive: true, force: true })
+    removeTempDirSync(tmp)
   })
 
   // --- config get / set ---

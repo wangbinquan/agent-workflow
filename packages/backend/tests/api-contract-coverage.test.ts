@@ -8,7 +8,7 @@
 
 import { describe, test, expect } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { ENDPOINTS, type HttpMethod } from './contracts/registry'
 
 const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
@@ -120,7 +120,13 @@ function discoverNonLiteralMounts(): string[] {
     let m: RegExpExecArray | null
     while ((m = re.exec(src)) !== null) {
       const line = src.slice(0, m.index).split('\n').length
-      out.push(`${f.split('/').slice(-1)[0]}:${line} app.${m[1]}(${m[2]}…)`)
+      // RFC-254 T32: `basename`, not `split('/')`. The hand-rolled version
+      // returns the WHOLE path on Windows, where the separator is `\`, so every
+      // entry here was spelled `C:\...\resourceAcl.ts:NN` and the
+      // `startsWith('resourceAcl.ts:')` check below matched nothing — the guard
+      // reported zero known blind spots and read like the ACL mounts had
+      // vanished.
+      out.push(`${basename(f)}:${line} app.${m[1]}(${m[2]}…)`)
     }
     // RFC-247 T3: the same blind spot in the registerRoute form. A declaration
     // whose `path` is a variable (the templated ACL mounts) is invisible to
@@ -133,9 +139,7 @@ function discoverNonLiteralMounts(): string[] {
     const reReg = /\bregisterRoute\s*\(\s*app\s*,\s*\{[^}]*?path(?::\s*([^'"\s,]))?\s*,/gs
     while ((m = reReg.exec(src)) !== null) {
       const line = src.slice(0, m.index).split('\n').length
-      out.push(
-        `${f.split('/').slice(-1)[0]}:${line} registerRoute(path: ${m[1] ?? '<shorthand>'}…)`,
-      )
+      out.push(`${basename(f)}:${line} registerRoute(path: ${m[1] ?? '<shorthand>'}…)`)
     }
   }
   return out

@@ -14,6 +14,7 @@ import {
   type RootOwnedBwrapPathDependencies,
   type RootOwnedBwrapQualificationError,
 } from '../src/services/runtime/opencode/sealedSubprocess'
+import { NO_POSIX_CONTAINMENT } from './fixtures/platformScope'
 
 /** Minimal stat shape the qualifier consumes. */
 function entry(input: {
@@ -71,7 +72,14 @@ async function qualify(overrides: Record<string, ReturnType<typeof entry>>) {
   }
 }
 
-describe('requireRootOwnedBwrap path diagnostics', () => {
+// RFC-254 T32: `requireRootOwnedBwrap` is the Linux bwrap qualifier, so every
+// diagnostic below names a POSIX condition (root ownership, parent-directory
+// safety, setuid bits). On Windows the fixtures' POSIX paths fail the CANONICAL
+// check first — the suite reported `provider-path-not-canonical` where it
+// expected `provider-parent-unsafe`, which reads like a diagnostic regression
+// and is really `/usr/bin/bwrap` resolving to `D:\usr\bin\bwrap`. See
+// `fixtures/platformScope.ts` for why this is scoped rather than fixed.
+describe.skipIf(NO_POSIX_CONTAINMENT)('requireRootOwnedBwrap path diagnostics', () => {
   test('a non-root ANCESTOR names that exact directory (the runner-image case)', async () => {
     const error = await qualify({ '/usr/bin': entry({ uid: 1000, mode: 0o755, dir: true }) })
     expect(error?.reason).toBe('provider-parent-unsafe')

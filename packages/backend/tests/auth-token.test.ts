@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ensureTokenFile, generateToken, rotateTokenFile, tokenAuth } from '../src/auth/token'
+import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
 import { Hono } from 'hono'
 import { errorHandler } from '../src/util/errors'
 
@@ -38,7 +39,23 @@ describe('token file management', () => {
   test('ensureTokenFile sets mode 0600', () => {
     ensureTokenFile(tokenPath)
     const mode = statSync(tokenPath).mode & 0o777
-    expect(mode).toBe(0o600)
+    // RFC-254 T32: POSIX mode bits are only meaningful where `stat` is the
+    // authority on who can read the file. On Windows `chmod` is a no-op and
+    // `stat` answers a synthesized 0o666 for every file — asserting 0o600 there
+    // measures nothing and fails for a reason that has nothing to do with the
+    // token. Confidentiality on that platform comes from the ACL the per-user
+    // app home carries, which is what `doctor`'s secret-file check reports and
+    // what the file-trust primitive verifies; the same primitive decides here
+    // whether the mode is worth asserting at all.
+    if (statMetadataIsAuthoritative(process.platform)) {
+      expect(mode).toBe(0o600)
+      return
+    }
+    // The mode is not the guarantee here, so assert what IS true: the file was
+    // created, and the platform reports the permissions it always reports —
+    // pinning that keeps this branch honest instead of vacuous.
+    expect(existsSync(tokenPath)).toBe(true)
+    expect(mode).toBe(0o666)
   })
 
   test('rotateTokenFile overwrites existing token', () => {
