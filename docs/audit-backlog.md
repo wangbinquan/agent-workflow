@@ -895,3 +895,18 @@ TypeError: null is not an object (evaluating 'task.worktreePath')
   与 linux/macOS 不同——那属于「该断言在该平台上不稳」，处理方式是让扫描排除该规则
   并说明，而不是调阈值。
 - 若长期不复现，也**不要**默默删掉本条；改成注明观察窗口与结论。
+
+## `fake-npm.sh` 夹具仍是 A 类（RFC-254 T32，2026-08-05）
+
+`npm` 垫片解包（`resolveNpmCommand`）已落地并在 Windows 实测通过，但
+`agent-plugin-not-found.test.ts` / `plugin-closure.test.ts` 仍红 4 条——它们传的
+`npmBin` 指向签入的 `packages/backend/tests/fixtures/fake-npm.sh`，那是**假二进制**
+问题，不是垫片问题：解包器看到一个绝对路径的 `.sh`，既不是 `.cmd` 也不是 `.bat`，
+于是原样返回，spawn 照样 EFTYPE。
+
+- ⏳ **(P1) 可行方向**：让 `resolveNpmCommand` 顺带识别 `.ts`/`.js`/`.mjs` 入口并
+  交给当前运行时执行（`[runtimePath, entry]`），夹具随之从 `fake-npm.sh` 改写为
+  `fake-npm.ts`。这条扩展在生产上也说得通——运维完全可以把 `npmBin` 指向一个 JS
+  入口——而且与既有的「绕开垫片」语义同源，不引入 shell。
+- **不要**用 `.cmd` 重写该夹具：它接收的参数里有 `spec`（用户可控），而 `.cmd` 会
+  经 cmd.exe 重新切词（本文件另有实测记录）。

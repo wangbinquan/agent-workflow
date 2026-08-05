@@ -22,9 +22,10 @@
 //   everything else                                       → npm
 
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
+import path, { dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import type { PluginSourceKind } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { redactSensitiveString } from '@/util/redact'
@@ -138,8 +139,18 @@ export async function probeNpmBinary(): Promise<boolean> {
   }
   let available = false
   try {
-    const { exitCode } = await runCommand('npm', ['--version'], { timeoutMs: 5_000 })
-    available = exitCode === 0
+    // RFC-254 T32: unwrap the Windows shim BEFORE probing, otherwise the probe
+    // reports npm as unavailable on every Windows host — it is present, it just
+    // cannot be spawned as a batch file.
+    const cmd = resolveNpmCommandForHost('npm')
+    if (cmd === null) {
+      available = false
+    } else {
+      const { exitCode } = await runCommand(cmd[0]!, [...cmd.slice(1), '--version'], {
+        timeoutMs: 5_000,
+      })
+      available = exitCode === 0
+    }
   } catch {
     available = false
   }
@@ -218,9 +229,22 @@ async function installPluginGeneration(
   // picks the wrong package whenever npm flattens transitive deps alongside
   // the requested one (e.g. for `github:…/opencode-toolkit#v0.2.6` we
   // previously surfaced `zod`'s version because readdir returned it first).
+  // RFC-254 T32: same unwrapping as the probe. `spec` is user-supplied, so the
+  // call must stay shell-free — see `resolveNpmCommand`.
+  const npmCmd = resolveNpmCommandForHost(npmBin)
+  if (npmCmd === null) throw new NpmUnavailableError()
   const { stdout, stderr, exitCode } = await runCommand(
-    npmBin,
-    ['install', '--prefix', pluginDir, '--no-audit', '--no-fund', '--silent', spec],
+    npmCmd[0]!,
+    [
+      ...npmCmd.slice(1),
+      'install',
+      '--prefix',
+      pluginDir,
+      '--no-audit',
+      '--no-fund',
+      '--silent',
+      spec,
+    ],
     { timeoutMs },
   )
   if (exitCode !== 0) {
@@ -594,6 +618,71 @@ interface CommandResult {
   stdout: string
   stderr: string
   exitCode: number
+}
+
+/**
+ * RFC-254 T32/D17 — how to invoke `npm` on a platform where `npm` is a batch shim.
+ *
+ * On Windows `npm` resolves to `npm.cmd`, and `node:child_process.spawn` refuses
+ * batch files outright:
+ *   EFTYPE: inappropriate file type or format, uv_spawn
+ * so plugin installation and its availability probe both failed there — every
+ * install, not an edge case.
+ *
+ * THE TWO OBVIOUS FIXES ARE BOTH WRONG, AND ONE OF THEM IS DANGEROUS.
+ * `shell: true` and `Bun.spawn` (which accepts `.cmd` and hands it to cmd.exe)
+ * make the call SUCCEED while re-tokenizing the arguments. Measured on Windows:
+ *   ['a&whoami'] → the argument becomes `a` and `whoami` EXECUTES
+ *   ['%PATH%']   → the variable expands and splits on spaces
+ * The argument here is a user-supplied package spec (`github:owner/repo#ref`),
+ * so that is a command-injection channel, not a compatibility fix.
+ *
+ * So the shim is bypassed instead: npm ships its own JS entry next to the shim,
+ * and running that with the current runtime keeps the call shell-free, which is
+ * what preserves argv exactly. Verified on Windows 11 — `npm-cli.js` resolves
+ * beside `npm.cmd` and reports the same version through both bun and node.
+ *
+ * Fails CLOSED: if the shim cannot be resolved to a JS entry, this returns null
+ * and the caller reports npm as unavailable rather than quietly reaching for a
+ * shell.
+ */
+export function resolveNpmCommandForHost(bin: string): string[] | null {
+  return resolveNpmCommand(bin, {
+    platform: process.platform,
+    which: (cmd) => Bun.which(cmd),
+    exists: existsSync,
+    runtimePath: process.execPath,
+  })
+}
+
+export function resolveNpmCommand(
+  bin: string,
+  deps: {
+    platform: NodeJS.Platform
+    which: (cmd: string) => string | null
+    exists: (path: string) => boolean
+    runtimePath: string
+  },
+): string[] | null {
+  if (deps.platform !== 'win32') return [bin]
+  // Path SEMANTICS travel with the injected platform, not with the host. Using
+  // the host's `node:path` here made every Windows case unreachable from a
+  // POSIX test run: `isAbsolute('C:\\tools\\npm.exe')` is false there and
+  // `dirname` does not recognise `\` as a separator, so the branch under test
+  // silently took a different path than it does in production.
+  const winPath = path.win32
+  const resolved = winPath.isAbsolute(bin) ? bin : deps.which(bin)
+  if (resolved === null) return null
+  // A path that is already a real executable needs no unwrapping.
+  if (!/\.(?:cmd|bat)$/i.test(resolved)) return [resolved]
+  const dir = winPath.dirname(resolved)
+  const candidates = [
+    winPath.join(dir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    winPath.join(dir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ]
+  const entry = candidates.find((candidate) => deps.exists(candidate))
+  if (entry === undefined) return null
+  return [deps.runtimePath, entry]
 }
 
 function runCommand(
