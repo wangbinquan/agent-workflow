@@ -9,7 +9,7 @@
 // into the default isolated path — investigate before relaxing.
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,6 +24,24 @@ import { reenterScheduler } from './reenter-scheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
+
+// RFC-254 T32: the single case here drives several real clarify rounds through
+// the scheduler and spawns the mock runtime once per round, so it pays process
+// cost per round rather than assertion cost — the shape that turns a busy host
+// into a red test.
+//
+// Ignore the printed duration when judging the margin: bun's per-test figure
+// INCLUDES beforeEach/afterEach, while the 5s default applies to the body alone
+// (probed: 3s hook + 3s body prints 6.02s and passes). This suite builds its
+// harness in a hook, so the ~4.7s printed on a quiet Windows host is not a
+// 300ms margin, and it did survive two deliberately CPU-starved runs. The
+// budget is here because the BODY still spawns per round.
+//
+// What a clock-induced red would cost HERE is the reason to be generous: this
+// test's whole job is to prove `--session` never reaches the isolated spawn, so
+// a timeout reads as "RFC-026 bled inline behaviour into the isolated path" —
+// a far more alarming claim than "the host was busy".
+setDefaultTimeout(60_000)
 
 async function buildHarness() {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc026-parity-'))

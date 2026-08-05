@@ -194,7 +194,13 @@ iso 从一个已删除的目录上建，报出那四行**点名 git 的**错误�
 同一负载逐个实测**（推翻了「贴着上限 ⇒ 会红」的直觉）：五个候选里只有
 `rfc130-node-isolation`（安静时最慢 4947ms ≈ 默认的 99%）真红 3 条、**已修并同负载复测
 5 pass / 0 fail**；`rfc210-git-diff-subrepo-paths` / `clarify-inline-isolated-parity` /
-`git-repo-cache` 扛住了留 P2。**并订正一处**：`task-start-git-identity` 的 3 条红不是预算
+`git-repo-cache` 两轮负载都扛住了。**用户指示把后两个也补上预算**，已补并同负载复测
+31 pass / 0 fail；`rfc210-git-diff-subrepo-paths` **本来就逐条 120s**，从来不在风险里
+——原表把它列进来是错的。**顺带订正一条度量口径**：bun 报表里的耗时**含 hook**，而 5s
+超时**只管 test body**（探针实测 3s hook + 3s body ⇒ 报表 6.02s 仍 pass），所以不能按
+报表数字给「贴着上限」排序，判据是 body 里做了多少真 I/O——这正是把重活放 `beforeEach`
+的那两个文件报表数字大却不红、而 body 里做真 git 的 `rfc130-node-isolation` 真红的原因。
+**并订正一处**：`task-start-git-identity` 的 3 条红不是预算
 （它本就有预算），是 `stub-opencode-env.sh` 这个 `.sh` 假二进制 EFTYPE——即「**A 类清零**」
 只在当时取样到的文件上成立、**不是全仓成立**，`tests/` 下写 shell shebang 的还有几十个。
 **CI 判定**：`28d32465` 的 CI 唯一红是 Windows e2e 的 `intent-builder` axe `color-contrast`

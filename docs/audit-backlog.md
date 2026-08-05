@@ -927,27 +927,39 @@ P1——而它们全是 bun 自己那个超时回收的下游。** 这类误导�
   （无假二进制、stub 逻辑随套件一起类型检查、与平台无关），它只是让流程往下多跑了
   一段，从而把这条预算问题露出来。
 
-### 同一形态的下一批：**已按同一负载逐个实测**，红的那个已修
+### 同一形态的下一批：已按同一负载逐个实测，并**订正了我自己的度量口径**
 
 先从整簇复扫（55 个文件、安静的 Windows 机器）里量出**通过但贴着上限**的用例，再把
 负载造回来逐个跑，结果**推翻了「贴着上限 ⇒ 会红」的直觉**——只有一个真红：
 
-| 文件 | 安静时最慢一条 | 同负载复跑 |
-|---|---|---|
-| `rfc130-node-isolation.test.ts` | **4947**（≈默认的 99%） | **3 条超时红 → 已加 `setDefaultTimeout(60_000)`，同负载复测 5 pass / 0 fail** |
-| `rfc210-git-diff-subrepo-paths.test.ts` | 4749 | 扛住了 |
-| `clarify-inline-isolated-parity.test.ts` | 4729 | 扛住了 |
-| `git-repo-cache.test.ts` | 4645 | 扛住了 |
-| `task-start-git-identity.test.ts` | 4463 | 红 3 条，但**不是预算问题**，见下 |
+| 文件 | 复扫里最慢一条（报表值） | 同负载复跑 | 现状 |
+|---|---|---|---|
+| `rfc130-node-isolation.test.ts` | 4947 | **3 条超时红** | 已加 `setDefaultTimeout(60_000)`，同负载复测 5 pass / 0 fail |
+| `git-repo-cache.test.ts` | 4645 | 扛住（两轮） | 已加预算（用户指示），同负载复测绿 |
+| `clarify-inline-isolated-parity.test.ts` | 4729 | 扛住（两轮） | 已加预算（用户指示），同负载复测绿 |
+| `rfc210-git-diff-subrepo-paths.test.ts` | 4749 | 扛住（两轮） | **本来就逐条 120s**，从来不在风险里——原表把它列进来是错的 |
+| `task-start-git-identity.test.ts` | 4463 | 红 3 条 | **不是预算问题**，见下 |
 
-- ⏳ **(P2)** 那三个「扛住了」的仍然只有毫秒级余量，值得在下一批里一并给预算；但**没
-  有红可对照**，所以本轮不动——先量再改这一条，本身就是这次得到的教训。
-- **一处对既有记录的订正**：`task-start-git-identity` 的 3 条红**与预算无关**（它本来
-  就声明了预算），真因是 `stub-opencode-env.sh` 这个 **`.sh` 假二进制**在 Windows 上
-  `EFTYPE`——也就是**「A 类清零」这个说法只在当时取样到的那几个文件上成立，不是全仓
-  成立**。`packages/backend/tests` 下写 shell shebang 的文件仍有几十个（`grep -rl
-  '#!/bin/sh\|#!/usr/bin/env bash'`），其中哪些真正会在 Windows 上被执行到，需要按
-  「这个 stub 会不会被 spawn」逐个判，不能按文件名猜。
+#### ⚠️ 度量口径订正：**bun 报表里的耗时含 hook，而 5s 超时只管 test body**
+
+这条把上面整张表的「风险排序」推翻了一半。直接探针（3s `beforeEach` + 3s body，默认
+预算）实测：**报表打印 6.02s，测试照样 pass**。所以：
+
+- **不能按报表耗时给「贴着上限」排序**——把重活放在 `beforeEach` 里的文件，报表数字
+  很大而 body 很轻，风险其实低；这正是 `git-repo-cache` / `clarify-inline-isolated-parity`
+  报表 4.6–4.7s（负载下甚至 5.5–6.0s）却两轮都没红的原因。
+- 真红的 `rfc130-node-isolation` 恰恰相反：它每条用例**在 body 里**建仓、快照、
+  `worktree add`、merge back，所以报表值几乎就是 body 值。
+- **判据应当是「body 里做了多少真 I/O」，不是报表数字。** 报表数字只配当粗筛。
+
+#### 一处对既有记录的订正（与预算无关）
+
+`task-start-git-identity` 的 3 条红**与预算无关**（它本来就声明了预算），真因是
+`stub-opencode-env.sh` 这个 **`.sh` 假二进制**在 Windows 上 `EFTYPE`——也就是
+**「A 类清零」这个说法只在当时取样到的那几个文件上成立，不是全仓成立**。
+`packages/backend/tests` 下写 shell shebang 的文件仍有几十个（`grep -rl
+'#!/bin/sh\|#!/usr/bin/env bash'`），其中哪些真正会在 Windows 上被执行到，需要按
+「这个 stub 会不会被 spawn」逐个判，不能按文件名猜。
 
 一个佐证顺带记下：`rfc130-iso-worktree-primitives` 的 `hasDirtySubmoduleContent` 在
 这次复扫里跑了 **9339ms**——所以给它 60s 而不是「比实测高一点」的 10s 是对的。

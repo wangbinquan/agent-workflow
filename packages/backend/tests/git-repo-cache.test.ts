@@ -2,7 +2,7 @@
 // concurrent-same-URL behavior of services/gitRepoCache.ts. Uses a real
 // local bare repo as the "remote" so the suite exercises git itself.
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { describe, expect, test, setDefaultTimeout, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -21,6 +21,23 @@ import { resolveRepoSourceSingle } from '../src/services/task'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+// RFC-254 T32: every case here clones, fetches and re-resolves against a real
+// local bare repo, so what it spends is git's time on the host, not assertion
+// time — exactly the shape that turns a busy machine into a red test.
+//
+// Note on the numbers, because the obvious ones mislead: bun's printed
+// per-test duration INCLUDES beforeEach/afterEach, while the 5s default applies
+// to the body alone (probed directly: 3s hook + 3s body prints 6.02s and
+// passes). This file does a good deal of its setup in hooks, so its 4.6s
+// printed on a quiet Windows host is not a 400ms margin, and indeed it survived
+// two deliberately CPU-starved runs. The budget is here because the BODY still
+// drives real git, not because of that printed figure.
+//
+// A timeout would not fail politely either — bun reaps the test's children
+// mid-clone, and the wreckage reads as a git defect rather than a slow host
+// (fusion-engine.test.ts records the case where that cost a wrong P1).
+setDefaultTimeout(60_000)
 
 async function spawnGitInit(cwd: string, ...args: string[]): Promise<void> {
   const proc = Bun.spawn({

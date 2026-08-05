@@ -483,7 +483,17 @@ iso 从一个已被删除的目录上建，于是报出那四行**点名 git 的
 候选里只有 `rfc130-node-isolation`（安静时最慢 **4947ms**，≈默认的 99%）真红 3 条，
 **已加 `setDefaultTimeout(60_000)`，同负载复测 5 pass / 0 fail**；
 `rfc210-git-diff-subrepo-paths`(4749) / `clarify-inline-isolated-parity`(4729) /
-`git-repo-cache`(4645) 扛住了，留 P2。
+`git-repo-cache`(4645) 两轮负载都扛住了。**用户指示把后两个也补上预算**（已补，同负载
+复测 31 pass / 0 fail）；`rfc210-git-diff-subrepo-paths` **本来就逐条 120s**，从来不在
+风险里——原表把它列进来是错的。
+
+> **度量口径订正（把上面这张表的排序推翻了一半）**：bun 报表里的每条耗时**含
+> `beforeEach`/`afterEach`**，而默认 5s 超时**只管 test body**。直接探针实测：3s hook
+> \+ 3s body ⇒ 报表打印 **6.02s，测试照样 pass**。所以把重活放 `beforeEach` 的文件
+> 报表数字大而风险低（`git-repo-cache` / `clarify-inline-isolated-parity` 在负载下
+> 报表已到 5.5–6.0s，两轮都没红），而在 body 里做真 I/O 的文件报表值≈body 值
+> （`rfc130-node-isolation` 就是这一类，所以它真红）。**判据是 body 里做了多少真
+> I/O，报表数字只配当粗筛。**
 
 **顺带订正一处既有记录**：`task-start-git-identity` 那 3 条红**不是预算问题**（它本就
 声明了预算），真因是 `stub-opencode-env.sh` 这个 `.sh` 假二进制在 Windows 上 `EFTYPE`
