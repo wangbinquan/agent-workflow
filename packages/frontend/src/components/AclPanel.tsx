@@ -107,6 +107,11 @@ export function AclPanel({
   const [dirty, setDirty] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferTo, setTransferTo] = useState<UserPublic[]>([])
+  // The mutation fence belongs to the snapshot the user started editing,
+  // not whichever revision React Query happens to hold when they click Save.
+  // Keep it frozen while either ACL editor is open/dirty so a background
+  // refetch cannot silently rebase a stale full-replace draft.
+  const draftBaselineRef = useRef<Pick<ResourceAcl, 'resourceId' | 'aclRevision'> | null>(null)
   // WebKit doesn't focus a <button> on mouse click, so the transfer Dialog's
   // auto-captured `document.activeElement` at open time is <body> and its
   // close-time focus-restore becomes a no-op. Hand the Dialog this explicit
@@ -116,11 +121,22 @@ export function AclPanel({
   const transferBtnRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
-    if (query.data !== undefined && !dirty) {
+    if (query.data !== undefined && !dirty && !transferOpen) {
       setVisibility(query.data.visibility)
       setMembers(query.data.users)
+      draftBaselineRef.current = {
+        resourceId: query.data.resourceId,
+        aclRevision: query.data.aclRevision,
+      }
     }
-  }, [query.data, dirty])
+    if (query.data !== undefined && !query.data.canManage) {
+      // A live permission downgrade must also dismiss the nested mutation UI.
+      // The Dialog's `open` prop is gated below for the first render; clearing
+      // the state here prevents it from reopening if access is later restored.
+      setTransferOpen(false)
+      setTransferTo([])
+    }
+  }, [query.data, dirty, transferOpen])
 
   const save = useMutation({
     mutationFn: (body: {
@@ -130,18 +146,22 @@ export function AclPanel({
     }) => {
       // RFC-170 §8: echo the composite OCC precondition the panel currently holds
       // so the server CAS-rejects (409) a write racing another writer's change.
-      const current = qc.getQueryData<ResourceAcl>(['acl', aclUrl])
-      if (current === undefined) {
+      const baseline = draftBaselineRef.current
+      if (baseline === null) {
         throw new Error('ACL snapshot unavailable; reload before saving')
       }
       return api.put<ResourceAcl>(aclUrl, {
         ...body,
-        expectedResourceId: current.resourceId,
-        expectedAclRevision: current.aclRevision,
+        expectedResourceId: baseline.resourceId,
+        expectedAclRevision: baseline.aclRevision,
       })
     },
     onSuccess: (next, body) => {
       qc.setQueryData(['acl', aclUrl], next)
+      draftBaselineRef.current = {
+        resourceId: next.resourceId,
+        aclRevision: next.aclRevision,
+      }
       setDirty(false)
       setTransferOpen(false)
       setTransferTo([])
@@ -152,9 +172,10 @@ export function AclPanel({
     },
     onError: () => {
       // RFC-170 §8: a failed save (esp. a 409 revision conflict) means the panel's
-      // held revision is stale — refetch so it shows the current owner/grants/
-      // revision (and a retry uses the fresh revision). The draft stays dirty so
-      // the user can review + re-apply; the error text shows via describeApiError.
+      // held revision is stale — refetch the authoritative owner/grants/revision.
+      // The draft fence deliberately stays frozen: retrying the same stale draft
+      // must keep conflicting until the user closes/reopens and reviews a fresh
+      // snapshot. The error text shows via describeApiError.
       void qc.invalidateQueries({ queryKey: ['acl', aclUrl] })
     },
   })
@@ -187,7 +208,15 @@ export function AclPanel({
               ref={transferBtnRef}
               type="button"
               className="btn btn--sm"
-              onClick={() => setTransferOpen(true)}
+              onClick={() => {
+                if (!dirty) {
+                  draftBaselineRef.current = {
+                    resourceId: acl.resourceId,
+                    aclRevision: acl.aclRevision,
+                  }
+                }
+                setTransferOpen(true)
+              }}
               data-testid="acl-transfer-owner"
             >
               {t('acl.transferOwner')}
@@ -204,6 +233,12 @@ export function AclPanel({
           <Segmented<ResourceVisibility>
             value={visibility}
             onChange={(v) => {
+              if (!dirty) {
+                draftBaselineRef.current = {
+                  resourceId: acl.resourceId,
+                  aclRevision: acl.aclRevision,
+                }
+              }
               setVisibility(v)
               setDirty(true)
             }}
@@ -225,17 +260,23 @@ export function AclPanel({
           <UserPicker
             value={members}
             onChange={(next) => {
+              if (!dirty) {
+                draftBaselineRef.current = {
+                  resourceId: acl.resourceId,
+                  aclRevision: acl.aclRevision,
+                }
+              }
               setMembers(next)
               setDirty(true)
             }}
             excludeIds={acl.ownerUserId !== null ? [acl.ownerUserId] : []}
             testidPrefix="acl-members"
           />
-        ) : members.length === 0 ? (
+        ) : acl.users.length === 0 ? (
           <span className="muted">{t('acl.noMembers')}</span>
         ) : (
           <span className="acl-panel__value">
-            {members.map((u) => (
+            {acl.users.map((u) => (
               <span key={u.id} className="chip">
                 {u.displayName}
               </span>
@@ -244,7 +285,7 @@ export function AclPanel({
         )}
       </div>
 
-      {visibility === 'private' && (
+      {(canManage ? visibility : acl.visibility) === 'private' && (
         <p className="acl-panel__hint page__hint">{t('acl.privateHint')}</p>
       )}
 
@@ -270,7 +311,7 @@ export function AclPanel({
       </div>
 
       <Dialog
-        open={transferOpen}
+        open={canManage && transferOpen}
         onClose={() => setTransferOpen(false)}
         title={t('acl.transferTitle')}
         size="sm"

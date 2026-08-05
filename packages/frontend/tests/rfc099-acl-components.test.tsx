@@ -5,7 +5,7 @@
 //     hidden entirely under the daemon-token actor (D19)
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
 
@@ -35,10 +35,13 @@ const mockedGet = vi.mocked(api.get)
 const mockedPost = vi.mocked(api.post)
 const mockedPut = vi.mocked(api.put)
 
-function wrap(node: React.ReactElement) {
-  const qc = new QueryClient({
+function makeQueryClient() {
+  return new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
+}
+
+function wrap(node: React.ReactElement, qc = makeQueryClient()) {
   return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
 }
 
@@ -192,6 +195,86 @@ describe('AclPanel', () => {
     expect(screen.getByText('DN bob')).toBeTruthy()
   })
 
+  test('read-only view uses the ACL snapshot after an unsaved manager draft', async () => {
+    // Regression: `members` is the editable draft and deliberately stops syncing while dirty.
+    // If access changes during that window, the read-only branch must render authoritative
+    // `acl.users`; otherwise it leaks the stale draft after management access is revoked.
+    setupGet({ canManage: true })
+    const qc = makeQueryClient()
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />, qc)
+    await waitFor(() => expect(screen.getByText('DN bob')).toBeTruthy())
+
+    fireEvent.click(screen.getByTestId('acl-visibility-private'))
+    fireEvent.click(screen.getByTestId('acl-transfer-owner'))
+    await waitFor(() => expect(screen.queryByTestId('acl-transfer-dialog')).toBeTruthy())
+
+    act(() => {
+      qc.setQueryData(['acl', '/api/agents/x/acl'], {
+        resourceType: 'agent',
+        resourceId: 'a1',
+        ownerUserId: 'owner-1',
+        owner: user('owner-1', 'alice'),
+        visibility: 'public',
+        users: [user('u3', 'carol')],
+        canManage: false,
+        aclRevision: 4,
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('acl-save')).toBeNull()
+      expect(screen.getByText('DN carol')).toBeTruthy()
+      expect(screen.queryByText('DN bob')).toBeNull()
+      expect(screen.queryByTestId('acl-transfer-dialog')).toBeNull()
+      expect(
+        screen.queryByText(
+          'Private resources are visible and usable only by the owner and authorized users; admins always see everything.',
+        ),
+      ).toBeNull()
+    })
+  })
+
+  test('saving a dirty draft keeps the revision captured before a background ACL update', async () => {
+    setupGet({ canManage: true })
+    mockedPut.mockResolvedValue({
+      resourceType: 'agent',
+      resourceId: 'a1',
+      ownerUserId: 'owner-1',
+      owner: user('owner-1', 'alice'),
+      visibility: 'private',
+      users: [user('u2', 'bob')],
+      canManage: true,
+      aclRevision: 5,
+    })
+    const qc = makeQueryClient()
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />, qc)
+    await waitFor(() => expect(screen.getByText('DN bob')).toBeTruthy())
+
+    fireEvent.click(screen.getByTestId('acl-visibility-private'))
+
+    act(() => {
+      qc.setQueryData(['acl', '/api/agents/x/acl'], {
+        resourceType: 'agent',
+        resourceId: 'a1',
+        ownerUserId: 'owner-1',
+        owner: user('owner-1', 'alice'),
+        visibility: 'public',
+        users: [user('u3', 'carol')],
+        canManage: true,
+        aclRevision: 4,
+      })
+    })
+
+    fireEvent.click(screen.getByTestId('acl-save'))
+    await waitFor(() => expect(mockedPut).toHaveBeenCalled())
+    expect(mockedPut).toHaveBeenCalledWith('/api/agents/x/acl', {
+      visibility: 'private',
+      userIds: ['u2'],
+      expectedResourceId: 'a1',
+      expectedAclRevision: 3,
+    })
+  })
+
   test('canTransferOwner defaults to true — a manager sees the transfer control', async () => {
     setupGet({ canManage: true })
     wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
@@ -240,6 +323,7 @@ describe('AclPanel', () => {
       visibility: 'private',
       users: [],
       canManage: true,
+      aclRevision: 4,
     })
     wrap(<AclDialogButton resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
     const btn = await screen.findByTestId('acl-dialog-button')
