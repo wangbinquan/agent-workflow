@@ -9,7 +9,7 @@
 // real diff/manifest/incorporated⊆selected reconcile + the atomic apply
 // (skill version bump + memory fuse) + OCC).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import {
   existsSync,
   mkdirSync,
@@ -45,6 +45,35 @@ import { getSkillVersionContent } from '../src/services/skillVersion'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
+
+// RFC-254 T32 — WHY THIS FILE NEEDS AN EXPLICIT BUDGET, AND WHAT IT PREVENTS
+// ---------------------------------------------------------------------------
+// Most tests below launch the engine task FOR REAL: seed a git repo, run a
+// workflow, spawn the stub runtime, park on clarify. On a quiet Windows host
+// that is 1.5–3.4s per test — already 30–70% of bun's 5s default — so the
+// margin is one slow host away from gone. It was measured gone: with the four
+// cores of the sampling VM held busy, ten of these went red at ~5.1s each.
+//
+// The timeout is not merely noise here, it CORRUPTS THE RUN. bun reaps the
+// timed-out test's children, so an in-flight `git rev-list` dies with SIGTERM
+// (exit 143); `seedWorktree` reads that as a failed baseline and throws;
+// `createFusion`'s cleanup then deletes the fusion work dir it still owns —
+// while the task that test already launched is still being scheduled. The
+// scheduler then reports things that read like a Windows git defect and are
+// nothing of the sort:
+//
+//   git worktree add (iso): fatal: cannot change to '...\iter1\work'
+//   workspace-missing: canonical worktree does not exist: ...\iter1\work
+//   TypeError: null is not an object (evaluating 'task.worktreePath')
+//
+// Lines of exactly that shape were once filed as "fusion's iso worktree is
+// broken on Windows" (docs/audit-backlog.md). They are downstream of this
+// budget — which line you get depends on how far the delete had progressed, so
+// the tell is not any one of them, it is an `exited 143` / `timed out after`
+// in the same log. Keep the budget generous: nothing here gets slower except by
+// doing more real work, and a test sitting near its own deadline eventually
+// turns into a false bug report about git.
+setDefaultTimeout(60_000)
 
 // Use the migration-seeded '__system__' admin user so task-membership inserts
 // (which FK to users.id) succeed.

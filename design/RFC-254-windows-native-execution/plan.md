@@ -443,10 +443,82 @@ win32 视觉基线现在**不再被阻塞**——e2e 已能在 Windows 上跑，
 | EBUSY 拆卸（`db` / `cli` / `gettask-multi-repo`） | ~6 | 先定位句柄持有者 |
 | `agent.plugins`（`spawn('npm')` 撞 `.cmd` 垫片） | 4 | 生产缺陷，需独立改动且不得用 `shell: true` |
 
+上表三行**已全部结案**（见下方第二、三轮）：A 类清零（`fusion-engine` 换缝 +
+`fake-npm` 移植为 TS）；EBUSY 定位到根因（`close()` 没真关上，句柄不可排空）并按
+「拆卸是卫生不是断言」处理，表上列的三个文件加第三轮的 `rfc213` 都已收；
+`agent.plugins` 的垫片已绕开。**注意这不等于「全仓 EBUSY 清零」**——同一形态（裸
+`rmSync` 拆卸 + 目录里有开着的 sqlite）在别处仍可能存在，只是**还没被测到**，因为
+Windows 全量跑不完（见下方）。**新的剩余项以 backlog 为准**，不再维护本表。
+
 **取样器本身的教训**（已同步 `docs/dev-gotchas.md` 的候选）：拿一台真机做勘测时，
 **先证明树与 HEAD 一致**再信它的失败清单；两次全量并发写同一个输出文件会得到
 无法归属的混合结果；wipe 掉 `packages/` 会连 workspace 内的 `node_modules` 一起带走，
 表现为 `Cannot find package 'zod'` 这种与改动无关的加载失败。
+
+### 第三轮：worktree 这一簇（同日）
+
+接着上一轮留下的「fusion 的 iso worktree 在 Windows 上建不起来（7 红，P1）」往下查，
+**结论是它不是 git 缺陷，是这个测试文件没有时间预算**。查证过程中下过一个错的结论，
+一并留档（详见 `docs/audit-backlog.md` 同名条目）：
+
+1. 安静的机器上复现不了——同 HEAD、四个相关文件 SHA-256 比对一致，
+   `fusion-engine.test.ts` **32 pass / 0 fail**，跑了两次。
+2. 取样机确实被污染过——`Get-Process bun` 捞出**三个被遗弃的全量跑**在烧 CPU（累计
+   20803s / 17082s / 1163s）。原先那次 7 红就是在这背景下取的。
+3. **于是一度结案为「污染、无缺陷」，这是错的**：把负载照着造回来（四核各压一个
+   CPU burner）再跑同一个文件，**22 pass / 10 fail，四行错误全部回来**。
+
+**真因与修法**：该文件多数用例真的启动引擎任务，安静的 Windows 机器上单条 1.5–3.4s，
+**已占 bun 默认 5s 的 30–70%**，而文件从未声明预算。超时后 bun 回收该测试的子进程 ⇒
+在飞的 `git rev-list` 收 SIGTERM（`exited 143`）⇒ `seedWorktree` 判基线失败抛错 ⇒
+`createFusion` 的 finally 删掉它仍持有的 work dir ⇒ 而该测试已启动的任务还在被调度 ⇒
+iso 从一个已被删除的目录上建，于是报出那四行**点名 git 的**错误。
+加 `setDefaultTimeout(60_000)`（仓内先例：`task-start-pre-worktree` /
+`clarify-review-combination-scenarios`），**同一负载下复测 32 pass / 0 fail**。
+
+> **判据留给下次**：Windows 上再见到「git 报路径不存在 / 对象解析不了」，先查同一批
+> 日志里有没有 `exited 143` 或 `this test timed out`——有就说明主语是预算不是 git。
+
+**同形态的下一批已量出来、本轮没改**（都还是绿的，故留成边界清楚的后续工作）：整簇
+复扫里贴着 5s 默认跑的有 `rfc130-node-isolation`（最慢 **4947ms**，≈默认的 99%）、
+`rfc210-git-diff-subrepo-paths`(4749)、`clarify-inline-isolated-parity`(4729)、
+`git-repo-cache`(4645)、`task-start-git-identity`(4463)。已登记 backlog。
+
+**这一簇另有 7 条真红（安静机器上就红，与 fusion 无关），均已修**（Windows 复测：
+上述 8 个文件 + `callgraph-multirepo-prefix` + `gettask-multi-repo` 共 10 个，
+**80 pass / 0 fail**）：
+
+| 失败 | 真因 | 处理 |
+|---|---|---|
+| `rfc213-worktree-capture` ×5 | `afterEach` 的裸 `rmSync` 撞 EBUSY——目录里有开着的 `db.sqlite`，即 `fixtures/tempDir.ts` 记的「Bun 的 sqlite `close()` 没真关上」 | 换 `removeTempDirSync`，循环改成**每个目录都试、第一个真错误留到循环后再抛**：旧写法在第一个忙目录就中断循环，后面的连试都没试过。留着「循环后再抛」是有意的——POSIX 上 `tempDir.ts` 仍照抛，就地吞掉等于悄悄撤销那条 |
+| `rfc213-worktree-capture` ×1 | `chmod 000` 造「读不了的文件」让 tar 失败——Windows 上**是空操作**（实测文件照读、tar 退 0），断言的 skip 从未发生；它此前还要一个 `getuid()===0` 逃生口 | 改成让坏 worktree 的路径**存在但不是目录**：`tar -C <文件>` chdir 失败退非零，**四种 tar 全部实测**（bsdtar 3.5.3 macOS / bsdtar Windows 11 / GNU tar 1.35 CI ubuntu / busybox 1.37 alpine），无权限、无特权判定、无平台分支 |
+| `rfc130-iso-worktree-primitives` ×1 | `hasDirtySubmoduleContent` 是三个 `git init` 加一次真 clone、约二十次 git spawn，撞 5s 默认预算 | 显式 60s 预算（同 `callgraph-multirepo-prefix` / `gettask-multi-repo`） |
+
+**整簇复扫**（`worktree|iso|git|backup|fusion` 命名的全部 **55 个文件**，
+`--isolate --randomize`，Windows）：**429 pass / 9 skip / 22 fail**，其中
+fusion 两件、`rfc213-worktree-capture`、`rfc130-iso-*` 三件**全部为零失败**。
+剩下 22 条分布在这一簇的**其他**文件上，属未处理项：
+`rfc252-git-hardening`(6)、`migration-0102-rfc210-submodule-isolation`(4)、
+`task-start-git-identity`(3)、`rfc213-pre-migration-backup`(3)、
+`rfc205-git-credential`(3)、`rfc208-unbounded-git-and-permits`(2)、
+`rfc188-isolated-agent-run`(1)。
+
+> 读 bun 报表时注意：末尾那份汇总清单会被「按最后一个文件标记归属」的朴素脚本
+> **整份算到最后一个文件头上**（本次即 `rfc205-git-credential` 一度显示 25 条 =
+> 自身 3 + 汇总 22）。归属要在**最后一个文件标记之前**统计。
+
+**顺带测到两条影响后续排期的事实**（均已登记 backlog）：
+
+1. **后端全量在 Windows 上会卡死**，因此**至今没有一份完整的 Windows 失败清单**。
+   `--isolate --randomize` 跑到 **181/1033 个文件**后父进程还在烧 CPU 但没有子进程、
+   输出不再增长；上面那三个遗弃进程是同一形态的历史残留。⇒ T32 剩余部分要拿到可信
+   清单必须**分批跑**（~100 文件一批、各写各的输出、批间确认进程已退）。已取到的 181
+   个文件里 89 红，最集中：`rfc224-store-hygiene`(19)、`rfc253-script-execution`(13)、
+   `rfc248-materialize-group`(8)、`sandbox-allowback-audit-2026-08-04`(7)。
+2. 插件簇还有 4 条红，其中**一条是生产缺陷**：`installFilePlugin` 用
+   `new URL(spec).pathname` 解 `file:` spec，Windows 上必然 `plugin-file-not-found`
+   （`pluginInstaller.ts:295`，正解 `fileURLToPath`）。另两条是断言写死 `/` 分隔符，
+   一条是 `fake-npm.ts` 拿 `github:org` 当目录名（`:` 在 Windows 非法）。
 
 ## T31 后端矩阵腿：真实障碍不是「预算不够」，是两道逐字锁（2026-08-05 调研）
 

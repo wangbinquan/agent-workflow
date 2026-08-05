@@ -10,15 +10,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -29,6 +21,7 @@ import {
   reconstructWorktrees,
   DEFAULT_MAX_WORKTREE_BYTES,
 } from '../src/services/worktreeBackup'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -38,8 +31,30 @@ function tmp(): string {
   tmps.push(d)
   return d
 }
+// RFC-254 T32: the appHome temp dirs here hold an open `db.sqlite`, and on
+// Windows an open handle makes the delete fail outright — measured, five of
+// this file's tests reported `(unnamed)` teardown failures with all of their
+// own assertions already green. `removeTempDirSync` is the repo's answer to
+// that (retry, then warn instead of throw on win32 only); see
+// fixtures/tempDir.ts for why waiting cannot fix it.
+//
+// The loop shape matters just as much as the helper. The old version was one
+// bare `rmSync` per iteration, so the FIRST busy dir aborted teardown and every
+// later dir leaked for reasons that had nothing to do with it. Here each dir is
+// attempted regardless, and the first real error is re-thrown AFTER the loop —
+// deliberately, so a POSIX host that cannot delete its own temp directory still
+// fails loudly (which is exactly what fixtures/tempDir.ts preserves the throw
+// for). Swallowing it here would have quietly undone that.
 afterEach(() => {
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  let first: unknown
+  for (const d of tmps.splice(0)) {
+    try {
+      removeTempDirSync(d)
+    } catch (error) {
+      first ??= error
+    }
+  }
+  if (first !== undefined) throw first
 })
 
 async function git(cwd: string, args: string[]): Promise<void> {
@@ -279,11 +294,29 @@ describe('impl-gate P0-2 — reconstruct trusts the DB row path, not the archive
 })
 
 describe('impl-gate P2-7 — one un-tarrable worktree skips, not aborts', () => {
-  test('unreadable file in one worktree → that task lands in skipped (no meta orphan), backup continues', async () => {
-    if (typeof process.getuid === 'function' && process.getuid() === 0) {
-      // root reads chmod-000 files fine — the fixture can't fail. Skip.
-      return
-    }
+  // RFC-254 T32 — HOW THIS TEST MAKES `tar` FAIL, AND WHY IT CHANGED
+  // ----------------------------------------------------------------
+  // It used to write a file into the bad worktree and `chmod 000` it, so tar
+  // could not read it. That mechanism is POSIX-only: measured on Windows 11,
+  // the chmod is accepted, the file stays fully readable, and `tar` exits 0 —
+  // so the capture SUCCEEDED and the test asserted a skip that never happened.
+  // It also needed a `getuid() === 0` escape hatch, because root reads
+  // mode-000 files too, i.e. the fixture already had one host where it silently
+  // proved nothing.
+  //
+  // The replacement makes the worktree path exist but not be a directory, so
+  // `tar -C <path>` cannot chdir into it. Measured on all four tars this repo
+  // is run against, and every one of them fails hard:
+  //
+  //   bsdtar 3.5.3 (macOS)      exit 1  could not chdir to '...'
+  //   bsdtar (Windows 11)       exit 1  could not chdir to '...'
+  //   GNU tar 1.35 (CI ubuntu)  exit 2  Cannot open: Not a directory
+  //   busybox tar 1.37 (alpine) exit 1  can't change directory to '...'
+  //
+  // No permissions, no privilege check, no platform branch. The SUBJECT is
+  // unchanged: one worktree that `tarGz` throws on must land in `skipped` with
+  // its meta json dropped, while the other task still captures.
+  test('un-tarrable worktree → that task lands in skipped (no meta orphan), backup continues', async () => {
     const appHome = tmp()
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     const wfId = ulid()
@@ -295,15 +328,14 @@ describe('impl-gate P2-7 — one un-tarrable worktree skips, not aborts', () => 
       })
       .run()
     const a = await setup(appHome, 'aw/ok-task')
-    // second worktree off the SAME mirror (setup() commits once; a re-run would
-    // make an empty commit and fail)
+    // The bad task's worktree path EXISTS (so it is not filtered out as
+    // "missing on disk") but is a plain file, which is what `tarGz` chokes on:
+    // `tar -C <file>` cannot chdir and exits non-zero. Its size scan reads 0
+    // bytes, so it also clears the cap check and reaches the tar branch.
     const badWt = join(appHome, 'worktrees', 'aw_bad-task')
-    await git(a.repoPath, ['worktree', 'add', '-b', 'aw/bad-task', badWt])
+    writeFileSync(badWt, 'this worktree path is not a directory\n')
     const okId = seedTask(db, wfId, 'running', a.repoPath, a.worktreePath, 'aw/ok-task')
     const badId = seedTask(db, wfId, 'running', a.repoPath, badWt, 'aw/bad-task')
-    // make ONE file unreadable → tar exits non-zero for that worktree only
-    writeFileSync(join(badWt, 'secret.bin'), 'x')
-    chmodSync(join(badWt, 'secret.bin'), 0o000)
 
     const staging = tmp()
     const cap = await captureWorktrees(db, staging)
@@ -317,7 +349,6 @@ describe('impl-gate P2-7 — one un-tarrable worktree skips, not aborts', () => 
       // no meta-without-tar orphan for reconstruct to trip on
       expect(existsSync(join(wtDir, `${badId}.json`))).toBe(false)
     } finally {
-      chmodSync(join(badWt, 'secret.bin'), 0o644)
       ;(db as unknown as { $client: Database }).$client.close()
     }
   })

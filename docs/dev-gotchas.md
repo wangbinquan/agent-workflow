@@ -20,6 +20,7 @@
 - **用错 runner 的表现是「挂死」不是报错**：`cd packages/frontend && bun test`（上一条说的那个错法）不会干脆失败，而是刷 `ReferenceError: document is not defined` 后长时间不退——正确的 `bun run --filter @agent-workflow/frontend test` 全量只要 ~60s。**跑套件卡住先怀疑 runner 用错，别当 flaky**（RFC-230 session 因此空等 2h37m）。
 - **`长任务 | tail -N` 会让你全程失明**：tail 要等 EOF 才吐字节，后台跑的全量测试在结束前输出文件恒为 0 字节，「没输出」看起来和「还在跑」一模一样。长任务全量落盘再取尾（`> log 2>&1` 后 `tail`）。判断进程死活看 **`ps -o etime=`**，不看输出有没有内容。
 - **给「遍历全部源码」型守卫显式的墙钟预算**：这类测试（AST 全树扫描、依赖图、指纹多重集）的成本随仓库增长，而 bun 的默认 5s 是个与它无关的数字。空闲机器 1.6s 看着很安全，四分片并行的共享 runner 上就会超时——报出来是 `timed out after 5000ms`，**不带任何断言信息**，读起来像挂了而不是像慢了。写显式预算并注明「这是墙钟允许量，不是对扫描器变慢的容忍」。
+- **上一条的严重版：超时的测试如果「持有一块工作区」，它会把还在跑的东西一起带走，而报错点名的是错的子系统**。bun 判超时后会**回收该测试的子进程**，于是 RFC-254 T32 里出现这条链：在飞的 `git rev-list` 收 SIGTERM（`exited 143`）→ `seedWorktree` 认为基线解析失败并抛错 → `createFusion` 的 `finally` 删掉它仍持有的 fusion work dir → 而**该测试此前已经启动的任务还在被调度**，于是 iso 从一个已被删除的目录上建，报出 `git worktree add (iso): fatal: cannot change to '…'` / `workspace-missing: canonical worktree does not exist` / `TypeError: … 'task.worktreePath'`。**这四行点名的全是 git，真正的主语却是「这个测试文件没声明预算」**——它一度被立成一条「Windows 上 git worktree 坏了」的 P1。**判据**：看到 git 报「路径不存在 / 对象解析不了」，先查同一批日志里有没有 `exited 143` 或 `this test timed out`；有就先修预算再谈缺陷。**预防**：凡是「真的起任务 / 真的建仓 / 真的拉子进程」的用例，文件顶上写 `setDefaultTimeout(60_000)`（先例：`task-start-pre-worktree` / `clarify-review-combination-scenarios` / `fusion-engine`），别让它贴着默认 5s 跑——安静机器上 1.5–3.4s 看着安全，那已经是预算的 30–70%。
 - **结构守卫必做变异实证**：加 grep/AST 守卫后，改坏源码断言必须看它变红；否则守卫是空的。表级锁（一次锁一类）优于文件级——注释里的字面量也会踩表级锁（RFC-072 事故）。
 - **做变异实证时别用 `git checkout` 还原「未跟踪文件」**：新写的文件还没进版本库，`git checkout <file>` 报 `did not match any file`——配上顺手加的 `|| true` 就**静默什么也没做**，于是下一轮「restored」跑出来的其实是**带着变异**的结果，你会照着它报一个假的通过。还原用 `cp` 备份（变异前先 `cp x /tmp/x.bak`），并让最后那次「restored」跑出的数字与基线**逐个数字核对**——对不上就是没还原干净。
 - **「写了规则 + 单测绿」≠「接上了」**：脱敏/校验这类横切规则，单测测的是**函数**，接线是另一件事。RFC-247 里 `redactMcpRecord` 与 `redactStdout` **各自**都是「定义了、单测了、零调用方」——`GET /api/mcps/:id` 一直原样吐 `config.env`/`oauth.clientSecret`。单测不会红，因为它没在测出口。**收尾必须从 AC/需求反查「谁调它」**（`grep -rn '<fn>' src | grep -v '<定义文件>'`，命中为空即未接线），或把出口写成唯一入口（`serializeXForActor(record, source)`）让调用方无从绕过。
@@ -232,11 +233,11 @@
 - **删一个「只有自己的测试在用」的导出，先确认它锁的是不是别的东西**：RFC-248 删 `buildLaunchBodyMultiRepo` 时发现三个测试文件引用它，其中两个真正锁的是「extras 字段要透传到 wire」和「反解要能还原」——主题仍然有效，只是载体换了。直接删测试会丢覆盖；正确做法是把主题迁到幸存的构造器上，再补一条「不得复活」的锁。
 - **本 RFC 暴露出的两条「早已空转的绿测试」**：`repoPath` 在 RFC-165 退役后，`task-start-pre-worktree` 的「回落到单仓 git 路径」实际只建了个空的多仓容器目录、而断言只查「目录存在」；`rfc107` 的多仓上传用例因旧路径不给同源仓加分支后缀而只物化了一个仓。**给旧路径加显式 422 时，会连带把这类空转测试照出来**——照出来就顺手修成真测，别只把断言改绿。
 
-## 拿真机 / 虚拟机做跨平台勘测时的三个坑（2026-08-05，RFC-254 T32）
+## 拿真机 / 虚拟机做跨平台勘测时的四个坑（2026-08-05，RFC-254 T32）
 
 用一台真机（本例：Parallels 上的 Windows 11）跑全量来给「另一个平台上有多少条红」
 定性，比 CI 快一个数量级——CI 那条腿 90 分钟跑不完、勘测作业排队几小时。但**取样器
-本身会骗人**，三次都真实发生过：
+本身会骗人**，下面每一条都真实发生过（第 4 条还害得一整条 P1 被记成了产品缺陷）：
 
 1. **先证明树与 HEAD 一致，再信它的失败清单**。旧快照里留着已被删除的测试文件、缺着
    新增的夹具源，于是报出一整簇与被测平台毫无关系的失败（本例 17 条，占当时清单的
@@ -249,7 +250,31 @@
    会把一部分依赖装在 `packages/*/node_modules`，删掉整棵树再解包 `git archive` 之后，
    表现为 `Cannot find package 'zod'` 这类**与改动无关**的加载失败，而且是整文件不
    加载、在报表里呈现为 `1 error` 而非 `N fail`。重装一次即可，但要认得出这个形态。
+4. **每次开跑之前查一遍 `Get-Process bun`，不是只在两次之间查**（第 2 条只说了后者，
+   不够）。实测在取样机上捞出**三个被遗弃的全量跑**，最老的已经跑了近 6 小时，
+   **累计 CPU 20803s / 17082s / 1163s**、驻留 0.3–1.7 GB——关键是它们**不是挂住空转，
+   是在烧 CPU**，所以「机器看起来没在干活」不成立。
+   查的时候连 `CPU` 一起看：`Get-Process bun | Select-Object Id,CPU,StartTime`；
+   命令行用 `Get-CimInstance Win32_Process -Filter "Name='bun.exe'"` 取，能看出是谁留下的。
+   **但注意别把这条用反**：干净之后不复现，只说明**该缺陷对时延敏感**，不等于没有缺陷。
+   RFC-254 T32 就在这里栽过——清干净后 fusion 那条绿了，据此结案为「污染、无缺陷」，
+   而**把负载照着造回来（每核压一个 CPU burner）再跑，10 条红全部回来**，真因是那个
+   文件从没声明过时间预算。**正确的收尾是「清干净复测 + 造回负载复测」两次都做**。
 
-配套教训：**ssh 到 Windows 的引号转义不值得斗**。zsh → ssh → cmd → PowerShell 四层
+配套教训一：**ssh 到 Windows 的引号转义不值得斗**。zsh → ssh → cmd → PowerShell 四层
 下来，`$_.Line` 这种会被逐层吃掉。稳的做法是**只在远端重定向到文件，把文件取回本地
 再过滤**——本地有 grep/sed，且结果可复查。
+
+配套教训三：**`FORCE_COLOR` 会让 `bun run test` 多出一条与你无关的红**。Claude Code
+（以及不少现代终端）在环境里设 `FORCE_COLOR=3`，于是被测子进程的 `console.error`
+输出带上 ANSI 转义，`test-command-helper.test.ts` 的
+`surfaces non-zero exits with bounded stderr` 就会红——期望 `"...: fixture failed"`，
+实得 `"...: [0m[31mfixture failed[0m"`。**这条与改动无关也与平台无关**，
+CI 不设该变量所以那边是绿的。跑门禁时用 `env -u FORCE_COLOR bun run test` 排除干扰；
+别把它算进自己改动的失败数（已登记 backlog，正解是别把控制字符拼进 Error message）。
+
+配套教训二：**别指望 `Start-Process` 把长跑放到后台**。用
+`Start-Process -WindowStyle Hidden -RedirectStandardOutput` 起的全量跑，在 ssh 会话结束时
+一起没了——实测只留下 28 字节的输出（第一个测试文件名）就断了，看上去像「第一个文件把
+runner 打崩了」，而单独跑那个文件是绿的。要么**把 ssh 会话开着**（本地用后台任务持有），
+要么用真正脱离会话的机制；不要凭那半截输出去归因。

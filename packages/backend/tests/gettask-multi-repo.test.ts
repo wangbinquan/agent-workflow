@@ -96,6 +96,12 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
     expect(task!.repos[0]!.worktreePath).toBe(task!.worktreePath)
   })
 
+  // RFC-254 T32: an explicit budget, because this test does real filesystem and
+  // git work rather than computation. Measured: ~2.0s locally, and it exceeded
+  // the default 5s on Windows — where per-file real-time scanning makes the same
+  // I/O several times more expensive. The budget is deliberately generous rather
+  // than "just above what was measured": a test sitting near its own deadline
+  // flakes, and nothing here gets slower except by doing more I/O.
   test('B27 multi-repo task → repos array ordered by repoIndex ascending', async () => {
     h = await buildHarness(3)
     const launched = await startTask(
@@ -123,5 +129,5 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
     }
     // worktreeDirName non-empty for every multi-repo row.
     for (const r of task!.repos) expect(r.worktreeDirName.length > 0).toBe(true)
-  })
+  }, 60_000)
 })

@@ -258,5 +258,12 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     expect(await hasDirtySubmoduleContent(parent)).toBe(true)
     rmSync(sub, { recursive: true, force: true })
     rmSync(parent, { recursive: true, force: true })
-  })
+    // RFC-254 T32: an explicit budget, because this case is three `git init`
+    // repos plus a `submodule add` (a real clone) rather than computation —
+    // roughly twenty git spawns. Measured: ~1.6s here, and it blew the default
+    // 5s on Windows, where per-spawn cost and real-time file scanning multiply
+    // the same work. Deliberately generous rather than "just above measured":
+    // a test sitting near its own deadline flakes, and nothing here gets slower
+    // except by doing more git.
+  }, 60_000)
 })

@@ -122,6 +122,12 @@ describe('getCallTargets — multi-repo external ownerClass re-prefix (RFC-089 P
   let h: Harness
   afterEach(() => h?.cleanup())
 
+  // RFC-254 T32: an explicit budget, because this test does real filesystem and
+  // git work rather than computation. Measured: ~1.3s locally, and it exceeded
+  // the default 5s on Windows — where per-file real-time scanning makes the same
+  // I/O several times more expensive. The budget is deliberately generous rather
+  // than "just above what was measured": a test sitting near its own deadline
+  // flakes, and nothing here gets slower except by doing more I/O.
   test('an external target (no ref) has its ownerClass `::` segment re-prefixed with the repo dir', async () => {
     h = await buildHarness()
     const task = await twoRepoTask(h)
@@ -152,5 +158,5 @@ describe('getCallTargets — multi-repo external ownerClass re-prefix (RFC-089 P
       // sequence-diagram lifeline / next click stays in repo-a.
       ownerClass: `${dirA}/src/OrderService.java::OrderService`,
     })
-  })
+  }, 60_000)
 })

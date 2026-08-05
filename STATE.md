@@ -176,6 +176,41 @@ WebSocket 让 `networkidle` 永不到达）。
 `rfc254-windows-e2e-exclusions.test.ts` 双向防腐（改名 / 清单变长 / 未登记 backlog
 都会红）。T34 同样先量后接，webkit 的勘测步骤已加。
 
+**2026-08-05 续三 · T32「fusion worktree 在 Windows 上是坏的」结案：真因是那个测试文件没有时间预算**：
+上一批记的那条 P1（7 红）**不是 git 缺陷**。查证分三步，中途下过一个错的结论，一并留档：
+①安静的机器上复现不了（同 HEAD、四文件 SHA-256 比对一致，32 pass / 0 fail 跑了两次）；
+②取样机确实被污染过——`Get-Process bun` 捞出**三个被遗弃的全量跑**在烧 CPU（累计
+20803s / 17082s / 1163s，驻留 0.3–1.7 GB），原先那次 7 红就是在这背景下取的；③**于是
+我一度结案为「污染、无缺陷」，这是错的**——把负载照着造回来（四核各压一个 burner）再跑，
+**22 pass / 10 fail，四行错误全部回来**。
+**真因**：文件里多数用例真的启动引擎任务，安静机器上单条 1.5–3.4s，**已占 bun 默认 5s
+预算的 30–70%**，而该文件从未声明预算。**且超时不止红一条**：bun 回收该测试的子进程 ⇒
+在飞的 `git rev-list` 收 SIGTERM（exit 143）⇒ `seedWorktree` 判基线失败抛错 ⇒
+`createFusion` 的 finally 删掉它仍持有的 work dir ⇒ 而该测试已启动的任务还在被调度 ⇒
+iso 从一个已删除的目录上建，报出那四行**点名 git 的**错误。修法 `setDefaultTimeout(60_000)`
+（仓内已有先例），**同一负载下复测 32 pass / 0 fail**。
+**判据留档**：Windows 上再见到「git 报路径不存在 / 对象解析不了」，先查同批日志里有没有
+`exited 143` 或 `this test timed out`——有就说明主语是预算不是 git。**同形态的下一批已量
+出来但本轮没改**（都还绿）：`rfc130-node-isolation`(最慢 4947ms，≈默认的 99%)、
+`rfc210-git-diff-subrepo-paths`(4749)、`clarify-inline-isolated-parity`(4729)、
+`git-repo-cache`(4645)、`task-start-git-identity`(4463)，已登记。
+**相邻套件另有 7 条真红（安静机器上就红），已修并在 Windows 上复测 80 pass / 0 fail**：
+`rfc213-worktree-capture` 的 5 条 EBUSY 拆卸（换 `removeTempDirSync` + 逐目录 try/catch
+——旧写法在第一个忙目录就中断循环）、同文件 1 条真断言失败（`chmod 000` 在 Windows 上是
+**空操作**、tar 照样退 0，改成「worktree 路径存在但不是目录」这个**四种 tar 实测一致**
+的失败源——bsdtar macOS / bsdtar Windows / GNU tar 1.35（CI ubuntu）/ busybox 1.37——
+顺带去掉原有的 `getuid()===0` 逃生口）、`rfc130-iso-worktree-primitives` 的
+`hasDirtySubmoduleContent` 撞 5s 默认预算（给显式 60s）。整簇复扫（`worktree|iso|git|
+backup|fusion` 命名的 55 个文件）**429 pass / 9 skip / 22 fail**，fusion 与修过的三件
+全部零失败，剩 22 条在这一簇的其他文件上（`rfc252-git-hardening` 6 条最多），已登记。
+**另测到两条方法论级事实**：①**后端全量在 Windows 上会卡死**——跑到 181/1033 个文件后
+父进程还在烧 CPU 但没有子进程、输出不再增长，那三个遗弃进程是同一形态的历史残留，
+也就是说此前每次「全量取样」大概率都没跑完 ⇒ 想要可信清单必须**分批跑**；已取到的 181
+个文件里有 89 红，最集中的是 `rfc224-store-hygiene`(19)、`rfc253-script-execution`(13)、
+`rfc248-materialize-group`(8)。②顺带在插件簇测到 4 条红，其中一条是**生产缺陷**：
+`installFilePlugin` 用 `new URL(spec).pathname` 解 `file:` spec，Windows 上必失败
+（`pluginInstaller.ts:295`，正解 `fileURLToPath`）。以上全部登记 `docs/audit-backlog.md`。
+
 **剩余：T31 的后端矩阵、T32 其余、T33–T35。** T33 **不再被阻塞**——e2e 已能在
 Windows 上跑，剩的是把那几条真失败清零后接腿。**现实评估**：把
 `windows-latest` 直接加进 ci.yml 四个矩阵会让约 8600 条按 POSIX 假设写的后端测试

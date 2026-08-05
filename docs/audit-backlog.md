@@ -856,7 +856,7 @@ cmd.exe，所以 `Bun.spawn({cmd:['x.cmd', ...args]})` 的 args 会被重新解�
   白名单校验后再走垫片。本条实测把「不得用 `shell: true`」的告诫升级为**有证据的
   硬约束**，且范围扩大到「任何 `.cmd`/`.bat` 目标」。
 
-## fusion 的 git worktree 在 Windows 上是坏的（RFC-254 T32，2026-08-05，新揭开）
+## ~~fusion 的 git worktree 在 Windows 上是坏的~~ → **真因是这个测试文件没有时间预算**（RFC-254 T32，2026-08-05，**已修**）
 
 把 `fusion-engine.test.ts` 的假二进制换成 `opencodeCmd: [bun, stub.ts]` 后（`opencodeCmd`
 本来就是**命令数组**，argv 直接进 spawn、不过 shell，所以既不需要假二进制也不受
@@ -872,11 +872,156 @@ git worktree remove failed: cannot change to '…': No such file or directory
 TypeError: null is not an object (evaluating 'task.worktreePath')
 ```
 
-- ⏳ **(P1)** fusion 的 iso worktree 建立/移除链路要在 Windows 上单独查。`Could not
-  parse object` 与 `canonical worktree does not exist` 指向 worktree 建立阶段就没成，
-  后续 `task.worktreePath` 为 null 只是它的下游。
-- **记账口径**：这 7 条不该记在「换缝改动」头上；换缝本身是正解（无假二进制、stub
-  逻辑随套件一起类型检查、与平台无关），它的作用是把真实缺陷从掩盖中拿出来。
+### 结案（2026-08-05）：**不是 git 的问题，是这个文件没有时间预算**
+
+查的过程本身值得留档，因为**中途下过一个错的结论**：
+
+1. **安静的机器上复现不了**。同一 HEAD（`43a86c0b`，四个相关文件逐个 SHA-256 比对与
+   本地一致）跑 `fusion-engine.test.ts` 是 **32 pass / 0 fail**，两次（单文件一次、与
+   另外 7 个 worktree/iso 套件一起 `--randomize` 一次），上面四行**一行都没出现**。
+2. **取样机确实被污染过**：复测前 `Get-Process bun` 查到**三个被遗弃的全量跑**还在
+   机器上转（`bun test packages/backend/tests`，无 `--isolate`），启动于 09:58 /
+   10:56 / 15:23，**累计 CPU 20803s / 17082s / 1163s**、驻留 0.3–1.7 GB——不是挂住
+   空转，是**在烧 CPU**。原先那次 7 红就是在这个背景下取的。
+3. **于是我一度结案为「污染，无缺陷」——这是错的。** 把负载**照着造回来**（四核各压
+   一个 CPU burner）再跑同一个文件：**22 pass / 10 fail**。所以本条是真的，只是
+   **对时延敏感**，安静的机器把它藏起来了。
+   逐条对表（本次实测出现次数）：`workspace-missing` ×5、`cannot change to` ×2、
+   `task.worktreePath` ×4，外加 `exited 143` ×2、`timed out after` ×20。
+   原记录里的 `Could not parse object` 与 `worktree remove failed` **本次没出现**——
+   同一根因下删除时序略有不同就会换一种报法，所以别拿具体某一行当判据，判据是下面
+   那条链。
+
+**真因**：这个文件里大多数用例**真的启动引擎任务**（建 git 仓、跑工作流、拉起 stub
+运行时、停在 clarify），安静的 Windows 机器上单条 1.5–3.4s，**已经占掉 bun 默认 5s
+预算的 30–70%**，而这个文件从来没声明过预算。机器一慢就超时。
+
+**而超时不只是「这条红了」，它会把整个跑污染掉**——这是本条最值得记的地方：
+
+```
+bun 判定超时 → 回收该测试的子进程 → 在飞的 git rev-list 收到 SIGTERM（exit 143）
+  → seedWorktree 认为基线解析失败并抛错
+  → createFusion 的 finally 把它仍持有的 fusion work dir 删掉
+  → 但该测试此前已经启动的任务还在被调度，于是 iso 从一个已被删除的目录上建
+  → 报出 `git worktree add (iso): fatal: cannot change to '…\iter1\work'`
+     / `workspace-missing: canonical worktree does not exist`
+     / `TypeError: null is not an object (evaluating 'task.worktreePath')`
+```
+
+**四行错误都点名 git / worktree，于是被当成「Windows 上 git worktree 坏了」立了一条
+P1——而它们全是 bun 自己那个超时回收的下游。** 这类误导性极强：报错的主语（git）和
+真正的主语（测试预算）隔着两层。
+
+**修法**：`setDefaultTimeout(60_000)`（仓内已有先例：`task-start-pre-worktree` /
+`clarify-review-combination-scenarios` 等真流程套件都这么做）。**同一负载下复测：
+32 pass / 0 fail，四行错误零出现**（修前同负载 10 红）。
+
+- **留给下次的判据**：Windows 上再看到「git 报路径不存在 / 对象解析不了」这类错误，
+  先看**同一批日志里有没有 `exited 143` 或 `this test timed out`**。有的话主语不是
+  git，是预算。
+- 这条也解释了为什么此前 `hasDirtySubmoduleContent`、`callgraph-multirepo-prefix`、
+  `gettask-multi-repo` 都要显式预算：**跑真 I/O 的用例贴着 5s 默认跑，就是在等一台
+  慢机器把它变成一份假的缺陷报告**。
+
+- **记账口径**：这 7 条从来就不该记在上一批那次「换缝改动」头上；换缝本身是正解
+  （无假二进制、stub 逻辑随套件一起类型检查、与平台无关），它只是让流程往下多跑了
+  一段，从而把这条预算问题露出来。
+
+### ⏳ **(P1) 同一形态的下一批：贴着 5s 默认跑的用例还有一片，都没声明预算**
+
+顺手从整簇复扫（55 个文件、安静的 Windows 机器）里量了**通过但贴着上限**的用例，
+3–5s 这一档是这些（毫秒为该次实测值）：
+
+| 文件 | 最慢一条 |
+|---|---|
+| `rfc130-node-isolation.test.ts` | **4947**（≈默认预算的 99%） |
+| `rfc210-git-diff-subrepo-paths.test.ts` | 4749 |
+| `clarify-inline-isolated-parity.test.ts` | 4729 |
+| `git-repo-cache.test.ts` | 4645 |
+| `task-start-git-identity.test.ts` | 4463 |
+
+它们**现在是绿的**，但离「变成下一份假的 git 缺陷报告」只差一台更慢的机器——上面
+fusion 那条就是这么来的。处置照 `fusion-engine` 的做法：文件顶上一句
+`setDefaultTimeout(60_000)` 加一句为什么。**本轮没做，因为它们没红**，留成一批边界
+清楚的后续工作，而不是顺手去改一片没有红可对照的文件。
+
+一个佐证顺带记下：`rfc130-iso-worktree-primitives` 的 `hasDirtySubmoduleContent` 在
+这次复扫里跑了 **9339ms**——所以给它 60s 而不是「比实测高一点」的 10s 是对的。
+
+### 相邻套件另有 7 条真红（已修，2026-08-05）
+
+把 fusion 与相邻的 worktree/iso 套件一起在安静的机器上跑，除了上面那条，红的还有
+这些——**它们与 fusion 无关，且在安静的机器上就红**：
+
+1. `rfc213-worktree-capture.test.ts` **5 条**：`afterEach` 的 `rmSync` 报 EBUSY——每个
+   临时目录里都有一个开着的 `db.sqlite`，正是 `fixtures/tempDir.ts` 记录的那个「Bun 的
+   sqlite `close()` 在 Windows 上并没真的关上」。改用 `removeTempDirSync`，并把循环改成
+   **每个目录都试、第一个真错误留到循环之后再抛**：旧写法在**第一个**忙目录上就中断
+   整个循环，后面的目录连试都没试过（本次实测 5 条告警对应 5 个带 db 的目录，而同批的
+   staging 目录现在能正常删掉）。**留着「循环后再抛」而不是就地吞掉**是有意的——
+   `tempDir.ts` 在 POSIX 上仍照抛，删不掉自己的临时目录在那里是真问题，吞掉等于把它
+   悄悄撤销了。
+2. 同文件 **1 条**是真断言失败：`impl-gate P2-7` 用 `chmod 000` 制造「读不了的文件」让
+   tar 失败，而 Windows 上**这个机制是空操作**——实测文件照读、`tar` 退出 0，于是断言的
+   那个 skip 根本没发生。它此前还需要一个 `getuid() === 0` 的逃生口（root 照样能读），
+   即这个夹具本来就已经有一台宿主上什么都没证明。改成让坏 worktree 的路径**存在但不是
+   目录**：`tar -C <文件>` chdir 失败退非零，**四种 tar 逐一实测**——bsdtar 3.5.3
+   (macOS) 退 1、bsdtar (Windows 11) 退 1、GNU tar 1.35 (CI ubuntu) 退 2、
+   busybox 1.37 (alpine) 退 1——无权限、无特权判定、无平台分支，被测主题一字未改。
+3. `rfc130-iso-worktree-primitives.test.ts` **1 条**：`hasDirtySubmoduleContent` 5018ms
+   撞默认 5s 上限。它是三个 `git init` 加一次 `submodule add`（真 clone）约二十次 git
+   spawn，本机 ~1.6s；给显式 60s 预算（同 `callgraph-multirepo-prefix` /
+   `gettask-multi-repo` 的处置）。
+
+修完复测（Windows，安静机器，`--isolate --randomize`，10 个文件：上述 8 个 +
+`callgraph-multirepo-prefix` + `gettask-multi-repo`）：**80 pass / 0 fail**。其中
+`tar: could not chdir to 'C:\…\aw_bad-task'` 证明新夹具在 Windows 上照样退非零；7 条
+`[tempDir] leaving … behind` 告警证明 EBUSY 是真的、只是不再被记成测试失败。
+
+再把整簇复扫一遍（`worktree|iso|git|backup|fusion` 命名的全部 **55 个文件**）：
+**429 pass / 9 skip / 22 fail**，fusion 两件与上面修的三件**全部零失败**。剩下 22 条
+在这一簇的其他文件上，尚未处理：`rfc252-git-hardening`(6)、
+`migration-0102-rfc210-submodule-isolation`(4)、`task-start-git-identity`(3)、
+`rfc213-pre-migration-backup`(3)、`rfc205-git-credential`(3)、
+`rfc208-unbounded-git-and-permits`(2)、`rfc188-isolated-agent-run`(1)。
+
+- ⏳ **(P1)** 上面这 22 条要逐条定性（真缺陷 / 测试可移植性 / 平台无此机制），判据同
+  `tests/fixtures/platformScope.ts` 的那条规则：**断言的主语**是不是 POSIX 机制本身。
+- **读 bun 报表的坑**：末尾那份汇总清单会被「按最后一个文件标记归属」的朴素脚本
+  整份算到**最后一个文件**头上（本次 `rfc205-git-credential` 一度显示 25 = 自身 3 +
+  汇总 22）。归属统计要截到**最后一个文件标记之前**。
+
+## Windows 上后端全量跑会**卡死**，因此至今没有一份完整的 Windows 失败清单（2026-08-05）
+
+`bun test --isolate --randomize packages/backend/tests` 在取样机上跑到 **181/1033 个文件**
+就停住：父进程还在、**在烧 CPU**，但**没有子进程**、输出文件几分钟一字不增。这不是某个
+测试超时（超时会打印并继续），是 runner 本身卡在换文件的缝上。上一节提到的三个被遗弃的
+进程是同一个形态的历史残留（其中两个跑了近 6 小时），也就是说**此前每一次「全量取样」
+大概率都没跑完，只是没人回头看它退没退**。
+
+- ⏳ **(P1)** 想要可信的 Windows 全量清单，先改成**分批跑**（把文件列表切成 ~100 个一批、
+  每批各写各的输出文件、批间确认进程已退出）。卡死只损失一批，且能定位到批。
+- 卡住的位置随 `--randomize` 变（本次停在 `memory-distiller.test.ts` 之后），所以**不要**
+  按「最后一个打印的文件」去归因某个测试文件。
+- 已取到的 181 个文件里有 **89 条红**，红最集中的是：`rfc224-store-hygiene`(19)、
+  `rfc253-script-execution`(13)、`rfc248-materialize-group`(8)、
+  `sandbox-allowback-audit-2026-08-04`(7)、`rfc252-git-hardening`(6)、
+  `rfc223-pr5-boot-restore-wiring`(6)、`rfc255-custom-provider-enumeration`(5)、
+  `migration-0138-rfc257-webhook-triggers`(5)。这是**部分**清单，只能当作下一批工作的
+  入口，不能当作总数。
+
+## `test-command-helper` 在设了 `FORCE_COLOR` 的环境里必红（2026-08-05）
+
+`test-command-helper.test.ts` 的 `surfaces non-zero exits with bounded stderr` 断言
+子进程 stderr 是 `"failure probe exited with code 7: fixture failed"`，而当环境里有
+`FORCE_COLOR`（Claude Code 会设 `FORCE_COLOR=3`）时子进程的 `console.error` 带上
+ANSI，实得 `"...: [0m[31mfixture failed[0m"`。**与平台无关、与改动
+无关**，`env -u FORCE_COLOR bun test …` 即绿；CI 不设该变量所以那边一直是绿的。
+
+- ⏳ **(P2)** 正解是**别把控制字符拼进 Error message**：`helpers/testCommand.ts` 组装
+  失败消息时先剥掉 ANSI（该消息会进断言、进日志、可能进报表）。改断言去容忍转义是
+  下策——那等于承认错误消息里可以带控制字符。
+- 归属：该文件属 `0feeb8e8`，非 RFC-254 工作，本轮只登记未代改。
 
 ## Windows e2e 腿首次出现 `color-contrast` 违规（2026-08-05，未归因）
 
@@ -924,3 +1069,25 @@ Windows 特例，把 `npmBin` 指向脚本入口在生产上同样合法（npm �
 - ⏳ **(P2) 遗留**：`plugins-http.test.ts` 的 PATH 注入在 Windows 上仍不可行——PATH
   查找要靠 PATHEXT，一个无扩展名的 `npm` 文件在那里找不到。该文件目前未在 Windows
   验证；接后端矩阵腿前需要单独处理（把注入的文件名改成带扩展名并让 `which` 能命中）。
+
+### `services/pluginInstaller.test.ts` 在 Windows 上还有 4 条红（2026-08-05 顺带测到，**含一条生产缺陷**）
+
+顺手在 Windows 上跑插件这一簇时测到（`rfc254-npm-shim-unwrap` 6/6 绿、
+`agent-plugin-not-found` + `plugin-closure` 绿，红的都在 `services/pluginInstaller.test.ts`）。
+四条与 `resolveNpmCommand` 无关——这些用例都显式传 `npmBin: FAKE_NPM`，根本不走
+`which`：
+
+- ⏳ **(P1，生产)** `installFilePlugin` 解 `file:` spec 用的是
+  `new URL(spec).pathname`（`services/pluginInstaller.ts:295`），**在 Windows 上得不到
+  可用路径**：`file:///C:/x/y` 的 `pathname` 是 `/C:/x/y`，`realpath` 必失败，于是
+  合法的 `file:` 插件安装在 Windows 上一律报 `plugin-file-not-found`。正解是
+  `fileURLToPath`（`node:url`）——它在 POSIX 上与现状等价，且顺带修掉 `pathname`
+  不解百分号编码（`file:///a%20b` 现在会被当成字面量）这个两平台都有的问题。
+  测试夹具那侧同时要改：它拼的是 `file://` + 绝对路径，只有 POSIX 的绝对路径以 `/`
+  开头才凑巧变成合法的 `file:///…`。
+- ⏳ **(P2，测试)** 两条断言写死了 `/` 分隔符
+  （`expect(result.cachedPath).toContain('node_modules/opencode-toolkit')`、
+  `'node_modules/@scope/pkg'`），Windows 上实际是 `\`。用 `join()` 拼期望值。
+- ⏳ **(P2，夹具)** `git source kind goes through same npm path` 传 `github:org/repo`，
+  `fake-npm.ts` 照搬 `${SPEC%@*}` 后去 `mkdir node_modules/github:org` —— `:` 在
+  Windows 文件名里非法，报 `ENOTDIR`。夹具需要把 spec 里的非法字符归一后再落盘。
