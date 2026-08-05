@@ -43,7 +43,7 @@ import { copyWorkgroup, createWorkgroup, workgroupRevisionOf } from '../src/serv
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
+const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 4,
   inputs: [],

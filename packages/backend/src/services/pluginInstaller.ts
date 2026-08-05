@@ -664,6 +664,13 @@ export function resolveNpmCommand(
     runtimePath: string
   },
 ): string[] | null {
+  // A JS/TS entry is run by the current runtime on EVERY platform. This is not
+  // a Windows special case: pointing `npmBin` at a script is a legitimate
+  // configuration (npm's own entry is one), and running it directly keeps the
+  // call shell-free, which is the property that matters. It is also what lets
+  // the test fixture be a portable `.ts` file instead of a `#!/usr/bin/env bash`
+  // script that Windows cannot execute at all.
+  if (/\.(?:ts|mts|cts|js|mjs|cjs)$/i.test(bin)) return [deps.runtimePath, bin]
   if (deps.platform !== 'win32') return [bin]
   // Path SEMANTICS travel with the injected platform, not with the host. Using
   // the host's `node:path` here made every Windows case unreachable from a

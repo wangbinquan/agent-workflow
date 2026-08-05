@@ -22,7 +22,7 @@ import { pluginOperationConfigHashOf } from '../src/services/pluginOperationRevi
 import { ConflictError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
+const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
 let db: DbClient
 let pluginsDir = ''

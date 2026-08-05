@@ -4,7 +4,7 @@
 //   1. sourceKind inference from spec strings (pure function).
 //   2. file: spec → realpath round-trip; never invokes npm.
 //   3. npm/git path runs `npm install --prefix <pluginDir> <spec>` and reads
-//      back the installed package's version. We swap npm out for `fake-npm.sh`
+//      back the installed package's version. We swap npm out for `fake-npm.ts`
 //      to keep tests hermetic + offline.
 //   4. install failure (non-zero exit) → PluginInstallFailedError carrying
 //      redacted stderr (Authorization / token shapes scrubbed).
@@ -27,7 +27,7 @@ import {
   resetNpmProbeCacheForTests,
 } from '../../src/services/pluginInstaller'
 
-const FAKE_NPM = resolve(import.meta.dir, '..', 'fixtures', 'fake-npm.sh')
+const FAKE_NPM = resolve(import.meta.dir, '..', 'fixtures', 'fake-npm.ts')
 
 let pluginsDir = ''
 const originalEnv: Record<string, string | undefined> = {}
@@ -152,7 +152,7 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
     // version (`4.1.8`) as the plugin's resolvedVersion, and the runner
     // pointed opencode at `node_modules/zod/` instead of the real plugin.
     // Fix: read host pluginDir/package.json's `dependencies` to identify
-    // the package the user actually requested. fake-npm.sh's success mode
+    // the package the user actually requested. fake-npm.ts's success mode
     // now drops two alphabetical-bracket decoy transitive deps with version
     // `9.9.9`; if this regression returns, resolvedVersion will be `9.9.9`
     // (or `cachedPath` will point at a decoy) and this test will fail.

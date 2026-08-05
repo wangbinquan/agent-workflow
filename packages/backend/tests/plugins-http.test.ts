@@ -20,7 +20,7 @@ import { createPlugin } from '../src/services/plugin'
 import { createApp } from '../src/server'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
+const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const TOKEN = 'rfc031-token-fixture'
 
 let pluginsDir = ''

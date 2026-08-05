@@ -904,9 +904,23 @@ TypeError: null is not an object (evaluating 'task.worktreePath')
 问题，不是垫片问题：解包器看到一个绝对路径的 `.sh`，既不是 `.cmd` 也不是 `.bat`，
 于是原样返回，spawn 照样 EFTYPE。
 
-- ⏳ **(P1) 可行方向**：让 `resolveNpmCommand` 顺带识别 `.ts`/`.js`/`.mjs` 入口并
-  交给当前运行时执行（`[runtimePath, entry]`），夹具随之从 `fake-npm.sh` 改写为
-  `fake-npm.ts`。这条扩展在生产上也说得通——运维完全可以把 `npmBin` 指向一个 JS
-  入口——而且与既有的「绕开垫片」语义同源，不引入 shell。
-- **不要**用 `.cmd` 重写该夹具：它接收的参数里有 `spec`（用户可控），而 `.cmd` 会
-  经 cmd.exe 重新切词（本文件另有实测记录）。
+**已完成（2026-08-05）**：按上述方向落地。`resolveNpmCommand` 现在识别
+`.ts/.mts/.cts/.js/.mjs/.cjs` 入口并交给当前运行时（`[runtimePath, entry]`）——这不是
+Windows 特例，把 `npmBin` 指向脚本入口在生产上同样合法（npm 自己的入口就是一个），
+而直接执行它正是「不经 shell」这条性质的来源。夹具已从 `fake-npm.sh` 移植为
+`fake-npm.ts`（含 6 种模式、诱饵包、lock 生成与 host package.json 改写，行为逐条对齐；
+`${SPEC%@*}` 的「从最后一个 @ 截断、无 @ 则原样」语义也照搬，包括 scoped 无版本时
+得到空名这一分支）。
+
+移植后它**还多了一层保障**：这个夹具此前从不参与类型检查，现在随套件一起检查。
+
+一个细节值得记：`plugins-http.test.ts` 走的是 **PATH 注入**（把夹具复制成
+`<tmp>/npm` 再 chmod），靠 shebang 执行，所以 `.ts` 文件必须保留
+`#!/usr/bin/env bun` 首行——否则 POSIX 上那条路径直接执行失败。
+
+实测：macOS 全部消费方 75 pass / 0 fail；Windows `agent-plugin-not-found` +
+`plugin-closure` 13 pass / 0 fail（此前 4 红）。
+
+- ⏳ **(P2) 遗留**：`plugins-http.test.ts` 的 PATH 注入在 Windows 上仍不可行——PATH
+  查找要靠 PATHEXT，一个无扩展名的 `npm` 文件在那里找不到。该文件目前未在 Windows
+  验证；接后端矩阵腿前需要单独处理（把注入的文件名改成带扩展名并让 `which` 能命中）。

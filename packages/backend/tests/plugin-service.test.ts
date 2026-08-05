@@ -5,7 +5,7 @@
 // name-conflict; rename cascade updates agents.plugins JSON column atomically;
 // delete defers immutable-generation cleanup to conservative GC.
 //
-// Install path uses the test-only fake-npm.sh shim (see RFC-031 design §3.2)
+// Install path uses the test-only fake-npm.ts shim (see RFC-031 design §3.2)
 // so tests stay hermetic and offline.
 
 import { buildActor } from '../src/auth/actor'
@@ -38,7 +38,7 @@ const T6_ACTOR = buildActor({
 })
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
+const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
 let pluginsDir = ''
 

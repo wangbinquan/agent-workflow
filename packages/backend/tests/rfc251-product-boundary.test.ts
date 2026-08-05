@@ -29,7 +29,7 @@ import { createWorkflow } from '../src/services/workflow'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
+const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const OPENCODE_RUNTIME = 'oc-with-model'
 
