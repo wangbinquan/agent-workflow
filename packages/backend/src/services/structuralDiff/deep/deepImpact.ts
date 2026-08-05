@@ -9,7 +9,7 @@
 // symbol across documents = the precise callers.
 
 import type { FileStructuralDiff, ImpactItem, ImpactCaller } from '@agent-workflow/shared'
-import type { ScipGraph } from './scip'
+import { occurrencesOf, type ScipGraph } from './scip'
 import { CALLABLE } from '../impact'
 
 /** SCIP ranges are 0-based [startLine, startChar, (endLine,) endChar]; our
@@ -43,12 +43,14 @@ export function resolveChangedScipSymbol(
  *  occurrence of that exact symbol, def site excluded, ordered deterministically. */
 export function computePreciseImpact(
   graph: ScipGraph,
-  changed: ReadonlyArray<{ changedSymbolId: string; scipSymbol: string }>,
+  changed: ReadonlyArray<{ changedSymbolId: string; scipSymbol: string; ownerFile: string }>,
 ): ImpactItem[] {
   const out: ImpactItem[] = []
   for (const c of changed) {
-    const occs = graph.bySymbol.get(c.scipSymbol)
-    if (occs === undefined) continue
+    // occurrencesOf (not raw bySymbol.get) so a `local N` symbol stays scoped
+    // to its own document (RFC-258 gate F-03).
+    const occs = occurrencesOf(graph, c.scipSymbol, c.ownerFile)
+    if (occs.length === 0) continue
     const callers: ImpactCaller[] = []
     for (const { doc, occ } of occs) {
       if (occ.isDefinition) continue // exclude the definition itself
@@ -71,7 +73,7 @@ export function preciseImpactFromBaseline(
   graph: ScipGraph,
   files: ReadonlyArray<FileStructuralDiff>,
 ): ImpactItem[] {
-  const changed: Array<{ changedSymbolId: string; scipSymbol: string }> = []
+  const changed: Array<{ changedSymbolId: string; scipSymbol: string; ownerFile: string }> = []
   for (const f of files) {
     for (const ch of f.changes) {
       // Every changed callable (incl. 'added') — so deep mode also surfaces
@@ -79,7 +81,8 @@ export function preciseImpactFromBaseline(
       const node = ch.after ?? ch.before
       if (node === undefined || !CALLABLE.has(node.kind) || node.range === undefined) continue
       const scipSymbol = resolveChangedScipSymbol(graph, f.filePath, node.range)
-      if (scipSymbol !== null) changed.push({ changedSymbolId: node.id, scipSymbol })
+      if (scipSymbol !== null)
+        changed.push({ changedSymbolId: node.id, scipSymbol, ownerFile: f.filePath })
     }
   }
   return computePreciseImpact(graph, changed)

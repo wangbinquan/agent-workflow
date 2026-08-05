@@ -501,6 +501,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/tasks/:id/structural-diff' },
   // RFC-239 — unified structural-change view
   { method: 'GET', path: '/api/tasks/:id/file-content' },
+  { method: 'GET', path: '/api/tasks/:id/file-symbols' }, // RFC-258
+  { method: 'GET', path: '/api/tasks/:id/code-intel' }, // RFC-258
   { method: 'GET', path: '/api/tasks/:id/change-narrative' },
   { method: 'POST', path: '/api/tasks/:id/change-narrative' },
   { method: 'GET', path: '/api/tasks/:id/call-targets' },

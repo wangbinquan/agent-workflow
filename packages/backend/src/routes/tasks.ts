@@ -72,6 +72,8 @@ import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { getTaskFileContent } from '@/services/worktreeFileContent'
 import { getChangeNarrativeStatus, triggerChangeNarrative } from '@/services/changeNarrative'
 import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
+import { getTaskFileSymbols } from '@/services/codeIntel/fileSymbols'
+import { getCodeIntel } from '@/services/codeIntel/codeIntel'
 import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
 import { structuralScopeSchema } from '@agent-workflow/shared'
 import { applyUploadsToWorktree, validateUploadPlan } from '@/services/upload'
@@ -617,6 +619,57 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
       return c.json(await getTaskFileContent(deps.db, c.req.param('id'), q))
+    },
+  )
+
+  // RFC-258 §2.1 — one file's symbol table (full-file anchor bar, baseline
+  // engine lookup, graph→source resolution). Multi-repo selects by the wire
+  // repo key ('.' = root, F-04); completeness is an honest 200 state (F-09).
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/file-symbols',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'File symbol table',
+    },
+    async (c) => {
+      const side = c.req.query('side') === 'base' ? 'base' : 'worktree'
+      const q: Parameters<typeof getTaskFileSymbols>[2] = {
+        path: c.req.query('path') ?? '',
+        side,
+      }
+      const repo = c.req.query('repo')
+      if (repo !== undefined && repo !== '') q.repo = repo
+      return c.json(await getTaskFileSymbols(deps.db, c.req.param('id'), q))
+    },
+  )
+
+  // RFC-258 §2.2 — identifier click resolution (definitions + references).
+  // deep degrades per file to baseline with an honest reason (F-07); the base
+  // side always resolves baseline (F-05).
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/code-intel',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Resolve an identifier',
+    },
+    async (c) => {
+      const q: Parameters<typeof getCodeIntel>[2] = {
+        path: c.req.query('path') ?? '',
+        side: c.req.query('side') === 'base' ? 'base' : 'worktree',
+        line: Number(c.req.query('line') ?? 0),
+        col: Number(c.req.query('col') ?? 0),
+        name: c.req.query('name') ?? '',
+        mode: c.req.query('mode') === 'deep' ? 'deep' : 'baseline',
+      }
+      const repo = c.req.query('repo')
+      if (repo !== undefined && repo !== '') q.repo = repo
+      return c.json(await getCodeIntel(deps.db, c.req.param('id'), q))
     },
   )
 

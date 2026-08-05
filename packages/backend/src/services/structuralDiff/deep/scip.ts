@@ -39,8 +39,34 @@ export interface ScipDocument {
 }
 export interface ScipGraph {
   documents: ScipDocument[]
-  /** symbol string → every occurrence of it across documents (O(1) reverse-ref). */
+  /** symbol string → every occurrence of it across documents (O(1) reverse-ref).
+   *  RFC-258 gate F-03: `local N` symbols are DOCUMENT-scoped in SCIP — two
+   *  files both emit `local 0` for unrelated locals — so local symbols are
+   *  stored under a `${doc}\0${symbol}` compound key. Always look occurrences
+   *  up through `occurrencesOf` (which routes on the `local ` prefix), never
+   *  via a raw `bySymbol.get`. */
   bySymbol: Map<string, Array<{ doc: string; occ: ScipOccurrence }>>
+}
+
+/** SCIP local symbols are `local <id>` (document-scoped). */
+export function isLocalScipSymbol(symbol: string): boolean {
+  return symbol.startsWith('local ')
+}
+
+function localKey(doc: string, symbol: string): string {
+  return `${doc}\u0000${symbol}`
+}
+
+/** Occurrences of `symbol`, honouring SCIP local-symbol document scoping.
+ *  `doc` is the document the symbol was observed in — required to resolve a
+ *  local symbol; ignored for global ones. */
+export function occurrencesOf(
+  graph: ScipGraph,
+  symbol: string,
+  doc: string,
+): Array<{ doc: string; occ: ScipOccurrence }> {
+  const key = isLocalScipSymbol(symbol) ? localKey(doc, symbol) : symbol
+  return graph.bySymbol.get(key) ?? []
 }
 
 export class ScipParseError extends Error {
@@ -87,8 +113,10 @@ export function buildSymbolIndex(documents: ScipDocument[]): ScipGraph['bySymbol
   for (const d of documents) {
     for (const occ of d.occurrences) {
       if (occ.symbol === '') continue
-      const arr = m.get(occ.symbol)
-      if (arr === undefined) m.set(occ.symbol, [{ doc: d.relativePath, occ }])
+      // F-03 — document-scope local symbols so `local 0` never crosses files.
+      const key = isLocalScipSymbol(occ.symbol) ? localKey(d.relativePath, occ.symbol) : occ.symbol
+      const arr = m.get(key)
+      if (arr === undefined) m.set(key, [{ doc: d.relativePath, occ }])
       else arr.push({ doc: d.relativePath, occ })
     }
   }

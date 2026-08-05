@@ -39,6 +39,7 @@ export * from './schemas/workgroup' // RFC-164
 export * from './schemas/workgroupRuntime' // RFC-164 PR-2
 export * from './schemas/sessionView'
 export * from './schemas/structuralDiff'
+export * from './schemas/codeIntel' // RFC-258
 export * from './schemas/ws'
 export * from './sessionView'
 export * from './inventory'

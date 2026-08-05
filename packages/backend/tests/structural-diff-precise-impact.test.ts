@@ -39,7 +39,7 @@ describe('computePreciseImpact', () => {
   ])
 
   test('callers = all non-def occurrences, def excluded, extracted confidence', () => {
-    const out = computePreciseImpact(graph, [{ changedSymbolId: 'A.foo', scipSymbol: SYM_A }])
+    const out = computePreciseImpact(graph, [{ changedSymbolId: 'A.foo', scipSymbol: SYM_A, ownerFile: 'src/a.ts' }])
     expect(out).toHaveLength(1)
     expect(out[0]?.confidence).toBe('extracted')
     expect(out[0]?.callers.map((c) => c.filePath)).toEqual(['src/b.ts', 'src/c.ts']) // dictionary order
@@ -55,11 +55,11 @@ describe('computePreciseImpact', () => {
         occurrences: [{ symbol: 'X', range: [1, 0, 3], isDefinition: true }],
       },
     ])
-    expect(computePreciseImpact(lonely, [{ changedSymbolId: 'X', scipSymbol: 'X' }])).toEqual([])
+    expect(computePreciseImpact(lonely, [{ changedSymbolId: 'X', scipSymbol: 'X', ownerFile: 'a.ts' }])).toEqual([])
   })
 
   test('symbol absent from graph → omitted, no throw', () => {
-    expect(computePreciseImpact(graph, [{ changedSymbolId: 'Z', scipSymbol: 'no-such' }])).toEqual(
+    expect(computePreciseImpact(graph, [{ changedSymbolId: 'Z', scipSymbol: 'no-such', ownerFile: 'a.ts' }])).toEqual(
       [],
     )
   })
@@ -87,7 +87,7 @@ describe('computePreciseImpact', () => {
         occurrences: [{ symbol: SYM_BRUN, range: [5, 2, 5], isDefinition: false }],
       },
     ])
-    const out = computePreciseImpact(g, [{ changedSymbolId: 'A.run', scipSymbol: SYM_ARUN }])
+    const out = computePreciseImpact(g, [{ changedSymbolId: 'A.run', scipSymbol: SYM_ARUN, ownerFile: 'a.ts' }])
     expect(out).toHaveLength(1)
     expect(out[0]?.callers.map((c) => c.filePath)).toEqual(['caller.ts']) // NOT other.ts
   })
