@@ -26,6 +26,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -142,7 +143,7 @@ describe('RFC-115 migration 0058 — DROP doc_versions.agent_snapshot', () => {
       expect(fks).toContain('node_runs')
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      removeTempDirSync(tmp)
     }
   })
 })
@@ -190,7 +191,7 @@ describe('RFC-115 migration 0058 — Codex F1: review_comments survive the upgra
       expect((up.query('SELECT COUNT(*) AS n FROM doc_versions').get() as { n: number }).n).toBe(1)
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      removeTempDirSync(tmp)
     }
   })
 

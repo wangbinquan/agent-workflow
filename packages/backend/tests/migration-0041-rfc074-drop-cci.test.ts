@@ -29,6 +29,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -233,7 +234,7 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
 
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      removeTempDirSync(tmp)
     }
   })
 })
