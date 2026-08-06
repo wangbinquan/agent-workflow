@@ -90,6 +90,26 @@ GET /api/webhook-deliveries/repos → string[]
 - 样式 `.pagination` 命名空间(flex + gap,贴既有 `.btn` 体系,无自造 chrome)。
 - i18n:`common.pagination.{aria,prev,next,pageOf}` zh/en 双语。
 
+### 3.1b 公共组件 `components/FilterBar.tsx`(D10)
+
+```tsx
+<FilterBar ariaLabel={...} trailing={hasFilter ? <清除筛选按钮/> : undefined} data-testid=...>
+  <Segmented .../>                               {/* 状态 */}
+  <FilterField label="事件"><Select .../></FilterField>
+  <FilterField label="仓库"><Select .../></FilterField>
+</FilterBar>
+```
+
+- `role="group"` + `aria-label`;`.filter-bar`(卡片:边框 + `--panel` 底 + 圆角)
+  内分两栏:`__controls`(左,flex-wrap)与 `__actions`(右,`margin-left:auto`)。
+- `FilterField` 渲染 `.filter-bar__label`(`<span>` 而非 `<label>`——Select 是自定义
+  `role=combobox` 且已带 `ariaLabel`,套 `<label>` 会双重标注;`.changes__toolbar-label`
+  同款分工)。
+- `.filter-bar__field > .select` 覆写基础 `width:100%` 为 `width:auto; min-width:10rem`
+  ——`.select` 的满宽是为表单栅格设计的,放进 inline-flex 会被压扁。
+- 视觉母本 `.user-directory__toolbar` 是同一件东西的私有实现;本组件是它的公共化,
+  users 页可后续迁移(不在本次改动内,避免掀翻其视觉基线)。
+
 ### 3.2 `DeliveriesPanel` 接线
 
 - 状态:`status`(既有 Segmented)+ `eventType`/`repoPath`(两个 `Select`,RFC-036
@@ -100,12 +120,14 @@ GET /api/webhook-deliveries/repos → string[]
 - 仓库下拉 query:`['webhook-deliveries','repos']`,`refetchInterval: 30_000`;
   选项 = `[全部, ...repos]`;`Select` value 用 `'all'` 哨兵(仅前端,不进 API)。
 - 事件下拉:`[全部, ...CODE_HOST_EVENT_TYPES]`,label 复用 `webhookTriggers.events.*`。
-- 顶部计数:`resultCount`(「{{count}} 条记录」)改为 `totalCount`(「共 {{total}} 条」),
-  数据源从 `rows.length` 改为 `data.total`。
-- 底部 `<Pagination>`;空态判定从 `status === 'all'` 扩为「三过滤均为 all/空」。
-- 过滤栏布局:`.webhook-filterbar` 既有 flex 容器内加一个 `.webhook-filterbar__selects`
-  子容器(flex + gap)容纳两个 Select——styles.css 只做加法(该文件有并发 session 未提交
-  改动,精确追加、不动他人行)。
+- 计数:`resultCount`(「{{count}} 条记录」)改为 `totalCount`(「共 {{total}} 条」),
+  数据源从 `rows.length` 改为 `data.total`;D10 后它是筛选栏**之外**、表格上方的
+  `.webhook-deliveries__meta` 行(不再与下拉挤在一起)。
+- 底部 `<Pagination>`;空态判定从 `status === 'all'` 扩为「三过滤均为 all/空」,
+  且筛选态空态带清除按钮(`user-directory` 空态同款出路)。
+- 过滤栏布局(D10):走 `FilterBar`/`FilterField`;RFC-261 初版的
+  `.webhook-filterbar` / `.webhook-filterbar__selects` 及其媒体查询块**删除**
+  (仅本面板使用,删除优于留死 CSS)。
 
 ### 3.3 页码钳制(AC-7)
 
@@ -177,6 +199,11 @@ batch)` 循环,单批默认 10000——D9' 让「保留期收缩」成为一等�
 前端:
 
 1. `pagination.test.tsx`:组件禁用边界 / onPageChange / nav role 与 aria(D6)。
+   1b. `filter-bar.test.tsx`(D10):role=group + 可访问名、控件落在 `__controls`、
+   trailing 缺省时连 `__actions` 容器都不渲染、FilterField 可见标签与控件同 field。
+   面板侧断言(rfc261 前端测试)锁:筛选栏含三控件、两标签可见、总数在栏外、
+   清除按钮的出现/消失与复位效果(AC-13)。视觉自查:本地 dev server + Chrome
+   实拍空闲态与激活态两张(CLAUDE.md 前端一致性规程第 4 条)。
 2. `rfc261-webhook-delivery-pagination.test.tsx`:mock api——下拉改变请求参数与页码
    复位、repos 选项渲染、总数展示、翻页请求 page=2、越界钳回、isAdmin=false 照常
    (AC-6/7/8)。

@@ -2452,6 +2452,9 @@ export interface Resources {
     filterAllRepos: string
     filterEventAria: string
     filterRepoAria: string
+    filtersLabel: string
+    filterEventLabel: string
+    filterRepoLabel: string
     replay: string
     replayBadge: string
     replaySuccess: string
@@ -7574,6 +7577,9 @@ export const zhCN: Resources = {
     filterAllRepos: '全部仓库',
     filterEventAria: '按事件类型过滤',
     filterRepoAria: '按仓库过滤',
+    filtersLabel: '投递筛选',
+    filterEventLabel: '事件',
+    filterRepoLabel: '仓库',
     replay: '重放',
     replayBadge: '重放',
     replaySuccess: '已创建重放投递 {{id}}，结果会自动刷新。',

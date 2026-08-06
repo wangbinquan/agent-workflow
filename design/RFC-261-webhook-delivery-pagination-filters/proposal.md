@@ -61,6 +61,18 @@ API 虽有 `before`(receivedAt 游标)参数,前端从未使用,仓内也零消�
   (design §2.1)。
 - **D8**:深页 OFFSET 成本(O(offset) 索引游走)接受——分页 UI 只有上一页/下一页,
   人工浏览深度有界;不为此引入 cursor 混合方案。
+- **D10(用户拍板 2026-08-07:「两个下拉框放右侧太丑了,好歹做下 UX 设计」)**:
+  初版把两个裸 Select 靠 `justify-content: space-between` 甩到过滤栏右端,和总数
+  挤在一起。三个真实缺陷:①**选中后 Select 只显示值**(`push` / `acme/api`),
+  没有可见标签就分不清哪个下拉管哪个维度;②三个筛选被拆成"左一族右一族",
+  不成整体;③**整页没有清除筛选入口**,而空态文案却让用户「清除筛选」。
+  重做为**卡片式筛选栏**(用户在三案中选定):抽公共原语
+  `components/FilterBar.tsx`(`FilterBar` + `FilterField`),视觉母本是既有
+  `.user-directory__toolbar`(边框 + panel 底 + 控件成族),改 flex-wrap 以容纳
+  可变数量维度;三个筛选左对齐成一族、两个 Select 带可见维度标签、清除筛选
+  按钮右对齐(仅在有激活筛选时渲染)、总数降为表格上方的 meta 行、筛选后空态
+  也带清除按钮。`user-directory` 视觉等价可后续迁移(记 audit-backlog,本次不动
+  它以免掀翻 users 页视觉基线)。
 - **D9'(用户拍板 2026-08-06:「是不是可以配置 webhook 的最长保留天数」→ 配置化)**:
   10 万/天 × 30 天 body 保留 ≈ 300 万个 ≤256KiB body,按典型 GitLab payload 5–30KiB
   估算为 **15–90GB** 量级的 SQLite 存储——保留天数从常量改为 config 字段
@@ -108,6 +120,9 @@ API 虽有 `before`(receivedAt 游标)参数,前端从未使用,仓内也零消�
 - AC-10:`bun run typecheck && lint && test && format:check` 全绿;i18n zh/en 双语齐。
 - AC-11(D9'):`PUT /api/config` 携带 body>row → 422 `webhook-retention-invalid`;
   合法值落盘且 GET 回读;0 / 负数 / >3650 / 小数被 schema 拒绝;缺省回填 30/90。
+- AC-13(D10):筛选栏是一个带可访问名的 `role=group`,三个筛选控件都在其中;
+  两个 Select 各有**可见**维度标签;清除按钮在无激活筛选时不渲染、激活后出现、
+  点击后三过滤复位且页码回到 1;筛选后空态带清除按钮;总数在筛选栏之外的 meta 行。
 - AC-12(D9'):`gcDeliveries` 按传入保留值分层生效(清 body / 删行)且**分批执行**
   (小 batchSize 下跨批清理完整、计数正确——保留期收缩的一次性百万级清理不物化
   id 大数组、不整段持写锁);ticker 走 getter 每 sweep 热读(`runDeliveryGcSweep`

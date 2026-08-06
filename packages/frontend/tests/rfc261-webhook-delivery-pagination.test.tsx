@@ -2,7 +2,7 @@
 //   封套消费（总数展示）、翻页请求 page=N、过滤变更携带参数且页码复位 1、
 //   仓库下拉选项来自 /repos、越界页钳回、只读（isAdmin=false）下过滤分页照常。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import i18n from '../src/i18n'
@@ -106,6 +106,56 @@ describe('RFC-261 · 投递面板分页与过滤', () => {
     expect(screen.getByRole('combobox', { name: 'Filter by event type' })).toBeTruthy()
     expect(screen.getByRole('combobox', { name: 'Filter by repository' })).toBeTruthy()
     expect(screen.queryByTestId('webhook-delivery-replay-dl1')).toBeNull()
+  })
+
+  test('UI 修订：筛选栏是一个 group，两个下拉带可见维度标签（选中后值会盖掉语义）', async () => {
+    mount()
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+    const bar = screen.getByRole('group', { name: 'Delivery filters' })
+    expect(screen.getByTestId('webhook-deliveries-filters')).toBe(bar)
+    // 三个筛选控件同属一族（此前两个下拉靠 space-between 甩在右侧）
+    for (const name of ['Filter by status', 'Filter by event type', 'Filter by repository']) {
+      const control = screen.getByRole(name === 'Filter by status' ? 'radiogroup' : 'combobox', {
+        name,
+      })
+      expect(bar.contains(control)).toBe(true)
+    }
+    // 表头也叫 Event/Repository——限定在筛选栏内找可见维度标签
+    const eventLabel = within(bar).getByText('Event')
+    const repoLabel = within(bar).getByText('Repository')
+    expect(eventLabel.className).toContain('filter-bar__label')
+    expect(repoLabel.className).toContain('filter-bar__label')
+    // 总数从下拉旁边挪到表格上方的 meta 行
+    const total = screen.getByTestId('webhook-deliveries-total')
+    expect(total.className).toContain('webhook-deliveries__meta')
+    expect(bar.contains(total)).toBe(false)
+  })
+
+  test('UI 修订：清除筛选——无筛选时不渲染，激活后出现，点击复位三过滤与页码', async () => {
+    mount()
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+    expect(screen.queryByTestId('webhook-deliveries-clear-filters')).toBeNull()
+
+    await pickOption('Filter by event type', 'Pipeline failed')
+    await pickOption('Filter by repository', 'acme/web')
+    // 换 queryKey 会有一帧 loading（表格与分页暂时不渲染），等数据回来再翻页
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+    fireEvent.click(pageBtn('Next'))
+    await waitFor(() => expect(screen.getByText('Page 2 of 3')).toBeTruthy())
+    const clear = await waitFor(() => screen.getByTestId('webhook-deliveries-clear-filters'))
+
+    requests = []
+    fireEvent.click(clear)
+    await waitFor(() => {
+      const after = listRequests()
+      expect(after.length).toBeGreaterThan(0)
+      const last = after[after.length - 1]!
+      expect(last.searchParams.get('eventType')).toBeNull()
+      expect(last.searchParams.get('repoPath')).toBeNull()
+      expect(last.searchParams.get('status')).toBeNull()
+      expect(last.searchParams.get('page')).toBe('1')
+    })
+    expect(screen.queryByTestId('webhook-deliveries-clear-filters')).toBeNull()
   })
 
   test('下一页 → 请求 page=2 且页码文案更新（AC-6）', async () => {

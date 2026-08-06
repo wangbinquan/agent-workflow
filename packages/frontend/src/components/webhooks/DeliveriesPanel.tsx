@@ -16,6 +16,7 @@ import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
+import { FilterBar, FilterField } from '@/components/FilterBar'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { Pagination } from '@/components/Pagination'
@@ -122,6 +123,13 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
 
   const rows = list.data?.items ?? []
   const hasFilter = status !== 'all' || eventType !== 'all' || repoPath !== 'all'
+  // UI 修订：此前整页没有清除入口，而空态文案却让用户「清除筛选」。
+  const clearFilters = () => {
+    setStatus('all')
+    setEventType('all')
+    setRepoPath('all')
+    setPage(1)
+  }
   // 空态看 total 而非当前页 items（越界页 items 为空但 total>0，由钳制效应接管）。
   const isInitialEmpty = !list.isLoading && list.data !== undefined && list.data.total === 0
 
@@ -134,7 +142,22 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
           <p>{t('webhookDeliveries.subtitle')}</p>
         </div>
       </div>
-      <div className="webhook-filterbar">
+      <FilterBar
+        ariaLabel={t('webhookDeliveries.filtersLabel')}
+        data-testid="webhook-deliveries-filters"
+        trailing={
+          hasFilter ? (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={clearFilters}
+              data-testid="webhook-deliveries-clear-filters"
+            >
+              {t('common.clearFilters')}
+            </button>
+          ) : undefined
+        }
+      >
         <Segmented<StatusFilter>
           value={status}
           onChange={(value) => {
@@ -150,7 +173,7 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
                 : t(`webhookDeliveries.statuses.${value}`),
           }))}
         />
-        <div className="webhook-filterbar__selects">
+        <FilterField label={t('webhookDeliveries.filterEventLabel')}>
           <Select<'all' | CodeHostEventType>
             value={eventType}
             onChange={(value) => {
@@ -167,6 +190,8 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
             ariaLabel={t('webhookDeliveries.filterEventAria')}
             data-testid="webhook-delivery-filter-event"
           />
+        </FilterField>
+        <FilterField label={t('webhookDeliveries.filterRepoLabel')}>
           <Select
             value={repoPath}
             onChange={(value) => {
@@ -180,13 +205,8 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
             ariaLabel={t('webhookDeliveries.filterRepoAria')}
             data-testid="webhook-delivery-filter-repo"
           />
-          {!list.isLoading && list.data !== undefined && (
-            <span className="muted" data-testid="webhook-deliveries-total">
-              {t('webhookDeliveries.totalCount', { total: list.data.total })}
-            </span>
-          )}
-        </div>
-      </div>
+        </FilterField>
+      </FilterBar>
       <FeedbackStack variant="section">
         {error !== null && <ErrorBanner error={error} />}
         {list.error != null && <ErrorBanner error={list.error} />}
@@ -212,8 +232,26 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
               ? 'webhookDeliveries.filteredEmptyDescription'
               : 'webhookDeliveries.emptyDescription',
           )}
+          // 筛选后无结果时给出路（user-directory 空态同款）。
+          action={
+            hasFilter ? (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={clearFilters}
+                data-testid="webhook-deliveries-empty-clear"
+              >
+                {t('common.clearFilters')}
+              </button>
+            ) : undefined
+          }
           data-testid="webhook-deliveries-empty"
         />
+      )}
+      {!list.isLoading && list.data !== undefined && list.data.total > 0 && (
+        <p className="webhook-deliveries__meta" data-testid="webhook-deliveries-total">
+          {t('webhookDeliveries.totalCount', { total: list.data.total })}
+        </p>
       )}
       {rows.length > 0 && (
         <TableViewport label={t('webhookDeliveries.title')}>
