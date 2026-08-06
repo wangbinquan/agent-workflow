@@ -97,6 +97,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // on win32 by runtime-smoke.test.ts; a real streaming single-binary needs a
   // compiled `.exe` (deferred). The other 20 registry tests run on win32.
   'packages/backend/tests/runtime-routes-registry.test.ts#skipIf': 1,
+  // RFC-254: one case forces "config unwritable" by chmod'ing .git to 0o555 — a
+  // read-only DIRECTORY blocks git's lock-file create on POSIX, but on Windows a
+  // dir's read-only attribute does not block writes to files inside, so the
+  // fail-closed premise can't be set up. The fail-closed logic is platform-
+  // agnostic (covered on the POSIX legs); the other case in the file runs on win32.
+  'packages/backend/tests/rfc205-mirror-origin-sanitize.test.ts#skipIf': 1,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is

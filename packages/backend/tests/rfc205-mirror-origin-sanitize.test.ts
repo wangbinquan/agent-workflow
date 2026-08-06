@@ -51,27 +51,37 @@ describe('RFC-205 P0-6 — warm reuse fails closed when the origin cannot be san
     rmSync(appHome, { recursive: true, force: true })
   })
 
-  test('a read-only .git/config that blocks the credential scrub → repo-origin-not-sanitized', async () => {
-    if (typeof process.getuid === 'function' && process.getuid() === 0) return // root ignores 0444
-    const url = pathToFileURL(await seedRepo('src')).href
-    const cold = await resolveCachedRepo({ db, appHome }, { url })
-    const mirror = cold.cached.localPath
-    // Simulate a pre-RFC-205 mirror whose origin STILL carries a credential, then
-    // make .git/config read-only so the warm-path set-url scrub can't rewrite it.
-    await runGit(mirror, ['remote', 'set-url', 'origin', 'https://user:tok@evil.example/r.git'])
-    // git rewrites config via a lock file + rename, so the write is gated by the
-    // DIRECTORY mode, not the file mode. Make .git read-only so set-url can't
-    // create its lock → the scrub fails, exactly the corrupt/locked-config case.
-    chmodSync(join(mirror, '.git'), 0o555)
-    try {
-      const err = await resolveCachedRepo({ db, appHome, fetchOnReuse: true }, { url }).catch(
-        (e: unknown) => e,
-      )
-      expect((err as { code?: string }).code).toBe('repo-origin-not-sanitized')
-    } finally {
-      chmodSync(join(mirror, '.git'), 0o755)
-    }
-  })
+  // RFC-254: skipped on Windows — this forces "config unwritable" by chmod'ing
+  // .git to 0o555 (POSIX: a read-only directory blocks git's lock-file create, so
+  // set-url can't rewrite config). On Windows a directory's read-only attribute
+  // does NOT block writes to files inside it, so the premise can't be established:
+  // set-url succeeds and the scrub does not fail-closed. The fail-closed logic is
+  // platform-agnostic and covered on the POSIX legs (forcing "unwritable" on
+  // Windows would need an ACL deny-write, not a directory mode bit).
+  test.skipIf(process.platform === 'win32')(
+    'a read-only .git/config that blocks the credential scrub → repo-origin-not-sanitized',
+    async () => {
+      if (typeof process.getuid === 'function' && process.getuid() === 0) return // root ignores 0444
+      const url = pathToFileURL(await seedRepo('src')).href
+      const cold = await resolveCachedRepo({ db, appHome }, { url })
+      const mirror = cold.cached.localPath
+      // Simulate a pre-RFC-205 mirror whose origin STILL carries a credential, then
+      // make .git/config read-only so the warm-path set-url scrub can't rewrite it.
+      await runGit(mirror, ['remote', 'set-url', 'origin', 'https://user:tok@evil.example/r.git'])
+      // git rewrites config via a lock file + rename, so the write is gated by the
+      // DIRECTORY mode, not the file mode. Make .git read-only so set-url can't
+      // create its lock → the scrub fails, exactly the corrupt/locked-config case.
+      chmodSync(join(mirror, '.git'), 0o555)
+      try {
+        const err = await resolveCachedRepo({ db, appHome, fetchOnReuse: true }, { url }).catch(
+          (e: unknown) => e,
+        )
+        expect((err as { code?: string }).code).toBe('repo-origin-not-sanitized')
+      } finally {
+        chmodSync(join(mirror, '.git'), 0o755)
+      }
+    },
+  )
 
   test('a normal warm reuse (origin scrubbable) does NOT fail closed', async () => {
     const url = pathToFileURL(await seedRepo('ok')).href
