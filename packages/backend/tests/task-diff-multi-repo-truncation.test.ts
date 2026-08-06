@@ -22,13 +22,14 @@
 //       truncated:false } with NO header emitted. This is a distinct boundary
 //       from B18 (one-of-two empty): here EVERY repo is empty.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { getTaskDiff, startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -71,8 +72,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      removeTempDirSync(appHome)
+      removeTempDirSync(reposParent)
     },
   }
 }
@@ -85,6 +86,10 @@ function filler(approxBytes: number): string {
   const line = 'x'.repeat(63) + '\n' // 64 bytes/line
   return line.repeat(Math.ceil(approxBytes / 64))
 }
+
+// RFC-254: file:// git clone is slow on Windows; the default 5s timeout kills
+// the in-flight clone (reported as 'git clone failed'). 60s gives it headroom.
+setDefaultTimeout(60_000)
 
 describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-through', () => {
   let h: Harness

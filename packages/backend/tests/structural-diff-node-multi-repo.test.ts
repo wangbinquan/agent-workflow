@@ -12,12 +12,13 @@
 // The happy-path per-repo resolution + prefixed merge are unit-covered in
 // structural-diff-refselect.test.ts and structural-diff-multi-repo-merge.test.ts.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { getTaskStructuralDiff } from '../src/services/structuralDiff/service'
 import { startTask } from '../src/services/task'
 import { nodeRuns, workflows } from '../src/db/schema'
@@ -60,8 +61,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      removeTempDirSync(appHome)
+      removeTempDirSync(reposParent)
     },
   }
 }
@@ -77,6 +78,10 @@ async function twoRepoTask(h: Harness) {
     { db: h.db, appHome: h.appHome },
   )
 }
+
+// RFC-254: file:// git clone is slow on Windows; the default 5s timeout kills
+// the in-flight clone (reported as 'git clone failed'). 60s gives it headroom.
+setDefaultTimeout(60_000)
 
 describe('RFC-089 P3 — structural node scope, multi-repo', () => {
   let h: Harness

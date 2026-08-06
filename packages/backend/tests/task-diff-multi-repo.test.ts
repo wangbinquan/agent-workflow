@@ -13,14 +13,15 @@
 //   B18 one repo has zero changes: that repo's section (including header)
 //       is silently dropped; only the changed repo appears in output.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { getTaskDiff, startTask, startTaskWithLocalRepo } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -62,11 +63,15 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      removeTempDirSync(appHome)
+      removeTempDirSync(reposParent)
     },
   }
 }
+
+// RFC-254: file:// git clone is slow on Windows; the default 5s timeout kills
+// the in-flight clone (reported as 'git clone failed'). 60s gives it headroom.
+setDefaultTimeout(60_000)
 
 describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
   let h: Harness

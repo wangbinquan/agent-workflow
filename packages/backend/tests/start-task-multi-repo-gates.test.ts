@@ -13,14 +13,15 @@
 //   B15 single-repo (length === 1) + wrapper-git → still launches normally
 //       (v1 only blocks the multi-repo combo).
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { startTask, startTaskWithLocalRepo } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -55,8 +56,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      removeTempDirSync(appHome)
+      removeTempDirSync(reposParent)
     },
   }
 }
@@ -72,6 +73,10 @@ async function seedWorkflow(db: DbClient, def: unknown): Promise<string> {
   })
   return id
 }
+
+// RFC-254: file:// git clone is slow on Windows; the default 5s timeout kills
+// the in-flight clone (reported as 'git clone failed'). 60s gives it headroom.
+setDefaultTimeout(60_000)
 
 describe('RFC-066 PR-A T6 — multi-repo gates', () => {
   let h: Harness

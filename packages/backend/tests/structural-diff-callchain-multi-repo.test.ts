@@ -8,12 +8,13 @@
 // chain keeps resolving in the same repo on the next click. Also locks the pure
 // splitRepoRef seam.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 import {
   getCallTargets,
   splitRepoRef,
@@ -23,6 +24,10 @@ import { startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+
+// RFC-254: file:// git clone is slow on Windows; the default 5s timeout kills
+// the in-flight clone (reported as 'git clone failed'). 60s gives it headroom.
+setDefaultTimeout(60_000)
 
 describe('splitRepoRef', () => {
   test('strips the matching repo-dir prefix', () => {
@@ -81,8 +86,8 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      removeTempDirSync(appHome)
+      removeTempDirSync(reposParent)
     },
   }
 }
