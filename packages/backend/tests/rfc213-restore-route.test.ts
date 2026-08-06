@@ -3,10 +3,11 @@
 // stagePendingRestore call → no marker written → the hasPendingRestore assertion reds.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { errorHandler } from '../src/util/errors'
 import type { Database } from 'bun:sqlite'
 import { Hono, type MiddlewareHandler } from 'hono'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb } from '../src/db/client'
@@ -28,7 +29,7 @@ function tmp(): string {
 afterEach(() => {
   if (savedHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
   else process.env.AGENT_WORKFLOW_HOME = savedHome
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
 /** Impl-gate P1-5: the routes are ADMIN-ONLY now — inject an actor the way

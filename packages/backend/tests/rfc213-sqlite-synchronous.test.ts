@@ -5,8 +5,9 @@
 // hardcode `PRAGMA synchronous = NORMAL` in openDb → the FULL assertion reds.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
@@ -20,7 +21,7 @@ function tmp(): string {
   return d
 }
 afterEach(() => {
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
 function synchronousLevel(db: DbClient): number {

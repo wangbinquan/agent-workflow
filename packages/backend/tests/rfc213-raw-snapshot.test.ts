@@ -13,8 +13,9 @@
 //   - stop writing the manifest → manifest assertions red.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
@@ -31,7 +32,7 @@ function tmp(prefix: string): string {
   return d
 }
 afterEach(() => {
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
 /** Open a file-backed, fully-migrated DB, checkpoint+close it, return its path

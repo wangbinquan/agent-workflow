@@ -5,8 +5,9 @@
 // checkpointWal → the -wal file is not truncated → the shrink assertion reds.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -23,7 +24,7 @@ function tmp(): string {
   return d
 }
 afterEach(() => {
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
 describe('RFC-213 checkpointWal', () => {

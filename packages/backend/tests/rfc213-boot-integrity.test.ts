@@ -12,7 +12,8 @@
 //   - change db/integrity.ts to `{ readonly: false }` → the readonly source lock reds.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
+import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Database } from 'bun:sqlite'
@@ -30,7 +31,7 @@ function tmp(): string {
   return d
 }
 afterEach(() => {
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
 function sqliteOf(db: DbClient): Database {
