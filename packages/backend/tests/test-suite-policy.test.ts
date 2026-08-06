@@ -109,6 +109,13 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // fail-closed at bootstrap); it also trips validatePolicyPath on Windows (POSIX
   // fixture paths vs path.normalize's '/' → '\'). The rest of the file runs on win32.
   'packages/backend/tests/rfc233-containment-coordinator.test.ts#skipIf': 1,
+  // RFC-254: both describes drive the POSIX sandbox-policy layer (computeSandboxPolicy
+  // → renderBwrapArgs / renderSeatbeltProfile) with POSIX fixture paths. Windows v1 has
+  // no sandbox provider (D1); computeSandboxPolicy is never reached in production and
+  // validatePolicyPath rejects the POSIX fixtures (verified: "invalid sandbox path").
+  // Same class as rfc205-sandbox-policy's render describes; the RFC-251 Linux fix is
+  // verified on real Debian.
+  'packages/backend/tests/rfc251-linux-plugin-visibility.test.ts#skipIf': 2,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is
