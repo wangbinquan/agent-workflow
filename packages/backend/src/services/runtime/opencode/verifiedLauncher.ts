@@ -11,6 +11,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { lstat, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join, parse, resolve } from 'node:path'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
+import { killProcessTree, isProcessTreeAlive, type KillTreeSignal } from '@/util/process'
 import type { ExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import {
   AscendingMessageIdGenerator,
@@ -86,8 +87,8 @@ export interface VerifiedLauncherServerProcess {
   readonly stdout: ReadableStream<Uint8Array>
   readonly stderr: ReadableStream<Uint8Array>
   readonly exited: Promise<number>
-  /** Signal the dedicated server process group (`kill(-pid, signal)`). */
-  killGroup(signal: NodeJS.Signals): void
+  /** Reap the dedicated server process tree (POSIX group signal; win32 taskkill/Job). */
+  killGroup(signal: KillTreeSignal): void
   /** Host call made inside the private PID namespace; true includes descendants. */
   isGroupAlive(): boolean
 }
@@ -234,24 +235,22 @@ function defaultSpawnServer(input: SpawnVerifiedServerInput): VerifiedLauncherSe
       stdout: child.stdout as ReadableStream<Uint8Array>,
       stderr: child.stderr as ReadableStream<Uint8Array>,
       exited: child.exited,
+      // RFC-254 T4 (bug#9): route the tree kill + liveness through the single
+      // platform-aware primitive. On POSIX both are byte-for-byte the old
+      // behaviour (`kill(-pid, signal)` group signal; `kill(-pid, 0)` liveness,
+      // EPERM counting as alive). On Windows the old `process.kill(-pid, …)` was
+      // a NO-OP (no process groups) — killGroup silently reached only the top
+      // opencode process and leaked its provider/bootstrap descendants; now it
+      // walks the tree via `taskkill /T /F` (this spawn does not adopt a Job
+      // Object, so no bun:ffi is involved — the atomic-job path stays future
+      // work). `isProcessTreeAlive` is null ("cannot tell") on win32 without a
+      // job, and `=== true` maps that to the same "not alive" the old EPERM-only
+      // check produced there — so stopServer's success/failure semantics are
+      // unchanged; only the actual reaping (top process → whole tree) improves.
       killGroup: (signal) => {
-        try {
-          process.kill(-child.pid, signal)
-        } catch {
-          // A concurrent clean exit may remove the group between the exited
-          // check and signal. `child.kill` is a best-effort final nudge and
-          // does not turn ESRCH into a host-path-bearing diagnostic.
-          child.kill(signal)
-        }
+        killProcessTree(child.pid, signal)
       },
-      isGroupAlive: () => {
-        try {
-          process.kill(-child.pid, 0)
-          return true
-        } catch (error) {
-          return (error as NodeJS.ErrnoException).code === 'EPERM'
-        }
-      },
+      isGroupAlive: () => isProcessTreeAlive(child.pid) === true,
     }
   } catch {
     return phaseFailure('execution-identity-bootstrap-failed')

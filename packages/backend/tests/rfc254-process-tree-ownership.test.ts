@@ -25,6 +25,8 @@ import {
   WIN32_JOB_LAYOUT,
 } from '@/util/windowsJobObject'
 import { adoptSpawnedProcessTree, isProcessTreeAlive, killProcessTree } from '@/util/process'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 /**
  * Ask the OS whether a pid still exists, independently of anything under test.
@@ -216,5 +218,29 @@ describe('RFC-254 T4 — process tree ownership', () => {
     // On Windows an unadopted pid has no authoritative answer at all; on POSIX
     // the group answer is always definite.
     expect(verdict === null).toBe(process.platform === 'win32')
+  })
+})
+
+// RFC-254 T4 (bug#9) — the verified launcher's own server process must reap the
+// whole tree, not just the top opencode process. The old `process.kill(-pid,…)`
+// group signal is a NO-OP on Windows (no process groups), so on win32 it left
+// opencode's provider/bootstrap descendants orphaned. defaultSpawnServer is
+// injected/mocked in every launcher test, so its production body is locked here
+// as a source anchor: it must route through the platform-aware primitive.
+describe('RFC-254 T4 (bug#9) — verified launcher spawn reaps the tree via the platform primitive', () => {
+  const launcher = readFileSync(
+    resolve(import.meta.dir, '..', 'src/services/runtime/opencode/verifiedLauncher.ts'),
+    'utf8',
+  )
+
+  test('killGroup / isGroupAlive go through killProcessTree / isProcessTreeAlive', () => {
+    expect(launcher).toContain('killProcessTree(child.pid, signal)')
+    expect(launcher).toContain('isProcessTreeAlive(child.pid) === true')
+  })
+
+  test('the win32 no-op group-signal form is gone from the spawned server handle', () => {
+    // `process.kill(-child.pid, …)` silently does nothing on Windows; its
+    // reappearance in this file is the exact bug#9 regression.
+    expect(launcher).not.toContain('process.kill(-child.pid')
   })
 })
