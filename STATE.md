@@ -416,6 +416,26 @@ present-empty（"(created on first daemon start)"）——但**单测隔离必�
 **未提交任何掩盖性改动**。本轮提交：`27d682ec`/`a325ff1c`/`13eeb8cf`/`3c13e41c`/`9a561e0f`/`daedfe7a`/
 `2054fcd2`。POSIX 全绿、每簇真机复验。
 
+**2026-08-06 续三 · T31 逐簇续（真机每簇复验，再收口 migration 全簇 + 3 个 DB-backed 文件，再抓修 1 个生产缺陷）**：
+①**migration 红簇 8 文件全绿**（0002/0021/0041/0042/0057/0058/0104/0138）——统一 bun:sqlite GC-gated 句柄致
+清理 EBUSY，按形态修：beforeEach 重建前 `if(win32)Bun.gc(true)`（0002/0021）、afterAll/afterEach/finally 的
+目录 rm → `removeTempDirSync`、`withMigratedDb` 泄漏 openDb 句柄 ⇒ 捕获 close（0104）。注：0117/0118（`:memory:`）
+实为绿，per-file scan 的 toBe/toContain hint 是命中断言源码文本的误判、真错全是 EBUSY。②`rfc099-migration-0045`
+(4/0)、`workflow-schema-migrate`(7/0，afterEach 关 openDb $client + 置空解引用 + `removeTempDirSync`)。
+③`subagent-live-capture` per-file scan 报 41 fail 系**假阳性**（fail 计数正则命中了被捕获的子代理输出文本），
+真机 13/0 双跑稳定绿。④`rfc249`/`runner-subagent-live-capture`/`upgrade-rolling` 本就绿。
+
+**真生产缺陷③（已修 `80285b95`，RFC-223 技能身份迁移在 Windows 整条不可用）**：`skillMigrateOp.ts
+renameAndSyncParent` 对父**目录** fd 无保护 `fsyncSync`——Windows 拒绝目录 fsync（EPERM）、且 openSync 目录本身
+可能抛 ⇒ 每次 boot + restore post-swap 链跑的技能身份 barrier 一开始就死。修法：目录 sync 改 best-effort
+try/catch（rename 本原子，与 `restore.ts fsyncDir` 同款语义）。是 `rfc223-pr5` 在 swapInDbFile 修好后暴露的下一道
+Windows 障碍（回归覆盖=rfc223-pr5，真机 8/0）。**本轮续三提交**：`7d5d12f3`/`8515d2bb`/`ab7af606`/`80285b95`。
+
+**至此三个 Windows 生产缺陷全部修掉**：①`swapInDbFile` 换库句柄（`daedfe7a`）②`skillMigrateOp` 目录 fsync
+（`80285b95`）③`backup.test` bare tar（测试侧，`3c13e41c`；生产 tarGz 早已 System32 tar）。**仍未修的生产缺陷**：
+`pluginInstaller.ts:295`（并发 session 占用，未代改）。**剩余 T31**：per-file sweep 的 r/s/t/u/w 段未系统跑完
+（可重起续扫）+ `cli` flaky 根因待定位（非产品）。T33–T35 未开始。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
