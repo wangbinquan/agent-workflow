@@ -13,7 +13,6 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -115,39 +114,48 @@ interface Harness {
  * standard <workflow-output> envelope so the scheduler marks the run done.
  */
 function makeEnvCapturingStub(dir: string, captureDir: string): string {
-  const path = join(dir, 'stub-opencode-env.sh')
-  // Use the OPENCODE_CONFIG_DIR last segment as a unique key — runner.ts
-  // constructs `~/.agent-workflow/runs/{task}/{nodeRun}/.opencode/`, so
-  // `basename` is the nodeRunId. Falls back to PID for safety.
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  KEY="$(basename "\${OPENCODE_CONFIG_DIR:-pid-$$}")"
-  KEY="\${KEY%%.opencode}"
-  if [[ -z "$KEY" ]]; then KEY="pid-$$"; fi
-  OUT="${captureDir}/env-\${KEY}.json"
-  # Capture only the four RFC-067 vars + a stable marker so the test
-  # doesn't have to grep through hundreds of inherited keys.
-  {
-    printf '{'
-    printf '"GIT_AUTHOR_NAME": %s,' "$(printf '%s' "\${GIT_AUTHOR_NAME:-__unset__}" | jq -Rs .)"
-    printf '"GIT_AUTHOR_EMAIL": %s,' "$(printf '%s' "\${GIT_AUTHOR_EMAIL:-__unset__}" | jq -Rs .)"
-    printf '"GIT_COMMITTER_NAME": %s,' "$(printf '%s' "\${GIT_COMMITTER_NAME:-__unset__}" | jq -Rs .)"
-    printf '"GIT_COMMITTER_EMAIL": %s' "$(printf '%s' "\${GIT_COMMITTER_EMAIL:-__unset__}" | jq -Rs .)"
-    printf '}\\n'
-  } > "$OUT"
-  ENV="$OPEN"'<port name="out">ok</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
+  // RFC-254: ported from a `#!/usr/bin/env bash` + `jq` stub — Windows has
+  // neither a shebang launcher nor jq. This runs under `bun run <this>` (the
+  // caller spawns `[process.execPath, 'run', <path>]`, the same seam as
+  // e2e-stub-argv-contract), so it's a portable interpreter on all three OSes.
+  // The OPENCODE_CONFIG_DIR last segment is the per-node_run key (runner builds
+  // `.../{nodeRun}/.opencode`); `basename` yields the nodeRunId, PID fallback.
+  // Output bytes mirror the bash stub: the four-var capture JSON + one
+  // `{"type":"text",...}` line carrying the <workflow-output> envelope (the
+  // runner's raw-text fallback + envelope regex extract it — the wrapping line
+  // is deliberately not strict JSON, exactly as the bash stub emitted).
+  const path = join(dir, 'stub-opencode-env.ts')
+  const script = `import { writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
+
+const CAPTURE_DIR = ${JSON.stringify(captureDir)}
+const args = process.argv.slice(2)
+if (args[0] === '--version') {
+  console.log('stub-opencode 1.14.99')
+  process.exit(0)
+}
+if (args[0] === 'run') {
+  const m = args.join(' ').match(/nonce="([^"]*)"/)
+  const open = m ? '<workflow-output nonce="' + m[1] + '">' : '<workflow-output>'
+  let key = basename(process.env.OPENCODE_CONFIG_DIR || ('pid-' + process.pid))
+  if (key.endsWith('.opencode')) key = key.slice(0, -'.opencode'.length)
+  if (key === '') key = 'pid-' + process.pid
+  writeFileSync(
+    join(CAPTURE_DIR, 'env-' + key + '.json'),
+    JSON.stringify({
+      GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME || '__unset__',
+      GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL || '__unset__',
+      GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME || '__unset__',
+      GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL || '__unset__',
+    }) + '\\n',
+  )
+  const env = open + '<port name="out">ok</port></workflow-output>'
+  console.log('{"type":"text","ts":' + Date.now() + ',"text":"' + env + '"}')
+  process.exit(0)
+}
+process.exit(1)
 `
   writeFileSync(path, script)
-  chmodSync(path, 0o755)
   return path
 }
 
@@ -256,7 +264,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         baseBranch: 'main',
         inputs: { topic: 't' },
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        awaitScheduler: true,
+      },
     )
 
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
@@ -286,7 +299,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         gitUserName: 'AI Bot',
         gitUserEmail: 'bot@workflow.local',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        awaitScheduler: true,
+      },
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     expect(row.gitUserName).toBe('AI Bot')
@@ -315,7 +333,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         gitUserName: '  Padded Bot  ',
         gitUserEmail: '  padded@bot.local  ',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        awaitScheduler: true,
+      },
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     expect(row.gitUserName).toBe('Padded Bot')
@@ -341,7 +364,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         gitUserName: 'Task Bot',
         gitUserEmail: 'task@bot.test',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        awaitScheduler: true,
+      },
     )
     expect(task.gitUserName).toBe('Task Bot')
     const envs = readCapturedEnvs(h.envCaptureDir)
@@ -367,7 +395,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         baseBranch: 'main',
         inputs: { topic: 't' },
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        awaitScheduler: true,
+      },
     )
     const envs = readCapturedEnvs(h.envCaptureDir)
     for (const e of envs) {
@@ -400,7 +433,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         {
           db: hA.db,
           appHome: hA.appHome,
-          opencodeCmd: [hA.stubOpencode],
+          opencodeCmd: [process.execPath, 'run', hA.stubOpencode],
           awaitScheduler: true,
         },
       ),
@@ -417,7 +450,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         {
           db: hA.db,
           appHome: hA.appHome,
-          opencodeCmd: [hA.stubOpencode],
+          opencodeCmd: [process.execPath, 'run', hA.stubOpencode],
           awaitScheduler: true,
         },
       ),
@@ -472,7 +505,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         inputs: { topic: 't' },
         gitUserName: 'Lonely Bot',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        awaitScheduler: true,
+      },
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     // BOTH columns must be NULL — half-identity is never persisted.
@@ -499,7 +537,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         inputs: { topic: 't' },
         gitUserEmail: 'lonely@bot.local',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stubOpencode],
+        awaitScheduler: true,
+      },
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     expect(row.gitUserName).toBeNull()
