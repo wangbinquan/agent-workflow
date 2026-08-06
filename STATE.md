@@ -690,6 +690,17 @@ sandbox-cli/source-reachability/source-guard。**余 ~9 文件**：①大簇 `ff
 `execution-identity`(1)/`custom-provider-runtime`(3)/`machine-config`(1)/`netless-workdir`(7/4 混合安全围栏)；④待查 mcp×2/
 identity-guard。**模式已充分验证**（9 文件），fresh-context 沿①skipIf-per-D1 / ②separator / ③④逐条真机核实即可续推。
 
+**2026-08-06 续二十 · 容器簇累计 10 文件（fff-capability，真机 0/13skip）+ netless-mcp 定性为大散布**：
+`rfc224-fff-capability` 两 describe skipIf（`9f80482a`）——13 测全经 FFF（Linux bwrap 边界证明）：12 测走共享
+fixture（materializeFffCapabilityProbe 带 `bwrapPath '/usr/bin/bwrap'` POSIX → win32 store-unsafe，真机实测同一根因），
+execution-proof 另断言 POSIX PGID kill/release；FFF 在 Windows v1 从不触达（D1 无 bwrap）。**netless-mcp 定性**：
+rfc242-claude-netless-mcp = 47 测 / 16 describe，26 fail **散布**（netless #!/bin/sh materialize），非快清——须逐
+describe/test skipIf + 逐条真机验非真 bug，属大 ① 工作。**本 session 容器簇 10 文件收口**（全真机验收），根因高度统一
+（POSIX sandbox 层 validatePolicyPath/store-unsafe + POSIX PGID）。**余 ~8 文件**（netless-mcp 散布 / verified-plan 13
+RFC-224 verified 核心 / execution-identity / custom-provider / machine-config / netless-workdir 混合围栏 / mcp×2 /
+identity-guard）皆大或谨慎，签名已编目，**须 fresh-context 逐条真机核实**（不在 session 末尾对 verified 核心/安全围栏
+仓促下断言——killGroup 正是逐条查才挖出的真 bug）。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
