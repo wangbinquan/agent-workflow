@@ -116,6 +116,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // Same class as rfc205-sandbox-policy's render describes; the RFC-251 Linux fix is
   // verified on real Debian.
   'packages/backend/tests/rfc251-linux-plugin-visibility.test.ts#skipIf': 2,
+  // RFC-254: both describes render POSIX sandbox specs (netless Seatbelt SBPL + Linux
+  // bwrap) — POSIX-mechanism never produced on win32 (D1); validatePolicyPath rejects the
+  // POSIX fixtures. Same class as rfc205-sandbox-policy. The second describe renders at
+  // body level, so it must skip at collection too.
+  'packages/backend/tests/rfc252-netless-write-deny.test.ts#skipIf': 2,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is

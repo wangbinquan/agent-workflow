@@ -102,7 +102,13 @@ function seatbeltWriteAllowed(profile: string, path: string): boolean {
   return allows.some((root) => path === root || path.startsWith(`${root}/`))
 }
 
-describe('RFC-252 G2 · macOS child 默认禁写', () => {
+// RFC-254: both describes render the POSIX sandbox specs (renderNetlessSeatbeltProfile
+// = macOS SBPL, renderNetlessBwrapArgs = Linux bwrap) — POSIX-mechanism never produced
+// on Windows v1 (D1: no sandbox provider; validatePolicyPath rejects the POSIX fixture
+// paths). Same class as rfc205-sandbox-policy / rfc251-linux-plugin-visibility. (The
+// second describe calls the renderers at describe-body level, so it must skip at
+// collection time too.)
+describe.skipIf(process.platform === 'win32')('RFC-252 G2 · macOS child 默认禁写', () => {
   test('基线是全局禁写，且排在所有 allow-back 之前（SBPL last-match-wins）', () => {
     const profile = renderNetlessSeatbeltProfile(seatbeltManifest())
     const lines = profile.split('\n')
@@ -158,9 +164,14 @@ describe('RFC-252 G2 · macOS child 默认禁写', () => {
   })
 })
 
-describe('RFC-252 G2 · 两平台可写/只读集合必须一致', () => {
-  const bwrapArgs = renderNetlessBwrapArgs(manifest(), [])
-  const profile = renderNetlessSeatbeltProfile(seatbeltManifest())
+describe.skipIf(process.platform === 'win32')('RFC-252 G2 · 两平台可写/只读集合必须一致', () => {
+  // RFC-254: describe.skipIf still RUNS the describe body (only the tests skip), so
+  // these body-level renderer calls execute even on win32 — where they throw (POSIX
+  // sandbox spec + validatePolicyPath). Guard them; the tests that consume them are
+  // skipped on win32 anyway.
+  const bwrapArgs = process.platform === 'win32' ? [] : renderNetlessBwrapArgs(manifest(), [])
+  const profile =
+    process.platform === 'win32' ? '' : renderNetlessSeatbeltProfile(seatbeltManifest())
 
   test('可写根集合逐条相同（两边都派生自 netlessWritableSubtrees）', () => {
     expect(seatbeltWritableRoots(profile)).toEqual(bwrapWritableRoots(bwrapArgs))
