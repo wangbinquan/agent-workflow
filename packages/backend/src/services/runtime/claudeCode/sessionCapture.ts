@@ -51,7 +51,12 @@ export interface CaptureClaudeSessionsOpts {
  * See design/test-guard-audit-2026-07-21 Top-1 / gap B4-runtime-1.
  */
 export function cwdSlug(cwd: string): string {
-  return cwd.replace(/\//g, '-')
+  // RFC-254: also fold Windows separators + the drive colon (`C:\a\b` → `C--a-b`).
+  // `:` and `\` are illegal / separator chars, so a `/`-only replace leaves an
+  // un-createable path on Windows (the projects fixture mkdir'd `…\projects\C:\…`
+  // and hit ENOENT). Still a best-effort fast path — findSessionDirs below is
+  // authoritative. POSIX paths carry no `\`/`:`, so behaviour there is unchanged.
+  return cwd.replace(/[/\\:]/g, '-')
 }
 
 /**
