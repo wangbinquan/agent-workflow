@@ -167,12 +167,19 @@ describe('RFC-242 §3 — system/business surface split cannot leak', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'claudeCode', 'driver.ts'),
       'utf8',
     )
-    // buildSpawn (system) marks it; buildBusinessSpawn must NOT.
-    const systemAt = driverSrc.indexOf("surface: 'system'")
+    // buildSpawn (system) marks it; buildBusinessSpawn must NOT. 2026-08-06:
+    // the system entry carries the probe carve-out ternary — the DEFAULT stays
+    // 'system' and only the explicit probeDispatchShape flag flips to the
+    // business dispatch shape (probe fidelity, GLM-fork incident). The exact
+    // literal is asserted so a refactor cannot silently widen the default.
+    const systemAt = driverSrc.indexOf(
+      "surface: ctx.probeDispatchShape === true ? 'business' : 'system'",
+    )
     const businessAt = driverSrc.indexOf('async buildBusinessSpawn(')
     expect(systemAt).toBeGreaterThan(-1)
     expect(systemAt).toBeLessThan(businessAt)
     expect(driverSrc.slice(businessAt)).not.toContain("surface: 'system'")
+    expect(driverSrc.slice(businessAt)).not.toContain('probeDispatchShape')
   })
 })
 

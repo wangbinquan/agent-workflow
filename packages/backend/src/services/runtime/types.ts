@@ -268,16 +268,10 @@ export interface ListModelsOpts {
    */
   cacheKey?: string
   /**
-   * RFC-255 test seam: supply the daemon config that names custom providers.
-   * Production reads the real config file.
+   * RFC-256 test seam: supply the daemon config carrying the machine-config
+   * inheritance switch. Production reads the real config file.
    */
-  loadCustomProviderConfig?: () => { customProviders?: unknown }
-  /**
-   * RFC-255 catalog probe: enumerate with THIS provider section instead of the
-   * configured gateways, and skip the cache. Used to detect an id that would
-   * merge into a built-in catalog provider.
-   */
-  injectedProviderSection?: Record<string, unknown>
+  loadDaemonConfig?: () => Record<string, unknown>
   /** RFC-224 diagnostic subprocess environment (OpenCode only). */
   env?: Record<string, string>
   /** RFC-224 private, source-guarded diagnostic working directory. */
@@ -373,6 +367,22 @@ export interface SystemAgentSpawnContext {
    * stays sealed.
    */
   extraArgs?: readonly string[]
+  /**
+   * 2026-08-06 — conformance-probe fidelity: build the BUSINESS dispatch shape
+   * (unconstrained `bypassPermissions` + full inherited env/settings) instead
+   * of the declared-control system shape. RFC-242 tightened the smoke to
+   * `--tools "" --setting-sources "" --disable-slash-commands` + controlled
+   * env; a claude fork whose gateway/model mapping lives in its own settings
+   * then fails EVERY probe while every business node runs green (the
+   * 2026-08-04..06 GLM-fork incident: execution fine, probe model-call-failed
+   * with the model explicitly set). A probe's job is to predict dispatch
+   * behavior, so it must test the shape dispatch actually uses.
+   * Capability impact (CLAUDE.md 规则 7): the probe child regains
+   * bypassPermissions and full env/settings — admin-only route, admin-selected
+   * binary, cwd is a throwaway temp dir. Set ONLY by runtimeSmoke; system
+   * features (distiller / intent / commit-push) keep declared-control.
+   */
+  probeDispatchShape?: true
   /** Subprocess cwd (distiller: a throwaway temp dir). */
   worktreePath: string
   /** Config dir (opencode: OPENCODE_CONFIG_DIR; claude: attempt dir holding .claude/). */

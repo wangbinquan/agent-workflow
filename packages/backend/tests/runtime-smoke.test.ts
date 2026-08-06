@@ -403,6 +403,14 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
         readFileSync(captureFile, 'utf8').trim().split('\n').at(-1)!,
       ) as string[]
       expect(argv.at(-1)).toBe('--skip-safe-check')
+      // 2026-08-06 probe fidelity: the probe argv is the BUSINESS dispatch
+      // shape — bypassPermissions, and none of the declared-control flags that
+      // cut a fork's settings-based gateway/model mapping (the GLM-fork
+      // incident: execution green, probe red with the model explicitly set).
+      expect(argv).toContain('bypassPermissions')
+      expect(argv).not.toContain('--setting-sources')
+      expect(argv).not.toContain('--tools')
+      expect(argv).not.toContain('--disable-slash-commands')
     },
     SMOKE_TIMEOUT,
   )

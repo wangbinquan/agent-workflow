@@ -231,6 +231,11 @@ async function buildSmokePlan(
   return getRuntimeDriver(protocol).buildSpawn({
     agentName: 'aw-smoke',
     systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
+    // 2026-08-06 — probe fidelity: test the shape dispatch actually uses
+    // (business-unconstrained), not the declared-control system shape. A fork
+    // whose gateway/model mapping lives in its settings passes business runs
+    // but failed every probe under `--setting-sources ""` (GLM-fork incident).
+    probeDispatchShape: true,
     ...(model !== undefined ? { model } : {}),
     ...(extraArgs !== undefined && extraArgs.length > 0 ? { extraArgs } : {}),
     prompt,

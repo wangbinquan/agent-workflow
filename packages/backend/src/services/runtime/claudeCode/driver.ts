@@ -180,7 +180,14 @@ export const claudeCodeDriver: RuntimeDriver = {
       prompt: ctx.prompt,
       systemPromptText: ctx.systemPrompt,
       // RFC-242 §3: this IS the system-agent surface — materialize the profile.
-      surface: 'system',
+      // 2026-08-06 carve-out: the conformance PROBE builds the business
+      // dispatch shape instead (unconstrained bypassPermissions + full
+      // env/settings) — the declared-control smoke tested a shape no business
+      // node ever runs and false-negatived claude forks whose gateway/model
+      // mapping lives in their settings (GLM-fork incident: execution green,
+      // probe red with the model explicitly set). See
+      // SystemAgentSpawnContext.probeDispatchShape for the capability note.
+      surface: ctx.probeDispatchShape === true ? 'business' : 'system',
       ...(ctx.model != null && ctx.model !== '' ? { model: ctx.model } : {}),
       attemptDir: ctx.runDir,
       // Design-gate P1-2: RFC-154 custom config-dir profile of the selected

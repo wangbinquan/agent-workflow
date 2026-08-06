@@ -139,6 +139,29 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     })
   })
 
+  // 2026-08-06 probe fidelity (GLM-fork incident): the conformance probe must
+  // build the BUSINESS dispatch shape — a fork whose gateway/model mapping
+  // lives in its settings passes every business run but failed every probe
+  // under the declared-control shape (`--setting-sources ""` cuts the fork's
+  // config layer; `--model` alone cannot compensate). The declared-control
+  // shape stays the default for every OTHER system caller (test above).
+  test('probeDispatchShape → business-unconstrained argv (probe tests what dispatch runs)', async () => {
+    await withTmp(async (dir) => {
+      const plan = await claudeCodeDriver.buildSpawn({
+        ...BASE,
+        runDir: dir,
+        probeDispatchShape: true,
+      })
+      expect(plan.cmd).toContain('bypassPermissions')
+      expect(plan.cmd).not.toContain('dontAsk')
+      expect(plan.cmd).not.toContain('--tools')
+      expect(plan.cmd).not.toContain('--setting-sources')
+      expect(plan.cmd).not.toContain('--disable-slash-commands')
+      // model still flows — probe fidelity is about the SHAPE, not the profile.
+      expect(plan.cmd).toContain('--model')
+    })
+  })
+
   test('runtimeBinary overrides the claude head', async () => {
     await withTmp(async (dir) => {
       const plan = await claudeCodeDriver.buildSpawn({
