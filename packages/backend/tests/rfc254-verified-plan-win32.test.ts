@@ -304,5 +304,119 @@ describe.skipIf(process.platform !== 'win32')(
         rmSync(root, { recursive: true, force: true })
       }
     })
+
+    // bug#5 sweep — the COMMON feature: a managed skill in the full plan. Drives
+    // inspect + snapshotManagedSkillTree end-to-end INSIDE the build (bug#2 only
+    // proved the snapshot standalone) and asserts the skill body lands in the
+    // frozen prompt. (Local MCP is deliberately NOT swept here: the verified
+    // identity digest requires a sealed MCP wrapper inside sealRoot, which needs
+    // a containment provider — Windows v1 has none, so local MCP is a separate
+    // architectural question, not a plan-build win32 defect. See audit-backlog.)
+    test('full plan with a managed skill builds on real win32', async () => {
+      const root = longTemp('rfc254-vp-feat-')
+      const originalAuth = process.env.OPENCODE_AUTH_CONTENT
+      const originalHome = process.env.HOME
+      try {
+        delete process.env.HOME
+        const appHome = join(root, 'app')
+        const scratchRepo = join(appHome, 'scratch', 'task-1')
+        const worktreePath = join(appHome, 'iso', 'task-1', 'run-feat')
+        const runRoot = join(appHome, 'runs', 'task-1', 'run-feat')
+        mkdirSync(scratchRepo, { recursive: true })
+        mkdirSync(dirname(worktreePath), { recursive: true })
+        const git = (args: string[]): void => {
+          execFileSync('git', args, { stdio: 'ignore' })
+        }
+        git(['init', '-q', '-b', 'main', scratchRepo])
+        writeFileSync(join(scratchRepo, 'README.md'), 'fixture\n')
+        git(['-C', scratchRepo, 'add', 'README.md'])
+        git([
+          '-C',
+          scratchRepo,
+          '-c',
+          'user.email=a@b.c',
+          '-c',
+          'user.name=a',
+          'commit',
+          '-q',
+          '-m',
+          'fixture',
+        ])
+        git(['-C', scratchRepo, 'worktree', 'add', '-q', '--detach', worktreePath, 'HEAD'])
+
+        // A managed skill — the primary agent receives the whole closure union.
+        const skillSrc = join(root, 'skill-src')
+        mkdirSync(skillSrc, { recursive: true })
+        writeFileSync(join(skillSrc, 'SKILL.md'), '# probe skill\nWIN32-SKILL-MARKER\n')
+
+        const containment = await new ContainmentCoordinator({
+          provider: {
+            mode: 'off',
+            status: { mechanism: 'none', available: false, detail: null },
+            appHome,
+          },
+        }).admit('model-child-netless-v1')
+        process.env.OPENCODE_AUTH_CONTENT = JSON.stringify({
+          openai: { type: 'api', key: 'test-only-key' },
+        })
+
+        const ctx: BusinessNodeSpawnContext = {
+          agent: probeAgent(),
+          prompt: 'do stable work',
+          injectedMemoryBlock: null,
+          dependents: [],
+          mcps: [],
+          plugins: [],
+          resolvedParamsByAgent: new Map([
+            [
+              'worker',
+              {
+                model: 'openai/gpt-5.6',
+                variant: null,
+                temperature: null,
+                steps: null,
+                maxSteps: null,
+              },
+            ],
+          ]),
+          skills: [
+            {
+              name: 'probe',
+              sourceKind: 'managed',
+              sourcePath: realpathSync.native(skillSrc),
+              skillId: 'skill-probe',
+              contentVersion: 1,
+              readContentVersion: async () => 1,
+            },
+          ],
+          worktreePath,
+          repoWorktreePaths: [worktreePath],
+          runRoot,
+          configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
+          wantsInventory: false,
+          nodeRunId: 'run-feat',
+          log: createLogger('rfc254-vp-feat-probe'),
+          appHome,
+          taskId: 'task-1',
+          nodeId: 'node-1',
+          opencodeControlNonce: 'd'.repeat(32),
+          opencodeLeaseNonceDigest: 'd'.repeat(64),
+          containment,
+        }
+
+        const plan = await buildVerifiedOpencodeBusinessPlan(ctx, ['opencode'], PLAN_DEPENDENCIES)
+        expect(plan.control?.kind).toBe('opencode-session')
+        // The skill was inspected, snapshotted AND injected into the frozen
+        // prompt — the full skill path end-to-end, on win32.
+        const manifest = readFileSync(join(runRoot, 'opencode-verified-manifest.json'), 'utf8')
+        expect(manifest).toContain('WIN32-SKILL-MARKER')
+      } finally {
+        if (originalAuth === undefined) delete process.env.OPENCODE_AUTH_CONTENT
+        else process.env.OPENCODE_AUTH_CONTENT = originalAuth
+        if (originalHome === undefined) delete process.env.HOME
+        else process.env.HOME = originalHome
+        rmSync(root, { recursive: true, force: true })
+      }
+    })
   },
 )
