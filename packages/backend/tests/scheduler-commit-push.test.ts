@@ -11,7 +11,7 @@
 //     commit-agent message + git push).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -41,27 +41,35 @@ interface Harness {
 // emits a commit message and writes nothing; the writer agent dirties the
 // worktree and emits its output port.
 function makeStub(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
-  OPEN='<workflow-output>'
-  if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
-  if [[ "$*" == *commit_message* ]]; then
-    ENV="$OPEN"'<port name="commit_message">feat: stub commit</port></workflow-output>'
-  else
-    printf 'agent change %s\\n' "$(date +%s%N)" > agent-output.txt
-    ENV="$OPEN"'<port name="out">ok</port></workflow-output>'
-  fi
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$(date +%s%3N)" "$ENV"
-  exit 0
-fi
-exit 1
+  // RFC-254: ported from a `#!/usr/bin/env bash` stub — not executable on Windows.
+  // Runs under `bun run <this>` (spawned as [process.execPath, 'run', <path>]); the
+  // envelope streams over stdout to the runner (no cmd.exe layer, unlike a `.cmd`).
+  // Output bytes mirror the bash stub (the wrapping line is deliberately not strict
+  // JSON — the runner's raw-text fallback + envelope regex extract it).
+  const path = join(dir, 'stub-opencode.ts')
+  const script = `import { writeFileSync } from 'node:fs'
+const args = process.argv.slice(2)
+if (args[0] === '--version') {
+  console.log('stub-opencode 1.14.99')
+  process.exit(0)
+}
+if (args[0] === 'run') {
+  const all = args.join(' ')
+  const m = all.match(/nonce="([^"]*)"/)
+  const open = m ? '<workflow-output nonce="' + m[1] + '">' : '<workflow-output>'
+  let env
+  if (all.includes('commit_message')) {
+    env = open + '<port name="commit_message">feat: stub commit</port></workflow-output>'
+  } else {
+    writeFileSync('agent-output.txt', 'agent change ' + Date.now() + '\\n')
+    env = open + '<port name="out">ok</port></workflow-output>'
+  }
+  console.log('{"type":"text","ts":' + Date.now() + ',"text":"' + env + '"}')
+  process.exit(0)
+}
+process.exit(1)
 `
   writeFileSync(path, script)
-  chmodSync(path, 0o755)
   return path
 }
 
@@ -147,7 +155,12 @@ describe('RFC-075 scheduler auto commit&push', () => {
         inputs: { topic: 't' },
         autoCommitPush: true,
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stub], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stub],
+        awaitScheduler: true,
+      },
     )
 
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
@@ -189,7 +202,12 @@ describe('RFC-075 scheduler auto commit&push', () => {
         baseBranch: 'main',
         inputs: { topic: 't' },
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stub], awaitScheduler: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: [process.execPath, 'run', h.stub],
+        awaitScheduler: true,
+      },
     )
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
     expect(rows.some((r) => isCommitPushNodeId(r.nodeId))).toBe(false)
