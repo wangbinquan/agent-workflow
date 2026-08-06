@@ -6,13 +6,14 @@
 // insert that commits first must make the fenced workflow delete report in-use.
 
 import type { StartTask, WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { cachedRepos, tasks } from '../src/db/schema'
 import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
 import { materializingSpaces } from '../src/services/gc'
@@ -97,11 +98,15 @@ async function expectWorktreeFullyRemoved(
   for (const cache of caches) expect(existsSync(cache.localPath)).toBe(true)
 }
 
+// RFC-254: multi-repo materialize does file:// clones (slow on Windows); default 5s
+// timeout kills the in-flight clone. 60s headroom.
+setDefaultTimeout(60_000)
+
 describe('RFC-199 startTask workflow delete/version race', () => {
   let harness: Harness | undefined
 
   afterEach(() => {
-    if (harness !== undefined) rmSync(harness.tmp, { recursive: true, force: true })
+    if (harness !== undefined) removeTempDirSync(harness.tmp)
     harness = undefined
   })
 
@@ -552,9 +557,11 @@ describe('RFC-199 startTask workflow delete/version race', () => {
     })
     expect(captured).toBeDefined()
     expect(existsSync(captured!.repoWorktrees[0]!.worktreePath)).toBe(true)
+    // RFC-254: `git worktree list --porcelain` prints forward-slash paths even on
+    // Windows; the captured worktreePath is backslash-separated (from join()).
     expect(
       (await runGit(harness.sourcePaths[0]!, ['worktree', 'list', '--porcelain'])).stdout,
-    ).toContain(captured!.repoWorktrees[0]!.worktreePath)
+    ).toContain(captured!.repoWorktrees[0]!.worktreePath.replace(/\\/g, '/'))
   })
 
   test('branch-restore cleanup hook failure is structured after worktree unregister', async () => {
@@ -740,7 +747,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
     // residue; materializeWorktree must not turn it into cleanup:null.
     expect(existsSync(residuePath)).toBe(true)
     const registered = await runGit(source, ['worktree', 'list', '--porcelain'])
-    expect(registered.stdout).toContain(residuePath)
+    // RFC-254: git prints forward-slash worktree paths even on Windows.
+    expect(registered.stdout).toContain(residuePath.replace(/\\/g, '/'))
     expect((await runGit(source, ['branch', '--list', residueBranch])).stdout.trim()).not.toBe('')
     expect(await harness.db.select().from(tasks)).toHaveLength(0)
   })
