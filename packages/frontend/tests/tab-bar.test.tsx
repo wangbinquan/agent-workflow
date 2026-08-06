@@ -5,6 +5,10 @@
 // (`.tabs__tab-badge`, tasks.detail pending-question count), the
 // `.tabs--<variant>` modifier mapping, overflow affordances, required
 // accessible names, semantic badge tones and per-tab testids.
+//
+// Windows classic scrollbars expose a cross-axis overflow trap: horizontal
+// scrolling makes an unspecified overflow-y compute to auto, leaving a bogus
+// vertical scrollbar beside short resource tabs such as /repos and /webhooks.
 
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
@@ -302,6 +306,7 @@ describe('<TabBar> — panel ids and scrolling', () => {
     const tabsRule = css.match(/\.tabs\s*\{([^}]*)\}/)?.[1] ?? ''
     const tabRule = css.match(/\.tabs__tab\s*\{([^}]*)\}/)?.[1] ?? ''
     expect(tabsRule).toContain('overflow-x: auto')
+    expect(tabsRule).toContain('overflow-y: hidden')
     expect(tabsRule).toContain('overscroll-behavior-inline: contain')
     expect(tabsRule).toContain('scrollbar-width: thin')
     expect(tabRule).toContain('flex: 0 0 auto')

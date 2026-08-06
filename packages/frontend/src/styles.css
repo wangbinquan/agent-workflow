@@ -5171,6 +5171,10 @@ details.form-section[open] > summary {
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
+  /* Horizontal scrolling otherwise makes overflow-y compute to auto. On
+     Windows that exposes a classic vertical scrollbar for subpixel tab ink,
+     even though the strip has no meaningful vertical scroll range. */
+  overflow-y: hidden;
   overscroll-behavior-inline: contain;
   scrollbar-width: thin;
 }
