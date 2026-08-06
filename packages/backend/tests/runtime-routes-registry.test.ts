@@ -313,27 +313,39 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect(forbidden.status).toBe(403)
   })
 
-  test('POST /api/runtimes/probe deep-smokes a mock binary → conforms', async () => {
-    process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
-    process.env.MOCK_OPENCODE_EMIT_SESSION_ID = '1'
-    try {
-      const res = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/probe', {
-        method: 'POST',
-        body: JSON.stringify({
-          protocol: 'opencode',
-          binaryPath: wrapperFor(MOCK_OPENCODE),
-          model: 'openai/gpt-5.6',
-        }),
-      })
-      expect(res.status).toBe(200)
-      const json = (await res.json()) as { smoke: { outcome: string; conforms: boolean } }
-      expect(json.smoke.outcome).toBe('conforms')
-      expect(json.smoke.conforms).toBe(true)
-    } finally {
-      delete process.env.MOCK_OPENCODE_ECHO_PROMPT
-      delete process.env.MOCK_OPENCODE_EMIT_SESSION_ID
-    }
-  }, 30_000)
+  // RFC-254: skipped on Windows — the ONE registry test that drives the REAL
+  // streaming deep-smoke end-to-end through the HTTP /probe route with a real
+  // binaryPath (the other probe tests inject a mock smoke via appWithSmoke). The
+  // route accepts a single path, so the command-array seam that lets runtime-smoke
+  // stream on Windows is unreachable here, and a `.sh`/`.cmd` cannot stream the
+  // protocol (cmd.exe buffers stdout). The streaming-smoke MECHANISM itself is
+  // covered on win32 by runtime-smoke.test.ts (21/21 via the command-array seam);
+  // a real streaming single-binary would need a compiled `.exe` (deferred).
+  test.skipIf(process.platform === 'win32')(
+    'POST /api/runtimes/probe deep-smokes a mock binary → conforms',
+    async () => {
+      process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
+      process.env.MOCK_OPENCODE_EMIT_SESSION_ID = '1'
+      try {
+        const res = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/probe', {
+          method: 'POST',
+          body: JSON.stringify({
+            protocol: 'opencode',
+            binaryPath: wrapperFor(MOCK_OPENCODE),
+            model: 'openai/gpt-5.6',
+          }),
+        })
+        expect(res.status).toBe(200)
+        const json = (await res.json()) as { smoke: { outcome: string; conforms: boolean } }
+        expect(json.smoke.outcome).toBe('conforms')
+        expect(json.smoke.conforms).toBe(true)
+      } finally {
+        delete process.env.MOCK_OPENCODE_ECHO_PROMPT
+        delete process.env.MOCK_OPENCODE_EMIT_SESSION_ID
+      }
+    },
+    30_000,
+  )
 
   test('POST /api/runtimes/:name/probe rejects a regular user before spawning diagnostics', async () => {
     let smokeCalls = 0

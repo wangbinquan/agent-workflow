@@ -90,6 +90,13 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // the file now runs on win32 (command-array runtime head via opencodeCmd +
   // platform-aware killProcessTree reap, which fixed the timeout/abort cases).
   'packages/backend/tests/rfc234-system-agent-run.test.ts#skipIf': 1,
+  // RFC-254: one registry test drives the REAL streaming deep-smoke end-to-end
+  // through the HTTP /probe route with a real binaryPath — the route takes a single
+  // path, so runtime-smoke's command-array streaming seam is unreachable and a
+  // `.sh`/`.cmd` can't stream (cmd.exe buffers). The streaming mechanism is covered
+  // on win32 by runtime-smoke.test.ts; a real streaming single-binary needs a
+  // compiled `.exe` (deferred). The other 20 registry tests run on win32.
+  'packages/backend/tests/runtime-routes-registry.test.ts#skipIf': 1,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is
