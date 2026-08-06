@@ -1093,10 +1093,20 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const workflowId = await seedEditorWorkflow()
     await routeLargeAgentCatalog(page, 50)
     await openEditorScene(page, workflowId, 3)
+    // RFC-253/RFC-257 added two late/stale-baseline-sensitive surfaces to
+    // this scene. Lock the fully hydrated admin shell and complete category
+    // catalog before taking pixels: the 0.2% full-page allowance previously
+    // let either missing row pass alone, then failed once both rendered.
+    await expect(
+      page.getByTestId('shell-navigation-desktop').locator('a[href="/webhooks"]'),
+    ).toBeVisible()
     await page.getByTestId('workflow-canvas-add').click()
     const palette = page.getByTestId('workflow-node-picker-dialog')
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await expect(palette.getByTestId('workflow-node-picker-category-agents')).toContainText('50')
+    const scriptsCategory = palette.getByTestId('workflow-node-picker-category-scripts')
+    await expect(scriptsCategory).toContainText('Scripts')
+    await expect(scriptsCategory.locator('.tabs__tab-badge')).toHaveText('1')
     await palette.getByTestId('workflow-node-picker-category-human').click()
     await expect(palette.getByTestId('workflow-node-picker-category-panel-human')).toBeVisible()
     await expect(palette.getByTestId('workflow-node-picker-item-kind-review')).toBeVisible()
