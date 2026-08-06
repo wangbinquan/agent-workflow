@@ -1,6 +1,8 @@
-// RFC-257 T8/T9 — 触发器管理面（owner 制，D19：非 RFC-099 ACL —— fire 以
-// owner 身份执行，grants 写权 = 改绑目标后借 owner 身份的提权通道；权限模型
-// 逐字沿 routes/scheduledTasks.ts：owner + resource-admin 旁路，不可见 = 404）。
+// RFC-257 T8/T9 — 触发器管理面（owner 制写面，D19：非 RFC-099 ACL —— fire 以
+// owner 身份执行，grants 写权 = 改绑目标后借 owner 身份的提权通道）。
+// RFC-260 D1/D5：**读面全量开放**（列表/详情/fires 对任何过了 read 方法门的
+// viewer 可见，原「不可见 = 404」读语义退役）；写面行级门保留
+// owner ∨ resource-admin（requireWrite，404 同形）。
 // 保存期校验三层（services/webhook/triggerValidation.ts 注释）；创建/更新时
 // 以**保存者身份**跑「彩排渲染 + assertScheduledTargetUsable」——launch 目标
 // 对保存者不可见即拒绝（对齐 services/resourceRefs.ts 的新增引用校验惯例）。
@@ -32,13 +34,14 @@ import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 type Row = typeof webhookTriggers.$inferSelect
 
-function canView(actor: Actor, row: Row): boolean {
-  return row.ownerUserId === actor.user.id || isResourceAdminRole(actor.user.role)
-}
-
+/**
+ * RFC-260 D1/D5：读路径不再做行级过滤（触发器全量只读，用户拍板——规则本身
+ * 不敏感，全量可见最利排障）；写路径的行级门保留 owner ∨ resource-admin
+ * （矩阵写点不在非 admin 基线 ⇒ 方法门先挡，这里是纵深）。原「非 owner 404
+ * 同形」读语义随 D1 显式退役。
+ */
 function requireWrite(actor: Actor, row: Row): void {
-  if (!canView(actor, row)) {
-    // 不可见走 404 同形；可见但非 owner 非 admin 在 canView 里已并入 404 语义
+  if (!(row.ownerUserId === actor.user.id || isResourceAdminRole(actor.user.role))) {
     throw new NotFoundError('webhook-trigger-not-found', `trigger '${row.id}' not found`)
   }
 }
@@ -147,12 +150,12 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List webhook triggers visible to the caller',
     },
     async (c) => {
-      const actor = actorOf(c)
       const rows = await deps.db
         .select()
         .from(webhookTriggers)
         .orderBy(desc(webhookTriggers.createdAt))
-      return c.json(rows.filter((r) => canView(actor, r)).map(toWire))
+      // RFC-260 D1：全量只读——不再按 owner 过滤。
+      return c.json(rows.map(toWire))
     },
   )
 
@@ -234,7 +237,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
           .where(eq(webhookTriggers.id, c.req.param('id')))
           .limit(1)
       )[0]
-      if (!row || !canView(actorOf(c), row)) {
+      if (!row) {
         throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
       }
       return c.json(toWire(row))
@@ -259,7 +262,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
           .where(eq(webhookTriggers.id, c.req.param('id')))
           .limit(1)
       )[0]
-      if (!row || !canView(actor, row)) {
+      if (!row) {
         throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
       }
       requireWrite(actor, row)
@@ -338,7 +341,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
           .where(eq(webhookTriggers.id, c.req.param('id')))
           .limit(1)
       )[0]
-      if (!row || !canView(actor, row)) {
+      if (!row) {
         throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
       }
       requireWrite(actor, row)
@@ -364,7 +367,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
           .where(eq(webhookTriggers.id, c.req.param('id')))
           .limit(1)
       )[0]
-      if (!row || !canView(actorOf(c), row)) {
+      if (!row) {
         throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
       }
       const limit = Math.min(200, Number(c.req.query('limit') ?? 50) || 50)
@@ -396,7 +399,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
           .where(eq(webhookTriggers.id, c.req.param('id')))
           .limit(1)
       )[0]
-      if (!row || !canView(actor, row)) {
+      if (!row) {
         throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
       }
       requireWrite(actor, row)

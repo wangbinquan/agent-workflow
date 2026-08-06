@@ -48,7 +48,8 @@ type StatusFilter = 'all' | WebhookDeliveryStatus
 
 const STATUS_FILTERS: StatusFilter[] = ['all', 'matched', 'ignored', 'rejected', 'failed']
 
-export function DeliveriesPanel() {
+/** RFC-260：isAdmin=false 渲染只读视图（replay 隐藏；列表与详情照常）。 */
+export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [status, setStatus] = useState<StatusFilter>('all')
@@ -201,25 +202,27 @@ export function DeliveriesPanel() {
                     >
                       {t('common.details')}
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn--xs"
-                      disabled={
-                        row.status === 'rejected' ||
-                        row.status === 'received' ||
-                        row.status === 'processing' ||
-                        replay.isPending
-                      }
-                      title={
-                        row.status === 'rejected'
-                          ? t('webhookDeliveries.rejectedNotReplayable')
-                          : undefined
-                      }
-                      onClick={() => replay.mutate(row.id)}
-                      data-testid={`webhook-delivery-replay-${row.id}`}
-                    >
-                      {t('webhookDeliveries.replay')}
-                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="btn btn--xs"
+                        disabled={
+                          row.status === 'rejected' ||
+                          row.status === 'received' ||
+                          row.status === 'processing' ||
+                          replay.isPending
+                        }
+                        title={
+                          row.status === 'rejected'
+                            ? t('webhookDeliveries.rejectedNotReplayable')
+                            : undefined
+                        }
+                        onClick={() => replay.mutate(row.id)}
+                        data-testid={`webhook-delivery-replay-${row.id}`}
+                      >
+                        {t('webhookDeliveries.replay')}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

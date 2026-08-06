@@ -1233,6 +1233,7 @@ export interface Resources {
       hint: string
       empty: string
       emptyDescription: string
+      emptyReadonlyDescription: string
       enabled: string
       disabled: string
       enabledSwitch: string
@@ -1267,6 +1268,7 @@ export interface Resources {
       copySecret: string
       secretCopied: string
       urlLabel: string
+      urlMaskedHint: string
       secretPasteHintGitlab: string
       secretPasteHintGithub: string
     }
@@ -2372,6 +2374,9 @@ export interface Resources {
     new: string
     empty: string
     emptyDescription: string
+    emptyReadonlyDescription: string
+    enabledChip: string
+    disabledChip: string
     corruptBadge: string
     scopeAll: string
     scopeExact: string
@@ -6031,6 +6036,7 @@ export const zhCN: Resources = {
       hint: '为 GitLab / GitHub 创建一个稳定的事件入口。创建后，把 URL 和 Secret 一起粘贴到代码平台的 Webhook 配置。',
       empty: '还没有接收端点',
       emptyDescription: '先创建端点，拿到只显示一次的 Secret，再回到代码平台完成连接。',
+      emptyReadonlyDescription: '管理员还没有配置接收端点。',
       enabled: '已启用',
       disabled: '已禁用',
       enabledSwitch: '启用',
@@ -6068,6 +6074,7 @@ export const zhCN: Resources = {
       copySecret: '复制',
       secretCopied: '已复制',
       urlLabel: 'Webhook URL',
+      urlMaskedHint: '完整 URL 仅管理员可见。',
       secretPasteHintGitlab:
         '在 GitLab：Settings → Webhooks，把 URL 与 Secret token 一起粘贴保存。',
       secretPasteHintGithub:
@@ -7488,6 +7495,9 @@ export const zhCN: Resources = {
     new: '新建规则',
     empty: '还没有触发规则',
     emptyDescription: '先准备一个接收端点，再创建规则，决定事件命中后启动什么工作。',
+    emptyReadonlyDescription: '管理员还没有创建任何触发规则。',
+    enabledChip: '已启用',
+    disabledChip: '已禁用',
     corruptBadge: '配置损坏',
     scopeAll: '全部仓库',
     scopeExact: '{{n}} 个仓库',

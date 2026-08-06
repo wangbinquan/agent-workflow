@@ -70,9 +70,15 @@ export const PERMISSIONS = [
   'workflows:read',
   'workgroups:read',
   'scheduled-tasks:read',
-  // RFC-257（UI 修订收紧）— webhook 配置整面 admin-only：四个 trigger 动词
-  // 与 endpoints:manage 都只在 admin 全集里，user/manager 基线一律没有。
+  // RFC-260 — webhook 面「读全员、写 admin」：两个 read 点都在 USER_BASELINE
+  // （触发器全量只读 + 端点/投递元数据只读——hook URL 明文另由响应分层保护：
+  // 只有 admin 的 session 请求拿明文，非 admin 与一切 PAT 拿掩码 hint，见
+  // routes/webhookEndpoints.ts toWire）。写动词（triggers 三动词与
+  // endpoints:manage）不在任何非 admin 基线——配置仍 admin 独占。
   'webhook-triggers:read',
+  // RFC-260 — 端点与投递审计共用的读点（投递是端点级审计，RFC-257 F-13；
+  // replay/写面仍走 system 域的 webhook-endpoints:manage）。
+  'webhook-endpoints:read',
   'repos:read',
   'memory:read',
   'tasks:read',
@@ -188,7 +194,8 @@ export const PERMISSIONS = [
   // RFC-257 (D19) — managing webhook ENDPOINTS (the verification secret and the
   // public URL token). Platform infrastructure, not a work resource: a leaked
   // PAT must never be able to read or rotate the ingress secret, so the point
-  // is system-domain (admin + manager role surface, zero token surface).
+  // is system-domain (admin-only role surface — it sits in no non-admin
+  // baseline; RFC-260 opened the READ face via webhook-endpoints:read instead).
   'webhook-endpoints:manage',
 ] as const
 
@@ -366,6 +373,10 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
   // RFC-234 (D22): intent building is open to all users.
   'intent:read',
   'intent:write',
+  // RFC-260 — webhook 读面全员开放（写面仍 admin 独占；URL 明文由响应分层
+  // 保护，PAT 恒拿掩码）。
+  'webhook-triggers:read',
+  'webhook-endpoints:read',
 ]
 
 // RFC-222 — manager's extra route points over the user baseline. Row-level

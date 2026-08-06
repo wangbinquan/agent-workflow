@@ -217,12 +217,17 @@ describe('RFC-257 · /webhooks page (admin)', () => {
   })
 })
 
-describe('RFC-257 · /webhooks page (non-admin)', () => {
-  test('a user role gets the forbidden state and zero configuration surfaces', async () => {
+describe('RFC-260 · /webhooks page (non-admin, read-only)', () => {
+  // RFC-257 原语义是拒绝态（webhooks-forbidden）；RFC-260 显式改判为「读全员、
+  // 写 admin」——user 看到只读视图，配置动作零渲染（真正边界在后端方法门与
+  // URL 响应分层）。
+  test('a user role sees the read-only page with zero configuration actions', async () => {
     role = 'user'
     await renderWebhooks()
-    await waitFor(() => expect(screen.getByTestId('webhooks-forbidden')).toBeTruthy())
-    expect(screen.queryByTestId('webhooks-tab')).toBeNull()
-    expect(screen.queryByTestId('webhook-endpoints')).toBeNull()
+    await waitFor(() => expect(screen.getByTestId('webhooks-tab')).toBeTruthy())
+    expect(screen.queryByTestId('webhooks-forbidden')).toBeNull()
+    expect(screen.getByTestId('webhook-endpoints')).toBeTruthy()
+    // 端点 tab：无新建入口
+    expect(screen.queryByTestId('webhook-endpoint-add')).toBeNull()
   })
 })

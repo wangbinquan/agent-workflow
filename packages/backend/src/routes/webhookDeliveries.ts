@@ -1,5 +1,6 @@
-// RFC-257 T9 — 投递观测面（端点级审计：全仓事件流，manage 权限——F-13 分层：
-// deliveries 归管理员，触发器 owner 用 /api/webhook-triggers/:id/fires 排障）。
+// RFC-257 T9 — 投递观测面（端点级审计：全仓事件流）。RFC-260 D2：列表与详情
+// （含原始 body）随 `webhook-endpoints:read` 全员只读开放（用户拍板——事件源于
+// 成员共同的代码平台，对内不构成秘密）；replay 仍 `webhook-endpoints:manage`。
 // replay 三规则（multica）：rejected 不可放（绕过拒绝=绕过验签）；重放新建行
 // 指回 replayed_from；event_uuid=NULL 绕过去重（replay 就是明确要求再跑一次）。
 // GitLab 对失败投递不自动重试（设计门 F-6）——replay 是平台侧的主恢复路径。
@@ -23,8 +24,9 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/webhook-deliveries',
-      permissions: ['webhook-endpoints:manage'],
-      tokenAccess: 'never',
+      // RFC-260 D2/D4：投递是端点级审计，列表随端点读点全员开放（replay 仍 manage）。
+      permissions: ['webhook-endpoints:read'],
+      tokenAccess: 'allow',
       summary: 'List webhook deliveries (endpoint-level audit)',
     },
     async (c) => {
@@ -73,8 +75,8 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/webhook-deliveries/:id',
-      permissions: ['webhook-endpoints:manage'],
-      tokenAccess: 'never',
+      permissions: ['webhook-endpoints:read'],
+      tokenAccess: 'allow',
       summary: 'Get one delivery including its raw body',
     },
     async (c) => {

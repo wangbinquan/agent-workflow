@@ -35,7 +35,14 @@ const QUERY_KEY = ['webhook-endpoints']
 /** 平台专名不进 i18n（两个 locale 同形）。 */
 const PROVIDER_NAMES: Record<Provider, string> = { gitlab: 'GitLab', github: 'GitHub' }
 
-export function WebhookEndpointCard(): React.ReactElement {
+/**
+ * RFC-260：isAdmin=false 渲染只读视图——无新建/轮换/删除/开关；hook URL 由后端
+ * 响应分层脱敏（urlToken/ingressUrl 为 null），这里只负责把掩码 hint 渲染出来。
+ */
+export function WebhookEndpointCard({
+  // fail-closed（评审门 F-8）：漏传按只读渲染；admin 视图必须显式声明。
+  isAdmin = false,
+}: { isAdmin?: boolean } = {}): React.ReactElement {
   const { t } = useTranslation()
   const client = useQueryClient()
   const [error, setError] = useState<unknown>(null)
@@ -133,7 +140,7 @@ export function WebhookEndpointCard(): React.ReactElement {
           <h2>{t('settings.webhookEndpoints.title')}</h2>
           <p>{t('settings.webhookEndpoints.hint')}</p>
         </div>
-        {createAction}
+        {isAdmin && createAction}
       </div>
 
       <FeedbackStack variant="section">
@@ -170,8 +177,12 @@ export function WebhookEndpointCard(): React.ReactElement {
         empty={
           <EmptyState
             title={t('settings.webhookEndpoints.empty')}
-            description={t('settings.webhookEndpoints.emptyDescription')}
-            action={createAction}
+            description={
+              isAdmin
+                ? t('settings.webhookEndpoints.emptyDescription')
+                : t('settings.webhookEndpoints.emptyReadonlyDescription')
+            }
+            action={isAdmin ? createAction : undefined}
           />
         }
       >
@@ -192,33 +203,35 @@ export function WebhookEndpointCard(): React.ReactElement {
                   </StatusChip>
                 }
                 footer={
-                  <div className="webhook-card__footer">
-                    <Switch
-                      checked={row.enabled}
-                      onChange={(enabled) => toggle.mutate({ id: row.id, enabled })}
-                      disabled={toggle.isPending}
-                      label={t('settings.webhookEndpoints.enabledSwitch')}
-                    />
-                    <div className="page__actions">
-                      <button
-                        type="button"
-                        className="btn btn--sm"
-                        onClick={() => setRotateTarget(row)}
-                        disabled={rotateSecret.isPending}
-                        data-testid={`webhook-endpoint-rotate-${row.id}`}
-                      >
-                        {t('settings.webhookEndpoints.rotateSecret')}
-                      </button>
-                      <ConfirmButton
-                        label={t('common.delete')}
-                        confirmLabel={t('settings.webhookEndpoints.deleteConfirm')}
-                        variant="danger"
-                        size="sm"
-                        confirmationKey={row.id}
-                        onConfirm={() => remove.mutateAsync(row.id)}
+                  isAdmin ? (
+                    <div className="webhook-card__footer">
+                      <Switch
+                        checked={row.enabled}
+                        onChange={(enabled) => toggle.mutate({ id: row.id, enabled })}
+                        disabled={toggle.isPending}
+                        label={t('settings.webhookEndpoints.enabledSwitch')}
                       />
+                      <div className="page__actions">
+                        <button
+                          type="button"
+                          className="btn btn--sm"
+                          onClick={() => setRotateTarget(row)}
+                          disabled={rotateSecret.isPending}
+                          data-testid={`webhook-endpoint-rotate-${row.id}`}
+                        >
+                          {t('settings.webhookEndpoints.rotateSecret')}
+                        </button>
+                        <ConfirmButton
+                          label={t('common.delete')}
+                          confirmLabel={t('settings.webhookEndpoints.deleteConfirm')}
+                          variant="danger"
+                          size="sm"
+                          confirmationKey={row.id}
+                          onConfirm={() => remove.mutateAsync(row.id)}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : undefined
                 }
                 data-testid={`webhook-endpoint-${row.id}`}
               >
@@ -251,7 +264,18 @@ export function WebhookEndpointCard(): React.ReactElement {
                   </div>
                 </dl>
 
-                {row.ingressUrl !== null ? (
+                {row.urlToken === null ? (
+                  // RFC-260：脱敏 viewer——后端响应里就没有明文，这里只渲染掩码。
+                  <div className="webhook-endpoint__url">
+                    <div>
+                      <span>{t('settings.webhookEndpoints.urlLabel')}</span>
+                      <code data-testid={`webhook-endpoint-url-masked-${row.id}`}>
+                        {`/webhooks/${row.provider}/•••• ${row.urlTokenHint ?? '????'}`}
+                      </code>
+                    </div>
+                    <span className="muted">{t('settings.webhookEndpoints.urlMaskedHint')}</span>
+                  </div>
+                ) : row.ingressUrl !== null ? (
                   <div className="webhook-endpoint__url">
                     <div>
                       <span>{t('settings.webhookEndpoints.urlLabel')}</span>

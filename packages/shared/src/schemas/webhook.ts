@@ -302,8 +302,14 @@ export const WebhookEndpointSchema = z.object({
   id: z.string(),
   name: WebhookEndpointNameSchema,
   provider: CodeHostProviderSchema,
-  /** 管理面（manage 权限）可见——它是「给 GitLab 填的 URL」的组成部分，不是验签锚。 */
-  urlToken: z.string(),
+  /**
+   * 「给代码平台填的 URL」的 token 段（寻址 + 弱凭据，不是验签锚）。
+   * RFC-260 响应分层：明文只出现在 admin 的 **session** 响应里；非 admin 与
+   * 一切 PAT（含 admin 的 PAT）拿 null——掩码提示走 urlTokenHint。
+   */
+  urlToken: z.string().nullable(),
+  /** 尾 4 位提示（secretHint 同款姿势）；所有 viewer 都有，前端统一渲染掩码。 */
+  urlTokenHint: z.string().nullable(),
   enabled: z.boolean(),
   preferredCloneProtocol: z.enum(['http', 'ssh']),
   hasSecret: z.boolean(),

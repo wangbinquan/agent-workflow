@@ -141,9 +141,15 @@ describe('RFC-257 T7 · 端点管理', () => {
     expect(rows[0]!['hasSecret']).toBe(true)
     expect((rows[0]!['secretHint'] as string).length).toBe(4)
     expect((created['secret'] as string).endsWith(rows[0]!['secretHint'] as string)).toBe(true)
-    // 普通用户无 manage 权限
-    const denied = await call(h.app, h.bob, 'GET', '/api/webhook-endpoints')
-    expect(denied.status).toBe(403)
+    // RFC-260 改判：读面全员开放（原 403），但 URL 明文只走 admin session——
+    // 普通用户拿 null + 尾 4 hint，响应体不含 urlToken 明文。
+    const readonly = await call(h.app, h.bob, 'GET', '/api/webhook-endpoints')
+    expect(readonly.status).toBe(200)
+    const bobRows = (await readonly.json()) as Array<Record<string, unknown>>
+    expect(bobRows[0]!['urlToken']).toBeNull()
+    expect(bobRows[0]!['ingressUrl']).toBeNull()
+    expect((bobRows[0]!['urlTokenHint'] as string).length).toBe(4)
+    expect(JSON.stringify(bobRows)).not.toContain(rows[0]!['urlToken'] as string)
   })
 
   test('轮换 secret：新明文一次性返回且 hint 更新；轮换 url token 改变入站地址', async () => {
@@ -184,7 +190,7 @@ describe('RFC-257 T7 · 端点管理', () => {
 })
 
 describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
-  test('创建成功（保存期校验通过）；owner 可见、他人 404 同形、admin 旁路（AC-17）', async () => {
+  test('创建成功（保存期校验通过）；读全量可见（RFC-260 D1 改判原 AC-17 owner-404）、写 admin 独占', async () => {
     const h = await harness()
     const ep = await createEndpoint(h.app, h.admin)
     const res = await call(
@@ -201,10 +207,13 @@ describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
       await call(h.app, h.alice, 'GET', '/api/webhook-triggers')
     ).json()) as unknown[]
     expect(mine.length).toBe(1)
-    // UI 修订收紧：webhook 面 admin-only —— user 角色连方法门都过不去（403），
-    // 行级 owner 语义只在 admin 间保留（resource-admin 旁路全可见）。
-    expect((await call(h.app, h.bob, 'GET', '/api/webhook-triggers')).status).toBe(403)
-    expect((await call(h.app, h.bob, 'GET', `/api/webhook-triggers/${tid}`)).status).toBe(403)
+    // RFC-260 D1 改判：触发器全量只读——user 也能列出他人的触发器（原 403/
+    // owner-404 读语义显式退役）；写面仍被方法门挡（rfc260 矩阵测试锁定）。
+    const bobList = await call(h.app, h.bob, 'GET', '/api/webhook-triggers')
+    expect(bobList.status).toBe(200)
+    expect(((await bobList.json()) as unknown[]).length).toBe(1)
+    expect((await call(h.app, h.bob, 'GET', `/api/webhook-triggers/${tid}`)).status).toBe(200)
+    // 写入口仍 admin-only（webhook-triggers:create 不在 user 基线）
     expect(
       (await call(h.app, h.bob, 'POST', '/api/webhook-triggers', triggerBody('ep-x', 'wf-x')))
         .status,
@@ -387,8 +396,9 @@ describe('RFC-257 T9 · 投递观测与重放', () => {
     const h = await harness()
     const ep = await createEndpoint(h.app, h.admin)
     const id = await seedDelivery(h.db, ep.id)
-    const denied = await call(h.app, h.bob, 'GET', '/api/webhook-deliveries')
-    expect(denied.status).toBe(403)
+    // RFC-260 D2 改判：投递读面全员开放（原 403）；replay 仍 manage（rfc260 矩阵锁）。
+    const bobRead = await call(h.app, h.bob, 'GET', '/api/webhook-deliveries')
+    expect(bobRead.status).toBe(200)
     const list = (await (
       await call(h.app, h.admin, 'GET', '/api/webhook-deliveries')
     ).json()) as Array<Record<string, unknown>>

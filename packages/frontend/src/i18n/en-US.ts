@@ -1080,6 +1080,8 @@ export const enUS: Resources = {
       empty: 'No ingress endpoints yet',
       emptyDescription:
         'Create an endpoint, save its one-time secret, then finish the connection on your code host.',
+      emptyReadonlyDescription:
+        'No ingress endpoints have been configured by an administrator yet.',
       enabled: 'Enabled',
       disabled: 'Disabled',
       enabledSwitch: 'Enabled',
@@ -1120,6 +1122,7 @@ export const enUS: Resources = {
       copySecret: 'Copy',
       secretCopied: 'Copied',
       urlLabel: 'Webhook URL',
+      urlMaskedHint: 'The full URL is visible to administrators only.',
       secretPasteHintGitlab:
         'In GitLab: Settings → Webhooks — paste the URL and secret token together.',
       secretPasteHintGithub:
@@ -2643,6 +2646,9 @@ export const enUS: Resources = {
     empty: 'No trigger rules yet',
     emptyDescription:
       'Prepare an ingress endpoint, then add a rule that decides what each matching event launches.',
+    emptyReadonlyDescription: 'No trigger rules have been created by an administrator yet.',
+    enabledChip: 'Enabled',
+    disabledChip: 'Disabled',
     corruptBadge: 'Corrupt config',
     scopeAll: 'All repos',
     scopeExact: '{{n}} repos',

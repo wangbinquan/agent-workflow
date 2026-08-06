@@ -67,7 +67,8 @@ export const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/repos', i18nKey: 'nav.repos', icon: 'repo' },
       // RFC-257 UI 修订：webhook 配置（端点/触发器/投递）挂在远端仓下方，
       // 仅 admin 可见。
-      { to: '/webhooks', i18nKey: 'nav.webhooks', icon: 'webhook', adminOnly: true },
+      // RFC-260：读面全员可见（配置动作在页内按 role 隐藏、后端方法门为界）。
+      { to: '/webhooks', i18nKey: 'nav.webhooks', icon: 'webhook' },
     ],
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so

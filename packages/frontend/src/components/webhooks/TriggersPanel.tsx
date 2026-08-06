@@ -149,7 +149,8 @@ type WorkflowDetail = {
 type AgentRow = { id: string; name: string }
 type WorkgroupRow = { id: string; name: string }
 
-export function TriggersPanel() {
+/** RFC-260：isAdmin=false 渲染只读视图（无新建/编辑/删除/开关/重置；fires 查看保留）。 */
+export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -169,7 +170,7 @@ export function TriggersPanel() {
         undefined,
         signal,
       ),
-    // 普通 owner 无 manage 权限（403）：endpoint 选择降级为手输 id 的空列表。
+    // RFC-260 起读面全员开放（掩码响应）；retry:false 只为异常时快速降级。
     retry: false,
   })
   const workflowOptions = useQuery({
@@ -257,7 +258,7 @@ export function TriggersPanel() {
           <h2>{t('webhookTriggers.title')}</h2>
           <p>{t('webhookTriggers.subtitle')}</p>
         </div>
-        {!isInitialEmpty && newAction}
+        {isAdmin && !isInitialEmpty && newAction}
       </div>
 
       <FeedbackStack variant="section">
@@ -268,8 +269,12 @@ export function TriggersPanel() {
       {isInitialEmpty && (
         <EmptyState
           title={t('webhookTriggers.empty')}
-          description={t('webhookTriggers.emptyDescription')}
-          action={newAction}
+          description={
+            isAdmin
+              ? t('webhookTriggers.emptyDescription')
+              : t('webhookTriggers.emptyReadonlyDescription')
+          }
+          action={isAdmin ? newAction : undefined}
           data-testid="webhook-triggers-empty"
         />
       )}
@@ -310,13 +315,23 @@ export function TriggersPanel() {
                 }
                 footer={
                   <div className="webhook-card__footer">
-                    <Switch
-                      checked={row.enabled}
-                      onChange={(enabled) => toggle.mutate({ id: row.id, enabled })}
-                      disabled={toggle.isPending}
-                      label={t('webhookTriggers.enabledSwitch')}
-                      data-testid={`webhook-trigger-enable-${row.id}`}
-                    />
+                    {isAdmin ? (
+                      <Switch
+                        checked={row.enabled}
+                        onChange={(enabled) => toggle.mutate({ id: row.id, enabled })}
+                        disabled={toggle.isPending}
+                        label={t('webhookTriggers.enabledSwitch')}
+                        data-testid={`webhook-trigger-enable-${row.id}`}
+                      />
+                    ) : (
+                      <StatusChip kind={row.enabled ? 'success' : 'neutral'} size="sm">
+                        {t(
+                          row.enabled
+                            ? 'webhookTriggers.enabledChip'
+                            : 'webhookTriggers.disabledChip',
+                        )}
+                      </StatusChip>
+                    )}
                     <div className="page__actions">
                       <button
                         type="button"
@@ -326,26 +341,30 @@ export function TriggersPanel() {
                       >
                         {t('webhookTriggers.firesButton')}
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn--sm"
-                        onClick={() => {
-                          setError(null)
-                          save.reset()
-                          setDraft(draftFromRow(row))
-                        }}
-                        data-testid={`webhook-trigger-edit-${row.id}`}
-                      >
-                        {t('common.edit')}
-                      </button>
-                      <ConfirmButton
-                        label={t('common.delete')}
-                        confirmLabel={t('webhookTriggers.deleteConfirm')}
-                        variant="danger"
-                        size="sm"
-                        confirmationKey={row.id}
-                        onConfirm={() => remove.mutateAsync(row.id)}
-                      />
+                      {isAdmin && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            onClick={() => {
+                              setError(null)
+                              save.reset()
+                              setDraft(draftFromRow(row))
+                            }}
+                            data-testid={`webhook-trigger-edit-${row.id}`}
+                          >
+                            {t('common.edit')}
+                          </button>
+                          <ConfirmButton
+                            label={t('common.delete')}
+                            confirmLabel={t('webhookTriggers.deleteConfirm')}
+                            variant="danger"
+                            size="sm"
+                            confirmationKey={row.id}
+                            onConfirm={() => remove.mutateAsync(row.id)}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                 }
@@ -403,7 +422,9 @@ export function TriggersPanel() {
           onSave={() => save.mutate(draft)}
         />
       )}
-      {firesFor !== null && <FiresDialog trigger={firesFor} onClose={() => setFiresFor(null)} />}
+      {firesFor !== null && (
+        <FiresDialog trigger={firesFor} isAdmin={isAdmin} onClose={() => setFiresFor(null)} />
+      )}
     </section>
   )
 }
@@ -910,7 +931,7 @@ type FireRow = {
   firedAt: number
 }
 
-function FiresDialog(props: { trigger: WebhookTrigger; onClose: () => void }) {
+function FiresDialog(props: { trigger: WebhookTrigger; isAdmin: boolean; onClose: () => void }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const fires = useQuery({
@@ -966,7 +987,7 @@ function FiresDialog(props: { trigger: WebhookTrigger; onClose: () => void }) {
                     </td>
                     <td className="muted">{new Date(f.firedAt).toLocaleString()}</td>
                     <td className="data-table__actions">
-                      {f.outcome === 'skipped-circuit-open' && (
+                      {props.isAdmin && f.outcome === 'skipped-circuit-open' && (
                         <button
                           type="button"
                           className="btn btn--xs"

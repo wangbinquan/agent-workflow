@@ -1,7 +1,11 @@
-// RFC-257 T7 — webhook 端点管理面。
-// 端点 = 平台基础设施（验签 secret + 公开 URL token），权限点
-// `webhook-endpoints:manage`（system 域：admin+manager 角色面、零令牌面——
-// RFC-253 scripts:author 先例），全部路由 tokenAccess:'never' 双保险。
+// RFC-257 T7 — webhook 端点管理面（RFC-260 读/写分层）。
+// 端点 = 平台基础设施（验签 secret + 公开 URL token）。写面（CRUD/轮换）走
+// `webhook-endpoints:manage`（system 域：零令牌面——RFC-253 scripts:author
+// 先例），tokenAccess:'never' 双保险；读面（RFC-260）走矩阵点
+// `webhook-endpoints:read`（全员基线），但 **URL 明文按 viewer 分层**：只有
+// admin 的 session 请求拿明文 urlToken/ingressUrl，非 admin 与一切 PAT（含
+// admin 的 PAT）拿 null + 尾 4 位 urlTokenHint——RFC-257 D19「ingress 面不上
+// 令牌」在读点开放后由响应分层继续兑现。
 // secret 三形态（RFC-255 姿势）：创建/轮换响应一次性明文、存储 secretBox
 // 密封、读取面只有 hasSecret + 尾 4 位 hint。
 import type { Hono } from 'hono'
@@ -15,6 +19,7 @@ import {
   type WebhookEndpoint,
 } from '@agent-workflow/shared'
 import type { AppDeps } from '@/server'
+import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { webhookEndpoints, webhookTriggers } from '@/db/schema'
 import { loadConfig } from '@/config'
@@ -38,13 +43,28 @@ async function safeJson(req: Request): Promise<unknown> {
 
 type Row = typeof webhookEndpoints.$inferSelect
 
-function toWire(row: Row, unsealHint: (enc: string) => string | null): WebhookEndpoint {
+/**
+ * RFC-260 D3 — URL 明文的 viewer 白名单：admin 的交互 session。其余（非 admin、
+ * PAT、daemon 内部调用）一律掩码——fail-closed，新增 ActorSource 值默认拿不到
+ * 明文。
+ */
+function revealsUrl(actor: Actor): boolean {
+  return actor.user.role === 'admin' && actor.source === 'session'
+}
+
+function toWire(
+  row: Row,
+  unsealHint: (enc: string) => string | null,
+  viewer: Actor,
+): WebhookEndpoint {
   const hint = unsealHint(row.secretEnc)
+  const reveal = revealsUrl(viewer)
   return {
     id: row.id,
     name: row.name,
     provider: row.provider,
-    urlToken: row.urlToken,
+    urlToken: reveal ? row.urlToken : null,
+    urlTokenHint: row.urlToken.length >= 4 ? row.urlToken.slice(-4) : null,
     enabled: row.enabled,
     preferredCloneProtocol: row.preferredCloneProtocol,
     hasSecret: row.secretEnc.length > 0,
@@ -55,7 +75,7 @@ function toWire(row: Row, unsealHint: (enc: string) => string | null): WebhookEn
   }
 }
 
-/** 给 GitLab 填的完整 URL：只能由 publicBaseUrl 拼装（禁 c.req.url，audit-backlog:81）。 */
+/** 给代码平台填的完整 URL：只能由 publicBaseUrl 拼装（禁 c.req.url，audit-backlog:81）。 */
 function ingressUrlOf(configPath: string, row: Pick<Row, 'provider' | 'urlToken'>): string | null {
   let base: string | undefined
   try {
@@ -65,6 +85,11 @@ function ingressUrlOf(configPath: string, row: Pick<Row, 'provider' | 'urlToken'
   }
   if (base === undefined) return null
   return `${base.replace(/\/+$/, '')}/webhooks/${row.provider}/${row.urlToken}`
+}
+
+/** ingressUrl 的同一分层：明文 URL 含 urlToken，非明文 viewer 一律 null。 */
+function ingressUrlFor(configPath: string, row: Row, viewer: Actor): string | null {
+  return revealsUrl(viewer) ? ingressUrlOf(configPath, row) : null
 }
 
 export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
@@ -84,16 +109,19 @@ export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/webhook-endpoints',
-      permissions: ['webhook-endpoints:manage'],
-      tokenAccess: 'never',
-      summary: 'List webhook ingress endpoints (RFC-257)',
+      // RFC-260：读面全员（矩阵点）；URL 明文由 toWire 按 viewer 分层——PAT
+      // 可读掩码后的元数据（tokenAccess allow），明文只走 admin session。
+      permissions: ['webhook-endpoints:read'],
+      tokenAccess: 'allow',
+      summary: 'List webhook ingress endpoints (RFC-257/260)',
     },
     async (c) => {
+      const viewer = actorOf(c)
       const rows = await deps.db.select().from(webhookEndpoints)
       return c.json(
         rows.map((r) => ({
-          ...toWire(r, unsealHint),
-          ingressUrl: ingressUrlOf(deps.configPath, r),
+          ...toWire(r, unsealHint, viewer),
+          ingressUrl: ingressUrlFor(deps.configPath, r, viewer),
         })),
       )
     },
@@ -144,8 +172,8 @@ export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
       }
       return c.json(
         {
-          ...toWire(row, unsealHint),
-          ingressUrl: ingressUrlOf(deps.configPath, row),
+          ...toWire(row, unsealHint, actorOf(c)),
+          ingressUrl: ingressUrlFor(deps.configPath, row, actorOf(c)),
           // 一次性明文：仅此响应携带；之后只有掩码 hint。
           secret,
         },
@@ -159,11 +187,12 @@ export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/webhook-endpoints/:id',
-      permissions: ['webhook-endpoints:manage'],
-      tokenAccess: 'never',
+      permissions: ['webhook-endpoints:read'],
+      tokenAccess: 'allow',
       summary: 'Get one webhook ingress endpoint',
     },
     async (c) => {
+      const viewer = actorOf(c)
       const row = (
         await deps.db
           .select()
@@ -172,7 +201,10 @@ export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
           .limit(1)
       )[0]
       if (!row) throw new NotFoundError('webhook-endpoint-not-found', 'endpoint not found')
-      return c.json({ ...toWire(row, unsealHint), ingressUrl: ingressUrlOf(deps.configPath, row) })
+      return c.json({
+        ...toWire(row, unsealHint, viewer),
+        ingressUrl: ingressUrlFor(deps.configPath, row, viewer),
+      })
     },
   )
 
@@ -199,7 +231,10 @@ export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
         .returning()
       const row = rows[0]
       if (!row) throw new NotFoundError('webhook-endpoint-not-found', 'endpoint not found')
-      return c.json({ ...toWire(row, unsealHint), ingressUrl: ingressUrlOf(deps.configPath, row) })
+      return c.json({
+        ...toWire(row, unsealHint, actorOf(c)),
+        ingressUrl: ingressUrlFor(deps.configPath, row, actorOf(c)),
+      })
     },
   )
 
@@ -256,8 +291,8 @@ export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
       const row = rows[0]
       if (!row) throw new NotFoundError('webhook-endpoint-not-found', 'endpoint not found')
       return c.json({
-        ...toWire(row, unsealHint),
-        ingressUrl: ingressUrlOf(deps.configPath, row),
+        ...toWire(row, unsealHint, actorOf(c)),
+        ingressUrl: ingressUrlFor(deps.configPath, row, actorOf(c)),
         secret,
       })
     },
@@ -280,7 +315,10 @@ export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
         .returning()
       const row = rows[0]
       if (!row) throw new NotFoundError('webhook-endpoint-not-found', 'endpoint not found')
-      return c.json({ ...toWire(row, unsealHint), ingressUrl: ingressUrlOf(deps.configPath, row) })
+      return c.json({
+        ...toWire(row, unsealHint, actorOf(c)),
+        ingressUrl: ingressUrlFor(deps.configPath, row, actorOf(c)),
+      })
     },
   )
 }

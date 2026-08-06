@@ -1324,3 +1324,7 @@ owning=a231432c(RFC-258):⑥ 权重测试 240 万 occurrence fixture 自伤超�
 生效;仅余三条本谱系超时(Windows skills-split-page 复现/Windows
 markdown-diff-table-word 新成员/macOS unsaved-guard——上轮在 Windows 腿,
 证明是共享 runner 负载家族而非单 OS)。RFC-258 归属面 CI 判定闭合。
+
+## Webhook 权限面（RFC-260 评审门 F-9 登记，2026-08-06）
+
+- **`webhook-triggers:{create,update,delete}` 是 grantable-but-unrenderable 的令牌授权**（RFC-257 引入、RFC-260 评审门发现）：三点是矩阵域点、触发器写路由 `tokenAccess:'allow'`，`grantableMatrixPoints(admin)` 含它们（API 422 校验以此为界），但 `'webhook-triggers'` 不在 `MATRIX_RESOURCES` ⇒ 账户页 token 矩阵永远不渲染该行——admin 经 API 可以发出能改/删触发器的 PAT，而 UI 无法呈现或复核该授权（`permission.ts` 文件头自己警告的「authorization UI lying」镜像形态）。候选修法：把 `webhook-triggers` 纳入 `MATRIX_RESOURCES`（矩阵多一行），或把三条写路由改 `tokenAccess:'never'`（触发器写完全退出令牌面，与 fire 以 owner 身份执行的 D19 模型更一致）。需要产品拍板，未在 RFC-260 内处理（其范围是读面）。

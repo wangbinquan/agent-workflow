@@ -48,7 +48,7 @@ function renderCard() {
   const hostRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <WebhookEndpointCard />,
+    component: () => <WebhookEndpointCard isAdmin />,
   })
   const triggersStub = createRoute({
     getParentRoute: () => rootRoute,

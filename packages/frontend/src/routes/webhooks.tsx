@@ -1,11 +1,11 @@
 // RFC-257 UI 修订 — webhook 配置单页：侧栏「运行与仓库」组（远端仓下方），
 // 三 tab（端点 / 触发器 / 投递审计），骨架与 tab 语义照抄 /repos（TabBar +
-// search param + 无效值归一化）。**仅 admin**：侧栏项 adminOnly 过滤 +
-// 本页对非 admin 渲染拒绝态（直输 URL 的兜底）。
+// search param + 无效值归一化）。RFC-260：**读全员、写 admin**——页面对全部
+// 角色可见（只读视图），配置动作按 isAdmin 渲染；真正的边界在后端方法门与
+// URL 明文的响应分层（非 admin 的响应里就没有 urlToken 明文）。
 import { createRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { TabPanels } from '@/components/split/TabPanels'
@@ -45,8 +45,8 @@ function WebhooksPage() {
   const actor = useActor()
   const tab: WebhooksTab = search.tab ?? 'endpoints'
 
-  // admin 守卫（AC：非 admin 不可见）。加载中给 Loading；已加载非 admin 给
-  // 拒绝态——不渲染任何配置数据（API 层权限点是真正的边界，这里是 UX 兜底）。
+  // RFC-260：页面全员可见。加载中给 Loading；isAdmin 决定配置动作是否渲染
+  //（后端方法门与 URL 响应分层才是真正边界，这里只是 UX）。
   if (actor.isLoading) {
     return (
       <div className="page page--operations webhooks-page">
@@ -54,17 +54,7 @@ function WebhooksPage() {
       </div>
     )
   }
-  if (actor.data?.user.role !== 'admin') {
-    return (
-      <div className="page page--operations webhooks-page">
-        <EmptyState
-          title={t('webhooksPage.forbiddenTitle')}
-          description={t('webhooksPage.forbiddenDescription')}
-          data-testid="webhooks-forbidden"
-        />
-      </div>
-    )
-  }
+  const isAdmin = actor.data?.user.role === 'admin'
 
   const selectTab = (next: WebhooksTab) =>
     void navigate({ search: (previous) => ({ ...previous, tab: next }) })
@@ -115,17 +105,17 @@ function WebhooksPage() {
             {
               key: 'endpoints',
               testid: 'webhooks-panel-endpoints',
-              content: <WebhookEndpointCard />,
+              content: <WebhookEndpointCard isAdmin={isAdmin} />,
             },
             {
               key: 'triggers',
               testid: 'webhooks-panel-triggers',
-              content: <TriggersPanel />,
+              content: <TriggersPanel isAdmin={isAdmin} />,
             },
             {
               key: 'deliveries',
               testid: 'webhooks-panel-deliveries',
-              content: <DeliveriesPanel />,
+              content: <DeliveriesPanel isAdmin={isAdmin} />,
             },
           ]}
         />

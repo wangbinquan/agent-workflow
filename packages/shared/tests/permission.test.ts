@@ -46,8 +46,10 @@ describe('PERMISSIONS catalog', () => {
     // 永不进令牌，角色基线 admin + manager）⇒ 60。
     // RFC-257 加 webhook-triggers 四动词（owner 制行，路由粗门 + 服务行级判定，
     // 对齐 scheduled-tasks）与 `webhook-endpoints:manage`（入站验签 secret 面；
-    // 系统域点，永不进令牌，角色基线 admin + manager）⇒ 65。
-    expect(PERMISSIONS.length).toBe(65)
+    // 系统域点，永不进令牌，角色面 admin-only）⇒ 65。
+    // RFC-260 加 `webhook-endpoints:read`（端点/投递元数据只读，全员；URL 明文
+    // 由响应分层保护——PAT 恒拿掩码）⇒ 66。
+    expect(PERMISSIONS.length).toBe(66)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -58,7 +60,7 @@ describe('PERMISSIONS catalog', () => {
     expect(ROLE_PERMISSIONS.admin.length).toBe(PERMISSIONS.length)
   })
 
-  test('user role contains exactly the documented baseline (46 entries)', () => {
+  test('user role contains exactly the documented baseline (48 entries)', () => {
     const expected: Permission[] = [
       // reads
       'agents:read',
@@ -118,9 +120,13 @@ describe('PERMISSIONS catalog', () => {
       // RFC-234 — intent builder is open to every logged-in user (D22)
       'intent:read',
       'intent:write',
+      // RFC-260 — webhook 读面全员开放（写面仍 admin 独占；URL 明文只走
+      // admin session，响应分层见 routes/webhookEndpoints.ts）。
+      'webhook-triggers:read',
+      'webhook-endpoints:read',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
-    expect(ROLE_PERMISSIONS.user.length).toBe(46)
+    expect(ROLE_PERMISSIONS.user.length).toBe(48)
   })
 
   test('user role does NOT include any admin-only point (snapshot guard)', () => {
@@ -146,10 +152,10 @@ describe('PERMISSIONS catalog', () => {
       // RFC-253 — 脚本正文编写。它同时也在 manager 基线里（见下面的
       // MANAGER_DENIED 断言不含它），但相对 user 仍是 admin-only。
       'scripts:author',
-      // RFC-257（UI 修订收紧）— webhook 全面 admin-only：触发器四动词与
-      // 端点 manage 都不在 user 基线。
+      // RFC-257（UI 修订收紧）→ RFC-260（读面重新放开）：写动词与端点 manage
+      // 仍 admin-only；两个 read 点（webhook-triggers:read /
+      // webhook-endpoints:read）自 RFC-260 起进 user 基线，已从本负向清单移除。
       'webhook-endpoints:manage',
-      'webhook-triggers:read',
       'webhook-triggers:create',
       'webhook-triggers:update',
       'webhook-triggers:delete',
