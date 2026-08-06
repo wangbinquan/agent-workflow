@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { lstat, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, symlink, unlink, writeFile } from 'node:fs/promises'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { statMetadataIsAuthoritative } from '@/util/fileTrust'
+import { buildControlledPathForHost } from '@/util/platformExec'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
 import { removeSealedTree } from '@/services/runtime/opencode/sealedInputs'
 import {
@@ -163,11 +165,18 @@ describe('RFC-224 strict provider auth', () => {
   })
 
   test('resolves the same xdg-basedir auth path without an OS/version branch', () => {
-    expect(resolveNativeOpencodeAuthPath({}, '/users/me')).toBe(
-      join('/users/me', '.local', 'share', 'opencode', 'auth.json'),
+    // RFC-254: host-resolve the fixture roots. resolveNativeOpencodeAuthPath's
+    // canonicalization guard (resolve(dataRoot) === dataRoot) rejects a bare POSIX
+    // path on Windows (path.resolve adds the drive + '\'); production always passes
+    // a real home/XDG dir, so only these literal fixtures trip it. resolve() is a
+    // no-op on POSIX and yields a canonical Windows path on win32.
+    const home = resolve('/users/me')
+    expect(resolveNativeOpencodeAuthPath({}, home)).toBe(
+      join(home, '.local', 'share', 'opencode', 'auth.json'),
     )
-    expect(resolveNativeOpencodeAuthPath({ XDG_DATA_HOME: '/data' }, '/ignored')).toBe(
-      join('/data', 'opencode', 'auth.json'),
+    const xdg = resolve('/data')
+    expect(resolveNativeOpencodeAuthPath({ XDG_DATA_HOME: xdg }, resolve('/ignored'))).toBe(
+      join(xdg, 'opencode', 'auth.json'),
     )
   })
 })
@@ -177,11 +186,19 @@ describe('RFC-224 hermetic layout and env', () => {
     const layout = await prepareHermeticOpencodeLayout(root())
     expect(new Set(layout.configRoots).size).toBe(3)
     for (const configRoot of layout.configRoots) {
-      expect((await lstat(configRoot)).mode & 0o777).toBe(0o500)
+      // RFC-254: win32 uses per-user ACL, not POSIX mode bits (chmod 0o500 reads
+      // back as 0o444) — the sealing is enforced/verified via the ACL path there.
+      if (statMetadataIsAuthoritative(process.platform)) {
+        expect((await lstat(configRoot)).mode & 0o777).toBe(0o500)
+      }
       expect(await readFile(join(configRoot, '.gitignore'), 'utf8')).toBe('*\n!.gitignore\n')
-      expect((await lstat(join(configRoot, '.gitignore'))).mode & 0o777).toBe(0o400)
+      if (statMetadataIsAuthoritative(process.platform)) {
+        expect((await lstat(join(configRoot, '.gitignore'))).mode & 0o777).toBe(0o400)
+      }
     }
-    expect(layout.sessionDbPath).toContain('/xdg-data/opencode/opencode.db')
+    // RFC-254: separator-agnostic — sessionDbPath is a host path (backslashes on
+    // Windows); assert the shape, not the POSIX literal.
+    expect(layout.sessionDbPath.replace(/\\/g, '/')).toContain('/xdg-data/opencode/opencode.db')
   })
 
   test('rejects a symlinked private root', async () => {
@@ -195,6 +212,12 @@ describe('RFC-224 hermetic layout and env', () => {
     } catch (error) {
       expectCode(error, 'execution-identity-store-unsafe')
     }
+    // RFC-254: drop the symlink we created before afterEach runs. removeSealedTree's
+    // rm-on-symlink EFAULTs on Windows (Bun); production never seals a symlinked root
+    // (it's rejected above), so this only bites the test's own cleanup. unlink drops
+    // the reparse point without following it. (The removeSealedTree Windows-symlink
+    // robustness gap is logged in docs/audit-backlog.md — latent, edge-only.)
+    await unlink(link).catch(() => {})
   })
 
   test('rebuilds env from an allowlist and scrubs loader/runtime/git/OpenCode injection', async () => {
@@ -228,7 +251,10 @@ describe('RFC-224 hermetic layout and env', () => {
     })
     expect(env.LANG).toBe('C.UTF-8')
     expect(env.HTTPS_PROXY).toBe('http://proxy.example')
-    expect(env.PATH).toBe('/usr/bin:/bin')
+    // RFC-254: single-source — env.PATH must be the platform's controlled PATH
+    // (POSIX '/usr/bin:/bin'; win32 the git-bin + System32 chain, T12), never a
+    // passthrough of the malicious sourceEnv (which sets no PATH here).
+    expect(env.PATH).toBe(buildControlledPathForHost())
     expect(env.HOME).toBe(layout.home)
     expect(env.OPENCODE_SERVER_USERNAME).toBe('user')
     expect(env.OPENCODE_SERVER_PASSWORD).toBe('pass')
