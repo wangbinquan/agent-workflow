@@ -1,10 +1,11 @@
 # RFC-254 T40b —— win32 file PRIVACY 原语（DACL）
 
-> 状态：**在真 ARM64 验收机上端到端验收通过（全簇 0 fail）；x64 GitHub runner 行为分叉、待查**。
-> `2d01bde7`（核心）+`5609ef0e`（封根推广）+`e01c4464`（末 2 条诊断收口）+`ccde2603`（source-guard
-> 回归修复）。⚠️ live-icacls 隐私簇在 GitHub `windows-latest`（x64）上 seal 未产出预期 DACL、大片
-> store-unsafe/not-private——**不主张跨 x64 通用**，根因待 `windows-platform.yml` evidence 步输出
-> （登记 `docs/audit-backlog.md`）。用户目标机（ARM64）成立。
+> 状态：**已完成 —— 真 ARM64 验收机 + GitHub x64 runner 双双端到端验收通过（全簇 0 fail）**。
+> `2d01bde7`（核心）+`5609ef0e`（封根推广）+`e01c4464`（末 2 诊断收口）+`ccde2603`（source-guard
+> 回归修复）+`2081a8ed`（x64 别名修复）。**x64 分叉已解**：GitHub `windows-latest` 以内建
+> Administrator（RID-500）跑，其 owner ACE 序列化为 SDDL 别名 `LA`；`verifyDaclPrivate` 现认
+> `LA`/`DA` 为 TCB（并在 RID-500 时以 `LA` 满足 userGranted）——`windows-platform.yml` 的 T40b 步
+> 已跑真 icacls 隐私簇、x64 转绿。
 > T40a（file IDENTITY）已入库 `e804dfff`。**下面 §3–§7 是设计探索期的稿子；实测把方案
 > 修正为「读+验 DACL + 建根即封」的混合，以本节 §0 为准**（§3 的选项 C「纯结构判据」被实测
 > 推翻——见 §0）。
@@ -40,10 +41,12 @@
   `bootstrap-failed`（D1 无隔离 provider），`skipIf(win32)` 且其隐私证明由业务 launcher 路径覆盖。
 - **POSIX**：全程 no-op（win32 分支跳过），后端相关套件全绿（9017/0，含 source-guard 回归修复
   `ccde2603`——guarded 模块禁直读平台全局，seal 平台分支下沉 helper）。
-- **⚠️ x64 GitHub runner 分叉（未竟）**：上述 live-icacls 簇在 `windows-latest`（x64）runner 上
-  seal 未产出预期 owner+TCB DACL、大片 store-unsafe/not-private。已把 `windows-platform.yml` 回退为
-  只跑纯解析 `rfc254-win32-acl` + 加非门禁 evidence 步 dump runner 的 seal 行为。**T40b 在用户
-  ARM64 目标机上端到端验收通过；跨 x64 通用性未定，待 evidence 根因**（`docs/audit-backlog.md`）。
+- **x64 GitHub runner 分叉已解（`2081a8ed`）**：evidence 步（非门禁）dump 出 runner 以内建
+  Administrator（RID-500）跑，封根后子文件 DACL = `(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;LA)`——seal 本身
+  exit=0、DACL 正确、无宽 ACE（文件确实私有），只是属主 ACE 序列化为别名 `LA` 而非完整 SID，被旧
+  白名单误拒。修 `verifyDaclPrivate` 认 `LA`/`DA`（TCB）+ RID-500 时 `LA` 满足 userGranted。
+  `windows-platform.yml` 重新启用 live-icacls 隐私簇步，**x64 转绿**。**T40b 在 ARM64 目标机与 x64
+  GitHub runner 上均端到端验收通过。**
 
 ---
 

@@ -355,10 +355,12 @@ provider）⇒ `skipIf(win32)`，隐私证明由业务 launcher 覆盖。**T40b 
 封根初版在 verifiedPlan/verifiedSystemPlan/verifiedManifest 直写 `process.platform` 撞 RFC-227/T11c
 源码锁（POSIX backend 多 shard 红），正解把 seal 平台分支下沉进 `sealDirectoryOwnerOnly`（off-win32
 no-op），guarded 模块无条件调、不出现平台全局；POSIX 全量 9017/0 复验。**⚠️ x64 分叉（未竟）**：
-live-icacls 隐私簇在 GitHub `windows-latest`（x64）runner 上 seal 未产出预期 DACL、大片
-store-unsafe/not-private——`windows-platform.yml` 曾加步随即 x64 变红、**已回退为只跑纯解析
-`rfc254-win32-acl` + 非门禁 evidence 步**（dump runner seal 行为免 SSH 诊断）。**诚实修正**：T40b
-对用户 ARM64 目标机成立，但**不主张跨 x64 通用**，根因待 evidence 输出（`docs/audit-backlog.md`）。
+live-icacls 隐私簇在 GitHub `windows-latest`（x64）runner 上一度 seal 未产出预期 DACL、大片
+store-unsafe——**x64 分叉已解**（`2081a8ed`）：非门禁 evidence 步 dump 出 runner 以 **RID-500 内建
+Administrator** 跑，封根后子文件 DACL 正确（SY+BA+LA、无宽 ACE、文件确私有）但属主 ACE 序列化为
+**别名 `LA`** 而非完整 SID，被旧白名单误拒；修 `verifyDaclPrivate` 认 `LA`/`DA` 为 TCB（RID-500 时
+`LA` 满足 userGranted）。`windows-platform.yml` 重新启用 live-icacls 隐私簇步、**x64 转绿**。
+**T40b 在 ARM64 目标机与 GitHub x64 runner 上均端到端验收通过、收口。**（backlog 该条已标 RESOLVED。）
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 

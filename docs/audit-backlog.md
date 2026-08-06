@@ -1329,7 +1329,14 @@ markdown-diff-table-word 新成员/macOS unsaved-guard——上轮在 Windows �
 
 - **`webhook-triggers:{create,update,delete}` 是 grantable-but-unrenderable 的令牌授权**（RFC-257 引入、RFC-260 评审门发现）：三点是矩阵域点、触发器写路由 `tokenAccess:'allow'`，`grantableMatrixPoints(admin)` 含它们（API 422 校验以此为界），但 `'webhook-triggers'` 不在 `MATRIX_RESOURCES` ⇒ 账户页 token 矩阵永远不渲染该行——admin 经 API 可以发出能改/删触发器的 PAT，而 UI 无法呈现或复核该授权（`permission.ts` 文件头自己警告的「authorization UI lying」镜像形态）。候选修法：把 `webhook-triggers` 纳入 `MATRIX_RESOURCES`（矩阵多一行），或把三条写路由改 `tokenAccess:'never'`（触发器写完全退出令牌面，与 fire 以 owner 身份执行的 D19 模型更一致）。需要产品拍板，未在 RFC-260 内处理（其范围是读面）。
 
-## RFC-254 T40b win32 隐私原语：x64 GitHub runner 与真机行为分叉（2026-08-06 登记）
+## ✅ RESOLVED（2026-08-06，`2081a8ed`）RFC-254 T40b win32 隐私原语：x64 GitHub runner 与真机行为分叉
+
+> **根因**：GitHub `windows-latest` 以**内建 Administrator（RID-500）**跑，封根后子文件 DACL 正确
+> （SY+BA+LA、无宽 ACE、文件确私有），但属主 ACE 在 SDDL 里序列化为**别名 `LA`** 而非完整 SID，
+> 被 `verifyDaclPrivate` 白名单 {完整 userSID, SY, BA} 误判为非白名单 ⇒ not-private。**修复**：
+> `LA`（内建 Administrator）/`DA`（Domain Admins）是 TCB ⇒ 纳入白名单；RID-500 进程以 `LA` 满足
+> userGranted。`windows-platform.yml` 重新启用 live-icacls 隐私簇步、x64 转绿；纯核 3 例新测锁定。
+> 以下为原始登记（存证）：
 
 - **现象**：T40b 的 live-icacls 验证隐私簇（`rfc254-win32-acl-integration` + `rfc224-store-hygiene`
   / `verified-launcher` / `opencode-store-recovery` / `direct-control-protocol` / `verified-system-plan`）
