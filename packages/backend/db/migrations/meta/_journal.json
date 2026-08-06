@@ -967,6 +967,13 @@
       "when": 1788278400012,
       "tag": "0138_rfc257_webhook_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "6",
+      "when": 1788278400013,
+      "tag": "0139_rfc261_webhook_delivery_scale",
+      "breakpoints": true
     }
   ]
 }

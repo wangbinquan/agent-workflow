@@ -5,10 +5,10 @@
 // 指回 replayed_from；event_uuid=NULL 绕过去重（replay 就是明确要求再跑一次）。
 // GitLab 对失败投递不自动重试（设计门 F-6）——replay 是平台侧的主恢复路径。
 import type { Hono } from 'hono'
-import { and, desc, eq, lt } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
-import { WEBHOOK_DELIVERY_STATUSES } from '@agent-workflow/shared'
+import { CodeHostEventTypeSchema, WEBHOOK_DELIVERY_STATUSES } from '@agent-workflow/shared'
 
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -30,43 +30,108 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List webhook deliveries (endpoint-level audit)',
     },
     async (c) => {
-      const limit = Math.min(200, Number(c.req.query('limit') ?? 50) || 50)
-      const before = Number(c.req.query('before') ?? 0) || undefined
+      // RFC-261：页码分页（用户拍板，非 load-more）。响应从裸数组改封套
+      // {items,total,page,pageCount}（tasks /api/tasks/page 先例）；receivedAt
+      // 游标参数 `before` 删除（仓内零消费）。
+      // 钳制必须 isFinite+trunc 守门（评审门 P1-①）：RFC-257 原式 `Math.min(200,
+      // Number(...)||50)` 会把 `-1` 交给 drizzle（负 LIMIT 被吞 → 全表 dump），
+      // 小数/±Infinity 则 SQLite datatype mismatch 500。
+      const limitRaw = Math.trunc(Number(c.req.query('limit') ?? 50))
+      const limit = !Number.isFinite(limitRaw) || limitRaw <= 0 ? 50 : Math.min(200, limitRaw)
+      const pageRaw = Math.trunc(Number(c.req.query('page') ?? 1))
+      const page = !Number.isFinite(pageRaw) || pageRaw <= 0 ? 1 : pageRaw
       const status = z
         .enum(WEBHOOK_DELIVERY_STATUSES)
         .optional()
         .catch(undefined)
         .parse(c.req.query('status'))
+      const eventType = CodeHostEventTypeSchema.optional()
+        .catch(undefined)
+        .parse(c.req.query('eventType'))
+      const repoPath = c.req.query('repoPath')
       const endpointId = c.req.query('endpointId')
       const conds = [
         ...(endpointId !== undefined && endpointId !== ''
           ? [eq(webhookDeliveries.endpointId, endpointId)]
           : []),
         ...(status !== undefined ? [eq(webhookDeliveries.status, status)] : []),
-        ...(before !== undefined ? [lt(webhookDeliveries.receivedAt, before)] : []),
+        ...(eventType !== undefined ? [eq(webhookDeliveries.eventType, eventType)] : []),
+        ...(repoPath !== undefined && repoPath !== ''
+          ? [eq(webhookDeliveries.repoPath, repoPath)]
+          : []),
       ]
-      const rows = await deps.db
-        .select({
-          id: webhookDeliveries.id,
-          endpointId: webhookDeliveries.endpointId,
-          eventUuid: webhookDeliveries.eventUuid,
-          attemptCount: webhookDeliveries.attemptCount,
-          gitlabEventHeader: webhookDeliveries.gitlabEventHeader,
-          objectKind: webhookDeliveries.objectKind,
-          eventType: webhookDeliveries.eventType,
-          repoPath: webhookDeliveries.repoPath,
-          streamHint: webhookDeliveries.streamHint,
-          status: webhookDeliveries.status,
-          statusReason: webhookDeliveries.statusReason,
-          replayedFromDeliveryId: webhookDeliveries.replayedFromDeliveryId,
-          receivedAt: webhookDeliveries.receivedAt,
-          // 列表页刻意不带 body_json（≤256KiB/行；详情页单独取）
-        })
-        .from(webhookDeliveries)
-        .where(conds.length > 0 ? and(...conds) : undefined)
-        .orderBy(desc(webhookDeliveries.receivedAt))
-        .limit(limit)
-      return c.json(rows)
+      const where = conds.length > 0 ? and(...conds) : undefined
+      // 先 count 后取页；两查询间的并发插入造成 ±1 瞬时偏差，10s 轮询自愈（design §1.2）。
+      const total = (
+        await deps.db
+          .select({ n: sql<number>`count(*)` })
+          .from(webhookDeliveries)
+          .where(where)
+      )[0]!.n
+      const offset = (page - 1) * limit
+      // offset ≥ total 短路（评审门 P2-①）：空页探测零成本；total 以内的深
+      // offset 是鉴权读面上的已接受成本（design §1.2）。
+      const rows =
+        offset >= total
+          ? []
+          : await deps.db
+              .select({
+                id: webhookDeliveries.id,
+                endpointId: webhookDeliveries.endpointId,
+                eventUuid: webhookDeliveries.eventUuid,
+                attemptCount: webhookDeliveries.attemptCount,
+                gitlabEventHeader: webhookDeliveries.gitlabEventHeader,
+                objectKind: webhookDeliveries.objectKind,
+                eventType: webhookDeliveries.eventType,
+                repoPath: webhookDeliveries.repoPath,
+                streamHint: webhookDeliveries.streamHint,
+                status: webhookDeliveries.status,
+                statusReason: webhookDeliveries.statusReason,
+                replayedFromDeliveryId: webhookDeliveries.replayedFromDeliveryId,
+                receivedAt: webhookDeliveries.receivedAt,
+                // 列表页刻意不带 body_json（≤256KiB/行；详情页单独取）
+              })
+              .from(webhookDeliveries)
+              .where(where)
+              // id（ULID）tie-break：同毫秒行在裸 receivedAt 排序下顺序未定义，
+              // OFFSET 翻页会跨页重/漏（AC-2）。
+              .orderBy(desc(webhookDeliveries.receivedAt), desc(webhookDeliveries.id))
+              .limit(limit)
+              .offset(offset)
+      return c.json({
+        items: rows,
+        total,
+        page,
+        pageCount: Math.max(1, Math.ceil(total / limit)),
+      })
+    },
+  )
+
+  // RFC-261：仓库过滤下拉的选项源（保留窗内出现过的仓库）。必须挂在 `/:id`
+  // 之前，防止字面量 `repos` 被吃进 `:id`（routes/tasks.ts `/api/tasks/page` 同款）。
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/webhook-deliveries/repos',
+      permissions: ['webhook-endpoints:read'],
+      tokenAccess: 'allow',
+      summary: 'Distinct repo paths seen in deliveries (filter options)',
+    },
+    async (c) => {
+      // Loose index scan（递归 CTE + idx_webhook_deliveries_repo_time 前缀）：
+      // K 个 distinct 仓库 = K×logN 次索引寻位。朴素 SELECT DISTINCT 在 10 万
+      // 投递/天 × 90 天 ≈ 900 万行上是每 30s 轮询一次的全索引扫描。
+      const rows = await deps.db.all<{ p: string }>(sql`
+        WITH RECURSIVE repo_walk(p) AS (
+          SELECT (SELECT min(repo_path) FROM webhook_deliveries WHERE repo_path IS NOT NULL)
+          UNION ALL
+          SELECT (SELECT min(repo_path) FROM webhook_deliveries WHERE repo_path > repo_walk.p)
+            FROM repo_walk WHERE repo_walk.p IS NOT NULL
+        )
+        SELECT p FROM repo_walk WHERE p IS NOT NULL
+      `)
+      return c.json(rows.map((r) => r.p))
     },
   )
 

@@ -1582,6 +1582,7 @@ export interface Resources {
     }
   }
   common: {
+    pagination: { aria: string; prev: string; next: string; pageOf: string }
     done: string
     searchEllipsis: string
     searchCards: string
@@ -2445,8 +2446,12 @@ export interface Resources {
     emptyDescription: string
     filteredEmpty: string
     filteredEmptyDescription: string
-    resultCount: string
+    totalCount: string
     filterAll: string
+    filterAllEvents: string
+    filterAllRepos: string
+    filterEventAria: string
+    filterRepoAria: string
     replay: string
     replayBadge: string
     replaySuccess: string
@@ -4223,6 +4228,10 @@ export interface Resources {
     archivePerNodeRunHint: string
     archiveGlobal: string
     archiveGlobalHint: string
+    webhookBodyRetention: string
+    webhookBodyRetentionHint: string
+    webhookRowRetention: string
+    webhookRowRetentionHint: string
     bindHost: string
     bindHostHint: string
     bindPort: string
@@ -6435,6 +6444,12 @@ export const zhCN: Resources = {
     },
   },
   common: {
+    pagination: {
+      aria: '分页',
+      prev: '上一页',
+      next: '下一页',
+      pageOf: '第 {{page}} / {{pageCount}} 页',
+    },
     done: '完成',
     searchEllipsis: '搜索…',
     searchCards: '搜索名称、描述或配置…',
@@ -7552,9 +7567,13 @@ export const zhCN: Resources = {
     empty: '还没有投递记录',
     emptyDescription: '在 GitLab 保存 Webhook 后，新事件会自动出现在这里。',
     filteredEmpty: '当前筛选没有记录',
-    filteredEmptyDescription: '换一个状态，或清除筛选查看全部投递。',
-    resultCount: '{{count}} 条记录',
+    filteredEmptyDescription: '调整筛选条件，或清除筛选查看全部投递。',
+    totalCount: '共 {{total}} 条',
     filterAll: '全部',
+    filterAllEvents: '全部事件',
+    filterAllRepos: '全部仓库',
+    filterEventAria: '按事件类型过滤',
+    filterRepoAria: '按仓库过滤',
     replay: '重放',
     replayBadge: '重放',
     replaySuccess: '已创建重放投递 {{id}}，结果会自动刷新。',
@@ -9452,6 +9471,11 @@ export const zhCN: Resources = {
     archivePerNodeRunHint: '当某个 node_run 累计到此行数，归档为 JSONL。',
     archiveGlobal: '事件归档 — 全局行数',
     archiveGlobalHint: 'DB 全表事件行数上限；超过会触发归档。',
+    webhookBodyRetention: 'Webhook 投递 body 保留（天）',
+    webhookBodyRetentionHint:
+      '超期投递的原始 payload 置空（重放不可用），行仍保留。高流量部署可调小以控制磁盘占用。',
+    webhookRowRetention: 'Webhook 投递记录保留（天）',
+    webhookRowRetentionHint: '超期投递整行删除（审计不可见）。不得小于 body 保留天数。',
     bindHost: '监听 host',
     bindHostHint: '需要重启。默认 127.0.0.1 使 daemon 仅本机可达。',
     bindPort: '监听 port',

@@ -339,7 +339,10 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // （fork 私有 flag 注入：runtimes.extra_args_json，NULL = 无附加 argv）。
     // RFC-257 bumped to 138 with 0138_rfc257_webhook_triggers（webhook 触发器
     // 五表 + tasks 归属两列；去重 partial unique index 排除 rejected/failed）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(138)
+    // RFC-261 bumped to 139 with 0139_rfc261_webhook_delivery_scale（deliveries
+    // 表重建 body_json 挪末列 + 过滤×时间组合索引组 + body-retention 部分索引，
+    // 10 万投递/天规模收口；无 FK 进出，重建安全）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(139)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

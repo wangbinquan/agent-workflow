@@ -399,9 +399,12 @@ describe('RFC-257 T9 · 投递观测与重放', () => {
     // RFC-260 D2 改判：投递读面全员开放（原 403）；replay 仍 manage（rfc260 矩阵锁）。
     const bobRead = await call(h.app, h.bob, 'GET', '/api/webhook-deliveries')
     expect(bobRead.status).toBe(200)
-    const list = (await (
-      await call(h.app, h.admin, 'GET', '/api/webhook-deliveries')
-    ).json()) as Array<Record<string, unknown>>
+    // RFC-261 改判：列表响应从裸数组封套化为 {items,total,...}。
+    const list = (
+      (await (await call(h.app, h.admin, 'GET', '/api/webhook-deliveries')).json()) as {
+        items: Array<Record<string, unknown>>
+      }
+    ).items
     expect(list.length).toBe(1)
     expect('bodyJson' in list[0]!).toBe(false)
     const detail = (await (

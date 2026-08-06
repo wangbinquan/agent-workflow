@@ -1227,16 +1227,24 @@ export const webhookDeliveries = sqliteTable(
       enum: ['received', 'processing', 'rejected', 'ignored', 'matched', 'failed'],
     }).notNull(),
     statusReason: text('status_reason'),
-    bodyJson: text('body_json'), // ≤256KiB 截断入库；保留期后置空（F-12 GC）
     replayedFromDeliveryId: text('replayed_from_delivery_id'),
     receivedAt: integer('received_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
+    // RFC-261（迁移 0139 表重建）：body_json 必须是末列——大 body 走 overflow 链，
+    // 排它后面的列会让不取 body 的列表投影也走完整条链。
+    bodyJson: text('body_json'), // ≤256KiB 截断入库；保留期后置空（F-12 GC）
   },
   (t) => ({
-    // 去重 partial unique index 在迁移 0138 手写（见表头注释）；这里只声明查询索引。
+    // 去重 partial unique index（0138）与 body-retention partial index（0139，
+    // WHERE body_json IS NOT NULL）在迁移手写；这里只声明普通查询索引。
+    // RFC-261 索引策略（10 万投递/天基准）：每个过滤维度 × received_at 组合，
+    // 过滤前缀 + 时间序游走 + LIMIT 早停；单列 status 索引已被组合索引取代。
     endpointTimeIdx: index('idx_webhook_deliveries_endpoint_time').on(t.endpointId, t.receivedAt),
-    statusIdx: index('idx_webhook_deliveries_status').on(t.status),
+    receivedAtIdx: index('idx_webhook_deliveries_received_at').on(t.receivedAt),
+    statusTimeIdx: index('idx_webhook_deliveries_status_time').on(t.status, t.receivedAt),
+    eventTimeIdx: index('idx_webhook_deliveries_event_time').on(t.eventType, t.receivedAt),
+    repoTimeIdx: index('idx_webhook_deliveries_repo_time').on(t.repoPath, t.receivedAt),
   }),
 )
 

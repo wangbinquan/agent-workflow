@@ -1,8 +1,14 @@
 // RFC-257 UI 修订 — 投递审计面板（/webhooks 单页的 deliveries tab；原独立
 // 路由 /webhook-deliveries 并入）。列表 + 详情 Dialog + 重放。
-import type { WebhookDeliveryReason, WebhookDeliveryStatus } from '@agent-workflow/shared'
+// RFC-261 — 服务端页码分页（{items,total,page,pageCount} 封套）+ 事件 / 仓库过滤。
+import {
+  CODE_HOST_EVENT_TYPES,
+  type CodeHostEventType,
+  type WebhookDeliveryReason,
+  type WebhookDeliveryStatus,
+} from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
@@ -12,8 +18,10 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { Pagination } from '@/components/Pagination'
 import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
+import { Select } from '@/components/Select'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
 
@@ -35,6 +43,14 @@ type DeliveryRow = {
 
 type DeliveryDetail = DeliveryRow & { bodyJson: string | null }
 
+/** RFC-261 列表封套（tasks /api/tasks/page 同款形态）。 */
+type DeliveryPage = {
+  items: DeliveryRow[]
+  total: number
+  page: number
+  pageCount: number
+}
+
 const STATUS_CHIP: Record<WebhookDeliveryStatus, StatusChipKind> = {
   received: 'info',
   processing: 'info',
@@ -53,20 +69,46 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [status, setStatus] = useState<StatusFilter>('all')
+  const [eventType, setEventType] = useState<'all' | CodeHostEventType>('all')
+  const [repoPath, setRepoPath] = useState<string>('all')
+  const [page, setPage] = useState(1)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [replayedDeliveryId, setReplayedDeliveryId] = useState<string | null>(null)
 
   const list = useQuery({
-    queryKey: ['webhook-deliveries', status],
+    queryKey: ['webhook-deliveries', status, eventType, repoPath, page],
     queryFn: ({ signal }) =>
-      api.get<DeliveryRow[]>(
+      api.get<DeliveryPage>(
         '/api/webhook-deliveries',
-        status === 'all' ? undefined : { status },
+        {
+          status: status === 'all' ? undefined : status,
+          eventType: eventType === 'all' ? undefined : eventType,
+          repoPath: repoPath === 'all' ? undefined : repoPath,
+          page,
+        },
         signal,
       ),
     refetchInterval: 10_000,
   })
+  // 仓库下拉选项源（保留窗内出现过的仓库；D5）。事件流通常低频，30s 足够新鲜。
+  const repos = useQuery({
+    queryKey: ['webhook-deliveries', 'repos'],
+    queryFn: ({ signal }) => api.get<string[]>('/api/webhook-deliveries/repos', undefined, signal),
+    refetchInterval: 30_000,
+  })
+  // 页码钳制（AC-7）：过滤切换/GC 让 total 缩水时钳回末页，不停留在空页。
+  const pageCount = list.data?.pageCount ?? 1
+  useEffect(() => {
+    if (list.data !== undefined && page > list.data.pageCount) setPage(list.data.pageCount)
+  }, [list.data, page])
+  // 选中仓库已滚出选项列表（30s 刷新窗）时补渲染，避免闭合态显示空 label；
+  // 补入后重排保持与 /repos 相同的字典升序（评审门 P2-⑥）。
+  const repoOptions = useMemo(() => {
+    const known = repos.data ?? []
+    if (repoPath === 'all' || known.includes(repoPath)) return known
+    return [...known, repoPath].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+  }, [repos.data, repoPath])
   const replay = useMutation({
     mutationFn: (id: string) =>
       api.post<{ deliveryId: string }>(`/api/webhook-deliveries/${encodeURIComponent(id)}/replay`),
@@ -78,8 +120,10 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
     onError: setError,
   })
 
-  const rows = list.data ?? []
-  const isInitialEmpty = !list.isLoading && list.data !== undefined && rows.length === 0
+  const rows = list.data?.items ?? []
+  const hasFilter = status !== 'all' || eventType !== 'all' || repoPath !== 'all'
+  // 空态看 total 而非当前页 items（越界页 items 为空但 total>0，由钳制效应接管）。
+  const isInitialEmpty = !list.isLoading && list.data !== undefined && list.data.total === 0
 
   return (
     <section className="webhook-panel" data-testid="webhook-deliveries-panel">
@@ -93,7 +137,10 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
       <div className="webhook-filterbar">
         <Segmented<StatusFilter>
           value={status}
-          onChange={setStatus}
+          onChange={(value) => {
+            setStatus(value)
+            setPage(1)
+          }}
           ariaLabel={t('webhookDeliveries.filterAria')}
           options={STATUS_FILTERS.map((value) => ({
             value,
@@ -103,11 +150,42 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
                 : t(`webhookDeliveries.statuses.${value}`),
           }))}
         />
-        {!list.isLoading && (
-          <span className="muted">
-            {t('webhookDeliveries.resultCount', { count: rows.length })}
-          </span>
-        )}
+        <div className="webhook-filterbar__selects">
+          <Select<'all' | CodeHostEventType>
+            value={eventType}
+            onChange={(value) => {
+              setEventType(value)
+              setPage(1)
+            }}
+            options={[
+              { value: 'all', label: t('webhookDeliveries.filterAllEvents') },
+              ...CODE_HOST_EVENT_TYPES.map((value) => ({
+                value,
+                label: t(`webhookTriggers.events.${value}`),
+              })),
+            ]}
+            ariaLabel={t('webhookDeliveries.filterEventAria')}
+            data-testid="webhook-delivery-filter-event"
+          />
+          <Select
+            value={repoPath}
+            onChange={(value) => {
+              setRepoPath(value)
+              setPage(1)
+            }}
+            options={[
+              { value: 'all', label: t('webhookDeliveries.filterAllRepos') },
+              ...repoOptions.map((repo) => ({ value: repo, label: repo })),
+            ]}
+            ariaLabel={t('webhookDeliveries.filterRepoAria')}
+            data-testid="webhook-delivery-filter-repo"
+          />
+          {!list.isLoading && list.data !== undefined && (
+            <span className="muted" data-testid="webhook-deliveries-total">
+              {t('webhookDeliveries.totalCount', { total: list.data.total })}
+            </span>
+          )}
+        </div>
       </div>
       <FeedbackStack variant="section">
         {error !== null && <ErrorBanner error={error} />}
@@ -128,13 +206,11 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
       {list.isLoading && <LoadingState data-testid="webhook-deliveries-loading" />}
       {isInitialEmpty && (
         <EmptyState
-          title={t(
-            status === 'all' ? 'webhookDeliveries.empty' : 'webhookDeliveries.filteredEmpty',
-          )}
+          title={t(hasFilter ? 'webhookDeliveries.filteredEmpty' : 'webhookDeliveries.empty')}
           description={t(
-            status === 'all'
-              ? 'webhookDeliveries.emptyDescription'
-              : 'webhookDeliveries.filteredEmptyDescription',
+            hasFilter
+              ? 'webhookDeliveries.filteredEmptyDescription'
+              : 'webhookDeliveries.emptyDescription',
           )}
           data-testid="webhook-deliveries-empty"
         />
@@ -229,6 +305,14 @@ export function DeliveriesPanel({ isAdmin = false }: { isAdmin?: boolean } = {})
             </tbody>
           </table>
         </TableViewport>
+      )}
+      {rows.length > 0 && (
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          onPageChange={setPage}
+          data-testid="webhook-deliveries-pagination"
+        />
       )}
       {detailId !== null && (
         <DeliveryDetailDialog id={detailId} onClose={() => setDetailId(null)} />

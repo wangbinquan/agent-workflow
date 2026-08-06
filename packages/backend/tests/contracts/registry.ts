@@ -141,6 +141,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/webhook-triggers/:id/fires' },
   { method: 'POST', path: '/api/webhook-triggers/:id/streams/reset' },
   { method: 'GET', path: '/api/webhook-deliveries' },
+  { method: 'GET', path: '/api/webhook-deliveries/repos' },
   { method: 'GET', path: '/api/webhook-deliveries/:id' },
   { method: 'POST', path: '/api/webhook-deliveries/:id/replay' },
 

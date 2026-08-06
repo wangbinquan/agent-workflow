@@ -92,7 +92,15 @@ beforeEach(async () => {
     if (url.includes('/api/auth/me')) return jsonResponse(meResponse())
     if (url.includes('/api/webhook-triggers')) return jsonResponse(triggers)
     if (url.includes('/api/webhook-endpoints')) return jsonResponse(endpoints)
-    if (url.includes('/api/webhook-deliveries')) return jsonResponse(deliveries)
+    // RFC-261：列表响应封套化；/repos 是仓库过滤下拉的选项源。
+    if (url.includes('/api/webhook-deliveries/repos')) return jsonResponse([])
+    if (url.includes('/api/webhook-deliveries'))
+      return jsonResponse({
+        items: deliveries,
+        total: deliveries.length,
+        page: 1,
+        pageCount: 1,
+      })
     if (url.includes('/api/workflows')) return jsonResponse([])
     if (url.includes('/api/agents')) return jsonResponse([])
     if (url.includes('/api/workgroups')) return jsonResponse([])

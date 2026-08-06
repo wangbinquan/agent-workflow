@@ -1,0 +1,174 @@
+// RFC-261 — DeliveriesPanel 分页 + 事件/仓库过滤集成锁（proposal AC-6/7/8）：
+//   封套消费（总数展示）、翻页请求 page=N、过滤变更携带参数且页码复位 1、
+//   仓库下拉选项来自 /repos、越界页钳回、只读（isAdmin=false）下过滤分页照常。
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+
+import i18n from '../src/i18n'
+import { setBaseUrl, setToken } from '../src/stores/auth'
+import { DeliveriesPanel } from '../src/components/webhooks/DeliveriesPanel'
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+const ROW = {
+  id: 'dl1',
+  endpointId: 'ep1',
+  eventUuid: 'uuid-1',
+  attemptCount: 1,
+  gitlabEventHeader: 'Push Hook',
+  objectKind: 'push',
+  eventType: 'push',
+  repoPath: 'acme/api',
+  streamHint: 'acme/api|branch:main',
+  status: 'matched',
+  statusReason: null,
+  replayedFromDeliveryId: null,
+  receivedAt: 1700000000000,
+}
+
+let requests: URL[] = []
+/** 打开后：page>=3 的列表响应模拟数据缩水（pageCount 掉到 1），触发钳制。 */
+let shrinkAtPage3 = false
+
+function listRequests(): URL[] {
+  return requests.filter((u) => u.pathname.endsWith('/api/webhook-deliveries'))
+}
+
+beforeEach(async () => {
+  requests = []
+  shrinkAtPage3 = false
+  await i18n.changeLanguage('en-US')
+  setBaseUrl(`http://rfc261-${crypto.randomUUID()}.test`)
+  setToken('tok')
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const u = new URL(typeof input === 'string' ? input : (input as URL | Request).toString())
+    requests.push(u)
+    if (u.pathname.endsWith('/api/webhook-deliveries/repos')) {
+      return jsonResponse(['acme/api', 'acme/web'])
+    }
+    if (u.pathname.endsWith('/api/webhook-deliveries')) {
+      const page = Number(u.searchParams.get('page') ?? '1')
+      if (shrinkAtPage3 && page >= 3) {
+        return jsonResponse({ items: [], total: 40, page, pageCount: 1 })
+      }
+      return jsonResponse({ items: [ROW], total: 120, page, pageCount: 3 })
+    }
+    return jsonResponse([])
+  })
+})
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+function mount(isAdmin = false) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={qc}>
+      <DeliveriesPanel isAdmin={isAdmin} />
+    </QueryClientProvider>,
+  )
+}
+
+function pageBtn(name: string): HTMLButtonElement {
+  return screen.getByRole('button', { name }) as HTMLButtonElement
+}
+
+async function pickOption(comboboxName: string, optionText: string): Promise<void> {
+  fireEvent.click(screen.getByRole('combobox', { name: comboboxName }))
+  const option = await waitFor(() => {
+    const list = document.querySelector('ul[role="listbox"]')
+    if (list === null) throw new Error('listbox not opened')
+    const found = Array.from(list.querySelectorAll('li[role="option"]')).find(
+      (candidate) => (candidate.textContent ?? '') === optionText,
+    )
+    if (found === undefined) throw new Error(`option '${optionText}' not ready`)
+    return found
+  })
+  fireEvent.mouseDown(option)
+}
+
+describe('RFC-261 · 投递面板分页与过滤', () => {
+  test('封套消费：总数 + 分页控件；只读视图（isAdmin=false）下照常、无 replay（AC-6/8）', async () => {
+    mount(false)
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+    expect(screen.getByTestId('webhook-deliveries-total').textContent).toBe('120 total')
+    expect(screen.getByText('Page 1 of 3')).toBeTruthy()
+    expect(pageBtn('Previous').disabled).toBe(true)
+    expect(pageBtn('Next').disabled).toBe(false)
+    expect(screen.getByRole('combobox', { name: 'Filter by event type' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Filter by repository' })).toBeTruthy()
+    expect(screen.queryByTestId('webhook-delivery-replay-dl1')).toBeNull()
+  })
+
+  test('下一页 → 请求 page=2 且页码文案更新（AC-6）', async () => {
+    mount()
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+    fireEvent.click(pageBtn('Next'))
+    await waitFor(() =>
+      expect(listRequests().some((u) => u.searchParams.get('page') === '2')).toBe(true),
+    )
+    await waitFor(() => expect(screen.getByText('Page 2 of 3')).toBeTruthy())
+    expect(pageBtn('Previous').disabled).toBe(false)
+  })
+
+  test('事件过滤 → 请求带 eventType 且页码复位 1（AC-6）', async () => {
+    mount()
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+    fireEvent.click(pageBtn('Next'))
+    await waitFor(() => expect(screen.getByText('Page 2 of 3')).toBeTruthy())
+    await pickOption('Filter by event type', 'Pipeline failed')
+    await waitFor(() => {
+      const withEvent = listRequests().filter(
+        (u) => u.searchParams.get('eventType') === 'pipeline_failed',
+      )
+      expect(withEvent.length).toBeGreaterThan(0)
+      // 过滤变更后的每个请求都从第 1 页开始
+      expect(withEvent.every((u) => u.searchParams.get('page') === '1')).toBe(true)
+    })
+  })
+
+  test('仓库过滤：选项来自 /repos（含「全部」）→ 请求带 repoPath（AC-6）', async () => {
+    mount()
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+    await waitFor(() =>
+      expect(requests.some((u) => u.pathname.endsWith('/api/webhook-deliveries/repos'))).toBe(true),
+    )
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter by repository' }))
+    const target = await waitFor(() => {
+      const list = document.querySelector('ul[role="listbox"]')
+      if (list === null) throw new Error('listbox not opened')
+      const options = Array.from(list.querySelectorAll('li[role="option"]'))
+      // 选中项 label 末尾带 ✓ 指示，归一后比较
+      const labels = options.map((candidate) => (candidate.textContent ?? '').replace(/✓$/, ''))
+      expect(labels).toEqual(['All repositories', 'acme/api', 'acme/web'])
+      return options[2]!
+    })
+    fireEvent.mouseDown(target)
+    await waitFor(() =>
+      expect(listRequests().some((u) => u.searchParams.get('repoPath') === 'acme/web')).toBe(true),
+    )
+  })
+
+  test('数据缩水时越界页钳回（AC-7）', async () => {
+    mount()
+    await waitFor(() => expect(screen.getByTestId('webhook-delivery-dl1')).toBeTruthy())
+    shrinkAtPage3 = true
+    fireEvent.click(pageBtn('Next'))
+    await waitFor(() => expect(screen.getByText('Page 2 of 3')).toBeTruthy())
+    fireEvent.click(pageBtn('Next')) // page 3 响应 pageCount=1 → 钳回
+    await waitFor(() => {
+      const pages = listRequests().map((u) => u.searchParams.get('page') ?? '1')
+      expect(pages).toContain('3')
+      expect(pages[pages.length - 1]).toBe('1')
+    })
+    await waitFor(() => expect(screen.getByText('Page 1 of 3')).toBeTruthy())
+  })
+})

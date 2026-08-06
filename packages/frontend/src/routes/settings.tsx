@@ -729,7 +729,7 @@ function GitTab({ config }: TabProps) {
   )
 }
 
-function GcTab({ config }: TabProps) {
+export function GcTab({ config }: TabProps) {
   const { t } = useTranslation()
   const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.gc, config)
   const { state, setState, save } = draft
@@ -805,6 +805,36 @@ function GcTab({ config }: TabProps) {
           min={10_000}
         />
       </Field>
+      {/* RFC-261 (D9') — webhook 投递保留天数（保存门校验 body ≤ row；GC 每小时
+          sweep 时热读生效值） */}
+      <div className="form-grid form-grid--cols-2">
+        <Field
+          label={t('settingsForm.webhookBodyRetention')}
+          required
+          hint={t('settingsForm.webhookBodyRetentionHint')}
+        >
+          <NumberInput
+            value={state.webhookDeliveryBodyRetentionDays}
+            onChange={(v) => setState({ ...state, webhookDeliveryBodyRetentionDays: v ?? 30 })}
+            min={1}
+            max={3650}
+            data-testid="settings-webhook-body-retention"
+          />
+        </Field>
+        <Field
+          label={t('settingsForm.webhookRowRetention')}
+          required
+          hint={t('settingsForm.webhookRowRetentionHint')}
+        >
+          <NumberInput
+            value={state.webhookDeliveryRowRetentionDays}
+            onChange={(v) => setState({ ...state, webhookDeliveryRowRetentionDays: v ?? 90 })}
+            min={1}
+            max={3650}
+            data-testid="settings-webhook-row-retention"
+          />
+        </Field>
+      </div>
       <BackupCard />
     </SectionForm>
   )

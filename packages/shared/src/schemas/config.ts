@@ -186,6 +186,14 @@ export const ConfigSchema = z.object({
    *  pre-migration) are never auto-pruned — recorded limitation. */
   backupMaxTotalBytes: z.number().int().nonnegative().default(0),
 
+  // --- RFC-261 webhook 投递保留（D9'）---
+  /** 投递 body_json 置空天数（观测/重放窗口）。10 万投递/天的部署下 30 天 body
+   *  ≈ 数十 GB SQLite 存储，管理员可按盘量收缩。保存门（routes/config.ts）校验
+   *  body ≤ row；GC ticker 每次 sweep 读取生效值，改动免重启热生效。 */
+  webhookDeliveryBodyRetentionDays: z.number().int().min(1).max(3650).default(30),
+  /** 投递整行删除天数（审计窗口）。见 webhookDeliveryBodyRetentionDays。 */
+  webhookDeliveryRowRetentionDays: z.number().int().min(1).max(3650).default(90),
+
   // --- RFC-205 runtime sandbox ---
   /** OS-level FS sandbox around agent processes (macOS sandbox-exec / Linux
    *  bwrap): 'enforce' = refuse to launch tasks when the mechanism is
@@ -612,6 +620,9 @@ export const DEFAULT_CONFIG: Config = {
   backupRetentionCount: 7,
   backupRetentionDays: 30,
   backupMaxTotalBytes: 0,
+  // RFC-261 webhook 投递保留
+  webhookDeliveryBodyRetentionDays: 30,
+  webhookDeliveryRowRetentionDays: 90,
   sandboxMode: 'warn',
   businessToolchainPaths: [],
   backupOnMigration: true,

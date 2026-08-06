@@ -616,8 +616,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   //    + RFC-033 batch-import retention GC).
   const limitsTicker = startLimitsTicker(db)
   const gcTicker = startWorktreeGc(db, () => loadConfig(Paths.config), undefined, Paths.root)
-  // RFC-257 (设计门 F-12) — deliveries 保留 GC：30 天置空 body、90 天删行。
-  const webhookGcTicker = startWebhookDeliveryGc(db)
+  // RFC-257 (设计门 F-12) — deliveries 保留 GC；RFC-261 (D9')：保留天数走 config
+  // （默认 30 天置空 body、90 天删行），getter 每次 sweep 读取 → 热生效。
+  const webhookGcTicker = startWebhookDeliveryGc(db, () => loadConfig(Paths.config))
   const archiveTicker = startEventsArchiver(db, () => loadConfig(Paths.config), Paths.logsDir)
   // RFC-213: scheduled backup + retention (disabled by default — backupIntervalMs=0).
   const backupTicker = startBackupScheduler({

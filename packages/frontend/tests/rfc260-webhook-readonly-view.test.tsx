@@ -126,7 +126,17 @@ beforeEach(async () => {
     }
     if (url.includes('/api/webhook-triggers')) return jsonResponse(empty ? [] : [TRIGGER_ROW])
     if (url.includes('/api/webhook-endpoints')) return jsonResponse(empty ? [] : [MASKED_ENDPOINT])
-    if (url.includes('/api/webhook-deliveries')) return jsonResponse(empty ? [] : [DELIVERY_ROW])
+    // RFC-261：列表响应封套化；/repos 与详情要先于列表前缀匹配。
+    if (url.includes('/api/webhook-deliveries/repos'))
+      return jsonResponse(empty ? [] : ['acme/api'])
+    if (url.includes('/api/webhook-deliveries/dl1'))
+      return jsonResponse({ ...DELIVERY_ROW, bodyJson: '{}' })
+    if (url.includes('/api/webhook-deliveries'))
+      return jsonResponse(
+        empty
+          ? { items: [], total: 0, page: 1, pageCount: 1 }
+          : { items: [DELIVERY_ROW], total: 1, page: 1, pageCount: 1 },
+      )
     return jsonResponse([])
   })
 })

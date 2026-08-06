@@ -244,7 +244,8 @@ describe('RFC-260 · AC-4 投递读面', () => {
     const h = await harness()
     const list = await get(h.app, '/api/webhook-deliveries', h.userSession)
     expect(list.status).toBe(200)
-    expect(((await list.json()) as unknown[]).length).toBe(1)
+    // RFC-261 改判：列表响应从裸数组封套化为 {items,total,...}。
+    expect(((await list.json()) as { items: unknown[] }).items.length).toBe(1)
     const detail = await get(h.app, '/api/webhook-deliveries/dl-1', h.userSession)
     expect(detail.status).toBe(200)
     expect(((await detail.json()) as { bodyJson: string }).bodyJson).toContain('secret_free')

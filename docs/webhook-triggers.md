@@ -52,23 +52,27 @@
 
 ## 3. 排障对照表
 
-| 现象 | 看哪里 | 处置 |
-|---|---|---|
-| GitLab Recent Deliveries 红色 401 | 平台投递历史 `rejected(invalid-token)` | Secret 不一致：平台轮换后重贴 GitLab |
-| GitLab 显示超时 | —— | 不应发生（平台三段式立即应答）；检查网络/反代超时设置 |
-| 事件到了但没起任务 | 投递历史 `ignored(no-trigger-matched)` | 规则没罩住该仓/事件类型/分支；核对触发器 |
-| 触发了但任务失败 | 触发器 → 触发记录 `launch-failed` | 看 error（repo clone 凭据 / 模板渲染 / 目标不可用） |
-| `skipped-owner-invalid` | 同上 | 触发器 owner 被禁用或对目标失去权限；admin 改 owner 后重放 |
-| `skipped-circuit-open` | 同上 | 熔断：人工重置或等开发者 push |
-| daemon 重启后有 `failed(interrupted)` | 投递历史 | GitLab 不自动重投——用重放按钮恢复 |
-| **hook 整个不发了** | GitLab webhook 编辑页 | **auto-disable**：GitLab 对连续失败的 hook 自动禁用（4xx 永久、5xx 退避）。平台侧已把可忽略情形一律 200 规避；若仍发生，在 GitLab 重新启用并排根因 |
+| 现象                                  | 看哪里                                 | 处置                                                                                                                                               |
+| ------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitLab Recent Deliveries 红色 401     | 平台投递历史 `rejected(invalid-token)` | Secret 不一致：平台轮换后重贴 GitLab                                                                                                               |
+| GitLab 显示超时                       | ——                                     | 不应发生（平台三段式立即应答）；检查网络/反代超时设置                                                                                              |
+| 事件到了但没起任务                    | 投递历史 `ignored(no-trigger-matched)` | 规则没罩住该仓/事件类型/分支；核对触发器                                                                                                           |
+| 触发了但任务失败                      | 触发器 → 触发记录 `launch-failed`      | 看 error（repo clone 凭据 / 模板渲染 / 目标不可用）                                                                                                |
+| `skipped-owner-invalid`               | 同上                                   | 触发器 owner 被禁用或对目标失去权限；admin 改 owner 后重放                                                                                         |
+| `skipped-circuit-open`                | 同上                                   | 熔断：人工重置或等开发者 push                                                                                                                      |
+| daemon 重启后有 `failed(interrupted)` | 投递历史                               | GitLab 不自动重投——用重放按钮恢复                                                                                                                  |
+| **hook 整个不发了**                   | GitLab webhook 编辑页                  | **auto-disable**：GitLab 对连续失败的 hook 自动禁用（4xx 永久、5xx 退避）。平台侧已把可忽略情形一律 200 规避；若仍发生，在 GitLab 重新启用并排根因 |
 
 ## 4. 恢复语义（重要）
 
 - **自建 GitLab 对失败投递不自动重试**，只有 Recent Deliveries 里的手工
   Resend。平台侧的**重放**（投递历史页）是主恢复路径：验签失败的投递不可
   重放（先修 Secret 再 Resend）；重放新建投递行并绕过去重。
-- 投递原始 body 保留 30 天（之后清空，重放不可用）、行保留 90 天。
+- 投递原始 body 默认保留 30 天（之后清空，重放不可用）、行默认保留 90 天。
+  RFC-261 起两者在 设置 → GC 可配（1–3650 天，body ≤ 行，改动免重启热生效）；
+  高流量部署（10 万投递/天量级）建议按磁盘预算调小 body 保留。
+- 投递历史页支持按状态 / 事件类型 / 仓库过滤 + 页码分页（每页 50 条，总数
+  实时显示）；仓库下拉列出保留窗内出现过的仓库。
 - **备份迁移**：webhook Secret 用 `secret.key` 密封，备份包不含该文件——
   restore 到新机后所有端点 Secret 失效，需在 UI 重新生成并重贴 GitLab。
 
@@ -134,12 +138,12 @@ GitHub 侧配置。
 
 ### 6.4 排障补充（对照 §3）
 
-| 现象 | 看哪里 | 处置 |
-|---|---|---|
-| GitHub Recent Deliveries 红 401 | 平台投递历史 `rejected(invalid-token)` | Secret 不一致：平台轮换后重贴 GitHub |
-| 投递历史 `ignored(parse-failed)` + GitHub 显示 400 | —— | **Content type 是 form-urlencoded**，改成 application/json |
-| 事件到了但没起任务 | `ignored(no-trigger-matched)` | 规则没罩住该仓（GitHub 的 repo path 是 `owner/repo` 形态）/事件类型/分支 |
-| 评论指令没触发且触发器带分支过滤 | 触发器规则 | 普通 PR 评论无目标分支（§6.3）：分支过滤留空或改用行内评论 |
-| 普通 PR 评论触发后 fire 显示 `launch-failed`（git-value-invalid） | 触发器 → 触发记录 | 目标 workflow 带「分支来自事件」映射而普通评论无分支（§6.3 必败组合）：改用行内评论或换无 git 映射的目标 |
-| GitHub Recent Deliveries 显 413 | —— | 批量 push 超平台 1 MiB body 上限被拒（GitHub 不重试，该事件丢失）；GitHub push 的 commits 数组可达千级，远超 GitLab 的 20 条。罕见；频繁出现请开 issue 评估 per-provider 上限 |
-| 修到绿频繁跳闸熔断 | 触发器 → 触发记录 `skipped-circuit-open` | 多 workflow 仓的事件基数放大（§6.3）：收敛到单条主 CI workflow 或上调连续触发上限 |
+| 现象                                                              | 看哪里                                   | 处置                                                                                                                                                                          |
+| ----------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub Recent Deliveries 红 401                                   | 平台投递历史 `rejected(invalid-token)`   | Secret 不一致：平台轮换后重贴 GitHub                                                                                                                                          |
+| 投递历史 `ignored(parse-failed)` + GitHub 显示 400                | ——                                       | **Content type 是 form-urlencoded**，改成 application/json                                                                                                                    |
+| 事件到了但没起任务                                                | `ignored(no-trigger-matched)`            | 规则没罩住该仓（GitHub 的 repo path 是 `owner/repo` 形态）/事件类型/分支                                                                                                      |
+| 评论指令没触发且触发器带分支过滤                                  | 触发器规则                               | 普通 PR 评论无目标分支（§6.3）：分支过滤留空或改用行内评论                                                                                                                    |
+| 普通 PR 评论触发后 fire 显示 `launch-failed`（git-value-invalid） | 触发器 → 触发记录                        | 目标 workflow 带「分支来自事件」映射而普通评论无分支（§6.3 必败组合）：改用行内评论或换无 git 映射的目标                                                                      |
+| GitHub Recent Deliveries 显 413                                   | ——                                       | 批量 push 超平台 1 MiB body 上限被拒（GitHub 不重试，该事件丢失）；GitHub push 的 commits 数组可达千级，远超 GitLab 的 20 条。罕见；频繁出现请开 issue 评估 per-provider 上限 |
+| 修到绿频繁跳闸熔断                                                | 触发器 → 触发记录 `skipped-circuit-open` | 多 workflow 仓的事件基数放大（§6.3）：收敛到单条主 CI workflow 或上调连续触发上限                                                                                             |

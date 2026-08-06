@@ -97,6 +97,18 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
             }
           }
         }
+        // RFC-261 (D9'): body 置空窗口不得长于整行保留窗口——行先删的话 body 段
+        // 永远空转，这是自相矛盾的意图，挡在保存门（运行期对手改 config 的畸形
+        // 组合保持无害容忍，见 deliveryStore.gcDeliveries）。校验合并后的完整
+        // config，无关 PUT 也过闸。
+        if (
+          nextConfig.webhookDeliveryBodyRetentionDays > nextConfig.webhookDeliveryRowRetentionDays
+        ) {
+          throw new ValidationError(
+            'webhook-retention-invalid',
+            `webhookDeliveryBodyRetentionDays (${nextConfig.webhookDeliveryBodyRetentionDays}) must not exceed webhookDeliveryRowRetentionDays (${nextConfig.webhookDeliveryRowRetentionDays})`,
+          )
+        }
         // RFC-224 system-agent profiles must never fall back to OpenCode's implicit
         // model. Validate the complete merged config, so an unrelated edit cannot
         // preserve a legacy-invalid internal-agent selection.

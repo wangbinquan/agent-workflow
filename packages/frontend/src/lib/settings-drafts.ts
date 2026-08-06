@@ -78,7 +78,13 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'autoRecoveryWindowMs',
     'periodicOrphanReconcileMs',
   ],
-  gc: ['worktreeAutoGc', 'eventsArchiveThresholds'],
+  gc: [
+    'worktreeAutoGc',
+    'eventsArchiveThresholds',
+    // RFC-261 (D9') — webhook 投递保留天数
+    'webhookDeliveryBodyRetentionDays',
+    'webhookDeliveryRowRetentionDays',
+  ],
   // RFC-210. Registering here is not optional bookkeeping: this list IS the
   // minimal-write allowlist, so a key missing from it gets silently dropped on
   // save. It is also `satisfies Record<keyof SETTINGS_CONFIG_SCOPE_IDS, …>`,
