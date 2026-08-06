@@ -772,6 +772,7 @@ EBUSY: resource busy or locked, rm 'C:\...\Temp\aw-db-xxxxxx'
   ②Bun 的 `bun:sqlite` 在 Windows 上 `close()` 后不立即释放文件（WAL 的 `-wal`/`-shm`
   尤其可疑）。用 `handle.exe` / `Get-Process` 之类直接看持有者，比继续调重试参数有用。
 - **不要把重试预算再调大**当作修复——那只会把「永不释放」伪装成「很慢」。
+- ✅ **`cli.test.ts` 已定位并修复（RFC-254 T31 task#11，`84604e9e`，真机确证）**：真机跑 `Get-Process bun` **拆卸后 0 个残留 bun 进程 ⇒ 候选①（子进程未退）排除**；根因是候选②的**具体形态——不是「close 后释放慢」，而是根本没 close**：`cli/migrate.ts:migrateCommand` `openDb()` 后**丢弃句柄从不 close**（注释「进程随后退出」故意不关，对 CLI 成立、对同进程复用的测试 harness 不成立）⇒ 泄漏的 bun:sqlite 连接锁住 temp dir。修 = `const db=openDb(...); db.$client.close()`。**真机实测 close 后 temp dir 干净删除（aw-cli dirs before=22 after=22）⇒ 关键修正上文「close() 后句柄存活>1s」的旧结论：close() 在 Windows 确实立即释放，之前的 EBUSY 是「压根没 close 的泄漏」而非「close 后释放慢」**。**据此 `db.test.ts`/`gettask-multi-repo` 应重查有无「未 close 的句柄」（db.test.ts afterAll 关的是 tracked 的那些，若有未 tracked 的 open 就会泄漏），而不是当「close 释放慢」**——真凶大概率也是某处 openDb/new Database 没进 close 路径。POSIX 看不见（打开的文件可 unlink），故此类泄漏只在 Windows 拆卸暴露。
 
 ### 已定位（2026-08-05）：`close()` 根本没关上
 
