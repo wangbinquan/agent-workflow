@@ -64,12 +64,6 @@ export const IGNORED_ADVISORIES: readonly IgnoreEntry[] = [
     why: 'parse() 的二次复杂度 DoS，同样只经 drizzle-kit / drizzle-orm 的迁移工具链引入，不在运行时与产物中。',
     removeWhen: '同上，drizzle 传递依赖升级后。',
   },
-  {
-    id: 'GHSA-52cp-r559-cp3m',
-    package: 'js-yaml',
-    why: 'merge-key 二次 CPU 消耗，经 eslint › @eslint/eslintrc 引入，仅 lint 工具链。',
-    removeWhen: 'ESLint 升级到 js-yaml >= 4.3.0 之后。',
-  },
 ]
 
 /** 会让门禁失败的严重度。moderate/low 的长尾是 dev 噪音（esbuild dev-server 之类），不入闸。 */
