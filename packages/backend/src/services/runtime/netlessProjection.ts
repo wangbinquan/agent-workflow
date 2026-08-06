@@ -187,7 +187,13 @@ export async function resolveNetlessGitCommonDirs(
       '--path-format=absolute',
       '--git-common-dir',
     ])
-    const reportedCommonDir = common.stdout.trim()
+    // Git-for-Windows reports forward-slash paths (`C:/repo/.git`) even under
+    // `--path-format=absolute`, but `isLexicallyCanonical`/`realpath` below use
+    // the real-OS `path` codec (backslash on win32), so an unnormalized report
+    // fails canonicalization and the verified plan build aborts. `split('/')`
+    // joins onto the host `sep` — a true no-op on POSIX, and it preserves the
+    // non-canonical rejection because `..`/`.` segments survive the swap.
+    const reportedCommonDir = common.stdout.trim().split('/').join(sep)
     if (common.exitCode !== 0 || reportedCommonDir.length === 0) {
       if (input.undescribableRepo === 'skip-projection') continue
       return executionIdentityFailure('execution-identity-source-changed')

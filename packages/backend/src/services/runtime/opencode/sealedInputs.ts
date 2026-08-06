@@ -15,7 +15,8 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { identityDigest } from './executionIdentity'
 import { executionIdentityFailure } from './failure'
-import { assertSameFileIdentityForHost } from '@/util/fileTrust'
+import { assertSameFileIdentityForHost, statMetadataIsAuthoritative } from '@/util/fileTrust'
+import { sealDirectoryOwnerOnly } from '@/util/win32Acl'
 
 const DEFAULT_MAX_FILES = 2_048
 const DEFAULT_MAX_FILE_BYTES = 16 * 1024 * 1024
@@ -275,6 +276,13 @@ async function materializeTree(
     await chmod(resolve(snapshotPath, entry.path), entry.mode)
   }
   await chmod(snapshotPath, 0o500)
+  // RFC-254 T40b: on win32 the chmod above is synthesized (a read-only dir attr
+  // does not actually prevent writes inside), so seal the snapshot root with the
+  // owner+TCB DACL like every other sealed root — no-op off win32, where the
+  // mode bits are authoritative. Fail closed if the seal does not take.
+  if (!(await sealDirectoryOwnerOnly(snapshotPath)).trusted) {
+    return executionIdentityFailure('execution-identity-store-unsafe')
+  }
 }
 
 async function verifyMaterializedTree(
@@ -292,7 +300,14 @@ async function verifyMaterializedTree(
     return executionIdentityFailure('execution-identity-source-changed')
   }
   const root = await stat(snapshotPath)
-  if (!root.isDirectory() || (root.mode & 0o777) !== 0o500) {
+  if (!root.isDirectory()) {
+    return executionIdentityFailure('execution-identity-store-unsafe')
+  }
+  // RFC-254 T40b: the exact-0o500 seal is only assertable where stat mode is
+  // authoritative (POSIX). On win32 the mode is synthesized (any read-only dir
+  // reports 0o444), so the seal is proven by the owner+TCB DACL that
+  // materializeTree applied and verified instead of by these bits.
+  if (statMetadataIsAuthoritative(process.platform) && (root.mode & 0o777) !== 0o500) {
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
 }

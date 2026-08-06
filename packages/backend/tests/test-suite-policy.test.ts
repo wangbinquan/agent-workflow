@@ -42,6 +42,13 @@ const FORBIDDEN_ALIASES = new Set(['fit', 'fdescribe', 'ftest', 'xit', 'xdescrib
 // or opt-in visual/chaos environment. Any addition/removal changes this exact
 // inventory and therefore requires an intentional review of this policy.
 const ALLOWED_SKIP_COUNTS: Record<string, number> = {
+  // RFC-254 T31: one win32-ONLY describe (skipIf non-win32) exercises the two
+  // verified-business-plan defects — resolveNetlessGitCommonDirs accepting git-
+  // for-Windows's forward-slash --git-common-dir, and snapshotManagedSkillTree
+  // sealing a tree via DACL — against REAL git + real fs on a Windows machine.
+  // The forced-darwin rfc224-verified-plan suite structurally cannot cover the
+  // real-win32 path; the same file's source anchors run on every POSIX CI leg.
+  'packages/backend/tests/rfc254-verified-plan-win32.test.ts#skipIf': 1,
   // RFC-254 T4: two assertions describe the POSIX process-GROUP model, which
   // Windows has no equivalent of — the group signal, and the fact that a
   // non-leader pid leads no tree. The Windows behaviour they mirror is covered
