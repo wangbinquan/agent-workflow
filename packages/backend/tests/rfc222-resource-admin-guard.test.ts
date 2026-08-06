@@ -22,7 +22,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const SHARED_SRC = resolve(import.meta.dir, '..', '..', 'shared', 'src')
@@ -53,7 +53,10 @@ describe('RFC-222 G-1 — resource-admin identity single source of truth', () =>
   test('isAdminActor identifier appears only in services/resourceAcl.ts', () => {
     const offenders: Hit[] = []
     for (const file of listTsFiles(BACKEND_SRC)) {
-      const rel = file.replace(`${BACKEND_SRC}/`, '')
+      // RFC-254: relativize via path.relative + normalize to '/' — a literal
+      // `${SRC}/` replace fails on Windows (backslash paths), leaving `rel` as the
+      // full path so `resourceAcl.ts` never matched the skip and was mis-flagged.
+      const rel = relative(BACKEND_SRC, file).replace(/\\/g, '/')
       if (rel === 'services/resourceAcl.ts') continue // the definition lives here
       const lines = readFileSync(file, 'utf8').split('\n')
       lines.forEach((line, i) => {
@@ -81,9 +84,11 @@ describe('RFC-222 G-1 — resource-admin identity single source of truth', () =>
       /'admin'\s*\|\|[^\n]*'manager'|'manager'\s*\|\|[^\n]*'admin'|===\s*'manager'[^\n]*\|\|[^\n]*===\s*'admin'/
     const offenders: Hit[] = []
     for (const file of [...listTsFiles(BACKEND_SRC), ...listTsFiles(SHARED_SRC)]) {
-      const rel = file.includes('/shared/')
-        ? `shared/${file.replace(`${SHARED_SRC}/`, '')}`
-        : file.replace(`${BACKEND_SRC}/`, '')
+      // RFC-254: separator-safe relativization (see note above).
+      const inShared = !relative(SHARED_SRC, file).startsWith('..')
+      const rel = inShared
+        ? `shared/${relative(SHARED_SRC, file).replace(/\\/g, '/')}`
+        : relative(BACKEND_SRC, file).replace(/\\/g, '/')
       // The single legal home of the predicate.
       if (rel === 'shared/schemas/permission.ts') continue
       const lines = readFileSync(file, 'utf8').split('\n')

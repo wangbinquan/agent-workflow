@@ -242,15 +242,19 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir)) {
         const p = join(dir, name)
+        // RFC-254: normalize to '/' so the forward-slash allowlist entries and the
+        // 'services/runtime' skip match on Windows (relative() yields '\' there,
+        // so `.has()` missed every allowlisted file and flagged it as an offender).
+        const rp = relative(SRC_ROOT, p).replace(/\\/g, '/')
         if (statSync(p).isDirectory()) {
-          if (relative(SRC_ROOT, p) === join('services', 'runtime')) continue
+          if (rp === 'services/runtime') continue
           walk(p)
           continue
         }
         if (!name.endsWith('.ts')) continue
-        if (kindDiscriminationAllowlist.has(relative(SRC_ROOT, p))) continue
+        if (kindDiscriminationAllowlist.has(rp)) continue
         const src = readFileSync(p, 'utf8')
-        if (kindDiscrimination.test(src)) offenders.push(relative(SRC_ROOT, p))
+        if (kindDiscrimination.test(src)) offenders.push(rp)
       }
     }
     walk(SRC_ROOT)
