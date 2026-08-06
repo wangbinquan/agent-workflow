@@ -184,7 +184,15 @@ async function expectBootstrapFailure(operation: Promise<unknown>): Promise<void
   expect(String(error)).not.toContain('rg')
 }
 
-describe('RFC-224 FFF capability artifact seal', () => {
+// RFC-254: the whole file exercises the FFF (filesystem-fence-fingerprint) — the
+// LINUX bwrap boundary proof (RFC-224 §Linux). The shared fixture calls
+// materializeFffCapabilityProbe with bwrapPath '/usr/bin/bwrap' (POSIX), rejected by
+// the store-safety check on win32 (execution-identity-store-unsafe, verified on ARM64);
+// the execution-proof cases additionally assert POSIX process-group (PGID) kill/release.
+// FFF is never reached on Windows v1 (D1: no bwrap provider). The one non-fixture case
+// (argv-drift) is platform-agnostic but part of the same Linux-only FFF supervisor
+// surface, so the whole file skips on win32.
+describe.skipIf(process.platform === 'win32')('RFC-224 FFF capability artifact seal', () => {
   test('materializes a one-file cwd, empty read-only cache/PATH, and pinned codec', async () => {
     const value = await fixture()
     expect(value.codec).toBe(1)
@@ -255,7 +263,7 @@ describe('RFC-224 FFF capability artifact seal', () => {
   })
 })
 
-describe('RFC-224 FFF capability execution proof', () => {
+describe.skipIf(process.platform === 'win32')('RFC-224 FFF capability execution proof', () => {
   test('keeps the hidden supervisor out of help and rejects argv drift', async () => {
     const mainPath = resolve(import.meta.dir, '../src/main.ts')
     const nonce = '44444444-4444-4444-8444-444444444444'

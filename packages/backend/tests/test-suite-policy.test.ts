@@ -130,6 +130,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // RFC-254: two REAL-process cases spawn /bin/sh + POSIX group-reap (no win32 equiv,
   // same class as rfc208; Job Object win32 branch covers it). Rest of file runs on win32.
   'packages/backend/tests/rfc216-sandbox-cli.test.ts#skipIf': 2,
+  // RFC-254: whole file exercises the FFF (filesystem-fence-fingerprint) — the Linux
+  // bwrap boundary proof. Shared fixture materializes with bwrapPath '/usr/bin/bwrap'
+  // (POSIX → store-unsafe on win32); execution-proof asserts POSIX PGID kill/release.
+  // FFF unreached on Windows v1 (D1: no bwrap). Both describes skip.
+  'packages/backend/tests/rfc224-fff-capability.test.ts#skipIf': 2,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is
