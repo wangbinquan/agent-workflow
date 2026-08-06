@@ -135,6 +135,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // (POSIX → store-unsafe on win32); execution-proof asserts POSIX PGID kill/release.
   // FFF unreached on Windows v1 (D1: no bwrap). Both describes skip.
   'packages/backend/tests/rfc224-fff-capability.test.ts#skipIf': 2,
+  // RFC-254: netless (no-network) MCP boundary — every failing case fails at
+  // lstat('/bin/sh') (POSIX shell the wrapper materializes); netless is a POSIX
+  // containment mechanism unused on win32 (D1). 8 all-fail describes + materialize-
+  // dependent mixed-describe cases skip; demand/config describes run on win32.
+  'packages/backend/tests/rfc242-claude-netless-mcp.test.ts#skipIf': 21,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is

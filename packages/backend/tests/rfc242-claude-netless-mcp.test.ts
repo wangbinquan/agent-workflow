@@ -337,90 +337,96 @@ describe('RFC-242 T5 — toClaudeMcpConfig wrapper rewrite', () => {
 })
 
 describe('RFC-242 T5 — materializeClaudeNetlessMcp', () => {
-  test('freezes a 0500 wrapper + 0400 manifest carrying the real command and env', async () => {
-    const f = fixture('rfc242-netless-mat-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
+  test.skipIf(process.platform === 'win32')(
+    'freezes a 0500 wrapper + 0400 manifest carrying the real command and env',
+    async () => {
+      const f = fixture('rfc242-netless-mat-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
 
-    const result = await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', [server, '--stdio'], { env: { TOKEN: 'secret-token' } })],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      repoWorktreePaths: [f.worktreePath],
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' },
-    })
+      const result = await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', [server, '--stdio'], { env: { TOKEN: 'secret-token' } })],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        repoWorktreePaths: [f.worktreePath],
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' },
+      })
 
-    const wrapperPath = result.wrapperByName.get('search')
-    expect(wrapperPath).toBeDefined()
-    expect(statSync(wrapperPath!).mode & 0o777).toBe(0o500)
-    // The wrapper re-enters THIS binary's hidden netless subcommand — the same
-    // one opencode's local MCP already uses (design §4.2: zero new mechanism).
-    const script = readFileSync(wrapperPath!, 'utf8')
-    expect(script).toStartWith('#!/bin/sh\n')
-    expect(script).toContain('__opencode-netless-subprocess')
-    expect(script).toContain('--manifest')
+      const wrapperPath = result.wrapperByName.get('search')
+      expect(wrapperPath).toBeDefined()
+      expect(statSync(wrapperPath!).mode & 0o777).toBe(0o500)
+      // The wrapper re-enters THIS binary's hidden netless subcommand — the same
+      // one opencode's local MCP already uses (design §4.2: zero new mechanism).
+      const script = readFileSync(wrapperPath!, 'utf8')
+      expect(script).toStartWith('#!/bin/sh\n')
+      expect(script).toContain('__opencode-netless-subprocess')
+      expect(script).toContain('--manifest')
 
-    const manifestPath = join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json')
-    expect(statSync(manifestPath).mode & 0o777).toBe(0o400)
-    const manifest = NetlessSubprocessManifestSchema.parse(
-      JSON.parse(readFileSync(manifestPath, 'utf8')),
-    )
-    expect(manifest.mode).toBe('mcp')
-    expect(manifest.command).toEqual([realpathSync(server), '--stdio'])
-    // The provider plan is the ADMITTED one, never re-derived from the OS.
-    expect(manifest.provider).toEqual(containment.childProvider)
-    expect(manifest.provider.providerId).not.toBe('none')
-    expect(manifest.env.TOKEN).toBe('secret-token')
-    expect(manifest.env.HOME).toBe(join(f.runRoot, 'claude-mcp-scratch', 'home'))
-    expect(manifest.env.TMPDIR).toBe(join(f.runRoot, 'claude-mcp-scratch', 'tmp'))
-    expect(manifest.env.PWD).toBe(f.worktreePath)
-    expect(manifest.env.PATH).toEndWith('/usr/bin:/bin')
-    // Nothing from the daemon's environment leaks in beyond the locale set.
-    expect(manifest.env.LANG).toBe('en_US.UTF-8')
-    expect(Object.keys(manifest.env).sort()).toEqual([
-      'HOME',
-      'LANG',
-      'PATH',
-      'PWD',
-      'TMPDIR',
-      'TOKEN',
-    ])
-    // Only the executable INODE is bound back — never its parent directory.
-    expect(manifest.bindReadOnly).toEqual([realpathSync(server)])
-    // The wrapper seal must NOT sit inside the child's writable scratch: a
-    // model-controlled child cannot be allowed to rewrite its own fence.
-    expect(wrapperPath!.startsWith(join(f.runRoot, 'claude-mcp-scratch'))).toBe(false)
-  })
+      const manifestPath = join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json')
+      expect(statSync(manifestPath).mode & 0o777).toBe(0o400)
+      const manifest = NetlessSubprocessManifestSchema.parse(
+        JSON.parse(readFileSync(manifestPath, 'utf8')),
+      )
+      expect(manifest.mode).toBe('mcp')
+      expect(manifest.command).toEqual([realpathSync(server), '--stdio'])
+      // The provider plan is the ADMITTED one, never re-derived from the OS.
+      expect(manifest.provider).toEqual(containment.childProvider)
+      expect(manifest.provider.providerId).not.toBe('none')
+      expect(manifest.env.TOKEN).toBe('secret-token')
+      expect(manifest.env.HOME).toBe(join(f.runRoot, 'claude-mcp-scratch', 'home'))
+      expect(manifest.env.TMPDIR).toBe(join(f.runRoot, 'claude-mcp-scratch', 'tmp'))
+      expect(manifest.env.PWD).toBe(f.worktreePath)
+      expect(manifest.env.PATH).toEndWith('/usr/bin:/bin')
+      // Nothing from the daemon's environment leaks in beyond the locale set.
+      expect(manifest.env.LANG).toBe('en_US.UTF-8')
+      expect(Object.keys(manifest.env).sort()).toEqual([
+        'HOME',
+        'LANG',
+        'PATH',
+        'PWD',
+        'TMPDIR',
+        'TOKEN',
+      ])
+      // Only the executable INODE is bound back — never its parent directory.
+      expect(manifest.bindReadOnly).toEqual([realpathSync(server)])
+      // The wrapper seal must NOT sit inside the child's writable scratch: a
+      // model-controlled child cannot be allowed to rewrite its own fence.
+      expect(wrapperPath!.startsWith(join(f.runRoot, 'claude-mcp-scratch'))).toBe(false)
+    },
+  )
 
-  test('a bare command token resolves to its canonical absolute path', async () => {
-    const f = fixture('rfc242-netless-token-')
-    const binDir = join(f.base, 'toolbin')
-    const server = mkExecutable(binDir, 'my-mcp', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
+  test.skipIf(process.platform === 'win32')(
+    'a bare command token resolves to its canonical absolute path',
+    async () => {
+      const f = fixture('rfc242-netless-token-')
+      const binDir = join(f.base, 'toolbin')
+      const server = mkExecutable(binDir, 'my-mcp', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
 
-    const result = await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', ['my-mcp', '--stdio'])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: `${binDir}:/usr/bin:/bin` },
-    })
+      const result = await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', ['my-mcp', '--stdio'])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        log,
+        sourceEnv: { PATH: `${binDir}:/usr/bin:/bin` },
+      })
 
-    const manifest = NetlessSubprocessManifestSchema.parse(
-      JSON.parse(
-        readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
-      ),
-    )
-    // A bare token cannot resolve inside the boundary (the child's PATH is the
-    // fixed netless one), so the manifest must carry the resolved path.
-    expect(manifest.command[0]).toBe(realpathSync(server))
-    expect(result.wrapperByName.size).toBe(1)
-  })
+      const manifest = NetlessSubprocessManifestSchema.parse(
+        JSON.parse(
+          readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+        ),
+      )
+      // A bare token cannot resolve inside the boundary (the child's PATH is the
+      // fixed netless one), so the manifest must carry the resolved path.
+      expect(manifest.command[0]).toBe(realpathSync(server))
+      expect(result.wrapperByName.size).toBe(1)
+    },
+  )
 
   test('an unresolvable command fails closed instead of shipping an unfenced child', async () => {
     const f = fixture('rfc242-netless-missing-')
@@ -438,84 +444,96 @@ describe('RFC-242 T5 — materializeClaudeNetlessMcp', () => {
     ).rejects.toThrow()
   })
 
-  test("a linked worktree's EXTERNAL git common dir is projected, a plain clone's is not", async () => {
-    // Without this projection every `git` call inside the boundary fails: a
-    // linked worktree keeps objects/refs/index behind the appHome/HOME masks.
-    const f = fixture('rfc242-netless-git-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const repo = join(f.base, 'repo')
-    mkdirSync(repo, { recursive: true })
-    const git = async (cwd: string, args: string[]): Promise<void> => {
-      const child = Bun.spawn(['git', ...args], { cwd, stdout: 'ignore', stderr: 'ignore' })
-      expect(await child.exited).toBe(0)
-    }
-    await git(repo, ['init', '-q', '-b', 'main'])
-    await git(repo, ['config', 'user.email', 'a@b.c'])
-    await git(repo, ['config', 'user.name', 'a'])
-    writeFileSync(join(repo, 'f.txt'), 'x')
-    await git(repo, ['add', '.'])
-    await git(repo, ['commit', '-qm', 'init'])
-    const linked = join(f.base, 'linked')
-    await git(repo, ['worktree', 'add', '-q', linked, '-b', 'wt'])
+  test.skipIf(process.platform === 'win32')(
+    "a linked worktree's EXTERNAL git common dir is projected, a plain clone's is not",
+    async () => {
+      // Without this projection every `git` call inside the boundary fails: a
+      // linked worktree keeps objects/refs/index behind the appHome/HOME masks.
+      const f = fixture('rfc242-netless-git-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const repo = join(f.base, 'repo')
+      mkdirSync(repo, { recursive: true })
+      const git = async (cwd: string, args: string[]): Promise<void> => {
+        const child = Bun.spawn(['git', ...args], { cwd, stdout: 'ignore', stderr: 'ignore' })
+        expect(await child.exited).toBe(0)
+      }
+      await git(repo, ['init', '-q', '-b', 'main'])
+      await git(repo, ['config', 'user.email', 'a@b.c'])
+      await git(repo, ['config', 'user.name', 'a'])
+      writeFileSync(join(repo, 'f.txt'), 'x')
+      await git(repo, ['add', '.'])
+      await git(repo, ['commit', '-qm', 'init'])
+      const linked = join(f.base, 'linked')
+      await git(repo, ['worktree', 'add', '-q', linked, '-b', 'wt'])
 
-    const containment = await admitContainment(f.appHome)
-    const manifestOf = async (worktreePath: string, repos: string[]): Promise<unknown> => {
-      const runRoot = join(f.appHome, 'runs', 'task-1', `nr-${repos.length}-${worktreePath.length}`)
-      mkdirSync(runRoot, { recursive: true })
-      await materializeClaudeNetlessMcp({
-        mcps: [localMcp('search', [server])],
+      const containment = await admitContainment(f.appHome)
+      const manifestOf = async (worktreePath: string, repos: string[]): Promise<unknown> => {
+        const runRoot = join(
+          f.appHome,
+          'runs',
+          'task-1',
+          `nr-${repos.length}-${worktreePath.length}`,
+        )
+        mkdirSync(runRoot, { recursive: true })
+        await materializeClaudeNetlessMcp({
+          mcps: [localMcp('search', [server])],
+          containment,
+          runRoot,
+          worktreePath,
+          appHome: f.appHome,
+          repoWorktreePaths: repos,
+          log,
+          sourceEnv: { PATH: '/usr/bin:/bin' },
+        })
+        return NetlessSubprocessManifestSchema.parse(
+          JSON.parse(
+            readFileSync(join(runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+          ),
+        )
+      }
+
+      expect(await manifestOf(linked, [linked])).toMatchObject({
+        gitCommonDirs: [realpathSync(join(repo, '.git'))],
+      })
+      // The plain clone's `.git` lives inside the already-bound worktree — adding
+      // it back would be a redundant allow-back, so it must be filtered out.
+      expect(await manifestOf(repo, [repo])).toMatchObject({ gitCommonDirs: [] })
+    },
+    60_000,
+  )
+
+  test.skipIf(process.platform === 'win32')(
+    'a repeated MCP name resolves the same way toClaudeMcpConfig dedupes it',
+    async () => {
+      // The wrapper map and the emitted config must agree: rewriting an entry the
+      // config never emitted (or vice versa) would unfence one of the two.
+      const f = fixture('rfc242-netless-dupe-')
+      const first = mkExecutable(join(f.base, 'mcp-a'), 'server', '#!/bin/sh\nexit 0\n')
+      const second = mkExecutable(join(f.base, 'mcp-b'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const mcps = [localMcp('search', [first]), localMcp('search', [second])]
+      const result = await materializeClaudeNetlessMcp({
+        mcps,
         containment,
-        runRoot,
-        worktreePath,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
         appHome: f.appHome,
-        repoWorktreePaths: repos,
         log,
         sourceEnv: { PATH: '/usr/bin:/bin' },
       })
-      return NetlessSubprocessManifestSchema.parse(
+      expect(result.wrapperByName.size).toBe(1)
+      const manifest = NetlessSubprocessManifestSchema.parse(
         JSON.parse(
-          readFileSync(join(runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+          readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
         ),
       )
-    }
-
-    expect(await manifestOf(linked, [linked])).toMatchObject({
-      gitCommonDirs: [realpathSync(join(repo, '.git'))],
-    })
-    // The plain clone's `.git` lives inside the already-bound worktree — adding
-    // it back would be a redundant allow-back, so it must be filtered out.
-    expect(await manifestOf(repo, [repo])).toMatchObject({ gitCommonDirs: [] })
-  }, 60_000)
-
-  test('a repeated MCP name resolves the same way toClaudeMcpConfig dedupes it', async () => {
-    // The wrapper map and the emitted config must agree: rewriting an entry the
-    // config never emitted (or vice versa) would unfence one of the two.
-    const f = fixture('rfc242-netless-dupe-')
-    const first = mkExecutable(join(f.base, 'mcp-a'), 'server', '#!/bin/sh\nexit 0\n')
-    const second = mkExecutable(join(f.base, 'mcp-b'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const mcps = [localMcp('search', [first]), localMcp('search', [second])]
-    const result = await materializeClaudeNetlessMcp({
-      mcps,
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    })
-    expect(result.wrapperByName.size).toBe(1)
-    const manifest = NetlessSubprocessManifestSchema.parse(
-      JSON.parse(
-        readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
-      ),
-    )
-    expect(manifest.command).toEqual([realpathSync(first)])
-    expect(toClaudeMcpConfig(mcps, result.wrapperByName)?.mcpServers.search).toEqual({
-      command: result.wrapperByName.get('search')!,
-      args: [],
-    })
-  })
+      expect(manifest.command).toEqual([realpathSync(first)])
+      expect(toClaudeMcpConfig(mcps, result.wrapperByName)?.mcpServers.search).toEqual({
+        command: result.wrapperByName.get('search')!,
+        args: [],
+      })
+    },
+  )
 
   test('remote-only input materializes nothing', async () => {
     const f = fixture('rfc242-netless-remote-')
@@ -532,46 +550,52 @@ describe('RFC-242 T5 — materializeClaudeNetlessMcp', () => {
     await result.preSpawnVerify()
   })
 
-  test('preSpawnVerify rejects a manifest tampered with after materialization', async () => {
-    const f = fixture('rfc242-netless-toctou-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const result = await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', [server])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    })
-    await result.preSpawnVerify() // clean
+  test.skipIf(process.platform === 'win32')(
+    'preSpawnVerify rejects a manifest tampered with after materialization',
+    async () => {
+      const f = fixture('rfc242-netless-toctou-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const result = await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', [server])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin' },
+      })
+      await result.preSpawnVerify() // clean
 
-    const manifestPath = join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json')
-    chmodSync(manifestPath, 0o600)
-    writeFileSync(manifestPath, '{"codec":1}')
-    await expect(result.preSpawnVerify()).rejects.toThrow()
-  })
+      const manifestPath = join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json')
+      chmodSync(manifestPath, 0o600)
+      writeFileSync(manifestPath, '{"codec":1}')
+      await expect(result.preSpawnVerify()).rejects.toThrow()
+    },
+  )
 
-  test('re-entering the same run root re-materializes instead of colliding', async () => {
-    // The wrapper writer is O_EXCL; an inline-clarify rerun keeps its runRoot.
-    const f = fixture('rfc242-netless-reentry-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const input = {
-      mcps: [localMcp('search', [server])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    }
-    const first = await materializeClaudeNetlessMcp(input)
-    const second = await materializeClaudeNetlessMcp(input)
-    expect(second.wrapperByName.get('search')).toBe(first.wrapperByName.get('search')!)
-    await second.preSpawnVerify()
-  })
+  test.skipIf(process.platform === 'win32')(
+    're-entering the same run root re-materializes instead of colliding',
+    async () => {
+      // The wrapper writer is O_EXCL; an inline-clarify rerun keeps its runRoot.
+      const f = fixture('rfc242-netless-reentry-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const input = {
+        mcps: [localMcp('search', [server])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin' },
+      }
+      const first = await materializeClaudeNetlessMcp(input)
+      const second = await materializeClaudeNetlessMcp(input)
+      expect(second.wrapperByName.get('search')).toBe(first.wrapperByName.get('search')!)
+      await second.preSpawnVerify()
+    },
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -598,243 +622,264 @@ async function initRepo(path: string): Promise<void> {
   await git(['commit', '-qm', 'init'])
 }
 
-describe('RFC-242 T5 — a `.git` pointer inside the worktree cannot mint an allow-back', () => {
-  test('a forged pointer naming ANOTHER repository fails closed', async () => {
-    // REPRODUCED 2026-07-31 against git 2.50.1. `<worktree>/.git` is an ordinary
-    // writable file inside the agent's own workspace — writable by every node of
-    // the task AND by the fenced MCP child itself (the worktree is one of the
-    // manifest's writable allow-backs). Point it at any other valid repository
-    // and git faithfully reports THAT common dir; the first cut canonicalized it
-    // and published it as a writable subtree, so a process inside the real
-    // Seatbelt/bwrap child boundary could write e.g.
-    // `<appHome>/repos/<other>/.git/hooks/post-commit` — a file the daemon later
-    // executes with no sandbox at all.
-    //
-    // The fix is the check the opencode plan always had: when the reported
-    // common dir lands outside the worktree, that worktree must be REGISTERED in
-    // it (`git worktree list`). The forged repo lists only its own worktrees.
-    const f = fixture('rfc242-netless-gitforge-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const repo = join(f.base, 'repo')
-    const foreign = join(f.base, 'foreign')
-    await initRepo(repo)
-    await initRepo(foreign)
-    const linked = join(f.base, 'linked')
-    const add = Bun.spawn(['git', 'worktree', 'add', '-q', linked, '-b', 'wt'], {
-      cwd: repo,
-      stdout: 'ignore',
-      stderr: 'ignore',
+// RFC-254: the netless (no-network) MCP boundary materializes a `#!/bin/sh`
+// wrapper — every failing case fails at lstat('/bin/sh') (ENOENT) on Windows. The
+// netless boundary is a POSIX containment mechanism, unused on Windows v1 (D1: no
+// provider). The 8 all-fail describes + the materialize-dependent cases in the mixed
+// describes skip on win32; the platform-agnostic demand/config describes still run.
+describe.skipIf(process.platform === 'win32')(
+  'RFC-242 T5 — a `.git` pointer inside the worktree cannot mint an allow-back',
+  () => {
+    test('a forged pointer naming ANOTHER repository fails closed', async () => {
+      // REPRODUCED 2026-07-31 against git 2.50.1. `<worktree>/.git` is an ordinary
+      // writable file inside the agent's own workspace — writable by every node of
+      // the task AND by the fenced MCP child itself (the worktree is one of the
+      // manifest's writable allow-backs). Point it at any other valid repository
+      // and git faithfully reports THAT common dir; the first cut canonicalized it
+      // and published it as a writable subtree, so a process inside the real
+      // Seatbelt/bwrap child boundary could write e.g.
+      // `<appHome>/repos/<other>/.git/hooks/post-commit` — a file the daemon later
+      // executes with no sandbox at all.
+      //
+      // The fix is the check the opencode plan always had: when the reported
+      // common dir lands outside the worktree, that worktree must be REGISTERED in
+      // it (`git worktree list`). The forged repo lists only its own worktrees.
+      const f = fixture('rfc242-netless-gitforge-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const repo = join(f.base, 'repo')
+      const foreign = join(f.base, 'foreign')
+      await initRepo(repo)
+      await initRepo(foreign)
+      const linked = join(f.base, 'linked')
+      const add = Bun.spawn(['git', 'worktree', 'add', '-q', linked, '-b', 'wt'], {
+        cwd: repo,
+        stdout: 'ignore',
+        stderr: 'ignore',
+      })
+      expect(await add.exited).toBe(0)
+
+      const containment = await admitContainment(f.appHome)
+      const materialize = async (): Promise<ReadonlyMap<string, string>> =>
+        (
+          await materializeClaudeNetlessMcp({
+            mcps: [localMcp('search', [server])],
+            containment,
+            runRoot: f.runRoot,
+            worktreePath: linked,
+            appHome: f.appHome,
+            repoWorktreePaths: [linked],
+            log,
+            sourceEnv: { PATH: '/usr/bin:/bin' },
+          })
+        ).wrapperByName
+
+      // Untampered: the real external common dir IS projected (git must keep working).
+      await materialize()
+      expect(
+        NetlessSubprocessManifestSchema.parse(
+          JSON.parse(
+            readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+          ),
+        ).gitCommonDirs,
+      ).toEqual([realpathSync(join(repo, '.git'))])
+
+      // Tampered: the agent rewrites its own `.git` pointer at the foreign repo.
+      writeFileSync(join(linked, '.git'), `gitdir: ${realpathSync(join(foreign, '.git'))}\n`)
+      const probe = Bun.spawn(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
+        cwd: linked,
+        stdout: 'pipe',
+        stderr: 'ignore',
+      })
+      // Precondition of the whole attack: git really does report the forged dir.
+      expect((await new Response(probe.stdout).text()).trim()).toBe(
+        realpathSync(join(foreign, '.git')),
+      )
+      await expect(materialize()).rejects.toThrow(/execution-identity-store-unsafe/)
+    }, 60_000)
+
+    test('a symlinked pointer is canonicalized by git and still projects the REAL dir', async () => {
+      // MEASURED against git 2.50.1: git resolves symlinks in a `gitdir:` pointer
+      // BEFORE reporting `--git-common-dir`, so a link cannot smuggle a
+      // non-canonical answer past the daemon on this platform. The
+      // `realpath(reported) === reported` check the opencode plan carries is kept
+      // as defense in depth for a git that reports the link verbatim — and this
+      // case is the other half of that contract: the legitimate linked worktree
+      // must NOT be over-blocked.
+      const f = fixture('rfc242-netless-gitlink-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const repo = join(f.base, 'repo')
+      await initRepo(repo)
+      const linked = join(f.base, 'linked')
+      const add = Bun.spawn(['git', 'worktree', 'add', '-q', linked, '-b', 'wt'], {
+        cwd: repo,
+        stdout: 'ignore',
+        stderr: 'ignore',
+      })
+      expect(await add.exited).toBe(0)
+      symlinkSync(realpathSync(join(repo, '.git')), join(linked, 'gitlink'))
+      writeFileSync(join(linked, '.git'), `gitdir: ${join(linked, 'gitlink')}\n`)
+
+      const containment = await admitContainment(f.appHome)
+      await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', [server])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: linked,
+        appHome: f.appHome,
+        repoWorktreePaths: [linked],
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin' },
+      })
+      expect(
+        NetlessSubprocessManifestSchema.parse(
+          JSON.parse(
+            readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+          ),
+        ).gitCommonDirs,
+      ).toEqual([realpathSync(join(repo, '.git'))])
+    }, 60_000)
+  },
+)
+
+describe.skipIf(process.platform === 'win32')(
+  'RFC-242 T5 — the private scratch cannot be re-entered through a symlink',
+  () => {
+    test('a scratch subdir replaced by a link fails closed instead of exporting HOME', async () => {
+      // An inline-clarify resume REUSES the run root, and the previous run's
+      // fenced child had write access to `claude-mcp-scratch` (it is one of the
+      // manifest's writable subtrees). Replacing `home` with a symlink used to be
+      // accepted by `mkdir(…, {recursive:true})` and followed by `realpath`, so
+      // the NEXT run published the link target as HOME — and
+      // `netlessWritableSubtrees` grants HOME write access AFTER the realHome /
+      // appHome masks. That is a straight escape out of the boundary.
+      const f = fixture('rfc242-netless-scratchlink-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const outside = join(f.base, 'outside-the-fence')
+      mkdirSync(outside, { recursive: true })
+      const containment = await admitContainment(f.appHome)
+      const input = {
+        mcps: [localMcp('search', [server])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin' },
+      }
+      await materializeClaudeNetlessMcp(input)
+
+      const home = join(f.runRoot, 'claude-mcp-scratch', 'home')
+      rmSync(home, { recursive: true, force: true })
+      symlinkSync(outside, home)
+      await expect(materializeClaudeNetlessMcp(input)).rejects.toThrow(
+        /execution-identity-store-unsafe/,
+      )
+      // The decisive assertion: the run produced NO manifest at all, so the
+      // outside directory never became an allow-back (the seal is rebuilt before
+      // the scratch is verified, so a rejected run leaves nothing behind).
+      expect(existsOrNull(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'))).toBeNull()
+      expect(existsOrNull(join(outside, 'private.txt'))).toBeNull()
     })
-    expect(await add.exited).toBe(0)
 
-    const containment = await admitContainment(f.appHome)
-    const materialize = async (): Promise<ReadonlyMap<string, string>> =>
-      (
-        await materializeClaudeNetlessMcp({
-          mcps: [localMcp('search', [server])],
-          containment,
-          runRoot: f.runRoot,
-          worktreePath: linked,
-          appHome: f.appHome,
-          repoWorktreePaths: [linked],
-          log,
-          sourceEnv: { PATH: '/usr/bin:/bin' },
-        })
-      ).wrapperByName
-
-    // Untampered: the real external common dir IS projected (git must keep working).
-    await materialize()
-    expect(
-      NetlessSubprocessManifestSchema.parse(
-        JSON.parse(
-          readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
-        ),
-      ).gitCommonDirs,
-    ).toEqual([realpathSync(join(repo, '.git'))])
-
-    // Tampered: the agent rewrites its own `.git` pointer at the foreign repo.
-    writeFileSync(join(linked, '.git'), `gitdir: ${realpathSync(join(foreign, '.git'))}\n`)
-    const probe = Bun.spawn(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
-      cwd: linked,
-      stdout: 'pipe',
-      stderr: 'ignore',
+    test('the seal root itself is rebuilt, never followed', async () => {
+      const f = fixture('rfc242-netless-seallink-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const outside = join(f.base, 'outside-seal')
+      mkdirSync(outside, { recursive: true })
+      symlinkSync(outside, join(f.runRoot, 'claude-mcp-seal'))
+      const containment = await admitContainment(f.appHome)
+      const result = await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', [server])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin' },
+      })
+      // The link was unlinked and a real private dir took its place; nothing was
+      // written through it into the external target.
+      expect(result.wrapperByName.get('search')).toBe(
+        join(f.runRoot, 'claude-mcp-seal', 'search', 'run'),
+      )
+      expect(existsOrNull(join(outside, 'search'))).toBeNull()
     })
-    // Precondition of the whole attack: git really does report the forged dir.
-    expect((await new Response(probe.stdout).text()).trim()).toBe(
-      realpathSync(join(foreign, '.git')),
-    )
-    await expect(materialize()).rejects.toThrow(/execution-identity-store-unsafe/)
-  }, 60_000)
-
-  test('a symlinked pointer is canonicalized by git and still projects the REAL dir', async () => {
-    // MEASURED against git 2.50.1: git resolves symlinks in a `gitdir:` pointer
-    // BEFORE reporting `--git-common-dir`, so a link cannot smuggle a
-    // non-canonical answer past the daemon on this platform. The
-    // `realpath(reported) === reported` check the opencode plan carries is kept
-    // as defense in depth for a git that reports the link verbatim — and this
-    // case is the other half of that contract: the legitimate linked worktree
-    // must NOT be over-blocked.
-    const f = fixture('rfc242-netless-gitlink-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const repo = join(f.base, 'repo')
-    await initRepo(repo)
-    const linked = join(f.base, 'linked')
-    const add = Bun.spawn(['git', 'worktree', 'add', '-q', linked, '-b', 'wt'], {
-      cwd: repo,
-      stdout: 'ignore',
-      stderr: 'ignore',
-    })
-    expect(await add.exited).toBe(0)
-    symlinkSync(realpathSync(join(repo, '.git')), join(linked, 'gitlink'))
-    writeFileSync(join(linked, '.git'), `gitdir: ${join(linked, 'gitlink')}\n`)
-
-    const containment = await admitContainment(f.appHome)
-    await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', [server])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: linked,
-      appHome: f.appHome,
-      repoWorktreePaths: [linked],
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    })
-    expect(
-      NetlessSubprocessManifestSchema.parse(
-        JSON.parse(
-          readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
-        ),
-      ).gitCommonDirs,
-    ).toEqual([realpathSync(join(repo, '.git'))])
-  }, 60_000)
-})
-
-describe('RFC-242 T5 — the private scratch cannot be re-entered through a symlink', () => {
-  test('a scratch subdir replaced by a link fails closed instead of exporting HOME', async () => {
-    // An inline-clarify resume REUSES the run root, and the previous run's
-    // fenced child had write access to `claude-mcp-scratch` (it is one of the
-    // manifest's writable subtrees). Replacing `home` with a symlink used to be
-    // accepted by `mkdir(…, {recursive:true})` and followed by `realpath`, so
-    // the NEXT run published the link target as HOME — and
-    // `netlessWritableSubtrees` grants HOME write access AFTER the realHome /
-    // appHome masks. That is a straight escape out of the boundary.
-    const f = fixture('rfc242-netless-scratchlink-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const outside = join(f.base, 'outside-the-fence')
-    mkdirSync(outside, { recursive: true })
-    const containment = await admitContainment(f.appHome)
-    const input = {
-      mcps: [localMcp('search', [server])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    }
-    await materializeClaudeNetlessMcp(input)
-
-    const home = join(f.runRoot, 'claude-mcp-scratch', 'home')
-    rmSync(home, { recursive: true, force: true })
-    symlinkSync(outside, home)
-    await expect(materializeClaudeNetlessMcp(input)).rejects.toThrow(
-      /execution-identity-store-unsafe/,
-    )
-    // The decisive assertion: the run produced NO manifest at all, so the
-    // outside directory never became an allow-back (the seal is rebuilt before
-    // the scratch is verified, so a rejected run leaves nothing behind).
-    expect(existsOrNull(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'))).toBeNull()
-    expect(existsOrNull(join(outside, 'private.txt'))).toBeNull()
-  })
-
-  test('the seal root itself is rebuilt, never followed', async () => {
-    const f = fixture('rfc242-netless-seallink-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const outside = join(f.base, 'outside-seal')
-    mkdirSync(outside, { recursive: true })
-    symlinkSync(outside, join(f.runRoot, 'claude-mcp-seal'))
-    const containment = await admitContainment(f.appHome)
-    const result = await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', [server])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    })
-    // The link was unlinked and a real private dir took its place; nothing was
-    // written through it into the external target.
-    expect(result.wrapperByName.get('search')).toBe(
-      join(f.runRoot, 'claude-mcp-seal', 'search', 'run'),
-    )
-    expect(existsOrNull(join(outside, 'search'))).toBeNull()
-  })
-})
+  },
+)
 
 describe('RFC-242 T5 — the fenced command is the one the author configured', () => {
-  test('a worktree-relative command resolves against the WORKTREE, not the daemon cwd', async () => {
-    // `./tools/server` is a legitimate local-MCP command: before the fence,
-    // claude forked it with the task worktree as cwd. `Bun.which` resolves a
-    // slash-bearing token against the DAEMON's cwd, which either fails outright
-    // or — worse — finds an unrelated same-named file inside the install dir.
-    const f = fixture('rfc242-netless-relcmd-')
-    const server = mkExecutable(join(f.worktreePath, 'tools'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const result = await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', ['./tools/server', '--stdio'])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    })
-    const manifest = NetlessSubprocessManifestSchema.parse(
-      JSON.parse(
-        readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
-      ),
-    )
-    expect(manifest.command).toEqual([realpathSync(server), '--stdio'])
-    expect(result.wrapperByName.size).toBe(1)
-  })
+  test.skipIf(process.platform === 'win32')(
+    'a worktree-relative command resolves against the WORKTREE, not the daemon cwd',
+    async () => {
+      // `./tools/server` is a legitimate local-MCP command: before the fence,
+      // claude forked it with the task worktree as cwd. `Bun.which` resolves a
+      // slash-bearing token against the DAEMON's cwd, which either fails outright
+      // or — worse — finds an unrelated same-named file inside the install dir.
+      const f = fixture('rfc242-netless-relcmd-')
+      const server = mkExecutable(join(f.worktreePath, 'tools'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const result = await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', ['./tools/server', '--stdio'])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin' },
+      })
+      const manifest = NetlessSubprocessManifestSchema.parse(
+        JSON.parse(
+          readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+        ),
+      )
+      expect(manifest.command).toEqual([realpathSync(server), '--stdio'])
+      expect(result.wrapperByName.size).toBe(1)
+    },
+  )
 
-  test("an interpreted launcher's interpreter is on the fenced PATH and bound read-only", async () => {
-    // MEASURED 2026-07-31: `npx` on this machine realpaths to
-    // `…/npm/bin/npx-cli.js` (`#!/usr/bin/env node`) and there is no `node` in
-    // that directory. PATH-ing only the launcher's own dir made the wrapper exit
-    // 127; claude reported `mcp_servers:[{status:"failed"}]` and the node still
-    // finished is_error:false with its MCP tools silently missing.
-    const f = fixture('rfc242-netless-shebang-')
-    const interpreterDir = join(f.base, 'interp')
-    const interpreter = mkExecutable(interpreterDir, 'fakenode', '#!/bin/sh\nexec /bin/sh "$@"\n')
-    const launcherDir = join(f.base, 'launcher')
-    const launcher = mkExecutable(launcherDir, 'server-cli.js', '#!/usr/bin/env fakenode\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', [launcher])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: `${interpreterDir}:/usr/bin:/bin` },
-    })
-    const manifest = NetlessSubprocessManifestSchema.parse(
-      JSON.parse(
-        readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
-      ),
-    )
-    // The interpreter's inode is bound (never its parent directory) and its
-    // directory is on the child's PATH so `/usr/bin/env` can find it.
-    expect(manifest.bindReadOnly).toEqual([realpathSync(launcher), realpathSync(interpreter)])
-    expect(manifest.env.PATH?.split(':')).toEqual([
-      realpathSync(launcherDir),
-      realpathSync(interpreterDir),
-      '/usr/bin',
-      '/bin',
-    ])
-  })
+  test.skipIf(process.platform === 'win32')(
+    "an interpreted launcher's interpreter is on the fenced PATH and bound read-only",
+    async () => {
+      // MEASURED 2026-07-31: `npx` on this machine realpaths to
+      // `…/npm/bin/npx-cli.js` (`#!/usr/bin/env node`) and there is no `node` in
+      // that directory. PATH-ing only the launcher's own dir made the wrapper exit
+      // 127; claude reported `mcp_servers:[{status:"failed"}]` and the node still
+      // finished is_error:false with its MCP tools silently missing.
+      const f = fixture('rfc242-netless-shebang-')
+      const interpreterDir = join(f.base, 'interp')
+      const interpreter = mkExecutable(interpreterDir, 'fakenode', '#!/bin/sh\nexec /bin/sh "$@"\n')
+      const launcherDir = join(f.base, 'launcher')
+      const launcher = mkExecutable(
+        launcherDir,
+        'server-cli.js',
+        '#!/usr/bin/env fakenode\nexit 0\n',
+      )
+      const containment = await admitContainment(f.appHome)
+      await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', [launcher])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        log,
+        sourceEnv: { PATH: `${interpreterDir}:/usr/bin:/bin` },
+      })
+      const manifest = NetlessSubprocessManifestSchema.parse(
+        JSON.parse(
+          readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+        ),
+      )
+      // The interpreter's inode is bound (never its parent directory) and its
+      // directory is on the child's PATH so `/usr/bin/env` can find it.
+      expect(manifest.bindReadOnly).toEqual([realpathSync(launcher), realpathSync(interpreter)])
+      expect(manifest.env.PATH?.split(':')).toEqual([
+        realpathSync(launcherDir),
+        realpathSync(interpreterDir),
+        '/usr/bin',
+        '/bin',
+      ])
+    },
+  )
 
   test('an interpreter that cannot be resolved fails closed', async () => {
     const f = fixture('rfc242-netless-shebang-missing-')
@@ -857,240 +902,261 @@ describe('RFC-242 T5 — the fenced command is the one the author configured', (
     ).rejects.toThrow(/execution-identity-mismatch/)
   })
 
-  test('the interpreted launcher actually starts inside the wrapper', async () => {
-    // The end-to-end form of the same regression: run the materialized wrapper
-    // the way claude forks it and prove the interpreter resolved.
-    const f = fixture('rfc242-netless-shebang-run-')
-    const interpreterDir = join(f.base, 'interp')
-    mkExecutable(interpreterDir, 'fakenode', '#!/bin/sh\nexec /bin/sh "$@"\n')
-    const launcher = mkExecutable(
-      join(f.base, 'launcher'),
-      'server-cli.js',
-      '#!/usr/bin/env fakenode\necho started-via-interpreter\n',
-    )
-    const containment = await new ContainmentCoordinator({
-      provider: {
-        mode: 'off',
-        status: { mechanism: 'none', available: false, detail: null },
+  test.skipIf(process.platform === 'win32')(
+    'the interpreted launcher actually starts inside the wrapper',
+    async () => {
+      // The end-to-end form of the same regression: run the materialized wrapper
+      // the way claude forks it and prove the interpreter resolved.
+      const f = fixture('rfc242-netless-shebang-run-')
+      const interpreterDir = join(f.base, 'interp')
+      mkExecutable(interpreterDir, 'fakenode', '#!/bin/sh\nexec /bin/sh "$@"\n')
+      const launcher = mkExecutable(
+        join(f.base, 'launcher'),
+        'server-cli.js',
+        '#!/usr/bin/env fakenode\necho started-via-interpreter\n',
+      )
+      const containment = await new ContainmentCoordinator({
+        provider: {
+          mode: 'off',
+          status: { mechanism: 'none', available: false, detail: null },
+          appHome: f.appHome,
+        },
+      }).admit('model-child-netless-v1')
+      const result = await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', [launcher])],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
         appHome: f.appHome,
-      },
-    }).admit('model-child-netless-v1')
-    const result = await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', [launcher])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: `${interpreterDir}:/usr/bin:/bin` },
-    })
-    const run = await runWrapper(result.wrapperByName.get('search')!, '')
-    expect(run.exitCode).toBe(0)
-    expect(run.stdout.trim()).toBe('started-via-interpreter')
-  }, 30_000)
+        log,
+        sourceEnv: { PATH: `${interpreterDir}:/usr/bin:/bin` },
+      })
+      const run = await runWrapper(result.wrapperByName.get('search')!, '')
+      expect(run.exitCode).toBe(0)
+      expect(run.stdout.trim()).toBe('started-via-interpreter')
+    },
+    30_000,
+  )
 
-  test('preSpawnVerify rejects a DIFFERENT file swapped into the planned path', async () => {
-    // The pre-fix check was lstat-only (regular file, not a symlink), so
-    // replacing the planned executable with another regular file passed while
-    // the comment claimed "must still be that exact file". Identity is dev/ino.
-    const f = fixture('rfc242-netless-swap-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const result = await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', [server])],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    })
-    await result.preSpawnVerify()
-    // ATOMIC replace, not unlink+recreate: freeing an inode and immediately
-    // creating a file at the same path can hand back the SAME inode number on
-    // Linux, which makes an unlink-based fixture a coin flip (it was, on the
-    // ubuntu shard). Renaming a separately-created file over the path
-    // guarantees a distinct inode — and is the realistic swap anyway.
-    const impostor = mkExecutable(join(f.base, 'mcp'), 'impostor', '#!/bin/sh\necho pwned\n')
-    expect(statSync(impostor).ino).not.toBe(statSync(server).ino)
-    renameSync(impostor, server)
-    await expect(result.preSpawnVerify()).rejects.toThrow(/execution-identity-mismatch/)
-  })
-})
-
-describe('RFC-242 T5 — MCP-authored env is forwarded, not silently policed', () => {
-  test('ordinary lowercase / camelCase keys reach the manifest', async () => {
-    // The first cut ran MCP env through the DAEMON-env allowlist, whose names
-    // must be SCREAMING_CASE, and then hard-failed on the count mismatch. Every
-    // one of these worked before the fence and is refused by no rule.
-    const f = fixture('rfc242-netless-envkeys-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    await materializeClaudeNetlessMcp({
-      mcps: [
-        localMcp('search', [server], {
-          env: {
-            token: 't',
-            apiKey: 'k',
-            PYTHONPATH: '/srv/lib',
-            NODE_OPTIONS: '--max-old-space-size=512',
-          },
-        }),
-      ],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    })
-    const manifest = NetlessSubprocessManifestSchema.parse(
-      JSON.parse(
-        readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
-      ),
-    )
-    expect(manifest.env.token).toBe('t')
-    expect(manifest.env.apiKey).toBe('k')
-    expect(manifest.env.PYTHONPATH).toBe('/srv/lib')
-    expect(manifest.env.NODE_OPTIONS).toBe('--max-old-space-size=512')
-  })
-
-  test('a dynamic-loader key fails closed and the error names the MCP and the key', async () => {
-    // This family is refused because it is read by the CONTAINMENT binary
-    // itself (`bwrap` / `sandbox-exec` receive this environment before the
-    // boundary exists), not because SCREAMING_CASE is a security property.
-    const f = fixture('rfc242-netless-envdeny-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    await expect(
-      materializeClaudeNetlessMcp({
-        mcps: [localMcp('search', [server], { env: { DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib' } })],
+  test.skipIf(process.platform === 'win32')(
+    'preSpawnVerify rejects a DIFFERENT file swapped into the planned path',
+    async () => {
+      // The pre-fix check was lstat-only (regular file, not a symlink), so
+      // replacing the planned executable with another regular file passed while
+      // the comment claimed "must still be that exact file". Identity is dev/ino.
+      const f = fixture('rfc242-netless-swap-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const result = await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', [server])],
         containment,
         runRoot: f.runRoot,
         worktreePath: f.worktreePath,
         appHome: f.appHome,
         log,
         sourceEnv: { PATH: '/usr/bin:/bin' },
-      }),
-    ).rejects.toThrow('/mcp/search/env/DYLD_INSERT_LIBRARIES')
-  })
+      })
+      await result.preSpawnVerify()
+      // ATOMIC replace, not unlink+recreate: freeing an inode and immediately
+      // creating a file at the same path can hand back the SAME inode number on
+      // Linux, which makes an unlink-based fixture a coin flip (it was, on the
+      // ubuntu shard). Renaming a separately-created file over the path
+      // guarantees a distinct inode — and is the realistic swap anyway.
+      const impostor = mkExecutable(join(f.base, 'mcp'), 'impostor', '#!/bin/sh\necho pwned\n')
+      expect(statSync(impostor).ino).not.toBe(statSync(server).ino)
+      renameSync(impostor, server)
+      await expect(result.preSpawnVerify()).rejects.toThrow(/execution-identity-mismatch/)
+    },
+  )
 })
 
-describe('RFC-242 T5 — the task git identity survives the fence', () => {
-  test('RFC-067 identity is carried in the manifest, not inherited', async () => {
-    // `runNetlessSubprocess` REPLACES the child environment, so a fenced MCP
-    // that commits would otherwise use the machine default (or fail against the
-    // private scratch HOME) even though claude itself got the task identity.
-    const f = fixture('rfc242-netless-gitid-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(
-      mkCtx(f, {
-        mcps: [localMcp('search', [server])],
+describe.skipIf(process.platform === 'win32')(
+  'RFC-242 T5 — MCP-authored env is forwarded, not silently policed',
+  () => {
+    test('ordinary lowercase / camelCase keys reach the manifest', async () => {
+      // The first cut ran MCP env through the DAEMON-env allowlist, whose names
+      // must be SCREAMING_CASE, and then hard-failed on the count mismatch. Every
+      // one of these worked before the fence and is refused by no rule.
+      const f = fixture('rfc242-netless-envkeys-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      await materializeClaudeNetlessMcp({
+        mcps: [
+          localMcp('search', [server], {
+            env: {
+              token: 't',
+              apiKey: 'k',
+              PYTHONPATH: '/srv/lib',
+              NODE_OPTIONS: '--max-old-space-size=512',
+            },
+          }),
+        ],
         containment,
-        gitUserName: 'Task Bot',
-        gitUserEmail: 'bot@example.test',
-      }),
-    )
-    expect(plan.cmd.length).toBeGreaterThan(0)
-    const manifest = NetlessSubprocessManifestSchema.parse(
-      JSON.parse(
-        readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
-      ),
-    )
-    expect(manifest.env.GIT_AUTHOR_NAME).toBe('Task Bot')
-    expect(manifest.env.GIT_AUTHOR_EMAIL).toBe('bot@example.test')
-    expect(manifest.env.GIT_COMMITTER_NAME).toBe('Task Bot')
-    expect(manifest.env.GIT_COMMITTER_EMAIL).toBe('bot@example.test')
-  })
-})
-
-describe('RFC-242 T5 — MCP secrets never enter any argv', () => {
-  test('the bwrap boundary carries the env out-of-band', () => {
-    // `--setenv NAME VALUE` put every MCP secret into `/proc/<bwrap>/cmdline`,
-    // which is world-readable — the very exposure that moving MCP env out of
-    // claude's `--mcp-config` was meant to end. bwrap has no `--clearenv` here,
-    // so passing the env to the bwrap PROCESS gives the child the same map.
-    const manifest = NetlessSubprocessManifestSchema.parse({
-      codec: 1,
-      mode: 'mcp',
-      provider: { providerId: 'linux-bwrap', config: { bwrapPath: '/usr/bin/bwrap' } },
-      worktreePath: '/w',
-      scratchPath: '/s',
-      appHome: '/a',
-      realHome: '/h',
-      gitCommonDirs: [],
-      bindReadOnly: [],
-      env: { TOKEN: 'super-secret', HOME: '/s/home', TMPDIR: '/s/tmp' },
-      command: ['/bin/true'],
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
+        appHome: f.appHome,
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin' },
+      })
+      const manifest = NetlessSubprocessManifestSchema.parse(
+        JSON.parse(
+          readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+        ),
+      )
+      expect(manifest.env.token).toBe('t')
+      expect(manifest.env.apiKey).toBe('k')
+      expect(manifest.env.PYTHONPATH).toBe('/srv/lib')
+      expect(manifest.env.NODE_OPTIONS).toBe('--max-old-space-size=512')
     })
-    const args = renderNetlessBwrapArgs(manifest, [])
-    expect(args).not.toContain('--setenv')
-    expect(args.join(' ')).not.toContain('super-secret')
-    // …and the child still RECEIVES it. The Linux boundary is otherwise only
-    // exercised by the gated integration suite, so lock the delivery here: a
-    // bwrap child that silently lost its environment looks exactly like one
-    // that never started.
-    const invocation = renderNetlessInvocation(manifest, [])
-    expect(invocation.cmd[0]).toBe('/usr/bin/bwrap')
-    expect(invocation.cmd.join(' ')).not.toContain('super-secret')
-    expect(invocation.env).toEqual(manifest.env)
-  })
 
-  test('the Seatbelt boundary keeps its out-of-band env too', () => {
-    const manifest = NetlessSubprocessManifestSchema.parse({
-      codec: 1,
-      mode: 'mcp',
-      provider: {
-        providerId: 'macos-seatbelt',
-        config: { sandboxExecPath: '/usr/bin/sandbox-exec' },
-      },
-      worktreePath: '/w',
-      scratchPath: '/s',
-      appHome: '/a',
-      realHome: '/h',
-      gitCommonDirs: [],
-      bindReadOnly: [],
-      env: { TOKEN: 'super-secret', HOME: '/s/home', TMPDIR: '/s/tmp' },
-      command: ['/bin/true'],
+    test('a dynamic-loader key fails closed and the error names the MCP and the key', async () => {
+      // This family is refused because it is read by the CONTAINMENT binary
+      // itself (`bwrap` / `sandbox-exec` receive this environment before the
+      // boundary exists), not because SCREAMING_CASE is a security property.
+      const f = fixture('rfc242-netless-envdeny-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      await expect(
+        materializeClaudeNetlessMcp({
+          mcps: [
+            localMcp('search', [server], { env: { DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib' } }),
+          ],
+          containment,
+          runRoot: f.runRoot,
+          worktreePath: f.worktreePath,
+          appHome: f.appHome,
+          log,
+          sourceEnv: { PATH: '/usr/bin:/bin' },
+        }),
+      ).rejects.toThrow('/mcp/search/env/DYLD_INSERT_LIBRARIES')
     })
-    const invocation = renderNetlessInvocation(manifest, [])
-    expect(invocation.cmd[0]).toBe('/usr/bin/sandbox-exec')
-    expect(invocation.cmd.join(' ')).not.toContain('super-secret')
-    expect(invocation.env).toEqual(manifest.env)
-  })
-})
+  },
+)
 
-describe('RFC-242 T5 — the boundary TRADE is announced per node', () => {
-  test('dropping the runner outer sandbox for the child boundary is warned, never silent', async () => {
-    // Adversarial review P1-2. On a provider that cannot nest (macOS Seatbelt)
-    // the model-child boundary REPLACES the runner's outer one and the child
-    // launcher wraps only the MCP servers — claude's own in-process
-    // Read/Edit/Write lose their platform filesystem boundary. RFC-227 already
-    // makes that trade for the verified opencode server (its write/edit tools
-    // are in-process too, `opencode/packages/opencode/src/tool/write.ts`), so
-    // this is parity rather than a claude-only gap — but it is a TRADE, and the
-    // node log has to say which layer was given up. Linux keeps both layers
-    // (`runner-outer-and-child`) and must therefore NOT warn.
-    const f = fixture('rfc242-netless-trade-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const warnings: string[] = []
-    const capture = {
-      debug: () => {},
-      info: () => {},
-      warn: (msg: string) => warnings.push(msg),
-      error: () => {},
-      child: () => capture,
-    }
-    await getRuntimeDriver('claude-code').buildBusinessSpawn(
-      mkCtx(f, { mcps: [localMcp('search', [server])], containment, log: capture }),
-    )
-    expect(warnings.includes('claude-mcp-netless-outer-dropped')).toBe(
-      containment.spawnTopology === 'provider-child-only',
-    )
-  })
-})
+describe.skipIf(process.platform === 'win32')(
+  'RFC-242 T5 — the task git identity survives the fence',
+  () => {
+    test('RFC-067 identity is carried in the manifest, not inherited', async () => {
+      // `runNetlessSubprocess` REPLACES the child environment, so a fenced MCP
+      // that commits would otherwise use the machine default (or fail against the
+      // private scratch HOME) even though claude itself got the task identity.
+      const f = fixture('rfc242-netless-gitid-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(
+        mkCtx(f, {
+          mcps: [localMcp('search', [server])],
+          containment,
+          gitUserName: 'Task Bot',
+          gitUserEmail: 'bot@example.test',
+        }),
+      )
+      expect(plan.cmd.length).toBeGreaterThan(0)
+      const manifest = NetlessSubprocessManifestSchema.parse(
+        JSON.parse(
+          readFileSync(join(f.runRoot, 'claude-mcp-seal', 'search', 'netless.json'), 'utf8'),
+        ),
+      )
+      expect(manifest.env.GIT_AUTHOR_NAME).toBe('Task Bot')
+      expect(manifest.env.GIT_AUTHOR_EMAIL).toBe('bot@example.test')
+      expect(manifest.env.GIT_COMMITTER_NAME).toBe('Task Bot')
+      expect(manifest.env.GIT_COMMITTER_EMAIL).toBe('bot@example.test')
+    })
+  },
+)
+
+describe.skipIf(process.platform === 'win32')(
+  'RFC-242 T5 — MCP secrets never enter any argv',
+  () => {
+    test('the bwrap boundary carries the env out-of-band', () => {
+      // `--setenv NAME VALUE` put every MCP secret into `/proc/<bwrap>/cmdline`,
+      // which is world-readable — the very exposure that moving MCP env out of
+      // claude's `--mcp-config` was meant to end. bwrap has no `--clearenv` here,
+      // so passing the env to the bwrap PROCESS gives the child the same map.
+      const manifest = NetlessSubprocessManifestSchema.parse({
+        codec: 1,
+        mode: 'mcp',
+        provider: { providerId: 'linux-bwrap', config: { bwrapPath: '/usr/bin/bwrap' } },
+        worktreePath: '/w',
+        scratchPath: '/s',
+        appHome: '/a',
+        realHome: '/h',
+        gitCommonDirs: [],
+        bindReadOnly: [],
+        env: { TOKEN: 'super-secret', HOME: '/s/home', TMPDIR: '/s/tmp' },
+        command: ['/bin/true'],
+      })
+      const args = renderNetlessBwrapArgs(manifest, [])
+      expect(args).not.toContain('--setenv')
+      expect(args.join(' ')).not.toContain('super-secret')
+      // …and the child still RECEIVES it. The Linux boundary is otherwise only
+      // exercised by the gated integration suite, so lock the delivery here: a
+      // bwrap child that silently lost its environment looks exactly like one
+      // that never started.
+      const invocation = renderNetlessInvocation(manifest, [])
+      expect(invocation.cmd[0]).toBe('/usr/bin/bwrap')
+      expect(invocation.cmd.join(' ')).not.toContain('super-secret')
+      expect(invocation.env).toEqual(manifest.env)
+    })
+
+    test('the Seatbelt boundary keeps its out-of-band env too', () => {
+      const manifest = NetlessSubprocessManifestSchema.parse({
+        codec: 1,
+        mode: 'mcp',
+        provider: {
+          providerId: 'macos-seatbelt',
+          config: { sandboxExecPath: '/usr/bin/sandbox-exec' },
+        },
+        worktreePath: '/w',
+        scratchPath: '/s',
+        appHome: '/a',
+        realHome: '/h',
+        gitCommonDirs: [],
+        bindReadOnly: [],
+        env: { TOKEN: 'super-secret', HOME: '/s/home', TMPDIR: '/s/tmp' },
+        command: ['/bin/true'],
+      })
+      const invocation = renderNetlessInvocation(manifest, [])
+      expect(invocation.cmd[0]).toBe('/usr/bin/sandbox-exec')
+      expect(invocation.cmd.join(' ')).not.toContain('super-secret')
+      expect(invocation.env).toEqual(manifest.env)
+    })
+  },
+)
+
+describe.skipIf(process.platform === 'win32')(
+  'RFC-242 T5 — the boundary TRADE is announced per node',
+  () => {
+    test('dropping the runner outer sandbox for the child boundary is warned, never silent', async () => {
+      // Adversarial review P1-2. On a provider that cannot nest (macOS Seatbelt)
+      // the model-child boundary REPLACES the runner's outer one and the child
+      // launcher wraps only the MCP servers — claude's own in-process
+      // Read/Edit/Write lose their platform filesystem boundary. RFC-227 already
+      // makes that trade for the verified opencode server (its write/edit tools
+      // are in-process too, `opencode/packages/opencode/src/tool/write.ts`), so
+      // this is parity rather than a claude-only gap — but it is a TRADE, and the
+      // node log has to say which layer was given up. Linux keeps both layers
+      // (`runner-outer-and-child`) and must therefore NOT warn.
+      const f = fixture('rfc242-netless-trade-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const warnings: string[] = []
+      const capture = {
+        debug: () => {},
+        info: () => {},
+        warn: (msg: string) => warnings.push(msg),
+        error: () => {},
+        child: () => capture,
+      }
+      await getRuntimeDriver('claude-code').buildBusinessSpawn(
+        mkCtx(f, { mcps: [localMcp('search', [server])], containment, log: capture }),
+      )
+      expect(warnings.includes('claude-mcp-netless-outer-dropped')).toBe(
+        containment.spawnTopology === 'provider-child-only',
+      )
+    })
+  },
+)
 
 describe('RFC-242 T5 — a fenced MCP that does not come up is a node failure', () => {
   test('parseUnusableMcpServers reads claude init inventory', () => {
@@ -1114,16 +1180,19 @@ describe('RFC-242 T5 — a fenced MCP that does not come up is a node failure', 
     ).toBeNull()
   })
 
-  test('the driver exposes the fenced server names on the spawn plan', async () => {
-    const f = fixture('rfc242-netless-fencedlist-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(
-      mkCtx(f, { mcps: [localMcp('search', [server]), remoteMcp('api')], containment }),
-    )
-    // Only the fenced (local, wrapped) server — a remote entry has no child.
-    expect(plan.fencedMcpServers).toEqual(['search'])
-  })
+  test.skipIf(process.platform === 'win32')(
+    'the driver exposes the fenced server names on the spawn plan',
+    async () => {
+      const f = fixture('rfc242-netless-fencedlist-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(
+        mkCtx(f, { mcps: [localMcp('search', [server]), remoteMcp('api')], containment }),
+      )
+      // Only the fenced (local, wrapped) server — a remote entry has no child.
+      expect(plan.fencedMcpServers).toEqual(['search'])
+    },
+  )
 
   test('an UNCONSTRAINED node declares no fenced servers (historical behavior kept)', async () => {
     const f = fixture('rfc242-netless-fencedlist-legacy-')
@@ -1143,28 +1212,31 @@ describe('RFC-242 T5 — a fenced MCP that does not come up is a node failure', 
 describe('RFC-242 T5 — buildBusinessSpawn wiring', () => {
   const driver = getRuntimeDriver('claude-code')
 
-  test('a controlled node points --mcp-config at the wrapper, not the raw command', async () => {
-    const f = fixture('rfc242-netless-spawn-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const plan = await driver.buildBusinessSpawn(
-      mkCtx(f, {
-        mcps: [localMcp('search', [server, '--stdio'], { env: { TOKEN: 'secret-token' } })],
-        containment,
-      }),
-    )
+  test.skipIf(process.platform === 'win32')(
+    'a controlled node points --mcp-config at the wrapper, not the raw command',
+    async () => {
+      const f = fixture('rfc242-netless-spawn-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const plan = await driver.buildBusinessSpawn(
+        mkCtx(f, {
+          mcps: [localMcp('search', [server, '--stdio'], { env: { TOKEN: 'secret-token' } })],
+          containment,
+        }),
+      )
 
-    const servers = mcpConfigOf(plan.cmd)
-    const wrapperPath = join(f.runRoot, 'claude-mcp-seal', 'search', 'run')
-    expect(servers.search).toEqual({ command: wrapperPath, args: [] })
-    expect(plan.cmd.join(' ')).not.toContain('secret-token')
-    expect(plan.cmd.join(' ')).not.toContain('--stdio')
-    // The binary seal (T2) and the MCP fence (T5) share one pre-spawn fence.
-    expect(plan.preSpawnVerify).toBeDefined()
-    await plan.preSpawnVerify!()
-    // Diagnostics still describe the node's MCP surface by NAME, unchanged.
-    expect(plan.diagnostics?.mcpKeys).toEqual(['search'])
-  })
+      const servers = mcpConfigOf(plan.cmd)
+      const wrapperPath = join(f.runRoot, 'claude-mcp-seal', 'search', 'run')
+      expect(servers.search).toEqual({ command: wrapperPath, args: [] })
+      expect(plan.cmd.join(' ')).not.toContain('secret-token')
+      expect(plan.cmd.join(' ')).not.toContain('--stdio')
+      // The binary seal (T2) and the MCP fence (T5) share one pre-spawn fence.
+      expect(plan.preSpawnVerify).toBeDefined()
+      await plan.preSpawnVerify!()
+      // Diagnostics still describe the node's MCP surface by NAME, unchanged.
+      expect(plan.diagnostics?.mcpKeys).toEqual(['search'])
+    },
+  )
 
   test('a Bash-granting node keeps the raw command — the outer sandbox wins', async () => {
     // Materialization must agree with businessContainmentProfile above, or the
@@ -1190,29 +1262,32 @@ describe('RFC-242 T5 — buildBusinessSpawn wiring', () => {
     expect(plan.preSpawnVerify).toBeDefined()
   })
 
-  test('a gated node allowlists its own MCP namespaces (dontAsk denies them otherwise)', async () => {
-    // MEASURED against claude 2.1.220 on 2026-07-31: without --allowedTools the
-    // server connects and every tool call comes back
-    // "Permission to use mcp__probe__netprobe has been denied because Claude Code
-    // is running in don't ask mode". With the allowlist the same run returned
-    // NETPROBE_RESULT net=000 AND a working built-in Read — so the flag buys MCP
-    // callability without costing the built-in cwd auto-decision.
-    const f = fixture('rfc242-netless-allowed-')
-    const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
-    const containment = await admitContainment(f.appHome)
-    const plan = await driver.buildBusinessSpawn(
-      mkCtx(f, {
-        mcps: [localMcp('search', [server]), remoteMcp('api')],
-        containment,
-      }),
-    )
-    const at = plan.cmd.indexOf('--allowedTools')
-    expect(at).toBeGreaterThan(-1)
-    // Exactly this node's namespaces — never a broad `mcp__*`.
-    expect(plan.cmd[at + 1]).toBe('mcp__search__*,mcp__api__*')
-    // …and it stays inside the declared-control group, before the model/prompt tail.
-    expect(at).toBeLessThan(plan.cmd.indexOf('--append-system-prompt-file'))
-  })
+  test.skipIf(process.platform === 'win32')(
+    'a gated node allowlists its own MCP namespaces (dontAsk denies them otherwise)',
+    async () => {
+      // MEASURED against claude 2.1.220 on 2026-07-31: without --allowedTools the
+      // server connects and every tool call comes back
+      // "Permission to use mcp__probe__netprobe has been denied because Claude Code
+      // is running in don't ask mode". With the allowlist the same run returned
+      // NETPROBE_RESULT net=000 AND a working built-in Read — so the flag buys MCP
+      // callability without costing the built-in cwd auto-decision.
+      const f = fixture('rfc242-netless-allowed-')
+      const server = mkExecutable(join(f.base, 'mcp'), 'server', '#!/bin/sh\nexit 0\n')
+      const containment = await admitContainment(f.appHome)
+      const plan = await driver.buildBusinessSpawn(
+        mkCtx(f, {
+          mcps: [localMcp('search', [server]), remoteMcp('api')],
+          containment,
+        }),
+      )
+      const at = plan.cmd.indexOf('--allowedTools')
+      expect(at).toBeGreaterThan(-1)
+      // Exactly this node's namespaces — never a broad `mcp__*`.
+      expect(plan.cmd[at + 1]).toBe('mcp__search__*,mcp__api__*')
+      // …and it stays inside the declared-control group, before the model/prompt tail.
+      expect(at).toBeLessThan(plan.cmd.indexOf('--append-system-prompt-file'))
+    },
+  )
 
   test('a gated node with NO MCP emits no allowlist at all', async () => {
     const f = fixture('rfc242-netless-noallow-')
@@ -1384,123 +1459,126 @@ describe('RFC-242 T5 — the runner actually enforces the pre-spawn fence', () =
   }, 30_000)
 })
 
-describe('RFC-242 T5 — the runner fails a node whose fenced MCP never came up', () => {
-  async function seedTask(
-    f: Fixture,
-    nodeRunId: string,
-  ): Promise<ReturnType<typeof createInMemoryDb>> {
-    const db = createInMemoryDb(MIGRATIONS)
-    await db.insert(workflows).values({ id: 'wf-1', name: 'wf-1', definition: '{}' })
-    await db.insert(tasks).values({
-      id: 'task-1',
-      name: 'task-1',
-      workflowId: 'wf-1',
-      workflowSnapshot: '{}',
-      repoPath: f.worktreePath,
-      worktreePath: f.worktreePath,
-      baseBranch: 'main',
-      branch: 'aw/task-1',
-      status: 'running',
-      inputs: '{}',
-      startedAt: 1,
-    })
-    await db
-      .insert(nodeRuns)
-      .values({ id: nodeRunId, taskId: 'task-1', nodeId: 'node-1', status: 'pending' })
-    return db
-  }
-
-  /** A fake runtime that emits ONE claude init line and then a clean output turn. */
-  function fakeRuntime(base: string, mcpStatus: string): string {
-    const init = JSON.stringify({
-      type: 'system',
-      subtype: 'init',
-      session_id: 'sess-1',
-      mcp_servers: [{ name: 'search', status: mcpStatus }],
-    })
-    const answer = JSON.stringify({
-      type: 'assistant',
-      session_id: 'sess-1',
-      message: {
-        id: 'm1',
-        content: [
-          {
-            type: 'text',
-            text: '<workflow-output><port name="result">ok</port></workflow-output>',
-          },
-        ],
-      },
-    })
-    return mkExecutable(
-      join(base, 'fake-runtime'),
-      'runtime',
-      `#!/bin/sh\ncat > /dev/null\nprintf '%s\\n' ${JSON.stringify(init)}\nprintf '%s\\n' ${JSON.stringify(answer)}\nexit 0\n`,
-    )
-  }
-
-  async function runWithMcpStatus(
-    f: Fixture,
-    nodeRunId: string,
-    mcpStatus: string,
-  ): Promise<Awaited<ReturnType<typeof runNode>>> {
-    const db = await seedTask(f, nodeRunId)
-    const original = claudeCodeDriver.buildBusinessSpawn
-    claudeCodeDriver.buildBusinessSpawn = async (): Promise<SpawnPlan> => ({
-      cmd: [fakeRuntime(f.base, mcpStatus)],
-      env: {},
-      stdin: { mode: 'pipe', data: 'x' },
-      fencedMcpServers: ['search'],
-    })
-    try {
-      return await runNode({
-        taskId: 'task-1',
-        nodeRunId,
-        nodeId: 'node-1',
-        agent: mkAgent(),
-        inputs: {},
+describe.skipIf(process.platform === 'win32')(
+  'RFC-242 T5 — the runner fails a node whose fenced MCP never came up',
+  () => {
+    async function seedTask(
+      f: Fixture,
+      nodeRunId: string,
+    ): Promise<ReturnType<typeof createInMemoryDb>> {
+      const db = createInMemoryDb(MIGRATIONS)
+      await db.insert(workflows).values({ id: 'wf-1', name: 'wf-1', definition: '{}' })
+      await db.insert(tasks).values({
+        id: 'task-1',
+        name: 'task-1',
+        workflowId: 'wf-1',
+        workflowSnapshot: '{}',
+        repoPath: f.worktreePath,
         worktreePath: f.worktreePath,
-        templateMeta: {
-          repoPath: f.worktreePath,
-          baseBranch: 'main',
-          taskId: 'task-1',
-          nodeId: 'node-1',
-        },
-        skills: [],
-        appHome: f.appHome,
-        runtime: 'claude-code',
-        runtimeParams: {
-          model: null,
-          variant: null,
-          temperature: null,
-          steps: null,
-          maxSteps: null,
-        },
-        db,
+        baseBranch: 'main',
+        branch: 'aw/task-1',
+        status: 'running',
+        inputs: '{}',
+        startedAt: 1,
       })
-    } finally {
-      claudeCodeDriver.buildBusinessSpawn = original
+      await db
+        .insert(nodeRuns)
+        .values({ id: nodeRunId, taskId: 'task-1', nodeId: 'node-1', status: 'pending' })
+      return db
     }
-  }
 
-  test('a fenced server reported unusable fails the node instead of losing its tools', async () => {
-    // MEASURED shape (design §4.4): claude answers normally with the server's
-    // tools missing and the run ends is_error:false. Before this gate the node
-    // reported DONE — a security fence that silently removes the node's declared
-    // capability is worse than no fence, because nothing surfaces it.
-    const f = fixture('rfc242-netless-mcpdown-')
-    const result = await runWithMcpStatus(f, 'nr-mcp-failed', 'failed')
-    expect(result.status).toBe('failed')
-    expect(result.errorMessage).toContain('mcp-unavailable')
-    expect(result.errorMessage).toContain('search')
-  }, 30_000)
+    /** A fake runtime that emits ONE claude init line and then a clean output turn. */
+    function fakeRuntime(base: string, mcpStatus: string): string {
+      const init = JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'sess-1',
+        mcp_servers: [{ name: 'search', status: mcpStatus }],
+      })
+      const answer = JSON.stringify({
+        type: 'assistant',
+        session_id: 'sess-1',
+        message: {
+          id: 'm1',
+          content: [
+            {
+              type: 'text',
+              text: '<workflow-output><port name="result">ok</port></workflow-output>',
+            },
+          ],
+        },
+      })
+      return mkExecutable(
+        join(base, 'fake-runtime'),
+        'runtime',
+        `#!/bin/sh\ncat > /dev/null\nprintf '%s\\n' ${JSON.stringify(init)}\nprintf '%s\\n' ${JSON.stringify(answer)}\nexit 0\n`,
+      )
+    }
 
-  test('a healthy fenced server runs the node to completion', async () => {
-    const f = fixture('rfc242-netless-mcpup-')
-    const result = await runWithMcpStatus(f, 'nr-mcp-ok', 'connected')
-    expect(result.status).toBe('done')
-    expect(result.outputs.result).toBe('ok')
-  }, 30_000)
-})
+    async function runWithMcpStatus(
+      f: Fixture,
+      nodeRunId: string,
+      mcpStatus: string,
+    ): Promise<Awaited<ReturnType<typeof runNode>>> {
+      const db = await seedTask(f, nodeRunId)
+      const original = claudeCodeDriver.buildBusinessSpawn
+      claudeCodeDriver.buildBusinessSpawn = async (): Promise<SpawnPlan> => ({
+        cmd: [fakeRuntime(f.base, mcpStatus)],
+        env: {},
+        stdin: { mode: 'pipe', data: 'x' },
+        fencedMcpServers: ['search'],
+      })
+      try {
+        return await runNode({
+          taskId: 'task-1',
+          nodeRunId,
+          nodeId: 'node-1',
+          agent: mkAgent(),
+          inputs: {},
+          worktreePath: f.worktreePath,
+          templateMeta: {
+            repoPath: f.worktreePath,
+            baseBranch: 'main',
+            taskId: 'task-1',
+            nodeId: 'node-1',
+          },
+          skills: [],
+          appHome: f.appHome,
+          runtime: 'claude-code',
+          runtimeParams: {
+            model: null,
+            variant: null,
+            temperature: null,
+            steps: null,
+            maxSteps: null,
+          },
+          db,
+        })
+      } finally {
+        claudeCodeDriver.buildBusinessSpawn = original
+      }
+    }
+
+    test('a fenced server reported unusable fails the node instead of losing its tools', async () => {
+      // MEASURED shape (design §4.4): claude answers normally with the server's
+      // tools missing and the run ends is_error:false. Before this gate the node
+      // reported DONE — a security fence that silently removes the node's declared
+      // capability is worse than no fence, because nothing surfaces it.
+      const f = fixture('rfc242-netless-mcpdown-')
+      const result = await runWithMcpStatus(f, 'nr-mcp-failed', 'failed')
+      expect(result.status).toBe('failed')
+      expect(result.errorMessage).toContain('mcp-unavailable')
+      expect(result.errorMessage).toContain('search')
+    }, 30_000)
+
+    test('a healthy fenced server runs the node to completion', async () => {
+      const f = fixture('rfc242-netless-mcpup-')
+      const result = await runWithMcpStatus(f, 'nr-mcp-ok', 'connected')
+      expect(result.status).toBe('done')
+      expect(result.outputs.result).toBe('ok')
+    }, 30_000)
+  },
+)
 
 /** Run a materialized wrapper exactly the way claude forks it: stdio, no args. */
 async function runWrapper(
@@ -1520,42 +1598,47 @@ async function runWrapper(
   return { exitCode, stdout, stderr }
 }
 
-describe('RFC-242 T5 — the wrapper actually executes (stdio passthrough)', () => {
-  test('claude forking the wrapper reaches the real MCP command over inherited stdio', async () => {
-    // This is the property the whole C-1 decision rests on (design §4.1): the
-    // platform sits between claude and the MCP server WITHOUT proxying — the
-    // wrapper re-execs into the netless subcommand which inherits stdio wholesale.
-    // Containment `off` keeps this runnable on any CI host; the boundary itself
-    // is proven by the gated case below.
-    const f = fixture('rfc242-netless-stdio-')
-    const server = mkExecutable(
-      join(f.base, 'mcp'),
-      'server',
-      '#!/bin/sh\nread line\necho "seen:$line token:$TOKEN cwd:$PWD"\n',
-    )
-    const containment = await new ContainmentCoordinator({
-      provider: {
-        mode: 'off',
-        status: { mechanism: 'none', available: false, detail: null },
+describe.skipIf(process.platform === 'win32')(
+  'RFC-242 T5 — the wrapper actually executes (stdio passthrough)',
+  () => {
+    test('claude forking the wrapper reaches the real MCP command over inherited stdio', async () => {
+      // This is the property the whole C-1 decision rests on (design §4.1): the
+      // platform sits between claude and the MCP server WITHOUT proxying — the
+      // wrapper re-execs into the netless subcommand which inherits stdio wholesale.
+      // Containment `off` keeps this runnable on any CI host; the boundary itself
+      // is proven by the gated case below.
+      const f = fixture('rfc242-netless-stdio-')
+      const server = mkExecutable(
+        join(f.base, 'mcp'),
+        'server',
+        '#!/bin/sh\nread line\necho "seen:$line token:$TOKEN cwd:$PWD"\n',
+      )
+      const containment = await new ContainmentCoordinator({
+        provider: {
+          mode: 'off',
+          status: { mechanism: 'none', available: false, detail: null },
+          appHome: f.appHome,
+        },
+      }).admit('model-child-netless-v1')
+
+      const result = await materializeClaudeNetlessMcp({
+        mcps: [localMcp('search', [server], { env: { TOKEN: 'round-trip' } })],
+        containment,
+        runRoot: f.runRoot,
+        worktreePath: f.worktreePath,
         appHome: f.appHome,
-      },
-    }).admit('model-child-netless-v1')
+        log,
+        sourceEnv: { PATH: '/usr/bin:/bin' },
+      })
 
-    const result = await materializeClaudeNetlessMcp({
-      mcps: [localMcp('search', [server], { env: { TOKEN: 'round-trip' } })],
-      containment,
-      runRoot: f.runRoot,
-      worktreePath: f.worktreePath,
-      appHome: f.appHome,
-      log,
-      sourceEnv: { PATH: '/usr/bin:/bin' },
-    })
-
-    const run = await runWrapper(result.wrapperByName.get('search')!, 'hello-from-claude\n')
-    expect(run.exitCode).toBe(0)
-    expect(run.stdout.trim()).toBe(`seen:hello-from-claude token:round-trip cwd:${f.worktreePath}`)
-  }, 30_000)
-})
+      const run = await runWrapper(result.wrapperByName.get('search')!, 'hello-from-claude\n')
+      expect(run.exitCode).toBe(0)
+      expect(run.stdout.trim()).toBe(
+        `seen:hello-from-claude token:round-trip cwd:${f.worktreePath}`,
+      )
+    }, 30_000)
+  },
+)
 
 // Real boundary evidence. Gated because it needs a capable host (and, on Linux,
 // a root-owned bwrap):
