@@ -92,9 +92,20 @@ describe('version registry — record / get / reset', () => {
 describe('probeOpencode seeds the registry', () => {
   test('成功探测（fake 二进制）→ 表里出现该 binary 的版本', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aw-oc-flag-'))
-    const fake = join(dir, 'fake-opencode-118.sh')
-    writeFileSync(fake, '#!/bin/sh\necho "fake-opencode 1.18.2"\n')
-    chmodSync(fake, 0o755)
+    // RFC-254: the version probe spawns this fake as argv[0]. A `#!/bin/sh` file
+    // isn't executable on Windows; a `.cmd` that echoes the version is (the probe
+    // is a one-shot `--version` read, so cmd.exe's line buffering is harmless —
+    // unlike the streaming smoke probe). One-shot output either way.
+    const fake = join(
+      dir,
+      process.platform === 'win32' ? 'fake-opencode-118.cmd' : 'fake-opencode-118.sh',
+    )
+    if (process.platform === 'win32') {
+      writeFileSync(fake, '@echo fake-opencode 1.18.2\r\n')
+    } else {
+      writeFileSync(fake, '#!/bin/sh\necho "fake-opencode 1.18.2"\n')
+      chmodSync(fake, 0o755)
+    }
     const probe = await probeOpencode(fake)
     expect(probe.version).toBe('1.18.2')
     expect(getOpencodeBinaryVersion(fake)).toBe('1.18.2')
