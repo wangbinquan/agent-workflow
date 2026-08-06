@@ -113,6 +113,30 @@ describe('RFC-254 win32 ACL — verifyDaclPrivate', () => {
     })
   })
 
+  // MEASURED on the GitHub windows-latest x64 runner, which runs as the built-in
+  // Administrator (RID 500): every store file's owner ACE serializes as the SDDL
+  // alias `LA`, not the full SID. Without accepting `LA` the primitive rejected
+  // its own owner's grant. `LA`/`DA` are TCB (local root / domain admins).
+  const ADMIN_SID = 'S-1-5-21-1178926710-2200278958-3596451971-500'
+  const RUNNER_SEALED_DACL = 'D:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;LA)'
+
+  test('accepts the RID-500 built-in Administrator whose owner ACE is the alias LA', () => {
+    expect(verifyDaclPrivate(ADMIN_SID, RUNNER_SEALED_DACL)).toEqual({ trusted: true })
+  })
+
+  test('LA/DA count as TCB alongside a normal user with its own full-SID ACE', () => {
+    const dacl = `D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;LA)(A;;FA;;;DA)(A;;FA;;;${USER_SID})`
+    expect(verifyDaclPrivate(USER_SID, dacl)).toEqual({ trusted: true })
+  })
+
+  test('a non-admin user is NOT satisfied by an LA-only owner grant (not our file)', () => {
+    // The user is RID-1000 here, so `LA` is TCB but not the user's own ACE.
+    expect(verifyDaclPrivate(USER_SID, 'D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;LA)')).toEqual({
+      trusted: false,
+      reason: 'not-private',
+    })
+  })
+
   test('fails CLOSED when the SID or DACL could not be read', () => {
     expect(verifyDaclPrivate(null, PRIVATE_DACL)).toEqual({
       trusted: false,

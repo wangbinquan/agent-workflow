@@ -58,6 +58,17 @@ const ADMINISTRATORS_SID = 'S-1-5-32-544'
 /** Their SDDL two-letter aliases, as icacls emits them. */
 const SYSTEM_ALIAS = 'SY'
 const ADMINISTRATORS_ALIAS = 'BA'
+// The built-in Administrator (RID 500) and Domain Admins also serialize to SDDL
+// aliases, NOT full SIDs, in `icacls /save` output. Both are TCB — the built-in
+// Administrator is the local root-equivalent and Domain Admins administer the
+// domain, so a grant to either is not a privacy leak (they can take ownership of
+// anything regardless). MEASURED on the GitHub windows-latest x64 runner, which
+// runs as RID-500: every store file's DACL reads `...(A;;FA;;;LA)` for the user,
+// so without `LA` here the primitive rejected its own owner's ACE as non-private.
+const LOCAL_ADMIN_ALIAS = 'LA'
+const DOMAIN_ADMINS_ALIAS = 'DA'
+/** RID of the built-in Administrator, whose owner ACE serializes as `LA`. */
+const BUILTIN_ADMIN_RID_SUFFIX = '-500'
 
 // Invoke the Windows tools by ABSOLUTE System32 path, never by bare name. Two
 // reasons: (1) a bare `whoami`/`icacls` is a PATH-hijack surface — this is a
@@ -134,11 +145,18 @@ export function verifyDaclPrivate(userSid: string | null, dacl: string | null): 
     SYSTEM_ALIAS,
     ADMINISTRATORS_SID,
     ADMINISTRATORS_ALIAS,
+    LOCAL_ADMIN_ALIAS,
+    DOMAIN_ADMINS_ALIAS,
   ])
+  // When the process runs AS the built-in Administrator (RID 500), the owner's
+  // ACE serializes as `LA`, not the full SID — so `LA` counts as the user's own
+  // grant there. A non-admin user still requires its full-SID ACE (an `LA`-only
+  // DACL is a system-owned file, not ours).
+  const userIsBuiltinAdmin = userSid.endsWith(BUILTIN_ADMIN_RID_SUFFIX)
   let userGranted = false
   for (const sid of parsed.allowSids) {
     if (!allowed.has(sid)) return deny('not-private')
-    if (sid === userSid) userGranted = true
+    if (sid === userSid || (userIsBuiltinAdmin && sid === LOCAL_ADMIN_ALIAS)) userGranted = true
   }
   if (!userGranted) return deny('not-private')
   return trusted
