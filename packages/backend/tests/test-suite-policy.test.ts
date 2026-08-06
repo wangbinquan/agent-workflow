@@ -57,6 +57,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // fixtures). Windows v1 has no provider, so local-MCP test material is a
   // future-provider concern; the remote-identity case still runs on win32.
   'packages/backend/tests/rfc238-mcp-test-execution-material.test.ts#skipIf': 2,
+  // RFC-254 T31: one real-process multi-turn E2E whose mock runtime is an
+  // extensionless JS file launched POSIX-style — not spawnable on win32 (turn 1
+  // never answers → turn 2 ConflictError). Production win32 spawn uses a real
+  // .exe (snapshotExecutableExtension); a win32-runnable mock is E2E-infra work.
+  'packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts#skipIf': 1,
   // RFC-254 T31: one win32-ONLY describe (skipIf non-win32) exercises the two
   // verified-business-plan defects — resolveNetlessGitCommonDirs accepting git-
   // for-Windows's forward-slash --git-common-dir, and snapshotManagedSkillTree
