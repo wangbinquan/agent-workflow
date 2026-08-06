@@ -1,6 +1,7 @@
 # RFC-254 T40b —— win32 file PRIVACY 原语（DACL）
 
-> 状态：**已实现 + 真 ARM64 机验收（大部）**，`2d01bde7`（核心）+`5609ef0e`（封根推广）。
+> 状态：**已完成 + 真 ARM64 机端到端验收（全簇 0 fail）**，`2d01bde7`（核心）+`5609ef0e`
+> （封根推广）+`e01c4464`（末 2 条诊断收口）。
 > T40a（file IDENTITY）已入库 `e804dfff`。**下面 §3–§7 是设计探索期的稿子；实测把方案
 > 修正为「读+验 DACL + 建根即封」的混合，以本节 §0 为准**（§3 的选项 C「纯结构判据」被实测
 > 推翻——见 §0）。
@@ -24,14 +25,17 @@
 - **落点**：`util/win32Acl.ts`（读+验+封，sync/async 双生，共享纯核）；`fileTrust.ts`
   path-aware 隐私变体（注入式 reader，POSIX 双分支可测）；9 调用点接线；hermetic /
   verifiedPlan / verifiedSystemPlan / verifiedManifest 四处建根封点。
-- **真机结果（110 pass / 2 fail 跨簇）**：rfc254-win32-acl 18/0、rfc254-file-trust 29/0、
+- **真机结果（全簇 0 fail，`e01c4464` 收口）**：rfc254-win32-acl 18/0、rfc254-file-trust 29/0、
   rfc254-win32-acl-integration（真 icacls §7 往返）6/0、rfc224-store-hygiene 20/0、
-  rfc224-direct-control-protocol 5/0、rfc224-verified-launcher 21/0；
-  **未竟**：rfc224-opencode-store-recovery 9/**1**（scrub 路径某隐私文件仍在未封子路径）、
-  rfc224-verified-system-plan 2/**1**（throw 于 `buildVerifiedOpencodePlan` 内二进制封检，
-  其 sealRoot 未被现封点覆盖）。正解 = 在 `buildVerifiedOpencodePlan` 入口先于任何子文件封
-  run/store 双根一次；留独立小增量 + 真机复验。
-- **POSIX**：全程 no-op（win32 分支跳过），后端相关套件全绿。
+  rfc224-direct-control-protocol 5/0、rfc224-verified-launcher 21/0、
+  rfc224-opencode-store-recovery 10/0、rfc224-verified-system-plan 2 pass/1 skip、
+  test-suite-policy 5/0。
+- **末 2 条经诊断均非 T40b 隐私问题**（T40b 隐私检查在 win32 全通过，只是各撞下一道 Windows 障碍）：
+  ①recovery scrub = `assertPriorOuterGroupDead` 的 `resolve(p)===p` canonical 守卫 vs 夹具
+  `HOST_SPAWN_PATH` 硬写 POSIX 路径（win32 resolve 前缀盘符），改 `canonicalBinaryPath` ⇒ 10/0；
+  ②system-plan = 该用例走 **bwrap-ENFORCE**（Linux 机制），win32 核心在 manifest 前即
+  `bootstrap-failed`（D1 无隔离 provider），`skipIf(win32)` 且其隐私证明由业务 launcher 路径覆盖。
+- **POSIX**：全程 no-op（win32 分支跳过），后端相关套件全绿。**T40b 至此端到端验收通过。**
 
 ---
 

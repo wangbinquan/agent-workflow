@@ -129,8 +129,8 @@ resolvedSource, platform)`——win32 且调用方路径未带源扩展名时追
   `rfc135-runtimes-status` + `rfc254-file-trust` + `rfc254-snapshot-executable-extension`
   在 Windows 上 **37 pass / 2 skip / 0 fail**（rfc135 此前 8 红），**首个变绿的 Windows
   verified/probe 测试簇**。rfc135 的 `.cmd` 夹具改动随本条一起入库。
-- **T40b · win32 file PRIVACY 原语（DACL）· 已实现 + 真 ARM64 机验收（大部）** ——
-  `2d01bde7`（核心）+`5609ef0e`（封根推广）。`mode` 在 Windows 合成（可写文件恒 0o666 与 ACL
+- **T40b · win32 file PRIVACY 原语（DACL）· 已完成 + 真 ARM64 机端到端验收（全簇 0 fail）** ——
+  `2d01bde7`（核心）+`5609ef0e`（封根推广）+`e01c4464`（末 2 条诊断收口）。`mode` 在 Windows 合成（可写文件恒 0o666 与 ACL
   无关），故隐私证明 = **读文件真实 DACL、断言 allow-ACE 只含 {用户 SID, SYSTEM,
   Administrators}**（`icacls /save` SID-based SDDL，locale 无关；PowerShell Get-Acl 太慢弃用）
   - **建 store/run 根即封** `icacls /inheritance:r /grant *SID:(OI)(CI)F`（子文件继承为私有，
@@ -139,12 +139,13 @@ resolvedSource, platform)`——win32 且调用方路径未带源扩展名时追
     「读+验 DACL」混合，且真机确认 ARM64 无 dlopen ⇒ advapi32-FFI 方案不可行、icacls 是唯一机制**
     （见 design-T40b §0 实测终稿）。加固：whoami/icacls 走绝对 System32 路径防 PATH 劫持；工具缺失
     /不可解析 fail closed。落点 `util/win32Acl.ts` + `fileTrust.ts` path-aware 变体 + 9 调用点 +
-    hermetic/verifiedPlan/verifiedSystemPlan/verifiedManifest 四建根封点。**真机 110 pass / 2 fail
-    跨簇**：win32-acl 18/0、file-trust 29/0、integration（真 icacls 往返）6/0、store-hygiene 20/0、
-    direct-control-protocol 5/0、verified-launcher 21/0；POSIX 相关套件 no-op 全绿。
-    **未竟 2 条（下一小增量）**：`rfc224-opencode-store-recovery` scrub 1 条、
-    `rfc224-verified-system-plan` 二进制封检 1 条——同类（隐私文件在未封子路径），正解 = 在
-    `buildVerifiedOpencodePlan` 入口先于任何子文件创建封 run/store 双根一次（多 builder、封序需细读）。
+    hermetic/verifiedPlan/verifiedSystemPlan/verifiedManifest 四建根封点。**真机全簇 0 fail**：
+    win32-acl 18/0、file-trust 29/0、integration（真 icacls 往返）6/0、store-hygiene 20/0、
+    direct-control-protocol 5/0、verified-launcher 21/0、store-recovery 10/0、
+    verified-system-plan 2/1skip、test-suite-policy 5/0；POSIX 相关套件 no-op 全绿。
+    **末 2 条经诊断均非 T40b 隐私问题**（隐私检查全通过，各撞下一道 Windows 障碍）：recovery scrub =
+    `assertPriorOuterGroupDead` 的 `resolve(p)===p` 守卫 vs 夹具 POSIX 路径 ⇒ 改 `canonicalBinaryPath`；
+    system-plan = bwrap-ENFORCE（Linux）⇒ `skipIf(win32)`，隐私证明由业务 launcher 覆盖。T40b 收口。
 
 ## AC → 测试追踪表
 
