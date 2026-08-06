@@ -54,7 +54,19 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
 
 - **T18** NUL 站点切换（`util/git.ts:1447,1948` + env 3 处）。
 - **T19** `hardenedGitLeadingArgs` win32 追加 `-c core.longpaths=true` + 硬化既有 8 用例的 win32 腿。
-- **T20** 凭据子命令化（D11，**六条义务见 design §6**）：`__git-credential` 子命令须解析 **operation + stdin 协议**（只在精确 host 的 `get` 返回，`store`/`erase` 静默成功）；**host 绑定是硬性迁移义务**（impl-gate P0-2 的防恶意 submodule 收割）；接线 `-c credential.helper= -c credential.helper=!<quoted>`（**先置空**，否则 GCM 抢答）；路径 quoting 覆盖空格/单引号/反斜杠；一次性文件与 redact 链路不变；既有锁 `rfc205-git-credential.test.ts:45` 同步改写。回归必测：递归 submodule 拿不到凭据 / host mismatch / 含空格安装路径（CI windows + 真机双档）。
+- **T20 · 凭据子命令化（D11）· 已完成 + POSIX & 真 Windows 机双档验收** —— `__git-credential`
+  隐藏子命令（`verifiedSelfCommand` 模式）取代 `#!/bin/sh` GIT_ASKPASS helper：解析 operation
+  （argv）+ 字段（stdin），只在 `get` 且 host 精确匹配 lease 时返回 `username=/password=`，
+  `store`/`erase` 静默成功不写日志；host 绑定（impl-gate P0-2 防恶意 submodule 收割）保留，纯函数
+  `computeGitCredentialResponse` 锁定；接线 `leadingArgs = -c credential.helper= -c credential.helper=!<sh-quoted self>`
+  （先置空挡 GCM），仅在带 lease 的 fetch/clone/push 上注入；单引号 quoting 覆盖空格/单引号/反斜杠
+  （Windows 反斜杠路径实测生效）；一次性文件 0600 + cleanup 不变；`rfc205-git-credential.test.ts`
+  重写（纯 host-binding 判据 + env 驱动子命令 + wiring 源锁，不再 spawn `.sh`）。**验收**：POSIX
+  后端全量 9024/0（顺带修 `rfc208-boot-and-external-timeouts` 的 clone/fetch 源锁——leadingArgs
+  多行化）；`git credential fill` 端到端在 **POSIX + 真 Windows 机**均：匹配 host 出 bob/pw123、
+  evil host 拒（真机 HELPER=`!'C:\Users\…\bun.exe' 'run' 'C:\aw\…main.ts' '__git-credential'`
+  反斜杠单引号路径正常执行）。三调用点（gitRepoCache fetch/clone、commitPushRunner push）已接
+  leadingArgs。
 - **T21** doctor 增 ssh/git 前置探测提示；README 前置清单。
 
 ## PR-4 · L6 脚本节点

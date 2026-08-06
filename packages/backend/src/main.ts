@@ -10,6 +10,7 @@
 //   backup   P-5-02
 
 import { appVersion } from './util/version'
+import { runGitCredentialSubcommand } from './services/gitCredential'
 import { backupCommand } from './cli/backup'
 import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
@@ -134,6 +135,19 @@ async function main(): Promise<void> {
       } catch {
         process.exit(125)
       }
+      break
+    }
+
+    case '__git-credential': {
+      // RFC-254 T20 (D11): git credential-helper protocol. `get`/`store`/`erase`
+      // in argv[3]; request fields on stdin. Answers a `get` for the lease host
+      // only (env AW_GIT_CRED_HOST / AW_GIT_CRED_FILE). Silent success otherwise —
+      // never prompts, never logs (a stray log line would land in git's stderr).
+      const operation = Bun.argv[3] ?? ''
+      const stdin = await Bun.stdin.text().catch(() => '')
+      const out = runGitCredentialSubcommand(operation, stdin)
+      if (out.length > 0) process.stdout.write(out)
+      process.exit(0)
       break
     }
 

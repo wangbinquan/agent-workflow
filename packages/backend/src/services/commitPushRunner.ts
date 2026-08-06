@@ -333,9 +333,19 @@ export async function runCommitPush(
     const pushLease = await leasePushCredential(params.taskId)
     let push: Awaited<ReturnType<typeof g>>
     try {
-      push = await runGit(W, ['push', '-u', remote, `${params.repoBranch}:${params.repoBranch}`], {
-        ...(pushLease !== null ? { env: pushLease.env } : {}),
-      })
+      push = await runGit(
+        W,
+        [
+          ...(pushLease?.leadingArgs ?? []),
+          'push',
+          '-u',
+          remote,
+          `${params.repoBranch}:${params.repoBranch}`,
+        ],
+        {
+          ...(pushLease !== null ? { env: pushLease.env } : {}),
+        },
+      )
     } finally {
       pushLease?.cleanup()
     }

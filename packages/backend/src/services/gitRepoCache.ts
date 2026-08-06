@@ -486,10 +486,14 @@ export async function resolveCachedRepo(
         const lease = leaseGitCredential(input.url)
         let r: Awaited<ReturnType<typeof runGit>>
         try {
-          r = await runGit(row.localPath, ['fetch', '--all', '--prune', '--tags'], {
-            timeoutMs,
-            ...(lease !== null ? { env: lease.env } : {}),
-          })
+          r = await runGit(
+            row.localPath,
+            [...(lease?.leadingArgs ?? []), 'fetch', '--all', '--prune', '--tags'],
+            {
+              timeoutMs,
+              ...(lease !== null ? { env: lease.env } : {}),
+            },
+          )
         } finally {
           lease?.cleanup()
         }
@@ -636,7 +640,7 @@ export async function resolveCachedRepo(
     const lease = leaseGitCredential(input.url)
     let r: Awaited<ReturnType<typeof spawnGit>>
     try {
-      r = await spawnGit(cloneArgs, {
+      r = await spawnGit([...(lease?.leadingArgs ?? []), ...cloneArgs], {
         timeoutMs,
         ...(lease !== null ? { env: lease.env } : {}),
       })

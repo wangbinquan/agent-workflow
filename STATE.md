@@ -362,6 +362,20 @@ Administrator** 跑，封根后子文件 DACL 正确（SY+BA+LA、无宽 ACE、�
 `LA` 满足 userGranted）。`windows-platform.yml` 重新启用 live-icacls 隐私簇步、**x64 转绿**。
 **T40b 在 ARM64 目标机与 GitHub x64 runner 上均端到端验收通过、收口。**（backlog 该条已标 RESOLVED。）
 
+**2026-08-06 续 · T20（D11 凭据子命令化）已完成 + POSIX & 真 Windows 机双档验收**：`#!/bin/sh`
+GIT_ASKPASS helper（Windows 无 shebang、不可执行）换成 `__git-credential` 隐藏子命令
+（`verifiedSelfCommand` 模式）——git 用 credential-helper 协议（operation 在 argv、字段走 stdin）
+调它，只在 `get` 且 host 精确匹配 lease 时出 `username=/password=`，`store`/`erase` 静默成功不写
+日志。host 绑定（impl-gate P0-2 防恶意 `.gitmodules` submodule 收割父仓 PAT）保留、纯函数
+`computeGitCredentialResponse` 锁；接线 `leadingArgs = -c credential.helper= -c credential.helper=!<sh-quoted self>`
+（先置空挡 Git-for-Windows 默认 GCM 抢答），仅带 lease 的 fetch/clone/push 注入；单引号 quoting
+覆盖空格/单引号/反斜杠。三调用点接线（gitRepoCache fetch/clone、commitPushRunner push）。
+**验收**：`rfc205-git-credential` 重写（POSIX 11/0、真机 11/0，纯判据 + env 驱动子命令 + wiring 源锁，
+不再 spawn `.sh`）；**`git credential fill` 端到端在 POSIX 与真 Windows 机双档**——匹配 host 出
+bob/pw123、evil host 拒（真机 HELPER=`!'C:\Users\…\bun.exe' 'run' 'C:\aw\…main.ts' '__git-credential'`
+反斜杠单引号路径正常执行，obligation-4 实证）；POSIX 后端全量 **9024/0**（顺带修
+`rfc208-boot-and-external-timeouts` clone/fetch 源锁——leadingArgs 多行化）。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
