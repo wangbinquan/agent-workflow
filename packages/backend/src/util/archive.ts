@@ -25,7 +25,7 @@ import { platformSpawnOptionsForHost } from '@/util/platformExec'
  * (measured on the real machine). Windows' own bsdtar handles drive-letter paths
  * and is the SAME libarchive dialect the macOS CI leg already exercises.
  */
-function tarBin(): string {
+export function tarBin(): string {
   if (process.platform === 'win32') {
     return join(
       process.env.SystemRoot ?? process.env.windir ?? 'C:\\Windows',

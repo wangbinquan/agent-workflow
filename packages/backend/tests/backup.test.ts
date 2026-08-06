@@ -8,7 +8,6 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,6 +16,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createBackup } from '../src/services/backup'
 import { createWorkflow } from '../src/services/workflow'
+import { tarBin } from '../src/util/archive'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -32,12 +33,14 @@ function buildHarness(): Harness {
   return {
     db,
     appHome,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    // RFC-254: appHome holds VACUUM-INTO'd + `new Database()` file-backed sqlite
+    // whose OS handle Windows frees on GC, not close() — bare rm hits EBUSY.
+    cleanup: () => removeTempDirSync(appHome),
   }
 }
 
 async function listTarMembers(tarPath: string): Promise<string[]> {
-  const proc = Bun.spawn(['tar', '-tzf', tarPath], { stdout: 'pipe', stderr: 'pipe' })
+  const proc = Bun.spawn([tarBin(), '-tzf', tarPath], { stdout: 'pipe', stderr: 'pipe' })
   const text = await new Response(proc.stdout).text()
   await proc.exited
   return text
@@ -48,7 +51,10 @@ async function listTarMembers(tarPath: string): Promise<string[]> {
 
 async function extractTar(tarPath: string, dest: string): Promise<void> {
   mkdirSync(dest, { recursive: true })
-  const proc = Bun.spawn(['tar', '-xzf', tarPath, '-C', dest], { stdout: 'pipe', stderr: 'pipe' })
+  const proc = Bun.spawn([tarBin(), '-xzf', tarPath, '-C', dest], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
   const code = await proc.exited
   if (code !== 0) {
     throw new Error(`tar -xzf failed with ${code}: ${await new Response(proc.stderr).text()}`)
