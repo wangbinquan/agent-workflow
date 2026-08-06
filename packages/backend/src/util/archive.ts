@@ -13,7 +13,28 @@
 // `tar` is missing entirely — hence the explicit presence check, which turns a
 // bare ENOENT into something an operator can act on.
 
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+
+/**
+ * RFC-254 T25b: invoke tar by ABSOLUTE `System32\tar.exe` (bsdtar) on win32, not
+ * a bare `tar`. A bare name resolves through PATH, and Git for Windows' GNU tar
+ * comes first in many setups — GNU tar reads an absolute Windows path like
+ * `C:\backups\x.tgz` as an rsh `host:path` and fails "Cannot connect to C:"
+ * (measured on the real machine). Windows' own bsdtar handles drive-letter paths
+ * and is the SAME libarchive dialect the macOS CI leg already exercises.
+ */
+function tarBin(): string {
+  if (process.platform === 'win32') {
+    return join(
+      process.env.SystemRoot ?? process.env.windir ?? 'C:\\Windows',
+      'System32',
+      'tar.exe',
+    )
+  }
+  return 'tar'
+}
 
 /** Create `outPath` as a gzip'd tarball of everything under `srcDir`. `exclude`
  *  paths are relative to `srcDir` (e.g. `.git`) and passed to tar `--exclude`.
@@ -35,7 +56,7 @@ import { platformSpawnOptionsForHost } from '@/util/platformExec'
  */
 let tarProbe: boolean | undefined
 export function tarAvailable(): boolean {
-  tarProbe ??= Bun.which('tar') !== null
+  tarProbe ??= process.platform === 'win32' ? existsSync(tarBin()) : Bun.which('tar') !== null
   return tarProbe
 }
 
@@ -61,7 +82,7 @@ export async function tarGz(
   const excludeArgs = (opts?.exclude ?? []).map((p) => `--exclude=./${p}`)
   let lastError = ''
   for (let attempt = 0; attempt < 2; attempt++) {
-    const proc = Bun.spawn(['tar', '-czf', outPath, '-C', srcDir, ...excludeArgs, '.'], {
+    const proc = Bun.spawn([tarBin(), '-czf', outPath, '-C', srcDir, ...excludeArgs, '.'], {
       ...platformSpawnOptionsForHost(),
       stdout: 'pipe',
       stderr: 'pipe',
@@ -79,7 +100,7 @@ export async function tarGz(
 /** Extract `tarPath` into `destDir` (which must already exist). */
 export async function extractTarGz(tarPath: string, destDir: string): Promise<void> {
   assertTar()
-  const proc = Bun.spawn(['tar', '-xzf', tarPath, '-C', destDir], {
+  const proc = Bun.spawn([tarBin(), '-xzf', tarPath, '-C', destDir], {
     ...platformSpawnOptionsForHost(),
     stdout: 'pipe',
     stderr: 'pipe',

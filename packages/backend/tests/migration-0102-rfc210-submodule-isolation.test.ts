@@ -10,10 +10,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDb } from '@/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 interface ColumnInfo {
   name: string
@@ -32,16 +33,25 @@ function withMigratedDb<T>(fn: (raw: Database) => T): T {
   const dir = mkdtempSync(join(tmpdir(), 'aw-mig-0102-'))
   const dbPath = join(dir, 'test.db')
   try {
-    openDb({ path: dbPath, migrationsFolder: MIGRATIONS_FOLDER })
-    // Reopen raw for PRAGMA introspection; drizzle's handle wraps the same file.
-    const raw = new Database(dbPath, { readwrite: true })
+    const client = openDb({ path: dbPath, migrationsFolder: MIGRATIONS_FOLDER })
     try {
-      return fn(raw)
+      // Reopen raw for PRAGMA introspection; drizzle's handle wraps the same file.
+      const raw = new Database(dbPath, { readwrite: true })
+      try {
+        return fn(raw)
+      } finally {
+        raw.close()
+      }
     } finally {
-      raw.close()
+      // RFC-254: close drizzle's handle too — on Windows a leaked sqlite handle
+      // locks the file, so the `rmSync` below fails with EBUSY (POSIX lets you
+      // unlink an open file; Windows does not).
+      client.$client.close()
     }
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    // RFC-254: on Windows bun:sqlite frees the file handle on GC, not close(), so
+    // a bare rm here hits EBUSY. removeTempDirSync forces a GC then deletes.
+    removeTempDirSync(dir)
   }
 }
 

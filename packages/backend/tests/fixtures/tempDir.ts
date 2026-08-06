@@ -59,6 +59,13 @@ import { rmSync } from 'node:fs'
  * host that cannot delete its own temp directory has a problem worth failing on.
  */
 export function removeTempDirSync(path: string, attempts = 10, delayMs = 100): void {
+  // RFC-254 (measured 2026-08-06): bun:sqlite frees the OS file handle on GC, not
+  // on close() — so on Windows a temp dir holding a just-closed .sqlite refuses to
+  // delete until finalizers run, and NO amount of retry helps (a 2s loop still
+  // failed EBUSY). Forcing a synchronous GC first runs those finalizers and
+  // releases the lock, turning the warn-and-leave fallback below into an actual
+  // delete. Off win32 this is unnecessary (open files unlink), so it is skipped.
+  if (process.platform === 'win32') Bun.gc(true)
   for (let i = 0; i < attempts - 1; i += 1) {
     try {
       rmSync(path, { recursive: true, force: true })

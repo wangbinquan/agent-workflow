@@ -11,7 +11,8 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
@@ -26,7 +27,9 @@ function tmp(): string {
   return d
 }
 afterEach(() => {
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  // RFC-254: on Windows bun:sqlite frees the file handle on GC, not close(), so a
+  // bare rm after close() hits EBUSY. removeTempDirSync forces a GC then deletes.
+  for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
 function sqliteOf(db: DbClient): Database {
