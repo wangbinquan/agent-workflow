@@ -8,24 +8,33 @@
 
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDb } from '@/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 function withMigratedDb<T>(fn: (raw: Database) => T): T {
   const dir = mkdtempSync(join(tmpdir(), 'aw-mig-0104-'))
   const dbPath = join(dir, 'test.db')
   try {
-    openDb({ path: dbPath, migrationsFolder: join(import.meta.dir, '..', 'db', 'migrations') })
+    // RFC-254: capture and close the openDb (drizzle) handle — a discarded
+    // return leaks it, and on Windows bun:sqlite frees the OS handle on GC, not
+    // close(), so the leaked + raw handles keep the dir busy at rm time.
+    const client = openDb({
+      path: dbPath,
+      migrationsFolder: join(import.meta.dir, '..', 'db', 'migrations'),
+    })
     const raw = new Database(dbPath, { readwrite: true })
     try {
       return fn(raw)
     } finally {
       raw.close()
+      ;(client as unknown as { $client: Database }).$client.close()
     }
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    // GCs first so the just-closed (GC-gated on Windows) handles are released.
+    removeTempDirSync(dir)
   }
 }
 

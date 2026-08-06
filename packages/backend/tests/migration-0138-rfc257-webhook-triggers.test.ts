@@ -8,16 +8,18 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-import { rmSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  // RFC-254: dirs hold file-backed sqlite whose handle Windows frees on GC, not
+  // close() — removeTempDirSync GCs first so the rm doesn't EBUSY.
+  for (const dir of tempDirs.splice(0)) removeTempDirSync(dir)
 })
 
 function freshDb(): Database {

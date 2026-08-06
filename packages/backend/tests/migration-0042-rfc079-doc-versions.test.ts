@@ -10,17 +10,20 @@
 
 import { afterAll, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb } from '../src/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const migrationsFolder = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 describe('migration 0042 — RFC-079 doc_versions multi-doc columns', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-mig0042-'))
   const dbPath = join(tmp, 'test.sqlite')
-  afterAll(() => rmSync(tmp, { recursive: true, force: true }))
+  // RFC-254: tmp holds a file-backed sqlite whose handle Windows frees on GC,
+  // not close() — removeTempDirSync GCs first so the rm doesn't EBUSY.
+  afterAll(() => removeTempDirSync(tmp))
 
   test('adds item_index / selection / item_path columns + review-item index', () => {
     openDb({ path: dbPath, migrationsFolder }) // applies through 0042

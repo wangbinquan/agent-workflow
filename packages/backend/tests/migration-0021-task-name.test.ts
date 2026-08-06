@@ -10,6 +10,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -110,12 +111,15 @@ describe('RFC-037 migration 0021 — tasks.name + backfill', () => {
   // Every case builds the pre-0021 boundary itself. The old A → B → C test
   // chain only passed in declaration order and failed under --randomize.
   beforeEach(() => {
+    // RFC-254: prior case's bun:sqlite handle to dbPath is freed on GC not
+    // close() on Windows — this rebuild rm would EBUSY. Force the finalizer.
+    if (process.platform === 'win32') Bun.gc(true)
     rmSync(dbPath, { force: true })
     seeded = seedPre0021(dbPath, prevMigrationsDir)
   })
 
   afterAll(() => {
-    rmSync(tmpDb, { recursive: true, force: true })
+    removeTempDirSync(tmpDb)
     rmSync(prevMigrationsDir, { recursive: true, force: true })
     rmSync(fullMigrationsDir, { recursive: true, force: true })
   })

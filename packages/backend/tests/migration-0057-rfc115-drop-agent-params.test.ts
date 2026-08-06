@@ -32,6 +32,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const PARAM_COLS = ['model', 'variant', 'temperature', 'steps', 'max_steps']
@@ -176,7 +177,8 @@ describe('RFC-115 migration 0057 — DROP agent params (re-homed DBs)', () => {
       ).toThrow()
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      // RFC-254: tmp holds file-backed sqlite (GC-gated handle on Windows) — GC before rm.
+      removeTempDirSync(tmp)
     }
   })
 })
@@ -209,7 +211,8 @@ describe('RFC-115 migration 0057 — pre-drop fail-loud guard (Codex F2)', () =>
       expect(row.model).toBe('anthropic/claude-opus-4-8')
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      // RFC-254: tmp holds file-backed sqlite (GC-gated handle on Windows) — GC before rm.
+      removeTempDirSync(tmp)
     }
   })
 })

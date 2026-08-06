@@ -18,6 +18,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -141,12 +142,15 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
   // Rebuild the v1 boundary for every case so random test order cannot turn
   // these migration assertions into an implicit A → B → C state machine.
   beforeEach(() => {
+    // RFC-254: the prior case's bun:sqlite handle to dbPath is freed on GC, not
+    // close(), on Windows — so this rebuild rm would EBUSY. Force the finalizer.
+    if (process.platform === 'win32') Bun.gc(true)
     rmSync(dbPath, { force: true })
     seededIds = seedV1(dbPath, v1MigrationsDir)
   })
 
   afterAll(() => {
-    rmSync(tmpDb, { recursive: true, force: true })
+    removeTempDirSync(tmpDb)
     rmSync(v1MigrationsDir, { recursive: true, force: true })
     rmSync(v2MigrationsDir, { recursive: true, force: true })
   })
