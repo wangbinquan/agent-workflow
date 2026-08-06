@@ -3,7 +3,7 @@
 // real worktree creation is exercised in tasks.test.ts.
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -125,6 +125,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
     }
   })
 }
+
+// RFC-254: each iteration/merge spawns a real agent (bun run <mock>), slow on Windows;
+// a loop/merge of several exceeds the default 5s. 60s headroom (POSIX unaffected).
+setDefaultTimeout(60_000)
 
 describe('runTask: linear DAG (M1)', () => {
   let h: Harness
