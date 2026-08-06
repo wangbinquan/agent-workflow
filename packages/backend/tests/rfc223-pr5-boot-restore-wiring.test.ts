@@ -21,6 +21,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { createBackup } from '../src/services/backup'
 import { maybePreMigrationBackup } from '../src/services/backupScheduler'
 import { rawCopyDb } from '../src/services/rawDbSnapshot'
@@ -86,7 +87,9 @@ describe('RFC-223 PR-5 boot/restore source ordering', () => {
 
 describe('RFC-223 PR-5 real backup restore modes', () => {
   afterEach(() => {
-    for (const path of tmps.splice(0)) rmSync(path, { recursive: true, force: true })
+    // RFC-254: tmps hold file-backed sqlite whose handle Windows frees on GC, not
+    // close() — removeTempDirSync GCs first so the rm doesn't EBUSY.
+    for (const path of tmps.splice(0)) removeTempDirSync(path)
   })
 
   test('forward restore applies 0116 then migrates restored legacy FS to skill id', async () => {

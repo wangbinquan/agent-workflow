@@ -257,11 +257,22 @@ function renameAndSyncParent(from: string, to: string): void {
   // The two roots are siblings. Persist the directory entry update before the
   // following phase commit so a power loss cannot leave SQLite claiming
   // fs-staged while the rename only lived in the filesystem cache.
+  //
+  // RFC-254: best-effort — Windows (and some other platforms) reject fsync on a
+  // directory fd with EPERM, and openSync of a directory can itself throw there.
+  // The rename is atomic regardless, so tolerate a failed parent-dir sync rather
+  // than aborting the whole migration (mirrors restore.ts `fsyncDir`). Without
+  // this the RFC-223 skill-identity barrier — run on every boot and inside
+  // restore's post-swap chain — dies on Windows before any skill can migrate.
   const parent = dirname(to)
-  const fd = openSync(parent, 'r')
   try {
-    fsyncSync(fd)
-  } finally {
-    closeSync(fd)
+    const fd = openSync(parent, 'r')
+    try {
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    /* best-effort durability — see comment above */
   }
 }
