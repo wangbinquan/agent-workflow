@@ -40,37 +40,48 @@ const manifest = {
   provider: { providerId: 'none', config: {} },
 } as unknown as NetlessSubprocessManifest
 
-describe('resolveNetlessCwd — 采纳 workdir，但只在围栏内', () => {
-  test('未请求 ⇒ 退回工作树（历史行为）', () => {
-    expect(resolveNetlessCwd(manifest, undefined)).toBe(WORKTREE)
-  })
+// RFC-254 T31: POSIX simulation. WORKTREE/SCRATCH are hardcoded POSIX paths
+// (`/tmp/...`) that are not win32-canonical, and the fence exercises netless
+// CHILD cwd/executable resolution (local MCP + sealed shell) — mechanisms
+// Windows v1 does not run (no containment provider → no netless fencing; no
+// sealed shell). The accept-cases fail on win32 (POSIX paths aren't contained
+// under the win32 `contained()` codec) while the reject-cases pass fail-closed;
+// neither is a meaningful win32 assertion. When Windows gains a containment
+// provider these need win32-canonical fixtures. Registered in test-suite-policy.
+describe.skipIf(process.platform === 'win32')(
+  'resolveNetlessCwd — 采纳 workdir，但只在围栏内',
+  () => {
+    test('未请求 ⇒ 退回工作树（历史行为）', () => {
+      expect(resolveNetlessCwd(manifest, undefined)).toBe(WORKTREE)
+    })
 
-  test('工作树的子目录 ⇒ 采纳（这正是 monorepo 的 workdir 用法）', () => {
-    const sub = join(WORKTREE, 'packages', 'x')
-    expect(resolveNetlessCwd(manifest, sub)).toBe(sub)
-  })
+    test('工作树的子目录 ⇒ 采纳（这正是 monorepo 的 workdir 用法）', () => {
+      const sub = join(WORKTREE, 'packages', 'x')
+      expect(resolveNetlessCwd(manifest, sub)).toBe(sub)
+    })
 
-  test('工作树本身 ⇒ 采纳', () => {
-    expect(resolveNetlessCwd(manifest, WORKTREE)).toBe(WORKTREE)
-  })
+    test('工作树本身 ⇒ 采纳', () => {
+      expect(resolveNetlessCwd(manifest, WORKTREE)).toBe(WORKTREE)
+    })
 
-  test('围栏外的绝对路径 ⇒ 拒绝并退回工作树（边界不因此放宽）', () => {
-    expect(resolveNetlessCwd(manifest, '/etc')).toBe(WORKTREE)
-    expect(resolveNetlessCwd(manifest, '/home/aw')).toBe(WORKTREE)
-  })
+    test('围栏外的绝对路径 ⇒ 拒绝并退回工作树（边界不因此放宽）', () => {
+      expect(resolveNetlessCwd(manifest, '/etc')).toBe(WORKTREE)
+      expect(resolveNetlessCwd(manifest, '/home/aw')).toBe(WORKTREE)
+    })
 
-  test('前缀相似但不是后代（worktree-evil）⇒ 拒绝', () => {
-    expect(resolveNetlessCwd(manifest, `${WORKTREE}-evil`)).toBe(WORKTREE)
-  })
+    test('前缀相似但不是后代（worktree-evil）⇒ 拒绝', () => {
+      expect(resolveNetlessCwd(manifest, `${WORKTREE}-evil`)).toBe(WORKTREE)
+    })
 
-  test('相对路径 ⇒ 拒绝（wrapper 只接受绝对 cwd）', () => {
-    expect(resolveNetlessCwd(manifest, 'packages/x')).toBe(WORKTREE)
-  })
+    test('相对路径 ⇒ 拒绝（wrapper 只接受绝对 cwd）', () => {
+      expect(resolveNetlessCwd(manifest, 'packages/x')).toBe(WORKTREE)
+    })
 
-  test('私有 scratch（HOME/TMPDIR 所在）⇒ 采纳，它本就是可写子树', () => {
-    expect(resolveNetlessCwd(manifest, SCRATCH)).toBe(SCRATCH)
-  })
-})
+    test('私有 scratch（HOME/TMPDIR 所在）⇒ 采纳，它本就是可写子树', () => {
+      expect(resolveNetlessCwd(manifest, SCRATCH)).toBe(SCRATCH)
+    })
+  },
+)
 
 // -----------------------------------------------------------------------------
 // 2026-08-04 审计 P1：opencode 的本地 MCP 直接拒绝 PATH token、且不解析解释器链。
@@ -81,7 +92,11 @@ describe('resolveNetlessCwd — 采纳 workdir，但只在围栏内', () => {
 // claude 侧 RFC-242 早已解决这两件事——修法是**共用**那套解析，而不是留一个更弱的第二实现。
 // 两个 helper 因此从 `claudeCode/netlessMcp.ts` 提到运行时中立的 `netlessProjection.ts`。
 // -----------------------------------------------------------------------------
-describe('共享的可执行文件解析（两个运行时同一实现）', () => {
+// RFC-254 T31: POSIX simulation (same rationale as the describe above) — these
+// resolve `#!/bin/sh` interpreter chains and bare PATH tokens for netless
+// children against POSIX fixtures; win32 has no `/bin/sh` and no shebang, and
+// the netless child path is not active on Windows v1. Registered in policy.
+describe.skipIf(process.platform === 'win32')('共享的可执行文件解析（两个运行时同一实现）', () => {
   test('bare PATH token 被解析成绝对规范路径，而不是直接拒绝', async () => {
     const resolved = await canonicalExecutable('sh', { PATH: '/bin:/usr/bin' }, '/tmp')
     expect(isAbsolute(resolved)).toBe(true)

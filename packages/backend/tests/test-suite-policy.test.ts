@@ -47,6 +47,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // `shell` key win32 forbids (SEALED_SHELL_SUPPORTED=false). The win32 digest
   // path is covered for real by rfc254-verified-plan-win32's full-plan build.
   'packages/backend/tests/rfc224-execution-identity.test.ts#skipIf': 1,
+  // RFC-254 T31: two POSIX-simulation describes — netless CHILD cwd/executable
+  // resolution against hardcoded POSIX paths + `/bin/sh` shebangs. Windows v1
+  // runs no netless fencing (no provider) or sealed shell, so these mechanisms
+  // are inactive; win32-canonical fixtures come with a future Windows provider.
+  'packages/backend/tests/netless-workdir-2026-08-04.test.ts#skipIf': 2,
   // RFC-254 T31: one win32-ONLY describe (skipIf non-win32) exercises the two
   // verified-business-plan defects — resolveNetlessGitCommonDirs accepting git-
   // for-Windows's forward-slash --git-common-dir, and snapshotManagedSkillTree
