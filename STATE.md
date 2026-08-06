@@ -325,6 +325,28 @@ Windows 合成（可写文件恒 0o666 与 ACL 无关），privacy 断言仍 win
 簇（batch 09 rfc224 约 19 条）在 Windows 仍红，须读 DACL（advapi32 `GetNamedSecurityInfoW`），含 ARM64
 `bun:ffi dlopen()` 不可用的诚实降级——工作量最大、需独立研究 + 设计门。plan T39/T40a/T40b 已分列。
 
+**2026-08-06 续 · T40b（win32 file PRIVACY，DACL）已实现 + 真 ARM64 机验收（大部）**：
+`2d01bde7`（核心）+`5609ef0e`（封根推广）。**用户纠正「你自己接虚拟机去验证啊」后，直连真机
+（`wangbinquan@10.211.55.3`，Parallels，OpenSSH；`C:\aw` 非 git、tarball overlay + git-bash 跑
+bun test）**，实测驱动把设计从 design-T40b 原稿的「trust-by-construction 结构判据」**修正为
+「读+验 DACL」混合**：判据 = 读文件真实 DACL（`icacls /save` SID-based SDDL，locale 无关、
+~106ms；PowerShell Get-Acl ~1166ms 弃用）、断言 allow-ACE 只含 {用户 SID, SYSTEM,
+Administrators}（授 Everyone 注入 `(A;;FR;;;WD)` 即拒）；+ **建 store/run 根即封**
+`icacls /inheritance:r /grant *SID:(OI)(CI)F`（子文件继承，稳健对抗 `%TEMP%`/GPO 宽 ACE；
+**仅封根**——逐目录封在 boot recovery 多 store 时撞 5s test timeout，实测回退）。**真机三连实证**：
+①本机 Bun 为 **arm64** 构建、`dlopen` 不可用 ⇒ 证实 advapi32-FFI 方案不可行、icacls 唯一机制；
+②真机 tmpdir=`C:\OpenCodeTemp` 默认含 Users/AuthUsers 宽授权（`%USERPROFILE%` 才是 SY+BA+user
+干净）⇒ 必须封根；③git-bash 的 MSYS `whoami` 抢占 ⇒ whoami/icacls 走绝对 System32 路径防 PATH
+劫持。落点 `util/win32Acl.ts`（读+验+封，sync/async 双生 + 纯核）+ `fileTrust.ts` path-aware
+隐私变体（注入式 reader，POSIX 双分支可测）+ 9 调用点 + hermetic/verifiedPlan/verifiedSystemPlan/
+verifiedManifest 四建根封点。**真机 110 pass / 2 fail 跨 verified 隐私簇**：win32-acl 18/0、
+file-trust 29/0、win32-acl-integration（真 icacls §7 往返）6/0、store-hygiene 20/0（此前 19 红）、
+direct-control-protocol 5/0、verified-launcher 21/0；POSIX 后端相关套件 no-op 全绿、typecheck/lint
+全清、RFC-224/227 语义未触信任边界（digest/attestation 不变，只补 win32 隐私证明）。**未竟 2 条
+（下一小增量）**：`rfc224-opencode-store-recovery` scrub 1 + `rfc224-verified-system-plan` 二进制
+封检 1——同类（隐私文件在未封子路径），正解 = `buildVerifiedOpencodePlan` 入口先于任何子文件封
+run/store 双根一次（多 builder、封序需细读）。design-T40b §0 为实测终稿。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。

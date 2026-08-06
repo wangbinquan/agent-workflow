@@ -129,14 +129,22 @@ resolvedSource, platform)`——win32 且调用方路径未带源扩展名时追
   `rfc135-runtimes-status` + `rfc254-file-trust` + `rfc254-snapshot-executable-extension`
   在 Windows 上 **37 pass / 2 skip / 0 fail**（rfc135 此前 8 红），**首个变绿的 Windows
   verified/probe 测试簇**。rfc135 的 `.cmd` 夹具改动随本条一起入库。
-- **T40b · win32 file PRIVACY 原语（DACL，仍待做）**——`assertPrivateRegularFileForHost` /
-  `assertUnopenedPrivateFileForHost` 仍 win32 fail-closed：`mode` 在 Windows 是合成的（可写
-  文件恒报 0o666，与 ACL 无关），必须读 DACL 才能证明「仅属主可读写」。这才是真正需要
-  owner+DACL / Bun FFI 调 advapi32（`GetNamedSecurityInfoW`）的部分，也是 `storeHygiene`
-  隐私检查（batch 09 rfc224 store-hygiene 簇）在 Windows 仍红的根因。**注意** ARM64 Bun 禁用
-  TinyCC ⇒ `bun:ffi dlopen()` 不可用（见 STATE），须带 dlopen 不可用时的诚实降级（要么改用
-  per-user appHome 目录 ACL 继承——`controlListener.ts` 已如此依赖——要么 fail-closed 明示）。
-  工作量最大、需独立研究 + 设计门。**架构决定已落 [design-T40b-win32-privacy.md](design-T40b-win32-privacy.md)**：否决 advapi32-FFI（ARM64 无 dlopen ⇒ 降级后隐私仍 fail-closed，等于没做）与逐文件 icacls（十几次 spawn + 本地化脆），**采 trust-by-construction**——建根一次用 icacls+SID 设受保护 DACL（用户+SYSTEM+Administrators，`(OI)(CI)` 继承），逐文件隐私改结构判据（普通文件 + 词法在封根内 + 非 reparse）。含真机 ACL 往返验收清单，**未过清单不得声称完成/合入**（headless 无法验证 DACL 语义）。
+- **T40b · win32 file PRIVACY 原语（DACL）· 已实现 + 真 ARM64 机验收（大部）** ——
+  `2d01bde7`（核心）+`5609ef0e`（封根推广）。`mode` 在 Windows 合成（可写文件恒 0o666 与 ACL
+  无关），故隐私证明 = **读文件真实 DACL、断言 allow-ACE 只含 {用户 SID, SYSTEM,
+  Administrators}**（`icacls /save` SID-based SDDL，locale 无关；PowerShell Get-Acl 太慢弃用）
+  - **建 store/run 根即封** `icacls /inheritance:r /grant *SID:(OI)(CI)F`（子文件继承为私有，
+    稳健对抗 `%TEMP%`/企业 GPO 宽 ACE），**仅封根**（逐目录封在 boot recovery 多 store 时撞 5s
+    timeout，实测回退）。**实测把设计从 design-T40b 的「trust-by-construction 结构判据」修正为
+    「读+验 DACL」混合，且真机确认 ARM64 无 dlopen ⇒ advapi32-FFI 方案不可行、icacls 是唯一机制**
+    （见 design-T40b §0 实测终稿）。加固：whoami/icacls 走绝对 System32 路径防 PATH 劫持；工具缺失
+    /不可解析 fail closed。落点 `util/win32Acl.ts` + `fileTrust.ts` path-aware 变体 + 9 调用点 +
+    hermetic/verifiedPlan/verifiedSystemPlan/verifiedManifest 四建根封点。**真机 110 pass / 2 fail
+    跨簇**：win32-acl 18/0、file-trust 29/0、integration（真 icacls 往返）6/0、store-hygiene 20/0、
+    direct-control-protocol 5/0、verified-launcher 21/0；POSIX 相关套件 no-op 全绿。
+    **未竟 2 条（下一小增量）**：`rfc224-opencode-store-recovery` scrub 1 条、
+    `rfc224-verified-system-plan` 二进制封检 1 条——同类（隐私文件在未封子路径），正解 = 在
+    `buildVerifiedOpencodePlan` 入口先于任何子文件创建封 run/store 双根一次（多 builder、封序需细读）。
 
 ## AC → 测试追踪表
 

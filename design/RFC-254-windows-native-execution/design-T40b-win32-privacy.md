@@ -1,10 +1,44 @@
-# RFC-254 T40b —— win32 file PRIVACY 原语设计（DACL）
+# RFC-254 T40b —— win32 file PRIVACY 原语（DACL）
 
-> 状态：**Design（待设计门 + 真机验收）**。T40a（file IDENTITY）已入库 `e804dfff`；
-> 本文只覆盖剩下的**隐私**半。实现前须过 Codex 设计门，落地前须在真 Windows 机上做
-> 「ACL 往返验收清单」（见 §7），**不得在无真机验证的情况下合入**——这是 verified 安全
-> 边界，未验证的隐私证明比没有更危险（receipt 说「已验证」而实际零验证，正是本模块要防的
-> 失效）。
+> 状态：**已实现 + 真 ARM64 机验收（大部）**，`2d01bde7`（核心）+`5609ef0e`（封根推广）。
+> T40a（file IDENTITY）已入库 `e804dfff`。**下面 §3–§7 是设计探索期的稿子；实测把方案
+> 修正为「读+验 DACL + 建根即封」的混合，以本节 §0 为准**（§3 的选项 C「纯结构判据」被实测
+> 推翻——见 §0）。
+
+## §0. 实测终稿（drove the design；真 Windows 11 / Bun 1.3.14 **ARM64**，2026-08-06）
+
+真机把设计从「trust-by-construction 结构判据」修正为**更忠实的「读+验 DACL」**：
+
+- **判据 = 读文件真实 DACL、断言 allow-ACE 只含 {当前用户 SID, SYSTEM, Administrators}**。
+  用 `icacls <f> /save`（SID-based SDDL、locale 无关、UTF-16LE，~106ms；PowerShell Get-Acl
+  ~1166ms 太慢）。授 Everyone 注入 `(A;;FR;;;WD)` 即被拒。纯解析 + 白名单判据抽为可测纯核。
+- **建根即封**：`%USERPROFILE%` 下默认 DACL 恰为 SY+BA+user，但 `os.tmpdir()`（真机
+  `C:\OpenCodeTemp`）默认含 Users/AuthUsers 宽授权。故在**建 store/run 根处**用
+  `icacls /inheritance:r /grant *SID:(OI)(CI)F` 封一次，子文件继承为私有（也稳健对抗企业 GPO
+  宽 ACE）。**仅封根**、不逐目录封——逐目录封在 boot recovery 一次建多 store 时 spawn 过多
+  icacls、撞 5s test timeout（实测回退）。
+- **ARM64 确认**：真机 Bun 为 arm64 构建、`dlopen` 不可用 ⇒ **证实 §3 选项 A（advapi32-FFI）
+  不可行**、icacls 子进程是唯一可行机制（x64/arm64 皆可）。
+- **安全加固**：`whoami`/`icacls` 走绝对 `System32` 路径，杜绝 PATH 劫持（真机 git-bash 的
+  MSYS `whoami` 曾抢占，实证）。工具缺失/输出不可解析一律 fail closed。
+- **落点**：`util/win32Acl.ts`（读+验+封，sync/async 双生，共享纯核）；`fileTrust.ts`
+  path-aware 隐私变体（注入式 reader，POSIX 双分支可测）；9 调用点接线；hermetic /
+  verifiedPlan / verifiedSystemPlan / verifiedManifest 四处建根封点。
+- **真机结果（110 pass / 2 fail 跨簇）**：rfc254-win32-acl 18/0、rfc254-file-trust 29/0、
+  rfc254-win32-acl-integration（真 icacls §7 往返）6/0、rfc224-store-hygiene 20/0、
+  rfc224-direct-control-protocol 5/0、rfc224-verified-launcher 21/0；
+  **未竟**：rfc224-opencode-store-recovery 9/**1**（scrub 路径某隐私文件仍在未封子路径）、
+  rfc224-verified-system-plan 2/**1**（throw 于 `buildVerifiedOpencodePlan` 内二进制封检，
+  其 sealRoot 未被现封点覆盖）。正解 = 在 `buildVerifiedOpencodePlan` 入口先于任何子文件封
+  run/store 双根一次；留独立小增量 + 真机复验。
+- **POSIX**：全程 no-op（win32 分支跳过），后端相关套件全绿。
+
+---
+
+## 以下为设计探索期原稿（保留以存论证；实测修正见上 §0）
+
+> 原状态：Design（待设计门 + 真机验收）。**不得在无真机验证的情况下合入**——这是 verified
+> 安全边界，未验证的隐私证明比没有更危险（receipt 说「已验证」而实际零验证）。
 
 ## 1. 问题
 
