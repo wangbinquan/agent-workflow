@@ -502,6 +502,19 @@ setDefaultTimeout，此前偶发 8/1 是 VM 负载超时 flake、60s 消除）�
 的 path-traversal Windows 行为、rfc205 只读 config（Windows 只读属性 vs POSIX mode）、plugins-http fake-npm(.sh)、
 rfc222 isAdminActor 源码 grep（疑并发引入、非 Windows）、RFC-224/227 容器簇、T33–T35。
 
+**2026-08-06 续八 · n-z 再清 4 文件（含 2 个我一度误判「假红」的真 Windows 缺陷）+ 1 生产 helper 修**：真机全绿、一步
+pathspec 提交。①`scheduler-commit-push`(2/0，`50bc518f`)——`makeStub` 的 `.sh` 假 opencode 端口成 `.ts` +
+`opencodeCmd:[process.execPath,'run',stub]`（bun run 流式，非 .cmd）。②`runtime-claude-capture`(4/0，`be26ac8e`，
+**生产 helper 修**)——`sessionCapture.ts cwdSlug` 只换 `/`，Windows `C:\a\b` 原样带 `:` ⇒ `.claude/projects/<slug>`
+非法 mkdir ENOENT；改折叠 `[/\\:]`（best-effort fast path，findSessionDirs 权威；POSIX 可证 no-op）。③`rfc222`(2/0) +`rfc143`(28/0)（`3863e19c`）——**源码守卫 fs 扫描的相对化/白名单匹配用正斜杠**，Windows 反斜杠路径下相对化失效/白名单
+漏配 ⇒ 误报「泄漏」（不是 git-grep 假红——是真 Windows bug）；改 `path.relative`+`replace(/\\/g,'/')` 归一，守卫
+意图不变（POSIX 30/0 仍抓真泄漏）。**教训**：别急着把红判成「假红」——fs 扫描的路径分隔符是真 Windows 隙。**n-z 干净桶
+至此确已扫尽**（EBUSY/mode/超时/路径分隔符/单文件 `.sh`→`.ts`/cwdSlug/源码守卫）。**剩余全属需谨慎/新上下文类**：
+spawn-failed 家族（runtime-smoke/rfc234/runtime-routes——需 runtimeSmoke 命令数组**产品缝** + rfc234 的 detached
+后台进程 Windows 语义，task #2）、RFC-224/227 容器簇（task #3 敏感）、安全（task #12 symlink + rfc107/task-file-content
+路径穿越）、rfc205 只读属性、plugins-http/rfc201（并发占用 pluginInstaller）、route-error-code/rfc064（git-grep 真
+假红——需 git 仓、我 VM overlay 非 git）、T33–T35。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
