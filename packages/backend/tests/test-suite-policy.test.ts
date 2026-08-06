@@ -67,6 +67,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // proof is covered on win32 by the business launcher path. The sibling bwrap-
   // rejection cases in the same file DO run on win32.
   'packages/backend/tests/rfc224-verified-system-plan.test.ts#skipIf': 1,
+  // RFC-254: the process-GROUP kill proof uses a POSIX `sleep` grandchild + a
+  // `pgrep -f` survivor scan (ENOENT on Windows). The Windows descendant-lifetime
+  // guarantee is the Job Object (rfc254-process-tree-ownership win32 branch).
+  'packages/backend/tests/rfc208-unbounded-git-and-permits.test.ts#skipIf': 1,
   'e2e/clarify.spec.ts#skip': 1,
   // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
   // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can

@@ -430,6 +430,31 @@ win32 视觉基线现在**不再被阻塞**——e2e 已能在 Windows 上跑，
 回放 + argv 契约 + Node 兼容守门 + shared 套件 + typecheck + 单二进制与 stub 的
 构建冒烟 + doctor。
 
+## T31 后端红簇诊断续（2026-08-06，真 ARM64 机复测，T40b 后）
+
+T40b 收口后在真机重跑 plan 列的红簇，得当前态（**这些是下一轮 T31 逐簇修的入口**）：
+
+| 簇                                        | fail        | 诊断（根因类型）                                                                                                                                                                                                          |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| rfc253-script-execution                   | 13          | 脚本节点在 Windows（待逐条）                                                                                                                                                                                              |
+| rfc248-materialize-group                  | 10          | 待逐条                                                                                                                                                                                                                    |
+| sandbox-allowback-audit-2026-08-04        | 7           | 待逐条                                                                                                                                                                                                                    |
+| rfc252-git-hardening                      | 6           | **混合**：2 纯函数（依赖 `process.platform`，应注入 platform——`hardenedGitLeadingArgs` 已带该参；win32 合法多带 `core.longpaths`/`autocrlf=false`/`eol=lf`，D18）+ 4 集成（跑真 git + hooks，Windows hook 执行/路径待查） |
+| migration-0102-rfc210-submodule-isolation | 4           | 待逐条                                                                                                                                                                                                                    |
+| task-start-git-identity                   | 3           | `.sh` 假 opencode stub 在 Windows 无法 spawn ⇒ 命令数组 `[bun, stub.ts]` 换缝（同 T31 前端夹具/HOST_SPAWN_PATH 模式）                                                                                                     |
+| rfc213-pre-migration-backup               | 3           | 待逐条                                                                                                                                                                                                                    |
+| rfc205-git-credential                     | 3           | POSIX `mode & 0o777===0o600` 断言 + `GIT_ASKPASS` 含 `libexec` 路径假设（平台感知修）                                                                                                                                     |
+| rfc208-unbounded-git-and-permits          | ~~1~~ **0** | ✅ 已修：进程组 kill 证明用 POSIX `sleep`+`pgrep`（Windows ENOENT）⇒ `skipIf(win32)`，Windows 保证由 Job Object（rfc254-process-tree-ownership win32 分支）覆盖。已登记 test-suite-policy。                               |
+| rfc188-isolated-agent-run                 | **0**       | 已绿（无需改）                                                                                                                                                                                                            |
+
+**共性修法（已在 T39/T40a/T40b 反复用到，下轮直接套）**：①POSIX 专属机制测（`pgrep`/进程组/
+`sleep`）→ `skipIf(win32)` + 登记 policy，Windows 等价保证指向 Job Object/对应 win32 分支；
+②依赖 `process.platform` 的纯函数测 → 注入 platform 双分支断言；③`.sh` 假二进制 → `[bun, stub.ts]`
+命令数组换缝；④POSIX `mode & 0o777` 断言 → 平台感知（win32 走 DACL/结构）；⑤路径字面量假设
+（`/`、`libexec`）→ 平台感知或 `canonicalBinaryPath`/`fileURLToPath`。**真生产缺陷**（非测试）：
+`pluginInstaller.ts:295` `new URL(spec).pathname`（Windows 必 `plugin-file-not-found`，正解
+`fileURLToPath`）——该文件长期被并发 session 占用（uncommitted），按并发保留原则未代改。
+
 ## T32 分类结果（2026-08-05，Windows 11 真机实测）
 
 用 Parallels 上的 Windows 11 虚拟机（`10.211.55.3`）跑后端全量，把「386 条失败」的

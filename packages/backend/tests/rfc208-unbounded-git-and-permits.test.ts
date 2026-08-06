@@ -61,29 +61,38 @@ describe('RFC-208 · runGit must be boundable', () => {
     }
   }, 30_000)
 
-  test('the timeout kills the whole process tree, not just the direct child', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'rfc208-git-'))
-    const marker = `rfc208-marker-${process.pid}-${dir.slice(-8)}`
-    try {
-      await runGit(dir, ['init', '-q', '.'])
-      // The grandchild carries a unique marker in its argv so we can look for
-      // survivors. `util/opencode.ts` learned this the hard way (Codex impl
-      // gate): killing only the direct child leaves a hung wrapper's grandchild
-      // alive and leaking once per call.
-      const started = Date.now()
-      await runGit(dir, ['-c', `alias.awhang=!sleep 30 ${marker}`, 'awhang'], { timeoutMs: 750 })
-      // Guard against a vacuous pass: without a real timeout this call would
-      // simply block the full 30s and the grandchild would be gone by the time
-      // we look for it.
-      expect(Date.now() - started).toBeLessThan(10_000)
+  // RFC-254: this proves the process-GROUP kill via a POSIX `sleep` grandchild
+  // and `pgrep -f` survivor scan — neither exists on Windows (`pgrep` → ENOENT).
+  // The Windows descendant-lifetime guarantee is the Job Object, covered by
+  // rfc254-process-tree-ownership's win32 branch, so no platform loses the
+  // "runaway grandchild is reaped" coverage.
+  test.skipIf(process.platform === 'win32')(
+    'the timeout kills the whole process tree, not just the direct child',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'rfc208-git-'))
+      const marker = `rfc208-marker-${process.pid}-${dir.slice(-8)}`
+      try {
+        await runGit(dir, ['init', '-q', '.'])
+        // The grandchild carries a unique marker in its argv so we can look for
+        // survivors. `util/opencode.ts` learned this the hard way (Codex impl
+        // gate): killing only the direct child leaves a hung wrapper's grandchild
+        // alive and leaking once per call.
+        const started = Date.now()
+        await runGit(dir, ['-c', `alias.awhang=!sleep 30 ${marker}`, 'awhang'], { timeoutMs: 750 })
+        // Guard against a vacuous pass: without a real timeout this call would
+        // simply block the full 30s and the grandchild would be gone by the time
+        // we look for it.
+        expect(Date.now() - started).toBeLessThan(10_000)
 
-      const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', marker] })
-      const out = new TextDecoder().decode(survivors.stdout).trim()
-      expect(out).toBe('')
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  }, 30_000)
+        const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', marker] })
+        const out = new TextDecoder().decode(survivors.stdout).trim()
+        expect(out).toBe('')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    },
+    30_000,
+  )
 
   test('omitting timeoutMs keeps the historical unbounded behavior byte-for-byte', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc208-git-'))
