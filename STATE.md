@@ -608,6 +608,19 @@ registry）、源码守卫路径分隔符（rfc222/rfc143）✓、git-grep 依�
 「POSIX-机制 → skipIf(win32) per D1（Windows v1 无隔离 provider、core 在 bootstrap 前 fail-closed）」vs「真 Windows bug
 （如 killGroup 那种）」——敏感核心（CLAUDE.md 要求动前重跑 qualification 套件），**明确多-session、须 fresh-context 逐簇过**。
 
+**2026-08-06 续十四 · T31 容器簇（task#3）真机抽样诊断——规模远小于预估**：抽 5 个容器/verified 文件真机跑：
+`rfc227-containment-provider` 4/0 ✓、`rfc216-doctor-sandbox` 7/0 ✓、`rfc233-config-containment-mode` 2/0 ✓、
+`rfc233-containment-coordinator` **16/1**、`rfc224-hermetic` **15/4**。**关键发现：容器簇多数已在 Windows 通过**
+（provider/doctor/config-mode 全绿、coordinator/hermetic 绝大多数绿）——73 文件匹配里绝大多数只 import 类型或断言平台无关
+行为，真红是一个**小集合**，两类：①**POSIX-机制**（coordinator「canonical bwrap executable」断言 outer/child 共享 bwrap
+路径——bwrap Linux-only）→ 可 skipIf(win32) per D1（须先取失败详情核实、勿假设，照 续八 教训）；②**`rfc224-hermetic` 4 红
+是「Windows 上受控 env/layout 该长什么样」的连贯设计题**、非孤立 test-fix：(a) config root mode `0o500` 断言（win32 用 ACL
+非 mode 位 → `statMetadataIsAuthoritative` 门，已知 pattern）；(b) `env.PATH === '/usr/bin:/bin'`（win32 受控 PATH 不同——T12
+要含 git 目录，须确认**生产 win32 受控 PATH 真值**再断言，是真行为题）；(c)「rejects a symlinked private root」（Windows
+symlink 建需权限 + 语义差，与 task#12 symlink 安全**交叉**）；(d) xdg-basedir auth 路径（Windows XDG 路径不同）。**task#3 重定级**：
+从「~30–73 文件全红」修正为「多数已过 + 一个小失败集」；bwrap 类 skipIf 可清，hermetic 核心那 4 条须 fresh-context 逐条真机
+核实（敏感 RFC-224 核心、动前重跑 qualification；(b)(c) 是真行为题不是 test 假红——照 killGroup 教训不可假设、须真机逐条查）。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
