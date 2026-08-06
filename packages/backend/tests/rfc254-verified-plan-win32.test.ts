@@ -1,7 +1,7 @@
 // RFC-254 T31 — the verified OpenCode BUSINESS plan build (the Code→Audit→Fix
 // mainline) was ENTIRELY broken on Windows, and neither the acceptance VM nor
-// the suite caught it. Two independent production defects, both in the sensitive
-// RFC-224/227/251 verified core:
+// the suite caught it. THREE independent production defects, all in the sensitive
+// RFC-224/227/251 verified core, each surfaced only by going one layer deeper:
 //
 //   bug #1 — resolveNetlessGitCommonDirs (netlessProjection.ts), called
 //     UNCONDITIONALLY by verifiedPlan.ts (`resolveGitCommonDirs`, "a verified
@@ -16,31 +16,91 @@
 //     not actually seal a directory. Every managed-skill plan failed
 //     `execution-identity-store-unsafe`.
 //
+//   bug #3 — assertRegisteredGitWorktree (netlessProjection.ts), reached only
+//     when the common dir lives OUTSIDE the worktree — i.e. a LINKED worktree,
+//     which is EXACTLY what every real task uses (`git worktree add` per task).
+//     `git worktree list --porcelain` also reports forward-slash on win32, so
+//     the registered path failed the same canonicality check → `store-unsafe`.
+//     The bug #1/#2 sub-function probes used a plain clone and never hit it; the
+//     full-plan sweep below (a real linked worktree) is what caught it.
+//
 // WHY IT WAS INVISIBLE: the acceptance VM's working copy (C:\aw) is a non-git
 // overlay, so no acceptance run ever built a plan in a real repo; AND the
 // rfc224-verified-plan suite FORCES process.platform='darwin' for deterministic
 // POSIX simulation, which gives the real-win32 production path ZERO coverage.
-// Both defects were confirmed AND fixed against real git + real fs on a
-// Windows 11 ARM64 VM by calling the exact production functions with the real
-// (non-forced) platform (STATE 续二十二).
+// All three were confirmed AND fixed against real git + real fs on a Windows 11
+// ARM64 VM by calling the exact production functions with the real (non-forced)
+// platform (STATE 续二十二/续二十三).
 //
 // Two layers of protection, mirroring rfc254-git-windows.test.ts:
-//   1. source anchors that run on every (POSIX) CI leg — a revert of either fix
+//   1. source anchors that run on every (POSIX) CI leg — a revert of any fix
 //      goes red immediately, before any Windows runner exists;
-//   2. a win32-gated runtime test that exercises both fixed functions against
-//      real git + real fs, so the behavior is asserted on the VM today and on
-//      the Windows CI leg once it lands (the forced-darwin suite never will).
+//   2. win32-gated runtime tests that exercise the fixed functions AND the whole
+//      buildVerifiedOpencodeBusinessPlan against real git + real fs, so the
+//      behavior is asserted on the VM today and on the Windows CI leg
+//      (windows-platform.yml) — the forced-darwin suite never will.
 
 import { describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
+import { ContainmentCoordinator } from '@/services/sandbox'
+import { createLogger } from '@/util/log'
+import type { BusinessNodeSpawnContext } from '@/services/runtime/types'
+import {
+  buildVerifiedOpencodeBusinessPlan,
+  type VerifiedBusinessPlanDependencies,
+} from '@/services/runtime/opencode/verifiedPlan'
 import { resolveNetlessGitCommonDirs } from '@/services/runtime/netlessProjection'
 import { snapshotManagedSkillTree } from '@/services/runtime/opencode/sealedInputs'
 
 const src = (path: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
+
+const TEST_BINARY_DIGEST = 'f'.repeat(64)
+
+// The four binary/toolchain seams buildVerifiedOpencodeBusinessPlan depends on,
+// mirrored from rfc224-verified-plan.test.ts so this probe freezes a tiny file
+// instead of copying the host's Bun binary.
+const PLAN_DEPENDENCIES: VerifiedBusinessPlanDependencies = {
+  inspectBinary: async () => ({ resolvedPath: '/runtime/opencode', digest: TEST_BINARY_DIGEST }),
+  snapshotBinary: async ({ snapshotPath }) => {
+    await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
+    await writeFile(snapshotPath, 'official test seam', { flag: 'wx', mode: 0o500 })
+    await chmod(snapshotPath, 0o500)
+    return { resolvedPath: '/runtime/opencode', snapshotPath, digest: TEST_BINARY_DIGEST }
+  },
+  resolveToolchainBinary: (token) => (token === 'bun' ? '/runtime/bun' : null),
+  snapshotToolchainBinary: async ({ snapshotPath }) => {
+    await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
+    await writeFile(snapshotPath, 'bun test seam', { flag: 'wx', mode: 0o500 })
+    await chmod(snapshotPath, 0o500)
+    return { resolvedPath: '/runtime/bun', snapshotPath, digest: 'e'.repeat(64) }
+  },
+}
+
+function probeAgent(): Agent {
+  return {
+    id: 'agent-worker',
+    name: 'worker',
+    description: 'verified worker',
+    outputs: [],
+    syncOutputsOnIterate: true,
+    permission: { bash: 'deny' },
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: 'frozen persona',
+    schemaVersion: 1,
+    createdAt: 0,
+    updatedAt: 0,
+  }
+}
 
 describe('RFC-254 T31 — verified business plan build on Windows (source anchors)', () => {
   test('bug#1: git --git-common-dir output is re-joined onto the host separator', () => {
@@ -51,6 +111,10 @@ describe('RFC-254 T31 — verified business plan build on Windows (source anchor
     // is the exact regression.
     const text = src('services/runtime/netlessProjection.ts')
     expect(text).toContain("common.stdout.trim().split('/').join(sep)")
+    // bug#3 (same root cause, linked-worktree path only): `git worktree list
+    // --porcelain` ALSO reports forward-slash on win32, so the registered path
+    // must be re-joined too or a real (linked-worktree) task aborts store-unsafe.
+    expect(text).toContain("record.slice('worktree '.length).split('/').join(sep)")
   })
 
   test('bug#2: the sealed-tree mode assertion is gated by stat authority + DACL seal', () => {
@@ -110,6 +174,103 @@ describe.skipIf(process.platform !== 'win32')(
         expect(snapshot.skillMarkdown).toContain('test skill')
       } finally {
         rmSync(base, { recursive: true, force: true })
+      }
+    })
+
+    // bug#3+ sweep: the two fixes above prove the SUB-functions. This drives the
+    // WHOLE buildVerifiedOpencodeBusinessPlan against real git + real fs with a
+    // no-containment admission (Windows v1 has no provider — RFC-254 D1 — so
+    // mode:'off' → a 'none' plan is the realistic production containment), which
+    // is the only way to learn whether any OTHER step of the verified mainline
+    // is broken on win32. The forced-darwin suite cannot reach this.
+    test('the whole verified business plan builds on real win32 (no-containment)', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'rfc254-vp-full-'))
+      const originalAuth = process.env.OPENCODE_AUTH_CONTENT
+      try {
+        const appHome = join(root, 'app')
+        const scratchRepo = join(appHome, 'scratch', 'task-1')
+        const worktreePath = join(appHome, 'iso', 'task-1', 'run-full')
+        const runRoot = join(appHome, 'runs', 'task-1', 'run-full')
+        mkdirSync(scratchRepo, { recursive: true })
+        mkdirSync(dirname(worktreePath), { recursive: true })
+
+        const git = (args: string[]): void => {
+          execFileSync('git', args, { stdio: 'ignore' })
+        }
+        git(['init', '-q', '-b', 'main', scratchRepo])
+        writeFileSync(join(scratchRepo, 'README.md'), 'fixture\n')
+        git(['-C', scratchRepo, 'add', 'README.md'])
+        git([
+          '-C',
+          scratchRepo,
+          '-c',
+          'user.email=a@b.c',
+          '-c',
+          'user.name=a',
+          'commit',
+          '-q',
+          '-m',
+          'fixture',
+        ])
+        git(['-C', scratchRepo, 'worktree', 'add', '-q', '--detach', worktreePath, 'HEAD'])
+
+        // Windows has no bwrap/seatbelt; mode:'off' yields the platform-agnostic
+        // 'none' admission that the real Windows daemon would carry today.
+        const containment = await new ContainmentCoordinator({
+          provider: {
+            mode: 'off',
+            status: { mechanism: 'none', available: false, detail: null },
+            appHome,
+          },
+        }).admit('model-child-netless-v1')
+
+        process.env.OPENCODE_AUTH_CONTENT = JSON.stringify({
+          openai: { type: 'api', key: 'test-only-key' },
+        })
+
+        const ctx: BusinessNodeSpawnContext = {
+          agent: probeAgent(),
+          prompt: 'do stable work',
+          injectedMemoryBlock: null,
+          dependents: [],
+          mcps: [],
+          plugins: [],
+          resolvedParamsByAgent: new Map([
+            [
+              'worker',
+              {
+                model: 'openai/gpt-5.6',
+                variant: null,
+                temperature: null,
+                steps: null,
+                maxSteps: null,
+              },
+            ],
+          ]),
+          skills: [],
+          worktreePath,
+          repoWorktreePaths: [worktreePath],
+          runRoot,
+          configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
+          wantsInventory: false,
+          nodeRunId: 'run-full',
+          log: createLogger('rfc254-vp-full-probe'),
+          appHome,
+          taskId: 'task-1',
+          nodeId: 'node-1',
+          opencodeControlNonce: 'c'.repeat(32),
+          opencodeLeaseNonceDigest: 'c'.repeat(64),
+          containment,
+        }
+
+        const plan = await buildVerifiedOpencodeBusinessPlan(ctx, ['opencode'], PLAN_DEPENDENCIES)
+        // A clean OpenCode session plan is the whole point — anything else means
+        // some later step of the mainline is still win32-broken (bug#3+).
+        expect(plan.control?.kind).toBe('opencode-session')
+      } finally {
+        if (originalAuth === undefined) delete process.env.OPENCODE_AUTH_CONTENT
+        else process.env.OPENCODE_AUTH_CONTENT = originalAuth
+        rmSync(root, { recursive: true, force: true })
       }
     })
   },

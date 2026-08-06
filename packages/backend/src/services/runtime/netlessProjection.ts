@@ -120,7 +120,10 @@ export async function assertRegisteredGitWorktree(canonicalRepo: string): Promis
   }
   for (const record of listed.stdout.split('\0')) {
     if (!record.startsWith('worktree ')) continue
-    const registeredPath = record.slice('worktree '.length)
+    // `git worktree list --porcelain` reports forward-slash paths on win32 (as
+    // `--git-common-dir` does); re-join onto the host `sep` before the lexical
+    // canonicality check, which uses the real-OS codec. No-op on POSIX.
+    const registeredPath = record.slice('worktree '.length).split('/').join(sep)
     if (!isLexicallyCanonical(registeredPath)) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
