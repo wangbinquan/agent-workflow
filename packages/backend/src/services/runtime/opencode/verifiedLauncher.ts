@@ -67,6 +67,13 @@ import { buildVerifiedInventorySnapshot, writeVerifiedInventorySnapshot } from '
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 const LISTEN_LINE_RE = /^opencode server listening on http:\/\/127\.0\.0\.1:([1-9]\d{0,4})$/
+// opencode >=1.18 prints benign startup lines to stdout BEFORE the listen line
+// (measured on 1.18.13: `Warning: OPENCODE_SERVER_PASSWORD is not set; server is
+// unsecured.`). The verified server's isolation is the loopback bind + control
+// nonce, not a server password, so that line is benign — but it must not be
+// mistaken for drift. Tolerate a bounded run of pre-listen preamble; post-listen
+// output is still a hard failure (RFC-254 T31: real opencode 1.18.13 drift).
+const MAX_SERVER_PREAMBLE_LINES = 16
 const MAX_SERVER_STDOUT_LINE_BYTES = 1024
 const MAX_SERVER_STDERR_TAIL_BYTES = 64 * 1024
 const SERVER_STOP_GRACE_MS = 2_000
@@ -573,12 +580,21 @@ function monitorServerStdout(stream: ReadableStream<Uint8Array>): StdoutMonitor 
   const ready = deferred<number>()
   const violation = deferred<never>()
   let sawListen = false
+  let preambleLines = 0
   const done = (async () => {
     try {
       for await (const line of boundedUtf8Lines(stream, MAX_SERVER_STDOUT_LINE_BYTES)) {
         if (sawListen) return phaseFailure('execution-identity-bootstrap-failed')
         const match = LISTEN_LINE_RE.exec(line)
-        if (match === null) return phaseFailure('execution-identity-bootstrap-failed')
+        if (match === null) {
+          // Benign pre-listen preamble (see MAX_SERVER_PREAMBLE_LINES): skip a
+          // bounded number of non-listen lines rather than treating the first as
+          // drift. The port is still only ever taken from an exact listen match.
+          if (++preambleLines > MAX_SERVER_PREAMBLE_LINES) {
+            return phaseFailure('execution-identity-bootstrap-failed')
+          }
+          continue
+        }
         const port = Number(match[1])
         if (!Number.isInteger(port) || port < 1 || port > 65_535) {
           return phaseFailure('execution-identity-bootstrap-failed')

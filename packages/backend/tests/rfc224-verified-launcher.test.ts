@@ -605,6 +605,8 @@ function fakeServer(
   extraStdout = '',
   resistTerm = false,
   holdPipes = false,
+  /** Benign lines opencode emits to stdout BEFORE the listen line (RFC-254 T31). */
+  preamble = '',
 ): {
   process: VerifiedLauncherServerProcess
   signals: NodeJS.Signals[]
@@ -617,7 +619,7 @@ function fakeServer(
       stdoutController = controller
       controller.enqueue(
         new TextEncoder().encode(
-          `opencode server listening on http://127.0.0.1:4096\n${extraStdout}`,
+          `${preamble}opencode server listening on http://127.0.0.1:4096\n${extraStdout}`,
         ),
       )
     },
@@ -1150,6 +1152,27 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
     })
     expect(server.signals).toEqual(['SIGTERM'])
     expect(harness.removed).toEqual([])
+  })
+
+  test('benign server stdout preamble BEFORE the listen line is tolerated (opencode >=1.18)', async () => {
+    // RFC-254 T31: opencode 1.18.13 prints `Warning: OPENCODE_SERVER_PASSWORD is
+    // not set; server is unsecured.` to stdout before the listen line. Before the
+    // fix the launcher treated that first non-listen line as bootstrap drift and
+    // aborted every verified run (measured on a real ARM64 VM with glm-5.2).
+    // Post-listen drift (the test above) must still fail; pre-listen preamble is
+    // tolerated up to a bound.
+    const manifest = systemManifest()
+    const client = new FakeClient(manifest.sessionTitle)
+    const server = fakeServer(
+      '',
+      false,
+      false,
+      'Warning: OPENCODE_SERVER_PASSWORD is not set; server is unsecured.\n',
+    )
+    const harness = dependencies(manifest, client, { spawnServer: () => server.process })
+    harness.deps.writeStdout = () => undefined
+    harness.deps.writeStderr = () => undefined
+    await launchVerifiedOpencodeManifest(manifest, harness.deps)
   })
 
   test('run timeout aborts SSE/POST, aborts the session, reaps, and leaves capture store', async () => {
