@@ -473,6 +473,23 @@ resume-multi-repo-rollback/start-task-multi-repo-gates，各 3/2/3/6/3/3）—�
 exit0），`runtime-smoke.test.ts wrapperFor` 的 `#!/bin/sh` 单文件包装 ⇒ win32 改写 `.cmd`（binaryPath 单路径形态
 不变）。POSIX 21/0；**真机全量跑很慢（cmd.exe×21 spawn），结果待 bg 确认**（若通过则提交，rfc234/runtime-routes
 另有各自 stub 机制需单独看）。**剩余**：runtime-smoke 确认 + RFC-224/227 容器核心簇（敏感，另起）+ 零散桶。
+
+**2026-08-06 续六 · n-z 零散桶再清 + 第 5 个生产缺陷 + 一次卷提交事故**：**runtime-smoke `.cmd` 证实死路**——
+真机 6/15，cmd.exe 缓冲把 smoke 的流式事件断掉、15 条卡 30s，已 revert（结论：一次性探测可用 `.cmd`，**流式
+不可**）。**零散桶已修+真机验**：`users-cli`(6/0,EBUSY→removeTempDirSync)、`secret-box`(7/0,mode 断言 host-aware)、
+`rfc165-file-cache-key`(3/0,clone 超时+EBUSY)、`rfc193-force-include`(6/1skip,`:` 非法文件名→skipIf+登记 policy)、
+`opencode-auto-flag-compat`(11/0,一次性版本探测 `.sh`→win32 `.cmd`)、`rfc199-start-task-workflow-race`(13/0,clone
+超时+EBUSY+`git worktree list` 正斜杠断言)（`b2ef9fa9`/`ac5e2391`/`7dce3e7b`）。**第 5 个生产缺陷（`6a771fdb` 内）**：
+`util/process.ts` 的 `pidCommandContainsBinary`+`pidCommandLooksLikeAgentChild`（RFC-108 stale-run 身份门/PID-复用门）
+靠 POSIX `ps`，Windows 无 `ps`⇒ 恒 false ⇒ 身份门形同虚设（回收 PID 可能被误杀）⇒ 抽 `pidCommandLine` win32 走
+PowerShell CIM（rfc108 7/0+rfc098 5/0）。**假红厘清**：`route-error-code-coverage`/`rfc064-source-grep-guards`（需
+git 仓，我 VM overlay `C:\aw` 非 git，真 CI 过）、`no-nul-bytes`（一次性慢扫描）。**⚠️ 卷提交事故**：`git add process.ts`
+后 `git commit`（未带 pathspec）把并发 session **已 staged** 的 webhook-template-var 半成品（8 文件+3 新文件）连同
+process.ts 一起提进 `6a771fdb` 并推了，main 多 7 前端红（对方 mid-work）；用户拍板**保留不动**（工作未丢、对方续修）。
+**纪律纠正**：一律 `git commit -F <msg> -- <精确路径>` 一步走，绝不 `git add`+`git commit`（并发 index 是热的，见
+dev-gotchas §git line 47 已记本次 6a771fdb）。剩余零散半深入（rfc107 path-traversal / rfc130 merge-agent / scheduler
+loop / rfc205 只读 config / plugins-http fake-npm）+ RFC-224/227 容器簇（敏感）+ T33–T35。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
