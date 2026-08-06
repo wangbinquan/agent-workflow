@@ -166,10 +166,12 @@ async function ensurePrivateRunRoot(path: string): Promise<void> {
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
   await chmod(path, 0o700)
-  // RFC-254 T40b: seal to owner+TCB on win32 (mode is synthesized there) with
-  // (OI)(CI) inheritance, so the manifest, control ACK, and sealed inputs written
-  // into this run root all prove private. POSIX relies on the mode above.
-  if (process.platform === 'win32' && !(await sealDirectoryOwnerOnly(path)).trusted) {
+  // RFC-254 T40b: seal to owner+TCB with (OI)(CI) inheritance so the manifest,
+  // control ACK, and sealed inputs written into this run root all prove private on
+  // win32 (mode is synthesized there). `sealDirectoryOwnerOnly` is a no-op off
+  // win32 — POSIX relies on the mode above — so the host-platform branch lives in
+  // that helper, keeping this guarded module free of the platform global (T11c).
+  if (!(await sealDirectoryOwnerOnly(path)).trusted) {
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
 }

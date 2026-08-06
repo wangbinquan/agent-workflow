@@ -250,6 +250,11 @@ export async function assertWindowsFilePrivate(path: string): Promise<FileTrustV
  * Fails closed if the user SID or icacls is unavailable.
  */
 export async function sealDirectoryOwnerOnly(dirPath: string): Promise<FileTrustVerdict> {
+  // Host-frozen: a no-op success off win32, so the guarded plan modules
+  // (verifiedPlan/verifiedSystemPlan/verifiedManifest — forbidden `process.platform`
+  // by RFC-227/T11c) can call it UNCONDITIONALLY and let the platform branch live
+  // here. POSIX keeps its mode-based privacy; no icacls spawn happens there.
+  if (process.platform !== 'win32') return trusted
   const userSid = await getCurrentUserSid()
   if (userSid === null) return deny('platform-unsupported')
   const { code } = await runAsync(ICACLS, [

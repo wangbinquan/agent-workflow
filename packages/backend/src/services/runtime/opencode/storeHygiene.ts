@@ -428,8 +428,9 @@ export async function acquireOpencodeStoreLifecycleLock(
     // RFC-254 T40b: on win32 `chmod 0o700` is a near-noop and the dir inherits
     // whatever DACL its parent carries (e.g. a broad `%TEMP%` grants Users +
     // Authenticated Users). Seal it to owner+TCB with inheritance so the lock and
-    // every store file created below prove private. POSIX keeps the mode above.
-    if (process.platform === 'win32' && !(await sealDirectoryOwnerOnly(storeDir)).trusted) unsafe()
+    // every store file created below prove private. `sealDirectoryOwnerOnly` is a
+    // no-op off win32 (POSIX keeps the mode above).
+    if (!(await sealDirectoryOwnerOnly(storeDir)).trusted) unsafe()
     const lockPath = join(storeDir, OPENCODE_STORE_LOCK_BASENAME)
     const handle = await open(
       lockPath,

@@ -322,10 +322,12 @@ export async function writeVerifiedLaunchManifest(
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
   // RFC-254 T40b: the manifest's directory is created across several plan paths
-  // (business run root, system run dir); seal it to owner+TCB here on win32 so the
-  // manifest inherits a private DACL no matter which path produced it, then the
-  // stat check below verifies it took. POSIX relies on the 0o600 open mode.
-  if (process.platform === 'win32' && !(await sealDirectoryOwnerOnly(dirname(path))).trusted) {
+  // (business run root, system run dir); seal it to owner+TCB so the manifest
+  // inherits a private DACL no matter which path produced it, then the stat check
+  // below verifies it took. `sealDirectoryOwnerOnly` is a no-op off win32 (POSIX
+  // relies on the 0o600 open mode), so the host-platform branch stays inside that
+  // helper — RFC-227 forbids reading the platform global directly in this module.
+  if (!(await sealDirectoryOwnerOnly(dirname(path))).trusted) {
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
   const handle = await open(

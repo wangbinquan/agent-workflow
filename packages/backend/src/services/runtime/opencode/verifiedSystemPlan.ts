@@ -78,9 +78,12 @@ function assertAbsolutePrivateDirectory(path: string): Promise<void> {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
     await chmod(path, 0o700)
-    // RFC-254 T40b: seal to owner+TCB on win32 (mode above is synthesized there)
-    // so the system manifest written into this dir proves private. POSIX no-op.
-    if (process.platform === 'win32' && !(await sealDirectoryOwnerOnly(path)).trusted) {
+    // RFC-254 T40b: seal to owner+TCB so the system manifest written into this dir
+    // proves private on win32 (mode above is synthesized there).
+    // `sealDirectoryOwnerOnly` is a no-op off win32, so the host-platform branch
+    // lives in that helper — this guarded module never reads the platform global
+    // directly (T11c).
+    if (!(await sealDirectoryOwnerOnly(path)).trusted) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
   })()

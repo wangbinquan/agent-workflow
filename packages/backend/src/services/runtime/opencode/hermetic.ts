@@ -368,11 +368,7 @@ async function ensurePrivateDirectory(root: string, path: string): Promise<strin
   // control ACK, and the session db all provably private. Sealing only the root
   // (not each subdir, which is called many times per boot recovery) keeps this off
   // the launch hot path. POSIX relies on the mode. Fails closed if sealing fails.
-  if (
-    process.platform === 'win32' &&
-    resolvedPath === resolvedRoot &&
-    !(await sealDirectoryOwnerOnly(resolvedPath)).trusted
-  ) {
+  if (resolvedPath === resolvedRoot && !(await sealDirectoryOwnerOnly(resolvedPath)).trusted) {
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
   return resolvedPath
