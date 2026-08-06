@@ -61,6 +61,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // the SDDL parsing + whitelist verdict they exercise are covered platform-
   // agnostically by the pure suite rfc254-win32-acl.test.ts.
   'packages/backend/tests/rfc254-win32-acl-integration.test.ts#skipIf': 1,
+  // RFC-254 T40b: one system-plan case builds the plan under bwrap-ENFORCE
+  // containment (a Linux mechanism); on win32 the core fails at bootstrap before
+  // the manifest (D1: no isolation provider on Windows v1). Its manifest-privacy
+  // proof is covered on win32 by the business launcher path. The sibling bwrap-
+  // rejection cases in the same file DO run on win32.
+  'packages/backend/tests/rfc224-verified-system-plan.test.ts#skipIf': 1,
   'e2e/clarify.spec.ts#skip': 1,
   // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
   // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can

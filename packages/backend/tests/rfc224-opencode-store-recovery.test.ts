@@ -45,7 +45,11 @@ import { sealDirectoryOwnerOnly } from '../src/util/win32Acl'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BUILD_DIGEST = 'a'.repeat(64)
-const HOST_SPAWN_PATH = '/opt/agent-workflow/bin/agent-workflow'
+// RFC-254 T40b/T32: canonical per-host (a hardcoded POSIX path fails the
+// recovery `resolve(p)===p` canonical guard on win32, where `resolve('/opt/...')`
+// prepends the drive). This is an incidentally-absolute stand-in host binary
+// path, not a subject-of-test literal, so canonicalizing it is the right fix.
+const HOST_SPAWN_PATH = canonicalBinaryPath('agent-workflow')
 const STORE_UNSAFE = { code: 'execution-identity-store-unsafe' } as const
 const tempRoots: string[] = []
 const materializedStoreRoots: string[] = []

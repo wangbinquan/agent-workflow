@@ -76,105 +76,115 @@ describe('RFC-224 verified system plan', () => {
     expect(await stat(runDir).catch(() => null)).toBeNull()
   })
 
-  test('builds one strict system manifest and hands cleanup ownership to the parent', async () => {
-    const base = root()
-    const worktreePath = join(base, 'worktree')
-    const runDir = join(base, 'run')
-    const appHome = join(base, 'app-home')
-    await mkdir(worktreePath)
-    const containment = await new ContainmentCoordinator({
-      provider: {
-        mode: 'enforce',
-        status: { mechanism: 'bwrap', available: true, detail: null },
-        appHome,
-      },
-      qualifyBwrap: async () => '/usr/bin/bwrap',
-    }).admit('model-child-netless-v1')
-
-    const plan = await buildVerifiedOpencodeSystemPlan(
-      {
-        agentName: 'aw-system',
-        systemPrompt: 'sealed persona',
-        model: 'openai/gpt-5',
-        prompt: 'exact prompt',
-        worktreePath,
-        runDir,
-        appHome,
-        containment,
-      },
-      ['/official/opencode'],
-      {
-        random: (size) => Buffer.alloc(size, 7),
-        sourceEnv: { OPENAI_API_KEY: 'test-only-key' },
-        snapshotBinary: async ({ snapshotPath }) => {
-          await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
-          await writeFile(snapshotPath, 'sealed official fixture', {
-            flag: 'wx',
-            mode: 0o500,
-          })
-          await chmod(snapshotPath, 0o500)
-          return {
-            resolvedPath: '/runtime/opencode',
-            snapshotPath,
-            digest: BUILD.digest,
-          }
+  // RFC-254: this case builds the plan under bwrap-ENFORCE containment
+  // (qualifyBwrap + bwrapPath assertions), which is a Linux mechanism — on win32
+  // the core fails at `execution-identity-bootstrap-failed` (no bwrap) BEFORE it
+  // reaches the manifest, so it cannot run there (D1: no isolation provider on
+  // Windows v1). The manifest-privacy proof this would exercise is covered on
+  // win32 by the business launcher path (rfc224-verified-launcher) instead. The
+  // sibling cases above (bwrap rejection / fail-closed) DO run on win32.
+  test.skipIf(process.platform === 'win32')(
+    'builds one strict system manifest and hands cleanup ownership to the parent',
+    async () => {
+      const base = root()
+      const worktreePath = join(base, 'worktree')
+      const runDir = join(base, 'run')
+      const appHome = join(base, 'app-home')
+      await mkdir(worktreePath)
+      const containment = await new ContainmentCoordinator({
+        provider: {
+          mode: 'enforce',
+          status: { mechanism: 'bwrap', available: true, detail: null },
+          appHome,
         },
-      },
-    )
+        qualifyBwrap: async () => '/usr/bin/bwrap',
+      }).admit('model-child-netless-v1')
 
-    expect(plan.control).toEqual({ kind: 'none' })
-    expect(plan.sessionStore).toMatchObject({ persistent: false })
-    expect(plan.env).toEqual({})
-    expect(plan.cmd).toContain('__opencode-verified-run')
-    const manifestPath = plan.cmd[plan.cmd.indexOf('--manifest') + 1]!
-    const manifest = VerifiedLaunchManifestSchema.parse(
-      JSON.parse(await readFile(manifestPath, 'utf8')),
-    )
-    expect(manifest).toMatchObject({
-      storeKind: 'system-ephemeral',
-      mode: 'new',
-      selectedAgent: 'aw-system',
-      selectedModel: { providerID: 'openai', modelID: 'gpt-5' },
-      prompt: 'exact prompt',
-      binaryDigest: BUILD.digest,
-      fffCapabilityCodec: 1,
-    })
-    expect(manifest.fffProbe).toMatchObject({
-      bwrapPath: '/usr/bin/bwrap',
-      basename: `aw-fff-${'07'.repeat(16)}.txt`,
-    })
-    if (manifest.storeKind !== 'system-ephemeral') {
-      throw new Error('expected system manifest')
-    }
-    const config = manifest.expectedConfig as Record<string, unknown>
-    expect(config.plugin).toEqual([])
-    expect(config.mcp).toEqual({})
-    expect(config.shell).toBe('/bin/false')
-    const agent = (config.agent as Record<string, Record<string, unknown>>)['aw-system']!
-    expect(agent).toMatchObject({
-      prompt: 'sealed persona',
-      model: 'openai/gpt-5',
-      mode: 'primary',
-      hidden: false,
-    })
-    expect(agent.permission).toMatchObject({
-      bash: 'deny',
-      read: 'deny',
-      edit: 'deny',
-      write: 'deny',
-      apply_patch: 'deny',
-      grep: 'deny',
-      glob: 'deny',
-      skill: 'deny',
-      task: 'deny',
-      webfetch: 'deny',
-      websearch: 'deny',
-      lsp: 'deny',
-    })
-    expect(plan.readOnlySubtrees?.length).toBeGreaterThanOrEqual(4)
+      const plan = await buildVerifiedOpencodeSystemPlan(
+        {
+          agentName: 'aw-system',
+          systemPrompt: 'sealed persona',
+          model: 'openai/gpt-5',
+          prompt: 'exact prompt',
+          worktreePath,
+          runDir,
+          appHome,
+          containment,
+        },
+        ['/official/opencode'],
+        {
+          random: (size) => Buffer.alloc(size, 7),
+          sourceEnv: { OPENAI_API_KEY: 'test-only-key' },
+          snapshotBinary: async ({ snapshotPath }) => {
+            await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
+            await writeFile(snapshotPath, 'sealed official fixture', {
+              flag: 'wx',
+              mode: 0o500,
+            })
+            await chmod(snapshotPath, 0o500)
+            return {
+              resolvedPath: '/runtime/opencode',
+              snapshotPath,
+              digest: BUILD.digest,
+            }
+          },
+        },
+      )
 
-    await plan.cleanup?.()
-    expect(await stat(manifestPath).catch(() => null)).toBeNull()
-    expect(await stat(plan.sessionStore!.root).catch(() => null)).toBeNull()
-  })
+      expect(plan.control).toEqual({ kind: 'none' })
+      expect(plan.sessionStore).toMatchObject({ persistent: false })
+      expect(plan.env).toEqual({})
+      expect(plan.cmd).toContain('__opencode-verified-run')
+      const manifestPath = plan.cmd[plan.cmd.indexOf('--manifest') + 1]!
+      const manifest = VerifiedLaunchManifestSchema.parse(
+        JSON.parse(await readFile(manifestPath, 'utf8')),
+      )
+      expect(manifest).toMatchObject({
+        storeKind: 'system-ephemeral',
+        mode: 'new',
+        selectedAgent: 'aw-system',
+        selectedModel: { providerID: 'openai', modelID: 'gpt-5' },
+        prompt: 'exact prompt',
+        binaryDigest: BUILD.digest,
+        fffCapabilityCodec: 1,
+      })
+      expect(manifest.fffProbe).toMatchObject({
+        bwrapPath: '/usr/bin/bwrap',
+        basename: `aw-fff-${'07'.repeat(16)}.txt`,
+      })
+      if (manifest.storeKind !== 'system-ephemeral') {
+        throw new Error('expected system manifest')
+      }
+      const config = manifest.expectedConfig as Record<string, unknown>
+      expect(config.plugin).toEqual([])
+      expect(config.mcp).toEqual({})
+      expect(config.shell).toBe('/bin/false')
+      const agent = (config.agent as Record<string, Record<string, unknown>>)['aw-system']!
+      expect(agent).toMatchObject({
+        prompt: 'sealed persona',
+        model: 'openai/gpt-5',
+        mode: 'primary',
+        hidden: false,
+      })
+      expect(agent.permission).toMatchObject({
+        bash: 'deny',
+        read: 'deny',
+        edit: 'deny',
+        write: 'deny',
+        apply_patch: 'deny',
+        grep: 'deny',
+        glob: 'deny',
+        skill: 'deny',
+        task: 'deny',
+        webfetch: 'deny',
+        websearch: 'deny',
+        lsp: 'deny',
+      })
+      expect(plan.readOnlySubtrees?.length).toBeGreaterThanOrEqual(4)
+
+      await plan.cleanup?.()
+      expect(await stat(manifestPath).catch(() => null)).toBeNull()
+      expect(await stat(plan.sessionStore!.root).catch(() => null)).toBeNull()
+    },
+  )
 })
