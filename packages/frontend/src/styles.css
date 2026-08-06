@@ -12147,65 +12147,99 @@ mark.prior-comment-anchor[data-active='true'] {
   min-height: 0;
   min-width: 0;
 }
-.changes__review-workspace > .changes__outline {
+.changes__review-workspace > .changes__outline-dock {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 clamp(15rem, 24cqi, 22rem);
+  min-height: 0;
+  min-width: 0;
+  gap: 4px;
+}
+/* collapsed: a slim vertical rail — no permanent column footprint */
+.changes__review-workspace > .changes__outline-dock--closed {
+  flex: 0 0 auto;
+}
+.changes__outline-dock-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.changes__outline-dock-toggle:hover {
+  color: var(--fg);
+  border-color: var(--fg-subtle, var(--border));
+}
+.changes__outline-dock--closed .changes__outline-dock-toggle {
+  writing-mode: vertical-rl;
+  flex: none;
+  padding: 8px 4px;
+}
+.changes__outline-dock > .changes__outline {
+  flex: 1 1 0%;
   width: auto;
   max-height: none;
   min-width: 0;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
 }
-.changes__review-workspace > .changes__outline > .structure__group > .structure__group-header {
+.changes__outline-dock > .changes__outline > .structure__group > .structure__group-header {
   padding-left: 0;
   overflow-wrap: anywhere;
 }
-.changes__review-workspace > .changes__outline > .structure__group > .structure__symbols {
+.changes__outline-dock > .changes__outline > .structure__group > .structure__symbols {
   padding-left: 16px;
 }
-.changes__review-workspace > .changes__outline > .changes__outline-imports > .structure__symbols {
+.changes__outline-dock > .changes__outline > .changes__outline-imports > .structure__symbols {
   padding-left: 16px;
 }
-.changes__review-workspace > .changes__outline .structure__symbol {
+.changes__outline-dock > .changes__outline .structure__symbol {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 2px 6px;
   min-width: 0;
 }
-.changes__review-workspace > .changes__outline .structure__symbol-main {
+.changes__outline-dock > .changes__outline .structure__symbol-main {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 8px;
   min-width: 0;
 }
-.changes__review-workspace > .changes__outline .structure__symbol-name {
+.changes__outline-dock > .changes__outline .structure__symbol-name {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.changes__review-workspace > .changes__outline .changes__outline-fold {
+.changes__outline-dock > .changes__outline .changes__outline-fold {
   display: flex;
   width: 100%;
   min-width: 0;
   align-items: flex-start;
   text-align: left;
 }
-.changes__review-workspace > .changes__outline .changes__outline-chevron {
+.changes__outline-dock > .changes__outline .changes__outline-chevron {
   flex: none;
 }
-.changes__review-workspace > .changes__outline .changes__outline-label {
+.changes__outline-dock > .changes__outline .changes__outline-label {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.changes__review-workspace > .changes__outline .changes__outline-count {
+.changes__outline-dock > .changes__outline .changes__outline-count {
   flex: none;
 }
-.changes__review-workspace > .changes__outline .structure__callchain-entry {
+.changes__outline-dock > .changes__outline .structure__callchain-entry {
   grid-column: 2;
   margin-left: 0;
 }
-.changes__review-workspace > .changes__outline .structure__sigdiff,
-.changes__review-workspace > .changes__outline .structure__explain {
+.changes__outline-dock > .changes__outline .structure__sigdiff,
+.changes__outline-dock > .changes__outline .structure__explain {
   grid-column: 1 / -1;
   min-width: 0;
 }
@@ -12647,11 +12681,15 @@ mark.prior-comment-anchor[data-active='true'] {
   .changes__review-workspace {
     flex-direction: column;
   }
-  .changes__review-workspace > .changes__outline {
+  .changes__outline-dock > .changes__outline {
     flex: 0 0 auto;
     width: 100%;
     max-height: 7rem;
     overflow: auto;
+  }
+  /* stacked layout: the collapsed rail reads horizontally */
+  .changes__outline-dock--closed .changes__outline-dock-toggle {
+    writing-mode: horizontal-tb;
   }
 }
 

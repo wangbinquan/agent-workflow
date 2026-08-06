@@ -237,7 +237,9 @@ export function ChangeReviewPanel({
   )
 
   // ---- RFC-258: source navigation session + symbol menu ----
-  const [codeView, setCodeView] = useState<'hunk' | 'full'>('hunk')
+  // Default = the rendered FULL view (user directive 2026-08-06); the hunk
+  // diff is the secondary lens.
+  const [codeView, setCodeView] = useState<'hunk' | 'full'>('full')
   const [fullFocus, setFullFocus] = useState<number | null>(null)
   /** Task-external file rendered read-only in the detail area (breadcrumb is
    *  the only way in/out). */
@@ -264,7 +266,7 @@ export function ChangeReviewPanel({
   const selectFromSidebar = useCallback((key: string) => {
     setSelectedKey(key)
     setExternalFile(null)
-    setCodeView('hunk')
+    setCodeView('full')
     setFullFocus(null)
     setMenu(null)
     dispatchNav({ type: 'clear' })

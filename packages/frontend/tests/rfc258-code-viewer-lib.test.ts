@@ -8,30 +8,47 @@ import { fullFileRanges, foldSegments } from '../src/lib/fullFileRanges'
 import { tokenAt } from '../src/lib/identifierClick'
 import type { HunkInfo } from '../src/lib/changeReview'
 
-const hunk = (
-  oldStart: number,
-  oldCount: number,
-  newStart: number,
-  newCount: number,
-): HunkInfo => ({
-  headerIndex: 0,
-  oldStart,
-  oldCount,
-  newStart,
-  newCount,
-})
+describe('fullFileRanges (body-driven — header newCount includes context, user bug)', () => {
+  // block: header + body rows; hunk covers old 10,4 → new 10,5
+  const LINES = [
+    '@@ -10,4 +10,5 @@',
+    ' ctx one', //      new 10  (context — must NOT be painted)
+    '-old line', //     (base only)
+    '+new line', //     new 11  modified (follows a '-')
+    ' ctx two', //      new 12  context
+    '+pure add', //     new 13  added (no preceding '-')
+    ' ctx three', //    new 14  context
+  ]
+  const HUNK: HunkInfo = { headerIndex: 0, oldStart: 10, oldCount: 4, newStart: 10, newCount: 5 }
 
-describe('fullFileRanges', () => {
-  test('add-only hunk → added; mixed hunk → modified; pure delete dropped', () => {
-    expect(fullFileRanges([hunk(10, 0, 11, 3)])).toEqual([{ start: 11, end: 13, type: 'added' }])
-    expect(fullFileRanges([hunk(5, 2, 5, 4)])).toEqual([{ start: 5, end: 8, type: 'modified' }])
-    expect(fullFileRanges([hunk(9, 3, 9, 0)])).toEqual([])
+  test("only '+' rows paint; context rows never do (2-line diff paints 2 lines)", () => {
+    expect(fullFileRanges(LINES, [HUNK])).toEqual([
+      { start: 11, end: 11, type: 'modified' },
+      { start: 13, end: 13, type: 'added' },
+    ])
+  })
+
+  test('a consecutive +run after a -run is one modified range', () => {
+    const lines = ['@@ -1,2 +1,3 @@', '-a', '-b', '+x', '+y', '+z']
+    const hunk: HunkInfo = { headerIndex: 0, oldStart: 1, oldCount: 2, newStart: 1, newCount: 3 }
+    expect(fullFileRanges(lines, [hunk])).toEqual([{ start: 1, end: 3, type: 'modified' }])
+  })
+
+  test('pure delete paints nothing on the worktree side', () => {
+    const lines = ['@@ -5,2 +5,0 @@', '-gone', '-also gone']
+    const hunk: HunkInfo = { headerIndex: 0, oldStart: 5, oldCount: 2, newStart: 5, newCount: 0 }
+    expect(fullFileRanges(lines, [hunk])).toEqual([])
   })
 
   test('touching ranges merge; mixed types collapse to modified', () => {
-    expect(fullFileRanges([hunk(1, 0, 1, 3), hunk(2, 2, 4, 2)])).toEqual([
-      { start: 1, end: 5, type: 'modified' },
-    ])
+    const lines = [
+      '@@ -1,1 +1,2 @@',
+      '+added one', //  new 1 added
+      '-old', //        base
+      '+changed', //    new 2 modified — touches new 1 → merged modified
+    ]
+    const hunk: HunkInfo = { headerIndex: 0, oldStart: 1, oldCount: 1, newStart: 1, newCount: 2 }
+    expect(fullFileRanges(lines, [hunk])).toEqual([{ start: 1, end: 2, type: 'modified' }])
   })
 })
 

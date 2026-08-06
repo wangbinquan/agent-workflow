@@ -125,44 +125,53 @@ describe('changes pane layout (RFC-239 merged view)', () => {
     expect(codeSurface).toMatch(/min-width:\s*0/)
     expect(codeSurface).toMatch(/min-height:\s*0/)
 
-    const outline = ruleBody('.changes__review-workspace > .changes__outline')
-    expect(outline).toMatch(/flex:\s*0 0 clamp\(15rem,\s*24cqi,\s*22rem\)/)
+    // 2026-08-06: the outline lives inside a collapsible dock — the dock owns
+    // the column clamp; collapsed it shrinks to a slim rail (不常驻占位).
+    const outlineDock = ruleBody('.changes__review-workspace > .changes__outline-dock')
+    expect(outlineDock).toMatch(/flex:\s*0 0 clamp\(15rem,\s*24cqi,\s*22rem\)/)
+    expect(outlineDock).toMatch(/min-height:\s*0/)
+    expect(outlineDock).toMatch(/min-width:\s*0/)
+
+    const outlineDockClosed = ruleBody(
+      '.changes__review-workspace > .changes__outline-dock--closed',
+    )
+    expect(outlineDockClosed).toMatch(/flex:\s*0 0 auto/)
+
+    const outline = ruleBody('.changes__outline-dock > .changes__outline')
     expect(outline).toMatch(/width:\s*auto/)
     expect(outline).toMatch(/max-height:\s*none/)
     expect(outline).toMatch(/overflow-x:\s*hidden/)
     expect(outline).toMatch(/overflow-y:\s*auto/)
 
     const outlineGroupHeader = ruleBody(
-      '.changes__review-workspace > .changes__outline > .structure__group > .structure__group-header',
+      '.changes__outline-dock > .changes__outline > .structure__group > .structure__group-header',
     )
     expect(outlineGroupHeader).toMatch(/padding-left:\s*0/)
 
     const outlineGroupMembers = ruleBody(
-      '.changes__review-workspace > .changes__outline > .structure__group > .structure__symbols',
+      '.changes__outline-dock > .changes__outline > .structure__group > .structure__symbols',
     )
     expect(outlineGroupMembers).toMatch(/padding-left:\s*16px/)
 
-    const outlineSymbol = ruleBody(
-      '.changes__review-workspace > .changes__outline .structure__symbol',
-    )
+    const outlineSymbol = ruleBody('.changes__outline-dock > .changes__outline .structure__symbol')
     expect(outlineSymbol).toMatch(/display:\s*grid/)
     expect(outlineSymbol).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\) auto/)
 
     const outlineSymbolMain = ruleBody(
-      '.changes__review-workspace > .changes__outline .structure__symbol-main',
+      '.changes__outline-dock > .changes__outline .structure__symbol-main',
     )
     expect(outlineSymbolMain).toMatch(/flex-wrap:\s*wrap/)
     expect(outlineSymbolMain).toMatch(/min-width:\s*0/)
 
     const outlineFold = ruleBody(
-      '.changes__review-workspace > .changes__outline .changes__outline-fold',
+      '.changes__outline-dock > .changes__outline .changes__outline-fold',
     )
     expect(outlineFold).toMatch(/width:\s*100%/)
     expect(outlineFold).toMatch(/min-width:\s*0/)
     expect(outlineFold).toMatch(/text-align:\s*left/)
 
     const outlineLabel = ruleBody(
-      '.changes__review-workspace > .changes__outline .changes__outline-label',
+      '.changes__outline-dock > .changes__outline .changes__outline-label',
     )
     expect(outlineLabel).toMatch(/overflow-wrap:\s*anywhere/)
 
@@ -180,7 +189,7 @@ describe('changes pane layout (RFC-239 merged view)', () => {
     expect(anchor).toMatch(/flex:\s*0 0 auto/)
 
     expect(STYLES).toMatch(
-      /@container\s+changes-pane\s*\(max-width:\s*720px\)\s*\{[\s\S]*?\.changes__review-workspace\s*\{[^}]*flex-direction:\s*column[^}]*\}[\s\S]*?\.changes__review-workspace\s*>\s*\.changes__outline\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*100%[^}]*max-height:\s*7rem[^}]*overflow:\s*auto/,
+      /@container\s+changes-pane\s*\(max-width:\s*720px\)\s*\{[\s\S]*?\.changes__review-workspace\s*\{[^}]*flex-direction:\s*column[^}]*\}[\s\S]*?\.changes__outline-dock\s*>\s*\.changes__outline\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*100%[^}]*max-height:\s*7rem[^}]*overflow:\s*auto/,
     )
   })
 

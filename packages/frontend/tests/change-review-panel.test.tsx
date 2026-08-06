@@ -242,8 +242,10 @@ diff --git a/src/x.ts b/src/x.ts
 describe('ChangeReviewPanel — structural degradation + empty states', () => {
   test('structural failure only degrades: banner + plain file rows, diff intact', () => {
     renderPanel({ structuralError: new Error('boom') })
-    expect(screen.getByRole('status').textContent).toMatch(
-      /结构分析不可用|Structural analysis is unavailable/,
+    // the default full view mounts its own role=status loader — find the banner
+    const statuses = screen.getAllByRole('status').map((el) => el.textContent ?? '')
+    expect(statuses.some((s) => /结构分析不可用|Structural analysis is unavailable/.test(s))).toBe(
+      true,
     )
     expect(fileSelectors().length).toBeGreaterThan(0)
   })
@@ -259,11 +261,18 @@ describe('ChangeReviewPanel — structural degradation + empty states', () => {
   })
 })
 
+/** The outline column defaults collapsed (2026-08-06 directive: 不常驻占位) —
+ *  tests that inspect it expand the dock first. */
+const expandOutline = (): void => {
+  fireEvent.click(screen.getByRole('button', { name: /结构大纲|Structure outline/ }))
+}
+
 describe('ChangeReviewPanel — detail pane', () => {
   test('symbol outline renders the changed method with jump affordance; added+safe rows carry no explanation', () => {
     renderPanel({ structuralData: structural() })
     const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
+    expandOutline()
     const outline = screen.getByTestId('symbol-outline')
     expect(within(outline).getByText('run')).toBeTruthy()
     // modified body-only row DOES render an explanation line
@@ -277,6 +286,7 @@ describe('ChangeReviewPanel — detail pane', () => {
     renderPanel({ structuralData: s })
     const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
+    expandOutline()
     expect(screen.getByText(/src\/old\/a\.ts/)).toBeTruthy()
     const entries = screen.getAllByRole('button', { name: /调用链|call chain/i })
     const rowEntry = entries.find((el) => el.classList.contains('structure__callchain-entry'))
@@ -318,6 +328,7 @@ describe('ChangeReviewPanel — all-added top-level fold', () => {
     renderPanel({ structuralData: structural({ files, summary: computeSummary(files, []) }) })
     const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
+    expandOutline()
     const outline = screen.getByTestId('symbol-outline')
     const importsFold = within(outline).getByRole('button', {
       name: /导入变更|Import changes/,
@@ -366,13 +377,42 @@ describe('ChangeReviewPanel — drilldown gating + narrative states', () => {
     const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
 
+    fireEvent.click(screen.getByRole('radio', { name: /改动|Changes/ }))
+    expandOutline()
     const workspace = document.querySelector('.changes__review-workspace')
-    const outline = workspace?.querySelector('[data-testid="symbol-outline"]')
+    const dock = workspace?.querySelector('[data-testid="outline-dock"]')
     const surface = workspace?.querySelector('.changes__review-surface')
     expect(workspace).toBeTruthy()
-    expect(outline).toBe(workspace?.firstElementChild)
-    expect(surface).toBe(outline?.nextElementSibling)
+    expect(dock).toBe(workspace?.firstElementChild)
+    expect(dock?.querySelector('[data-testid="symbol-outline"]')).toBeTruthy()
+    expect(surface).toBe(dock?.nextElementSibling)
     expect(surface?.querySelector('.changes__diff')).toBeTruthy()
+  })
+
+  // 2026-08-06 directive: the outline column must not permanently occupy
+  // width — it boots collapsed (slim rail, no symbol-outline mounted) and the
+  // expanded/collapsed choice persists across file switches.
+  test('outline dock defaults collapsed and persists the toggle across file switches', () => {
+    renderPanel({ structuralData: structural() })
+    const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    fireEvent.click(aTab as HTMLElement)
+    const toggle = screen.getByRole('button', { name: /结构大纲|Structure outline/ })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByTestId('symbol-outline')).toBeNull()
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByTestId('symbol-outline')).toBeTruthy()
+    // switch to another file and back — stays open
+    const bTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/b.ts')
+    if (bTab !== undefined) {
+      fireEvent.click(bTab)
+      fireEvent.click(aTab as HTMLElement)
+      expect(
+        screen
+          .getByRole('button', { name: /结构大纲|Structure outline/ })
+          .getAttribute('aria-expanded'),
+      ).toBe('true')
+    }
   })
 
   test('impact/deps buttons appear only with data; graph opens a FULL-size dialog', () => {
@@ -395,10 +435,12 @@ describe('ChangeReviewPanel — drilldown gating + narrative states', () => {
 describe('ChangeReviewPanel — survives-GC fallback', () => {
   test('text diff missing (410) but structural data present → renders structural-only entries', () => {
     renderPanel({ diff: undefined, structuralData: structural() })
+    fireEvent.click(screen.getByRole('radio', { name: /改动|Changes/ }))
     // the structural-only entry appears in the sidebar; its detail pane notes
     // the missing text diff instead of dead-ending on a loading state
     const tab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     expect(tab).toBeTruthy()
+    expandOutline()
     expect(screen.getByTestId('symbol-outline')).toBeTruthy()
     expect(screen.getByText(/文本 diff|text diff/i)).toBeTruthy()
   })
@@ -494,16 +536,15 @@ describe('RFC-250 ChangeReview semantic boundaries', () => {
 })
 
 describe('RFC-258 — full-file view + line-level impact jumps', () => {
-  test('code files get the 改动/全文 Segmented; switching renders the CodeViewer shell', async () => {
+  test('code files DEFAULT to the full rendered view; 改动 switches to the hunk lens', async () => {
     renderPanel({ structuralData: structural() })
     const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
-    const fullBtn = screen.getByRole('radio', { name: /全文|Full file/ })
-    fireEvent.click(fullBtn)
+    // default = full (user directive 2026-08-06)
     await waitFor(() => expect(document.querySelector('.code-viewer')).toBeTruthy())
-    // switching back restores the hunk view
     fireEvent.click(screen.getByRole('radio', { name: /改动|Changes/ }))
     expect(document.querySelector('.code-viewer')).toBeNull()
+    expect(document.querySelector('.changes__diff')).toBeTruthy()
   })
 
   test('graph member ‹› opens the split source pane WITHOUT unmounting the graph (F-12 keep-alive)', async () => {
@@ -541,6 +582,7 @@ describe('RFC-258 — full-file view + line-level impact jumps', () => {
     renderPanel({ structuralData: structural() })
     const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
+    fireEvent.click(screen.getByRole('radio', { name: /改动|Changes/ }))
     const owner = document.querySelector('.changes__hunk-owner') as HTMLElement
     expect(owner).toBeTruthy()
     const callsBefore = spy.mock.calls.filter((c) => String(c[0]).includes('code-intel')).length

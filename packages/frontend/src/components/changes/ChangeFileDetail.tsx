@@ -244,6 +244,15 @@ function SymbolRow({
   )
 }
 
+/** Mirrors SymbolOutline's render conditions — the collapsible dock only
+ *  mounts when the outline would actually show something. */
+export function outlineHasContent(entry: ChangeFileEntry): boolean {
+  const f = entry.structural
+  if (f === undefined || (f.changes.length === 0 && entry.pureMove)) return entry.pureMove
+  if (f.status === 'parse-error') return true
+  return f.changes.length > 0
+}
+
 function SymbolOutline({
   entry,
   onJumpToHunk,
@@ -633,6 +642,10 @@ export function ChangeFileDetail({
   // highlight after clicking a hunk's owner badge.
   const [outlineFocus, setOutlineFocus] = useState<string | null>(null)
   useEffect(() => setOutlineFocus(null), [entry.key])
+  // The outline column must not permanently occupy width (user directive
+  // 2026-08-06): collapsed by default into a slim rail; the choice persists
+  // across file switches, and owner-badge reverse jumps auto-open it.
+  const [outlineOpen, setOutlineOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => setPendingFocus(focusHunk), [focusHunk])
   useEffect(() => setDocView('rendered'), [entry.key])
@@ -725,12 +738,33 @@ export function ChangeFileDetail({
         )}
       </div>
       <div className="changes__review-workspace">
-        <SymbolOutline
-          entry={entry}
-          onJumpToHunk={(h) => setPendingFocus(h)}
-          onOpenCallChain={onOpenCallChain}
-          focusQualifiedName={outlineFocus}
-        />
+        {outlineHasContent(entry) && (
+          <div
+            className={`changes__outline-dock${outlineOpen ? '' : ' changes__outline-dock--closed'}`}
+            data-testid="outline-dock"
+          >
+            <button
+              type="button"
+              className="changes__outline-dock-toggle"
+              aria-expanded={outlineOpen}
+              title={t(outlineOpen ? 'tasks.changesOutlineCollapse' : 'tasks.changesOutlineExpand')}
+              onClick={() => setOutlineOpen((v) => !v)}
+            >
+              <span className="changes__outline-chevron" aria-hidden="true">
+                {outlineOpen ? '⟨' : '⟩'}
+              </span>
+              <span className="changes__outline-dock-label">{t('tasks.changesOutlineTitle')}</span>
+            </button>
+            {outlineOpen && (
+              <SymbolOutline
+                entry={entry}
+                onJumpToHunk={(h) => setPendingFocus(h)}
+                onOpenCallChain={onOpenCallChain}
+                focusQualifiedName={outlineFocus}
+              />
+            )}
+          </div>
+        )}
         <div className="changes__review-surface">
           {!isDoc && codeView === 'full' && onCodeViewChange !== undefined ? (
             <>
@@ -746,7 +780,7 @@ export function ChangeFileDetail({
                 filePath={entry.filePath}
                 side="worktree"
                 focus={fullFocus !== null ? { line: fullFocus } : null}
-                changedRanges={fullFileRanges(entry.hunks)}
+                changedRanges={fullFileRanges(entry.block?.lines ?? [], entry.hunks)}
                 onIdentifierClick={
                   onIdentifier === undefined
                     ? undefined
@@ -787,7 +821,10 @@ export function ChangeFileDetail({
                   entry={entry}
                   focusHunk={pendingFocus}
                   scrollRef={scrollRef}
-                  onOwnerClick={(qn) => setOutlineFocus(qn)}
+                  onOwnerClick={(qn) => {
+                    setOutlineOpen(true)
+                    setOutlineFocus(qn)
+                  }}
                   onIdentifier={onIdentifier}
                 />
               )}

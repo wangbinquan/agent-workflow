@@ -2891,6 +2891,9 @@ export interface Resources {
     changesImportsAggregated: string
     changesContainerCollapsed: string
     changesTopLevelGroup: string
+    changesOutlineTitle: string
+    changesOutlineExpand: string
+    changesOutlineCollapse: string
     changesDrillBackToGraph: string
     changesNarrativeTitle: string
     codeViewerOversized: string
@@ -8145,6 +8148,9 @@ export const zhCN: Resources = {
     changesImportsAggregated: '导入变更({{n}})',
     changesContainerCollapsed: '{{n}} 个成员',
     changesTopLevelGroup: '顶层符号',
+    changesOutlineTitle: '结构大纲',
+    changesOutlineExpand: '展开结构大纲',
+    changesOutlineCollapse: '收起结构大纲',
     changesDrillBackToGraph: '返回关系图',
     changesNarrativeTitle: 'AI 导读',
     codeViewerOversized: '文件过大,无法渲染源码视图',

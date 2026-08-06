@@ -951,9 +951,10 @@ test.describe('RFC-250 interaction-integrity browser closure', () => {
     const panel = page.getByTestId('change-review')
     await expect(panel).toBeVisible()
 
-    // select the account.ts entry, then click the identifier inside its added
-    // row (real caret APIs resolve the column)
+    // select the account.ts entry; the default view is now the FULL rendered
+    // one (user directive) — switch to the hunk lens for the diff-row click
     await panel.locator('.changes__file-tab[title="src/ui/account.ts"]').click()
+    await panel.getByRole('radio', { name: /改动|Changes/ }).click()
     const addedRow = panel.locator('[data-hunkrow]', { hasText: 'accountState' }).nth(1)
     await addedRow.getByText(/accountState/).click()
     const menu = page.getByRole('menu')

@@ -1,8 +1,10 @@
 // RFC-258 §4.1 — map a file's diff hunks onto WORKTREE-side line ranges for
-// the full-file view's change gutter. Pure: hunk coords in, merged 1-based
-// [start,end] ranges out. A pure-delete hunk has no worktree lines and is
-// dropped (the full view renders the worktree side; deletions live in the
-// hunk view).
+// the full-file view's change gutter. Pure: the hunk BODY rows drive the
+// ranges — the header's newCount includes CONTEXT rows, so using it painted
+// unchanged lines as modified (user report: "diff 改了 2 行,全文标了一大段").
+// Only '+' rows produce ranges: a '+' run preceded by a '-' run is a
+// modification; an isolated '+' run is an addition. Deleted rows have no
+// worktree line (they live in the hunk view).
 
 import type { HunkInfo } from './changeReview'
 
@@ -12,15 +14,48 @@ export interface ChangedRange {
   type: 'added' | 'modified'
 }
 
-export function fullFileRanges(hunks: readonly HunkInfo[]): ChangedRange[] {
+export function fullFileRanges(
+  lines: readonly string[],
+  hunks: readonly HunkInfo[],
+): ChangedRange[] {
   const raw: ChangedRange[] = []
   for (const h of hunks) {
-    if (h.newCount === 0) continue // pure delete — nothing on the worktree side
-    raw.push({
-      start: h.newStart,
-      end: h.newStart + h.newCount - 1,
-      type: h.oldCount === 0 ? 'added' : 'modified',
-    })
+    let newLine = h.newStart
+    let oldLeft = h.oldCount
+    let newLeft = h.newCount
+    let pendingDel = false
+    let run: ChangedRange | null = null
+    const flushRun = (): void => {
+      if (run !== null) raw.push(run)
+      run = null
+    }
+    for (let i = h.headerIndex + 1; oldLeft > 0 || newLeft > 0; i++) {
+      const row = lines[i]
+      if (row === undefined) break
+      const marker = row[0] ?? ' '
+      if (marker === '\\') continue // "\ No newline" — consumes no counters
+      if (marker === '+') {
+        const type = pendingDel ? 'modified' : 'added'
+        if (run !== null && run.type === type && run.end === newLine - 1) run.end = newLine
+        else {
+          flushRun()
+          run = { start: newLine, end: newLine, type }
+        }
+        newLine += 1
+        newLeft -= 1
+      } else if (marker === '-') {
+        pendingDel = true
+        flushRun()
+        oldLeft -= 1
+      } else {
+        pendingDel = false
+        flushRun()
+        newLine += 1
+        oldLeft -= 1
+        newLeft -= 1
+      }
+    }
+    flushRun()
   }
   raw.sort((a, b) => a.start - b.start)
   // merge touching/overlapping ranges; mixed types merge to 'modified'
