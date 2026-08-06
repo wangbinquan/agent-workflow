@@ -86,6 +86,17 @@ describe('CLI subcommands (P-1-05)', () => {
     expect(existsSync(dbPath)).toBe(true)
   })
 
+  // RFC-254 T31 (task#11): migrateCommand must CLOSE its DB handle. A leaked
+  // bun:sqlite connection is invisible on POSIX (open files unlink fine) but on
+  // Windows it locks the temp dir, so `afterEach`'s rm(tmp) fails EBUSY and the
+  // whole cli.test.ts describe reads as a teardown flake. The Windows regression
+  // is the afterEach itself; this source anchor makes a revert red on POSIX CI
+  // too. (Root-caused on the ARM64 VM: 0 lingering processes, leaked DB handle.)
+  test('migrateCommand closes its DB handle (no leaked bun:sqlite lock)', () => {
+    const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'migrate.ts'), 'utf8')
+    expect(source).toContain('.$client.close()')
+  })
+
   // --- doctor ---
 
   test('doctor returns ok when opencode + git present', async () => {
