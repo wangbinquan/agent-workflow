@@ -533,9 +533,21 @@ task #2 撰文已久的「产品缝」落地——`runtime-smoke.test.ts` 的 `w
 rfc143-driver-capability/rfc237-claude-{intent-readonly-spawn,env-assembly}/rfc234-system-permission-profile/
 runtime-{extra-args,resolve} **92/92** + runtime-{smoke,spawn-head} **24/24** 全绿；**真 ARM64 机
 runtime-smoke.test.ts 21/21 全绿**（此前整簇 spawn-failed）；typecheck/lint(`--max-warnings 0`)/format:check 全绿。
-**提交 `adc62057`**（4 文件一步 pathspec）。**spawn-failed 桶残余属不同机制、非本缝可解**：runtime-routes(9)+
-registry(1) 走**配置面 `opencodePath` 单路径**（route 冒烟的是 config 里的一个 `.sh` 路径，命令数组缝够不到，
-须另想 Windows 可 spawn 的 config binary）；rfc234(10) 是 detached 后台进程 Windows 语义——两者留作后续增量。
+**提交 `adc62057`**（4 文件一步 pathspec）+ 文档 `dfd781a2`。**CI 判定**：superseding `dfd781a2`
+**后端 8 shard（macos 4/4 + ubuntu 4/4）全绿**（runtime-smoke 与全部 spawn-plan 套件所在）、
+Lint+Typecheck+Format+Shared 绿、static scans 绿；唯一红 = frontend windows shard 3/3，**本次提交零 frontend 文件**
+且父提交 `9d0b9684` 该 shard 为绿（前端字节完全相同）⇒ flaky 实锤（同 RFC-259 记载的 windows 前端 flaky），
+非本改动，superseding run 自愈。**spawn-failed 桶残余属不同机制、非本缝可解，各留后续增量**：①runtime-routes(9)+
+registry(1) 走**配置面 `opencodePath` 单路径**——route 冒烟的是 config 里的一个 `.sh` 路径，命令数组缝够不到，
+须另想 Windows 可 spawn 的**单** config binary（`.cmd` 流式死、须真 `.exe` 或让 route 也接命令数组，后者是产品面）。
+②`rfc234-system-agent-run`(10) 经细读**实为三子情形**（非单纯 detached）：**(a)** `baseOpts`/legacy-path 组
+（`runtimeBinary` 传 `.sh` 包装、`testOnlyUnverifiedRuntime:true` 走 legacy `buildSpawn` 分支）——可套本缝：
+`wrapperFor`→命令数组，`baseOpts` 由 `runtimeBinary` 改走 opencodeCmd（opencode driver 里 opencodeCmd 优先，
+`systemAgentRun.ts:463/479` 两路都进 `driver.buildSpawn`）；**(b)** 品牌/verified 组（`rfc234-system-agent-run.test.ts:287-312`
+的 `markProductionOpencodeCommand([binary])`）走真 seal 路径——**seal 是拷贝+哈希单个二进制、命令数组无法 seal**，
+故这几条与 runtime-routes 同类阻塞（须单 spawnable 二进制）；**(c)** `wrapperHoldingStdoutOpen`（`(sleep 3; echo late-evidence) &`）
+是真 detached 后台子进程语义——Windows Job Object vs POSIX 进程组，最难，须单列。三者混在一个文件、且触 RFC-234
+verified 系统 agent 核心 ⇒ 整体作**新上下文增量**（本缝只吃得下其 (a) 子情形）。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
