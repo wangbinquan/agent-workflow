@@ -66,8 +66,15 @@ async function armedRepo(): Promise<Fixture> {
   const repo = join(root, 'repo')
   mkdirSync(repo, { recursive: true })
   const hitsFile = join(root, 'hits.txt')
+  // RFC-254: git-for-Windows runs hooks / fsmonitor / diff.external through its
+  // bundled MSYS `sh`, which treats `\` as an escape — a backslash Windows path
+  // in the redirect silently writes nowhere (the trap never records a hit, so
+  // even the unhardened positive control shows []). Forward-slash paths are
+  // accepted by both git and sh on all three OSes; `hits()` reads the same file
+  // back through node fs, which takes either separator.
+  const hitsFileSh = hitsFile.replace(/\\/g, '/')
   const trap = (marker: string, extra = ''): string =>
-    `#!/bin/sh\necho ${marker} >> ${hitsFile}\n${extra}`
+    `#!/bin/sh\necho ${marker} >> "${hitsFileSh}"\n${extra}`
 
   await rawGit(repo, ['init', '-q', '-b', 'main', '.'])
   await rawGit(repo, [
@@ -94,17 +101,19 @@ async function armedRepo(): Promise<Fixture> {
   // pre-commit 单独一条：`commit` 是**豁免**子命令（用户 2026-08-03 拍板），这条必须
   // 仍然被执行。exit 0 以便同一用例还能断言提交本身成功。
   writeFileSync(join(evil, 'pre-commit'), trap('PRE_COMMIT'), { mode: 0o755 })
-  await rawGit(repo, ['config', 'core.hooksPath', evil])
+  // RFC-254: config values also go through git/sh on Windows — pass sh-friendly
+  // forward-slash paths (git accepts them natively on all OSes too).
+  await rawGit(repo, ['config', 'core.hooksPath', evil.replace(/\\/g, '/')])
 
   // 陷阱 3：core.fsmonitor —— 任何一次索引刷新（status/diff/add/commit）都会跑它。
   const fsm = join(root, 'fsm.sh')
   writeFileSync(fsm, trap('FSMONITOR', 'exit 1\n'), { mode: 0o755 })
-  await rawGit(repo, ['config', 'core.fsmonitor', fsm])
+  await rawGit(repo, ['config', 'core.fsmonitor', fsm.replace(/\\/g, '/')])
 
   // 陷阱 4：diff.external —— daemon 侧 diff 会执行它。
   const ext = join(root, 'ext.sh')
   writeFileSync(ext, trap('DIFF_EXTERNAL'), { mode: 0o755 })
-  await rawGit(repo, ['config', 'diff.external', ext])
+  await rawGit(repo, ['config', 'diff.external', ext.replace(/\\/g, '/')])
   writeFileSync(join(repo, 'f.txt'), 'one\n')
   await rawGit(repo, ['add', 'f.txt'])
   await rawGit(repo, [
@@ -173,16 +182,41 @@ describe('RFC-252 G1 · 纯函数', () => {
     // 用户 2026-08-03 拍板：仓库钩子继续 gate 平台的自动 commit&push
     // （rfc210-publish-failure-hard-fails 把它当 everyday setup）。fsmonitor 不是
     // 用户会依赖的 gate，压制它零功能影响，故不豁免。
-    expect(hardenedGitLeadingArgs('commit')).toEqual(['-c', 'core.fsmonitor=false'])
+    // RFC-254: platform 显式注入，两平台都断言（host 无关）。win32 额外带 D18
+    // 的 longpaths/autocrlf/eol（路径/换行修正，非 hardening），但 hooksPath 仍豁免。
+    expect(hardenedGitLeadingArgs('commit', undefined, 'linux')).toEqual([
+      '-c',
+      'core.fsmonitor=false',
+    ])
+    expect(hardenedGitLeadingArgs('commit', undefined, 'win32')).toEqual([
+      '-c',
+      'core.longpaths=true',
+      '-c',
+      'core.autocrlf=false',
+      '-c',
+      'core.eol=lf',
+      '-c',
+      'core.fsmonitor=false',
+    ])
     for (const sub of ['worktree', 'status', 'diff', 'merge', 'checkout', 'stash']) {
-      expect(hardenedGitLeadingArgs(sub)).toContain(`core.hooksPath=${gitHooksVoidDir()}`)
+      for (const p of ['linux', 'win32'] as const) {
+        expect(hardenedGitLeadingArgs(sub, undefined, p)).toContain(
+          `core.hooksPath=${gitHooksVoidDir()}`,
+        )
+      }
     }
     // 定位不到子命令时按最严处理。
-    expect(hardenedGitLeadingArgs(undefined)).toContain(`core.hooksPath=${gitHooksVoidDir()}`)
+    expect(hardenedGitLeadingArgs(undefined, undefined, 'linux')).toContain(
+      `core.hooksPath=${gitHooksVoidDir()}`,
+    )
+    expect(hardenedGitLeadingArgs(undefined, undefined, 'win32')).toContain(
+      `core.hooksPath=${gitHooksVoidDir()}`,
+    )
   })
 
   test('hardenGitArgs 端到端：非豁免子命令带完整覆盖集，且 hooks 空目录落在 appHome 内', () => {
-    const args = hardenGitArgs(['-C', '/repo', 'status', '--porcelain'])
+    // RFC-254: platform 显式注入。非 win32：领头恰是 hooksPath + fsmonitor 两对。
+    const args = hardenGitArgs(['-C', '/repo', 'status', '--porcelain'], undefined, 'linux')
     expect(args.slice(0, 4)).toEqual([
       '-c',
       `core.hooksPath=${gitHooksVoidDir()}`,
@@ -190,8 +224,17 @@ describe('RFC-252 G1 · 纯函数', () => {
       'core.fsmonitor=false',
     ])
     expect(args.slice(4)).toEqual(['-C', '/repo', 'status', '--porcelain'])
-    // diff 仍会拿到子命令级修正。
-    expect(hardenGitArgs(['-C', '/repo', 'diff'])).toContain('--no-ext-diff')
+    // win32：hooksPath 领头，D18 随行，fsmonitor 收尾；用户 argv 原样附在最后。
+    const win = hardenGitArgs(['-C', '/repo', 'status', '--porcelain'], undefined, 'win32')
+    expect(win.slice(0, 2)).toEqual(['-c', `core.hooksPath=${gitHooksVoidDir()}`])
+    expect(win).toContain('core.longpaths=true')
+    expect(win).toContain('core.autocrlf=false')
+    expect(win).toContain('core.eol=lf')
+    expect(win).toContain('core.fsmonitor=false')
+    expect(win.slice(-4)).toEqual(['-C', '/repo', 'status', '--porcelain'])
+    // diff 仍会拿到子命令级修正（两平台）。
+    expect(hardenGitArgs(['-C', '/repo', 'diff'], undefined, 'linux')).toContain('--no-ext-diff')
+    expect(hardenGitArgs(['-C', '/repo', 'diff'], undefined, 'win32')).toContain('--no-ext-diff')
     // appHome 在两层沙箱里都是拒绝区；放到 /tmp 之类 agent 可写的位置等于把
     // hooksPath 又交回给它。
     expect(gitHooksVoidDir().startsWith(home)).toBe(true)
