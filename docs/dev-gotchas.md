@@ -43,6 +43,8 @@
 
 ## git / 多人协作（共享工作树）
 
+- **共享树里 `git add <自己路径>` 之后不能裸 `git commit`**——不带 pathspec 的 commit 提交的是**整个 index**,他人已暂存（`git status` 里 `D `/`M ` 首列有字母）的改动会连坐进你的 commit。2026-08-06 真实发生：sibling 暂存的 **12 个 RFC-255 文件删除**（-2901 行）被卷进一个探测修复 commit，靠秒级 `git reset --soft HEAD~1` 挽回。定式：多人树上**一律 `git commit -m … -- <路径列表>`**（pathspec commit 只取列出的路径，他人暂存原样留在 index）；已经卷入且 HEAD 还没被别人接上时，`reset --soft` + pathspec 重提；commit 后**必看 `git show --stat HEAD` 的文件数**是否等于自己的路径数。
+
 - **全部工作直接在 `main`**，不开分支/PR；push main 即触发 CI。
 - **提交只用一步 `git commit -- <精确路径>`**，别 `git add` 后再 commit——并发 session 的 commit 会把你 staged 的卷进它（2026-06-24 事故；2026-08-06 复犯：webhook 模板变量 chips 的 10 文件 add 后隔了几轮工具调用才 commit，被 RFC-254 session 的 `6a771fdb` 整体卷走，message 未及该功能——add 与 commit 之间任何 await 都是暴露窗口，untracked 先 add 后**立刻**同一条命令串里 commit）。untracked 新文件须先 `git add <精确路径>`，用**显式正向清单**（污染大时别 `git add packages/`）。
 - **绝不 `git commit --amend`**：HEAD 可能已是并发 session 的 commit，amend 会重写他们的（defd9958 覆 94436c9f）。后续=新 pathspec commit；恢复=reflog + `reset --soft`（非 `--hard`）。
