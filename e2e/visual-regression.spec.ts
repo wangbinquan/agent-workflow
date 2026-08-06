@@ -123,6 +123,13 @@ async function waitForStableAuthenticatedShell(page: Page): Promise<void> {
   const userMenu = page.locator('.user-menu__trigger')
   await expect(userMenu).toContainText('e2e_admin')
   await expect(userMenu).toContainText('E2E Administrator')
+  // UserMenu and ShellNavigation subscribe to the same actor query through
+  // separate observers. The menu can commit one render before the admin-only
+  // navigation rows, so waiting on it alone still leaves screenshots racing
+  // the late /webhooks row. Lock the visible navigation tree as well.
+  await expect(
+    page.locator('[data-testid^="shell-navigation-"]:visible a[href="/webhooks"]'),
+  ).toBeVisible()
   await page.waitForLoadState('networkidle')
 }
 
@@ -1093,13 +1100,9 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const workflowId = await seedEditorWorkflow()
     await routeLargeAgentCatalog(page, 50)
     await openEditorScene(page, workflowId, 3)
-    // RFC-253/RFC-257 added two late/stale-baseline-sensitive surfaces to
-    // this scene. Lock the fully hydrated admin shell and complete category
-    // catalog before taking pixels: the 0.2% full-page allowance previously
-    // let either missing row pass alone, then failed once both rendered.
-    await expect(
-      page.getByTestId('shell-navigation-desktop').locator('a[href="/webhooks"]'),
-    ).toBeVisible()
+    // RFC-253 added a late/stale-baseline-sensitive category to this scene.
+    // Lock the complete catalog before taking pixels: the 0.2% full-page
+    // allowance previously let the missing row pass on its own.
     await page.getByTestId('workflow-canvas-add').click()
     const palette = page.getByTestId('workflow-node-picker-dialog')
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
