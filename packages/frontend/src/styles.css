@@ -11855,6 +11855,21 @@ mark.prior-comment-anchor[data-active='true'] {
   gap: 8px;
   flex-wrap: wrap;
 }
+.changes__toolbar-field {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.changes__toolbar-field--scope {
+  flex: 0 1 20rem;
+}
+.changes__toolbar-field--scope > .select {
+  flex: 1 1 12rem;
+  width: auto;
+  min-width: 0;
+}
 .changes__toolbar-label {
   font-size: var(--font-xs);
   color: var(--muted);
@@ -11886,6 +11901,11 @@ mark.prior-comment-anchor[data-active='true'] {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: min(24dvh, 180px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 .changes__narrative--idle,
 .changes__narrative--generating {
@@ -11935,8 +11955,8 @@ mark.prior-comment-anchor[data-active='true'] {
   color: var(--muted);
 }
 .changes__body {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 0%;
+  min-height: clamp(22rem, 52dvh, 34rem);
   display: flex;
   gap: 8px;
 }
@@ -12112,11 +12132,91 @@ mark.prior-comment-anchor[data-active='true'] {
   height: 100%;
   min-height: 0;
 }
+.changes__review-workspace {
+  display: flex;
+  flex: 1 1 0%;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+}
+.changes__review-surface {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  min-width: 0;
+}
+.changes__review-workspace > .changes__outline {
+  flex: 0 0 clamp(15rem, 24cqi, 22rem);
+  width: auto;
+  max-height: none;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.changes__review-workspace > .changes__outline > .structure__group > .structure__group-header {
+  padding-left: 0;
+  overflow-wrap: anywhere;
+}
+.changes__review-workspace > .changes__outline > .structure__group > .structure__symbols {
+  padding-left: 16px;
+}
+.changes__review-workspace > .changes__outline > .changes__outline-imports > .structure__symbols {
+  padding-left: 16px;
+}
+.changes__review-workspace > .changes__outline .structure__symbol {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px 6px;
+  min-width: 0;
+}
+.changes__review-workspace > .changes__outline .structure__symbol-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.changes__review-workspace > .changes__outline .structure__symbol-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.changes__review-workspace > .changes__outline .changes__outline-fold {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  text-align: left;
+}
+.changes__review-workspace > .changes__outline .changes__outline-chevron {
+  flex: none;
+}
+.changes__review-workspace > .changes__outline .changes__outline-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.changes__review-workspace > .changes__outline .changes__outline-count {
+  flex: none;
+}
+.changes__review-workspace > .changes__outline .structure__callchain-entry {
+  grid-column: 2;
+  margin-left: 0;
+}
+.changes__review-workspace > .changes__outline .structure__sigdiff,
+.changes__review-workspace > .changes__outline .structure__explain {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
 .changes__file-head {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+.changes__file-head > .changes__file-stats {
+  margin-left: 0;
 }
 .changes__file-path {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -12382,12 +12482,18 @@ mark.prior-comment-anchor[data-active='true'] {
 /* RFC-258 — full-view symbol anchor bar (P1-6) */
 .changes__anchorbar {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
-  padding: 4px 0 8px;
+  padding: 4px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
 }
 .changes__anchor {
+  flex: 0 0 auto;
   background: none;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -12528,11 +12634,24 @@ mark.prior-comment-anchor[data-active='true'] {
 @container changes-pane (max-width: 880px) {
   .changes__body {
     flex-direction: column;
+    min-height: clamp(46rem, 90dvh, 60rem);
   }
   .changes__sidebar {
     flex: 0 0 auto;
     width: 100%;
     max-height: 12rem;
+  }
+}
+
+@container changes-pane (max-width: 720px) {
+  .changes__review-workspace {
+    flex-direction: column;
+  }
+  .changes__review-workspace > .changes__outline {
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: 7rem;
+    overflow: auto;
   }
 }
 

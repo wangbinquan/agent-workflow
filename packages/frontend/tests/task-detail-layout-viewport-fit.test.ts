@@ -92,7 +92,96 @@ describe('changes pane layout (RFC-239 merged view)', () => {
     const body = ruleBody('.changes__body')
     expect(body).toMatch(/display:\s*flex/)
     expect(body).toMatch(/flex:\s*1/)
-    expect(body).toMatch(/min-height:\s*0/)
+    expect(body).toMatch(/min-height:\s*clamp\(22rem,\s*52dvh,\s*34rem\)/)
+  })
+
+  // Regression: an expanded AI walkthrough plus the symbol outline could
+  // shrink the actual diff/code surface to ~170px on an 817px viewport. The
+  // navigation aids must scroll within a bounded budget; code stays primary.
+  test('toolbar and review aids cannot consume the code-review height budget', () => {
+    const scopeField = ruleBody('.changes__toolbar-field--scope')
+    expect(scopeField).toMatch(/flex:\s*0 1 20rem/)
+
+    const scopeSelect = ruleBody('.changes__toolbar-field--scope > .select')
+    expect(scopeSelect).toMatch(/width:\s*auto/)
+    expect(scopeSelect).toMatch(/min-width:\s*0/)
+    expect(scopeSelect).toMatch(/flex:\s*1 1 12rem/)
+
+    const narrative = ruleBody('.changes__narrative')
+    expect(narrative).toMatch(/flex:\s*0 0 auto/)
+    expect(narrative).toMatch(/max-height:\s*min\(24dvh,\s*180px\)/)
+    expect(narrative).toMatch(/min-height:\s*0/)
+    expect(narrative).toMatch(/overflow-y:\s*auto/)
+    expect(narrative).toMatch(/overscroll-behavior-y:\s*contain/)
+
+    const reviewWorkspace = ruleBody('.changes__review-workspace')
+    expect(reviewWorkspace).toMatch(/display:\s*flex/)
+    expect(reviewWorkspace).toMatch(/flex:\s*1 1 0%/)
+    expect(reviewWorkspace).toMatch(/min-height:\s*0/)
+
+    const codeSurface = ruleBody('.changes__review-surface')
+    expect(codeSurface).toMatch(/display:\s*flex/)
+    expect(codeSurface).toMatch(/flex:\s*1 1 0%/)
+    expect(codeSurface).toMatch(/min-width:\s*0/)
+    expect(codeSurface).toMatch(/min-height:\s*0/)
+
+    const outline = ruleBody('.changes__review-workspace > .changes__outline')
+    expect(outline).toMatch(/flex:\s*0 0 clamp\(15rem,\s*24cqi,\s*22rem\)/)
+    expect(outline).toMatch(/width:\s*auto/)
+    expect(outline).toMatch(/max-height:\s*none/)
+    expect(outline).toMatch(/overflow-x:\s*hidden/)
+    expect(outline).toMatch(/overflow-y:\s*auto/)
+
+    const outlineGroupHeader = ruleBody(
+      '.changes__review-workspace > .changes__outline > .structure__group > .structure__group-header',
+    )
+    expect(outlineGroupHeader).toMatch(/padding-left:\s*0/)
+
+    const outlineGroupMembers = ruleBody(
+      '.changes__review-workspace > .changes__outline > .structure__group > .structure__symbols',
+    )
+    expect(outlineGroupMembers).toMatch(/padding-left:\s*16px/)
+
+    const outlineSymbol = ruleBody(
+      '.changes__review-workspace > .changes__outline .structure__symbol',
+    )
+    expect(outlineSymbol).toMatch(/display:\s*grid/)
+    expect(outlineSymbol).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\) auto/)
+
+    const outlineSymbolMain = ruleBody(
+      '.changes__review-workspace > .changes__outline .structure__symbol-main',
+    )
+    expect(outlineSymbolMain).toMatch(/flex-wrap:\s*wrap/)
+    expect(outlineSymbolMain).toMatch(/min-width:\s*0/)
+
+    const outlineFold = ruleBody(
+      '.changes__review-workspace > .changes__outline .changes__outline-fold',
+    )
+    expect(outlineFold).toMatch(/width:\s*100%/)
+    expect(outlineFold).toMatch(/min-width:\s*0/)
+    expect(outlineFold).toMatch(/text-align:\s*left/)
+
+    const outlineLabel = ruleBody(
+      '.changes__review-workspace > .changes__outline .changes__outline-label',
+    )
+    expect(outlineLabel).toMatch(/overflow-wrap:\s*anywhere/)
+
+    const detailStats = ruleBody('.changes__file-head > .changes__file-stats')
+    expect(detailStats).toMatch(/margin-left:\s*0/)
+
+    const anchorBar = ruleBody('.changes__anchorbar')
+    expect(anchorBar).toMatch(/flex:\s*0 0 auto/)
+    expect(anchorBar).toMatch(/flex-wrap:\s*nowrap/)
+    expect(anchorBar).toMatch(/overflow-x:\s*auto/)
+    expect(anchorBar).toMatch(/overflow-y:\s*hidden/)
+    expect(anchorBar).toMatch(/overscroll-behavior-inline:\s*contain/)
+
+    const anchor = ruleBody('.changes__anchor')
+    expect(anchor).toMatch(/flex:\s*0 0 auto/)
+
+    expect(STYLES).toMatch(
+      /@container\s+changes-pane\s*\(max-width:\s*720px\)\s*\{[\s\S]*?\.changes__review-workspace\s*\{[^}]*flex-direction:\s*column[^}]*\}[\s\S]*?\.changes__review-workspace\s*>\s*\.changes__outline\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*100%[^}]*max-height:\s*7rem[^}]*overflow:\s*auto/,
+    )
   })
 
   test('sidebar is a bounded independently scrollable column', () => {
@@ -104,7 +193,7 @@ describe('changes pane layout (RFC-239 merged view)', () => {
 
   test('narrow task panes stack the sidebar above a full-width detail column', () => {
     expect(STYLES).toMatch(
-      /@container\s+changes-pane\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\.changes__body\s*\{[^}]*flex-direction:\s*column[^}]*\}[\s\S]*?\.changes__sidebar\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*100%[^}]*max-height:\s*12rem/,
+      /@container\s+changes-pane\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\.changes__body\s*\{[^}]*flex-direction:\s*column[^}]*min-height:\s*clamp\(46rem,\s*90dvh,\s*60rem\)[^}]*\}[\s\S]*?\.changes__sidebar\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*100%[^}]*max-height:\s*12rem/,
     )
   })
 

@@ -218,14 +218,14 @@ function SymbolRow({
       {target !== null ? (
         <button
           type="button"
-          className="structure__symbol-jump"
+          className="structure__symbol-main structure__symbol-jump"
           title={t('tasks.changesJumpToHunk')}
           onClick={() => onJumpToHunk(target)}
         >
           {body}
         </button>
       ) : (
-        body
+        <span className="structure__symbol-main">{body}</span>
       )}
       {callRoot !== null && (
         <button
@@ -294,9 +294,15 @@ function SymbolOutline({
           <button
             type="button"
             className="changes__outline-fold"
+            aria-expanded={showImports}
             onClick={() => setShowImports((v) => !v)}
           >
-            {showImports ? '▾' : '▸'} {t('tasks.changesImportsAggregated', { n: imports.length })}
+            <span className="changes__outline-chevron" aria-hidden="true">
+              {showImports ? '▾' : '▸'}
+            </span>
+            <span className="changes__outline-label">
+              {t('tasks.changesImportsAggregated', { n: imports.length })}
+            </span>
           </button>
           {showImports && (
             <ul className="structure__symbols">
@@ -331,10 +337,15 @@ function SymbolOutline({
                   <button
                     type="button"
                     className="changes__outline-fold"
+                    aria-expanded={!collapsed}
                     onClick={() => toggle(key)}
                   >
-                    {collapsed ? '▸' : '▾'}{' '}
-                    {g.container === '' ? t('tasks.changesTopLevelGroup') : key}
+                    <span className="changes__outline-chevron" aria-hidden="true">
+                      {collapsed ? '▸' : '▾'}
+                    </span>
+                    <span className="changes__outline-label">
+                      {g.container === '' ? t('tasks.changesTopLevelGroup') : key}
+                    </span>
                     <span className="changes__outline-count">
                       {t('tasks.changesContainerCollapsed', { n: memberCount })}
                     </span>
@@ -713,73 +724,77 @@ export function ChangeFileDetail({
           />
         )}
       </div>
-      <SymbolOutline
-        entry={entry}
-        onJumpToHunk={(h) => setPendingFocus(h)}
-        onOpenCallChain={onOpenCallChain}
-        focusQualifiedName={outlineFocus}
-      />
-      {!isDoc && codeView === 'full' && onCodeViewChange !== undefined ? (
-        <>
-          <FileSymbolAnchorBar
-            taskId={taskId}
-            repoKey={entry.repoLabel ?? ''}
-            filePath={entry.filePath}
-            onJumpToLine={(line) => onFullFocusChange?.(line)}
-          />
-          <CodeViewer
-            taskId={taskId}
-            repoKey={entry.repoLabel ?? ''}
-            filePath={entry.filePath}
-            side="worktree"
-            focus={fullFocus !== null ? { line: fullFocus } : null}
-            changedRanges={fullFileRanges(entry.hunks)}
-            onIdentifierClick={
-              onIdentifier === undefined
-                ? undefined
-                : (hit) => {
-                    // The full view renders the worktree side (F-05); the caret
-                    // layer already produced file-line coordinates.
-                    onIdentifier({ side: 'worktree', ...hit })
-                  }
-            }
-          />
-        </>
-      ) : wantRendered && !renderedFailed ? (
-        renderedReady ? (
-          <MarkdownDiffView
-            left={baseContent.data.exists ? (baseContent.data.content ?? '') : ''}
-            right={worktreeContent.data.exists ? (worktreeContent.data.content ?? '') : ''}
-            className="changes__md"
-          />
-        ) : (
-          <div className="changes__outline-note muted">{t('tasks.changesDocLoading')}</div>
-        )
-      ) : (
-        <>
-          {wantRendered && renderedFailed && (
-            <ErrorBanner
-              error={baseContent.error ?? worktreeContent.error}
-              onRetry={() => {
-                void baseContent.refetch()
-                void worktreeContent.refetch()
-              }}
-            />
-          )}
-          {entry.block !== undefined && entry.hunks.length === 0 ? (
-            <DiffFileBody block={entry.block} />
+      <div className="changes__review-workspace">
+        <SymbolOutline
+          entry={entry}
+          onJumpToHunk={(h) => setPendingFocus(h)}
+          onOpenCallChain={onOpenCallChain}
+          focusQualifiedName={outlineFocus}
+        />
+        <div className="changes__review-surface">
+          {!isDoc && codeView === 'full' && onCodeViewChange !== undefined ? (
+            <>
+              <FileSymbolAnchorBar
+                taskId={taskId}
+                repoKey={entry.repoLabel ?? ''}
+                filePath={entry.filePath}
+                onJumpToLine={(line) => onFullFocusChange?.(line)}
+              />
+              <CodeViewer
+                taskId={taskId}
+                repoKey={entry.repoLabel ?? ''}
+                filePath={entry.filePath}
+                side="worktree"
+                focus={fullFocus !== null ? { line: fullFocus } : null}
+                changedRanges={fullFileRanges(entry.hunks)}
+                onIdentifierClick={
+                  onIdentifier === undefined
+                    ? undefined
+                    : (hit) => {
+                        // The full view renders the worktree side (F-05); the caret
+                        // layer already produced file-line coordinates.
+                        onIdentifier({ side: 'worktree', ...hit })
+                      }
+                }
+              />
+            </>
+          ) : wantRendered && !renderedFailed ? (
+            renderedReady ? (
+              <MarkdownDiffView
+                left={baseContent.data.exists ? (baseContent.data.content ?? '') : ''}
+                right={worktreeContent.data.exists ? (worktreeContent.data.content ?? '') : ''}
+                className="changes__md"
+              />
+            ) : (
+              <div className="changes__outline-note muted">{t('tasks.changesDocLoading')}</div>
+            )
           ) : (
-            <AnnotatedDiff
-              key={entry.key} // fresh scroll + sticky state per file (impl-gate P2)
-              entry={entry}
-              focusHunk={pendingFocus}
-              scrollRef={scrollRef}
-              onOwnerClick={(qn) => setOutlineFocus(qn)}
-              onIdentifier={onIdentifier}
-            />
+            <>
+              {wantRendered && renderedFailed && (
+                <ErrorBanner
+                  error={baseContent.error ?? worktreeContent.error}
+                  onRetry={() => {
+                    void baseContent.refetch()
+                    void worktreeContent.refetch()
+                  }}
+                />
+              )}
+              {entry.block !== undefined && entry.hunks.length === 0 ? (
+                <DiffFileBody block={entry.block} />
+              ) : (
+                <AnnotatedDiff
+                  key={entry.key} // fresh scroll + sticky state per file (impl-gate P2)
+                  entry={entry}
+                  focusHunk={pendingFocus}
+                  scrollRef={scrollRef}
+                  onOwnerClick={(qn) => setOutlineFocus(qn)}
+                  onIdentifier={onIdentifier}
+                />
+              )}
+            </>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   )
 }

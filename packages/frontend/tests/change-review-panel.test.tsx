@@ -153,6 +153,7 @@ function renderPanel(
     structuralData?: StructuralDiff
     structuralError?: unknown
     storageKey?: string
+    scopeOptions?: Array<{ value: string; label: string }>
   } = {},
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -169,7 +170,7 @@ function renderPanel(
           isLoading: false,
         }}
         scopeValue="task"
-        scopeOptions={[{ value: 'task', label: '整任务' }]}
+        scopeOptions={opts.scopeOptions ?? [{ value: 'task', label: '整任务' }]}
         onScopeChange={() => {}}
         engineMode="baseline"
         onEngineChange={() => {}}
@@ -300,6 +301,11 @@ describe('ChangeReviewPanel — all-added top-level fold', () => {
         edges: [],
         impact: [],
         changes: [
+          {
+            changeType: 'added',
+            kind: 'import',
+            after: sym('pathlib.Path', 'import'),
+          },
           { changeType: 'added', kind: 'function', after: sym('verifyManifest', 'function') },
           {
             changeType: 'added',
@@ -313,10 +319,19 @@ describe('ChangeReviewPanel — all-added top-level fold', () => {
     const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
     fireEvent.click(aTab as HTMLElement)
     const outline = screen.getByTestId('symbol-outline')
+    const importsFold = within(outline).getByRole('button', {
+      name: /导入变更|Import changes/,
+    })
+    expect(importsFold.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(importsFold)
+    expect(importsFold.getAttribute('aria-expanded')).toBe('true')
+    expect(within(outline).getByText('Path')).toBeTruthy()
     // collapsed by default (allAdded de-noising) — rows hidden, header present
     expect(within(outline).queryByText('verifyManifest')).toBeNull()
     const fold = within(outline).getByRole('button', { name: /顶层符号|Top-level symbols/ })
+    expect(fold.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(fold)
+    expect(fold.getAttribute('aria-expanded')).toBe('true')
     expect(within(outline).getByText('verifyManifest')).toBeTruthy()
     const entries = within(outline).getAllByRole('button', { name: /调用链|call chain/i })
     expect(entries.some((el) => el.classList.contains('structure__callchain-entry'))).toBe(true)
@@ -324,6 +339,42 @@ describe('ChangeReviewPanel — all-added top-level fold', () => {
 })
 
 describe('ChangeReviewPanel — drilldown gating + narrative states', () => {
+  // Regression: the shared Select is width:100% by default. Leaving it as a
+  // loose toolbar child forced the scope control onto its own full-width row,
+  // consuming code-review height before the file body even rendered.
+  test('keeps scope and engine controls in compact toolbar field groups', () => {
+    renderPanel({
+      structuralData: structural(),
+      scopeOptions: [
+        { value: 'task', label: '整任务' },
+        { value: 'node:n1', label: '节点 n1' },
+      ],
+    })
+
+    expect(
+      screen
+        .getByRole('combobox', { name: /范围|Scope/ })
+        .closest('.changes__toolbar-field--scope'),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('radiogroup', { name: /引擎|Engine/ }).closest('.changes__toolbar-field'),
+    ).toBeTruthy()
+  })
+
+  test('places the symbol outline beside the code surface in one review workspace', () => {
+    renderPanel({ structuralData: structural() })
+    const aTab = fileSelectors().find((el) => el.getAttribute('title') === 'src/ui/a.ts')
+    fireEvent.click(aTab as HTMLElement)
+
+    const workspace = document.querySelector('.changes__review-workspace')
+    const outline = workspace?.querySelector('[data-testid="symbol-outline"]')
+    const surface = workspace?.querySelector('.changes__review-surface')
+    expect(workspace).toBeTruthy()
+    expect(outline).toBe(workspace?.firstElementChild)
+    expect(surface).toBe(outline?.nextElementSibling)
+    expect(surface?.querySelector('.changes__diff')).toBeTruthy()
+  })
+
   test('impact/deps buttons appear only with data; graph opens a FULL-size dialog', () => {
     renderPanel({ structuralData: structural() })
     expect(screen.queryByRole('button', { name: /影响面|Impact/ })).toBeNull()

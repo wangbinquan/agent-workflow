@@ -533,7 +533,7 @@ export function ChangeReviewPanel({
     <div className="changes" data-testid="change-review">
       <div className="changes__toolbar">
         {scopeOptions.length > 1 && (
-          <>
+          <div className="changes__toolbar-field changes__toolbar-field--scope">
             <span className="changes__toolbar-label">{t('tasks.structScopeLabel')}</span>
             <Select
               value={scopeValue}
@@ -541,18 +541,20 @@ export function ChangeReviewPanel({
               options={scopeOptions}
               ariaLabel={t('tasks.structScopeLabel')}
             />
-          </>
+          </div>
         )}
-        <span className="changes__toolbar-label">{t('tasks.structEngineLabel')}</span>
-        <Segmented<'baseline' | 'deep'>
-          value={engineMode}
-          onChange={onEngineChange}
-          options={[
-            { value: 'baseline', label: t('tasks.structEngineBaseline') },
-            { value: 'deep', label: t('tasks.structEngineDeep') },
-          ]}
-          ariaLabel={t('tasks.structEngineLabel')}
-        />
+        <div className="changes__toolbar-field">
+          <span className="changes__toolbar-label">{t('tasks.structEngineLabel')}</span>
+          <Segmented<'baseline' | 'deep'>
+            value={engineMode}
+            onChange={onEngineChange}
+            options={[
+              { value: 'baseline', label: t('tasks.structEngineBaseline') },
+              { value: 'deep', label: t('tasks.structEngineDeep') },
+            ]}
+            ariaLabel={t('tasks.structEngineLabel')}
+          />
+        </div>
         {summary !== undefined && (
           <span className="changes__summary-line">
             {t('tasks.changesSummaryLine', {
