@@ -134,8 +134,19 @@ describe('RFC-254 T31 — verified business plan build on Windows (source anchor
 describe.skipIf(process.platform !== 'win32')(
   'RFC-254 T31 — verified business plan build on real win32 (runtime)',
   () => {
+    // `realpathSync.native` (NOT plain `realpathSync`) because the GitHub
+    // windows-latest runner's `os.tmpdir()` is an 8.3 SHORT name
+    // (`C:\Users\RUNNER~1\...`), and plain `realpathSync` does NOT expand 8.3 on
+    // Windows — it returns the short form, resolve-stable. Git then reports the
+    // LONG form from `--git-common-dir`, and the short↔long mismatch trips the
+    // canonicality/containment checks (measured on the VM). Production is immune
+    // (worktree roots derive from `os.homedir()`, always long form); only this
+    // test's temp base needs the native expansion to match what git returns.
+    const longTemp = (prefix: string): string =>
+      realpathSync.native(mkdtempSync(join(tmpdir(), prefix)))
+
     test('bug#1: resolveNetlessGitCommonDirs accepts a real git repo on win32', async () => {
-      const base = mkdtempSync(join(tmpdir(), 'rfc254-vp-git-'))
+      const base = longTemp('rfc254-vp-git-')
       try {
         const repo = join(base, 'repo')
         mkdirSync(repo)
@@ -156,7 +167,7 @@ describe.skipIf(process.platform !== 'win32')(
     })
 
     test('bug#2: snapshotManagedSkillTree seals + verifies a managed skill tree on win32', async () => {
-      const base = mkdtempSync(join(tmpdir(), 'rfc254-vp-skill-'))
+      const base = longTemp('rfc254-vp-skill-')
       try {
         const source = join(base, 'skill')
         mkdirSync(join(source, 'sub'), { recursive: true })
@@ -184,7 +195,7 @@ describe.skipIf(process.platform !== 'win32')(
     // is the only way to learn whether any OTHER step of the verified mainline
     // is broken on win32. The forced-darwin suite cannot reach this.
     test('the whole verified business plan builds on real win32 (no-containment)', async () => {
-      const root = mkdtempSync(join(tmpdir(), 'rfc254-vp-full-'))
+      const root = longTemp('rfc254-vp-full-')
       const originalAuth = process.env.OPENCODE_AUTH_CONTENT
       try {
         const appHome = join(root, 'app')
