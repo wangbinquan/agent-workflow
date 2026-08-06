@@ -120,7 +120,7 @@ describe('resolveOpencodeDbPath', () => {
       OPENCODE_TEST_HOME: '/tmp/fake-home',
       XDG_DATA_HOME: '/tmp/fake-home/data',
     } as NodeJS.ProcessEnv)
-    expect(path).toBe('/tmp/fake-home/data/opencode/opencode.db')
+    expect(path.replace(/\\/g, '/')).toBe('/tmp/fake-home/data/opencode/opencode.db')
   })
 
   test('falls back to ~/.local/share/opencode/opencode.db when no XDG override (regression: matches opencode xdg-basedir on macOS too)', () => {
@@ -135,7 +135,7 @@ describe('resolveOpencodeDbPath', () => {
     const path = resolveOpencodeDbPath({
       OPENCODE_TEST_HOME: '/users/me',
     } as NodeJS.ProcessEnv)
-    expect(path).toBe('/users/me/.local/share/opencode/opencode.db')
+    expect(path.replace(/\\/g, '/')).toBe('/users/me/.local/share/opencode/opencode.db')
   })
 })
 
