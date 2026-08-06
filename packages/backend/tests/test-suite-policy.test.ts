@@ -82,6 +82,14 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // the POSIX CI legs. The env-assembly, traversal-defense, and contained-spawn
   // mechanics in the same file DO run on win32 (portable `bun -e` commands).
   'packages/backend/tests/rfc253-script-execution.test.ts#skipIf': 2,
+  // RFC-254: one case needs a runtime whose DIRECT child exits while a detached
+  // grandchild keeps the inherited stdout pipe open (post-exit-flush-timeout →
+  // 'incomplete'). Windows closes the pipe on parent exit regardless of an unref'd
+  // grandchild, so the condition is unreproducible there ('complete'); the flush
+  // cap it exercises is a platform-agnostic timer on the stdout drain. The rest of
+  // the file now runs on win32 (command-array runtime head via opencodeCmd +
+  // platform-aware killProcessTree reap, which fixed the timeout/abort cases).
+  'packages/backend/tests/rfc234-system-agent-run.test.ts#skipIf': 1,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is

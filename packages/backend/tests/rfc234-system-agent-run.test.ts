@@ -7,14 +7,7 @@
 // precedent).
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import {
-  chmodSync,
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { assertSafeSeedPath, runSystemAgent } from '../src/services/systemAgentRun'
@@ -23,20 +16,34 @@ import type { Logger } from '../src/util/log'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
-function wrapperFor(mockFile: string): string {
-  const dir = mkdtempSync(join(tmpdir(), 'aw-sysrun-bin-'))
-  const wrapper = join(dir, 'mock-runtime')
-  writeFileSync(wrapper, `#!/bin/sh\nexec bun run ${mockFile} "$@"\n`)
-  chmodSync(wrapper, 0o755)
-  return wrapper
+// RFC-254: a full spawn command head `[bun, run, <mock>]` (baseOpts routes an
+// array through opencodeCmd, a string through runtimeBinary). This WAS a
+// `#!/bin/sh` wrapper file — unspawnable on Windows; spawning bun directly
+// streams natively on every OS (runtime-smoke.test.ts precedent).
+function wrapperFor(mockFile: string): readonly string[] {
+  return [process.execPath, 'run', mockFile]
 }
 
-function wrapperHoldingStdoutOpen(): string {
+// RFC-254: a runtime whose DIRECT child exits 0 but leaves a detached grandchild
+// holding the inherited stdout pipe open — runSystemAgent must see the child exit
+// yet still hit a post-exit-flush-timeout. Was `#!/bin/sh\n(sleep 3; echo …) &`
+// (POSIX backgrounding); the portable form spawns an unref'd grandchild that
+// writes after 3s with inherited stdout, then the parent exits immediately.
+function wrapperHoldingStdoutOpen(): readonly string[] {
   const dir = mkdtempSync(join(tmpdir(), 'aw-sysrun-bin-'))
-  const wrapper = join(dir, 'mock-runtime')
-  writeFileSync(wrapper, '#!/bin/sh\n(sleep 3; echo late-evidence) &\nexit 0\n')
-  chmodSync(wrapper, 0o755)
-  return wrapper
+  const grandchild = join(dir, 'late-writer.ts')
+  writeFileSync(grandchild, "setTimeout(() => process.stdout.write('late-evidence\\n'), 3000)\n")
+  const holder = join(dir, 'hold-stdout.ts')
+  writeFileSync(
+    holder,
+    [
+      `const child = Bun.spawn([process.execPath, 'run', ${JSON.stringify(grandchild)}], { stdout: 'inherit', stdin: 'ignore', stderr: 'ignore' })`,
+      'child.unref()',
+      'process.exit(0)',
+      '',
+    ].join('\n'),
+  )
+  return [process.execPath, 'run', holder]
 }
 
 const SET_ENV_KEYS = [
@@ -54,13 +61,19 @@ function scratchParentDir(): string {
   return mkdtempSync(join(tmpdir(), 'aw-sysrun-scratch-'))
 }
 
-const baseOpts = (scratchParent: string, binary: string) => ({
+const baseOpts = (scratchParent: string, binary: string | readonly string[]) => ({
   feature: 'intent-builder',
   agentName: 'aw-intent-builder',
   systemPrompt: 'You are a test system agent.',
   prompt: 'echo this back: sysrun-nonce-42',
   protocol: 'opencode' as const,
-  runtimeBinary: binary,
+  // RFC-254: a command-array binary (wrapperFor → [bun, run, mock]) rides the
+  // opencodeCmd seam (Windows-spawnable); a plain path stays runtimeBinary. An
+  // UNBRANDED opencodeCmd + testOnlyUnverifiedRuntime is the same legacy
+  // buildSpawn branch as runtimeBinary (systemAgentRun.ts:463/479 both feed
+  // driver.buildSpawn; opencode driver prefers opencodeCmd) — byte-identical
+  // behavior, only the head becomes Windows-spawnable.
+  ...(typeof binary === 'string' ? { runtimeBinary: binary } : { opencodeCmd: binary }),
   scratchParent,
   testOnlyUnverifiedRuntime: true,
   timeoutMs: 20_000,
@@ -117,8 +130,12 @@ describe('runSystemAgent', () => {
     }
     // Nothing leaked outside the (removed) scratch dirs.
     expect(readdirSync(scratchParent)).toEqual([])
-    expect(() => assertSafeSeedPath('/tmp/wt', '../up')).toThrow(/unsafe seed path/)
-    expect(assertSafeSeedPath('/tmp/wt', 'ok/nested.md')).toBe('/tmp/wt/ok/nested.md')
+    // RFC-254: use a host-resolved worktree root. A bare '/tmp/wt' has no drive
+    // letter, but resolve() adds the CWD drive to the seed path on Windows, so the
+    // lexical-inside check compared two different roots and rejected every path.
+    const wt = resolve('/tmp/wt')
+    expect(() => assertSafeSeedPath(wt, '../up')).toThrow(/unsafe seed path/)
+    expect(assertSafeSeedPath(wt, 'ok/nested.md')).toBe(resolve(wt, 'ok/nested.md'))
   })
 
   test('timeout escalates TERM→KILL and retains scratch', async () => {
@@ -163,7 +180,10 @@ describe('runSystemAgent', () => {
       scratchName: 'turn-cleanup-failure',
       retainScratchOnSuccess: true,
       buildPlan: async () => ({
-        cmd: ['/bin/sh', '-c', 'exit 0'],
+        // RFC-254: cross-platform no-op child — /bin/sh does not exist on Windows.
+        // buildPlan supplies the whole cmd (no driver flags appended), so bun -e
+        // is safe here (unlike a driver head, where trailing --flags break -e).
+        cmd: [process.execPath, '-e', 'process.exit(0)'],
         env: { PATH: '/usr/bin:/bin' },
         stdin: { mode: 'ignore' },
         cleanup: async () => {
@@ -223,24 +243,35 @@ describe('runSystemAgent', () => {
     expect(terminals).toEqual(['complete'])
   })
 
-  test('inherited pipe timeout settles capture incomplete without changing business result', async () => {
-    const terminals: Array<{ state: string; reason?: string }> = []
-    const sink: SystemAgentEventSinkV1 = {
-      append: async () => {},
-      setRootSessionId: async () => {},
-      markTerminal: async (state, reason) => {
-        terminals.push({ state, ...(reason === undefined ? {} : { reason }) })
-      },
-    }
-    const scratchParent = scratchParentDir()
-    const result = await runSystemAgent({
-      ...baseOpts(scratchParent, wrapperHoldingStdoutOpen()),
-      eventSink: sink,
-    })
+  // RFC-254: skipped on Windows — this test needs a runtime whose DIRECT child
+  // exits while a detached grandchild keeps the inherited stdout pipe open, so the
+  // framework hits post-exit-flush-timeout ('incomplete'). On Windows the pipe
+  // reaches EOF when the parent exits regardless of an unref'd grandchild (no
+  // POSIX-style handle inheritance across the detached boundary), so the condition
+  // is not reproducible here ('complete'). The production flush cap it exercises is
+  // platform-agnostic (a plain timer on the stdout drain); only the repro diverges.
+  test.skipIf(process.platform === 'win32')(
+    'inherited pipe timeout settles capture incomplete without changing business result',
+    async () => {
+      const terminals: Array<{ state: string; reason?: string }> = []
+      const sink: SystemAgentEventSinkV1 = {
+        append: async () => {},
+        setRootSessionId: async () => {},
+        markTerminal: async (state, reason) => {
+          terminals.push({ state, ...(reason === undefined ? {} : { reason }) })
+        },
+      }
+      const scratchParent = scratchParentDir()
+      const result = await runSystemAgent({
+        ...baseOpts(scratchParent, wrapperHoldingStdoutOpen()),
+        eventSink: sink,
+      })
 
-    expect(result.status).toBe('ok')
-    expect(terminals).toEqual([{ state: 'incomplete', reason: 'post-exit-flush-timeout' }])
-  }, 10_000)
+      expect(result.status).toBe('ok')
+      expect(terminals).toEqual([{ state: 'incomplete', reason: 'post-exit-flush-timeout' }])
+    },
+    10_000,
+  )
 
   test('transient terminal failure retries the remembered incomplete state', async () => {
     process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
@@ -299,7 +330,7 @@ describe('runSystemAgent', () => {
     // Unbranded command, no test flag → legacy path runs the stub fine.
     const legacy = await runSystemAgent({
       ...optsWithoutFlag,
-      opencodeCmd: [binary],
+      opencodeCmd: binary,
       scratchName: 'turn-unbranded',
     })
     expect(legacy.status).toBe('ok')
@@ -309,7 +340,7 @@ describe('runSystemAgent', () => {
     // back to the legacy spawn).
     const verified = await runSystemAgent({
       ...optsWithoutFlag,
-      opencodeCmd: markProductionOpencodeCommand([binary]),
+      opencodeCmd: markProductionOpencodeCommand([...binary]),
       scratchName: 'turn-branded',
     })
     expect(verified.status).toBe('identity-failed')

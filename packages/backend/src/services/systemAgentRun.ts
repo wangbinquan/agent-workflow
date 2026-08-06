@@ -37,6 +37,7 @@ import {
 import { createLogger, type Logger } from '@/util/log'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
+import { killProcessTree } from '@/util/process'
 import {
   isExecutionIdentityFailureCode,
   maskDiagnosticsText,
@@ -168,10 +169,21 @@ export interface SystemAgentRunResult {
   scratchRetained: boolean
 }
 
-/** kill the whole process group (the child is `detached`), best-effort. */
+/**
+ * Kill the child's whole process tree, best-effort. RFC-254: this used a raw
+ * `process.kill(-pid, signal)` (POSIX process-group kill via a negative PID),
+ * which has no Windows equivalent — the child was never reaped and every
+ * timeout/abort/cancel settled as `unreaped` (a system agent was effectively
+ * unkillable there). Route through the shared platform-aware primitive instead:
+ * POSIX still group-kills via `-pid` (byte-identical); Windows walks the tree
+ * with `taskkill /T /F`. That is best-effort (the main runner's fallback when no
+ * Job Object was adopted), which is sufficient here because system agents run in
+ * an ephemeral scratch dir — provable reap gates persistent-store reuse, which
+ * this path does not have.
+ */
 function killGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   try {
-    if (typeof child.pid === 'number') process.kill(-child.pid, signal)
+    if (typeof child.pid === 'number') killProcessTree(child.pid, signal)
     else child.kill(signal === 'SIGKILL' ? 9 : 15)
   } catch {
     /* already gone */
