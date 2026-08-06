@@ -1354,3 +1354,15 @@ markdown-diff-table-word 新成员/macOS unsaved-guard——上轮在 Windows �
 - **诚实边界修正**：先前提交把 T40b 记为「端到端验收通过」——**准确表述是「在用户的 ARM64 验收机
   上端到端验收通过」**；x64（尤其 GitHub runner）行为未过、real-x64 机未测。T40b 的隐私证明对
   用户目标机成立，但**不主张跨 x64 通用**，直到上面根因查清。
+
+## `changes-grouped-sidebar` 的 win32 视觉基线待刷（2026-08-06 登记）
+
+- **背景**:结构变更代码视图三项 UI 变更(默认全文渲染态 / hunk 正文精确标线 / 大纲栏收起
+  为细轨 dock,commit `9269c5ee`)使 `rfc250-visual-states.spec.ts` 的 "Changes grouped
+  sidebar" 场景基线过期;spec 已改为截图前显式切「改动」视图(场景主题是分组侧栏,且
+  fixture 未 seed 真实 worktree 文件,全文视图会渲染 file-not-exist 占位)。
+- **已刷**:darwin(本地,先 `build:binary:e2e` 后 rm+重生成,复跑绿);linux(按仓规走
+  CI artifact 铸造周期——删旧基线推送,取失败 run artifact 的 actual 回填)。
+- **⏳ 待刷**:`changes-grouped-sidebar-chromium-win32.png` 仍是旧 UI(RFC-254 T32/T33 期
+  在 Windows VM 上生成的 44 张之一)。win32 视觉腿不在 CI 门禁里,不阻塞;下次在
+  Windows VM(`reference_windows_vm`)跑 RFC-254 视觉验收时随手重生成该场景即可。

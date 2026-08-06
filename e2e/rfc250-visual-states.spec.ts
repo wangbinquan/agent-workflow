@@ -677,6 +677,12 @@ test.describe('RFC-250 §12.3 high-risk visual states', () => {
     const panel = page.getByTestId('change-review')
     await expect(panel).toBeVisible()
     await expect(panel.getByTestId('change-group')).toHaveCount(3)
+    // The scene's subject is the grouped SIDEBAR. Code files default to the
+    // full rendered view (2026-08-06), which reads real worktree content this
+    // fixture doesn't seed — pin the hunk view so the surface stays the
+    // mocked diff instead of an empty-file placeholder.
+    await panel.getByRole('radio', { name: /改动|Changes/ }).click()
+    await expect(panel.locator('.changes__diff')).toBeVisible()
     await expect(panel).toHaveScreenshot('changes-grouped-sidebar.png', COMPONENT_SNAPSHOT_OPTS)
   })
 
