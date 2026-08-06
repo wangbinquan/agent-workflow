@@ -406,9 +406,15 @@ checkpoint、bun:sqlite 于 GC 才释放句柄 ⇒ 换库必 EBUSY（boot pendin
 `pluginInstaller.ts:295` `new URL(spec).pathname`（应 `fileURLToPath`）——该文件全程被并发 session 占用
 （uncommitted），按并发保留原则未代改，登记待并发方提交后跟进。
 
-**剩余**：migration-\* 混合簇（逐条：EBUSY vs 断言）、`cli` 及 per-file sweep 未跑完的 r/s/t/u/w 段
-（sweep 为提交本轮成果已 kill，可重起续扫）。本轮提交：`27d682ec`/`a325ff1c`/`13eeb8cf`/`3c13e41c`/
-`9a561e0f`/`daedfe7a`。POSIX 全绿、每簇真机复验。
+**剩余**：migration-\* 混合簇（逐条：文件后备库 EBUSY vs `:memory:` 的断言级红）、per-file sweep 未跑完的
+r/s/t/u/w 段（sweep 为提交本轮成果已 kill，可重起续扫）。**`cli`(1) 已查清＝Windows flaky 非产品缺陷**：
+「doctor flags missing migrations folder」在整文件跑时约 1/4 概率 `secret file protection` 报
+present-empty（"(created on first daemon start)"）——但**单测隔离必过、独立 `doctorCommand()` 探针
+在真机稳定返回 "per-user ACL … [token]"**（生产 doctor 密钥检查在 Windows 工作正常，已实证），加一行
+`console.error` 即稳定转绿（海森堡＝时序/文件可见性竞态，非确定性）。按「flaky 不得以重跑掩盖」留待
+定位根因（疑与整文件跑时 `removeTempDirSync` 的 `Bun.gc(true)` 逐 afterEach 触发的终结器时序有关），
+**未提交任何掩盖性改动**。本轮提交：`27d682ec`/`a325ff1c`/`13eeb8cf`/`3c13e41c`/`9a561e0f`/`daedfe7a`/
+`2054fcd2`。POSIX 全绿、每簇真机复验。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
