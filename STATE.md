@@ -549,6 +549,25 @@ registry(1) 走**配置面 `opencodePath` 单路径**——route 冒烟的是 co
 是真 detached 后台子进程语义——Windows Job Object vs POSIX 进程组，最难，须单列。三者混在一个文件、且触 RFC-234
 verified 系统 agent 核心 ⇒ 整体作**新上下文增量**（本缝只吃得下其 (a) 子情形）。
 
+**2026-08-06 续十 · T31 rfc234-system-agent-run 收口——顺带抓修第 6 个 Windows 生产缺陷（真机 11/1skip/0）**：
+续九把 rfc234 判为「新上下文增量、本缝只吃得下 (a)」，真机走下去比预判更好也更糟——(a) 命令数组缝清了 8/12，
+剩 4 条经真机逐条诊断**各有真因**，其中两条是**生产缺陷**不是测试问题：①**killGroup 用 `process.kill(-pid, signal)`
+（POSIX 进程组负 PID kill），Windows 无进程组 ⇒ 空操作**——超时/中止/取消一律落 `unreaped`，即系统 agent
+（intent-builder / distiller / smoke）在 Windows 上**超时后杀不掉、进程泄漏**（第 6 个 Windows 生产 bug）。改走仓内
+既有平台感知原语 `util/process.ts:killProcessTree`（主 runner 同款）：POSIX 仍 `-pid` 组杀逐字节不变、Windows 走
+`taskkill /T /F`（best-effort，系统 agent 用临时 scratch 非持久 store、不需 Job Object 可证明 reap）——timeout/abort
+两条转绿。②seed-path oracle 硬编码 `/tmp/wt` 无盘符，`resolve()` 在 Windows 给 seed 加 CWD 盘符 ⇒ lexical-inside 比
+两个不同根、全拒（生产 assertSafeSeedPath 本对，是**测试预言** POSIX 偏置）——改 host-resolve。③(b) 品牌/verified
+半程真机**直接给 identity-failed**（无 auth/seal 在 spawn 前失败、不依赖 sealable 二进制）⇒ 续九「须单 spawnable
+二进制阻塞」的预判被推翻，命令数组即可、无需 skip。④(c) inherited-pipe（detached 孙进程持 stdout）Windows 确实
+不可复现（父退出即闭管、无 POSIX 式跨 detached 句柄继承，实测 complete≠incomplete）⇒ 唯一 `test.skipIf(win32)` +
+登记 test-suite-policy（生产 flush cap 是平台无关计时器、仅复现分叉）。**验收**：mac rfc234 12/0 + kill-path 套件
+（process-tree-ownership/rfc208）12/0（killProcessTree 复用无回归）+ policy 5/0 + typecheck/lint/format 绿；真 ARM64
+机 **11 pass / 1 skip / 0 fail**（此前 8/4）。**提交 `410036b8`**（3 文件一步 pathspec）+ dev-gotchas 补「`process.kill(-pid)`
+是 POSIX-only，跨平台杀进程走 killProcessTree」。**spawn-failed 桶只剩 runtime-routes(10)**——配置面 `opencodePath`
+单路径，须 Windows 可 spawn 的单 config binary 或让 route 接命令数组（产品面），留后续。**教训**：别被「须新上下文」
+的预判劝退——真机逐条诊断常拆出「测试预言 bug + 真生产缺陷 + 假阻塞」的混合，其中生产缺陷（killGroup）恰最值钱。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
