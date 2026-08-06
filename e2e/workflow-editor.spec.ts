@@ -776,7 +776,13 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     for (const viewport of viewports) {
       await page.setViewportSize(viewport)
       await openEditor(page)
-      await page.locator('.react-flow__node[data-id="agent_1"]').click()
+      // RFC-250 intentionally opens narrow canvases on the stable entry node
+      // instead of shrinking the whole graph into an unreadable overview.
+      // This case owns workspace/Inspector geometry, so interact with that
+      // guaranteed-visible entry rather than an off-screen downstream node.
+      const visibleEntryNode = page.locator('.react-flow__node[data-id="in_1"]')
+      await expect(visibleEntryNode).toBeInViewport()
+      await visibleEntryNode.click()
       const expectedMode =
         viewport.width >= 1536
           ? 'wide'
@@ -1003,7 +1009,11 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await expectEditorAxeClean(page, '390 editor NodePicker dialog')
     await dialog.locator('.dialog__close').click()
 
-    await page.locator('.react-flow__node[data-id="agent_1"]').click()
+    // The 390px readable-focus camera keeps the entry node actionable while
+    // downstream agent_1 is intentionally outside the viewport.
+    const visibleEntryNode = page.locator('.react-flow__node[data-id="in_1"]')
+    await expect(visibleEntryNode).toBeInViewport()
+    await visibleEntryNode.click()
     dialog = page.getByTestId('workflow-editor-inspector-surface')
     await expect(dialog).toBeVisible()
     await expectEditorAxeClean(page, '390 editor inspector dialog')
