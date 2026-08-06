@@ -312,7 +312,7 @@ describe.skipIf(process.platform !== 'win32')(
     // identity digest requires a sealed MCP wrapper inside sealRoot, which needs
     // a containment provider — Windows v1 has none, so local MCP is a separate
     // architectural question, not a plan-build win32 defect. See audit-backlog.)
-    test('full plan with a managed skill builds on real win32', async () => {
+    test('full plan with a managed skill + bash-allow builds on real win32', async () => {
       const root = longTemp('rfc254-vp-feat-')
       const originalAuth = process.env.OPENCODE_AUTH_CONTENT
       const originalHome = process.env.HOME
@@ -361,7 +361,11 @@ describe.skipIf(process.platform !== 'win32')(
         })
 
         const ctx: BusinessNodeSpawnContext = {
-          agent: probeAgent(),
+          // bash:'allow' too — Windows has no sealed shell
+          // (SEALED_SHELL_SUPPORTED=false), so this also sweeps that the null
+          // shell path is handled rather than assumed. The CORE test above
+          // keeps bash:'deny'.
+          agent: { ...probeAgent(), permission: { bash: 'allow' } },
           prompt: 'do stable work',
           injectedMemoryBlock: null,
           dependents: [],
