@@ -41,80 +41,95 @@ function bindPairs(args: readonly string[], flag: '--bind' | '--ro-bind'): strin
   return out
 }
 
-describe('git mirror allow-back is gated on the directory existing', () => {
-  test('present (default) ⇒ mirror is a read-write allow-back and one bwrap bind', () => {
-    const policy = computeSandboxPolicy(base)
-    expect(policy.allowSubtrees).toContain(MIRROR)
-    // Exactly ONE bind: the renderer used to add its own on top of the
-    // allowSubtrees loop, so the argv carried the same mount twice.
-    expect(bindPairs(renderBwrapArgs(policy), '--bind').filter((p) => p === MIRROR)).toEqual([
-      MIRROR,
-    ])
-  })
-
-  test('absent ⇒ no mirror allow-back and NO bwrap bind (a missing SOURCE aborts the spawn)', () => {
-    const policy = computeSandboxPolicy({ ...base, gitMirrorPresent: false })
-    expect(policy.allowSubtrees).not.toContain(MIRROR)
-    expect(renderBwrapArgs(policy).join(' ')).not.toContain(MIRROR)
-    // Seatbelt is a deny-list, so an absent mirror simply has no allow rule;
-    // nothing else about the profile may change.
-    expect(renderSeatbeltProfile(policy)).not.toContain(`(subpath "${MIRROR}")`)
-    // The worktree and run dir are untouched by the mirror decision.
-    expect(policy.allowSubtrees).toEqual([WT, RUN_DIR])
-  })
-
-  test('absent + readOnlyWorktrees ⇒ mirror is not read-only-allowed either', () => {
-    const policy = computeSandboxPolicy({
-      ...base,
-      readOnlyWorktrees: true,
-      gitMirrorPresent: false,
+// RFC-254: every describe here asserts computeSandboxPolicy → renderBwrapArgs /
+// renderSeatbeltProfile output — the Linux bwrap / macOS SBPL sandbox specs.
+// Those are POSIX-only (D1: no win32 containment provider) and policy.ts renders
+// them with host `path` helpers, so on win32 the paths come out backslashed and
+// `validatePolicyPath` rejects the POSIX fixture paths outright. Exercised on the
+// POSIX CI legs; skipped on win32.
+describe.skipIf(process.platform === 'win32')(
+  'git mirror allow-back is gated on the directory existing',
+  () => {
+    test('present (default) ⇒ mirror is a read-write allow-back and one bwrap bind', () => {
+      const policy = computeSandboxPolicy(base)
+      expect(policy.allowSubtrees).toContain(MIRROR)
+      // Exactly ONE bind: the renderer used to add its own on top of the
+      // allowSubtrees loop, so the argv carried the same mount twice.
+      expect(bindPairs(renderBwrapArgs(policy), '--bind').filter((p) => p === MIRROR)).toEqual([
+        MIRROR,
+      ])
     })
-    expect(policy.readOnlyAllowSubtrees).toEqual([WT])
-    expect(renderBwrapArgs(policy).join(' ')).not.toContain(MIRROR)
-  })
-})
 
-describe('allowMetadataFiles covers read-only allow-backs, not just read-write ones', () => {
-  // Production failure: a `readonly: true` script node (RFC-253) runs against
-  // the canonical worktree with allowSubtrees = [runDir]. Deriving the ancestor
-  // metadata allows from allowSubtrees alone left `<appHome>/worktrees` and
-  // `<appHome>/worktrees/r1` unreadable, and every tool that stats each path
-  // prefix (POSIX `sh`'s `cd`, git's upward probe) died on the prefix.
-  test('readOnlyWorktrees run keeps the worktree ancestor chain stat-able', () => {
-    const policy = computeSandboxPolicy({ ...base, readOnlyWorktrees: true })
-    expect(policy.allowSubtrees).toEqual([RUN_DIR])
-    expect(policy.readOnlyAllowSubtrees).toContain(WT)
-    for (const ancestor of [HOME, join(HOME, 'worktrees'), join(HOME, 'worktrees', 'r1')]) {
-      expect(policy.allowMetadataFiles).toContain(ancestor)
-    }
-    const profile = renderSeatbeltProfile(policy)
-    expect(profile).toContain(`(allow file-read-metadata (literal "${join(HOME, 'worktrees')}"))`)
-  })
+    test('absent ⇒ no mirror allow-back and NO bwrap bind (a missing SOURCE aborts the spawn)', () => {
+      const policy = computeSandboxPolicy({ ...base, gitMirrorPresent: false })
+      expect(policy.allowSubtrees).not.toContain(MIRROR)
+      expect(renderBwrapArgs(policy).join(' ')).not.toContain(MIRROR)
+      // Seatbelt is a deny-list, so an absent mirror simply has no allow rule;
+      // nothing else about the profile may change.
+      expect(renderSeatbeltProfile(policy)).not.toContain(`(subpath "${MIRROR}")`)
+      // The worktree and run dir are untouched by the mirror decision.
+      expect(policy.allowSubtrees).toEqual([WT, RUN_DIR])
+    })
 
-  test('plugin read-only allow-back also gets its ancestors (RFC-251 shape)', () => {
-    const pluginRoot = join(HOME, 'plugins', 'plg_1')
-    const policy = computeSandboxPolicy({ ...base, readOnlyAllowSubtrees: [pluginRoot] })
-    expect(policy.allowMetadataFiles).toContain(join(HOME, 'plugins'))
-  })
-})
+    test('absent + readOnlyWorktrees ⇒ mirror is not read-only-allowed either', () => {
+      const policy = computeSandboxPolicy({
+        ...base,
+        readOnlyWorktrees: true,
+        gitMirrorPresent: false,
+      })
+      expect(policy.readOnlyAllowSubtrees).toEqual([WT])
+      expect(renderBwrapArgs(policy).join(' ')).not.toContain(MIRROR)
+    })
+  },
+)
 
-describe('the bwrap renderer reads the appHome off the policy', () => {
-  // The renderer used to receive a second copy from the caller. `wrapSandbox`
-  // realpaths every policy root but passed the RAW ctx.appHome, so a symlinked
-  // appHome masked one path while the allow-backs bound another.
-  test('tmpfs target is the policy appHome, and the policy carries it', () => {
-    const policy = computeSandboxPolicy(base)
-    expect(policy.appHome).toBe(HOME)
-    const args = renderBwrapArgs(policy)
-    expect(args[args.indexOf('--tmpfs') + 1]).toBe(HOME)
-  })
+describe.skipIf(process.platform === 'win32')(
+  'allowMetadataFiles covers read-only allow-backs, not just read-write ones',
+  () => {
+    // Production failure: a `readonly: true` script node (RFC-253) runs against
+    // the canonical worktree with allowSubtrees = [runDir]. Deriving the ancestor
+    // metadata allows from allowSubtrees alone left `<appHome>/worktrees` and
+    // `<appHome>/worktrees/r1` unreadable, and every tool that stats each path
+    // prefix (POSIX `sh`'s `cd`, git's upward probe) died on the prefix.
+    test('readOnlyWorktrees run keeps the worktree ancestor chain stat-able', () => {
+      const policy = computeSandboxPolicy({ ...base, readOnlyWorktrees: true })
+      expect(policy.allowSubtrees).toEqual([RUN_DIR])
+      expect(policy.readOnlyAllowSubtrees).toContain(WT)
+      for (const ancestor of [HOME, join(HOME, 'worktrees'), join(HOME, 'worktrees', 'r1')]) {
+        expect(policy.allowMetadataFiles).toContain(ancestor)
+      }
+      const profile = renderSeatbeltProfile(policy)
+      expect(profile).toContain(`(allow file-read-metadata (literal "${join(HOME, 'worktrees')}"))`)
+    })
 
-  test('readOnlyWorktrees emits the mirror only as --ro-bind, never --bind', () => {
-    const args = renderBwrapArgs(computeSandboxPolicy({ ...base, readOnlyWorktrees: true }))
-    expect(bindPairs(args, '--bind')).not.toContain(MIRROR)
-    expect(bindPairs(args, '--ro-bind')).toContain(MIRROR)
-  })
-})
+    test('plugin read-only allow-back also gets its ancestors (RFC-251 shape)', () => {
+      const pluginRoot = join(HOME, 'plugins', 'plg_1')
+      const policy = computeSandboxPolicy({ ...base, readOnlyAllowSubtrees: [pluginRoot] })
+      expect(policy.allowMetadataFiles).toContain(join(HOME, 'plugins'))
+    })
+  },
+)
+
+describe.skipIf(process.platform === 'win32')(
+  'the bwrap renderer reads the appHome off the policy',
+  () => {
+    // The renderer used to receive a second copy from the caller. `wrapSandbox`
+    // realpaths every policy root but passed the RAW ctx.appHome, so a symlinked
+    // appHome masked one path while the allow-backs bound another.
+    test('tmpfs target is the policy appHome, and the policy carries it', () => {
+      const policy = computeSandboxPolicy(base)
+      expect(policy.appHome).toBe(HOME)
+      const args = renderBwrapArgs(policy)
+      expect(args[args.indexOf('--tmpfs') + 1]).toBe(HOME)
+    })
+
+    test('readOnlyWorktrees emits the mirror only as --ro-bind, never --bind', () => {
+      const args = renderBwrapArgs(computeSandboxPolicy({ ...base, readOnlyWorktrees: true }))
+      expect(bindPairs(args, '--bind')).not.toContain(MIRROR)
+      expect(bindPairs(args, '--ro-bind')).toContain(MIRROR)
+    })
+  },
+)
 
 // -----------------------------------------------------------------------------
 // runner 的 SpawnPlan → SandboxCtx 合并缝
@@ -124,6 +139,8 @@ describe('the bwrap renderer reads the appHome off the policy', () => {
 // `file://<cachedPath>` 全 ENOENT」的事故会原样复发且无任何预警。
 // 这里用源码层文本断言兜底（运行时巨型函数难直接覆盖时的既定做法）。
 // -----------------------------------------------------------------------------
+// This describe is a SOURCE-TEXT lock (greps runner.ts), so it is platform-
+// agnostic and runs on win32 too — unlike the policy-render describes above.
 describe('runner 必须把 plan 的三类子树下传给沙箱', () => {
   const runnerSrc = readFileSync(
     join(import.meta.dirname, '..', 'src', 'services', 'runner.ts'),

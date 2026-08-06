@@ -77,6 +77,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // the POSIX CI legs. The env-assembly, traversal-defense, and contained-spawn
   // mechanics in the same file DO run on win32 (portable `bun -e` commands).
   'packages/backend/tests/rfc253-script-execution.test.ts#skipIf': 2,
+  // RFC-254: the three policy-render describes assert computeSandboxPolicy →
+  // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
+  // rendered with host path helpers. The fourth (runner source-text lock) is
+  // platform-agnostic and still runs on win32. Render describes → POSIX CI legs.
+  'packages/backend/tests/sandbox-allowback-audit-2026-08-04.test.ts#skipIf': 3,
   'e2e/clarify.spec.ts#skip': 1,
   // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
   // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can
