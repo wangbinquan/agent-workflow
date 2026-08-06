@@ -37,6 +37,7 @@ import {
   type VerifiedLaunchManifest,
 } from './verifiedManifest'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
+import { sealDirectoryOwnerOnly } from '@/util/win32Acl'
 import { buildVerifiedOpencodePlan } from './verifiedPlanCore'
 import { runtimeContainmentAdmissionFromPrepared } from './containment'
 import { disabledShellCommandForHost, EXECUTABLE_SUFFIX_FOR_HOST } from '@/util/platformExec'
@@ -77,6 +78,11 @@ function assertAbsolutePrivateDirectory(path: string): Promise<void> {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
     await chmod(path, 0o700)
+    // RFC-254 T40b: seal to owner+TCB on win32 (mode above is synthesized there)
+    // so the system manifest written into this dir proves private. POSIX no-op.
+    if (process.platform === 'win32' && !(await sealDirectoryOwnerOnly(path)).trusted) {
+      return executionIdentityFailure('execution-identity-store-unsafe')
+    }
   })()
 }
 

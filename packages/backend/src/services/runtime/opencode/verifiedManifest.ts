@@ -4,7 +4,7 @@
 
 import { constants } from 'node:fs'
 import { lstat, open, unlink } from 'node:fs/promises'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { JsonValueSchema, OPENCODE_DIRECT_PROTOCOL_CODEC } from './directApiSchemas'
 import { verifiedSelfCommand } from './sealedSubprocess'
@@ -14,6 +14,7 @@ import {
   assertSameFileIdentityForHost,
   assertUnopenedPrivateFileForHost,
 } from '@/util/fileTrust'
+import { sealDirectoryOwnerOnly } from '@/util/win32Acl'
 import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
 import { FffCapabilityProbeSchema } from './fffCapability'
 import { VerifiedInventoryPlanSchema } from './verifiedInventory'
@@ -318,6 +319,13 @@ export async function writeVerifiedLaunchManifest(
   const parsed = VerifiedLaunchManifestSchema.parse(value)
   const bytes = Buffer.from(JSON.stringify(parsed), 'utf8')
   if (bytes.byteLength > MAX_VERIFIED_MANIFEST_BYTES) {
+    return executionIdentityFailure('execution-identity-store-unsafe')
+  }
+  // RFC-254 T40b: the manifest's directory is created across several plan paths
+  // (business run root, system run dir); seal it to owner+TCB here on win32 so the
+  // manifest inherits a private DACL no matter which path produced it, then the
+  // stat check below verifies it took. POSIX relies on the 0o600 open mode.
+  if (process.platform === 'win32' && !(await sealDirectoryOwnerOnly(dirname(path))).trusted) {
     return executionIdentityFailure('execution-identity-store-unsafe')
   }
   const handle = await open(

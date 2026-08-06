@@ -41,6 +41,7 @@ import {
   OPENCODE_STORE_LOCK_BASENAME,
   type OpencodeStoreServerBinding,
 } from '../src/services/runtime/opencode/storeHygiene'
+import { sealDirectoryOwnerOnly } from '../src/util/win32Acl'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BUILD_DIGEST = 'a'.repeat(64)
@@ -222,6 +223,11 @@ async function preparePinnedBusinessStore(
 ): Promise<{ root: string; dbPath: string }> {
   const store = await materializeStore(appHome, 'business', key)
   await mkdir(dirname(store.dbPath), { recursive: true, mode: 0o700 })
+  // RFC-254 T40b: production stores live under the clean ~/.agent-workflow; the
+  // fixture appHome sits under a possibly-broad %TEMP%. Seal the store dir before
+  // writing the db/lock so they inherit an owner+TCB DACL, exactly as the launcher
+  // does on win32. No-op on POSIX (the 0o700 above already suffices there).
+  if (process.platform === 'win32') await sealDirectoryOwnerOnly(dirname(store.dbPath))
   createPinnedAccountDatabase(store.dbPath)
   return store
 }

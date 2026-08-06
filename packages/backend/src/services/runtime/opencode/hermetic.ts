@@ -10,6 +10,7 @@ import { buildPluginSpecArray } from './pluginSpec'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 import { NULL_DEVICE_FOR_HOST, buildControlledPathForHost } from '@/util/platformExec'
 import { assertSameFileIdentityForHost } from '@/util/fileTrust'
+import { sealDirectoryOwnerOnly } from '@/util/win32Acl'
 
 export const OPENCODE_FFF_CAPABILITY_CODEC = 1 as const
 export const PINNED_BUILTIN_SKILL = Object.freeze({
@@ -360,6 +361,20 @@ async function ensurePrivateDirectory(root: string, path: string): Promise<strin
     cursor = resolvedParent
   }
   await chmod(resolvedPath, 0o700)
+  // RFC-254 T40b: on win32 the mode above is synthesized and the dir inherits its
+  // parent's DACL (a broad `%TEMP%` can grant Users/AuthUsers). Seal the layout
+  // ROOT to owner+TCB with (OI)(CI) inheritance — every subdir and file created
+  // below then inherits it, so one icacls call per store makes the manifest, the
+  // control ACK, and the session db all provably private. Sealing only the root
+  // (not each subdir, which is called many times per boot recovery) keeps this off
+  // the launch hot path. POSIX relies on the mode. Fails closed if sealing fails.
+  if (
+    process.platform === 'win32' &&
+    resolvedPath === resolvedRoot &&
+    !(await sealDirectoryOwnerOnly(resolvedPath)).trusted
+  ) {
+    return executionIdentityFailure('execution-identity-store-unsafe')
+  }
   return resolvedPath
 }
 

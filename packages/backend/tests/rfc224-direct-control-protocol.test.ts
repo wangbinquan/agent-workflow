@@ -15,6 +15,7 @@ import {
 import { lstatSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { assertWindowsFilePrivate, sealDirectoryOwnerOnly } from '@/util/win32Acl'
 
 const nonce = 'A'.repeat(43)
 const sessionID = 'ses_000000001001AAAAAAAAAAAAAA'
@@ -85,12 +86,23 @@ describe('RFC-224 nonce-bound exclusive acknowledgement', () => {
     expect(() => parseControlAck(`AW_OPENCODE_ACK ok ${wrong}\n`, nonce)).toThrow('nonce-mismatch')
   })
 
-  test('creates a 0600 regular file exactly once and reads it without following symlinks', () => {
+  test('creates a 0600 regular file exactly once and reads it without following symlinks', async () => {
     const root = mkdtempSync(join(tmpdir(), 'rfc224-control-'))
     roots.push(root)
+    // RFC-254 T40b: in production the ACK is written into a store dir the launcher
+    // already sealed; mirror that here so the write's win32 privacy proof has a
+    // clean DACL to inherit (a raw %TEMP% may grant Users/AuthUsers). No-op POSIX.
+    if (process.platform === 'win32') {
+      expect((await sealDirectoryOwnerOnly(root)).trusted).toBe(true)
+    }
     const ackPath = join(root, 'ack')
     writeControlAckExclusive(ackPath, { decision: 'ok', nonce })
-    expect(lstatSync(ackPath).mode & 0o777).toBe(0o600)
+    // POSIX proves privacy from the mode; win32 from the DACL (mode is synthesized).
+    if (process.platform === 'win32') {
+      expect(await assertWindowsFilePrivate(ackPath)).toEqual({ trusted: true })
+    } else {
+      expect(lstatSync(ackPath).mode & 0o777).toBe(0o600)
+    }
     expect(readControlAck(ackPath, nonce)).toEqual({ decision: 'ok', nonce })
     expect(() => writeControlAckExclusive(ackPath, { decision: 'nack', nonce })).toThrow(
       'exclusive-ack-write-failed',
