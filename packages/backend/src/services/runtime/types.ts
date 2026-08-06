@@ -268,6 +268,22 @@ export interface ListModelsOpts {
    */
   cacheKey?: string
   /**
+   * RFC-255 test seam: supply the daemon config that names custom providers.
+   * Production reads the real config file.
+   * 2026-08-06 restore: this and `injectedProviderSection` were accidentally
+   * swept out inside an unrelated commit while their committed consumers
+   * (cli/start.ts, opencode/models.ts) still reference them — main went
+   * typecheck-red. Restored verbatim; the RFC-255→256 teardown commit removes
+   * them TOGETHER with those consumers.
+   */
+  loadCustomProviderConfig?: () => { customProviders?: unknown }
+  /**
+   * RFC-255 catalog probe: enumerate with THIS provider section instead of the
+   * configured gateways, and skip the cache. Used to detect an id that would
+   * merge into a built-in catalog provider.
+   */
+  injectedProviderSection?: Record<string, unknown>
+  /**
    * RFC-256 test seam: supply the daemon config carrying the machine-config
    * inheritance switch. Production reads the real config file.
    */
