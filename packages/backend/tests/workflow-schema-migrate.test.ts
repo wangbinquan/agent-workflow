@@ -16,7 +16,8 @@
 import type { Workflow, WorkflowDefinition } from '@agent-workflow/shared'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -87,7 +88,12 @@ describe('GET path: legacy row → latest definition returned by getWorkflow', (
   })
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    // RFC-254: close the openDb handle and GC before rm — bun:sqlite frees the OS
+    // handle on GC, not close(), on Windows, so a bare rm of tmp (holds db.sqlite)
+    // EBUSYs. Dereferencing db lets the GC in removeTempDirSync collect it.
+    ;(db as unknown as { $client: { close(): void } }).$client.close()
+    db = undefined as unknown as DbClient
+    removeTempDirSync(tmp)
   })
 
   test('legacy v1 row → getWorkflow returns latest-version definition', async () => {
@@ -155,7 +161,12 @@ describe('POST / PUT paths normalize older versions → latest on write', () => 
   })
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    // RFC-254: close the openDb handle and GC before rm — bun:sqlite frees the OS
+    // handle on GC, not close(), on Windows, so a bare rm of tmp (holds db.sqlite)
+    // EBUSYs. Dereferencing db lets the GC in removeTempDirSync collect it.
+    ;(db as unknown as { $client: { close(): void } }).$client.close()
+    db = undefined as unknown as DbClient
+    removeTempDirSync(tmp)
   })
 
   test('createWorkflow with v1 def → DB row stores latest version', async () => {

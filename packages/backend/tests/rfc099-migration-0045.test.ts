@@ -12,6 +12,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -94,6 +95,9 @@ describe('RFC-099 migration 0045 — DB with human admins', () => {
     fullDir = makeMigrationsFolder(FULL_MAX_IDX)
   })
   beforeEach(() => {
+    // RFC-254: prior case's bun:sqlite handle to dbPath is freed on GC not close()
+    // on Windows — this rebuild rm would EBUSY. Force the finalizer first.
+    if (process.platform === 'win32') Bun.gc(true)
     rmSync(dbPath, { force: true })
     const { sqlite } = openWithMigrations(dbPath, prevDir)
     try {
@@ -119,7 +123,7 @@ describe('RFC-099 migration 0045 — DB with human admins', () => {
     }
   })
   afterAll(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    removeTempDirSync(tmp)
     rmSync(prevDir, { recursive: true, force: true })
     rmSync(fullDir, { recursive: true, force: true })
   })
@@ -202,7 +206,7 @@ describe('RFC-099 migration 0045 — daemon-only DB (no human admin)', () => {
     fullDir = makeMigrationsFolder(FULL_MAX_IDX)
   })
   afterAll(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    removeTempDirSync(tmp)
     rmSync(prevDir, { recursive: true, force: true })
     rmSync(fullDir, { recursive: true, force: true })
   })
