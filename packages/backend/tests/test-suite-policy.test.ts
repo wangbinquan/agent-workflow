@@ -71,6 +71,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // `pgrep -f` survivor scan (ENOENT on Windows). The Windows descendant-lifetime
   // guarantee is the Job Object (rfc254-process-tree-ownership win32 branch).
   'packages/backend/tests/rfc208-unbounded-git-and-permits.test.ts#skipIf': 1,
+  // RFC-254: one case creates a file literally named `:tricky.md` to prove
+  // leading-colon names are treated literally (not pathspec magic). `:` is an
+  // illegal filename char on Windows (drive/ADS separator), so the case's premise
+  // can't exist there; the guard it locks is platform-agnostic production code.
+  'packages/backend/tests/rfc193-force-include.test.ts#skipIf': 1,
   // RFC-254: two script-node describes render the Linux bwrap args / macOS SBPL
   // profile (network fence + readonly boundary) — POSIX sandbox specs never
   // produced on win32 (D1), whose renderers use host path helpers. Exercised on

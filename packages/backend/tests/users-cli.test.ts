@@ -2,7 +2,8 @@
 // the temp $HOME so the daemon DB lands in a tmp dir.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -18,7 +19,7 @@ beforeEach(() => {
 afterEach(() => {
   if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
   else process.env.AGENT_WORKFLOW_HOME = prevHome
-  rmSync(homeDir, { recursive: true, force: true })
+  removeTempDirSync(homeDir)
 })
 
 describe('user CLI', () => {

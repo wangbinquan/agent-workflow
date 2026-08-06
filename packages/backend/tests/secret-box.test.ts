@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSecretBox, createSecretBoxFromKey, ensureSecretKey } from '../src/auth/secretBox'
+import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
 
 describe('ensureSecretKey', () => {
   test('creates a 32-byte file with mode 0600 on first call', () => {
@@ -17,7 +18,9 @@ describe('ensureSecretKey', () => {
       expect(k.length).toBe(32)
       expect(existsSync(keyPath)).toBe(true)
       const mode = statSync(keyPath).mode & 0o777
-      expect(mode).toBe(0o600)
+      // RFC-254: mode bits are protection only where the OS honours them; on win32
+      // secret.key's confidentiality is the per-user ACL, not 0600 (doctor D19).
+      if (statMetadataIsAuthoritative(process.platform)) expect(mode).toBe(0o600)
       const second = ensureSecretKey(keyPath)
       expect(Buffer.compare(k, second)).toBe(0)
       expect(Buffer.compare(k, readFileSync(keyPath))).toBe(0)

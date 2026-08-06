@@ -11,9 +11,10 @@
 //   K3 lossy collision is NOT adopted: a row whose legacy key matches but
 //      whose url is a DIFFERENT repo under the new canonicalization stays
 //      untouched; the request cold-clones its own mirror.
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync } from 'node:fs'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -51,6 +52,9 @@ async function seedRepo(name: string): Promise<string> {
   ])
   return repo
 }
+
+// RFC-254: file:// clone is slow on Windows; default 5s timeout kills the in-flight clone.
+setDefaultTimeout(60_000)
 
 describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
   beforeEach(() => {
@@ -103,8 +107,8 @@ describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
     const rows = await db.select().from(cachedRepos)
     expect(rows.length).toBe(1)
     expect(rows[0]!.urlHash).toBe(newHash)
-    rmSync(tmp, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
+    removeTempDirSync(tmp)
+    removeTempDirSync(appHome)
   })
 
   test('K3 lossy collision is not adopted — the other repo stays, ours cold-clones', async () => {
@@ -137,7 +141,7 @@ describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
     const hashes = rows.map((r) => r.urlHash).sort()
     expect(hashes).toContain(legacyPlain)
     expect(hashes).toContain(gitUrlCacheKeyWith(parsedPlain, sha1).hash)
-    rmSync(tmp, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
+    removeTempDirSync(tmp)
+    removeTempDirSync(appHome)
   })
 })

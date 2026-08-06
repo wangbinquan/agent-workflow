@@ -70,17 +70,23 @@ describe('RFC-193 snapshotFullState forceIncludePaths (case 8e)', () => {
     expect(await treePaths(forced)).toContain('notes/hidden.md')
   })
 
-  test('leading-colon filename treated literally, not as pathspec magic (case 8e)', async () => {
-    writeFileSync(join(dir, ':tricky.md'), 'T')
-    // Also drop an ignored decoy tree: `:(glob)`-style interpretation would
-    // slurp it in; literal pathspec must include ONLY the colon file.
-    mkdirSync(join(dir, 'notes'), { recursive: true })
-    writeFileSync(join(dir, 'notes', 'decoy.md'), 'D')
-    const forced = await snapshotFullState(dir, { forceIncludePaths: [':tricky.md'] })
-    const paths = await treePaths(forced)
-    expect(paths).toContain(':tricky.md')
-    expect(paths).not.toContain('notes/decoy.md')
-  })
+  // RFC-254: ':' is an illegal filename char on Windows (drive/ADS separator), so
+  // a file literally named ':tricky.md' cannot exist there — the case's premise is
+  // POSIX-only. The pathspec-magic guard it locks is platform-agnostic production code.
+  test.skipIf(process.platform === 'win32')(
+    'leading-colon filename treated literally, not as pathspec magic (case 8e)',
+    async () => {
+      writeFileSync(join(dir, ':tricky.md'), 'T')
+      // Also drop an ignored decoy tree: `:(glob)`-style interpretation would
+      // slurp it in; literal pathspec must include ONLY the colon file.
+      mkdirSync(join(dir, 'notes'), { recursive: true })
+      writeFileSync(join(dir, 'notes', 'decoy.md'), 'D')
+      const forced = await snapshotFullState(dir, { forceIncludePaths: [':tricky.md'] })
+      const paths = await treePaths(forced)
+      expect(paths).toContain(':tricky.md')
+      expect(paths).not.toContain('notes/decoy.md')
+    },
+  )
 
   test('missing rostered path degrades to warn (snapshot still succeeds)', async () => {
     const sha = await snapshotFullState(dir, { forceIncludePaths: ['gone.md'] })
