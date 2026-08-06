@@ -9,7 +9,7 @@ import {
 } from 'node:fs'
 import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
 import {
   assertSourceFingerprintUnchanged,
@@ -209,7 +209,10 @@ describe('RFC-224 frozen instruction read', () => {
 
   test('rejects traversal, symlink, non-UTF8, and oversize inputs', async () => {
     const worktree = root()
-    const outside = join(dirname(worktree), `${worktree.split('/').at(-1)}-outside`)
+    // RFC-254: basename(), not split('/') — a Windows worktree path is backslash-
+    // separated, so split('/').at(-1) returns the whole path and the outside fixture
+    // lands at a bogus location (ENOENT before the guard even runs).
+    const outside = join(dirname(worktree), `${basename(worktree)}-outside`)
     roots.push(outside)
     await writeFile(outside, 'outside')
     await symlink(outside, join(worktree, 'AGENTS.md'))

@@ -22,7 +22,12 @@ function allTypeScriptSources(): Array<{ path: string; text: string }> {
       if (statSync(path).isDirectory()) {
         walk(path)
       } else if (name.endsWith('.ts')) {
-        files.push({ path: relative(SRC_ROOT, path), text: readFileSync(path, 'utf8') })
+        // RFC-254: normalize to '/' — relative() yields backslash paths on Windows,
+        // which would never match the forward-slash reachability expectations below.
+        files.push({
+          path: relative(SRC_ROOT, path).replace(/\\/g, '/'),
+          text: readFileSync(path, 'utf8'),
+        })
       }
     }
   }
