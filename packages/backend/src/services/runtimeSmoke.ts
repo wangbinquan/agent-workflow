@@ -59,7 +59,11 @@ export interface SmokeResult {
 
 export interface SmokeOptions {
   protocol: RuntimeKind
-  binaryPath: string
+  /** RFC-254: a string is the binary path (production); an array is a full spawn
+   *  command head (`[bun, run, mock]`) — used by Windows tests where a single-file
+   *  `.sh`/`.cmd` wrapper cannot stream the protocol. Routed to the driver's
+   *  command-array seam (opencodeCmd / runtimeCmd), not runtimeBinary. */
+  binaryPath: string | readonly string[]
   config?: { opencodePath?: string | null; claudeCodePath?: string | null }
   model?: string
   /** 2026-08-04 — the runtime row's extraArgs, so a probe reproduces the exact
@@ -217,7 +221,7 @@ export async function finalizeSmokeAttempt(input: {
  */
 async function buildSmokePlan(
   protocol: RuntimeKind,
-  binaryPath: string,
+  binaryPath: string | readonly string[],
   worktreeDir: string,
   runDir: string,
   prompt: string,
@@ -242,7 +246,15 @@ async function buildSmokePlan(
     worktreePath: worktreeDir,
     runDir,
     ...(containment === undefined ? {} : { appHome: containment.sandbox.appHome, containment }),
-    runtimeBinary: binaryPath,
+    // RFC-254: an array binaryPath is a full command head — route it to the
+    // driver's command-array seam (opencode reads opencodeCmd; claude reads
+    // runtimeCmd), and DON'T set runtimeBinary (claude's pickRuntimeHead would
+    // otherwise prefer it). A string stays the plain runtimeBinary (production).
+    // NB: use `typeof === 'string'`, not Array.isArray — the latter's guard is
+    // `any[]` and does NOT narrow a `readonly string[]` in its false branch.
+    ...(typeof binaryPath === 'string'
+      ? { runtimeBinary: binaryPath }
+      : { opencodeCmd: [...binaryPath], runtimeCmd: [...binaryPath] }),
     bridgeCredentials,
     log,
     ...(testOnlyUnverifiedRuntime ? { testOnlyUnverifiedRuntime: true } : {}),

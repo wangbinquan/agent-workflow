@@ -146,8 +146,12 @@ export const claudeCodeDriver: RuntimeDriver = {
       throw new Error(`claude-code runtime cannot enforce system permission profile '${profile}'`)
     }
     const readOnlyIntent = profile === 'intent-read-v1'
-    const sourceHead =
-      ctx.runtimeBinary != null && ctx.runtimeBinary !== '' ? [ctx.runtimeBinary] : undefined
+    // RFC-254: honor a command-array head (ctx.runtimeCmd) exactly like
+    // buildBusinessSpawn does — needed so the Windows smoke can spawn `[bun, run,
+    // mock]` instead of a `.sh` wrapper (unspawnable on Windows). pickRuntimeHead
+    // returns [runtimeBinary] whenever runtimeBinary is set, so production (which
+    // sets runtimeBinary and never runtimeCmd) is byte-identical to before.
+    const sourceHead = pickRuntimeHead(ctx.runtimeBinary, ctx.runtimeCmd)
     // RFC-237 design §2.4 — the declared-control branch executes ONLY a private
     // byte-frozen copy (same TOCTOU fence as opencode, shared module). The
     // explicit test seam skips the seal exactly like opencode's legacy test

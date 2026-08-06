@@ -8,7 +8,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { finalizeSmokeAttempt, smokeRuntime, smokeSandboxCtx } from '../src/services/runtimeSmoke'
@@ -21,13 +21,25 @@ const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const SMOKE_TIMEOUT = 30_000
 
-/** A single executable wrapper that execs `bun run <mock>` (binaryPath is one path). */
-function wrapperFor(mockFile: string): string {
-  const dir = mkdtempSync(join(tmpdir(), 'aw-smoke-bin-'))
-  const wrapper = join(dir, 'runtime-bin')
-  writeFileSync(wrapper, `#!/bin/sh\nexec bun run ${mockFile} "$@"\n`)
-  chmodSync(wrapper, 0o755)
-  return wrapper
+/** RFC-254: a full spawn command head `[bun, run, <mock>]` (smokeRuntime's
+ *  binaryPath accepts an array). This WAS a `#!/bin/sh` wrapper file — unspawnable
+ *  on Windows; a `.cmd` wrapper buffers stdout and never streams the protocol
+ *  (proven: 6/15 pass, the rest time out). Spawning bun directly streams natively
+ *  on every OS, and `bun run` forwards the driver's trailing session flags to the
+ *  mock as argv untouched (verified — unlike `bun -e`, which parses them as code). */
+function wrapperFor(mockFile: string): readonly string[] {
+  return [process.execPath, 'run', mockFile]
+}
+
+/** A command head for a binary that runs but speaks no protocol: it prints one line
+ *  of plain text and ignores its args, so the smoke must classify it
+ *  stream-nonconforming. Replaces `/bin/echo`, which does not exist on Windows
+ *  (there it would misclassify as spawn-failed). */
+function nonProtocolCmd(): readonly string[] {
+  const dir = mkdtempSync(join(tmpdir(), 'aw-smoke-noise-'))
+  const f = join(dir, 'noise.ts')
+  writeFileSync(f, `console.log('not-a-protocol-event')\n`)
+  return [process.execPath, 'run', f]
 }
 
 const SET_ENV_KEYS = [
@@ -503,11 +515,11 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
   )
 
   test(
-    'a non-protocol binary (/bin/echo) emits no parseable events → stream-nonconforming',
+    'a non-protocol binary emits no parseable events → stream-nonconforming',
     async () => {
       const r = await smokeRuntime({
         protocol: 'claude-code',
-        binaryPath: '/bin/echo',
+        binaryPath: nonProtocolCmd(),
         bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })

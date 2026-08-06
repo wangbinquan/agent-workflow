@@ -422,6 +422,15 @@ export interface SystemAgentSpawnContext {
 
   runtimeBinary?: string
   /**
+   * RFC-254: the claude driver's analogue of `opencodeCmd` — a full command head
+   * consumed by `buildSpawn` via `pickRuntimeHead(runtimeBinary, runtimeCmd)`.
+   * Production never sets it (it sets `runtimeBinary`), so behavior is unchanged;
+   * it exists so the Windows smoke can spawn `[bun, run, mock]` instead of a
+   * `.sh` wrapper (unspawnable on Windows). Mirrors `BusinessNodeSpawnContext`
+   * (mutable `string[]` — the shape `pickRuntimeHead`'s fallback param takes).
+   */
+  runtimeCmd?: string[]
+  /**
    * RFC-237 (design-gate P1-2) — RFC-154 config-dir profile of the SELECTED
    * runtime row (env-var name + leaf), threaded so a custom claude fork that
    * changed its discovery surface still lands in the private per-run dir.
