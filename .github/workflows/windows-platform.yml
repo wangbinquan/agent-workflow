@@ -119,6 +119,15 @@ jobs:
       - name: RFC-254 T31 — file:// plugin install (win32 path conversion)
         run: bun test --isolate packages/backend/tests/rfc254-plugin-file-url.test.ts
 
+      # RFC-254 T24/T25/T25c/T25d — win32 acceptance of the subsystems whose
+      # command resolution / spawn / kill-tree were ported in PR-1/PR-2: script
+      # nodes (deps + bash) already run in the platform-suites step above; this
+      # adds SCIP/code-intel and the memory-distill pipeline, confirmed green on
+      # a real Windows 11 ARM64 VM. CI-enforcing them here makes that acceptance
+      # permanent (and advances T35's backend-on-win32 convergence).
+      - name: RFC-254 T24/T25c/T25d — SCIP + code-intel + memory-distill
+        run: bun test --isolate packages/backend/tests/rfc258-code-intel.test.ts packages/backend/tests/structural-diff-scip-parse.test.ts packages/backend/tests/structural-diff-indexer-discovery.test.ts packages/backend/tests/memory-distill-scheduler.test.ts packages/backend/tests/distill-session-capture.test.ts packages/backend/tests/memory-distiller-source-context.test.ts
+
       # RFC-254 T20 (D11) — the git-credential subcommand that replaced the POSIX
       # `#!/bin/sh` askpass helper. Platform-agnostic (pure host-binding verdict +
       # env-driven subcommand, no DACL/seal dependency), so this guards the win32
