@@ -12172,8 +12172,8 @@ mark.prior-comment-anchor[data-active='true'] {
   cursor: pointer;
 }
 .changes__outline-dock-toggle:hover {
-  color: var(--fg);
-  border-color: var(--fg-subtle, var(--border));
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 .changes__outline-dock--closed .changes__outline-dock-toggle {
   writing-mode: vertical-rl;
