@@ -464,6 +464,21 @@ T40b 收口后在真机重跑 plan 列的红簇，得当前态（**这些是下�
 | rfc208-unbounded-git-and-permits          | ~~1~~ **0**  | ✅ 已修：进程组 kill 证明用 POSIX `sleep`+`pgrep`（Windows ENOENT）⇒ `skipIf(win32)`，Windows 保证由 Job Object（rfc254-process-tree-ownership win32 分支）覆盖。已登记 test-suite-policy。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | rfc188-isolated-agent-run                 | **0**        | 已绿（无需改）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
+**2026-08-06 续（后端全量 per-file 扫描抽头 + 逐簇修，非 plan 原抽样）**：起了 per-file
+sweep（1038 文件逐个 `bun test`，避开全量卡死）。已修簇：
+
+| 簇                          | fail         | 诊断 / 修法                                                                                                                                                                                                                                                                     |
+| --------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| backup                      | ~~4~~ **0**  | 测试的 `listTarMembers`/`extractTar` 直接 `Bun.spawn(['tar',…])`（GNU tar 抢 PATH，`C:\` 当 rsh）⇒ 复用 archive.ts 的 `tarBin()`（提升为 export，win32 走 `System32\tar.exe`）；cleanup 撞 VACUUM-INTO/`new Database` 句柄 EBUSY ⇒ `removeTempDirSync`。真机 8/0。              |
+| rfc213 restore 簇（7 文件） | ~~24~~ **0** | boot-integrity/raw-snapshot/restore-route/sqlite-synchronous/wal-checkpoint（5）= afterEach `rmSync` 撞 openDb/`new Database` 句柄 EBUSY ⇒ `removeTempDirSync`（真机各 solo 全绿）。restore/pending-restore（2）= **真生产缺陷**见下。真机 restore 16/0、pending-restore 10/0。 |
+
+**真生产缺陷②（RFC-213 灾备在 Windows 上整条不可用，已修 `daedfe7a`）**：`restore.ts
+swapInDbFile` 先 unlink 活库 `-wal`/`-shm` 再 rename 换库；POSIX 可动开着的文件、Windows 不行
+（EBUSY），而 restore 自己的 `rawCopyDb` 安全拷贝刚打开活库 checkpoint、bun:sqlite 在 Windows
+**GC 才释放句柄**⇒ 换库必 EBUSY（boot pending-restore 与 CLI restore 都挂）。修法：换库前
+`if(win32) Bun.gc(true)` 逼终结器释放无引用句柄（POSIX no-op）。回归覆盖=上述 2 测试文件
+（含 crash-WAL 用例 close 后补 win32 GC 模拟死进程释放、`makeTarball` 走 `removeTempDirSync`）。
+
 **共性修法（已在 T39/T40a/T40b 反复用到，下轮直接套）**：①POSIX 专属机制测（`pgrep`/进程组/
 `sleep`）→ `skipIf(win32)` + 登记 policy，Windows 等价保证指向 Job Object/对应 win32 分支；
 ②依赖 `process.platform` 的纯函数测 → 注入 platform 双分支断言；③`.sh` 假二进制 → `[bun, stub.ts]`

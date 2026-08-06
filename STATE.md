@@ -386,9 +386,29 @@ bob/pw123、evil host 拒（真机 HELPER=`!'C:\Users\…\bun.exe' 'run' 'C:\aw\
 ③测试里 `file://${winPath}` 畸形（`file://C:\…`）git 拒 ⇒ `pathToFileURL().href`。**rfc248 本次**（纯测试侧、
 零生产改动）：afterEach `removeTempDirSync`（clone 开 bun:sqlite 缓存库句柄）+ `pathToFileURL` clone URL +
 真 git 物化在 Windows 慢 → 13 条 `test()` 统一 60s 超时 + `worktreePath` 形状断言分隔符无关
-（`/worktrees[\\/]…/`，生产路径本就对）。**剩余簇**：`rfc252-git-hardening`(6：2 纯函数注入 platform +
-4 真 git+hooks 集成)、`task-start-git-identity`(3：`.sh` stub 换 `[bun, stub.ts]` 命令数组缝) + 未抽查文件约
-350 红。POSIX 全绿、每簇提交前真机复验。
+（`/worktrees[\\/]…/`，生产路径本就对）。
+
+**2026-08-06 续二 · T31 逐簇续（真机每簇复验，本轮新收口 5 簇 + 抓到并修 2 个生产缺陷）**：
+①`task-start-git-identity`(8/0)——`makeEnvCapturingStub` 的 `#!/usr/bin/env bash`+`jq` 假 opencode
+端口成 `.ts`、经 `opencodeCmd:[process.execPath,'run',stub.ts]` 换缝（e2e-stub-argv-contract 先例），
+输出字节复刻。②`rfc252-git-hardening`(9/0)——2 纯函数注入 `platform`（win32 序 hooksPath→D18→fsmonitor）
+双平台断言；4 集成的陷阱 `.sh`（hook/fsmonitor/diff.external）`>>hitsFile` 与 config 值全 `replace(/\\/g,'/')`
+（git-for-Windows 经 MSYS `sh` 跑，`\` 被当转义写空——证实它确实跑 `.sh` 钩子/fsmonitor/diff.external）。
+③`backup`(8/0)——测试 `Bun.spawn(['tar',…])` → 复用 `tarBin()`（archive.ts 提升 export）+ cleanup
+`removeTempDirSync`。④`rfc213 restore 簇 7 文件`(全绿)——5 文件 afterEach EBUSY→`removeTempDirSync`；
+**restore/pending-restore 揭出真生产缺陷**。**per-file sweep** 起了 1038 文件逐个跑（全量卡死），
+抽头确认 migration-\* 大量红（**混合**：文件后备库 EBUSY vs `:memory:` 的断言级红，需逐条）、`cli`(1) 等。
+
+**真生产缺陷②（已修 `daedfe7a`，RFC-213 灾备在 Windows 整条不可用）**：`restore.ts swapInDbFile` 换库前
+unlink 活库 `-wal`/`-shm`——Windows 不能动开着的文件，而 restore 的 `rawCopyDb` 安全拷贝刚开活库
+checkpoint、bun:sqlite 于 GC 才释放句柄 ⇒ 换库必 EBUSY（boot pending-restore 与 CLI restore 全挂）。
+修法：换库前 `if(win32) Bun.gc(true)`（POSIX no-op），回归覆盖=那 2 个 rfc213 文件。**真生产缺陷①仍未修**：
+`pluginInstaller.ts:295` `new URL(spec).pathname`（应 `fileURLToPath`）——该文件全程被并发 session 占用
+（uncommitted），按并发保留原则未代改，登记待并发方提交后跟进。
+
+**剩余**：migration-\* 混合簇（逐条：EBUSY vs 断言）、`cli` 及 per-file sweep 未跑完的 r/s/t/u/w 段
+（sweep 为提交本轮成果已 kill，可重起续扫）。本轮提交：`27d682ec`/`a325ff1c`/`13eeb8cf`/`3c13e41c`/
+`9a561e0f`/`daedfe7a`。POSIX 全绿、每簇真机复验。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
