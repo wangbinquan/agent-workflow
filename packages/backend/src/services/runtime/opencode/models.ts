@@ -12,11 +12,9 @@
 import { dirname, join } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import type { ListModelsOpts, RuntimeModelList } from '../types'
-import { listOpencodeModels, opencodeModelsCacheKey } from '@/util/opencode-models'
+import { listOpencodeModels } from '@/util/opencode-models'
 import { loadConfig } from '@/config'
 import { Paths } from '@/util/paths'
-import { buildEnumerationProviderSection, customProvidersProjection } from './customProvider'
-import type { IdentityJson } from './executionIdentity'
 import { machineConfigEnvOverrides } from './hermetic'
 import { withRuntimeOpencodeSnapshot } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
@@ -61,34 +59,17 @@ export async function listOpencodeModelsHermetic(
     // frozen executable alone is therefore insufficient: run it from a
     // private source-guarded cwd with every config/auth root redirected,
     // so a repo/V2 plugin or host account cannot execute during inventory.
-    // RFC-255: administrator-configured gateways must appear in every model
-    // picker. Enumeration is measured to list config-defined providers with no
-    // credential present, so the section injected here carries display names
-    // but never a key — the enumeration surface stays credential-free.
-    const cfg = (opts.loadCustomProviderConfig ?? (() => loadConfig(Paths.config)))()
+    const cfg = (opts.loadDaemonConfig ?? (() => loadConfig(Paths.config)))()
     const inheritMachineConfig =
       (cfg as { inheritMachineOpencodeConfig?: unknown }).inheritMachineOpencodeConfig !== false
-    // The catalog probe supplies its own single-entry section and must not be
-    // answered from (or written into) the configured-gateway cache slot.
-    const probing = opts.injectedProviderSection !== undefined
-    const providerSection = probing
-      ? (opts.injectedProviderSection as Record<string, IdentityJson>)
-      : buildEnumerationProviderSection(cfg)
-    const hasCustomProviders = Object.keys(providerSection).length > 0
     const sourceBefore = await scanOpencodeProjectSurface(cwd)
     const result = await listOpencodeModels(snapshot, {
       refresh,
       // The projection joins the key so an edit to any gateway invalidates the
       // cached list; a key rotation deliberately leaves it unchanged.
-      cacheKey: opencodeModelsCacheKey(
-        binary,
-        probing ? `probe:${JSON.stringify(providerSection)}` : customProvidersProjection(cfg),
-      ),
+      cacheKey: binary,
       cwd,
       env: {
-        ...(hasCustomProviders
-          ? { OPENCODE_CONFIG_CONTENT: JSON.stringify({ provider: providerSection }) }
-          : {}),
         PATH: buildControlledPathForHost(),
         HOME: home,
         TMPDIR: tmp,

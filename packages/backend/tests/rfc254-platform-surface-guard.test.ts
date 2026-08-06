@@ -142,13 +142,6 @@ const ALLOWANCES: readonly Allowance[] = [
     why: 'operands are structural-diff symbol refs prefixed by repo mount labels, normalized to posix before they reach here',
   },
   {
-    rule: 'posix-path-prefix',
-    file: 'services/runtime/opencode/catalogProbe.ts',
-    match: '`${providerID}/`',
-    count: 1,
-    why: 'builds a MODEL-ID prefix (`anthropic/claude-...`), a provider wire identifier that has no filesystem meaning',
-  },
-  {
     rule: 'null-device',
     file: 'services/skillVersion.ts',
     match: "'/dev/null'",

@@ -43,13 +43,13 @@ const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
 import {
   inheritsMachineOpencodeConfig,
   resolveProviderCredential,
-  type CustomProviderPlanDependencies,
-} from './customProvider'
+  type MachineConfigDependencies,
+} from './machineConfig'
 
 export interface VerifiedMcpTestPlanDependencies extends VerifiedOpencodePlanDependencies {
   random?: (size: number) => Buffer
-  /** RFC-255 — inject the daemon config / secret key for custom providers. */
-  customProvider?: CustomProviderPlanDependencies
+  /** RFC-256 — inject the daemon config that carries the inheritance switch. */
+  machineConfig?: MachineConfigDependencies
   inspectBinary?: typeof inspectRuntimeOpencodeBinary
   snapshotBinary?: typeof snapshotRuntimeOpencodeBinary
   sourceEnv?: Readonly<Record<string, string | undefined>>
@@ -234,7 +234,7 @@ export async function buildVerifiedOpencodeMcpTestPlan(
   const credential = await resolveProviderCredential(
     selectedModel.providerID,
     sourceEnv,
-    dependencies.customProvider,
+    dependencies.machineConfig,
   )
   const controlledConfig = buildControlledOpencodeConfig({
     name: ctx.agentName,
@@ -257,7 +257,6 @@ export async function buildVerifiedOpencodeMcpTestPlan(
     mcp: {
       [ctx.executionMaterial.runtimeKey]: ctx.executionMaterial.opencodeEntry as IdentityJson,
     },
-    customProvider: credential.customProvider,
   })
   const auth = credential.auth
   const random = dependencies.random ?? randomBytes
@@ -269,7 +268,7 @@ export async function buildVerifiedOpencodeMcpTestPlan(
     username: `aw-${random(12).toString('base64url')}`,
     password: random(32).toString('base64url'),
     sourceEnv,
-    inheritMachineConfig: inheritsMachineOpencodeConfig(dependencies.customProvider),
+    inheritMachineConfig: inheritsMachineOpencodeConfig(dependencies.machineConfig),
   })
   serverEnv.PWD = canonicalWorktree
 

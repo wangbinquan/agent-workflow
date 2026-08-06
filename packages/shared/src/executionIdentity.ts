@@ -30,16 +30,6 @@ export const EXECUTION_IDENTITY_FAILURE_CODES = [
   'execution-identity-stream-failed',
   'execution-identity-timeout',
   'execution-identity-store-unsafe',
-  /**
-   * RFC-255 — the selected model belongs to a custom provider the administrator
-   * has disabled. Emitted by the planners BEFORE credential resolution, because
-   * falling through to the generic three-channel lookup produces an unactionable
-   * outcome: a leftover entry in the host's native auth.json passes planning and
-   * fails much later as `provider-untrusted`, and an id that collides with the
-   * credential-env table would quietly run against the vendor's own endpoint
-   * with the daemon's real key.
-   */
-  'execution-identity-custom-provider-disabled',
 ] as const
 
 /**
@@ -53,6 +43,14 @@ export const EXECUTION_IDENTITY_FAILURE_CODES = [
  * being absent from the emit domain above.
  */
 export const LEGACY_EXECUTION_IDENTITY_FAILURE_CODES = [
+  /**
+   * RFC-255 (removed): the platform-declared custom-provider surface is gone —
+   * machine `opencode.json` inheritance (RFC-256) covers the same need without
+   * a second place to declare a gateway. Kept readable because a deployment
+   * that ran the interim build can hold rows carrying this code, and the task
+   * page parses the whole payload with a strict enum.
+   */
+  'execution-identity-custom-provider-disabled',
   'execution-identity-plugin-unsupported',
   'execution-identity-dependent-unsupported',
   'execution-identity-instance-changed',

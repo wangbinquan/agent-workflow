@@ -39,44 +39,9 @@ export function clearOpencodeModelsCache(): void {
   cache.clear()
 }
 
-/**
- * RFC-114 P3-6: drop one binary's slot (call on runtime delete / binary change).
- *
- * RFC-255 gave the key a second component (the custom-provider projection), so
- * one binary can own several slots. Dropping only the exact key would strand
- * every slot written under a previous configuration — both a stale-result risk
- * and unbounded growth for an administrator who edits providers repeatedly.
- */
+/** RFC-114 P3-6: drop one binary's slot (call on runtime delete / binary change). */
 export function evictOpencodeModelsCache(binary: string): void {
   cache.delete(binary)
-  for (const key of cache.keys()) {
-    if (binaryOfCacheKey(key) === binary) cache.delete(key)
-  }
-}
-
-/**
- * Compose the two-part key.
- *
- * Encoded as JSON rather than joined with a separator: a binary path may
- * legitimately contain whatever character a separator would use (spaces
- * included), so a joined key could be ambiguous between two different
- * (binary, projection) pairs. JSON makes the split exact and turns eviction
- * into a decode rather than a guess.
- */
-export function opencodeModelsCacheKey(binary: string, projection?: string): string {
-  if (projection === undefined || projection === '') return binary
-  return JSON.stringify([binary, projection])
-}
-
-/** Inverse of the above; the single-component form is its own binary. */
-function binaryOfCacheKey(key: string): string {
-  if (!key.startsWith('[')) return key
-  try {
-    const decoded: unknown = JSON.parse(key)
-    return Array.isArray(decoded) && typeof decoded[0] === 'string' ? decoded[0] : key
-  } catch {
-    return key
-  }
 }
 
 // RFC-114 P2-3: `<binary> models` now runs arbitrary admin-registered fork

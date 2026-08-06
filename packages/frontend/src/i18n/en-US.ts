@@ -1128,41 +1128,6 @@ export const enUS: Resources = {
       secretPasteHintGithub:
         'On GitHub: Settings → Webhooks → Add webhook — paste the payload URL and secret, and set Content type to application/json.',
     },
-    customProviders: {
-      title: 'Custom providers',
-      hint: 'Connect an OpenAI-compatible private gateway (one-api / new-api / vLLM). Credentials are sealed by the daemon before they reach disk; every read surface returns a mask.',
-      add: '+ Add provider',
-      empty: 'No custom providers configured yet.',
-      enabled: 'Enabled',
-      modelCount: '{{count}} models',
-      dialogCreate: 'Add custom provider',
-      dialogEdit: 'Edit custom provider',
-      deleteTitle: 'Delete custom provider',
-      deleteMessage:
-        'After deleting "{{id}}", nodes that still reference it will fail at launch. Delete anyway?',
-      fields: {
-        id: 'Provider ID',
-        name: 'Display name',
-        baseURL: 'Endpoint',
-        baseURLHint:
-          'Full URL of the OpenAI-compatible endpoint, e.g. https://gw.example.com/v1. Not normalized \u2014 a trailing slash is a different endpoint.',
-        apiKey: 'API key',
-        apiKeyHint: 'Entered once here; never shown again after saving.',
-        apiKeyKeepHint: 'Leave empty to keep the stored key; type a value to replace it.',
-        models: 'Model list',
-        modelsHint:
-          'Enter model ids manually (Enter or comma). Only the models listed here can be selected.',
-      },
-      errors: {
-        id: 'Use lowercase letters, digits and . _ -, starting with a letter or digit.',
-        idReserved:
-          'That id belongs to a built-in OpenCode catalog provider; claiming it would re-point that provider.',
-        idDuplicate: 'A provider with this id already exists.',
-        baseURL: 'Enter an absolute http(s) URL with no variable placeholder.',
-        models: 'List at least one model id.',
-        apiKeyRequired: 'A new or renamed provider must carry its API key.',
-      },
-    },
     title: 'Settings',
     sectionNavLabel: 'Settings sections',
     sectionGroups: {
@@ -3176,14 +3141,14 @@ export const enUS: Resources = {
       'execution-identity-timeout': 'OpenCode identity verification or direct execution timed out.',
       'execution-identity-timeout__hint':
         'Check the provider and host health, then launch a new run.',
+      'execution-identity-custom-provider-disabled':
+        'Historical failure: the run selected a model from a platform custom provider that was disabled (the feature has since been removed).',
+      'execution-identity-custom-provider-disabled__hint':
+        "Models now come from the machine's own OpenCode configuration; launch again.",
       'execution-identity-store-unsafe':
         'The private OpenCode session store failed its safety check.',
       'execution-identity-store-unsafe__hint':
         'Repair or remove the reported private store after confirming no run is active.',
-      'execution-identity-custom-provider-disabled':
-        'The selected model belongs to a custom provider that is currently disabled.',
-      'execution-identity-custom-provider-disabled__hint':
-        'Re-enable it under Settings → Custom providers, or pick a different model for this node.',
       summary: {
         snapshotLost: "The task's workspace snapshot is gone; it cannot continue in place.",
         snapshotInvalid: "The task's workspace snapshot is no longer valid.",
@@ -5204,31 +5169,6 @@ export const enUS: Resources = {
     'execution-identity-store-unsafe': '$t(tasks.failure.execution-identity-store-unsafe)',
     'execution-identity-store-unsafe__hint':
       '$t(tasks.failure.execution-identity-store-unsafe__hint)',
-    'execution-identity-custom-provider-disabled':
-      '$t(tasks.failure.execution-identity-custom-provider-disabled)',
-    'execution-identity-custom-provider-disabled__hint':
-      '$t(tasks.failure.execution-identity-custom-provider-disabled__hint)',
-    'config-custom-provider-malformed': 'The custom provider entry is malformed.',
-    'config-custom-provider-id-invalid':
-      'Provider ids use lowercase letters, digits and . _ -, starting with a letter or digit.',
-    'config-custom-provider-id-reserved':
-      'That id belongs to a built-in OpenCode catalog provider; claiming it would re-point that provider.',
-    'config-custom-provider-id-catalog':
-      'The runtime probe reports that id as a built-in catalog provider; claiming it would re-point that provider.',
-    'config-custom-provider-id-duplicate': 'A provider with this id already exists.',
-    'config-custom-provider-name-invalid': 'The display name is invalid.',
-    'config-custom-provider-npm-unsupported':
-      'Only the OpenAI-compatible implementation is supported in v1.',
-    'config-custom-provider-baseurl-invalid':
-      'The endpoint must be an absolute http(s) URL with no variable placeholder.',
-    'config-custom-provider-apikey-invalid': 'The API key is invalid.',
-    'config-custom-provider-apikey-required':
-      'Creating a provider, renaming it or changing its endpoint requires re-entering the API key.',
-    'config-custom-provider-models-empty': 'List at least one model id.',
-    'config-custom-provider-model-invalid': 'A model id is invalid.',
-    'config-custom-provider-model-duplicate': 'Duplicate model id.',
-    'config-custom-provider-unavailable':
-      'The daemon secret key is missing, so provider credentials cannot be stored safely.',
     'invalid-json': 'The request body is not valid JSON.',
     'invalid-body': 'Invalid request body.',
     'import-ref-unresolved': 'An imported resource reference is not available.',

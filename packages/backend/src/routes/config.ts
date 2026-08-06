@@ -4,7 +4,6 @@
 
 import type { Hono } from 'hono'
 import { applyConfigPatch, loadConfig, previewConfigPatch } from '@/config'
-import { maskConfigForOutput, resolveCustomProvidersForSave } from '@/config/customProviderGate'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import {
@@ -64,8 +63,7 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Read daemon configuration',
     },
     (c) => {
-      // RFC-255: sealed gateway credentials never leave the daemon.
-      return c.json(maskConfigForOutput(loadConfig(deps.configPath)))
+      return c.json(loadConfig(deps.configPath))
     },
   )
 
@@ -194,34 +192,13 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         // fresh plaintext and seal it a second time, so an unrelated settings
         // change (a log level, a theme) would silently corrupt every gateway
         // credential on the box.
-        if (body.customProviders !== undefined && deps.secretBox === undefined) {
-          // Without the seal there is no way to store a credential safely, and
-          // writing the submission through would put a plaintext key on disk
-          // with none of the id/mask checks applied. Refuse instead.
-          throw new ValidationError(
-            'config-custom-provider-unavailable',
-            'custom providers require the daemon secret key',
-            { field: 'customProviders', permanent: true },
-          )
-        }
-        const providerPatch =
-          deps.secretBox === undefined || body.customProviders === undefined
-            ? {}
-            : {
-                customProviders: await resolveCustomProvidersForSave(
-                  currentConfig,
-                  nextConfig,
-                  deps.secretBox,
-                  { probeCatalogCollision: deps.probeCatalogCollision },
-                ),
-              }
-        const updated = applyConfigPatch(deps.configPath, { ...body, ...providerPatch })
+        const updated = applyConfigPatch(deps.configPath, body)
         await runtimeTests.reconcileDurableIntents()
         // RFC-233 linearization point: once this response can be observed, every
         // future admission sees the saved mode generation. Existing immutable
         // admissions are intentionally not rewritten.
         deps.containmentCoordinator?.setMode(updated.sandboxMode)
-        return c.json(maskConfigForOutput(updated))
+        return c.json(updated)
       })
     },
   )

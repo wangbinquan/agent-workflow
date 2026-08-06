@@ -1272,37 +1272,6 @@ export interface Resources {
       secretPasteHintGitlab: string
       secretPasteHintGithub: string
     }
-    customProviders: {
-      title: string
-      hint: string
-      add: string
-      empty: string
-      enabled: string
-      modelCount: string
-      dialogCreate: string
-      dialogEdit: string
-      deleteTitle: string
-      deleteMessage: string
-      fields: {
-        id: string
-        name: string
-        baseURL: string
-        baseURLHint: string
-        apiKey: string
-        apiKeyHint: string
-        apiKeyKeepHint: string
-        models: string
-        modelsHint: string
-      }
-      errors: {
-        id: string
-        idReserved: string
-        idDuplicate: string
-        baseURL: string
-        models: string
-        apiKeyRequired: string
-      }
-    }
     title: string
     sectionNavLabel: string
     sectionGroups: {
@@ -6083,38 +6052,6 @@ export const zhCN: Resources = {
       secretPasteHintGithub:
         '在 GitHub：Settings → Webhooks → Add webhook——粘贴 Payload URL 与 Secret，Content type 选 application/json。',
     },
-    customProviders: {
-      title: '自定义 provider',
-      hint: '接入 OpenAI 兼容的私有网关（one-api / new-api / vLLM 等）。凭据由守护进程加密后落盘，任何读取接口只返回掩码。',
-      add: '+ 添加 provider',
-      empty: '尚未配置自定义 provider。',
-      enabled: '启用',
-      modelCount: '{{count}} 个模型',
-      dialogCreate: '添加自定义 provider',
-      dialogEdit: '编辑自定义 provider',
-      deleteTitle: '删除自定义 provider',
-      deleteMessage: '删除 “{{id}}” 后，仍引用它的节点在发起时会失败。确定删除？',
-      fields: {
-        id: 'Provider ID',
-        name: '显示名',
-        baseURL: '接口地址',
-        baseURLHint:
-          'OpenAI 兼容端点的完整地址，例如 https://gw.example.com/v1（不做归一化，尾部斜杠算不同地址）。',
-        apiKey: 'API 密钥',
-        apiKeyHint: '仅在此处录入一次；保存后不再回显。',
-        apiKeyKeepHint: '留空则保留已存密钥；填写则替换。',
-        models: '模型清单',
-        modelsHint: '手动录入模型 id，回车或逗号分隔。只有列在这里的模型可被选用。',
-      },
-      errors: {
-        id: 'ID 只能用小写字母、数字与 . _ -，且以字母或数字开头。',
-        idReserved: '该 ID 属于 OpenCode 内置目录 provider，占用它会改写内置 provider 的端点。',
-        idDuplicate: '已存在同名 provider ID。',
-        baseURL: '请填写 http(s) 绝对地址，且不能包含变量占位符。',
-        models: '至少填写一个模型 id。',
-        apiKeyRequired: '新建或更名 provider 必须填写 API 密钥。',
-      },
-    },
     title: '设置',
     sectionNavLabel: '设置分区',
     sectionGroups: {
@@ -7975,12 +7912,13 @@ export const zhCN: Resources = {
         '请查看运行时诊断后重新发起；系统不会自动重试此故障。',
       'execution-identity-timeout': 'OpenCode 身份校验或直接执行超时。',
       'execution-identity-timeout__hint': '请检查 provider 与主机健康状态后重新发起。',
+      'execution-identity-custom-provider-disabled':
+        '历史失败：该运行选中的模型属于一个已停用的平台自定义 provider（该功能已移除）。',
+      'execution-identity-custom-provider-disabled__hint':
+        '现在改由机器自身的 opencode 配置提供模型，重新发起即可。',
       'execution-identity-store-unsafe': 'OpenCode 私有会话存储未通过安全检查。',
       'execution-identity-store-unsafe__hint':
         '确认没有活动运行后，修复或移除错误详情指出的私有存储。',
-      'execution-identity-custom-provider-disabled': '所选模型属于已停用的自定义 provider。',
-      'execution-identity-custom-provider-disabled__hint':
-        '在「设置 → 自定义 provider」里重新启用它，或为该节点改选其它模型。',
       summary: {
         snapshotLost: '任务的工作区快照丢失，无法从原位置继续。',
         snapshotInvalid: '任务的工作区快照已失效。',
@@ -9871,29 +9809,6 @@ export const zhCN: Resources = {
     'execution-identity-store-unsafe': '$t(tasks.failure.execution-identity-store-unsafe)',
     'execution-identity-store-unsafe__hint':
       '$t(tasks.failure.execution-identity-store-unsafe__hint)',
-    'execution-identity-custom-provider-disabled':
-      '$t(tasks.failure.execution-identity-custom-provider-disabled)',
-    'execution-identity-custom-provider-disabled__hint':
-      '$t(tasks.failure.execution-identity-custom-provider-disabled__hint)',
-    'config-custom-provider-malformed': '自定义 provider 配置格式不合法。',
-    'config-custom-provider-id-invalid':
-      'Provider ID 只能用小写字母、数字与 . _ -，且以字母或数字开头。',
-    'config-custom-provider-id-reserved':
-      '该 ID 属于 OpenCode 内置目录 provider，占用它会改写该 provider 的端点。',
-    'config-custom-provider-id-catalog':
-      '该 ID 经运行时探测属于内置目录 provider，占用它会改写该 provider 的端点。',
-    'config-custom-provider-id-duplicate': '已存在同名 provider ID。',
-    'config-custom-provider-name-invalid': '显示名不合法。',
-    'config-custom-provider-npm-unsupported': 'v1 仅支持 OpenAI 兼容实现。',
-    'config-custom-provider-baseurl-invalid':
-      '接口地址必须是 http(s) 绝对地址，且不能包含变量占位符。',
-    'config-custom-provider-apikey-invalid': 'API 密钥不合法。',
-    'config-custom-provider-apikey-required':
-      '新建 provider、更名或更换接口地址时必须重新填写 API 密钥。',
-    'config-custom-provider-models-empty': '至少填写一个模型 id。',
-    'config-custom-provider-model-invalid': '模型 id 不合法。',
-    'config-custom-provider-model-duplicate': '模型 id 重复。',
-    'config-custom-provider-unavailable': '守护进程缺少密钥文件，无法安全保存 provider 凭据。',
     'invalid-json': '请求内容不是有效 JSON。',
     'invalid-body': '请求内容不合法。',
     'import-ref-unresolved': '导入内容引用了当前不可用的资源。',

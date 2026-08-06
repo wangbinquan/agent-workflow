@@ -18,8 +18,8 @@ import {
 import {
   inheritsMachineOpencodeConfig,
   resolveProviderCredential,
-  type CustomProviderPlanDependencies,
-} from './customProvider'
+  type MachineConfigDependencies,
+} from './machineConfig'
 import type { snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
 import { removeSealedTree } from './sealedInputs'
@@ -49,8 +49,8 @@ export interface VerifiedSystemPlanDependencies {
   random?: (size: number) => Buffer
   snapshotBinary?: typeof snapshotRuntimeOpencodeBinary
   sourceEnv?: Readonly<Record<string, string | undefined>>
-  /** RFC-255 — inject the daemon config / secret key for custom providers. */
-  customProvider?: CustomProviderPlanDependencies
+  /** RFC-256 — inject the daemon config that carries the inheritance switch. */
+  machineConfig?: MachineConfigDependencies
 }
 
 function parseSelectedModel(model: string | null | undefined): SelectedModel {
@@ -196,7 +196,7 @@ export async function buildVerifiedOpencodeSystemPlan(
     const credential = await resolveProviderCredential(
       selectedModel.providerID,
       sourceEnv,
-      dependencies.customProvider,
+      dependencies.machineConfig,
     )
     const auth = credential.auth
     const controlledConfig = buildControlledOpencodeConfig({
@@ -212,7 +212,6 @@ export async function buildVerifiedOpencodeSystemPlan(
       shellPath: disabledShellCommandForHost(),
       allowShell: false,
       mcp: {},
-      customProvider: credential.customProvider,
       ...(profile === 'intent-read-v1' ? { allowedReadOnlyTools: SYSTEM_READ_ONLY_TOOLS } : {}),
     })
     const serverEnv = buildHermeticServerEnv({
@@ -221,7 +220,7 @@ export async function buildVerifiedOpencodeSystemPlan(
       auth,
       config: controlledConfig,
       sourceEnv,
-      inheritMachineConfig: inheritsMachineOpencodeConfig(dependencies.customProvider),
+      inheritMachineConfig: inheritsMachineOpencodeConfig(dependencies.machineConfig),
     })
     serverEnv.PWD = canonicalWorktree
 

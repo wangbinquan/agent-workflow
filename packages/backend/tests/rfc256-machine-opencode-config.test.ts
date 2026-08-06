@@ -23,7 +23,7 @@ import {
   machineConfigDeclaredPluginCount,
   machineConfigEnvOverrides,
 } from '@/services/runtime/opencode/hermetic'
-import { inheritsMachineOpencodeConfig } from '@/services/runtime/opencode/customProvider'
+import { inheritsMachineOpencodeConfig } from '@/services/runtime/opencode/machineConfig'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 
 const layout = deriveHermeticOpencodeLayout('/tmp/rfc256-store')
@@ -138,13 +138,13 @@ describe('RFC-256 execution environment', () => {
 describe('RFC-256 switch', () => {
   test('defaults to on — the behavior the platform had before RFC-224', () => {
     expect(DEFAULT_CONFIG.inheritMachineOpencodeConfig).toBe(true)
-    expect(inheritsMachineOpencodeConfig({ loadCustomProviderConfig: () => ({}) })).toBe(true)
+    expect(inheritsMachineOpencodeConfig({ loadDaemonConfig: () => ({}) })).toBe(true)
   })
 
   test('an operator can seal the platform back up', () => {
     expect(
       inheritsMachineOpencodeConfig({
-        loadCustomProviderConfig: () => ({ inheritMachineOpencodeConfig: false }) as never,
+        loadDaemonConfig: () => ({ inheritMachineOpencodeConfig: false }),
       }),
     ).toBe(false)
   })

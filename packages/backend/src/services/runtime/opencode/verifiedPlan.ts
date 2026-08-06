@@ -20,8 +20,8 @@ import { pluginFileSpec, selectShippedPlugins } from './pluginSpec'
 import {
   inheritsMachineOpencodeConfig,
   resolveProviderCredential,
-  type CustomProviderPlanDependencies,
-} from './customProvider'
+  type MachineConfigDependencies,
+} from './machineConfig'
 import { inspectRuntimeOpencodeBinary, snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
@@ -195,8 +195,8 @@ export interface VerifiedBusinessPlanDependencies extends VerifiedOpencodePlanDe
    * reads the real daemon config (same shape as RFC-255's provider seam).
    */
   loadBusinessToolchainPaths?: () => readonly string[]
-  /** RFC-255 — inject the daemon config / secret key for custom providers. */
-  customProvider?: CustomProviderPlanDependencies
+  /** RFC-256 — inject the daemon config that carries the inheritance switch. */
+  machineConfig?: MachineConfigDependencies
 }
 
 /**
@@ -695,14 +695,14 @@ export async function buildVerifiedOpencodeBusinessPlan(
       allowShell: dep.permission.bash !== 'deny',
     }
   })
-  const inheritMachineConfig = inheritsMachineOpencodeConfig(dependencies.customProvider)
+  const inheritMachineConfig = inheritsMachineOpencodeConfig(dependencies.machineConfig)
   // RFC-255: resolved BEFORE the config is built — a custom gateway contributes
   // a `provider` section to that config, and a disabled one must fail here
   // rather than fall through to the generic credential channels.
   const credential = await resolveProviderCredential(
     selectedModel.providerID,
     sourceEnv,
-    dependencies.customProvider,
+    dependencies.machineConfig,
   )
   const controlledConfig = buildControlledOpencodeConfig({
     name: ctx.agent.name,
@@ -723,7 +723,6 @@ export async function buildVerifiedOpencodeBusinessPlan(
     // from the result, so a non-empty selection also turns that flag off.
     plugins: ctx.plugins,
     dependents: controlledDependents,
-    customProvider: credential.customProvider,
   })
   const auth = credential.auth
   const username = `aw-${randomBytes(12).toString('base64url')}`

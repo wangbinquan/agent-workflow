@@ -771,17 +771,6 @@ export interface BuildControlledAgentConfigInput {
    * any work at all.
    */
   dependents?: readonly ControlledSubagentInput[]
-  /**
-   * RFC-255 — the selected custom OpenAI-compatible provider's section, or
-   * undefined when the run uses a built-in catalog provider.
-   *
-   * Only the SELECTED entry is admitted, mirroring how MCP admits only the
-   * selected closure: a run must not carry endpoints it has no reason to reach.
-   * The section itself is built by `customProvider.ts` (no key, no display
-   * name) and lands in the frozen config, so the endpoint is part of the
-   * execution identity while the credential is not.
-   */
-  customProvider?: Record<string, IdentityJson>
 }
 
 /**
@@ -947,9 +936,6 @@ export function buildControlledOpencodeConfig(
     // DB-sourced fields (e.g. agent outputs in verifiedPlan).
     plugin: buildPluginSpecArray(input.plugins ?? []) as unknown as IdentityJson,
     mcp: input.mcp ?? {},
-    // RFC-255: absent for catalog providers, so a run that does not select a
-    // custom gateway serializes byte-identically to before this key existed.
-    ...(input.customProvider === undefined ? {} : { provider: input.customProvider }),
     permission: {
       question: 'deny',
       plan_enter: 'deny',

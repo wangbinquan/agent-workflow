@@ -116,15 +116,6 @@ export interface AppDeps {
    */
   webhookDispatcher?: WebhookDispatcher
   /**
-   * RFC-255 — decide whether a provider id is a built-in OpenCode catalog id.
-   *
-   * Layer 2 of the collision check: the static reserved list catches the known
-   * names, and this probe catches the ones a newer OpenCode added. Production
-   * wires the sealed enumeration canary; tests inject a decision directly.
-   * Omitted ⇒ only the static list applies.
-   */
-  probeCatalogCollision?: (id: string) => Promise<boolean>
-  /**
    * RFC-159 — override the scheduled-task run-now launch closure. Production
    * omits it (the route builds the real one from db + configPath); tests inject
    * a stub so POST /:id/run-now doesn't spawn a real opencode task.

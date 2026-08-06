@@ -47,10 +47,6 @@ describe('RFC-224 execution identity failure taxonomy', () => {
       'execution-identity-stream-failed',
       'execution-identity-timeout',
       'execution-identity-store-unsafe',
-      // RFC-255: a disabled custom provider fails in the planner rather than
-      // falling through to the generic credential lookup, whose outcome depends
-      // on leftover host state and is therefore unactionable.
-      'execution-identity-custom-provider-disabled',
     ])
     expect(new Set(EXECUTION_IDENTITY_FAILURE_CODES).size).toBe(
       EXECUTION_IDENTITY_FAILURE_CODES.length,
@@ -84,6 +80,8 @@ describe('RFC-224 execution identity failure taxonomy', () => {
   // degrade that row. Emitting them is gone; parsing them is not.
   test('retired codes are absent from the emit domain but still parse', () => {
     expect(LEGACY_EXECUTION_IDENTITY_FAILURE_CODES).toEqual([
+      // RFC-255 removed; readable so an interim-build row still parses.
+      'execution-identity-custom-provider-disabled',
       'execution-identity-plugin-unsupported',
       'execution-identity-dependent-unsupported',
       'execution-identity-instance-changed',

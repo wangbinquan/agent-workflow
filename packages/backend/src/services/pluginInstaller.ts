@@ -649,7 +649,13 @@ interface CommandResult {
 export function resolveNpmCommandForHost(bin: string): string[] | null {
   return resolveNpmCommand(bin, {
     platform: process.platform,
-    which: (cmd) => Bun.which(cmd),
+    // RFC-254 T32: pass PATH EXPLICITLY. Measured on Windows 11 — `Bun.which`
+    // there does not observe a `process.env.PATH` that was changed after the
+    // process started; it answers from the environment block it was born with.
+    // An operator who fixes their PATH and expects the daemon to pick npm up,
+    // or a test that shadows npm on PATH, gets the stale answer instead. Handing
+    // the current value in makes the lookup honour it on both platforms.
+    which: (cmd) => Bun.which(cmd, { PATH: process.env.PATH ?? '' }),
     exists: existsSync,
     runtimePath: process.execPath,
   })

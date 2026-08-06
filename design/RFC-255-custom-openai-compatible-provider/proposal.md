@@ -1,6 +1,14 @@
 # RFC-255 · 受控自定义 OpenAI-compatible Provider 准入 — proposal
 
-状态：**Draft**（2026-08-04，设计门 + 用户批准前不动代码）
+状态：**Superseded by [RFC-256](../RFC-256-machine-opencode-config-inheritance/proposal.md)（2026-08-04，实现已从代码库移除）**
+
+> **为什么撤掉**：本 RFC 让管理员把网关**再录一遍**到平台里，解决的是执行面；但用户的实际
+> 诉求是「我 opencode.json 里配好的东西，为什么平台不认了」——那是 RFC-224 造成的**回归**，
+> 正解是 RFC-256（恢复读取机器自有配置），零录入、且同时修好探测面。两者并存意味着同一件事
+> 有两个声明处（还会互相覆盖：受控 config 后合并、平台条目胜），且本 RFC 只覆盖 opencode
+> 一个运行时（claude-code 走继承环境、根本不需要注入）。用户据此判定其为多余入口并要求删除。
+> 实现、测试、设置页卡片与 i18n 已全部移除；失败码 `execution-identity-custom-provider-disabled`
+> 退役进只读 legacy 域（存量行仍可解析）。本目录仅作决策与考古留档。
 
 ## 1. 背景
 
