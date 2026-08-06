@@ -174,6 +174,21 @@ daemon 把任务和节点状态持久化到 SQLite。重启后，它会对账孤
 token 文件权限、migration 和生命周期健康状态。OpenCode 检查失败只表示该可选运行时尚未
 就绪，不会阻止 daemon 启动。
 
+## 前置条件
+
+单二进制自带运行时；它会调用的外部工具如下：
+
+- **git —— 必装**（≥ 2.38，隔离 merge-back 依赖 `git merge-tree --write-tree`）。Windows 装
+  [Git for Windows](https://git-scm.com/download/win)，它同时提供 shell 脚本节点用的 `bash`。
+- **ssh —— 可选。** 仅 `ssh://` git 远端需要（https 远端走内置凭据 helper）。Windows 10+ 自带
+  OpenSSH 客户端 —— 在「设置 → 应用 → 可选功能 → OpenSSH 客户端」启用。
+- **bash —— 可选。** 仅 shell 脚本节点需要。Windows 上从 Git for Windows 安装解析（**绝不**用
+  System32 里的 WSL `bash.exe`）；可用 `AW_GIT_BASH_PATH` 覆盖。
+- **opencode —— 运行 agent 必装**（见配置 `opencodePath`）。
+
+`agent-workflow doctor` 会探测以上全部（git/opencode/sandbox 为通过-失败；ssh 为咨询式）——装完
+立即跑一次。
+
 ## 安装发布二进制
 
 从 [GitHub Releases](https://github.com/wangbinquan/agent-workflow/releases/latest)
