@@ -89,6 +89,17 @@ jobs:
       - name: RFC-254 platform suites
         run: bun test --isolate packages/backend/tests/rfc254-platform-exec.test.ts packages/backend/tests/rfc254-file-trust.test.ts packages/backend/tests/rfc254-env-case-folding.test.ts packages/backend/tests/rfc254-git-windows.test.ts packages/backend/tests/rfc254-script-node-windows.test.ts packages/backend/tests/rfc254-process-tree-ownership.test.ts packages/backend/tests/rfc254-platform-surface-guard.test.ts
 
+      # RFC-254 T40b — the verified-execution store's file PRIVACY proof on a REAL
+      # Windows kernel: the icacls DACL primitive (pure parse + live icacls/whoami
+      # round-trip) and the RFC-224 verified clusters it unblocks (store-hygiene
+      # lock, launcher, boot recovery, control-ACK, system plan) plus the RFC-135
+      # version probe that T39/T40a fixed. These pass identically on x64 and ARM64
+      # (icacls/whoami are arch-agnostic; the ARM64-only gap was FFI, unused here),
+      # so this leg guards the win32 privacy layer on every push, not just at hand-
+      # run acceptance. Verified green on a real ARM64 Windows 11 machine.
+      - name: RFC-254 T40b — verified store privacy (win32 DACL)
+        run: bun test --isolate packages/backend/tests/rfc254-win32-acl.test.ts packages/backend/tests/rfc254-win32-acl-integration.test.ts packages/backend/tests/rfc224-store-hygiene.test.ts packages/backend/tests/rfc224-verified-launcher.test.ts packages/backend/tests/rfc224-opencode-store-recovery.test.ts packages/backend/tests/rfc224-direct-control-protocol.test.ts packages/backend/tests/rfc224-verified-system-plan.test.ts packages/backend/tests/rfc135-runtimes-status.test.ts
+
       # RFC-254 T28b — the e2e model stand-in used to be nine `#!/bin/sh` files,
       # which is why it had to become one compiled program. These two suites are
       # what says the port is faithful, and they are RUNNABLE HERE because the
