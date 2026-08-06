@@ -17,7 +17,7 @@
 //      in node_runs.promptText).
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -219,6 +219,10 @@ function defaultDef(): WorkflowDefinition {
     outputs: [],
   }
 }
+
+// RFC-254: each dispatch spawns a real agent (bun run <mock>), slow on Windows; a
+// cross-clarify round of several exceeds the default 5s. 60s headroom (POSIX unaffected).
+setDefaultTimeout(60_000)
 
 describe('RFC-056 scheduler cross-clarify dispatch', () => {
   let h: Harness
