@@ -468,14 +468,37 @@ describe('T28 — plaintext at execution, masked in diagnostics', () => {
     expect(env.API_TOKEN).toBe('sk-live-exec-plaintext')
   })
 
-  test('the scheduler masks known env values out of the persisted failure detail', () => {
-    // Source-level lock (repo fallback pattern): the script branch must run its
-    // errorMessage through maskScriptEnvValues with the node's own env before
-    // the failed setNodeRunStatus / summary sinks consume it.
+  // Source-level locks (repo fallback pattern) on the diagnostic/data split.
+  // Masking ONLY the failure detail was not enough: `errorMessage` is
+  // `stderrTail`, a strict suffix of the bytes the per-line stderr sink stores
+  // in node_run_events — same secret, one table over, three read doors.
+  describe('the scheduler masks the diagnostic channel and only that', () => {
     const scheduler = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    expect(scheduler).toContain('maskScriptEnvValues(errorMessage, readScriptEnv(a.node))')
+    // The script branch, delimited so a match from the agent branch cannot
+    // stand in for one of these.
+    const branch = scheduler.slice(
+      scheduler.indexOf('const outcome = await runScriptProcess({'),
+      scheduler.indexOf('async function runOneNode('),
+    )
+
+    test('the persisted failure detail is masked', () => {
+      expect(branch).toContain('maskScriptEnvValues(errorMessage, scriptEnv)')
+    })
+
+    test('every persisted stderr LINE is masked, not just the tail', () => {
+      expect(branch).toContain('line: maskScriptEnvValues(line, scriptEnv)')
+    })
+
+    test('stdout lines are NOT masked — they are the port value, byte for byte', () => {
+      const stdoutSink = branch.slice(
+        branch.indexOf('onStdoutLine:'),
+        branch.indexOf('onStderrLine:'),
+      )
+      expect(stdoutSink).toContain('JSON.stringify({ line })')
+      expect(stdoutSink).not.toContain('maskScriptEnvValues')
+    })
   })
 })

@@ -23,7 +23,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { serializeWorkflowFor } from '@/services/tokenRedaction'
+import { serializeWorkflowFor, serializeWorkflowReceiptFor } from '@/services/tokenRedaction'
 import {
   canViewResource,
   filterVisibleRows,
@@ -190,8 +190,10 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
+      // A save answers with a RECEIPT, whose `snapshot` carries the definition
+      // just written — the record projection would not reach it.
       return c.json(
-        serializeWorkflowFor(
+        serializeWorkflowReceiptFor(
           await updateWorkflow(deps.db, id, parsed.data, { kind: 'actor', actor }),
           actor.source,
         ),
@@ -429,10 +431,12 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const result = await importWorkflowYaml(deps.db, parsed.data, { kind: 'actor', actor })
+      // Both arms carry a definition, in different shapes: `created` returns a
+      // workflow record, `overwritten` returns a save receipt.
       const body =
         result.outcome === 'created'
           ? { ...result, workflow: serializeWorkflowFor(result.workflow, actor.source) }
-          : result
+          : { ...result, receipt: serializeWorkflowReceiptFor(result.receipt, actor.source) }
       return c.json(body, result.outcome === 'created' ? 201 : 200)
     },
   )

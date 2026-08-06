@@ -4404,6 +4404,10 @@ async function runOneScriptAttempt(
 
   const envelopeNonce = await loadRunEnvelopeNonce(db, a.nodeRunId)
 
+  // RFC-253 T28 — resolved once and shared by every diagnostic sink below, so
+  // no sink can drift into persisting what another one masks.
+  const scriptEnv = readScriptEnv(a.node)
+
   // DB first, then broadcast — a client must never observe `running` for a row
   // the database still calls `pending`.
   await setNodeRunStatus({
@@ -4464,6 +4468,10 @@ async function runOneScriptAttempt(
         .where(eq(nodeRuns.id, a.nodeRunId))
     },
     onStdoutLine: async (line) => {
+      // NOT masked, deliberately: stdout is the DATA channel. Its bytes become
+      // the port value verbatim (AC-27), so masking this mirror would show the
+      // operator something the downstream node never sees. A script that prints
+      // its own credential to stdout has published it as data.
       await db.insert(nodeRunEvents).values({
         nodeRunId: a.nodeRunId,
         ts: Date.now(),
@@ -4472,11 +4480,16 @@ async function runOneScriptAttempt(
       })
     },
     onStderrLine: async (line) => {
+      // RFC-253 T28 — stderr is the DIAGNOSTIC channel and these rows are a
+      // read surface (node-run events route, /session reconstruction, WS
+      // replay). Masking only the failure detail below was not enough: that
+      // value is `stderrTail`, a strict SUFFIX of the very bytes this sink
+      // stores, so the same secret stayed in the clear one table over.
       await db.insert(nodeRunEvents).values({
         nodeRunId: a.nodeRunId,
         ts: Date.now(),
         kind: 'stderr',
-        payload: JSON.stringify({ line }),
+        payload: JSON.stringify({ line: maskScriptEnvValues(line, scriptEnv) }),
       })
     },
     log,
@@ -4550,7 +4563,7 @@ async function runOneScriptAttempt(
   // and envelope excerpts must not re-leak env values the workflow read path
   // masks. Port values stay byte-exact; only diagnostics are masked.
   if (errorMessage !== null) {
-    errorMessage = maskScriptEnvValues(errorMessage, readScriptEnv(a.node))
+    errorMessage = maskScriptEnvValues(errorMessage, scriptEnv)
   }
 
   if (failureCode !== null) {

@@ -25,7 +25,9 @@ import {
   redactRepoUrl,
   redactStdout,
   serializePluginFor,
+  serializeTaskFor,
   serializeWorkflowFor,
+  serializeWorkflowReceiptFor,
   shouldRedactFor,
 } from '@/services/tokenRedaction'
 
@@ -338,12 +340,103 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
     expect(serializeWorkflowFor(plain, 'pat')).toBe(plain)
   })
 
-  test('serializeWorkflowFor is wired on every workflows outlet', () => {
+  // A SAVE answers with a receipt, not a record: the definition sits at
+  // `snapshot.definition`. The record projection reads `record.definition`,
+  // finds undefined, hits the same-reference short circuit and returns the
+  // receipt untouched — a call site that reads as wired and does nothing.
+  // That was not a leak (a receipt snapshot is the caller's own submitted
+  // bytes, workflow.ts:345), which is why only a TYPE can catch it: there is
+  // no wrong output to assert on. These lock the shape split.
+  describe('save receipts carry the definition one level down', () => {
+    const receipt = {
+      clientMutationId: 'm1',
+      requestedBaseVersion: 2,
+      revision: { workflowId: 'w1', version: 3 },
+      snapshot: { name: 'etl', description: '', definition: record.definition },
+      outcome: 'committed' as const,
+    }
+
+    test('pat: the receipt snapshot is masked', () => {
+      const out = serializeWorkflowReceiptFor(receipt, 'pat')
+      const script = (out.snapshot.definition as typeof record.definition).nodes[1] as {
+        env: Record<string, string>
+      }
+      expect(script.env).toEqual({ API_TOKEN: REDACTED, LOG_LEVEL: REDACTED })
+      // sibling receipt fields survive; the input is not mutated
+      expect(out.revision).toEqual({ workflowId: 'w1', version: 3 })
+      expect(out.outcome).toBe('committed')
+      expect(out.snapshot.name).toBe('etl')
+      expect(
+        (receipt.snapshot.definition.nodes[1] as { env: Record<string, string> }).env.API_TOKEN,
+      ).toBe('sk-live-scriptenv')
+    })
+
+    test('session gets the same reference; a script-free receipt is untouched', () => {
+      expect(serializeWorkflowReceiptFor(receipt, 'session')).toBe(receipt)
+      const plain = { snapshot: { definition: { nodes: [{ id: 'a', kind: 'agent-single' }] } } }
+      expect(serializeWorkflowReceiptFor(plain, 'pat')).toBe(plain)
+    })
+
+    test('the record projection REFUSES a receipt at compile time', () => {
+      // The regression was a silent no-op, so the guard has to be the type
+      // system rather than a runtime assertion. If someone widens
+      // serializeWorkflowFor's constraint back to `<T>`, this directive stops
+      // being needed and typecheck fails with "unused @ts-expect-error" —
+      // the mutation test is built into the lock.
+      // @ts-expect-error — a receipt has no top-level `definition`
+      serializeWorkflowFor(receipt, 'pat')
+      expect(true).toBe(true)
+    })
+  })
+
+  // Launching a task FREEZES the definition into `workflowSnapshot`, so the
+  // same env values live on in every task response — and outlive the workflow
+  // (the snapshot still answers after the source is edited or deleted).
+  // `GET /api/tasks/:id` is tokenAccess:'allow', so this was the widest of the
+  // outlets and the one both review passes rated highest.
+  describe('task snapshots carry the frozen definition', () => {
+    const task = {
+      id: 't1',
+      name: 'carrier-run',
+      workflowId: 'w1',
+      workflowSnapshot: record.definition,
+      status: 'done',
+    } as unknown as Parameters<typeof serializeTaskFor>[0]
+
+    test('pat: the frozen snapshot is masked; session keeps the same reference', () => {
+      const out = serializeTaskFor(task, 'pat')
+      const snap = out.workflowSnapshot as typeof record.definition
+      expect((snap.nodes[1] as { env: Record<string, string> }).env).toEqual({
+        API_TOKEN: REDACTED,
+        LOG_LEVEL: REDACTED,
+      })
+      expect((out as unknown as { status: string }).status).toBe('done')
+      expect(serializeTaskFor(task, 'session')).toBe(task)
+    })
+
+    test('a task whose snapshot has no script env is the same reference', () => {
+      const plain = { workflowSnapshot: { nodes: [{ id: 'a', kind: 'agent-single' }] } } as never
+      expect(serializeTaskFor(plain, 'pat')).toBe(plain)
+    })
+
+    test('serializeTaskFor is wired on every Task-returning outlet', () => {
+      const routes = readFileSync(resolve(import.meta.dir, '..', 'src', 'routes/tasks.ts'), 'utf8')
+      // get + create(multipart) + create + cancel + resume + retry + sync.
+      // The repair endpoints deliberately do NOT appear: their responses carry
+      // no definition, and the `T extends Task` constraint rejected them at
+      // compile time when this wiring was first attempted.
+      expect(routes.split('serializeTaskFor(').length - 1).toBeGreaterThanOrEqual(7)
+    })
+  })
+
+  test('both workflow projections are wired on every outlet', () => {
     const routes = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'routes/workflows.ts'),
       'utf8',
     )
-    // list + detail + create + copy + update + export(YAML) + import(created)
-    expect(routes.split('serializeWorkflowFor(').length - 1).toBeGreaterThanOrEqual(7)
+    // records: list + detail + create + copy + export(YAML) + import(created)
+    expect(routes.split('serializeWorkflowFor(').length - 1).toBeGreaterThanOrEqual(6)
+    // receipts: update (PUT) + import(overwritten)
+    expect(routes.split('serializeWorkflowReceiptFor(').length - 1).toBeGreaterThanOrEqual(2)
   })
 })

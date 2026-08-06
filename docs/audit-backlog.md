@@ -1368,24 +1368,44 @@ theme-css-ratchet 三 OS 红 owning=9269c5ee(结构变更 UI 三连修复:dock h
   在 Windows VM 上生成的 44 张之一)。win32 视觉腿不在 CI 门禁里,不阻塞;下次在
   Windows VM(`reference_windows_vm`)跑 RFC-254 视觉验收时随手重生成该场景即可。
 
-## 任务快照仍向 PAT 泄漏 script env 明文（RFC-253 T28 收口时发现，2026-08-07 登记）
+## ✅ RESOLVED（2026-08-07，同批）任务快照曾向 PAT 泄漏 script env 明文（RFC-253 T28）
 
-- T28 已把 workflow 资源自身的读面（列表/详情/create/copy/update 返回/YAML 导出/import 返回）经
-  `serializeWorkflowFor` 对 PAT 通道脱敏（`routes/workflows.ts`，7 处出口 + 计数锁），但
-  **任务行携带的 `workflowSnapshot`（`schemas/task.ts` · 冻结的完整 definition）不在其中**：
-  `GET /api/tasks/:id` 为 `tokenAccess:'allow'` 且 `getTask` 原样返回（`routes/tasks.ts:265-280`），
-  script 节点 env 明文随快照出令牌面；routes/tasks.ts 返回完整 task 行的出口 8+ 处
-  （get/create/resume/cancel/update/sync 等），须独立收口。
+- 原形态：T28 收口了 workflow 资源自身的 7 个读面，但**任务行携带的 `workflowSnapshot`**
+  （`schemas/task.ts` · 冻结的完整 definition，且在源工作流被改/被删后依然作答）不在其中；
+  `GET /api/tasks/:id` 为 `tokenAccess:'allow'` ⇒ 空矩阵 PAT 可直接读出 script env 明文。
+  原判为独立切片，**两路实现门（独立子代理 + Codex）各自判 high/blocking** 后本批一并收口。
+- 收口：`serializeTaskFor<T extends Task>`（`services/tokenRedaction.ts`）+ `routes/tasks.ts`
+  七个 Task 出口（get / create×2 / cancel / resume / retry / sync），MCP `get_task`/`watch_task`
+  经同一路由表继承。**约束选型让编译器筛集合**：`RepairOptionsResponse`/`RepairResponse`
+  两处不含定义，被 `T extends Task` 在 typecheck 阶段挡出，确认无需投影。
 - TaskSummary（列表/WS 帧）**不含** workflowSnapshot，已核实无此面。
-- 建议修法：与 MCP/workflow 同模式——task 序列化单出口 + `maskWorkflowScriptEnv(snapshot, REDACTED)`
-  （shared 单一 walker 已在，`intentSecretSlots.ts`）；宜先把 routes/tasks.ts 的裸 `c.json(task)`
-  收敛为单序列化函数再挂投影，属独立切片。
+- 锁：`rfc247-token-redaction.test.ts`（PAT 掩 / session 同引用 / 出口计数），摘掉任一出口即红
+  （已变异实证）。
 - ⏳ **RFC-254 win32 UX（低优先）：非 native `AGENT_WORKFLOW_HOME` 在 Windows 导致 daemon 以不透明 `execution-identity-store-unsafe` 拒启**。`opencodeStoreRecovery.ts:70-76 storeRoots` 的 `resolve(appHome)!==appHome` 规范性检查对正斜杠 / git-bash 形 home（`/c/...`、`C:/...`）判 unsafe（win32 `resolve` 归一到反斜杠）。生产默认 home 出自 `homedir()`（native 反斜杠）故免疫；但用户在 Windows 显式设正斜杠 `AGENT_WORKFLOW_HOME`（git-bash/WSL 习惯）会撞上，且错误码不提示「home 路径形态不对」。修法：boot 早期对 `AGENT_WORKFLOW_HOME` 做 native 规范化（`path.resolve`）或给出明确错误文案（「AGENT_WORKFLOW_HOME must be a native absolute path」）。真机确证（续三十二）。
 
 ## RFC-254 verified 路径对 opencode 1.18.13 的「冻结校验漂移」（2026-08-07 真机 glm-5.2 挖出；bug#7 已修，bug#8+ 待修）
 
 用 `runNode`（无 opencodeCmd = 生产 verified 路径）在真机 VM 跑完整业务节点（opencode 1.18.13 + alibaba-cn/glm-5.2）挖出：verifiedLauncher 的多处**冻结信任边界校验**是对着旧 opencode 冻结的，1.18.13 已漂移。**非 win32 特有——所有平台受影响**（此前未撞因 CI LIVE 走 `opencode run`、preflight 有 python 锚且可能用旧 opencode）。
+
 - ✅ **bug#7 已修（`7b3a0c27`）**：`verifiedLauncher.ts:monitorServerStdout` 要求 serve 首行即 listen 行；1.18.13 先打 `Warning: OPENCODE_SERVER_PASSWORD is not set; server is unsecured.` ⇒ 每次 `execution-identity-bootstrap-failed`。修：容忍 listen 前有界 preamble（`MAX_SERVER_PREAMBLE_LINES=16`；post-listen 仍严格；port 仍只取精确 listen）。qualification 22/0。**附带安全 backlog**：warning 提示 verified serve 无 server password（loopback 无鉴权，本机他进程若知端口可打 verified API）——RFC-224 现靠 loopback+control nonce，是否加 `OPENCODE_SERVER_PASSWORD` 纵深加固（directClient 随请求发）待评估。
 - ⏳ **bug#8（待修，已特征化）**：越过 bootstrap 后 `execution-identity-mismatch`。逐层比对 opencode 1.18.13 真形状：`/config/providers` exactKeys **匹配**、`/skill` 形状匹配（`customize-opencode`，内容 digest 须在 `PINNED_BUILTIN_SKILL.contentDigests` 白名单——1.18.13 若改写正文须人工 review 加白）、`verifyManifestDigests`（spawn 前）已过。通用 mismatch 落 **spawn 后层**：`buildVerifiedInventorySnapshot`（`verifiedInventory.ts` 对 `/agent` exactKeys/model 校验；1.18.13 agent 键=name,description,mode,native,permission,options）或 config/session digest。**下一步**：child-stderr 插桩（launcher child console.error 经 drain 未捕获）定位确切校验 → 谨慎更新冻结校验（勿弱化信任边界）→ 测试 → 重跑 rfc224 qualification。**bug#7 已示范做法**。属敏感核心，须清醒专门回合。
 - **净**：real execution 组件/传输侧在 Windows 全绿（真 opencode+glm-5.2、codec、direct-API session、daemon+API、plan 构建）；full verified 端到端卡在这条 opencode-1.18.13 兼容性 pass。
 - ⏳ **bug#9（待修，同 killGroup 类 win32 缺陷）**：`verifiedLauncher.ts:defaultSpawnServer`(217-249) 对 opencode serve 子进程用**无条件 POSIX 进程组操作**——`detached:true`(230) + `killGroup`=`process.kill(-child.pid,signal)`(237-239) + `isGroupAlive`=`process.kill(-child.pid,0)`(247-249)。Windows 无进程组，`kill(-pid)` 抛错/no-op ⇒ `isGroupAlive()` 恒返 false（error.code≠'EPERM'）、`killGroup` 走不通。与我已修的 `systemAgentRun.ts` killGroup 缺陷同类，修法一致：win32 走 `util/process.ts` 的 `killProcessTree`/`isOwnedTreeAlive`（POSIX 保 `kill(-pid)`）。**属敏感核心**（RFC-224 kill/containment 语义载体，line 962/970/980 cleanup/settlement 依赖它），须谨慎（勿破 POSIX 进程组语义）+ 重跑 qualification。这是本次真机 runNode 跑完整 verified 节点连撞的第三处（bug#7 preamble 已修 / bug#9 进程组 / bug#8 inventory-digest 漂移），共同构成 verifiedLauncher 的 **win32 + opencode-1.18.13 兼容性 pass**（多处敏感冻结校验/进程管理对旧 opencode+POSIX 冻结，须一次专门清醒回合逐处抓真形状+真机验证）。
+
+## `snapshotHash` 是明文定义的哈希，与掩码后的 definition 同批下发给 PAT（RFC-253 T28 实现门发现，2026-08-07 登记）
+
+- **形态**：`workflowToDetail`（`services/workflow.ts:875-881`）按**明文** definition 算
+  `snapshotHash = sha256(serializeWorkflowEditableSnapshotV1(snapshot))`；T28 的
+  `serializeWorkflowFor` 掩掉 `definition.nodes[].env` 的值后，其余字段原样 spread ⇒
+  PAT 同时拿到 `env:{DB_PASSWORD:'***'}` **和真值的哈希**，构成离线字典/暴力恢复的 oracle
+  （低熵密钥尤甚）。评审实跑：单 script 节点 `env:{DB_PASSWORD:'hunter2'}`，5 词字典第 4 个
+  候选命中。同字段还出现在 exact-revision 冲突详情与 `workflow-import-conflict` 的 details 里。
+- **是 T28 的副作用而非既有问题**：掩码之前响应本就含明文，哈希不额外泄漏；掩了值却留哈希才
+  使其成为 oracle。MCP 记录无此伴生字段，故属 workflow 特有。
+- **为何未在本批处理（需协议层决策）**：`snapshotHash` 是 exact-revision 乐观并发协议的一部分
+  （export / validate / PUT 都要求 `expectedSnapshotHash` 匹配）。若对 PAT 通道改发「掩码后
+  定义的哈希」，PAT 对含 script env 的工作流将无法完成任何 exact 操作（export / validate 直接
+  mismatch）——这是能力收缩，按 CLAUDE.md §能力收缩型 RFC 附加门槛须呈用户确认；若干脆不发
+  哈希，则破坏同一协议。候选修法：①PAT 通道发掩码定义的哈希并同步放宽这类工作流的 exact 校验；
+  ②保持现状并接受（论据：PAT 无法改 script 工作流，`scripts:author` 永不进令牌面）；
+  ③让 `snapshotHash` 本身对 script env 值取「归一化占位」参与哈希（改变哈希语义，影响存量比对）。

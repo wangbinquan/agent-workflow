@@ -326,6 +326,20 @@ describe('RFC-253 T28 — script-node env carrier', () => {
     expect((out.nodes[1] as { env: Record<string, string> }).env.API_TOKEN).toBe('***')
   })
 
+  // `__proto__` is a legal environment variable name and survives JSON.parse as
+  // an own property. Building the masked map by assignment would hit the legacy
+  // prototype setter and DROP the key — invisible in the dump, and a silent
+  // shape change on YAML export → import.
+  test('maskWorkflowScriptEnv: a __proto__ env key survives masking', () => {
+    const parsed = JSON.parse(
+      '{"nodes":[{"kind":"script","env":{"__proto__":"ordinary-secret-42","NORMAL":"x"}}]}',
+    ) as { nodes: Array<{ env: Record<string, string> }> }
+    const out = maskWorkflowScriptEnv(parsed, '***') as typeof parsed
+    expect(Object.keys(out.nodes[0]!.env)).toEqual(['__proto__', 'NORMAL'])
+    expect(Object.values(out.nodes[0]!.env)).toEqual(['***', '***'])
+    expect(JSON.stringify(out)).not.toContain('ordinary-secret-42')
+  })
+
   test('maskWorkflowScriptEnv: same reference when nothing needs masking', () => {
     const noScript = { nodes: [{ id: 'x', kind: 'input', inputKey: 'k' }] }
     expect(maskWorkflowScriptEnv(noScript)).toBe(noScript)
@@ -376,18 +390,66 @@ describe('RFC-253 T28 — script-node env carrier', () => {
     ).toEqual([])
   })
 
-  test('maskScriptEnvValues: known values scrub out of diagnostics, longest first', () => {
-    const env = { A: 'longer-secret-value', B: 'secret-value', C: 'ok' }
-    const masked = maskScriptEnvValues(`boom: longer-secret-value then secret-value then ok`, env)
+  test('maskScriptEnvValues: known values scrub out of diagnostics', () => {
+    const env = { A: 'longer-secret-value', B: 'secret-value' }
+    const masked = maskScriptEnvValues(`boom: longer-secret-value then secret-value`, env)
     expect(masked).not.toContain('longer-secret-value')
     expect(masked).not.toContain('secret-value')
-    // Values under the length floor stay: masking 'ok'/'true'/'1' would shred
-    // unrelated prose (SCRIPT_ENV_MASK_MIN_LEN).
-    expect(masked).toContain('ok')
     expect(masked).toContain(INTENT_REDACTED)
+  })
+
+  // EVERY non-empty env value is a carrier — the earlier draft skipped values
+  // under six characters, and asserted the survivor, which locked a real hole
+  // in: `DEPLOY_PIN=73921` passes every env validator.
+  test('maskScriptEnvValues: a short value is masked where it stands alone', () => {
+    expect(maskScriptEnvValues('fatal: 73921', { DEPLOY_PIN: '73921' })).toBe(
+      `fatal: ${INTENT_REDACTED}`,
+    )
+  })
+
+  // …but only as a token. Substring-replacing a one-character value would turn
+  // the diagnostics into noise while hiding nothing the reader lacks.
+  test('maskScriptEnvValues: a short value does not shred surrounding prose', () => {
+    const masked = maskScriptEnvValues('attempt 10 of 3, code 1 here', { RETRY: '1' })
+    expect(masked).toBe(`attempt 10 of 3, code ${INTENT_REDACTED} here`)
+  })
+
+  // Short values go through a RegExp, so a value carrying regex metacharacters
+  // must be escaped — otherwise `1.5` would also collapse `125`.
+  test('maskScriptEnvValues: regex metacharacters in a short value are literal', () => {
+    expect(maskScriptEnvValues('code 125 seen', { RATE: '1.5' })).toBe('code 125 seen')
+    expect(maskScriptEnvValues('rate 1.5 seen', { RATE: '1.5' })).toBe(
+      `rate ${INTENT_REDACTED} seen`,
+    )
+  })
+
+  // The ordering above is load-bearing but the assertions there do NOT pin it:
+  // a shortest-first implementation leaves `longer-‹redacted›` and still
+  // satisfies every `not.toContain` (it no longer contains the whole value).
+  // This input distinguishes them — one value is a strict suffix of the other,
+  // so a wrong order leaks the prefix of a real secret.
+  test('maskScriptEnvValues: a value containing another collapses whole', () => {
+    const masked = maskScriptEnvValues('AAAAAAsecret', { A: 'AAAAAAsecret', B: 'secret' })
+    expect(masked).toBe(INTENT_REDACTED)
   })
 
   test('maskScriptEnvValues: no-op on empty env', () => {
     expect(maskScriptEnvValues('unchanged', {})).toBe('unchanged')
+  })
+
+  // A non-string env value still reaches storage: a stored definition parses
+  // through the permissive WorkflowNodeSchema, not ScriptNodeSchema. The MCP
+  // branch refuses non-strings, and this one claims to mirror it.
+  test('IN: non-string env values are carriers too', () => {
+    expect(
+      findNonSentinelSecretCarriers({
+        resourceType: 'workflow',
+        payload: {
+          definition: {
+            nodes: [{ id: 's1', kind: 'script', env: { DB: ['postgres://u:p@h/db'], N: 12345 } }],
+          },
+        },
+      }),
+    ).toEqual(['/payload/definition/nodes/0/env/DB', '/payload/definition/nodes/0/env/N'])
   })
 })

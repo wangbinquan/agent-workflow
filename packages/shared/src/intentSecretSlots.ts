@@ -169,8 +169,12 @@ export function maskWorkflowScriptEnv<T>(definition: T, marker: string = INTENT_
     if (rec.kind !== 'script') return node
     const env = rec.env
     if (typeof env !== 'object' || env === null || Array.isArray(env)) return node
-    const masked: Record<string, string> = {}
-    for (const k of Object.keys(env)) masked[k] = marker
+    // `Object.fromEntries`, not `masked[k] = marker`: a JSON-parsed env may
+    // legitimately hold `__proto__` (the env-name grammar accepts it), and
+    // plain assignment hits the legacy prototype setter instead of creating an
+    // own property — the key vanishes. That breaks the keys-survive contract
+    // and, worse, silently changes the workflow shape on YAML export→import.
+    const masked = Object.fromEntries(Object.keys(env).map((k) => [k, marker]))
     touched = true
     return { ...rec, env: masked }
   })
@@ -367,7 +371,12 @@ export function findNonSentinelSecretCarriers(op: {
       if (rec.kind !== 'script') return
       if (typeof rec.env !== 'object' || rec.env === null || Array.isArray(rec.env)) return
       for (const [k, v] of Object.entries(rec.env as Record<string, unknown>)) {
-        if (typeof v !== 'string') continue
+        // Non-strings are refused too, exactly like the MCP branch above. The
+        // node schema for a stored definition is the permissive
+        // `WorkflowNodeSchema`, so `env: {DB: ['postgres://u:p@h/db']}` does
+        // reach the database; that it is inert at run time (`readScriptEnv`
+        // drops non-strings) is a second line of defence, not a reason for
+        // this one to have a hole. A carrier is a carrier at any type.
         if (v !== '' && v !== INTENT_SECRET_SENTINEL) {
           push(`/payload/definition/nodes/${i}/env/${escapePointer(k)}`)
         }
@@ -409,23 +418,45 @@ export function findNonSentinelSecretCarriers(op: {
   return [...new Set(out)]
 }
 
-/** Minimum env-value length `maskScriptEnvValues` will match. Below this,
- *  values ('1', 'true', 'info', …) are indistinguishable from ordinary
- *  diagnostics prose and masking them would shred unrelated text. Real
- *  credentials are comfortably longer. */
-export const SCRIPT_ENV_MASK_MIN_LEN = 6
+/** At or above this length a value is masked wherever it appears, substring or
+ *  not. BELOW it, the value is still masked — but only where it stands alone
+ *  as a token.
+ *
+ *  This is not a leniency knob. An earlier draft simply SKIPPED short values,
+ *  which contradicted the closed-carrier rule (`DEPLOY_PIN=73921` is a real
+ *  credential that passes every env validator) and the test even asserted the
+ *  short value survived, locking the hole in. The reason a plain substring
+ *  replace is still wrong for them is different: with `RETRY=1`, replacing
+ *  every `1` turns `attempt 10 of 3` into unreadable noise and hides nothing
+ *  a reader did not already know. Token boundaries give both — the PIN goes,
+ *  the prose survives. */
+export const SCRIPT_ENV_SUBSTRING_MIN_LEN = 6
+
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 /** RFC-253 T28 — mask a script node's KNOWN env values out of diagnostics text
- *  (stderr tails, failure details) before persistence. Exact-occurrence
- *  replacement, longest value first so a value that contains another still
- *  collapses to one marker. Complements maskDiagnosticsText (which matches
- *  credential SHAPES without knowing values). */
+ *  (stderr lines, failure details) before persistence. Longest value first, so
+ *  a value that contains another still collapses to a single marker rather
+ *  than leaving the longer one's prefix behind. Complements
+ *  maskDiagnosticsText (which matches credential SHAPES without knowing
+ *  values). */
 export function maskScriptEnvValues(text: string, env: Record<string, string>): string {
   const values = [...new Set(Object.values(env))]
-    .filter((v) => v.length >= SCRIPT_ENV_MASK_MIN_LEN)
+    .filter((v) => v.length > 0)
     .sort((a, b) => b.length - a.length)
   let out = text
-  for (const value of values) out = out.split(value).join(INTENT_REDACTED)
+  for (const value of values) {
+    if (value.length >= SCRIPT_ENV_SUBSTRING_MIN_LEN) {
+      out = out.split(value).join(INTENT_REDACTED)
+      continue
+    }
+    out = out.replace(
+      new RegExp(`(?<![A-Za-z0-9_])${escapeRegExp(value)}(?![A-Za-z0-9_])`, 'g'),
+      INTENT_REDACTED,
+    )
+  }
   return out
 }
 

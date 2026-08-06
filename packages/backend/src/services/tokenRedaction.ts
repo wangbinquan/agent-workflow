@@ -25,6 +25,7 @@
 // "read-only tokens can't leak secrets", which would be false.
 
 import { maskWorkflowScriptEnv, redactGitUrl } from '@agent-workflow/shared'
+import type { Task } from '@agent-workflow/shared'
 import type { ActorSource } from '@/auth/actor'
 import { redactSensitiveString } from '@/util/redact'
 
@@ -90,7 +91,7 @@ export function serializeMcpFor<T>(record: T, source: ActorSource): T {
 }
 
 /**
- * Serialize one workflow record for a specific caller (RFC-253 T28).
+ * Serialize one workflow RECORD for a specific caller (RFC-253 T28).
  *
  * A workflow definition became a credential carrier the day script nodes
  * landed: their `env` map holds whatever the author typed, API keys included.
@@ -98,15 +99,75 @@ export function serializeMcpFor<T>(record: T, source: ActorSource): T {
  * channel — applied through the shared `maskWorkflowScriptEnv` walker so this
  * projection and the intent-dump projection can never disagree about which
  * nodes carry secrets. Records without script nodes come back as the SAME
- * reference. NOTE: a PAT cannot round-trip the mask into the stored definition
- * — saving a script-bearing workflow needs `scripts:author`, which never
- * enters the token face (RFC-253 D19), so every script write via PAT is 403
- * before this could matter.
+ * reference.
+ *
+ * THE CONSTRAINT IS THE POINT. `definition` is REQUIRED on T, so passing a
+ * save receipt here is a compile error rather than a silent no-op: a receipt
+ * keeps its definition at `snapshot.definition`, so the original permissive
+ * `<T>` signature read `record.definition === undefined`, hit the
+ * same-reference short circuit, and returned the receipt untouched — a call
+ * site that looked wired and did nothing. Receipts go through
+ * `serializeWorkflowReceiptFor` below.
+ *
+ * That dead call site was NOT a leak, and the distinction is worth keeping
+ * straight: `prepareWorkflowSave` builds the receipt snapshot from
+ * `parsed.data.snapshot` (services/workflow.ts:345) — the caller's OWN
+ * submitted bytes, never the stored row — so the response echoed only what
+ * the request already contained. A token cannot launder plaintext through it
+ * either: it reads `***` from any GET, and submitting that back changes the
+ * sensitive projection, which demands `scripts:author` — a system-domain
+ * point no token carries (RFC-253 D19). This is defence in depth against the
+ * day a receipt starts reflecting stored bytes.
  */
-export function serializeWorkflowFor<T>(record: T, source: ActorSource): T {
-  if (!shouldRedactFor(source) || !isPlainObject(record)) return record
+export function serializeWorkflowFor<T extends { definition: unknown }>(
+  record: T,
+  source: ActorSource,
+): T {
+  if (!shouldRedactFor(source)) return record
   const masked = maskWorkflowScriptEnv(record.definition, REDACTED)
   return masked === record.definition ? record : ({ ...record, definition: masked } as T)
+}
+
+/**
+ * Serialize one save RECEIPT for a specific caller (RFC-253 T28).
+ *
+ * `PUT /api/workflows/:id` and the overwrite arm of the YAML import both
+ * answer with a `SaveWorkflowReceipt`, whose `snapshot` carries the complete
+ * definition that was just written. Same masking walker, different shape —
+ * kept as its own function (rather than one helper sniffing for both) so the
+ * required-property constraint on each can do the routing at compile time.
+ */
+export function serializeWorkflowReceiptFor<T extends { snapshot: { definition: unknown } }>(
+  receipt: T,
+  source: ActorSource,
+): T {
+  if (!shouldRedactFor(source)) return receipt
+  const current = receipt.snapshot.definition
+  const masked = maskWorkflowScriptEnv(current, REDACTED)
+  return masked === current
+    ? receipt
+    : ({ ...receipt, snapshot: { ...receipt.snapshot, definition: masked } } as T)
+}
+
+/**
+ * Serialize one TASK for a specific caller (RFC-253 T28).
+ *
+ * Launching a task freezes the workflow definition into `workflowSnapshot` so
+ * the run survives later edits — which means the script-node `env` values the
+ * workflow read path masks are ALSO sitting in every task response, and they
+ * outlive the workflow itself (the snapshot still answers after the source
+ * workflow is edited or deleted). `GET /api/tasks/:id` is `tokenAccess:
+ * 'allow'`, so before this an empty-matrix PAT could read them straight out.
+ *
+ * Same walker, same shape rule as the workflow projections. `workflowSnapshot`
+ * is REQUIRED on T for the reason `serializeWorkflowFor` requires
+ * `definition`: it makes "I forgot this outlet returns a task" a compile error
+ * at the one place it can be caught.
+ */
+export function serializeTaskFor<T extends Task>(task: T, source: ActorSource): T {
+  if (!shouldRedactFor(source)) return task
+  const masked = maskWorkflowScriptEnv(task.workflowSnapshot, REDACTED)
+  return masked === task.workflowSnapshot ? task : ({ ...task, workflowSnapshot: masked } as T)
 }
 
 /**
