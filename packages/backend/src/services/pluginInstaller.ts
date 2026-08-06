@@ -26,6 +26,7 @@ import { existsSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
 import path, { dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { PluginSourceKind } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { redactSensitiveString } from '@/util/redact'
@@ -291,8 +292,14 @@ async function installPluginGeneration(
 }
 
 async function installFilePlugin(spec: string): Promise<InstallResult> {
-  // Strip file:// prefix if present; everything else is a host path.
-  const raw = spec.startsWith('file://') ? new URL(spec).pathname : spec
+  // Convert a file:// URL to a host path; everything else is already a host
+  // path. RFC-254 T31: `new URL(spec).pathname` is WRONG on win32 — it yields
+  // `/C:/plugins/foo` (a URL component, leading slash), which `realpath` cannot
+  // open, so every `file://` plugin install fails on Windows. `fileURLToPath`
+  // is the correct, platform-correct conversion (`C:\plugins\foo` on win32,
+  // `/plugins/foo` on POSIX). The repo guard rfc254-file-url-pathname-guard only
+  // bans the `import.meta.url` spelling, so this file-spec form slipped through.
+  const raw = spec.startsWith('file://') ? fileURLToPath(spec) : spec
   let resolved: string
   try {
     resolved = await realpath(raw)

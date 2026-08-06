@@ -112,6 +112,13 @@ jobs:
       - name: RFC-254 T31 — verified business plan (win32 git + skill seal)
         run: bun test --isolate packages/backend/tests/rfc254-verified-plan-win32.test.ts
 
+      # RFC-254 T31 — a `file://` plugin spec must convert via fileURLToPath, not
+      # `URL.pathname` (which yields the unopenable `/C:/...` on win32, failing
+      # every file-plugin install). The behavioural install here only fails on a
+      # real Windows kernel, which is why it runs on this leg.
+      - name: RFC-254 T31 — file:// plugin install (win32 path conversion)
+        run: bun test --isolate packages/backend/tests/rfc254-plugin-file-url.test.ts
+
       # RFC-254 T20 (D11) — the git-credential subcommand that replaced the POSIX
       # `#!/bin/sh` askpass helper. Platform-agnostic (pure host-binding verdict +
       # env-driven subcommand, no DACL/seal dependency), so this guards the win32
