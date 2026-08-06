@@ -22976,6 +22976,24 @@ button.status-chip {
   gap: var(--space-1);
 }
 
+/* TemplateVarChips — 模板变量点击插入行（webhook 触发器三注入面共用）。 */
+.template-var-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.template-var-chips__label {
+  font-size: var(--font-sm);
+  color: var(--muted);
+  margin-right: var(--space-1);
+}
+
+.template-var-chips__chip {
+  font-family: var(--font-mono);
+}
+
 .webhook-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

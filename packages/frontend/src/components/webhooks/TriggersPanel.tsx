@@ -11,7 +11,7 @@ import {
   type WebhookTrigger,
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
@@ -33,6 +33,11 @@ import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { Stepper } from '@/components/Stepper'
 import { TableViewport } from '@/components/TableViewport'
+import {
+  TemplateVarChips,
+  applyTemplateVarInsertion,
+  webhookVarsForDisplay,
+} from '@/components/TemplateVarChips'
 
 type RepoScopeKind = 'all' | 'prefix' | 'exact'
 
@@ -477,6 +482,35 @@ function TriggerDialog(props: {
     [workflowDetail.data],
   )
 
+  // 模板变量插入（三种注入面共用一套 chips）：变量集 = 所选事件类型交集，
+  // event_json 置顶。workflow 面是多输入网格 —— 记录最近聚焦的 text 输入作为
+  // 插入目标，未聚焦过时落到第一个 text 输入。
+  const templateVars = useMemo(() => webhookVarsForDisplay(draft.eventTypes), [draft.eventTypes])
+  const templateVarsLabel = t('webhookTriggers.fields.templateVarsLabel')
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
+  const goalRef = useRef<HTMLTextAreaElement | null>(null)
+  const mappingInputRefs = useRef(new Map<string, HTMLInputElement>())
+  const [focusedMappingKey, setFocusedMappingKey] = useState<string | null>(null)
+  const textInputKeys = useMemo(
+    () => workflowInputs.filter((input) => input.kind === 'text').map((input) => input.key),
+    [workflowInputs],
+  )
+  const insertIntoMapping = (token: string) => {
+    const key =
+      focusedMappingKey !== null && textInputKeys.includes(focusedMappingKey)
+        ? focusedMappingKey
+        : textInputKeys[0]
+    if (key === undefined) return
+    const mapping = draft.inputMappings[key]
+    const current = mapping?.kind === 'template' ? mapping.template : ''
+    applyTemplateVarInsertion(mappingInputRefs.current.get(key) ?? null, current, token, (next) => {
+      const nextMappings = { ...draft.inputMappings }
+      if (next === '') delete nextMappings[key]
+      else nextMappings[key] = { kind: 'template', template: next }
+      set({ inputMappings: nextMappings })
+    })
+  }
+
   const targetOptions: Array<{ value: string; label: string }> =
     draft.launchKind === 'workflow'
       ? (workflows.data ?? []).map((w) => ({ value: w.id, label: w.name }))
@@ -802,6 +836,11 @@ function TriggerDialog(props: {
                                     template === '' ? null : { kind: 'template', template },
                                   )
                                 }
+                                onFocus={() => setFocusedMappingKey(input.key)}
+                                inputRef={(el) => {
+                                  if (el === null) mappingInputRefs.current.delete(input.key)
+                                  else mappingInputRefs.current.set(input.key, el)
+                                }}
                                 placeholder={t('webhookTriggers.fields.templatePlaceholder')}
                                 data-testid={`wt-map-${input.key}`}
                               />
@@ -811,38 +850,68 @@ function TriggerDialog(props: {
                           </Field>
                         )
                       })}
+                      {textInputKeys.length > 0 && (
+                        <TemplateVarChips
+                          vars={templateVars}
+                          label={templateVarsLabel}
+                          onInsert={insertIntoMapping}
+                          testidPrefix="wt-var"
+                        />
+                      )}
                     </div>
                   )}
                 </Field>
               )}
               {draft.launchKind === 'agent' && (
-                <Field
-                  label={t('webhookTriggers.fields.description')}
-                  hint={t('webhookTriggers.fields.templateVarsHint')}
-                >
-                  <TextArea
-                    value={draft.description}
-                    onChange={(description) => set({ description })}
-                    rows={5}
-                    monospace
-                    data-testid="wt-description"
+                <>
+                  <Field label={t('webhookTriggers.fields.description')}>
+                    <TextArea
+                      value={draft.description}
+                      onChange={(description) => set({ description })}
+                      rows={5}
+                      monospace
+                      textareaRef={descriptionRef}
+                      data-testid="wt-description"
+                    />
+                  </Field>
+                  <TemplateVarChips
+                    vars={templateVars}
+                    label={templateVarsLabel}
+                    onInsert={(token) =>
+                      applyTemplateVarInsertion(
+                        descriptionRef.current,
+                        draft.description,
+                        token,
+                        (description) => set({ description }),
+                      )
+                    }
+                    testidPrefix="wt-var"
                   />
-                </Field>
+                </>
               )}
               {draft.launchKind === 'workgroup' && (
-                <Field
-                  label={t('webhookTriggers.fields.goal')}
-                  hint={t('webhookTriggers.fields.templateVarsHint')}
-                  required
-                >
-                  <TextArea
-                    value={draft.goal}
-                    onChange={(goal) => set({ goal })}
-                    rows={5}
-                    monospace
-                    data-testid="wt-goal"
+                <>
+                  <Field label={t('webhookTriggers.fields.goal')} required>
+                    <TextArea
+                      value={draft.goal}
+                      onChange={(goal) => set({ goal })}
+                      rows={5}
+                      monospace
+                      textareaRef={goalRef}
+                      data-testid="wt-goal"
+                    />
+                  </Field>
+                  <TemplateVarChips
+                    vars={templateVars}
+                    label={templateVarsLabel}
+                    onInsert={(token) =>
+                      applyTemplateVarInsertion(goalRef.current, draft.goal, token, (goal) =>
+                        set({ goal }),
+                      )
+                    }
+                    testidPrefix="wt-var"
                   />
-                </Field>
+                </>
               )}
             </div>
           )}

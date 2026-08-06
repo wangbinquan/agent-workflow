@@ -2459,7 +2459,7 @@ export interface Resources {
       unmappable: string
       description: string
       goal: string
-      templateVarsHint: string
+      templateVarsLabel: string
       maxFires: string
       maxFiresHint: string
       autoRegister: string
@@ -7599,8 +7599,7 @@ export const zhCN: Resources = {
       unmappable: 'Webhook 事件不能提供这种输入，请改用其他目标或调整工作流。',
       description: '任务提示词模板',
       goal: '工作组目标模板',
-      templateVarsHint:
-        '可用变量：event_type / repo_path / branch / target_branch / mr_iid / mr_title / commit_sha / comment_text / comment_author / pipeline_status / event_json',
+      templateVarsLabel: '事件变量——点击插入到光标处：',
       maxFires: '连续触发上限',
       maxFiresHint: '同一 MR 或分支达到上限后暂停，防止自动化反复触发自己。',
       autoRegister: '自动注册仓库',

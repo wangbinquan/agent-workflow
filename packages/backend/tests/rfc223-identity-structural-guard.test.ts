@@ -226,6 +226,7 @@ const EXACT_ALLOWANCE_ROWS = [
   'frontend-name-key\u001fpackages/frontend/src/components/skills/ImportZipPanel.tsx\u001fReviewPhase\u001fJsxAttribute:e823e2cf6505413bec52\u001f1\u001fimport-name-boundary\u001fkey={row.candidate.name}',
   'frontend-name-key\u001fpackages/frontend/src/components/TaskOutputPanel.tsx\u001fTaskOutputPanel\u001fJsxAttribute:8808a2afe9f155ffba84\u001f1\u001fport-or-protocol-name\u001fkey={`${r.port.name}-${i}`}',
   'frontend-name-key\u001fpackages/frontend/src/components/TaskOutputPanel.tsx\u001fTaskOutputPanel\u001fJsxAttribute:becf02ceddb1aacb671a\u001f1\u001fport-or-protocol-name\u001fkey={`${port.port.name}-${i}`}',
+  'frontend-name-key\u001fpackages/frontend/src/components/TemplateVarChips.tsx\u001fTemplateVarChips\u001fJsxAttribute:68c4bdce1d7b982e55c3\u001f1\u001fport-or-protocol-name\u001fkey={name}',
   'frontend-name-key\u001fpackages/frontend/src/components/WorktreeFilesPanel.tsx\u001fDirChildren\u001fJsxAttribute:c5b4acd338972267579a\u001f1\u001ffilesystem-name\u001fkey={entry.name}',
   "frontend-name-key\u001fpackages/frontend/src/lib/skill-zip-import.ts\u001fbuildDecisionMap\u001fBinaryExpression:03bfef62fd8ba7b27dd4\u001f1\u001fimport-name-boundary\u001fout[row.candidate.name] = { action: 'import' }",
   "frontend-name-key\u001fpackages/frontend/src/lib/skill-zip-import.ts\u001fbuildDecisionMap\u001fBinaryExpression:22a61d09c6bb1e978d5d\u001f1\u001fimport-name-boundary\u001fout[row.candidate.name] = { action: 'skip' }",
@@ -372,7 +373,11 @@ describe('RFC-223 T15 structural identity guard', () => {
     // RFC-258: 138 → 140. Two code-intel react-query keys carry the CLICKED
     // IDENTIFIER text — a source-code symbol name that IS the protocol's
     // lookup key (code-symbol), reviewed above; no resource identity involved.
-    expect(findings.length).toBe(140)
+    // Webhook template-var chips: 140 → 141. TemplateVarChips renders one
+    // button per webhook template VARIABLE name (closed enum, shared
+    // WEBHOOK_TEMPLATE_VARS) keyed by that name — a protocol namespace with no
+    // id form (port-or-protocol-name), reviewed above; no resource identity.
+    expect(findings.length).toBe(141)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

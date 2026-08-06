@@ -223,15 +223,33 @@ export function processGroupMembers(pid: number): number[] {
 export const STALE_RUN_PID_MAX_AGE_MS = 48 * 3_600_000
 
 /**
- * PID-reuse noise gate 2: `ps -p <pid> -o command=` must look like one of our
+ * RFC-254: a process's command line, cross-platform. POSIX uses `ps`; Windows
+ * has no `ps` and WMIC is deprecated/removed on newer builds, so it reads the
+ * CommandLine via PowerShell CIM. Empty string on any failure (caller decides).
+ */
+function pidCommandLine(pid: number): string {
+  if (process.platform === 'win32') {
+    const res = Bun.spawnSync([
+      'powershell',
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`,
+    ])
+    return res.exitCode === 0 ? res.stdout.toString() : ''
+  }
+  const res = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'command='])
+  return res.exitCode === 0 ? res.stdout.toString() : ''
+}
+
+/**
+ * PID-reuse noise gate 2: the pid's command line must look like one of our
  * children (the real `opencode` binary, or `bun` running a test fixture /
  * source checkout). Anything else ⟹ the pid was recycled; leave it alone.
  */
 export function pidCommandLooksLikeAgentChild(pid: number): boolean {
   try {
-    const res = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'command='])
-    if (res.exitCode !== 0) return false
-    return /opencode|bun/i.test(res.stdout.toString())
+    return /opencode|bun/i.test(pidCommandLine(pid))
   } catch {
     return false
   }
@@ -247,9 +265,10 @@ export function pidCommandLooksLikeAgentChild(pid: number): boolean {
  */
 export function pidCommandContainsBinary(pid: number, binaryPath: string): boolean {
   try {
-    const res = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'command='])
-    if (res.exitCode !== 0) return false
-    return res.stdout.toString().includes(binaryPath)
+    // RFC-254: cross-platform command-line read (POSIX `ps` / win32 CIM). Without
+    // the win32 path this identity gate was a no-op on Windows (always false), so
+    // a recycled PID could be killed as if it were our stale run.
+    return pidCommandLine(pid).includes(binaryPath)
   } catch {
     return false
   }

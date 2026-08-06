@@ -2763,8 +2763,7 @@ export const enUS: Resources = {
         'Webhook events cannot provide this input. Choose another target or adjust the workflow.',
       description: 'Task prompt template',
       goal: 'Workgroup goal template',
-      templateVarsHint:
-        'Available vars: event_type / repo_path / branch / target_branch / mr_iid / mr_title / commit_sha / comment_text / comment_author / pipeline_status / event_json',
+      templateVarsLabel: 'Event variables — click to insert at the cursor:',
       maxFires: 'Consecutive fire limit',
       maxFiresHint:
         'Pause after this many fires on the same MR or branch so automation cannot repeatedly trigger itself.',
