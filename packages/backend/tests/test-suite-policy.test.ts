@@ -52,6 +52,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // runs no netless fencing (no provider) or sealed shell, so these mechanisms
   // are inactive; win32-canonical fixtures come with a future Windows provider.
   'packages/backend/tests/netless-workdir-2026-08-04.test.ts#skipIf': 2,
+  // RFC-254 T31: two local-material cases force a seatbelt/bwrap provider and
+  // materialize a netless wrapper through it (plus POSIX `#!/bin/sh` / `true`
+  // fixtures). Windows v1 has no provider, so local-MCP test material is a
+  // future-provider concern; the remote-identity case still runs on win32.
+  'packages/backend/tests/rfc238-mcp-test-execution-material.test.ts#skipIf': 2,
   // RFC-254 T31: one win32-ONLY describe (skipIf non-win32) exercises the two
   // verified-business-plan defects — resolveNetlessGitCommonDirs accepting git-
   // for-Windows's forward-slash --git-common-dir, and snapshotManagedSkillTree

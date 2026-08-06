@@ -101,57 +101,68 @@ describe('RFC-238 frozen MCP execution material', () => {
     expect(durableIdentity).not.toContain('header-secret-one')
   })
 
-  test('local material seals the executable and detects snapshot or wrapper tampering', async () => {
-    const base = root('rfc238-local-material-')
-    const appHome = join(base, 'app-home')
-    const worktreePath = join(base, 'worktree')
-    const executable = join(base, 'bin', 'fixture-mcp')
-    mkdirSync(worktreePath, { recursive: true, mode: 0o700 })
-    mkdirSync(dirname(executable), { recursive: true, mode: 0o700 })
-    writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o500 })
-    chmodSync(executable, 0o500)
-    const admitted = await containment(appHome)
+  // RFC-254 T31: POSIX-provider simulation — `containment()` forces a seatbelt
+  // (or bwrap) provider, and local material materializes a netless WRAPPER
+  // through it. Windows v1 has no containment provider (RFC-254 D1), so no
+  // wrapper is produced and `frozenFileDigest(wrapperPath)` hits ENOENT; the
+  // fixtures are POSIX too (`#!/bin/sh`, the `true` binary). Local-MCP test
+  // material therefore belongs to the future Windows provider, not T31. The
+  // remote-identity case above (no wrapper) still runs on win32. Registered in
+  // test-suite-policy.
+  test.skipIf(process.platform === 'win32')(
+    'local material seals the executable and detects snapshot or wrapper tampering',
+    async () => {
+      const base = root('rfc238-local-material-')
+      const appHome = join(base, 'app-home')
+      const worktreePath = join(base, 'worktree')
+      const executable = join(base, 'bin', 'fixture-mcp')
+      mkdirSync(worktreePath, { recursive: true, mode: 0o700 })
+      mkdirSync(dirname(executable), { recursive: true, mode: 0o700 })
+      writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o500 })
+      chmodSync(executable, 0o500)
+      const admitted = await containment(appHome)
 
-    const materialRoot = join(base, 'material')
-    const material = await prepareMcpTestExecutionMaterial({
-      mcp: {
-        id: 'mcp-local',
-        name: 'local_fixture',
-        description: '',
-        type: 'local',
-        config: {
-          command: [executable, '--stdio'],
-          env: { FIXTURE_TOKEN: 'private-value' },
+      const materialRoot = join(base, 'material')
+      const material = await prepareMcpTestExecutionMaterial({
+        mcp: {
+          id: 'mcp-local',
+          name: 'local_fixture',
+          description: '',
+          type: 'local',
+          config: {
+            command: [executable, '--stdio'],
+            env: { FIXTURE_TOKEN: 'private-value' },
+          },
+          enabled: true,
+          schemaVersion: 1,
+          createdAt: 1,
+          updatedAt: 1,
         },
-        enabled: true,
-        schemaVersion: 1,
-        createdAt: 1,
-        updatedAt: 1,
-      },
-      root: materialRoot,
-      worktreePath,
-      appHome,
-      containment: admitted,
-    })
+        root: materialRoot,
+        worktreePath,
+        appHome,
+        containment: admitted,
+      })
 
-    expect(material.opencodeEntry.command).toEqual([join(materialRoot, 'mcp-wrapper', 'run')])
-    expect(material.claudeEntry).toEqual({
-      command: join(materialRoot, 'mcp-wrapper', 'run'),
-      args: [],
-    })
-    expect(readFileSync(join(materialRoot, 'mcp-wrapper', 'netless.json'), 'utf8')).toContain(
-      join(materialRoot, 'mcp-bin', 'server'),
-    )
-    await expect(material.preSpawnVerify()).resolves.toBeUndefined()
+      expect(material.opencodeEntry.command).toEqual([join(materialRoot, 'mcp-wrapper', 'run')])
+      expect(material.claudeEntry).toEqual({
+        command: join(materialRoot, 'mcp-wrapper', 'run'),
+        args: [],
+      })
+      expect(readFileSync(join(materialRoot, 'mcp-wrapper', 'netless.json'), 'utf8')).toContain(
+        join(materialRoot, 'mcp-bin', 'server'),
+      )
+      await expect(material.preSpawnVerify()).resolves.toBeUndefined()
 
-    const snapshot = join(materialRoot, 'mcp-bin', 'server')
-    chmodSync(snapshot, 0o700)
-    writeFileSync(snapshot, '#!/bin/sh\nexit 9\n')
-    chmodSync(snapshot, 0o500)
-    await expect(material.preSpawnVerify()).rejects.toMatchObject({
-      code: 'execution-identity-untrusted-binary',
-    })
-  })
+      const snapshot = join(materialRoot, 'mcp-bin', 'server')
+      chmodSync(snapshot, 0o700)
+      writeFileSync(snapshot, '#!/bin/sh\nexit 9\n')
+      chmodSync(snapshot, 0o500)
+      await expect(material.preSpawnVerify()).rejects.toMatchObject({
+        code: 'execution-identity-untrusted-binary',
+      })
+    },
+  )
 
   // RFC-242 (adversarial review P1-4) reshaped the second half of this case
   // WITHOUT weakening it. The invariant is unchanged — "an author-declared env
@@ -162,54 +173,59 @@ describe('RFC-238 frozen MCP execution material', () => {
   // fail-closed leg now covers the family that genuinely cannot be forwarded:
   // dynamic-loader variables, which `bwrap`/`sandbox-exec` read before the
   // boundary exists.
-  test('local material resolves a stable PATH token and never silently drops env keys', async () => {
-    const base = root('rfc238-local-path-material-')
-    const appHome = join(base, 'app-home')
-    const worktreePath = join(base, 'worktree')
-    mkdirSync(worktreePath, { recursive: true, mode: 0o700 })
-    const admitted = await containment(appHome)
-    const local = (env: Record<string, string>): Extract<Mcp, { type: 'local' }> => ({
-      id: 'mcp-local-path',
-      name: 'local_path_fixture',
-      description: '',
-      type: 'local',
-      config: { command: ['true'], env },
-      enabled: true,
-      schemaVersion: 1,
-      createdAt: 1,
-      updatedAt: 1,
-    })
+  // RFC-254 T31: POSIX-provider simulation (same as above) + a POSIX `true`
+  // binary as the PATH token, which win32 has no equivalent of.
+  test.skipIf(process.platform === 'win32')(
+    'local material resolves a stable PATH token and never silently drops env keys',
+    async () => {
+      const base = root('rfc238-local-path-material-')
+      const appHome = join(base, 'app-home')
+      const worktreePath = join(base, 'worktree')
+      mkdirSync(worktreePath, { recursive: true, mode: 0o700 })
+      const admitted = await containment(appHome)
+      const local = (env: Record<string, string>): Extract<Mcp, { type: 'local' }> => ({
+        id: 'mcp-local-path',
+        name: 'local_path_fixture',
+        description: '',
+        type: 'local',
+        config: { command: ['true'], env },
+        enabled: true,
+        schemaVersion: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      })
 
-    const material = await prepareMcpTestExecutionMaterial({
-      mcp: local({ FIXTURE_TOKEN: 'private-value' }),
-      root: join(base, 'material-ok'),
-      worktreePath,
-      appHome,
-      containment: admitted,
-    })
-    expect(material.rawCommandDigest).toMatch(/^[0-9a-f]{64}$/)
-    await expect(material.preSpawnVerify()).resolves.toBeUndefined()
-
-    const lowercaseRoot = join(base, 'material-lowercase')
-    await prepareMcpTestExecutionMaterial({
-      mcp: local({ lowercase_key: 'must-not-be-silently-dropped' }),
-      root: lowercaseRoot,
-      worktreePath,
-      appHome,
-      containment: admitted,
-    })
-    expect(readFileSync(join(lowercaseRoot, 'mcp-wrapper', 'netless.json'), 'utf8')).toContain(
-      'must-not-be-silently-dropped',
-    )
-
-    await expect(
-      prepareMcpTestExecutionMaterial({
-        mcp: local({ DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib' }),
-        root: join(base, 'material-rejected'),
+      const material = await prepareMcpTestExecutionMaterial({
+        mcp: local({ FIXTURE_TOKEN: 'private-value' }),
+        root: join(base, 'material-ok'),
         worktreePath,
         appHome,
         containment: admitted,
-      }),
-    ).rejects.toMatchObject({ code: 'execution-identity-mismatch' })
-  })
+      })
+      expect(material.rawCommandDigest).toMatch(/^[0-9a-f]{64}$/)
+      await expect(material.preSpawnVerify()).resolves.toBeUndefined()
+
+      const lowercaseRoot = join(base, 'material-lowercase')
+      await prepareMcpTestExecutionMaterial({
+        mcp: local({ lowercase_key: 'must-not-be-silently-dropped' }),
+        root: lowercaseRoot,
+        worktreePath,
+        appHome,
+        containment: admitted,
+      })
+      expect(readFileSync(join(lowercaseRoot, 'mcp-wrapper', 'netless.json'), 'utf8')).toContain(
+        'must-not-be-silently-dropped',
+      )
+
+      await expect(
+        prepareMcpTestExecutionMaterial({
+          mcp: local({ DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib' }),
+          root: join(base, 'material-rejected'),
+          worktreePath,
+          appHome,
+          containment: admitted,
+        }),
+      ).rejects.toMatchObject({ code: 'execution-identity-mismatch' })
+    },
+  )
 })
