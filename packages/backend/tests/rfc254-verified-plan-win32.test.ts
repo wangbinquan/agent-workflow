@@ -127,6 +127,16 @@ describe('RFC-254 T31 — verified business plan build on Windows (source anchor
     )
     expect(text).toContain('sealDirectoryOwnerOnly(snapshotPath)')
   })
+
+  test('bug#4: RFC-256 machine-config count uses realHome, not sourceEnv.HOME', () => {
+    // Native Windows does not populate HOME (only USERPROFILE), so reading
+    // `sourceEnv.HOME` here re-introduced the RFC-254 T11b bug: the whole plan
+    // build aborts store-unsafe on a stock Windows install. Must use `realHome`
+    // (= platformHomeEnvForHost, USERPROFILE on win32), identical on POSIX.
+    const text = src('services/runtime/opencode/verifiedPlan.ts')
+    expect(text).toContain('machineConfigDeclaredPluginCount(join(realHome')
+    expect(text).not.toContain('safeAbsoluteHome(sourceEnv.HOME)')
+  })
 })
 
 // Real behavior on real win32 — the coverage the forced-darwin suite structurally
@@ -197,7 +207,15 @@ describe.skipIf(process.platform !== 'win32')(
     test('the whole verified business plan builds on real win32 (no-containment)', async () => {
       const root = longTemp('rfc254-vp-full-')
       const originalAuth = process.env.OPENCODE_AUTH_CONTENT
+      const originalHome = process.env.HOME
       try {
+        // Simulate a STOCK Windows install, where native processes do not
+        // populate HOME (only USERPROFILE). This deterministically exercises
+        // bug#4 — the RFC-256 machine-config count once read `sourceEnv.HOME`
+        // and aborted the whole plan store-unsafe when HOME was unset. On win32
+        // `realHome` reads USERPROFILE, so deleting HOME is safe here (and the
+        // CI runner's HOME, set by git-bash but not pwsh, no longer masks it).
+        delete process.env.HOME
         const appHome = join(root, 'app')
         const scratchRepo = join(appHome, 'scratch', 'task-1')
         const worktreePath = join(appHome, 'iso', 'task-1', 'run-full')
@@ -281,6 +299,8 @@ describe.skipIf(process.platform !== 'win32')(
       } finally {
         if (originalAuth === undefined) delete process.env.OPENCODE_AUTH_CONTENT
         else process.env.OPENCODE_AUTH_CONTENT = originalAuth
+        if (originalHome === undefined) delete process.env.HOME
+        else process.env.HOME = originalHome
         rmSync(root, { recursive: true, force: true })
       }
     })

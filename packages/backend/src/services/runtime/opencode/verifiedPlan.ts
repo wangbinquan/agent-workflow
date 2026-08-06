@@ -984,10 +984,14 @@ export async function buildVerifiedOpencodeBusinessPlan(
         // plugins declared there are still not loaded. Report the count so that
         // limit is visible in the run log instead of looking like a silent
         // no-op (0 when inheritance is off or nothing is declared).
+        // RFC-254 T11b/T31: use `realHome` (USERPROFILE on win32), NOT
+        // `sourceEnv.HOME` — native Windows does not populate HOME, so the
+        // `sourceEnv.HOME` spelling re-introduced the exact bug the comment at
+        // `realHome`'s definition warns about: `safeAbsoluteHome(undefined)`
+        // aborts store-unsafe and takes the WHOLE plan build down. Identical to
+        // `sourceEnv.HOME` on POSIX (both are HOME there).
         machineConfigIgnoredPlugins: inheritMachineConfig
-          ? machineConfigDeclaredPluginCount(
-              join(safeAbsoluteHome(sourceEnv.HOME), '.config', 'opencode'),
-            )
+          ? machineConfigDeclaredPluginCount(join(realHome, '.config', 'opencode'))
           : 0,
         mcpCount: Object.keys(plannedMcp.config).length,
         // RFC-251: report the encoded selection, not a structural zero.
