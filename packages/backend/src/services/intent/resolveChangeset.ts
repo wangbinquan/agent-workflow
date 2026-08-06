@@ -199,6 +199,26 @@ export type IntentSlot =
   | { kind: 'humanBinding'; slotId: string; opId: string; displayName: string }
   | { kind: 'finalName'; slotId: string; opId: string }
 
+/** Script nodes of a passthrough workflow definition that carry a record env,
+ *  with their node index (pointer segment). ONE walker for both slot
+ *  derivation and confirm-time value injection — the two must never disagree
+ *  about which entries exist. */
+function collectScriptEnvNodes(
+  definition: unknown,
+): Array<[number, { env: Record<string, string> }]> {
+  const nodes = (definition as { nodes?: unknown[] } | undefined)?.nodes
+  if (!Array.isArray(nodes)) return []
+  const out: Array<[number, { env: Record<string, string> }]> = []
+  nodes.forEach((node, i) => {
+    if (typeof node !== 'object' || node === null) return
+    const rec = node as { kind?: unknown; env?: unknown }
+    if (rec.kind !== 'script') return
+    if (typeof rec.env !== 'object' || rec.env === null || Array.isArray(rec.env)) return
+    out.push([i, { env: rec.env as Record<string, string> }])
+  })
+  return out
+}
+
 export function deriveIntentSlots(
   manifest: IntentContextManifest,
   cs: IntentChangeset,
@@ -226,6 +246,23 @@ export function deriveIntentSlots(
       }
       if (op.payload.type === 'local') pushSecret('/config/env', config.env)
       if (op.payload.type === 'remote') pushSecret('/config/headers', config.headers)
+    }
+    if (op.resourceType === 'workflow') {
+      // RFC-253 T28 — script-node env mirrors MCP env: the model may only emit
+      // the sentinel; each sentinel becomes a server-issued slot the user fills
+      // at confirm time. Pointers are payload-relative (MCP precedent above).
+      for (const [i, node] of collectScriptEnvNodes(op.payload.definition)) {
+        for (const [key, value] of Object.entries(node.env)) {
+          if (value !== INTENT_SECRET_SENTINEL) continue
+          const pointer = `/definition/nodes/${i}/env/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`
+          slots.push({
+            kind: 'secret',
+            slotId: `secret:${op.opId}:${pointer}`,
+            opId: op.opId,
+            jsonPointer: pointer,
+          })
+        }
+      }
     }
     if (op.resourceType === 'workgroup') {
       for (const member of op.payload.members) {
@@ -534,6 +571,15 @@ export function resolveIntentBundle(input: {
           const ref = node.agentRef as string
           delete node.agentRef
           node.agentId = resolveRef(ref)
+        }
+        // RFC-253 T28 — inject confirm-time secret values into script env; the
+        // sentinel itself must never be persisted as a runtime value.
+        for (const [i, scriptNode] of collectScriptEnvNodes(def)) {
+          for (const key of Object.keys(scriptNode.env)) {
+            const pointer = `/definition/nodes/${i}/env/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`
+            const secret = secretValues.get(`${op.opId}:${pointer}`)
+            if (secret !== undefined) scriptNode.env[key] = secret
+          }
         }
         payload = { name, description: op.payload.description, definition: def }
         break

@@ -23,6 +23,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
+import { serializeWorkflowFor } from '@/services/tokenRedaction'
 import {
   canViewResource,
   filterVisibleRows,
@@ -87,12 +88,14 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       // name AND __system__ owner — workflows.name is non-unique, so a user-owned
       // workflow named aw-skill-fusion must stay visible. See systemResources.ts.
       c.json(
-        await filterVisibleRows(
-          deps.db,
-          actorOf(c),
-          'workflow',
-          excludeBuiltinWorkflows(await listWorkflows(deps.db)),
-        ),
+        (
+          await filterVisibleRows(
+            deps.db,
+            actorOf(c),
+            'workflow',
+            excludeBuiltinWorkflows(await listWorkflows(deps.db)),
+          )
+        ).map((wf) => serializeWorkflowFor(wf, actorOf(c).source)),
       ),
   )
 
@@ -106,7 +109,10 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Get one workflow',
     },
     async (c) => {
-      return c.json(await loadVisibleWorkflow(actorOf(c), c.req.param('id')))
+      const actor = actorOf(c)
+      return c.json(
+        serializeWorkflowFor(await loadVisibleWorkflow(actor, c.req.param('id')), actor.source),
+      )
     },
   )
 
@@ -132,7 +138,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
         ownerUserId: actor.user.id,
         actor,
       })
-      return c.json(created, 201)
+      return c.json(serializeWorkflowFor(created, actor.source), 201)
     },
   )
 
@@ -152,7 +158,17 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      return c.json(await copyWorkflow(deps.db, c.req.param('id'), parsed.data, actorOf(c)), 201)
+      const actor = actorOf(c)
+      // Copy is the one write a PAT can perform on a script-bearing workflow
+      // (verbatim provenance skips the scripts:author gate, D21) — its response
+      // must not hand back the env plaintext the read path hides.
+      return c.json(
+        serializeWorkflowFor(
+          await copyWorkflow(deps.db, c.req.param('id'), parsed.data, actor),
+          actor.source,
+        ),
+        201,
+      )
     },
   )
 
@@ -174,7 +190,12 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      return c.json(await updateWorkflow(deps.db, id, parsed.data, { kind: 'actor', actor }))
+      return c.json(
+        serializeWorkflowFor(
+          await updateWorkflow(deps.db, id, parsed.data, { kind: 'actor', actor }),
+          actor.source,
+        ),
+      )
     },
   )
 
@@ -370,10 +391,19 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       await deps.workflowExactOperationHook?.({ operation: 'export', revision })
       // RFC-223: emit portable name+owner selectors. Backup export keeps full
       // fidelity and does not go through this route.
-      const yaml = stringifyWorkflowYaml({
-        ...workflow,
-        definition: await workflowDefinitionToSelectors(deps.db, actorOf(c), workflow.definition),
-      })
+      const yaml = stringifyWorkflowYaml(
+        serializeWorkflowFor(
+          {
+            ...workflow,
+            definition: await workflowDefinitionToSelectors(
+              deps.db,
+              actorOf(c),
+              workflow.definition,
+            ),
+          },
+          actorOf(c).source,
+        ),
+      )
       return c.body(yaml, 200, {
         'content-type': 'application/yaml; charset=utf-8',
         'content-disposition': `attachment; filename="${c.req.param('id')}.yaml"`,
@@ -399,7 +429,11 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const result = await importWorkflowYaml(deps.db, parsed.data, { kind: 'actor', actor })
-      return c.json(result, result.outcome === 'created' ? 201 : 200)
+      const body =
+        result.outcome === 'created'
+          ? { ...result, workflow: serializeWorkflowFor(result.workflow, actor.source) }
+          : result
+      return c.json(body, result.outcome === 'created' ? 201 : 200)
     },
   )
 

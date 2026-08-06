@@ -145,6 +145,38 @@ export function projectPluginForDump(plugin: {
   }
 }
 
+/** Script node env masking (RFC-253 T28, carrier `script-node-env`).
+ *  A workflow definition rides everywhere else verbatim; script nodes' `env`
+ *  is its one closed credential carrier (same status as MCP local env: ALL
+ *  values are masked, keys survive so the reader can reason about shape).
+ *  ONE walker for both outlets — the intent dump masks with the default
+ *  `‹redacted›` marker, the token read projection (services/tokenRedaction.ts)
+ *  passes its own `***` — so the two mechanisms can never disagree about which
+ *  nodes carry secrets. Non-script nodes and every other field pass through
+ *  untouched. Pure and non-mutating; returns the SAME reference when nothing
+ *  needed masking; tolerates malformed shapes (no `nodes` array, non-record
+ *  env). */
+export function maskWorkflowScriptEnv<T>(definition: T, marker: string = INTENT_REDACTED): T {
+  if (typeof definition !== 'object' || definition === null || Array.isArray(definition)) {
+    return definition
+  }
+  const def = definition as Record<string, unknown>
+  if (!Array.isArray(def.nodes)) return definition
+  let touched = false
+  const nodes = def.nodes.map((node) => {
+    if (typeof node !== 'object' || node === null || Array.isArray(node)) return node
+    const rec = node as Record<string, unknown>
+    if (rec.kind !== 'script') return node
+    const env = rec.env
+    if (typeof env !== 'object' || env === null || Array.isArray(env)) return node
+    const masked: Record<string, string> = {}
+    for (const k of Object.keys(env)) masked[k] = marker
+    touched = true
+    return { ...rec, env: masked }
+  })
+  return touched ? ({ ...def, nodes } as T) : definition
+}
+
 /** Free-form JSON masking. `maskAllStrings=true` masks every string value
  *  (plugin options); otherwise only values under SECRET_KEY_RE keys are masked
  *  (frontmatterExtra etc.). Arrays and nested objects are walked. */
@@ -322,7 +354,28 @@ export function findNonSentinelSecretCarriers(op: {
     }
   }
 
-  // 2. Secret-named keys anywhere in the payload (plugin options, agent/skill
+  // 2. Workflow script-node env (RFC-253 T28, carrier `script-node-env`).
+  //    Mirrors MCP local env exactly: EVERY value is a closed carrier, not just
+  //    secret-named keys — `DATABASE_URL` and `LOG_LEVEL` alike must arrive as
+  //    the sentinel (the user fills real values at confirm time) or empty.
+  if (op.resourceType === 'workflow') {
+    const def = (op.payload as { definition?: { nodes?: unknown[] } }).definition
+    const nodes = Array.isArray(def?.nodes) ? def.nodes : []
+    nodes.forEach((node, i) => {
+      if (typeof node !== 'object' || node === null) return
+      const rec = node as { kind?: unknown; env?: unknown }
+      if (rec.kind !== 'script') return
+      if (typeof rec.env !== 'object' || rec.env === null || Array.isArray(rec.env)) return
+      for (const [k, v] of Object.entries(rec.env as Record<string, unknown>)) {
+        if (typeof v !== 'string') continue
+        if (v !== '' && v !== INTENT_SECRET_SENTINEL) {
+          push(`/payload/definition/nodes/${i}/env/${escapePointer(k)}`)
+        }
+      }
+    })
+  }
+
+  // 3. Secret-named keys anywhere in the payload (plugin options, agent/skill
   //    frontmatterExtra, workgroup free fields, …): string value must be the
   //    sentinel or empty. Redaction markers are ALWAYS refused — a model
   //    echoing `‹redacted›…` back as real config is a corruption, not a value.
@@ -354,6 +407,26 @@ export function findNonSentinelSecretCarriers(op: {
   }
   walk(op.payload, '/payload')
   return [...new Set(out)]
+}
+
+/** Minimum env-value length `maskScriptEnvValues` will match. Below this,
+ *  values ('1', 'true', 'info', …) are indistinguishable from ordinary
+ *  diagnostics prose and masking them would shred unrelated text. Real
+ *  credentials are comfortably longer. */
+export const SCRIPT_ENV_MASK_MIN_LEN = 6
+
+/** RFC-253 T28 — mask a script node's KNOWN env values out of diagnostics text
+ *  (stderr tails, failure details) before persistence. Exact-occurrence
+ *  replacement, longest value first so a value that contains another still
+ *  collapses to one marker. Complements maskDiagnosticsText (which matches
+ *  credential SHAPES without knowing values). */
+export function maskScriptEnvValues(text: string, env: Record<string, string>): string {
+  const values = [...new Set(Object.values(env))]
+    .filter((v) => v.length >= SCRIPT_ENV_MASK_MIN_LEN)
+    .sort((a, b) => b.length - a.length)
+  let out = text
+  for (const value of values) out = out.split(value).join(INTENT_REDACTED)
+  return out
 }
 
 /** Mask credential-shaped content inside free diagnostics text (stderr tails,

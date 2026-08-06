@@ -160,3 +160,37 @@ describe('the strict node schema is actually enforced', () => {
     )
   })
 })
+
+// RFC-253 T28 — the validator-message read surface: env KEYS may appear in
+// issue text (the operator must know WHICH entry is refused), env VALUES never
+// may. A validator message is persisted, broadcast and displayed — one value
+// echo makes every other masking surface pointless.
+describe('T28 — validator messages never echo script env values', () => {
+  const VALUE = 'sk-live-validator-probe-value'
+
+  test('rejected entries are reported by key, with the value absent', () => {
+    const definition: WorkflowDefinition = {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        script({
+          env: {
+            'bad name!': VALUE, // name-charset issue
+            LD_PRELOAD: VALUE, // loader-injection issue
+            AW_PORT_X: VALUE, // reserved-key issue
+            NUL_VALUE: `${VALUE}\0`, // value-nul issue — the one rule ABOUT a value
+          },
+        }),
+      ],
+      edges: [],
+    }
+    const { issues } = validateWorkflowDefinition(definition, { agents: [], skills: [] })
+    const envIssues = issues.filter(
+      (i) => i.code === 'script-env-key-invalid' || i.code === 'script-env-key-reserved',
+    )
+    expect(envIssues.length).toBeGreaterThanOrEqual(4)
+    for (const issue of issues) {
+      expect(JSON.stringify(issue)).not.toContain(VALUE)
+    }
+  })
+})

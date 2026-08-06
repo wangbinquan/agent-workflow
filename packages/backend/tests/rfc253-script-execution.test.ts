@@ -442,3 +442,40 @@ describe('spilled port files cannot escape the run directory', () => {
     expect(JSON.parse(env.AW_PORT_NAMES!)['../../../../tmp/evil']).toBeDefined()
   })
 })
+
+// RFC-253 T28 — masking is a READ-surface rule. Execution gets plaintext
+// (AC-27): the process env carries the author's literal values, while the
+// scheduler masks those same values out of the persisted failure detail.
+describe('T28 — plaintext at execution, masked in diagnostics', () => {
+  test('node env values reach the assembled process env verbatim', () => {
+    const { env } = assembleScriptEnv({
+      inputs: {},
+      runDir: '/run/dir',
+      inputDir: '/run/dir/inputs',
+      worktreePath: '/wt',
+      repos: [{ name: '', path: '/wt' }],
+      taskId: 'T1',
+      nodeId: 's1',
+      nodeRunId: 'R1',
+      iteration: 0,
+      retryIndex: 0,
+      shardKey: null,
+      envelopeNonce: NONCE,
+      interpreterPath: '/usr/bin/python3',
+      depsEnv: null,
+      node: node({ language: 'python', env: { API_TOKEN: 'sk-live-exec-plaintext' } }),
+    })
+    expect(env.API_TOKEN).toBe('sk-live-exec-plaintext')
+  })
+
+  test('the scheduler masks known env values out of the persisted failure detail', () => {
+    // Source-level lock (repo fallback pattern): the script branch must run its
+    // errorMessage through maskScriptEnvValues with the node's own env before
+    // the failed setNodeRunStatus / summary sinks consume it.
+    const scheduler = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    expect(scheduler).toContain('maskScriptEnvValues(errorMessage, readScriptEnv(a.node))')
+  })
+})

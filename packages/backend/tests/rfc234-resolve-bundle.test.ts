@@ -324,3 +324,95 @@ describe('resolveIntentBundle', () => {
     expect((renamed.ops[0]?.payload as { name: string }).name).toBe('free-name')
   })
 })
+
+// RFC-253 T28 — script-node env is a slot-addressed carrier, mirroring MCP env:
+// the model may only emit the sentinel, the confirm UI supplies real values,
+// and the sentinel itself must never survive into the resolved definition.
+describe('RFC-253 T28 — script-node env slots', () => {
+  const scriptFlow = (env: Record<string, string>) =>
+    parse({
+      $schema_version: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          action: 'create',
+          resourceType: 'workflow',
+          tempRef: '$new:etl',
+          payload: {
+            name: 'etl',
+            description: '',
+            definition: {
+              $schema_version: 4,
+              inputs: [],
+              nodes: [{ id: 's1', kind: 'script', language: 'python', script: 'print(1)', env }],
+              edges: [],
+            },
+          },
+        },
+      ],
+    })
+
+  test('a sentinel env value issues a secret slot; empty issues none', () => {
+    const { slots, report } = deriveIntentSlots(
+      MANIFEST,
+      scriptFlow({ API_TOKEN: '‹secret›', EMPTY: '' }),
+    )
+    expect(report.errors).toEqual([])
+    const ids = slots.map((s) => s.slotId)
+    expect(ids).toContain('secret:op-1:/definition/nodes/0/env/API_TOKEN')
+    expect(ids.filter((id) => id.includes('/env/'))).toHaveLength(1)
+  })
+
+  test('the filled slot value lands in the resolved definition', () => {
+    const bundle = resolveIntentBundle({
+      manifest: MANIFEST,
+      changeset: scriptFlow({ API_TOKEN: '‹secret›' }),
+      decisions: [
+        {
+          opId: 'op-1',
+          slots: [
+            {
+              slotId: 'secret:op-1:/definition/nodes/0/env/API_TOKEN',
+              value: 'real-env-secret',
+            },
+          ],
+        },
+      ],
+      occupiedNames: OCCUPIED,
+    })
+    const wfOp = bundle.ops.find((o) => o.opId === 'op-1')
+    const nodes = (wfOp?.payload.definition as { nodes: Array<Record<string, unknown>> }).nodes
+    expect((nodes[0]?.env as Record<string, string>).API_TOKEN).toBe('real-env-secret')
+    expect(JSON.stringify(wfOp?.payload)).not.toContain('‹secret›')
+  })
+
+  test('an unfilled script env slot blocks the confirm', () => {
+    expect(() =>
+      resolveIntentBundle({
+        manifest: MANIFEST,
+        changeset: scriptFlow({ API_TOKEN: '‹secret›' }),
+        decisions: [],
+        occupiedNames: OCCUPIED,
+      }),
+    ).toThrow(/intent-secret-required|must be filled/)
+  })
+
+  test('a literal env value is refused at draft time with its pointer', () => {
+    const { report } = deriveIntentSlots(MANIFEST, scriptFlow({ API_TOKEN: 'literal-value' }))
+    expect(
+      report.errors.some(
+        (e) =>
+          e.includes('intent-secret-value-forbidden') &&
+          e.includes('/payload/definition/nodes/0/env/API_TOKEN'),
+      ),
+    ).toBe(true)
+    expect(() =>
+      resolveIntentBundle({
+        manifest: MANIFEST,
+        changeset: scriptFlow({ API_TOKEN: 'literal-value' }),
+        decisions: [],
+        occupiedNames: OCCUPIED,
+      }),
+    ).toThrow(/draft has blocking validation errors/)
+  })
+})

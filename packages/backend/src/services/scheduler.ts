@@ -76,7 +76,9 @@ import { createHash } from 'node:crypto'
 // RFC-253 — script node execution.
 import { mkdirSync } from 'node:fs'
 import {
+  maskScriptEnvValues,
   readScriptDependencies,
+  readScriptEnv,
   readScriptLanguage,
   scriptOutputMode,
   resolveScriptNetwork,
@@ -4542,6 +4544,13 @@ async function runOneScriptAttempt(
       failureCode = extraction.code
       errorMessage = extraction.detail
     }
+  }
+
+  // RFC-253 T28 — the persisted failure detail is a read surface: stderr tails
+  // and envelope excerpts must not re-leak env values the workflow read path
+  // masks. Port values stay byte-exact; only diagnostics are masked.
+  if (errorMessage !== null) {
+    errorMessage = maskScriptEnvValues(errorMessage, readScriptEnv(a.node))
   }
 
   if (failureCode !== null) {

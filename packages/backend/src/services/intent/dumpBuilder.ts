@@ -28,6 +28,7 @@ import type {
 } from '@agent-workflow/shared'
 import {
   maskFreeJsonSecrets,
+  maskWorkflowScriptEnv,
   serializeAgentMarkdown,
   serializeMcpDump,
   serializePluginDump,
@@ -400,7 +401,14 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
         }),
       }
       const doc = stringifyYaml(
-        { handle, name: wf.name, description: wf.description, definition: transformed },
+        {
+          handle,
+          name: wf.name,
+          description: wf.description,
+          // RFC-253 T28 — script-node env values are a closed secret carrier;
+          // the definition otherwise rides verbatim.
+          definition: maskWorkflowScriptEnv(transformed),
+        },
         { lineWidth: 0 },
       )
       seedFiles.push({ path: `${base}.yaml`, content: doc })

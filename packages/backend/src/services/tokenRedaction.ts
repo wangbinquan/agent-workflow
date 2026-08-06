@@ -24,7 +24,7 @@
 // It is stated here so the account page and the generated docs never promise
 // "read-only tokens can't leak secrets", which would be false.
 
-import { redactGitUrl } from '@agent-workflow/shared'
+import { maskWorkflowScriptEnv, redactGitUrl } from '@agent-workflow/shared'
 import type { ActorSource } from '@/auth/actor'
 import { redactSensitiveString } from '@/util/redact'
 
@@ -87,6 +87,26 @@ export function redactMcpRecord<T>(record: T): T {
  */
 export function serializeMcpFor<T>(record: T, source: ActorSource): T {
   return shouldRedactFor(source) ? redactMcpRecord(record) : record
+}
+
+/**
+ * Serialize one workflow record for a specific caller (RFC-253 T28).
+ *
+ * A workflow definition became a credential carrier the day script nodes
+ * landed: their `env` map holds whatever the author typed, API keys included.
+ * Same rule as MCP env — keys survive, values collapse to `***` on the token
+ * channel — applied through the shared `maskWorkflowScriptEnv` walker so this
+ * projection and the intent-dump projection can never disagree about which
+ * nodes carry secrets. Records without script nodes come back as the SAME
+ * reference. NOTE: a PAT cannot round-trip the mask into the stored definition
+ * — saving a script-bearing workflow needs `scripts:author`, which never
+ * enters the token face (RFC-253 D19), so every script write via PAT is 403
+ * before this could matter.
+ */
+export function serializeWorkflowFor<T>(record: T, source: ActorSource): T {
+  if (!shouldRedactFor(source) || !isPlainObject(record)) return record
+  const masked = maskWorkflowScriptEnv(record.definition, REDACTED)
+  return masked === record.definition ? record : ({ ...record, definition: masked } as T)
 }
 
 /**

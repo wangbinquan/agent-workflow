@@ -375,10 +375,15 @@ describe('RFC-199 route source lock', () => {
     expect(validateBlock).not.toMatch(/\bvalidateWorkflowById\s*\(/)
     expect(exportBlock.match(/loadVisibleWorkflow\(/g)).toHaveLength(1)
     // RFC-223: export derives a portable name+owner selector from the single
-    // captured workflow definition, never a second workflow read.
-    expect(exportBlock).toContain('stringifyWorkflowYaml({')
-    expect(exportBlock).toContain(
-      'workflowDefinitionToSelectors(deps.db, actorOf(c), workflow.definition)',
+    // captured workflow definition, never a second workflow read. RFC-253 T28
+    // routed that same captured object through the PAT script-env projection
+    // (serializeWorkflowFor is pure — still no second read), so the lock
+    // anchors on the call names rather than the pre-T28 literal layout.
+    expect(exportBlock).toContain('stringifyWorkflowYaml(')
+    expect(exportBlock).toContain('serializeWorkflowFor(')
+    expect(exportBlock).toContain('...workflow,')
+    expect(exportBlock).toMatch(
+      /workflowDefinitionToSelectors\(\s*deps\.db,\s*actorOf\(c\),\s*workflow\.definition,?\s*\)/,
     )
     expect(exportBlock).not.toContain('getWorkflow(')
   })

@@ -394,3 +394,58 @@ describe('buildIntentDump', () => {
     expect(beforeFence).not.toContain('IGNORE ALL PREVIOUS INSTRUCTIONS')
   })
 })
+
+// RFC-253 T28 — script-node env is the workflow definition's closed secret
+// carrier: values never enter a dump, keys and every other field ride verbatim.
+describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
+  test('env values are redacted, keys and script body survive', async () => {
+    await seedUser(OWNER)
+    const wfId = ulid()
+    await db.insert(workflows).values({
+      id: wfId,
+      name: 'etl-flow',
+      description: 'runs a script',
+      definition: JSON.stringify({
+        $schema_version: 4,
+        inputs: [],
+        nodes: [
+          {
+            id: 's1',
+            kind: 'script',
+            language: 'python',
+            script: 'import os; print(os.environ["API_TOKEN"])',
+            env: { API_TOKEN: SECRET, LOG_LEVEL: 'debug' },
+            network: 'deny',
+          },
+        ],
+        edges: [],
+      }),
+      version: 1,
+      ownerUserId: OWNER,
+      visibility: 'private',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof workflows.$inferInsert)
+
+    const r = await buildIntentDump({
+      db,
+      actor: actorFor(OWNER),
+      appHome,
+      mounts: [{ resourceType: 'workflow', resourceId: wfId }],
+    })
+    const wfEntry = manifestEntryFor(r.manifest, 'workflow', wfId)
+    const wfDump = r.seedFiles.find(
+      (f) => f.path === `mounted/${handleBasename(wfEntry?.handle ?? '')}.yaml`,
+    )
+    expect(wfDump).toBeDefined()
+    expect(wfDump?.content).not.toContain(SECRET)
+    // LOG_LEVEL's VALUE is masked too — all script env values are carriers,
+    // secret-looking or not (MCP local env precedent).
+    expect(wfDump?.content).not.toContain('debug')
+    expect(wfDump?.content).toContain('API_TOKEN')
+    expect(wfDump?.content).toContain('LOG_LEVEL')
+    expect(wfDump?.content).toContain('‹redacted›')
+    expect(wfDump?.content).toContain('network: deny')
+    expect(wfDump?.content).toContain('import os')
+  })
+})

@@ -87,3 +87,29 @@ describe('buildIntentDoc', () => {
     expect(doc).toContain('close definition, payload, and the final op')
   })
 })
+
+// RFC-253 T42 — the payload tutorial must teach the script node form: without
+// it the model is TOLD the supported-node-forms list is exhaustive and will
+// never emit `kind:'script'`, even when the user asks for a script step.
+describe('RFC-253 T42 — script node form documented', () => {
+  test('the workflow tutorial carries the script form and its hard rules', () => {
+    const doc = buildIntentDoc({
+      sessionTitle: 't',
+      turns: [],
+      currentDraftJson: null,
+      validationErrors: [],
+      pendingQuestions: [],
+      hiddenDependencyNote: null,
+      envelopeNonce: NONCE,
+      langDirective: '',
+    })
+    expect(doc).toContain("kind:'script'")
+    expect(doc).toContain("language:'python'|'bash'|'node'")
+    // the four rules a model cannot guess:
+    expect(doc).toContain('AW_PORT_<PORT>') // inbound ports arrive as env
+    expect(doc).toContain('$AW_ENVELOPE_NONCE') // envelope mode needs the nonce
+    expect(doc).toContain('pkg==1.2.3') // deps must pin exact versions
+    expect(doc).toMatch(/env.*VALUES must be.*‹secret›/) // closed carrier rule
+    expect(doc).toContain('scripts:author') // apply-time permission gate
+  })
+})

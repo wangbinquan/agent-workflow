@@ -25,6 +25,7 @@ import {
   redactRepoUrl,
   redactStdout,
   serializePluginFor,
+  serializeWorkflowFor,
   shouldRedactFor,
 } from '@/services/tokenRedaction'
 
@@ -284,5 +285,65 @@ describe('RFC-247 impl-gate — redaction covers every door onto node output', (
   test('every plugin serialization point goes through the outlet', () => {
     const plugins = readFileSync(resolve(SRC, 'routes/plugins.ts'), 'utf8')
     expect(plugins.split('serializePluginFor(').length - 1).toBeGreaterThanOrEqual(5)
+  })
+})
+
+// RFC-253 T28 — workflow definitions became credential carriers when script
+// nodes landed: their env maps hold API keys. Token channel masks values via
+// the SHARED walker; sessions keep plaintext (the editor round-trip depends on
+// it, and a PAT cannot write the mask back — script saves need scripts:author,
+// which never enters the token face).
+describe('RFC-253 T28 — script env masked on the workflow token channel', () => {
+  const record = {
+    id: 'w1',
+    name: 'etl',
+    definition: {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        { id: 'in1', kind: 'input', inputKey: 'context' },
+        {
+          id: 's1',
+          kind: 'script',
+          language: 'python',
+          script: 'print(1)',
+          env: { API_TOKEN: 'sk-live-scriptenv', LOG_LEVEL: 'debug' },
+        },
+      ],
+      edges: [],
+    },
+    version: 3,
+  }
+
+  test('pat: values collapse to REDACTED, keys and body survive', () => {
+    const out = serializeWorkflowFor(record, 'pat') as typeof record
+    const script = out.definition.nodes[1] as { env: Record<string, string>; script: string }
+    expect(script.env).toEqual({ API_TOKEN: REDACTED, LOG_LEVEL: REDACTED })
+    expect(script.script).toBe('print(1)')
+    expect(out.definition.nodes[0]).toBe(record.definition.nodes[0])
+    expect(out.version).toBe(3)
+    // the input record is never mutated
+    expect((record.definition.nodes[1] as { env: Record<string, string> }).env.API_TOKEN).toBe(
+      'sk-live-scriptenv',
+    )
+  })
+
+  test('session and daemon get the SAME reference — byte-for-byte passthrough', () => {
+    expect(serializeWorkflowFor(record, 'session')).toBe(record)
+    expect(serializeWorkflowFor(record, 'daemon')).toBe(record)
+  })
+
+  test('a workflow without script env comes back as the same reference', () => {
+    const plain = { id: 'w2', definition: { nodes: [{ id: 'a', kind: 'agent-single' }] } }
+    expect(serializeWorkflowFor(plain, 'pat')).toBe(plain)
+  })
+
+  test('serializeWorkflowFor is wired on every workflows outlet', () => {
+    const routes = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'routes/workflows.ts'),
+      'utf8',
+    )
+    // list + detail + create + copy + update + export(YAML) + import(created)
+    expect(routes.split('serializeWorkflowFor(').length - 1).toBeGreaterThanOrEqual(7)
   })
 })

@@ -11,6 +11,8 @@ import {
   looksHighEntropy,
   maskDiagnosticsText,
   maskFreeJsonSecrets,
+  maskScriptEnvValues,
+  maskWorkflowScriptEnv,
   projectMcpForDump,
   projectPluginForDump,
   redactUrlForDump,
@@ -281,5 +283,111 @@ describe('credential scanner (IN direction)', () => {
       `fetch failed for https://u:${SECRET}@h.com/x?access_token=${SECRET} while running --token=${SECRET}`,
     )
     expect(masked).not.toContain(SECRET)
+  })
+})
+
+// RFC-253 T28 — the `script-node-env` carrier: workflow definitions became
+// credential-bearing the day script nodes landed. Locks all three faces:
+// OUT (dump masking), IN (sentinel-or-empty), diagnostics (known-value scrub).
+describe('RFC-253 T28 — script-node env carrier', () => {
+  const definition = {
+    $schema_version: 4,
+    inputs: [],
+    nodes: [
+      { id: 'in1', kind: 'input', inputKey: 'context' },
+      {
+        id: 's1',
+        kind: 'script',
+        language: 'python',
+        script: 'print(1)',
+        env: { API_TOKEN: SECRET, LOG_LEVEL: 'debug' },
+      },
+      { id: 'a1', kind: 'agent-single', agentId: 'A1', env: { NOT_A_SCRIPT: 'stays' } },
+    ],
+    edges: [],
+  }
+
+  test('maskWorkflowScriptEnv: values collapse, keys survive, other kinds untouched', () => {
+    const out = maskWorkflowScriptEnv(definition) as typeof definition
+    const script = out.nodes[1] as { env: Record<string, string> }
+    expect(script.env).toEqual({ API_TOKEN: INTENT_REDACTED, LOG_LEVEL: INTENT_REDACTED })
+    // Non-script nodes are NOT carriers — their fields ride verbatim.
+    expect((out.nodes[2] as { env: Record<string, string> }).env).toEqual({
+      NOT_A_SCRIPT: 'stays',
+    })
+    expect(out.nodes[0]).toBe(definition.nodes[0])
+    expect(JSON.stringify(out)).not.toContain(SECRET)
+    // Input untouched (pure).
+    expect((definition.nodes[1] as { env: Record<string, string> }).env.API_TOKEN).toBe(SECRET)
+  })
+
+  test('maskWorkflowScriptEnv: custom marker serves the token read projection', () => {
+    const out = maskWorkflowScriptEnv(definition, '***') as typeof definition
+    expect((out.nodes[1] as { env: Record<string, string> }).env.API_TOKEN).toBe('***')
+  })
+
+  test('maskWorkflowScriptEnv: same reference when nothing needs masking', () => {
+    const noScript = { nodes: [{ id: 'x', kind: 'input', inputKey: 'k' }] }
+    expect(maskWorkflowScriptEnv(noScript)).toBe(noScript)
+    const noEnv = { nodes: [{ id: 's', kind: 'script', language: 'bash', script: 'true' }] }
+    expect(maskWorkflowScriptEnv(noEnv)).toBe(noEnv)
+    // Malformed shapes pass through instead of throwing.
+    expect(maskWorkflowScriptEnv(null)).toBe(null)
+    expect(maskWorkflowScriptEnv({ nodes: 'not-an-array' })).toEqual({ nodes: 'not-an-array' })
+    const badEnv = { nodes: [{ kind: 'script', env: 'not-a-record' }] }
+    expect(maskWorkflowScriptEnv(badEnv)).toBe(badEnv)
+  })
+
+  test('IN: literal script env values are refused, sentinel and empty pass', () => {
+    const carriers = findNonSentinelSecretCarriers({
+      resourceType: 'workflow',
+      payload: {
+        definition: {
+          nodes: [
+            { id: 'in1', kind: 'input', inputKey: 'context' },
+            {
+              id: 's1',
+              kind: 'script',
+              env: {
+                LITERAL: 'hunter2-value',
+                FILLED_LATER: INTENT_SECRET_SENTINEL,
+                EMPTY_OK: '',
+                'we/ird~key': 'x',
+              },
+            },
+          ],
+        },
+      },
+    })
+    expect(carriers).toEqual([
+      '/payload/definition/nodes/1/env/LITERAL',
+      '/payload/definition/nodes/1/env/we~1ird~0key',
+    ])
+  })
+
+  test('IN: a non-script node env is not a structural carrier', () => {
+    expect(
+      findNonSentinelSecretCarriers({
+        resourceType: 'workflow',
+        payload: {
+          definition: { nodes: [{ id: 'a1', kind: 'agent-single', env: { PLAIN: 'value' } }] },
+        },
+      }),
+    ).toEqual([])
+  })
+
+  test('maskScriptEnvValues: known values scrub out of diagnostics, longest first', () => {
+    const env = { A: 'longer-secret-value', B: 'secret-value', C: 'ok' }
+    const masked = maskScriptEnvValues(`boom: longer-secret-value then secret-value then ok`, env)
+    expect(masked).not.toContain('longer-secret-value')
+    expect(masked).not.toContain('secret-value')
+    // Values under the length floor stay: masking 'ok'/'true'/'1' would shred
+    // unrelated prose (SCRIPT_ENV_MASK_MIN_LEN).
+    expect(masked).toContain('ok')
+    expect(masked).toContain(INTENT_REDACTED)
+  })
+
+  test('maskScriptEnvValues: no-op on empty env', () => {
+    expect(maskScriptEnvValues('unchanged', {})).toBe('unchanged')
   })
 })
