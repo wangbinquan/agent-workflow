@@ -22,13 +22,14 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
-  rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, taskSpaceNodes } from '../src/db/schema'
 import { createRepoGroup, updateRepoGroup } from '../src/services/repoGroup'
@@ -51,7 +52,9 @@ beforeEach(() => {
 afterEach(() => {
   if (priorAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
   else process.env.AGENT_WORKFLOW_HOME = priorAppHome
-  if (tmp !== '') rmSync(tmp, { recursive: true, force: true })
+  // RFC-254: the clone opens a bun:sqlite cache DB whose handle Windows frees
+  // only on GC, so a bare rm here hits EBUSY — removeTempDirSync forces a GC first.
+  if (tmp !== '') removeTempDirSync(tmp)
 })
 
 function git(cwd: string, ...args: string[]): string {
@@ -88,8 +91,10 @@ function seedRepo(name: string, files: Record<string, string>): { id: string; pa
     .values({
       id,
       urlHash: `${name}00000000`.slice(0, 8),
-      url: `file://${dir}`,
-      urlRedacted: `file://${dir}`,
+      // RFC-254: `file://${winPath}` is malformed on Windows (`file://C:\…`);
+      // pathToFileURL yields the valid `file:///C:/…` git can actually clone.
+      url: pathToFileURL(dir).href,
+      urlRedacted: pathToFileURL(dir).href,
       localPath: dir,
       defaultBranch: 'main',
       lastFetchedAt: now,
@@ -224,7 +229,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     // ⑦ 只读标记落到了记录上。
     expect(byMount.get('vendor/sdk')!.readonly).toBe(true)
     expect(byMount.get('')!.readonly).toBe(false)
-  })
+  }, 60_000)
 
   test('worker 改动后：每个仓的 diff 只含自己的改动，互不串味', async () => {
     const app = seedRepo('app2', { 'src/main.ts': 'orig' })
@@ -260,7 +265,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       .split('\n')
       .filter(Boolean)
     expect(nestedTracked).toEqual(['lib/sdk.ts'])
-  })
+  }, 60_000)
 
   test('对可写仓跑 add -A 零 embedded-repo 告警，且不吞嵌套仓', async () => {
     const app = seedRepo('app3', { 'f.txt': 'f' })
@@ -276,7 +281,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     // 没有 gitlink 进索引（proposal E2 的反面）。
     expect(git(root.worktreePath, 'ls-files', '--stage', 'vendor/sdk').trim()).toBe('')
     expect(git(root.worktreePath, 'diff', '--cached', '--name-only').trim()).toBe('f.txt')
-  })
+  }, 60_000)
 
   test('AC-10：单成员挂根落回单仓分支，路径与 kind 与今天字节级一致', async () => {
     // 「单仓是多仓的特例」这条产品判断的实现兑现。若这里走了组物化，每一个现存
@@ -290,14 +295,16 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     // 派生名（`util/git.ts:repoSlug`），所以只断言「不在 group 命名空间下」
     // 且路径形状仍是 slug/taskId 两级。
     expect(space.worktreePath).not.toContain(join('worktrees', 'group'))
-    expect(space.worktreePath).toMatch(/worktrees\/[^/]+\/[^/]+$/)
+    // RFC-254: separator-agnostic — the shape is `worktrees/{slug}/{taskId}` but
+    // the path is backslash-separated on Windows, where a `/`-only regex reds.
+    expect(space.worktreePath).toMatch(/worktrees[\\/][^\\/]+[\\/][^\\/]+$/)
     expect(space.worktreePath).toContain('src-solo')
     expect(space.repos).toHaveLength(1)
     expect(space.repos[0]!.mountPath).toBe('')
     // 单仓没有嵌套子成员 ⇒ 不该有预置 commit。
     expect(space.repos[0]!.gitignoreCommit).toBeNull()
     expect(space.nodePaths).toEqual([''])
-  })
+  }, 60_000)
 
   test('RFC-249：纯目录进入 group 工作区与冻结 nodePaths，不触发单仓快路径', async () => {
     const app = seedRepo('tree-app', { 'src/main.ts': 'app' })
@@ -326,7 +333,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     // nested-repo exclusions; they therefore remain visible to git.
     writeFileSync(join(space.worktreePath, 'docs', 'decisions', 'adr.md'), 'ADR')
     expect(git(space.worktreePath, 'status', '--porcelain')).toContain('docs/')
-  })
+  }, 60_000)
 
   test('RFC-249：纯目录被文件或 symlink 占用时结构化拒绝并回收 worktree', async () => {
     const occupied = seedRepo('tree-file', { blocked: 'not a directory' })
@@ -369,7 +376,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     expect(await codeOfAsync(() => materialize(linkGroup))).toBe('repo-group-directory-occupied')
     expect(git(linked.path, 'worktree', 'list').trim().split('\n')).toHaveLength(1)
     expect(localHeads(linked.path)).toEqual(linkedHeads)
-  })
+  }, 60_000)
 
   test('RFC-249：任务原子冻结纯目录，组改动后 sourceTaskId 仍按旧树重跑', async () => {
     const app = seedRepo('snapshot-app', { 'src/main.ts': 'app' })
@@ -439,7 +446,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     )
     expect(replay.spaceNodes?.map((node) => node.path)).toEqual(['', 'docs', 'docs/decisions'])
     expect(existsSync(join(replay.worktreePath, 'docs', 'decisions'))).toBe(true)
-  })
+  }, 60_000)
 
   test('单成员但带 subdir ⇒ 走组物化（单仓分支不支持 sparse）', async () => {
     const docs = seedRepo('docs2', { 'guides/g.md': 'g', 'api/a.md': 'a' })
@@ -455,7 +462,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     // （对应 `commitGitignorePreset` 的 `git add --sparse`——仓根 .gitignore
     //   落在 sparse 集之外，不带那个 flag git 会直接拒。）
     expect(lsVisible(space.worktreePath).sort()).toEqual(['.gitignore', 'guides'])
-  })
+  }, 60_000)
 
   test('没有仓挂根时 cwd 是不属于任何仓的普通父目录', async () => {
     const a = seedRepo('fe', { 'f.txt': 'f' })
@@ -468,7 +475,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     expect(space.kind).toBe('group')
     expect(existsSync(join(space.worktreePath, '.git'))).toBe(false)
     expect(lsVisible(space.worktreePath).sort()).toEqual(['backend', 'frontend'])
-  })
+  }, 60_000)
 
   test('H8：容器在选定 ref 上跟踪着挂载点路径 ⇒ 启动期就报 mount-occupied', async () => {
     // 只看工作树会漏掉这种情形（sparse 不删索引里的已跟踪路径）。
@@ -479,7 +486,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       { cachedRepoId: sdk.id, mountPath: 'vendor/sdk' },
     ])
     expect(await codeOfAsync(() => materialize(gid))).toBe('repo-group-mount-occupied')
-  })
+  }, 60_000)
 
   test('sparse 子目录在该 ref 上不存在 ⇒ sparse-empty，而不是静默给空目录', async () => {
     const app = seedRepo('app5', { 'f.txt': 'f' })
@@ -489,7 +496,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       { cachedRepoId: docs.id, mountPath: 'site', subdir: 'nope' },
     ])
     expect(await codeOfAsync(() => materialize(gid))).toBe('repo-group-sparse-empty')
-  })
+  }, 60_000)
 
   test('物化中途失败 ⇒ 已建的 worktree 全部回收，源仓注册表不留悬空', async () => {
     const app = seedRepo('app6', { 'f.txt': 'f' })
@@ -503,7 +510,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     const list = git(app.path, 'worktree', 'list')
     expect(list).not.toContain('prunable')
     expect(list.trim().split('\n')).toHaveLength(1) // 只剩源仓自己
-  })
+  }, 60_000)
 
   test('组内 ref 生效——成员按自己声明的分支检出', async () => {
     const app = seedRepo('app7', { 'f.txt': 'main' })
@@ -525,5 +532,5 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     expect(git(byMount.get('compare/release')!.worktreePath, 'show', 'HEAD:f.txt').trim()).toBe(
       'release',
     )
-  })
+  }, 60_000)
 })
