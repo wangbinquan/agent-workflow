@@ -15,6 +15,7 @@ import {
   type InventorySnapshotCaptured,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { statMetadataIsAuthoritative } from '@/util/fileTrust'
 import { executionIdentityFailure } from './failure'
 import { PINNED_BUILTIN_SKILL } from './hermetic'
 
@@ -274,7 +275,13 @@ export async function writeVerifiedInventorySnapshot(
     const metadata = await handle.stat()
     if (
       !metadata.isFile() ||
-      (metadata.mode & 0o777) !== 0o600 ||
+      // RFC-254 T40b: POSIX mode bits are not authoritative on Windows (a fresh
+      // file reports 0o666/0o444, never 0o600), so the exact-mode privacy assert
+      // only holds where stat mode is real. Exclusivity/integrity still come from
+      // O_CREAT|O_EXCL|O_NOFOLLOW, isFile(), and the size check; win32 store-root
+      // privacy is enforced by the DACL seal (see win32Acl), mirroring the
+      // sealedInputs.ts gate.
+      (statMetadataIsAuthoritative(process.platform) && (metadata.mode & 0o777) !== 0o600) ||
       metadata.size !== bytes.byteLength
     ) {
       return executionIdentityFailure('execution-identity-store-unsafe')

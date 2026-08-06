@@ -14,7 +14,7 @@ import { z } from 'zod'
 import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
 import { executionIdentityFailure } from './failure'
 import { verifiedSelfCommand } from './sealedSubprocess'
-import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
+import { GIT_NULL_CONFIG_PATH } from '@/util/platformExec'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 const PROBE_BASENAME_RE = /^aw-fff-[0-9a-f]{32}\.txt$/
@@ -344,7 +344,7 @@ function probeEnvironment(paths: ProbePaths): Record<string, string> {
       skills: { paths: [], urls: [] },
     }),
     GIT_CONFIG_NOSYSTEM: '1',
-    GIT_CONFIG_GLOBAL: NULL_DEVICE_FOR_HOST,
+    GIT_CONFIG_GLOBAL: GIT_NULL_CONFIG_PATH,
   }
 }
 

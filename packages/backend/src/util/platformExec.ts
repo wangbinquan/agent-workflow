@@ -30,6 +30,23 @@ export function nullDevice(platform: NodeJS.Platform): string {
 }
 
 /**
+ * The `GIT_CONFIG_GLOBAL` value that means "no global config" for git — and,
+ * unlike a host null-device redirect, it is ALWAYS the POSIX `/dev/null`.
+ *
+ * git-for-Windows is an MSYS2 build: it understands `/dev/null`, but chokes on
+ * the Windows `NUL` device as a *config path* (`fatal: unable to access 'NUL':
+ * Invalid argument`, observed on the RFC-254 ARM64 VM). Pointing
+ * `GIT_CONFIG_GLOBAL` at `NUL` therefore makes EVERY git invocation fail — most
+ * visibly, opencode's worktree detection falls back to the "global" project with
+ * worktree `/`, so the verified session `path` no longer matches the worktree
+ * and identity validation rejects a valid session. `/dev/null` is correct on
+ * POSIX too, so this is host-independent. (The `NUL` device is still right for
+ * `git diff --no-index -- NUL`, which git special-cases — that stays
+ * `nullDevice()`.)
+ */
+export const GIT_NULL_CONFIG_PATH = '/dev/null'
+
+/**
  * Join directories into one PATH-style search list. Windows separates with `;`
  * because `:` is the drive-letter separator (`C:\bin` would split into two
  * meaningless entries).

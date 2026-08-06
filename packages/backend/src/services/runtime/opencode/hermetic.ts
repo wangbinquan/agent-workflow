@@ -8,7 +8,7 @@ import { executionIdentityFailure } from './failure'
 import { canonicalizeIdentity, type IdentityJson } from './executionIdentity'
 import { buildPluginSpecArray } from './pluginSpec'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
-import { NULL_DEVICE_FOR_HOST, buildControlledPathForHost } from '@/util/platformExec'
+import { GIT_NULL_CONFIG_PATH, buildControlledPathForHost } from '@/util/platformExec'
 import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 import { sealDirectoryOwnerOnly } from '@/util/win32Acl'
 
@@ -685,7 +685,7 @@ export function buildHermeticServerEnv(input: HermeticServerEnvInput): Record<st
   env.OPENCODE_SERVER_USERNAME = input.username ?? `aw-${randomBytes(12).toString('base64url')}`
   env.OPENCODE_SERVER_PASSWORD = input.password ?? randomBytes(32).toString('base64url')
   env.GIT_CONFIG_NOSYSTEM = '1'
-  env.GIT_CONFIG_GLOBAL = NULL_DEVICE_FOR_HOST
+  env.GIT_CONFIG_GLOBAL = GIT_NULL_CONFIG_PATH
   return env
 }
 

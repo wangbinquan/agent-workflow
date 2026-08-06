@@ -1158,7 +1158,18 @@ export async function launchVerifiedOpencodeManifest(
       ...credentials,
       budgets: {
         maxJsonBytes: 4 * 1024 * 1024,
-        requestTimeoutMs: Math.min(2_000, manifest.bootstrapTimeoutMs),
+        // The bootstrap fact-gathering GETs run inside a runWithDeadline bounded
+        // by bootstrapTimeoutMs, so that phase deadline — not a separate, tighter
+        // per-request cap — is the real bound. The old Math.min(2_000, …) was an
+        // arbitrary sub-budget smaller than the phase it lived in: opencode's
+        // FIRST /config/providers does cold provider-catalog initialization
+        // (measured ~1.9s on the RFC-254 ARM64 Windows VM, and it tips over 2s
+        // under concurrent load), so a healthy-but-cold request was being aborted
+        // and — because DirectHttpError is not a recognized launcher error type —
+        // collapsing to a misleading `execution-identity-mismatch`. Bounding each
+        // request by the bootstrap budget removes the false timeout without
+        // widening the total wall-clock, which runWithDeadline still owns.
+        requestTimeoutMs: manifest.bootstrapTimeoutMs,
         promptTimeoutMs: manifest.runTimeoutMs,
       },
     })

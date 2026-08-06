@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { statMetadataIsAuthoritative } from '@/util/fileTrust'
-import { buildControlledPathForHost } from '@/util/platformExec'
+import { buildControlledPathForHost, nullDevice } from '@/util/platformExec'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
 import { removeSealedTree } from '@/services/runtime/opencode/sealedInputs'
 import {
@@ -259,6 +259,16 @@ describe('RFC-224 hermetic layout and env', () => {
     expect(env.OPENCODE_SERVER_USERNAME).toBe('user')
     expect(env.OPENCODE_SERVER_PASSWORD).toBe('pass')
     expect(env.OPENCODE_PURE).toBe('1')
+    // RFC-254 (ARM64 VM): git — even git-for-Windows, an MSYS2 build — understands
+    // the POSIX /dev/null but NOT the Windows NUL device as a *config path* (it
+    // fails `unable to access 'NUL'`). Pointing GIT_CONFIG_GLOBAL at NUL made EVERY
+    // git call fail, so opencode's worktree detection fell back to the "global"
+    // project and the verified session `path` no longer matched the worktree —
+    // the whole verified path was dead on Windows. The git-config null must always
+    // be /dev/null, never the host null device.
+    expect(env.GIT_CONFIG_NOSYSTEM).toBe('1')
+    expect(env.GIT_CONFIG_GLOBAL).toBe('/dev/null')
+    expect(env.GIT_CONFIG_GLOBAL).not.toBe(nullDevice('win32'))
     for (const key of [
       'NODE_OPTIONS',
       'LD_PRELOAD',

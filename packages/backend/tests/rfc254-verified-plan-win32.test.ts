@@ -139,6 +139,62 @@ describe('RFC-254 T31 — verified business plan build on Windows (source anchor
   })
 })
 
+// A SECOND wave, found only by driving the whole verified LAUNCH (not just the
+// plan build) against real opencode 1.18.13 + a real model on the ARM64 VM —
+// the plan built fine, but the launcher then failed three ways in sequence,
+// each masking the next (STATE 续三十五). All three are POSIX-invisible.
+describe('RFC-254 T31b — verified LAUNCH on Windows (source anchors)', () => {
+  test('bug#5 (critical): GIT_CONFIG_GLOBAL is /dev/null, never the Windows NUL device', () => {
+    // git-for-Windows is an MSYS2 build: it understands the POSIX /dev/null but
+    // treats the Windows NUL device as a literal filename for a config path and
+    // dies `unable to access 'NUL': Invalid argument`. GIT_CONFIG_GLOBAL=NUL
+    // (what NULL_DEVICE_FOR_HOST yields on win32) therefore broke EVERY git call
+    // under the sealed env, so opencode's worktree detection fell back to the
+    // "global" project (worktree "/") and the verified session `path` no longer
+    // matched — the whole verified path was dead on Windows. Fix: a dedicated,
+    // host-independent GIT_NULL_CONFIG_PATH used at all three GIT_CONFIG_GLOBAL
+    // sites. The `git diff --no-index -- NUL` sites keep nullDevice() (git
+    // special-cases the diff empty-side), so NUL must NOT vanish entirely.
+    expect(src('util/platformExec.ts')).toContain("export const GIT_NULL_CONFIG_PATH = '/dev/null'")
+    for (const file of [
+      'services/runtime/opencode/hermetic.ts',
+      'services/runtime/opencode/models.ts',
+      'services/runtime/opencode/fffCapability.ts',
+    ]) {
+      const text = src(file)
+      expect(text).toContain('GIT_CONFIG_GLOBAL')
+      expect(text).toContain('GIT_NULL_CONFIG_PATH')
+      expect(text).not.toContain('GIT_CONFIG_GLOBAL: NULL_DEVICE_FOR_HOST')
+      expect(text).not.toContain('GIT_CONFIG_GLOBAL = NULL_DEVICE_FOR_HOST')
+    }
+  })
+
+  test('bug#6: the bootstrap per-request budget is the phase deadline, not a 2s sub-cap', () => {
+    // opencode's FIRST /config/providers does cold provider-catalog init
+    // (~1.9s on the ARM64 VM, tips over 2s under load). The old
+    // Math.min(2_000, bootstrapTimeoutMs) per-request cap aborted that healthy
+    // request; DirectHttpError is not a recognized launcher error, so it
+    // collapsed to a misleading execution-identity-mismatch. The phase-level
+    // runWithDeadline already bounds bootstrap, so each request is bounded by
+    // that same budget instead.
+    const text = src('services/runtime/opencode/verifiedLauncher.ts')
+    expect(text).toContain('requestTimeoutMs: manifest.bootstrapTimeoutMs')
+    expect(text).not.toContain('requestTimeoutMs: Math.min(2_000, manifest.bootstrapTimeoutMs)')
+  })
+
+  test('bug#7: the inventory-write 0o600 assertion is gated by stat authority', () => {
+    // writeVerifiedInventorySnapshot asserted the freshly O_EXCL-created file
+    // carried POSIX mode 0o600 — impossible on win32, where a fresh file reads
+    // back 0o666/0o444 — so a business node with inventory enabled failed
+    // store-unsafe AFTER a valid session. Same gate as sealedInputs (bug#2):
+    // exclusivity/integrity come from O_CREAT|O_EXCL|O_NOFOLLOW + isFile + size,
+    // and win32 privacy from the DACL seal.
+    expect(src('services/runtime/opencode/verifiedInventory.ts')).toContain(
+      'statMetadataIsAuthoritative(process.platform) && (metadata.mode & 0o777) !== 0o600',
+    )
+  })
+})
+
 // Real behavior on real win32 — the coverage the forced-darwin suite structurally
 // cannot provide. Skipped on POSIX (registered in test-suite-policy).
 describe.skipIf(process.platform !== 'win32')(

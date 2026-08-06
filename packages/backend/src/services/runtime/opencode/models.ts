@@ -18,7 +18,7 @@ import { Paths } from '@/util/paths'
 import { machineConfigEnvOverrides } from './hermetic'
 import { withRuntimeOpencodeSnapshot } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
-import { NULL_DEVICE_FOR_HOST, buildControlledPathForHost } from '@/util/platformExec'
+import { GIT_NULL_CONFIG_PATH, buildControlledPathForHost } from '@/util/platformExec'
 
 export async function listOpencodeModelsHermetic(
   binary: string,
@@ -94,7 +94,7 @@ export async function listOpencodeModelsHermetic(
         OPENCODE_DISABLE_EMBEDDED_WEB_UI: '1',
         OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: '1',
         GIT_CONFIG_NOSYSTEM: '1',
-        GIT_CONFIG_GLOBAL: NULL_DEVICE_FOR_HOST,
+        GIT_CONFIG_GLOBAL: GIT_NULL_CONFIG_PATH,
         // RFC-256: the probe is the surface an operator judges "does the
         // platform see my models" by. Sealed off, it reports an empty catalog
         // for every model declared in the machine's own opencode.json — which

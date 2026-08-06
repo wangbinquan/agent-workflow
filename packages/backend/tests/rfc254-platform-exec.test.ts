@@ -18,6 +18,7 @@ import {
   toPortableRelativePath,
   isLexicallyInside,
   nullDevice,
+  GIT_NULL_CONFIG_PATH,
   pathListJoin,
   pathListSplit,
   platformSpawnOptions,
@@ -35,6 +36,18 @@ describe('RFC-254 platformExec', () => {
     expect(nullDevice('linux')).toBe('/dev/null')
     expect(nullDevice('darwin')).toBe('/dev/null')
     expect(nullDevice('win32')).toBe('NUL')
+  })
+
+  test('the git-config null is /dev/null on EVERY platform, never the host NUL', () => {
+    // RFC-254 (ARM64 VM): git — including git-for-Windows, an MSYS2 build —
+    // understands the POSIX /dev/null but treats the Windows NUL device as a
+    // literal filename for a *config path* and fails `unable to access 'NUL':
+    // Invalid argument`. GIT_CONFIG_GLOBAL=NUL therefore broke every git call
+    // under the sealed env, collapsing opencode's worktree detection to the
+    // "global" project. Unlike a host redirect (nullDevice), the git-config null
+    // is host-independent.
+    expect(GIT_NULL_CONFIG_PATH).toBe('/dev/null')
+    expect(GIT_NULL_CONFIG_PATH).not.toBe(nullDevice('win32'))
   })
 
   test('PATH lists join with the platform separator', () => {
