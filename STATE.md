@@ -631,6 +631,29 @@ validatePolicyPath` 的 `normalize(path)!==path` 闸把 POSIX fixture 路径（`
 `/usr/bin:/bin` 真值 / symlink-root 拒绝 / xdg auth 路径），敏感 RFC-224 核心、须 fresh-context 逐条真机核实 + 重跑
 qualification。**下一步**：先系统跑全 73 文件真机分类（抽样示多数已过），再逐条过 hermetic 4 红。
 
+**2026-08-06 续十六 · rfc224-hermetic 4 红全清（真机 19/0，纯 test-fix 无 skip）+ 容器簇全量 sweep（`bdefa47b`）**：
+深读定性（续八纪律）后 hermetic 4 红**全是 test-fix、零机制改动、零 skip**：①auth-path——`resolveNativeOpencodeAuthPath`
+的 `resolve(dataRoot)!==dataRoot` 规范化闸（与 validatePolicyPath 同型）对 POSIX fixture 路径在 Windows 抛
+auth-invalid，生产用真 home 无恙 ⇒ `resolve()` fixture（同 rfc205 seed-path）；②config-root mode 0o500/0o400 ⇒
+`statMetadataIsAuthoritative` 门；③sessionDbPath 反斜杠 ⇒ 分隔符无关；④`env.PATH` win32=git-bin+System32（T12）⇒
+改单源 `buildControlledPathForHost()` 断言；⑤**symlinked-root 拒绝在 Windows 真机有效**（store-unsafe，安全特性完好），
+仅 afterEach `removeSealedTree` 清理 symlink 时 `rm` EFAULT（Bun-Windows）⇒ 测试内 `unlink` 自清 + backlog 记
+removeSealedTree symlink 隐患（edge-only，生产不封 symlink）。**容器簇全量 sweep（66 匹配文件）完成——修正续十四的「小失败集」判断**：抽样（5 文件）不具代表性，
+全量 sweep 显示 task#3 仍是**大簇**：~20 文件红、约 95 条失败。**⚠️ sweep 跑在 VM overlay（混合：本 session
+已 scp 的当前版 + 原 tarball 旧版），红名单含 stale-overlay 噪声，须逐条再 scp 复核**——已实锤两例噪声：
+`scheduler-cross-clarify-dispatch`(4，**本 session 已修 `e915b0d7`**、overlay 预置旧版故假红)、`test-suite-policy`(1，
+overlay 测试文件 skipIf 计数与当前 policy 不同步的混合态假红)。**完整红名单**（含噪声、待复核）：`rfc224-verified-plan`(13)、`rfc224-fff-capability`(12，FFF=Linux bwrap 指纹)、`rfc242-claude-netless-mcp`(26)、
+`rfc251-linux-plugin-visibility`(7，**文件名即 Linux-only**)、`rfc252-netless-write-deny`(4)、`netless-workdir`(4)、
+`rfc224-sandbox-readonly`(3)、`rfc224-source-reachability`(3)、`rfc255-custom-provider-runtime`(3)、`rfc216-sandbox-cli`(2)、
+`rfc216-sandbox-readonly-subprocess`(2)、`rfc238-{runtime-mcp-test-plans,mcp-test-execution-material}`(各 2)、
+`rfc223-identity-structural-guard`/`rfc224-execution-identity`/`rfc224-source-guard`/`rfc238-mcp-runtime-test-real-e2e`/
+`rfc256-machine-opencode-config`/`sandbox-multirepo-allowback`(各 1)、`plugins-http`(8，task#10 并发占用)。**性质**：绝大多数是
+**POSIX-机制**（netless×3 / bwrap-FFF / Seatbelt / linux-plugin）→ skipIf(win32) per D1，但**每条须真机取详情核实**
+（照 killGroup 教训不假设——hermetic 就是「看着像设计题、实为纯 test-fix」的反例，也可能有反向的真 bug）。**已绿/已修/已 skip 的容器文件**：
+provider/doctor/config-mode/coordinator(16/1skip)/hermetic(19/0)/verified-launcher(21/0)/store-recovery(10/0)/
+controlled-config(24/0)/containment-provider/source-guard(rfc227/rfc233)/system-permission-profile 等。**task#3 = 明确
+多-session**：须逐文件真机取详情 → 分类 → skipIf-per-D1 或修真 bug → 重跑 qualification，非 session 末尾可仓促收的量。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
