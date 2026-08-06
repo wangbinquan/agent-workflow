@@ -93,7 +93,6 @@ agent-workflow sandbox --help
   **win32 v1 相对 POSIX 的语义降级清单（D20）**——唯一事实源是
   `design/RFC-254-windows-native-execution/design.md` §10，此处是它的运维视角摘要，
   两处不一致时以 design.md 为准：
-
   1. **零隔离**：业务 agent / 系统 agent / 脚本 / 安装器都以 daemon 用户权限直跑，
      等价于 POSIX 上把 sandboxMode 设成 off/warn 且无机制可用；`enforce` 与脚本节点
      的 failClosed 档**拒绝执行**而不是降级。
@@ -114,6 +113,16 @@ agent-workflow sandbox --help
   7. **上游弱项**：opencode 在 win32 的 MCP 子孙清理是 no-op，FFF 默认关闭。
   8. **env 名的大小写折叠是新增安全面**：Windows 环境变量名大小写不敏感，所有黑白
      名单都经单点折叠，混合大小写绕过在三平台都有测试锁定。
+  9. **部署要求 —— 给密封根加 Windows Defender 排除目录**：verified 路径每次运行把
+     ~175MB 的 opencode 二进制新拷进 `~/.agent-workflow/…/opencode-stores/…` 再执行，
+     Defender 实时扫描会与「拷完即 exec」竞争，间歇把服务端进程杀在启动期（exit
+     `5=ACCESS_DENIED`、零输出 → `bootstrap-failed`；真机紧循环压测下可达约半数）。这是
+     AV 与构建产物的标准冲突，**部署时对 `~/.agent-workflow` 加 Defender 排除目录**即可
+     根除（`Add-MpPreference -ExclusionPath`，需管理员）。代码侧的治本方向是按内容摘要
+     缓存复用密封二进制、不每次重拷（Defender 只扫一次），属 RFC-227「per-run seal」不
+     变量的设计级变更，见 `docs/audit-backlog.md` 与 `docs/dev-gotchas.md` 详录；exec 层
+     的预热/重生 spawn 实测只到 ~50%（Defender 也杀运行期访问，非只 image-map），不采纳。
+
 - 进程侧信道（ps / /proc）不遮蔽——凭据已不入 argv/env，残余为低敏路径信息。
 - `off` / 降级态与 RFC-205 之前等同（威胁未消除，仅可见）。
 - bwrap 缺失的发行版需装 bubblewrap（跑 `agent-workflow sandbox` 拿发行版感知的精确
