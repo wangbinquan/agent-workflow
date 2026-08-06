@@ -150,27 +150,39 @@ describe('RFC-233 containment coordinator', () => {
     expect(calls).toBe(1)
   })
 
-  test('qualified outer and child plans share the canonical bwrap executable', async () => {
-    const coordinator = new ContainmentCoordinator({
-      provider: provider('enforce'),
-      qualifyBwrap: async () => '/opt/root-owned/bin/bwrap',
-    })
-    const plan = await coordinator.admit('model-child-netless-v1')
-    const ctx = buildRunSandboxCtx(
-      plan.sandbox,
-      'task-a',
-      '/work/task-a',
-      '/srv/agent-workflow/runs/task-a/run-a',
-    )
+  // RFC-254: skipped on Windows — this exercises the Linux bwrap outer+child
+  // topology and its sandbox-POLICY computation (wrapSandbox → computeSandboxPolicy).
+  // bwrap has no Windows equivalent, and this whole path is unreached on Windows v1
+  // (D1: no isolation provider; the core fails closed at bootstrap before any
+  // policy is computed). It also can't run here mechanically: the injected POSIX
+  // fixture paths (/home/aw, /srv/...) trip validatePolicyPath's canonicalization
+  // on Windows, where path.normalize rewrites '/' → '\'. (That normalize check is
+  // '/'-only and WILL need Windows-awareness if a future Windows containment
+  // provider lands — logged in docs/audit-backlog.md.)
+  test.skipIf(process.platform === 'win32')(
+    'qualified outer and child plans share the canonical bwrap executable',
+    async () => {
+      const coordinator = new ContainmentCoordinator({
+        provider: provider('enforce'),
+        qualifyBwrap: async () => '/opt/root-owned/bin/bwrap',
+      })
+      const plan = await coordinator.admit('model-child-netless-v1')
+      const ctx = buildRunSandboxCtx(
+        plan.sandbox,
+        'task-a',
+        '/work/task-a',
+        '/srv/agent-workflow/runs/task-a/run-a',
+      )
 
-    expect(plan.receipt.decision).toBe('contained')
-    expect(plan.topology).toBe('runner-outer-and-child')
-    expect(plan.childProvider).toEqual({
-      providerId: 'linux-bwrap',
-      config: { bwrapPath: '/opt/root-owned/bin/bwrap' },
-    })
-    expect(wrapSandbox(['/runtime/opencode'], ctx)[0]).toBe('/opt/root-owned/bin/bwrap')
-  })
+      expect(plan.receipt.decision).toBe('contained')
+      expect(plan.topology).toBe('runner-outer-and-child')
+      expect(plan.childProvider).toEqual({
+        providerId: 'linux-bwrap',
+        config: { bwrapPath: '/opt/root-owned/bin/bwrap' },
+      })
+      expect(wrapSandbox(['/runtime/opencode'], ctx)[0]).toBe('/opt/root-owned/bin/bwrap')
+    },
+  )
 
   test('partial Linux proof contains filesystem profile but atomically degrades stronger OpenCode profile', async () => {
     const coordinator = new ContainmentCoordinator({

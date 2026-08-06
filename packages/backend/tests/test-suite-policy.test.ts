@@ -103,6 +103,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // fail-closed premise can't be set up. The fail-closed logic is platform-
   // agnostic (covered on the POSIX legs); the other case in the file runs on win32.
   'packages/backend/tests/rfc205-mirror-origin-sanitize.test.ts#skipIf': 1,
+  // RFC-254: one case builds the Linux bwrap outer+child topology and computes its
+  // sandbox policy (wrapSandbox → computeSandboxPolicy). bwrap has no Windows
+  // equivalent and the path is unreached on Windows v1 (D1: no isolation provider,
+  // fail-closed at bootstrap); it also trips validatePolicyPath on Windows (POSIX
+  // fixture paths vs path.normalize's '/' → '\'). The rest of the file runs on win32.
+  'packages/backend/tests/rfc233-containment-coordinator.test.ts#skipIf': 1,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is
