@@ -71,6 +71,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // `pgrep -f` survivor scan (ENOENT on Windows). The Windows descendant-lifetime
   // guarantee is the Job Object (rfc254-process-tree-ownership win32 branch).
   'packages/backend/tests/rfc208-unbounded-git-and-permits.test.ts#skipIf': 1,
+  // RFC-254: two script-node describes render the Linux bwrap args / macOS SBPL
+  // profile (network fence + readonly boundary) — POSIX sandbox specs never
+  // produced on win32 (D1), whose renderers use host path helpers. Exercised on
+  // the POSIX CI legs. The env-assembly, traversal-defense, and contained-spawn
+  // mechanics in the same file DO run on win32 (portable `bun -e` commands).
+  'packages/backend/tests/rfc253-script-execution.test.ts#skipIf': 2,
   'e2e/clarify.spec.ts#skip': 1,
   // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
   // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can

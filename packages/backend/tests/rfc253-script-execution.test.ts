@@ -16,7 +16,7 @@
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { extractScriptPorts } from '@/services/scriptPorts'
 import { runContainedProcess } from '@/services/execution/containedSpawn'
@@ -131,7 +131,10 @@ describe('environment assembly', () => {
         env: { HOME: '/tmp/evil', PYTHONPATH: '/tmp/evil', API_TOKEN: 'keep-me' },
       }),
     })
-    expect(env.HOME).toBe('/run/dir/home')
+    // HOME is `join(runDir, 'home')` — win32 renders it with backslashes, so pin
+    // the platform-joined value rather than a POSIX literal. The point of the case
+    // is that the platform key wins over the node overlay's `HOME`, not its spelling.
+    expect(env.HOME).toBe(join('/run/dir', 'home'))
     expect(env.PYTHONPATH).toBeUndefined() // no deps env ⇒ platform leaves it unset
     expect(env.API_TOKEN).toBe('keep-me')
   })
@@ -156,7 +159,11 @@ describe('environment assembly', () => {
   })
 })
 
-describe('network fence rendering', () => {
+// RFC-254: these render the Linux bwrap args / macOS SBPL profile — POSIX sandbox
+// specs that are never produced on Windows (D1: no win32 containment provider),
+// and the renderers use host `path` helpers so their output is host-dependent.
+// Exercised on the POSIX CI legs; skipped on win32.
+describe.skipIf(process.platform === 'win32')('network fence rendering', () => {
   const base = {
     appHome: '/home/u/.agent-workflow',
     taskWorktrees: ['/home/u/.agent-workflow/worktrees/r/t1'],
@@ -214,15 +221,26 @@ describe('fail-closed containment profile', () => {
 })
 
 describe('contained spawn', () => {
+  // RFC-254: these exercise the spawn/capture/timeout/pid mechanics of
+  // `runContainedProcess`, which is platform-agnostic (it just `Bun.spawn`s the
+  // argv). The original fixtures hardcoded `/bin/sh <script>`, which does not
+  // exist on Windows; drive the same behaviours with a portable `bun -e` command
+  // so the mechanics are tested on every platform (script-nodes spawn on win32).
+  const bunInline = (js: string): string[] => [process.execPath, '-e', js]
+  // bun.exe is self-contained; win32 still wants SystemRoot present. POSIX keeps
+  // the minimal isolating PATH the originals used.
+  const spawnEnv = (): Record<string, string> =>
+    process.platform === 'win32'
+      ? { PATH: process.env.PATH ?? '', SystemRoot: process.env.SystemRoot ?? '' }
+      : { PATH: '/usr/bin:/bin' }
+
   test('captures raw stdout byte for byte while still emitting lines', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc253-'))
-    const script = join(dir, 's.sh')
-    writeFileSync(script, "printf 'a\\n\\nb\\n'\n", 'utf8')
     const lines: string[] = []
     const result = await runContainedProcess({
-      argv: ['/bin/sh', script],
+      argv: bunInline("process.stdout.write('a\\n\\nb\\n')"),
       cwd: dir,
-      env: { PATH: '/usr/bin:/bin' },
+      env: spawnEnv(),
       captureRawStdout: true,
       onStdoutLine: (line) => {
         lines.push(line)
@@ -239,12 +257,10 @@ describe('contained spawn', () => {
 
   test('reports a non-zero exit without throwing', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc253-'))
-    const script = join(dir, 's.sh')
-    writeFileSync(script, 'echo boom >&2\nexit 3\n', 'utf8')
     const result = await runContainedProcess({
-      argv: ['/bin/sh', script],
+      argv: bunInline("process.stderr.write('boom\\n'); process.exit(3)"),
       cwd: dir,
-      env: { PATH: '/usr/bin:/bin' },
+      env: spawnEnv(),
       captureRawStdout: true,
     })
     expect(result.exitCode).toBe(3)
@@ -263,13 +279,11 @@ describe('contained spawn', () => {
 
   test('the spawn receipt fires before output is read, so a pid is always recorded', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc253-'))
-    const script = join(dir, 's.sh')
     const marker = join(dir, 'pid.txt')
-    writeFileSync(script, 'echo done\n', 'utf8')
     await runContainedProcess({
-      argv: ['/bin/sh', script],
+      argv: bunInline("process.stdout.write('done\\n')"),
       cwd: dir,
-      env: { PATH: '/usr/bin:/bin' },
+      env: spawnEnv(),
       onSpawned: ({ pid }) => {
         writeFileSync(marker, String(pid), 'utf8')
       },
@@ -279,12 +293,10 @@ describe('contained spawn', () => {
 
   test('a runaway child is killed at the timeout', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rfc253-'))
-    const script = join(dir, 's.sh')
-    writeFileSync(script, 'sleep 30\n', 'utf8')
     const result = await runContainedProcess({
-      argv: ['/bin/sh', script],
+      argv: bunInline('setTimeout(() => {}, 30000)'),
       cwd: dir,
-      env: { PATH: '/usr/bin:/bin' },
+      env: spawnEnv(),
       timeoutMs: 200,
       killEscalationGraceMs: 200,
     })
@@ -349,7 +361,10 @@ describe('fail-closed admission cannot be satisfied by a mode that applies nothi
 //   B. the spill file was named after the raw port name, which an author
 //      controls through an edge's target port — `../../..` would place a
 //      daemon-owned write outside the run directory.
-describe('readonly is a boundary, not a convention', () => {
+// RFC-254: same as network-fence rendering — these assert the Linux bwrap
+// read-write binds / macOS SBPL of the readonly policy, POSIX sandbox specs never
+// produced on win32 (D1). Exercised on the POSIX CI legs; skipped on win32.
+describe.skipIf(process.platform === 'win32')('readonly is a boundary, not a convention', () => {
   const base = {
     appHome: '/home/u/.agent-workflow',
     taskWorktrees: ['/home/u/.agent-workflow/worktrees/r/t1'],
@@ -418,7 +433,10 @@ describe('spilled port files cannot escape the run directory', () => {
     })
     expect(spillFiles).toHaveLength(1)
     const target = spillFiles[0]!.path
-    expect(target.startsWith('/run/dir/inputs/')).toBe(true)
+    // The spill path is `join(inputDir, …)`, so win32 renders it with
+    // backslashes — assert containment with the platform separator, not a POSIX
+    // literal. The point is it stays INSIDE inputDir despite the traversal name.
+    expect(target.startsWith(join('/run/dir/inputs') + sep)).toBe(true)
     expect(target).not.toContain('..')
     // The script can still find it: AW_PORT_NAMES maps the original name.
     expect(JSON.parse(env.AW_PORT_NAMES!)['../../../../tmp/evil']).toBeDefined()
