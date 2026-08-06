@@ -242,27 +242,39 @@ describe('makeBoundedSpawn — normalizes every failure to unavailable, never th
 // path only SENDS SIGKILL then awaits proc.exited, and readCappedStderr swallows a
 // stream error — both are proven bounded/correct here rather than mocked).
 describe('makeBoundedSpawn — REAL process (bounded reap, zero survivor, stderr non-fatal)', () => {
-  it('a hanging mechanism is SIGKILL-reaped at the deadline — bounded, not the 30s sleep', async () => {
-    const b = makeBoundedSpawn(undefined, undefined, 200) // real spawn + real killProcessTree
-    const start = Date.now()
-    const code = await b.spawn(['/bin/sh', '-c', 'sleep 30'])
-    expect(Date.now() - start).toBeLessThan(6000) // bounded — awaiting proc.exited resolves after the group SIGKILL
-    expect(b.getDiag()).toEqual({ kind: 'timeout' })
-    expect(code).toBe(127)
-  }, 10_000)
+  // RFC-254: both REAL-process cases spawn `/bin/sh` + rely on POSIX group-reap
+  // (killProcessTree's -pid / grandchild survivor scan) — no Windows equivalent (same
+  // class as rfc208 / rfc254-process-tree, covered by the Job Object win32 branch). The
+  // rest of the file (injected-deps exit-code cells, argv fail-closed) runs on win32.
+  it.skipIf(process.platform === 'win32')(
+    'a hanging mechanism is SIGKILL-reaped at the deadline — bounded, not the 30s sleep',
+    async () => {
+      const b = makeBoundedSpawn(undefined, undefined, 200) // real spawn + real killProcessTree
+      const start = Date.now()
+      const code = await b.spawn(['/bin/sh', '-c', 'sleep 30'])
+      expect(Date.now() - start).toBeLessThan(6000) // bounded — awaiting proc.exited resolves after the group SIGKILL
+      expect(b.getDiag()).toEqual({ kind: 'timeout' })
+      expect(code).toBe(127)
+    },
+    10_000,
+  )
 
-  it('a wrapper that forks a grandchild then exits fast leaves NO survivor (finally group-reap)', async () => {
-    const dir = tmp()
-    const marker = join(dir, 'survivor')
-    // sh backgrounds a grandchild (sleep 3 → touch marker) in the SAME group, then
-    // exits 0 immediately (before any timeout). The finally killProcessTree(SIGKILL)
-    // must reap the whole detached group so the marker is never written.
-    const b = makeBoundedSpawn(undefined, undefined, 10_000)
-    const code = await b.spawn(['/bin/sh', '-c', `( sleep 3; touch "${marker}" ) & exit 0`])
-    expect(code).toBe(0)
-    await new Promise((r) => setTimeout(r, 3_500)) // wait past the grandchild's sleep
-    expect(existsSync(marker)).toBe(false) // grandchild was group-killed → never touched marker
-  }, 10_000)
+  it.skipIf(process.platform === 'win32')(
+    'a wrapper that forks a grandchild then exits fast leaves NO survivor (finally group-reap)',
+    async () => {
+      const dir = tmp()
+      const marker = join(dir, 'survivor')
+      // sh backgrounds a grandchild (sleep 3 → touch marker) in the SAME group, then
+      // exits 0 immediately (before any timeout). The finally killProcessTree(SIGKILL)
+      // must reap the whole detached group so the marker is never written.
+      const b = makeBoundedSpawn(undefined, undefined, 10_000)
+      const code = await b.spawn(['/bin/sh', '-c', `( sleep 3; touch "${marker}" ) & exit 0`])
+      expect(code).toBe(0)
+      await new Promise((r) => setTimeout(r, 3_500)) // wait past the grandchild's sleep
+      expect(existsSync(marker)).toBe(false) // grandchild was group-killed → never touched marker
+    },
+    10_000,
+  )
 
   it('a stderr stream error is NON-FATAL — the outcome comes from the exit code, not the stderr read', async () => {
     const errStream = new ReadableStream<Uint8Array>({

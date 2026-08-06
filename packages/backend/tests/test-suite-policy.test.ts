@@ -121,6 +121,15 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // POSIX fixtures. Same class as rfc205-sandbox-policy. The second describe renders at
   // body level, so it must skip at collection too.
   'packages/backend/tests/rfc252-netless-write-deny.test.ts#skipIf': 2,
+  // RFC-254: readOnlySubtrees describe computes sandbox policy with POSIX fixtures →
+  // validatePolicyPath rejects on win32 (POSIX sandbox render, D1). Whole describe.
+  'packages/backend/tests/rfc224-sandbox-readonly.test.ts#skipIf': 1,
+  // RFC-254: one case renders the macOS Seatbelt SBPL profile (POSIX sandbox spec, D1);
+  // the sibling bwrap/taskWorktrees cases run on win32.
+  'packages/backend/tests/sandbox-multirepo-allowback-2026-08-04.test.ts#skipIf': 1,
+  // RFC-254: two REAL-process cases spawn /bin/sh + POSIX group-reap (no win32 equiv,
+  // same class as rfc208; Job Object win32 branch covers it). Rest of file runs on win32.
+  'packages/backend/tests/rfc216-sandbox-cli.test.ts#skipIf': 2,
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is

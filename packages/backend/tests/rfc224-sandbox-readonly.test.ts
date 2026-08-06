@@ -22,7 +22,13 @@ function policy(readOnlySubtrees: readonly string[] = [SEAL]) {
   })
 }
 
-describe('RFC-224 sandbox readOnlySubtrees', () => {
+// RFC-254: the whole describe computes sandbox policy (computeSandboxPolicy) with
+// POSIX fixture paths — validatePolicyPath's '/'-only guard throws "invalid sandbox
+// path" on win32 (verified). POSIX sandbox render, unreached on Windows v1 (D1: no
+// provider). NB the "rejects duplicate" case accidentally PASSES on win32 —
+// toThrow(TypeError) matches validatePolicyPath's TypeError, not the dup check — a
+// false-pass correctly removed by skipping the whole describe.
+describe.skipIf(process.platform === 'win32')('RFC-224 sandbox readOnlySubtrees', () => {
   test('bwrap stacks every RO overlay after all RW allow-backs', () => {
     const args = renderBwrapArgs(policy())
     const lastRwBind = args.lastIndexOf('--bind')

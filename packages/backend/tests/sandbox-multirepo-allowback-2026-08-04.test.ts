@@ -54,7 +54,10 @@ describe('多仓 iso 运行：每个成员仓都必须进 allow 集', () => {
     for (const member of members) expect(argv).toContain(`--bind ${member} ${member}`)
   })
 
-  test('Seatbelt profile 为每个成员各发一条 allow', () => {
+  // RFC-254: renders the macOS Seatbelt SBPL profile — POSIX sandbox spec never
+  // produced on win32 (D1). The sibling bwrap/taskWorktrees cases in this describe
+  // run on win32; only the Seatbelt render is skipped.
+  test.skipIf(process.platform === 'win32')('Seatbelt profile 为每个成员各发一条 allow', () => {
     const ctx = buildRunSandboxCtx(provider('seatbelt'), TASK, members[0]!, runDir, members)
     const profile = wrapSandbox(['/bin/true'], ctx)[2] ?? ''
     for (const member of members) {
