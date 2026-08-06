@@ -5,26 +5,26 @@
 
 ## 环境
 
-| 项 | 值 |
-|---|---|
-| 主机 | macOS / Apple Silicon，Parallels Desktop（标准版） |
-| 客户机 | Windows 11，build **10.0.26200.8655**，**ARM64** |
-| 访问 | OpenSSH Server over Parallels shared network，`10.211.55.3` |
-| Bun | **1.3.14**（`bun-windows-aarch64`） |
-| git | **2.55.0.windows.3** |
-| 仓库 | 从 `\\Mac\Home\...` robocopy 到本地盘 `C:\aw`（见「踩坑」） |
+| 项     | 值                                                          |
+| ------ | ----------------------------------------------------------- |
+| 主机   | macOS / Apple Silicon，Parallels Desktop（标准版）          |
+| 客户机 | Windows 11，build **10.0.26200.8655**，**ARM64**            |
+| 访问   | OpenSSH Server over Parallels shared network，`10.211.55.3` |
+| Bun    | **1.3.14**（`bun-windows-aarch64`）                         |
+| git    | **2.55.0.windows.3**                                        |
+| 仓库   | 从 `\\Mac\Home\...` robocopy 到本地盘 `C:\aw`（见「踩坑」） |
 
 ## 结果
 
-| 验收项 | 结果 |
-|---|---|
-| RFC-254 平台套件（6 个文件） | **84 pass / 2 skip / 0 fail** |
-| 负向扫描守卫 | 4 pass / 0 fail |
-| e2e 编译缝锁 | 5 pass / 0 fail |
-| NUL 字节守卫 | 6 pass / 0 fail |
-| `bun run typecheck`（三包） | 全部 exit 0 |
-| `bun run build:binary` | **`dist\agent-workflow-windows-arm64.exe`，123.9 MiB**，`version` 冒烟通过 |
-| `<binary> doctor` | 见下 |
+| 验收项                       | 结果                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| RFC-254 平台套件（6 个文件） | **84 pass / 2 skip / 0 fail**                                              |
+| 负向扫描守卫                 | 4 pass / 0 fail                                                            |
+| e2e 编译缝锁                 | 5 pass / 0 fail                                                            |
+| NUL 字节守卫                 | 6 pass / 0 fail                                                            |
+| `bun run typecheck`（三包）  | 全部 exit 0                                                                |
+| `bun run build:binary`       | **`dist\agent-workflow-windows-arm64.exe`，123.9 MiB**，`version` 冒烟通过 |
+| `<binary> doctor`            | 见下                                                                       |
 
 ### doctor 输出（关键行，原文）
 
@@ -92,3 +92,44 @@ Bun 1.3.14 在网络盘执行 workspace 安装时崩溃（生成 crash report）
 bun install --frozen-lockfile
 ./scripts/verify-windows-platform.ps1
 ```
+
+## 续 2026-08-07：真 opencode 1.18.13 + glm-5.2 的 verified 执行端到端验收（T38）
+
+用户在 Windows 11 **ARM64** 验收机（`reference_windows_vm`，`wangbinquan@10.211.55.3`）
+部署了 **opencode 1.18.13** 并接上模型 **`alibaba-cn/glm-5.2`**，从而解锁上一轮「未覆盖」
+清单里的「真 opencode 业务工作流端到端」。
+
+**方法**：直接调 `services/runner.ts:runNode`（**无 `opencodeCmd` = 生产 verified 路径**，
+非 legacy/mock），`runtimeParams.model=alibaba-cn/glm-5.2`、`ContainmentCoordinator`
+mode `off`（Windows v1 无 provider，D1）、native `AGENT_WORKFLOW_HOME`、真 git worktree、
+ambient auth 由 verified 路径镜像。跑一整条业务节点。
+
+**结果 —— `STATUS=done`（首次在 Windows 确认 verified 执行成立）**：
+`projectID`＝真 hash（非 `global`）、`session.path=""`、`validateSessionIdentity` 通过、
+模型真实执行、node 完成并收下 workflow-output 信封。传输层（`direct API` 建会话+发消息+
+真 LLM 响应+token 计量）此前已在续三十三单证；本轮是**整条生产 launcher 胶水层**首次
+端到端跑通。
+
+**过程中揪出并修复 3 处 win32 生产缺陷（提交 `c4a5ea4a`，qualification 簇 1033/0）**：
+
+1. **关键**：`GIT_CONFIG_GLOBAL=NUL` 打死 git-for-Windows（MSYS2 只认 `/dev/null`）⇒
+   opencode worktree 探测失败落 `global`/worktree=`/` ⇒ session `path` 不匹配 ⇒ 身份校验
+   在 `/path` 拒。**这是 Windows verified 路径此前彻底不可用的元凶**。修＝host 无关的
+   `GIT_NULL_CONFIG_PATH='/dev/null'`（3 站点）。
+2. bootstrap 逐请求 `Math.min(2_000,…)` 太紧（首个 `/config/providers` 冷初始化 ~1.9s）⇒
+   请求被 abort 且被 `stableFailureCode` 兜底成误导性 `mismatch`。修＝用 `bootstrapTimeoutMs`。
+3. `verifiedInventory` 写入的 `0o600` mode 断言 win32 恒假。修＝`statMetadataIsAuthoritative` 门。
+
+**唯一已知残留：verified 服务端 flaky 冷启动**（`bootstrap-failed`，统一 exit
+`5=ACCESS_DENIED`）——真机确证是 Windows Defender 对每次运行新拷的 175MB 密封二进制的
+实时扫描竞争，在启动期（image-map 与运行期访问都算）杀进程。**exec 层挡不住**（`--version`
+预热 + 有界重生 spawn 组合紧循环压测只到 ~50%，故未落地、已回退，防脏敏感 launcher）。
+**正解**：①ops —— 对 `~/.agent-workflow` 密封根加 Windows Defender 排除目录（零代码、彻底，
+提交 `a4b9ea43` 已写入 `docs/sandbox.md` 部署要求）；②架构 —— 密封二进制按内容摘要缓存
+复用、不每次重拷（RFC-227「per-run seal」不变量的设计级变更，待专门 RFC）。紧循环压测会
+高估生产失败率（生产任务间隔拉开，模型调用本身数十秒）。详录见 `docs/dev-gotchas.md` +
+`docs/audit-backlog.md`。
+
+**本轮更新的「未覆盖」项**：「真 opencode 的业务工作流端到端」✅ 已覆盖（本条）。仍未覆盖：
+Job Object 原子杀树（本机 ARM64 无 FFI）、console 弹窗、长路径仓、e2e/视觉基线（T33–T35，
+CI-pipeline 产物）。
