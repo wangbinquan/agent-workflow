@@ -565,8 +565,15 @@ verified 系统 agent 核心 ⇒ 整体作**新上下文增量**（本缝只吃�
 （process-tree-ownership/rfc208）12/0（killProcessTree 复用无回归）+ policy 5/0 + typecheck/lint/format 绿；真 ARM64
 机 **11 pass / 1 skip / 0 fail**（此前 8/4）。**提交 `410036b8`**（3 文件一步 pathspec）+ dev-gotchas 补「`process.kill(-pid)`
 是 POSIX-only，跨平台杀进程走 killProcessTree」。**spawn-failed 桶只剩 runtime-routes(10)**——配置面 `opencodePath`
-单路径，须 Windows 可 spawn 的单 config binary 或让 route 接命令数组（产品面），留后续。**教训**：别被「须新上下文」
-的预判劝退——真机逐条诊断常拆出「测试预言 bug + 真生产缺陷 + 假阻塞」的混合，其中生产缺陷（killGroup）恰最值钱。
+单路径（models 路由 spawn `[opencodePath, 'models']` 一次性、版本探测 spawn `--version`）。**本轮试过 `.cmd`
+包装缝、真机确证死路**：把 stub 改「`.cmd` → `bun run stub.ts %*`」+ `stubBinaryPath` 加 `.cmd` 后缀，7/12 过
+（spawn/exit code 都对），但**内容依赖的 5 条挂**——route 经 `.cmd` 捕获的 **stdout 为空/不可解析**（models 列表
+收到近空）、**stderr 丢失**（`kaboom` → `(no stderr)`）；Bun.spawn 对 `.cmd` 的管道转发在 Windows 上语义浑浊
+（与续六「`.cmd` 流式死」同源，连一次性内容捕获都不干净）。**已回退该尝试（未提交、`git checkout` 干净还原）**。
+下一次直接走**能干净捕获的真二进制**：`bun build --compile` 出 stub `.exe`（无 cmd.exe 中间层，route 直接 spawn
+→ stdout/stderr/exit 全干净，代价是每个 stub 编译 ~1–2s）或让 config/route 接命令数组（产品面）——**别再试 `.cmd`**。
+**教训**：别被「须新上下文」的预判劝退——真机逐条诊断常拆出「测试预言 bug + 真生产缺陷 + 假阻塞」的混合，其中
+生产缺陷（killGroup）恰最值钱；但也别被沉没成本拖进死路——`.cmd` 内容捕获查证为死路后即回退，不硬撑。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
