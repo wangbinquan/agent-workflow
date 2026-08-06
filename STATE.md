@@ -441,17 +441,22 @@ Windows 障碍（回归覆盖=rfc223-pr5，真机 8/0）。**本轮续三提交*
 （真缺陷，`4396ccdc`：私有性 mode 断言按 host 而非 writeControlFile 的 platform arg 判——win32 host 上 posix-path
 文件落盘仍是 0o666，外包 `statMetadataIsAuthoritative(process.platform)`，真机 22/0）；`rfc254-git-windows`
 **假红**（我的 tarball overlay 只同步 packages/backend，仓根 `.gitattributes` 不在 `C:\aw`；补同步后真机 8/0，
-完整 checkout/CI 本就有该文件、无需改码）。**76 红文件按签名分桶**（本机 grep 初判，逐簇仍需真机看真错）：
-①**RFC-224/227 verified-path + containment/sandbox-render 簇（最大，~30 文件）**：rfc224-\*（verified-plan 13/
-fff-capability 12/runner-control-barrier 7/direct-client 7/sealed-inputs 5/hermetic 4/…）、rfc242-claude-netless-mcp(26)、
-rfc251/rfc255/rfc252/rfc216/rfc233/rfc238/sandbox-\*、runtime-smoke(15)——多为 bwrap/Seatbelt/netless 的 POSIX-only
-机制（D1 win32 无 containment provider）⇒ 预计 `skipIf(win32)`+登记 policy 或平台感知，**但须逐条分清「纯 config
-构建（应在 win32 可跑）vs 容器渲染（POSIX-only）」**，不能整簇一刀切。②**SH-STUB 簇**：runtime-routes(9)/
-rfc234-system-agent-run(10)/rfc227-version-neutral-probe(5)/rfc255-enumeration(5)/netless-workdir(4)/scheduler-commit-push
-等——`.sh` 假二进制 → `[process.execPath,'run',stub.ts]` 换缝（同 task-start-git-identity）。③**多仓 diff 簇**：
-structural-diff-\*-multi-repo/task-diff-multi-repo\*/resume-multi-repo-rollback/start-task-multi-repo-gates——git 多仓，
-疑 EBUSY 或路径。④**MODE-ASSERT/EBUSY/grep-guard 零散**：secret-box/session-capture-sqlite/rfc064-source-grep-guards/
-users-cli/plugins-http(8) 等。⑤**rfc258-file-symbols(12)**：code-intel（SCIP indexer spawn？）单列。逐簇修中。
+完整 checkout/CI 本就有该文件、无需改码）。**76 红文件按真错分桶**（真机采样 6 个最大文件的真实报错校正了本机 grep 初判）：
+①**「binaryPath 是 `#!/bin/sh` 包装」spawn-failed 簇**：`runtime-smoke`(15)/`rfc234-system-agent-run`(10)/
+`runtime-routes`(9，502=smoke spawn 挂)等——`runtime-smoke.test.ts:28 wrapperFor` 写 `#!/bin/sh\nexec bun run <mock>`
+单文件包装 + `binaryPath:'/bin/echo'`（:163），Windows 不可 spawn ⇒ 需把「单路径 fake 二进制」换成 Windows 可 spawn
+的形态（smoke 走单 `binaryPath` 不是命令数组，故不能照搬 `[bun,ts]`；候选：win32 写 `.cmd`/或 runtimeSmoke 接受
+命令数组的缝——**要先读 `runtimeSmoke.ts` 的 spawn 形态再定**）。②**RFC-224/227 verified-path + containment 簇
+（最大且最敏感，~30 文件）**：rfc224-\*(verified-plan 13 真错=`ENOENT lstat '/bin/sh'`——plan 里 POSIX shell 路径假设；
+fff-capability 12/runner-control-barrier 7/direct-client 7/sealed-inputs 5/hermetic 4…)、rfc242-claude-netless-mcp(26)、
+rfc251/rfc255/rfc252/rfc216/rfc233/rfc238/sandbox-\*——bwrap/Seatbelt/netless POSIX-only 机制（D1 win32 无 provider）。
+**这是平台执行路径核心，CLAUDE.md 明令改动前重跑 containment/behavior 资格套件**；须逐条分「纯 config 构建（win32 应可跑，
+如 `/bin/sh` 该走平台感知 shell）vs 容器渲染（POSIX-only → skipIf+policy）」，**不宜在 marathon 尾仓促一刀切**，留独立
+fresh-context 增量做。③**rfc258-file-symbols(12)** 真错=`mkdir 'C:\…\:\src'`——repoKey/路径拼接把 `:` 当路径段
+（Windows 非法字符）⇒ 夹具路径构造 bug，可独立修。④**多仓 diff 簇**（structural-diff-\*/task-diff-multi-repo\*/
+resume-multi-repo-rollback）+ **零散 MODE/EBUSY/grep**（secret-box/session-capture-sqlite/users-cli/plugins-http(8)…）
+待逐条。**结论**：n-z 76 红已枚举+真错分桶；spawn-failed 与 rfc258 `:` 桶是下一步干净入口，RFC-224/227 容器簇按
+敏感区规程另起增量。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 

@@ -10,7 +10,7 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -35,7 +35,11 @@ async function makeRepo(files: Record<string, string>): Promise<{ dir: string; c
   await runGit(dir, ['config', 'user.email', 't@t.test'])
   await runGit(dir, ['config', 'user.name', 't'])
   for (const [p, content] of Object.entries(files)) {
-    mkdirSync(join(dir, resolve('/', p, '..').slice(1)), { recursive: true })
+    // RFC-254: `resolve('/', p, '..').slice(1)` was a POSIX-only way to get the
+    // parent dir — on Windows `resolve('/',…)` yields `C:\…` and `.slice(1)`
+    // leaves `:\…` (an illegal path segment → mkdir ENOENT). `dirname(p)` is the
+    // same intent, platform-agnostic.
+    mkdirSync(join(dir, dirname(p)), { recursive: true })
     writeFileSync(join(dir, p), content)
   }
   await runGit(dir, ['add', '.'])
