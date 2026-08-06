@@ -26,6 +26,7 @@ import {
   writeControlFile,
   type ControlEndpoint,
 } from '@/services/controlListener'
+import { statMetadataIsAuthoritative } from '@/util/fileTrust'
 
 const roots: string[] = []
 function root(): string {
@@ -141,8 +142,13 @@ describe('RFC-254 T7 — the control file', () => {
 
     // The mode bit is only meaningful where the OS honours it. Asserting it on
     // the win32 path would be asserting a protection that is not the one
-    // actually in force — see `doctor`'s report (D19).
-    expect(statSync(posixPath).mode & 0o777).toBe(0o600)
+    // actually in force — see `doctor`'s report (D19). RFC-254: this also holds
+    // for the posix-path file when the TEST HOST is win32 — writeControlFile's
+    // `'linux'` arg picks the code path, but the on-disk mode is the host OS's
+    // (0o666 on Windows), so gate the assertion on the host honouring mode bits.
+    if (statMetadataIsAuthoritative(process.platform)) {
+      expect(statSync(posixPath).mode & 0o777).toBe(0o600)
+    }
     expect(readControlFile(posixPath)).toEqual(endpoint)
     expect(readControlFile(winPath)).toEqual(endpoint)
   })
