@@ -1,11 +1,10 @@
 // Live wrapper-membership preview for WorkflowCanvas node dragging.
 //
-// This module deliberately changes only xyflow node.data. Persisted workflow
-// membership, coordinates, wrapper sizes, and the undo stack stay untouched
-// until onNodeDragStop. GroupWrapperNode renders the returned rectangle as a
-// visual transform inside the wrapper's fixed xyflow shell, which lets the
-// wrapper appear to grow around the candidate without re-parenting the node
-// mid-gesture (re-parenting changes coordinate systems and makes it jump).
+// This module changes only local xyflow state. Persisted workflow membership,
+// coordinates, wrapper sizes, and the undo stack stay untouched until
+// onNodeDragStop. The wrapper's xyflow shell keeps its top-left position and
+// temporarily grows to the right/bottom, so both its visible border and edge
+// handles stay attached to the same canvas node throughout the gesture.
 
 import { isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -29,10 +28,10 @@ export type WrapperDragPreviewState = 'accept' | 'leave'
 /** Local-only data consumed by GroupWrapperNode during a node drag. */
 export interface WrapperDragPreview {
   state: WrapperDragPreviewState
-  /** Visual offset from the wrapper's unchanged xyflow top-left. */
-  offsetX?: number
-  offsetY?: number
-  /** Preview rectangle dimensions. Present for an accepting wrapper. */
+  /** Original xyflow dimensions, used to restore the shell after preview. */
+  baseWidth?: number
+  baseHeight?: number
+  /** Temporary xyflow dimensions. Present for an accepting wrapper. */
   width?: number
   height?: number
 }
@@ -92,8 +91,13 @@ function definitionWithLiveGeometry(
     const flowNode = flowById.get(node.id)
     if (flowNode === undefined) return next
     const style = flowNode.style as { width?: unknown; height?: unknown } | undefined
-    const width = positiveNumber(style?.width)
-    const height = positiveNumber(style?.height)
+    const data = flowNode.data as Record<string, unknown>
+    const livePreview = data[WRAPPER_DRAG_PREVIEW_DATA_KEY] as WrapperDragPreview | undefined
+    // An accepting preview temporarily expands node.style. Always rebuild the
+    // detached definition from its saved base dimensions so the larger visual
+    // shell never becomes the next frame's hit area or persisted fit input.
+    const width = positiveNumber(livePreview?.baseWidth) ?? positiveNumber(style?.width)
+    const height = positiveNumber(livePreview?.baseHeight) ?? positiveNumber(style?.height)
     if (width === undefined || height === undefined) return next
 
     const previousSize = (node as Record<string, unknown>).size as
@@ -197,7 +201,7 @@ export function computeWrapperDragPreviews(args: PreviewArgs): Map<string, Wrapp
     const base = baseRects.get(wrapperId)
     if (wrapper === undefined || base === undefined) continue
     const size = (wrapper as Record<string, unknown>).size as { sizeLocked?: unknown } | undefined
-    const rect =
+    const fittedRect =
       size?.sizeLocked === true
         ? {
             offset: base.position,
@@ -205,12 +209,26 @@ export function computeWrapperDragPreviews(args: PreviewArgs): Map<string, Wrapp
             height: base.height,
           }
         : computeFitBounds(wrapper, previewDefinition.nodes, undefined, measuredSizes, minimumSizes)
+    const baseWidth = Math.round(base.width)
+    const baseHeight = Math.round(base.height)
+    // The old preview translated an inner DOM rectangle to fittedRect.offset,
+    // which made the wrapper appear to follow the pointer while xyflow's node
+    // and its edges stayed behind. Keep the shell origin fixed and only extend
+    // its right/bottom edges far enough to cover the fitted rectangle.
+    const width = Math.max(
+      baseWidth,
+      Math.round(fittedRect.offset.x + fittedRect.width - base.position.x),
+    )
+    const height = Math.max(
+      baseHeight,
+      Math.round(fittedRect.offset.y + fittedRect.height - base.position.y),
+    )
     previews.set(wrapperId, {
       state: 'accept',
-      offsetX: Math.round(rect.offset.x - base.position.x),
-      offsetY: Math.round(rect.offset.y - base.position.y),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
+      baseWidth,
+      baseHeight,
+      width,
+      height,
     })
   }
   return previews
@@ -222,15 +240,16 @@ function previewsEqual(a: unknown, b: WrapperDragPreview | undefined): boolean {
   const previous = a as WrapperDragPreview
   return (
     previous.state === b.state &&
-    previous.offsetX === b.offsetX &&
-    previous.offsetY === b.offsetY &&
+    previous.baseWidth === b.baseWidth &&
+    previous.baseHeight === b.baseHeight &&
     previous.width === b.width &&
     previous.height === b.height
   )
 }
 
-/** Attach preview data without disturbing positions, parentIds, measurements,
- * or selection. Returns the original array when the preview is unchanged. */
+/** Attach preview feedback and its ephemeral xyflow shell size without
+ * disturbing positions, parentIds, persisted data, or selection. Returns the
+ * original array when both preview and shell size are unchanged. */
 export function applyWrapperDragPreviews(
   flowNodes: Node[],
   previews: ReadonlyMap<string, WrapperDragPreview>,
@@ -240,15 +259,31 @@ export function applyWrapperDragPreviews(
     if (!isWrapperKind(node.type)) return node
     const data = node.data as Record<string, unknown>
     const preview = previews.get(node.id)
-    const previous = data[WRAPPER_DRAG_PREVIEW_DATA_KEY]
+    const previous = data[WRAPPER_DRAG_PREVIEW_DATA_KEY] as WrapperDragPreview | undefined
     if (preview === undefined && previous === undefined) return node
-    if (preview !== undefined && previewsEqual(previous, preview)) return node
 
     const nextData = { ...data }
     if (preview === undefined) delete nextData[WRAPPER_DRAG_PREVIEW_DATA_KEY]
     else nextData[WRAPPER_DRAG_PREVIEW_DATA_KEY] = preview
+
+    const style = node.style as { width?: unknown; height?: unknown } | undefined
+    const targetSize =
+      preview?.state === 'accept' && preview.width !== undefined && preview.height !== undefined
+        ? { width: preview.width, height: preview.height }
+        : previous?.state === 'accept' &&
+            previous.baseWidth !== undefined &&
+            previous.baseHeight !== undefined
+          ? { width: previous.baseWidth, height: previous.baseHeight }
+          : undefined
+    const sizeUnchanged =
+      targetSize === undefined ||
+      (style?.width === targetSize.width && style?.height === targetSize.height)
+    if (preview !== undefined && previewsEqual(previous, preview) && sizeUnchanged) return node
+
     changed = true
-    return { ...node, data: nextData }
+    return targetSize === undefined
+      ? { ...node, data: nextData }
+      : { ...node, data: nextData, style: { ...node.style, ...targetSize } }
   })
   return changed ? next : flowNodes
 }

@@ -100,17 +100,6 @@ export function GroupWrapperNode({ data, selected }: Props) {
       data-loop-body={data.loopBody ? 'true' : undefined}
       data-surface={data.surface}
       data-wrapper-drop-preview={dragPreview?.state}
-      style={
-        dragPreview?.state === 'accept' &&
-        dragPreview.width !== undefined &&
-        dragPreview.height !== undefined
-          ? {
-              width: dragPreview.width,
-              height: dragPreview.height,
-              transform: `translate(${dragPreview.offsetX ?? 0}px, ${dragPreview.offsetY ?? 0}px)`,
-            }
-          : undefined
-      }
     >
       <NodeValidationBadge data={data} />
       <div className="canvas-node__header">

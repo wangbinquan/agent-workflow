@@ -17,6 +17,8 @@
 //   * Pan via the canvas viewport doesn't break click hit-test (a
 //     subtle xyflow bug that affected RFC-016 wrapper-nest before
 //     the pan / drag boundary was fixed).
+//   * A live wrapper drop preview grows the xyflow shell in place and moves
+//     its connected edge before pointer-up.
 //
 // Notably absent: connect-edge by dragging a port handle to another
 // port. xyflow's handle drag is a stream of `pointermove` events that
@@ -512,6 +514,87 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
 
     // No nodes were created or deleted by the pan.
     await expect(page.locator('.react-flow__node')).toHaveCount(before)
+  })
+
+  test('wrapper drop preview grows the anchored xyflow shell before pointer-up', async ({
+    page,
+  }) => {
+    workflowId = await seedWorkflow({
+      $schema_version: 4,
+      inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
+      nodes: [
+        { id: 'candidate', kind: 'input', inputKey: 'topic', position: { x: 20, y: 220 } },
+        {
+          id: 'wrapper',
+          kind: 'wrapper-git',
+          nodeIds: [],
+          position: { x: 430, y: 170 },
+          size: { width: 260, height: 210 },
+        },
+        {
+          id: 'sink',
+          kind: 'output',
+          ports: [{ name: 'git_diff', bind: { nodeId: 'wrapper', portName: 'git_diff' } }],
+          position: { x: 850, y: 230 },
+        },
+      ],
+      edges: [
+        {
+          id: 'wrapper_to_sink',
+          source: { nodeId: 'wrapper', portName: 'git_diff' },
+          target: { nodeId: 'sink', portName: 'git_diff' },
+        },
+      ],
+    })
+    await openEditor(page)
+    await page.getByTestId('workflow-camera-overview').click()
+    await expect(page.locator('.workflow-canvas')).toHaveAttribute('data-camera-mode', 'overview')
+    // fitView animates after the mode flips; sample drag coordinates only
+    // once the same camera transition used elsewhere in this suite settles.
+    await page.waitForTimeout(250)
+
+    const candidate = page.locator('.react-flow__node[data-id="candidate"]')
+    const wrapper = page.locator('.react-flow__node[data-id="wrapper"]')
+    const wrapperSurface = wrapper.locator('.canvas-node--wrapper-group')
+    const edgePath = page
+      .locator('.react-flow__edge[data-id="wrapper_to_sink"]')
+      .locator('path.react-flow__edge-path')
+    const candidateBox = await candidate.boundingBox()
+    const wrapperBox = await wrapper.boundingBox()
+    if (candidateBox === null || wrapperBox === null) throw new Error('drag fixture missing')
+    const wrapperTransformBefore = await wrapper.evaluate((element) => element.style.transform)
+    const edgePathBefore = await edgePath.getAttribute('d')
+
+    await page.mouse.move(
+      candidateBox.x + candidateBox.width / 2,
+      candidateBox.y + candidateBox.height / 2,
+    )
+    await page.mouse.down()
+    try {
+      // Keep the candidate's center inside the original hit rectangle while
+      // its right/bottom edges extend beyond it. Do not release: every
+      // assertion below observes the live preview contract.
+      await page.mouse.move(
+        wrapperBox.x + wrapperBox.width - 8,
+        wrapperBox.y + wrapperBox.height - 8,
+        { steps: 12 },
+      )
+      await expect(wrapperSurface).toHaveAttribute('data-wrapper-drop-preview', 'accept')
+
+      const previewBox = await wrapper.boundingBox()
+      if (previewBox === null) throw new Error('wrapper preview missing')
+      expect(previewBox.x).toBeCloseTo(wrapperBox.x, 0)
+      expect(previewBox.y).toBeCloseTo(wrapperBox.y, 0)
+      expect(previewBox.width).toBeGreaterThan(wrapperBox.width)
+      expect(previewBox.height).toBeGreaterThan(wrapperBox.height)
+      expect(await wrapper.evaluate((element) => element.style.transform)).toBe(
+        wrapperTransformBefore,
+      )
+      expect(await wrapperSurface.getAttribute('style')).toBeNull()
+      await expect.poll(() => edgePath.getAttribute('d')).not.toBe(edgePathBefore)
+    } finally {
+      await page.mouse.up()
+    }
   })
 
   test('palette filter input narrows the visible drag items', async ({ page }) => {

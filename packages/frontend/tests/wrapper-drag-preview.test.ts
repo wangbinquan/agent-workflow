@@ -83,10 +83,10 @@ describe('computeWrapperDragPreviews', () => {
 
     expect(previews.get('w')).toEqual({
       state: 'accept',
-      offsetX: -46,
-      offsetY: -42,
-      width: 392,
-      height: 282,
+      baseWidth: 200,
+      baseHeight: 160,
+      width: 346,
+      height: 240,
     })
     // Preview calculation is detached: no speculative nodeIds/size write.
     expect((def.nodes[0] as unknown as { nodeIds: string[] }).nodeIds).toEqual([])
@@ -164,8 +164,8 @@ describe('computeWrapperDragPreviews', () => {
     })
     expect(previews.get('w')).toEqual({
       state: 'accept',
-      offsetX: 0,
-      offsetY: 0,
+      baseWidth: 200,
+      baseHeight: 160,
       width: 200,
       height: 160,
     })
@@ -203,8 +203,8 @@ describe('computeWrapperDragPreviews', () => {
   })
 })
 
-describe('wrapper preview node-data adapter', () => {
-  test('adds and clears only local wrapper data', () => {
+describe('wrapper preview xyflow adapter', () => {
+  test('temporarily grows and restores the anchored xyflow shell', () => {
     const def = definition([
       wrapper('w', [], { x: 100, y: 100 }, { width: 200, height: 160 }),
       agent('a', { x: 110, y: 120 }),
@@ -212,7 +212,16 @@ describe('wrapper preview node-data adapter', () => {
     const base = flowNodes(def)
     const candidate = base.find((node) => node.id === 'a')
     const previews = new Map([
-      ['w', { state: 'accept' as const, offsetX: -10, offsetY: -20, width: 300, height: 260 }],
+      [
+        'w',
+        {
+          state: 'accept' as const,
+          baseWidth: 200,
+          baseHeight: 160,
+          width: 300,
+          height: 260,
+        },
+      ],
     ])
     const applied = applyWrapperDragPreviews(base, previews)
     const wrapperNode = applied.find((node) => node.id === 'w')
@@ -224,12 +233,17 @@ describe('wrapper preview node-data adapter', () => {
     )
     expect(wrapperNode?.position).toEqual(base.find((node) => node.id === 'w')?.position)
     expect(wrapperNode?.parentId).toBe(base.find((node) => node.id === 'w')?.parentId)
+    expect(wrapperNode?.style?.width).toBe(300)
+    expect(wrapperNode?.style?.height).toBe(260)
 
     const cleared = clearWrapperDragPreviews(applied)
     const clearedWrapper = cleared.find((node) => node.id === 'w')
     expect(
       (clearedWrapper?.data as Record<string, unknown>)[WRAPPER_DRAG_PREVIEW_DATA_KEY],
     ).toBeUndefined()
+    expect(clearedWrapper?.position).toEqual(base.find((node) => node.id === 'w')?.position)
+    expect(clearedWrapper?.style?.width).toBe(200)
+    expect(clearedWrapper?.style?.height).toBe(160)
     expect(clearWrapperDragPreviews(cleared)).toBe(cleared)
   })
 })

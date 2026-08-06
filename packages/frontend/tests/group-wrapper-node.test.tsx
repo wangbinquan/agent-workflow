@@ -131,13 +131,13 @@ describe('GroupWrapperNode', () => {
     expect((container.textContent ?? '').includes('Drop nodes here')).toBe(false)
   })
 
-  test('accept preview expands the visible wrapper and applies target feedback', () => {
+  test('accept preview only applies target feedback; xyflow owns the anchored size', () => {
     const { container } = renderNode(
       gitData({
         wrapperDragPreview: {
           state: 'accept',
-          offsetX: -46,
-          offsetY: -42,
+          baseWidth: 200,
+          baseHeight: 160,
           width: 392,
           height: 282,
         },
@@ -146,9 +146,7 @@ describe('GroupWrapperNode', () => {
     const root = container.querySelector<HTMLElement>('.canvas-node--wrapper-group')
     expect(root?.classList.contains('canvas-node--wrapper-group--drop-hover')).toBe(true)
     expect(root?.getAttribute('data-wrapper-drop-preview')).toBe('accept')
-    expect(root?.style.width).toBe('392px')
-    expect(root?.style.height).toBe('282px')
-    expect(root?.style.transform).toBe('translate(-46px, -42px)')
+    expect(root?.getAttribute('style')).toBeNull()
   })
 
   test('leave preview changes the border hint without resizing the wrapper', () => {
