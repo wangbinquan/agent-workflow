@@ -67,7 +67,12 @@ PR-0 存储信任原语(D22) ─► PR-1 地基+进程治理(含 Job Object) ─
   evil host 拒（真机 HELPER=`!'C:\Users\…\bun.exe' 'run' 'C:\aw\…main.ts' '__git-credential'`
   反斜杠单引号路径正常执行）。三调用点（gitRepoCache fetch/clone、commitPushRunner push）已接
   leadingArgs。
-- **T21** doctor 增 ssh/git 前置探测提示；README 前置清单。
+- **T21 · 已完成** —— doctor 增 ssh 前置探测（`checkSsh`/`evaluateSshCheck`：ssh 是**可选**前置
+  ——仅 `ssh://` 远端需要，https 走 T20 凭据子命令——故**咨询式**恒 ok、不 fail doctor，报存在性 +
+  平台特化安装提示：win32 指路 OpenSSH Optional Feature、POSIX 指路 openssh-client，并注明「https
+  不受影响」）；git 前置已有 `checkGit`。纯函数 `evaluateSshCheck` 双平台 4 例单测。README 加
+  「Prerequisites」清单：git 必装（≥2.38）/ssh 可选 /bash 可选（Windows 从 Git-for-Windows 取、
+  非 System32 WSL bash，`AW_GIT_BASH_PATH` 可覆盖）/opencode 必装。POSIX doctor 套件 32/0。
 
 ## PR-4 · L6 脚本节点
 

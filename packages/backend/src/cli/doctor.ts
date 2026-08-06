@@ -60,8 +60,9 @@ export async function doctorCommand(): Promise<DoctorResult> {
     })
   }
 
-  // 2. git binary
+  // 2. git binary (required) + ssh (optional, advisory — RFC-254 T21)
   checks.push(await checkGit())
+  checks.push(await checkSsh())
 
   // 3. app home writable
   checks.push(checkAppHome())
@@ -384,6 +385,49 @@ async function checkGit(): Promise<CheckResult> {
     return evaluateGitCheck(out)
   } catch (err) {
     return { name: 'git', ok: false, message: `git not executable: ${(err as Error).message}` }
+  }
+}
+
+/**
+ * RFC-254 T21 — ssh is an OPTIONAL prerequisite: only `ssh://` git remotes need
+ * it (`util/git.ts` sets GIT_SSH_COMMAND, which assumes `ssh` on PATH), while
+ * https remotes go through T20's credential subcommand. So this check is
+ * ADVISORY — always `ok: true` — and just surfaces presence plus a
+ * platform-specific install hint, rather than failing doctor over a feature the
+ * operator may never use. Pure half exported for tests.
+ */
+export function evaluateSshCheck(
+  sshVersion: string | null,
+  platform: NodeJS.Platform,
+): CheckResult {
+  if (sshVersion !== null && sshVersion !== '') {
+    return { name: 'ssh (optional)', ok: true, message: `${sshVersion} — ssh:// remotes available` }
+  }
+  const hint =
+    platform === 'win32'
+      ? 'not found — ssh:// git remotes will fail (https remotes are unaffected). Windows 10+ ships an OpenSSH client: enable it via Settings → Apps → Optional Features → OpenSSH Client.'
+      : 'not found — ssh:// git remotes will fail (https remotes are unaffected). Install openssh-client.'
+  return { name: 'ssh (optional)', ok: true, message: hint }
+}
+
+async function checkSsh(): Promise<CheckResult> {
+  try {
+    const proc = Bun.spawn({
+      ...platformSpawnOptionsForHost(),
+      cmd: ['ssh', '-V'],
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    // `ssh -V` prints the version banner to STDERR and exits 0.
+    const [err, out, exitCode] = await Promise.all([
+      new Response(proc.stderr).text(),
+      new Response(proc.stdout).text(),
+      proc.exited,
+    ])
+    const banner = (err.trim() || out.trim()).split('\n')[0] ?? ''
+    return evaluateSshCheck(exitCode === 0 ? banner : null, process.platform)
+  } catch {
+    return evaluateSshCheck(null, process.platform)
   }
 }
 

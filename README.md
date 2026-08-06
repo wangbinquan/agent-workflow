@@ -202,6 +202,24 @@ the data directory, config, token-file permissions, migrations, and lifecycle
 health. An OpenCode failure means that optional runtime is not ready; it does not
 prevent the daemon from starting.
 
+## Prerequisites
+
+The single binary carries its own runtime; the external tools it shells out to are:
+
+- **git — required** (≥ 2.38, for isolated merge-back via `git merge-tree
+--write-tree`). On Windows install [Git for Windows](https://git-scm.com/download/win);
+  it also provides the `bash` used by shell script-nodes.
+- **ssh — optional.** Only `ssh://` git remotes need it (https remotes use the
+  built-in credential helper). Windows 10+ ships an OpenSSH client — enable it via
+  _Settings → Apps → Optional Features → OpenSSH Client_.
+- **bash — optional.** Only shell script-nodes need it. On Windows it is resolved
+  from the Git for Windows install (never the WSL `bash.exe` in System32); set
+  `AW_GIT_BASH_PATH` to override.
+- **opencode — required to run agents** (see config `opencodePath`).
+
+`agent-workflow doctor` probes all of these (git/opencode/sandbox are pass-fail;
+ssh is advisory) — run it right after install.
+
 ## Install a release binary
 
 Download the asset for your platform from
