@@ -26,7 +26,7 @@
 
 🚧 **进行中 RFC（实现完成 / 待用户真机验收，2026-08-04）：[RFC-256 恢复对机器自有 OpenCode 配置的读取](design/RFC-256-machine-opencode-config-inheritance/proposal.md)** —— 用户报告「过去配在 opencode.json 里的模型一直好好的，某天开始探测就坏了」。考古锁定 **`b4b3e082`（RFC-224）一个提交同时打断探测面与执行面**：之前 `opencode models` 的 `Bun.spawn` **不传 env**（`b4b3e082^:util/opencode-models.ts:94`）完整继承 daemon 环境 ⇒ 操作者 `~/.config/opencode/opencode.json` 里的模型正常出现在下拉；之后 env 被整体换成私有 HOME/XDG 沙箱 ⇒ 探测面报空目录、执行面 `auth-invalid`。**RFC-255 只解了执行面且要求把配置再抄一遍，未回答用户诉求；本 RFC 才是正解**（用户在 A/B 两档中直接选 B）。依据 opencode `config/paths.ts:23-40`——全局配置面与仓库配置面由互不相干的变量控制，故 `machineConfigEnvOverrides` 只覆盖**恰好三项**（HOME / OPENCODE_TEST_HOME / XDG_CONFIG_HOME），探测面与三计划面共用；**仓库 `.opencode`、会话存储/状态/缓存、外部 skills 仍然关闭**；auth 转可选（凭据在操作者自己的配置里）；开关 `inheritMachineOpencodeConfig` 默认 true，置 false 逐字节回到 RFC-224 姿态。**实现期自查收回一处越界**：初版剔除 `OPENCODE_PURE` 等于连带打开机器配置里的插件加载（进程内执行、无 containment），超出授权范围且撞红 RFC-251 锁——已收回，改为把被忽略的插件数报进运行诊断。13 条回归测试；backend 除并发 session `b2214b26` 引入的 rfc143 守卫红（stash 对照验证非本改动）外全绿、frontend 5927 pass。**下一步：用户在那台 Linux 机验收——更新构建后无需任何配置，确认模型下拉恢复 + Test 通过 + 发起任务成功。**
 
-✅ **RFC-255 受控自定义 OpenAI-compatible provider 准入 —— Done（2026-08-04）**：[三件套](design/RFC-255-custom-openai-compatible-provider/proposal.md) · [设计门](design/RFC-255-custom-openai-compatible-provider/design-gate-2026-08-04.md) · [实现门](design/RFC-255-custom-openai-compatible-provider/implementation-gate-2026-08-04.md)。真实故障驱动（Linux 部署机的私有网关全部 `execution-identity-auth-invalid`），**定性为 RFC-224 密封化的能力回退**、与 RFC-251 同款受控恢复；同批交付 [RFC-224 能力回退全面审计](design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md) 与 `CLAUDE.md` 第 7 条硬规则（能力收缩型 RFC 须带「能力影响清单」呈用户逐项确认）。
+🗑️ **RFC-255 受控自定义 OpenAI-compatible provider 准入 —— 已撤销，实现从代码库移除（2026-08-04）**：用户判定其为多余入口。它让管理员把网关**再录一遍**到平台里（只解执行面），而真正的诉求是「机器上 opencode.json 配好的东西为何平台不认了」——那由 [RFC-256](design/RFC-256-machine-opencode-config-inheritance/proposal.md) 零录入解决，且同时修好探测面；两者并存还会语义重叠（受控 config 后合并 ⇒ 平台条目覆盖机器同名 provider），且 RFC-255 只覆盖 opencode 一个运行时（claude-code 走继承环境、不需要注入）。移除范围：shared/backend/frontend 实现 5 文件、89 条测试、设置页卡片、i18n、canary 探针与保存门；失败码 `execution-identity-custom-provider-disabled` 退役进只读 legacy 域（存量行仍可解析）；`config.json` 0600 收紧予以保留。RFC 目录留档（含两道门的结论）。
 
 **能力**：管理员在 设置 → 运行时 配置 OpenAI-compatible 私有网关（id / baseURL / 手动模型清单 / enabled），凭据 secretBox 密封落盘（config 0600）、任何出口掩码；运行时注入**无密钥无显示名**的 provider 段（`api` 与 `options.baseURL` 同源 ⇒ 报告面=生效面），密钥经 `OPENCODE_AUTH_CONTENT` 直供 ⇒ **轮换密钥 / 改显示名不破 resume**，改端点或模型清单即身份变更；boot 后逐字节准入 + 模型键集 ⊆ 清单（安全锁）。
 
@@ -489,6 +489,18 @@ process.ts 一起提进 `6a771fdb` 并推了，main 多 7 前端红（对方 mid
 **纪律纠正**：一律 `git commit -F <msg> -- <精确路径>` 一步走，绝不 `git add`+`git commit`（并发 index 是热的，见
 dev-gotchas §git line 47 已记本次 6a771fdb）。剩余零散半深入（rfc107 path-traversal / rfc130 merge-agent / scheduler
 loop / rfc205 只读 config / plugins-http fake-npm）+ RFC-224/227 容器簇（敏感）+ T33–T35。
+
+**2026-08-06 续七 · n-z 零散再清 4 文件 + 抓到一个待查的 Windows 安全隙**：真机全绿并**一步 pathspec 提交**
+（`dfe84e18` scheduler 23/0 loop 超时→setDefaultTimeout；`3f692673` rfc130 2/0 shim 按 cwd 判角色的
+`includes('/resolve-')` 只认正斜杠→`replace(/\\/g,'/')`；`a6c0c03d` session-capture-sqlite 14/0 opencode DB 路径
+断言硬写正斜杠→`path.replace(/\\/g,'/')`；`e915b0d7` scheduler-cross-clarify 9/0 dispatch agent-spawn 超时→
+setDefaultTimeout，此前偶发 8/1 是 VM 负载超时 flake、60s 消除）。**⚠️ 待查安全隙（非测试、勿在 marathon 尾仓促）**：
+`task-file-content:95` 的 symlink-out 用例真机返回 `ok` 而非 `outside`——`worktreeFileContent.ts openContainedFile`
+的 symlink 封堵在 Windows 疑似失效（`O_NOFOLLOW` 在 Windows 大概率 no-op + `realpathSync` 对 Windows 符号链接的
+解析语义不同 ⇒ 指向 worktree 外的软链可能被 UI 读到）。**属 fresh-context 谨慎排查项**（可能连带 rfc193-port-artifacts
+的 symlink 用例），若确为生产隙需按敏感区规程加 `lstatSync` 显式拒软链等修法 + 回归。**其余剩余**：rfc107/task-file-content
+的 path-traversal Windows 行为、rfc205 只读 config（Windows 只读属性 vs POSIX mode）、plugins-http fake-npm(.sh)、
+rfc222 isAdminActor 源码 grep（疑并发引入、非 Windows）、RFC-224/227 容器簇、T33–T35。
 
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
