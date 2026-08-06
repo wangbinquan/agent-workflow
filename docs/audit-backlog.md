@@ -1366,3 +1366,17 @@ theme-css-ratchet 三 OS 红 owning=9269c5ee(结构变更 UI 三连修复:dock h
 - **⏳ 待刷**:`changes-grouped-sidebar-chromium-win32.png` 仍是旧 UI(RFC-254 T32/T33 期
   在 Windows VM 上生成的 44 张之一)。win32 视觉腿不在 CI 门禁里,不阻塞;下次在
   Windows VM(`reference_windows_vm`)跑 RFC-254 视觉验收时随手重生成该场景即可。
+
+## 任务快照仍向 PAT 泄漏 script env 明文（RFC-253 T28 收口时发现，2026-08-07 登记）
+
+- T28 已把 workflow 资源自身的读面（列表/详情/create/copy/update 返回/YAML 导出/import 返回）经
+  `serializeWorkflowFor` 对 PAT 通道脱敏（`routes/workflows.ts`，7 处出口 + 计数锁），但
+  **任务行携带的 `workflowSnapshot`（`schemas/task.ts` · 冻结的完整 definition）不在其中**：
+  `GET /api/tasks/:id` 为 `tokenAccess:'allow'` 且 `getTask` 原样返回（`routes/tasks.ts:265-280`），
+  script 节点 env 明文随快照出令牌面；routes/tasks.ts 返回完整 task 行的出口 8+ 处
+  （get/create/resume/cancel/update/sync 等），须独立收口。
+- TaskSummary（列表/WS 帧）**不含** workflowSnapshot，已核实无此面。
+- 建议修法：与 MCP/workflow 同模式——task 序列化单出口 + `maskWorkflowScriptEnv(snapshot, REDACTED)`
+  （shared 单一 walker 已在，`intentSecretSlots.ts`）；宜先把 routes/tasks.ts 的裸 `c.json(task)`
+  收敛为单序列化函数再挂投影，属独立切片。
+- ⏳ **RFC-254 win32 UX（低优先）：非 native `AGENT_WORKFLOW_HOME` 在 Windows 导致 daemon 以不透明 `execution-identity-store-unsafe` 拒启**。`opencodeStoreRecovery.ts:70-76 storeRoots` 的 `resolve(appHome)!==appHome` 规范性检查对正斜杠 / git-bash 形 home（`/c/...`、`C:/...`）判 unsafe（win32 `resolve` 归一到反斜杠）。生产默认 home 出自 `homedir()`（native 反斜杠）故免疫；但用户在 Windows 显式设正斜杠 `AGENT_WORKFLOW_HOME`（git-bash/WSL 习惯）会撞上，且错误码不提示「home 路径形态不对」。修法：boot 早期对 `AGENT_WORKFLOW_HOME` 做 native 规范化（`path.resolve`）或给出明确错误文案（「AGENT_WORKFLOW_HOME must be a native absolute path」）。真机确证（续三十二）。
