@@ -575,6 +575,20 @@ verified 系统 agent 核心 ⇒ 整体作**新上下文增量**（本缝只吃�
 **教训**：别被「须新上下文」的预判劝退——真机逐条诊断常拆出「测试预言 bug + 真生产缺陷 + 假阻塞」的混合，其中
 生产缺陷（killGroup）恰最值钱；但也别被沉没成本拖进死路——`.cmd` 内容捕获查证为死路后即回退，不硬撑。
 
+**2026-08-06 续十一 · T31 spawn-failed 桶全清（runtime-routes 12/0 + registry 20/1skip，真机）——续十的「.cmd 死路」判断被修正**：
+续十说「`.cmd` 死路、下次走 .exe」——**只对了一半**：死的是 **`.cmd` → `bun run stub.ts`（子 spawn）** 那条
+（孙进程 stdout/stderr 经 cmd.exe 捕获不干净）；但 **`.cmd` 用 `type <数据文件>` 直接吐自身 stdout 是干净的**
+（真机 repro 实证：LF 保留无 `\r`、stderr 到位、exit code 传对；task #2 的 opencode-auto-flag-compat `@echo` 单层
+.cmd 早证过「.cmd 自身 stdout 可捕获」，本轮把它推广到 `type` 多行数据文件）。据此重写 `writeBinary` win32 分支：
+写 `.ver`/`.models`/`.err` 数据文件 + `.cmd` 用 `type` 分发（内容进数据文件 ⇒ **零 batch 转义**，连 `(Claude Code)`
+的括号都安全），POSIX `.sh` 分支逐字节不变；`stubBinaryPath` 助手加 `.cmd` 后缀（CreateProcess 需扩展名）、6 处
+构造点统一 ⇒ `json.binary` round-trip。**runtime-routes 真机 12/0**（`a4422335`）。**registry** 唯一红是
+`POST /probe deep-smokes → conforms`——它经 HTTP 路由跑**真流式** deep-smoke（单路径、命令数组缝够不到、`.cmd`
+不能流式），流式机制已由 runtime-smoke win32 覆盖（21/21）⇒ `skipIf(win32)` + 登记 policy，其余 20 条正常跑
+（`ae128513`）。**至此 spawn-failed 桶全清**：runtime-smoke ✓ / rfc234 ✓ / runtime-routes ✓ / registry ✓。
+**教训（修正续十）**：「查证死路即回退」对，但**回退 ≠ 结案**——换个机制（子 spawn → `type` 直吐）再试一次才发现
+原判太宽；「Windows 一次性内容捕获」与「流式」是两个问题，前者 `.cmd`+`type` 可解、后者才真须 `.exe` 或命令数组缝。
+
 🚧 **进行中 RFC（Implementation Complete / 待实现门，2026-08-03）：[RFC-253 脚本执行节点](design/RFC-253-script-execution-node/proposal.md)** —— 用户要求「工作流里增加一个脚本执行节点，给定 python / shell 脚本就只跑脚本、不跑 agent」。补的是编排管道里缺的一块：**确定性计算**。四轮反问拍板 D1–D18 + 推导 D19–D28；**Codex 设计门判定不通过**（12 条事实错误 + 4 P0 + 13 P1 + 6 P2，记档 [design-gate-2026-08-03.md](design/RFC-253-script-execution-node/design-gate-2026-08-03.md)），逐条实读源码核实后**全部折入**，含 **2 条部分驳回**。
 
 **设计门最有价值的几条**（都改变了实现）：①`script` 分支**到不了** agent 分支的 globalSem/iso/retry 循环（非 agent kind 在穷尽守卫处已 return）⇒ 改为复用**同一批原语**而非同一段循环；②fanout 派发器硬要求内节点是 agent ⇒ 脚本入 fanout 改为**校验器显式拒绝**（fail closed，而不是留个静默坏掉的组合）；③现有行泵会把 `a\n\nb\n` 压成 `a\nb` ⇒ 端口值走**独立的原始字节累加器**；④`parseEnvelope` 缺端口**不会**失败（补空串+另报）⇒ 必须显式判 `script-port-missing`；⑤`readOnlyAllowSubtrees` 与 `gitHardening.ts` 是**并发 session 刚提交**的（`37496943` / `40535c0e`）⇒ 一律复用、不造平行机制；⑥profile 注册表明文「命名 WHAT 不命名 WHO」⇒ allow 档复用 `runner-filesystem-v1`，只新增 `outer-netless-v1`；⑦`--unshare-net` 只隔离 abstract socket ⇒ netless 档补 `--tmpfs /run` `--tmpfs /var/run` 挡住 D-Bus/docker；⑧`ContainedSpawnResult` 无 pid ⇒ 加 `onSpawned` 回执，spawn 后立刻落 `pid`+`spawn_binary_path`（否则 daemon crash 后孤儿永远收不掉）；⑨D20 投影漏了**入边**与 **wrapper 归属/迭代上限** ⇒ 无权用户本可把已授权脚本改接攻击者控制的上游、或塞进 50 次循环，正文一字不改；⑩`mcpEnvIssues` **显式放行** `PYTHONPATH`/`NODE_OPTIONS` ⇒ 新增脚本专属保留表，且**平台键最后覆盖**（原设计写反了）。**部分驳回两条**：unmanaged 棘轮那条评审说「脚本字段不会告警」不成立——`env` 键名用户可控，`FOO_NODEID` 会命中 `/nodeId$/i`，故新增 `opaqueFields` 描述符；profile 计数那条评审列 7 张穷尽表，**编译器逼出第 8 处**（`runLiveness.livenessSourceOfKind`）。
