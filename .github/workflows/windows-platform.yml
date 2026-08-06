@@ -101,6 +101,15 @@ jobs:
       - name: RFC-254 T40b — verified store privacy (win32 DACL)
         run: bun test --isolate packages/backend/tests/rfc254-win32-acl.test.ts packages/backend/tests/rfc254-win32-acl-integration.test.ts packages/backend/tests/rfc224-store-hygiene.test.ts packages/backend/tests/rfc224-verified-launcher.test.ts packages/backend/tests/rfc224-opencode-store-recovery.test.ts packages/backend/tests/rfc224-direct-control-protocol.test.ts packages/backend/tests/rfc224-verified-system-plan.test.ts packages/backend/tests/rfc135-runtimes-status.test.ts
 
+      # RFC-254 T20 (D11) — the git-credential subcommand that replaced the POSIX
+      # `#!/bin/sh` askpass helper. Platform-agnostic (pure host-binding verdict +
+      # env-driven subcommand, no DACL/seal dependency), so this guards the win32
+      # credential path on every push. The real `git credential fill` end-to-end
+      # (matching host answers, hostile submodule host refused, backslash install
+      # path quoted) is verified on the real Windows machine — see STATE/plan.
+      - name: RFC-254 T20 — git credential subcommand
+        run: bun test --isolate packages/backend/tests/rfc205-git-credential.test.ts
+
       # RFC-254 T28b — the e2e model stand-in used to be nine `#!/bin/sh` files,
       # which is why it had to become one compiled program. These two suites are
       # what says the port is faithful, and they are RUNNABLE HERE because the
