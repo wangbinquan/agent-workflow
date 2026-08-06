@@ -289,7 +289,12 @@ function scanProductionSources(): IdentityGuardFinding[] {
   const findings: IdentityGuardFinding[] = []
   for (const sourceRoot of SOURCE_ROOTS) {
     for (const file of sourceFiles(resolve(REPO_ROOT, sourceRoot))) {
-      findings.push(...analyzeIdentitySource(readFileSync(file, 'utf8'), relative(REPO_ROOT, file)))
+      // The reviewed allowance fingerprints spell paths with forward slashes;
+      // `relative` yields backslashes on win32, so normalize or the ENTIRE
+      // multiset mismatches on Windows (every finding reads as both a stale
+      // allowance and an unreviewed sink). RFC-254 T31.
+      const relPath = relative(REPO_ROOT, file).replaceAll('\\', '/')
+      findings.push(...analyzeIdentitySource(readFileSync(file, 'utf8'), relPath))
     }
   }
   return findings

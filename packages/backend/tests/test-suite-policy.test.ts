@@ -42,6 +42,11 @@ const FORBIDDEN_ALIASES = new Set(['fit', 'fdescribe', 'ftest', 'xit', 'xdescrib
 // or opt-in visual/chaos environment. Any addition/removal changes this exact
 // inventory and therefore requires an intentional review of this policy.
 const ALLOWED_SKIP_COUNTS: Record<string, number> = {
+  // RFC-254 T31: one POSIX-simulation case — its `config()` builds a
+  // POSIX-absolute sealRoot (non-canonical on win32 after `resolve()`) plus a
+  // `shell` key win32 forbids (SEALED_SHELL_SUPPORTED=false). The win32 digest
+  // path is covered for real by rfc254-verified-plan-win32's full-plan build.
+  'packages/backend/tests/rfc224-execution-identity.test.ts#skipIf': 1,
   // RFC-254 T31: one win32-ONLY describe (skipIf non-win32) exercises the two
   // verified-business-plan defects — resolveNetlessGitCommonDirs accepting git-
   // for-Windows's forward-slash --git-common-dir, and snapshotManagedSkillTree

@@ -153,31 +153,41 @@ describe('RFC-224 stable business owner identity', () => {
     }
   }
 
-  test('normalizes only attempt-local seal roots while retaining the MCP semantic digest', () => {
-    const first = businessOpencodeIdentityDigest({
-      config: config('/private/app/runs/task/run-1/opencode-identity-seal'),
-      agent: 'worker',
-      model,
-      binaryDigest: build,
-      sealRoot: '/private/app/runs/task/run-1/opencode-identity-seal',
-    })
-    const resumed = businessOpencodeIdentityDigest({
-      config: config('/private/app/runs/task/run-2/opencode-identity-seal'),
-      agent: 'worker',
-      model,
-      binaryDigest: build,
-      sealRoot: '/private/app/runs/task/run-2/opencode-identity-seal',
-    })
-    const changedMcp = businessOpencodeIdentityDigest({
-      config: config('/private/app/runs/task/run-2/opencode-identity-seal', 'c'.repeat(64)),
-      agent: 'worker',
-      model,
-      binaryDigest: build,
-      sealRoot: '/private/app/runs/task/run-2/opencode-identity-seal',
-    })
-    expect(resumed).toBe(first)
-    expect(changedMcp).not.toBe(first)
-  })
+  // RFC-254 T31: POSIX simulation — `config()` builds a POSIX-absolute sealRoot
+  // (`resolve()` rewrites it to a backslash path on win32, so it fails the
+  // lexical-canonical gate) AND declares a `shell` key, which win32 rejects
+  // outright (SEALED_SHELL_SUPPORTED=false). The win32 digest path is covered
+  // for real by rfc254-verified-plan-win32's full-plan build, which calls
+  // businessOpencodeIdentityDigest with a real win32-canonical seal root and no
+  // shell. Registered in test-suite-policy.
+  test.skipIf(process.platform === 'win32')(
+    'normalizes only attempt-local seal roots while retaining the MCP semantic digest',
+    () => {
+      const first = businessOpencodeIdentityDigest({
+        config: config('/private/app/runs/task/run-1/opencode-identity-seal'),
+        agent: 'worker',
+        model,
+        binaryDigest: build,
+        sealRoot: '/private/app/runs/task/run-1/opencode-identity-seal',
+      })
+      const resumed = businessOpencodeIdentityDigest({
+        config: config('/private/app/runs/task/run-2/opencode-identity-seal'),
+        agent: 'worker',
+        model,
+        binaryDigest: build,
+        sealRoot: '/private/app/runs/task/run-2/opencode-identity-seal',
+      })
+      const changedMcp = businessOpencodeIdentityDigest({
+        config: config('/private/app/runs/task/run-2/opencode-identity-seal', 'c'.repeat(64)),
+        agent: 'worker',
+        model,
+        binaryDigest: build,
+        sealRoot: '/private/app/runs/task/run-2/opencode-identity-seal',
+      })
+      expect(resumed).toBe(first)
+      expect(changedMcp).not.toBe(first)
+    },
+  )
 
   test('rejects an unsealed shell or malformed local-MCP wrapper path', () => {
     const sealRoot = '/private/app/runs/task/run-1/opencode-identity-seal'
