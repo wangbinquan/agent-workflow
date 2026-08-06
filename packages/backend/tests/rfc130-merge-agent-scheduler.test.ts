@@ -18,7 +18,7 @@
 // runNode dispatch of the merge agent through the scheduler.
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -72,7 +72,9 @@ const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
 const outputOpen =
   nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const f = join(cwd, 'f.txt')
-const isMerge = cwd.includes('/resolve-')
+// RFC-254: cwd is backslash-separated on Windows — normalize before matching the
+// resolve-iso marker, else the shim mistakes the merge role for the worker role.
+const isMerge = cwd.replace(/\\\\/g, '/').includes('/resolve-')
 let port
 if (isMerge) {
   // Merge agent. Resolve = write clean content; fail = leave conflict markers.
@@ -167,6 +169,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
     }
   })
 }
+
+// RFC-254: each iteration/merge spawns a real agent (bun run <mock>), slow on Windows;
+// a loop/merge of several exceeds the default 5s. 60s headroom (POSIX unaffected).
+setDefaultTimeout(60_000)
 
 describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real dispatch)', () => {
   let h: Harness
