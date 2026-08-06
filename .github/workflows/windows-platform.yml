@@ -101,6 +101,17 @@ jobs:
       - name: RFC-254 T40b — verified store privacy (win32 DACL)
         run: bun test --isolate packages/backend/tests/rfc254-win32-acl.test.ts packages/backend/tests/rfc254-win32-acl-integration.test.ts packages/backend/tests/rfc224-store-hygiene.test.ts packages/backend/tests/rfc224-verified-launcher.test.ts packages/backend/tests/rfc224-opencode-store-recovery.test.ts packages/backend/tests/rfc224-direct-control-protocol.test.ts packages/backend/tests/rfc224-verified-system-plan.test.ts packages/backend/tests/rfc135-runtimes-status.test.ts
 
+      # RFC-254 T31 — the two verified-BUSINESS-plan defects that made the whole
+      # Code→Audit→Fix mainline fail on Windows: resolveNetlessGitCommonDirs
+      # rejecting git-for-Windows's forward-slash --git-common-dir, and
+      # snapshotManagedSkillTree asserting a POSIX 0o500 seal that win32 chmod
+      # cannot produce. The forced-darwin rfc224-verified-plan suite structurally
+      # cannot cover this; the win32-gated runtime cases here drive the REAL
+      # production functions against real git + real fs, and the file's source
+      # anchors also run on every POSIX leg. (d6fdb0a3, confirmed on ARM64.)
+      - name: RFC-254 T31 — verified business plan (win32 git + skill seal)
+        run: bun test --isolate packages/backend/tests/rfc254-verified-plan-win32.test.ts
+
       # RFC-254 T20 (D11) — the git-credential subcommand that replaced the POSIX
       # `#!/bin/sh` askpass helper. Platform-agnostic (pure host-binding verdict +
       # env-driven subcommand, no DACL/seal dependency), so this guards the win32
