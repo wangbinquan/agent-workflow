@@ -44,6 +44,17 @@ async function req(app: Hono, path: string): Promise<Response> {
   return app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
 }
 
+/**
+ * RFC-254: the spawnable path for a stub opencode/claude binary. The models route
+ * (`opencode models`) and version probe (`opencode --version`) spawn it as argv[0]
+ * — one-shot, no streaming. A `#!/bin/sh` file is unspawnable on Windows, so on
+ * win32 the path carries a `.cmd` extension (CreateProcess requires it). Callers
+ * MUST use this for BOTH writeBinary and opencodePath so `json.binary` round-trips.
+ */
+function stubBinaryPath(dir: string, name = 'opencode'): string {
+  return join(dir, process.platform === 'win32' ? `${name}.cmd` : name)
+}
+
 function writeBinary(
   path: string,
   body: {
@@ -65,6 +76,33 @@ function writeBinary(
     modelsStderr = '',
     recordArgs,
   } = body
+  if (process.platform === 'win32') {
+    // RFC-254: a `#!/bin/sh` stub is unspawnable on Windows. A `.cmd` that
+    // sub-spawns `bun run` DOES spawn, but its grandchild's stdout/stderr are not
+    // cleanly captured back through cmd.exe (verified on ARM64: empty stdout, lost
+    // stderr). A `.cmd` that `type`s DATA FILES emits the exact bytes on its OWN
+    // stdout, which Bun.spawn captures cleanly (LF preserved, stderr + exit code
+    // intact — verified). Content lives in data files, so there is no batch
+    // escaping of model ids / JSON / parens (e.g. "(Claude Code)").
+    const verFile = `${path}.ver`
+    const modelsFile = `${path}.models`
+    writeFileSync(verFile, `${versionStdout}\n`) // matches printf '%s\n'
+    writeFileSync(modelsFile, modelsStdout) // matches printf '%s' (no trailing NL)
+    const lines = ['@echo off']
+    if (recordArgs) lines.push(`echo %* >> "${recordArgs}"`)
+    lines.push(`if "%1"=="--version" ( type "${verFile}" & exit /b ${versionExit} )`)
+    lines.push(`if "%1"=="-v" ( type "${verFile}" & exit /b ${versionExit} )`)
+    let modelsBranch = `type "${modelsFile}"`
+    if (modelsStderr) {
+      const errFile = `${path}.err`
+      writeFileSync(errFile, modelsStderr)
+      modelsBranch += ` & type "${errFile}" 1>&2`
+    }
+    lines.push(`if "%1"=="models" ( ${modelsBranch} & exit /b ${modelsExit} )`)
+    lines.push('echo unknown subcommand: %* 1>&2 & exit /b 99')
+    writeFileSync(path, `${lines.join('\r\n')}\r\n`)
+    return
+  }
   const versionStdoutEscaped = versionStdout.replace(/'/g, `'\\''`)
   const modelsStdoutEscaped = modelsStdout.replace(/'/g, `'\\''`)
   const modelsStderrEscaped = modelsStderr.replace(/'/g, `'\\''`)
@@ -101,7 +139,7 @@ describe('GET /api/runtime/models', () => {
 
   beforeEach(() => {
     const tmp = mkdtempSync(join(tmpdir(), 'aw-runtime-bin-'))
-    const bin = join(tmp, 'opencode')
+    const bin = stubBinaryPath(tmp)
     writeBinary(bin, {
       modelsStdout: [
         'anthropic/claude-sonnet-4-6',
@@ -207,7 +245,7 @@ describe('GET /api/runtime/models', () => {
   test('changing opencodePath invalidates cache', async () => {
     await req(h.app, '/api/runtime/models')
     const otherDir = mkdtempSync(join(tmpdir(), 'aw-runtime-other-'))
-    const otherBin = join(otherDir, 'opencode')
+    const otherBin = stubBinaryPath(otherDir)
     writeBinary(otherBin, { modelsStdout: 'openai/bar' })
     applyConfigPatch(h.configPath, { opencodePath: otherBin })
     const res = await req(h.app, '/api/runtime/models')
@@ -235,7 +273,7 @@ describe('GET /api/runtime/models?runtime=claude (RFC-111)', () => {
   beforeEach(() => {
     // opencode path is a non-empty placeholder (claude routes never invoke it).
     h = makeHarness({ binary: 'opencode' })
-    claudeBin = join(h.tmp, 'fake-claude')
+    claudeBin = stubBinaryPath(h.tmp, 'fake-claude')
     writeBinary(claudeBin, { versionStdout: '2.1.193 (Claude Code)' })
     applyConfigPatch(h.configPath, { claudeCodePath: claudeBin })
   })
@@ -261,12 +299,12 @@ describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-1
   let customBin: string
   beforeEach(async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aw-rt114-default-'))
-    const defaultBin = join(dir, 'opencode')
+    const defaultBin = stubBinaryPath(dir)
     writeBinary(defaultBin, { modelsStdout: 'default/d-model' })
     h = makeHarness({ binary: defaultBin })
     clearOpencodeModelsCache()
     await seedBuiltinRuntimes(h.db)
-    customBin = join(h.tmp, 'oc-fork')
+    customBin = stubBinaryPath(h.tmp, 'oc-fork')
     writeBinary(customBin, { modelsStdout: 'fork/special' })
     await createRuntime(h.db, { name: 'oc-fork', protocol: 'opencode', binaryPath: customBin })
   })
@@ -290,7 +328,7 @@ describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-1
   })
 
   test('P1-1: a runtime NAMED "claude" (opencode) is NOT hijacked into the static list', async () => {
-    const claudeNamedBin = join(h.tmp, 'oc-claude')
+    const claudeNamedBin = stubBinaryPath(h.tmp, 'oc-claude')
     writeBinary(claudeNamedBin, { modelsStdout: 'fork/named-claude' })
     await createRuntime(h.db, { name: 'claude', protocol: 'opencode', binaryPath: claudeNamedBin })
     const res = await req(h.app, '/api/runtime/models?runtime=claude')
