@@ -16,16 +16,9 @@
 //   - invert computeRestoreDirection → downgrade test accepts a newer backup → red.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -56,7 +49,7 @@ function tmp(prefix: string): string {
   return d
 }
 afterEach(() => {
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
 function sqliteOf(db: DbClient): Database {
@@ -184,6 +177,12 @@ describe('RFC-213 restore — crash-safe swap over a live WAL', () => {
     cpSync(`${dbPath}-wal`, join(frozen, 'db.sqlite-wal'))
     if (existsSync(`${dbPath}-shm`)) cpSync(`${dbPath}-shm`, join(frozen, 'db.sqlite-shm'))
     sqliteOf(db).close()
+    // RFC-254: close() doesn't free the OS handle on Windows (GC-gated), so the
+    // in-place cpSync below would EBUSY overwriting db.sqlite/-wal/-shm while this
+    // connection's handle is still open. A real crashed daemon's dead process
+    // would already have released them; force the finalizers to match. POSIX
+    // unlinks/overwrites open files fine, so gate the GC to win32.
+    if (process.platform === 'win32') Bun.gc(true)
 
     // 3) Install the frozen trio as the LIVE db — a db.sqlite whose WAL holds 5
     //    uncheckpointed rows (reads as 7), exactly a crashed daemon's state.

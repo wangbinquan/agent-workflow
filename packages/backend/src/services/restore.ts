@@ -284,6 +284,13 @@ function fsyncFile(path: string): void {
  */
 export function swapInDbFile(incomingDb: string, dbPath: string): void {
   fsyncFile(incomingDb)
+  // RFC-254: on Windows, bun:sqlite releases the OS file handle on GC, not on
+  // close(). Restore's own pre-swap safety copy (rawCopyDb) opens the live DB to
+  // checkpoint it, and any just-closed live connection likewise lingers, so
+  // db.sqlite-wal/-shm stay locked and the unlink/rename below EBUSYs. Force the
+  // finalizers to run so those handles are actually released before the swap.
+  // POSIX unlinks an open file happily, so gate the GC to win32.
+  if (process.platform === 'win32') Bun.gc(true)
   for (const sidecar of [`${dbPath}-wal`, `${dbPath}-shm`]) {
     if (existsSync(sidecar)) unlinkSync(sidecar)
   }

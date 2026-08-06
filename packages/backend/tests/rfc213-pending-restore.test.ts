@@ -13,8 +13,9 @@
 //     restoreBackup) → the "already consumed" test throws → reds.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -47,7 +48,7 @@ function tmp(): string {
   return d
 }
 afterEach(() => {
-  for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
 function sqliteOf(db: DbClient): Database {
@@ -281,7 +282,9 @@ async function makeTarball(
   }
   const out = join(home, `mk-${ulid()}.tar.gz`)
   await tarGz(staging, out)
-  rmSync(staging, { recursive: true, force: true })
+  // RFC-254: staging holds an openDb file-backed sqlite whose handle Windows
+  // frees on GC, not close() — bare rm hits EBUSY. removeTempDirSync GCs first.
+  removeTempDirSync(staging)
   return out
 }
 
