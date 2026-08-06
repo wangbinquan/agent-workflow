@@ -1328,3 +1328,22 @@ markdown-diff-table-word 新成员/macOS unsaved-guard——上轮在 Windows �
 ## Webhook 权限面（RFC-260 评审门 F-9 登记，2026-08-06）
 
 - **`webhook-triggers:{create,update,delete}` 是 grantable-but-unrenderable 的令牌授权**（RFC-257 引入、RFC-260 评审门发现）：三点是矩阵域点、触发器写路由 `tokenAccess:'allow'`，`grantableMatrixPoints(admin)` 含它们（API 422 校验以此为界），但 `'webhook-triggers'` 不在 `MATRIX_RESOURCES` ⇒ 账户页 token 矩阵永远不渲染该行——admin 经 API 可以发出能改/删触发器的 PAT，而 UI 无法呈现或复核该授权（`permission.ts` 文件头自己警告的「authorization UI lying」镜像形态）。候选修法：把 `webhook-triggers` 纳入 `MATRIX_RESOURCES`（矩阵多一行），或把三条写路由改 `tokenAccess:'never'`（触发器写完全退出令牌面，与 fire 以 owner 身份执行的 D19 模型更一致）。需要产品拍板，未在 RFC-260 内处理（其范围是读面）。
+
+## RFC-254 T40b win32 隐私原语：x64 GitHub runner 与真机行为分叉（2026-08-06 登记）
+
+- **现象**：T40b 的 live-icacls 验证隐私簇（`rfc254-win32-acl-integration` + `rfc224-store-hygiene`
+  / `verified-launcher` / `opencode-store-recovery` / `direct-control-protocol` / `verified-system-plan`）
+  在**真 Windows 11 ARM64 机**上全绿（110 tests / 0 fail，见 design-T40b §0），但在 **GitHub
+  `windows-latest`（x64）runner** 上大片 `execution-identity-store-unsafe` / `not-private` /
+  `unsafe-ack-file`——即 `sealDirectoryOwnerOnly`（`icacls /inheritance:r /grant *SID:(OI)(CI)F`）
+  在该 runner 上**没有产出预期的 owner+TCB DACL**，隐私复核据此判非私有。
+- **影响**：`windows-platform.yml` 曾加过一步跑这些簇、随即在 x64 变红；**已回退为只跑纯解析
+  `rfc254-win32-acl`**（不依赖 live icacls，任何 runner 安全）。已加**非门禁 evidence 步**
+  「icacls seal behaviour on this runner」dump runner 上 whoami SID + seal 前后 SDDL + 子文件
+  SDDL，供下次 run 免 SSH 诊断分叉根因。
+- **待查根因候选**：①GitHub runner 的 `%TEMP%`/工作卷 ACL 模型（可能 ReFS/网络卷或含无法被
+  `/inheritance:r` 清除的 ACE）；②runner 以特殊服务账户跑、`whoami /user` SID 或 `/grant:r *SID`
+  语法在其上不生效；③icacls 版本/行为差异。**在拿到 evidence 步输出前不下结论**。
+- **诚实边界修正**：先前提交把 T40b 记为「端到端验收通过」——**准确表述是「在用户的 ARM64 验收机
+  上端到端验收通过」**；x64（尤其 GitHub runner）行为未过、real-x64 机未测。T40b 的隐私证明对
+  用户目标机成立，但**不主张跨 x64 通用**，直到上面根因查清。

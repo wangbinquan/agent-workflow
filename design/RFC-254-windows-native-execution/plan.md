@@ -129,8 +129,10 @@ resolvedSource, platform)`——win32 且调用方路径未带源扩展名时追
   `rfc135-runtimes-status` + `rfc254-file-trust` + `rfc254-snapshot-executable-extension`
   在 Windows 上 **37 pass / 2 skip / 0 fail**（rfc135 此前 8 红），**首个变绿的 Windows
   verified/probe 测试簇**。rfc135 的 `.cmd` 夹具改动随本条一起入库。
-- **T40b · win32 file PRIVACY 原语（DACL）· 已完成 + 真 ARM64 机端到端验收（全簇 0 fail）** ——
-  `2d01bde7`（核心）+`5609ef0e`（封根推广）+`e01c4464`（末 2 条诊断收口）。`mode` 在 Windows 合成（可写文件恒 0o666 与 ACL
+- **T40b · win32 file PRIVACY 原语（DACL）· ARM64 验收机端到端通过（全簇 0 fail）；x64 CI 分叉待查** ——
+  `2d01bde7`（核心）+`5609ef0e`（封根推广）+`e01c4464`（末 2 诊断收口）+`ccde2603`（source-guard 回归修复）。
+  ⚠️ live-icacls 隐私簇在 GitHub `windows-latest`（x64）上 seal 未产出预期 DACL、大片 store-unsafe（登记
+  `docs/audit-backlog.md`，`windows-platform.yml` 已回退为只跑纯解析 + 加 evidence 步）。`mode` 在 Windows 合成（可写文件恒 0o666 与 ACL
   无关），故隐私证明 = **读文件真实 DACL、断言 allow-ACE 只含 {用户 SID, SYSTEM,
   Administrators}**（`icacls /save` SID-based SDDL，locale 无关；PowerShell Get-Acl 太慢弃用）
   - **建 store/run 根即封** `icacls /inheritance:r /grant *SID:(OI)(CI)F`（子文件继承为私有，
