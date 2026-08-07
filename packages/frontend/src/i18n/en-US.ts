@@ -3953,6 +3953,9 @@ export const enUS: Resources = {
       maxSizeHint: 'Max per file: {{bytes}} bytes',
       minHint: ' / min {{n}}',
       maxHint: ' / max {{n}}',
+      overwriteHint: 'On a name clash in this directory: the existing file is overwritten.',
+      duplicateName:
+        '"{{name}}" lands on the same path as another file you picked — rename one and reselect.',
     },
     repoSource: {
       bar: 'Repo source',
@@ -4070,6 +4073,11 @@ export const enUS: Resources = {
       maxFileSizeHint: 'Empty = falls back to the global uploadLimits.perFile setting.',
       minCount: 'Min file count',
       maxCount: 'Max file count',
+      onConflict: 'On name conflict',
+      onConflictHint:
+        'What happens when the target directory already holds a file with that name. "Keep both" writes report (1).pdf and leaves the existing file alone; "Overwrite" replaces it, and downstream nodes still receive the original path.',
+      onConflictRename: 'Keep both',
+      onConflictOverwrite: 'Overwrite',
     },
     fieldNodeTitle: 'Display name',
     fieldNodeTitleHint:
@@ -5036,6 +5044,8 @@ export const enUS: Resources = {
       'upload-input-target-dir-missing': 'The upload input is missing its target dir.',
       'upload-input-target-dir-invalid':
         'The upload input target dir must be a repo-relative path.',
+      'upload-input-on-conflict-invalid':
+        'The upload input conflict policy must be either rename or overwrite.',
       'wrapper-children-outside-bounds': 'An inner node sits outside the wrapper visual bounds.',
       'wrapper-child-duplicate': 'The wrapper lists the same direct child more than once.',
       'script-node-invalid':
@@ -5373,6 +5383,9 @@ export const enUS: Resources = {
     'upload-too-many-files': 'Too many files in this upload.',
     'upload-max-count': 'Too many files for this input.',
     'upload-min-count': 'Not enough files for this input.',
+    'upload-duplicate-filename':
+      'Two uploaded files would land on the same path; rename one and resubmit.',
+    'upload-target-is-dir': 'A directory already occupies the path to overwrite.',
     'upload-mime-rejected': 'A file type is not in the accept list for this input.',
     'upload-name-clash': 'Could not pick a non-clashing file name.',
     'upload-path-escape': 'The resolved upload path escapes the target directory.',

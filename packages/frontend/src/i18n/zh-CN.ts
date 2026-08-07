@@ -3447,6 +3447,8 @@ export interface Resources {
       maxSizeHint: string
       minHint: string
       maxHint: string
+      overwriteHint: string
+      duplicateName: string
     }
     repoSource: {
       bar: string
@@ -3563,6 +3565,10 @@ export interface Resources {
       maxFileSizeHint: string
       minCount: string
       maxCount: string
+      onConflict: string
+      onConflictHint: string
+      onConflictRename: string
+      onConflictOverwrite: string
     }
     fieldNodeTitle: string
     fieldNodeTitleHint: string
@@ -8696,6 +8702,8 @@ export const zhCN: Resources = {
       maxSizeHint: '单文件上限：{{bytes}} 字节',
       minHint: ' / 最少 {{n}}',
       maxHint: ' / 最多 {{n}}',
+      overwriteHint: '与该目录下的同名文件冲突时：直接覆盖已有文件。',
+      duplicateName: '「{{name}}」与本次已选的另一个文件落点重名——请改名后重新选择。',
     },
     repoSource: {
       bar: '仓库来源',
@@ -8804,6 +8812,11 @@ export const zhCN: Resources = {
       maxFileSizeHint: '留空时使用全局 uploadLimits.perFile 设置。',
       minCount: '最少文件数',
       maxCount: '最多文件数',
+      onConflict: '同名文件冲突时',
+      onConflictHint:
+        '落点目录里已有同名文件时怎么办。「改名保留」写成 report (1).pdf 并保留原文件；「覆盖」用上传的文件替换它，下游拿到的仍是原路径。',
+      onConflictRename: '改名保留',
+      onConflictOverwrite: '覆盖',
     },
     fieldNodeTitle: '显示名',
     fieldNodeTitleHint: '画布卡片上的标题；为空时回退到 agent 名 / input key / 节点 id。',
@@ -9697,6 +9710,7 @@ export const zhCN: Resources = {
       'topology-cycle': '工作流在循环包装器之外存在环。',
       'upload-input-target-dir-missing': '上传输入缺少目标目录。',
       'upload-input-target-dir-invalid': '上传输入的目标目录必须是仓库内相对路径。',
+      'upload-input-on-conflict-invalid': '上传输入的同名冲突策略只能是 rename 或 overwrite。',
       'wrapper-children-outside-bounds': '包装器内有节点超出了包装器边界。',
       'wrapper-child-duplicate': '包装器重复列出了同一个直接子节点。',
       'script-node-invalid':
@@ -9988,6 +10002,8 @@ export const zhCN: Resources = {
     'upload-too-many-files': '本次上传文件数超出限制。',
     'upload-max-count': '文件数量超出该输入允许的上限。',
     'upload-min-count': '文件数量不足该输入要求的下限。',
+    'upload-duplicate-filename': '本次上传里有两个文件会落到同一路径，请改名后重传。',
+    'upload-target-is-dir': '要覆盖的路径上已经是一个目录，无法用文件覆盖。',
     'upload-mime-rejected': '文件类型不在该输入允许的范围内。',
     'upload-name-clash': '重名文件过多，无法生成不冲突的文件名。',
     'upload-path-escape': '上传路径越界，已拒绝。',

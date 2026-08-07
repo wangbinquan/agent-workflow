@@ -22,6 +22,7 @@ const CATALOG_DIR = join(HERE, '..', 'examples', 'workflows', 'e2e')
 const CATALOG_FILES = [
   'prompt-input-kinds.yaml',
   'upload-input-roundtrip.yaml',
+  'upload-input-overwrite.yaml',
   'output-kinds-roundtrip.yaml',
   'linear-fan-in.yaml',
   'wrapper-git-change-set.yaml',
@@ -656,6 +657,32 @@ test('upload input: multipart files land before dispatch and their packed paths 
   expect(reader.promptText).toContain('matrix-uploads/one.md')
   expect(reader.promptText).toContain('matrix-uploads/two.md')
   expect(outputValue(data, reader.id, 'report')).toBe('upload-roundtrip-ok')
+})
+
+// RFC-262: the whole point of `onConflict: overwrite` is that the packed path
+// keeps the ORIGINAL name, so repo-internal references to it resolve to what
+// the user just uploaded. `docs/a.md` is committed in the fixture repo above.
+test('upload input (overwrite): the uploaded file replaces the committed repo file, keeping its path', async () => {
+  const result = await launchMultipart('upload-input-overwrite.yaml', {}, [
+    {
+      inputKey: 'spec',
+      filename: 'a.md',
+      content: '# uploaded-overwrite\n',
+      type: 'text/markdown',
+    },
+  ])
+  await expectHttp(result.response, 201, 'launch upload-input-overwrite.yaml')
+  if (result.task === undefined) throw new Error('multipart launch returned no task')
+  const final = await waitForTerminal(result.task.id)
+  expect(final.status).toBe('done')
+
+  const data = await nodeRuns(result.task.id)
+  const reader = onlyRun(data, 'overwrite_reader')
+  expect(reader.promptText).toContain('docs/a.md')
+  expect(reader.promptText).not.toContain('docs/a (1).md')
+  // The stub asserted on disk that the committed content is gone and that no
+  // renamed copy exists; reaching this port means both held.
+  expect(outputValue(data, reader.id, 'report')).toBe('upload-overwrite-ok')
 })
 
 test('output kinds: scalar, markdown, path, list, list-path, list-markdown, and signal round-trip', async () => {

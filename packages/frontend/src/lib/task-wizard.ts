@@ -9,9 +9,12 @@
 // field explicitly).
 
 import {
+  findDuplicateUploadTarget,
   taskExecutionKind,
   type ScheduledLaunchKind,
   type Task,
+  type UploadDuplicate,
+  type UploadLandingEntry,
   type WorkflowInput,
 } from '@agent-workflow/shared'
 import {
@@ -130,6 +133,44 @@ export function buildWorkflowStartBody(
  * backend's per-input gate sees every declared key (RFC-020 contract).
  * Multi-repo + uploads is UI-gated before this is reachable.
  */
+/**
+ * RFC-262: two selected files that would land on the same worktree path.
+ *
+ * The daemon refuses this with `upload-duplicate-filename` (services/upload.ts
+ * `validateUploadPlan`) BEFORE it clones anything — running the same shared
+ * walker here means the wizard can say so while the files are still local,
+ * instead of making the user ship up to 200 MiB to learn it. Ordering mirrors
+ * `buildWorkflowStartFormData`'s `Object.entries(uploads)` walk so the
+ * `upload-<n>.bin` fallback index for a nameless part matches the server's.
+ *
+ * Pure: takes the resolved input defs + picked files, touches no route state.
+ */
+export function findUploadDuplicate(
+  inputDefs: readonly WorkflowInput[],
+  uploads: Record<string, File[]>,
+): UploadDuplicate | null {
+  const dirByKey = new Map<string, string>()
+  for (const def of inputDefs) {
+    if (def.kind !== 'upload') continue
+    const raw = (def as Record<string, unknown>).targetDir
+    dirByKey.set(def.key, typeof raw === 'string' ? raw : '')
+  }
+  const entries: UploadLandingEntry[] = []
+  let idx = 0
+  for (const [key, list] of Object.entries(uploads)) {
+    const targetDir = dirByKey.get(key)
+    // A stale bucket for an input the workflow no longer declares is dropped by
+    // the server too (`task-multipart-unknown-input`); it must not manufacture a
+    // duplicate against a live input here.
+    if (targetDir === undefined) continue
+    for (const f of list) {
+      idx++
+      entries.push({ inputKey: key, filename: f.name, targetDir, fallbackIndex: idx })
+    }
+  }
+  return findDuplicateUploadTarget(entries)
+}
+
 export function buildWorkflowStartFormData(
   space: WizardSpace,
   common: WorkflowWizardCommon,

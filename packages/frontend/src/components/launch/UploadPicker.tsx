@@ -24,6 +24,10 @@ export function UploadPicker({ def, files, onChange }: Props) {
   const minCount = typeof rec.minCount === 'number' ? rec.minCount : undefined
   const maxCount = typeof rec.maxCount === 'number' ? rec.maxCount : undefined
   const maxFileSize = typeof rec.maxFileSize === 'number' ? rec.maxFileSize : undefined
+  // RFC-262: overwriting a repo file is a destructive-looking side effect the
+  // launcher must not spring on the user — the author opted in, the person
+  // pressing Start gets told.
+  const overwrites = rec.onConflict === 'overwrite'
 
   const countHint =
     t('launch.upload.selectedCount', { count: files.length }) +
@@ -46,6 +50,9 @@ export function UploadPicker({ def, files, onChange }: Props) {
       <div className="muted upload-picker__targetdir">
         {t('launch.upload.targetDirHint', { dir: targetDir || '/' })}
       </div>
+      {overwrites && (
+        <div className="muted upload-picker__overwrite">{t('launch.upload.overwriteHint')}</div>
+      )}
       {accept !== undefined && accept !== '' && (
         <div className="muted upload-picker__accept">
           {t('launch.upload.acceptHint', { accept })}

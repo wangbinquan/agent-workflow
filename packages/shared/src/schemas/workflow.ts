@@ -189,6 +189,25 @@ export type WorkflowInput = z.infer<typeof WorkflowInputSchema>
  * (`image/*`) tokens; matching either passes (server still sniffs MIME via
  * file-type and does not trust client-declared mime).
  */
+/**
+ * RFC-262: what happens when an uploaded file's name is already taken inside
+ * `targetDir` at task start.
+ *
+ *   - `rename`    — pick `<stem> (n).<ext>` and leave the existing entry alone.
+ *                   RFC-020's original (and still default) behavior.
+ *   - `overwrite` — replace the existing entry so the packed path keeps the
+ *                   ORIGINAL filename. That is the whole point: repo-internal
+ *                   references to `spec/api.yaml` keep resolving to the file
+ *                   the user just uploaded instead of the stale committed one.
+ *
+ * An enum rather than an `overwrite: boolean` so the default (rename) is
+ * nameable in the UI — a switch's "off" reads like "nothing happens" — and so a
+ * future third mode (e.g. hard-fail on collision) does not break the wire again.
+ */
+export const UPLOAD_ON_CONFLICT = ['rename', 'overwrite'] as const
+export const UploadOnConflictSchema = z.enum(UPLOAD_ON_CONFLICT)
+export type UploadOnConflict = (typeof UPLOAD_ON_CONFLICT)[number]
+
 export const UploadInputSchema = WorkflowInputSchema.extend({
   kind: z.literal('upload'),
   targetDir: z
@@ -202,6 +221,8 @@ export const UploadInputSchema = WorkflowInputSchema.extend({
   maxFileSize: z.number().int().positive().optional(),
   minCount: z.number().int().min(0).optional(),
   maxCount: z.number().int().min(1).optional(),
+  /** RFC-262 — absent ⇒ `'rename'` (RFC-020 behavior, byte-identical). */
+  onConflict: UploadOnConflictSchema.optional(),
 })
 export type UploadInput = z.infer<typeof UploadInputSchema>
 

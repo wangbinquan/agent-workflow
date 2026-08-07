@@ -67,6 +67,27 @@ describe('UploadPicker (RFC-218 adapter over FilesDropzone)', () => {
   })
 })
 
+// RFC-262: 覆盖模式是「会替换仓内既有文件」的副作用，作者在定义里开了它，
+// 按 Start 的人必须在启动面看得见——缺省（改名）则不该多出这行噪音。
+describe('UploadPicker overwrite notice (RFC-262)', () => {
+  test('onConflict:"overwrite" 渲染覆盖提示', () => {
+    render(
+      wrap(<UploadPicker def={def({ onConflict: 'overwrite' })} files={[]} onChange={() => {}} />),
+    )
+    expect(document.querySelector('.upload-picker__overwrite')).not.toBeNull()
+  })
+
+  test('缺省与显式 rename 都不渲染该提示', () => {
+    const { unmount } = render(wrap(<UploadPicker def={def()} files={[]} onChange={() => {}} />))
+    expect(document.querySelector('.upload-picker__overwrite')).toBeNull()
+    unmount()
+    render(
+      wrap(<UploadPicker def={def({ onConflict: 'rename' })} files={[]} onChange={() => {}} />),
+    )
+    expect(document.querySelector('.upload-picker__overwrite')).toBeNull()
+  })
+})
+
 describe('UploadPicker source guard (RFC-218)', () => {
   const SRC = readFileSync(
     resolve(import.meta.dirname, '..', 'src', 'components', 'launch', 'UploadPicker.tsx'),

@@ -22,7 +22,7 @@ import {
   requireEnvelopeOpen,
   writeInventoryIfRequested,
 } from './skeleton'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
 const NAME = 'stub-opencode-workflow-matrix'
@@ -141,6 +141,22 @@ export async function run(argv: readonly string[]): Promise<void> {
     }
     for (const file of uploads) require_(file)
     ports('<port name="report">upload-roundtrip-ok</port>')
+  }
+
+  // RFC-262: the uploaded file must have REPLACED the committed `docs/a.md`,
+  // not landed beside it. Disk first (that is the actual claim), prompt second
+  // (the packed path must keep the original name so repo-internal references
+  // still resolve). Exit codes mirror the branch above: 11 = disk wrong,
+  // 10 = prompt wrong.
+  if (prompt.includes('MATRIX_UPLOAD_OVERWRITE')) {
+    if (!existsSync('docs/a.md')) die(11, 'missing overwritten file docs/a.md')
+    const landed = readFileSync('docs/a.md', 'utf-8')
+    if (!landed.includes('uploaded-overwrite')) {
+      die(11, `docs/a.md was not overwritten (content: ${JSON.stringify(landed)})`)
+    }
+    if (existsSync('docs/a (1).md')) die(11, 'overwrite mode still wrote a renamed copy')
+    require_('docs/a.md')
+    ports('<port name="report">upload-overwrite-ok</port>')
   }
 
   if (prompt.includes('MATRIX_OUTPUT_KINDS')) {

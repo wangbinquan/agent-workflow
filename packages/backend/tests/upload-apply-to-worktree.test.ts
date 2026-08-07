@@ -1,7 +1,7 @@
 // RFC-020: applyUploadsToWorktree and its helpers — pure-ish I/O with no DB.
 // We point it at a temp directory standing in for a task worktree and assert
-// (a) happy multi-file write, (b) filename sanitization, (c) the various
-// limit/accept rejection paths, (d) mid-flight rollback on write failure.
+// (a) happy multi-file write, (b) the various
+// limit/accept rejection paths, (c) mid-flight rollback on write failure.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -13,7 +13,6 @@ import {
   assertInsideWorktree,
   DEFAULT_UPLOAD_LIMITS,
   resolveUniqueName,
-  sanitizeFilename,
   sniffMime,
   type UploadFile,
   type UploadInputDef,
@@ -49,30 +48,9 @@ const TXT_BYTES = new TextEncoder().encode('hello world')
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a])
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00])
 
-describe('sanitizeFilename', () => {
-  test('strips path separators and leading dots', () => {
-    expect(sanitizeFilename('../etc/passwd')).toBe('etcpasswd')
-    expect(sanitizeFilename('..')).toBe('upload-0.bin')
-    expect(sanitizeFilename('foo\\bar.txt')).toBe('foobar.txt')
-  })
-  test('empty / control-only → fallback name with index', () => {
-    expect(sanitizeFilename('', 7)).toBe('upload-7.bin')
-    expect(sanitizeFilename('\x00\x01\x1f\x7f', 3)).toBe('upload-3.bin')
-  })
-  // Regression: bun parses a multipart part whose Content-Disposition carries
-  // `filename=""` as a File whose `.name` is `undefined` (not ''), so the route
-  // can hand us a non-string raw. Before the fix this hit `raw.replace(...)` and
-  // crashed with "undefined is not an object (evaluating 'e.replace')", surfacing
-  // as "failed to land uploads into worktree". Defense-in-depth: coerce to fallback.
-  test('non-string / undefined raw → fallback name (no .replace crash)', () => {
-    expect(sanitizeFilename(undefined as unknown as string, 4)).toBe('upload-4.bin')
-    expect(sanitizeFilename(null as unknown as string, 2)).toBe('upload-2.bin')
-  })
-  test('preserves CJK and spaces', () => {
-    expect(sanitizeFilename('  报告 v1.pdf  ')).toBe('报告 v1.pdf')
-  })
-})
-
+// RFC-262: the `sanitizeFilename` cases moved with the function itself to
+// packages/shared/tests/upload-naming.test.ts (verbatim) — it is shared with the
+// launcher's duplicate check now, so its tests live beside its owner.
 describe('resolveUniqueName', () => {
   test('returns same name when no collision', () => {
     const d = mkdtempSync(join(tmpdir(), 'uniq-'))

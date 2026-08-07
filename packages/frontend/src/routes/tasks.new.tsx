@@ -79,6 +79,7 @@ import {
 import {
   buildAgentStartBody,
   buildAgentStartFormData,
+  findUploadDuplicate,
   buildScheduledEnvelope,
   taskToLaunchPayload,
   type WizardSeed,
@@ -913,6 +914,11 @@ function TaskWizardPage() {
   })
   const hasUploads = Object.values(uploads).some((arr) => arr.length > 0)
   const hasUploadInput = inputDefs.some((d) => d.kind === 'upload')
+  // RFC-262: two picked files that would land on the same worktree path. The
+  // daemon rejects this outright (`upload-duplicate-filename`), so surface it
+  // here — same shared walker, same verdict — instead of shipping the bytes
+  // first. Applies to workflow inputs and RFC-218 agent port forms alike.
+  const uploadDuplicate = findUploadDuplicate(inputDefs, uploads)
   // RFC-218 (impl-gate P2-6): the upload arm applies to agent port forms too —
   // multipart + multi-repo is refused server-side (multi-repo-upload-
   // unsupported), so the wizard must gate it for BOTH kinds that can carry
@@ -963,14 +969,15 @@ function TaskWizardPage() {
         workflowQ.isFetchedAfterMount &&
         normalizedWorkflowVersion !== undefined &&
         activeWorkflowVersionMismatch === null &&
-        !missingRequired
+        !missingRequired &&
+        uploadDuplicate === null
       : kind === 'agent'
         ? // RFC-218: the P1-5 barrier gates BOTH shapes (an unloaded list must
           // not read as "zero-port"); ported agents launch on their port form,
           // blockers (signal / reserved names) hard-disable the launch.
           agentDataReady &&
           (agentPorted
-            ? agentBlockers.length === 0 && !missingRequired
+            ? agentBlockers.length === 0 && !missingRequired && uploadDuplicate === null
             : description.trim().length > 0)
         : goal.trim().length > 0
   const gitNameTrim = gitUserName.trim()
@@ -2302,9 +2309,18 @@ function TaskWizardPage() {
                 inputDefs.map((def) => (
                   <Field
                     key={def.key}
-                    label={def.label === def.key ? def.key : `${def.label} (${def.key})`}
+                    label={def.label}
                     required={def.required === true}
                     hint={def.description ?? portKindHint(def, t)}
+                    error={
+                      uploadDuplicate !== null &&
+                      (uploadDuplicate.first.inputKey === def.key ||
+                        uploadDuplicate.second.inputKey === def.key)
+                        ? t('launch.upload.duplicateName', {
+                            name: uploadDuplicate.second.filename,
+                          })
+                        : undefined
+                    }
                   >
                     {def.kind === 'upload' ? (
                       <UploadPicker

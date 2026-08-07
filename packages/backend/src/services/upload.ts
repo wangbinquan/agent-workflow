@@ -7,8 +7,13 @@
 // Pure I/O with explicit limits; no DB / no scheduler / no Hono coupling
 // so we can unit-test it directly.
 
-import { existsSync, lstatSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, type Stats, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, normalize, parse as parsePath, resolve, sep } from 'node:path'
+import {
+  findDuplicateUploadTarget,
+  sanitizeUploadFilename,
+  type UploadOnConflict,
+} from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 import { realpathInside } from '@/util/safePath'
 
@@ -61,6 +66,11 @@ export interface UploadInputDef {
   maxFileSize?: number
   minCount?: number
   maxCount?: number
+  /**
+   * RFC-262 — same-name collision policy inside `targetDir`. Absent ⇒
+   * `'rename'`, i.e. RFC-020's original behavior byte for byte.
+   */
+  onConflict?: UploadOnConflict
 }
 
 /** One incoming file after the route handler has read its bytes. */
@@ -90,36 +100,22 @@ export interface UploadResult {
   packedByKey: Map<string, string[]>
 }
 
+// RFC-262: filename sanitization now lives in @agent-workflow/shared
+// (`sanitizeUploadFilename`) so the launcher's pre-submit duplicate check and
+// this writer compute identical landing names. No local alias is kept — one
+// owner, one name, one test location (packages/shared/tests/upload-naming).
+
 /**
- * Drop characters that could break path resolution or shell-pipe filenames
- * downstream. Path separators / control chars / leading dots all become
- * empty; the result is then NFC-normalized so visually-equivalent filenames
- * collide as expected during dedup.
+ * `lstat` that returns null instead of throwing. Never follows symlinks, so a
+ * dangling link, a live link, a file and a dir all come back as real Stats —
+ * that distinction is what the RFC-262 overwrite branch below decides on.
  */
-export function sanitizeFilename(raw: string, fallbackIndex = 0): string {
-  // Defense-in-depth: callers can hand us a non-string name. A multipart part
-  // with `filename=""` parses (under bun) to a File whose `.name` is `undefined`,
-  // so `raw` may be undefined/null at runtime despite the `string` type. Falling
-  // back here avoids `undefined.replace(...)` ("undefined is not an object").
-  if (typeof raw !== 'string' || raw === '') {
-    return `upload-${fallbackIndex}.bin`
+function lstatOrNull(p: string): Stats | null {
+  try {
+    return lstatSync(p)
+  } catch {
+    return null
   }
-  const stripped = raw
-    // strip path separators outright
-    .replace(/[\\/]/g, '')
-    // strip control / NUL
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\x00-]/g, '')
-    .trim()
-    .normalize('NFC')
-  // Leading dots (`..`, `.foo`) — strip just the leading dot run to neutralize
-  // `..` while keeping `.gitignore`-style names intact only when they have a
-  // following extension. Simpler: collapse leading dots fully.
-  const trimmed = stripped.replace(/^\.+/, '')
-  if (trimmed.length === 0) {
-    return `upload-${fallbackIndex}.bin`
-  }
-  return trimmed
 }
 
 /**
@@ -133,12 +129,7 @@ export function sanitizeFilename(raw: string, fallbackIndex = 0): string {
  * `resolveUniqueName` rename around it so the write lands on a fresh real file.
  */
 function entryExists(p: string): boolean {
-  try {
-    lstatSync(p)
-    return true
-  } catch {
-    return false
-  }
+  return lstatOrNull(p) !== null
 }
 
 /** Pick a `<stem> (n).<ext>` that does not collide with anything in `dir`. */
@@ -153,6 +144,48 @@ export function resolveUniqueName(dir: string, filename: string): string {
     'upload-name-clash',
     `cannot pick a non-clashing name for '${filename}' after 999 attempts`,
   )
+}
+
+/**
+ * RFC-262 `onConflict: 'overwrite'` — make `filename` writable in `dir` while
+ * preserving RFC-107's "never write THROUGH an existing path" property, and
+ * return the (unchanged) name.
+ *
+ * Why unlink instead of letting `writeFileSync` truncate: an untrusted
+ * (URL-cloned) repo can commit `inputs/report.pdf` as a symlink pointing
+ * anywhere the daemon can write. A plain write would FOLLOW it and truncate the
+ * outside target. `unlinkSync` operates on the link itself — never on what it
+ * points at — so the link is removed and the subsequent `wx` write creates a
+ * fresh real file inside the worktree. The write keeps `O_EXCL`, so if anything
+ * re-creates that path in the gap (TOCTOU), the write fails EEXIST instead of
+ * following the new entry.
+ *
+ * A directory is refused outright rather than renamed around: silently landing
+ * `report (1).pdf` after the author explicitly asked for overwrite would be the
+ * one behavior nobody can debug.
+ */
+function clearOverwriteTarget(dir: string, filename: string): string {
+  const abs = resolve(dir, filename)
+  // Defense in depth: `sanitizeUploadFilename` already stripped separators, so
+  // this can only fire if that rule ever regresses. Check BEFORE unlinking —
+  // the write path's own guard runs after, which would be too late to matter.
+  if (dirname(abs) !== resolve(dir)) {
+    throw new ValidationError(
+      'upload-path-escape',
+      `resolved upload path escapes target directory: ${abs}`,
+    )
+  }
+  const st = lstatOrNull(abs)
+  if (st !== null) {
+    if (st.isDirectory()) {
+      throw new ValidationError(
+        'upload-target-is-dir',
+        `cannot overwrite '${filename}': a directory already exists at that path`,
+      )
+    }
+    unlinkSync(abs)
+  }
+  return filename
 }
 
 /** Confirm `child` resolves to a path under `root`. Throws ValidationError. */
@@ -303,6 +336,36 @@ export function validateUploadPlan(args: {
     }
   }
 
+  // RFC-262 (D4): two files in ONE submit that would land on the same path.
+  // In `overwrite` mode the second write destroys the first silently; in
+  // `rename` mode they survive under different names, but the user asked for a
+  // single uniform rule — tell them to rename and resubmit rather than guessing
+  // which same-named file they meant. Checked here (not at write time) so it
+  // fires BEFORE the repo is resolved/cloned and the worktree materialized —
+  // same ordering guarantee RFC-107 established for the size/accept checks.
+  const dup = findDuplicateUploadTarget(
+    files.map((f, i) => ({
+      inputKey: f.inputKey,
+      filename: f.filename,
+      // Every declared key exists: the loop above already threw on unknowns.
+      targetDir: defs.get(f.inputKey)?.targetDir ?? '',
+      // Mirror the writer's 1-based counter so two nameless parts get distinct
+      // `upload-<n>.bin` fallbacks here exactly as they will on disk.
+      fallbackIndex: i + 1,
+    })),
+  )
+  if (dup !== null) {
+    throw new ValidationError(
+      'upload-duplicate-filename',
+      `two uploaded files would land on the same path '${dup.key}': '${dup.first.filename}' (input '${dup.first.inputKey}') and '${dup.second.filename}' (input '${dup.second.inputKey}'); rename one and resubmit`,
+      {
+        landingKey: dup.key,
+        first: dup.first,
+        second: dup.second,
+      },
+    )
+  }
+
   // Per-input min/maxCount enforcement
   const countsByKey = new Map<string, number>()
   for (const f of files) {
@@ -330,9 +393,17 @@ export function validateUploadPlan(args: {
  * `targetDir`, enforcing per-file / per-request / per-count limits + the
  * `accept` whitelist (extension OR sniffed MIME).
  *
- * Failure semantics: any pre-flight reject (limits, accept, traversal) throws
- * BEFORE writing anything. Once writes begin, a mid-flight failure unlinks
- * everything this call has already written and re-throws.
+ * Failure semantics: any pre-flight reject (limits, accept, traversal,
+ * RFC-262 duplicate landing paths) throws BEFORE writing anything. Once writes
+ * begin, a mid-flight failure unlinks everything this call has already written
+ * and re-throws.
+ *
+ * RFC-262 (D5): an `overwrite` file that was already replaced before the
+ * failure is NOT restored — no backup is taken. Both callers respond to a throw
+ * from here by deleting the whole materialized space and creating no task row
+ * (routes/tasks.ts, services/agentLaunch.ts), so the only copy that could be
+ * "restored" is inside a worktree that is about to be removed. The user's own
+ * repo working tree is never touched: tasks run in their own `git worktree`.
  */
 export async function applyUploadsToWorktree(plan: UploadPlan): Promise<UploadResult> {
   const { worktreePath, defs, files, limits } = plan
@@ -365,8 +436,15 @@ export async function applyUploadsToWorktree(plan: UploadPlan): Promise<UploadRe
       assertTargetDirInsideWorktree(worktreePath, targetAbs)
       mkdirSync(targetAbs, { recursive: true })
 
-      const safeName = sanitizeFilename(f.filename, idx)
-      const finalName = resolveUniqueName(targetAbs, safeName)
+      const safeName = sanitizeUploadFilename(f.filename, idx)
+      // RFC-262: `rename` (default) keeps RFC-020's behavior byte for byte.
+      // `overwrite` keeps the ORIGINAL name — that is the entire value of the
+      // mode: repo-internal references to the colliding path must resolve to
+      // what the user just uploaded, not to `spec/api (1).yaml`.
+      const finalName =
+        (def.onConflict ?? 'rename') === 'overwrite'
+          ? clearOverwriteTarget(targetAbs, safeName)
+          : resolveUniqueName(targetAbs, safeName)
       const absPath = resolve(targetAbs, finalName)
       // Second-layer guard against `resolveUniqueName` returning a separator-bearing name.
       if (dirname(absPath) !== targetAbs) {

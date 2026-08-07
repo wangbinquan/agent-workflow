@@ -117,7 +117,7 @@ export async function parseMultipartLaunch(req: Request): Promise<ParsedMultipar
     // bun parses a part whose Content-Disposition carries `filename=""` (a
     // browser Blob that was never named) as a File whose `.name` is
     // `undefined`, NOT ''. Treat both empty and missing names as unnamed so we
-    // don't hand a non-string filename to sanitizeFilename.
+    // don't hand a non-string filename to sanitizeUploadFilename.
     parts.push({
       inputKey,
       filename: value.name ? value.name : 'upload.bin',
@@ -185,6 +185,9 @@ export function collectUploadInputDefs(
     if (parsed.data.maxFileSize !== undefined) def.maxFileSize = parsed.data.maxFileSize
     if (parsed.data.minCount !== undefined) def.minCount = parsed.data.minCount
     if (parsed.data.maxCount !== undefined) def.maxCount = parsed.data.maxCount
+    // RFC-262 — absent stays absent so the writer's `?? 'rename'` default is
+    // the single place the fallback lives.
+    if (parsed.data.onConflict !== undefined) def.onConflict = parsed.data.onConflict
     out.set(def.key, def)
   }
   return out

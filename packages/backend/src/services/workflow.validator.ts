@@ -69,6 +69,7 @@ import {
   ScriptNodeSchema,
   serializeWorkflowDefinitionCandidateV1,
   tryParseKind,
+  UPLOAD_ON_CONFLICT,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
@@ -1645,6 +1646,28 @@ export function validateWorkflowDef(
       issues.push({
         code: 'upload-input-target-dir-invalid',
         message: `upload input '${inp.key}' targetDir '${td}' must be a repo-relative path without '..' or absolute prefixes`,
+        pointer: inp.key,
+        target: target.workflowInput(inp.key),
+      })
+    }
+    // RFC-262: same-name conflict policy. Mirrors UploadInputSchema (which
+    // guards the write path) so a definition that reached the DB by another
+    // route surfaces in the canvas validation panel instead of only failing at
+    // launch — same "schema on write + validator statically" pairing targetDir
+    // already has above.
+    // Read raw (not via readString): a non-string `onConflict` is just as
+    // invalid as an unknown string, and readString would silently drop it.
+    const onConflict = (inp as Record<string, unknown>).onConflict
+    if (
+      onConflict !== undefined &&
+      !(
+        typeof onConflict === 'string' &&
+        (UPLOAD_ON_CONFLICT as readonly string[]).includes(onConflict)
+      )
+    ) {
+      issues.push({
+        code: 'upload-input-on-conflict-invalid',
+        message: `upload input '${inp.key}' onConflict '${String(onConflict)}' must be one of: ${UPLOAD_ON_CONFLICT.join(', ')}`,
         pointer: inp.key,
         target: target.workflowInput(inp.key),
       })

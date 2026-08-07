@@ -213,6 +213,12 @@ fetch('/api/tasks', { method: 'POST', body: fd })
 - **DoS 防护**：`perCount` / `perFile` / `perRequest` 三个上限同时启用。Hono / Bun multipart 解析失败 → 直接 400，不进 `startTask`。
 - **文件名注入**：清洗剥 `\\` `/`、移除控制字符、Unicode NFC；保留空格 / 中文。
 - **重名占位**：始终是"加 (n) 起新名"，**绝不覆盖** 已经存在的文件（即使是 untracked 用户文件）。
+  > **勘误（RFC-262，2026-08-07）**：本条已被显式改判为**默认行为**而非绝对约束。upload 输入新增
+  > 作者级字段 `onConflict: 'rename' | 'overwrite'`，缺省 `rename` 即本条描述的行为（字节级不变）；
+  > 作者显式选 `overwrite` 时用上传文件替换同名条目（`unlinkSync` 只删链接/文件本体，不跟随符号
+  > 链接，写入仍带 `wx`，RFC-107 的"绝不写穿已存在路径"性质不变）。另：同一次上传内两个文件落到
+  > 同一路径，现在在启动校验期即被拒（`upload-duplicate-filename`），不再自动改名——见
+  > `design/RFC-262-upload-input-overwrite/`。
 
 ## 6. 测试策略
 

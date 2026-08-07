@@ -151,7 +151,10 @@ Per-type payload fields:
   Input declarations all use \`{kind,key,label,required?,description?}\`. Supported kinds and extra fields:
   \`text{multiline?,maxLength?}\`; \`files{minCount?,maxCount?,accept?}\`;
   \`enum{choices,multiSelect?,allowOther?}\`; \`git{gitKind:'branch'|'commit-range'|'pr'}\`;
-  \`upload{targetDir,accept?,maxFileSize?,minCount?,maxCount?}\`.
+  \`upload{targetDir,accept?,maxFileSize?,minCount?,maxCount?,onConflict?}\`
+  (\`onConflict:'rename'|'overwrite'\`, default \`rename\`: on a name clash inside \`targetDir\`,
+  \`rename\` writes \`report (1).pdf\` and keeps the existing file, \`overwrite\` replaces it and keeps
+  the original path. Two uploaded files landing on the same path are rejected at launch either way).
   Every node has \`{id,kind}\` and may carry \`position:{x,y}\` / \`title\`. Supported node forms:
   - \`{id,kind:'input',inputKey}\`.
   - \`{id,kind:'agent-single',agentRef:ref,promptTemplate,overrides?}\`. Use \`agentRef\`, never agentId/agentName.

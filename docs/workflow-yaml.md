@@ -90,6 +90,7 @@ inputs:
     targetDir: .agent-workflow/uploads
     accept: ['.pdf', 'image/*']
     maxFileSize: 10485760
+    onConflict: rename # rename (default) | overwrite
 ```
 
 | `kind`   | Extra fields                                  | Packed value sent to backend              |
@@ -98,7 +99,15 @@ inputs:
 | `files`  | `minCount`, `maxCount`, `accept`              | Newline-joined repo-relative paths        |
 | `enum`   | `choices`, `multiSelect`, `allowOther`        | Bare string (single) / JSON array (multi) |
 | `git`    | `gitKind: 'branch' \| 'commit-range' \| 'pr'` | `{kind, ...}` JSON object                 |
-| `upload` | `targetDir`, `accept`, size/count limits      | Newline-joined staged repo-relative paths |
+| `upload` | `targetDir`, `accept`, size/count limits, `onConflict` | Newline-joined staged repo-relative paths |
+
+`upload.onConflict` (RFC-262) decides what happens when a file lands on a name that
+already exists inside `targetDir` in the task worktree: `rename` (default, RFC-020
+behavior) writes `report (1).pdf` and leaves the existing file alone, while
+`overwrite` replaces it so the packed path keeps the original name — which is what
+repo-internal references to that path resolve to. Two uploaded files that would land
+on the same path are rejected at launch (`upload-duplicate-filename`) under either
+policy. Unrelated to the retired `?onConflict=` import query parameter above.
 
 ## `nodes[]` — nine kinds
 

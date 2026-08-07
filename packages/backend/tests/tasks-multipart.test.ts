@@ -260,7 +260,7 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
   // multipart Content-Disposition — e.g. a drag-dropped Blob the browser never
   // named) is parsed by bun as a File whose `.name` is `undefined`, not ''. The
   // route's `value.name === '' ? ...` guard missed that, so `filename` landed as
-  // `undefined` and `sanitizeFilename` crashed with "undefined is not an object
+  // `undefined` and `sanitizeUploadFilename` crashed with "undefined is not an object
   // (evaluating 'e.replace')", surfacing to the user as task-upload-failed:
   // "failed to land uploads into worktree". Must succeed under a fallback name.
   test('upload with empty filename → 201, file lands under fallback name', async () => {

@@ -204,7 +204,9 @@ describe('RFC-199 strict workflow validation targets', () => {
     // The dependency pair used to be ONE push with a ternary `code:`, which this
     // ratchet cannot see (it scans literal `code:` values) — the only such site
     // in the validator. Split into two literal pushes so the count is real.
-    expect(emissions).toHaveLength(128)
+    // RFC-262 adds one upload emission (`upload-input-on-conflict-invalid`,
+    // strict workflow-input target — same family as the targetDir pair).
+    expect(emissions).toHaveLength(129)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

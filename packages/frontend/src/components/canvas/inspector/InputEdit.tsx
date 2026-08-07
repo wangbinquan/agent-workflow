@@ -1,11 +1,16 @@
 // input-node inspector branch (RFC-004/RFC-020) — extracted verbatim from
 // the NodeInspector EditForm switch by RFC-146 T3.
 
-import type { WorkflowInput } from '@agent-workflow/shared'
+import {
+  UPLOAD_ON_CONFLICT,
+  type UploadOnConflict,
+  type WorkflowInput,
+} from '@agent-workflow/shared'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChipsInput } from '@/components/ChipsInput'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
+import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { patchInputDef, renameInputKey } from '../syncInputDefs'
 import {
@@ -199,6 +204,14 @@ function UploadInputFields({
   const maxFileSize = typeof rec.maxFileSize === 'number' ? rec.maxFileSize : undefined
   const minCount = typeof rec.minCount === 'number' ? rec.minCount : undefined
   const maxCount = typeof rec.maxCount === 'number' ? rec.maxCount : undefined
+  // RFC-262: absent ⇒ 'rename' (RFC-020's original behavior). A stored value
+  // outside the enum can only come from a hand-edited definition; fall back to
+  // the default rather than rendering an unselected control.
+  const onConflict: UploadOnConflict = (UPLOAD_ON_CONFLICT as readonly string[]).includes(
+    rec.onConflict as string,
+  )
+    ? (rec.onConflict as UploadOnConflict)
+    : 'rename'
   const targetDirInvalid =
     targetDir === '' ||
     targetDir.includes('..') ||
@@ -208,6 +221,11 @@ function UploadInputFields({
     nodeId,
     'input.targetDir',
     t('inspector.upload.targetDir'),
+  )
+  const onConflictMeta = atomicNodeInspectorChange(
+    nodeId,
+    'input.onConflict',
+    t('inspector.upload.onConflict'),
   )
   const acceptMeta = continuousNodeInspectorChange(
     nodeId,
@@ -249,6 +267,27 @@ function UploadInputFields({
             placeholder="inputs/refs"
           />
         </InspectorHistoryBoundary>
+      </Field>
+      <Field
+        label={t('inspector.upload.onConflict')}
+        hint={t('inspector.upload.onConflictHint')}
+        group
+      >
+        <Segmented<UploadOnConflict>
+          value={onConflict}
+          onChange={(next) =>
+            onPatch(
+              { ...(def as object), onConflict: next } as Partial<WorkflowInput>,
+              onConflictMeta,
+            )
+          }
+          options={[
+            { value: 'rename', label: t('inspector.upload.onConflictRename') },
+            { value: 'overwrite', label: t('inspector.upload.onConflictOverwrite') },
+          ]}
+          ariaLabel={t('inspector.upload.onConflict')}
+          testidPrefix="upload-on-conflict"
+        />
       </Field>
       <Field label={t('inspector.upload.accept')} hint={t('inspector.upload.acceptHint')}>
         <InspectorHistoryBoundary meta={acceptMeta} onBoundary={onHistoryBoundary}>

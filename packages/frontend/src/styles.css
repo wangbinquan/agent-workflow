@@ -6316,8 +6316,15 @@ details.form-section[open] > summary {
 
 .upload-picker__targetdir,
 .upload-picker__accept,
-.upload-picker__maxsize {
+.upload-picker__maxsize,
+.upload-picker__overwrite {
   font-size: 12px;
+}
+
+/* RFC-262 — overwrite mode replaces an existing repo file; the hint carries
+   the same warning weight the rest of the app gives destructive notes. */
+.upload-picker__overwrite {
+  color: var(--warn);
 }
 
 .enum-picker__list {
