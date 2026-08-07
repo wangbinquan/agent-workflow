@@ -155,6 +155,8 @@
 - **「测试加固」类 finding 可能实为生产竞态子系统**：给 fire-and-forget 链加 settle seam 时，Codex 常揭示这不是补测试、而是暴露原设计的 [high] 并发 bug（RFC-212 WS 授权握手期不重跑 gate + 无 pass generation → 被移除成员仍收 stdout）；「不能仅延期测试」。
 
 - **进程级注册表 + 测试夹具 = 只在共享进程下才炸的碰撞**：`bun test` 的项目脚本带 `--isolate`，每个文件独立进程；**手敲 `bun test`（不带 flag）则全部文件共享一个进程**。RFC-247 的路由元数据注册表是模块级单例（它描述「本仓有哪些路由」这一静态事实），于是一个测试夹具若拿**生产路径**当例子（当时用了 `/api/whoami`），共享进程下就会和真实声明撞成「同路径不同契约」并抛错——而带 `--isolate` 跑永远绿。**夹具一律用合成路径**（`/api/__x_fixture__`），别借生产路径当例子；另外**本地复现 CI 请用 `bun run test` 而不是 `bun test`**，两者的进程模型不同。
+- **但 `bun run test` 是 `backend && shared && frontend` 的 `&&` 串联——前一个包一红，后面的包一次都不跑**，而 CI 的 job 是并行的、会把三个包的红全报出来。于是本地「只有 1 条红」很可能是假象：修完那条再推，CI 照样红在你从没跑到的包上（RFC-266 实测：shared 的 fixture 红短路掉了 frontend，前端那条 i18n 守卫红只能等 CI 才暴露，多推了一次红）。**判据：本地出现任何红并修复后，别只重跑失败的那个文件——至少把被短路掉的下游包各自单跑一遍**（`bun run test:shared` / `bun run test:frontend`），或者拿 `;` 而不是 `&&` 串一遍。
+- **i18n 文案里不许出现字面 `**`**（`onboarding-guide.test.tsx` 的 RFC-211 守卫全量遍历 zh/en 两棵树）：这些字符串大多进的是纯文本组件，`**强调**` 会原样显示成星号。写 hint / 说明文案时用「」或直接不强调；只有 `apiDocs.*`（`api-docs-markdown.ts` 拼成 markdown 过 `Prose`）是白名单，且 `title`/`subtitle` 仍被排除在外。
 
 ## 新增 NodeKind（RFC-253 实测）
 
@@ -235,6 +237,7 @@
 
 ## dev-env / daemon
 
+- **本地 backend 并行只能用 `bun run test:backend` 的“完整 shard + 独立命名空间”，不能直接加 `bun test --parallel`**：历史实测后者让多个真实 daemon 争同一单实例 flock，跑满 420s 零结果；2026-08-07 的四 shard 原型给每个进程独立 `AGENT_WORKFLOW_HOME` + `TMPDIR/TMP/TEMP`，仍逐文件 `--isolate --randomize`，1051/1051 文件、9170 测试全绿，墙钟 264s（原串行 1030s）。隐藏的 `AGENT_WORKFLOW_TEST_SHARD_HOME/TMP` 由 preload 在每个隔离文件开头恢复，防某测试删除公开 env 后让下一文件落回用户真实 home。排查顺序依赖时用 `bun run test:backend:serial`；完整 push 门是 `bun run gate:local`，不要自己拼一条少门的快命令。
 - **`bun dev` 中编辑 `packages/backend/src/**`触发`--watch` 重启**，race 30s graceful-shutdown flock → daemon 常 **DOWN\*\*（浏览器空白 + 503 + 误导「token 无权限」横幅），非崩溃；重启复活。纯前端编辑不掉。
 - **claude-code 运行时直连 Anthropic**：daemon 从普通 shell 起若缺 `HTTP(S)_PROXY` → 403 被 smoke 误报「缺鉴权」；报缺鉴权先查 daemon 代理再查凭据。
 - **claude code 在 uid 0 下 bypassPermissions 会 exit(1)** 除非 env `IS_SANDBOX==="1"`（精确字符串）；root 跑 daemon 时每次 claude-code-protocol 启动都需（`buildClaudeSpawn` 已 gate；2026-07-31 起 intent 受控分支同样 uid-0 主动注入——继承值仍剥离，2.1.220 二进制实证两处 gate 均 bypass-only，注入是容器形态下的诚实断言 + 前向防御）。
