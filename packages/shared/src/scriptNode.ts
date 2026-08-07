@@ -222,6 +222,199 @@ export function planScriptPortEnv(inputs: Record<string, string>): ScriptPortEnv
 }
 
 // ---------------------------------------------------------------------------
+// Author snippets (T43 / AC-37…40)
+// ---------------------------------------------------------------------------
+//
+// Why these live in shared rather than in the Inspector: the snippets are the
+// ONLY place the platform tells an author how to speak the two protocols, so
+// they must be generated from the same oracles the executor obeys —
+// `scriptEnvSuffix` for the variable names, the envelope grammar for the output
+// — or the instructions drift away from the runtime and the author debugs a
+// framework bug as if it were their own.
+//
+// The nonce is ALWAYS read from `AW_ENVELOPE_NONCE` at run time and never
+// rendered as a literal. D5 is explicit that the platform substitutes nothing
+// into a script body, so a snippet that showed `nonce="$AW_ENVELOPE_NONCE"` as
+// text would be correct for bash (the shell expands it) and silently wrong for
+// python / node — the exact confusion that produced this task: the body would
+// print a literal `$AW_ENVELOPE_NONCE`, the parser would not match it, and the
+// node would burn its retries on `script-envelope-missing`.
+
+/** Placeholder each generated port body carries; the author replaces it. */
+export const SCRIPT_SNIPPET_PLACEHOLDER = 'TODO'
+
+/**
+ * A port name that can never appear in an envelope: `PORT_OPEN_RE`
+ * (`services/envelope.ts`) accepts `name="…"` or `name='…'`, and a name holding
+ * BOTH quote characters fits inside neither. Declaring one guarantees
+ * `script-port-missing` on every single run, so the validator refuses it at
+ * save time (AC-40) — the generator stays defensive anyway, since a definition
+ * written before that rule existed still has to render something.
+ */
+export function scriptPortNameUnquotable(name: string): boolean {
+  return name.includes('"') && name.includes("'")
+}
+
+/** `name="x"`, or `name='x'` when the name itself contains a double quote. */
+function portOpenTag(name: string): string {
+  const quote = name.includes('"') ? "'" : '"'
+  return `<port name=${quote}${name}${quote}>`
+}
+
+/**
+ * A single-quoted string literal — the escaping happens to be identical for
+ * python and JavaScript, and both reject a raw newline inside one, so control
+ * characters have to become escapes rather than pass through.
+ */
+function singleQuotedLiteral(value: string): string {
+  const body = value
+    .replaceAll('\\', '\\\\')
+    .replaceAll("'", "\\'")
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+  return `'${body}'`
+}
+
+/**
+ * Text inside an UNQUOTED heredoc delimiter. The delimiter cannot be quoted —
+ * that is precisely what makes `$AW_ENVELOPE_NONCE` expand — so the three
+ * characters the shell still acts on have to be escaped.
+ */
+function heredocText(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('$', '\\$')
+}
+
+/** Port name rendered safely into a trailing `# port '…'` comment. */
+function commentSafe(name: string): string {
+  return name.replaceAll('\r', ' ').replaceAll('\n', ' ')
+}
+
+/**
+ * The envelope every declared-port script must print (D3). Empty when no ports
+ * are declared: single-port mode IS the whole stdout, and handing that author
+ * an envelope would teach them a protocol they must not use.
+ */
+export function buildScriptEnvelopeSnippet(
+  language: ScriptLanguage,
+  ports: readonly string[],
+): string {
+  if (ports.length === 0) return ''
+  const header = `# Replace ${SCRIPT_SNIPPET_PLACEHOLDER} with each port's real value.`
+  const body = (name: string) => `${portOpenTag(name)}${SCRIPT_SNIPPET_PLACEHOLDER}</port>`
+
+  if (language === 'bash') {
+    return [
+      header,
+      'cat <<EOF',
+      // `$AW_ENVELOPE_NONCE` is left unescaped ON PURPOSE — the shell expanding
+      // it is exactly how bash gets the run's nonce.
+      '<workflow-output nonce="$AW_ENVELOPE_NONCE">',
+      ...ports.map((name) => heredocText(body(name))),
+      '</workflow-output>',
+      'EOF',
+      '',
+    ].join('\n')
+  }
+
+  if (language === 'node') {
+    return [
+      header.replace(/^# /, '// '),
+      'const nonce = process.env.AW_ENVELOPE_NONCE',
+      "console.log('<workflow-output nonce=\"' + nonce + '\">')",
+      ...ports.map((name) => `console.log(${singleQuotedLiteral(body(name))})`),
+      "console.log('</workflow-output>')",
+      '',
+    ].join('\n')
+  }
+
+  return [
+    header,
+    'import os',
+    '',
+    "nonce = os.environ['AW_ENVELOPE_NONCE']",
+    "print('<workflow-output nonce=\"' + nonce + '\">')",
+    ...ports.map((name) => `print(${singleQuotedLiteral(body(name))})`),
+    "print('</workflow-output>')",
+    '',
+  ].join('\n')
+}
+
+/**
+ * Reading the upstream ports (D5). The generated helper checks the SPILL
+ * variable first: a value over `SCRIPT_ENV_INLINE_LIMIT` sets only
+ * `AW_PORT_FILE_<SUFFIX>` and leaves `AW_PORT_<SUFFIX>` absent, so a script
+ * that reads the environment alone works on a small diff and silently reads an
+ * empty string on a large one (AC-3 — invisible in the UI until now).
+ */
+export function buildScriptInputSnippet(
+  language: ScriptLanguage,
+  ports: readonly string[],
+): string {
+  if (ports.length === 0) return ''
+  const rows = ports.map((name) => ({ name, suffix: scriptEnvSuffix(name) }))
+
+  if (language === 'bash') {
+    return [
+      'read_port() {',
+      '  # A large upstream value is written to a file instead of the environment.',
+      '  local file_var="AW_PORT_FILE_$1"',
+      '  local value_var="AW_PORT_$1"',
+      '  if [ -n "${!file_var:-}" ]; then',
+      '    cat "${!file_var}"',
+      '  else',
+      '    printf \'%s\' "${!value_var:-}"',
+      '  fi',
+      '}',
+      '',
+      '# NOTE: $( ) strips trailing newlines — read the file directly if they matter.',
+      ...rows.map(
+        (row) => `${row.suffix}="$(read_port ${row.suffix})"  # port ${commentSafe(row.name)}`,
+      ),
+      '',
+    ].join('\n')
+  }
+
+  if (language === 'node') {
+    return [
+      // The platform runs node scripts as `script.mjs` (ESM), so this is
+      // `import`, not `require` — a `require` snippet would not even start.
+      "import { readFileSync } from 'node:fs'",
+      '',
+      'function readPort(suffix) {',
+      '  // A large upstream value is written to a file instead of the environment.',
+      "  const file = process.env['AW_PORT_FILE_' + suffix]",
+      "  if (file) return readFileSync(file, 'utf8')",
+      "  return process.env['AW_PORT_' + suffix] ?? ''",
+      '}',
+      '',
+      ...rows.map(
+        (row) =>
+          `const ${row.suffix} = readPort(${singleQuotedLiteral(row.suffix)}) // port ${commentSafe(row.name)}`,
+      ),
+      '',
+    ].join('\n')
+  }
+
+  return [
+    'import os',
+    '',
+    'def read_port(suffix):',
+    '    # A large upstream value is written to a file instead of the environment.',
+    "    path = os.environ.get('AW_PORT_FILE_' + suffix)",
+    '    if path:',
+    "        with open(path, encoding='utf-8') as fh:",
+    '            return fh.read()',
+    "    return os.environ.get('AW_PORT_' + suffix, '')",
+    '',
+    ...rows.map(
+      (row) =>
+        `${row.suffix} = read_port(${singleQuotedLiteral(row.suffix)})  # port ${commentSafe(row.name)}`,
+    ),
+    '',
+  ].join('\n')
+}
+
+// ---------------------------------------------------------------------------
 // Dependency specs (D14 / AC-19 / AC-19b)
 // ---------------------------------------------------------------------------
 

@@ -24,6 +24,9 @@ import {
   serializeScriptSensitiveProjectionV1,
   SCRIPT_ENV_INLINE_LIMIT,
   SCRIPT_ENV_TOTAL_LIMIT,
+  buildScriptEnvelopeSnippet,
+  buildScriptInputSnippet,
+  scriptPortNameUnquotable,
   type WorkflowDefinition,
   type WorkflowNode,
 } from '../src/index'
@@ -392,5 +395,125 @@ describe('exact pins must actually be exact', () => {
     expect(scriptDependencyIssue('python', 'torch==2.3.0+cpu')).toBeNull()
     expect(scriptDependencyIssue('node', 'lodash@4.17.21')).toBeNull()
     expect(scriptDependencyIssue('node', '@scope/pkg@1.2.3-beta.1')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// T43 — author snippets (AC-37…40).
+//
+// Why these exist: the Inspector's only output guidance used to be the literal
+// text `<workflow-output nonce="$AW_ENVELOPE_NONCE">`. That is true for bash
+// (the shell expands it) and FALSE for python / node — D5 says the platform
+// substitutes nothing into a body, so the printed envelope carried a literal
+// `$AW_ENVELOPE_NONCE`, missed the run's nonce, and the node burned its retries
+// on `script-envelope-missing`. A user hit exactly that. These lock the shape
+// that replaced it; `rfc253-script-snippets.test.ts` (backend) additionally
+// RUNS each snippet and parses the result.
+// ---------------------------------------------------------------------------
+
+describe('T43 — envelope snippet', () => {
+  test('single-port mode gets no snippet at all', () => {
+    // Handing the stdout-mode author an envelope would teach a protocol they
+    // must not speak — their whole stdout IS the port value.
+    for (const lang of ['python', 'bash', 'node'] as const) {
+      expect(buildScriptEnvelopeSnippet(lang, [])).toBe('')
+      expect(buildScriptInputSnippet(lang, [])).toBe('')
+    }
+  })
+
+  test('the nonce is read from the environment, never rendered as a literal', () => {
+    expect(buildScriptEnvelopeSnippet('python', ['summary'])).toContain(
+      "os.environ['AW_ENVELOPE_NONCE']",
+    )
+    expect(buildScriptEnvelopeSnippet('node', ['summary'])).toContain(
+      'process.env.AW_ENVELOPE_NONCE',
+    )
+    // bash is the ONE language where the text form is correct — the shell
+    // expands it inside an unquoted heredoc.
+    expect(buildScriptEnvelopeSnippet('bash', ['summary'])).toContain(
+      '<workflow-output nonce="$AW_ENVELOPE_NONCE">',
+    )
+    for (const lang of ['python', 'node'] as const) {
+      expect(buildScriptEnvelopeSnippet(lang, ['summary'])).not.toContain('"$AW_ENVELOPE_NONCE"')
+    }
+  })
+
+  test('every declared port gets its own line, in declaration order', () => {
+    const snippet = buildScriptEnvelopeSnippet('python', ['summary', 'findings'])
+    expect(snippet.indexOf('name="summary"')).toBeGreaterThan(-1)
+    expect(snippet.indexOf('name="summary"')).toBeLessThan(snippet.indexOf('name="findings"'))
+    expect(snippet).toContain('<port name="summary">TODO</port>')
+  })
+
+  test('bash escapes the three characters an unquoted heredoc still acts on', () => {
+    const snippet = buildScriptEnvelopeSnippet('bash', ['cost$', 'tick`', 'back\\'])
+    expect(snippet).toContain('name="cost\\$"')
+    expect(snippet).toContain('name="tick\\`"')
+    expect(snippet).toContain('name="back\\\\"')
+    // …but NOT the nonce, which must survive as an expansion.
+    expect(snippet).toContain('nonce="$AW_ENVELOPE_NONCE"')
+  })
+
+  test("a port name containing ' stays inside a valid python/node literal", () => {
+    for (const lang of ['python', 'node'] as const) {
+      const snippet = buildScriptEnvelopeSnippet(lang, ["it's"])
+      expect(snippet).toContain('name="it\\\'s"')
+    }
+  })
+
+  test('a port name containing " flips the attribute to single quotes', () => {
+    // envelope.ts PORT_OPEN_RE accepts either quote; a name holding one of them
+    // must be emitted with the other or the tag is unparseable.
+    expect(buildScriptEnvelopeSnippet('bash', ['say"hi'])).toContain("name='say\"hi'")
+    expect(buildScriptEnvelopeSnippet('python', ['say"hi'])).toContain("name=\\'say\"hi\\'")
+  })
+
+  test('a newline in a port name never breaks the literal', () => {
+    // A raw newline inside a single-quoted python/JS literal is a syntax error.
+    for (const lang of ['python', 'node'] as const) {
+      const snippet = buildScriptEnvelopeSnippet(lang, ['two\nlines'])
+      expect(snippet).toContain('two\\nlines')
+      expect(snippet.split('\n').filter((l) => l.includes('two'))).toHaveLength(1)
+    }
+  })
+
+  test('unquotable names are named as such (AC-40 discriminator)', () => {
+    expect(scriptPortNameUnquotable(`both"and'`)).toBe(true)
+    expect(scriptPortNameUnquotable(`only"`)).toBe(false)
+    expect(scriptPortNameUnquotable(`only'`)).toBe(false)
+    expect(scriptPortNameUnquotable('plain')).toBe(false)
+  })
+})
+
+describe('T43 — input snippet', () => {
+  test('the spill variable is checked BEFORE the inline one', () => {
+    // The whole point: a value over the inline ceiling sets ONLY
+    // AW_PORT_FILE_*, so an environment-only read succeeds on a small diff and
+    // silently returns '' on a large one. The file branch must come first.
+    const inlineMarker: Record<'python' | 'bash' | 'node', string> = {
+      python: "os.environ.get('AW_PORT_' + suffix",
+      bash: 'value_var="AW_PORT_$1"',
+      node: "process.env['AW_PORT_' + suffix]",
+    }
+    for (const lang of ['python', 'bash', 'node'] as const) {
+      const snippet = buildScriptInputSnippet(lang, ['report'])
+      const file = snippet.indexOf('AW_PORT_FILE_')
+      const inline = snippet.indexOf(inlineMarker[lang])
+      expect(file).toBeGreaterThan(-1)
+      expect(inline).toBeGreaterThan(-1)
+      expect(file).toBeLessThan(inline)
+    }
+  })
+
+  test('variable names come from the same folding the executor uses', () => {
+    const snippet = buildScriptInputSnippet('python', ['git-diff'])
+    expect(snippet).toContain(`GIT_DIFF = read_port('GIT_DIFF')`)
+    expect(snippet).toContain('# port git-diff')
+  })
+
+  test('node uses ESM — the platform runs script.mjs, where require() is fatal', () => {
+    const snippet = buildScriptInputSnippet('node', ['report'])
+    expect(snippet).toContain("import { readFileSync } from 'node:fs'")
+    expect(snippet).not.toContain('require(')
   })
 })

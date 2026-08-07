@@ -13,9 +13,21 @@
 //      by the form and rejected on save. Rendering the whole block read-only with
 //      an explicit banner is the honest surface (AC-30) — "you may look, you may
 //      not change" beats "type freely, lose it on save".
+//
+//   3. **Generated snippets, not prose (T43).** The panel used to describe the
+//      envelope with the literal text `<workflow-output nonce="$AW_ENVELOPE_NONCE">`.
+//      That reads as an instruction to type it verbatim, which is correct for
+//      bash alone — D5 guarantees the platform substitutes NOTHING into a body,
+//      so the python / node author printed a literal `$AW_ENVELOPE_NONCE`, the
+//      nonce-scoped parser matched nothing, and the node burned its retries on
+//      `script-envelope-missing`. Both sample blocks are derived from the same
+//      shared oracles the executor obeys and are pure display state: they never
+//      enter `node.script`, the history stack, or a save.
 
 import { useTranslation } from 'react-i18next'
 import {
+  buildScriptEnvelopeSnippet,
+  buildScriptInputSnippet,
   declaredScriptOutputs,
   readScriptDependencies,
   readScriptEnv,
@@ -37,6 +49,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { Segmented } from '@/components/Segmented'
 import { usePermission } from '@/hooks/useActor'
+import { copyText } from '@/lib/clipboard'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -151,15 +164,24 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
         {inboundPorts.length === 0 ? (
           <p className="inspector-hint">{t('scriptInspector.noInputs')}</p>
         ) : (
-          <ul className="script-input-hints" data-testid="script-input-hints">
-            {inboundPorts.map((port) => (
-              <li key={port}>
-                <code>{port}</code>
-                <span aria-hidden="true"> → </span>
-                <code>{`${SCRIPT_ENV_VALUE_PREFIX}${scriptEnvSuffix(port)}`}</code>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="script-input-hints" data-testid="script-input-hints">
+              {inboundPorts.map((port) => (
+                <li key={port}>
+                  <code>{port}</code>
+                  <span aria-hidden="true"> → </span>
+                  <code>{`${SCRIPT_ENV_VALUE_PREFIX}${scriptEnvSuffix(port)}`}</code>
+                </li>
+              ))}
+            </ul>
+            <SnippetField
+              label={t('scriptInspector.inputSample')}
+              hint={t('scriptInspector.inputSampleHint')}
+              language={EDITOR_LANGUAGE[language]}
+              testid="script-input-sample"
+              snippet={buildScriptInputSnippet(language, inboundPorts)}
+            />
+          </>
         )}
       </InspectorSection>
 
@@ -186,6 +208,18 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
             }
           />
         </Field>
+        {mode === 'envelope' ? (
+          <SnippetField
+            label={t('scriptInspector.envelopeSample')}
+            hint={t('scriptInspector.envelopeSampleHint')}
+            language={EDITOR_LANGUAGE[language]}
+            testid="script-envelope-sample"
+            snippet={buildScriptEnvelopeSnippet(
+              language,
+              outputs.map((port) => port.name),
+            )}
+          />
+        ) : null}
       </InspectorSection>
 
       <InspectorSection title={t('scriptInspector.sectionRuntime')}>
@@ -253,6 +287,58 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
         />
       </InspectorSection>
     </div>
+  )
+}
+
+/**
+ * One generated, copyable sample block (T43).
+ *
+ * Built from `<Field group>` + `<CodeEditor readOnly>` + the same
+ * `btn--xs btn--ghost` copy affordance the Inspector already uses for a node's
+ * technical id — no new chrome, no new CSS namespace. Kept local to this file:
+ * it is two primitives in a fixed arrangement, and promoting it before a second
+ * caller exists would invent a generic that serves one.
+ *
+ * `minLines` tracks the snippet so a five-line sample does not sit in an
+ * eight-line box, and the editor is read-only because this is documentation —
+ * editing it would imply it feeds the node.
+ */
+function SnippetField({
+  label,
+  hint,
+  language,
+  snippet,
+  testid,
+}: {
+  label: string
+  hint: string
+  language: CodeEditorLanguage
+  snippet: string
+  testid: string
+}) {
+  const { t } = useTranslation()
+  if (snippet.length === 0) return null
+  const lines = snippet.replace(/\n$/, '').split('\n').length
+  return (
+    <Field label={label} hint={hint} group>
+      <CodeEditor
+        value={snippet}
+        language={language}
+        readOnly
+        minLines={Math.min(lines, 24)}
+        maxLines={24}
+        aria-label={label}
+        data-testid={testid}
+      />
+      <button
+        type="button"
+        className="btn btn--xs btn--ghost"
+        data-testid={`${testid}-copy`}
+        onClick={() => void copyText(snippet)}
+      >
+        {t('scriptInspector.copySample')}
+      </button>
+    </Field>
   )
 }
 

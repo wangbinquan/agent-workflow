@@ -36,8 +36,16 @@ import { runContainedProcess, type ContainedSpawnResult } from './execution/cont
 import type { ScriptDepsEnv } from './scriptDepsEnv'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
-/** File extension + argv shape per language. */
-const INTERPRETER_SPEC: Record<
+/**
+ * File extension + argv shape per language.
+ *
+ * Exported so the T43 snippet test can run a generated snippet EXACTLY the way
+ * production runs a body — a hand-copied table in the test would let the
+ * snippets keep passing after this one changed (the `.mjs` extension is the
+ * live example: it makes node scripts ESM, so a `require()` snippet does not
+ * even start).
+ */
+export const INTERPRETER_SPEC: Record<
   ScriptLanguage,
   { binary: string; ext: string; argv: (bin: string, script: string) => string[] }
 > = {

@@ -5,6 +5,8 @@
 // we migrate them to t() — there is no migration script, but the key tree
 // matches en-US 1:1.
 
+import type { WebhookTemplateVar } from '@agent-workflow/shared'
+
 export interface Resources {
   tabBar: {
     scrollStart: string
@@ -2430,6 +2432,14 @@ export interface Resources {
       description: string
       goal: string
       templateVarsLabel: string
+      /** RFC-263：变量表 13→30 后按两组呈现。 */
+      varGroupContext: string
+      varGroupApi: string
+      /**
+       * RFC-263：每个变量的悬停说明。Record 而非逐条声明 —— 新增变量时漏写说明
+       * 会在 typecheck 期变红，而不是在 UI 上显示一个空 title。
+       */
+      vars: Record<WebhookTemplateVar, string>
       maxFires: string
       maxFiresHint: string
       autoRegister: string
@@ -4359,9 +4369,14 @@ export interface Resources {
     retryWarning: string
     sectionInputs: string
     noInputs: string
+    inputSample: string
+    inputSampleHint: string
     sectionOutputs: string
     outputSingle: string
     outputEnvelope: string
+    envelopeSample: string
+    envelopeSampleHint: string
+    copySample: string
     outputPorts: string
     outputPortsHint: string
     sectionRuntime: string
@@ -7561,6 +7576,44 @@ export const zhCN: Resources = {
       description: '任务提示词模板',
       goal: '工作组目标模板',
       templateVarsLabel: '事件变量——点击插入到光标处：',
+      varGroupContext: '事件上下文',
+      varGroupApi: 'API 定位（回帖 / 调接口用）',
+      vars: {
+        event_type: '事件类型（push / mr_opened / note / pipeline_failed 等）。',
+        provider: '代码平台：gitlab 或 github。调接口前用它区分两边的形态。',
+        repo_path: '仓库路径（GitLab 的 group/repo、GitHub 的 owner/repo）。',
+        repo_http_url: '仓库 HTTP 克隆地址。',
+        repo_ssh_url: '仓库 SSH 克隆地址。',
+        branch: '事件分支：push 为被推分支，MR / 评论 / 流水线为源分支，tag 事件为 tag 名。',
+        target_branch: 'MR / PR 的目标分支。',
+        default_branch: '仓库默认分支（自动建 MR 时可作目标分支）。',
+        mr_iid: 'MR / PR 编号——REST 接口路径里用的就是它。',
+        mr_title: 'MR / PR 标题。',
+        commit_sha: '事件对应的提交 SHA。',
+        commit_before: 'push 之前的提交 SHA，与 commit_sha 配对可算出本次推送范围。',
+        comment_text: '评论正文。',
+        comment_author: '评论者用户名。',
+        pipeline_status: '流水线结论（failed / success 等）。',
+        event_json: '原始事件 JSON（截断至 32 KiB）。优先用上面的精确变量，这里只作兜底。',
+        api_base_url:
+          'API 根地址：GitLab 为 <实例>/api/v4；GitHub 为 https://api.github.com，GHES 为 <实例>/api/v3。',
+        project_id:
+          '项目数字 ID。GitLab 的 /projects/:id 用它；GitHub 侧调接口请改用 repo_owner + repo_name。',
+        project_web_url: '仓库网页地址。',
+        repo_owner: 'GitHub REST 路径里的 {owner}；GitLab 侧为 namespace 路径。',
+        repo_name: 'GitHub REST 路径里的 {repo}。',
+        author_id: '事件作者的平台用户 ID（指派、@ 提及用）。',
+        mr_id: 'MR / PR 的全局 ID。REST 路径请用 mr_iid，这个只在 GraphQL 等少数接口用。',
+        mr_url: 'MR / PR 网页地址。',
+        comment_id: '评论本身的 ID（编辑、删除、加表情用；GitHub 的回复接口也用它）。',
+        comment_thread_id:
+          '讨论线程 ID——回复到同一条线程用它。GitLab 即 discussion_id；GitHub 普通 PR 评论没有线程，此处为空。',
+        comment_url: '评论网页地址。',
+        comment_position_json:
+          '行内评论的位置参数（JSON）。键名与该平台新建评论接口的参数一一对应，可原样回传；非行内评论为空。',
+        pipeline_id: '流水线 / workflow run 的 ID（重跑、列 job、拉日志用）。',
+        pipeline_url: '流水线网页地址。',
+      },
       maxFires: '连续触发上限',
       maxFiresHint: '同一 MR 或分支达到上限后暂停，防止自动化反复触发自己。',
       autoRegister: '自动注册仓库',
@@ -9596,10 +9649,16 @@ export const zhCN: Resources = {
       '失败会自动重试。文件改动随隔离工作区一起回滚，但外部副作用（HTTP 调用、通知）不会——非幂等的脚本要自己做幂等保护。',
     sectionInputs: '输入',
     noInputs: '还没有入边。连一个上游端口即可把值传进来。',
+    inputSample: '读取样例',
+    inputSampleHint:
+      '超过 32 KiB 的上游值不走环境变量、改写成文件，所以要先看 AW_PORT_FILE_*；只读环境变量的脚本会在大 diff 上读到空串。',
     sectionOutputs: '输出',
     outputSingle: '整个 stdout 作为「{{port}}」端口的值。',
     outputEnvelope:
-      '声明了端口后，需要在 stdout 打印 <workflow-output nonce="$AW_ENVELOPE_NONCE"> 信封。',
+      '声明了端口后，脚本要在 stdout 打印 <workflow-output> 信封。nonce 每次运行都不同，必须从 AW_ENVELOPE_NONCE 环境变量读出来再拼进标签——平台不会替换脚本正文里的任何文本。',
+    envelopeSample: '信封样例',
+    envelopeSampleHint: '按当前语言与已声明端口生成，可直接复制进脚本，再把 TODO 换成真实内容。',
+    copySample: '复制样例',
     outputPorts: '声明输出端口',
     outputPortsHint: '留空则把 stdout 作为单一端口输出。',
     sectionRuntime: '运行时',
@@ -9720,6 +9779,8 @@ export const zhCN: Resources = {
       'script-in-fanout-unsupported':
         '脚本节点不能放在扇出包装器内部——请把清单计算放在扇出的上游。',
       'script-output-name-duplicate': '脚本节点的输出端口重名。',
+      'script-output-name-unquotable':
+        '输出端口名同时含单引号和双引号，信封的 <port name=...> 标签无法表达，请改名。',
       'script-output-kind-path-unsupported':
         '脚本节点暂不支持 path 类端口（归档链未接通，内容会在工作区回收后失效）。',
       'script-port-env-collision': '两个输入端口会映射到同一个环境变量名，请重命名其一。',

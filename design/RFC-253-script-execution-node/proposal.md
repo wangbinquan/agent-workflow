@@ -227,6 +227,25 @@
 - **AC-36** spawn 之后立即持久化 `pid` + `spawn_binary_path`；kill -9 daemon 再重启，boot reaper 能定位到
   遗留的脚本进程（设计门 P0-3：没有 pid 就是 `no-pid`，孤儿进程永远收不掉）。
 
+### 作者体验（2026-08-07 追加，用户实测反馈：「不知道信封怎么写、nonce 怎么填」）
+
+起因是真实使用反馈：抽屉里唯一的输出指引是一句
+`scriptInspector.outputEnvelope` —— 字面写着 `<workflow-output nonce="$AW_ENVELOPE_NONCE">`。
+这句话**只对 bash 成立**（`$VAR` 是 shell 自己展开的）；对 python / node 是**误导**：D5 明确
+「脚本正文不做任何模板替换」，照抄进 python 字符串就是字面量，信封打不中本次 nonce，节点必然以
+`script-envelope-missing` 失败并烧完重试。作者除非去读 `scriptRun.ts` 才知道要 `os.environ["AW_ENVELOPE_NONCE"]`。
+
+- **AC-37** 声明了输出端口后，输出区按**当前语言 + 已声明端口名**实时生成一段**只读**信封样例并可一键复制；
+  端口增删改名、切换语言，样例同步跟着变。样例里的 nonce 一律**从环境变量读出再拼进去**，绝不写死、
+  也绝不呈现成「平台会替你替换」的形态。未声明端口（单端口模式）时不出现样例——那条路本来就不需要信封。
+- **AC-38** 输入区在既有「`port` → `AW_PORT_X`」映射表之外给出按语言的**读取样例**，且必须演示大值溢出分支
+  （先看 `AW_PORT_FILE_<SUFFIX>` 再回落 `AW_PORT_<SUFFIX>`）。理由：AC-3 的行为今天在 UI 上**完全不可见**，
+  只读环境变量的脚本会在小 diff 上跑通、在大 diff 上突然读到空串。
+- **AC-39** 生成的样例**真能跑**：三种解释器各自实际执行一遍样例，stdout 经 `extractLastEnvelope` +
+  `parseEnvelope` 能解析出全部声明端口、零 `missingDeclared`、零 `malformedPorts`。端口名含 `'` / `"` /
+  `` ` `` / `$` / `\` 时样例仍语法正确（转义按语言分档）。
+- **AC-40** 那句误导性提示文案中英双语一并订正：点明 nonce 来自 `AW_ENVELOPE_NONCE` 环境变量、正文不做替换。
+
 ## 7. 风险与后续
 
 | 风险                                                  | 处置                                                                                                                     |

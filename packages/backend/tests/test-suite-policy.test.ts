@@ -109,6 +109,16 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // the POSIX CI legs. The env-assembly, traversal-defense, and contained-spawn
   // mechanics in the same file DO run on win32 (portable `bun -e` commands).
   'packages/backend/tests/rfc253-script-execution.test.ts#skipIf': 2,
+  // RFC-253 T43: the generated author snippets are proven by RUNNING them, so
+  // the file is gated twice. (1) One `describe.skipIf` for win32 — there is no
+  // `python3` there and `bash` resolves through Git for Windows
+  // (WINDOWS_INTERPRETER_CANDIDATES), while the snippets themselves are
+  // OS-independent, so the POSIX legs carry the proof. (2) Four `test.skipIf`
+  // for a machine that lacks python3 / node. That second gate could hide a
+  // total loss of coverage, so the same describe holds a case that NEVER skips
+  // and requires all three interpreters whenever `CI` is set — a runner that
+  // loses one goes red instead of silently proving nothing.
+  'packages/backend/tests/rfc253-script-snippets.test.ts#skipIf': 5,
   // RFC-254: one case needs a runtime whose DIRECT child exits while a detached
   // grandchild keeps the inherited stdout pipe open (post-exit-flush-timeout →
   // 'incomplete'). Windows closes the pipe on parent exit regardless of an unref'd

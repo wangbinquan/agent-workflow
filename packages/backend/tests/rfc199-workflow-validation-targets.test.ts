@@ -206,7 +206,12 @@ describe('RFC-199 strict workflow validation targets', () => {
     // in the validator. Split into two literal pushes so the count is real.
     // RFC-262 adds one upload emission (`upload-input-on-conflict-invalid`,
     // strict workflow-input target — same family as the targetDir pair).
-    expect(emissions).toHaveLength(129)
+    // RFC-253 T43 adds one more script emission
+    // (`script-output-name-unquotable`: a port name holding both quote
+    // characters fits in neither `<port name="…">` nor `<port name='…'>`, so
+    // the node could only ever fail at run time) — strict `script-outputs`
+    // node-field target, same family as the duplicate/path-kind pair.
+    expect(emissions).toHaveLength(130)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

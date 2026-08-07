@@ -64,6 +64,7 @@ import {
   resolveWorkflowSourceRef,
   scriptDependencyIssue,
   scriptPortEnvCollisions,
+  scriptPortNameUnquotable,
   scriptReservedEnvKeyIssue,
   SCRIPT_LANGUAGES,
   ScriptNodeSchema,
@@ -1235,6 +1236,19 @@ export function validateWorkflowDef(
         })
       }
       seenPorts.add(port.name)
+      // RFC-253 T43 / AC-40: `PORT_OPEN_RE` (services/envelope.ts) accepts
+      // `name="…"` or `name='…'`, so a name holding BOTH quote characters fits
+      // inside neither form — no script could ever emit it, and the node would
+      // fail `script-port-missing` on every single run. Refused at save time
+      // rather than left as a guaranteed runtime failure.
+      if (scriptPortNameUnquotable(port.name)) {
+        issues.push({
+          code: 'script-output-name-unquotable',
+          message: `node '${node.id}': output port '${port.name}' contains both a single and a double quote, so it cannot be written into a <port name=...> tag. Rename the port.`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'script-outputs'),
+        })
+      }
       if (port.kind !== undefined && /(^|<)path</.test(port.kind)) {
         // A path port's content is a file reference whose durability depends on
         // the RFC-193 archival chain; without it the value dangles the moment

@@ -77,6 +77,23 @@ describe('script node validation', () => {
     )
   })
 
+  // T43 / AC-40. `PORT_OPEN_RE` (services/envelope.ts) reads `name="…"` OR
+  // `name='…'`; a name carrying both quotes fits in neither, so no script can
+  // emit that port and every run ends in `script-port-missing`. A guaranteed
+  // runtime failure belongs at save time.
+  test('a port name that no envelope can express is refused at save time', () => {
+    expect(codesFor([script({ outputs: [{ name: `both"and'` }] })])).toContain(
+      'script-output-name-unquotable',
+    )
+    // One quote at a time is expressible — the generated snippet flips the
+    // attribute quote — and must stay allowed.
+    for (const name of [`say"hi`, `it's`]) {
+      expect(codesFor([script({ outputs: [{ name }] })])).not.toContain(
+        'script-output-name-unquotable',
+      )
+    }
+  })
+
   test('inbound ports that fold to the same env var are refused', () => {
     const codes = codesFor(
       [script(), { id: 'a1', kind: 'agent-single', agentId: 'AG1' } as WorkflowNode],

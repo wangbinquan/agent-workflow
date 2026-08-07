@@ -2735,6 +2735,49 @@ export const enUS: Resources = {
       description: 'Task prompt template',
       goal: 'Workgroup goal template',
       templateVarsLabel: 'Event variables — click to insert at the cursor:',
+      varGroupContext: 'Event context',
+      varGroupApi: 'API targets (for replying / calling the API)',
+      vars: {
+        event_type: 'Event type (push / mr_opened / note / pipeline_failed, …).',
+        provider: 'Code host: gitlab or github. Use it to branch between the two API shapes.',
+        repo_path: "Repository path (GitLab's group/repo, GitHub's owner/repo).",
+        repo_http_url: 'HTTP clone URL.',
+        repo_ssh_url: 'SSH clone URL.',
+        branch:
+          'Event branch: the pushed branch for push, the source branch for MR / comment / pipeline, the tag name for tag events.',
+        target_branch: 'Target branch of the MR / PR.',
+        default_branch: 'Repository default branch (useful as the target when opening an MR).',
+        mr_iid: 'MR / PR number — this is the one REST paths take.',
+        mr_title: 'MR / PR title.',
+        commit_sha: 'Commit SHA the event refers to.',
+        commit_before:
+          'Commit SHA before the push; pair it with commit_sha to get the pushed range.',
+        comment_text: 'Comment body.',
+        comment_author: 'Comment author username.',
+        pipeline_status: 'Pipeline conclusion (failed / success, …).',
+        event_json:
+          'Raw event JSON (truncated to 32 KiB). Prefer the precise variables above; this is the fallback.',
+        api_base_url:
+          'API root: <instance>/api/v4 for GitLab; https://api.github.com for GitHub, <instance>/api/v3 for GHES.',
+        project_id:
+          "Numeric project id. GitLab's /projects/:id takes it; on GitHub use repo_owner + repo_name instead.",
+        project_web_url: 'Repository web URL.',
+        repo_owner: "GitHub REST's {owner}; the namespace path on GitLab.",
+        repo_name: "GitHub REST's {repo}.",
+        author_id: 'Platform user id of the event author (assignment, mentions).',
+        mr_id:
+          'Global id of the MR / PR. REST paths take mr_iid — this one is only for GraphQL and a few endpoints.',
+        mr_url: 'MR / PR web URL.',
+        comment_id:
+          "The comment's own id (edit / delete / react; GitHub's reply endpoint takes it too).",
+        comment_thread_id:
+          "Discussion thread id — use it to reply in the same thread. GitLab's discussion_id; empty for plain GitHub PR comments, which have no threads.",
+        comment_url: 'Comment web URL.',
+        comment_position_json:
+          "Inline-comment position (JSON). Keys match that platform's create-comment API parameters, so it can be posted back verbatim; empty for non-inline comments.",
+        pipeline_id: 'Pipeline / workflow run id (rerun, list jobs, fetch logs).',
+        pipeline_url: 'Pipeline web URL.',
+      },
       maxFires: 'Consecutive fire limit',
       maxFiresHint:
         'Pause after this many fires on the same MR or branch so automation cannot repeatedly trigger itself.',
@@ -4906,10 +4949,17 @@ export const enUS: Resources = {
       'A failed run is retried automatically. File changes are rolled back with the isolated worktree, but external side effects (HTTP calls, notifications) are not — make non-idempotent scripts guard themselves.',
     sectionInputs: 'Inputs',
     noInputs: 'No inbound edges yet. Connect an upstream port to pass values in.',
+    inputSample: 'Reading sample',
+    inputSampleHint:
+      'An upstream value over 32 KiB is written to a file instead of the environment, so check AW_PORT_FILE_* first — a script that only reads the environment gets an empty string on a large diff.',
     sectionOutputs: 'Outputs',
     outputSingle: 'Whole stdout becomes the “{{port}}” port.',
     outputEnvelope:
-      'Declared ports require a <workflow-output nonce="$AW_ENVELOPE_NONCE"> envelope on stdout.',
+      'Declared ports require a <workflow-output> envelope on stdout. The nonce differs every run: read it from the AW_ENVELOPE_NONCE environment variable and build the tag from it — the platform substitutes nothing into your script body.',
+    envelopeSample: 'Envelope sample',
+    envelopeSampleHint:
+      'Generated from the current language and declared ports. Copy it into the script and replace TODO with the real values.',
+    copySample: 'Copy sample',
     outputPorts: 'Declared output ports',
     outputPortsHint: 'Leave empty to emit stdout as a single port.',
     sectionRuntime: 'Runtime',
@@ -5055,6 +5105,8 @@ export const enUS: Resources = {
       'script-in-fanout-unsupported':
         'A script node cannot sit inside a fan-out wrapper — compute the shard list upstream of it instead.',
       'script-output-name-duplicate': 'The script node declares duplicate output ports.',
+      'script-output-name-unquotable':
+        'An output port name contains both a single and a double quote, so no <port name=...> tag can express it. Rename the port.',
       'script-output-kind-path-unsupported':
         'Script nodes cannot emit path-valued ports yet — the artifact archival chain is not wired for them.',
       'script-port-env-collision':

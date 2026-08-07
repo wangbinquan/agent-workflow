@@ -488,6 +488,41 @@ export function scriptSensitiveProjection(def: WorkflowDefinition): string // sh
 - **无权者**：整块以 `readOnly` 渲染 + 一条 `<ErrorBanner>` 说明需要脚本编写权限（AC-30），不是「能改存不上」。
 - i18n 中英双语齐全。
 
+### 8.3 作者辅助：样例生成（2026-08-07 追加 · T43 · AC-37…40）
+
+**缺口**：§8.2 的「入参提示区」只解决了变量**名**（`port` → `AW_PORT_X`），没解决**怎么用**；输出侧连提示
+都是错的（见 proposal §6「作者体验」）。两侧都缺的是同一样东西——**一段照抄就能跑的代码**。
+
+**契约**（纯函数，落 `packages/shared/src/scriptNode.ts`，与 `scriptEnvSuffix` 同源同文件，前端与测试共用）：
+
+| 函数                         | 签名                                                          | 产出                                                                     |
+| ---------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `buildScriptEnvelopeSnippet` | `(language: ScriptLanguage, ports: readonly string[]) => string` | 信封样例；nonce **从环境读**再拼；ports 为空返回空串（单端口模式不出样例） |
+| `buildScriptInputSnippet`    | `(language: ScriptLanguage, ports: readonly string[]) => string` | 入参读取样例；**含 `AW_PORT_FILE_` 溢出分支**；ports 为空返回空串           |
+
+**为什么放 shared 而不是前端**：端口名 → 变量名的折叠规则（`scriptEnvSuffix`）已经在 shared，样例必须与
+执行器**同源**才不会漂移；且 AC-39 的「真跑一遍」oracle 在 backend 测试里，需要同一个生成器。
+
+**转义分档**（AC-39 的实质内容——端口名是作者自由文本，`ScriptOutputPortSchema` 只限 1..64 字符）：
+
+| 语言   | 字面量形态                    | 必须转义                                                   |
+| ------ | ----------------------------- | ---------------------------------------------------------- |
+| python | 单引号字符串                  | `\` `'`                                                    |
+| node   | 模板串                        | `` ` `` `\` `${`                                           |
+| bash   | **未加引号定界符**的 heredoc  | `\` `` ` `` `$`（定界符不能加引号——要靠 shell 展开 nonce） |
+
+XML 属性引号按端口名内容择 `"` 或 `'`——`envelope.ts` 的 `PORT_OPEN_RE` 两种都收。
+**已知残留（本任务不关，需用户拍板是否加校验）**：端口名**同时**含 `"` 与 `'` 时两种引号都表达不了它，
+该端口在任何脚本里都无法被发进信封 ⇒ 每次运行必然 `script-port-missing`。可选修法是加一条
+`script-output-name-unquotable` 保存期校验（fail closed）；不加则样例按 `"` 渲染并在该端口旁标注不可用。
+
+**前端**（`ScriptEdit.tsx`，零新组件、零新 chrome —— CLAUDE.md §Frontend UI consistency）：
+输出区（仅 `scriptOutputMode==='envelope'` 时）与输入区（仅有入边时）各渲染一个
+`<CodeEditor readOnly language={当前语言}>` + 一个 `btn btn--xs btn--ghost` 复制按钮，复制走
+`lib/clipboard.copyText`（与 `NodeInspector.tsx:260` 的技术 ID 复制同形，含非安全上下文回落）。
+样例是**派生态**：不进 `node.script`、不进历史栈、不触发保存、对无 `scripts:author` 者照常可见可复制
+（读不改，与 AC-30 的只读态不冲突）。
+
 ## 9. 校验器规则
 
 `services/workflow.validator.ts` 新增（全部带稳定 kebab code + `target.nodeField` 定位）：
