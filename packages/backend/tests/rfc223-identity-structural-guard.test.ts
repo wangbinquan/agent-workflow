@@ -236,6 +236,21 @@ const EXACT_ALLOWANCE_ROWS = [
   "frontend-name-key\u001fpackages/frontend/src/lib/skill-zip-import.ts\u001fbuildDecisionMap\u001fBinaryExpression:2306dab802a531ae8c06\u001f1\u001fimport-name-boundary\u001fout[row.candidate.name] = { action: 'overwrite', skillId: target.skillId, expectedOwnerUserId: target.ownerUserId, expectedVisibility: target.visibility, expectedAclRevision: target.expectedAclRevision, expectedToken: target.expectedToken, ",
   "frontend-name-key\u001fpackages/frontend/src/lib/skill-zip-import.ts\u001fbuildDecisionMap\u001fBinaryExpression:9efd51bc06107824e2eb\u001f1\u001fimport-name-boundary\u001fout[row.candidate.name] = { action: 'rename', newName: d.newName }",
   "id-name-fallback\u001fpackages/backend/src/services/workflow.validator.ts\u001fcompareResourceIdentity\u001fBinaryExpression:7b849ec1de6e0f779e2e\u001f1\u001fdeterministic-order\u001fleft.name.localeCompare(right.name) || (left.id ?? '').localeCompare(right.id ?? '')",
+  // RFC-264 (concurrent session) — the webhook target picker renders a
+  // collision-disambiguated label looked up BY ID, falling back to the raw name
+  // only when the map has no entry. Display-only: the Select's value stays the
+  // id, so nothing resolves a resource by name.
+  //
+  // HOW IT GOT HERE, AND HOW IT LEAVES: this occurrence rode into main on
+  // RFC-263's commit (19510f16) — that commit touched the same file and swept
+  // the then-unpushed RFC-264 hunk along with it. RFC-264's own tree has since
+  // refactored the helper into `buildResourceOptionLabeler`, which returns a
+  // function and has no `?? name` fallback at all. So when RFC-264 lands this
+  // entry goes STALE: delete it and drop the count back to 140, then register
+  // whatever that RFC's own (six) call sites produce. A local tree already
+  // carrying RFC-264's unpushed work will not match this count — that is
+  // expected; main is the reference.
+  'id-name-fallback\u001fpackages/frontend/src/components/webhooks/TriggersPanel.tsx\u001fTriggerDialog\u001fBinaryExpression:d88a5a88df1d74cbd9ff\u001f1\u001fdisplay-fallback\u001ftargetLabels.get(row.id) ?? row.name',
   'id-name-fallback\u001fpackages/frontend/src/components/TaskSubjectLink.tsx\u001fTaskSubjectLink\u001fBinaryExpression:c120a3667d253ef16d68\u001f1\u001fdisplay-fallback\u001ftask.workflowName ?? task.workflowId',
   'id-name-fallback\u001fpackages/frontend/src/routes/clarify.tsx\u001fClarifyListPage\u001fConditionalExpression:316e1cfa80f0184b921b\u001f2\u001fdisplay-fallback\u001fitems[0]?.taskName && items[0].taskName.length > 0 ? items[0].taskName : taskId',
   'id-name-fallback\u001fpackages/frontend/src/routes/tasks.new.tsx\u001fTaskWizardPage\u001fBinaryExpression:1f916ee84daf6fb858bd\u001f1\u001fdisplay-fallback\u001fagentOptions.find((option) => option.value === agentId)?.label ?? agentName',
@@ -382,7 +397,10 @@ describe('RFC-223 T15 structural identity guard', () => {
     // id form (port-or-protocol-name), reviewed above; no resource identity.
     // RFC-255 removal: 141 → 140. The custom-provider card and its
     // name-falls-back-to-id render are gone with the feature.
-    expect(findings.length).toBe(140)
+    // Webhook target label fallback: 140 → 141. See the allowance above —
+    // one RFC-264 display-fallback occurrence rode into main on RFC-263's
+    // commit; reviewed there, no resource identity involved.
+    expect(findings.length).toBe(141)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

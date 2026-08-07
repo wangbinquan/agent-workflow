@@ -128,6 +128,13 @@ const ALLOWANCES: readonly Allowance[] = [
     why: 'git pathspec construction and ls-files output matching; git speaks `/` on every platform (RFC-248)',
   },
   {
+    rule: 'posix-dirname',
+    file: 'services/webhook/gitlabAdapter.ts',
+    match: "lastIndexOf('/')",
+    count: 1,
+    why: 'operand is a GitLab project path from the webhook payload (`group/subgroup/repo`) — a wire identifier that is `/`-separated on every platform, never a filesystem path (RFC-263)',
+  },
+  {
     rule: 'posix-path-prefix',
     file: 'services/skillIdentityPaths.ts',
     match: '`${expectedPrefix}/`',
