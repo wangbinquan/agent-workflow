@@ -158,13 +158,15 @@ describe('buildPalette', () => {
   // pin the exact i18n keys this module emits without booting the bundle.
   const identityT = (key: string) => key
 
-  test('groups agents into Agents + Wrappers + Calls + Scripts + IO + Human sections (RFC-243 added Calls, RFC-253 added Scripts)', () => {
+  // RFC-269 显式改判：新增 Integrations 分区（代码平台调用节点）。
+  test('groups agents into Agents + Wrappers + Calls + Scripts + Integrations + IO + Human sections (RFC-243 added Calls, RFC-253 added Scripts, RFC-269 added Integrations)', () => {
     const sections = buildPalette([AGENT_A], identityT)
     expect(sections.map((s) => s.key)).toEqual([
       'agents',
       'wrappers',
       'calls',
       'scripts',
+      'integrations',
       'io',
       'human',
     ])
@@ -174,6 +176,7 @@ describe('buildPalette', () => {
       'editor.paletteWrappers',
       'editor.paletteCalls',
       'editor.paletteScripts',
+      'editor.paletteIntegrations',
       'editor.paletteIo',
       'editor.paletteHuman',
     ])

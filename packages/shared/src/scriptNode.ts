@@ -8,7 +8,6 @@
 // throwing inside a canvas render.
 
 import {
-  isWrapperKind,
   SCRIPT_DEFAULT_OUTPUT_PORT,
   SCRIPT_DEPENDENCY_MAX_LEN,
   SCRIPT_LANGUAGES,
@@ -19,6 +18,7 @@ import {
   type WorkflowNode,
 } from './schemas/workflow'
 import { canonicalJson } from './workflow-canonical'
+import { inboundEdgeSignature, wrapperAncestryOf } from './workflowNodeAncestry'
 
 // ---------------------------------------------------------------------------
 // Field readers
@@ -541,76 +541,25 @@ export function serializeScriptSensitiveProjectionV1(definition: WorkflowDefinit
 
   const rows = definition.nodes
     .filter((node) => node.kind === 'script')
-    .map((node) => {
-      // Incoming edges decide the NAMES and VALUES of the `AW_PORT_*` variables
-      // the script reads, so rewiring one changes what the host executes even
-      // though the body is untouched (design-gate P1).
-      const inbound = definition.edges
-        .filter((edge) => edge.target.nodeId === node.id)
-        .map((edge) => ({
-          from: `${edge.source.nodeId}.${edge.source.portName}`,
-          to: edge.target.portName,
-        }))
-        .sort((a, b) => cmp(a.to + a.from, b.to + b.from))
-
-      // Wrapper membership decides WHETHER and HOW MANY TIMES it runs — moving
-      // a script into a 50-iteration loop is an execution-semantics change.
-      //
-      // impl-gate 1.2: this must follow the FULL ancestry, not just the direct
-      // container. Wrapper containment is transitive, so wrapping the script's
-      // own 1-iteration loop inside a fresh 50-iteration loop changed the run
-      // count by 50× while the projection stayed byte-identical. The loop's
-      // exit terms belong here for the same reason: flipping `exitCondition`
-      // to something that never holds turns one run into `maxIterations` runs
-      // without touching a count.
-      const ancestry = new Set<string>()
-      for (;;) {
-        const before = ancestry.size
-        for (const candidate of definition.nodes) {
-          if (!isWrapperKind(candidate.kind) || ancestry.has(candidate.id)) continue
-          const ids = (candidate as unknown as Record<string, unknown>).nodeIds
-          if (!Array.isArray(ids)) continue
-          if (
-            ids.includes(node.id) ||
-            ids.some((id) => typeof id === 'string' && ancestry.has(id))
-          ) {
-            ancestry.add(candidate.id)
-          }
-        }
-        // Fixed point; also terminates on a malformed cyclic containment graph.
-        if (ancestry.size === before) break
-      }
-      const wrappers = definition.nodes
-        .filter((candidate) => ancestry.has(candidate.id))
-        .map((wrapper) => {
-          const rec = wrapper as unknown as Record<string, unknown>
-          const raw = rec.maxIterations
-          return {
-            id: wrapper.id,
-            kind: wrapper.kind,
-            maxIterations: typeof raw === 'number' ? raw : null,
-            exitCondition: rec.exitCondition ?? null,
-            continueOnMaxIterations: rec.continueOnMaxIterations ?? null,
-          }
-        })
-        .sort((a, b) => cmp(a.id, b.id))
-
-      return {
-        id: node.id,
-        language: readScriptLanguage(node) ?? null,
-        script: readScriptBody(node),
-        outputs: readScriptOutputPorts(node).map((port) => ({
-          name: port.name,
-          kind: port.kind ?? null,
-        })),
-        dependencies: readScriptDependencies(node),
-        env: Object.fromEntries(Object.entries(readScriptEnv(node)).sort(([a], [b]) => cmp(a, b))),
-        network: resolveScriptNetwork(node),
-        readonly: resolveScriptReadonly(node),
-        inbound,
-        wrappers,
-      }
-    })
+    .map((node) => ({
+      id: node.id,
+      language: readScriptLanguage(node) ?? null,
+      script: readScriptBody(node),
+      outputs: readScriptOutputPorts(node).map((port) => ({
+        name: port.name,
+        kind: port.kind ?? null,
+      })),
+      dependencies: readScriptDependencies(node),
+      env: Object.fromEntries(Object.entries(readScriptEnv(node)).sort(([a], [b]) => cmp(a, b))),
+      network: resolveScriptNetwork(node),
+      readonly: resolveScriptReadonly(node),
+      // RFC-269 抽取：入边决定 `AW_PORT_*` 的名字与取值、wrapper 归属决定跑不跑
+      // 与跑几次 —— 两段推理与代码平台调用节点逐字相同，故由
+      // `workflowNodeAncestry.ts` 共用（含 impl-gate 1.2 的完整祖先链修正）。
+      // 字段名与顺序保持不变，投影字节因此与抽取前完全一致。
+      inbound: inboundEdgeSignature(definition, node.id),
+      wrappers: wrapperAncestryOf(definition, node.id),
+    }))
     .sort((a, b) => cmp(a.id, b.id))
   return `${SCRIPT_SENSITIVE_PROJECTION_DOMAIN_V1}${canonicalJson(rows)}`
 }

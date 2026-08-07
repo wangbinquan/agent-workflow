@@ -85,6 +85,14 @@ export * from './signalPromptGuard'
 export * from './wrapperFanout'
 export * from './nodePorts'
 export * from './scriptNode' // RFC-253
+export * from './workflowNodeAncestry' // RFC-269（RFC-253 抽取）
+// RFC-269 — code-host call node: action registry, template encoding, path
+// judgements, trigger-context projection.
+export * from './codeHost/actions'
+export * from './codeHost/authorProjection'
+export * from './codeHost/path'
+export * from './codeHost/template'
+export * from './codeHost/triggerContext'
 export * from './workflowCalls'
 export * from './systemChannelPorts'
 export * from './scheduleTime' // RFC-159
@@ -121,6 +129,7 @@ export * from './platformEnv'
 // 模板封套 / 投递与触发 closed enum，以及模板变量的纯函数面（保存期静态校验
 // 与运行期渲染同源）。零 DB / 零 fs 依赖，前后端共用。
 export * from './schemas/webhook'
+export * from './schemas/codeHost' // RFC-269
 export * from './webhookTemplate'
 // RFC-262 — upload 文件名净化与落点判重的纯函数面。启动表单提交前与 daemon
 // 收到 multipart 后跑的是同一套规则，两边不可能给出不同判定。零依赖叶子。

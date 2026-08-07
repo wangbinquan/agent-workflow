@@ -228,6 +228,8 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         resizeAllNodePools(deps.db, {
           agent: updated.maxConcurrentNodes,
           script: updated.maxConcurrentScriptNodes,
+          // RFC-269 — the third pool hot-applies on the same linearization point.
+          'code-host': updated.maxConcurrentCodeHostCalls,
         })
         resizeAllTaskFanoutSems(updated.multiProcessSubprocessConcurrency)
         return c.json(updated)

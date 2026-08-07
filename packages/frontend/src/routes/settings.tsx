@@ -45,6 +45,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
+import { CodeHostsSection } from '@/components/settings/CodeHostsSection'
 import { RuntimeSelect } from '@/components/RuntimeSelect'
 import { useRuntimesList } from '@/hooks/useRuntimesList'
 import { SandboxCard } from '@/components/settings/SandboxCard'
@@ -83,6 +84,8 @@ export type SettingsTab =
   | 'appearance'
   | 'rendering'
   | 'authentication'
+  // RFC-269 — 代码平台出站凭据（不进 config.json，走独立 REST 端点）。
+  | 'codeHosts'
 
 export const SETTINGS_TABS = [
   'runtime',
@@ -92,6 +95,7 @@ export const SETTINGS_TABS = [
   'gc',
   'git',
   'network',
+  'codeHosts',
   'appearance',
   'rendering',
   'authentication',
@@ -121,6 +125,9 @@ function configScopeForSettingsTab(tab: SettingsTab): SettingsConfigScopeId | un
       return SETTINGS_CONFIG_SCOPE_IDS.rendering
     case 'runtime':
     case 'authentication':
+    // RFC-269: 凭据不在 config.json 里（DB + secretBox），所以没有 config scope。
+    // eslint-disable-next-line no-fallthrough -- 空 case 串联，无语句可落空
+    case 'codeHosts':
       return undefined
   }
 }
@@ -307,6 +314,11 @@ function SettingsPage() {
           label: t('settings.tabAuthentication'),
           description: t('settings.sectionDescriptions.authentication'),
         },
+        {
+          key: 'codeHosts',
+          label: t('settings.tabCodeHosts'),
+          description: t('settings.sectionDescriptions.codeHosts'),
+        },
       ],
     },
     {
@@ -356,6 +368,7 @@ function SettingsPage() {
         {tab === 'git' && <GitTab config={config.data} />}
         {tab === 'gc' && <GcTab config={config.data} />}
         {tab === 'network' && <NetworkTab config={config.data} />}
+        {tab === 'codeHosts' && <CodeHostsSection />}
         {tab === 'appearance' && <AppearanceTab config={config.data} />}
         {tab === 'rendering' && <RenderingTab config={config.data} />}
         {tab === 'authentication' && <AuthenticationTab />}

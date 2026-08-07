@@ -49,7 +49,10 @@ describe('PERMISSIONS catalog', () => {
     // 系统域点，永不进令牌，角色面 admin-only）⇒ 65。
     // RFC-260 加 `webhook-endpoints:read`（端点/投递元数据只读，全员；URL 明文
     // 由响应分层保护——PAT 恒拿掩码）⇒ 66。
-    expect(PERMISSIONS.length).toBe(66)
+    // RFC-269 加 `code-host-calls:author`（代码平台调用节点 = 以管理员配置的
+    // token 对 GitLab/GitHub 做写操作；与 scripts:author 同档的能力点：系统域、
+    // 永不进令牌、角色基线 admin + manager）⇒ 67。
+    expect(PERMISSIONS.length).toBe(67)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -152,6 +155,10 @@ describe('PERMISSIONS catalog', () => {
       // RFC-253 — 脚本正文编写。它同时也在 manager 基线里（见下面的
       // MANAGER_DENIED 断言不含它），但相对 user 仍是 admin-only。
       'scripts:author',
+      // RFC-269 — 代码平台调用节点的编写。与 scripts:author 完全同档：manager
+      // 也有，但相对普通用户是 admin-only（该节点携带的是管理员配置的 token 对
+      // GitLab/GitHub 的写权限，平台侧 ACL 约束不了它能碰到的仓库）。
+      'code-host-calls:author',
       // RFC-257（UI 修订收紧）→ RFC-260（读面重新放开）：写动词与端点 manage
       // 仍 admin-only；两个 read 点（webhook-triggers:read /
       // webhook-endpoints:read）自 RFC-260 起进 user 基线，已从本负向清单移除。
@@ -386,6 +393,8 @@ describe('RFC-222 manager role', () => {
       // RFC-253 D19 — 脚本正文编写下放到 manager（资源管理员），但依然是
       // 系统域点，任何 PAT 都拿不到。
       'scripts:author',
+      // RFC-269 Q3 — 代码平台调用节点的编写同样下放到 manager，同样是系统域点。
+      'code-host-calls:author',
     ]
     expect([...ROLE_PERMISSIONS.manager].sort()).toEqual([...new Set(expected)].sort())
   })

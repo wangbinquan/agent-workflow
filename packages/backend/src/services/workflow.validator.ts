@@ -38,6 +38,17 @@ import {
   CLARIFY_RESPONSE_TARGET_PORT_NAME,
   CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT,
   BUILTIN_VARS,
+  CODE_HOST_DESTRUCTIVE_METHODS,
+  CodeHostCallNodeSchema,
+  CodeHostCustomRequestSchema,
+  codeHostActionFields,
+  codeHostActionSupported,
+  codeHostJsonBodyIssue,
+  codeHostPathIssue,
+  codeHostRequiredFields,
+  extractCodeHostVars,
+  isCodeHostAction,
+  isTriggerContextVar,
   analyzeWorkflowScopeTree,
   buildNodeAgentLookup,
   canonicalJson,
@@ -1328,6 +1339,184 @@ export function validateWorkflowDef(
           pointer: node.id,
           target: target.nodeField(node.id, 'script-env'),
         })
+      }
+    }
+  }
+
+  // 3c. RFC-269 code-host call nodes -------------------------------------------
+  //
+  // Fails CLOSED like the script rules: a combination the executor cannot honour
+  // is rejected at save time rather than at 2am against a real GitLab.
+  //
+  // What is deliberately NOT checked here: whether the workflow will run on a
+  // MULTI-repo task (RFC-066). Repo count is a LAUNCH parameter, not a property
+  // of the definition, so "project is empty and the task has two repos" is only
+  // knowable at run time — `resolveProjectFallback` reports it there with a
+  // message naming both repos. Nor is "does this workflow actually have a
+  // webhook trigger" checked: triggers are an independent resource that can be
+  // created after the workflow, so checking it here would red-flag the natural
+  // authoring order (design D24).
+  for (const node of nodes) {
+    if (node.kind !== 'code-host-call') continue
+
+    const strict = CodeHostCallNodeSchema.safeParse(node)
+    if (!strict.success) {
+      for (const issue of strict.error.issues) {
+        issues.push({
+          code: 'code-host-node-invalid',
+          message: `node '${node.id}': ${issue.path.join('.')} ${issue.message}`,
+          pointer: node.id,
+          target: target.node(node.id),
+        })
+      }
+    }
+
+    const provider = readString(node, 'provider')
+    if (provider !== 'gitlab' && provider !== 'github') {
+      issues.push({
+        code: 'code-host-provider-invalid',
+        message: `node '${node.id}': provider must be gitlab or github`,
+        pointer: node.id,
+        target: target.node(node.id),
+      })
+      continue
+    }
+    const action = readString(node, 'action') ?? ''
+    if (!isCodeHostAction(action)) {
+      issues.push({
+        code: 'code-host-action-invalid',
+        message: `node '${node.id}': unknown action '${action}'`,
+        pointer: node.id,
+        target: target.node(node.id),
+      })
+      continue
+    }
+    if (!codeHostActionSupported(action, provider)) {
+      issues.push({
+        code: 'code-host-action-unsupported',
+        message: `node '${node.id}': action '${action}' is not supported on ${provider}`,
+        pointer: node.id,
+        target: target.node(node.id),
+      })
+    }
+
+    const rawParams = (node as unknown as { params?: unknown }).params
+    const params: Record<string, string> = {}
+    if (rawParams !== null && typeof rawParams === 'object' && !Array.isArray(rawParams)) {
+      for (const [key, value] of Object.entries(rawParams as Record<string, unknown>)) {
+        if (typeof value === 'string') params[key] = value
+      }
+    }
+
+    if (codeHostActionSupported(action, provider)) {
+      for (const field of codeHostRequiredFields(action, provider)) {
+        if ((params[field] ?? '').trim().length === 0) {
+          issues.push({
+            code: 'code-host-param-missing',
+            message: `node '${node.id}': '${field}' is required for ${action} on ${provider}`,
+            pointer: node.id,
+            target: target.node(node.id),
+          })
+        }
+      }
+      // Enum-typed fields: only a LITERAL value can be judged here. A value
+      // containing `{{` resolves at run time (user story 2 wants `state` to come
+      // from an upstream port), and the executor rejects an illegal one there
+      // with the legal set spelled out.
+      for (const field of codeHostActionFields(action, provider)) {
+        if (field.control !== 'select') continue
+        const options = 'options' in field ? (field.options ?? []) : []
+        const value = params[field.name] ?? ''
+        if (value.length === 0 || value.includes('{{')) continue
+        if (!(options as readonly string[]).includes(value)) {
+          issues.push({
+            code: 'code-host-param-invalid',
+            message: `node '${node.id}': '${field.name}' must be one of ${options.join(', ')}`,
+            pointer: node.id,
+            target: target.node(node.id),
+          })
+        }
+      }
+    }
+
+    const templates: string[] = Object.values(params)
+    if (action === 'custom') {
+      const request = (node as unknown as { request?: unknown }).request
+      const parsedRequest = CodeHostCustomRequestSchema.safeParse(request)
+      if (!parsedRequest.success) {
+        issues.push({
+          code: 'code-host-request-invalid',
+          message: `node '${node.id}': a custom action needs a valid request (method + relative path)`,
+          pointer: node.id,
+          target: target.node(node.id),
+        })
+      } else {
+        const req = parsedRequest.data
+        if (
+          (CODE_HOST_DESTRUCTIVE_METHODS as readonly string[]).includes(req.method) &&
+          (node as unknown as { allowDestructive?: unknown }).allowDestructive !== true
+        ) {
+          issues.push({
+            code: 'code-host-method-forbidden',
+            message: `node '${node.id}': ${req.method} requires the node to explicitly allow destructive methods`,
+            pointer: node.id,
+            target: target.node(node.id),
+          })
+        }
+        const pathIssue = codeHostPathIssue(req.path)
+        if (pathIssue !== null) {
+          issues.push({
+            code: 'code-host-path-invalid',
+            message: `node '${node.id}': request path rejected (${pathIssue}) — it must be a relative path under the configured API root`,
+            pointer: node.id,
+            target: target.node(node.id),
+          })
+        }
+        if (req.body !== undefined) {
+          const bodyIssue = codeHostJsonBodyIssue(req.body)
+          if (bodyIssue !== null) {
+            const detail =
+              bodyIssue.kind === 'invalid-json'
+                ? 'the body is not valid JSON'
+                : bodyIssue.kind === 'var-in-key'
+                  ? `{{${bodyIssue.ref}}} is used as an object key`
+                  : `{{${bodyIssue.ref}}} sits outside a JSON string — put it inside quotes so an upstream value cannot change the request structure`
+            issues.push({
+              code: 'code-host-body-invalid',
+              message: `node '${node.id}': ${detail}`,
+              pointer: node.id,
+              target: target.node(node.id),
+            })
+          }
+        }
+        templates.push(req.path, ...Object.values(req.query ?? {}), req.body ?? '')
+      }
+    }
+
+    // Template variable domain: upstream ports by name (same rule the prompt
+    // templates use) plus the closed trigger-context set.
+    const inboundPorts = inbound.get(node.id) ?? new Set<string>()
+    for (const template of templates) {
+      for (const ref of extractCodeHostVars(template)) {
+        if (ref.kind === 'trigger') {
+          if (!isTriggerContextVar(ref.name)) {
+            issues.push({
+              code: 'code-host-var-unknown',
+              message: `node '${node.id}': {{trigger.${ref.name}}} is not a webhook event variable`,
+              pointer: node.id,
+              target: target.node(node.id),
+            })
+          }
+          continue
+        }
+        if (!inboundPorts.has(ref.name)) {
+          issues.push({
+            code: 'code-host-var-unknown',
+            message: `node '${node.id}': {{${ref.name}}} has no matching inbound port`,
+            pointer: node.id,
+            target: target.node(node.id),
+          })
+        }
       }
     }
   }

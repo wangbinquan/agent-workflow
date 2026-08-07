@@ -70,6 +70,8 @@ describe('buildPalette with real i18n', () => {
       'Wrappers',
       'Calls',
       'Scripts',
+      // RFC-269 显式改判：新增 Integrations 分区。
+      'Integrations',
       'IO',
       'Human',
     ])

@@ -50,6 +50,7 @@ import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/sys
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
+import { mountCodeHostRoutes } from '@/routes/codeHosts'
 import { mountWebhookEndpointRoutes } from '@/routes/webhookEndpoints'
 import { mountWebhookTriggerRoutes } from '@/routes/webhookTriggers'
 import { mountWebhookDeliveryRoutes } from '@/routes/webhookDeliveries'
@@ -115,6 +116,12 @@ export interface AppDeps {
    * guaranteed-500 public route.
    */
   webhookDispatcher?: WebhookDispatcher
+  /**
+   * RFC-269 — outbound `fetch` seam for code-host calls (connection tests and
+   * the call-node executor). Production omits it and the real `fetch` is used;
+   * tests inject a stub so no suite ever depends on reaching gitlab.com.
+   */
+  codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
   /**
    * RFC-159 — override the scheduled-task run-now launch closure. Production
    * omits it (the route builds the real one from db + configPath); tests inject
@@ -320,6 +327,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountTaskRoutes(app, deps)
   mountScheduledTaskRoutes(app, deps) // RFC-159
   mountWebhookEndpointRoutes(app, deps) // RFC-257 T7
+  mountCodeHostRoutes(app, deps) // RFC-269
   mountWebhookTriggerRoutes(app, deps) // RFC-257 T8
   mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9
   mountBackupRoutes(app, deps)

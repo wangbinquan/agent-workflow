@@ -185,6 +185,22 @@ export const NODE_KIND_BEHAVIORS = {
     isAgent: false,
     settlesWithoutRow: false,
   },
+  // RFC-269 — a code-host call issues one real outbound API request with real
+  // external side effects (a comment gets posted, an MR gets merged), so it
+  // cascades on retry and is process-bearing exactly like `script`. It owns no
+  // model session (`isAgent: false` keeps it out of inventory capture, memory
+  // injection and clarify), and always writes its own node_run row.
+  //
+  // Unlike `script` it spawns NO subprocess — the daemon issues the request
+  // itself — so it never enters the containment admission surface. That
+  // difference lives in the executor, not in this table: every dimension here
+  // is about scheduling/lifecycle, which the two kinds genuinely share.
+  'code-host-call': {
+    retryCascade: 'mint-placeholder',
+    isProcess: true,
+    isAgent: false,
+    settlesWithoutRow: false,
+  },
 } as const satisfies Record<NodeKind, NodeKindBehavior>
 
 // ---------------------------------------------------------------------------

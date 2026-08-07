@@ -106,10 +106,22 @@ export function livenessSourceOfKind(kind: NodeKind): 'process' | 'delegated' {
     case 'clarify':
     case 'clarify-cross-agent':
     case 'script': // RFC-253 — see the note below
+    case 'code-host-call': // RFC-269 — see the note below
       // RFC-253: a script node spawns its own subprocess and the executor
       // writes `pid` + `spawn_binary_path` on the same update as every agent
       // run, so its liveness is direct process evidence — never delegated (it
       // owns no inner rows and no child task).
+      //
+      // RFC-269: a code-host call spawns NOTHING — the daemon issues the HTTP
+      // request in-process, so its row never carries a pid. It belongs here
+      // anyway: 'process' vs 'delegated' asks "does this row do its own work,
+      // or is its liveness carried by rows/tasks underneath it?", and a
+      // code-host call owns no inner rows and no child task. With pid = null
+      // `classifyRunLiveness` lands on `{kind:'none'}` and the row stays alive
+      // through the driver gate — the same treatment an agent row gets in its
+      // pre-spawn window. Calling it 'delegated' would instead route it down
+      // the EMPTY-delegation path, whose whole purpose is reaping containers
+      // that have nothing running underneath them.
       return 'process'
     // RFC-243: a call node's liveness is carried by its independent child
     // task (the childTaskId probe in resolveRunLiveness, which outranks this

@@ -38,6 +38,8 @@ export const DEFAULT_NODE_SIZE_BY_KIND: Record<NodeKind, { width: number; height
   // RFC-253 — agent-shaped card (header + badge row + port rows on both
   // sides), so it shares agent-single's generous default.
   script: { width: 280, height: 180 },
+  // RFC-269 — same card shape as script (header + badge row + ports).
+  'code-host-call': { width: 280, height: 180 },
 }
 
 /** Header strip height (matches `.canvas-node__header`). */

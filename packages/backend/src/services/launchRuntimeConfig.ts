@@ -106,6 +106,9 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     maxInvocationDepth?: number // RFC-243
     scriptInterpreters?: { python?: string; bash?: string; node?: string } // RFC-253
     scriptDepsInstallTimeoutMs?: number // RFC-253
+    maxConcurrentCodeHostCalls?: number // RFC-269
+    codeHostRequestTimeoutMs?: number // RFC-269
+    codeHostResponseMaxBytes?: number // RFC-269
   } = {}
   const commitPush = resolveCommitPushConfig(configPath)
   if (commitPush !== undefined) out.commitPush = commitPush
@@ -115,6 +118,16 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     // RFC-266: the script pool + the fan-out sub-pool ride the same funnel.
     if (cfg.maxConcurrentScriptNodes !== undefined)
       out.maxConcurrentScriptNodes = cfg.maxConcurrentScriptNodes
+    // RFC-269: the code-host pool + its request knobs ride the same funnel.
+    // Forgetting one here is the RFC-243/266 failure mode — the pool is a
+    // daemon singleton with resize-on-read, so a missing key silently rewrites
+    // the administrator's setting back to the default for the WHOLE daemon.
+    if (cfg.maxConcurrentCodeHostCalls !== undefined)
+      out.maxConcurrentCodeHostCalls = cfg.maxConcurrentCodeHostCalls
+    if (cfg.codeHostRequestTimeoutMs !== undefined)
+      out.codeHostRequestTimeoutMs = cfg.codeHostRequestTimeoutMs
+    if (cfg.codeHostResponseMaxBytes !== undefined)
+      out.codeHostResponseMaxBytes = cfg.codeHostResponseMaxBytes
     if (cfg.multiProcessSubprocessConcurrency !== undefined)
       out.multiProcessSubprocessConcurrency = cfg.multiProcessSubprocessConcurrency
     if (cfg.defaultPerNodeTimeoutMs !== undefined && cfg.defaultPerNodeTimeoutMs > 0)

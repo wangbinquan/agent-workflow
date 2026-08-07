@@ -29,7 +29,7 @@
 import { Semaphore } from '@/util/semaphore'
 
 /** Which independent daemon pool a process node competes in. */
-export type NodePoolKind = 'agent' | 'script'
+export type NodePoolKind = 'agent' | 'script' | 'code-host'
 
 const limiters = new WeakMap<object, Partial<Record<NodePoolKind, Semaphore>>>()
 
@@ -70,4 +70,7 @@ export function resizeAllNodePools(
 ): void {
   getNodePoolSemaphore(daemonScope, 'agent', capacities.agent)
   getNodePoolSemaphore(daemonScope, 'script', capacities.script)
+  // RFC-269: the third pool. `Record<NodePoolKind, number>` makes forgetting it
+  // a compile error rather than a silently un-resizable pool.
+  getNodePoolSemaphore(daemonScope, 'code-host', capacities['code-host'])
 }

@@ -19,6 +19,7 @@ import {
   isExecutionIdentityFailureCode,
   isPermanentRuntimeFailure,
   RUNTIME_FAILURE_CODES,
+  CODE_HOST_FAILURE_CODES,
   SCRIPT_FAILURE_CODES,
   isTransientRuntimeFailure,
 } from '../src'
@@ -63,10 +64,18 @@ describe('RFC-224 execution identity failure taxonomy', () => {
       // 告诉 agent 怎么重试；而对一个鉴权被拒的 agent 无话可说。
       ...RUNTIME_FAILURE_CODES,
       ...SCRIPT_FAILURE_CODES,
+      // RFC-269 显式改判：代码平台调用节点的失败族接在 script 之后。同样不进
+      // FOLLOWUP —— 一次 HTTP 请求要么拿到了响应要么没有，"在同一个 session 里
+      // 重新提示模型"对它没有意义，重试永远是一次全新的请求。
+      ...CODE_HOST_FAILURE_CODES,
       ...EXECUTION_IDENTITY_FAILURE_CODES,
       ...LEGACY_EXECUTION_IDENTITY_FAILURE_CODES,
     ])
-    for (const code of [...SCRIPT_FAILURE_CODES, ...RUNTIME_FAILURE_CODES]) {
+    for (const code of [
+      ...SCRIPT_FAILURE_CODES,
+      ...RUNTIME_FAILURE_CODES,
+      ...CODE_HOST_FAILURE_CODES,
+    ]) {
       expect(FOLLOWUP_FAILURE_CODES).not.toContain(code)
     }
     expect(new Set(FAILURE_CODES).size).toBe(FAILURE_CODES.length)

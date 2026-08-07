@@ -1,0 +1,710 @@
+// RFC-269 — 动作注册表：本 RFC 的核心资产，前后端唯一事实源。
+//
+// 一张表同时喂三个消费者，它们因此不可能对不齐：
+//   - 前端 Inspector：渲染动作下拉（按 group 分组）与该动作的定型表单
+//   - 校验器：必填字段、provider 是否支持该动作
+//   - 执行器：拼出真正的 method / path / query / body
+//
+// `satisfies Record<CodeHostAction, CodeHostActionDef>` 让「新增动作/新增
+// provider 却漏填映射」变成 typecheck 红，而不是运行期 404。
+//
+// 归一化的边界（用户拍板「统一动作名 + 各自映射」）：动作名与字段名 provider
+// 无关，**真实不对称的地方如实暴露**而不是假装一样——
+//   - GitHub 不支持 resolve 线程（REST 无此端点，`resolveReviewThread` 只在
+//     GraphQL，且线程的 PRRT_ node id 在 REST 面根本拿不到）⇒ unsupported
+//   - 触发流水线：GitLab 是 pipeline、GitHub 是 workflow_dispatch 且**必须**
+//     指定工作流文件 ⇒ 多一个 `workflow` 字段，只对 GitHub 显示
+//   - 列 job 的过滤维度两边根本不是一回事（GitLab 按 job 状态、GitHub 按
+//     "只看最后一次尝试"）⇒ 两个独立字段，各自只对自家显示
+//   - 指派：GitLab 吃数字 user id、GitHub 吃 login ⇒ 同一个字段，不同 hint
+//     与不同 transform（强行归一只会让人填错）
+//
+// 外部依据 2026-08-07 查证，逐条见 design §4.2；未实证项列在 proposal §8。
+
+import type { CodeHostProvider } from '../schemas/webhook'
+
+export const CODE_HOST_ACTION_GROUPS = ['comment', 'mr', 'pipeline', 'read', 'custom'] as const
+export type CodeHostActionGroup = (typeof CODE_HOST_ACTION_GROUPS)[number]
+
+export const CODE_HOST_ACTIONS = [
+  // comment
+  'comment.reply-thread',
+  'comment.create',
+  'comment.create-inline',
+  'comment.update',
+  'thread.resolve',
+  // mr
+  'commit-status.set',
+  'label.add',
+  'assignee.set',
+  'mr.approve',
+  'mr.merge',
+  'mr.create',
+  // pipeline
+  'pipeline.trigger',
+  'pipeline.retry',
+  'pipeline.cancel',
+  'job.list',
+  'job.log',
+  // read
+  'mr.diff',
+  'mr.list',
+  'file.read',
+  // 逃生舱
+  'custom',
+] as const
+export type CodeHostAction = (typeof CODE_HOST_ACTIONS)[number]
+
+/**
+ * 定型表单的字段名（闭合集合）。闭合是为了让前端能用
+ * `Record<CodeHostField, string>` 保证 i18n 漏写即 typecheck 红。
+ */
+export const CODE_HOST_FIELDS = [
+  'project',
+  'mr',
+  'thread',
+  'comment',
+  'comment_scope',
+  'body',
+  'position',
+  'sha',
+  'state',
+  'context',
+  'description',
+  'target_url',
+  'labels',
+  'assignees',
+  'ref',
+  'workflow',
+  'pipeline',
+  'job',
+  'job_scope',
+  'job_filter',
+  'path',
+  'file_ref',
+  'mr_state',
+  'per_page',
+  'source_branch',
+  'target_branch',
+  'title',
+  'merge_method',
+  'squash',
+] as const
+export type CodeHostField = (typeof CODE_HOST_FIELDS)[number]
+
+/**
+ * D22 —— 固定的两个输出端口。用户拍板 Q8：不做「可声明字段提取」，需要某个
+ * 字段时在下游接一个脚本节点取，平台不再造第二套 JSON 路径语法。
+ */
+export const CODE_HOST_OUTPUT_PORTS = ['response', 'status'] as const
+export type CodeHostOutputPort = (typeof CODE_HOST_OUTPUT_PORTS)[number]
+
+export const CODE_HOST_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+export type CodeHostMethod = (typeof CODE_HOST_METHODS)[number]
+
+/** 破坏性方法：节点上必须显式勾选 `allowDestructive` 才能选（用户拍板 Q9）。 */
+export const CODE_HOST_DESTRUCTIVE_METHODS: readonly CodeHostMethod[] = ['DELETE']
+
+/**
+ * 值变换。两家 API 对"同一件事"的参数形态不同，差异吸收在这里而不是让用户
+ * 填两次。
+ */
+export type CodeHostTransform =
+  | 'csv-array' // "a,b" -> ["a","b"]
+  | 'csv-number-array' // "1,2" -> [1,2]（GitLab 的 assignee_ids）
+  | 'json-object' // 字符串 JSON -> 对象（position 原样回传）
+  | 'status-state' // 统一三档 -> 各家 commit status 取值
+  | 'mr-state' // 统一三档 -> 各家 MR 列表过滤取值
+  | 'boolean' // "true"/"false" -> 布尔
+
+export interface CodeHostParamMap {
+  /** API 参数名。`'*'` = 把该值（对象）展开到 body 顶层。 */
+  readonly api: string
+  readonly from: { readonly field: CodeHostField } | { readonly literal: unknown }
+  readonly transform?: CodeHostTransform
+  /** 渲染为空时省略该参数（可选参数用；必填字段由校验器在更早的地方拦下）。 */
+  readonly omitIfEmpty?: boolean
+}
+
+/** binding 的特殊语义开关。 */
+export type CodeHostQuirk = 'followRedirectStripAuth'
+
+export interface CodeHostBinding {
+  readonly method: CodeHostMethod
+  /** path 模板；`{field}` 取字段值，`{__project__}` 取解析后的 project 定位段。 */
+  readonly path: string
+  readonly query?: readonly CodeHostParamMap[]
+  readonly body?: readonly CodeHostParamMap[]
+  readonly quirks?: readonly CodeHostQuirk[]
+  /** 覆盖默认 Accept（如 GitHub 读文件要 raw）。 */
+  readonly accept?: string
+}
+
+export interface CodeHostUnsupported {
+  readonly unsupported: true
+  /** i18n key 后缀，落在 `codeHost.unsupported.<reasonKey>`。 */
+  readonly reasonKey: string
+}
+
+export interface CodeHostFieldDef {
+  readonly name: CodeHostField
+  readonly control: 'text' | 'textarea' | 'select'
+  /** select 的取值（value）。label 走 i18n，所以这里放 API 认识的原值。 */
+  readonly options?: readonly string[]
+  /** 在这些 provider 上必填；不在列 = 可选。 */
+  readonly requiredFor: readonly CodeHostProvider[]
+  /** 只对这些 provider 显示；缺省 = 全部。 */
+  readonly onlyFor?: readonly CodeHostProvider[]
+}
+
+export interface CodeHostActionDef {
+  readonly group: CodeHostActionGroup
+  readonly fields: readonly CodeHostFieldDef[]
+  readonly bindings: Readonly<Record<CodeHostProvider, CodeHostBinding | CodeHostUnsupported>>
+}
+
+const BOTH: readonly CodeHostProvider[] = ['gitlab', 'github']
+
+// project 是每个动作都有的第一个字段：**留空则取当前任务的仓库**（用户拍板
+// Q11）。因此它在任何 provider 上都不是"必填" —— 能不能推导出来是**运行期**的
+// 事：仓库数量是启动参数（RFC-066）而不是工作流定义的属性，所以多仓任务由
+// `resolveProjectFallback` 在运行期报「请显式填写」，保存期无从判定。
+const PROJECT: CodeHostFieldDef = { name: 'project', control: 'text', requiredFor: [] }
+const MR_REQUIRED: CodeHostFieldDef = { name: 'mr', control: 'text', requiredFor: BOTH }
+const BODY_REQUIRED: CodeHostFieldDef = { name: 'body', control: 'textarea', requiredFor: BOTH }
+
+export const CODE_HOST_ACTION_DEFS = {
+  // -------------------------------------------------------------------------
+  // 评论类 —— 「自动回复评论流水线」的核心
+  // -------------------------------------------------------------------------
+  'comment.reply-thread': {
+    group: 'comment',
+    fields: [
+      PROJECT,
+      MR_REQUIRED,
+      { name: 'thread', control: 'text', requiredFor: BOTH },
+      BODY_REQUIRED,
+    ],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/merge_requests/{mr}/discussions/{thread}/notes',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/pulls/{mr}/comments/{thread}/replies',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+    },
+  },
+  'comment.create': {
+    group: 'comment',
+    fields: [PROJECT, MR_REQUIRED, BODY_REQUIRED],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/merge_requests/{mr}/notes',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+      github: {
+        // PR 的"普通评论"在 GitHub 就是 issue comment —— 同一个对象两种叫法。
+        method: 'POST',
+        path: '/repos/{__project__}/issues/{mr}/comments',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+    },
+  },
+  'comment.create-inline': {
+    group: 'comment',
+    fields: [
+      PROJECT,
+      MR_REQUIRED,
+      BODY_REQUIRED,
+      // RFC-263 的 {{trigger.comment_position_json}} 就是**按各自建评论 API 的
+      // 参数名打包、原样可回传**的，所以这里一个字段喂两家。
+      { name: 'position', control: 'textarea', requiredFor: BOTH },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/merge_requests/{mr}/discussions',
+        body: [
+          { api: 'body', from: { field: 'body' } },
+          { api: 'position', from: { field: 'position' }, transform: 'json-object' },
+        ],
+      },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/pulls/{mr}/comments',
+        body: [
+          { api: 'body', from: { field: 'body' } },
+          // GitHub 的位置参数（commit_id / path / line / side）是 body 顶层字段，
+          // 不像 GitLab 收在 position 对象里 ⇒ 展开。
+          { api: '*', from: { field: 'position' }, transform: 'json-object' },
+        ],
+      },
+    },
+  },
+  'comment.update': {
+    group: 'comment',
+    fields: [
+      PROJECT,
+      { name: 'mr', control: 'text', requiredFor: ['gitlab'] },
+      { name: 'comment', control: 'text', requiredFor: BOTH },
+      BODY_REQUIRED,
+      // GitHub 的行内评论与普通评论是**两个端点**；值直接是 API 的路径段，
+      // 人读的标签走 i18n。
+      {
+        name: 'comment_scope',
+        control: 'select',
+        options: ['pulls', 'issues'],
+        requiredFor: ['github'],
+        onlyFor: ['github'],
+      },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'PUT',
+        path: '/projects/{__project__}/merge_requests/{mr}/notes/{comment}',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+      github: {
+        method: 'PATCH',
+        path: '/repos/{__project__}/{comment_scope}/comments/{comment}',
+        body: [{ api: 'body', from: { field: 'body' } }],
+      },
+    },
+  },
+  'thread.resolve': {
+    group: 'comment',
+    fields: [PROJECT, MR_REQUIRED, { name: 'thread', control: 'text', requiredFor: ['gitlab'] }],
+    bindings: {
+      gitlab: {
+        method: 'PUT',
+        path: '/projects/{__project__}/merge_requests/{mr}/discussions/{thread}',
+        body: [{ api: 'resolved', from: { literal: true } }],
+      },
+      // 2026-08-07 查证：REST 面没有 resolve review thread；`resolveReviewThread`
+      // 是 GraphQL mutation，且它要的 PRRT_ 线程 node id 在 REST 面拿不到 ——
+      // 所以这不是"我们没做"，是 REST 结构上做不到。
+      github: { unsupported: true, reasonKey: 'graphqlOnly' },
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // MR 状态类
+  // -------------------------------------------------------------------------
+  'commit-status.set': {
+    group: 'mr',
+    fields: [
+      PROJECT,
+      { name: 'sha', control: 'text', requiredFor: BOTH },
+      // 三档覆盖"审计中 / 通过 / 不通过"的全部用例。两家各自多出来的档
+      // （GitLab running·canceled、GitHub error）不进产品面：那只会制造
+      // provider 特有知识，而它们表达不了三档表达不了的东西。
+      {
+        name: 'state',
+        control: 'select',
+        options: ['pending', 'success', 'failed'],
+        requiredFor: BOTH,
+      },
+      { name: 'context', control: 'text', requiredFor: [] },
+      { name: 'description', control: 'text', requiredFor: [] },
+      { name: 'target_url', control: 'text', requiredFor: [] },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/statuses/{sha}',
+        query: [
+          { api: 'state', from: { field: 'state' }, transform: 'status-state' },
+          { api: 'name', from: { field: 'context' }, omitIfEmpty: true },
+          { api: 'description', from: { field: 'description' }, omitIfEmpty: true },
+          { api: 'target_url', from: { field: 'target_url' }, omitIfEmpty: true },
+        ],
+      },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/statuses/{sha}',
+        body: [
+          { api: 'state', from: { field: 'state' }, transform: 'status-state' },
+          { api: 'context', from: { field: 'context' }, omitIfEmpty: true },
+          { api: 'description', from: { field: 'description' }, omitIfEmpty: true },
+          { api: 'target_url', from: { field: 'target_url' }, omitIfEmpty: true },
+        ],
+      },
+    },
+  },
+  'label.add': {
+    group: 'mr',
+    fields: [PROJECT, MR_REQUIRED, { name: 'labels', control: 'text', requiredFor: BOTH }],
+    bindings: {
+      gitlab: {
+        method: 'PUT',
+        path: '/projects/{__project__}/merge_requests/{mr}',
+        body: [{ api: 'add_labels', from: { field: 'labels' } }],
+      },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/issues/{mr}/labels',
+        body: [{ api: 'labels', from: { field: 'labels' }, transform: 'csv-array' }],
+      },
+    },
+  },
+  'assignee.set': {
+    group: 'mr',
+    fields: [PROJECT, MR_REQUIRED, { name: 'assignees', control: 'text', requiredFor: BOTH }],
+    bindings: {
+      gitlab: {
+        method: 'PUT',
+        path: '/projects/{__project__}/merge_requests/{mr}',
+        // GitLab 要数字 user id；GitHub 要 login。同一个字段、不同 transform，
+        // 差异写进 hint —— 它们本来就是不同的东西。
+        body: [
+          { api: 'assignee_ids', from: { field: 'assignees' }, transform: 'csv-number-array' },
+        ],
+      },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/issues/{mr}/assignees',
+        body: [{ api: 'assignees', from: { field: 'assignees' }, transform: 'csv-array' }],
+      },
+    },
+  },
+  'mr.approve': {
+    group: 'mr',
+    fields: [PROJECT, MR_REQUIRED, { name: 'body', control: 'textarea', requiredFor: [] }],
+    bindings: {
+      // 待实证（proposal §8-2）：approve 端点在 GitLab **Free 版**是否存在。
+      // 实测 404 时改为 unsupported + reasonKey，而不是留一个必然失败的动作。
+      gitlab: { method: 'POST', path: '/projects/{__project__}/merge_requests/{mr}/approve' },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/pulls/{mr}/reviews',
+        body: [
+          { api: 'event', from: { literal: 'APPROVE' } },
+          { api: 'body', from: { field: 'body' }, omitIfEmpty: true },
+        ],
+      },
+    },
+  },
+  'mr.merge': {
+    group: 'mr',
+    fields: [
+      PROJECT,
+      MR_REQUIRED,
+      { name: 'title', control: 'text', requiredFor: [] },
+      {
+        name: 'squash',
+        control: 'select',
+        options: ['true', 'false'],
+        requiredFor: [],
+        onlyFor: ['gitlab'],
+      },
+      {
+        name: 'merge_method',
+        control: 'select',
+        options: ['merge', 'squash', 'rebase'],
+        requiredFor: [],
+        onlyFor: ['github'],
+      },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'PUT',
+        path: '/projects/{__project__}/merge_requests/{mr}/merge',
+        body: [
+          { api: 'squash', from: { field: 'squash' }, transform: 'boolean', omitIfEmpty: true },
+          { api: 'merge_commit_message', from: { field: 'title' }, omitIfEmpty: true },
+        ],
+      },
+      github: {
+        method: 'PUT',
+        path: '/repos/{__project__}/pulls/{mr}/merge',
+        body: [
+          { api: 'merge_method', from: { field: 'merge_method' }, omitIfEmpty: true },
+          { api: 'commit_title', from: { field: 'title' }, omitIfEmpty: true },
+        ],
+      },
+    },
+  },
+  'mr.create': {
+    group: 'mr',
+    fields: [
+      PROJECT,
+      { name: 'source_branch', control: 'text', requiredFor: BOTH },
+      { name: 'target_branch', control: 'text', requiredFor: BOTH },
+      { name: 'title', control: 'text', requiredFor: BOTH },
+      { name: 'description', control: 'textarea', requiredFor: [] },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/merge_requests',
+        body: [
+          { api: 'source_branch', from: { field: 'source_branch' } },
+          { api: 'target_branch', from: { field: 'target_branch' } },
+          { api: 'title', from: { field: 'title' } },
+          { api: 'description', from: { field: 'description' }, omitIfEmpty: true },
+        ],
+      },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/pulls',
+        body: [
+          { api: 'head', from: { field: 'source_branch' } },
+          { api: 'base', from: { field: 'target_branch' } },
+          { api: 'title', from: { field: 'title' } },
+          { api: 'body', from: { field: 'description' }, omitIfEmpty: true },
+        ],
+      },
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // Pipeline 类 —— 「修到绿」循环的原料
+  // -------------------------------------------------------------------------
+  'pipeline.trigger': {
+    group: 'pipeline',
+    fields: [
+      PROJECT,
+      { name: 'ref', control: 'text', requiredFor: BOTH },
+      // GitHub 的 workflow_dispatch 必须指名工作流文件（GitLab 没有对应概念）。
+      { name: 'workflow', control: 'text', requiredFor: ['github'], onlyFor: ['github'] },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'POST',
+        path: '/projects/{__project__}/pipeline',
+        query: [{ api: 'ref', from: { field: 'ref' } }],
+      },
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/actions/workflows/{workflow}/dispatches',
+        body: [{ api: 'ref', from: { field: 'ref' } }],
+      },
+    },
+  },
+  'pipeline.retry': {
+    group: 'pipeline',
+    fields: [PROJECT, { name: 'pipeline', control: 'text', requiredFor: BOTH }],
+    bindings: {
+      gitlab: { method: 'POST', path: '/projects/{__project__}/pipelines/{pipeline}/retry' },
+      // rerun-failed-jobs 而不是 rerun：这个动作服务的是"修到绿"循环，
+      // 只想重跑失败的那些（proposal §8-4 列为待实证项）。
+      github: {
+        method: 'POST',
+        path: '/repos/{__project__}/actions/runs/{pipeline}/rerun-failed-jobs',
+      },
+    },
+  },
+  'pipeline.cancel': {
+    group: 'pipeline',
+    fields: [PROJECT, { name: 'pipeline', control: 'text', requiredFor: BOTH }],
+    bindings: {
+      gitlab: { method: 'POST', path: '/projects/{__project__}/pipelines/{pipeline}/cancel' },
+      github: { method: 'POST', path: '/repos/{__project__}/actions/runs/{pipeline}/cancel' },
+    },
+  },
+  'job.list': {
+    group: 'pipeline',
+    fields: [
+      PROJECT,
+      { name: 'pipeline', control: 'text', requiredFor: BOTH },
+      // 两家的"过滤"根本不是一回事：GitLab 按 job 状态过滤，GitHub 只能选
+      // "只看最后一次尝试 / 全部"。做成一个字段会骗人，所以各给各的。
+      {
+        name: 'job_scope',
+        control: 'select',
+        options: ['failed', 'success', 'canceled', 'running'],
+        requiredFor: [],
+        onlyFor: ['gitlab'],
+      },
+      {
+        name: 'job_filter',
+        control: 'select',
+        options: ['latest', 'all'],
+        requiredFor: [],
+        onlyFor: ['github'],
+      },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'GET',
+        path: '/projects/{__project__}/pipelines/{pipeline}/jobs',
+        query: [{ api: 'scope', from: { field: 'job_scope' }, omitIfEmpty: true }],
+      },
+      github: {
+        method: 'GET',
+        path: '/repos/{__project__}/actions/runs/{pipeline}/jobs',
+        query: [{ api: 'filter', from: { field: 'job_filter' }, omitIfEmpty: true }],
+      },
+    },
+  },
+  'job.log': {
+    group: 'pipeline',
+    fields: [PROJECT, { name: 'job', control: 'text', requiredFor: BOTH }],
+    bindings: {
+      gitlab: { method: 'GET', path: '/projects/{__project__}/jobs/{job}/trace' },
+      // 2026-08-07 查证：GitHub 这个端点返回 302 到有效期约 1 分钟的签名 URL
+      // （pipelines.actions.githubusercontent.com）。这是全表**唯一**允许跟随
+      // 重定向的 binding，且跟随时必须剥掉 Authorization —— 签名 URL 自带凭据，
+      // 把我们的 token 送到第三方主机是教科书式的凭据外泄。
+      github: {
+        method: 'GET',
+        path: '/repos/{__project__}/actions/jobs/{job}/logs',
+        quirks: ['followRedirectStripAuth'],
+      },
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 读取类 —— 把代码平台侧的信息引进工作流当输入
+  // -------------------------------------------------------------------------
+  'mr.diff': {
+    group: 'read',
+    fields: [PROJECT, MR_REQUIRED],
+    bindings: {
+      // /changes 自 GitLab 15.7 弃用（v5 移除），一开始就用 /diffs。
+      gitlab: { method: 'GET', path: '/projects/{__project__}/merge_requests/{mr}/diffs' },
+      github: { method: 'GET', path: '/repos/{__project__}/pulls/{mr}/files' },
+    },
+  },
+  'mr.list': {
+    group: 'read',
+    fields: [
+      PROJECT,
+      { name: 'mr_state', control: 'select', options: ['open', 'closed', 'all'], requiredFor: [] },
+      { name: 'per_page', control: 'text', requiredFor: [] },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'GET',
+        path: '/projects/{__project__}/merge_requests',
+        query: [
+          { api: 'state', from: { field: 'mr_state' }, transform: 'mr-state', omitIfEmpty: true },
+          { api: 'per_page', from: { field: 'per_page' }, omitIfEmpty: true },
+        ],
+      },
+      github: {
+        method: 'GET',
+        path: '/repos/{__project__}/pulls',
+        query: [
+          { api: 'state', from: { field: 'mr_state' }, transform: 'mr-state', omitIfEmpty: true },
+          { api: 'per_page', from: { field: 'per_page' }, omitIfEmpty: true },
+        ],
+      },
+    },
+  },
+  'file.read': {
+    group: 'read',
+    fields: [
+      PROJECT,
+      { name: 'path', control: 'text', requiredFor: BOTH },
+      { name: 'file_ref', control: 'text', requiredFor: [] },
+    ],
+    bindings: {
+      gitlab: {
+        method: 'GET',
+        // 文件路径整段 percent-encode（渲染器对 path 位置一律 encodeURIComponent，
+        // 所以 a/b.txt -> a%2Fb.txt 正是 GitLab 要的形态）。
+        path: '/projects/{__project__}/repository/files/{path}/raw',
+        query: [{ api: 'ref', from: { field: 'file_ref' }, omitIfEmpty: true }],
+      },
+      github: {
+        method: 'GET',
+        path: '/repos/{__project__}/contents/{path}',
+        query: [{ api: 'ref', from: { field: 'file_ref' }, omitIfEmpty: true }],
+        accept: 'application/vnd.github.raw',
+      },
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 逃生舱 —— 走节点的 request 字段，不查本表的 binding
+  // -------------------------------------------------------------------------
+  custom: {
+    group: 'custom',
+    fields: [PROJECT],
+    bindings: {
+      gitlab: { method: 'GET', path: '/' },
+      github: { method: 'GET', path: '/' },
+    },
+  },
+} as const satisfies Record<CodeHostAction, CodeHostActionDef>
+
+// ---------------------------------------------------------------------------
+// 派生读取器
+// ---------------------------------------------------------------------------
+
+export function isCodeHostAction(value: unknown): value is CodeHostAction {
+  return typeof value === 'string' && (CODE_HOST_ACTIONS as readonly string[]).includes(value)
+}
+
+export function codeHostActionDef(action: CodeHostAction): CodeHostActionDef {
+  return CODE_HOST_ACTION_DEFS[action]
+}
+
+export function isUnsupportedBinding(
+  binding: CodeHostBinding | CodeHostUnsupported,
+): binding is CodeHostUnsupported {
+  return 'unsupported' in binding
+}
+
+/** 该 provider 是否支持该动作。 */
+export function codeHostActionSupported(
+  action: CodeHostAction,
+  provider: CodeHostProvider,
+): boolean {
+  return !isUnsupportedBinding(CODE_HOST_ACTION_DEFS[action].bindings[provider])
+}
+
+/** 该动作在该 provider 下要渲染/校验的字段（已过滤 onlyFor）。 */
+export function codeHostActionFields(
+  action: CodeHostAction,
+  provider: CodeHostProvider,
+): readonly CodeHostFieldDef[] {
+  // 显式加宽：`as const satisfies` 保留了每个字段的字面量类型，联合里那些没写
+  // `onlyFor` 的成员上访问该属性会 TS2339。加宽到接口类型是这里唯一想要的。
+  const fields: readonly CodeHostFieldDef[] = CODE_HOST_ACTION_DEFS[action].fields
+  return fields.filter((f) => f.onlyFor === undefined || f.onlyFor.includes(provider))
+}
+
+/** 该动作在该 provider 下的必填字段名。 */
+export function codeHostRequiredFields(
+  action: CodeHostAction,
+  provider: CodeHostProvider,
+): readonly CodeHostField[] {
+  return codeHostActionFields(action, provider)
+    .filter((f) => f.requiredFor.includes(provider))
+    .map((f) => f.name)
+}
+
+/** 按 group 分组的动作列表（UI 分组呈现的顺序源）。 */
+export function codeHostActionsByGroup(): ReadonlyArray<{
+  readonly group: CodeHostActionGroup
+  readonly actions: readonly CodeHostAction[]
+}> {
+  return CODE_HOST_ACTION_GROUPS.map((group) => ({
+    group,
+    actions: CODE_HOST_ACTIONS.filter((a) => CODE_HOST_ACTION_DEFS[a].group === group),
+  }))
+}
+
+/** 统一三档 commit status -> 各家取值。 */
+export const CODE_HOST_STATUS_STATE_MAP: Readonly<
+  Record<CodeHostProvider, Readonly<Record<string, string>>>
+> = {
+  gitlab: { pending: 'pending', success: 'success', failed: 'failed' },
+  // GitHub 用 'failure'；写 'failed' 会 422。
+  github: { pending: 'pending', success: 'success', failed: 'failure' },
+}
+
+/** 统一三档 MR 列表过滤 -> 各家取值。 */
+export const CODE_HOST_MR_STATE_MAP: Readonly<
+  Record<CodeHostProvider, Readonly<Record<string, string>>>
+> = {
+  gitlab: { open: 'opened', closed: 'closed', all: 'all' },
+  github: { open: 'open', closed: 'closed', all: 'all' },
+}

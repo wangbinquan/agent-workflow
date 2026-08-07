@@ -89,6 +89,7 @@ export function deriveNodePickerCatalog(input: {
     wrappers: 0,
     calls: 0,
     scripts: 0,
+    integrations: 0, // RFC-269
     io: 0,
     human: 0,
   }

@@ -145,6 +145,7 @@ function WorkflowNodePickerCatalogBody({
       calls: t('editor.nodePicker.categoryCalls'),
       // RFC-253 — scripts run deterministic compute with no model process.
       scripts: t('editor.nodePicker.categoryScripts'),
+      integrations: t('editor.nodePicker.categoryIntegrations'), // RFC-269
       io: t('editor.nodePicker.categoryIo'),
       human: t('editor.nodePicker.categoryHuman'),
     }),

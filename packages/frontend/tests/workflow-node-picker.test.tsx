@@ -53,7 +53,8 @@ describe('WorkflowNodePicker', () => {
     expect(search.getAttribute('type')).toBe('search')
     expect(search.getAttribute('aria-label')).not.toBeNull()
     expect(getByRole('tablist', { name: /node type|节点类型/ })).toBeTruthy()
-    expect(getByTestId('workflow-node-picker-category-all').textContent).toMatch(/12/)
+    // RFC-269 显式改判：新增 code-host-call 节点类型 ⇒ 12 → 13。
+    expect(getByTestId('workflow-node-picker-category-all').textContent).toMatch(/13/)
     expect(getByTestId('workflow-node-picker-category-agents').textContent).toMatch(/1/)
     expect(getByTestId('workflow-node-picker-category-wrappers').textContent).toMatch(/3/)
     // RFC-243 — call-workflow + call-workgroup entries in the Calls category.

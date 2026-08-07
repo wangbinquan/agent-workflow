@@ -86,6 +86,30 @@ export const ConfigSchema = z.object({
    * cannot block a second-scale script step (and vice versa).
    */
   maxConcurrentScriptNodes: z.number().int().positive(),
+  /**
+   * RFC-269: daemon-wide pool capacity for code-host call nodes — a third
+   * independent pool, for the same reason RFC-266 split scripts out: one
+   * outbound API call is a second-scale step and must not queue behind
+   * multi-minute agent runs. Default 8 (higher than the other two: these hold
+   * no subprocess, only an in-flight HTTP request).
+   */
+  maxConcurrentCodeHostCalls: z.number().int().positive().default(8),
+  /** RFC-269: wall clock for ONE outbound code-host request. Node may override. */
+  codeHostRequestTimeoutMs: z
+    .number()
+    .int()
+    .positive()
+    .default(30 * 1000),
+  /**
+   * RFC-269: cap on the `response` port value. Beyond this the body is
+   * truncated with an explicit marker — never silently, because a downstream
+   * agent would otherwise draw conclusions from half a JSON document.
+   */
+  codeHostResponseMaxBytes: z
+    .number()
+    .int()
+    .positive()
+    .default(256 * 1024),
   /** Independent sub-process pool capacity inside a multi-process node. */
   multiProcessSubprocessConcurrency: z.number().int().positive(),
 
@@ -605,6 +629,9 @@ export const DEFAULT_CONFIG: Config = {
   $schema_version: CONFIG_SCHEMA_VERSION,
   maxConcurrentNodes: 4,
   maxConcurrentScriptNodes: 4,
+  maxConcurrentCodeHostCalls: 8, // RFC-269 — no subprocess, only an in-flight request
+  codeHostRequestTimeoutMs: 30 * 1000,
+  codeHostResponseMaxBytes: 256 * 1024,
   multiProcessSubprocessConcurrency: 4,
   defaultPerTaskMaxDurationMs: 60 * 60 * 1000, // 1 hour
   defaultPerTaskMaxTotalTokens: 0, // 0 = unlimited

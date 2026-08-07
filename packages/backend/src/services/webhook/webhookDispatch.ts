@@ -60,6 +60,7 @@ import {
   type WebhookLaunchPayloadTemplate,
   type WebhookWorkflowPayloadTemplate,
   type WebhookWorkgroupPayloadTemplate,
+  triggerContextOf,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 
@@ -601,6 +602,23 @@ async function fireTrigger(
         rendered,
         invoker,
       )
+      // RFC-269：把事件信封的**变量投影**快照进任务行，让 code-host-call 节点
+      // 能直接写 {{trigger.mr_iid}} 而不必为每个定位参数接一条 input 连线。
+      // 只投影 RFC-263 变量表的 29 项（剔除 event_json —— 32 KiB 原文进任务行
+      // 只会把外部数据的保留期从投递表的 90 天 GC 拉到与任务同寿）。
+      // 写失败不该让一次已经成功的启动变成 launch-failed：节点届时会以
+      // `code-host-trigger-context-missing` 给出可读原因。
+      try {
+        await db
+          .update(tasks)
+          .set({ triggerContextJson: JSON.stringify(triggerContextOf(event)) })
+          .where(eq(tasks.id, taskId))
+      } catch (err) {
+        log.warn('trigger context snapshot failed', {
+          taskId,
+          error: errText(err),
+        })
+      }
       await recordFire(db, { ...base, outcome: 'launched', supersededTaskId, taskId })
       await writeStream(circuit.effectiveCount + 1, true)
       await db

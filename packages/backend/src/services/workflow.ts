@@ -36,6 +36,7 @@ import { and, eq } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
 import { assertScriptAuthorAllowed, type ScriptAuthorPrincipal } from './scriptAuthorGate'
+import { assertCodeHostAuthorAllowed } from './codeHostAuthorGate'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
@@ -380,6 +381,18 @@ export async function prepareWorkflowSave(
     // `scripts:author` can still move nodes and edit unrelated parts of a
     // workflow that happens to contain a script.
     assertScriptAuthorAllowed({
+      next: normalizedSnapshot.definition,
+      previous: preflightWorkflow.definition,
+      principal:
+        principal.kind === 'actor'
+          ? { kind: 'actor', actor: principal.actor }
+          : { kind: 'system', reason: principal.reason },
+    })
+    // RFC-269 — the same shape for code-host call nodes. Separate point on
+    // purpose: authoring host code and acting on the code host as the
+    // platform's bot identity are different capabilities, and a deployment may
+    // reasonably grant one without the other.
+    assertCodeHostAuthorAllowed({
       next: normalizedSnapshot.definition,
       previous: preflightWorkflow.definition,
       principal:
@@ -790,6 +803,9 @@ export function insertWorkflowInTx(
   },
 ): WorkflowRow {
   assertScriptAuthorAllowed({ next: input.definition, principal: input.scriptPrincipal })
+  // RFC-269 — same persistence primitive, same provenance value (the two
+  // principal types are structurally identical by design).
+  assertCodeHostAuthorAllowed({ next: input.definition, principal: input.scriptPrincipal })
   const initialAcl = input.builtin
     ? initialBuiltinResourceAcl(input.ownerUserId)
     : initialPrivateResourceAcl(input.ownerUserId)

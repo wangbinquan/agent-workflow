@@ -191,6 +191,15 @@ export const PERMISSIONS = [
   // system domain and never rides a token, so a leaked PAT with every matrix
   // grant still cannot write a script body.
   'scripts:author',
+  // RFC-269 — authoring a code-host call node, i.e. deciding what the platform
+  // does to GitLab/GitHub **with the administrator's token**. Like
+  // `scripts:author` it is a capability, not a CRUD verb on a resource domain
+  // (there is no "code-host call" resource — the call is inline in the
+  // workflow): "may act on the code host as the platform's bot identity, on any
+  // repository that token can reach". Platform ACLs cannot bound that reach —
+  // the permissions live on the code host, not here. System domain, so a leaked
+  // PAT with every matrix grant still cannot write one.
+  'code-host-calls:author',
   // RFC-257 (D19) — managing webhook ENDPOINTS (the verification secret and the
   // public URL token). Platform infrastructure, not a work resource: a leaked
   // PAT must never be able to read or rotate the ingress secret, so the point
@@ -237,6 +246,9 @@ export const SYSTEM_DOMAIN_POINTS: ReadonlyArray<Permission> = [
   // RFC-253 — see the catalog entry: host code execution is a system-domain
   // capability, so no token may carry it (AC-26).
   'scripts:author',
+  // RFC-269 — see the catalog entry: acting on the code host as the platform's
+  // bot identity is a system-domain capability, so no token may carry it.
+  'code-host-calls:author',
   // RFC-257 — see the catalog entry: the ingress secret surface never rides a token.
   'webhook-endpoints:manage',
 ]
@@ -388,6 +400,9 @@ const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   // `intent:*` are system-domain and sit in USER_BASELINE. The system domain
   // bounds the TOKEN surface, not the role surface.
   'scripts:author',
+  // RFC-269 (Q3) — same shape as script authoring: admin + manager. Being a
+  // SYSTEM-domain point bounds the TOKEN surface, not the role surface.
+  'code-host-calls:author',
   'repos:create',
   'repos:update', // RFC-248 D5/G4 —— 仓库组走 repos:* 这一档
   'repos:delete',

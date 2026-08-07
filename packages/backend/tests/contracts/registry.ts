@@ -145,6 +145,13 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/webhook-deliveries/:id' },
   { method: 'POST', path: '/api/webhook-deliveries/:id/replay' },
 
+  // RFC-269 — 代码平台连接（出站凭据面）。全部 admin（settings:*）且
+  // tokenAccess:'never'：一枚 PAT 既读不到 base URL 也改不了 token。
+  { method: 'GET', path: '/api/code-hosts' },
+  { method: 'PUT', path: '/api/code-hosts/:provider' },
+  { method: 'DELETE', path: '/api/code-hosts/:provider' },
+  { method: 'POST', path: '/api/code-hosts/:provider/test' },
+
   // ---- oidc-auth (mixed: providers list + login flow are public) ----
   { method: 'GET', path: '/api/auth/oidc/providers', public: true },
   { method: 'POST', path: '/api/auth/oidc/:slug/login/start', public: true },

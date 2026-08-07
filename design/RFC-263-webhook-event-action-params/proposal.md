@@ -160,7 +160,7 @@ mr_iid mr_title commit_sha comment_text comment_author pipeline_status event_jso
 
 ## 9. 后续演进（非本 RFC）
 
-- **RFC-265（已排期——用户 2026-08-07 拍板从本 RFC 拆出；编号避开并发占用的 RFC-264）**：受控执行面的**自定义环境变量注入通道**，让 token 能到达 agent 的 shell（§6）。它触及 RFC-224/251 的密封边界（`SAFE_FORWARD_ENV` 白名单是那两个 RFC 的承重结构），需要独立设计 + 按 CLAUDE.md 第 7 条逐项呈报能力影响，不塞进本 RFC。**在该 RFC 落地前，回帖动作的 token 走 remote MCP headers**（proposal §6 路径 a）。
+- ~~**RFC-265**（受控执行面的自定义环境变量注入通道）~~ —— **已被 [RFC-269](../RFC-269-code-host-call-node/proposal.md) 取代**（用户 2026-08-07 同日拍板）。RFC-269 换了一条路：不把 token 送进 agent，而是让**平台自己发起调用**（代码平台调用节点）。token 只留在 daemon 手里，永不进 agent 进程也永不进模型上下文，`SAFE_FORWARD_ENV` 白名单一个字节都不动 —— 也就是说 §6 披露的三条凭据现状**全部保持原样**，回帖不再需要它们中的任何一条松动。RFC-265 编号因此不再排期、不复用。需要 agent **自主**调 API（而非平台代发）的场景仍走 remote MCP headers（§6 路径 a）。
 - 平台侧出站回写 `ReportSink`（RFC-257 design §12）。
 - note 事件扩到 Issue 评论 / commit 评论。
 - GitLab `builds[]` 的 job 级归一化（若将来 GitHub 侧出现对称信息）。

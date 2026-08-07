@@ -43,6 +43,7 @@ export const NODE_KIND = [
   'call-workflow', // RFC-243: invoke another workflow as an independent child task
   'call-workgroup', // RFC-243: hand a DAG stage to a workgroup as an independent child task
   'script', // RFC-253: run an inline python/bash/node script — no model process
+  'code-host-call', // RFC-269: one outbound GitLab/GitHub API call — no model, no subprocess
 ] as const
 // RFC-060 PR-E: 'agent-multi' was the M3 fan-out kind; superseded by
 // wrapper-fanout (RFC-060). Its node_runs / row shape are no longer minted by
@@ -480,6 +481,8 @@ export const WORKFLOW_NODE_FIELD_KEYS = [
   'script-outputs', // RFC-253: declared output ports
   'script-dependencies', // RFC-253: declared dependency specs
   'script-env', // RFC-253: the process env overlay
+  'code-host-request', // RFC-269: the custom request (method / path / body)
+  'code-host-params', // RFC-269: the typed-form parameters
 ] as const
 export const WorkflowNodeFieldKeySchema = z.enum(WORKFLOW_NODE_FIELD_KEYS)
 export type WorkflowNodeFieldKey = z.infer<typeof WorkflowNodeFieldKeySchema>
@@ -895,3 +898,52 @@ export const ScriptNodeSchema = WorkflowNodeSchema.extend({
   readonly: z.boolean().optional(),
 }).passthrough()
 export type ScriptNode = z.infer<typeof ScriptNodeSchema>
+
+// --- RFC-269 Code-host call node ---------------------------------------------
+//
+// One outbound GitLab/GitHub API call, issued by the daemon itself with the
+// administrator-configured base URL + token. No model process, no subprocess,
+// no session — so it never enters the containment admission surface, and the
+// token never reaches an agent process or a model context.
+//
+// `$schema_version` deliberately NOT bumped: RFC-243 (call-workflow /
+// call-workgroup) and RFC-253 (script) both added node kinds without one. The
+// bump is pure metadata — an older document can never contain the new kind —
+// and version 4's meaning (RFC-056) is unaffected. Old binaries reading a new
+// document fail closed on the closed NODE_KIND enum (`unknown-node-kind`),
+// which is the correct outcome for a node with real external side effects.
+
+/** Node-level cap on a single rendered parameter value. */
+export const CODE_HOST_PARAM_MAX = 64 * 1024
+/** Node-level cap on the custom-request JSON body template. */
+export const CODE_HOST_BODY_MAX = 128 * 1024
+export const CODE_HOST_PATH_MAX = 2048
+
+export const CodeHostMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+
+/** Escape hatch: only consulted when `action === 'custom'`. */
+export const CodeHostCustomRequestSchema = z
+  .object({
+    method: CodeHostMethodSchema,
+    /** RELATIVE path, appended to the configured base URL. Never a full URL. */
+    path: z.string().min(1).max(CODE_HOST_PATH_MAX),
+    query: z.record(z.string(), z.string().max(CODE_HOST_PARAM_MAX)).optional(),
+    /** JSON body template; skeleton must parse, vars may only sit inside strings. */
+    body: z.string().max(CODE_HOST_BODY_MAX).optional(),
+  })
+  .strict()
+export type CodeHostCustomRequest = z.infer<typeof CodeHostCustomRequestSchema>
+
+export const CodeHostCallNodeSchema = WorkflowNodeSchema.extend({
+  kind: z.literal('code-host-call'),
+  provider: z.enum(['gitlab', 'github']),
+  /** Action key from the shared registry (`codeHost/actions.ts`), incl. 'custom'. */
+  action: z.string().min(1).max(64),
+  /** Typed-form field values. All templates, rendered at run time. */
+  params: z.record(z.string(), z.string().max(CODE_HOST_PARAM_MAX)).default({}),
+  request: CodeHostCustomRequestSchema.optional(),
+  /** Explicit gate for DELETE (user decision Q9). */
+  allowDestructive: z.boolean().optional(),
+  timeoutMs: z.number().int().min(1000).max(300_000).optional(),
+}).passthrough()
+export type CodeHostCallNode = z.infer<typeof CodeHostCallNodeSchema>

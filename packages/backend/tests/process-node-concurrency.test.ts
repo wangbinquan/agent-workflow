@@ -89,7 +89,7 @@ describe('process node concurrency', () => {
     const daemonScope = {}
     const agent = getNodePoolSemaphore(daemonScope, 'agent', 4)
     const script = getNodePoolSemaphore(daemonScope, 'script', 4)
-    resizeAllNodePools(daemonScope, { agent: 9, script: 2 })
+    resizeAllNodePools(daemonScope, { agent: 9, script: 2, 'code-host': 8 })
     expect(agent.capacity).toBe(9)
     expect(script.capacity).toBe(2)
     // 实例不得被替换 —— 换实例 = 预算分裂（本模块存在的理由）。
@@ -99,7 +99,7 @@ describe('process node concurrency', () => {
 
   test('resizeAllNodePools on a cold daemon creates both pools at the saved capacity', () => {
     const daemonScope = {}
-    resizeAllNodePools(daemonScope, { agent: 3, script: 5 })
+    resizeAllNodePools(daemonScope, { agent: 3, script: 5, 'code-host': 8 })
     expect(getNodePoolSemaphore(daemonScope, 'agent', 3).capacity).toBe(3)
     expect(getNodePoolSemaphore(daemonScope, 'script', 5).capacity).toBe(5)
   })

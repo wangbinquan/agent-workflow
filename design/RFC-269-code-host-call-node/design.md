@@ -69,8 +69,11 @@ GHES 的 `https://host/api/v3`。**写错不猜**：形态不匹配时保存直�
 有机会立刻纠正。
 
 **D4 三形态 token**（照搬 RFC-255 / RFC-257 的既有姿势）：写入接受明文；存储密封；读路径只回
-`tokenHint`。PUT 语义为**保留**：不传 token 字段 = 保持原值（管理员改 base URL 不用重录 token）；
-传空串 = 显式清除整行凭据。
+`tokenHint`。PUT 语义为**保留**：不传 token 字段 = 保持原值（管理员改 base URL 不用重录 token）。
+
+**实现期勘误**：初稿写「传空串 = 显式清除整行凭据」。改为**空串直接被 schema 拒绝，清除走
+`DELETE /api/code-hosts/:provider`** —— 一个手滑清空的输入框不该等于删除凭据。另外，base URL 或
+token 一旦变更就作废 `last_test_json`：旧的绿勾盖在新配置上比没有勾更误导。
 
 **D5 缺 `secretBox` 时的行为**：`server.ts` 的 deps 里 `secretBox` 是可选的（OIDC 与 webhook 管理面
 在缺它时自我跳过挂载）。本 RFC 照做：路由自我跳过；节点执行返回明确失败 `code-host-not-configured`。
@@ -96,9 +99,13 @@ base URL + token（未保存也能测），或在 token 缺省时用已存的密
 
 ## 3. 节点 schema
 
-新 `NodeKind`：`'code-host-call'`，加入 `NODE_KIND`（`packages/shared/src/schemas/workflow.ts:33-46`）。
-`WORKFLOW_SCHEMA_VERSION` 4 → 5，`WORKFLOW_SCHEMA_VERSIONS` 追加，v1–v4 继续透明升级（老文档从不含新
-kind，纯元数据 bump —— 与 RFC-005/023/056 的三次 bump 同形）。
+新 `NodeKind`：`'code-host-call'`，加入 `NODE_KIND`（`packages/shared/src/schemas/workflow.ts`）。
+
+**实现期勘误**：初稿写「`WORKFLOW_SCHEMA_VERSION` 4 → 5」。实读发现**近例不 bump** ——
+RFC-243（`call-workflow` / `call-workgroup`）与 RFC-253（`script`）都新增了 NodeKind 而版本停在
+RFC-056 的 4。理由成立：bump 是纯元数据（老文档不可能含新 kind），却要改判一批断言。本 RFC 跟随
+近例**不 bump**。旧二进制读到新 kind 时在闭合枚举上 fail closed（`unknown-node-kind`），这正是
+一个有外部副作用的节点该有的结果。
 
 ```ts
 export const CODE_HOST_PROVIDERS = ['gitlab', 'github'] as const   // 与 webhook 的 provider 同源
@@ -245,7 +252,7 @@ mutation，线程 `PRRT_` node id 亦仅 GraphQL 可得）；GitLab `GET /projec
 
 | 位置 | 编码 | 理由 |
 |---|---|---|
-| path 段 | `encodeURIComponent`（含 `/`） | 值是 id / iid / 文件路径。GitLab 的 `file.read` 正需要整路径 percent-encode；顺带堵死用变量值往 path 里塞 `../` 或新段 |
+| path 段 | `encodeURIComponent`（含 `/`），**整个字段值**而不只是其中的模板变量 | 值是 id / iid / 文件路径。GitLab 的 `file.read` 正需要整路径 percent-encode；顺带堵死用变量值往 path 里塞 `../` 或新段。**实现期修正**：初稿只对模板变量编码，于是字面量 `src/a b.ts` 的斜杠原样进 URL，被 GitLab 当成多个路径段而 404 —— 编码必须作用在字段值整体上。唯一例外是 `{__project__}`：推导值自带编码，显式值走 `encodeProjectLocator`（GitLab 只把 `/` 换成 `%2F`，这样 `grp/repo`、`grp%2Frepo`、数字 id 三种写法都对；GitHub 的 `owner/repo` 本来就是两段，原样保留） |
 | query 值 | `URLSearchParams` | 同上，且天然处理 `&` `=` |
 | JSON body 字符串字面量内 | JSON 字符串转义 | 评论正文里的引号 / 换行 / 反斜杠不会破坏 body 结构 |
 | JSON body 的其它位置 | **保存期拒绝** | 见 D13 |
@@ -263,12 +270,20 @@ sentinel 后 `JSON.parse`，并检查每个 sentinel 落点是否为字符串值
 - 必须以 `/` 开头；不得以 `//` 开头（协议相对 URL）。
 - 不得含 scheme（`^[a-z][a-z0-9+.-]*:`）—— 堵 `https://evil.example`、`file:`、`javascript:`。
 - 不得含 `..` 段（`.` 段允许，`%2e%2e` 归一化后同样拒绝）。
-- 不得含 `@`（`/x@evil.example` 在某些 URL 解析器里会被读成 userinfo）。
-- 模板变量在 path 里按 D12 编码，因此**运行期不可能**引入上述任一形态。
+- 不得含空白与控制符；不得含 `?` / `#`（query 走独立字段）。
 
-最终 URL 一律用 `new URL(path, baseUrlWithTrailingSlash)` 构造，并在发请求前**复核 `url.origin` 与
-base URL 的 origin 逐字节相等**。这是 belt-and-suspenders：即使上面某条规则未来被改坏，origin 复核
-仍然拦住跨主机。
+**实现期勘误（2026-08-07 实证，Bun 的 WHATWG URL）**，初稿两条判断被推翻：
+
+- **`@` 那条删除**。`base + '/x@evil.example/y'` 的 origin 不变 —— `@` 在 path 段里无害，而
+  GitLab 的 `@scope` 包端点**需要**它，判负是误伤。反斜杠同理无害。
+- **兜底从「origin 复核」升级为「origin + base pathname 前缀**双复核**」**。只查 origin 拦不住
+  `base + '/../../admin'` → `https://gitlab.corp.example/admin`：origin 一字未变，却已经从 API 根
+  跳到了 GitLab 的**管理界面**。`%2e%2e` 会被 URL 类解码归一，所以判据必须先把 `%2e` 还原成点。
+
+职责因此按环境切分：**保存期**判据是纯字符串操作，留在 shared（`codeHost/path.ts`）；**运行期**的
+最终 URL 构造与双复核在 backend（`services/codeHost/url.ts`）—— 它要的是 `..` 与 percent 编码被
+**归一化之后**的结果，而 shared 是零环境依赖层（`lib: ["ES2022"]` + `types: []`），根本拿不到
+`URL`（`git-url.ts` 同样自己手写解析）。
 
 ### 5.4 project 定位（Q11）
 
@@ -280,6 +295,11 @@ base URL 的 origin 逐字节相等**。这是 belt-and-suspenders：即使上�
    用既有 `packages/shared/src/git-url.ts` 解析出 host + path。
 3. 校验 host 与所配 base URL 的 host **相等**；不等 ⇒ 失败 `code-host-project-foreign`，文案明确
    「任务仓库 `git.other.example` 不属于所配置的 GitLab 实例 `gitlab.corp.example`」。
+
+   **实现期勘误**：公有 GitHub 的 API 主机与仓库主机**本来就不同**（`api.github.com` vs
+   `github.com`），所以「相等」这条判据在 github.com 上恒假 —— 初稿会让每个 GitHub 任务都报
+   foreign。判据改为「repo host 等于该 base URL 的**期望仓库主机**」：`api.github.com` ⇒
+   `github.com`（含 `www.` 变体），GHES 与 GitLab 没有这种分裂，仍是同主机比较。
 4. GitLab ⇒ `encodeURIComponent(namespace/path)`；GitHub ⇒ `owner/repo`。
 
 显式填写时直接用该值（仍按 D12 编码），支持数字 id 与 `{{trigger.project_id}}`。
@@ -339,6 +359,10 @@ agent 的 prompt 模板、workgroup 目标、脚本节点 env 一律不解析该
 
 节点级失败后仍可由用户手动重试（RFC-052 的既有单节点重试语义），那是人工判断，与自动重试不同档。
 
+**没有节点级自动重试**（实现期明确）：脚本节点有 `defaultNodeRetries` 的重试循环，本节点**没有**。
+HTTP 层已经在能分辨「安全重试」与「不安全重试」的地方做了退避；在它之上再套一层节点级重试，等于把
+刚刚特意不重发的 POST 又重发一遍。
+
 ### 7.4 响应处理
 
 - `status` 端口 = 三位状态码字符串。
@@ -367,9 +391,14 @@ token 绝不出现在：节点 `summary` / `message`、`node_run_events`、daemo
 API 响应、YAML 导出、intent dump、诊断输出。实现两层：
 
 1. **结构上不放**：token 只进 header 组装，从不进任何被记录的字符串。
-2. **最后一道网**：所有对外字符串过一次 redactor（把已知 token 值替换为 `‹redacted›`），并把
-   `code_host_connections` 的 token 登记进 `packages/shared/src/intentSecretSlots.ts` 的**闭合载体表**
-   （该表是 RFC-234 的 OUT 方向单一事实源，新增凭据不登记等于漏了一整条投影路径）。
+2. **最后一道网**：所有对外字符串过一次 redactor（`redactToken`，把已知 token 值替换为
+   `‹redacted›`）。即便对方 API 把 token 原样回显（真实存在的坏行为），它也进不了错误信息 ——
+   有专门的变异测试锁这条。
+
+   **实现期勘误**：初稿要求把该 token 登记进 `intentSecretSlots.ts` 的闭合载体表。实读
+   `services/intent/dumpBuilder.ts` 后取消 —— intent dump 只读 agents / mcps / plugins / skills /
+   workflows / workgroups，**不读系统配置**，所以该登记没有任何消费者，属于 RFC-146 明令禁止的
+   「假 SSOT」。改为一条源码层锁：`dumpBuilder` 不得 import `codeHostConnections`。
 
 ### 7.7 并发
 
@@ -438,7 +467,7 @@ API 响应、YAML 导出、intent dump、诊断输出。实现两层：
 | R4 | custom：method 合法；DELETE ⇒ `allowDestructive === true` | `code-host-method-forbidden` |
 | R5 | custom：path 过 §5.3 全部判据 | `code-host-path-invalid` |
 | R6 | custom：body sentinel 替换后是合法 JSON，且变量只落字符串字面量（D13） | `code-host-body-invalid` |
-| R7 | `project` 留空 ⇒ 工作流不得是多仓形态 | `code-host-project-ambiguous` |
+| ~~R7~~ | **实现期删除**：多仓是**启动参数**（RFC-066 的 `task_repos`），不是工作流定义的属性，保存期无从判定。改为运行期由 `resolveProjectFallback` 报 `code-host-project-unresolved` 并说明「本任务跨多个仓库，请显式填写 project」。 | — |
 | R8 | 模板变量：端口名 ∈ 上游可达端口；trigger 变量 ∈ `TRIGGER_CONTEXT_VARS` | `code-host-var-unknown` |
 | R9 | 枚举型字段的**字面量**取值合法（含 `{{` 时跳过，运行期判） | `code-host-param-invalid` |
 

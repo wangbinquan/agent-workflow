@@ -342,7 +342,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-261 bumped to 139 with 0139_rfc261_webhook_delivery_scale（deliveries
     // 表重建 body_json 挪末列 + 过滤×时间组合索引组 + body-retention 部分索引，
     // 10 万投递/天规模收口；无 FK 进出，重建安全）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(139)
+    // RFC-269 显式改判：迁移 0140（code_host_connections 表 +
+    // tasks.trigger_context_json 列）⇒ 139 → 140。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(140)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -95,11 +95,15 @@ describe('RFC-146 NODE_KIND_BEHAVIORS — 全真表', () => {
     // 但不拥有模型 session（isAgent=false），也不是容器。
     const isCallKind = (k: string): boolean => k === 'call-workflow' || k === 'call-workgroup'
     const isScriptKind = (k: string): boolean => k === 'script'
+    // RFC-269：code-host-call 是第五类 process 载体 —— 它有真实的外部副作用
+    // （一条评论发出去了），所以要级联、要自己的 node_run 行；但它既不 spawn
+    // 进程也不拥有模型 session（isAgent=false），更不是容器。
+    const isCodeHostKind = (k: string): boolean => k === 'code-host-call'
     for (const k of NODE_KIND) {
       const row = NODE_KIND_BEHAVIORS[k]
       if (row.isAgent) expect(row.isProcess).toBe(true)
       expect(row.isProcess).toBe(
-        row.isAgent || isWrapperKind(k) || isCallKind(k) || isScriptKind(k),
+        row.isAgent || isWrapperKind(k) || isCallKind(k) || isScriptKind(k) || isCodeHostKind(k),
       )
       if (row.settlesWithoutRow) expect(row.isProcess).toBe(false)
       // RFC-052 语义：级联恰是 process 家族。

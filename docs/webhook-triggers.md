@@ -269,11 +269,18 @@ curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
    **`glab` / `gh` 不可用**（通常装在 `/usr/local/bin`、`/opt/homebrew/bin`）。
 3. **网络本身不受限**：沙箱默认不拦截出站，`curl` 打得出去。
 
-因此目前把 token 送到 agent 的可行路径只有两条：
+**回帖 / 调接口的推荐做法是让平台代发，而不是把 token 交给 agent**：在设置页
+「代码平台」分区配好 GitLab / GitHub 的 base URL 与令牌，然后在工作流里放一个
+**代码平台调用节点**（RFC-269）。节点里可以直接引用 `{{trigger.mr_iid}}` /
+`{{trigger.comment_thread_id}}` 等本节列出的变量，无需为每个参数接一条 input 连线。
+令牌只留在 daemon 进程里，不进 agent 环境、不进提示词、不进模型上下文 —— 上面三条
+平台现状因此**一条都不需要松动**。
+
+如果确实需要 agent **自己**调 API（而不是平台代发），仍然只有两条路：
 
 - **remote MCP（推荐）**：配一个远端 MCP server，token 放在它的请求 header 里，agent
   通过 MCP 工具回帖。token 不进提示词、不进数据库。（本地 MCP 走无网络子边界，用不了。）
 - **写进触发器模板 / 提示词**：可行但 token 会落进数据库、任务日志和模型上下文，**不推荐**。
 
-「在 daemon 上配一个环境变量、agent 的 curl 直接能用」需要扩受控执行面的白名单，
-属独立 RFC（RFC-265，已排期）。
+（「在 daemon 上配一个环境变量、agent 的 curl 直接能用」曾排期为 RFC-265，已由
+RFC-269 的平台侧出站取代，不再计划实现。）

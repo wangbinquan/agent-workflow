@@ -139,6 +139,18 @@ async function seedTaskWithEdge(
         // process-bearing retry-cascade row: an upstream retry mints it a
         // placeholder exactly like an agent or a wrapper.
         return { id: downstreamNodeId, kind: 'script', language: 'bash', script: 'echo hi' }
+      case 'code-host-call':
+        // RFC-269 — a code-host call has REAL external side effects (a comment
+        // gets posted), so it is process-bearing and cascades like the rest:
+        // an upstream retry must mint it a placeholder, otherwise the retried
+        // chain would silently skip the step that reports its result.
+        return {
+          id: downstreamNodeId,
+          kind: 'code-host-call',
+          provider: 'gitlab',
+          action: 'comment.create',
+          params: { mr: '1', body: '{{out}}' },
+        }
       default: {
         const _exhaustive: never = downstreamKind
         throw new Error(`unexpected kind ${_exhaustive as string}`)

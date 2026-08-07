@@ -128,6 +128,13 @@ const ALLOWANCES: readonly Allowance[] = [
     why: 'git pathspec construction and ls-files output matching; git speaks `/` on every platform (RFC-248)',
   },
   {
+    rule: 'posix-path-prefix',
+    file: 'services/codeHost/url.ts',
+    match: '`${basePath}/`',
+    count: 1,
+    why: 'operand is a URL pathname (`new URL(...).pathname`), not a filesystem path — URL pathnames are `/`-separated and case-sensitive on every platform, so neither the win32 separator nor NTFS case folding applies (RFC-269)',
+  },
+  {
     rule: 'posix-dirname',
     file: 'services/webhook/gitlabAdapter.ts',
     match: "lastIndexOf('/')",

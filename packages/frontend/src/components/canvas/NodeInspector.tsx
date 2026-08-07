@@ -34,6 +34,7 @@ import { InputEdit } from './inspector/InputEdit'
 import { OutputEdit } from './inspector/OutputEdit'
 import { ReviewEdit } from './inspector/ReviewEdit'
 import { ScriptEdit } from './inspector/ScriptEdit'
+import { CodeHostCallEdit } from './inspector/CodeHostCallEdit'
 import { WrapperFanoutEdit } from './inspector/WrapperFanoutEdit'
 import { WrapperGitLoopEdit } from './inspector/WrapperGitLoopEdit'
 import type { InspectorChangeMeta } from './inspector/historyMeta'
@@ -96,6 +97,7 @@ const KIND_INSPECTORS = {
   'call-workgroup': CallWorkgroupEdit,
   // RFC-253 — script node: language + inline body + runtime knobs.
   script: ScriptEdit,
+  'code-host-call': CodeHostCallEdit,
 } as const satisfies Record<NodeKind, FC<EditProps>>
 
 export function NodeInspector({

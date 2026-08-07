@@ -289,6 +289,9 @@ import { basename, join as pathJoin } from 'node:path'
 import type { Semaphore } from '@/util/semaphore'
 import { ulid } from 'ulid'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
+import { executeCodeHostCall } from '@/services/codeHost/call'
+import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
+import { resolveProjectFallback } from '@/services/codeHost/project'
 
 export interface RunTaskOptions {
   taskId: string
@@ -329,6 +332,20 @@ export interface RunTaskOptions {
   maxConcurrentNodes?: number
   /** RFC-266: daemon-wide pool for script nodes, independent of the agent pool. Default 4. */
   maxConcurrentScriptNodes?: number
+  /** RFC-269: independent pool for code-host call nodes (default 8). */
+  maxConcurrentCodeHostCalls?: number
+  /** RFC-269: per-request wall clock; node-level `timeoutMs` overrides it. */
+  codeHostRequestTimeoutMs?: number
+  /** RFC-269: cap on the `response` port value before explicit truncation. */
+  codeHostResponseMaxBytes?: number
+  /**
+   * RFC-269: the credential service. Absent ⇒ code-host nodes fail with
+   * `code-host-not-configured` (the same self-skip discipline the OIDC and
+   * webhook surfaces use when `secretBox` is missing).
+   */
+  codeHostConnections?: CodeHostConnectionsService
+  /** RFC-269: outbound fetch seam; production omits it, tests inject a stub. */
+  codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
   /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
   multiProcessSubprocessConcurrency?: number
   /**
@@ -409,6 +426,8 @@ interface SchedulerState {
    */
   agentSem: Semaphore
   scriptSem: Semaphore
+  /** RFC-269: the code-host call pool. */
+  codeHostSem: Semaphore
   writeSem: Semaphore
   /** RFC-266: per-task fan-out sub-pool, from the daemon-scoped registry so a
    *  settings change reaches a task that is already running. */
@@ -671,6 +690,9 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // applies to this run, not just to the next launch.
     agentSem: getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4),
     scriptSem: getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4),
+    // RFC-269: the third pool — one outbound HTTP request is a second-scale
+    // step and holds no subprocess, so it gets its own (larger) budget.
+    codeHostSem: getNodePoolSemaphore(db, 'code-host', opts.maxConcurrentCodeHostCalls ?? 8),
     // RFC-098 B1 (audit S-9): the writer lock comes from the per-task
     // registry so HTTP rollback paths (clarify/review/cross-clarify) hold THE
     // SAME instance. gc happens in this function's finally only (see
@@ -3674,6 +3696,17 @@ function buildChildDeps(state: SchedulerState): StartTaskDeps {
     ...(opts.maxConcurrentScriptNodes !== undefined
       ? { maxConcurrentScriptNodes: opts.maxConcurrentScriptNodes }
       : {}),
+    // RFC-269: same reasoning one pool over — the code-host pool is also a
+    // daemon-wide singleton with resize-on-read.
+    ...(opts.maxConcurrentCodeHostCalls !== undefined
+      ? { maxConcurrentCodeHostCalls: opts.maxConcurrentCodeHostCalls }
+      : {}),
+    ...(opts.codeHostRequestTimeoutMs !== undefined
+      ? { codeHostRequestTimeoutMs: opts.codeHostRequestTimeoutMs }
+      : {}),
+    ...(opts.codeHostResponseMaxBytes !== undefined
+      ? { codeHostResponseMaxBytes: opts.codeHostResponseMaxBytes }
+      : {}),
     ...(opts.multiProcessSubprocessConcurrency !== undefined
       ? { multiProcessSubprocessConcurrency: opts.multiProcessSubprocessConcurrency }
       : {}),
@@ -4004,6 +4037,224 @@ async function launchCallWorkgroupChild(
 // isolation helpers, mintNodeRun, setNodeRunStatus, the envelope parser — which
 // is where the invariants actually live.
 // ---------------------------------------------------------------------------
+
+/**
+ * RFC-269 — one outbound code-host API call.
+ *
+ * Deliberately much shorter than `runScriptNode`: there is no iso worktree (it
+ * writes no files), no subprocess (the daemon issues the request itself, so it
+ * never enters the containment admission surface), and **no node-level retry
+ * loop**. That last one is a decision, not an omission: the executor already
+ * retries at the HTTP layer where it can tell a safe retry from an unsafe one
+ * (D18 — 429 always, 5xx/network only for idempotent methods). Re-running the
+ * whole node on top of that would re-POST comments that may well have landed.
+ * A human can still retry the node by hand; that is a judgement call, not an
+ * automatic one.
+ */
+async function runCodeHostCallNode(
+  state: SchedulerState,
+  args: OneNodeArgs,
+): Promise<OneNodeResult> {
+  const { db, task, taskId, definition, opts, log, codeHostSem } = state
+  const { node, iteration } = args
+
+  const provider = pickString(node, 'provider')
+  const action = pickString(node, 'action')
+  if (provider !== 'gitlab' && provider !== 'github') {
+    return {
+      kind: 'failed',
+      summary: `code-host node ${node.id} has no valid provider`,
+      message: 'code-host-param-invalid',
+    }
+  }
+  if (action === null) {
+    return {
+      kind: 'failed',
+      summary: `code-host node ${node.id} has no action`,
+      message: 'code-host-param-invalid',
+    }
+  }
+
+  const { inputs: upstreamInputs, consumed } = await resolveUpstreamInputs(
+    db,
+    taskId,
+    definition.edges,
+    node.id,
+    iteration,
+    log,
+    definition,
+    state.containerOf,
+  )
+
+  // Row selection mirrors the script/agent branches exactly: adopt the pending
+  // row if one exists (that is what `retryNode` mints for a user-requested
+  // retry and what the cascade mints downstream), otherwise take the next
+  // retry index. Minting unconditionally would leave the placeholder pending
+  // forever and make `isFresherNodeRun` pick between two rows for the same
+  // attempt.
+  const consumedUpstreamJson = JSON.stringify(consumed)
+  const sameNodeIterRuns = await db
+    .select()
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, taskId),
+        eq(nodeRuns.nodeId, node.id),
+        eq(nodeRuns.iteration, iteration),
+      ),
+    )
+    .orderBy(asc(nodeRuns.startedAt))
+  let latestExisting: (typeof sameNodeIterRuns)[number] | undefined
+  for (const r of sameNodeIterRuns) {
+    if (r.parentNodeRunId !== null) continue
+    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
+  }
+  const pendingExisting = sameNodeIterRuns.find(
+    (r) => r.status === 'pending' && r.parentNodeRunId === null,
+  )
+  let nodeRunId: string
+  if (pendingExisting !== undefined) {
+    nodeRunId = pendingExisting.id
+    await db
+      .update(nodeRuns)
+      .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
+      .where(eq(nodeRuns.id, nodeRunId))
+  } else {
+    nodeRunId = await mintNodeRun(db, {
+      taskId,
+      nodeId: node.id,
+      status: 'pending',
+      cause: schedulerMintCause(latestExisting),
+      retryIndex:
+        sameNodeIterRuns.length === 0
+          ? 0
+          : Math.max(...sameNodeIterRuns.map((r) => r.retryIndex)) + 1,
+      iteration,
+      overrides: {
+        shardKey: latestExisting?.shardKey ?? null,
+        parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
+        consumedUpstreamRunsJson: consumedUpstreamJson,
+      },
+    })
+  }
+  await setNodeRunStatus({
+    db,
+    nodeRunId,
+    to: 'running',
+    allowedFrom: ['pending'],
+    reason: 'code-host-call-start',
+    extra: {},
+  })
+  broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
+
+  const settle = async (
+    to: 'done' | 'failed',
+    reason: string,
+    extra: Record<string, unknown>,
+  ): Promise<void> => {
+    await setNodeRunStatus({
+      db,
+      nodeRunId,
+      to,
+      allowedFrom: ['running'],
+      reason,
+      extra: { finishedAt: Date.now(), ...extra },
+    })
+    broadcastNodeStatus(taskId, nodeRunId, node.id, to)
+  }
+
+  const connections = opts.codeHostConnections
+  const connection = connections?.resolve(provider) ?? null
+  if (connection === null) {
+    await settle('failed', 'code-host-not-configured', {
+      errorMessage: `no ${provider} connection is configured; set its base URL and token in Settings`,
+      failureCode: 'code-host-not-configured',
+    })
+    return {
+      kind: 'failed',
+      summary: `${provider} is not configured`,
+      message: 'code-host-not-configured',
+    }
+  }
+
+  // 触发上下文：NULL 与「有上下文但该键为空」是两回事，渲染器据此区分
+  // `code-host-trigger-context-missing` 与普通的空值。
+  let trigger: Record<string, string> | null = null
+  if (task.triggerContextJson !== null) {
+    try {
+      const parsed: unknown = JSON.parse(task.triggerContextJson)
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        trigger = parsed as Record<string, string>
+      }
+    } catch {
+      trigger = null
+    }
+  }
+
+  const params: Record<string, string> = {}
+  const rawParams = (node as unknown as { params?: unknown }).params
+  if (rawParams !== null && typeof rawParams === 'object' && !Array.isArray(rawParams)) {
+    for (const [key, value] of Object.entries(rawParams as Record<string, unknown>)) {
+      if (typeof value === 'string') params[key] = value
+    }
+  }
+  const rawRequest = (node as unknown as { request?: unknown }).request
+  const timeoutMs =
+    typeof (node as unknown as { timeoutMs?: unknown }).timeoutMs === 'number'
+      ? (node as unknown as { timeoutMs: number }).timeoutMs
+      : opts.codeHostRequestTimeoutMs
+
+  const release = await codeHostSem.acquire()
+  let outcome: Awaited<ReturnType<typeof executeCodeHostCall>>
+  try {
+    outcome = await executeCodeHostCall(
+      {
+        provider,
+        action,
+        params,
+        ...(rawRequest !== undefined ? { request: rawRequest as never } : {}),
+        allowDestructive:
+          (node as unknown as { allowDestructive?: unknown }).allowDestructive === true,
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      },
+      {
+        connection,
+        ctx: { ports: upstreamInputs, trigger },
+        projectFallback: resolveProjectFallback({
+          provider,
+          baseUrl: connection.baseUrl,
+          repoUrl: task.repoUrl,
+          repoCount: task.repoCount,
+        }),
+        ...(opts.codeHostFetch !== undefined ? { fetchImpl: opts.codeHostFetch } : {}),
+        ...(opts.codeHostResponseMaxBytes !== undefined
+          ? { maxResponseBytes: opts.codeHostResponseMaxBytes }
+          : {}),
+      },
+    )
+  } finally {
+    release()
+  }
+
+  if (!outcome.ok) {
+    await settle('failed', outcome.code, {
+      errorMessage: outcome.message,
+      failureCode: outcome.code,
+    })
+    return { kind: 'failed', summary: outcome.summary, message: outcome.code }
+  }
+
+  await db.insert(nodeRunOutputs).values([
+    { nodeRunId, portName: 'response', content: outcome.body },
+    { nodeRunId, portName: 'status', content: String(outcome.status) },
+  ])
+  await settle('done', 'code-host-call-done', {})
+  return {
+    kind: 'ok',
+    summary: `${outcome.method} ${outcome.pathname} → ${outcome.status}`,
+    message: '',
+  }
+}
 
 async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
   // RFC-266: the SCRIPT pool, not the agent pool — a second-scale script must
@@ -4918,6 +5169,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // agent fall-through guard, same as the call kinds.
   if (node.kind === 'script') {
     return await runScriptNode(state, args)
+  }
+  // RFC-269 — code-host call: one outbound HTTP request, no model, no
+  // subprocess. Same position as the script/call kinds: before the agent
+  // fall-through guard.
+  if (node.kind === 'code-host-call') {
+    return await runCodeHostCallNode(state, args)
   }
   if (node.kind !== 'agent-single') {
     return {

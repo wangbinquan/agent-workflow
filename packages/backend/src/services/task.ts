@@ -260,6 +260,10 @@ export interface StartTaskDeps {
    * default (4).
    */
   maxConcurrentScriptNodes?: number
+  /** RFC-269: daemon-wide pool for code-host call nodes + their request knobs. */
+  maxConcurrentCodeHostCalls?: number
+  codeHostRequestTimeoutMs?: number
+  codeHostResponseMaxBytes?: number
   /**
    * RFC-115: global per-node retry budget (config.defaultNodeRetries) threaded
    * via runtimeConfigOpts → RunTaskOptions across start / resume / retry.
@@ -826,6 +830,9 @@ export function runtimeConfigOpts(
     | 'maxConcurrentNodes'
     | 'multiProcessSubprocessConcurrency'
     | 'maxConcurrentScriptNodes'
+    | 'maxConcurrentCodeHostCalls'
+    | 'codeHostRequestTimeoutMs'
+    | 'codeHostResponseMaxBytes'
     | 'defaultPerNodeTimeoutMs'
     | 'defaultNodeRetries'
     | 'defaultRuntime'
@@ -869,6 +876,16 @@ export function runtimeConfigOpts(
       : {}),
     ...(deps.maxConcurrentScriptNodes !== undefined
       ? { maxConcurrentScriptNodes: deps.maxConcurrentScriptNodes }
+      : {}),
+    // RFC-269: the code-host pool + request knobs ride the same funnel.
+    ...(deps.maxConcurrentCodeHostCalls !== undefined
+      ? { maxConcurrentCodeHostCalls: deps.maxConcurrentCodeHostCalls }
+      : {}),
+    ...(deps.codeHostRequestTimeoutMs !== undefined
+      ? { codeHostRequestTimeoutMs: deps.codeHostRequestTimeoutMs }
+      : {}),
+    ...(deps.codeHostResponseMaxBytes !== undefined
+      ? { codeHostResponseMaxBytes: deps.codeHostResponseMaxBytes }
       : {}),
     // RFC-115: per-node timeout + retry budget + default runtime. Previously
     // timeout was hand-spread at each runTask call site and defaultRuntime was

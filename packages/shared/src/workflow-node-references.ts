@@ -100,6 +100,26 @@ export const WORKFLOW_NODE_REFERENCE_INVENTORY = {
     bindingLists: [],
     opaqueFields: ['env', 'script'],
   },
+  // RFC-269: a code-host call references no other node — its parameters are
+  // templates resolved BY NAME at run time (agent-single's promptTemplate
+  // precedent: `{{port}}` carries no nodeId, so there is nothing for the
+  // clipboard/prune machinery to rewrite).
+  //
+  // Both subtrees are declared opaque for the same reason `script.env` is:
+  // `request.query` is keyed by the USER (whatever the target API calls its
+  // parameters), so a query parameter legitimately named `nodeId` would trip
+  // the ratchet's `/nodeId$/i` key-name heuristic and abort copy/paste of a
+  // perfectly valid workflow. `params` is keyed by our own closed field set,
+  // but its VALUES are arbitrary user text; declaring the pair opaque states
+  // the guarantee once instead of relying on the heuristic to keep guessing
+  // right.
+  'code-host-call': {
+    nodeIdLists: [],
+    directPortRefs: [],
+    embeddedPortRefs: [],
+    bindingLists: [],
+    opaqueFields: ['params', 'request'],
+  },
 } as const satisfies Record<NodeKind, WorkflowNodeReferenceDescriptor>
 
 export type WorkflowNodeReferenceWarningCode =

@@ -63,6 +63,7 @@ import { ulid } from 'ulid'
 import type { CallNodeNavKind } from '@/lib/call-node-nav'
 import { AgentNode } from './nodes/AgentNode'
 import { CallWorkflowNode } from './nodes/CallWorkflowNode'
+import { CodeHostCallNode, type CodeHostCallNodeData } from './nodes/CodeHostCallNode'
 import { CallWorkgroupNode } from './nodes/CallWorkgroupNode'
 import { useWorkflowRefResolver } from './useWorkflowRefResolver'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
@@ -187,6 +188,7 @@ const NODE_TYPES = {
   'call-workgroup': CallWorkgroupNode,
   // RFC-253 — script node card.
   script: ScriptNode,
+  'code-host-call': CodeHostCallNode,
 } satisfies Record<NodeKind, ComponentType<never>>
 
 const EDGE_TYPES = { 'workflow-insertable': WorkflowCanvasEdge }
@@ -3492,6 +3494,15 @@ function toFlowNodes(
       scriptData.dependencyCount = Array.isArray(rec.dependencies) ? rec.dependencies.length : 0
       scriptData.networkDenied = rec.network === 'deny'
       scriptData.scriptReadonly = rec.readonly === true
+    }
+    // RFC-269: surface provider / action / destructive on the card so an author
+    // can tell "merges an MR" from "reads a diff" without opening the drawer.
+    if (n.kind === 'code-host-call') {
+      const rec = n as unknown as Record<string, unknown>
+      const callData = data as CodeHostCallNodeData
+      if (typeof rec.provider === 'string') callData.provider = rec.provider
+      if (typeof rec.action === 'string') callData.action = rec.action
+      callData.destructive = rec.allowDestructive === true
     }
     // RFC-060 PR-E: agent-multi sourcePort mirroring removed.
     if (n.kind === 'wrapper-fanout') {

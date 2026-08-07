@@ -1289,6 +1289,7 @@ export interface Resources {
       recovery: string
       gc: string
       git: string
+      codeHosts: string
       network: string
       appearance: string
       rendering: string
@@ -1300,6 +1301,7 @@ export interface Resources {
     tabRecovery: string
     tabGc: string
     tabGit: string
+    tabCodeHosts: string
     tabNetwork: string
     tabAppearance: string
     tabMemory: string
@@ -3125,6 +3127,7 @@ export interface Resources {
       categoryWrapper: string
       /** RFC-243 — Calls category (call-workflow). */
       categoryCalls: string
+      categoryIntegrations: string
       categoryScripts: string
       categoryIo: string
       categoryHuman: string
@@ -3237,6 +3240,9 @@ export interface Resources {
     /** RFC-243 — Calls palette section + call-workflow entry. */
     /** RFC-253 — Scripts section (deterministic compute, no model). */
     paletteScripts: string
+    paletteCodeHostLabel: string
+    paletteCodeHostDesc: string
+    paletteIntegrations: string
     paletteScriptLabel: string
     paletteScriptDesc: string
     paletteCalls: string
@@ -4363,6 +4369,143 @@ export interface Resources {
   }
   /** RFC-243 PR-4 — canvas chip label + unset-reference line for
    *  call-workgroup nodes (⬡ icon). */
+  codeHostSettings: {
+    baseUrl: string
+    baseUrlHint_gitlab: string
+    baseUrlHint_github: string
+    token: string
+    tokenHint: string
+    tokenStored: string
+    test: string
+    testOk: string
+    testFailed: string
+    testCode_unauthorized: string
+    'testCode_not-found': string
+    testCode_unreachable: string
+    'testCode_bad-response': string
+    loading: string
+    intro: string
+  }
+  codeHostNode: {
+    label: string
+    destructive: string
+  }
+  codeHostProvider: {
+    gitlab: string
+    github: string
+  }
+  codeHostActionGroup: {
+    comment: string
+    mr: string
+    pipeline: string
+    read: string
+    custom: string
+  }
+  codeHostAction: {
+    'comment_reply-thread': string
+    comment_create: string
+    'comment_create-inline': string
+    comment_update: string
+    thread_resolve: string
+    'commit-status_set': string
+    label_add: string
+    assignee_set: string
+    mr_approve: string
+    mr_merge: string
+    mr_create: string
+    pipeline_trigger: string
+    pipeline_retry: string
+    pipeline_cancel: string
+    job_list: string
+    job_log: string
+    mr_diff: string
+    mr_list: string
+    file_read: string
+    custom: string
+  }
+  codeHostField: {
+    project: string
+    mr: string
+    thread: string
+    comment: string
+    comment_scope: string
+    body: string
+    position: string
+    sha: string
+    state: string
+    context: string
+    description: string
+    target_url: string
+    labels: string
+    assignees: string
+    ref: string
+    workflow: string
+    pipeline: string
+    job: string
+    job_scope: string
+    job_filter: string
+    path: string
+    file_ref: string
+    mr_state: string
+    per_page: string
+    source_branch: string
+    target_branch: string
+    title: string
+    merge_method: string
+    squash: string
+  }
+  codeHostFieldHint: {
+    project: string
+    thread: string
+    position: string
+    labels: string
+    assignees: string
+    workflow: string
+    path: string
+  }
+  codeHostOption: {
+    pending: string
+    success: string
+    failed: string
+    pulls: string
+    issues: string
+    open: string
+    closed: string
+    all: string
+    latest: string
+    canceled: string
+    running: string
+    merge: string
+    squash: string
+    rebase: string
+    true: string
+    false: string
+  }
+  codeHostUnsupported: {
+    graphqlOnly: string
+  }
+  codeHostInspector: {
+    provider: string
+    providerHint: string
+    action: string
+    actionHint: string
+    sectionParams: string
+    sectionCustom: string
+    sectionVars: string
+    method: string
+    path: string
+    pathHint: string
+    body: string
+    bodyHint: string
+    allowDestructive: string
+    allowDestructiveHint: string
+    varsHint: string
+    triggerVarsHint: string
+    noInboundPorts: string
+    readonlyBanner: string
+    actionUnsupported: string
+    unsupportedGeneric: string
+  }
   scriptNode: {
     label: string
     dependencyCount_one: string
@@ -6112,6 +6255,7 @@ export const zhCN: Resources = {
       recovery: '创建备份并配置恢复行为。',
       gc: '控制数据保留与自动清理。',
       git: '控制 submodule 的递归、并行度与后台刷新。',
+      codeHosts: '配置 GitLab / GitHub 的出站凭据',
       network: '设置 daemon 监听地址与端口。',
       appearance: '选择主题与界面语言。',
       rendering: '配置外部图表渲染服务。',
@@ -6123,6 +6267,7 @@ export const zhCN: Resources = {
     tabRecovery: '恢复',
     tabGc: 'GC',
     tabGit: 'Git',
+    tabCodeHosts: '代码平台',
     tabNetwork: '网络',
     tabAppearance: '外观',
     tabMemory: '记忆',
@@ -7940,6 +8085,20 @@ export const zhCN: Resources = {
       generic: '任务执行失败。',
       'script-output-truncated':
         '脚本的 stdout 超出保留窗口，单端口模式无法保证端口值完整，已判失败。',
+      'code-host-not-configured': '该代码平台还没有配置 base URL 与 token（设置页 → 代码平台）。',
+      'code-host-project-foreign':
+        '任务的仓库不属于所配置的代码平台实例，已拒绝调用而不是去改一个同名项目。',
+      'code-host-project-unresolved': '无法从任务推导出目标项目，请在节点上显式填写。',
+      'code-host-param-missing': '必填参数为空。',
+      'code-host-param-invalid': '参数取值不合法。',
+      'code-host-trigger-context-missing':
+        '节点引用了 webhook 触发上下文，但该任务不是由 webhook 启动的。',
+      'code-host-body-invalid': '渲染后的请求体不是合法 JSON。',
+      'code-host-path-invalid': '请求路径越出了所配置的 API 根。',
+      'code-host-http-error': '代码平台返回了错误状态码。',
+      'code-host-redirect-refused': '对方返回了重定向，平台不跟随跨主机跳转。',
+      'code-host-network-error': '连接代码平台失败（DNS / 网络 / 超时）。',
+      'code-host-response-unreadable': '响应不是文本，无法作为端口值。',
       'script-nonzero-exit': '脚本以非零退出码结束。',
       'script-timeout': '脚本超时被终止。',
       'script-envelope-missing': '脚本没有输出带本次运行 nonce 的 <workflow-output> 信封。',
@@ -8433,6 +8592,7 @@ export const zhCN: Resources = {
       categoryAgent: 'Agent',
       categoryWrapper: '包装器',
       categoryCalls: '调用',
+      categoryIntegrations: '集成',
       categoryScripts: '脚本',
       categoryIo: '输入输出',
       categoryHuman: '人工节点',
@@ -8542,6 +8702,9 @@ export const zhCN: Resources = {
     paletteClarifyLabel: '反问',
     paletteClarifyDesc: '让 agent 在无法决断时主动反问；从节点左侧 input 端往 agent 上拖即可挂接。',
     paletteScripts: '脚本',
+    paletteCodeHostLabel: '代码平台调用',
+    paletteCodeHostDesc: '以管理员配置的凭据调用 GitLab / GitHub API',
+    paletteIntegrations: '集成',
     paletteScriptLabel: '脚本',
     paletteScriptDesc:
       '在任务工作区里跑一段内联的 python / bash / node，不起模型、不计 token。上游端口以 AW_PORT_* 环境变量注入。',
@@ -9661,6 +9824,145 @@ export const zhCN: Resources = {
     label: '调用工作流',
     unsetWorkflow: '（未选择工作流）',
   },
+  codeHostSettings: {
+    baseUrl: 'API 根地址',
+    baseUrlHint_gitlab: '形如 https://gitlab.example.com/api/v4（子路径部署也以 /api/v4 结尾）',
+    baseUrlHint_github: '公有 GitHub 填 https://api.github.com；GHES 填 https://host/api/v3',
+    token: '访问令牌',
+    tokenHint: '建议用专用机器人账号的最小权限令牌',
+    tokenStored: '已保存（尾号 {{hint}}）。留空保存则保留原令牌',
+    test: '测试连接',
+    testOk: '连接成功，当前身份：{{login}}',
+    testFailed: '连接失败：{{reason}}',
+    testCode_unauthorized: '令牌无效或权限不足',
+    'testCode_not-found': '地址不是有效的 API 根',
+    testCode_unreachable: '网络不通或超时',
+    'testCode_bad-response': '响应不是预期的身份信息（可能被反代拦到了登录页）',
+    loading: '正在读取代码平台配置…',
+    intro:
+      '工作流里的「代码平台调用」节点用这里配置的凭据调用 GitLab / GitHub。令牌加密存储，读取时只显示尾号。',
+  },
+  codeHostNode: {
+    label: '代码平台调用',
+    destructive: '可删除',
+  },
+  codeHostProvider: {
+    gitlab: 'GitLab',
+    github: 'GitHub',
+  },
+  codeHostActionGroup: {
+    comment: '评论',
+    mr: 'MR 状态',
+    pipeline: '流水线',
+    read: '读取',
+    custom: '自定义',
+  },
+  codeHostAction: {
+    'comment_reply-thread': '回复评论线程',
+    comment_create: '在 MR/PR 上新开评论',
+    'comment_create-inline': '在 diff 行新建线程',
+    comment_update: '编辑自己发的评论',
+    thread_resolve: 'resolve 线程',
+    'commit-status_set': '设 commit status',
+    label_add: '打 label',
+    assignee_set: '指派',
+    mr_approve: '批准 MR/PR',
+    mr_merge: '合并 MR/PR',
+    mr_create: '创建 MR/PR',
+    pipeline_trigger: '触发流水线',
+    pipeline_retry: '重跑失败的流水线作业',
+    pipeline_cancel: '取消流水线',
+    job_list: '列出作业',
+    job_log: '拉取作业日志',
+    mr_diff: '拉取 MR/PR diff',
+    mr_list: '列出 MR/PR',
+    file_read: '读取仓库文件',
+    custom: '自定义请求',
+  },
+  codeHostField: {
+    project: '项目',
+    mr: 'MR / PR 编号',
+    thread: '线程 ID',
+    comment: '评论 ID',
+    comment_scope: '评论类型',
+    body: '正文',
+    position: '行内位置 JSON',
+    sha: '提交 SHA',
+    state: '状态',
+    context: '状态名称',
+    description: '描述',
+    target_url: '详情链接',
+    labels: '标签',
+    assignees: '指派对象',
+    ref: '分支 / 标签',
+    workflow: '工作流文件',
+    pipeline: '流水线 ID',
+    job: '作业 ID',
+    job_scope: '作业状态过滤',
+    job_filter: '作业范围',
+    path: '文件路径',
+    file_ref: '引用（分支 / 标签 / SHA）',
+    mr_state: 'MR 状态过滤',
+    per_page: '每页条数',
+    source_branch: '源分支',
+    target_branch: '目标分支',
+    title: '标题',
+    merge_method: '合并方式',
+    squash: '压缩提交',
+  },
+  codeHostFieldHint: {
+    project:
+      '留空则使用当前任务的仓库。GitLab 可填 namespace/path 或数字 ID；GitHub 填 owner/repo。',
+    thread: 'GitLab 为 discussion ID；GitHub 为线程根评论 ID。',
+    position: '直接填 {{trigger.comment_position_json}} 即可原样回传。',
+    labels: '逗号分隔。',
+    assignees: '逗号分隔。GitLab 需要用户数字 ID，GitHub 需要登录名。',
+    workflow: 'GitHub 的 workflow_dispatch 必须指名工作流文件（如 ci.yml）。',
+    path: '填原始路径，平台负责编码。',
+  },
+  codeHostOption: {
+    pending: '进行中',
+    success: '通过',
+    failed: '不通过',
+    pulls: '行内评论',
+    issues: '普通评论',
+    open: '打开',
+    closed: '已关闭',
+    all: '全部',
+    latest: '最后一次尝试',
+    canceled: '已取消',
+    running: '运行中',
+    merge: '合并提交',
+    squash: '压缩合并',
+    rebase: '变基',
+    true: '是',
+    false: '否',
+  },
+  codeHostUnsupported: {
+    graphqlOnly: 'GitHub 的 REST 面没有这个端点（只有 GraphQL），且线程 ID 在 REST 里拿不到',
+  },
+  codeHostInspector: {
+    provider: '代码平台',
+    providerHint: '凭据在设置页的「代码平台」分区配置',
+    action: '操作',
+    actionHint: '按类别分组；某家不支持的操作会置灰并说明原因',
+    sectionParams: '参数',
+    sectionCustom: '自定义请求',
+    sectionVars: '可用变量',
+    method: '方法',
+    path: '相对路径',
+    pathHint: '拼在所配 base URL 之后，必须以 / 开头，不能是绝对 URL',
+    body: '请求体（JSON）',
+    bodyHint: '变量只能写在 JSON 字符串里，这样上游内容改不了请求结构',
+    allowDestructive: '允许破坏性方法',
+    allowDestructiveHint: '打开后才能选 DELETE',
+    varsHint: '上游端口（连线后可用）：',
+    triggerVarsHint: 'Webhook 触发上下文（任务由 webhook 启动时有值）：',
+    noInboundPorts: '还没有连入的端口',
+    readonlyBanner: '你没有编辑代码平台调用节点的权限，本节点只读',
+    actionUnsupported: '所选代码平台不支持这个操作',
+    unsupportedGeneric: '该代码平台不支持这个操作',
+  },
   scriptNode: {
     label: '脚本',
     // 中文无单复数变化，两档同文——与仓内 wgRow_one/_other 先例一致。
@@ -9806,6 +10108,17 @@ export const zhCN: Resources = {
       'wrapper-child-duplicate': '包装器重复列出了同一个直接子节点。',
       'script-node-invalid':
         '脚本节点的字段不合法（正文过长、端口或依赖数量超上限、字段形状不对）。',
+      'code-host-node-invalid': '代码平台调用节点的字段不合法。',
+      'code-host-provider-invalid': '代码平台必须是 GitLab 或 GitHub。',
+      'code-host-action-invalid': '未知的代码平台操作。',
+      'code-host-action-unsupported': '所选代码平台不支持这个操作。',
+      'code-host-param-missing': '代码平台调用节点缺少必填参数。',
+      'code-host-param-invalid': '代码平台调用节点的参数取值不合法。',
+      'code-host-request-invalid': '自定义请求需要合法的方法与相对路径。',
+      'code-host-method-forbidden': '该方法有破坏性，需要在节点上显式允许。',
+      'code-host-path-invalid': '请求路径必须是所配 API 根之下的相对路径。',
+      'code-host-body-invalid': '请求体不是合法 JSON，或变量放在了 JSON 字符串之外。',
+      'code-host-var-unknown': '引用了不存在的端口或触发上下文变量。',
       'script-body-empty': '脚本节点的正文为空。',
       'script-language-invalid': '脚本节点的语言必须是 python、bash 或 node。',
       'script-in-fanout-unsupported':

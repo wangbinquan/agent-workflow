@@ -31,7 +31,8 @@ const STUB_AGENT: Agent = {
 
 // RFC-243 added ⧉ (call-workflow, Calls section); PR-4 added ⬡ (call-workgroup).
 // RFC-253 added ▶ (script, Scripts section).
-const KIND_ICON_GLYPHS = ['⚙', '⎈', '⟳', '⫶', '↳', '⤴', '⚖', '⚡', '⧉', '⬡', '▶']
+// RFC-269 显式改判：新增 '⇄'（代码平台调用节点的 kind icon）。
+const KIND_ICON_GLYPHS = ['⚙', '⎈', '⟳', '⫶', '↳', '⤴', '⚖', '⚡', '⧉', '⬡', '▶', '⇄']
 const LEADING_ICON_RE = new RegExp(`^(?:${KIND_ICON_GLYPHS.map((g) => g).join('|')}) `)
 
 describe('palette rows lead with a kind-icon glyph (both locales)', () => {

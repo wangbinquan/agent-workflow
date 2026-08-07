@@ -1069,6 +1069,18 @@ export const tasks = sqliteTable(
      * workflowSnapshot through the existing member-gated surface.
      */
     refClosureJson: text('ref_closure_json'),
+    /**
+     * RFC-269: webhook 触发时快照的**事件变量投影**（RFC-263 的 29 项，剔除
+     * `event_json`），供 `code-host-call` 节点的 `{{trigger.*}}` 取值。
+     *
+     * NULL = 该任务不是 webhook 触发的。这与「有上下文但某个变量恰好为空」是
+     * 两回事：前者要给出「这个任务不是 webhook 起的」这句话，后者只是空串。
+     *
+     * 不存 `event_json` 原文：那是 32 KiB 截断的完整 payload，进一次外部 API
+     * 调用没有用例，却会把外部原始数据的保留期从投递表的 90 天 GC 拉长到与任务
+     * 同寿（design D15）。
+     */
+    triggerContextJson: text('trigger_context_json'),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },
@@ -1297,6 +1309,37 @@ export const webhookTriggerStreams = sqliteTable(
     pk: primaryKey({ columns: [t.triggerId, t.streamKey] }),
   }),
 )
+
+// -----------------------------------------------------------------------------
+// code_host_connections — RFC-269. The administrator-configured outbound
+// credential, at most ONE ROW PER PROVIDER (user decision Q2/Q12: one global
+// set, per code host).
+//
+// Why DB + secretBox rather than `~/.agent-workflow/config.json`: that file is
+// plaintext on disk AND `GET /api/config` returns the whole document to the
+// frontend, so a token there would need its own masking layer to stay secret.
+// Every credential the platform already holds (webhook_endpoints.secret_enc,
+// oidc_providers.client_secret_enc, cached_repos.url_enc) is sealed in the DB;
+// this follows that path instead of inventing a second posture.
+//
+// Losing `~/.agent-workflow/secret.key` makes these unreadable — identical to
+// the webhook ingress secret, so disaster recovery gains one line ("re-enter
+// the code-host tokens"), not a new mechanism.
+// -----------------------------------------------------------------------------
+export const codeHostConnections = sqliteTable('code_host_connections', {
+  provider: text('provider', { enum: ['gitlab', 'github'] }).primaryKey(),
+  /** Normalized API root, no trailing slash (`https://host/api/v4`). */
+  baseUrl: text('base_url').notNull(),
+  tokenEnc: text('token_enc').notNull(), // secretBox.seal(token)
+  /** Last 4 chars — the ONLY part any read path ever returns. */
+  tokenHint: text('token_hint').notNull(),
+  /** Last "test connection" result (JSON). Display only; never an admission input. */
+  lastTestJson: text('last_test_json'),
+  updatedAt: integer('updated_at')
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedBy: text('updated_by'), // users.id (audit)
+})
 
 // -----------------------------------------------------------------------------
 // task_repos — RFC-066. One row per repo in a task. Single-repo tasks have

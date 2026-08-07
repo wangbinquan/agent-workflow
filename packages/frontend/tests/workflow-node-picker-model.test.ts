@@ -36,13 +36,15 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
     })
 
     expect(model.categoryCounts).toEqual({
-      all: 61,
+      // RFC-269 显式改判：新增 code-host-call ⇒ 全量 61 → 62、新增 integrations 分区。
+      all: 62,
       agents: 50,
       wrappers: 3,
       // RFC-243 — call-workflow + call-workgroup entries in the Calls category.
       calls: 2,
       // RFC-253 — the single generic script entry.
       scripts: 1,
+      integrations: 1,
       io: 2,
       human: 3,
     })
@@ -52,10 +54,13 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
       'wrappers',
       'calls',
       'scripts',
+      // RFC-269 显式改判：新增 integrations 分区。
+      'integrations',
       'io',
       'human',
     ])
-    expect(model.visibleEntryCount).toBe(61)
+    // RFC-269 显式改判：新增 code-host-call ⇒ 61 → 62。
+    expect(model.visibleEntryCount).toBe(62)
   })
 
   test('opens Wrapper and Human directly without any Agent rows', () => {
@@ -191,7 +196,8 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
 
     expect(model.categoryCounts.agents).toBe(0)
     // RFC-253 added the Scripts entry ⇒ 10 → 11 non-agent palette rows.
-    expect(model.categoryCounts.all).toBe(11)
+    // RFC-269 显式改判：11 → 12（新增 code-host-call）。
+    expect(model.categoryCounts.all).toBe(12)
     expect(model.groups).toEqual([])
     expect(model.visibleEntryCount).toBe(0)
   })

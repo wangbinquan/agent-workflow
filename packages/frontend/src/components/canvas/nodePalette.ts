@@ -43,12 +43,22 @@ export type PaletteItem =
   // Inspector after the drop (a palette row per language would be three rows
   // that differ only by a default value).
   | { kind: 'script' }
+  // RFC-269 — one generic Integrations row; provider and action are picked in
+  // the Inspector after the drop (a row per provider × action would be forty).
+  | { kind: 'code-host-call' }
 
 /** mime carried in HTML5 dataTransfer. Custom to avoid colliding with files. */
 export const PALETTE_MIME = 'application/x-agent-workflow-node'
 
 /** Sidebar section a kind's palette entry renders under. */
-export type PaletteSectionKey = 'agents' | 'wrappers' | 'calls' | 'scripts' | 'io' | 'human'
+export type PaletteSectionKey =
+  | 'agents'
+  | 'wrappers'
+  | 'calls'
+  | 'scripts'
+  | 'integrations'
+  | 'io'
+  | 'human'
 
 interface PaletteDescriptor {
   section: PaletteSectionKey
@@ -209,6 +219,21 @@ export const PALETTE_DESCRIPTORS = {
     idPrefix: 'script',
     makeDefaults: () => ({ language: 'python', script: SCRIPT_STARTER_TEMPLATES.python }),
   },
+  // RFC-269 — a fresh node starts on GitLab with the reply-to-thread action:
+  // that is the "auto-reply to a comment" pipeline this RFC was asked for, and
+  // it is the action whose parameters the trigger context fills in for free.
+  'code-host-call': {
+    section: 'integrations',
+    glyph: '\u21c4',
+    labelKey: 'editor.paletteCodeHostLabel',
+    descKey: 'editor.paletteCodeHostDesc',
+    idPrefix: 'call_api',
+    makeDefaults: () => ({
+      provider: 'gitlab',
+      action: 'comment.reply-thread',
+      params: {},
+    }),
+  },
 } as const satisfies Record<NodeKind, PaletteDescriptor>
 
 /**
@@ -363,6 +388,9 @@ export const PALETTE_SECTIONS = [
   { key: 'calls', labelKey: 'editor.paletteCalls' },
   // RFC-253 — Scripts: deterministic compute that runs no model.
   { key: 'scripts', labelKey: 'editor.paletteScripts' },
+  // RFC-269 — Integrations: acting on the code host with the administrator's
+  // configured credential.
+  { key: 'integrations', labelKey: 'editor.paletteIntegrations' },
   { key: 'io', labelKey: 'editor.paletteIo' },
   { key: 'human', labelKey: 'editor.paletteHuman' },
 ] as const satisfies ReadonlyArray<{ key: PaletteSectionKey; labelKey: string }>

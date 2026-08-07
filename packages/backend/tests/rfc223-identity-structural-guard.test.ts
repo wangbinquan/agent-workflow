@@ -66,6 +66,17 @@ interface ExactAllowance {
 // `count` is part of the contract: copying the exact same allowed syntax in the
 // same function produces an extra occurrence and fails the guard.
 const EXACT_ALLOWANCE_ROWS = [
+  // RFC-269: 代码平台调用节点的五处 name 键。全部属于**协议命名空间**而不是
+  // 资源身份 —— `name` 在这里要么是 RFC-263 的模板变量名（触发上下文投影、
+  // `{{trigger.x}}` 的合法性判定），要么是 `CODE_HOST_FIELDS` 这个闭合字段枚举
+  // 的成员（表单渲染的 React key 与 params 字典的键）。两者都不解析任何资源，
+  // 也没有 owner 维度；节点引用的 provider / action 是闭合枚举，凭据则按
+  // provider 主键取行 —— 都不走名字。
+  'collection-name-identitypackages/shared/src/codeHost/triggerContext.tsisTriggerContextVarCallExpression:082430e325726b6171251port-or-protocol-nameTRIGGER_CONTEXT_VAR_SET.has(name)',
+  'frontend-name-keypackages/frontend/src/components/canvas/inspector/CodeHostCallEdit.tsxCodeHostCallEditJsxAttribute:570a921541bde4fe091a1port-or-protocol-namekey={field.name}',
+  'frontend-name-keypackages/frontend/src/components/canvas/inspector/CodeHostCallEdit.tsxCodeHostCallEditJsxAttribute:68c4bdce1d7b982e55c31port-or-protocol-namekey={name}',
+  'frontend-name-keypackages/frontend/src/components/canvas/inspector/CodeHostCallEdit.tsxpatchParamComputedPropertyName:73e1ace15637cb5374201port-or-protocol-name[name]',
+  'frontend-name-keypackages/shared/src/codeHost/triggerContext.tstriggerContextOfBinaryExpression:65137cd5060b8698a4151port-or-protocol-nameout[name] = value',
   'collection-name-identity\u001fpackages/backend/src/services/importRefs.ts\u001fbuildCandidateSnapshotsInTx\u001fNewExpression:375cd3c41fdf6552897b\u001f1\u001fportable-selector\u001fnew Set(typeSelectors.map((selector) => selector.name))',
   // RFC-234: intent-bundle CREATE-name precheck; the authoritative guard is
   // each type's owner-scoped unique index inside the apply transaction.
@@ -386,7 +397,9 @@ describe('RFC-223 T15 structural identity guard', () => {
     // predicted: `buildResourceOptionLabeler` returns a total function, so the
     // five pickers that use it produce NO `get(id) ?? name` fallback at all —
     // the allowance went stale and the count returns to 140.
-    expect(findings.length).toBe(140)
+    // RFC-269 显式改判：140 → 145。代码平台调用节点新增五处 name 键，全部登记
+    // 为 port-or-protocol-name（模板变量名 / 闭合字段枚举，不解析任何资源）。
+    expect(findings.length).toBe(145)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

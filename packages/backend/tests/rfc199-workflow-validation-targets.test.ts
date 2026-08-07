@@ -211,7 +211,10 @@ describe('RFC-199 strict workflow validation targets', () => {
     // characters fits in neither `<port name="…">` nor `<port name='…'>`, so
     // the node could only ever fail at run time) — strict `script-outputs`
     // node-field target, same family as the duplicate/path-kind pair.
-    expect(emissions).toHaveLength(130)
+    // RFC-269 显式改判：代码平台调用节点新增 12 条 issue emission（provider /
+    // action / 支持性 / 必填 / 枚举 / 自定义请求四条 / 变量域 / strict schema），
+    // 全部带 node 级 strict target ⇒ 130 → 142。
+    expect(emissions).toHaveLength(142)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

@@ -300,6 +300,56 @@ export const SCRIPT_PERMANENT_FAILURE_CODES: ReadonlyArray<ScriptFailureCode> = 
 ]
 
 /**
+ * RFC-269 — code-host call node failures.
+ *
+ * Same reasoning as the script codes: not part of `FOLLOWUP_FAILURE_CODES`,
+ * because "re-prompt the model in the same session" is meaningless for an HTTP
+ * request that either got a response or did not. A retry is always a fresh
+ * request.
+ *
+ * Note the split below is about whether ANOTHER ATTEMPT BY THE PLATFORM can
+ * change the outcome — it is not about whether a human can fix the situation.
+ * `code-host-http-error` is retryable because the fix (grant the token an
+ * additional scope, create the missing MR) happens OUTSIDE the platform and a
+ * later retry then succeeds; `code-host-param-missing` is permanent because
+ * the input is frozen in the workflow definition and will render identically
+ * forever.
+ */
+export const CODE_HOST_FAILURE_CODES = [
+  'code-host-not-configured',
+  'code-host-project-foreign',
+  'code-host-project-unresolved',
+  'code-host-param-missing',
+  'code-host-param-invalid',
+  'code-host-trigger-context-missing',
+  'code-host-body-invalid',
+  'code-host-path-invalid',
+  'code-host-http-error',
+  'code-host-redirect-refused',
+  'code-host-network-error',
+  'code-host-response-unreadable',
+] as const
+export type CodeHostFailureCode = (typeof CODE_HOST_FAILURE_CODES)[number]
+
+/** Code-host failures where another attempt cannot change the outcome. */
+export const CODE_HOST_PERMANENT_FAILURE_CODES: ReadonlyArray<CodeHostFailureCode> = [
+  // The workflow definition renders the same values every time.
+  'code-host-param-missing',
+  'code-host-param-invalid',
+  'code-host-body-invalid',
+  'code-host-path-invalid',
+  // The task's repo / trigger provenance is frozen at launch; a retry of THIS
+  // task can never acquire a trigger context or change which repo it runs on.
+  'code-host-project-foreign',
+  'code-host-project-unresolved',
+  'code-host-trigger-context-missing',
+  // The endpoint answered with a cross-host redirect; that is a property of the
+  // endpoint, not of this attempt.
+  'code-host-redirect-refused',
+  'code-host-response-unreadable',
+]
+
+/**
  * Failures the RUNTIME reported about ITSELF, outside the envelope protocol and
  * outside the execution-identity contract.
  *
@@ -323,6 +373,7 @@ export const FAILURE_CODES = [
   ...FOLLOWUP_FAILURE_CODES,
   ...RUNTIME_FAILURE_CODES,
   ...SCRIPT_FAILURE_CODES,
+  ...CODE_HOST_FAILURE_CODES,
   ...EXECUTION_IDENTITY_FAILURE_CODES,
   // RFC-251: retired codes stay in the READ domain. No path emits them, but
   // rows written before the upgrade must not fail the strict page parse.

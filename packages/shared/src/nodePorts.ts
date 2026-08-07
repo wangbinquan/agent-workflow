@@ -279,6 +279,17 @@ const PORT_DERIVERS = {
     ...NO_PORTS,
     dataOutputs: declaredScriptOutputs(node),
   }),
+  // RFC-269 D22 — a code-host call declares NO inputs (its parameters are
+  // templates resolved by name, the agent-single/script precedent) and exactly
+  // two outputs, the same pair for every action and both optional to wire:
+  // `response` is the response body verbatim, `status` the HTTP status code.
+  'code-host-call': (): DeclaredPorts => ({
+    ...NO_PORTS,
+    dataOutputs: [
+      { name: 'response', kind: 'text' },
+      { name: 'status', kind: 'text' },
+    ],
+  }),
 } as const satisfies Record<NodeKind, (ctx: DeriverCtx) => DeclaredPorts>
 
 /**
