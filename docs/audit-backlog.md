@@ -334,6 +334,10 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ⏳ **两条 CI flaky（RFC-269 实施期间连续撞上，均非本 RFC 引入，各需 owner 处置）**：仓规明令「绝不允许『重跑就过了』作为通过依据」，故在此登记而不是就地重跑了事。
+  - `packages/frontend/tests/unsaved-guard.test.tsx > dismiss via ESC = stay, then a later nav blocks again`（owning commit `5a1f6993` / RFC-250）：**仅 macOS shard 1/3** 红，该用例耗时 `5139ms`（同文件其余用例 ~100ms），ubuntu 同分片绿、本地 19/19 稳定绿。症状是 ESC 后 `unsaved-guard-dialog` 仍在 DOM 里 —— `waitFor` 等的是「消失」，在慢 runner 上像是没等到重渲染。归属判据：该测试自建路由树、**不 import 真实 settings 路由**，与并发改动零耦合。
+  - `RFC-227 REAL macOS Seatbelt provider (gated) > denies app secrets, seal writes, and child network while preserving worktree writes`（owning commit `5c3eacf1` / RFC-252 G2）：**仅 macOS shard 1/4** 红，耗时 `5015ms` 像是撞上超时上限。**硬证据表明与代码无关**：红 run（`b2754f65`）与它前一个绿 run（`7322beef`）之间的全部差异是 **两个 `.md` 文件各改一行**；两行 markdown 改不了 macOS 沙箱行为。两条都在重跑后整 run success。
+  处置建议：前者按仓内既有姿势换更稳的等待锚点（`findBy*` 而非 `waitFor` + `queryBy`）；后者若确认是 runner 上 `sandbox-exec` 启动耗时抖动，给该 gated 用例单独放宽超时并注明理由 —— 两者都需要各自 RFC 的 owner 判断，不宜由无关改动顺手改测试。
 - ⏳ **存量任务的 canonical worktree 指向 `iso/` 的成因未定（2026-08-04 Linux 部署事故）**：真实
   部署日志显示某任务的 `tasks.worktree_path` 落在 `~/.agent-workflow/iso/{taskId}/{nodeRunId}`
   （每次运行后清理的临时隔离空间），目录消失后节点以误导性的
