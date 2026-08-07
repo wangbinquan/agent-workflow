@@ -111,6 +111,26 @@ describe('openContainedFile (handle-first contained read)', () => {
     expect(res.kind).toBe('outside')
   })
 
+  test('task#12 seam: a REGULAR-FILE swap after resolution is refused by the dev/ino recheck', () => {
+    // O_NOFOLLOW cannot catch a non-symlink swap, and is a NO-OP on win32
+    // entirely (RFC-254 task#12) — so on Windows even the symlink case above
+    // reaches the open. The lstat-before / fstat-after dev+ino recheck closes
+    // both: the file we actually read must be identity-identical to the one we
+    // lstat'd and containment-checked. This POSIX test exercises that recheck
+    // directly by swapping in a DIFFERENT regular file (new inode), which
+    // O_NOFOLLOW lets through to the fstat — the same handle-identity path that
+    // guards Windows.
+    const root = tempDir('aw-fc-swap-')
+    writeFileSync(join(root, 'victim.md'), 'legit\n')
+    const res = openContainedFile(root, 'victim.md', {
+      beforeOpen: () => {
+        rmSync(join(root, 'victim.md'))
+        writeFileSync(join(root, 'victim.md'), 'attacker-controlled\n')
+      },
+    })
+    expect(res.kind).toBe('outside')
+  })
+
   test('oversized and binary files are refused with their own kinds', () => {
     const root = tempDir('aw-fc-guard-')
     writeFileSync(join(root, 'big.md'), 'x'.repeat(FILE_CONTENT_MAX_BYTES + 1))

@@ -14,7 +14,17 @@
 //     already-realpath'd target), then verify regular-file/size/NUL on the
 //     file handle and read from that same handle.
 
-import { closeSync, constants, fstatSync, openSync, readSync, realpathSync } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readSync,
+  realpathSync,
+  type Stats,
+} from 'node:fs'
+import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 import { basename, isAbsolute, join, resolve, sep } from 'node:path'
 import { parseRepoKeyWire } from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -69,7 +79,13 @@ export function openContainedFile(
   hooks?: ContainedFileHooks,
 ): ContainedRead {
   if (relPath === '' || isAbsolute(relPath)) return { kind: 'outside' }
-  if (relPath.split('/').some((seg) => seg === '..')) return { kind: 'outside' }
+  // Split on the platform's ACTUAL separators: win32 accepts `\` too, so a `..`
+  // spelled with a backslash must be caught there — but `\` is a legal filename
+  // character on POSIX, so splitting on it there would false-reject a real file.
+  // (The realpath containment at line ~90 is the true gate; this is a fast,
+  // platform-honest pre-screen.)
+  const sepSplit = process.platform === 'win32' ? /[/\\]/ : /\//
+  if (relPath.split(sepSplit).some((seg) => seg === '..')) return { kind: 'outside' }
 
   let rootReal: string
   try {
@@ -87,6 +103,24 @@ export function openContainedFile(
     return { kind: 'outside' }
   }
 
+  // RFC-254 T31 (task#12): O_NOFOLLOW below is a NO-OP on win32
+  // (`constants.O_NOFOLLOW` is undefined there, and `flags | undefined === flags`),
+  // so the realpath→open symlink-swap window has no kernel guard on Windows.
+  // Bracket the open with a handle-identity recheck instead: lstat the resolved
+  // target now — it must be a non-symlink regular file — and after opening,
+  // require the fstat'd handle to carry the SAME dev/ino (win32-authoritative
+  // since T40a, fail-closed on index-less filesystems). A symlink swapped into
+  // `resolved` after the realpath is refused here even where O_NOFOLLOW cannot;
+  // on POSIX this is belt-and-suspenders behind the ELOOP path.
+  let before: Stats
+  try {
+    before = lstatSync(resolved)
+  } catch {
+    return { kind: 'not-found' }
+  }
+  if (before.isSymbolicLink()) return { kind: 'outside' }
+  if (!before.isFile()) return { kind: 'not-found' }
+
   hooks?.beforeOpen?.()
 
   let fd: number
@@ -100,6 +134,10 @@ export function openContainedFile(
   }
   try {
     const st = fstatSync(fd)
+    // The file we OPENED must be byte-identical in identity to the one we lstat'd
+    // and containment-checked. A dev/ino change means a swap slipped into the
+    // realpath→open window (the win32 gap O_NOFOLLOW cannot close); refuse it.
+    if (!assertSameFileIdentityForHost(before, st).trusted) return { kind: 'outside' }
     if (!st.isFile()) return { kind: 'not-found' }
     if (st.size > FILE_CONTENT_MAX_BYTES) return { kind: 'oversized', size: st.size }
     const buf = Buffer.alloc(st.size)
