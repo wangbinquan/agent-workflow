@@ -65,10 +65,11 @@ export type NamedInputDropPolicy = 'new-only' | 'new-or-reuse'
 
 /** The single policy for card nodes whose body accepts an arbitrary named input.
  *
- *  Agent, workgroup-call and script inputs are all edge-derived variables, so
- *  they can create a new name or deliberately replace the edge occupying an
- *  existing name. Output is collection-shaped: every body drop appends a new
- *  port, because reusing one would conflict with its `ports[].bind` sync.
+ *  Agent, workgroup-call, script and code-host-call inputs are all edge-derived
+ *  variables, so they can create a new name or deliberately replace the edge
+ *  occupying an existing name. Output is collection-shaped: every body drop
+ *  appends a new port, because reusing one would conflict with its `ports[].bind`
+ *  sync.
  *
  *  RFC-243: call-workflow is deliberately NOT here — its input ports are a
  *  CLOSED set mirrored from the child definition's `inputs[]` (design §5.2
@@ -82,12 +83,17 @@ export type NamedInputDropPolicy = 'new-only' | 'new-or-reuse'
  *
  *  RFC-253: script follows agent-single: inbound edge target names become
  *  `AW_PORT_*` variables, so it must not silently lose the shared preview just
- *  because the node kind was added after RFC-106. */
+ *  because the node kind was added after RFC-106.
+ *
+ *  RFC-269: code-host-call follows the same open-input contract: target names
+ *  become {{port}} templates. Keeping it here also deconflicts two upstream
+ *  outputs with the same name instead of silently aliasing both to one token. */
 export function namedInputDropPolicy(kind: string): NamedInputDropPolicy | null {
   switch (kind) {
     case 'agent-single':
     case 'call-workgroup':
     case 'script':
+    case 'code-host-call':
       return 'new-or-reuse'
     case 'output':
       return 'new-only'

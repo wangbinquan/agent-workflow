@@ -48,7 +48,7 @@ describe('findNewInputTarget (pointer hit-test)', () => {
     })
   })
 
-  test.each(['agent-single', 'call-workgroup', 'script'] as const)(
+  test.each(['agent-single', 'call-workgroup', 'script', 'code-host-call'] as const)(
     '%s keeps the shared NEW + REUSE input-drop contract',
     (kind) => {
       expect(namedInputDropPolicy(kind)).toBe('new-or-reuse')
@@ -144,7 +144,8 @@ describe('RFC-106 wiring (source anchors)', () => {
 
   test('reuse follows the shared open-input policy (output still always appends)', () => {
     // Rebinding an output port would clear its ports[].bind, so output remains
-    // NEW-only. Agent/workgroup/script edge-derived inputs share precise reuse.
+    // NEW-only. Agent/workgroup/script/code-host edge-derived inputs share
+    // precise reuse.
     expect(resolve).toContain("namedInputDropPolicy(targetNode.kind) === 'new-or-reuse'")
   })
 
@@ -158,8 +159,8 @@ describe('RFC-106 wiring (source anchors)', () => {
 
   test('catch-all build and validity checks use the same open-input node policy', () => {
     // Both the actual onConnect adapter and xyflow's preflight must include
-    // workgroup/script targets; otherwise preview would claim a port that the
-    // release path names differently or refuses.
+    // workgroup/script/code-host targets; otherwise preview would claim a port
+    // that the release path names differently or refuses.
     expect(canvas.match(/namedInputDropPolicy\(targetNode\.kind\)/g)).toHaveLength(2)
   })
 

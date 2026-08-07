@@ -4537,6 +4537,26 @@ export interface Resources {
     manageConnectionsAria: string
     action: string
     actionHint: string
+    sectionInputs: string
+    inputGuideEmptyTitle: string
+    inputGuideEmpty: string
+    inputGuideNoTargetTitle: string
+    inputGuideNoTarget: string
+    inputGuideUnboundTitle: string
+    inputGuideUnbound: string
+    inputGuideBoundTitle: string
+    inputGuideBound: string
+    bindTargetAria: string
+    bindTargetPlaceholder: string
+    bindTargetEmpty: string
+    bindTargetReplace: string
+    boundTargets: string
+    removeBindingAria: string
+    inputBindingAdvancedHint: string
+    upstreamOptionGroup: string
+    upstreamOptionDescription: string
+    savedTemplateOptionGroup: string
+    savedTemplateOptionDescription: string
     sectionParams: string
     sectionCustom: string
     sectionVars: string
@@ -10056,9 +10076,31 @@ export const zhCN: Resources = {
     manageConnectionsAria: '在新标签页配置代码平台凭据',
     action: '操作',
     actionHint: '按类别分组；某家不支持的操作会置灰并说明原因',
+    sectionInputs: '输入绑定',
+    inputGuideEmptyTitle: '尚未连接上游输入',
+    inputGuideEmpty: '从上游节点的输出端口拖线到本节点；连线后，这里会列出可绑定的变量和参数。',
+    inputGuideNoTargetTitle: '当前操作没有可直接绑定的参数',
+    inputGuideNoTarget: '请先选择受支持的操作；自定义 JSON 请求体可在下方高级模板变量中组合输入。',
+    inputGuideUnboundTitle: '还有 {{count}} 个输入未绑定',
+    inputGuideUnbound:
+      '连线只把上游值带到本节点，不会替你猜它属于哪个 API 参数。请为每个输入选择目标参数。',
+    inputGuideBoundTitle: '输入已绑定',
+    inputGuideBound: '运行时会用上游真实值替换参数模板；可在每行继续添加或移除目标参数。',
+    bindTargetAria: '把输入 {{port}} 绑定到参数',
+    bindTargetPlaceholder: '选择目标参数…',
+    bindTargetEmpty: '将该参数设为这个输入',
+    bindTargetReplace: '该参数已有值，选择后会替换',
+    boundTargets: '已用于',
+    removeBindingAria: '取消输入 {{port}} 与参数 {{field}} 的绑定',
+    inputBindingAdvancedHint:
+      '需要把输入嵌入固定文字或 JSON 时，先点对应字段，再在下方“高级模板变量”中点击变量；自定义 JSON 请求体不会被一键整体替换。',
+    upstreamOptionGroup: '上游输入',
+    upstreamOptionDescription: '来自 {{source}}；运行时替换为实际值',
+    savedTemplateOptionGroup: '已保存模板',
+    savedTemplateOptionDescription: '当前值是模板；请确认它仍有对应入边或 Webhook 上下文',
     sectionParams: '参数',
     sectionCustom: '自定义请求',
-    sectionVars: '可用变量',
+    sectionVars: '高级模板变量',
     method: '方法',
     path: '相对路径',
     pathHint: '拼在所配 base URL 之后，必须以 / 开头，不能是绝对 URL',

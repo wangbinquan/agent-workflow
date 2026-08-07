@@ -35,10 +35,12 @@ import {
 } from '@agent-workflow/shared'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { Segmented } from '@/components/Segmented'
-import { Select } from '@/components/Select'
+import { Select, type SelectOption } from '@/components/Select'
 import { applyTemplateVarInsertion, TemplateVarChips } from '@/components/TemplateVarChips'
 import { usePermission } from '@/hooks/useActor'
+import { nodeTitle } from '../nodeTitle'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -77,7 +79,14 @@ interface TemplateTarget {
   key: string
   label: string
   value: string
+  allowDirectBinding: boolean
   commit: (next: string) => void
+}
+
+interface InboundBinding {
+  portName: string
+  sources: string[]
+  token: string
 }
 
 function readRequest(node: WorkflowNode): CustomRequestShape {
@@ -121,11 +130,29 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
     )
   }
 
-  // 上游端口名 = 可用的 {{port}} 变量（与校验器同源：入边的 target portName）。
-  const inboundPorts = definition.edges
-    .filter((edge) => edge.target.nodeId === node.id)
-    .map((edge) => edge.target.portName)
-  const uniqueInbound = [...new Set(inboundPorts)].sort()
+  // 入边的 target portName 才是本节点真正可引用的 {{port}} 名。把 source 与
+  // target 同时呈现，避免重命名后的边让作者误拿 source port 猜模板变量。
+  const inboundByPort = new Map<string, InboundBinding>()
+  for (const edge of definition.edges) {
+    if (edge.target.nodeId !== node.id) continue
+    const sourceNode = definition.nodes.find((candidate) => candidate.id === edge.source.nodeId)
+    const sourceName = sourceNode === undefined ? edge.source.nodeId : nodeTitle(sourceNode)
+    const source = [sourceName, edge.source.portName].join(' · ')
+    const current = inboundByPort.get(edge.target.portName)
+    if (current === undefined) {
+      inboundByPort.set(edge.target.portName, {
+        portName: edge.target.portName,
+        sources: [source],
+        token: '{{' + edge.target.portName + '}}',
+      })
+    } else if (!current.sources.includes(source)) {
+      current.sources.push(source)
+    }
+  }
+  const inboundBindings = [...inboundByPort.values()].sort((a, b) =>
+    a.portName.localeCompare(b.portName),
+  )
+  const uniqueInbound = inboundBindings.map((binding) => binding.portName)
 
   const actionOptions = codeHostActionsByGroup().flatMap(({ group, actions }) =>
     actions.map((value) => {
@@ -161,6 +188,7 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             key: 'request:path',
             label: t('codeHostInspector.path'),
             value: request.path,
+            allowDirectBinding: true,
             commit: (path) =>
               patch(
                 { request: { ...request, path } },
@@ -175,6 +203,11 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             key: 'request:body',
             label: t('codeHostInspector.body'),
             value: request.body ?? '',
+            // A bare {{port}} is not a valid JSON body skeleton. Authors can
+            // still compose it at a deliberate cursor position in Advanced
+            // template variables, but the one-click whole-value binding must
+            // not manufacture a definition the validator immediately rejects.
+            allowDirectBinding: false,
             commit: (body) =>
               patch(
                 { request: { ...request, body } },
@@ -186,19 +219,20 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
               ),
           },
         ]
-      : fields
-          .filter((field) => field.control !== 'select')
-          .map((field) => {
-            const label = t(`codeHostField.${field.name}`, { defaultValue: field.name })
-            return {
-              key: `param:${field.name}`,
-              label,
-              value: params[field.name] ?? '',
-              commit: (next: string) => patchParam(field.name, next, label),
-            }
-          })
-  const activeTemplateTarget =
-    templateTargets.find((target) => target.key === focusedTemplateTargetKey) ?? templateTargets[0]
+      : fields.map((field) => {
+          const label = t(`codeHostField.${field.name}`, { defaultValue: field.name })
+          return {
+            key: `param:${field.name}`,
+            label,
+            value: params[field.name] ?? '',
+            allowDirectBinding: true,
+            commit: (next: string) => patchParam(field.name, next, label),
+          }
+        })
+  const directTemplateTargets = templateTargets.filter((target) => target.allowDirectBinding)
+  const activeTemplateTarget = templateTargets.find(
+    (target) => target.key === focusedTemplateTargetKey,
+  )
   const bindTemplateInput = (key: string) => (el: TemplateInput | null) => {
     if (el === null) templateInputRefs.current.delete(key)
     else templateInputRefs.current.set(key, el)
@@ -212,6 +246,14 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
       activeTemplateTarget.commit,
     )
   }
+  const bindInputToTarget = (binding: InboundBinding, targetKey: string): void => {
+    if (!canAuthor || targetKey.length === 0) return
+    directTemplateTargets.find((target) => target.key === targetKey)?.commit(binding.token)
+  }
+  const removeInputFromTarget = (binding: InboundBinding, target: TemplateTarget): void => {
+    if (!canAuthor) return
+    target.commit(target.value.split(binding.token).join(''))
+  }
   const triggerVariableGroups = WEBHOOK_VAR_GROUPS.map((group) => ({
     label: t(
       group.key === 'api'
@@ -222,6 +264,39 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
       .filter((name) => (TRIGGER_CONTEXT_VARS as readonly string[]).includes(name))
       .map((name) => `trigger.${name}`),
   }))
+  const unboundInputCount = inboundBindings.filter(
+    (binding) => !templateTargets.some((target) => target.value.includes(binding.token)),
+  ).length
+  const inputGuideState =
+    inboundBindings.length === 0
+      ? 'empty'
+      : directTemplateTargets.length === 0
+        ? 'no-target'
+        : unboundInputCount > 0
+          ? 'unbound'
+          : 'bound'
+  const inputGuideTone =
+    inputGuideState === 'bound'
+      ? 'success'
+      : inputGuideState === 'unbound' || inputGuideState === 'no-target'
+        ? 'warning'
+        : 'info'
+  const inputGuideTitle =
+    inputGuideState === 'empty'
+      ? t('codeHostInspector.inputGuideEmptyTitle')
+      : inputGuideState === 'no-target'
+        ? t('codeHostInspector.inputGuideNoTargetTitle')
+        : inputGuideState === 'unbound'
+          ? t('codeHostInspector.inputGuideUnboundTitle', { count: unboundInputCount })
+          : t('codeHostInspector.inputGuideBoundTitle')
+  const inputGuideBody =
+    inputGuideState === 'empty'
+      ? t('codeHostInspector.inputGuideEmpty')
+      : inputGuideState === 'no-target'
+        ? t('codeHostInspector.inputGuideNoTarget')
+        : inputGuideState === 'unbound'
+          ? t('codeHostInspector.inputGuideUnbound')
+          : t('codeHostInspector.inputGuideBound')
 
   return (
     <>
@@ -293,6 +368,101 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             }}
           />
         </Field>
+      </InspectorSection>
+
+      <InspectorSection title={t('codeHostInspector.sectionInputs')}>
+        <NoticeBanner
+          tone={inputGuideTone}
+          size="compact"
+          title={inputGuideTitle}
+          testid="code-host-input-guide"
+        >
+          {inputGuideBody}
+        </NoticeBanner>
+        {inboundBindings.length > 0 ? (
+          <div className="code-host-input-bindings" data-testid="code-host-input-bindings">
+            {inboundBindings.map((binding) => {
+              const usedTargets = templateTargets.filter((target) =>
+                target.value.includes(binding.token),
+              )
+              return (
+                <div
+                  className="code-host-input-binding"
+                  key={binding.portName}
+                  data-testid={'code-host-input-binding-' + binding.portName}
+                >
+                  <div className="code-host-input-binding__route">
+                    <span
+                      className="code-host-input-binding__source"
+                      title={binding.sources.join(' + ')}
+                    >
+                      {binding.sources.join(' + ')}
+                    </span>
+                    <span className="code-host-input-binding__arrow" aria-hidden="true">
+                      →
+                    </span>
+                    <code
+                      className="code-host-input-binding__token"
+                      data-testid={'code-host-input-token-' + binding.portName}
+                    >
+                      {binding.token}
+                    </code>
+                  </div>
+                  <Select<string>
+                    value=""
+                    ariaLabel={t('codeHostInspector.bindTargetAria', {
+                      port: binding.portName,
+                    })}
+                    data-testid={'code-host-input-target-' + binding.portName}
+                    disabled={!canAuthor || directTemplateTargets.length === 0}
+                    onChange={(targetKey) => bindInputToTarget(binding, targetKey)}
+                    options={[
+                      {
+                        value: '',
+                        label: t('codeHostInspector.bindTargetPlaceholder'),
+                        disabled: true,
+                      },
+                      ...directTemplateTargets.map((target) => ({
+                        value: target.key,
+                        label: target.label,
+                        disabled: target.value.includes(binding.token),
+                        description:
+                          target.value.trim().length === 0
+                            ? t('codeHostInspector.bindTargetEmpty')
+                            : t('codeHostInspector.bindTargetReplace'),
+                      })),
+                    ]}
+                  />
+                  {usedTargets.length > 0 ? (
+                    <div
+                      className="code-host-input-binding__uses"
+                      aria-label={t('codeHostInspector.boundTargets')}
+                    >
+                      <span>{t('codeHostInspector.boundTargets')}</span>
+                      {usedTargets.map((target) => (
+                        <button
+                          type="button"
+                          className="btn btn--xs btn--ghost code-host-input-binding__unlink"
+                          key={target.key}
+                          disabled={!canAuthor}
+                          aria-label={t('codeHostInspector.removeBindingAria', {
+                            port: binding.portName,
+                            field: target.label,
+                          })}
+                          onClick={() => removeInputFromTarget(binding, target)}
+                        >
+                          {target.label}
+                          <span aria-hidden="true"> ×</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+            <p className="inspector-hint">{t('codeHostInspector.inputBindingAdvancedHint')}</p>
+          </div>
+        ) : null}
       </InspectorSection>
 
       {action === 'custom' ? (
@@ -395,6 +565,34 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
           {fields.map((field) => {
             const required = field.requiredFor.includes(provider)
             const value = params[field.name] ?? ''
+            const selectOptions: SelectOption<string>[] = (
+              'options' in field ? (field.options ?? []) : []
+            ).map((opt) => ({
+              value: opt,
+              label: t('codeHostOption.' + opt, { defaultValue: opt }),
+            }))
+            for (const binding of inboundBindings) {
+              selectOptions.push({
+                value: binding.token,
+                label: binding.token,
+                group: t('codeHostInspector.upstreamOptionGroup'),
+                description: t('codeHostInspector.upstreamOptionDescription', {
+                  source: binding.sources.join(' + '),
+                }),
+              })
+            }
+            if (
+              field.control === 'select' &&
+              value.includes('{{') &&
+              !selectOptions.some((option) => option.value === value)
+            ) {
+              selectOptions.push({
+                value,
+                label: value,
+                group: t('codeHostInspector.savedTemplateOptionGroup'),
+                description: t('codeHostInspector.savedTemplateOptionDescription'),
+              })
+            }
             const label = t(`codeHostField.${field.name}`, { defaultValue: field.name })
             const hint = t(`codeHostFieldHint.${field.name}`, { defaultValue: '' })
             const common = {
@@ -407,10 +605,8 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                   {field.control === 'select' ? (
                     <Select
                       value={value}
-                      options={('options' in field ? (field.options ?? []) : []).map((opt) => ({
-                        value: opt,
-                        label: t(`codeHostOption.${opt}`, { defaultValue: opt }),
-                      }))}
+                      options={selectOptions}
+                      searchable={selectOptions.length > 8}
                       disabled={!canAuthor}
                       ariaLabel={label}
                       data-testid={`code-host-field-${field.name}`}

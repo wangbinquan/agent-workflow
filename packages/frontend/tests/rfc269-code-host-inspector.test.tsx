@@ -48,13 +48,16 @@ const DEFINITION: WorkflowDefinition = {
   edges: [],
 }
 
-function renderEdit(n: WorkflowNode = node()) {
+function renderEdit(
+  n: WorkflowNode = node(),
+  definition: WorkflowDefinition = { ...DEFINITION, nodes: [n] },
+) {
   const patched: WorkflowNode[] = []
   const view = render(
     <CodeHostCallEdit
       node={n}
       agents={[]}
-      definition={{ ...DEFINITION, nodes: [n] }}
+      definition={definition}
       onPatch={(next) => {
         patched.push(next)
       }}
@@ -66,7 +69,89 @@ function renderEdit(n: WorkflowNode = node()) {
   return { ...view, patched }
 }
 
+function definitionWithInput(
+  n: WorkflowNode,
+  targetPortName: string,
+  sourcePortName = 'result',
+): WorkflowDefinition {
+  const source = {
+    id: 'audit-agent',
+    kind: 'agent-single',
+    agentName: 'Code auditor',
+  } as WorkflowNode
+  return {
+    ...DEFINITION,
+    nodes: [source, n],
+    edges: [
+      {
+        id: 'edge-input',
+        source: { nodeId: source.id, portName: sourcePortName },
+        target: { nodeId: n.id, portName: targetPortName },
+      },
+    ],
+  }
+}
+
 describe('RFC-269 Inspector', () => {
+  test('连入输出后显式显示 source → 本地变量，并可一键绑定到参数', () => {
+    const n = node({ action: 'comment.create', params: { mr: '18', body: '' } })
+    const { patched } = renderEdit(n, definitionWithInput(n, 'review_body'))
+
+    expect(screen.getByTestId('code-host-input-guide').textContent).toContain(
+      '1 input(s) still need a parameter',
+    )
+    expect(screen.getByTestId('code-host-input-binding-review_body').textContent).toContain(
+      'Code auditor · result',
+    )
+    expect(screen.getByTestId('code-host-input-token-review_body').textContent).toBe(
+      '{{review_body}}',
+    )
+
+    fireEvent.click(screen.getByTestId('code-host-input-target-review_body'))
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Body.*complete parameter value/i }))
+
+    const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
+    expect((latest.params as Record<string, string>).body).toBe('{{review_body}}')
+  })
+
+  test('枚举参数也能直接选择上游输入，不再被静态下拉锁死', () => {
+    const n = node({
+      action: 'commit-status.set',
+      params: { sha: 'abc123', state: 'pending' },
+    })
+    const { patched } = renderEdit(n, definitionWithInput(n, 'verdict'))
+
+    fireEvent.click(screen.getByTestId('code-host-field-state'))
+    fireEvent.mouseDown(screen.getByRole('option', { name: /\{\{verdict\}\}/ }))
+
+    const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
+    expect((latest.params as Record<string, string>).state).toBe('{{verdict}}')
+  })
+
+  test('未连输入时明确给出下一步，而不是显示空变量面板', () => {
+    renderEdit()
+    expect(screen.getByTestId('code-host-input-guide').textContent).toContain(
+      'No upstream input connected',
+    )
+  })
+
+  test('已写入参数的输入显示完成态与可移除目标', () => {
+    const n = node({
+      action: 'comment.create',
+      params: { mr: '18', body: '{{review_body}}' },
+    })
+    const { patched } = renderEdit(n, definitionWithInput(n, 'review_body'))
+
+    expect(screen.getByTestId('code-host-input-guide').textContent).toContain('Inputs are bound')
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove the binding from input review_body to parameter Body',
+      }),
+    )
+    const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
+    expect((latest.params as Record<string, string>).body).toBe('')
+  })
+
   test('动作下拉按类别分组呈现', () => {
     renderEdit()
     expect(screen.getByText(/Add a reply to an existing code-review discussion/)).toBeTruthy()

@@ -5173,9 +5173,35 @@ export const enUS: Resources = {
     manageConnectionsAria: 'Configure code-host credentials in a new tab',
     action: 'Action',
     actionHint: 'Grouped by category; actions a host does not support are disabled with a reason',
+    sectionInputs: 'Input bindings',
+    inputGuideEmptyTitle: 'No upstream input connected',
+    inputGuideEmpty:
+      'Drag an upstream output port to this node. Its bindable variable and parameters will appear here.',
+    inputGuideNoTargetTitle: 'This action has no directly bindable parameter',
+    inputGuideNoTarget:
+      'Choose a supported action first. For a custom JSON body, compose inputs under Advanced template variables.',
+    inputGuideUnboundTitle: '{{count}} input(s) still need a parameter',
+    inputGuideUnbound:
+      'A wire only makes the upstream value available; it cannot guess which API parameter should receive it. Choose a target parameter for each input.',
+    inputGuideBoundTitle: 'Inputs are bound',
+    inputGuideBound:
+      'Runtime values will replace the parameter templates. You can add or remove target parameters on each row.',
+    bindTargetAria: 'Bind input {{port}} to a parameter',
+    bindTargetPlaceholder: 'Choose target parameter…',
+    bindTargetEmpty: 'Use this input as the complete parameter value',
+    bindTargetReplace: 'This parameter already has a value and will be replaced',
+    boundTargets: 'Used by',
+    removeBindingAria: 'Remove the binding from input {{port}} to parameter {{field}}',
+    inputBindingAdvancedHint:
+      'To embed an input in fixed text or JSON, focus that field and click the variable under “Advanced template variables”. A custom JSON body is never replaced wholesale by the one-click binding.',
+    upstreamOptionGroup: 'Upstream inputs',
+    upstreamOptionDescription: 'From {{source}}; replaced with the runtime value',
+    savedTemplateOptionGroup: 'Saved template',
+    savedTemplateOptionDescription:
+      'This value is a template; make sure its inbound edge or webhook context still exists',
     sectionParams: 'Parameters',
     sectionCustom: 'Custom request',
-    sectionVars: 'Available variables',
+    sectionVars: 'Advanced template variables',
     method: 'Method',
     path: 'Relative path',
     pathHint:

@@ -4443,6 +4443,76 @@ button:disabled:hover {
   gap: 4px;
 }
 
+/* Code-host inputs are edge-derived template variables, not positional
+ * function arguments. Keep the route (human source → exact local token) and
+ * the parameter binding control in one compact card so connecting an edge does
+ * not leave an invisible second configuration step. */
+.code-host-input-bindings {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.code-host-input-binding {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, #4f46e5 20%, var(--border));
+  border-left: 3px solid #4f46e5;
+  border-radius: 8px;
+  background: color-mix(in srgb, #4f46e5 4%, var(--panel));
+}
+
+.code-host-input-binding__route {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.code-host-input-binding__source {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-host-input-binding__arrow {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.code-host-input-binding__token {
+  flex: 0 0 auto;
+  max-width: 52%;
+  overflow: hidden;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, #4f46e5 24%, var(--border));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, #4f46e5 8%, var(--panel));
+  color: color-mix(in srgb, #4f46e5 82%, var(--text));
+  font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-host-input-binding__uses {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.code-host-input-binding__unlink {
+  min-height: 24px;
+  padding-block: 2px;
+}
+
 .form-input {
   font: inherit;
   font-size: 14px;
@@ -6764,11 +6834,7 @@ details.form-section[open] > summary {
 .workflow-node-picker__item[data-category='integrations'] {
   border-inline-start-width: 3px;
   border-inline-start-color: #4f46e5;
-  background: linear-gradient(
-    110deg,
-    color-mix(in srgb, #4f46e5 7%, var(--bg)),
-    var(--bg) 58%
-  );
+  background: linear-gradient(110deg, color-mix(in srgb, #4f46e5 7%, var(--bg)), var(--bg) 58%);
 }
 
 .workflow-node-picker__type-chip[data-category='integrations'] {
