@@ -111,6 +111,8 @@ const e2eCommandHelper = readFileSync(resolve(root, 'e2e', 'command.ts'), 'utf8'
 const e2eSqliteRunner = readFileSync(resolve(root, 'e2e', 'fixtures', 'sqlite-exec.ts'), 'utf8')
 const e2eSpecSources = readE2eSpecSources(resolve(root, 'e2e'))
 const hardenedBunCommand = 'bun test --isolate --randomize'
+const hardenedSharedCommand = `${hardenedBunCommand} --dots`
+const localShardedBackendCommand = 'bun run scripts/test-backend-sharded.ts'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
 function workflowJob(source: string, name: string): string {
@@ -167,9 +169,11 @@ describe('repository test entrypoint', () => {
     expect(pkg.scripts?.test).toBe(
       'bun run test:backend && bun run test:shared && bun run test:frontend',
     )
-    expect(pkg.scripts?.['test:backend']).toBe(hardenedBunCommand)
+    expect(pkg.scripts?.['test:backend']).toBe(localShardedBackendCommand)
+    expect(pkg.scripts?.['test:backend:serial']).toBe(hardenedBunCommand)
     expect(pkg.scripts?.['test:shared']).toBe('bun run --filter @agent-workflow/shared test')
     expect(pkg.scripts?.['test:frontend']).toBe('bun run --filter @agent-workflow/frontend test')
+    expect(pkg.scripts?.['gate:local']).toBe('bun run scripts/local-gate.ts')
   })
 
   test('every backend gate isolates files and randomizes execution order', () => {
@@ -177,10 +181,11 @@ describe('repository test entrypoint', () => {
     expect(backendBunfig).toContain('preload = ["./tests/setup.ts"]')
     // CI shards the backend suite across runners: each shard is an isolated VM,
     // which is why sharding is safe where `bun test --parallel` deadlocks on the
-    // single-instance daemon flock. Both legs keep --isolate --randomize; the
+    // single-instance daemon flock. Both CI legs keep --isolate --randomize; the
     // ubuntu shards additionally instrument coverage and emit the lcov report
-    // consumed by Codecov. The local gate (backendPkg.scripts.test, asserted
-    // above) stays unsharded.
+    // consumed by Codecov. The local root gate uses complete serial shards with
+    // distinct home/temp namespaces; backendPkg.scripts.test remains the
+    // single-process diagnostic entrypoint asserted above.
     expect(ciWorkflow).toContain(
       `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/4 --coverage --coverage-reporter=lcov`,
     )
@@ -199,7 +204,7 @@ describe('repository test entrypoint', () => {
   })
 
   test('shared and frontend gates randomize execution order', () => {
-    expect(sharedPkg.scripts?.test).toBe(hardenedBunCommand)
+    expect(sharedPkg.scripts?.test).toBe(hardenedSharedCommand)
     expect(frontendPkg.scripts?.test).toBe(hardenedFrontendCommand)
     expect(ciWorkflow).toContain('run: bun run --filter @agent-workflow/shared test')
     expect(ciWorkflow).toContain('run: bun run --filter @agent-workflow/frontend test')

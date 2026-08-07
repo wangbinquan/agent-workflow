@@ -17,7 +17,8 @@ This repo is **mid-implementation** (M1 in progress; ~9/18 of M1 done as of last
 
 When a batch of issues completes, commit + push and update `STATE.md` so the next session can pick up seamlessly.
 
-`bun install` then `bun run test` to verify the backend, shared, and frontend test suites.
+`bun install` then `bun run gate:local` to run the complete local quality/test gate. For a
+tests-only pass, `bun run test` verifies backend, shared, and frontend.
 
 ## RFC workflow（新增 / 修改前的强制流程）
 
@@ -58,7 +59,7 @@ When a batch of issues completes, commit + push and update `STATE.md` so the nex
 - **bug 修复**：先写一个能稳定复现该 bug 的测试用例（红），再写修复（绿）。把"为什么这条测试存在"写进 test 文件顶端的注释（链接 commit / RFC / issue），让未来任何 refactor 一旦把它变红能立刻看出意图。
 - **首选可断言面**：抽出纯函数 / 纯数据预言（典型例子见 `affectsDefinition` / `affectsEdgeDefinition` / `selectionSig` / `deriveSelection` / `extractMissingRefs` / `hasConflict`），在用户层面 wire 进去后再写少量集成断言。运行时巨型组件难直接覆盖时，**最低限度也要保留一条源代码层文本断言**作为兜底（例如"`selectionOnDrag` 不得出现在 `WorkflowCanvas.tsx`"）。
 - **回归防护命名**：测试文件 / describe 标题应能让人一眼识别它锁的是哪类回归（例如 `canvas-edge-changes.test.ts` 顶部直接写明"locks in EdgeInspector reachability fixes from commit 9b7ba31"）。
-- **运行门槛**：`bun run typecheck && bun run lint && bun run test && bun run format:check` 必须全绿才能 push（lint 是 `--max-warnings 0`——一个 unused import 就双 OS 红，RFC-140 事故）。GitHub Actions 同样会跑这四项 + 单二进制 build smoke + Playwright e2e。**推完立刻查 CI**：用 GitHub Actions API 按**自己的确切 sha** 查——共享 `main` 上并发 push 会取消你的 run，须看含你 commit 的 superseding commit 的绿、按失败测试的 owning commit 归属（详见 `docs/dev-gotchas.md`）。
+- **运行门槛**：`bun run gate:local` 必须全绿才能 push。它把 backend 与 quality 两条车道并发：backend 保留 `--isolate --randomize`，拆成 4 个各自拥有独立 home/tmp 的完整串行 shard；quality 依次跑 typecheck / lint / format / depcheck / shared / frontend。`bun run test:backend:serial` 是复现单进程顺序问题的诊断入口，不能替代完整门禁。lint 是 `--max-warnings 0`——一个 unused import 就双 OS 红（RFC-140 事故）。GitHub Actions 同样会跑这些检查 + 单二进制 build smoke + Playwright e2e。**推完立刻查 CI**：用 GitHub Actions API 按**自己的确切 sha** 查——共享 `main` 上并发 push 会取消你的 run，须看含你 commit 的 superseding commit 的绿、按失败测试的 owning commit 归属（详见 `docs/dev-gotchas.md`）。
 - **flaky 不能掩盖红 case**：发现某测试间歇性失败，先确认是不是真 bug；如果确属环境 / 时序，要么修测试（首选 `findByRole` / class 选择器去掉 i18n race），要么显式用注释标记并开 issue，**绝不允许"重跑就过了"作为通过依据**。
 - **不写测试的极少数例外**：纯文档 / 注释改动、依赖版本号 bump（且 lock 文件锁住了 minor）、CI 配置微调、prettier 自动 format。**任何触及生产代码或测试代码的改动都没有这个豁免**。
 
@@ -127,8 +128,8 @@ chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致�
   commit 被分支切换「顺走」到别人的分支上（曾真实发生）；②CI 只在 `push to main`
   与 `PR to main` 触发，待在分支上等于**一次 CI 都没跑**；③`main` 持续前进，分支
   越久越要 rebase，冲突面滚雪球。
-  正确做法：小步提交、**每次提交前跑全套门禁**（`typecheck` / `lint` /
-  `test` / `format:check`）、`git pull --rebase` 后立刻 `git push origin main`、
+  正确做法：小步提交、**每次提交前跑全套门禁**（`bun run gate:local`）、
+  `git pull --rebase` 后立刻 `git push origin main`、
   推完按 exact SHA 查 CI。**注意**：Claude Code 的 harness 默认提示「在默认分支上
   应先切分支」——本仓**显式覆盖**该默认，照它做就是违规。
 - **面向代码最合理，优于改动最小**：审计给「正解 / 过渡」两案时选正解、backfill 优于双读回退、删除优于 deprecate。别为「快一点」留过渡态。

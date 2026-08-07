@@ -8,6 +8,19 @@
 import { afterEach, beforeEach } from 'bun:test'
 import { readdirSync } from 'node:fs'
 
+// The optimized local gate runs several complete Bun shards in parallel. Keep
+// a hidden per-process baseline so a test file that deliberately deletes
+// AGENT_WORKFLOW_HOME/TMPDIR cannot make the next isolated file fall back to the
+// user's real home or another shard's temporary namespace.
+const shardHome = process.env.AGENT_WORKFLOW_TEST_SHARD_HOME
+const shardTemp = process.env.AGENT_WORKFLOW_TEST_SHARD_TMP
+if (shardHome !== undefined) process.env.AGENT_WORKFLOW_HOME = shardHome
+if (shardTemp !== undefined) {
+  process.env.TMPDIR = shardTemp
+  process.env.TMP = shardTemp
+  process.env.TEMP = shardTemp
+}
+
 let envAtTestStart: NodeJS.ProcessEnv | undefined
 let cwdAtTestStart: string | undefined
 let cwdEntriesAtTestStart: Set<string> | undefined
