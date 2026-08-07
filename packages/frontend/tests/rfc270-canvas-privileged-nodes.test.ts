@@ -51,16 +51,24 @@ describe('RFC-270 AC-14 · 受保护节点不可拖、不可删', () => {
   })
 })
 
-describe('RFC-270 AC-14 · 触及受保护节点的边不可删', () => {
-  test('端点任一受保护即锁；两端都无关则原样', () => {
+describe('RFC-270 AC-14 · 指向受保护节点的入边不可删', () => {
+  test('只锁入边 —— 判据与门一致，不多锁一分', () => {
     const locked = lockPrivilegedFlowEdges(edges, new Set(['s1']))
     const byId = new Map(locked.map((e) => [e.id, e]))
     // 入边决定 `AW_PORT_*` 取到什么 —— 拆掉它就是改了脚本实际执行的内容。
     expect(byId.get('e-a-s')?.deletable).toBe(false)
-    // 出边同样在敏感投影的入边签名之外，但删它会连带改别的节点的入边；这里锁的
-    // 是「任一端受保护」，语义更宽也更安全。
-    expect(byId.get('e-s-c')?.deletable).toBe(false)
+    // **出边不锁**：`inboundEdgeSignature` 只看 `edge.target.nodeId`，从脚本连出去
+    // 不改变它自己的投影。锁了就是拿走一个 proposal §5 C6 从没声称、后端也一直
+    // 接受的能力。这条反例是防止「顺手改宽一点更安全」的回归。
+    expect(byId.get('e-s-c')?.deletable).toBeUndefined()
     expect(byId.get('e-a-a')?.deletable).toBeUndefined()
+  })
+
+  test('目标是受保护节点时才锁，与 source 无关', () => {
+    const locked = lockPrivilegedFlowEdges(edges, new Set(['c1']))
+    const byId = new Map(locked.map((e) => [e.id, e]))
+    expect(byId.get('e-s-c')?.deletable).toBe(false)
+    expect(byId.get('e-a-s')?.deletable).toBeUndefined()
   })
 })
 

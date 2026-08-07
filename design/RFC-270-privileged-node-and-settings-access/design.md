@@ -239,7 +239,7 @@ beforeLoad: async ({ context }) => {
 `WorkflowCanvas.tsx`：
 
 1. `toFlowNodes`（`:3368`）给受保护节点加 `draggable: false` + `deletable: false`；
-2. `toFlowEdges`（`:3609`）给「端点之一是受保护节点」的边加 `deletable: false`；`isValidConnection` 拒绝触及受保护节点的新连线；
+2. 给**目标**是受保护节点的边加 `deletable: false`，`isValidConnection` 拒绝**指向**受保护节点的新连线。**实现期收窄**：初稿写的是「端点之一」，但 `inboundEdgeSignature` 只看 `edge.target.nodeId` —— 从特权节点**连出去**不改变它自己的投影，锁了就是拿走一个 `proposal §5 C6` 从没声称、后端也一直接受的能力。判据与门严格同源；
 3. **wrapper 归属守卫** —— `onNodeDragStop`（`:2712-2790`）在 `applyMembershipPatch`（`:2760`）之后、`commitChange`（`:2789`）之前，用一个 shared 纯函数复核：
 
 ```ts

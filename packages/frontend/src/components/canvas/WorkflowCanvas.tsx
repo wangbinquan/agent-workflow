@@ -1557,9 +1557,11 @@ function CanvasInner({
 
   const isValidConnection = useCallback(
     (conn: Connection | Edge) => {
-      // RFC-270 — 连线也是改「这个节点执行什么」的一条路：入边决定 `AW_PORT_*`
-      // 取到什么、决定回帖正文是什么。无权限就不许接上或拆掉。
-      if (protectedIds.has(conn.source ?? '') || protectedIds.has(conn.target ?? '')) return false
+      // RFC-270 — 连线也是改「这个节点执行什么」的一条路：**入边**决定
+      // `AW_PORT_*` 取到什么、决定回帖正文是什么。只挡入边，判据与门一致
+      // （`inboundEdgeSignature` 只看 `edge.target.nodeId`）——从特权节点**连出去**
+      // 不改变它自己的投影，那是门一直允许的普通编辑。
+      if (protectedIds.has(conn.target ?? '')) return false
       const guardConn = {
         source: conn.source ?? null,
         target: conn.target ?? null,
@@ -3640,13 +3642,20 @@ export function lockPrivilegedFlowNodes(nodes: Node[], protectedIds: ReadonlySet
   )
 }
 
+/**
+ * INBOUND edges only, and that boundary is the gate's, not a guess.
+ *
+ * `inboundEdgeSignature` filters `edge.target.nodeId === nodeId`, so only an
+ * edge POINTING AT a privileged node is in its sensitive projection. An edge
+ * leaving one feeds some downstream node's inputs — if that node is itself
+ * privileged the target rule already covers it, and if it is not, rewiring it
+ * is ordinary editing the gate has always allowed. Locking both directions
+ * would take away a capability `proposal.md §5 C6` never claimed ("入边不可改")
+ * and the backend would happily have accepted.
+ */
 export function lockPrivilegedFlowEdges(edges: Edge[], protectedIds: ReadonlySet<string>): Edge[] {
   if (protectedIds.size === 0) return edges
-  return edges.map((edge) =>
-    protectedIds.has(edge.source) || protectedIds.has(edge.target)
-      ? { ...edge, deletable: false }
-      : edge,
-  )
+  return edges.map((edge) => (protectedIds.has(edge.target) ? { ...edge, deletable: false } : edge))
 }
 
 function workflowInsertableEdgeIds(

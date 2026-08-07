@@ -354,8 +354,10 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   `useResolvedTheme` 的 MutationObserver → setState → useEffect → renderSpy 这条效果链在慢 runner
   上吃不下默认预算，当时的处置就是把超时从 1s 提到 5s。**与 RFC-270 无关**：本次改动不碰
   prose / mermaid / theme 任一路径；隔离重跑 3 次、全量前端套件重跑 3 次（728 文件 / 6154 用例）
-  均全绿，只在满载并发那一次红。按仓规登记而不是拿「重跑就过」当结论。建议 owner 换成事件驱动的
-  等待锚点（或再提预算），不宜由无关改动顺手改测试。
+  均全绿，只在满载并发那一次红。**2026-08-08 再复现一次**，同样只在 `gate:local` 的满载并发下（backend
+  四分片 + quality lane 同跑），单独跑前端全套（728 文件 / 6155 用例）仍然全绿 —— 两次复现的条件完全
+  一致，可以确定判据就是「机器满载 ⇒ 那条 MutationObserver 效果链吃不下 5s」。按仓规登记而不是拿
+  「重跑就过」当结论。建议 owner 换成事件驱动的等待锚点（或再提预算），不宜由无关改动顺手改测试。
 
 - ⏳ **RFC-270 遗留：被遮蔽读者的 `snapshotHash` 不对称（已知、显式不修）**。后端
   `workflowSnapshotHashOf` 与前端 `hashWorkflowDraftSnapshot` 是同一个算法，脱敏之后被遮用户
