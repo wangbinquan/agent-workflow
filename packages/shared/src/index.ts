@@ -86,6 +86,7 @@ export * from './wrapperFanout'
 export * from './nodePorts'
 export * from './scriptNode' // RFC-253
 export * from './workflowNodeAncestry' // RFC-269（RFC-253 抽取）
+export * from './privilegedNodeRedaction' // RFC-270
 // RFC-269 — code-host call node: action registry, template encoding, path
 // judgements, trigger-context projection.
 export * from './codeHost/actions'

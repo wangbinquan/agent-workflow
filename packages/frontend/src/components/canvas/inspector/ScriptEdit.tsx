@@ -8,11 +8,16 @@
 //      live list the author has to guess the mangling, so the panel renders the
 //      exact variable names the executor will set — same derivation, one source.
 //
-//   2. **Read-only for users without `scripts:author`.** The gate lives at the
-//      persistence primitives, so an unprivileged user's edits would be accepted
-//      by the form and rejected on save. Rendering the whole block read-only with
-//      an explicit banner is the honest surface (AC-30) — "you may look, you may
-//      not change" beats "type freely, lose it on save".
+//   2. **Hidden — not read-only — for users without `scripts:author`.**
+//      RFC-253 AC-30 originally rendered the whole block read-only with a
+//      banner, on the reasoning that "you may look, you may not change" beats
+//      "type freely, lose it on save". RFC-270 OVERTURNS that half: a script
+//      body is code the daemon host will execute, so who may READ it is the same
+//      question as who may WRITE it, and the platform now answers it in one
+//      place. The server no longer sends the body to a principal without the
+//      point (services/tokenRedaction.ts) — this panel would render `***`, which
+//      is worse than saying so. The "may not change" half is unchanged and now
+//      holds by construction: there is no control to type into.
 //
 //   3. **Generated snippets, not prose (T43).** The panel used to describe the
 //      envelope with the literal text `<workflow-output nonce="$AW_ENVELOPE_NONCE">`.
@@ -47,7 +52,7 @@ import {
 import { ChipsInput } from '@/components/ChipsInput'
 import { CodeEditor, type CodeEditorLanguage } from '@/components/CodeEditor'
 import { Dialog } from '@/components/Dialog'
-import { ErrorBanner } from '@/components/ErrorBanner'
+import { EmptyState } from '@/components/EmptyState'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { Segmented } from '@/components/Segmented'
 import { usePermission } from '@/hooks/useActor'
@@ -109,16 +114,26 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
     )
   }
 
-  const fullscreenLabel = t(
-    canAuthor ? 'scriptInspector.fullscreenEdit' : 'scriptInspector.fullscreenView',
-  )
+  const fullscreenLabel = t('scriptInspector.fullscreenEdit')
+
+  // RFC-270 — no point, no panel. Everything below reads fields the server has
+  // already masked, so rendering the form would only display `***` in a dozen
+  // disabled inputs.
+  if (!canAuthor) {
+    return (
+      <div className="inspector-sections">
+        <EmptyState
+          title={t('scriptInspector.noViewPermission.title')}
+          description={t('scriptInspector.noViewPermission.body')}
+          size="compact"
+          data-testid="script-inspector-no-view-permission"
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="inspector-sections">
-      {canAuthor ? null : (
-        <ErrorBanner error={null} message={t('scriptInspector.noAuthorPermission')} />
-      )}
-
       <InspectorSection title={t('inspector.sectionBasics')}>
         <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
         <Field label={t('scriptInspector.language')} hint={t('scriptInspector.languageHint')} group>
@@ -128,7 +143,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
             testidPrefix="script-language"
             options={SCRIPT_LANGUAGES.map((value) => ({ value, label: value }))}
             onChange={(next) => {
-              if (!canAuthor) return
               // Swapping language on an untouched starter body swaps the
               // template too; a body the author actually wrote is never
               // rewritten under them.
@@ -180,7 +194,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
             <CodeEditor
               value={body}
               language={EDITOR_LANGUAGE[language]}
-              readOnly={!canAuthor}
               aria-label={t('scriptInspector.body')}
               data-testid="script-body-editor"
               onChange={updateScript}
@@ -198,7 +211,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
                 <CodeEditor
                   value={body}
                   language={EDITOR_LANGUAGE[language]}
-                  readOnly={!canAuthor}
                   fill
                   aria-label={t('scriptInspector.body')}
                   data-testid="script-body-editor-fullscreen"
@@ -251,7 +263,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
         >
           <ChipsInput
             value={outputs.length === 1 && mode === 'single' ? [] : outputs.map((p) => p.name)}
-            disabled={!canAuthor}
             testidPrefix="script-outputs"
             onChange={(next) =>
               update(
@@ -283,7 +294,7 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
         >
           <ChipsInput
             value={dependencies}
-            disabled={!canAuthor || language === 'bash'}
+            disabled={language === 'bash'}
             testidPrefix="script-deps"
             validate={(token) => scriptDependencyIssue(language, token)}
             onChange={(next) =>
@@ -302,7 +313,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
         <Field label={t('scriptInspector.env')} hint={t('scriptInspector.envHint')} group>
           <ScriptEnvTable
             env={env}
-            disabled={!canAuthor}
             onChange={(next) =>
               update(
                 { env: Object.keys(next).length === 0 ? undefined : next },
@@ -314,7 +324,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
 
         <Switch
           checked={network === 'deny'}
-          disabled={!canAuthor}
           label={t('scriptInspector.networkDeny')}
           hint={t('scriptInspector.networkDenyHint')}
           data-testid="script-network-deny"
@@ -327,7 +336,6 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
         />
         <Switch
           checked={isReadonly}
-          disabled={!canAuthor}
           label={t('scriptInspector.readonly')}
           hint={t('scriptInspector.readonlyHint')}
           data-testid="script-readonly"
@@ -403,13 +411,13 @@ function SnippetField({
  * generic that serves neither. If a third appears, that is the moment to
  * extract one.
  */
+// RFC-270 dropped this component's `disabled` prop: the only caller is behind
+// the `scripts:author` early return, so it could never be anything but false.
 function ScriptEnvTable({
   env,
-  disabled,
   onChange,
 }: {
   env: Record<string, string>
-  disabled: boolean
   onChange: (next: Record<string, string>) => void
 }) {
   const { t } = useTranslation()
@@ -422,7 +430,6 @@ function ScriptEnvTable({
           <div className="script-env-table__row" key={key}>
             <TextInput
               value={key}
-              disabled={disabled}
               aria-label={t('scriptInspector.envKey')}
               data-testid={`script-env-key-${key}`}
               onChange={(nextKey) => {
@@ -433,7 +440,6 @@ function ScriptEnvTable({
             />
             <TextInput
               value={value}
-              disabled={disabled}
               aria-label={t('scriptInspector.envValue')}
               data-testid={`script-env-value-${key}`}
               onChange={(nextValue) => onChange({ ...env, [key]: nextValue })}
@@ -441,7 +447,6 @@ function ScriptEnvTable({
             <button
               type="button"
               className="btn btn--xs btn--danger"
-              disabled={disabled}
               aria-label={t('scriptInspector.envRemove')}
               data-testid={`script-env-remove-${key}`}
               onClick={() => {
@@ -459,7 +464,6 @@ function ScriptEnvTable({
       <button
         type="button"
         className="btn btn--sm"
-        disabled={disabled}
         data-testid="script-env-add"
         onClick={() => {
           let i = 1

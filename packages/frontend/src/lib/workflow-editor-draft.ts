@@ -74,6 +74,40 @@ export interface WorkflowDraftFailure {
   kind: 'transport' | 'http'
   message: string
   status?: number
+  /**
+   * RFC-270 — the API error CODE, when the response carried one.
+   *
+   * Without it a 403 is untypeable and every 403 collapsed into "this workflow
+   * is gone" (see `AUTHOR_FORBIDDEN_CODES` below). Optional because transport
+   * failures have no code.
+   */
+  code?: string
+}
+
+/**
+ * RFC-270 — 403s that mean "that particular EDIT needs a permission", not "you
+ * lost access to this workflow".
+ *
+ * Both are thrown by the persistence primitives (`scriptAuthorGate.ts` /
+ * `codeHostAuthorGate.ts`) for an edit that touched a privileged node's
+ * executable surface. The draft is intact, the workflow is still readable, and
+ * the fix is to undo one step — none of which is true of a real access loss, so
+ * they must not share its terminal `inaccessible` phase and its four
+ * recovery actions (retry re-403s forever; "save a copy" hits the same gate on
+ * the create path, which has no `previous` and so cannot even be bypassed).
+ */
+export const AUTHOR_FORBIDDEN_CODES: ReadonlySet<string> = new Set([
+  'script-author-forbidden',
+  'code-host-author-forbidden',
+])
+
+export function isAuthorForbiddenFailure(failure: WorkflowDraftFailure | null): boolean {
+  return (
+    failure !== null &&
+    failure.status === 403 &&
+    failure.code !== undefined &&
+    AUTHOR_FORBIDDEN_CODES.has(failure.code)
+  )
 }
 
 export interface WorkflowReconcileRetry {
@@ -596,7 +630,10 @@ function saveFailed(
     return unchanged(state)
   }
   const status = event.failure.status
-  if (status === 403 || status === 404) {
+  // RFC-270 — an author-gate 403 falls through to the ordinary `error` phase
+  // below: non-terminal, draft preserved, autosave resumes on the next edit
+  // (`applyLocalRevision`'s `mayResumeAutosave`), and no retry timer to loop on.
+  if ((status === 403 && !isAuthorForbiddenFailure(event.failure)) || status === 404) {
     return terminalState(state, 'inaccessible', event.failure)
   }
   if (status === 409) {
@@ -665,7 +702,10 @@ function reconcileFailed(
   ) {
     return unchanged(state)
   }
-  if (event.failure.status === 403 || event.failure.status === 404) {
+  if (
+    (event.failure.status === 403 && !isAuthorForbiddenFailure(event.failure)) ||
+    event.failure.status === 404
+  ) {
     return terminalState(state, 'inaccessible', event.failure)
   }
   const failures = state.reconcileRetry.attempt + 1

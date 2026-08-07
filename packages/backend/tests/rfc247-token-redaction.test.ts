@@ -16,7 +16,8 @@
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { redactGitUrl } from '@agent-workflow/shared'
+import { PRIVILEGED_LENS_TRANSPARENT, redactGitUrl } from '@agent-workflow/shared'
+import type { ActorSource } from '@/auth/actor'
 import {
   REDACTED,
   redactErrorText,
@@ -29,7 +30,18 @@ import {
   serializeWorkflowFor,
   serializeWorkflowReceiptFor,
   shouldRedactFor,
+  type WorkflowReadLens,
 } from '@/services/tokenRedaction'
+
+/**
+ * RFC-270 改判：三个定义 serializer 的第二参从 `ActorSource` 变成了双轴的
+ * `WorkflowReadLens`（通道轴 + 权限轴）。本文件锁的是**通道轴**，所以这里一律
+ * 用透明的权限镜头 —— 断言语义与改判前逐字相同，只是显式说明「这一轴不参与」。
+ * 权限轴由 `rfc270-privileged-node-read-lens.test.ts` 单独覆盖。
+ */
+function channelLens(source: ActorSource): WorkflowReadLens {
+  return { source, privileged: PRIVILEGED_LENS_TRANSPARENT }
+}
 
 describe('RFC-247 — redaction applies to the token channel only', () => {
   test('pat is redacted; session and daemon are untouched', () => {
@@ -318,7 +330,7 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
   }
 
   test('pat: values collapse to REDACTED, keys and body survive', () => {
-    const out = serializeWorkflowFor(record, 'pat') as typeof record
+    const out = serializeWorkflowFor(record, channelLens('pat')) as typeof record
     const script = out.definition.nodes[1] as { env: Record<string, string>; script: string }
     expect(script.env).toEqual({ API_TOKEN: REDACTED, LOG_LEVEL: REDACTED })
     expect(script.script).toBe('print(1)')
@@ -331,13 +343,13 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
   })
 
   test('session and daemon get the SAME reference — byte-for-byte passthrough', () => {
-    expect(serializeWorkflowFor(record, 'session')).toBe(record)
-    expect(serializeWorkflowFor(record, 'daemon')).toBe(record)
+    expect(serializeWorkflowFor(record, channelLens('session'))).toBe(record)
+    expect(serializeWorkflowFor(record, channelLens('daemon'))).toBe(record)
   })
 
   test('a workflow without script env comes back as the same reference', () => {
     const plain = { id: 'w2', definition: { nodes: [{ id: 'a', kind: 'agent-single' }] } }
-    expect(serializeWorkflowFor(plain, 'pat')).toBe(plain)
+    expect(serializeWorkflowFor(plain, channelLens('pat'))).toBe(plain)
   })
 
   // A SAVE answers with a receipt, not a record: the definition sits at
@@ -357,7 +369,7 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
     }
 
     test('pat: the receipt snapshot is masked', () => {
-      const out = serializeWorkflowReceiptFor(receipt, 'pat')
+      const out = serializeWorkflowReceiptFor(receipt, channelLens('pat'))
       const script = (out.snapshot.definition as typeof record.definition).nodes[1] as {
         env: Record<string, string>
       }
@@ -372,9 +384,9 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
     })
 
     test('session gets the same reference; a script-free receipt is untouched', () => {
-      expect(serializeWorkflowReceiptFor(receipt, 'session')).toBe(receipt)
+      expect(serializeWorkflowReceiptFor(receipt, channelLens('session'))).toBe(receipt)
       const plain = { snapshot: { definition: { nodes: [{ id: 'a', kind: 'agent-single' }] } } }
-      expect(serializeWorkflowReceiptFor(plain, 'pat')).toBe(plain)
+      expect(serializeWorkflowReceiptFor(plain, channelLens('pat'))).toBe(plain)
     })
 
     test('the record projection REFUSES a receipt at compile time', () => {
@@ -384,7 +396,7 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
       // being needed and typecheck fails with "unused @ts-expect-error" —
       // the mutation test is built into the lock.
       // @ts-expect-error — a receipt has no top-level `definition`
-      serializeWorkflowFor(receipt, 'pat')
+      serializeWorkflowFor(receipt, channelLens('pat'))
       expect(true).toBe(true)
     })
   })
@@ -404,19 +416,19 @@ describe('RFC-253 T28 — script env masked on the workflow token channel', () =
     } as unknown as Parameters<typeof serializeTaskFor>[0]
 
     test('pat: the frozen snapshot is masked; session keeps the same reference', () => {
-      const out = serializeTaskFor(task, 'pat')
+      const out = serializeTaskFor(task, channelLens('pat'))
       const snap = out.workflowSnapshot as typeof record.definition
       expect((snap.nodes[1] as { env: Record<string, string> }).env).toEqual({
         API_TOKEN: REDACTED,
         LOG_LEVEL: REDACTED,
       })
       expect((out as unknown as { status: string }).status).toBe('done')
-      expect(serializeTaskFor(task, 'session')).toBe(task)
+      expect(serializeTaskFor(task, channelLens('session'))).toBe(task)
     })
 
     test('a task whose snapshot has no script env is the same reference', () => {
       const plain = { workflowSnapshot: { nodes: [{ id: 'a', kind: 'agent-single' }] } } as never
-      expect(serializeTaskFor(plain, 'pat')).toBe(plain)
+      expect(serializeTaskFor(plain, channelLens('pat'))).toBe(plain)
     })
 
     test('serializeTaskFor is wired on every Task-returning outlet', () => {

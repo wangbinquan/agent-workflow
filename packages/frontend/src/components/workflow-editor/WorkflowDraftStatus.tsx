@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
+import { isAuthorForbiddenFailure } from '@/lib/workflow-editor-draft'
 import type {
   WorkflowDraftPhase,
   WorkflowDraftTransport,
@@ -106,6 +107,7 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
   const loadTriggerRef = useRef<HTMLButtonElement | null>(null)
   const overwriteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const phase = props.state.phase
+  const authorForbidden = isAuthorForbiddenFailure(props.state.error)
   const transport = props.state.transport
   const remoteVersion = props.state.conflict?.current?.version ?? props.state.serverRevision.version
   const localRevision = props.state.revision
@@ -150,7 +152,27 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
         </NoticeBanner>
       )}
 
-      {phase === 'error' && (
+      {/* RFC-270 — an author-gate 403 is a different failure from "the save
+          broke": the workflow is fine, the draft is intact, and retrying the
+          same bytes can only fail again. Naming the missing permission is the
+          whole point; offering Retry here would be a loop. */}
+      {phase === 'error' && authorForbidden && (
+        <NoticeBanner
+          tone="warning"
+          size="compact"
+          title={t('editor.draftStatus.authorForbiddenTitle')}
+          data-testid="draft-status-author-forbidden"
+        >
+          {t('editor.draftStatus.authorForbiddenBody', {
+            permission:
+              props.state.error?.code === 'code-host-author-forbidden'
+                ? 'code-host-calls:author'
+                : 'scripts:author',
+          })}
+        </NoticeBanner>
+      )}
+
+      {phase === 'error' && !authorForbidden && (
         <NoticeBanner
           tone="error"
           size="compact"

@@ -3135,6 +3135,8 @@ export interface Resources {
       resultsCount: string
       resultsCountInCategory: string
       dragHint: string
+      /** RFC-270 —— 特权节点条目被置灰时的原因，带上所需权限点名字。 */
+      requiresPermission: string
     }
     starter: {
       title: string
@@ -3316,6 +3318,9 @@ export interface Resources {
       errorTitle: string
       errorBody: string
       conflictTitle: string
+      /** RFC-270 —— author 门 403 的专属横幅（与「保存失败」区分）。 */
+      authorForbiddenTitle: string
+      authorForbiddenBody: string
       conflictBody: string
       saveCopyRecommended: string
       saveCopy: string
@@ -4358,6 +4363,8 @@ export interface Resources {
     accessibleDescription: string
     nodeConfigurationSummary: string
     placementUnavailable: string
+    /** RFC-270 —— 拖动 wrapper 会改变特权节点归属时的提示。 */
+    privilegedMembershipBlocked: string
     layoutCrossScope: string
     layoutCycles: string
     layoutLockedOverflow: string
@@ -4572,7 +4579,7 @@ export interface Resources {
     varsInsertHint: string
     varsNoTarget: string
     noInboundPorts: string
-    readonlyBanner: string
+    noViewPermission: { title: string; body: string }
     actionUnsupported: string
     unsupportedGeneric: string
   }
@@ -4590,7 +4597,6 @@ export interface Resources {
     body: string
     bodyHint: string
     fullscreenEdit: string
-    fullscreenView: string
     retryWarning: string
     sectionInputs: string
     noInputs: string
@@ -4617,7 +4623,7 @@ export interface Resources {
     networkDenyHint: string
     readonly: string
     readonlyHint: string
-    noAuthorPermission: string
+    noViewPermission: { title: string; body: string }
   }
   callWorkgroupNode: {
     label: string
@@ -8670,6 +8676,7 @@ export const zhCN: Resources = {
       resultsCount: '有 {{n}} 个工作流步骤可用。',
       resultsCountInCategory: '{{category}}分类有 {{n}} 个步骤可用。',
       dragHint: '拖到画布上',
+      requiresPermission: '需要 {{permission}} 权限',
     },
     starter: {
       title: '选择工作流起点',
@@ -8848,6 +8855,9 @@ export const zhCN: Resources = {
       reconcilingBody: '上次请求的结果不确定；在核对完成前不会发送后续修改。',
       errorTitle: '工作流保存失败',
       errorBody: '本地草稿仍然保留。请重试保存，或先导出本地内容。',
+      authorForbiddenTitle: '此改动需要额外权限',
+      authorForbiddenBody:
+        '改动脚本 / 代码平台调用节点需要 {{permission}} 权限。本地草稿仍然保留——撤销该步即可继续保存，或找管理员开通权限。',
       conflictTitle: '检测到版本冲突',
       conflictBody:
         '本地草稿 r{{localRevision}} 与远端 v{{remoteVersion}} 不一致。请选择如何继续。',
@@ -9900,6 +9910,8 @@ export const zhCN: Resources = {
       '使用“添加”或节点工具栏创建并连接步骤；方向键移动焦点，Delete 删除当前选择。',
     nodeConfigurationSummary: '{{inputs}} 个输入 · {{outputs}} 个输出',
     placementUnavailable: '该位置附近没有可用空间，请平移画布后重试。',
+    privilegedMembershipBlocked:
+      '已移动，但分组未改变：改变脚本 / 代码平台调用节点的归属需要对应的创作权限。',
     layoutCrossScope: '所选步骤分属不同包装器范围。请分别整理每个范围，或使用“整理全图”。',
     layoutCycles: '布局时保留了 {{n}} 条循环依赖边，但未用它们约束层级。',
     layoutLockedOverflow: '有 {{n}} 个锁定尺寸的包装器放不下整理后的步骤；其锁定矩形已保留。',
@@ -10113,7 +10125,10 @@ export const zhCN: Resources = {
     varsInsertHint: '点击变量会插入当前字段：{{field}}',
     varsNoTarget: '当前操作没有可插入变量的文本字段',
     noInboundPorts: '还没有连入的端口',
-    readonlyBanner: '你没有编辑代码平台调用节点的权限，本节点只读',
+    noViewPermission: {
+      title: '无权查看节点详情',
+      body: '查看代码平台调用节点需要 code-host-calls:author 权限。如确有需要，请找管理员开通。',
+    },
     actionUnsupported: '所选代码平台不支持这个操作',
     unsupportedGeneric: '该代码平台不支持这个操作',
   },
@@ -10132,7 +10147,6 @@ export const zhCN: Resources = {
     body: '脚本正文',
     bodyHint: '在任务工作区里执行。平台不会往这段文本里替换任何内容。',
     fullscreenEdit: '全屏编辑',
-    fullscreenView: '全屏查看',
     retryWarning:
       '失败会自动重试。文件改动随隔离工作区一起回滚，但外部副作用（HTTP 调用、通知）不会——非幂等的脚本要自己做幂等保护。',
     sectionInputs: '输入',
@@ -10163,7 +10177,10 @@ export const zhCN: Resources = {
     networkDenyHint: '依赖照常安装；脚本本身在无网环境下执行。',
     readonly: '只读工作区',
     readonlyHint: '不建隔离工作区、不合并回写。脚本无法修改仓库文件。',
-    noAuthorPermission: '你可以查看这段脚本但不能修改——编辑脚本内容需要 scripts:author 权限。',
+    noViewPermission: {
+      title: '无权查看脚本',
+      body: '查看脚本节点需要 scripts:author 权限。如确有需要，请找管理员开通。',
+    },
   },
   callWorkgroupNode: {
     label: '调用工作组',

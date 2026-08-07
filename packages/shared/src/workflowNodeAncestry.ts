@@ -14,6 +14,7 @@
 // wrapper 归属决定回几次帖），所以这两段从 `scriptNode.ts` 抽到这里由两个门
 // 共用，而不是复制一份——复制出来的第二份迟早会漏掉下一个 impl-gate 修正。
 
+import { canonicalJson } from './workflow-canonical'
 import { isWrapperKind, type WorkflowDefinition } from './schemas/workflow'
 
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
@@ -82,4 +83,30 @@ export function wrapperAncestryOf(
       }
     })
     .sort((a, b) => cmp(a.id, b.id))
+}
+
+/**
+ * RFC-270 §4.5 —— 这几个节点的 wrapper 祖先链在两份定义之间是否**一字未变**。
+ *
+ * 画布用它做 drag-stop 守卫：受保护节点自己已经拖不动了，但拖动**包着它的**
+ * wrapper 仍可能改变它的传递归属（`resolveMembershipOnDragStop` 会按几何重算
+ * `nodeIds`），而归属正在两个 author 门的敏感投影里。一次纯粹的「挪个位置」因此
+ * 会变成 403 —— 恰好是 `scriptAuthorGate.ts` 开头承诺「无权限也能移动脚本节点」
+ * 的反面。守卫命中就丢弃归属补丁、只提交位置变化。
+ *
+ * 放在这里而不是画布里：判据必须与门的判据同源，抄一份出去就会各自漂移。
+ */
+export function ancestryUnchanged(
+  previous: WorkflowDefinition,
+  next: WorkflowDefinition,
+  nodeIds: Iterable<string>,
+): boolean {
+  for (const id of nodeIds) {
+    if (
+      canonicalJson(wrapperAncestryOf(previous, id)) !== canonicalJson(wrapperAncestryOf(next, id))
+    ) {
+      return false
+    }
+  }
+  return true
 }

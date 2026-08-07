@@ -53,6 +53,7 @@ import type {
   WorkflowValidationIssue,
 } from '@agent-workflow/shared'
 import {
+  ancestryUnchanged,
   buildNodeAgentLookup,
   CODE_HOST_ACTION_DEFS,
   CODE_HOST_METHODS,
@@ -70,6 +71,7 @@ import { CallWorkflowNode } from './nodes/CallWorkflowNode'
 import { CodeHostCallNode, type CodeHostCallNodeData } from './nodes/CodeHostCallNode'
 import { CallWorkgroupNode } from './nodes/CallWorkgroupNode'
 import { useWorkflowRefResolver } from './useWorkflowRefResolver'
+import { usePrivilegedNodes } from '@/hooks/usePrivilegedNodes'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
 import { classifyClarifyConnection } from './clarifyDragHelper'
 import { classifyCrossClarifyConnection } from './crossClarifyDragHelper'
@@ -442,6 +444,11 @@ function CanvasInner({
   // derivation (declaredPorts 4th arg). Identity only changes when the
   // ['workflows'] cache entry does, so it can drive the def-sync ref-guard.
   const { workflowByRef } = useWorkflowRefResolver()
+  // RFC-270 — the single privileged-node judgement for this canvas: palette
+  // grey-out, node drag/delete, edge wiring and the drag-stop ancestry guard
+  // all read it, so they cannot drift into a half-open combination.
+  const { paletteDisabledReason, protectedNodeIds } = usePrivilegedNodes()
+  const protectedIds = useMemo(() => protectedNodeIds(definition), [definition, protectedNodeIds])
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents ?? []), [agents])
   const validationProjection = useMemo(
     () => projectWorkflowValidationIssues(definition, validationIssues),
@@ -1535,8 +1542,24 @@ function CanvasInner({
    * guard for the case where read-only is bypassed and the user tries to
    * rewire a review whose iteration count is already non-zero.
    */
+  // RFC-270 — 受保护节点的画布锁。放在**渲染出口**这一处而不是三个
+  // `toFlowNodes` 建表点：状态路径有三条（初始化 + 两个 def-sync effect），在出口
+  // 派生才能保证没有哪条路径漏网，也不必给 `toFlowNodes` 那串位置参数再加一个
+  // （九个测试文件按位置传参）。
+  const lockedNodes = useMemo(
+    () => lockPrivilegedFlowNodes(nodes, protectedIds),
+    [nodes, protectedIds],
+  )
+  const lockedEdges = useMemo(
+    () => lockPrivilegedFlowEdges(edges, protectedIds),
+    [edges, protectedIds],
+  )
+
   const isValidConnection = useCallback(
     (conn: Connection | Edge) => {
+      // RFC-270 — 连线也是改「这个节点执行什么」的一条路：入边决定 `AW_PORT_*`
+      // 取到什么、决定回帖正文是什么。无权限就不许接上或拆掉。
+      if (protectedIds.has(conn.source ?? '') || protectedIds.has(conn.target ?? '')) return false
       const guardConn = {
         source: conn.source ?? null,
         target: conn.target ?? null,
@@ -1602,7 +1625,7 @@ function CanvasInner({
       const iter = taskContext.reviewIteration[conn.target] ?? 0
       return iter === 0
     },
-    [definition, semanticContext, taskContext],
+    [definition, protectedIds, semanticContext, taskContext],
   )
 
   // ---- Clipboard / shortcuts (P-2-07) ----
@@ -2181,6 +2204,12 @@ function CanvasInner({
 
   const nodePickerDisabledReason = useCallback(
     (item: PaletteItem): string | null => {
+      // RFC-270 — permission comes first: it holds for every intent, and unlike
+      // the placement reasons below it cannot be resolved by aiming somewhere
+      // else. Blocking here also closes the DRAG path, which `aria-disabled`
+      // alone never did.
+      const permissionReason = paletteDisabledReason(item)
+      if (permissionReason !== null) return permissionReason
       if (nodePickerIntent?.kind !== 'insert-edge') return null
       const candidate = makeEdgeInsertionCandidate(item, nodePickerIntent.edgeId, false)
       if (candidate === null) return t('canvas.placementUnavailable')
@@ -2192,7 +2221,14 @@ function CanvasInner({
       )
       return plan.ok ? null : plan.reason.message
     },
-    [definition, makeEdgeInsertionCandidate, nodePickerIntent, semanticContext, t],
+    [
+      definition,
+      makeEdgeInsertionCandidate,
+      nodePickerIntent,
+      paletteDisabledReason,
+      semanticContext,
+      t,
+    ],
   )
 
   const pickNode = useCallback(
@@ -2614,8 +2650,8 @@ function CanvasInner({
         {t('canvas.accessibleDescription')}
       </p>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={lockedNodes}
+        edges={lockedEdges}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         onNodesChange={handleNodesChange}
@@ -2714,6 +2750,9 @@ function CanvasInner({
           const measured = buildMeasuredSizesFromXyflowNodes(liveNodes)
           const minimumSizes = buildWrapperPortMinimumSizes(liveNodes)
           let nextDef = toDefinition(definition, liveNodes, edgesRef.current, measured)
+          // RFC-270 — 被守卫丢弃了归属补丁时置位，用于提示用户「位置提交了，但
+          // 归属没动」，不静默。
+          let membershipBlocked = false
           const absoluteNodes = projectXyflowPositionsToAbsolute(definition, liveNodes, measured)
           const wrappers: WrapperHitInput[] = []
           for (const fn of liveNodes) {
@@ -2757,7 +2796,17 @@ function CanvasInner({
                 ? wrapperDescendantIds(nextDef, dn.id)
                 : undefined,
             })
-            nextDef = applyMembershipPatch(nextDef, patch)
+            const patched = applyMembershipPatch(nextDef, patch)
+            // RFC-270 — wrapper 归属守卫。受保护节点自己已经拖不动了，但拖动
+            // **包着它的** wrapper 仍会改变它的传递归属，而归属正在两个 author
+            // 门的敏感投影里 —— 那会把一次纯粹的「挪位置」变成 403，恰好是
+            // `scriptAuthorGate.ts` 承诺「无权限也能移动脚本节点」的反面。
+            // 判据与门同源（shared `ancestryUnchanged`），不在这里抄一份。
+            if (ancestryUnchanged(nextDef, patched, protectedIds)) {
+              nextDef = patched
+            } else {
+              membershipBlocked = true
+            }
           }
           // Re-fit wrappers whose still-inner dragged child may now sit
           // too close OR too far from the wrapper border. We look up each
@@ -2786,6 +2835,9 @@ function CanvasInner({
             nextDef = fitWrapperToInner(nextDef, wid, measured, minimumSizes)
           }
           const primaryDragged = draggedNodes[0]?.id
+          if (membershipBlocked) {
+            announceCanvasChange(t('canvas.privilegedMembershipBlocked'))
+          }
           commitChange(nextDef, {
             label: t('editor.history.move'),
             selectionBefore:
@@ -3570,6 +3622,32 @@ function toFlowNodes(
 // now including the `review:<port>` case the candidates fork carried);
 // re-exported here to keep the historical import surface.
 export { nodeTitle }
+
+/**
+ * RFC-270 — 画布上的特权节点保护，纯函数两只。
+ *
+ * 「不可拖」不是装饰：drag-stop 会按几何重算 wrapper 归属并改写 `nodeIds`，而
+ * 归属在两个 author 门的敏感投影里 —— 一次纯粹的挪位置就会变成 403。「不可删」
+ * 与「边不可删」同理：删节点、拆入边都会改变敏感投影。三者一起，无权限用户在
+ * 画布上就没有任何一条能触发 `script-author-forbidden` 的路径。
+ *
+ * `protectedIds` 为空时返回同一个引用，让 memo 的下游不必重算。
+ */
+export function lockPrivilegedFlowNodes(nodes: Node[], protectedIds: ReadonlySet<string>): Node[] {
+  if (protectedIds.size === 0) return nodes
+  return nodes.map((node) =>
+    protectedIds.has(node.id) ? { ...node, draggable: false, deletable: false } : node,
+  )
+}
+
+export function lockPrivilegedFlowEdges(edges: Edge[], protectedIds: ReadonlySet<string>): Edge[] {
+  if (protectedIds.size === 0) return edges
+  return edges.map((edge) =>
+    protectedIds.has(edge.source) || protectedIds.has(edge.target)
+      ? { ...edge, deletable: false }
+      : edge,
+  )
+}
 
 function workflowInsertableEdgeIds(
   definition: WorkflowDefinition,

@@ -23,7 +23,11 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { serializeWorkflowFor, serializeWorkflowReceiptFor } from '@/services/tokenRedaction'
+import {
+  serializeWorkflowFor,
+  serializeWorkflowReceiptFor,
+  workflowReadLensFor,
+} from '@/services/tokenRedaction'
 import {
   canViewResource,
   filterVisibleRows,
@@ -95,7 +99,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
             'workflow',
             excludeBuiltinWorkflows(await listWorkflows(deps.db)),
           )
-        ).map((wf) => serializeWorkflowFor(wf, actorOf(c).source)),
+        ).map((wf) => serializeWorkflowFor(wf, workflowReadLensFor(actorOf(c)))),
       ),
   )
 
@@ -111,7 +115,10 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       return c.json(
-        serializeWorkflowFor(await loadVisibleWorkflow(actor, c.req.param('id')), actor.source),
+        serializeWorkflowFor(
+          await loadVisibleWorkflow(actor, c.req.param('id')),
+          workflowReadLensFor(actor),
+        ),
       )
     },
   )
@@ -138,7 +145,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
         ownerUserId: actor.user.id,
         actor,
       })
-      return c.json(serializeWorkflowFor(created, actor.source), 201)
+      return c.json(serializeWorkflowFor(created, workflowReadLensFor(actor)), 201)
     },
   )
 
@@ -165,7 +172,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       return c.json(
         serializeWorkflowFor(
           await copyWorkflow(deps.db, c.req.param('id'), parsed.data, actor),
-          actor.source,
+          workflowReadLensFor(actor),
         ),
         201,
       )
@@ -195,7 +202,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       return c.json(
         serializeWorkflowReceiptFor(
           await updateWorkflow(deps.db, id, parsed.data, { kind: 'actor', actor }),
-          actor.source,
+          workflowReadLensFor(actor),
         ),
       )
     },
@@ -403,7 +410,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
               workflow.definition,
             ),
           },
-          actorOf(c).source,
+          workflowReadLensFor(actorOf(c)),
         ),
       )
       return c.body(yaml, 200, {
@@ -435,8 +442,14 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       // workflow record, `overwritten` returns a save receipt.
       const body =
         result.outcome === 'created'
-          ? { ...result, workflow: serializeWorkflowFor(result.workflow, actor.source) }
-          : { ...result, receipt: serializeWorkflowReceiptFor(result.receipt, actor.source) }
+          ? {
+              ...result,
+              workflow: serializeWorkflowFor(result.workflow, workflowReadLensFor(actor)),
+            }
+          : {
+              ...result,
+              receipt: serializeWorkflowReceiptFor(result.receipt, workflowReadLensFor(actor)),
+            }
       return c.json(body, result.outcome === 'created' ? 201 : 200)
     },
   )

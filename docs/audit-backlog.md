@@ -334,6 +334,46 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ⏳ **`prose-code-mermaid-theme.test.tsx` 的主题切换用例在满载机器上仍会超时（RFC-270 实施期撞上，
+  非本 RFC 引入）**。用例 `toggling <html data-theme> dark→light re-invokes MermaidBlock.render with
+  new theme` 在一次 `gate:local` 里红（耗时 ~5050ms，恰好压在它自己那条 5000ms 显式预算上）；
+  该 lane 与 backend 四分片并发跑，机器满载。归属明确：owning commit `f37ef44d`
+  （标题就是「fix macos-only flakes in … mermaid theme test」），测试顶部注释已写明根因是
+  `useResolvedTheme` 的 MutationObserver → setState → useEffect → renderSpy 这条效果链在慢 runner
+  上吃不下默认预算，当时的处置就是把超时从 1s 提到 5s。**与 RFC-270 无关**：本次改动不碰
+  prose / mermaid / theme 任一路径；隔离重跑 3 次、全量前端套件重跑 3 次（728 文件 / 6154 用例）
+  均全绿，只在满载并发那一次红。按仓规登记而不是拿「重跑就过」当结论。建议 owner 换成事件驱动的
+  等待锚点（或再提预算），不宜由无关改动顺手改测试。
+
+- ⏳ **RFC-270 遗留：被遮蔽读者的 `snapshotHash` 不对称（已知、显式不修）**。后端
+  `workflowSnapshotHashOf` 与前端 `hashWorkflowDraftSnapshot` 是同一个算法，脱敏之后被遮用户
+  本地算出的 hash 与服务端返回的不再相等。影响面逐处核过**只有一处**：
+  `lib/workflow-editor-draft.ts` 里「refetch 抢在 PUT 回执之前到达」的快速结算路径
+  （`observation.revision.snapshotHash === attempt.snapshotHash`）对被遮用户不再命中，落回常规
+  冲突判定。CAS 不受影响（客户端回传的 `expectedSnapshotHash` 取自服务端给的值，比较两端同源），
+  脏检测不受影响（比的是两份都被遮过的本地快照）。**不修的理由**：修它要让 hash 也过镜头，于是
+  同一 revision 对不同观察者有不同 hash，会污染 WS 帧与 CAS 语义，代价远大于收益。若将来真要修，
+  正解是让服务端按观察者镜头计算并同时改 WS 帧，而不是在前端补丁。
+- ⏳ **`/repos` 对普通用户暴露全部写操作按钮（RFC-270 全面排查发现，未修）**。读是合法开放的
+  （`repos:read` 在 `USER_BASELINE`），但 `routes/repos.tsx` **零权限判断**，而 `repos:create` /
+  `repos:update` / `repos:delete` / `repos:execute` 全在 `MANAGER_EXTRA`。于是普通用户看到并可点：
+  批量导入、新建组、逐行刷新、逐行删除（danger 样式），全部 403；删除被 N 个任务引用的仓库时还会
+  先弹「此仓库被 N 个任务使用」的确认框。不是数据泄露，是**能力面泄露**。修法与 RFC-270 同款：
+  按权限隐藏/禁用写操作入口。
+- ⏳ **memory distill jobs 的反向洞：UI 比 API 严（RFC-270 全面排查发现，需产品拍板）**。
+  `/memory` 的 distill-jobs 分区与 `/memory/distill-jobs/$jobId` 只在**前端**按 admin 拦
+  （`routes/memory.tsx` / `memory.distill-jobs.$jobId.tsx` 的 `useIsAdmin`），而后端
+  `routes/memoryDistillJobs.ts` 要的是 `memory:read` —— 它**在 `USER_BASELINE` 里**。所以
+  `curl /api/memory-distill-jobs` 用普通用户令牌返回 **200**，含蒸馏候选与 LLM 会话记录；前端那道
+  拦截是唯一的控制，PAT / 直接 fetch 一走一个准。二选一：要么 UI 的限制是错的（撤掉），要么后端
+  的点是错的（需要一个 admin-only 点）。**这是 RFC-099 D12 把 `memory:*` 移进用户基线时留下的
+  不一致，不是本次改动引入的。**
+- ⏳ **`nav.ts` 的 `adminOnly` 标志已成死代码（RFC-270 全面排查发现，文档失真）**。RFC-260 把
+  `/webhooks` 的 `adminOnly` 摘掉之后，`NAV_GROUPS` 里没有任何一项再设它，但 `ShellNavigation.tsx`
+  的过滤逻辑还在、`router.tsx` 与 `nav.ts` 三处注释仍在描述那个已不存在的世界。机制**从未在生产
+  跑过**，下一个写 `adminOnly: true` 的人会依赖一条零覆盖的过滤。要么删掉机制与注释，要么给它补
+  一条测试。
+
 - ⏳ **两条 CI flaky（RFC-269 实施期间连续撞上，均非本 RFC 引入，各需 owner 处置）**：仓规明令「绝不允许『重跑就过了』作为通过依据」，故在此登记而不是就地重跑了事。
   - `packages/frontend/tests/unsaved-guard.test.tsx > dismiss via ESC = stay, then a later nav blocks again`（owning commit `5a1f6993` / RFC-250）：**仅 macOS shard 1/3** 红，该用例耗时 `5139ms`（同文件其余用例 ~100ms），ubuntu 同分片绿、本地 19/19 稳定绿。症状是 ESC 后 `unsaved-guard-dialog` 仍在 DOM 里 —— `waitFor` 等的是「消失」，在慢 runner 上像是没等到重渲染。归属判据：该测试自建路由树、**不 import 真实 settings 路由**，与并发改动零耦合。
   - `RFC-227 REAL macOS Seatbelt provider (gated) > denies app secrets, seal writes, and child network while preserving worktree writes`（owning commit `5c3eacf1` / RFC-252 G2）：**仅 macOS shard 1/4** 红，耗时 `5015ms` 像是撞上超时上限。**硬证据表明与代码无关**：红 run（`b2754f65`）与它前一个绿 run（`7322beef`）之间的全部差异是 **两个 `.md` 文件各改一行**；两行 markdown 改不了 macOS 沙箱行为。两条都在重跑后整 run success。

@@ -20,6 +20,7 @@ import { buildNodeAgentLookup, normalizeResourceDisplayName } from '@agent-workf
 import { api, ApiError } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { EditorPaletteContent, EditorSidebar } from '@/components/canvas/EditorSidebar'
+import { usePrivilegedNodes } from '@/hooks/usePrivilegedNodes'
 import { EdgeInspector } from '@/components/canvas/EdgeInspector'
 import { NodeInspector } from '@/components/canvas/NodeInspector'
 import { nodeTitle } from '@/components/canvas/nodeTitle'
@@ -463,6 +464,9 @@ export function WorkflowEditorLoaded({
   const starterTriggerRef = useRef<HTMLElement | null>(null)
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
   const paletteSearchRef = useRef<HTMLInputElement | null>(null)
+  // RFC-270 — the palette rail and the modal palette are two mounts of the same
+  // catalog; both need the grey-out or the closed door has a second entrance.
+  const { paletteDisabledReason } = usePrivilegedNodes()
   const canvasFrameRef = useRef<HTMLDivElement | null>(null)
   const openStarter = (trigger: HTMLElement): void => {
     starterTriggerRef.current = trigger
@@ -1063,6 +1067,7 @@ export function WorkflowEditorLoaded({
               agents={agents.data ?? []}
               initialFocusRef={paletteSearchRef}
               onAdd={(item) => canvasRef.current?.addPaletteItemAtViewportCenter(item)}
+              disabledReason={paletteDisabledReason}
             />
           ) : null}
           <div ref={canvasFrameRef} className="canvas-frame" tabIndex={-1}>
@@ -1144,6 +1149,7 @@ export function WorkflowEditorLoaded({
             agents={agents.data ?? []}
             initialFocusRef={paletteSearchRef}
             showDragGrip={false}
+            disabledReason={paletteDisabledReason}
             onAdd={(item) => {
               canvasRef.current?.addPaletteItemAtViewportCenter(item)
               setModalSurface('none')

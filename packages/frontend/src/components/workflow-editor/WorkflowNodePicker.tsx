@@ -277,7 +277,14 @@ function WorkflowNodePickerCatalogBody({
     }
   }
 
-  const onDragStart = (event: DragEvent<HTMLElement>, item: PaletteItem) => {
+  const onDragStart = (event: DragEvent<HTMLElement>, item: PaletteItem, reason: string | null) => {
+    // RFC-270 — `aria-disabled` only stops click/Enter, and dragging is a
+    // SECOND creation path: without this the grey-out is decoration and an
+    // unprivileged user still drops the node onto the canvas.
+    if (reason !== null) {
+      event.preventDefault()
+      return
+    }
     const serialized = serialize(item)
     event.dataTransfer.setData(PALETTE_MIME, serialized)
     event.dataTransfer.setData('text/plain', serialized)
@@ -386,8 +393,8 @@ function WorkflowNodePickerCatalogBody({
                               {showDragGrip ? (
                                 <span
                                   className="workflow-node-picker__drag-grip"
-                                  draggable
-                                  onDragStart={(event) => onDragStart(event, entry.item)}
+                                  draggable={reason === null}
+                                  onDragStart={(event) => onDragStart(event, entry.item, reason)}
                                   title={t('editor.nodePicker.dragHint')}
                                   aria-hidden="true"
                                 >

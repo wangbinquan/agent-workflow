@@ -231,6 +231,12 @@
 
 - **源码里嵌真实 NUL 字节(0x00)会让 grep/ugrep 把整个文件当二进制静默跳过**:AI/脚本生成代码时想写 NUL 分隔符,若落成真实字节而非 \u0000 转义,后果不是编译错——是 grep 对该文件**零输出无警告**,git diff 显示 Binary file,肉眼像文件没改。RFC-258 实现期连中三个文件(scip.ts/snapshot.ts/indexCache.ts),表现为「明明 Edit 成功了 grep 却找不到」。判据:grep 突然对某文件全哑 → python 查 chr(0) in src;修法统一写 \u0000 转义序列。
 
+- **「入口藏了」不等于「页面守住了」**：`AppShell` 的齿轮判 `settings:read`、`UserMenu` 判 `users:read`，看起来 `/settings` 是 admin 专属——但路由本身没有任何 `beforeLoad`，`sectionGroups` 又是零过滤的硬编码字面量，非 admin 敲 URL 就能拿到完整外壳与全部 11 个分区的名字和描述（一张管理面地图）。`lib/nav.ts` 里 `adminOnly` 的注释早就写明「过滤只发生在 ShellNavigation，非 admin 直输 URL 时页面自身再守卫」，只是 `/settings` 从没拿到那个自守卫（RFC-270 修）。**新增任何 admin 页时，入口过滤与页面守卫必须成对落地**；仓内两种守卫姿势都可以——`beforeLoad` 重定向（`routes/settings.tsx`）或组件内 `EmptyState` + `enabled: allowed`（`routes/users.tsx` / `memory.distill-jobs.$jobId.tsx`）。
+- **`disabledReason` 这类「早就存在但零调用方」的能力钩子会假装功能已经有了**：`WorkflowNodePickerCatalog` 从一开始就接受 `disabledReason` 并接进了 `aria-disabled` 与置灰样式，只是没有任何调用方传它——读代码像「置灰能力已具备」，实际从未生效。而且它只挡了 click/Enter，**抓手的 `draggable` 是完全独立的第二条创建路径**，只测点击会让置灰变成纯视觉（RFC-270 补）。判据：给一个交互加禁用态时，把该组件里**所有**能产出同一结果的事件入口数一遍（click / keydown / dragstart / paste / 快捷键），每条各写一个用例。
+- **把 hook 塞进 `WorkflowCanvas` 之前先想清楚它需不需要 QueryClientProvider**：十来个画布单测直接 `render(<WorkflowCanvas/>)`，没有 provider，裸 `useQuery` 在那里会抛「No QueryClient set」并把整棵树打挂——现象是一口气红七八个与你改动无关的测试文件。仓内既有解法是**provider 容忍**（`useWorkflowRefResolver` 的 `QueryClientContext` + 显式 `QueryObserver`，无 client 时降级），RFC-270 的 `usePrivilegedNodes` 照抄了它。顺带：`usePermission` 以前对 `data.permissions` 缺失会直接抛，现在失败关闭。
+- **给 `createRootRoute` 加 context 会波及每一个测试自建 router**：`createRootRouteWithContext<T>()` 让 `context` 变成 `createRouter` 的**必填**项，仓内 12 个测试文件的 `createRouter({ routeTree, history })` 当场编译不过。需要在 `beforeLoad` 里读全局资源时，优先把依赖做成**函数入参**并在路由定义处注入单例（`assertSettingsRouteAccess(appQueryClient)`），既可测又零波及。
+- **`redirect()` 抛出来的是一个 `Response`，目标在 `.options.to` 而不是顶层 `.to`**：断言写成 `(thrown as {to?}).to` 会拿到 `undefined`，而 `toEqual({to: undefined})` 对着 `toEqual({to: '/'})` 才会红——写成 `expect(x).toBeDefined()` 之类就直接假绿了。
+
 ## 依赖与审计门
 
 - **跨大版本的扁平 `overrides` 会打破按旧 API 调用的消费者**：审计门报 `brace-expansion` 高危时，把它在根 `overrides` 里一刀切钉成 `5.0.9`，结果 eslint 全线 `TypeError: expand is not a function` —— v1 是 `module.exports = expand`、v5 换了导出形态，而 eslint 依赖链上的 `minimatch@3` 按 v1 调用。**先看公告命中的是不是多条不同大版本的线**（这次是 `<1.1.18` 与 `>=4.0.0 <5.0.9` 两条），是的话扁平 override 必错。

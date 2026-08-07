@@ -3667,6 +3667,9 @@ export const enUS: Resources = {
       resultsCount: '{{n}} workflow steps available.',
       resultsCountInCategory: '{{n}} {{category}} steps available.',
       dragHint: 'Drag onto the canvas',
+      // RFC-270 — why a privileged node row is greyed out. Names the point so
+      // the user can ask an administrator for the right thing.
+      requiresPermission: 'Requires the {{permission}} permission',
     },
     starter: {
       title: 'Choose a workflow starting point',
@@ -3852,6 +3855,12 @@ export const enUS: Resources = {
         'The last request has an uncertain result. Later edits will not be sent until this check finishes.',
       errorTitle: 'Workflow save failed',
       errorBody: 'Your local draft is preserved. Retry saving or export the local content first.',
+      // RFC-270 — an author-gate 403. Distinct from errorTitle/errorBody: the
+      // save did not break, one specific change was refused, and retrying the
+      // same bytes can only fail again — so this banner offers no Retry.
+      authorForbiddenTitle: 'This change needs an extra permission',
+      authorForbiddenBody:
+        'Changing a script or code-host call node requires the {{permission}} permission. Your local draft is preserved — undo that step to keep saving, or ask an administrator for the permission.',
       conflictTitle: 'A version conflict was detected',
       conflictBody:
         'Local draft r{{localRevision}} differs from remote v{{remoteVersion}}. Choose how to continue.',
@@ -4980,6 +4989,11 @@ export const enUS: Resources = {
       'Use Add or the node toolbar to create and connect steps. Arrow keys move focus; Delete removes the current selection.',
     nodeConfigurationSummary: '{{inputs}} inputs · {{outputs}} outputs',
     placementUnavailable: 'No open space was found near that point. Pan the canvas and try again.',
+    // RFC-270 — a wrapper drag would have changed a privileged node's loop
+    // placement (which decides how many times it runs). Position committed,
+    // membership did not; said out loud rather than silently dropped.
+    privilegedMembershipBlocked:
+      'Moved, but the grouping was left unchanged: changing where a script or code-host call node sits requires the matching author permission.',
     layoutCrossScope:
       'The selected steps belong to different wrapper scopes. Layout each scope separately, or use Layout all.',
     layoutCycles: '{{n}} cyclic dependency edge(s) were left unconstrained during layout.',
@@ -5217,8 +5231,13 @@ export const enUS: Resources = {
     varsInsertHint: 'Click a variable to insert it into: {{field}}',
     varsNoTarget: 'This action has no text field that accepts variables',
     noInboundPorts: 'No inbound ports yet',
-    readonlyBanner:
-      'You do not have permission to author code-host call nodes; this node is read-only',
+    // RFC-270 — replaces the retired `readonlyBanner`: without
+    // `code-host-calls:author` the panel is not shown at all, because the server
+    // no longer sends the request template to this reader.
+    noViewPermission: {
+      title: 'Node details hidden',
+      body: 'Viewing a code-host call node requires the code-host-calls:author permission. Ask an administrator if you need it.',
+    },
     actionUnsupported: 'The selected code host does not support this action',
     unsupportedGeneric: 'Not supported on this code host',
   },
@@ -5237,7 +5256,6 @@ export const enUS: Resources = {
     body: 'Script body',
     bodyHint: 'Runs in the task worktree. The platform never substitutes anything into this text.',
     fullscreenEdit: 'Edit full screen',
-    fullscreenView: 'View full screen',
     retryWarning:
       'A failed run is retried automatically. File changes are rolled back with the isolated worktree, but external side effects (HTTP calls, notifications) are not — make non-idempotent scripts guard themselves.',
     sectionInputs: 'Inputs',
@@ -5271,8 +5289,11 @@ export const enUS: Resources = {
     readonly: 'Read-only worktree',
     readonlyHint:
       'Skips the isolated worktree and merge-back. The script cannot modify repository files.',
-    noAuthorPermission:
-      'You can view this script but not change it — editing script content requires the scripts:author permission.',
+    // RFC-270 — replaces the retired `noAuthorPermission` read-only banner.
+    noViewPermission: {
+      title: 'Script hidden',
+      body: 'Viewing a script node requires the scripts:author permission. Ask an administrator if you need it.',
+    },
   },
   callWorkgroupNode: {
     label: 'call workgroup',

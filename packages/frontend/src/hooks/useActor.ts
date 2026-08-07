@@ -25,13 +25,21 @@ export interface MeResponse {
  *  variant can do `queryClient.invalidateQueries({ queryKey: ACTOR_QUERY_KEY })`. */
 export const ACTOR_QUERY_KEY = ['auth', 'me'] as const
 
-function useAuthTokenSnapshot(): string | null {
+export function useAuthTokenSnapshot(): string | null {
   return useSyncExternalStore(subscribeAuth, getToken, () => null)
 }
 
-export function useActor() {
-  const token = useAuthTokenSnapshot()
-  return useQuery<MeResponse | null>({
+/**
+ * The /me query as a shareable options object.
+ *
+ * RFC-270 extracted this out of `useActor` so the `/settings` route guard can
+ * `ensureQueryData` the SAME query: a guard that built its own key would fire a
+ * second request per navigation and answer from a cache the components never
+ * see, which is exactly how "the gear is hidden but the page still opens"
+ * happens a second time.
+ */
+export function meQueryOptions(token: string | null) {
+  return {
     // Including the token in the key makes "log out → log in as someone
     // else" surface fresh /me data instantly. Token is process-local state
     // (not network-bound), so leaking it through the React Query devtools
@@ -45,7 +53,7 @@ export function useActor() {
     // app: nav entries vanish and the account page spins forever, with a reload
     // the only way out. This query is mounted app-wide, so it is the single
     // highest-value place to get this right.
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }: { signal: AbortSignal }): Promise<MeResponse | null> => {
       if (!token) return null
       return api.get<MeResponse>('/api/auth/me', undefined, signal)
     },
@@ -54,12 +62,22 @@ export function useActor() {
     // Drop the previously-cached value on token change so consumers don't
     // briefly render last-user data while the new query is in-flight.
     placeholderData: undefined,
-  })
+  }
+}
+
+export function useActor() {
+  const token = useAuthTokenSnapshot()
+  return useQuery<MeResponse | null>(meQueryOptions(token))
 }
 
 export function usePermission(perm: Permission): boolean {
   const { data } = useActor()
-  if (!data) return false
+  // Fails closed on anything that is not a permission array: loading, logged
+  // out, and a malformed/partial /me payload all answer "no". RFC-270 made this
+  // explicit because the hook moved into the canvas render path, where a
+  // payload missing `permissions` used to throw and take the whole editor down
+  // instead of merely hiding a control.
+  if (!data || !Array.isArray(data.permissions)) return false
   return data.permissions.includes(perm)
 }
 

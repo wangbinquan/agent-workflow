@@ -1022,7 +1022,10 @@ function failureFromError(error: unknown): WorkflowDraftFailure {
   // RFC-199 G1), never as a definitive http failure. The e2e weak-network
   // suite (rfc199-save-reliability.spec.ts) locks this end-to-end.
   if (error instanceof ApiError && error.status !== 0) {
-    return { kind: 'http', status: error.status, message: error.message }
+    // RFC-270: carry the CODE. Dropping it is what made every 403 look like a
+    // deleted workflow — the state machine had nothing left to tell an
+    // author-permission refusal apart from a real loss of access.
+    return { kind: 'http', status: error.status, message: error.message, code: error.code }
   }
   return {
     kind: 'transport',

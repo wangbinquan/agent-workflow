@@ -132,18 +132,19 @@ describe('RFC-267 script full-screen editor', () => {
     expect(viewOf('script-body-editor').state.doc.toString()).toBe('print("full screen")')
   })
 
-  test('users without scripts:author get a truthful full-screen read-only view', () => {
+  // RFC-270 显式改判（原断言：无 `scripts:author` 时得到一个「诚实的全屏只读
+  // 视图」）。RFC-270 把「谁能看」并进「谁能写」——脚本正文是宿主要执行的代码，
+  // 服务端已不再把它下发给无权限的读者，全屏里能显示的只有 `***`。所以「只读
+  // 全屏」这个形态整个消失了：面板本身换成无权限占位，自然也没有全屏按钮。
+  // 改判而不是删除，是为了让「无权限分支」在本文件里仍然有一条锁。
+  test('RFC-270 改判：无 scripts:author 时整个面板换成占位，没有全屏入口', () => {
     permissionState.canAuthor = false
     render(<Harness initialNode={scriptNode()} />)
 
-    const trigger = screen.getByTestId('script-body-fullscreen-trigger')
-    expect(trigger.textContent).toContain('全屏查看')
-    expect(screen.getByTestId('script-body-editor').getAttribute('data-readonly')).toBe('true')
-    fireEvent.click(trigger)
-    expect(screen.getByRole('dialog', { name: '全屏查看' })).toBeTruthy()
-    expect(screen.getByTestId('script-body-editor-fullscreen').getAttribute('data-readonly')).toBe(
-      'true',
-    )
+    expect(screen.getByTestId('script-inspector-no-view-permission')).toBeTruthy()
+    expect(screen.queryByTestId('script-body-fullscreen-trigger')).toBeNull()
+    expect(screen.queryByTestId('script-body-editor')).toBeNull()
+    expect(document.body.textContent).not.toContain('print(')
   })
 })
 

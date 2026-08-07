@@ -13,6 +13,14 @@ export interface EditorPaletteContentProps {
   initialFocusRef?: RefObject<HTMLInputElement | null>
   showDragGrip?: boolean
   className?: string
+  /**
+   * RFC-270 — why this row cannot be used, or `null` when it can. The catalog
+   * has always accepted this prop; until RFC-270 nobody passed it, so the
+   * `script` / `code-host-call` rows were draggable by users who could not save
+   * them. Threaded (rather than read inside the catalog) because the catalog is
+   * a presentation primitive with no business rules of its own.
+   */
+  disabledReason?: (item: PaletteItem) => string | null
 }
 
 export function EditorPaletteContent({
@@ -21,6 +29,7 @@ export function EditorPaletteContent({
   initialFocusRef,
   showDragGrip = true,
   className,
+  disabledReason,
 }: EditorPaletteContentProps) {
   return (
     <WorkflowNodePickerCatalog
@@ -29,6 +38,7 @@ export function EditorPaletteContent({
       showDragGrip={showDragGrip}
       className={className}
       initialFocusRef={initialFocusRef}
+      disabledReason={disabledReason}
     />
   )
 }

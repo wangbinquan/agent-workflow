@@ -28,6 +28,18 @@ import { QueryClient } from '@tanstack/react-query'
  */
 const NETWORK_MODE = 'always' as const
 
+/**
+ * The app-wide instance.
+ *
+ * RFC-270 needed the client OUTSIDE React: the `/settings` route guard runs in
+ * `beforeLoad`, before any component mounts, and must `ensureQueryData` the SAME
+ * `/api/auth/me` entry the components read — a guard with its own client would
+ * fire a second request per navigation and answer from a cache nobody sees.
+ * Exported from here rather than from `router.tsx` so the layering stays
+ * router → query-client, not the reverse.
+ */
+export const appQueryClient: QueryClient = createQueryClient()
+
 export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {

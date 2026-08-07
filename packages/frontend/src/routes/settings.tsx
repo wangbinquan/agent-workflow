@@ -15,8 +15,8 @@
 // server session via /api/auth/logout, which this tab never did), and active
 // sessions / tokens are managed on /account.
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, Link, useRouterState } from '@tanstack/react-router'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { createRoute, Link, redirect, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuthLoginPolicy, Config, ConfigPatch } from '@agent-workflow/shared'
@@ -57,6 +57,9 @@ import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
 import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
+import { appQueryClient } from '@/lib/query-client'
+import { meQueryOptions, type MeResponse } from '@/hooks/useActor'
+import { getToken } from '@/stores/auth'
 import {
   SETTINGS_CONFIG_SCOPE_IDS,
   settingsConfigScopeKeys,
@@ -64,11 +67,50 @@ import {
 } from '@/lib/settings-drafts'
 import { Route as RootRoute } from './__root'
 
+/**
+ * RFC-270 — the `/settings` access guard.
+ *
+ * Before this, the ONLY thing hidden from a non-admin was the sidebar gear
+ * (AppShell's `AdminGear`, keyed on `settings:read`). The route itself had no
+ * guard and `sectionGroups` is an unfiltered literal, so typing the URL still
+ * rendered the full page: header, all four groups, all eleven section links —
+ * with an error banner where each panel's data would be. `lib/nav.ts` already
+ * documented the rule this page never got ("非 admin 直接输入 URL 时页面自身再
+ * 守卫"); this is that guard.
+ *
+ * Two deliberate choices:
+ *
+ *  · **Fails OPEN on a `/me` error**, unlike every other RFC-270 surface. A
+ *    guard that bounces on a transient network blip locks an administrator out
+ *    of the page they need in order to fix the daemon. It can afford to: every
+ *    settings endpoint is `settings:read` / `settings:write` enforced server
+ *    side (routes/config.ts, codeHosts.ts, daemon.ts, oidc.ts, runtimes.ts), so
+ *    this guard is UX, not the boundary.
+ *
+ *  · **`replace: true`** so the back button does not bounce between /settings
+ *    and the home page.
+ *
+ * The client is a parameter rather than router context: making context required
+ * on the root route would force every test-local `createRouter({ routeTree })`
+ * to supply one, and this guard is just as testable injected.
+ */
+export async function assertSettingsRouteAccess(queryClient: QueryClient): Promise<void> {
+  let me: MeResponse | null
+  try {
+    me = await queryClient.ensureQueryData(meQueryOptions(getToken()))
+  } catch {
+    return
+  }
+  if (me !== null && me.permissions.includes('settings:read')) return
+  throw redirect({ to: '/', replace: true })
+}
+
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/settings',
   component: SettingsPage,
   validateSearch: validateSettingsSearch,
+  beforeLoad: () => assertSettingsRouteAccess(appQueryClient),
 })
 
 export type SettingsTab =

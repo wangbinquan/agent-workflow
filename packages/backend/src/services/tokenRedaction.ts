@@ -24,22 +24,71 @@
 // It is stated here so the account page and the generated docs never promise
 // "read-only tokens can't leak secrets", which would be false.
 
-import { maskWorkflowScriptEnv, redactGitUrl } from '@agent-workflow/shared'
+import {
+  maskWorkflowScriptEnv,
+  redactGitUrl,
+  redactPrivilegedNodes,
+  type PrivilegedNodeLens,
+} from '@agent-workflow/shared'
 import type { Task } from '@agent-workflow/shared'
-import type { ActorSource } from '@/auth/actor'
+import type { Actor, ActorSource } from '@/auth/actor'
+import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { redactSensitiveString } from '@/util/redact'
 
 /** The placeholder a redacted value collapses to. Keys survive; values do not. */
 export const REDACTED = '***'
 
 /**
- * Redaction applies to the token channel only. Session and daemon actors keep
- * today's behaviour byte-for-byte — a human who can already open the MCP editor
- * in the browser gains nothing from having the same bytes hidden from them, and
- * changing that would be a UX regression dressed up as security.
+ * The CHANNEL axis. Token callers get MCP/plugin/stdout secrets masked; session
+ * and daemon actors do not — a human who can already open the MCP editor in the
+ * browser gains nothing from having the same bytes hidden from them.
+ *
+ * RFC-270 correction: this axis alone is NOT sufficient for workflow
+ * definitions. Script bodies and code-host request templates are governed by
+ * `scripts:author` / `code-host-calls:author`, which a browser session may well
+ * lack — so "the browser can already see it" was true for MCP config and false
+ * here. Definition reads therefore go through `WorkflowReadLens` below, which
+ * carries this channel axis AND a permission axis, applied together.
  */
 export function shouldRedactFor(source: ActorSource): boolean {
   return source === 'pat'
+}
+
+/**
+ * RFC-270 §2.2 — the two orthogonal axes a workflow definition is read through.
+ *
+ * Kept as an explicit value object rather than passing the `Actor` itself: this
+ * module stays decoupled from auth internals, and a test can state the exact
+ * lens it means in one literal instead of assembling a plausible actor.
+ *
+ * Changing the serializers below from `ActorSource` to this type is a
+ * DELIBERATE compile-time break at every call site — the same argument the
+ * required-`definition` constraint already makes further down: "I forgot this
+ * outlet also returns a definition" has to be a compile error, because a
+ * redaction that covers seven of eight outlets is not a redaction.
+ */
+export interface WorkflowReadLens {
+  source: ActorSource
+  privileged: PrivilegedNodeLens
+}
+
+export function workflowReadLensFor(actor: Actor): WorkflowReadLens {
+  return { source: actor.source, privileged: privilegedNodeLensFor(actor) }
+}
+
+/**
+ * Apply both axes to one definition-shaped value.
+ *
+ * Order is irrelevant to the result (both write `REDACTED`), but is fixed
+ * channel-then-permission so a reader of a masked payload can reason about it
+ * in one direction. Unchanged input comes back as the SAME reference on both
+ * steps, so a transparent lens costs one comparison.
+ */
+function redactDefinitionShaped<T>(value: T, lens: WorkflowReadLens): T {
+  const channelMasked = shouldRedactFor(lens.source)
+    ? maskWorkflowScriptEnv(value, REDACTED)
+    : value
+  return redactPrivilegedNodes(channelMasked, lens.privileged, REDACTED)
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -118,13 +167,17 @@ export function serializeMcpFor<T>(record: T, source: ActorSource): T {
  * sensitive projection, which demands `scripts:author` — a system-domain
  * point no token carries (RFC-253 D19). This is defence in depth against the
  * day a receipt starts reflecting stored bytes.
+ *
+ * RFC-270 widened this from "the token channel masks script `env`" to "both
+ * axes mask the whole privileged surface": script body / env / dependencies and
+ * the code-host `params` / `request` template, for any caller lacking the
+ * matching author point. See `redactDefinitionShaped`.
  */
 export function serializeWorkflowFor<T extends { definition: unknown }>(
   record: T,
-  source: ActorSource,
+  lens: WorkflowReadLens,
 ): T {
-  if (!shouldRedactFor(source)) return record
-  const masked = maskWorkflowScriptEnv(record.definition, REDACTED)
+  const masked = redactDefinitionShaped(record.definition, lens)
   return masked === record.definition ? record : ({ ...record, definition: masked } as T)
 }
 
@@ -139,11 +192,10 @@ export function serializeWorkflowFor<T extends { definition: unknown }>(
  */
 export function serializeWorkflowReceiptFor<T extends { snapshot: { definition: unknown } }>(
   receipt: T,
-  source: ActorSource,
+  lens: WorkflowReadLens,
 ): T {
-  if (!shouldRedactFor(source)) return receipt
   const current = receipt.snapshot.definition
-  const masked = maskWorkflowScriptEnv(current, REDACTED)
+  const masked = redactDefinitionShaped(current, lens)
   return masked === current
     ? receipt
     : ({ ...receipt, snapshot: { ...receipt.snapshot, definition: masked } } as T)
@@ -163,10 +215,14 @@ export function serializeWorkflowReceiptFor<T extends { snapshot: { definition: 
  * is REQUIRED on T for the reason `serializeWorkflowFor` requires
  * `definition`: it makes "I forgot this outlet returns a task" a compile error
  * at the one place it can be caught.
+ *
+ * RFC-270: this outlet matters MORE than the workflow one, not less. The frozen
+ * snapshot outlives its source workflow (it still answers after the workflow is
+ * edited or deleted), so a privileged-node body that leaks here leaks for the
+ * lifetime of the task row.
  */
-export function serializeTaskFor<T extends Task>(task: T, source: ActorSource): T {
-  if (!shouldRedactFor(source)) return task
-  const masked = maskWorkflowScriptEnv(task.workflowSnapshot, REDACTED)
+export function serializeTaskFor<T extends Task>(task: T, lens: WorkflowReadLens): T {
+  const masked = redactDefinitionShaped(task.workflowSnapshot, lens)
   return masked === task.workflowSnapshot ? task : ({ ...task, workflowSnapshot: masked } as T)
 }
 

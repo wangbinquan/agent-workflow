@@ -11,9 +11,12 @@
 //      不存在（只有 GraphQL）。隐藏它会让人以为「GitHub 没这功能」然后跑去
 //      自定义请求里瞎试；置灰 + 说明原因才是诚实的。
 //
-//   3. **没有 `code-host-calls:author` 时整块只读**。门在持久化原语上，所以
-//      无权限用户的编辑会被表单接受、在保存时被拒。整块只读 + 明确横幅是诚实
-//      的呈现（与 RFC-253 的脚本面板同款）。
+//   3. **没有 `code-host-calls:author` 时整块不可见**（RFC-270 改判）。初版随
+//      RFC-253 的脚本面板做成「整块只读 + 横幅」；RFC-270 把「谁能看」与「谁能
+//      写」合并成同一个问题：这里的 path / body / params 就是平台将以管理员
+//      token 发出的请求，服务端已经不再把它们下发给无权限的调用方
+//      （services/tokenRedaction.ts），面板渲染出来只会是一排 `***`。「不可改」
+//      那一半没变，而且现在是构造保证的 —— 没有控件可以输入。
 
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -33,6 +36,7 @@ import {
   type CodeHostProvider,
   type WorkflowNode,
 } from '@agent-workflow/shared'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { NoticeBanner } from '@/components/NoticeBanner'
@@ -109,6 +113,7 @@ function readRequest(node: WorkflowNode): CustomRequestShape {
 export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
   const { t } = useTranslation()
   const canAuthor = usePermission('code-host-calls:author')
+  const canManageConnections = usePermission('settings:read')
   const templateInputRefs = useRef(new Map<string, TemplateInput>())
   const [focusedTemplateTargetKey, setFocusedTemplateTargetKey] = useState<string | null>(null)
 
@@ -238,7 +243,7 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
     else templateInputRefs.current.set(key, el)
   }
   const insertTemplateToken = (token: string): void => {
-    if (!canAuthor || activeTemplateTarget === undefined) return
+    if (activeTemplateTarget === undefined) return
     applyTemplateVarInsertion(
       templateInputRefs.current.get(activeTemplateTarget.key) ?? null,
       activeTemplateTarget.value,
@@ -247,11 +252,10 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
     )
   }
   const bindInputToTarget = (binding: InboundBinding, targetKey: string): void => {
-    if (!canAuthor || targetKey.length === 0) return
+    if (targetKey.length === 0) return
     directTemplateTargets.find((target) => target.key === targetKey)?.commit(binding.token)
   }
   const removeInputFromTarget = (binding: InboundBinding, target: TemplateTarget): void => {
-    if (!canAuthor) return
     target.commit(target.value.split(binding.token).join(''))
   }
   const triggerVariableGroups = WEBHOOK_VAR_GROUPS.map((group) => ({
@@ -298,12 +302,20 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
           ? t('codeHostInspector.inputGuideUnbound')
           : t('codeHostInspector.inputGuideBound')
 
+  // RFC-270 — 无权限就不渲染面板：下面每个字段读的都是服务端已经遮蔽过的值。
+  if (!canAuthor) {
+    return (
+      <EmptyState
+        title={t('codeHostInspector.noViewPermission.title')}
+        description={t('codeHostInspector.noViewPermission.body')}
+        size="compact"
+        data-testid="code-host-inspector-no-view-permission"
+      />
+    )
+  }
+
   return (
     <>
-      {!canAuthor ? (
-        <ErrorBanner error={null} message={t('codeHostInspector.readonlyBanner')} />
-      ) : null}
-
       <InspectorSection title={t('inspector.sectionBasics')}>
         <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
         <Field
@@ -317,7 +329,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                 value={provider}
                 ariaLabel={t('codeHostInspector.provider')}
                 testidPrefix="code-host-provider"
-                disabled={!canAuthor}
                 options={PROVIDERS.map((value) => ({
                   value,
                   label: t(`codeHostProvider.${value}`, { defaultValue: value }),
@@ -334,25 +345,30 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                 }}
               />
             </div>
-            <a
-              href="/settings?tab=codeHosts"
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn--sm btn--ghost inspector__resource-reference-link"
-              aria-label={t('codeHostInspector.manageConnectionsAria')}
-              title={t('codeHostInspector.manageConnectionsAria')}
-              data-testid="code-host-manage-connections"
-            >
-              {t('codeHostInspector.manageConnections')}
-              <span aria-hidden="true">↗</span>
-            </a>
+            {/* RFC-270 — 这个入口通向 admin-only 的配置页。它对**有**
+                `code-host-calls:author` 却**无** `settings:read` 的人可见，
+                也就是 manager（`MANAGER_DENIED_PERMISSIONS` 显式拒了
+                `settings:read`）——正是今天点进去只会吃 403 的那批人。 */}
+            {canManageConnections ? (
+              <a
+                href="/settings?tab=codeHosts"
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn--sm btn--ghost inspector__resource-reference-link"
+                aria-label={t('codeHostInspector.manageConnectionsAria')}
+                title={t('codeHostInspector.manageConnectionsAria')}
+                data-testid="code-host-manage-connections"
+              >
+                {t('codeHostInspector.manageConnections')}
+                <span aria-hidden="true">↗</span>
+              </a>
+            ) : null}
           </div>
         </Field>
         <Field label={t('codeHostInspector.action')} hint={selectedActionDescription} group>
           <Select
             value={action}
             options={actionOptions}
-            disabled={!canAuthor}
             searchable
             ariaLabel={t('codeHostInspector.action')}
             data-testid="code-host-action"
@@ -414,7 +430,7 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                       port: binding.portName,
                     })}
                     data-testid={'code-host-input-target-' + binding.portName}
-                    disabled={!canAuthor || directTemplateTargets.length === 0}
+                    disabled={directTemplateTargets.length === 0}
                     onChange={(targetKey) => bindInputToTarget(binding, targetKey)}
                     options={[
                       {
@@ -444,7 +460,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                           type="button"
                           className="btn btn--xs btn--ghost code-host-input-binding__unlink"
                           key={target.key}
-                          disabled={!canAuthor}
                           aria-label={t('codeHostInspector.removeBindingAria', {
                             port: binding.portName,
                             field: target.label,
@@ -473,7 +488,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
               options={CODE_HOST_METHODS.filter((m) => m !== 'DELETE' || allowDestructive).map(
                 (value) => ({ value, label: value }),
               )}
-              disabled={!canAuthor}
               ariaLabel={t('codeHostInspector.method')}
               data-testid="code-host-method"
               onChange={(value) => {
@@ -492,7 +506,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             <Field label={t('codeHostInspector.path')} hint={t('codeHostInspector.pathHint')}>
               <TextInput
                 value={request.path}
-                disabled={!canAuthor}
                 data-testid="code-host-path"
                 inputRef={bindTemplateInput('request:path')}
                 onFocus={() => setFocusedTemplateTargetKey('request:path')}
@@ -514,7 +527,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
               value={request.body ?? ''}
               monospace
               rows={6}
-              disabled={!canAuthor}
               data-testid="code-host-body"
               textareaRef={bindTemplateInput('request:body')}
               onFocus={() => setFocusedTemplateTargetKey('request:body')}
@@ -537,7 +549,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
           >
             <Switch
               checked={allowDestructive}
-              disabled={!canAuthor}
               data-testid="code-host-allow-destructive"
               onChange={(checked) => {
                 patch(
@@ -596,7 +607,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             const label = t(`codeHostField.${field.name}`, { defaultValue: field.name })
             const hint = t(`codeHostFieldHint.${field.name}`, { defaultValue: '' })
             const common = {
-              disabled: !canAuthor,
               'data-testid': `code-host-field-${field.name}`,
             }
             return (
@@ -607,7 +617,6 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                       value={value}
                       options={selectOptions}
                       searchable={selectOptions.length > 8}
-                      disabled={!canAuthor}
                       ariaLabel={label}
                       data-testid={`code-host-field-${field.name}`}
                       onChange={(next) => {
@@ -658,7 +667,7 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
               label={t('codeHostInspector.varsHint')}
               onInsert={insertTemplateToken}
               testidPrefix="code-host-port-var"
-              disabled={!canAuthor || activeTemplateTarget === undefined}
+              disabled={activeTemplateTarget === undefined}
             />
           )}
         </div>
@@ -668,7 +677,7 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
             label={t('codeHostInspector.triggerVarsHint')}
             onInsert={insertTemplateToken}
             testidPrefix="code-host-trigger-var"
-            disabled={!canAuthor || activeTemplateTarget === undefined}
+            disabled={activeTemplateTarget === undefined}
             titleOf={(name) => {
               const variable = name.startsWith('trigger.') ? name.slice('trigger.'.length) : name
               return t(`webhookTriggers.fields.vars.${variable}`, { defaultValue: variable })

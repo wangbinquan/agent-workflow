@@ -42,6 +42,7 @@ import {
   redactEventPayload,
   redactStdout,
   serializeTaskFor,
+  workflowReadLensFor,
   shouldRedactFor,
 } from '@/services/tokenRedaction'
 import { deleteTask } from '@/services/taskDelete'
@@ -280,7 +281,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       if (task === null) {
         throw new NotFoundError('task-not-found', `task '${id}' not found`)
       }
-      return c.json(serializeTaskFor(task, actorOf(c).source))
+      return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))))
     },
   )
 
@@ -302,7 +303,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // contents bound to `kind: 'upload'` inputs.
       if (ct.toLowerCase().startsWith('multipart/form-data')) {
         const task = await handleMultipartTaskStart(c.req.raw, deps, opencodeCmd, actorOf(c))
-        return c.json(serializeTaskFor(task, actorOf(c).source), 201)
+        return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))), 201)
       }
 
       const bodyJson = await safeJson(c.req.raw)
@@ -384,7 +385,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         },
         startDeps,
       )
-      return c.json(serializeTaskFor(task, actorOf(c).source), 201)
+      return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))), 201)
     },
   )
 
@@ -444,7 +445,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const task = await cancelTask(deps.db, c.req.param('id'))
-      return c.json(serializeTaskFor(task, actorOf(c).source))
+      return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))))
     },
   )
 
@@ -837,7 +838,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         // RFC-103 T2: resume must thread commit&push + maxConcurrentNodes too.
         ...resolveLaunchRuntimeConfig(deps.configPath),
       })
-      return c.json(serializeTaskFor(task, actorOf(c).source))
+      return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))))
     },
   )
 
@@ -923,7 +924,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         ...resolveLaunchRuntimeConfig(deps.configPath),
       })
-      return c.json(serializeTaskFor(updated, actorOf(c).source))
+      return c.json(serializeTaskFor(updated, workflowReadLensFor(actorOf(c))))
     },
   )
 
@@ -1049,7 +1050,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           ...resolveLaunchRuntimeConfig(deps.configPath),
         },
       })
-      return c.json(serializeTaskFor(task, actorOf(c).source))
+      return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))))
     },
   )
 

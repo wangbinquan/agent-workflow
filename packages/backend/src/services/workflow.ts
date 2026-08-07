@@ -25,6 +25,8 @@ import {
   serializeWorkflowDefinitionStorageV1,
   serializeWorkflowEditableSnapshotV1,
   normalizeResourceDisplayName,
+  PRIVILEGED_LENS_TRANSPARENT,
+  rehydratePrivilegedNodes,
   RESOURCE_DISPLAY_NAME_MSG,
   UpdateWorkflowSchema,
   WORKFLOW_SCHEMA_VERSION,
@@ -37,6 +39,7 @@ import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
 import { assertScriptAuthorAllowed, type ScriptAuthorPrincipal } from './scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from './codeHostAuthorGate'
+import { privilegedNodeLensFor } from './privilegedNodeLens'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
@@ -359,22 +362,48 @@ export async function prepareWorkflowSave(
   // snapshot bytes are taken, so what gets hashed into the receipt is exactly
   // what gets stored. Only the WRITE path normalizes — `normalizeWorkflowSnapshot`
   // is shared with the read/hash path, where a stored row must stay byte-faithful.
-  const normalizedSnapshot = normalizeWorkflowSnapshot({
+  const submittedSnapshot = normalizeWorkflowSnapshot({
     ...parsed.data.snapshot,
     name: normalizeResourceDisplayName(parsed.data.snapshot.name),
   })
-  assertCanonicalWorkflowAgentIds(normalizedSnapshot.definition)
-  const submittedBytes = serializeWorkflowEditableSnapshotV1(normalizedSnapshot)
-  const definitionStorage = serializeWorkflowDefinitionStorageV1(normalizedSnapshot.definition)
+  assertCanonicalWorkflowAgentIds(submittedSnapshot.definition)
 
   // Schema/reference checks remain outside the single-row write transaction.
   // The current row gates below are repeated in dbTxSync, so an ACL transfer or
   // built-in flip between preflight and CAS cannot authorize a stale writer.
   const preflightRow = await loadRawWorkflow(db, id)
   let fenceableAgentIds = new Set<string>()
+  // RFC-270 — what actually gets stored. Identical to the submitted snapshot
+  // except for privileged-node fields this principal was not allowed to SEE:
+  // those are restored from the stored row below, before the author gates run.
+  let normalizedSnapshot = submittedSnapshot
   if (preflightRow !== null) {
     await assertPrincipalCanWritePreflight(db, principal, preflightRow)
     const preflightWorkflow = rowToWorkflow(preflightRow)
+    // RFC-270 §2.3 — REHYDRATE BEFORE THE GATES.
+    //
+    // The read path hands a principal without `scripts:author` /
+    // `code-host-calls:author` a definition whose privileged fields are `***`
+    // (services/tokenRedaction.ts). Submitting that back verbatim — which the
+    // editor does on any autosave, including one caused by dragging an
+    // unrelated node — would change the sensitive projection and 403, breaking
+    // the promise `scriptAuthorGate.ts` opens with: an author without the point
+    // can still move nodes and edit unrelated parts of the same workflow.
+    //
+    // So the masked fields are restored from the stored row, by LENS and never
+    // by value (see `rehydratePrivilegedNodes`). What is NOT restored — a new
+    // privileged node, a deleted one, its inbound wiring, its wrapper placement
+    // — still reaches the gates unchanged and is still refused.
+    const rehydratedDefinition = rehydratePrivilegedNodes(
+      submittedSnapshot.definition,
+      preflightWorkflow.definition,
+      principal.kind === 'actor'
+        ? privilegedNodeLensFor(principal.actor)
+        : PRIVILEGED_LENS_TRANSPARENT,
+    )
+    if (rehydratedDefinition !== submittedSnapshot.definition) {
+      normalizedSnapshot = { ...submittedSnapshot, definition: rehydratedDefinition }
+    }
     assertChangedWorkflowName(preflightWorkflow.name, normalizedSnapshot.name)
     // RFC-253 — the save path's script gate. Compares the sensitive projection
     // of the STORED definition against the submitted one, so an author without
@@ -435,6 +464,13 @@ export async function prepareWorkflowSave(
     ])
     fenceableAgentIds = new Set(resolved.byToken.values())
   }
+  // Byte projections are taken from the REHYDRATED snapshot, not the submitted
+  // one: everything downstream (receipt hash, logical-same short circuit, the
+  // stored `definition` column) has to describe what is actually written. Pure
+  // computations, so moving them below the preflight block changes no error
+  // precedence — only which definition they describe.
+  const submittedBytes = serializeWorkflowEditableSnapshotV1(normalizedSnapshot)
+  const definitionStorage = serializeWorkflowDefinitionStorageV1(normalizedSnapshot.definition)
   return {
     id,
     principal,
