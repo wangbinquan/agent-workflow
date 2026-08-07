@@ -125,8 +125,13 @@ ambient auth 由 verified 路径镜像。跑一整条业务节点。
 实时扫描竞争，在启动期（image-map 与运行期访问都算）杀进程。**exec 层挡不住**（`--version`
 预热 + 有界重生 spawn 组合紧循环压测只到 ~50%，故未落地、已回退，防脏敏感 launcher）。
 **正解**：①ops —— 对 `~/.agent-workflow` 密封根加 Windows Defender 排除目录（零代码、彻底，
-提交 `a4b9ea43` 已写入 `docs/sandbox.md` 部署要求）；②架构 —— 密封二进制按内容摘要缓存
-复用、不每次重拷（RFC-227「per-run seal」不变量的设计级变更，待专门 RFC）。紧循环压测会
+提交 `a4b9ea43` 已写入 `docs/sandbox.md` 部署要求）。**～～②架构：内容摘要缓存复用～～
+续 2026-08-07（T41）真机证伪并撤销**：按源 digest 缓存复用密封二进制（每次 exec 前 + spawn 前
+重哈希＝安全等价，已实现、四门全绿、POSIX 逐字零影响、win32-gated）**不解本缺陷**——反复 exec
+**同一份已落盘缓存 `.exe`** 仍 ~⅕–⅓ 零输出秒退（8 次探针 5 listen / 3 `EXITED-NO-LISTEN
+lines=0`；**密封目录 vs 未密封目录 4/5 vs 4/5 同率** ⇒ DACL/位置/名皆非因），即 Defender 每次
+加载期都拦杀、非「首次扫净后免扫」；有界 respawn 4 次也只到 ~90%（连杀漏网）。**故唯一确定解
+只剩 ①ops Defender 排除**（已在 `docs/sandbox.md`）。紧循环压测会
 高估生产失败率（生产任务间隔拉开，模型调用本身数十秒）。详录见 `docs/dev-gotchas.md` +
 `docs/audit-backlog.md`。
 

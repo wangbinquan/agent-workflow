@@ -118,10 +118,13 @@ agent-workflow sandbox --help
      Defender 实时扫描会与「拷完即 exec」竞争，间歇把服务端进程杀在启动期（exit
      `5=ACCESS_DENIED`、零输出 → `bootstrap-failed`；真机紧循环压测下可达约半数）。这是
      AV 与构建产物的标准冲突，**部署时对 `~/.agent-workflow` 加 Defender 排除目录**即可
-     根除（`Add-MpPreference -ExclusionPath`，需管理员）。代码侧的治本方向是按内容摘要
-     缓存复用密封二进制、不每次重拷（Defender 只扫一次），属 RFC-227「per-run seal」不
-     变量的设计级变更，见 `docs/audit-backlog.md` 与 `docs/dev-gotchas.md` 详录；exec 层
-     的预热/重生 spawn 实测只到 ~50%（Defender 也杀运行期访问，非只 image-map），不采纳。
+     根除（`Add-MpPreference -ExclusionPath '~/.agent-workflow'`，需管理员；可加
+     `-ExclusionProcess 'opencode.exe'` 作补充）。**这是唯一确定解——代码侧无可靠替代**：
+     曾设想「按内容摘要缓存复用密封二进制、让 Defender 只扫一次」，续 2026-08-07（RFC-254
+     T41）真机**证伪并撤销**——反复 exec 同一份已落盘缓存 `.exe` 仍 ~⅕–⅓ 零输出秒退，密封
+     目录 vs 未密封目录同率，即 Defender 每次加载期都拦杀、非「首次扫净后免扫」；exec 层
+     预热/重生 spawn 实测只到 ~50–90%（Defender 也杀运行期访问、且会连杀一簇），均不采纳。
+     详录见 `docs/dev-gotchas.md` §跨平台 T41 与 `docs/audit-backlog.md`。
 
 - 进程侧信道（ps / /proc）不遮蔽——凭据已不入 argv/env，残余为低敏路径信息。
 - `off` / 降级态与 RFC-205 之前等同（威胁未消除，仅可见）。
