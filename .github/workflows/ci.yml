@@ -406,19 +406,18 @@ jobs:
 
   build-binary:
     name: Build production binary + e2e artifact (smoke)
-    # Order the binary build + e2e AFTER the fast, cheap checks and the full test
-    # matrix so their logs read top-down and a green run costs the same as before.
-    # Each is a separate job now that the old monolithic `check` was split for
-    # sharding.
-    needs: [lint, test-backend, test-frontend]
-    # …but `needs` alone SKIPS this job when any dependency is red, and a skipped
-    # guard is indistinguishable from a guard that ran clean. This repository is
-    # developed main-only with several sessions pushing concurrently, so an
-    # unrelated backend shard going red is routine — and it used to silently take
-    # the binary smoke, the e2e suite, the a11y sweep and the focus-ring geometry
-    # audit down with it (RFC-206 was signed off on a run where its own new guard
-    # never executed). `!cancelled()` keeps the ordering while letting these run
-    # anyway; a superseding push still cancels the whole run as before.
+    # This job consumes only the checkout; it does not consume lint/test output.
+    # Keep it at the workflow root so compilation overlaps the unit matrices and
+    # e2e can start as soon as its artifact exists. Six successful main runs on
+    # 2026-08-07 showed the old test -> build -> e2e waterfall spending 397-458s
+    # after the unit matrix had already finished, stretching 6-7 minutes of work
+    # into 12-15 minutes without adding signal. Do not add a unit-job `needs:`
+    # edge here merely to order the Actions UI.
+    #
+    # `!cancelled()` preserves the guard-audit contract if dependencies are added
+    # for a real artifact reason later: an unrelated red shard must not silently
+    # skip binary smoke, e2e, a11y, or focus-ring geometry. A superseding push
+    # still cancels the whole run via workflow concurrency.
     # See design/test-guard-audit-2026-07-21 §2 逃逸机制⑥.
     if: ${{ !cancelled() }}
     strategy:

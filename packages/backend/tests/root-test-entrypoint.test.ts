@@ -546,6 +546,17 @@ describe('repository test entrypoint', () => {
     }
   })
 
+  test('binary build overlaps unit matrices instead of serializing the CI critical path', () => {
+    const buildBinaryJob = workflowJob(ciWorkflow, 'build-binary')
+    const e2eJob = workflowJob(ciWorkflow, 'e2e')
+
+    // build-binary consumes only the checkout, so waiting for lint/backend/
+    // frontend adds their complete wall time before the build and e2e can even
+    // start. Keep only the real artifact edge: e2e -> build-binary.
+    expect(buildBinaryJob).not.toMatch(/^ {4}needs:/m)
+    expect(e2eJob).toContain('needs: build-binary')
+  })
+
   test('OpenCode admission and CI define no version floor or ceiling', () => {
     const opencodeUtil = readFileSync(
       resolve(root, 'packages', 'backend', 'src', 'util', 'opencode.ts'),
