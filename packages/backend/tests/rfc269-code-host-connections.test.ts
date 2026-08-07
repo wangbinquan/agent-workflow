@@ -26,7 +26,9 @@ import {
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
 
-const SECRET_TOKEN = 'glpat-SUPERSECRETVALUE9999'
+// 夹具**不能**长得像真 PAT：`glpat-` / `ghp_` 前缀会命中 gitleaks 的
+// gitlab-pat / generic-api-key 规则，让 CI 的密钥扫描红（本地门禁不跑它）。
+const SECRET_TOKEN = 'aw-fixture-not-a-real-token-9999'
 
 type FetchStub = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -190,7 +192,7 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
     expect(svc.get('gitlab').lastTest?.ok).toBe(true)
     await call('PUT', '/api/code-hosts/gitlab', {
       baseUrl: 'https://gitlab.corp.example/api/v4',
-      token: 'glpat-ROTATED0000',
+      token: 'aw-fixture-rotated-0000',
     })
     expect(svc.get('gitlab').lastTest).toBeNull()
   })
@@ -223,19 +225,28 @@ describe('RFC-269 凭据面 — base URL 形态', () => {
       (
         await call('PUT', '/api/code-hosts/github', {
           baseUrl: 'https://ghes.corp.example/api/v3',
-          token: 'ghp_x1234',
+          token: 'aw-fixture-gh-1234',
         })
       ).status,
     ).toBe(200)
   })
 
-  test('未知 provider 404', async () => {
+  test('未知 provider 404 并点名错误码', async () => {
     const { call } = await harness()
     const res = await call('PUT', '/api/code-hosts/gitea', {
       baseUrl: 'https://x/api/v1',
       token: 't',
     })
     expect(res.status).toBe(404)
+    expect(((await res.json()) as { code: string }).code).toBe('code-host-provider-unknown')
+  })
+
+  test('请求体形状不合法 ⇒ code-host-connection-invalid', async () => {
+    const { call } = await harness()
+    // baseUrl 缺失 + 多余键：schema 层拒绝，与「base URL 形态不对」是两条不同的错误。
+    const res = await call('PUT', '/api/code-hosts/gitlab', { nope: 1 })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('code-host-connection-invalid')
   })
 })
 

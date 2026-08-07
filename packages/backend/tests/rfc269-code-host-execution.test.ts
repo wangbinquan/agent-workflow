@@ -16,7 +16,8 @@ import { executeCodeHostCall, type CodeHostCallSpec } from '../src/services/code
 import { resolveProjectFallback } from '../src/services/codeHost/project'
 import { buildCodeHostUrl } from '../src/services/codeHost/url'
 
-const TOKEN = 'glpat-SECRETTOKENVALUE1234'
+// 同 connections 测试：夹具刻意不带 glpat- / ghp_ 前缀（gitleaks 规则）。
+const TOKEN = 'aw-fixture-not-a-real-token-1234'
 const GL_BASE = 'https://gitlab.corp.example/api/v4'
 const GH_BASE = 'https://api.github.com'
 
@@ -65,7 +66,7 @@ function ghDeps(
   overrides: Partial<Parameters<typeof executeCodeHostCall>[1]> = {},
 ): Parameters<typeof executeCodeHostCall>[1] {
   return {
-    connection: { provider: 'github', baseUrl: GH_BASE, token: 'ghp_SECRET5678' },
+    connection: { provider: 'github', baseUrl: GH_BASE, token: 'aw-fixture-gh-5678' },
     ctx: { ports: {}, trigger: null },
     projectFallback: { ok: true, value: 'octo/repo' },
     sleep: async () => {},
@@ -106,7 +107,7 @@ describe('RFC-269 请求组装 —— 两家的真实端点', () => {
     expect(seen[0]!.url).toBe(
       'https://api.github.com/repos/octo/repo/pulls/7/comments/9911/replies',
     )
-    expect(seen[0]!.headers.authorization).toBe('Bearer ghp_SECRET5678')
+    expect(seen[0]!.headers.authorization).toBe('Bearer aw-fixture-gh-5678')
     expect(seen[0]!.headers['x-github-api-version']).toBe('2022-11-28')
   })
 
@@ -387,7 +388,7 @@ describe('RFC-269 重定向与凭据', () => {
     )
     expect(out.ok).toBe(true)
     expect(seen).toHaveLength(2)
-    expect(seen[0]!.headers.authorization).toBe('Bearer ghp_SECRET5678')
+    expect(seen[0]!.headers.authorization).toBe('Bearer aw-fixture-gh-5678')
     // 关键：签名 URL 自带凭据，把我们的 token 送到第三方主机就是凭据外泄。
     expect(seen[1]!.headers.authorization).toBeUndefined()
     expect(seen[1]!.url).toContain('githubusercontent.com')
