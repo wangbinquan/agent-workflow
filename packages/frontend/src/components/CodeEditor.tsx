@@ -122,6 +122,8 @@ export interface CodeEditorProps {
   onChange?: (value: string) => void
   language: CodeEditorLanguage
   readOnly?: boolean
+  /** Fill the height of a flex/grid parent instead of using line-count sizing. */
+  fill?: boolean
   /** Minimum visible height, in lines. */
   minLines?: number
   /** Maximum height before the editor scrolls internally, in lines. */
@@ -138,6 +140,7 @@ export function CodeEditor({
   onChange,
   language,
   readOnly = false,
+  fill = false,
   minLines = 8,
   maxLines = 32,
   placeholder: placeholderText,
@@ -146,6 +149,11 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
+  // A controlled-value reconciliation is not a user edit. This guard is
+  // especially load-bearing when two views show the same buffer (RFC-267's
+  // inline + full-screen script editors): without it, one user's keystroke in
+  // one view is echoed by the other view as a second onChange/history update.
+  const reconcilingValueRef = useRef(false)
   // Keep the latest onChange reachable without rebuilding the editor on every
   // parent render (a rebuild would drop the cursor and the undo history).
   const onChangeRef = useRef(onChange)
@@ -168,19 +176,31 @@ export function CodeEditor({
       ...(placeholderText === undefined ? [] : [placeholder(placeholderText)]),
       EditorState.readOnly.of(readOnly),
       EditorView.editable.of(!readOnly),
-      EditorView.theme({
-        '.cm-scroller': {
-          minHeight: `${minLines * LINE_HEIGHT_PX}px`,
-          maxHeight: `${maxLines * LINE_HEIGHT_PX}px`,
-          overflow: 'auto',
-        },
-      }),
+      EditorView.theme(
+        fill
+          ? {
+              '&': { height: '100%', minHeight: '0' },
+              '.cm-scroller': {
+                height: '100%',
+                minHeight: '0',
+                maxHeight: 'none',
+                overflow: 'auto',
+              },
+            }
+          : {
+              '.cm-scroller': {
+                minHeight: `${minLines * LINE_HEIGHT_PX}px`,
+                maxHeight: `${maxLines * LINE_HEIGHT_PX}px`,
+                overflow: 'auto',
+              },
+            },
+      ),
       EditorView.updateListener.of((update) => {
-        if (!update.docChanged) return
+        if (!update.docChanged || reconcilingValueRef.current) return
         onChangeRef.current?.(update.state.doc.toString())
       }),
     ],
-    [language, readOnly, minLines, maxLines, placeholderText],
+    [language, readOnly, fill, minLines, maxLines, placeholderText],
   )
 
   useEffect(() => {
@@ -207,16 +227,22 @@ export function CodeEditor({
     if (view === null) return
     const current = view.state.doc.toString()
     if (current === value) return
-    view.dispatch({ changes: { from: 0, to: current.length, insert: value } })
+    reconcilingValueRef.current = true
+    try {
+      view.dispatch({ changes: { from: 0, to: current.length, insert: value } })
+    } finally {
+      reconcilingValueRef.current = false
+    }
   }, [value])
 
   return (
     <div
-      className={`code-editor${readOnly ? ' code-editor--readonly' : ''}`}
+      className={`code-editor${readOnly ? ' code-editor--readonly' : ''}${fill ? ' code-editor--fill' : ''}`}
       ref={hostRef}
       data-testid={testId}
       data-language={language}
       data-readonly={readOnly ? 'true' : 'false'}
+      data-fill={fill ? 'true' : 'false'}
     />
   )
 }

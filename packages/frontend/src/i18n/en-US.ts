@@ -4954,6 +4954,8 @@ export const enUS: Resources = {
     sectionCode: 'Script',
     body: 'Script body',
     bodyHint: 'Runs in the task worktree. The platform never substitutes anything into this text.',
+    fullscreenEdit: 'Edit full screen',
+    fullscreenView: 'View full screen',
     retryWarning:
       'A failed run is retried automatically. File changes are rolled back with the isolated worktree, but external side effects (HTTP calls, notifications) are not — make non-idempotent scripts guard themselves.',
     sectionInputs: 'Inputs',

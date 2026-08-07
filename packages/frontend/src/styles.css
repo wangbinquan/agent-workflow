@@ -22881,6 +22881,57 @@ button.status-chip {
   border-radius: var(--radius-md);
 }
 
+.code-editor--fill,
+.code-editor--fill .cm-editor {
+  height: 100%;
+  min-height: 0;
+}
+
+.script-code-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-2);
+}
+
+.script-code-editor__actions .btn {
+  gap: var(--space-1);
+}
+
+.script-code-editor__actions svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.script-code-editor-dialog .dialog__body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.script-code-editor-dialog__editor {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 720px) {
+  .dialog__overlay:has(> .script-code-editor-dialog) {
+    padding: 0;
+  }
+
+  .dialog--full .dialog__panel.script-code-editor-dialog {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    padding-top: max(var(--space-4), env(safe-area-inset-top));
+    padding-right: max(var(--space-4), env(safe-area-inset-right));
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+    padding-left: max(var(--space-4), env(safe-area-inset-left));
+  }
+}
+
 .canvas-node__script-badges {
   display: flex;
   flex-wrap: wrap;

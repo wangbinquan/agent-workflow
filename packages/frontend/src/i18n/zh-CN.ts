@@ -4370,6 +4370,8 @@ export interface Resources {
     sectionCode: string
     body: string
     bodyHint: string
+    fullscreenEdit: string
+    fullscreenView: string
     retryWarning: string
     sectionInputs: string
     noInputs: string
@@ -9656,6 +9658,8 @@ export const zhCN: Resources = {
     sectionCode: '脚本',
     body: '脚本正文',
     bodyHint: '在任务工作区里执行。平台不会往这段文本里替换任何内容。',
+    fullscreenEdit: '全屏编辑',
+    fullscreenView: '全屏查看',
     retryWarning:
       '失败会自动重试。文件改动随隔离工作区一起回滚，但外部副作用（HTTP 调用、通知）不会——非幂等的脚本要自己做幂等保护。',
     sectionInputs: '输入',

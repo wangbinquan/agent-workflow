@@ -141,6 +141,11 @@ const OVERLAY_CALLSITES = {
 
   // RFC-239: the changes pane's deep views (graph/impact/call-chain/deps) overlay.
   'components/changes/DrilldownOverlay.tsx': { family: 'task-execution', count: 1 },
+  // RFC-267: script bodies can expand from the inspector into a full-screen editor.
+  'components/canvas/inspector/ScriptEdit.tsx': {
+    family: 'workflow-authoring',
+    count: 1,
+  },
   'components/canvas/WorkflowCanvas.tsx': { family: 'workflow-authoring', count: 1 },
   'components/workflow-editor/ConnectionDialog.tsx': {
     family: 'workflow-authoring',

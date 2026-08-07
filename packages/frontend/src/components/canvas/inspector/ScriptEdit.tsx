@@ -24,6 +24,7 @@
 //      shared oracles the executor obeys and are pure display state: they never
 //      enter `node.script`, the history stack, or a save.
 
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   buildScriptEnvelopeSnippet,
@@ -45,6 +46,7 @@ import {
 } from '@agent-workflow/shared'
 import { ChipsInput } from '@/components/ChipsInput'
 import { CodeEditor, type CodeEditorLanguage } from '@/components/CodeEditor'
+import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { Segmented } from '@/components/Segmented'
@@ -70,6 +72,8 @@ const EDITOR_LANGUAGE: Record<ScriptLanguage, CodeEditorLanguage> = {
 export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
   const { t } = useTranslation()
   const canAuthor = usePermission('scripts:author')
+  const [fullscreenOpen, setFullscreenOpen] = useState(false)
+  const fullscreenTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   const language = readScriptLanguage(node) ?? 'python'
   const body =
@@ -97,6 +101,17 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
   function update(patch: Record<string, unknown>, meta: InspectorChangeMeta) {
     onPatch({ ...(node as Record<string, unknown>), ...patch } as unknown as WorkflowNode, meta)
   }
+
+  function updateScript(next: string) {
+    update(
+      { script: next },
+      continuousNodeInspectorChange(node.id, 'script', t('scriptInspector.body')),
+    )
+  }
+
+  const fullscreenLabel = t(
+    canAuthor ? 'scriptInspector.fullscreenEdit' : 'scriptInspector.fullscreenView',
+  )
 
   return (
     <div className="inspector-sections">
@@ -140,19 +155,57 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
             required
             group
           >
+            <div className="script-code-editor__actions">
+              <button
+                ref={fullscreenTriggerRef}
+                type="button"
+                className="btn btn--xs btn--ghost"
+                aria-haspopup="dialog"
+                aria-expanded={fullscreenOpen}
+                data-testid="script-body-fullscreen-trigger"
+                onClick={() => setFullscreenOpen(true)}
+              >
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path
+                    d="M7 3H3v4m10-4h4v4M7 17H3v-4m10 4h4v-4"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {fullscreenLabel}
+              </button>
+            </div>
             <CodeEditor
               value={body}
               language={EDITOR_LANGUAGE[language]}
               readOnly={!canAuthor}
               aria-label={t('scriptInspector.body')}
               data-testid="script-body-editor"
-              onChange={(next) =>
-                update(
-                  { script: next },
-                  continuousNodeInspectorChange(node.id, 'script', t('scriptInspector.body')),
-                )
-              }
+              onChange={updateScript}
             />
+            <Dialog
+              open={fullscreenOpen}
+              onClose={() => setFullscreenOpen(false)}
+              title={fullscreenLabel}
+              size="full"
+              triggerRef={fullscreenTriggerRef}
+              panelClassName="script-code-editor-dialog"
+              data-testid="script-body-fullscreen-dialog"
+            >
+              <div className="script-code-editor-dialog__editor">
+                <CodeEditor
+                  value={body}
+                  language={EDITOR_LANGUAGE[language]}
+                  readOnly={!canAuthor}
+                  fill
+                  aria-label={t('scriptInspector.body')}
+                  data-testid="script-body-editor-fullscreen"
+                  onChange={updateScript}
+                />
+              </div>
+            </Dialog>
           </Field>
         </InspectorFieldAnchor>
         <p className="inspector-hint" data-testid="script-retry-warning">
