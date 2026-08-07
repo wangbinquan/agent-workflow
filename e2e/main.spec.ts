@@ -206,7 +206,7 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   // Step 3 — task name + declared inputs.
   await page.fill('[data-testid="wizard-task-name"]', 'e2e-launch-task')
   const topicInput = page
-    .locator('label.form-field', { hasText: 'Topic (topic)' })
+    .locator('label.form-field', { hasText: 'Topic' })
     .locator('input.form-input')
   await expect(topicInput).toBeVisible({ timeout: 10_000 })
   await topicInput.fill('e2e-test')
@@ -497,7 +497,7 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
   // Step 3 — name + topic.
   await page.fill('[data-testid="wizard-task-name"]', 'e2e-url-task')
   await page
-    .locator('label.form-field', { hasText: 'Topic (topic)' })
+    .locator('label.form-field', { hasText: 'Topic' })
     .locator('input.form-input')
     .fill('rfc-024-test')
   await page.getByTestId('stepper-next').click()

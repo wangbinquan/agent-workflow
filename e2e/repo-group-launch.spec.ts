@@ -268,7 +268,7 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     await page.getByTestId('stepper-next').click()
     await page.fill('[data-testid="wizard-task-name"]', 'rfc248-e2e-task')
     await page
-      .locator('label.form-field', { hasText: 'Topic (topic)' })
+      .locator('label.form-field', { hasText: 'Topic' })
       .locator('input.form-input')
       .fill('repo-group-e2e')
 
@@ -539,7 +539,7 @@ test.describe('RFC-248 —— 仓库组多仓启动', () => {
     await page.getByTestId('stepper-next').click()
     await page.getByTestId('wizard-task-name').fill('rfc249-full-chain')
     await page
-      .locator('label.form-field', { hasText: 'Topic (topic)' })
+      .locator('label.form-field', { hasText: 'Topic' })
       .locator('input.form-input')
       .fill('directory-tree')
     await page.getByTestId('stepper-next').click()

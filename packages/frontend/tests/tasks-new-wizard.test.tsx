@@ -424,8 +424,13 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     // Step 3 — name + required input gate Next.
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'T1' } })
-    // The required 'topic' input — Field wraps children in <label>.
-    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+    // User feedback 2026-08-07: the authored label is the user-facing parameter
+    // name. Do not append its internal key — the red * already conveys required.
+    const topicInput = await screen.findByLabelText(/Topic/)
+    const topicLabel = topicInput.closest('label')?.querySelector('.form-field__label')
+    expect(topicLabel?.textContent).toBe('Topic *')
+    expect(topicLabel?.querySelector('.form-field__required')).not.toBeNull()
+    fireEvent.change(topicInput, {
       target: { value: 'hello' },
     })
     await waitFor(() =>
@@ -473,7 +478,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       },
     })
     // The shared cache is display-only until this mount's forced fetch wins.
-    expect(screen.queryByLabelText(/Topic \(topic\)/)).toBeNull()
+    expect(screen.queryByLabelText(/Topic/)).toBeNull()
     freshDetail.resolve(jsonResponse({ ...WF_DETAIL, version: 2 }))
     const mismatch = await screen.findByTestId('wizard-workflow-version-mismatch')
     expect(mismatch.textContent).toMatch(/v1/)
@@ -483,7 +488,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     // fields, and the fresh mismatch keeps progression blocked.
     next()
     fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'T1' } })
-    expect(screen.queryByLabelText(/Topic \(topic\)/)).toBeNull()
+    expect(screen.queryByLabelText(/Topic/)).toBeNull()
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
 
     fireEvent.click(screen.getByTestId('wizard-workflow-version-recover'))
@@ -518,8 +523,8 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     const rendered = await renderWizard('/tasks/new?kind=workflow&workflow=wf-1&workflowVersion=1')
 
     next()
-    const removed = (await screen.findByLabelText(/Removed text \(removed\)/)) as HTMLInputElement
-    const changed = screen.getByLabelText(/Changed text \(changed\)/) as HTMLInputElement
+    const removed = (await screen.findByLabelText(/Removed text/)) as HTMLInputElement
+    const changed = screen.getByLabelText(/Changed text/) as HTMLInputElement
     fireEvent.change(screen.getByTestId('wizard-task-name'), { target: { value: 'T1' } })
     fireEvent.change(removed, { target: { value: 'keep removed value' } })
     fireEvent.change(changed, { target: { value: 'keep text kind' } })
@@ -553,15 +558,15 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
 
     // No silent reseed: deleted fields, the old widget kind, typed bytes and
     // non-serializable File stay visible until the user explicitly recovers.
-    expect((screen.getByLabelText(/Removed text \(removed\)/) as HTMLInputElement).value).toBe(
+    expect((screen.getByLabelText(/Removed text/) as HTMLInputElement).value).toBe(
       'keep removed value',
     )
-    const preservedChanged = screen.getByLabelText(/Changed text \(changed\)/) as HTMLInputElement
+    const preservedChanged = screen.getByLabelText(/Changed text/) as HTMLInputElement
     expect(preservedChanged.tagName).toBe('INPUT')
     expect(preservedChanged.value).toBe('keep text kind')
     expect(screen.getByText('artifact.txt')).toBeTruthy()
-    expect(screen.queryByLabelText(/Changed enum \(changed\)/)).toBeNull()
-    expect(screen.queryByLabelText(/Asset text \(asset\)/)).toBeNull()
+    expect(screen.queryByLabelText(/Changed enum/)).toBeNull()
+    expect(screen.queryByLabelText(/Asset text/)).toBeNull()
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
   })
 
@@ -609,7 +614,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     await renderWizard('/tasks/new?kind=workflow&workflow=wf-1')
     next()
     fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'T1' } })
-    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+    fireEvent.change(await screen.findByLabelText(/Topic/), {
       target: { value: 'hello' },
     })
     await waitFor(() =>
@@ -624,8 +629,8 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     expect(postedBodies[0]).toMatchObject({ expectedWorkflowVersion: 1 })
 
     fireEvent.click(screen.getByTestId('wizard-workflow-submit-version-recover'))
-    const review = (await screen.findByLabelText(/Review note \(review\)/)) as HTMLInputElement
-    expect((screen.getByLabelText(/Topic \(topic\)/) as HTMLInputElement).value).toBe('hello')
+    const review = (await screen.findByLabelText(/Review note/)) as HTMLInputElement
+    expect((screen.getByLabelText(/Topic/) as HTMLInputElement).value).toBe('hello')
     expect(screen.queryByTestId('wizard-workflow-submit-version-error')).toBeNull()
     fireEvent.change(review, { target: { value: 'checked' } })
     next()
@@ -835,7 +840,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     fireEvent.change(await screen.findByTestId('wizard-task-name'), {
       target: { value: 'scheduled workflow run' },
     })
-    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+    fireEvent.change(await screen.findByLabelText(/Topic/), {
       target: { value: 'scheduled topic' },
     })
     await waitFor(() =>
@@ -1109,7 +1114,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     await renderWizard('/tasks/new?kind=workflow&workflow=wf-1')
     next()
     fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'T1' } })
-    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+    fireEvent.change(await screen.findByLabelText(/Topic/), {
       target: { value: 'hello' },
     })
     await waitFor(() =>
@@ -1422,7 +1427,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     fireEvent.change(await screen.findByTestId('wizard-task-name'), {
       target: { value: 'Version-fenced run' },
     })
-    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+    fireEvent.change(await screen.findByLabelText(/Topic/), {
       target: { value: 'Keep this input' },
     })
     await waitFor(() => {
@@ -1451,9 +1456,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     expect((screen.getByTestId('wizard-task-name') as HTMLInputElement).value).toBe(
       'Version-fenced run',
     )
-    expect((screen.getByLabelText(/Topic \(topic\)/) as HTMLInputElement).value).toBe(
-      'Keep this input',
-    )
+    expect((screen.getByLabelText(/Topic/) as HTMLInputElement).value).toBe('Keep this input')
   })
 
   test('RFC-250: a same actor/flow/source draft is offered and restored without losing material values', async () => {

@@ -2309,7 +2309,7 @@ function TaskWizardPage() {
                 inputDefs.map((def) => (
                   <Field
                     key={def.key}
-                    label={def.label === def.key ? def.key : `${def.label} (${def.key})`}
+                    label={def.label}
                     required={def.required === true}
                     hint={def.description ?? portKindHint(def, t)}
                     error={
