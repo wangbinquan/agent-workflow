@@ -24,6 +24,8 @@ import {
   DeleteWorkflowSchema,
   serializeWorkflowDefinitionStorageV1,
   serializeWorkflowEditableSnapshotV1,
+  normalizeResourceDisplayName,
+  RESOURCE_DISPLAY_NAME_MSG,
   UpdateWorkflowSchema,
   WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
@@ -68,6 +70,13 @@ import { assertNotBuiltin } from './systemResources'
 import { validateWorkflowById } from './workflow.validator'
 
 type WorkflowRow = typeof workflows.$inferSelect
+
+/**
+ * RFC-264 — one wording behind the `workflow-name-invalid` code, shared by the
+ * save-path rename gate and YAML import so the two can never describe
+ * different rules.
+ */
+export const WORKFLOW_NAME_INVALID_MESSAGE = `workflow ${RESOURCE_DISPLAY_NAME_MSG}`
 
 export interface WorkflowWriteInTxGuard {
   /**
@@ -281,8 +290,11 @@ export async function copyWorkflow(
       .where(eq(workflows.ownerUserId, actor.user.id))
       .all()
       .map((row) => row.name)
-    const name = nextResourceCopyName(source.name, occupiedNames, 'workflow')
-    WorkflowNameSchema.parse(name)
+    // RFC-264: persist the PARSED name — the schema is also the normalizer, so
+    // ignoring its output would store an unfolded copy name.
+    const name = WorkflowNameSchema.parse(
+      nextResourceCopyName(source.name, occupiedNames, 'workflow'),
+    )
     return insertWorkflowInTx(tx, {
       id: ulid(),
       name,
@@ -342,7 +354,14 @@ export async function prepareWorkflowSave(
       issues: parsed.error.issues,
     })
   }
-  const normalizedSnapshot = normalizeWorkflowSnapshot(parsed.data.snapshot)
+  // RFC-264: fold the submitted name (NFC / space runs / edges) BEFORE the
+  // snapshot bytes are taken, so what gets hashed into the receipt is exactly
+  // what gets stored. Only the WRITE path normalizes — `normalizeWorkflowSnapshot`
+  // is shared with the read/hash path, where a stored row must stay byte-faithful.
+  const normalizedSnapshot = normalizeWorkflowSnapshot({
+    ...parsed.data.snapshot,
+    name: normalizeResourceDisplayName(parsed.data.snapshot.name),
+  })
   assertCanonicalWorkflowAgentIds(normalizedSnapshot.definition)
   const submittedBytes = serializeWorkflowEditableSnapshotV1(normalizedSnapshot)
   const definitionStorage = serializeWorkflowDefinitionStorageV1(normalizedSnapshot.definition)
@@ -962,11 +981,9 @@ function assertChangedWorkflowName(currentName: string, submittedName: string): 
   if (currentName === submittedName) return
   const parsed = WorkflowNameSchema.safeParse(submittedName)
   if (!parsed.success) {
-    throw new ValidationError(
-      'workflow-name-invalid',
-      'workflow name must start with [a-z0-9] and contain only [a-z0-9_-] (max 128 chars)',
-      { issues: parsed.error.issues },
-    )
+    throw new ValidationError('workflow-name-invalid', WORKFLOW_NAME_INVALID_MESSAGE, {
+      issues: parsed.error.issues,
+    })
   }
 }
 

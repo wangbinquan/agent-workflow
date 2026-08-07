@@ -113,3 +113,41 @@ describe('RFC-253 T42 — script node form documented', () => {
     expect(doc).toContain('scripts:author') // apply-time permission gate
   })
 })
+
+// RFC-264 — the name rule the model is taught is now per-type. Before this,
+// one blanket `^[a-z0-9][a-z0-9_-]*$` line made the model emit English slugs
+// for workflows/workgroups even when the user wrote Chinese; those two types
+// carry human-readable names now, the other four still do not.
+describe('RFC-264 — per-type name rules in the payload tutorial', () => {
+  const doc = buildIntentDoc({
+    sessionTitle: 't',
+    turns: [],
+    currentDraftJson: null,
+    validationErrors: [],
+    pendingQuestions: [],
+    hiddenDependencyNote: null,
+    envelopeNonce: NONCE,
+    langDirective: '',
+  })
+
+  test('workflow / workgroup names may be written in the user’s own language', () => {
+    expect(doc).toMatch(/name.*for \*\*workflow \/ workgroup\*\*/)
+    expect(doc).toContain("USER'S OWN LANGUAGE")
+    expect(doc).toContain('代码审计流水线')
+    // The three constraints that still apply, so the model does not emit a
+    // name the shared schema will reject.
+    expect(doc).toMatch(/must not start with `_`/i)
+    expect(doc).toContain('128 characters')
+  })
+
+  test('agent / skill / mcp / plugin names are still ASCII slugs', () => {
+    expect(doc).toMatch(/name.*for \*\*agent \/ skill \/ mcp \/ plugin\*\*/)
+    expect(doc).toContain('^[a-z0-9][a-z0-9_-]*$')
+    // and the reason, so a future editor does not "unify" them away:
+    expect(doc).toContain('OpenCode agent key')
+  })
+
+  test('the blanket slug-for-everything rule is gone', () => {
+    expect(doc).not.toContain('`name`: machine slug matching')
+  })
+})

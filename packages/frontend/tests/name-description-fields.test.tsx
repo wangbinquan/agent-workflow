@@ -38,7 +38,11 @@ describe('NameDescriptionFields (shared metadata field pair)', () => {
     expect(screen.getByTestId('x-create-description')).toBeTruthy()
   })
 
-  test('inline error supersedes hint; pattern + description cap apply', () => {
+  // RFC-264 RE-JUDGEMENT: `namePattern` (native HTML validation) was removed
+  // with the slug rule — it validated the RAW input while the server validates
+  // the NORMALIZED one, so a trailing space showed a red field the server would
+  // have accepted. The inline `nameError` verdict is now the only judge.
+  test('inline error supersedes hint; description cap applies; no native pattern', () => {
     render(
       <NameDescriptionFields
         testidPrefix="x-rename"
@@ -47,7 +51,6 @@ describe('NameDescriptionFields (shared metadata field pair)', () => {
         name="Bad Name"
         onNameChange={() => {}}
         nameError="name invalid"
-        namePattern="[a-z0-9-]+"
         descriptionLabel="Description"
         description="d"
         onDescriptionChange={() => {}}
@@ -57,9 +60,9 @@ describe('NameDescriptionFields (shared metadata field pair)', () => {
     // Field renders error XOR hint — the error wins when both are supplied.
     expect(screen.getByText('name invalid')).toBeTruthy()
     expect(screen.queryByText('slug rules')).toBeNull()
-    expect((screen.getByTestId('x-rename-name') as HTMLInputElement).getAttribute('pattern')).toBe(
-      '[a-z0-9-]+',
-    )
+    expect(
+      (screen.getByTestId('x-rename-name') as HTMLInputElement).getAttribute('pattern'),
+    ).toBeNull()
     expect((screen.getByTestId('x-rename-description') as HTMLInputElement).maxLength).toBe(4096)
   })
 

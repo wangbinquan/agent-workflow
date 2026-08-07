@@ -4,6 +4,8 @@
 import {
   CreateMcpSchema,
   CreateWorkgroupSchema,
+  RESOURCE_DISPLAY_NAME_MAX,
+  RESOURCE_DISPLAY_NAME_RE,
   serializeWorkflowDefinitionStorageV1,
   type AclResourceType,
   type WorkflowDefinition,
@@ -114,12 +116,64 @@ describe('RFC-231 copy-name allocator', () => {
     expect(
       nextResourceCopyName('flow', ['flow-copy', 'flow-copy-2', 'flow-copy-4'], 'workflow'),
     ).toBe('flow-copy-3')
-    expect(nextResourceCopyName('Legacy Flow / 中文', [], 'workflow')).toBe('legacy-flow-copy')
-    expect(nextResourceCopyName('中文', [], 'workgroup')).toBe('workgroup-copy')
+    // RFC-264 EXPLICIT RE-JUDGEMENT of two assertions that used to read
+    // `'legacy-flow-copy'` and `'workgroup-copy'`: names are no longer folded
+    // to a lowercase ASCII slug, so a copy keeps the source's own characters
+    // instead of collapsing to the bare fallback.
+    expect(nextResourceCopyName('Legacy Flow / 中文', [], 'workflow')).toBe(
+      'Legacy Flow / 中文-copy',
+    )
+    expect(nextResourceCopyName('中文', [], 'workgroup')).toBe('中文-copy')
 
     const long = nextResourceCopyName('a'.repeat(128), [], 'workflow')
     expect(long).toHaveLength(128)
     expect(long.endsWith('-copy')).toBe(true)
+  })
+})
+
+// RFC-264 — copy names for human-readable (Chinese) resource names.
+// The `-copy` suffix family stays ASCII; everything before it is the source's
+// own text. The truncation case is a REGRESSION LOCK for a real bug the old
+// ASCII-only charset hid: `String.prototype.slice` cuts UTF-16 units, so
+// truncating an emoji/extension-B name split a surrogate pair into a lone
+// surrogate, which the RFC-264 rule rejects — i.e. "copy" would 500.
+describe('RFC-264 copy names keep their script', () => {
+  test('Chinese names copy and chain without collapsing to the fallback', () => {
+    expect(nextResourceCopyName('代码审计流水线', [], 'workflow')).toBe('代码审计流水线-copy')
+    expect(nextResourceCopyName('代码审计流水线-copy', [], 'workflow')).toBe(
+      '代码审计流水线-copy-2',
+    )
+    expect(nextResourceCopyName('代码审计流水线', ['代码审计流水线-copy'], 'workflow')).toBe(
+      '代码审计流水线-copy-2',
+    )
+    expect(nextResourceCopyName('审计 Pipeline v2', [], 'workgroup')).toBe('审计 Pipeline v2-copy')
+  })
+
+  test('the source name is folded before it becomes a copy base', () => {
+    expect(nextResourceCopyName('代码审计 ', [], 'workflow')).toBe('代码审计-copy')
+    expect(nextResourceCopyName('审计　流程', [], 'workflow')).toBe('审计 流程-copy')
+  })
+
+  test('an all-punctuation name still falls back instead of producing a bare suffix', () => {
+    expect(nextResourceCopyName('---', [], 'workflow')).toBe('workflow-copy')
+    expect(nextResourceCopyName('   ', [], 'workgroup')).toBe('workgroup-copy')
+  })
+
+  test('truncation cuts CODE POINTS — never half of a surrogate pair', () => {
+    const astral = '🎯'.repeat(RESOURCE_DISPLAY_NAME_MAX)
+    const copied = nextResourceCopyName(astral, [], 'workflow')
+    expect([...copied].length).toBeLessThanOrEqual(RESOURCE_DISPLAY_NAME_MAX)
+    expect(copied.endsWith('-copy')).toBe(true)
+    // The whole point: the result must still be a LEGAL name.
+    expect(RESOURCE_DISPLAY_NAME_RE.test(copied)).toBe(true)
+    expect(/\p{Cs}/u.test(copied)).toBe(false)
+  })
+
+  test('long Chinese names truncate to the code-point bound and stay legal', () => {
+    const long = '审'.repeat(RESOURCE_DISPLAY_NAME_MAX)
+    const copied = nextResourceCopyName(long, [], 'workflow')
+    expect([...copied].length).toBe(RESOURCE_DISPLAY_NAME_MAX)
+    expect(RESOURCE_DISPLAY_NAME_RE.test(copied)).toBe(true)
   })
 })
 
@@ -450,7 +504,11 @@ describe('RFC-231 Workflow exact copy', () => {
       },
       bob,
     )
-    expect(copied.name).toBe('legacy-flow-copy')
+    // RFC-264 EXPLICIT RE-JUDGEMENT (was 'legacy-flow-copy'): a copy no longer
+    // slug-folds the source name, so a legacy free-form row copies verbatim
+    // plus the ASCII `-copy` suffix. Still create-safe, which is what this
+    // assertion has always been about.
+    expect(copied.name).toBe('Legacy Flow / 中文-copy')
   })
 })
 

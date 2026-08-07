@@ -16,7 +16,7 @@ import type {
   WorkflowDraftSnapshot,
   WorkflowValidationReceipt,
 } from '@agent-workflow/shared'
-import { buildNodeAgentLookup } from '@agent-workflow/shared'
+import { buildNodeAgentLookup, normalizeResourceDisplayName } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { EditorPaletteContent, EditorSidebar } from '@/components/canvas/EditorSidebar'
@@ -1302,7 +1302,10 @@ export function WorkflowEditorLoaded({
             controller.commit(
               {
                 ...controller.state.local,
-                name: renameName,
+                // RFC-264: commit the FOLDED name — the server folds on write,
+                // so keeping the raw value would leave the draft permanently
+                // "dirty" against the persisted revision.
+                name: normalizeResourceDisplayName(renameName),
                 description: renameDescription,
               },
               {
@@ -1345,7 +1348,8 @@ export function WorkflowEditorLoaded({
           onCreate={() => {
             if (copySnapshot === null || !copyCanCreate) return
             copyCreate.mutate({
-              name: copyName,
+              // RFC-264: send the FOLDED name (what the server will store).
+              name: normalizeResourceDisplayName(copyName),
               description: copyDescription,
               definition: copySnapshot.definition,
             })

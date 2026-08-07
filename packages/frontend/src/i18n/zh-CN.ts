@@ -7142,7 +7142,7 @@ export const zhCN: Resources = {
     cardKind: '工作流',
     newButton: '+ 新建工作流',
     createButton: '创建工作流',
-    fieldNameHint: '小写字母 / 数字开头，只允许 [a-z0-9_-]，至多 128 字。',
+    fieldNameHint: '支持中文；不能以 _ 开头，不能含换行等控制字符，至多 128 字。',
     importButton: '导入 YAML',
     emptyList: '还没有工作流。',
     emptyDescription: '从一个清晰的自动化流程开始，之后可继续编辑节点与连接。',
@@ -7178,7 +7178,7 @@ export const zhCN: Resources = {
     noDescription: '（未填写描述）',
     errors: {
       nameRequired: '名称必填。',
-      nameInvalid: '名称须以小写字母 / 数字开头，只允许 [a-z0-9_-]，长度 ≤ 128。',
+      nameInvalid: '名称不能以 _ 开头，不能含换行 / 制表符等控制字符，长度 ≤ 128 字。',
     },
   },
   // RFC-164 — 工作组资源页（列表 + 快速新建弹窗 / 详情管理页）。
@@ -7209,7 +7209,7 @@ export const zhCN: Resources = {
     sectionMembers: '成员',
     sectionSwitches: '协作开关',
     fieldName: '名称',
-    fieldNameHint: '小写字母 / 数字开头，只允许 [a-z0-9_-]，至多 128 字。',
+    fieldNameHint: '支持中文；不能以 _ 开头，不能含换行等控制字符，至多 128 字。',
     fieldDescription: '描述',
     fieldInstructions: '工作组章程',
     fieldInstructionsHint: '可选。每一轮都会注入给每个成员的公共指令。',
@@ -7447,7 +7447,7 @@ export const zhCN: Resources = {
     },
     errors: {
       nameRequired: '名称必填。',
-      nameInvalid: '名称须以小写字母 / 数字开头，只允许 [a-z0-9_-]，长度 ≤ 128。',
+      nameInvalid: '名称不能以 _ 开头，不能含换行 / 制表符等控制字符，长度 ≤ 128 字。',
       agentNameRequired: 'agent 成员必须选择代理。',
       userRequired: '人类成员必须选择平台用户。',
       displayNameRequired: '显示名必填。',
@@ -10035,7 +10035,8 @@ export const zhCN: Resources = {
     'workflow-not-visible': '该工作流不可见（不存在或无权访问）。',
     'workflow-deleted': '该工作流已被删除。',
     'workflow-invalid': '工作流内容不合法。',
-    'workflow-name-invalid': '工作流名称须以小写字母 / 数字开头，只允许 [a-z0-9_-]，长度 ≤ 128。',
+    'workflow-name-invalid':
+      '工作流名称不能以 _ 开头，不能含换行 / 制表符等控制字符，长度 ≤ 128 字。',
     'workflow-version-conflict': '工作流已被他人更新，请刷新后重试。',
     'workflow-version-mismatch': '发起期间工作流发生了变化，请刷新后重新发起。',
     'workflow-in-use': '仍有任务引用该工作流，无法删除。',

@@ -6,9 +6,14 @@
 // the markup inline.
 //
 // The name input's required flag is baked in (both flows require a name); the
-// slug rules are unified (≤128) so maxLength defaults to 128. Everything a
-// caller legitimately varies — labels, hint, the inline name error, an optional
-// HTML pattern, the description cap — is a prop.
+// naming rules are unified (≤128) so maxLength defaults to 128. Everything a
+// caller legitimately varies — labels, hint, the inline name error, the
+// description cap — is a prop.
+//
+// RFC-264 removed the `namePattern` prop: native HTML validation judged the RAW
+// input while the server judges the NORMALIZED one, so a trailing space painted
+// the field red for a name the server would have accepted. The caller's
+// `nameError` verdict is the single judge.
 
 import { Field, TextInput } from '@/components/Form'
 
@@ -23,9 +28,6 @@ export interface NameDescriptionFieldsProps {
   onNameChange: (value: string) => void
   /** Translated inline error for a malformed (non-empty) name. */
   nameError?: string
-  /** Optional HTML validation pattern (strict-slug resources set it; the
-   *  grandfather-name workflow rename relies on nameError instead). */
-  namePattern?: string
   nameMaxLength?: number
   descriptionLabel: string
   description: string
@@ -41,7 +43,6 @@ export function NameDescriptionFields({
   name,
   onNameChange,
   nameError,
-  namePattern,
   nameMaxLength = 128,
   descriptionLabel,
   description,
@@ -56,7 +57,6 @@ export function NameDescriptionFields({
         <TextInput
           value={name}
           onChange={onNameChange}
-          pattern={namePattern}
           maxLength={nameMaxLength}
           required
           data-testid={`${testidPrefix}-name`}

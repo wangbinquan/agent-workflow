@@ -5,7 +5,11 @@
 // the React tree so the validation matrix is unit-testable without rendering.
 
 import type { CreateWorkflow, WorkflowDefinition } from '@agent-workflow/shared'
-import { CreateWorkflowSchema, WORKFLOW_NAME_RE } from '@agent-workflow/shared'
+import {
+  CreateWorkflowSchema,
+  isValidResourceDisplayName,
+  normalizeResourceDisplayName,
+} from '@agent-workflow/shared'
 
 /** Definition a quick-created workflow starts with. Written as v1-empty on
  *  purpose — the backend GET path transparently upgrades schema versions, so
@@ -23,14 +27,19 @@ export interface QuickCreateWorkflowInput {
 }
 
 /**
- * 2026-07-10 naming unification: workflow names follow the workgroup slug
- * rules (shared WORKFLOW_NAME_RE alias, ≤128). Error values are raw i18n keys
- * ('workflows.errors.*') — widgets translate at render time, same contract as
- * the workgroup builder.
+ * 2026-07-10 naming unification: workflow names follow the SAME rules as
+ * workgroup names (one shared regex, aliased). RFC-264 widened that rule to
+ * human-readable names and put a normalizer in front of it, so the verdict is
+ * taken on the FOLDED value — otherwise a trailing space the server silently
+ * trims would show as an inline error the user cannot see.
+ *
+ * Error values are raw i18n keys ('workflows.errors.*') — widgets translate at
+ * render time, same contract as the workgroup builder.
  */
 export function workflowNameError(name: string): string | null {
-  if (name.length === 0) return 'workflows.errors.nameRequired'
-  if (name.length > 128 || !WORKFLOW_NAME_RE.test(name)) return 'workflows.errors.nameInvalid'
+  const normalized = normalizeResourceDisplayName(name)
+  if (normalized.length === 0) return 'workflows.errors.nameRequired'
+  if (!isValidResourceDisplayName(normalized)) return 'workflows.errors.nameInvalid'
   return null
 }
 

@@ -274,8 +274,11 @@ export async function copyWorkgroup(
         .where(eq(workgroups.ownerUserId, actor.user.id))
         .all()
         .map((row) => row.name)
-      const name = nextResourceCopyName(sourceSnapshot.name, occupiedNames, 'workgroup')
-      WorkgroupNameSchema.parse(name)
+      // RFC-264: persist the PARSED name — the schema is also the normalizer,
+      // so ignoring its output would store an unfolded copy name.
+      const name = WorkgroupNameSchema.parse(
+        nextResourceCopyName(sourceSnapshot.name, occupiedNames, 'workgroup'),
+      )
       const snapshot = { ...sourceSnapshot, name }
       const id = ulid()
       const now = Date.now()

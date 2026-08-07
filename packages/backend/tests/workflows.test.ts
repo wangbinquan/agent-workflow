@@ -354,24 +354,41 @@ describe('workflow HTTP routes', () => {
     expect(after.revision.version).toBe(2)
   })
 
-  // 2026-07-10 naming unification: workflow names follow the workgroup slug
-  // rules (WORKFLOW_NAME_RE alias). CREATE is guarded by the strict schema;
-  // PUT validates ONLY a changed name, so stored legacy free-form names keep
+  // 2026-07-10 naming unification: workflow names follow the workgroup rules
+  // (WORKFLOW_NAME_RE alias). CREATE is guarded by the strict schema; PUT
+  // validates ONLY a changed name, so stored legacy free-form names keep
   // auto-saving (grandfather decision — 放行存量，只卡新名).
-  test('POST with a free-form name → 422 workflow-invalid (strict create schema)', async () => {
+  //
+  // RFC-264 EXPLICIT RE-JUDGEMENT: the shared rule is no longer a lowercase
+  // slug, so 'My Workflow' (the old fixture here) is now LEGAL. The invariant
+  // under test is unchanged — create is strictly guarded — so the fixture moves
+  // to a name that is illegal under the current rule.
+  test('POST with an illegal name → 422 workflow-invalid (strict create schema)', async () => {
+    for (const name of ['_reserved', 'two\nlines', '   ']) {
+      const res = await req(app, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({ name, description: '', definition: sampleDefinition() }),
+      })
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('workflow-invalid')
+    }
+  })
+
+  // RFC-264 — the user-visible point of the whole RFC.
+  test('POST with a Chinese name → 201, stored folded', async () => {
     const res = await req(app, '/api/workflows', {
       method: 'POST',
       body: JSON.stringify({
-        name: 'My Workflow',
+        name: '代码审计流水线 ',
         description: '',
         definition: sampleDefinition(),
       }),
     })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('workflow-invalid')
+    expect(res.status).toBe(201)
+    expect(((await res.json()) as WorkflowDetail).name).toBe('代码审计流水线')
   })
 
-  test('PUT: unchanged legacy name saves; rename validates against the slug rules', async () => {
+  test('PUT: unchanged legacy name saves; rename validates against the shared rules', async () => {
     const { db: hdb, app: happ } = buildHarness()
     // Route-create with a valid slug, then service-rename to a legacy
     // free-form value — simulates a row stored before the unification.
@@ -403,17 +420,29 @@ describe('workflow HTTP routes', () => {
     const current = await getWorkflow(hdb, created.id)
     if (current === null) throw new Error('workflow disappeared after save')
 
-    // An actual rename must satisfy the unified rules.
+    // An actual rename must satisfy the unified rules. RFC-264 RE-JUDGEMENT:
+    // the old fixture 'Still Bad Name' is legal now, so the illegal fixture
+    // becomes one the CURRENT rule rejects (reserved `_` prefix).
     const bad = await req(happ, `/api/workflows/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify(saveInput(current, { name: 'Still Bad Name' })),
+      body: JSON.stringify(saveInput(current, { name: '_reserved' })),
     })
     expect(bad.status).toBe(422)
     expect(((await bad.json()) as { code: string }).code).toBe('workflow-name-invalid')
 
+    // RFC-264: renaming TO a Chinese name is an ordinary accepted rename.
+    const zh = await req(happ, `/api/workflows/${created.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(saveInput(current, { name: '代码审计流程' })),
+    })
+    expect(zh.status).toBe(200)
+    expect(((await zh.json()) as { snapshot: { name: string } }).snapshot.name).toBe('代码审计流程')
+    const renamed = await getWorkflow(hdb, created.id)
+    if (renamed === null) throw new Error('workflow disappeared after rename')
+
     const good = await req(happ, `/api/workflows/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify(saveInput(current, { name: 'legacy-renamed' })),
+      body: JSON.stringify(saveInput(renamed, { name: 'legacy-renamed' })),
     })
     expect(good.status).toBe(200)
     expect(((await good.json()) as { snapshot: { name: string } }).snapshot.name).toBe(

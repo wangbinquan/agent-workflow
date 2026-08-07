@@ -5,9 +5,10 @@
 // pixel-identically, so the chrome lives here and the parents keep the draft
 // state, builder validation and create mutation.
 //
-// Naming rules are unified across both resources (slug charset, ≤128 — see
-// shared WORKFLOW_NAME_RE = WORKGROUP_NAME_RE), which is why the name input's
-// maxLength and required flag are baked in rather than configurable.
+// Naming rules are unified across both resources (one shared rule, aliased as
+// WORKFLOW_NAME_RE = WORKGROUP_NAME_RE; human-readable and ≤128 since RFC-264),
+// which is why the name input's maxLength and required flag are baked in rather
+// than configurable.
 
 import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'

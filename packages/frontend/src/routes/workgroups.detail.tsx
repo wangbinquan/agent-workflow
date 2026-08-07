@@ -10,7 +10,11 @@ import type {
   WorkgroupDetail,
   WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
-import { WORKGROUP_NAME_RE, workgroupLaunchReadiness } from '@agent-workflow/shared'
+import {
+  isValidResourceDisplayName,
+  normalizeResourceDisplayName,
+  workgroupLaunchReadiness,
+} from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { AclPanel } from '@/components/AclPanel'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -570,7 +574,8 @@ export function WorkgroupEditor(props: {
       if (copyIntent === null) throw new Error('missing workgroup copy draft')
       return api.post<WorkgroupDetail>('/api/workgroups', {
         ...copyIntent,
-        name: copyName,
+        // RFC-264: send the FOLDED name (what the server will store anyway).
+        name: normalizeResourceDisplayName(copyName),
         description: copyDescription,
       })
     },
@@ -621,8 +626,9 @@ export function WorkgroupEditor(props: {
   const [newName, setNewName] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const renameNameValid =
-    newName.length > 0 && newName.length <= 128 && WORKGROUP_NAME_RE.test(newName)
+  // RFC-264: one shared verdict on the FOLDED name (the server normalizes
+  // before validating), replacing the hand-rolled length + regex combo.
+  const renameNameValid = isValidResourceDisplayName(normalizeResourceDisplayName(newName))
   const renameCanSave =
     renameNameValid &&
     (newName !== config.state.draft.name || newDescription !== config.state.draft.description)
@@ -994,7 +1000,6 @@ export function WorkgroupEditor(props: {
         testidPrefix="workgroup"
         nameLabel={t('workgroups.renameField')}
         nameHint={t('workgroups.fieldNameHint')}
-        namePattern={WORKGROUP_NAME_RE.source}
         name={newName}
         onNameChange={setNewName}
         descriptionLabel={t('workgroups.fieldDescription')}
@@ -1009,7 +1014,10 @@ export function WorkgroupEditor(props: {
             {
               config: {
                 ...config.ref.current.draft,
-                name: newName,
+                // RFC-264: store the FOLDED name — the server folds on write, so
+                // keeping the raw value here would leave the draft permanently
+                // "dirty" against the persisted row.
+                name: normalizeResourceDisplayName(newName),
                 description: newDescription,
               },
             },
@@ -1027,7 +1035,6 @@ export function WorkgroupEditor(props: {
         testidPrefix="workgroup-copy"
         nameLabel={t('workgroups.fieldName')}
         nameHint={t('workgroups.fieldNameHint')}
-        namePattern={WORKGROUP_NAME_RE.source}
         name={copyName}
         onNameChange={setCopyName}
         descriptionLabel={t('workgroups.fieldDescription')}
@@ -1035,10 +1042,7 @@ export function WorkgroupEditor(props: {
         onDescriptionChange={setCopyDescription}
         descriptionMaxLength={4096}
         canSave={
-          copyIntent !== null &&
-          copyName.length > 0 &&
-          copyName.length <= 128 &&
-          WORKGROUP_NAME_RE.test(copyName)
+          copyIntent !== null && isValidResourceDisplayName(normalizeResourceDisplayName(copyName))
         }
         pending={saveCopy.isPending}
         submitError={saveCopy.error === null ? undefined : String(saveCopy.error)}

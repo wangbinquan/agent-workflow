@@ -136,7 +136,8 @@ anything credential-shaped anywhere in the changeset is rejected.`)
   sections.push(`## Payload schemas (STRICT — unknown keys are rejected)
 
 Common rules:
-- \`name\`: machine slug matching ^[a-z0-9][a-z0-9_-]*$ (human wording goes in \`description\`).
+- \`name\` for **agent / skill / mcp / plugin**: machine slug matching ^[a-z0-9][a-z0-9_-]*$ (human wording goes in \`description\`). These names become an OpenCode agent key, an on-disk skill directory and an MCP server key, so they stay ASCII.
+- \`name\` for **workflow / workgroup**: an ordinary human-readable name in the USER'S OWN LANGUAGE — Chinese is expected when the user writes Chinese (\`代码审计流水线\`). Must not start with \`_\`, must not contain control characters or line breaks, at most 128 characters.
 - \`opId\`: \`op-1\`, \`op-2\`, … in order. tempRef: \`$new:<slug>\`.
 - The changeset port contains ONE flat \`{"$schema_version":1,"ops":[…]}\` — never nest an \`ops\` array inside an op.
 - ref = a \`res#<type>#<n>\` handle or a \`$new:<slug>\` tempRef declared in this same changeset.

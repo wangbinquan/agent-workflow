@@ -26,7 +26,6 @@ export interface RenameDialogProps {
   name: string
   onNameChange: (value: string) => void
   nameError?: string
-  namePattern?: string
   descriptionLabel: string
   description: string
   onDescriptionChange: (value: string) => void
@@ -51,7 +50,6 @@ export function RenameDialog({
   name,
   onNameChange,
   nameError,
-  namePattern,
   descriptionLabel,
   description,
   onDescriptionChange,
@@ -96,7 +94,6 @@ export function RenameDialog({
         name={name}
         onNameChange={onNameChange}
         nameError={nameError}
-        namePattern={namePattern}
         descriptionLabel={descriptionLabel}
         description={description}
         onDescriptionChange={onDescriptionChange}

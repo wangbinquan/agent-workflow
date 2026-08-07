@@ -78,14 +78,17 @@ describe('RenameDialog (shared rename chrome)', () => {
     expect(screen.getByText('server said no')).toBeTruthy()
   })
 
-  test('hint + pattern wire through; an inline name error supersedes the hint', () => {
+  // RFC-264 RE-JUDGEMENT: the `namePattern` pass-through was removed with the
+  // slug rule (native pattern judged the RAW input, the server judges the
+  // NORMALIZED one). The hint still wires through and the error still wins.
+  test('hint wires through with no native pattern; an inline name error supersedes the hint', () => {
     // Field renders error XOR hint (error wins), so exercise the two states
     // separately rather than asserting both at once.
-    renderDialog({ nameHint: 'slug rules', namePattern: '[a-z-]+' })
+    renderDialog({ nameHint: 'slug rules' })
     expect(screen.getByText('slug rules')).toBeTruthy()
     expect(
       (screen.getByTestId('thing-rename-name') as HTMLInputElement).getAttribute('pattern'),
-    ).toBe('[a-z-]+')
+    ).toBeNull()
     cleanup()
     renderDialog({ nameHint: 'slug rules', nameError: 'bad name' })
     expect(screen.getByText('bad name')).toBeTruthy()

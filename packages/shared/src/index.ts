@@ -14,6 +14,7 @@ export * from './schemas/operationRevision'
 export * from './schemas/permission'
 export * from './schemas/repo'
 export * from './schemas/resourceAcl'
+export * from './schemas/resourceName' // RFC-264
 export * from './schemas/intentChangeset' // RFC-234
 export * from './schemas/intentSession' // RFC-234
 export * from './schemas/importRef'

@@ -14,6 +14,7 @@
 
 import { z } from 'zod'
 import { ResourceVisibilitySchema } from './resourceAcl'
+import { RESOURCE_DISPLAY_NAME_RE, ResourceDisplayNameSchema } from './resourceName'
 
 /**
  * RFC-217 T3 (G7) — message-turn shardKey codec: `msg:<memberId>:<maxMsgId>`.
@@ -59,14 +60,15 @@ export function parseBatchShardKey(
   return { memberId, assignmentIds: ids }
 }
 
-/** Permitted characters in a workgroup's display name. */
-export const WORKGROUP_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+/**
+ * RFC-264 — workgroup names are ordinary human-readable names (Chinese
+ * included). Aliases of the shared rule so workflow and workgroup naming can
+ * never drift; see schemas/resourceName.ts for the charset and the
+ * normalization pipeline.
+ */
+export const WORKGROUP_NAME_RE = RESOURCE_DISPLAY_NAME_RE
 
-export const WorkgroupNameSchema = z
-  .string()
-  .min(1, 'name is required')
-  .max(128, 'name too long')
-  .regex(WORKGROUP_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
+export const WorkgroupNameSchema = ResourceDisplayNameSchema
 
 // RFC-167: `dynamic_workflow` is the THIRD execution mode (user 2026-07-11
 // "工作组有三种执行模式：leader/自由/动态工作流"). Unlike the two turn-based

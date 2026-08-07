@@ -15,7 +15,7 @@ import { Field, NumberInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { Select } from '@/components/Select'
 import { useUserLookup } from '@/hooks/useUserLookup'
-import { resourceOptionLabel } from '@/lib/resource-option-label'
+import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
 import { useWorkflowRefResolver } from '../useWorkflowRefResolver'
 import {
   atomicNodeInspectorChange,
@@ -54,6 +54,14 @@ export function CallWorkflowEdit({ node, workflowId, onPatch, onHistoryBoundary 
   // Self-reference = the trivial call cycle (design §5.3) — the editor
   // simply never offers the workflow being edited as a target.
   const candidates = workflows.filter((w) => w.id !== workflowId)
+  // RFC-264: workflow names may legally repeat, and human-readable names make
+  // that common — colliding options carry an id suffix so they stay pickable.
+  const optionRow = (w: { id: string; name: string; ownerUserId?: string | null }) => ({
+    id: w.id,
+    name: w.name,
+    owner: owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId ?? undefined,
+  })
+  const candidateLabel = buildResourceOptionLabeler(candidates.map(optionRow))
   // Select value: prefer the cached id when it is offered; else re-resolve
   // through the authoritative name (covers YAML imports that carry no id).
   const selectedId =
@@ -145,10 +153,7 @@ export function CallWorkflowEdit({ node, workflowId, onPatch, onHistoryBoundary 
                   { value: '', label: t('inspector.pickCallWorkflow') },
                   ...candidates.map((w) => ({
                     value: w.id,
-                    label: resourceOptionLabel(
-                      w.name,
-                      owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId ?? undefined,
-                    ),
+                    label: candidateLabel(optionRow(w)),
                   })),
                   // A dangling reference stays visible (and revertable by
                   // picking something else) instead of silently blanking.

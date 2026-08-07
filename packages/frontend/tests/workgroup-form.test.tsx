@@ -96,13 +96,26 @@ describe('buildQuickCreatePayload', () => {
     }
   })
 
-  test('empty / malformed names are rejected', () => {
+  // RFC-264 RE-JUDGEMENT: 'Bad Name!' is a legal name now (the shared rule is
+  // no longer a lowercase slug). Same invariant, illegal-under-the-current-rule
+  // fixture.
+  test('empty / illegal names are rejected; Chinese names are accepted', () => {
     const empty = buildQuickCreatePayload({ name: '', description: '' })
     expect(empty.ok).toBe(false)
     if (!empty.ok) expect(empty.errors.name).toBe('workgroups.errors.nameRequired')
-    const bad = buildQuickCreatePayload({ name: 'Bad Name!', description: '' })
+    const blank = buildQuickCreatePayload({ name: '   ', description: '' })
+    expect(blank.ok).toBe(false)
+    if (!blank.ok) expect(blank.errors.name).toBe('workgroups.errors.nameRequired')
+    const bad = buildQuickCreatePayload({ name: '_reserved', description: '' })
     expect(bad.ok).toBe(false)
     if (!bad.ok) expect(bad.errors.name).toBe('workgroups.errors.nameInvalid')
+    const multiline = buildQuickCreatePayload({ name: 'two\nlines', description: '' })
+    expect(multiline.ok).toBe(false)
+    if (!multiline.ok) expect(multiline.errors.name).toBe('workgroups.errors.nameInvalid')
+    const zh = buildQuickCreatePayload({ name: '代码审计组 ', description: '' })
+    expect(zh.ok).toBe(true)
+    // Folded on the way out — the POST body equals what the server stores.
+    if (zh.ok) expect(zh.payload.name).toBe('代码审计组')
   })
 })
 

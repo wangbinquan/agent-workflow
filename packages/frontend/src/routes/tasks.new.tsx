@@ -60,7 +60,7 @@ import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { useActor } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { defaultRepoSource, resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
-import { resourceOptionLabel } from '@/lib/resource-option-label'
+import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
 import { stableStringify } from '@/lib/stable-stringify'
 import {
   parseTaskWizardDraft,
@@ -775,24 +775,28 @@ function TaskWizardPage() {
     ...(agentsQ.data ?? []).map((agent) => agent.ownerUserId),
     ...(workgroupsQ.data ?? []).map((group) => group.ownerUserId),
   ])
-  const workflowOptions = (workflowsQ.data ?? [])
-    .filter((workflow) => workflow.builtin !== true)
-    .map((workflow) => ({
-      value: workflow.id,
-      label: resourceOptionLabel(
-        workflow.name,
-        resourceOwners.get(workflow.ownerUserId)?.displayName ?? workflow.ownerUserId ?? undefined,
-      ),
-    }))
-  const agentOptions = (agentsQ.data ?? [])
-    .filter((a) => a.builtin !== true)
-    .map((a) => ({
-      value: a.id,
-      label: resourceOptionLabel(
-        a.name,
-        resourceOwners.get(a.ownerUserId)?.displayName ?? a.ownerUserId ?? undefined,
-      ),
-    }))
+  // RFC-264: labels come from the shared builder so same-name rows (legal for
+  // workflows, and now easy to hit with human-readable names) get an id suffix.
+  const optionRow = (r: { id: string; name: string; ownerUserId?: string | null }) => ({
+    id: r.id,
+    name: r.name,
+    owner: resourceOwners.get(r.ownerUserId)?.displayName ?? r.ownerUserId ?? undefined,
+  })
+  const launchableWorkflows = (workflowsQ.data ?? []).filter(
+    (workflow) => workflow.builtin !== true,
+  )
+  const workflowLabel = buildResourceOptionLabeler(launchableWorkflows.map(optionRow))
+  const workflowOptions = launchableWorkflows.map((workflow) => ({
+    value: workflow.id,
+    label: workflowLabel(optionRow(workflow)),
+  }))
+  const launchableAgents = (agentsQ.data ?? []).filter((a) => a.builtin !== true)
+  const agentLabel = buildResourceOptionLabeler(launchableAgents.map(optionRow))
+  const agentOptions = launchableAgents.map((a) => ({
+    value: a.id,
+    label: agentLabel(optionRow(a)),
+  }))
+  const workgroupLabel = buildResourceOptionLabeler((workgroupsQ.data ?? []).map(optionRow))
   const workgroupOptions = (workgroupsQ.data ?? []).map((g) => {
     const readiness = workgroupLaunchReadiness(g)
     // RFC-187 TRAP-1 (Codex impl-gate P2): the ADVISORY tier must reach the
@@ -801,10 +805,7 @@ function TaskWizardPage() {
     // can only idle. Blocking reasons keep the disabled treatment.
     return {
       value: g.id,
-      label: resourceOptionLabel(
-        g.name,
-        resourceOwners.get(g.ownerUserId)?.displayName ?? g.ownerUserId ?? undefined,
-      ),
+      label: workgroupLabel(optionRow(g)),
       ...(readiness.ready
         ? readiness.warnings.length > 0
           ? { description: t('taskWizard.workgroupLeaderOnlyWarning') }

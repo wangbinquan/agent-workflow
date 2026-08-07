@@ -21,7 +21,7 @@
 import { z } from 'zod'
 import { ImportRefSelectionSchema } from './importRef'
 import { ResourceVisibilitySchema } from './resourceAcl'
-import { WORKGROUP_NAME_RE } from './workgroup'
+import { WORKGROUP_NAME_RE, WorkgroupNameSchema } from './workgroup'
 
 /** Currently-written schema version. New writes always set this value. */
 export const WORKFLOW_SCHEMA_VERSION = 4
@@ -349,20 +349,19 @@ export type WorkflowDetail = z.infer<typeof WorkflowDetailSchema>
 
 /**
  * 2026-07-10 naming unification: workflow names follow the SAME rules as
- * workgroup names (slug charset, ≤128) — one regex, aliased so the two can
- * never drift. Unlike workgroups the name is still NOT the identity (the ULID
- * id is; duplicates stay legal and systemResources' builtin discrimination
- * relies on that), so the rules only apply where a NEW name enters the
- * system: create, an actual rename, and YAML import. Stored legacy free-form
- * names are grandfathered — UpdateWorkflowSchema stays permissive and the
- * route/service layers validate only CHANGED names against WorkflowNameSchema.
+ * workgroup names — one regex, aliased so the two can never drift. RFC-264
+ * turned that shared rule from a lowercase slug into a human-readable name
+ * (Chinese included); see schemas/resourceName.ts.
+ *
+ * Unlike workgroups the name is still NOT the identity (the ULID id is;
+ * duplicates stay legal and systemResources' builtin discrimination relies on
+ * that), so the rules only apply where a NEW name enters the system: create,
+ * an actual rename, and YAML import. Stored legacy free-form names are
+ * grandfathered — UpdateWorkflowSchema stays permissive and the route/service
+ * layers validate only CHANGED names against WorkflowNameSchema.
  */
 export const WORKFLOW_NAME_RE = WORKGROUP_NAME_RE
-export const WorkflowNameSchema = z
-  .string()
-  .min(1, 'name is required')
-  .max(128, 'name too long')
-  .regex(WORKFLOW_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
+export const WorkflowNameSchema = WorkgroupNameSchema
 
 export const CreateWorkflowSchema = z.object({
   name: WorkflowNameSchema,

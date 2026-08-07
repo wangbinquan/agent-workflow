@@ -305,10 +305,15 @@ definition:
     expect(res.status).toBe(422)
   })
 
-  // 2026-07-10 naming unification: imports mint a new name → the workgroup
-  // slug rules apply flat (explicit 422, no auto-slugging — user decision).
-  test('free-form name in YAML => 422 workflow-name-invalid', async () => {
-    const yaml = `name: Audit Pipeline
+  // 2026-07-10 naming unification: imports mint a new name → the shared name
+  // rules apply flat (explicit 422, no auto-slugging — user decision).
+  //
+  // RFC-264 RE-JUDGEMENT: the fixture used to be `name: Audit Pipeline`, which
+  // the current human-readable rule ACCEPTS. The invariant is unchanged — an
+  // illegal name is a 422 with this exact code, never a silent rewrite — so the
+  // fixture moves to a name the current rule rejects (reserved `_` prefix).
+  test('illegal name in YAML => 422 workflow-name-invalid', async () => {
+    const yaml = `name: _reserved
 description: ''
 definition:
   $schema_version: 1
@@ -325,6 +330,31 @@ definition:
     )
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('workflow-name-invalid')
+  })
+
+  // RFC-264 — the positive half: a Chinese name imports, and the stored name is
+  // the folded one (the import path parses through the shared schema).
+  test('a Chinese name in YAML imports and is stored folded', async () => {
+    const yaml = `name: '代码审计流水线  v2 '
+description: ''
+definition:
+  $schema_version: 1
+  inputs: []
+  nodes: []
+  edges: []
+`
+    const res = await h.app.fetch(
+      new Request('http://localhost/api/workflows/import', {
+        method: 'POST',
+        headers: { ...HEADERS, 'content-type': 'application/json' },
+        body: JSON.stringify({ yamlText: yaml, mode: 'fail' }),
+      }),
+    )
+    expect(res.status).toBe(201)
+    const result = (await res.json()) as { outcome: string; workflow: { id: string; name: string } }
+    expect(result.outcome).toBe('created')
+    expect(result.workflow.name).toBe('代码审计流水线 v2')
+    expect((await getWorkflow(h.db, result.workflow.id))?.name).toBe('代码审计流水线 v2')
   })
 
   test('rejects legacy raw-YAML/query fallback and incomplete overwrite fences', async () => {

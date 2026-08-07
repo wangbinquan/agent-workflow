@@ -15,7 +15,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
-import { buildResourceOptionLabels } from '@/lib/resource-option-label'
+import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
 import { Card } from '@/components/Card'
 import { ChoiceCards } from '@/components/ChoiceCards'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -536,10 +536,10 @@ function TriggerDialog(props: {
       : draft.launchKind === 'agent'
         ? (agents.data ?? [])
         : (workgroups.data ?? [])
-  const targetLabels = buildResourceOptionLabels(targetRows)
+  const targetLabel = buildResourceOptionLabeler(targetRows)
   const targetOptions: Array<{ value: string; label: string }> = targetRows.map((row) => ({
     value: row.id,
-    label: targetLabels.get(row.id) ?? row.name,
+    label: targetLabel(row),
   }))
 
   const scopeValid =

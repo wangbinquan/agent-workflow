@@ -325,9 +325,13 @@ describe('RFC-199 workflow revision fencing', () => {
 
     const current = await getWorkflow(db, workflow.id)
     if (current === null) throw new Error('workflow missing')
-    await expect(
-      save(db, current, snapshot(current, { name: 'Another Bad Name' })),
-    ).rejects.toMatchObject({ code: 'workflow-name-invalid', status: 422 })
+    // RFC-264 RE-JUDGEMENT: 'Another Bad Name' is legal under the current
+    // shared rule, so the illegal fixture becomes a reserved `_` prefix. The
+    // invariant is unchanged — a CHANGED name is gated and the gate leaves the
+    // version untouched.
+    await expect(save(db, current, snapshot(current, { name: '_reserved' }))).rejects.toMatchObject(
+      { code: 'workflow-name-invalid', status: 422 },
+    )
     expect((await getWorkflow(db, workflow.id))?.version).toBe(2)
   })
 

@@ -23,6 +23,12 @@ import { z } from 'zod'
 import { AgentOutputKindSchema } from './review'
 import { AGENT_NAME_RE } from './agent'
 import { ACL_RESOURCE_TYPES, type AclResourceType } from './resourceAcl'
+import {
+  isValidResourceDisplayName,
+  normalizeResourceDisplayName,
+  RESOURCE_DISPLAY_NAME_MSG,
+  ResourceDisplayNameSchema,
+} from './resourceName'
 
 export const INTENT_CHANGESET_SCHEMA_VERSION = 1
 
@@ -322,7 +328,9 @@ export function collectIntentWorkflowAgentRefs(definition: {
 
 export const IntentWorkflowPayloadSchema = z
   .object({
-    name: z.string().min(1).max(200),
+    // RFC-264: same rule (and same normalizer) as every other workflow-name
+    // entry point — this payload writes straight through to the row.
+    name: ResourceDisplayNameSchema,
     description: DescriptionSchema,
     definition: IntentWorkflowDefinitionSchema.superRefine((def, ctx) => {
       const { violations } = collectIntentWorkflowAgentRefs(
@@ -364,7 +372,8 @@ export type IntentWorkgroupMember = z.infer<typeof IntentWorkgroupMemberSchema>
 
 export const IntentWorkgroupPayloadSchema = z
   .object({
-    name: z.string().min(1).max(200),
+    // RFC-264: same rule / normalizer as every other workgroup-name entry point.
+    name: ResourceDisplayNameSchema,
     description: DescriptionSchema,
     instructions: z.string().max(65536).default(''),
     mode: z.enum(['leader_worker', 'free_collab', 'dynamic_workflow']),
@@ -637,14 +646,13 @@ export function validateFinalNameForType(
   value: string,
 ): string | null {
   if (resourceType === 'workflow' || resourceType === 'workgroup') {
-    if (value.length < 1 || value.length > 200) return 'name must be 1..200 characters'
-    // Control chars would break YAML/JSON round-trips and canvas labels; the
-    // codepoint scan avoids a control-char regex (eslint no-control-regex).
-    for (const ch of value) {
-      const code = ch.codePointAt(0) ?? 0
-      if (code < 0x20 || code === 0x7f) return 'name must not contain control characters'
-    }
-    return null
+    // RFC-264: the canonical human-readable rule, not a third private one.
+    // These ops write straight through to the row, so a laxer grammar here
+    // could mint a name the rest of the product cannot represent (a `_`-prefixed
+    // framework-shaped name, or one past the 128-code-point bound).
+    return isValidResourceDisplayName(normalizeResourceDisplayName(value))
+      ? null
+      : RESOURCE_DISPLAY_NAME_MSG
   }
   if (value.length < 1 || value.length > 128) return 'name must be 1..128 characters'
   if (!AGENT_NAME_RE.test(value)) {

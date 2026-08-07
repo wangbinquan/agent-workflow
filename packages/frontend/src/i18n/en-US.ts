@@ -2251,7 +2251,8 @@ export const enUS: Resources = {
     cardKind: 'Workflow',
     newButton: '+ New workflow',
     createButton: 'Create workflow',
-    fieldNameHint: 'Starts with a lowercase letter / digit; only [a-z0-9_-], at most 128 chars.',
+    fieldNameHint:
+      'Chinese is fine. Must not start with _ or contain control characters; at most 128 characters.',
     importButton: 'Import YAML',
     emptyList: 'No workflows yet.',
     emptyDescription: 'Create a reusable automation, then refine its nodes and connections.',
@@ -2291,7 +2292,7 @@ export const enUS: Resources = {
     errors: {
       nameRequired: 'Name is required.',
       nameInvalid:
-        'Name must start with a lowercase letter / digit, only [a-z0-9_-], at most 128 chars.',
+        'Name must not start with _ or contain control characters, and is at most 128 characters.',
     },
   },
   // RFC-164 — workgroup resource pages (list + quick-create dialog / detail).
@@ -2322,7 +2323,8 @@ export const enUS: Resources = {
     sectionMembers: 'Members',
     sectionSwitches: 'Collaboration switches',
     fieldName: 'Name',
-    fieldNameHint: 'Starts with a lowercase letter / digit; only [a-z0-9_-], at most 128 chars.',
+    fieldNameHint:
+      'Chinese is fine. Must not start with _ or contain control characters; at most 128 characters.',
     fieldDescription: 'Description',
     fieldInstructions: 'Group charter',
     fieldInstructionsHint: 'Optional. Injected for every member on every turn.',
@@ -2585,7 +2587,7 @@ export const enUS: Resources = {
     errors: {
       nameRequired: 'Name is required.',
       nameInvalid:
-        'Name must start with a lowercase letter / digit, only [a-z0-9_-], at most 128 chars.',
+        'Name must not start with _ or contain control characters, and is at most 128 characters.',
       agentNameRequired: 'Agent members need an agent name.',
       userRequired: 'Human members must pick a platform user.',
       displayNameRequired: 'Display name is required.',
@@ -5402,7 +5404,7 @@ export const enUS: Resources = {
     'workflow-deleted': 'That workflow no longer exists.',
     'workflow-invalid': 'Invalid workflow payload.',
     'workflow-name-invalid':
-      'Workflow name must start with a lowercase letter / digit, only [a-z0-9_-], at most 128 chars.',
+      'Workflow name must not start with _ or contain control characters, and is at most 128 characters.',
     'workflow-version-conflict': 'The workflow was updated by someone else; refresh and retry.',
     'workflow-version-mismatch': 'The workflow changed during launch; refresh and launch again.',
     'workflow-in-use': 'Tasks still reference this workflow; it cannot be deleted.',

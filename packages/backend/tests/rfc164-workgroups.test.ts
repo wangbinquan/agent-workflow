@@ -563,9 +563,12 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     expect(body.ownerUserId).toBe(alice.id)
     expect(body.visibility).toBe('private')
 
+    // RFC-264 RE-JUDGEMENT: 'BAD NAME!' is a legal human-readable name now, so
+    // the invalid-body fixture moves to a name the current rule rejects
+    // (reserved `_` prefix). The invariant — a bad create body is a 422 — holds.
     const bad = await req(alice.token, '/api/workgroups', {
       method: 'POST',
-      body: JSON.stringify({ name: 'BAD NAME!' }),
+      body: JSON.stringify({ name: '_reserved' }),
     })
     expect(bad.status).toBe(422)
     expect(((await bad.json()) as { code: string }).code).toBe('workgroup-invalid')

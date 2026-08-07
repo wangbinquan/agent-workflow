@@ -23,10 +23,11 @@ import type {
 } from '@agent-workflow/shared'
 import {
   CreateWorkgroupSchema,
+  isValidResourceDisplayName,
+  normalizeResourceDisplayName,
   WorkgroupDraftSnapshotSchema,
   WORKGROUP_MAX_ROUNDS_DEFAULT,
   WORKGROUP_MAX_ROUNDS_LIMIT,
-  WORKGROUP_NAME_RE,
   WG_CLARIFY_BUDGET_DEFAULT,
 } from '@agent-workflow/shared'
 
@@ -53,15 +54,19 @@ export function buildQuickCreatePayload(
   input: QuickCreateWorkgroupBody,
 ): BuiltWorkgroup<QuickCreateWorkgroupBody> {
   const errors: Record<string, string> = {}
-  if (input.name.length === 0) errors.name = 'workgroups.errors.nameRequired'
-  else if (input.name.length > 128 || !WORKGROUP_NAME_RE.test(input.name)) {
+  // RFC-264: judge the FOLDED value — the server normalizes before it
+  // validates, so an unfolded verdict here would reject names it accepts.
+  const normalizedName = normalizeResourceDisplayName(input.name)
+  if (normalizedName.length === 0) errors.name = 'workgroups.errors.nameRequired'
+  else if (!isValidResourceDisplayName(normalizedName)) {
     errors.name = 'workgroups.errors.nameInvalid'
   }
   if (Object.keys(errors).length > 0) return { ok: false, errors }
   // Wire-shape net: the same schema the server parses (defaults fill in).
   const parsed = CreateWorkgroupSchema.safeParse(input)
   if (!parsed.success) return { ok: false, errors: schemaIssues(parsed.error.issues) }
-  return { ok: true, payload: { name: input.name, description: input.description } }
+  // RFC-264: the schema is also the normalizer — send what the server stores.
+  return { ok: true, payload: { name: parsed.data.name, description: input.description } }
 }
 
 // ---------------------------------------------------------------------------

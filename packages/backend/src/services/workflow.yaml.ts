@@ -38,6 +38,7 @@ import {
   createWorkflow,
   getWorkflow,
   updateWorkflow,
+  WORKFLOW_NAME_INVALID_MESSAGE,
   workflowRevisionOf,
   type WorkflowWriteInTxGuard,
   type WorkflowWritePrincipal,
@@ -101,16 +102,15 @@ export function previewWorkflowYaml(yamlText: string): Omit<YamlImportPreview, '
     throw new ValidationError('workflow-yaml-invalid', 'YAML missing required field: name')
   }
   // 2026-07-10 naming unification: an import always mints a NEW name, so the
-  // workgroup slug rules apply flat — old exports carrying a legacy free-form
-  // name get an explicit 422 (edit the YAML's name line and retry). Decided
-  // over auto-slugging to avoid silent renames.
+  // shared name rules apply flat — a YAML whose name breaks them gets an
+  // explicit 422 (edit the YAML's name line and retry). Decided over
+  // auto-slugging to avoid silent renames. RFC-264 widened the rule to
+  // human-readable names, and the parse also folds the name (NFC / spaces).
   const nameOk = WorkflowNameSchema.safeParse(name)
   if (!nameOk.success) {
-    throw new ValidationError(
-      'workflow-name-invalid',
-      'workflow name must start with [a-z0-9] and contain only [a-z0-9_-] (max 128 chars)',
-      { issues: nameOk.error.issues },
-    )
+    throw new ValidationError('workflow-name-invalid', WORKFLOW_NAME_INVALID_MESSAGE, {
+      issues: nameOk.error.issues,
+    })
   }
   const id = typeof obj.id === 'string' && obj.id.length > 0 ? obj.id : null
   const description = typeof obj.description === 'string' ? obj.description : ''
@@ -121,7 +121,9 @@ export function previewWorkflowYaml(yamlText: string): Omit<YamlImportPreview, '
       issues: parsed.error.issues,
     })
   }
-  return { id, name, description, definition: parsed.data }
+  // RFC-264: hand back the FOLDED name — an import mints a new name, and the
+  // conflict dialog compares it against existing rows, which are folded too.
+  return { id, name: nameOk.data, description, definition: parsed.data }
 }
 
 /**

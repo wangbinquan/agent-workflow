@@ -14,7 +14,7 @@ import { Field } from '@/components/Form'
 import { useManagedLiveRegion } from '@/components/ManagedLiveRegion'
 import { Select } from '@/components/Select'
 import { useUserLookup } from '@/hooks/useUserLookup'
-import { resourceOptionLabel } from '@/lib/resource-option-label'
+import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
 import { sha256Hex } from '@/lib/sha256'
 import {
   WORKFLOW_STARTER_CATALOG,
@@ -122,6 +122,13 @@ export function WorkflowStarterDialog({
 }: WorkflowStarterDialogProps) {
   const { t } = useTranslation()
   const owners = useUserLookup(agents.map((agent) => agent.ownerUserId))
+  // RFC-264: colliding option labels get an id suffix (shared builder).
+  const optionRow = (a: { id: string; name: string; ownerUserId?: string | null }) => ({
+    id: a.id,
+    name: a.name,
+    owner: owners.get(a.ownerUserId)?.displayName ?? a.ownerUserId ?? undefined,
+  })
+  const agentLabel = buildResourceOptionLabeler(agents.map(optionRow))
   const managedLiveRegion = useManagedLiveRegion()
   const firstStarterRef = useRef<HTMLButtonElement | null>(null)
   const [starterId, setStarterId] =
@@ -331,10 +338,7 @@ export function WorkflowStarterDialog({
             const reason = workflowStarterAgentIneligibleReason(role, agent)
             return {
               value: agent.id,
-              label: resourceOptionLabel(
-                agent.name,
-                owners.get(agent.ownerUserId)?.displayName ?? agent.ownerUserId ?? undefined,
-              ),
+              label: agentLabel(optionRow(agent)),
               disabled: reason !== null,
               description:
                 reason === null ? agent.description : t(`editor.starter.issue.${reason}`),

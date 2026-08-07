@@ -18,7 +18,7 @@ import { api } from '@/api/client'
 import { Field, NumberInput, TextArea } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { useUserLookup } from '@/hooks/useUserLookup'
-import { resourceOptionLabel } from '@/lib/resource-option-label'
+import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -60,6 +60,14 @@ export function CallWorkgroupEdit({ node, onPatch, onHistoryBoundary }: EditProp
   const goalTemplate = typeof rec.goalTemplate === 'string' ? rec.goalTemplate : ''
   const limits = readLimits(rec)
   const owners = useUserLookup(workgroups.map((w) => w.ownerUserId))
+  // RFC-264: human-readable names make look-alike options realistic — the
+  // shared builder appends an id suffix to colliding ones only.
+  const optionRow = (w: { id: string; name: string; ownerUserId?: string | null }) => ({
+    id: w.id,
+    name: w.name,
+    owner: owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId ?? undefined,
+  })
+  const workgroupLabel = buildResourceOptionLabeler(workgroups.map(optionRow))
 
   // Select value: prefer the cached id when it is offered; else re-resolve
   // through the authoritative name (covers YAML imports that carry no id).
@@ -135,10 +143,7 @@ export function CallWorkgroupEdit({ node, onPatch, onHistoryBoundary }: EditProp
                   { value: '', label: t('inspector.pickCallWorkgroup') },
                   ...workgroups.map((w) => ({
                     value: w.id,
-                    label: resourceOptionLabel(
-                      w.name,
-                      owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId ?? undefined,
-                    ),
+                    label: workgroupLabel(optionRow(w)),
                   })),
                   // A dangling reference stays visible (and revertable by
                   // picking something else) instead of silently blanking.

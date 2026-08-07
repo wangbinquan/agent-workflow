@@ -236,29 +236,49 @@ describe('workflow name rules (pure) — unified with workgroup naming (用户 2
     expect(WORKFLOW_NAME_RE).toBe(WORKGROUP_NAME_RE)
   })
 
-  test('workflowNameError matrix: empty / malformed / overlong / valid', () => {
+  // RFC-264 RE-JUDGEMENT: the shared rule is no longer a lowercase slug, so
+  // 'Bad Name!' / '-leading-dash' / 'still bad' (the old malformed fixtures)
+  // are all LEGAL now. The invariants under test are unchanged — a blank name
+  // is `nameRequired`, an illegal one is `nameInvalid`, an unchanged name never
+  // blocks — so the fixtures move to names the CURRENT rule rejects.
+  test('workflowNameError matrix: empty / illegal / overlong / valid', () => {
     expect(workflowNameError('')).toBe('workflows.errors.nameRequired')
-    expect(workflowNameError('Bad Name!')).toBe('workflows.errors.nameInvalid')
-    expect(workflowNameError('-leading-dash')).toBe('workflows.errors.nameInvalid')
-    expect(workflowNameError('a'.repeat(129))).toBe('workflows.errors.nameInvalid')
+    // Whitespace-only folds to empty → required, not invalid.
+    expect(workflowNameError('   ')).toBe('workflows.errors.nameRequired')
+    expect(workflowNameError('_reserved')).toBe('workflows.errors.nameInvalid')
+    expect(workflowNameError('two\nlines')).toBe('workflows.errors.nameInvalid')
+    expect(workflowNameError('审'.repeat(129))).toBe('workflows.errors.nameInvalid')
+    expect(workflowNameError('审'.repeat(128))).toBeNull()
     expect(workflowNameError('a'.repeat(128))).toBeNull()
     expect(workflowNameError('code-audit_2')).toBeNull()
+    // The point of the RFC:
+    expect(workflowNameError('代码审计流水线')).toBeNull()
+    expect(workflowNameError('审计 Pipeline v2')).toBeNull()
+    expect(workflowNameError('Code Review（重构专用）')).toBeNull()
+    // Folded before judging: a trailing space is trimmed, not rejected.
+    expect(workflowNameError('代码审计 ')).toBeNull()
   })
 
   test('workflowRenameError: an UNCHANGED legacy free-form name never blocks (grandfather)', () => {
     expect(workflowRenameError('My Legacy Flow', 'My Legacy Flow')).toBeNull()
-    expect(workflowRenameError('still bad', 'My Legacy Flow')).toBe('workflows.errors.nameInvalid')
+    expect(workflowRenameError('_reserved', 'My Legacy Flow')).toBe('workflows.errors.nameInvalid')
     expect(workflowRenameError('', 'My Legacy Flow')).toBe('workflows.errors.nameRequired')
     expect(workflowRenameError('new-slug', 'My Legacy Flow')).toBeNull()
+    expect(workflowRenameError('代码审计流程', 'My Legacy Flow')).toBeNull()
   })
 
-  test('builder: empty name → nameRequired; malformed → nameInvalid (raw i18n keys)', () => {
+  test('builder: empty name → nameRequired; illegal → nameInvalid (raw i18n keys)', () => {
     const empty = buildQuickCreateWorkflowPayload({ name: '', description: 'x' })
     expect(empty.ok).toBe(false)
     if (!empty.ok) expect(empty.errors.name).toBe('workflows.errors.nameRequired')
-    const bad = buildQuickCreateWorkflowPayload({ name: 'Bad Name!', description: '' })
+    const bad = buildQuickCreateWorkflowPayload({ name: '_reserved', description: '' })
     expect(bad.ok).toBe(false)
     if (!bad.ok) expect(bad.errors.name).toBe('workflows.errors.nameInvalid')
+    // The payload carries the FOLDED name (the create schema is the normalizer),
+    // so what the dialog POSTs equals what the server stores.
+    const zh = buildQuickCreateWorkflowPayload({ name: '代码审计  流水线 ', description: '' })
+    expect(zh.ok).toBe(true)
+    if (zh.ok) expect(zh.payload.name).toBe('代码审计 流水线')
   })
 
   test('valid draft assembles name + description + the EMPTY definition', () => {
@@ -479,13 +499,14 @@ describe('/workflows quick-create dialog', () => {
     expect(router.state.location.pathname).toBe('/workflows')
   })
 
-  test('a malformed name shows the inline error and keeps Create disabled', async () => {
+  // RFC-264: fixture moved from 'Bad Name!' (legal now) to a reserved prefix.
+  test('an illegal name shows the inline error and keeps Create disabled', async () => {
     installFetch({ workflows: [], calls: [] })
     await renderPage('/workflows')
 
     fireEvent.click(await screen.findByTestId('workflow-new-button'))
     fireEvent.change(await screen.findByTestId('workflow-create-name'), {
-      target: { value: 'Bad Name!' },
+      target: { value: '_reserved' },
     })
     expect(screen.getByText(enUS.workflows.errors.nameInvalid)).toBeTruthy()
     expect((screen.getByTestId('workflow-create-confirm') as HTMLButtonElement).disabled).toBe(true)
@@ -836,6 +857,42 @@ describe('/workflows/new removal wiring', () => {
     const hits = edit.match(/workflowRenameError\(/g) ?? []
     expect(hits.length).toBeGreaterThanOrEqual(1)
     expect(edit).toContain('workflowRenameError } from')
+  })
+
+  // RFC-264 — the copy must describe the CURRENT rule, and the native HTML
+  // `pattern` gate must stay gone: it judged the RAW input while the server
+  // judges the NORMALIZED one, so a trailing space rendered a red field the
+  // server would have accepted.
+  test('RFC-264 wiring: copy describes the human-readable rule; no native pattern gate', () => {
+    for (const hint of [zhCN.workflows.fieldNameHint, enUS.workflows.fieldNameHint]) {
+      expect(hint).not.toMatch(/URL/i)
+      expect(hint).not.toMatch(/lowercase|小写/)
+      expect(hint).not.toContain('[a-z0-9_-]')
+    }
+    expect(zhCN.workflows.fieldNameHint).toContain('中文')
+    expect(enUS.workflows.fieldNameHint).toMatch(/Chinese/i)
+    for (const invalid of [
+      zhCN.workflows.errors.nameInvalid,
+      enUS.workflows.errors.nameInvalid,
+      zhCN.workgroups.errors.nameInvalid,
+      enUS.workgroups.errors.nameInvalid,
+      zhCN.errors['workflow-name-invalid'] ?? '',
+      enUS.errors['workflow-name-invalid'] ?? '',
+    ]) {
+      expect(invalid).not.toMatch(/lowercase|小写/)
+      expect(invalid).toContain('128')
+    }
+    // The two resources' hints stay byte-identical (2026-07-10 rule, kept).
+    expect(zhCN.workgroups.fieldNameHint).toBe(zhCN.workflows.fieldNameHint)
+    expect(enUS.workgroups.fieldNameHint).toBe(enUS.workflows.fieldNameHint)
+    // Source-level lock: the prop and its two call sites are gone for good.
+    // Matched on CODE, not the identifier — the files explain in prose why the
+    // prop was removed, and that explanation must not trip the guard.
+    expect(readSrc('components/NameDescriptionFields.tsx')).not.toContain('pattern={')
+    expect(readSrc('components/NameDescriptionFields.tsx')).not.toContain('namePattern?:')
+    expect(readSrc('components/RenameDialog.tsx')).not.toContain('namePattern={')
+    expect(readSrc('components/RenameDialog.tsx')).not.toContain('namePattern?:')
+    expect(readSrc('routes/workgroups.detail.tsx')).not.toContain('namePattern=')
   })
 
   test('editor edits name/description via a RenameDialog, not inline fields (用户 2026-07-13)', () => {

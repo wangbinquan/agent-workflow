@@ -536,18 +536,24 @@ describe('/workgroups quick-create dialog', () => {
     const confirm = (await screen.findByTestId('workgroup-create-confirm')) as HTMLButtonElement
     expect(confirm.disabled).toBe(true) // empty name
 
+    // RFC-264 RE-JUDGEMENT: 'Bad Name!' (the old fixture) is legal now, so the
+    // illegal fixture becomes a reserved `_` prefix and the asserted copy is
+    // the current wording. Same invariant: illegal ⇒ inline error + disabled.
     fireEvent.change(screen.getByTestId('workgroup-create-name'), {
-      target: { value: 'Bad Name!' },
+      target: { value: '_reserved' },
     })
     expect((screen.getByTestId('workgroup-create-confirm') as HTMLButtonElement).disabled).toBe(
       true,
     )
-    // Malformed (non-empty) name earns the inline error.
-    expect(
-      screen.getByText(
-        'Name must start with a lowercase letter / digit, only [a-z0-9_-], at most 128 chars.',
-      ),
-    ).toBeTruthy()
+    expect(screen.getByText(enUS.workgroups.errors.nameInvalid)).toBeTruthy()
+
+    // A Chinese name enables Create — the user-visible point of RFC-264.
+    fireEvent.change(screen.getByTestId('workgroup-create-name'), {
+      target: { value: '代码审计组' },
+    })
+    expect((screen.getByTestId('workgroup-create-confirm') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
 
     fireEvent.change(screen.getByTestId('workgroup-create-name'), {
       target: { value: 'review-squad' },

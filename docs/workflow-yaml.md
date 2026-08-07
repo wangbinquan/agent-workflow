@@ -19,6 +19,14 @@ definition:
   outputs: [...] # optional; named ports surfaced on the task detail page
 ```
 
+`name` is an ordinary human-readable name — Chinese and mixed scripts are fine
+(`代码审计流水线`, `审计 Pipeline v2`). It must not start with `_` (that shape is
+reserved for framework-internal rows), must not contain control characters or
+line breaks, and is at most 128 characters. It is normalized on import (NFC,
+spaces folded, edges trimmed). An import always mints a NEW name, so a YAML
+whose `name` breaks those rules is rejected with `workflow-name-invalid` rather
+than silently rewritten (RFC-264).
+
 Import uses a structured JSON request to `POST /api/workflows/import`:
 
 ```json
