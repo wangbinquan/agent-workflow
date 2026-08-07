@@ -28,7 +28,7 @@ const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
 
 // 夹具**不能**长得像真 PAT：`glpat-` / `ghp_` 前缀会命中 gitleaks 的
 // gitlab-pat / generic-api-key 规则，让 CI 的密钥扫描红（本地门禁不跑它）。
-const SECRET_TOKEN = 'aw-fixture-not-a-real-token-9999'
+const SECRET_TOKEN = 'aw-fixture-not-a-real-token-9999' // gitleaks:allow
 
 type FetchStub = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -192,7 +192,7 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
     expect(svc.get('gitlab').lastTest?.ok).toBe(true)
     await call('PUT', '/api/code-hosts/gitlab', {
       baseUrl: 'https://gitlab.corp.example/api/v4',
-      token: 'aw-fixture-rotated-0000',
+      token: 'aw-fixture-rotated-0000', // gitleaks:allow
     })
     expect(svc.get('gitlab').lastTest).toBeNull()
   })
@@ -225,7 +225,7 @@ describe('RFC-269 凭据面 — base URL 形态', () => {
       (
         await call('PUT', '/api/code-hosts/github', {
           baseUrl: 'https://ghes.corp.example/api/v3',
-          token: 'aw-fixture-gh-1234',
+          token: 'aw-fixture-gh-1234', // gitleaks:allow
         })
       ).status,
     ).toBe(200)

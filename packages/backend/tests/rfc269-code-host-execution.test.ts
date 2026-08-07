@@ -17,7 +17,7 @@ import { resolveProjectFallback } from '../src/services/codeHost/project'
 import { buildCodeHostUrl } from '../src/services/codeHost/url'
 
 // 同 connections 测试：夹具刻意不带 glpat- / ghp_ 前缀（gitleaks 规则）。
-const TOKEN = 'aw-fixture-not-a-real-token-1234'
+const TOKEN = 'aw-fixture-not-a-real-token-1234' // gitleaks:allow
 const GL_BASE = 'https://gitlab.corp.example/api/v4'
 const GH_BASE = 'https://api.github.com'
 
@@ -66,6 +66,7 @@ function ghDeps(
   overrides: Partial<Parameters<typeof executeCodeHostCall>[1]> = {},
 ): Parameters<typeof executeCodeHostCall>[1] {
   return {
+    // gitleaks:allow
     connection: { provider: 'github', baseUrl: GH_BASE, token: 'aw-fixture-gh-5678' },
     ctx: { ports: {}, trigger: null },
     projectFallback: { ok: true, value: 'octo/repo' },
