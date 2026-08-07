@@ -770,7 +770,27 @@ describe('startMemoryDistillLoop reentrancy', () => {
 
     const loop = startMemoryDistillLoop({ db, spawnFn: slowSpawn, intervalMs: 5 })
     try {
-      // Let many interval fires happen while the first spawn is blocked.
+      // Two waits, and they are NOT the same kind — conflating them is what made
+      // this assertion flaky twice.
+      //
+      // (a) PRECONDITION, positive ⇒ poll. "The first spawn has started" is an
+      //     observable event, so waiting a fixed 80ms for it is a bet on runner
+      //     speed. CI run 31167085366 (macos shard 3/4) lost that bet and
+      //     reported `maxInFlight` **0** — not 2. A guard failure would read 2;
+      //     0 means the loop had not even reached its first spawn yet, i.e. the
+      //     test never got to the thing it exists to check. Five local runs
+      //     passed, including with six CPU burners pinned alongside.
+      const startDeadline = Date.now() + 5_000
+      while (calls === 0 && Date.now() < startDeadline) {
+        await new Promise((r) => setTimeout(r, 5))
+      }
+      expect(calls).toBe(1) // the loop is actually running now
+
+      // (b) THE REAL ASSERTION, negative ⇒ wall clock. "No second spawn
+      //     overlapped" cannot be polled for (you cannot poll for the absence of
+      //     an event), so we hold the gate open across many interval fires
+      //     (16 × 5ms) and then check. This wait now starts from a KNOWN state
+      //     (first spawn in flight) instead of racing the loop's startup.
       await new Promise((r) => setTimeout(r, 80))
       // The guard serialises: exactly one spawn in-flight, only the first head
       // claimed so far.
