@@ -87,6 +87,37 @@ describe('RFC-103 T2 runtimeConfigOpts — 单一事实源摊配置', () => {
   test('RFC-115: defaultNodeRetries 0 也摊出（nonnegative，不被当 falsy 跳过）', () => {
     expect(runtimeConfigOpts({ defaultNodeRetries: 0 })).toEqual({ defaultNodeRetries: 0 })
   })
+
+  // RFC-266: 同一个漏斗第三次漏接线。`multiProcessSubprocessConcurrency` 被
+  // settings 持久化、被 scheduler 消费，却从来没有人把它从 config 搬进 opts，
+  // 于是所有部署上扇出并发恒为硬编码的 4；`maxConcurrentScriptNodes` 是新加的
+  // 脚本独立池，必须一开始就走同一条漏斗，不能重蹈覆辙。
+  test('RFC-266: 扇出子池 + 脚本池经同一漏斗摊出', () => {
+    expect(
+      runtimeConfigOpts({
+        multiProcessSubprocessConcurrency: 8,
+        maxConcurrentScriptNodes: 6,
+      }),
+    ).toEqual({
+      multiProcessSubprocessConcurrency: 8,
+      maxConcurrentScriptNodes: 6,
+    })
+  })
+
+  test('RFC-266: 两个新键单独也摊出；缺省不合成键', () => {
+    expect(runtimeConfigOpts({ multiProcessSubprocessConcurrency: 2 })).toEqual({
+      multiProcessSubprocessConcurrency: 2,
+    })
+    expect(runtimeConfigOpts({ maxConcurrentScriptNodes: 2 })).toEqual({
+      maxConcurrentScriptNodes: 2,
+    })
+    expect(runtimeConfigOpts({ maxConcurrentNodes: 1 })).not.toHaveProperty(
+      'maxConcurrentScriptNodes',
+    )
+    expect(runtimeConfigOpts({ maxConcurrentNodes: 1 })).not.toHaveProperty(
+      'multiProcessSubprocessConcurrency',
+    )
+  })
 })
 
 describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
@@ -115,6 +146,40 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     const spreads = taskSrc.match(/\.\.\.runtimeConfigOpts\(/g) ?? []
     // startTask + resumeTask（同块 replace_all）+ retryNode = 3
     expect(spreads.length).toBe(3)
+  })
+
+  // RFC-266: RFC-243 子任务的 deps 装配（buildChildDeps）必须原样带上三个并发键。
+  // 尤其是脚本池 —— 它是 daemon 级单例且 resize-on-read，漏传会让**每一次子任务
+  // 启动都把管理员配置的脚本上限静默改回默认 4**（影响整个 daemon，不只是子任务）。
+  test('RFC-266: buildChildDeps 透传三个并发键（漏传脚本池 = 全 daemon 被改回默认）', () => {
+    const schedulerSrc = readFileSync(join(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
+    const start = schedulerSrc.indexOf('function buildChildDeps(')
+    expect(start).toBeGreaterThan(-1)
+    const body = schedulerSrc.slice(start, schedulerSrc.indexOf('\n}\n', start))
+    for (const key of [
+      'maxConcurrentNodes',
+      'maxConcurrentScriptNodes',
+      'multiProcessSubprocessConcurrency',
+    ]) {
+      expect(body).toContain(`opts.${key} !== undefined`)
+      expect(body).toContain(`{ ${key}: opts.${key} }`)
+    }
+  })
+
+  // RFC-266: 防第四次漏接线 —— 三个并发键都必须出现在 config→deps 的那一级里。
+  test('RFC-266: 三个并发键都被 resolveLaunchRuntimeConfig 从 config 读出', () => {
+    const launchSrc = readFileSync(
+      join(import.meta.dir, '../src/services/launchRuntimeConfig.ts'),
+      'utf8',
+    )
+    for (const key of [
+      'maxConcurrentNodes',
+      'maxConcurrentScriptNodes',
+      'multiProcessSubprocessConcurrency',
+    ]) {
+      expect(launchSrc).toContain(`cfg.${key} !== undefined`)
+      expect(launchSrc).toContain(`out.${key} = cfg.${key}`)
+    }
   })
 
   test('RFC-115: 三处 runTask 调用点不再手动 spread per-node timeout（收进漏斗）', () => {

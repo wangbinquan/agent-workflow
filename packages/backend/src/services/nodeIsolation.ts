@@ -1251,7 +1251,7 @@ async function gitlinksReachable(worktreePath: string, tree: string): Promise<bo
  * by GC — but it used to be UNBOUNDED, and that turned a stuck
  * `git worktree remove` (residual `index.lock`, stalled network volume) into a
  * daemon-wide outage: the scheduler awaited it while holding the shared
- * `globalSem` permit, so the permit never came back and, once capacity was
+ * node-pool permit, so the permit never came back and, once capacity was
  * exhausted, every task in the daemon stopped. Bounding it here is what lets
  * `runHostNode` — and therefore `runTask` — resolve at all, which the release
  * reordering alone does not achieve (Codex design gate, RFC-208 §6-3).
@@ -1353,7 +1353,7 @@ async function dropNodePoolRefs(
 
 // ---------------------------------------------------------------------------
 // RFC-130 §6.2 — merge-agent conflict resolution (git orchestration).
-// The scheduler injects `runAgent` (a runNode call that BYPASSES globalSem, §7)
+// The scheduler injects `runAgent` (a runNode call that BYPASSES the node pool, §7)
 // so this git-only orchestration stays unit-testable with a mock agent.
 // ---------------------------------------------------------------------------
 
@@ -1378,7 +1378,7 @@ export interface ResolveConflictOutcome {
  * worktree and the resolve-iso removed; on failure the resolve-iso is preserved.
  *
  * `runAgent(prompt, cwd)` is injected by the scheduler and MUST dispatch the merge
- * agent WITHOUT acquiring globalSem (§7 deadlock avoidance). Setup failures
+ * agent WITHOUT acquiring a node-pool slot (§7 deadlock avoidance). Setup failures
  * (commit-tree / worktree add) throw → caller treats as merge-failed; a failed
  * agent RUN resolves to `{ resolved: false }` with the iso kept.
  */
@@ -1459,7 +1459,7 @@ export async function resolveConflictWithAgent(
   let resolved = false
   let unresolved: MergeConflictEntry[] = [...manifest, ...unhandled]
   try {
-    // §6.2②: run the merge agent in the resolve-iso (scheduler bypasses globalSem).
+    // §6.2②: run the merge agent in the resolve-iso (scheduler bypasses the node pool).
     await runAgent(buildMergeResolvePrompt({ manifest }), resolveIso, manifest)
     // §6.2③: framework self-check from observed worktree state.
     const states = gatherResolvedStates(resolveIso, manifest)

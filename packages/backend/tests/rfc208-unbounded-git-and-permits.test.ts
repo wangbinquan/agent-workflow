@@ -107,7 +107,16 @@ describe('RFC-208 · runGit must be boundable', () => {
   }, 30_000)
 })
 
-describe('RFC-208 · globalSem permit must survive a wedged or throwing cleanup', () => {
+// RFC-266 显式改判（不变量不变，覆盖面变宽）：daemon 级的 `globalSem` 已拆成
+// `agentSem`（agent 节点 / 工作组主持 / 扇出分片与聚合）与 `scriptSem`（脚本节点）
+// 两个独立池。两条 oracle 原本只认 `globalSem.acquire()` / `releaseGlobal()`：
+// 前者改名后会**空扫**（`acquires.length > 0` 直接红，本轮就是这么暴露的），后者
+// 会**静默漏掉脚本路径**（它释放的是 `releaseScript()`）。permit 泄漏的后果没变
+// ——任何一个池的名额漏还都会卡死整个 daemon 上所有任务，所以两条都按池集合展开。
+const POOL_RELEASE_NAMES = ['releaseGlobal', 'releaseScript'] as const
+const POOL_ACQUIRE_RE = /(?:agentSem|scriptSem)\.acquire\(\)/g
+
+describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup', () => {
   // Structural oracle #1 — ordering inside every finally that does BOTH.
   //
   // Deliberately table-driven over ALL matching blocks rather than pinned to one
@@ -122,14 +131,20 @@ describe('RFC-208 · globalSem permit must survive a wedged or throwing cleanup'
     })
 
     const offenders: string[] = []
+    let checkedBlocks = 0
     for (const block of finallyBlocks) {
-      const release = block.indexOf('releaseGlobal()')
-      const discard = block.indexOf('await discardNodeIso(')
-      if (release === -1 || discard === -1) continue
-      if (release > discard) offenders.push(block.slice(0, 240))
+      for (const name of POOL_RELEASE_NAMES) {
+        const release = block.indexOf(`${name}()`)
+        const discard = block.indexOf('await discardNodeIso(')
+        if (release === -1 || discard === -1) continue
+        checkedBlocks++
+        if (release > discard) offenders.push(block.slice(0, 240))
+      }
     }
 
     expect(offenders).toEqual([])
+    // 防空扫：release 标识符再被改名时这里先红，而不是悄悄退化成零断言。
+    expect(checkedBlocks).toBeGreaterThan(0)
   })
 
   // Structural oracle #2 — nothing REJECTABLE sits unguarded between acquire
@@ -144,13 +159,17 @@ describe('RFC-208 · globalSem permit must survive a wedged or throwing cleanup'
   // therefore cannot leak the outer permit by throwing. Nesting one budget
   // inside another is an existing sanctioned shape (fanout shard / aggregator);
   // flagging it here would be a false positive, not a finding.
-  test('no rejectable await sits between globalSem.acquire() and its guarding try', () => {
-    const acquires = [...schedulerSource.matchAll(/globalSem\.acquire\(\)/g)]
+  test('no rejectable await sits between a pool acquire() and its guarding try', () => {
+    const acquires = [...schedulerSource.matchAll(POOL_ACQUIRE_RE)]
+    // RFC-266: 两个池都必须被扫到（agent 路径 + 脚本路径），否则改名/拆池会让这条
+    // 守卫退化成零覆盖。
     expect(acquires.length).toBeGreaterThan(0)
+    expect(schedulerSource).toContain('scriptSem.acquire()')
+    expect(schedulerSource).toContain('agentSem.acquire()')
 
     const offenders: string[] = []
     for (const m of acquires) {
-      const from = (m.index ?? 0) + 'globalSem.acquire()'.length
+      const from = (m.index ?? 0) + m[0].length
       const region = schedulerSource.slice(from, from + 6000)
 
       // Walk forward tracking try-block nesting. An await that can reject is
@@ -187,7 +206,7 @@ describe('RFC-208 · globalSem permit must survive a wedged or throwing cleanup'
         const callee = awaitMatch[1] ?? ''
         if (/\.acquire$/.test(callee)) continue // resolve-only, cannot reject
         if (tryDepths.length === 0) {
-          offenders.push(`${callee} (unguarded after globalSem.acquire())`)
+          offenders.push(`${callee} (unguarded after ${m[0]})`)
         }
       }
     }

@@ -72,8 +72,20 @@ export const ConfigSchema = z.object({
   // 配置门已删除——三重矛盾的假门：注释称默认关、前端按默认开消费、后端从不
   // enforce。claude 可用性以 runtimes 注册表内建行的 per-runtime `enabled`
   // 为单一事实源；存量 config.json 里的旧 key 被 zod 静默剥离。）
-  /** Global semaphore capacity. design.md §11 default = 4. */
+  /**
+   * Daemon-wide pool capacity for AGENT-class process nodes (agent nodes,
+   * workgroup host nodes, fan-out shards and aggregators). design.md §11
+   * default = 4. RFC-266 narrowed this from "every process node" — script
+   * nodes have their own independent pool below, so the daemon's peak child
+   * count is this value PLUS maxConcurrentScriptNodes.
+   */
   maxConcurrentNodes: z.number().int().positive(),
+  /**
+   * RFC-266: daemon-wide pool capacity for RFC-253 script nodes, fully
+   * independent of `maxConcurrentNodes` so a queue of multi-minute agents
+   * cannot block a second-scale script step (and vice versa).
+   */
+  maxConcurrentScriptNodes: z.number().int().positive(),
   /** Independent sub-process pool capacity inside a multi-process node. */
   multiProcessSubprocessConcurrency: z.number().int().positive(),
 
@@ -592,6 +604,7 @@ export type Config = z.infer<typeof ConfigSchema>
 export const DEFAULT_CONFIG: Config = {
   $schema_version: CONFIG_SCHEMA_VERSION,
   maxConcurrentNodes: 4,
+  maxConcurrentScriptNodes: 4,
   multiProcessSubprocessConcurrency: 4,
   defaultPerTaskMaxDurationMs: 60 * 60 * 1000, // 1 hour
   defaultPerTaskMaxTotalTokens: 0, // 0 = unlimited

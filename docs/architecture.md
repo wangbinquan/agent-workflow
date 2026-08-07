@@ -63,12 +63,17 @@ so the DB stays fast; the events API stitches archive + DB transparently.
    workflow definition into `tasks.workflow_snapshot`, and `git worktree add`s
    a fresh worktree under `~/.agent-workflow/worktrees/<repo-slug>/<task-id>`
    on the chosen base branch.
-2. **Scheduler** — Kahn's algorithm over the snapshot's DAG. Each "level" of
-   ready nodes runs in parallel under three independent semaphores:
-   - global (`config.maxConcurrentNodes`)
-   - per-task **write semaphore** (capacity 1; `readonly: false` agents
-     serialize within a task)
-   - per multi-process node sub-pool (`config.multiProcessSubprocessConcurrency`)
+2. **Scheduler** — Kahn's algorithm over the snapshot's DAG. Ready nodes run in
+   parallel under four semaphores (all hot-applied on a settings save, RFC-266):
+   - daemon-wide **agent pool** (`config.maxConcurrentNodes`) — agent nodes,
+     workgroup host nodes, fan-out shards and aggregators
+   - daemon-wide **script pool** (`config.maxConcurrentScriptNodes`) — RFC-253
+     script nodes, fully independent of the agent pool
+   - per-task **write semaphore** (capacity 1; held only across
+     snapshot-at-dispatch and merge-back, not across a node's whole run —
+     RFC-130 gave every node its own isolated worktree)
+   - per-task fan-out sub-pool (`config.multiProcessSubprocessConcurrency`),
+     applied *inside* an agent-pool slot
 3. **Per node** — record a `pre_snapshot` (cheap `git stash create` SHA),
    spawn `opencode` with the agent injected via `OPENCODE_CONFIG_CONTENT` and
    the per-process skills directory via `OPENCODE_CONFIG_DIR`. Stream stdout

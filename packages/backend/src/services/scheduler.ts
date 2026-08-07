@@ -157,7 +157,8 @@ import {
   type ManagedInjectionIdentity,
 } from '@/services/runtime/injectionIdentity'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
-import { getProcessNodeSemaphore } from '@/services/processNodeConcurrency'
+import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
+import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import {
   areTransitiveUpstreamsCompleted,
@@ -282,7 +283,10 @@ import type { MaterializedSpace, StartTaskDeps } from '@/services/task'
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import { existsSync } from 'node:fs'
 import { basename, join as pathJoin } from 'node:path'
-import { Semaphore } from '@/util/semaphore'
+// RFC-266: the scheduler no longer CONSTRUCTS any semaphore — all three come
+// from the daemon-scoped registries (processNodeConcurrency / taskFanoutPools /
+// taskWriteLocks), so a settings change resizes the very instances in use.
+import type { Semaphore } from '@/util/semaphore'
 import { ulid } from 'ulid'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -317,8 +321,14 @@ export interface RunTaskOptions {
   scriptInterpreters?: Partial<Record<ScriptLanguage, string>>
   /** RFC-253 — wall clock for one dependency-environment build. */
   scriptDepsInstallTimeoutMs?: number
-  /** Daemon-wide concurrency limit shared by agent nodes across tasks. Default 4. */
+  /**
+   * Daemon-wide pool shared across tasks by AGENT-class process nodes — agent
+   * nodes, workgroup host nodes, fan-out shards and aggregators. Default 4.
+   * RFC-266: script nodes have their own pool below and no longer compete here.
+   */
   maxConcurrentNodes?: number
+  /** RFC-266: daemon-wide pool for script nodes, independent of the agent pool. Default 4. */
+  maxConcurrentScriptNodes?: number
   /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
   multiProcessSubprocessConcurrency?: number
   /**
@@ -391,8 +401,17 @@ interface SchedulerState {
   opts: RunTaskOptions
   log: Logger
   inputsMap: Record<string, string>
-  globalSem: Semaphore
+  /**
+   * RFC-266: the two INDEPENDENT daemon-wide pools. `agentSem` covers agent
+   * nodes, workgroup host nodes and fan-out shards/aggregators; `scriptSem`
+   * covers RFC-253 script nodes. A given executor takes exactly ONE of them and
+   * never both, so the pools introduce no lock order between themselves.
+   */
+  agentSem: Semaphore
+  scriptSem: Semaphore
   writeSem: Semaphore
+  /** RFC-266: per-task fan-out sub-pool, from the daemon-scoped registry so a
+   *  settings change reaches a task that is already running. */
   subprocessSem: Semaphore
   /** nodeId → innermost wrapper id containing it. */
   containerOf: Map<string, string>
@@ -452,10 +471,14 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
   // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
   // mutex against our cached SchedulerState.writeSem reference).
+  // RFC-266: the fan-out sub-pool registry entry follows the SAME rule and the
+  // same reasoning (a split pool would run a task at double its configured
+  // shard concurrency), so it is reclaimed in this one place too.
   try {
     await runTaskInner(opts)
   } finally {
     gcTaskWriteSem(opts.taskId)
+    gcTaskFanoutSem(opts.taskId)
   }
 }
 
@@ -642,13 +665,21 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     repoGroupName: task.repoGroupName ?? null,
     log,
     inputsMap,
-    globalSem: getProcessNodeSemaphore(db, opts.maxConcurrentNodes ?? 4),
+    // RFC-266: two independent daemon-wide pools (script nodes no longer queue
+    // behind agent runs). Both come from the daemon-scoped registry, which
+    // resizes the SAME instance when the setting changes — so a settings save
+    // applies to this run, not just to the next launch.
+    agentSem: getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4),
+    scriptSem: getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4),
     // RFC-098 B1 (audit S-9): the writer lock comes from the per-task
     // registry so HTTP rollback paths (clarify/review/cross-clarify) hold THE
     // SAME instance. gc happens in this function's finally only (see
     // taskWriteLocks.ts lifecycle doc).
     writeSem: getTaskWriteSem(taskId),
-    subprocessSem: new Semaphore(opts.multiProcessSubprocessConcurrency ?? 4),
+    // RFC-266: from the per-task registry (same lifecycle rule as writeSem) so
+    // PUT /api/config can resize a RUNNING task's fan-out. Before RFC-266 this
+    // was a local `new Semaphore(...)` fed by a value nothing ever threaded.
+    subprocessSem: getTaskFanoutSem(taskId, opts.multiProcessSubprocessConcurrency ?? 4),
     containerOf,
     topLevelIds,
     // RFC-066: thread per-repo metadata through every inner dispatch.
@@ -864,7 +895,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       return { status: 'failed', outputs: {}, errorMessage: injection.message }
     }
 
-    const releaseGlobal = await state.globalSem.acquire()
+    const releaseGlobal = await state.agentSem.acquire()
     let iso: IsoHandle
     // RFC-210 impl-gate A1-fix (review round 2): a merge/snapshot THROW keeps
     // the iso. The publish path hard-fails BEFORE the node tree is persisted,
@@ -1260,7 +1291,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       // RFC-208: release the daemon-wide permit BEFORE awaiting cleanup. The
       // three sibling call sites already do it in this order; this one drifted
       // and turned a wedged `git worktree remove` into a permanent permit leak
-      // (globalSem is shared daemon-wide, so exhausting it stalls every task in
+      // (the node pool is shared daemon-wide, so exhausting it stalls every task in
       // the process and nothing self-heals — restart only). discardNodeIso is
       // itself bounded now (ISO_DISCARD_GIT_TIMEOUT_MS), which is what keeps
       // runHostNode able to resolve at all.
@@ -1446,7 +1477,7 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   // completion (`Promise.race`), so a finished node's downstream dispatches the
   // instant its last upstream settles — no waiting on the slowest sibling in a
   // batch. RFC-130: every node runs in its OWN isolated worktree, so ALL nodes
-  // run truly in parallel under `globalSem` (the `readonly` flag was removed —
+  // run truly in parallel under the node pool (the `readonly` flag was removed —
   // there is no read/write distinction); `writeSem` only serializes the brief
   // per-node snapshot-at-dispatch (§段①) + merge-back (§段③), not the agent run.
   //
@@ -2722,8 +2753,8 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
  * merge agent. For each conflicted repo, spins a resolve-iso from the conflicted
  * merged tree and dispatches the merge agent there (as a child node_run under the
  * conflicting run, `cause='merge-resolve'`). The dispatch is a DIRECT `runNode`
- * call — it deliberately does NOT acquire `globalSem`, because the caller holds
- * `writeSem` across §6.2 and a globalSem wait here would close the writeSem↔globalSem
+ * call — it deliberately does NOT acquire a node-pool slot, because the caller
+ * holds `writeSem` across §6.2 and a pool wait here would close the writeSem↔pool
  * cycle (§7 deadlock analysis). Framework self-checks the resolution (D6); on
  * success the resolution is materialized into the canonical worktree and the
  * resolve-iso discarded, on failure the resolve-iso is preserved for awaiting_human.
@@ -2776,7 +2807,7 @@ async function resolveMergeConflicts(
       configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
     })
     const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
-    // DIRECT runNode — bypasses globalSem on purpose (§7 deadlock avoidance).
+    // DIRECT runNode — bypasses the node pool on purpose (§7 deadlock avoidance).
     await runNode({
       taskId: task.id,
       nodeRunId: sessionRunId,
@@ -3082,7 +3113,7 @@ async function runCallWorkflowNode(
     }
 
     // ---- D: derive the child's workspace from THIS node's iso (slot first,
-    // snapshot second — the agent path's globalSem-then-iso ordering, so a
+    // snapshot second — the agent path's slot-then-iso ordering, so a
     // long budget queue cannot serve the child a stale base).
     try {
       liveIso = await createIsoUnderLock({
@@ -3634,6 +3665,18 @@ function buildChildDeps(state: SchedulerState): StartTaskDeps {
     ...(opts.maxConcurrentNodes !== undefined
       ? { maxConcurrentNodes: opts.maxConcurrentNodes }
       : {}),
+    // RFC-266: the child MUST carry both other concurrency knobs too. The
+    // script pool is a daemon-wide singleton with resize-on-read, so dropping
+    // it here would make every child-task launch silently reset the
+    // administrator's script cap back to the default 4 for the WHOLE daemon;
+    // dropping the fan-out cap would run the child's shards at 4 regardless of
+    // configuration — the very defect this RFC exists to fix, one level down.
+    ...(opts.maxConcurrentScriptNodes !== undefined
+      ? { maxConcurrentScriptNodes: opts.maxConcurrentScriptNodes }
+      : {}),
+    ...(opts.multiProcessSubprocessConcurrency !== undefined
+      ? { multiProcessSubprocessConcurrency: opts.multiProcessSubprocessConcurrency }
+      : {}),
     ...(opts.maxActiveChildTasks !== undefined
       ? { maxActiveChildTasks: opts.maxActiveChildTasks }
       : {}),
@@ -3956,13 +3999,16 @@ async function launchCallWorkgroupChild(
 // Structurally parallel to the agent branch below, but it cannot SHARE that
 // code: the agent path's semaphore/iso/retry block sits after the
 // `kind !== 'agent-single'` guard, so a script node never reaches it
-// (design-gate F6). What IS shared are the primitives — globalSem, the RFC-130
+// (design-gate F6). What IS shared are the primitives — the pool semaphore
+// (RFC-266: the script one), the RFC-130
 // isolation helpers, mintNodeRun, setNodeRunStatus, the envelope parser — which
 // is where the invariants actually live.
 // ---------------------------------------------------------------------------
 
 async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
-  const { db, task, taskId, definition, opts, log, globalSem, writeSem } = state
+  // RFC-266: the SCRIPT pool, not the agent pool — a second-scale script must
+  // not queue behind multi-minute agent runs (and cannot starve them either).
+  const { db, task, taskId, definition, opts, log, scriptSem, writeSem } = state
   const { node, iteration } = args
 
   const language = readScriptLanguage(node)
@@ -4056,7 +4102,10 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
   }
 
   const maxRetries = opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
-  const releaseGlobal = await globalSem.acquire()
+  // The slot is held across iso setup → dependency build → EVERY retry →
+  // merge-back, released in the finally below (unchanged by RFC-266; only the
+  // pool it comes from changed).
+  const releaseScript = await scriptSem.acquire()
 
   // A readonly script runs IN PLACE against the canonical worktree with the
   // whole tree (and the git common dir) mounted read-only, so there is nothing
@@ -4075,7 +4124,7 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
         log,
       })
     } catch (err) {
-      releaseGlobal()
+      releaseScript()
       log.warn('script iso worktree setup failed', {
         nodeId: node.id,
         error: err instanceof Error ? err.message : String(err),
@@ -4188,7 +4237,7 @@ async function runScriptNode(state: SchedulerState, args: OneNodeArgs): Promise<
       }
     }
   } finally {
-    releaseGlobal()
+    releaseScript()
     if (isoHandle !== null && !succeeded) {
       await discardNodeIso(isoHandle, log, writeSem).catch(() => {})
     }
@@ -4604,7 +4653,7 @@ async function runOneScriptAttempt(
 }
 
 async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
-  const { db, task, taskId, definition, opts, inputsMap, globalSem, writeSem, log } = state
+  const { db, task, taskId, definition, opts, inputsMap, agentSem, writeSem, log } = state
   const { node, iteration } = args
 
   if (opts.signal?.aborted === true) {
@@ -4861,7 +4910,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // SchedulerState; see RFC-146 design D2.)
   // RFC-243: call nodes — an independent child task behind an agent-shaped
   // node. Deliberately BEFORE the agent fall-through guard; never acquires
-  // globalSem (design §6.1 — the child's own nodes compete for it).
+  // a node-pool slot (design §6.1 — the child's own nodes compete for it).
   if (node.kind === 'call-workflow' || node.kind === 'call-workgroup') {
     return await runCallWorkflowNode(state, args)
   }
@@ -5043,15 +5092,18 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
   let envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
 
-  // Lock order: writeSem ≺ globalSem ≺ subprocessSem (no cycles — RFC-098 survey
-  // §wp5-4). RFC-130 §7 SUPERSEDED the RFC-098 B1 "writer acquires writeSem before
-  // its global slot" model (which existed to stop queued writers starving readers):
-  // there is no whole-run write lock now — each node runs in its OWN isolated
-  // worktree, so writeSem is held only for the brief snapshot-at-dispatch (§段①) +
-  // merge-back (§段③), never across the multi-minute agent run. globalSem is the
-  // real DAG-parallelism cap now (writeSem + globalSem are never held together —
-  // §7.2 deadlock analysis; the merge agent bypasses globalSem to avoid a cycle).
-  const releaseGlobal = await globalSem.acquire()
+  // Lock order: writeSem ≺ (agentSem | scriptSem) ≺ subprocessSem (no cycles —
+  // RFC-098 survey §wp5-4). RFC-266 split the old single `globalSem` into two
+  // independent pools; an executor takes exactly ONE of them and never both, so
+  // the split adds no new ordering edge. RFC-130 §7 SUPERSEDED the RFC-098 B1
+  // "writer acquires writeSem before its global slot" model (which existed to
+  // stop queued writers starving readers): there is no whole-run write lock now
+  // — each node runs in its OWN isolated worktree, so writeSem is held only for
+  // the brief snapshot-at-dispatch (§段①) + merge-back (§段③), never across the
+  // multi-minute agent run. The pool slot is the real DAG-parallelism cap now
+  // (writeSem + pool are never held together — §7.2 deadlock analysis; the merge
+  // agent bypasses the pool to avoid a cycle).
+  const releaseGlobal = await agentSem.acquire()
   // §段①: snapshot canonical worktree(s) + branch an isolated worktree under a
   // brief writeSem window. On failure release the slot and fail the node (the
   // canonical worktree is never touched, so nothing to roll back).
@@ -7439,7 +7491,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
   // writeSem serialization — shards run truly in parallel up to global/subprocess
   // caps and merge their deltas back one at a time). Shards usually touch DIFFERENT
   // files (per-file / per-dir sharding), so merge-backs rarely conflict.
-  const releaseGlobal = await state.globalSem.acquire()
+  const releaseGlobal = await state.agentSem.acquire()
   const releaseSub = await state.subprocessSem.acquire()
   let shardIso: IsoHandle
   // RFC-210 impl-gate A1-fix (review round 2): a merge/snapshot THROW keeps the
@@ -7900,7 +7952,7 @@ async function dispatchFanoutAggregatorAttempt(
   // RFC-130: the aggregator runs in its OWN isolated worktree too (it can write —
   // e.g. concatenate shard outputs into a file). Merge-back into canonical on
   // success; no whole-run writeSem.
-  const releaseGlobal = await state.globalSem.acquire()
+  const releaseGlobal = await state.agentSem.acquire()
   const releaseSub = await state.subprocessSem.acquire()
   let aggIso: IsoHandle
   // RFC-210 impl-gate A1-fix (review round 2): keep the iso on a merge/snapshot

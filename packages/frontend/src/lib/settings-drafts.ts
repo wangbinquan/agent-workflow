@@ -66,6 +66,7 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'defaultNodeRetries',
     'largeOutputThresholdBytes',
     'maxConcurrentNodes',
+    'maxConcurrentScriptNodes',
     'multiProcessSubprocessConcurrency',
     'logLevel',
   ],

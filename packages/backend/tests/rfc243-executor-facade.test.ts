@@ -70,14 +70,20 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
     expect(text).toContain('startWorkgroupTask(')
   })
 
-  test('call 分支纪律：不持 globalSem；adoption 区零 mint（实现门 P2-4 源锁）', () => {
+  test('call 分支纪律：不持任何节点池名额；adoption 区零 mint（实现门 P2-4 源锁）', () => {
     const text = srcText('services/scheduler.ts')
     const fnStart = text.indexOf('async function runCallWorkflowNode')
     const fnEnd = text.indexOf('async function failCallRow')
     expect(fnStart).toBeGreaterThan(0)
     expect(fnEnd).toBeGreaterThan(fnStart)
     const body = text.slice(fnStart, fnEnd)
-    expect(body).not.toContain('globalSem.acquire')
+    // RFC-266 显式改判：`globalSem` 已拆成 `agentSem` / `scriptSem` 两个独立池，
+    // 只留原来那条 `not.toContain('globalSem.acquire')` 会**静默失效**（断言一个
+    // 不复存在的标识符，永远真）。不变量本身没变——call 节点一个名额都不占，
+    // 由子任务自己的节点去抢——所以这里改成对两个池都断言。
+    for (const pool of ['agentSem', 'scriptSem']) {
+      expect(body).not.toContain(`${pool}.acquire`)
+    }
     const aStart = body.indexOf('RFC-243-LOCK:adoption-no-mint-begin')
     const aEnd = body.indexOf('RFC-243-LOCK:adoption-no-mint-end')
     expect(aStart).toBeGreaterThan(0)

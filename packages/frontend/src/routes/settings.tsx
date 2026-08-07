@@ -527,14 +527,34 @@ function LimitsTab({ config }: TabProps) {
       </Field>
       {/* RFC-113: global execution knobs relocated from the Runtime tab. */}
       <div className="form-grid form-grid--cols-2">
-        <Field label={t('settingsForm.maxConcurrentNodes')} required>
+        <Field
+          label={t('settingsForm.maxConcurrentNodes')}
+          hint={t('settingsForm.maxConcurrentNodesHint')}
+          required
+        >
           <NumberInput
             value={state.maxConcurrentNodes}
             onChange={(v) => setState({ ...state, maxConcurrentNodes: v ?? 1 })}
             min={1}
           />
         </Field>
-        <Field label={t('settingsForm.multiProcessConc')} required>
+        {/* RFC-266: script nodes run in their own daemon pool. */}
+        <Field
+          label={t('settingsForm.maxConcurrentScriptNodes')}
+          hint={t('settingsForm.maxConcurrentScriptNodesHint')}
+          required
+        >
+          <NumberInput
+            value={state.maxConcurrentScriptNodes}
+            onChange={(v) => setState({ ...state, maxConcurrentScriptNodes: v ?? 1 })}
+            min={1}
+          />
+        </Field>
+        <Field
+          label={t('settingsForm.multiProcessConc')}
+          hint={t('settingsForm.multiProcessConcHint')}
+          required
+        >
           <NumberInput
             value={state.multiProcessSubprocessConcurrency}
             onChange={(v) => setState({ ...state, multiProcessSubprocessConcurrency: v ?? 1 })}

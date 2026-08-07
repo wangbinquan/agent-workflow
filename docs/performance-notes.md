@@ -98,7 +98,10 @@ cache plus the 10 simultaneous child process pipes.
 `maxConcurrentNodes` (default 4) caps the actual parallelism: when 10
 tasks each have one agent node, 4 nodes execute at once and the other 6
 queue. The 17 ms per-node average is dominated by `git worktree add` +
-`Bun.spawn` setup; the stub script itself exits in <1 ms.
+`Bun.spawn` setup; the stub script itself exits in <1 ms. (RFC-266: this
+cap covers agent-class nodes only — script nodes queue on the separate
+`maxConcurrentScriptNodes` pool, so a burst mixing both node kinds runs
+up to the sum of the two caps.)
 
 There were no flaky failures across the 10-task burst and the WS
 broadcasters did not back-pressure (none of the test infra subscribes).

@@ -209,7 +209,7 @@ export interface MergeSettleOutcome {
  * - Git-level failures THROW RAW — the merge-throw disposition is per-site
  *   (markMergeFailed vs the workgroup hook's leave-for-replay, see header).
  * - Holding writeSem across the (rare) conflict resolution is the §6.2/D5
- *   tradeoff — the resolver's runNode bypasses globalSem (§7 no-cycle);
+ *   tradeoff — the resolver's runNode bypasses the node pool (§7 no-cycle);
  *   moving the agent out of the lock is the separately-RFC'd T5b.
  */
 export async function mergeBackAndSettle(args: {

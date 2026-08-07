@@ -244,6 +244,23 @@ export interface StartTaskDeps {
    */
   maxConcurrentNodes?: number
   /**
+   * RFC-266: per-task fan-out sub-pool capacity
+   * (config.multiProcessSubprocessConcurrency), threaded via runtimeConfigOpts →
+   * RunTaskOptions. Omitted → scheduler default (4). Until RFC-266 this was
+   * never wired from the HTTP layer either (the exact defect RFC-103 fixed for
+   * `maxConcurrentNodes`), so every fan-out ran at 4 regardless of the
+   * configured value. Live changes reach RUNNING tasks through the
+   * taskFanoutPools registry, not through this launch-time value.
+   */
+  multiProcessSubprocessConcurrency?: number
+  /**
+   * RFC-266: capacity of the daemon-wide pool for RFC-253 script nodes
+   * (config.maxConcurrentScriptNodes), independent of `maxConcurrentNodes` so
+   * scripts and agents never queue behind each other. Omitted → scheduler
+   * default (4).
+   */
+  maxConcurrentScriptNodes?: number
+  /**
    * RFC-115: global per-node retry budget (config.defaultNodeRetries) threaded
    * via runtimeConfigOpts → RunTaskOptions across start / resume / retry.
    * Replaces the removed per-node `retries` override. Omitted → scheduler `?? 3`.
@@ -807,6 +824,8 @@ export function runtimeConfigOpts(
     | 'commitPush'
     | 'mergeAgent'
     | 'maxConcurrentNodes'
+    | 'multiProcessSubprocessConcurrency'
+    | 'maxConcurrentScriptNodes'
     | 'defaultPerNodeTimeoutMs'
     | 'defaultNodeRetries'
     | 'defaultRuntime'
@@ -841,6 +860,15 @@ export function runtimeConfigOpts(
     ...(deps.commitPush?.lang !== undefined ? { commitPushLang: deps.commitPush.lang } : {}),
     ...(deps.maxConcurrentNodes !== undefined
       ? { maxConcurrentNodes: deps.maxConcurrentNodes }
+      : {}),
+    // RFC-266: the fan-out sub-pool + the independent script pool ride the SAME
+    // funnel. The fan-out one was persisted by Settings and consumed by the
+    // scheduler but wired by nobody in between.
+    ...(deps.multiProcessSubprocessConcurrency !== undefined
+      ? { multiProcessSubprocessConcurrency: deps.multiProcessSubprocessConcurrency }
+      : {}),
+    ...(deps.maxConcurrentScriptNodes !== undefined
+      ? { maxConcurrentScriptNodes: deps.maxConcurrentScriptNodes }
       : {}),
     // RFC-115: per-node timeout + retry budget + default runtime. Previously
     // timeout was hand-spread at each runTask call site and defaultRuntime was

@@ -56,6 +56,15 @@ export function resolveCommitPushConfig(configPath: string):
  * funnel), so the global value is now the single source. Before RFC-108 this
  * field was threaded NOWHERE — default-config nodes ran with no timeout, so a
  * hung-but-alive opencode child was effectively immortal.
+ *
+ * RFC-266: `multiProcessSubprocessConcurrency` was the SAME defect one knob
+ * over — Settings persisted it, the scheduler read `opts.multiProcessSubprocessConcurrency`,
+ * but nothing in between ever read it off the config, so every fan-out ran at
+ * the hard-coded `?? 4` no matter what the administrator set. It is threaded
+ * here now, together with the new `maxConcurrentScriptNodes` (the independent
+ * script-node pool). Three knobs, three defects of the exact same shape
+ * (RFC-108 timeout, RFC-103 concurrency, RFC-266 fan-out) — the source-anchor
+ * test in rfc103-launch-config-passthrough.test.ts now locks all of them.
  */
 export function resolveLaunchRuntimeConfig(configPath: string): {
   commitPush?: {
@@ -66,6 +75,8 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     lang?: Language
   }
   maxConcurrentNodes?: number
+  maxConcurrentScriptNodes?: number // RFC-266: independent script-node pool
+  multiProcessSubprocessConcurrency?: number
   defaultPerNodeTimeoutMs?: number
   defaultRuntime?: string // RFC-112: a registered runtime NAME (built-ins or custom)
   defaultNodeRetries?: number // RFC-115: global per-node retry budget
@@ -84,6 +95,8 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
       diffMaxBytes?: number
     }
     maxConcurrentNodes?: number
+    maxConcurrentScriptNodes?: number // RFC-266
+    multiProcessSubprocessConcurrency?: number
     defaultPerNodeTimeoutMs?: number
     defaultRuntime?: string // RFC-112: a registered runtime NAME (built-ins or custom)
     defaultNodeRetries?: number // RFC-115: global per-node retry budget
@@ -99,6 +112,11 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
   try {
     const cfg = loadConfig(configPath)
     if (cfg.maxConcurrentNodes !== undefined) out.maxConcurrentNodes = cfg.maxConcurrentNodes
+    // RFC-266: the script pool + the fan-out sub-pool ride the same funnel.
+    if (cfg.maxConcurrentScriptNodes !== undefined)
+      out.maxConcurrentScriptNodes = cfg.maxConcurrentScriptNodes
+    if (cfg.multiProcessSubprocessConcurrency !== undefined)
+      out.multiProcessSubprocessConcurrency = cfg.multiProcessSubprocessConcurrency
     if (cfg.defaultPerNodeTimeoutMs !== undefined && cfg.defaultPerNodeTimeoutMs > 0)
       out.defaultPerNodeTimeoutMs = cfg.defaultPerNodeTimeoutMs
     // RFC-111: global default runtime threaded to the scheduler dispatch site.

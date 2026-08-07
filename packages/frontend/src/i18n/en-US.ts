@@ -4787,8 +4787,15 @@ export const enUS: Resources = {
     mergeAgentRuntime: 'Merge-conflict runtime',
     mergeAgentRuntimeHint:
       'Runtime profile the built-in merge-conflict resolver runs on (its model comes from that profile); leave empty to inherit the global default runtime.',
-    maxConcurrentNodes: 'Max concurrent nodes',
-    multiProcessConc: 'Multi-process subprocess concurrency',
+    maxConcurrentNodes: 'Max concurrent agent nodes (global)',
+    maxConcurrentNodesHint:
+      'Daemon-wide cap on agent-class node processes running at once, shared by every task: agent nodes, workgroup host nodes, and each fan-out shard and aggregator take one slot (sub-workflow / sub-workgroup nodes take none — the child task’s own nodes do). Script nodes use the independent pool below and do not draw on this budget. Applies on save, to running tasks and to nodes already queued for a slot. Default 4.',
+    maxConcurrentScriptNodes: 'Max concurrent script nodes (global)',
+    maxConcurrentScriptNodesHint:
+      'Daemon-wide cap on script node processes running at once, fully independent of the agent pool above: a second-scale script never queues behind multi-minute agent runs, and vice versa. Peak child processes are therefore this value plus the agent cap. The slot is held across isolated-copy setup, dependency build, every retry and merge-back. Applies on save, including running tasks. Default 4.',
+    multiProcessConc: 'Fan-out subprocess concurrency (per task)',
+    multiProcessConcHint:
+      'Cap on shards running at once inside one task’s fan-out, applied within the agent pool — effective parallelism = min(free agent slots, this value). Script nodes cannot sit inside a fan-out and are unaffected. Applies on save, including running tasks. Default 4.',
     logLevel: 'Log level',
     perTaskDuration: 'Per-task max duration (ms)',
     perTaskTokens: 'Per-task max total tokens',

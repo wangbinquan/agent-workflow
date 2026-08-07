@@ -22,6 +22,8 @@ import {
 import { listAgents } from '@/services/agent'
 import { getRuntimeDriver } from '@/services/runtime'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import { resizeAllNodePools } from '@/services/processNodeConcurrency'
+import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
 import { Paths } from '@/util/paths'
 
 /** RFC-237 — the intent builder admits only runtimes whose driver declares the
@@ -210,6 +212,24 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         // future admission sees the saved mode generation. Existing immutable
         // admissions are intentionally not rewritten.
         deps.containmentCoordinator?.setMode(updated.sandboxMode)
+        // RFC-266 linearization point for the concurrency pools. Semaphore
+        // supports live resize (growing drains the FIFO so queued nodes start
+        // at once, shrinking never preempts an in-flight holder), but until now
+        // the ONLY caller was runTask — so a saved value sat inert until the
+        // next task launch, and with no launch in sight it never applied at
+        // all. Resizing here makes all three knobs take effect on save, for
+        // RUNNING tasks and for nodes already queued for a slot.
+        //
+        // AFTER applyConfigPatch on purpose: a failed file write must not leave
+        // the daemon admitting work at a capacity that was never persisted.
+        // `deps.db` is the same DbClient object the scheduler holds (one openDb
+        // in cli/start.ts feeds both createApp and buildStartTaskDeps), so the
+        // WeakMap keying reaches the very limiters runTask uses.
+        resizeAllNodePools(deps.db, {
+          agent: updated.maxConcurrentNodes,
+          script: updated.maxConcurrentScriptNodes,
+        })
+        resizeAllTaskFanoutSems(updated.multiProcessSubprocessConcurrency)
         return c.json(updated)
       })
     },

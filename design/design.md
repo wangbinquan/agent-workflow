@@ -763,10 +763,12 @@ edges:
   1. 找出所有 `pending` 且所有上游 port 已 ready 的节点
   2. 按节点类型分发到不同执行路径
   3. 任一节点状态变更 → 唤醒调度循环
-- 并发控制：
-  - **全局 semaphore**：容量 `max_concurrent_nodes`（默认 4）
-  - **写入 semaphore**：容量 1（per-task；按 agent.readonly 区分；只读节点不占用）
-  - **multi-process 子进程独立池**：父节点占 1 个全局名额，子进程在父节点内部用独立池（容量按分片策略推算 / settings 配 `multiProcessSubprocessConcurrency`），不挤占其他节点全局名额
+- 并发控制（**RFC-266 勘误**——本节原文与实现不符，已按实现改写）：
+  - **agent 类节点池**：daemon 级共享，容量 `maxConcurrentNodes`（默认 4）。占用者 = agent 节点、工作组主持节点、分片扇出的**每个分片**与聚合节点。`call-workflow` / `call-workgroup` 与 RFC-130 合并 agent 不占。
+  - **脚本节点池**：daemon 级共享，容量 `maxConcurrentScriptNodes`（默认 4），与 agent 池**完全独立**（RFC-266：秒级脚本不排在多分钟 agent 后面；daemon 峰值子进程数 = 两池之和）。
+  - **写入 semaphore**：容量 1（per-task）。RFC-130 之后**不再**按 agent.readonly 区分——每个节点都在自己的隔离 worktree 里跑，writeSem 只在「取快照」与「合并回写」两个短窗持有，不跨整个 agent run。
+  - **分片扇出子池**：容量 `multiProcessSubprocessConcurrency`（默认 4），per-task。原文称「父节点占 1 个全局名额、子进程不挤占其他节点全局名额」——**实际相反**：父 wrapper 是容器、不占名额，每个分片各占 1 个 agent 池名额后**再**取子池名额，故有效并行度 = min(agent 池余量, 子池容量)。
+  - 三者均由 `PUT /api/config` 保存时就地 resize，对**正在运行的任务**与**正在排队的节点**立即生效（RFC-266）。
 - 资源限额检查：
   - daemon 内 1Hz 后台 tick：扫描所有 running task → 检查 `now - started_at > max_duration_ms` / `sum(tok_total) > max_total_tokens` → 超限自动 cancel，error_message = `task-time-limit-exceeded` / `task-token-limit-exceeded`
 

@@ -70,20 +70,34 @@ If multiple envelopes appear in stdout, the **last one wins**. Missing
 declared ports are stored as empty strings. Ports the agent emits but did
 not declare are logged with a warning and dropped.
 
-## `readonly` and concurrency
+## Concurrency
 
-The platform has three independent semaphores:
+The platform has four semaphores:
 
-| Semaphore         | Capacity                                    | Who holds it                         |
-| ----------------- | ------------------------------------------- | ------------------------------------ |
-| Global            | `config.maxConcurrentNodes` (default 4)     | Every node                           |
-| Per-task write    | 1                                           | Every `readonly: false` node         |
-| Multi-process sub | `config.multiProcessSubprocessConcurrency`  | Each child of an `agent-multi` fan-out |
+| Semaphore          | Capacity                                     | Who holds it                                                                   |
+| ------------------ | -------------------------------------------- | ------------------------------------------------------------------------------ |
+| Agent pool         | `config.maxConcurrentNodes` (default 4)      | Agent nodes, workgroup host nodes, and each fan-out shard/aggregator            |
+| Script pool        | `config.maxConcurrentScriptNodes` (default 4)| RFC-253 script nodes — a **separate** daemon pool (RFC-266)                     |
+| Per-task write     | 1                                            | Every node, but only across snapshot-at-dispatch and merge-back                 |
+| Fan-out sub-pool   | `config.multiProcessSubprocessConcurrency`   | Each shard of one task's fan-out, **inside** its agent-pool slot                |
 
-So `readonly: true` audit agents fan out wide; `readonly: false` writer
-agents serialize within a task. **`readonly` is inherited from the agent
-and cannot be overridden per node** — it's a contract about the
-filesystem, not a hint.
+Notes:
+
+- The two daemon pools are **fully independent**: a script node never queues
+  behind agent runs and vice versa, so peak child processes are the sum of both
+  caps.
+- Taking **no** slot: `call-workflow` / `call-workgroup` nodes (the child task's
+  own nodes compete instead), the RFC-130 merge-conflict agent (bypasses the
+  pool to avoid a lock cycle), and wrapper containers themselves.
+- Effective fan-out parallelism is `min(free agent slots, sub-pool capacity)`.
+- All four caps are hot-applied when settings are saved — running tasks and
+  nodes already queued for a slot included (RFC-266).
+- RFC-130 superseded the old "writers serialize per task" model: every node runs
+  in its **own isolated worktree** and merges its delta back, so agent-level
+  `readonly` no longer partitions the scheduler. What `readonly` still governs
+  is the filesystem boundary a node runs under, and for script nodes it also
+  decides whether the node runs in place against the canonical worktree (with a
+  read-only mount) or in an isolated copy.
 
 ## Variables in the user prompt template
 
