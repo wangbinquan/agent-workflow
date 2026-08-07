@@ -34,7 +34,10 @@ vi.mock('../src/hooks/useActor', () => ({
   usePermission: () => true,
 }))
 
-const copyText = vi.fn(async () => true)
+// The parameter type must be declared: `vi.fn(async () => true)` infers a
+// zero-arg mock, so both the call below and every `mock.calls[0][0]` read fail
+// to typecheck.
+const copyText = vi.fn(async (_text: string) => true)
 vi.mock('../src/lib/clipboard', () => ({ copyText: (text: string) => copyText(text) }))
 
 afterEach(() => {
