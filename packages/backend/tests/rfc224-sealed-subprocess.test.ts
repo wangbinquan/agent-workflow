@@ -81,14 +81,30 @@ async function expectProcessGroupAbsent(
   pid: number,
   observation: ProcessGroupObservation,
 ): Promise<void> {
-  const deadline = Date.now() + 1_000
+  // Widened from 1s: under heavy CI load (macOS, several backend shards running
+  // in parallel) the group teardown after the kill occasionally needs longer.
+  const deadline = Date.now() + 5_000
   for (;;) {
     try {
       process.kill(-pid, 0)
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ESRCH') observation.absent = true
-      expect(error).toMatchObject({ code: 'ESRCH' })
-      return
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ESRCH') {
+        // Definitively gone: no process remains in the group.
+        observation.absent = true
+        return
+      }
+      // EPERM is a TRANSIENT teardown state, not a verdict. Right after the
+      // group's last member is killed there is a window where a not-yet-reaped
+      // zombie (reparented to init) makes `kill(-pgid, 0)` answer EPERM
+      // ("exists but unsignalable") before it settles to ESRCH. Treating the
+      // FIRST non-ESRCH throw as the answer made this test flaky on loaded
+      // macOS CI (observed: EPERM at ~595ms). Keep polling until ESRCH (or the
+      // deadline) instead of asserting on the transient state.
+      if (code !== 'EPERM') {
+        expect(error).toMatchObject({ code: 'ESRCH' })
+        return
+      }
     }
     if (Date.now() >= deadline) throw new Error(`process group ${pid} remained live`)
     await Bun.sleep(10)
