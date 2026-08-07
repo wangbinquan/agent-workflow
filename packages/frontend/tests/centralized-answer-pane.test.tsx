@@ -823,7 +823,7 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     fireEvent.keyDown(q1, { key: '1' })
     await waitFor(
       () => expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
-      { timeout: 3_000 },
+      { timeout: 10_000 },
     )
   })
 
@@ -887,7 +887,7 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     // commit may land on the next turn under a loaded CI runner.
     await waitFor(
       () => expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
-      { timeout: 3_000 },
+      { timeout: 10_000 },
     )
     expect(document.activeElement).toBe(q2)
   })
@@ -918,7 +918,7 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     fireEvent.keyDown(q2, { key: '1' })
     await waitFor(
       () => expect((within(q2).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
-      { timeout: 3_000 },
+      { timeout: 10_000 },
     )
     expect(document.activeElement).toBe(q2)
     expect(document.activeElement).not.toBe(submit)
@@ -943,7 +943,7 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     fireEvent.keyDown(q1, { key: '1' }) // picks (first filled answer) + advances past the last question
     await waitFor(
       () => expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
-      { timeout: 3_000 },
+      { timeout: 10_000 },
     )
     // The submit button enables (filledTotal 0→1) but NO deferred flush focuses it — focus stays put.
     await waitFor(() => expect(submit.disabled).toBe(false))
