@@ -205,7 +205,13 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // relevant push/PR and performs no LLM/provider call.
   'packages/backend/tests/integration-opencode/opencode-identity-preflight.integration.test.ts#skipIf': 1,
   'packages/backend/tests/integration-opencode/opencode-live.integration.test.ts#skipIf': 1,
-  'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 1,
+  // Two describes: the RUN_GIT_NETWORK fixture-server suite, plus the 2026-08-07
+  // error-classification suite, which additionally requires that no outbound
+  // HTTP proxy is configured — a proxy answers with its own 5xx instead of the
+  // OS refusing the connection, and Bun caches proxy env at process start so it
+  // cannot be unset from inside the test. Unit-level shape fixtures for the same
+  // classification live in `tests/services/mcpProbe.test.ts` and always run.
+  'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 2,
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,
   // RFC-254 T32: the three entries below all carry `NO_POSIX_CONTAINMENT`, and
   // the full reasoning — including why this is scoping rather than a Windows

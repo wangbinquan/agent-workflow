@@ -293,6 +293,73 @@ function tail(s: string, max: number): string {
 }
 
 /**
+ * Connect-side failures reported via an error `code`.
+ *
+ * Two families have to be covered, because the daemon ships on Bun but the
+ * shapes below also travel through Node/undici in tests and tooling:
+ *   - errno strings — `node:child_process` spawn (stdio transport) and undici.
+ *   - Bun's own fetch codes, which are NOT errno. Bun collapses connection
+ *     refusal, NXDOMAIN and TLS mismatch into one shape (verified on Bun
+ *     1.3.13 / macOS arm64):
+ *       { name: 'Error', code: 'ConnectionRefused',
+ *         message: 'Unable to connect. Is the computer able to access the url?' }
+ *     — no errno anywhere, and never undici's "fetch failed" wording. Matching
+ *     only the errno family sent every unreachable remote MCP to
+ *     `internal-error` ("this is an agent-workflow bug") instead of
+ *     `connect-failed` (RFC-030 design.md §6).
+ */
+const CONNECT_FAILED_ERROR_CODES = new Set([
+  // spawn + Node/undici
+  'ENOENT',
+  'EACCES',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EPIPE',
+  // Bun fetch
+  'ConnectionRefused',
+  'ConnectionClosed',
+  'FailedToOpenSocket',
+])
+
+/**
+ * Same signals when they arrive without a usable `code`. The SDK's `SseError`
+ * (sdk `client/sse.js`) re-wraps the transport message as `SSE error: <msg>`
+ * and puts the HTTP status — not an errno — on `.code`, so the underlying
+ * wording can only be matched as a substring. Kept in sync in spirit with the
+ * network signatures RFC-116 already learned for runtime smoke
+ * (`services/runtimeSmoke.ts`), but deliberately narrower: no 403/region
+ * phrases here, those belong to `auth-required` for a probe.
+ */
+const CONNECT_FAILED_MESSAGE_RE =
+  /ENOENT|EACCES|ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|fetch failed|unable to connect|failed to connect|could not connect|connection (?:refused|reset|closed)|socket hang up|socket connection was closed/i
+
+function isHttpStatus(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 100 && v < 600
+}
+
+/**
+ * HTTP status from structured fields only. `.status` is the undici/fetch-ish
+ * shape; `.code` is where the MCP SDK's `SseError` / `StreamableHTTPError` put
+ * it (as a number — the errno `code` family above is string-typed, so the two
+ * never collide). Message text is deliberately NOT consulted here: it is safe
+ * for the `errorDetail.httpStatus` column but not for classification, where a
+ * stray 3-digit run (e.g. `initialize timed out after 401ms`) would hijack the
+ * auth branch.
+ */
+function httpStatusFromFields(err: unknown): number | null {
+  if (err === null || typeof err !== 'object') return null
+  const e = err as { status?: unknown; code?: unknown }
+  if (isHttpStatus(e.status)) return e.status
+  if (isHttpStatus(e.code)) return e.code
+  return null
+}
+
+/**
  * Map a thrown error from openClient / list calls to a normalized error code.
  * Order matters — auth checks run before timeout / connect because
  * UnauthorizedError can also surface during transport.connect.
@@ -301,17 +368,23 @@ export function classifyProbeError(err: unknown, abortedByTimeout: boolean): Mcp
   if (abortedByTimeout) return 'timeout'
 
   if (err !== null && typeof err === 'object') {
-    const e = err as { name?: string; code?: string; message?: string; status?: number }
+    const e = err as { name?: string; code?: unknown; message?: string; status?: number }
     const name = String(e.name ?? '')
     const message = String(e.message ?? '')
+    const code = typeof e.code === 'string' ? e.code : ''
+    const httpStatus = httpStatusFromFields(err)
 
     // SDK's UnauthorizedError — matched by constructor name to avoid hard
     // dependency on a specific export path at this layer.
     if (name === 'UnauthorizedError' || name.includes('Unauthorized')) return 'auth-required'
 
-    // HTTP 401/403 from streamable / SSE transports surface either with
-    // .status on the error or with "401"/"403" embedded in the message.
-    if (e.status === 401 || e.status === 403) return 'auth-required'
+    // HTTP 401/403 (design §6). Without an authProvider the SDK does not raise
+    // UnauthorizedError — a 401 arrives as `SseError`/`StreamableHTTPError`
+    // with the status on `.code` and a message that carries no auth word at all
+    // ("SSE error: Non-200 status code (401)"), so the structured field has to
+    // be checked first. The message heuristic stays as a fallback for shapes
+    // that only spell it out in prose.
+    if (httpStatus === 401 || httpStatus === 403) return 'auth-required'
     if (/\b40[13]\b/.test(message) && /unauth|forbidden|auth/i.test(message)) {
       return 'auth-required'
     }
@@ -322,12 +395,10 @@ export function classifyProbeError(err: unknown, abortedByTimeout: boolean): Mcp
       return 'handshake-failed'
     }
 
-    // Connect-side failures: spawn ENOENT / EACCES, fetch network errors.
-    if (
-      e.code === 'ENOENT' ||
-      e.code === 'EACCES' ||
-      /ENOENT|EACCES|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|fetch failed/.test(message)
-    ) {
+    // Connect-side failures: spawn ENOENT / EACCES, fetch network errors, and
+    // 5xx (design §6 groups "http 5xx / 网络 reset" under connect-failed).
+    if (httpStatus !== null && httpStatus >= 500) return 'connect-failed'
+    if (CONNECT_FAILED_ERROR_CODES.has(code) || CONNECT_FAILED_MESSAGE_RE.test(message)) {
       return 'connect-failed'
     }
 
@@ -339,12 +410,14 @@ export function classifyProbeError(err: unknown, abortedByTimeout: boolean): Mcp
 }
 
 function extractHttpStatus(err: unknown): number | null {
+  const fromFields = httpStatusFromFields(err)
+  if (fromFields !== null) return fromFields
   if (err === null || typeof err !== 'object') return null
-  const s = (err as { status?: unknown }).status
-  if (typeof s === 'number' && Number.isInteger(s) && s >= 100 && s < 600) return s
   const msg = (err as { message?: unknown }).message
   if (typeof msg === 'string') {
-    const m = msg.match(/\b(\d{3})\b/)
+    // Drop the SDK's literal "Non-200" prefix first: `SSE error: Non-200 status
+    // code (401)` would otherwise report httpStatus=200 for a 401.
+    const m = msg.replace(/non-?\s?200/gi, '').match(/\b(\d{3})\b/)
     if (m !== null) {
       const v = Number(m[1])
       if (v >= 100 && v < 600) return v

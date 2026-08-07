@@ -376,6 +376,116 @@ describe('classifyProbeError (pure)', () => {
   })
 })
 
+// -----------------------------------------------------------------------------
+// Regression lock — 2026-08-07. `classifyProbeError` was written against
+// Node/undici error shapes (errno + "fetch failed" in `.message`) and against a
+// hand-imagined `{ status: 401 }`. Neither is what the daemon actually sees:
+// it runs on Bun and talks through the real MCP SDK, so EVERY remote failure
+// landed in `internal-error` — the code RFC-030 design.md §6 reserves for
+// "触发本 RFC bug".
+//
+// Live repro (Bun 1.3.13 / @modelcontextprotocol/sdk 1.27.x, remote MCP probed
+// through the real `defaultOpenClient`):
+//   closed port  → "SSE error: Unable to connect. Is the computer able to
+//                   access the url?"       classified internal-error (want connect-failed)
+//   server 401   → "SSE error: Non-200 status code (401)"
+//                                          classified internal-error (want auth-required)
+//   server 500   → "SSE error: Non-200 status code (500)"
+//                                          classified internal-error (want connect-failed)
+//
+// Two shape facts drive the fixtures below, both verified against the runtime
+// rather than assumed:
+//   1. Bun's fetch never emits an errno and never says "fetch failed" — a
+//      refused connection, an NXDOMAIN and a TLS mismatch all arrive as
+//      { name:'Error', code:'ConnectionRefused', message:'Unable to connect. …' }.
+//   2. The remote path falls back to SSE, so the error that reaches the
+//      classifier is `SseError`: message prefixed "SSE error: ", and the HTTP
+//      status carried on `.code` as a NUMBER (sdk client/sse.js:5-11) — there
+//      is no `.status`, and the message spells out no auth word at all.
+// -----------------------------------------------------------------------------
+describe('classifyProbeError — real Bun + MCP SDK error shapes (RFC-030 §6)', () => {
+  /** Exactly what Bun 1.3.13 throws from fetch when the port refuses. */
+  function bunConnectionRefused(): Error {
+    return Object.assign(new Error('Unable to connect. Is the computer able to access the url?'), {
+      code: 'ConnectionRefused',
+    })
+  }
+  /** How SseError re-wraps whatever the transport reported. */
+  function sseError(message: string, code?: number): Error {
+    return Object.assign(new Error(`SSE error: ${message}`), { code })
+  }
+
+  test('Bun fetch connection refusal → connect-failed', () => {
+    expect(classifyProbeError(bunConnectionRefused(), false)).toBe('connect-failed')
+  })
+
+  test('Bun refusal wrapped by SseError → connect-failed', () => {
+    expect(
+      classifyProbeError(
+        sseError('Unable to connect. Is the computer able to access the url?'),
+        false,
+      ),
+    ).toBe('connect-failed')
+  })
+
+  test('SseError carrying HTTP 401 on .code → auth-required', () => {
+    expect(classifyProbeError(sseError('Non-200 status code (401)', 401), false)).toBe(
+      'auth-required',
+    )
+  })
+
+  test('SseError carrying HTTP 403 on .code → auth-required', () => {
+    expect(classifyProbeError(sseError('Non-200 status code (403)', 403), false)).toBe(
+      'auth-required',
+    )
+  })
+
+  test('SseError carrying HTTP 500 on .code → connect-failed', () => {
+    expect(classifyProbeError(sseError('Non-200 status code (500)', 500), false)).toBe(
+      'connect-failed',
+    )
+  })
+
+  test('numeric .code never collides with the errno family', () => {
+    // `.code` is a string errno for spawn, a number (HTTP status) for the SDK.
+    expect(classifyProbeError(Object.assign(new Error('spawn x'), { code: 'ENOENT' }), false)).toBe(
+      'connect-failed',
+    )
+    expect(classifyProbeError(Object.assign(new Error('nope'), { code: 418 }), false)).toBe(
+      'internal-error',
+    )
+  })
+
+  test('handshake wording still wins over a stray 3-digit run in the message', () => {
+    // `initialize timed out after {timeoutMs}ms` is our own wording; a user
+    // configuring timeoutMs=401 must not be reported as an auth failure.
+    expect(classifyProbeError(new Error('initialize timed out after 401ms'), false)).toBe(
+      'handshake-failed',
+    )
+  })
+
+  test('errorDetail.httpStatus reads 401 from an SseError, not 200 from "Non-200"', async () => {
+    const opener: OpenClientFn = async () => {
+      throw Object.assign(new Error('SSE error: Non-200 status code (401)'), { code: 401 })
+    }
+    const r = await probeMcp(makeRemoteMcp(), { openClient: opener })
+    expect(r.errorCode).toBe('auth-required')
+    expect((r.errorDetail as { httpStatus?: number } | null)?.httpStatus).toBe(401)
+  })
+
+  test('unreachable remote MCP no longer reports internal-error', async () => {
+    const opener: OpenClientFn = async () => {
+      throw Object.assign(
+        new Error('SSE error: Unable to connect. Is the computer able to access the url?'),
+        { code: undefined },
+      )
+    }
+    const r = await probeMcp(makeRemoteMcp(), { openClient: opener })
+    expect(r.status).toBe('error')
+    expect(r.errorCode).toBe('connect-failed')
+  })
+})
+
 describe('buildStdioEnv', () => {
   test('drops daemon SOME_FAKE_TOKEN; keeps PATH/HOME/LANG; adds config env', () => {
     const source = {
