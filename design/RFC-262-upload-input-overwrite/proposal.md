@@ -2,7 +2,7 @@
 
 状态：Draft
 作者：本 session（用户提出）
-关联：[RFC-020](../RFC-020-input-file-upload/proposal.md)（上传输入本体）、[RFC-107](../RFC-107-url-launch-multipart-upload/proposal.md)（URL 启动 + 上传的路径安全）、[RFC-218](../RFC-218-agent-input-ports/proposal.md)（agent 端口派生 upload 输入）、[RFC-248](../RFC-248-multi-repo-tasks/proposal.md)（多仓上传落 `.agent-workflow-inputs/`）
+关联：[RFC-020](../RFC-020-input-file-upload/proposal.md)（上传输入本体）、[RFC-107](../RFC-107-url-launch-multipart-upload/proposal.md)（URL 启动 + 上传的路径安全）、[RFC-218](../RFC-218-agent-launch-port-form/proposal.md)（agent 端口派生 upload 输入）、[RFC-248](../RFC-248-repo-groups/proposal.md)（多仓上传落 `.agent-workflow-inputs/`）
 
 ## 1. 背景
 
