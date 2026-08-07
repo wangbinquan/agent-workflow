@@ -1,8 +1,9 @@
-# Webhook 触发器运维指引（RFC-257 / RFC-259）
+# Webhook 触发器运维指引（RFC-257 / RFC-259 / RFC-268）
 
 面向**商用内网部署**（自建 GitLab + 几百个仓库）的接入手册；§6 为 GitHub
 （github.com / GHES，RFC-259）接入。产品/技术契约见
-`design/RFC-257-code-host-webhook-triggers/` 与 `design/RFC-259-github-webhook-adapter/`。
+`design/RFC-257-code-host-webhook-triggers/`、`design/RFC-259-github-webhook-adapter/`
+与 `design/RFC-268-webhook-scratch-space/`。
 
 ## 1. 一次性接入（管理员）
 
@@ -41,9 +42,21 @@
 - **触发器绑规则不绑仓**：repo 范围（全部 / path 前缀 / 精确清单）× 事件
   类型 × 分支 glob × 评论指令前缀。几百仓用一条「前缀 = group path」的触发
   器罩住。
-- 任务的仓库来自事件本身；事件仓未导入平台时默认按 payload URL 自动 clone
-  （触发器可关）。**统一 URL 形态**：内外网双 host / 大小写路径别名会造成
-  同一仓的双份缓存——GitLab 侧保证 `git_http_url`/`git_ssh_url` 一致即可。
+- **执行空间有两种**：默认“事件仓库”会使用事件对应的仓库与分支；事件仓未
+  导入平台时默认按 payload URL 自动 clone（触发器可关）。“临时工作区”则每次
+  触发新建一个带空根提交的 `main` Git 仓库，不读取事件仓缓存、不 clone、不带
+  remote，也不会自动 push；事件变量仍照常渲染进提示词或 workflow 输入。
+- 临时工作区下“自动注册仓库”固定关闭。切回事件仓库后平台不会自动恢复该
+  开关，需要管理员按需手动开启。事件仓模式还需注意 **URL 形态统一**：内外网
+  双 host / 大小写路径别名会造成同一仓的双份缓存——代码平台侧应保证 HTTP/SSH
+  URL 形态稳定。
+- workflow 的“分支来自事件”是输入元数据，不是工作区 checkout。即使选择临时
+  工作区，无分支事件仍会代包空 `ref` 并在启动校验时报错；不要为 GitHub 普通
+  PR 评论选择带该必填 git 映射的 workflow。
+- 临时工作区只隔离、回收本地文件；任务已经发出的 HTTP 请求、评论、通知等
+  外部副作用不会随重试、取消或工作区清理回滚，非幂等动作仍需自行加幂等保护。
+- **降级兼容**：不认识 RFC-268 的旧 daemon 会把含 `scratch` 的模板判成损坏并
+  跳过，不会悄悄回落成事件仓执行。回滚版本前先把这些规则切回“事件仓库”。
 - 分支过滤语义：MR 类事件按**目标分支**匹配（`main` = 只审进主干的 MR），
   push/tag 按事件分支。
 - 修到绿循环 = pipeline_failed 反复触发 + supersede（新事件取消同 MR 在跑
@@ -58,6 +71,7 @@
 | GitLab 显示超时                       | ——                                     | 不应发生（平台三段式立即应答）；检查网络/反代超时设置                                                                                              |
 | 事件到了但没起任务                    | 投递历史 `ignored(no-trigger-matched)` | 规则没罩住该仓/事件类型/分支；核对触发器                                                                                                           |
 | 触发了但任务失败                      | 触发器 → 触发记录 `launch-failed`      | 看 error（repo clone 凭据 / 模板渲染 / 目标不可用）                                                                                                |
+| 临时工作区里没有项目文件或 remote     | 任务工作区                             | 这是预期行为：临时模式从空 Git 仓开始；需要读/改事件仓代码时把规则切回“事件仓库”                                                                   |
 | `skipped-owner-invalid`               | 同上                                   | 触发器 owner 被禁用或对目标失去权限；admin 改 owner 后重放                                                                                         |
 | `skipped-circuit-open`                | 同上                                   | 熔断：人工重置或等开发者 push                                                                                                                      |
 | daemon 重启后有 `failed(interrupted)` | 投递历史                               | GitLab 不自动重投——用重放按钮恢复                                                                                                                  |
@@ -120,11 +134,12 @@ GitHub 侧配置。
   修到绿**（合并成一条聚合 workflow，或按需上调触发器的连续触发上限）。
 - **评论指令的分支限制**：PR **普通评论**（issue_comment）的 payload 不含分支
   （零平台 API 拿不到）→ 该类事件不带源/目标分支——**评论指令触发器要罩
-  GitHub 普通评论就把分支过滤留空**。分支缺省的后果按目标形态分两种：
-  目标**不含 git 输入映射**（agent / workgroup / 纯 text 输入的 workflow）时任务
-  跑在仓库**默认分支**；目标 workflow 带**「分支来自事件」的 git 输入映射**时
-  该组合**必然 launch-failed**（代包渲染出空分支，保存期彩排拦不住）——这类
-  触发器不要勾 GitHub 普通评论事件。要让指令带上 PR 源分支上下文，用
+  GitHub 普通评论就把分支过滤留空**。事件仓模式下，目标**不含 git 输入映射**
+  （agent / workgroup / 纯 text 输入的 workflow）时任务跑在仓库**默认分支**；
+  临时工作区模式始终从空仓开始。无论选择哪种空间，目标 workflow 带**「分支
+  来自事件」的 git 输入映射**时该组合都**必然 launch-failed**（代包渲染出空
+  分支，保存期彩排拦不住）——这类触发器不要勾 GitHub 普通评论事件。要让指令
+  带上 PR 源分支上下文，用
   **diff 行内评论**（Files changed 页上的 review comment），其 payload 带完整
   PR 对象。
 - **fork PR**：workflow_run 的 `pull_requests` 为空 → 修到绿循环按分支维度

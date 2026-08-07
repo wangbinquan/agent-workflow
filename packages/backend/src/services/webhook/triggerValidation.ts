@@ -37,6 +37,7 @@ export type TriggerValidationIssue = {
     | 'required-input-unmapped'
     | 'input-kind-unmappable'
     | 'input-mapping-kind-mismatch'
+    | 'scratch-auto-register-conflict'
   detail: string
 }
 
@@ -115,12 +116,19 @@ export async function assertTriggerSaveable(
     launchRefId: string
     launchPayload: unknown
     eventTypes: ReadonlyArray<CodeHostEventType>
+    autoRegisterRepos: boolean
   },
   defaultRuntime: string | null | undefined,
 ): Promise<void> {
-  const payload = webhookPayloadTemplateSchemaFor(candidate.launchKind).parse(
+  const parsedPayload = webhookPayloadTemplateSchemaFor(candidate.launchKind).safeParse(
     candidate.launchPayload,
   )
+  if (!parsedPayload.success) {
+    throw new ValidationError('webhook-trigger-invalid', 'invalid launch payload', {
+      issues: parsedPayload.error.issues,
+    })
+  }
+  const payload = parsedPayload.data
   let workflowInputs: ReadonlyArray<DefInput> | null = null
   if (candidate.launchKind === 'workflow') {
     const wf = (
@@ -141,6 +149,12 @@ export async function assertTriggerSaveable(
     candidate.eventTypes,
     workflowInputs,
   )
+  if (payload.scratch === true && candidate.autoRegisterRepos !== false) {
+    issues.push({
+      code: 'scratch-auto-register-conflict',
+      detail: 'autoRegisterRepos must be false when launchPayload.scratch is true',
+    })
+  }
   if (issues.length > 0) {
     throw new ValidationError('webhook-trigger-invalid', 'trigger static validation failed', {
       issues,
@@ -154,7 +168,9 @@ export async function assertTriggerSaveable(
     },
     'rehearsal',
     rehearsalEvent(candidate.eventTypes[0] ?? 'push'),
-    { kind: 'url', repoUrl: 'https://rehearsal.invalid/repo.git' },
+    payload.scratch === true
+      ? { kind: 'scratch' }
+      : { kind: 'url', repoUrl: 'https://rehearsal.invalid/repo.git' },
   )
   await assertScheduledTargetUsable(
     db,

@@ -336,6 +336,141 @@ describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
     expect((await h.db.select().from(webhookTriggerStreams)).length).toBe(0)
   })
 
+  test('RFC-268：scratch 创建必须显式关闭 auto-register；partial update 校验完整候选', async () => {
+    const h = await harness()
+    const ep = await createEndpoint(h.app, h.admin)
+    const scratchPayload = { ...VALID_PAYLOAD, scratch: true }
+
+    for (const autoRegisterRepos of [undefined, true]) {
+      const body = triggerBody(ep.id, h.workflowId, {
+        launchPayload: scratchPayload,
+        ...(autoRegisterRepos !== undefined ? { autoRegisterRepos } : {}),
+      })
+      const rejected = await call(h.app, h.alice, 'POST', '/api/webhook-triggers', body)
+      expect(rejected.status).toBe(422)
+      expect((await rejected.json()) as Record<string, unknown>).toMatchObject({
+        code: 'webhook-trigger-invalid',
+      })
+    }
+
+    const created = await call(
+      h.app,
+      h.alice,
+      'POST',
+      '/api/webhook-triggers',
+      triggerBody(ep.id, h.workflowId, {
+        launchPayload: scratchPayload,
+        autoRegisterRepos: false,
+      }),
+    )
+    expect(created.status).toBe(201)
+    const scratch = (await created.json()) as {
+      id: string
+      launchPayload: Record<string, unknown>
+      autoRegisterRepos: boolean
+    }
+    expect(scratch.launchPayload['scratch']).toBe(true)
+    expect(scratch.autoRegisterRepos).toBe(false)
+
+    const enableClone = await call(h.app, h.alice, 'PUT', `/api/webhook-triggers/${scratch.id}`, {
+      autoRegisterRepos: true,
+    })
+    expect(enableClone.status).toBe(422)
+
+    for (const remoteOnly of [
+      { workingBranch: 'automation/test' },
+      { autoCommitPush: true },
+      { autoCommitPush: false },
+    ]) {
+      const rejected = await call(h.app, h.alice, 'PUT', `/api/webhook-triggers/${scratch.id}`, {
+        launchPayload: { ...scratchPayload, ...remoteOnly },
+      })
+      expect(rejected.status).toBe(422)
+      expect((await rejected.json()) as Record<string, unknown>).toMatchObject({
+        code: 'webhook-trigger-invalid',
+      })
+    }
+
+    const eventRepo = await call(
+      h.app,
+      h.alice,
+      'POST',
+      '/api/webhook-triggers',
+      triggerBody(ep.id, h.workflowId),
+    )
+    const eventRepoId = ((await eventRepo.json()) as { id: string }).id
+    const scratchOnlyPatch = await call(
+      h.app,
+      h.alice,
+      'PUT',
+      `/api/webhook-triggers/${eventRepoId}`,
+      { launchPayload: scratchPayload },
+    )
+    expect(scratchOnlyPatch.status).toBe(422)
+
+    const convertTogether = await call(
+      h.app,
+      h.alice,
+      'PUT',
+      `/api/webhook-triggers/${eventRepoId}`,
+      { launchPayload: scratchPayload, autoRegisterRepos: false },
+    )
+    expect(convertTogether.status).toBe(200)
+    expect((await convertTogether.json()) as Record<string, unknown>).toMatchObject({
+      launchPayload: { scratch: true },
+      autoRegisterRepos: false,
+    })
+
+    const backToEventRepo = await call(
+      h.app,
+      h.alice,
+      'PUT',
+      `/api/webhook-triggers/${eventRepoId}`,
+      { launchPayload: VALID_PAYLOAD },
+    )
+    expect(backToEventRepo.status).toBe(200)
+    const eventRepoAgain = (await backToEventRepo.json()) as {
+      launchPayload: Record<string, unknown>
+    }
+    expect('scratch' in eventRepoAgain.launchPayload).toBe(false)
+  })
+
+  test('RFC-268：并发 launch-config PATCH 最多一代提交，另一请求返回 409', async () => {
+    const h = await harness()
+    const ep = await createEndpoint(h.app, h.admin)
+    const created = await call(
+      h.app,
+      h.alice,
+      'POST',
+      '/api/webhook-triggers',
+      triggerBody(ep.id, h.workflowId),
+    )
+    const tid = ((await created.json()) as { id: string }).id
+
+    const [eventTypes, duration] = await Promise.all([
+      call(h.app, h.alice, 'PUT', `/api/webhook-triggers/${tid}`, {
+        eventTypes: ['mr_opened'],
+      }),
+      call(h.app, h.alice, 'PUT', `/api/webhook-triggers/${tid}`, {
+        launchPayload: { ...VALID_PAYLOAD, maxDurationMs: 1234 },
+      }),
+    ])
+    expect([eventTypes.status, duration.status].sort()).toEqual([200, 409])
+    const conflict = eventTypes.status === 409 ? eventTypes : duration
+    expect((await conflict.json()) as Record<string, unknown>).toMatchObject({
+      code: 'webhook-trigger-update-conflict',
+    })
+
+    const current = await call(h.app, h.alice, 'GET', `/api/webhook-triggers/${tid}`)
+    const row = (await current.json()) as {
+      eventTypes: string[]
+      launchPayload: Record<string, unknown>
+    }
+    const eventTypesWon = row.eventTypes.length === 1
+    const durationWon = row.launchPayload['maxDurationMs'] === 1234
+    expect(Number(eventTypesWon) + Number(durationWon)).toBe(1)
+  })
+
   test('streams reset：owner 归零计数并记审计（AC-10 人工重置源）', async () => {
     const h = await harness()
     const ep = await createEndpoint(h.app, h.admin)

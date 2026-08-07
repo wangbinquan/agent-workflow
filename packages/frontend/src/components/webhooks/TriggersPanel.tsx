@@ -41,6 +41,16 @@ import {
 } from '@/components/TemplateVarChips'
 
 type RepoScopeKind = 'all' | 'prefix' | 'exact'
+type ExecutionSpace = 'event-repo' | 'scratch'
+
+function isScratchPayload(payload: unknown): payload is { scratch: true } {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'scratch' in payload &&
+    payload.scratch === true
+  )
+}
 
 interface Draft {
   id: string | null
@@ -56,6 +66,7 @@ interface Draft {
   ignoreUsernames: string[]
   launchKind: WebhookLaunchKind
   launchRefId: string
+  space: ExecutionSpace
   /** workflow 面：inputKey → 映射；agent/workgroup 面用下面两个字段。 */
   inputMappings: Record<string, WebhookInputMapping>
   description: string
@@ -78,6 +89,7 @@ const EMPTY_DRAFT: Draft = {
   ignoreUsernames: [],
   launchKind: 'workflow',
   launchRefId: '',
+  space: 'event-repo',
   inputMappings: {},
   description: '',
   goal: '',
@@ -91,6 +103,7 @@ function draftFromRow(row: WebhookTrigger): Draft {
     inputs?: Record<string, WebhookInputMapping> | Record<string, string>
     description?: string
     goal?: string
+    scratch?: true
   }
   return {
     id: row.id,
@@ -106,6 +119,7 @@ function draftFromRow(row: WebhookTrigger): Draft {
     ignoreUsernames: row.ignoreUsernames ?? [],
     launchKind: row.launchKind,
     launchRefId: row.launchRefId,
+    space: payload.scratch === true ? 'scratch' : 'event-repo',
     inputMappings:
       row.launchKind === 'workflow'
         ? ((payload.inputs ?? {}) as Record<string, WebhookInputMapping>)
@@ -118,11 +132,12 @@ function draftFromRow(row: WebhookTrigger): Draft {
 }
 
 function payloadOf(draft: Draft): unknown {
-  if (draft.launchKind === 'workflow') return { inputs: draft.inputMappings }
+  const space = draft.space === 'scratch' ? { scratch: true as const } : {}
+  if (draft.launchKind === 'workflow') return { inputs: draft.inputMappings, ...space }
   if (draft.launchKind === 'agent') {
-    return draft.description.trim() === '' ? {} : { description: draft.description }
+    return draft.description.trim() === '' ? space : { description: draft.description, ...space }
   }
-  return { goal: draft.goal }
+  return { goal: draft.goal, ...space }
 }
 
 function bodyOf(draft: Draft): Record<string, unknown> {
@@ -144,7 +159,7 @@ function bodyOf(draft: Draft): Record<string, unknown> {
     launchRefId: draft.launchRefId,
     launchPayload: payloadOf(draft),
     maxConsecutiveFires: draft.maxConsecutiveFires,
-    autoRegisterRepos: draft.autoRegisterRepos,
+    autoRegisterRepos: draft.space === 'scratch' ? false : draft.autoRegisterRepos,
   }
 }
 
@@ -297,6 +312,7 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
                     : t('webhookTriggers.scopeExact', { n: row.repoScope.paths.length })
             const target =
               targetNames.get(`${row.launchKind}:${row.launchRefId}`) ?? row.launchRefId
+            const scratch = isScratchPayload(row.launchPayload)
             return (
               <Card
                 key={row.id}
@@ -407,6 +423,19 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
                   <StatusChip kind="info" size="sm">
                     {t(`webhookTriggers.kinds.${row.launchKind}`)}
                   </StatusChip>
+                  {row.launchPayload !== null && (
+                    <StatusChip
+                      kind={scratch ? 'info' : 'neutral'}
+                      size="sm"
+                      data-testid={`webhook-trigger-space-${row.id}`}
+                    >
+                      {t(
+                        scratch
+                          ? 'webhookTriggers.spaces.scratch'
+                          : 'webhookTriggers.spaces.eventRepo',
+                      )}
+                    </StatusChip>
+                  )}
                 </div>
               </Card>
             )
@@ -812,11 +841,37 @@ function TriggerDialog(props: {
                   data-testid="wt-target"
                 />
               </Field>
+              <Field label={t('webhookTriggers.fields.executionSpace')} group required>
+                <ChoiceCards<ExecutionSpace>
+                  value={draft.space}
+                  onChange={(space) =>
+                    set(space === 'scratch' ? { space, autoRegisterRepos: false } : { space })
+                  }
+                  ariaLabel={t('webhookTriggers.fields.executionSpace')}
+                  testidPrefix="wt-space"
+                  options={[
+                    {
+                      value: 'event-repo',
+                      label: t('webhookTriggers.spaces.eventRepo'),
+                      description: t('webhookTriggers.spaceDescriptions.eventRepo'),
+                    },
+                    {
+                      value: 'scratch',
+                      label: t('webhookTriggers.spaces.scratch'),
+                      description: t('webhookTriggers.spaceDescriptions.scratch'),
+                    },
+                  ]}
+                />
+              </Field>
 
               {draft.launchKind === 'workflow' && draft.launchRefId !== '' && (
                 <Field
                   label={t('webhookTriggers.fields.inputMappings')}
-                  hint={t('webhookTriggers.fields.inputMappingsHint')}
+                  hint={t(
+                    draft.space === 'scratch'
+                      ? 'webhookTriggers.fields.inputMappingsScratchHint'
+                      : 'webhookTriggers.fields.inputMappingsHint',
+                  )}
                   group
                 >
                   {workflowDetail.isLoading ? (
@@ -973,6 +1028,16 @@ function TriggerDialog(props: {
                     {selectedTarget ?? draft.launchRefId}
                   </dd>
                 </div>
+                <div className="wizard-summary__row">
+                  <dt>{t('webhookTriggers.review.space')}</dt>
+                  <dd>
+                    {t(
+                      draft.space === 'scratch'
+                        ? 'webhookTriggers.spaces.scratch'
+                        : 'webhookTriggers.spaces.eventRepo',
+                    )}
+                  </dd>
+                </div>
               </dl>
               <div className="form-grid--cols-2 webhook-protection-grid">
                 <Field
@@ -987,14 +1052,22 @@ function TriggerDialog(props: {
                     data-testid="wt-max-fires"
                   />
                 </Field>
-                <Field label={t('webhookTriggers.fields.autoRegister')} group>
-                  <Switch
-                    checked={draft.autoRegisterRepos}
-                    onChange={(autoRegisterRepos) => set({ autoRegisterRepos })}
-                    label={t('webhookTriggers.fields.autoRegisterLabel')}
-                  />
-                </Field>
+                {draft.space === 'event-repo' && (
+                  <Field label={t('webhookTriggers.fields.autoRegister')} group>
+                    <Switch
+                      checked={draft.autoRegisterRepos}
+                      onChange={(autoRegisterRepos) => set({ autoRegisterRepos })}
+                      label={t('webhookTriggers.fields.autoRegisterLabel')}
+                      data-testid="wt-auto-register"
+                    />
+                  </Field>
+                )}
               </div>
+              {draft.space === 'scratch' && (
+                <NoticeBanner tone="info" size="compact" testid="wt-scratch-notice">
+                  {t('webhookTriggers.fields.scratchNotice')}
+                </NoticeBanner>
+              )}
               <NoticeBanner tone="info" size="compact">
                 {t('webhookTriggers.review.safetyNote', {
                   count: draft.maxConsecutiveFires,

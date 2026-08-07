@@ -248,6 +248,49 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
     expect(p['description']).toBe('修 platform/api 的 !42')
     expect(p['repoUrl']).toBe(HTTP_URL)
   })
+
+  test('RFC-268：三类目标的 scratch payload 只注入临时空间，不注入事件仓远端字段', () => {
+    const cases = [
+      {
+        launchKind: 'workflow' as const,
+        launchRefId: 'wf-1',
+        payloadTemplate: {
+          inputs: { mr_ref: { kind: 'event-branch' as const } },
+          scratch: true as const,
+        },
+      },
+      {
+        launchKind: 'agent' as const,
+        launchRefId: 'ag-1',
+        payloadTemplate: { description: '修 {{repo_path}}', scratch: true as const },
+      },
+      {
+        launchKind: 'workgroup' as const,
+        launchRefId: 'wg-1',
+        payloadTemplate: { goal: '修 {{repo_path}}', scratch: true as const },
+      },
+    ]
+    for (const trigger of cases) {
+      const rendered = renderWebhookLaunch(trigger, '临时任务', ev(), { kind: 'scratch' })
+      const payload = rendered.payload as unknown as Record<string, unknown>
+      expect(payload['scratch']).toBe(true)
+      if (rendered.kind === 'workflow') {
+        const inputs = payload['inputs'] as Record<string, string>
+        expect(JSON.parse(inputs['mr_ref']!)).toEqual({ kind: 'branch', ref: 'feature/x' })
+      }
+      for (const key of [
+        'repoUrl',
+        'cachedRepoId',
+        'repoGroupId',
+        'sourceTaskId',
+        'ref',
+        'workingBranch',
+        'autoCommitPush',
+      ]) {
+        expect(key in payload).toBe(false)
+      }
+    }
+  })
 })
 
 describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
@@ -432,6 +475,112 @@ describe('RFC-257 T6 · dispatch 集成', () => {
     const t = await insertTrigger(h, { autoRegisterRepos: false })
     await dispatchOnce(h, ev())
     expect((await firesOf(h, t))[0]?.outcome).toBe('skipped-repo-unregistered')
+  })
+
+  test('RFC-268：scratch 在未缓存事件仓上仍启动；坏行 autoRegister=true 也不得回落仓库解析', async () => {
+    const h = await harness()
+    let repoResolveCalls = 0
+    h.deps.resolveRepo = async () => {
+      repoResolveCalls += 1
+      throw new Error('scratch must bypass repo resolution')
+    }
+    const t = await insertTrigger(h, {
+      launchPayload: JSON.stringify({ inputs: {}, scratch: true }),
+      // 模拟历史/手工篡改坏行：dispatch 的纵深保护仍必须以 scratch 为准。
+      autoRegisterRepos: true,
+    })
+    await dispatchOnce(h, ev())
+    expect((await firesOf(h, t))[0]?.outcome).toBe('launched')
+    const payload = h.launched[0]?.payload as Record<string, unknown>
+    expect(payload['scratch']).toBe(true)
+    expect('repoUrl' in payload).toBe(false)
+    expect('cachedRepoId' in payload).toBe(false)
+    expect('ref' in payload).toBe(false)
+    expect(repoResolveCalls).toBe(0)
+  })
+
+  test('RFC-268：scratch 继续复用同一 stream 的 supersede 与 circuit', async () => {
+    const h = await harness()
+    let repoResolveCalls = 0
+    h.deps.resolveRepo = async () => {
+      repoResolveCalls += 1
+      throw new Error('scratch must bypass repo resolution')
+    }
+    const t = await insertTrigger(h, {
+      launchPayload: JSON.stringify({ inputs: {}, scratch: true }),
+      autoRegisterRepos: false,
+      maxConsecutiveFires: 2,
+    })
+
+    await dispatchOnce(h, ev())
+    const firstTaskId = h.launched[0]!.taskId
+    await dispatchOnce(h, ev())
+    await dispatchOnce(h, ev())
+
+    const fires = await firesOf(h, t)
+    expect(fires.map((fire) => fire.outcome)).toEqual([
+      'launched',
+      'launched',
+      'skipped-circuit-open',
+    ])
+    expect(fires.map((fire) => fire.streamKey)).toEqual([
+      'platform/api|mr:42',
+      'platform/api|mr:42',
+      'platform/api|mr:42',
+    ])
+    expect(fires[1]?.supersededTaskId).toBe(firstTaskId)
+    expect(h.canceled).toEqual([firstTaskId])
+    expect(repoResolveCalls).toBe(0)
+  })
+
+  test('RFC-268：排队期间切换空间不会把旧 payload 与新 auto-register 混成一代', async () => {
+    const h = await harness()
+    const originalLaunch = h.deps.launch!
+    let releaseFirst!: () => void
+    let firstEntered!: () => void
+    const firstBlocked = new Promise<void>((resolve) => {
+      firstEntered = resolve
+    })
+    const firstRelease = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    let launchCalls = 0
+    h.deps.launch = async (...args) => {
+      launchCalls += 1
+      if (launchCalls === 1) {
+        firstEntered()
+        await firstRelease
+      }
+      return originalLaunch(...args)
+    }
+    const autoRegisterSeen: boolean[] = []
+    h.deps.resolveRepo = async (_db, _box, _event, _endpoint, autoRegister) => {
+      autoRegisterSeen.push(autoRegister)
+      return { kind: 'url', repoUrl: HTTP_URL }
+    }
+
+    await insertTrigger(h, { id: 'tr-snapshot-a', autoRegisterRepos: true })
+    const second = await insertTrigger(h, { id: 'tr-snapshot-b', autoRegisterRepos: true })
+    const dispatch = dispatchOnce(h, ev())
+    await firstBlocked
+
+    // 同一次 dispatch 已把两行 parse 成 matched snapshot；让第二行在队列中
+    // 等待时切到 scratch，证明它仍完整执行旧的 event-repo 一代。
+    await h.db
+      .update(webhookTriggers)
+      .set({
+        launchPayload: JSON.stringify({ inputs: {}, scratch: true }),
+        autoRegisterRepos: false,
+      })
+      .where(eq(webhookTriggers.id, second))
+    releaseFirst()
+    await dispatch
+
+    expect(autoRegisterSeen).toEqual([true, true])
+    expect(h.launched).toHaveLength(2)
+    const secondPayload = h.launched[1]!.payload as Record<string, unknown>
+    expect(secondPayload['repoUrl']).toBe(HTTP_URL)
+    expect('scratch' in secondPayload).toBe(false)
   })
 
   test('launch 抛错 → launch-failed + 观测列 consecutive_failures 累加', async () => {

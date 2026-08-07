@@ -1,7 +1,8 @@
 // RFC-257 — 代码平台 Webhook 触发器的 shared 契约层（RFC-259 扩 github provider）。
 // 三块内容：①归一化事件信封（provider 无关，各 provider adapter 产出）；②触发器
 // 规则与三形态启动参数「模板封套」（对齐 scheduled_tasks 的 launchKind 模型，
-// 但 repo 源/ref/name 由 fire 时按事件注入——设计门 F-3：不能直接复用
+// 但 repo 源/ref/name 由 fire 时按事件注入（RFC-268 的 scratch 是唯一显式
+// 例外）——设计门 F-3：不能直接复用
 // scheduledPayloadSchemaFor，StartTaskSchema 的 repo 三态 superRefine 与
 // 「模板留空」矛盾）；③投递/触发记录的 closed enum（emit 域，读域另行放宽时
 // 必须走独立常量，见 RFC-251 实现门 P0 的教训）。
@@ -306,9 +307,10 @@ export type WebhookVarGroupKey = (typeof WEBHOOK_VAR_GROUPS)[number]['key']
 // 启动参数模板封套（触发器 launch_payload；设计门 F-3 的派生 schema）
 //
 // 与 Scheduled*PayloadSchema 的三点不同（不能直接复用的原因）：
-//   1. repo 源（scratch/repoUrl/cachedRepoId/repoGroupId/sourceTaskId）与 ref
-//      一律禁填 —— fire 时按事件动态注入（D9/D17），而 StartTaskSchema 的
-//      superRefine 强制三态必给其一（start-task-source-required）。
+//   1. repo 源（repoUrl/cachedRepoId/repoGroupId/sourceTaskId）与 ref 一律禁填
+//      —— fire 时按事件动态注入（D9/D17）；RFC-268 仅允许显式 `scratch:true`
+//      选择临时工作区。StartTaskSchema 的 superRefine 强制三态必给其一
+//      （start-task-source-required），因此这里仍不能直接复用它。
 //   2. `name` 禁填 —— fire 时自动生成（`[触发器名] repoPath!mrIid`）。
 //   3. ref-id（workflowId/agentId/workgroupId）外置在触发器行的 launch_ref_id
 //      列（单一事实源），payload 内不重复。
@@ -329,11 +331,39 @@ export const WebhookInputMappingSchema = z.discriminatedUnion('kind', [
 export type WebhookInputMapping = z.infer<typeof WebhookInputMappingSchema>
 
 const CommonTemplateFields = {
+  /** RFC-268：显式选择空白临时 Git 工作区；缺省继续使用事件仓库。 */
+  scratch: z.literal(true).optional(),
   workingBranch: z.string().optional(),
   autoCommitPush: z.boolean().optional(),
   maxDurationMs: z.number().int().positive().optional(),
   maxTotalTokens: z.number().int().positive().optional(),
 } as const
+
+type WebhookTemplateSpaceFields = {
+  scratch?: true
+  workingBranch?: string
+  autoCommitPush?: boolean
+}
+
+/** 与 StartTaskSchema 保持同一冲突码：临时空间没有可写回的远端分支。 */
+function refineWebhookTemplateSpace(value: WebhookTemplateSpaceFields, ctx: z.RefinementCtx): void {
+  if (value.scratch !== true) return
+
+  if (value.workingBranch !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'scratch-remote-only-option',
+      path: ['workingBranch'],
+    })
+  }
+  if (value.autoCommitPush !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'scratch-remote-only-option',
+      path: ['autoCommitPush'],
+    })
+  }
+}
 
 export const WebhookWorkflowPayloadTemplateSchema = z
   .object({
@@ -342,6 +372,7 @@ export const WebhookWorkflowPayloadTemplateSchema = z
     ...CommonTemplateFields,
   })
   .strict()
+  .superRefine(refineWebhookTemplateSpace)
 export type WebhookWorkflowPayloadTemplate = z.infer<typeof WebhookWorkflowPayloadTemplateSchema>
 
 export const WebhookAgentPayloadTemplateSchema = z
@@ -354,6 +385,7 @@ export const WebhookAgentPayloadTemplateSchema = z
     ...CommonTemplateFields,
   })
   .strict()
+  .superRefine(refineWebhookTemplateSpace)
 export type WebhookAgentPayloadTemplate = z.infer<typeof WebhookAgentPayloadTemplateSchema>
 
 export const WebhookWorkgroupPayloadTemplateSchema = z
@@ -363,6 +395,7 @@ export const WebhookWorkgroupPayloadTemplateSchema = z
     ...CommonTemplateFields,
   })
   .strict()
+  .superRefine(refineWebhookTemplateSpace)
 export type WebhookWorkgroupPayloadTemplate = z.infer<typeof WebhookWorkgroupPayloadTemplateSchema>
 
 export type WebhookLaunchPayloadTemplate =

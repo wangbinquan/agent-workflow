@@ -30,7 +30,7 @@ import {
 import { parseTriggerRow } from '@/services/webhook/webhookDispatch'
 import { assertTriggerSaveable } from '@/services/webhook/triggerValidation'
 import { loadConfig } from '@/config'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 type Row = typeof webhookTriggers.$inferSelect
 
@@ -194,6 +194,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
         launchRefId: body.launchRefId,
         launchPayload: body.launchPayload,
         eventTypes: body.eventTypes,
+        autoRegisterRepos: body.autoRegisterRepos,
       })
       const id = ulid()
       const rows = await deps.db
@@ -289,8 +290,14 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
         launchPayload:
           patch.launchPayload !== undefined ? patch.launchPayload : JSON.parse(row.launchPayload),
         eventTypes: patch.eventTypes !== undefined ? patch.eventTypes : storedEventTypes,
+        autoRegisterRepos: patch.autoRegisterRepos ?? row.autoRegisterRepos,
       }
       await assertSaveable(deps, actor, next)
+      const launchConfigTouched =
+        patch.launchRefId !== undefined ||
+        patch.launchPayload !== undefined ||
+        patch.eventTypes !== undefined ||
+        patch.autoRegisterRepos !== undefined
       const rows = await deps.db
         .update(webhookTriggers)
         .set({
@@ -317,8 +324,24 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
             : {}),
           updatedAt: Date.now(),
         })
-        .where(eq(webhookTriggers.id, row.id))
+        .where(
+          launchConfigTouched
+            ? and(
+                eq(webhookTriggers.id, row.id),
+                eq(webhookTriggers.launchRefId, row.launchRefId),
+                eq(webhookTriggers.launchPayload, row.launchPayload),
+                eq(webhookTriggers.eventTypes, row.eventTypes),
+                eq(webhookTriggers.autoRegisterRepos, row.autoRegisterRepos),
+              )
+            : eq(webhookTriggers.id, row.id),
+        )
         .returning()
+      if (launchConfigTouched && rows.length === 0) {
+        throw new ConflictError(
+          'webhook-trigger-update-conflict',
+          'trigger launch configuration changed; reload and retry',
+        )
+      }
       return c.json(toWire(rows[0]!))
     },
   )

@@ -1,5 +1,5 @@
 // RFC-257 T1 — shared 契约层回归锁。
-// 锁三层：①模板封套「repo 源/name/ref-id 禁填」（设计门 F-3：直接复用
+// 锁三层：①模板封套「事件仓 repo 源/name/ref-id 禁填」（设计门 F-3：直接复用
 // scheduledPayloadSchemaFor 会因 StartTaskSchema 的 repo 三态 superRefine 拒掉
 // 合法模板——本套 schema 存在的理由）；②模板变量矩阵与保存期静态校验
 // （设计门 F-1 前提：pipeline 类事件声明 mr_iid 但不受忽略名单过滤）；
@@ -47,13 +47,12 @@ function sampleEvent(overrides: Partial<CodeHostEvent> = {}): CodeHostEvent {
 }
 
 describe('RFC-257 T1 · 模板封套（F-3 派生 schema）', () => {
-  test('workflow 模板：repo 源 / ref / name / workflowId 全部被 strict 拒绝', () => {
+  test('workflow 模板：事件仓 repo 源 / ref / name / workflowId 全部被 strict 拒绝', () => {
     for (const bad of [
       { repoUrl: 'https://x/y.git' },
       { cachedRepoId: 'c1' },
       { repoGroupId: 'g1' },
       { sourceTaskId: 't1' },
-      { scratch: true },
       { ref: 'main' },
       { name: 'x' },
       { workflowId: 'w1' },

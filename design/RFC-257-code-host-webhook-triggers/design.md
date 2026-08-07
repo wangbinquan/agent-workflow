@@ -248,6 +248,10 @@ evaluateCircuit(stream, event, trigger, now): 'pass' | 'reset-then-pass' | 'open
 
 ### 5.1 repo 解析（D13/D17，F-17 加固）
 
+> **RFC-268 后续注记（2026-08-07）**：以下步骤只适用于默认“事件仓库”模式。
+> 当模板显式含 `scratch:true` 时，dispatcher 在 cache 查询、凭据解密与 clone 前
+> 直接装配 `{scratch:true}`；不注入事件仓 URL/cache/ref/workingBranch/push 字段。
+
 1. `event.repoKeys` → `gitUrlCacheKey` → 查 `cached_repos.url_hash`（UNIQUE，`db/schema.ts:802`）。
 2. **桶命中后 unseal `url_enc` 做 canonical 等值复核**——8-hex sha1 截断有碰撞风险（`git-url.ts:293-295` 自认），人工启动时人眼可见仓名，webhook 自动化下碰撞 = 静默在错误仓库跑任务并用写凭据 push；unseal 复核成本 O(1)。
 3. 命中 → 注入 `cachedRepoId` + `ref`；未命中：`auto_register_repos` 开 → 注入 `repoUrl`（按端点 `preferred_clone_protocol` 选）走既有 `resolveCachedRepo` clone（`services/task.ts:610-658`）；关 → `skipped-repo-unregistered`。

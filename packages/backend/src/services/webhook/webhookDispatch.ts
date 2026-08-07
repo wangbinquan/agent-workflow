@@ -80,6 +80,8 @@ export type WebhookDispatchDeps = {
    */
   launch?: (actor: Actor, rendered: RenderedLaunch, invoker: ExecutionInvoker) => Promise<string>
   cancel?: (taskId: string) => Promise<unknown>
+  /** RFC-268 测试接缝：证明 scratch 在 repo resolver 入口之前即完成分流。 */
+  resolveRepo?: typeof resolveRepoForEvent
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +161,10 @@ export type RepoResolution =
   | { kind: 'url'; repoUrl: string }
   | { kind: 'unregistered' }
 
+export type WebhookLaunchSpace =
+  | Exclude<RepoResolution, { kind: 'unregistered' }>
+  | { kind: 'scratch' }
+
 export async function resolveRepoForEvent(
   db: DbClient,
   secretBox: SecretBox,
@@ -225,13 +231,19 @@ export function renderWebhookLaunch(
   trigger: Pick<ParsedTrigger, 'launchKind' | 'launchRefId' | 'payloadTemplate'>,
   triggerName: string,
   event: CodeHostEvent,
-  repo: Exclude<RepoResolution, { kind: 'unregistered' }>,
+  space: WebhookLaunchSpace,
 ): RenderedLaunch {
   const vars = eventVarsOf(event)
   const name = fireTaskName(triggerName, event)
-  const repoFields =
-    repo.kind === 'cached' ? { cachedRepoId: repo.cachedRepoId } : { repoUrl: repo.repoUrl }
-  const ref = event.branch
+  const spaceFields =
+    space.kind === 'scratch'
+      ? { scratch: true as const }
+      : space.kind === 'cached'
+        ? { cachedRepoId: space.cachedRepoId }
+        : { repoUrl: space.repoUrl }
+  // scratch 是新建空白 Git 仓，不得把事件仓 branch 误当成 checkout ref。
+  const refFields =
+    space.kind !== 'scratch' && event.branch !== undefined ? { ref: event.branch } : {}
   if (trigger.launchKind === 'workflow') {
     const t = trigger.payloadTemplate as WebhookWorkflowPayloadTemplate
     const inputs: Record<string, string> = {}
@@ -250,10 +262,14 @@ export function renderWebhookLaunch(
         workflowId: trigger.launchRefId,
         name,
         inputs,
-        ...repoFields,
-        ...(ref !== undefined ? { ref } : {}),
-        ...(t.workingBranch !== undefined ? { workingBranch: t.workingBranch } : {}),
-        ...(t.autoCommitPush !== undefined ? { autoCommitPush: t.autoCommitPush } : {}),
+        ...spaceFields,
+        ...refFields,
+        ...(space.kind !== 'scratch' && t.workingBranch !== undefined
+          ? { workingBranch: t.workingBranch }
+          : {}),
+        ...(space.kind !== 'scratch' && t.autoCommitPush !== undefined
+          ? { autoCommitPush: t.autoCommitPush }
+          : {}),
         ...(t.maxDurationMs !== undefined ? { maxDurationMs: t.maxDurationMs } : {}),
         ...(t.maxTotalTokens !== undefined ? { maxTotalTokens: t.maxTotalTokens } : {}),
       } as unknown as StartTask,
@@ -276,10 +292,14 @@ export function renderWebhookLaunch(
           : {}),
         ...(inputs !== undefined ? { inputs } : {}),
         ...(t.allowClarify !== undefined ? { allowClarify: t.allowClarify } : {}),
-        ...repoFields,
-        ...(ref !== undefined ? { ref } : {}),
-        ...(t.workingBranch !== undefined ? { workingBranch: t.workingBranch } : {}),
-        ...(t.autoCommitPush !== undefined ? { autoCommitPush: t.autoCommitPush } : {}),
+        ...spaceFields,
+        ...refFields,
+        ...(space.kind !== 'scratch' && t.workingBranch !== undefined
+          ? { workingBranch: t.workingBranch }
+          : {}),
+        ...(space.kind !== 'scratch' && t.autoCommitPush !== undefined
+          ? { autoCommitPush: t.autoCommitPush }
+          : {}),
         ...(t.maxDurationMs !== undefined ? { maxDurationMs: t.maxDurationMs } : {}),
         ...(t.maxTotalTokens !== undefined ? { maxTotalTokens: t.maxTotalTokens } : {}),
       } as unknown as StartAgentTask & { agentId: string },
@@ -293,10 +313,14 @@ export function renderWebhookLaunch(
       workgroupId: trigger.launchRefId,
       name,
       goal: renderTemplate(t.goal, vars),
-      ...repoFields,
-      ...(ref !== undefined ? { ref } : {}),
-      ...(t.workingBranch !== undefined ? { workingBranch: t.workingBranch } : {}),
-      ...(t.autoCommitPush !== undefined ? { autoCommitPush: t.autoCommitPush } : {}),
+      ...spaceFields,
+      ...refFields,
+      ...(space.kind !== 'scratch' && t.workingBranch !== undefined
+        ? { workingBranch: t.workingBranch }
+        : {}),
+      ...(space.kind !== 'scratch' && t.autoCommitPush !== undefined
+        ? { autoCommitPush: t.autoCommitPush }
+        : {}),
       ...(t.maxDurationMs !== undefined ? { maxDurationMs: t.maxDurationMs } : {}),
       ...(t.maxTotalTokens !== undefined ? { maxTotalTokens: t.maxTotalTokens } : {}),
     } as unknown as StartWorkgroupTask & { workgroupId: string },
@@ -507,15 +531,19 @@ async function fireTrigger(
       }
     }
 
-    // repo 解析（D13/D17）。
-    const repo = await resolveRepoForEvent(
-      db,
-      deps.secretBox,
-      event,
-      input.endpoint,
-      fresh.autoRegisterRepos,
-    )
-    if (repo.kind === 'unregistered') {
+    // RFC-268：scratch 在任何 cache/decrypt/clone 前短路。payload 与
+    // autoRegisterRepos 同取匹配时快照，避免排队期间编辑造成混合代配置。
+    const space: RepoResolution | { kind: 'scratch' } =
+      trigger.payloadTemplate.scratch === true
+        ? { kind: 'scratch' }
+        : await (deps.resolveRepo ?? resolveRepoForEvent)(
+            db,
+            deps.secretBox,
+            event,
+            input.endpoint,
+            trigger.row.autoRegisterRepos,
+          )
+    if (space.kind === 'unregistered') {
       await recordFire(db, { ...base, outcome: 'skipped-repo-unregistered', supersededTaskId })
       return
     }
@@ -541,7 +569,7 @@ async function fireTrigger(
       },
       source: 'daemon',
     })
-    const rendered = renderWebhookLaunch(trigger, fresh.name, event, repo)
+    const rendered = renderWebhookLaunch(trigger, fresh.name, event, space)
     try {
       await assertScheduledTargetUsable(
         db,

@@ -2647,6 +2647,11 @@ export const enUS: Resources = {
       agent: 'Start one agent directly for a focused, fast task.',
       workgroup: 'Let several members collaborate on the same goal.',
     },
+    spaces: { eventRepo: 'Event repository', scratch: 'Temporary workspace' },
+    spaceDescriptions: {
+      eventRepo: 'Use the repository and branch from the event; clone it if needed.',
+      scratch: 'Create a fresh empty Git repository; never clone or push the event repository.',
+    },
     inputKinds: {
       text: 'Text',
       files: 'File list',
@@ -2678,6 +2683,7 @@ export const enUS: Resources = {
       scope: 'Repo scope',
       events: 'Events',
       target: 'Launch target',
+      space: 'Execution space',
       separator: '→',
       safetyNote:
         'After {{count}} consecutive fires on the same MR or branch, the rule pauses to prevent an automation loop.',
@@ -2726,9 +2732,14 @@ export const enUS: Resources = {
         'The target kind cannot change after saving. Create a new rule to switch kinds.',
       target: 'Target',
       targetPlaceholder: 'Select a target',
+      executionSpace: 'Execution space',
+      scratchNotice:
+        'Every fire creates a fresh empty Git repository. The event repository is not cloned, and its branch is not used as a checkout ref.',
       inputMappings: 'Input mappings',
       inputMappingsHint:
         'Pass repo, branch, MR, and other event data into the workflow. Git inputs automatically use the event branch.',
+      inputMappingsScratchHint:
+        'Pass event data into the workflow. Git inputs still carry the event branch value, but do not check out the event repository.',
       noInputs: 'This workflow declares no inputs.',
       eventBranch: 'Branch from event',
       templatePlaceholder: 'For example: investigate why this MR failed',

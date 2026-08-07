@@ -75,6 +75,10 @@ Claude 判断（设计门修订后版本；与首版的差异见设计门记档�
 | D23 | 快速应答 + 异步分发（**F-4 新增**） | 三段式：插 `received` 行 → 立即响应 → 异步分发（supersede 的 cancel 轮询最多 5s、auto-register clone 分钟级，同步执行必撞 GitLab 10s 超时）→ 终态更新。daemon 重启把 `processing` 行标 `failed(interrupted)`，手动 replay 恢复 |
 | D24 | 同流互斥（**F-5 新增**） | per `(triggerId, streamKey)` 内存 keyed-mutex 串行化「supersede 判定 + 熔断计数 + 启动」段（仿 `gitRepoCache.ts` `withUrlLock` 先例），防两并发事件双任务存活 |
 
+> **RFC-268 后续注记（2026-08-07）**：D17 的事件仓默认保持不变，但 `scratch`
+> 已成为显式可选的单仓临时空间；`repoGroupId` / `sourceTaskId` 仍禁止。RFC-268
+> 的新决策与验收标准覆盖本文中“scratch 不可引用”的历史边界。
+
 ## 6. 部署与能力影响清单（呈用户逐项确认）
 
 本 RFC 是纯新增能力，无既有能力收缩；但有五条**部署形态影响**按 CLAUDE.md 第 7 条精神逐项呈报：

@@ -2370,6 +2370,8 @@ export interface Resources {
     columns: { name: string; rule: string; target: string; state: string }
     kinds: { workflow: string; agent: string; workgroup: string }
     kindDescriptions: { workflow: string; agent: string; workgroup: string }
+    spaces: { eventRepo: string; scratch: string }
+    spaceDescriptions: { eventRepo: string; scratch: string }
     inputKinds: { text: string; files: string; enum: string; git: string; upload: string }
     last: { launched: string; failed: string }
     outcomes: {
@@ -2388,6 +2390,7 @@ export interface Resources {
       scope: string
       events: string
       target: string
+      space: string
       separator: string
       safetyNote: string
     }
@@ -2423,8 +2426,11 @@ export interface Resources {
       kindImmutable: string
       target: string
       targetPlaceholder: string
+      executionSpace: string
+      scratchNotice: string
       inputMappings: string
       inputMappingsHint: string
+      inputMappingsScratchHint: string
       noInputs: string
       eventBranch: string
       templatePlaceholder: string
@@ -7508,6 +7514,11 @@ export const zhCN: Resources = {
       agent: '直接启动一个 Agent，适合单一、快速任务。',
       workgroup: '让多个成员协作处理同一个目标。',
     },
+    spaces: { eventRepo: '事件仓库', scratch: '临时工作区' },
+    spaceDescriptions: {
+      eventRepo: '使用事件对应的仓库与分支；未导入时可自动拉取。',
+      scratch: '每次创建空白 Git 仓库；不拉取事件仓，也不推送远端。',
+    },
     inputKinds: {
       text: '文本',
       files: '文件列表',
@@ -7537,6 +7548,7 @@ export const zhCN: Resources = {
       scope: '仓库范围',
       events: '响应事件',
       target: '启动目标',
+      space: '执行空间',
       separator: '→',
       safetyNote: '同一 MR 或分支连续触发 {{count}} 次后会暂停，避免自动化循环失控。',
     },
@@ -7573,8 +7585,13 @@ export const zhCN: Resources = {
       kindImmutable: '目标类型保存后不能更换；需要更换时请新建规则。',
       target: '目标',
       targetPlaceholder: '选择目标',
+      executionSpace: '执行空间',
+      scratchNotice:
+        '每次触发都会创建新的空白 Git 仓库；事件仓不会被拉取，事件分支也不会作为检出 ref。',
       inputMappings: '输入映射',
       inputMappingsHint: '把仓库、分支、MR 等事件内容交给工作流；Git 输入会自动使用事件分支。',
+      inputMappingsScratchHint:
+        '把事件内容交给工作流；Git 输入仍携带事件分支值，但不会因此检出事件仓。',
       noInputs: '该工作流没有声明输入。',
       eventBranch: '分支来自事件',
       templatePlaceholder: '例如：检查这个 MR 的失败原因',

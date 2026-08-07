@@ -53,6 +53,8 @@ const WF_DETAIL = {
   },
 }
 
+let triggerWrites: Array<Record<string, unknown>> = []
+
 async function renderWebhooks() {
   const mod = await import('../src/routes/webhooks')
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -94,10 +96,11 @@ async function openWizardAtTargetStep() {
 }
 
 beforeEach(async () => {
+  triggerWrites = []
   await i18n.changeLanguage('en-US')
   setBaseUrl(`http://webhook-var-insert-${crypto.randomUUID()}.test`)
   setToken('tok')
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     if (url.includes('/api/auth/me')) {
       return jsonResponse({
@@ -108,7 +111,13 @@ beforeEach(async () => {
         pats: [],
       })
     }
-    if (url.includes('/api/webhook-triggers')) return jsonResponse([])
+    if (url.includes('/api/webhook-triggers')) {
+      if (init?.method === 'POST') {
+        triggerWrites.push(JSON.parse(String(init.body)) as Record<string, unknown>)
+        return jsonResponse({})
+      }
+      return jsonResponse([])
+    }
     if (url.includes('/api/webhook-endpoints')) return jsonResponse([ENDPOINT])
     if (url.includes('/api/workflows/wf1')) return jsonResponse(WF_DETAIL)
     if (url.includes('/api/workflows')) return jsonResponse([{ id: 'wf1', name: 'Fix WF' }])
@@ -124,6 +133,51 @@ afterEach(() => {
 })
 
 describe('webhook trigger wizard · template var insertion', () => {
+  test('RFC-268: scratch choice serializes true + autoRegister=false and review hides clone control', async () => {
+    await renderWebhooks()
+    await openWizardAtTargetStep()
+
+    fireEvent.click(screen.getByTestId('wt-target'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'Fix WF' }))
+    fireEvent.change(await screen.findByTestId('wt-map-instruction'), {
+      target: { value: 'repair {{repo_path}}' },
+    })
+
+    expect(screen.getByTestId('wt-space-event-repo').getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByTestId('wt-space-scratch'))
+    expect(screen.getByTestId('wt-space-scratch').getAttribute('aria-checked')).toBe('true')
+    expect(
+      screen.getByText(
+        'Pass event data into the workflow. Git inputs still carry the event branch value, but do not check out the event repository.',
+      ),
+    ).toBeTruthy()
+
+    // 切回事件仓不会偷偷恢复 clone；该开关保持 false。再选 scratch 完成保存。
+    fireEvent.click(screen.getByTestId('wt-space-event-repo'))
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    await screen.findByTestId('webhook-trigger-step-review')
+    expect((screen.getByTestId('wt-auto-register') as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(screen.getByTestId('stepper-step-target'))
+    fireEvent.click(screen.getByTestId('wt-space-scratch'))
+    fireEvent.click(screen.getByTestId('stepper-next'))
+
+    await screen.findByTestId('webhook-trigger-step-review')
+    expect(screen.getByText('Temporary workspace')).toBeTruthy()
+    expect(screen.queryByTestId('wt-auto-register')).toBeNull()
+    expect(screen.getByTestId('wt-scratch-notice').textContent).toContain(
+      'fresh empty Git repository',
+    )
+    fireEvent.click(screen.getByTestId('webhook-trigger-save'))
+    await waitFor(() => expect(triggerWrites).toHaveLength(1))
+    expect(triggerWrites[0]?.['autoRegisterRepos']).toBe(false)
+    expect(triggerWrites[0]?.['launchPayload']).toEqual({
+      inputs: {
+        instruction: { kind: 'template', template: 'repair {{repo_path}}' },
+      },
+      scratch: true,
+    })
+  })
+
   test('workflow mappings: chips render (event_json first), insert into the focused input', async () => {
     await renderWebhooks()
     await openWizardAtTargetStep()

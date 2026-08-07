@@ -158,6 +158,41 @@ describe('RFC-257 · /webhooks page (admin)', () => {
     await waitFor(() => expect(screen.getByTestId('webhook-trigger-tr1')).toBeTruthy())
     expect(screen.getByText(/platform\/\*/)).toBeTruthy()
     expect(screen.getByText(/Pipeline failed/)).toBeTruthy()
+    expect(screen.getByTestId('webhook-trigger-space-tr1').textContent).toBe('Event repository')
+  })
+
+  test('corrupt trigger keeps only the corrupt badge and does not guess an execution space', async () => {
+    triggers = [
+      {
+        id: 'tr-corrupt',
+        name: 'Broken rule',
+        endpointId: 'ep1',
+        ownerUserId: 'u1',
+        enabled: false,
+        repoScope: null,
+        eventTypes: null,
+        branchFilter: null,
+        commandPrefix: null,
+        ignoreUsernames: null,
+        launchKind: 'workflow',
+        launchRefId: 'wf1',
+        launchPayload: null,
+        migrationError: { launchPayload: 'launch-payload-invalid' },
+        maxConsecutiveFires: 3,
+        autoRegisterRepos: false,
+        lastFiredAt: null,
+        lastStatus: null,
+        lastError: null,
+        lastTaskId: null,
+        consecutiveFailures: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]
+    await renderWebhooks('?tab=triggers')
+    await screen.findByTestId('webhook-trigger-tr-corrupt')
+    expect(screen.getByText('Corrupt config')).toBeTruthy()
+    expect(screen.queryByTestId('webhook-trigger-space-tr-corrupt')).toBeNull()
   })
 
   test('deliveries tab renders the audit panel; rejected replay disabled', async () => {
