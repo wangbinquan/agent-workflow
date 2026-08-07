@@ -544,12 +544,12 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
 
     // The issue lands directly on Review's source field. Repair the connection
     // there instead of asking a phone user to find a producer that focus/fitView
-    // may have moved outside the viewport. These Select changes use the same
-    // transition that writes both inputSource and its synchronized edge.
-    await inspector.getByRole('combobox', { name: 'Source node', exact: true }).click()
+    // may have moved outside the viewport. Choosing the source writes both
+    // inputSource and its synchronized edge; its sole reviewable Markdown port
+    // is filled automatically so the phone path does not require a second menu.
+    await inspector.getByRole('combobox', { name: 'Content source', exact: true }).click()
     await page.getByRole('option').filter({ hasText: 'w2-3-agent-a' }).click()
-    await inspector.getByRole('combobox', { name: 'Source port', exact: true }).click()
-    await page.getByRole('option', { name: 'answer', exact: true }).click()
+    await expect(inspector.getByTestId('review-source-port')).toContainText('answer')
     await inspector.locator('.dialog__close').click()
 
     // Launch validates the exact saved revision through the same fresh gate,
