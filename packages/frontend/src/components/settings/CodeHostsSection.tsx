@@ -86,7 +86,10 @@ function ConnectionCard({ row, onSaved }: { row: CodeHostConnectionWire; onSaved
   return (
     <section className="page__section" data-testid={`code-host-card-${row.provider}`}>
       <h3>{t(`codeHostProvider.${row.provider}`)}</h3>
-      <ErrorBanner error={error} />
+      {/* 只在真有错误时渲染：ErrorBanner 在 `error == null` 且无 `message` 时会
+          落到 `t('common.unknownError')`，无条件渲染等于页面一打开就挂一条
+          「未知错误」（用户实报）。 */}
+      {error !== null ? <ErrorBanner error={error} /> : null}
       <Field
         label={t('codeHostSettings.baseUrl')}
         hint={t(`codeHostSettings.baseUrlHint_${row.provider}`)}
