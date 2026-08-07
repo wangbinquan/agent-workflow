@@ -69,11 +69,27 @@ function renderEdit(n: WorkflowNode = node()) {
 describe('RFC-269 Inspector', () => {
   test('动作下拉按类别分组呈现', () => {
     renderEdit()
+    expect(screen.getByText(/Add a reply to an existing code-review discussion/)).toBeTruthy()
     fireEvent.click(screen.getByTestId('code-host-action'))
     // 分组表头由公共 <Select> 的 group 能力渲染（零组件改动即满足 Q5）。
     // 断言结构而不是文案：测试环境的语言不该决定这条锁成不成立。
     const headers = document.querySelectorAll('.select__group')
     expect(headers.length).toBe(5)
+    expect(screen.getByTestId('code-host-action-search')).toBeTruthy()
+    expect(screen.getByRole('option', { name: /top-level comment ID/i })).toBeTruthy()
+  })
+
+  test('动作可按业务词搜索，不用在 20 个接口里逐个翻', () => {
+    renderEdit()
+    fireEvent.click(screen.getByTestId('code-host-action'))
+    fireEvent.change(screen.getByTestId('code-host-action-search'), {
+      target: { value: 'workflow' },
+    })
+
+    expect(screen.getByRole('option', { name: /Start pipeline \/ workflow/i })).toBeTruthy()
+    expect(
+      screen.queryByRole('option', { name: /Reply to existing review discussion/i }),
+    ).toBeNull()
   })
 
   test('GitHub 下 resolve 线程置灰且给出原因，而不是从列表里消失', () => {
@@ -99,5 +115,42 @@ describe('RFC-269 Inspector', () => {
     expect(chips.textContent).toContain('{{trigger.comment_thread_id}}')
     // event_json 不在触发上下文里（design D15）。
     expect(chips.textContent).not.toContain('event_json')
+  })
+
+  test('凭据配置入口在新标签页打开，不会把作者从当前草稿带走', () => {
+    renderEdit()
+    const link = screen.getByTestId('code-host-manage-connections')
+    expect(link.getAttribute('href')).toBe('/settings?tab=codeHosts')
+    expect(link.getAttribute('target')).toBe('_blank')
+  })
+
+  test('变量 chip 点击后插入最近聚焦字段的光标处', () => {
+    const { patched } = renderEdit(node({ params: { body: 'Review: ' } }))
+    const body = screen.getByTestId('code-host-field-body') as HTMLTextAreaElement
+    fireEvent.focus(body)
+    body.setSelectionRange(body.value.length, body.value.length)
+
+    fireEvent.click(screen.getByTestId('code-host-trigger-var-trigger.comment_thread_id'))
+
+    const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
+    expect((latest.params as Record<string, string>).body).toBe(
+      'Review: {{trigger.comment_thread_id}}',
+    )
+  })
+
+  test('关闭破坏性方法权限时同步把已选 DELETE 退回 GET', () => {
+    const { patched } = renderEdit(
+      node({
+        action: 'custom',
+        allowDestructive: true,
+        request: { method: 'DELETE', path: '/projects/example' },
+      }),
+    )
+
+    fireEvent.click(screen.getByTestId('code-host-allow-destructive'))
+
+    const latest = patched[patched.length - 1] as unknown as Record<string, unknown>
+    expect(latest.allowDestructive).toBe(false)
+    expect(latest.request).toMatchObject({ method: 'GET', path: '/projects/example' })
   })
 })

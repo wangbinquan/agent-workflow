@@ -40,6 +40,7 @@ const STUB_AGENT: Agent = {
   name: 'stub',
   description: '',
   outputs: ['design'],
+  outputKinds: { design: 'markdown' },
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],
@@ -138,7 +139,7 @@ describe('Review NodeInspector — RFC-007 form ↔ edge sync', () => {
     // RFC-199 migrated the editable node/port ids to searchable selectors.
     // Pick the declared port — both halves are now non-empty, so an edge
     // should materialize through the single transition path.
-    pickSelect(screen.getByRole('combobox', { name: 'Source port' }), 'design')
+    pickSelect(screen.getByRole('combobox', { name: 'Markdown output port' }), 'design')
     expect(spy).toHaveBeenCalled()
     const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
     expect(last.edges).toHaveLength(1)
@@ -166,7 +167,7 @@ describe('Review NodeInspector — RFC-007 form ↔ edge sync', () => {
     render(<Host initialDef={def} selectedNodeId="r" onChangeSpy={spy} />)
     // The upstream nodeId picker is the shared <Select>; clearing = picking
     // the leading "—" (empty) option from its portaled listbox.
-    const upstream = screen.getByRole('combobox', { name: 'Source node' })
+    const upstream = screen.getByRole('combobox', { name: 'Content source' })
     pickSelect(upstream, '—')
     expect(spy).toHaveBeenCalled()
     const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition

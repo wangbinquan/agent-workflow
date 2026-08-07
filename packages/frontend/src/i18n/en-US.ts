@@ -3768,7 +3768,7 @@ export const enUS: Resources = {
     paletteHuman: 'Human',
     paletteReviewLabel: 'review',
     paletteReviewDesc:
-      'Sits downstream of a markdown port and pauses the workflow until a human decides.',
+      'Connect an agent’s Markdown output; the workflow pauses here for approve, reject, or iterate.',
     paletteClarifyLabel: 'clarify',
     paletteClarifyDesc:
       'Lets an agent ask back when stuck; drag from this node’s input handle onto the agent to wire it.',
@@ -4163,18 +4163,45 @@ export const enUS: Resources = {
     fieldNodeTitleHint:
       'Shown on the canvas card. When empty, falls back to the agent name / input key / node id.',
     fieldReviewDescription: 'Review description',
-    fieldReviewDescriptionHint: 'Optional context shown to reviewers.',
-    fieldReviewInputSourceNode: 'Source node',
-    fieldReviewInputSourceNodeHint: 'Upstream node id whose markdown output this review covers.',
-    fieldReviewInputSourcePort: 'Source port',
+    fieldReviewDescriptionHint: 'Optional context shown to reviewers; it does not supply content.',
+    fieldReviewInputSourceNode: 'Content source',
+    fieldReviewInputSourceNodeHint:
+      'Choose an agent with a reviewable Markdown output; its only eligible port is filled automatically.',
+    fieldReviewInputSourcePort: 'Markdown output port',
     fieldReviewInputSourcePortHint:
-      'Port name on the source node; its declared kind must be markdown-family (markdown / markdown_file / path<md>). A list<path<md>> / list<markdown> port enters multi-document review.',
-    fieldReviewRerunReject: 'Reject re-runs',
+      'Supports markdown, markdown_file / path<md>, list<markdown>, and list<path<md>>; you can also wire the canvas ports directly.',
+    fieldReviewGuideReadyTitle: 'Review content is ready',
+    fieldReviewGuideReadyBody:
+      '{{source}}.{{port}} · {{kind}}. The task pauses here and opens a {{mode}}.',
+    fieldReviewGuideEmptyTitle: 'Only one required input remains',
+    fieldReviewGuideEmptyBody:
+      'Do not paste the review body here. Wire an upstream agent’s Markdown output into this node, or choose Content source + Output port below. Title, description, and re-run policies are optional.',
+    fieldReviewGuideUnavailableTitle: 'No reviewable output is available',
+    fieldReviewGuideUnavailableBody:
+      'First declare a Markdown output port on an upstream agent. A plain string cannot be reviewed; markdown, path<md>, and their single-level lists are supported.',
+    fieldReviewGuideInvalidTitle: 'The current source cannot be reviewed',
+    fieldReviewGuideInvalidBody:
+      'Choose an agent output declared with a Markdown kind. Unavailable rows remain visible in the picker with the reason.',
+    fieldReviewConfigureAgentOutputs: 'Configure agent outputs',
+    fieldReviewSourceNonAgent: 'Unavailable: review content must come from an agent output.',
+    fieldReviewSourceAgentMissing:
+      'Unavailable: the referenced agent could not be resolved, so its output kinds are unknown.',
+    fieldReviewSourceNoMarkdown:
+      'Unavailable: this agent has no output port declared with a Markdown kind.',
+    fieldReviewSourceAvailable: 'Available ports: {{ports}}',
+    fieldReviewSourceCount: '{{count}} available',
+    fieldReviewPortSingle: 'Single document: reads this Markdown body or Markdown file at runtime.',
+    fieldReviewPortMulti:
+      'Multiple documents: every list item becomes a document that can be reviewed and curated separately.',
+    fieldReviewPortUnsupported: 'Unavailable: {{kind}} is not a reviewable Markdown content kind.',
+    fieldReviewModeSingle: 'single-document review',
+    fieldReviewModeMulti: 'multi-document review',
+    fieldReviewRerunReject: 'Additional re-runs on reject',
     fieldReviewRerunRejectHint:
-      'Press Enter or comma to add node ids. Default = source node + all its reachable upstreams.',
-    fieldReviewRerunIterate: 'Iterate re-runs',
+      'Optional. Empty still re-runs the direct content source; add only reachable upstream nodes that must also run again.',
+    fieldReviewRerunIterate: 'Additional re-runs on iterate',
     fieldReviewRerunIterateHint:
-      'Press Enter or comma to add node ids. Default = direct source node only.',
+      'Optional. Empty still re-runs the direct content source; add reachable upstream nodes that should regenerate from review feedback.',
     fieldReviewRerunInvalid: 'Node {{id}} is not an available upstream node.',
     fieldReviewRollbackReject: 'Rollback files on reject',
     fieldReviewRollbackRejectLabel: 'Restore worktree to pre-snapshot when rejecting',
@@ -4250,6 +4277,7 @@ export const enUS: Resources = {
     technicalId: 'Technical ID',
     sectionBasics: 'Basics',
     sectionFlow: 'Flow',
+    sectionReviewInput: 'Content to review',
     sectionAdvanced: 'Advanced',
     sectionTechnical: 'Technical',
     missingRefsLabel: 'Template refs without inbound edge:',
@@ -4960,6 +4988,7 @@ export const enUS: Resources = {
   },
   reviewNode: {
     label: 'review',
+    sourceUnset: 'Connect a Markdown output to review',
     navAwaiting: 'Click to open review',
     navDecided: 'Click to view latest review decision',
   },
@@ -4997,45 +5026,84 @@ export const enUS: Resources = {
   },
   codeHostNode: {
     label: 'code host',
-    destructive: 'destructive',
+    destructive: 'DELETE request',
+    unsupported: 'unsupported here',
   },
   codeHostProvider: {
     gitlab: 'GitLab',
     github: 'GitHub',
   },
   codeHostActionGroup: {
-    comment: 'Comments',
-    mr: 'MR state',
-    pipeline: 'Pipelines',
-    read: 'Reads',
+    comment: 'Review & comments',
+    mr: 'MR / PR & commits',
+    pipeline: 'CI/CD',
+    read: 'Read data',
     custom: 'Custom',
   },
   codeHostAction: {
-    'comment_reply-thread': 'Reply in comment thread',
-    comment_create: 'New comment on MR/PR',
-    'comment_create-inline': 'New inline thread on a diff line',
-    comment_update: 'Edit own comment',
-    thread_resolve: 'Resolve thread',
+    'comment_reply-thread': 'Reply to existing review discussion',
+    comment_create: 'Post general MR/PR comment',
+    'comment_create-inline': 'Start inline review discussion',
+    comment_update: 'Update comment content',
+    thread_resolve: 'Resolve review discussion',
     'commit-status_set': 'Set commit status',
     label_add: 'Add labels',
-    assignee_set: 'Set assignees',
+    assignee_set: 'Assign users',
     mr_approve: 'Approve MR/PR',
     mr_merge: 'Merge MR/PR',
     mr_create: 'Create MR/PR',
-    pipeline_trigger: 'Trigger pipeline',
-    pipeline_retry: 'Re-run failed pipeline jobs',
-    pipeline_cancel: 'Cancel pipeline',
-    job_list: 'List jobs',
-    job_log: 'Fetch job log',
-    mr_diff: 'Fetch MR/PR diff',
+    pipeline_trigger: 'Start pipeline / workflow',
+    pipeline_retry: 'Re-run unsuccessful jobs',
+    pipeline_cancel: 'Cancel pipeline / workflow',
+    job_list: 'List pipeline / workflow jobs',
+    job_log: 'Read job log',
+    mr_diff: 'Read changed files and diffs',
     mr_list: 'List MRs/PRs',
     file_read: 'Read repository file',
     custom: 'Custom request',
   },
+  codeHostActionDescription: {
+    'comment_reply-thread':
+      'Add a reply to an existing code-review discussion. GitLab needs a discussion ID; GitHub only supports PR review comments and requires the top-level comment ID.',
+    comment_create:
+      'Post a general conversation comment on an MR/PR; it is not attached to a diff line.',
+    'comment_create-inline':
+      'Start an inline review discussion on an MR/PR diff using position JSON in the platform format.',
+    comment_update:
+      'Update existing comment text. GitLab supports general MR notes here; on GitHub, choose a general or inline review comment.',
+    thread_resolve:
+      'Mark an existing GitLab MR review discussion as resolved; GitHub has no equivalent REST endpoint.',
+    'commit-status_set':
+      'Write a pending, success, or failed status to a commit, optionally with a context and details URL.',
+    label_add: 'Add one or more labels to an MR/PR without removing its existing labels.',
+    assignee_set:
+      'Assign users to an MR/PR. GitLab uses numeric user IDs and replaces the current list; GitHub uses logins and appends to it.',
+    mr_approve:
+      'Approve an MR/PR as the configured credential. GitHub creates an APPROVE review and can include a message.',
+    mr_merge:
+      'Merge an MR/PR, optionally setting a supported merge method or merge-commit message.',
+    mr_create:
+      'Create an MR/PR from a source branch into a target branch with a title and description.',
+    pipeline_trigger:
+      'GitLab creates a pipeline on the given ref; GitHub dispatches a workflow configured for workflow_dispatch.',
+    pipeline_retry:
+      'GitLab retries failed or canceled pipeline jobs; GitHub re-runs failed jobs and their dependent jobs.',
+    pipeline_cancel:
+      'GitLab cancels every job in a pipeline; GitHub cancels one Actions workflow run.',
+    job_list: 'List jobs in a GitLab pipeline or a GitHub Actions workflow run.',
+    job_log:
+      'Read the plain-text log for one job; GitHub follows its short-lived download redirect.',
+    mr_diff:
+      'Read changed files and per-file diffs for an MR/PR; the result is not one raw patch file.',
+    mr_list: 'List MR/PRs in a project, optionally filtered by state and page size.',
+    file_read: 'Read raw repository file contents at a branch, tag, or commit.',
+    custom:
+      'Call a relative path under the configured code-host base URL, choosing the method and JSON body; DELETE requires explicit permission.',
+  },
   codeHostField: {
     project: 'Project',
     mr: 'MR / PR number',
-    thread: 'Thread ID',
+    thread: 'Discussion / root comment ID',
     comment: 'Comment ID',
     comment_scope: 'Comment type',
     body: 'Body',
@@ -5048,8 +5116,8 @@ export const enUS: Resources = {
     labels: 'Labels',
     assignees: 'Assignees',
     ref: 'Branch or tag',
-    workflow: 'Workflow file',
-    pipeline: 'Pipeline ID',
+    workflow: 'GitHub workflow file / ID',
+    pipeline: 'Pipeline / workflow run ID',
     job: 'Job ID',
     job_scope: 'Job state filter',
     job_filter: 'Job scope',
@@ -5066,11 +5134,14 @@ export const enUS: Resources = {
   codeHostFieldHint: {
     project:
       'Leave empty to use the task repository. GitLab accepts namespace/path or a numeric ID; GitHub takes owner/repo.',
-    thread: 'GitLab: discussion ID. GitHub: the root comment ID of the thread.',
+    thread: 'GitLab: discussion ID. GitHub: the top-level PR review comment ID, never a reply ID.',
+    comment:
+      'GitLab: general MR note ID. GitHub: comment ID; then choose general or inline review below.',
     position: 'Pass {{trigger.comment_position_json}} to replay the position verbatim.',
     labels: 'Comma separated.',
     assignees: 'Comma separated. GitLab needs numeric user IDs, GitHub needs logins.',
-    workflow: 'GitHub workflow_dispatch requires the workflow file name, e.g. ci.yml.',
+    workflow: 'GitHub workflow_dispatch workflow file name (for example ci.yml) or numeric ID.',
+    pipeline: 'GitLab: pipeline ID. GitHub: Actions workflow run ID.',
     path: 'Enter the raw path; the platform encodes it.',
   },
   codeHostOption: {
@@ -5098,6 +5169,8 @@ export const enUS: Resources = {
   codeHostInspector: {
     provider: 'Code host',
     providerHint: 'Credentials live in Settings › Code hosts',
+    manageConnections: 'Configure',
+    manageConnectionsAria: 'Configure code-host credentials in a new tab',
     action: 'Action',
     actionHint: 'Grouped by category; actions a host does not support are disabled with a reason',
     sectionParams: 'Parameters',
@@ -5110,10 +5183,13 @@ export const enUS: Resources = {
     body: 'Request body (JSON)',
     bodyHint:
       'Variables may only appear inside JSON strings, so upstream content cannot change the request structure',
-    allowDestructive: 'Allow destructive methods',
-    allowDestructiveHint: 'Required before DELETE can be selected',
+    allowDestructive: 'Allow DELETE requests',
+    allowDestructiveHint:
+      'Required before selecting DELETE; turning this off resets the method to GET',
     varsHint: 'Upstream ports (available once wired):',
     triggerVarsHint: 'Webhook trigger context (populated when the task was started by a webhook):',
+    varsInsertHint: 'Click a variable to insert it into: {{field}}',
+    varsNoTarget: 'This action has no text field that accepts variables',
     noInboundPorts: 'No inbound ports yet',
     readonlyBanner:
       'You do not have permission to author code-host call nodes; this node is read-only',

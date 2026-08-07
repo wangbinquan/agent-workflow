@@ -54,8 +54,12 @@ import type {
 } from '@agent-workflow/shared'
 import {
   buildNodeAgentLookup,
+  CODE_HOST_ACTION_DEFS,
+  CODE_HOST_METHODS,
   declaredPorts,
+  isCodeHostAction,
   isClarifyAskingNode,
+  isUnsupportedBinding,
   isWrapperKind,
   type WorkflowByRef,
 } from '@agent-workflow/shared'
@@ -422,7 +426,8 @@ function CanvasInner({
 }: WorkflowCanvasProps & {
   handleRef?: React.ForwardedRef<WorkflowCanvasHandle>
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const canvasLanguage = i18n.resolvedLanguage ?? i18n.language
   const managedLiveRegion = useManagedLiveRegion()
   const canvasDescriptionId = useId()
   const [canvasNotice, setCanvasNotice] = useState<string | null>(null)
@@ -631,6 +636,10 @@ function CanvasInner({
   const externalValidationIssuesRef = useRef(validationIssues)
   const externalEdgeInsertEnabledRef = useRef(edgeInsertEnabled)
   const externalInlineActionsVisibleRef = useRef(inlineActionsVisible)
+  // Localized default titles are projected into xyflow node data. A language
+  // switch does not change the workflow definition, so it needs its own rebuild
+  // signal or cards keep the previous language until the next edit/reload.
+  const externalLanguageRef = useRef(canvasLanguage)
   // RFC-243: mirror of the agents late-load guard for the child-workflow
   // resolver — the ['workflows'] query resolves after mount, and without a
   // resolver-changed arm a call-workflow node would keep zero port rows
@@ -1028,6 +1037,7 @@ function CanvasInner({
     const edgeInsertEnabledChanged = edgeInsertEnabled !== externalEdgeInsertEnabledRef.current
     const inlineActionsVisibilityChanged =
       inlineActionsVisible !== externalInlineActionsVisibleRef.current
+    const languageChanged = canvasLanguage !== externalLanguageRef.current
     // RFC-243: resolver identity changes exactly when the ['workflows'] cache
     // entry does — repaint call-workflow port rows on child-definition edits.
     const workflowRefsChanged = workflowByRef !== externalWorkflowByRefRef.current
@@ -1044,6 +1054,7 @@ function CanvasInner({
       validationChanged ||
       edgeInsertEnabledChanged ||
       inlineActionsVisibilityChanged ||
+      languageChanged ||
       workflowRefsChanged
     ) {
       externalDefRef.current = definition
@@ -1058,6 +1069,7 @@ function CanvasInner({
       externalValidationIssuesRef.current = validationIssues
       externalEdgeInsertEnabledRef.current = edgeInsertEnabled
       externalInlineActionsVisibleRef.current = inlineActionsVisible
+      externalLanguageRef.current = canvasLanguage
       externalWorkflowByRefRef.current = workflowByRef
       // Preserve `selected: true` across the rebuild. Without this, an
       // inspector edit (which mints a new `definition` reference) wipes
@@ -1137,6 +1149,7 @@ function CanvasInner({
     // this dep the effect never re-runs on a callNavs-only flip and the card's
     // hint/cursor desyncs from the click behavior.
     callNavs,
+    canvasLanguage,
     edgeInsertEnabled,
     editableEditor,
     handleInsertNodeOnEdge,
@@ -3495,14 +3508,35 @@ function toFlowNodes(
       scriptData.networkDenied = rec.network === 'deny'
       scriptData.scriptReadonly = rec.readonly === true
     }
-    // RFC-269: surface provider / action / destructive on the card so an author
-    // can tell "merges an MR" from "reads a diff" without opening the drawer.
+    // RFC-269: surface provider / action / method / support state on the card so
+    // an author can tell "merges an MR" from "reads a diff" without opening the
+    // drawer. `destructive` describes the configured request, not the broader
+    // allowDestructive permission (a GET with that gate enabled is still a GET).
     if (n.kind === 'code-host-call') {
       const rec = n as unknown as Record<string, unknown>
       const callData = data as CodeHostCallNodeData
       if (typeof rec.provider === 'string') callData.provider = rec.provider
       if (typeof rec.action === 'string') callData.action = rec.action
-      callData.destructive = rec.allowDestructive === true
+      const provider = rec.provider === 'github' || rec.provider === 'gitlab' ? rec.provider : null
+      if (provider !== null && isCodeHostAction(rec.action)) {
+        if (rec.action === 'custom') {
+          const request =
+            rec.request !== null && typeof rec.request === 'object' && !Array.isArray(rec.request)
+              ? (rec.request as Record<string, unknown>)
+              : {}
+          const method =
+            typeof request.method === 'string' &&
+            (CODE_HOST_METHODS as readonly string[]).includes(request.method)
+              ? request.method
+              : 'GET'
+          callData.method = method
+          callData.destructive = method === 'DELETE'
+        } else {
+          const binding = CODE_HOST_ACTION_DEFS[rec.action].bindings[provider]
+          if (isUnsupportedBinding(binding)) callData.unsupported = true
+          else callData.method = binding.method
+        }
+      }
     }
     // RFC-060 PR-E: agent-multi sourcePort mirroring removed.
     if (n.kind === 'wrapper-fanout') {

@@ -6758,6 +6758,25 @@ details.form-section[open] > summary {
   color: color-mix(in srgb, #0e7490 72%, var(--text));
 }
 
+/* External API integrations are an explicit indigo family. Without this row,
+ * the RFC-269 picker entry and its canvas card silently fell back to the generic
+ * agent accent even though the catalog already exposed a dedicated category. */
+.workflow-node-picker__item[data-category='integrations'] {
+  border-inline-start-width: 3px;
+  border-inline-start-color: #4f46e5;
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, #4f46e5 7%, var(--bg)),
+    var(--bg) 58%
+  );
+}
+
+.workflow-node-picker__type-chip[data-category='integrations'] {
+  border-color: color-mix(in srgb, #4f46e5 45%, var(--border));
+  background: color-mix(in srgb, #4f46e5 10%, var(--panel));
+  color: color-mix(in srgb, #4f46e5 72%, var(--text));
+}
+
 /* Resource calls are one catalog category, but the two cards should retain
  * the resource identity users already know from the workflow/workgroup
  * galleries and from their canvas nodes. `data-node-kind` keeps that visual
@@ -7881,6 +7900,10 @@ details.form-section[open] > summary {
   --node-accent: #0e7490;
 }
 
+.canvas-node--card[data-node-kind='code-host-call'] {
+  --node-accent: #4f46e5;
+}
+
 .canvas-node--card[data-node-kind='review'],
 .canvas-node--card[data-node-kind='clarify'],
 .canvas-node--card[data-node-kind='clarify-cross-agent'] {
@@ -7993,7 +8016,7 @@ details.form-section[open] > summary {
 /* Resource-backed nodes add a bounded target band to the shared card shell.
  * The band appears for an actionable unset call or when a custom node title
  * differs from the referenced workflow, workgroup, or agent name. */
-.canvas-node__call-reference {
+.canvas-node__fact-band {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -8008,13 +8031,18 @@ details.form-section[open] > summary {
   line-height: 1.35;
 }
 
-.canvas-node__call-reference-indicator {
+.canvas-node__fact-band-indicator {
   width: 6px;
   height: 6px;
   flex: 0 0 auto;
   border-radius: var(--radius-pill);
   background: var(--node-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-accent) 11%, transparent);
+}
+
+.canvas-node__fact-band-content {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .canvas-node__call-reference code {
@@ -8035,10 +8063,122 @@ details.form-section[open] > summary {
   color: var(--muted);
 }
 
-.canvas-node--call[data-reference-state='unset'] .canvas-node__call-reference-indicator {
+.canvas-node--call[data-reference-state='unset'] .canvas-node__fact-band-indicator {
   border: 1px solid color-mix(in srgb, var(--node-accent) 58%, var(--border));
   background: transparent;
   box-shadow: none;
+}
+
+.canvas-node__review-source-value {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.canvas-node__review-source-value code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node__review-source-value code:last-child {
+  color: color-mix(in srgb, var(--node-accent) 74%, var(--text));
+}
+
+.canvas-node__review-source-unset {
+  color: color-mix(in srgb, var(--node-accent) 76%, var(--text));
+  font-weight: 600;
+}
+
+.canvas-node--review[data-review-input-state='unset'] .canvas-node__fact-band {
+  border-style: dashed;
+}
+
+.canvas-node--review[data-review-input-state='unset'] .canvas-node__fact-band-indicator {
+  border: 1px solid color-mix(in srgb, var(--node-accent) 58%, var(--border));
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Code-host calls use the shared fact band as a compact operation summary.
+ * Provider/method stay on the first line; the action occupies a bounded second
+ * line only when a custom title otherwise hides it. */
+.canvas-node__code-host-operation .canvas-node__fact-band-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.canvas-node__code-host-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.canvas-node__code-host-provider {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--node-accent) 76%, var(--text));
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node__code-host-method {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--node-accent) 24%, var(--border));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--node-accent) 7%, var(--panel));
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.canvas-node__code-host-action {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node__code-host-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: 6px;
+}
+
+.canvas-node__code-host-flag {
+  padding: 1px 7px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.canvas-node--code-host[data-support-state='unsupported'] .canvas-node__fact-band {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.canvas-node--code-host[data-support-state='unsupported'] .canvas-node__fact-band-indicator {
+  background: var(--warn-fg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn-fg) 11%, transparent);
 }
 
 /* RFC-056 cross-clarify node — reuses the clarify/review amber/gold tint

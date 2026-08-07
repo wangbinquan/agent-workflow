@@ -135,6 +135,23 @@ describe('TemplateVarChips', () => {
     expect(container.firstChild).toBeNull()
   })
 
+  test('disabled mode keeps read-only consumers from offering a false insertion action', () => {
+    const onInsert = vi.fn()
+    render(
+      <TemplateVarChips
+        vars={['branch']}
+        label="Vars"
+        onInsert={onInsert}
+        testidPrefix="tv"
+        disabled
+      />,
+    )
+    const chip = screen.getByTestId('tv-branch')
+    expect((chip as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(chip)
+    expect(onInsert).not.toHaveBeenCalled()
+  })
+
   // RFC-263：分组呈现 + 每 chip 的说明 tooltip。
   test('grouped mode renders one labelled row per group, chips carry titles', () => {
     const onInsert = vi.fn()

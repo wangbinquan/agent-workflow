@@ -1,16 +1,21 @@
 // RFC-005 — human review node config. inputSource is the (upstream, port)
 // we'll snapshot into doc_versions; rerunnable lists are subsets of
-// reachable upstream node ids (validator enforces). Comma-separated
-// text input keeps the inspector light — we could swap to a multi-select
-// chip picker in a polish pass. Extracted verbatim from the NodeInspector
-// EditForm switch by RFC-146 T3.
+// reachable upstream node ids (validator enforces). The inspector exposes
+// searchable, contract-aware selectors and keeps the source edge in lock-step.
+// Extracted from the NodeInspector EditForm switch by RFC-146 T3.
 
-import type { WorkflowNode } from '@agent-workflow/shared'
+import {
+  buildNodeAgentLookup,
+  isMultiDocReviewInput,
+  isReviewableBodyKindString,
+  resolveNodeAgent,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Field, Switch, TextArea } from '@/components/Form'
 import { MultiSelect } from '@/components/MultiSelect'
+import { NoticeBanner, type NoticeBannerTone } from '@/components/NoticeBanner'
 import { Select } from '@/components/Select'
-import { buildNodeAgentLookup } from '@agent-workflow/shared'
 import { computePorts } from '../WorkflowCanvas'
 import { nodeTitle } from '../nodeTitle'
 import {
@@ -23,6 +28,47 @@ import { NodeTitleField } from './NodeTitleField'
 import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import { InspectorSection } from './InspectorSection'
 import type { EditProps } from './types'
+
+interface ReviewSourcePort {
+  name: string
+  kind: string
+  reviewable: boolean
+  multiDocument: boolean
+}
+
+interface ReviewSourceCandidate {
+  id: string
+  title: string
+  nodeKind: WorkflowNode['kind']
+  agentId?: string
+  ports: ReviewSourcePort[]
+  reviewablePorts: ReviewSourcePort[]
+}
+
+function collectReachableUpstreamIds(
+  definition: EditProps['definition'],
+  sourceNodeId: string,
+): Set<string> {
+  if (sourceNodeId === '') return new Set()
+  const reverse = new Map<string, string[]>()
+  for (const edge of definition.edges) {
+    const incoming = reverse.get(edge.target.nodeId) ?? []
+    incoming.push(edge.source.nodeId)
+    reverse.set(edge.target.nodeId, incoming)
+  }
+  const reachable = new Set<string>([sourceNodeId])
+  const queue = [sourceNodeId]
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (current === undefined) break
+    for (const upstream of reverse.get(current) ?? []) {
+      if (reachable.has(upstream)) continue
+      reachable.add(upstream)
+      queue.push(upstream)
+    }
+  }
+  return reachable
+}
 
 export function ReviewEdit({
   node,
@@ -52,29 +98,130 @@ export function ReviewEdit({
   const commentInjectTemplate =
     typeof rec.commentInjectTemplate === 'string' ? rec.commentInjectTemplate : ''
 
-  // Candidate upstream node ids = every node in the workflow except this
-  // one and any output sink. Validator enforces "subset of reachable
-  // upstreams" — this dropdown is the friendly version.
-  // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
-  const agentByName = buildNodeAgentLookup(agents, (a) => a)
-  const upstreamCandidates = definition.nodes
+  // Review input is not an arbitrary edge: runtime snapshots exactly one
+  // agent output declared as markdownish. Keep invalid nodes/ports visible
+  // (with a reason) so an old workflow is diagnosable, but only let authors
+  // choose values accepted by the validator. RFC-223 keeps resolution id-only.
+  const agentById = buildNodeAgentLookup(agents, (a) => a)
+  const sourceCandidates: ReviewSourceCandidate[] = definition.nodes
     .filter((n) => n.id !== node.id && n.kind !== 'output')
-    .map((candidate) => ({
-      id: candidate.id,
-      title: nodeTitle(candidate, agentByName),
-      ports: computePorts(candidate, agentByName, definition).outputs,
-    }))
-  const selectedSource = upstreamCandidates.find(
+    .map((candidate) => {
+      const agent =
+        candidate.kind === 'agent-single' ? resolveNodeAgent(candidate, agentById) : null
+      const ports = computePorts(candidate, agentById, definition).outputs.map((name) => {
+        const kind = agent?.outputKinds?.[name] ?? 'string'
+        const multiDocument = isMultiDocReviewInput(kind)
+        const reviewable = multiDocument || isReviewableBodyKindString(kind)
+        return { name, kind, reviewable, multiDocument }
+      })
+      return {
+        id: candidate.id,
+        title: nodeTitle(candidate, agentById),
+        nodeKind: candidate.kind,
+        ...(agent === null || agent === undefined ? {} : { agentId: agent.id }),
+        ports,
+        reviewablePorts: ports.filter((port) => port.reviewable),
+      }
+    })
+  const selectedSource = sourceCandidates.find(
     (candidate) => candidate.id === (inputSource.nodeId ?? ''),
   )
-  const sourceNodeMissing = (inputSource.nodeId ?? '').length > 0 && selectedSource === undefined
+  const selectedPort = selectedSource?.ports.find(
+    (port) => port.name === (inputSource.portName ?? ''),
+  )
+  const sourceNodeMissing =
+    (inputSource.nodeId ?? '').length > 0 &&
+    (selectedSource === undefined || selectedSource.reviewablePorts.length === 0)
   const sourcePortMissing =
     (inputSource.portName ?? '').length > 0 &&
-    (selectedSource === undefined || !selectedSource.ports.includes(inputSource.portName ?? ''))
-  const rerunnableOptions = upstreamCandidates.map((candidate) => ({
-    value: candidate.id,
-    label: candidate.title === candidate.id ? candidate.id : `${candidate.title} (${candidate.id})`,
+    (selectedPort === undefined || !selectedPort.reviewable)
+  const reviewSourceReady =
+    selectedSource !== undefined &&
+    selectedSource.reviewablePorts.length > 0 &&
+    selectedPort?.reviewable === true
+  const availableSourceCount = sourceCandidates.filter(
+    (candidate) => candidate.reviewablePorts.length > 0,
+  ).length
+  const reachableRerunnableIds = collectReachableUpstreamIds(definition, inputSource.nodeId ?? '')
+  const rerunnableOptions = sourceCandidates
+    .filter((candidate) => reachableRerunnableIds.has(candidate.id))
+    .map((candidate) => ({
+      value: candidate.id,
+      label:
+        candidate.title === candidate.id ? candidate.id : `${candidate.title} (${candidate.id})`,
+    }))
+
+  const sourceOptions = sourceCandidates.map((candidate) => {
+    let description: string
+    if (candidate.nodeKind !== 'agent-single') {
+      description = t('inspector.fieldReviewSourceNonAgent')
+    } else if (candidate.agentId === undefined) {
+      description = t('inspector.fieldReviewSourceAgentMissing')
+    } else if (candidate.reviewablePorts.length === 0) {
+      description = t('inspector.fieldReviewSourceNoMarkdown')
+    } else {
+      description = t('inspector.fieldReviewSourceAvailable', {
+        ports: candidate.reviewablePorts.map((port) => `${port.name} · ${port.kind}`).join('；'),
+      })
+    }
+    return {
+      value: candidate.id,
+      label:
+        candidate.title === candidate.id ? candidate.id : `${candidate.title} (${candidate.id})`,
+      description,
+      disabled: candidate.reviewablePorts.length === 0,
+      ...(candidate.reviewablePorts.length === 0
+        ? {}
+        : {
+            badge: t('inspector.fieldReviewSourceCount', {
+              count: candidate.reviewablePorts.length,
+            }),
+          }),
+    }
+  })
+  const sourcePortOptions = (selectedSource?.ports ?? []).map((port) => ({
+    value: port.name,
+    label: port.name,
+    badge: port.kind,
+    badgeTone: port.reviewable ? ('neutral' as const) : ('attention' as const),
+    disabled: !port.reviewable,
+    description: port.reviewable
+      ? t(port.multiDocument ? 'inspector.fieldReviewPortMulti' : 'inspector.fieldReviewPortSingle')
+      : t('inspector.fieldReviewPortUnsupported', { kind: port.kind }),
   }))
+  const guideTone: NoticeBannerTone = reviewSourceReady
+    ? 'success'
+    : availableSourceCount === 0 || sourceNodeMissing || sourcePortMissing
+      ? 'warning'
+      : 'info'
+  const guideTitle = reviewSourceReady
+    ? t('inspector.fieldReviewGuideReadyTitle')
+    : availableSourceCount === 0
+      ? t('inspector.fieldReviewGuideUnavailableTitle')
+      : sourceNodeMissing || sourcePortMissing
+        ? t('inspector.fieldReviewGuideInvalidTitle')
+        : t('inspector.fieldReviewGuideEmptyTitle')
+  const guideBody = reviewSourceReady
+    ? t('inspector.fieldReviewGuideReadyBody', {
+        source: selectedSource.title,
+        port: selectedPort.name,
+        kind: selectedPort.kind,
+        mode: t(
+          selectedPort.multiDocument
+            ? 'inspector.fieldReviewModeMulti'
+            : 'inspector.fieldReviewModeSingle',
+        ),
+      })
+    : availableSourceCount === 0
+      ? t('inspector.fieldReviewGuideUnavailableBody')
+      : sourceNodeMissing || sourcePortMissing
+        ? t('inspector.fieldReviewGuideInvalidBody')
+        : t('inspector.fieldReviewGuideEmptyBody')
+  const shouldOfferAgentConfig = availableSourceCount === 0 || sourceNodeMissing
+  const agentConfigHref =
+    selectedSource?.agentId === undefined
+      ? '/agents'
+      : `/agents/${encodeURIComponent(selectedSource.agentId)}`
 
   const patchReview = (delta: Record<string, unknown>, meta: InspectorChangeMeta): void =>
     onPatch(
@@ -128,7 +275,28 @@ export function ReviewEdit({
           </InspectorHistoryBoundary>
         </Field>
       </InspectorSection>
-      <InspectorSection title={t('inspector.sectionFlow')}>
+      <InspectorSection title={t('inspector.sectionReviewInput')}>
+        <NoticeBanner
+          tone={guideTone}
+          size="compact"
+          title={guideTitle}
+          testid="review-source-guide"
+          action={
+            shouldOfferAgentConfig ? (
+              <a
+                href={agentConfigHref}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn--sm btn--ghost"
+              >
+                {t('inspector.fieldReviewConfigureAgentOutputs')}
+                <span aria-hidden="true">↗</span>
+              </a>
+            ) : undefined
+          }
+        >
+          {guideBody}
+        </NoticeBanner>
         <InspectorFieldAnchor nodeId={node.id} field="review-source">
           <div className="form-grid form-grid--two">
             <Field
@@ -141,17 +309,22 @@ export function ReviewEdit({
                 className={sourceNodeMissing ? 'form-input--invalid' : undefined}
                 value={inputSource.nodeId ?? ''}
                 ariaLabel={t('inspector.fieldReviewInputSourceNode')}
+                data-testid="review-source-node"
                 onChange={(nextNodeId) => {
-                  const nextCandidate = upstreamCandidates.find(
+                  const nextCandidate = sourceCandidates.find(
                     (candidate) => candidate.id === nextNodeId,
                   )
+                  const currentPort = inputSource.portName ?? ''
+                  const nextReviewablePorts = nextCandidate?.reviewablePorts ?? []
+                  const nextPortName = nextReviewablePorts.some((port) => port.name === currentPort)
+                    ? currentPort
+                    : nextReviewablePorts.length === 1
+                      ? (nextReviewablePorts[0]?.name ?? '')
+                      : ''
                   patchReviewInputSource(
                     {
                       nodeId: nextNodeId,
-                      portName:
-                        nextCandidate?.ports.includes(inputSource.portName ?? '') === true
-                          ? (inputSource.portName ?? '')
-                          : '',
+                      portName: nextPortName,
                     },
                     atomicNodeInspectorChange(
                       node.id,
@@ -162,8 +335,8 @@ export function ReviewEdit({
                 }}
                 options={[
                   { value: '', label: '—' },
-                  ...rerunnableOptions,
-                  ...(sourceNodeMissing
+                  ...sourceOptions,
+                  ...(selectedSource === undefined && (inputSource.nodeId ?? '').length > 0
                     ? [
                         {
                           value: inputSource.nodeId ?? '',
@@ -184,7 +357,12 @@ export function ReviewEdit({
                 className={sourcePortMissing ? 'form-input--invalid' : undefined}
                 value={inputSource.portName ?? ''}
                 ariaLabel={t('inspector.fieldReviewInputSourcePort')}
-                disabled={(inputSource.nodeId ?? '').length === 0}
+                data-testid="review-source-port"
+                disabled={
+                  (inputSource.nodeId ?? '').length === 0 ||
+                  selectedSource === undefined ||
+                  selectedSource.reviewablePorts.length === 0
+                }
                 onChange={(nextPortName) =>
                   patchReviewInputSource(
                     { nodeId: inputSource.nodeId ?? '', portName: nextPortName },
@@ -197,11 +375,8 @@ export function ReviewEdit({
                 }
                 options={[
                   { value: '', label: '—' },
-                  ...(selectedSource?.ports ?? []).map((portName) => ({
-                    value: portName,
-                    label: portName,
-                  })),
-                  ...(sourcePortMissing
+                  ...sourcePortOptions,
+                  ...(selectedPort === undefined && (inputSource.portName ?? '').length > 0
                     ? [
                         {
                           value: inputSource.portName ?? '',

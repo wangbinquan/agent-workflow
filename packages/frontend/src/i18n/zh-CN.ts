@@ -3600,6 +3600,25 @@ export interface Resources {
     fieldReviewInputSourceNodeHint: string
     fieldReviewInputSourcePort: string
     fieldReviewInputSourcePortHint: string
+    fieldReviewGuideReadyTitle: string
+    fieldReviewGuideReadyBody: string
+    fieldReviewGuideEmptyTitle: string
+    fieldReviewGuideEmptyBody: string
+    fieldReviewGuideUnavailableTitle: string
+    fieldReviewGuideUnavailableBody: string
+    fieldReviewGuideInvalidTitle: string
+    fieldReviewGuideInvalidBody: string
+    fieldReviewConfigureAgentOutputs: string
+    fieldReviewSourceNonAgent: string
+    fieldReviewSourceAgentMissing: string
+    fieldReviewSourceNoMarkdown: string
+    fieldReviewSourceAvailable: string
+    fieldReviewSourceCount: string
+    fieldReviewPortSingle: string
+    fieldReviewPortMulti: string
+    fieldReviewPortUnsupported: string
+    fieldReviewModeSingle: string
+    fieldReviewModeMulti: string
     fieldReviewRerunReject: string
     fieldReviewRerunRejectHint: string
     fieldReviewRerunIterate: string
@@ -3671,6 +3690,7 @@ export interface Resources {
     technicalId: string
     sectionBasics: string
     sectionFlow: string
+    sectionReviewInput: string
     sectionAdvanced: string
     sectionTechnical: string
     missingRefsLabel: string
@@ -4345,6 +4365,7 @@ export interface Resources {
   /** Canvas chip label for review nodes (⚖ icon). */
   reviewNode: {
     label: string
+    sourceUnset: string
     /** RFC-158: task-detail canvas click hints when the review node is clickable. */
     navAwaiting: string
     navDecided: string
@@ -4389,6 +4410,7 @@ export interface Resources {
   codeHostNode: {
     label: string
     destructive: string
+    unsupported: string
   }
   codeHostProvider: {
     gitlab: string
@@ -4402,6 +4424,28 @@ export interface Resources {
     custom: string
   }
   codeHostAction: {
+    'comment_reply-thread': string
+    comment_create: string
+    'comment_create-inline': string
+    comment_update: string
+    thread_resolve: string
+    'commit-status_set': string
+    label_add: string
+    assignee_set: string
+    mr_approve: string
+    mr_merge: string
+    mr_create: string
+    pipeline_trigger: string
+    pipeline_retry: string
+    pipeline_cancel: string
+    job_list: string
+    job_log: string
+    mr_diff: string
+    mr_list: string
+    file_read: string
+    custom: string
+  }
+  codeHostActionDescription: {
     'comment_reply-thread': string
     comment_create: string
     'comment_create-inline': string
@@ -4457,10 +4501,12 @@ export interface Resources {
   codeHostFieldHint: {
     project: string
     thread: string
+    comment: string
     position: string
     labels: string
     assignees: string
     workflow: string
+    pipeline: string
     path: string
   }
   codeHostOption: {
@@ -4487,6 +4533,8 @@ export interface Resources {
   codeHostInspector: {
     provider: string
     providerHint: string
+    manageConnections: string
+    manageConnectionsAria: string
     action: string
     actionHint: string
     sectionParams: string
@@ -4501,6 +4549,8 @@ export interface Resources {
     allowDestructiveHint: string
     varsHint: string
     triggerVarsHint: string
+    varsInsertHint: string
+    varsNoTarget: string
     noInboundPorts: string
     readonlyBanner: string
     actionUnsupported: string
@@ -8698,7 +8748,7 @@ export const zhCN: Resources = {
     paletteOutputDesc: '任务详情页输出面板',
     paletteHuman: '人工',
     paletteReviewLabel: '评审',
-    paletteReviewDesc: '挂在 markdown port 下游，让人评审后再继续。',
+    paletteReviewDesc: '连接代理的 Markdown 输出；运行到这里会暂停，等待人工通过、退回或迭代。',
     paletteClarifyLabel: '反问',
     paletteClarifyDesc: '让 agent 在无法决断时主动反问；从节点左侧 input 端往 agent 上拖即可挂接。',
     paletteScripts: '脚本',
@@ -9060,16 +9110,42 @@ export const zhCN: Resources = {
     fieldNodeTitle: '显示名',
     fieldNodeTitleHint: '画布卡片上的标题；为空时回退到 agent 名 / input key / 节点 id。',
     fieldReviewDescription: '评审说明',
-    fieldReviewDescriptionHint: '可选 — 给评审者的上下文。',
-    fieldReviewInputSourceNode: '上游节点',
-    fieldReviewInputSourceNodeHint: '产出待评 markdown 的上游节点 id。',
-    fieldReviewInputSourcePort: '上游端口',
+    fieldReviewDescriptionHint: '可选；展示给评审者，不影响待评内容的来源。',
+    fieldReviewInputSourceNode: '内容来源',
+    fieldReviewInputSourceNodeHint:
+      '选择带有可评审 Markdown 输出的代理；若它只有一个有效端口，会自动补全端口。',
+    fieldReviewInputSourcePort: 'Markdown 输出端口',
     fieldReviewInputSourcePortHint:
-      '上游端口名；该端口在 agent 上声明的 kind 需属 markdown 家族（markdown / markdown_file / path<md>）。声明为 list<path<md>> / list<markdown> 时进入多文档评审。',
-    fieldReviewRerunReject: 'reject 时重跑节点',
-    fieldReviewRerunRejectHint: '按 Enter 或逗号添加节点 id；默认 = 上游节点 + 其所有可达上游。',
-    fieldReviewRerunIterate: 'iterate 时重跑节点',
-    fieldReviewRerunIterateHint: '按 Enter 或逗号添加节点 id；默认 = 仅上游节点。',
+      '支持 markdown、markdown_file / path<md>、list<markdown>、list<path<md>>；也可直接从画布端口连线。',
+    fieldReviewGuideReadyTitle: '待评内容已就绪',
+    fieldReviewGuideReadyBody:
+      '{{source}}.{{port}} · {{kind}}。运行到此节点会暂停任务并进入{{mode}}。',
+    fieldReviewGuideEmptyTitle: '只需补 1 项必填输入',
+    fieldReviewGuideEmptyBody:
+      '评审正文不用手填：从画布把上游代理的 Markdown 输出连到本节点，或在下方选择“内容来源 + 输出端口”。标题、说明和重跑策略均为可选。',
+    fieldReviewGuideUnavailableTitle: '当前没有可评审的输出',
+    fieldReviewGuideUnavailableBody:
+      '先给上游代理声明一个 Markdown 输出端口。普通 string 不能作为评审正文；支持 markdown、path<md> 及其单层列表。',
+    fieldReviewGuideInvalidTitle: '当前来源不能用于评审',
+    fieldReviewGuideInvalidBody:
+      '请选择代理节点中声明为 Markdown 类型的输出；下拉列表会保留不可用项并说明原因。',
+    fieldReviewConfigureAgentOutputs: '配置代理输出',
+    fieldReviewSourceNonAgent: '不可用：评审内容只能来自代理节点的输出。',
+    fieldReviewSourceAgentMissing: '不可用：找不到该节点引用的代理，无法确认输出类型。',
+    fieldReviewSourceNoMarkdown: '不可用：该代理没有声明 Markdown 类型的输出端口。',
+    fieldReviewSourceAvailable: '可用端口：{{ports}}',
+    fieldReviewSourceCount: '{{count}} 个可用',
+    fieldReviewPortSingle: '单文档：运行时读取这份 Markdown 正文或 Markdown 文件。',
+    fieldReviewPortMulti: '多文档：列表中的每项会成为一份可独立查看和取舍的文档。',
+    fieldReviewPortUnsupported: '不可用：{{kind}} 不是可评审的 Markdown 内容类型。',
+    fieldReviewModeSingle: '单文档评审',
+    fieldReviewModeMulti: '多文档评审',
+    fieldReviewRerunReject: '退回时额外重跑',
+    fieldReviewRerunRejectHint:
+      '可选；留空仍会重跑直接内容来源。这里只添加需要一并重跑的可达上游节点。',
+    fieldReviewRerunIterate: '迭代时额外重跑',
+    fieldReviewRerunIterateHint:
+      '可选；留空仍会重跑直接内容来源。这里只添加需要结合评审意见重新生成的可达上游节点。',
     fieldReviewRerunInvalid: '节点 {{id}} 不是可选的上游节点。',
     fieldReviewRollbackReject: '退回时回滚文件',
     fieldReviewRollbackRejectLabel: '回滚上游节点对 worktree 的修改',
@@ -9139,6 +9215,7 @@ export const zhCN: Resources = {
     technicalId: '技术 ID',
     sectionBasics: '基础',
     sectionFlow: '流程',
+    sectionReviewInput: '待评内容',
     sectionAdvanced: '高级',
     sectionTechnical: '技术信息',
     missingRefsLabel: '模板引用但未连入：',
@@ -9809,6 +9886,7 @@ export const zhCN: Resources = {
   },
   reviewNode: {
     label: '评审',
+    sourceUnset: '连接待评 Markdown 输出',
     navAwaiting: '点击打开评审',
     navDecided: '点击查看最近评审结论',
   },
@@ -9844,45 +9922,73 @@ export const zhCN: Resources = {
   },
   codeHostNode: {
     label: '代码平台调用',
-    destructive: '可删除',
+    destructive: 'DELETE 请求',
+    unsupported: '当前平台不支持',
   },
   codeHostProvider: {
     gitlab: 'GitLab',
     github: 'GitHub',
   },
   codeHostActionGroup: {
-    comment: '评论',
-    mr: 'MR 状态',
-    pipeline: '流水线',
-    read: '读取',
+    comment: '评审与评论',
+    mr: 'MR / PR 与提交',
+    pipeline: 'CI/CD',
+    read: '读取数据',
     custom: '自定义',
   },
   codeHostAction: {
-    'comment_reply-thread': '回复评论线程',
-    comment_create: '在 MR/PR 上新开评论',
-    'comment_create-inline': '在 diff 行新建线程',
-    comment_update: '编辑自己发的评论',
-    thread_resolve: 'resolve 线程',
-    'commit-status_set': '设 commit status',
-    label_add: '打 label',
-    assignee_set: '指派',
+    'comment_reply-thread': '回复已有评审讨论',
+    comment_create: '发布普通 MR/PR 评论',
+    'comment_create-inline': '新建行内评审讨论',
+    comment_update: '更新评论内容',
+    thread_resolve: '解决评审讨论',
+    'commit-status_set': '设置提交状态',
+    label_add: '添加标签',
+    assignee_set: '指派处理人',
     mr_approve: '批准 MR/PR',
     mr_merge: '合并 MR/PR',
     mr_create: '创建 MR/PR',
-    pipeline_trigger: '触发流水线',
-    pipeline_retry: '重跑失败的流水线作业',
-    pipeline_cancel: '取消流水线',
-    job_list: '列出作业',
-    job_log: '拉取作业日志',
-    mr_diff: '拉取 MR/PR diff',
+    pipeline_trigger: '启动流水线 / 工作流',
+    pipeline_retry: '重跑未通过的作业',
+    pipeline_cancel: '取消流水线 / 工作流',
+    job_list: '列出流水线 / 工作流作业',
+    job_log: '读取作业日志',
+    mr_diff: '读取变更文件与差异',
     mr_list: '列出 MR/PR',
     file_read: '读取仓库文件',
     custom: '自定义请求',
   },
+  codeHostActionDescription: {
+    'comment_reply-thread':
+      '向已有代码评审讨论追加回复。GitLab 填 discussion ID；GitHub 仅支持 PR 行内评审评论，且必须填顶层评论 ID。',
+    comment_create: '在 MR/PR 会话区发布普通评论；不会绑定到具体代码行。',
+    'comment_create-inline': '在 MR/PR 的代码差异上新建行内评审讨论，需要提供平台格式的位置 JSON。',
+    comment_update:
+      '更新已有评论正文。GitLab 仅适用于普通 MR 评论；GitHub 还需选择普通评论或行内评审评论。',
+    thread_resolve: '将 GitLab MR 的已有评审讨论标记为已解决；GitHub REST 没有对等接口。',
+    'commit-status_set': '为指定提交写入进行中、通过或不通过状态，可附状态名称与详情链接。',
+    label_add: '向指定 MR/PR 追加一个或多个标签，不移除已有标签。',
+    assignee_set:
+      '指派 MR/PR 处理人。GitLab 使用数字用户 ID 并替换当前列表；GitHub 使用登录名并追加到已有列表。',
+    mr_approve: '以当前凭据身份批准 MR/PR；GitHub 会创建 APPROVE review，可附说明。',
+    mr_merge: '合并指定 MR/PR，可设置平台支持的合并方式或合并提交信息。',
+    mr_create: '从源分支向目标分支创建 MR/PR，可填写标题和描述。',
+    pipeline_trigger:
+      'GitLab 在指定 ref 上创建流水线；GitHub 手动触发已配置 workflow_dispatch 的工作流。',
+    pipeline_retry: 'GitLab 重试该流水线中失败或已取消的作业；GitHub 重跑失败作业及其依赖作业。',
+    pipeline_cancel: 'GitLab 取消流水线内所有作业；GitHub 取消一次工作流运行。',
+    job_list: '列出指定 GitLab 流水线或 GitHub Actions 工作流运行中的作业。',
+    job_log: '读取单个作业的纯文本运行日志；GitHub 会跟随短时有效的下载链接。',
+    mr_diff: '读取 MR/PR 的变更文件及逐文件差异；结果不是单个原始补丁文件。',
+    mr_list: '列出项目中的 MR/PR，可按状态和每页数量过滤。',
+    file_read: '读取指定分支、标签或提交上的仓库文件原始内容。',
+    custom:
+      '调用所配代码平台 base URL 下的自定义相对路径；需自行选择方法和 JSON 请求体，DELETE 还需显式允许。',
+  },
   codeHostField: {
     project: '项目',
     mr: 'MR / PR 编号',
-    thread: '线程 ID',
+    thread: '评审讨论 / 顶层评论 ID',
     comment: '评论 ID',
     comment_scope: '评论类型',
     body: '正文',
@@ -9895,8 +10001,8 @@ export const zhCN: Resources = {
     labels: '标签',
     assignees: '指派对象',
     ref: '分支 / 标签',
-    workflow: '工作流文件',
-    pipeline: '流水线 ID',
+    workflow: 'GitHub 工作流文件 / ID',
+    pipeline: '流水线 / 工作流运行 ID',
     job: '作业 ID',
     job_scope: '作业状态过滤',
     job_filter: '作业范围',
@@ -9913,11 +10019,13 @@ export const zhCN: Resources = {
   codeHostFieldHint: {
     project:
       '留空则使用当前任务的仓库。GitLab 可填 namespace/path 或数字 ID；GitHub 填 owner/repo。',
-    thread: 'GitLab 为 discussion ID；GitHub 为线程根评论 ID。',
+    thread: 'GitLab 填 discussion ID；GitHub 填 PR 行内评审讨论的顶层评论 ID，不能填子回复 ID。',
+    comment: 'GitLab 填普通 MR note ID；GitHub 填 comment ID，并下方选择普通或行内评论。',
     position: '直接填 {{trigger.comment_position_json}} 即可原样回传。',
     labels: '逗号分隔。',
     assignees: '逗号分隔。GitLab 需要用户数字 ID，GitHub 需要登录名。',
-    workflow: 'GitHub 的 workflow_dispatch 必须指名工作流文件（如 ci.yml）。',
+    workflow: 'GitHub 的 workflow_dispatch 工作流文件名（如 ci.yml）或数字 ID。',
+    pipeline: 'GitLab 填 pipeline ID；GitHub 填 Actions workflow run ID。',
     path: '填原始路径，平台负责编码。',
   },
   codeHostOption: {
@@ -9944,6 +10052,8 @@ export const zhCN: Resources = {
   codeHostInspector: {
     provider: '代码平台',
     providerHint: '凭据在设置页的「代码平台」分区配置',
+    manageConnections: '配置',
+    manageConnectionsAria: '在新标签页配置代码平台凭据',
     action: '操作',
     actionHint: '按类别分组；某家不支持的操作会置灰并说明原因',
     sectionParams: '参数',
@@ -9954,10 +10064,12 @@ export const zhCN: Resources = {
     pathHint: '拼在所配 base URL 之后，必须以 / 开头，不能是绝对 URL',
     body: '请求体（JSON）',
     bodyHint: '变量只能写在 JSON 字符串里，这样上游内容改不了请求结构',
-    allowDestructive: '允许破坏性方法',
-    allowDestructiveHint: '打开后才能选 DELETE',
+    allowDestructive: '允许 DELETE 请求',
+    allowDestructiveHint: '打开后才能选 DELETE；关闭时会自动改回 GET',
     varsHint: '上游端口（连线后可用）：',
     triggerVarsHint: 'Webhook 触发上下文（任务由 webhook 启动时有值）：',
+    varsInsertHint: '点击变量会插入当前字段：{{field}}',
+    varsNoTarget: '当前操作没有可插入变量的文本字段',
     noInboundPorts: '还没有连入的端口',
     readonlyBanner: '你没有编辑代码平台调用节点的权限，本节点只读',
     actionUnsupported: '所选代码平台不支持这个操作',

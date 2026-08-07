@@ -1,3 +1,5 @@
+import { CanvasNodeFactBand } from './CanvasNodeFactBand'
+
 interface CanvasNodeReferenceBandProps {
   displayTitle: string
   referenceName: string
@@ -18,13 +20,12 @@ export function CanvasNodeReferenceBand({
   if (!hasReference && unsetReferenceLabel === undefined) return null
 
   return (
-    <div className="canvas-node__call-reference">
-      <span className="canvas-node__call-reference-indicator" aria-hidden="true" />
+    <CanvasNodeFactBand className="canvas-node__call-reference">
       {hasReference ? (
         <code title={referenceName}>{referenceName}</code>
       ) : (
         <span>{unsetReferenceLabel}</span>
       )}
-    </div>
+    </CanvasNodeFactBand>
   )
 }

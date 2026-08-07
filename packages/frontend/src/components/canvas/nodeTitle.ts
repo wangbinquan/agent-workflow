@@ -8,7 +8,7 @@
 // the one full rule; callers only choose the empty-fallback (canvas appends
 // `?? id`, candidate labels keep '' so the UI renders the bare nodeId).
 
-import { resolveNodeAgent, type WorkflowNode } from '@agent-workflow/shared'
+import { isCodeHostAction, resolveNodeAgent, type WorkflowNode } from '@agent-workflow/shared'
 import i18n from '@/i18n'
 
 interface DisplayAgent {
@@ -46,7 +46,8 @@ export function nodeAgentDisplayName(n: WorkflowNode, agents?: DisplayAgentLooku
  *   4. review → `review:<port>` when inputSource.portName is wired;
  *   5. call-workflow → workflowName (or the localized kind label, RFC-243);
  *   6. call-workgroup → workgroupName (same rule, RFC-243 PR-4);
- *   7. otherwise '' — callers decide the id fallback.
+ *   7. code-host-call → localized action label (or the localized kind label);
+ *   8. otherwise '' — callers decide the id fallback.
  */
 export function nodeDisplayTitle(n: WorkflowNode, agents?: DisplayAgentLookup): string {
   const rec = n as unknown as Record<string, unknown>
@@ -70,6 +71,12 @@ export function nodeDisplayTitle(n: WorkflowNode, agents?: DisplayAgentLookup): 
     return typeof rec.workgroupName === 'string' && rec.workgroupName.length > 0
       ? rec.workgroupName
       : i18n.t('callWorkgroupNode.label')
+  }
+  if (n.kind === 'code-host-call') {
+    const action = rec.action
+    return isCodeHostAction(action)
+      ? i18n.t(`codeHostAction.${action.replace('.', '_')}`, { defaultValue: action })
+      : i18n.t('codeHostNode.label')
   }
   if (n.kind === 'input') {
     return typeof rec.inputKey === 'string' ? rec.inputKey : i18n.t('editor.nodeTitleUnsetKey')

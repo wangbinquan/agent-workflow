@@ -100,4 +100,15 @@ describe('canvas card visual system', () => {
     // its documented 260px width even though it appeared later in the file.
     expect(css).toContain(".canvas-node.canvas-node--review[data-surface='editor']")
   })
+
+  test('an unwired review card tells the author which required input is missing', () => {
+    const { container } = renderNode(ReviewNode, nodeData('review'))
+    const card = container.querySelector('.canvas-node--review')
+
+    expect(card?.getAttribute('data-review-input-state')).toBe('unset')
+    expect(card?.querySelector('.canvas-node__fact-band')).not.toBeNull()
+    expect(card?.querySelector('.canvas-node__review-source-unset')?.textContent).toBe(
+      'Connect a Markdown output to review',
+    )
+  })
 })

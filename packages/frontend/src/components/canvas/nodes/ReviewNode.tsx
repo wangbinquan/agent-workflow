@@ -19,6 +19,7 @@ import { PortHandles } from './PortHandles'
 import { REVIEW_INPUT_HANDLE_ID } from '../connectionSync'
 import type { CanvasNodeData } from './types'
 import { CanvasNodeCard } from './CanvasNodeCard'
+import { CanvasNodeFactBand } from './CanvasNodeFactBand'
 
 interface Props extends NodeProps {
   data: CanvasNodeData
@@ -29,6 +30,8 @@ export function ReviewNode({ data, selected }: Props) {
   const inputSource =
     (data as CanvasNodeData & { inputSource?: { nodeId: string; portName: string } }).inputSource ??
     null
+  const hasInputSource =
+    inputSource !== null && inputSource.nodeId.length > 0 && inputSource.portName.length > 0
   // RFC-158: task-detail canvas marks the click target; clicking routes to the
   // review page. Absent on the editor canvas and on non-clickable reviews.
   const reviewNav = data.reviewNav
@@ -42,7 +45,10 @@ export function ReviewNode({ data, selected }: Props) {
       title={data.title || data.nodeId}
       titleTooltip={data.title || data.nodeId}
       status={data.status ?? 'default'}
-      dataAttributes={reviewNav === undefined ? undefined : { 'data-review-nav': reviewNav }}
+      dataAttributes={{
+        'data-review-input-state': hasInputSource ? 'configured' : 'unset',
+        ...(reviewNav === undefined ? {} : { 'data-review-nav': reviewNav }),
+      }}
       overlays={
         <Handle
           type="target"
@@ -53,18 +59,21 @@ export function ReviewNode({ data, selected }: Props) {
         />
       }
     >
-      {inputSource !== null &&
-        (inputSource.nodeId.length > 0 || inputSource.portName.length > 0) && (
-          <div className="canvas-node__input-source muted">
+      <CanvasNodeFactBand className="canvas-node__review-source">
+        {hasInputSource ? (
+          <div className="canvas-node__review-source-value">
             <code>
               {data.surface === 'editor'
                 ? ((data as CanvasNodeData & { inputSourceTitle?: string }).inputSourceTitle ?? '?')
-                : inputSource.nodeId || '?'}
+                : inputSource.nodeId}
             </code>
             <span>.</span>
-            <code>{inputSource.portName || '?'}</code>
+            <code>{inputSource.portName}</code>
           </div>
+        ) : (
+          <span className="canvas-node__review-source-unset">{t('reviewNode.sourceUnset')}</span>
         )}
+      </CanvasNodeFactBand>
       <PortHandles side="right" ports={data.outputPorts} />
       {reviewNav !== undefined && (
         <div className="canvas-node__review-nav muted">

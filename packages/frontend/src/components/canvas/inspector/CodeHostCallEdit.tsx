@@ -15,6 +15,7 @@
 //      无权限用户的编辑会被表单接受、在保存时被拒。整块只读 + 明确横幅是诚实
 //      的呈现（与 RFC-253 的脚本面板同款）。
 
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   CODE_HOST_ACTION_DEFS,
@@ -25,6 +26,7 @@ import {
   isCodeHostAction,
   isUnsupportedBinding,
   TRIGGER_CONTEXT_VARS,
+  WEBHOOK_VAR_GROUPS,
   type CodeHostAction,
   type CodeHostField,
   type CodeHostMethod,
@@ -35,6 +37,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
+import { applyTemplateVarInsertion, TemplateVarChips } from '@/components/TemplateVarChips'
 import { usePermission } from '@/hooks/useActor'
 import {
   atomicNodeInspectorChange,
@@ -68,6 +71,15 @@ interface CustomRequestShape {
   body?: string
 }
 
+type TemplateInput = HTMLInputElement | HTMLTextAreaElement
+
+interface TemplateTarget {
+  key: string
+  label: string
+  value: string
+  commit: (next: string) => void
+}
+
 function readRequest(node: WorkflowNode): CustomRequestShape {
   const raw = rec(node).request
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -88,6 +100,8 @@ function readRequest(node: WorkflowNode): CustomRequestShape {
 export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
   const { t } = useTranslation()
   const canAuthor = usePermission('code-host-calls:author')
+  const templateInputRefs = useRef(new Map<string, TemplateInput>())
+  const [focusedTemplateTargetKey, setFocusedTemplateTargetKey] = useState<string | null>(null)
 
   const provider: CodeHostProvider = rec(node).provider === 'github' ? 'github' : 'gitlab'
   const rawAction = rec(node).action
@@ -117,25 +131,97 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
     actions.map((value) => {
       const binding = CODE_HOST_ACTION_DEFS[value].bindings[provider]
       const unsupported = isUnsupportedBinding(binding)
+      const actionKey = value.replace('.', '_')
       return {
         value,
-        label: t(`codeHostAction.${value.replace('.', '_')}`, { defaultValue: value }),
+        label: t(`codeHostAction.${actionKey}`, { defaultValue: value }),
         group: t(`codeHostActionGroup.${group}`, { defaultValue: group }),
         disabled: unsupported,
-        ...(unsupported
-          ? {
-              description: t(`codeHostUnsupported.${binding.reasonKey}`, {
-                defaultValue: t('codeHostInspector.unsupportedGeneric'),
-              }),
-            }
-          : {}),
+        description: unsupported
+          ? t(`codeHostUnsupported.${binding.reasonKey}`, {
+              defaultValue: t('codeHostInspector.unsupportedGeneric'),
+            })
+          : t(`codeHostActionDescription.${actionKey}`, {
+              defaultValue: t('codeHostInspector.actionHint'),
+            }),
       }
     }),
   )
+  const selectedActionDescription =
+    actionOptions.find((option) => option.value === action)?.description ??
+    t('codeHostInspector.actionHint')
 
   const fields = codeHostActionSupported(action, provider)
     ? codeHostActionFields(action, provider)
     : []
+  const templateTargets: TemplateTarget[] =
+    action === 'custom'
+      ? [
+          {
+            key: 'request:path',
+            label: t('codeHostInspector.path'),
+            value: request.path,
+            commit: (path) =>
+              patch(
+                { request: { ...request, path } },
+                continuousNodeInspectorChange(
+                  node.id,
+                  'code-host-request',
+                  t('codeHostInspector.path'),
+                ),
+              ),
+          },
+          {
+            key: 'request:body',
+            label: t('codeHostInspector.body'),
+            value: request.body ?? '',
+            commit: (body) =>
+              patch(
+                { request: { ...request, body } },
+                continuousNodeInspectorChange(
+                  node.id,
+                  'code-host-request',
+                  t('codeHostInspector.body'),
+                ),
+              ),
+          },
+        ]
+      : fields
+          .filter((field) => field.control !== 'select')
+          .map((field) => {
+            const label = t(`codeHostField.${field.name}`, { defaultValue: field.name })
+            return {
+              key: `param:${field.name}`,
+              label,
+              value: params[field.name] ?? '',
+              commit: (next: string) => patchParam(field.name, next, label),
+            }
+          })
+  const activeTemplateTarget =
+    templateTargets.find((target) => target.key === focusedTemplateTargetKey) ?? templateTargets[0]
+  const bindTemplateInput = (key: string) => (el: TemplateInput | null) => {
+    if (el === null) templateInputRefs.current.delete(key)
+    else templateInputRefs.current.set(key, el)
+  }
+  const insertTemplateToken = (token: string): void => {
+    if (!canAuthor || activeTemplateTarget === undefined) return
+    applyTemplateVarInsertion(
+      templateInputRefs.current.get(activeTemplateTarget.key) ?? null,
+      activeTemplateTarget.value,
+      token,
+      activeTemplateTarget.commit,
+    )
+  }
+  const triggerVariableGroups = WEBHOOK_VAR_GROUPS.map((group) => ({
+    label: t(
+      group.key === 'api'
+        ? 'webhookTriggers.fields.varGroupApi'
+        : 'webhookTriggers.fields.varGroupContext',
+    ),
+    vars: group.vars
+      .filter((name) => (TRIGGER_CONTEXT_VARS as readonly string[]).includes(name))
+      .map((name) => `trigger.${name}`),
+  }))
 
   return (
     <>
@@ -150,32 +236,49 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
           hint={t('codeHostInspector.providerHint')}
           group
         >
-          <Segmented<CodeHostProvider>
-            value={provider}
-            ariaLabel={t('codeHostInspector.provider')}
-            testidPrefix="code-host-provider"
-            disabled={!canAuthor}
-            options={PROVIDERS.map((value) => ({
-              value,
-              label: t(`codeHostProvider.${value}`, { defaultValue: value }),
-            }))}
-            onChange={(value) => {
-              patch(
-                { provider: value },
-                atomicNodeInspectorChange(
-                  node.id,
-                  'code-host-params',
-                  t('codeHostInspector.provider'),
-                ),
-              )
-            }}
-          />
+          <div className="inspector__resource-reference">
+            <div className="inspector__resource-reference-picker">
+              <Segmented<CodeHostProvider>
+                value={provider}
+                ariaLabel={t('codeHostInspector.provider')}
+                testidPrefix="code-host-provider"
+                disabled={!canAuthor}
+                options={PROVIDERS.map((value) => ({
+                  value,
+                  label: t(`codeHostProvider.${value}`, { defaultValue: value }),
+                }))}
+                onChange={(value) => {
+                  patch(
+                    { provider: value },
+                    atomicNodeInspectorChange(
+                      node.id,
+                      'code-host-params',
+                      t('codeHostInspector.provider'),
+                    ),
+                  )
+                }}
+              />
+            </div>
+            <a
+              href="/settings?tab=codeHosts"
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn--sm btn--ghost inspector__resource-reference-link"
+              aria-label={t('codeHostInspector.manageConnectionsAria')}
+              title={t('codeHostInspector.manageConnectionsAria')}
+              data-testid="code-host-manage-connections"
+            >
+              {t('codeHostInspector.manageConnections')}
+              <span aria-hidden="true">↗</span>
+            </a>
+          </div>
         </Field>
-        <Field label={t('codeHostInspector.action')} hint={t('codeHostInspector.actionHint')} group>
+        <Field label={t('codeHostInspector.action')} hint={selectedActionDescription} group>
           <Select
             value={action}
             options={actionOptions}
             disabled={!canAuthor}
+            searchable
             ariaLabel={t('codeHostInspector.action')}
             data-testid="code-host-action"
             onChange={(value) => {
@@ -221,6 +324,8 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                 value={request.path}
                 disabled={!canAuthor}
                 data-testid="code-host-path"
+                inputRef={bindTemplateInput('request:path')}
+                onFocus={() => setFocusedTemplateTargetKey('request:path')}
                 onChange={(next) => {
                   patch(
                     { request: { ...request, path: next } },
@@ -241,6 +346,8 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
               rows={6}
               disabled={!canAuthor}
               data-testid="code-host-body"
+              textareaRef={bindTemplateInput('request:body')}
+              onFocus={() => setFocusedTemplateTargetKey('request:body')}
               onChange={(next) => {
                 patch(
                   { request: { ...request, body: next } },
@@ -264,7 +371,12 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
               data-testid="code-host-allow-destructive"
               onChange={(checked) => {
                 patch(
-                  { allowDestructive: checked },
+                  {
+                    allowDestructive: checked,
+                    ...(!checked && request.method === 'DELETE'
+                      ? { request: { ...request, method: 'GET' } }
+                      : {}),
+                  },
                   atomicNodeInspectorChange(
                     node.id,
                     'code-host-request',
@@ -311,6 +423,8 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                       value={value}
                       rows={4}
                       {...common}
+                      textareaRef={bindTemplateInput(`param:${field.name}`)}
+                      onFocus={() => setFocusedTemplateTargetKey(`param:${field.name}`)}
                       onChange={(next) => {
                         patchParam(field.name, next, label)
                       }}
@@ -319,6 +433,8 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
                     <TextInput
                       value={value}
                       {...common}
+                      inputRef={bindTemplateInput(`param:${field.name}`)}
+                      onFocus={() => setFocusedTemplateTargetKey(`param:${field.name}`)}
                       onChange={(next) => {
                         patchParam(field.name, next, label)
                       }}
@@ -331,22 +447,37 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
         </InspectorSection>
       )}
 
-      <InspectorSection title={t('codeHostInspector.sectionVars')}>
-        <p className="inspector-hint">{t('codeHostInspector.varsHint')}</p>
+      <InspectorSection title={t('codeHostInspector.sectionVars')} collapsed>
+        <p className="inspector-hint" data-testid="code-host-vars-target">
+          {activeTemplateTarget === undefined
+            ? t('codeHostInspector.varsNoTarget')
+            : t('codeHostInspector.varsInsertHint', { field: activeTemplateTarget.label })}
+        </p>
         <div className="template-var-chips" data-testid="code-host-port-vars">
           {uniqueInbound.length === 0 ? (
             <span className="inspector-hint">{t('codeHostInspector.noInboundPorts')}</span>
           ) : (
-            uniqueInbound.map((port) => (
-              <code key={port} className="template-var-chip">{`{{${port}}}`}</code>
-            ))
+            <TemplateVarChips
+              vars={uniqueInbound}
+              label={t('codeHostInspector.varsHint')}
+              onInsert={insertTemplateToken}
+              testidPrefix="code-host-port-var"
+              disabled={!canAuthor || activeTemplateTarget === undefined}
+            />
           )}
         </div>
-        <p className="inspector-hint">{t('codeHostInspector.triggerVarsHint')}</p>
         <div className="template-var-chips" data-testid="code-host-trigger-vars">
-          {TRIGGER_CONTEXT_VARS.map((name) => (
-            <code key={name} className="template-var-chip">{`{{trigger.${name}}}`}</code>
-          ))}
+          <TemplateVarChips
+            groups={triggerVariableGroups}
+            label={t('codeHostInspector.triggerVarsHint')}
+            onInsert={insertTemplateToken}
+            testidPrefix="code-host-trigger-var"
+            disabled={!canAuthor || activeTemplateTarget === undefined}
+            titleOf={(name) => {
+              const variable = name.startsWith('trigger.') ? name.slice('trigger.'.length) : name
+              return t(`webhookTriggers.fields.vars.${variable}`, { defaultValue: variable })
+            }}
+          />
         </div>
       </InspectorSection>
     </>

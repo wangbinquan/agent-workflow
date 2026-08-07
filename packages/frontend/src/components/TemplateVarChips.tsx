@@ -110,6 +110,8 @@ interface TemplateVarChipsProps {
   testidPrefix?: string
   /** RFC-263：每个 chip 的悬停说明。30 个变量光看名字认不全。 */
   titleOf?: (name: string) => string | undefined
+  /** Keep read-only / target-less consumers from presenting a false action. */
+  disabled?: boolean
 }
 
 export function TemplateVarChips({
@@ -119,6 +121,7 @@ export function TemplateVarChips({
   onInsert,
   testidPrefix,
   titleOf,
+  disabled = false,
 }: TemplateVarChipsProps) {
   const chip = (name: string) => {
     const token = `{{${name}}}`
@@ -131,6 +134,7 @@ export function TemplateVarChips({
         // 阻掉它让插入点保持在用户正在编辑的位置（键盘 Tab 激活不受影响）。
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onInsert(token)}
+        disabled={disabled}
         title={titleOf?.(name)}
         data-testid={testidPrefix === undefined ? undefined : `${testidPrefix}-${name}`}
       >
