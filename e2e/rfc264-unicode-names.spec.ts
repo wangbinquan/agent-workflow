@@ -58,7 +58,10 @@ test('a workflow can be created and renamed with a Chinese name', async ({ page 
   await expect(page).toHaveURL(/\/workflows\/[0-9A-HJKMNP-TV-Z]{26}/)
   await expect(page.getByText('代码审计流水线').first()).toBeVisible()
 
-  // Rename through the shared RenameDialog to a mixed-script name.
+  // Rename through the shared RenameDialog to a mixed-script name. The rename
+  // entry lives inside the editor's "more actions" dialog, not on the header.
+  await page.getByTestId('workflow-more-actions').click()
+  await expect(page.getByTestId('workflow-actions-dialog')).toBeVisible()
   await page.getByTestId('workflow-rename-button').click()
   const renameInput = page.getByTestId('workflow-rename-name')
   await expect(renameInput).toBeVisible()
@@ -66,7 +69,23 @@ test('a workflow can be created and renamed with a Chinese name', async ({ page 
   await page.getByTestId('workflow-rename-confirm').click()
   await expect(page.getByText('审计 Pipeline v2').first()).toBeVisible()
 
-  // And it reads back on the list page (i.e. it really persisted).
+  // The editor autosaves on a debounce, so wait for the SERVER to carry the new
+  // name before navigating — otherwise the list is asserted against a save that
+  // has not flushed yet (and a bare `goto` would race it).
+  await expect
+    .poll(
+      async () => {
+        const response = await fetch(`${daemon.baseUrl}/api/workflows`, {
+          headers: { Authorization: `Bearer ${daemon.token}` },
+        })
+        if (!response.ok) return []
+        return ((await response.json()) as Array<{ name: string }>).map((row) => row.name)
+      },
+      { timeout: 15_000 },
+    )
+    .toContain('审计 Pipeline v2')
+
+  // And it reads back on the list page.
   await page.goto(`${daemon.baseUrl}/workflows`)
   await expect(page.getByText('审计 Pipeline v2').first()).toBeVisible()
 })
