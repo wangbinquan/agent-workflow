@@ -117,15 +117,20 @@ describe('openContainedFile (handle-first contained read)', () => {
     // reaches the open. The lstat-before / fstat-after dev+ino recheck closes
     // both: the file we actually read must be identity-identical to the one we
     // lstat'd and containment-checked. This POSIX test exercises that recheck
-    // directly by swapping in a DIFFERENT regular file (new inode), which
-    // O_NOFOLLOW lets through to the fstat — the same handle-identity path that
-    // guards Windows.
+    // directly by swapping in a DIFFERENT regular file, which O_NOFOLLOW lets
+    // through to the fstat — the same handle-identity path that guards Windows.
+    //
+    // The swap must be a RENAME of a pre-existing distinct file, not rm+recreate:
+    // Linux/ext4 recycles a just-freed inode number, so a recreated same-name
+    // file can land on the SAME dev/ino and the recheck (correctly) would not
+    // fire. `attacker.md` has its own inode, and rename preserves it, so the
+    // victim now provably differs from what was lstat'd.
     const root = tempDir('aw-fc-swap-')
     writeFileSync(join(root, 'victim.md'), 'legit\n')
+    writeFileSync(join(root, 'attacker.md'), 'attacker-controlled\n')
     const res = openContainedFile(root, 'victim.md', {
       beforeOpen: () => {
-        rmSync(join(root, 'victim.md'))
-        writeFileSync(join(root, 'victim.md'), 'attacker-controlled\n')
+        renameSync(join(root, 'attacker.md'), join(root, 'victim.md'))
       },
     })
     expect(res.kind).toBe('outside')
