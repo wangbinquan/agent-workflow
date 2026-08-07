@@ -21,6 +21,27 @@ import {
 /** {{event_json}} 的截断上限（字符）。< 65536 的注入面上限，留出模板其余文字余量。 */
 export const EVENT_JSON_VAR_MAX_CHARS = 32 * 1024
 
+/** RFC-263：{{comment_position_json}} 的上限。position 对象只有十来个键，8 KiB 是宽裕的防御值。 */
+export const COMMENT_POSITION_JSON_MAX_CHARS = 8 * 1024
+
+/**
+ * RFC-263（design §5.2）：行内评论位置对象 → 可原样回传给建评论 API 的 JSON。
+ *
+ * 与 `event_json` 不同，**超限不截断**：截断后的 JSON 是非法 JSON，agent 要么
+ * 解析失败，要么（更糟）在部分解析后把评论打到错位置。空串是可判定的失败。
+ * 序列化抛错（循环引用等）同样落空串。
+ */
+function positionJsonOf(position: unknown): string {
+  if (position === undefined || position === null) return ''
+  let json: string
+  try {
+    json = JSON.stringify(position) ?? ''
+  } catch {
+    return ''
+  }
+  return json.length > COMMENT_POSITION_JSON_MAX_CHARS ? '' : json
+}
+
 const VAR_RE = /\{\{\s*([a-z_]+)\s*\}\}/g
 const KNOWN_VARS: ReadonlySet<string> = new Set(WEBHOOK_TEMPLATE_VARS)
 
@@ -65,17 +86,34 @@ export function eventVarsOf(event: CodeHostEvent): Record<WebhookTemplateVar, st
   }
   return {
     event_type: event.eventType,
+    provider: event.provider,
     repo_path: event.repoPath,
     repo_http_url: event.repoHttpUrl,
     repo_ssh_url: event.repoSshUrl,
     branch: event.branch ?? '',
     target_branch: event.targetBranch ?? '',
+    default_branch: event.defaultBranch ?? '',
     mr_iid: event.mrIid ?? '',
+    mr_id: event.mrId ?? '',
     mr_title: event.mrTitle ?? '',
+    mr_url: event.mrUrl ?? '',
     commit_sha: event.commitSha ?? '',
+    commit_before: event.commitBefore ?? '',
     comment_text: event.commentText ?? '',
     comment_author: event.author.username ?? '',
+    comment_id: event.commentId ?? '',
+    comment_thread_id: event.commentThreadId ?? '',
+    comment_url: event.commentUrl ?? '',
+    comment_position_json: positionJsonOf(event.commentPosition),
     pipeline_status: event.pipelineStatus ?? '',
+    pipeline_id: event.pipelineId ?? '',
+    pipeline_url: event.pipelineUrl ?? '',
+    api_base_url: event.apiBaseUrl ?? '',
+    project_id: event.projectId ?? '',
+    project_web_url: event.projectWebUrl ?? '',
+    repo_owner: event.repoOwner ?? '',
+    repo_name: event.repoName ?? '',
+    author_id: event.authorId ?? '',
     event_json: eventJson,
   }
 }

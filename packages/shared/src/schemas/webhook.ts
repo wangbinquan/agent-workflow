@@ -75,6 +75,44 @@ export const CodeHostEventSchema = z.object({
     name: z.string().optional(),
   }),
   pipelineStatus: z.string().optional(),
+  // -------------------------------------------------------------------------
+  // RFC-263 —— 「事件之后能跟的动作」所需的 API 定位参数（design §1）。
+  // 推导方式不是「把 payload 里的 id 抄一遍」，而是先列每类事件之后现实存在的
+  // 动作（回复线程 / 新建行内评论 / resolve / 设 commit status / retry 流水线 /
+  // 拉 job 日志 / 建 MR），再取这些动作 API 的必需参数并集（proposal §3）。
+  //
+  // 全部 optional 且 **软提取**：任何一个字段缺失或类型不符都不得把投递判成
+  // parse-failed —— 那会把一条本可正常触发的事件整条丢掉（proposal C4）。
+  // 数值型 id 在 adapter 侧统一转字符串（沿既有 mrIid 的姿势）。
+  // -------------------------------------------------------------------------
+  /** 平台项目主键：GitLab `project.id`（`/projects/:id` 的实参）/ GitHub `repository.id`。 */
+  projectId: z.string().optional(),
+  /** GitHub REST 的 `{owner}` / `{repo}` 路径段；GitLab 为 namespace / project path。 */
+  repoOwner: z.string().optional(),
+  repoName: z.string().optional(),
+  /** 推导值：GitLab `<实例>/api/v4`；GitHub `https://api.github.com` 或 GHES `<实例>/api/v3`。 */
+  apiBaseUrl: z.string().optional(),
+  projectWebUrl: z.string().optional(),
+  defaultBranch: z.string().optional(),
+  /** 事件作者的平台用户 id（指派 / 审计）。 */
+  authorId: z.string().optional(),
+  /** MR/PR 的 **global id**，区别于 REST 路径用的 `mrIid`。 */
+  mrId: z.string().optional(),
+  mrUrl: z.string().optional(),
+  commentId: z.string().optional(),
+  /** 讨论线程 id：GitLab `discussion_id`；GitHub `in_reply_to_id ?? comment.id`（design §5.1）。 */
+  commentThreadId: z.string().optional(),
+  commentUrl: z.string().optional(),
+  /**
+   * 行内评论位置，**结构化对象**（序列化与上限在 `eventVarsOf`，design §5.2）。
+   * 键名与该平台建评论 API 的参数名一一对应，agent 原样回传即可。
+   */
+  commentPosition: z.unknown().optional(),
+  /** GitLab pipeline id / GitHub workflow run id。 */
+  pipelineId: z.string().optional(),
+  pipelineUrl: z.string().optional(),
+  /** push 的前一个 sha（与 `commitSha` = after 配对）。 */
+  commitBefore: z.string().optional(),
   raw: z.unknown(),
 })
 export type CodeHostEvent = z.infer<typeof CodeHostEventSchema>
@@ -108,27 +146,58 @@ export type WebhookLaunchKind = z.infer<typeof WebhookLaunchKindSchema>
 
 export const WEBHOOK_TEMPLATE_VARS = [
   'event_type',
+  'provider',
   'repo_path',
   'repo_http_url',
   'repo_ssh_url',
   'branch',
   'target_branch',
+  'default_branch',
   'mr_iid',
+  'mr_id',
   'mr_title',
+  'mr_url',
   'commit_sha',
+  'commit_before',
   'comment_text',
   'comment_author',
+  'comment_id',
+  'comment_thread_id',
+  'comment_url',
+  'comment_position_json',
   'pipeline_status',
+  'pipeline_id',
+  'pipeline_url',
+  'api_base_url',
+  'project_id',
+  'project_web_url',
+  'repo_owner',
+  'repo_name',
+  'author_id',
   'event_json',
 ] as const
 export type WebhookTemplateVar = (typeof WEBHOOK_TEMPLATE_VARS)[number]
 
+/**
+ * RFC-263：`project`/`repository` 与 `user`/`sender` 块在 9 类事件的 payload 里
+ * 都在，所以这 8 个 API 定位变量与原有 6 个一样进 common 集。
+ * （GitHub org 级 `ping` 无 repository，但它在 repository 解析之前就返回
+ * unsupported，githubAdapter.ts 的 ping 分支，不构成例外。）
+ */
 const COMMON_VARS: ReadonlyArray<WebhookTemplateVar> = [
   'event_type',
+  'provider',
   'repo_path',
   'repo_http_url',
   'repo_ssh_url',
   'branch',
+  'default_branch',
+  'api_base_url',
+  'project_id',
+  'project_web_url',
+  'repo_owner',
+  'repo_name',
+  'author_id',
   'event_json',
 ]
 
@@ -138,19 +207,100 @@ const COMMON_VARS: ReadonlyArray<WebhookTemplateVar> = [
  * pipeline 声明 mr_iid/target_branch（MR 流水线才有值）但不声明 mr_title
  * （payload 是否携带待 T3 fixture 实证，实证后可放宽）。
  */
+const MR_VARS: ReadonlyArray<WebhookTemplateVar> = [
+  'target_branch',
+  'mr_iid',
+  'mr_id',
+  'mr_title',
+  'mr_url',
+]
+
 export const WEBHOOK_EVENT_VAR_MATRIX: Readonly<
   Record<CodeHostEventType, ReadonlyArray<WebhookTemplateVar>>
 > = {
-  push: [...COMMON_VARS, 'commit_sha'],
-  tag_push: [...COMMON_VARS, 'commit_sha'],
-  mr_opened: [...COMMON_VARS, 'target_branch', 'mr_iid', 'mr_title', 'commit_sha'],
-  mr_updated: [...COMMON_VARS, 'target_branch', 'mr_iid', 'mr_title', 'commit_sha'],
-  mr_merged: [...COMMON_VARS, 'target_branch', 'mr_iid', 'mr_title', 'commit_sha'],
-  mr_closed: [...COMMON_VARS, 'target_branch', 'mr_iid', 'mr_title', 'commit_sha'],
-  note: [...COMMON_VARS, 'target_branch', 'mr_iid', 'mr_title', 'comment_text', 'comment_author'],
-  pipeline_failed: [...COMMON_VARS, 'commit_sha', 'pipeline_status', 'mr_iid', 'target_branch'],
-  pipeline_succeeded: [...COMMON_VARS, 'commit_sha', 'pipeline_status', 'mr_iid', 'target_branch'],
+  push: [...COMMON_VARS, 'commit_sha', 'commit_before'],
+  tag_push: [...COMMON_VARS, 'commit_sha', 'commit_before'],
+  mr_opened: [...COMMON_VARS, ...MR_VARS, 'commit_sha'],
+  mr_updated: [...COMMON_VARS, ...MR_VARS, 'commit_sha'],
+  mr_merged: [...COMMON_VARS, ...MR_VARS, 'commit_sha'],
+  mr_closed: [...COMMON_VARS, ...MR_VARS, 'commit_sha'],
+  note: [
+    ...COMMON_VARS,
+    ...MR_VARS,
+    'comment_text',
+    'comment_author',
+    'comment_id',
+    'comment_thread_id',
+    'comment_url',
+    'comment_position_json',
+  ],
+  pipeline_failed: [
+    ...COMMON_VARS,
+    ...MR_VARS.filter((v) => v !== 'mr_title'),
+    'commit_sha',
+    'pipeline_status',
+    'pipeline_id',
+    'pipeline_url',
+  ],
+  pipeline_succeeded: [
+    ...COMMON_VARS,
+    ...MR_VARS.filter((v) => v !== 'mr_title'),
+    'commit_sha',
+    'pipeline_status',
+    'pipeline_id',
+    'pipeline_url',
+  ],
 }
+
+/**
+ * RFC-263：变量表 13 → 30 后，一行 chips 会挤成一坨 —— UI 按「事件上下文」与
+ * 「API 定位」两组呈现。单一事实源放在这里而不是前端：漏登记一个新变量会让它
+ * 在 UI 里直接消失，测试锁定两组并集 === 全表且交集为空。
+ */
+export const WEBHOOK_VAR_GROUPS = [
+  {
+    key: 'context',
+    vars: [
+      'event_type',
+      'provider',
+      'repo_path',
+      'repo_http_url',
+      'repo_ssh_url',
+      'branch',
+      'target_branch',
+      'default_branch',
+      'mr_iid',
+      'mr_title',
+      'commit_sha',
+      'commit_before',
+      'comment_text',
+      'comment_author',
+      'pipeline_status',
+      'event_json',
+    ],
+  },
+  {
+    key: 'api',
+    vars: [
+      'api_base_url',
+      'project_id',
+      'project_web_url',
+      'repo_owner',
+      'repo_name',
+      'author_id',
+      'mr_id',
+      'mr_url',
+      'comment_id',
+      'comment_thread_id',
+      'comment_url',
+      'comment_position_json',
+      'pipeline_id',
+      'pipeline_url',
+    ],
+  },
+] as const satisfies ReadonlyArray<{ key: string; vars: ReadonlyArray<WebhookTemplateVar> }>
+
+export type WebhookVarGroupKey = (typeof WEBHOOK_VAR_GROUPS)[number]['key']
 
 // ---------------------------------------------------------------------------
 // 启动参数模板封套（触发器 launch_payload；设计门 F-3 的派生 schema）

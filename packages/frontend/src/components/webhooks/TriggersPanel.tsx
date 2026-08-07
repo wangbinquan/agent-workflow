@@ -11,10 +11,11 @@ import {
   type WebhookTrigger,
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
+import { buildResourceOptionLabels } from '@/lib/resource-option-label'
 import { Card } from '@/components/Card'
 import { ChoiceCards } from '@/components/ChoiceCards'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -36,7 +37,7 @@ import { TableViewport } from '@/components/TableViewport'
 import {
   TemplateVarChips,
   applyTemplateVarInsertion,
-  webhookVarsForDisplay,
+  webhookVarGroupsForDisplay,
 } from '@/components/TemplateVarChips'
 
 type RepoScopeKind = 'all' | 'prefix' | 'exact'
@@ -483,10 +484,26 @@ function TriggerDialog(props: {
   )
 
   // 模板变量插入（三种注入面共用一套 chips）：变量集 = 所选事件类型交集，
-  // event_json 置顶。workflow 面是多输入网格 —— 记录最近聚焦的 text 输入作为
+  // 组内 event_json 置顶。workflow 面是多输入网格 —— 记录最近聚焦的 text 输入作为
   // 插入目标，未聚焦过时落到第一个 text 输入。
-  const templateVars = useMemo(() => webhookVarsForDisplay(draft.eventTypes), [draft.eventTypes])
+  // RFC-263：变量表 13→30 后按「事件上下文 / API 定位」两组呈现，每个 chip 带说明。
+  const templateVarGroups = useMemo(
+    () =>
+      webhookVarGroupsForDisplay(draft.eventTypes).map((group) => ({
+        label: t(
+          group.key === 'api'
+            ? 'webhookTriggers.fields.varGroupApi'
+            : 'webhookTriggers.fields.varGroupContext',
+        ),
+        vars: group.vars,
+      })),
+    [draft.eventTypes, t],
+  )
   const templateVarsLabel = t('webhookTriggers.fields.templateVarsLabel')
+  const templateVarTitle = useCallback(
+    (name: string) => t(`webhookTriggers.fields.vars.${name}`),
+    [t],
+  )
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
   const goalRef = useRef<HTMLTextAreaElement | null>(null)
   const mappingInputRefs = useRef(new Map<string, HTMLInputElement>())
@@ -511,12 +528,19 @@ function TriggerDialog(props: {
     })
   }
 
-  const targetOptions: Array<{ value: string; label: string }> =
+  // RFC-264: a trigger binds one exact row by id, so same-name candidates must
+  // be tellable apart — the shared builder appends an id suffix to those only.
+  const targetRows: ReadonlyArray<{ id: string; name: string }> =
     draft.launchKind === 'workflow'
-      ? (workflows.data ?? []).map((w) => ({ value: w.id, label: w.name }))
+      ? (workflows.data ?? [])
       : draft.launchKind === 'agent'
-        ? (agents.data ?? []).map((a) => ({ value: a.id, label: a.name }))
-        : (workgroups.data ?? []).map((w) => ({ value: w.id, label: w.name }))
+        ? (agents.data ?? [])
+        : (workgroups.data ?? [])
+  const targetLabels = buildResourceOptionLabels(targetRows)
+  const targetOptions: Array<{ value: string; label: string }> = targetRows.map((row) => ({
+    value: row.id,
+    label: targetLabels.get(row.id) ?? row.name,
+  }))
 
   const scopeValid =
     (draft.scopeKind !== 'prefix' || draft.scopePrefix.trim() !== '') &&
@@ -852,10 +876,11 @@ function TriggerDialog(props: {
                       })}
                       {textInputKeys.length > 0 && (
                         <TemplateVarChips
-                          vars={templateVars}
+                          groups={templateVarGroups}
                           label={templateVarsLabel}
                           onInsert={insertIntoMapping}
                           testidPrefix="wt-var"
+                          titleOf={templateVarTitle}
                         />
                       )}
                     </div>
@@ -875,7 +900,7 @@ function TriggerDialog(props: {
                     />
                   </Field>
                   <TemplateVarChips
-                    vars={templateVars}
+                    groups={templateVarGroups}
                     label={templateVarsLabel}
                     onInsert={(token) =>
                       applyTemplateVarInsertion(
@@ -886,6 +911,7 @@ function TriggerDialog(props: {
                       )
                     }
                     testidPrefix="wt-var"
+                    titleOf={templateVarTitle}
                   />
                 </>
               )}
@@ -902,7 +928,7 @@ function TriggerDialog(props: {
                     />
                   </Field>
                   <TemplateVarChips
-                    vars={templateVars}
+                    groups={templateVarGroups}
                     label={templateVarsLabel}
                     onInsert={(token) =>
                       applyTemplateVarInsertion(goalRef.current, draft.goal, token, (goal) =>
@@ -910,6 +936,7 @@ function TriggerDialog(props: {
                       )
                     }
                     testidPrefix="wt-var"
+                    titleOf={templateVarTitle}
                   />
                 </>
               )}

@@ -202,14 +202,44 @@ describe('webhook trigger wizard · template var insertion', () => {
     fireEvent.click(screen.getByTestId('wt-launch-kind-workgroup'))
     await screen.findByTestId('wt-goal')
     const chips = await screen.findAllByTestId(/^wt-var-/)
-    // push = COMMON(6) + commit_sha；旧 hint 文案漏掉的 repo_http_url /
-    // repo_ssh_url 必须在场（本改动同时修复了清单不全）。
-    expect(chips).toHaveLength(7)
+    // RFC-263 改判：push = COMMON(14) + commit_sha + commit_before（原为 COMMON(6)
+    // + commit_sha = 7）—— 补齐的 8 个 API 定位变量对每类事件都可用。
+    expect(chips).toHaveLength(16)
     expect(chips[0]!.getAttribute('data-testid')).toBe('wt-var-event_json')
     expect(screen.getByTestId('wt-var-repo_http_url')).toBeTruthy()
     expect(screen.getByTestId('wt-var-repo_ssh_url')).toBeTruthy()
     expect(screen.getByTestId('wt-var-commit_sha')).toBeTruthy()
+    // RFC-263：API 定位组在 push 事件下同样可用（设 commit status / 建 MR 要用）
+    expect(screen.getByTestId('wt-var-project_id')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-api_base_url')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-commit_before')).toBeTruthy()
     expect(screen.queryByTestId('wt-var-mr_iid')).toBeNull()
     expect(screen.queryByTestId('wt-var-mr_title')).toBeNull()
+    // 评论专属变量在 push 事件下不出现
+    expect(screen.queryByTestId('wt-var-comment_thread_id')).toBeNull()
+  })
+
+  // RFC-263：note 事件下「回复到同一线程」的三件套必须都能点进提示词。
+  test('note events expose the reply-to-thread variables', async () => {
+    await renderWebhooks()
+    await openWizardAtTargetStep()
+
+    fireEvent.click(screen.getByTestId('stepper-step-events'))
+    await screen.findByTestId('webhook-trigger-step-events')
+    fireEvent.click(screen.getByTestId('wt-event-mr_opened'))
+    fireEvent.click(screen.getByTestId('wt-event-mr_updated'))
+    fireEvent.click(screen.getByTestId('wt-event-note'))
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    await screen.findByTestId('webhook-trigger-step-target')
+
+    fireEvent.click(screen.getByTestId('wt-launch-kind-workgroup'))
+    await screen.findByTestId('wt-goal')
+    await screen.findAllByTestId(/^wt-var-/)
+    expect(screen.getByTestId('wt-var-comment_thread_id')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-comment_id')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-comment_position_json')).toBeTruthy()
+    expect(screen.getByTestId('wt-var-project_id')).toBeTruthy()
+    // 变量说明挂在 chip 的 title 上（30 个变量光看名字认不全）
+    expect(screen.getByTestId('wt-var-comment_thread_id').getAttribute('title')).toBeTruthy()
   })
 })

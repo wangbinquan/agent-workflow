@@ -23035,6 +23035,20 @@ button.status-chip {
   gap: var(--space-1);
 }
 
+/* RFC-263：变量表 13→30 后按组分行呈现（每组一行，组内 chips 自行 wrap）。 */
+.template-var-chips--grouped {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.template-var-chips__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
 .template-var-chips__label {
   font-size: var(--font-sm);
   color: var(--muted);

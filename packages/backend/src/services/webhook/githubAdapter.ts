@@ -38,6 +38,72 @@ function numStr(v: unknown): string | undefined {
       : undefined
 }
 
+/** RFC-263 —— 保持数字形态（position 包要回传给 API，行号必须是数字不是字符串）。 */
+function num(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined
+}
+
+/**
+ * RFC-263（design §4.2）—— GitHub 的 REST base。
+ *
+ * 后缀剥离拿到实例根，再按主机名分流：github.com → `https://api.github.com`；
+ * 其余（GHES）→ `<实例>/api/v3`。形态不符或畸形 URL 一律 undefined（→ 变量
+ * 渲染空串），不猜。
+ */
+export function githubApiBaseUrl(
+  htmlUrl: string | undefined,
+  fullName: string | undefined,
+): string | undefined {
+  if (htmlUrl === undefined || fullName === undefined) return undefined
+  const suffix = `/${fullName}`
+  if (!htmlUrl.endsWith(suffix)) return undefined
+  const base = htmlUrl.slice(0, htmlUrl.length - suffix.length)
+  if (base.length === 0) return undefined
+  let hostname: string
+  try {
+    hostname = new URL(base).hostname
+  } catch {
+    return undefined
+  }
+  return hostname === 'github.com' || hostname === 'www.github.com'
+    ? 'https://api.github.com'
+    : `${base}/api/v3`
+}
+
+/**
+ * RFC-263（design §5.2）—— GitHub 行内评论的位置参数包。
+ *
+ * 键名 = `POST /repos/{o}/{r}/pulls/{n}/comments` 的 body 参数名，agent 原样回传
+ * 即可建一条同位置的行内评论。两条与 GitLab 相反的规则：
+ *   - **省略 null 键**：GitHub 的 null 是「不适用」（`start_line:null` ⇒ 单行评论），
+ *     原样传给 API 会 422；GitLab 的 null 有语义（`old_line:null` ⇒ 新增行）必须保留。
+ *   - **当前行与原始行成组二选一**：`line` 为 null 表示该行已被后续 commit 改动，
+ *     此时整组落到 `original_*`（schema 标注 original_line 非 null）。混用两组会
+ *     产出一个自相矛盾的范围。
+ * 不含 `diff_hunk`：那是上下文不是定位参数（可能几十行），agent 有 worktree 可直接
+ * 读文件，需要时也仍能从 {{event_json}} 取。
+ */
+function githubCommentPosition(
+  comment: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const path = str(comment['path'])
+  if (path === undefined) return undefined
+  const out: Record<string, unknown> = { path }
+  const current = num(comment['line'])
+  const line = current ?? num(comment['original_line'])
+  const startLine =
+    current === undefined ? num(comment['original_start_line']) : num(comment['start_line'])
+  if (line !== undefined) out['line'] = line
+  const side = str(comment['side'])
+  if (side !== undefined) out['side'] = side
+  if (startLine !== undefined) out['start_line'] = startLine
+  const startSide = str(comment['start_side'])
+  if (startSide !== undefined) out['start_side'] = startSide
+  const commitId = str(comment['commit_id'])
+  if (commitId !== undefined) out['commit_id'] = commitId
+  return out
+}
+
 /**
  * HMAC-SHA256 验签（AC-1/AC-2）。对**原始请求字节**计算（官方文档明示 payload
  * 按 UTF-8 处理）；比较完整 `sha256=<hex>` 串、常量时间、不等长走一次同长
@@ -65,6 +131,13 @@ type RepositoryFields = {
   repoPath: string
   repoHttpUrl: string
   repoSshUrl: string
+  /** RFC-263 —— 全部软提取：缺失只让对应变量渲染空串，不影响投递归一化。 */
+  projectId?: string
+  projectWebUrl?: string
+  defaultBranch?: string
+  repoOwner?: string
+  repoName?: string
+  apiBaseUrl?: string
 }
 
 function parseRepository(body: Record<string, unknown>): RepositoryFields | undefined {
@@ -76,19 +149,47 @@ function parseRepository(body: Record<string, unknown>): RepositoryFields | unde
   if (repoPath === undefined || repoHttpUrl === undefined || repoSshUrl === undefined) {
     return undefined
   }
-  return { repoPath, repoHttpUrl, repoSshUrl }
+  const projectWebUrl = str(repository['html_url'])
+  const owner = rec(repository['owner'])
+  return {
+    repoPath,
+    repoHttpUrl,
+    repoSshUrl,
+    projectId: numStr(repository['id']),
+    projectWebUrl,
+    defaultBranch: str(repository['default_branch']),
+    // 取 owner.login / name 原字段而不是切 full_name —— 原字段更权威，且 GitHub
+    // 的 owner 恒为单段，不存在 GitLab 那种多层 namespace 的切分问题。
+    repoOwner: owner ? str(owner['login']) : undefined,
+    repoName: str(repository['name']),
+    apiBaseUrl: githubApiBaseUrl(projectWebUrl, repoPath),
+  }
 }
 
-/** sender = 触发本次事件的平台用户（全事件统一，RFC-259 D5；GitHub user 对象无显示名字段）。 */
-function parseSender(body: Record<string, unknown>): { username?: string; name?: string } {
+/**
+ * sender = 触发本次事件的平台用户（全事件统一，RFC-259 D5；GitHub user 对象无显示
+ * 名字段）。RFC-263 追加 `id`。
+ */
+function parseSender(body: Record<string, unknown>): {
+  username?: string
+  name?: string
+  id?: string
+} {
   const sender = rec(body['sender'])
-  return { username: sender ? str(sender['login']) : undefined }
+  return {
+    username: sender ? str(sender['login']) : undefined,
+    id: sender ? numStr(sender['id']) : undefined,
+  }
 }
 
 /** pull_request 对象的公共字段块（pull_request / pull_request_review_comment 事件）。 */
 function parsePrBlock(v: unknown): {
   mrIid?: string
+  /** RFC-263 —— global id，区别于 REST 路径用的 number。 */
+  mrId?: string
   mrTitle?: string
+  /** RFC-263 —— PR 网页地址（`html_url`，不是 API 的 `url`）。 */
+  mrUrl?: string
   sourceBranch?: string
   targetBranch?: string
   headSha?: string
@@ -100,7 +201,9 @@ function parsePrBlock(v: unknown): {
   const base = rec(pr['base'])
   return {
     mrIid: numStr(pr['number']),
+    mrId: numStr(pr['id']),
     mrTitle: str(pr['title']),
+    mrUrl: str(pr['html_url']),
     sourceBranch: head ? str(head['ref']) : undefined,
     targetBranch: base ? str(base['ref']) : undefined,
     headSha: head ? str(head['sha']) : undefined,
@@ -141,8 +244,15 @@ export function githubNormalize(headers: HeaderBag, body: unknown): NormalizeRes
     }
   }
   const eventUuid = headers['x-github-delivery'] ?? null
-  const author = parseSender(root)
-  const base = { provider: 'github' as const, eventUuid, ...repository, author, raw: body }
+  const sender = parseSender(root)
+  const base = {
+    provider: 'github' as const,
+    eventUuid,
+    ...repository,
+    author: { username: sender.username, name: sender.name },
+    authorId: sender.id,
+    raw: body,
+  }
 
   if (eventName === 'push') {
     if (root['deleted'] === true) {
@@ -167,6 +277,7 @@ export function githubNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         eventType,
         branch: ref.slice(eventType === 'push' ? 'refs/heads/'.length : 'refs/tags/'.length),
         commitSha: str(root['after']),
+        commitBefore: str(root['before']),
       },
     }
   }
@@ -204,7 +315,9 @@ export function githubNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         branch: pr.sourceBranch,
         targetBranch: pr.targetBranch,
         mrIid: pr.mrIid,
+        mrId: pr.mrId,
         mrTitle: pr.mrTitle,
+        mrUrl: pr.mrUrl,
         commitSha: pr.headSha,
       },
     }
@@ -245,6 +358,15 @@ export function githubNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         mrIid,
         mrTitle: str(issue['title']),
         commentText,
+        // RFC-263：`issue.html_url` 就是 PR 页面地址（issue 与 PR 共用编号空间的
+        // 网页路由），可直接当 mrUrl 用。但 **`issue.id` 不是 PR 的 id**——两者是
+        // 独立的 id 空间，填进 mrId 会让任何按 global id 查 PR 的调用查到别的东西，
+        // 所以这里有意不填 mrId。
+        mrUrl: str(issue['html_url']),
+        commentId: numStr(comment?.['id']),
+        commentUrl: comment ? str(comment['html_url']) : undefined,
+        // commentThreadId 有意不填：普通 PR 评论没有线程概念（回复只能新开一条
+        // issue comment），编造一个 id 会让模板作者以为能回到线程里（proposal AC-2）。
       },
     }
   }
@@ -276,9 +398,18 @@ export function githubNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         branch: pr.sourceBranch,
         targetBranch: pr.targetBranch,
         mrIid: pr.mrIid,
+        mrId: pr.mrId,
         mrTitle: pr.mrTitle,
+        mrUrl: pr.mrUrl,
         commitSha: pr.headSha,
         commentText,
+        commentId: numStr(comment?.['id']),
+        commentUrl: comment ? str(comment['html_url']) : undefined,
+        // RFC-263（design §5.1）：回复端点吃的是**线程根评论的 id**。回复别人的
+        // 行内评论时 in_reply_to_id 指向根；对根评论本身回复时该字段不存在，此时
+        // 根就是 comment.id。只用 comment.id 会让「回复第 3 条」开出一条新线程。
+        commentThreadId: numStr(comment?.['in_reply_to_id']) ?? numStr(comment?.['id']),
+        commentPosition: comment === undefined ? undefined : githubCommentPosition(comment),
       },
     }
   }
@@ -327,8 +458,14 @@ export function githubNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         branch: str(run['head_branch']),
         targetBranch: pullBase ? str(pullBase['ref']) : undefined,
         mrIid: pull ? numStr(pull['number']) : undefined,
+        mrId: pull ? numStr(pull['id']) : undefined,
+        // mrUrl 有意不填：`pull_requests[].url` 是 **API URL** 而非网页地址，填进去
+        // 会让「回帖里贴 PR 链接」这个动作贴出一条 JSON 端点（design §3.2）。
         commitSha: str(run['head_sha']),
         pipelineStatus: conclusion,
+        // RFC-263：run id 是「rerun / 列 jobs / 拉失败日志」三个动作的入口。
+        pipelineId: numStr(run['id']),
+        pipelineUrl: str(run['html_url']),
         // 熔断重置判定（RFC-257 D22）要「引发这次流水线的人」：actor 是
         // initially-triggering user（是否 = push 者列入 fixtures 实测清单）。
         author: {

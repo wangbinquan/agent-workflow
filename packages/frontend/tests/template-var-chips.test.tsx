@@ -12,7 +12,7 @@ import {
   TemplateVarChips,
   applyTemplateVarInsertion,
   insertAtCursor,
-  webhookVarsForDisplay,
+  webhookVarGroupsForDisplay,
 } from '../src/components/TemplateVarChips'
 
 afterEach(cleanup)
@@ -35,29 +35,54 @@ describe('insertAtCursor', () => {
   })
 })
 
-describe('webhookVarsForDisplay', () => {
-  test('empty event selection yields an empty list', () => {
-    expect(webhookVarsForDisplay([])).toEqual([])
+// RFC-263 改判：返回值从扁平数组变成「事件上下文 / API 定位」两组（变量表 13→30，
+// 一行 chips 会挤成一坨）。原「event_json 置顶 + 长度 7」的断言按新 COMMON 集改写，
+// 「与保存期校验同源」这条原始需求继续锁住。
+describe('webhookVarGroupsForDisplay', () => {
+  const flatten = (groups: ReturnType<typeof webhookVarGroupsForDisplay>) =>
+    groups.flatMap((g) => g.vars)
+
+  test('empty event selection yields no groups', () => {
+    expect(webhookVarGroupsForDisplay([])).toEqual([])
   })
 
-  test('event_json comes first; the rest follow the intersection of selected events', () => {
-    const vars = webhookVarsForDisplay(['push'])
-    expect(vars[0]).toBe('event_json')
-    // push = COMMON(6) + commit_sha；含旧 hint 文案里漏掉的两个 URL 变量。
-    expect(vars).toHaveLength(7)
+  test('event_json leads its own group; both groups follow the selected events', () => {
+    const groups = webhookVarGroupsForDisplay(['push'])
+    expect(groups.map((g) => g.key)).toEqual(['context', 'api'])
+    expect(groups[0]?.vars[0]).toBe('event_json')
+    const vars = flatten(groups)
+    // push = COMMON(14) + commit_sha + commit_before
+    expect(vars).toHaveLength(16)
     expect(vars).toContain('commit_sha')
+    expect(vars).toContain('commit_before')
+    // 旧 hint 文案漏掉的两个 URL 变量仍在（原始需求 1）
     expect(vars).toContain('repo_http_url')
     expect(vars).toContain('repo_ssh_url')
+    // RFC-263 的 API 定位组对每类事件都可用
+    expect(groups[1]?.vars).toContain('project_id')
+    expect(groups[1]?.vars).toContain('api_base_url')
     expect(vars).not.toContain('mr_title')
   })
 
   test('multi-event selection intersects the per-event matrices', () => {
-    const vars = webhookVarsForDisplay(['mr_opened', 'note'])
-    expect(vars[0]).toBe('event_json')
+    const vars = flatten(webhookVarGroupsForDisplay(['mr_opened', 'note']))
     expect(vars).toContain('mr_title')
+    expect(vars).toContain('mr_url')
     // commit_sha 只在 mr_opened、comment_text 只在 note —— 交集都没有。
     expect(vars).not.toContain('commit_sha')
     expect(vars).not.toContain('comment_text')
+    expect(vars).not.toContain('comment_thread_id')
+  })
+
+  test('note keeps the reply-to-thread variables together in the API group', () => {
+    const groups = webhookVarGroupsForDisplay(['note'])
+    const api = groups.find((g) => g.key === 'api')?.vars ?? []
+    expect(api).toContain('comment_thread_id')
+    expect(api).toContain('comment_id')
+    expect(api).toContain('comment_position_json')
+    expect(api).toContain('project_id')
+    // 上下文类的仍在另一组，不混进来
+    expect(api).not.toContain('comment_text')
   })
 })
 
@@ -107,6 +132,53 @@ describe('TemplateVarChips', () => {
 
   test('renders nothing for an empty var list', () => {
     const { container } = render(<TemplateVarChips vars={[]} label="Vars" onInsert={() => {}} />)
+    expect(container.firstChild).toBeNull()
+  })
+
+  // RFC-263：分组呈现 + 每 chip 的说明 tooltip。
+  test('grouped mode renders one labelled row per group, chips carry titles', () => {
+    const onInsert = vi.fn()
+    render(
+      <TemplateVarChips
+        groups={[
+          { label: 'Event context', vars: ['event_json', 'branch'] },
+          { label: 'API targets', vars: ['project_id', 'comment_thread_id'] },
+        ]}
+        label="Vars"
+        onInsert={onInsert}
+        testidPrefix="tv"
+        titleOf={(name) => `explains ${name}`}
+      />,
+    )
+    expect(screen.getByRole('group', { name: 'Vars' })).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'Event context' })).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'API targets' })).toBeTruthy()
+    expect(screen.getByTestId('tv-comment_thread_id').getAttribute('title')).toBe(
+      'explains comment_thread_id',
+    )
+    fireEvent.click(screen.getByTestId('tv-project_id'))
+    expect(onInsert).toHaveBeenCalledWith('{{project_id}}')
+  })
+
+  test('grouped mode drops empty groups and renders nothing when all are empty', () => {
+    const { container, rerender } = render(
+      <TemplateVarChips
+        groups={[
+          { label: 'Event context', vars: ['branch'] },
+          { label: 'API targets', vars: [] },
+        ]}
+        label="Vars"
+        onInsert={() => {}}
+      />,
+    )
+    expect(screen.queryByRole('group', { name: 'API targets' })).toBeNull()
+    rerender(
+      <TemplateVarChips
+        groups={[{ label: 'Event context', vars: [] }]}
+        label="Vars"
+        onInsert={() => {}}
+      />,
+    )
     expect(container.firstChild).toBeNull()
   })
 })

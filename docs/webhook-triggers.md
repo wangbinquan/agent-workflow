@@ -147,3 +147,118 @@ GitHub 侧配置。
 | 普通 PR 评论触发后 fire 显示 `launch-failed`（git-value-invalid） | 触发器 → 触发记录                        | 目标 workflow 带「分支来自事件」映射而普通评论无分支（§6.3 必败组合）：改用行内评论或换无 git 映射的目标                                                                      |
 | GitHub Recent Deliveries 显 413                                   | ——                                       | 批量 push 超平台 1 MiB body 上限被拒（GitHub 不重试，该事件丢失）；GitHub push 的 commits 数组可达千级，远超 GitLab 的 20 条。罕见；频繁出现请开 issue 评估 per-provider 上限 |
 | 修到绿频繁跳闸熔断                                                | 触发器 → 触发记录 `skipped-circuit-open` | 多 workflow 仓的事件基数放大（§6.3）：收敛到单条主 CI workflow 或上调连续触发上限                                                                                             |
+
+## 7. 事件变量与「回帖 / 调接口」动作对照（RFC-263）
+
+触发器编辑弹窗里的变量 chips 分两组，点击即插入到光标处。
+
+### 7.1 变量速查
+
+**事件上下文**：`event_type` `provider` `repo_path` `repo_http_url` `repo_ssh_url`
+`branch` `target_branch` `default_branch` `mr_iid` `mr_title` `commit_sha`
+`commit_before` `comment_text` `comment_author` `pipeline_status` `event_json`
+
+**API 定位**：`api_base_url` `project_id` `project_web_url` `repo_owner` `repo_name`
+`author_id` `mr_id` `mr_url` `comment_id` `comment_thread_id` `comment_url`
+`comment_position_json` `pipeline_id` `pipeline_url`
+
+**三个最容易用错的**：
+
+| 变量 | 说明 |
+| --- | --- |
+| `mr_iid` vs `mr_id` | **REST 路径一律用 `mr_iid`**（GitLab 的 MR iid / GitHub 的 PR number）。`mr_id` 是全局 id，只在 GraphQL 等少数接口用；拿它去填 `:merge_request_iid` 会 404 或改到别的 MR |
+| `comment_thread_id` | 回复到同一线程用它。GitLab 即 `discussion_id`；GitHub **行内评论**为线程根评论 id（自动处理了 `in_reply_to_id`）；GitHub **普通 PR 评论没有线程 ⇒ 此变量为空**，只能新开一条 |
+| `project_id` | 只用于 GitLab 的 `/projects/:id`。GitHub 侧调接口请用 `repo_owner` + `repo_name`（`project_id` 在 GitHub 是 repository 的数字 id，绝大多数端点用不上） |
+
+所有变量在该事件没有对应值时渲染**空串**（例如分支流水线的 `mr_iid`、普通评论的
+`comment_position_json`）。触发器保存时会静态校验：引用了所选事件类型不提供的变量
+直接 422，不会等到真事件跑起来才发现。
+
+### 7.2 事件 → 之后能跟的动作
+
+| 事件 | 能跟的动作 | 主要用到 |
+| --- | --- | --- |
+| `note`（MR/PR 评论） | 回复同线程 / 新开评论 / 在 diff 行新建线程 / 编辑删除自己的评论 / resolve 线程 | `comment_thread_id` `comment_id` `comment_position_json` `mr_iid` `project_id` |
+| `mr_*` | 评论 MR / 设 commit status / 打 label / 指派 / merge | `mr_iid` `commit_sha` `author_id` |
+| `push` `tag_push` | 设 commit status / 评论 commit / 自动建 MR / 建 release | `commit_sha` `commit_before` `branch` `default_branch` |
+| `pipeline_*` | 列 job 拉失败日志 / retry / 把结论回帖到 MR / 贴流水线链接 | `pipeline_id` `pipeline_url` `mr_iid` |
+
+### 7.3 GitLab 样例
+
+回复到评论所在线程（自动回复评论流水线的核心动作）：
+
+```bash
+curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+  --data-urlencode "body=审计结论：……" \
+  "{{api_base_url}}/projects/{{project_id}}/merge_requests/{{mr_iid}}/discussions/{{comment_thread_id}}/notes"
+```
+
+在 MR 上新开一条评论 / 在 diff 某一行新建线程：
+
+```bash
+curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+  --data-urlencode "body=……" \
+  "{{api_base_url}}/projects/{{project_id}}/merge_requests/{{mr_iid}}/notes"
+
+# {{comment_position_json}} 的键与 position[...] 参数一一对应，原样回传即可
+curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg b "……" --argjson p '{{comment_position_json}}' '{body:$b, position:$p}')" \
+  "{{api_base_url}}/projects/{{project_id}}/merge_requests/{{mr_iid}}/discussions"
+```
+
+把结论挂成 commit status / 拉失败 job：
+
+```bash
+curl -sS -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+  "{{api_base_url}}/projects/{{project_id}}/statuses/{{commit_sha}}?state=success&name=aw-audit"
+
+curl -sS -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+  "{{api_base_url}}/projects/{{project_id}}/pipelines/{{pipeline_id}}/jobs?scope[]=failed"
+```
+
+### 7.4 GitHub 样例
+
+```bash
+# 行内评论：回复到同一线程
+curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' \
+  -d '{"body":"……"}' \
+  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/pulls/{{mr_iid}}/comments/{{comment_thread_id}}/replies"
+
+# 普通 PR 评论没有线程，只能新开一条
+curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -d '{"body":"……"}' \
+  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/issues/{{mr_iid}}/comments"
+
+# 新建行内评论：position 包补上 body 即为完整请求体
+curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -d "$(jq -n --arg b "……" --argjson p '{{comment_position_json}}' '$p + {body:$b}')" \
+  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/pulls/{{mr_iid}}/comments"
+
+# commit status / 重跑 workflow
+curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -d '{"state":"success","context":"aw-audit"}' \
+  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/statuses/{{commit_sha}}"
+
+curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
+  "{{api_base_url}}/repos/{{repo_owner}}/{{repo_name}}/actions/runs/{{pipeline_id}}/rerun"
+```
+
+### 7.5 凭据：token 怎么到 agent 手里（配置前先读）
+
+参数齐了，但 **token 不会自动出现在 agent 的 shell 里**。三条平台现状：
+
+1. **daemon 的环境变量不转发**：agent 进程的环境是白名单（`LANG` / `LC_*` / `TERM` /
+   `TZ` / `*_PROXY` / `GIT_AUTHOR_*` / `GIT_COMMITTER_*`）。在 daemon 上
+   `export GITLAB_TOKEN=…` **到不了 agent**。
+2. **PATH 也是白名单**：POSIX 上只有 `/usr/bin` 与 `/bin`。`curl`、`python3` 可用；
+   **`glab` / `gh` 不可用**（通常装在 `/usr/local/bin`、`/opt/homebrew/bin`）。
+3. **网络本身不受限**：沙箱默认不拦截出站，`curl` 打得出去。
+
+因此目前把 token 送到 agent 的可行路径只有两条：
+
+- **remote MCP（推荐）**：配一个远端 MCP server，token 放在它的请求 header 里，agent
+  通过 MCP 工具回帖。token 不进提示词、不进数据库。（本地 MCP 走无网络子边界，用不了。）
+- **写进触发器模板 / 提示词**：可行但 token 会落进数据库、任务日志和模型上下文，**不推荐**。
+
+「在 daemon 上配一个环境变量、agent 的 curl 直接能用」需要扩受控执行面的白名单，
+属独立 RFC（RFC-265，已排期）。

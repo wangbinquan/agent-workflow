@@ -52,6 +52,7 @@
 - **绝不删他人的行/文件/未追踪文件**即便在破 CI；停下先问。`git checkout --` 回滚只对 tracked 有效，且会连带丢本 session 对该 tracked 文件的未提交改动。
 - **pathspec commit 后自验**：`git show HEAD:<file> | grep <新符号>`——共享树竞态会让 i18n 值块/新键在提交时丢失，形成「本地绿 CI 红裸 key」。
 - **共享树迁移号冲突**：并发 session 各加 `migrations/`，号会撞。`_journal.json` 必须接在**已提交**的最后一条之后连续。他人的迁移未提交时，你排不了下一号——等他提交，或另立时把自己的暂存进 `design/RFC-XXX/deferred-*/`（RFC-223 与 RFC-225 撞 0114 的处理）。
+- **共享树 RFC 编号也会撞**（与迁移号同族）：并发 session 各自 `design/RFC-NNN-*/` 落档，号会重。2026-08-07 实例：RFC-263 落档时另一 session 同日占走 264，而 263 的 proposal 已把拆出去的后续工作写成「另立 RFC-264」——写的时候 `design/plan.md` 索引里还没有 264 那行（对方先建目录后写索引）。定式：分配号前 `ls -d design/RFC-2*/` 看**磁盘**，不能只信 `plan.md` 索引；**引用尚未落档的未来 RFC 时不写具体号**（写「另立独立 RFC」），非写不可就落档前再 `ls` 一次并在文里注明跳号原因。
 - **双引号 `git commit -m` / `gh --body` 里的 backtick / `$()` / `&&` 会命令替换**并静默改坏消息；用单引号 heredoc + `-F`。
 - **协作者 commit gate 会 `git stash -u`**：未提交工作中途「消失」时 `git stash apply`（含 untracked）恢复。
 - **混合文件提交前查交叉依赖**：`git commit -- <混了他人 hunk 的文件>` 前，确认并发 hunk 不引用**其他未提交文件**的符号、且无 HEAD 测试锁了旧接线；写完测试后重跑 `typecheck`（`bun test` 跳 tsc，RFC-161 事故）。

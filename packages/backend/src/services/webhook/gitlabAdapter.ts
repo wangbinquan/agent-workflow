@@ -28,6 +28,43 @@ function rec(v: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
+/**
+ * RFC-263：GitLab 的 id 类字段是数字（project.id / note id / pipeline id），信封统一
+ * 字符串（githubAdapter 的同名 helper 是 GitHub 侧对应物）。
+ *
+ * 与本函数取代的旧 `mrIid` 内联三元的唯一差别：空字符串现在归 undefined 而不是
+ * 原样带进信封 —— 空 iid 本就不是合法 MR 编号，让它走 parse-failed 比让下游拿着
+ * `''` 去拼 API 路径更早暴露问题。
+ */
+function numStr(v: unknown): string | undefined {
+  return typeof v === 'number' && Number.isFinite(v)
+    ? String(v)
+    : typeof v === 'string' && v.length > 0
+      ? v
+      : undefined
+}
+
+/**
+ * RFC-263（design §4.1）—— GitLab 实例的 REST base。
+ *
+ * 后缀剥离而非 `new URL().origin`：**子路径部署**（`https://host/gitlab/group/repo`）
+ * 必须得到 `https://host/gitlab/api/v4`，取 origin 会得到 `https://host/api/v4` ——
+ * 一个打不通、或（更糟）打到同主机另一个服务上的地址。
+ *
+ * 形态不符一律 undefined（→ 变量渲染空串）：宁可让 agent 的 curl 因相对路径立刻
+ * 失败，也不猜一个可能打到错主机的 base。
+ */
+export function gitlabApiBaseUrl(
+  webUrl: string | undefined,
+  pathWithNamespace: string | undefined,
+): string | undefined {
+  if (webUrl === undefined || pathWithNamespace === undefined) return undefined
+  const suffix = `/${pathWithNamespace}`
+  if (!webUrl.endsWith(suffix)) return undefined
+  const base = webUrl.slice(0, webUrl.length - suffix.length)
+  return base.length === 0 ? undefined : `${base}/api/v4`
+}
+
 function stripRefPrefix(ref: string | undefined, prefix: string): string | undefined {
   if (ref === undefined) return undefined
   return ref.startsWith(prefix) ? ref.slice(prefix.length) : ref
@@ -59,6 +96,13 @@ type ProjectFields = {
   repoPath: string
   repoHttpUrl: string
   repoSshUrl: string
+  /** RFC-263 —— 以下全部软提取：缺失只让对应变量渲染空串，绝不让投递变成 parse-failed。 */
+  projectId?: string
+  projectWebUrl?: string
+  defaultBranch?: string
+  repoOwner?: string
+  repoName?: string
+  apiBaseUrl?: string
 }
 
 function parseProject(body: Record<string, unknown>): ProjectFields | undefined {
@@ -70,38 +114,68 @@ function parseProject(body: Record<string, unknown>): ProjectFields | undefined 
   if (repoPath === undefined || repoHttpUrl === undefined || repoSshUrl === undefined) {
     return undefined
   }
-  return { repoPath, repoHttpUrl, repoSshUrl }
+  const projectWebUrl = str(project['web_url'])
+  // GitLab 的 namespace 可以多层（`group/subgroup/repo`）：owner 取最后一段之前的
+  // 全部。该切分只服务「GitHub 形态的 owner/repo 调用面」，GitLab 侧的 API 一律
+  // 走 projectId —— 文档写明，避免有人拿 `group/subgroup` 去填 GitLab 的 `:id`。
+  const slash = repoPath.lastIndexOf('/')
+  return {
+    repoPath,
+    repoHttpUrl,
+    repoSshUrl,
+    projectId: numStr(project['id']),
+    projectWebUrl,
+    defaultBranch: str(project['default_branch']),
+    repoOwner: slash > 0 ? repoPath.slice(0, slash) : undefined,
+    repoName: slash >= 0 ? repoPath.slice(slash + 1) : repoPath,
+    apiBaseUrl: gitlabApiBaseUrl(projectWebUrl, repoPath),
+  }
 }
 
 /** MR 属性块（merge_request 事件的 object_attributes / note・pipeline 事件的 merge_request）。 */
 function parseMrBlock(v: unknown): {
   mrIid?: string
+  /** RFC-263 —— global id，区别于 REST 路径用的 iid。 */
+  mrId?: string
   mrTitle?: string
+  /** RFC-263 —— MR 网页地址（`object_attributes.url` / `merge_request.url`）。 */
+  mrUrl?: string
   sourceBranch?: string
   targetBranch?: string
   lastCommitSha?: string
 } {
   const mr = rec(v)
   if (!mr) return {}
-  const iidRaw = mr['iid']
   const lastCommit = rec(mr['last_commit'])
   return {
-    mrIid:
-      typeof iidRaw === 'number' ? String(iidRaw) : typeof iidRaw === 'string' ? iidRaw : undefined,
+    mrIid: numStr(mr['iid']),
+    mrId: numStr(mr['id']),
     mrTitle: str(mr['title']),
+    mrUrl: str(mr['url']),
     sourceBranch: str(mr['source_branch']),
     targetBranch: str(mr['target_branch']),
     lastCommitSha: lastCommit ? str(lastCommit['id']) : undefined,
   }
 }
 
-/** user{} 块（MR/note/pipeline 事件）；push 事件是顶层 user_username（形态差异见 fixture）。 */
-function parseUser(body: Record<string, unknown>): { username?: string; name?: string } {
+/**
+ * user{} 块（MR/note/pipeline 事件）；push 事件是顶层 user_username（形态差异见
+ * fixture）。RFC-263 追加 `id`：两形态分别取 `user.id` 与顶层 `user_id`。
+ */
+function parseUser(body: Record<string, unknown>): {
+  username?: string
+  name?: string
+  id?: string
+} {
   const user = rec(body['user'])
   if (user) {
-    return { username: str(user['username']), name: str(user['name']) }
+    return { username: str(user['username']), name: str(user['name']), id: numStr(user['id']) }
   }
-  return { username: str(body['user_username']), name: str(body['user_name']) }
+  return {
+    username: str(body['user_username']),
+    name: str(body['user_name']),
+    id: numStr(body['user_id']),
+  }
 }
 
 /**
@@ -125,8 +199,15 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
     }
   }
   const eventUuid = headers['x-gitlab-event-uuid'] ?? null
-  const author = parseUser(root)
-  const base = { provider: 'gitlab' as const, eventUuid, ...project, author, raw: body }
+  const user = parseUser(root)
+  const base = {
+    provider: 'gitlab' as const,
+    eventUuid,
+    ...project,
+    author: { username: user.username, name: user.name },
+    authorId: user.id,
+    raw: body,
+  }
 
   if (objectKind === 'push' || objectKind === 'tag_push') {
     const prefix = objectKind === 'push' ? 'refs/heads/' : 'refs/tags/'
@@ -141,6 +222,7 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         eventType: objectKind as CodeHostEventType,
         branch,
         commitSha: str(root['after']) ?? str(root['checkout_sha']),
+        commitBefore: str(root['before']),
       },
     }
   }
@@ -181,7 +263,9 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         branch: mr.sourceBranch,
         targetBranch: mr.targetBranch,
         mrIid: mr.mrIid,
+        mrId: mr.mrId,
         mrTitle: mr.mrTitle,
+        mrUrl: mr.mrUrl,
         commitSha: mr.lastCommitSha,
       },
     }
@@ -210,8 +294,19 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         branch: mr.sourceBranch,
         targetBranch: mr.targetBranch,
         mrIid: mr.mrIid,
+        mrId: mr.mrId,
         mrTitle: mr.mrTitle,
+        mrUrl: mr.mrUrl,
         commentText,
+        // RFC-263：回复到同一线程的三件套。`discussion_id` 是 GitLab 讨论线程的
+        // 主键（`hook_data/note_builder.rb` 的 SAFE_HOOK_ATTRIBUTES 成员），
+        // `url` 由 data builder 经 .merge() 追加。
+        commentId: numStr(attrs?.['id']),
+        commentThreadId: str(attrs?.['discussion_id']),
+        commentUrl: str(attrs?.['url']),
+        // 仅 DiffNote 带 position；键名正是 Discussions API 的 `position[...]`
+        // 实参集，原样透传（含 null —— `old_line:null` 表示这是新增行）。
+        commentPosition: rec(attrs?.['position']),
       },
     }
   }
@@ -246,8 +341,13 @@ export function gitlabNormalize(headers: HeaderBag, body: unknown): NormalizeRes
         branch,
         targetBranch: mr.targetBranch,
         mrIid: mr.mrIid,
+        mrId: mr.mrId,
+        mrUrl: mr.mrUrl,
         commitSha: attrs ? str(attrs['sha']) : undefined,
         pipelineStatus: status,
+        // RFC-263：pipeline id 是「retry / 列 jobs / 拉失败日志」三个动作的入口。
+        pipelineId: attrs ? numStr(attrs['id']) : undefined,
+        pipelineUrl: attrs ? str(attrs['url']) : undefined,
       },
     }
   }
