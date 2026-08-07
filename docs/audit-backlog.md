@@ -392,6 +392,14 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   - `packages/frontend/tests/unsaved-guard.test.tsx > dismiss via ESC = stay, then a later nav blocks again`（owning commit `5a1f6993` / RFC-250）：**仅 macOS shard 1/3** 红，该用例耗时 `5139ms`（同文件其余用例 ~100ms），ubuntu 同分片绿、本地 19/19 稳定绿。症状是 ESC 后 `unsaved-guard-dialog` 仍在 DOM 里 —— `waitFor` 等的是「消失」，在慢 runner 上像是没等到重渲染。归属判据：该测试自建路由树、**不 import 真实 settings 路由**，与并发改动零耦合。
   - `RFC-227 REAL macOS Seatbelt provider (gated) > denies app secrets, seal writes, and child network while preserving worktree writes`（owning commit `5c3eacf1` / RFC-252 G2）：**仅 macOS shard 1/4** 红，耗时 `5015ms` 像是撞上超时上限。**硬证据表明与代码无关**：红 run（`b2754f65`）与它前一个绿 run（`7322beef`）之间的全部差异是 **两个 `.md` 文件各改一行**；两行 markdown 改不了 macOS 沙箱行为。两条都在重跑后整 run success。
   **Seatbelt 那条已修（用户拍板后动手）**：根因确证 —— 该用例只在 CI 跑（`ci.yml` 的 macOS 腿设 `RUN_SANDBOX_ITEST=1`，本地恒 skip，所以躲过全部本地门禁），而它内含一次**预期被网络围栏拦住**的 `curl --max-time 2`（必然走满 2 秒）加多次 `sandbox-exec` 冷启动；本机 380ms、runner 5009ms，正卡在 bun 默认 5000ms 上。已给两个 gated 用例加显式 `30_000ms` 超时并在文件顶部写明理由（真挂起仍会失败，不是把上限抬到永不触发）。
+  **RFC-250 名下现在是两条，建议 owner 一起处置**：除 unsaved-guard 外，
+  `centralized-answer-pane.test.tsx > single-choice digit key picks the option AND advances to the
+  next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗时 `10026ms` —— 它**已经被
+  放宽过一次**（`7a1c119c`：3s→10s，理由就写着「loaded CI 时序」），10 秒仍然不够。测试里那条注释
+  已经点出根因：数字键处理器是**原生监听器**，受控 radio 的 React commit 在满载 runner 上可能落到下
+  一个 turn。继续加超时是治标；正解是等一个**事件驱动**的锚点（例如 `findBy*` 配合真实的 commit 信号）
+  而不是轮询 `checked`。该测试只 import 自建 QueryClient / api / clarify libs / auth store / i18n，
+  与 RFC-270 改动无任何 import 路径相连。
   **unsaved-guard 那条仍未决**，留给 RFC-250 owner：建议换更稳的等待锚点（`findBy*` 而非 `waitFor` + `queryBy`），不宜由无关改动顺手改测试。
   **2026-08-08 复现（RFC-270 push `c584d6bb`）**：同一测试同一 `test.each` 分支（`ESC`）在 **windows-latest shard 1/3** 又红一次，耗时 `5178ms`，而同文件的 `×` 分支同一 run 里 187ms 通过 —— 两条走的是同一个 helper，27 倍的耗时差说明是时序而非逻辑。**归属不变**（该测试自建路由树，只 import `__root` / `ResourceSplitPage` / `splitDirty` / auth store / i18n，**不 import** 任何 RFC-270 改动的模块），且现在已知它**不是 macOS 独有**，两个 OS 都能命中。
 - ⏳ **存量任务的 canonical worktree 指向 `iso/` 的成因未定（2026-08-04 Linux 部署事故）**：真实
