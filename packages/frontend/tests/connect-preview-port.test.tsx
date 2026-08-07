@@ -45,6 +45,7 @@ describe('RFC-106 live preview input port', () => {
   test('without a drag: no preview port row', () => {
     const { container } = renderAgent()
     expect(container.querySelector('.canvas-node__port-row--preview')).toBeNull()
+    expect(container.querySelector('.canvas-node')?.getAttribute('data-connect-preview')).toBeNull()
     // existing input handle still present
     expect(
       container.querySelector('.react-flow__handle[data-handleid="requirement"]'),
@@ -59,6 +60,9 @@ describe('RFC-106 live preview input port', () => {
     expect(getByText('design_2')).not.toBeNull()
     // and its handle exists with the new name as the drop target id
     expect(container.querySelector('.react-flow__handle[data-handleid="design_2"]')).not.toBeNull()
+    expect(container.querySelector('.canvas-node')?.getAttribute('data-connect-preview')).toBe(
+      'new',
+    )
   })
 
   test('previewInputPort that duplicates an existing input is not double-rendered', () => {
@@ -74,5 +78,8 @@ describe('RFC-106 live preview input port', () => {
     // it highlights the EXISTING port, not a new one
     expect(row?.textContent).toContain('requirement')
     expect(container.querySelector('.canvas-node__port-row--preview')).toBeNull()
+    expect(container.querySelector('.canvas-node')?.getAttribute('data-connect-preview')).toBe(
+      'reuse',
+    )
   })
 })

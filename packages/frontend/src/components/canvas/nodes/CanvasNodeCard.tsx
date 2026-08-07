@@ -46,6 +46,12 @@ export function CanvasNodeCard({
   iconClassName,
   identityClassName,
 }: CanvasNodeCardProps) {
+  const connectPreview =
+    data.reuseInputPort !== undefined
+      ? 'reuse'
+      : data.previewInputPort !== undefined
+        ? 'new'
+        : undefined
   return (
     <div
       className={`canvas-node canvas-node--card ${className}${selected ? ' canvas-node--selected' : ''}`}
@@ -53,6 +59,7 @@ export function CanvasNodeCard({
       data-status={status}
       data-loop-body={loopBody ? 'true' : undefined}
       data-surface={data.surface}
+      data-connect-preview={connectPreview}
       {...dataAttributes}
     >
       {overlays}

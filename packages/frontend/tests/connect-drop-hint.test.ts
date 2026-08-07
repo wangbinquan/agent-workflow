@@ -8,7 +8,11 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import type { WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
-import { findNewInputTarget, type NodeBox } from '../src/components/canvas/dropTarget'
+import {
+  findNewInputTarget,
+  namedInputDropPolicy,
+  type NodeBox,
+} from '../src/components/canvas/dropTarget'
 import { nearestPort, REUSE_RADIUS_PX } from '../src/components/canvas/connectResolve'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -42,6 +46,31 @@ describe('findNewInputTarget (pointer hit-test)', () => {
       nodeId: 'C',
       portName: 'result',
     })
+  })
+
+  test.each(['agent-single', 'call-workgroup', 'script'] as const)(
+    '%s keeps the shared NEW + REUSE input-drop contract',
+    (kind) => {
+      expect(namedInputDropPolicy(kind)).toBe('new-or-reuse')
+      const targetDef = def([
+        { id: 'A', kind: 'agent-single', agentName: 'a' },
+        { id: 'C', kind, ...(kind === 'agent-single' ? { agentName: 'c' } : {}) },
+      ])
+      expect(
+        findNewInputTarget(
+          targetDef,
+          [box('A', 0, 0), box('C', 200, 0)],
+          { x: 250, y: 30 },
+          'A',
+          'result',
+        ),
+      ).toEqual({ nodeId: 'C', portName: 'result' })
+    },
+  )
+
+  test('output keeps NEW-only semantics while closed call-workflow is not a body-drop target', () => {
+    expect(namedInputDropPolicy('output')).toBe('new-only')
+    expect(namedInputDropPolicy('call-workflow')).toBeNull()
   })
 
   test('deconflicts the new name against existing inputs', () => {
@@ -113,10 +142,10 @@ describe('RFC-106 wiring (source anchors)', () => {
     expect(canvas).toContain('<ConnectDropHint')
   })
 
-  test('reuse is scoped to agent-single (output always appends; no bind clobber)', () => {
-    // Codex P2: rebinding an output port would clear its ports[].bind. Output
-    // drops stay NEW (native multi-collect); only agent-single inputs reuse.
-    expect(resolve).toContain("targetNode?.kind === 'agent-single'")
+  test('reuse follows the shared open-input policy (output still always appends)', () => {
+    // Rebinding an output port would clear its ports[].bind, so output remains
+    // NEW-only. Agent/workgroup/script edge-derived inputs share precise reuse.
+    expect(resolve).toContain("namedInputDropPolicy(targetNode.kind) === 'new-or-reuse'")
   })
 
   test('preview, build and line all resolve via the SAME resolveDropTarget', () => {
@@ -125,6 +154,13 @@ describe('RFC-106 wiring (source anchors)', () => {
     expect(hint).toContain('resolveDropTarget(')
     expect(canvas).toContain('onConnectEnd={handleConnectEnd}')
     expect(canvas).toContain('resolveDropTarget(')
+  })
+
+  test('catch-all build and validity checks use the same open-input node policy', () => {
+    // Both the actual onConnect adapter and xyflow's preflight must include
+    // workgroup/script targets; otherwise preview would claim a port that the
+    // release path names differently or refuses.
+    expect(canvas.match(/namedInputDropPolicy\(targetNode\.kind\)/g)).toHaveLength(2)
   })
 
   test('node hit-test uses connection.to (flow); reuse probe uses the client pointerRef', () => {

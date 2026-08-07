@@ -8649,6 +8649,46 @@ details.form-section[open] > summary {
  * port + line that releasing will create. It looks like a real port (the whole
  * point — "identical to released"); a faint accent + soft pulse just flags it
  * as the incoming one. */
+.canvas-node[data-connect-preview='new'] {
+  border-color: var(--accent);
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.canvas-node[data-connect-preview='reuse'] {
+  border-color: var(--warn-fg);
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 3px color-mix(in srgb, var(--warn-fg) 22%, transparent);
+}
+
+/* Connection feedback outranks semantic zoom. RFC-250 originally hid these
+ * descendants in overview/topology, which made the live RFC-106 contract vanish
+ * exactly while the pointer was over its target. Keep normal LOD unchanged, but
+ * temporarily reveal the target identity + ports for the duration of the drag. */
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview']
+  .canvas-node[data-connect-preview]
+  > .canvas-node__header,
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology']
+  .canvas-node[data-connect-preview]
+  > .canvas-node__header,
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview']
+  .canvas-node[data-connect-preview]
+  > .canvas-node__port-rows,
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology']
+  .canvas-node[data-connect-preview]
+  > .canvas-node__port-rows,
+.workflow-canvas[data-surface='editor'][data-zoom-band='overview']
+  .canvas-node[data-connect-preview]
+  :is(.canvas-node__title, .canvas-node__port-label),
+.workflow-canvas[data-surface='editor'][data-zoom-band='topology']
+  .canvas-node[data-connect-preview]
+  :is(.canvas-node__title, .canvas-node__port-label) {
+  visibility: visible;
+  opacity: 1;
+}
+
 .canvas-node__port-row--preview .canvas-node__port-label {
   color: var(--accent);
   font-style: italic;

@@ -12,11 +12,10 @@
 // one `C.result`. Here a NEW input gets a name de-conflicted against the target's
 // existing inputs via `nextFreeInputPort`.
 //
-// Scope (Codex design gate): only `agent-single` and `output` accept arbitrary
-// named inputs via the PortHandles catch-all, so only they are hit-test targets.
-// review (single `__review_input__`), wrapper-fanout (inline boundary handles)
-// and wrapper-loop/git (reject inbound edges in v1) are NOT targets — those
-// gestures fall through to the existing connect paths with zero behavior change.
+// Scope: every card with OPEN, edge-derived named inputs shares this target
+// contract. review (single `__review_input__`), call-workflow (closed child-
+// declared inputs), wrapper-fanout (typed boundary handles) and wrapper-loop/git
+// (reject inbound edges in v1) are NOT body-drop targets.
 
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { declaredPorts } from '@agent-workflow/shared'
@@ -62,8 +61,14 @@ export function nextFreeInputPort(existing: readonly string[], desired: string):
   return `${desired}_${i}`
 }
 
-/** Kinds whose left input is the PortHandles catch-all with arbitrary named
- *  ports — the only hit-test targets (RFC-106 scope).
+export type NamedInputDropPolicy = 'new-only' | 'new-or-reuse'
+
+/** The single policy for card nodes whose body accepts an arbitrary named input.
+ *
+ *  Agent, workgroup-call and script inputs are all edge-derived variables, so
+ *  they can create a new name or deliberately replace the edge occupying an
+ *  existing name. Output is collection-shaped: every body drop appends a new
+ *  port, because reusing one would conflict with its `ports[].bind` sync.
  *
  *  RFC-243: call-workflow is deliberately NOT here — its input ports are a
  *  CLOSED set mirrored from the child definition's `inputs[]` (design §5.2
@@ -73,9 +78,22 @@ export function nextFreeInputPort(existing: readonly string[], desired: string):
  *  RFC-243 PR-4: call-workgroup IS here — the opposite of its call-workflow
  *  sibling. Its inputs are an OPEN set of edge-derived prompt vars consumed
  *  by the goalTemplate ({{port}}), exactly the agent-single shape, so a
- *  minted NEW deconflicted input name is always a legal port. */
-function acceptsNamedInputs(kind: string): boolean {
-  return kind === 'agent-single' || kind === 'output' || kind === 'call-workgroup'
+ *  minted NEW deconflicted input name is always a legal port.
+ *
+ *  RFC-253: script follows agent-single: inbound edge target names become
+ *  `AW_PORT_*` variables, so it must not silently lose the shared preview just
+ *  because the node kind was added after RFC-106. */
+export function namedInputDropPolicy(kind: string): NamedInputDropPolicy | null {
+  switch (kind) {
+    case 'agent-single':
+    case 'call-workgroup':
+    case 'script':
+      return 'new-or-reuse'
+    case 'output':
+      return 'new-only'
+    default:
+      return null
+  }
 }
 
 /** A node's flow-space bounding box (from xyflow node.position + measured). */
@@ -89,7 +107,7 @@ export interface NodeBox {
 
 /**
  * Hit-test the drag pointer (FLOW coords) against node bounding boxes and, if it
- * is over a supported target node (agent-single / output, not the source),
+ * is over an open named-input target node (not the source),
  * return that node + the NEW input port name the drop would create (deconflicted
  * against the node's existing inputs). Topmost box wins (boxes are in render
  * order; iterate from the end). Pure.
@@ -114,7 +132,7 @@ export function findNewInputTarget(
     if (b.id === sourceNodeId) continue
     if (point.x < b.x || point.x > b.x + b.w || point.y < b.y || point.y > b.y + b.h) continue
     const node = definition.nodes.find((n) => n.id === b.id)
-    if (node === undefined || !acceptsNamedInputs(node.kind)) continue
+    if (node === undefined || namedInputDropPolicy(node.kind) === null) continue
     return {
       nodeId: b.id,
       portName: nextFreeInputPort(existingInputPorts(definition, node), sourceHandle),

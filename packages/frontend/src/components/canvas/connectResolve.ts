@@ -9,7 +9,12 @@
 // the precise-reuse check is in SCREEN coords (DOM handle rects vs the pointer).
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { existingInputPorts, findNewInputTarget, type NodeBox } from './dropTarget'
+import {
+  existingInputPorts,
+  findNewInputTarget,
+  namedInputDropPolicy,
+  type NodeBox,
+} from './dropTarget'
 
 export type ResolvedDrop = { kind: 'new' | 'reuse'; nodeId: string; portName: string }
 
@@ -94,7 +99,7 @@ function existingInputHandleCenters(
 
 /**
  * Resolve a drag over the canvas to a new-or-reuse target (or null when not over
- * a supported target node). `flowPoint` finds the hovered node; `screenPoint`
+ * an open named-input target node). `flowPoint` finds the hovered node; `screenPoint`
  * (the same pointer, in screen coords) drives the precise-reuse check.
  */
 export function resolveDropTarget(
@@ -107,12 +112,12 @@ export function resolveDropTarget(
 ): ResolvedDrop | null {
   const target = findNewInputTarget(definition, boxes, flowPoint, sourceNodeId, sourceHandle)
   if (target === null) return null
-  // REUSE is agent-single only. An OUTPUT node natively APPENDS a new collection
-  // port per upstream; rebinding one of its existing ports would route through the
-  // disconnect path and clear that port's `ports[].bind` after the new bind was
-  // written, leaving it unbound (Codex P2). So output drops are always NEW.
+  // Output is NEW-only: it natively APPENDS a collection port per upstream;
+  // rebinding one of its existing ports would route through the disconnect path
+  // and clear that port's `ports[].bind` after the new bind was written, leaving
+  // it unbound (Codex P2). Other open named-input cards share precise REUSE.
   const targetNode = definition.nodes.find((n) => n.id === target.nodeId)
-  if (targetNode?.kind === 'agent-single') {
+  if (targetNode !== undefined && namedInputDropPolicy(targetNode.kind) === 'new-or-reuse') {
     const reuse = nearestPort(
       existingInputHandleCenters(definition, target.nodeId),
       screenPoint.x,

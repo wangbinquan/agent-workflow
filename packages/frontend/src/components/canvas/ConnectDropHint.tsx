@@ -1,7 +1,8 @@
 // RFC-106 T3 — live new-or-reuse preview INJECTOR.
 //
-// While a connection is dragged over a supported target node (agent-single /
-// output, not the source), this resolves whether the drop will create a NEW
+// While a connection is dragged over an open named-input target node (agent,
+// workgroup call, script or output; never the source), this resolves whether
+// the drop will create a NEW
 // input (the default) or REUSE an existing one (a precise drop onto an existing
 // input handle), and injects that into the node's data so PortHandles renders
 // it: a real preview port row for `new`, or a highlight on the existing port row

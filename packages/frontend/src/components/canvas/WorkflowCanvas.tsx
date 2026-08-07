@@ -68,7 +68,7 @@ import { useWorkflowRefResolver } from './useWorkflowRefResolver'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
 import { classifyClarifyConnection } from './clarifyDragHelper'
 import { classifyCrossClarifyConnection } from './crossClarifyDragHelper'
-import { existingInputPorts, nextFreeInputPort } from './dropTarget'
+import { existingInputPorts, namedInputDropPolicy, nextFreeInputPort } from './dropTarget'
 import { getNodeBoxes, resolveDropTarget } from './connectResolve'
 import { buildControlFlowEdgeIds, CONTROL_FLOW_EDGE_CLASS } from './controlFlowEdge'
 import { nodeAgentDisplayName, nodeTitle } from './nodeTitle'
@@ -1303,7 +1303,7 @@ function CanvasInner({
               : undefined
           if (
             targetNode !== undefined &&
-            (targetNode.kind === 'agent-single' || targetNode.kind === 'output') &&
+            namedInputDropPolicy(targetNode.kind) !== null &&
             conn.source != null &&
             conn.sourceHandle != null
           ) {
@@ -1557,7 +1557,7 @@ function CanvasInner({
           const targetPortName =
             mode === 'new' &&
             targetNode !== undefined &&
-            (targetNode.kind === 'agent-single' || targetNode.kind === 'output') &&
+            namedInputDropPolicy(targetNode.kind) !== null &&
             translated.sourceHandle != null
               ? nextFreeInputPort(
                   existingInputPorts(definition, targetNode),

@@ -181,6 +181,17 @@ describe('WorkflowCanvas camera integration backstop', () => {
     )
   })
 
+  test('active connection feedback overrides semantic zoom hiding', () => {
+    expect(css).toMatch(
+      /data-zoom-band='overview'[\s\S]{0,900}data-connect-preview[\s\S]{0,900}visibility:\s*visible/,
+    )
+    expect(css).toMatch(
+      /data-zoom-band='topology'[\s\S]{0,900}data-connect-preview[\s\S]{0,900}visibility:\s*visible/,
+    )
+    expect(css).toContain(".canvas-node[data-connect-preview='new']")
+    expect(css).toContain(".canvas-node[data-connect-preview='reuse']")
+  })
+
   test('low zoom projects selection and validation markers back to an 8px screen-space floor', () => {
     expect(src).toContain("'--workflow-canvas-inverse-zoom'")
     expect(css).toContain('--workflow-canvas-marker-scale')

@@ -20,12 +20,9 @@
 //   * A live wrapper drop preview grows the xyflow shell in place and moves
 //     its connected edge before pointer-up.
 //
-// Notably absent: connect-edge by dragging a port handle to another
-// port. xyflow's handle drag is a stream of `pointermove` events that
-// Playwright's `page.mouse.move` doesn't drive through the React Flow
-// reconciler — the test would be flaky. Edge creation is exercised
-// indirectly via the round-trip in W2-7's import/export spec, and via
-// the unit tests under `packages/frontend/tests/canvas-*.test.ts`.
+// Connection dragging uses stepped pointer movement and holds before release.
+// This locks the live NEW/REUSE target state that RFC-250 semantic zoom once
+// hid: the feedback is part of the gesture, not merely an edge-creation result.
 //
 // HTML5 drag note: the sidebar palette uses native HTML5 drag-and-drop
 // (`draggable=true` + `onDragStart`). Playwright's built-in dragTo
@@ -222,6 +219,76 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // The 3 nodes are input / agent-single / output. Each gets a
     // .react-flow__node element on mount.
     await expect(page.locator('.react-flow__node')).toHaveCount(3)
+  })
+
+  test('port drag keeps NEW and REUSE target feedback visible in overview', async ({ page }) => {
+    workflowId = await seedWorkflow({
+      $schema_version: 4,
+      inputs: [
+        { kind: 'text', key: 'topic', label: 'Topic', required: true },
+        { kind: 'text', key: 'brief', label: 'Brief', required: true },
+      ],
+      nodes: [
+        { id: 'topic', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
+        { id: 'brief', kind: 'input', inputKey: 'brief', position: { x: 0, y: 360 } },
+        {
+          id: 'target',
+          kind: 'agent-single',
+          agentId: seededAgentAId,
+          agentName: 'w2-3-agent-a',
+          promptTemplate: '{{topic}}',
+          position: { x: 640, y: 160 },
+        },
+      ],
+      edges: [
+        {
+          id: 'existing',
+          source: { nodeId: 'topic', portName: 'topic' },
+          target: { nodeId: 'target', portName: 'topic' },
+        },
+      ],
+    })
+    await openEditor(page)
+    await page.getByTestId('workflow-camera-overview').click()
+    await expect(page.locator('.workflow-canvas')).toHaveAttribute('data-camera-mode', 'overview')
+    // fitView animates the viewport. Measure and press the source handle only
+    // after that transform settles, otherwise the captured centre can move
+    // away before mouse.down and no connection gesture starts.
+    await page.waitForTimeout(300)
+
+    const source = page.locator('.react-flow__node[data-id="brief"] .react-flow__handle-right')
+    const targetCard = page.locator('.react-flow__node[data-id="target"] .canvas-node')
+
+    const dragAndHold = async (target: ReturnType<Page['locator']>): Promise<void> => {
+      const sourceBox = await source.boundingBox()
+      const targetBox = await target.boundingBox()
+      if (sourceBox === null || targetBox === null)
+        throw new Error('connect preview geometry missing')
+      await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
+        steps: 20,
+      })
+    }
+
+    await dragAndHold(targetCard)
+    try {
+      await expect(targetCard).toHaveAttribute('data-connect-preview', 'new')
+      await expect(targetCard.locator('.canvas-node__port-row--preview')).toBeVisible()
+      await expect(page.getByTestId('canvas-connect-badge')).toContainText('New input')
+    } finally {
+      await page.mouse.up()
+    }
+
+    const existingInput = targetCard.locator('.react-flow__handle[data-handleid="topic"]')
+    await dragAndHold(existingInput)
+    try {
+      await expect(targetCard).toHaveAttribute('data-connect-preview', 'reuse')
+      await expect(targetCard.locator('.canvas-node__port-row--reuse-target')).toBeVisible()
+      await expect(page.getByTestId('canvas-connect-badge')).toContainText('Reuse input')
+    } finally {
+      await page.mouse.up()
+    }
   })
 
   test('clicking a node selects it (selected class applied)', async ({ page }) => {
