@@ -477,8 +477,19 @@ describe.skipIf(process.platform === 'win32')('RFC-224 FFF capability execution 
     const group = { absent: false }
 
     try {
+      // The marker only appears after TWO cold bun starts: this supervisor
+      // (`main.ts`, whose import graph pulls the whole app wire via ./cli/start)
+      // and the `-e target` child it spawns, which then spawns `/bin/sleep` and
+      // writes the file. The original budget was 100 × 10ms = 1s, which is fine
+      // on an idle machine (`bun run main.ts version` measures ~0.30s locally)
+      // and NOT fine on a loaded macos-latest runner with four backend shards in
+      // flight — it went red there on 2026-08-08 having burned the full second,
+      // failing on `Number.isSafeInteger(NaN)` with no hint that a cold start
+      // was the cause. Deadline-based and generous now: a genuinely broken
+      // supervisor still fails, it just takes longer to say so.
+      const markerDeadline = Date.now() + 20_000
       let descendantPid = Number.NaN
-      for (let attempt = 0; attempt < 100; attempt += 1) {
+      while (Date.now() < markerDeadline) {
         try {
           descendantPid = Number(await readFile(marker, 'utf8'))
           break
@@ -511,7 +522,11 @@ describe.skipIf(process.platform === 'win32')('RFC-224 FFF capability execution 
     } finally {
       await closeSupervisorControlAndWait(child, rawExited)
     }
-  })
+    // Explicit budget for the same reason `754eafde` gave the other real-spawn
+    // cases one: two cold bun starts plus a 5s supervisor watchdog do not fit
+    // inside bun's 5s default on a loaded runner. This case was missed by that
+    // batch.
+  }, 60_000)
 
   test('treats frozen-provider drift as bootstrap failure without a second policy admission', async () => {
     const value = await fixture()

@@ -334,6 +334,18 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ✅ **已修（2026-08-08，RFC-270 push 撞红后就地根因修复）：`rfc224-fff-capability` 的「daemon EOF kills a
+  descendant」用例给 marker 轮询的预算只有 1 秒**。CI（macos-latest shard 3/4，run 31205560040）红在
+  `expect(Number.isSafeInteger(descendantPid)).toBe(true)` —— 收到 `NaN`，即整整 1 秒里 marker 文件
+  从没出现。根因是预算本身：marker 要等**两次 bun 冷启动**（supervisor 跑的是 `main.ts`，其 import 图
+  经 `./cli/start` 拉进整套 app wire；它再 spawn 一个 `-e target` 的 bun，那个才 spawn `/bin/sleep`
+  并写文件），而原预算是 `100 × 10ms`。本机实测 `bun run main.ts version` 单次冷启动约 **0.30s**（空载、
+  Apple Silicon、缓存热），loaded 的 macOS runner 上四个 backend 分片同时在跑，两次冷启动塞不进 1 秒。
+  已改为 deadline 式 20s 预算，并给该用例补上显式 `60_000ms`（同文件其它真 spawn 用例在 `754eafde`
+  就拿到了显式超时，**这一个被那批漏掉了**）。断言强度不变：supervisor 真的坏掉仍然会红，只是慢一点
+  才说。**这不是 RFC-270 引入的**（本 RFC 只往 `main.ts` 的 import 图里加了两个无 I/O 的小模块），
+  但既然是本次 push 撞红的，就地修掉而不是登记了事。
+
 - ⏳ **`prose-code-mermaid-theme.test.tsx` 的主题切换用例在满载机器上仍会超时（RFC-270 实施期撞上，
   非本 RFC 引入）**。用例 `toggling <html data-theme> dark→light re-invokes MermaidBlock.render with
   new theme` 在一次 `gate:local` 里红（耗时 ~5050ms，恰好压在它自己那条 5000ms 显式预算上）；
@@ -379,6 +391,7 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   - `RFC-227 REAL macOS Seatbelt provider (gated) > denies app secrets, seal writes, and child network while preserving worktree writes`（owning commit `5c3eacf1` / RFC-252 G2）：**仅 macOS shard 1/4** 红，耗时 `5015ms` 像是撞上超时上限。**硬证据表明与代码无关**：红 run（`b2754f65`）与它前一个绿 run（`7322beef`）之间的全部差异是 **两个 `.md` 文件各改一行**；两行 markdown 改不了 macOS 沙箱行为。两条都在重跑后整 run success。
   **Seatbelt 那条已修（用户拍板后动手）**：根因确证 —— 该用例只在 CI 跑（`ci.yml` 的 macOS 腿设 `RUN_SANDBOX_ITEST=1`，本地恒 skip，所以躲过全部本地门禁），而它内含一次**预期被网络围栏拦住**的 `curl --max-time 2`（必然走满 2 秒）加多次 `sandbox-exec` 冷启动；本机 380ms、runner 5009ms，正卡在 bun 默认 5000ms 上。已给两个 gated 用例加显式 `30_000ms` 超时并在文件顶部写明理由（真挂起仍会失败，不是把上限抬到永不触发）。
   **unsaved-guard 那条仍未决**，留给 RFC-250 owner：建议换更稳的等待锚点（`findBy*` 而非 `waitFor` + `queryBy`），不宜由无关改动顺手改测试。
+  **2026-08-08 复现（RFC-270 push `c584d6bb`）**：同一测试同一 `test.each` 分支（`ESC`）在 **windows-latest shard 1/3** 又红一次，耗时 `5178ms`，而同文件的 `×` 分支同一 run 里 187ms 通过 —— 两条走的是同一个 helper，27 倍的耗时差说明是时序而非逻辑。**归属不变**（该测试自建路由树，只 import `__root` / `ResourceSplitPage` / `splitDirty` / auth store / i18n，**不 import** 任何 RFC-270 改动的模块），且现在已知它**不是 macOS 独有**，两个 OS 都能命中。
 - ⏳ **存量任务的 canonical worktree 指向 `iso/` 的成因未定（2026-08-04 Linux 部署事故）**：真实
   部署日志显示某任务的 `tasks.worktree_path` 落在 `~/.agent-workflow/iso/{taskId}/{nodeRunId}`
   （每次运行后清理的临时隔离空间），目录消失后节点以误导性的
