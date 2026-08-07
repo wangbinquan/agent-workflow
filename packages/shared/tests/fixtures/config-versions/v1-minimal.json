@@ -1,6 +1,7 @@
 {
   "$schema_version": 1,
   "maxConcurrentNodes": 4,
+  "maxConcurrentScriptNodes": 4,
   "multiProcessSubprocessConcurrency": 4,
   "defaultPerTaskMaxDurationMs": 3600000,
   "defaultPerTaskMaxTotalTokens": 0,
