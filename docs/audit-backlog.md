@@ -353,6 +353,9 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   且当轮 diff **一行后端代码都没碰**（只有 design.md / WorkflowCanvas.tsx / 两个 i18n /
   一个新前端测试），归属为机器饱和而非改动。`gate:local` 把 backend 四分片与 quality lane
   **并发**跑，本机（Apple Silicon）上足以让真 spawn + 计时预算的用例踩线。
+  **2026-08-09 再次复发**（RFC-271 T7/T8 门禁，5691ms）：同一条 WP-8，当轮 diff 只有一个迁移 +
+  一个新 `services/bundle/provider.ts` + 一个纯函数测试，与进程治理零交集；隔离连跑 3/3 全绿。
+  即这条模式**至今仍在**，且复发间隔以「一次满载 gate」计——它不是偶发噪音，是预算写法的问题。
   **可操作的解法**：把这类真 spawn / 计时用例的预算从「够快的机器上够用」改成「饱和时也够用」，
   或给 `gate:local` 一个降低并发的开关。在那之前，判据是**分开跑两条车道**（`bun run test:backend`
   与 quality 各自跑）取干净信号 —— 这不是「重跑就过」，因为它换掉的是执行条件而不是结论。

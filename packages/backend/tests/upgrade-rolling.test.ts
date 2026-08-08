@@ -344,7 +344,10 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 10 万投递/天规模收口；无 FK 进出，重建安全）。
     // RFC-269 显式改判：迁移 0140（code_host_connections 表 +
     // tasks.trigger_context_json 列）⇒ 139 → 140。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(140)
+    // RFC-271 T7 bumped to 141 with 0141_rfc271_resource_bundle_applies
+    // （`BundleApply` 引擎的 apply journal，泛化自 intent_apply_journal；
+    // 纯新增表 + 三个索引，无 ALTER、无回填、无 FK 进出）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(141)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

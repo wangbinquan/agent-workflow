@@ -981,6 +981,13 @@
       "when": 1788278400014,
       "tag": "0140_rfc269_code_host_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "6",
+      "when": 1788278400015,
+      "tag": "0141_rfc271_resource_bundle_applies",
+      "breakpoints": true
     }
   ]
 }

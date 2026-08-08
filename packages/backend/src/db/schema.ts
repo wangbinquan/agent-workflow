@@ -3542,3 +3542,57 @@ export const intentProvenance = sqliteTable(
     sessionIdx: index('idx_intent_provenance_session').on(t.sessionId),
   }),
 )
+
+// -----------------------------------------------------------------------------
+// RFC-271 resource_bundle_applies — the `BundleApply` engine's apply journal
+// (generalized from `intent_apply_journal`). One row per commit ATTEMPT;
+// `UNIQUE(scope, key)` makes replays idempotent.
+//
+// ⚠️ Replay is THREE-STATE, not "always return the receipt" (invariants I3):
+//   committed          → return the stored receipt
+//   failed             → 409, the previous attempt failed (do NOT silently rerun)
+//   prepared/applying  → 409 unsettled — an attempt crashed and convergence has
+//                        not swept it yet. Refuse rather than guess.
+//
+// `preparedArtifactsJson` is the COMPENSATION ORACLE: every external side effect
+// (skill staging op, plugin generation dir) records "enough to delete it exactly"
+// here BEFORE it is created (I14 record-before-act) — hanging the path off a
+// thrown error is not enough, the process can be SIGKILLed after mkdir and
+// before the throw.
+//
+// Secret values NEVER land here: credential slots are sentinel-replaced at
+// packaging time.
+//
+// Why not reuse `intent_apply_journal`: its `session_id` is a NOT NULL FK into
+// `intent_sessions`, and a package import has no session. Reusing it would mean
+// either loosening that FK or fabricating a session row per import. The two
+// tables converge independently (RFC-271 decision 26: intent does not migrate),
+// so there is no cross-table idempotency / in-flight exclusion coexistence
+// problem to solve.
+// -----------------------------------------------------------------------------
+export const resourceBundleApplies = sqliteTable(
+  'resource_bundle_applies',
+  {
+    id: text('id').primaryKey(), // ULID
+    /** Idempotency namespace (e.g. 'package'). NOT the serialization key. */
+    scope: text('scope').notNull(),
+    /** Idempotency key within the scope (e.g. the client-held importId). */
+    key: text('key').notNull(),
+    /** Who applied it — audit column AND the identity convergence rebuilds. */
+    actorUserId: text('actor_user_id').notNull(),
+    state: text('state', { enum: ['prepared', 'applying', 'committed', 'failed'] })
+      .notNull()
+      .default('prepared'),
+    preparedArtifactsJson: text('prepared_artifacts_json').notNull().default('[]'),
+    /** Success receipt: {applied:[{opId, resourceType, resourceId, action}]}. */
+    receiptJson: text('receipt_json'),
+    error: text('error'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    keyUnique: uniqueIndex('uniq_resource_bundle_applies_key').on(t.scope, t.key),
+    stateIdx: index('idx_resource_bundle_applies_state').on(t.state),
+    actorIdx: index('idx_resource_bundle_applies_actor').on(t.actorUserId),
+  }),
+)
