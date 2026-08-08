@@ -36,14 +36,17 @@ export const INTENT_CHANGESET_SCHEMA_VERSION = 1
 // Reference grammar
 // -----------------------------------------------------------------------------
 
-/** Session-scoped opaque resource handle minted by the platform (design §3.1).
- *  The numeric suffix is a per-session counter; the mapping to a canonical id
- *  lives ONLY in the server-side context manifest. */
-export const INTENT_HANDLE_RE =
-  /^res#(agent|skill|mcp|plugin|workflow|workgroup)#([1-9][0-9]{0,5})$/
-
-/** Same-changeset forward reference to a `create` op (`tempRef`). */
-export const INTENT_TEMP_REF_RE = /^\$new:[a-z0-9][a-z0-9_-]{0,63}$/
+/**
+ * Session-scoped opaque resource handle minted by the platform (design §3.1).
+ * The numeric suffix is a per-session counter; the mapping to a canonical id
+ * lives ONLY in the server-side context manifest.
+ *
+ * RFC-271 T6b — 词法**只有一份**，定义在 `../ref/codecs`（决策 29：同一概念
+ * 此前有六套实现）。这里 re-export 以保持既有 import 路径不变；**wire 逐字节
+ * 不变**，`res#<type>#<n>` / `$new:<slug>` 一个字符都没动。
+ */
+export { INTENT_HANDLE_RE, INTENT_TEMP_REF_RE } from '../ref/codecs'
+import { INTENT_HANDLE_RE, INTENT_TEMP_REF_RE } from '../ref/codecs'
 
 export const IntentHandleSchema = z
   .string()

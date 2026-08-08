@@ -19,8 +19,15 @@ import type { AclResourceType } from '../schemas/resourceAcl'
 // 域 1 · IntentRef —— 拼写来自 schemas/intentChangeset.ts，逐字不动
 // -----------------------------------------------------------------------------
 
-const INTENT_HANDLE_RE = /^res#(agent|skill|mcp|plugin|workflow|workgroup)#([1-9][0-9]{0,5})$/
-const INTENT_TEMP_REF_RE = /^\$new:([a-z0-9][a-z0-9_-]{0,63})$/
+/**
+ * ⚠️ **这两个正则是 intent wire 的唯一 lexicon**（RFC-271 T6b）。
+ * `schemas/intentChangeset.ts` 从这里导入，不再各自声明一份——重复声明正是决策 29
+ * 要消除的东西（同一概念六套实现）。捕获组是 codec 需要的，schema 侧只用它们做
+ * `.regex()` 校验，行为逐字不变。
+ */
+export const INTENT_HANDLE_RE =
+  /^res#(agent|skill|mcp|plugin|workflow|workgroup)#([1-9][0-9]{0,5})$/
+export const INTENT_TEMP_REF_RE = /^\$new:([a-z0-9][a-z0-9_-]{0,63})$/
 
 /** `res#agent#3` / `$new:auditor` → AST。不认识的返回 null。 */
 export function decodeIntentRef(wire: string): ResourceRefAst | null {

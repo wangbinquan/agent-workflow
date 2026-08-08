@@ -18,7 +18,10 @@
 // 资源去重门都要跳过它，但它**必须**能在 agent.skills 槽里往返，否则一个今天
 // 完全合法、能跑的代理无法 round-trip。
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+import { INTENT_HANDLE_RE, INTENT_TEMP_REF_RE } from '../src/ref/codecs'
 import {
   decodeAgentSkillRef,
   decodeBundleAgentSkillRef,
@@ -227,3 +230,31 @@ describe('AST schema', () => {
 function encodeRuntimeIdRefSafe(ref: ResourceRefAst): string | null {
   return ref.k === 'id' ? ref.id : null
 }
+
+describe('T6b/T6c —— lexicon 只有一份（决策 29 的实质）', () => {
+  test('intent 的两个正则由 ref/codecs 定义，schemas 侧只是 re-export', () => {
+    // 决策 29 要消除的正是「同一概念多套实现」。这条守卫保证以后没人再复制一份
+    // 正则回 schemas/：那样两边会各自漂移，而 wire 是模型看得见的东西。
+    const codecs = readFileSync(resolve(import.meta.dir, '..', 'src', 'ref', 'codecs.ts'), 'utf8')
+    const schema = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'schemas', 'intentChangeset.ts'),
+      'utf8',
+    )
+    expect(codecs).toContain('export const INTENT_HANDLE_RE')
+    expect(codecs).toContain('export const INTENT_TEMP_REF_RE')
+    // schemas 侧不得再有自己的定义（re-export 不含 `= /`）
+    expect(schema).not.toMatch(
+      /export const INTENT_HANDLE_RE\s*=\s*$|export const INTENT_HANDLE_RE\s*=\s*\//,
+    )
+    expect(schema).not.toMatch(/export const INTENT_TEMP_REF_RE\s*=\s*\//)
+    expect(schema).toContain("from '../ref/codecs'")
+  })
+
+  test('两处 wire 拼写与今天逐字节相同（模型契约不动）', () => {
+    expect(INTENT_HANDLE_RE.test('res#agent#3')).toBe(true)
+    expect(INTENT_TEMP_REF_RE.test('$new:auditor')).toBe(true)
+    // 反例同样不变
+    expect(INTENT_HANDLE_RE.test('res#agent#0')).toBe(false)
+    expect(INTENT_TEMP_REF_RE.test('$new:Bad')).toBe(false)
+  })
+})
