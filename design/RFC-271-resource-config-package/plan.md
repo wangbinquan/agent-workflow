@@ -34,7 +34,8 @@
   plugin spec 同样脱敏）；`builtins` 分流；文件名消歧。
 - **RFC-271-T11** **分轴特权门**（Codex C2）：`lens.scripts && hasScript` 与
   `lens.codeHost && hasCodeHost` 各自独立判定。
-- **RFC-271-T12** `export.ts` 编排 + 三道门（id 域不可见 / 分轴特权 / 超限）。
+- **RFC-271-T12** `export.ts` 编排 + **四道门**（id 域行级可见性 / **类型级 `*:read` 权限点**
+  （AC-7d，按闭包实际涉及的类型）/ 分轴特权 / 超限）。
 - **RFC-271-T13** `README.md` 生成器（依赖图 + 环境要求 + 待填密钥 + dangling 警示 +
   二义候选标注）。**固定中英双段**，不跟当前用户语言走——包是跨人跨机的产物。
 - **RFC-271-T14** backend 导出测试两文件（`export-closure` / `export-gates`，含 AC-7b 的
@@ -150,7 +151,7 @@
 
 ## 验收清单
 
-- [ ] AC-1 … AC-34 逐条有测试点名
+- [ ] AC-1 … AC-34（含 AC-7d）逐条有测试点名
 - [ ] `bun run gate:local` 全绿
 - [ ] 六类根 × 九种闭包形态矩阵跑通（含同名不同 owner、传递不可见）
 - [ ] **AC-7b 预言机对照**：零匹配 vs 全不可见，响应逐字节相同

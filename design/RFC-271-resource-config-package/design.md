@@ -162,6 +162,25 @@ name 域解析**只在 actor 的可见集合内**进行；2+ 可见候选时按 
 （`execution/closure.ts`）的同一条规则「**最老可见 ULID 胜出**」选定，并写进
 `manifest.ambiguousCallRefs`（AC-7c，消解 Codex C8）。
 
+### 2.1b 整棵树的权限点（用户原则 / AC-7d）
+
+「具备整棵树权限才能导出」有**两层**判据，缺一不可：
+
+| 层 | 判据 | 缺失后果 |
+|---|---|---|
+| **行级可见性** | 闭包内每个 id 域资源都对 actor 可见（owner / public / grant） | 422 `package-export-ref-unavailable`（AC-7） |
+| **类型级权限点** 🆕 | 闭包**实际涉及**的每种资源类型的 `*:read` 都在 actor 矩阵里 | 422 `package-export-permission-missing`，写明缺哪个点（AC-7d） |
+| **特权节点** | 按轴的 `scripts:author` / `code-host-calls:author`（§2.3） | 422 `package-privileged-node-forbidden`（AC-8） |
+
+路由门只能校验**根类型**（`GET /api/workflows/:id/export-package` 挂 `workflows:read`），闭包
+里冒出来的其它类型必须在业务层补校验。三种角色基线都含六类 read
+（`permission.ts:312`），所以对**会话用户**这条今天恒真；但 **PAT 矩阵是可裁剪的**，一个只勾
+`workflows:read` 的令牌今天就能拿到闭包里的 MCP / 插件 / 技能配置——这条判据对令牌调用方
+**立即生效**，不是纸面规则。
+
+判据基于**实际涉及的类型**而非固定六类：一个无依赖的技能包不该因为调用方没有 `mcps:read`
+就导不出来。
+
 ### 2.2 脱敏（Codex D1）
 
 **不自造字段清单**——复用 `packages/shared/src/intentSecretSlots.ts` 的既有载体覆盖：
@@ -447,7 +466,9 @@ agent-workflow import-package <zip> --as-user <u>
 
 ### backend
 - `rfc271-export-closure.test.ts`：AC-3 / AC-4 / AC-4b / AC-5 / AC-9 / AC-10 / AC-12。
-- `rfc271-export-gates.test.ts`：AC-7（含 **AC-34 传递不可见**）、**AC-7b 预言机对照**
+- `rfc271-export-gates.test.ts`：AC-7（含 **AC-34 传递不可见**）、**AC-7d 类型级权限点**
+  （令牌只勾 `workflows:read`、闭包含 MCP → 422，写明缺 `mcps:read`；无依赖技能包不因缺
+  `mcps:read` 而失败）、**AC-7b 预言机对照**
   （零匹配 vs 全不可见，断言响应逐字节相同）、AC-7c、AC-8 + AC-33（**分轴权限矩阵**）、AC-11。
 - `rfc271-import-preview.test.ts`：AC-14 / AC-14b（多个 own match）/ AC-15 / AC-16 / AC-17 /
   AC-19。

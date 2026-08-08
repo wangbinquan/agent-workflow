@@ -165,6 +165,11 @@ C1 / C2 / C5a 是 wire breaking：包格式与 YAML 格式不互通，旧二进�
   预言机：「零匹配行」与「有行但全部不可见」必须产生**逐字节相同**的 dangling 结果。
 - **AC-7c** 🆕 name 域命中 2+ 可见候选时按 `freezeCallClosure` 同一规则（最老可见 ULID）选定，
   并在 manifest / README 标注候选数与选中项。
+- **AC-7d** 🆕 **整棵树的权限点都要有**（用户原则）：导出**逐类**校验闭包实际涉及的每种资源
+  类型的 `*:read`，不只校验根类型。三种角色基线都含六类 read
+  （`permission.ts:312` `USER_RESOURCE_READS`），但**令牌矩阵是可裁剪的**——一个只勾了
+  `workflows:read` 的 PAT 今天就能导出闭包里含 MCP / 插件 / 技能的工作流。缺任一类 → 422
+  `package-export-permission-missing`，写明缺哪个权限点。
 - **AC-8** 闭包内出现特权节点且导出者缺**对应**权限 → 422，**分轴判定**：`lens.scripts &&
   闭包含 script 节点` 与 `lens.codeHost && 闭包含 code-host-call 节点` 各自独立。
 - **AC-9** `builtin` / `owner=__system__` 资源不写进 `resources`，只写进 `builtins` 声明。
