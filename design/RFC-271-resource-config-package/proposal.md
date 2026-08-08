@@ -47,6 +47,9 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 
 1. **抽出一份平台级的资源 bundle 表达**（`ResourceBundle`）：六类资源的可移植 payload +
    引用域 + 操作集 + 落地引擎，与任何具体场景（intent / 配置包 / 未来的模板市场）解耦。
+1b. **统一引用模型**（决策 29）：把仓里**六套各自为政**的「怎么指向一个资源」合成一个
+   `ResourceRef`（形态集 + 域子集 + 解析契约）。**包括调度器的运行期解析**——用户观察
+   「调度器的节点选择器和统一资源建模应该是一套东西」，核实属实。
 2. 在此之上交付**配置包**：六类资源皆可作根，递归闭包导出为 zip；导入走预检页逐条决策；
    导出导入均提供 CLI。**配置包是本 RFC 唯一的消费者。**
 3. 引擎的 provider 接口**预留事务钩子**（`claimInTx` / `revalidateInTx` / `finalizeInTx`），
@@ -151,7 +154,23 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
     （`applyChangeset.ts:135`）今天就在 preflight 校验 `ownerUserId`，非本人资源只能 copy。
     加断言只是闭合「preflight 后发生 owner 转移」的 TOCTOU 窗口。
 
-### 6.4 范围决策（v4，本轮）
+### 6.5 统一引用模型（v8，本轮）
+
+29. **六套引用机制合一**（用户拍板，2026-08-08）。合的是**命名与解析层**，不是事务层——
+    与已被砍回的决策 23（把 intent 的 apply 引擎迁进来）是两个量级。
+    - **既有拼写全部保留为合法形态**：`res#agent#3`、`$new:slug`、裸 ULID、`name` 选择器
+      逐一进 `ResourceRef` 的形态集 ⇒ **`INTENT.md`、模型输出、存量 definition、导入 YAML
+      一个字节都不用改**（v4/v6 那句「模型契约不动」的承诺因此保住）。
+    - **域是收窄不是放宽**：六个域各自只允许一个形态子集，把 `name` 塞进 agent 的
+      `dependsOn` 必须 parse 失败。
+    - **解析契约是实质**：`freeze` / `aclAt` / `dangle` 三条属性一并进模型，否则表达不了
+      `freezeCallClosure`。决策 28 因此不再是独立实现，而是 `CallRef` 域的 resolver 实例。
+    - 受影响的运行期代码：`scheduler.ts` 的四处 `agentId` 裸读、`freezeCallClosure`、
+      runner 的技能/MCP/插件闭包组装。
+    ⚠️ **我明确提示过这是决策 23 那条已失败过一次的路**；用户在知悉后仍选择一次到位。
+    风险按 `plan.md` 的批次 A′ 独立成 commit 控制。
+
+### 6.4 范围决策（v4）
 
 26. **拆**：表达层 + 引擎 + 配置包在本 RFC；**intent 迁移另立 RFC**。引擎的 provider 接口
     预留事务钩子，使后续迁移不必重构引擎。理由见状态段——intent 的不变量面是 ~13 条，
@@ -168,6 +187,16 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
   handle、无 intent 用语、无包路径）。
 - **AC-B2** 引用槽只接受 `BundleRef`（bundle 内 `local:<slug>` 或 provider 解析的
   `external:<token>`）；裸 id / 裸 name 出现在 payload 里 → parse 失败。
+- **AC-B2c** 🆕 **统一引用模型**（决策 29）：`ResourceRef` 是**唯一**的「怎么指向一个资源」，
+  六个域各取一个形态子集。**跨域使用必须 parse 失败**（如 `name` 形态出现在 agent 的
+  `dependsOn`）。
+- **AC-B2d** 🆕 **wire 零变更**：`res#<type>#<n>`、`$new:<slug>`、裸 ULID、name 选择器逐一
+  保留为合法拼写 ⇒ `INTENT.md`、模型输出、存量 workflow definition、agent.md 导入
+  **一个字节不改**。测试做**字节级拼写断言**；intent 测试套**零改判**。
+- **AC-B2e** 🆕 **解析契约进模型**：`freeze` / `aclAt` / `dangle` 三条属性由域声明。
+  `freezeCallClosure` 是 `CallRef` 域的 resolver 实例，不是独立实现。
+- **AC-B2f** 🆕 **调度器不再裸读字段**：`scheduler.ts` 四处 `agentId` 直读收成一个
+  `RuntimeRef` resolver；配一条守卫防止下一个 NodeKind 再抄第五份。
 - **AC-B2b** 🆕 表达层有**第三种引用形态** `name:<selector>`（late-bound）：`call-workflow` /
   `call-workgroup` 的权威引用是名字且**允许保存时不存在、启动时才解析**
   （`intentDoc.ts:264` 定其为唯一允许的裸名字引用；`rfc234-apply-changeset.test.ts:868`

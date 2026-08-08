@@ -27,6 +27,28 @@
   函数本体**。
 - **T6** shared 五个测试文件；**`bundle-secrets.test.ts` 必须断言脱敏后仍过各自严格 schema**。
 
+## 批次 A′ · 统一引用模型（决策 29）
+
+依赖 A。**独立成 commit**——它触及 scheduler 热路径，要能单独回滚。
+
+- **T6a** `shared/src/ref/`：`ResourceRef` 形态集（`id` / `name` / `handle` / `local` /
+  `external` / `selector`，**既有拼写逐一保留**）+ 六个域子集 schema + `RefResolution`
+  契约类型（`freeze` / `aclAt` / `dangle`）。
+- **T6b** **机制 4 归位**：`IntentRefSchema` 改为 `IntentRef` 域的别名。
+  ⚠️ **wire 零变更**——`res#<type>#<n>` 与 `$new:<slug>` 拼写不动，`INTENT.md` 不改。
+  验收：intent 测试套**零改判**。
+- **T6c** **机制 5 归位**：`ImportRefSelector` 改为 `ImportSelectorRef` 域的别名
+  （agent.md 导入仍在用；YAML 工作流导入已由 C2 下线）。
+- **T6d** **机制 1 归位**：`scheduler.ts` 四处 `agentId` 裸读（`:5187` / `:6943` / `:6997` /
+  `:7226`）收成**一个** `RuntimeRef` resolver。⚠️ 这是最热的派发路径，改动要能被现有调度
+  测试全覆盖；另加一条「新增 NodeKind 不会再抄第五份」的守卫。
+- **T6e** **机制 2 归位**：`freezeCallClosure` 成为 `CallRef` 域的 resolver 实例，
+  决策 28 的「id 优先 + 按节点键控 + in-tx snapshot」落在这一处。
+- **T6f** **机制 3 归位**：runner 的技能/MCP/插件/dependsOn 闭包组装改用 `RuntimeRef`。
+  ⚠️ `agents.skills` 是判别联合（managed skillId / project name），域子集要能表达它。
+- **T6g** 测试：六个域的正反例（跨域形态必须 parse 失败）、三条解析契约属性、
+  **wire 零变更的字节级断言**（intent handle / tempRef 拼写不变）。
+
 ## 批次 B · `BundleApply` 引擎（backend）
 
 **开工前置已完成**：`invariants.md` 是逐条读源码核实的 12 条清单（含锚点与原文引用）。
@@ -193,6 +215,7 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 | # | 内容 | 独立可绿 |
 |---|---|---|
 | 1 | 批次 A（表达层） | ✅ 纯 shared |
+| 1b | **批次 A′（统一引用模型）** | ✅ **独立 commit，触及 scheduler 热路径需单独可回滚** |
 | 2 | 批次 B（引擎 + 新表） | ✅ 引擎有自己的测试，尚无消费者 |
 | 3 | **批次 C（intent 能力扩张）** | ✅ **单独推并跑完 CI** |
 | 4 | 批次 D + F 导出半边 | ✅ |
@@ -224,6 +247,7 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 |---|---|
 | 决策 27 误伤 intent 既有 copy 语义 | AC-K2 双向锁；`ownerUserId` 判据一字不动；独立 commit 先推 |
 | 泛化丢掉某条既有不变量 | 开工前列不变量清单，泛化后逐条对照 + 点名测试 |
+| **决策 29 动了 scheduler 热路径** | 批次 A′ 独立 commit；wire 零变更（既有拼写全保留）⇒ intent/存量 definition 零改判；六域正反例 + 字节级拼写断言 |
 | ~~新旧 journal 并存~~ | **随 intent 不迁移而消失**：`intent_apply_journal` 一字不动 |
 | `skill-update` 拆分回归 | 既有 `commitSkillVersion` 退化为四段顺序组合、保留 `noop` |
 | 盘子过大 | 六个独立可绿的 commit |

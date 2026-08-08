@@ -38,123 +38,84 @@ provider 接口预留事务钩子，使后续 RFC 迁 intent 时不必重构引�
 
 新目录 `packages/shared/src/bundle/`。
 
-### 1.1 引用域 `BundleRef` —— **三**种形态（R3-F1）
+### 1.1 统一引用模型 `ResourceRef`（决策 29）
 
-```ts
-/** ① bundle 内前向引用：指向同一 bundle 里某个 create op。 */
-local:<slug>          /^local:[a-z0-9][a-z0-9_-]{0,63}$/
-/** ② bundle 外部引用：不透明 token，provider **必须**解析成本地资源 id。 */
-external:<token>      /^external:[A-Za-z0-9._:#-]{1,128}$/
-/** ③ late-bound 名字选择器：**允许解析不到**，由启动期兜底。 */
-name:<type>/<name>    /^name:(workflow|workgroup)\/.{1,256}$/
-```
+> **用户观察（2026-08-08）**：「调度器的节点选择器和统一资源建模应该是一套东西。」
+> 核实属实——「怎么指向一个资源」这一个概念，仓里有**六套各自为政的实现**：
 
-**第三种形态是必须的**：`call-workflow.workflowName` / `call-workgroup.workgroupName` 的
-权威引用是**名字**，且允许保存时不存在、启动时才失败——`intentDoc.ts:264` 明确它是唯一允许
-的裸名字引用，`schemas/workflow.ts:800` 定义 `workflowName` 为权威 selector，
-`rfc234-apply-changeset.test.ts:868` 锁住 dangling 可保存。
+| # | 机制 | 用在 | 今天的形态 |
+|---|---|---|---|
+| 1 | `node.agentId` **裸字段读** | scheduler 派发：`scheduler.ts:5187` / `:6943` / `:6997` / `:7226` **四处各读各的** | id |
+| 2 | `workflowName` 权威 + `workflowId` cache | `freezeCallClosure` | name + id cache |
+| 3 | `agents.skills[] / mcp[] / plugins[] / dependsOn[]` | runner 组装 config | id 数组（skills 是判别联合） |
+| 4 | `IntentRef` | intent 的模型 wire | `res#<type>#<n>` handle / `$new:<slug>` tempRef |
+| 5 | `ImportRefSelector` | agent.md 导入边界 | name + ownerUsername |
+| 6 | `BundleRef` | 本 RFC 原方案 | local / external / name |
 
-可复现的反例（v3 的两形态设计过不去）：intent 或包创建一个节点为
-`{kind:'call-workflow', workflowName:'does-not-exist-anywhere'}` 的工作流——保留裸名字违反
-AC-B2；编码成 `external:` 则 `resolveExternal` 拿不到 id、apply 失败。**两条路都堵死。**
+**这个 session 查出的 bug 有一半根因就在这里**：机制 2 内部就不一致（工作流分支认 id cache、
+工作组分支压根不读 `workgroupId` —— 决策 28 修的正是它）；冻结闭包按 **name** 键控而节点带的是
+**id**（R6-P1-3）；机制 1 在四处各写一遍，RFC-243 加 wrapper-fanout 时又抄了第五份。
 
-`name:` 形态**只允许出现在 call 节点的目标槽**（schema 层按槽位区分，见 §1.3），不是全局放宽。
+**决策 29：六套合一。** 但合的是**命名与解析层**，不是事务层——这与已被砍回的决策 23
+（把 intent 的 apply 引擎迁进来）是两个量级。
 
-#### 1.1b Lowering 契约：三形态 → 持久化字段（R4-P1-2）
+#### 1.1a 形态集（**既有拼写全部保留**）
 
-**这是最容易漏写、漏了必错的一段**。call 节点持久化时有**两个**字段：`workflowName`
-（权威 selector）与 `workflowId`（本地解析 cache）。`freezeCallClosure`
-（`execution/closure.ts:167-219`）是 **id-cache 优先、且要求该行仍带该名字**，名字回退才取
-最老可见 ULID。因此三形态各有确定的落法：
+统一**不等于**改 wire。`ResourceRef` 是超集，各域只允许各自的子集，而**每一种既有拼写都
+原样成为合法形态**——因此 `INTENT.md`、模型输出、存量 workflow definition、导入 YAML
+**一个字节都不用改**：
 
-| bundle 形态 | 落成 | 为什么 |
+| 形态 | 拼写 | 语义 | 来自 |
+|---|---|---|---|
+| `id` | 裸 ULID | 本实例的 canonical id | 机制 1 / 3 |
+| `name` | `<type>/<name>` | late-bound 名字选择器，**允许解析不到** | 机制 2 |
+| `handle` | `res#<type>#<n>` | 会话挂载句柄 | 机制 4（拼写不变） |
+| `local` | `$new:<slug>` | bundle 内前向引用 | 机制 4 的 tempRef（**拼写不变**）+ 机制 6 |
+| `external` | `external:<token>` | 由 provider 解析的外部引用 | 机制 6 |
+| `selector` | `{name, ownerUsername?}` | 可移植名字选择器 | 机制 5 |
+
+#### 1.1b 域（slot）——谁能用哪些形态
+
+不存在「全局都能用」的 `ResourceRefSchema`。每个域是一个**子集**，schema 层按域区分：
+
+| 域 | 允许形态 | 用在 |
 |---|---|---|
-| `local:<slug>` | `workflowName = <该 op 最终名字>` + `workflowId = <预铸 id>` | 同 bundle 新建，id 已知 |
-| `external:<token>` | `workflowName = <解析到的那一行的名字>` + `workflowId = <解析到的 id>` | **必须两个都写**——只写名字会让 `freezeCallClosure` 回退到最老可见行，而用户在预检页明确选的可能是较新的那一个 |
-| `name:<type>/<name>` | **只写** `workflowName`，**不写** `workflowId` | late-bound：本来就没解析到，写 cache 等于伪造 |
+| `RuntimeRef` | `id` | scheduler 派发、runner config 组装（机制 1/3） |
+| `CallRef` | `id` + `name` | call 节点目标（机制 2）——id 优先、name 兜底，正是 `freezeCallClosure` 的判据 |
+| `IntentRef` | `handle` + `local` | intent payload（机制 4）——**与今天的 `IntentRefSchema` 等价** |
+| `BundleIdentityRef` | `local` + `external` | bundle 里 agent 的 dependsOn/mcp/plugins/skills、工作组成员、工作流 agentRef |
+| `BundleCallRef` | `local` + `external` + `name` | bundle 里 call 节点目标 |
+| `ImportSelectorRef` | `selector` | agent.md 导入（机制 5） |
 
-**可复现的反例**（v4 之前无契约时）：目标库有两个可见同名 `audit`，W1 较老、W2 是用户明确
-选的 reuse 目标。若只落 `workflowName:'audit'`，启动时 `freezeCallClosure` 取 W1 —— 用户的
-选择被静默丢弃；若把 `external:<W2-id>` 原样写进 `workflowName`，启动直接找不到。
+⚠️ 域是**收窄**而非放宽：把 `name:` 放进 agent 的 `dependsOn` 必须 parse 失败。
 
-⚠️ `bundleCreatedNames` 只解决「同 bundle 新名字的 ACL 顺序」，`assertRefsUsableInTx` 的
-name 域只证明「至少一个同名行可见」——**两者都区分不了两个同名目标**，所以 lowering 契约不能
-指望它们兜底。
+#### 1.1c 解析契约（这才是合并的实质）
 
-#### 1.1c 工作组 call 的 runtime 对齐（R5-P1-B，用户决策 28）
+只统一「引用长什么样」是个空壳——运行期的解析带着三条 authoring 侧没有的属性，必须一并进
+契约，否则合出来的东西表达不了 `freezeCallClosure`：
 
-**已核实的阻断**：上表对工作组**原本不成立**。`freezeCallClosure` 的工作组分支
-（`execution/closure.ts:269-309`）**只收 `workgroupName`**，按名查库 → `orderBy(asc(id))` →
-取第一个可见行；**`workgroupId` 从头到尾没有被读过**（尽管 schema 里有这个字段）。于是
-「external 目标同时落 name + id」对工作组是空操作——写了也没用，启动照样取最老可见行。
-
-可复现：同名 G1（旧）/ G2（新），用户明确 reuse G2 → lowering 落
-`workgroupName='audit', workgroupId=G2` → launch 仍冻结到 G1。
-
-**用户决策 28：扩 runtime，让工作组与工作流对齐**——`freezeCallClosure` 的工作组分支改为
-**id-cache 优先**（且该行仍带该选择器名字，否则回退名字规则），与工作流分支
-（`closure.ts:162-169`）逐字同构。这顺带修掉平台现有的一处不对称：两类 call 节点今天行为
-不一致，而这个不一致没有任何设计理由，只是 RFC-243 PR-4 补工作组时漏了。
-
-⚠️ **这是执行期行为变更**，因此：
-- `proposal.md §3` 的「不改任何执行期行为」非目标**相应收窄**；
-- 它进能力影响清单作为 **C7（行为变更，非收缩）**：存量工作流里若有「`workgroupId` cache
-  指向 A、但同名最老可见行是 B」的 call 节点，启动目标会从 B 变成 A。
-  **这正是用户当初存下那个 cache 时的意图**，但确实是变更，须在发布说明点名。
-- 需要一条专门的回归：同名两行 + cache 指向较新那个 → 冻结到 cache 指向的行。
-
-**R6-P1-3 修正：光让 freeze 认 id 是不够的。** 冻结**结果**本身也是按名字键控的：
+| 属性 | 含义 | 谁需要 |
+|---|---|---|
+| **freeze** | 启动时快照，之后对该任务终身不变（`tasks.refClosureJson`） | CallRef |
+| **launch-ACL** | 可见性按**启动者**判定，而非保存者 | CallRef |
+| **dangle** | 保存时允许解析不到，启动才 fail closed | CallRef 的 `name` 形态 |
 
 ```ts
-export interface FrozenCallClosure {
-  workflows:  Record<string, FrozenWorkflowRef>    // ← key 是 name
-  workgroups: Record<string, FrozenWorkgroupRef>   // ← key 是 name
+interface RefResolution<T> {
+  freeze: 'per-task' | 'none'
+  aclAt: 'launch' | 'save' | 'none'
+  dangle: 'tolerated' | 'rejected'
+  resolve(ref: ResourceRef, ctx: ResolveCtx): Promise<T>
 }
 ```
 
-消费端 `frozenWorkgroupFromClosure(json, name)`（`closure.ts:90`）也按名字取，scheduler 两处
-调用点同理（`scheduler.ts:2966-2968`）。所以同名两个节点最终仍落到同一条冻结项。
+`freezeCallClosure` 因此不再是一份独立实现，而是 `CallRef` 域的 resolver 实例——决策 28 的
+「id 优先 + 按节点键控」就落在这一处，不用在别处再抄一遍。
 
-而这个冲突状态**今天用普通编辑器就能造**——`CallWorkgroupEdit.tsx:133` 已经在写
-`{workgroupName, workgroupId}`，还专门处理了同名候选。**它不是配置包引入的问题**，只把
-validator 放在 bundle 路径上够不着存量与普通保存。
+#### 1.1d `local:` 的稳定性
 
-**用户决策 28（修订）：冻结闭包改为按节点键控，两个同名节点各自生效。**
-
-| 项 | 改动 |
-|---|---|
-| 形状 | `Record<nodeId, FrozenXxxRef>`，**workflow 与 workgroup 两侧同时改**（它们是同一个形状、同一个毛病） |
-| 生产者 | `freezeCallClosure`（`closure.ts:313`）按节点产出；解析仍是 id-cache 优先、其次最老可见 |
-| 消费者 | `scheduler.ts:2966-2968` 两处改按 nodeId 取 |
-| **存量兼容** | `tasks.refClosureJson` 里已有 name-keyed 的 JSON。`parseCallClosure` **同时接受两种形状**（带 `closureVersion` 判别；无该字段即 v1 name-keyed），消费端对 v1 行回退到按名字取。**存量任务零影响、无需迁移** |
-
-**R6-P2-1：cache 判据与 roster 必须同一个 SQLite snapshot 读。** 判据是「id 命中**且该行仍带
-该选择器名字**」，但现有实现分两次读（先查名字/版本，再 `getWorkgroupById` 取 roster）。
-可复现：freeze 先读到 `G2(name='audit', v1)` → owner 在一个事务里改名并换成员推到 v2 →
-第二次读回 v2 ⇒ 存成 `{key:'audit', version:1, group:v2}`：**判据通过时它还叫 audit，真正
-冻结的却已经不叫了**。而 `startWorkgroupTaskFromFrozen` 明确不再回读资源、不做 OCC，所以
-这个不一致会一路带到执行。修法：新增 in-tx snapshot loader，把 grants、workgroup row、
-member rows 放进同一个 `dbTxSync`，不复用分两次读的 `getWorkgroupById`；配 rename/roster
-并发回归。
-
-⚠️ 这仍是**执行期行为变更**（C7）：无冲突场景下，节点的启动目标从「最老可见行」变成「你当初
-在下拉里选的那个」——那正是用户存下 `workgroupId` 时的意图，但确实是变更。有冲突场景下，
-两个节点从「都跑同一个」变成「各跑各的」。发布说明须点名两者。
-
-三种形态与消费者的对应：
-
-| 消费者 | `local:` | `external:` 的 token 是什么 | 谁解析 |
-|---|---|---|---|
-| intent | 同一 changeset 里新建的资源 | session handle `res#agent#3` | intent provider（查会话挂载表） |
-| 配置包导入 | 包里新建 / 副本的资源 | 预检页选定的**本地资源 id** | package provider（决策表） |
-| 配置包导出 | 闭包内的资源 | 闭包外已解析的引用 | 导出侧只写不解析 |
-| （三种） `name:` | — | 闭包外**未解析**的 call 目标 | 谁都不解析，启动期兜底 |
-
-**裸 id / 裸 name 永远不得出现在 payload 的引用槽里**（AC-B2）。这是把
-`IntentWorkflowPayloadSchema` 已有的规则提升为整份表达的通则。
-
-`local:<slug>` 的稳定性（设计门 B1）：slug 由**导出侧显式分配并写进 manifest**，不是从声明
-顺序派生的序号；`BundleSchema` 拒绝重复 slug、拒绝悬空引用、拒绝悬空 `rootRef`。
+slug 由**导出侧显式分配并写进 manifest**，不是从声明顺序派生的序号（设计门 B1）；
+`BundleSchema` 拒绝重复 slug、拒绝悬空引用、拒绝悬空 `rootRef`。
 
 ### 1.2 六类 payload
 
