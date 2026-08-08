@@ -21,12 +21,17 @@
 >   `skill_versions.source` **扩枚举加 `'import'`**（该列无 DB CHECK ⇒ 零迁移），这是
 >   plan 要求「批次 B 开工前必须定」的那个问题。
 >
+> - `T11`（`46dff44e`）—— `installPlugin` 接受**预铸的** `generationId`，另给纯函数
+>   `plannedGenerationDir` 让调用方在动手前算出精确路径写进 journal。测试里有一条直接
+>   实证「只靠异常对象记录路径不够」：故意让安装失败，断言目录**已经存在**。
+> - `T12`（`d53aebf6`）—— `commitMcpUpdateInTx` 加提交事务内的 **owner 围栏**，堵掉
+>   RFC 设计期定位的那条真实越权（**hash 不是授权**：拿他人 public 资源的 id + 正确
+>   hash 即可改写别人那一行）。intent 侧传的是「授权时看到的 owner」而不是 actor 自己，
+>   于是同时覆盖伪造与「授权后 owner 转移」两种情形，且不误伤 admin 代改。
+>
 > **下一步（批次 B 余下）**：`T9` 引擎本体（五段生命周期，逐条对照 `invariants.md` 的
-> 11 条引擎不变量；写完在该文件末尾的对照表上打勾）、`T11` 插件 record-before-act
-> （调用方**预铸** generation id，先把精确路径写进 journal artifacts 再调 installer——
-> 只把目录挂在抛出的错误上不够，进程可能在 mkdir 之后、返回之前被 SIGKILL）、
-> `T12` 最终事务内 owner 断言（修 `commitMcpUpdateInTx` 只校验 hash 不校验 owner 那条
-> 真实越权）、`T13` 三个测试文件。
+> 11 条引擎不变量；写完在该文件末尾的对照表上打勾）与 `T13` 三个测试文件。
+> T10/T11/T12 已把引擎需要的三块地基备齐：技能四段、插件预铸路径、owner 围栏。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 
