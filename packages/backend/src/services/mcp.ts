@@ -175,11 +175,33 @@ export interface PreparedMcpUpdate {
   id: string
   set: Partial<typeof mcps.$inferInsert>
   expectedConfigHash?: string
+  /**
+   * RFC-271 T12 —— 提交事务内的 **owner 围栏**（与技能版本提交的
+   * `expectedOwnerUserId` 同一形态，RFC-170 第四轮 review 的先例）。
+   *
+   * ⚠️ 在此之前这条原语**只校验 config hash、不校验 owner**：owner 门只在路由层。
+   * 对经路由的编辑没问题，但任何**直接到达这条原语**的新写路径（intent apply、
+   * 配置包导入）都绕过了它 —— 伪造「他人公开资源的 id + 正确的 hash」即可改写
+   * 别人那一行的内容。hash 不是授权，它只证明「我读到的是这一版」。
+   *
+   * 传入调用方**授权时**看到的 owner。给了就在事务内复核：既拦下伪造，也顺带
+   * 关掉「授权之后、提交之前发生 owner 转移」这个竞态。缺席 = 不设围栏（既有
+   * 调用方逐字不变）。
+   */
+  expectedOwnerUserId?: string | null
 }
 
 export function commitMcpUpdateInTx(tx: DbTxSync, p: PreparedMcpUpdate): void {
   const row = tx.select().from(mcps).where(eq(mcps.id, p.id)).get()
   if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
+  if (p.expectedOwnerUserId !== undefined && row.ownerUserId !== p.expectedOwnerUserId) {
+    // 与「不存在」同形的错误码没有意义：调用方是持有 id 的写入方，这里要的是
+    // 明确的拒绝而不是存在性隐藏（列表与详情面的隐藏在别处）。
+    throw new ConflictError(
+      'resource-operation-stale',
+      'the MCP is no longer owned by the authorizing user; reload before saving',
+    )
+  }
   if (p.expectedConfigHash !== undefined) {
     const currentConfigHash = mcpOperationConfigHashOf(rowToMcp(row))
     if (currentConfigHash !== p.expectedConfigHash) {

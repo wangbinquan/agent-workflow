@@ -570,7 +570,15 @@ async function applyInner(
             preparedOps.push({
               op,
               kind: 'mcp-update',
-              prepared: { id: op.resourceId, set, expectedConfigHash: fence.configHash },
+              prepared: {
+                id: op.resourceId,
+                set,
+                expectedConfigHash: fence.configHash,
+                // RFC-271 T12：把授权时看到的 owner 一起带进提交事务。hash 只证明
+                // 「我读到的是这一版」，不是授权——少了这道围栏，直接到达该原语的
+                // 写路径可以拿他人公开资源的 id + 正确 hash 改写别人那一行。
+                expectedOwnerUserId: existing.ownerUserId,
+              },
             })
             break
           }
