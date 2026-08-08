@@ -1,0 +1,320 @@
+// RFC-271 T21 —— 闭包 → `ResourceBundle`（分配 local slug）+ 脱敏 + secrets 索引。
+//
+// 两条硬约束：
+//
+// ① **脱敏之后必须仍能通过各自的严格 schema**（AC-6 / 设计门 D1）。仓里已有的
+//    `projectMcpForDump` 是给**模型看的展示投影**：它把 `oauth` 换成字符串（而
+//    schema 要求对象或 false）、把 argv 改成 `‹redacted›-arg-N`、删掉整个 URL
+//    query。直接复用会同时造成密钥泄漏面错配、合法配置丢失、导入 schema 解析失败
+//    三种后果。所以这里走 `shared/bundle/secrets.ts`——它只改**值**，不改结构。
+//
+// ② **枚举字段绝不脱敏**（RFC-270 教训）：把 `type: 'remote'` 换成占位符，导入
+//    侧的判别联合直接崩，而且那本来就不是密钥。
+//
+// local slug 从资源名派生（小写 + 非法字符换 `-`），冲突时追加序号——slug 只是
+// **包内**的引用键，不承载任何语义，所以派生规则怎么定都行，唯一要求是稳定且唯一。
+
+import type { BundleOp, ResourceBundle } from '@agent-workflow/shared'
+import {
+  BUNDLE_VERSION,
+  PACKAGE_SECRET_PLACEHOLDER,
+  redactFreeJson,
+  redactRecord,
+  type PackageSecretRef,
+  type RedactionSink,
+} from '@agent-workflow/shared'
+import type { ClosureResource, ExportClosure } from './closure'
+
+export interface SerializedPackage {
+  bundle: ResourceBundle
+  /** manifest 用：哪些字段被脱敏了（**只记位置，绝不记原值**）。 */
+  secrets: PackageSecretRef[]
+  /** slug ↔ 源实例 id 的对照，供 manifest / README 展示。 */
+  slugOfId: Map<string, string>
+}
+
+/** 名字 → slug。只在包内使用，冲突追加序号。 */
+export function assignSlugs(resources: readonly ClosureResource[]): Map<string, string> {
+  const used = new Set<string>()
+  const out = new Map<string, string>()
+  for (const r of resources) {
+    const base =
+      r.name
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 56) || r.type
+    let slug = `${r.type}-${base}`
+    let n = 2
+    while (used.has(slug)) slug = `${r.type}-${base}-${n++}`
+    used.add(slug)
+    out.set(r.id, slug)
+  }
+  return out
+}
+
+const parseJson = (value: unknown, fallback: unknown): unknown => {
+  if (typeof value !== 'string') return value ?? fallback
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+
+/** 引用 wire：同包内 → `local:<slug>`；不在包里 → `external:<id>`。 */
+function refWire(slugOfId: ReadonlyMap<string, string>, id: string): string {
+  const slug = slugOfId.get(id)
+  return slug === undefined ? `external:${id}` : `local:${slug}`
+}
+
+export function serializeClosure(closure: ExportClosure): SerializedPackage {
+  const slugOfId = assignSlugs(closure.resources)
+  const secrets: PackageSecretRef[] = []
+  // sink 按**资源**开一个（它带 resourceType / resourceName 上下文），产出汇总到
+  // 同一个数组。⚠️ 只记**位置**，绝不记原值。
+  const sinkFor = (r: ClosureResource): RedactionSink => ({
+    resourceType: r.type,
+    resourceName: r.name,
+    found: secrets,
+  })
+
+  const ops: BundleOp[] = []
+  let opSeq = 0
+  const nextOpId = (): string => `op-${++opSeq}`
+
+  for (const r of closure.resources) {
+    const slug = slugOfId.get(r.id)!
+    const row = r.row
+    switch (r.type) {
+      case 'agent': {
+        const skills = (parseJson(row.skills, []) as unknown[]).map((raw) => {
+          const s = raw as { kind?: string; skillId?: string; name?: string }
+          return s.kind === 'project'
+            ? `project:${s.name ?? ''}`
+            : refWire(slugOfId, String(s.skillId ?? ''))
+        })
+        ops.push({
+          opId: nextOpId(),
+          kind: 'agent-create',
+          slug,
+          payload: {
+            name: r.name,
+            description: String(row.description ?? ''),
+            outputs: parseJson(row.outputs, []),
+            syncOutputsOnIterate: row.syncOutputsOnIterate !== false,
+            permission: parseJson(row.permission, {}),
+            // ⚠️ AC-B3b：`network` 必须带上。intent 版的 payload 没有这个字段，
+            // 照抄会让导入后静默回落成 'deny'。
+            ...(row.network === undefined || row.network === null ? {} : { network: row.network }),
+            skills,
+            dependsOn: (parseJson(row.dependsOn, []) as unknown[]).map((id) =>
+              refWire(slugOfId, String(id)),
+            ),
+            mcp: (parseJson(row.mcp, []) as unknown[]).map((id) => refWire(slugOfId, String(id))),
+            plugins: (parseJson(row.plugins, []) as unknown[]).map((id) =>
+              refWire(slugOfId, String(id)),
+            ),
+            frontmatterExtra: redactFreeJson(
+              parseJson(row.frontmatterExtra, {}),
+              sinkFor(r),
+              'frontmatterExtra',
+            ),
+            bodyMd: String(row.bodyMd ?? ''),
+          },
+        } as unknown as BundleOp)
+        break
+      }
+      case 'mcp': {
+        const config = asRecord(parseJson(row.config, {}))
+        ops.push({
+          opId: nextOpId(),
+          kind: 'mcp-create',
+          slug,
+          payload: {
+            name: r.name,
+            description: String(row.description ?? ''),
+            // ⚠️ 判别字段原样——脱敏枚举会让导入侧的判别联合直接崩。
+            type: row.type,
+            config: redactMcpConfig(config, sinkFor(r), 'config'),
+            enabled: row.enabled !== false,
+          },
+        } as unknown as BundleOp)
+        break
+      }
+      case 'plugin': {
+        ops.push({
+          opId: nextOpId(),
+          kind: 'plugin-create',
+          slug,
+          payload: {
+            name: r.name,
+            description: String(row.description ?? ''),
+            spec: String(row.spec ?? ''),
+            options: redactFreeJson(parseJson(row.optionsJson, {}), sinkFor(r), 'options'),
+            enabled: row.enabled !== false,
+            // 决策 13：带 `sourceKind`（导入侧据它决定要不要跑安装），但**不带**
+            // cachedPath / resolvedVersion / installedAt —— 那些是机器本地产物。
+            sourceKind: row.sourceKind ?? 'npm',
+          },
+        } as unknown as BundleOp)
+        break
+      }
+      case 'skill': {
+        // 技能文件树在打包段单独写进 zip；payload 里只带 SKILL.md 的结构化部分与
+        // 文件清单（`ref` 指向包内路径）。
+        ops.push({
+          opId: nextOpId(),
+          kind: 'skill-create',
+          slug,
+          payload: {
+            name: r.name,
+            description: String(row.description ?? ''),
+            frontmatterExtra: {},
+            bodyMd: '',
+            files: [],
+          },
+        } as unknown as BundleOp)
+        break
+      }
+      case 'workflow': {
+        ops.push({
+          opId: nextOpId(),
+          kind: 'workflow-create',
+          slug,
+          payload: {
+            name: r.name,
+            description: String(row.description ?? ''),
+            definition: liftWorkflowDefinition(
+              asRecord(parseJson(row.definition, {})),
+              slugOfId,
+              closure,
+              r.id,
+              sinkFor(r),
+            ),
+          },
+        } as unknown as BundleOp)
+        break
+      }
+      case 'workgroup': {
+        const members = (parseJson(row.membersJson ?? row.members, []) as unknown[]).map((raw) => {
+          const m = asRecord(raw)
+          if (m.memberType !== 'agent') return { ...m }
+          const { agentId, ...rest } = m
+          return { ...rest, agentRef: refWire(slugOfId, String(agentId ?? '')) }
+        })
+        ops.push({
+          opId: nextOpId(),
+          kind: 'workgroup-create',
+          slug,
+          payload: {
+            name: r.name,
+            description: String(row.description ?? ''),
+            instructions: String(row.instructions ?? ''),
+            mode: row.mode,
+            switches: parseJson(row.switchesJson ?? row.switches, {}),
+            maxRounds: row.maxRounds ?? 1,
+            completionGate: row.completionGate === true,
+            members,
+            leaderDisplayName: row.leaderDisplayName ?? null,
+          },
+        } as unknown as BundleOp)
+        break
+      }
+    }
+  }
+
+  const bundle = {
+    bundleVersion: BUNDLE_VERSION,
+    ops,
+    rootRef: `local:${slugOfId.get(closure.root.id)!}`,
+  } as unknown as ResourceBundle
+
+  return { bundle, secrets, slugOfId }
+}
+
+/** MCP config 的三个载体：env / headers / argv / url。结构一律保持。 */
+function redactMcpConfig(
+  config: Record<string, unknown>,
+  sink: RedactionSink,
+  fieldPrefix: string,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...config }
+  if (typeof out.env === 'object' && out.env !== null) {
+    out.env = redactRecord(out.env as Record<string, string>, sink, `${fieldPrefix}.env`)
+  }
+  if (typeof out.headers === 'object' && out.headers !== null) {
+    out.headers = redactRecord(
+      out.headers as Record<string, string>,
+      sink,
+      `${fieldPrefix}.headers`,
+    )
+  }
+  if (typeof out.oauth === 'object' && out.oauth !== null) {
+    // ⚠️ `oauth` **仍然是对象**——展示投影把它换成字符串，那会让严格 schema 解析失败。
+    const oauth = { ...(out.oauth as Record<string, unknown>) }
+    if (typeof oauth.clientSecret === 'string') {
+      oauth.clientSecret = PACKAGE_SECRET_PLACEHOLDER
+      sink.found.push({
+        resourceType: sink.resourceType,
+        resourceName: sink.resourceName,
+        field: `${fieldPrefix}.oauth.clientSecret`,
+      })
+    }
+    out.oauth = oauth
+  }
+  return out
+}
+
+/**
+ * 工作流定义的 lifting：把节点上的 canonical id 换成 wire 引用。
+ * call 目标走名字域（late-bound）；解析到包内目标时用 `local:`。
+ */
+function liftWorkflowDefinition(
+  definition: Record<string, unknown>,
+  slugOfId: ReadonlyMap<string, string>,
+  closure: ExportClosure,
+  fromId: string,
+  sink: RedactionSink,
+): Record<string, unknown> {
+  const nodes = Array.isArray(definition.nodes) ? definition.nodes : []
+  const lifted = nodes.map((raw) => {
+    const node = { ...asRecord(raw) }
+    if (typeof node.agentId === 'string' && node.agentId.length > 0) {
+      node.agentRef = refWire(slugOfId, node.agentId)
+      delete node.agentId
+    }
+    for (const [kind, nameField, idField, refField] of [
+      ['workflow', 'workflowName', 'workflowId', 'workflowRef'],
+      ['workgroup', 'workgroupName', 'workgroupId', 'workgroupRef'],
+    ] as const) {
+      const name = node[nameField]
+      if (typeof name !== 'string' || name.length === 0) continue
+      const resolved = closure.callRefs.find(
+        (c) => c.fromId === fromId && c.nodeId === node.id && c.targetType === kind,
+      )
+      const targetSlug =
+        resolved?.resolvedId === undefined || resolved.resolvedId === null
+          ? undefined
+          : slugOfId.get(resolved.resolvedId)
+      // 目标在包里 ⇒ `local:`；否则退回 late-bound 的名字域（**导出方也可能根本
+      // 看不见那一行**，这正是 `name:` 形态存在的理由）。
+      node[refField] = targetSlug === undefined ? `name:${kind}/${name}` : `local:${targetSlug}`
+      delete node[nameField]
+      delete node[idField]
+    }
+    // 脚本节点的 env 是凭据载体。
+    if (node.kind === 'script' && typeof node.env === 'object' && node.env !== null) {
+      node.env = redactRecord(
+        node.env as Record<string, string>,
+        sink,
+        `nodes.${String(node.id)}.env`,
+      )
+    }
+    return node
+  })
+  return { ...definition, nodes: lifted }
+}
