@@ -7,9 +7,16 @@ import { describe, expect, test } from 'bun:test'
 import {
   CODE_HOST_ACTIONS,
   CODE_HOST_METHODS,
+  CODE_HOST_REDACTED_FIELDS,
+  INTENT_REDACTED,
   NODE_KIND,
+  SCRIPT_REDACTED_FIELDS,
   TRIGGER_CONTEXT_VARS,
+  codeHostActionDef,
+  codeHostActionFields,
+  codeHostActionSupported,
   codeHostRequiredFields,
+  isUnsupportedBinding,
 } from '@agent-workflow/shared'
 import {
   RECENT_TURNS_VERBATIM,
@@ -370,21 +377,51 @@ describe('Codex impl-gate P1-2 — withheld kinds must be PRESERVED, not deleted
   // could no longer make ANY intent edit to a workflow containing one.
   test('deletion is called out as its own forbidden operation', () => {
     expect(doc).toMatch(/must not DELETE one/)
-    expect(doc).toMatch(/COPY THAT NODE BACK\s+VERBATIM/)
   })
 
-  test('the redaction marker is named, and echoing it back is the correct move', () => {
-    // The model must know `‹redacted›` is what it should send back — not a
-    // placeholder to clean up or to guess a value for.
-    expect(doc).toContain('‹redacted›')
-    expect(doc).toMatch(/restores the real values from storage/)
-    expect(doc).toMatch(/"cleaning up" the markers/)
+  // The correction to the FIRST fix for this finding. "Copy the node back
+  // verbatim" was itself unfollowable: `mounted/` prints redacted fields as the
+  // marker, and any value containing it is refused as a corrupted credential
+  // (intentSecretSlots.ts:388) BEFORE the author gate runs. Omitting the key is
+  // the only instruction that both preserves the node and passes validation —
+  // see intent-privileged-node-capability.test.ts for the behavioural proof.
+  test('the doc says OMIT the redacted keys, never echo the marker back', () => {
+    expect(doc).toContain(INTENT_REDACTED)
+    expect(doc).toMatch(/OMIT every key printed as/)
+    expect(doc).toMatch(/rejected as a corrupted credential/)
+    expect(doc).toMatch(/omitting the key is what tells the platform to restore/)
+    // and the superseded instruction must not creep back
+    expect(doc).not.toMatch(/COPY THAT NODE BACK\s+VERBATIM/)
+    expect(doc).not.toMatch(/the marker is\s+the correct thing to send back/)
+  })
+
+  test('the omitted key lists are derived from the rehydration constants', () => {
+    for (const field of SCRIPT_REDACTED_FIELDS) expect(doc).toContain(`\`${field}\``)
+    for (const field of CODE_HOST_REDACTED_FIELDS) expect(doc).toContain(`\`${field}\``)
   })
 
   test('identity fields that rehydration matches on are spelled out', () => {
     // rehydrate pairs by id + kind + order of appearance; changing any of the
     // three silently defeats it.
-    expect(doc).toContain('same `id`, same `kind`, same place in `nodes[]`')
+    expect(doc).toMatch(/same `id`,\s*\n?\s*the same `kind`, the same place in `nodes\[\]`/)
+  })
+
+  // The projected-but-not-rehydrated fields: visible to the author, still
+  // untouchable. Enumerated in the doc because nothing else tells the model
+  // that seeing a field does not mean being allowed to edit it.
+  test('the see-but-do-not-touch fields are named', () => {
+    for (const field of [
+      'language',
+      'network',
+      'readonly',
+      'outputs',
+      'provider',
+      'action',
+      'allowDestructive',
+      'timeoutMs',
+    ]) {
+      expect(doc).toContain(`\`${field}\``)
+    }
   })
 
   test('the all-or-nothing consequence names both error codes', () => {
@@ -457,5 +494,185 @@ describe('Codex impl-gate P2-5 — call-workflow launch constraints', () => {
     // input makes the child uncallable at all
     expect(doc).toMatch(/including inputs the child marks optional/)
     expect(doc).toMatch(/CANNOT be called at all/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Derivation fidelity: the action catalog is not merely "present", it must
+// agree with the registry field by field. A hand-copied catalog would pass a
+// "does every action name appear" check and still teach the wrong required
+// set — which is exactly the failure mode (`code-host-param-missing` at launch)
+// the derivation exists to prevent.
+// ---------------------------------------------------------------------------
+describe('code-host action catalog agrees with the registry, entry by entry', () => {
+  const doc = docWith()
+  const providers = ['gitlab', 'github'] as const
+
+  test('each action line carries its group and both providers', () => {
+    for (const action of CODE_HOST_ACTIONS) {
+      const line = doc.split('\n').find((l) => l.includes(`\`${action}\``))
+      expect(line, `no catalog line for ${action}`).toBeDefined()
+      expect(line).toContain(`[${codeHostActionDef(action).group}]`)
+      for (const provider of providers) expect(line).toContain(`${provider}:`)
+    }
+  })
+
+  test('required fields are marked `*` and optional ones `?`, per provider', () => {
+    for (const action of CODE_HOST_ACTIONS) {
+      const line = doc.split('\n').find((l) => l.includes(`\`${action}\``))!
+      for (const provider of providers) {
+        if (!codeHostActionSupported(action, provider)) continue
+        const segment = line.slice(line.indexOf(`${provider}:`))
+        const required = new Set<string>(codeHostRequiredFields(action, provider))
+        for (const field of codeHostActionFields(action, provider)) {
+          expect(
+            segment.includes(`${field.name}${required.has(field.name) ? '*' : '?'}`),
+            `${action}/${provider}: ${field.name} marker`,
+          ).toBe(true)
+        }
+      }
+    }
+  })
+
+  test('select fields expose their legal values (else the model guesses and fails validation)', () => {
+    let checked = 0
+    for (const action of CODE_HOST_ACTIONS) {
+      const line = doc.split('\n').find((l) => l.includes(`\`${action}\``))!
+      for (const provider of providers) {
+        if (!codeHostActionSupported(action, provider)) continue
+        for (const field of codeHostActionFields(action, provider)) {
+          if (field.control !== 'select') continue
+          const options = 'options' in field ? (field.options ?? []) : []
+          if (options.length === 0) continue
+          expect(line).toContain(`(${options.join('|')})`)
+          checked += 1
+        }
+      }
+    }
+    // guard the guard: if the registry ever loses every select field this test
+    // would silently assert nothing.
+    expect(checked).toBeGreaterThan(0)
+  })
+
+  test('unsupported pairs are labelled with their reason, not silently dropped', () => {
+    let unsupported = 0
+    for (const action of CODE_HOST_ACTIONS) {
+      const line = doc.split('\n').find((l) => l.includes(`\`${action}\``))!
+      for (const provider of providers) {
+        if (codeHostActionSupported(action, provider)) continue
+        const binding = codeHostActionDef(action).bindings[provider]
+        expect(line).toContain(`${provider}: UNSUPPORTED`)
+        if (isUnsupportedBinding(binding)) expect(line).toContain(binding.reasonKey)
+        unsupported += 1
+      }
+    }
+    expect(unsupported).toBeGreaterThan(0)
+  })
+
+  test('the catalog invents nothing: every backticked action token is a real key', () => {
+    const known = new Set<string>(CODE_HOST_ACTIONS)
+    for (const line of doc.split('\n')) {
+      const m = /^ {4}- `([a-z.-]+)` \[/.exec(line)
+      if (m !== null) expect(known.has(m[1]!)).toBe(true)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Structural invariants — the doc is assembled by string concatenation with
+// conditional blocks, so "does it still read as one coherent document" is a
+// real risk, especially in the withheld-permission shapes.
+// ---------------------------------------------------------------------------
+describe('doc structure holds in every privilege shape', () => {
+  const shapes = [
+    ['both', ALL_PRIVILEGES],
+    ['neither', NO_PRIVILEGES],
+    ['scripts only', { mayAuthorScripts: true, mayAuthorCodeHostCalls: false }],
+    ['code-host only', { mayAuthorScripts: false, mayAuthorCodeHostCalls: true }],
+  ] as const
+
+  // turnEngine always supplies a sentence here (both config branches do), so an
+  // empty fixture value would collapse a section and produce a blank-line run
+  // that never occurs in production.
+  const LANG = 'Write generated artifact prose in the language the user used.'
+
+  for (const [label, privileges] of shapes) {
+    test(`${label}: pure — same input gives byte-identical output`, () => {
+      expect(docWith({ privileges, langDirective: LANG })).toBe(
+        docWith({ privileges, langDirective: LANG }),
+      )
+    })
+
+    test(`${label}: no empty bullets or stray blank runs from the conditional blocks`, () => {
+      const doc = docWith({ privileges, langDirective: LANG })
+      expect(doc).not.toMatch(/^\s*-\s*$/m) // a bullet with no content
+      expect(doc).not.toMatch(/\n{4,}/) // 3+ blank lines = a dropped block
+      expect(doc.endsWith('\n')).toBe(true)
+    })
+
+    test(`${label}: the non-privileged contract is unaffected`, () => {
+      const doc = docWith({ privileges, langDirective: LANG })
+      // Sections that must exist no matter what the actor may author.
+      for (const anchor of [
+        '## Platform model (essentials)',
+        '## Reference rules (hard)',
+        '## Secrets (hard)',
+        '## Payload schemas (STRICT — unknown keys are rejected)',
+        '## Output contract',
+        '## Conversation history',
+      ]) {
+        expect(doc).toContain(anchor)
+      }
+      // and the six payload types are always taught
+      for (const type of ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup']) {
+        expect(doc).toContain(`- **${type}**:`)
+      }
+    })
+  }
+
+  test('withholding changes ONLY the privileged material', () => {
+    const full = docWith({ privileges: ALL_PRIVILEGES, langDirective: LANG })
+    const none = docWith({ privileges: NO_PRIVILEGES, langDirective: LANG })
+    // Everything from the output contract onwards is privilege-independent.
+    const tail = (d: string): string => d.slice(d.indexOf('## Output contract'))
+    expect(tail(full)).toBe(tail(none))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Budget signal, not a performance requirement.
+//
+// INTENT.md is rebuilt and shipped to the model EVERY turn (the store is
+// ephemeral — multi-turn means full context replay), so it is a recurring cost
+// on every intent session, and it only ever grows: this change alone added a
+// 20-line action catalog and a 29-name variable list. There is no natural
+// backpressure on a prompt, so the ceiling here exists to make the next
+// unbounded addition visible in review rather than in a context window.
+//
+// The number is deliberately loose (roughly 2× today's size). Raising it is
+// fine — doing so knowingly is the point.
+// ---------------------------------------------------------------------------
+describe('INTENT.md stays within a sane size budget', () => {
+  const BUDGET_BYTES = 32 * 1024
+
+  test('the fully privileged document fits the budget', () => {
+    const bytes = Buffer.byteLength(docWith(), 'utf8')
+    expect(bytes).toBeLessThan(BUDGET_BYTES)
+  })
+
+  test('withholding both kinds makes it smaller, not larger', () => {
+    // A withheld doc drops two node forms plus the whole action catalog and
+    // gains one short section; if this ever inverts, the refusal text has grown
+    // past the material it replaces.
+    const full = Buffer.byteLength(docWith(), 'utf8')
+    const none = Buffer.byteLength(docWith({ privileges: NO_PRIVILEGES }), 'utf8')
+    expect(none).toBeLessThan(full)
+  })
+
+  test('the action catalog scales with the registry, one line per action', () => {
+    const lines = docWith()
+      .split('\n')
+      .filter((l) => /^ {4}- `[a-z.-]+` \[/.test(l))
+    expect(lines.length).toBe(CODE_HOST_ACTIONS.length)
   })
 })

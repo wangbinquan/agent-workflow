@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
+import { ROLE_PERMISSIONS, canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
@@ -21,6 +21,7 @@ import {
   intentProvenance,
   intentSessions,
   mcps,
+  resourceGrants,
   plugins,
   skills,
   users,
@@ -872,4 +873,443 @@ describe('intent create path enforces call-ref visibility (RFC-243 §5.3)', () =
     })) as { applied: unknown[] }
     expect(receipt.applied.length).toBe(1)
   })
+})
+
+// ---------------------------------------------------------------------------
+// Codex impl-gate P2 — the call-ref fence must not depend on op ORDER.
+//
+// The first cut relied on same-connection in-tx visibility: a target created
+// EARLIER in the same transaction is visible to the fence, so it passed. But
+// nothing orders call refs — they are not part of the resolver's dependency
+// graph and INTENT.md never says "emit the target first" — so the identical
+// logical bundle would 403 or succeed depending on op order alone, and only
+// when someone else's private resource happened to hold that name.
+//
+// The fix excludes names this bundle is creating. These tests pin BOTH
+// directions plus the collision case that made it observable.
+// ---------------------------------------------------------------------------
+describe('call-ref fence is order-independent (RFC-243 §5.3)', () => {
+  const OTHER2 = 'user_other2_apply_00000000'
+
+  async function seedForeignPrivateWorkflow(name: string): Promise<void> {
+    await db.insert(users).values({
+      id: OTHER2,
+      username: 'other2',
+      displayName: 'other2',
+      role: 'user',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof users.$inferInsert)
+    await db.insert(workflows).values({
+      id: ulid(),
+      name,
+      description: '',
+      definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
+      version: 1,
+      ownerUserId: OTHER2,
+      visibility: 'private',
+      builtin: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof workflows.$inferInsert)
+  }
+
+  /** Two creates: a caller referencing `child-flow` by name, and `child-flow`
+   *  itself. `callerFirst` flips only their order in `ops`. */
+  function pairBundle(callerFirst: boolean): unknown {
+    const caller = {
+      opId: callerFirst ? 'op-1' : 'op-2',
+      action: 'create',
+      resourceType: 'workflow',
+      tempRef: '$new:caller',
+      payload: {
+        name: 'caller-flow',
+        description: '',
+        definition: {
+          $schema_version: 4,
+          inputs: [],
+          nodes: [{ id: 'n1', kind: 'call-workflow', workflowName: 'child-flow' }],
+          edges: [],
+        },
+      },
+    }
+    const child = {
+      opId: callerFirst ? 'op-2' : 'op-1',
+      action: 'create',
+      resourceType: 'workflow',
+      tempRef: '$new:child',
+      payload: {
+        name: 'child-flow',
+        description: '',
+        definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
+      },
+    }
+    return { $schema_version: 1, ops: callerFirst ? [caller, child] : [child, caller] }
+  }
+
+  async function applyPair(callerFirst: boolean): Promise<unknown> {
+    const { session } = await createIntentSession(db, actor, { message: 'compose' })
+    const draft = installDraft(session.id, pairBundle(callerFirst), [])
+    return applyIntentChangeset(deps(), {
+      sessionId: session.id,
+      clientMutationId: ulid(),
+      ...draft,
+      decisions: [],
+    })
+  }
+
+  for (const callerFirst of [true, false]) {
+    test(`bundle-internal target resolves with caller ${callerFirst ? 'BEFORE' : 'AFTER'} it`, async () => {
+      const receipt = (await applyPair(callerFirst)) as { applied: unknown[] }
+      expect(receipt.applied.length).toBe(2)
+      expect((await db.select().from(workflows)).length).toBe(2)
+    })
+  }
+
+  // The collision that made the ordering bug observable at all: someone else
+  // already owns a private workflow with the name this bundle is creating.
+  for (const callerFirst of [true, false]) {
+    test(`a foreign private same-name row does not change the verdict (caller ${callerFirst ? 'first' : 'last'})`, async () => {
+      await seedForeignPrivateWorkflow('child-flow')
+      const receipt = (await applyPair(callerFirst)) as { applied: unknown[] }
+      expect(receipt.applied.length).toBe(2)
+      // the actor's own child row exists alongside the foreign one
+      const rows = await db.select().from(workflows)
+      expect(rows.filter((r) => r.name === 'child-flow').length).toBe(2)
+    })
+  }
+
+  // The exclusion must be scoped to names this bundle CREATES — a reference to
+  // someone else's private workflow that the bundle does NOT create is still
+  // refused, in either order.
+  test('excluding bundle names does not open a hole for unrelated foreign refs', async () => {
+    await seedForeignPrivateWorkflow('someone-elses-flow')
+    const { session } = await createIntentSession(db, actor, { message: 'compose' })
+    const draft = installDraft(
+      session.id,
+      {
+        $schema_version: 1,
+        ops: [
+          {
+            opId: 'op-1',
+            action: 'create',
+            resourceType: 'workflow',
+            tempRef: '$new:caller',
+            payload: {
+              name: 'caller-flow',
+              description: '',
+              definition: {
+                $schema_version: 4,
+                inputs: [],
+                nodes: [{ id: 'n1', kind: 'call-workflow', workflowName: 'someone-elses-flow' }],
+                edges: [],
+              },
+            },
+          },
+        ],
+      },
+      [],
+    )
+    await expect(
+      applyIntentChangeset(deps(), {
+        sessionId: session.id,
+        clientMutationId: ulid(),
+        ...draft,
+        decisions: [],
+      }),
+    ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+  })
+
+  // D1: the error echoes only the name the author typed — never an id, owner
+  // or description of the row they cannot see.
+  test('the refusal discloses only the typed name', async () => {
+    await seedForeignPrivateWorkflow('secret-name')
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    const draft = installDraft(
+      session.id,
+      {
+        $schema_version: 1,
+        ops: [
+          {
+            opId: 'op-1',
+            action: 'create',
+            resourceType: 'workflow',
+            tempRef: '$new:caller',
+            payload: {
+              name: 'caller-flow',
+              description: '',
+              definition: {
+                $schema_version: 4,
+                inputs: [],
+                nodes: [{ id: 'n1', kind: 'call-workflow', workflowName: 'secret-name' }],
+                edges: [],
+              },
+            },
+          },
+        ],
+      },
+      [],
+    )
+    const err = (await applyIntentChangeset(deps(), {
+      sessionId: session.id,
+      clientMutationId: ulid(),
+      ...draft,
+      decisions: [],
+    }).catch((e: unknown) => e)) as { message: string; details?: unknown }
+    expect(err.message).toContain('secret-name')
+    expect(err.message).not.toContain(OTHER2)
+    expect(JSON.stringify(err.details ?? {})).not.toContain(OTHER2)
+  })
+
+  // A call node nested inside a wrapper still contributes its ref: the
+  // extractor walks `nodes[]` flat, and wrappers only list ids.
+  test('a call node inside a wrapper is still fenced', async () => {
+    await seedForeignPrivateWorkflow('nested-target')
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    const draft = installDraft(
+      session.id,
+      {
+        $schema_version: 1,
+        ops: [
+          {
+            opId: 'op-1',
+            action: 'create',
+            resourceType: 'workflow',
+            tempRef: '$new:caller',
+            payload: {
+              name: 'caller-flow',
+              description: '',
+              definition: {
+                $schema_version: 4,
+                inputs: [],
+                nodes: [
+                  { id: 'n1', kind: 'call-workflow', workflowName: 'nested-target' },
+                  { id: 'w1', kind: 'wrapper-loop', nodeIds: ['n1'], maxIterations: 2 },
+                ],
+                edges: [],
+              },
+            },
+          },
+        ],
+      },
+      [],
+    )
+    await expect(
+      applyIntentChangeset(deps(), {
+        sessionId: session.id,
+        clientMutationId: ulid(),
+        ...draft,
+        decisions: [],
+      }),
+    ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The rest of the call-ref ACL surface: the workgroup half (symmetric with the
+// workflow half above, and separately implemented, so separately tested), the
+// grant path, and the resource-admin bypass.
+//
+// These matter because the fence is the ONLY place per-resource use rights are
+// checked for a call node — launch validates the workflow itself, not its
+// closure (RFC-099 D3) — so an over-tight fence blocks legitimate composition
+// and an over-loose one lets an author adopt a reference they cannot see.
+// ---------------------------------------------------------------------------
+describe('call-ref fence: workgroup half, grants and admin bypass', () => {
+  const OWNER3 = 'user_owner3_apply_00000000'
+
+  async function seedOtherUser(id: string): Promise<void> {
+    await db.insert(users).values({
+      id,
+      username: id,
+      displayName: id,
+      role: 'user',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof users.$inferInsert)
+  }
+
+  async function seedPrivateWorkgroup(name: string, ownerUserId: string): Promise<string> {
+    const id = ulid()
+    await db.insert(workgroups).values({
+      id,
+      name,
+      description: '',
+      instructions: 'work',
+      mode: 'leader_worker',
+      ownerUserId,
+      visibility: 'private',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof workgroups.$inferInsert)
+    return id
+  }
+
+  async function seedPrivateWorkflow(name: string, ownerUserId: string): Promise<string> {
+    const id = ulid()
+    await db.insert(workflows).values({
+      id,
+      name,
+      description: '',
+      definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
+      version: 1,
+      ownerUserId,
+      visibility: 'private',
+      builtin: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof workflows.$inferInsert)
+    return id
+  }
+
+  function callerWith(node: Record<string, unknown>): unknown {
+    return {
+      $schema_version: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          action: 'create',
+          resourceType: 'workflow',
+          tempRef: '$new:caller',
+          payload: {
+            name: 'caller-flow',
+            description: '',
+            definition: { $schema_version: 4, inputs: [], nodes: [node], edges: [] },
+          },
+        },
+      ],
+    }
+  }
+
+  async function applyWith(a: Actor, node: Record<string, unknown>): Promise<unknown> {
+    const { session } = await createIntentSession(db, a, { message: 'compose' })
+    const draft = installDraft(session.id, callerWith(node), [])
+    return applyIntentChangeset(deps({ actor: a }), {
+      sessionId: session.id,
+      clientMutationId: ulid(),
+      ...draft,
+      decisions: [],
+    })
+  }
+
+  const wgNode = (name: string): Record<string, unknown> => ({
+    id: 'n1',
+    kind: 'call-workgroup',
+    workgroupName: name,
+    goalTemplate: 'do it',
+  })
+
+  test('a workgroup created in the same bundle is referenceable in EITHER order', async () => {
+    for (const callerFirst of [true, false]) {
+      db = createInMemoryDb(MIGRATIONS)
+      await seedUser(OWNER, 'owner')
+      const caller = {
+        opId: callerFirst ? 'op-1' : 'op-2',
+        action: 'create',
+        resourceType: 'workflow',
+        tempRef: '$new:caller',
+        payload: {
+          name: 'caller-flow',
+          description: '',
+          definition: {
+            $schema_version: 4,
+            inputs: [],
+            nodes: [wgNode('squad')],
+            edges: [],
+          },
+        },
+      }
+      const squad = {
+        opId: callerFirst ? 'op-2' : 'op-1',
+        action: 'create',
+        resourceType: 'workgroup',
+        tempRef: '$new:squad',
+        payload: {
+          name: 'squad',
+          description: '',
+          instructions: 'work',
+          mode: 'free_collab',
+          members: [{ memberType: 'human', displayName: 'someone', roleDesc: 'helps' }],
+        },
+      }
+      const { session } = await createIntentSession(db, actor, { message: 'compose' })
+      const draft = installDraft(
+        session.id,
+        { $schema_version: 1, ops: callerFirst ? [caller, squad] : [squad, caller] },
+        [],
+      )
+      const receipt = (await applyIntentChangeset(deps(), {
+        sessionId: session.id,
+        clientMutationId: ulid(),
+        ...draft,
+        decisions: [{ opId: squad.opId, slots: [] }],
+      })) as { applied: unknown[] }
+      expect(receipt.applied.length).toBe(2)
+    }
+  })
+
+  test("another user's private workgroup is refused", async () => {
+    await seedOtherUser(OWNER3)
+    await seedPrivateWorkgroup('their-squad', OWNER3)
+    await expect(applyWith(actor, wgNode('their-squad'))).rejects.toMatchObject({
+      code: 'acl-missing-refs',
+    })
+  })
+
+  // An explicit grant is the supported way to share a private resource, so it
+  // must open the fence — otherwise the ACL model has a hole in the other
+  // direction: shared-with-me resources would be uncomposable.
+  test('an explicit grant makes a private workgroup referenceable', async () => {
+    await seedOtherUser(OWNER3)
+    const wgId = await seedPrivateWorkgroup('granted-squad', OWNER3)
+    await db.insert(resourceGrants).values({
+      resourceType: 'workgroup',
+      resourceId: wgId,
+      userId: OWNER,
+      addedBy: OWNER3,
+      addedAt: Date.now(),
+    } as typeof resourceGrants.$inferInsert)
+    const receipt = (await applyWith(actor, wgNode('granted-squad'))) as { applied: unknown[] }
+    expect(receipt.applied.length).toBe(1)
+  })
+
+  test('an explicit grant makes a private workflow referenceable', async () => {
+    await seedOtherUser(OWNER3)
+    const wfId = await seedPrivateWorkflow('granted-flow', OWNER3)
+    await db.insert(resourceGrants).values({
+      resourceType: 'workflow',
+      resourceId: wfId,
+      userId: OWNER,
+      addedBy: OWNER3,
+      addedAt: Date.now(),
+    } as typeof resourceGrants.$inferInsert)
+    const receipt = (await applyWith(actor, {
+      id: 'n1',
+      kind: 'call-workflow',
+      workflowName: 'granted-flow',
+    })) as { applied: unknown[] }
+    expect(receipt.applied.length).toBe(1)
+  })
+
+  // RFC-222: manager and admin share every row-level ACL bypass, so the fence
+  // must not stop them composing against a resource they can already see.
+  for (const role of ['manager', 'admin'] as const) {
+    test(`a ${role} may reference another user's private workflow`, async () => {
+      await seedOtherUser(OWNER3)
+      await seedPrivateWorkflow('their-flow', OWNER3)
+      const elevated: Actor = {
+        user: { id: OWNER, username: 'owner', displayName: 'Owner', role, status: 'active' },
+        source: 'session',
+        permissions: new Set(ROLE_PERMISSIONS[role]),
+      }
+      const receipt = (await applyWith(elevated, {
+        id: 'n1',
+        kind: 'call-workflow',
+        workflowName: 'their-flow',
+      })) as { applied: unknown[] }
+      expect(receipt.applied.length).toBe(1)
+    })
+  }
 })

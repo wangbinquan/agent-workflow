@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { ROLE_PERMISSIONS } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
@@ -765,4 +766,50 @@ describe('INTENT.md privileged node forms track the actor’s permissions', () =
     expect(doc).not.toContain("{id,kind:'code-host-call'")
     expect(doc).toContain('code-host-calls:author')
   })
+})
+
+// The same wire-through, but driven by REAL role permission sets rather than
+// hand-written ones. This is the test that actually answers "can an ordinary
+// user get these node forms": if ROLE_PERMISSIONS.user ever gained
+// scripts:author, the hand-written variants above would keep passing while the
+// product silently changed.
+describe('privileged node forms follow real ROLE_PERMISSIONS', () => {
+  async function docForRole(role: 'user' | 'manager' | 'admin'): Promise<string> {
+    const roleActor: Actor = {
+      user: { id: OWNER, username: 'owner', displayName: 'Owner', role, status: 'active' },
+      source: 'session',
+      permissions: new Set(ROLE_PERMISSIONS[role]),
+    }
+    const { session } = await createIntentSession(db, roleActor, { message: 'build' })
+    let seenDoc = ''
+    await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((opts, nonce) => {
+          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+        }),
+      },
+      { sessionId: session.id, actor: roleActor },
+    )
+    return seenDoc
+  }
+
+  test("role 'user' is taught neither privileged form", async () => {
+    const doc = await docForRole('user')
+    expect(doc).not.toContain("{id,kind:'script'")
+    expect(doc).not.toContain("{id,kind:'code-host-call'")
+    expect(doc).toContain('Capability limits (hard)')
+  })
+
+  for (const role of ['manager', 'admin'] as const) {
+    test(`role '${role}' is taught both`, async () => {
+      const doc = await docForRole(role)
+      expect(doc).toContain("{id,kind:'script'")
+      expect(doc).toContain("{id,kind:'code-host-call'")
+      expect(doc).not.toContain('Capability limits (hard)')
+    })
+  }
 })

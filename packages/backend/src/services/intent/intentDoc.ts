@@ -20,8 +20,10 @@
 import {
   CODE_HOST_METHODS,
   CODE_HOST_PROVIDERS,
+  CODE_HOST_REDACTED_FIELDS,
   INTENT_LIMITS,
   INTENT_REDACTED,
+  SCRIPT_REDACTED_FIELDS,
   TRIGGER_CONTEXT_VARS,
   codeHostActionDef,
   codeHostActionFields,
@@ -272,13 +274,18 @@ carries the COMPLETE definition:
   another kind — and offer what you CAN build instead (typically an agent whose
   prompt does the same work).
 - **Preserving**: a workflow under \`mounted/\` MAY ALREADY CONTAIN one. Its
-  privileged fields are shown to you as \`${INTENT_REDACTED}\` precisely because you may
-  not read them. When you update that workflow you must COPY THAT NODE BACK
-  VERBATIM — same \`id\`, same \`kind\`, same place in \`nodes[]\`, every
-  \`${INTENT_REDACTED}\` value left exactly as printed, and its edges untouched. The
-  platform restores the real values from storage before saving, so the marker is
-  the correct thing to send back. Dropping the node, "cleaning up" the markers,
-  or filling in a guess all count as CHANGING it.
+  privileged fields are printed as \`${INTENT_REDACTED}\` precisely because you may not read
+  them. When you update that workflow, copy the node back with the same \`id\`,
+  the same \`kind\`, the same place in \`nodes[]\` and its edges untouched — but
+  **OMIT every key printed as \`${INTENT_REDACTED}\` instead of echoing the marker**. A value
+  containing \`${INTENT_REDACTED}\` is rejected as a corrupted credential before the
+  permission check is even reached, so echoing it back fails the changeset;
+  omitting the key is what tells the platform to restore the stored value. Those
+  keys are \`${SCRIPT_REDACTED_FIELDS.join('` / `')}\` on a script node and
+  \`${CODE_HOST_REDACTED_FIELDS.join('` / `')}\` on a code-host call. Dropping the whole node — or
+  editing any field you CAN see, such as \`language\` / \`network\` / \`readonly\` /
+  \`outputs\` / \`provider\` / \`action\` / \`allowDestructive\` / \`timeoutMs\` — counts
+  as CHANGING it.
 
 Apply is all-or-nothing: any of these is refused with
 \`script-author-forbidden\` / \`code-host-author-forbidden\` and takes the whole
