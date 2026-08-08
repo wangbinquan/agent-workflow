@@ -130,6 +130,8 @@ const EXACT_ALLOWANCE_ROWS = [
   // and the name fallback is visibility-fenced (see closure.ts).
   // RFC-243 PR-4 — workgroup-leaf closure freeze name surfaces (same
   // deterministic oldest-ULID selector rule as the workflow side).
+  'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:613b1a0045d8d1a4940b\u001f1\u001fportable-selector\u001fvisible.find((r) => r.id === idHint && rowName(r) === name)',
+  'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:a83c2a9bf56ed96e8233\u001f1\u001fportable-selector\u001finArray(table.name, [name])',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:018216e6416c703e0a7a\u001f1\u001fportable-selector\u001fnew Set(workgroupEdges.map((e) => e.ref.workgroupName))',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:501cdb0ec5ac157ec1e8\u001f1\u001fportable-selector\u001fnew Set(pending.map((e) => e.ref.workflowName))',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:02a5932b1082cf8c9639\u001f1\u001fportable-selector\u001frowByName.get(name)',
@@ -407,7 +409,16 @@ describe('RFC-223 T15 structural identity guard', () => {
     //     `IN` 取值集合；`workflows.find(w => w.name === ref.name)` 是 id hint 不
     //     可用时的回退）。回退保留是**刻意**的：design §1.1c''' 写明「id hint 不
     //     可见时保持现状 = 回退名字规则」，改成 fail-closed 属于能力收缩。
-    expect(findings.length).toBe(132)
+    // RFC-271 T20 显式改判：132 → 134。配置包导出的 call 目标解析**必须**与
+    // `freezeCallClosure` 逐字一致（AC-7c），于是它必然复刻那两处名字落点：
+    //   · `inArray(table.name, [name])` —— call 的权威选择器就是名字（RFC-243），
+    //     导出侧改用 id 会导出一个与实际执行不同的闭包；
+    //   · `visible.find(… r.id === idHint && rowName(r) === name)` —— id hint 优先
+    //     **且带名字守卫**，与决策 28 同构。
+    // ⚠️ 这两处**不能**去掉：v2 曾写成「总选最老可见行」，节点若指向同名新行 W2
+    // 而另有更老的 W1，现网启动的是 W2 而导出会给出 W1 —— 包与实际执行的闭包不是
+    // 同一个。它们是「与运行时对齐」的证据，不是待清理的技术债。
+    expect(findings.length).toBe(134)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three
