@@ -171,6 +171,26 @@ export function resetNpmProbeCacheForTests(): void {
  * @param spec      Raw user-supplied spec.
  * @param opts      Optional overrides; tests pass `npmBin`/`pluginsDir`.
  */
+/**
+ * RFC-271 T11 —— 一次安装会创建的 generation 目录，**调用前**就能算出来。
+ *
+ * 补偿 oracle 要 record-before-act：把精确路径先写进 journal，再动手安装。只把
+ * 目录挂在抛出的错误上不够——进程可能在 mkdir 之后、抛错之前被 SIGKILL，那时
+ * 启动收敛不知道该删哪个目录，而粗粒度 GC 又会被任一非终态 node run 完全挡住
+ * ⇒ 目录永久残留，且 journal 无法证明补偿完成。
+ *
+ * `file:` 源不产生 generation 目录（它直接指向外部路径），返回 null。
+ */
+export function plannedGenerationDir(
+  pluginId: string,
+  spec: string,
+  generationId: string,
+  pluginsDir?: string,
+): string | null {
+  if (inferSourceKind(spec) === 'file') return null
+  return join(pluginsDir ?? Paths.pluginsDir, pluginId, 'generations', generationId)
+}
+
 export async function installPlugin(
   pluginId: string,
   spec: string,
@@ -178,11 +198,14 @@ export async function installPlugin(
     pluginsDir?: string
     npmBin?: string
     timeoutMs?: number
+    /** RFC-271 T11：由调用方**预铸**，好让精确路径先落 journal 再安装。
+     *  缺席时内部铸一个——单条路径（路由 / intent）的既有行为逐字不变。 */
+    generationId?: string
   } = {},
 ): Promise<InstallResult> {
   const sourceKind = inferSourceKind(spec)
   if (sourceKind === 'file') return installFilePlugin(spec)
-  return installPluginGeneration(pluginId, ulid(), spec, sourceKind, opts)
+  return installPluginGeneration(pluginId, opts.generationId ?? ulid(), spec, sourceKind, opts)
 }
 
 async function installPluginGeneration(
