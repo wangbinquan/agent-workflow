@@ -1,8 +1,14 @@
 # RFC-271 · 统一资源表达（Resource Bundle）与配置包
 
-状态：Draft v3（2026-08-08）。v1 落档 → Codex 设计门第一轮 12 条 → v2 重写 → 第二轮 9 条
-（5 条确认堵上）→ **用户决策：不是打补丁，而是归一化本系统的结构化表达，导入导出与 intent
-引用同一份表达；新设计一份，两边都迁，同一 RFC 一次到位。** 本版按该决策重写。
+状态：Draft v4（2026-08-08）。v1 → 设计门 R1（12 条）→ v2 → R2（9 条）→ **用户决策：归一化
+结构化表达** → v3 → **R3（13×P1 + 5×P2，判定不可进入实现）** → v4。
+
+**v4 的范围变更（用户决策 26）**：R3 揭示 `applyChangeset.ts` 的承重不变量有 **~13 条**而非
+我 v3 描述的 6 条，多出来的大多是 intent 特有的（session 串行、draft/session claim 与资源写
+同事务、provenance + commitSeq + contextRevision + currentDraftId 同事务、copy-only、secret
+slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：表达层与引擎照建，但
+**本 RFC 只给配置包这一个消费者**——它是 greenfield，没有存量用户、没有 13 条不变量要保；
+表达被真实跑过一轮后，intent 再迁到一个已经受过验证的东西上（后续 RFC）。
 
 ## 1. 背景
 
@@ -17,7 +23,8 @@
 
 ### 1.2 为什么这变成了一个「表达层」RFC
 
-第一版把导入设计成一套自建引擎。两轮外部设计门共 21 条 findings，其中**至少五条同一根因**：
+第一版把导入设计成一套自建引擎。三轮外部设计门共 39 条 findings（逐条核实全部属实），其中
+**至少五条同一根因**：
 自造了仓里已有且已调试过的机制，且每次自造都恰好踩中那个机制当初为之而生的坑。
 
 | 我造的 | 仓里已有 | 自造版的缺陷 |
@@ -33,16 +40,21 @@
 已经硬性禁止 payload 里出现 `agentId` / `agentName`，只许 `agentRef`。
 
 **结论**：平台其实已经长出了一份「结构化资源表达 + bundle 落地引擎」，只是它被命名和圈定
-在 intent 场景里。配置包不该再造一份，而该与 intent **共用同一份表达**。这就是本 RFC 的
-主体工作。
+在 intent 场景里。配置包不该再造一份，而该抽出一份**平台级**表达——本 RFC 建它并让配置包
+先用起来，intent 在后续 RFC 迁入（决策 26）。
 
 ## 2. 目标
 
 1. **抽出一份平台级的资源 bundle 表达**（`ResourceBundle`）：六类资源的可移植 payload +
    引用域 + 操作集 + 落地引擎，与任何具体场景（intent / 配置包 / 未来的模板市场）解耦。
-2. **intent 与配置包都迁到这份表达上**，同一 RFC 内一次到位，杜绝两份实现共存。
-3. 在此之上交付**配置包**：六类资源皆可作根，递归闭包导出为 zip；导入走预检页逐条决策；
-   导出导入均提供 CLI。
+2. 在此之上交付**配置包**：六类资源皆可作根，递归闭包导出为 zip；导入走预检页逐条决策；
+   导出导入均提供 CLI。**配置包是本 RFC 唯一的消费者。**
+3. 引擎的 provider 接口**预留事务钩子**（`claimInTx` / `revalidateInTx` / `finalizeInTx`），
+   使后续 RFC 能把 intent 迁进来而不必重构引擎——但本 RFC **不迁 intent**。
+4. **顺带解开 intent 的一处欠账**（决策 27）：`skill-update` 需要的三段技能版本内核本就要为
+   配置包建，建好后 intent 自己那条路径也能调它，把 `copyOnlyTargetsFor` 里那句
+   `'in-place update for this resource type is not supported yet'` 解掉。这是 intent 的
+   **能力扩张**（非收缩，不进 §5 清单），单独验收。
 
 ## 3. 非目标
 
@@ -53,7 +65,8 @@
 - **不扫描技能文件树内容里的密钥**：脱敏保证限定在**结构化字段**，技能目录里硬编码的凭据
   属于技能作者的责任（决策 18）。
 - 不改任何执行期行为（调度 / 准入 / containment / runtime 选择零改动）。
-- **不改变 intent 的用户可见行为**：迁移是纯重构，现有 intent 测试套是它的验收标准。
+- **不迁移 intent**（决策 26）：`applyIntentChangeset` 与 `intent_apply_journal` 原样保留，
+  本 RFC 不碰它的生命周期。唯一的交集是 §2 决策 27 的技能内核复用。
 
 ## 4. 用户故事
 
@@ -83,7 +96,8 @@
 > 了，`registry.ts:44-62` 写明该值只为 RFC-247 的 D5/D6 存在、创建资源不在其列，六类 create
 > 端点全是 `'allow'`）；同名二义 422（改为沿用 `freezeCallClosure` 的解析规则）。
 
-**intent 迁移不产生能力影响**：它是纯重构，行为不变，现有测试套是验收标准。
+**intent 侧只有一处能力扩张、无收缩**：决策 27 解开 skill/plugin 的原地更新（今天硬编码
+只能 copy）。扩张不进本清单，但有专门验收（AC-K1/K2）。
 
 ## 6. 产品决策
 
@@ -115,7 +129,7 @@
 20. CLI 两条命令都要 `--as-user`；文档写明本机操作者本身是 break-glass 管理员。
 21. 导入端点 `tokenAccess:'allow'`，授权靠逐类权限点，与界面逐字一致。
 
-### 6.3 架构决策（v3，本轮）
+### 6.3 架构决策（v3）
 
 22. **归一化：新设计一份表达，intent 与配置包两边都迁**，不以 `IntentChangeset` 为基底
     向后兼容——它带着「模型输出专用」的历史包裹（session handle 域、给模型看的约束文案），
@@ -129,6 +143,18 @@
     ⚠️ 这不是新规则，是把决策 4 在**新写路径**上补齐——已核实 `commitMcpUpdateInTx`
     （`mcp.ts:180`）等内核只校验 `expectedConfigHash` **不校验 owner**，owner 门在路由层
     （`routes/mcps.ts:375`），而导入提交不经过那条路由。详见 `design.md §5.4`。
+    ✅ R3 已核实**这不构成 intent 能力收缩**：`copyOnlyTargetsFor`
+    （`applyChangeset.ts:135`）今天就在 preflight 校验 `ownerUserId`，非本人资源只能 copy。
+    加断言只是闭合「preflight 后发生 owner 转移」的 TOCTOU 窗口。
+
+### 6.4 范围决策（v4，本轮）
+
+26. **拆**：表达层 + 引擎 + 配置包在本 RFC；**intent 迁移另立 RFC**。引擎的 provider 接口
+    预留事务钩子，使后续迁移不必重构引擎。理由见状态段——intent 的不变量面是 ~13 条，
+    与包的新 bug 压在同一个 changeset 里风险叠加。
+27. **`skill-update` / `plugin-update` 进表达层，且顺带给 intent 开**：三段技能版本内核本就
+    要为配置包建；建好后解开 intent 那句 `'not supported yet'`。属**能力扩张**，单独验收
+    （AC-K1/K2），不进 §5 收缩清单。外部 owner 仍只能 copy（那条判据不动）。
 
 ## 7. 验收标准
 
@@ -138,11 +164,30 @@
   handle、无 intent 用语、无包路径）。
 - **AC-B2** 引用槽只接受 `BundleRef`（bundle 内 `local:<slug>` 或 provider 解析的
   `external:<token>`）；裸 id / 裸 name 出现在 payload 里 → parse 失败。
-- **AC-B3** 操作集覆盖六类 × create/update（含新增的 `skill-update`）。
-- **AC-B4** 落地引擎保留既有全部不变量：journal 幂等键、active lease + freshness 下限、
-  pre-stage 不可见、big tx 翻可见、bundleCreatedNames、逆序补偿、启动收敛。
-- **AC-B5** **intent 迁移后行为逐字节不变**：现有 intent 测试套全绿，不许为迁移改判任何一条
-  intent 断言（改判即视为回归）。
+- **AC-B2b** 🆕 表达层有**第三种引用形态** `name:<selector>`（late-bound）：`call-workflow` /
+  `call-workgroup` 的权威引用是名字且**允许保存时不存在、启动时才解析**
+  （`intentDoc.ts:264` 定其为唯一允许的裸名字引用；`rfc234-apply-changeset.test.ts:868`
+  锁住 dangling 可保存）。只有 `local:` / `external:` 两形态无法表达它。
+- **AC-B3** 操作集是**严格 discriminated union**（12 分支）：create 必须有合法 slug、禁
+  `target`/`expect`；update 必须是 external `target`、禁 `slug`、**必须**带该资源类型的
+  `expect`；`kind` 与 payload 类型绑定；`local:` 引用的目标类型与引用槽期望类型一致。
+  ⚠️ 缺这条约束时 `kind:'mcp-update'` 不带 `expect` 能通过 schema，而
+  `commitMcpUpdateInTx` 只在 `expectedConfigHash !== undefined` 时 CAS ⇒ **无 CAS 覆盖**。
+- **AC-B3b** 🆕 payload 逐字段对照**正式** create/snapshot schema，不是只列相对
+  `Intent*Payload` 的差异。已知两个缺口：agent 的 `network:'allow'|'deny'`
+  （`agent.ts:267`，intent 版没有 ⇒ 导出再导入会静默回落成 deny）；技能文件路径
+  （intent 版只许 ASCII `[A-Za-z0-9._-]`，正式写路径只要求相对且不越界 ⇒
+  `references/审计 规则.md` 这类合法技能**导不出去**）。
+- **AC-B4** 落地引擎保留 `applyChangeset.ts` 的**全部**承重不变量。开工前先把它们列成清单
+  逐条对照——R3 已点出至少 13 条，v3 只覆盖了 6 条。
+- **AC-B4b** 🆕 provider 接口带**事务钩子**（`claimInTx` / `revalidateInTx` / `finalizeInTx` +
+  receipt 投影），使后续 RFC 能把 intent 的 session 原子性迁进来而不必重构引擎。
+- **AC-B4c** 🆕 引擎自带 **dependency planner + pending seams**：同 bundle 内新建的
+  skill/MCP/plugin/agent/workgroup 互相引用时，preflight 必须接受尚未落库的目标
+  （`pendingBundleIds` / `pendingAgentNames`），并按类型 + agent `dependsOn` 排序、对
+  agent 互相 `dependsOn` 的闭环给出确定拒绝点。
+- **AC-B6** 🆕 闭包规模上限**显式披露**：`ops.max(N)` 的 N 是一条产品限制，超限有专门错误码
+  并在 `proposal §3` 声明；不得像 v3 那样静默塞一个 512。
 
 ### 导出
 
@@ -167,7 +212,10 @@
 - **AC-10** `requirements` 五段（runtimes / codeHosts / executables / pluginSources /
   projectSkills），**不含任何密钥**（插件 spec 在此处同样脱敏）。
 - **AC-11** 超 `SKILL_ZIP_LIMITS` 任一维度 → 422 并点名资源与维度。
-- **AC-12** 根资源沿用 exact-revision 保护。
+- **AC-12** 根资源沿用 exact-revision 保护，**六类都要**：工作流 / 工作组 `expectedVersion`、
+  代理 `expectedUpdatedAt`、MCP / 插件 `expectedConfigHash`、技能 `contentVersion`。
+  ⚠️ v3 只给了工作流 / 工作组 ⇒ 另一标签把 agent 的 `network` 从 deny 改成 allow 后，
+  原标签点导出会静默导出新版本而不是 409。
 
 ### 导入
 
@@ -192,16 +240,42 @@
   `contentVersion + metaRevision + aclRevision`。
 - **AC-24b** 内容 token **由 preview 返回、由 decisions 原样回传**；commit 不得现场重读后
   自比自（那样等于没有 CAS）。
+- **AC-24d** 🆕 **preview 与 commit 必须绑定同一份包内容**：preview 返回规范化 package
+  digest，decisions / CLI plan 原样携带，commit 对重新上传的内容比对。
+  ⚠️ 否则可以 preview 文件 A（普通 agent 节点）、commit 上传文件 B（同 slug 同 name 同
+  expect 但 definition 换成脚本节点）——服务端重算权限也证明不了用户确认的是 B。
+- **AC-24e** 🆕 **稳定 `importId` 进 wire**：preview 下发、decisions / CLI plan 回传。
+  否则 commit 成功但响应丢失后重传同一个 zip 会**再建一遍资源**（幂等键必须由客户端持有
+  并重放，服务端每次新生成等于没有幂等）。
 - **AC-24c** 技能目标同时取 `skill_operation_locks`；同目标第二个导入 409。
 - **AC-25** 技能与插件落地走既有内核，产出完整 `skill_versions` v1 快照、content hash、
   非空 `cached_path`；测试断言导入后的技能能过 `skillBootVerify`。
 - **AC-25b** **技能覆盖**（`skill-update`）不得留下部分提交：已核实 `commitSkillVersion`
-  收 `DbClient` 且自开事务（`skillVersion.ts:474`），必须为其提供可组合进 big tx 的形态
-  （新增 in-tx 变体或改为 pre-stage + in-tx 发布）。
+  收 `DbClient` 且自开事务（`skillVersion.ts:474`），必须拆成**三段**——
+  `stageSkillVersion`（op + staging + 归档 `versions/vN`）/ `commitSkillVersionInTx`
+  （DB 行 + `advancePhase`）/ `publishStagedSkillVersion`（`swapInStaged` 从 **staging**
+  发布 live + 哈希校验 + `fs-published` + `finishOperation`）。
+  ⚠️ **不是「rename 候选目录到 live」**——`versions/vN/files` 是永久权威快照，
+  `reconcileSkillLiveFiles()` 靠它重建 live、恢复 handler 靠它前滚
+  （`skillVersion.ts:555,608`、`skillVersionOp.ts:64`）；搬走它会让 `skillBootVerify` 失败、
+  版本历史读不到、恢复无法前滚。DB 提交后立即 `unmarkSkillBootVerified`，成功后重新 mark；
+  **pre-commit 失败保留 op 作恢复 oracle，post-commit 失败绝不回滚**。
+
+### intent 能力扩张（决策 27）
+
+- **AC-K1** 🆕 三段技能版本内核落地后，intent 对**自己拥有的** skill / plugin 支持原地更新；
+  `copyOnlyTargetsFor` 里 `'in-place update for this resource type is not supported yet'`
+  那条分支移除。
+- **AC-K2** 🆕 **外部 owner 仍只能 copy**（`copyOnlyTargetsFor` 的 owner 判据一字不动），
+  且既有 copy 语义（slot derivation / copy rewiring / finalName / receipt `fromCopy`）
+  逐条保持。测试对「自己的技能 → 原地更新成功」与「他人的技能 → 仍强制 copy」双向锁。
 
 ### CLI
 
 - **AC-26/27** 两条命令都必须 `--as-user`，缺则报错退出。
+- **AC-26b** 🆕 CLI 根选择器支持 `--id`：工作流名不是 identity，同一 owner 可以有两个都叫
+  「审计」的工作流（`rfc264-unicode-names.test.ts:101` 锁住该行为），`--type --name` 选不中。
+  二义时列候选并要求 exact id。
 - **AC-28** `--plan` / `--apply` / `--on-conflict`（后者与 `--plan` 互斥）。
 - **AC-29** CLI 的权限校验、owner 归属、回滚语义与网页逐条一致。
 
@@ -209,6 +283,10 @@
 
 - **AC-30/30b** 导入端点 `tokenAccess:'allow'`；令牌矩阵缺某类写权限时含该类新资源的包提交
   422（与预检页标红同源）。
+- **AC-30c** 🆕 **路由层只做身份准入，资源类型权限按包内实际条目动态计算**。
+  ⚠️ v3 把 preview/commit 的路由门写成六类 `*:read` 的 AND，与 §预检逐条权限自相矛盾：
+  只有 agent 读/建权限的用户导入一个无依赖的单 agent 包，会在 middleware 直接被拒、
+  根本看不到 `missingPermissions`。
 - **AC-31~34** 两条旧路由不再注册；前端 YAML 路径消失；C4 分轴正反例；C6 传递不可见 422。
 
 ## 8. 包结构
@@ -232,8 +310,8 @@ code-review-配置包.zip
 ## 9. 度量与回归防护
 
 - 表达层是纯 schema + 纯函数，可脱离 DB 全覆盖。
-- **intent 迁移的验收标准是现有 intent 测试套全绿且零改判**（AC-B5）——这是本 RFC 风险最大
-  的一块，也是最容易自欺的一块：任何「顺手改判一条 intent 断言」都必须当成回归对待。
+- **决策 27 的能力扩张单独验收**（AC-K1/K2）：intent 测试套除 `copyOnlyTargetsFor` 的
+  skill/plugin 分支外零改判；`ownerUserId` 判据一字不动。
 - 六类根 × 九种闭包形态矩阵；混合「复用 + 新建」的同名重绑单独锁。
 - 崩溃收敛在 journal 各 phase 边界注入中断，重启后断言收敛到二态之一。
 - 并发导入同目标 → 409。
