@@ -724,6 +724,26 @@ async function applyInner(
         )
       }
 
+      // Names this very bundle is about to create, by type. Read from the
+      // RESOLVED payload, so a target renamed through its `finalName` slot at
+      // confirm time is keyed by the name that actually lands in the row —
+      // `resolveIntentBundle` overlays the slot before we get here
+      // (resolveChangeset.ts `nameOf`), and keying off the model's original
+      // name would silently miss the rename.
+      const bundleCreatedNames = { workflow: new Set<string>(), workgroup: new Set<string>() }
+      for (const item of preparedOps) {
+        if (item.op.action !== 'create') continue
+        const bucket =
+          item.op.resourceType === 'workflow'
+            ? bundleCreatedNames.workflow
+            : item.op.resourceType === 'workgroup'
+              ? bundleCreatedNames.workgroup
+              : null
+        if (bucket === null) continue
+        const name = (item.op.payload as { name?: unknown }).name
+        if (typeof name === 'string' && name.length > 0) bucket.add(name)
+      }
+
       for (const item of preparedOps) {
         switch (item.kind) {
           case 'agent-create':
@@ -775,16 +795,29 @@ async function applyInner(
               // three at services/workflow.ts:200, copyWorkflow at :278, and the
               // save path re-diffs them at :526). It was unreachable only because
               // INTENT.md never taught the two call kinds; teaching them is what
-              // makes it reachable. Name domain tolerates dangling in-tx, so a
-              // target created earlier in this same bundle still passes.
+              // makes it reachable.
+              //
+              // Codex impl-gate P2 — bundle-internal names are excluded rather
+              // than left to in-tx visibility. Same-connection visibility only
+              // covers a target whose op ran EARLIER, so relying on it would make
+              // the fence order-dependent: caller-then-target would 403 while
+              // target-then-caller succeeded, for the same logical bundle, and
+              // nothing in the resolver's dependency graph or in INTENT.md orders
+              // call refs. Excluding them is also the correct ACL answer — the
+              // actor is creating those rows in this very transaction, so there
+              // is no one else's row to hide behind the name.
               {
                 type: 'workflow',
-                names: extractWorkflowWorkflowRefs(item.definition),
+                names: extractWorkflowWorkflowRefs(item.definition).filter(
+                  (name) => !bundleCreatedNames.workflow.has(name),
+                ),
                 domain: 'name',
               },
               {
                 type: 'workgroup',
-                names: extractWorkflowWorkgroupRefs(item.definition),
+                names: extractWorkflowWorkgroupRefs(item.definition).filter(
+                  (name) => !bundleCreatedNames.workgroup.has(name),
+                ),
                 domain: 'name',
               },
             ])

@@ -4,7 +4,13 @@
 // fenced with the turn nonce (RFC-200).
 
 import { describe, expect, test } from 'bun:test'
-import { CODE_HOST_ACTIONS, NODE_KIND, codeHostRequiredFields } from '@agent-workflow/shared'
+import {
+  CODE_HOST_ACTIONS,
+  CODE_HOST_METHODS,
+  NODE_KIND,
+  TRIGGER_CONTEXT_VARS,
+  codeHostRequiredFields,
+} from '@agent-workflow/shared'
 import {
   RECENT_TURNS_VERBATIM,
   buildIntentDoc,
@@ -215,7 +221,7 @@ describe('RFC-243 — call node forms', () => {
 
   test('the handles-only rule carries the name exception', () => {
     expect(doc).toMatch(/EXACTLY ONE exception/)
-    expect(doc).toMatch(/a handle in `workflowName` \/ `workgroupName`\s+is wrong/)
+    expect(doc).toMatch(/handle in `workflowName` \/ `workgroupName` is wrong/)
   })
 })
 
@@ -284,7 +290,7 @@ describe('privileged node kinds are withheld from sessions that cannot author th
     expect(doc).toContain('code-host-calls:author')
     expect(doc).toContain('all-or-nothing')
     // Say so rather than quietly building something else.
-    expect(doc).toMatch(/do not silently substitute another kind/)
+    expect(doc).toMatch(/do not silently substitute\s+another kind/)
   })
 
   test('the unprivileged kinds are the ONLY ones missing', () => {
@@ -341,5 +347,115 @@ describe('privilegesFromLens', () => {
       mayAuthorScripts: false,
       mayAuthorCodeHostCalls: true,
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Codex implementation-gate findings on the first cut of this work (7 total:
+// 2×P1 + 5×P2). Each test below pins one of them.
+//
+// The P1s were both real defects in the DOC ITSELF, which is the whole point of
+// gating a prompt like production code: INTENT.md is not documentation, it is
+// the only specification the generating model ever reads.
+// ---------------------------------------------------------------------------
+describe('Codex impl-gate P1-2 — withheld kinds must be PRESERVED, not deleted', () => {
+  const doc = docWith({ privileges: NO_PRIVILEGES })
+
+  // The regression the first cut shipped: "you MUST NOT emit them" reads, on an
+  // `update` (which carries the COMPLETE definition), as "leave that node out".
+  // The model then deletes a script/code-host node it is merely not allowed to
+  // TOUCH, and `prepareWorkflowSave` refuses the deletion — because
+  // `rehydratePrivilegedNodes` only restores nodes still present with the same
+  // id AND kind (privilegedNodeRedaction.ts:253-259). Net effect: a plain user
+  // could no longer make ANY intent edit to a workflow containing one.
+  test('deletion is called out as its own forbidden operation', () => {
+    expect(doc).toMatch(/must not DELETE one/)
+    expect(doc).toMatch(/COPY THAT NODE BACK\s+VERBATIM/)
+  })
+
+  test('the redaction marker is named, and echoing it back is the correct move', () => {
+    // The model must know `‹redacted›` is what it should send back — not a
+    // placeholder to clean up or to guess a value for.
+    expect(doc).toContain('‹redacted›')
+    expect(doc).toMatch(/restores the real values from storage/)
+    expect(doc).toMatch(/"cleaning up" the markers/)
+  })
+
+  test('identity fields that rehydration matches on are spelled out', () => {
+    // rehydrate pairs by id + kind + order of appearance; changing any of the
+    // three silently defeats it.
+    expect(doc).toContain('same `id`, same `kind`, same place in `nodes[]`')
+  })
+
+  test('the all-or-nothing consequence names both error codes', () => {
+    expect(doc).toContain('script-author-forbidden')
+    expect(doc).toContain('code-host-author-forbidden')
+  })
+})
+
+describe('Codex impl-gate P1-1 / P2-2 — call selectors are late-bound names', () => {
+  const doc = docWith()
+
+  // The first cut asserted the selector "survives a rename", copied from the
+  // schema's "durable, rename-tolerant" comment. That comment is about YAML
+  // portability. `freezeCallClosure` (execution/closure.ts:142-176) accepts the
+  // cached `workflowId` ONLY while that row still bears the authored name, then
+  // falls back to resolving the name — so a rename breaks callers outright.
+  test('the false rename-tolerance claim is gone', () => {
+    expect(doc).not.toMatch(/survives a rename/)
+    expect(doc).toMatch(/A name is not a stable reference/)
+    expect(doc).toContain('call-workflow-ref-missing')
+  })
+
+  // `workflows.name` is explicitly NOT unique (db/schema.ts:478); freeze-time
+  // resolution is "oldest visible ULID wins". A model handed only a name cannot
+  // disambiguate, so it must ask rather than guess.
+  test('name ambiguity is disclosed with the actual tie-break rule', () => {
+    expect(doc).toMatch(/Names are not unique/)
+    expect(doc).toMatch(/binds the OLDEST one/)
+    expect(doc).toMatch(/Ask the user which one instead of guessing/)
+  })
+})
+
+describe('Codex impl-gate P2-3 — the custom-request wire format is exact', () => {
+  const doc = docWith()
+
+  test('method / path / query / body types are all stated', () => {
+    for (const method of CODE_HOST_METHODS) expect(doc).toContain(method)
+    // path: single leading slash, and the four things that make it invalid
+    expect(doc).toContain('must start with a single `/`')
+    expect(doc).toContain('no `?`, no `#`, no `..` segment')
+    // body is a STRING of JSON, not an object — the mistake a model makes by default
+    expect(doc).toContain('`body` is a STRING holding JSON, not an object')
+    expect(doc).toMatch(/INSIDE a JSON string value \(never as a key, never bare\)/)
+  })
+})
+
+describe('Codex impl-gate P2-4 — trigger variables are enumerated, not hinted', () => {
+  const doc = docWith()
+
+  // TRIGGER_CONTEXT_VARS is a closed 29-name set and no seed file lists it, so
+  // `{{trigger.<var>}}` alone left the model guessing; a plausible-but-wrong
+  // name applies fine and then always fails launch with `code-host-var-unknown`.
+  test('every allowed trigger variable is rendered from the shared constant', () => {
+    for (const name of TRIGGER_CONTEXT_VARS) expect(doc).toContain(name)
+    expect(doc).toContain('code-host-var-unknown')
+  })
+
+  test('the list is derived, so a new variable cannot silently go untaught', () => {
+    expect(doc).toContain(`ONLY these ${TRIGGER_CONTEXT_VARS.length} names`)
+  })
+})
+
+describe('Codex impl-gate P2-5 — call-workflow launch constraints', () => {
+  const doc = docWith()
+
+  test('both launch-only rules are stated with their error codes', () => {
+    expect(doc).toContain('call-workflow-input-unwired')
+    expect(doc).toContain('call-workflow-upload-input-unsupported')
+    // the non-obvious halves: optional inputs still need an edge, and an upload
+    // input makes the child uncallable at all
+    expect(doc).toMatch(/including inputs the child marks optional/)
+    expect(doc).toMatch(/CANNOT be called at all/)
   })
 })

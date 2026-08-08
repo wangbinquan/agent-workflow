@@ -18,8 +18,11 @@
 //    secret sentinel, size bounds) so schema rejections stay rare.
 
 import {
+  CODE_HOST_METHODS,
   CODE_HOST_PROVIDERS,
   INTENT_LIMITS,
+  INTENT_REDACTED,
+  TRIGGER_CONTEXT_VARS,
   codeHostActionDef,
   codeHostActionFields,
   codeHostActionSupported,
@@ -174,7 +177,8 @@ export function buildIntentDoc(input: IntentDocInput): string {
       ? `  - \`{id,kind:'script',language:'python'|'bash'|'node',script,outputs?:[{name,kind?}],dependencies?:[string],env?:{KEY:'‹secret›'},network?:'allow'|'deny',readonly?:boolean}\`. Runs \`script\` inline in the task worktree — no agent, no model. Inbound port values arrive as env vars \`AW_PORT_<PORT>\` (port name uppercased, chars outside [A-Z0-9_] folded to \`_\`); they are NEVER substituted into the body, so read them from the environment. Absent/empty \`outputs\` ⇒ one implicit port \`stdout\` = raw stdout; non-empty ⇒ the script must print \`<workflow-output nonce="$AW_ENVELOPE_NONCE"><port name="…">…</port></workflow-output>\`; \`path<…>\` output kinds are unsupported. \`dependencies\` must pin exact versions (pip \`pkg==1.2.3\` / npm \`pkg@1.2.3\`); bash declares none. \`env\` VALUES must be \`'‹secret›'\` or \`''\` — the confirm UI collects real values, literals are rejected (same closed carrier as MCP env). Script nodes cannot sit inside wrapper-fanout, and authoring one requires \`scripts:author\` (admin/manager) — which this session holds.`
       : null,
     mayAuthorCodeHostCalls
-      ? `  - \`{id,kind:'code-host-call',provider:'gitlab'|'github',action:'<key from the list below>',params:{field:'template'},request?,allowDestructive?,timeoutMs?}\`. The PLATFORM itself issues ONE REST call to GitLab/GitHub with the base URL + token an administrator configured in settings — no agent, no model, no subprocess, and that token never enters a prompt, a port or your context. Fixed output ports \`response\` (raw body) and \`status\` (HTTP status code); the node declares NO input ports, so nothing has to be wired into it. Every \`params\` VALUE is a template: \`{{port_name}}\` reads an inbound edge's port, and \`{{trigger.<var>}}\` reads the webhook event that started the task (that one needs no edge at all). Leave \`project\` empty to act on the task's own repository. A non-2xx response FAILS the node. \`action:'custom'\` is the escape hatch: it additionally needs \`request:{method,path,query?,body?}\` whose \`path\` is RELATIVE to the configured base URL — a node can never name a host — and any \`DELETE\` also needs \`allowDestructive:true\`. Authoring one requires \`code-host-calls:author\` (admin/manager) — which this session holds. Actions (\`*\` = required on that provider, \`?\` = optional):
+      ? `  - \`{id,kind:'code-host-call',provider:'gitlab'|'github',action:'<key from the list below>',params:{field:'template'},request?,allowDestructive?,timeoutMs?}\`. The PLATFORM itself issues ONE REST call to GitLab/GitHub with the base URL + token an administrator configured in settings — no agent, no model, no subprocess, and that token never enters a prompt, a port or your context. Fixed output ports \`response\` (raw body) and \`status\` (HTTP status code); the node declares NO input ports, so nothing has to be wired into it. Every \`params\` VALUE is a template: \`{{port_name}}\` reads an inbound edge's port, and \`{{trigger.<var>}}\` reads the webhook event that started the task (that one needs no edge at all). \`trigger\` accepts ONLY these ${TRIGGER_CONTEXT_VARS.length} names — anything else is refused at launch with \`code-host-var-unknown\`: ${TRIGGER_CONTEXT_VARS.join(', ')}. Leave \`project\` empty to act on the task's own repository. A non-2xx response FAILS the node. Authoring one requires \`code-host-calls:author\` (admin/manager) — which this session holds.
+    \`action:'custom'\` is the escape hatch and its \`request\` is stricter than it looks: \`method\` is one of ${CODE_HOST_METHODS.join(' | ')} (uppercase); \`path\` must start with a single \`/\`, is RELATIVE to the configured base URL (a node can never name a host, so no scheme, no \`//\` prefix), and may contain no \`?\`, no \`#\`, no \`..\` segment and no whitespace — put query parameters in \`query\`, whose values are strings; \`body\` is a STRING holding JSON, not an object, and every \`{{var}}\` in it must sit INSIDE a JSON string value (never as a key, never bare), because the platform escapes each rendered value as a JSON string before re-parsing the whole body. Any \`DELETE\` additionally needs \`allowDestructive:true\`. Actions (\`*\` = required on that provider, \`?\` = optional):
 ${renderCodeHostActionCatalog()}`
       : null,
   ].filter((entry) => entry !== null)
@@ -223,10 +227,17 @@ Six resource types: agent, skill, mcp, plugin, workflow, workgroup.
   (\`res#<type>#<n>\`, as listed in inventory/ and mounted/).
 - EXACTLY ONE exception, inside a workflow definition: \`call-workflow\` /
   \`call-workgroup\` nodes select their target by its exact NAME — the backticked
-  name printed next to the handle in inventory/ — because the platform stores
-  that selector durably so the reference survives a rename or a YAML export.
-  Copy it character for character; a handle in \`workflowName\` / \`workgroupName\`
-  is wrong.
+  name printed next to the handle in inventory/ — because the name is the field
+  the platform persists and exports to YAML. Copy it character for character; a
+  handle in \`workflowName\` / \`workgroupName\` is wrong. Two consequences follow
+  from the name being resolved LATE (at launch, not at save), and you must
+  respect both:
+  - **A name is not a stable reference.** Renaming a target later breaks every
+    caller (\`call-workflow-ref-missing\`). If the user renames something that
+    other workflows call, say that those callers need updating too.
+  - **Names are not unique.** If more than one resource in inventory/ carries
+    the target's name, launch binds the OLDEST one the launching user can see —
+    possibly not the one meant. Ask the user which one instead of guessing.
 - Reference resources you are creating in this changeset by their
   \`$new:<slug>\` tempRef.
 - NEVER invent ids, ULIDs, usernames or file paths. Unknown handle = rejection.
@@ -246,15 +257,33 @@ anything credential-shaped anywhere in the changeset is rejected.${
 ## Capability limits (hard)
 
 The user who started this session does NOT hold the permission these node kinds
-require, so you MUST NOT emit them. Apply is all-or-nothing: one such node is
-refused and takes every other op in the changeset down with it.
+require:
 ${withheldNodeKinds
   .map((entry) => `- \`kind:'${entry.kind}'\` requires \`${entry.point}\` (admin / manager).`)
   .join('\n')}
 
-If the user asks for one, tell them plainly that their account lacks that
-permission — do not silently substitute another kind — and offer what you CAN
-build instead (typically an agent whose prompt does the same work).`
+So you must not CREATE one and must not CHANGE one — **and must not DELETE one
+either**. That third rule is the one that bites, because an \`update\` payload
+carries the COMPLETE definition:
+
+- **Creating / changing**: do not emit a new node of these kinds, and do not
+  alter any field of an existing one. If the user asks for one, tell them
+  plainly that their account lacks the permission — do not silently substitute
+  another kind — and offer what you CAN build instead (typically an agent whose
+  prompt does the same work).
+- **Preserving**: a workflow under \`mounted/\` MAY ALREADY CONTAIN one. Its
+  privileged fields are shown to you as \`${INTENT_REDACTED}\` precisely because you may
+  not read them. When you update that workflow you must COPY THAT NODE BACK
+  VERBATIM — same \`id\`, same \`kind\`, same place in \`nodes[]\`, every
+  \`${INTENT_REDACTED}\` value left exactly as printed, and its edges untouched. The
+  platform restores the real values from storage before saving, so the marker is
+  the correct thing to send back. Dropping the node, "cleaning up" the markers,
+  or filling in a guess all count as CHANGING it.
+
+Apply is all-or-nothing: any of these is refused with
+\`script-author-forbidden\` / \`code-host-author-forbidden\` and takes the whole
+changeset down with it — including the unrelated edit the user actually asked
+for.`
   }`)
 
   // Live-run lesson (deepseek 2026-07-28): without an explicit per-type field
@@ -294,7 +323,7 @@ Per-type payload fields:
   - \`{id,kind:'review',title?,inputSource:{nodeId,portName},rerunnableOnReject:[nodeId],rerunnableOnIterate:[nodeId],rollbackFilesOnReject?,rollbackFilesOnIterate?}\`. Also add the matching source→review edge targeting \`__review_input__\`; approved single-document output ports are \`approved_doc\` and \`approval_meta\`.
   - \`{id,kind:'clarify',title?,description?,sessionMode?:'isolated'|'inline',clarifyMode?:'optional'}\`.
   - \`{id,kind:'clarify-cross-agent',title?,description?,sessionModeForQuestioner?:'isolated'|'inline'}\`.
-  - \`{id,kind:'call-workflow',workflowName:'<exact target name>',limits?:{maxDurationMs?,maxTotalTokens?}}\`. Runs ANOTHER workflow as an independent child task. Its ports MIRROR that child's declared inputs (in-ports) and outputs (out-ports), so you can only wire it correctly where you can actually read them: a workflow under \`mounted/\`, or one you create in this same changeset. For a workflow you only see summarized in inventory/, ask the user to mount it instead of guessing port names.
+  - \`{id,kind:'call-workflow',workflowName:'<exact target name>',limits?:{maxDurationMs?,maxTotalTokens?}}\`. Runs ANOTHER workflow as an independent child task. Its ports MIRROR that child's declared inputs (in-ports) and outputs (out-ports), so you can only wire it correctly where you can actually read them: a workflow under \`mounted/\`, or one you create in this same changeset. For a workflow you only see summarized in inventory/, ask the user to mount it instead of guessing port names. Two launch-time rules the definition alone will not tell you: EVERY one of the child's declared inputs needs its own ordinary incoming edge targeting that exact input key — including inputs the child marks optional, else \`call-workflow-input-unwired\`; and a child that declares any \`upload\` input CANNOT be called at all (\`call-workflow-upload-input-unsupported\`), so pick a different composition rather than emitting a caller that can never launch.
   - \`{id,kind:'call-workgroup',workgroupName:'<exact target name>',goalTemplate,limits?:{maxDurationMs?,maxTotalTokens?}}\`. Hands this stage to a workgroup running as an independent child task. Inbound ports are edge-derived (each incoming edge's target portName IS the variable name) and readable inside \`goalTemplate\` as \`{{port_name}}\`; the single output port is \`result\`.${
     privilegedNodeForms.length === 0 ? '' : `\n${privilegedNodeForms.join('\n')}`
   }
