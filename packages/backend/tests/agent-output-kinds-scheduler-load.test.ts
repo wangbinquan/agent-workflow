@@ -57,19 +57,32 @@ describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045
     expect((loaded?.frontmatterExtra as Record<string, unknown>).outputKinds).toBeUndefined()
   })
 
-  test('scheduler.ts uses the canonical getAgentById loader (no duplicate agent loader)', () => {
+  // ── RFC-271 T6d 显式改判（2026-08-08）────────────────────────────────────
+  // 本用例原本锚定 scheduler.ts 里对 getAgentById 的直接 import 与调用。RFC-271
+  // 决策 29 把三处 agentId 裸读收口到 `services/ref/runtimeRef.ts`，那两处锚点
+  // 搬到了新读取点。
+  //
+  // **守卫的意图不变**：仍然只有一个 canonical loader，没有 scheduler 私有的
+  // agent 加载器（私有加载器要么绕过 outputKinds——就是本文件最初记录的那个
+  // bug——要么在 row→Agent 契约的其余部分漂移）。锚点跟着读取点走。
+  test('the canonical getAgentById loader is the only agent loader', () => {
     const src = readFileSync(SCHEDULER_SRC, 'utf8')
+    const runtimeRef = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'ref', 'runtimeRef.ts'),
+      'utf8',
+    )
 
-    // RFC-127 借壳 imports buildBorrowedAgent alongside getAgentById from the SAME
-    // canonical module — match getAgentById in the agent-service import (don't pin the
-    // exact named list) so the "no duplicate loader" intent survives co-imports.
-    expect(src).toMatch(/import \{[^}]*\bgetAgentById\b[^}]*\} from '@\/services\/agent'/)
-    expect(src).toContain('await getAgentById(db, agentIdRef)')
+    // ① 唯一读取点用的是同一个 canonical module 的 getAgentById。
+    expect(runtimeRef).toMatch(/import \{[^}]*\bgetAgentById\b[^}]*\} from '@\/services\/agent'/)
+    expect(runtimeRef).toContain('await getAgentById(db,')
 
-    // No local re-declaration. A scheduler-private agent loader would either
-    // bypass outputKinds (the original bug) or drift on the rest of the
-    // row→Agent contract (mcp / plugins / dependsOn parsing).
-    expect(src).not.toMatch(/async function loadAgent\s*\(/)
-    expect(src).not.toMatch(/JSON\.parse\(row\.frontmatterExtra\)/)
+    // ② scheduler 不再自己查 agent 行（收口后比原来更严）。
+    expect(src).not.toMatch(/await getAgentById\(db, (aid|agentIdRef)\b/)
+
+    // ③ 两个文件都不许有本地 re-declaration —— 原意图逐条保留。
+    for (const text of [src, runtimeRef]) {
+      expect(text).not.toMatch(/async function loadAgent\s*\(/)
+      expect(text).not.toMatch(/JSON\.parse\(row\.frontmatterExtra\)/)
+    }
   })
 })

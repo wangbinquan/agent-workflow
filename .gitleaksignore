@@ -18,3 +18,12 @@ d96a5c729f71bcdc10531cc8aef6ee7c3885ef94:packages/backend/tests/rfc269-code-host
 a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-connections.test.ts:generic-api-key:195
 a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-connections.test.ts:generic-api-key:228
 a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-execution.test.ts:generic-api-key:69
+
+# RFC-271 配置包脱敏投影的测试夹具。它们是**合成**串（`FAKEtok_` / `FAKEq_`），
+# 用来验证 argv 只换命中项、URL 换值后仍是合法 http URL 这两条判据。
+# 下面三条钉的是最初那版夹具（误用了 `ghp_` 前缀、URL query 用了裸 `token=`，
+# 已改）—— 它们仍在 git 历史里，而 gitleaks detect 扫的是全部历史，改当前文件
+# 消不掉。当前版另有行内 `gitleaks:allow`，未来编辑不会再复发。
+3a262cbbdb97f4644bea5290113d6d29f161c88e:packages/shared/tests/rfc271-bundle-secrets.test.ts:generic-api-key:48
+3a262cbbdb97f4644bea5290113d6d29f161c88e:packages/shared/tests/rfc271-bundle-secrets.test.ts:generic-api-key:65
+3a262cbbdb97f4644bea5290113d6d29f161c88e:packages/shared/tests/rfc271-bundle-secrets.test.ts:generic-api-key:93

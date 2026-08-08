@@ -297,17 +297,33 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
   // The runtime giant (runOneNode) is exercised end-to-end by the workgroup /
   // workflow e2e suites; this pins the id-first resolution so a refactor can’t
   // silently drop back to name-only dispatch (PR-1 left node→agent by name).
+  // ── RFC-271 T6d 显式改判（2026-08-08）────────────────────────────────────
+  // 本用例原本锚定 scheduler.ts 里三行确切文本。RFC-271 决策 29 把三处 agentId
+  // 裸读收口到 `services/ref/runtimeRef.ts` 的单一读取点，那三行不再存在。
+  //
+  // **守卫的意图不变**（id-first、绝不回退 name-only），锚点搬到新读取点；并且
+  // **加强**了：既然只剩一个读取点，就可以断言 scheduler.ts 里**没有任何**直接的
+  // `getAgentById(db, <节点字段>)` 调用——这比原来的三条文本锚更难绕过。
   test('agent-single + wrapper-fanout hydrate only via canonical agentId', () => {
-    const src = readFileSync(
+    const scheduler = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    expect(src).toContain('const nodeAgent = await getAgentById(db, agentIdRef)')
-    expect(src).toContain('const a = aid !== null ? await getAgentById(db, aid) : null')
-    expect(src).not.toContain('await getAgent(db, agentName)')
-    // RFC-223 (PR-3a impl-gate H2): dedup + key the inner-agent map by the
-    // CANONICAL identity (agentId when stamped), NOT the mutable name — so two
-    // same-name different-id inner nodes never collapse onto one agent.
-    expect(src).toContain('const dedupKey = fanoutInnerAgentKey(rec)')
+    const runtimeRef = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'ref', 'runtimeRef.ts'),
+      'utf8',
+    )
+
+    // ① 单一读取点仍然是 id-first：从节点上只取 agentId，再按 id 查行。
+    expect(runtimeRef).toContain('const raw = node.agentId')
+    expect(runtimeRef).toContain('getAgentById(db,')
+    // ② 绝不回退 name-only —— 两个文件都不许出现按名字查 agent。
+    expect(runtimeRef).not.toContain('agentName')
+    expect(scheduler).not.toContain('await getAgent(db, agentName)')
+    // ③ scheduler 不再自己查 agent 行（比原三条文本锚更强的收口断言）。
+    expect(scheduler).not.toMatch(/await getAgentById\(db, (aid|agentIdRef)\b/)
+    // ④ RFC-223 (PR-3a impl-gate H2)：inner-agent map 仍按 CANONICAL identity
+    //    去重，不按可变的 name —— 两个同名不同 id 的 inner 节点绝不塌成一个。
+    expect(scheduler).toContain('const dedupKey = fanoutInnerAgentKey(rec)')
   })
 })

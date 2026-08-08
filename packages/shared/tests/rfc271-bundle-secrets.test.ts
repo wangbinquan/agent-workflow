@@ -8,6 +8,11 @@
 // 只断言「与某个既有脱敏函数一致」是没用的：那只会把同一份不完整集合锁死。
 // 所以这里**逐 carrier** 验证，并对每个 carrier 追加一条 schema 复核。
 
+// ⚠️ 夹具**一律不用真实厂商前缀**（ghp_ / glpat- 等）：gitleaks 扫的是**全部 git
+// 历史**，一旦提交进去，改当前文件消不掉历史里的那一条，只能靠 .gitleaksignore
+// 的 fingerprint 钉住——代价远大于换个字符串。判据走键名与熵，与前缀无关。
+// （docs/dev-gotchas.md 已记这条；本文件初版仍踩了，故在此就地留注。）
+
 import { describe, expect, test } from 'bun:test'
 import { McpLocalConfigSchema, McpRemoteConfigSchema } from '../src/schemas/mcp'
 import {
@@ -25,7 +30,7 @@ const sink = (): RedactionSink => ({ resourceType: 'mcp', resourceName: 'github'
 describe('carrier · env / headers —— 键保留、值收敛', () => {
   test('值全部收敛且逐条进 secrets 索引', () => {
     const s = sink()
-    const out = redactRecord({ GITHUB_TOKEN: 'ghp_real', MODE: 'prod' }, s, 'config.env')
+    const out = redactRecord({ GITHUB_TOKEN: 'FAKE_TOKEN_VALUE', MODE: 'prod' }, s, 'config.env')
     expect(out).toEqual({
       GITHUB_TOKEN: PACKAGE_SECRET_PLACEHOLDER,
       // ⚠️ 连 MODE 也收敛：一个叫 MODE 的环境变量同样可能装着 token，
@@ -45,7 +50,11 @@ describe('carrier · env / headers —— 键保留、值收敛', () => {
 describe('carrier · argv —— 只换命中的那一个，结构与长度不变', () => {
   test('--token=<高熵> 只换值、保留键与 argv 长度', () => {
     const s = sink()
-    const out = redactArgv(['mcp-server', '--port', '8080', '--token=ghp_A1b2C3d4E5f6G7h8I9j0K'], s)
+    // gitleaks:allow — 合成夹具，验证 argv 只换命中项
+    const out = redactArgv(
+      ['mcp-server', '--port', '8080', '--token=FAKEtok_A1b2C3d4E5f6G7h8I9j0K'],
+      s,
+    )
     // ⚠️ dump 投影会把 argv[1..] 全改成 ‹redacted›-arg-N —— 那会摧毁真实命令。
     expect(out[0]).toBe('mcp-server')
     expect(out[1]).toBe('--port')
@@ -62,7 +71,8 @@ describe('carrier · argv —— 只换命中的那一个，结构与长度不�
 
   test('脱敏后仍过 McpLocalConfigSchema（command 至少一个元素）', () => {
     const s = sink()
-    const config = { command: redactArgv(['tool', '--token=ghp_A1b2C3d4E5f6G7h8I9j0K'], s) }
+    // gitleaks:allow — 同上
+    const config = { command: redactArgv(['tool', '--token=FAKEtok_A1b2C3d4E5f6G7h8I9j0K'], s) }
     expect(McpLocalConfigSchema.safeParse(config).success).toBe(true)
   })
 })
@@ -82,15 +92,18 @@ describe('carrier · URL —— 换值但仍是合法 http URL', () => {
 
   test('敏感 query 值被换、非敏感 query 保留', () => {
     const s = sink()
-    const out = redactUrlKeepingShape('https://h.co/p?access_token=abc123XYZ789&mode=fast', s, 'u')
+    // gitleaks:allow — 合成夹具
+    const url = 'https://h.co/p?access_token=FAKEq_abc123XYZ789&mode=fast'
+    const out = redactUrlKeepingShape(url, s, 'u')
     expect(out).toContain('mode=fast')
-    expect(out).not.toContain('abc123XYZ789')
+    expect(out).not.toContain('FAKEq_abc123XYZ789')
   })
 
   test('脱敏后仍过 McpRemoteConfigSchema —— dump 投影在这里必挂', () => {
     const s = sink()
     const config = {
-      url: redactUrlKeepingShape('https://u:p@h.co/sse?token=abc123XYZ789', s, 'config.url'),
+      // gitleaks:allow — 合成夹具
+      url: redactUrlKeepingShape('https://u:p@h.co/sse?token=FAKEq_abc123XYZ789', s, 'config.url'),
       headers: redactRecord({ Authorization: 'Bearer x' }, s, 'config.headers'),
       // ⚠️ oauth 保持**对象**形状。dump 投影把它变成字符串 '‹redacted›' ⇒ 这里必红。
       oauth: { clientId: 'cid', clientSecret: PACKAGE_SECRET_PLACEHOLDER },
@@ -116,7 +129,7 @@ describe('carrier · 自由 JSON（frontmatterExtra / plugin options / 工作流
   test('键名命中 SECRET_KEY_RE 的值被换，其余保留', () => {
     const s = sink()
     const out = redactFreeJson(
-      { github_token: 'ghp_x', note: 'hello', nested: { apiKey: 'k', depth: 2 } },
+      { github_token: 'FAKEv', note: 'hello', nested: { apiKey: 'k', depth: 2 } },
       s,
       'frontmatterExtra',
     ) as Record<string, unknown>

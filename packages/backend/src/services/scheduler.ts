@@ -108,7 +108,9 @@ import {
   taskRepos,
   tasks,
 } from '@/db/schema'
-import { getAgentById } from '@/services/agent'
+// RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
+// `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
+import { fanoutInnerAgentRefKey, resolveNodeAgentRef } from '@/services/ref/runtimeRef'
 import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '@/services/mcpClosure'
 import { collectPluginIdsFromClosure, loadPluginsByIds } from '@/services/pluginClosure'
@@ -203,6 +205,9 @@ import {
 import {
   DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES,
   DEFAULT_COMMIT_PUSH_MAX_REPAIR_RETRIES,
+  // RFC-271 T6d — 两处调用点的归属策略（实测不同，见 runtimeRef.ts 的表）。
+  DISPATCH_CALL_POLICY,
+  FANOUT_HYDRATE_CALL_POLICY,
 } from '@agent-workflow/shared'
 import {
   decodeWrapperProgress,
@@ -5184,21 +5189,24 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     }
   }
 
+  // RFC-271 T6d：解析走统一 resolver（services/ref/runtimeRef.ts），但**两个错误码
+  // 与归属逐字不变**——主派发是节点级失败，与 fanout hydration 的静默跳过不同。
   const agentIdRef = pickString(node, 'agentId')
-  if (agentIdRef === null) {
+  const agentName = pickString(node, 'agentName') ?? agentIdRef ?? node.id
+  const resolvedAgent = await resolveNodeAgentRef(db, node, DISPATCH_CALL_POLICY)
+  if (!resolvedAgent.ok && resolvedAgent.reason === 'missing') {
     return {
       kind: 'failed',
       summary: `node ${node.id} missing canonical agentId`,
       message: 'agent-identity-missing',
     }
   }
-  const agentName = pickString(node, 'agentName') ?? agentIdRef
-  // RFC-223 (T15): persisted workflow identity is the frozen id. A name-only
-  // node is corrupt/quarantined data and was rejected above.
-  const nodeAgent = await getAgentById(db, agentIdRef)
-  if (nodeAgent === null) {
+  if (!resolvedAgent.ok) {
     return { kind: 'failed', summary: `agent '${agentName}' not found`, message: 'agent-not-found' }
   }
+  // RFC-223 (T15): persisted workflow identity is the frozen id. A name-only
+  // node is corrupt/quarantined data and was rejected above.
+  const nodeAgent = resolvedAgent.value
   // RFC-132 ③ (借壳收官): the borrow ledgers are move-semantics (RFC-131 T4) and the immediate
   // ledger is deleted, so resolveBorrowForNode never returns an agent anymore — its remaining
   // job is the multi-ledger duplicate-execution REJECT (designer + dispatched self/q both open
@@ -6940,7 +6948,9 @@ export function fanoutInnerAgentKey(node: {
   agentId?: unknown
   agentName?: unknown
 }): string | null {
-  return typeof node.agentId === 'string' && node.agentId.length > 0 ? node.agentId : null
+  // RFC-271 T6d：判据收到 `services/ref/runtimeRef.ts` 的单一读取点。
+  // 语义与返回值逐字不变——name-only 节点仍返回 null 并 fail closed。
+  return fanoutInnerAgentRefKey(node)
 }
 
 async function runFanoutWrapperNode(
@@ -6994,11 +7004,14 @@ async function runFanoutWrapperNode(
     const inner = definition.nodes.find((n) => n.id === id)
     if (inner === undefined) continue
     const rec = inner as Record<string, unknown>
-    const aid = typeof rec.agentId === 'string' && rec.agentId.length > 0 ? rec.agentId : null
+    // RFC-271 T6d：此处原本内联重算了一遍与 `fanoutInnerAgentKey` 完全相同的判据
+    // （紧接着的下一行又调了它），现在只留一次。
     const dedupKey = fanoutInnerAgentKey(rec)
     if (dedupKey === null || agentsMap.has(dedupKey)) continue
-    const a = aid !== null ? await getAgentById(db, aid) : null
-    if (a !== null) agentsMap.set(dedupKey, a)
+    // ⚠️ 归属：hydration **静默跳过**缺失/查不到的 ref（FANOUT_HYDRATE_CALL_POLICY），
+    // 与主派发的「节点失败」不同——这是实测差异，不是笔误。
+    const resolved = await resolveNodeAgentRef(db, rec, FANOUT_HYDRATE_CALL_POLICY)
+    if (resolved.ok) agentsMap.set(dedupKey, resolved.value)
   }
 
   // 3. Wrapper row resume / mint (mirrors wrapper-git pattern).
