@@ -359,6 +359,18 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   一致，可以确定判据就是「机器满载 ⇒ 那条 MutationObserver 效果链吃不下 5s」。按仓规登记而不是拿
   「重跑就过」当结论。建议 owner 换成事件驱动的等待锚点（或再提预算），不宜由无关改动顺手改测试。
 
+- ⏳ **非 owner 打开别人的工作流：编辑器完全可交互，第一次自动保存才 403，且文案是错的**
+  （2026-08-08 用户实报，**非 RFC-270 引入** —— `assertPrincipalCanWritePreflight` 的
+  `only the workflow owner or an admin can modify it` 在 `7174013b` 及更早就在，两处）。
+  后端逻辑是对的：普通用户能看别人的公共工作流，但不能改。错的是前台没对齐这条边界 ——
+  画布让他随便拖、随便改，`healLoadedDefinition` 在打开时就可能打出第一发自动保存，然后吃
+  一个不带 code 的 403，被判成 `inaccessible`，弹出「无法继续访问此工作流 / 此工作流可能已
+  删除或权限已变化」。**那句话两条都不成立**：工作流既没删，权限也没变，他从来就没有写权限。
+  正解与 RFC-270 同款两层：①编辑器对非 owner 进入只读态（画布不可拖不可改、Inspector 只读），
+  ②`forbidden` 这一码单独分流出自己的文案（「你没有修改此工作流的权限，可另存为副本」），
+  别再复用「可能已删除」。**注意**：修的时候要连 `workflows.edit.tsx:1400` 的
+  `isWorkflowAccessLoss`（GET 侧 `403 || 404`）一起想清楚 —— 那里的 403 也可能是「看得见但改不了」。
+
 - ⏳ **RFC-270 遗留：被遮蔽读者的 `snapshotHash` 不对称（已知、显式不修）**。后端
   `workflowSnapshotHashOf` 与前端 `hashWorkflowDraftSnapshot` 是同一个算法，脱敏之后被遮用户
   本地算出的 hash 与服务端返回的不再相等。影响面逐处核过**只有一处**：
