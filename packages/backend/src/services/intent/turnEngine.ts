@@ -44,7 +44,8 @@ import { markProductionOpencodeCommand } from '@/util/opencode'
 import type { ResolvedRuntime } from '@/services/runtimeRegistry'
 import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
-import { buildIntentDoc, type IntentDocTurn } from './intentDoc'
+import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
+import { buildIntentDoc, privilegesFromLens, type IntentDocTurn } from './intentDoc'
 import { validateDraftChangeset } from './resolveChangeset'
 import {
   assertNoUnsettledApply,
@@ -418,6 +419,11 @@ export async function runIntentTurn(
         deps.config.lang === null
           ? 'Write generated artifact prose (descriptions, prompts) in the language the user used in their intent.'
           : `Write generated artifact prose (descriptions, prompts) in: ${deps.config.lang}.`,
+      // RFC-253 / RFC-269 — derive from the SAME lens the read redaction and the
+      // two author gates read, inverted once here. Recomputing the two
+      // `permissions.has(...)` checks locally would be a second source of truth
+      // for "may this session author privileged nodes".
+      privileges: privilegesFromLens(privilegedNodeLensFor(input.actor)),
     })
 
     // Protocol tail: the SHARED block renders "list ALL these ports" with a

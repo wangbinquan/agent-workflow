@@ -706,3 +706,63 @@ describe('RFC-237 claude-code intent turn', () => {
     expect(drafts.length).toBe(1)
   })
 })
+
+// ---------------------------------------------------------------------------
+// The privileged-node forms in INTENT.md must follow the REQUESTING ACTOR.
+//
+// intentDoc.test.ts proves the doc renders both ways; this proves the engine
+// actually asks. A hardcoded `privileges: {all true}` here would keep every
+// doc-level test green while teaching a plain `role:'user'` session to emit
+// script / code-host-call nodes that apply then refuses as a whole — the exact
+// wasted-turn this split exists to prevent.
+// ---------------------------------------------------------------------------
+describe('INTENT.md privileged node forms track the actor’s permissions', () => {
+  async function docFor(seedActor: Actor): Promise<string> {
+    const { session } = await createIntentSession(db, seedActor, { message: 'build something' })
+    let seenDoc = ''
+    const outcome = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((opts, nonce) => {
+          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+        }),
+      },
+      { sessionId: session.id, actor: seedActor },
+    )
+    expect(outcome.kind).toBe('changeset')
+    return seenDoc
+  }
+
+  test('a plain user is taught neither form and told which permission is missing', async () => {
+    const doc = await docFor(actor)
+    expect(doc).not.toContain("{id,kind:'script'")
+    expect(doc).not.toContain("{id,kind:'code-host-call'")
+    expect(doc).toContain('Capability limits (hard)')
+    expect(doc).toContain('scripts:author')
+    expect(doc).toContain('code-host-calls:author')
+  })
+
+  test('an author-permitted actor is taught both, with no capability-limits section', async () => {
+    const doc = await docFor({
+      ...actor,
+      permissions: new Set(['scripts:author', 'code-host-calls:author'] as const),
+    })
+    expect(doc).toContain("{id,kind:'script'")
+    expect(doc).toContain("{id,kind:'code-host-call'")
+    expect(doc).toContain('`comment.reply-thread`') // the derived action catalog rides along
+    expect(doc).not.toContain('Capability limits (hard)')
+  })
+
+  test('the two permissions are independent end-to-end', async () => {
+    const doc = await docFor({
+      ...actor,
+      permissions: new Set(['scripts:author'] as const),
+    })
+    expect(doc).toContain("{id,kind:'script'")
+    expect(doc).not.toContain("{id,kind:'code-host-call'")
+    expect(doc).toContain('code-host-calls:author')
+  })
+})

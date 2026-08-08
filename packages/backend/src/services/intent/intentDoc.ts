@@ -17,7 +17,19 @@
 //  - The document teaches the exact output contract (ports, handle grammar,
 //    secret sentinel, size bounds) so schema rejections stay rare.
 
-import { INTENT_LIMITS, fenceUntrusted, type IntentQuestion } from '@agent-workflow/shared'
+import {
+  CODE_HOST_PROVIDERS,
+  INTENT_LIMITS,
+  codeHostActionDef,
+  codeHostActionFields,
+  codeHostActionSupported,
+  codeHostActionsByGroup,
+  codeHostRequiredFields,
+  fenceUntrusted,
+  isUnsupportedBinding,
+  type IntentQuestion,
+  type PrivilegedNodeLens,
+} from '@agent-workflow/shared'
 
 export const RECENT_TURNS_VERBATIM = 8
 const HISTORY_VERBATIM_TURN_CAP_BYTES = 16 * 1024
@@ -28,6 +40,32 @@ export interface IntentDocTurn {
   kind: 'message' | 'answers' | 'mount-approval' | 'questions' | 'changeset' | 'error'
   /** Display text: message text / summary / structured JSON for answers. */
   text: string
+}
+
+/**
+ * RFC-253 / RFC-269 — 会话发起者手上有没有两个特权节点的创作权。
+ *
+ * 这不是排版偏好，是**别让用户白跑一轮**：两类节点的落库门在持久化原语上
+ * （`scriptAuthorGate` / `codeHostAuthorGate`），一个 `role:'user'` 的发起者拿不
+ * 到 `scripts:author` / `code-host-calls:author`，模型就算把节点写得完全正确，
+ * 整包 changeset 也在 apply 时 403 —— 而一轮 intent 是一次真实的模型进程。所以
+ * 无权限时形态根本不进 doc，另换一条明确的禁令，让模型改为跟用户解释。
+ *
+ * 取值由 `privilegedNodeLensFor(actor)` 取反而来（turnEngine），与两个写门读的是
+ * 同一个 `actor.permissions`，因此不可能漂移出「doc 教了但存不下」的组合。
+ */
+export interface IntentDocPrivileges {
+  mayAuthorScripts: boolean
+  mayAuthorCodeHostCalls: boolean
+}
+
+/**
+ * The lens says "redact this" (`true` = the actor may NOT author); the doc wants
+ * the positive capability. Flip it in exactly one place so the two spellings can
+ * never drift apart.
+ */
+export function privilegesFromLens(lens: PrivilegedNodeLens): IntentDocPrivileges {
+  return { mayAuthorScripts: !lens.scripts, mayAuthorCodeHostCalls: !lens.codeHost }
 }
 
 export interface IntentDocInput {
@@ -43,6 +81,7 @@ export interface IntentDocInput {
   envelopeNonce: string
   /** Output language directive (config intentBuilderLang or mirror-input). */
   langDirective: string
+  privileges: IntentDocPrivileges
 }
 
 function clip(text: string, capBytes: number): { text: string; truncated: boolean } {
@@ -82,8 +121,70 @@ export function renderHistory(turns: readonly IntentDocTurn[], nonce: string): s
   return lines.join('\n')
 }
 
+/**
+ * RFC-269 的动作目录，**从注册表派生**而不是手抄一份进 prompt。
+ *
+ * 手抄的那天注册表一改 doc 就静默过期，模型继续按旧清单生成——这正是
+ * `code-host-call` 整类节点最初在 doc 里全缺席的同一类漂移（RFC-253 补 script
+ * 形态时立过先例，RFC-269 / RFC-243 落地时没跟上）。派生还顺带保证「必填字段」
+ * 与校验器读的是同一个 `codeHostRequiredFields`，模型照着 doc 填就撞不上
+ * `code-host-param-missing`；`select` 字段直接把合法取值摊开，避免
+ * `code-host-param-invalid`。
+ *
+ * `*` = 该 provider 必填，`?` = 可选。unsupported 如实写出来而不是隐去该动作：
+ * 模型需要知道「这件事在 GitHub 上做不到」才能改口跟用户解释，而不是换个动作瞎试。
+ */
+function renderCodeHostActionCatalog(): string {
+  const lines: string[] = []
+  for (const { group, actions } of codeHostActionsByGroup()) {
+    for (const action of actions) {
+      const perProvider = CODE_HOST_PROVIDERS.map((provider) => {
+        if (!codeHostActionSupported(action, provider)) {
+          const binding = codeHostActionDef(action).bindings[provider]
+          const reason = isUnsupportedBinding(binding) ? binding.reasonKey : 'unsupported'
+          return `${provider}: UNSUPPORTED (${reason})`
+        }
+        const required = new Set<string>(codeHostRequiredFields(action, provider))
+        const fields = codeHostActionFields(action, provider).map((field) => {
+          const options =
+            field.control === 'select' && field.options !== undefined
+              ? `(${field.options.join('|')})`
+              : ''
+          return `${field.name}${required.has(field.name) ? '*' : '?'}${options}`
+        })
+        return `${provider}: ${fields.length === 0 ? '(no fields)' : fields.join(', ')}`
+      })
+      lines.push(`    - \`${action}\` [${group}] — ${perProvider.join(' · ')}`)
+    }
+  }
+  return lines.join('\n')
+}
+
 export function buildIntentDoc(input: IntentDocInput): string {
   const sections: string[] = []
+  const { mayAuthorScripts, mayAuthorCodeHostCalls } = input.privileges
+  // The overview must not advertise a kind whose FORM the doc then withholds:
+  // a model told "script nodes exist" but shown no field list invents one.
+  const privilegedOverview = [
+    mayAuthorScripts ? 'script (inline code, no model)' : null,
+    mayAuthorCodeHostCalls ? 'code-host-call (one GitLab/GitHub API call)' : null,
+  ].filter((entry) => entry !== null)
+  const privilegedNodeForms = [
+    mayAuthorScripts
+      ? `  - \`{id,kind:'script',language:'python'|'bash'|'node',script,outputs?:[{name,kind?}],dependencies?:[string],env?:{KEY:'‹secret›'},network?:'allow'|'deny',readonly?:boolean}\`. Runs \`script\` inline in the task worktree — no agent, no model. Inbound port values arrive as env vars \`AW_PORT_<PORT>\` (port name uppercased, chars outside [A-Z0-9_] folded to \`_\`); they are NEVER substituted into the body, so read them from the environment. Absent/empty \`outputs\` ⇒ one implicit port \`stdout\` = raw stdout; non-empty ⇒ the script must print \`<workflow-output nonce="$AW_ENVELOPE_NONCE"><port name="…">…</port></workflow-output>\`; \`path<…>\` output kinds are unsupported. \`dependencies\` must pin exact versions (pip \`pkg==1.2.3\` / npm \`pkg@1.2.3\`); bash declares none. \`env\` VALUES must be \`'‹secret›'\` or \`''\` — the confirm UI collects real values, literals are rejected (same closed carrier as MCP env). Script nodes cannot sit inside wrapper-fanout, and authoring one requires \`scripts:author\` (admin/manager) — which this session holds.`
+      : null,
+    mayAuthorCodeHostCalls
+      ? `  - \`{id,kind:'code-host-call',provider:'gitlab'|'github',action:'<key from the list below>',params:{field:'template'},request?,allowDestructive?,timeoutMs?}\`. The PLATFORM itself issues ONE REST call to GitLab/GitHub with the base URL + token an administrator configured in settings — no agent, no model, no subprocess, and that token never enters a prompt, a port or your context. Fixed output ports \`response\` (raw body) and \`status\` (HTTP status code); the node declares NO input ports, so nothing has to be wired into it. Every \`params\` VALUE is a template: \`{{port_name}}\` reads an inbound edge's port, and \`{{trigger.<var>}}\` reads the webhook event that started the task (that one needs no edge at all). Leave \`project\` empty to act on the task's own repository. A non-2xx response FAILS the node. \`action:'custom'\` is the escape hatch: it additionally needs \`request:{method,path,query?,body?}\` whose \`path\` is RELATIVE to the configured base URL — a node can never name a host — and any \`DELETE\` also needs \`allowDestructive:true\`. Authoring one requires \`code-host-calls:author\` (admin/manager) — which this session holds. Actions (\`*\` = required on that provider, \`?\` = optional):
+${renderCodeHostActionCatalog()}`
+      : null,
+  ].filter((entry) => entry !== null)
+  // A withheld kind must be stated, not silently absent: the user CAN ask for
+  // one, and "I was not taught that form" would read as the platform lacking
+  // the feature. Naming the permission is what lets them go get it.
+  const withheldNodeKinds = [
+    mayAuthorScripts ? null : { kind: 'script', point: 'scripts:author' },
+    mayAuthorCodeHostCalls ? null : { kind: 'code-host-call', point: 'code-host-calls:author' },
+  ].filter((entry) => entry !== null)
   // Codex impl-gate P1-4: the title is user-authored (derived from their first
   // message) — it must be fenced like any other untrusted text, not spliced
   // into the system-authored heading.
@@ -105,8 +206,12 @@ Six resource types: agent, skill, mcp, plugin, workflow, workgroup.
   output ports; it may reference skills / mcp / plugins / other agents.
 - A **workflow** is a static DAG: agent-single nodes (each runs one agent with
   a prompt template), input/output nodes, wrapper-git / wrapper-loop /
-  wrapper-fanout containers, review (human approval) and clarify nodes.
+  wrapper-fanout containers, review (human approval) and clarify nodes, plus
+  call-workflow / call-workgroup, which delegate a stage to an independent child
+  task${privilegedOverview.length === 0 ? '' : `, and ${privilegedOverview.join(' / ')}`}.
   Wrappers list inner node ids in \`nodeIds\`; nodes stay flat in \`nodes[]\`.
+  "Supported node forms" under Payload schemas is EXHAUSTIVE — a kind absent
+  from it does not exist for you, whatever the platform may support elsewhere.
 - A **workgroup** is a roster of agent/human members with a mode
   (leader_worker | free_collab | dynamic_workflow) and a charter.
 - A **skill** is a directory: SKILL.md (authored via \`bodyMd\`) + auxiliary
@@ -116,6 +221,12 @@ Six resource types: agent, skill, mcp, plugin, workflow, workgroup.
 
 - Reference existing resources ONLY by their session handle
   (\`res#<type>#<n>\`, as listed in inventory/ and mounted/).
+- EXACTLY ONE exception, inside a workflow definition: \`call-workflow\` /
+  \`call-workgroup\` nodes select their target by its exact NAME — the backticked
+  name printed next to the handle in inventory/ — because the platform stores
+  that selector durably so the reference survives a rename or a YAML export.
+  Copy it character for character; a handle in \`workflowName\` / \`workgroupName\`
+  is wrong.
 - Reference resources you are creating in this changeset by their
   \`$new:<slug>\` tempRef.
 - NEVER invent ids, ULIDs, usernames or file paths. Unknown handle = rejection.
@@ -127,7 +238,24 @@ Six resource types: agent, skill, mcp, plugin, workflow, workgroup.
 
 Credential-bearing fields (MCP env values / remote headers) must be the exact
 sentinel \`‹secret›\` — the user fills real values at confirm time. Emitting
-anything credential-shaped anywhere in the changeset is rejected.`)
+anything credential-shaped anywhere in the changeset is rejected.${
+    withheldNodeKinds.length === 0
+      ? ''
+      : `
+
+## Capability limits (hard)
+
+The user who started this session does NOT hold the permission these node kinds
+require, so you MUST NOT emit them. Apply is all-or-nothing: one such node is
+refused and takes every other op in the changeset down with it.
+${withheldNodeKinds
+  .map((entry) => `- \`kind:'${entry.kind}'\` requires \`${entry.point}\` (admin / manager).`)
+  .join('\n')}
+
+If the user asks for one, tell them plainly that their account lacks that
+permission — do not silently substitute another kind — and offer what you CAN
+build instead (typically an agent whose prompt does the same work).`
+  }`)
 
   // Live-run lesson (deepseek 2026-07-28): without an explicit per-type field
   // spec the model invents payload keys (systemPrompt/outputPorts/handle/…),
@@ -166,7 +294,10 @@ Per-type payload fields:
   - \`{id,kind:'review',title?,inputSource:{nodeId,portName},rerunnableOnReject:[nodeId],rerunnableOnIterate:[nodeId],rollbackFilesOnReject?,rollbackFilesOnIterate?}\`. Also add the matching source→review edge targeting \`__review_input__\`; approved single-document output ports are \`approved_doc\` and \`approval_meta\`.
   - \`{id,kind:'clarify',title?,description?,sessionMode?:'isolated'|'inline',clarifyMode?:'optional'}\`.
   - \`{id,kind:'clarify-cross-agent',title?,description?,sessionModeForQuestioner?:'isolated'|'inline'}\`.
-  - \`{id,kind:'script',language:'python'|'bash'|'node',script,outputs?:[{name,kind?}],dependencies?:[string],env?:{KEY:'‹secret›'},network?:'allow'|'deny',readonly?:boolean}\`. Runs \`script\` inline in the task worktree — no agent, no model. Inbound port values arrive as env vars \`AW_PORT_<PORT>\` (port name uppercased, chars outside [A-Z0-9_] folded to \`_\`); they are NEVER substituted into the body, so read them from the environment. Absent/empty \`outputs\` ⇒ one implicit port \`stdout\` = raw stdout; non-empty ⇒ the script must print \`<workflow-output nonce="$AW_ENVELOPE_NONCE"><port name="…">…</port></workflow-output>\`; \`path<…>\` output kinds are unsupported. \`dependencies\` must pin exact versions (pip \`pkg==1.2.3\` / npm \`pkg@1.2.3\`); bash declares none. \`env\` VALUES must be \`'‹secret›'\` or \`''\` — the confirm UI collects real values, literals are rejected (same closed carrier as MCP env). Script nodes cannot sit inside wrapper-fanout, and a changeset containing one only applies if the requesting user holds \`scripts:author\` (admin/manager).
+  - \`{id,kind:'call-workflow',workflowName:'<exact target name>',limits?:{maxDurationMs?,maxTotalTokens?}}\`. Runs ANOTHER workflow as an independent child task. Its ports MIRROR that child's declared inputs (in-ports) and outputs (out-ports), so you can only wire it correctly where you can actually read them: a workflow under \`mounted/\`, or one you create in this same changeset. For a workflow you only see summarized in inventory/, ask the user to mount it instead of guessing port names.
+  - \`{id,kind:'call-workgroup',workgroupName:'<exact target name>',goalTemplate,limits?:{maxDurationMs?,maxTotalTokens?}}\`. Hands this stage to a workgroup running as an independent child task. Inbound ports are edge-derived (each incoming edge's target portName IS the variable name) and readable inside \`goalTemplate\` as \`{{port_name}}\`; the single output port is \`result\`.${
+    privilegedNodeForms.length === 0 ? '' : `\n${privilegedNodeForms.join('\n')}`
+  }
   Ordinary edges: \`{id,source:{nodeId,portName},target:{nodeId,portName}}\`. A fanout boundary edge additionally has \`boundary:'wrapper-input'|'wrapper-output'\`: wrapper-input runs from wrapper declared input → inner agent input; wrapper-output runs from inner aggregator output → wrapper outlet. An input node's out-port = its inputKey; an agent's out-ports = its \`outputs\`; prompt templates read inbound ports as \`{{port_name}}\`.
 - **workgroup**: \`{name, description, instructions, mode:'leader_worker'|'free_collab'|'dynamic_workflow', leaderDisplayName?, members:[{memberType:'agent', agentRef: ref, displayName, roleDesc} | {memberType:'human', displayName, roleDesc}], switches?:{shareOutputs:boolean,directMessages:boolean,blackboard:boolean}, maxRounds?:integer(1..1000), completionGate?:boolean, clarifyBudget?:integer(0..50), fanOut?:boolean}\`. Human members are placeholders — never real usernames. Visibility choices must be encoded structurally: for “private direct messages + public blackboard”, set \`switches:{shareOutputs:true,directMessages:true,blackboard:true}\`; prose in \`instructions\` does not change runtime switches.
 

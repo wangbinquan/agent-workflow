@@ -725,3 +725,151 @@ describe('applyIntentChangeset', () => {
     })
   }
 })
+
+// ---------------------------------------------------------------------------
+// RFC-243 §5.3 in the intent CREATE path.
+//
+// call-workflow / call-workgroup select their target by NAME, and a name is not
+// an authorization. Every other workflow INSERT re-checks that the writer can
+// actually see the referenced row — createWorkflow (services/workflow.ts:200),
+// copyWorkflow (:278), the save path (:526) — but the intent create path only
+// ever checked agent refs. It was unreachable while INTENT.md withheld the two
+// call kinds; documenting them is exactly what makes it reachable, so the check
+// and the docs have to land together.
+//
+// Name domain stays dangle-tolerant: an unresolvable name is launch-time's
+// problem, not an ACL violation.
+// ---------------------------------------------------------------------------
+describe('intent create path enforces call-ref visibility (RFC-243 §5.3)', () => {
+  const OTHER = 'user_other_apply_000000000'
+
+  async function seedWorkflow(
+    name: string,
+    ownerUserId: string,
+    visibility: 'public' | 'private',
+  ): Promise<string> {
+    const id = ulid()
+    const now = Date.now()
+    await db.insert(workflows).values({
+      id,
+      name,
+      description: '',
+      definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
+      version: 1,
+      ownerUserId,
+      visibility,
+      builtin: false,
+      createdAt: now,
+      updatedAt: now,
+    } as typeof workflows.$inferInsert)
+    return id
+  }
+
+  async function seedWorkgroup(
+    name: string,
+    ownerUserId: string,
+    visibility: 'public' | 'private',
+  ): Promise<string> {
+    const id = ulid()
+    const now = Date.now()
+    await db.insert(workgroups).values({
+      id,
+      name,
+      description: '',
+      instructions: 'work',
+      mode: 'leader_worker',
+      ownerUserId,
+      visibility,
+      createdAt: now,
+      updatedAt: now,
+    } as typeof workgroups.$inferInsert)
+    return id
+  }
+
+  function callBundle(node: Record<string, unknown>): unknown {
+    return {
+      $schema_version: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          action: 'create',
+          resourceType: 'workflow',
+          tempRef: '$new:caller',
+          payload: {
+            name: 'caller-flow',
+            description: '',
+            definition: { $schema_version: 4, inputs: [], nodes: [node], edges: [] },
+          },
+        },
+      ],
+    }
+  }
+
+  async function applyCall(node: Record<string, unknown>): Promise<unknown> {
+    const { session } = await createIntentSession(db, actor, { message: 'call something' })
+    const draft = installDraft(session.id, callBundle(node), [])
+    return applyIntentChangeset(deps(), {
+      sessionId: session.id,
+      clientMutationId: ulid(),
+      ...draft,
+      decisions: [],
+    })
+  }
+
+  test('call-workflow naming another user’s private workflow is refused, nothing lands', async () => {
+    await seedUser(OTHER, 'other')
+    await seedWorkflow('secret-flow', OTHER, 'private')
+
+    await expect(
+      applyCall({ id: 'n1', kind: 'call-workflow', workflowName: 'secret-flow' }),
+    ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+    // all-or-nothing: the caller workflow must not exist either
+    expect((await db.select().from(workflows)).length).toBe(1) // only the seeded one
+  })
+
+  test('call-workgroup naming another user’s private workgroup is refused', async () => {
+    await seedUser(OTHER, 'other')
+    await seedWorkgroup('secret-squad', OTHER, 'private')
+
+    await expect(
+      applyCall({
+        id: 'n1',
+        kind: 'call-workgroup',
+        workgroupName: 'secret-squad',
+        goalTemplate: 'do it',
+      }),
+    ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+    expect((await db.select().from(workgroups)).length).toBe(1)
+  })
+
+  test('a workflow the actor owns is referenceable', async () => {
+    await seedWorkflow('my-flow', OWNER, 'private')
+    const receipt = (await applyCall({
+      id: 'n1',
+      kind: 'call-workflow',
+      workflowName: 'my-flow',
+    })) as { applied: unknown[] }
+    expect(receipt.applied.length).toBe(1)
+    expect((await db.select().from(workflows)).length).toBe(2)
+  })
+
+  test('a public workflow is referenceable', async () => {
+    await seedUser(OTHER, 'other')
+    await seedWorkflow('shared-flow', OTHER, 'public')
+    const receipt = (await applyCall({
+      id: 'n1',
+      kind: 'call-workflow',
+      workflowName: 'shared-flow',
+    })) as { applied: unknown[] }
+    expect(receipt.applied.length).toBe(1)
+  })
+
+  test('an unresolvable name stays dangle-tolerant (launch validates it, not ACL)', async () => {
+    const receipt = (await applyCall({
+      id: 'n1',
+      kind: 'call-workflow',
+      workflowName: 'does-not-exist-anywhere',
+    })) as { applied: unknown[] }
+    expect(receipt.applied.length).toBe(1)
+  })
+})

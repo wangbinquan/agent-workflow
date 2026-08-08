@@ -99,7 +99,11 @@ import {
   type PreparedWorkgroupCreate,
   type PreparedWorkgroupSave,
 } from '@/services/workgroups'
-import { assertRefsUsableInTx } from '@/services/resourceRefs'
+import {
+  assertRefsUsableInTx,
+  extractWorkflowWorkflowRefs,
+  extractWorkflowWorkgroupRefs,
+} from '@/services/resourceRefs'
 import { type IntentContextManifest, type IntentFence, type IntentManifestEntry } from './manifest'
 import { resolveIntentBundle, type IntentDecision, type ResolvedIntentOp } from './resolveChangeset'
 import { sessionManifest } from './session'
@@ -763,6 +767,25 @@ async function applyInner(
                 names: (item.definition.nodes ?? [])
                   .filter((n) => n.kind === 'agent-single' && typeof n.agentId === 'string')
                   .map((n) => n.agentId as string),
+              },
+              // RFC-243 §5.3 — call-workflow / call-workgroup select by NAME, and
+              // a name is not an authorization: without these two rows the intent
+              // create path is the only workflow INSERT that lets an actor adopt a
+              // reference to a resource they cannot see (createWorkflow checks all
+              // three at services/workflow.ts:200, copyWorkflow at :278, and the
+              // save path re-diffs them at :526). It was unreachable only because
+              // INTENT.md never taught the two call kinds; teaching them is what
+              // makes it reachable. Name domain tolerates dangling in-tx, so a
+              // target created earlier in this same bundle still passes.
+              {
+                type: 'workflow',
+                names: extractWorkflowWorkflowRefs(item.definition),
+                domain: 'name',
+              },
+              {
+                type: 'workgroup',
+                names: extractWorkflowWorkgroupRefs(item.definition),
+                domain: 'name',
               },
             ])
             const row = insertWorkflowInTx(tx, {
