@@ -423,6 +423,10 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   一个 turn。继续加超时是治标；正解是等一个**事件驱动**的锚点（例如 `findBy*` 配合真实的 commit 信号）
   而不是轮询 `checked`。该测试只 import 自建 QueryClient / api / clarify libs / auth store / i18n，
   与 RFC-270 改动无任何 import 路径相连。
+  **复发频次值得注意**：仅 RFC-270 实施期的 6 次 CI 里它就红了 **3 次**（ubuntu shard 3/3 为主，
+  耗时稳定压在 10026 / 10033ms —— 即正好越过它自己的 10s 预算），已是本仓命中率最高的一条。
+  继续加超时只会把这个数字往后推；根因是拿轮询式 `waitFor` 等一个**原生监听器 → 受控 radio 的
+  React commit**跨 turn 的效果，满载 runner 上随时越线。
   **unsaved-guard 那条仍未决**，留给 RFC-250 owner：建议换更稳的等待锚点（`findBy*` 而非 `waitFor` + `queryBy`），不宜由无关改动顺手改测试。
   **2026-08-08 复现（RFC-270 push `c584d6bb`）**：同一测试同一 `test.each` 分支（`ESC`）在 **windows-latest shard 1/3** 又红一次，耗时 `5178ms`，而同文件的 `×` 分支同一 run 里 187ms 通过 —— 两条走的是同一个 helper，27 倍的耗时差说明是时序而非逻辑。**归属不变**（该测试自建路由树，只 import `__root` / `ResourceSplitPage` / `splitDirty` / auth store / i18n，**不 import** 任何 RFC-270 改动的模块），且现在已知它**不是 macOS 独有**，两个 OS 都能命中。
 - ⏳ **存量任务的 canonical worktree 指向 `iso/` 的成因未定（2026-08-04 Linux 部署事故）**：真实
