@@ -133,15 +133,23 @@ W1**。name-only 一开始就错选 W1；id-only 会继续跟着已改名的 W2�
   `requirements.projectSkills=['repo-lint']` 会**丢掉 A→skill 这条边**——导入后不给任何代理
   则 A 能力丢失，给所有代理则 B 拿到了它原本没有的能力。
 
-  **修法**：agent 的 `skills` 槽单独一个域 codec
+  **修法**：agent 的 `skills` 槽单独一个域 codec，**并把两个分支的 wire / lowering /
+  raising 全部写死**（R9-P1-1：v10 只给了类型并集，实现者据此写不出来）：
 
   ```ts
   BundleAgentSkillRef = BundleIdentityRef | ProjectSkillRef
+  ProjectSkillRef wire = "project:<name>"      // 与 local:/external:/name: 同族前缀
   ```
 
-  `project-skill` **只在这一个槽**合法（其余槽仍拒绝），并保留 `requirements.projectSkills`
-  作为**环境要求声明**（导入方要自备该仓内技能），两者不是二选一：边在 payload 里，
-  要求在 manifest 里。
+  | 正式 `AgentSkillRef` | ↓ lowering（导出） | ↑ raising（导入） |
+  |---|---|---|
+  | `{kind:'managed', skillId}` | `local:<slug>`（闭包内）或 `external:<token>` | 解析出 id 后写回 **`{kind:'managed', skillId:<解析到的 id>}`** |
+  | `{kind:'project', name}` | **`project:<name>`** | **原样写回 `{kind:'project', name}`** ——**不走 `resolveExternal`、不查 ACL、不查 row**（它本来就没有行） |
+
+  `project-skill` **只在这一个槽**合法（其余槽仍拒绝）。`requirements.projectSkills` 只是
+  **环境要求声明**，**不能替代 payload 里的边**——两者都要有：边在 payload、要求在 manifest。
+
+  测试：两个分支各一条**字节级 round-trip**（导出→导入后与原 `AgentSkillRef` 逐字节相同）。
 
   **并规定：T1 的三个 Bundle schema 是 T6a 域 codec 的 alias / re-export，不是第二套
   parser。**（否则「归一化」在自己 RFC 内部就分叉了。）
@@ -180,7 +188,7 @@ interface RefResolution<T> {
   freeze: 'per-task' | 'none'
   aclAt: 'launch' | 'save' | 'none'
   // 调用级：同域不同目的行为不同
-  purpose: 'dispatch' | 'validate' | 'preview'
+  purpose: 'dispatch' | 'validate' | 'preview' | 'export'
   onMissing: 'fail' | 'skip' | 'dangle'
   failureOwner: 'node' | 'wrapper' | 'task' | 'caller'
   /** parse 与 resolve 分开；resolve 返回 typed Result，**不 throw** ——
@@ -225,18 +233,55 @@ interface RefResolution<T> {
 | **4** | **`detectCallCycles`（`workflowCalls.ts:88-101`）** | resolver 签名是 **`(name: string)`**，把 `nodeId` 与 `workflowId` **整个丢掉** | 签名收完整 `CallRef` + source id——否则**表示不了「同名两条指向不同目标的边」** |
 | **5** | **`loadCallWorkflowClosure`（`workflow.validator.ts:207-255`）** + 其消费点（`:563-571` / `:830-840` / `:2709-2719`） | 按 name 取**最老行** | 采用与启动**同一条** id-hint-first 判据 |
 
+#### 1.1c''' 三个验证语境，「同一行」不是无条件不变量（R9-P1-3）
+
+**已核实**：`loadWorkflowValidationContext(db, candidate?)`（`workflow.validator.ts:149`）
+**不收 Actor**，查所有同名行；而冻结器按**启动者**的 grants/visibility 过滤
+（`closure.ts:142,207`）。所以「validator 与启动绑同一行」**跨 actor 时根本不可能成立**——
+该函数自己的注释也写着它是启动冻结的 **advisory twin**。
+
+v10 只说「validator 改用同一条 id-hint-first 判据」是不够的。三个语境各自定死：
+
+| 语境 | Actor | 数据源 | 性质 |
+|---|---|---|---|
+| **编辑器 / 保存期校验** | **保存者** | live DB | **advisory**（明确写进文案）——它证明不了启动时会绑到哪一行 |
+| **根任务启动** | 启动者 | 由启动者**解析并冻结一次**，**再用同一份 frozen result 做校验** | 权威 |
+| **子任务启动** | 继承 | **直接用继承的 v1/v2 closure subset**，**不重查 live** | 权威 |
+
+两条可复现（都是 v10 没处理的）：
+
+1. **跨 actor**：W1 对启动者 B 可见、W2 仅作者 A 可见，端口分别是 `old`/`new`；节点存
+   `idHint:W2` 并连了 `new`。actorless validator 改成 id-first 后会**按 W2 校验**，甚至可能
+   通过 validation issue **泄露 W2 的端口名**；而 B 启动时冻结器拒绝不可见的 W2、回退 W1
+   ⇒ 静态校验与实际执行绑不同定义。
+2. **父子快照**：父任务已冻结 G1，随后资源行改成 G2；子任务已有
+   `callLaunch.refClosureJson`（`task.ts:360`），但启动流程仍**先从 live DB 构造 validator
+   context**（`task.ts:1979`）⇒ 子 validator 校验 G2，而 scheduler 消费冻结的 G1。
+
+**id hint 不可见时的语义**：**保持现状 = 回退到名字规则**（冻结器今天就是这么做的），
+不改成 fail-closed——那会是一条新的存量能力收缩。
+
 **第 5 条是硬约束，不是可选项。** 该函数的注释写明了一个不变量：
 
 > *Duplicate names resolve DETERMINISTICALLY: oldest row wins — **the exact rule
 > freezeCallClosure applies, so editor preview and launch bind the same row.***
 
-决策 28 把启动改成 id 优先，**就破了这条不变量**——除非 validator 一起改。不改的后果可复现：
+决策 28 把启动改成 id 优先，**就破了这条不变量**——除非 validator 一起改（且按上表限定为
+**同 actor 同数据源**时才成立）。不改的后果可复现：
 W1（旧）/ W2（新）都叫 `audit`，根 R 有 `c1={name:'audit',idHint:W1}`、
 `c2={name:'audit',idHint:W2}`；W1 输出 `old`、W2 输出 `new` 且 W2 回调 R。启动会为 `c2`
 冻结 W2，而 validator 固定读 W1 ⇒ **对 `new` 端口报错**、且**看不见 W2→R 这个环**。
 
+| **6** | **配置包导出器**（§4 的 `walkClosure`） | 本 RFC 新写，若照现有冻结器那样先把名字收进 `Set/Map`（`closure.ts:162`）就会重蹈覆辙 | 按边解析，`purpose:'export'` |
+
+**第 6 条是本 RFC 自己造的**（R9-P1-2）：我在同一份设计里既加了
+`package-duplicate-resource-name` 去重门，又写了一个按名字折叠的闭包遍历器。可复现：W1/W2
+同名、依赖不同，根 R 有 `c1→W1`、`c2→W2` ⇒ 折叠后**只看到一条 `audit`**，静默漏掉另一支
+及其全部依赖，**而那道去重门根本不会触发**（它看到的就只有一个同名条目）。
+锁定结果：该场景必须 **422 duplicate**，不得产出只含一支的包。
+
 **统一契约**：所有图操作走 `resolveEdge(sourceWorkflowId, CallRef)` —— 冻结生成、cycle
-walk、child subset、validator / 端口推导五处同源。source id 在两层都是现成的：根层
+walk、child subset、validator / 端口推导、**配置包导出**六处同源。source id 在两层都是现成的：根层
 `task.ts:138-151` 已经把 `root.id` 传给冻结器，子层调用点持有 `frozen.id`，**只是没写进
 helper 签名**。
 
@@ -256,7 +301,7 @@ slug 由**导出侧显式分配并写进 manifest**，不是从声明顺序派�
 
 | payload | 泛化自 | 变更 |
 |---|---|---|
-| `BundleAgentPayload` | `IntentAgentPayloadSchema` | `dependsOn/mcp/plugins` 由 `IntentRef` → `BundleRef`；`skills` 条目同 |
+| `BundleAgentPayload` | `IntentAgentPayloadSchema` | `dependsOn/mcp/plugins` 用 `BundleIdentityRef`；**`skills` 用专属 `BundleAgentSkillRef`**（含 `project:` 分支，见 §1.1b'） |
 | `BundleSkillPayload` | `IntentSkillPayloadSchema` | 文件树条目改为**外部载体引用**（`files: { path, ref }[]`，`ref` 指向包内路径 / intent 的内联内容），因为技能文件可能是二进制 |
 | `BundleMcpPayload` | `IntentMcpPayloadSchema` | 保留 `McpLocalConfig` / `McpRemoteConfig` **原结构**（见 §4.2 脱敏必须 schema-valid） |
 | `BundlePluginPayload` | `IntentPluginPayloadSchema` | 同上 |

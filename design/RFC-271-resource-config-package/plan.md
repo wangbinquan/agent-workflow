@@ -4,7 +4,16 @@
 能力扩张）。
 每个批次自带测试，`bun run gate:local` 全绿才推。
 
-## 批次 A · `ResourceBundle` 表达层（shared）
+## 批次 A · shared 基座：`ResourceRef` 域 codec + `ResourceBundle` 表达层
+
+⚠️ **顺序**（R9-P2-1）：`ResourceRef` AST 与六个域 codec（原 T6a）**必须先于 T1**——
+否则 T1 要么 import 尚不存在的东西、typecheck 不过，要么自建一套 parser、违反「不是第二套
+parser」。批次 A′ 只保留 **scheduler / runtime wiring**（可独立回滚的那部分）。
+
+- **T0a** `shared/src/ref/`：`ResourceRef` 归一化 AST + **六个域 wire codec**
+  （见 design §1.1a/§1.1b'；含 `BundleAgentSkillRef` 的 `project:<name>` 分支）+
+  `RefResolution` 五属性契约（`resolve` 返回 typed `Result`、不 throw）。
+- **T0b** 六域正反例 + **两条字节级 round-trip**（managed / project 技能各一）。
 
 - **T1** `shared/src/bundle/ref.ts`：`BundleRefSchema` **三形态**（`local:` / `external:` /
   **`name:<type>/<name>` late-bound**，第三种只许出现在 call 节点目标槽）+ 解析辅助。
@@ -29,9 +38,10 @@
 
 ## 批次 A′ · 统一引用模型（决策 29）
 
-依赖 A。**独立成 commit**——它触及 scheduler 热路径，要能单独回滚。
+依赖 A（含 T0a/T0b）。**独立成 commit**——它触及 scheduler 热路径，要能单独回滚。
+本批次只做 **wiring**，AST 与 codec 已在批次 A 落地。
 
-- **T6a** `shared/src/ref/`：`ResourceRef` **归一化 AST**（`id` / `name` / `selector` /
+- ~~**T6a**~~ **已前移为 T0a/T0b**（R9-P2-1 依赖倒置）。原文保留供对照：`ResourceRef` **归一化 AST**（`id` / `name` / `selector` /
   `handle` / `local` / `external` / **`call` 复合** / **`project-skill`**）+ **六个域各自的
   wire codec**（不是共用一套字符串形态！`$new:` 与 `local:` 是同一 AST 的两种编码，
   `ImportSelectorRef` 的 `type` 必须保留）+ `RefResolution` 契约
@@ -64,8 +74,10 @@
   `resolveEdge(sourceWorkflowId, CallRef)`，五个消费者同源**——冻结生成、`scheduler.ts:2966-2968`
   主消费 ×2、`childClosureSubset`（要收 source id，调用点 `:3732/:3811/:3851` 已持有
   `frozen.id`）、**`detectCallCycles`（`workflowCalls.ts:88` 的 resolver 签名 `(name)` 必须
-  改成收完整 CallRef）**、**validator 闭包装载（`workflow.validator.ts:207-255` 按名取最老，
-  其注释写明「与启动绑同一行」是不变量 ⇒ 启动改判据就必须一起改）**。回归含「同名双 id
+  改成收完整 CallRef）**、**validator 闭包装载**、**配置包导出器（第六个，本 RFC 自己写的
+  ——见 design §1.1c'' 第 6 行，`purpose:'export'`）**。
+  ⚠️ validator 那条按 design §1.1c''' 的**三语境表**做：保存期是 advisory（保存者 Actor +
+  live）、根启动「解析冻结一次再用同一份校验」、子启动直接用继承 closure 不重查 live。回归含「同名双 id
   其中一支成环」与「同名双 id 端口不同」。原文：`freezeCallClosure` 成为
   `CallRef` 域的 resolver；冻结闭包改 **source-scoped key**（`${sourceWorkflowId}#${nodeId}`
   ——**不能只用 nodeId**，节点 id 只在单份 definition 内唯一）；**三个消费者**
