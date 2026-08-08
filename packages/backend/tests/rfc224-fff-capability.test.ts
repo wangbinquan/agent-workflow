@@ -141,6 +141,16 @@ async function expectProcessGroupAbsent(
 }
 
 async function expectProcessAbsent(pid: number): Promise<void> {
+  // 2026-08-09：**非正数 pid 必须当场失败，不能进轮询**。POSIX 的 `kill(0, sig)`
+  // 打的是**调用者自己的进程组**、`kill(-N, sig)` 打的是进程组 N —— 两者都不是
+  // 「某个具体进程」，且前者永远成功、永远等不到 ESRCH，于是循环必然耗满预算并
+  // 报出 `process 0 remained live` 这种彻底误导的信息（真实含义是「探针从没报回
+  // pid」）。CI run 31270648529 的 macos shard 1/4 就是这么红的。
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    throw new Error(
+      `expectProcessAbsent got a non-process pid ${pid} — the probe never reported one`,
+    )
+  }
   const deadline = Date.now() + 1_000
   for (;;) {
     try {
@@ -487,17 +497,28 @@ describe.skipIf(process.platform === 'win32')('RFC-224 FFF capability execution 
       // failing on `Number.isSafeInteger(NaN)` with no hint that a cold start
       // was the cause. Deadline-based and generous now: a genuinely broken
       // supervisor still fails, it just takes longer to say so.
+      // ⚠️ **文件可读 ≠ 内容已写完**。后代进程先 create 再 write，落在中间的一次
+      // 读取返回空串，而 `Number('')` 是 **0** —— 它既通过 `isSafeInteger`，
+      // `process.kill(0, 0)` 又必然成功（那是自己的进程组），于是这条读取撕裂
+      // 一路装作正常，直到 `expectProcessAbsent(0)` 耗满预算才以一句完全误导的
+      // `process 0 remained live` 收场（CI run 31270648529）。
+      // 所以要**解析成功且为正整数**才算就绪，否则继续等。
       const markerDeadline = Date.now() + 20_000
       let descendantPid = Number.NaN
       while (Date.now() < markerDeadline) {
         try {
-          descendantPid = Number(await readFile(marker, 'utf8'))
-          break
+          const raw = (await readFile(marker, 'utf8')).trim()
+          const parsed = Number(raw)
+          if (raw.length > 0 && Number.isSafeInteger(parsed) && parsed > 0) {
+            descendantPid = parsed
+            break
+          }
         } catch {
-          await Bun.sleep(10)
+          /* not created yet */
         }
+        await Bun.sleep(10)
       }
-      expect(Number.isSafeInteger(descendantPid)).toBe(true)
+      expect(Number.isSafeInteger(descendantPid) && descendantPid > 0).toBe(true)
       await Bun.sleep(100)
       expect(() => process.kill(descendantPid, 0)).not.toThrow()
 
