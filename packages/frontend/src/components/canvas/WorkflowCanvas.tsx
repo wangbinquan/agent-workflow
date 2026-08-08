@@ -62,6 +62,8 @@ import {
   isClarifyAskingNode,
   isUnsupportedBinding,
   isWrapperKind,
+  lensIsTransparent,
+  privilegedProjectionChange,
   type WorkflowByRef,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
@@ -447,7 +449,7 @@ function CanvasInner({
   // RFC-270 — the single privileged-node judgement for this canvas: palette
   // grey-out, node drag/delete, edge wiring and the drag-stop ancestry guard
   // all read it, so they cannot drift into a half-open combination.
-  const { paletteDisabledReason, protectedNodeIds } = usePrivilegedNodes()
+  const { paletteDisabledReason, protectedNodeIds, lens: privilegedLens } = usePrivilegedNodes()
   const protectedIds = useMemo(() => protectedNodeIds(definition), [definition, protectedNodeIds])
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents ?? []), [agents])
   const validationProjection = useMemo(
@@ -497,27 +499,50 @@ function CanvasInner({
         setCanvasNotice(t('canvas.referenceChangeBlocked'))
         return false
       }
-      // RFC-270（Codex 实现门 P2）—— 这里曾经放过一道「中央守卫」：拿两个 author
-      // 门的敏感投影比对 `definition` 与 `result.next`，任何触碰特权节点执行面的
-      // 本地提交一律当场拒绝。想法是对的（这是画布唯一的 `onChange` 出口，一处
-      // 设卡就覆盖 EdgeInspector / Connect Next / 右键菜单 / 复制粘贴等全部入口），
-      // 但**上线即回归**：用户实报「工作流里只要有脚本或代码平台调用节点，连移动
-      // 别的节点都被拦下」。`applyWorkflowTransition` 在 `replace-definition` 上还会
-      // 跑 `reconcileRemovalAndReferences` / `applyInputDeclarationSync` /
-      // `reconcileDerivedPorts`（workflow-transition.ts:749-751），比较的两端因此
-      // 跨了一层归一化；最小复现里纯移动**不**触发，说明真实形状另有原因，未定位。
+      // RFC-270（Codex 实现门 P2）—— 特权节点的**中央守卫**。
       //
-      // 撤回而不是赌一个没验证过的修法：它要改善的只是「本地做得成、保存时 403」，
-      // 而回归拦掉的是基本操作，代价高得多。判据函数 `privilegedProjectionChange`
-      // 与其用例保留在 shared，重上时直接复用；未覆盖的编辑入口登记在
-      // `docs/audit-backlog.md`。
+      // 这是画布上唯一调用 `onChange` 的地方，所以判据放这一处就覆盖了全部编辑
+      // 入口：EdgeInspector 改端口名 / 重连 / 删边、Connect Next、
+      // ConnectionDialog、右键菜单的删除与 wrap / decompose、复制粘贴与
+      // 「再来一个」——以及下一个还没写出来的入口。只在 xyflow 的 `draggable` /
+      // `deletable` / `isValidConnection` 与 palette 上设卡的话，那些自定义入口
+      // 条条都是绕过口，后果是本地做得成、自动保存吃 403。
+      //
+      // 判据复用两个 author 门的敏感投影 ⇒ 与后端逐字同源。
+      //
+      // **两端必须走同一条管线**：`applyWorkflowTransition` 在 replace-definition
+      // 上还会跑 reconcileRemovalAndReferences / applyInputDeclarationSync /
+      // reconcileDerivedPorts，所以拿未归一化的 `definition` 直接对比 `result.next`
+      // 会把归一化产生的差异算到用户头上。实测这套归一化对两个敏感投影是中性且
+      // 幂等的（见 canvas-privileged-central-guard 用例），但「实测几种形状中性」
+      // 与「构造上不可能不中性」是两回事 —— 这里取后者：基线也过一遍同样的变换。
+      // 该 RFC 第一次上线时就是漏了这一步被撤回的（撤回当时误判成它导致了
+      // 「移动节点被拦」，真凶其实是 owner 门的 `forbidden`）。
+      if (!lensIsTransparent(privilegedLens)) {
+        const baseline = applyWorkflowTransition(
+          definition,
+          { kind: 'replace-definition', next: definition },
+          semanticContext,
+        ).next
+        const touched = privilegedProjectionChange(baseline, result.next, privilegedLens)
+        if (touched !== null) {
+          setCanvasNotice(
+            t(
+              touched === 'script'
+                ? 'canvas.privilegedScriptChangeBlocked'
+                : 'canvas.privilegedCodeHostChangeBlocked',
+            ),
+          )
+          return false
+        }
+      }
       if (result.warnings.length > 0) {
         setCanvasNotice(t('canvas.referencesPruned', { n: result.warnings.length }))
       }
       onChange(result.next, meta ?? { label: t('editor.history.canvasEdit') })
       return true
     },
-    [definition, onChange, semanticContext, t],
+    [definition, onChange, privilegedLens, semanticContext, t],
   )
   const commitChange = useCallback(
     (next: WorkflowDefinition, meta?: WorkflowCanvasChangeMeta): boolean =>

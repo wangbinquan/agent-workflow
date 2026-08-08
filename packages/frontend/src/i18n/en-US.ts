@@ -4994,6 +4994,13 @@ export const enUS: Resources = {
     // membership did not; said out loud rather than silently dropped.
     privilegedMembershipBlocked:
       'Moved, but the grouping was left unchanged: changing where a script or code-host call node sits requires the matching author permission.',
+    // RFC-270 (Codex impl-gate P2) — the central guard refused a local edit that
+    // would have changed what a privileged node executes. Said here rather than
+    // letting autosave fail with a 403 several seconds later.
+    privilegedScriptChangeBlocked:
+      'That change needs the scripts:author permission — script nodes cannot be added, removed, or rewired without it.',
+    privilegedCodeHostChangeBlocked:
+      'That change needs the code-host-calls:author permission — code-host call nodes cannot be added, removed, or rewired without it.',
     layoutCrossScope:
       'The selected steps belong to different wrapper scopes. Layout each scope separately, or use Layout all.',
     layoutCycles: '{{n}} cyclic dependency edge(s) were left unconstrained during layout.',

@@ -4365,6 +4365,9 @@ export interface Resources {
     placementUnavailable: string
     /** RFC-270 —— 拖动 wrapper 会改变特权节点归属时的提示。 */
     privilegedMembershipBlocked: string
+    /** RFC-270 —— 中央守卫拒绝了一次会改变特权节点执行面的本地编辑。 */
+    privilegedScriptChangeBlocked: string
+    privilegedCodeHostChangeBlocked: string
     layoutCrossScope: string
     layoutCycles: string
     layoutLockedOverflow: string
@@ -9912,6 +9915,10 @@ export const zhCN: Resources = {
     placementUnavailable: '该位置附近没有可用空间，请平移画布后重试。',
     privilegedMembershipBlocked:
       '已移动，但分组未改变：改变脚本 / 代码平台调用节点的归属需要对应的创作权限。',
+    privilegedScriptChangeBlocked:
+      '该改动需要 scripts:author 权限 —— 没有它就不能新增、删除或重接脚本节点。',
+    privilegedCodeHostChangeBlocked:
+      '该改动需要 code-host-calls:author 权限 —— 没有它就不能新增、删除或重接代码平台调用节点。',
     layoutCrossScope: '所选步骤分属不同包装器范围。请分别整理每个范围，或使用“整理全图”。',
     layoutCycles: '布局时保留了 {{n}} 条循环依赖边，但未用它们约束层级。',
     layoutLockedOverflow: '有 {{n}} 个锁定尺寸的包装器放不下整理后的步骤；其锁定矩形已保留。',

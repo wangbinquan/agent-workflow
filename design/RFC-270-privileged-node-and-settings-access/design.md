@@ -255,6 +255,32 @@ export function ancestryUnchanged(
 
 补丁被丢弃时用既有的画布提示告诉用户原因（不静默）。
 
+### 4.5b 中央守卫（Codex 实现门 P2，实现期新增）
+
+§4.5 的三条只覆盖了 xyflow 自己的交互面（`draggable` / `deletable` /
+`isValidConnection`）与 palette。Codex 实现门指出**每一条自定义编辑入口都是绕过口**：
+`EdgeInspector` 改端口名 / 重连 / 删边、`Connect Next`、`ConnectionDialog`、右键菜单的
+`deleteSelected` / `wrapSelection` / `decomposeWrapper` / `deleteWrapperWithInner`、
+`duplicateNode` / `pasteFromClipboard`。后果都一样：本地做得成、自动保存吃 403。
+
+逐个入口补太脆（下一个新入口照样漏），所以判据放在 `commitTransition` —— 画布**唯一**
+调 `onChange` 的地方 —— 并直接复用两个 author 门的敏感投影（`privilegedProjectionChange`），
+与后端逐字同源。
+
+**两端必须走同一条管线**：`applyWorkflowTransition` 在 `replace-definition` 上还会跑
+`reconcileRemovalAndReferences` / `applyInputDeclarationSync` / `reconcileDerivedPorts`，
+拿未归一化的 `definition` 直接对比归一化后的 `result.next`，会把归一化自己产生的差异算到
+用户头上。所以基线也过一遍**同样**的变换再比。实测这套归一化对两个敏感投影中性且幂等
+（`rfc270-canvas-central-guard.test.ts` 第一组就是这个前提的哨兵），但守卫不靠该实测结论
+成立 —— 基线对齐是构造保证。
+
+> **实现期事故记录**：这道守卫第一次上线时漏了基线对齐，随后用户实报「移动节点被拦」，
+> 当时判成是它导致的并整体撤回。事后查明**真凶无关** —— 是
+> `assertPrincipalCanWritePreflight` 对非 owner 抛的 `forbidden`（`7174013b` 及更早就在）。
+> 撤回的依据错了，但撤回时提出的基线疑虑是对的；重上时把它补齐并加了 13 条用例，其中
+> 「移动无关节点」「移动脚本节点自己」两条是那次事故的回归锁。教训：现场问题先要**错误
+> 原文**再动手 —— 「此改动需要额外权限」与「无法继续访问此工作流」指向完全不同的根因。
+
 ### 4.6 403 不再等于「工作流没了」（AC-16）
 
 三步，缺一不可：

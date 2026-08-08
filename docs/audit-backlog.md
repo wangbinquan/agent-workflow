@@ -346,6 +346,17 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
   才说。**这不是 RFC-270 引入的**（本 RFC 只往 `main.ts` 的 import 图里加了两个无 I/O 的小模块），
   但既然是本次 push 撞红的，就地修掉而不是登记了事。
 
+- ⏳ **`gate:local` 在满载机器上会随机红掉计时敏感的后端用例（模式，非单条）**。RFC-270 实施期
+  两次连跑 `gate:local` 分别红在**不同**的用例上 —— `RFC-098 WP-8 runner escalation ... 
+  child AND grandchild group-killed`（5537ms）与 `rfc199 start-task-cleanup-incomplete`
+  （git `cannot lock ref ... is at X but expected Y` 的并发竞争）—— 两条单独重跑都全绿，
+  且当轮 diff **一行后端代码都没碰**（只有 design.md / WorkflowCanvas.tsx / 两个 i18n /
+  一个新前端测试），归属为机器饱和而非改动。`gate:local` 把 backend 四分片与 quality lane
+  **并发**跑，本机（Apple Silicon）上足以让真 spawn + 计时预算的用例踩线。
+  **可操作的解法**：把这类真 spawn / 计时用例的预算从「够快的机器上够用」改成「饱和时也够用」，
+  或给 `gate:local` 一个降低并发的开关。在那之前，判据是**分开跑两条车道**（`bun run test:backend`
+  与 quality 各自跑）取干净信号 —— 这不是「重跑就过」，因为它换掉的是执行条件而不是结论。
+
 - ⏳ **`prose-code-mermaid-theme.test.tsx` 的主题切换用例在满载机器上仍会超时（RFC-270 实施期撞上，
   非本 RFC 引入）**。用例 `toggling <html data-theme> dark→light re-invokes MermaidBlock.render with
   new theme` 在一次 `gate:local` 里红（耗时 ~5050ms，恰好压在它自己那条 5000ms 显式预算上）；
