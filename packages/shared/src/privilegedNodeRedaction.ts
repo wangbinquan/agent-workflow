@@ -19,6 +19,11 @@
 // 结构性字段（语言 / 依赖**个数** / provider / action / method），遮了图就没法读。
 
 import { canonicalJson } from './workflow-canonical'
+import { definitionHasScriptNode, serializeScriptSensitiveProjectionV1 } from './scriptNode'
+import {
+  definitionHasCodeHostCallNode,
+  serializeCodeHostSensitiveProjectionV1,
+} from './codeHost/authorProjection'
 import type { WorkflowDefinition, WorkflowNode } from './schemas/workflow'
 
 /**
@@ -118,32 +123,60 @@ function redactCodeHostNode(
   const patch: Record<string, unknown> = {}
   let touched = false
 
+  // 畸形 `params` 也要遮：保存路径用的是宽松的 `WorkflowNodeSchema`（passthrough），
+  // 严格的 `CodeHostCallNodeSchema` 只在校验器里跑，所以库里**可以**存着
+  // `params: "字符串"` 这种形状。只处理「plain object」等于对畸形值开了个口子。
   const params = rec.params
-  if (isPlainObject(params) && Object.keys(params).length > 0) {
-    patch.params = maskValues(params, marker)
-    touched = true
+  if (params !== undefined) {
+    if (isPlainObject(params)) {
+      if (Object.keys(params).length > 0) {
+        patch.params = maskValues(params, marker)
+        touched = true
+      }
+    } else {
+      patch.params = marker
+      touched = true
+    }
   }
 
   const request = rec.request
-  if (isPlainObject(request)) {
-    const nextRequest: Record<string, unknown> = { ...request }
-    let requestTouched = false
-    if (typeof nextRequest.path === 'string' && nextRequest.path.length > 0) {
-      nextRequest.path = marker
-      requestTouched = true
-    }
-    // 空 body 是合法的（`codeHostJsonBodyIssue` 明确放行），保持空。
-    if (typeof nextRequest.body === 'string' && nextRequest.body.length > 0) {
-      nextRequest.body = marker
-      requestTouched = true
-    }
-    if (isPlainObject(nextRequest.query) && Object.keys(nextRequest.query).length > 0) {
-      nextRequest.query = maskValues(nextRequest.query, marker)
-      requestTouched = true
-    }
-    if (requestTouched) {
-      patch.request = nextRequest
+  if (request !== undefined) {
+    if (!isPlainObject(request)) {
+      // author 门把**整个** `request` 当敏感（`authorProjection.ts` 里是
+      // `request: rec.request ?? null`），所以形状不认识时**整体**遮掉，
+      // 而不是原样透出 —— fail closed。
+      patch.request = marker
       touched = true
+    } else {
+      const nextRequest: Record<string, unknown> = { ...request }
+      let requestTouched = false
+      // 非 string 的 `path` 同样遮：`typeof === 'string'` 的判定放过数字 / 对象，
+      // 而那些值一样是作者写进去的请求内容。
+      if (nextRequest.path !== undefined && nextRequest.path !== '') {
+        nextRequest.path = marker
+        requestTouched = true
+      }
+      // 空 body 是合法的（`codeHostJsonBodyIssue` 明确放行），保持空。
+      if (nextRequest.body !== undefined && nextRequest.body !== '') {
+        nextRequest.body = marker
+        requestTouched = true
+      }
+      const query = nextRequest.query
+      if (query !== undefined) {
+        if (isPlainObject(query)) {
+          if (Object.keys(query).length > 0) {
+            nextRequest.query = maskValues(query, marker)
+            requestTouched = true
+          }
+        } else {
+          nextRequest.query = marker
+          requestTouched = true
+        }
+      }
+      if (requestTouched) {
+        patch.request = nextRequest
+        touched = true
+      }
     }
   }
 
@@ -203,13 +236,26 @@ export function rehydratePrivilegedNodes(
   lens: PrivilegedNodeLens,
 ): WorkflowDefinition {
   if (lensIsTransparent(lens)) return next
-  const previousById = new Map<string, WorkflowNode>(previous.nodes.map((node) => [node.id, node]))
+  // 按 id 分桶而不是 `new Map(id → node)`：`WorkflowDefinitionSchema` 的
+  // `nodes` 只是 `z.array(...)`，没有 id 唯一性约束，而保存路径不跑校验器 ——
+  // 库里**可以**存着两个同 id 的特权节点。折叠成一个的话，回填会把最后那个的
+  // 正文灌进每一个同 id 节点，于是敏感投影被我们自己改掉，用户明明一个特权字段
+  // 都没碰却吃一个 author-forbidden 403。按出现顺序逐个配对，一一对应。
+  const previousById = new Map<string, WorkflowNode[]>()
+  for (const node of previous.nodes) {
+    const bucket = previousById.get(node.id)
+    if (bucket === undefined) previousById.set(node.id, [node])
+    else bucket.push(node)
+  }
+  const consumed = new Map<string, number>()
 
   let touched = false
   const nodes = next.nodes.map((node) => {
     const fields = redactedFieldsFor(node.kind, lens)
     if (fields === null) return node
-    const before = previousById.get(node.id)
+    const seen = consumed.get(node.id) ?? 0
+    consumed.set(node.id, seen + 1)
+    const before = previousById.get(node.id)?.[seen]
     if (before === undefined || before.kind !== node.kind) return node
 
     const rec = node as unknown as Record<string, unknown>
@@ -235,4 +281,43 @@ export function rehydratePrivilegedNodes(
   })
 
   return touched ? { ...next, nodes } : next
+}
+
+/**
+ * RFC-270（Codex 实现门 P2）—— 这次改动是否触碰了当前观察者管不着的执行面。
+ *
+ * 前台原本只在 xyflow 的 `draggable` / `deletable` / `isValidConnection` 和
+ * palette 上设卡，于是**每一条自定义编辑入口**都是绕过口：EdgeInspector 改端口
+ * 名 / 重连 / 删边、Connect Next、ConnectionDialog、右键菜单的删除与
+ * wrap / decompose、复制粘贴与「再来一个」。后果都一样 —— 本地做得成、自动保存
+ * 时吃一个 403，正是 RFC-270 要消灭的那种体验。
+ *
+ * 逐个入口补太脆（下一个新入口照样漏），所以判据放在**画布唯一的提交口**上，
+ * 并且直接复用两个 author 门的敏感投影：判据与后端**逐字同源**，不可能漂移出
+ * 「前台放行、后端 403」或反过来的组合。
+ *
+ * 返回被触碰的那一类；`null` = 这次改动与特权节点的执行面无关，放行。
+ */
+export function privilegedProjectionChange(
+  previous: WorkflowDefinition,
+  next: WorkflowDefinition,
+  lens: PrivilegedNodeLens,
+): 'script' | 'code-host-call' | null {
+  if (lensIsTransparent(lens)) return null
+  if (
+    lens.scripts &&
+    (definitionHasScriptNode(previous) || definitionHasScriptNode(next)) &&
+    serializeScriptSensitiveProjectionV1(previous) !== serializeScriptSensitiveProjectionV1(next)
+  ) {
+    return 'script'
+  }
+  if (
+    lens.codeHost &&
+    (definitionHasCodeHostCallNode(previous) || definitionHasCodeHostCallNode(next)) &&
+    serializeCodeHostSensitiveProjectionV1(previous) !==
+      serializeCodeHostSensitiveProjectionV1(next)
+  ) {
+    return 'code-host-call'
+  }
+  return null
 }

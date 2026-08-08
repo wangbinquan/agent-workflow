@@ -497,6 +497,20 @@ function CanvasInner({
         setCanvasNotice(t('canvas.referenceChangeBlocked'))
         return false
       }
+      // RFC-270（Codex 实现门 P2）—— 这里曾经放过一道「中央守卫」：拿两个 author
+      // 门的敏感投影比对 `definition` 与 `result.next`，任何触碰特权节点执行面的
+      // 本地提交一律当场拒绝。想法是对的（这是画布唯一的 `onChange` 出口，一处
+      // 设卡就覆盖 EdgeInspector / Connect Next / 右键菜单 / 复制粘贴等全部入口），
+      // 但**上线即回归**：用户实报「工作流里只要有脚本或代码平台调用节点，连移动
+      // 别的节点都被拦下」。`applyWorkflowTransition` 在 `replace-definition` 上还会
+      // 跑 `reconcileRemovalAndReferences` / `applyInputDeclarationSync` /
+      // `reconcileDerivedPorts`（workflow-transition.ts:749-751），比较的两端因此
+      // 跨了一层归一化；最小复现里纯移动**不**触发，说明真实形状另有原因，未定位。
+      //
+      // 撤回而不是赌一个没验证过的修法：它要改善的只是「本地做得成、保存时 403」，
+      // 而回归拦掉的是基本操作，代价高得多。判据函数 `privilegedProjectionChange`
+      // 与其用例保留在 shared，重上时直接复用；未覆盖的编辑入口登记在
+      // `docs/audit-backlog.md`。
       if (result.warnings.length > 0) {
         setCanvasNotice(t('canvas.referencesPruned', { n: result.warnings.length }))
       }

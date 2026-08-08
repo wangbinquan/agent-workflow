@@ -446,6 +446,60 @@ describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
     expect(wfDump?.content).toContain('LOG_LEVEL')
     expect(wfDump?.content).toContain('‹redacted›')
     expect(wfDump?.content).toContain('network: deny')
+    // RFC-270 显式改判（Codex 实现门 P1）。原断言是
+    // `expect(wfDump?.content).toContain('import os')` —— 它把「脚本正文照进
+    // dump」写成了期望行为，而这个 actor 恰恰是 `role: 'user'` + 空权限集。
+    // dump 是要喂给**模型**的，所以这条比任何 REST 读出口都宽：正文一旦进去，
+    // 就跟着那段对话继续走。RFC-270 让 dump 过 actor 的权限镜头，无
+    // `scripts:author` 者看到的正文是 `‹redacted›`。
+    expect(wfDump?.content).not.toContain('import os')
+  })
+
+  test('RFC-270 —— 有 scripts:author 的作者仍然拿到完整正文（遮蔽不误伤有权限者）', async () => {
+    await seedUser(OWNER)
+    const wfId = ulid()
+    await db.insert(workflows).values({
+      id: wfId,
+      name: 'etl-flow',
+      description: 'runs a script',
+      definition: JSON.stringify({
+        $schema_version: 4,
+        inputs: [],
+        nodes: [
+          {
+            id: 's1',
+            kind: 'script',
+            language: 'python',
+            script: 'import os; print(os.environ["API_TOKEN"])',
+            env: { API_TOKEN: SECRET },
+            network: 'deny',
+          },
+        ],
+        edges: [],
+      }),
+      version: 1,
+      ownerUserId: OWNER,
+      visibility: 'private',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof workflows.$inferInsert)
+
+    const author: Actor = {
+      ...actorFor(OWNER),
+      permissions: new Set(['scripts:author'] as const),
+    }
+    const r = await buildIntentDump({
+      db,
+      actor: author,
+      appHome,
+      mounts: [{ resourceType: 'workflow', resourceId: wfId }],
+    })
+    const wfEntry = manifestEntryFor(r.manifest, 'workflow', wfId)
+    const wfDump = r.seedFiles.find(
+      (f) => f.path === `mounted/${handleBasename(wfEntry?.handle ?? '')}.yaml`,
+    )
     expect(wfDump?.content).toContain('import os')
+    // env 仍然被 RFC-253 T28 的既有遮蔽盖住 —— 那一轴与创作权限无关。
+    expect(wfDump?.content).not.toContain(SECRET)
   })
 })

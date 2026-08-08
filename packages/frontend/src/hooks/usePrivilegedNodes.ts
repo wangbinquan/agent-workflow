@@ -14,7 +14,12 @@
 import { QueryClientContext, QueryObserver } from '@tanstack/react-query'
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { NodeKind, Permission, WorkflowDefinition } from '@agent-workflow/shared'
+import type {
+  NodeKind,
+  Permission,
+  PrivilegedNodeLens,
+  WorkflowDefinition,
+} from '@agent-workflow/shared'
 import type { PaletteItem } from '@/components/canvas/nodePalette'
 import { meQueryOptions, useAuthTokenSnapshot, type MeResponse } from '@/hooks/useActor'
 
@@ -32,6 +37,8 @@ export interface PrivilegedNodeGrants {
 }
 
 export interface PrivilegedNodeAccess extends PrivilegedNodeGrants {
+  /** 喂给 shared 判据（`privilegedProjectionChange` / `redactPrivilegedNodes`）。 */
+  lens: PrivilegedNodeLens
   /** 这个 NodeKind 对当前用户是不是「特权且无权」。 */
   isProtectedKind: (kind: string) => boolean
   /** 定义里全部受保护节点的 id。画布用它做 draggable / deletable / 连线判定。 */
@@ -53,6 +60,7 @@ export function privilegedNodeAccessOf(
   const isProtectedKind = (kind: string): boolean => grantOf(kind) === false
   return {
     ...grants,
+    lens: { scripts: !grants.canAuthorScripts, codeHost: !grants.canAuthorCodeHost },
     isProtectedKind,
     protectedNodeIds: (definition) =>
       new Set(definition.nodes.filter((node) => isProtectedKind(node.kind)).map((node) => node.id)),

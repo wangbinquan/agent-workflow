@@ -28,7 +28,9 @@ import type {
 } from '@agent-workflow/shared'
 import {
   maskFreeJsonSecrets,
+  INTENT_REDACTED,
   maskWorkflowScriptEnv,
+  redactPrivilegedNodes,
   serializeAgentMarkdown,
   serializeMcpDump,
   serializePluginDump,
@@ -36,6 +38,7 @@ import {
   fenceUntrusted,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
+import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import type { DbClient } from '@/db/client'
 import { listAgents } from '@/services/agent'
 import { listMcps } from '@/services/mcp'
@@ -405,9 +408,24 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
           handle,
           name: wf.name,
           description: wf.description,
-          // RFC-253 T28 — script-node env values are a closed secret carrier;
-          // the definition otherwise rides verbatim.
-          definition: maskWorkflowScriptEnv(transformed),
+          // RFC-253 T28 — script-node env values are a closed secret carrier.
+          //
+          // RFC-270 (Codex impl-gate P1): "the definition otherwise rides
+          // verbatim" was the leak. `intent:read` / `intent:write` are both in
+          // USER_BASELINE, so ANY user could mount a visible workflow here and
+          // have the script body, dependencies and the code-host
+          // `params` / `request` written into the seed YAML — which is then fed
+          // to the configured MODEL. That is a wider outlet than the REST reads
+          // this RFC closed: it survives in whatever the conversation goes on to
+          // do. The actor's privileged lens applies here for the same reason it
+          // applies to `GET /api/workflows/:id`.
+          definition: redactPrivilegedNodes(
+            maskWorkflowScriptEnv(transformed),
+            privilegedNodeLensFor(actor),
+            // 用 intent 自己的标记而不是 REST 的 `***`：同一份 YAML 里出现两种
+            // 遮蔽记号，读它的模型会以为那是两种不同的东西。
+            INTENT_REDACTED,
+          ),
         },
         { lineWidth: 0 },
       )

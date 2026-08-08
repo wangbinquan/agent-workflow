@@ -19,6 +19,7 @@ import {
   SCRIPT_REDACTED_FIELDS,
   ScriptNodeSchema,
   lensIsTransparent,
+  privilegedProjectionChange,
   redactPrivilegedNodes,
   rehydratePrivilegedNodes,
   serializeCodeHostSensitiveProjectionV1,
@@ -277,6 +278,141 @@ describe('RFC-270 · 回填', () => {
   it('无实际差异时返回同一个引用', () => {
     const stored = definitionOf([scriptNode()])
     expect(rehydratePrivilegedNodes(stored, stored, OPAQUE)).toBe(stored)
+  })
+})
+
+// Codex 实现门 P2 —— 两条都是「形状不合预期时要 fail closed / 不折叠」。
+describe('RFC-270 · 畸形输入 fail closed（Codex 实现门 P2）', () => {
+  // 保存路径用的是宽松的 `WorkflowNodeSchema`（passthrough），严格 schema 只在
+  // 校验器里跑，所以库里可以躺着这些形状。只处理「plain object + string」
+  // 等于对畸形值开口子，而 author 门把整个 request 都当敏感。
+  it('request 不是对象时整体遮掉，不原样透出', () => {
+    const out = redactPrivilegedNodes(
+      definitionOf([codeHostNode({ request: '/api/v4/secret/path' })]),
+      OPAQUE,
+      MARKER,
+    )
+    expect(nodeById(out, 'ch1').request).toBe(MARKER)
+  })
+
+  it('path / body 不是字符串时同样遮', () => {
+    const out = redactPrivilegedNodes(
+      definitionOf([
+        codeHostNode({ request: { method: 'POST', path: 12345, body: { secret: 1 } } }),
+      ]),
+      OPAQUE,
+      MARKER,
+    )
+    const request = nodeById(out, 'ch1').request as Record<string, unknown>
+    expect(request.path).toBe(MARKER)
+    expect(request.body).toBe(MARKER)
+    expect(request.method).toBe('POST')
+  })
+
+  it('params / query 不是对象时整体遮', () => {
+    const out = redactPrivilegedNodes(
+      definitionOf([
+        codeHostNode({ params: 'grp/app', request: { method: 'GET', path: '/x', query: 'a=1' } }),
+      ]),
+      OPAQUE,
+      MARKER,
+    )
+    expect(nodeById(out, 'ch1').params).toBe(MARKER)
+    expect((nodeById(out, 'ch1').request as Record<string, unknown>).query).toBe(MARKER)
+  })
+
+  it('同 id 的两个特权节点按出现顺序一一配对，不被折叠', () => {
+    // 折叠成 `new Map(id → node)` 的话，两个节点都会拿到**最后**那份正文，
+    // 敏感投影被回填自己改掉 —— 用户一个特权字段没碰却吃 403。
+    const stored = definitionOf([
+      scriptNode({ id: 'dup', script: 'print("first")' }),
+      scriptNode({ id: 'dup', script: 'print("second")' }),
+    ])
+    const submitted = redactPrivilegedNodes(stored, OPAQUE, MARKER) as WorkflowDefinition
+    const restored = rehydratePrivilegedNodes(submitted, stored, OPAQUE)
+    const bodies = restored.nodes.map((node) => (node as unknown as Record<string, unknown>).script)
+    expect(bodies).toEqual(['print("first")', 'print("second")'])
+    expect(serializeScriptSensitiveProjectionV1(restored)).toBe(
+      serializeScriptSensitiveProjectionV1(stored),
+    )
+  })
+})
+
+// Codex 实现门 P2 —— 画布的中央守卫判据。它是「本地就拒绝」而不是「保存时 403」
+// 的承重件，且必须与后端 author 门**逐字同源**，否则会漂移出「前台放行、后端
+// 403」或「前台拦死、后端本来允许」两种坏组合。
+describe('RFC-270 · privilegedProjectionChange（中央守卫判据）', () => {
+  const script = () => scriptNode({ id: 's1' })
+  const base = definitionOf([script(), { id: 'a1', kind: 'agent-single', agentId: 'ag1' }])
+
+  it('镜头透明时永远放行（有权限用户行为一字不变）', () => {
+    const next = definitionOf([{ id: 'a1', kind: 'agent-single', agentId: 'ag1' }])
+    expect(privilegedProjectionChange(base, next, PRIVILEGED_LENS_TRANSPARENT)).toBeNull()
+  })
+
+  it('删除脚本节点 → 拦', () => {
+    const next = definitionOf([{ id: 'a1', kind: 'agent-single', agentId: 'ag1' }])
+    expect(privilegedProjectionChange(base, next, OPAQUE)).toBe('script')
+  })
+
+  it('新增脚本节点（复制 / 粘贴 / 再来一个）→ 拦', () => {
+    const next = definitionOf([
+      script(),
+      scriptNode({ id: 's2' }),
+      { id: 'a1', kind: 'agent-single' },
+    ])
+    expect(privilegedProjectionChange(base, next, OPAQUE)).toBe('script')
+  })
+
+  it('改脚本节点的入边（EdgeInspector 重连 / 改端口名）→ 拦', () => {
+    const next: WorkflowDefinition = {
+      ...base,
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'a1', portName: 'out' },
+          target: { nodeId: 's1', portName: 'diff' },
+        },
+      ] as unknown as WorkflowDefinition['edges'],
+    }
+    expect(privilegedProjectionChange(base, next, OPAQUE)).toBe('script')
+  })
+
+  it('把脚本节点包进 wrapper（wrapSelection）→ 拦', () => {
+    const next = definitionOf([
+      script(),
+      { id: 'a1', kind: 'agent-single', agentId: 'ag1' },
+      { id: 'w1', kind: 'wrapper-loop', nodeIds: ['s1'], maxIterations: 50 },
+    ])
+    expect(privilegedProjectionChange(base, next, OPAQUE)).toBe('script')
+  })
+
+  it('挪位置 / 改标题 → 放行（门明确允许，拦了就是 over-block）', () => {
+    const next = definitionOf([
+      scriptNode({ id: 's1', position: { x: 999, y: 999 }, title: '改名了' }),
+      { id: 'a1', kind: 'agent-single', agentId: 'ag1' },
+    ])
+    expect(privilegedProjectionChange(base, next, OPAQUE)).toBeNull()
+  })
+
+  it('只改无关节点 → 放行', () => {
+    const next = definitionOf([script(), { id: 'a1', kind: 'agent-single', agentId: 'ag2' }])
+    expect(privilegedProjectionChange(base, next, OPAQUE)).toBeNull()
+  })
+
+  it('镜头分家：只缺 code-host 权限时，改脚本不拦、改调用节点拦', () => {
+    const codeHostOnly: PrivilegedNodeLens = { scripts: false, codeHost: true }
+    const withCall = definitionOf([script(), codeHostNode()])
+    const removedScript = definitionOf([codeHostNode()])
+    expect(privilegedProjectionChange(withCall, removedScript, codeHostOnly)).toBeNull()
+    const removedCall = definitionOf([script()])
+    expect(privilegedProjectionChange(withCall, removedCall, codeHostOnly)).toBe('code-host-call')
+  })
+
+  it('两边都没有特权节点时零成本放行', () => {
+    const a = definitionOf([{ id: 'a1', kind: 'agent-single', agentId: 'ag1' }])
+    const b = definitionOf([{ id: 'a1', kind: 'agent-single', agentId: 'ag2' }])
+    expect(privilegedProjectionChange(a, b, OPAQUE)).toBeNull()
   })
 })
 
