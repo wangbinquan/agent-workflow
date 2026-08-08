@@ -146,6 +146,7 @@
 - **分离 worktree 里必须真跑 `bun install`，`cp -R node_modules` 是无效捷径**（2026-08-08 实测）：`git worktree add` 不带任何 node_modules，而 cp 过去的那份**丢掉 bun 的 workspace link**（`@agent-workflow/shared` 直接 "Cannot find module"），手工补 symlink 又会卡在下一层（`Cannot find package 'zod'`，嵌套依赖同样没跟着走）。症状是 Codex 想验证结论时 `bun test` exit 1，于是**整轮 review 退化成纯代码阅读**——它照样报 finding，但少了自证环节，而你从 companion 日志里只看得到一行 "Command failed"，很容易漏掉自己的 review 弱了一档。定式：worktree 建好后立刻 `bun install --frozen-lockfile`（约 1.2s，本仓 1542 包），跑一个测试文件确认绿，再启 review。
 
 - **主干开发下 Codex 的 `review` 圈不出「你的」改动**：它按 `--base` 算 diff，而共享 main 上那个区间里必然混着并发 session 的提交——实测它会跑去读别人 RFC 的文件并对着那些代码出 findings。分离 worktree 解决的是「工作树里的未提交改动」，解决不了「区间里的他人提交」。当本轮改动跨了别人的提交，改用**独立子代理**评审并把**确切文件清单**写进 prompt（RFC-240 先例，`docs/dev-gotchas.md` 的 Codex 段已列为备选）；顺带把「忽略 rfc257/webhook 之类他人关键词」也写进 prompt，否则子代理也会去查别人的代码。
+  **但先试最省事的一招：把 `--base` 钉到你这条提交的直接父提交**（`git rev-parse <yoursha>^`），区间里就只剩你一个提交，根本不需要子代理。2026-08-08 实测踩过一次反例：图省事拿「上一次审过的点」当 base，区间里混进并发 session 的两笔 RFC-271 提交（design.md 被整份重写），**报回来的 9 条 P1/P2 全部指向 `design/RFC-271-*/design.md`，与本轮改动零交集**——不是没找到问题，是把整轮算力花在别人的文件上，自己的改动一条没审。**识别信号**：findings 的 file 路径**集体**落在你没碰过的目录。所以启动 review 前先 `git diff --name-only <base> HEAD` 扫一眼，确认列出来的就是你自己的文件清单。
 - **对抗式评审的 prompt 要求「给出能复现的具体输入」**，否则拿回来的是一堆看着有理、核实起来全是空的猜测。加一句「构造不出具体失败输入的就丢掉」，findings 的信噪比会完全不同——本轮两路 25 条里绝大多数自带变异验证，逐条核实后全部属实。
 
 ## impl-gate（Codex 实现门）经验规律
