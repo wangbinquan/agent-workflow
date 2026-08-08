@@ -1,6 +1,6 @@
 # RFC-271 · 任务分解
 
-配套 `proposal.md` / `design.md`（均为吸收 Codex 设计门 12 条 findings 后的版本）。批次内可并行，
+配套 `proposal.md` / `design.md`（均为吸收 Codex 设计门第一轮 12 条 findings 后的版本）。批次内可并行，
 批次间有依赖。每个批次落地时**自带测试**（CLAUDE.md「Test-with-every-change」），
 `bun run gate:local` 全绿才推。
 
@@ -38,7 +38,7 @@
 - **RFC-271-T13** `README.md` 生成器（依赖图 + 环境要求 + 待填密钥 + dangling 警示 +
   二义候选标注）。**固定中英双段**，不跟当前用户语言走——包是跨人跨机的产物。
 - **RFC-271-T14** backend 导出测试两文件（`export-closure` / `export-gates`，含 AC-7b 的
-  逐字节对照与 AC-32 的分轴权限矩阵）。
+  逐字节对照与 AC-33 的分轴权限矩阵）。
 
 ## 批次 C · 后端导入引擎
 
@@ -70,8 +70,9 @@
 
 - **RFC-271-T22** 六条 `GET /api/<type>/:id/export-package`（工作流 / 工作组带
   `expectedVersion`）。
-- **RFC-271-T23** `POST /api/resource-packages/preview` + `/commit`，
-  **`tokenAccess:'never'`**（合法值是 `'allow' | 'never'`，没有 `'deny'`）。
+- **RFC-271-T23** `POST /api/resource-packages/preview` + `/commit`，**`tokenAccess:'allow'`**
+  （合法值是 `'allow' | 'never'`，没有 `'deny'`；`'never'` 只为 RFC-247 的 D5/D6 存在，创建
+  资源不在其列）。授权靠逐类权限点，令牌与界面逐字一致（AC-30 / AC-30b）。
 - **RFC-271-T24** 错误码族登记 + `route-error-code-coverage` 点名测试。
   ⚠️ 新文件先 `git add -N` 再跑门禁，否则该测试用 `git ls-files` 扫不到。
 - **RFC-271-T25** `client.ts` 新增六个导出方法 + 两个导入方法。
@@ -111,7 +112,7 @@
 - **RFC-271-T40** `cli/start.ts` 命令表注册 + `--help` 文案（写明 break-glass 边界）。
 - **RFC-271-T41** `rfc271-cli.test.ts`（含「CLI 不是权限旁路」对照用例、缺 `--as-user` 退出）。
 
-## 批次 H · 能力下线（C1–C7）
+## 批次 H · 能力下线（C1–C6）
 
 **放在最后**：前面批次全绿、新路径可用后才拆旧的，避免中途出现「新的没好、旧的没了」的窗口。
 
@@ -121,8 +122,8 @@
 - **RFC-271-T43** 删 `lib/workflow-draft-export.ts` 的本地草稿导出路径（C3）与编辑页救援态
   「导出本地 YAML」按钮。
 - **RFC-271-T44** 删 `components/WorkflowImportDialog.tsx` 及其 YAML 路径（C2）。
-- **RFC-271-T45** `rfc271-capability-removal.test.ts`：源码层文本断言 + 路由不再注册 +
-  新导入端点 `tokenAccess:'never'`（C6 的锁）。
+- **RFC-271-T45** `rfc271-capability-removal.test.ts`：源码层文本断言 + 两条旧路由不再注册；
+  另在 `rfc271-routes.test.ts` 锁住导入端点是 `'allow'` 且缺权限令牌提交 422。
 - **RFC-271-T46** 显式改判既有断言（design §9 表格七项），每处写明改判理由。
 
 ## 批次 I · 文档与记档
@@ -149,14 +150,14 @@
 
 ## 验收清单
 
-- [ ] AC-1 … AC-33 逐条有测试点名
+- [ ] AC-1 … AC-34 逐条有测试点名
 - [ ] `bun run gate:local` 全绿
 - [ ] 六类根 × 九种闭包形态矩阵跑通（含同名不同 owner、传递不可见）
 - [ ] **AC-7b 预言机对照**：零匹配 vs 全不可见，响应逐字节相同
 - [ ] **AC-25 内核锁**：导入后的技能过 `skillBootVerify`、插件 `cached_path` 非空
 - [ ] **AC-20 收敛**：journal 各 phase 边界注入中断 + 重启，收敛到二态之一
 - [ ] **AC-24 并发**：两个 actor 同目标导入，后者 409
-- [ ] C1–C7 每条都有源码层文本断言
+- [ ] C1–C6 每条都有源码层文本断言
 - [ ] 前端视觉对齐自查完成
 - [ ] Codex 实现门（declare done 前）跑一次并修 findings
 - [ ] 推送后按 exact SHA 查 CI 绿
@@ -170,7 +171,7 @@
 | 闭包遍历漏一类引用 | `directRefsOf` 与 `resourceRefs.ts` 既有提取器同源；矩阵测试 |
 | 脱敏漏一个载体 | 复用 `intentSecretSlots.ts` 而非自造清单；**逐 carrier** 测试而非「与某函数一致」 |
 | 预言机回归 | AC-7b 逐字节对照断言，任何分支差异都会红 |
-| C1/C2/C6/C7 打断用户既有自动化 | `proposal.md §5` 逐条呈用户确认；发布说明必须点名，尤其 **C6（PAT 导入无迁移路径）** |
+| C1/C2/C6 打断用户既有自动化 | `proposal.md §5` 逐条呈用户确认；发布说明必须点名，尤其 **C6（传递不可见闭包不再可导出——工作流仍能跑，只是导不出）** |
 | zip 实现自写引入 bug | store-only 最小实现 + round-trip 单测 |
 | 64 MB 上限对大技能库不够 | 超限错误点名具体资源；上限是共享常量，日后调一处 |
 

@@ -1,7 +1,7 @@
 # RFC-271 · 资源配置包（递归闭包导出 / 导入）
 
-状态：Draft（2026-08-08 落档；Codex 设计门 12 条 findings 已逐条核实属实并修入本版，等待用户
-对 §5 更新后的能力影响清单确认）。
+状态：Draft（2026-08-08 落档；Codex 设计门第一轮 12 条 findings 已逐条核实属实并修入本版，
+能力影响清单已获用户逐条确认；等待设计门第二轮复核）。
 
 ## 1. 背景
 
@@ -64,7 +64,8 @@ workflow / workgroup 选择器 dangle-tolerant），但启动时才逐个报
 
 ## 5. 能力影响清单（CLAUDE.md 规则 7 强制）
 
-本 RFC 关闭 / 收缩**七项**既有能力。C6 / C7 是 Codex 设计门查出、我第一版漏列的，需要你补确认：
+本 RFC 关闭 / 收缩**六项**既有能力。C6 是 Codex 设计门查出、我第一版漏列的，已获你补确认；
+另有两条候选收缩经核实/决策后消解，见表下说明。
 
 | # | 被关闭的能力 | 现状 | 改后 | 受影响者 |
 |---|---|---|---|---|
@@ -74,14 +75,21 @@ workflow / workgroup 选择器 dangle-tolerant），但启动时才逐个报
 | **C4** | 无特权权限者导出含特权节点的工作流 | 今天**允许**：`export` 路由已套 RFC-270 镜头，无 `scripts:author` 的人拿到脚本正文为 `***` 的 YAML | **422 拒绝导出**（`package-privileged-node-forbidden`），**按节点类型分轴判定**：缺 `scripts:author` 只挡含脚本节点的包，缺 `code-host-calls:author` 只挡含代码平台节点的包 | 普通用户导不出含对应特权节点的工作流，哪怕只想要拓扑 |
 | **C5a** | 按 **exact id** 覆盖导入 | `mode:'overwrite'` 按 YAML 里的 `id` 精确匹配覆盖目标 | 包不带 `id`，覆盖改为**按名字匹配** | **所有角色**共同失去 exact-id 覆盖 |
 | **C5b** | 覆盖**他人拥有**的资源 | resource-admin（manager / admin）今天可覆盖任何可见工作流 | 覆盖仅对**自己拥有**的资源开放 | 只影响 **manager / admin**；普通用户本来就只能改自己的（门在持久化原语上） |
-| **C6** 🆕 | **PAT（令牌）导入** | `POST /api/workflows/import` 是 `tokenAccess:'allow'`，PAT 可直接导入工作流 | 新的 preview / commit 端点 `tokenAccess:'never'`，旧端点删除 | 用 PAT 做自动化导入的调用方**没有迁移路径**（导入会新建资源并决定权属，不该是令牌能做的事）。CLI 的 `--as-user` 是替代方案，但那是本机 break-glass 通道，不等价 |
-| **C7** 🆕 | 导出**传递不可见**闭包的工作流 | 今天可以：`workflowDefinitionToSelectors` **只检查直接的 `agent-single` 引用**，不走 `dependsOn` / skills / mcp / plugins | 包要遍历完整闭包，途中遇到任一不可见资源 → **整体 422 并明确提示无法导出**（你的决策） | 真实场景：Bob 的代理 A 授权给你、A `dependsOn` 未授权的 B → 你今天导得出、改后导不出。这类工作流**仍可正常运行**（RFC-099 D3 隐式授权），只是不可导出 |
+| **C6** 🆕 | 导出**传递不可见**闭包的工作流 | 今天可以：`workflowDefinitionToSelectors` **只检查直接的 `agent-single` 引用**，不走 `dependsOn` / skills / mcp / plugins | 包要遍历完整闭包，途中遇到任一不可见资源 → **整体 422 并明确提示无法导出**（你的决策） | 真实场景：Bob 的代理 A 授权给你、A `dependsOn` 未授权的 B → 你今天导得出、改后导不出。这类工作流**仍可正常运行**（RFC-099 D3 隐式授权），只是不可导出 |
 
-> **C8 曾是候选但已消解**：设计门指出「call 引用名字命中 2+ 可见候选 → 422」会让一个今天能
-> 确定性启动的工作流失去导出能力。按你的决策，导出改为**沿用 `freezeCallClosure` 的同一条
-> 规则**（可见行中最老 ULID 胜出）并在 README / manifest 里标注，因此不构成收缩。
+> **两条候选收缩已消解，不进清单**：
+>
+> - **PAT 导入通道**：设计门指出我把新导入端点定为 `tokenAccess:'never'` 会切断现有
+>   `POST /api/workflows/import`（`'allow'`）的令牌自动化。核查 `registry.ts:44-62` 后确认
+>   **我写错了**——`'never'` 只为 RFC-247 的两条决策存在（D6 令牌不得再签令牌；D5 令牌不得改
+>   owner / grants / visibility，共四种 URL 形态），**创建资源不在其列**，而六类资源的 create
+>   端点**全是** `'allow'`。按你的判据「令牌有写权限才能导入，与界面操作一致」改回
+>   `'allow'` + 逐类权限点强制（决策 21），既不新增收缩也不开旁路。
+> - **同名二义**：设计门指出「call 引用命中 2+ 可见候选 → 422」会让今天能确定性启动的工作流
+>   失去导出能力。按你的决策改为**沿用 `freezeCallClosure` 的同一条规则**（可见行中最老 ULID
+>   胜出）并在 README / manifest 标注。
 
-C1 / C2 / C5a / C6 是 wire breaking：包格式与 YAML 格式不互通，旧二进制与新二进制之间没有兼容期。
+C1 / C2 / C5a 是 wire breaking：包格式与 YAML 格式不互通，旧二进制与新二进制之间没有兼容期。
 
 ## 6. 已确认的产品决策
 
@@ -91,7 +99,7 @@ C1 / C2 / C5a / C6 是 wire breaking：包格式与 YAML 格式不互通，旧�
 2. **密钥一律脱敏**（范围见决策 18）：值收敛为占位符、键名保留；manifest 生成待填清单，
    预检页对每项给输入框当场补。
 3. **闭包里有导出者不可见的依赖 → 整体 422 并明确提示无法导出**。⚠️ 第一轮我把这条说成
-   「沿用现状」是错的（见 C7），你在知悉真实现状后仍选择维持 422。
+   「沿用现状」是错的（见 C6），你在知悉真实现状后仍选择维持 422。
 4. **覆盖只对自己拥有的资源开放**；别人的同名资源只给「复用已有 / 新建副本」。包不携带任何
    权属信息，新建一律「导入者 owner + `private`」（RFC-231 硬规则，导入不得成为旁路）。
 5. **机器级依赖不进包**：runtime 执行档、代码平台连接、MCP `command[0]` 可执行文件、插件源、
@@ -127,6 +135,11 @@ C1 / C2 / C5a / C6 是 wire breaking：包格式与 YAML 格式不互通，旧�
 20. **CLI 两条命令都要 `--as-user`**：导出的 ACL 可见性、闭包判据、C4 分轴门都需要 Actor；
     没有 Actor 就要么无声 impersonation、要么绕过网页判据。文档同时写明「能访问 appHome /
     SQLite 的本机操作者本身就是 break-glass 管理员」，不把 CLI 描述成终端用户认证。
+21. **导入端点 `tokenAccess:'allow'`，授权靠逐类权限点**：令牌只要具备相应写权限就能导入，
+    与界面操作**逐字一致**。`'never'` 只为 RFC-247 的 D5 / D6 存在（`registry.ts:44-62`），
+    创建资源不在其列，六类 create 端点全是 `'allow'`——把导入定成 `'never'` 是我读错了规则。
+    令牌矩阵缺 `agents:create` 时，含新代理的包对它同样不可提交（预检页标红那条规则对令牌
+    调用方以 422 形式生效）。
 
 ## 7. 验收标准
 
@@ -202,15 +215,22 @@ C1 / C2 / C5a / C6 是 wire breaking：包格式与 YAML 格式不互通，旧�
   一档快捷方式（与 `--plan` 互斥）。
 - **AC-29** CLI 的权限校验、owner 归属、回滚语义与网页**逐条一致**，不是旁路。
 
-### 能力下线（C1–C7 的锁）
+### 令牌通道（决策 21）
 
-- **AC-30** `GET /api/workflows/:id/export` 与 `POST /api/workflows/import` 不再注册；路由清单
-  测试显式断言其消失，并断言新导入端点是 `tokenAccess:'never'`（C6）。
-- **AC-31** 前端不再存在 `downloadWorkflowLocalDraft` 与 `WorkflowImportDialog` 的 YAML 路径；
+- **AC-30** 🆕 preview / commit 两个端点是 `tokenAccess:'allow'`；持有相应写权限的令牌能完成
+  与界面**逐字一致**的导入。
+- **AC-30b** 🆕 令牌矩阵缺某类 `*:create` / `*:update` 时，含该类新资源的包**提交失败**
+  （与预检页标红同源的判据，对令牌以 422 呈现），不是静默跳过、也不是放行。
+
+### 能力下线（C1–C6 的锁）
+
+- **AC-31** `GET /api/workflows/:id/export` 与 `POST /api/workflows/import` 不再注册；路由清单
+  测试显式断言其消失。
+- **AC-32** 前端不再存在 `downloadWorkflowLocalDraft` 与 `WorkflowImportDialog` 的 YAML 路径；
   源码层文本断言锁住。
-- **AC-32** 无 `scripts:author` 的用户导出含脚本节点的工作流 → 422；**有 `scripts:author`、无
+- **AC-33** 无 `scripts:author` 的用户导出含脚本节点的工作流 → 422；**有 `scripts:author`、无
   `code-host-calls:author`、闭包只含脚本节点 → 允许导出**（C4 分轴的正例，独立权限矩阵测试）。
-- **AC-33** 🆕 传递不可见闭包（代理可见但其 `dependsOn` 不可见）→ 422（C7 的锁），错误文案与
+- **AC-34** 🆕 传递不可见闭包（代理可见但其 `dependsOn` 不可见）→ 422（C6 的锁），错误文案与
   直接不可见一致。
 
 ## 8. 包结构
@@ -252,4 +272,4 @@ code-review-配置包.zip
 - 并发导入用两个 actor 同目标验证 AC-24 / AC-24b 的 409。
 - 导入后的技能必须通过 `skillBootVerify`（AC-25 的锁——这是 `skill-zip.ts:415` 注释里那个
   「单测能过、活 daemon 上必挂」的坑的专门防线）。
-- C1–C7 每条下线都有一条**源码层文本断言**兜底。
+- C1–C6 每条下线都有一条**源码层文本断言**兜底。

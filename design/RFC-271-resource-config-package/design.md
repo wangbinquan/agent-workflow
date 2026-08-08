@@ -323,10 +323,10 @@ resource_package_imports        -- 形态照抄 intent_apply_journal
 | 方法 | 路径 | 权限 | tokenAccess |
 |---|---|---|---|
 | GET | `/api/{agents,skills,mcps,plugins,workflows,workgroups}/:id/export-package` | 对应 `*:read` | `'allow'` |
-| POST | `/api/resource-packages/preview` | 六类 `*:read` | **`'never'`** |
-| POST | `/api/resource-packages/commit` | 六类 `*:read` + §3.2 逐条判据 | **`'never'`** |
+| POST | `/api/resource-packages/preview` | 六类 `*:read` | `'allow'` |
+| POST | `/api/resource-packages/commit` | 六类 `*:read` + §3.2 逐条判据 | `'allow'` |
 | ~~GET~~ | ~~`/api/workflows/:id/export`~~ | — | 下线（C1） |
-| ~~POST~~ | ~~`/api/workflows/import`~~ | — | 下线（C2 / C6） |
+| ~~POST~~ | ~~`/api/workflows/import`~~ | — | 下线（C2） |
 
 工作流 / 工作组的导出接 `?expectedVersion=`（AC-12）。
 
@@ -334,8 +334,26 @@ resource_package_imports        -- 形态照抄 intent_apply_journal
 角色都带六类 read，所以粗粒度门只挡完全无关的调用方；精确判据在业务层——与 RFC-099
 「保存时只校验新增引用」的分层姿势一致。
 
-`TokenAccess` 的合法值是 `'allow' | 'never'`（`registry.ts`）——初稿写的 `'deny'` 不存在。
-导入端点选 `'never'`：导入会新建资源并决定权属，不是令牌该做的事。这是 **C6** 的来源。
+### 4.1 令牌通道（决策 21 / Codex 的候选 C6）
+
+`TokenAccess` 的合法值是 `'allow' | 'never'`（`registry.ts:62`）——初稿写的 `'deny'` 不存在。
+初稿把导入端点定为 `'never'`，设计门指出这会切断现有 `POST /api/workflows/import`
+（`tokenAccess:'allow'`）的令牌自动化。**核查后确认是我读错了规则**：`registry.ts:44-62` 写明
+`'never'` 是 permission points 之外的独立门，只为 RFC-247 的两条决策存在——
+
+- **D6** 令牌不得再签令牌 ⇒ `/api/auth/*` 全关；
+- **D5** 令牌不得改 owner / grants / visibility ⇒ 四种具体 URL 形态（六类资源的
+  `PUT /api/{res}/:id/acl`、`PUT /api/tasks/:id/members`、
+  `PUT /api/workgroup-tasks/:taskId/config`）。
+
+**创建资源不在其列**，而六类资源的 create 端点**全部**是 `'allow'`
+（`agents.ts:197` / `skills.ts:93` / `mcps.ts:332` / `plugins.ts:113` / `workgroups.ts:130` /
+`workflows.ts:131`）。导入新建的资源是 `owner = 令牌所属用户` + `private` + 零 grants，属于
+「创建自己的私有资源」，不是 D5 说的「改动既有资源的权属」。
+
+因此两个导入端点取 `'allow'`，授权靠 §3.2 的逐类权限点：令牌矩阵缺 `agents:create` 时，含新
+代理的包对它同样不可提交——预检页对人类标红的那条判据，对令牌调用方以 422 呈现（AC-30 /
+AC-30b）。**与界面操作逐字一致，既不新增收缩也不开旁路。**
 
 ## 5. 前端
 
@@ -429,8 +447,8 @@ agent-workflow import-package <zip> --as-user <u>
 
 ### backend
 - `rfc271-export-closure.test.ts`：AC-3 / AC-4 / AC-4b / AC-5 / AC-9 / AC-10 / AC-12。
-- `rfc271-export-gates.test.ts`：AC-7（含 **AC-33 传递不可见**）、**AC-7b 预言机对照**
-  （零匹配 vs 全不可见，断言响应逐字节相同）、AC-7c、AC-8 + AC-32（**分轴权限矩阵**）、AC-11。
+- `rfc271-export-gates.test.ts`：AC-7（含 **AC-34 传递不可见**）、**AC-7b 预言机对照**
+  （零匹配 vs 全不可见，断言响应逐字节相同）、AC-7c、AC-8 + AC-33（**分轴权限矩阵**）、AC-11。
 - `rfc271-import-preview.test.ts`：AC-14 / AC-14b（多个 own match）/ AC-15 / AC-16 / AC-17 /
   AC-19。
 - `rfc271-import-commit.test.ts`：AC-20（journal 各 phase 边界注入中断 + 重启收敛）/ AC-20b /
@@ -439,7 +457,8 @@ agent-workflow import-package <zip> --as-user <u>
   有 `skill_versions` v1 与 content hash；插件 `cached_path` 非空。这是 `skill-zip.ts:415`
   那个「单测能过、活 daemon 上必挂」的坑的专门防线。
 - `rfc271-package-antitamper.test.ts`：AC-2 未登记文件、zip slip、超深目录。
-- `rfc271-routes.test.ts`：AC-30（两条旧路由不再注册 + 新导入端点 `tokenAccess:'never'`）。
+- `rfc271-routes.test.ts`：AC-31（两条旧路由不再注册）+ **AC-30 / AC-30b**（导入端点是
+  `tokenAccess:'allow'`；令牌矩阵缺 `agents:create` 时含新代理的包提交 422，与预检页标红同源）。
 - `rfc271-cli.test.ts`：AC-26 ~ AC-29（含「CLI 不是权限旁路」对照）。
 
 ### frontend
@@ -478,4 +497,4 @@ agent-workflow import-package <zip> --as-user <u>
 | C3 CLI 导出无 Actor 来源 | P2 | §6 两条命令都要 `--as-user` + break-glass 边界说明 |
 | D1 结构化密钥面不全 | P1 | §2.2 复用 `intentSecretSlots.ts` + 逐 carrier 测试 |
 | D2 技能文件树密钥 | P1 | 按用户决策 18 **明确划出保证范围**（非目标 + 文档写明责任归属） |
-| E1 能力清单漏项 | P2 | `proposal.md §5` 补 C6 / C7，拆 C5a / C5b，修正 C4 |
+| E1 能力清单漏项 | P2 | `proposal.md §5` 补 C6（传递不可见闭包），拆 C5a / C5b，修正 C4；PAT 通道经核查是我读错规则、按 §4.1 改回 `'allow'` 故不成为收缩 |
