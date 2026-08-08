@@ -1,280 +1,242 @@
-# RFC-271 · 资源配置包（递归闭包导出 / 导入）
+# RFC-271 · 统一资源表达（Resource Bundle）与配置包
 
-状态：Draft（2026-08-08 落档；Codex 设计门第一轮 12 条 findings 已逐条核实属实并修入本版，
-能力影响清单已获用户逐条确认；等待设计门第二轮复核）。
+状态：Draft v3（2026-08-08）。v1 落档 → Codex 设计门第一轮 12 条 → v2 重写 → 第二轮 9 条
+（5 条确认堵上）→ **用户决策：不是打补丁，而是归一化本系统的结构化表达，导入导出与 intent
+引用同一份表达；新设计一份，两边都迁，同一 RFC 一次到位。** 本版按该决策重写。
 
 ## 1. 背景
 
-今天平台唯一的「把配置搬到别处」的手段是**工作流的单文件 YAML 导出**
-（`GET /api/workflows/:id/export` → 编辑页「更多操作 → 导出 YAML」）。它只序列化
-工作流自己的 `id / name / description / definition`，被引用的一切都退化成**名字选择器**：
+### 1.1 直接诉求
 
-- `agent-single` 节点导出成 `agentName + agentOwnerUsername`（RFC-223），代理本体不带；
-- `call-workflow` / `call-workgroup` 节点只留 `workflowName` / `workgroupName`（RFC-243），
-  子工作流与工作组本体不带；
-- 代理背后的技能 / MCP / 插件 / `dependsOn` 子代理闭包，**一个字节都不在文件里**。
+今天唯一的「把配置搬到别处」的手段是工作流的单文件 YAML 导出，它只序列化工作流自己的
+`definition`，被引用的一切退化成名字选择器——代理背后的技能 / MCP / 插件 / `dependsOn` 闭包
+**一个字节都不在文件里**，导入后必然悬空。工作组则**根本没有导出**。
 
-于是导出的 YAML 在目标实例上几乎必然是**悬空的**：导入能成功（`importRefs` 对
-workflow / workgroup 选择器 dangle-tolerant），但启动时才逐个报
-`workflow-call-ref-missing` / `agent-not-found`。要真正搬一套配置，用户得手工按依赖顺序
-一个个重建技能、MCP、插件、代理，再导入工作流——依赖越深越不可能做对。
+用户要的是**配置包**：一个 zip，装下这个资源递归闭包内的全部可移植配置，能在另一个实例导入
+后直接跑。
 
-工作组更彻底：**根本没有导出**。详情页「更多操作」里只有 复制 / 重命名 / 访问权限 / 删除。
+### 1.2 为什么这变成了一个「表达层」RFC
+
+第一版把导入设计成一套自建引擎。两轮外部设计门共 21 条 findings，其中**至少五条同一根因**：
+自造了仓里已有且已调试过的机制，且每次自造都恰好踩中那个机制当初为之而生的坑。
+
+| 我造的 | 仓里已有 | 自造版的缺陷 |
+|---|---|---|
+| 「FS 暂存 → DB 事务 → FS 入位」 | `stageManagedSkill` → `commitSkillReadyInTx` | 顺序反了，凭空造出「DB 已提交、FS 未发布」的不可收敛窗口 |
+| `packageResourceKey` 出现序号 | `IntentTempRefSchema`（`$new:<slug>`） | 序号随节点声明顺序漂移，manifest 又不拒重复 key |
+| 自建 import journal | `intentApplyJournal` | 无客户端幂等键、无 active lease，慢导入会被小时收敛器当成崩溃任务标 failed |
+| 预铸 id 解环 | `bundleCreatedNames` | 目标库存在不可见同名行时，环形包仍无首个可写入节点 |
+| 「复用 dump 脱敏函数」 | —— | `projectMcpForDump` 输出 `oauth:'‹redacted›'` 是**字符串**，直接违反 `McpRemoteConfigSchema` |
+
+同时核实到：`applyIntentChangeset` 已经支持**六类资源 × create/update** 的绝大部分 op，且
+`IntentAgentPayloadSchema` / `IntentWorkflowPayloadSchema` 就是一份可移植资源表达——后者甚至
+已经硬性禁止 payload 里出现 `agentId` / `agentName`，只许 `agentRef`。
+
+**结论**：平台其实已经长出了一份「结构化资源表达 + bundle 落地引擎」，只是它被命名和圈定
+在 intent 场景里。配置包不该再造一份，而该与 intent **共用同一份表达**。这就是本 RFC 的
+主体工作。
 
 ## 2. 目标
 
-把「导出 YAML」升级为**导出配置包**：一个 zip，装下这个资源**递归闭包内的全部可移植配置**，
-并提供与之配套的导入，使「在 A 实例导出 → 在 B 实例导入 → 直接能跑」成为一条走得通的路径。
-
-- 六类 ACL 资源（代理 / 技能 / MCP / 插件 / 工作流 / 工作组）都能作为**包的根**导出。
-- 闭包递归、去重、去环：工作流 → 代理 / 子工作流 / 工作组；代理 → 技能 + MCP + 插件 +
-  `dependsOn` 子代理；工作组 → 成员代理。同一个资源被两处引用只存一份。
-- 包内目录结构按资源类型平铺，配 `manifest.yaml`（权威清单）与 `README.md`（人类摘要）。
-- 导入走**预检页逐条决策**：每个资源单独选「复用已有 / 新建副本 / 覆盖」，确认后一次落地，
-  且**崩溃后可收敛**（前滚或回滚二选一，可证明）。
-- 导出与导入同时提供 CLI。
+1. **抽出一份平台级的资源 bundle 表达**（`ResourceBundle`）：六类资源的可移植 payload +
+   引用域 + 操作集 + 落地引擎，与任何具体场景（intent / 配置包 / 未来的模板市场）解耦。
+2. **intent 与配置包都迁到这份表达上**，同一 RFC 内一次到位，杜绝两份实现共存。
+3. 在此之上交付**配置包**：六类资源皆可作根，递归闭包导出为 zip；导入走预检页逐条决策；
+   导出导入均提供 CLI。
 
 ## 3. 非目标
 
-- **不导出运行态**：任务、node_run、评审记录、聊天室消息、记忆、蒸馏作业一律不进包。
-- **不导出账户面**：用户、权限矩阵、OIDC、PAT、令牌审计不进包。
-- **不导出仓库**：`cached_repos` / `repo_groups` 与其密封凭据不进包（跨机器不可解密，见
-  RFC-213 AC-12）。
-- **不替代 backup/restore**：那是整机冷备份（`tar.gz` + `db.sqlite`），本 RFC 是资源级可移植包，
-  两条线互不影响、互不复用产物。
-- **不做跨格式版迁移**：`formatVersion` 高于本二进制的包直接拒绝，不猜。
-- **不做增量包 / 差分包 / 包签名 / 包加密**。
-- **不扫描技能文件内容里的密钥**（决策 18）：脱敏保证明确限定在**结构化字段**，技能目录树
-  里硬编码的凭据属于技能作者的责任，文档里写明。
-- **不改任何执行期行为**：调度、准入、containment、runtime 选择零改动。
+- 不导出运行态（任务 / node_run / 评审 / 聊天室 / 记忆）、账户面（用户 / 权限矩阵 / OIDC /
+  PAT）、仓库（`cached_repos` / `repo_groups` 及其密封凭据）。
+- 不替代 backup/restore（那是整机冷备份，两条线互不复用产物）。
+- 不做跨格式版迁移、增量包、差分包、包签名、包加密。
+- **不扫描技能文件树内容里的密钥**：脱敏保证限定在**结构化字段**，技能目录里硬编码的凭据
+  属于技能作者的责任（决策 18）。
+- 不改任何执行期行为（调度 / 准入 / containment / runtime 选择零改动）。
+- **不改变 intent 的用户可见行为**：迁移是纯重构，现有 intent 测试套是它的验收标准。
 
 ## 4. 用户故事
 
-1. 我在测试实例上调好了一条 `Code → Audit → Fix` 工作流，牵扯 4 个代理、2 个技能、1 个
-   MCP。我在编辑页点「导出配置包」，拿到一个 zip；在生产实例的工作流列表点「导入配置包」，
-   预检页列出这 9 个资源、逐条确认后一次导入完成，直接可以启动任务。
-2. 我要把一个成熟的审计代理分享给同事。我在代理详情页导出配置包，里面自动带上它的技能与
-   `dependsOn` 子代理；同事导入时，他已经有的同名 MCP 选「复用已有」，代理选「新建副本」。
-3. 我在 CI 里要把配置从 staging 同步到 prod：`agent-workflow export-package --as-user ci
-   --type workflow --name code-review -o pkg.zip`，然后在 prod 上
-   `agent-workflow import-package pkg.zip --as-user deployer --plan > plan.yaml`，人工复核
-   `plan.yaml` 后 `--apply plan.yaml`。
-4. 我导出的工作流里有个 MCP 需要 `GITHUB_TOKEN`。包里那一项是脱敏占位，manifest 的待填清单
-   列出了它；导入预检页在那一条上直接给了输入框，我当场填进去，导完即可用。
+1. 我在测试实例调好一条牵扯 4 个代理、2 个技能、1 个 MCP 的工作流，点「导出配置包」拿到
+   zip；生产实例上传，预检页列出这 9 个资源、逐条确认后一次导入完成，直接能启动任务。
+2. 我把一个成熟审计代理分享给同事，包里自动带上它的技能与 `dependsOn` 子代理；同事导入时
+   已有的同名 MCP 选「复用已有」，代理选「新建副本」。
+3. CI 里从 staging 同步到 prod：`export-package --as-user ci ...` → `import-package ...
+   --as-user deployer --plan > plan.yaml` → 人工复核 → `--apply plan.yaml`。
+4. 包里的 MCP 需要 `GITHUB_TOKEN`，那一项是脱敏占位，预检页在那条上直接给输入框，我当场填。
 
 ## 5. 能力影响清单（CLAUDE.md 规则 7 强制）
 
-本 RFC 关闭 / 收缩**六项**既有能力。C6 是 Codex 设计门查出、我第一版漏列的，已获你补确认；
-另有两条候选收缩经核实/决策后消解，见表下说明。
+沿用 v2 已获用户逐条确认的六条，**本版无新增收缩**：
 
-| # | 被关闭的能力 | 现状 | 改后 | 受影响者 |
-|---|---|---|---|---|
-| **C1** | 工作流单文件 YAML **导出** | 编辑页「导出 YAML」→ `GET /api/workflows/:id/export`，返回 `application/yaml` | 入口改名为「导出配置包」，端点**下线**，由 `GET /api/workflows/:id/export-package`（zip）取代 | 任何在脚本里 curl 该端点并解析 YAML 的自动化**立即失效** |
-| **C2** | 裸 `.yaml` **导入** | `POST /api/workflows/import` + `WorkflowImportDialog` 接受 YAML 文本 | 端点与对话框**下线**，导入只接受 zip | 手里存着旧 YAML 文件、且源实例已不存在的人**没有导入路径**（只能手工重建） |
-| **C3** | 救援态「导出本地 YAML」 | 工作流被删 / 不可访问时，纯浏览器端从内存快照生成 `xxx-unsaved.yaml`（RFC-199 B2，不依赖服务端） | **删除**。配置包必须服务端生成闭包，救援态没有服务端 | 工作流被删后，本地草稿只剩「另存副本」，**不能再导出成文件** |
-| **C4** | 无特权权限者导出含特权节点的工作流 | 今天**允许**：`export` 路由已套 RFC-270 镜头，无 `scripts:author` 的人拿到脚本正文为 `***` 的 YAML | **422 拒绝导出**（`package-privileged-node-forbidden`），**按节点类型分轴判定**：缺 `scripts:author` 只挡含脚本节点的包，缺 `code-host-calls:author` 只挡含代码平台节点的包 | 普通用户导不出含对应特权节点的工作流，哪怕只想要拓扑 |
-| **C5a** | 按 **exact id** 覆盖导入 | `mode:'overwrite'` 按 YAML 里的 `id` 精确匹配覆盖目标 | 包不带 `id`，覆盖改为**按名字匹配** | **所有角色**共同失去 exact-id 覆盖 |
-| **C5b** | 覆盖**他人拥有**的资源 | resource-admin（manager / admin）今天可覆盖任何可见工作流 | 覆盖仅对**自己拥有**的资源开放 | 只影响 **manager / admin**；普通用户本来就只能改自己的（门在持久化原语上） |
-| **C6** 🆕 | 导出**传递不可见**闭包的工作流 | 今天可以：`workflowDefinitionToSelectors` **只检查直接的 `agent-single` 引用**，不走 `dependsOn` / skills / mcp / plugins | 包要遍历完整闭包，途中遇到任一不可见资源 → **整体 422 并明确提示无法导出**（你的决策） | 真实场景：Bob 的代理 A 授权给你、A `dependsOn` 未授权的 B → 你今天导得出、改后导不出。这类工作流**仍可正常运行**（RFC-099 D3 隐式授权），只是不可导出 |
+| # | 被关闭的能力 | 改后 | 受影响者 |
+|---|---|---|---|
+| **C1** | 工作流单文件 YAML 导出（`GET /api/workflows/:id/export`） | 端点下线，由 `export-package`（zip）取代 | curl 该端点解析 YAML 的自动化立即失效 |
+| **C2** | 裸 `.yaml` 导入（`POST /api/workflows/import` + 对话框） | 端点与对话框下线，导入只接受 zip | 手里只有旧 YAML 且源实例已不在的人没有导入路径 |
+| **C3** | 救援态「导出本地 YAML」（RFC-199 B2 纯浏览器端） | 删除 | 工作流被删后本地草稿只剩「另存副本」 |
+| **C4** | 无特权权限者导出含特权节点的工作流 | 422，**按节点类型分轴**判定 | 普通用户导不出含对应特权节点的工作流 |
+| **C5a** | 按 exact id 覆盖导入 | 改为按名字匹配 | 所有角色 |
+| **C5b** | 覆盖他人拥有的资源 | 仅对自己拥有的开放 | 仅 manager / admin |
+| **C6** | 导出传递不可见闭包的工作流 | 整体 422 并明确提示 | 代理可见但其 `dependsOn` 不可见者；这类工作流**仍可正常运行** |
 
-> **两条候选收缩已消解，不进清单**：
->
-> - **PAT 导入通道**：设计门指出我把新导入端点定为 `tokenAccess:'never'` 会切断现有
->   `POST /api/workflows/import`（`'allow'`）的令牌自动化。核查 `registry.ts:44-62` 后确认
->   **我写错了**——`'never'` 只为 RFC-247 的两条决策存在（D6 令牌不得再签令牌；D5 令牌不得改
->   owner / grants / visibility，共四种 URL 形态），**创建资源不在其列**，而六类资源的 create
->   端点**全是** `'allow'`。按你的判据「令牌有写权限才能导入，与界面操作一致」改回
->   `'allow'` + 逐类权限点强制（决策 21），既不新增收缩也不开旁路。
-> - **同名二义**：设计门指出「call 引用命中 2+ 可见候选 → 422」会让今天能确定性启动的工作流
->   失去导出能力。按你的决策改为**沿用 `freezeCallClosure` 的同一条规则**（可见行中最老 ULID
->   胜出）并在 README / manifest 标注。
+> **两条候选收缩经核实/决策后消解**：PAT 导入通道（是我把 `tokenAccess` 写成 `'never'` 写错
+> 了，`registry.ts:44-62` 写明该值只为 RFC-247 的 D5/D6 存在、创建资源不在其列，六类 create
+> 端点全是 `'allow'`）；同名二义 422（改为沿用 `freezeCallClosure` 的解析规则）。
 
-C1 / C2 / C5a 是 wire breaking：包格式与 YAML 格式不互通，旧二进制与新二进制之间没有兼容期。
+**intent 迁移不产生能力影响**：它是纯重构，行为不变，现有测试套是验收标准。
 
-## 6. 已确认的产品决策
+## 6. 产品决策
 
-### 6.1 五轮澄清（2026-08-08）
+### 6.1 前五轮澄清（v1，逐条仍有效）
 
-1. **导出 + 导入同期交付**，导入入口统一收 zip，裸 YAML 能力下线。
-2. **密钥一律脱敏**（范围见决策 18）：值收敛为占位符、键名保留；manifest 生成待填清单，
-   预检页对每项给输入框当场补。
-3. **闭包里有导出者不可见的依赖 → 整体 422 并明确提示无法导出**。⚠️ 第一轮我把这条说成
-   「沿用现状」是错的（见 C6），你在知悉真实现状后仍选择维持 422。
-4. **覆盖只对自己拥有的资源开放**；别人的同名资源只给「复用已有 / 新建副本」。包不携带任何
-   权属信息，新建一律「导入者 owner + `private`」（RFC-231 硬规则，导入不得成为旁路）。
-5. **机器级依赖不进包**：runtime 执行档、代码平台连接、MCP `command[0]` 可执行文件、插件源、
-   仓内 `project` 技能只写进 manifest 的 `requirements` 段。
-6. **框架内置资源不进包**（`builtin` / `owner=__system__`）：只记依赖声明，导入时按名字绑本地
-   内置件；本地没有则预检页报错。
-7. **特权节点无权限直接拒绝导出**（C4），且按节点类型分轴判定。
-8. **体积上限沿用 `SKILL_ZIP_LIMITS`**：总 64 MB / 单文件 10 MB / 2000 条目 / 12 层。
-9. **预检页匹配规则**：优先匹配「你自己拥有的同名资源」；没有则列出全部可见同名候选（带
-   owner）让你指定；一个都没有则默认新建。
-10. **导入失败即停 + 回滚已建**：要么整包落地，要么当什么都没发生（实现见决策 17）。
-11. **权限不足 → 预检页标红，不解决不让导**。
-12. **manifest 只记格式版 + 平台版 + 导出时间**，不记导出者、不记源实例、不记源资源 id。
-13. **插件只带 `spec` + `options`**，不打包 `cachedPath` 的实际代码。
-14. **「新建副本」名字自动生成且可现场改**。
-15. **CLI 导出导入都给**；**两条命令都必须 `--as-user <用户名>`**（决策 20），且导入同时支持
-    `--on-conflict` 全局档与 `--plan` / `--apply` 逐条决策文件。
-16. 导出入口一律放**详情 / 编辑页的「更多操作」**；导入入口**各资源列表页各一个 + 类型不符时
-    自动跳到对的页面继续**。
+1. 导出 + 导入同期交付，导入入口统一收 zip，裸 YAML 能力下线。
+2. 密钥一律脱敏（范围见 18），manifest 生成待填清单，预检页给输入框当场补。
+3. 闭包里有不可见依赖 → 整体 422 并明确提示无法导出。
+4. 覆盖只对自己拥有的资源开放；包不携带权属信息；新建一律「导入者 owner + private」。
+5. 机器级依赖（runtime / 代码平台 / MCP 可执行文件 / 插件源 / 仓内 `project` 技能）只进
+   `requirements` 声明。
+6. 框架内置资源不进包，只记依赖声明。
+7. 特权节点无对应权限直接拒绝导出，按轴判定。
+8. 体积上限沿用 `SKILL_ZIP_LIMITS`。
+9. 预检匹配：优先自己的同名 → 否则列可见候选让你选 → 都没有则新建。
+10. 导入失败即停 + 回滚已建。
+11. 权限不足 → 预检页标红，不解决不让导。
+12. manifest 只记格式版 + 平台版 + 导出时间。
+13. 插件只带 `spec` + `options`。
+14. 「新建副本」名字自动生成且可现场改。
+15. CLI 导出导入都给，两条命令都必须 `--as-user`。
+16. 导出入口在详情/编辑页「更多操作」；导入入口各列表页 + 统一入口 + 类型不符自动跳转。
 
-### 6.2 设计门后追加（2026-08-08，Codex 12 条 findings 核实后）
+### 6.2 设计门后追加（v2）
 
-17. **加一张表保真原子**（对 A1 / A3 的回应）：新增 `resource_package_imports` journal
-    （逐 artifact 的 phase / fingerprint / DB before-image）+ 一个迁移 + 启动期收敛。
-    ⚠️ 这**推翻**了我第一版「零新表、零迁移」的承诺。技能 / 插件的落地改为复用既有持久化
-    内核（`createManagedSkillWithFiles` / `commitSkillVersion` / plugin coordinator），
-    **不再自造「裸 DB insert + rename」**——`skill-zip.ts:415` 的注释明写那条路会留下
-    `versionState='legacy-unbackfilled'`，**单测能过但活 daemon 上每次都挂**。
-18. **脱敏范围限定在结构化字段**：不扫描技能文件树内容。AC-6 的措辞相应收窄，文档写明
-    「技能目录里硬编码的凭据属于作者责任」。
-19. **同名二义沿用 launch 规则**：导出按 `freezeCallClosure` 的「可见行中最老 ULID 胜出」
-    解析，并在 README / manifest 标注候选数与选中项，不再 422（消解 C8）。
-20. **CLI 两条命令都要 `--as-user`**：导出的 ACL 可见性、闭包判据、C4 分轴门都需要 Actor；
-    没有 Actor 就要么无声 impersonation、要么绕过网页判据。文档同时写明「能访问 appHome /
-    SQLite 的本机操作者本身就是 break-glass 管理员」，不把 CLI 描述成终端用户认证。
-21. **导入端点 `tokenAccess:'allow'`，授权靠逐类权限点**：令牌只要具备相应写权限就能导入，
-    与界面操作**逐字一致**。`'never'` 只为 RFC-247 的 D5 / D6 存在（`registry.ts:44-62`），
-    创建资源不在其列，六类 create 端点全是 `'allow'`——把导入定成 `'never'` 是我读错了规则。
-    令牌矩阵缺 `agents:create` 时，含新代理的包对它同样不可提交（预检页标红那条规则对令牌
-    调用方以 422 形式生效）。
+17. 落地复用既有 pre-stage + big-tx 内核，不自造持久化路径。
+18. 脱敏范围限定结构化字段，不扫技能文件树。
+19. 同名二义沿用 `freezeCallClosure` 的解析规则。
+20. CLI 两条命令都要 `--as-user`；文档写明本机操作者本身是 break-glass 管理员。
+21. 导入端点 `tokenAccess:'allow'`，授权靠逐类权限点，与界面逐字一致。
+
+### 6.3 架构决策（v3，本轮）
+
+22. **归一化：新设计一份表达，intent 与配置包两边都迁**，不以 `IntentChangeset` 为基底
+    向后兼容——它带着「模型输出专用」的历史包裹（session handle 域、给模型看的约束文案），
+    作为平台级表达会长期别扭。
+23. **同一 RFC 一次到位**：共享表达 + 引擎 + intent 迁移 + 配置包，全在 RFC-271。永远不会
+    出现两份实现共存。代价是盘子大、intent 是生产路径、回归面宽——用户已知悉并选择。
+24. **可见即有读权限**：导出的读侧判据只有 ACL 行级可见性，**不**额外要求类型级 `*:read`
+    权限点。AC-7d 是一条**反向锁**（可见但缺该类型权限点必须导出成功）。
+25. **owner 断言进最终事务**：commit 时服务端重算每条允许的动作（不信客户端传来的），并在
+    真正写入的事务内对每个 overwrite 目标断言 `ownerUserId === actor.user.id`。
+    ⚠️ 这不是新规则，是把决策 4 在**新写路径**上补齐——已核实 `commitMcpUpdateInTx`
+    （`mcp.ts:180`）等内核只校验 `expectedConfigHash` **不校验 owner**，owner 门在路由层
+    （`routes/mcps.ts:375`），而导入提交不经过那条路由。详见 `design.md §5.4`。
 
 ## 7. 验收标准
 
+### 表达层（新）
+
+- **AC-B1** `ResourceBundle` 表达覆盖六类资源，且**不含任何场景特有字段**（无 session
+  handle、无 intent 用语、无包路径）。
+- **AC-B2** 引用槽只接受 `BundleRef`（bundle 内 `local:<slug>` 或 provider 解析的
+  `external:<token>`）；裸 id / 裸 name 出现在 payload 里 → parse 失败。
+- **AC-B3** 操作集覆盖六类 × create/update（含新增的 `skill-update`）。
+- **AC-B4** 落地引擎保留既有全部不变量：journal 幂等键、active lease + freshness 下限、
+  pre-stage 不可见、big tx 翻可见、bundleCreatedNames、逆序补偿、启动收敛。
+- **AC-B5** **intent 迁移后行为逐字节不变**：现有 intent 测试套全绿，不许为迁移改判任何一条
+  intent 断言（改判即视为回归）。
+
 ### 导出
 
-- **AC-1** 六类资源的详情 / 编辑页「更多操作」都有「导出配置包」，产物是 zip，文件名取资源名。
-- **AC-2** 包内结构为 §8 的固定布局；`manifest.yaml` 的 `resources` 是权威清单，包内出现未登记
-  的文件时导入**拒绝**（防夹带）。
-- **AC-3** 闭包完整：工作流带出其全部 `agent-single` 代理、`call-workflow` 子工作流、
-  `call-workgroup` 工作组，并递归到代理的技能 / MCP / 插件 / `dependsOn` 子代理。
-- **AC-4** 闭包去重且**去环**（`A → B → A` 不死循环、不重复导出、导入侧也不要求拓扑序）。
-- **AC-4b** 🆕 每个 manifest 条目带 **opaque `packageResourceKey`**（不含源实例信息）；所有依赖
-  边、可移植引用、预检决策与导入重绑一律按该 key 工作，**不按名字**。两个不同 owner 的同名
-  `agent/worker` 各自独立可寻址。
-- **AC-5** 技能带**整棵文件树**（fs 是事实源），不是只有 `SKILL.md`。
-- **AC-6** **结构化字段**中的密钥值收敛为占位符、键名保留；manifest 的 `secrets` 段逐条列出
-  `资源类型 / 资源名 / 字段路径`。覆盖面复用 `intentSecretSlots.ts` 的既有载体清单（MCP argv /
-  URL 内嵌凭据 / headers / oauth / plugin spec·options / agent `frontmatterExtra` / 工作流
-  passthrough 字段 / 脚本 env），**不**含技能文件树内容（决策 18）。
-- **AC-7** 闭包内出现导出者不可见的 **id 域**资源（代理 / 技能 / MCP / 插件）→ **422**
-  `package-export-ref-unavailable`，错误信息明确「因存在你无权访问的依赖，无法导出」。
-- **AC-7b** 🆕 **name 域** call 引用（`call-workflow` / `call-workgroup`）**不得**成为存在性
-  预言机：「零匹配行」与「有行但全部不可见」必须产生**逐字节相同**的 dangling 结果。
-- **AC-7c** 🆕 name 域命中 2+ 可见候选时按 `freezeCallClosure` 同一规则（最老可见 ULID）选定，
-  并在 manifest / README 标注候选数与选中项。
-- **AC-7d** 🆕 **可见即有读权限**（用户原则，2026-08-08 澄清）：导出的读侧判据**只有 ACL
-  行级可见性**一条。闭包里的资源只要对导出者可见（owner / public / grant），就可以被导出，
-  **不再**额外要求该资源类型的 `*:read` 权限点。「你能看见别人的资源，你就拥有这个资源的
-  权限了。」测试须显式锁住这条：**缺类型级权限点但资源可见 → 导出成功**，防止未来有人
-  「顺手补一道门」把它改回去。
-- **AC-8** 闭包内出现特权节点且导出者缺**对应**权限 → 422，**分轴判定**：`lens.scripts &&
-  闭包含 script 节点` 与 `lens.codeHost && 闭包含 code-host-call 节点` 各自独立。
-- **AC-9** `builtin` / `owner=__system__` 资源不写进 `resources`，只写进 `builtins` 声明。
-- **AC-10** runtime / 代码平台 / MCP 可执行文件 / 插件源 / **仓内 `project` 技能**写进
-  `requirements`，且**不含任何密钥**（插件 spec 在此处同样脱敏）。
-- **AC-11** 超过 `SKILL_ZIP_LIMITS` 任一维度 → 422 并点名超限的资源与维度。
-- **AC-12** 根资源沿用现有 exact-revision 保护（`expectedVersion` 不匹配 → 409）；依赖资源取
-  导出时刻快照。
+- **AC-1** 六类资源详情/编辑页「更多操作」都有「导出配置包」，产物是 zip。
+- **AC-2** `manifest.yaml` 的 `resources` 是权威清单；包内未登记文件 → 导入拒绝。
+- **AC-3** 闭包完整（工作流 → 代理 / 子工作流 / 工作组；代理 → 技能 + MCP + 插件 +
+  `dependsOn`；工作组 → 成员代理）。
+- **AC-4** 闭包去重 + 去环；导入侧不要求拓扑序。
+- **AC-4b** 包内身份用 `BundleRef` 的 `local:<slug>`，**与声明顺序无关**且 manifest schema
+  拒绝重复 slug、拒绝悬空 `rootRef`。
+- **AC-5** 技能带整棵文件树。
+- **AC-6** **结构化字段**中的密钥值收敛为占位符、键名保留，且脱敏后的文档**仍满足各资源的
+  严格 schema**（不得像 dump 投影那样把 `oauth` 变成字符串）。
+- **AC-7** 闭包内有导出者不可见的 **id 域**资源 → 422，含传递依赖。
+- **AC-7b** **name 域** call 引用「零匹配」与「全不可见」产生**逐字节相同**的 dangling 结果。
+- **AC-7c** name 域解析**与 `freezeCallClosure` 逐字一致**：`workflowId` cache 优先（且该行
+  仍带该名字），其次最老可见 ULID；manifest 记录候选数与选中项。
+- **AC-7d** **可见即有读权限**的反向锁：actor 缺该类型 `*:read` 但资源可见 → **导出成功**。
+- **AC-8** 特权节点按轴判定：`lens.scripts && 含脚本节点` / `lens.codeHost && 含代码平台节点`
+  各自独立。
+- **AC-9** builtin / `__system__` 资源不入 `resources`，只入 `builtins` 声明。
+- **AC-10** `requirements` 五段（runtimes / codeHosts / executables / pluginSources /
+  projectSkills），**不含任何密钥**（插件 spec 在此处同样脱敏）。
+- **AC-11** 超 `SKILL_ZIP_LIMITS` 任一维度 → 422 并点名资源与维度。
+- **AC-12** 根资源沿用 exact-revision 保护。
 
 ### 导入
 
-- **AC-13** 各资源列表页与统一入口都能上传 zip；包的 `root` 类型与当前页不符时**自动跳转**。
-- **AC-14** 预检页逐条列出包内资源，每条显示：类型、名字、本地匹配结果、可选动作、所需权限
-  是否满足。
-- **AC-14b** 🆕 本地存在**多个**你自己拥有的同名资源时（工作流无唯一约束，这是合法状态），
-  预检页列出全部并要求显式选定一个 stable id，**不得**静默折叠成单个匹配。
+- **AC-13** 各列表页与统一入口都能上传；`rootRef` 类型与当前页不符 → 自动跳转。
+- **AC-14** 预检页逐条列出：类型 / 名字 / 本地匹配 / 可选动作 / 权限是否满足。
+- **AC-14b** 本地存在多个你自己拥有的同名资源时全部列出，要求显式选定，不得静默折叠。
 - **AC-15** 「覆盖」仅在本地同名资源属于你自己时可选。
-- **AC-16** 「新建副本」默认填一个不冲突的名字，且可现场编辑。
-- **AC-17** 任一条目权限不满足 → 标红，**整包不可提交**，写明缺哪个权限点。
-- **AC-18** 待填密钥在预检页逐条给输入框；填了就写入，留空就跳过并进导入报告。
-- **AC-19** 工作组人类席位：包里带 `username`，自动匹配同名本地用户；匹配不上则要求手动指派
-  或删除该席位，**未处理不可提交**。
-- **AC-20** 导入是一个**可收敛**的原子操作：任一步失败或进程被 `SIGKILL` → 启动期收敛能
-  **证明**该前滚还是回滚，最终状态要么整包落地、要么与导入前一致。
-- **AC-20b** 🆕 正式资源行在 journal 到达 `committed` 之前对读 / 启动路径**不可见**，杜绝
-  「DB 已提交、FS 未发布」窗口里被 daemon 读到并启动。
-- **AC-21** 新建资源一律 `owner = 导入者`、`visibility = 'private'`、零 grants；覆盖不改动本地
-  资源的 owner / visibility / grants。
-- **AC-22** 导入后包内的跨资源引用**按 `packageResourceKey` 绑到本次导入的结果**（复用 / 新建
-  混合时各自绑对），而不是本地任意同名资源。
-- **AC-23** `formatVersion` 高于本二进制 → 拒绝并提示升级。
-- **AC-24** 🆕 决策必须携带各类型的**内容级** exact token 并在最终事务内 CAS：工作流 /
-  工作组 `expectedVersion`、代理 `expectedUpdatedAt + expectedAclRevision`、MCP / 插件
-  `expectedConfigHash`、技能 `contentVersion + metaRevision + aclRevision`。仅比对 ACL 不够
-  ——两个并发导入串行执行时会静默丢掉先完成那个的内容。
-- **AC-24b** 🆕 技能目标同时取得 `skill_operation_locks`；同目标的第二个导入返回 409 要求
-  重新预检。
-- **AC-25** 🆕 技能与插件落地**必须**走既有内核（`createManagedSkillWithFiles` /
-  `commitSkillVersion` / plugin 安装 + coordinator），产出完整的 `skill_versions` v1 快照、
-  content hash 与非空 `cached_path`；测试断言导入后的技能能通过 `skillBootVerify`。
+- **AC-15b** **服务端在 commit 时重算 `allowedActions`**，客户端传来的动作只是意向；
+  最终事务内对每个 overwrite 目标断言 owner（决策 25）。
+- **AC-16** 「新建副本」默认名不冲突且可现场改。
+- **AC-17** 任一条目权限不满足 → 标红，整包不可提交。
+- **AC-18** 待填密钥逐条给输入框；留空则跳过并进导入报告。
+- **AC-19** 工作组人类席位带 `username`，自动匹配；匹配不上须手动指派或删除该席位。
+- **AC-20** 导入可收敛：任一步失败或进程被 `SIGKILL` → 启动收敛能**证明**该前滚还是回滚。
+- **AC-20b** 正式资源行在 journal 到达 `committed` 前对读 / 启动路径不可见。
+- **AC-21** 新建一律 `owner = 导入者` + `private` + 零 grants；覆盖不改动 owner / visibility /
+  grants。
+- **AC-22** 跨资源引用按 `BundleRef` 绑到本次导入结果（复用 / 新建混合时各自绑对）。
+- **AC-23** `formatVersion` 高于本二进制 → 拒绝。
+- **AC-24** 决策携带**内容级** exact token 并在最终事务 CAS：工作流/工作组 `expectedVersion`、
+  代理 `expectedUpdatedAt + expectedAclRevision`、MCP/插件 `expectedConfigHash`、技能
+  `contentVersion + metaRevision + aclRevision`。
+- **AC-24b** 内容 token **由 preview 返回、由 decisions 原样回传**；commit 不得现场重读后
+  自比自（那样等于没有 CAS）。
+- **AC-24c** 技能目标同时取 `skill_operation_locks`；同目标第二个导入 409。
+- **AC-25** 技能与插件落地走既有内核，产出完整 `skill_versions` v1 快照、content hash、
+  非空 `cached_path`；测试断言导入后的技能能过 `skillBootVerify`。
+- **AC-25b** **技能覆盖**（`skill-update`）不得留下部分提交：已核实 `commitSkillVersion`
+  收 `DbClient` 且自开事务（`skillVersion.ts:474`），必须为其提供可组合进 big tx 的形态
+  （新增 in-tx 变体或改为 pre-stage + in-tx 发布）。
 
 ### CLI
 
-- **AC-26** `agent-workflow export-package --as-user <u> --type <t> --name <n> [--owner <u2>]
-  -o <file>` 产出与网页完全相同的字节；缺 `--as-user` 直接报错退出。
-- **AC-27** `agent-workflow import-package <zip> --as-user <username>`，缺 `--as-user` 报错退出。
-- **AC-28** `--plan` 输出可编辑的决策文件；`--apply <plan>` 按其执行；`--on-conflict` 提供全局
-  一档快捷方式（与 `--plan` 互斥）。
-- **AC-29** CLI 的权限校验、owner 归属、回滚语义与网页**逐条一致**，不是旁路。
+- **AC-26/27** 两条命令都必须 `--as-user`，缺则报错退出。
+- **AC-28** `--plan` / `--apply` / `--on-conflict`（后者与 `--plan` 互斥）。
+- **AC-29** CLI 的权限校验、owner 归属、回滚语义与网页逐条一致。
 
-### 令牌通道（决策 21）
+### 令牌与能力下线
 
-- **AC-30** 🆕 preview / commit 两个端点是 `tokenAccess:'allow'`；持有相应写权限的令牌能完成
-  与界面**逐字一致**的导入。
-- **AC-30b** 🆕 令牌矩阵缺某类 `*:create` / `*:update` 时，含该类新资源的包**提交失败**
-  （与预检页标红同源的判据，对令牌以 422 呈现），不是静默跳过、也不是放行。
-
-### 能力下线（C1–C6 的锁）
-
-- **AC-31** `GET /api/workflows/:id/export` 与 `POST /api/workflows/import` 不再注册；路由清单
-  测试显式断言其消失。
-- **AC-32** 前端不再存在 `downloadWorkflowLocalDraft` 与 `WorkflowImportDialog` 的 YAML 路径；
-  源码层文本断言锁住。
-- **AC-33** 无 `scripts:author` 的用户导出含脚本节点的工作流 → 422；**有 `scripts:author`、无
-  `code-host-calls:author`、闭包只含脚本节点 → 允许导出**（C4 分轴的正例，独立权限矩阵测试）。
-- **AC-34** 🆕 传递不可见闭包（代理可见但其 `dependsOn` 不可见）→ 422（C6 的锁），错误文案与
-  直接不可见一致。
+- **AC-30/30b** 导入端点 `tokenAccess:'allow'`；令牌矩阵缺某类写权限时含该类新资源的包提交
+  422（与预检页标红同源）。
+- **AC-31~34** 两条旧路由不再注册；前端 YAML 路径消失；C4 分轴正反例；C6 传递不可见 422。
 
 ## 8. 包结构
 
 ```
 code-review-配置包.zip
-├── manifest.yaml          # 包元信息 + 权威资源清单（含 packageResourceKey）+ 内置依赖
-│                          #   + 环境要求 + 待填密钥索引
-├── README.md              # 自动生成的人类摘要
-├── workflows/
-│   ├── code-review.yaml           # 根（manifest.root 指向）
-│   └── deep-audit.yaml            # call-workflow 递归带出
-├── workgroups/
-│   └── fix-squad.yaml             # call-workgroup 递归带出
-├── agents/
-│   ├── auditor.md                 # agent.md（复用现有 parser / serializer）
-│   └── fixer.md                   # dependsOn 子代理闭包
+├── manifest.yaml          # 格式版 / 平台版 / 导出时间 / rootRef / resources（权威清单）
+│                          #   / graph / builtins / requirements / secrets / ambiguousCallRefs
+├── README.md              # 自动生成的人类摘要（中英双段）
+├── bundle.yaml            # ← ResourceBundle：六类 payload + BundleRef 引用图
 ├── skills/
-│   └── review-checklist/          # 技能整树（fs 是事实源）
+│   └── review-checklist/  # 技能整树（payload 引用它，二进制/大文件不进 bundle.yaml）
 │       ├── SKILL.md
 │       └── references/rules.md
-├── mcps/
-│   └── github.yaml                # env / headers / oauth / argv / URL 内嵌凭据均已脱敏
-└── plugins/
-    └── inventory.yaml             # spec（脱敏）+ options（脱敏），无 cachedPath 代码
 ```
 
-文件名只是人类可读的定位符——**权威身份是 `manifest.resources[].packageResourceKey`**。
-同名不同 owner 的资源各自独立成条目，文件名追加 `-2` / `-3` 后缀消歧。
+**与 v2 的结构差异**：v2 把六类资源各拆成一个目录、各自一份文档；v3 的资源声明**统一收进
+`bundle.yaml`**（就是那份共享表达），只有技能文件树因为是二进制/任意文件而留在包内目录。
+这样「包」与「intent 产出的 changeset」是**同一种东西的两种载体**，而不是两套格式。
 
 ## 9. 度量与回归防护
 
-- 闭包遍历、去重、去环、`packageResourceKey` 分配是纯函数，独立单测（不需要 DB）。
-- 六类根 × 「有依赖 / 无依赖 / 有环 / 有内置件 / 有不可见件 / 有传递不可见件 / 有特权节点 /
-  有同名不同 owner / 有同名同 owner」矩阵覆盖。
-- 导入预检匹配规则与三档决策的笛卡尔积覆盖；混合「复用 + 新建」的同名重绑单独锁。
-- **崩溃收敛**用注入式故障点验证：在 journal 的每个 phase 边界注入 `SIGKILL` 等价中断，重启后
-  断言收敛到「整包落地」或「与导入前一致」二者之一。
-- 并发导入用两个 actor 同目标验证 AC-24 / AC-24b 的 409。
-- 导入后的技能必须通过 `skillBootVerify`（AC-25 的锁——这是 `skill-zip.ts:415` 注释里那个
-  「单测能过、活 daemon 上必挂」的坑的专门防线）。
-- C1–C6 每条下线都有一条**源码层文本断言**兜底。
+- 表达层是纯 schema + 纯函数，可脱离 DB 全覆盖。
+- **intent 迁移的验收标准是现有 intent 测试套全绿且零改判**（AC-B5）——这是本 RFC 风险最大
+  的一块，也是最容易自欺的一块：任何「顺手改判一条 intent 断言」都必须当成回归对待。
+- 六类根 × 九种闭包形态矩阵；混合「复用 + 新建」的同名重绑单独锁。
+- 崩溃收敛在 journal 各 phase 边界注入中断，重启后断言收敛到二态之一。
+- 并发导入同目标 → 409。
+- **越权对照**：伪造 `overwrite + 他人资源 id + 正确 hash` 的提交必须被最终事务拒绝
+  （AC-15b 的锁）。
+- C1–C6 每条下线都有源码层文本断言。

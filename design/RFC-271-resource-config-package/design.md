@@ -1,418 +1,350 @@
-# RFC-271 · 技术设计
+# RFC-271 · 技术设计 v3
 
-配套 `proposal.md`。锚点均为本仓当前源码（`aa035f9c`）。本版已吸收 Codex 设计门 12 条 findings
-（7×P1 + 5×P2），逐条核实属实；§10 列出每条的落点。
+配套 `proposal.md`。锚点为本仓当前源码。本版按用户架构决策（22 / 23）重写：**先归一化出一份
+平台级资源表达与落地引擎，intent 与配置包都迁到它上面**，配置包是它的第二个消费者。
+§11 列出两轮设计门共 21 条 findings 的落点。
 
 ## 0. 设计要旨
 
-四条承重线：
+1. **一份表达，多个生产者**。`ResourceBundle` 描述「一组资源 + 它们之间的引用 + 要执行的
+   操作」，不含任何场景特有概念。intent 生产它、配置包生产它、未来的模板市场也生产它；
+   落地引擎只认它。
+2. **引用槽只许放 `BundleRef`**。这条规则今天已经存在于
+   `IntentWorkflowPayloadSchema`（显式拒绝 `agentId` / `agentName`，只收 `agentRef`），
+   泛化后成为整份表达的硬约束——它同时解决「包内同名资源绑错」（设计门 B1）与「模型编出
+   一个 id」两类问题。
+3. **落地引擎保留既有全部不变量，并补齐两条**。`applyIntentChangeset` 已经踩平了 journal
+   幂等 / active lease / bundleCreatedNames / pre-stage 不可见 / 逆序补偿 / 启动收敛；泛化时
+   **一条都不许丢**，另补 ① 最终事务内的 owner 断言、② `skill-update`。
+4. **导出是引擎的逆向，不共用引擎**。导出只需把闭包序列化成 `ResourceBundle`，不写库；
+   导入才走引擎。两者共用的是**表达**，不是执行路径。
 
-1. **闭包遍历是纯函数，IO 在外层**。`directRefsOf` / `walkClosure` 只吃已装载的行，不自己查库；
-   批量装载器负责 DB 读取。闭包规则可脱离 DB 单测，递归里也不会打出 N+1。
-2. **包内身份是 opaque key，不是名字**。`(owner, name)` 只对五类资源唯一、工作流连这个都没有，
-   所以「名字 → id」的重绑在同名场景必然绑错。每个 manifest 条目带
-   `packageResourceKey`，所有边 / 引用 / 决策 / 重绑一律按它工作。
-3. **落地复用 RFC-234 已建成的 pre-stage + big-tx 管线，不自造持久化路径**。
-   `stageManagedSkill`（`skill.ts:313`）的契约白纸黑字：*reserve（不可见行 + op 锁）→ 产文件 →
-   归档 v1，技能在 `commitSkillReadyInTx` 之前一直 INVISIBLE，抛错即已补偿*；
-   `commitSkillReadyInTx`（`skill.ts:304`）的存在理由就是「让 intent apply 事务把**许多**
-   pre-staged 技能与 bundle 其余部分**原子地**翻可见」。插件同理：`installPlugin`
-   （`pluginInstaller.ts:174`）产出不可变 generation，插入内核在其**之后**
-   （`plugin.ts:84,105`）。
-4. **manifest 是权威清单，其余段是派生索引**。`resources` 决定导入读哪些文件；`graph` /
-   `requirements` / `secrets` 只供人类与预检页阅读，**导入侧一律不消费**——否则就是 RFC-146
-   禁止的假单一事实源。
+> **v1/v2 的教训写在这里，供接手者避坑**：v1 自造了「FS 暂存 → DB 事务 → FS 入位」，方向
+> 与既有内核相反并凭空造出不可收敛窗口；v2 改为复用内核但仍自建 journal / 自定义 key /
+> 直接复用 dump 脱敏函数，又各错一次。定式：**多资源批量落地之前，先在仓里找有没有既成的
+> bundle/pre-stage/commit 内核**——`skill-zip.ts:415` 的注释早把自造裸路径的代价写清楚了
+> （留下 `versionState='legacy-unbackfilled'`，**单测能过但活 daemon 上每次 create 都挂**）。
 
-> **对第一版的纠正**：初稿写的是「FS 暂存 → DB 事务 → FS 原子入位」，声称第三段是唯一补偿
-> 窗口。这个方向是反的，也因此留下了「DB 已提交、FS 未发布」的不可收敛窗口。既有内核的
-> 正确顺序是 **FS 先落位但 DB 行不可见 → 一个事务里翻可见**，此时根本不存在那个窗口。
-> `skill-zip.ts:415` 的注释还记着自造裸路径的代价：留下 `versionState='legacy-unbackfilled'`、
-> 无快照，**单测能过但活 daemon 上每次 create 都失败**。
+---
 
-## 1. shared 契约层
+## 1. `ResourceBundle` 表达（shared）
 
-新文件 `packages/shared/src/resourcePackage.ts`（+ `index.ts` re-export）。
+新目录 `packages/shared/src/bundle/`。
 
-### 1.1 常量
+### 1.1 引用域 `BundleRef`
 
 ```ts
-export const PACKAGE_FORMAT_VERSION = 1
-/** 复用技能 zip 的同一套上限。导出与导入共用这一份判据。 */
-export const PACKAGE_LIMITS = SKILL_ZIP_LIMITS   // 总 64MB / 单文件 10MB / 2000 条目 / 12 层
-/** 目录名 ← 资源类型；同时是导入侧的合法顶层目录白名单。 */
-export const PACKAGE_DIRS = { agent:'agents', skill:'skills', mcp:'mcps',
-  plugin:'plugins', workflow:'workflows', workgroup:'workgroups' } as const
-    satisfies Record<AclResourceType, string>
-/** 脱敏后的字段值。导入侧遇到它一律当「未提供」，绝不写成字面量。 */
-export const PACKAGE_SECRET_PLACEHOLDER = '<REDACTED:SECRET>'
+/** bundle 内前向引用：指向同一 bundle 里某个 create op。 */
+export const BUNDLE_LOCAL_REF_RE = /^local:[a-z0-9][a-z0-9_-]{0,63}$/
+/** bundle 外部引用：不透明 token，由 provider 解析成本地资源 id。 */
+export const BUNDLE_EXTERNAL_REF_RE = /^external:[A-Za-z0-9._:#-]{1,128}$/
+
+export const BundleRefSchema = z.string().regex(
+  /^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#-]{1,128})$/,
+  'must be local:<slug> or external:<token>',
+)
 ```
 
-### 1.2 包内身份（Codex B1）
+两种形态覆盖了两个消费者的全部需要：
 
-```ts
-/** 包内稳定身份。不含源实例信息（决策 12）：由 (type, name, ownerDisambiguator) 的
- *  出现序号派生，形如 'agent:worker#1' / 'agent:worker#2'。同名不同 owner 各自独立。 */
-export const PackageResourceKeySchema = z.string().min(1).max(256)
-
-export const PackageResourceEntrySchema = z.object({
-  key: PackageResourceKeySchema,        // ← 权威身份
-  type: AclResourceTypeSchema,
-  name: z.string().min(1).max(256),     // 展示 + 匹配用，不是身份
-  path: z.string().min(1).max(1024),    // 目录型（skill）以 '/' 结尾
-}).strict()
-```
-
-**所有**跨资源引用在包内都改用 key：
-- 工作流 `agent-single` 节点：`agentPackageKey`（替代 `agentName + agentOwnerUsername`）
-- `call-workflow` / `call-workgroup`：`targetPackageKey`（闭包内命中时）或保留裸名字（dangling）
-- agent 的 `skills` / `mcp` / `plugins` / `dependsOn`：key 数组
-- 工作组成员：`agentPackageKey`
-
-包外引用（内置件、dangling 名字）保留名字形态，与 key 域不混。
-
-### 1.3 manifest schema
-
-```ts
-export const PackageManifestSchema = z.object({
-  formatVersion: z.literal(PACKAGE_FORMAT_VERSION),
-  platformVersion: z.string(),          // currentAppVersion()（backupManifest.ts）
-  exportedAt: z.number().int(),
-  rootKey: PackageResourceKeySchema,    // 指向 resources 里的一条
-  resources: z.array(PackageResourceEntrySchema).min(1),
-  graph: z.array(PackageEdgeSchema).default([]),          // 派生索引
-  builtins: z.array(PackageBuiltinRefSchema).default([]), // 内置依赖声明
-  requirements: PackageRequirementsSchema,
-  secrets: z.array(PackageSecretRefSchema).default([]),   // 派生索引
-  /** AC-7c：name 域 call 引用有多个可见候选时的选定记录。 */
-  ambiguousCallRefs: z.array(z.object({
-    fromKey: PackageResourceKeySchema, nodeId: z.string(),
-    name: z.string(), candidateCount: z.number().int().positive(),
-    chosenKey: PackageResourceKeySchema.nullable(),   // null = 选中的行不在闭包内
-  }).strict()).default([]),
-}).strict()
-```
-
-`PackageRequirementsSchema` **五**段（Codex B2 补了第五段），全部只放非敏感字段：
-
-| 段 | 字段 | 来源 |
-|---|---|---|
-| `runtimes` | `name` / `protocol` / `model` | `runtimes` 表；**不含** `binaryPath` / `extraArgsJson` / `lastProbeJson` |
-| `codeHosts` | `provider` | `code-host-call` 节点；**不含** base URL / token |
-| `executables` | `command`（argv[0]） | MCP local 的 `config.command[0]` |
-| `pluginSources` | `name` / `sourceKind` / `spec`（**脱敏后**） | `plugins` 表 |
-| `projectSkills` 🆕 | `name` | agent 的 `{kind:'project'}` 技能引用（仓内技能，不入包） |
-
-每段带 `usedBy: PackageResourceKey[]`。
-
-### 1.4 可移植资源文档 schema
-
-| 类型 | 包内格式 | 复用 | 新增 |
+| 消费者 | `local:` | `external:` 的 token 是什么 | 谁解析 |
 |---|---|---|---|
-| workflow | YAML | `stringifyWorkflowYamlDocument` | 无 `id`；引用改 key 域 |
-| agent | `.md` | `serializeAgentMarkdown` / `parseAgentMarkdown` | 引用改 key 域 |
-| skill | 目录树 | `SKILL.md`（`skill-md.ts`） | 无 |
-| mcp | YAML | — | `PortableMcpSchema` |
-| plugin | YAML | — | `PortablePluginSchema` |
-| workgroup | YAML | — | `PortableWorkgroupSchema` |
+| intent | 同一 changeset 里新建的资源 | session handle `res#agent#3` | intent provider（查会话挂载表） |
+| 配置包导入 | 包里新建 / 副本的资源 | 预检页选定的**本地资源 id** | package provider（决策表） |
+| 配置包导出 | 闭包内的资源 | 闭包外的 dangling 名字选择器 | 导出侧只写不解析 |
+
+**裸 id / 裸 name 永远不得出现在 payload 的引用槽里**（AC-B2）。这是把
+`IntentWorkflowPayloadSchema` 已有的规则提升为整份表达的通则。
+
+`local:<slug>` 的稳定性（设计门 B1）：slug 由**导出侧显式分配并写进 manifest**，不是从声明
+顺序派生的序号；`BundleSchema` 拒绝重复 slug、拒绝悬空引用、拒绝悬空 `rootRef`。
+
+### 1.2 六类 payload
+
+从 `Intent*PayloadSchema` 泛化（去掉给模型看的约束文案与 session 概念，补上包需要的字段）：
+
+| payload | 泛化自 | 变更 |
+|---|---|---|
+| `BundleAgentPayload` | `IntentAgentPayloadSchema` | `dependsOn/mcp/plugins` 由 `IntentRef` → `BundleRef`；`skills` 条目同 |
+| `BundleSkillPayload` | `IntentSkillPayloadSchema` | 文件树条目改为**外部载体引用**（`files: { path, ref }[]`，`ref` 指向包内路径 / intent 的内联内容），因为技能文件可能是二进制 |
+| `BundleMcpPayload` | `IntentMcpPayloadSchema` | 保留 `McpLocalConfig` / `McpRemoteConfig` **原结构**（见 §4.2 脱敏必须 schema-valid） |
+| `BundlePluginPayload` | `IntentPluginPayloadSchema` | 同上 |
+| `BundleWorkflowPayload` | `IntentWorkflowPayloadSchema` | `agentRef` / `call-*` 目标改为 `BundleRef` |
+| `BundleWorkgroupPayload` | `IntentWorkgroupPayloadSchema` | **人类成员补 `username`**（intent 版只有占位符，因为模型不许绑人；包必须能带跨实例的人类席位标识） |
+
+### 1.3 操作与顶层
 
 ```ts
-export const PortableWorkgroupMemberSchema = z.discriminatedUnion('memberType', [
-  z.object({ memberType: z.literal('agent'), agentPackageKey: PackageResourceKeySchema,
-             displayName: WorkgroupMemberDisplayNameSchema,
-             roleDesc: z.string(), sortOrder: z.number().int() }).strict(),
-  z.object({ memberType: z.literal('human'), username: z.string().min(1),
-             displayName: WorkgroupMemberDisplayNameSchema,
-             roleDesc: z.string(), sortOrder: z.number().int() }).strict(),
-])
+export const BUNDLE_OP_KINDS = [
+  'agent-create','agent-update','skill-create','skill-update',      // ← skill-update 新增
+  'mcp-create','mcp-update','plugin-create','plugin-update',
+  'workflow-create','workflow-update','workgroup-create','workgroup-update',
+] as const
+
+export const BundleOpSchema = z.object({
+  opId: z.string().regex(/^op-[1-9][0-9]{0,3}$/),
+  kind: z.enum(BUNDLE_OP_KINDS),
+  /** create：本 op 产出的 local slug；update：目标的 external ref。 */
+  slug: z.string().optional(),
+  target: BundleRefSchema.optional(),
+  /** update 的内容级 CAS token（AC-24），由 provider 填充。 */
+  expect: BundleExpectTokenSchema.optional(),
+  payload: BundlePayloadSchema,
+}).strict()
+
+export const BundleSchema = z.object({
+  bundleVersion: z.literal(1),
+  ops: z.array(BundleOpSchema).min(1).max(512),
+  /** 该 bundle 的「主角」，供 UI/CLI 定位；必须指向 ops 里的某个 slug。 */
+  rootRef: BundleRefSchema.optional(),
+}).strict().superRefine(assertBundleRefsClosed)   // 重复 slug / 悬空引用 / 悬空 rootRef 全拒
 ```
 
-工作组的 `leaderMemberId` 是本地行 id，改用 `leaderDisplayName` 承载
-（`uq_workgroup_members_display` 保证组内 `displayName` 唯一，可作组内稳定键）。
+`BundleExpectTokenSchema` 是六类内容级 token 的联合（AC-24）：
 
-### 1.5 闭包遍历（纯函数）
-
-`directRefsOf` 的每类规则（与既有提取器同源）：
-
-| 资源 | 引用 | 提取自 |
-|---|---|---|
-| workflow | agent | `extractWorkflowAgentRefs`（`resourceRefs.ts:39`） |
-| workflow | workflow | `extractWorkflowWorkflowRefs`（`:64`），**name 域** |
-| workflow | workgroup | `extractWorkflowWorkgroupRefs`（`:69`），**name 域** |
-| agent | skill | `agents.skills` 的 `kind:'managed'`；`kind:'project'` → `requirements.projectSkills` |
-| agent | mcp / plugin / agent | `agents.mcp` / `.plugins` / `.dependsOn` |
-| workgroup | agent | `workgroup_members` 里 `memberType='agent'` 的 `agentId` |
-| skill / mcp / plugin | — | 叶子 |
-
-`walkClosure` 是 BFS + visited，**去环**（AC-4），输出稳定顺序（类型 → key）。
-
-## 2. 后端 · 导出
-
-`packages/backend/src/services/resourcePackage/export.ts`。
-
-### 2.1 两个引用域，两套可见性规则（Codex C1）
-
-这是本 RFC 最容易写错的地方，单列：
-
-| 域 | 谁 | 不可见时 | 理由 |
-|---|---|---|---|
-| **id 域** | `agent-single.agentId`、agent 的 skills / mcp / plugins / dependsOn、工作组成员 agentId | **422** `package-export-ref-unavailable`，文案「因存在你无权访问的依赖，无法导出」 | 调用方手里已经有 canonical id，不构成新的信息泄露；用户决策 3 |
-| **name 域** | `call-workflow.workflowName`、`call-workgroup.workgroupName` | **必须与「零匹配行」逐字节同形**：dangling，导出成功，README 警示 | 否则构成存在性预言机：Alice 用一个尚不存在的名字保存工作流并周期导出，Bob 后来建了同名私有资源，Alice 的导出就从 200 变 422 ⇒ 精确得知 Bob 的私有资源名存在。这正是 `resourceRefs.ts:148-151` 那一位 bit，导出会把它变成可无限轮询、无写操作的预言机 |
-
-name 域解析**只在 actor 的可见集合内**进行；2+ 可见候选时按 `freezeCallClosure`
-（`execution/closure.ts`）的同一条规则「**最老可见 ULID 胜出**」选定，并写进
-`manifest.ambiguousCallRefs`（AC-7c，消解 Codex C8）。
-
-### 2.1b 「整棵树权限」的判据边界 —— 可见即有读权限（用户原则 / AC-7d）
-
-用户 2026-08-08 澄清：**「你能看见别人的资源，你就拥有这个资源的权限了……可见即有读权限。」**
-
-因此「具备整棵树权限才能导出」里的**读侧**只有一条判据，特权节点是另一条**独立**的、
-关于节点内容而非资源可见性的判据：
-
-| 判据 | 内容 | 缺失后果 |
-|---|---|---|
-| **行级可见性**（读侧的唯一判据） | 闭包内每个 id 域资源都对 actor 可见（owner / public / grant） | 422 `package-export-ref-unavailable`（AC-7），含传递依赖（AC-34） |
-| **特权节点**（内容侧，与可见性正交） | 按轴的 `scripts:author` / `code-host-calls:author`（§2.3） | 422 `package-privileged-node-forbidden`（AC-8） |
-
-**显式不做的一道门**：不再逐类校验闭包涉及类型的 `*:read` 权限点。曾一度加过这道门
-（理由是 PAT 矩阵可裁剪，一个只勾 `workflows:read` 的令牌能拿到闭包里的 MCP 配置），
-经用户澄清后**撤销**——`isVisibleRow` 的 owner / public / grant 判定本身就是本平台的读权限
-模型，类型级权限点管的是「能不能走这一类的列表 / 详情路由」，不是「这一行你有没有资格读」。
-两者叠加会让「我明明看得见它、却导不出引用它的工作流」，与产品直觉相悖。
-
-> **令牌通道的实际影响，如实记录**：这意味着一个缺 `mcps:read` 的 PAT，可以通过导出一个
-> 引用了 MCP 的工作流包，间接读到该 MCP 的**非密钥**配置。缓解事实有两条：① 该 MCP 必须
-> 对令牌所属用户 ACL 可见，才会进闭包；② 包里的 `env` / `headers` / `oauth.clientSecret` /
-> argv 内嵌 token / URL 内嵌凭据**全部已脱敏**（§2.2），拿到的是结构不是凭据。
->
-> **回归防线**：`rfc271-export-gates.test.ts` 显式锁住「**缺类型级权限点但资源可见 → 导出
-> 成功**」，防止未来有人以「补齐权限校验」为由把这道门加回去——那会是一次静默的能力收缩。
-
-### 2.2 脱敏（Codex D1）
-
-**不自造字段清单**——复用 `packages/shared/src/intentSecretSlots.ts` 的既有载体覆盖：
-
-| 载体 | 复用函数 |
+| 类型 | token |
 |---|---|
-| MCP argv 内嵌 token / URL 内嵌凭据 / env / headers / oauth | `projectMcpForDump` + `redactUrlForDump` |
-| plugin `spec`（含凭据的 git URL）/ `options` | `projectPluginForDump` |
-| agent `frontmatterExtra` / 工作流 passthrough 自由字段 | `maskFreeJsonSecrets` + `SECRET_KEY_RE` |
-| 脚本节点 `env` | `maskWorkflowScriptEnv` |
-| 兜底 | `scanForCredentialPatterns` + `looksHighEntropy` 作为**第二层**，命中即写进 `manifest.secrets` |
+| workflow / workgroup | `expectedVersion` |
+| agent | `expectedUpdatedAt` + `expectedAclRevision` |
+| mcp / plugin | `expectedConfigHash` |
+| skill | `contentVersion` + `metaRevision` + `aclRevision` |
 
-`requirements.pluginSources.spec` 走**同一条**脱敏（AC-10：requirements 不含任何密钥——初稿
-在这里把 plugin spec 原样复制了一份，与 AC-10 自相矛盾）。
+---
 
-**范围边界（决策 18）**：技能文件树内容**不扫描**。`proposal.md §3` 已把它列为非目标，
-`docs/resource-packages.md` 写明「技能目录里硬编码的凭据属于技能作者的责任」。
+## 2. `BundleApply` 引擎（backend）
 
-**枚举字段绝不脱敏**（RFC-270 教训：脱成占位符会让严格 schema 解析失败）。
+`packages/backend/src/services/bundle/`，从 `services/intent/applyChangeset.ts` 泛化而来。
 
-### 2.3 特权节点门 · 按轴判定（Codex C2）
+### 2.1 Provider 接口
+
+场景差异全部收进这一个接口，引擎本体不认识 intent 也不认识配置包：
 
 ```ts
-const lens = privilegedNodeLensFor(actor)      // { scripts: boolean, codeHost: boolean }
-if (lens.scripts  && closureHasScriptNode(closure))   throw forbidden('scripts:author')
-if (lens.codeHost && closureHasCodeHostNode(closure)) throw forbidden('code-host-calls:author')
+export interface BundleApplyProvider {
+  /** 幂等身份。intent: (sessionId, clientMutationId)；package: (importId)。 */
+  idempotencyKey: { scope: string; key: string }
+  /** 解析 external ref → 本地资源 id（+ 类型校验）。 */
+  resolveExternal(ref: string, expectType: AclResourceType): Promise<string>
+  /** 技能文件载体：intent 内联、package 从 zip 取。 */
+  readSkillFile(ref: string): Uint8Array
+  /** 执行身份。owner 归属与全部授权判据都从它出。 */
+  actor: Actor
+}
 ```
 
-两个维度**本来就独立**（`privilegedNodeRedaction.ts:29`）。初稿写的
-`!lensIsTransparent(lens) && closureHasPrivilegedNode(closure)` 会让「有 `scripts:author`、
-闭包只含脚本节点」的合法 actor 也被 422。当前角色矩阵下两个权限同进同出，所以这是 latent
-契约缺陷而非现网越权——但判据必须按轴写，并配独立权限矩阵测试（AC-32）。
+### 2.2 生命周期（保留既有全部不变量 · AC-B4）
 
-判定覆盖闭包内**每一个**工作流，不只根。
+```
+① claim      journal 插入 phase='prepared'，UNIQUE(scope, key) 幂等
+             ↳ 重复提交返回**原 receipt**，不重跑（设计门 A1：v2 缺这一条，
+               响应丢失后重试会再建一个同名工作流）
+② pre-stage  FS / 安装副作用，产出「DB 不可见」的成果，逐个记 artifacts：
+             · 技能 create → stageManagedSkill(..., {id: 预铸})   reserve(不可见行+op锁)
+             · 技能 update → §2.4 的可组合发布形态
+             · 插件        → installPlugin，**失败时精确清理**（§2.5）
+③ big tx     CAS prepared→applying；一个 dbTxSync 内：
+             · 内容级 CAS（BundleExpectToken）
+             · **owner 断言**（§5.4，新增）
+             · commitSkillReadyInTx / 各 commit 内核 / 三类 CRUD
+             · 按 BundleRef 回填全部引用
+             · bundleCreatedNames 排除同 bundle 待建名字（设计门 B3）
+             · journal → 'committed' + receipt
+④ 幂等尾     清理 staging / backup。失败无害，收敛会重放
+⑤ 收敛       启动 + 每小时：prepared/applying → 逆序补偿 → failed；committed → 重放尾
+             ↳ **active set + freshness 下限**（`ACTIVE_APPLY_JOURNALS` +
+               `CONVERGE_MIN_AGE_MS = 10min`）——v2 缺这两条，一个慢 npm 安装跨过小时
+               tick 就会被判成崩溃任务
+```
 
-### 2.4 zip 打包
+### 2.3 `bundleCreatedNames`（设计门 B3）
 
-仓内只有 `decodeZip`（`skill-zip.ts:62`），需要对偶方向：`encodeZip` 放
-`packages/backend/src/util/zip.ts`，store-only（无压缩，约 120 行，不引第三方依赖）。
-`PACKAGE_LIMITS` 因此约束的是**未压缩**大小，语义直白。
+name 域的 ACL 校验必须排除**同 bundle 内待创建**的名字，否则：Alice 导入互相 call 的新工作流
+A、B，而目标库已有 Bob 私有的同名 A、B —— 无论先写哪个，第一条 call 引用都只匹配到不可见
+外部行，`assertRefsUsableInTx`（`resourceRefs.ts:263-318`）拒绝，**不存在可行拓扑序**。
+`applyChangeset.ts:733,812,819` 已有该机制，泛化时原样带过来。
 
-## 3. 后端 · 导入
+### 2.4 `skill-update` 的可组合性（设计门 A3 / AC-25b）
 
-`packages/backend/src/services/resourcePackage/`。
+**已核实的障碍**：`commitSkillVersion(db: DbClient, ...)`（`skillVersion.ts:474`）收的是
+`DbClient` 且内部自开 `dbTxSync`（`:513-528`），**塞不进 big tx**。若照 v2 那样直接调用，
+会出现「S1 的版本已由内部事务提交、随后 S2 的 token CAS 失败 → 整包判 failed，但 S1 已被改」。
 
-### 3.1 两步式（无服务端暂存态）
+拆成与 create 对称的两段（在 `skillVersion.ts` 内新增，不改既有调用方语义）：
 
-沿用技能 zip 导入的姿势（前端持有文件、传两次），不引入服务端临时存储：
+| 段 | 做什么 | 何时 |
+|---|---|---|
+| `stageSkillVersion(db, opts, skillId, produce, commit)` | 开 version-write op（拿 `skill_operation_locks`）、产 staging、归档候选版本目录，**不碰 live、不改 skills 行** | pre-stage |
+| `commitSkillVersionInTx(tx, staged)` | 事务内写 `skill_versions` 行 + 更新 `skills.contentVersion` + `advancePhase` | big tx |
+| 发布 live 树 | 幂等尾（rename 候选目录到 live），失败由收敛重放 | ④ |
+
+既有的 `commitSkillVersion` 保留为「两段的顺序组合」，其它调用方零改动。
+
+### 2.5 插件安装失败的精确清理（设计门 A1-3）
+
+**已核实**：`installPlugin`（`pluginInstaller.ts:174`）在 npm 失败时直接
+`throw new PluginInstallFailedError`（`:251-254`），调用方拿不到 `InstallResult.generationDir`，
+而清理函数只接受成功结果；通用 GC 要等 24h 且**只要存在任一非终态 node run 就完全不清理**
+（`pluginGenerationGc.ts`）。于是「持续有 `awaiting_human` 任务 + 反复导入坏 spec」会无限
+积累目录。
+
+修法：`installPlugin` 在抛错前把 `generationDir` 挂到错误对象上（或改为返回
+`{ok:false, generationDir}`），引擎把它记进 journal artifacts，由逆序补偿删除。这条修改
+**intent 侧同样受益**，属于泛化的净收益。
+
+---
+
+## 3. intent 迁移（AC-B5）
+
+`services/intent/applyChangeset.ts` 变成薄适配层：把 `IntentChangeset` 翻译成
+`ResourceBundle` + 一个 intent `BundleApplyProvider`（`resolveExternal` 查会话挂载表把
+`res#agent#3` 换成 id），然后调引擎。
+
+**验收标准是现有 intent 测试套全绿且零改判**。任何「顺手改判一条 intent 断言」都按回归处理
+——这是本 RFC 最容易自欺的一处：迁移期改测试比改代码容易得多。
+
+`IntentChangeset` 的对外形态（模型看到的 schema、`INTENT.md` 里的指示）**不变**——模型契约
+是 RFC-234/237 的资产，本 RFC 只换它下面的执行层。
+
+---
+
+## 4. 配置包 · 导出
+
+`services/resourcePackage/export.ts`。流程：
+
+```
+loadRoot(actor, type, id) → assertExactRevision（AC-12，仅根）
+  → walkClosure（纯函数，BFS + visited 去重去环）
+  → 三道门（§4.1）
+  → 序列化成 ResourceBundle（分配 local slug）+ 收集 requirements / builtins / secrets
+  → buildManifest + buildReadme → assertWithinLimits → encodeZip
+```
+
+### 4.1 三道门
+
+| 门 | 判据 | 失败 |
+|---|---|---|
+| **行级可见性**（读侧唯一） | 闭包内每个 id 域资源对 actor 可见，含传递依赖 | 422 `package-export-ref-unavailable`（AC-7 / AC-34） |
+| **特权节点**（内容侧，分轴） | `lens.scripts && 含脚本节点` / `lens.codeHost && 含代码平台节点` 各自独立 | 422 `package-privileged-node-forbidden`（AC-8） |
+| **体积** | `SKILL_ZIP_LIMITS` 四维 | 422 并点名资源与维度（AC-11） |
+
+**显式不做第四道门**（决策 24 / AC-7d）：不逐类校验 `*:read`。用户原则「可见即有读权限」
+——`isVisibleRow` 的 owner/public/grant 判定本身就是读权限模型；类型级权限点管的是「能不能
+走这一类的列表/详情路由」。测试用**反向锁**钉住（可见但缺该类型权限点 → 必须导出成功），
+防止未来有人以「补齐权限校验」为由把门加回去。
+
+> 如实记录：这意味着缺 `mcps:read` 的 PAT 能通过导出间接读到该 MCP 的**非密钥**配置。缓解：
+> ① 该 MCP 必须对令牌所属用户 ACL 可见才进闭包；② 密钥字段全部已脱敏（§4.2）。
+
+### 4.2 脱敏必须产出 **schema-valid** 的文档（设计门 D1）
+
+**已核实的反例**：`projectMcpForDump`（`intentSecretSlots.ts:85`）产出
+`oauth: '‹redacted›'`（**字符串**），而 `McpRemoteConfigSchema`（`schemas/mcp.ts:135`）要求
+`McpOAuthConfigSchema | false`；它还把 argv 改成 `‹redacted›-arg-N`、删掉整个 URL query。
+那是给模型看的**展示投影**，**不是可导入投影**——直接复用会同时造成密钥泄漏面错配、合法
+配置丢失、导入 schema 解析失败三种后果。
+
+因此本 RFC 自建 `packages/shared/src/bundle/secrets.ts`，但**复用它的载体知识**：
+
+| 载体 | 处理 | 借用 |
+|---|---|---|
+| MCP `config.env.*` / `headers.*` | 值 → `PACKAGE_SECRET_PLACEHOLDER`，键保留 | — |
+| MCP `oauth.clientSecret` | 值 → 占位符，**`oauth` 仍是对象** | — |
+| MCP `command[1..]`（argv 内嵌 token） | 只替换命中 `SECRET_KEY_RE` / 高熵的**那一个 token**，argv 结构与长度不变 | `SECRET_KEY_RE` / `looksHighEntropy` |
+| MCP remote `url` 的 userinfo / 敏感 query 值 | 只替换值，**URL 仍是合法 http(s) URL** | `redactUrlForDump` 的 userinfo 判定逻辑 |
+| plugin `spec`（含凭据的 git URL）/ `options` | 同上；`requirements.pluginSources.spec` 走同一条 | 同上 |
+| agent `frontmatterExtra` / 工作流 passthrough | `SECRET_KEY_RE` 命中的值 → 占位符 | `maskFreeJsonSecrets` 的键判定 |
+| 脚本节点 `env` | 值 → 占位符 | — |
+| **兜底扫描** | `scanForCredentialPatterns` + `looksHighEntropy` 命中 → **同样替换成占位符**并记进 `manifest.secrets` | 该函数本体（v2 误以为它会改值，实际只返回 finding） |
+
+**硬性回归**：每个 portable 文档在脱敏**之后**必须仍能通过它自己的严格 schema——测试对六类
+逐条断言（AC-6）。**枚举字段绝不脱敏**（RFC-270 教训）。
+
+### 4.3 name 域引用（设计门 C1 已堵上，AC-7c 本轮修正）
+
+| 情况 | 行为 |
+|---|---|
+| 零匹配行 / 有行但全部不可见 | **逐字节相同**的 dangling 结果（堵预言机） |
+| 有可见候选 | **与 `freezeCallClosure`（`execution/closure.ts:142-219`）逐字一致**：`workflowId` cache 优先（且该行仍带该选择器名字），其次最老可见 ULID |
+
+⚠️ v2 写的是「总选最老可见行」，**与运行时不符**（设计门 E1-1）：节点若指向同名新行 W2 而另有
+更老的 W1，现网启动的是 W2，v2 的导出却会导出 W1——包与实际执行的闭包不是同一个。
+
+---
+
+## 5. 配置包 · 导入
+
+### 5.1 两步式
 
 ```
 POST /api/resource-packages/preview   multipart: file                  → PackagePreview
 POST /api/resource-packages/commit    multipart: file + decisions(JSON) → PackageImportReport
 ```
 
-`commit` 重新解析 zip；决策绑定预检时的身份 + **内容级** token（§3.3）。
+前端持有文件传两次（与技能 zip 导入同姿势），无服务端暂存态。
 
-### 3.2 预检
+### 5.2 预检
 
-```ts
-export interface PackagePreviewEntry {
-  key: PackageResourceKey            // ← 决策按 key 索引，不按名字
-  type: AclResourceType
-  name: string
-  /** 你自己拥有的同名资源。工作流无唯一约束 ⇒ 可能多个，必须显式选（AC-14b）。 */
-  ownMatches: ImportRefCandidate[]
-  /** 其余可见同名候选（带 owner）。 */
-  otherMatches: ImportRefCandidate[]
-  /** 'overwrite' 仅当 ownMatches 非空才出现（AC-15）。 */
-  allowedActions: Array<'reuse' | 'new' | 'overwrite'>
-  defaultAction: 'reuse' | 'new' | 'overwrite'
-  suggestedName: string              // 'new' 时的建议名，已避开本地冲突
-  missingPermissions: PermissionKey[]// 非空 ⇒ 标红且整包不可提交
-  secretFields: string[]             // 待填密钥
-}
-```
+每条产出：`localSlug` / `type` / `name` / `ownMatches[]`（可能多个，AC-14b）/ `otherMatches[]` /
+`allowedActions` / `defaultAction` / `suggestedName` / `missingPermissions` / `secretFields` /
+**`expect`（内容级 token，AC-24b：由 preview 下发、由 decisions 原样回传）**。
 
-`ImportRefCandidate`（`importRef.ts:55`）已带 `id / ownerUserId / ownerUsername / visibility /
-aclRevision`，直接复用。
+v2 复用 `ImportRefCandidate` 是不够的——它只有 `id/owner/visibility/aclRevision`，没有内容
+token；commit 若现场重读只会拿新值与新值自比，等于没有 CAS。
 
-权限判据：`reuse` → `<type>:read`；`new` → `<type>:create`；`overwrite` → `<type>:update`。
-工作流额外：含 `script` 节点需 `scripts:author`、含 `code-host-call` 节点需
-`code-host-calls:author`——这两个门今天就在 `prepareWorkflowSave` / `insertWorkflowInTx` 上
-（RFC-270），预检只是把它**提前可见**，不新增强制点也绕不过。
+### 5.3 提交 = 翻译成 Bundle + 调引擎
 
-另有三段独立块：`builtins`（本地找不到同名内置件 → 标红）、`humanSeats`（未匹配的必须指派或
-删除）、`requirements`（只展示，不阻断）。
+决策表 → `ResourceBundle`：`reuse` 不产生 op（引用改为 `external:<选定id>`）；`new` 产生
+create op；`overwrite` 产生 update op（带 `expect`）。然后交给 §2 的引擎。
 
-### 3.3 提交 · 复用 RFC-234 的 pre-stage + big-tx 管线（Codex A1 / A2 / A3 / B3）
+A1 / A3 / B1 / B3 / A2 因此**不是被修好，而是不存在了**——那些都是引擎的属性。
 
-生命周期与 `intentApplyJournal`（`schema.ts:3491`，`applyChangeset.ts:9-23`）**逐条同构**：
+### 5.4 owner 断言必须在最终事务里（设计门 E1-2 / 决策 25 / AC-15b）
 
-```
-① claim      新表插入 phase='prepared' 行（UNIQUE(importId) 幂等声明）
-② pre-stage  FS / 安装副作用，全部产出「DB 不可见」的成果，逐个记进 journal artifacts：
-             · 技能 → stageManagedSkill(..., { id: 预铸id })   reserve(不可见行+op锁)→产文件→归档v1
-             · 插件 → installPlugin(...)                       不可变 generation 目录
-             （抛错即已补偿，见各内核自身契约）
-③ big tx     CAS journal prepared→applying；一个 dbTxSync 内：
-             · 内容级 CAS（见下表）
-             · commitSkillReadyInTx / commitSkillVersion / plugin 插入内核
-             · agent / workflow / workgroup 的 insert / update
-             · 按 packageResourceKey 回填全部引用
-             · journal → 'committed' + receipt
-④ 幂等尾     清理 staging / backup 目录。失败无害，收敛会重放
-⑤ 收敛       启动期 + 每小时：prepared/applying → 逆序补偿 artifacts → 'failed'（零可见）；
-             'committed' → 重放幂等尾
-```
+**已核实**：`commitMcpUpdateInTx`（`mcp.ts:180`）只校验 `expectedConfigHash`，**不校验
+owner**；owner 门在路由层 `routes/mcps.ts:375` 的 `requireResourceOwner`。插件同构
+（`plugin.ts:409` / `routes/plugins.ts:56`）。
 
-**「DB 已提交、FS 未发布」的窗口不存在**：FS 先落位但 DB 行不可见，`commitSkillReadyInTx`
-是唯一线性化点。这也自然满足 AC-20b（journal 未 committed 前正式行对读 / 启动路径不可见）。
+导入提交是**一条不经过那些路由的新写路径**，所以那道门不会被执行。若 commit 只做「内容 CAS +
+ACL fence」：
 
-**预铸 id 消解拓扑序要求**（Codex B3）：`stageManagedSkill` 已支持 `meta.id`
-（注释原文：*pre-minted bundle id so same-bundle refs resolve before insert*）。六类资源全部
-在 ② 之前预铸 id，③ 里一次写入，因此 `A → B → A` 的 call 环**不需要**拓扑序，AC-4 的导出
-承诺与导入不再冲突。
+1. Bob 有一个 **public** MCP `github`。Alice 能看见它（public），预检响应里**本来就带着**
+   它的 id（要展示「本地已有同名候选」）。
+2. Alice 把提交里那一条的 `action` 从 `reuse` 改成 `overwrite`（F12 或 curl，一个字段值）。
+3. 内容 CAS 过（Bob 没动过，hash 对）、ACL fence 过（public，看得见）→ **UPDATE 执行**。
+4. 结果：**同一行、同一个 id、owner 仍是 Bob**，但 `command` / `env` / `url` 变成 Alice 的。
+   没有新行产生，任何「同名优先级」规则都不会介入；Bob 界面上看还是他自己的 MCP。若是
+   local stdio MCP，`command` 被改写意味着 **Bob 的任务会执行 Alice 指定的可执行文件**。
 
-**内容级 CAS（Codex A2）**——只比 ACL 不够，两个并发导入串行执行会静默丢掉先完成那个的内容：
+**两道修法，缺一不可**：
 
-| 类型 | 决策必须携带的 token | 出处 |
-|---|---|---|
-| workflow | `expectedVersion` | `schemas/workflow.ts:410` |
-| workgroup | `expectedVersion` | `schemas/workgroup.ts:391` |
-| agent | `expectedUpdatedAt + expectedAclRevision` | `schemas/agent.ts:414` |
-| mcp / plugin | `expectedConfigHash` | `schemas/mcp.ts:180` / `plugin.ts:83` |
-| skill | `contentVersion + metaRevision + aclRevision` | `skill-zip.ts:376` |
+- **服务端重算 `allowedActions`**：客户端传来的动作只是意向，commit 用与预检同一份纯函数
+  重新推导一遍。UI 不是边界。
+- **最终事务内断言 owner**：对每个 update 目标在 big tx 里断言
+  `row.ownerUserId === actor.user.id`。放在事务里而非之前，是因为「检查」与「写入」之间
+  权属可能变（转移 / 改私有）——这就是「线性化」的含义。
 
-技能目标同时取 `skill_operation_locks`（`skillOperations.ts` 的通用互斥原语），同目标第二个
-导入 → 409 要求重新预检（AC-24b）。ACL fence 仍复用 `assertImportRefsStableInTx`
-（`importRefs.ts:172`），与内容 CAS 是两道**并列**的门。
+这不是新规则，是把决策 4（「覆盖只能覆盖自己的」）在新写路径上补齐。引擎层实现，
+**intent 侧同样受益**。
 
-**owner / visibility（AC-21）**：新建一律 `ownerUserId = actor.user.id` + `visibility='private'`
-+ 零 grants（RFC-231）；覆盖**不写** owner / visibility / grants 三列。
+---
 
-### 3.4 新表
+## 6. 路由 · CLI · 前端
 
-```
-resource_package_imports        -- 形态照抄 intent_apply_journal
-  id                TEXT PK     -- ULID
-  actor_user_id     TEXT NOT NULL
-  state             TEXT NOT NULL   -- prepared | applying | committed | failed
-  root_key          TEXT NOT NULL
-  prepared_artifacts_json TEXT      -- [{kind:'skill'|'plugin', id, opId?, stagingPath?}]
-  receipt_json      TEXT
-  created_at / updated_at INTEGER NOT NULL
-```
-
-一个迁移。⚠️ 这推翻初稿「零新表零迁移」的说法，已在 `proposal.md` 决策 17 记明。
-收敛逻辑若能与 `applyChangeset` 的那份抽出共用则共用；不能则同构实现并互相加断言锁。
-
-### 3.5 防夹带（AC-2）
-
-解 zip 后：路径必须落在 `PACKAGE_DIRS` 白名单顶层目录或是 `manifest.yaml` / `README.md`；
-每个文件必须在 `manifest.resources[].path` 登记（技能目录按前缀匹配）；出现未登记条目 → 422
-`package-unlisted-entry`。zip slip（`..` / 绝对路径 / 符号链接）由 `decodeZip` 既有的归一化
-保证，复用而非重写。
-
-## 4. 路由与权限
+### 6.1 路由
 
 | 方法 | 路径 | 权限 | tokenAccess |
 |---|---|---|---|
-| GET | `/api/{agents,skills,mcps,plugins,workflows,workgroups}/:id/export-package` | 对应 `*:read` | `'allow'` |
+| GET | `/api/{六类}/:id/export-package` | 对应 `*:read` | `'allow'` |
 | POST | `/api/resource-packages/preview` | 六类 `*:read` | `'allow'` |
-| POST | `/api/resource-packages/commit` | 六类 `*:read` + §3.2 逐条判据 | `'allow'` |
+| POST | `/api/resource-packages/commit` | 六类 `*:read` + §5.2 逐条判据 | `'allow'` |
 | ~~GET~~ | ~~`/api/workflows/:id/export`~~ | — | 下线（C1） |
 | ~~POST~~ | ~~`/api/workflows/import`~~ | — | 下线（C2） |
 
-工作流 / 工作组的导出接 `?expectedVersion=`（AC-12）。
+`TokenAccess` 合法值是 `'allow' | 'never'`（`registry.ts:62`）；`'never'` 只为 RFC-247 的 D6
+（令牌不得再签令牌）与 D5（令牌不得改 owner/grants/visibility 的四种 URL 形态）存在，创建
+资源不在其列，六类 create 端点全是 `'allow'`。**不新增权限点**（目录保持 67）。
 
-**不新增权限点**（目录保持 67 条）。路由 permission 数组是 **AND**（`registry.ts:65`），当前三种
-角色都带六类 read，所以粗粒度门只挡完全无关的调用方；精确判据在业务层——与 RFC-099
-「保存时只校验新增引用」的分层姿势一致。
-
-### 4.1 令牌通道（决策 21 / Codex 的候选 C6）
-
-`TokenAccess` 的合法值是 `'allow' | 'never'`（`registry.ts:62`）——初稿写的 `'deny'` 不存在。
-初稿把导入端点定为 `'never'`，设计门指出这会切断现有 `POST /api/workflows/import`
-（`tokenAccess:'allow'`）的令牌自动化。**核查后确认是我读错了规则**：`registry.ts:44-62` 写明
-`'never'` 是 permission points 之外的独立门，只为 RFC-247 的两条决策存在——
-
-- **D6** 令牌不得再签令牌 ⇒ `/api/auth/*` 全关；
-- **D5** 令牌不得改 owner / grants / visibility ⇒ 四种具体 URL 形态（六类资源的
-  `PUT /api/{res}/:id/acl`、`PUT /api/tasks/:id/members`、
-  `PUT /api/workgroup-tasks/:taskId/config`）。
-
-**创建资源不在其列**，而六类资源的 create 端点**全部**是 `'allow'`
-（`agents.ts:197` / `skills.ts:93` / `mcps.ts:332` / `plugins.ts:113` / `workgroups.ts:130` /
-`workflows.ts:131`）。导入新建的资源是 `owner = 令牌所属用户` + `private` + 零 grants，属于
-「创建自己的私有资源」，不是 D5 说的「改动既有资源的权属」。
-
-因此两个导入端点取 `'allow'`，授权靠 §3.2 的逐类权限点：令牌矩阵缺 `agents:create` 时，含新
-代理的包对它同样不可提交——预检页对人类标红的那条判据，对令牌调用方以 422 呈现（AC-30 /
-AC-30b）。**与界面操作逐字一致，既不新增收缩也不开旁路。**
-
-## 5. 前端
-
-### 5.1 导出入口（AC-1）
-
-六类详情 / 编辑页的「更多操作」抽屉各加一条：工作流把 `workflows.edit.tsx:1191` 的
-「导出 YAML」原地改名；工作组抽屉新增；代理 / 技能 / MCP / 插件详情页各新增。
-
-新 `lib/resource-package-download.ts`：抽出 `safeDownloadBaseName`（RFC-264 的 Unicode 安全
-文件名）共用，然后**删除** `workflow-draft-export.ts` 的本地草稿导出路径（C3）。
-
-### 5.2 导入预检页（AC-13 / AC-14）
-
-新组件 `components/ResourcePackageImportDialog.tsx`，`<Dialog size="full">`；每一行用既有公共
-原语，**零自写 chrome**：
-
-| 元素 | 用什么 |
-|---|---|
-| 弹窗 | `components/Dialog.tsx` |
-| 动作三选一 | `.segmented`（`styles.css`） |
-| 候选资源选择（含多个 own match） | `components/Select.tsx` |
-| 副本名 / 密钥输入 | `components/Form.tsx` 的 `<Field>` + `<TextInput>` |
-| 状态标记 | `<StatusChip>` |
-| 错误 / 空 / 加载 | `<ErrorBanner>` / `<EmptyState>` / `<LoadingState>` |
-
-`WorkflowImportDialog.tsx` 删除（C2）；其三档冲突交互被新预检页吸收，是它的超集。
-
-导入入口（AC-13）：六类列表页各一个 + 统一入口；读 manifest 的 `rootKey` 对应类型，与当前页
-不符则 `router.navigate` 到对应列表页并透传已解析文件。
-
-## 6. CLI
-
-`packages/backend/src/cli/package.ts`，在 `cli/start.ts` 命令表注册：
+### 6.2 CLI
 
 ```
 agent-workflow export-package --as-user <u> --type <t> --name <n> [--owner <u2>] -o <file>
@@ -420,109 +352,117 @@ agent-workflow import-package <zip> --as-user <u>
         [--plan | --apply <plan.yaml>] [--on-conflict reuse|new|fail] [--dry-run]
 ```
 
-- **两条命令都必须 `--as-user`**（Codex C3 / 决策 20）：导出的 ACL 可见性、闭包判据、§2.3 分轴
-  门都需要 Actor。缺了就只有三条坏路：用 `--owner` 构造 Actor = 无声明 impersonation；用
-  system principal = 绕开网页判据；不构造 Actor = AC-26「与网页完全相同」不可实现。
-- 解析成真实 `users` 行并构造与 HTTP 同构的 `Actor`（含权限矩阵），全部判据走**同一套服务
-  函数**（AC-29）。
-- 文档明确写：**能访问 appHome / SQLite 的本机操作者本身就是 break-glass 管理员**
-  （`cli/user.ts` 既有边界），`--as-user` 是**归属声明**而非身份认证，不要把 CLI 描述成
-  终端用户认证通道。
-- `--plan` 输出 = `PackagePreview` 的 YAML + 每条 `action` 默认值；`--apply` 读回校验后喂给
-  commit 服务。`--on-conflict` 是「全部设成同一档」的语法糖，与 `--plan` 互斥。
-- 与 `cli/restore.ts:23` 的 `--dry-run` / `--yes` 两段式风格一致。
+两条都必须 `--as-user`（导出的 ACL 可见性与分轴特权门都需要 Actor）。文档写明：**能访问
+appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-user` 是归属声明而非身份
+认证。
+
+### 6.3 前端
+
+导出：六类详情/编辑页「更多操作」各加一条；工作流那条由「导出 YAML」原地改名。
+导入：新 `components/ResourcePackageImportDialog.tsx`，`<Dialog size="full">` + `.segmented` +
+`<Select>` + `<Field>/<TextInput>` + `<StatusChip>`，**零自写 chrome**。六类列表页各一个入口
++ 统一入口 + 类型不符自动跳转。
+
+---
 
 ## 7. 数据与迁移
 
-**一张新表 + 一个迁移**（§3.4）。除此之外零 schema 变更、零新权限点。资源写入全部走既有内核
-与 CRUD 服务，不绕过任何既有校验或门。
+- 新表 `resource_bundle_applies`（journal，泛化自 `intent_apply_journal`）+ 一个迁移。
+- `intent_apply_journal` 的存量行：迁移期**保留原表与原收敛器**直到无未结行，新 apply 一律
+  写新表；旧表在后续 RFC 删除（本 RFC 不删，避免升级瞬间有未结 intent 时丢掉收敛能力）。
+- 无其它 schema 变更、不新增权限点。
 
-## 8. 失败模式与取舍
+## 8. 失败模式
 
-| 场景 | 行为 | 理由 |
-|---|---|---|
-| 闭包内 **id 域**资源不可见 | 422 + 明确提示「无法导出」 | 决策 3；已知这是新增收缩（C7） |
-| 闭包内 **name 域**引用无可见候选 | 导出成功，dangling，README 警示 | 与「零匹配」同形，堵预言机（C1） |
-| name 域 2+ 可见候选 | 按最老可见 ULID 选定 + manifest 标注 | 与 `freezeCallClosure` 逐字一致（消解 C8） |
-| 闭包内特权节点且缺**对应**权限 | 422，按轴 | C4 / Codex C2 |
-| 超体积上限 | 422 并点名资源 + 维度 | AC-11 |
-| pre-stage 阶段失败 | 各内核自补偿 + journal → failed | 零可见副作用 |
-| big tx 失败 | SQLite 回滚 + 逆序补偿 artifacts | 零可见副作用 |
-| 进程被 SIGKILL | 启动收敛：prepared/applying → 补偿 → failed；committed → 重放幂等尾 | AC-20 |
-| 并发导入同目标 | 内容 CAS 409 + 技能 op 锁 409 | AC-24 / AC-24b |
-| `formatVersion` 更高 | 拒绝，提示升级 | AC-23 |
-| 包内未登记文件 | 422 `package-unlisted-entry` | AC-2 |
-| agent 的 `project` 技能 | 不入包，进 `requirements.projectSkills` | 仓内技能属代码仓 |
-| 技能文件树里的硬编码密钥 | **不扫描、原样入包** | 决策 18；文档写明是作者责任 |
-
-**已知不对称（显式承认，不修）**：包不携带版本号 / 修改时间 / ACL 授权名单，所以
-「导出→导入→再导出」不是字节幂等的。这是决策 4 与决策 12 的直接后果。
+| 场景 | 行为 |
+|---|---|
+| 闭包内 id 域资源不可见（含传递） | 422 + 明确提示 |
+| name 域零匹配 / 全不可见 | 逐字节相同的 dangling |
+| name 域有可见候选 | 与 `freezeCallClosure` 逐字一致的解析 |
+| 特权节点缺对应权限 | 422，分轴 |
+| 超体积 | 422 并点名 |
+| pre-stage 失败 | 各内核自补偿 + 插件 generation 精确删除 + journal → failed |
+| big tx 失败 | SQLite 回滚 + 逆序补偿 |
+| 进程被 SIGKILL | 启动收敛（带 active set + 10min 下限） |
+| 重复提交同 idempotencyKey | 返回**原 receipt**，不重跑 |
+| 并发导入同目标 | 内容 CAS 409 + 技能 op 锁 409 |
+| **伪造 overwrite 他人资源** | **最终事务内 owner 断言拒绝**（§5.4） |
+| `formatVersion` 更高 | 拒绝 |
+| 包内未登记文件 | 422 `package-unlisted-entry` |
+| 技能文件树里的硬编码密钥 | 不扫描、原样入包（决策 18，文档写明作者责任） |
 
 ## 9. 测试策略
 
-### shared（纯函数，无 DB）
-- `resource-package-closure.test.ts`：六类根 × {无依赖 / 线性链 / 菱形共享 / 自环 / 互环 /
-  含内置件 / 同名不同 owner}；断言去重、去环、key 分配稳定且唯一。
-- `resource-package-manifest.test.ts`：schema 正反例；`formatVersion` 高低版本判定。
-- `resource-package-portable.test.ts`：三个新 Portable schema round-trip；工作组
-  `leaderDisplayName ↔ leaderMemberId` 换算。
-- `resource-package-secrets.test.ts`：**逐 carrier** 验证（MCP argv / URL 内嵌凭据 / headers /
-  oauth / plugin spec / plugin options / frontmatterExtra / 工作流 passthrough / 脚本 env），
-  **不**只断言「与 `redactMcpRecord` 一致」；断言 `requirements.pluginSources.spec` 同样脱敏；
-  断言枚举字段不被脱敏。
+### shared
+- `bundle-ref.test.ts`：`local:` / `external:` 正反例；裸 id / 裸 name 被拒。
+- `bundle-schema.test.ts`：重复 slug、悬空引用、悬空 `rootRef` 全拒（AC-4b）。
+- `bundle-payload.test.ts`：六类 payload round-trip。
+- `bundle-secrets.test.ts`：**逐 carrier** 验证 + **脱敏后仍过各自严格 schema**（AC-6，
+  专门锁住 `oauth` 不得变成字符串、argv 结构不变、URL 仍合法）。
+- `package-closure.test.ts`：六类根 × 九形态矩阵。
 
 ### backend
-- `rfc271-export-closure.test.ts`：AC-3 / AC-4 / AC-4b / AC-5 / AC-9 / AC-10 / AC-12。
-- `rfc271-export-gates.test.ts`：AC-7（含 **AC-34 传递不可见**）、**AC-7d 可见即有读权限**
-  （actor 缺 `mcps:read` 但该 MCP 对其可见 → **导出成功**；这是一条「不许把门加回来」的
-  反向锁）、**AC-7b 预言机对照**
-  （零匹配 vs 全不可见，断言响应逐字节相同）、AC-7c、AC-8 + AC-33（**分轴权限矩阵**）、AC-11。
-- `rfc271-import-preview.test.ts`：AC-14 / AC-14b（多个 own match）/ AC-15 / AC-16 / AC-17 /
-  AC-19。
-- `rfc271-import-commit.test.ts`：AC-20（journal 各 phase 边界注入中断 + 重启收敛）/ AC-20b /
-  AC-21 / AC-22（**复用+新建混合的同名重绑**）/ AC-24 / AC-24b（并发 409）。
-- `rfc271-import-kernels.test.ts`：**AC-25** —— 导入后的技能能通过 `skillBootVerify`、
-  有 `skill_versions` v1 与 content hash；插件 `cached_path` 非空。这是 `skill-zip.ts:415`
-  那个「单测能过、活 daemon 上必挂」的坑的专门防线。
-- `rfc271-package-antitamper.test.ts`：AC-2 未登记文件、zip slip、超深目录。
-- `rfc271-routes.test.ts`：AC-31（两条旧路由不再注册）+ **AC-30 / AC-30b**（导入端点是
-  `tokenAccess:'allow'`；令牌矩阵缺 `agents:create` 时含新代理的包提交 422，与预检页标红同源）。
-- `rfc271-cli.test.ts`：AC-26 ~ AC-29（含「CLI 不是权限旁路」对照）。
+- `rfc271-bundle-engine.test.ts`：AC-B4 全部不变量（幂等重放返回原 receipt、active
+  lease、bundleCreatedNames、pre-stage 不可见、逆序补偿、启动收敛注入中断）。
+- `rfc271-bundle-owner-gate.test.ts`：**AC-15b 越权对照**——伪造 `overwrite + 他人 public
+  资源 id + 正确 hash`，断言最终事务拒绝；且服务端重算的 `allowedActions` 不含 overwrite。
+- `rfc271-skill-update.test.ts`：AC-25b——两个技能覆盖 + 第三个 op 失败，断言**两个技能都
+  没被改**；导入后技能过 `skillBootVerify`。
+- `rfc271-export-gates.test.ts`：AC-7 / AC-34 / **AC-7b 逐字节对照** / AC-7c（cache 优先，
+  不是总选最老）/ **AC-7d 反向锁** / AC-8 分轴正反例 / AC-11。
+- `rfc271-import-preview.test.ts`：AC-14 / AC-14b / AC-15 / AC-17 / AC-19 / **AC-24b
+  token 下发与回传**。
+- `rfc271-import-commit.test.ts`：AC-20 / AC-20b / AC-21 / AC-22 / AC-24 / AC-24c。
+- `rfc271-package-antitamper.test.ts`：AC-2 / zip slip / 超深目录。
+- `rfc271-routes.test.ts`：AC-30 / AC-30b / AC-31。
+- `rfc271-cli.test.ts`：AC-26~29。
+- **`rfc271-intent-parity.test.ts`**：AC-B5——现有 intent 测试套全绿且**零改判**的守卫。
 
 ### frontend
-- `rfc271-export-actions.test.tsx`：六类详情页都有「导出配置包」；工作流那条不再叫「导出 YAML」。
-- `rfc271-import-dialog.test.tsx`：三档动作渲染、标红阻断提交、多 own match 选择器、密钥输入、
-  副本改名、类型不符跳转。
-- `rfc271-capability-removal.test.ts`：源码层文本断言锁住 C1–C3。
+- `rfc271-export-actions.test.tsx` / `rfc271-import-dialog.test.tsx` /
+  `rfc271-capability-removal.test.ts`（C1–C3 源码层文本断言）。
 
-### 显式改判的既有断言（预计）
+### 显式改判的既有断言
 
 | 文件 | 改判 | 原因 |
 |---|---|---|
 | `workflow-draft-export.test.ts` | 删本地草稿导出用例 | C3 |
 | `workflow-import-dialog.test.tsx` | 整文件删除 | C2 |
-| `workflows-pages.test.tsx` | 「导出 YAML」文案断言改判 | C1 |
-| `rfc199-workflow-exact-operations.test.ts` | `operation:'export'` hook 断言改指新端点 | C1 |
-| `rfc243-call-refs-yaml.test.ts` | YAML 导出断言迁移到包导出 | C1 |
-| `route-error-code-coverage` | 新增错误码族登记 | 新路由 |
-| RFC-270 的 export 出口用例 | 「遮蔽后可导出」→「按轴拒绝导出」 | C4 |
+| `workflows-pages.test.tsx` | 「导出 YAML」文案 | C1 |
+| `rfc199-workflow-exact-operations.test.ts` | export hook 指向新端点 | C1 |
+| `rfc243-call-refs-yaml.test.ts` | 迁到包导出 | C1 |
+| RFC-270 的 export 出口用例 | 「遮蔽后可导出」→「按轴拒绝」 | C4 |
+| **intent 测试套** | **零改判**（AC-B5） | 迁移是纯重构 |
 
-⚠️ `route-error-code-coverage` 用 `git ls-files` 枚举源文件，**未追踪的新文件对它是盲的**——
-本 RFC 新增文件多，落地时必须先 `git add -N` 再跑门禁（`docs/dev-gotchas.md` 已有该定式）。
+⚠️ `route-error-code-coverage` 用 `git ls-files` 枚举，未追踪的新文件对它是盲的——新增文件
+多，落地时先 `git add -N` 再跑门禁。
 
-## 10. Codex 设计门 findings 落点
+## 10. 风险
 
-| # | 级别 | 落点 |
-|---|---|---|
-| A1 无持久化批次状态与可见性屏障 | P1 | §3.3 改为 pre-stage + big-tx（窗口本身消失）+ §3.4 新表 + 启动收敛 |
-| A2 fence 只锁 ACL 不锁内容 | P1 | §3.3 内容级 CAS 表 + `skill_operation_locks` |
-| A3 绕过技能版本状态机 / 插件预安装 | P1 | §0 要旨 3 + §3.3 复用既有内核；AC-25 + `rfc271-import-kernels.test.ts` |
-| B1 包内无稳定身份 | P1 | §1.2 `packageResourceKey`；§3.2 `ownMatches[]` |
-| B2 `project` 技能无处承载 | P2 | §1.3 `requirements.projectSkills` |
-| B3 导出容环 / 导入要拓扑序 | P2 | §3.3 预铸 id，一次写入，不要求拓扑序 |
-| C1 存在性预言机 | P1 | §2.1 两域两规则表 + AC-7b 逐字节对照测试 |
-| C2 特权门未按轴 | P2 | §2.3 分轴 + AC-32 权限矩阵 |
-| C3 CLI 导出无 Actor 来源 | P2 | §6 两条命令都要 `--as-user` + break-glass 边界说明 |
-| D1 结构化密钥面不全 | P1 | §2.2 复用 `intentSecretSlots.ts` + 逐 carrier 测试 |
-| D2 技能文件树密钥 | P1 | 按用户决策 18 **明确划出保证范围**（非目标 + 文档写明责任归属） |
-| E1 能力清单漏项 | P2 | `proposal.md §5` 补 C6（传递不可见闭包），拆 C5a / C5b，修正 C4；PAT 通道经核查是我读错规则、按 §4.1 改回 `'allow'` 故不成为收缩 |
+| 风险 | 缓解 |
+|---|---|
+| **intent 迁移打断生产路径** | AC-B5 零改判守卫；迁移作为独立 commit 先落地并跑全套，再接包 |
+| 泛化时丢掉某条既有不变量 | `rfc271-bundle-engine.test.ts` 逐条点名；泛化前把 `applyChangeset.ts` 的不变量列成清单对照 |
+| 新旧 journal 并存期语义分裂 | 旧表只读收敛存量、新 apply 一律写新表；旧表删除留给后续 RFC |
+| `skill-update` 拆两段引入回归 | 既有 `commitSkillVersion` 保留为两段的顺序组合，其它调用方零改动 |
+| 盘子过大一次推不动 | §PR 拆分：表达层 → 引擎 → intent 迁移 → 导出 → 导入 → 前端/CLI → 下线，逐个独立可绿 |
+
+## 11. 两轮设计门 findings 落点
+
+| 轮次·编号 | 落点 |
+|---|---|
+| R1-A1 / R2-A1 无可见性屏障、journal 不同构 | §2.2 复用既有生命周期 + 幂等键 + active lease |
+| R1-A2 / R2-A2 fence 只锁 ACL | §1.3 `BundleExpectToken` + §5.2 由 preview 下发回传（AC-24b） |
+| R1-A3 / R2-A3 绕过技能/插件持久化协议 | §2.4 `skill-update` 两段拆分 + §2.5 插件失败精确清理 |
+| R1-B1 / R2-B1 包内无稳定身份 | §1.1 `BundleRef` + 显式分配 slug + schema 拒重复/悬空 |
+| R1-B2 project 技能无处承载 | `requirements.projectSkills` |
+| R1-B3 / R2-B3 环形与拓扑序 | §2.3 `bundleCreatedNames` |
+| R1-C1 存在性预言机 | §4.3（R2 确认已堵上） |
+| R1-C2 特权门未按轴 | §4.1（R2 确认已堵上） |
+| R1-C3 CLI 无 Actor | §6.2（R2 确认已堵上） |
+| R1-D1 / R2-D1 脱敏面与投影语义 | §4.2 自建 schema-valid 投影 + 复用载体知识 |
+| R1-D2 技能文件树密钥 | 决策 18 明确划出范围（R2 确认已堵上） |
+| R1-E1 能力清单 | `proposal.md §5` 六条 |
+| R2-E1-1 workflowId cache 优先 | §4.3 AC-7c 修正 |
+| **R2-E1-2 伪造 overwrite 越权** | **§5.4 服务端重算动作 + 事务内 owner 断言** |
+| R2 文档一致性（5 条） | v3 重写时统一：字段名、AC 编号、C 编号、条数 |

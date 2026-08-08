@@ -1,181 +1,163 @@
-# RFC-271 · 任务分解
+# RFC-271 · 任务分解 v3
 
-配套 `proposal.md` / `design.md`（均为吸收 Codex 设计门第一轮 12 条 findings 后的版本）。批次内可并行，
-批次间有依赖。每个批次落地时**自带测试**（CLAUDE.md「Test-with-every-change」），
-`bun run gate:local` 全绿才推。
+配套 `proposal.md` / `design.md` v3（统一资源表达 + intent 迁移 + 配置包）。
+每个批次自带测试，`bun run gate:local` 全绿才推。
 
-## 批次 A · shared 契约层
+## 批次 A · `ResourceBundle` 表达层（shared）
 
-无前置依赖，是后面所有批次的地基。
+- **T1** `shared/src/bundle/ref.ts`：`BundleRefSchema`（`local:` / `external:`）+ 解析辅助。
+- **T2** `shared/src/bundle/payload.ts`：六类 payload，从 `Intent*PayloadSchema` 泛化；
+  引用槽一律 `BundleRef`；工作组人类成员补 `username`；技能文件改外部载体引用。
+- **T3** `shared/src/bundle/op.ts`：`BUNDLE_OP_KINDS`（含 **`skill-update`**）+ `BundleOpSchema`
+  + `BundleExpectTokenSchema`（六类内容 token 的联合）。
+- **T4** `shared/src/bundle/bundle.ts`：`BundleSchema` + `assertBundleRefsClosed`
+  （**拒重复 slug / 悬空引用 / 悬空 rootRef**）。
+- **T5** `shared/src/bundle/secrets.ts`：schema-valid 脱敏投影（design §4.2 的载体表），复用
+  `SECRET_KEY_RE` / `looksHighEntropy` / `redactUrlForDump` 的判定逻辑，**不复用 dump 投影
+  函数本体**。
+- **T6** shared 五个测试文件；**`bundle-secrets.test.ts` 必须断言脱敏后仍过各自严格 schema**。
 
-- **RFC-271-T1** `packages/shared/src/resourcePackage.ts`：`PACKAGE_FORMAT_VERSION` /
-  `PACKAGE_LIMITS`（复用 `SKILL_ZIP_LIMITS`）/ `PACKAGE_DIRS` / `PACKAGE_SECRET_PLACEHOLDER`。
-- **RFC-271-T2** **`packageResourceKey` 分配器**（Codex B1）：`(type, name, ownerDisambiguator)`
-  → 稳定唯一 key，不含源实例信息；同名不同 owner 必须分开。
-- **RFC-271-T3** manifest schema：`PackageManifestSchema` + `PackageResourceEntrySchema`（带
-  `key`）+ `PackageRequirementsSchema`（**五段**，含 `projectSkills`）+ `PackageEdgeSchema` +
-  `ambiguousCallRefs`。
-- **RFC-271-T4** 三个可移植文档 schema（引用一律 key 域）+ 工作组
-  `leaderDisplayName ↔ leaderMemberId` 换算纯函数。
-- **RFC-271-T5** 闭包遍历：`directRefsOf` / `walkClosure`（BFS + visited 去重去环 + 稳定顺序）。
-- **RFC-271-T6** 从 `index.ts` re-export；shared 四个测试文件（design §9）。
+## 批次 B · `BundleApply` 引擎（backend）
 
-## 批次 B · 后端导出引擎
+**开工前先做一件事**：把 `applyChangeset.ts` 的不变量列成清单（journal 幂等键、active set +
+`CONVERGE_MIN_AGE_MS`、`bundleCreatedNames`、pre-stage 不可见、逆序补偿、启动收敛…），
+泛化后逐条对照——**丢一条就是回归**。
 
-依赖 A。
+- **T7** 迁移 + 新表 `resource_bundle_applies`（泛化自 `intent_apply_journal`）。
+- **T8** `services/bundle/provider.ts`：`BundleApplyProvider` 接口。
+- **T9** `services/bundle/apply.ts`：五段生命周期，从 `applyChangeset.ts` 搬运并泛化。
+- **T10** **`skill-update` 两段拆分**：`skillVersion.ts` 新增 `stageSkillVersion` +
+  `commitSkillVersionInTx`；既有 `commitSkillVersion` 保留为两段的顺序组合（其它调用方零改动）。
+- **T11** **插件安装失败精确清理**：`installPlugin` 抛错时携带 `generationDir`，引擎记进
+  artifacts 由补偿删除。
+- **T12** **最终事务内 owner 断言**（design §5.4）：对每个 update 目标断言
+  `ownerUserId === actor.user.id`。引擎层实现，intent 侧同样受益。
+- **T13** `rfc271-bundle-engine.test.ts` + `rfc271-bundle-owner-gate.test.ts` +
+  `rfc271-skill-update.test.ts`。
 
-- **RFC-271-T7** `util/zip.ts` 的 `encodeZip`（store-only；与 `decodeZip` round-trip 单测）。
-- **RFC-271-T8** `services/resourcePackage/loader.ts`：批量装载器（每层每类型一次 `inArray`）。
-- **RFC-271-T9** **两域可见性规则**（Codex C1）：id 域不可见 → 422；name 域「零匹配」与
-  「全不可见」**逐字节同形** → dangling；2+ 可见候选按最老 ULID 选定并记 `ambiguousCallRefs`。
-- **RFC-271-T10** `serialize.ts`：六类 → 包内文档；**脱敏复用 `intentSecretSlots.ts`**
-  （`projectMcpForDump` / `projectPluginForDump` / `maskFreeJsonSecrets` / `redactUrlForDump` /
-  `maskWorkflowScriptEnv` + `scanForCredentialPatterns` 兜底）；`requirements` 收集（五段，
-  plugin spec 同样脱敏）；`builtins` 分流；文件名消歧。
-- **RFC-271-T11** **分轴特权门**（Codex C2）：`lens.scripts && hasScript` 与
-  `lens.codeHost && hasCodeHost` 各自独立判定。
-- **RFC-271-T12** `export.ts` 编排 + 三道门（id 域行级可见性 / 分轴特权 / 超限）。
-  ⚠️ **不要**逐类校验 `*:read` 权限点——用户原则「可见即有读权限」，AC-7d 是一条**反向锁**
-  （可见但缺该类型权限点时必须导出成功），别顺手补成一道门。
-- **RFC-271-T13** `README.md` 生成器（依赖图 + 环境要求 + 待填密钥 + dangling 警示 +
-  二义候选标注）。**固定中英双段**，不跟当前用户语言走——包是跨人跨机的产物。
-- **RFC-271-T14** backend 导出测试两文件（`export-closure` / `export-gates`，含 AC-7b 的
-  逐字节对照与 AC-33 的分轴权限矩阵）。
+## 批次 C · intent 迁移（**风险最高**）
 
-## 批次 C · 后端导入引擎
+- **T14** `IntentChangeset` → `ResourceBundle` 翻译器 + intent `BundleApplyProvider`
+  （`resolveExternal` 查会话挂载表）。
+- **T15** `applyIntentChangeset` 改为薄适配层调引擎；`INTENT.md` 与模型看到的 schema
+  **一个字节不动**。
+- **T16** 旧 `intent_apply_journal` 保留原表与原收敛器直到无未结行；新 apply 一律写新表。
+- **T17** **`rfc271-intent-parity.test.ts`**：AC-B5 守卫。
+  ⚠️ 验收标准是**现有 intent 测试套全绿且零改判**。任何「顺手改判一条 intent 断言」按回归
+  处理——这是本 RFC 最容易自欺的一处。
 
-依赖 A、B。**本批次是全 RFC 风险最高的一块。**
+> **在此处独立成一个 commit 推送并跑完 CI**，确认 intent 稳了再往下接。
 
-- **RFC-271-T15** 迁移 + 新表 `resource_package_imports`（形态照抄 `intent_apply_journal`）。
-- **RFC-271-T16** `parse.ts`：解 zip（复用 `decodeZip` 归一化）+ manifest 校验 + 防夹带 +
+## 批次 D · 配置包导出
+
+- **T18** `util/zip.ts` 的 `encodeZip`（store-only，与 `decodeZip` round-trip 单测）。
+- **T19** `services/resourcePackage/closure.ts`：批量装载器 + `walkClosure`。
+- **T20** **name 域解析与 `freezeCallClosure` 逐字一致**（AC-7c：cache 优先、其次最老可见），
+  且「零匹配」与「全不可见」逐字节同形（AC-7b）。
+- **T21** `serialize.ts`：闭包 → `ResourceBundle`（分配 local slug）+ requirements 五段 +
+  builtins + secrets 索引 + `ambiguousCallRefs`。
+- **T22** 三道门：行级可见性（含传递）/ 分轴特权 / 体积。
+  ⚠️ **不要**加第四道类型级 `*:read` 门——AC-7d 是反向锁。
+- **T23** `manifest.yaml` + `README.md`（中英双段）生成器。
+- **T24** `rfc271-export-gates.test.ts` + `package-closure` 矩阵。
+
+## 批次 E · 配置包导入
+
+- **T25** `parse.ts`：解 zip（复用 `decodeZip` 归一化）+ manifest 校验 + 防夹带 +
   `formatVersion` 判定。
-- **RFC-271-T17** `preview.ts`：按 key 逐条匹配、**`ownMatches[]` 支持多个**（AC-14b）、
-  动作可选性、建议副本名、权限缺口、密钥字段、内置件检查、人类席位。
-- **RFC-271-T18** **pre-stage 阶段**：预铸六类 id；技能走 `stageManagedSkill(..., {id})`、
-  插件走 `installPlugin`；逐个记进 journal artifacts。
-  ⚠️ **绝不**自造「裸 DB insert + rename」——`skill-zip.ts:415` 注释写明那会留下
-  `versionState='legacy-unbackfilled'`，**单测能过但活 daemon 上每次都挂**。
-- **RFC-271-T19** **big tx**：CAS `prepared→applying`；内容级 CAS（工作流/工作组
-  `expectedVersion`、代理 `expectedUpdatedAt+expectedAclRevision`、MCP/插件
-  `expectedConfigHash`、技能 `contentVersion+metaRevision+aclRevision`）+
-  `skill_operation_locks`；`commitSkillReadyInTx` / `commitSkillVersion` / plugin 插入内核 /
-  三类 CRUD；**按 `packageResourceKey` 回填全部引用**；journal → `committed`。
-- **RFC-271-T20** 幂等尾 + **启动期与每小时收敛**（prepared/applying → 逆序补偿 → failed；
-  committed → 重放幂等尾）。收敛逻辑若能与 `applyChangeset` 那份抽出共用则共用。
-- **RFC-271-T21** backend 导入测试四文件（`preview` / `commit` / **`kernels`** /
-  `antitamper`）。`kernels` 是 AC-25 的专门防线：导入后的技能必须过 `skillBootVerify`、
-  有 v1 快照与 content hash，插件 `cached_path` 非空。
+- **T26** `preview.ts`：逐条匹配（`ownMatches[]` 可多个）+ 动作可选性 + 建议名 + 权限缺口 +
+  密钥字段 + **`expect` 内容 token 下发**（AC-24b）+ 内置件 + 人类席位。
+- **T27** `commit.ts`：**服务端重算 `allowedActions`** → 决策表翻译成 `ResourceBundle` →
+  调引擎。`reuse` 不产 op（改 `external:<id>`）/ `new` → create / `overwrite` → update+expect。
+- **T28** package `BundleApplyProvider`（`resolveExternal` = 决策表；`readSkillFile` = 从 zip 取）。
+- **T29** `rfc271-import-preview.test.ts` + `rfc271-import-commit.test.ts` +
+  `rfc271-package-antitamper.test.ts`。
 
-## 批次 D · 路由与权限
+## 批次 F · 路由与 client
 
-依赖 B、C。
+- **T30** 六条 `GET /api/{类}/:id/export-package`（工作流/工作组带 `expectedVersion`）。
+- **T31** `POST /api/resource-packages/preview` + `/commit`，`tokenAccess:'allow'`。
+- **T32** 错误码族登记 + `route-error-code-coverage` 点名。
+  ⚠️ 新文件先 `git add -N` 再跑门禁。
+- **T33** `client.ts` 八个方法 + `rfc271-routes.test.ts`。
 
-- **RFC-271-T22** 六条 `GET /api/<type>/:id/export-package`（工作流 / 工作组带
-  `expectedVersion`）。
-- **RFC-271-T23** `POST /api/resource-packages/preview` + `/commit`，**`tokenAccess:'allow'`**
-  （合法值是 `'allow' | 'never'`，没有 `'deny'`；`'never'` 只为 RFC-247 的 D5/D6 存在，创建
-  资源不在其列）。授权靠逐类权限点，令牌与界面逐字一致（AC-30 / AC-30b）。
-- **RFC-271-T24** 错误码族登记 + `route-error-code-coverage` 点名测试。
-  ⚠️ 新文件先 `git add -N` 再跑门禁，否则该测试用 `git ls-files` 扫不到。
-- **RFC-271-T25** `client.ts` 新增六个导出方法 + 两个导入方法。
+## 批次 G · 前端
 
-## 批次 E · 前端导出入口
+- **T34** `lib/resource-package-download.ts`（抽出 `safeDownloadBaseName`）。
+- **T35** 六类详情/编辑页「更多操作」导出入口（工作流那条原地改名）。
+- **T36** `components/ResourcePackageImportDialog.tsx`（`<Dialog size="full">` + `.segmented`
+  + `<Select>` + `<Field>/<TextInput>` + `<StatusChip>`，零自写 chrome）。
+- **T37** 六类列表页导入入口 + 统一入口 + 类型不符跳转 + 导入报告视图。
+- **T38** 中英双语 i18n（⚠️ i18n 值里禁字面 `**`）。
+- **T39** 前端两个测试文件 + **视觉对齐自查**（与 `/agents`、`/workflows`、`/repos`、
+  `/settings` side-by-side）。
 
-依赖 D。
+## 批次 H · CLI
 
-- **RFC-271-T26** `lib/resource-package-download.ts`（抽出 `safeDownloadBaseName` 共用）。
-- **RFC-271-T27** 工作流编辑页「导出 YAML」→「导出配置包」原地替换。
-- **RFC-271-T28** 工作组详情页动作抽屉新增导出（今天没有）。
-- **RFC-271-T29** 代理 / 技能 / MCP / 插件详情页各新增一条。
-- **RFC-271-T30** 中英双语 i18n key（⚠️ i18n 值里禁字面 `**`，RFC-266 教训）。
-- **RFC-271-T31** `rfc271-export-actions.test.tsx`。
+- **T40** `cli/package.ts`：两条命令，**都必须 `--as-user`** 并构造与 HTTP 同构的 `Actor`。
+- **T41** `--plan` / `--apply` 决策文件 schema；`--on-conflict`（与 `--plan` 互斥）。
+- **T42** `cli/start.ts` 注册 + `--help`（写明 break-glass 边界）+ `rfc271-cli.test.ts`。
 
-## 批次 F · 前端导入预检页
+## 批次 I · 能力下线（C1–C6）
 
-依赖 D。
+**最后做**，前面全绿后才拆旧的。
 
-- **RFC-271-T32** `components/ResourcePackageImportDialog.tsx`：`<Dialog size="full">` +
-  `.segmented` + `<Select>` + `<Field>/<TextInput>` + `<StatusChip>`，**零自写 chrome**。
-- **RFC-271-T33** 多 own match 选择器（AC-14b）+ 密钥输入 + 副本改名 + 人类席位指派。
-- **RFC-271-T34** 六类列表页导入按钮 + 统一入口 + 类型不符跳转（透传已解析文件）。
-- **RFC-271-T35** 导入报告视图（新建 / 复用 / 覆盖 / 待补密钥 / 环境要求 / 内置依赖）。
-- **RFC-271-T36** `rfc271-import-dialog.test.tsx`。
-- **RFC-271-T37** 视觉对齐自查：与 `/agents`、`/workflows`、`/repos`、`/settings`
-  side-by-side 比按钮高度 / 圆角 / spacing / 字号（CLAUDE.md 前端一致性规程第 4 条）。
+- **T43** 删两条旧路由 + `services/workflow.yaml.ts` 中只服务它们的部分
+  （⚠️ `workflowDefinitionToSelectors` / `stripCallWorkflowNodeIds` 保留）。
+- **T44** 删 `workflow-draft-export.ts` 的本地草稿路径（C3）+ 编辑页救援态按钮。
+- **T45** 删 `WorkflowImportDialog.tsx`（C2）。
+- **T46** `rfc271-capability-removal.test.ts` + 显式改判既有断言（design §9 表格六项，
+  **intent 测试套除外——那里零改判**）。
 
-## 批次 G · CLI
+## 批次 J · 文档
 
-依赖 B、C。
+- **T47** `docs/resource-bundles.md`：表达层规范（BundleRef / payload / op / 引擎生命周期 /
+  Provider 契约）。
+- **T48** `docs/resource-packages.md`：包格式、manifest 字段、导入流程与收敛语义、CLI 用法、
+  「技能文件树里的密钥属于作者责任」、失败原因对照表。
+- **T49** `design/plan.md` 索引改 Done；`STATE.md` 加条目；勘误 RFC-234/199/223/243/270 中
+  受影响的表述。
+- **T50** `docs/dev-gotchas.md` 沉淀两条通用教训：
+  ① **多资源批量落地前先找仓里既成的 bundle / pre-stage / commit 内核**——本 RFC 两轮设计门
+  里至少五条 findings 同此根因；
+  ② **给模型看的 dump 投影 ≠ 可导入投影**——`projectMcpForDump` 输出的 `oauth` 是字符串，
+  直接复用会让产物过不了自己的 schema。
 
-- **RFC-271-T38** `cli/package.ts`：`export-package` / `import-package`；**两条都必须
-  `--as-user`** 并构造与 HTTP 同构的 `Actor`。
-- **RFC-271-T39** `--plan` / `--apply` 决策文件 schema 与读写；`--on-conflict` 语法糖
-  （与 `--plan` 互斥）。
-- **RFC-271-T40** `cli/start.ts` 命令表注册 + `--help` 文案（写明 break-glass 边界）。
-- **RFC-271-T41** `rfc271-cli.test.ts`（含「CLI 不是权限旁路」对照用例、缺 `--as-user` 退出）。
+## PR / commit 拆分
 
-## 批次 H · 能力下线（C1–C6）
-
-**放在最后**：前面批次全绿、新路径可用后才拆旧的，避免中途出现「新的没好、旧的没了」的窗口。
-
-- **RFC-271-T42** 删 `GET /api/workflows/:id/export` 与 `POST /api/workflows/import` 两条路由，
-  及 `services/workflow.yaml.ts` 中只服务它们的部分。
-  ⚠️ `workflowDefinitionToSelectors` / `stripCallWorkflowNodeIds` **保留**——包导出继续用。
-- **RFC-271-T43** 删 `lib/workflow-draft-export.ts` 的本地草稿导出路径（C3）与编辑页救援态
-  「导出本地 YAML」按钮。
-- **RFC-271-T44** 删 `components/WorkflowImportDialog.tsx` 及其 YAML 路径（C2）。
-- **RFC-271-T45** `rfc271-capability-removal.test.ts`：源码层文本断言 + 两条旧路由不再注册；
-  另在 `rfc271-routes.test.ts` 锁住导入端点是 `'allow'` 且缺权限令牌提交 422。
-- **RFC-271-T46** 显式改判既有断言（design §9 表格七项），每处写明改判理由。
-
-## 批次 I · 文档与记档
-
-- **RFC-271-T47** 新建 `docs/resource-packages.md`：包格式规范、目录结构、manifest 字段表、
-  `packageResourceKey` 语义、导入流程与收敛语义、CLI 用法（含 break-glass 声明）、
-  **「技能文件树里的密钥属于作者责任」**、常见失败原因对照表。
-- **RFC-271-T48** `design/plan.md` 索引状态改 Done；`STATE.md` 加已完成条目。
-- **RFC-271-T49** 勘误：RFC-270 `design.md §2.2` 的 export 出口描述（C4 改判）；RFC-199 的 B2
-  本地草稿导出（C3 删除）；RFC-223 / RFC-243 中提及「YAML 导出」的段落改指配置包。
-- **RFC-271-T50** `docs/dev-gotchas.md` 补本次沉淀（至少一条已确定：**「多资源批量落地不要
-  自造 DB+FS 顺序，先查有没有既成的 pre-stage/commit 内核」**——本 RFC 初稿正是把顺序写反了，
-  而 `skill-zip.ts:415` 早把代价写在注释里）。
-
-## PR 拆分建议
-
-单 RFC 单 PR 是本仓默认，但本 RFC 体量大（预计 45+ 文件）。建议拆三个 commit 推同一条 `main`：
-
-1. `feat(shared,backend): RFC-271 配置包导出`（A + B + D 的导出半边）
-2. `feat(backend,frontend): RFC-271 配置包导入与 CLI`（C + D 导入半边 + E + F + G）
-3. `refactor(workflow): RFC-271 下线 YAML 导出/导入路径`（H + I）
-
-每个 commit 单独跑全套门禁并推送，推完按 exact SHA 查 CI。
+| # | 内容 | 独立可绿 |
+|---|---|---|
+| 1 | 批次 A（表达层） | ✅ 纯 shared |
+| 2 | 批次 B（引擎 + 新表） | ✅ 引擎有自己的测试，尚无消费者 |
+| 3 | **批次 C（intent 迁移）** | ✅ **必须单独推并跑完 CI 确认 intent 稳** |
+| 4 | 批次 D + F 导出半边 | ✅ |
+| 5 | 批次 E + F 导入半边 + G + H | ✅ |
+| 6 | 批次 I + J | ✅ |
 
 ## 验收清单
 
-- [ ] AC-1 … AC-34（含 AC-7d）逐条有测试点名
-- [ ] `bun run gate:local` 全绿
-- [ ] 六类根 × 九种闭包形态矩阵跑通（含同名不同 owner、传递不可见）
-- [ ] **AC-7b 预言机对照**：零匹配 vs 全不可见，响应逐字节相同
-- [ ] **AC-25 内核锁**：导入后的技能过 `skillBootVerify`、插件 `cached_path` 非空
-- [ ] **AC-20 收敛**：journal 各 phase 边界注入中断 + 重启，收敛到二态之一
-- [ ] **AC-24 并发**：两个 actor 同目标导入，后者 409
-- [ ] C1–C6 每条都有源码层文本断言
-- [ ] 前端视觉对齐自查完成
-- [ ] Codex 实现门（declare done 前）跑一次并修 findings
-- [ ] 推送后按 exact SHA 查 CI 绿
+- [ ] AC-B1…B5 + AC-1…AC-34 逐条有测试点名
+- [ ] **AC-B5：intent 测试套全绿且零改判**
+- [ ] **AC-15b：伪造 overwrite 他人资源被最终事务拒绝**
+- [ ] AC-6：六类文档脱敏后仍过各自严格 schema
+- [ ] AC-7b：零匹配 vs 全不可见逐字节相同
+- [ ] AC-7c：与 `freezeCallClosure` 逐字一致（cache 优先）
+- [ ] AC-7d：反向锁（可见但缺类型权限点 → 导出成功）
+- [ ] AC-20：journal 各 phase 边界注入中断 + 重启收敛到二态之一
+- [ ] AC-25b：技能覆盖失败后两个技能都没被改
+- [ ] `bun run gate:local` 全绿；推后按 exact SHA 查 CI
+- [ ] Codex 实现门跑一次并修 findings
 
 ## 风险与回滚
 
 | 风险 | 缓解 |
 |---|---|
-| 批量落地写错 → 用户技能被毁 | **不自造路径**，全走 `stageManagedSkill` / `commitSkillReadyInTx` / `commitSkillVersion`；AC-25 内核锁 + AC-20 中断注入 |
-| 收敛逻辑与 `applyChangeset` 那份漂移 | 能抽出就共用；不能则互相加断言锁 |
-| 闭包遍历漏一类引用 | `directRefsOf` 与 `resourceRefs.ts` 既有提取器同源；矩阵测试 |
-| 脱敏漏一个载体 | 复用 `intentSecretSlots.ts` 而非自造清单；**逐 carrier** 测试而非「与某函数一致」 |
-| 预言机回归 | AC-7b 逐字节对照断言，任何分支差异都会红 |
-| C1/C2/C6 打断用户既有自动化 | `proposal.md §5` 逐条呈用户确认；发布说明必须点名，尤其 **C6（传递不可见闭包不再可导出——工作流仍能跑，只是导不出）** |
-| zip 实现自写引入 bug | store-only 最小实现 + round-trip 单测 |
-| 64 MB 上限对大技能库不够 | 超限错误点名具体资源；上限是共享常量，日后调一处 |
+| **intent 迁移打断生产路径** | AC-B5 零改判守卫；独立 commit 先推并跑完 CI |
+| 泛化丢掉某条既有不变量 | 开工前列不变量清单，泛化后逐条对照 + 点名测试 |
+| 新旧 journal 并存期分裂 | 旧表只读收敛存量，新 apply 一律写新表 |
+| `skill-update` 两段拆分回归 | 既有 `commitSkillVersion` 保留为顺序组合 |
+| 盘子过大 | 六个独立可绿的 commit |
+| C1/C2/C6 打断既有自动化 | 已逐条呈用户确认；发布说明点名 |
 
-**回滚**：批次 H 之前的任何时点都可安全停下——新路径是纯增量，旧路径未动（新表已建但无行时
-无副作用）。H 落地后回滚需 revert 三个 commit。
+**回滚**：批次 I 之前任何时点可停（新路径纯增量）。批次 C 若出问题，回滚该 commit 即可——
+引擎与表达层对 intent 之外无影响。
