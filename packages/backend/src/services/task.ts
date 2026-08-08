@@ -1979,6 +1979,17 @@ async function startTaskImpl(
   // Static validation gate (proposal.md §静态校验): "校验失败不阻止保存，但阻止启动 task".
   // Run the same 5-rule check the editor uses, against the live agent/skill set,
   // and refuse to launch if it surfaces any error-severity issues. Warnings pass.
+  // RFC-243 §3.1 / RFC-271 T6f2：闭包在**校验之前**冻结，校验与执行读同一份。
+  // 根启动此前是「validator 查 live 解析一次、freeze 按启动者再解析一次」——两
+  // 条判据本就不同（validator 不收 Actor、查所有同名行），决策 28 把启动改成
+  // id-hint 优先之后差异更大，能真的分叉成「校验的是 W1、执行的是 W2」。
+  // 子启动直接用父任务传下来的子集，绝不重查 live（父冻结 G1、随后行改成 G2 时，
+  // 重查会去校验一个 scheduler 根本不会执行的定义）。
+  const frozenClosureJson =
+    deps.callLaunch !== undefined
+      ? deps.callLaunch.refClosureJson
+      : await freezeClosureForLaunch(deps, workflow.id, effectiveDefinition)
+
   const validation = validateWorkflowDef(
     effectiveDefinition,
     // RFC-243 实现门 P1-2 — the service funnel enforces 4f/4g on the exact
@@ -1986,6 +1997,7 @@ async function startTaskImpl(
     await buildWorkflowValidationContext(deps.db, {
       definition: effectiveDefinition,
       currentWorkflow: { id: workflow.id, name: workflow.name },
+      frozenClosureJson,
     }),
   )
   if (!validation.ok) {
@@ -1996,15 +2008,6 @@ async function startTaskImpl(
       { issues: validation.issues },
     )
   }
-  // RFC-243 §3.1: parents freeze the reference closure at launch (null when
-  // the definition has no call nodes — byte-compat fast path); children carry
-  // the subset handed down via deps.callLaunch. Runs AFTER static validation
-  // so a cycle/missing-ref failure points at launch, not at a half-built row.
-  const frozenClosureJson =
-    deps.callLaunch !== undefined
-      ? null // this arm never reads it — the INSERT takes deps.callLaunch.refClosureJson
-      : await freezeClosureForLaunch(deps, workflow.id, effectiveDefinition)
-
   // Browser-side required/picker gates are advisory: JSON API callers and
   // scheduled fires reach this service directly. Validate the packed map here
   // before any repo resolution/materialization so a missing required input
@@ -2281,8 +2284,9 @@ async function startTaskImpl(
           parentTaskId: deps.callLaunch?.parentTaskId ?? null,
           parentNodeRunId: deps.callLaunch?.parentNodeRunId ?? null,
           invocationDepth: deps.callLaunch?.invocationDepth ?? 0,
-          refClosureJson:
-            deps.callLaunch !== undefined ? deps.callLaunch.refClosureJson : frozenClosureJson,
+          // RFC-271 T6f2：`frozenClosureJson` 已经在校验之前算好，两条分支同源
+          // —— 根是刚冻结的那份，子是继承下来的那份，落库的与校验用的逐字同一。
+          refClosureJson: frozenClosureJson,
           // RFC-165 (R3-2-r4): a materialize-failure row has NO revivable workspace —
           // stamp the tombstone atomically with the row so retry / sync-workflow can
           // never CAS it back to pending against a missing directory.

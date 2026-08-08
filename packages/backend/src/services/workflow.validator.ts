@@ -87,6 +87,7 @@ import {
   type WorkflowByRef,
   type WorkflowRefSelector,
 } from '@agent-workflow/shared'
+import { callEdgeKey, parseCallClosure } from '@/services/execution/closure'
 import { createHash } from 'node:crypto'
 import { asc, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
@@ -133,6 +134,21 @@ export interface ValidatorWorkflowRef {
 export interface WorkflowValidationCandidate {
   definition: WorkflowDefinition
   currentWorkflow?: { id: string; name: string }
+  /**
+   * RFC-271 T6f2（design §1.1c''' 三语境表）—— 启动期传**已冻结的闭包**，让校验
+   * 与执行读同一份数据。
+   *
+   * 不传（编辑器 / 保存期）＝ advisory 语境：走 live DB、不收 Actor，证明不了
+   * 启动时会绑到哪一行。
+   *
+   * 传了则**完全不查 live**：
+   *   · 根启动 —— 先冻结一次，再用同一份 frozen result 校验（此前是各解析各的，
+   *     决策 28 之后两者判据不同，能真的分叉）；
+   *   · 子启动 —— 用父任务传下来的 `refClosureJson` 子集。父冻结了 G1、随后资源
+   *     行改成 G2 时，子校验必须仍看 G1，否则会去校验一个 scheduler 根本不会
+   *     执行的定义。
+   */
+  frozenClosureJson?: string | null
 }
 
 /**
@@ -176,11 +192,81 @@ export async function loadWorkflowValidationContext(
     plugins,
   }
   if (candidate !== undefined) {
-    ctx.callWorkflows = await loadCallWorkflowClosure(db, candidate.definition)
-    ctx.callWorkgroupNames = await loadCallWorkgroupNames(db, candidate.definition)
+    // RFC-271 T6f2：启动期给了冻结闭包就**只读它**，一次 live 查询都不发。
+    const frozen =
+      candidate.frozenClosureJson === undefined || candidate.frozenClosureJson === null
+        ? null
+        : closureFromFrozen(candidate.frozenClosureJson, {
+            id: candidate.currentWorkflow?.id ?? FROZEN_ROOT_PLACEHOLDER,
+            definition: candidate.definition,
+          })
+    if (frozen !== null) {
+      ctx.callWorkflows = frozen.workflows
+      ctx.callWorkgroupNames = frozen.workgroupNames
+    } else {
+      ctx.callWorkflows = await loadCallWorkflowClosure(db, candidate.definition)
+      ctx.callWorkgroupNames = await loadCallWorkgroupNames(db, candidate.definition)
+    }
     if (candidate.currentWorkflow !== undefined) ctx.currentWorkflow = candidate.currentWorkflow
   }
   return ctx
+}
+
+/** 根 id 未知时（未落库的候选）的占位——它永远不会出现在任何边键里。 */
+const FROZEN_ROOT_PLACEHOLDER = '__frozen-root__'
+
+/**
+ * RFC-271 T6f2 —— 把**已冻结**的闭包投影成 validator 认得的形状，零 DB 查询。
+ *
+ * BFS 沿冻结图走，每条 call 边配上它自己的冻结项：v2 按边键取，v1 按名字取
+ * （存量任务）。取到的项以**该选择器的名字**登记 —— 冻结时已经过了名字守卫，
+ * 所以「这条边解析到了它」本身就是事实，`pickCallWorkflowRow` 据此按 id 命中。
+ */
+function closureFromFrozen(
+  frozenJson: string,
+  root: { id: string; definition: WorkflowDefinition },
+): {
+  workflows: ReadonlyMap<string, ValidatorWorkflowRef>
+  workgroupNames: ReadonlySet<string>
+} | null {
+  const closure = parseCallClosure(frozenJson)
+  if (closure === null) return null
+  const v2 = closure.closureVersion === 2
+  const byId = new Map<string, ValidatorWorkflowRef>()
+  const nameWinner = new Map<string, ValidatorWorkflowRef>()
+  const workgroupNames = new Set<string>()
+  const seen = new Set<string>()
+  const queue: Array<{ id: string; definition: WorkflowDefinition }> = [root]
+  while (queue.length > 0) {
+    const cur = queue.shift()
+    if (cur === undefined) break
+    if (seen.has(cur.id)) continue
+    seen.add(cur.id)
+    for (const ref of collectWorkflowCallRefs(cur.definition)) {
+      const frozen = v2
+        ? closure.workflows[callEdgeKey(cur.id, ref.nodeId)]
+        : closure.workflows[ref.workflowName]
+      if (frozen === undefined) continue // 冻结里没有 ⇒ 4f 照常报 ref-missing
+      const entry: ValidatorWorkflowRef = {
+        id: frozen.id,
+        name: ref.workflowName,
+        definition: frozen.definition,
+      }
+      byId.set(frozen.id, entry)
+      if (!nameWinner.has(ref.workflowName)) nameWinner.set(ref.workflowName, entry)
+      queue.push({ id: frozen.id, definition: frozen.definition })
+    }
+    for (const g of collectWorkgroupCallRefs(cur.definition)) {
+      const frozen = v2
+        ? closure.workgroups[callEdgeKey(cur.id, g.nodeId)]
+        : closure.workgroups[g.workgroupName]
+      if (frozen !== undefined) workgroupNames.add(g.workgroupName)
+    }
+  }
+  // 与 live 装载同序：先 id 键、后 name 键（name 与另一行的 id 撞车时 name 胜）。
+  const out = new Map<string, ValidatorWorkflowRef>(byId)
+  for (const [name, entry] of nameWinner) out.set(name, entry)
+  return { workflows: out, workgroupNames }
 }
 
 /**
