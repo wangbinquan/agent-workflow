@@ -34,8 +34,9 @@
   plugin spec 同样脱敏）；`builtins` 分流；文件名消歧。
 - **RFC-271-T11** **分轴特权门**（Codex C2）：`lens.scripts && hasScript` 与
   `lens.codeHost && hasCodeHost` 各自独立判定。
-- **RFC-271-T12** `export.ts` 编排 + **四道门**（id 域行级可见性 / **类型级 `*:read` 权限点**
-  （AC-7d，按闭包实际涉及的类型）/ 分轴特权 / 超限）。
+- **RFC-271-T12** `export.ts` 编排 + 三道门（id 域行级可见性 / 分轴特权 / 超限）。
+  ⚠️ **不要**逐类校验 `*:read` 权限点——用户原则「可见即有读权限」，AC-7d 是一条**反向锁**
+  （可见但缺该类型权限点时必须导出成功），别顺手补成一道门。
 - **RFC-271-T13** `README.md` 生成器（依赖图 + 环境要求 + 待填密钥 + dangling 警示 +
   二义候选标注）。**固定中英双段**，不跟当前用户语言走——包是跨人跨机的产物。
 - **RFC-271-T14** backend 导出测试两文件（`export-closure` / `export-gates`，含 AC-7b 的
