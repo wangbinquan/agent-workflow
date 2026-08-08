@@ -87,6 +87,8 @@ export * from './nodePorts'
 export * from './scriptNode' // RFC-253
 export * from './workflowNodeAncestry' // RFC-269（RFC-253 抽取）
 export * from './privilegedNodeRedaction' // RFC-270
+// RFC-271 决策 29 — 统一引用模型（归一化 AST + 六域 wire codec + 解析契约）。
+export * from './ref'
 // RFC-269 — code-host call node: action registry, template encoding, path
 // judgements, trigger-context projection.
 export * from './codeHost/actions'
