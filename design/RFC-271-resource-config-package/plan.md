@@ -35,7 +35,9 @@
   `handle` / `local` / `external` / **`call` 复合** / **`project-skill`**）+ **六个域各自的
   wire codec**（不是共用一套字符串形态！`$new:` 与 `local:` 是同一 AST 的两种编码，
   `ImportSelectorRef` 的 `type` 必须保留）+ `RefResolution` 契约
-  （`freeze` / `aclAt` / **`purpose` / `onMissing` / `failureOwner`**）。
+  （域级 `freeze` / `aclAt` + 调用级 **`purpose` / `onMissing` / `failureOwner`**）。
+  ⚠️ **agent 的 `skills` 槽用专属 codec** `BundleIdentityRef | ProjectSkillRef`；
+  **T1 的三个 Bundle schema 是这些域 codec 的 alias / re-export，不是第二套 parser**。
   ⚠️ `resolve` 返回 typed `Result`、**不 throw**——各调用点自己映射错误码与 node_run 归属。
 - **T6b** **机制 4 归位**：`IntentRefSchema` 改为 `IntentRef` 域的别名。
   ⚠️ **wire 零变更**——`res#<type>#<n>` 与 `$new:<slug>` 拼写不动，`INTENT.md` 不改。
@@ -58,7 +60,13 @@
   在 runner 组装路径上留 special-case。
   ⚠️ `agentDeps` 的 `allowMissing` 是**调用级**差异（`agentDeps.ts:40-46`），走 `onMissing`
   而不是域级 `dangle`。
-- **T6e** **机制 2 归位 + 决策 28 完整落地**（design §1.1c'）：`freezeCallClosure` 成为
+- **T6e** **机制 2 归位 + 决策 28 完整落地**（design §1.1c' / §1.1c''）：**统一走
+  `resolveEdge(sourceWorkflowId, CallRef)`，五个消费者同源**——冻结生成、`scheduler.ts:2966-2968`
+  主消费 ×2、`childClosureSubset`（要收 source id，调用点 `:3732/:3811/:3851` 已持有
+  `frozen.id`）、**`detectCallCycles`（`workflowCalls.ts:88` 的 resolver 签名 `(name)` 必须
+  改成收完整 CallRef）**、**validator 闭包装载（`workflow.validator.ts:207-255` 按名取最老，
+  其注释写明「与启动绑同一行」是不变量 ⇒ 启动改判据就必须一起改）**。回归含「同名双 id
+  其中一支成环」与「同名双 id 端口不同」。原文：`freezeCallClosure` 成为
   `CallRef` 域的 resolver；冻结闭包改 **source-scoped key**（`${sourceWorkflowId}#${nodeId}`
   ——**不能只用 nodeId**，节点 id 只在单份 definition 内唯一）；**三个消费者**
   （`scheduler.ts:2966-2968` ×2 + **`childClosureSubset` `closure.ts:103-131`**）全部双读
@@ -69,9 +77,11 @@
 
 ## 批次 B · `BundleApply` 引擎（backend）
 
-**开工前置已完成**：`invariants.md` 是逐条读源码核实的 12 条清单（含锚点与原文引用）。
+**开工前置已完成**：`invariants.md` 是逐条读源码核实的 **14 条**清单（**11 条归引擎**，
+含锚点与原文引用）。验收清单**逐条枚举 I1–I14**，不要按「12 条」生成矩阵（会漏掉 I13 的
+big-tx 共处与 I14 的 record-before-act）。
 批次 B 落地后按其末尾的对照表**逐条打勾**——丢一条就是回归。
-⚠️ 该表当场查出：9 条归引擎的不变量里，设计初稿只有 1 条完整；I1（scope 串行）、
+⚠️ 该表当场查出：11 条归引擎的不变量里，设计初稿只有 1 条完整；I1（scope 串行）、
 I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 
 - **T7** 迁移 + 新表 `resource_bundle_applies`（泛化自 `intent_apply_journal`）。
@@ -102,10 +112,11 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - **T13** `rfc271-bundle-engine.test.ts` + `rfc271-bundle-owner-gate.test.ts` +
   `rfc271-skill-update.test.ts`。
 
-## 批次 C · intent 能力扩张（决策 27）+ 工作组 call runtime 对齐（决策 28）
+## 批次 C · intent 能力扩张（决策 27）
 
-本 RFC **不迁移 intent 主流程**（决策 26），但有**两处显式例外**：skill 半边是真「顺手」
+本 RFC **不迁移 intent 主流程**（决策 26），但有**一处显式例外**：skill 半边是真「顺手」
 （调四段内核即可）；**plugin 半边要动 intent 的 prestage 循环与收敛器**。
+⚠️ **决策 28 不在本批次**——它完整归 A′ 的 T6e（见回滚段）。
 
 - **T14** 解开 `copyOnlyTargetsFor`（`applyChangeset.ts:135`）里 skill/plugin 的
   `'in-place update for this resource type is not supported yet'` 分支；skill 侧改为调用
@@ -267,5 +278,5 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 | C1/C2/C6 打断既有自动化 | 已逐条呈用户确认；发布说明点名 |
 
 **回滚**：批次 I 之前任何时点可停（新路径纯增量）。批次 C 若出问题回滚该 commit 即可——
-但注意它**不只动一个分支**：含 plugin 的 prestage/artifact/收敛三处，以及决策 28 的
-`freezeCallClosure` 工作组分支（执行期行为变更）。回滚粒度按这四处评估。
+但注意它**不只动一个分支**：含 plugin 的 prestage / artifact / 收敛三处。
+⚠️ **决策 28（C7 行为变更）不在批次 C**——它在 A′ 的 T6e。回滚批次 C **不会**撤销 C7。

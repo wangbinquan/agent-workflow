@@ -1,6 +1,7 @@
 # RFC-271 · 统一资源表达（Resource Bundle）与配置包
 
-状态：Draft v4（2026-08-08）。v1 → 设计门 R1（12 条）→ v2 → R2（9 条）→ **用户决策：归一化
+状态：Draft v10（2026-08-08）。经**八轮**外部设计门（R1 12 / R2 9 / R3 18 / R4 13 /
+R5 13 / R6 7 / R7 7 / R8 5，逐条核实全部属实）。v1 → R1 → v2 → R2 → **用户决策：归一化
 结构化表达** → v3 → **R3（13×P1 + 5×P2，判定不可进入实现）** → v4。
 
 **v4 的范围变更（用户决策 26）**：R3 揭示 `applyChangeset.ts` 的承重不变量有 **~13 条**而非
@@ -142,7 +143,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
     向后兼容——它带着「模型输出专用」的历史包裹（session handle 域、给模型看的约束文案），
     作为平台级表达会长期别扭。
 23. ~~**同一 RFC 一次到位**~~ **（已被决策 26 supersede）**：R3 揭示 intent 的不变量面是
-    ~12 条且多为场景特有，与包的新 bug 压在同一 changeset 里风险叠加。
+    ~14 条且多为场景特有，与包的新 bug 压在同一 changeset 里风险叠加。
 24. **可见即有读权限**：导出的读侧判据只有 ACL 行级可见性，**不**额外要求类型级 `*:read`
     权限点。AC-7d 是一条**反向锁**（可见但缺该类型权限点必须导出成功）。
 25. **owner 断言进最终事务**：commit 时服务端重算每条允许的动作（不信客户端传来的），并在
@@ -165,8 +166,9 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
       `dependsOn` 必须 parse 失败。
     - **解析契约是实质**：`freeze` / `aclAt` / `dangle` 三条属性一并进模型，否则表达不了
       `freezeCallClosure`。决策 28 因此不再是独立实现，而是 `CallRef` 域的 resolver 实例。
-    - 受影响的运行期代码：`scheduler.ts` 的四处 `agentId` 裸读、`freezeCallClosure`、
-      runner 的技能/MCP/插件闭包组装。
+    - 受影响的运行期代码：`scheduler.ts` 的 `agentId` 裸读（`:5187` / `:6943` / `:6997`；
+      ⚠️ v8 误列的 `:7226` 是 `markWrapperTerminal` 不是读取点）、`freezeCallClosure`、
+      `detectCallCycles`、validator 闭包装载、runner 的技能/MCP/插件闭包组装。
     ⚠️ **我明确提示过这是决策 23 那条已失败过一次的路**；用户在知悉后仍选择一次到位。
     风险按 `plan.md` 的批次 A′ 独立成 commit 控制。
 
@@ -193,8 +195,18 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **AC-B2d** 🆕 **wire 零变更**：`res#<type>#<n>`、`$new:<slug>`、裸 ULID、name 选择器逐一
   保留为合法拼写 ⇒ `INTENT.md`、模型输出、存量 workflow definition、agent.md 导入
   **一个字节不改**。测试做**字节级拼写断言**；intent 测试套**零改判**。
-- **AC-B2e** 🆕 **解析契约进模型**：`freeze` / `aclAt` / `dangle` 三条属性由域声明。
+- **AC-B2e** 🆕 **解析契约进模型**：域级 `freeze` / `aclAt` + **调用级 `purpose` /
+  `onMissing` / `failureOwner`**（共五属性），且 `resolve` 返回 typed `Result`、**不 throw**
+  ——直接 throw 会被 `runScope` 冒泡成任务级 `scheduler error`，丢掉 node/wrapper 归属。
   `freezeCallClosure` 是 `CallRef` 域的 resolver 实例，不是独立实现。
+- **AC-B2g** 🆕 **边身份契约**：所有 call 图操作走 `resolveEdge(sourceWorkflowId, CallRef)`,
+  **五个消费者同源**（冻结生成 / scheduler 主消费 ×2 / `childClosureSubset` /
+  `detectCallCycles` / validator 闭包装载与端口推导）。
+  ⚠️ validator 的注释写明「与启动绑同一行」是不变量——决策 28 改了启动判据就**必须**一起改
+  validator，否则同名双 id 场景下预览与启动绑不同的行。
+- **AC-B2h** 🆕 agent 的 `skills` 槽用专属 codec `BundleIdentityRef | ProjectSkillRef`；
+  `project-skill` **只在该槽**合法。⚠️ 否则一个今天合法可跑的代理（含 `{kind:'project'}`
+  技能）**无法 round-trip**——`external:` 兜不住它（无资源行可解析）。
 - **AC-B2f** 🆕 **调度器不再裸读字段**：`scheduler.ts` 四处 `agentId` 直读收成一个
   `RuntimeRef` resolver；配一条守卫防止下一个 NodeKind 再抄第五份。
 - **AC-B2b** 🆕 表达层有**第三种引用形态** `name:<selector>`（late-bound）：`call-workflow` /

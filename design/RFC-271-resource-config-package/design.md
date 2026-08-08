@@ -123,6 +123,28 @@ W1**。name-only 一开始就错选 W1；id-only 会继续跟着已改名的 W2�
 - ✅ **typed RuntimeRef**：`{k:'id'}` 承载 managed skill / mcp / plugin / dependsOn / agentId；
   新增 `{k:'project-skill', name}` 承载 project 技能——它**不是平台资源**（无 row、无 ACL），
   但它确实是一个「指向某物」的引用，放进 AST 才能让 resolver 完整、不留 special-case。
+
+  ⚠️ **AST 有了还不够，Bundle 里也得有槽位**（R8-P1-1）。v9 只加了 AST 变体，却仍规定
+  agent 的 `skills` 用 `BundleIdentityRef`（只允许 `local:` / `external:`）——而 `external:`
+  兜不住：`resolveExternal` 必须按 `AclResourceType` 解析成资源 id，project 技能**恰好没有
+  那种行**。净结果是**一个今天完全合法、能跑的代理无法 round-trip**。
+
+  可复现：包里代理 A 引用 project 技能 `repo-lint`、代理 B 不引用。只写全局
+  `requirements.projectSkills=['repo-lint']` 会**丢掉 A→skill 这条边**——导入后不给任何代理
+  则 A 能力丢失，给所有代理则 B 拿到了它原本没有的能力。
+
+  **修法**：agent 的 `skills` 槽单独一个域 codec
+
+  ```ts
+  BundleAgentSkillRef = BundleIdentityRef | ProjectSkillRef
+  ```
+
+  `project-skill` **只在这一个槽**合法（其余槽仍拒绝），并保留 `requirements.projectSkills`
+  作为**环境要求声明**（导入方要自备该仓内技能），两者不是二选一：边在 payload 里，
+  要求在 manifest 里。
+
+  **并规定：T1 的三个 Bundle schema 是 T6a 域 codec 的 alias / re-export，不是第二套
+  parser。**（否则「归一化」在自己 RFC 内部就分叉了。）
 - ❌ 宣布 project 技能是「非资源 requirement」并退出「唯一 ResourceRef」承诺——那等于把
   归一化打了个洞，而洞正好在 runner 组装 config 的路径上。
 
@@ -186,13 +208,42 @@ interface RefResolution<T> {
 |---|---|
 | 判据 | 与工作流分支同构：id hint 命中**且该行仍带该选择器名字**才用，否则回退最老可见行。即 §1.1b 的复合 `CallRef` 语义，**不在别处再抄一份** |
 | 形状 | **`Record<sourceScopedKey, FrozenXxxRef>`**，key = `` `${sourceWorkflowId}#${nodeId}` ``。⚠️ **不能只用 nodeId**（R7-P1-4）：节点 id 只在**单份 definition 内**唯一（`workflow.validator.ts:574-588` 只查单份内重复），传递闭包里两个不同工作流都用 `call-1` 是合法的，扁平 `Record<nodeId,…>` 必有一条被覆盖 |
-| 消费者 | **三处**（v8 只列了两处）：`scheduler.ts:2966-2968` 主消费 ×2、**`childClosureSubset`（`closure.ts:103-131`）**——它按名字重建子闭包并做**传递遍历**，不改就会让子任务查不到而报 `workflow-call-ref-missing`（调用点 `scheduler.ts:3824-3855`） |
+| 消费者 | **五处**（R8-P1-2；v8 写两处、v9 写三处，都少了）——见下表 |
 | 存量兼容 | `parseCallClosure` 带 `closureVersion` 判别，无该字段即 v1 name-keyed；**三个消费者全部双读** v1/v2 ⇒ 存量任务零影响、零迁移 |
 | 快照 | grants + workgroup row + member rows 必须在**同一个 `dbTxSync`** 里读（R6-P2-1），否则「判据通过时它还叫 audit、冻结的却已改名」 |
 | **归属** | 完整落在**批次 A′ 的 T6e**。⚠️ v8 里 T17b 与回滚说明把它归批次 C，与「scheduler 热路径独立可回滚」自相矛盾，已移除重复所有权 |
 
+#### 1.1c'' 边身份契约：`resolveEdge(sourceWorkflowId, CallRef)`（R8-P1-2）
+
+**只换 `Record` 的 key 兑现不了 C7。** 图上的每一条 call 边都要能被独立定位，而现在有两条
+生产路径仍在**按名字折叠**：
+
+| # | 消费者 | 现状 | 必须改成 |
+|---|---|---|---|
+| 1-2 | `scheduler.ts:2966-2968` 主消费 ×2 | 按 name 取 | 按 `sourceWorkflowId#nodeId` |
+| 3 | `childClosureSubset`（`closure.ts:103-131`） | 只收 definition、内部按 name BFS | 收 `sourceWorkflowId`，按边遍历。调用点已持有 `frozen.id` 却没传（`scheduler.ts:3732,3811,3851`） |
+| **4** | **`detectCallCycles`（`workflowCalls.ts:88-101`）** | resolver 签名是 **`(name: string)`**，把 `nodeId` 与 `workflowId` **整个丢掉** | 签名收完整 `CallRef` + source id——否则**表示不了「同名两条指向不同目标的边」** |
+| **5** | **`loadCallWorkflowClosure`（`workflow.validator.ts:207-255`）** + 其消费点（`:563-571` / `:830-840` / `:2709-2719`） | 按 name 取**最老行** | 采用与启动**同一条** id-hint-first 判据 |
+
+**第 5 条是硬约束，不是可选项。** 该函数的注释写明了一个不变量：
+
+> *Duplicate names resolve DETERMINISTICALLY: oldest row wins — **the exact rule
+> freezeCallClosure applies, so editor preview and launch bind the same row.***
+
+决策 28 把启动改成 id 优先，**就破了这条不变量**——除非 validator 一起改。不改的后果可复现：
+W1（旧）/ W2（新）都叫 `audit`，根 R 有 `c1={name:'audit',idHint:W1}`、
+`c2={name:'audit',idHint:W2}`；W1 输出 `old`、W2 输出 `new` 且 W2 回调 R。启动会为 `c2`
+冻结 W2，而 validator 固定读 W1 ⇒ **对 `new` 端口报错**、且**看不见 W2→R 这个环**。
+
+**统一契约**：所有图操作走 `resolveEdge(sourceWorkflowId, CallRef)` —— 冻结生成、cycle
+walk、child subset、validator / 端口推导五处同源。source id 在两层都是现成的：根层
+`task.ts:138-151` 已经把 `root.id` 传给冻结器，子层调用点持有 `frozen.id`，**只是没写进
+helper 签名**。
+
+回归必须含：「同名双 id、其中一支成环」与「同名双 id、端口不同」两条。
+
 ⚠️ 仍是**执行期行为变更**（C7）：无冲突时目标从「最老可见行」变成「你当初选的那个」；
-有冲突时两节点从「都跑同一个」变成「各跑各的」。
+有冲突时两节点从「都跑同一个」变成「各跑各的」；**编辑器预览的绑定规则同步改变**。
 
 #### 1.1d `local:` 的稳定性
 
@@ -363,10 +414,10 @@ export interface BundleApplyProvider {
 
 ### 2.2b 不变量清单是开工前置（R3）
 
-**已完成**：`invariants.md` 是 2026-08-08 逐条读源码核实的完整清单（12 条，含锚点与原文
+**已完成**：`invariants.md` 是 2026-08-08 逐条读源码核实的完整清单（**14 条**，含锚点与原文
 引用），**不是转述注释**。批次 B 落地后按其末尾的对照表逐条打勾。
 
-它当场查出：12 条里 9 条归引擎，而**只有 1 条（I5 pending seams）在本设计里是完整的**——
+它当场查出：**14 条里 11 条归引擎**，而初稿**只有 1 条（I5 pending seams）是完整的**——
 I1 / I3 / I8 完全没写，I2 / I4 / I6 / I7 / I9 写了但缺关键细节。以下五条是本节据此补写的：
 
 - **I1 按 scope 串行**：`applyChangeset.ts:198` 的 `applyLocks` 链式 Promise 锁。
