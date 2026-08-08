@@ -38,7 +38,7 @@ import { dirname, join, relative } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { skills, skillVersions } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { realpathInside } from '@/util/safePath'
 import { cleanupOpDirs, opStagedDir, swapInStaged } from '@/services/skillFsPublish'
 import {
@@ -471,13 +471,49 @@ function assertCompositePrecondition(
   }
 }
 
-export function commitSkillVersion(
+/**
+ * RFC-271 T10 —— 一次版本提交被拆成**四段**，让批量导入能把「DB 提交」这一段和
+ * 别的资源放进同一个事务。
+ *
+ *   stage      → FS 暂存 + 候选目录 + 开 op（DB 里还看不见）
+ *   commitInTx → 版本行 + skills 行的推进（**引擎把它塞进自己的 big tx**）
+ *   publish    → 原子 swap 发布 live files/
+ *   abort      → pre-commit 补偿
+ *
+ * ⚠️ 引擎必须有 `abort`：没有它，批量场景失败时只能复制状态机内部逻辑去清理，
+ * 而那正是这套两阶段提交当初为之而生的东西。
+ *
+ * ⚠️ **`unmarkSkillBootVerified` 不在 publish 段里**。单条路径在 DB 提交返回后
+ * 立刻 unmark；批量场景必须在 big tx 返回后、**任何**逐项 publish 之前一次性
+ * unmark 全部已提交技能——否则先 publish 的那个已经 mark 回来了，而后一个还没
+ * 发布的技能仍带着上一代的 admission。
+ */
+export interface StagedSkillVersion {
+  skillId: string
+  skillName: string
+  /** null = 调用方已持有该技能的 op 锁（reserve / create 路径的 skipOp）。 */
+  opId: string | null
+  publishId: string
+  newVersion: number
+  newHash: string
+  filesDir: string
+  versionDir: string
+  stagingDir: string
+  /**
+   * 空写短路（编辑器 Save 内容未变）。**它仍然是一个 fence-only 的已暂存 op**：
+   * 照样进事务重验那四道 token，只跳过版本写入与 publish。整条 op 跳过会破坏
+   * 整包基线——调用方会以为这个目标没被校验过。
+   */
+  noop: SkillVersionRow | null
+}
+
+export function stageSkillVersion(
   db: DbClient,
   opts: SkillVersionFsOptions,
   skillId: string,
   produce: (stagingDir: string) => void,
   commit: SkillVersionCommitOpts,
-): SkillVersion {
+): StagedSkillVersion {
   const skill = loadSkillRow(db, skillId)
   if (!skill) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   if (skill.sourceKind !== 'managed') {
@@ -527,27 +563,39 @@ export function commitSkillVersion(
         }),
       )
 
-  let committed = false
+  const staged: StagedSkillVersion = {
+    skillId,
+    skillName: cur.name,
+    opId,
+    publishId,
+    newVersion,
+    newHash: '',
+    filesDir,
+    versionDir,
+    stagingDir: staging,
+    noop: null,
+  }
   try {
     rmSync(staging, { recursive: true, force: true })
     mkdirSync(staging, { recursive: true })
     if (existsSync(filesDir)) cpSync(filesDir, staging, { recursive: true })
     produce(staging)
 
-    const newHash = hashRegularFileTree(staging)
+    staged.newHash = hashRegularFileTree(staging)
     // Empty-write short-circuit: an editor Save with no real change must not
     // inflate the history. (Initial / fusion / restore always commit.)
-    if (commit.source === 'editor' && maxIndex > 0 && newHash === hashRegularFileTree(filesDir)) {
-      rmSync(staging, { recursive: true, force: true })
+    if (
+      commit.source === 'editor' &&
+      maxIndex > 0 &&
+      staged.newHash === hashRegularFileTree(filesDir)
+    ) {
       const latest = existing.find((r) => r.versionIndex === maxIndex)
       if (latest) {
-        // RFC-170 (Codex re-review): a no-op editor Save must STILL honor the
-        // composite token. Without this, an identical-content delete→recreate in
-        // the caller's await window returns the substitute skill's row/token to a
-        // request that was authorized against (and holds the token of) the old one.
-        dbTxSync(db, (tx) => assertCompositePrecondition(tx, skillId, commit))
-        if (opId) dbTxSync(db, (tx) => abandonOperation(tx, opId)) // nothing committed
-        return rowToSkillVersion(latest, cur.name)
+        // 空写：丢掉 staging，但**保留 op**（若有）—— 它仍要在事务里重验那四道
+        // token，只是不写版本、不发布。整条跳过会破坏整包基线。
+        rmSync(staging, { recursive: true, force: true })
+        staged.noop = latest
+        return staged
       }
     }
     if (opId) dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
@@ -557,101 +605,154 @@ export function commitSkillVersion(
     cpSync(staging, versionDir, { recursive: true })
     assertRegularFileTree(versionDir)
     if (opId) dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-versioned'))
+    return staged
+  } catch (err) {
+    // 暂存段自身失败：这里还没有任何 DB 可见物，直接补偿。
+    abortStagedSkillVersion(db, staged, commit)
+    throw err
+  }
+}
 
-    const id = ulid()
-    const now = Date.now()
-    const created = dbTxSync(db, (tx) => {
-      // RFC-170 (Codex F4): fence the composite precondition IN the version-bump
-      // tx (atomic with the UPDATE), so a drift that slipped past the caller's
-      // earlier pre-check cannot be applied to the wrong generation. Same check as
-      // the no-op short-circuit above — one helper, two call sites.
-      assertCompositePrecondition(tx, skillId, commit)
-      const skillSet: Partial<typeof skills.$inferInsert> = {
-        contentVersion: newVersion,
-        updatedAt: now,
-        // RFC-170 §invariant④: a freshly-written snapshot IS the authority. Mark
-        // the durable state authoritative (and boot-verified in-memory after the
-        // publish) so a post-boot create/edit is immediately available under the
-        // isSkillAvailableThisBoot gate (a just-written tree is the hashed tree).
-        versionState: 'snapshot-authoritative',
-      }
-      if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
-      tx.update(skills).set(skillSet).where(eq(skills.id, skillId)).run()
-      tx.insert(skillVersions)
-        .values({
-          id,
-          skillId,
-          versionIndex: newVersion,
-          filesPath: skillVersionRelPath(skillId, newVersion),
-          source: commit.source,
-          summary: commit.summary ?? null,
-          fusionId: commit.fusionId ?? null,
-          restoredFromVersion: commit.restoredFromVersion ?? null,
-          authorUserId: commit.authorUserId,
-          contentHash: newHash,
-          createdAt: now,
-        })
-        .run()
-      commit.txExtra?.(tx, newVersion)
-      if (opId) advancePhase(tx, opId, 'db-committed')
-      return (
-        tx.select().from(skillVersions).where(eq(skillVersions.id, id)).all() as SkillVersionRow[]
-      )[0]
+/**
+ * 第二段：**纯 DB**。调用方把它塞进自己的事务，于是「这个技能的新版本」与同一
+ * 包里其它资源的写入要么一起可见、要么一起不可见。
+ *
+ * 空写（`staged.noop !== null`）仍然跑那四道 token 复核，只跳过两个写入。
+ * 返回 null 表示没有新版本行。
+ */
+export function commitSkillVersionInTx(
+  tx: DbTxSync,
+  staged: StagedSkillVersion,
+  commit: SkillVersionCommitOpts,
+): SkillVersionRow | null {
+  // RFC-170 (Codex F4): fence the composite precondition IN the version-bump
+  // tx (atomic with the UPDATE), so a drift that slipped past the caller's
+  // earlier pre-check cannot be applied to the wrong generation.
+  assertCompositePrecondition(tx, staged.skillId, commit)
+  if (staged.noop !== null) {
+    if (staged.opId) abandonOperation(tx, staged.opId) // nothing committed
+    return null
+  }
+  const id = ulid()
+  const now = Date.now()
+  const skillSet: Partial<typeof skills.$inferInsert> = {
+    contentVersion: staged.newVersion,
+    updatedAt: now,
+    // RFC-170 §invariant④: a freshly-written snapshot IS the authority.
+    versionState: 'snapshot-authoritative',
+  }
+  if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
+  tx.update(skills).set(skillSet).where(eq(skills.id, staged.skillId)).run()
+  tx.insert(skillVersions)
+    .values({
+      id,
+      skillId: staged.skillId,
+      versionIndex: staged.newVersion,
+      filesPath: skillVersionRelPath(staged.skillId, staged.newVersion),
+      source: commit.source,
+      summary: commit.summary ?? null,
+      fusionId: commit.fusionId ?? null,
+      restoredFromVersion: commit.restoredFromVersion ?? null,
+      authorUserId: commit.authorUserId,
+      contentHash: staged.newHash,
+      createdAt: now,
     })
+    .run()
+  commit.txExtra?.(tx, staged.newVersion)
+  if (staged.opId) advancePhase(tx, staged.opId, 'db-committed')
+  const created = (
+    tx.select().from(skillVersions).where(eq(skillVersions.id, id)).all() as SkillVersionRow[]
+  )[0]
+  if (!created) throw new Error('skill_versions row disappeared after insert')
+  return created
+}
+
+/**
+ * 第三段：把 staging 原子发布成 live `files/`（`swapInStaged` 两次同父 rename）。
+ *
+ * ⚠️ 这一段**故意不含** `unmarkSkillBootVerified` —— 见 `StagedSkillVersion` 的
+ * 注释：批量场景要在 big tx 返回后、任何逐项 publish 之前一次性 unmark 全部。
+ * 崩在两次 rename 之间只会留下一棵完整的树，`reconcileSkillLiveFiles()` 在启动
+ * 时从 `versions/v{cur}` 重新同步 live。
+ */
+export function publishStagedSkillVersion(
+  db: DbClient,
+  opts: SkillVersionFsOptions,
+  staged: StagedSkillVersion,
+): void {
+  if (staged.noop !== null) return
+  const { filesDir, publishId, opId } = staged
+  mkdirSync(dirname(filesDir), { recursive: true })
+  swapInStaged(filesDir, publishId)
+  const root = skillRootAbs(opts.appHome, staged.skillId)
+  if (realDirectoryChainState(root, filesDir) !== 'real-directory') {
+    throw new Error(`skill version ${staged.newVersion} live publish is not a real directory`)
+  }
+  if (hashRegularFileTree(filesDir) !== staged.newHash) {
+    throw new Error(
+      `skill version ${staged.newVersion} live publish does not match committed content hash`,
+    )
+  }
+  cleanupOpDirs(filesDir, publishId)
+  if (opId) {
+    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
+    dbTxSync(db, (tx) => finishOperation(tx, opId))
+  }
+  // RFC-170 §invariant④: the snapshot we just published IS verified this boot.
+  markSkillBootVerified(staged.skillId)
+}
+
+/**
+ * 第四段：**pre-commit 补偿**。没有它，引擎在批量失败时只能复制这套状态机的内部
+ * 逻辑去清理。清理本身若无法证明完成，**保留** active op + 锁——启动恢复要靠它
+ * 当 oracle（这条与既有实现逐字一致）。
+ */
+export function abortStagedSkillVersion(
+  db: DbClient,
+  staged: StagedSkillVersion,
+  commit?: Pick<SkillVersionCommitOpts, '__beforeRollbackCleanupForTest'>,
+): void {
+  if (staged.opId === null) return
+  try {
+    commit?.__beforeRollbackCleanupForTest?.()
+    cleanupOpDirs(staged.filesDir, staged.publishId)
+    rmSync(staged.versionDir, { recursive: true, force: true })
+    const opId = staged.opId
+    dbTxSync(db, (tx) => abandonOperation(tx, opId))
+  } catch {
+    /* active op + lock intentionally preserved for boot recovery */
+  }
+}
+
+/**
+ * 四段的顺序组合 —— 单条路径的既有形态，行为逐字不变。
+ * 批量路径不走这里：它要把第二段并进自己的事务。
+ */
+export function commitSkillVersion(
+  db: DbClient,
+  opts: SkillVersionFsOptions,
+  skillId: string,
+  produce: (stagingDir: string) => void,
+  commit: SkillVersionCommitOpts,
+): SkillVersion {
+  const staged = stageSkillVersion(db, opts, skillId, produce, commit)
+  let committed = false
+  try {
+    const created = dbTxSync(db, (tx) => commitSkillVersionInTx(tx, staged, commit))
     committed = true
+    if (staged.noop !== null) return rowToSkillVersion(staged.noop, staged.skillName)
     // The DB now names a generation that live files/ has not yet published.
     // Remove any prior-generation admission immediately; a post-commit fault
     // must remain hidden while its active op + lock await boot recovery.
-    unmarkSkillBootVerified(cur.id)
+    unmarkSkillBootVerified(staged.skillId)
     commit.__afterDbCommitForTest?.()
-
-    // Publish live files/ from the staged snapshot LAST, ATOMICALLY (swapInStaged
-    // — two same-parent renames). A crash between them leaves a complete tree;
-    // reconcileSkillLiveFiles() (startup) re-syncs live from versions/v{cur}.
-    mkdirSync(dirname(filesDir), { recursive: true })
-    swapInStaged(filesDir, publishId)
-    const root = skillRootAbs(opts.appHome, skillId)
-    if (realDirectoryChainState(root, filesDir) !== 'real-directory') {
-      throw new Error(`skill version ${newVersion} live publish is not a real directory`)
-    }
-    if (hashRegularFileTree(filesDir) !== newHash) {
-      throw new Error(
-        `skill version ${newVersion} live publish does not match committed content hash`,
-      )
-    }
-    cleanupOpDirs(filesDir, publishId)
-    if (opId) {
-      dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
-      dbTxSync(db, (tx) => finishOperation(tx, opId))
-    }
-
-    // RFC-170 §invariant④: the snapshot we just published IS verified this boot —
-    // mark it so a post-boot create/edit is immediately available under the gate.
-    markSkillBootVerified(cur.id)
-
+    publishStagedSkillVersion(db, opts, staged)
     if (!created) throw new Error('skill_versions row disappeared after insert')
-    return rowToSkillVersion(created, cur.name)
+    return rowToSkillVersion(created, staged.skillName)
   } catch (err) {
-    if (opId) {
-      if (committed) {
-        // Post-db-committed: the version is durable, but the two-rename live
-        // publish may be incomplete. Preserve the active op + lock as recovery
-        // evidence; the boot barrier must converge canonical live content before
-        // it may finish the operation.
-      } else {
-        // Pre-db-committed rollback: nothing is referenced — discard staged + the
-        // orphan version dir + free the lock. If cleanup itself cannot be proven,
-        // preserve the active op + lock so boot recovery retains its oracle.
-        try {
-          commit.__beforeRollbackCleanupForTest?.()
-          cleanupOpDirs(filesDir, publishId)
-          rmSync(versionDir, { recursive: true, force: true })
-          dbTxSync(db, (tx) => abandonOperation(tx, opId))
-        } catch {
-          /* active op + lock intentionally preserved for boot recovery */
-        }
-      }
-    }
+    // Post-db-committed: the version is durable, but the two-rename live publish
+    // may be incomplete. Preserve the active op + lock as recovery evidence.
+    if (!committed) abortStagedSkillVersion(db, staged, commit)
     throw err
   }
 }

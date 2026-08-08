@@ -1920,6 +1920,7 @@ export const enUS: Resources = {
     versionSourceEditor: 'edited',
     versionSourceFusion: 'fused',
     versionSourceRestore: 'restored',
+    versionSourceImport: 'imported',
     versionRestoredFrom: 'restored from v{{n}}',
     versionCompare: 'Compare to current',
     versionRestore: 'Restore',

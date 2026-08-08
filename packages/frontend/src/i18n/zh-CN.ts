@@ -1948,6 +1948,7 @@ export interface Resources {
     versionSourceEditor: string
     versionSourceFusion: string
     versionSourceRestore: string
+    versionSourceImport: string
     versionRestoredFrom: string
     versionCompare: string
     versionRestore: string
@@ -7072,6 +7073,7 @@ export const zhCN: Resources = {
     versionSourceEditor: '编辑',
     versionSourceFusion: '融合',
     versionSourceRestore: '回退',
+    versionSourceImport: '导入',
     versionRestoredFrom: '回退自 v{{n}}',
     versionCompare: '与当前对比',
     versionRestore: '回退到此版本',

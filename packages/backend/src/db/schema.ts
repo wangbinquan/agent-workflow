@@ -394,7 +394,9 @@ export const skillVersions = sqliteTable(
     versionIndex: integer('version_index').notNull(), // 1-based; == skills.content_version at archive
     filesPath: text('files_path').notNull(), // relative to app home: skills/{id}/versions/v{n}/files
     source: text('source', {
-      enum: ['initial', 'editor', 'fusion', 'restore'],
+      // RFC-271: 'import' = written by a config-package import (zero migration —
+      // this column has no DB CHECK; the enum is TS-side only).
+      enum: ['initial', 'editor', 'fusion', 'restore', 'import'],
     }).notNull(),
     summary: text('summary'), // change note (fusion changelog / restore auto-text); nullable
     fusionId: text('fusion_id'), // RFC-101 PR-B: set when source='fusion'; weak ref (no cascade)

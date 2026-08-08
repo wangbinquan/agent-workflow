@@ -26,6 +26,7 @@ const SOURCE_KEY: Record<SkillVersionSource, string> = {
   editor: 'skills.versionSourceEditor',
   fusion: 'skills.versionSourceFusion',
   restore: 'skills.versionSourceRestore',
+  import: 'skills.versionSourceImport',
 }
 
 export function SkillVersionHistory({

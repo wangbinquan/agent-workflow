@@ -5,7 +5,15 @@
 import { z } from 'zod'
 import { FileNodeSchema, SkillContentSchema } from './skill'
 
-export const SkillVersionSourceSchema = z.enum(['initial', 'editor', 'fusion', 'restore'])
+/**
+ * RFC-271 T10 —— 扩了一个 `'import'`（配置包导入写入的版本）。
+ *
+ * 不复用 `'editor'`：`source` 这一列的全部意义就是**溯源**，而库里没有第二个
+ * 地方记「这次内容是从哪来的」。把包导入记成 editor，等于让版本历史说谎——
+ * 用户回看时无从分辨「谁在编辑器里改的」与「一次导入覆盖了它」。
+ * 该列**没有** DB CHECK 约束（纯 TS 侧枚举），故扩它零迁移。
+ */
+export const SkillVersionSourceSchema = z.enum(['initial', 'editor', 'fusion', 'restore', 'import'])
 export type SkillVersionSource = z.infer<typeof SkillVersionSourceSchema>
 
 /** A single skill_versions row, projected for the API. */
