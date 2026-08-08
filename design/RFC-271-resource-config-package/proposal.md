@@ -212,7 +212,8 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
   （intent 版只许 ASCII `[A-Za-z0-9._-]`，正式写路径只要求相对且不越界 ⇒
   `references/审计 规则.md` 这类合法技能**导不出去**）。
 - **AC-B4** 落地引擎保留 `applyChangeset.ts` 的**全部**承重不变量。开工前先把它们列成清单
-  逐条对照——`invariants.md` 已核实为 12 条，v3 只覆盖了 6 条。
+  逐条对照——`invariants.md` 已核实为 **14 条（11 条归引擎）**，v3 只覆盖了 6 条。
+  验收清单直接枚举 I1–I14。
 - **AC-B4b** 🆕 provider 接口带**事务钩子**（`claimInTx` / `revalidateInTx` / `finalizeInTx` +
   receipt 投影），使后续 RFC 能把 intent 的 session 原子性迁进来而不必重构引擎。
 - **AC-B4c** 🆕 引擎自带 **dependency planner + pending seams**：同 bundle 内新建的

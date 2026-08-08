@@ -20,7 +20,7 @@ provider 接口预留事务钩子，使后续 RFC 迁 intent 时不必重构引�
    泛化后成为整份表达的硬约束——它同时解决「包内同名资源绑错」（设计门 B1）与「模型编出
    一个 id」两类问题。
 3. **落地引擎保留既有全部不变量，并补齐三条**。`applyIntentChangeset` 的承重不变量
-   **核实为 12 条**（不是 v3 写的 6 条），泛化时**一条都不许丢**——开工前先列清单
+   **核实为 14 条**（`invariants.md` I1–I14，11 条归引擎），泛化时**一条都不许丢**——开工前先列清单
    （§2.2b），另补 ① 最终事务内的 owner 断言、② `skill-update` / `plugin-update`、
    ③ dependency planner 与 pending seams。
 4. **导出是引擎的逆向，不共用引擎**。导出只需把闭包序列化成 `ResourceBundle`，不写库；
@@ -59,35 +59,72 @@ provider 接口预留事务钩子，使后续 RFC 迁 intent 时不必重构引�
 **决策 29：六套合一。** 但合的是**命名与解析层**，不是事务层——这与已被砍回的决策 23
 （把 intent 的 apply 引擎迁进来）是两个量级。
 
-#### 1.1a 形态集（**既有拼写全部保留**）
+#### 1.1a 归一化 AST + 逐域 wire codec（R7-P1-1 修正）
 
-统一**不等于**改 wire。`ResourceRef` 是超集，各域只允许各自的子集，而**每一种既有拼写都
-原样成为合法形态**——因此 `INTENT.md`、模型输出、存量 workflow definition、导入 YAML
-**一个字节都不用改**：
+⚠️ **v8 初稿把「归一化」和「wire」混成了一张形态表，那是错的。** 反例三条，各自致命：
 
-| 形态 | 拼写 | 语义 | 来自 |
-|---|---|---|---|
-| `id` | 裸 ULID | 本实例的 canonical id | 机制 1 / 3 |
-| `name` | `<type>/<name>` | late-bound 名字选择器，**允许解析不到** | 机制 2 |
-| `handle` | `res#<type>#<n>` | 会话挂载句柄 | 机制 4（拼写不变） |
-| `local` | `$new:<slug>` | bundle 内前向引用 | 机制 4 的 tempRef（**拼写不变**）+ 机制 6 |
-| `external` | `external:<token>` | 由 provider 解析的外部引用 | 机制 6 |
-| `selector` | `{name, ownerUsername?}` | 可移植名字选择器 | 机制 5 |
+1. intent 的 tempRef wire 是 `$new:<slug>`（`intentChangeset.ts:42-56`），bundle 的是
+   `local:<slug>`。**同一语义、两种拼写**——选 `$new:` 破坏 bundle，选 `local:` 改 intent
+   wire，两个都塞进一个无域 codec 的 schema 又让跨域 parse-fail 失效。
+2. `ImportRefSelector` 的 `type` 是**必填且参与稳定 key**（`importRef.ts:25-37`）。我写的
+   `{name, ownerUsername?}` 丢了 `type` ⇒ agent.md 里 `{type:'mcp',name:'github'}` 与
+   `{type:'plugin',name:'github'}` 会归并成同一个 key。
+3. 仓里**已有**另一个宽松的全局 `ResourceRefSchema`（`agent.ts:100-113`），create/import
+   wire 还接受名字——「唯一 ResourceRef」这个说法必须先面对它。
 
-#### 1.1b 域（slot）——谁能用哪些形态
+**正解**：`ResourceRef` 是**归一化 AST**，各域各有一个 **wire codec**；AST 统一，编码不统一。
 
-不存在「全局都能用」的 `ResourceRefSchema`。每个域是一个**子集**，schema 层按域区分：
+```ts
+type ResourceRef =
+  | { k: 'id';       type: AclResourceType; id: string }
+  | { k: 'name';     type: AclResourceType; name: string }
+  | { k: 'selector'; type: AclResourceType; name: string; ownerUsername?: string }
+  | { k: 'handle';   type: AclResourceType; ordinal: number }
+  | { k: 'local';    slug: string }
+  | { k: 'external'; token: string }
+  | { k: 'call';     ... }            // 见 1.1b
+  | { k: 'project-skill'; name: string }   // 见 1.1b'
+```
 
-| 域 | 允许形态 | 用在 |
+| 域 | wire 编码 | 逐字保留 |
 |---|---|---|
-| `RuntimeRef` | `id` | scheduler 派发、runner config 组装（机制 1/3） |
-| `CallRef` | `id` + `name` | call 节点目标（机制 2）——id 优先、name 兜底，正是 `freezeCallClosure` 的判据 |
-| `IntentRef` | `handle` + `local` | intent payload（机制 4）——**与今天的 `IntentRefSchema` 等价** |
-| `BundleIdentityRef` | `local` + `external` | bundle 里 agent 的 dependsOn/mcp/plugins/skills、工作组成员、工作流 agentRef |
-| `BundleCallRef` | `local` + `external` + `name` | bundle 里 call 节点目标 |
-| `ImportSelectorRef` | `selector` | agent.md 导入（机制 5） |
+| `IntentRef` | `res#<type>#<n>` / **`$new:<slug>`** | ✅ `intentChangeset.ts:42-56` 不动 |
+| `BundleIdentityRef` / `BundleCallRef` | **`local:<slug>`** / `external:<token>` / `name:<type>/<name>` | ✅ 本 RFC 新定 |
+| `ImportSelectorRef` | `{type, name, ownerUsername?}` **对象**（`type` 必留） | ✅ `importRef.ts` 不动 |
+| `RuntimeRef` | 裸 ULID / 判别联合对象（见 1.1b'） | ✅ 存量 definition 与 `agents.*` 不动 |
+| `CallRef` | `{nodeId, workflowName, workflowId?}` **复合记录** | ✅ 见 1.1b |
 
-⚠️ 域是**收窄**而非放宽：把 `name:` 放进 agent 的 `dependsOn` 必须 parse 失败。
+**T6b/T6c 只能 alias 域 codec，不能 alias 单一字符串形态。**
+
+#### 1.1b `CallRef` 是**复合记录**，不是两种互斥形态（R7-P1-3 修正）
+
+`WorkflowCallRef` 的真实形状是 `{nodeId, workflowName, workflowId?}`，注释写着
+*name is authoritative, id is a cache*（`workflowCalls.ts:12-17`）。而 `freezeCallClosure`
+的判据是**一条复合行为**：id hint 命中**且该行仍带该名字**才用它，否则**回退到最老可见同名行**
+（`closure.ts:162-219`）。
+
+```ts
+{ k: 'call'; type: 'workflow'|'workgroup'; nodeId: string;
+  authoritativeName: string; idHint?: string }
+```
+
+可复现（`id | name` 两形态表达不了）：W1 旧 / W2 新、都叫 `audit`，节点存
+`{workflowName:'audit', workflowId:W2}`。W2 仍叫 `audit` 时应选 **W2**；W2 被改名后应**回退
+W1**。name-only 一开始就错选 W1；id-only 会继续跟着已改名的 W2、也做不出回退。
+
+#### 1.1b' `RuntimeRef` 必须表达判别联合（R7-P1-2 修正）
+
+`agents.skills` 是判别联合：`{kind:'managed', skillId}` / `{kind:'project', name}`
+（`agent.ts:115-128`），**project 技能没有 DB row**、runner 按 `m:<skillId>` / `p:<name>`
+去重（`scheduler.ts:9276-9290`）、直接按名字透传给 CLI（`:9360-9382`）。
+
+所以 `RuntimeRef = id` 是错的。两条出路，**本 RFC 取第一条**：
+
+- ✅ **typed RuntimeRef**：`{k:'id'}` 承载 managed skill / mcp / plugin / dependsOn / agentId；
+  新增 `{k:'project-skill', name}` 承载 project 技能——它**不是平台资源**（无 row、无 ACL），
+  但它确实是一个「指向某物」的引用，放进 AST 才能让 resolver 完整、不留 special-case。
+- ❌ 宣布 project 技能是「非资源 requirement」并退出「唯一 ResourceRef」承诺——那等于把
+  归一化打了个洞，而洞正好在 runner 组装 config 的路径上。
 
 #### 1.1c 解析契约（这才是合并的实质）
 
@@ -100,17 +137,62 @@ provider 接口预留事务钩子，使后续 RFC 迁 intent 时不必重构引�
 | **launch-ACL** | 可见性按**启动者**判定，而非保存者 | CallRef |
 | **dangle** | 保存时允许解析不到，启动才 fail closed | CallRef 的 `name` 形态 |
 
+**三条静态属性不够**（R7-P1-5）。同一个 ref、同一个域，行为仍随**调用目的**而变：
+
+- `resolveDependsClosure` 默认 missing 硬失败，但 tolerant UI preview 传 `allowMissing:true`
+  就静默跳过（`agentDeps.ts:8-13,40-46`）——一条域级 `dangle` 表达不了。
+- **scheduler 四处的失败归属根本不同**：主 `agent-single` 直接返回
+  `agent-identity-missing` / `agent-not-found`（`:5187-5200`）；而 wrapper-fanout 的 inner
+  节点先在 hydration 里**跳过**缺失 ref（`:6982-7002`）、shard source 为空时 wrapper 仍
+  **成功**（`:7135-7149`）、source 非空才把 wrapper row 标 failed（`:7192-7242`）。
+  ⚠️ 我 v8 写的源码清单也不准：`:7226` 是 `markWrapperTerminal`，真正的读取在
+  `fanoutInnerAgentKey`（`:6939-6944`）与调用点 `:7224`。
+
+若统一 resolver 在这些位置直接 `throw`，`runScope` 没有局部 rejection 映射
+（`:1629-1654`），异常会被归成**任务级** `"scheduler error"`（`:713-788`）——原本的
+node / wrapper 级失败归属**整个丢掉**。
+
 ```ts
 interface RefResolution<T> {
+  // 域级静态属性
   freeze: 'per-task' | 'none'
   aclAt: 'launch' | 'save' | 'none'
-  dangle: 'tolerated' | 'rejected'
-  resolve(ref: ResourceRef, ctx: ResolveCtx): Promise<T>
+  // 调用级：同域不同目的行为不同
+  purpose: 'dispatch' | 'validate' | 'preview'
+  onMissing: 'fail' | 'skip' | 'dangle'
+  failureOwner: 'node' | 'wrapper' | 'task' | 'caller'
+  /** parse 与 resolve 分开；resolve 返回 typed Result，**不 throw** ——
+   *  各调用点自己把 Result 映射成它原有的错误码与 node_run 归属。 */
+  resolve(ref: ResourceRef, ctx: ResolveCtx): Promise<RefResult<T>>
 }
 ```
 
+**硬性要求**：合并后各调用点的**错误码、空 source 行为、node_run 归属逐条不变**——这四处
+不是「看起来一样」，是实测不同。批次 A′ 要为四处各留一条归属回归。
+
 `freezeCallClosure` 因此不再是一份独立实现，而是 `CallRef` 域的 resolver 实例——决策 28 的
 「id 优先 + 按节点键控」就落在这一处，不用在别处再抄一遍。
+
+#### 1.1c' 决策 28 落在 `CallRef` resolver 上（含 R7-P1-4 修正）
+
+**背景**：`freezeCallClosure` 的工作组分支只收 `workgroupName`、按名取最老可见行，
+`workgroupId` **从头到尾没被读过**（`closure.ts:269-309`）；而冻结**结果**本身也是按名字
+键控的，同名两节点因此落到同一条。这个冲突状态**今天用普通编辑器就能造**——
+`CallWorkgroupEdit.tsx:133` 已在写 `{workgroupName, workgroupId}` 并专门处理同名候选。
+
+**用户决策 28**：跑我选的那个，且同名两节点各自生效。落法：
+
+| 项 | 内容 |
+|---|---|
+| 判据 | 与工作流分支同构：id hint 命中**且该行仍带该选择器名字**才用，否则回退最老可见行。即 §1.1b 的复合 `CallRef` 语义，**不在别处再抄一份** |
+| 形状 | **`Record<sourceScopedKey, FrozenXxxRef>`**，key = `` `${sourceWorkflowId}#${nodeId}` ``。⚠️ **不能只用 nodeId**（R7-P1-4）：节点 id 只在**单份 definition 内**唯一（`workflow.validator.ts:574-588` 只查单份内重复），传递闭包里两个不同工作流都用 `call-1` 是合法的，扁平 `Record<nodeId,…>` 必有一条被覆盖 |
+| 消费者 | **三处**（v8 只列了两处）：`scheduler.ts:2966-2968` 主消费 ×2、**`childClosureSubset`（`closure.ts:103-131`）**——它按名字重建子闭包并做**传递遍历**，不改就会让子任务查不到而报 `workflow-call-ref-missing`（调用点 `scheduler.ts:3824-3855`） |
+| 存量兼容 | `parseCallClosure` 带 `closureVersion` 判别，无该字段即 v1 name-keyed；**三个消费者全部双读** v1/v2 ⇒ 存量任务零影响、零迁移 |
+| 快照 | grants + workgroup row + member rows 必须在**同一个 `dbTxSync`** 里读（R6-P2-1），否则「判据通过时它还叫 audit、冻结的却已改名」 |
+| **归属** | 完整落在**批次 A′ 的 T6e**。⚠️ v8 里 T17b 与回滚说明把它归批次 C，与「scheduler 热路径独立可回滚」自相矛盾，已移除重复所有权 |
+
+⚠️ 仍是**执行期行为变更**（C7）：无冲突时目标从「最老可见行」变成「你当初选的那个」；
+有冲突时两节点从「都跑同一个」变成「各跑各的」。
 
 #### 1.1d `local:` 的稳定性
 
@@ -751,7 +833,7 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 | pre-stage 失败 | 各内核自补偿 + 插件 generation 精确删除 + journal → failed |
 | big tx 失败 | SQLite 回滚 + 逆序补偿 |
 | 进程被 SIGKILL | 启动收敛（带 active set + 10min 下限） |
-| 重复提交同 idempotencyKey | 返回**原 receipt**，不重跑 |
+| 重复提交同 idempotencyKey | **三态**（I3）：`committed` → 原 receipt；`failed` → 409；`prepared`/`applying` → 409 未结 |
 | 并发导入同目标 | 内容 CAS 409 + 技能 op 锁 409 |
 | **伪造 overwrite 他人资源** | **最终事务内 owner 断言拒绝**（§5.4） |
 | `formatVersion` 更高 | 拒绝 |
@@ -812,7 +894,7 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 | 决策 27 误伤 intent 既有 copy 语义 | AC-K2 双向锁；`ownerUserId` 判据一字不动 |
 | 决策 27 的 plugin 半边动到 intent prestage / 收敛 | §3.2 完整链路 + 独立 commit + 改判范围显式限定四处 |
 | 泛化时丢掉某条既有不变量 | `rfc271-bundle-engine.test.ts` 逐条点名；泛化前把 `applyChangeset.ts` 的不变量列成清单对照 |
-| 新旧 journal 并存期语义分裂 | 旧表只读收敛存量、新 apply 一律写新表；旧表删除留给后续 RFC |
+| ~~新旧 journal 并存~~ | **不存在**：决策 26 下 `intent_apply_journal` 一字不动，intent 继续用它自己那张表 |
 | `skill-update` 拆分引入回归 | 既有 `commitSkillVersion` 退化为四段顺序组合、保留 `noop` 分支，其它调用方零改动 |
 | 盘子过大一次推不动 | `plan.md` 的「PR / commit 拆分」：表达层 → 引擎 → intent 迁移 → 导出 → 导入 → 前端/CLI → 下线，逐个独立可绿 |
 

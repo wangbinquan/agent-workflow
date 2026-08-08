@@ -31,23 +31,41 @@
 
 依赖 A。**独立成 commit**——它触及 scheduler 热路径，要能单独回滚。
 
-- **T6a** `shared/src/ref/`：`ResourceRef` 形态集（`id` / `name` / `handle` / `local` /
-  `external` / `selector`，**既有拼写逐一保留**）+ 六个域子集 schema + `RefResolution`
-  契约类型（`freeze` / `aclAt` / `dangle`）。
+- **T6a** `shared/src/ref/`：`ResourceRef` **归一化 AST**（`id` / `name` / `selector` /
+  `handle` / `local` / `external` / **`call` 复合** / **`project-skill`**）+ **六个域各自的
+  wire codec**（不是共用一套字符串形态！`$new:` 与 `local:` 是同一 AST 的两种编码，
+  `ImportSelectorRef` 的 `type` 必须保留）+ `RefResolution` 契约
+  （`freeze` / `aclAt` / **`purpose` / `onMissing` / `failureOwner`**）。
+  ⚠️ `resolve` 返回 typed `Result`、**不 throw**——各调用点自己映射错误码与 node_run 归属。
 - **T6b** **机制 4 归位**：`IntentRefSchema` 改为 `IntentRef` 域的别名。
   ⚠️ **wire 零变更**——`res#<type>#<n>` 与 `$new:<slug>` 拼写不动，`INTENT.md` 不改。
   验收：intent 测试套**零改判**。
 - **T6c** **机制 5 归位**：`ImportRefSelector` 改为 `ImportSelectorRef` 域的别名
   （agent.md 导入仍在用；YAML 工作流导入已由 C2 下线）。
-- **T6d** **机制 1 归位**：`scheduler.ts` 四处 `agentId` 裸读（`:5187` / `:6943` / `:6997` /
-  `:7226`）收成**一个** `RuntimeRef` resolver。⚠️ 这是最热的派发路径，改动要能被现有调度
-  测试全覆盖；另加一条「新增 NodeKind 不会再抄第五份」的守卫。
-- **T6e** **机制 2 归位**：`freezeCallClosure` 成为 `CallRef` 域的 resolver 实例，
-  决策 28 的「id 优先 + 按节点键控 + in-tx snapshot」落在这一处。
+- **T6d** **机制 1 归位**：`scheduler.ts` 的 `agentId` 裸读收成**一个** `RuntimeRef` resolver。
+  实际读取点：主派发 `:5187`、`fanoutInnerAgentKey` `:6939-6944`（调用点 `:6997` / `:7224`）
+  ——⚠️ v8 写的 `:7226` 是 `markWrapperTerminal`、不是读取点。
+  **四处的失败归属实测不同，合并后必须逐条不变**：主 `agent-single` 返回
+  `agent-identity-missing`/`agent-not-found`（`:5187-5200`）；wrapper-fanout 的 inner 在
+  hydration 里**跳过**缺失 ref（`:6982-7002`）、shard source 为空时 wrapper 仍**成功**
+  （`:7135-7149`）、非空才标 wrapper failed（`:7192-7242`）。
+  ⚠️ 直接 throw 会被 `runScope`（`:1629-1654`）冒泡成**任务级** `"scheduler error"`
+  （`:713-788`），原有 node/wrapper 归属整个丢掉。四处各留一条归属回归。
 - **T6f** **机制 3 归位**：runner 的技能/MCP/插件/dependsOn 闭包组装改用 `RuntimeRef`。
-  ⚠️ `agents.skills` 是判别联合（managed skillId / project name），域子集要能表达它。
-- **T6g** 测试：六个域的正反例（跨域形态必须 parse 失败）、三条解析契约属性、
-  **wire 零变更的字节级断言**（intent handle / tempRef 拼写不变）。
+  ⚠️ `agents.skills` 是判别联合——managed `{kind,skillId}` 走 `{k:'id'}`，**project
+  `{kind,name}` 走新增的 `{k:'project-skill'}`**（无 DB row、无 ACL，runner 按 `p:<name>`
+  去重并按名字透传 CLI：`scheduler.ts:9276-9290,9360-9382`）。不给它一个 AST 变体就等于
+  在 runner 组装路径上留 special-case。
+  ⚠️ `agentDeps` 的 `allowMissing` 是**调用级**差异（`agentDeps.ts:40-46`），走 `onMissing`
+  而不是域级 `dangle`。
+- **T6e** **机制 2 归位 + 决策 28 完整落地**（design §1.1c'）：`freezeCallClosure` 成为
+  `CallRef` 域的 resolver；冻结闭包改 **source-scoped key**（`${sourceWorkflowId}#${nodeId}`
+  ——**不能只用 nodeId**，节点 id 只在单份 definition 内唯一）；**三个消费者**
+  （`scheduler.ts:2966-2968` ×2 + **`childClosureSubset` `closure.ts:103-131`**）全部双读
+  v1/v2；grants+row+members 同一 `dbTxSync` 快照。
+- **T6g** 测试：六个域的正反例（跨域形态必须 parse 失败）、五条解析契约属性、
+  **wire 零变更的字节级断言**（`$new:` / `res#type#n` / selector `type` / 裸 ULID 逐字不变）、
+  四处 scheduler 失败归属各一条、v1/v2 双读 × 三消费者、跨 definition 同名 nodeId 不覆盖。
 
 ## 批次 B · `BundleApply` 引擎（backend）
 
@@ -104,14 +122,8 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
   ⚠️ 改判范围**显式限定**为 prestage 循环 / artifact / 收敛 / `copyOnlyTargetsFor` 四处，
   其余零改判。
 
-- **T17b** **决策 28（修订）**：`freezeCallClosure` 工作组分支改 id-cache 优先，**且冻结闭包
-  从按名字键控改为按节点键控**（workflow 与 workgroup 两侧同时改——同一个形状同一个毛病）。
-  改 `closure.ts:45-48,83-94,313` + `scheduler.ts:2966-2968` 两处消费点。
-  **存量兼容**：`tasks.refClosureJson` 里已有 name-keyed JSON，`parseCallClosure` 同时接受
-  两种形状（带 `closureVersion` 判别，无该字段即 v1），消费端对 v1 回退按名字取 ⇒ 零迁移。
-  ⚠️ **执行期行为变更**，两条回归：①无冲突时冻结到 cache 指向的行；②同名两节点各自生效。
-  另需 in-tx snapshot loader（grants + workgroup row + members 同一 `dbTxSync`），否则
-  「判据通过时它还叫 audit、冻结的却已改名」（R6-P2-1）。
+- ~~**T17b**~~ **已移入批次 A′ 的 T6e**（决策 28 属 `CallRef` resolver；留在批次 C 会破坏
+  「scheduler 热路径独立可回滚」）。
 
 > 批次 C 独立成 commit 推送并跑完 CI，与包的工作解耦。
 
@@ -225,6 +237,7 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 ## 验收清单
 
 - [ ] AC-B1…B6 + AC-K1/K2 + AC-1…AC-34 逐条有测试点名
+- [ ] **I1–I14 逐条枚举**（不是「12 条」）
 - [ ] **AC-24d：伪造 `previewToken`（换文件+换摘要）被拒**
 - [ ] **§1.1b lowering：external 目标同时落 name + id，`name:` 只落 name 不落 cache**
 - [ ] **selectedExternalFence：reuse 目标在 big tx 内复核，`ops=[]` 也要走**
