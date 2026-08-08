@@ -103,10 +103,43 @@ name 域只证明「至少一个同名行可见」——**两者都区分不了�
   **这正是用户当初存下那个 cache 时的意图**，但确实是变更，须在发布说明点名。
 - 需要一条专门的回归：同名两行 + cache 指向较新那个 → 冻结到 cache 指向的行。
 
-**另一处仍需 validator 兜底**：即使 runtime 对齐，`freezeCallClosure` 的 cache 仍是**每个
-name 一个**（`closure.ts:162` 的 map 按 name 键控）。同一张图里两个同名 selector 分别指向
-W1 / W2 时，**至少一个选择会丢**。这种组合 bundle validator **直接拒绝**并说明原因——
-它不可表示，不是我们该猜的。
+**R6-P1-3 修正：光让 freeze 认 id 是不够的。** 冻结**结果**本身也是按名字键控的：
+
+```ts
+export interface FrozenCallClosure {
+  workflows:  Record<string, FrozenWorkflowRef>    // ← key 是 name
+  workgroups: Record<string, FrozenWorkgroupRef>   // ← key 是 name
+}
+```
+
+消费端 `frozenWorkgroupFromClosure(json, name)`（`closure.ts:90`）也按名字取，scheduler 两处
+调用点同理（`scheduler.ts:2966-2968`）。所以同名两个节点最终仍落到同一条冻结项。
+
+而这个冲突状态**今天用普通编辑器就能造**——`CallWorkgroupEdit.tsx:133` 已经在写
+`{workgroupName, workgroupId}`，还专门处理了同名候选。**它不是配置包引入的问题**，只把
+validator 放在 bundle 路径上够不着存量与普通保存。
+
+**用户决策 28（修订）：冻结闭包改为按节点键控，两个同名节点各自生效。**
+
+| 项 | 改动 |
+|---|---|
+| 形状 | `Record<nodeId, FrozenXxxRef>`，**workflow 与 workgroup 两侧同时改**（它们是同一个形状、同一个毛病） |
+| 生产者 | `freezeCallClosure`（`closure.ts:313`）按节点产出；解析仍是 id-cache 优先、其次最老可见 |
+| 消费者 | `scheduler.ts:2966-2968` 两处改按 nodeId 取 |
+| **存量兼容** | `tasks.refClosureJson` 里已有 name-keyed 的 JSON。`parseCallClosure` **同时接受两种形状**（带 `closureVersion` 判别；无该字段即 v1 name-keyed），消费端对 v1 行回退到按名字取。**存量任务零影响、无需迁移** |
+
+**R6-P2-1：cache 判据与 roster 必须同一个 SQLite snapshot 读。** 判据是「id 命中**且该行仍带
+该选择器名字**」，但现有实现分两次读（先查名字/版本，再 `getWorkgroupById` 取 roster）。
+可复现：freeze 先读到 `G2(name='audit', v1)` → owner 在一个事务里改名并换成员推到 v2 →
+第二次读回 v2 ⇒ 存成 `{key:'audit', version:1, group:v2}`：**判据通过时它还叫 audit，真正
+冻结的却已经不叫了**。而 `startWorkgroupTaskFromFrozen` 明确不再回读资源、不做 OCC，所以
+这个不一致会一路带到执行。修法：新增 in-tx snapshot loader，把 grants、workgroup row、
+member rows 放进同一个 `dbTxSync`，不复用分两次读的 `getWorkgroupById`；配 rename/roster
+并发回归。
+
+⚠️ 这仍是**执行期行为变更**（C7）：无冲突场景下，节点的启动目标从「最老可见行」变成「你当初
+在下拉里选的那个」——那正是用户存下 `workgroupId` 时的意图，但确实是变更。有冲突场景下，
+两个节点从「都跑同一个」变成「各跑各的」。发布说明须点名两者。
 
 三种形态与消费者的对应：
 
@@ -247,8 +280,10 @@ export interface BundleApplyProvider {
   /** 执行身份。owner 归属与全部授权判据都从它出。 */
   actor: Actor
 
-  // ── 事务钩子（AC-B4b）：本 RFC 的 package provider 全部留空实现；
-  //    它们存在的理由是让后续 RFC 能把 intent 的 session 原子性迁进来而不重构引擎。
+  // ── 事务钩子（AC-B4b）。⚠️ **不是全部留空**：package provider 必须实现
+  //    `revalidateInTx` 来执行 §5.3 的 selectedExternalFence（reuse 目标的内容复核）。
+  //    `claimInTx` / `finalizeInTx` 本 RFC 留空，它们存在的理由是让后续 RFC 能把
+  //    intent 的 session 原子性迁进来而不重构引擎。
   //    R3 已证明缺了它们 intent 无法迁：intent 要把 draft/session claim 校验、
   //    pre-stage 后的 session 二次 fence、provenance、commitSeq/contextRevision/
   //    currentDraftId、receipt 投影**与资源写放在同一事务**，薄 adapter 在引擎前后
@@ -456,7 +491,7 @@ intent 根本没有 plugin-update 接线；而 plugin 的发布协议与 skill *
 | 步骤 | 内容 |
 |---|---|
 | resolve | `copyOnlyTargetsFor` 移除 plugin 分支；新增 `PreparedOp` kind `plugin-update` |
-| baseline | **先用 session manifest 的 `configHash` 验原始基线**（R5-P1-D）：`manifest.ts:22` 存的是 dump 时刻的 hash。只捕获当前 row 是不够的—— dump 得 H1、同 owner 在普通插件页改成 H2、intent apply 随后捕获 H2 并以 H2 为栅栏，**H1 从未参与判断**，用户确认的基线被静默跳过。PreparedOp 因此必须同时携带 manifest 的 `expectedConfigHash` 与授权时的 owner |
+| baseline | **先用 session manifest 的 `configHash` 验原始基线**，且**必须从同一次读到的完整 row 投影计算**（R6-P2-2：若先 `getPlugin` 读 H1、再第二次读 full row，两次之间变成 H2 ⇒ captured=H2、commit kernel 只防 capture 之后的漂移 ⇒ 原漏洞原样复现）。只读一次 row → 从它投影算 `configHash` 与 manifest H1 比 → **同一个 row** 交给 commit kernel。测试分别覆盖「capture 前变化 → baseline stale」与「capture 后变化 → full-row stale」（R5-P1-D）：`manifest.ts:22` 存的是 dump 时刻的 hash。只捕获当前 row 是不够的—— dump 得 H1、同 owner 在普通插件页改成 H2、intent apply 随后捕获 H2 并以 H2 为栅栏，**H1 从未参与判断**，用户确认的基线被静默跳过。PreparedOp 因此必须同时携带 manifest 的 `expectedConfigHash` 与授权时的 owner |
 | capture | 捕获**完整** plugin row（`commitPluginPublishInTx` 的栅栏靠它防 capture **之后**的漂移；与上一行是**两道**不同的门，缺一不可） |
 | prestage | **spec 变了才**预安装；**record-before-act**：调用方预铸 generation id、先写 artifact 再 `installPlugin` |
 | big tx | `commitPluginPublishInTx(tx, captured, set)` |
@@ -498,6 +533,13 @@ loadRoot(actor, type, id) → assertExactRevision（AC-12，仅根）
 | **行级可见性**（读侧唯一） | 闭包内每个 id 域资源对 actor 可见，含传递依赖 | 422 `package-export-ref-unavailable`（AC-7 / AC-34） |
 | **特权节点**（内容侧，分轴） | `lens.scripts && 含脚本节点` / `lens.codeHost && 含代码平台节点` 各自独立 | 422 `package-privileged-node-forbidden`（AC-8） |
 | **体积** | `SKILL_ZIP_LIMITS` 四维 | 422 并点名资源与维度（AC-11） |
+| **同名重复** 🆕 | 闭包内出现两个同 `(类型, 名字)` 的资源 | 422 `package-duplicate-resource-name`，点名是哪两个、各自被谁引用（AC-2b） |
+
+**为什么在导出侧拒绝**（R6-P1-2，用户点破）：包**不带任何权属信息**（决策 4 / 12）。源实例上
+两个同名资源之所以能共存，是因为名字是 `(owner, name)` 复合唯一；进了包，owner 没了，
+**就剩两个都叫 `lint` 的条目，导入方无从分辨**。这种包在语义上不可表示——与其让导入侧去
+猜、或者搞一套「显式合并」的交互，不如根本不产出。构造场景真实存在：工作流引用代理 A
+（用 Alice 的 `lint`）和代理 B（用 Bob 的 `lint`），闭包把两个插件都拉进来。
 
 **显式不做第四道门**（决策 24 / AC-7d）：不逐类校验 `*:read`。用户原则「可见即有读权限」
 ——`isVisibleRow` 的 owner/public/grant 判定本身就是读权限模型；类型级权限点管的是「能不能
@@ -611,16 +653,46 @@ token；commit 若现场重读只会拿新值与新值自比，等于没有 CAS�
 
 | 决策 | 产生 | 指向它的引用怎么改 |
 |---|---|---|
-| `reuse` | **不产生 op** | 全部改写为 `external:<选定的本地 id>` |
+| `reuse` | **不产生 op**，但**必须产生一条 `selectedExternalFence`** | 全部改写为 `external:<选定的本地 id>` |
 | `new` | create op（带 `local:<slug>`） | 保持 `local:<slug>` |
 | `overwrite` | update op（external `target` + `expect`） | **也要改写为 `external:<目标 id>`** —— v3 只写了 reuse 的改写，漏了这条：包里 agent A 被 overwrite、workflow W 引用 A 时，A 不再是 create op，W 的 `local:A` 没有 slug 可绑 |
 
+#### `selectedExternalFence`（R6-P1-1）
+
+**`reuse` 不产生 op，但绝不等于「不需要校验」。** v6 之前的写法有一个洞：`reuse` 不产 op、
+package provider 的三个事务钩子又写着「全部留空」⇒ **没有任何 commit kernel 会核对被复用
+目标的内容**。可复现：Alice preview 时候选 `P` 的签名基线是 `configHash=H1`，选 `reuse P`；
+commit 验签与重算 `allowedActions` 都过了，**随后在 big tx 之前** Bob 把 `P` 改成 `H2`；
+导入成功，包内引用绑定到用户从未确认过的 `H2`。全 reuse 的根若在同一窗口被删，还会提交一个
+指向不存在 external root 的空 receipt。
+
+`previewToken` 只证明「用户当时看到的是 H1」，**它不是提交的线性化点**。因此每个 `reuse`
+目标都要产出一条 fence，在 **journal CAS 之后、任何 commit kernel 之前**、同一个 big tx 内
+复核：目标仍存在、类型相符、**内容 token 仍等于签名基线里的那个**、当前仍对 actor 可见。
+
+```ts
+interface SelectedExternalFence {
+  localSlug: string
+  type: AclResourceType
+  resourceId: string
+  expect: BundleExpectToken     // 来自签名基线，不是现场重读
+}
+```
+
+落点是 package provider 的 **`revalidateInTx`** —— 因此 §2.1 那句「package provider 的
+钩子全部留空实现」**作废**：`revalidateInTx` 是实打实要实现的。既有先例是
+`importRefs.ts:160-180` 的最终事务 selection fence，形状可直接借鉴。
+
+**`ops` 为空时也必须走这道 fence 才能把 journal 标 committed** —— 否则「全 reuse 的包」
+恰恰是完全没有任何校验的那一档。
+
 两个边界：
 
-- **`ops` 可以为空**：只有一个 agent 的包、目标已有同名且选 `reuse` ⇒ 零 op。
-  `BundleSchema` 因此**不能**要求 `.min(1)`；引擎对空 bundle 走 **no-op 成功路径**
-  （journal 直接 committed + 空 receipt），不是报错。
-- **`rootRef` 可以指向 external**：根被 reuse / overwrite 时它没有 create slug。
+- **`ops` 可以为空**：只有一个 agent 的包、目标已有同名且选 `reuse` ⇒ 零 op、但**非零
+  fence**。`BundleSchema` 因此不要求 `.min(1)`；引擎对空 bundle 走 no-op 成功路径
+  （fence 通过 → journal committed + 空 receipt），不是报错、也不是免检。
+- **`rootRef` 可以指向 external**：根被 reuse / overwrite 时它没有 create slug；
+  该 external 根**同样在 fence 集合里**（覆盖「根被并发删除」）。
 
 A1 / A3 / B1 / B3 / A2 因此**不是被修好，而是不存在了**——那些都是引擎的属性。
 

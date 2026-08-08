@@ -236,6 +236,28 @@ preflight"），检查通过之后、提交之前目标的 grant 被撤销，资
 
 ---
 
+## I14 · 补偿 oracle 必须 record-before-act
+
+**锚点**：`applyChangeset.ts:641-646`（现有 intent 路径**先 record 再 install**）、
+`pluginInstaller.ts:202-254`（installer 在返回前就创建了目录，且可能抛错）、
+`pluginGenerationGc.ts:18-31`（粗粒度 GC 被任一非终态 node run 完全挡住）。
+
+**规则**：**任何外部副作用之前，先把「足以精确补偿它」的信息持久化进 journal。**
+
+**具体反例**：plugin generation 已 mkdir、但精确路径尚未写 journal 时进程被 `SIGKILL` ⇒
+启动收敛不知道该删哪个目录；而只要有一个 `awaiting_human` 的 node run，粗粒度 GC 又会完全
+跳过 ⇒ **目录永久残留，且 journal 无法证明补偿完成**。
+
+⚠️ 现有 intent 路径只做到「先 record `{pluginId}`」——**不含 generation id**，因为那个 id
+在 `installPlugin` 内部才生成。RFC-271 的 record-before-act 要求**调用方预铸** generation id，
+把精确路径先写进 artifact。
+
+**归属**：引擎。
+**状态**：design §2.5 / plan T11 已定案，**不阻塞开工**；列为 I 项是为了让批次 B 的对照表
+完整——三个中断边界（journal 写入前 / mkdir 后 / install 返回前）各要一条测试。
+
+---
+
 ## I10 · session mutation 在未结 apply 期间必须 409
 
 **锚点**：`session.ts:193-205` `assertNoUnsettledApply`
@@ -281,15 +303,19 @@ skill/plugin 的 `not supported yet` 分支，`ownerUserId` 判据一字不动**
 | I10 | session mutation 409 | intent 特有 | — 本 RFC 不需要 | — |
 | I11 | resolve 期场景校验 | intent 特有 | — 本 RFC 不需要 | — |
 | I12 | MCP OAuth carry-forward | intent 特有 | — 本 RFC 不需要 | — |
-| **I13** | **commit kernel / 引用 ACL / receipt / journal 共处同一 big tx** | 引擎 | ✅ 已补（本轮新增） | ☐ |
+| **I13** | **commit kernel / 引用 ACL / receipt / journal 共处同一 big tx** | 引擎 | ✅ 已补（R5 新增） | ☐ |
+| **I14** | **补偿 oracle 必须 record-before-act** | 引擎 | ✅ 已补（R6 新增） | ☐ |
 
-**结论（v2，2026-08-08 第五轮复核后）**：**13 条**，10 条归引擎。
+**结论（v3，2026-08-08 第六轮复核后）**：**14 条**，11 条归引擎。
 
 初版（12 条）有三处错漏，全部由设计门第五轮抓出：
 1. **I1 写错**——把具体的 `sessionId` 泛化成「provider 的 idempotency scope」，而那样会让所有
    导入全局串行；
 2. **I9 不完整**——漏了「claim 后立即注册 active」与「补偿未成功不得无条件终态化」；
 3. **整条 I13 漏了**——big tx 的安全边界我在 design 速查表里写了，却没立成 I 项。
+
+第六轮又补出 **I14**（补偿 oracle 必须 record-before-act）。**两轮各补出一条被漏掉的承重
+不变量**——这本身就是证据：这份表不该被当成「一次做对」的东西。
 
 > 这份清单存在的理由是「不要凭推断泛化」，而它自己第一条就犯了同一个错。**留着这段自陈，
 > 是为了让后来者知道：这份表也要被审，不是权威。**

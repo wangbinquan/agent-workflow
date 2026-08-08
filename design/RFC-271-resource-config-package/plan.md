@@ -37,10 +37,11 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - **T7** 迁移 + 新表 `resource_bundle_applies`（泛化自 `intent_apply_journal`）。
 - **T8** `services/bundle/provider.ts`：`BundleApplyProvider` 接口。
 - **T9** `services/bundle/apply.ts`：五段生命周期，从 `applyChangeset.ts` 搬运并泛化。
-- **T10** **`skill-update` 四段拆分**：`stageSkillVersion` / `commitSkillVersionInTx` /
+- **T10** **`skill-update` 四段拆分**（stage / commitInTx / publishStaged / **abort**）：`stageSkillVersion` / `commitSkillVersionInTx` /
   `publishStagedSkillVersion` + **`abortStagedSkillVersion`**（pre-commit 补偿，引擎没有它
-  就只能复制状态机内部逻辑）；既有 `commitSkillVersion` 退化为顺序组合，**保留 `noop` 分支**
-  （内容相同的保存不建新版本、abandon op、返回原 latest）。
+  就只能复制状态机内部逻辑）；既有 `commitSkillVersion` 退化为顺序组合，**保留 `noop` 分支**。
+  ⚠️ **`noop` 仍是 fence-only PreparedOp，照样进 big tx 重验四道 token**，只跳过版本写入与
+  publish——跳过整个 op 会破坏整包基线（R5-P1-C）。
   ⚠️ **`unmarkSkillBootVerified` 不在 publish 段里**——现有实现在 DB commit 返回后立刻
   unmark（`skillVersion.ts:601`）；批量场景必须在 big tx 返回后、任何逐项 publish 之前
   **一次性 unmark 全部已提交技能**。
@@ -74,15 +75,21 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - **T16** `rfc271-intent-skill-update.test.ts`：**双向锁**——自己的技能原地更新成功、
   他人的技能仍强制 copy；**显式传 `expectedOwnerUserId`** 的 owner-transfer 409 用例。
 - **T17** **plugin 半边的完整链路**（决策 27「两个都开」，决策 26 的显式例外）：
-  `PreparedOp` 新 kind → 完整 row 捕获 → spec 变了才预安装（**record-before-act**：预铸
+  `PreparedOp` 新 kind → **先用 session manifest 的 `configHash` 验原始基线**（且必须从
+  **同一次**读到的完整 row 投影计算，两次读会让漏洞原样复现）→ 完整 row 捕获 → spec 变了才预安装（**record-before-act**：预铸
   generation id、先写 artifact 再 `installPlugin`）→ `commitPluginPublishInTx` → 精确路径
   逆序补偿 → **收敛器的 artifact 分支要能处理它**（现有实现对 plugin artifact 什么也不做）。
   ⚠️ 改判范围**显式限定**为 prestage 循环 / artifact / 收敛 / `copyOnlyTargetsFor` 四处，
   其余零改判。
 
-- **T17b** **决策 28**：`freezeCallClosure` 工作组分支改 id-cache 优先（与 `closure.ts:162`
-  的工作流分支逐字同构）。⚠️ **执行期行为变更**，须带专门回归（同名两行 + cache 指向较新
-  那个 → 冻结到 cache 指向的行）并进发布说明。
+- **T17b** **决策 28（修订）**：`freezeCallClosure` 工作组分支改 id-cache 优先，**且冻结闭包
+  从按名字键控改为按节点键控**（workflow 与 workgroup 两侧同时改——同一个形状同一个毛病）。
+  改 `closure.ts:45-48,83-94,313` + `scheduler.ts:2966-2968` 两处消费点。
+  **存量兼容**：`tasks.refClosureJson` 里已有 name-keyed JSON，`parseCallClosure` 同时接受
+  两种形状（带 `closureVersion` 判别，无该字段即 v1），消费端对 v1 回退按名字取 ⇒ 零迁移。
+  ⚠️ **执行期行为变更**，两条回归：①无冲突时冻结到 cache 指向的行；②同名两节点各自生效。
+  另需 in-tx snapshot loader（grants + workgroup row + members 同一 `dbTxSync`），否则
+  「判据通过时它还叫 audit、冻结的却已改名」（R6-P2-1）。
 
 > 批次 C 独立成 commit 推送并跑完 CI，与包的工作解耦。
 
@@ -94,7 +101,9 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
   且「零匹配」与「全不可见」逐字节同形（AC-7b）。
 - **T21** `serialize.ts`：闭包 → `ResourceBundle`（分配 local slug）+ requirements 五段 +
   builtins + secrets 索引 + `ambiguousCallRefs`。
-- **T22** 三道门：行级可见性（含传递）/ 分轴特权 / 体积。
+- **T22** **四道门**：行级可见性（含传递）/ 分轴特权 / 体积 / **同名重复**
+  （闭包内两个同 `(类型,名字)` 资源 → 422 并点名各自被谁引用；包不带 owner，这种包
+  语义上不可表示）。
   ⚠️ **不要**加第四道类型级 `*:read` 门——AC-7d 是反向锁。
 - **T23** `manifest.yaml` + `README.md`（中英双段）生成器。
 - **T24** `rfc271-export-gates.test.ts` + `package-closure` 矩阵。
@@ -104,13 +113,20 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - **T25** `parse.ts`：解 zip（复用 `decodeZip` 归一化）+ manifest 校验 + 防夹带 +
   `formatVersion` 判定。
 - **T26** `preview.ts`：逐条匹配（`ownMatches[]` 可多个）+ 动作可选性 + 建议名 + 权限缺口 +
-  密钥字段 + **`expect` 内容 token 下发** + 稳定 `importId` + **`previewToken`**
-  （HMAC 绑定 importId‖actor‖digest‖exp，**不是客户端自报 digest**）+ 内置件 + 人类席位。
-- **T27** `commit.ts`：**验签 `previewToken`**（重算上传内容 digest + 同密钥验签，三者任一不符 409） → **服务端重算 `allowedActions`** → 决策表
-  翻译成 `ResourceBundle` → 调引擎。`reuse` 不产 op / `new` → create / `overwrite` →
+  密钥字段 + 稳定 `importId` + **`previewToken`** + 内置件 + 人类席位。
+  ⚠️ **`previewToken` 要签死整套基线**（`importId‖actor‖packageDigest‖exp‖
+  canonical(每条目的候选 id / 各候选 expect / 允许动作)），**不是只签 digest**——只签 digest
+  时客户端换掉某条的 `expect` 仍能通过（R5-P1-A）。
+- **T27** `commit.ts`：**① 验签 → ② duplicate lookup（命中走 I3 三态、不查 exp）→ ③ 仅首次
+  claim 查 exp**（顺序是承重的：先查 exp 会让「成功但响应丢失、过期后重试」进不了 replay）
+  → 断言用户提交的 `(target, expect)` **是该条目签名基线里的一对** → 服务端重算
+  `allowedActions` → 翻译成 `ResourceBundle`（**含每个 reuse 目标的 `selectedExternalFence`**）
+  → 调引擎。`reuse` 不产 op / `new` → create / `overwrite` →
   update+expect；**指向 reuse 与 overwrite 项的引用都要改写成 `external:`**（v3 只写了
   reuse 那一半）。
-- **T28** package `BundleApplyProvider`（`resolveExternal` = 决策表；`readSkillFile` = 从 zip 取）。
+- **T28** package `BundleApplyProvider`（`resolveExternal` = 决策表；`readSkillFile` = 从 zip 取；
+  **`revalidateInTx` 必须实现**——在 big tx 内逐条复核 `selectedExternalFence`，`ops` 为空时
+  也要走。⚠️ 「provider 钩子全部留空」的说法已作废：全 reuse 的包否则完全免检）。
 - **T29** `rfc271-import-preview.test.ts` + `rfc271-import-commit.test.ts` +
   `rfc271-package-antitamper.test.ts`。
 
@@ -188,6 +204,9 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - [ ] AC-B1…B6 + AC-K1/K2 + AC-1…AC-34 逐条有测试点名
 - [ ] **AC-24d：伪造 `previewToken`（换文件+换摘要）被拒**
 - [ ] **§1.1b lowering：external 目标同时落 name + id，`name:` 只落 name 不落 cache**
+- [ ] **selectedExternalFence：reuse 目标在 big tx 内复核，`ops=[]` 也要走**
+- [ ] **冻结闭包按节点键控 + v1 name-keyed 存量仍可读**
+- [ ] **导出拒绝同名重复资源**
 - [ ] **AC-K1/K2：自己的 skill/plugin 可原地更新、他人的仍强制 copy**
 - [ ] **AC-15b：伪造 overwrite 他人资源被最终事务拒绝**
 - [ ] AC-6：六类文档脱敏后仍过各自严格 schema

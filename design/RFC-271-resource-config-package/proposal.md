@@ -65,8 +65,8 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **不扫描技能文件树内容里的密钥**：脱敏保证限定在**结构化字段**，技能目录里硬编码的凭据
   属于技能作者的责任（决策 18）。
 - 调度 / 准入 / containment / runtime 选择零改动。
-  ⚠️ **一处例外（决策 28）**：`freezeCallClosure` 的**工作组** call 解析改为 id-cache 优先，
-  与工作流分支对齐。这是执行期行为变更，作为 **C7** 列入 §5。
+  ⚠️ **一处例外（决策 28）**：`freezeCallClosure` 的工作组分支改 id-cache 优先，**且冻结闭包
+  改为按节点键控**（两侧同改）。这是执行期行为变更，作为 **C7** 列入 §5。
 - **不迁移 intent**（决策 26）：`applyIntentChangeset` 与 `intent_apply_journal` 原样保留，
   本 RFC 不碰它的生命周期。唯一的交集是 §2 决策 27 的技能内核复用。
 
@@ -93,7 +93,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 | **C5a** | 按 exact id 覆盖导入 | 改为按名字匹配 | 所有角色 |
 | **C5b** | 覆盖他人拥有的资源 | 仅对自己拥有的开放 | 仅 manager / admin |
 | **C6** | 导出传递不可见闭包的工作流 | 整体 422 并明确提示 | 代理可见但其 `dependsOn` 不可见者；这类工作流**仍可正常运行** |
-| **C7** 🆕 **（行为变更，非收缩）** | 工作组 call 节点的启动目标解析 | 今天**只按名字**取最老可见行，`workgroupId` 字段存在却从不被读（`closure.ts:269-309`）；改为**id-cache 优先**（该行仍带该名字），与工作流分支（`closure.ts:162`）对齐 | 存量工作流里若有「`workgroupId` 指向 A、但同名最老可见行是 B」的 call 节点，**启动目标从 B 变成 A**。A 正是当初存下那个 cache 时的意图，但确实是变更，发布说明须点名 |
+| **C7** 🆕 **（行为变更，非收缩）** | call 节点的启动目标解析 | ①工作组分支今天**只按名字**取最老可见行，`workgroupId` 存在却从不被读（`closure.ts:269-309`）→ 改为 id-cache 优先；②**冻结闭包从按名字键控改为按节点键控**（`FrozenCallClosure` 的两个 `Record<string,…>` 都是按 name，同名两节点因此落到同一条）→ 每节点各自冻结 | **两处变更**：(a) 无冲突时启动目标从「最老可见行」变成「你当初在下拉里选的那个」；(b) 同名两节点从「都跑同一个」变成「各跑各的」。二者都是用户存下 `workgroupId` 时的意图，但确实是变更，发布说明须点名。**存量任务零影响**：`parseCallClosure` 同时接受 v1 name-keyed 与 v2 node-keyed，零迁移 |
 
 > **两条候选收缩经核实/决策后消解**：PAT 导入通道（是我把 `tokenAccess` 写成 `'never'` 写错
 > 了，`registry.ts:44-62` 写明该值只为 RFC-247 的 D5/D6 存在、创建资源不在其列，六类 create
@@ -200,6 +200,9 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 
 - **AC-1** 六类资源详情/编辑页「更多操作」都有「导出配置包」，产物是 zip。
 - **AC-2** `manifest.yaml` 的 `resources` 是权威清单；包内未登记文件 → 导入拒绝。
+- **AC-2b** 🆕 闭包内出现两个同 `(类型, 名字)` 的资源 → **导出侧 422**
+  `package-duplicate-resource-name`，点名是哪两个、各自被谁引用。包不携带 owner
+  （决策 4/12），而名字只在 owner 内唯一 ⇒ 这种包对导入方不可分辨、语义上不可表示。
 - **AC-3** 闭包完整（工作流 → 代理 / 子工作流 / 工作组；代理 → 技能 + MCP + 插件 +
   `dependsOn`；工作组 → 成员代理）。
 - **AC-4** 闭包去重 + 去环；导入侧不要求拓扑序。
@@ -253,6 +256,11 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **AC-24f** 🆕 重复提交按 **三态**处理（I3）：`committed` → 返回原 receipt；`failed` → 409
   并说明上次失败；`prepared`/`applying` → 409「有未结尝试」。**不是「总是返回 receipt」**。
 - **AC-24g** 🆕 技能 `noop`（内容未变）**仍进 big tx 做 fence**，只跳过版本写入与 publish。
+- **AC-24h** 🆕 每个 `reuse` 目标在 big tx 内复核 `selectedExternalFence`（类型 / id / **签名
+  基线里的内容 token** / 当前可见性），**`ops` 为空时也要走**。
+  ⚠️ 否则「全 reuse 的包」恰恰是完全免检的那一档：preview 时基线 `H1`、commit 前并发改成
+  `H2`，导入成功并绑定用户从未确认的 `H2`。`previewToken` 只证明「用户当时看到 H1」，
+  它不是提交的线性化点。
   ⚠️ 跳过整个 op 会破坏整包基线：stage 判定相同 → 同 bundle 慢安装期间并发改成 v2 →
   big tx 跳过它却提交了引用它的代理 ⇒ 导入绑定的是用户从未确认的 v2。
 - **AC-24d** 🆕 **preview 与 commit 绑定同一份确认基线**（R5-P1-A 修正）：preview 返回
