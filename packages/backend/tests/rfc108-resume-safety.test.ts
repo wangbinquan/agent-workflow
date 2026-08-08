@@ -126,16 +126,32 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
     // Simulate worktreeAutoGc reclaiming the worktree of a resumable task.
     rmSync(h.repoPath, { recursive: true, force: true })
 
-    let code: string | undefined
-    let status: number | undefined
+    // 2026-08-09（RFC-271 T6f2 的 push `9da5cc63`，macos shard 2/4 单点红）：这条
+    // 断言此前只取 `err.code`，于是「压根没抛」与「抛了个不带 code 的错」在失败
+    // 输出里长得一模一样——CI 只留下 `Expected "task-worktree-missing" / Received
+    // undefined`，无从判断到底哪一种，本机 24 次并发复跑全绿也无从推进。
+    // 现在把**原始异常**与前置条件一起留在断言里：下次再红，日志直接说明是哪种。
+    let caught: unknown
+    let threw = false
     try {
       await resumeTask(h.db, h.taskId, { db: h.db, appHome: h.appHome, opencodeCmd: DEPS_CMD })
     } catch (err) {
-      code = (err as { code?: string }).code
-      status = (err as { status?: number }).status
+      threw = true
+      caught = err
     }
-    expect(code).toBe('task-worktree-missing')
-    expect(status).toBe(410)
+    const detail = threw
+      ? `threw ${String((caught as { name?: string })?.name ?? typeof caught)}: ${String(
+          (caught as { message?: string })?.message ?? caught,
+        )} (code=${String((caught as { code?: string })?.code)})`
+      : 'did NOT throw'
+    // 前置条件本身也断言出来：worktree 真的没了，才轮得到讨论 410。
+    expect(
+      existsSync(h.repoPath),
+      `precondition: worktree dir removed — resumeTask ${detail}`,
+    ).toBe(false)
+    expect(threw, `expected a 410 DomainError but resumeTask ${detail}`).toBe(true)
+    expect((caught as { code?: string })?.code, detail).toBe('task-worktree-missing')
+    expect((caught as { status?: number })?.status, detail).toBe(410)
     // Critical: the 410 fires BEFORE the ownership CAS — the task is NOT
     // resurrected to pending; it stays failed.
     const t = await getTask(h.db, h.taskId)
