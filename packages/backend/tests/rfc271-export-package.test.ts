@@ -1,0 +1,189 @@
+// RFC-271 T23/T24 —— 导出入口的端到端：闭包 → manifest / README / bundle.json → zip。
+//
+// 三条产品级断言：
+//  ① **包不带任何权属信息**（决策 4/12）。manifest 里出现 owner / visibility /
+//     grant 都是 bug——带上它们只会诱导导入侧去「还原」一个在本实例上根本不存在
+//     的主体，而用户拍板的规则是「谁导入的整体所有资源权限就归谁」。
+//  ② **凭据的位置在包里、值不在包里**。
+//  ③ **同一份闭包导出两次逐字节相同**（AC-7b 的前提，见 `encodeZip`）。
+
+import { describe, expect, test } from 'bun:test'
+import { resolve } from 'node:path'
+import { ulid } from 'ulid'
+import { parse as parseYaml } from 'yaml'
+import type { WorkflowDefinition } from '@agent-workflow/shared'
+import type { Actor } from '../src/auth/actor'
+import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { agents, mcps, workflows } from '../src/db/schema'
+import { decodeZip } from '../src/services/skill-zip'
+import { exportResourcePackage } from '../src/services/resourcePackage/export'
+
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const actorOf = (id: string, permissions: string[] = ['scripts:author']): Actor =>
+  ({
+    user: { id, username: id, displayName: id, role: 'user', status: 'active' },
+    source: 'daemon',
+    permissions: new Set(permissions),
+  }) as unknown as Actor
+
+const defn = (nodes: unknown[]): WorkflowDefinition =>
+  ({ $schema_version: 4, inputs: [], nodes, edges: [] }) as unknown as WorkflowDefinition
+
+async function seed(db: DbClient): Promise<{ wf: string }> {
+  const mcpId = ulid()
+  await db
+    .insert(mcps)
+    .values({
+      id: mcpId,
+      name: 'gh-tools',
+      description: '',
+      type: 'remote',
+      config: JSON.stringify({
+        url: 'https://api.test/mcp',
+        headers: { Authorization: 'Bearer ghp_REAL_SECRET_VALUE' },
+      }),
+      enabled: true,
+      ownerUserId: 'u1',
+      visibility: 'private',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    .run()
+  const agentId = ulid()
+  await db
+    .insert(agents)
+    .values({
+      id: agentId,
+      name: 'auditor',
+      description: '',
+      outputs: '[]',
+      permission: '{}',
+      skills: '[]',
+      dependsOn: '[]',
+      mcp: JSON.stringify([mcpId]),
+      plugins: '[]',
+      frontmatterExtra: '{}',
+      bodyMd: '',
+      ownerUserId: 'u1',
+      visibility: 'private',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    .run()
+  const wfId = ulid()
+  await db
+    .insert(workflows)
+    .values({
+      id: wfId,
+      name: 'audit',
+      description: '',
+      definition: JSON.stringify(defn([{ id: 'n1', kind: 'agent-single', agentId }])),
+      ownerUserId: 'u1',
+      visibility: 'private',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    .run()
+  return { wf: wfId }
+}
+
+const readEntry = (zip: Uint8Array, path: string): string => {
+  const entry = decodeZip(zip).find((e) => e.path === path)
+  if (entry === undefined) throw new Error(`missing zip entry ${path}`)
+  return new TextDecoder().decode(entry.bytes())
+}
+
+describe('包的目录结构（AC-1：内部结构清晰明确）', () => {
+  test('三个固定条目：manifest.yaml / README.md / bundle.json', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    expect(
+      decodeZip(pkg.zip)
+        .map((e) => e.path)
+        .sort(),
+    ).toEqual(['README.md', 'bundle.json', 'manifest.yaml'])
+    expect(pkg.filename).toContain('audit')
+  })
+
+  test('bundle.json 是机器契约、manifest 是给人看的 —— 两者分开', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const bundle = JSON.parse(readEntry(pkg.zip, 'bundle.json')) as {
+      ops: unknown[]
+      rootRef: string
+    }
+    expect(bundle.ops).toHaveLength(3) // workflow + agent + mcp
+    expect(bundle.rootRef).toBe('local:workflow-audit')
+  })
+})
+
+describe('① 包**不带任何权属信息**（决策 4/12）', () => {
+  test('manifest 里不出现 owner / visibility / grant', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const raw = readEntry(pkg.zip, 'manifest.yaml')
+    expect(raw).not.toContain('ownerUserId')
+    expect(raw).not.toContain('visibility')
+    expect(raw).not.toContain('aclRevision')
+    // README 明说这件事，免得导入方以为「权限会跟着过来」。
+    expect(readEntry(pkg.zip, 'README.md')).toContain('归**导入者**所有')
+  })
+
+  test('bundle.json 里同样没有权属字段', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const raw = readEntry(pkg.zip, 'bundle.json')
+    expect(raw).not.toContain('ownerUserId')
+    expect(raw).not.toContain('"visibility"')
+  })
+})
+
+describe('② 凭据：位置在包里、值不在包里', () => {
+  test('manifest.secrets 点名字段，原 token 在**整个包**里找不到', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
+      secrets: Array<{ field: string; resourceName: string }>
+    }
+    expect(manifest.secrets.some((s) => s.field === 'config.headers.Authorization')).toBe(true)
+
+    // 硬断言：**整个 zip 的字节**里都不含原值。
+    const all = new TextDecoder().decode(pkg.zip)
+    expect(all).not.toContain('ghp_REAL_SECRET_VALUE')
+  })
+
+  test('README 说明了要重新填写，并给出数量', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    expect(readEntry(pkg.zip, 'README.md')).toContain('原值不在包里')
+  })
+})
+
+describe('③ 逐字节可复现', () => {
+  test('同一份闭包导出两次，zip 字节完全相同', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const a = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const b = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    expect([...a.zip]).toEqual([...b.zip])
+  })
+})
+
+describe('requirements —— 导入方需要自备的东西', () => {
+  test('MCP 形态进 requirements（它不是包内容，是前提）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
+      requirements: { mcpKinds: string[] }
+    }
+    expect(manifest.requirements.mcpKinds).toEqual(['remote'])
+  })
+})
