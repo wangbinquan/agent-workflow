@@ -291,20 +291,24 @@ skill/plugin 的 `not supported yet` 分支，`ownerUserId` 判据一字不动**
 
 | # | 不变量 | 归属 | v4 设计已覆盖 | 落地已验证 |
 |---|---|---|---|---|
-| I1 | 按**资源实例**串行（in-process） | 引擎 | ✅ 已补（`serializationKey`） | ☐ |
-| I2 | claim 单事务 + duplicate 优先 | 引擎 + `claimInTx` | ⚠️ 缺顺序约束 | ☐ |
-| I3 | replay **三态** | 引擎 | ✅ 已补 | ☐ |
-| I4 | 类型序 + agent dependsOn 拓扑 | 引擎 | ⚠️ 缺具体类型序 | ☐ |
-| I5 | pending seams（预铸早于 preflight） | 引擎 | ✅ | ☐ |
-| I6 | CAS 后**二次校验** | 引擎 + `revalidateInTx` | ⚠️ 缺二次校验时机 | ☐ |
-| I7 | finalize 与资源写同事务 | 引擎 + `finalizeInTx` | ⚠️ 缺「同事务」措辞 | ☐ |
-| I8 | post-commit 绝不补偿 | 引擎 | ✅ 已补 | ☐ |
-| I9 | 收敛 active set + 10min + 逆序 + 前滚 + **claim 后立即注册** + **补偿失败不终态化** | 引擎 | ⚠️ 四点待落实 | ☐ |
+| I1 | 按**资源实例**串行（in-process） | 引擎 | ✅ 已补（`serializationKey`） | ✅ `apply.ts:withApplyLock(provider.serializationKey)` + 引擎测试源码锁 |
+| I2 | claim 单事务 + duplicate 优先 | 引擎 + `claimInTx` | ⚠️ 缺顺序约束 | ✅ `apply.ts` claim 事务：duplicate 查询在 `claimInTx` 与 insert 之前 |
+| I3 | replay **三态** | 引擎 | ✅ 已补 | ✅ `replayOutcome` 三分支 + 三条测试 |
+| I4 | 类型序 + agent dependsOn 拓扑 | 引擎 | ⚠️ 缺具体类型序 | ✅ `provider.ts:planBundleOps`（类型序照抄）+ 9 条规划器测试 |
+| I5 | pending seams（预铸早于 preflight） | 引擎 | ✅ | ✅ `lower.ts` 预铸在 payload 处理之前 + 同包 dependsOn 回填测试 |
+| I6 | CAS 后**二次校验** | 引擎 + `revalidateInTx` | ⚠️ 缺二次校验时机 | ✅ CAS 紧跟 `provider.revalidateInTx?.(tx)` |
+| I7 | finalize 与资源写同事务 | 引擎 + `finalizeInTx` | ⚠️ 缺「同事务」措辞 | ✅ `finalizeInTx` 在 journal committed 之前、同事务 |
+| I8 | post-commit 绝不补偿 | 引擎 | ✅ 已补 | ✅ `committedReceipt !== null` 分水岭 + 幂等尾抛错测试 |
+| I9 | 收敛 active set + 10min + 逆序 + 前滚 + **claim 后立即注册** + **补偿失败不终态化** | 引擎 | ⚠️ 四点待落实 | ✅ active set 在 claim 后立即注册；10min 下限；补偿失败 `continue` 不终态化 |
 | I10 | session mutation 409 | intent 特有 | — 本 RFC 不需要 | — |
 | I11 | resolve 期场景校验 | intent 特有 | — 本 RFC 不需要 | — |
 | I12 | MCP OAuth carry-forward | intent 特有 | — 本 RFC 不需要 | — |
-| **I13** | **commit kernel / 引用 ACL / receipt / journal 共处同一 big tx** | 引擎 | ✅ 已补（R5 新增） | ☐ |
-| **I14** | **补偿 oracle 必须 record-before-act** | 引擎 | ✅ 已补（R6 新增） | ☐ |
+| **I13** | **commit kernel / 引用 ACL / receipt / journal 共处同一 big tx** | 引擎 | ✅ 已补（R5 新增） | ✅ 整个提交循环在一个 `dbTxSync` 内（ACL 复核 / owner 断言 / receipt / journal） |
+| **I14** | **补偿 oracle 必须 record-before-act** | 引擎 | ✅ 已补（R6 新增） | ✅ `plannedGenerationDir` 事前落 artifact + 安装失败时目录已存在的实证 |
+
+**落地状态（2026-08-09，批次 B 完工）**：11 条归引擎的不变量**逐条已验证**，对照表右列
+写明了各自的落点与锁它的测试。**打勾不等于免检**——这张表的价值在于「下一个人重构引擎时
+知道哪些行为是承重的」，所以每一格填的是**落点**而不是一个对号。
 
 **结论（v3，2026-08-08 第六轮复核后）**：**14 条**，11 条归引擎。
 

@@ -29,9 +29,13 @@
 >   hash 即可改写别人那一行）。intent 侧传的是「授权时看到的 owner」而不是 actor 自己，
 >   于是同时覆盖伪造与「授权后 owner 转移」两种情形，且不误伤 admin 代改。
 >
-> **下一步（批次 B 余下）**：`T9` 引擎本体（五段生命周期，逐条对照 `invariants.md` 的
-> 11 条引擎不变量；写完在该文件末尾的对照表上打勾）与 `T13` 三个测试文件。
-> T10/T11/T12 已把引擎需要的三块地基备齐：技能四段、插件预铸路径、owner 围栏。
+> - `T9` + `T13`（`3c28ac24`）—— **引擎本体**：`apply.ts` 五段生命周期 + `lower.ts`
+>   （预铸 id + 引用回填）+ `refs.ts`（四种 wire 引用各自的归宿）。12 个 op kind 全部
+>   接上各自的 canonical 内核。`invariants.md` 末尾的对照表已**逐条打勾并写明落点**。
+>
+> **批次 B 完工。下一步是批次 C**（intent 能力扩张：skill / plugin 原地更新，决策 27）。
+> ⚠️ 动 `copyOnlyTargetsFor` 时只改 skill/plugin 的 `not supported yet` 分支，
+> **`ownerUserId` 判据一字不动**（invariants I11 的注）。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 
