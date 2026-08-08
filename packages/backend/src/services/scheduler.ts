@@ -110,7 +110,12 @@ import {
 } from '@/db/schema'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import { fanoutInnerAgentRefKey, resolveNodeAgentRef } from '@/services/ref/runtimeRef'
+import {
+  agentSkillRef,
+  fanoutInnerAgentRefKey,
+  resolveNodeAgentRef,
+  runtimeRefKey,
+} from '@/services/ref/runtimeRef'
 import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '@/services/mcpClosure'
 import { collectPluginIdsFromClosure, loadPluginsByIds } from '@/services/pluginClosure'
@@ -9265,7 +9270,7 @@ export async function prepareNodeRunInjection(
     }
   | { kind: 'failed'; summary: string; message: string }
 > {
-  const closure = await resolveDependsClosure(db, agent, { allowMissing: false }).catch(
+  const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY }).catch(
     (err: Error & { code?: string; details?: unknown }) => {
       // resolveDependsClosure throws DomainError for missing deps. Surface
       // the code via NodeStepResult so the caller's normal failure path
@@ -9299,10 +9304,12 @@ export async function prepareNodeRunInjection(
   const dependents = closure.agents.slice(1) // [0] is the root
   // RFC-223 (PR-1): skills are typed refs (managed{skillId} / project{name}).
   // Union across the closure de-duped by ref identity (first-seen order).
+  // RFC-271 T6f：去重键走 canonical `runtimeRefKey`（类型进 key 的 JSON 元组），
+  // 不再是手写的 `m:`/`p:` 前缀串——自造命名空间只要来第三类引用就会撞车。
   const skillsUnion: AgentSkillRef[] = []
   const seenSkills = new Set<string>()
   for (const ref of [...agent.skills, ...dependents.flatMap((a) => a.skills)]) {
-    const key = ref.kind === 'managed' ? `m:${ref.skillId}` : `p:${ref.name}`
+    const key = runtimeRefKey(agentSkillRef(ref))
     if (seenSkills.has(key)) continue
     seenSkills.add(key)
     skillsUnion.push(ref)

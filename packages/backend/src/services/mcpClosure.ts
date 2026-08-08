@@ -22,6 +22,7 @@ import type { Agent, Mcp } from '@agent-workflow/shared'
 import { McpSchema } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
+import { runtimeIdRef, runtimeRefKey } from '@/services/ref/runtimeRef'
 import { mcps as mcpsTable } from '@/db/schema'
 
 /**
@@ -34,12 +35,15 @@ import { mcps as mcpsTable } from '@/db/schema'
  * read in spawn logs).
  */
 export function collectMcpIdsFromClosure(closure: readonly Agent[]): string[] {
+  // RFC-271 T6f：去重走 canonical `runtimeRefKey`，不再拿裸 id 当键 —— 裸 id 默认
+  // 了「id 跨资源类型全局唯一」这条从没被约束过的假设。first-seen 顺序不变。
   const seen = new Set<string>()
   const out: string[] = []
   for (const agent of closure) {
     for (const id of agent.mcp ?? []) {
-      if (seen.has(id)) continue
-      seen.add(id)
+      const key = runtimeRefKey(runtimeIdRef('mcp', id))
+      if (seen.has(key)) continue
+      seen.add(key)
       out.push(id)
     }
   }

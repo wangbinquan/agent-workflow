@@ -16,6 +16,8 @@ import {
   ResourceRefSchema,
   StartAgentTaskSchema,
   UpdateAgentRequestSchema,
+  PREVIEW_CALL_POLICY,
+  VALIDATE_CALL_POLICY,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { Hono } from 'hono'
@@ -446,8 +448,8 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const root = await loadVisibleAgent(actor, c.req.param('id'))
-      const closure = await resolveDependsClosure(deps.db, root, { allowMissing: true })
-      // `allowMissing: true` never produces ok:false (cycles only arise when a
+      const closure = await resolveDependsClosure(deps.db, root, { call: PREVIEW_CALL_POLICY })
+      // `onMissing:'skip'` never produces ok:false (cycles only arise when a
       // name appears on the active path — which agent.ts save guard prevents),
       // but defensively handle the type anyway.
       if (closure.ok === false) {
@@ -529,7 +531,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       }
       // Build a synthetic root agent for closure expansion (self may not exist in
       // DB yet — new-agent flow). validateDependsOn already vetted ids exist + no
-      // cycle, so allowMissing:false is safe here.
+      // cycle, so onMissing:'fail' is safe here.
       const syntheticRoot: Agent = existing
         ? { ...existing, dependsOn }
         : ({
@@ -550,7 +552,9 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
             createdAt: 0,
             updatedAt: 0,
           } satisfies Agent)
-      const closure = await resolveDependsClosure(deps.db, syntheticRoot, { allowMissing: false })
+      const closure = await resolveDependsClosure(deps.db, syntheticRoot, {
+        call: VALIDATE_CALL_POLICY,
+      })
       if (closure.ok === false) {
         // Shouldn't happen — validateDependsOn already screened cycles — but
         // surface defensively so a race doesn't 500.

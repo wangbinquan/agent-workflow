@@ -19,6 +19,7 @@ import { createMcp } from '../src/services/mcp'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
 import { resolveDependsClosure } from '../src/services/agentDeps'
 import { buildInlineConfig } from '../src/services/runner'
+import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -55,7 +56,7 @@ describe('RFC-028 end-to-end inline injection', () => {
     })
 
     const agent = (await getAgent(db, 'auditor'))!
-    const closure = await resolveDependsClosure(db, agent)
+    const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
     if (closure.ok === false) throw new Error('cycle: ' + closure.cyclePath.join(' → '))
     const mcpIds = collectMcpIdsFromClosure(closure.agents)
     const mcps = await loadMcpsByIds(db, mcpIds)
@@ -145,7 +146,7 @@ describe('RFC-028 end-to-end inline injection', () => {
     })
 
     const agent = (await getAgent(db, 'root'))!
-    const closure = await resolveDependsClosure(db, agent)
+    const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
     if (closure.ok === false) throw new Error('cycle')
     const mcpIds = collectMcpIdsFromClosure(closure.agents)
     const mcps = await loadMcpsByIds(db, mcpIds)
@@ -189,7 +190,7 @@ describe('RFC-028 end-to-end inline injection', () => {
     })
 
     const agent = (await getAgent(db, 'a'))!
-    const closure = await resolveDependsClosure(db, agent)
+    const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
     if (closure.ok === false) throw new Error('cycle')
     const mcps = await loadMcpsByIds(db, collectMcpIdsFromClosure(closure.agents))
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
@@ -211,7 +212,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       bodyMd: '',
     })
     const agent = (await getAgent(db, 'minimal'))!
-    const closure = await resolveDependsClosure(db, agent)
+    const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
     if (closure.ok === false) throw new Error('cycle')
     const mcps = await loadMcpsByIds(db, collectMcpIdsFromClosure(closure.agents))
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)

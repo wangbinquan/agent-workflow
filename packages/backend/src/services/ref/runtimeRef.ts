@@ -17,9 +17,10 @@
 // 冒泡成任务级 "scheduler error"，把 node/wrapper 级归属整个丢掉。各调用点自己
 // 把 Result 映射成它原有的错误码。
 
-import type { Agent } from '@agent-workflow/shared'
+import type { Agent, AgentSkillRef } from '@agent-workflow/shared'
 import {
   decodeRuntimeIdRef,
+  resourceRefKey,
   type RefCallPolicy,
   type RefResult,
   type ResourceRefAst,
@@ -67,4 +68,39 @@ export async function resolveNodeAgentRef(
 export function fanoutInnerAgentRefKey(node: { agentId?: unknown }): string | null {
   const ref = agentRefOfNode(node)
   return ref === null ? null : ref.k === 'id' ? ref.id : null
+}
+
+// --- T6f：runner 闭包组装的三类引用 ------------------------------------------
+//
+// 这三类此前各写各的去重键（scheduler 的 `m:`/`p:` 前缀串、两个 collector 各自的
+// `Set<string>`）。前缀串是个真陷阱：`m:`/`p:` 这种自造命名空间一旦有第三类
+// 引用加入就会撞车，而 `Set<id>` 又默认了「id 跨类型全局唯一」。统一走
+// `resourceRefKey`（JSON 元组、类型进 key）后两个问题都不存在。
+
+/**
+ * `agents.skills` 的判别联合 → AST。
+ *
+ * ⚠️ **project 技能不是资源**：它没有 DB row、没有 ACL、没有 owner，是仓库里
+ * 自带的目录（RFC-178），runner 按名字透传给 CLI 让 opencode 自己发现。给它
+ * 一个专属 AST 变体（`project-skill`），而不是塞进 `{k:'name',type:'skill'}`
+ * ——后者会让闭包遍历 / 去重门 / ACL 把它当成一个查不到的受管技能。
+ * `isNonResourceRef` 就是给它准备的跳过判据。
+ */
+export function agentSkillRef(ref: AgentSkillRef): ResourceRefAst {
+  return ref.kind === 'managed'
+    ? decodeRuntimeIdRef('skill', ref.skillId)
+    : { k: 'project-skill', name: ref.name }
+}
+
+/** MCP / 插件 / dependsOn 在行上都是裸 id 数组——同一条读取点。 */
+export function runtimeIdRef(
+  type: 'agent' | 'skill' | 'mcp' | 'plugin',
+  id: string,
+): ResourceRefAst {
+  return decodeRuntimeIdRef(type, id)
+}
+
+/** 运行期引用的 canonical 去重键。跨类型不碰撞（type 进 key）。 */
+export function runtimeRefKey(ref: ResourceRefAst): string {
+  return resourceRefKey(ref)
 }

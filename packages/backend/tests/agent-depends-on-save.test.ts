@@ -24,6 +24,7 @@ import {
   validateDependsOn,
 } from '../src/services/agentDeps'
 import type { DomainError } from '../src/util/errors'
+import { PREVIEW_CALL_POLICY, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -137,7 +138,7 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
     await expect(validateDependsOn(db, 'new-a-id', [b, c, b, d, c])).resolves.toBeUndefined()
   })
 
-  test('resolveDependsClosure: happy path returns BFS order with root first; allowMissing skips dangling', async () => {
+  test('resolveDependsClosure: happy path returns BFS order with root first; onMissing skip 跳过 dangling', async () => {
     // Leaves first, then parents. The "ghost" reference is injected post-hoc via
     // a raw UPDATE (with a bogus id) so createAgent's guard doesn't trip during
     // seeding. RFC-223 PR-1: dependsOn stores IDS, so the raw JSON uses mid's id.
@@ -157,12 +158,14 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
     if (top === null) throw new Error('unreachable')
 
     // Default: throws on missing
-    await expect(resolveDependsClosure(db, top)).rejects.toMatchObject({
+    await expect(
+      resolveDependsClosure(db, top, { call: VALIDATE_CALL_POLICY }),
+    ).rejects.toMatchObject({
       code: 'agent-dependency-not-found',
     })
 
-    // allowMissing: missing 'ghost-id' silently skipped, traversal continues
-    const closure = await resolveDependsClosure(db, top, { allowMissing: true })
+    // onMissing:'skip': missing 'ghost-id' silently skipped, traversal continues
+    const closure = await resolveDependsClosure(db, top, { call: PREVIEW_CALL_POLICY })
     expect(closure.ok).toBe(true)
     if (closure.ok === false) throw new Error('unreachable')
     expect(closure.agents.map((a) => a.name)).toEqual(['top', 'mid', 'leaf'])

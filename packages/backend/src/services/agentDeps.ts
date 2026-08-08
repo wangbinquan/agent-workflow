@@ -5,12 +5,13 @@
 // DB writes; no inline-config building. Callers compose with the rest of the
 // services layer.
 //
-//   resolveDependsClosure(db, root, opts?)
+//   resolveDependsClosure(db, root, { call })
 //     BFS over agent.dependsOn. Returns ok:true with agents in BFS order
-//     (root first) or ok:false with the offending cycle path. Missing names
-//     either throw `agent-dependency-not-found` (default) or are silently
-//     skipped (allowMissing=true) — caller picks based on whether the read
-//     is for save-time validation or for tolerant UI preview.
+//     (root first) or ok:false with the offending cycle path. Missing ids
+//     either throw `agent-dependency-not-found` or are silently skipped, per
+//     the caller's `RefCallPolicy.onMissing` (RFC-271 T6f) — save-time
+//     validation fails, tolerant UI preview skips. The policy is REQUIRED:
+//     "什么都不传" 曾经默认成硬失败，读起来像是域的固有语义，实际是调用点的选择。
 //
 //   validateDependsOn(db, selfName, dependsOn)
 //     Save-time guard chained from agent.ts createAgent / updateAgent. Runs
@@ -26,7 +27,8 @@
 //     against false positives (e.g. agent 'foo' matching 'foobar' in some
 //     other row's dependsOn).
 
-import type { Agent } from '@agent-workflow/shared'
+import type { Agent, RefCallPolicy } from '@agent-workflow/shared'
+import { VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
 import { like } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { agents } from '@/db/schema'
@@ -39,11 +41,15 @@ export type DependsClosureResult =
 
 export interface ResolveClosureOpts {
   /**
-   * When true, dependsOn entries that don't resolve to an Agent row are
-   * silently skipped (useful for UI preview where the DB is read tolerantly).
-   * Default: throws `agent-dependency-not-found` on first missing name.
+   * RFC-271 T6f —— 「解析不到怎么办」是**调用级**属性，不是 dependsOn 这个域的
+   * 固有语义：同一条引用，保存期校验要硬失败、tolerant UI preview 要静默跳过。
+   * 所以它走 `RefCallPolicy`（`VALIDATE_CALL_POLICY` / `PREVIEW_CALL_POLICY` /
+   * `DISPATCH_CALL_POLICY`），而不是域级的 `dangle`——`dangle` 的语义是「按契约
+   * 允许解析不到、留到启动再 fail closed」，dependsOn 从来不是那样。
+   *
+   * 只有 `onMissing:'skip'` 会跳过；`'fail'` 抛 `agent-dependency-not-found`。
    */
-  allowMissing?: boolean
+  call: RefCallPolicy
 }
 
 /**
@@ -59,12 +65,12 @@ export interface ResolveClosureOpts {
 export async function resolveDependsClosure(
   db: DbClient,
   root: Agent,
-  opts: ResolveClosureOpts = {},
+  opts: ResolveClosureOpts,
 ): Promise<DependsClosureResult> {
   // RFC-223 (PR-1): dependsOn stores agent IDS; the closure BFS resolves by id
   // (getAgentById) and the cycle path is expressed in ids. A rename never
   // re-routes a closure because ids are stable.
-  const allowMissing = opts.allowMissing ?? false
+  const allowMissing = opts.call.onMissing === 'skip'
   const visited = new Map<string, Agent>([[root.id, root]])
   const order: Agent[] = [root]
   const queue: Array<{ id: string; path: string[] }> = []
@@ -172,7 +178,9 @@ export async function validateDependsOn(
         createdAt: 0,
         updatedAt: 0,
       } satisfies Agent)
-  const closure = await resolveDependsClosure(db, syntheticRoot)
+  const closure = await resolveDependsClosure(db, syntheticRoot, {
+    call: VALIDATE_CALL_POLICY,
+  })
   if (closure.ok === false) {
     throw new DomainError(
       'agent-dependency-cycle',
