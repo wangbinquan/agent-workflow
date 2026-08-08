@@ -48,8 +48,22 @@
 > - `T21`（`6b9bfb50`）—— 序列化：slug / 引用 lifting / 脱敏。脱敏产物直接跑严格 schema
 >   作硬回归（展示投影会让它当场失败）。
 >
-> **下一步**：`T23`（manifest.yaml + README 生成器）、`T24`（导出矩阵测试），然后批次 E
-> （导入）→ F（路由/client）→ G（前端）→ H（CLI）→ I（能力下线 C1–C6）→ J（文档）。
+> - `T23/T24`（`da41f992`）—— 导出入口：`manifest.yaml` / `README.md`（中英双段）/
+>   `bundle.json`（机器契约）。requirements 是**包的前提**而非内容（执行档 / 插件来源 /
+>   仓库自带技能 / MCP 形态 / 人类成员 username）。三条产品级断言各有测试：包不带任何
+>   权属信息、凭据位置在包里值不在包里（扫**整个 zip 字节**）、两次导出逐字节相同。
+>
+> **批次 E 进行中**（配置包导入）：
+> - `T25/T26`（`34b2f2a0`）—— 解包（防夹带 + formatVersion 向上拒绝）与预检。
+>   `previewToken` **签死整套确认基线**（`importId‖actor‖digest‖exp‖canonical(baseline)`），
+>   不是只签摘要——设计期两版被否掉的绕法都已写进测试。别人的资源**可 reuse 不可
+>   overwrite**（两条独立规则）。身份棘轮 134 → 136。
+>
+> **下一步**：`T27`（commit：验签 → duplicate lookup **先于** exp 检查 → 断言用户提交的
+> `(target,expect)` 是签名基线里的一对 → 服务端重算 allowedActions → 翻译成
+> `ResourceBundle` → 调引擎）、`T28`（package provider，**`revalidateInTx` 必须实现**，
+> `ops` 为空时也要走，否则全 reuse 的包完全免检）、`T29` 测试；然后批次 F（路由/client）→
+> G（前端）→ H（CLI）→ I（能力下线 C1–C6）→ J（文档）。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 
