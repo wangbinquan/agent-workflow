@@ -5,7 +5,7 @@
 **v4 相对 v3 的范围变更（决策 26）**：表达层与引擎照建，但**本 RFC 只给配置包这一个消费者**；
 **intent 不迁移**（`applyIntentChangeset` 与 `intent_apply_journal` 原样保留）。引擎的
 provider 接口预留事务钩子，使后续 RFC 迁 intent 时不必重构引擎。唯一与 intent 的交集是
-§2.4 的三段技能内核——它本就要为配置包建，建好后顺带解开 intent 的 skill/plugin 原地更新
+§2.4 的四段技能内核——它本就要为配置包建，建好后顺带解开 intent 的 skill/plugin 原地更新
 （决策 27，能力扩张）。
 
 §11 列出三轮设计门共 39 条 findings 的落点。
@@ -80,6 +80,33 @@ AC-B2；编码成 `external:` 则 `resolveExternal` 拿不到 id、apply 失败�
 ⚠️ `bundleCreatedNames` 只解决「同 bundle 新名字的 ACL 顺序」，`assertRefsUsableInTx` 的
 name 域只证明「至少一个同名行可见」——**两者都区分不了两个同名目标**，所以 lowering 契约不能
 指望它们兜底。
+
+#### 1.1c 工作组 call 的 runtime 对齐（R5-P1-B，用户决策 28）
+
+**已核实的阻断**：上表对工作组**原本不成立**。`freezeCallClosure` 的工作组分支
+（`execution/closure.ts:269-309`）**只收 `workgroupName`**，按名查库 → `orderBy(asc(id))` →
+取第一个可见行；**`workgroupId` 从头到尾没有被读过**（尽管 schema 里有这个字段）。于是
+「external 目标同时落 name + id」对工作组是空操作——写了也没用，启动照样取最老可见行。
+
+可复现：同名 G1（旧）/ G2（新），用户明确 reuse G2 → lowering 落
+`workgroupName='audit', workgroupId=G2` → launch 仍冻结到 G1。
+
+**用户决策 28：扩 runtime，让工作组与工作流对齐**——`freezeCallClosure` 的工作组分支改为
+**id-cache 优先**（且该行仍带该选择器名字，否则回退名字规则），与工作流分支
+（`closure.ts:162-169`）逐字同构。这顺带修掉平台现有的一处不对称：两类 call 节点今天行为
+不一致，而这个不一致没有任何设计理由，只是 RFC-243 PR-4 补工作组时漏了。
+
+⚠️ **这是执行期行为变更**，因此：
+- `proposal.md §3` 的「不改任何执行期行为」非目标**相应收窄**；
+- 它进能力影响清单作为 **C7（行为变更，非收缩）**：存量工作流里若有「`workgroupId` cache
+  指向 A、但同名最老可见行是 B」的 call 节点，启动目标会从 B 变成 A。
+  **这正是用户当初存下那个 cache 时的意图**，但确实是变更，须在发布说明点名。
+- 需要一条专门的回归：同名两行 + cache 指向较新那个 → 冻结到 cache 指向的行。
+
+**另一处仍需 validator 兜底**：即使 runtime 对齐，`freezeCallClosure` 的 cache 仍是**每个
+name 一个**（`closure.ts:162` 的 map 按 name 键控）。同一张图里两个同名 selector 分别指向
+W1 / W2 时，**至少一个选择会丢**。这种组合 bundle validator **直接拒绝**并说明原因——
+它不可表示，不是我们该猜的。
 
 三种形态与消费者的对应：
 
@@ -205,8 +232,14 @@ export const BundleSchema = z.object({
 
 ```ts
 export interface BundleApplyProvider {
-  /** 幂等身份。package: (scope:'package', key:importId)。**必须由客户端持有并重放** */
+  /** 幂等身份（namespace + key）。package: (scope:'package', key:importId)。
+   *  **必须由客户端持有并重放** */
   idempotencyKey: { scope: string; key: string }
+  /** ⚠️ **串行键，与幂等 namespace 是两回事**（R5-P2-E）。源码按 `sessionId` 串行
+   *  （`applyChangeset.ts:201` `withSessionApplyLock`）——即**按资源实例**，不是按命名空间。
+   *  package 若直接拿 `scope:'package'` 当串行键，所有导入会全局串行：Alice 一个慢 npm
+   *  安装会堵住 Bob 完全无关的纯 agent 包。粒度由 provider 自己定（建议按目标资源集合）。 */
+  serializationKey: string
   /** 解析 external ref → 本地资源 id（+ 类型校验）。`name:` 形态不经过这里。 */
   resolveExternal(ref: string, expectType: AclResourceType): Promise<string>
   /** 技能文件载体：package 从 zip 取。 */
@@ -230,8 +263,8 @@ export interface BundleApplyProvider {
 
 ```
 ① claim      journal 插入 phase='prepared'，UNIQUE(scope, key) 幂等
-             ↳ 重复提交返回**原 receipt**，不重跑（设计门 A1：v2 缺这一条，
-               响应丢失后重试会再建一个同名工作流）
+             ↳ 重复提交按 **I3 三态**处理（`committed` → 返回原 receipt；`failed` → 409；
+               `prepared`/`applying` → 409 未结）。**不是「总是返回 receipt」**
 ② pre-stage  FS / 安装副作用，产出「DB 不可见」的成果，逐个记 artifacts：
              · 技能 create → stageManagedSkill(..., {id: 预铸})   reserve(不可见行+op锁)
              · 技能 update → §2.4 的可组合发布形态
@@ -324,7 +357,7 @@ bundle 同时新建 skill / MCP / plugin / agent / workgroup，agent 引用前�
 `DbClient` 且内部自开 `dbTxSync`（`:513-528`），**塞不进 big tx**。若照 v2 那样直接调用，
 会出现「S1 的版本已由内部事务提交、随后 S2 的 token CAS 失败 → 整包判 failed，但 S1 已被改」。
 
-拆成**三段**（在 `skillVersion.ts` 内新增），既有 `commitSkillVersion` 退化为三段的顺序组合、
+拆成**四段**（在 `skillVersion.ts` 内新增），既有 `commitSkillVersion` 退化为四段的顺序组合、
 其它调用方零改动：
 
 | 段 | 做什么 | 何时 |
@@ -355,10 +388,19 @@ rename）发布的，而 `versions/vN/files` 是**永久权威快照**——`rec
   catch 里（`skillVersion.ts:634-655`）；拆开后引擎没有合法 API 就只能复制状态机内部逻辑。
   create 侧本就专门提供了 `compensateManagedSkillStage`（`skill.ts:386-401`），说明这不是
   可省略的辅助函数。
-- **stage 要能返回 `noop`**（R4-P2-12）。现有行为：内容完全相同的保存**不创建新版本**、
-  abandon op、返回原 latest（`skillVersion.ts:538-550`）。三段版的 `stageSkillVersion`
-  因此返回 `{ kind:'staged', ... } | { kind:'noop', version }`，`noop` 时 big tx 不产生
-  该 op、publish 段跳过。⚠️ `skill_versions.source` 现有枚举是
+- **stage 要能返回 `noop`，但 `noop` 仍必须进 big tx 做 fence**（R4-P2-12 + **R5-P1-C 修正**）。
+  现有行为：内容完全相同的保存**不创建新版本**、abandon op、返回原 latest
+  （`skillVersion.ts:538-550`），且那次判定是在**独立事务**里校验 composite token 后做的。
+
+  v5 初稿写「`noop` 时 big tx 不产生该 op」——**这会破坏整包的同一确认基线**。可复现：
+  S 在 stage 阶段判定与当前 v1 相同、释放锁；同 bundle 后续在跑一个慢 npm 安装；期间并发
+  编辑把 S 改成 v2；big tx 跳过 S，却提交了引用 S 的 agent / workflow ⇒ **导入成功，但绑定
+  的是用户从未确认过的 v2**。
+
+  正解：`noop` 成为 **fence-only PreparedOp** —— big tx 内**照样重验**
+  content/meta/ACL/owner 四道 token，**只跳过版本写入与 publish**。
+  `stageSkillVersion` 返回 `{ kind:'staged', ... } | { kind:'noop', fence }`，两种都进
+  big tx，只是 `noop` 分支不调 `commitSkillVersionInTx`。⚠️ `skill_versions.source` 现有枚举是
   `initial/editor/fusion/restore`——**包导入的 update 复用 `editor` 还是扩枚举，是一处必须
   在批次 B 之前定下的决定**；扩枚举则 §7「无其它 schema 变更」要相应勘误。
 
@@ -390,9 +432,9 @@ journal artifacts**，再调 `installPlugin(pluginId, spec, { generationId })`�
 
 ### 3.1 skill 半边（真的顺手）
 
-三段内核为配置包而建，intent 直接调用即可。改动面：`copyOnlyTargetsFor`
+四段内核为配置包而建，intent 直接调用即可。改动面：`copyOnlyTargetsFor`
 （`applyChangeset.ts:135`）里 skill 分支的 `'not supported yet'` 移除 + update switch 里
-接上三段调用。
+接上四段调用。
 
 ⚠️ **必须显式传 `expectedOwnerUserId`**（R4-P1-8）。该 fence 在 `commitSkillVersion` 里是
 **optional**（`skillVersion.ts:381`，判据是 `!== undefined && ...`，**不传即不检查**），
@@ -414,7 +456,8 @@ intent 根本没有 plugin-update 接线；而 plugin 的发布协议与 skill *
 | 步骤 | 内容 |
 |---|---|
 | resolve | `copyOnlyTargetsFor` 移除 plugin 分支；新增 `PreparedOp` kind `plugin-update` |
-| capture | 捕获**完整** plugin row（`commitPluginPublishInTx` 的栅栏靠它） |
+| baseline | **先用 session manifest 的 `configHash` 验原始基线**（R5-P1-D）：`manifest.ts:22` 存的是 dump 时刻的 hash。只捕获当前 row 是不够的—— dump 得 H1、同 owner 在普通插件页改成 H2、intent apply 随后捕获 H2 并以 H2 为栅栏，**H1 从未参与判断**，用户确认的基线被静默跳过。PreparedOp 因此必须同时携带 manifest 的 `expectedConfigHash` 与授权时的 owner |
+| capture | 捕获**完整** plugin row（`commitPluginPublishInTx` 的栅栏靠它防 capture **之后**的漂移；与上一行是**两道**不同的门，缺一不可） |
 | prestage | **spec 变了才**预安装；**record-before-act**：调用方预铸 generation id、先写 artifact 再 `installPlugin` |
 | big tx | `commitPluginPublishInTx(tx, captured, set)` |
 | 补偿 | artifact 带**精确** generation 路径，逆序删除 |
@@ -515,16 +558,43 @@ POST /api/resource-packages/commit    multipart: file + decisions(JSON) → Pack
 - **`importId`**（AC-24e）：preview 下发的稳定幂等键，decisions / CLI plan 原样回传，作为
   引擎的 `idempotencyKey.key`。没有它，commit 成功但响应丢失后重传同一个 zip 会**再建一遍
   资源**——服务端每次新生成 id 等于没有幂等。
-- **`previewToken`**（AC-24d，**R4-P1-1 修正**）：**不是**客户端自报的 digest。
+- **`previewToken`**（AC-24d，**R4-P1-1 / R5-P1-A 修正**）：**不是**客户端自报的 digest，
+  也不只签包内容。
   v4 初稿写「preview 下发 digest、commit 比对重算值」——那证明不了任何事：客户端可以同时
   换掉文件**和**摘要（preview 包 A 拿到 `DA`，commit 传包 B 并把 decisions 里的摘要改成
   `hash(B)`，commit 重算 B 得到同一个值，比对通过）。
-  正解是**不可伪造的绑定**：preview 返回
-  `previewToken = HMAC(daemonSecret, importId ‖ actorUserId ‖ packageDigest ‖ exp)`，
-  decisions / CLI plan 原样回传；commit 重算上传内容的 digest、用同一密钥验签，
-  **三者任一不符即 409**。复用仓内既有的密钥设施（`secretBox` 已用于 webhook secret /
-  OIDC client_secret / RFC-204），**不新增表、不引入服务端暂存态**，与「无暂存态」这条
-  设计约束不冲突。
+  正解是把**整套确认基线**签进去。R5 指出只签 `packageDigest` 仍可绕：preview 时目标
+  plugin 是 `H1`，另一标签页改成 `H2`，客户端把 decision 里的 `expect` 换成 `H2` —— 包没变、
+  签名仍有效、owner 与 allowedActions 也仍通过，于是 CAS 覆盖了用户从未确认的 `H2`。
+
+  **签名覆盖面**（`previewBaseline`）：
+
+  ```
+  previewToken = sign(daemonSecret,
+      importId ‖ actorUserId ‖ packageDigest ‖ exp ‖
+      canonical(previewBaseline))
+  previewBaseline = 每个条目的 { localSlug, candidateIds[], expectByCandidateId{}, allowedActions[] }
+  ```
+
+  关键在于**用户的「选择」是自由的，但可选项与它们的基线是签死的**。commit 时除了验签，
+  还要断言「用户提交的 `(target, expect)` 组合**是该条目 baseline 里的一对**」——H2 不在
+  baseline 里，于是被拒。
+
+  **校验顺序**（R5 指出的第二个复现：commit 成功但响应丢失、过期后重试，若先查 expiry 会
+  409 而进不了 replay，违反 I3 三态）：
+
+  ```
+  ① 验签（签名不符 → 400，与 replay 无关）
+  ② duplicate lookup（命中 → 按 I3 三态处理，**不再检查 expiry**）
+  ③ 仅首次 claim 才检查 exp（过期 → 409，要求重新预检）
+  ```
+
+  **TTL 与 wire**：`exp` 是 envelope 的一部分（不是独立字段，否则可被单独篡改），
+  默认 30 分钟，随 `previewToken` 一起原样回传。
+  ⚠️ **`SecretBox` 现有 API 只有 AES-GCM `seal/unseal`、没有 HMAC**
+  （`auth/secretBox.ts:16`）——用 authenticated sealed payload（把 envelope 直接 seal，
+  unseal 成功即证明未被篡改）还是给 `SecretBox` 扩一个 HMAC helper，是**实现期的局部选择**，
+  语义已由本节定死。
 
 ### 5.2 预检
 
@@ -719,7 +789,7 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 |---|---|
 | R1-A1 / R2-A1 无可见性屏障、journal 不同构 | §2.2 复用既有生命周期 + 幂等键 + active lease |
 | R1-A2 / R2-A2 fence 只锁 ACL | §1.3 `BundleExpectToken` + §5.2 由 preview 下发回传（AC-24b） |
-| R1-A3 / R2-A3 绕过技能/插件持久化协议 | §2.4 `skill-update` 两段拆分 + §2.5 插件失败精确清理 |
+| R1-A3 / R2-A3 绕过技能/插件持久化协议 | §2.4 `skill-update` 四段拆分 + §2.5 插件 record-before-act |
 | R1-B1 / R2-B1 包内无稳定身份 | §1.1 `BundleRef` + 显式分配 slug + schema 拒重复/悬空 |
 | R1-B2 project 技能无处承载 | `requirements.projectSkills` |
 | R1-B3 / R2-B3 环形与拓扑序 | §2.3 `bundleCreatedNames` |

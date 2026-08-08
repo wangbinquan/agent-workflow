@@ -51,7 +51,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
    导出导入均提供 CLI。**配置包是本 RFC 唯一的消费者。**
 3. 引擎的 provider 接口**预留事务钩子**（`claimInTx` / `revalidateInTx` / `finalizeInTx`），
    使后续 RFC 能把 intent 迁进来而不必重构引擎——但本 RFC **不迁 intent**。
-4. **顺带解开 intent 的一处欠账**（决策 27）：`skill-update` 需要的三段技能版本内核本就要为
+4. **顺带解开 intent 的一处欠账**（决策 27）：`skill-update` 需要的四段技能版本内核本就要为
    配置包建，建好后 intent 自己那条路径也能调它，把 `copyOnlyTargetsFor` 里那句
    `'in-place update for this resource type is not supported yet'` 解掉。这是 intent 的
    **能力扩张**（非收缩，不进 §5 清单），单独验收。
@@ -64,7 +64,9 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - 不做跨格式版迁移、增量包、差分包、包签名、包加密。
 - **不扫描技能文件树内容里的密钥**：脱敏保证限定在**结构化字段**，技能目录里硬编码的凭据
   属于技能作者的责任（决策 18）。
-- 不改任何执行期行为（调度 / 准入 / containment / runtime 选择零改动）。
+- 调度 / 准入 / containment / runtime 选择零改动。
+  ⚠️ **一处例外（决策 28）**：`freezeCallClosure` 的**工作组** call 解析改为 id-cache 优先，
+  与工作流分支对齐。这是执行期行为变更，作为 **C7** 列入 §5。
 - **不迁移 intent**（决策 26）：`applyIntentChangeset` 与 `intent_apply_journal` 原样保留，
   本 RFC 不碰它的生命周期。唯一的交集是 §2 决策 27 的技能内核复用。
 
@@ -91,6 +93,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 | **C5a** | 按 exact id 覆盖导入 | 改为按名字匹配 | 所有角色 |
 | **C5b** | 覆盖他人拥有的资源 | 仅对自己拥有的开放 | 仅 manager / admin |
 | **C6** | 导出传递不可见闭包的工作流 | 整体 422 并明确提示 | 代理可见但其 `dependsOn` 不可见者；这类工作流**仍可正常运行** |
+| **C7** 🆕 **（行为变更，非收缩）** | 工作组 call 节点的启动目标解析 | 今天**只按名字**取最老可见行，`workgroupId` 字段存在却从不被读（`closure.ts:269-309`）；改为**id-cache 优先**（该行仍带该名字），与工作流分支（`closure.ts:162`）对齐 | 存量工作流里若有「`workgroupId` 指向 A、但同名最老可见行是 B」的 call 节点，**启动目标从 B 变成 A**。A 正是当初存下那个 cache 时的意图，但确实是变更，发布说明须点名 |
 
 > **两条候选收缩经核实/决策后消解**：PAT 导入通道（是我把 `tokenAccess` 写成 `'never'` 写错
 > 了，`registry.ts:44-62` 写明该值只为 RFC-247 的 D5/D6 存在、创建资源不在其列，六类 create
@@ -153,7 +156,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 26. **拆**：表达层 + 引擎 + 配置包在本 RFC；**intent 迁移另立 RFC**。引擎的 provider 接口
     预留事务钩子，使后续迁移不必重构引擎。理由见状态段——intent 的不变量面是 ~13 条，
     与包的新 bug 压在同一个 changeset 里风险叠加。
-27. **`skill-update` / `plugin-update` 进表达层，且顺带给 intent 开**：三段技能版本内核本就
+27. **`skill-update` / `plugin-update` 进表达层，且顺带给 intent 开**：四段技能版本内核本就
     要为配置包建；建好后解开 intent 那句 `'not supported yet'`。属**能力扩张**，单独验收
     （AC-K1/K2），不进 §5 收缩清单。外部 owner 仍只能 copy（那条判据不动）。
 
@@ -246,11 +249,21 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
   代理 `expectedUpdatedAt + expectedAclRevision`、MCP/插件 `expectedConfigHash`、技能
   `contentVersion + metaRevision + aclRevision`。
 - **AC-24c** 内容 token **由 preview 返回、由 decisions 原样回传**；commit 不得现场重读后
-  自比自（那样等于没有 CAS）。
-- **AC-24d** 🆕 **preview 与 commit 必须绑定同一份包内容**：preview 返回规范化 package
-  digest，decisions / CLI plan 原样携带，commit 对重新上传的内容比对。
-  ⚠️ 否则可以 preview 文件 A（普通 agent 节点）、commit 上传文件 B（同 slug 同 name 同
-  expect 但 definition 换成脚本节点）——服务端重算权限也证明不了用户确认的是 B。
+  自比自（那样等于没有 CAS）。回传值的可信度由 AC-24d 的签名保证。
+- **AC-24f** 🆕 重复提交按 **三态**处理（I3）：`committed` → 返回原 receipt；`failed` → 409
+  并说明上次失败；`prepared`/`applying` → 409「有未结尝试」。**不是「总是返回 receipt」**。
+- **AC-24g** 🆕 技能 `noop`（内容未变）**仍进 big tx 做 fence**，只跳过版本写入与 publish。
+  ⚠️ 跳过整个 op 会破坏整包基线：stage 判定相同 → 同 bundle 慢安装期间并发改成 v2 →
+  big tx 跳过它却提交了引用它的代理 ⇒ 导入绑定的是用户从未确认的 v2。
+- **AC-24d** 🆕 **preview 与 commit 绑定同一份确认基线**（R5-P1-A 修正）：preview 返回
+  `previewToken` —— 一个签死了 `importId ‖ actor ‖ packageDigest ‖ exp ‖ canonical(基线)`
+  的信封，基线含每条目的候选 id、各候选的 `expect`、允许动作。decisions / CLI plan 原样回传。
+  commit 必须：**① 验签 → ② duplicate lookup（命中走 I3 三态，不查 exp）→ ③ 仅首次 claim
+  查 exp**；并断言用户提交的 `(target, expect)` **是该条目基线里的一对**。
+  ⚠️ 只签 `packageDigest` 不够：包没变、但客户端把某条的 `expect` 从 `H1` 换成并发改出来的
+  `H2`，签名仍有效 ⇒ 覆盖了用户从未确认的 `H2`。
+  ⚠️ 顺序也是承重的：先查 exp 会让「commit 成功但响应丢失、过期后重试」直接 409，进不了
+  replay，违反 AC-24f 的三态。
 - **AC-24e** 🆕 **稳定 `importId` 进 wire**：preview 下发、decisions / CLI plan 回传。
   否则 commit 成功但响应丢失后重传同一个 zip 会**再建一遍资源**（幂等键必须由客户端持有
   并重放，服务端每次新生成等于没有幂等）。
@@ -258,10 +271,9 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **AC-25** 技能与插件落地走既有内核，产出完整 `skill_versions` v1 快照、content hash、
   非空 `cached_path`；测试断言导入后的技能能过 `skillBootVerify`。
 - **AC-25b** **技能覆盖**（`skill-update`）不得留下部分提交：已核实 `commitSkillVersion`
-  收 `DbClient` 且自开事务（`skillVersion.ts:474`），必须拆成**三段**——
-  `stageSkillVersion`（op + staging + 归档 `versions/vN`）/ `commitSkillVersionInTx`
-  （DB 行 + `advancePhase`）/ `publishStagedSkillVersion`（`swapInStaged` 从 **staging**
-  发布 live + 哈希校验 + `fs-published` + `finishOperation`）。
+  收 `DbClient` 且自开事务（`skillVersion.ts:474`），必须拆成**四段**——
+  `stageSkillVersion` / `commitSkillVersionInTx` / `publishStagedSkillVersion` /
+  **`abortStagedSkillVersion`**（pre-commit 补偿）。
   ⚠️ **不是「rename 候选目录到 live」**——`versions/vN/files` 是永久权威快照，
   `reconcileSkillLiveFiles()` 靠它重建 live、恢复 handler 靠它前滚
   （`skillVersion.ts:555,608`、`skillVersionOp.ts:64`）；搬走它会让 `skillBootVerify` 失败、
@@ -270,7 +282,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 
 ### intent 能力扩张（决策 27）
 
-- **AC-K1** 🆕 三段技能版本内核落地后，intent 对**自己拥有的** skill / plugin 支持原地更新；
+- **AC-K1** 🆕 四段技能版本内核落地后，intent 对**自己拥有的** skill / plugin 支持原地更新；
   `copyOnlyTargetsFor` 里 `'in-place update for this resource type is not supported yet'`
   那条分支移除。
 - **AC-K2** 🆕 **外部 owner 仍只能 copy**（`copyOnlyTargetsFor` 的 owner 判据一字不动），

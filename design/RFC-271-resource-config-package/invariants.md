@@ -20,11 +20,21 @@
 const applyLocks = new Map<string, Promise<unknown>>()
 ```
 
-链式 Promise 锁，`finally` 里 release。**注意是 in-process**——注释显式写明依赖「单 daemon
-平台」这个前提，不是跨进程锁。
+链式 Promise 锁，`finally` 里 release（`applyChangeset.ts:201-217`，入口在 `:266`
+`withSessionApplyLock(input.sessionId, ...)`）。**注意是 in-process**——注释显式写明依赖
+「单 daemon 平台」这个前提，不是跨进程锁。
 
-**归属**：引擎（scope 由 provider 的 `idempotencyKey.scope` 给）。
-**v4 状态**：design §2.2 未写。**必须补**。
+⚠️ **本条初版我写错了**（R5 抓出）：我写的是「scope 由 provider 的 `idempotencyKey.scope`
+给」。源码的键是 **`sessionId`——按资源实例串行，不是按命名空间**。若 package provider 拿
+常量 `scope:'package'` 当串行键，**所有导入会全局串行**：Alice 一个慢 npm 安装堵住 Bob
+完全无关的纯 agent 包。**串行键与幂等 namespace 必须是两个独立概念**。
+
+> 这条错误本身值得记：这份清单存在的理由就是「不要凭推断泛化」，而它的第一条就犯了同一个错
+> ——我把一个具体的 `sessionId` 泛化成了「provider 给的 scope」，而没有回头确认泛化后的语义
+> 是否还成立。
+
+**归属**：引擎（`serializationKey` 由 provider 单独提供，与 `idempotencyKey` 分开）。
+**状态**：design §2.1 已补 `serializationKey` 字段并写明二者区别。
 
 ---
 
@@ -190,8 +200,39 @@ CAS.*
 靠 installer 自己的 generation GC 回收孤儿。**这正是 R3-F8 说的缺口**——RFC-271 的
 record-before-act 要把精确路径预先写进 journal，才能在这里真正删掉。
 
+**R5 补充的两条边界**（初版遗漏）：
+
+- **claim 成功后必须立刻把 journalId 注册进 active set，并在 finally 里移除**
+  （`applyChangeset.ts:382-395`）——注册晚于 pre-stage 就会留下「本进程正在跑、收敛器却看不见」
+  的窗口。
+- **补偿未成功时不得无条件终态化**（`:985-1027`）：现有实现里补偿抛错只 `log.warn` 然后仍把
+  journal 标 `failed`，于是那次的残留再也不会被重试——这是**已知的既有缺口**（R5-P2-B 也点到
+  它与插件精确删除的组合：`rm` 遇 `EBUSY` → journal 进 failed 不再重试 → 而 GC 又被任一
+  非终态 run 阻断 ⇒ 目录永久残留）。新引擎应改为「补偿失败保留可重试状态」而不是照抄。
+
 **归属**：引擎。
-**v4 状态**：§2.2 已写 active set + 10min。要补：CAS 带 state 条件、插件 artifact 的精确路径。
+**状态**：design §2.2 已写 active set + 10min；本条的四点（CAS 带 state 条件、插件精确路径、
+claim 后立即注册、补偿失败不终态化）需在批次 B 逐条落实。
+
+---
+
+## I13 · commit kernel / 引用 ACL / 特权 principal / receipt / journal **共处同一 big tx**
+
+**锚点**：`applyChangeset.ts:747-874`
+
+整个提交循环在**一个** `dbTxSync` 内：每个 op 的 commit kernel、`assertRefsUsableInTx` 的引用
+ACL 复核、特权 principal 判定、`bundleCreatedNames`、provenance、receipt、journal
+`committed`——**全部同事务**。
+
+⚠️ **本条初版整个漏了**（R5 抓出）：我在 design 的速查表里写了它，却没有立成 I 项，于是
+「逐条打勾」会漏掉它。
+
+**具体反例**：泛化时若把 `assertRefsUsableInTx` 挪到事务外（很自然的重构——"preflight 归
+preflight"），检查通过之后、提交之前目标的 grant 被撤销，资源仍会带着一个已失效的引用提交。
+
+**归属**：引擎。
+**状态**：design §2.2 的生命周期 ③ 已列出这些项在 big tx 内，但要在批次 B 显式断言「没有
+任何一项被挪出事务」。
 
 ---
 
@@ -228,18 +269,27 @@ skill/plugin 的 `not supported yet` 分支，`ownerUserId` 判据一字不动**
 
 | # | 不变量 | 归属 | v4 设计已覆盖 | 落地已验证 |
 |---|---|---|---|---|
-| I1 | 按 scope 串行（in-process） | 引擎 | ❌ 待补 | ☐ |
+| I1 | 按**资源实例**串行（in-process） | 引擎 | ✅ 已补（`serializationKey`） | ☐ |
 | I2 | claim 单事务 + duplicate 优先 | 引擎 + `claimInTx` | ⚠️ 缺顺序约束 | ☐ |
-| I3 | replay **三态** | 引擎 | ❌ 只写了 1/3 | ☐ |
+| I3 | replay **三态** | 引擎 | ✅ 已补 | ☐ |
 | I4 | 类型序 + agent dependsOn 拓扑 | 引擎 | ⚠️ 缺具体类型序 | ☐ |
 | I5 | pending seams（预铸早于 preflight） | 引擎 | ✅ | ☐ |
 | I6 | CAS 后**二次校验** | 引擎 + `revalidateInTx` | ⚠️ 缺二次校验时机 | ☐ |
 | I7 | finalize 与资源写同事务 | 引擎 + `finalizeInTx` | ⚠️ 缺「同事务」措辞 | ☐ |
-| I8 | post-commit 绝不补偿 | 引擎 | ⚠️ 仅隐含 | ☐ |
-| I9 | 收敛 active set + 10min + 逆序 + 前滚 | 引擎 | ⚠️ 缺 CAS 条件与插件路径 | ☐ |
+| I8 | post-commit 绝不补偿 | 引擎 | ✅ 已补 | ☐ |
+| I9 | 收敛 active set + 10min + 逆序 + 前滚 + **claim 后立即注册** + **补偿失败不终态化** | 引擎 | ⚠️ 四点待落实 | ☐ |
 | I10 | session mutation 409 | intent 特有 | — 本 RFC 不需要 | — |
 | I11 | resolve 期场景校验 | intent 特有 | — 本 RFC 不需要 | — |
 | I12 | MCP OAuth carry-forward | intent 特有 | — 本 RFC 不需要 | — |
+| **I13** | **commit kernel / 引用 ACL / receipt / journal 共处同一 big tx** | 引擎 | ✅ 已补（本轮新增） | ☐ |
 
-**结论**：12 条里 9 条归引擎，其中**只有 1 条（I5）在 v4 设计里是完整的**，3 条完全没写
-（I1 / I3 / I8）、5 条写了但缺关键细节。这份表本身就是 design §2.2 需要补写的清单。
+**结论（v2，2026-08-08 第五轮复核后）**：**13 条**，10 条归引擎。
+
+初版（12 条）有三处错漏，全部由设计门第五轮抓出：
+1. **I1 写错**——把具体的 `sessionId` 泛化成「provider 的 idempotency scope」，而那样会让所有
+   导入全局串行；
+2. **I9 不完整**——漏了「claim 后立即注册 active」与「补偿未成功不得无条件终态化」；
+3. **整条 I13 漏了**——big tx 的安全边界我在 design 速查表里写了，却没立成 I 项。
+
+> 这份清单存在的理由是「不要凭推断泛化」，而它自己第一条就犯了同一个错。**留着这段自陈，
+> 是为了让后来者知道：这份表也要被审，不是权威。**

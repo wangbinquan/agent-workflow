@@ -61,13 +61,14 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - **T13** `rfc271-bundle-engine.test.ts` + `rfc271-bundle-owner-gate.test.ts` +
   `rfc271-skill-update.test.ts`。
 
-## 批次 C · intent 的一处能力扩张（决策 27，**不是迁移**）
+## 批次 C · intent 能力扩张（决策 27）+ 工作组 call runtime 对齐（决策 28）
 
-本 RFC **不迁移 intent**（决策 26）。这里只做一件事：批次 B 的三段技能内核建好后，intent
-自己那条路径也能调它。
+本 RFC **不迁移 intent 主流程**（决策 26），但有**两处显式例外**：skill 半边是真「顺手」
+（调四段内核即可）；**plugin 半边要动 intent 的 prestage 循环与收敛器**。
 
 - **T14** 解开 `copyOnlyTargetsFor`（`applyChangeset.ts:135`）里 skill/plugin 的
-  `'in-place update for this resource type is not supported yet'` 分支，改为调用三段内核。
+  `'in-place update for this resource type is not supported yet'` 分支；skill 侧改为调用
+  四段内核。
 - **T15** ⚠️ **`ownerUserId` 判据一字不动**——他人拥有的资源仍强制 copy；既有 copy 语义
   （slot derivation / copy rewiring / finalName / receipt `fromCopy`）逐条保持。
 - **T16** `rfc271-intent-skill-update.test.ts`：**双向锁**——自己的技能原地更新成功、
@@ -79,7 +80,11 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
   ⚠️ 改判范围**显式限定**为 prestage 循环 / artifact / 收敛 / `copyOnlyTargetsFor` 四处，
   其余零改判。
 
-> 这一条独立成 commit 推送并跑完 CI，与包的工作解耦。
+- **T17b** **决策 28**：`freezeCallClosure` 工作组分支改 id-cache 优先（与 `closure.ts:162`
+  的工作流分支逐字同构）。⚠️ **执行期行为变更**，须带专门回归（同名两行 + cache 指向较新
+  那个 → 冻结到 cache 指向的行）并进发布说明。
+
+> 批次 C 独立成 commit 推送并跑完 CI，与包的工作解耦。
 
 ## 批次 D · 配置包导出
 
@@ -206,4 +211,5 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 | C1/C2/C6 打断既有自动化 | 已逐条呈用户确认；发布说明点名 |
 
 **回滚**：批次 I 之前任何时点可停（新路径纯增量）。批次 C 若出问题回滚该 commit 即可——
-它只动 intent 的一个分支，引擎与表达层对 intent 零影响。
+但注意它**不只动一个分支**：含 plugin 的 prestage/artifact/收敛三处，以及决策 28 的
+`freezeCallClosure` 工作组分支（执行期行为变更）。回滚粒度按这四处评估。
