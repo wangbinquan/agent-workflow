@@ -33,9 +33,23 @@
 >   （预铸 id + 引用回填）+ `refs.ts`（四种 wire 引用各自的归宿）。12 个 op kind 全部
 >   接上各自的 canonical 内核。`invariants.md` 末尾的对照表已**逐条打勾并写明落点**。
 >
-> **批次 B 完工。下一步是批次 C**（intent 能力扩张：skill / plugin 原地更新，决策 27）。
-> ⚠️ 动 `copyOnlyTargetsFor` 时只改 skill/plugin 的 `not supported yet` 分支，
-> **`ownerUserId` 判据一字不动**（invariants I11 的注）。
+> **批次 C 完工**（`e5317715`）—— 解开 skill / plugin 的原地更新特例；`ownerUserId`
+> 判据一字未动（一组**双向锁**：自己的能原地改、别人的仍强制 copy）。plugin 半边把
+> 基线 hash 与整行捕获收成**同一次**读取，并补上 record-before-act 与收敛器的精确删除。
+>
+> **批次 D 进行中**（配置包导出）：
+> - `T18`（`b141ec89`）—— `encodeZip`：**store-only + 固定时间戳 + 条目字典序**。这不是
+>   洁癖：AC-7b 要求「零匹配」与「全不可见」产出逐字节相同的包，带了当前时间或让顺序
+>   随调用方漂移，那条断言就永远写不出来。
+> - `T19/T20/T22`（`6afee550`）—— 闭包 BFS + 四道门。**同名重复在导出侧拒绝**（包不带
+>   owner，两条同名条目导入方无从分辨）；「不存在」与「不可见」错误**同形**（不给存在性
+>   预言机）；call 目标解析与 `freezeCallClosure` 逐字一致；**不做**类型级 `*:read` 门，
+>   并用反向锁钉住。身份棘轮 132 → 134。
+> - `T21`（`6b9bfb50`）—— 序列化：slug / 引用 lifting / 脱敏。脱敏产物直接跑严格 schema
+>   作硬回归（展示投影会让它当场失败）。
+>
+> **下一步**：`T23`（manifest.yaml + README 生成器）、`T24`（导出矩阵测试），然后批次 E
+> （导入）→ F（路由/client）→ G（前端）→ H（CLI）→ I（能力下线 C1–C6）→ J（文档）。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 
