@@ -151,8 +151,27 @@ W1**。name-only 一开始就错选 W1；id-only 会继续跟着已改名的 W2�
 
   测试：两个分支各一条**字节级 round-trip**（导出→导入后与原 `AgentSkillRef` 逐字节相同）。
 
-  **并规定：T1 的三个 Bundle schema 是 T6a 域 codec 的 alias / re-export，不是第二套
-  parser。**（否则「归一化」在自己 RFC 内部就分叉了。）
+  **`walkClosure` 对两个分支的规则（R10 补齐）**：
+
+  | 分支 | 入队遍历 | 查 row / ACL | 进 `(type,name)` 去重门 | 产出 |
+  |---|---|---|---|---|
+  | `managed` | ✅ | ✅ | ✅ | `resources` 条目 + payload 边 |
+  | **`project`** | ❌ **非资源叶子** | ❌ | ❌ | **payload 边** + `requirements.projectSkills`（**去重后**） |
+
+  ⚠️ 不写死这条会出两种错（可复现）：代理 A 同时引用 managed `lint` 与 project `lint` ——
+  若把 project 当普通技能边，要么查不到 row 误报 `package-export-ref-unavailable`，
+  要么与 managed `lint` 误撞 `(type,name)` duplicate 门。运行时本来是把两者当**不同身份**的
+  （`scheduler.ts:9276-9285` 按 `m:<skillId>` / `p:<name>` 分别去重）。
+
+  **`managed` 的 `local:` / `external:` 选择规则（R10 补齐）**：
+
+  | 目标 | 编码 | 导入侧绑定 |
+  |---|---|---|
+  | 在本包闭包内 | `local:<slug>` | 绑到本次导入结果 |
+  | **builtin / `__system__`** | **`external:builtin/<type>/<name>`** | 按名字绑**目标实例的内置件**；本地没有 → 预检页报错（决策 6 已规定内置件只记依赖声明） |
+  | 闭包外且非 builtin | —— **不可能**：非 builtin 的可见依赖一定被 `walkClosure` 拉进闭包；不可见的在 §4.1 第一道门就 422 了 | —— |
+
+  **并规定：T1 的 Bundle schema 是 T0a 域 codec 的 alias / re-export，不是第二套 parser。**（否则「归一化」在自己 RFC 内部就分叉了。）
 - ❌ 宣布 project 技能是「非资源 requirement」并退出「唯一 ResourceRef」承诺——那等于把
   归一化打了个洞，而洞正好在 runner 组装 config 的路径上。
 
@@ -272,7 +291,27 @@ W1（旧）/ W2（新）都叫 `audit`，根 R 有 `c1={name:'audit',idHint:W1}`
 `c2={name:'audit',idHint:W2}`；W1 输出 `old`、W2 输出 `new` 且 W2 回调 R。启动会为 `c2`
 冻结 W2，而 validator 固定读 W1 ⇒ **对 `new` 端口报错**、且**看不见 W2→R 这个环**。
 
-| **6** | **配置包导出器**（§4 的 `walkClosure`） | 本 RFC 新写，若照现有冻结器那样先把名字收进 `Set/Map`（`closure.ts:162`）就会重蹈覆辙 | 按边解析，`purpose:'export'` |
+| **6** | **配置包导出器**（§4 的 `walkClosure`） | 本 RFC 新写，若照现有冻结器那样先把名字收进 `Set/Map`（`closure.ts:162`）就会重蹈覆辙 | 按边解析；**完整元组见下** |
+
+**导出 resolver 的完整实例**（R10 补齐——v11 只填了 `purpose`）：
+
+```ts
+{ purpose: 'export', onMissing: 'dangle', failureOwner: 'caller' }
+```
+
+- `onMissing:'dangle'` —— 与 AC-7b 一致：name 域零匹配 / 全不可见都产出**逐字节相同**的
+  dangling 结果，导出**成功**。
+- `failureOwner:'caller'` —— 导出没有 node_run / wrapper，失败由 HTTP 调用方承担。
+  典型触发：目标行存在但 definition 读不出来（现有冻结器把它映射成 missing，
+  `execution/closure.ts:226-235`）。
+
+**dangling 在产物里的表示**（此前未定义）：
+
+| 位置 | 形态 |
+|---|---|
+| bundle payload | 保留 **`name:<type>/<name>`** late-bound 形态（不写 id cache） |
+| `manifest.ambiguousCallRefs` | `{fromKey, nodeId, name, candidateCount: 0, chosenKey: null}` |
+| `README.md` | 「以下 call 目标在本实例未解析，导入后需自行提供」警示段 |
 
 **第 6 条是本 RFC 自己造的**（R9-P1-2）：我在同一份设计里既加了
 `package-duplicate-resource-name` 去重门，又写了一个按名字折叠的闭包遍历器。可复现：W1/W2
@@ -371,11 +410,12 @@ export const BundleSchema = z.object({
 （**external 形态的 rootRef 不算悬空**）、`rootRef` 为 external 但缺 `rootType`、
 `name:` 出现在 call 目标槽之外的槽位（R4-P2-9）。
 
-**槽位分层**（R4-P2-9）：不存在一个「全局都能用」的 `BundleRefSchema`。三个子 schema：
+**槽位分层**（R4-P2-9 / R10 补第四个）：不存在一个「全局都能用」的 `BundleRefSchema`。**四个**子 schema：
 
 | 子 schema | 允许形态 | 用在 |
 |---|---|---|
-| `BundleIdentityRefSchema` | `local:` \| `external:` | agent 的 `dependsOn` / `mcp` / `plugins` / `skills`，工作组成员，工作流 `agentRef` |
+| `BundleIdentityRefSchema` | `local:` \| `external:` | agent 的 `dependsOn` / `mcp` / `plugins`，工作组成员，工作流 `agentRef` |
+| **`BundleAgentSkillRefSchema`** | `local:` \| `external:` \| **`project:`** | **仅** agent 的 `skills` 槽（§1.1b'） |
 | `BundleCallRefSchema` | `local:` \| `external:` \| **`name:`** | 仅 `call-workflow` / `call-workgroup` 的目标槽 |
 | `BundleExternalRefSchema` | 仅 `external:` | update op 的 `target` |
 

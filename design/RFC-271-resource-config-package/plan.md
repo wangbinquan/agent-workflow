@@ -21,7 +21,7 @@ parser」。批次 A′ 只保留 **scheduler / runtime wiring**（可独立回�
   schema 并产出一份最终 wire 字段表**（R4-P2-10：plugin 正式字段是 `options`、intent 版是
   `optionsJson`，两处规范打架会让 exporter/importer 各按一处实现 ⇒ 严格 parse 失败或选项丢失）（不是只列相对 `Intent*Payload` 的差异）。已知两个缺口必须补：agent 的
   `network:'allow'|'deny'`（`agent.ts:267`）、技能文件路径的 Unicode 支持（intent 版只许
-  ASCII，正式写路径只要求相对不越界）。引用槽一律 `BundleRef`；工作组人类成员补 `username`；
+  ASCII，正式写路径只要求相对不越界）。引用槽按**四个域**各取其一（agent 的 `skills` 用 `BundleAgentSkillRef`）；工作组人类成员补 `username`；
   技能文件改外部载体引用。
 - **T3** `shared/src/bundle/op.ts`：`BUNDLE_OP_KINDS` + **12 分支严格 discriminated union**
   （design §1.3 已给规范代码，照抄）（create 必须有 slug、禁 target/expect；update 必须
@@ -83,6 +83,9 @@ parser」。批次 A′ 只保留 **scheduler / runtime wiring**（可独立回�
   ——**不能只用 nodeId**，节点 id 只在单份 definition 内唯一）；**三个消费者**
   （`scheduler.ts:2966-2968` ×2 + **`childClosureSubset` `closure.ts:103-131`**）全部双读
   v1/v2；grants+row+members 同一 `dbTxSync` 快照。
+- **T6f2** 三条语境回归（R10-P2-N2 点名）：①保存者与启动者不同 → 保存期 advisory 结果与
+  启动绑定可以不同且不报错；②根启动**只解析一次**（同一 frozen result 既校验又执行）；
+  ③父冻结 G1 后 live 改成 G2 → 子任务仍校验 **G1**（禁止重查 live）。
 - **T6g** 测试：六个域的正反例（跨域形态必须 parse 失败）、五条解析契约属性、
   **wire 零变更的字节级断言**（`$new:` / `res#type#n` / selector `type` / 裸 ULID 逐字不变）、
   四处 scheduler 失败归属各一条、v1/v2 双读 × 三消费者、跨 definition 同名 nodeId 不覆盖。

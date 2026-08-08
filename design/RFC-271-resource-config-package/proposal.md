@@ -187,8 +187,8 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 
 - **AC-B1** `ResourceBundle` 表达覆盖六类资源，且**不含任何场景特有字段**（无 session
   handle、无 intent 用语、无包路径）。
-- **AC-B2** 引用槽只接受 `BundleRef`（bundle 内 `local:<slug>` 或 provider 解析的
-  `external:<token>`）；裸 id / 裸 name 出现在 payload 里 → parse 失败。
+- **AC-B2** 引用槽只接受该槽所属域的形态（四个域见 design §1.3）；裸 id / 裸 name 出现在
+  payload 里 → parse 失败。
 - **AC-B2c** 🆕 **统一引用模型**（决策 29）：`ResourceRef` 是**唯一**的「怎么指向一个资源」，
   六个域各取一个形态子集。**跨域使用必须 parse 失败**（如 `name` 形态出现在 agent 的
   `dependsOn`）。
@@ -200,12 +200,17 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
   ——直接 throw 会被 `runScope` 冒泡成任务级 `scheduler error`，丢掉 node/wrapper 归属。
   `freezeCallClosure` 是 `CallRef` 域的 resolver 实例，不是独立实现。
 - **AC-B2g** 🆕 **边身份契约**：所有 call 图操作走 `resolveEdge(sourceWorkflowId, CallRef)`,
-  **五个消费者同源**（冻结生成 / scheduler 主消费 ×2 / `childClosureSubset` /
-  `detectCallCycles` / validator 闭包装载与端口推导）。
+  **六个消费者同源**（冻结生成 / scheduler 主消费 ×2 / `childClosureSubset` /
+  `detectCallCycles` / validator 闭包装载与端口推导 / **配置包导出器**）。
+  导出实例逐字为 `{purpose:'export', onMissing:'dangle', failureOwner:'caller'}`。
   ⚠️ validator 的注释写明「与启动绑同一行」是不变量——决策 28 改了启动判据就**必须**一起改
   validator，否则同名双 id 场景下预览与启动绑不同的行。
-- **AC-B2h** 🆕 agent 的 `skills` 槽用专属 codec `BundleIdentityRef | ProjectSkillRef`；
-  `project-skill` **只在该槽**合法。⚠️ 否则一个今天合法可跑的代理（含 `{kind:'project'}`
+- **AC-B2h** 🆕 agent 的 `skills` 槽用**第四个**专属 codec `BundleAgentSkillRef`
+  （`local:` / `external:` / **`project:<name>`**），`project-skill` **只在该槽**合法。
+  **project 是非资源叶子**：不入 `walkClosure` 队列、不查 row/ACL、不进 `(type,name)` 去重门，
+  只产出 payload 边 + 去重后的 `requirements.projectSkills`。
+  managed 的编码规则：闭包内 → `local:<slug>`；**builtin / `__system__` → `external:builtin/<type>/<name>`**
+  （导入按名字绑本地内置件，本地没有则预检页报错）。⚠️ 否则一个今天合法可跑的代理（含 `{kind:'project'}`
   技能）**无法 round-trip**——`external:` 兜不住它（无资源行可解析）。
 - **AC-B2f** 🆕 **调度器不再裸读字段**：`scheduler.ts` 四处 `agentId` 直读收成一个
   `RuntimeRef` resolver；配一条守卫防止下一个 NodeKind 再抄第五份。
