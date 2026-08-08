@@ -87,6 +87,22 @@ const NO_PORTS: DeclaredPorts = Object.freeze({
 })
 
 /**
+ * The call-workflow selector as authored. RFC-271 T6e（决策 28）—— 解析规则
+ * （id hint 优先、且仅当该行**仍带这个名字**时才采信，否则回退名字规则）归
+ * **resolver 自己**所有，调用点只负责把选择器原样递过去。
+ *
+ * 此前是 `(nameOrId: string)`，于是每个调用点各自决定先试哪个：deriver 与前端
+ * 解析器都写死 name 优先，而启动冻结（`closure.ts`）是 id 优先 ⇒ 同名双 id 时
+ * **编辑器按 W1 推端口、启动按 W2 执行**（design §1.1c''' 可复现例）。
+ */
+export interface WorkflowRefSelector {
+  /** Authoritative selector. */
+  name?: string
+  /** Resolution cache (the row the author actually picked). */
+  id?: string
+}
+
+/**
  * RFC-243 §5.2 — resolver for call-workflow port derivation. Returns the
  * referenced workflow's definition, `'forbidden'` when the caller may not see
  * it (grandfathered reference without a use-grant — Inspector shows an
@@ -94,7 +110,7 @@ const NO_PORTS: DeclaredPorts = Object.freeze({
  * pre-RFC-243 call site keeps its 3-arg shape and call-workflow simply
  * declares no ports there.
  */
-export type WorkflowByRef = (nameOrId: string) => WorkflowDefinition | 'forbidden' | null
+export type WorkflowByRef = (ref: WorkflowRefSelector) => WorkflowDefinition | 'forbidden' | null
 
 interface DeriverCtx {
   node: WorkflowNode
@@ -106,6 +122,17 @@ interface DeriverCtx {
 function readString(node: WorkflowNode, key: string): string | undefined {
   const v = (node as unknown as Record<string, unknown>)[key]
   return typeof v === 'string' ? v : undefined
+}
+
+/** The selector a call-workflow node authored, as-is. Empty strings drop out so
+ *  a resolver never has to distinguish `''` from absent. */
+export function callWorkflowSelector(node: WorkflowNode): WorkflowRefSelector {
+  const name = readString(node, 'workflowName')
+  const id = readString(node, 'workflowId')
+  return {
+    ...(name !== undefined && name.length > 0 ? { name } : {}),
+    ...(id !== undefined && id.length > 0 ? { id } : {}),
+  }
 }
 
 /** `{ name: string }[]`-ish field reader (output.ports / loop.outputBindings /
@@ -244,8 +271,7 @@ const PORT_DERIVERS = {
   // ports — callers render edge-derived fallbacks and the validator
   // degrades per design §5.2.
   'call-workflow': ({ node, workflowByRef }: DeriverCtx): DeclaredPorts => {
-    const ref = readString(node, 'workflowName') ?? readString(node, 'workflowId')
-    const child = ref !== undefined ? (workflowByRef?.(ref) ?? null) : null
+    const child = workflowByRef?.(callWorkflowSelector(node)) ?? null
     if (child === null || child === 'forbidden') return NO_PORTS
     const dataInputs: DeclaredPort[] = []
     for (const input of child.inputs) {

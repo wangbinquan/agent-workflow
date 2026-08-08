@@ -84,10 +84,16 @@ export interface CallCycleReport {
  * DFS three-color cycle detection over the call graph starting at `root`.
  * Deterministic: children visited in declaration order; each distinct cycle
  * is reported once (keyed by its id multiset entry point).
+ *
+ * RFC-271 T6e（决策 28）—— resolver 收的是**整条边**（`ref` + 它所在定义的
+ * `sourceWorkflowId`），不再是裸名字。名字不是身份：同一张图里两个同名
+ * selector 可以分别指向 W1/W2，按名解析必然走错一支 ⇒ **放过真实的环**
+ * （根 R 有 c1→W1、c2→W2 且 W2→R，按名解析只看得见 W1 那支）。
+ * 三色状态仍按**行 id** 记，因为图的顶点是工作流行而不是边。
  */
 export function detectCallCycles(
   root: { id: string; definition: WorkflowDefinition },
-  resolve: (name: string) => ResolvedWorkflowRef,
+  resolve: (ref: WorkflowCallRef, sourceWorkflowId: string) => ResolvedWorkflowRef,
 ): CallCycleReport {
   const cycles: string[][] = []
   const unresolved = new Set<string>()
@@ -98,7 +104,7 @@ export function detectCallCycles(
     state.set(id, 'gray')
     stack.push(id)
     for (const ref of collectWorkflowCallRefs(definition)) {
-      const child = resolve(ref.workflowName)
+      const child = resolve(ref, id)
       if (child === null || child === 'forbidden') {
         unresolved.add(ref.workflowName)
         continue

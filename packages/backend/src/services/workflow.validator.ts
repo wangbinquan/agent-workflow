@@ -51,6 +51,7 @@ import {
   isTriggerContextVar,
   analyzeWorkflowScopeTree,
   buildNodeAgentLookup,
+  callWorkflowSelector,
   canonicalJson,
   CLARIFY_SOURCE_PORT_NAME,
   collectWorkflowCallRefs,
@@ -83,6 +84,8 @@ import {
   tryParseKind,
   UPLOAD_ON_CONFLICT,
   WorkflowDefinitionSchema,
+  type WorkflowByRef,
+  type WorkflowRefSelector,
 } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
 import { asc, inArray } from 'drizzle-orm'
@@ -204,55 +207,126 @@ async function loadCallWorkgroupNames(
   return new Set(rows.map((r) => r.name))
 }
 
+/**
+ * RFC-271 T6e（决策 28）—— validator 侧的**唯一**解析规则，与启动冻结
+ * （`execution/closure.ts:freezeCallClosure`）逐条同构：
+ *
+ *   ① id hint 命中、**且该行仍带选择器里的名字** ⇒ 用它（用户在下拉里挑的那个）；
+ *   ② 否则回退名字规则（最老 ULID 胜，由 `loadCallWorkflowClosure` 定夺）。
+ *
+ * ⚠️ 名字守卫不是可选项：少了它，rename + recreate 会让节点被 stale id 静默重绑。
+ * ⚠️ 本规则是 **advisory**（design §1.1c''' 三语境表）：`loadWorkflowValidationContext`
+ * 不收 Actor、查所有同名行，而冻结器按**启动者**的可见性过滤 ⇒ 跨 actor 时
+ * 「编辑器与启动绑同一行」根本不可能成立，也不该被当成不变量断言。
+ */
+function pickCallWorkflowRow(
+  closure: ReadonlyMap<string, ValidatorWorkflowRef>,
+  ref: WorkflowRefSelector,
+): ValidatorWorkflowRef | undefined {
+  if (ref.id !== undefined) {
+    const hinted = closure.get(ref.id)
+    if (hinted !== undefined && (ref.name === undefined || hinted.name === ref.name)) return hinted
+  }
+  if (ref.name === undefined) return undefined
+  return closure.get(ref.name)
+}
+
+function resolverOverClosure(closure: ReadonlyMap<string, ValidatorWorkflowRef>): WorkflowByRef {
+  return (ref) => pickCallWorkflowRow(closure, ref)?.definition ?? null
+}
+
 async function loadCallWorkflowClosure(
   db: DbClient,
   definition: WorkflowDefinition,
 ): Promise<ReadonlyMap<string, ValidatorWorkflowRef>> {
-  const resolvedByName = new Map<string, ValidatorWorkflowRef>()
-  const queried = new Set<string>()
-  let frontier = [...new Set(collectWorkflowCallRefs(definition).map((r) => r.workflowName))]
+  const parseRow = (row: {
+    id: string
+    name: string
+    definition: string
+  }): ValidatorWorkflowRef | null => {
+    try {
+      const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(row.definition))
+      if (!parsed.success) return null // unreadable ⇒ treated as unresolvable
+      return { id: row.id, name: row.name, definition: parsed.data }
+    } catch {
+      return null
+    }
+  }
+  const columns = {
+    id: workflowsTable.id,
+    name: workflowsTable.name,
+    definition: workflowsTable.definition,
+  }
+
+  const byId = new Map<string, ValidatorWorkflowRef>()
+  const nameWinner = new Map<string, ValidatorWorkflowRef>()
+  // RFC-271 T6e：BFS 的单位是**选择器**（name + 可选 idHint），不是裸名字——
+  // 同名两个节点分别 hint W1/W2 时，两支都要各自展开。
+  type Selector = { name: string; id?: string }
+  const selKey = (s: Selector): string => `${s.id ?? ''}#${s.name}`
+  const refToSelector = (r: { workflowName: string; workflowId?: string }): Selector => ({
+    name: r.workflowName,
+    ...(r.workflowId !== undefined ? { id: r.workflowId } : {}),
+  })
+  let frontier: Selector[] = collectWorkflowCallRefs(definition).map(refToSelector)
+  const seen = new Set<string>()
+  const queriedNames = new Set<string>()
+  const queriedIds = new Set<string>()
+
   while (frontier.length > 0) {
-    const wanted = frontier.filter((name) => !queried.has(name))
-    if (wanted.length === 0) break
-    for (const name of wanted) queried.add(name)
-    const rows = await db
-      .select({
-        id: workflowsTable.id,
-        name: workflowsTable.name,
-        definition: workflowsTable.definition,
-      })
-      .from(workflowsTable)
-      .where(inArray(workflowsTable.name, wanted))
-      .orderBy(asc(workflowsTable.id))
-    // Duplicate names resolve DETERMINISTICALLY: oldest row (lowest ULID)
-    // wins, first-wins per name — the exact rule freezeCallClosure applies,
-    // so editor preview and launch bind the same row.
-    const byName = new Map<string, (typeof rows)[number]>()
-    for (const r of rows) if (!byName.has(r.name)) byName.set(r.name, r)
-    const nextFrontier: string[] = []
-    for (const name of wanted) {
-      const row = byName.get(name)
-      if (row === undefined) continue // dangling ref → 4f `call-workflow-ref-missing`
-      let parsedDefinition: WorkflowDefinition
-      try {
-        const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(row.definition))
-        if (!parsed.success) continue // unreadable ⇒ treated as unresolvable
-        parsedDefinition = parsed.data
-      } catch {
-        continue
-      }
-      resolvedByName.set(name, { id: row.id, name: row.name, definition: parsedDefinition })
-      for (const ref of collectWorkflowCallRefs(parsedDefinition)) {
-        nextFrontier.push(ref.workflowName)
+    const pending = frontier.filter((s) => !seen.has(selKey(s)))
+    if (pending.length === 0) break
+    for (const s of pending) seen.add(selKey(s))
+
+    const wantNames = [...new Set(pending.map((s) => s.name))].filter((n) => !queriedNames.has(n))
+    const wantIds = [...new Set(pending.flatMap((s) => (s.id !== undefined ? [s.id] : [])))].filter(
+      (i) => !queriedIds.has(i),
+    )
+    for (const n of wantNames) queriedNames.add(n)
+    for (const i of wantIds) queriedIds.add(i)
+
+    if (wantNames.length > 0) {
+      const rows = await db
+        .select(columns)
+        .from(workflowsTable)
+        .where(inArray(workflowsTable.name, wantNames))
+        .orderBy(asc(workflowsTable.id))
+      // Duplicate names resolve DETERMINISTICALLY: oldest row (lowest ULID)
+      // wins, first-wins per name — the fallback rule freezeCallClosure applies
+      // when a node carries no usable id hint.
+      for (const row of rows) {
+        const ref = parseRow(row)
+        if (ref === null) continue
+        if (!nameWinner.has(ref.name)) nameWinner.set(ref.name, ref)
       }
     }
-    frontier = [...new Set(nextFrontier)]
+    if (wantIds.length > 0) {
+      const rows = await db.select(columns).from(workflowsTable).where(inArray(columns.id, wantIds))
+      for (const row of rows) {
+        const ref = parseRow(row)
+        if (ref !== null) byId.set(ref.id, ref)
+      }
+    }
+
+    const nextFrontier: Selector[] = []
+    for (const sel of pending) {
+      const hinted = sel.id !== undefined ? byId.get(sel.id) : undefined
+      const ref =
+        hinted !== undefined && hinted.name === sel.name ? hinted : nameWinner.get(sel.name)
+      if (ref === undefined) continue // dangling ref → 4f `call-workflow-ref-missing`
+      byId.set(ref.id, ref)
+      for (const child of collectWorkflowCallRefs(ref.definition)) {
+        nextFrontier.push(refToSelector(child))
+      }
+    }
+    frontier = nextFrontier
   }
+
   // id keys first, then name keys — a (pathological) name equal to another
   // row's id resolves to the name entry, matching the authoritative selector.
   const out = new Map<string, ValidatorWorkflowRef>()
-  for (const ref of resolvedByName.values()) out.set(ref.id, ref)
-  for (const [name, ref] of resolvedByName) out.set(name, ref)
+  for (const ref of byId.values()) out.set(ref.id, ref)
+  for (const [name, ref] of nameWinner) out.set(name, ref)
   return out
 }
 
@@ -556,20 +630,13 @@ export function validateWorkflowDef(
   // RFC-243 §5.4 — call-workflow resolver over the pre-loaded closure
   // (`loadWorkflowValidationContext(db, candidate)`). Kept as a nullable
   // function so `declaredPorts` receives the exact `workflowByRef` shape the
-  // shared deriver expects; `callChildResolved` mirrors the deriver's ref
-  // choice (name first, id cache second) so the severity of rule-2 edge
-  // checks always matches the ports that were actually derived.
+  // shared deriver expects; `callChildResolved` reuses the SAME resolver (not a
+  // hand-rolled mirror of it) so the severity of rule-2 edge checks always
+  // matches the ports that were actually derived.
   const callWorkflows = ctx.callWorkflows
-  const workflowByRef =
-    callWorkflows === undefined
-      ? undefined
-      : (nameOrId: string): WorkflowDefinition | null =>
-          callWorkflows.get(nameOrId)?.definition ?? null
-  const callChildResolved = (node: WorkflowDefinition['nodes'][number]): boolean => {
-    if (workflowByRef === undefined) return false
-    const ref = readString(node, 'workflowName') ?? readString(node, 'workflowId')
-    return ref !== undefined && workflowByRef(ref) !== null
-  }
+  const workflowByRef = callWorkflows === undefined ? undefined : resolverOverClosure(callWorkflows)
+  const callChildResolved = (node: WorkflowDefinition['nodes'][number]): boolean =>
+    workflowByRef !== undefined && workflowByRef(callWorkflowSelector(node)) !== null
 
   // Stable node identity is a scheduler invariant, not a canvas nicety. A
   // duplicate id used to survive validation, then `new Map(nodes.map(...))`
@@ -2706,7 +2773,13 @@ export function validateWorkflowDef(
         })
         continue
       }
-      const childRef = callWorkflows.get(workflowName)
+      // RFC-271 T6e：走**同一条** resolver（id hint 优先 + 名字守卫），否则本段的
+      // 端口 / 输入形状检查会拿 W1 去校验一个实际会绑到 W2 的节点。
+      const resolvedChild = workflowByRef?.(callWorkflowSelector(node)) ?? null
+      const childRef =
+        resolvedChild === null || resolvedChild === 'forbidden'
+          ? undefined
+          : { definition: resolvedChild }
       if (childRef === undefined) {
         issues.push({
           code: 'call-workflow-ref-missing',
@@ -2787,8 +2860,14 @@ export function validateWorkflowDef(
     // re-reported here.
     if (callWorkflows !== undefined && collectWorkflowCallRefs(def).length > 0) {
       const rootId = ctx.currentWorkflow?.id ?? '__workflow-under-validation__'
-      const report = detectCallCycles({ id: rootId, definition: def }, (name) => {
-        const ref = callWorkflows.get(name)
+      // RFC-271 T6e：按**整条边**解析（selector 自带 id hint），不再按裸名字。
+      // 按名字取会让同名双 id 的其中一支被另一支替身 ⇒ **看不见真实的环**
+      // （根 R 有 c1→W1、c2→W2 且 W2→R，按名只看得见 W1 那支）。
+      const report = detectCallCycles({ id: rootId, definition: def }, (callRef) => {
+        const ref = pickCallWorkflowRow(callWorkflows, {
+          name: callRef.workflowName,
+          ...(callRef.workflowId !== undefined ? { id: callRef.workflowId } : {}),
+        })
         return ref === undefined ? null : { id: ref.id, definition: ref.definition }
       })
       for (const cycle of report.cycles) {

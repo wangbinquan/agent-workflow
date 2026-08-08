@@ -15,7 +15,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import type { Agent, Workflow, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type {
+  Agent,
+  Workflow,
+  WorkflowByRef,
+  WorkflowDefinition,
+  WorkflowNode,
+} from '@agent-workflow/shared'
 import i18n from '../src/i18n'
 import {
   buildPalette,
@@ -82,7 +88,11 @@ const SELF_WF = workflowRow('wf-self', 'self-wf', {
   edges: [],
 } as unknown as WorkflowDefinition)
 
-const RESOLVER = (ref: string) => (ref === 'child-wf' || ref === 'wf-child' ? CHILD_DEF : null)
+// RFC-271 T6e：resolver 收整条选择器（name + 可选 id hint），不再是裸字符串。
+// 桩保持「名字或 id 命中即解析」的原语义——本文件锁的是端口推导，不是解析优先级
+// （那条由 `rfc271-call-selector-resolution.test.tsx` 专门锁）。
+const RESOLVER: WorkflowByRef = (ref) =>
+  ref.name === 'child-wf' || ref.name === 'wf-child' || ref.id === 'wf-child' ? CHILD_DEF : null
 
 function callNode(extra: Record<string, unknown> = {}): WorkflowNode {
   return {

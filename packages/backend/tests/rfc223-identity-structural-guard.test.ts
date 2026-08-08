@@ -120,9 +120,6 @@ const EXACT_ALLOWANCE_ROWS = [
   // node-authored `workflowName` portable selector (agentName precedent) to
   // stable ids + frozen definitions — the same boundary the launch freeze
   // (services/execution/closure.ts freezeCallClosure) crosses.
-  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fCallExpression:dd1289bbe947439ca8c2\u001f1\u001fportable-selector\u001fbyName.get(name)',
-  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fCallExpression:e244bad43cbbe60ef6df\u001f1\u001fportable-selector\u001fresolvedByName.set(name, { id: row.id, name: row.name, definition: parsedDefinition })',
-  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fNewExpression:e471fa71736153b63b0a\u001f1\u001fportable-selector\u001fnew Set(collectWorkflowCallRefs(definition).map((r) => r.workflowName))',
   'collection-name-identity\u001fpackages/backend/src/services/resourceRefs.ts\u001fextractWorkflowWorkgroupRefs\u001fNewExpression:275f20bc217e74b5e3ba\u001f1\u001fportable-selector\u001fnew Set(collectWorkgroupCallRefs(defn).map((ref) => ref.workgroupName))',
   'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkgroupNames\u001fNewExpression:2a12e7f1780ab2e96ac3\u001f1\u001fportable-selector\u001fnew Set(collectWorkgroupCallRefs(definition).map((r) => r.workgroupName))',
   'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkgroupNames\u001fNewExpression:2cc6f17218adcaf9829a\u001f1\u001fportable-selector\u001fnew Set(rows.map((r) => r.name))',
@@ -131,16 +128,13 @@ const EXACT_ALLOWANCE_ROWS = [
   // RFC-243 实现门 P0-1 — the id-cache-first hint map: the node's cached
   // workflowId is honored only when that row still bears the selector NAME,
   // and the name fallback is visibility-fenced (see closure.ts).
-  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:3f701ec7e535cf39181b\u001f1\u001fportable-selector\u001fidHintByName.get(name)',
-  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:6aaf3d713e00bc20c93a\u001f1\u001fportable-selector\u001fidHintByName.set(r.workflowName, r.workflowId)',
-  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:f615cea2c8ebd9f44567\u001f1\u001fportable-selector\u001fidHintByName.has(ref.workflowName)',
-  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:f6483c5b3337f8b8b880\u001f1\u001fportable-selector\u001fidHintByName.set(ref.workflowName, ref.workflowId)',
   // RFC-243 PR-4 — workgroup-leaf closure freeze name surfaces (same
   // deterministic oldest-ULID selector rule as the workflow side).
+  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:018216e6416c703e0a7a\u001f1\u001fportable-selector\u001fnew Set(workgroupEdges.map((e) => e.ref.workgroupName))',
+  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:501cdb0ec5ac157ec1e8\u001f1\u001fportable-selector\u001fnew Set(pending.map((e) => e.ref.workflowName))',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:02a5932b1082cf8c9639\u001f1\u001fportable-selector\u001frowByName.get(name)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:cc5f8d207780b450171f\u001f1\u001fportable-selector\u001frowByName.set(r.name, r)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:fb48c4e605ca4f31e9b4\u001f1\u001fportable-selector\u001frowByName.has(r.name)',
-  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:706b83acba3567b64491\u001f1\u001fportable-selector\u001fnew Set(rootWorkgroupRefs.map((r) => r.workgroupName))',
   'collection-name-identity\u001fpackages/shared/src/workflowCalls.ts\u001fcollectExecutionRefs\u001fNewExpression:017208639753c8f14b05\u001f1\u001fportable-selector\u001fnew Set(collectWorkgroupCallRefs(defn).map((r) => r.workgroupName))',
   // RFC-253: the key here is a workflow PORT name, not a resource name — it is
   // the protocol identifier the envelope itself carries and the only thing a
@@ -152,7 +146,6 @@ const EXACT_ALLOWANCE_ROWS = [
   "frontend-name-key\u001fpackages/frontend/src/components/changes/ChangeReviewPanel.tsx\u001fChangeReviewPanel\u001fPropertyAssignment:171b1272fff0e7d321b3\u001f1\u001fcode-symbol\u001fqueryKey: [ 'codeIntel', taskId, repoKeyWire(menu?.params.repo ?? ''), menu?.params.path, menu?.params.side, menu?.params.line, menu?.params.col, menu?.params.name, engineMode, structural.data?.contentDigest ?? '', // snapshot hint (F-16) ]",
   "frontend-name-key\u001fpackages/frontend/src/components/code/SourcePane.tsx\u001fSourcePane\u001fPropertyAssignment:6010ade8882f9ffd5ff3\u001f1\u001fcode-symbol\u001fqueryKey: [ 'codeIntel', taskId, repoKeyWire(current.repoKey), current.filePath, menu?.params.side, menu?.params.line, menu?.params.col, menu?.params.name, engineMode, 'pane', data?.contentDigest ?? '', // snapshot hint (impl-gate P1-1 / F-",
   'frontend-name-key\u001fpackages/backend/src/services/scriptPorts.ts\u001fextractScriptPorts\u001fBinaryExpression:f2e0585546fad134fd5c\u001f1\u001fportable-selector\u001fports[name] = content',
-  'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fBinaryExpression:b7eb66bf361458a26852\u001f1\u001fportable-selector\u001ffrozenWorkgroups[name] = { id: row.id, version: row.version, group }',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fkeepWorkgroupsOf\u001fBinaryExpression:f7a5f661ceac0065c5fe\u001f1\u001fportable-selector\u001fkept.workgroups[ref.workgroupName] = g',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fparseCallClosure\u001fBinaryExpression:0dfb50f5c2f57f92e91c\u001f1\u001fportable-selector\u001fout.workgroups[name] = { id: r.id, version: r.version, group: r.group }',
   // RFC-243 PR-3 — call-node name-selector surfaces (closure freeze /
@@ -161,20 +154,15 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:9ffabec59513ccd0a313\u001f1\u001fportable-selector\u001fbyName.set(r.name, r)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:a3a4376981d17c0b23bb\u001f1\u001fportable-selector\u001fbyName.has(r.name)',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:dd1289bbe947439ca8c2\u001f1\u001fportable-selector\u001fbyName.get(name)',
-  'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:0f9ad456aeefa123f140\u001f1\u001fportable-selector\u001fnew Set(rootRefs.map((r) => r.workflowName))',
   'collection-name-identity\u001fpackages/backend/src/services/resourceRefs.ts\u001fextractWorkflowWorkflowRefs\u001fNewExpression:c1af3dd799b7b0c5fa6c\u001f1\u001fportable-selector\u001fnew Set(collectWorkflowCallRefs(defn).map((ref) => ref.workflowName))',
   'collection-name-identity\u001fpackages/backend/src/services/resourceRefs.ts\u001fgroupRowsByName\u001fCallExpression:1878291824ac3d8a428d\u001f1\u001fportable-selector\u001fbyName.set(row.name, [row])',
   'collection-name-identity\u001fpackages/backend/src/services/resourceRefs.ts\u001fgroupRowsByName\u001fCallExpression:a68e1be588b0b8918920\u001f1\u001fportable-selector\u001fbyName.get(row.name)',
-  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fCallExpression:9ffabec59513ccd0a313\u001f1\u001fportable-selector\u001fbyName.set(r.name, r)',
-  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fCallExpression:a3a4376981d17c0b23bb\u001f1\u001fportable-selector\u001fbyName.has(r.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/workflow.validator.ts\u001floadCallWorkflowClosure\u001fNewExpression:b1075b709396bb5035e8\u001f1\u001fportable-selector\u001fnew Set(pending.map((s) => s.name))',
+  'collection-name-identity\u001fpackages/frontend/src/components/canvas/useWorkflowRefResolver.ts\u001fuseWorkflowRefResolver\u001fCallExpression:16b484cc43537d9abd79\u001f1\u001fportable-selector\u001fworkflows.find((w) => w.name === ref.name)',
   'collection-name-identity\u001fpackages/frontend/src/components/canvas/inspector/CallWorkflowEdit.tsx\u001fCallWorkflowEdit\u001fCallExpression:f74de0867559d90020c9\u001f1\u001fportable-selector\u001fcandidates.find((w) => w.name === refName)',
-  'collection-name-identity\u001fpackages/frontend/src/components/canvas/useWorkflowRefResolver.ts\u001fuseWorkflowRefResolver\u001fCallExpression:d62dfab769d04d37dc55\u001f1\u001fportable-selector\u001fworkflows.find((w) => w.name === nameOrId)',
   'collection-name-identity\u001fpackages/shared/src/workflowCalls.ts\u001fcollectExecutionRefs\u001fNewExpression:02f50f53ee060c201eb3\u001f1\u001fportable-selector\u001fnew Set(collectWorkflowCallRefs(defn).map((r) => r.workflowName))',
-  'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fchildClosureSubset\u001fBinaryExpression:396b9fc963e0a714216b\u001f1\u001fportable-selector\u001fkept.workflows[name] = ref',
-  'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fBinaryExpression:0d100ea4e71d12f49ee1\u001f1\u001fportable-selector\u001fclosure.workflows[name] = ref',
   'frontend-name-key\u001fpackages/backend/src/services/execution/closure.ts\u001fparseCallClosure\u001fBinaryExpression:78cd6ddf35cd8b0056e2\u001f1\u001fportable-selector\u001fout.workflows[name] = { id: r.id, version: r.version, definition: def.data }',
   'frontend-name-key\u001fpackages/frontend/src/components/canvas/inspector/CallWorkflowEdit.tsx\u001fCallWorkflowEdit\u001fJsxAttribute:68c4bdce1d7b982e55c3\u001f1\u001fdisplay-fallback\u001fkey={name}',
-  'id-name-fallback\u001fpackages/frontend/src/components/canvas/inspector/CallWorkflowEdit.tsx\u001fCallWorkflowEdit\u001fBinaryExpression:b58954c6132d406c7d4b\u001f1\u001fdisplay-fallback\u001frefName || refId',
   'sql-name-selector\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fCallExpression:be6cb55b3879b8e8391e\u001f1\u001fportable-selector\u001finArray(workflows.name, missing)',
   'sql-name-selector\u001fpackages/backend/src/services/resourceRefs.ts\u001fassertRefsUsableInTx\u001fCallExpression:3937fae482b42f8dc11f\u001f1\u001fportable-selector\u001finArray(table.name, refs)',
   'sql-name-selector\u001fpackages/backend/src/services/resourceRefs.ts\u001fresolveRefsUsableByName\u001fCallExpression:3937fae482b42f8dc11f\u001f1\u001fportable-selector\u001finArray(table.name, refs)',
@@ -398,7 +386,28 @@ describe('RFC-223 T15 structural identity guard', () => {
     // the allowance went stale and the count returns to 140.
     // RFC-269 显式改判：140 → 144。代码平台调用节点保留四处 name 键，全部登记
     // 为 port-or-protocol-name（模板变量名 / 闭合字段枚举，不解析任何资源）。
-    expect(findings.length).toBe(144)
+    // RFC-271 T6e（决策 28）显式改判：144 → 137，**净减 7**。冻结闭包从
+    // `Record<name, ref>` 改为按**边**键控（`sourceWorkflowId#nodeId`），于是：
+    //   删 9 —— per-name last-write-wins 的 `idHintByName` 四处（它就是「同名两个
+    //     selector 分别指向 W1/W2 时至少一个选择会丢」的根因）、BFS 的两个 name
+    //     集合、以及三处「拿名字当 key 写闭包」（closure.workflows[name] /
+    //     frozenWorkgroups[name] / kept.workflows[name]）——最后这三处正是决策 28
+    //     要根除的东西。
+    //   加 2 —— 按边 BFS 仍要按名字**批量查库**（`new Set(pending.map(…))` /
+    //     `new Set(workgroupEdges.map(…))`）。它们是 SQL `IN` 的取值集合，不做
+    //     任何身份判定：选哪一行由紧随其后的 id-hint-first 判据决定。
+    // RFC-271 T6e 第二段（validator + 前端解析器同源）：137 → 132，**再净减 5**。
+    // 决策 28 要求编辑器预览与启动绑定走**同一条**判据，于是三处「各自决定先试
+    // name 还是 id」的调用点全部收口到 resolver 自己：
+    //   删 7 —— `loadCallWorkflowClosure` 里按名字 BFS 的整套落点（`byName.*` ×3、
+    //     `resolvedByName.set(name, …)`、`new Set(…map(r => r.workflowName))`）、
+    //     前端 `workflows.find(w => w.name === nameOrId)`、以及 CallWorkflowEdit
+    //     里 `refName || refId` 这个「name 优先」的调用点选择。
+    //   加 2 —— 名字**回退**路径本身（`new Set(pending.map(s => s.name))` 是 SQL
+    //     `IN` 取值集合；`workflows.find(w => w.name === ref.name)` 是 id hint 不
+    //     可用时的回退）。回退保留是**刻意**的：design §1.1c''' 写明「id hint 不
+    //     可见时保持现状 = 回退名字规则」，改成 fail-closed 属于能力收缩。
+    expect(findings.length).toBe(132)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

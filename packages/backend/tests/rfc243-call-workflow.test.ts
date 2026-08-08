@@ -829,10 +829,19 @@ describe('RFC-243 §3.1 — freezeCallClosure', () => {
     )
     const json = await freezeCallClosure(db, { id: 'W0', definition: defWithWg }, closureActor)
     expect(json).not.toBeNull()
+    // ── RFC-271 T6e 显式改判（2026-08-08）──────────────────────────────
+    // 冻结闭包由 `Record<name, ref>` 改为按**边**键控 `sourceWorkflowId#nodeId`
+    // （决策 28）：同名两个 call 节点此前落到同一条，用户在下拉里选的那个被
+    // 静默丢弃。断言的**内容不变**（同一个组、完整 roster），只是取法从名字
+    // 换成边键；节点 id 是 'cw'、source 是 'W0'。
     const parsed = JSON.parse(json!) as {
+      closureVersion?: number
       workgroups: Record<string, { id: string; group: { members: unknown[] } }>
     }
-    expect(parsed.workgroups['ghost-wg']?.id).toBe(group.id)
-    expect(parsed.workgroups['ghost-wg']?.group.members.length).toBe(1)
+    expect(parsed.closureVersion).toBe(2)
+    expect(parsed.workgroups['W0#cw']?.id).toBe(group.id)
+    expect(parsed.workgroups['W0#cw']?.group.members.length).toBe(1)
+    // 旧的按名字取法必须**取不到**——否则说明形状没真的改。
+    expect(parsed.workgroups['ghost-wg']).toBeUndefined()
   })
 })

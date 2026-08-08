@@ -2951,6 +2951,8 @@ async function runCallWorkflowNode(
   const { node, iteration } = args
   const taskRow = task as unknown as {
     refClosureJson?: string | null
+    /** RFC-271 T6e：v2 边键的 source —— 本任务正在跑的工作流 id。 */
+    workflowId?: string | null
     invocationDepth?: number | null
     parentTaskId?: string | null
     ownerUserId?: string | null
@@ -2966,11 +2968,17 @@ async function runCallWorkflowNode(
       message: 'workflow-call-ref-missing',
     }
   }
+  // RFC-271 T6e：v2 闭包按边取（source = 本任务的工作流 id + 该 call 节点 id）；
+  // v1 存量闭包由 accessor 内部回退到按名字取，**零迁移**。
+  const callSource =
+    typeof taskRow.workflowId === 'string' && taskRow.workflowId.length > 0
+      ? { workflowId: taskRow.workflowId, nodeId: node.id }
+      : undefined
   const frozen = isWorkgroupCall
     ? null
-    : frozenWorkflowFromClosure(taskRow.refClosureJson ?? null, workflowName)
+    : frozenWorkflowFromClosure(taskRow.refClosureJson ?? null, workflowName, callSource)
   const frozenGroup = isWorkgroupCall
-    ? frozenWorkgroupFromClosure(taskRow.refClosureJson ?? null, workflowName)
+    ? frozenWorkgroupFromClosure(taskRow.refClosureJson ?? null, workflowName, callSource)
     : null
   if ((isWorkgroupCall ? frozenGroup : frozen) === null) {
     return {
@@ -3856,6 +3864,9 @@ async function launchCallChild(
         refClosureJson: childClosureSubset(
           taskRow.refClosureJson ?? null,
           frozen.definition as Parameters<typeof childClosureSubset>[1],
+          // RFC-271 T6e：子集裁剪要用**子工作流自己的 id** 当 source（v2 边键）。
+          // 调用点本来就持有 frozen.id，此前只是没传进去。
+          frozen.id,
         ),
       },
     },

@@ -58,13 +58,20 @@ export function useWorkflowRefResolver(): WorkflowRefResolver {
   // payloads; the resolver must degrade to "unknown", never crash the canvas.
   const workflows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows])
   const workflowByRef = useMemo<WorkflowByRef>(
-    () => (nameOrId: string) => {
-      // Name is the authoritative selector (design §5.1); id is the local
-      // resolution cache — match name first so a rename+recreate can never
-      // silently rebind the node through a stale id.
-      const hit =
-        workflows.find((w) => w.name === nameOrId) ?? workflows.find((w) => w.id === nameOrId)
-      return hit?.definition ?? null
+    () => (ref) => {
+      // RFC-271 T6e（决策 28）—— 与启动冻结（`execution/closure.ts`）逐条同构：
+      //   ① id hint 命中、**且该行仍带选择器里的名字** ⇒ 用它（作者挑的那个）；
+      //   ② 否则回退名字规则。
+      // 名字守卫保住了这里原本 name-优先想防的那件事（rename + recreate 不得被
+      // stale id 静默重绑），同时修掉了它的代价：此前同名两个 call 节点无论各自
+      // hint 谁，都被推成同一份端口，而启动会按各自的 id 绑到不同工作流。
+      const hinted = ref.id === undefined ? undefined : workflows.find((w) => w.id === ref.id)
+      if (hinted !== undefined && (ref.name === undefined || hinted.name === ref.name)) {
+        return hinted.definition
+      }
+      if (ref.name === undefined) return null
+      // 名字回退：列表按后端顺序，取首个同名行。
+      return workflows.find((w) => w.name === ref.name)?.definition ?? null
     },
     [workflows],
   )

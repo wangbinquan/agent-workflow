@@ -75,7 +75,12 @@ export function CallWorkflowEdit({ node, workflowId, onPatch, onHistoryBoundary 
   const refMissing = refName.length > 0 && selectedId === '' && !isLoading
   const selectValue = selectedId !== '' ? selectedId : refMissing ? refName : ''
 
-  const child = refName.length > 0 || refId.length > 0 ? workflowByRef(refName || refId) : null
+  // RFC-271 T6e：把选择器原样交给 resolver（id hint 优先 + 名字守卫的规则归它），
+  // 调用点不再自己决定先试 name 还是 id。
+  const child = workflowByRef({
+    ...(refName.length > 0 ? { name: refName } : {}),
+    ...(refId.length > 0 ? { id: refId } : {}),
+  })
   const childInputs =
     child === null || child === 'forbidden'
       ? []
