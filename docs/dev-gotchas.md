@@ -174,6 +174,50 @@
 
 - **第 9 处穷尽点不受编译器保护，而且它不在代码里：`services/intent/intentDoc.ts` 的 "Supported node forms"**（2026-08-08 实测）。INTENT.md 明说这份清单是穷举的，模型据此认定「不在清单里的 kind 不存在」——RFC-253 补 `script` 时把这条机制写进了 `rfc234-intent-doc.test.ts` 的注释，但 **RFC-243（`call-workflow` / `call-workgroup`）与 RFC-269（`code-host-call`）落 `NODE_KIND` 时都没回来补**，于是意图构建器**静默地**只会写 13 种节点里的 10 种：typecheck 绿、测试绿、功能不存在。定式：新增 NodeKind 必须同时补 intentDoc，并且**守卫要按 `NODE_KIND` 枚举**而不是手抄清单（`rfc234-intent-doc.test.ts` 的 `form(kind)` 锚点即为此，锚 `{id,kind:'x'` 而不是宽松的 `kind:'x'`——后者分不清「教了」和「明确禁止」）。
 
+## 复用既有引擎 / 内核（RFC-271 三轮设计门实测）
+
+RFC-271（多资源批量落地）三轮外部设计门共 39 条 findings，**至少五条同一根因**：自造了仓里
+已有且已调试过的机制，而每次自造都恰好踩中那个机制当初为之而生的坑。这不是个人失误，是一类
+系统性错误——下面四条是它的可操作形态。
+
+- **多资源批量落地之前，先在仓里找有没有既成的 bundle / pre-stage / commit 内核**。
+  RFC-271 初稿自造了「FS 暂存 → DB 事务 → FS 原子入位」，**方向与既有内核相反**，凭空造出
+  「DB 已提交、FS 未发布」的不可收敛窗口。既有内核（RFC-234 建的）是
+  **FS 先落位但 DB 行不可见 → 一个事务里翻可见**：`stageManagedSkill`（`skill.ts:313`）的
+  契约白纸黑字写着「reserve（不可见行 + op 锁）→ 产文件 → 归档 v1，技能在
+  `commitSkillReadyInTx` 之前一直 INVISIBLE，抛错即已补偿」，而 `commitSkillReadyInTx`
+  （`skill.ts:304`）的存在理由就是「让 apply 事务把**许多** pre-staged 技能与 bundle 其余
+  部分**原子地**翻可见」，还支持**预铸 bundle id**（`meta.id`）让同 bundle 引用在 insert 前
+  就能解析。自造那条路的代价 `skill-zip.ts:415` 的注释早写清楚了：留下
+  `versionState='legacy-unbackfilled'`、无快照，**单测能过但活 daemon 上每次 create 都挂**
+  （单测环境里 RFC-170 的可用性门是关的）。
+
+- **泛化一个既有引擎前，先把它的承重不变量列成清单——逐行读实现，不要读注释**。
+  `applyChangeset.ts` 实际有 **12 条**承重不变量，而凭注释和函数签名能看见的只有六七条。
+  漏掉的那几条恰恰最要命：replay 是 **committed / failed / unsettled 三态**（不是「总是返回
+  receipt」）；claim 事务里 **duplicate 查询必须排在业务状态校验之前**（否则已 committed 的
+  重放会因为 scope 此后关闭而报错）；journal CAS `prepared→applying` **之后**必须再校验一次
+  身份（pre-stage 窗口里外部状态会变）；**DB 提交后任何 tail 异常都不得补偿、不得把 journal
+  改 failed**（`committedReceipt !== null` 是错误处理的分水岭，而写 catch 块时把补偿逻辑放
+  进去太自然了）。RFC-271 把这份核实过的清单落在
+  `design/RFC-271-resource-config-package/invariants.md`，含锚点与原文引用，可作模板。
+
+- **给模型看的 dump 投影 ≠ 可导入投影，别拿来复用**。
+  `intentSecretSlots.ts` 的 `projectMcpForDump` 输出 `oauth: '‹redacted›'` 是**字符串**，而
+  `McpRemoteConfigSchema` 要求对象或 `false`；它还把 argv 改成 `‹redacted›-arg-N`、删掉整个
+  URL query 并追加说明文字。那是**展示**投影（给模型看形状、绝不给值），复用到「要能被导入
+  回去」的产物上会同时造成密钥面错配、合法配置丢失、schema 解析失败三种后果。正解是复用它的
+  **载体知识**（`SECRET_KEY_RE` / `looksHighEntropy` / URL userinfo 判定）另写一个
+  schema-valid 的投影，并**逐 carrier 测试 + 断言脱敏后仍过各自严格 schema**——只断言「与某个
+  既有脱敏函数一致」是没用的，那只会把同一份不完整集合锁死。
+
+- **写路径的权限门可能只在路由层，新写路径不会继承它**。`commitMcpUpdateInTx`
+  （`mcp.ts:180`）只校验 `expectedConfigHash` **不校验 owner**——owner 门在
+  `routes/mcps.ts:375` 的 `requireResourceOwner`。任何绕过该路由的新写路径（批量导入、
+  CLI、后台任务）都必须自己补一遍，且要放在**真正写入的那个事务里**（检查与写入之间权属可能
+  转移）。判别定式：给内核加写路径前，先 grep 该资源现有路由里 `requireResourceOwner` /
+  `assertPrincipalCanWrite` 之类的调用，逐个确认新路径是否覆盖到。
+
 ## 给模型的 prompt 就是生产代码（RFC-234 intentDoc 实测）
 
 - **prompt 要过实现门，理由和代码一样硬**：2026-08-08 那轮 Codex 实现门报的 7 条里，两条 P1 **都在 doc 里**，不在代码里——INTENT.md 不是文档，是生成模型唯一读到的规格，一句措辞不当等价于一个 API 契约写错。

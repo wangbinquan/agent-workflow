@@ -28,9 +28,10 @@
 
 ## 批次 B · `BundleApply` 引擎（backend）
 
-**开工前先做一件事**：把 `applyChangeset.ts` 的不变量列成清单（journal 幂等键、active set +
-`CONVERGE_MIN_AGE_MS`、`bundleCreatedNames`、pre-stage 不可见、逆序补偿、启动收敛…），
-泛化后逐条对照——**丢一条就是回归**。
+**开工前置已完成**：`invariants.md` 是逐条读源码核实的 12 条清单（含锚点与原文引用）。
+批次 B 落地后按其末尾的对照表**逐条打勾**——丢一条就是回归。
+⚠️ 该表当场查出：9 条归引擎的不变量里，设计初稿只有 1 条完整；I1（scope 串行）、
+I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 
 - **T7** 迁移 + 新表 `resource_bundle_applies`（泛化自 `intent_apply_journal`）。
 - **T8** `services/bundle/provider.ts`：`BundleApplyProvider` 接口。

@@ -185,8 +185,33 @@ export interface BundleApplyProvider {
 
 ### 2.2b 不变量清单是开工前置（R3）
 
-R3 对照 `applyChangeset.ts` 列出的承重不变量**至少 13 条**，v3 的生命周期描述只覆盖 6 条。
-泛化前必须把它们逐条列出并标注「本 RFC 是否需要 / 由谁承载」：
+**已完成**：`invariants.md` 是 2026-08-08 逐条读源码核实的完整清单（12 条，含锚点与原文
+引用），**不是转述注释**。批次 B 落地后按其末尾的对照表逐条打勾。
+
+它当场查出：12 条里 9 条归引擎，而**只有 1 条（I5 pending seams）在本设计里是完整的**——
+I1 / I3 / I8 完全没写，I2 / I4 / I6 / I7 / I9 写了但缺关键细节。以下五条是本节据此补写的：
+
+- **I1 按 scope 串行**：`applyChangeset.ts:198` 的 `applyLocks` 链式 Promise 锁。
+  ⚠️ 注释明写它依赖「单 daemon 平台」，**是 in-process 锁不是跨进程锁**。
+- **I2 claim 顺序是承重的**：单事务内 `读身份（不存在与 owner 不符同形 404）` →
+  **duplicate 查询** → 业务状态校验 → provider `claimInTx` → `insert prepared`。
+  duplicate 若排在状态校验之后，一次已 committed 的重放会因为 scope 此后关闭而报错，
+  而不是返回原 receipt。
+- **I3 replay 是三态**：`committed` → 返回**原 receipt**；`failed` → 409
+  `bundle-apply-failed-replay`；`prepared`/`applying` → 409 `bundle-apply-unsettled`
+  （原文：*Refuse rather than guess*）。**本设计此前只写了三分之一。**
+- **I6 CAS 之后必须二次校验**：`revalidateInTx` 的调用时机 = journal CAS
+  `prepared→applying` **之后**、任何 commit kernel **之前**。pre-stage 窗口（npm 安装 /
+  技能 staging）里外部状态可能已变。
+- **I8 post-commit 绝不补偿**：`committedReceipt !== null` 是错误处理的分水岭——DB 已提交后
+  任何 tail 异常只记日志并原样抛出，**不得**补偿、**不得**把 journal 改 failed，由收敛重放
+  幂等尾。这是重构里最容易丢的一条（写 catch 块时把补偿逻辑放进去太自然了）。
+
+另两条细节补正：**I4** 的类型序照抄 `resolveChangeset.ts:656`
+（`skill → mcp → plugin → agent(dependsOn) → wf/wg`），别自己重排；**I9** 收敛把
+`prepared/applying` 改 `failed` 的 CAS **必须带 `state = row.state` 条件**，否则会与活事务竞争。
+
+下表是归属速查，完整证据见 `invariants.md`：
 
 | 不变量 | 锚点 | v4 归属 |
 |---|---|---|
