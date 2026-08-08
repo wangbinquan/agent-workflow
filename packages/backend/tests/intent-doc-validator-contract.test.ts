@@ -37,6 +37,8 @@ import {
 } from '@agent-workflow/shared'
 import { buildIntentDoc } from '../src/services/intent/intentDoc'
 import { validateWorkflowDef, type ValidatorContext } from '../src/services/workflow.validator'
+import { assertScriptAuthorAllowed } from '../src/services/scriptAuthorGate'
+import { assertCodeHostAuthorAllowed } from '../src/services/codeHostAuthorGate'
 
 const NONCE = 'aabbccdd11223344'
 
@@ -516,5 +518,116 @@ describe('contract: the dump masks with the same constant the doc names', () => 
 
   test('the doc quotes that same constant', () => {
     expect(withheldDoc).toContain(INTENT_REDACTED)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The one hand-written list left in the doc, bound to the gate that enforces it.
+//
+// Every other list INTENT.md renders is derived from a constant (actions from
+// CODE_HOST_ACTION_DEFS, trigger vars from TRIGGER_CONTEXT_VARS, omissions from
+// the *_REDACTED_FIELDS pairs). The "you can see it but may not edit it" list
+// cannot be: it is the DIFFERENCE between the sensitive projection and the
+// rehydrated set, and the projection's field list lives inside
+// serializeScriptSensitiveProjectionV1 rather than in an exported constant.
+//
+// So bind it behaviourally instead: for each field the doc names, changing it
+// must actually be refused by the gate. A field that drifts out of the
+// projection would make the doc a liar (we forbid what is allowed); one that
+// drifts in without being documented is caught by the reverse test below.
+// ---------------------------------------------------------------------------
+describe('contract: the see-but-do-not-touch list matches the gate', () => {
+  const actor = {
+    user: {
+      id: 'u1',
+      username: 'u1',
+      displayName: 'u1',
+      role: 'user' as const,
+      status: 'active' as const,
+    },
+    source: 'session' as const,
+    permissions: new Set<never>(),
+  }
+  const principal = { kind: 'actor' as const, actor: actor as never }
+
+  const scriptNode = {
+    id: 'sc1',
+    kind: 'script',
+    language: 'python',
+    script: 'print(1)',
+    outputs: [{ name: 'a' }],
+    dependencies: ['requests==2.32.3'],
+    env: {},
+    network: 'deny',
+    readonly: true,
+  }
+  const codeHostNode = {
+    id: 'ch1',
+    kind: 'code-host-call',
+    provider: 'gitlab',
+    action: 'comment.create',
+    params: { mr: '1', body: 'x' },
+    allowDestructive: false,
+    timeoutMs: 1000,
+  }
+
+  function defWith(node: Record<string, unknown>): WorkflowDefinition {
+    return {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [node],
+      edges: [],
+    } as unknown as WorkflowDefinition
+  }
+
+  const scriptEdits: Array<[string, Record<string, unknown>]> = [
+    ['language', { language: 'bash', dependencies: [] }],
+    ['network', { network: 'allow' }],
+    ['readonly', { readonly: false }],
+    ['outputs', { outputs: [{ name: 'b' }] }],
+  ]
+  for (const [field, patch] of scriptEdits) {
+    test(`script \`${field}\` is documented as untouchable AND the gate refuses it`, () => {
+      expect(withheldDoc).toContain(`\`${field}\``)
+      expect(() =>
+        assertScriptAuthorAllowed({
+          previous: defWith(scriptNode),
+          next: defWith({ ...scriptNode, ...patch }),
+          principal,
+        }),
+      ).toThrow()
+    })
+  }
+
+  const codeHostEdits: Array<[string, Record<string, unknown>]> = [
+    ['provider', { provider: 'github' }],
+    ['action', { action: 'mr.approve' }],
+    ['allowDestructive', { allowDestructive: true }],
+    ['timeoutMs', { timeoutMs: 2000 }],
+  ]
+  for (const [field, patch] of codeHostEdits) {
+    test(`code-host \`${field}\` is documented as untouchable AND the gate refuses it`, () => {
+      expect(withheldDoc).toContain(`\`${field}\``)
+      expect(() =>
+        assertCodeHostAuthorAllowed({
+          previous: defWith(codeHostNode),
+          next: defWith({ ...codeHostNode, ...patch }),
+          principal,
+        }),
+      ).toThrow()
+    })
+  }
+
+  // The reverse direction: a field the gate DOES rehydrate must not appear in
+  // the untouchable list, or we would be forbidding an edit the platform
+  // silently discards anyway.
+  test('rehydrated fields are never listed as untouchable', () => {
+    const untouchableSection = withheldDoc.slice(
+      withheldDoc.indexOf('editing any field you CAN see'),
+      withheldDoc.indexOf('Apply is all-or-nothing'),
+    )
+    for (const field of [...SCRIPT_REDACTED_FIELDS, ...CODE_HOST_REDACTED_FIELDS]) {
+      expect(untouchableSection).not.toContain(`\`${field}\``)
+    }
   })
 })

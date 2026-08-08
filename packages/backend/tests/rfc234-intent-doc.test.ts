@@ -724,3 +724,62 @@ describe('the omit-these-fields list is scoped to the withheld kind', () => {
     expect(doc).toMatch(/omitting it there would delete it/)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Codex round-3 P2 — scoping the FIELD LIST was not enough.
+//
+// The round-2 fix trimmed the list but left an unconditional nested example
+// ("drop the whole `env`") in place, so the mixed shape still told a script
+// AUTHOR to omit `env` — reproducing the exact silent deletion. The lesson is
+// that "does the list name this field" is too narrow an assertion for a prompt:
+// the instruction can be reintroduced by any prose that mentions the field.
+//
+// These tests therefore assert on the whole section, not on the list.
+// ---------------------------------------------------------------------------
+describe('no omission instruction may mention an AUTHORABLE kind’s fields', () => {
+  function capabilitySection(doc: string): string {
+    const start = doc.indexOf('## Capability limits (hard)')
+    expect(start).toBeGreaterThan(-1)
+    return doc.slice(start, doc.indexOf('## Payload schemas'))
+  }
+
+  test('scripts authorable + code-host withheld: the section never mentions script fields', () => {
+    const section = capabilitySection(
+      docWith({ privileges: { mayAuthorScripts: true, mayAuthorCodeHostCalls: false } }),
+    )
+    // every rehydration-only field of the AUTHORABLE kind must be absent —
+    // in the list, in the example, in any prose
+    for (const field of SCRIPT_REDACTED_FIELDS) {
+      expect(section, `script field \`${field}\` leaked into the omission guidance`).not.toContain(
+        `\`${field}\``,
+      )
+    }
+    // the withheld kind's guidance is still there, example included
+    expect(section).toContain('`params`')
+    expect(section).toMatch(/drop the whole `params`/)
+  })
+
+  test('code-host authorable + scripts withheld: the section never mentions code-host fields', () => {
+    const section = capabilitySection(
+      docWith({ privileges: { mayAuthorScripts: false, mayAuthorCodeHostCalls: true } }),
+    )
+    for (const field of CODE_HOST_REDACTED_FIELDS) {
+      expect(
+        section,
+        `code-host field \`${field}\` leaked into the omission guidance`,
+      ).not.toContain(`\`${field}\``)
+    }
+    expect(section).toContain('`env`')
+    expect(section).toMatch(/drop the whole `env`/)
+  })
+
+  test('both withheld: both examples render', () => {
+    const section = capabilitySection(docWith({ privileges: NO_PRIVILEGES }))
+    expect(section).toMatch(/drop the whole `env`/)
+    expect(section).toMatch(/drop the whole `params`/)
+  })
+
+  test('fully privileged: there is no capability-limits section to leak from', () => {
+    expect(docWith()).not.toContain('## Capability limits (hard)')
+  })
+})

@@ -204,6 +204,13 @@ ${renderCodeHostActionCatalog()}`
           kind: 'script',
           point: 'scripts:author',
           fields: SCRIPT_REDACTED_FIELDS as readonly string[],
+          // The nested example has to be scoped too, not just the field list.
+          // Codex round-3 P2: the round-2 fix trimmed the list and left an
+          // unconditional "drop the whole `env`" behind, which reproduced the
+          // very deletion the scoping exists to prevent — a script AUTHOR sees
+          // a redacted `env` (masking is permission-blind) and gets no
+          // rehydration, so omitting it deletes the stored credential.
+          nested: `a redacted \`env\` prints as \`{"NAME": "${INTENT_REDACTED}"}\` — drop the whole \`env\`, not just the value`,
         },
     mayAuthorCodeHostCalls
       ? null
@@ -211,6 +218,7 @@ ${renderCodeHostActionCatalog()}`
           kind: 'code-host-call',
           point: 'code-host-calls:author',
           fields: CODE_HOST_REDACTED_FIELDS as readonly string[],
+          nested: `a redacted \`params\` prints as \`{"mr": "${INTENT_REDACTED}"}\` — drop the whole \`params\`, not just the values`,
         },
   ].filter((entry) => entry !== null)
   // Same reasoning for the see-but-do-not-touch list: naming another kind's
@@ -310,8 +318,9 @@ carries the COMPLETE definition:
   **OMIT these WHOLE FIELDS instead of echoing the marker** — ${withheldNodeKinds
     .map((entry) => `\`${entry.fields.join('` / `')}\` on a ${entry.kind} node`)
     .join(', ')}. Leave the field out of the node object entirely; do not send it
-  emptied, and do not send the inner keys either (a redacted \`env\` prints as
-  \`{"NAME": "${INTENT_REDACTED}"}\` — drop the whole \`env\`, not just the value). Any string
+  emptied, and do not send the inner keys either (${withheldNodeKinds
+    .map((entry) => entry.nested)
+    .join('; ')}). Any string
   containing \`${INTENT_REDACTED}\` is rejected as a corrupted credential before the permission
   check is even reached, so echoing the marker fails the changeset; omitting the
   field is what tells the platform to restore the stored value. This applies ONLY
