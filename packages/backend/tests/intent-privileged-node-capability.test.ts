@@ -38,6 +38,9 @@ import { ulid } from 'ulid'
 import {
   INTENT_REDACTED,
   ROLE_PERMISSIONS,
+  SYSTEM_DOMAIN_POINTS,
+  grantableMatrixPoints,
+  resolveTokenPermissions,
   canonicalIntentJson,
   parseIntentChangeset,
   type Permission,
@@ -69,12 +72,12 @@ function actorOf(id: string, role: 'user' | 'manager' | 'admin'): Actor {
 const plain = actorOf(PLAIN, 'user')
 const boss = actorOf(BOSS, 'manager')
 
-async function seedUser(id: string): Promise<void> {
+async function seedUser(id: string, role: 'user' | 'manager' | 'admin' = 'user'): Promise<void> {
   await db.insert(users).values({
     id,
     username: id,
     displayName: id,
-    role: 'user',
+    role,
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -260,6 +263,7 @@ async function applyAs(
   actor: Actor,
   bundle: unknown,
   manifest: IntentContextManifest = [],
+  decisions: unknown[] = [],
 ): Promise<unknown> {
   const { session } = await createIntentSession(db, actor, { message: 'do a thing' })
   const draft = installDraft(session.id, bundle, manifest)
@@ -267,7 +271,7 @@ async function applyAs(
     sessionId: session.id,
     clientMutationId: ulid(),
     ...draft,
-    decisions: [],
+    decisions: decisions as never,
   })
 }
 
@@ -281,8 +285,8 @@ beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-priv-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })
-  await seedUser(PLAIN)
-  await seedUser(BOSS)
+  await seedUser(PLAIN, 'user')
+  await seedUser(BOSS, 'manager')
 })
 afterEach(() => {
   rmSync(appHome, { recursive: true, force: true })
@@ -761,5 +765,279 @@ describe('boundary: the same rules for a code-host-call node', () => {
     const node = (await storedNodes(wf.id)).find((n) => n.kind === 'code-host-call')!
     expect(node.action).toBe('mr.approve')
     expect(node.params).toEqual({ mr: '9' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The gate must not over-reach. Everything above proves it says NO in the right
+// places; this proves it stays silent everywhere else — which is the larger
+// surface by far, and the one whose breakage would make the intent builder
+// useless for ordinary users rather than merely restricted.
+//
+// Both gates short-circuit on "no node of this kind on either side"
+// (scriptAuthorGate.ts:70-75, codeHostAuthorGate.ts:54-59), so these are the
+// tests that would catch that short-circuit being lost.
+// ---------------------------------------------------------------------------
+describe('normal: the author gates do not touch ordinary work', () => {
+  test('a plain user creates an ordinary workflow', async () => {
+    const receipt = (await applyAs(
+      plain,
+      createBundle(
+        [
+          { id: 'in1', kind: 'input', inputKey: 'topic' },
+          { id: 'out1', kind: 'output', ports: [] },
+        ],
+        'ordinary-flow',
+      ),
+    )) as { applied: unknown[] }
+    expect(receipt.applied.length).toBe(1)
+    expect((await db.select().from(workflows)).length).toBe(1)
+  })
+
+  test('a plain user creates a workflow with an empty node list', async () => {
+    const receipt = (await applyAs(plain, createBundle([], 'empty-flow'))) as {
+      applied: unknown[]
+    }
+    expect(receipt.applied.length).toBe(1)
+  })
+
+  test('a plain user updates a workflow that has no privileged node', async () => {
+    const wf = await seedWorkflow('plain-flow', PLAIN, {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [{ id: 'in1', kind: 'input', inputKey: 'k' }],
+      edges: [],
+    })
+    await applyAs(
+      plain,
+      updateBundle(
+        [
+          { id: 'in1', kind: 'input', inputKey: 'k' },
+          { id: 'out1', kind: 'output', ports: [] },
+        ],
+        'plain-flow',
+      ),
+      manifestFor(wf.id, wf.version),
+    )
+    expect((await storedNodes(wf.id)).some((n) => n.id === 'out1')).toBe(true)
+  })
+
+  test('a plain user may delete an ORDINARY node from a workflow that also has a script', async () => {
+    // The privileged node stays untouched; the deletion targets a normal node.
+    // If the gate compared whole definitions instead of the sensitive
+    // projection, this legitimate edit would 403.
+    const wf = await seedWorkflow(
+      'mixed-flow',
+      PLAIN,
+      storedDefinition([{ id: 'out1', kind: 'output', ports: [] }]),
+    )
+    await applyAs(
+      plain,
+      updateBundle([{ id: 'in1', kind: 'input', inputKey: 'k' }, sentScriptNode()], 'mixed-flow'),
+      manifestFor(wf.id, wf.version),
+    )
+    const nodes = await storedNodes(wf.id)
+    expect(nodes.some((n) => n.id === 'out1')).toBe(false)
+    expect(nodes.find((n) => n.kind === 'script')?.script).toBe(SCRIPT_NODE.script)
+  })
+
+  test('a plain user may rename a workflow that contains a script node', async () => {
+    const wf = await seedWorkflow('old-name', PLAIN, storedDefinition())
+    await applyAs(
+      plain,
+      updateBundle(
+        [{ id: 'in1', kind: 'input', inputKey: 'k' }, sentScriptNode()],
+        'a new human name',
+      ),
+      manifestFor(wf.id, wf.version),
+    )
+    const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]
+    expect(row!.name).toBe('a new human name')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The nested-field ambiguity. `env` is an OBJECT whose VALUES carry the marker,
+// so "omit what is redacted" has two readings: drop `env`, or drop `TOKEN`
+// inside it. Only one of them is safe, and the doc now says which — these tests
+// pin the actual tolerance so the wording can be checked against reality.
+// ---------------------------------------------------------------------------
+describe('boundary: how much of a redacted nested field may be sent', () => {
+  async function mountedScript(): Promise<{ id: string; manifest: IntentContextManifest }> {
+    const wf = await seedWorkflow('env-flow', PLAIN, storedDefinition())
+    return { id: wf.id, manifest: manifestFor(wf.id, wf.version) }
+  }
+
+  test('omitting the whole `env` field restores it from storage', async () => {
+    const { id, manifest } = await mountedScript()
+    await applyAs(
+      plain,
+      updateBundle([{ id: 'in1', kind: 'input', inputKey: 'k' }, sentScriptNode()], 'env-flow'),
+      manifest,
+    )
+    expect((await storedNodes(id)).find((n) => n.kind === 'script')?.env).toEqual({
+      TOKEN: 'real-value-in-storage',
+    })
+  })
+
+  // Tolerated, because rehydration keys off the FIELD being absent-or-different
+  // rather than off its shape — but the doc still says "omit the field", since
+  // this form only works by accident of the same overwrite.
+  test('an emptied `env` object is also overwritten from storage, not refused', async () => {
+    const { id, manifest } = await mountedScript()
+    await applyAs(
+      plain,
+      updateBundle(
+        [{ id: 'in1', kind: 'input', inputKey: 'k' }, sentScriptNode({ env: {} })],
+        'env-flow',
+      ),
+      manifest,
+    )
+    expect((await storedNodes(id)).find((n) => n.kind === 'script')?.env).toEqual({
+      TOKEN: 'real-value-in-storage',
+    })
+  })
+
+  // The reading the doc must steer away from: keeping the inner key and its
+  // marker. This is refused, and by the SECRET scanner rather than the author
+  // gate — so the error would not even mention permissions.
+  test('keeping the inner key with its marker is refused', async () => {
+    const { manifest } = await mountedScript()
+    await expect(
+      applyAs(
+        plain,
+        updateBundle(
+          [
+            { id: 'in1', kind: 'input', inputKey: 'k' },
+            sentScriptNode({ env: { TOKEN: INTENT_REDACTED } }),
+          ],
+          'env-flow',
+        ),
+        manifest,
+      ),
+    ).rejects.toMatchObject({ code: 'intent-draft-invalid' })
+  })
+
+  test('the doc resolves the ambiguity explicitly', async () => {
+    const { buildIntentDoc } = await import('../src/services/intent/intentDoc')
+    const doc = buildIntentDoc({
+      sessionTitle: 't',
+      turns: [],
+      currentDraftJson: null,
+      validationErrors: [],
+      pendingQuestions: [],
+      hiddenDependencyNote: null,
+      envelopeNonce: 'aabbccdd11223344',
+      langDirective: 'x',
+      privileges: { mayAuthorScripts: false, mayAuthorCodeHostCalls: false },
+    })
+    expect(doc).toMatch(/OMIT these WHOLE FIELDS/)
+    expect(doc).toMatch(/drop the whole/)
+    expect(doc).toMatch(/do not send it\s+emptied/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The other authentication channel.
+//
+// Everything above drives a `source: 'session'` actor. A PAT is the second way
+// into this platform, and it resolves permissions through a different function
+// (resolveTokenPermissions) — so "a plain user cannot author these" is only
+// half an answer until the token path is checked too.
+//
+// It turns out to be the STRONGER half: both author points sit in
+// SYSTEM_DOMAIN_POINTS, which resolveTokenPermissions deletes unconditionally
+// (permission.ts:490) — so no token carries them whatever its owner's role or
+// grant matrix. `intent:read` / `intent:write` are system-domain as well, so a
+// token cannot even open an intent session. Asserting the full matrix at the
+// highest role is what makes that airtight rather than incidental.
+// ---------------------------------------------------------------------------
+describe('abnormal: no PAT can author privileged nodes, at any role', () => {
+  for (const role of ['user', 'manager', 'admin'] as const) {
+    test(`a ${role}'s token with EVERY grantable point still lacks both author points`, () => {
+      const perms = resolveTokenPermissions({
+        role,
+        matrix: [...grantableMatrixPoints(role)],
+      })
+      expect(perms.has('scripts:author')).toBe(false)
+      expect(perms.has('code-host-calls:author')).toBe(false)
+    })
+
+    test(`a ${role}'s token cannot open an intent session at all`, () => {
+      const perms = resolveTokenPermissions({
+        role,
+        matrix: [...grantableMatrixPoints(role)],
+      })
+      expect(perms.has('intent:read')).toBe(false)
+      expect(perms.has('intent:write')).toBe(false)
+    })
+  }
+
+  test('the author points are system-domain, which is WHY tokens never carry them', () => {
+    expect(SYSTEM_DOMAIN_POINTS).toContain('scripts:author')
+    expect(SYSTEM_DOMAIN_POINTS).toContain('code-host-calls:author')
+  })
+
+  test('neither author point is even offerable in a token matrix', () => {
+    for (const role of ['user', 'manager', 'admin'] as const) {
+      const offerable = grantableMatrixPoints(role)
+      expect(offerable).not.toContain('scripts:author')
+      expect(offerable).not.toContain('code-host-calls:author')
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Codex round-2 P2 — the omission list must follow the WITHHELD kind.
+//
+// Rehydration is keyed on the lens, i.e. on what the actor may NOT author. The
+// dump's masking is not: `maskWorkflowScriptEnv` redacts script `env` for
+// EVERYONE (RFC-253 T28 — env is a closed secret carrier regardless of
+// permissions). So for an actor who may author scripts but not code-host calls,
+// the two diverge: they still SEE `env: {TOKEN: "‹redacted›"}`, but nothing
+// will restore it. Telling them to "omit `env`" therefore does not preserve the
+// field — it deletes a stored credential, through a save the gate correctly
+// allows. Silent data loss, no error.
+//
+// The first test proves the deletion mechanism; the second pins the doc fix.
+// ---------------------------------------------------------------------------
+describe('boundary: omitting a field only restores it when the actor may NOT author that kind', () => {
+  test('an actor WITH scripts:author who omits `env` deletes it (mechanism proof)', async () => {
+    const wf = await seedWorkflow('boss-flow', BOSS, storedDefinition())
+    await applyAs(
+      boss,
+      updateBundle([{ id: 'in1', kind: 'input', inputKey: 'k' }, sentScriptNode()], 'boss-flow'),
+      manifestFor(wf.id, wf.version),
+    )
+    const node = (await storedNodes(wf.id)).find((n) => n.kind === 'script')!
+    // No rehydration happens for an authorized actor — the omission is taken
+    // literally. This is correct behaviour for someone who may edit the node;
+    // it is only dangerous when the DOC tells them to omit.
+    expect(node.env).toBeUndefined()
+  })
+
+  test('the same actor without the omission keeps the stored value', async () => {
+    const wf = await seedWorkflow('boss-flow-2', BOSS, storedDefinition())
+    await applyAs(
+      boss,
+      updateBundle(
+        [
+          { id: 'in1', kind: 'input', inputKey: 'k' },
+          { ...sentScriptNode(), env: { TOKEN: '‹secret›' } },
+        ],
+        'boss-flow-2',
+      ),
+      manifestFor(wf.id, wf.version),
+      [
+        {
+          opId: 'op-1',
+          slots: [
+            { slotId: 'secret:op-1:/definition/nodes/1/env/TOKEN', value: 'real-value-in-storage' },
+          ],
+        },
+      ],
+    )
+    const node = (await storedNodes(wf.id)).find((n) => n.kind === 'script')!
+    expect(node.env).toEqual({ TOKEN: 'real-value-in-storage' })
   })
 })

@@ -19,6 +19,8 @@
 // against the real predicates / validator, never restated as literals.
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   CODE_HOST_METHODS,
   CODE_HOST_REDACTED_FIELDS,
@@ -395,7 +397,7 @@ describe('contract: script node rules the model cannot guess', () => {
       ],
       edges: [],
     })
-    expect(codes.some((c) => c.includes('fanout'))).toBe(true)
+    expect(codes).toContain('script-in-fanout-unsupported')
   })
 })
 
@@ -459,7 +461,7 @@ describe('contract: redacted ⇄ rehydrated ⇄ documented are the same field se
     for (const field of [...SCRIPT_REDACTED_FIELDS, ...CODE_HOST_REDACTED_FIELDS]) {
       expect(withheldDoc).toContain(`\`${field}\``)
     }
-    expect(withheldDoc).toMatch(/OMIT every key printed as/)
+    expect(withheldDoc).toMatch(/OMIT these WHOLE FIELDS/)
     expect(withheldDoc).toContain(INTENT_REDACTED)
   })
 
@@ -478,5 +480,41 @@ describe('contract: redacted ⇄ rehydrated ⇄ documented are the same field se
     for (const kept of ['language', 'network', 'readonly', 'id', 'kind']) {
       expect(masked).not.toContain(kept)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The last link of the redaction chain, held by a source-level assertion.
+//
+// The chain is: dumpBuilder masks → the model sees a marker → INTENT.md tells
+// it which fields to omit → rehydration restores them. Links 2-4 are covered by
+// value above. Link 1 is covered behaviourally in rfc234-dump-builder.test.ts,
+// but that file asserts the marker as a STRING LITERAL — so changing
+// INTENT_REDACTED would leave it green (matching the old literal) while the doc
+// switched to the new value, and the model would be told to omit a marker it
+// never sees. A source-level check is the cheap way to pin "same constant, not
+// a coincidentally equal string" without standing up a second dump fixture.
+// ---------------------------------------------------------------------------
+describe('contract: the dump masks with the same constant the doc names', () => {
+  const dumpSource = readFileSync(
+    join(import.meta.dir, '..', 'src', 'services', 'intent', 'dumpBuilder.ts'),
+    'utf8',
+  )
+
+  test('dumpBuilder redacts through the shared constant, not a literal', () => {
+    expect(dumpSource).toContain('redactPrivilegedNodes')
+    expect(dumpSource).toContain('INTENT_REDACTED')
+    // a hardcoded marker would decouple the dump from the doc
+    expect(dumpSource).not.toContain("'‹redacted›'")
+  })
+
+  test('dumpBuilder also masks script env before redacting', () => {
+    // Two maskers compose here (RFC-253 T28 env carrier, then RFC-270's lens);
+    // dropping either changes what the model sees without changing the doc.
+    expect(dumpSource).toContain('maskWorkflowScriptEnv')
+  })
+
+  test('the doc quotes that same constant', () => {
+    expect(withheldDoc).toContain(INTENT_REDACTED)
   })
 })

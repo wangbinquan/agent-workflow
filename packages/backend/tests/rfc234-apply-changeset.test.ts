@@ -1201,10 +1201,12 @@ describe('call-ref fence: workgroup half, grants and admin bypass', () => {
     goalTemplate: 'do it',
   })
 
-  test('a workgroup created in the same bundle is referenceable in EITHER order', async () => {
-    for (const callerFirst of [true, false]) {
-      db = createInMemoryDb(MIGRATIONS)
-      await seedUser(OWNER, 'owner')
+  // One test per order, each on the beforeEach-provided database. An earlier
+  // draft looped both orders inside a single test and rebuilt `db` mid-test,
+  // which silently detached the run from the fixture appHome and made a failure
+  // in the second iteration impossible to attribute.
+  for (const callerFirst of [true, false]) {
+    test(`a bundle-created workgroup is referenceable with caller ${callerFirst ? 'BEFORE' : 'AFTER'} it`, async () => {
       const caller = {
         opId: callerFirst ? 'op-1' : 'op-2',
         action: 'create',
@@ -1244,11 +1246,14 @@ describe('call-ref fence: workgroup half, grants and admin bypass', () => {
         sessionId: session.id,
         clientMutationId: ulid(),
         ...draft,
-        decisions: [{ opId: squad.opId, slots: [] }],
+        decisions: [
+          { opId: squad.opId, slots: [{ slotId: `human:${squad.opId}:someone`, value: APPROVER }] },
+        ],
       })) as { applied: unknown[] }
       expect(receipt.applied.length).toBe(2)
-    }
-  })
+      expect((await db.select().from(workgroups)).length).toBe(1)
+    })
+  }
 
   test("another user's private workgroup is refused", async () => {
     await seedOtherUser(OWNER3)

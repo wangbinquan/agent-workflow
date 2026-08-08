@@ -187,10 +187,40 @@ ${renderCodeHostActionCatalog()}`
   // A withheld kind must be stated, not silently absent: the user CAN ask for
   // one, and "I was not taught that form" would read as the platform lacking
   // the feature. Naming the permission is what lets them go get it.
+  // Codex round-2 P2 — the omission list is PER WITHHELD KIND, never the union.
+  //
+  // Rehydration keys off the lens (what the actor may NOT author); the dump's
+  // masking does not — `maskWorkflowScriptEnv` redacts script `env` for
+  // everyone, permissions or no (RFC-253 T28: env is a closed carrier). For an
+  // actor who may author scripts but not code-host calls the two diverge: they
+  // still SEE `env: {…: '‹redacted›'}` but nothing would restore it, so telling
+  // them to omit it deletes a stored credential through a save the gate
+  // correctly allows — silent data loss with no error. Each entry therefore
+  // carries its own field list, and only withheld kinds contribute one.
   const withheldNodeKinds = [
-    mayAuthorScripts ? null : { kind: 'script', point: 'scripts:author' },
-    mayAuthorCodeHostCalls ? null : { kind: 'code-host-call', point: 'code-host-calls:author' },
+    mayAuthorScripts
+      ? null
+      : {
+          kind: 'script',
+          point: 'scripts:author',
+          fields: SCRIPT_REDACTED_FIELDS as readonly string[],
+        },
+    mayAuthorCodeHostCalls
+      ? null
+      : {
+          kind: 'code-host-call',
+          point: 'code-host-calls:author',
+          fields: CODE_HOST_REDACTED_FIELDS as readonly string[],
+        },
   ].filter((entry) => entry !== null)
+  // Same reasoning for the see-but-do-not-touch list: naming another kind's
+  // fields here would tell an authorized author their own edits are forbidden.
+  const untouchableFields = [
+    mayAuthorScripts ? null : '`language` / `network` / `readonly` / `outputs`',
+    mayAuthorCodeHostCalls ? null : '`provider` / `action` / `allowDestructive` / `timeoutMs`',
+  ]
+    .filter((entry) => entry !== null)
+    .join(' / ')
   // Codex impl-gate P1-4: the title is user-authored (derived from their first
   // message) — it must be fenced like any other untrusted text, not spliced
   // into the system-authored heading.
@@ -277,15 +307,18 @@ carries the COMPLETE definition:
   privileged fields are printed as \`${INTENT_REDACTED}\` precisely because you may not read
   them. When you update that workflow, copy the node back with the same \`id\`,
   the same \`kind\`, the same place in \`nodes[]\` and its edges untouched — but
-  **OMIT every key printed as \`${INTENT_REDACTED}\` instead of echoing the marker**. A value
-  containing \`${INTENT_REDACTED}\` is rejected as a corrupted credential before the
-  permission check is even reached, so echoing it back fails the changeset;
-  omitting the key is what tells the platform to restore the stored value. Those
-  keys are \`${SCRIPT_REDACTED_FIELDS.join('` / `')}\` on a script node and
-  \`${CODE_HOST_REDACTED_FIELDS.join('` / `')}\` on a code-host call. Dropping the whole node — or
-  editing any field you CAN see, such as \`language\` / \`network\` / \`readonly\` /
-  \`outputs\` / \`provider\` / \`action\` / \`allowDestructive\` / \`timeoutMs\` — counts
-  as CHANGING it.
+  **OMIT these WHOLE FIELDS instead of echoing the marker** — ${withheldNodeKinds
+    .map((entry) => `\`${entry.fields.join('` / `')}\` on a ${entry.kind} node`)
+    .join(', ')}. Leave the field out of the node object entirely; do not send it
+  emptied, and do not send the inner keys either (a redacted \`env\` prints as
+  \`{"NAME": "${INTENT_REDACTED}"}\` — drop the whole \`env\`, not just the value). Any string
+  containing \`${INTENT_REDACTED}\` is rejected as a corrupted credential before the permission
+  check is even reached, so echoing the marker fails the changeset; omitting the
+  field is what tells the platform to restore the stored value. This applies ONLY
+  to the kinds listed above — a redacted field on a node kind you MAY author is
+  not restored for you, so omitting it there would delete it. Dropping a whole
+  node of a listed kind — or editing any field you CAN see on one
+  (${untouchableFields}) — counts as CHANGING it.
 
 Apply is all-or-nothing: any of these is refused with
 \`script-author-forbidden\` / \`code-host-author-forbidden\` and takes the whole

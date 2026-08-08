@@ -143,6 +143,7 @@
 - **两个门**：写完 RFC 请批前（**设计门**）+ 改完代码 declare done 前（**实现门**），每次修 findings。这是 CI 之外的额外门（RFC-101 抓过 7 个真问题）。
 - **共享树上从分离 worktree 跑**：并发 session 的 diff 会**吞掉**你的 review（你的代码出 0 findings）；从 pin 到你 commit 的分离 worktree 跑，并 grep job log 证明这不是空洞通过。
 - **rescue job 会僵尸**（status=running 但 result=no-job-found、rollout mtime 冻结、0% CPU）；从 `~/.codex/sessions` 的 rollout jsonl 里抢救 pre-stall finding 独立复核；分离 job 无自动通知，须 bg 轮询 status。
+- **分离 worktree 里必须真跑 `bun install`，`cp -R node_modules` 是无效捷径**（2026-08-08 实测）：`git worktree add` 不带任何 node_modules，而 cp 过去的那份**丢掉 bun 的 workspace link**（`@agent-workflow/shared` 直接 "Cannot find module"），手工补 symlink 又会卡在下一层（`Cannot find package 'zod'`，嵌套依赖同样没跟着走）。症状是 Codex 想验证结论时 `bun test` exit 1，于是**整轮 review 退化成纯代码阅读**——它照样报 finding，但少了自证环节，而你从 companion 日志里只看得到一行 "Command failed"，很容易漏掉自己的 review 弱了一档。定式：worktree 建好后立刻 `bun install --frozen-lockfile`（约 1.2s，本仓 1542 包），跑一个测试文件确认绿，再启 review。
 
 - **主干开发下 Codex 的 `review` 圈不出「你的」改动**：它按 `--base` 算 diff，而共享 main 上那个区间里必然混着并发 session 的提交——实测它会跑去读别人 RFC 的文件并对着那些代码出 findings。分离 worktree 解决的是「工作树里的未提交改动」，解决不了「区间里的他人提交」。当本轮改动跨了别人的提交，改用**独立子代理**评审并把**确切文件清单**写进 prompt（RFC-240 先例，`docs/dev-gotchas.md` 的 Codex 段已列为备选）；顺带把「忽略 rfc257/webhook 之类他人关键词」也写进 prompt，否则子代理也会去查别人的代码。
 - **对抗式评审的 prompt 要求「给出能复现的具体输入」**，否则拿回来的是一堆看着有理、核实起来全是空的猜测。加一句「构造不出具体失败输入的就丢掉」，findings 的信噪比会完全不同——本轮两路 25 条里绝大多数自带变异验证，逐条核实后全部属实。
@@ -169,6 +170,17 @@
 - **新增 palette 分区 / 失败码 / 校验码会触发一批"覆盖棘轮"测试**，它们是设计如此、必须显式更新：`palette.test.ts`（分区 key 与 label 列表）、`palette-icon-coverage.test.ts`（glyph 白名单）、`i18n-phase-b.test.ts`、`workflow-node-picker*.test.ts`（分类计数与 `all` 总数）、`permission.test.ts`（`PERMISSIONS.length` 与 manager/admin 快照）、`rfc203-task-failure.test.ts`（每个 `FAILURE_CODE` 必须有本地化文案，否则降级成 `generic`）、`rfc203-validation-copy.test.ts`（每个 validator code 必须有精确词条）、`rfc224-execution-identity-failure-taxonomy.test.ts`（`FAILURE_CODES` 的组合顺序）。
 - **`unmanagedReferenceWarnings` 的引用识别是按键名启发式（`/nodeId$/i` 等）**，对**用户可控键名**的字段会误报：一个叫 `FOO_NODEID` 的普通环境变量就会触发 `action:'abort'` 并卡住复制粘贴。正解是给描述符加 `opaqueFields` 显式声明「此子树是用户数据、按构造不含引用」，而不是让启发式去猜用户起的名字。
 - **i18n 的 `zh-CN.ts` 里 `interface Resources` 与 `const zhCN` 是两段**，同一个键名在文件里出现两次。用脚本插入键时 `re.search` 会命中**接口**那一份（在前面），结果是把字符串字面量写进了类型声明。改 i18n 一律分别定位两段，改完 `bun run typecheck` 立刻能看出来。
+
+- **第 9 处穷尽点不受编译器保护，而且它不在代码里：`services/intent/intentDoc.ts` 的 "Supported node forms"**（2026-08-08 实测）。INTENT.md 明说这份清单是穷举的，模型据此认定「不在清单里的 kind 不存在」——RFC-253 补 `script` 时把这条机制写进了 `rfc234-intent-doc.test.ts` 的注释，但 **RFC-243（`call-workflow` / `call-workgroup`）与 RFC-269（`code-host-call`）落 `NODE_KIND` 时都没回来补**，于是意图构建器**静默地**只会写 13 种节点里的 10 种：typecheck 绿、测试绿、功能不存在。定式：新增 NodeKind 必须同时补 intentDoc，并且**守卫要按 `NODE_KIND` 枚举**而不是手抄清单（`rfc234-intent-doc.test.ts` 的 `form(kind)` 锚点即为此，锚 `{id,kind:'x'` 而不是宽松的 `kind:'x'`——后者分不清「教了」和「明确禁止」）。
+
+## 给模型的 prompt 就是生产代码（RFC-234 intentDoc 实测）
+
+- **prompt 要过实现门，理由和代码一样硬**：2026-08-08 那轮 Codex 实现门报的 7 条里，两条 P1 **都在 doc 里**，不在代码里——INTENT.md 不是文档，是生成模型唯一读到的规格，一句措辞不当等价于一个 API 契约写错。
+- **「doc 里有没有这句话」类断言抓不到真正的失败模式**：它锁得住措辞，锁不住**两条各自正确的规则交互后不成立**。实测：修 Codex P1-2 时写下「把 dump 里的 `‹redacted›` 原样回传」，读起来天经地义，实际不可执行——`findNonSentinelSecretCarriers` 无条件拒绝任何含该标记的字符串（`intentSecretSlots.ts:388`），而 dump 正是用它遮蔽，于是照 doc 做的 changeset 在到达权限门**之前**就 `intent-draft-invalid`。正解是**省略整个字段**，走 rehydrate 的「next 缺失 + previous 存在 ⇒ 取库里的值」分支。**只有驱动真实 `applyIntentChangeset` 的行为测试能发现这一类**（`intent-privileged-node-capability.test.ts`）。
+- **写给模型的指示要按「可执行」验收，不是按「读着对」**：每加一条 doc 规则，问一遍「模型照这句做，端到端能不能过」。特别小心**嵌套字段**——`env` 是对象、标记在它的**值**上，「省略被遮的 key」有两种读法（丢 `env` 还是丢 `TOKEN`），必须写死是哪一种。
+- **doc 里的清单一律从常量派生，别手抄**：动作目录派生自 `CODE_HOST_ACTION_DEFS`（必填字段直接复用校验器读的 `codeHostRequiredFields`，模型照填就撞不上 `code-host-param-missing`），trigger 变量派生自 `TRIGGER_CONTEXT_VARS`，要省略的字段派生自 `SCRIPT_REDACTED_FIELDS` / `CODE_HOST_REDACTED_FIELDS`。手抄的那天注册表一改，doc 就静默过期。
+- **doc 承诺的规则要和强制它的代码成对断言**（`intent-doc-validator-contract.test.ts`）：只测 doc 写了什么，validator 一改 doc 就悄悄变错；只测 validator，模型压根不知道规则。两半一起断言，任一边漂移即红。这类缺陷的症状是最难查的那种——**changeset 应用得进去，任务永远起不来**。
+- **prompt 只增不减且没有天然背压**，所以给它一条尺寸预算守卫（当前 INTENT.md 全权限约 18 KB，上限设 32 KB）：不是性能要求，是让下一次无节制膨胀出现在 review 里而不是上下文窗口里。
 
 ## 子进程与沙箱（RFC-253 实测）
 

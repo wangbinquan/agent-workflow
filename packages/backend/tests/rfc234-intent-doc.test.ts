@@ -387,9 +387,9 @@ describe('Codex impl-gate P1-2 — withheld kinds must be PRESERVED, not deleted
   // see intent-privileged-node-capability.test.ts for the behavioural proof.
   test('the doc says OMIT the redacted keys, never echo the marker back', () => {
     expect(doc).toContain(INTENT_REDACTED)
-    expect(doc).toMatch(/OMIT every key printed as/)
-    expect(doc).toMatch(/rejected as a corrupted credential/)
-    expect(doc).toMatch(/omitting the key is what tells the platform to restore/)
+    expect(doc).toMatch(/OMIT these WHOLE FIELDS/)
+    expect(doc).toMatch(/rejected as a\s+corrupted credential/)
+    expect(doc).toMatch(/omitting the\s+field is what tells the platform to restore/)
     // and the superseded instruction must not creep back
     expect(doc).not.toMatch(/COPY THAT NODE BACK\s+VERBATIM/)
     expect(doc).not.toMatch(/the marker is\s+the correct thing to send back/)
@@ -674,5 +674,53 @@ describe('INTENT.md stays within a sane size budget', () => {
       .split('\n')
       .filter((l) => /^ {4}- `[a-z.-]+` \[/.test(l))
     expect(lines.length).toBe(CODE_HOST_ACTIONS.length)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Codex round-2 P2 — the omission list must name ONLY withheld kinds.
+//
+// The union form was actively dangerous in the mixed shape: an actor who may
+// author scripts still sees a redacted `env` (masking is permission-blind,
+// RFC-253 T28) but gets NO rehydration, so "omit `env`" would delete a stored
+// credential through an allowed save. See
+// intent-privileged-node-capability.test.ts for the mechanism proof.
+// ---------------------------------------------------------------------------
+describe('the omit-these-fields list is scoped to the withheld kind', () => {
+  const scriptFields = `\`${SCRIPT_REDACTED_FIELDS.join('` / `')}\``
+  const codeHostFields = `\`${CODE_HOST_REDACTED_FIELDS.join('` / `')}\``
+
+  test('both withheld: both field lists appear', () => {
+    const doc = docWith({ privileges: NO_PRIVILEGES })
+    expect(doc).toContain(scriptFields)
+    expect(doc).toContain(codeHostFields)
+  })
+
+  test('only code-host withheld: the SCRIPT list must NOT be offered', () => {
+    const doc = docWith({
+      privileges: { mayAuthorScripts: true, mayAuthorCodeHostCalls: false },
+    })
+    expect(doc).toContain('Capability limits (hard)')
+    expect(doc).toContain(codeHostFields)
+    expect(doc).not.toContain(scriptFields)
+    // and the see-but-do-not-touch list is scoped too
+    expect(doc).not.toContain('`language` / `network` / `readonly` / `outputs`')
+  })
+
+  test('only scripts withheld: the CODE-HOST list must NOT be offered', () => {
+    const doc = docWith({
+      privileges: { mayAuthorScripts: false, mayAuthorCodeHostCalls: true },
+    })
+    expect(doc).toContain(scriptFields)
+    expect(doc).not.toContain(codeHostFields)
+    expect(doc).not.toContain('`provider` / `action` / `allowDestructive` / `timeoutMs`')
+  })
+
+  test('the scope limit is stated, not just implied by omission', () => {
+    const doc = docWith({
+      privileges: { mayAuthorScripts: true, mayAuthorCodeHostCalls: false },
+    })
+    expect(doc).toMatch(/applies ONLY\s+to the kinds listed above/)
+    expect(doc).toMatch(/omitting it there would delete it/)
   })
 })
