@@ -131,11 +131,12 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 
 ### 6.3 架构决策（v3）
 
-22. **归一化：新设计一份表达，intent 与配置包两边都迁**，不以 `IntentChangeset` 为基底
+22. ~~**归一化：新设计一份表达，intent 与配置包两边都迁**~~ **（已被决策 26 supersede：表达层
+    照建，但 intent 主流程不迁）**，不以 `IntentChangeset` 为基底
     向后兼容——它带着「模型输出专用」的历史包裹（session handle 域、给模型看的约束文案），
     作为平台级表达会长期别扭。
-23. **同一 RFC 一次到位**：共享表达 + 引擎 + intent 迁移 + 配置包，全在 RFC-271。永远不会
-    出现两份实现共存。代价是盘子大、intent 是生产路径、回归面宽——用户已知悉并选择。
+23. ~~**同一 RFC 一次到位**~~ **（已被决策 26 supersede）**：R3 揭示 intent 的不变量面是
+    ~12 条且多为场景特有，与包的新 bug 压在同一 changeset 里风险叠加。
 24. **可见即有读权限**：导出的读侧判据只有 ACL 行级可见性，**不**额外要求类型级 `*:read`
     权限点。AC-7d 是一条**反向锁**（可见但缺该类型权限点必须导出成功）。
 25. **owner 断言进最终事务**：commit 时服务端重算每条允许的动作（不信客户端传来的），并在
@@ -179,15 +180,18 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
   （intent 版只许 ASCII `[A-Za-z0-9._-]`，正式写路径只要求相对且不越界 ⇒
   `references/审计 规则.md` 这类合法技能**导不出去**）。
 - **AC-B4** 落地引擎保留 `applyChangeset.ts` 的**全部**承重不变量。开工前先把它们列成清单
-  逐条对照——R3 已点出至少 13 条，v3 只覆盖了 6 条。
+  逐条对照——`invariants.md` 已核实为 12 条，v3 只覆盖了 6 条。
 - **AC-B4b** 🆕 provider 接口带**事务钩子**（`claimInTx` / `revalidateInTx` / `finalizeInTx` +
   receipt 投影），使后续 RFC 能把 intent 的 session 原子性迁进来而不必重构引擎。
 - **AC-B4c** 🆕 引擎自带 **dependency planner + pending seams**：同 bundle 内新建的
   skill/MCP/plugin/agent/workgroup 互相引用时，preflight 必须接受尚未落库的目标
   （`pendingBundleIds` / `pendingAgentNames`），并按类型 + agent `dependsOn` 排序、对
   agent 互相 `dependsOn` 的闭环给出确定拒绝点。
-- **AC-B6** 🆕 闭包规模上限**显式披露**：`ops.max(N)` 的 N 是一条产品限制，超限有专门错误码
-  并在 `proposal §3` 声明；不得像 v3 那样静默塞一个 512。
+- **AC-B5** 🆕 op 数上限 `BUNDLE_MAX_OPS = 512` **显式披露**：`§3 非目标`里声明，超限报专门
+  错误码 `bundle-too-many-ops` 并点名实际条数。不得像 v3 那样静默塞一个字面量。
+- **AC-B6** 🆕 `ops` **允许为空**（全 reuse 的包）：引擎走 no-op 成功路径——journal 直接
+  committed、返回空 op receipt、同 `importId` 重试返回原 receipt；`rootRef` 可为 external，
+  此时必须带 `rootType`（external token 不自带类型，receipt 需要它才能报出根的类型）。
 
 ### 导出
 
@@ -212,8 +216,11 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **AC-10** `requirements` 五段（runtimes / codeHosts / executables / pluginSources /
   projectSkills），**不含任何密钥**（插件 spec 在此处同样脱敏）。
 - **AC-11** 超 `SKILL_ZIP_LIMITS` 任一维度 → 422 并点名资源与维度。
-- **AC-12** 根资源沿用 exact-revision 保护，**六类都要**：工作流 / 工作组 `expectedVersion`、
-  代理 `expectedUpdatedAt`、MCP / 插件 `expectedConfigHash`、技能 `contentVersion`。
+- **AC-12** 根资源沿用 exact-revision 保护，**六类都要且用各自的完整形态**（R4-P2-13）：
+  工作流 / 工作组 `expectedVersion`；代理 `expectedUpdatedAt` **+ `expectedAclRevision`**
+  （`agent.ts:414` 的正式 mutation revision 是这两个）；MCP / 插件 `expectedConfigHash`；
+  技能 `contentVersion` **+ `metaRevision`**（`skillToken.ts:23`——只改 description 会推进
+  `metaRevision` 而 `contentVersion` 不变，只带后者会漏掉这类漂移）。
   ⚠️ v3 只给了工作流 / 工作组 ⇒ 另一标签把 agent 的 `network` 从 deny 改成 allow 后，
   原标签点导出会静默导出新版本而不是 409。
 
@@ -238,7 +245,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **AC-24** 决策携带**内容级** exact token 并在最终事务 CAS：工作流/工作组 `expectedVersion`、
   代理 `expectedUpdatedAt + expectedAclRevision`、MCP/插件 `expectedConfigHash`、技能
   `contentVersion + metaRevision + aclRevision`。
-- **AC-24b** 内容 token **由 preview 返回、由 decisions 原样回传**；commit 不得现场重读后
+- **AC-24c** 内容 token **由 preview 返回、由 decisions 原样回传**；commit 不得现场重读后
   自比自（那样等于没有 CAS）。
 - **AC-24d** 🆕 **preview 与 commit 必须绑定同一份包内容**：preview 返回规范化 package
   digest，decisions / CLI plan 原样携带，commit 对重新上传的内容比对。
@@ -311,7 +318,8 @@ code-review-配置包.zip
 
 - 表达层是纯 schema + 纯函数，可脱离 DB 全覆盖。
 - **决策 27 的能力扩张单独验收**（AC-K1/K2）：intent 测试套除 `copyOnlyTargetsFor` 的
-  skill/plugin 分支外零改判；`ownerUserId` 判据一字不动。
+  四处（prestage 循环 / artifact / 收敛 / `copyOnlyTargetsFor`）外零改判；`ownerUserId`
+  判据一字不动。
 - 六类根 × 九种闭包形态矩阵；混合「复用 + 新建」的同名重绑单独锁。
 - 崩溃收敛在 journal 各 phase 边界注入中断，重启后断言收敛到二态之一。
 - 并发导入同目标 → 409。

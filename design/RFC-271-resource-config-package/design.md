@@ -20,7 +20,7 @@ provider 接口预留事务钩子，使后续 RFC 迁 intent 时不必重构引�
    泛化后成为整份表达的硬约束——它同时解决「包内同名资源绑错」（设计门 B1）与「模型编出
    一个 id」两类问题。
 3. **落地引擎保留既有全部不变量，并补齐三条**。`applyIntentChangeset` 的承重不变量
-   **R3 点出至少 13 条**（不是 v3 写的 6 条），泛化时**一条都不许丢**——开工前先列清单
+   **核实为 12 条**（不是 v3 写的 6 条），泛化时**一条都不许丢**——开工前先列清单
    （§2.2b），另补 ① 最终事务内的 owner 断言、② `skill-update` / `plugin-update`、
    ③ dependency planner 与 pending seams。
 4. **导出是引擎的逆向，不共用引擎**。导出只需把闭包序列化成 `ResourceBundle`，不写库；
@@ -58,8 +58,28 @@ name:<type>/<name>    /^name:(workflow|workgroup)\/.{1,256}$/
 `{kind:'call-workflow', workflowName:'does-not-exist-anywhere'}` 的工作流——保留裸名字违反
 AC-B2；编码成 `external:` 则 `resolveExternal` 拿不到 id、apply 失败。**两条路都堵死。**
 
-`name:` 形态**只允许出现在 call 节点的目标槽**（其它引用槽仍只收 `local:` / `external:`），
-schema 层按槽位区分，不是全局放宽。
+`name:` 形态**只允许出现在 call 节点的目标槽**（schema 层按槽位区分，见 §1.3），不是全局放宽。
+
+#### 1.1b Lowering 契约：三形态 → 持久化字段（R4-P1-2）
+
+**这是最容易漏写、漏了必错的一段**。call 节点持久化时有**两个**字段：`workflowName`
+（权威 selector）与 `workflowId`（本地解析 cache）。`freezeCallClosure`
+（`execution/closure.ts:167-219`）是 **id-cache 优先、且要求该行仍带该名字**，名字回退才取
+最老可见 ULID。因此三形态各有确定的落法：
+
+| bundle 形态 | 落成 | 为什么 |
+|---|---|---|
+| `local:<slug>` | `workflowName = <该 op 最终名字>` + `workflowId = <预铸 id>` | 同 bundle 新建，id 已知 |
+| `external:<token>` | `workflowName = <解析到的那一行的名字>` + `workflowId = <解析到的 id>` | **必须两个都写**——只写名字会让 `freezeCallClosure` 回退到最老可见行，而用户在预检页明确选的可能是较新的那一个 |
+| `name:<type>/<name>` | **只写** `workflowName`，**不写** `workflowId` | late-bound：本来就没解析到，写 cache 等于伪造 |
+
+**可复现的反例**（v4 之前无契约时）：目标库有两个可见同名 `audit`，W1 较老、W2 是用户明确
+选的 reuse 目标。若只落 `workflowName:'audit'`，启动时 `freezeCallClosure` 取 W1 —— 用户的
+选择被静默丢弃；若把 `external:<W2-id>` 原样写进 `workflowName`，启动直接找不到。
+
+⚠️ `bundleCreatedNames` 只解决「同 bundle 新名字的 ACL 顺序」，`assertRefsUsableInTx` 的
+name 域只证明「至少一个同名行可见」——**两者都区分不了两个同名目标**，所以 lowering 契约不能
+指望它们兜底。
 
 三种形态与消费者的对应：
 
@@ -98,24 +118,71 @@ export const BUNDLE_OP_KINDS = [
   'workflow-create','workflow-update','workgroup-create','workgroup-update',
 ] as const
 
-export const BundleOpSchema = z.object({
-  opId: z.string().regex(/^op-[1-9][0-9]{0,3}$/),
-  kind: z.enum(BUNDLE_OP_KINDS),
-  /** create：本 op 产出的 local slug；update：目标的 external ref。 */
-  slug: z.string().optional(),
-  target: BundleRefSchema.optional(),
-  /** update 的内容级 CAS token（AC-24），由 provider 填充。 */
-  expect: BundleExpectTokenSchema.optional(),
-  payload: BundlePayloadSchema,
-}).strict()
+// ⚠️ 这是**规范代码**（R4-P1-4）：必须是 12 分支 discriminated union，不能是一个
+//    optional 字段全开的对象。反例：{kind:'mcp-update', target, payload} 不带 expect
+//    能通过宽松 schema，而 commitMcpUpdateInTx(mcp.ts:180) 只在 expect !== undefined
+//    时 CAS ⇒ 无栅栏覆盖。
+const createOp = <K extends string, P extends z.ZodTypeAny>(kind: K, payload: P) =>
+  z.object({
+    opId: OpIdSchema, kind: z.literal(kind),
+    slug: BundleSlugSchema,                       // 必需
+    target: z.never().optional(),                 // 禁止
+    expect: z.never().optional(),                 // 禁止
+    payload,
+  }).strict()
+
+const updateOp = <K extends string, P extends z.ZodTypeAny, E extends z.ZodTypeAny>(
+  kind: K, payload: P, expect: E) =>
+  z.object({
+    opId: OpIdSchema, kind: z.literal(kind),
+    slug: z.never().optional(),                   // 禁止
+    target: BundleExternalRefSchema,              // 必需，且只许 external
+    expect,                                       // 必需，且是该类型专属 token
+    payload,
+  }).strict()
+
+export const BundleOpSchema = z.discriminatedUnion('kind', [
+  createOp('agent-create', BundleAgentPayloadSchema),
+  updateOp('agent-update', BundleAgentPayloadSchema, AgentExpectSchema),
+  createOp('skill-create', BundleSkillPayloadSchema),
+  updateOp('skill-update', BundleSkillPayloadSchema, SkillExpectSchema),
+  createOp('mcp-create', BundleMcpPayloadSchema),
+  updateOp('mcp-update', BundleMcpPayloadSchema, McpExpectSchema),
+  createOp('plugin-create', BundlePluginPayloadSchema),
+  updateOp('plugin-update', BundlePluginPayloadSchema, PluginExpectSchema),
+  createOp('workflow-create', BundleWorkflowPayloadSchema),
+  updateOp('workflow-update', BundleWorkflowPayloadSchema, WorkflowExpectSchema),
+  createOp('workgroup-create', BundleWorkgroupPayloadSchema),
+  updateOp('workgroup-update', BundleWorkgroupPayloadSchema, WorkgroupExpectSchema),
+])
 
 export const BundleSchema = z.object({
   bundleVersion: z.literal(1),
-  ops: z.array(BundleOpSchema).min(1).max(512),
-  /** 该 bundle 的「主角」，供 UI/CLI 定位；必须指向 ops 里的某个 slug。 */
+  /** ⚠️ **允许为空**（R4-P1-3）：全 reuse 的包翻译结果就是零 op。 */
+  ops: z.array(BundleOpSchema).max(BUNDLE_MAX_OPS),
+  /** 该 bundle 的「主角」。可以是 local slug（新建/副本），**也可以是 external**
+   *  （被 reuse / overwrite 时它没有 create slug）。 */
   rootRef: BundleRefSchema.optional(),
-}).strict().superRefine(assertBundleRefsClosed)   // 重复 slug / 悬空引用 / 悬空 rootRef 全拒
+  /** rootRef 是 external 时，receipt 需要它才能报出根的类型（external token 不自带 type）。 */
+  rootType: AclResourceTypeSchema.optional(),
+}).strict().superRefine(assertBundleRefsClosed)
 ```
+
+`assertBundleRefsClosed` 拒绝：重复 slug、悬空 `local:` 引用、`rootRef` 指向不存在的 slug
+（**external 形态的 rootRef 不算悬空**）、`rootRef` 为 external 但缺 `rootType`、
+`name:` 出现在 call 目标槽之外的槽位（R4-P2-9）。
+
+**槽位分层**（R4-P2-9）：不存在一个「全局都能用」的 `BundleRefSchema`。三个子 schema：
+
+| 子 schema | 允许形态 | 用在 |
+|---|---|---|
+| `BundleIdentityRefSchema` | `local:` \| `external:` | agent 的 `dependsOn` / `mcp` / `plugins` / `skills`，工作组成员，工作流 `agentRef` |
+| `BundleCallRefSchema` | `local:` \| `external:` \| **`name:`** | 仅 `call-workflow` / `call-workgroup` 的目标槽 |
+| `BundleExternalRefSchema` | 仅 `external:` | update op 的 `target` |
+
+⚠️ 正式 `WorkflowNodeSchema` 是 `.passthrough()` 的宽松形态（`schemas/workflow.ts:105-131`），
+**靠它自动得不到 call-slot 限制**——必须显式 walker/refine，并配负例测试
+（在 `dependsOn` 里放 `name:workflow/audit` → parse 失败）。
 
 `BundleExpectTokenSchema` 是六类内容级 token 的联合（AC-24）：
 
@@ -219,8 +286,8 @@ I1 / I3 / I8 完全没写，I2 / I4 / I6 / I7 / I9 写了但缺关键细节。�
 | claim 同事务校验身份 / in-flight / draft hash，且 duplicate 查询先于这些校验 | `:277` | 引擎骨架 + `claimInTx` |
 | committed / failed / unsettled **三态** replay，不是统一「返回 receipt」 | `:357` | 引擎 |
 | slot / secret waiver / human binding / finalName / copy-only / typed ref / cycle 校验 | `resolveChangeset.ts:345` | **intent 特有**，留在 intent（本 RFC 不迁） |
-| 预铸 id、按类型与 agent `dependsOn` 排序 | `resolveChangeset.ts:651` | 引擎（§2.6 planner） |
-| `pendingIds` / `pendingAgentNames` 让 preflight 接受未落库的同 bundle 目标 | `:428` | 引擎（§2.6） |
+| 预铸 id、按类型与 agent `dependsOn` 排序 | `resolveChangeset.ts:651` | 引擎（§2.3b planner） |
+| `pendingIds` / `pendingAgentNames` 让 preflight 接受未落库的同 bundle 目标 | `:428` | 引擎（§2.3b） |
 | prepared→applying CAS **之后**再次校验身份 | `:695` | 引擎 + `revalidateInTx` |
 | commit kernel / 引用 ACL / 特权 principal / `bundleCreatedNames` 都在 big tx | `:727` | 引擎 |
 | provenance / commitSeq / context epoch / currentDraftId / receipt / journal committed **与资源写同事务** | `:865` | 引擎 + `finalizeInTx` |
@@ -264,7 +331,8 @@ bundle 同时新建 skill / MCP / plugin / agent / workgroup，agent 引用前�
 |---|---|---|
 | `stageSkillVersion(...)` | 开 version-write op（拿 `skill_operation_locks`）、产 op-scoped staging、归档 `versions/vN/files`（**永久权威快照**）、算 content hash。`fs-staged` → `fs-versioned` | pre-stage |
 | `commitSkillVersionInTx(tx, staged)` | 事务内写 `skill_versions` 行 + `skills.contentVersion` + 完整 composite precondition + `txExtra` / description / `versionState` + `advancePhase('db-committed')` | big tx |
-| `publishStagedSkillVersion(staged)` | DB 提交后**立即** `unmarkSkillBootVerified` → `swapInStaged(filesDir, publishId)` **从 staging** 原子发布 live → 校验真实目录 + content hash → `cleanupOpDirs` → `advancePhase('fs-published')` + `finishOperation` 释放锁 → 重新 mark verified | ④ |
+| `publishStagedSkillVersion(staged)` | `swapInStaged(filesDir, publishId)` **从 staging** 原子发布 live → 校验真实目录 + content hash → `cleanupOpDirs` → `advancePhase('fs-published')` + `finishOperation` 释放锁 → 重新 mark verified | ④ |
+| `abortStagedSkillVersion(staged)` 🆕 | **pre-commit 补偿**：删除未提交的候选 `versions/vN` 与 staging、释放 `skill_operation_locks`；清理无法证明时**保留 op 作 recovery oracle** | 补偿路径 |
 
 ⚠️ **v3 在这里写错了**：v3 写的是「rename 候选目录到 live」。实测源码
 （`skillVersion.ts:555,608`）live 是**从 op-scoped staging** 经 `swapInStaged`（两次同父
@@ -274,6 +342,25 @@ rename）发布的，而 `versions/vN/files` 是**永久权威快照**——`rec
 
 **必须一并保留的既有语义**：`fs-staged` → `fs-versioned` → `db-committed` → `fs-published` →
 `done` 五相；**pre-commit 清理失败保留 op 作恢复 oracle，post-commit 失败绝不回滚**。
+
+**三处 R4 修正**：
+
+- **`unmarkSkillBootVerified` 不在 publish 段里**（R4-P1-5）。现有实现在 DB commit 返回后
+  **立刻** unmark，且在测试 fault hook **之前**（`skillVersion.ts:601-606`：
+  `committed = true; unmarkSkillBootVerified(...); commit.__afterDbCommitForTest?.()`）。
+  批量场景必须照此：**big tx 成功返回后、进入任何逐项 publish 之前，一次性 unmark 本次提交
+  的全部技能**。否则「DB 已指向新版本、live 仍是旧树，而技能还在 `bootVerifiedSet`」，
+  运行路径会继续注入旧树。
+- **必须有 `abortStagedSkillVersion`**（R4-P1-6）。现有那些细致的补偿语义全在单体函数的
+  catch 里（`skillVersion.ts:634-655`）；拆开后引擎没有合法 API 就只能复制状态机内部逻辑。
+  create 侧本就专门提供了 `compensateManagedSkillStage`（`skill.ts:386-401`），说明这不是
+  可省略的辅助函数。
+- **stage 要能返回 `noop`**（R4-P2-12）。现有行为：内容完全相同的保存**不创建新版本**、
+  abandon op、返回原 latest（`skillVersion.ts:538-550`）。三段版的 `stageSkillVersion`
+  因此返回 `{ kind:'staged', ... } | { kind:'noop', version }`，`noop` 时 big tx 不产生
+  该 op、publish 段跳过。⚠️ `skill_versions.source` 现有枚举是
+  `initial/editor/fusion/restore`——**包导入的 update 复用 `editor` 还是扩枚举，是一处必须
+  在批次 B 之前定下的决定**；扩枚举则 §7「无其它 schema 变更」要相应勘误。
 
 ### 2.5 插件安装失败的精确清理（设计门 A1-3）
 
@@ -294,31 +381,60 @@ journal artifacts**，再调 `installPlugin(pluginId, spec, { generationId })`�
 
 ---
 
-## 3. intent：本 RFC **不迁移**（决策 26）
+## 3. intent：不迁移主流程，但决策 27 有**显式例外**
 
-`applyIntentChangeset` 与 `intent_apply_journal` 原样保留，本 RFC 不碰它的生命周期，因此
-**没有新旧 journal 并存问题**（R3 的 F-journal-coexistence 随范围收缩消失：跨表幂等、
-in-flight 排他、session mutation guard、详情读取全都不受影响）。
+`applyIntentChangeset` 的**生命周期**（journal / claim / 收敛 / session 原子性）原样保留，
+因此没有新旧 journal 并存问题。但用户决策 27 选择「skill 与 plugin **两个都开**」，而
+**plugin 那半边不是「顺手」**——它要动 intent 的 prestage 循环与收敛。这是决策 26
+「不碰 intent 生命周期」的**显式例外**，在此写明而不含糊。
 
-唯一交集是 §2.4 的三段技能内核。它本就要为配置包建；建好后 intent 自己那条路径也能调用，
-于是可以顺带解开 `copyOnlyTargetsFor`（`applyChangeset.ts:135`）里这一句：
+### 3.1 skill 半边（真的顺手）
 
-```
-if (op.resourceType === 'skill' || op.resourceType === 'plugin') {
-  out.set(op.target, 'in-place update for this resource type is not supported yet')
-```
+三段内核为配置包而建，intent 直接调用即可。改动面：`copyOnlyTargetsFor`
+（`applyChangeset.ts:135`）里 skill 分支的 `'not supported yet'` 移除 + update switch 里
+接上三段调用。
 
-**这是 intent 的能力扩张**（决策 27，AC-K1/K2）：自己拥有的 skill / plugin 从「只能 copy」
-变成「可原地更新」。**外部 owner 的判据一字不动**——那段紧随其后的 `ownerUserId` 检查仍然把
-他人资源强制为 copy，既有 copy 语义（slot derivation / copy rewiring / finalName / receipt
-`fromCopy`）逐条保持。测试双向锁：自己的技能原地更新成功、他人的技能仍强制 copy。
+⚠️ **必须显式传 `expectedOwnerUserId`**（R4-P1-8）。该 fence 在 `commitSkillVersion` 里是
+**optional**（`skillVersion.ts:381`，判据是 `!== undefined && ...`，**不传即不检查**），
+而 intent 的 skill manifest token 只绑 `skillId / contentVersion / metaRevision`
+（`skillToken.ts:23-27`），**不绑 owner**。可复现场景：Alice preflight 时拥有 S → pre-stage
+期间管理员把 S 转给 Bob → 若新调用方没传 owner fence，最终写入仍会通过。
+普通调用方都显式传了（`skill.ts:662`、`skill-zip.ts:466`），新路径也必须传。
+技能 ACL 路由不取 `skill_operation_locks`，所以 owner 转移**不会**被 stage 锁挡住。
 
-**后续迁移 RFC 的前置条件**（写在这里供接手者参考）：§2.1 的三个事务钩子必须真正可用；
-§2.2b 表里标「intent 特有」的两条（resolve 期的 slot/secret/finalName/copy-only 校验、
-session mutation 409 守卫）要么留在 intent adapter、要么进 provider；MCP update 的 OAuth
-carry-forward（`applyChangeset.ts:545`：模型不许输出 OAuth，apply 前把 existing OAuth 合并
-回去）**不能**成为引擎默认——包的 overwrite 里「无 OAuth」可能是有意删除，必须由 intent
-translator 在构造 bundle 前补齐。
+### 3.2 plugin 半边（决策 26 的显式例外）
+
+**已核实的现状**：`applyChangeset.ts:641-647` 的 prestage 循环**只有 `plugin-create`**，
+intent 根本没有 plugin-update 接线；而 plugin 的发布协议与 skill **完全不同**——
+`commitPluginPublishInTx`（`plugin.ts:407`）用的是 **full-captured-row 身份栅栏**
+（`samePluginRow` + `fullPluginRowWhere`，任何并发变化 → `resource-operation-stale`）。
+
+因此「删掉一个分支」是不够的，要补的是一条完整链路：
+
+| 步骤 | 内容 |
+|---|---|
+| resolve | `copyOnlyTargetsFor` 移除 plugin 分支；新增 `PreparedOp` kind `plugin-update` |
+| capture | 捕获**完整** plugin row（`commitPluginPublishInTx` 的栅栏靠它） |
+| prestage | **spec 变了才**预安装；**record-before-act**：调用方预铸 generation id、先写 artifact 再 `installPlugin` |
+| big tx | `commitPluginPublishInTx(tx, captured, set)` |
+| 补偿 | artifact 带**精确** generation 路径，逆序删除 |
+| 收敛 | `convergeIntentApplyJournal` 的 artifact 分支要能处理 `plugin-install` 的精确路径（现有实现对它**什么也不做**，注释写明「崩溃后拿不到 InstallResult，靠 GC 回收」——而 GC 会被任一非终态 node run 无限阻挡） |
+
+**这条链路同时修好了 intent 侧一个既有缺口**：今天 intent 的 plugin-create 在崩溃后也只能
+靠被阻塞的 GC 回收孤儿 generation。record-before-act 一并解决。
+
+### 3.3 验收与范围声明
+
+- **AC-K1/K2** 覆盖 skill 与 plugin 双向锁（自己的可原地更新、他人的仍强制 copy）。
+- **`ownerUserId` 判据一字不动**，既有 copy 语义（slot derivation / copy rewiring /
+  finalName / receipt `fromCopy`）逐条保持。
+- ⚠️ **「intent 测试套零改判」这条承诺作废**（R4）：真正实现 plugin update 必须改 `PreparedOp`、
+  artifact、收敛行为，相关断言必然变。改判范围限定为「prestage 循环 / artifact / 收敛 /
+  copyOnlyTargetsFor 四处的相关用例」，其余零改判。
+
+**后续迁移 RFC 的前置条件**：§2.1 的三个事务钩子；§2.2b 表里标「intent 特有」的两条；
+MCP update 的 OAuth carry-forward（`applyChangeset.ts:556-563`）**不能**成为引擎默认——
+配置包的 overwrite 里「无 OAuth」可能是有意删除。
 
 ## 4. 配置包 · 导出
 
@@ -399,10 +515,16 @@ POST /api/resource-packages/commit    multipart: file + decisions(JSON) → Pack
 - **`importId`**（AC-24e）：preview 下发的稳定幂等键，decisions / CLI plan 原样回传，作为
   引擎的 `idempotencyKey.key`。没有它，commit 成功但响应丢失后重传同一个 zip 会**再建一遍
   资源**——服务端每次新生成 id 等于没有幂等。
-- **`packageDigest`**（AC-24d）：包内容的规范化摘要，preview 下发、decisions 回传、commit
-  对重新上传的字节比对。没有它可以 preview 文件 A（普通 agent 节点）、commit 上传文件 B
-  （同 slug 同 name 同 expect，但 definition 换成脚本节点）——服务端重算权限也证明不了用户
-  确认的是 B。CLI `--plan` / `--apply` 同理。
+- **`previewToken`**（AC-24d，**R4-P1-1 修正**）：**不是**客户端自报的 digest。
+  v4 初稿写「preview 下发 digest、commit 比对重算值」——那证明不了任何事：客户端可以同时
+  换掉文件**和**摘要（preview 包 A 拿到 `DA`，commit 传包 B 并把 decisions 里的摘要改成
+  `hash(B)`，commit 重算 B 得到同一个值，比对通过）。
+  正解是**不可伪造的绑定**：preview 返回
+  `previewToken = HMAC(daemonSecret, importId ‖ actorUserId ‖ packageDigest ‖ exp)`，
+  decisions / CLI plan 原样回传；commit 重算上传内容的 digest、用同一密钥验签，
+  **三者任一不符即 409**。复用仓内既有的密钥设施（`secretBox` 已用于 webhook secret /
+  OIDC client_secret / RFC-204），**不新增表、不引入服务端暂存态**，与「无暂存态」这条
+  设计约束不冲突。
 
 ### 5.2 预检
 
@@ -575,7 +697,7 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 | `rfc199-workflow-exact-operations.test.ts` | export hook 指向新端点 | C1 |
 | `rfc243-call-refs-yaml.test.ts` | 迁到包导出 | C1 |
 | RFC-270 的 export 出口用例 | 「遮蔽后可导出」→「按轴拒绝」 | C4 |
-| **intent 测试套** | 仅 `copyOnlyTargetsFor` 的 skill/plugin 分支相关用例改判 | 决策 27 的能力扩张；其余零改判 |
+| **intent 测试套** | 改判限定在 prestage 循环 / artifact / 收敛 / `copyOnlyTargetsFor` **四处**；其余零改判 | 决策 27「两个都开」（plugin 半边动到 prestage 与收敛） |
 
 ⚠️ `route-error-code-coverage` 用 `git ls-files` 枚举，未追踪的新文件对它是盲的——新增文件
 多，落地时先 `git add -N` 再跑门禁。
@@ -585,12 +707,13 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 | 风险 | 缓解 |
 |---|---|
 | 决策 27 误伤 intent 既有 copy 语义 | AC-K2 双向锁；`ownerUserId` 判据一字不动 |
+| 决策 27 的 plugin 半边动到 intent prestage / 收敛 | §3.2 完整链路 + 独立 commit + 改判范围显式限定四处 |
 | 泛化时丢掉某条既有不变量 | `rfc271-bundle-engine.test.ts` 逐条点名；泛化前把 `applyChangeset.ts` 的不变量列成清单对照 |
 | 新旧 journal 并存期语义分裂 | 旧表只读收敛存量、新 apply 一律写新表；旧表删除留给后续 RFC |
-| `skill-update` 拆两段引入回归 | 既有 `commitSkillVersion` 保留为两段的顺序组合，其它调用方零改动 |
-| 盘子过大一次推不动 | §PR 拆分：表达层 → 引擎 → intent 迁移 → 导出 → 导入 → 前端/CLI → 下线，逐个独立可绿 |
+| `skill-update` 拆分引入回归 | 既有 `commitSkillVersion` 退化为四段顺序组合、保留 `noop` 分支，其它调用方零改动 |
+| 盘子过大一次推不动 | `plan.md` 的「PR / commit 拆分」：表达层 → 引擎 → intent 迁移 → 导出 → 导入 → 前端/CLI → 下线，逐个独立可绿 |
 
-## 11. 两轮设计门 findings 落点
+## 11. 四轮设计门 findings 落点
 
 | 轮次·编号 | 落点 |
 |---|---|
