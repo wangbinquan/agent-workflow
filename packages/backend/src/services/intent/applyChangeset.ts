@@ -41,12 +41,18 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { stringify as stringifyYaml } from 'yaml'
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { intentApplyJournal, intentDrafts, intentProvenance, intentSessions } from '@/db/schema'
+import {
+  intentApplyJournal,
+  intentDrafts,
+  intentProvenance,
+  intentSessions,
+  plugins as pluginsTable,
+} from '@/db/schema'
 import { ACL_TABLES } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
@@ -70,10 +76,16 @@ import {
   type PreparedMcpCreate,
   type PreparedMcpUpdate,
 } from '@/services/mcp'
-import { commitPluginCreateInTx, type PreparedPluginCreate } from '@/services/plugin'
+import {
+  commitPluginCreateInTx,
+  commitPluginPublishInTx,
+  type PreparedPluginCreate,
+} from '@/services/plugin'
+import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
 import {
   cleanupInstallGeneration,
   installPlugin,
+  plannedGenerationDir,
   type InstallResult,
 } from '@/services/pluginInstaller'
 import {
@@ -82,6 +94,14 @@ import {
   stageManagedSkill,
 } from '@/services/skill'
 import { finishOperation } from '@/services/skillOperations'
+import {
+  abortStagedSkillVersion,
+  commitSkillVersionInTx,
+  publishStagedSkillVersion,
+  stageSkillVersion,
+  type StagedSkillVersion,
+} from '@/services/skillVersion'
+import { unmarkSkillBootVerified } from '@/services/skillBootVerify'
 import {
   broadcastWorkflowCreated,
   commitWorkflowSaveInTx,
@@ -122,13 +142,18 @@ export interface IntentApplyReceipt {
 }
 
 type JournalArtifact =
-  | { kind: 'plugin-install'; pluginId: string }
+  /** RFC-271 T17：`generationDir` 由调用方**预铸**并先落库——只记 pluginId 时，
+   *  崩溃后的收敛器不知道该删哪个 generation 目录，而粗粒度 GC 又被任一非终态
+   *  node run 完全挡住 ⇒ 目录永久残留。旧形态（无该字段）仍可解析。 */
+  | { kind: 'plugin-install'; pluginId: string; generationDir?: string }
   | { kind: 'skill-stage'; skillId: string; opId: string; skillDir: string }
+  | { kind: 'skill-version-stage'; skillId: string; opId: string; stagingDir: string }
 
 /**
  * Codex impl-gate P0-1/P2-3 — update targets the actor cannot modify in place:
- *  - foreign or built-in owner (D-round1: 他人/内置仅副本) → copy-only;
- *  - skill/plugin (in-place update pipeline not implemented yet) → copy-only.
+ *  - foreign or built-in owner (D-round1: 他人/内置仅副本) → copy-only.
+ * RFC-271 T14: the skill/plugin "not implemented yet" carve-out is GONE; all six
+ * types share the one ownerUserId rule.
  * handle → reason. Shared by the apply preflight (enforced inside
  * resolveIntentBundle) and the session-detail route (drives the commit UI).
  */
@@ -146,10 +171,10 @@ export async function copyOnlyTargetsFor(
   )
   for (const op of changeset.ops) {
     if (op.action !== 'update' || op.target === undefined) continue
-    if (op.resourceType === 'skill' || op.resourceType === 'plugin') {
-      out.set(op.target, 'in-place update for this resource type is not supported yet')
-      continue
-    }
+    // RFC-271 T14（决策 27）：skill / plugin 的「尚不支持原地更新」特例已解除——
+    // 它们和其余四类走**同一条** ownerUserId 判据。⚠️ 那条判据本身一字未动：
+    // 他人拥有的 / 内置的资源仍然强制 copy，copy 语义（slot 派生 / 重连 /
+    // finalName / receipt 的 fromCopy）逐条保持。
     const entry = byHandle.get(op.target)
     if (entry === undefined) continue // unknown handle → draft validation owns it
     const table = ACL_TABLES[entry.resourceType]
@@ -166,6 +191,30 @@ export async function copyOnlyTargetsFor(
     }
   }
   return out
+}
+
+type PluginRow = typeof pluginsTable.$inferSelect
+
+/**
+ * RFC-271 T17 —— 插件基线复核**只读一次**。
+ *
+ * ⚠️ 分两次读（一次算 hash、一次做整行捕获）会让「两次读之间被人改掉」的窗口
+ * 原样复现，而 `commitPluginPublishInTx` 的整行 CAS 正是为堵这个窗口而存在的。
+ * 所以这里返回**同一行**，hash 与捕获都从它算。
+ */
+async function requirePluginRowForIntent(db: DbClient, id: string): Promise<PluginRow> {
+  const rows = await db.select().from(pluginsTable).where(eq(pluginsTable.id, id)).limit(1)
+  const row = rows[0]
+  if (row === undefined) throw new NotFoundError('plugin-not-found', `plugin '${id}' not found`)
+  return row
+}
+
+/** `pluginOperationConfigHashOf` 要的最小投影（与 plugin.ts 的 rowToPlugin 同源字段）。 */
+function rowToPluginForIntent(row: PluginRow): Parameters<typeof pluginOperationConfigHashOf>[0] {
+  return {
+    ...row,
+    options: JSON.parse(row.optionsJson) as Record<string, unknown>,
+  } as never
 }
 
 export interface ApplyIntentFaults {
@@ -245,6 +294,15 @@ type PreparedOp =
       parsed: PreparedPluginCreate['parsed']
     }
   | { op: ResolvedIntentOp; kind: 'skill-create' }
+  | { op: ResolvedIntentOp; kind: 'skill-update'; staged: StagedSkillVersion }
+  | {
+      op: ResolvedIntentOp
+      kind: 'plugin-update'
+      spec: string
+      specChanged: boolean
+      captured: PluginRow
+      payload: { options: Record<string, unknown>; description: string; enabled: boolean }
+    }
   | { op: ResolvedIntentOp; kind: 'workflow-create'; definition: WorkflowDefinition }
   | { op: ResolvedIntentOp; kind: 'workflow-update'; prepared: PreparedWorkflowSave }
   | { op: ResolvedIntentOp; kind: 'workgroup-create'; prepared: PreparedWorkgroupCreate }
@@ -411,6 +469,7 @@ async function applyInner(
 
   const pluginInstalls = new Map<string, InstallResult>()
   const skillStages = new Map<string, { skillId: string; opId: string; skillDir: string }>()
+  const skillVersionStages = new Map<string, StagedSkillVersion>()
   let committedReceipt: IntentApplyReceipt | null = null
   try {
     // ── preflight (design §9.2/§9.3) ──
@@ -623,6 +682,47 @@ async function applyInner(
             preparedOps.push({ op, kind: 'workgroup-update', prepared })
             break
           }
+          case 'skill': {
+            // RFC-271 T14：暂存段留到 prestage（它有 FS 副作用），这里只占位。
+            preparedOps.push({ op, kind: 'skill-update', staged: null as never })
+            break
+          }
+          case 'plugin': {
+            // ⚠️ T17：基线必须从**同一次**读到的完整 row 投影算 configHash。
+            // 分两次读（一次算 hash、一次做捕获）会让「读之间被人改掉」的漏洞
+            // 原样复现——那正是 `commitPluginPublishInTx` 的整行 CAS 要防的东西。
+            const captured = await requirePluginRowForIntent(db, op.resourceId)
+            const fence = op.manifestEntry?.fence
+            if (fence?.kind !== 'plugin') {
+              throw new ConflictError('intent-baseline-stale', 'plugin fence missing')
+            }
+            const currentHash = pluginOperationConfigHashOf(rowToPluginForIntent(captured))
+            if (currentHash !== fence.configHash) {
+              throw new ConflictError(
+                'resource-operation-stale',
+                'the plugin changed; reload before saving',
+              )
+            }
+            const p = op.payload as {
+              spec: string
+              options?: Record<string, unknown>
+              description?: string
+              enabled?: boolean
+            }
+            preparedOps.push({
+              op,
+              kind: 'plugin-update',
+              spec: p.spec,
+              specChanged: p.spec !== captured.spec,
+              captured,
+              payload: {
+                options: p.options ?? {},
+                description: p.description ?? captured.description,
+                enabled: p.enabled ?? captured.enabled,
+              },
+            })
+            break
+          }
           default:
             throw new ValidationError(
               'intent-op-unsupported',
@@ -648,11 +748,71 @@ async function applyInner(
 
     // ── prestage (design §9.4 ①②; record-then-act) ──
     for (const item of preparedOps) {
-      if (item.kind === 'plugin-create') {
-        recordArtifact({ kind: 'plugin-install', pluginId: item.op.resourceId })
-        const install = await installPlugin(item.op.resourceId, item.spec, deps.pluginInstallOpts)
+      if (item.kind === 'plugin-create' || (item.kind === 'plugin-update' && item.specChanged)) {
+        // RFC-271 T17：**预铸** generation id，精确路径先落 journal 再安装。
+        const generationId = ulid()
+        const generationDir = plannedGenerationDir(
+          item.op.resourceId,
+          item.spec,
+          generationId,
+          deps.pluginInstallOpts?.pluginsDir,
+        )
+        recordArtifact({
+          kind: 'plugin-install',
+          pluginId: item.op.resourceId,
+          ...(generationDir === null ? {} : { generationDir }),
+        })
+        const install = await installPlugin(item.op.resourceId, item.spec, {
+          ...deps.pluginInstallOpts,
+          generationId,
+        })
         pluginInstalls.set(item.op.resourceId, install)
         deps.faults?.afterPluginInstall?.()
+      } else if (item.kind === 'skill-update') {
+        const payload = item.op.payload as {
+          name: string
+          description: string
+          frontmatterExtra: Record<string, unknown>
+          bodyMd: string
+          files: Array<{ path: string; content: string }>
+        }
+        const staged = stageSkillVersion(
+          db,
+          { appHome: deps.appHome },
+          item.op.resourceId,
+          (stagingDir) => {
+            const skillMd = `---\n${stringifyYaml(
+              {
+                name: payload.name,
+                description: payload.description,
+                ...payload.frontmatterExtra,
+              },
+              { lineWidth: 0 },
+            )}---\n\n${payload.bodyMd}\n`
+            writeFileSync(join(stagingDir, 'SKILL.md'), skillMd)
+            for (const file of payload.files ?? []) {
+              const abs = join(stagingDir, file.path)
+              mkdirSync(dirname(abs), { recursive: true })
+              writeFileSync(abs, file.content)
+            }
+          },
+          {
+            source: 'editor',
+            authorUserId: actor.user.id,
+            // T16：owner 围栏显式传入 —— 授权之后、提交之前的 owner 转移必须 409。
+            expectedOwnerUserId: actor.user.id,
+            setDescription: payload.description,
+          },
+        )
+        ;(item as { staged: StagedSkillVersion }).staged = staged
+        skillVersionStages.set(item.op.resourceId, staged)
+        recordArtifact({
+          kind: 'skill-version-stage',
+          skillId: staged.skillId,
+          opId: staged.opId ?? '',
+          stagingDir: staged.stagingDir,
+        })
+        deps.faults?.afterSkillStage?.()
       } else if (item.kind === 'skill-create') {
         const payload = item.op.payload as {
           name: string
@@ -788,6 +948,32 @@ async function applyInner(
             commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
             break
           }
+          case 'skill-update': {
+            const staged = skillVersionStages.get(item.op.resourceId)
+            if (staged === undefined) throw new Error('skill version stage missing')
+            commitSkillVersionInTx(tx, staged, {
+              source: 'editor',
+              authorUserId: actor.user.id,
+              expectedOwnerUserId: actor.user.id,
+              setDescription: (item.op.payload as { description: string }).description,
+            })
+            break
+          }
+          case 'plugin-update': {
+            const install = pluginInstalls.get(item.op.resourceId)
+            commitPluginPublishInTx(tx, item.captured, {
+              spec: item.spec,
+              optionsJson: JSON.stringify(item.payload.options),
+              description: item.payload.description,
+              enabled: item.payload.enabled,
+              sourceKind: install?.sourceKind ?? item.captured.sourceKind,
+              cachedPath: install?.cachedPath ?? item.captured.cachedPath,
+              resolvedVersion: install?.resolvedVersion ?? item.captured.resolvedVersion,
+              installedAt: install === undefined ? item.captured.installedAt : Date.now(),
+              updatedAt: Math.max(Date.now(), item.captured.updatedAt + 1),
+            })
+            break
+          }
           case 'workflow-create': {
             assertRefsUsableInTx(tx, actor, [
               {
@@ -911,7 +1097,15 @@ async function applyInner(
 
     // ── roll-forward (design §9.5; idempotent) ──
     deps.faults?.afterTxBeforeRollForward?.()
-    rollForwardCommitted(db, { skillStages: [...skillStages.values()] }, log)
+    rollForwardCommitted(
+      db,
+      {
+        skillStages: [...skillStages.values()],
+        appHome: deps.appHome,
+        skillVersionStages: [...skillVersionStages.values()],
+      },
+      log,
+    )
     for (const row of createdWorkflowRows) {
       try {
         broadcastWorkflowCreated(rowToWorkflowDetail(row))
@@ -939,6 +1133,16 @@ async function applyInner(
       throw error
     }
     // ── compensation: reverse order, then journal 'failed' (zero visible) ──
+    for (const staged of [...skillVersionStages.values()].reverse()) {
+      try {
+        abortStagedSkillVersion(db, staged)
+      } catch (err) {
+        log.warn('intent-skill-version-compensation-failed', {
+          skillId: staged.skillId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
     for (const stage of [...skillStages.values()].reverse()) {
       try {
         compensateManagedSkillStage(db, stage)
@@ -969,9 +1173,29 @@ async function applyInner(
  *  finished op throws and is swallowed per item. */
 function rollForwardCommitted(
   db: DbClient,
-  state: { skillStages: Array<{ skillId: string; opId: string }> },
+  state: {
+    skillStages: Array<{ skillId: string; opId: string }>
+    /** RFC-271 T14：技能原地更新的发布段。 */
+    appHome?: string
+    skillVersionStages?: StagedSkillVersion[]
+  },
   log: Logger,
 ): void {
+  // ⚠️ 先把**全部**已提交技能 unmark，再逐项 publish（T10 的那条注释）：放进
+  // publish 里的话，先发布的已经 mark 回来，而后一个还没发布的仍带着上一代
+  // admission。
+  for (const staged of state.skillVersionStages ?? []) unmarkSkillBootVerified(staged.skillId)
+  for (const staged of state.skillVersionStages ?? []) {
+    if (state.appHome === undefined) break
+    try {
+      publishStagedSkillVersion(db, { appHome: state.appHome }, staged)
+    } catch (err) {
+      log.warn('intent-skill-publish-replayed-or-failed', {
+        skillId: staged.skillId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
   for (const stage of state.skillStages) {
     try {
       dbTxSync(db, (tx) => finishOperation(tx, stage.opId))
@@ -1016,9 +1240,12 @@ export async function convergeIntentApplyJournal(
         try {
           if (artifact.kind === 'skill-stage') {
             compensateManagedSkillStage(db, artifact)
+          } else if (artifact.kind === 'plugin-install' && artifact.generationDir !== undefined) {
+            // RFC-271 T17：精确路径事前落了库 ⇒ 这里删得准。旧行（无该字段）仍
+            // 退回「靠 installer 自己的 generation GC」——不能因为格式演进就把
+            // 存量 journal 判成不可补偿。
+            rmSync(artifact.generationDir, { recursive: true, force: true })
           }
-          // plugin-install artifacts carry no cached InstallResult across a
-          // crash; the installer's own generation GC reclaims orphan caches.
         } catch (err) {
           log.warn('intent-converge-compensation-failed', {
             journalId: row.id,
