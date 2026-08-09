@@ -94,6 +94,11 @@ export interface ResourceSplitPageProps {
   selectedKey: string | null
   newActive: boolean
   newLabel: string
+  /**
+   * RFC-271：列表侧「新建」按钮之后的额外动作（配置包导入入口）。
+   * 最小扩展而不是让六个列表页各 fork 一套 header —— 六份自写的 chrome 必然漂移。
+   */
+  listActions?: ReactNode
   newTo: ResourceNewTo
   searchPlaceholder: string
   /** Shown when the resource list itself is empty (vs. filtered-to-nothing). */
@@ -486,6 +491,7 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
             >
               {props.newLabel}
             </Link>
+            {props.listActions}
           </aside>
           <section ref={detailPaneRef} className="split__detail" data-testid="split-detail">
             {mobileView === 'detail' &&

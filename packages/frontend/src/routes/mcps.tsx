@@ -13,6 +13,7 @@ import { useResourceList } from '@/hooks/useResourceList'
 import { EmptyState } from '@/components/EmptyState'
 import { ResourceBadges } from '@/components/ResourceBadges'
 import { McpProbeStatusChip, type McpProbeUiStatus } from '@/components/McpProbeStatusChip'
+import { ResourcePackageImportEntry } from '@/components/ResourcePackageImportEntry'
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
 import { useMcpProbes } from '@/lib/mcp-probe-query'
 import { probeFreshness } from '@/lib/probe-freshness'
@@ -95,6 +96,13 @@ function McpsSplitLayout() {
 
   return (
     <ResourceSplitPage
+      // RFC-271：配置包导入是**一个**入口通吃六类——包的根类型写在包里，用户不必
+      // 先选「我要导入哪一类」。导入可能同时落多类资源，所以失效键不止本列表。
+      listActions={
+        <ResourcePackageImportEntry
+          invalidateKeys={[['agents'], ['skills'], ['mcps'], ['plugins'], ['workflows']]}
+        />
+      }
       title={t('mcps.title')}
       items={items}
       isLoading={isLoading}

@@ -7,6 +7,7 @@
 // QUICK-CREATE dialog (name + description only); members/config live on the
 // detail page, and delete lives in the detail header (no list-level delete).
 
+import { ResourcePackageImportEntry } from '@/components/ResourcePackageImportEntry'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useMemo, useRef, useState } from 'react'
@@ -190,6 +191,16 @@ function WorkgroupsPage() {
             variant="create"
             hint="workgroup"
             data-testid="workgroups-intent-entry"
+          />
+          <ResourcePackageImportEntry
+            invalidateKeys={[
+              ['agents'],
+              ['skills'],
+              ['mcps'],
+              ['plugins'],
+              ['workflows'],
+              ['workgroups'],
+            ]}
           />
           {createAction}
         </>

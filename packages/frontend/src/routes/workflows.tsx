@@ -5,6 +5,7 @@
 // editing happens on the editor page), mirroring the RFC-164 pattern.
 // Delete / export live in the EDITOR header (RFC-191: no list-level delete).
 
+import { ResourcePackageImportEntry } from '@/components/ResourcePackageImportEntry'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -241,6 +242,16 @@ function WorkflowsPage() {
       headerActions={
         <>
           {importActions}
+          <ResourcePackageImportEntry
+            invalidateKeys={[
+              ['agents'],
+              ['skills'],
+              ['mcps'],
+              ['plugins'],
+              ['workflows'],
+              ['workgroups'],
+            ]}
+          />
           <IntentEntryButton
             variant="create"
             hint="workflow"
