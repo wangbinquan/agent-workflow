@@ -108,7 +108,7 @@ async function loadRows(
  * human 成员在表里只有 `user_id`；跨实例可移植的标识是 **username**，所以这里
  * 一并 join 出来。排序按 `(sortOrder, id)` 固定，导出要逐字节稳定。
  */
-async function attachWorkgroupMembers(
+export async function attachWorkgroupMembers(
   db: DbClient,
   groups: Record<string, unknown>[],
 ): Promise<void> {

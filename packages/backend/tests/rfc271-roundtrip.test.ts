@@ -996,3 +996,196 @@ describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**�
     }
   })
 })
+
+describe('AC-9 · **交集**：built-in 根 + 它自己的 built-in 依赖', () => {
+  // 这条锁的是实现门第四轮的 P1-1，而它躲过了我此前两条测试——因为那两条各覆盖一半、
+  // **交集为空**：
+  //   · 一条用**无依赖**的 built-in 根；
+  //   · 一条用**非 built-in 根** + built-in 依赖。
+  // 只有「built-in 根 **且** 它自己还引用别的 built-in」才同时踩到两边：导出侧的
+  // `manifest.builtins` 按「闭包里所有 builtin 资源」列（根 + 依赖两项），而 parse 侧的
+  // 对账只扫 op 的**引用槽**——根不产 op、不在任何槽里，于是只收到依赖一项，两边不等。
+  //
+  // 真实后果：仓内真实的 `aw-skill-fusion`（builtin workflow → builtin agent
+  // `aw-skill-merger`）导出返回 200，产物却被**自己的 parser** 判 `package-invalid`。
+  //
+  // 「两条测试都绿、但它们的交集没人测」是这轮反复出现的形态（上一轮是「往返测试只走到
+  // parse」）。补测试时要问的不是「这个分支测了吗」，而是「**这些分支的组合**测了吗」。
+  test('导出 → 解析 → 预检 → 提交：全链走通，且两项 builtin 都在 manifest 里', async () => {
+    const src = await makeInstance()
+    const dst = await makeInstance()
+    try {
+      const srcAgent = ulid()
+      await src.db.insert(agents).values({
+        id: srcAgent,
+        name: 'aw-skill-merger',
+        description: '',
+        outputs: '[]',
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
+        ownerUserId: '__system__',
+        visibility: 'public',
+        builtin: true,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      const srcWf = ulid()
+      await src.db.insert(workflows).values({
+        id: srcWf,
+        name: 'aw-skill-fusion',
+        description: '',
+        definition: JSON.stringify({
+          $schema_version: 4,
+          inputs: [],
+          edges: [],
+          nodes: [{ id: 'n1', kind: 'agent-single', agentId: srcAgent }],
+        }),
+        ownerUserId: '__system__',
+        visibility: 'public',
+        builtin: true,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+
+      const pkg = await exportResourcePackage(
+        src.db,
+        actorOf('u1'),
+        { type: 'workflow', id: srcWf },
+        { appHome: src.appHome },
+      )
+      // ① 产物必须能被**自己的 parser** 接受 —— 这正是 P1-1 当场失败的地方。
+      const parsed = await parseResourcePackage(pkg.zip)
+
+      expect(parsed.bundle.rootRef).toBe('builtin:workflow/aw-skill-fusion')
+      expect(parsed.bundle.ops).toHaveLength(0)
+      expect(parsed.manifest.resources).toHaveLength(0)
+      // built-in 根的包只表达「绑你自己的那一个」——**只有根**在 builtins 里。
+      // 它内部还引用了别的 built-in 是对端自己的事：包里零 op、根的 definition 一个字节
+      // 都没带，无从担保那条依赖，也就不该替对端声明这个前提。
+      expect(parsed.manifest.builtins).toEqual([{ type: 'workflow', name: 'aw-skill-fusion' }])
+
+      // ② 对端两项都有 ⇒ 预检通过、提交绑到对端自己那一个（不复制）。
+      for (const [name, table] of [
+        ['aw-skill-merger', agents],
+        ['aw-skill-fusion', workflows],
+      ] as const) {
+        const base = {
+          id: ulid(),
+          name,
+          description: '',
+          ownerUserId: '__system__',
+          visibility: 'public',
+          builtin: true,
+          createdAt: 1,
+          updatedAt: 1,
+        }
+        await dst.db.insert(table).values(
+          (table === agents
+            ? {
+                ...base,
+                outputs: '[]',
+                permission: '{}',
+                skills: '[]',
+                dependsOn: '[]',
+                mcp: '[]',
+                plugins: '[]',
+                frontmatterExtra: '{}',
+                bodyMd: '',
+              }
+            : {
+                ...base,
+                definition: JSON.stringify({
+                  $schema_version: 4,
+                  inputs: [],
+                  edges: [],
+                  nodes: [],
+                }),
+              }) as never,
+        )
+      }
+
+      const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+        box,
+        importId: ulid(),
+      })
+      expect(preview.entries).toEqual([])
+
+      const receipt = await commitResourcePackage(
+        { db: dst.db, appHome: dst.appHome, box },
+        actorOf('u1'),
+        { pkg: parsed, previewToken: preview.previewToken, decisions: [] },
+      )
+      expect(receipt.root).toMatchObject({
+        resourceType: 'workflow',
+        name: 'aw-skill-fusion',
+        action: 'reuse',
+      })
+      // 没有复制出第二份。
+      expect(
+        dst.db
+          .select()
+          .from(workflows)
+          .all()
+          .filter((r) => r.name === 'aw-skill-fusion'),
+      ).toHaveLength(1)
+    } finally {
+      removeTempDirSync(dst.appHome)
+      removeTempDirSync(src.appHome)
+    }
+  })
+
+  test('对端**缺少这个 built-in 根** ⇒ 预检即报错（rootRef 必须进 builtins 声明）', async () => {
+    // 这条锁的是 collector 里 `rootRef` 那一支的**真正价值**。
+    //
+    // 反向验证时发现：去掉那一支，manifest 与 parse 对账**仍然相等**——因为两边现在同源，
+    // 会一致地少算根。对账查不出来，但后果在别处：`manifest.builtins` 是预检
+    // (`findMissingBuiltins`) 判断「对端缺什么」的唯一输入，根不在里面，一个对端根本
+    // 没有该 built-in 的包就会一路放行到 commit 才炸。
+    //
+    // 教训：一个字段被两处消费时，只测「产出与校验对得上」是不够的——那可能只是**同一个
+    // 函数跟自己比**。要测的是**下游真正拿它做的判断**。
+    const src = await makeInstance()
+    const dst = await makeInstance() // 目标实例**没有**任何 built-in
+    try {
+      const srcWf = ulid()
+      await src.db.insert(workflows).values({
+        id: srcWf,
+        name: 'aw-skill-fusion',
+        description: '',
+        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+        ownerUserId: '__system__',
+        visibility: 'public',
+        builtin: true,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+
+      const pkg = await exportResourcePackage(
+        src.db,
+        actorOf('u1'),
+        { type: 'workflow', id: srcWf },
+        { appHome: src.appHome },
+      )
+      const parsed = await parseResourcePackage(pkg.zip)
+      expect(parsed.manifest.builtins).toEqual([{ type: 'workflow', name: 'aw-skill-fusion' }])
+
+      const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+        box,
+        importId: ulid(),
+      }).then(
+        () => null,
+        (e: unknown) => e as { code?: string; message?: string },
+      )
+      expect(err?.code).toBe('package-builtin-missing')
+      expect(err?.message).toContain('workflow/aw-skill-fusion')
+    } finally {
+      removeTempDirSync(dst.appHome)
+      removeTempDirSync(src.appHome)
+    }
+  })
+})

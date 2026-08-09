@@ -15,8 +15,6 @@ import {
   AclResourceTypeSchema,
   BundleSchema,
   collectBundleRefIssues,
-  decodeBundleCallRef,
-  decodeBundleIdentityRef,
   type ResourceBundle,
 } from '@agent-workflow/shared'
 import { decodeZip } from '@/services/skill-zip'
@@ -24,7 +22,7 @@ import { resourceTypeOfOp } from '@/services/bundle/provider'
 import { ValidationError } from '@/util/errors'
 import { PACKAGE_FORMAT_VERSION } from './export'
 import { packagedSkillFileRef } from './skillTree'
-import { collectPackageRequirements } from './requirements'
+import { collectBundleBuiltins, collectPackageRequirements } from './requirements'
 
 const ManifestResourceSchema = z
   .object({
@@ -230,7 +228,7 @@ function assertManifestMatchesBundle(manifest: PackageManifest, bundle: Resource
   const declaredBuiltins = manifest.builtins
     .map((builtin) => `${builtin.type}\u0000${builtin.name}`)
     .sort()
-  const actualBuiltins = [...collectBundleBuiltinKeys(bundle)].sort()
+  const actualBuiltins = collectBundleBuiltins(bundle).map((b) => `${b.type}\u0000${b.name}`)
   if (JSON.stringify(declaredBuiltins) !== JSON.stringify(actualBuiltins)) {
     throw new ValidationError(
       'package-invalid',
@@ -284,47 +282,6 @@ function assertManifestMatchesBundle(manifest: PackageManifest, bundle: Resource
       'manifest.root does not match bundle.json rootRef and resources',
     )
   }
-}
-
-/** 收集 bundle 的**引用槽**中实际出现的 built-in；同一依赖只声明一次。 */
-function collectBundleBuiltinKeys(bundle: ResourceBundle): Set<string> {
-  const out = new Set<string>()
-  const takeIdentity = (raw: unknown): void => {
-    if (typeof raw !== 'string') return
-    const ref = decodeBundleIdentityRef(raw)
-    if (ref?.k === 'builtin') out.add(`${ref.type}\u0000${ref.name}`)
-  }
-  const takeCall = (raw: unknown): void => {
-    if (typeof raw !== 'string') return
-    const ref = decodeBundleCallRef(raw)
-    if (ref?.k === 'builtin') out.add(`${ref.type}\u0000${ref.name}`)
-  }
-
-  if (bundle.rootRef?.startsWith('builtin:')) takeIdentity(bundle.rootRef)
-  for (const op of bundle.ops) {
-    const payload = op.payload as Record<string, unknown>
-    if (op.kind === 'agent-create' || op.kind === 'agent-update') {
-      for (const key of ['dependsOn', 'mcp', 'plugins'] as const) {
-        for (const raw of Array.isArray(payload[key]) ? payload[key] : []) takeIdentity(raw)
-      }
-    }
-    if (op.kind === 'workgroup-create' || op.kind === 'workgroup-update') {
-      for (const raw of Array.isArray(payload.members) ? payload.members : []) {
-        const member = raw as Record<string, unknown>
-        if (member.memberType === 'agent') takeIdentity(member.agentRef)
-      }
-    }
-    if (op.kind === 'workflow-create' || op.kind === 'workflow-update') {
-      const definition = payload.definition as { nodes?: unknown } | undefined
-      for (const raw of Array.isArray(definition?.nodes) ? definition.nodes : []) {
-        const node = raw as Record<string, unknown>
-        takeIdentity(node.agentRef)
-        takeCall(node.workflowRef)
-        takeCall(node.workgroupRef)
-      }
-    }
-  }
-  return out
 }
 
 async function digestOf(bytes: Uint8Array): Promise<string> {

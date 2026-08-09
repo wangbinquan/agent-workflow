@@ -15,14 +15,19 @@ import type { AclResourceType } from '@agent-workflow/shared'
 import { eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { ACL_TABLES } from '@/services/resourceAcl'
+import { ACL_TABLES, isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { encodeZip, type ZipFile } from '@/util/zip'
 import { ConflictError, ValidationError } from '@/util/errors'
-import { assertPrivilegedNodesExportable, walkExportClosure, type ExportClosure } from './closure'
+import {
+  assertPrivilegedNodesExportable,
+  attachWorkgroupMembers,
+  walkExportClosure,
+  type ExportClosure,
+} from './closure'
 import { expectTokenOf } from './preview'
 import { serializeClosure, type SerializedPackage } from './serialize'
 import { packagedSkillFileRef, readSkillTree, type SkillTree } from './skillTree'
-import { collectPackageRequirements } from './requirements'
+import { collectBundleBuiltins, collectPackageRequirements } from './requirements'
 
 /** 包格式版本。导入侧见到更高的值直接拒绝（design §8）。 */
 export const PACKAGE_FORMAT_VERSION = 1
@@ -60,13 +65,18 @@ export function buildManifest(
     // built-in **不入 resources**：它不产 op、导入侧自动忽略。列在下面的
     // `builtins` 里，让导入方一眼看到「这个包依赖对端也有这几个框架内置」。
     resources: closure.resources.filter((r) => r.builtin !== true).map(bySlug),
-    /** 框架内置依赖：导入时按**名字**绑到对端自己 seed 的那一个，不会被复制。 */
-    builtins: closure.resources
-      .filter((r) => r.builtin === true)
-      .map((r) => ({ type: r.type, name: r.name }))
-      .sort((a, b) =>
-        a.type === b.type ? a.name.localeCompare(b.name) : a.type.localeCompare(b.type),
-      ),
+    /**
+     * 框架内置依赖：导入时按**名字**绑到对端自己 seed 的那一个，不会被复制。
+     *
+     * ⚠️ 从 **bundle** 派生，不是从闭包——parser 也用同一个 collector 对账，两边必须
+     * 同源。曾经这里按「闭包里所有 builtin 资源」列：built-in 自己当根时闭包有根 + 它的
+     * built-in 依赖两项，而 bundle 里只有 `rootRef` 一项（根不产 op，依赖压根不出现），
+     * 于是**导出的包被自己的 parser 判 `package-invalid`**（真实的 `aw-skill-fusion`）。
+     *
+     * 语义上也是 bundle 侧对：built-in 根的包只表达「绑你自己的那一个」，它内部还用了
+     * 什么是对端自己的事，包无从担保、也不该替它声明前提。
+     */
+    builtins: collectBundleBuiltins(serialized.bundle),
     // 从真正会被导入方消费的、已脱敏 bundle 计算；parser 用同一 collector 复核。
     requirements: collectPackageRequirements(serialized.bundle),
     /** 被脱敏的字段清单：**只有位置，没有值**。导入方据此知道要补哪些凭据。 */
@@ -175,7 +185,7 @@ export async function exportResourcePackage(
   // Client only knows the root revision, but the exporter itself knows the exact revision of
   // every transitive member it captured. Recheck that internal snapshot after all live reads so
   // an agent@v1 row cannot be combined with an MCP/skill/workgroup that changed halfway through.
-  await assertClosureStillCurrent(db, closure)
+  await assertClosureStillCurrent(db, actor, closure)
 
   const serialized = serializeClosure(closure, skillTrees)
   const manifest = buildManifest(closure, serialized, {
@@ -283,7 +293,33 @@ async function assertRootStillCurrent(
   assertRootUnchanged(type, row, expect)
 }
 
-async function assertClosureStillCurrent(db: DbClient, closure: ExportClosure): Promise<void> {
+/**
+ * 闭包成员在**所有 live 读取之后**的两道复核 —— 它们回答的是**两个不同的问题**，
+ * 必须分开做（实现门第四轮的 P1-2 / P2-2 就是把它们混成一件事的代价）：
+ *
+ *  ① **产物还是那个产物吗**（`artifactTokenOf`）—— 防「agent@v1 的行 + 半路改过的
+ *     MCP」这种拼接快照；
+ *  ② **你现在还有权导出它吗**（`isVisibleRow`）—— 防**授权在导出中途被撤销**。
+ *
+ * 曾经只做①、且拿 `expectTokenOf`（引擎的 mutation CAS token）来做，两头都错：
+ *
+ *  · **漏检**：workflow / workgroup 的 CAS token 只有 `version`，而 ACL 写路径只推
+ *    `aclRevision` / `updatedAt`。于是「reader 对 private 子工作流有 grant → 发起导出
+ *    → 闭包捕获后 owner 撤销 grant」全程无感，导出照样 200，包里带走了**此刻已经
+ *    不可见**的资源。实测复现：撤权后 `remainingGrants=0`、`aclRevision` 0→1、
+ *    `version` 不动，导出仍返回 200-zip。
+ *  · **误拒**：agent / skill 的 CAS token 里含 `aclRevision`，MCP / plugin 的 hash 更是
+ *    覆盖 owner / visibility / 本机安装态。于是把一个 agent 从 private 改成 public
+ *    ——**包字节一个都不变**——却会让在途导出报 `package-closure-changed`。
+ *
+ * 「ACL 不改变产物字节」这个实测结论是对的，但它只能推出①不该管 ACL，**推不出**
+ * 「ACL 无关紧要」：产物等价 ≠ 授权仍然成立。
+ */
+async function assertClosureStillCurrent(
+  db: DbClient,
+  actor: Actor,
+  closure: ExportClosure,
+): Promise<void> {
   const byType = new Map<AclResourceType, Array<(typeof closure.resources)[number]>>()
   for (const resource of closure.resources) {
     const list = byType.get(resource.type) ?? []
@@ -302,7 +338,15 @@ async function assertClosureStillCurrent(db: DbClient, closure: ExportClosure): 
           captured.map((resource) => resource.id),
         ),
       )) as unknown as Array<Record<string, unknown>>
+    // ⚠️ 必须走**与闭包遍历同一条装载路径**：工作组的成员在独立表 `workgroup_members`，
+    // 由 `attachWorkgroupMembers` 在装载层补进 `row.members`。裸 `select` 拿到的行没有
+    // 这个字段，而捕获时的行有 —— 整行比较会**恒不相等**，把每一次工作组导出都变成
+    // 假 `package-root-changed`（实测：R0 往返用例当场变红）。
+    if (type === 'workgroup') await attachWorkgroupMembers(db, rows)
     const currentById = new Map(rows.map((row) => [String(row.id), row]))
+    // grant **重新查**，不能复用闭包遍历时缓存的那一份——被撤销的授权正是要抓的东西。
+    const grants = new Set(await listGrantedResourceIds(db, actor, type))
+
     for (const resource of captured) {
       const current = currentById.get(resource.id)
       const isRoot = resource.type === closure.root.type && resource.id === closure.root.id
@@ -313,9 +357,18 @@ async function assertClosureStillCurrent(db: DbClient, closure: ExportClosure): 
           `${type} '${resource.id}' vanished during export; retry from a fresh snapshot`,
         )
       }
-      const before = JSON.stringify(expectTokenOf(type, resource.row))
-      const after = JSON.stringify(expectTokenOf(type, current))
-      if (before !== after) {
+
+      // ② 授权复核。报 `package-export-ref-unavailable` 而不是 `*-changed`：这不是
+      // 「重试一次就好」的竞态，是「你现在没有这个权限」——错误码要说对是哪一种。
+      if (!isVisibleRow(actor, current as never, grants)) {
+        throw new ValidationError(
+          'package-export-ref-unavailable',
+          `cannot export ${type} '${resource.id}': it is no longer available to you`,
+        )
+      }
+
+      // ① 产物复核。
+      if (artifactTokenOf(resource.row) !== artifactTokenOf(current)) {
         throw new ConflictError(
           changeCode,
           `${type} '${resource.id}' changed during export; retry from a fresh snapshot`,
@@ -323,4 +376,31 @@ async function assertClosureStillCurrent(db: DbClient, closure: ExportClosure): 
       }
     }
   }
+}
+
+/**
+ * 「这一行有没有以**会进包**的方式变过」。
+ *
+ * 判据是**整行减去 ACL 列**，而不是逐类型手写一份「哪些字段进包」——那种清单会随
+ * schema 漂移，而漂移的方向永远是漏掉新字段（本 RFC 已经栽过两次：序列化器按想象的
+ * 列名读行、闭合性扫描扫一个不存在的字段名）。整行做基线则**只会误报、不会漏报**，
+ * 而误报在这里是安全的一侧。
+ *
+ * 排除的四列都是 ACL 写路径会动而**不进包**的（包不携带任何权属信息——决策 4/12）：
+ * `ownerUserId` / `visibility` / `aclRevision`，以及 `updatedAt`——它被 ACL 写一并推进，
+ * 留着它等于没排除前三个。排掉 `updatedAt` 不会漏掉真实内容变更：任何内容写同时
+ * 也会改内容列（definition / bodyMd / config / …）。
+ */
+const ARTIFACT_IRRELEVANT_COLUMNS = new Set([
+  'ownerUserId',
+  'visibility',
+  'aclRevision',
+  'updatedAt',
+])
+
+function artifactTokenOf(row: Record<string, unknown>): string {
+  const entries = Object.entries(row)
+    .filter(([key]) => !ARTIFACT_IRRELEVANT_COLUMNS.has(key))
+    .sort(([a], [b]) => a.localeCompare(b))
+  return JSON.stringify(entries)
 }

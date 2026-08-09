@@ -4,7 +4,11 @@
 // prerequisite projection from that contract on both export and import so a hand-edited
 // manifest cannot hide a missing runtime/executable (or invent a scary prerequisite).
 
-import type { ResourceBundle } from '@agent-workflow/shared'
+import {
+  decodeBundleCallRef,
+  decodeBundleIdentityRef,
+  type ResourceBundle,
+} from '@agent-workflow/shared'
 
 export interface PackageRequirements {
   runtimes: string[]
@@ -110,4 +114,69 @@ export function collectPackageRequirements(bundle: ResourceBundle): PackageRequi
     mcpKinds: [...mcpKinds].sort(),
     humanMembers: [...humanMembers].sort(),
   }
+}
+
+/**
+ * 收集 bundle 里实际出现的 built-in 身份：**引用槽 + rootRef**；同一项只声明一次。
+ *
+ * `rootRef` 那一支（上面 `takeIdentity(bundle.rootRef)`）不能漏：built-in 自己当根时它
+ * **不在任何 op 的引用槽里**——它压根不产 op。
+ *
+ * ⚠️ 这个函数是 **manifest 侧与 parse 侧共用的唯一定义**，两边必须同源。实现门第四轮的
+ * P1-1 就是它们不同源的代价：`manifest.builtins` 曾按「闭包里所有 builtin 资源」列，而
+ * 对账按 bundle 扫。built-in 根 **且** 它自己还引用别的 built-in 时，闭包有两项、bundle
+ * 只有 `rootRef` 一项（依赖压根不出现在包里），于是**真实的 `aw-skill-fusion` 导出返回
+ * 200、产物却被自己的 parser 判 `package-invalid`**。
+ *
+ * 语义上也是 bundle 侧对：built-in 根的包只表达「绑你自己的那一个」，零 op、根的
+ * definition 一个字节都没带，无从担保它内部还用了什么。
+ */
+export function collectBundleBuiltins(
+  bundle: ResourceBundle,
+): Array<{ type: string; name: string }> {
+  const out = new Set<string>()
+  const takeIdentity = (raw: unknown): void => {
+    if (typeof raw !== 'string') return
+    const ref = decodeBundleIdentityRef(raw)
+    if (ref?.k === 'builtin') out.add(`${ref.type}\u0000${ref.name}`)
+  }
+  const takeCall = (raw: unknown): void => {
+    if (typeof raw !== 'string') return
+    const ref = decodeBundleCallRef(raw)
+    if (ref?.k === 'builtin') out.add(`${ref.type}\u0000${ref.name}`)
+  }
+
+  if (bundle.rootRef?.startsWith('builtin:')) takeIdentity(bundle.rootRef)
+  for (const op of bundle.ops) {
+    const payload = op.payload as Record<string, unknown>
+    if (op.kind === 'agent-create' || op.kind === 'agent-update') {
+      for (const key of ['dependsOn', 'mcp', 'plugins'] as const) {
+        for (const raw of Array.isArray(payload[key]) ? payload[key] : []) takeIdentity(raw)
+      }
+    }
+    if (op.kind === 'workgroup-create' || op.kind === 'workgroup-update') {
+      for (const raw of Array.isArray(payload.members) ? payload.members : []) {
+        const member = raw as Record<string, unknown>
+        if (member.memberType === 'agent') takeIdentity(member.agentRef)
+      }
+    }
+    if (op.kind === 'workflow-create' || op.kind === 'workflow-update') {
+      const definition = payload.definition as { nodes?: unknown } | undefined
+      for (const raw of Array.isArray(definition?.nodes) ? definition.nodes : []) {
+        const node = raw as Record<string, unknown>
+        takeIdentity(node.agentRef)
+        takeCall(node.workflowRef)
+        takeCall(node.workgroupRef)
+      }
+    }
+  }
+
+  return [...out]
+    .map((key) => {
+      const [type, name] = key.split('\u0000')
+      return { type: type!, name: name! }
+    })
+    .sort((a, b) =>
+      a.type === b.type ? a.name.localeCompare(b.name) : a.type.localeCompare(b.type),
+    )
 }

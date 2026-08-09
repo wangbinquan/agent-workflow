@@ -164,7 +164,12 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     expect(exportSrc).toContain(
       'assertRootStillCurrent(db, closure.root.type, closure.root.id, opts.expect)',
     )
-    expect(exportSrc).toContain('assertClosureStillCurrent(db, closure)')
+    // 末端复核现在要 actor —— 它不只比「产物变没变」，还要重新跑一次**授权复核**
+    // （闭包成员的 grant 可能在导出中途被撤销；实现门第四轮的 P1-2 就是这条漏检）。
+    expect(exportSrc).toContain('assertClosureStillCurrent(db, actor, closure)')
+    // 而且产物比较不能再用引擎的 CAS token：它对 workflow/workgroup 漏 ACL、对另外
+    // 四类又把不进包的 ACL 维算进去 ⇒ 一边漏检一边误拒（P2-2）。
+    expect(exportSrc).toContain('artifactTokenOf(resource.row) !== artifactTokenOf(current)')
     expect(exportSrc).toContain('package-root-changed')
   })
 
