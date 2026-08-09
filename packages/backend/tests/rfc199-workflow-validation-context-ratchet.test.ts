@@ -87,6 +87,7 @@ function fixtureSkill(): Skill {
     managedPath: '/secret/skill/path',
     schemaVersion: 2,
     contentVersion: 7,
+    metaRevision: 3,
     createdAt: 10,
     updatedAt: 30,
   }

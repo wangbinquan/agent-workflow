@@ -48,6 +48,7 @@ function skill(name: string): Skill {
     managedPath: `/tmp/${name}`,
     schemaVersion: 1,
     contentVersion: 1,
+    metaRevision: 1,
     createdAt: 0,
     updatedAt: 0,
   }

@@ -111,6 +111,7 @@ function makeSkill(name: string, ownerUserId = 'owner-user'): Skill {
     sourceKind: 'managed',
     schemaVersion: 1,
     contentVersion: 1,
+    metaRevision: 1,
     createdAt: 0,
     updatedAt: 0,
     managedPath: `skills/${name}/files`,
