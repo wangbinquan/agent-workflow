@@ -522,7 +522,7 @@ next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗�
 
 实际生效的改法是**把查询提到轮询之外**：原写法每轮询一次就 `getByLabelText` 重扫一遍整棵树（该页面 DOM 很大——两段 SVG 插画 + 完整表单），满载 runner 上光这个重复扫描就能吃掉 5s 预算；改成只让轮询体读一个已拿到的引用。本机连跑 3 次 9/9 全绿。**这条经验对另外三条同样适用**：先看轮询体里有没有藏着一次全树查询，那往往比「跨 turn 的 React commit」更能解释预算耗尽。
 
-- ⏳ **第十一条 flaky：`rfc131-review-reject-aging-prior-output.test.ts > RFC-131 验收#4 组合`**（2026-08-09 干净 worktree 门禁复现一次）。与前面几条**不同形态**，值得单列：它不是前端 `waitFor` 轮询越线，而是 **bun:test 的每用例 5000ms 硬上限**被撞穿——日志逐字为 `this test timed out after 5000ms`，实测 6252.89ms。**归属明确不是触发它的那次改动**：该轮 diff 只有一个前端测试 + 两份 md + 两个 RFC-271 后端测试文件，与 clarify / review / 老化链路零耦合；同 run 另外三个 backend 分片全绿，隔离下单跑该文件连续 3 次 3/3 全绿。**现场负载**：并发 session 同时在跑自己的门禁，两套四分片抢核。**紧邻线索**：同 shard 日志在该用例前一行打了 `killed 1 dangling process`，与第五条（RFC-224 取消预言机超时后 shard 挂死）出现过的字样相同，值得一并查是不是同一个回收路径。**同族第二例（2026-08-09 同日，干净 worktree 门禁）**：`scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts > S-2 multi-repo in-process retry rollback`，同样逐字 `this test timed out after 5000ms`，实测 5609.40ms；隔离下连跑 3 次 2/2 全绿；同 run 另外三个 backend 分片全绿；本轮 diff 只有 resourcePackage / routes / fusion / 两个前端详情页，与多仓 worktree 回滚链路零耦合。两例合看，**共同点不是某条用例，而是「一条串了多段异步真实 IO（git worktree / 子进程 / DB 事务）的用例 + 满载 runner」**——本机当时有两套四分片门禁在抢核。**修法方向与前几条一致**：不要再把 5000ms 往上调——该用例串了 deferred self-clarify → review REJECT → 重做三段异步链，正解是给它一个确定性的完成信号（等 review 状态落库的事件，而不是等墙钟），或把三段拆成各自可断言的单元。**同族第三例（2026-08-09 同日，本机 `gate:local` 满载）**：`scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts > gap4 — wrapper-loop exitCondition referencing an out-of-loop node > an old invalid snapshot keeps the latest outer value instead of false-exiting`，同样逐字 `this test timed out after 5000ms`，实测 6189.89ms；隔离下单跑该文件 2 pass / 0 fail / 2.44s（**比预算快一倍有余**，可见不是逻辑变慢而是被抢核）；紧邻线索同样命中——同 shard 日志在该用例前打了 `killed 1 dangling process`。**归属明确不是触发它的那次改动**：该轮我的 diff 只有 `design/plan.md`（纯文档）+ 新增一个 e2e spec，**零后端源码与零后端测试改动**，而本用例走 wrapper-loop 退出条件 + 跨 scope 端口快照，两者零耦合。三例合看进一步收窄了共同点：**都是 wrapper / worktree / 子进程这类串了多段真实异步 IO 的调度器用例**，且三例全部紧邻 `killed 1 dangling process`——与第十条（`bun test --isolate` 分片忙等空转不自行退出）大概率是同一个进程回收路径在放大。
+- ⏳ **第十一条 flaky：`rfc131-review-reject-aging-prior-output.test.ts > RFC-131 验收#4 组合`**（2026-08-09 干净 worktree 门禁复现一次）。与前面几条**不同形态**，值得单列：它不是前端 `waitFor` 轮询越线，而是 **bun:test 的每用例 5000ms 硬上限**被撞穿——日志逐字为 `this test timed out after 5000ms`，实测 6252.89ms。**归属明确不是触发它的那次改动**：该轮 diff 只有一个前端测试 + 两份 md + 两个 RFC-271 后端测试文件，与 clarify / review / 老化链路零耦合；同 run 另外三个 backend 分片全绿，隔离下单跑该文件连续 3 次 3/3 全绿。**现场负载**：并发 session 同时在跑自己的门禁，两套四分片抢核。**紧邻线索**：同 shard 日志在该用例前一行打了 `killed 1 dangling process`，与第五条（RFC-224 取消预言机超时后 shard 挂死）出现过的字样相同，值得一并查是不是同一个回收路径。**同族第二例（2026-08-09 同日，干净 worktree 门禁）**：`scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts > S-2 multi-repo in-process retry rollback`，同样逐字 `this test timed out after 5000ms`，实测 5609.40ms；隔离下连跑 3 次 2/2 全绿；同 run 另外三个 backend 分片全绿；本轮 diff 只有 resourcePackage / routes / fusion / 两个前端详情页，与多仓 worktree 回滚链路零耦合。两例合看，**共同点不是某条用例，而是「一条串了多段异步真实 IO（git worktree / 子进程 / DB 事务）的用例 + 满载 runner」**——本机当时有两套四分片门禁在抢核。**同族第三例（2026-08-10，干净 worktree 门禁）**：`rfc098-process-governance.test.ts > RFC-098 WP-8 — runner escalation against a stubborn child`，逐字 `this test timed out after 5000ms`，实测 5515.22ms；隔离下连跑 3 次 5/5 全绿；同 run 另外三分片全绿；本轮 diff 只有 RFC-271 的导出/预检与两个前端文件，与进程治理链路零耦合。**三例已经足以定型**：`rfc131-review-reject-aging`（多段 clarify/review 异步链）、`scheduler-audit-s02`（多仓 git worktree 回滚）、`rfc098 WP-8`（子进程 + 孙进程组杀），共同点是**一条用例串了多段真实异步 IO**（子进程 / git / 文件系统 / DB 事务），在满载 runner 上撞穿 bun:test 的每用例 5000ms 硬上限。它们与前面几条前端 `waitFor` 越线是**不同机理、同一后果**，处置时可以合并考虑但修法不同：前端那批要换事件驱动锚点，这批要么把多段链拆成各自可断言的单元、要么给这类用例一个显式的更高预算（并写明为什么这条需要）。**修法方向与前几条一致**：不要再把 5000ms 往上调——该用例串了 deferred self-clarify → review REJECT → 重做三段异步链，正解是给它一个确定性的完成信号（等 review 状态落库的事件，而不是等墙钟），或把三段拆成各自可断言的单元。**同族第三例（2026-08-09 同日，本机 `gate:local` 满载）**：`scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts > gap4 — wrapper-loop exitCondition referencing an out-of-loop node > an old invalid snapshot keeps the latest outer value instead of false-exiting`，同样逐字 `this test timed out after 5000ms`，实测 6189.89ms；隔离下单跑该文件 2 pass / 0 fail / 2.44s（**比预算快一倍有余**，可见不是逻辑变慢而是被抢核）；紧邻线索同样命中——同 shard 日志在该用例前打了 `killed 1 dangling process`。**归属明确不是触发它的那次改动**：该轮我的 diff 只有 `design/plan.md`（纯文档）+ 新增一个 e2e spec，**零后端源码与零后端测试改动**，而本用例走 wrapper-loop 退出条件 + 跨 scope 端口快照，两者零耦合。三例合看进一步收窄了共同点：**都是 wrapper / worktree / 子进程这类串了多段真实异步 IO 的调度器用例**，且三例全部紧邻 `killed 1 dangling process`——与第十条（`bun test --isolate` 分片忙等空转不自行退出）大概率是同一个进程回收路径在放大。
 
 - ⏳ **第五条 CI 缺陷，性质与上面四条不同：它不是「一条红」，而是会吞掉整个 shard 的挂死，且伪装成「并发 push 取消」**（2026-08-08，run 31236841932 attempt 1，push `f734a897`，ubuntu shard 2/4）。测试：`RFC-224 Linux cancellation oracle protocol > rejects a target that self-exits after ARMED but before the TERM freeze lease`（`packages/backend/tests/integration-opencode/opencode-identity-preflight.integration.test.ts`）。**症状两段**：①03:19:05 该用例 `30002.05ms` 撞满自己的 30s 上限判失败，同时日志打出 `killed 1 dangling process`；②**此后整个 shard 静默 12 分 56 秒**（03:19:05 → 03:32:01）直到 job 的 `timeout-minutes: 15` 触发，`##[error]The operation was canceled.` + `Terminate orphan process: pid (2370) (bun)`。**危害不在那条红，在第二段**：该 shard 只启动到第 90 个文件就再没往下走，其余文件**一次都没执行**，而 job 的 conclusion 是 `cancelled` 不是 `failure` —— 于是整个 run 的 conclusion 也是 `cancelled`，正好落进 `CLAUDE.md` 里「共享 main 上并发 push 会取消你的 run」那条已知情形，**极易被下一个人当成噪音略过**。判别方法要写死：`cancelled` 先查 `git log <yoursha>..origin/main` 是否真有 superseding commit，为空就说明不是并发取消，必须翻 job 日志。**归属**：与本轮改动零耦合 —— 本轮 diff 只有 `services/intent/{intentDoc,turnEngine,applyChangeset}.ts` + 三个 `rfc234-*` 测试 + `STATE.md`，不触及 opencode 执行身份链路的任何模块；同 run 另外 7 个 backend shard（含跑了本轮全部三个测试文件的 ubuntu/macOS shard 1 与 shard 4）全部 success，shard 2 里唯一的 intent 相关文件 `rfc235-intent-turn-session.test.ts` 在卡死点之前跑完且全 pass。**历史**：`b2f7144a fix(ci): 修依赖漏洞门禁 + 放宽取消预言机的单阶段预算` 已经为这条用例放宽过一次预算，所以这次是「放宽之后仍然超时」，与上面 centralized-answer-pane 那条是同一种「继续加超时只是把数字往后推」的形态。**留给 RFC-224/227 owner 的两件事**：①那条用例本身为什么会在 runner 上越过 30s（它等的是一个 self-exit 与 TERM freeze lease 的竞争窗口，本就是时序敏感面）；②**更要紧的**是超时之后为什么 bun 进程没被回收 —— 一条用例失败不该让同 shard 剩余文件全部不执行，这条挂死才是把单点 flaky 放大成整 run 不可用的原因。
 - ⏳ **存量任务的 canonical worktree 指向 `iso/` 的成因未定（2026-08-04 Linux 部署事故）**：真实
@@ -1601,3 +1601,69 @@ theme-css-ratchet 三 OS 红 owning=9269c5ee(结构变更 UI 三连修复:dock h
   哈希，则破坏同一协议。候选修法：①PAT 通道发掩码定义的哈希并同步放宽这类工作流的 exact 校验；
   ②保持现状并接受（论据：PAT 无法改 script 工作流，`scripts:author` 永不进令牌面）；
   ③让 `snapshotHash` 本身对 script env 值取「归一化占位」参与哈希（改变哈希语义，影响存量比对）。
+
+## 全能力实机验收（2026-08-10，本机 opencode + zhipuai/glm-5.2）遗留的四项设计级未决
+
+一轮「意图创建 → 全节点执行 → 依赖注入探针」的真机验收（12/13 种节点跑通，
+`code-host-call` 的接线 P0 已在同批修复）暴露出四条**不适合直接改代码**的问题，
+逐条给出形态、证据与候选修法，留待专门回合定夺。
+
+### A. 依赖不在围栏内的 local MCP **静默不启动**，任务照样 done
+
+- **形态**：`verifiedPlan.ts:planMcpConfig` 会把 local MCP 正常编进 `OPENCODE_CONFIG_CONTENT`
+  （实测 `mcpCount=3`），但 `materializeMcpWrappers` 给子进程的 `bindReadOnly` 只有
+  「frozen skill 路径 + 管理员 `businessToolchainPaths` + 启动器 inode + 解释器链」，
+  而 macOS profile（`sealedSubprocess.ts:renderNetlessSeatbeltProfile`）把 `realHome`、
+  `appHome`、各 tmp 全部 `(deny file-read* file-write*)`。⇒ MCP 脚本自身或它的
+  `node_modules` 只要不在 allow-back 集合里就读不到，服务器起不来。
+- **真正的问题不是围栏，是无声**：opencode 把起不来的 server 记为 failed 后继续跑，平台侧
+  **零反馈**——无 lifecycle 告警、无 node_run 事件、无日志行，agent 只是悄悄少了工具，任务
+  以 `done` 收场。用户唯一能察觉的方式是模型自己说「这个工具不在清单里」。
+- **A/B 实证**：同目录同解释器（`bun <abs>.ts`），零依赖版 `aw-probe-localraw` 的工具出现在
+  运行时清单里；`import '@modelcontextprotocol/sdk/...'` 的 `aw-probe-local` 不出现。把该目录
+  加进 `businessToolchainPaths` 后前者可用，后者仍不可用（SDK 在仓内 `node_modules`，仍在 mask 下）。
+- **候选修法**：①启动后按选中的 MCP 闭包核对实际可用工具面，缺失即告警/失败（RFC-251 曾显式
+  移除 `/mcp/status` 查询，需重新论证）；②wrapper 侧捕获子进程非零退出并落一条 node_run 事件；
+  ③把 MCP 命令的**参数路径**也纳入 `bindReadOnly`（只解决自身脚本，解决不了传递依赖）。
+  ①③ 都触及 RFC-224/227 的密封边界，按能力型 RFC 走。
+
+### B. managed skill 的**辅助文件运行期不可达**
+
+- **形态**：只有 `SKILL.md` 正文以 `<aw-frozen-skill>` 注入；整棵树密封在
+  `<runRoot>/opencode-identity-seal/skills/<sha24>` 并对 bash 子进程只读可见，**但没有任何
+  env / 提示词行告诉 agent 这个路径**，而 `~/.agent-workflow` 又在 mask 下。
+- **证据**：探针技能的 `SKILL.md` 标记行两次都取回；同一技能 `reference.md` 里的标记行两次都
+  `MISSING`，agent 自己 find/grep 也搜不到。
+- `docs/skill.md` 已在同批改正（它此前描述的是 RFC-224 之前的行为，会误导用户去建多文件技能）。
+- **候选修法**：①在 frozen block 里追加一行「本技能的只读根路径 = …」+ 文件清单；②把辅助文件
+  正文一并注入（有上下文预算风险）；③显式不支持，创建期就拒绝多文件技能（能力收缩，须逐项确认）。
+
+### C. 意图构建器单轮产能上限 ≈ 6–8 节点，且失败轮**没有「为什么」**
+
+- **形态**：要求一次产出覆盖 13 种节点的主工作流，连续 3 轮 `intent-envelope-missing`
+  （415 / 465 / 459 秒，`exitCode: 0`，会话树里连一条 assistant 文本都没有）；退到 9 种节点
+  仍撞 600 秒 `intent-run-timeout`。拆成「6 节点工作流」+「资源分批建」后稳定成功。
+- **诊断面**：`intent_turns.content_json` 只有 `{"code":"intent-envelope-missing"}`；
+  `stderrTail` 仅在非空时落库（这里 stderr 为空），`scratch_retained=0` 工作目录已删。UI 侧
+  有「重试本轮」与完整事件树，但没有任何东西指向真实原因（输出超限 / 模型没收尾）。
+- **候选修法**：①失败轮记录「本轮是否产生过 assistant 文本 / 最后一条消息类型」，把
+  「读完 inventory 就停了」与「吐到一半被截断」分开；②`intent-envelope-missing` 时默认保留
+  scratch 目录若干小时；③在 INTENT.md 里给出「单轮 op / 字节预算」的硬提示并鼓励分批提交。
+
+### D. 工作组「零 delta」告警对**讨论型**工作组必然误报，且是硬编码英文
+
+- `leaderWorker.ts:warnIfZeroDeltaDone` 只要有 assignment 完成且 canonical worktree 无变更
+  就发告警。评审 / 讨论型工作组从不写文件 ⇒ 每次都报。
+- 该消息（连同 `freeCollab.ts` / `engine.ts` 里的同类系统消息）**全部硬编码英文**，在 zh-CN
+  界面里突兀。后端目前没有房间系统消息的 i18n 层，单独翻译一条会造成不一致。
+- **候选修法**：①按工作组是否声明「产出为文件」决定是否检测（需要新的配置维度）；②把房间系统
+  消息统一收进一张可翻译的消息表（跨 RFC 的基础设施改动）。
+
+### E. 本机 DB 与迁移漂移，且启动期无漂移检测
+
+- `mcp_runtime_test_turns` 缺 `raw_command_digest` 列（迁移 0125 里有；空库 `migrate` 后有），
+  于是 RFC-238 的 MCP 运行时试跑在这台机器上 500（`SQLiteError: table … has no column named …`）。
+  成因是 daemon 曾在该迁移文件仍在编辑中的工作树上启动过，drizzle 按序号记为已应用。
+- 平台**启动期不做 schema 漂移检测**，漂移只会在功能被用到时炸成 500。
+- **候选修法**：boot 时把 `__drizzle_migrations` 与实际表结构做一次轻量比对（或至少对每张表的
+  列集合算指纹），不一致就明确报「DB 与迁移不一致，请恢复备份或重建」。
