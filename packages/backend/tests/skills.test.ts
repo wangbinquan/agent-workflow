@@ -259,9 +259,7 @@ describe('skill HTTP routes', () => {
 
   afterEach(() => h.cleanup())
 
-  async function createHttpSkill(
-    body: Record<string, unknown>,
-  ): Promise<{
+  async function createHttpSkill(body: Record<string, unknown>): Promise<{
     id: string
     name: string
     sourceKind: string

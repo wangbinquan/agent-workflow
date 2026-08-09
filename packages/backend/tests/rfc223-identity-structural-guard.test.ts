@@ -140,6 +140,7 @@ const EXACT_ALLOWANCE_ROWS = [
   // by the importing actor; hidden rows from other owners must not influence it.
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fNewExpression:be5e5774c05b6d80827e\u001f1\u001fowner-uniqueness\u001fnew Set( rows.filter((row) => row.ownerUserId === actor.user.id).map((row) => String(row.name)), )',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/commit.ts\u001fmakePackageProvider\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fbuiltin-binding\u001feq(table.name, name)',
+  'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/commit.ts\u001fmakePackageProvider\u001fCallExpression:6d6e7b35a37449eaae8f\u001f1\u001fbuiltin-binding\u001feq(table.name, ref.name)',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/cli/package.ts\u001frunExport\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:613b1a0045d8d1a4940b\u001f1\u001fportable-selector\u001fvisible.find((r) => r.id === idHint && rowName(r) === name)',
@@ -455,7 +456,10 @@ describe('RFC-223 T15 structural identity guard', () => {
     // `resolvedParamsByAgent` 本来就是 name-keyed 的运行时协议表（runner 建、
     // root 也这样读）。此前 claude 根本不查这张表，每个子代理都跑父的模型。
     // 同批次的 `agents[dep.name] = entry` 只是既有条目的指纹改判，不增计数。
-    expect(findings.length).toBe(139)
+    // RFC-271 package hardening：139 → 140。built-in 根在导入目标实例上只能按
+    // wire 的 `(type,name)` 重新绑定；查询同时带 `builtin=true`，同名普通资源
+    // 不能劫持这个 identity boundary。
+    expect(findings.length).toBe(140)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

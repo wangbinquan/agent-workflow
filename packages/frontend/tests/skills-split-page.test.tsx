@@ -251,9 +251,9 @@ describe('/skills split page', () => {
     ).not.toBeNull()
     fireEvent.click(screen.getByTestId('export-package-skill'))
     const exportUrl = await waitFor(() => {
-      const call = vi.mocked(globalThis.fetch).mock.calls.find(([input]) =>
-        String(input).includes('/api/skills/sk1/export-package'),
-      )
+      const call = vi
+        .mocked(globalThis.fetch)
+        .mock.calls.find(([input]) => String(input).includes('/api/skills/sk1/export-package'))
       expect(call).toBeTruthy()
       return new URL(String(call![0]))
     })
