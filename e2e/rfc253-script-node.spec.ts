@@ -276,12 +276,51 @@ test('RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 
   const taskId = /\/tasks\/([A-Z0-9]+)/i.exec(page.url())![1]!
 
   // ── 6. 先在 API 上判定，再看 UI：瞬时状态不会被误当成终态 ─────────────────
-  expect(await pollUntilTerminal(taskId, 90_000)).toBe('done')
+  const finalStatus = await pollUntilTerminal(taskId, 90_000)
 
   const nodeRuns = await api<{
-    runs: { id: string; nodeId: string; status: string }[]
+    runs: {
+      id: string
+      nodeId: string
+      status: string
+      failureCode: string | null
+      errorMessage: string | null
+    }[]
     outputs: { nodeRunId: string; port: string; value: string }[]
   }>(`/api/tasks/${taskId}/node-runs`)
+
+  // 裸 `toBe('done')` 只会告诉你「Expected done / Received failed」，而脚本节点失败的
+  // 真原因（解释器解析不到 / 非零退出码 / 信封解析失败…）全在 node_run 行里。首次上
+  // hosted runner 就撞上这一点：Windows 腿红了，CI 日志里只有 expected/received 两行，
+  // daemon 侧一个字都没有，只能再推一轮才拿得到原因。所以这里把原因随断言一起抛出。
+  if (finalStatus !== 'done') {
+    // 连 stderr 一起捞：脚本节点的失败原因常常只在 node_run_events 里（解释器解析不到、
+    // 非零退出码的最后几行、信封解析失败），`errorMessage` 只是 stderrTail 的后缀。
+    const parts: string[] = []
+    for (const r of nodeRuns.runs) {
+      let tail = ''
+      try {
+        const ev = await api<{ events: { kind: string; payload: string }[] }>(
+          `/api/tasks/${taskId}/node-runs/${r.id}/events`,
+        )
+        tail = ev.events
+          .filter((e) => e.kind === 'stderr' || e.kind === 'text')
+          .slice(-6)
+          .map((e) => `${e.kind}:${e.payload}`)
+          .join(' | ')
+      } catch (err) {
+        tail = `（事件拉取失败：${String(err)}）`
+      }
+      parts.push(
+        `${r.nodeId}=${r.status}${r.failureCode === null ? '' : `/${r.failureCode}`}` +
+          `${r.errorMessage === null ? '' : ` msg=${JSON.stringify(r.errorMessage)}`}` +
+          `${tail === '' ? '' : ` events=[${tail}]`}`,
+      )
+    }
+    throw new Error(
+      `任务终态 ${finalStatus}（期望 done）；各 node_run：${parts.join(' · ') || '（无）'}`,
+    )
+  }
 
   const producerRun = nodeRuns.runs.find((r) => r.nodeId === producerId)
   const consumerRun = nodeRuns.runs.find((r) => r.nodeId === consumerId)
