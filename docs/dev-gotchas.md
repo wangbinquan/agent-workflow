@@ -220,6 +220,37 @@ RFC-271（多资源批量落地）三轮外部设计门共 39 条 findings，**�
   转移）。判别定式：给内核加写路径前，先 grep 该资源现有路由里 `requireResourceOwner` /
   `assertPrincipalCanWrite` 之类的调用，逐个确认新路径是否覆盖到。
 
+## 权限判据不止一套：审计前先把判据面取全（2026-08-09 实测）
+
+问「有没有绕过权限直接读资源的地方」时，**按单一 ACL 去 grep 会得出大量假阳性**。
+本仓的判据是**三套并存、各管一层**：
+
+| 判据                                      | 管什么                                                                                               | 典型入口                                                                          |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **资源 ACL**（`services/resourceAcl.ts`） | 六类资源的**行级** owner / visibility / grant                                                        | `isVisibleRow` / `filterVisibleRows` / `canViewResource` / `requireResourceOwner` |
+| **任务成员制**                            | 任务及其派生（评审 / 反问 / 澄清）——RFC-099 明确任务走**独立的成员制私有模型**，没有 visibility 开关 | `requireTaskMember`                                                               |
+| **类型级权限点**                          | **全局配置**类（运行时注册表 / 设置），它们不是六类 ACL 资源、没有行级 owner                         | 路由声明 `permissions: ['runtime:read']` / `['settings:write']`                   |
+
+实测数据（RFC-271 收尾审计）：六类资源表共 **106** 个直接 `.from()` 读取点，**全部
+在 `services/` 下**（`routes/` 与 scheduler 不直接碰表）；ACL 判据函数 115 个调用点
+分布 32 个文件；**没有 SQL 层可见性过滤**，判定全在内存。
+
+「读表却不调 ACL 判据」的 15 个文件逐个归类后**无一是绕过**：
+
+- **委托**给另一个统一判据（3 个）。范例：`webhook/triggerValidation.ts` 自己读
+  `workflows.definition` 只为做输入映射的 kind-aware 校验，ACL 由它调的
+  `assertScheduledTargetUsable` 全权负责——文件头注释写明「ACL/builtin/upload/
+  launch-shape 全复用」。
+- **不被 `routes/` import**（7 个：scheduler、五个 `skill*` 运维路径、workgroup 引擎）
+  ——执行期与内部运维。符合 RFC-099「启动任务只校验工作流本身可用，**引用闭包隐式
+  授权**」：闭包成员在启动那一刻已经授权过，执行中再逐个判反而与冻结语义冲突。
+- **用户可达但用另一套判据**（reviews / taskQuestions / clarify 走 `requireTaskMember`；
+  runtime / settings 走类型级权限点）。
+
+**审计定式**：先列全判据面再做差集，否则「92 个读取点没有权限校验」这种结论会把
+正确的分层误报成漏洞。反过来，真要找绕过，看的是**差集里既不委托、又被 `routes/`
+import、又没有第二套判据**的那些。
+
 ## 序列化 / 往返（RFC-271 实现门实测，2026-08-08）
 
 实现门在 RFC-271 上抓出 6 条 P1，其中**两条同一根因**：序列化器是对着「我以为的

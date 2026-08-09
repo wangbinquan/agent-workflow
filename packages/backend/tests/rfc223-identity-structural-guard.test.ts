@@ -27,6 +27,8 @@ const ALLOWANCE_REASONS = {
     'The key identifies a browser File or worktree entry, not a persisted resource.',
   'import-name-boundary':
     'Portable ZIP candidates are name-keyed until the selected stable id and owner/OCC token are committed.',
+  'builtin-binding':
+    'Framework builtins bind by NAME across instances: the source id is meaningless on the target, and the lookup is additionally fenced on builtin=true.',
   'injection-validation':
     'This map detects duplicate external registry names after canonical-id hydration.',
   'legacy-path':
@@ -133,6 +135,9 @@ const EXACT_ALLOWANCE_ROWS = [
   // RFC-271 privacy fence: suggested import names only collide with rows owned
   // by the importing actor; hidden rows from other owners must not influence it.
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fNewExpression:be5e5774c05b6d80827e\u001f1\u001fowner-uniqueness\u001fnew Set( rows.filter((row) => row.ownerUserId === actor.user.id).map((row) => String(row.name)), )',
+  'collection-name-identity\u001fpackages/backend/src/services/closureNameConflict.ts\u001ffindClosureNameConflicts\u001fCallExpression:31928c2705d337feda11\u001f1\u001finjection-validation\u001fidsByName.get(r.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/closureNameConflict.ts\u001ffindClosureNameConflicts\u001fCallExpression:7e3ec55af914c2797e3d\u001f1\u001finjection-validation\u001fidsByName.set(r.name, set)',
+  'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/commit.ts\u001fmakePackageProvider\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fbuiltin-binding\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/cli/package.ts\u001frunExport\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:613b1a0045d8d1a4940b\u001f1\u001fportable-selector\u001fvisible.find((r) => r.id === idHint && rowName(r) === name)',
@@ -432,7 +437,16 @@ describe('RFC-223 T15 structural identity guard', () => {
     // RFC-271 T40 显式改判：136 → 137。CLI 导出允许 `--name` 选目标，所以必然按
     // 名字查一次。**它恰恰不是**「按名字解析身份」：命中多行时**报错并列出候选
     // id**，要求用户改用 `--id`——`workflows.name` 非唯一，猜一行就是选错资源。
-    expect(findings.length).toBe(137)
+    // RFC-271 收尾显式改判：137 -> 140，三条，都是**有意的按名字**：
+    //   · `closureNameConflict.ts` 的 `idsByName` 两处 —— 这个模块的职责就是
+    //     **找出闭包内的同名冲突**（运行时注入按名字组织：技能按名字建目录、MCP
+    //     按名字写 mcpServers key，两个同名资源会静默互相覆盖）。按名字聚合是它的
+    //     目的本身，且它先按 id 去重，只把「不同 id 共享同一名字」判成冲突。
+    //   · `resourcePackage/commit.ts` 的 `resolveBuiltin` —— 框架 built-in 跨实例
+    //     **按名字**绑定：源库 id 在对端没有任何意义，复制一份只会得到 owner 错、
+    //     `builtin=false` 的同名副本。查询额外用 `builtin=true` 兜底，所以它不会
+    //     绑到某个碰巧同名的用户资源。
+    expect(findings.length).toBe(140)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three

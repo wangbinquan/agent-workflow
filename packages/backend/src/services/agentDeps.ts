@@ -28,13 +28,12 @@
 //     other row's dependsOn).
 
 import type { Agent, RefCallPolicy } from '@agent-workflow/shared'
-import { VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
+import { resourceRefKey, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
 import { like } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { agents } from '@/db/schema'
 import { DomainError } from '@/util/errors'
 import { getAgentById } from './agent'
-import { runtimeIdRef, runtimeRefKey } from './ref/runtimeRef'
 
 export type DependsClosureResult =
   | { ok: true; agents: Agent[] }
@@ -83,7 +82,17 @@ export async function resolveDependsClosure(
   //
   // ⚠️ 只有**去重键**换成 canonical 形态；`path` / `cyclePath` 保持**裸 id**——
   // 它们会进 HTTP 响应（`routes/agents.ts:459/564`）给人读。
-  const keyOf = (id: string): string => runtimeRefKey(runtimeIdRef('agent', id))
+  //
+  // ⚠️ 直接用 shared 的 `resourceRefKey`，**不经过** backend 的
+  // `services/ref/runtimeRef.ts`：后者为了 `agentSkillRef` 需要 `getAgentById`，
+  // 从而 import `services/agent`，而 `services/agent` 又 import 本文件的
+  // `validateDependsOn` —— 走它会形成 agentDeps → runtimeRef → agent → agentDeps
+  // 的环（`bun run depcheck` 的 no-circular 会红）。
+  //
+  // 这不是绕开统一入口：`runtimeRefKey` 本身**就只是** `resourceRefKey` 的一行
+  // 转发，shared 的那个才是键的单一定义。三处运行期消费者走 runtimeRef 是因为它们
+  // 还要 `agentSkillRef` 那些解析；这里只需要键。
+  const keyOf = (id: string): string => resourceRefKey({ k: 'id', type: 'agent', id })
   const visited = new Map<string, Agent>([[keyOf(root.id), root]])
   const order: Agent[] = [root]
   const queue: Array<{ id: string; path: string[] }> = []
