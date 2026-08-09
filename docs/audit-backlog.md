@@ -348,7 +348,7 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 - ⏳ **`gate:local` 在满载机器上会随机红掉计时敏感的后端用例（模式，非单条）**。RFC-270 实施期
   两次连跑 `gate:local` 分别红在**不同**的用例上 —— `RFC-098 WP-8 runner escalation ... 
-  child AND grandchild group-killed`（5537ms）与 `rfc199 start-task-cleanup-incomplete`
+child AND grandchild group-killed`（5537ms）与 `rfc199 start-task-cleanup-incomplete`
   （git `cannot lock ref ... is at X but expected Y` 的并发竞争）—— 两条单独重跑都全绿，
   且当轮 diff **一行后端代码都没碰**（只有 design.md / WorkflowCanvas.tsx / 两个 i18n /
   一个新前端测试），归属为机器饱和而非改动。`gate:local` 把 backend 四分片与 quality lane
@@ -365,7 +365,7 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 - ⏳ **`prose-code-mermaid-theme.test.tsx` 的主题切换用例在满载机器上仍会超时（RFC-270 实施期撞上，
   非本 RFC 引入）**。用例 `toggling <html data-theme> dark→light re-invokes MermaidBlock.render with
-  new theme` 在一次 `gate:local` 里红（耗时 ~5050ms，恰好压在它自己那条 5000ms 显式预算上）；
+new theme` 在一次 `gate:local` 里红（耗时 ~5050ms，恰好压在它自己那条 5000ms 显式预算上）；
   该 lane 与 backend 四分片并发跑，机器满载。归属明确：owning commit `f37ef44d`
   （标题就是「fix macos-only flakes in … mermaid theme test」），测试顶部注释已写明根因是
   `useResolvedTheme` 的 MutationObserver → setState → useEffect → renderSpy 这条效果链在慢 runner
@@ -420,26 +420,28 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 - ⏳ **两条 CI flaky（RFC-269 实施期间连续撞上，均非本 RFC 引入，各需 owner 处置）**：仓规明令「绝不允许『重跑就过了』作为通过依据」，故在此登记而不是就地重跑了事。
   - `packages/frontend/tests/unsaved-guard.test.tsx > dismiss via ESC = stay, then a later nav blocks again`（owning commit `5a1f6993` / RFC-250）：**仅 macOS shard 1/3** 红，该用例耗时 `5139ms`（同文件其余用例 ~100ms），ubuntu 同分片绿、本地 19/19 稳定绿。症状是 ESC 后 `unsaved-guard-dialog` 仍在 DOM 里 —— `waitFor` 等的是「消失」，在慢 runner 上像是没等到重渲染。归属判据：该测试自建路由树、**不 import 真实 settings 路由**，与并发改动零耦合。
   - `RFC-227 REAL macOS Seatbelt provider (gated) > denies app secrets, seal writes, and child network while preserving worktree writes`（owning commit `5c3eacf1` / RFC-252 G2）：**仅 macOS shard 1/4** 红，耗时 `5015ms` 像是撞上超时上限。**硬证据表明与代码无关**：红 run（`b2754f65`）与它前一个绿 run（`7322beef`）之间的全部差异是 **两个 `.md` 文件各改一行**；两行 markdown 改不了 macOS 沙箱行为。两条都在重跑后整 run success。
-  **Seatbelt 那条已修（用户拍板后动手）**：根因确证 —— 该用例只在 CI 跑（`ci.yml` 的 macOS 腿设 `RUN_SANDBOX_ITEST=1`，本地恒 skip，所以躲过全部本地门禁），而它内含一次**预期被网络围栏拦住**的 `curl --max-time 2`（必然走满 2 秒）加多次 `sandbox-exec` 冷启动；本机 380ms、runner 5009ms，正卡在 bun 默认 5000ms 上。已给两个 gated 用例加显式 `30_000ms` 超时并在文件顶部写明理由（真挂起仍会失败，不是把上限抬到永不触发）。
-  **RFC-250 名下现在是两条，建议 owner 一起处置**：除 unsaved-guard 外，
-  `centralized-answer-pane.test.tsx > single-choice digit key picks the option AND advances to the
-  next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗时 `10026ms` —— 它**已经被
-  放宽过一次**（`7a1c119c`：3s→10s，理由就写着「loaded CI 时序」），10 秒仍然不够。测试里那条注释
-  已经点出根因：数字键处理器是**原生监听器**，受控 radio 的 React commit 在满载 runner 上可能落到下
-  一个 turn。继续加超时是治标；正解是等一个**事件驱动**的锚点（例如 `findBy*` 配合真实的 commit 信号）
-  而不是轮询 `checked`。该测试只 import 自建 QueryClient / api / clarify libs / auth store / i18n，
-  与 RFC-270 改动无任何 import 路径相连。
-  **复发频次值得注意**：仅 RFC-270 实施期的 6 次 CI 里它就红了 **3 次**（ubuntu shard 3/3 为主，
-  耗时稳定压在 10026 / 10033ms —— 即正好越过它自己的 10s 预算），已是本仓命中率最高的一条。
-  继续加超时只会把这个数字往后推；根因是拿轮询式 `waitFor` 等一个**原生监听器 → 受控 radio 的
-  React commit**跨 turn 的效果，满载 runner 上随时越线。
-  **2026-08-08 第 4 次复发（run 31242157114，`c24eeeb0`，windows-latest shard 3/3）**：这次是 **windows** 腿，说明它和 unsaved-guard 一样**不挑 OS**（此前记的是「ubuntu 为主」）。失败快照给出了根因的直接证据 —— 两个 `<input type="radio">` **都没有 `checked`**，即数字键的原生监听器已触发、受控 radio 的 React commit 还没落，`waitFor` 轮到超时；这与登记里推断的一致，不必再猜。归属仍与触发它的改动无关（该 run 含的两笔提交分别只动 backend `services/intent/*` + 两份 md、以及 `design/RFC-271-*/` 三份 md）。**该 run 的其余失败都是它的连带**：`Playwright e2e (shard 2/4)` 是被这条 failure 触发的 cancel，不是独立问题。
-  **unsaved-guard 那条仍未决**，留给 RFC-250 owner：建议换更稳的等待锚点（`findBy*` 而非 `waitFor` + `queryBy`），不宜由无关改动顺手改测试。
-  **2026-08-08 复现（RFC-270 push `c584d6bb`）**：同一测试同一 `test.each` 分支（`ESC`）在 **windows-latest shard 1/3** 又红一次，耗时 `5178ms`，而同文件的 `×` 分支同一 run 里 187ms 通过 —— 两条走的是同一个 helper，27 倍的耗时差说明是时序而非逻辑。**归属不变**（该测试自建路由树，只 import `__root` / `ResourceSplitPage` / `splitDirty` / auth store / i18n，**不 import** 任何 RFC-270 改动的模块），且现在已知它**不是 macOS 独有**，两个 OS 都能命中。
+    **Seatbelt 那条已修（用户拍板后动手）**：根因确证 —— 该用例只在 CI 跑（`ci.yml` 的 macOS 腿设 `RUN_SANDBOX_ITEST=1`，本地恒 skip，所以躲过全部本地门禁），而它内含一次**预期被网络围栏拦住**的 `curl --max-time 2`（必然走满 2 秒）加多次 `sandbox-exec` 冷启动；本机 380ms、runner 5009ms，正卡在 bun 默认 5000ms 上。已给两个 gated 用例加显式 `30_000ms` 超时并在文件顶部写明理由（真挂起仍会失败，不是把上限抬到永不触发）。
+    **RFC-250 名下现在是两条，建议 owner 一起处置**：除 unsaved-guard 外，
+    `centralized-answer-pane.test.tsx > single-choice digit key picks the option AND advances to the
+next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗时 `10026ms` —— 它**已经被
+    放宽过一次**（`7a1c119c`：3s→10s，理由就写着「loaded CI 时序」），10 秒仍然不够。测试里那条注释
+    已经点出根因：数字键处理器是**原生监听器**，受控 radio 的 React commit 在满载 runner 上可能落到下
+    一个 turn。继续加超时是治标；正解是等一个**事件驱动**的锚点（例如 `findBy*` 配合真实的 commit 信号）
+    而不是轮询 `checked`。该测试只 import 自建 QueryClient / api / clarify libs / auth store / i18n，
+    与 RFC-270 改动无任何 import 路径相连。
+    **复发频次值得注意**：仅 RFC-270 实施期的 6 次 CI 里它就红了 **3 次**（ubuntu shard 3/3 为主，
+    耗时稳定压在 10026 / 10033ms —— 即正好越过它自己的 10s 预算），已是本仓命中率最高的一条。
+    继续加超时只会把这个数字往后推；根因是拿轮询式 `waitFor` 等一个**原生监听器 → 受控 radio 的
+    React commit**跨 turn 的效果，满载 runner 上随时越线。
+    **2026-08-08 第 4 次复发（run 31242157114，`c24eeeb0`，windows-latest shard 3/3）**：这次是 **windows** 腿，说明它和 unsaved-guard 一样**不挑 OS**（此前记的是「ubuntu 为主」）。失败快照给出了根因的直接证据 —— 两个 `<input type="radio">` **都没有 `checked`**，即数字键的原生监听器已触发、受控 radio 的 React commit 还没落，`waitFor` 轮到超时；这与登记里推断的一致，不必再猜。归属仍与触发它的改动无关（该 run 含的两笔提交分别只动 backend `services/intent/*` + 两份 md、以及 `design/RFC-271-*/` 三份 md）。**该 run 的其余失败都是它的连带**：`Playwright e2e (shard 2/4)` 是被这条 failure 触发的 cancel，不是独立问题。
+    **unsaved-guard 那条仍未决**，留给 RFC-250 owner：建议换更稳的等待锚点（`findBy*` 而非 `waitFor` + `queryBy`），不宜由无关改动顺手改测试。
+    **2026-08-08 复现（RFC-270 push `c584d6bb`）**：同一测试同一 `test.each` 分支（`ESC`）在 **windows-latest shard 1/3** 又红一次，耗时 `5178ms`，而同文件的 `×` 分支同一 run 里 187ms 通过 —— 两条走的是同一个 helper，27 倍的耗时差说明是时序而非逻辑。**归属不变**（该测试自建路由树，只 import `__root` / `ResourceSplitPage` / `splitDirty` / auth store / i18n，**不 import** 任何 RFC-270 改动的模块），且现在已知它**不是 macOS 独有**，两个 OS 都能命中。
 - ⏳ **call-workflow / call-workgroup 的目标选择器在 intent 路径退化成裸名字（Codex 实现门 P1-1，2026-08-08 登记；当前只做了 doc 侧缓解）**：意图会话手里**有 handle**（inventory 每行都印着 `res#workflow#N`），却只能把 `workflowName` 这个裸名字写进定义 —— 信息在这一步白白丢掉。而 `workflows.name` **非唯一**（`db/schema.ts:478` 明写），`resolveIntentBundle` 既不解析 call ref 也不回填 `workflowId`（`resolveChangeset.ts` 对 `workflowName` 零处理），于是 launch 期 `freezeCallClosure` 走 name fallback、按「启动者可见行里最老的 ULID」定夺（`execution/closure.ts:173-176`）—— **可能执行的不是用户挂载的那一个**。第二条相关缺陷：用户在确认界面用 `finalName` slot 给同 bundle 的新建目标改名后，caller 的 selector 仍是模型写的旧名（`nameOf` 只覆盖被改名 op 自己的 payload，`resolveChangeset.ts:479`），留下一个指向不存在名字的 stale 引用，launch 期报 `call-workflow-ref-missing`。**本轮只做了 doc 缓解**：INTENT.md 现在明说「名字不是稳定引用、改名会打断所有 caller」「名字不唯一、命中多个时 launch 绑最老的可见行，该问用户而不是猜」，并要求只对 mounted 目标建 call 节点。**正解是子系统改动**（intent 侧接受 handle/tempRef → resolve 阶段解析成 canonical id + final name → 同时写 `workflowId` 与 `workflowName`），要动 `IntentRefSchema` / `resolveIntentBundle` / apply 三处，按 `dev-gotchas.md` §impl-gate 经验规律属「生产逻辑类 finding = 子系统级」，不在本次 doc 补齐范围内，留给 RFC-243 owner。**注意画布路径同样只写 name**（`nodePalette.ts:198` 的 `makeDefaults: () => ({ workflowName: '' })`），所以这不是 intent 独有的降级，而是 RFC-243 的既有设计面 —— intent 只是**本可以做得更好却没有**。
 - ⏳ **第六条同源 flaky：`prose-code-mermaid-theme.test.tsx > toggling <html data-theme> dark→light re-invokes MermaidBlock.render with new theme`**（2026-08-08 本机满载 `gate:local` 复现一次，backend 四分片与 frontend 729 文件并发）。**归属明确不是触发它的那次改动**：该轮 diff 只有 backend 的 `intentDoc.ts` + 四个 backend 测试 + 两份 md，`git diff --name-only HEAD | grep frontend` 为空；单跑该文件连续 3 次 3/3 全绿，只有全量并发时才红。**与已登记的 unsaved-guard、centralized-answer-pane 是同一形态**，值得一起处置：三条都在用轮询式 `waitFor` 等一个**跨 turn 的 React commit**（这条是 `MutationObserver` → setState → useEffect → renderSpy 的四段链），满载 runner 上随时越线。而且三条**都已经被放宽过超时**——这条的注释里就写着「2026-05-22 CI run 26297919707 确认环境 flake，把默认 1s 提到 5s」，如今 5s 也不够。**继续加超时是这类问题的错解**：预算只要还是「猜一个够大的数」，负载一变就再越线。正解方向一致——换成事件驱动的锚点（等一个真实的 commit 信号 / `findBy*`），而不是轮询状态直到超时。
   **对 owner 最有用的一条新事实：这两条在本机满载下可复现，不必等 CI**。2026-08-08 一次 `bun run gate:local`（backend 四分片与 frontend 729 文件并发）里，`centralized-answer-pane` 与 `prose-code-mermaid-theme` **同一次一起红**（`Test Files 2 failed | 727 passed`，backend 侧 4/4 全绿）。此前两条都记作「CI 偶现」，实际只要把机器压满就能在本地重现——修复与验证都不再需要靠 CI 抽样，直接 `gate:local` 循环即可。
 - ⏳ **第十条（**很可能是第六/七/九条与本机满载 flaky 的共同放大器**）：`bun test --isolate` 的 shard 会**忙等空转**，不自行退出，也不被任何超时收割**（2026-08-09 本机实测两例）。现场：`ps` 里两个 `bun test --isolate --randomize --shard=2/4` 进程，`STAT=R`、**99–100% CPU**，分别已跑 **3h37m** 与 **19h07m**；`sample` 抓栈显示主线程停在 `kevent64` 紧循环 + JIT 帧 —— 是**忙等**，不是死锁等 I/O。两例 shard-2 最后创建的 fixture 不同（`aw-rfc107-leaf-` / `aw-mig0106-partial-`），所以不是某一条用例的固定死循环。**危害有两层**：①单次 `gate:local` 永远不返回（本地没有 CI 那种 job timeout 兜底，只能人工发现）；②**没被发现的那个会一直偷走一个核**——19h 那个从 08-08 12:41 起就在跑，而本仓 08-08 12:41 之后的**每一次**本机门禁都在与它抢 CPU。这足以解释同期集中出现的计时敏感 flaky（第六/七条的前端 `waitFor` 越线、`RFC-098 WP-8` 的 5691ms、以及第九条 Windows 分片之外的本机复现），**那些条目里「机器饱和」的归因应当理解为「有一个跑飞的分片在偷核」，而不是负载天然如此**。**给 owner 的三件事**：①`gate:local` 给每个分片加**墙钟上限**（CI 侧 job timeout 已有，本地完全没有），超时打印该分片已跑到哪个文件再杀；②查清 bun 在 `--isolate` 下什么条件会让事件循环空转不退（两例都在 shard 2，值得先看该分片的文件集合有没有共同点）；③排查前先 `ps -eo pid,etime,%cpu | grep "bun test"`——历史遗留的跑飞进程会让**任何**计时结论失真。
+
+- ⏳ **第十一条（**修正第十条的归因**）：`RFC-098 WP-8 — runner escalation against a stubborn child > timeout: ...; child AND grandchild group-killed` 在**没有任何跑飞进程**的情况下仍会在 4 分片并发下红**（2026-08-09，RFC-271 实现门修复轮的 `bun run test:backend`，shard 2/4 单点红，5516ms；其余三分片全绿）。失败断言是文件末尾的 `expect(await waitDead(grandchildPid)).toBe(true)` —— 等孙进程随进程组一起死。**为什么值得单独登记**：第十条把同期这条的越时归因于「有一个 19 小时的跑飞分片在偷核」，而本次复现前那两个跑飞进程**已被杀掉并确认 `ps` 计数为 0**，机器上只有本次门禁自身的 4 个分片（load avg 9.76）。所以正确结论是：**跑飞进程是放大器，不是必要条件**——这条用例在正常的 4-shard 并发下就会越线，第十条那句「那些条目里『机器饱和』的归因应当理解为『有一个跑飞的分片在偷核』」需要按本条收窄。**归属明确不是本轮改动**：RFC-271 实现门修复轮的 diff 是 `services/resourcePackage/*` / `services/bundle/*` / `cli/package.ts` / `cli/start.ts` / 三份文档 + 两个新测试文件，与进程治理/runner 升级链路零交集；该测试文件不 import `cli/start.ts`（本轮唯一碰到的 daemon 侧文件）；**同一份代码的非分片全量跑 9631 pass / 0 fail**，隔离复跑 3/3 全绿。**留给 owner**：`waitDead` 的等待预算与 `waitForFile(h.pidFile)` 一样是「猜一个够大的数」，与第六/七条同形——继续加超时只是把数字往后推；孙进程死亡有可观测锚点（进程组消失），值得换成事件驱动而非轮询到超时。
 
 - ⏳ **第九条：Windows 前端分片的 runner 饥饿（20s testTimeout 集体撞线）**（2026-08-09，run 含 push `d53aebf6`，**windows-latest shard 2/3** 三条同时超时：`AgentForm-outputs-kind` 32.3s、`workflow-edge-insertion` 28.1s、`review-decision-info` 22.0s，预算均为 20s）。**归属证据是决定性的**：`workflow-edge-insertion.test.ts` 是**纯函数** planner 测试——不挂 DOM、不渲染 React、不发请求；一个纯函数跑不完 20 秒，只可能是 runner 被饿死，不可能是逻辑变慢。而当轮 diff **纯后端**（`services/mcp.ts` 的一个可选字段 + `intent/applyChangeset.ts` 一行 + 一个 backend 测试），与前端零交集；同 run 的 ubuntu / macOS 前端分片全部 success。**与已登记的第六/七条不是一回事**：那两条是「轮询式 `waitFor` 等一个跨 turn 的 React commit」，这一条连等待面都没有，是整机吞吐问题。**留给 CI owner 的方向**：Windows 前端分片要么降低并发（vitest `poolOptions.threads.maxThreads`）、要么给 win32 单独抬高 `testTimeout`——但后者又是「猜一个够大的数」，与第六条的教训冲突；更稳的做法是先测出该分片的实际并发与 CPU 配额是否失配（三条同时撞线、且其中一条不含任何异步等待，指向的是调度而不是单条用例）。
 

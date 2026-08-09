@@ -19,13 +19,13 @@ skills/…        技能文件树，二进制原样
 
 ### manifest 字段
 
-| 字段 | 含义 |
-|---|---|
-| `formatVersion` | 比本实例高就拒绝导入 |
-| `root` | 这个包是围绕谁导出的 |
-| `resources[]` | 闭包成员（slug / type / name） |
-| `requirements` | **导入方需要自备**的东西，不是包的内容 |
-| `secrets[]` | 被脱敏字段的**位置**（没有值） |
+| 字段                 | 含义                                                           |
+| -------------------- | -------------------------------------------------------------- |
+| `formatVersion`      | 比本实例高就拒绝导入                                           |
+| `root`               | 这个包是围绕谁导出的                                           |
+| `resources[]`        | 闭包成员（slug / type / name）                                 |
+| `requirements`       | **导入方需要自备**的东西，不是包的内容                         |
+| `secrets[]`          | 被脱敏字段的**位置**（没有值）                                 |
 | `danglingCallRefs[]` | 解析不到的 call 目标（late-bound，导入后仍按名字在启动期解析） |
 
 `requirements` 单列的理由：执行档名、插件来源、仓库自带技能、MCP 形态、工作组的
@@ -47,6 +47,12 @@ Alice 的 `lint`）和代理 B（用 Bob 的 `lint`）。
 ## 2. 导出
 
 `GET /api/{类}/:id/export-package`（六条），或 CLI。
+
+可选 `?expectedVersion=` / `?expectedSnapshotHash=`：**只 fence root**，对不上给 409
+（`package-root-changed`）。防的是「你看着 v1 按了导出，实际拿到 v2」。
+
+闭包成员**取最新、不 fence**——这与任务执行同语义（执行期非 root 依赖同样取最新）。给成员
+也 fence 会要求客户端先知道整个闭包才能给出期望值，而闭包正是导出这一步才算出来的。
 
 ### 谁能导出
 
@@ -74,13 +80,14 @@ Alice 的 `lint`）和代理 B（用 Bob 的 `lint`）。
 
 被替换成占位符的是**值**，结构一律保留：
 
-| 载体 | 处理 |
-|---|---|
-| MCP `config.env.*` / `headers.*` | 值 → 占位符，键保留 |
-| MCP `oauth.clientSecret` | 值 → 占位符，**`oauth` 仍是对象** |
-| MCP argv 内嵌 token | 只替换命中的**那一个** token，argv 结构与长度不变 |
-| URL userinfo | 整段去掉，URL 仍是合法 http(s) URL |
-| plugin `spec` / `options`、agent `frontmatterExtra`、脚本节点 `env` | 键名命中或高熵 ⇒ 值替换 |
+| 载体                                                                | 处理                                                           |
+| ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| MCP `config.env.*` / `headers.*`                                    | 值 → 占位符，键保留                                            |
+| MCP `oauth.clientSecret`                                            | 值 → 占位符，**`oauth` 仍是对象**                              |
+| MCP `command` argv 内嵌 token                                       | 只替换命中的**那一个** token，argv 结构与长度不变              |
+| plugin `spec` 的 git URL 凭据                                       | 与 `requirements.pluginSources` 走**同一条**（两处都不含密钥） |
+| URL userinfo                                                        | 整段去掉，URL 仍是合法 http(s) URL                             |
+| plugin `spec` / `options`、agent `frontmatterExtra`、脚本节点 `env` | 键名命中或高熵 ⇒ 值替换                                        |
 
 **枚举字段绝不脱敏**：把 `type:'remote'` 换成占位符会让导入侧的判别联合直接崩，
 而它本来就不是密钥。
@@ -93,6 +100,14 @@ Alice 的 `lint`）和代理 B（用 Bob 的 `lint`）。
 > ⚠️ **技能文件树不扫描**。包里的技能文件按原样打包；如果作者把凭据硬编码在技能
 > 文件里，那会原样进包。这是**作者责任**，不是平台会替你兜住的事。
 
+技能内容**不在 DB 里**——`skills` 表只有 `managed_path`，SKILL.md 与全部辅助文件都在
+`${appHome}/skills/{id}/files/` 下。导出读整棵树写进 zip 的 `skills/<slug>/files/…`，
+**不设大小上限**（一个技能带多大的辅助文件是作者的事，截断会产出一个「看起来成功」的残包）。
+SKILL.md 结构化进 payload（frontmatter + 正文），不重复打包一份。
+
+symlink 逃逸在导出这条路径上被挡住：技能目录里一个 `secret -> ~/.ssh/id_rsa`，在线读取只
+泄漏给该技能的读者，打进 zip 却会被搬到另一台机器。读取复用 `realpathInside` 的边界。
+
 ## 3. 导入
 
 两步：`POST /api/resource-packages/preview` → `POST /api/resource-packages/commit`。
@@ -102,20 +117,36 @@ Alice 的 `lint`）和代理 B（用 Bob 的 `lint`）。
 
 预检对包里每一条列出本地同名候选（**可以多个**）与允许的动作：
 
-| 动作 | 条件 |
-|---|---|
-| `new` | 总是可以 |
-| `reuse` | 本地有可见的同名资源 |
-| `overwrite` | 本地有**你自己拥有**的同名资源 |
+| 动作        | 条件                                                       |
+| ----------- | ---------------------------------------------------------- |
+| `new`       | 令牌有该类的 `*:create`                                    |
+| `reuse`     | 本地有可见的同名资源（**不需要写权限**——它一个字节都不写） |
+| `overwrite` | 本地有**你自己拥有**的同名资源，且令牌有该类的 `*:update`  |
 
 **别人的资源可以复用，但不给覆盖选项**——这是两条独立的规则，不是一条。
+
+写权限与界面完全一致：界面上没有 `agents:create` 就没有「新建」按钮，这里也不给 `new`。
+某个条目**一个动作都不剩**时整包拒绝（`package-write-forbidden`），而不是跳过它——少掉的
+那条是别人的传递依赖，装出来必然悬空。
+
+### human 成员要逐个选映射
+
+工作组的 human 成员在包里带的是**源实例的 username**，本机的 `user_id` 与它没有任何关系。
+预检把每个 human 成员列成一个待映射的槽，导入方逐个选绑到哪个本地用户，或选**不加入**。
+本地恰好有同名 active 用户时预填为建议值，但仍要用户拍板——同名不等于同一个人。
+
+例外：`leader_worker` 模式的 leader 槽**不允许跳过**（没有 leader 的组根本起不了），
+留空提交会被 `package-human-mapping-required` 拒。
+
+映射的**候选基线**同样进 `previewToken` 签名面。不签它，客户端就能把某个成员映射到一个
+预检里从未列为候选的 user id——与下面 `expect` 那一版绕法同构。
 
 ### 两次之间靠什么绑定
 
 - **`importId`**：幂等键，原样回传。没有它，commit 成功但响应丢失后重传同一个包
   会**再建一遍资源**。
 - **`previewToken`**：把**整套确认基线**签死（`importId ‖ actor ‖ packageDigest ‖
-  exp ‖ canonical(每条目的候选 id / 各候选 expect / 允许动作)`）。
+exp ‖ canonical(每条目的候选 id / 各候选 expect / 允许动作)`）。
 
 后者的两版错误写法值得记下来，因为它们看起来都挺合理：
 
@@ -147,31 +178,44 @@ GC 又被任一非终态 run 挡住，结果是永久残留。
 
 ```
 agent-workflow package export --as-user <u> --type <t> (--id <id> | --name <n>) --out <f.zip>
-agent-workflow package import --as-user <u> --file <f.zip> [--plan <p.json> | --on-conflict <a>]
+agent-workflow package import --as-user <u> --file <f.zip>
+    (--plan <out.json> | --apply <in.json> | --on-conflict <new|reuse|overwrite>)
 ```
 
 - **`--as-user` 强制**。CLI 直接读写本机 DB，但仍解析成真实 Actor 并套用与 HTTP
-  **相同**的可见性与归属规则——它不是绕过判据的通道。
+  **相同**的可见性与归属规则——它不是绕过判据的通道。非 `active` 用户直接拒绝：HTTP 侧
+  session lookup 对停用用户返回 null，只查「行存在」会让 CLI 给一个停用主体造出可写 Actor。
 - **`--id` 存在的理由**：同一个 owner 可以有两个同名工作流（`workflows.name`
   非唯一），`--name` 命中多行时命令**报错并列出候选**，不猜。
-- `--plan` 与 `--on-conflict` 互斥：一个是逐条显式决策文件，一个是一刀切默认。
+- **导入默认两阶段**：`--plan` 写出决策计划（含 human 成员映射）且**不提交任何东西**，
+  复核后 `--apply` 提交。计划里带着那次预检的 `previewToken`——`--apply` 消费的是**用户
+  复核过的那份基线**，不是重算一遍。
+- `--on-conflict` 是一刀切逃生口。三者互斥，且**三个都不给是错误**：导入会创建和覆盖资源，
+  没有静默默认这一档。
 
 ## 5. 失败原因对照
 
-| 错误码 | 含义 |
-|---|---|
-| `package-export-ref-unavailable` | 闭包里有你看不见的资源（含传递） |
-| `package-duplicate-resource-name` | 闭包里两个同 (类型,名字) —— 包无法表示 |
-| `package-privileged-node-forbidden` | 含脚本 / 代码平台节点但缺对应权限 |
-| `package-format-unsupported` | 包的 formatVersion 比本实例高 |
-| `package-unlisted-entry` | 包里有未在 manifest/bundle 登记的条目 |
-| `package-invalid` | manifest / bundle.json 结构或引用有问题 |
-| `package-preview-token-invalid` | 验签失败 / 换了包 / 换了人 |
-| `package-preview-expired` | 预检过期（**仅首次提交**会这样） |
-| `package-decision-missing` | 有条目没给决策 |
-| `package-decision-not-allowed` | 动作不在服务端重算的允许集合里 |
-| `package-decision-unconfirmed` | 目标不在确认过的候选里 |
-| `package-selected-target-changed` | reuse 目标在预检之后变了 |
-| `package-overwrite-not-owned` | 覆盖目标不归你所有 |
-| `bundle-apply-unsettled` | 同一 importId 有一次未结的尝试 |
-| `bundle-apply-failed-replay` | 同一 importId 上次失败了（不会静默重跑） |
+| 错误码                              | 含义                                                                |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| `package-export-ref-unavailable`    | 闭包里有你看不见的资源（含传递）                                    |
+| `package-duplicate-resource-name`   | 闭包里两个同 (类型,名字) —— 包无法表示                              |
+| `package-privileged-node-forbidden` | 含脚本 / 代码平台节点但缺对应权限                                   |
+| `package-format-unsupported`        | 包的 formatVersion 比本实例高                                       |
+| `package-unlisted-entry`            | 包里有未在 manifest/bundle 登记的条目                               |
+| `package-invalid`                   | manifest / bundle.json 结构或引用有问题                             |
+| `package-preview-token-invalid`     | 验签失败 / 换了包 / 换了人                                          |
+| `package-preview-expired`           | 预检过期（**仅首次提交**会这样）                                    |
+| `package-decision-missing`          | 有条目没给决策                                                      |
+| `package-decision-not-allowed`      | 动作不在服务端重算的允许集合里                                      |
+| `package-decision-unconfirmed`      | 目标不在确认过的候选里                                              |
+| `package-selected-target-changed`   | reuse 目标在预检之后变了                                            |
+| `package-overwrite-not-owned`       | 覆盖目标不归你所有                                                  |
+| `package-write-forbidden`           | 令牌缺该类写权限，且没有可复用的同名资源                            |
+| `package-decision-duplicate`        | 同一条目给了多条决策（不靠「后写覆盖」收场）                        |
+| `package-root-changed`              | root 在你加载之后变了（`expectedVersion` / `expectedSnapshotHash`） |
+| `package-human-mapping-missing`     | 有 human 成员没给映射                                               |
+| `package-human-mapping-required`    | leader 槽不允许选「不加入」                                         |
+| `package-human-mapping-invalid`     | 映射目标不是 active 用户                                            |
+| `package-human-mapping-unconfirmed` | 映射的成员不在确认过的槽位里                                        |
+| `bundle-apply-unsettled`            | 同一 importId 有一次未结的尝试                                      |
+| `bundle-apply-failed-replay`        | 同一 importId 上次失败了（不会静默重跑）                            |

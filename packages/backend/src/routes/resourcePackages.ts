@@ -18,7 +18,11 @@ import { registerRoute } from '@/routes/registry'
 import { exportResourcePackage } from '@/services/resourcePackage/export'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
 import { buildPackagePreview } from '@/services/resourcePackage/preview'
-import { commitResourcePackage, type ImportDecision } from '@/services/resourcePackage/commit'
+import {
+  commitResourcePackage,
+  type HumanMemberMapping,
+  type ImportDecision,
+} from '@/services/resourcePackage/commit'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
 
@@ -30,6 +34,17 @@ const ImportDecisionsSchema = z.array(
       action: z.enum(['new', 'reuse', 'overwrite']),
       targetId: z.string().min(1).max(64).optional(),
       finalName: z.string().min(1).max(256).optional(),
+    })
+    .strict(),
+)
+
+/** human 成员映射：`userId: null` = 该成员不加入（leader 槽会在业务层被拒）。 */
+const HumanMemberMappingsSchema = z.array(
+  z
+    .object({
+      workgroupSlug: z.string().min(1).max(128),
+      username: z.string().min(1).max(64),
+      userId: z.string().min(1).max(64).nullable().optional(),
     })
     .strict(),
 )
@@ -49,13 +64,38 @@ export interface ResourcePackageRouteDeps {
  * 地躺在守卫之外，而仓里对「守卫悄悄不再覆盖某物」的态度很明确。共享逻辑收在
  * `exportHandler` 里，重复的只是声明本身，那正是要被守卫看见的部分。
  */
+/**
+ * `?expectedVersion=` / `?expectedSnapshotHash=` —— 两者都可选，给了就必须对上。
+ * 非法的 `expectedVersion`（`0` / `abc` / 小数）是**拒绝**而不是当没给：静默忽略
+ * 一个写错的 fence，等于用户以为有保护而实际没有。
+ */
+function parseRootFence(c: Context): { expectedVersion?: number; expectedSnapshotHash?: string } {
+  const out: { expectedVersion?: number; expectedSnapshotHash?: string } = {}
+  const rawVersion = c.req.query('expectedVersion')
+  if (rawVersion !== undefined) {
+    const parsed = z.coerce.number().int().positive().safeParse(rawVersion)
+    if (!parsed.success) {
+      throw new ValidationError('package-invalid', 'expectedVersion must be a positive integer')
+    }
+    out.expectedVersion = parsed.data
+  }
+  const hash = c.req.query('expectedSnapshotHash')
+  if (hash !== undefined && hash !== '') out.expectedSnapshotHash = hash
+  return out
+}
+
 function exportHandler(type: AclResourceType, deps: ResourcePackageRouteDeps) {
   return async (c: Context): Promise<Response> => {
     const pkg = await exportResourcePackage(
       deps.db,
       actorOf(c),
       { type, id: c.req.param('id') ?? '' },
-      { exportedAt: Date.now() },
+      {
+        appHome: deps.appHome,
+        exportedAt: Date.now(),
+        // 「所见非所得」防护，**只针对 root**：闭包成员取最新，与任务执行同语义。
+        expect: parseRootFence(c),
+      },
     )
     return new Response(new Blob([pkg.zip]), {
       headers: {
@@ -191,6 +231,20 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
         })
       }
       const decisions: ImportDecision[] = parsed.data
+      // 工作组的 human 成员：包里带的是源实例 username，本机绑谁由用户逐个选。
+      let rawMappings: unknown
+      try {
+        rawMappings = JSON.parse(String(form.get('humanMemberMappings') ?? '[]'))
+      } catch {
+        throw new ValidationError('package-invalid', '`humanMemberMappings` is not valid JSON')
+      }
+      const parsedMappings = HumanMemberMappingsSchema.safeParse(rawMappings)
+      if (!parsedMappings.success) {
+        throw new ValidationError('package-invalid', '`humanMemberMappings` has an invalid shape', {
+          issues: parsedMappings.error.issues,
+        })
+      }
+      const humanMemberMappings: HumanMemberMapping[] = parsedMappings.data
       const pkg = await parseResourcePackage(new Uint8Array(await file.arrayBuffer()))
       return c.json(
         await commitResourcePackage(
@@ -203,7 +257,7 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
               : { pluginInstallOpts: deps.pluginInstallOpts }),
           },
           actorOf(c),
-          { pkg, previewToken, decisions },
+          { pkg, previewToken, decisions, humanMemberMappings },
         ),
       )
     },

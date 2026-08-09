@@ -20,6 +20,7 @@ const RootRefSchema = z
 
 export interface BundleRefIssue {
   code:
+    | 'bundle-duplicate-op-id'
     | 'bundle-duplicate-slug'
     | 'bundle-dangling-local-ref'
     | 'bundle-dangling-root'
@@ -79,6 +80,23 @@ export function collectBundleRefIssues(bundle: {
       code: 'bundle-too-many-ops',
       message: `bundle has ${bundle.ops.length} ops; the limit is ${BUNDLE_MAX_OPS}`,
     })
+  }
+
+  // `opId` 是引擎侧 Map 的**键**（pluginInstalls / skillStages / skillVersionStages
+  // 全按它索引）。重复的 opId 不会报错，只会静静地让后一项 `Map.set` 覆盖前一项：
+  // 两个插件都用 `op-1` 时，插件 A 保留自己的 spec，`cachedPath` 却指向插件 B 装出来
+  // 的目录。这属于「schema 本该挡住」的一类，放到运行时就只能靠肉眼发现。
+  const opIds = new Set<string>()
+  for (const op of bundle.ops) {
+    if (opIds.has(op.opId)) {
+      issues.push({
+        code: 'bundle-duplicate-op-id',
+        message: `opId '${op.opId}' is used by more than one op`,
+        pointer: op.opId,
+      })
+      continue
+    }
+    opIds.add(op.opId)
   }
 
   const slugs = new Set<string>()

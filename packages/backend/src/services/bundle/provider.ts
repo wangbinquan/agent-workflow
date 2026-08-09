@@ -37,9 +37,35 @@ export interface BundleReceipt {
  * 非终态 node run 完全挡住，于是目录永久残留且 journal 无法证明补偿完成。
  * 这要求调用方**预铸** generation id 再调 installer。
  */
+/**
+ * `StagedSkillVersion` 的结构镜像。这里**不** import 那个类型：provider 是引擎与
+ * 场景之间的契约层，把技能版本模块拖进来会让两边的依赖方向反过来。字段对不上会在
+ * `apply.ts` 的赋值处直接编译失败——那正是想要的检查点。
+ */
+export interface StagedSkillVersionLike {
+  skillId: string
+  skillName: string
+  opId: string | null
+  publishId: string
+  newVersion: number
+  newHash: string
+  filesDir: string
+  versionDir: string
+  stagingDir: string
+  noop: unknown
+}
+
 export type BundleArtifact =
   | { kind: 'skill-stage'; skillId: string; opId: string; skillDir: string }
-  | { kind: 'skill-version-stage'; skillId: string; opId: string; stagingDir: string }
+  /**
+   * 整个 `StagedSkillVersion` 都要落库，不只是补偿用得到的那三个字段。
+   *
+   * 补偿（abort）只需要 `stagingDir`，但 **committed 之后的重放需要 publish**，而
+   * publish 要的是完整结构（newVersion / newHash / filesDir / versionDir …）。只记
+   * 三个字段的话，一次「DB 已提交、publish 前崩溃」的 run 永远补不上那次 publish
+   * ——收敛器看得见这条 committed 行，却没有足够信息把它推完。
+   */
+  | { kind: 'skill-version-stage'; staged: StagedSkillVersionLike }
   | { kind: 'plugin-install'; pluginId: string; generationId: string; generationDir: string }
 
 export interface BundleApplyProvider {
@@ -56,6 +82,14 @@ export interface BundleApplyProvider {
   resolveExternal(ref: string, expectType: AclResourceType): Promise<string>
   /** 技能文件载体：配置包从 zip 取，intent 从内联句柄取。 */
   readSkillFile(ref: string): Uint8Array
+  /**
+   * 工作组的 human 成员：包里带的是源实例的 **username**，本机的 `user_id` 与它
+   * 没有任何关系。返回本地 user id，或 `null` = 该成员不加入。
+   *
+   * 缺省实现（intent 场景没有这一步）等价于「全部不加入」——但配置包侧在 commit
+   * 期就已经强制用户逐个拍板，走不到缺省分支。
+   */
+  resolveHumanMember?(workgroupSlug: string, username: string): string | null
 
   // ── 事务钩子。三个都在**同一个** big tx 内被调用（I7 / I13）。 ──
   /** claim 事务内的场景特有校验（intent 的 draft revision/hash）。 */

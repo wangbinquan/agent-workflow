@@ -15,8 +15,10 @@ import type { AclResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { encodeZip, type ZipFile } from '@/util/zip'
+import { ConflictError } from '@/util/errors'
 import { assertPrivilegedNodesExportable, walkExportClosure, type ExportClosure } from './closure'
 import { serializeClosure, type SerializedPackage } from './serialize'
+import { packagedSkillFileRef, readSkillTree, type SkillTree } from './skillTree'
 
 /** 包格式版本。导入侧见到更高的值直接拒绝（design §8）。 */
 export const PACKAGE_FORMAT_VERSION = 1
@@ -34,7 +36,20 @@ const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s)
  * requirements：**导入方需要自备**的东西。它们不是包的内容，而是包的前提——
  * 分开列出来，导入方在预检就能看到「我这台机器缺什么」，而不是等到运行时才炸。
  */
-function collectRequirements(closure: ExportClosure): Record<string, unknown> {
+function collectRequirements(
+  closure: ExportClosure,
+  serialized: SerializedPackage,
+): Record<string, unknown> {
+  // plugin spec 可以内嵌凭据。**取已脱敏的那一份**（AC-10：requirements 同样不含
+  // 任何密钥），而不是重新读 `row.spec` —— 重读等于给密钥开第二条出口，且两处的
+  // 脱敏规则会随时间漂移。
+  const redactedSpecOfSlug = new Map<string, string>()
+  for (const op of serialized.bundle.ops) {
+    if (op.kind !== 'plugin-create') continue
+    const { slug, payload } = op as unknown as { slug: string; payload: { spec?: unknown } }
+    redactedSpecOfSlug.set(slug, String(payload.spec ?? ''))
+  }
+
   const runtimes = new Set<string>()
   const pluginSources: Array<{ name: string; spec: string; sourceKind: string }> = []
   const projectSkills = new Set<string>()
@@ -57,23 +72,20 @@ function collectRequirements(closure: ExportClosure): Record<string, unknown> {
     if (r.type === 'plugin') {
       pluginSources.push({
         name: r.name,
-        spec: String(r.row.spec ?? ''),
+        spec: redactedSpecOfSlug.get(serialized.slugOfId.get(r.id) ?? '') ?? '',
         sourceKind: String(r.row.sourceKind ?? 'npm'),
       })
     }
     if (r.type === 'mcp') mcpKinds.add(String(r.row.type ?? 'remote'))
     if (r.type === 'workgroup') {
-      try {
-        for (const raw of JSON.parse(String(r.row.membersJson ?? '[]')) as unknown[]) {
-          const m = raw as { memberType?: string; username?: string }
-          // human 成员带 **username**：跨实例标识。导入方要么本地有同名用户，要么
-          // 在导入时改绑——所以它是 requirement，不是包内容。
-          if (m.memberType === 'human' && typeof m.username === 'string') {
-            humanMembers.add(m.username)
-          }
+      // `row.members` 由闭包装载层补上（成员是独立表）。human 成员带 **username**：
+      // 跨实例标识。导入方要么本地有同名用户、要么在导入时逐个选映射——所以它是
+      // requirement，不是包内容。
+      for (const raw of Array.isArray(r.row.members) ? r.row.members : []) {
+        const m = raw as { memberType?: string; username?: string | null }
+        if (m.memberType === 'human' && typeof m.username === 'string' && m.username.length > 0) {
+          humanMembers.add(m.username)
         }
-      } catch {
-        /* 同上 */
       }
     }
   }
@@ -105,7 +117,7 @@ export function buildManifest(
     // 信息，导入后一切归导入者。带上它们只会诱导导入侧去「还原」一个在本实例上
     // 根本不存在的主体。
     resources: closure.resources.map(bySlug),
-    requirements: collectRequirements(closure),
+    requirements: collectRequirements(closure, serialized),
     /** 被脱敏的字段清单：**只有位置，没有值**。导入方据此知道要补哪些凭据。 */
     secrets: serialized.secrets,
     /** 解析不到的 call 目标（late-bound）。导入后它们仍按名字在启动期解析。 */
@@ -181,11 +193,21 @@ export async function exportResourcePackage(
   db: DbClient,
   actor: Actor,
   root: { type: AclResourceType; id: string },
-  opts: { exportedAt?: number } = {},
+  opts: { appHome: string; exportedAt?: number; expect?: RootExportFence },
 ): Promise<ExportedPackage> {
   const closure = await walkExportClosure(db, actor, root)
+  assertRootUnchanged(closure, opts.expect)
   assertPrivilegedNodesExportable(actor, closure.resources)
-  const serialized = serializeClosure(closure)
+
+  // 技能内容在文件系统里，不在行上——**先读盘**再序列化。序列化段保持无 IO，
+  // 这样它仍然是可单测的纯转换。
+  const skillTrees = new Map<string, SkillTree>()
+  for (const r of closure.resources) {
+    if (r.type !== 'skill') continue
+    skillTrees.set(r.id, await readSkillTree(db, opts.appHome, r.id))
+  }
+
+  const serialized = serializeClosure(closure, skillTrees)
   const manifest = buildManifest(closure, serialized, {
     // 调用方给时间戳（路由传 `Date.now()`）。留成参数是为了让测试能断言
     // 「同一份闭包导出两次字节相同」——见 `encodeZip` 的可复现要求。
@@ -196,9 +218,50 @@ export async function exportResourcePackage(
     { path: 'README.md', bytes: utf8(buildReadme(manifest)) },
     { path: 'bundle.json', bytes: utf8(`${JSON.stringify(serialized.bundle, null, 2)}\n`) },
   ]
+  for (const r of closure.resources) {
+    const tree = skillTrees.get(r.id)
+    if (tree === undefined) continue
+    const slug = serialized.slugOfId.get(r.id)!
+    for (const f of tree.files) {
+      files.push({ path: packagedSkillFileRef(slug, f.path), bytes: f.bytes })
+    }
+  }
   return {
     zip: encodeZip(files),
     filename: `${closure.root.type}-${closure.root.name}.awpkg.zip`.replace(/[^\w.@-]+/g, '-'),
     manifest,
+  }
+}
+
+/** 只对 **root** 生效的 exact-revision fence（旧 YAML 导出的那条保障）。 */
+export interface RootExportFence {
+  expectedVersion?: number
+  expectedSnapshotHash?: string
+}
+
+/**
+ * 「所见非所得」防护：用户在界面上看着 v1 按了导出，另一个写者已经把它推到 v2。
+ *
+ * ⚠️ **只 fence root**，闭包成员**取最新**——这与任务执行同语义：执行期非 root 的
+ * 依赖同样取最新。给闭包成员也 fence 会要求客户端先知道整个闭包才能给出期望值，
+ * 而闭包正是导出这一步才算出来的。
+ */
+function assertRootUnchanged(closure: ExportClosure, expect: RootExportFence | undefined): void {
+  if (expect === undefined) return
+  const row = closure.root.row
+  if (expect.expectedVersion !== undefined && Number(row.version ?? 1) !== expect.expectedVersion) {
+    throw new ConflictError(
+      'package-root-changed',
+      `this ${closure.root.type} changed since you loaded it (expected version ${expect.expectedVersion})`,
+    )
+  }
+  if (
+    expect.expectedSnapshotHash !== undefined &&
+    String(row.snapshotHash ?? '') !== expect.expectedSnapshotHash
+  ) {
+    throw new ConflictError(
+      'package-root-changed',
+      `this ${closure.root.type} changed since you loaded it`,
+    )
   }
 }

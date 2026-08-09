@@ -134,16 +134,19 @@ async function withApplyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const gate = new Promise<void>((r) => {
     release = r
   })
-  applyLocks.set(
-    key,
-    prior.then(() => gate),
-  )
+  // ⚠️ map 里存的是**派生**的 chain，不是 `gate` 本身。清理时必须比较同一个引用：
+  // 拿 `gate` 去比 `applyLocks.get(key)` 恒为 false，于是每个出现过的
+  // serializationKey 都会永久留一项 —— 串行语义仍对，但那是一处内存泄漏，
+  // 而 serializationKey 是按资源实例派生的（基数无上限）。
+  const chain = prior.then(() => gate)
+  applyLocks.set(key, chain)
   await prior.catch(() => {})
   try {
     return await fn()
   } finally {
     release()
-    if (applyLocks.get(key) === gate) applyLocks.delete(key)
+    // 只有**最后一个** waiter 能删：中途完成的那些，map 早被后来者覆盖成新 chain。
+    if (applyLocks.get(key) === chain) applyLocks.delete(key)
   }
 }
 
@@ -321,12 +324,9 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
           },
         )
         skillVersionStages.set(item.op.opId, staged)
-        recordArtifact({
-          kind: 'skill-version-stage',
-          skillId: staged.skillId,
-          opId: staged.opId ?? '',
-          stagingDir: staged.stagingDir,
-        })
+        // 完整结构落库：补偿只需要 stagingDir，但 committed 之后的 publish 重放
+        // 需要全部字段（见 `BundleArtifact` 的注释）。
+        recordArtifact({ kind: 'skill-version-stage', staged })
         deps.faults?.afterSkillStage?.()
       }
     }
@@ -438,10 +438,12 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
       throw error
     }
     // 逆序补偿，然后 journal → failed（零可见）。
+    let compensated = true
     for (const staged of [...skillVersionStages.values()].reverse()) {
       try {
         abortStagedSkillVersion(db, staged)
       } catch (err) {
+        compensated = false
         log.warn('bundle-skill-version-compensation-failed', {
           skillId: staged.skillId,
           err: err instanceof Error ? err.message : String(err),
@@ -452,6 +454,7 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
       try {
         compensateManagedSkillStage(db, stage)
       } catch (err) {
+        compensated = false
         log.warn('bundle-skill-compensation-failed', {
           skillId: stage.skillId,
           err: err instanceof Error ? err.message : String(err),
@@ -462,12 +465,27 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
       try {
         await cleanupInstallGeneration(install)
       } catch (err) {
+        compensated = false
         log.warn('bundle-plugin-compensation-failed', {
           err: err instanceof Error ? err.message : String(err),
         })
       }
     }
-    settleFailed(error)
+    if (compensated) {
+      settleFailed(error)
+    } else {
+      // I9 的**对称条款**（收敛器那一侧早就这么做了，这一侧漏了）：补偿没做干净就
+      // **不终态化**。标 failed 会让收敛器（它显式跳过 failed 行）再也不重试这些
+      // 残留，而粗粒度 GC 又被任一非终态 run 挡住 ⇒ 目录永久残留，且 journal 反过来
+      // 宣称「这次什么都没留下」。保留非终态，下一轮收敛接手。
+      //
+      // 代价是同一个 importId 在收敛前重放会拿到 `bundle-apply-unsettled` —— 那正是
+      // 事实：确实有一次未结的尝试。
+      log.warn('bundle-left-retryable', {
+        journalId,
+        err: error instanceof Error ? error.message : String(error),
+      })
+    }
     throw error
   } finally {
     ACTIVE_BUNDLE_APPLIES.delete(journalId)
@@ -905,7 +923,30 @@ export async function convergeResourceBundleApplies(
   const reapBefore = Date.now() - CONVERGE_MIN_AGE_MS
   for (const row of rows) {
     if (row.state === 'committed') {
-      // committed 的尾巴是幂等的：重放即可，绝不回滚。
+      // committed 的尾巴是幂等的：**重放**即可，绝不回滚。
+      //
+      // ⚠️ 光计数不算收敛：一次「DB 已提交、publish 前 SIGKILL」的 run 会留下一个
+      // 已入库但**内容未发布**的技能版本。只 `rolledForward += 1` 等于宣称已经处理，
+      // 而实际什么都没做。
+      const state = {
+        skillStages: new Map<string, { skillId: string; opId: string }>(),
+        skillVersionStages: new Map<string, StagedSkillVersion>(),
+      }
+      for (const artifact of parseArtifacts(row.preparedArtifactsJson)) {
+        if (artifact.kind === 'skill-stage') {
+          state.skillStages.set(artifact.opId, {
+            skillId: artifact.skillId,
+            opId: artifact.opId,
+          })
+        } else if (artifact.kind === 'skill-version-stage') {
+          const staged = artifact.staged as StagedSkillVersion
+          state.skillVersionStages.set(staged.publishId, staged)
+        }
+      }
+      if (state.skillStages.size > 0 || state.skillVersionStages.size > 0) {
+        // 每一步自己吞异常并 log（publish 已经发生过时会「重放即无操作」）。
+        rollForwardCommitted(db, appHome, state, log)
+      }
       rolledForward += 1
       continue
     }
@@ -962,19 +1003,10 @@ function compensateArtifact(db: DbClient, appHome: string, artifact: BundleArtif
       compensateManagedSkillStage(db, artifact)
       return
     case 'skill-version-stage':
-      // 精确到这一次的 staging / 候选目录；op 锁由状态机自己的恢复处理。
-      abortStagedSkillVersion(db, {
-        skillId: artifact.skillId,
-        skillName: '',
-        opId: artifact.opId === '' ? null : artifact.opId,
-        publishId: '',
-        newVersion: 0,
-        newHash: '',
-        filesDir: join(appHome, 'skills', artifact.skillId, 'files'),
-        versionDir: artifact.stagingDir,
-        stagingDir: artifact.stagingDir,
-        noop: null,
-      })
+      // 用**落库的那一份真实结构**，不再现编一个（旧写法把 newVersion/newHash 填
+      // 成 0/''、versionDir 填成 stagingDir，abort 恰好用不到才没出事——那是运气，
+      // 不是设计）。
+      abortStagedSkillVersion(db, artifact.staged as StagedSkillVersion)
       return
     case 'plugin-install':
       // I14 的收益就在这一行：**精确路径**事前落了库，所以这里能删得准。

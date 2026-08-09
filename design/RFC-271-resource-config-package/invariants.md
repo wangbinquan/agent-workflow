@@ -63,14 +63,14 @@ session 此后被关闭而报错，而不是返回原 receipt。
 
 **锚点**：`applyChangeset.ts:357-380`
 
-| journal state | 行为 |
-|---|---|
-| `committed` 且有 receipt | 返回**原 receipt** |
-| `failed` | 抛 `intent-apply-failed-replay`（409），带 journalId |
-| `prepared` / `applying` | 抛 `intent-apply-unsettled`（409）——「有一次未结的尝试，稍后重试」 |
+| journal state            | 行为                                                               |
+| ------------------------ | ------------------------------------------------------------------ |
+| `committed` 且有 receipt | 返回**原 receipt**                                                 |
+| `failed`                 | 抛 `intent-apply-failed-replay`（409），带 journalId               |
+| `prepared` / `applying`  | 抛 `intent-apply-unsettled`（409）——「有一次未结的尝试，稍后重试」 |
 
-第三态的注释写得很清楚：*prepared/applying without a live lock holder = a crashed attempt
-that boot convergence has not yet swept. **Refuse rather than guess.***
+第三态的注释写得很清楚：\*prepared/applying without a live lock holder = a crashed attempt
+that boot convergence has not yet swept. **Refuse rather than guess.\***
 
 **归属**：引擎。
 **v4 状态**：design §2.2 写的是「重复提交返回**原 receipt**，不重跑」——**只覆盖了三分之一**。
@@ -85,8 +85,8 @@ that boot convergence has not yet swept. **Refuse rather than guess.***
 
 ```ts
 // ── topo order: skills → mcps → plugins → agents (dependsOn) → wf/wg ──
-const typeRank = (t) => t === 'skill' ? 0 : t === 'mcp' ? 1 : t === 'plugin' ? 2
-                      : t === 'agent' ? 3 : 4
+const typeRank = (t) =>
+  t === 'skill' ? 0 : t === 'mcp' ? 1 : t === 'plugin' ? 2 : t === 'agent' ? 3 : 4
 ```
 
 agent 之间再按 `dependsOn` 排（`agentDeps` map，**只统计同 bundle 内的依赖**——
@@ -102,10 +102,12 @@ agent 之间再按 `dependsOn` 排（`agentDeps` map，**只统计同 bundle 内
 **锚点**：`applyChangeset.ts:428-435`
 
 ```ts
-const pendingIds = new Set(bundle.ops.filter(o => o.action === 'create').map(o => o.resourceId))
+const pendingIds = new Set(bundle.ops.filter((o) => o.action === 'create').map((o) => o.resourceId))
 const pendingAgentNames = new Map(
-  bundle.ops.filter(o => o.action === 'create' && o.resourceType === 'agent')
-            .map(o => [o.resourceId, o.payload.name]))
+  bundle.ops
+    .filter((o) => o.action === 'create' && o.resourceType === 'agent')
+    .map((o) => [o.resourceId, o.payload.name]),
+)
 ```
 
 **注意 `pendingIds` 的元素是预铸的 `resourceId`**（不是名字），说明预铸发生在 resolve 阶段、
@@ -121,8 +123,11 @@ preflight 之前。
 **锚点**：`applyChangeset.ts:695-712`
 
 ```ts
-const cas = tx.update(journal).set({state:'applying'})
-              .where(and(eq(id, journalId), eq(state, 'prepared'))).run()
+const cas = tx
+  .update(journal)
+  .set({ state: 'applying' })
+  .where(and(eq(id, journalId), eq(state, 'prepared')))
+  .run()
 if (cas.changes !== 1) throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
 ```
 
@@ -188,9 +193,9 @@ if (ACTIVE_APPLY_JOURNALS.has(row.id) || row.updatedAt > reapBefore) continue
 ```
 
 两个条件**是或关系**：本进程正在跑的、或**更新时间在 10 分钟内**的，都不收割。
-注释：*an apply this PROCESS is running, or one still fresh enough to be a slow install, is
+注释：_an apply this PROCESS is running, or one still fresh enough to be a slow install, is
 ACTIVE — reaping it would compensate a live transaction's prestage and then fail its journal
-CAS.*
+CAS._
 
 - `prepared`/`applying` → 逆序补偿 artifacts → CAS 成 `failed`（**CAS 带 `state = row.state`
   条件**，防止与活事务竞争）
@@ -289,22 +294,22 @@ skill/plugin 的 `not supported yet` 分支，`ownerUserId` 判据一字不动**
 
 ## 对照检查表（批次 B 落地后逐条打勾）
 
-| # | 不变量 | 归属 | v4 设计已覆盖 | 落地已验证 |
-|---|---|---|---|---|
-| I1 | 按**资源实例**串行（in-process） | 引擎 | ✅ 已补（`serializationKey`） | ✅ `apply.ts:withApplyLock(provider.serializationKey)` + 引擎测试源码锁 |
-| I2 | claim 单事务 + duplicate 优先 | 引擎 + `claimInTx` | ⚠️ 缺顺序约束 | ✅ `apply.ts` claim 事务：duplicate 查询在 `claimInTx` 与 insert 之前 |
-| I3 | replay **三态** | 引擎 | ✅ 已补 | ✅ `replayOutcome` 三分支 + 三条测试 |
-| I4 | 类型序 + agent dependsOn 拓扑 | 引擎 | ⚠️ 缺具体类型序 | ✅ `provider.ts:planBundleOps`（类型序照抄）+ 9 条规划器测试 |
-| I5 | pending seams（预铸早于 preflight） | 引擎 | ✅ | ✅ `lower.ts` 预铸在 payload 处理之前 + 同包 dependsOn 回填测试 |
-| I6 | CAS 后**二次校验** | 引擎 + `revalidateInTx` | ⚠️ 缺二次校验时机 | ✅ CAS 紧跟 `provider.revalidateInTx?.(tx)` |
-| I7 | finalize 与资源写同事务 | 引擎 + `finalizeInTx` | ⚠️ 缺「同事务」措辞 | ✅ `finalizeInTx` 在 journal committed 之前、同事务 |
-| I8 | post-commit 绝不补偿 | 引擎 | ✅ 已补 | ✅ `committedReceipt !== null` 分水岭 + 幂等尾抛错测试 |
-| I9 | 收敛 active set + 10min + 逆序 + 前滚 + **claim 后立即注册** + **补偿失败不终态化** | 引擎 | ⚠️ 四点待落实 | ✅ active set 在 claim 后立即注册；10min 下限；补偿失败 `continue` 不终态化 |
-| I10 | session mutation 409 | intent 特有 | — 本 RFC 不需要 | — |
-| I11 | resolve 期场景校验 | intent 特有 | — 本 RFC 不需要 | — |
-| I12 | MCP OAuth carry-forward | intent 特有 | — 本 RFC 不需要 | — |
-| **I13** | **commit kernel / 引用 ACL / receipt / journal 共处同一 big tx** | 引擎 | ✅ 已补（R5 新增） | ✅ 整个提交循环在一个 `dbTxSync` 内（ACL 复核 / owner 断言 / receipt / journal） |
-| **I14** | **补偿 oracle 必须 record-before-act** | 引擎 | ✅ 已补（R6 新增） | ✅ `plannedGenerationDir` 事前落 artifact + 安装失败时目录已存在的实证 |
+| #       | 不变量                                                                              | 归属                    | v4 设计已覆盖                 | 落地已验证                                                                                                                                                                                                                   |
+| ------- | ----------------------------------------------------------------------------------- | ----------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I1      | 按**资源实例**串行（in-process）                                                    | 引擎                    | ✅ 已补（`serializationKey`） | ✅ `apply.ts:withApplyLock(provider.serializationKey)` + 引擎测试源码锁                                                                                                                                                      |
+| I2      | claim 单事务 + duplicate 优先                                                       | 引擎 + `claimInTx`      | ⚠️ 缺顺序约束                 | ✅ `apply.ts` claim 事务：duplicate 查询在 `claimInTx` 与 insert 之前                                                                                                                                                        |
+| I3      | replay **三态**                                                                     | 引擎                    | ✅ 已补                       | ✅ `replayOutcome` 三分支 + 三条测试                                                                                                                                                                                         |
+| I4      | 类型序 + agent dependsOn 拓扑                                                       | 引擎                    | ⚠️ 缺具体类型序               | ✅ `provider.ts:planBundleOps`（类型序照抄）+ 9 条规划器测试                                                                                                                                                                 |
+| I5      | pending seams（预铸早于 preflight）                                                 | 引擎                    | ✅                            | ✅ `lower.ts` 预铸在 payload 处理之前 + 同包 dependsOn 回填测试                                                                                                                                                              |
+| I6      | CAS 后**二次校验**                                                                  | 引擎 + `revalidateInTx` | ⚠️ 缺二次校验时机             | ✅ CAS 紧跟 `provider.revalidateInTx?.(tx)`                                                                                                                                                                                  |
+| I7      | finalize 与资源写同事务                                                             | 引擎 + `finalizeInTx`   | ⚠️ 缺「同事务」措辞           | ✅ `finalizeInTx` 在 journal committed 之前、同事务                                                                                                                                                                          |
+| I8      | post-commit 绝不补偿                                                                | 引擎                    | ✅ 已补                       | ✅ `committedReceipt !== null` 分水岭 + 幂等尾抛错测试                                                                                                                                                                       |
+| I9      | 收敛 active set + 10min + 逆序 + 前滚 + **claim 后立即注册** + **补偿失败不终态化** | 引擎                    | ⚠️ 四点待落实                 | ✅ active set / 10min / 逆序补偿；**两侧对称**：收敛器与 apply 的 catch 都做到「补偿失败不终态化」；committed 分支**真的重放** `rollForwardCommitted`；收敛器已接进 `cli/start.ts` 的 boot 与小时 tick（实现门 P1-5 / P1-6） |
+| I10     | session mutation 409                                                                | intent 特有             | — 本 RFC 不需要               | —                                                                                                                                                                                                                            |
+| I11     | resolve 期场景校验                                                                  | intent 特有             | — 本 RFC 不需要               | —                                                                                                                                                                                                                            |
+| I12     | MCP OAuth carry-forward                                                             | intent 特有             | — 本 RFC 不需要               | —                                                                                                                                                                                                                            |
+| **I13** | **commit kernel / 引用 ACL / receipt / journal 共处同一 big tx**                    | 引擎                    | ✅ 已补（R5 新增）            | ✅ 整个提交循环在一个 `dbTxSync` 内（ACL 复核 / owner 断言 / receipt / journal）                                                                                                                                             |
+| **I14** | **补偿 oracle 必须 record-before-act**                                              | 引擎                    | ✅ 已补（R6 新增）            | ✅ `plannedGenerationDir` 事前落 artifact + 安装失败时目录已存在的实证；技能版本落**完整** `StagedSkillVersion`（够 publish 重放，不只够 abort —— 实现门 P1-6）                                                              |
 
 **落地状态（2026-08-09，批次 B 完工）**：11 条归引擎的不变量**逐条已验证**，对照表右列
 写明了各自的落点与锁它的测试。**打勾不等于免检**——这张表的价值在于「下一个人重构引擎时
@@ -313,6 +318,7 @@ skill/plugin 的 `not supported yet` 分支，`ownerUserId` 判据一字不动**
 **结论（v3，2026-08-08 第六轮复核后）**：**14 条**，11 条归引擎。
 
 初版（12 条）有三处错漏，全部由设计门第五轮抓出：
+
 1. **I1 写错**——把具体的 `sessionId` 泛化成「provider 的 idempotency scope」，而那样会让所有
    导入全局串行；
 2. **I9 不完整**——漏了「claim 后立即注册 active」与「补偿未成功不得无条件终态化」；

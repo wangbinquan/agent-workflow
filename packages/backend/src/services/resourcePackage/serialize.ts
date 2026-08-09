@@ -18,12 +18,17 @@ import type { BundleOp, ResourceBundle } from '@agent-workflow/shared'
 import {
   BUNDLE_VERSION,
   PACKAGE_SECRET_PLACEHOLDER,
+  redactArgv,
   redactFreeJson,
+  redactPluginSpec,
   redactRecord,
+  redactUrlKeepingShape,
   type PackageSecretRef,
   type RedactionSink,
 } from '@agent-workflow/shared'
+import { ValidationError } from '@/util/errors'
 import type { ClosureResource, ExportClosure } from './closure'
+import { packagedSkillFileRef, type SkillTree } from './skillTree'
 
 export interface SerializedPackage {
   bundle: ResourceBundle
@@ -71,7 +76,11 @@ function refWire(slugOfId: ReadonlyMap<string, string>, id: string): string {
   return slug === undefined ? `external:${id}` : `local:${slug}`
 }
 
-export function serializeClosure(closure: ExportClosure): SerializedPackage {
+export function serializeClosure(
+  closure: ExportClosure,
+  /** 技能文件树（由导出段先读盘，keyed by skill id）。序列化本身保持无 IO。 */
+  skillTrees: ReadonlyMap<string, SkillTree> = new Map(),
+): SerializedPackage {
   const slugOfId = assignSlugs(closure.resources)
   const secrets: PackageSecretRef[] = []
   // sink 按**资源**开一个（它带 resourceType / resourceName 上下文），产出汇总到
@@ -153,7 +162,9 @@ export function serializeClosure(closure: ExportClosure): SerializedPackage {
           payload: {
             name: r.name,
             description: String(row.description ?? ''),
-            spec: String(row.spec ?? ''),
+            // git spec 可以内嵌 `user:secret@` —— 与 `requirements.pluginSources`
+            // 走同一条脱敏（AC-10：requirements 也不含任何密钥）。
+            spec: redactPluginSpec(String(row.spec ?? ''), sinkFor(r)),
             options: redactFreeJson(parseJson(row.optionsJson, {}), sinkFor(r), 'options'),
             enabled: row.enabled !== false,
             // 决策 13：带 `sourceKind`（导入侧据它决定要不要跑安装），但**不带**
@@ -164,8 +175,18 @@ export function serializeClosure(closure: ExportClosure): SerializedPackage {
         break
       }
       case 'skill': {
-        // 技能文件树在打包段单独写进 zip；payload 里只带 SKILL.md 的结构化部分与
-        // 文件清单（`ref` 指向包内路径）。
+        // 技能文件树在打包段单独写进 zip；payload 里带 SKILL.md 的结构化部分与
+        // 文件清单（`ref` 指向包内路径，由 provider 的 readSkillFile 解成字节）。
+        //
+        // ⚠️ `skills` 表**没有** bodyMd / frontmatterExtra 列 —— 内容全在
+        // `managedPath` 下的文件系统里。读行是读不出技能的，只会导出一个空壳。
+        const tree = skillTrees.get(r.id)
+        if (tree === undefined) {
+          throw new ValidationError(
+            'package-invalid',
+            `skill '${r.name}' was not staged for export`,
+          )
+        }
         ops.push({
           opId: nextOpId(),
           kind: 'skill-create',
@@ -173,9 +194,12 @@ export function serializeClosure(closure: ExportClosure): SerializedPackage {
           payload: {
             name: r.name,
             description: String(row.description ?? ''),
-            frontmatterExtra: {},
-            bodyMd: '',
-            files: [],
+            frontmatterExtra: redactFreeJson(tree.frontmatterExtra, sinkFor(r), 'frontmatterExtra'),
+            bodyMd: tree.bodyMd,
+            files: tree.files.map((f) => ({
+              path: f.path,
+              ref: packagedSkillFileRef(slug, f.path),
+            })),
           },
         } as unknown as BundleOp)
         break
@@ -200,12 +224,27 @@ export function serializeClosure(closure: ExportClosure): SerializedPackage {
         break
       }
       case 'workgroup': {
-        const members = (parseJson(row.membersJson ?? row.members, []) as unknown[]).map((raw) => {
-          const m = asRecord(raw)
-          if (m.memberType !== 'agent') return { ...m }
-          const { agentId, ...rest } = m
-          return { ...rest, agentRef: refWire(slugOfId, String(agentId ?? '')) }
+        // ⚠️ 成员在**独立表**（装载层已补进 `row.members`），开关是**各自独立的列**
+        // ——`workgroups` 上没有 membersJson / switchesJson / leaderDisplayName。
+        const rawMembers = (parseJson(row.members, []) as unknown[]).map(asRecord)
+        const members = rawMembers.map((m) => {
+          const base = {
+            displayName: String(m.displayName ?? ''),
+            roleDesc: String(m.roleDesc ?? ''),
+            sortOrder: Number(m.sortOrder ?? 0),
+          }
+          return m.memberType === 'agent'
+            ? {
+                memberType: 'agent' as const,
+                agentRef: refWire(slugOfId, String(m.agentId ?? '')),
+                ...base,
+              }
+            : // human 成员带 **username**：本地 `user_id` 跨实例无意义，导入时由用户
+              // 逐个选映射（`humanMemberMappings`）。
+              { memberType: 'human' as const, username: String(m.username ?? ''), ...base }
         })
+        // `leaderMemberId` 是本地行 id，不可移植；组内 displayName 唯一，是稳定键。
+        const leader = rawMembers.find((m) => String(m.id) === String(row.leaderMemberId ?? ''))
         ops.push({
           opId: nextOpId(),
           kind: 'workgroup-create',
@@ -215,11 +254,18 @@ export function serializeClosure(closure: ExportClosure): SerializedPackage {
             description: String(row.description ?? ''),
             instructions: String(row.instructions ?? ''),
             mode: row.mode,
-            switches: parseJson(row.switchesJson ?? row.switches, {}),
-            maxRounds: row.maxRounds ?? 1,
+            switches: {
+              shareOutputs: row.shareOutputs !== false,
+              directMessages: row.directMessages === true,
+              blackboard: row.blackboard === true,
+            },
+            maxRounds: Number(row.maxRounds ?? 20),
             completionGate: row.completionGate === true,
+            clarifyBudget: Number(row.clarifyBudget ?? 3),
+            fanOut: row.fanOut === true,
             members,
-            leaderDisplayName: row.leaderDisplayName ?? null,
+            leaderDisplayName:
+              leader === undefined ? null : String(leader.displayName ?? '') || null,
           },
         } as unknown as BundleOp)
         break
@@ -265,6 +311,16 @@ function redactMcpConfig(
       })
     }
     out.oauth = oauth
+  }
+  // local MCP：argv 里内嵌的 token（`--token=…` 或裸高熵串）。**只换命中的那一个**，
+  // argv 结构与长度不变——整段替换会摧毁真实命令。
+  if (Array.isArray(out.command)) {
+    out.command = redactArgv(out.command as string[], sink)
+  }
+  // remote MCP：userinfo 与 query 里的 token。产物仍是合法 http(s) URL，否则
+  // `McpRemoteConfigSchema` 的 `startsWith('http')` 判据过不了。
+  if (typeof out.url === 'string' && out.url.length > 0) {
+    out.url = redactUrlKeepingShape(out.url, sink, `${fieldPrefix}.url`)
   }
   return out
 }

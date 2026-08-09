@@ -33,11 +33,17 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s)
 
-const actorOf = (id: string): Actor =>
+// 六类写权限齐全的普通用户。**默认给全**是因为绝大多数用例断言的不是权限，
+// 而是决策/基线逻辑；缺权限的那条单独立用例（见「写权限」describe）。
+const WRITE_ALL = ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups'].flatMap(
+  (t) => [`${t}:create`, `${t}:update`],
+)
+
+const actorOf = (id: string, permissions: readonly string[] = WRITE_ALL): Actor =>
   ({
     user: { id, username: id, displayName: id, role: 'user', status: 'active' },
     source: 'daemon',
-    permissions: new Set<string>(),
+    permissions: new Set<string>(permissions),
   }) as unknown as Actor
 
 const mcpOp = (slug: string, name: string) => ({
@@ -241,6 +247,7 @@ describe('② previewToken —— 签死的是**基线**，不是包摘要', () 
       packageDigest: 'd',
       expiresAt: 1,
       baseline: [],
+      humanBaseline: [],
     })
     expect(verifyPreviewToken(box, t).actorUserId).toBe('u1')
   })
@@ -252,6 +259,7 @@ describe('② previewToken —— 签死的是**基线**，不是包摘要', () 
       packageDigest: 'd',
       expiresAt: 1,
       baseline: [],
+      humanBaseline: [],
     })
     // ⚠️ **在中间改一个字符**，不是往尾部追加。packed 是 base64(iv|ct|tag)，
     // 追加单个字符不足以凑成一个完整字节组，base64 解码会把它丢掉 ⇒ 解出的字节
@@ -271,6 +279,7 @@ describe('② previewToken —— 签死的是**基线**，不是包摘要', () 
       packageDigest: 'd',
       expiresAt: 1,
       baseline: [],
+      humanBaseline: [],
     })
     expect(() => verifyPreviewToken(box, t)).toThrow()
   })

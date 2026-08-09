@@ -20,6 +20,7 @@ import { createApp } from '@/server'
 import { startFusionReconcileLoop } from '@/services/fusion'
 import { startLimitsTicker } from '@/services/limits'
 import { convergeIntentApplyJournal } from '@/services/intent/applyChangeset'
+import { convergeResourceBundleApplies } from '@/services/bundle/apply'
 import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '@/services/intent/maintenance'
 import { reapOrphanRunsForStoreRecovery } from '@/services/orphans'
 import { autoResumeInterruptedTasks } from '@/services/autoResume'
@@ -698,12 +699,32 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       err: err instanceof Error ? err.message : String(err),
     })
   }
+
+  // RFC-271 — the resource-bundle apply journal needs the SAME treatment as the
+  // intent one: without this, a daemon killed between pre-stage and the big tx
+  // leaves plugin generations / staged skill dirs on disk forever, and the
+  // importId stays permanently unsettled (every retry answers
+  // `bundle-apply-unsettled`). Separate try/catch so one converger failing does
+  // not skip the other.
+  try {
+    const converged = await convergeResourceBundleApplies(db, Paths.root)
+    if (converged.failed > 0 || converged.rolledForward > 0) {
+      log.info('resource-bundle maintenance on boot', converged)
+    }
+  } catch (err) {
+    log.warn('resource-bundle boot maintenance failed', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
   const intentGcTimer = setInterval(
     () => {
       try {
         const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24
         sweepIntentScratch(db, Paths.root, retention)
         void convergeIntentApplyJournal(db, Paths.root)
+        // 同上：两条 journal 各自收敛（RFC-271）。收敛器自带 active-set + 10 分钟
+        // 下限，所以一个慢 npm 安装跨过 tick 不会被当成崩溃残留收割。
+        void convergeResourceBundleApplies(db, Paths.root)
       } catch (err) {
         log.warn('intent hourly maintenance failed', {
           err: err instanceof Error ? err.message : String(err),

@@ -19,7 +19,11 @@ import { writeFileSync, readFileSync } from 'node:fs'
 import { exportResourcePackage } from '@/services/resourcePackage/export'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
 import { buildPackagePreview } from '@/services/resourcePackage/preview'
-import { commitResourcePackage, type ImportDecision } from '@/services/resourcePackage/commit'
+import {
+  commitResourcePackage,
+  type HumanMemberMapping,
+  type ImportDecision,
+} from '@/services/resourcePackage/commit'
 import type { AclResourceType } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
@@ -31,9 +35,16 @@ const USAGE = `usage: agent-workflow package <export|import> --as-user <username
       (workflows.name is NOT unique).
 
   package import --as-user <u> --file <file.zip>
-                 [--plan <plan.json> | --on-conflict <new|reuse|overwrite>]
-      --plan and --on-conflict are mutually exclusive: one is an explicit
-      per-entry decision file, the other a blanket default.
+                 (--plan <out.json> | --apply <in.json>
+                  | --on-conflict <new|reuse|overwrite>)
+      Two-phase by default:
+        --plan  writes the decision plan (incl. human-member mappings) and
+                commits NOTHING. Start here.
+        --apply commits a plan you reviewed.
+      --on-conflict is the one-shot escape hatch: one blanket action for every
+      entry. All three are mutually exclusive, and omitting all three is an
+      error — importing creates and overwrites resources, so there is no
+      silent default.
 
   Break-glass boundary: the CLI runs on this machine's DB directly, but it
   still resolves --as-user into a real Actor and applies the SAME visibility /
@@ -90,6 +101,15 @@ export async function packageCommand(
   const db = openDb({ path: Paths.db, migrationsFolder: Paths.migrationsDir })
   const row = db.select().from(users).where(eq(users.username, username)).get()
   if (row === undefined) return { output: `user '${username}' not found\n`, status: 'error' }
+  // ⚠️ 与 HTTP 同构的**第二半**：HTTP 侧 session lookup 对非 active 用户返回 null，
+  // 所以停用的人在网页上什么都做不了。只查「行存在」会让 CLI 给一个已停用的主体
+  // 造出可写 Actor，导入的资源归到该主体名下 —— 那正是「绕过判据」。
+  if (row.status !== 'active') {
+    return {
+      output: `user '${username}' is ${row.status}, not active: refusing to act as them\n`,
+      status: 'error',
+    }
+  }
   // 与 HTTP 同构：`source: 'daemon'` ⇒ 权限点按角色算，与网页登录的同一条路径。
   const actor = buildActor({
     user: {
@@ -148,7 +168,12 @@ async function runExport(
     id = matches[0]!.id
   }
 
-  const pkg = await exportResourcePackage(db, actor, { type, id }, { exportedAt: Date.now() })
+  const pkg = await exportResourcePackage(
+    db,
+    actor,
+    { type, id },
+    { appHome: Paths.root, exportedAt: Date.now() },
+  )
   writeFileSync(out, pkg.zip)
   return { output: `wrote ${out} (${pkg.zip.byteLength} bytes)\n`, status: 'ok' }
 }
@@ -160,23 +185,96 @@ async function runImport(
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   const file = flags.get('file')
   if (file === undefined) return { output: '--file <file.zip> is required\n', status: 'error' }
-  const planPath = flags.get('plan')
+  const planOut = flags.get('plan')
+  const applyPath = flags.get('apply')
   const onConflict = flags.get('on-conflict')
-  if (planPath !== undefined && onConflict !== undefined) {
-    // 二者互斥：一个是逐条显式决策，一个是一刀切默认。同时给就说明用户没想清楚
-    // 哪个说了算——与其挑一个，不如让他明确。
-    return { output: '--plan and --on-conflict are mutually exclusive\n', status: 'error' }
+
+  // 三个决策来源两两互斥。同时给就说明用户没想清楚哪个说了算——与其挑一个，
+  // 不如让他明确。
+  const given = [
+    planOut === undefined ? null : '--plan',
+    applyPath === undefined ? null : '--apply',
+    onConflict === undefined ? null : '--on-conflict',
+  ].filter((x): x is string => x !== null)
+  if (given.length > 1) {
+    return { output: `${given.join(' and ')} are mutually exclusive\n`, status: 'error' }
+  }
+  if (given.length === 0) {
+    // ⚠️ **不默认提交**。导入会创建/覆盖资源，一个没写任何决策来源的命令最可能的
+    // 意思是「我还不知道会发生什么」，而不是「照你想的全新建吧」。
+    return {
+      output:
+        'one of --plan <out.json> / --apply <in.json> / --on-conflict <a> is required:\n' +
+        '  --plan writes the decision plan and commits NOTHING (start here)\n' +
+        '  --apply commits a plan you reviewed\n' +
+        '  --on-conflict applies one blanket action to every entry\n',
+      status: 'error',
+    }
   }
 
   const pkg = await parseResourcePackage(new Uint8Array(readFileSync(file)))
   const box = createSecretBox(Paths.secretKeyFile)
   const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
+  // ── 阶段一：只产出计划，**不提交任何东西** ──
+  if (planOut !== undefined) {
+    const plan = {
+      // `previewToken` 与 `importId` 一起写进计划：`--apply` 消费的是**这一次**
+      // 预检的基线，不是重新算一遍——重算等于让「用户复核过的那份」失去意义。
+      previewToken: preview.previewToken,
+      entries: preview.entries.map((e) => ({
+        localSlug: e.localSlug,
+        type: e.type,
+        name: e.name,
+        allowedActions: e.allowedActions,
+        candidates: e.candidates.map((c) => ({ id: c.id, name: c.name, owned: c.owned })),
+        // 预填一个**合法**的建议动作，用户改的是这一行。
+        action: e.allowedActions.includes('reuse') ? 'reuse' : e.allowedActions[0],
+        targetId: e.candidates[0]?.id,
+        finalName: e.suggestedName,
+      })),
+      // human 成员逐个选映射：`userId: null` = 不加入。leader 槽 `required: true`，
+      // 留 null 会在提交时被拒。
+      humanMemberMappings: preview.humanMembers.map((m) => ({
+        workgroupSlug: m.workgroupSlug,
+        username: m.username,
+        displayName: m.displayName,
+        required: m.required,
+        userId: m.suggestedUserId,
+      })),
+    }
+    writeFileSync(planOut, `${JSON.stringify(plan, null, 2)}\n`)
+    return {
+      output:
+        `wrote ${planOut} (${plan.entries.length} entr${plan.entries.length === 1 ? 'y' : 'ies'}); nothing committed.\n` +
+        `review it, then: agent-workflow package import --as-user … --file ${file} --apply ${planOut}\n`,
+      status: 'ok',
+    }
+  }
+
   let decisions: ImportDecision[]
-  if (planPath !== undefined) {
-    decisions = JSON.parse(readFileSync(planPath, 'utf8')) as ImportDecision[]
+  let previewToken = preview.previewToken
+  let humanMemberMappings: HumanMemberMapping[] = preview.humanMembers.map((m) => ({
+    workgroupSlug: m.workgroupSlug,
+    username: m.username,
+    userId: m.suggestedUserId,
+  }))
+  if (applyPath !== undefined) {
+    const saved = JSON.parse(readFileSync(applyPath, 'utf8')) as {
+      previewToken?: string
+      entries?: ImportDecision[]
+      humanMemberMappings?: Array<{
+        workgroupSlug: string
+        username: string
+        userId?: string | null
+      }>
+    }
+    // 计划里带的 token 是权威：它把用户**复核过的那份基线**签死了。
+    if (typeof saved.previewToken === 'string') previewToken = saved.previewToken
+    decisions = saved.entries ?? []
+    if (saved.humanMemberMappings !== undefined) humanMemberMappings = saved.humanMemberMappings
   } else {
-    const want = onConflict ?? 'new'
+    const want = onConflict
     decisions = preview.entries.map((e) => {
       // 一刀切的默认值也要落在**允许**的动作里：例如别人的资源没有 overwrite，
       // 那就退回 reuse（能看见即可复用），再退回 new。
@@ -193,8 +291,9 @@ async function runImport(
 
   const receipt = await commitResourcePackage({ db, appHome: Paths.root, box }, actor, {
     pkg,
-    previewToken: preview.previewToken,
+    previewToken,
     decisions,
+    humanMemberMappings,
   })
   return {
     output:

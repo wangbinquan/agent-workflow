@@ -162,7 +162,7 @@
 
 - **进程级注册表 + 测试夹具 = 只在共享进程下才炸的碰撞**：`bun test` 的项目脚本带 `--isolate`，每个文件独立进程；**手敲 `bun test`（不带 flag）则全部文件共享一个进程**。RFC-247 的路由元数据注册表是模块级单例（它描述「本仓有哪些路由」这一静态事实），于是一个测试夹具若拿**生产路径**当例子（当时用了 `/api/whoami`），共享进程下就会和真实声明撞成「同路径不同契约」并抛错——而带 `--isolate` 跑永远绿。**夹具一律用合成路径**（`/api/__x_fixture__`），别借生产路径当例子；另外**本地复现 CI 请用 `bun run test` 而不是 `bun test`**，两者的进程模型不同。
 - **但 `bun run test` 是 `backend && shared && frontend` 的 `&&` 串联——前一个包一红，后面的包一次都不跑**，而 CI 的 job 是并行的、会把三个包的红全报出来。于是本地「只有 1 条红」很可能是假象：修完那条再推，CI 照样红在你从没跑到的包上（RFC-266 实测：shared 的 fixture 红短路掉了 frontend，前端那条 i18n 守卫红只能等 CI 才暴露，多推了一次红）。**判据：本地出现任何红并修复后，别只重跑失败的那个文件——至少把被短路掉的下游包各自单跑一遍**（`bun run test:shared` / `bun run test:frontend`），或者拿 `;` 而不是 `&&` 串一遍。
-- **i18n 文案里不许出现字面 `**`**（`onboarding-guide.test.tsx` 的 RFC-211 守卫全量遍历 zh/en 两棵树）：这些字符串大多进的是纯文本组件，`**强调**` 会原样显示成星号。写 hint / 说明文案时用「」或直接不强调；只有 `apiDocs.*`（`api-docs-markdown.ts` 拼成 markdown 过 `Prose`）是白名单，且 `title`/`subtitle` 仍被排除在外。
+- **i18n 文案里不许出现字面 `**`**（`onboarding-guide.test.tsx` 的 RFC-211 守卫全量遍历 zh/en 两棵树）：这些字符串大多进的是纯文本组件，`**强调**`会原样显示成星号。写 hint / 说明文案时用「」或直接不强调；只有`apiDocs.\*`（`api-docs-markdown.ts`拼成 markdown 过`Prose`）是白名单，且 `title`/`subtitle` 仍被排除在外。
 
 ## 新增 NodeKind（RFC-253 实测）
 
@@ -217,6 +217,37 @@ RFC-271（多资源批量落地）三轮外部设计门共 39 条 findings，**�
   CLI、后台任务）都必须自己补一遍，且要放在**真正写入的那个事务里**（检查与写入之间权属可能
   转移）。判别定式：给内核加写路径前，先 grep 该资源现有路由里 `requireResourceOwner` /
   `assertPrincipalCanWrite` 之类的调用，逐个确认新路径是否覆盖到。
+
+## 序列化 / 往返（RFC-271 实现门实测，2026-08-08）
+
+实现门在 RFC-271 上抓出 6 条 P1，其中**两条同一根因**：序列化器是对着「我以为的
+schema」写的，而喂给它的单测 fixture 是**同一个人手写的 fake row**——形状正好也是那个
+错的形状。实现与测试共享同一个错误假设，于是互相印证、全绿通过，而真实导出产出的是空壳。
+
+- **凡「读行 → 产出可移植结构」的代码，fixture 必须来自真实建资源路径，且必须有一条跨实例
+  往返**。RFC-271 里 `skills` 表根本没有 `bodyMd` / `frontmatterExtra` 列（内容在
+  `managedPath` 的文件系统里），`workgroups` 也没有 `switchesJson` / `membersJson`（开关是
+  各自独立的 boolean 列、成员在 `workgroup_members` 表）。两处导出恒为空，**零报错**。
+  判别定式：给一个资源写序列化/快照前，先 `rg -n "export const <table> = sqliteTable" -A 40
+packages/backend/src/db/schema.ts` 把真实列读一遍，别信自己对形状的记忆；然后写一条
+  `建资源 → 导出 → 导入到另一个 DB+appHome → 断言真实行与文件` 的往返（模板见
+  `packages/backend/tests/rfc271-roundtrip.test.ts`）。喂 fake row 的单测**不能**替代它。
+- **fixture 断言里出现「非默认值」才有意义**。工作组那条用默认开关会让「根本没导出」与
+  「导出了恰好等于默认」无法区分——往返 fixture 一律挑非默认值（`maxRounds: 7`、
+  `shareOutputs: false`…）。
+- **helper 写好了不等于接上了**。同一轮里 `redactArgv` / `redactUrlKeepingShape` /
+  `redactPluginSpec` 三个脱敏函数在 shared 里齐全并有单测，`serialize.ts` 一个都没调；
+  `convergeResourceBundleApplies` 也只有定义和测试、没有生产调用点。**加一个 helper 时，
+  同一个 PR 里 grep 一次它的调用方**（`rg -n "<name>" packages --type ts`）——只出现在自己的
+  定义与单测里就是没接上。
+
+- **复合键的分隔符只能有一个定义**。同一轮还栽在：映射表的键在解析端与消费端各拼了一次，
+  一侧的「空格」实际敲成了 `U+0000`（编辑器不显示），于是查表永远落空，human 成员被静默
+  当成「用户选了不加入」整条剔除，**全程零报错**。同类手滑此前也发生过一次
+  （`workflow.validator.ts` 的 `selKey` 被写进真实 NUL 字节，靠 `rg` 报「binary file
+  matches」才发现）。定式：**键的拼接抽成一个导出函数**，两端都调它；分隔符用可见字符
+  （`#`），不要用空格或不可见控制字符。提交前扫一遍：
+  `rg -n $'[\x00-\x08\x0b\x0c\x0e-\x1f]' packages/*/src --binary`。
 
 ## 给模型的 prompt 就是生产代码（RFC-234 intentDoc 实测）
 

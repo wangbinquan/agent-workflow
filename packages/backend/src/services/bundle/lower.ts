@@ -75,7 +75,7 @@ export async function lowerBundlePayloads(
   for (const op of ops) {
     const slug = opSlug(op)
     const resourceId = slug !== null ? idOfSlug.get(slug)! : targetIdOfOp.get(op.opId)!
-    const payload = await lowerPayload(op, ctx, nameOfId)
+    const payload = await lowerPayload(op, ctx, nameOfId, provider, slug ?? '')
     out.push({
       opId: op.opId,
       kind: op.kind,
@@ -106,6 +106,13 @@ async function loadExistingNames(
     const id = targetIdOfOp.get(op.opId)
     if (id !== undefined) want(resourceTypeOfOp(op), id)
   }
+  // ⚠️ update **目标**只是 external id 的一半来源：payload 里也会出现 `external:`
+  // ——典型场景是预检把某个 call 目标选成了 reuse，于是引用方指向一个本次并不改写
+  // 的既有行。只扫 target 的话，call 槽拿不到权威名字，整包在
+  // `bundle-ref-invalid ... name is unknown` 上失败（一个纯 reuse 的包必然踩中）。
+  for (const op of ops) {
+    collectExternalRefs(op.payload, (type, id) => want(type, id))
+  }
   for (const [type, ids] of byType) {
     const table = ACL_TABLES[type]
     const rows = await db
@@ -116,10 +123,45 @@ async function loadExistingNames(
   }
 }
 
+/**
+ * payload 里出现 `external:` 的**引用槽**（按槽位分派，不盲扫字符串——`external:`
+ * 长得像的自由文本不该被当成引用，而槽位本身就带类型）。
+ */
+function collectExternalRefs(
+  rawPayload: unknown,
+  want: (type: AclResourceType, id: string) => void,
+): void {
+  const payload = (rawPayload ?? {}) as Record<string, unknown>
+  const take = (type: AclResourceType, value: unknown): void => {
+    if (typeof value !== 'string' || !value.startsWith('external:')) return
+    want(type, value.slice('external:'.length))
+  }
+  const takeAll = (type: AclResourceType, list: unknown): void => {
+    for (const v of Array.isArray(list) ? list : []) take(type, v)
+  }
+
+  takeAll('skill', payload.skills)
+  takeAll('agent', payload.dependsOn)
+  takeAll('mcp', payload.mcp)
+  takeAll('plugin', payload.plugins)
+  for (const raw of Array.isArray(payload.members) ? payload.members : []) {
+    take('agent', (raw as Record<string, unknown>).agentRef)
+  }
+  const definition = payload.definition as { nodes?: unknown } | undefined
+  for (const raw of Array.isArray(definition?.nodes) ? definition.nodes : []) {
+    const node = raw as Record<string, unknown>
+    take('agent', node.agentRef)
+    take('workflow', node.workflowRef)
+    take('workgroup', node.workgroupRef)
+  }
+}
+
 async function lowerPayload(
   op: BundleOp,
   ctx: RefResolveCtx,
   nameOfId: Map<string, string>,
+  provider: BundleApplyProvider,
+  slug: string,
 ): Promise<Record<string, unknown>> {
   const payload = { ...(op.payload as Record<string, unknown>) }
   switch (op.kind) {
@@ -141,19 +183,34 @@ async function lowerPayload(
     case 'workgroup-create':
     case 'workgroup-update': {
       const members = Array.isArray(payload.members) ? payload.members : []
-      payload.members = await Promise.all(
+      const lowered = await Promise.all(
         members.map(async (raw) => {
           const m = raw as Record<string, unknown>
           if (m.memberType !== 'agent') {
-            // human 成员带 **username**（跨实例标识）。解析成本地 userId 是导入侧
-            // 的事——这里保持原样，由 provider 决定认领策略。
-            return { ...m }
+            // human 成员带 **username**（跨实例标识）；canonical 层要的是本地
+            // `userId`。原样透传会让 payload 过不了正式 schema，也会在
+            // `workgroup_members` 里留一条永远解析不出人的行。
+            const userId = provider.resolveHumanMember?.(slug, String(m.username ?? '')) ?? null
+            // `null` = 用户在导入时选了「不加入」⇒ 整条剔除。
+            if (userId === null) return null
+            const { username: _username, sortOrder: _order, ...rest } = m
+            return { ...rest, userId }
           }
           const agentId = await resolveIdentityRef(String(m.agentRef), 'agent', ctx)
           const { agentRef: _drop, sortOrder: _order, ...rest } = m
           return { ...rest, agentId }
         }),
       )
+      const kept = lowered.filter((m) => m !== null) as Record<string, unknown>[]
+      payload.members = kept
+      // leader 被剔除时 `leaderDisplayName` 必须一并置空，否则指向一个不存在的成员。
+      // （配置包侧 leader 槽根本不允许选「不加入」，这里是防御。）
+      if (
+        typeof payload.leaderDisplayName === 'string' &&
+        !kept.some((m) => m.displayName === payload.leaderDisplayName)
+      ) {
+        payload.leaderDisplayName = null
+      }
       return payload
     }
     case 'workflow-create':

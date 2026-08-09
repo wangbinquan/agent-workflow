@@ -31,11 +31,17 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s)
 
-const actorOf = (id: string): Actor =>
+// 六类写权限齐全的普通用户。**默认给全**是因为绝大多数用例断言的不是权限，
+// 而是决策/基线逻辑；缺权限的那条单独立用例（见「写权限」describe）。
+const WRITE_ALL = ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups'].flatMap(
+  (t) => [`${t}:create`, `${t}:update`],
+)
+
+const actorOf = (id: string, permissions: readonly string[] = WRITE_ALL): Actor =>
   ({
     user: { id, username: id, displayName: id, role: 'user', status: 'active' },
     source: 'daemon',
-    permissions: new Set<string>(),
+    permissions: new Set<string>(permissions),
   }) as unknown as Actor
 
 const packageZip = (): Uint8Array =>

@@ -28,6 +28,7 @@ import {
 import { asc, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import { users, workgroupMembers } from '@/db/schema'
 import { ACL_TABLES, isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { ValidationError } from '@/util/errors'
@@ -75,7 +76,66 @@ async function loadRows(
     .from(table)
     .where(inArray(table.id, [...ids]))
     .orderBy(asc(table.id))
-  return rows as unknown as Record<string, unknown>[]
+  const out = rows as unknown as Record<string, unknown>[]
+  if (type === 'workgroup') await attachWorkgroupMembers(db, out)
+  return out
+}
+
+/**
+ * 工作组的成员在**独立表** `workgroup_members`，不是 `workgroups` 上的 JSON 列；
+ * 开关（shareOutputs / directMessages / blackboard）也是各自独立的列。
+ *
+ * 在**装载层**把成员补进 `row.members`，让下游（`directRefsOf` / 序列化 /
+ * requirements）只有一处知道它的来源——三处各查一遍是「两套实现」的起点。
+ *
+ * human 成员在表里只有 `user_id`；跨实例可移植的标识是 **username**，所以这里
+ * 一并 join 出来。排序按 `(sortOrder, id)` 固定，导出要逐字节稳定。
+ */
+async function attachWorkgroupMembers(
+  db: DbClient,
+  groups: Record<string, unknown>[],
+): Promise<void> {
+  if (groups.length === 0) return
+  const groupIds = groups.map((g) => String(g.id))
+  const members = await db
+    .select()
+    .from(workgroupMembers)
+    .where(inArray(workgroupMembers.workgroupId, groupIds))
+    .orderBy(asc(workgroupMembers.sortOrder), asc(workgroupMembers.id))
+
+  const userIds = [
+    ...new Set(
+      members
+        .filter((m) => m.memberType === 'human' && typeof m.userId === 'string')
+        .map((m) => m.userId as string),
+    ),
+  ]
+  const usernameById = new Map<string, string>()
+  if (userIds.length > 0) {
+    const rows = await db
+      .select({ id: users.id, username: users.username })
+      .from(users)
+      .where(inArray(users.id, userIds))
+    for (const u of rows) usernameById.set(u.id, u.username)
+  }
+
+  const byGroup = new Map<string, Record<string, unknown>[]>()
+  for (const m of members) {
+    const list = byGroup.get(m.workgroupId) ?? []
+    list.push({
+      id: m.id,
+      memberType: m.memberType,
+      agentId: m.agentId,
+      agentName: m.agentName,
+      userId: m.userId,
+      username: m.userId === null ? null : (usernameById.get(m.userId) ?? null),
+      displayName: m.displayName,
+      roleDesc: m.roleDesc,
+      sortOrder: m.sortOrder,
+    })
+    byGroup.set(m.workgroupId, list)
+  }
+  for (const g of groups) g.members = byGroup.get(String(g.id)) ?? []
 }
 
 function parseJsonArray(value: unknown): unknown[] {
@@ -138,7 +198,8 @@ export function directRefsOf(
     return out
   }
   if (type === 'workgroup') {
-    for (const raw of parseJsonArray(row.membersJson ?? row.members)) {
+    // `row.members` 由 `attachWorkgroupMembers` 在装载层补上（成员是独立表）。
+    for (const raw of parseJsonArray(row.members)) {
       const m = raw as { memberType?: string; agentId?: string }
       if (m.memberType === 'agent' && typeof m.agentId === 'string') {
         out.push({ type: 'agent', id: m.agentId })

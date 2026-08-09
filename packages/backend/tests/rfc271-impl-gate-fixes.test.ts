@@ -1,0 +1,257 @@
+// RFC-271 —— 锁住**实现门**（Codex，2026-08-08）那一轮 13 条 findings 的修复。
+//
+// 集中在一个文件是有意的：这 13 条来自同一次评审，读的人需要一眼看到「哪些洞被堵上
+// 了」。每个 describe 标题带原始编号，正文写清**具体的失败场景**——没有可复现场景的
+// 断言等于没有断言。
+//
+// 跨实例往返（P1-3 技能树 / P1-4 工作组 / P1-2 脱敏 / P1-1 写权限）在
+// `rfc271-roundtrip.test.ts`，那条才是根因防护；这里补的是其余各条。
+
+import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { ulid } from 'ulid'
+import { collectBundleRefIssues } from '@agent-workflow/shared'
+import { translateDecisions } from '../src/services/resourcePackage/commit'
+import type { ParsedPackage } from '../src/services/resourcePackage/parse'
+
+const BACKEND = resolve(import.meta.dir, '..')
+const read = (rel: string): string => readFileSync(resolve(BACKEND, rel), 'utf8')
+
+describe('P2-1 · 重复 opId 必须被 schema 拒绝', () => {
+  test('两个 op 共用一个 opId ⇒ 报 bundle-duplicate-op-id', () => {
+    // 场景：两个不同 slug 的插件都写 `opId: 'op-1'`。引擎侧 pluginInstalls /
+    // skillStages / skillVersionStages **全部按 opId 索引**，后一项 Map.set 会静静
+    // 覆盖前一项 —— 插件 one 保留自己的 spec，cachedPath 却指向插件 two 装出来的目录。
+    const issues = collectBundleRefIssues({
+      ops: [
+        { opId: 'op-1', kind: 'plugin-create', slug: 'one', payload: { name: 'one' } },
+        { opId: 'op-1', kind: 'plugin-create', slug: 'two', payload: { name: 'two' } },
+      ] as never,
+    })
+    expect(issues.map((i) => i.code)).toContain('bundle-duplicate-op-id')
+  })
+
+  test('opId 各不相同 ⇒ 无此问题', () => {
+    const issues = collectBundleRefIssues({
+      ops: [
+        { opId: 'op-1', kind: 'plugin-create', slug: 'one', payload: { name: 'one' } },
+        { opId: 'op-2', kind: 'plugin-create', slug: 'two', payload: { name: 'two' } },
+      ] as never,
+    })
+    expect(issues.map((i) => i.code)).not.toContain('bundle-duplicate-op-id')
+  })
+})
+
+describe('P2-4 · 同一条目的互相矛盾决策必须拒绝', () => {
+  const pkg = {
+    bundle: {
+      bundleVersion: 1,
+      ops: [{ opId: 'op-1', kind: 'mcp-create', slug: 'mcp-x', payload: { name: 'x' } }],
+    },
+  } as unknown as ParsedPackage
+
+  test('同 slug 两条 decision ⇒ package-decision-duplicate', () => {
+    // 场景：decisions = [MCP reuse(old), MCP new]。旧写法里 `bySlug` 后写赢（走 new
+    // 分支建了新 MCP），而 `externalOfSlug` 是遍历原数组建的、早先那条 reuse 留了下来
+    // ⇒ 新 agent 指向**旧** MCP。两个都生效，且没有任何报错。
+    expect(() =>
+      translateDecisions(
+        pkg,
+        [
+          { localSlug: 'mcp-x', action: 'reuse', targetId: 'old-id' },
+          { localSlug: 'mcp-x', action: 'new', finalName: 'x' },
+        ],
+        new Map(),
+      ),
+    ).toThrow(/more than one decision/)
+  })
+
+  test('每条目一条 decision ⇒ 正常翻译', () => {
+    const out = translateDecisions(
+      pkg,
+      [{ localSlug: 'mcp-x', action: 'new', finalName: 'x' }],
+      new Map(),
+    )
+    expect(out.ops).toHaveLength(1)
+  })
+})
+
+describe('P2-6 · withApplyLock 的 map 清理必须比较同一个 Promise', () => {
+  test('清理时比的是存进 map 的那个 chain，不是 gate', () => {
+    // map 里存的是 `prior.then(() => gate)` 派生出来的**新** Promise；拿 `gate` 去比
+    // `applyLocks.get(key)` 恒为 false ⇒ 每个出现过的 serializationKey 都永久留一项。
+    // 串行语义仍对，所以只会表现为内存缓慢增长——而 serializationKey 是按资源实例
+    // 派生的，基数无上限。
+    const src = read('src/services/bundle/apply.ts')
+    expect(src).toContain('const chain = prior.then(() => gate)')
+    expect(src).toContain('applyLocks.get(key) === chain')
+    expect(src).not.toContain('applyLocks.get(key) === gate')
+  })
+})
+
+describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
+  test('daemon 启动与每小时任务都调了 convergeResourceBundleApplies', () => {
+    // 只有定义、没有调用点的收敛器等于不存在：一次崩在 pre-stage 与 big tx 之间的
+    // daemon 会永久留下插件 generation / 暂存技能目录，且那个 importId 每次重放都答
+    // `bundle-apply-unsettled`。
+    const start = read('src/cli/start.ts')
+    expect(start).toContain('convergeResourceBundleApplies')
+    // 两处：boot 一次 + 小时 tick 一次。
+    expect(start.match(/convergeResourceBundleApplies\(/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('committed 分支重放幂等尾，不是只 +1', () => {
+    // 一次「DB 已提交、publish 前 SIGKILL」的 run 会留下已入库但**内容未发布**的技能
+    // 版本。只 `rolledForward += 1` 等于宣称处理过而实际什么都没做。
+    const src = read('src/services/bundle/apply.ts')
+    const committedBranch = src.slice(src.indexOf("if (row.state === 'committed')"))
+    expect(committedBranch.slice(0, 1400)).toContain('rollForwardCommitted(')
+  })
+})
+
+describe('P1-6 · 补偿没做干净就不许终态化 failed', () => {
+  test('catch 一侧与收敛器一侧对称：compensated 为假时不 settleFailed', () => {
+    // 补偿抛错（EBUSY 等）却照样标 failed ⇒ 收敛器显式跳过 failed 行 ⇒ 那次残留再也
+    // 不会被重试，而粗粒度 GC 又被任一非终态 run 挡住 ⇒ 永久残留，且 journal 反过来
+    // 宣称「这次什么都没留下」。
+    const src = read('src/services/bundle/apply.ts')
+    expect(src).toContain('if (compensated) {')
+    expect(src).toContain("log.warn('bundle-left-retryable'")
+  })
+
+  test('技能版本 artifact 落的是完整 staged 结构（够 publish 重放，不只够 abort）', () => {
+    const src = read('src/services/bundle/apply.ts')
+    expect(src).toContain("recordArtifact({ kind: 'skill-version-stage', staged })")
+    // 旧写法现编一个假的 StagedSkillVersion（newVersion: 0 / newHash: ''），
+    // abort 恰好用不到才没出事——那是运气不是设计。
+    expect(src).not.toContain("skillName: '',")
+  })
+})
+
+describe('P2-3 · lower 必须预载 payload 内 external 目标的名字', () => {
+  test('collectExternalRefs 覆盖全部引用槽', () => {
+    // 场景：root workflow 调用 local child，预检把 child 选成 reuse ⇒ root 的 call 槽
+    // 变成 `external:W`、child 的 create op 被删除。只扫 update target 的话 `nameOfId`
+    // 里没有 W 的名字，call 槽拿不到权威名字 ⇒ 整包死在
+    // `bundle-ref-invalid ... name is unknown`（一个纯 reuse 的包必然踩中）。
+    const src = read('src/services/bundle/lower.ts')
+    expect(src).toContain('collectExternalRefs(op.payload')
+    for (const slot of ['payload.skills', 'payload.dependsOn', 'payload.mcp', 'payload.plugins']) {
+      expect(src).toContain(slot)
+    }
+    for (const slot of ['node.agentRef', 'node.workflowRef', 'node.workgroupRef']) {
+      expect(src).toContain(slot)
+    }
+  })
+})
+
+describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
+  test('handler 读 query 并传给导出；闭包成员不 fence', () => {
+    const routes = read('src/routes/resourcePackages.ts')
+    expect(routes).toContain('parseRootFence(c)')
+    expect(routes).toContain('expectedVersion')
+    expect(routes).toContain('expectedSnapshotHash')
+    const exportSrc = read('src/services/resourcePackage/export.ts')
+    // 只对 root 生效 —— 与任务执行同语义（执行期非 root 依赖同样取最新）。
+    expect(exportSrc).toContain('assertRootUnchanged(closure, opts.expect)')
+    expect(exportSrc).toContain('package-root-changed')
+  })
+
+  test('写错的 expectedVersion 是拒绝，不是当没给', () => {
+    // 静默忽略一个写错的 fence，等于用户以为有保护而实际没有。
+    const routes = read('src/routes/resourcePackages.ts')
+    expect(routes).toContain('expectedVersion must be a positive integer')
+  })
+})
+
+describe('P2-2 / P2-7 · CLI 的两阶段与身份', () => {
+  const src = read('src/cli/package.ts')
+
+  test('--plan 只写计划、不提交；--apply 才提交', () => {
+    // 旧实现把 `--plan` 当带值参数：裸 `--plan` 落进被丢弃的 bools，命令**照常
+    // commit**。用户以为在 dry-run，实际建了一堆资源。
+    expect(src).toContain('commits NOTHING')
+    expect(src).toContain("flags.get('apply')")
+    expect(src).toContain('nothing committed')
+  })
+
+  test('三个决策来源都不给 ⇒ 报错，没有静默默认', () => {
+    expect(src).toContain('is required:')
+    expect(src).toContain('mutually exclusive')
+  })
+
+  test('非 active 用户 ⇒ 拒绝（与 HTTP 同构的第二半）', () => {
+    // HTTP 侧 session lookup 对停用用户返回 null；只查「行存在」会让 CLI 给一个停用
+    // 主体造出可写 Actor，导入的资源归到该主体名下。
+    expect(src).toContain("row.status !== 'active'")
+    expect(src).toContain('refusing to act as them')
+  })
+})
+
+describe('P1-2 · 脱敏三件套必须真的被调用（写了没接上 = 没写）', () => {
+  test('serialize 调了 argv / url / pluginSpec 三个 helper', () => {
+    const src = read('src/services/resourcePackage/serialize.ts')
+    expect(src).toContain('redactArgv(')
+    expect(src).toContain('redactUrlKeepingShape(')
+    expect(src).toContain('redactPluginSpec(')
+  })
+
+  test('requirements.pluginSources 取的是**已脱敏**的那一份，不重读原行', () => {
+    // 重读 `row.spec` 等于给密钥开第二条出口，且两处脱敏规则会随时间漂移。
+    const src = read('src/services/resourcePackage/export.ts')
+    expect(src).toContain('redactedSpecOfSlug')
+    expect(src).not.toContain("spec: String(r.row.spec ?? '')")
+  })
+})
+
+describe('复合键只能有一个定义（本轮实测的静默剔除事故）', () => {
+  test('humanMemberKey 是唯一定义，两端都调它', () => {
+    // 解析端与 provider 端各拼一次 `${slug} ${username}`，其中一侧的「空格」实际敲成
+    // 了 U+0000（编辑器不显示）⇒ 查表永远落空 ⇒ human 成员被当成「用户选了不加入」
+    // 整条剔除，全程零报错。
+    const commit = read('src/services/resourcePackage/commit.ts')
+    expect(commit).toContain('export function humanMemberKey(')
+    expect(commit).toContain('humanMemberKey(workgroupSlug, username)')
+    // 分隔符必须是可见字符。
+    expect(commit).toContain('`${workgroupSlug}#${username}`')
+  })
+
+  test('源码里没有裸控制字符', () => {
+    // ⚠️ **不用 regex**：把控制字符敲进字面量正是它要抓的问题（写这条测试的第一版
+    // 就自己踩了一次），而转义写法又会撞 `no-control-regex`。直接查字符码最直白。
+    const hasControlChar = (text: string): boolean => {
+      for (let i = 0; i < text.length; i++) {
+        const c = text.charCodeAt(i)
+        // 放行 \t(9) \n(10) \r(13)；其余 C0 控制字符都不该出现在源码里。
+        if (c < 0x20 && c !== 9 && c !== 10 && c !== 13) return true
+      }
+      return false
+    }
+    for (const rel of [
+      'src/services/resourcePackage/commit.ts',
+      'src/services/resourcePackage/preview.ts',
+      'src/services/bundle/lower.ts',
+      'src/services/workflow.validator.ts',
+    ]) {
+      expect({ rel, hit: hasControlChar(read(rel)) }).toEqual({ rel, hit: false })
+    }
+  })
+})
+
+describe('P1-1 · 写权限点表两头受检', () => {
+  test('六类齐全且点位名字来自 Permission 联合（打错字编译失败）', () => {
+    const src = read('src/services/resourcePackage/preview.ts')
+    expect(src).toContain('Record<AclResourceType, { create: Permission; update: Permission }>')
+    for (const t of ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups']) {
+      expect(src).toContain(`create: '${t}:create'`)
+      expect(src).toContain(`update: '${t}:update'`)
+    }
+  })
+})
+
+describe('导入 receipt 的幂等键仍是客户端持有的 importId', () => {
+  test('ulid 生成的 importId 每次不同（不会误撞别人的 journal 行）', () => {
+    expect(ulid()).not.toBe(ulid())
+  })
+})

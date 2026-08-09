@@ -204,18 +204,34 @@ describe('产出的 op 通过 BundleOp 的严格 schema', () => {
         res('plugin', 'P', 'lint', { spec: 'left-pad@1.0.0', optionsJson: '{}' }),
         res('skill', 'S', 'helper'),
         res('workflow', 'W', 'wf', { definition: '{}' }),
-        // ⚠️ fixture 必须用**真实**的枚举与完整 switches —— 编的值会让这条测试
-        // 变成「测我自己编的形状」而不是「测序列化器产出的形状」。
+        // ⚠️ fixture 必须用**真实的 DB 列**。这条注释原本就在这里，而 fixture 自己
+        // 却用了 `switchesJson` —— `workgroups` 表上根本没有这一列（开关是各自独立
+        // 的 boolean 列，成员在 `workgroup_members` 表）。于是这条「过严格 schema」
+        // 的测试一直在验证一个**编出来的**形状，真实导出产的 payload 反而永远缺
+        // switches/members —— 序列化器与真实 schema 脱节的根因就是这里。
         res('workgroup', 'G', 'squad', {
           mode: 'leader_worker',
           maxRounds: 3,
-          switchesJson: JSON.stringify({
-            shareOutputs: true,
-            directMessages: false,
-            blackboard: false,
-          }),
+          shareOutputs: true,
+          directMessages: false,
+          blackboard: false,
+          clarifyBudget: 3,
+          fanOut: false,
+          leaderMemberId: 'M1',
+          members: [
+            {
+              id: 'M1',
+              memberType: 'agent',
+              agentId: 'A',
+              displayName: 'auditor',
+              roleDesc: '',
+              sortOrder: 0,
+            },
+          ],
         }),
       ]),
+      // 技能内容在文件系统里，导出段先读盘再交给序列化器（见 skillTree.ts）。
+      new Map([['S', { frontmatterExtra: {}, bodyMd: '# helper', files: [] }]]),
     )
     for (const op of out.bundle.ops) {
       const parsed = BundleOpSchema.safeParse(op)

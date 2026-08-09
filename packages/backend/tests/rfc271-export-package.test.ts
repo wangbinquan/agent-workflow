@@ -8,7 +8,9 @@
 //  ③ **同一份闭包导出两次逐字节相同**（AC-7b 的前提，见 `encodeZip`）。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { parse as parseYaml } from 'yaml'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
@@ -19,6 +21,9 @@ import { decodeZip } from '../src/services/skill-zip'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+// 技能内容在文件系统里（`${appHome}/skills/{id}/files/`），所以导出要 appHome。
+// 本文件的 seed 不建 managed 技能，目录不存在 ⇒ 读到空树，不影响这里的断言。
+const APP_HOME = mkdtempSync(join(tmpdir(), 'rfc271-export-'))
 
 const actorOf = (id: string, permissions: string[] = ['scripts:author']): Actor =>
   ({
@@ -98,7 +103,12 @@ describe('包的目录结构（AC-1：内部结构清晰明确）', () => {
   test('三个固定条目：manifest.yaml / README.md / bundle.json', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
     expect(
       decodeZip(pkg.zip)
         .map((e) => e.path)
@@ -110,7 +120,12 @@ describe('包的目录结构（AC-1：内部结构清晰明确）', () => {
   test('bundle.json 是机器契约、manifest 是给人看的 —— 两者分开', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
     const bundle = JSON.parse(readEntry(pkg.zip, 'bundle.json')) as {
       ops: unknown[]
       rootRef: string
@@ -124,7 +139,12 @@ describe('① 包**不带任何权属信息**（决策 4/12）', () => {
   test('manifest 里不出现 owner / visibility / grant', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
     const raw = readEntry(pkg.zip, 'manifest.yaml')
     expect(raw).not.toContain('ownerUserId')
     expect(raw).not.toContain('visibility')
@@ -136,7 +156,12 @@ describe('① 包**不带任何权属信息**（决策 4/12）', () => {
   test('bundle.json 里同样没有权属字段', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
     const raw = readEntry(pkg.zip, 'bundle.json')
     expect(raw).not.toContain('ownerUserId')
     expect(raw).not.toContain('"visibility"')
@@ -147,7 +172,12 @@ describe('② 凭据：位置在包里、值不在包里', () => {
   test('manifest.secrets 点名字段，原 token 在**整个包**里找不到', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
     const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
       secrets: Array<{ field: string; resourceName: string }>
     }
@@ -161,7 +191,12 @@ describe('② 凭据：位置在包里、值不在包里', () => {
   test('README 说明了要重新填写，并给出数量', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
     expect(readEntry(pkg.zip, 'README.md')).toContain('原值不在包里')
   })
 })
@@ -170,8 +205,18 @@ describe('③ 逐字节可复现', () => {
   test('同一份闭包导出两次，zip 字节完全相同', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { wf } = await seed(db)
-    const a = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
-    const b = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const a = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
+    const b = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
     expect([...a.zip]).toEqual([...b.zip])
   })
 })
@@ -180,7 +225,12 @@ describe('requirements —— 导入方需要自备的东西', () => {
   test('MCP 形态进 requirements（它不是包内容，是前提）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(db, actorOf('u1'), { type: 'workflow', id: wf })
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
     const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
       requirements: { mcpKinds: string[] }
     }

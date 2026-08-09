@@ -11,16 +11,16 @@
 
 一个引用只有八种形态。**形态本身就携带"这个引用意味着什么"**：
 
-| 变体 | 含义 | 典型出处 |
-|---|---|---|
-| `id` | canonical 资源 id | 运行期一切引用 |
-| `name` | 裸名字 | 历史 wire 形态 |
-| `selector` | 名字 + 可选 owner 用户名 | 工作流 YAML 导出 |
-| `handle` | `res#<type>#<n>` | 意图会话的清单句柄 |
-| `local` | 包/草稿**内部**的 slug | bundle、intent 的 `$new:` |
-| `external` | 指向本实例已有行 | bundle 的 update 目标 |
-| `call` | 调用目标（名字权威 + id hint） | `call-workflow` / `call-workgroup` |
-| `project-skill` | **不是资源**：仓库自带技能 | `agents.skills` 的 project 分支 |
+| 变体            | 含义                           | 典型出处                           |
+| --------------- | ------------------------------ | ---------------------------------- |
+| `id`            | canonical 资源 id              | 运行期一切引用                     |
+| `name`          | 裸名字                         | 历史 wire 形态                     |
+| `selector`      | 名字 + 可选 owner 用户名       | 工作流 YAML 导出                   |
+| `handle`        | `res#<type>#<n>`               | 意图会话的清单句柄                 |
+| `local`         | 包/草稿**内部**的 slug         | bundle、intent 的 `$new:`          |
+| `external`      | 指向本实例已有行               | bundle 的 update 目标              |
+| `call`          | 调用目标（名字权威 + id hint） | `call-workflow` / `call-workgroup` |
+| `project-skill` | **不是资源**：仓库自带技能     | `agents.skills` 的 project 分支    |
 
 最后一条最容易做错：`project-skill` 没有 DB 行、没有 ACL、没有 owner。把它表达成
 `{k:'name',type:'skill'}` 等于宣称"库里应该有这么一行"，于是闭包遍历会去查、查不到
@@ -40,13 +40,13 @@ selector、runtime 的裸 ULID、bundle 的 `local:`/`external:`、agent-skill �
 
 解析由**五个属性**定死，分两层：
 
-| 层 | 属性 | 含义 |
-|---|---|---|
-| 域级 | `freeze` | 是否按任务冻结（只有 call 域是 `per-task`） |
-| 域级 | `aclAt` | 可见性判定的时点/主体 |
-| 调用级 | `purpose` | dispatch / validate / preview / export |
-| 调用级 | `onMissing` | fail / skip / dangle |
-| 调用级 | `failureOwner` | node / wrapper / task / caller |
+| 层     | 属性           | 含义                                        |
+| ------ | -------------- | ------------------------------------------- |
+| 域级   | `freeze`       | 是否按任务冻结（只有 call 域是 `per-task`） |
+| 域级   | `aclAt`        | 可见性判定的时点/主体                       |
+| 调用级 | `purpose`      | dispatch / validate / preview / export      |
+| 调用级 | `onMissing`    | fail / skip / dangle                        |
+| 调用级 | `failureOwner` | node / wrapper / task / caller              |
 
 **两层不能混**。把 `onMissing` 塞进域级，等于宣称"这个域永远只有一种调用方式"——
 反例就在仓里：同一条 `dependsOn` 引用，保存期校验要硬失败，而 tolerant UI preview
@@ -104,7 +104,13 @@ payload 逐字段对齐**正式的** create/snapshot schema，不是 intent 版�
 ### 3.2 Provider 契约
 
 场景差异全部收进 `BundleApplyProvider`：幂等身份、串行键、执行 actor、
-`resolveExternal`、`readSkillFile`，外加三个事务钩子。
+`resolveExternal`、`readSkillFile`、`resolveHumanMember`，外加三个事务钩子。
+
+`resolveHumanMember` 存在的理由：工作组的 human 成员在 wire 上带的是**源实例的
+username**，canonical 层要的是本地 `userId`。原样透传既过不了正式 schema，也会在
+`workgroup_members` 里留一条永远解析不出人的行。配置包侧把它接到「用户在导入时逐个
+拍板」的映射上；返回 `null` 表示该成员不加入，lower 会整条剔除（并连带把指向它的
+`leaderDisplayName` 置空）。
 
 `revalidateInTx` **不是可选装饰**：它在 CAS 之后、任何 commit 内核之前跑。
 pre-stage 窗口（npm 安装 / 技能暂存）足够长，claim 期校验过的东西可能已经过期。
@@ -120,3 +126,25 @@ pre-stage 窗口（npm 安装 / 技能暂存）足够长，claim 期校验过的
 （`plannedGenerationDir()` 让你在动手前算出精确路径）——只记 `{pluginId}` 的话，
 崩溃后收敛器不知道该删哪个目录，而粗粒度 GC 又被任一非终态 node run 挡住，
 结果是目录永久残留且 journal 无法证明补偿完成。
+
+**记的信息要够「推完」，不只够「回滚」。** 技能版本的 artifact 落的是完整的
+`StagedSkillVersion`，不是补偿用得到的那三个字段：abort 只需要 `stagingDir`，而
+**committed 之后的重放需要 publish**，publish 要 `newVersion` / `newHash` /
+`versionDir` 等全套。只记三个字段的话，一次「DB 已提交、publish 前崩溃」的 run 会留下
+一个已入库但内容未发布的技能版本，而收敛器看得见那条 committed 行却推不完它。
+
+### 4.1 两侧对称：补偿没做干净就不许终态化
+
+收敛器一侧早就是这样（补偿抛错 ⇒ 保留非终态，下轮再试），**apply 的 catch 一侧同样**。
+两侧写法不对称的后果很具体：catch 里补偿失败却照样 `settleFailed`，而收敛器显式跳过
+`failed` 行 ⇒ 那次的残留再也不会被重试，粗粒度 GC 又被非终态 run 挡住 ⇒ 永久残留，
+且 journal 反过来宣称「这次什么都没留下」。
+
+代价是同一个幂等键在收敛前重放会拿到 `bundle-apply-unsettled`——那正是事实。
+
+### 4.2 收敛器必须真的被调用
+
+`convergeResourceBundleApplies` 挂在 daemon 启动与每小时后台任务上（`cli/start.ts`，
+与 intent 那条并列、各自 try/catch）。没接线的收敛器等于没有：一次崩在 pre-stage 与
+big tx 之间的 daemon 会永久留下插件 generation / 暂存技能目录，且那个 importId 每次
+重放都答 `bundle-apply-unsettled`。加收敛器时**同一个 PR 里 grep 一次它的调用点**。

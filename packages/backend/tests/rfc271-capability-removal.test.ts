@@ -57,10 +57,12 @@ describe('C2 · 裸 YAML 导入已下线', () => {
     expect(list).not.toContain('WorkflowImportDialog')
   })
 
-  test('取代它的入口在，且**两个** header 槽都挂了（空列表走的是另一个）', () => {
+  test('取代它的入口融入创建流程，列表页不再挂独立导入按钮', () => {
     const list = read(resolve(FRONTEND, 'src', 'routes', 'workflows.tsx'))
-    expect(list).toContain('ResourcePackageImportEntry')
-    expect(list).toContain('emptyHeaderActions=')
+    expect(list).toContain('ResourcePackageImportDialog')
+    expect(list).toContain('alternativeAction=')
+    expect(list).not.toContain('ResourcePackageImportEntry')
+    expect(list).not.toContain('emptyHeaderActions=')
   })
 })
 

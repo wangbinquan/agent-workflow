@@ -20,7 +20,7 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { canonicalJson, type AclResourceType, type BundleOp } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { resourceBundleApplies } from '@/db/schema'
+import { resourceBundleApplies, users } from '@/db/schema'
 import { ACL_TABLES } from '@/services/resourceAcl'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { applyResourceBundle, type BundleApplyDeps } from '@/services/bundle/apply'
@@ -38,10 +38,29 @@ export interface ImportDecision {
   finalName?: string
 }
 
+/** 一个 human 成员槽的落地决定：绑到哪个本地用户，或 `null` = 不加入该成员。 */
+export interface HumanMemberMapping {
+  workgroupSlug: string
+  username: string
+  userId?: string | null
+}
+
+/**
+ * human 成员映射表的键。**必须只有这一个定义**：解析端与 provider 端各拼一次的
+ * 写法已经出过一次事故 —— 一侧的「空格」实际敲成了 U+0000，另一侧是真空格，于是
+ * 查表永远落空、human 成员被静默当成「用户选了不加入」而整条剔除，全程零报错。
+ * `#` 是显式可见字符；slug 与 username 都不含它。
+ */
+export function humanMemberKey(workgroupSlug: string, username: string): string {
+  return `${workgroupSlug}#${username}`
+}
+
 export interface CommitPackageInput {
   pkg: ParsedPackage
   previewToken: string
   decisions: ImportDecision[]
+  /** 包里有 human 成员时必须逐个给出；leader 槽不允许为 null。 */
+  humanMemberMappings?: HumanMemberMapping[]
 }
 
 export const PACKAGE_IDEMPOTENCY_SCOPE = 'package'
@@ -63,6 +82,20 @@ export function translateDecisions(
     { candidateIds: string[]; expectByCandidateId: Record<string, unknown> }
   >,
 ): { ops: BundleOp[]; externalOfSlug: Map<string, string> } {
+  // ⚠️ 同一 slug 给两条互相矛盾的 decision 必须**拒绝**，不能靠「后写覆盖」收场：
+  // `bySlug` 是后写赢，而 `externalOfSlug` 是遍历原数组建的，早先那条 reuse 会留下。
+  // 于是 `MCP reuse(old)` + `MCP new` 会同时新建 MCP **并**让新 agent 指向旧 MCP。
+  const seenSlugs = new Set<string>()
+  for (const d of decisions) {
+    if (seenSlugs.has(d.localSlug)) {
+      throw new ValidationError(
+        'package-decision-duplicate',
+        `entry '${d.localSlug}' has more than one decision`,
+      )
+    }
+    seenSlugs.add(d.localSlug)
+  }
+
   const bySlug = new Map(decisions.map((d) => [d.localSlug, d]))
   const externalOfSlug = new Map<string, string>()
   for (const d of decisions) {
@@ -174,9 +207,21 @@ export async function commitResourcePackage(
 
   const baseline = new Map(verified.baseline.map((b) => [b.localSlug, b]))
   assertActionsAllowed(deps.db, actor, input.decisions, verified.baseline)
+  const humanMemberUserIds = resolveHumanMemberMappings(
+    deps.db,
+    verified.humanBaseline ?? [],
+    input.humanMemberMappings ?? [],
+  )
   const { ops } = translateDecisions(input.pkg, input.decisions, baseline)
 
-  const provider = makePackageProvider(deps.db, actor, input, verified.importId, baseline)
+  const provider = makePackageProvider(
+    deps.db,
+    actor,
+    input,
+    verified.importId,
+    baseline,
+    humanMemberUserIds,
+  )
   return applyResourceBundle(deps, {
     bundle: { ...input.pkg.bundle, ops } as typeof input.pkg.bundle,
     provider,
@@ -225,12 +270,86 @@ function assertActionsAllowed(
   void actor
 }
 
+/**
+ * human 成员映射：`(workgroupSlug, username)` → 本地 user id（或 null = 不加入）。
+ *
+ * 三条判据，缺一不可：
+ *  ① 每个**签名基线里**的槽都必须给出决定——漏一个就不是「用户拍过板」的状态；
+ *  ② 给的槽必须在基线里——否则客户端可以凭空插入一个成员；
+ *  ③ `required`（leader_worker 的 leader）不能映射成 null，否则导入出来的组起不了。
+ *
+ * 目标用户必须存在且 active：绑到一个不能登录的主体上没有意义，而绑到一个不存在的
+ * id 上会在 `workgroup_members` 里留一条永远解析不出人的行。
+ */
+function resolveHumanMemberMappings(
+  db: DbClient,
+  humanBaseline: readonly { workgroupSlug: string; username: string; required: boolean }[],
+  mappings: readonly HumanMemberMapping[],
+): Map<string, string | null> {
+  const out = new Map<string, string | null>()
+  if (humanBaseline.length === 0) return out
+
+  const wanted = new Map(humanBaseline.map((b) => [humanMemberKey(b.workgroupSlug, b.username), b]))
+  const given = new Map<string, HumanMemberMapping>()
+  for (const m of mappings) {
+    const key = humanMemberKey(m.workgroupSlug, m.username)
+    if (!wanted.has(key)) {
+      throw new ValidationError(
+        'package-human-mapping-unconfirmed',
+        `member '${m.username}' of '${m.workgroupSlug}' was not part of the confirmed preview`,
+      )
+    }
+    if (given.has(key)) {
+      throw new ValidationError(
+        'package-human-mapping-duplicate',
+        `member '${m.username}' of '${m.workgroupSlug}' has more than one mapping`,
+      )
+    }
+    given.set(key, m)
+  }
+
+  for (const [key, slot] of wanted) {
+    const mapping = given.get(key)
+    if (mapping === undefined) {
+      throw new ValidationError(
+        'package-human-mapping-missing',
+        `no mapping for member '${slot.username}' of '${slot.workgroupSlug}'`,
+      )
+    }
+    const userId = mapping.userId ?? null
+    if (userId === null) {
+      if (slot.required) {
+        throw new ValidationError(
+          'package-human-mapping-required',
+          `member '${slot.username}' is the leader of '${slot.workgroupSlug}' and cannot be skipped`,
+        )
+      }
+      out.set(key, null)
+      continue
+    }
+    const row = db
+      .select({ id: users.id, status: users.status })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get()
+    if (row === undefined || row.status !== 'active') {
+      throw new ValidationError(
+        'package-human-mapping-invalid',
+        `mapping target for '${slot.username}' is not an active user`,
+      )
+    }
+    out.set(key, userId)
+  }
+  return out
+}
+
 function makePackageProvider(
   db: DbClient,
   actor: Actor,
   input: CommitPackageInput,
   importId: string,
   baseline: ReadonlyMap<string, { expectByCandidateId: Record<string, unknown> }>,
+  humanMemberUserIds: ReadonlyMap<string, string | null>,
 ): BundleApplyProvider {
   // 串行键按**目标资源集合**，不是常量 scope（I1）：拿 `'package'` 当串行键，
   // Alice 一个慢 npm 安装会堵死 Bob 完全无关的纯 agent 包。
@@ -242,6 +361,9 @@ function makePackageProvider(
     idempotencyKey: { scope: PACKAGE_IDEMPOTENCY_SCOPE, key: importId },
     serializationKey: `package:${actor.user.id}:${targets}`,
     actor,
+    // 用户在导入时逐个拍板的 human 成员映射（已在 commit 期校验过基线与有效性）。
+    resolveHumanMember: (workgroupSlug, username) =>
+      humanMemberUserIds.get(humanMemberKey(workgroupSlug, username)) ?? null,
     resolveExternal: async (ref, expectType) => {
       const id = ref.startsWith('external:') ? ref.slice('external:'.length) : ref
       const table = ACL_TABLES[expectType]
