@@ -32,6 +32,7 @@ import {
 } from '@/components/AgentForm'
 import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
 import { useTour } from '@/components/tour/SpotlightTour'
+import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
@@ -193,6 +194,7 @@ function AgentDetailPage() {
         extra={
           <>
             <IntentProvenanceBadge resourceType="agent" resourceId={id} />
+            <ResourcePackageExportButton type="agent" id={id} name={query.data?.name ?? id} />
             <IntentEntryButton
               variant="modify"
               mount={{ resourceType: 'agent', resourceId: id }}

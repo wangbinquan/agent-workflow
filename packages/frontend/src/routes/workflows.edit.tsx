@@ -2,6 +2,7 @@
 // list page's quick-create dialog (RFC-164 workgroup pattern); the editor owns
 // every detail edit of the (initially empty) definition.
 
+import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -892,6 +893,7 @@ export function WorkflowEditorLoaded({
   const headerActions = (
     <>
       <IntentProvenanceBadge resourceType="workflow" resourceId={workflowId} />
+      <ResourcePackageExportButton type="workflow" id={workflowId} name={workflowId} />
       <IntentEntryButton
         variant="modify"
         size="sm"

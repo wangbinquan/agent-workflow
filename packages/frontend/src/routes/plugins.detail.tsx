@@ -10,6 +10,7 @@ import type {
   PluginUpgradeResult,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
@@ -532,6 +533,7 @@ function PluginDetailPage() {
         extra={
           <>
             <IntentProvenanceBadge resourceType="plugin" resourceId={id} />
+            <ResourcePackageExportButton type="plugin" id={id} name={displayName} />
             <IntentEntryButton
               variant="modify"
               mount={{ resourceType: 'plugin', resourceId: id }}

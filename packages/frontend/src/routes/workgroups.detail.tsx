@@ -1,5 +1,6 @@
 // RFC-225 — workgroup detail studio with one versioned autosave writer.
 
+import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -689,6 +690,11 @@ export function WorkgroupEditor(props: {
             </span>
             <WorkgroupDraftStatusSummary state={controller.state} />
             <IntentProvenanceBadge resourceType="workgroup" resourceId={props.initial.id} />
+            <ResourcePackageExportButton
+              type="workgroup"
+              id={props.initial.id}
+              name={props.initial.name}
+            />
           </div>
         }
         actions={

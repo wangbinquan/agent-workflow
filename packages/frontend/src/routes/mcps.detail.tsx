@@ -17,6 +17,7 @@ import {
   useSplitDirty,
   type SplitBusyRelease,
 } from '@/components/split/splitDirty'
+import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { IntentEntryButton } from '@/components/IntentEntryButton'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
@@ -209,6 +210,7 @@ function McpDetailPage() {
         extra={
           <>
             <IntentProvenanceBadge resourceType="mcp" resourceId={id} />
+            <ResourcePackageExportButton type="mcp" id={id} name={query.data?.name ?? id} />
             <IntentEntryButton
               variant="modify"
               mount={{ resourceType: 'mcp', resourceId: id }}
