@@ -9,25 +9,23 @@
 //    此时必须带 `rootType`：external token 不自带类型，receipt 需要它才能报出根的类型。
 
 import { z } from 'zod'
-import { AclResourceTypeSchema } from '../schemas/resourceAcl'
+import { AclResourceTypeSchema, type AclResourceType } from '../schemas/resourceAcl'
+import { decodeBundleIdentityRef } from '../ref/codecs'
 import { BUNDLE_MAX_OPS, BundleOpSchema, type BundleOp } from './op'
+import { BundleIdentityRefWireSchema } from './payload'
 
 export const BUNDLE_VERSION = 1
 
-const RootRefSchema = z
-  .string()
-  // ⚠️ 必须接受 `builtin:` —— 导出一个 built-in 根时 serializer 就是这么写的
-  // （built-in 不产 op，写 `local:` 会让 parser 判 `bundle-dangling-root`）。
-  // 少了这一支，导出的包**自己的 parser 都解析不了**（实测 `package-invalid`）。
-  .regex(
-    /^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128}|builtin:(agent|workflow)\/\S{1,256})$/,
-  )
+// Root 是 identity 域的一个槽，不再拷贝第二份正则。这也锁住 built-in 根与
+// payload 内 built-in 引用共用同一个 codec/schema 词法面。
+const RootRefSchema = BundleIdentityRefWireSchema
 
 export interface BundleRefIssue {
   code:
     | 'bundle-duplicate-op-id'
     | 'bundle-duplicate-slug'
     | 'bundle-dangling-local-ref'
+    | 'bundle-local-ref-type-mismatch'
     | 'bundle-dangling-root'
     | 'bundle-root-type-missing'
     | 'bundle-too-many-ops'
@@ -36,38 +34,81 @@ export interface BundleRefIssue {
   pointer?: string
 }
 
-/** 收集 bundle 内所有 `local:` 引用（各槽位都要扫到）。 */
-function collectLocalRefs(op: BundleOp): string[] {
-  const out: string[] = []
-  const push = (wire: unknown): void => {
-    if (typeof wire === 'string' && wire.startsWith('local:')) out.push(wire.slice('local:'.length))
+interface LocalRefUse {
+  slug: string
+  expectedType: AclResourceType
+}
+
+function resourceTypeOfBundleOp(op: BundleOp): AclResourceType {
+  switch (op.kind) {
+    case 'agent-create':
+    case 'agent-update':
+      return 'agent'
+    case 'skill-create':
+    case 'skill-update':
+      return 'skill'
+    case 'mcp-create':
+    case 'mcp-update':
+      return 'mcp'
+    case 'plugin-create':
+    case 'plugin-update':
+      return 'plugin'
+    case 'workflow-create':
+    case 'workflow-update':
+      return 'workflow'
+    case 'workgroup-create':
+    case 'workgroup-update':
+      return 'workgroup'
+  }
+}
+
+/** 收集 bundle 内所有 `local:` 引用，并保留槽位期待的资源类型。 */
+function collectLocalRefs(op: BundleOp): LocalRefUse[] {
+  const out: LocalRefUse[] = []
+  const push = (wire: unknown, expectedType: AclResourceType): void => {
+    if (typeof wire !== 'string') return
+    const decoded = decodeBundleIdentityRef(wire)
+    if (decoded?.k === 'local') out.push({ slug: decoded.slug, expectedType })
   }
   const p = op.payload as Record<string, unknown>
-  for (const key of ['skills', 'dependsOn', 'mcp', 'plugins'] as const) {
-    const arr = p[key]
-    if (Array.isArray(arr)) for (const item of arr) push(item)
+  if (op.kind === 'agent-create' || op.kind === 'agent-update') {
+    const slots = [
+      ['skills', 'skill'],
+      ['dependsOn', 'agent'],
+      ['mcp', 'mcp'],
+      ['plugins', 'plugin'],
+    ] as const
+    for (const [key, type] of slots) {
+      const arr = p[key]
+      if (Array.isArray(arr)) for (const item of arr) push(item, type)
+    }
   }
-  const members = p.members
-  if (Array.isArray(members)) {
-    for (const m of members) {
-      if (typeof m === 'object' && m !== null) push((m as Record<string, unknown>).agentRef)
+  if (op.kind === 'workgroup-create' || op.kind === 'workgroup-update') {
+    const members = p.members
+    if (Array.isArray(members)) {
+      for (const m of members) {
+        if (typeof m === 'object' && m !== null) {
+          push((m as Record<string, unknown>).agentRef, 'agent')
+        }
+      }
     }
   }
   // 工作流 definition 里的引用槽（agentRef / call 目标）已在 lowering 时写成 wire。
-  const definition = p.definition
-  if (typeof definition === 'object' && definition !== null) {
+  const definition =
+    op.kind === 'workflow-create' || op.kind === 'workflow-update' ? p.definition : undefined
+  if (typeof definition === 'object' && definition !== null && !Array.isArray(definition)) {
     const nodes = (definition as Record<string, unknown>).nodes
     if (Array.isArray(nodes)) {
       for (const n of nodes) {
         if (typeof n !== 'object' || n === null) continue
         const rec = n as Record<string, unknown>
-        push(rec.agentRef)
+        push(rec.agentRef, 'agent')
         // ⚠️ call 目标的实际字段是 `workflowRef` / `workgroupRef`（见 serialize 的
         // lifting）。这里曾写 `targetRef` —— 一个**根本不存在的字段**，于是 call 槽的
         // `local:` 引用从来没被闭合性校验扫到过：一个引用了包内子工作流、而该子工作流
         // 又没有 create op 的包，能一路过 schema 到 apply 才炸。
-        push(rec.workflowRef)
-        push(rec.workgroupRef)
+        push(rec.workflowRef, 'workflow')
+        push(rec.workgroupRef, 'workgroup')
       }
     }
   }
@@ -109,7 +150,7 @@ export function collectBundleRefIssues(bundle: {
     opIds.add(op.opId)
   }
 
-  const slugs = new Set<string>()
+  const slugs = new Map<string, { type: AclResourceType; opId: string }>()
   for (const op of bundle.ops) {
     const slug = (op as { slug?: string }).slug
     if (slug === undefined) continue
@@ -121,17 +162,27 @@ export function collectBundleRefIssues(bundle: {
       })
       continue
     }
-    slugs.add(slug)
+    slugs.set(slug, { type: resourceTypeOfBundleOp(op), opId: op.opId })
   }
 
   for (const op of bundle.ops) {
-    for (const slug of collectLocalRefs(op)) {
-      if (slugs.has(slug)) continue
-      issues.push({
-        code: 'bundle-dangling-local-ref',
-        message: `op ${op.opId} references local:${slug}, which no create op declares`,
-        pointer: op.opId,
-      })
+    for (const ref of collectLocalRefs(op)) {
+      const target = slugs.get(ref.slug)
+      if (target === undefined) {
+        issues.push({
+          code: 'bundle-dangling-local-ref',
+          message: `op ${op.opId} references local:${ref.slug}, which no create op declares`,
+          pointer: op.opId,
+        })
+        continue
+      }
+      if (target.type !== ref.expectedType) {
+        issues.push({
+          code: 'bundle-local-ref-type-mismatch',
+          message: `op ${op.opId} uses local:${ref.slug} as ${ref.expectedType}, but ${target.opId} declares ${target.type}`,
+          pointer: op.opId,
+        })
+      }
     }
   }
 

@@ -174,6 +174,51 @@ describe('闭合性：重复 slug / 悬空 local 引用 / op 上限', () => {
     expect(codes).toContain('bundle-dangling-local-ref')
   })
 
+  test('local slug 存在但资源类型不对：schema 早拒绝，不留给 lowering', () => {
+    // 真实反例：只用 Set<slug> 检查会认为已闭合，随后把 plugin 的预铸 id
+    // 写进 agent.mcp。最终虽会被事务内引用栅栏回滚，preview/schema 已经给了假阳性。
+    const wrong = {
+      bundleVersion: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          kind: 'plugin-create' as const,
+          slug: 'tool',
+          payload: { name: 'tool', spec: 'tool@1', sourceKind: 'npm' as const },
+        },
+        {
+          opId: 'op-2',
+          kind: 'agent-create' as const,
+          slug: 'agent',
+          payload: { ...agentPayload, mcp: ['local:tool'] },
+        },
+      ],
+      rootRef: 'local:agent',
+    }
+    expect(collectBundleRefIssues(wrong).map((i) => i.code)).toContain(
+      'bundle-local-ref-type-mismatch',
+    )
+    expect(BundleSchema.safeParse(wrong).success).toBe(false)
+  })
+
+  test('local slug 的类型与槽位一致：正常通过', () => {
+    const good = {
+      bundleVersion: 1,
+      ops: [
+        { opId: 'op-1', kind: 'mcp-create' as const, slug: 'tool', payload: mcpPayload },
+        {
+          opId: 'op-2',
+          kind: 'agent-create' as const,
+          slug: 'agent',
+          payload: { ...agentPayload, mcp: ['local:tool'] },
+        },
+      ],
+      rootRef: 'local:agent',
+    }
+    expect(collectBundleRefIssues(good)).toEqual([])
+    expect(BundleSchema.safeParse(good).success).toBe(true)
+  })
+
   test('工作组成员的 agentRef 也要扫到', () => {
     const wg = {
       ops: [
@@ -254,6 +299,66 @@ describe('payload 逐字段对照正式 schema（AC-B3b）', () => {
     expect(BundleOpSchema.safeParse(wrongSlot).success).toBe(false)
   })
 
+  test('builtin identity 必须与 agent 的具体槽类型一致', () => {
+    const opWith = (patch: Record<string, unknown>) => ({
+      opId: 'op-1',
+      kind: 'agent-create' as const,
+      slug: 'a1',
+      payload: { ...agentPayload, ...patch },
+    })
+    // dependsOn 是 agent 槽，只有 builtin:agent 是有意义的。
+    expect(BundleOpSchema.safeParse(opWith({ dependsOn: ['builtin:agent/base'] })).success).toBe(
+      true,
+    )
+    expect(BundleOpSchema.safeParse(opWith({ dependsOn: ['builtin:workflow/base'] })).success).toBe(
+      false,
+    )
+
+    // mcp / plugin / skill 都没有 builtin 列；identity 域的词法放行不得渗进槽位。
+    for (const patch of [
+      { mcp: ['builtin:agent/base'] },
+      { mcp: ['builtin:workflow/base'] },
+      { plugins: ['builtin:agent/base'] },
+      { plugins: ['builtin:workflow/base'] },
+      { skills: ['builtin:agent/base'] },
+      { skills: ['builtin:workflow/base'] },
+    ]) {
+      expect({ patch, ok: BundleOpSchema.safeParse(opWith(patch)).success }).toEqual({
+        patch,
+        ok: false,
+      })
+    }
+  })
+
+  test('workgroup.agentRef 允许 builtin:agent，拒绝 builtin:workflow', () => {
+    const opWith = (agentRef: string) => ({
+      opId: 'op-1',
+      kind: 'workgroup-create' as const,
+      slug: 'g1',
+      payload: {
+        name: 'group',
+        description: '',
+        instructions: '',
+        mode: 'leader_worker' as const,
+        switches: { shareOutputs: true, directMessages: true, blackboard: true },
+        maxRounds: 10,
+        completionGate: true,
+        members: [
+          {
+            memberType: 'agent' as const,
+            agentRef,
+            displayName: 'leader',
+            roleDesc: '',
+            sortOrder: 0,
+          },
+        ],
+        leaderDisplayName: 'leader',
+      },
+    })
+    expect(BundleOpSchema.safeParse(opWith('builtin:agent/base')).success).toBe(true)
+    expect(BundleOpSchema.safeParse(opWith('builtin:workflow/base')).success).toBe(false)
+  })
+
   test('plugin payload 用正式字段名 options（不是 intent 的 optionsJson）', () => {
     const op = {
       opId: 'op-1',
@@ -291,6 +396,109 @@ describe('payload 逐字段对照正式 schema（AC-B3b）', () => {
     expect(BundleOpSchema.safeParse(mk('references/审计 规则.md')).success).toBe(true)
     expect(BundleOpSchema.safeParse(mk('../escape.md')).success).toBe(false)
     expect(BundleOpSchema.safeParse(mk('/abs.md')).success).toBe(false)
+  })
+
+  test('技能文件 path/ref 都必须唯一，避免同一落点或同一载体被含糊复用', () => {
+    const mk = (files: Array<{ path: string; ref: string }>) => ({
+      opId: 'op-1',
+      kind: 'skill-create' as const,
+      slug: 's1',
+      payload: {
+        name: 'review',
+        description: '',
+        frontmatterExtra: {},
+        bodyMd: '',
+        files,
+      },
+    })
+    expect(
+      BundleOpSchema.safeParse(
+        mk([
+          { path: 'a.md', ref: 'skills/s1/files/a.md' },
+          { path: 'a.md', ref: 'skills/s1/files/b.md' },
+        ]),
+      ).success,
+    ).toBe(false)
+    expect(
+      BundleOpSchema.safeParse(
+        mk([
+          { path: 'a.md', ref: 'skills/s1/files/x' },
+          { path: 'b.md', ref: 'skills/s1/files/x' },
+        ]),
+      ).success,
+    ).toBe(false)
+  })
+})
+
+describe('workflow definition 引用 walker —— record 外壳不能绕过域 codec', () => {
+  const opWith = (node: Record<string, unknown>) => ({
+    opId: 'op-1',
+    kind: 'workflow-create' as const,
+    slug: 'wf-root',
+    payload: {
+      name: 'root',
+      description: '',
+      definition: { $schema_version: 4, inputs: [], edges: [], nodes: [{ id: 'n1', ...node }] },
+    },
+  })
+
+  test('正例：三种槽位各自的 wire 形态通过', () => {
+    expect(BundleOpSchema.safeParse(opWith({ agentRef: 'builtin:agent/merger' })).success).toBe(
+      true,
+    )
+    expect(BundleOpSchema.safeParse(opWith({ workflowRef: 'builtin:workflow/host' })).success).toBe(
+      true,
+    )
+    expect(BundleOpSchema.safeParse(opWith({ workflowRef: 'name:workflow/audit' })).success).toBe(
+      true,
+    )
+    expect(BundleOpSchema.safeParse(opWith({ workgroupRef: 'name:workgroup/squad' })).success).toBe(
+      true,
+    )
+  })
+
+  test('反例：词法错/跨域/声明 type 与槽位不符都早拒绝', () => {
+    const bad: Array<Record<string, unknown>> = [
+      { agentRef: 'name:workflow/audit' },
+      { agentRef: 'builtin:workflow/host' },
+      { workflowRef: 'project:repo-skill' },
+      { workflowRef: 'name:workgroup/squad' },
+      { workflowRef: 'builtin:agent/merger' },
+      { workgroupRef: 'name:workflow/audit' },
+      { workgroupRef: 'builtin:workflow/host' },
+      { workflowRef: 42 },
+    ]
+    for (const node of bad) {
+      expect({ node, ok: BundleOpSchema.safeParse(opWith(node)).success }).toEqual({
+        node,
+        ok: false,
+      })
+    }
+  })
+
+  test('canonical id/name 字段不得绕过 portable ref；有引用的节点必须带对应 *Ref', () => {
+    const bad: Array<Record<string, unknown>> = [
+      { kind: 'agent-single', agentId: 'SOURCE_AGENT' },
+      { kind: 'call-workflow', workflowName: 'audit', workflowId: 'SOURCE_WF' },
+      { kind: 'call-workgroup', workgroupName: 'squad', workgroupId: 'SOURCE_WG' },
+      { kind: 'agent-single' },
+      { kind: 'call-workflow' },
+      { kind: 'call-workgroup' },
+      // 即使 portable ref 同时存在，也不能夹带一份相互矛盾的 canonical cache。
+      { kind: 'call-workflow', workflowRef: 'name:workflow/audit', workflowId: 'ATTACKER' },
+    ]
+    for (const node of bad) {
+      expect({ node, ok: BundleOpSchema.safeParse(opWith(node)).success }).toEqual({
+        node,
+        ok: false,
+      })
+    }
+
+    expect(
+      BundleOpSchema.safeParse(
+        opWith({ kind: 'agent-single', agentName: 'display-only', agentRef: 'local:agent' }),
+      ).success,
+    ).toBe(true)
   })
 })
 
@@ -345,6 +553,36 @@ describe('闭合性扫描必须扫**真实字段名** —— call 槽的 local: 
       ] as never,
     }).map((i) => i.code)
     expect(codes).not.toContain('bundle-dangling-local-ref')
+  })
+
+  test('call local 目标 slug 存在但类型错（workflowRef → workgroup）⇒ 早拒绝', () => {
+    const bundle = {
+      bundleVersion: 1,
+      ops: [
+        wfOp([{ id: 'n1', type: 'call', workflowRef: 'local:group' }]),
+        {
+          opId: 'op-2',
+          kind: 'workgroup-create' as const,
+          slug: 'group',
+          payload: {
+            name: 'group',
+            description: '',
+            instructions: '',
+            mode: 'leader_worker' as const,
+            switches: { shareOutputs: true, directMessages: true, blackboard: true },
+            maxRounds: 10,
+            completionGate: true,
+            members: [],
+            leaderDisplayName: null,
+          },
+        },
+      ],
+      rootRef: 'local:wf-root',
+    }
+    expect(collectBundleRefIssues(bundle as never).map((i) => i.code)).toContain(
+      'bundle-local-ref-type-mismatch',
+    )
+    expect(BundleSchema.safeParse(bundle).success).toBe(false)
   })
 })
 

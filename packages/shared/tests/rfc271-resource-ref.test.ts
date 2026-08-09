@@ -42,6 +42,7 @@ import {
   encodeImportSelectorRef,
   encodeIntentRef,
   isNonResourceRef,
+  RESOURCE_REF_AST_KINDS,
   REF_DOMAIN_VARIANTS,
   resourceRefKey,
   ResourceRefAstSchema,
@@ -105,6 +106,10 @@ describe('① 字节级 round-trip —— 「wire 零变更」的唯一硬保证
     expect(encodeBundleCallRef(decodeBundleCallRef('name:workflow/audit')!)).toBe(
       'name:workflow/audit',
     )
+    for (const wire of ['builtin:agent/merger', 'builtin:workflow/host']) {
+      expect(encodeBundleIdentityRef(decodeBundleIdentityRef(wire)!)).toBe(wire)
+      expect(encodeBundleCallRef(decodeBundleCallRef(wire)!)).toBe(wire)
+    }
   })
 
   test("builtin managed 技能的 external token 编码可往返（design §1.1b' 的表）", () => {
@@ -125,6 +130,17 @@ describe('② 域是收窄不是放宽 —— 跨域形态必须 parse 失败', 
     expect(decodeBundleCallRef('project:repo-lint')).toBeNull()
   })
 
+  test('builtin: 只进 identity/call 域，不渗进 agent.skills', () => {
+    const wire = 'builtin:workflow/host'
+    const ast = { k: 'builtin', type: 'workflow', name: 'host' } as const
+    expect(decodeBundleIdentityRef(wire)).toEqual(ast)
+    expect(decodeBundleCallRef(wire)).toEqual(ast)
+    expect(decodeBundleAgentSkillRef(wire)).toBeNull()
+    expect(encodeBundleIdentityRef(ast)).toBe(wire)
+    expect(encodeBundleCallRef(ast)).toBe(wire)
+    expect(encodeBundleAgentSkillRef(ast)).toBeNull()
+  })
+
   test('intent codec 不认识 bundle 的拼写，反之亦然', () => {
     expect(decodeIntentRef('local:auditor')).toBeNull()
     expect(decodeIntentRef('external:tok')).toBeNull()
@@ -141,7 +157,7 @@ describe('② 域是收窄不是放宽 —— 跨域形态必须 parse 失败', 
     expect(encodeRuntimeIdRefSafe(projectRef)).toBeNull()
   })
 
-  test('域变体表覆盖了全部八个 AST 变体（新增变体会让这条红）', () => {
+  test('域变体表覆盖了全部九个 AST 变体（新增变体会让这条红）', () => {
     const declared = new Set(Object.values(REF_DOMAIN_VARIANTS).flat())
     const all: ResourceRefAst['k'][] = [
       'id',
@@ -152,8 +168,12 @@ describe('② 域是收窄不是放宽 —— 跨域形态必须 parse 失败', 
       'external',
       'call',
       'project-skill',
+      'builtin',
     ]
     for (const k of all) expect(declared.has(k)).toBe(true)
+    expect(REF_DOMAIN_VARIANTS.bundleIdentity).toContain('builtin')
+    expect(REF_DOMAIN_VARIANTS.bundleCall).toContain('builtin')
+    expect(REF_DOMAIN_VARIANTS.bundleAgentSkill).not.toContain('builtin')
   })
 })
 
@@ -210,7 +230,7 @@ describe('project-skill 是非资源叶子', () => {
 })
 
 describe('AST schema', () => {
-  test('八个变体都能通过 schema', () => {
+  test('九个变体都能通过 schema', () => {
     const all: ResourceRefAst[] = [
       { k: 'id', type: 'agent', id: '01J' },
       { k: 'name', type: 'workflow', name: 'audit' },
@@ -220,8 +240,19 @@ describe('AST schema', () => {
       { k: 'external', token: 'builtin/skill/x' },
       { k: 'call', type: 'workgroup', nodeId: 'c1', authoritativeName: 'squad' },
       { k: 'project-skill', name: 'repo-lint' },
+      { k: 'builtin', type: 'workflow', name: 'host' },
     ]
+    expect(all.map((ref) => ref.k)).toEqual(RESOURCE_REF_AST_KINDS)
     for (const ref of all) expect(ResourceRefAstSchema.safeParse(ref).success).toBe(true)
+  })
+
+  test('builtin 只允许真有 builtin 列的 agent/workflow', () => {
+    expect(
+      ResourceRefAstSchema.safeParse({ k: 'builtin', type: 'agent', name: 'merger' }).success,
+    ).toBe(true)
+    for (const type of ['skill', 'mcp', 'plugin', 'workgroup']) {
+      expect(ResourceRefAstSchema.safeParse({ k: 'builtin', type, name: 'x' }).success).toBe(false)
+    }
   })
 
   test('local slug 词法与 intent tempRef 的 slug 部分一致', () => {

@@ -12,8 +12,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   BundleSchema,
   BUNDLE_VERSION,
+  encodePackageSecretFieldSegments,
   PACKAGE_SECRET_PLACEHOLDER,
+  redactFreeJson,
   type PackageSecretRef,
+  type RedactionSink,
   type ResourceBundle,
 } from '@agent-workflow/shared'
 import { DomainError } from '../src/util/errors'
@@ -315,6 +318,130 @@ describe('RFC-271 package secret inputs', () => {
       MODE: 'strict',
     })
     expect(result.skippedRefs).toEqual([ref])
+  })
+
+  test('free JSON segment fields round-trip dot/bracket/numeric keys and reject legacy collisions', () => {
+    const original = {
+      'a.b': { token: 'literal-dot-value' },
+      a: { b: { token: 'nested-dot-value' } },
+      'items[0]': { password: 'literal-bracket-value' },
+      items: [{ password: 'array-index-value' }],
+      numeric: { '0': { apiKey: 'numeric-key-value' } },
+    }
+    const redactionSink: RedactionSink = {
+      resourceType: 'agent',
+      resourceName: 'auditor',
+      found: [],
+    }
+    const redacted = redactFreeJson(original, redactionSink, 'frontmatterExtra') as Record<
+      string,
+      unknown
+    >
+    const values = new Map<string, string>([
+      [encodePackageSecretFieldSegments(['frontmatterExtra', 'a.b', 'token']), 'literal-dot-value'],
+      [
+        encodePackageSecretFieldSegments(['frontmatterExtra', 'a', 'b', 'token']),
+        'nested-dot-value',
+      ],
+      [
+        encodePackageSecretFieldSegments(['frontmatterExtra', 'items[0]', 'password']),
+        'literal-bracket-value',
+      ],
+      [
+        encodePackageSecretFieldSegments(['frontmatterExtra', 'items', 0, 'password']),
+        'array-index-value',
+      ],
+      [
+        encodePackageSecretFieldSegments(['frontmatterExtra', 'numeric', '0', 'apiKey']),
+        'numeric-key-value',
+      ],
+    ])
+    expect(redactionSink.found.map((ref) => ref.field).sort()).toEqual([...values.keys()].sort())
+
+    const bundle = bundleOf([
+      {
+        opId: 'op-1',
+        kind: 'agent-create',
+        slug: 'agent-auditor',
+        payload: {
+          name: 'auditor',
+          description: '',
+          outputs: [],
+          syncOutputsOnIterate: true,
+          permission: {},
+          skills: [],
+          dependsOn: [],
+          mcp: [],
+          plugins: [],
+          frontmatterExtra: redacted,
+          bodyMd: '',
+        },
+      },
+    ])
+    const result = applyPackageSecretInputs(
+      bundle,
+      redactionSink.found,
+      redactionSink.found.map((ref) => input(ref, values.get(ref.field)!)),
+    )
+    expect(
+      payloadOf<{ frontmatterExtra: Record<string, unknown> }>(result.bundle, 0).frontmatterExtra,
+    ).toEqual(original)
+
+    // 两个真实 slot 在旧语法里都压成 frontmatterExtra.a.b.token；必须拒绝而不是猜。
+    const ambiguousLegacyRef = secret('agent', 'auditor', 'frontmatterExtra.a.b.token')
+    expect(
+      errorCode(() =>
+        applyPackageSecretInputs(
+          bundle,
+          [ambiguousLegacyRef],
+          [input(ambiguousLegacyRef, 'ambiguous-value')],
+        ),
+      ),
+    ).toBe('package-secret-manifest-invalid')
+  })
+
+  test('unambiguous legacy free-JSON field remains import-compatible', () => {
+    const legacyRef = secret('agent', 'auditor', 'frontmatterExtra.nested.API_TOKEN')
+    const bundle = bundleOf([
+      {
+        opId: 'op-1',
+        kind: 'agent-create',
+        slug: 'agent-auditor',
+        payload: {
+          name: 'auditor',
+          description: '',
+          outputs: [],
+          syncOutputsOnIterate: true,
+          permission: {},
+          skills: [],
+          dependsOn: [],
+          mcp: [],
+          plugins: [],
+          frontmatterExtra: { nested: { API_TOKEN: PACKAGE_SECRET_PLACEHOLDER } },
+          bodyMd: '',
+        },
+      },
+    ])
+
+    const result = applyPackageSecretInputs(bundle, [legacyRef], [input(legacyRef, 'legacy-value')])
+    expect(
+      payloadOf<{ frontmatterExtra: Record<string, unknown> }>(result.bundle, 0).frontmatterExtra,
+    ).toEqual({ nested: { API_TOKEN: 'legacy-value' } })
+
+    const segmentRef = secret(
+      'agent',
+      'auditor',
+      encodePackageSecretFieldSegments(['frontmatterExtra', 'nested', 'API_TOKEN']),
+    )
+    expect(
+      errorCode(() =>
+        applyPackageSecretInputs(
+          bundle,
+          [legacyRef, segmentRef],
+          [input(legacyRef, 'legacy-value'), input(segmentRef, 'segment-value')],
+        ),
+      ),
+    ).toBe('package-secret-manifest-invalid')
   })
 
   test('rejects extra inputs, duplicate inputs, and duplicate manifest declarations', () => {

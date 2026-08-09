@@ -21,6 +21,7 @@ import type { DbClient } from '@/db/client'
 import {
   BundleSchema,
   canonicalJson,
+  decodeBundleIdentityRef,
   type AclResourceType,
   type BundleOp,
   type ResourceBundle,
@@ -128,18 +129,62 @@ export function translateDecisions(
     }
   }
 
-  const rewrite = (value: unknown): unknown => {
-    if (typeof value === 'string') {
-      if (!value.startsWith('local:')) return value
-      const slug = value.slice('local:'.length)
-      const external = externalOfSlug.get(slug)
-      return external === undefined ? value : `external:${external}`
+  const rewriteRef = (value: unknown): unknown => {
+    if (typeof value !== 'string' || !value.startsWith('local:')) return value
+    const slug = value.slice('local:'.length)
+    const external = externalOfSlug.get(slug)
+    return external === undefined ? value : `external:${external}`
+  }
+
+  /**
+   * 只改 bundle contract 明确定义的引用槽。payload 里还有大量自由数据
+   * （frontmatter/options/env/body/description）；盲递归会把一个恰好写成
+   * `local:foo` 的示例文本当成引用，产生无提示的数据腐化。
+   */
+  const rewritePayloadRefs = (op: BundleOp): Record<string, unknown> => {
+    const payload = { ...(op.payload as Record<string, unknown>) }
+    switch (op.kind) {
+      case 'agent-create':
+      case 'agent-update':
+        for (const key of ['skills', 'dependsOn', 'mcp', 'plugins'] as const) {
+          if (Array.isArray(payload[key])) payload[key] = payload[key].map(rewriteRef)
+        }
+        return payload
+      case 'workgroup-create':
+      case 'workgroup-update':
+        if (Array.isArray(payload.members)) {
+          payload.members = payload.members.map((raw) => {
+            if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw
+            const member = raw as Record<string, unknown>
+            return member.memberType === 'agent'
+              ? { ...member, agentRef: rewriteRef(member.agentRef) }
+              : member
+          })
+        }
+        return payload
+      case 'workflow-create':
+      case 'workflow-update': {
+        const definition = payload.definition
+        if (typeof definition !== 'object' || definition === null || Array.isArray(definition)) {
+          return payload
+        }
+        const cloned = { ...(definition as Record<string, unknown>) }
+        if (Array.isArray(cloned.nodes)) {
+          cloned.nodes = cloned.nodes.map((raw) => {
+            if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw
+            const node = { ...(raw as Record<string, unknown>) }
+            for (const key of ['agentRef', 'workflowRef', 'workgroupRef'] as const) {
+              if (node[key] !== undefined) node[key] = rewriteRef(node[key])
+            }
+            return node
+          })
+        }
+        payload.definition = cloned
+        return payload
+      }
+      default:
+        return payload
     }
-    if (Array.isArray(value)) return value.map(rewrite)
-    if (typeof value === 'object' && value !== null) {
-      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, rewrite(v)]))
-    }
-    return value
   }
 
   const ops: BundleOp[] = []
@@ -155,7 +200,7 @@ export function translateDecisions(
     }
     if (decision.action === 'reuse') continue // 不产 op
 
-    const payload = rewrite(op.payload) as Record<string, unknown>
+    const payload = rewritePayloadRefs(op)
     if (decision.action === 'new') {
       ops.push({
         ...op,
@@ -387,8 +432,20 @@ function translatedBundle(
   externalOfSlug: ReadonlyMap<string, string>,
 ): ResourceBundle {
   const rootRef = pkg.bundle.rootRef
-  if (rootRef === undefined || !rootRef.startsWith('local:')) {
-    throw new ValidationError('package-invalid', 'a config package must have a local root')
+  if (rootRef === undefined) {
+    throw new ValidationError('package-invalid', 'a config package must have a root')
+  }
+  // built-in 根不产 op/decision；保留自描述引用，finalizeInTx 会在目标实例上按
+  // `(type,name,builtin=true)` 解析并写入 receipt。此前 export→parse 已放行这里却仍
+  // 硬拒，导致一个由本系统导出的合法包永远无法导入。
+  if (rootRef.startsWith('builtin:')) {
+    return BundleSchema.parse({ ...pkg.bundle, ops })
+  }
+  if (!rootRef.startsWith('local:')) {
+    throw new ValidationError(
+      'package-invalid',
+      'a config package must have a local or builtin root',
+    )
   }
   const rootSlug = rootRef.slice('local:'.length)
   const externalRoot = externalOfSlug.get(rootSlug)
@@ -608,8 +665,43 @@ function makePackageProvider(
     finalizeInTx: (tx, receipt) => {
       if (skippedSecrets.length > 0) receipt.skippedSecrets = [...skippedSecrets]
       const rootRef = input.pkg.bundle.rootRef
-      if (rootRef === undefined || !rootRef.startsWith('local:')) {
-        throw new ValidationError('package-invalid', 'a config package must have a local root')
+      if (rootRef === undefined) {
+        throw new ValidationError('package-invalid', 'a config package must have a root')
+      }
+      if (rootRef.startsWith('builtin:')) {
+        const ref = decodeBundleIdentityRef(rootRef)
+        if (ref?.k !== 'builtin') {
+          throw new ValidationError('package-invalid', `invalid builtin root '${rootRef}'`)
+        }
+        const table = ACL_TABLES[ref.type]
+        const row = tx
+          .select({ id: table.id, name: table.name })
+          .from(table)
+          .where(
+            and(eq(table.name, ref.name), eq((table as never as { builtin: never }).builtin, true)),
+          )
+          .get() as { id: string; name: string } | undefined
+        if (row === undefined) {
+          // 同名普通资源不能充当 built-in；这一条件与嵌套引用的 resolveBuiltin 完全
+          // 相同，并且在 big tx 里复核，避免 preview 后环境前提漂移。
+          throw new ValidationError(
+            'bundle-builtin-missing',
+            `this instance has no builtin ${ref.type} named '${ref.name}'`,
+          )
+        }
+        receipt.root = {
+          resourceType: ref.type,
+          resourceId: row.id,
+          name: row.name,
+          action: 'reuse',
+        }
+        return
+      }
+      if (!rootRef.startsWith('local:')) {
+        throw new ValidationError(
+          'package-invalid',
+          'a config package must have a local or builtin root',
+        )
       }
       const rootSlug = rootRef.slice('local:'.length)
       const rootOp = input.pkg.bundle.ops.find((op) => opSlug(op) === rootSlug)

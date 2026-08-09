@@ -16,12 +16,19 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type * as TanStackRouter from '@tanstack/react-router'
 import {
   ResourcePackageImportDialog,
   ResourcePackageImportPanel,
 } from '../src/components/ResourcePackageImportDialog'
 import { api, ApiError } from '../src/api/client'
 import * as pkgApi from '../src/api/resourcePackages'
+
+const { navigateSpy } = vi.hoisted(() => ({ navigateSpy: vi.fn() }))
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof TanStackRouter>()
+  return { ...actual, useNavigate: () => navigateSpy }
+})
 
 /** ⚠️ 先剥注释再扫：本组件的注释里就写着「不该出现 `.xxx__overlay`」，裸文本扫描
  *  会自己撞上自己（同一个坑在 RFC-217 守卫与 RFC-271 的 ref 契约测试上都踩过）。 */
@@ -42,6 +49,7 @@ const SRC = stripComments(
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  navigateSpy.mockReset()
 })
 
 const preview: pkgApi.PackagePreview = {
@@ -122,6 +130,42 @@ describe('① 零自写 chrome —— 全部走公共组件', () => {
 })
 
 describe('② 交互契约', () => {
+  test('合法 builtin root 即使 entries=[] 也以 decisions=[] 提交并处理 receipt/open root', async () => {
+    const builtinPreview: pkgApi.PackagePreview = {
+      ...preview,
+      root: { slug: 'builtin-code-reviewer', type: 'agent', name: 'builtin:code-reviewer' },
+      entries: [],
+      humanMembers: [],
+      secrets: [],
+    }
+    const commit = vi.spyOn(pkgApi, 'commitResourcePackage').mockResolvedValue({
+      journalId: 'J-builtin-root',
+      applied: [],
+      root: {
+        resourceType: 'agent',
+        resourceId: 'builtin:code-reviewer',
+        name: 'builtin:code-reviewer',
+        action: 'reuse',
+      },
+    })
+    await openWithPreview(builtinPreview, 'agent')
+
+    const submit = await screen.findByTestId('package-import-commit')
+    expect((submit as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(submit)
+
+    expect(await screen.findByTestId('package-import-report')).toBeTruthy()
+    expect(commit).toHaveBeenCalledTimes(1)
+    expect(commit.mock.calls[0]?.[2]).toEqual([])
+    expect(commit.mock.calls[0]?.[3]).toEqual([])
+    expect(commit.mock.calls[0]?.[4]).toEqual([])
+    fireEvent.click(screen.getByTestId('package-import-open-root'))
+    expect(navigateSpy).toHaveBeenCalledWith({
+      to: '/agents/$id',
+      params: { id: 'builtin:code-reviewer' },
+    })
+  })
+
   test('多候选默认复用方式，但必须显式选择目标', async () => {
     await openWithPreview()
     const target = await screen.findByTestId('package-target-mcp-tools')
@@ -540,6 +584,64 @@ describe('② 交互契约', () => {
     expect(screen.getByText('pkg.zip')).toBeTruthy()
   })
 
+  test('bundle-apply-unsettled 锁住同一 importId/preview/决策并只允许原样重试', async () => {
+    const onClose = vi.fn()
+    const unsettledPreview: pkgApi.PackagePreview = {
+      ...preview,
+      entries: [{ ...preview.entries[0]!, candidates: [preview.entries[0]!.candidates[0]!] }],
+    }
+    const commit = vi
+      .spyOn(pkgApi, 'commitResourcePackage')
+      .mockRejectedValueOnce(
+        new ApiError(409, 'bundle-apply-unsettled', 'the journal is still converging'),
+      )
+      .mockResolvedValueOnce({ journalId: 'J-converged', applied: [] })
+    await openWithPreview(unsettledPreview, undefined, onClose)
+    fireEvent.click(await screen.findByTestId('package-import-commit'))
+
+    expect(await screen.findByTestId('package-import-retry-notice')).toBeTruthy()
+    expect(screen.queryByTestId('package-import-repreview-notice')).toBeNull()
+    expect((screen.getByTestId('package-import-file') as HTMLInputElement).disabled).toBe(true)
+    expect(
+      (screen.getByTestId('package-action-mcp-tools-reuse') as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(
+      screen
+        .getAllByRole('button', { name: 'Close' })
+        .every((button) => (button as HTMLButtonElement).disabled),
+    ).toBe(true)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+
+    const firstAttempt = commit.mock.calls[0]!.slice(0, 5)
+    fireEvent.click(screen.getByTestId('package-import-commit'))
+    await screen.findByTestId('package-import-report')
+    expect(commit).toHaveBeenCalledTimes(2)
+    expect(commit.mock.calls[1]!.slice(0, 5)).toEqual(firstAttempt)
+    expect(commit.mock.calls[1]?.[1]).toMatchObject({
+      importId: 'imp-1',
+      previewToken: 'TOKEN-AS-ISSUED',
+    })
+  })
+
+  test.each(['bundle-apply-failed-replay', 'bundle-baseline-stale'])(
+    '%s 要求重新预检，不能原样重提旧基线',
+    async (code) => {
+      vi.spyOn(pkgApi, 'commitResourcePackage').mockRejectedValue(
+        new ApiError(409, code, 'the persisted apply cannot be replayed from this baseline'),
+      )
+      await openWithPreview({
+        ...preview,
+        entries: [{ ...preview.entries[0]!, candidates: [preview.entries[0]!.candidates[0]!] }],
+      })
+      fireEvent.click(await screen.findByTestId('package-import-commit'))
+
+      expect(await screen.findByTestId('package-import-repreview-notice')).toBeTruthy()
+      expect(screen.queryByTestId('package-import-retry-notice')).toBeNull()
+      expect((screen.getByTestId('package-import-commit') as HTMLButtonElement).disabled).toBe(true)
+    },
+  )
+
   test('提交结果未知时 human 映射也冻结，只允许原样重试', async () => {
     vi.spyOn(pkgApi, 'commitResourcePackage').mockRejectedValue(new Error('response lost'))
     await openWithPreview({
@@ -610,6 +712,119 @@ describe('② 交互契约', () => {
     fireEvent.click(screen.getByTestId('package-import-commit'))
     await screen.findByTestId('package-import-report')
     expect(commit.mock.calls[1]?.[1]).toMatchObject({ previewToken: 'TOKEN-REFRESHED' })
+  })
+
+  test('重新预检发现 overwrite 候选基线变化时清除覆盖并提示重新确认', async () => {
+    const overwritePreview: pkgApi.PackagePreview = {
+      ...preview,
+      secrets: [],
+      entries: [
+        {
+          ...preview.entries[0]!,
+          allowedActions: ['new', 'reuse', 'overwrite'],
+          secretFields: [],
+          candidates: [
+            {
+              id: 'M-mine',
+              name: 'tools',
+              expect: { expectedConfigHash: 'H1' },
+              owned: true,
+            },
+          ],
+        },
+      ],
+    }
+    vi.spyOn(pkgApi, 'commitResourcePackage').mockRejectedValue(
+      new ApiError(409, 'package-selected-target-changed', 'target changed; preview again'),
+    )
+    await openWithPreview(overwritePreview)
+    fireEvent.click(await screen.findByTestId('package-action-mcp-tools-overwrite'))
+    fireEvent.click(screen.getByTestId('package-import-commit'))
+    expect(await screen.findByTestId('package-import-repreview-notice')).toBeTruthy()
+
+    vi.mocked(pkgApi.previewResourcePackage).mockResolvedValueOnce({
+      ...overwritePreview,
+      previewToken: 'TOKEN-H2',
+      entries: [
+        {
+          ...overwritePreview.entries[0]!,
+          candidates: [
+            {
+              id: 'M-mine',
+              name: 'tools',
+              expect: { expectedConfigHash: 'H2' },
+              owned: true,
+            },
+          ],
+        },
+      ],
+    })
+    fireEvent.click(screen.getByTestId('package-import-repreview'))
+
+    expect((await screen.findByTestId('package-import-overwrite-reset')).textContent).toContain(
+      'tools',
+    )
+    expect(
+      screen.getByTestId('package-action-mcp-tools-overwrite').getAttribute('aria-checked'),
+    ).toBe('false')
+    expect(screen.getByTestId('package-action-mcp-tools-reuse').getAttribute('aria-checked')).toBe(
+      'true',
+    )
+  })
+
+  test('overwrite expect 仅键序不同仍视为同一 canonical 基线并保留选择', async () => {
+    const overwritePreview: pkgApi.PackagePreview = {
+      ...preview,
+      secrets: [],
+      entries: [
+        {
+          ...preview.entries[0]!,
+          allowedActions: ['new', 'reuse', 'overwrite'],
+          secretFields: [],
+          candidates: [
+            {
+              id: 'M-mine',
+              name: 'tools',
+              expect: { expectedUpdatedAt: 10, expectedAclRevision: 2 },
+              owned: true,
+            },
+          ],
+        },
+      ],
+    }
+    vi.spyOn(pkgApi, 'commitResourcePackage').mockRejectedValue(
+      new ApiError(409, 'package-selected-target-changed', 'target changed; preview again'),
+    )
+    await openWithPreview(overwritePreview)
+    fireEvent.click(await screen.findByTestId('package-action-mcp-tools-overwrite'))
+    fireEvent.click(screen.getByTestId('package-import-commit'))
+    await screen.findByTestId('package-import-repreview-notice')
+
+    vi.mocked(pkgApi.previewResourcePackage).mockResolvedValueOnce({
+      ...overwritePreview,
+      previewToken: 'TOKEN-CANONICAL',
+      entries: [
+        {
+          ...overwritePreview.entries[0]!,
+          candidates: [
+            {
+              id: 'M-mine',
+              name: 'tools',
+              expect: { expectedAclRevision: 2, expectedUpdatedAt: 10 },
+              owned: true,
+            },
+          ],
+        },
+      ],
+    })
+    fireEvent.click(screen.getByTestId('package-import-repreview'))
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('package-action-mcp-tools-overwrite').getAttribute('aria-checked'),
+      ).toBe('true'),
+    )
+    expect(screen.queryByTestId('package-import-overwrite-reset')).toBeNull()
   })
 
   test('写权限在提交前被撤销时必须重新预检，不能直接重提旧决策', async () => {

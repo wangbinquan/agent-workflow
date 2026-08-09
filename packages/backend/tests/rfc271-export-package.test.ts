@@ -17,13 +17,18 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { parse as parseYaml } from 'yaml'
-import type { WorkflowDefinition } from '@agent-workflow/shared'
+import {
+  encodePackageSecretFieldSegments,
+  type ResourceBundle,
+  type WorkflowDefinition,
+} from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { eq } from 'drizzle-orm'
 import { agents, mcps, workflows } from '../src/db/schema'
 import { decodeZip } from '../src/services/skill-zip'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
+import { applyPackageSecretInputs } from '../src/services/resourcePackage/secretInputs'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 技能内容在文件系统里（`${appHome}/skills/{id}/files/`），所以导出要 appHome。
@@ -184,7 +189,7 @@ describe('② 凭据：位置在包里、值不在包里', () => {
       { appHome: APP_HOME },
     )
     const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
-      secrets: Array<{ field: string; resourceName: string }>
+      secrets: Array<{ field: string; resourceName: string; resourceType: string }>
     }
     expect(manifest.secrets.some((s) => s.field === 'config.headers.Authorization')).toBe(true)
 
@@ -203,6 +208,175 @@ describe('② 凭据：位置在包里、值不在包里', () => {
       { appHome: APP_HOME },
     )
     expect(readEntry(pkg.zip, 'README.md')).toContain('原值不在包里')
+  })
+
+  test('分离式 --token/--password 的 value 槽脱敏，整个 zip 字节不含原值', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const [agent] = await db.select().from(agents)
+    const localMcpId = ulid()
+    const tokenValue = 'SYNTHETIC_SEPARATED_TOKEN_FOR_ZIP_SCAN'
+    const passwordValue = 'SYNTHETIC_SEPARATED_PASSWORD_FOR_ZIP_SCAN'
+    await db
+      .insert(mcps)
+      .values({
+        id: localMcpId,
+        name: 'local-secret-tools',
+        description: '',
+        type: 'local',
+        config: JSON.stringify({
+          command: [
+            'acme-tool',
+            '--token',
+            tokenValue,
+            '--password',
+            passwordValue,
+            '--port',
+            '8080',
+          ],
+          env: {},
+        }),
+        enabled: true,
+        ownerUserId: 'u1',
+        visibility: 'private',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      .run()
+    await db
+      .update(agents)
+      .set({ mcp: JSON.stringify([...JSON.parse(agent!.mcp), localMcpId]) })
+      .where(eq(agents.id, agent!.id))
+      .run()
+
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
+    const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
+      secrets: Array<{ field: string; resourceName: string }>
+    }
+    expect(
+      manifest.secrets
+        .filter((ref) => ref.resourceName === 'local-secret-tools')
+        .map((ref) => ref.field),
+    ).toEqual(['config.command[2]', 'config.command[4]'])
+
+    const bundle = JSON.parse(readEntry(pkg.zip, 'bundle.json')) as ResourceBundle
+    const local = bundle.ops.find(
+      (op) => (op.payload as { name?: string }).name === 'local-secret-tools',
+    )
+    expect((local?.payload as { config?: { command?: string[] } }).config?.command).toEqual([
+      'acme-tool',
+      '--token',
+      '<REDACTED:SECRET>',
+      '--password',
+      '<REDACTED:SECRET>',
+      '--port',
+      '8080',
+    ])
+
+    const zipBytes = new TextDecoder().decode(pkg.zip)
+    const decodedEntries = decodeZip(pkg.zip)
+      .map((entry) => new TextDecoder().decode(entry.bytes()))
+      .join('\n')
+    for (const rawSecret of [tokenValue, passwordValue]) {
+      expect(zipBytes).not.toContain(rawSecret)
+      expect(decodedEntries).not.toContain(rawSecret)
+    }
+
+    const applied = applyPackageSecretInputs(
+      bundle,
+      manifest.secrets,
+      manifest.secrets.map((ref) => ({
+        ...ref,
+        value:
+          ref.resourceName !== 'local-secret-tools'
+            ? 'synthetic-replacement'
+            : ref.field === 'config.command[2]'
+              ? tokenValue
+              : passwordValue,
+      })),
+    )
+    const appliedLocal = applied.bundle.ops.find(
+      (op) => (op.payload as { name?: string }).name === 'local-secret-tools',
+    )
+    expect((appliedLocal?.payload as { config?: { command?: string[] } }).config?.command).toEqual([
+      'acme-tool',
+      '--token',
+      tokenValue,
+      '--password',
+      passwordValue,
+      '--port',
+      '8080',
+    ])
+  })
+
+  test('自由 JSON 的 dot/bracket/numeric key 经 export→apply 精确往返', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const [agent] = await db.select().from(agents)
+    const original = {
+      'a.b': { token: 'literal-dot-value' },
+      a: { b: { token: 'nested-dot-value' } },
+      'items[0]': { password: 'literal-bracket-value' },
+      items: [{ password: 'array-index-value' }],
+      numeric: { '0': { apiKey: 'numeric-key-value' } },
+    }
+    await db
+      .update(agents)
+      .set({ frontmatterExtra: JSON.stringify(original) })
+      .where(eq(agents.id, agent!.id))
+      .run()
+
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
+    const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
+      secrets: Array<{ field: string; resourceName: string; resourceType: string }>
+    }
+    const bundle = JSON.parse(readEntry(pkg.zip, 'bundle.json')) as ResourceBundle
+    const expected = new Map<string, string>([
+      [encodePackageSecretFieldSegments(['frontmatterExtra', 'a.b', 'token']), 'literal-dot-value'],
+      [
+        encodePackageSecretFieldSegments(['frontmatterExtra', 'a', 'b', 'token']),
+        'nested-dot-value',
+      ],
+      [
+        encodePackageSecretFieldSegments(['frontmatterExtra', 'items[0]', 'password']),
+        'literal-bracket-value',
+      ],
+      [
+        encodePackageSecretFieldSegments(['frontmatterExtra', 'items', 0, 'password']),
+        'array-index-value',
+      ],
+      [
+        encodePackageSecretFieldSegments(['frontmatterExtra', 'numeric', '0', 'apiKey']),
+        'numeric-key-value',
+      ],
+    ])
+    const agentSecrets = manifest.secrets.filter((ref) => ref.resourceName === 'auditor')
+    expect(agentSecrets.map((ref) => ref.field).sort()).toEqual([...expected.keys()].sort())
+
+    const applied = applyPackageSecretInputs(
+      bundle,
+      manifest.secrets,
+      manifest.secrets.map((ref) => ({
+        ...ref,
+        value: expected.get(ref.field) ?? 'synthetic-replacement',
+      })),
+    )
+    const agentOp = applied.bundle.ops.find(
+      (op) => (op.payload as { name?: string }).name === 'auditor',
+    )
+    expect(
+      (agentOp?.payload as { frontmatterExtra?: Record<string, unknown> }).frontmatterExtra,
+    ).toEqual(original)
   })
 })
 

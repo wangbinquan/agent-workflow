@@ -12,14 +12,17 @@
 
 import { stringify as stringifyYaml } from 'yaml'
 import type { AclResourceType } from '@agent-workflow/shared'
+import { eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import { ACL_TABLES } from '@/services/resourceAcl'
 import { encodeZip, type ZipFile } from '@/util/zip'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { assertPrivilegedNodesExportable, walkExportClosure, type ExportClosure } from './closure'
 import { expectTokenOf } from './preview'
 import { serializeClosure, type SerializedPackage } from './serialize'
 import { packagedSkillFileRef, readSkillTree, type SkillTree } from './skillTree'
+import { collectPackageRequirements } from './requirements'
 
 /** 包格式版本。导入侧见到更高的值直接拒绝（design §8）。 */
 export const PACKAGE_FORMAT_VERSION = 1
@@ -37,99 +40,6 @@ const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s)
  * requirements：**导入方需要自备**的东西。它们不是包的内容，而是包的前提——
  * 分开列出来，导入方在预检就能看到「我这台机器缺什么」，而不是等到运行时才炸。
  */
-function collectRequirements(
-  closure: ExportClosure,
-  serialized: SerializedPackage,
-): Record<string, unknown> {
-  // plugin spec 可以内嵌凭据。**取已脱敏的那一份**（AC-10：requirements 同样不含
-  // 任何密钥），而不是重新读 `row.spec` —— 重读等于给密钥开第二条出口，且两处的
-  // 脱敏规则会随时间漂移。
-  const redactedSpecOfSlug = new Map<string, string>()
-  for (const op of serialized.bundle.ops) {
-    if (op.kind !== 'plugin-create') continue
-    const { slug, payload } = op as unknown as { slug: string; payload: { spec?: unknown } }
-    redactedSpecOfSlug.set(slug, String(payload.spec ?? ''))
-  }
-
-  const runtimes = new Set<string>()
-  const codeHosts = new Set<string>()
-  const executables = new Set<string>()
-  const pluginSources: Array<{ name: string; spec: string; sourceKind: string }> = []
-  const projectSkills = new Set<string>()
-  const mcpKinds = new Set<string>()
-  const humanMembers = new Set<string>()
-
-  for (const r of closure.resources) {
-    if (r.type === 'agent') {
-      const runtime = r.row.runtime
-      if (typeof runtime === 'string' && runtime.length > 0) runtimes.add(runtime)
-      try {
-        for (const raw of JSON.parse(String(r.row.skills ?? '[]')) as unknown[]) {
-          const s = raw as { kind?: string; name?: string }
-          if (s.kind === 'project' && typeof s.name === 'string') projectSkills.add(s.name)
-        }
-      } catch {
-        /* 坏行由闭包段的 schema 校验负责 */
-      }
-    }
-    if (r.type === 'workflow') {
-      try {
-        const definition = JSON.parse(String(r.row.definition ?? '{}')) as { nodes?: unknown }
-        for (const raw of Array.isArray(definition.nodes) ? definition.nodes : []) {
-          const node = raw as { kind?: unknown; provider?: unknown }
-          if (
-            node.kind === 'code-host-call' &&
-            typeof node.provider === 'string' &&
-            node.provider.length > 0
-          ) {
-            codeHosts.add(node.provider)
-          }
-        }
-      } catch {
-        /* malformed rows are rejected by the closure/schema validation path */
-      }
-    }
-    if (r.type === 'plugin') {
-      pluginSources.push({
-        name: r.name,
-        spec: redactedSpecOfSlug.get(serialized.slugOfId.get(r.id) ?? '') ?? '',
-        sourceKind: String(r.row.sourceKind ?? 'npm'),
-      })
-    }
-    if (r.type === 'mcp') {
-      mcpKinds.add(String(r.row.type ?? 'remote'))
-      try {
-        const config = JSON.parse(String(r.row.config ?? '{}')) as { command?: unknown }
-        const executable = Array.isArray(config.command) ? config.command[0] : undefined
-        if (typeof executable === 'string' && executable.length > 0) executables.add(executable)
-      } catch {
-        /* malformed rows are rejected by the closure/schema validation path */
-      }
-    }
-    if (r.type === 'workgroup') {
-      // `row.members` 由闭包装载层补上（成员是独立表）。human 成员带 **username**：
-      // 跨实例标识。导入方要么本地有同名用户、要么在导入时逐个选映射——所以它是
-      // requirement，不是包内容。
-      for (const raw of Array.isArray(r.row.members) ? r.row.members : []) {
-        const m = raw as { memberType?: string; username?: string | null }
-        if (m.memberType === 'human' && typeof m.username === 'string' && m.username.length > 0) {
-          humanMembers.add(m.username)
-        }
-      }
-    }
-  }
-
-  return {
-    runtimes: [...runtimes].sort(),
-    codeHosts: [...codeHosts].sort(),
-    executables: [...executables].sort(),
-    pluginSources: pluginSources.sort((a, b) => a.name.localeCompare(b.name)),
-    projectSkills: [...projectSkills].sort(),
-    mcpKinds: [...mcpKinds].sort(),
-    humanMembers: [...humanMembers].sort(),
-  }
-}
-
 export function buildManifest(
   closure: ExportClosure,
   serialized: SerializedPackage,
@@ -157,7 +67,8 @@ export function buildManifest(
       .sort((a, b) =>
         a.type === b.type ? a.name.localeCompare(b.name) : a.type.localeCompare(b.type),
       ),
-    requirements: collectRequirements(closure, serialized),
+    // 从真正会被导入方消费的、已脱敏 bundle 计算；parser 用同一 collector 复核。
+    requirements: collectPackageRequirements(serialized.bundle),
     /** 被脱敏的字段清单：**只有位置，没有值**。导入方据此知道要补哪些凭据。 */
     secrets: serialized.secrets,
     /** 解析不到的 call 目标（late-bound）。导入后它们仍按名字在启动期解析。 */
@@ -247,7 +158,7 @@ export async function exportResourcePackage(
   opts: { appHome: string; exportedAt?: number; expect?: RootExportFence },
 ): Promise<ExportedPackage> {
   const closure = await walkExportClosure(db, actor, root)
-  assertRootUnchanged(closure, opts.expect)
+  assertRootUnchanged(closure.root.type, closure.root.row, opts.expect)
   assertPrivilegedNodesExportable(actor, closure.resources)
 
   // 技能内容在文件系统里，不在行上——**先读盘**再序列化。序列化段保持无 IO，
@@ -257,6 +168,14 @@ export async function exportResourcePackage(
     if (r.type !== 'skill') continue
     skillTrees.set(r.id, await readSkillTree(db, opts.appHome, r.id))
   }
+
+  // exact fence 必须包住所有 live 读取。旧实现只在 walkClosure 后比较一次，随后读取
+  // 技能文件树/工作组 roster 的窗口里根仍可变化，最终却带着旧 expected 成功 200。
+  await assertRootStillCurrent(db, closure.root.type, closure.root.id, opts.expect)
+  // Client only knows the root revision, but the exporter itself knows the exact revision of
+  // every transitive member it captured. Recheck that internal snapshot after all live reads so
+  // an agent@v1 row cannot be combined with an MCP/skill/workgroup that changed halfway through.
+  await assertClosureStillCurrent(db, closure)
 
   const serialized = serializeClosure(closure, skillTrees)
   const manifest = buildManifest(closure, serialized, {
@@ -301,14 +220,17 @@ export type RootExportFence = Record<string, unknown>
 /**
  * 「所见非所得」防护：用户在界面上看着 v1 按了导出，另一个写者已经把它推到 v2。
  *
- * ⚠️ **只 fence root**，闭包成员**取最新**——这与任务执行同语义：执行期非 root 的
- * 依赖同样取最新。给闭包成员也 fence 会要求客户端先知道整个闭包才能给出期望值，
- * 而闭包正是导出这一步才算出来的。
+ * ⚠️ 客户端提供的 expected revision **只 fence root**；闭包成员在遍历时取最新，
+ * 再由 exporter 用自己捕获的 revision 做末端稳定性复核。这样既不要求客户端预先知道
+ * 整棵闭包，也不会把两个时刻的依赖拼成一个包。
  */
-function assertRootUnchanged(closure: ExportClosure, expect: RootExportFence | undefined): void {
+function assertRootUnchanged(
+  type: AclResourceType,
+  row: Record<string, unknown>,
+  expect: RootExportFence | undefined,
+): void {
   if (expect === undefined || Object.keys(expect).length === 0) return
-  const type = closure.root.type
-  const actual = expectTokenOf(type, closure.root.row)
+  const actual = expectTokenOf(type, row)
 
   // ⚠️ **给了就必须给全**：该类型要求的每个字段都要出现。少给一个就等于放过那一维
   // 的漂移（技能只改 description 会推进 metaRevision 而 contentVersion 不变——只带
@@ -337,5 +259,64 @@ function assertRootUnchanged(closure: ExportClosure, expect: RootExportFence | u
       'package-root-changed',
       `this ${type} changed since you loaded it (${key}: expected ${String(expect[key])}, now ${String(actual[key])})`,
     )
+  }
+}
+
+async function assertRootStillCurrent(
+  db: DbClient,
+  type: AclResourceType,
+  id: string,
+  expect: RootExportFence | undefined,
+): Promise<void> {
+  if (expect === undefined || Object.keys(expect).length === 0) return
+  const table = ACL_TABLES[type]
+  const row = (await db.select().from(table).where(eq(table.id, id)).get()) as
+    | Record<string, unknown>
+    | undefined
+  if (row === undefined) {
+    throw new ConflictError('package-root-changed', `this ${type} vanished during export`)
+  }
+  assertRootUnchanged(type, row, expect)
+}
+
+async function assertClosureStillCurrent(db: DbClient, closure: ExportClosure): Promise<void> {
+  const byType = new Map<AclResourceType, Array<(typeof closure.resources)[number]>>()
+  for (const resource of closure.resources) {
+    const list = byType.get(resource.type) ?? []
+    list.push(resource)
+    byType.set(resource.type, list)
+  }
+
+  for (const [type, captured] of byType) {
+    const table = ACL_TABLES[type]
+    const rows = (await db
+      .select()
+      .from(table)
+      .where(
+        inArray(
+          table.id,
+          captured.map((resource) => resource.id),
+        ),
+      )) as unknown as Array<Record<string, unknown>>
+    const currentById = new Map(rows.map((row) => [String(row.id), row]))
+    for (const resource of captured) {
+      const current = currentById.get(resource.id)
+      const isRoot = resource.type === closure.root.type && resource.id === closure.root.id
+      const changeCode = isRoot ? 'package-root-changed' : 'package-closure-changed'
+      if (current === undefined) {
+        throw new ConflictError(
+          changeCode,
+          `${type} '${resource.id}' vanished during export; retry from a fresh snapshot`,
+        )
+      }
+      const before = JSON.stringify(expectTokenOf(type, resource.row))
+      const after = JSON.stringify(expectTokenOf(type, current))
+      if (before !== after) {
+        throw new ConflictError(
+          changeCode,
+          `${type} '${resource.id}' changed during export; retry from a fresh snapshot`,
+        )
+      }
+    }
   }
 }

@@ -928,6 +928,7 @@ function rowToSkill(row: SkillRow): Skill {
     sourceKind: 'managed',
     schemaVersion: row.schemaVersion,
     contentVersion: row.contentVersion,
+    metaRevision: row.metaRevision,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }

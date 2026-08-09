@@ -921,8 +921,19 @@ function SkillDetailPage() {
             type="skill"
             id={id}
             name={skillName}
+            fence={{
+              expectedContentVersion: meta.data?.contentVersion ?? 0,
+              expectedMetaRevision: meta.data?.metaRevision ?? 0,
+              expectedAclRevision: meta.data?.aclRevision ?? 0,
+            }}
             variant="action"
-            disabled={del.isPending || aggregate.dirty || operationBusy || aggregate.outcomeUnknown}
+            disabled={
+              del.isPending ||
+              aggregate.dirty ||
+              operationBusy ||
+              aggregate.outcomeUnknown ||
+              meta.data === undefined
+            }
             disabledReason={t('resourcePackage.saveBeforeExport')}
           />
         }

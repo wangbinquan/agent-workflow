@@ -15,6 +15,7 @@
 // **用户的「选择」是自由的，但可选项与它们的基线是签死的。**
 
 import { eq, inArray } from 'drizzle-orm'
+import { z } from 'zod'
 import { users } from '@/db/schema'
 import type { SecretBox } from '@/auth/secretBox'
 import type { Actor } from '@/auth/actor'
@@ -154,6 +155,35 @@ export interface VerifiedPreview {
   humanBaseline: HumanMemberBaselineEntry[]
 }
 
+const PreviewBaselineEntrySchema = z
+  .object({
+    localSlug: z.string().min(1),
+    candidateIds: z.array(z.string().min(1)),
+    expectByCandidateId: z.record(z.unknown()),
+    allowedActions: z.array(z.enum(['new', 'reuse', 'overwrite'])),
+  })
+  .strict()
+
+const HumanMemberBaselineEntrySchema = z
+  .object({
+    workgroupSlug: z.string().min(1),
+    username: z.string().min(1),
+    required: z.boolean(),
+  })
+  .strict()
+
+const VerifiedPreviewSchema = z
+  .object({
+    importId: z.string().min(1),
+    actorUserId: z.string().min(1),
+    packageDigest: z.string().min(1),
+    expiresAt: z.number().int().nonnegative(),
+    baseline: z.array(PreviewBaselineEntrySchema),
+    // TTL 内可能仍有旧版本签出的 token；旧形态没有 humanBaseline，等价于无席位。
+    humanBaseline: z.array(HumanMemberBaselineEntrySchema).default([]),
+  })
+  .strict()
+
 export function verifyPreviewToken(box: SecretBox, token: string): VerifiedPreview {
   let raw: string
   try {
@@ -161,11 +191,20 @@ export function verifyPreviewToken(box: SecretBox, token: string): VerifiedPrevi
   } catch {
     throw new ValidationError('package-preview-token-invalid', 'preview token is not valid')
   }
+  let payload: unknown
   try {
-    return JSON.parse(raw) as VerifiedPreview
+    payload = JSON.parse(raw)
   } catch {
     throw new ValidationError('package-preview-token-invalid', 'preview token payload is corrupt')
   }
+  const parsed = VerifiedPreviewSchema.safeParse(payload)
+  if (!parsed.success) {
+    throw new ValidationError(
+      'package-preview-token-invalid',
+      'preview token payload has an invalid shape',
+    )
+  }
+  return parsed.data
 }
 
 /** 各类型的内容级 CAS token —— 与 `BundleExpectToken` 的形态一一对应。 */

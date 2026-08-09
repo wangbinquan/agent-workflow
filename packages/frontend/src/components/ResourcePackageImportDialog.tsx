@@ -41,6 +41,7 @@ import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { UserPicker } from '@/components/UserPicker'
+import { stableStringify } from '@/lib/stable-stringify'
 
 const RESOURCE_PACKAGE_COLLECTION_KEYS = [
   ['agents'],
@@ -71,10 +72,14 @@ const REPREVIEW_ERROR_CODES = new Set([
   'package-selected-target-gone',
   'package-selected-target-changed',
   'package-write-forbidden',
+  'bundle-apply-failed-replay',
+  'bundle-baseline-stale',
 ])
+const RETRY_SAME_IMPORT_ERROR_CODES = new Set(['bundle-apply-unsettled'])
 
 function commitRecoveryFor(error: unknown): CommitRecovery {
   if (!(error instanceof ApiError)) return 'retry'
+  if (RETRY_SAME_IMPORT_ERROR_CODES.has(error.code)) return 'retry'
   if (REPREVIEW_ERROR_CODES.has(error.code)) return 'repreview'
   if (error.status === 0 || error.status >= 500) return 'retry'
   return null
@@ -247,27 +252,69 @@ function initialDecision(entry: PackagePreviewEntry): DecisionDraft {
   }
 }
 
+function safeDecisionAfterOverwriteReset(entry: PackagePreviewEntry): DecisionDraft {
+  const safeActions = entry.allowedActions.filter((action) => action !== 'overwrite')
+  if (safeActions.length === 0) {
+    // A malformed/legacy preview may expose overwrite as the only action. Keep
+    // it incomplete so the user must explicitly confirm a target; never carry
+    // an old target or auto-select a new revision after re-preview.
+    return { localSlug: entry.localSlug, action: 'overwrite' }
+  }
+  return initialDecision({
+    ...entry,
+    allowedActions: safeActions,
+    defaultAction: entry.defaultAction === 'overwrite' ? null : entry.defaultAction,
+  })
+}
+
 function reconcileDecision(
   entry: PackagePreviewEntry,
   previous: DecisionDraft | undefined,
-): DecisionDraft {
+  previousEntry: PackagePreviewEntry | undefined,
+): { decision: DecisionDraft; overwriteReset: boolean } {
   if (previous === undefined || !entry.allowedActions.includes(previous.action)) {
-    return initialDecision(entry)
+    return {
+      decision:
+        previous?.action === 'overwrite'
+          ? safeDecisionAfterOverwriteReset(entry)
+          : initialDecision(entry),
+      overwriteReset: previous?.action === 'overwrite',
+    }
   }
   if (previous.action === 'new') {
     return {
-      ...previous,
-      localSlug: entry.localSlug,
-      finalName: previous.finalName ?? entry.suggestedName,
-      targetId: undefined,
+      decision: {
+        ...previous,
+        localSlug: entry.localSlug,
+        finalName: previous.finalName ?? entry.suggestedName,
+        targetId: undefined,
+      },
+      overwriteReset: false,
     }
   }
-  const targetId = candidateOptions(entry, previous.action).some(
-    (candidate) => candidate.id === previous.targetId,
+  const candidate = candidateOptions(entry, previous.action).find(
+    (option) => option.id === previous.targetId,
   )
-    ? previous.targetId
-    : undefined
-  return { ...previous, localSlug: entry.localSlug, targetId }
+  if (previous.action === 'overwrite') {
+    const previousCandidate = previousEntry?.candidates.find(
+      (option) => option.id === previous.targetId,
+    )
+    if (
+      candidate === undefined ||
+      previousCandidate === undefined ||
+      stableStringify(candidate.expect) !== stableStringify(previousCandidate.expect)
+    ) {
+      return { decision: safeDecisionAfterOverwriteReset(entry), overwriteReset: true }
+    }
+  }
+  return {
+    decision: {
+      ...previous,
+      localSlug: entry.localSlug,
+      targetId: candidate?.id,
+    },
+    overwriteReset: false,
+  }
 }
 
 function decisionComplete(
@@ -335,6 +382,7 @@ export const ResourcePackageImportPanel = forwardRef<
   const [error, setError] = useState<unknown>(null)
   const [commitRecovery, setCommitRecovery] = useState<CommitRecovery>(null)
   const [previewExpiring, setPreviewExpiring] = useState(false)
+  const [resetOverwriteNames, setResetOverwriteNames] = useState<string[]>([])
   const requestGenerationRef = useRef(0)
   const previewAbortRef = useRef<AbortController | null>(null)
   const commitPendingRef = useRef(false)
@@ -371,6 +419,7 @@ export const ResourcePackageImportPanel = forwardRef<
     setError(null)
     updateCommitRecovery(null)
     setPreviewExpiring(false)
+    setResetOverwriteNames([])
   }, [updateCommitRecovery])
 
   useImperativeHandle(
@@ -440,6 +489,7 @@ export const ResourcePackageImportPanel = forwardRef<
     setError(null)
     updateCommitRecovery(null)
     setPreviewExpiring(false)
+    setResetOverwriteNames([])
     if (nextFile !== null && !nextFile.name.toLowerCase().endsWith('.zip')) {
       setFile(null)
       setFileError(t('resourcePackage.invalidFile'))
@@ -464,6 +514,7 @@ export const ResourcePackageImportPanel = forwardRef<
   const runPreview = async (preserveDrafts = false): Promise<void> => {
     if (file === null || fileError !== null || phase === 'previewing') return
     const previousDecisions = decisions
+    const previousPreview = preview
     const previousHumanMappings = humanMappings
     const previousSecretValues = secretValues
     const generation = ++requestGenerationRef.current
@@ -482,15 +533,22 @@ export const ResourcePackageImportPanel = forwardRef<
       )
         return
       setPreview(next)
+      const reconciled = next.entries.map((entry) => {
+        if (!preserveDrafts) {
+          return { entry, decision: initialDecision(entry), overwriteReset: false }
+        }
+        const result = reconcileDecision(
+          entry,
+          previousDecisions[entry.localSlug],
+          previousPreview?.entries.find((oldEntry) => oldEntry.localSlug === entry.localSlug),
+        )
+        return { entry, ...result }
+      })
       setDecisions(
-        Object.fromEntries(
-          next.entries.map((entry) => [
-            entry.localSlug,
-            preserveDrafts
-              ? reconcileDecision(entry, previousDecisions[entry.localSlug])
-              : initialDecision(entry),
-          ]),
-        ),
+        Object.fromEntries(reconciled.map(({ entry, decision }) => [entry.localSlug, decision])),
+      )
+      setResetOverwriteNames(
+        reconciled.filter(({ overwriteReset }) => overwriteReset).map(({ entry }) => entry.name),
       )
       const humanSlots = normalizeHumanSlots(next.humanMembers ?? [])
       setHumanMappings(
@@ -628,7 +686,6 @@ export const ResourcePackageImportPanel = forwardRef<
 
   const canCommit =
     preview !== null &&
-    preview.entries.length > 0 &&
     preview.entries.every((entry) => decisionComplete(entry, decisions[entry.localSlug])) &&
     humanMappingsComplete &&
     requiredSecretsComplete &&
@@ -878,6 +935,17 @@ export const ResourcePackageImportPanel = forwardRef<
               >
                 {t('resourcePackage.repreviewAction')}
               </button>
+            </NoticeBanner>
+          ) : null}
+          {resetOverwriteNames.length > 0 ? (
+            <NoticeBanner
+              tone="warning"
+              title={t('resourcePackage.overwriteResetTitle')}
+              testid="package-import-overwrite-reset"
+            >
+              {t('resourcePackage.overwriteResetBody', {
+                names: resetOverwriteNames.join(', '),
+              })}
             </NoticeBanner>
           ) : null}
           {activeHumanSlots.length > 0 ? (

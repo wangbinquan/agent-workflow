@@ -16,7 +16,7 @@
 // "inside the dialog" (Dialog.tsx isFocusInsideDialog).
 
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useRef, useState, type AriaAttributes } from 'react'
+import { useEffect, useId, useRef, useState, type AriaAttributes, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
@@ -61,6 +61,7 @@ export function UserPicker({
   const [input, setInput] = useState('')
   const [debounced, setDebounced] = useState('')
   const [open, setOpen] = useState(false)
+  const [activeUserId, setActiveUserId] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -112,10 +113,69 @@ export function UserPicker({
     (u) =>
       !selectedIds.has(u.id) && !hidden.has(u.id) && (activeOnly !== true || u.status === 'active'),
   )
+  const resultKey = results.map((user) => user.id).join('\u0000')
+  const activeIndex = results.findIndex((user) => user.id === activeUserId)
+  const activeOptionId = open && activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined
+
+  useEffect(() => {
+    if (!open || results.length === 0) {
+      setActiveUserId(null)
+      return
+    }
+    setActiveUserId((current) =>
+      results.some((user) => user.id === current && user.status === 'active')
+        ? current
+        : (results.find((user) => user.status === 'active')?.id ?? null),
+    )
+    // The id signature is the stable dependency for an asynchronously replaced
+    // result array; object identity alone changes on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, resultKey])
+
+  function moveActive(direction: 1 | -1) {
+    if (results.length === 0) return
+    const current = results.findIndex(
+      (user) => user.id === activeUserId && user.status === 'active',
+    )
+    let next = current < 0 ? (direction === 1 ? -1 : 0) : current
+    for (let step = 0; step < results.length; step += 1) {
+      next = (next + direction + results.length) % results.length
+      const candidate = results[next]
+      if (candidate?.status === 'active') {
+        setActiveUserId(candidate.id)
+        return
+      }
+    }
+  }
+
+  function onInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setOpen(true)
+      moveActive(1)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setOpen(true)
+      moveActive(-1)
+    } else if (event.key === 'Enter' && open) {
+      event.preventDefault()
+      const active = results.find((user) => user.id === activeUserId && user.status === 'active')
+      if (active !== undefined) add(active)
+    } else if (event.key === 'Escape' && open) {
+      // Consume the first Escape inside a Dialog so it closes this portaled
+      // listbox, not both the listbox and its parent surface.
+      event.stopPropagation()
+      event.preventDefault()
+      setOpen(false)
+      setActiveUserId(null)
+    }
+  }
 
   function add(user: UserPublic) {
     onChange(single ? [user] : [...value, user])
     setInput('')
+    setActiveUserId(null)
     if (single) setOpen(false)
   }
 
@@ -170,6 +230,7 @@ export function UserPicker({
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
+          aria-activedescendant={activeOptionId}
           aria-autocomplete="list"
           aria-label={ariaLabel}
           aria-labelledby={ariaLabelledby}
@@ -178,6 +239,7 @@ export function UserPicker({
           aria-invalid={ariaInvalid}
           data-testid={testidPrefix ? `${testidPrefix}-input` : undefined}
           onFocus={() => setOpen(true)}
+          onKeyDown={onInputKeyDown}
           onChange={(e) => {
             setInput(e.target.value)
             setOpen(true)
@@ -205,14 +267,22 @@ export function UserPicker({
                 {search.isLoading ? t('common.loading') : t('userPicker.noResults')}
               </li>
             ) : (
-              results.map((u) => (
+              results.map((u, index) => (
                 <li key={u.id}>
                   <button
+                    id={`${listId}-option-${index}`}
                     type="button"
                     role="option"
-                    aria-selected={false}
-                    className="user-picker__option"
+                    aria-selected={u.id === activeUserId}
+                    aria-disabled={u.status !== 'active'}
+                    disabled={u.status !== 'active'}
+                    className={`user-picker__option${
+                      u.id === activeUserId ? ' user-picker__option--active' : ''
+                    }`}
                     data-testid={testidPrefix ? `${testidPrefix}-option-${u.username}` : undefined}
+                    onMouseEnter={() => {
+                      if (u.status === 'active') setActiveUserId(u.id)
+                    }}
                     onClick={() => add(u)}
                   >
                     <span className="user-picker__name">{u.displayName}</span>

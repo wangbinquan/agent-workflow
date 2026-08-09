@@ -34,6 +34,8 @@ export const SkillSchema = z.object({
   schemaVersion: z.number().int(),
   /** RFC-101: monotonic content version; equals the latest skill_versions row. */
   contentVersion: z.number().int(),
+  /** Metadata generation used with content/ACL generations for exact export fencing. */
+  metaRevision: z.number().int().nonnegative(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 })

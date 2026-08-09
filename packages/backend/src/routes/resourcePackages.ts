@@ -8,9 +8,10 @@
 // 行级可见性是两回事（后者在 `walkExportClosure` 里，且**不**逐类校验 `*:read`，
 // 见决策 24 / AC-7d 的反向锁）。
 
-import type { Context, Hono } from 'hono'
+import type { Context, Hono, MiddlewareHandler } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { ulid } from 'ulid'
-import type { AclResourceType } from '@agent-workflow/shared'
+import { SKILL_ZIP_LIMITS, type AclResourceType } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
@@ -53,6 +54,64 @@ const HumanMemberMappingsSchema = z.array(
 const PackageSecretInputsSchema = z.array(
   PackageSecretRefSchema.extend({ value: z.string() }).strict(),
 )
+
+// A valid package may use the entire compressed-ZIP allowance. Leave bounded
+// room for multipart framing plus commit decisions/mappings/secrets, while
+// ensuring an attacker can never make `formData()` materialise an unbounded
+// request body.
+export const RESOURCE_PACKAGE_BODY_MAX_BYTES = SKILL_ZIP_LIMITS.totalBytes + 4 * 1024 * 1024
+
+function packageBodyTooLarge(c: Context): Response {
+  return c.json(
+    {
+      ok: false as const,
+      code: 'zip-limit-exceeded',
+      message: `resource package request exceeds ${RESOURCE_PACKAGE_BODY_MAX_BYTES} bytes`,
+    },
+    413,
+  )
+}
+
+const honoResourcePackageBodyLimit = bodyLimit({
+  maxSize: RESOURCE_PACKAGE_BODY_MAX_BYTES,
+  onError: packageBodyTooLarge,
+})
+
+/**
+ * Hono's built-in limit takes the fast path when Content-Length is present: it
+ * rejects an oversized declaration, but otherwise trusts the declaration and
+ * does not count the stream. Keep the fail-fast branch, then remove an accepted
+ * length before delegating so Hono also counts actual bytes. This closes the
+ * understated/malformed Content-Length bypass without duplicating its bounded
+ * stream buffering and Request reconstruction.
+ */
+const resourcePackageBodyLimit: MiddlewareHandler = async (c, next) => {
+  const raw = c.req.raw
+  const contentLength = raw.headers.get('content-length')
+  const hasTransferEncoding = raw.headers.has('transfer-encoding')
+  if (contentLength !== null && !hasTransferEncoding) {
+    const parsedLength = Number(contentLength)
+    if (
+      !/^\d+$/.test(contentLength) ||
+      !Number.isSafeInteger(parsedLength) ||
+      parsedLength > RESOURCE_PACKAGE_BODY_MAX_BYTES
+    ) {
+      return packageBodyTooLarge(c)
+    }
+
+    if (raw.body !== null) {
+      const headers = new Headers(raw.headers)
+      headers.delete('content-length')
+      const requestInit: RequestInit & { duplex: 'half' } = {
+        headers,
+        body: raw.body,
+        duplex: 'half',
+      }
+      c.req.raw = new Request(raw, requestInit)
+    }
+  }
+  return honoResourcePackageBodyLimit(c, next)
+}
 
 export interface ResourcePackageRouteDeps {
   db: DbClient
@@ -112,7 +171,8 @@ function exportHandler(type: AclResourceType, deps: ResourcePackageRouteDeps) {
       {
         appHome: deps.appHome,
         exportedAt: Date.now(),
-        // 「所见非所得」防护，**只针对 root**：闭包成员取最新，与任务执行同语义。
+        // 客户端「所见非所得」revision 只针对 root；导出器会自行复核整棵闭包在
+        // 本次读取期间没有变化，客户端不需要预先知道传递成员。
         expect: parseRootFence(c),
       },
     )
@@ -206,6 +266,7 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
       tokenAccess: 'allow',
       summary: 'Inspect a config package against this instance (no writes)',
     },
+    resourcePackageBodyLimit,
     async (c) => {
       const pkg = await parseResourcePackage(await readUpload(c))
       return c.json(
@@ -227,12 +288,10 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
       tokenAccess: 'allow',
       summary: 'Apply a previewed config package',
     },
+    resourcePackageBodyLimit,
     async (c) => {
-      const form = await c.req.formData()
-      const file = form.get('file')
-      if (!(file instanceof File)) {
-        throw new ValidationError('package-invalid', 'multipart field `file` is required')
-      }
+      const form = await readMultipart(c)
+      const file = packageFile(form)
       const previewToken = String(form.get('previewToken') ?? '')
       if (previewToken.length === 0) {
         throw new ValidationError('package-invalid', 'multipart field `previewToken` is required')
@@ -297,10 +356,32 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
 }
 
 async function readUpload(c: Context): Promise<Uint8Array> {
-  const form = await c.req.formData()
+  const form = await readMultipart(c)
+  const file = packageFile(form)
+  return new Uint8Array(await file.arrayBuffer())
+}
+
+async function readMultipart(c: Context): Promise<FormData> {
+  try {
+    return await c.req.formData()
+  } catch (err) {
+    throw new ValidationError(
+      'package-invalid',
+      `failed to parse multipart body: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+}
+
+function packageFile(form: FormData): File {
   const file = form.get('file')
   if (!(file instanceof File)) {
     throw new ValidationError('package-invalid', 'multipart field `file` is required')
   }
-  return new Uint8Array(await file.arrayBuffer())
+  if (file.size > SKILL_ZIP_LIMITS.totalBytes) {
+    throw new ValidationError(
+      'zip-limit-exceeded',
+      `uploaded package exceeds ${SKILL_ZIP_LIMITS.totalBytes} bytes`,
+    )
+  }
+  return file
 }

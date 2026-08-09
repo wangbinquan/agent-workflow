@@ -196,6 +196,10 @@ function AgentDetailPage() {
             type="agent"
             id={id}
             name={query.data?.name ?? id}
+            fence={{
+              expectedUpdatedAt: query.data?.updatedAt ?? 0,
+              expectedAclRevision: query.data?.aclRevision ?? 0,
+            }}
             variant="action"
             disabled={dirty || save.isPending || del.isPending || !loaded || !jsonValid}
             disabledReason={t('resourcePackage.saveBeforeExport')}

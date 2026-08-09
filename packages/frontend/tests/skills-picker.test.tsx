@@ -28,6 +28,7 @@ function fakeSkill(name: string, description = ''): Skill {
     managedPath: `/x/${name}`,
     schemaVersion: 1,
     contentVersion: 1,
+    metaRevision: 1,
     createdAt: 0,
     updatedAt: 0,
   }

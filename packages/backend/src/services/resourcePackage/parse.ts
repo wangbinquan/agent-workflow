@@ -15,12 +15,16 @@ import {
   AclResourceTypeSchema,
   BundleSchema,
   collectBundleRefIssues,
+  decodeBundleCallRef,
+  decodeBundleIdentityRef,
   type ResourceBundle,
 } from '@agent-workflow/shared'
 import { decodeZip } from '@/services/skill-zip'
 import { resourceTypeOfOp } from '@/services/bundle/provider'
 import { ValidationError } from '@/util/errors'
 import { PACKAGE_FORMAT_VERSION } from './export'
+import { packagedSkillFileRef } from './skillTree'
+import { collectPackageRequirements } from './requirements'
 
 const ManifestResourceSchema = z
   .object({
@@ -71,7 +75,11 @@ export const PackageManifestSchema = z
      * `builtin:` 引用，所以缺省空数组是安全的。
      */
     builtins: z
-      .array(z.object({ type: z.string(), name: z.string() }).strict())
+      .array(
+        z
+          .object({ type: z.enum(['agent', 'workflow']), name: z.string().min(1).max(256) })
+          .strict(),
+      )
       .optional()
       .default([]),
   })
@@ -151,11 +159,33 @@ export async function parseResourcePackage(zip: Uint8Array): Promise<ParsedPacka
 
   // ② 防夹带：登记面 = 三个固定条目 + bundle 里声明过的技能文件 ref。
   const declared = new Set<string>([MANIFEST, BUNDLE, README])
+  const requiredSkillFiles = new Set<string>()
   for (const op of bundle.ops) {
     if (op.kind !== 'skill-create' && op.kind !== 'skill-update') continue
     for (const file of (op.payload as { files?: Array<{ ref?: unknown }> }).files ?? []) {
-      if (typeof file.ref === 'string') declared.add(file.ref)
+      if (typeof file.ref !== 'string') continue
+      if (!('slug' in op)) {
+        throw new ValidationError('package-invalid', 'package skill files require a create slug')
+      }
+      const path = (file as { path?: unknown }).path
+      const expected =
+        typeof path === 'string' ? packagedSkillFileRef(op.slug, path) : '<invalid-skill-path>'
+      if (file.ref !== expected) {
+        throw new ValidationError(
+          'package-invalid',
+          `skill file ref '${file.ref}' does not match its declared slug/path`,
+        )
+      }
+      declared.add(file.ref)
+      requiredSkillFiles.add(file.ref)
     }
+  }
+  const missingSkillFiles = [...requiredSkillFiles].filter((path) => !byPath.has(path))
+  if (missingSkillFiles.length > 0) {
+    throw new ValidationError(
+      'package-invalid',
+      `package is missing ${missingSkillFiles.length} declared skill file(s): ${missingSkillFiles.slice(0, 5).join(', ')}`,
+    )
   }
   const unlisted = entries.map((e) => e.path).filter((p) => !declared.has(p))
   if (unlisted.length > 0) {
@@ -194,6 +224,31 @@ function assertManifestMatchesBundle(manifest: PackageManifest, bundle: Resource
     )
   }
 
+  // `manifest.builtins` 是导入预检展示的环境前提，bundle wire 才是机器实际消费的
+  // 身份面。两者不逐项对照会出现两种危险假象：manifest 漏报前提，或夹带一个根本
+  // 未被引用的“前提”。按槽位收集，避免把 bodyMd 等自由文本里的 `builtin:` 误判。
+  const declaredBuiltins = manifest.builtins
+    .map((builtin) => `${builtin.type}\u0000${builtin.name}`)
+    .sort()
+  const actualBuiltins = [...collectBundleBuiltinKeys(bundle)].sort()
+  if (JSON.stringify(declaredBuiltins) !== JSON.stringify(actualBuiltins)) {
+    throw new ValidationError(
+      'package-invalid',
+      'manifest.builtins does not match builtin references declared by bundle.json',
+    )
+  }
+
+  // requirements 是 UI 在 commit 前展示的环境前提，不能信任 manifest 自报。
+  // 与导出侧共用 bundle collector，既挡“删掉真实前提”，也挡“塞入虚假前提”。
+  if (
+    JSON.stringify(manifest.requirements) !== JSON.stringify(collectPackageRequirements(bundle))
+  ) {
+    throw new ValidationError(
+      'package-invalid',
+      'manifest.requirements does not match prerequisites declared by bundle.json',
+    )
+  }
+
   if (bundle.rootRef === undefined) {
     throw new ValidationError('package-invalid', 'a config package must declare a rootRef')
   }
@@ -229,6 +284,47 @@ function assertManifestMatchesBundle(manifest: PackageManifest, bundle: Resource
       'manifest.root does not match bundle.json rootRef and resources',
     )
   }
+}
+
+/** 收集 bundle 的**引用槽**中实际出现的 built-in；同一依赖只声明一次。 */
+function collectBundleBuiltinKeys(bundle: ResourceBundle): Set<string> {
+  const out = new Set<string>()
+  const takeIdentity = (raw: unknown): void => {
+    if (typeof raw !== 'string') return
+    const ref = decodeBundleIdentityRef(raw)
+    if (ref?.k === 'builtin') out.add(`${ref.type}\u0000${ref.name}`)
+  }
+  const takeCall = (raw: unknown): void => {
+    if (typeof raw !== 'string') return
+    const ref = decodeBundleCallRef(raw)
+    if (ref?.k === 'builtin') out.add(`${ref.type}\u0000${ref.name}`)
+  }
+
+  if (bundle.rootRef?.startsWith('builtin:')) takeIdentity(bundle.rootRef)
+  for (const op of bundle.ops) {
+    const payload = op.payload as Record<string, unknown>
+    if (op.kind === 'agent-create' || op.kind === 'agent-update') {
+      for (const key of ['dependsOn', 'mcp', 'plugins'] as const) {
+        for (const raw of Array.isArray(payload[key]) ? payload[key] : []) takeIdentity(raw)
+      }
+    }
+    if (op.kind === 'workgroup-create' || op.kind === 'workgroup-update') {
+      for (const raw of Array.isArray(payload.members) ? payload.members : []) {
+        const member = raw as Record<string, unknown>
+        if (member.memberType === 'agent') takeIdentity(member.agentRef)
+      }
+    }
+    if (op.kind === 'workflow-create' || op.kind === 'workflow-update') {
+      const definition = payload.definition as { nodes?: unknown } | undefined
+      for (const raw of Array.isArray(definition?.nodes) ? definition.nodes : []) {
+        const node = raw as Record<string, unknown>
+        takeIdentity(node.agentRef)
+        takeCall(node.workflowRef)
+        takeCall(node.workgroupRef)
+      }
+    }
+  }
+  return out
 }
 
 async function digestOf(bytes: Uint8Array): Promise<string> {

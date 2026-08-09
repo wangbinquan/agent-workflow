@@ -17,6 +17,7 @@
 import type { BundleOp, ResourceBundle } from '@agent-workflow/shared'
 import {
   BUNDLE_VERSION,
+  BundleSchema,
   PACKAGE_SECRET_PLACEHOLDER,
   redactArgv,
   redactFreeJson,
@@ -43,15 +44,22 @@ export function assignSlugs(resources: readonly ClosureResource[]): Map<string, 
   const used = new Set<string>()
   const out = new Map<string, string>()
   for (const r of resources) {
-    const base =
+    const normalized =
       r.name
         .toLowerCase()
         .replace(/[^a-z0-9_-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 56) || r.type
-    let slug = `${r.type}-${base}`
+        .replace(/^-+|-+$/g, '') || r.type
+    const prefix = `${r.type}-`
     let n = 2
-    while (used.has(slug)) slug = `${r.type}-${base}-${n++}`
+    let suffix = ''
+    let slug = `${prefix}${normalized.slice(0, 64 - prefix.length)}`
+    while (used.has(slug)) {
+      suffix = `-${n++}`
+      // The suffix is part of the 64-byte wire budget. Truncating once before collision
+      // handling made a 56-character workflow name 65 chars, and every `-2` could push an
+      // otherwise legal slug over the schema limit.
+      slug = `${prefix}${normalized.slice(0, 64 - prefix.length - suffix.length)}${suffix}`
+    }
     used.add(slug)
     out.set(r.id, slug)
   }
@@ -130,6 +138,13 @@ export function serializeClosure(
             name: r.name,
             description: String(row.description ?? ''),
             outputs: parseJson(row.outputs, []),
+            // RFC-166 / RFC-111：两者都是真正影响运行行为的 canonical 字段。
+            // payload schema 一直支持它们，但旧 serializer 没发出，跨实例后会分别
+            // 回落成「无声明输入」与目标实例默认 runtime，形成静默语义漂移。
+            inputs: parseJson(row.inputs, []),
+            ...(typeof row.runtime === 'string' && row.runtime.length > 0
+              ? { runtime: row.runtime }
+              : {}),
             syncOutputsOnIterate: row.syncOutputsOnIterate !== false,
             permission: parseJson(row.permission, {}),
             // ⚠️ AC-B3b：`network` 必须带上。intent 版的 payload 没有这个字段，
@@ -292,7 +307,7 @@ export function serializeClosure(
     }
   }
 
-  const bundle = {
+  const rawBundle = {
     bundleVersion: BUNDLE_VERSION,
     ops,
     // ⚠️ built-in 根同样**不产 op**，写成 `local:` 会让 parser 在
@@ -301,7 +316,17 @@ export function serializeClosure(
     rootRef: builtinOfId.has(closure.root.id)
       ? `builtin:${closure.root.type}/${closure.root.name}`
       : `local:${slugOfId.get(closure.root.id)!}`,
-  } as unknown as ResourceBundle
+  }
+
+  // 导出端必须吃自己的机器契约。没有这道最终校验，坏的 legacy/corrupt 行会让 API
+  // 返回一个“导出成功”的 zip，直到目标实例上传时才被同仓 parser 拒绝。
+  const parsedBundle = BundleSchema.safeParse(rawBundle)
+  if (!parsedBundle.success) {
+    throw new ValidationError('package-invalid', 'serialized resource bundle is invalid', {
+      issues: parsedBundle.error.issues,
+    })
+  }
+  const bundle: ResourceBundle = parsedBundle.data
 
   return { bundle, secrets, slugOfId }
 }
@@ -384,17 +409,15 @@ function liftWorkflowDefinition(
       // 目标在包里 ⇒ `local:`；否则退回 late-bound 的名字域（**导出方也可能根本
       // 看不见那一行**，这正是 `name:` 形态存在的理由）。
       //
-      // ⚠️ built-in 目标**必须**走名字域：它进闭包但**不产 create op**，写成
-      // `local:<slug>` 会让导入侧解析到一个本次并不会创建的 slug ⇒ 整包
-      // `bundle-dangling-local-ref`。call 槽的 `name:` 语义恰好就是「按名字绑对端
-      // 自己那一个」，与 built-in 的绑定语义一致，所以这里复用它而不是引入
-      // `builtin:`（call 槽的 wire schema 也只认 local/external/name）。
-      const resolvedIsBuiltin =
+      // built-in 目标必须保留 `builtin:` 身份。把它降成 late-bound `name:` 会让
+      // 运行期的“最老可见同名”规则有机会绑到攻击者预先创建的普通同名资源。
+      const resolvedBuiltin =
         resolved?.resolvedId !== undefined &&
         resolved.resolvedId !== null &&
-        builtinOfId.has(resolved.resolvedId)
-      node[refField] =
-        targetSlug === undefined || resolvedIsBuiltin
+        builtinOfId.get(resolved.resolvedId)
+      node[refField] = resolvedBuiltin
+        ? `builtin:${resolvedBuiltin.type}/${resolvedBuiltin.name}`
+        : targetSlug === undefined
           ? `name:${kind}/${name}`
           : `local:${targetSlug}`
       delete node[nameField]

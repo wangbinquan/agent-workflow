@@ -12,8 +12,10 @@
 
 import {
   BundleSchema,
+  encodePackageSecretFieldSegments,
   PACKAGE_SECRET_PLACEHOLDER,
   type AclResourceType,
+  type PackageSecretFieldSegment,
   type PackageSecretRef,
   type ResourceBundle,
 } from '@agent-workflow/shared'
@@ -80,6 +82,7 @@ export function applyPackageSecretInputs(
   const slotsByRef = indexSecretSlots(out)
   const skippedRefs: PackageSecretRef[] = []
   const arrayDeletes = new Map<unknown[], Set<number>>()
+  const resolvedSlots = new Set<SecretSlot>()
 
   for (const projection of active) {
     const sourceKey = secretRefKey(projection.source)
@@ -94,6 +97,13 @@ export function applyPackageSecretInputs(
     }
 
     const slot = slots[0]!
+    if (resolvedSlots.has(slot)) {
+      throw new ValidationError(
+        'package-secret-manifest-invalid',
+        `manifest secret '${formatRef(projection.source)}' aliases a bundle field already declared by another secret ref`,
+      )
+    }
+    resolvedSlots.add(slot)
     const input = inputs.get(sourceKey)
     if (input === undefined || input.value === '') {
       skippedRefs.push(copyRef(projection.target))
@@ -297,7 +307,13 @@ function indexSecretSlots(bundle: ResourceBundle): Map<string, SecretSlot[]> {
       out.set(key, current)
     }
     const collect = (value: unknown, path: string): void => {
-      collectPlaceholderSlots(value, path, add)
+      collectPlaceholderSlots(value, [path], (segments, slot) => {
+        // New packages use typed segments. The legacy alias keeps already-exported packages
+        // importable; if two real slots collapse to one legacy path, that alias has two entries
+        // and the normal `slots.length !== 1` gate rejects it instead of guessing.
+        add(encodePackageSecretFieldSegments(segments), slot)
+        add(encodeLegacySecretField(segments), slot)
+      })
     }
 
     switch (resourceType) {
@@ -397,39 +413,51 @@ function collectCommandSlots(value: unknown, add: (field: string, slot: SecretSl
 
 function collectPlaceholderSlots(
   value: unknown,
-  path: string,
-  add: (field: string, slot: SecretSlot) => void,
+  segments: readonly PackageSecretFieldSegment[],
+  add: (segments: readonly PackageSecretFieldSegment[], slot: SecretSlot) => void,
 ): void {
   if (Array.isArray(value)) {
     value.forEach((item, index) => {
-      const itemPath = `${path}[${index}]`
+      const itemSegments = [...segments, index]
       if (typeof item === 'string' && item.includes(PACKAGE_SECRET_PLACEHOLDER)) {
-        add(itemPath, {
+        add(itemSegments, {
           parent: value,
           key: index,
           current: item,
           wholeField: false,
         })
       } else {
-        collectPlaceholderSlots(item, itemPath, add)
+        collectPlaceholderSlots(item, itemSegments, add)
       }
     })
     return
   }
   if (typeof value !== 'object' || value === null) return
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    const childPath = path.length === 0 ? key : `${path}.${key}`
+    const childSegments = [...segments, key]
     if (typeof child === 'string' && child.includes(PACKAGE_SECRET_PLACEHOLDER)) {
-      add(childPath, {
+      add(childSegments, {
         parent: value as Record<string, unknown>,
         key,
         current: child,
         wholeField: false,
       })
     } else {
-      collectPlaceholderSlots(child, childPath, add)
+      collectPlaceholderSlots(child, childSegments, add)
     }
   }
+}
+
+function encodeLegacySecretField(segments: readonly PackageSecretFieldSegment[]): string {
+  let out = ''
+  for (const segment of segments) {
+    if (typeof segment === 'number') {
+      out += `[${segment}]`
+    } else {
+      out = out.length === 0 ? segment : `${out}.${segment}`
+    }
+  }
+  return out
 }
 
 function collectReservedPlaceholderPaths(value: unknown, path = 'bundle'): string[] {

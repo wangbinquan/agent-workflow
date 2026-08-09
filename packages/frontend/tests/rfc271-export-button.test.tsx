@@ -8,6 +8,7 @@
 
 import { describe, expect, test, vi, afterEach } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { api } from '../src/api/client'
 import { ResourcePackageExportButton } from '../src/components/ResourcePackageExportButton'
 import { ResourceActionList } from '../src/components/ResourceActionList'
 import * as pkgApi from '../src/api/resourcePackages'
@@ -55,12 +56,20 @@ describe('② 行为', () => {
     // 与被测组件毫无关系，极难定位。这里断言的是「用什么文件名下载」，触发动作
     // 本身由 `triggerBlobDownload` 自己负责。
     const trigger = vi.spyOn(dl, 'triggerBlobDownload').mockImplementation(() => {})
-    render(<ResourcePackageExportButton type="workflow" id="W1" name="audit" />)
+    render(
+      <ResourcePackageExportButton
+        type="workflow"
+        id="W1"
+        name="audit"
+        fence={{ expectedVersion: 7 }}
+      />,
+    )
     fireEvent.click(screen.getByTestId('export-package-workflow'))
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
     expect(download.mock.calls[0]?.[0]).toBe('workflow')
     expect(download.mock.calls[0]?.[1]).toBe('W1')
-    expect(download.mock.calls[0]?.[2]).toBeInstanceOf(AbortSignal)
+    expect(download.mock.calls[0]?.[2]).toEqual({ expectedVersion: 7 })
+    expect(download.mock.calls[0]?.[3]).toBeInstanceOf(AbortSignal)
     await waitFor(() => expect(trigger).toHaveBeenCalledTimes(1))
     expect(trigger.mock.calls[0]?.[1]).toBe('workflow-audit.awpkg.zip')
   })
@@ -70,7 +79,15 @@ describe('② 行为', () => {
       new Error("cannot export: agent:A references mcp 'M', which is not available to you"),
     )
     const onError = vi.fn()
-    render(<ResourcePackageExportButton type="workflow" id="W1" name="audit" onError={onError} />)
+    render(
+      <ResourcePackageExportButton
+        type="workflow"
+        id="W1"
+        name="audit"
+        fence={{ expectedVersion: 7 }}
+        onError={onError}
+      />,
+    )
     fireEvent.click(screen.getByTestId('export-package-workflow'))
     await waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
     expect(String(onError.mock.calls[0]?.[0])).toContain('not available to you')
@@ -84,6 +101,7 @@ describe('② 行为', () => {
         type="plugin"
         id="P1"
         name="formatter"
+        fence={{ expectedConfigHash: 'plugin-hash' }}
         variant="action"
         disabled
         disabledReason="Save first"
@@ -113,6 +131,7 @@ describe('② 行为', () => {
           type="workgroup"
           id="WG1"
           name="review-team"
+          fence={{ expectedVersion: 3 }}
           variant="action"
         />
         <button type="button" data-testid="sibling-action">
@@ -132,7 +151,8 @@ describe('② 行为', () => {
     expect(download).toHaveBeenCalledTimes(1)
     expect(download.mock.calls[0]?.[0]).toBe('workgroup')
     expect(download.mock.calls[0]?.[1]).toBe('WG1')
-    expect(download.mock.calls[0]?.[2]).toBeInstanceOf(AbortSignal)
+    expect(download.mock.calls[0]?.[2]).toEqual({ expectedVersion: 3 })
+    expect(download.mock.calls[0]?.[3]).toBeInstanceOf(AbortSignal)
 
     release(new Blob([new Uint8Array([1])]))
     await waitFor(() => expect(actionList.disabled).toBe(false))
@@ -148,12 +168,51 @@ describe('② 行为', () => {
       }),
     )
     vi.spyOn(dl, 'triggerBlobDownload').mockImplementation(() => {})
-    render(<ResourcePackageExportButton type="agent" id="A1" name="auditor" />)
+    render(
+      <ResourcePackageExportButton
+        type="agent"
+        id="A1"
+        name="auditor"
+        fence={{ expectedUpdatedAt: 11, expectedAclRevision: 2 }}
+      />,
+    )
     const btn = screen.getByTestId('export-package-agent') as HTMLButtonElement
     fireEvent.click(btn)
     await waitFor(() => expect(btn.disabled).toBe(true))
     expect(btn.getAttribute('aria-busy')).toBe('true')
     release(new Blob([new Uint8Array([1])]))
     await waitFor(() => expect(btn.disabled).toBe(false))
+  })
+
+  test('六类根资源的 exact-revision fence 原样进入下载 query', async () => {
+    const getBlob = vi.spyOn(api, 'getBlob').mockResolvedValue(new Blob())
+
+    await pkgApi.downloadResourcePackage('workflow', 'W1', { expectedVersion: 1 })
+    await pkgApi.downloadResourcePackage('workgroup', 'WG1', { expectedVersion: 2 })
+    await pkgApi.downloadResourcePackage('agent', 'A1', {
+      expectedUpdatedAt: 3,
+      expectedAclRevision: 4,
+    })
+    await pkgApi.downloadResourcePackage('skill', 'S1', {
+      expectedContentVersion: 5,
+      expectedMetaRevision: 6,
+      expectedAclRevision: 7,
+    })
+    await pkgApi.downloadResourcePackage('mcp', 'M1', { expectedConfigHash: 'mcp-hash' })
+    await pkgApi.downloadResourcePackage('plugin', 'P1', {
+      expectedConfigHash: 'plugin-hash',
+    })
+
+    expect(getBlob.mock.calls.map(([path, query]) => [path, query])).toEqual([
+      ['/api/workflows/W1/export-package', { expectedVersion: 1 }],
+      ['/api/workgroups/WG1/export-package', { expectedVersion: 2 }],
+      ['/api/agents/A1/export-package', { expectedUpdatedAt: 3, expectedAclRevision: 4 }],
+      [
+        '/api/skills/S1/export-package',
+        { expectedContentVersion: 5, expectedMetaRevision: 6, expectedAclRevision: 7 },
+      ],
+      ['/api/mcps/M1/export-package', { expectedConfigHash: 'mcp-hash' }],
+      ['/api/plugins/P1/export-package', { expectedConfigHash: 'plugin-hash' }],
+    ])
   })
 })

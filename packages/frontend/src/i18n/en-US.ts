@@ -1561,6 +1561,9 @@ export const enUS: Resources = {
     repreviewRequiredTitle: 'Check the package again',
     repreviewRequiredBody:
       'This preview expired or an existing resource changed. Check the same package again before importing; choices that are still valid will be kept.',
+    overwriteResetTitle: 'Overwrite choices were cleared',
+    overwriteResetBody:
+      'These targets changed or no longer match the confirmed revision, so they were reset to a safe action: {{names}}. Review them before choosing overwrite again.',
     previewExpiringTitle: 'This preview expires soon',
     previewExpiringBody:
       'Check the package again now to refresh its baseline without losing choices that are still valid.',

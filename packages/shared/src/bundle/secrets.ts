@@ -20,6 +20,21 @@ import { looksHighEntropy, SECRET_KEY_RE } from '../intentSecretSlots'
 /** 脱敏后的占位值。导入侧遇到它一律当「未提供」，绝不写成字面量。 */
 export const PACKAGE_SECRET_PLACEHOLDER = '<REDACTED:SECRET>'
 
+/**
+ * 自由 JSON 密钥位置的无歧义编码。
+ *
+ * 字符串 segment 表示对象 key，数字 segment 表示数组下标。因此字面 key `a.b`、
+ * `items[0]`、`0` 不会再和结构路径碰撞。前缀也让导入侧可以同时索引旧的点号路径。
+ */
+export const PACKAGE_SECRET_FIELD_SEGMENTS_PREFIX = 'segments:'
+export type PackageSecretFieldSegment = string | number
+
+export function encodePackageSecretFieldSegments(
+  segments: readonly PackageSecretFieldSegment[],
+): string {
+  return `${PACKAGE_SECRET_FIELD_SEGMENTS_PREFIX}${JSON.stringify(segments)}`
+}
+
 /** shared 的 tsconfig 不带 DOM/Node lib —— 沿用 intentSecretSlots.ts 的本地结构声明。 */
 interface UrlLike {
   username: string
@@ -36,7 +51,7 @@ interface UrlLike {
 export interface PackageSecretRef {
   resourceType: string
   resourceName: string
-  /** 点号路径，如 `config.env.GITHUB_TOKEN`。 */
+  /** 固定 carrier 沿用点号路径；自由 JSON 使用带类型的 `segments:[...]` 路径。 */
   field: string
 }
 
@@ -84,25 +99,56 @@ export function redactRecord(
  * ⚠️ 不能像 dump 投影那样把 argv[1..] 全改成占位——那会摧毁真实命令。
  */
 export function redactArgv(argv: readonly string[], sink: RedactionSink): string[] {
-  return argv.map((arg, i) => {
-    if (i === 0) return arg // executable 本身不是密钥
+  const out = [...argv]
+  let parseFlags = true
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i]!
+    if (arg === '--') {
+      parseFlags = false
+      continue
+    }
     // `--token=ghp_xxx` / `--token ghp_xxx` 两种形态
     const eq = arg.indexOf('=')
-    if (eq > 0) {
+    if (parseFlags && eq > 0) {
       const key = arg.slice(0, eq)
       const value = arg.slice(eq + 1)
       if (isSecretish(key, value)) {
         note(sink, `config.command[${i}]`)
-        return `${key}=${PACKAGE_SECRET_PLACEHOLDER}`
+        out[i] = `${key}=${PACKAGE_SECRET_PLACEHOLDER}`
       }
-      return arg
+      continue
+    }
+    if (parseFlags && isSecretFlag(arg)) {
+      const next = argv[i + 1]
+      // 缺值或下一项已经是另一个 flag 时，不能把 flag 本身吞成 secret value。
+      if (next !== undefined && next.length > 0 && !isCommandFlag(next)) {
+        note(sink, `config.command[${i + 1}]`)
+        out[i + 1] = PACKAGE_SECRET_PLACEHOLDER
+        i += 1
+      }
+      continue
     }
     if (looksHighEntropy(arg)) {
       note(sink, `config.command[${i}]`)
-      return PACKAGE_SECRET_PLACEHOLDER
+      out[i] = PACKAGE_SECRET_PLACEHOLDER
     }
-    return arg
-  })
+  }
+  return out
+}
+
+function isSecretFlag(arg: string): boolean {
+  if (!isCommandFlag(arg) || arg.includes('=')) return false
+  const name = arg.slice(arg.startsWith('--') ? 2 : 1)
+  const words = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').split(/[^a-z0-9]+/i)
+  return words.some((word) =>
+    /^(?:token|secret|key|password|passwd|credential|auth|api(?:token|secret|key)|access(?:token|key)|client(?:secret|key))$/i.test(
+      word,
+    ),
+  )
+}
+
+function isCommandFlag(arg: string): boolean {
+  return arg === '--' || /^-{1,2}[^-\s]/.test(arg)
 }
 
 /**
@@ -141,18 +187,26 @@ export function redactUrlKeepingShape(raw: string, sink: RedactionSink, field: s
 
 /** 自由 JSON（frontmatterExtra / plugin options / 工作流 passthrough）。 */
 export function redactFreeJson(value: unknown, sink: RedactionSink, pointer: string): unknown {
+  return redactFreeJsonAt(value, sink, [pointer])
+}
+
+function redactFreeJsonAt(
+  value: unknown,
+  sink: RedactionSink,
+  segments: readonly PackageSecretFieldSegment[],
+): unknown {
   if (Array.isArray(value)) {
-    return value.map((v, i) => redactFreeJson(v, sink, `${pointer}[${i}]`))
+    return value.map((v, i) => redactFreeJsonAt(v, sink, [...segments, i]))
   }
   if (typeof value === 'object' && value !== null) {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (isSecretish(k, v)) {
         out[k] = PACKAGE_SECRET_PLACEHOLDER
-        note(sink, `${pointer}.${k}`)
+        note(sink, encodePackageSecretFieldSegments([...segments, k]))
         continue
       }
-      out[k] = redactFreeJson(v, sink, `${pointer}.${k}`)
+      out[k] = redactFreeJsonAt(v, sink, [...segments, k])
     }
     return out
   }

@@ -151,13 +151,20 @@ describe('P2-3 · lower 必须预载 payload 内 external 目标的名字', () =
 })
 
 describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
-  test('handler 读 query 并传给导出；闭包成员不 fence', () => {
+  test('handler 只传 root query；闭包成员由 exporter 内部稳定性复核', () => {
     const routes = read('src/routes/resourcePackages.ts')
     expect(routes).toContain('parseRootFence(c)')
     expect(routes).toContain('expectedVersion')
     const exportSrc = read('src/services/resourcePackage/export.ts')
-    // 只对 root 生效 —— 与任务执行同语义（执行期非 root 依赖同样取最新）。
-    expect(exportSrc).toContain('assertRootUnchanged(closure, opts.expect)')
+    // 客户端只需要知道 root revision。
+    expect(exportSrc).toContain(
+      'assertRootUnchanged(closure.root.type, closure.root.row, opts.expect)',
+    )
+    // 技能树/工作组 roster 等后续 live 读取也必须被末端复核包住。
+    expect(exportSrc).toContain(
+      'assertRootStillCurrent(db, closure.root.type, closure.root.id, opts.expect)',
+    )
+    expect(exportSrc).toContain('assertClosureStillCurrent(db, closure)')
     expect(exportSrc).toContain('package-root-changed')
   })
 
@@ -185,7 +192,7 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     }
     const exportSrc = read('src/services/resourcePackage/export.ts')
     // 形态取自 `expectTokenOf` 那一份定义，不另抄一套。
-    expect(exportSrc).toContain('expectTokenOf(type, closure.root.row)')
+    expect(exportSrc).toContain('const actual = expectTokenOf(type, row)')
     // 给了就必须给全 —— 少给一维等于放过那一维的漂移。
     expect(exportSrc).toContain('needs all of:')
   })
@@ -225,9 +232,11 @@ describe('P1-2 · 脱敏三件套必须真的被调用（写了没接上 = 没�
 
   test('requirements.pluginSources 取的是**已脱敏**的那一份，不重读原行', () => {
     // 重读 `row.spec` 等于给密钥开第二条出口，且两处脱敏规则会随时间漂移。
-    const src = read('src/services/resourcePackage/export.ts')
-    expect(src).toContain('redactedSpecOfSlug')
-    expect(src).not.toContain("spec: String(r.row.spec ?? '')")
+    const exportSrc = read('src/services/resourcePackage/export.ts')
+    const requirementsSrc = read('src/services/resourcePackage/requirements.ts')
+    expect(exportSrc).toContain('collectPackageRequirements(serialized.bundle)')
+    expect(requirementsSrc).toContain("spec: String(payload.spec ?? '')")
+    expect(exportSrc).not.toContain("spec: String(r.row.spec ?? '')")
   })
 })
 

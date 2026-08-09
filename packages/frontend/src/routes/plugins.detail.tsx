@@ -545,6 +545,7 @@ function PluginDetailPage() {
             type="plugin"
             id={id}
             name={displayName}
+            fence={{ expectedConfigHash: query.data?.operationConfigHash ?? '' }}
             variant="action"
             disabled={dirty || save.isPending || del.isPending || operationBusy || !loaded}
             disabledReason={t('resourcePackage.saveBeforeExport')}

@@ -19,6 +19,7 @@ import {
   resolveAgentSkillRef,
   resolveCallRef,
   resolveIdentityRef,
+  type LocalRefTarget,
   type RefResolveCtx,
 } from './refs'
 
@@ -42,12 +43,12 @@ export async function lowerBundlePayloads(
 ): Promise<LoweredOp[]> {
   // ① 预铸 / 解析目标 id —— 必须先于任何 payload 处理，因为 payload 里的
   //    `local:` 引用要换成这一步产出的 id。
-  const idOfSlug = new Map<string, string>()
+  const idOfSlug = new Map<string, LocalRefTarget>()
   const targetIdOfOp = new Map<string, string>()
   for (const op of ops) {
     const slug = opSlug(op)
     if (slug !== null) {
-      idOfSlug.set(slug, ulid())
+      idOfSlug.set(slug, { id: ulid(), type: resourceTypeOfOp(op) })
       continue
     }
     const target = (op as { target: string }).target
@@ -69,15 +70,15 @@ export async function lowerBundlePayloads(
     const slug = opSlug(op)
     if (slug === null) continue
     const name = (op.payload as { name?: unknown }).name
-    const id = idOfSlug.get(slug)
-    if (typeof name === 'string' && id !== undefined) nameOfId.set(id, name)
+    const target = idOfSlug.get(slug)
+    if (typeof name === 'string' && target !== undefined) nameOfId.set(target.id, name)
   }
   await loadExistingNames(db, ops, targetIdOfOp, nameOfId)
 
   const out: LoweredOp[] = []
   for (const op of ops) {
     const slug = opSlug(op)
-    const resourceId = slug !== null ? idOfSlug.get(slug)! : targetIdOfOp.get(op.opId)!
+    const resourceId = slug !== null ? idOfSlug.get(slug)!.id : targetIdOfOp.get(op.opId)!
     const payload = await lowerPayload(op, ctx, nameOfId, provider, slug ?? '')
     out.push({
       opId: op.opId,

@@ -17,8 +17,13 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
-import { agents } from '../src/db/schema'
-import { resolveIdentityRef, type RefResolveCtx } from '../src/services/bundle/refs'
+import { agents, workflows } from '../src/db/schema'
+import {
+  resolveAgentSkillRef,
+  resolveIdentityRef,
+  type RefResolveCtx,
+} from '../src/services/bundle/refs'
+import { __lowerPayloadForTests } from '../src/services/bundle/lower'
 
 /** 断言的是**错误码**（契约），不是 message 文案——文案改了不该让测试红。 */
 const codeOf = async (p: Promise<unknown>): Promise<string | undefined> =>
@@ -141,6 +146,99 @@ describe('builtin: 语义层 —— fail closed', () => {
       ),
     ).toBe('bundle-builtin-missing')
   })
+
+  test('agent.skills 专属域不接受 builtin，不会误当 managed skill', async () => {
+    expect(
+      await codeOf(
+        resolveAgentSkillRef('builtin:agent/__skill_merger__', {
+          idOfSlug: new Map(),
+          resolveExternal: async () => 'x',
+        }),
+      ),
+    ).toBe('bundle-ref-invalid')
+  })
+})
+
+describe('local: 语义层二道 fail-closed', () => {
+  test('slug 存在但声明类型与槽位不符 ⇒ 不返回预铸 id', async () => {
+    const ctx: RefResolveCtx = {
+      idOfSlug: new Map([['tool', { id: 'PLUGIN_ID', type: 'plugin' }]]),
+      resolveExternal: async () => 'external',
+    }
+    expect(await resolveIdentityRef('local:tool', 'plugin', ctx)).toBe('PLUGIN_ID')
+    expect(await codeOf(resolveIdentityRef('local:tool', 'mcp', ctx))).toBe(
+      'bundle-local-ref-type-mismatch',
+    )
+  })
+})
+
+describe('builtin call lowering —— 真实 builtin id + wire 权威名字', () => {
+  test('同名普通 workflow 不得劫持，错误 name cache 也不得改写权威名', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    for (const row of [
+      { id: 'ATTACKER', ownerUserId: 'u-attacker', builtin: false },
+      { id: 'REAL_BUILTIN', ownerUserId: '__system__', builtin: true },
+    ]) {
+      db.insert(workflows)
+        .values({
+          ...row,
+          name: '__agent_host__',
+          description: '',
+          definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+          visibility: 'public',
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+        .run()
+    }
+    const ctx: RefResolveCtx = {
+      idOfSlug: new Map(),
+      resolveExternal: async () => {
+        throw new Error('external should not be reached')
+      },
+      resolveBuiltin: async (type, name) => {
+        if (type !== 'workflow') return null
+        return (
+          db
+            .select()
+            .from(workflows)
+            .all()
+            .find((row) => row.name === name && row.builtin === true)?.id ?? null
+        )
+      },
+    }
+    const op = {
+      opId: 'op-1',
+      kind: 'workflow-create' as const,
+      slug: 'root',
+      payload: {
+        name: 'root',
+        description: '',
+        definition: {
+          $schema_version: 4,
+          inputs: [],
+          edges: [],
+          nodes: [
+            { id: 'call-1', type: 'call-workflow', workflowRef: 'builtin:workflow/__agent_host__' },
+          ],
+        },
+      },
+    }
+    const lowered = await __lowerPayloadForTests(
+      op as never,
+      ctx,
+      // 如果 builtin 走通用 `nameOfId` 回查，这个污染值会被写进 definition。
+      new Map([['REAL_BUILTIN', 'attacker-controlled-name']]),
+      {} as never,
+      'root',
+    )
+    const node = ((lowered.definition as { nodes: Array<Record<string, unknown>> }).nodes ?? [])[0]
+    expect(node).toMatchObject({
+      workflowName: '__agent_host__',
+      workflowId: 'REAL_BUILTIN',
+    })
+    expect(node).not.toHaveProperty('workflowRef')
+  })
 })
 
 describe('builtin 作为**导出根**：产物必须能被自己的 parser 接受', () => {
@@ -173,12 +271,13 @@ describe('builtin 作为**导出根**：产物必须能被自己的 parser 接�
       resolve(import.meta.dir, '..', '..', 'shared', 'src', 'bundle', 'bundle.ts'),
       'utf8',
     )
-    // RootRefSchema 必须认 builtin:
-    expect(bundle).toContain('builtin:(agent|workflow)')
+    // Root 与 payload 必须消费同一个 wire schema，不能再复制一份含 builtin 的 regex。
+    expect(bundle).toContain('const RootRefSchema = BundleIdentityRefWireSchema')
+    expect(bundle).not.toContain('builtin:(agent|workflow)')
     // 闭合性扫描扫的是**真实字段名**：曾写 `targetRef`（不存在的字段），于是 call
     // 槽的 local: 引用从来没被校验过。
-    expect(bundle).toContain('push(rec.workflowRef)')
-    expect(bundle).toContain('push(rec.workgroupRef)')
+    expect(bundle).toContain("push(rec.workflowRef, 'workflow')")
+    expect(bundle).toContain("push(rec.workgroupRef, 'workgroup')")
     expect(bundle).not.toContain('push(rec.targetRef)')
   })
 })

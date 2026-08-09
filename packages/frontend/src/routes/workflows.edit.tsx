@@ -1170,6 +1170,7 @@ export function WorkflowEditorLoaded({
               type="workflow"
               id={workflowId}
               name={controller.state.server.name || workflowId}
+              fence={{ expectedVersion: controller.state.serverRevision.version }}
               variant="action"
               disabled={unsafe || exactActionRef.current !== null}
               disabledReason={t('resourcePackage.saveBeforeExport')}

@@ -37,7 +37,7 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import { plugins, resourceBundleApplies } from '@/db/schema'
+import { plugins, resourceBundleApplies, skillOperations } from '@/db/schema'
 import { ACL_TABLES } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
@@ -59,12 +59,7 @@ import {
   type PreparedMcpUpdate,
 } from '@/services/mcp'
 import { commitPluginCreateInTx, commitPluginPublishInTx } from '@/services/plugin'
-import {
-  cleanupInstallGeneration,
-  installPlugin,
-  plannedGenerationDir,
-  type InstallResult,
-} from '@/services/pluginInstaller'
+import { installPlugin, plannedGenerationDir, type InstallResult } from '@/services/pluginInstaller'
 import {
   commitSkillReadyInTx,
   compensateManagedSkillStage,
@@ -121,6 +116,8 @@ export interface BundleApplyDeps {
     beforeTx?: () => void
     inTxAfterOps?: () => void
     afterTxBeforeRollForward?: () => void
+    /** Test-only: fail a specific compensation attempt without corrupting the filesystem. */
+    beforeArtifactCompensation?: (artifact: BundleArtifact) => void
   }
 }
 
@@ -437,36 +434,18 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
       })
       throw error
     }
-    // 逆序补偿，然后 journal → failed（零可见）。
+    // 逆序补偿，然后 journal → failed（零可见）。必须以已持久化的 artifact
+    // 为 oracle，不能只看「成功返回后才填充」的内存 map：installer 可能已 mkdir
+    // 却在返回 InstallResult 前抛错，那时 map 还是空的，而 journal 里已有精确路径。
     let compensated = true
-    for (const staged of [...skillVersionStages.values()].reverse()) {
+    for (const artifact of [...artifacts].reverse()) {
       try {
-        abortStagedSkillVersion(db, staged)
+        deps.faults?.beforeArtifactCompensation?.(artifact)
+        compensateArtifact(db, deps.appHome, artifact)
       } catch (err) {
         compensated = false
-        log.warn('bundle-skill-version-compensation-failed', {
-          skillId: staged.skillId,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-    for (const stage of [...skillStages.values()].reverse()) {
-      try {
-        compensateManagedSkillStage(db, stage)
-      } catch (err) {
-        compensated = false
-        log.warn('bundle-skill-compensation-failed', {
-          skillId: stage.skillId,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-    for (const install of [...pluginInstalls.values()].reverse()) {
-      try {
-        await cleanupInstallGeneration(install)
-      } catch (err) {
-        compensated = false
-        log.warn('bundle-plugin-compensation-failed', {
+        log.warn('bundle-artifact-compensation-failed', {
+          kind: artifact.kind,
           err: err instanceof Error ? err.message : String(err),
         })
       }
@@ -889,8 +868,38 @@ function rollForwardCommitted(
   },
   log: Logger,
 ): void {
-  for (const staged of state.skillVersionStages.values()) unmarkSkillBootVerified(staged.skillId)
+  // A committed journal is retained for audit and the hourly converger sees it forever. Once a
+  // skill operation is `done`, its exact tail has already published, verified and released its
+  // lock; replaying that old artifact after a later edit would compare today's live tree with the
+  // old hash and, worse, unmark the healthy skill before failing. Only the exact still-active op
+  // is an unfinished tail. Boot recovery may have finished it before this journal converger runs,
+  // in which case the boot snapshot verifier owns admission and this pass must be a no-op.
+  const pendingSkillVersions: StagedSkillVersion[] = []
   for (const staged of state.skillVersionStages.values()) {
+    if (staged.opId === null) {
+      pendingSkillVersions.push(staged)
+      continue
+    }
+    const op = db
+      .select({ active: skillOperations.active, phase: skillOperations.phase })
+      .from(skillOperations)
+      .where(eq(skillOperations.opId, staged.opId))
+      .get()
+    if (op?.active === 1) {
+      pendingSkillVersions.push(staged)
+      continue
+    }
+    if (op?.phase !== 'done') {
+      log.warn('bundle-skill-publish-op-not-replayable', {
+        skillId: staged.skillId,
+        opId: staged.opId,
+        phase: op?.phase ?? 'missing',
+      })
+    }
+  }
+
+  for (const staged of pendingSkillVersions) unmarkSkillBootVerified(staged.skillId)
+  for (const staged of pendingSkillVersions) {
     try {
       publishStagedSkillVersion(db, { appHome }, staged)
     } catch (err) {

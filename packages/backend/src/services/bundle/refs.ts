@@ -1,8 +1,9 @@
 // RFC-271 T9 —— bundle 引用槽的**回填**：wire 形态 → canonical id。
 //
-// 包里的引用有四种 wire 形态，各有各的归宿：
+// 包里的引用有五种 wire 形态，各有各的归宿：
 //   `local:<slug>`      → 本包内的目标，回填成**预铸 id**（同一批次里它还没落库）
 //   `external:<token>`  → 库里既有的行，交给 provider 解析（含类型校验）
+//   `builtin:<type>/<n>` → 对端实例按名字 + builtin=true 绑到自己的 seed 行
 //   `project:<name>`    → 仓库自带技能，**不是资源**：原样按名字透传
 //   `name:<type>/<n>`   → call 目标，**late-bound**：原样留名字，启动时才冻结
 //
@@ -10,13 +11,17 @@
 // 本来就是名字（RFC-243），把它提前解析成 id 会让「导入后改名」这类正常操作
 // 直接打断被调用方。
 
-import type { AclResourceType } from '@agent-workflow/shared'
+import {
+  decodeBundleAgentSkillRef,
+  decodeBundleCallRef,
+  decodeBundleIdentityRef,
+  type AclResourceType,
+} from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
-import { localSlugOf } from './provider'
 
 export interface RefResolveCtx {
-  /** 本包内 slug → 预铸资源 id。 */
-  idOfSlug: ReadonlyMap<string, string>
+  /** 本包内 slug → 预铸资源 id + 声明类型。类型不能在 lowering 边界丢掉。 */
+  idOfSlug: ReadonlyMap<string, LocalRefTarget>
   /** `external:<token>` → 本地资源 id（含类型校验）。 */
   resolveExternal(ref: string, expectType: AclResourceType): Promise<string>
   /**
@@ -26,19 +31,21 @@ export interface RefResolveCtx {
   resolveBuiltin?(type: AclResourceType, name: string): Promise<string | null>
 }
 
-const PROJECT_PREFIX = 'project:'
-const NAME_PREFIX = 'name:'
+export interface LocalRefTarget {
+  id: string
+  type: AclResourceType
+}
 
-/** 身份域（`dependsOn` / `mcp` / `plugins` / 工作组成员）。只接受 local / external。 */
+/** 身份域（`dependsOn` / `mcp` / `plugins` / 工作组成员）。 */
 export async function resolveIdentityRef(
   ref: string,
   type: AclResourceType,
   ctx: RefResolveCtx,
 ): Promise<string> {
-  const slug = localSlugOf(ref)
-  if (slug !== null) {
-    const id = ctx.idOfSlug.get(slug)
-    if (id === undefined) {
+  const decoded = decodeBundleIdentityRef(ref)
+  if (decoded?.k === 'local') {
+    const target = ctx.idOfSlug.get(decoded.slug)
+    if (target === undefined) {
       // 悬空 `local:` 在 shared 的 `collectBundleRefIssues` 就该被拒；走到这里说明
       // 调用方跳过了那道校验——fail closed，不要静默丢一个引用。
       throw new ValidationError(
@@ -46,34 +53,38 @@ export async function resolveIdentityRef(
         `bundle ref '${ref}' does not name any op in this bundle`,
       )
     }
-    return id
+    if (target.type !== type) {
+      // 第二道门：shared schema 应该已拒绝跨类型 local，但 intent/内部调用方
+      // 可以直接调 lowering。不在这里复核就会把 plugin id 写进 mcp 槽。
+      throw new ValidationError(
+        'bundle-local-ref-type-mismatch',
+        `bundle ref '${ref}' points to ${target.type}, but the slot expects ${type}`,
+      )
+    }
+    return target.id
   }
-  if (ref.startsWith('external:')) return ctx.resolveExternal(ref, type)
+  if (decoded?.k === 'external') return ctx.resolveExternal(ref, type)
   // `builtin:<type>/<name>` —— 框架 built-in。它在包里**没有 create op**（导入侧
   // 自动忽略），引用要绑到**本实例自己 seed 的那一个**：源库的 id 在这里没有意义，
   // 而复制一份会得到 owner 错、`builtin=false` 的同名副本。
-  if (ref.startsWith('builtin:')) {
-    const spec = ref.slice('builtin:'.length)
-    const slash = spec.indexOf('/')
-    const declared = slash < 0 ? '' : spec.slice(0, slash)
-    const name = slash < 0 ? '' : spec.slice(slash + 1)
+  if (decoded?.k === 'builtin') {
     // ⚠️ **声明类型必须与槽类型一致**。wire schema 是六类共用的，所以
     // `mcp: ['builtin:agent/x']` 能过词法层；不校验的话解析器会丢掉 wire 里的
     // `agent`、改用槽类型 `mcp` 去查 `mcps.builtin` —— 那一列**不存在**，drizzle
     // 生成非法 SQL、整个 commit 变成 500 internal-error（而不是 4xx）。
-    if (declared !== type) {
+    if (decoded.type !== type) {
       throw new ValidationError(
         'bundle-ref-invalid',
-        `builtin ref '${ref}' declares '${declared}' but the slot expects '${type}'`,
+        `builtin ref '${ref}' declares '${decoded.type}' but the slot expects '${type}'`,
       )
     }
-    const id = await ctx.resolveBuiltin?.(type, name)
+    const id = await ctx.resolveBuiltin?.(type, decoded.name)
     if (id === undefined || id === null) {
       // fail closed：本实例没有同名 built-in 是**环境前提缺失**（manifest 的
       // `builtins` 段就是为了让导入方预先看到这件事），不能静默留一个悬空引用。
       throw new ValidationError(
         'bundle-builtin-missing',
-        `this instance has no builtin ${type} named '${name}'`,
+        `this instance has no builtin ${type} named '${decoded.name}'`,
       )
     }
     return id
@@ -92,12 +103,15 @@ export async function resolveAgentSkillRef(
   ref: string,
   ctx: RefResolveCtx,
 ): Promise<{ kind: 'managed'; skillId: string } | { kind: 'project'; name: string }> {
-  if (ref.startsWith(PROJECT_PREFIX)) {
-    const name = ref.slice(PROJECT_PREFIX.length)
-    if (name.length === 0) {
-      throw new ValidationError('bundle-ref-invalid', 'project skill ref has an empty name')
-    }
-    return { kind: 'project', name }
+  const decoded = decodeBundleAgentSkillRef(ref)
+  if (decoded?.k === 'project-skill') {
+    return { kind: 'project', name: decoded.name }
+  }
+  if (decoded?.k !== 'local' && decoded?.k !== 'external') {
+    throw new ValidationError(
+      'bundle-ref-invalid',
+      `agent skill ref '${ref}' must be local:, external: or project:`,
+    )
   }
   return { kind: 'managed', skillId: await resolveIdentityRef(ref, 'skill', ctx) }
 }
@@ -116,27 +130,28 @@ export async function resolveCallRef(
   ctx: RefResolveCtx,
   nameOfId: (id: string) => string | undefined,
 ): Promise<{ name: string; idHint?: string }> {
-  if (ref.startsWith(NAME_PREFIX)) {
-    const rest = ref.slice(NAME_PREFIX.length)
-    const slash = rest.indexOf('/')
-    if (slash <= 0) {
+  const decoded = decodeBundleCallRef(ref)
+  if (decoded?.k === 'name') {
+    if (decoded.type !== type) {
       throw new ValidationError(
         'bundle-ref-invalid',
-        `call ref '${ref}' must be name:<type>/<name>`,
+        `call ref '${ref}' declares '${decoded.type}' but the slot expects '${type}'`,
       )
     }
-    const declared = rest.slice(0, slash)
-    const name = rest.slice(slash + 1)
-    if (declared !== type) {
-      throw new ValidationError(
-        'bundle-ref-invalid',
-        `call ref '${ref}' declares '${declared}' but the slot expects '${type}'`,
-      )
-    }
-    if (name.length === 0) {
-      throw new ValidationError('bundle-ref-invalid', `call ref '${ref}' has an empty name`)
-    }
-    return { name }
+    return { name: decoded.name }
+  }
+  if (decoded?.k === 'builtin') {
+    // builtin 也必须携带 id hint：名字是跨实例的权威选择器，id 必须是
+    // provider 按 `(name, builtin=true)` 解到的本实例真实行。不经 `nameOfId`
+    // 回查可避免同名普通行/错误缓存改写 wire 中的权威名字。
+    const id = await resolveIdentityRef(ref, type, ctx)
+    return { name: decoded.name, idHint: id }
+  }
+  if (decoded?.k !== 'local' && decoded?.k !== 'external') {
+    throw new ValidationError(
+      'bundle-ref-invalid',
+      `call ref '${ref}' must be local:, external:, name: or builtin:`,
+    )
   }
   const id = await resolveIdentityRef(ref, type, ctx)
   const name = nameOfId(id)

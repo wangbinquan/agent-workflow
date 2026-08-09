@@ -151,6 +151,51 @@ describe('UserPicker', () => {
     expect(input.getAttribute('aria-invalid')).toBe('true')
     expect(mockedGet.mock.calls[0]?.[1]).toMatchObject({ limit: 100, status: 'active' })
   })
+
+  test('ArrowUp/ArrowDown skip disabled accounts and Enter picks the active option', async () => {
+    mockedGet.mockResolvedValue([
+      user('u1', 'alice'),
+      { ...user('u2', 'disabled-bob'), status: 'disabled' },
+      user('u3', 'carol'),
+    ])
+    const onChange = vi.fn()
+    wrap(<UserPicker value={[]} onChange={onChange} single testidPrefix="keyboard" />)
+    const input = screen.getByTestId('keyboard-input')
+    fireEvent.focus(input)
+    const alice = await screen.findByTestId('keyboard-option-alice')
+    const carol = screen.getByTestId('keyboard-option-carol')
+    expect((screen.getByTestId('keyboard-option-disabled-bob') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    await waitFor(() => expect(input.getAttribute('aria-activedescendant')).toBe(alice.id))
+    expect(alice.getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(input.getAttribute('aria-activedescendant')).toBe(carol.id)
+    expect(carol.getAttribute('aria-selected')).toBe('true')
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input.getAttribute('aria-activedescendant')).toBe(alice.id)
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input.getAttribute('aria-activedescendant')).toBe(carol.id)
+
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ id: 'u3' })])
+    expect(input.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  test('Escape closes only the portaled listbox and clears aria-activedescendant', async () => {
+    mockedGet.mockResolvedValue([user('u1', 'alice')])
+    wrap(<UserPicker value={[]} onChange={() => {}} testidPrefix="escape" />)
+    const input = screen.getByTestId('escape-input')
+    fireEvent.focus(input)
+    await screen.findByTestId('escape-option-alice')
+    await waitFor(() => expect(input.getAttribute('aria-activedescendant')).not.toBeNull())
+
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(input.getAttribute('aria-expanded')).toBe('false')
+    expect(input.getAttribute('aria-activedescendant')).toBeNull()
+    expect(screen.queryByTestId('escape-option-alice')).toBeNull()
+  })
 })
 
 describe('AclPanel', () => {

@@ -34,6 +34,7 @@ interface SkillRow {
   managedPath: string | null
   schemaVersion: number
   contentVersion: number
+  metaRevision: number
   createdAt: number
   updatedAt: number
   visibility: 'public' | 'private'
@@ -54,6 +55,7 @@ function makeSkill(name: string, description = ''): SkillRow {
     managedPath: `/managed/${name}`,
     schemaVersion: 1,
     contentVersion: 1,
+    metaRevision: 4,
     createdAt: 0,
     updatedAt: 0,
     visibility: 'public',
@@ -247,6 +249,19 @@ describe('/skills split page', () => {
     expect(
       screen.getByTestId('export-package-skill').closest('.resource-action-list'),
     ).not.toBeNull()
+    fireEvent.click(screen.getByTestId('export-package-skill'))
+    const exportUrl = await waitFor(() => {
+      const call = vi.mocked(globalThis.fetch).mock.calls.find(([input]) =>
+        String(input).includes('/api/skills/sk1/export-package'),
+      )
+      expect(call).toBeTruthy()
+      return new URL(String(call![0]))
+    })
+    expect(Object.fromEntries(exportUrl.searchParams)).toEqual({
+      expectedContentVersion: '1',
+      expectedMetaRevision: '4',
+      expectedAclRevision: '3',
+    })
   })
 
   test('edit description → dirty dot; Save stays in place and clears it', async () => {

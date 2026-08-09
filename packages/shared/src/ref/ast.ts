@@ -27,7 +27,7 @@ import { AclResourceTypeSchema, type AclResourceType } from '../schemas/resource
 export const BUNDLE_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
 /**
- * 归一化 AST。八个变体覆盖六个域的全部实际形态。
+ * 归一化 AST。九个变体覆盖六个域的全部实际形态。
  *
  * 变体的选取原则：**一个变体对应一种「解析方式」**，而不是对应一种拼写。
  * 所以 intent 的 `$new:x` 与 bundle 的 `local:x` 是**同一个** `local` 变体
@@ -85,11 +85,27 @@ export type ResourceRefAst =
    * `RootRefSchema` 又两者都不认 —— 导出一个 built-in 根会产出**自己的 parser 都
    * 解析不了**的包。RFC 的核心主张就是「引用身份只有一处定义」，破坏它的代价就是这个。
    */
-  | { readonly k: 'builtin'; readonly type: AclResourceType; readonly name: string }
+  | { readonly k: 'builtin'; readonly type: 'agent' | 'workflow'; readonly name: string }
+
+/**
+ * 运行时变体表。下方的 compile-time assertion 保证它与 `ResourceRefAst['k']`
+ * 完全等价：新增第十个变体却忘了更新表时，typecheck 直接变红。
+ */
+export const RESOURCE_REF_AST_KINDS = [
+  'id',
+  'name',
+  'selector',
+  'handle',
+  'local',
+  'external',
+  'call',
+  'project-skill',
+  'builtin',
+] as const
 
 // --- schema（用于跨进程/落盘时的校验；域 codec 见 ./codecs.ts） ---
 
-export const ResourceRefAstSchema: z.ZodType<ResourceRefAst> = z.discriminatedUnion('k', [
+export const ResourceRefAstSchema = z.discriminatedUnion('k', [
   z.object({ k: z.literal('id'), type: AclResourceTypeSchema, id: z.string().min(1).max(128) }),
   z.object({ k: z.literal('name'), type: AclResourceTypeSchema, name: z.string().min(1).max(256) }),
   z.object({
@@ -113,7 +129,34 @@ export const ResourceRefAstSchema: z.ZodType<ResourceRefAst> = z.discriminatedUn
     idHint: z.string().min(1).max(128).optional(),
   }),
   z.object({ k: z.literal('project-skill'), name: z.string().min(1).max(128) }),
-]) as unknown as z.ZodType<ResourceRefAst>
+  z.object({
+    k: z.literal('builtin'),
+    // 只有 agents / workflows 两张表有 builtin 列；把六类 ACL type 全放进来会
+    // 制造一种任何 resolver 都不可能兑现的非法状态。
+    type: z.enum(['agent', 'workflow']),
+    name: z.string().min(1).max(256),
+  }),
+])
+
+type AssertTrue<T extends true> = T
+type SchemaResourceRefAst = z.infer<typeof ResourceRefAstSchema>
+
+/** Schema 不得漏掉 AST 变体（builtin 初次漏分支正是这个方向）。 */
+export type ResourceRefAstIsCoveredBySchema = AssertTrue<
+  [ResourceRefAst] extends [SchemaResourceRefAst] ? true : false
+>
+/** Schema 也不得产生 AST 没定义的额外状态。 */
+export type ResourceRefAstSchemaIsCoveredByType = AssertTrue<
+  [SchemaResourceRefAst] extends [ResourceRefAst] ? true : false
+>
+/** 运行时变体表与 type union 双向穷尽。 */
+export type ResourceRefAstKindsAreExhaustive = AssertTrue<
+  [ResourceRefAst['k']] extends [(typeof RESOURCE_REF_AST_KINDS)[number]]
+    ? [(typeof RESOURCE_REF_AST_KINDS)[number]] extends [ResourceRefAst['k']]
+      ? true
+      : false
+    : false
+>
 
 /** 稳定 key —— JSON 元组，避免分隔符碰撞（沿用 importRefSelectorKey 的做法）。 */
 export function resourceRefKey(ref: ResourceRefAst): string {

@@ -7,13 +7,16 @@
 
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { downloadResourcePackage, type ExportableType } from '@/api/resourcePackages'
+import {
+  downloadResourcePackage,
+  type ExportableType,
+  type ResourcePackageExportFenceByType,
+} from '@/api/resourcePackages'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ResourceActionItem, useResourceActionBusy } from '@/components/ResourceActionList'
 import { resourcePackageFilename, triggerBlobDownload } from '@/lib/resource-package-download'
 
-export interface ResourcePackageExportButtonProps {
-  type: ExportableType
+interface BaseResourcePackageExportButtonProps {
   id: string
   /** 资源显示名——只用于文件名。 */
   name: string
@@ -26,6 +29,13 @@ export interface ResourcePackageExportButtonProps {
   /** 可选的额外失败通知；组件自身始终保留可见的 ErrorBanner。 */
   onError?: (message: string) => void
 }
+
+export type ResourcePackageExportButtonProps = {
+  [T in ExportableType]: BaseResourcePackageExportButtonProps & {
+    type: T
+    fence: ResourcePackageExportFenceByType[T]
+  }
+}[ExportableType]
 
 export function ResourcePackageExportButton(props: ResourcePackageExportButtonProps): ReactElement {
   const { t } = useTranslation()
@@ -52,7 +62,7 @@ export function ResourcePackageExportButton(props: ResourcePackageExportButtonPr
     const abort = new AbortController()
     abortRef.current?.abort()
     abortRef.current = abort
-    void downloadResourcePackage(props.type, props.id, abort.signal)
+    void downloadResourcePackage(props.type, props.id, props.fence, abort.signal)
       .then((blob) => {
         if (!mountedRef.current || abort.signal.aborted) return
         triggerBlobDownload(blob, resourcePackageFilename(props.type, props.name))

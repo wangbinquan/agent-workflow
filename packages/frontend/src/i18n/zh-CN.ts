@@ -1607,6 +1607,8 @@ export interface Resources {
     retryCurrentBody: string
     repreviewRequiredTitle: string
     repreviewRequiredBody: string
+    overwriteResetTitle: string
+    overwriteResetBody: string
     previewExpiringTitle: string
     previewExpiringBody: string
     repreviewAction: string
@@ -6832,6 +6834,9 @@ export const zhCN: Resources = {
     repreviewRequiredTitle: '重新检查配置包',
     repreviewRequiredBody:
       '当前预检已过期，或已有资源发生了变化。请重新检查同一个包；仍然有效的选择会被保留。',
+    overwriteResetTitle: '已清除覆盖选择',
+    overwriteResetBody:
+      '这些目标已变化或不再是之前确认的版本，因此已重置为安全操作：{{names}}。再次选择覆盖前请重新核对。',
     previewExpiringTitle: '当前预检即将过期',
     previewExpiringBody: '现在重新检查可以刷新基线，并保留仍然有效的选择。',
     repreviewAction: '重新检查',

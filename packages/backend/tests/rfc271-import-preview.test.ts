@@ -21,12 +21,14 @@ import { randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { stringify } from 'yaml'
+import type { ResourceBundle } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps, users } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
+import { collectPackageRequirements } from '../src/services/resourcePackage/requirements'
 import {
   buildPackagePreview,
   groupHumanMemberSlots,
@@ -121,6 +123,7 @@ const packageZip = (
   })
   const rootRef = extra.rootRef ?? `local:${resources[0]?.slug ?? ''}`
   const root = resources.find((resource) => `local:${resource.slug}` === rootRef)
+  const bundle = { bundleVersion: 1, ops, rootRef }
 
   return encodeZip([
     {
@@ -131,7 +134,7 @@ const packageZip = (
           exportedAt: 0,
           root: extra.manifestRoot ?? root,
           resources: extra.manifestResources ?? resources,
-          requirements: extra.requirements ?? {},
+          requirements: extra.requirements ?? collectPackageRequirements(bundle as ResourceBundle),
           secrets: extra.secrets ?? [],
           danglingCallRefs: [],
         }),
@@ -139,13 +142,7 @@ const packageZip = (
     },
     {
       path: 'bundle.json',
-      bytes: utf8(
-        JSON.stringify({
-          bundleVersion: 1,
-          ops,
-          rootRef,
-        }),
-      ),
+      bytes: utf8(JSON.stringify(bundle)),
     },
     ...(extra.files ?? []),
   ])
@@ -377,7 +374,6 @@ describe('② 预检：候选、可选动作、归属', () => {
     const pkg = await parseResourcePackage(
       packageZip({
         secrets: [matchingSecret, unrelatedSecret],
-        requirements: { runtimes: ['bun'] },
       }),
     )
     const preview = await buildPackagePreview(db, actorOf('u1'), pkg, {
@@ -388,7 +384,7 @@ describe('② 预检：候选、可选动作、归属', () => {
     expect(preview.root).toEqual({ slug: 'mcp-tools', type: 'mcp', name: 'tools' })
     expect(preview.secrets).toEqual([matchingSecret, unrelatedSecret])
     expect(preview.entries[0]?.secretFields).toEqual([matchingSecret])
-    expect(preview.requirements.runtimes).toEqual(['bun'])
+    expect(preview.requirements.mcpKinds).toEqual(['remote'])
   })
 })
 

@@ -11,9 +11,9 @@
 //
 // 引用槽存的是**该槽所属域的 wire 编码**（字符串/对象），由 ../ref/codecs 解码。
 // 槽位分层是硬约束（R4-P2-9 / R8-P1-1）：
-//   dependsOn / mcp / plugins   → BundleIdentityRef（local: | external:）
+//   dependsOn / mcp / plugins   → BundleIdentityRef（local: | external: | builtin:）
 //   skills                      → BundleAgentSkillRef（+ project:）← 第四个域
-//   call 目标                   → BundleCallRef（+ name:）
+//   call 目标                   → BundleCallRef（+ name: / builtin:）
 
 import { z } from 'zod'
 import {
@@ -25,7 +25,14 @@ import {
 } from '../schemas/agent'
 import { McpLocalConfigSchema, McpRemoteConfigSchema } from '../schemas/mcp'
 import { PluginOptionsSchema, PluginSourceKindSchema } from '../schemas/plugin'
+import type { AclResourceType } from '../schemas/resourceAcl'
 import { WorkgroupModeSchema, WorkgroupSwitchesSchema } from '../schemas/workgroup'
+import {
+  decodeBundleAgentSkillRef,
+  decodeBundleCallRef,
+  decodeBundleIdentityRef,
+  type ResourceRefAst,
+} from '../ref'
 
 // --- 引用槽的 wire 形态（词法校验；语义解码在 ../ref/codecs） ---
 
@@ -37,28 +44,124 @@ import { WorkgroupModeSchema, WorkgroupSwitchesSchema } from '../schemas/workgro
  * 按名字绑到对端自己 seed 的那一个 —— 复制一份只会在对端多出 owner 错、
  * `builtin=false` 的同名副本，而真正的 built-in 仍在原处。
  */
-export const BundleIdentityRefWireSchema = z.string().regex(
-  // ⚠️ 名字段用 `\S`（非空白）而不是 `.`：`.` 会把尾随空格当成名字的一部分，
-  // 于是 `builtin:agent/foo ` 通过词法层、再靠「查不到」fail closed。资源名字
-  // 永远不含空白，这一层挡掉比留给语义层更早也更准。
-  /^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128}|builtin:(agent|workflow)\/\S{1,256})$/,
-  { message: 'must be local:<slug>, external:<token> or builtin:<type>/<name>' },
-)
+export const BundleIdentityRefWireSchema = z
+  .string()
+  .refine((wire) => decodeBundleIdentityRef(wire) !== null, {
+    message: 'must be local:<slug>, external:<token> or builtin:<type>/<name>',
+  })
 
 /** 上面两种 + `project:<name>`。**仅** agent 的 `skills` 槽（R8-P1-1）。 */
 export const BundleAgentSkillRefWireSchema = z
   .string()
-  .regex(/^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128}|project:.{1,128})$/, {
+  .refine((wire) => decodeBundleAgentSkillRef(wire) !== null, {
     message: 'must be local:/external:/project:',
   })
 
 /** 上面两种 + `name:<type>/<name>`（late-bound）。仅 call 目标槽。 */
 export const BundleCallRefWireSchema = z
   .string()
-  .regex(
-    /^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128}|name:(workflow|workgroup)\/.{1,256})$/,
-    { message: 'must be local:/external:/name:' },
-  )
+  .refine((wire) => decodeBundleCallRef(wire) !== null, {
+    message: 'must be local:/external:/name:/builtin:',
+  })
+
+/**
+ * Identity 域本身合法不等于具体槽合法。`builtin:` 自带声明类型，必须在
+ * payload schema 边界就与槽位 expected type 对上；否则 `mcp: ['builtin:agent/x']`
+ * 会得到 preview 假阳性，只在 lowering 才报错。
+ */
+function identityRefWireFor(expectedType: AclResourceType) {
+  return BundleIdentityRefWireSchema.superRefine((wire, ctx) => {
+    const decoded = decodeBundleIdentityRef(wire)
+    if (decoded?.k !== 'builtin' || decoded.type === expectedType) return
+    ctx.addIssue({
+      code: 'custom',
+      message: `builtin ref declares ${decoded.type}, but this slot expects ${expectedType}`,
+    })
+  })
+}
+
+const BundleAgentIdentityRefWireSchema = identityRefWireFor('agent')
+const BundleMcpIdentityRefWireSchema = identityRefWireFor('mcp')
+const BundlePluginIdentityRefWireSchema = identityRefWireFor('plugin')
+
+function declaredTypeMatches(
+  ref: ResourceRefAst,
+  expected: 'agent' | 'workflow' | 'workgroup',
+): boolean {
+  return (ref.k !== 'name' && ref.k !== 'builtin') || ref.type === expected
+}
+
+/**
+ * definition 内的 wire 槽不能因为外层是 `record` 就绕过域 codec。这里只校验
+ * lowering 负责的三种引用字段；其余 workflow canonical 结构仍由正式 schema
+ * 在 apply 时校验。
+ */
+export const BundleWorkflowDefinitionSchema = z
+  .record(z.string(), z.unknown())
+  .superRefine((definition, ctx) => {
+    if (!Array.isArray(definition.nodes)) return
+    const check = (
+      node: Record<string, unknown>,
+      index: number,
+      field: 'agentRef' | 'workflowRef' | 'workgroupRef',
+      expected: 'agent' | 'workflow' | 'workgroup',
+    ): void => {
+      const wire = node[field]
+      if (wire === undefined) return
+      const decoded =
+        typeof wire !== 'string'
+          ? null
+          : field === 'agentRef'
+            ? decodeBundleIdentityRef(wire)
+            : decodeBundleCallRef(wire)
+      if (decoded !== null && declaredTypeMatches(decoded, expected)) return
+      ctx.addIssue({
+        code: 'custom',
+        path: ['nodes', index, field],
+        message: `${field} must be a valid ${expected} bundle reference`,
+      })
+    }
+
+    for (const [index, raw] of definition.nodes.entries()) {
+      if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue
+      const node = raw as Record<string, unknown>
+      // Bundle wire 必须只携带 portable ref。若允许 canonical id/name 字段夹带进来，
+      // hand-built 包就能绕开 external/builtin 的 provider 解析、manifest 对照与预检面。
+      for (const field of [
+        'agentId',
+        'workflowName',
+        'workflowId',
+        'workgroupName',
+        'workgroupId',
+      ] as const) {
+        if (node[field] === undefined) continue
+        ctx.addIssue({
+          code: 'custom',
+          path: ['nodes', index, field],
+          message: `${field} is canonical-only; bundle definitions must use *Ref fields`,
+        })
+      }
+      check(node, index, 'agentRef', 'agent')
+      check(node, index, 'workflowRef', 'workflow')
+      check(node, index, 'workgroupRef', 'workgroup')
+
+      const requiredRef =
+        node.kind === 'agent-single'
+          ? 'agentRef'
+          : node.kind === 'call-workflow'
+            ? 'workflowRef'
+            : node.kind === 'call-workgroup'
+              ? 'workgroupRef'
+              : null
+      if (requiredRef !== null && node[requiredRef] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['nodes', index, requiredRef],
+          message: `${String(node.kind)} nodes require ${requiredRef} in bundle wire`,
+        })
+      }
+    }
+  })
 
 // --- agent ---
 
@@ -80,9 +183,9 @@ export const BundleAgentPayloadSchema = z
     permission: AgentPermissionSchema.default({}),
     /** 第四个槽位域：唯一允许 `project:` 的地方。 */
     skills: z.array(BundleAgentSkillRefWireSchema).max(64).default([]),
-    dependsOn: z.array(BundleIdentityRefWireSchema).max(64).default([]),
-    mcp: z.array(BundleIdentityRefWireSchema).max(64).default([]),
-    plugins: z.array(BundleIdentityRefWireSchema).max(64).default([]),
+    dependsOn: z.array(BundleAgentIdentityRefWireSchema).max(64).default([]),
+    mcp: z.array(BundleMcpIdentityRefWireSchema).max(64).default([]),
+    plugins: z.array(BundlePluginIdentityRefWireSchema).max(64).default([]),
     frontmatterExtra: z.record(z.string(), z.unknown()).default({}),
     bodyMd: z.string().default(''),
   })
@@ -118,6 +221,22 @@ export const BundleSkillPayloadSchema = z
     files: z.array(BundleSkillFileSchema).max(2000).default([]),
   })
   .strict()
+  .superRefine((payload, ctx) => {
+    for (const key of ['path', 'ref'] as const) {
+      const seen = new Set<string>()
+      for (const [index, file] of payload.files.entries()) {
+        if (!seen.has(file[key])) {
+          seen.add(file[key])
+          continue
+        }
+        ctx.addIssue({
+          code: 'custom',
+          path: ['files', index, key],
+          message: `skill file ${key} must be unique`,
+        })
+      }
+    }
+  })
 export type BundleSkillPayload = z.infer<typeof BundleSkillPayloadSchema>
 
 // --- mcp ---
@@ -169,7 +288,7 @@ export const BundleWorkflowPayloadSchema = z
   .object({
     name: z.string().min(1).max(256),
     description: z.string().max(4096).default(''),
-    definition: z.record(z.string(), z.unknown()),
+    definition: BundleWorkflowDefinitionSchema,
   })
   .strict()
 export type BundleWorkflowPayload = z.infer<typeof BundleWorkflowPayloadSchema>
@@ -184,7 +303,7 @@ export const BundleWorkgroupMemberSchema = z.discriminatedUnion('memberType', [
   z
     .object({
       memberType: z.literal('agent'),
-      agentRef: BundleIdentityRefWireSchema,
+      agentRef: BundleAgentIdentityRefWireSchema,
       displayName: z.string().min(1).max(64),
       roleDesc: z.string().max(2048).default(''),
       sortOrder: z.number().int(),

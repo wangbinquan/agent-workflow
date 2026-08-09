@@ -16,6 +16,7 @@
 import { describe, expect, test } from 'bun:test'
 import { McpLocalConfigSchema, McpRemoteConfigSchema } from '../src/schemas/mcp'
 import {
+  encodePackageSecretFieldSegments,
   PACKAGE_SECRET_PLACEHOLDER,
   redactArgv,
   redactFreeJson,
@@ -61,6 +62,62 @@ describe('carrier · argv —— 只换命中的那一个，结构与长度不�
     expect(out[2]).toBe('8080')
     expect(out[3]).toBe(`--token=${PACKAGE_SECRET_PLACEHOLDER}`)
     expect(out).toHaveLength(4)
+  })
+
+  test('--token value / --password value 分离式 flag 只替换 value 槽', () => {
+    const s = sink()
+    const out = redactArgv(
+      ['mcp-server', '--token', 'short-token', '--password', 'pw', '--port', '8080'],
+      s,
+    )
+
+    expect(out).toEqual([
+      'mcp-server',
+      '--token',
+      PACKAGE_SECRET_PLACEHOLDER,
+      '--password',
+      PACKAGE_SECRET_PLACEHOLDER,
+      '--port',
+      '8080',
+    ])
+    expect(s.found.map((ref) => ref.field)).toEqual(['config.command[2]', 'config.command[4]'])
+  })
+
+  test('分离式敏感 flag 缺值或下一项仍是 flag 时不误杀，普通 port 原样', () => {
+    const s = sink()
+    const out = redactArgv(
+      [
+        'mcp-server',
+        '--token',
+        '--verbose',
+        '--password',
+        '--port',
+        '8080',
+        '--monkey',
+        'banana',
+        '--secret',
+        '--',
+        '--password',
+        'positional',
+      ],
+      s,
+    )
+
+    expect(out).toEqual([
+      'mcp-server',
+      '--token',
+      '--verbose',
+      '--password',
+      '--port',
+      '8080',
+      '--monkey',
+      'banana',
+      '--secret',
+      '--',
+      '--password',
+      'positional',
+    ])
+    expect(s.found).toEqual([])
   })
 
   test('executable 本身永不收敛', () => {
@@ -161,6 +218,34 @@ describe('carrier · 自由 JSON（frontmatterExtra / plugin options / 工作流
     const out = redactFreeJson({ blob: 'A1b2C3d4E5f6' }, s, 'x') as Record<string, unknown>
     expect(out.blob).toBe('A1b2C3d4E5f6')
   })
+
+  test('segment field 区分点号、方括号、数组下标与数字对象 key', () => {
+    const s = sink()
+    const out = redactFreeJson(
+      {
+        'a.b': { token: 'literal-dot' },
+        a: { b: { token: 'nested-dot' } },
+        'items[0]': { password: 'literal-bracket' },
+        items: [{ password: 'array-index' }],
+        numeric: { '0': { apiKey: 'numeric-key' } },
+      },
+      s,
+      'frontmatterExtra',
+    ) as Record<string, unknown>
+
+    expect(out).not.toEqual({})
+    expect(s.found.map((ref) => ref.field).sort()).toEqual(
+      [
+        ['frontmatterExtra', 'a.b', 'token'],
+        ['frontmatterExtra', 'a', 'b', 'token'],
+        ['frontmatterExtra', 'items[0]', 'password'],
+        ['frontmatterExtra', 'items', 0, 'password'],
+        ['frontmatterExtra', 'numeric', '0', 'apiKey'],
+      ]
+        .map(encodePackageSecretFieldSegments)
+        .sort(),
+    )
+  })
 })
 
 describe('carrier · plugin spec', () => {
@@ -175,10 +260,10 @@ describe('carrier · plugin spec', () => {
 })
 
 describe('范围边界（决策 18）', () => {
-  test('本模块只处理结构化字段——不提供任何技能文件树扫描入口', () => {
+  test('本模块只处理结构化字段——不提供任何技能文件树扫描入口', async () => {
     // 这条是**故意的负向断言**：技能目录里硬编码的凭据属于技能作者的责任
     // （proposal §3 非目标）。若将来有人加了扫描入口，这条会提醒他先改 RFC。
-    const api = Object.keys(require('../src/bundle/secrets') as Record<string, unknown>)
+    const api = Object.keys(await import('../src/bundle/secrets'))
     expect(api.some((k) => /scanSkill|skillTree|scanFiles/i.test(k))).toBe(false)
   })
 })

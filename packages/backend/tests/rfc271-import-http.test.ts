@@ -47,7 +47,10 @@ resources:
   - slug: workgroup-squad
     type: workgroup
     name: squad
-requirements: {}
+requirements:
+  mcpKinds: [local]
+  executables: [tool-server]
+  humanMembers: [source-alice]
 secrets:
   - resourceType: mcp
     resourceName: tools

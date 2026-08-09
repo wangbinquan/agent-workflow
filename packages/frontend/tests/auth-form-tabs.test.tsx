@@ -111,7 +111,24 @@ describe('/auth method discovery', () => {
     expect(screen.queryByTestId('auth-password-form')).toBeNull()
     expect(screen.queryByTestId('auth-oidc-method')).toBeNull()
     expect(screen.queryByRole('tablist')).toBeNull()
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(enUS.auth.token)))
+    // 事件驱动的焦点锚点，不要退回 `waitFor(() => document.activeElement === ...)`。
+    //
+    // 这条断言曾是 `docs/audit-backlog.md` 登记的「第七条同源 flaky」：轮询全局
+    // `document.activeElement` 直到超时，等的是 render → effect → `ref.focus()` 这条
+    // 跨 turn 的三段链。满载 runner 上越线即红——本机满载 gate 复现过一次，2026-08-09
+    // 又在 CI（ubuntu shard 1/3，5081ms 超时）红过一次，而同 run 的 macOS / windows
+    // 三条腿全绿：典型的时序敏感面，不是回归。
+    //
+    // 修法不是继续加超时——预算只要还是「猜一个够大的数」，负载一变就再越线。
+    //
+    // ⚠️ backlog 原文建议的 `expect(await findByLabelText(...)).toHaveFocus()` 在本仓
+    // **跑不了**：前端没装 jest-dom，`toHaveFocus` 会直接 `Invalid Chai property`。
+    // 可用的等价改法是把**查询提到轮询之外**：原写法每轮询一次就 `getByLabelText`
+    // 重扫一遍整棵树（这个页面的 DOM 很大——两段 SVG 插画 + 完整表单），满载 runner 上
+    // 光是这个重复扫描就能吃掉 5s 预算。元素在上面 `findByTestId` 时就已存在，真正
+    // 要等的只有 `ref.focus()` 那一步，所以只让轮询体读一个已经拿到的引用。
+    const token = await screen.findByLabelText(enUS.auth.token)
+    await waitFor(() => expect(document.activeElement).toBe(token))
   })
 
   test('valid bootstrap token is persisted for the handoff and preserves the redirect', async () => {

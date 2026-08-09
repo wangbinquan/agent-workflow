@@ -1,4 +1,4 @@
-// RFC-271 决策 29 — 六个域的 wire codec。
+// RFC-271 决策 29 — 七个域的 wire codec。
 //
 // **这是「wire 零变更」的兑现点。** AST 统一（./ast.ts），编码各域自理：
 //
@@ -6,8 +6,9 @@
 //   ImportSelectorRef  {type, name, ownerUsername?} 对象      ← type 必留
 //   RuntimeRef         裸 ULID  /  {kind:'project',name}      ← 存量 agents.* 不改
 //   CallRef            {nodeId, workflowName, workflowId?}    ← 存量 definition 不改
-//   BundleIdentityRef  local:<slug> / external:<token>
+//   BundleIdentityRef  local:<slug> / external:<token> / builtin:<type>/<name>
 //   BundleAgentSkillRef  local: / external: / project:<name>  ← 仅 agent.skills 槽
+//   BundleCallRef      local: / external: / name:<type>/<name> / builtin:<type>/<name>
 //
 // 域是**收窄**不是放宽：把 `name` 形态放进 agent 的 dependsOn 必须 parse 失败。
 // 每个 codec 只认自己那几个变体，其余一律 `null`（调用方转成该域自己的错误）。
@@ -163,7 +164,11 @@ export function decodeBundleIdentityRef(wire: string): ResourceRefAst | null {
   if (external !== null) return { k: 'external', token: external[1]! }
   const builtin = BUNDLE_BUILTIN_RE.exec(wire)
   if (builtin !== null) {
-    return { k: 'builtin', type: builtin[1] as AclResourceType, name: builtin[2]! }
+    return {
+      k: 'builtin',
+      type: builtin[1] as 'agent' | 'workflow',
+      name: builtin[2]!,
+    }
   }
   return null
 }
@@ -186,12 +191,17 @@ const BUNDLE_PROJECT_SKILL_RE = /^project:(.{1,128})$/
 export function decodeBundleAgentSkillRef(wire: string): ResourceRefAst | null {
   const project = BUNDLE_PROJECT_SKILL_RE.exec(wire)
   if (project !== null) return { k: 'project-skill', name: project[1]! }
-  return decodeBundleIdentityRef(wire)
+  const identity = decodeBundleIdentityRef(wire)
+  // Skill 表没有 builtin 列。不能因为 identity 域增加了 builtin，就把
+  // 这种无法解析的形态渗进 agent.skills 专属域。
+  return identity?.k === 'local' || identity?.k === 'external' ? identity : null
 }
 
 export function encodeBundleAgentSkillRef(ref: ResourceRefAst): string | null {
   if (ref.k === 'project-skill') return `project:${ref.name}`
-  return encodeBundleIdentityRef(ref)
+  if (ref.k === 'local') return `local:${ref.slug}`
+  if (ref.k === 'external') return `external:${ref.token}`
+  return null
 }
 
 // -----------------------------------------------------------------------------
@@ -224,9 +234,9 @@ export const REF_DOMAIN_VARIANTS = {
   agentSkill: ['id', 'project-skill'],
   runtimeId: ['id'],
   call: ['call'],
-  bundleIdentity: ['local', 'external'],
+  bundleIdentity: ['local', 'external', 'builtin'],
   bundleAgentSkill: ['local', 'external', 'project-skill'],
-  bundleCall: ['local', 'external', 'name'],
+  bundleCall: ['local', 'external', 'name', 'builtin'],
 } as const satisfies Record<string, readonly ResourceRefAst['k'][]>
 
 export { BUNDLE_SLUG_RE }

@@ -65,7 +65,10 @@ describe('引用 lifting', () => {
           plugins: '[]',
           skills: '[]',
         }),
-        res('mcp', 'M-in', 'tools', { type: 'remote', config: '{}' }),
+        res('mcp', 'M-in', 'tools', {
+          type: 'remote',
+          config: JSON.stringify({ url: 'https://tools.test/mcp' }),
+        }),
       ]),
     )
     const agentOp = out.bundle.ops.find((o) => o.kind === 'agent-create')!
@@ -133,6 +136,50 @@ describe('引用 lifting', () => {
     expect(nodes[2]!.workflowRef).toBe('name:workflow/ghost')
     expect(nodes[2]!.workflowName).toBeUndefined()
   })
+
+  test('call 目标是真 built-in ⇒ 保留 builtin 身份，不降级成可被同名行劫持的 name:', () => {
+    const root = res('workflow', 'W', 'root', {
+      definition: JSON.stringify({
+        $schema_version: 4,
+        inputs: [],
+        edges: [],
+        nodes: [
+          {
+            id: 'c1',
+            kind: 'call-workflow',
+            workflowName: 'aw-host',
+            workflowId: 'BUILTIN',
+          },
+        ],
+      }),
+    })
+    const builtin = {
+      ...res('workflow', 'BUILTIN', 'aw-host', { definition: '{}' }),
+      builtin: true,
+    }
+    const out = serializeClosure(
+      closureOf(
+        [root, builtin],
+        [
+          {
+            fromType: 'workflow',
+            fromId: 'W',
+            nodeId: 'c1',
+            targetType: 'workflow',
+            name: 'aw-host',
+            resolvedId: 'BUILTIN',
+          },
+        ],
+      ),
+    )
+    const node = (
+      out.bundle.ops[0]!.payload as unknown as {
+        definition: { nodes: Array<Record<string, unknown>> }
+      }
+    ).definition.nodes[0]!
+    expect(node.workflowRef).toBe('builtin:workflow/aw-host')
+    expect(out.bundle.ops).toHaveLength(1)
+  })
 })
 
 describe('脱敏 —— **结构不变**，且产物仍过严格 schema', () => {
@@ -184,8 +231,8 @@ describe('脱敏 —— **结构不变**，且产物仍过严格 schema', () => 
     const out = serializeClosure(
       closureOf([
         res('mcp', 'M', 'tools', {
-          type: 'remote',
-          config: JSON.stringify({ url: 'https://x.test', env: { GITHUB_TOKEN: 'ghp_real' } }),
+          type: 'local',
+          config: JSON.stringify({ command: ['tool'], env: { GITHUB_TOKEN: 'ghp_real' } }),
         }),
       ]),
     )

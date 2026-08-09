@@ -222,6 +222,7 @@ function McpDetailPage() {
             type="mcp"
             id={id}
             name={query.data?.name ?? id}
+            fence={{ expectedConfigHash: query.data?.operationConfigHash ?? '' }}
             variant="action"
             disabled={dirty || save.isPending || del.isPending || !loaded}
             disabledReason={t('resourcePackage.saveBeforeExport')}

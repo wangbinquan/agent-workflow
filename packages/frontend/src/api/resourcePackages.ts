@@ -108,6 +108,21 @@ export interface PackageImportReceipt {
 /** 六类共用一条路径形状。 */
 export type ExportableType = ResourcePackageType
 
+/** Root-only exact revision fence required by each export endpoint. */
+export interface ResourcePackageExportFenceByType {
+  agent: { expectedUpdatedAt: number; expectedAclRevision: number }
+  skill: {
+    expectedContentVersion: number
+    expectedMetaRevision: number
+    expectedAclRevision: number
+  }
+  mcp: { expectedConfigHash: string }
+  plugin: { expectedConfigHash: string }
+  workflow: { expectedVersion: number }
+  workgroup: { expectedVersion: number }
+}
+export type ResourcePackageExportFence = ResourcePackageExportFenceByType[ExportableType]
+
 const SEGMENT: Record<ExportableType, string> = {
   agent: 'agents',
   skill: 'skills',
@@ -121,14 +136,15 @@ export function exportPackageUrl(type: ExportableType, id: string): string {
   return `/api/${SEGMENT[type]}/${encodeURIComponent(id)}/export-package`
 }
 
-export async function downloadResourcePackage(
-  type: ExportableType,
+export async function downloadResourcePackage<T extends ExportableType>(
+  type: T,
   id: string,
+  fence: ResourcePackageExportFenceByType[T],
   signal?: AbortSignal,
 ): Promise<Blob> {
   return api.getBlob(
     exportPackageUrl(type, id),
-    undefined,
+    fence,
     signal === undefined ? undefined : { signal },
   )
 }

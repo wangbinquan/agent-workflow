@@ -261,7 +261,13 @@ describe('skill HTTP routes', () => {
 
   async function createHttpSkill(
     body: Record<string, unknown>,
-  ): Promise<{ id: string; name: string; sourceKind: string; aclRevision?: number }> {
+  ): Promise<{
+    id: string
+    name: string
+    sourceKind: string
+    aclRevision?: number
+    metaRevision: number
+  }> {
     const res = await req(h.app, '/api/skills', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -272,6 +278,7 @@ describe('skill HTTP routes', () => {
       name: string
       sourceKind: string
       aclRevision?: number
+      metaRevision: number
     }
   }
 
@@ -283,10 +290,14 @@ describe('skill HTTP routes', () => {
       frontmatterExtra: { author: 'me' },
     })
     expect(skill.sourceKind).toBe('managed')
+    expect(skill.metaRevision).toBe(0)
 
     const got = await req(h.app, `/api/skills/${skill.id}`)
     expect(got.status).toBe(200)
-    expect(((await got.json()) as { name: string }).name).toBe('foo')
+    expect((await got.json()) as { name: string; metaRevision: number }).toMatchObject({
+      name: 'foo',
+      metaRevision: 0,
+    })
   })
 
   test('invalid skill name returns 422', async () => {

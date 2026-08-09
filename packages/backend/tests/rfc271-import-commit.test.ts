@@ -35,6 +35,7 @@ import {
   verifyPreviewToken,
 } from '../src/services/resourcePackage/preview'
 import { commitResourcePackage } from '../src/services/resourcePackage/commit'
+import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -64,7 +65,9 @@ resources:
   - slug: mcp-tools
     type: mcp
     name: tools
-requirements: {}
+requirements:
+  mcpKinds:
+    - remote
 secrets: []
 danglingCallRefs: []
 `
@@ -111,7 +114,11 @@ resources:
   - slug: mcp-tools
     type: mcp
     name: tools
-requirements: {}
+requirements:
+  executables:
+    - tool-server
+  mcpKinds:
+    - local
 secrets:
   - resourceType: mcp
     resourceName: tools
@@ -142,63 +149,6 @@ danglingCallRefs: []
             },
           ],
           rootRef: 'local:mcp-tools',
-        }),
-      ),
-    },
-  ])
-
-const workgroupManifest = `formatVersion: 1
-exportedAt: 0
-root:
-  slug: workgroup-squad
-  type: workgroup
-  name: squad
-resources:
-  - slug: workgroup-squad
-    type: workgroup
-    name: squad
-requirements: {}
-secrets: []
-danglingCallRefs: []
-`
-
-const workgroupPackageZip = (): Uint8Array =>
-  encodeZip([
-    { path: 'manifest.yaml', bytes: utf8(workgroupManifest) },
-    {
-      path: 'bundle.json',
-      bytes: utf8(
-        JSON.stringify({
-          bundleVersion: 1,
-          ops: [
-            {
-              opId: 'op-1',
-              kind: 'workgroup-create',
-              slug: 'workgroup-squad',
-              payload: {
-                name: 'squad',
-                description: '',
-                instructions: '',
-                mode: 'free_collab',
-                switches: { shareOutputs: true, directMessages: false, blackboard: false },
-                maxRounds: 20,
-                completionGate: false,
-                clarifyBudget: 3,
-                fanOut: false,
-                members: [
-                  {
-                    memberType: 'human',
-                    username: 'alice',
-                    displayName: 'reviewer',
-                    roleDesc: 'reviews',
-                    sortOrder: 0,
-                  },
-                ],
-                leaderDisplayName: null,
-              },
-            },
-          ],
-          rootRef: 'local:workgroup-squad',
         }),
       ),
     },
@@ -732,7 +682,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
   test('reuse 不要求映射，也不消费附带的重复/无效映射', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const target = await seedWorkgroup(db, 'u1', 'squad')
-    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
@@ -753,7 +703,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
 
   test('new 工作组缺少已确认的映射 ⇒ 拒绝', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
@@ -771,7 +721,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
   test('free_collab 的 null leader 经 lowering 归一后可成功新建', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedUser(db, 'active-user', 'active')
-    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
@@ -792,7 +742,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const target = await seedWorkgroup(db, 'u1', 'squad')
     await seedUser(db, 'disabled-user', 'disabled')
-    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
@@ -837,7 +787,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     // 由**最后一条**生效。UI 上只显示一次选择，用户以为自己绑的是第一条。
     const db = createInMemoryDb(MIGRATIONS)
     await seedUser(db, 'u2', 'active')
-    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
@@ -861,7 +811,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     // 否则一个有两个人类席位的工作组永远导不进来。
     const db = createInMemoryDb(MIGRATIONS)
     await seedUser(db, 'u2', 'active')
-    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
     const baseline = verifyPreviewToken(box, preview.previewToken).humanBaseline
@@ -885,7 +835,7 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
     // 的 token。正因为正常路径打不到它，它更需要一条直接构造签名的测试——否则它被
     // 删掉、或者条件写反，都要等到一个真实用户拿着旧 token 提交时才暴露。
     const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const pkg = await parseResourcePackage(buildWorkgroupPackageZip())
     const actor = actorOf('u1')
     const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
     const verified = verifyPreviewToken(box, preview.previewToken)

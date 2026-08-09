@@ -101,9 +101,9 @@ describe('builtin: 词法层 —— **刻意宽松**的两处，连同它们为�
 })
 
 describe('域是收窄不是放宽 —— builtin 不得渗进别的槽', () => {
-  test('call 目标槽不接受 builtin:（它有自己的 late-bound `name:` 域）', () => {
-    expect(BundleCallRefWireSchema.safeParse('builtin:workflow/__agent_host__').success).toBe(false)
-    // call 槽表达「按名字绑」用的是 name:，语义已经覆盖 built-in workflow。
+  test('call 域接受 builtin 词法；具体槽的声明 type 由 definition walker 收窄', () => {
+    expect(BundleCallRefWireSchema.safeParse('builtin:workflow/__agent_host__').success).toBe(true)
+    expect(BundleCallRefWireSchema.safeParse('builtin:agent/__skill_merger__').success).toBe(true)
     expect(BundleCallRefWireSchema.safeParse('name:workflow/__agent_host__').success).toBe(true)
   })
 

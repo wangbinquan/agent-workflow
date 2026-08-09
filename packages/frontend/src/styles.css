@@ -16976,8 +16976,18 @@ mark.prior-comment-anchor[data-active='true'] {
   cursor: pointer;
 }
 
-.user-picker__option:hover {
+.user-picker__option:hover,
+.user-picker__option--active {
   background: var(--hover, rgba(127, 127, 127, 0.12));
+}
+
+.user-picker__option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.user-picker__option:disabled:hover {
+  background: transparent;
 }
 
 .user-picker__name {

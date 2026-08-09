@@ -903,6 +903,7 @@ export function WorkgroupEditor(props: {
             type="workgroup"
             id={props.initial.id}
             name={controller.state.server.name}
+            fence={{ expectedVersion: controller.state.serverRevision.version }}
             variant="action"
             disabled={unsafe || busy}
             disabledReason={t('resourcePackage.saveBeforeExport')}
