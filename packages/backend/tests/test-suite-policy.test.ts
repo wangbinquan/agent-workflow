@@ -195,6 +195,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // 的替身二进制是 `#!/bin/sh` 脚本），一条是 runner describe，其假运行时同样是
   // POSIX 脚本。parser 与判据本身由同文件的纯函数用例平台无关地覆盖。
   'packages/backend/tests/runtime-startup-inventory-2026-08-09.test.ts#skipIf': 3,
+  // 2026-08-09 MCP 可见性：两条 runner 用例在上面那个 `describe.skipIf` 之内，
+  // 不额外计数（skipIf 记在 describe 上）。
+
   // RFC-254: the three policy-render describes assert computeSandboxPolicy →
   // bwrap/SBPL output — POSIX sandbox specs never produced on win32 (D1),
   // rendered with host path helpers. The fourth (runner source-text lock) is

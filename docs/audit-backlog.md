@@ -202,6 +202,16 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
   （无法证明 ≠ 证否，fork 不该因此变红）。opencode 侧不需要新机制：它的 verified inventory 里 agents 是从
   `/agent` **真实读回**并做重名校验，skills 走 prompt 冻结块注入（内容就在 prompt 里，不存在「运行时不扫」
   这一失效模式），mcp/plugin 走密封 config。
+- ✅ **(P2，已修 2026-08-09) 非围栏 MCP 没连上时完全不可见**：`--allowedTools` 放行**全部**注入的 MCP
+  （`driver.ts:444` `mcpServerNames`），而 init 校验只覆盖**围栏的** local MCP（`fencedMcpServers`），
+  差集（远程 MCP + 非围栏 local）连不上时模型少了它声明的工具、照样跑完、照样 `done`，日志零字。
+  已加 `SpawnPlan.declaredMcpServers` + runner 的 `runtime-declared-mcp-unusable` 告警。
+  **失败判据刻意不动**：远端挂了是外部故障而非平台配置问题，RFC-242 T5 只让围栏 MCP 失败的选择保留；
+  本次只补可见性。**是否把「任何注入的 MCP 没连上」也升级为节点失败，是一个独立的产品决策，待定。**
+- 🟡 **(P3，已登记未修) MCP playground（`mcpRuntimeTest.ts`）不读 init 的 `mcp_servers` 连接状态**：
+  文件里的 `unusable` 全是 session 层面的，与 MCP 连接无关。该路径是**人在回路**的手动测试（用户会直接
+  看到模型调不动工具），静默失能危害远小于业务节点；但「没连上」与「连上了但工具不对」在 UI 上不可区分，
+  补一条 init 状态提示会让排障快很多。
 - ✅ **(P0，已修 2026-08-04) claude 的部分 permission 声明 ⇒ 零工具且无告警**：`permissionMap.ts:110-155` 无 `'*'` 键时
   baseline 为 deny，且纯 deny 声明**不产生任何 warning**。一份从 opencode 直译的 `{bash:'deny'}` 变成
   `--tools ""`（help 原文 "Use \"\" to disable all tools"）。opencode 侧内置 defaults 是 `{"*":"allow",…}`

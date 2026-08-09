@@ -1746,6 +1746,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // instead. Only fenced servers qualify — an unfenced/legacy MCP keeps its
     // historical best-effort behavior.
     const fencedMcpServers = new Set(plan.fencedMcpServers ?? [])
+    // 2026-08-09: everything injected, fenced or not — the visibility half.
+    const declaredMcpServers = new Set(plan.declaredMcpServers ?? [])
     let fencedMcpFailure: string | undefined
     /** claude's terminal `{type:'result', is_error:true}` message, if any. */
     let terminalResultError: string | undefined
@@ -1809,13 +1811,28 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         failControlBarrier()
         return
       }
-      if (fencedMcpServers.size > 0 && !fencedMcpInventorySeen) {
+      if ((fencedMcpServers.size > 0 || declaredMcpServers.size > 0) && !fencedMcpInventorySeen) {
         // Null = this line is not the inventory; keep looking. A non-null answer
         // is the one-shot startup inventory, so stop re-parsing every line after
         // it (the runtime freezes MCP availability there — RFC-242 §4.4).
         const unusable = driver.parseUnusableMcpServers?.(line) ?? null
         if (unusable !== null) {
           fencedMcpInventorySeen = true
+          // 2026-08-09 — the UNFENCED half of the same inventory. Its verdict
+          // stays best-effort on purpose (a remote outage is not a platform
+          // misconfiguration), but it can no longer be invisible: the node
+          // would otherwise finish `done` having silently lost tools it
+          // declares, which is precisely the shape this whole batch removes.
+          const declaredUnusable = unusable
+            .filter((name) => declaredMcpServers.has(name) && !fencedMcpServers.has(name))
+            .sort()
+          if (declaredUnusable.length > 0) {
+            log.warn('runtime-declared-mcp-unusable', {
+              nodeRunId: opts.nodeRunId,
+              servers: declaredUnusable,
+              detail: 'injected MCP server(s) did not come up; the node runs without their tools',
+            })
+          }
           const missing = unusable.filter((name) => fencedMcpServers.has(name)).sort()
           if (missing.length > 0) {
             fencedMcpFailure =

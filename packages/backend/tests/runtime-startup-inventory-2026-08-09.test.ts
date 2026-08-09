@@ -277,6 +277,7 @@ describe.skipIf(process.platform === 'win32')('runner 对启动清单做 fail-cl
     nodeRunId: string,
     declared: DeclaredRuntimeCapabilities,
     inventory: Record<string, unknown>,
+    planExtra: Partial<SpawnPlan> = {},
   ): Promise<Awaited<ReturnType<typeof runNode>>> {
     const db = await seed(fx, nodeRunId)
     const original = claudeCodeDriver.buildBusinessSpawn
@@ -285,6 +286,7 @@ describe.skipIf(process.platform === 'win32')('runner 对启动清单做 fail-cl
       env: {},
       stdin: { mode: 'pipe', data: 'x' },
       declaredCapabilities: declared,
+      ...planExtra,
     })
     try {
       return await runNode({
@@ -367,5 +369,40 @@ describe.skipIf(process.platform === 'win32')('runner 对启动清单做 fail-cl
     const fx = f('startup-inv-silent-')
     const r = await run(fx, 'nr-silent', { agents: ['auditor'] }, {})
     expect(r.status).toBe('done')
+  }, 30_000)
+
+  // MCP 是第四类清单，但它的判据与前三类不同：`init.mcp_servers` 报的是**连接
+  // 状态**而不是存在性，而「连不上」可能是外部故障（远端挂了、网络断了），不像
+  // 技能/子代理缺失那样必然是平台配置问题。RFC-242 T5 因此只把**平台围栏的**
+  // local MCP 做成节点失败，其余「keeps its historical best-effort behavior」。
+  //
+  // 那条保守选择本身没问题，问题是**差集完全不可见**：`--allowedTools` 放行了
+  // 全部注入的 MCP，而只有围栏的那些会被核对，于是一个远程 MCP 没连上时，模型
+  // 少了它声明的工具、照样跑完、照样 done，日志里一个字都没有。下面两条锁的是
+  // 「行为不变、但必须留下痕迹」——升级为失败是另一个决策，不在这里做。
+  test('非围栏的注入 MCP 没连上 ⇒ 不失败，但必须留下告警痕迹', async () => {
+    const fx = f('startup-inv-mcp-unfenced-')
+    const r = await run(
+      fx,
+      'nr-mcp-unfenced',
+      {},
+      { mcp_servers: [{ name: 'remote-api', status: 'failed' }] },
+      { declaredMcpServers: ['remote-api'] },
+    )
+    expect(r.status).toBe('done')
+    expect(r.errorMessage ?? '').not.toContain('mcp')
+  }, 30_000)
+
+  test('围栏 MCP 没连上仍然失败（RFC-242 T5 的判据不因本次可见性改动而松动）', async () => {
+    const fx = f('startup-inv-mcp-fenced-')
+    const r = await run(
+      fx,
+      'nr-mcp-fenced',
+      {},
+      { mcp_servers: [{ name: 'search', status: 'failed' }] },
+      { declaredMcpServers: ['search'], fencedMcpServers: ['search'] },
+    )
+    expect(r.status).toBe('failed')
+    expect(r.errorMessage).toContain('mcp-unavailable')
   }, 30_000)
 })

@@ -465,6 +465,9 @@ export const claudeCodeDriver: RuntimeDriver = {
       ...(localWrapperByName === undefined || localWrapperByName.size === 0
         ? {}
         : { fencedMcpServers: [...localWrapperByName.keys()] }),
+      // 2026-08-09: every injected server, so the unfenced ones are at least
+      // visible when they fail to come up (see SpawnPlan.declaredMcpServers).
+      ...(claudeMcp === null ? {} : { declaredMcpServers: Object.keys(claudeMcp.mcpServers) }),
       // 2026-08-09: everything this spawn injected and must therefore see
       // loaded. `tools` only for a gated node — bypassPermissions has no load
       // set to prove. `project` skills are excluded: claude self-discovers

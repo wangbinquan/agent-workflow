@@ -151,6 +151,19 @@ export interface SpawnPlan {
    */
   fencedMcpServers?: readonly string[]
   /**
+   * 2026-08-09 — EVERY MCP server the platform put into this spawn's config,
+   * fenced or not. `fencedMcpServers` (above) decides what FAILS the node;
+   * this decides what is at least VISIBLE.
+   *
+   * The gap it closes: `--allowedTools` admits all injected servers while only
+   * the fenced subset was ever checked, so a remote server that never connected
+   * left the model short of tools the node declares, finished the turn, and
+   * reported done with nothing in the log. Keeping the failure judgement narrow
+   * is deliberate (a remote outage is not a platform misconfiguration) — being
+   * silent about it was not.
+   */
+  declaredMcpServers?: readonly string[]
+  /**
    * 2026-08-09 — what the PLATFORM injected and the runtime must therefore
    * report as loaded at startup. The runner intersects this with the runtime's
    * own startup inventory and fails the node on any absence.
