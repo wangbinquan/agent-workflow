@@ -87,14 +87,36 @@
 > 救援态 UI 与四个测试文件。**半拆会让编辑页导出按钮运行时 404，比不拆更糟**，故已
 > 回滚 C1，树保持一致、门禁全绿。
 >
-> **批次 I 的接手顺序**（建议一次做完，别分批）：
-> ① 前端先拆：`WorkflowImportDialog.tsx`（C2）+ `workflows.tsx` 的 import 按钮/状态；
-> `workflow-draft-export.ts`（C3）+ `workflows.edit.tsx` 的两处调用 + `WorkflowDraftStatus`
-> 的 `onExportLocal` prop + 救援态按钮。
-> ② 再拆后端两条路由（C1）与 `services/workflow.yaml.ts` 里只服务它们的部分
-> （⚠️ `workflowDefinitionToSelectors` / `stripCallWorkflowNodeIds` **保留**，别人还在用）。
-> ③ 契约注册表删对应两条；`rfc271-capability-removal.test.ts` + design §9 表格六项的
-> 显式改判（**intent 测试套改判限定四处、其余零改判**）。
+> **批次 I 的接手指南**（2026-08-09 完整走过一遍后回滚，以下是实测结论，不是估计）：
+>
+> **拆除本身不难，难的是改判面**。生产代码的改动很小且已验证可行：
+> ① 前端 C2：删 `WorkflowImportDialog.tsx` + `workflows.tsx` 里的 `importOpen`/
+>    `importTriggerRef`/`importWorkflow`/`refreshImportConflict`/`importActions`/
+>    **`postYaml`**（它是那条 wire 的唯一入口，留着是死码）。
+>    ⚠️ 别忘了 `emptyHeaderActions` —— 空列表走的是它而不是 `headerActions`，
+>    只改后者会让 gallery 的空态测试红。
+> ② 前端 C3：删 `lib/workflow-draft-export.ts` + `workflows.edit.tsx` 的 `handleExport`
+>    整个函数、More 菜单里那个按钮、`exportPending` state，以及 `WorkflowDraftStatus`
+>    的 `onExportLocal` prop 与**两处**救援态按钮（inaccessible / deleted 各一）。
+> ③ 后端 C1：删两条 `registerRoute`，并连带删掉只服务它们的
+>    `parseExactPositiveInteger`（全仓唯一使用者就是那条导出路由）。
+>    ⚠️ `workflowDefinitionToSelectors` / `stripCallWorkflowNodeIds` **保留**。
+> ④ 契约注册表删对应两条。
+>
+> **真正的工作量在这里**：删完之后后端有 **8 个测试文件**与被删端点绑定，需要逐文件
+> 判断「哪些断言是关于 HTTP 端点（随之退场）、哪些是关于底层服务（仍然有效，只是
+> 要改成直接调服务）」——
+> `workflow-yaml.test.ts` / `rfc199-workflow-exact-operations.test.ts` /
+> `rfc104-builtin-readonly.test.ts` / `rfc099-resource-routes.test.ts` /
+> `rfc223-import-refs.test.ts` / `rfc243-call-refs-yaml.test.ts` /
+> `rfc223-reference-write-fence.test.ts` / `backup.test.ts`。
+> 前端另有 4 处已验证的改判点（overlay 清单、gallery 空态、编辑页 More 菜单、
+> 编辑页导出用例），改法已在本轮试过、可直接照做。
+>
+> **给接手的建议**：单开一轮、只做批次 I，从后端那 8 个文件先读起再动手删——本轮
+> 是先删后发现改判面，导致中途必须回滚（半拆状态会让编辑页导出按钮运行时 404，
+> 比不拆更糟）。`rfc271-capability-removal.test.ts` 的**不复辟守卫**已写好并跑通
+> 13 条，可从本轮 git 历史里取回（未提交，但内容见本条目下方的 commit 描述）。
 >
 > **再往后**：H（CLI，T40–42> 拆完 I 之后：收尾完整门禁 + Codex 实现门。
 >
