@@ -77,6 +77,13 @@ interface Draft {
   inputMappings: Record<string, WebhookInputMapping>
   description: string
   goal: string
+  /**
+   * 行里 launch payload 的原样副本。UI 只拥有它真正渲染的那几个键（见
+   * `payloadOf`），其余合法字段必须原样带回——否则在界面上改个名字保存，就会
+   * 把只能经 API 设置的键（agent 端口 `inputs`、`allowClarify`、`maxDurationMs`
+   * / `maxTotalTokens`、事件仓的 `workingBranch` / `autoCommitPush`）静默删掉。
+   */
+  payloadBase: Record<string, unknown>
   maxConsecutiveFires: number
   autoRegisterRepos: boolean
 }
@@ -99,6 +106,7 @@ const EMPTY_DRAFT: Draft = {
   inputMappings: {},
   description: '',
   goal: '',
+  payloadBase: {},
   maxConsecutiveFires: 3,
   autoRegisterRepos: true,
 }
@@ -132,18 +140,38 @@ function draftFromRow(row: WebhookTrigger): Draft {
         : {},
     description: row.launchKind === 'agent' ? (payload.description ?? '') : '',
     goal: row.launchKind === 'workgroup' ? (payload.goal ?? '') : '',
+    payloadBase: { ...((row.launchPayload ?? {}) as Record<string, unknown>) },
     maxConsecutiveFires: row.maxConsecutiveFires,
     autoRegisterRepos: row.autoRegisterRepos,
   }
 }
 
+/** scratch 与远端专属选项互斥（shared `scratch-remote-only-option`）——切空间时显式删除。 */
+const SCRATCH_FORBIDDEN_KEYS = ['workingBranch', 'autoCommitPush'] as const
+
+/**
+ * 序列化只覆盖 UI 真正拥有的键，其余从 `payloadBase` 原样带回。
+ * 早期实现是「按 kind 重新拼一个 payload」，于是只要在界面上保存一次，凡是
+ * UI 不渲染的合法字段（agent 端口 `inputs` / `allowClarify` / 资源上限）就会被
+ * 后端整体覆盖掉——RFC-268 实现门 P1（2026-08-09）实证，归属 RFC-257。
+ */
 function payloadOf(draft: Draft): unknown {
-  const space = draft.space === 'scratch' ? { scratch: true as const } : {}
-  if (draft.launchKind === 'workflow') return { inputs: draft.inputMappings, ...space }
-  if (draft.launchKind === 'agent') {
-    return draft.description.trim() === '' ? space : { description: draft.description, ...space }
+  const payload: Record<string, unknown> = { ...draft.payloadBase }
+  if (draft.launchKind === 'workflow') {
+    payload.inputs = draft.inputMappings
+  } else if (draft.launchKind === 'agent') {
+    if (draft.description.trim() === '') delete payload.description
+    else payload.description = draft.description
+  } else {
+    payload.goal = draft.goal
   }
-  return { goal: draft.goal, ...space }
+  if (draft.space === 'scratch') {
+    payload.scratch = true
+    for (const key of SCRATCH_FORBIDDEN_KEYS) delete payload[key]
+  } else {
+    delete payload.scratch
+  }
+  return payload
 }
 
 function bodyOf(draft: Draft): Record<string, unknown> {

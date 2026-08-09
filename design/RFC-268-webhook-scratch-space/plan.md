@@ -1,6 +1,6 @@
 # RFC-268 · 实施计划
 
-> 状态：In Progress（2026-08-07 用户已批准；明确跳过外部设计门）
+> 状态：Done（2026-08-09 收口；2026-08-07 用户已批准并明确跳过外部设计门，实现门已于收口时补跑）
 
 ## 1. 依赖与边界
 
@@ -14,7 +14,7 @@
 
 | 任务   | 内容                                                                                                               | 验收                                                    |
 | ------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| **T1** | RFC 三件套、`design/plan.md` 索引、`STATE.md` In Progress 条目；记录用户批准与设计门豁免                            | 文档自洽、链接可解析；实施授权可追溯                     |
+| **T1** | RFC 三件套、`design/plan.md` 索引、`STATE.md` In Progress 条目；记录用户批准与设计门豁免                           | 文档自洽、链接可解析；实施授权可追溯                    |
 | **T2** | shared Webhook 三模板增加 canonical `scratch:true` 与 remote-only cross-field guard；更新注释与 schema 测试        | AC-1、AC-2、AC-4；旧 fixtures 深等值不变                |
 | **T3** | 保存门接入 effective `autoRegisterRepos`；create/update 完整候选验证；launch-config 条件 CAS 防并发 partial update | AC-3；并发 barrier 测试最终行永远是联合校验过的一代配置 |
 | **T4** | `WebhookLaunchSpace` + 三形态共同渲染；scratch 在 repo resolver 前分流；matched snapshot 同源                      | AC-5、AC-6、AC-8、AC-9                                  |
@@ -96,3 +96,49 @@
 - 共享 `main` 的当前 typecheck 仍被并行 RFC-269 未完成的 `code-host-call` 穷尽分支
   挡住；外部实现门也未在私有源码不可安全披露的边界下运行。故 T8 与 Done 状态
   暂不关闭；以上限制不改写为 RFC-268 功能失败，也不擅自修补/提交 RFC-269。
+
+## 7. 2026-08-09 T8 收口（实现门 + AC 复核）
+
+当初挡住 T8 的两条外部阻塞都已解除：RFC-269 已 Done 并入 `main`；`main` 最新
+CI（`dd72db0e`）success —— RFC-268 的代码已随 RFC-270 / RFC-271 的绿跑过多轮完整
+门禁。Mermaid 那条是他人 RFC 的已登记 flake，与本 RFC 零交集。
+
+**AC 复核（逐条有绿 oracle）**：shared `rfc268-webhook-scratch-space` +
+`webhook-schema` 19/19（AC-1…4）；backend `rfc268-webhook-scratch-launch` +
+`rfc257-webhook-dispatch` + `rfc257-webhook-management` 33/33（AC-3、5、6、8、
+10 及 AC-7 的四项真实 git 断言：`branch --show-current` / `rev-list --count` /
+空 tree / `git remote` 空）；frontend `wt-space-*` 往返 + `wt-scratch-notice` +
+请求 body 精确锁（AC-11…13）。AC-9 为结构证明：分流在 `webhookDispatch.ts:537`
+的三元里完成，启动仍只有 `assertScheduledTargetUsable` + `startExecution` 一个
+收口。AC-14 文档五点齐备。
+
+**Codex 实现门**（`codex exec`，pin 到 `d870588e` 的分离 worktree + 真
+`bun install`，区间只含本提交 22 个文件）：**needs-attention，1 P1 + 1 P2，逐条
+核实全部属实**。两条的 owning commit 都**不是** RFC-268 —— `git show d870588e^`
+证明缺陷在 RFC-257 时期即已存在，本 RFC 只是把它们照了出来。按用户拍板**当场
+修掉**（含红→绿变异实证：三条前端用例与一条后端用例在 pin worktree 的修复前
+代码上全红）：
+
+- **P1（RFC-257）**：`payloadOf` 按 kind 重拼 payload ⇒ 在 UI 里改一下触发器
+  名字保存，就会把 UI 不渲染但 schema 合法的字段整体覆盖掉 —— agent 的端口
+  `inputs` 与 `allowClarify`、三 kind 共有的 `maxDurationMs` / `maxTotalTokens`、
+  事件仓的 `workingBranch` / `autoCommitPush`。**带端口模板的 agent 触发器会丢
+  掉全部端口值**。修法：Draft 新增 `payloadBase` 保留行内 payload 原样，序列化
+  只覆盖 UI 真正拥有的键；切 scratch 时显式删远端专属键，切回时删 `scratch`
+  键（而不是留成 false）。锁：`packages/frontend/tests/rfc257-trigger-payload-preserve.test.tsx` 3 条。
+- **P2（RFC-257）**：`assertScheduledTargetUsable` 同时做目标可用性与渲染后
+  payload·输入校验，而 dispatcher 把它抛出的**全部**异常记成
+  `skipped-owner-invalid` —— 与枚举自身语义矛盾（`launch-failed` 才是「owner
+  有效但启动失败（payload-invalid）」），且 `skipped-*` 分支不写
+  `lastStatus/lastError`、不推进 `consecutiveFailures`，于是**配错的触发器永远
+  触不了熔断**、卡片一直挂旧状态。修法：按错误类别分流（`ValidationError` →
+  `launch-failed` 且计入连续失败；NotFound / Forbidden / 其它 → 维持
+  `skipped-owner-invalid`），`launch-failed` 收尾抽成两处共用的
+  `recordLaunchFailed`。锁：`rfc257-webhook-dispatch.test.ts` 新增 describe 两条
+  （含「目标缺失仍是 skipped-owner-invalid 且失败水位不动」的反向锁）。
+
+门禁：三包 typecheck 0 错；改动文件 eslint `--max-warnings 0` 与 prettier 全绿；
+上述定向套件全绿。共享树上并发 session 正在改 `TriggersPanel.tsx` 与
+`rfc257-webhook-pages-inline.test.tsx`（`useIsAdmin` 实时降级门），其未完成用例
+`downgrade clears an admin draft…` 当前为红 —— 该红由 `git diff` 证明属对方新增
+用例，不在本次改动范围内，未触碰、未修复、未提交。

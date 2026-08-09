@@ -637,3 +637,64 @@ describe('RFC-257 T6 · dispatch 集成', () => {
     })
   })
 })
+
+// RFC-268 实现门 P2（2026-08-09）翻出的 RFC-257 存量归因错：
+// `assertScheduledTargetUsable` 同时做「目标可用性」与「渲染后 payload·输入校验」，
+// 早期实现把它抛出的**所有**异常记成 skipped-owner-invalid —— 与枚举语义矛盾
+// （launch-failed 才是「owner 有效但启动失败（payload-invalid）」），且 skipped-*
+// 分支不写 lastStatus/lastError、不推进 consecutiveFailures，于是**配错的触发器
+// 永远触不了熔断**。这组测试锁住按错误类别分流后的两侧归属。
+describe('RFC-257 · gate 失败归因（launch-failed vs skipped-owner-invalid）', () => {
+  /** 必填 git 输入 + 无分支事件 = 渲染出空 ref，`workflow-inputs-invalid`。 */
+  async function gitInputWorkflow(h: Harness): Promise<string> {
+    const id = ulid()
+    await h.db.insert(workflows).values({
+      id,
+      name: 'git-input-wf',
+      description: '',
+      definition: JSON.stringify({
+        $schema_version: 1,
+        inputs: [{ kind: 'git', key: 'repo', label: 'Repo', required: true }],
+        nodes: [],
+        edges: [],
+      }),
+      version: 1,
+      ownerUserId: h.ownerId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    return id
+  }
+
+  test('输入校验失败 → launch-failed，并推进 consecutiveFailures（不再伪报 owner 失效）', async () => {
+    const h = await harness()
+    const t = await insertTrigger(h, {
+      launchRefId: await gitInputWorkflow(h),
+      launchPayload: JSON.stringify({ inputs: { repo: { kind: 'event-branch' } } }),
+    })
+    // 无 branch 的事件（GitHub 普通 PR 评论即此形态）：代包渲染出空 ref。
+    await dispatchOnce(h, ev({ branch: undefined }))
+    const fires = await firesOf(h, t)
+    expect(fires.map((f) => f.outcome)).toEqual(['launch-failed'])
+    expect(fires[0]?.error ?? '').toContain('launch inputs failed validation')
+    expect(h.launched.length).toBe(0)
+    const row = (
+      await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, t)).limit(1)
+    )[0]!
+    expect(row.lastStatus).toBe('failed')
+    expect(row.consecutiveFailures).toBe(1)
+    expect(row.lastError ?? '').toContain('launch inputs failed validation')
+  })
+
+  test('目标缺失 / 不可见仍是 skipped-owner-invalid，且不推进失败水位', async () => {
+    const h = await harness()
+    const t = await insertTrigger(h, { launchRefId: ulid() }) // 不存在的 workflow
+    await dispatchOnce(h, ev())
+    const fires = await firesOf(h, t)
+    expect(fires.map((f) => f.outcome)).toEqual(['skipped-owner-invalid'])
+    const row = (
+      await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, t)).limit(1)
+    )[0]!
+    expect(row.consecutiveFailures).toBe(0)
+  })
+})

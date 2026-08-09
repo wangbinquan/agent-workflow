@@ -56,6 +56,9 @@
   **定式**：共享树上做完改动要过门禁时，别在主工作树跑，改用 **pin 到自己 commit 的分离 worktree**（与 Codex review 那条同一个理由、同一个姿势）：`git worktree add --detach <wt> <yoursha>` → 把自己**尚未提交**的文件 `cp` 进去 → `bun install --frozen-lockfile` → 在 wt 里跑 `gate:local`。这样门禁看到的是「干净 HEAD + 只有你的改动」，红了就一定是你的。
   **判别（来不及重跑时）**：先 `git status --porcelain` 看有没有你没动过的 ` M` 文件，再 `ls -lT` 看它们的 mtime 是不是落在门禁运行窗口内——是，就基本可以判定为并发写入窗口，**但仍要在干净 worktree 复跑确认**，不能就此放行。
 
+- **并发 session 跑 Playwright ⇒ 仓根多出 `test-results/` ⇒ backend 的「工作目录泄漏」守卫把红扣到随机一条无辜测试头上**（2026-08-09 实测）。`packages/backend/tests/setup.ts:97-102` 在每条测试前后对比 **cwd（= 共享仓根）** 的目录条目，多出来就抛
+  `Test leaked N entries into its working directory`。而 `test-results/` 是 Playwright 的输出目录、**被 `.gitignore` 覆盖**，所以 `git status --porcelain` 完全看不见它——上一条的「查没动过的 ` M` 文件」判别法在这里失效。实测一次 `gate:local` 里两条毫不相干的红（`worktree-files-service > listWorktreeDir 截断` 与 `rfc187-merge-salvage > mergeBackNodeIso 冲突 repo`）根因同一个：另一个 session 在那十几分钟里跑了 e2e。**识别特征**：①报错正文是 leak 守卫而不是业务断言；②泄漏条目名与被点名的测试毫无关系（`test-results` / `playwright-report` / `.last-run.json`）；③单跑该文件全绿。**定式**：先看报错里的**泄漏条目名**再谈归属——名字不属于你改的子系统就别去改那条测试；同期做 e2e 的 session 会持续复现，pin worktree 跑门禁可彻底规避（worktree 有自己的 cwd）。
+
 - **全部工作直接在 `main`**，不开分支/PR；push main 即触发 CI。
 - **提交只用一步 `git commit -- <精确路径>`**，别 `git add` 后再 commit——并发 session 的 commit 会把你 staged 的卷进它（2026-06-24 事故；2026-08-06 复犯：webhook 模板变量 chips 的 10 文件 add 后隔了几轮工具调用才 commit，被 RFC-254 session 的 `6a771fdb` 整体卷走，message 未及该功能——add 与 commit 之间任何 await 都是暴露窗口，untracked 先 add 后**立刻**同一条命令串里 commit）。untracked 新文件须先 `git add <精确路径>`，用**显式正向清单**（污染大时别 `git add packages/`）。
 - **绝不 `git commit --amend`**：HEAD 可能已是并发 session 的 commit，amend 会重写他们的（defd9958 覆 94436c9f）。后续=新 pathspec commit；恢复=reflog + `reset --soft`（非 `--hard`）。
@@ -288,6 +291,30 @@ packages/backend/src/db/schema.ts` 把真实列读一遍，别信自己对形状
   matches」才发现）。定式：**键的拼接抽成一个导出函数**，两端都调它；分隔符用可见字符
   （`#`），不要用空格或不可见控制字符。提交前扫一遍：
   `rg -n $'[\x00-\x08\x0b\x0c\x0e-\x1f]' packages/*/src --binary`。
+
+- **编辑表单的序列化必须「以行内原值为基底、只覆盖 UI 真正拥有的键」，不能「按 kind 重新
+  拼一个」**（RFC-268 实现门 P1 实测，缺陷归属 RFC-257）：webhook 触发器向导只渲染 payload
+  的一小部分（workflow=`inputs` / agent=`description` / workgroup=`goal`），而 payload schema
+  允许更多合法键（agent 端口 `inputs`、`allowClarify`、`maxDurationMs` / `maxTotalTokens`、
+  `workingBranch` / `autoCommitPush`）。`payloadOf` 是「按 kind 重拼」，于是任何人在界面上
+  **只改一下名字**保存，PUT 就把那些只能经 API 设置的字段整体覆盖掉——**带端口模板的 agent
+  触发器会丢光端口值**，全程零报错、零校验失败（新 payload 本身完全合法）。凡「UI 渲染的
+  字段 ⊊ schema 允许的字段」的编辑面都有这个洞，PATCH 语义的后端也救不了（前端发的是整
+  对象）。定式：Draft 里存一份行内原值（`payloadBase`），序列化 `{...base}` 后只写 UI 拥有
+  的键，互斥字段在切换时**显式 delete**（删键，不要留成 `false`——`z.literal(true).optional()`
+  这类 schema 会拒）。判据测试：造一个带 UI 不渲染字段的行 → 在 UI 里只改名字保存 →
+  断言请求体逐键保留（模板见 `packages/frontend/tests/rfc257-trigger-payload-preserve.test.tsx`）。
+
+- **一个 assert 函数同时承担两类校验时，调用方的 catch 必须按错误类别分流**（RFC-268 实现门
+  P2 实测，缺陷归属 RFC-257）：`assertScheduledTargetUsable` 既查目标可用性（缺失 / 不可见 /
+  built-in 不可调度）又查渲染后的 payload·输入合法性，而 webhook dispatcher 把它抛出的**全部**
+  异常记成 `skipped-owner-invalid`。后果不止是错误信息难看：`skipped-*` 分支按设计不写
+  `lastStatus/lastError`、不推进 `consecutiveFailures`，于是**配错的触发器永远触不了熔断**、
+  卡片一直挂着上一次的旧状态，而枚举注释里明明写着 `launch-failed` 才是「owner 有效但启动
+  失败（payload-invalid）」——**代码与自己的枚举语义矛盾，没有任何测试能靠读注释发现**。
+  定式：catch 里按错误类（`ValidationError` vs `NotFound`/`Forbidden`）分流到不同 outcome，
+  每类各写一条断言并配**反向锁**（「目标缺失仍是 skipped-\* 且失败水位不动」），否则下一次
+  重构很容易把两条并回一条。
 
 ## 删端点 / 删能力时，`e2e/` 不在任何本地门禁的覆盖面内（RFC-271 批次 I 实测）
 

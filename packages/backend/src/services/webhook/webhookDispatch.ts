@@ -38,6 +38,7 @@ import {
   type TriggerRule,
 } from '@/services/webhook/matching'
 import { unsealRepoUrl } from '@/services/repoCredentials'
+import { ValidationError } from '@/util/errors'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import { createLogger } from '@/util/log'
 import { resolveOpencodeCmd } from '@/util/opencode'
@@ -571,6 +572,19 @@ async function fireTrigger(
       source: 'daemon',
     })
     const rendered = renderWebhookLaunch(trigger, fresh.name, event, space)
+    /** launch-failed 收尾：fires 行 + 触发器行的失败水位（熔断计数的唯一来源）。 */
+    const recordLaunchFailed = async (msg: string): Promise<void> => {
+      await recordFire(db, { ...base, outcome: 'launch-failed', supersededTaskId, error: msg })
+      await db
+        .update(webhookTriggers)
+        .set({
+          lastStatus: 'failed',
+          lastError: msg,
+          consecutiveFailures: sql`${webhookTriggers.consecutiveFailures} + 1`,
+          updatedAt: now,
+        })
+        .where(eq(webhookTriggers.id, triggerId))
+    }
     try {
       await assertScheduledTargetUsable(
         db,
@@ -580,6 +594,17 @@ async function fireTrigger(
         await deps.getDefaultRuntime(),
       )
     } catch (err) {
+      // 这个 gate 同时做两件事：目标可用性（缺失 / 不可见 / built-in 不可调度）与
+      // 渲染后的 payload·输入校验。早期实现把两类异常一律记成 skipped-owner-invalid
+      // ——与枚举自身的语义矛盾（launch-failed 才是「owner 有效但启动失败
+      // （payload-invalid）」），后果是配错的触发器**永远触不了熔断**、卡片一直挂着
+      // 上一次的旧状态。按错误类别分流（RFC-268 实现门 P2，2026-08-09；归属 RFC-257）：
+      //   ValidationError            → payload / 输入非法 → launch-failed（计入连续失败）
+      //   NotFound / Forbidden / 其它 → 目标不可用或 owner 失去启动权 → skipped-owner-invalid
+      if (err instanceof ValidationError) {
+        await recordLaunchFailed(errText(err))
+        return
+      }
       await recordFire(db, {
         ...base,
         outcome: 'skipped-owner-invalid',
@@ -633,22 +658,7 @@ async function fireTrigger(
         })
         .where(eq(webhookTriggers.id, triggerId))
     } catch (err) {
-      const msg = errText(err)
-      await recordFire(db, {
-        ...base,
-        outcome: 'launch-failed',
-        supersededTaskId,
-        error: msg,
-      })
-      await db
-        .update(webhookTriggers)
-        .set({
-          lastStatus: 'failed',
-          lastError: msg,
-          consecutiveFailures: sql`${webhookTriggers.consecutiveFailures} + 1`,
-          updatedAt: now,
-        })
-        .where(eq(webhookTriggers.id, triggerId))
+      await recordLaunchFailed(errText(err))
     }
   })
 }
