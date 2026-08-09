@@ -522,15 +522,15 @@ next question` 于 2026-08-08（run 31208702050，ubuntu shard 3/3）红，耗�
 
 实际生效的改法是**把查询提到轮询之外**：原写法每轮询一次就 `getByLabelText` 重扫一遍整棵树（该页面 DOM 很大——两段 SVG 插画 + 完整表单），满载 runner 上光这个重复扫描就能吃掉 5s 预算；改成只让轮询体读一个已拿到的引用。本机连跑 3 次 9/9 全绿。**这条经验对另外三条同样适用**：先看轮询体里有没有藏着一次全树查询，那往往比「跨 turn 的 React commit」更能解释预算耗尽。
 
-  **⚠️ 2026-08-10 复发一次，说明「提查询出轮询」只是压低了概率而没有消除竞态**：本机满载
-  `gate:local`（backend 四分片与 frontend 736 文件并发），失败逐字仍是
-  `expected <body>…</body> to be <input class="form-input" …>`，实测 5072ms；**同一棵树**
-  在几分钟前的另一次 gate 里 frontend 736 文件全绿（两次只差 vitest seed），隔离下连跑
-  3 次 9/9 全绿、单次仅 1.8s。归属明确不是触发它的那次改动：本轮 diff 只有 backend 的
-  `codeHost/connections.ts`、`scheduler.ts`、`envelope.ts`、`pluginInstaller.ts`、
-  `routes/plugins.ts` 与三个新 backend 测试 + 三份 md，**零前端源码与零前端测试改动**。
-  结论：这条仍是**未修完**的时序敏感面，等的还是 `ref.focus()` 那一步跨 turn 的 commit；
-  真正的正解是给它一个事件驱动锚点（等一次 focus 事件），而不是继续依赖轮询预算。
+**⚠️ 2026-08-10 复发一次，说明「提查询出轮询」只是压低了概率而没有消除竞态**：本机满载
+`gate:local`（backend 四分片与 frontend 736 文件并发），失败逐字仍是
+`expected <body>…</body> to be <input class="form-input" …>`，实测 5072ms；**同一棵树**
+在几分钟前的另一次 gate 里 frontend 736 文件全绿（两次只差 vitest seed），隔离下连跑
+3 次 9/9 全绿、单次仅 1.8s。归属明确不是触发它的那次改动：本轮 diff 只有 backend 的
+`codeHost/connections.ts`、`scheduler.ts`、`envelope.ts`、`pluginInstaller.ts`、
+`routes/plugins.ts` 与三个新 backend 测试 + 三份 md，**零前端源码与零前端测试改动**。
+结论：这条仍是**未修完**的时序敏感面，等的还是 `ref.focus()` 那一步跨 turn 的 commit；
+真正的正解是给它一个事件驱动锚点（等一次 focus 事件），而不是继续依赖轮询预算。
 
 - ⏳ **第十一条 flaky：`rfc131-review-reject-aging-prior-output.test.ts > RFC-131 验收#4 组合`**（2026-08-09 干净 worktree 门禁复现一次）。与前面几条**不同形态**，值得单列：它不是前端 `waitFor` 轮询越线，而是 **bun:test 的每用例 5000ms 硬上限**被撞穿——日志逐字为 `this test timed out after 5000ms`，实测 6252.89ms。**归属明确不是触发它的那次改动**：该轮 diff 只有一个前端测试 + 两份 md + 两个 RFC-271 后端测试文件，与 clarify / review / 老化链路零耦合；同 run 另外三个 backend 分片全绿，隔离下单跑该文件连续 3 次 3/3 全绿。**现场负载**：并发 session 同时在跑自己的门禁，两套四分片抢核。**紧邻线索**：同 shard 日志在该用例前一行打了 `killed 1 dangling process`，与第五条（RFC-224 取消预言机超时后 shard 挂死）出现过的字样相同，值得一并查是不是同一个回收路径。**同族第二例（2026-08-09 同日，干净 worktree 门禁）**：`scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts > S-2 multi-repo in-process retry rollback`，同样逐字 `this test timed out after 5000ms`，实测 5609.40ms；隔离下连跑 3 次 2/2 全绿；同 run 另外三个 backend 分片全绿；本轮 diff 只有 resourcePackage / routes / fusion / 两个前端详情页，与多仓 worktree 回滚链路零耦合。两例合看，**共同点不是某条用例，而是「一条串了多段异步真实 IO（git worktree / 子进程 / DB 事务）的用例 + 满载 runner」**——本机当时有两套四分片门禁在抢核。**同族第三例（2026-08-10，干净 worktree 门禁）**：`rfc098-process-governance.test.ts > RFC-098 WP-8 — runner escalation against a stubborn child`，逐字 `this test timed out after 5000ms`，实测 5515.22ms；隔离下连跑 3 次 5/5 全绿；同 run 另外三分片全绿；本轮 diff 只有 RFC-271 的导出/预检与两个前端文件，与进程治理链路零耦合。**`rfc098 WP-8` 已复现两次且耗时稳定**（5515.22ms / 5528.45ms，相差 13ms）——这条不是随机噪声，而是**稳定地略微超预算**：它要跑完「超时 + grace + margin」三段真实等待，本身的下界就贴着 5000ms，满载时必然越线。对处置很有用：这类用例该做的不是「加超时」而是**把预算算清楚**（三段等待的标称值加起来是多少、留多少余量），或者把 kill 时序做成可注入的假时钟。**三例已经足以定型**：`rfc131-review-reject-aging`（多段 clarify/review 异步链）、`scheduler-audit-s02`（多仓 git worktree 回滚）、`rfc098 WP-8`（子进程 + 孙进程组杀），共同点是**一条用例串了多段真实异步 IO**（子进程 / git / 文件系统 / DB 事务），在满载 runner 上撞穿 bun:test 的每用例 5000ms 硬上限。它们与前面几条前端 `waitFor` 越线是**不同机理、同一后果**，处置时可以合并考虑但修法不同：前端那批要换事件驱动锚点，这批要么把多段链拆成各自可断言的单元、要么给这类用例一个显式的更高预算（并写明为什么这条需要）。**修法方向与前几条一致**：不要再把 5000ms 往上调——该用例串了 deferred self-clarify → review REJECT → 重做三段异步链，正解是给它一个确定性的完成信号（等 review 状态落库的事件，而不是等墙钟），或把三段拆成各自可断言的单元。**同族第三例（2026-08-09 同日，本机 `gate:local` 满载）**：`scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts > gap4 — wrapper-loop exitCondition referencing an out-of-loop node > an old invalid snapshot keeps the latest outer value instead of false-exiting`，同样逐字 `this test timed out after 5000ms`，实测 6189.89ms；隔离下单跑该文件 2 pass / 0 fail / 2.44s（**比预算快一倍有余**，可见不是逻辑变慢而是被抢核）；紧邻线索同样命中——同 shard 日志在该用例前打了 `killed 1 dangling process`。**归属明确不是触发它的那次改动**：该轮我的 diff 只有 `design/plan.md`（纯文档）+ 新增一个 e2e spec，**零后端源码与零后端测试改动**，而本用例走 wrapper-loop 退出条件 + 跨 scope 端口快照，两者零耦合。三例合看进一步收窄了共同点：**都是 wrapper / worktree / 子进程这类串了多段真实异步 IO 的调度器用例**，且三例全部紧邻 `killed 1 dangling process`——与第十条（`bun test --isolate` 分片忙等空转不自行退出）大概率是同一个进程回收路径在放大。
 
