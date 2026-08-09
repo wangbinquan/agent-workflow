@@ -29,6 +29,7 @@ import path, { dirname, isAbsolute, join, relative, resolve as resolvePath } fro
 import { fileURLToPath } from 'node:url'
 import type { PluginSourceKind } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
+import { ValidationError } from '@/util/errors'
 import { redactSensitiveString } from '@/util/redact'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -71,35 +72,50 @@ export interface PluginGenerationManifest {
   createdAt: number
 }
 
-export class PluginInstallFailedError extends Error {
-  readonly code = 'plugin-install-failed' as const
+// 2026-08-10 本机验收：这四个类原本是**裸 `Error`**，只有 `routes/plugins.ts`
+// 有一层私有翻译把它们变成 422。于是同一个「插件装不上」在不同入口的表现天差地别：
+// `/api/plugins` 给 422 `plugin-file-not-found`（照着改就行），而**意图会话提交**
+// 与**配置包导入**这两条同样会装插件的路径直接 500 `internal-error`，调用方拿不到
+// 任何可操作信息。翻译层放在路由里，就注定漏掉后来的入口。
+//
+// 改成 `ValidationError` 子类 ⇒ 抛出点即带 code/status/details，**所有**入口
+// 自动一致；`routes/plugins.ts` 的响应逐字节不变（同 code、同 details、同 422）。
+export class PluginInstallFailedError extends ValidationError {
   readonly exitCode: number
   readonly stderr: string
   constructor(stderr: string, exitCode: number) {
-    super(`plugin install failed (exit ${exitCode})`)
+    super('plugin-install-failed', `plugin install failed (exit ${exitCode})`, {
+      stderr,
+      exitCode,
+    })
     this.stderr = stderr
     this.exitCode = exitCode
   }
 }
 
-export class PluginInstallTimeoutError extends Error {
-  readonly code = 'plugin-install-timeout' as const
-  constructor(public readonly timeoutMs: number) {
-    super(`plugin install exceeded ${timeoutMs}ms`)
+export class PluginInstallTimeoutError extends ValidationError {
+  readonly timeoutMs: number
+  constructor(timeoutMs: number) {
+    super('plugin-install-timeout', `plugin install exceeded ${timeoutMs}ms`, { timeoutMs })
+    this.timeoutMs = timeoutMs
   }
 }
 
-export class NpmUnavailableError extends Error {
-  readonly code = 'npm-unavailable' as const
+export class NpmUnavailableError extends ValidationError {
   constructor() {
-    super('npm binary not found in PATH; non-file: plugin specs cannot be installed')
+    super(
+      'npm-unavailable',
+      'npm binary not found in PATH; non-file: plugin specs cannot be installed',
+      {},
+    )
   }
 }
 
-export class PluginFileNotFoundError extends Error {
-  readonly code = 'plugin-file-not-found' as const
-  constructor(public readonly spec: string) {
-    super(`plugin file path not found: ${spec}`)
+export class PluginFileNotFoundError extends ValidationError {
+  readonly spec: string
+  constructor(spec: string) {
+    super('plugin-file-not-found', `plugin file path not found: ${spec}`, { spec })
+    this.spec = spec
   }
 }
 
@@ -314,6 +330,20 @@ async function installPluginGeneration(
   }
 }
 
+/**
+ * 把一个 file 源 spec 归一成宿主路径。三种形态都要收，因为
+ * `inferSourceKind` 三种都判成 `'file'`：
+ *   - `file://<url>`  —— 走 `fileURLToPath`（win32 上 `new URL().pathname` 会
+ *     给出 `/C:/…` 这种 URL 分量，`realpath` 打不开；RFC-254 T31 的教训）；
+ *   - `file:<path>`   —— npm 的单冒号写法，剥掉前缀即是宿主路径；
+ *   - 裸路径          —— 原样。
+ */
+export function fileSpecToHostPath(spec: string): string {
+  if (spec.startsWith('file://')) return fileURLToPath(spec)
+  if (spec.startsWith('file:')) return spec.slice('file:'.length)
+  return spec
+}
+
 async function installFilePlugin(spec: string): Promise<InstallResult> {
   // Convert a file:// URL to a host path; everything else is already a host
   // path. RFC-254 T31: `new URL(spec).pathname` is WRONG on win32 — it yields
@@ -322,7 +352,12 @@ async function installFilePlugin(spec: string): Promise<InstallResult> {
   // is the correct, platform-correct conversion (`C:\plugins\foo` on win32,
   // `/plugins/foo` on POSIX). The repo guard rfc254-file-url-pathname-guard only
   // bans the `import.meta.url` spelling, so this file-spec form slipped through.
-  const raw = spec.startsWith('file://') ? fileURLToPath(spec) : spec
+  //
+  // 2026-08-10 本机验收：`inferSourceKind` 收 `file:` 前缀（npm 自己的合法写法，
+  // 如 `file:/abs/path` / `file:./rel`），但这里只对 **`file://`** 做转换，于是
+  // 单斜杠形态被原样丢给 `realpath("file:/Users/…")` ⇒ **必然** `plugin-file-not-found`。
+  // 分类器与安装器对同一个前缀的理解必须一致，否则那条分支等于「能存不能装」。
+  const raw = fileSpecToHostPath(spec)
   let resolved: string
   try {
     resolved = await realpath(raw)

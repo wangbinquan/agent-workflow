@@ -27,13 +27,7 @@ import {
   renamePlugin,
   updatePlugin,
 } from '@/services/plugin'
-import {
-  checkForUpdate,
-  NpmUnavailableError,
-  PluginFileNotFoundError,
-  PluginInstallFailedError,
-  PluginInstallTimeoutError,
-} from '@/services/pluginInstaller'
+import { checkForUpdate } from '@/services/pluginInstaller'
 import {
   pluginOperationConfigHashOf,
   withPluginOperationConfigHash,
@@ -371,23 +365,12 @@ async function safeJson(req: Request): Promise<unknown> {
   }
 }
 
+/**
+ * 安装失败的四个类**自己**就是 `ValidationError`（见 `pluginInstaller.ts` 的注释：
+ * 翻译层留在路由里，就注定漏掉后来的入口——意图提交与配置包导入两条同样会装插件的
+ * 路径当初就都掉进了 500）。所以这里不再逐类重建，只保留「非 Error 抛出物归一」这
+ * 一点点残余职责。
+ */
 function wrapInstallErrors(error: unknown): Error {
-  if (error instanceof PluginInstallFailedError) {
-    return new ValidationError('plugin-install-failed', error.message, {
-      stderr: error.stderr,
-      exitCode: error.exitCode,
-    })
-  }
-  if (error instanceof PluginInstallTimeoutError) {
-    return new ValidationError('plugin-install-timeout', error.message, {
-      timeoutMs: error.timeoutMs,
-    })
-  }
-  if (error instanceof NpmUnavailableError) {
-    return new ValidationError('npm-unavailable', error.message, {})
-  }
-  if (error instanceof PluginFileNotFoundError) {
-    return new ValidationError('plugin-file-not-found', error.message, { spec: error.spec })
-  }
   return error instanceof Error ? error : new Error(String(error))
 }

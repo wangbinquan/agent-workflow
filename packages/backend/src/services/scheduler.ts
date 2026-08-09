@@ -305,8 +305,12 @@ import type { Semaphore } from '@/util/semaphore'
 import { ulid } from 'ulid'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { executeCodeHostCall } from '@/services/codeHost/call'
-import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
+import {
+  resolveCodeHostConnectionsFromKeyFile,
+  type CodeHostConnectionsService,
+} from '@/services/codeHost/connections'
 import { resolveProjectFallback } from '@/services/codeHost/project'
+import { Paths } from '@/util/paths'
 
 export interface RunTaskOptions {
   taskId: string
@@ -4189,7 +4193,10 @@ async function runCodeHostCallNode(
     broadcastNodeStatus(taskId, nodeRunId, node.id, to)
   }
 
-  const connections = opts.codeHostConnections
+  // 注入优先（测试注 stub）；生产没人注入，落到密钥文件懒解析——见
+  // `resolveCodeHostConnectionsFromKeyFile` 的注释：这条接线曾经整条断开。
+  const connections =
+    opts.codeHostConnections ?? resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)
   const connection = connections?.resolve(provider) ?? null
   if (connection === null) {
     await settle('failed', 'code-host-not-configured', {

@@ -3,6 +3,7 @@
 // token 只在这一层短暂以明文存在：unseal → 组 header → 发请求 → 丢弃。它不进
 // 任何子进程环境、不进日志、不进任何响应（读路径只回尾 4 位）。
 
+import { existsSync, readFileSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import type {
   CodeHostConnectionWire,
@@ -11,7 +12,7 @@ import type {
   CodeHostTestResult,
 } from '@agent-workflow/shared'
 import { normalizeCodeHostBaseUrl } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { codeHostConnections } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
@@ -57,6 +58,37 @@ function unconfigured(provider: CodeHostProvider): CodeHostConnectionWire {
     updatedBy: null,
     lastTest: null,
   }
+}
+
+/**
+ * RFC-269 接线修复（2026-08-10 本机验收）——凭据服务此前**只**在
+ * `mountCodeHostRoutes` 里就地构造，全仓没有任何生产路径把它注进 scheduler，
+ * 于是 `code-host-call` 节点在真实运行里恒定 `code-host-not-configured`：
+ * 与「管理员根本没配」完全同形，实测已配好且 `/test` 返回 ok 仍然照失败。
+ *
+ * 为什么收在这里而不是逐个 launch 入口补注入：`resolveLaunchRuntimeConfig`
+ * 的十四处展开点各自拼 deps，同一形状的参数已经栽过两次（RFC-115 的
+ * `defaultRuntime`「从没被任何 HTTP 入口穿过」、RFC-266 的 fan-out 上限
+ * 「被设置页写入、被 scheduler 消费、中间没人接线」）。再补第十五处只会
+ * 再漂一次，所以留**一个**懒解析点，注入仍然优先（测试照旧注 stub）。
+ *
+ * 只读、绝不创建：`ensureSecretKey` 在缺文件时会**生成**密钥，而这条路径每
+ * 派发一个 code-host 节点就走一次，必须无副作用（同 verifiedPlan 里
+ * `readConfig` 而非 `loadConfig` 的既有纪律）。密钥缺失/损坏 ⇒ 返回 null，
+ * 节点仍以 `code-host-not-configured` 收场，与自跳过语义一致。
+ */
+export function resolveCodeHostConnectionsFromKeyFile(
+  db: DbClient,
+  keyPath: string,
+): CodeHostConnectionsService | null {
+  if (!existsSync(keyPath)) return null
+  let secretBox: SecretBox
+  try {
+    secretBox = createSecretBoxFromKey(readFileSync(keyPath))
+  } catch {
+    return null
+  }
+  return createCodeHostConnectionsService({ db, secretBox })
 }
 
 export function createCodeHostConnectionsService(deps: {

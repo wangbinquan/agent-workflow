@@ -1,36 +1,53 @@
 # Skill reference
 
-A **skill** is a directory the platform copies / symlinks into a node's
-`OPENCODE_CONFIG_DIR/skills/<name>/` before `opencode` starts, so the agent
-can read it like any other `~/.opencode/skills/<name>/`. Unlike agents,
-**the filesystem is the source of truth**: the DB only indexes
+A **skill** is a directory of markdown the platform hands to an agent. Unlike
+agents, **the filesystem is the source of truth**: the DB only indexes
 `name → path`.
 
-## Two source kinds
+> **How a skill actually reaches the agent (RFC-224 / RFC-251).** The
+> production path does **not** populate `OPENCODE_CONFIG_DIR/skills/<name>/`
+> and does not use OpenCode's on-disk skill registry at all. Per run the
+> platform snapshots the whole skill tree (no symlinks) into the run seal at
+> `<runRoot>/opencode-identity-seal/skills/<sha256(skillId)[:24]>`, and injects
+> **`SKILL.md`'s body only** into the agent's system prompt as a digest-tagged
+> `<aw-frozen-skill …>` block. See `services/runtime/opencode/verifiedPlan.ts`.
+>
+> **Consequence — auxiliary files are effectively unreachable today.** The
+> sealed tree is bind-mounted read-only for the `bash` child, but nothing tells
+> the agent its path (no env var, no line in the frozen block), and the netless
+> profile masks `$HOME` and `~/.agent-workflow`, so the agent cannot find the
+> files by searching either. Measured 2026-08-10: an agent reliably quotes a
+> marker line from `SKILL.md` and reliably reports `MISSING` for the same kind
+> of marker in a sibling `reference.md`. **Put everything the agent must read
+> into `SKILL.md`**; treat other files as human-facing until this is closed
+> (tracked in `docs/audit-backlog.md`).
 
-| Source kind  | Stored at                                | Behavior                                            |
-| ------------ | ---------------------------------------- | --------------------------------------------------- |
-| `managed`    | `~/.agent-workflow/skills/<name>/files/` | Daemon writes / edits the files via the API        |
-| `external`   | wherever the user said                    | Symlinked into the run dir; daemon never mutates it |
+## Source kinds
 
-Use `managed` for skills you author in the UI; use `external` for skills
-that already live in another repo (your dotfiles, a shared team library,
-etc.).
+Skills are **managed-only** since RFC-178: they live under
+`~/.agent-workflow/skills/<id>/files/` and the daemon writes / edits them via
+the API. The former `external` source kind (symlink a directory the user
+already has) has been removed — the verified execution path rejects external
+skills rather than inheriting them.
 
 ## Layout
 
 ```
-~/.agent-workflow/skills/<name>/
+~/.agent-workflow/skills/<id>/
 └── files/
-    ├── SKILL.md            # frontmatter + body (required)
+    ├── SKILL.md            # frontmatter + body (required, and the ONLY part
+    │                       # the agent actually reads at runtime today)
     ├── examples/
     │   ├── good.ts
     │   └── bad.ts
-    └── README.md           # optional, ignored by opencode but visible
+    └── README.md           # human-facing; not reachable from the agent yet
 ```
 
-`SKILL.md` is the only required file. Everything else under `files/` is
-copied verbatim into the agent's `OPENCODE_CONFIG_DIR/skills/<name>/`.
+`SKILL.md` is the only required file. Everything else under `files/` is part
+of the snapshot and of the tree digest that fixes the run's execution identity
+— so editing an auxiliary file *does* change the digest — but see the box
+above: nothing currently hands the agent a path into that snapshot, so
+auxiliary files do not participate in what the model sees.
 
 ## SKILL.md frontmatter
 

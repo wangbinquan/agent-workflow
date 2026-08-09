@@ -185,17 +185,34 @@ function escapeRe(s: string): string {
 // Absent nonce → the legacy bare open tag (a run dispatched before RFC-200).
 // Each call returns a FRESH RegExp, so there is no shared `lastIndex` state to
 // reset between callers (the old module-level consts needed that dance).
+/**
+ * 开标签的 nonce 属性：双引号与单引号都收。
+ *
+ * 2026-08-10 本机验收实证：RFC-253 的 script 节点里，模型为了躲 bash 的引号
+ * 转义写成 `nonce='$AW_ENVELOPE_NONCE'`，脚本明明打印了完整信封，却连吃 4 次
+ * `script-envelope-missing`（重试预算耗尽后整条任务失败）。同一文件下面的
+ * **port 标签解析器早就两种引号都收**（见 PORT 正则的注释），所以这里的双引号
+ * 独苗是不一致，不是设计。
+ *
+ * 安全性质不变：RFC-200 的反伪造靠的是 **nonce 值必须逐字相等**，与包裹它的
+ * 是哪种引号无关——裸信封与错 nonce 的信封照旧不匹配。`(?:…|…)` 是**非捕获**
+ * 组，捕获序不变（调用方一律读 `match[1]` 取正文）。
+ */
+function nonceAttrRe(nonce: string): string {
+  const escaped = escapeRe(nonce)
+  return `nonce=(?:"${escaped}"|'${escaped}')`
+}
 function envelopeRe(nonce?: string): RegExp {
   const open =
     nonce !== undefined && nonce.length > 0
-      ? `<workflow-output\\s+nonce="${escapeRe(nonce)}"\\s*>`
+      ? `<workflow-output\\s+${nonceAttrRe(nonce)}\\s*>`
       : '<workflow-output>'
   return new RegExp(`${open}([\\s\\S]*?)<\\/workflow-output>`, 'g')
 }
 function clarifyRe(nonce?: string): RegExp {
   const open =
     nonce !== undefined && nonce.length > 0
-      ? `<workflow-clarify\\s+nonce="${escapeRe(nonce)}"\\s*>`
+      ? `<workflow-clarify\\s+${nonceAttrRe(nonce)}\\s*>`
       : '<workflow-clarify>'
   return new RegExp(`${open}([\\s\\S]*?)<\\/workflow-clarify>`, 'g')
 }
