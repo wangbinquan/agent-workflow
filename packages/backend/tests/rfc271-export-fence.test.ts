@@ -21,7 +21,7 @@ import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, plugins, skills, users, workflows, workgroups } from '../src/db/schema'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
-import { exportFenceTokenOf } from '../src/services/resourcePackage/preview'
+import { expectTokenOf } from '../src/services/resourcePackage/preview'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const actorOf = (id: string): Actor =>
@@ -199,48 +199,20 @@ describe('AC-12 · mcp 用 configHash（形态与 agent 不同，取自同一份
   })
 })
 
-describe('AC-12 · workflow / workgroup：version + aclRevision 两维', () => {
-  // 这两类曾经**只**比 `version`。问题在于 `version` 只被内容写路径推进
-  // （definition / 成员 / 设置），而 ACL 写路径改的是 visibility / grants，只推
-  // `aclRevision` 与 `updatedAt`。于是「把工作流从 private 改成 public」对 fence
-  // 完全不可见：页面上是 v3、导出的也是 v3，但它的可见面已经换了一个。
-  test('两维都对上 ⇒ 成功；version 对不上 ⇒ 409', async () => {
-    const { db, appHome } = await seed()
-    const wfId = ulid()
-    await db.insert(workflows).values({
-      id: wfId,
-      name: 'wf',
-      description: '',
-      definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
-      ownerUserId: 'u1',
-      visibility: 'private',
-      version: 2,
-      aclRevision: 0,
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-
-    const ok = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workflow', id: wfId },
-      { appHome, expect: { expectedVersion: 2, expectedAclRevision: 0 } },
-    )
-    expect(ok.zip.byteLength).toBeGreaterThan(0)
-
-    expect(
-      await codeOf(
-        exportResourcePackage(
-          db,
-          actorOf('u1'),
-          { type: 'workflow', id: wfId },
-          { appHome, expect: { expectedVersion: 1, expectedAclRevision: 0 } },
-        ),
-      ),
-    ).toBe('package-root-changed')
-  })
-
-  test('**只有 ACL 漂移**（version 不变）也必须 409 —— 这是补这一维的全部理由', async () => {
+describe('AC-12 · workflow / workgroup 只用 expectedVersion（ACL 维**不该**加）', () => {
+  // 实现门第三轮报过「这两类漏了 ACL 漂移维度」（`version` 只被内容写路径推进，
+  // `updateResourceAcl` 只推 `aclRevision`）。我照做加了一维，然后**实测推翻了它**：
+  //
+  //   包**不携带任何权属信息**（决策 4/12），所以把工作流从 private 改成 public 之后
+  //   再导出，产物**逐字节相同**、manifest 也相同 —— fence 放行它是对的，「所见即所得」
+  //   的「所得」根本没变。
+  //
+  // 而那一维的代价是实打实的：六个前端导出入口全部 `package-invalid`（工作流/工作组
+  // 页面只拿得到 `version`，拿不到 `aclRevision`）。
+  //
+  // 这条测试就是为了钉住这个结论，省得下一个看到「agent 有 aclRevision 而 workflow
+  // 没有」的人再加一次。判据只有一句：**这一维会改变导出的字节吗？**
+  test('ACL 漂移产出逐字节相同的包 ⇒ 旧 fence 应当放行', async () => {
     const { db, appHome } = await seed()
     const wfId = ulid()
     await db.insert(workflows).values({
@@ -256,26 +228,58 @@ describe('AC-12 · workflow / workgroup：version + aclRevision 两维', () => {
       updatedAt: 1,
     } as never)
 
-    // 模拟 ACL 写路径：只推 aclRevision / visibility，**不动 version**。
+    const before = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wfId },
+      { appHome, exportedAt: 0, expect: { expectedVersion: 3 } },
+    )
+
+    // ACL 写路径：推 aclRevision / visibility / updatedAt，**不动 version**。
     await db
       .update(workflows)
       .set({ visibility: 'public', aclRevision: 1, updatedAt: 2 } as never)
       .where(eq(workflows.id, wfId))
 
+    const after = await exportResourcePackage(
+      db,
+      actorOf('u1'),
+      { type: 'workflow', id: wfId },
+      { appHome, exportedAt: 0, expect: { expectedVersion: 3 } },
+    )
+
+    // ① 旧 fence 仍然放行（没有 409）；② 两次产物逐字节相同 —— ② 是 ① 正确的理由。
+    expect(Buffer.from(after.zip).equals(Buffer.from(before.zip))).toBe(true)
+    expect(JSON.stringify(after.manifest)).toBe(JSON.stringify(before.manifest))
+  })
+
+  test('内容漂移（version）仍然 409', async () => {
+    const { db, appHome } = await seed()
+    const wfId = ulid()
+    await db.insert(workflows).values({
+      id: wfId,
+      name: 'wf',
+      description: '',
+      definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+      ownerUserId: 'u1',
+      visibility: 'private',
+      version: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
     expect(
       await codeOf(
         exportResourcePackage(
           db,
           actorOf('u1'),
           { type: 'workflow', id: wfId },
-          // 页面加载时看到的是 v3 / acl 0。
-          { appHome, expect: { expectedVersion: 3, expectedAclRevision: 0 } },
+          { appHome, expect: { expectedVersion: 1 } },
         ),
       ),
     ).toBe('package-root-changed')
   })
 
-  test('workgroup 同形（两维齐；缺一维 ⇒ package-invalid）', async () => {
+  test('workgroup 同形（只要 expectedVersion；多给 ACL 维 ⇒ 拒绝）', async () => {
     const { db, appHome } = await seed()
     const wgId = ulid()
     await db.insert(workgroups).values({
@@ -304,7 +308,7 @@ describe('AC-12 · workflow / workgroup：version + aclRevision 两维', () => {
       db,
       actorOf('u1'),
       { type: 'workgroup', id: wgId },
-      { appHome, expect: { expectedVersion: 5, expectedAclRevision: 2 } },
+      { appHome, expect: { expectedVersion: 5 } },
     )
     expect(ok.zip.byteLength).toBeGreaterThan(0)
 
@@ -314,7 +318,7 @@ describe('AC-12 · workflow / workgroup：version + aclRevision 两维', () => {
           db,
           actorOf('u1'),
           { type: 'workgroup', id: wgId },
-          { appHome, expect: { expectedVersion: 5 } },
+          { appHome, expect: { expectedVersion: 5, expectedAclRevision: 2 } },
         ),
       ),
     ).toBe('package-invalid')
@@ -436,7 +440,7 @@ describe('AC-12 · plugin 用 configHash（含安装态，不只是配置文本�
     const { db, appHome } = await seed()
     const id = await seedPlugin(db)
     // 先拿到当前 hash（用一次成功导出证明它是对的）。
-    const before = exportFenceTokenOf('plugin', {
+    const before = expectTokenOf('plugin', {
       ...(db
         .select()
         .from(plugins)

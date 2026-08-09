@@ -6,6 +6,8 @@
 //  ② **导出失败是预期内的产品行为**（闭包里有你看不见的资源 ⇒ 整体拒绝，AC-7），
 //     所以服务端那句可读的原因必须交回页面，不能吞掉或换成通用错误。
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, test, vi, afterEach } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { api } from '../src/api/client'
@@ -214,5 +216,52 @@ describe('② 行为', () => {
       ['/api/mcps/M1/export-package', { expectedConfigHash: 'mcp-hash' }],
       ['/api/plugins/P1/export-package', { expectedConfigHash: 'plugin-hash' }],
     ])
+  })
+})
+
+describe('③ fence 值缺失时不得发出空 fence', () => {
+  // 服务端对**显式空**的 fence 参数返回 422：`?expectedConfigHash=` 曾被静默当成
+  // 「没传 fence」，于是返回 200 + 一个完全没有「所见非所得」保护的 zip；而
+  // `?expectedConfigHash=wrong` 才 409。静默降级比报错糟得多——调用方以为自己有保护。
+  //
+  // 而空值恰恰是前端最容易拼出来的：`operationConfigHash ?? ''`、表单未填、查询还没
+  // 落地。mcps / plugins 两个详情页当时写的就是 `?? ''`。修法不是在前端把空串过滤掉
+  // （那等于把静默降级搬到前端），而是**没拿到 revision 就禁用导出**：没有「所见」，
+  // 就谈不上「所见即所得」。
+  //
+  // 这条锁的是那两处 `disabled` 条件里 `=== undefined` 那一项不被顺手删掉。
+  const src = readFileSync(
+    resolve(import.meta.dirname, '..', 'src', 'routes', 'mcps.detail.tsx'),
+    'utf8',
+  )
+  const pluginSrc = readFileSync(
+    resolve(import.meta.dirname, '..', 'src', 'routes', 'plugins.detail.tsx'),
+    'utf8',
+  )
+
+  test('mcps / plugins 详情页在 operationConfigHash 未就绪时禁用导出', () => {
+    expect(src).toContain('query.data?.operationConfigHash === undefined')
+    expect(pluginSrc).toContain('query.data?.operationConfigHash === undefined')
+  })
+
+  test('组件层：fence 逐字透传给 API（不会在中途被"清洗"掉）', async () => {
+    // 与上面互补：即使某个调用方真的传了奇怪的值，组件也不该自作主张改写它——
+    // 该拒绝的由服务端拒绝，前端悄悄改写会让 409/422 与用户实际点的东西对不上。
+    const spy = vi
+      .spyOn(pkgApi, 'downloadResourcePackage')
+      .mockResolvedValue(new Blob(['z']) as unknown as Blob)
+    vi.spyOn(dl, 'triggerBlobDownload').mockImplementation(() => {})
+
+    render(
+      <ResourcePackageExportButton
+        type="mcp"
+        id="M1"
+        name="gh"
+        fence={{ expectedConfigHash: 'abc123' }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button'))
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    expect(spy.mock.calls[0]?.[2]).toEqual({ expectedConfigHash: 'abc123' })
   })
 })

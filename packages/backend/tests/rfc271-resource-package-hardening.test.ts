@@ -614,10 +614,7 @@ describe('exact root fence 覆盖闭包之后的 live 读取窗口', () => {
             racedDb,
             actorOf('u1'),
             { type: 'workflow', id: 'WF1' },
-            // workflow 的导出 fence 是**两维**（version + aclRevision）：ACL 写路径
-            // 不推 version，只比 version 会看不见 private→public。少给一维会先被
-            // 「给了就必须给全」判 package-invalid，测不到这里要测的 TOCTOU。
-            { appHome, expect: { expectedVersion: 1, expectedAclRevision: 0 } },
+            { appHome, expect: { expectedVersion: 1 } },
           ),
         ),
       ).toBe('package-root-changed')

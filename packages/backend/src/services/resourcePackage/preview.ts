@@ -208,32 +208,25 @@ export function verifyPreviewToken(box: SecretBox, token: string): VerifiedPrevi
 }
 
 /**
- * **导出 fence** 专用的 revision token —— 与 `expectTokenOf` 是两件事，别合并。
+ * **导出 fence 用的就是 `expectTokenOf`**，不是另一份定义——这一点被验证过，别再拆开。
  *
- * · `expectTokenOf` 回答的是「引擎能拿什么做 CAS」，字段受 `BundleExpectTokenSchema`
- *   与各域服务 update 的能力约束（工作流/工作组只能 CAS `version`）；
- * · 这里回答的是「我在页面上看过它之后，这一行有没有**任何**变化」。
+ * 实现门第三轮曾报「workflow / workgroup 的导出 fence 漏了 ACL 漂移维度」（`version`
+ * 只被内容写路径推进，`updateResourceAcl` 只推 `aclRevision` / `updatedAt`），我据此
+ * 加了 `exportFenceTokenOf` 多带一维 `expectedAclRevision`。
  *
- * 两者对工作流/工作组分叉：`version` 只被**内容**写路径推进（definition / 成员 /
- * 设置），而 ACL 写路径（`updateResourceAcl`）改 `visibility` / grants 时只推
- * `aclRevision` 与 `updatedAt`、**不动 version**。于是「把工作流从 private 改成
- * public」对只比 version 的 fence 完全不可见：页面上是 v3、导出的也是 v3，但它的
- * 可见面已经换了一个——而可见面恰恰决定这个包该不该被导出、导出给谁。
+ * **实测推翻了这条**：包**不携带任何权属信息**（决策 4/12——带上只会诱导导入侧去
+ * 「还原」一个在本实例根本不存在的主体）。于是把一个工作流从 private 改成 public
+ * 之后再导出，产物**逐字节相同**、manifest 也相同。fence 放行它是对的：所见即所得
+ * 的「所得」没有变。
  *
- * 曾经把这一维直接加进 `expectTokenOf`，结果 bundle 的 `expect` schema 不认新字段，
- * 导入侧整条 overwrite 链路报 `unrecognized_keys`。那次失败本身就说明这两个 token
- * 服务于不同的消费者，不该共用一个定义。
+ * 那个改动的代价是真实的：它让六个前端导出入口全部 `package-invalid`（工作流/工作组
+ * 只拿得到 `version`，拿不到 `aclRevision`），换来的是拦截一次**不改变任何产物**的
+ * 漂移。这条留在这里，是为了让下一个看到同样"不一致"的人先问一句：**这一维会改变
+ * 导出的字节吗？** 不会就别加。
+ *
+ * （agent / skill 的 fence 里有 `expectedAclRevision`，那是因为它们的 CAS token 本就
+ * 是这个形态——`agent.ts` 的 mutation revision 是这两个——不是因为 ACL 影响导出。）
  */
-export function exportFenceTokenOf(
-  type: AclResourceType,
-  row: Record<string, unknown>,
-): Record<string, unknown> {
-  const base = expectTokenOf(type, row)
-  if (type === 'workflow' || type === 'workgroup') {
-    return { ...base, expectedAclRevision: Number(row.aclRevision ?? 0) }
-  }
-  return base
-}
 
 /** 各类型的内容级 CAS token —— 与 `BundleExpectToken` 的形态一一对应。 */
 export function expectTokenOf(

@@ -149,6 +149,13 @@ function parseRootFence(c: Context): Record<string, unknown> {
   for (const key of FENCE_NUMERIC) {
     const raw = c.req.query(key)
     if (raw === undefined) continue
+    // ⚠️ 空串必须**显式**拒绝：`z.coerce.number()` 走的是 `Number('')`，结果是 **0**，
+    // 于是 `?expectedVersion=` 会被悄悄转成一个看起来完全合法的 fence 值 0，拿去比
+    // version 稳定不相等 ⇒ 409「资源已变更」。用户明明什么都没传，却收到一条说资源被
+    // 别人改了的错——比静默放行更难排查。
+    if (raw === '') {
+      throw new ValidationError('package-invalid', `${key} must not be empty`)
+    }
     const parsed = z.coerce.number().int().nonnegative().safeParse(raw)
     if (!parsed.success) {
       throw new ValidationError('package-invalid', `${key} must be a non-negative integer`)

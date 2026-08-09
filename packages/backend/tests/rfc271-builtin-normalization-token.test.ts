@@ -28,7 +28,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, users } from '../src/db/schema'
 import { seedFusionResources } from '../src/services/fusion'
-import { exportFenceTokenOf } from '../src/services/resourcePackage/preview'
+import { expectTokenOf } from '../src/services/resourcePackage/preview'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -67,7 +67,7 @@ describe('AC-12 · built-in 归一改变导出语义 ⇒ 必须推进 token', ()
       .where(eq(agents.id, String(seeded?.id)))
 
     const beforeRow = agentRow(db, 'aw-skill-merger')!
-    const beforeToken = exportFenceTokenOf('agent', beforeRow)
+    const beforeToken = expectTokenOf('agent', beforeRow)
 
     // 再次 seed ⇒ 触发归一。
     await seedFusionResources(db)
@@ -78,7 +78,7 @@ describe('AC-12 · built-in 归一改变导出语义 ⇒ 必须推进 token', ()
 
     // 核心断言：token 必须变。它变了，拿着 beforeToken 的导出请求才会 409，
     // 而不是静默拿回一个「自动忽略」语义的包。
-    expect(exportFenceTokenOf('agent', afterRow)).not.toEqual(beforeToken)
+    expect(expectTokenOf('agent', afterRow)).not.toEqual(beforeToken)
     expect(Number(afterRow.aclRevision)).toBeGreaterThan(Number(beforeRow.aclRevision))
   })
 
@@ -88,13 +88,13 @@ describe('AC-12 · built-in 归一改变导出语义 ⇒ 必须推进 token', ()
     const db = await freshDb()
     await seedFusionResources(db)
     const first = agentRow(db, 'aw-skill-merger')!
-    const firstToken = exportFenceTokenOf('agent', first)
+    const firstToken = expectTokenOf('agent', first)
 
     await seedFusionResources(db)
     await seedFusionResources(db)
 
     const third = agentRow(db, 'aw-skill-merger')!
-    expect(exportFenceTokenOf('agent', third)).toEqual(firstToken)
+    expect(expectTokenOf('agent', third)).toEqual(firstToken)
     expect(third.updatedAt).toEqual(first.updatedAt)
     expect(third.aclRevision).toEqual(first.aclRevision)
   })

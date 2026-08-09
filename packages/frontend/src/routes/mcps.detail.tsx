@@ -222,9 +222,19 @@ function McpDetailPage() {
             type="mcp"
             id={id}
             name={query.data?.name ?? id}
+            // ⚠️ 不能写成 `?? ''`：空的 fence 值不是「不做保护」，服务端会 422 拒绝
+            // （显式传了空 = 调用方以为自己有「所见非所得」保护，实际什么都没有——
+            // 静默降级比报错糟得多）。所以没拿到 hash 时**禁用导出**，而不是发一个
+            // 空 fence 过去。`!loaded` 已覆盖绝大多数情况，这里把它变成由构造保证。
             fence={{ expectedConfigHash: query.data?.operationConfigHash ?? '' }}
             variant="action"
-            disabled={dirty || save.isPending || del.isPending || !loaded}
+            disabled={
+              dirty ||
+              save.isPending ||
+              del.isPending ||
+              !loaded ||
+              query.data?.operationConfigHash === undefined
+            }
             disabledReason={t('resourcePackage.saveBeforeExport')}
           />
         }
