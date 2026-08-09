@@ -11,7 +11,7 @@ import {
   type WebhookTrigger,
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
@@ -39,9 +39,15 @@ import {
   applyTemplateVarInsertion,
   webhookVarGroupsForDisplay,
 } from '@/components/TemplateVarChips'
+import { isAdminAtRequest, useIsAdmin } from '@/hooks/useActor'
 
 type RepoScopeKind = 'all' | 'prefix' | 'exact'
 type ExecutionSpace = 'event-repo' | 'scratch'
+
+interface AdminRequest<T> {
+  session: number
+  input: T
+}
 
 function isScratchPayload(payload: unknown): payload is { scratch: true } {
   return (
@@ -174,9 +180,14 @@ type WorkgroupRow = { id: string; name: string }
 export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const liveIsAdmin = useIsAdmin()
+  const canAdmin = isAdmin && liveIsAdmin
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [firesFor, setFiresFor] = useState<WebhookTrigger | null>(null)
+  const adminSessionRef = useRef(0)
+  const previousCanAdminRef = useRef(canAdmin)
+  const resetMutationsRef = useRef<() => void>(() => {})
 
   const triggers = useQuery({
     queryKey: ['webhook-triggers'],
@@ -210,40 +221,77 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
     retry: false,
   })
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['webhook-triggers'] })
+  const requestIsCurrent = (session: number): boolean =>
+    session === adminSessionRef.current && isAdminAtRequest(qc)
 
   const save = useMutation({
-    mutationFn: (d: Draft) =>
-      d.id === null
+    mutationFn: ({ input: d, session }: AdminRequest<Draft>) => {
+      if (!requestIsCurrent(session)) throw new Error('Webhook admin session ended')
+      return d.id === null
         ? api.post<WebhookTrigger>('/api/webhook-triggers', bodyOf(d))
         : api.put<WebhookTrigger>(`/api/webhook-triggers/${encodeURIComponent(d.id)}`, {
             ...bodyOf(d),
             // kind/endpoint 不可变：PUT 不带这两个键（后端提供时才校验相等）。
             launchKind: undefined,
             endpointId: undefined,
-          }),
-    onSuccess: () => {
+          })
+    },
+    onSuccess: (_saved, request) => {
+      if (!requestIsCurrent(request.session)) return
       setError(null)
       setDraft(null)
       invalidate()
     },
-    onError: setError,
+    onError: (nextError, request) => {
+      if (requestIsCurrent(request.session)) setError(nextError)
+    },
   })
   const toggle = useMutation({
-    mutationFn: (input: { id: string; enabled: boolean }) =>
-      api.put<WebhookTrigger>(`/api/webhook-triggers/${encodeURIComponent(input.id)}`, {
+    mutationFn: ({ input, session }: AdminRequest<{ id: string; enabled: boolean }>) => {
+      if (!requestIsCurrent(session)) throw new Error('Webhook admin session ended')
+      return api.put<WebhookTrigger>(`/api/webhook-triggers/${encodeURIComponent(input.id)}`, {
         enabled: input.enabled,
-      }),
-    onSuccess: invalidate,
-    onError: setError,
+      })
+    },
+    onSuccess: (_saved, request) => {
+      if (requestIsCurrent(request.session)) invalidate()
+    },
+    onError: (nextError, request) => {
+      if (requestIsCurrent(request.session)) setError(nextError)
+    },
   })
   const remove = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/webhook-triggers/${encodeURIComponent(id)}`),
-    onSuccess: () => {
+    mutationFn: ({ input: id, session }: AdminRequest<string>) => {
+      if (!requestIsCurrent(session)) throw new Error('Webhook admin session ended')
+      return api.delete(`/api/webhook-triggers/${encodeURIComponent(id)}`)
+    },
+    onSuccess: (_deleted, request) => {
+      if (!requestIsCurrent(request.session)) return
       setError(null)
       invalidate()
     },
-    onError: setError,
+    onError: (nextError, request) => {
+      if (requestIsCurrent(request.session)) setError(nextError)
+    },
   })
+  resetMutationsRef.current = () => {
+    save.reset()
+    toggle.reset()
+    remove.reset()
+  }
+
+  useLayoutEffect(() => {
+    const lostAdmin = previousCanAdminRef.current && !canAdmin
+    previousCanAdminRef.current = canAdmin
+    if (!canAdmin) {
+      if (lostAdmin) adminSessionRef.current += 1
+      setDraft(null)
+      setError(null)
+      resetMutationsRef.current()
+    }
+  }, [canAdmin])
+
+  const adminSession = adminSessionRef.current
 
   const rows = triggers.data ?? []
   const isInitialEmpty = !triggers.isLoading && triggers.data !== undefined && rows.length === 0
@@ -260,6 +308,7 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
       type="button"
       className="btn btn--primary"
       onClick={() => {
+        if (!requestIsCurrent(adminSession)) return
         setError(null)
         save.reset()
         setDraft({ ...EMPTY_DRAFT, endpointId: endpoints.data?.[0]?.id ?? '' })
@@ -279,7 +328,7 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
           <h2>{t('webhookTriggers.title')}</h2>
           <p>{t('webhookTriggers.subtitle')}</p>
         </div>
-        {isAdmin && !isInitialEmpty && newAction}
+        {canAdmin && !isInitialEmpty && newAction}
       </div>
 
       <FeedbackStack variant="section">
@@ -291,11 +340,11 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
         <EmptyState
           title={t('webhookTriggers.empty')}
           description={
-            isAdmin
+            canAdmin
               ? t('webhookTriggers.emptyDescription')
               : t('webhookTriggers.emptyReadonlyDescription')
           }
-          action={isAdmin ? newAction : undefined}
+          action={canAdmin ? newAction : undefined}
           data-testid="webhook-triggers-empty"
         />
       )}
@@ -337,10 +386,15 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
                 }
                 footer={
                   <div className="webhook-card__footer">
-                    {isAdmin ? (
+                    {canAdmin ? (
                       <Switch
                         checked={row.enabled}
-                        onChange={(enabled) => toggle.mutate({ id: row.id, enabled })}
+                        onChange={(enabled) =>
+                          toggle.mutate({
+                            session: adminSession,
+                            input: { id: row.id, enabled },
+                          })
+                        }
                         disabled={toggle.isPending}
                         label={t('webhookTriggers.enabledSwitch')}
                         data-testid={`webhook-trigger-enable-${row.id}`}
@@ -363,12 +417,13 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
                       >
                         {t('webhookTriggers.firesButton')}
                       </button>
-                      {isAdmin && (
+                      {canAdmin && (
                         <>
                           <button
                             type="button"
                             className="btn btn--sm"
                             onClick={() => {
+                              if (!requestIsCurrent(adminSession)) return
                               setError(null)
                               save.reset()
                               setDraft(draftFromRow(row))
@@ -383,7 +438,9 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
                             variant="danger"
                             size="sm"
                             confirmationKey={row.id}
-                            onConfirm={() => remove.mutateAsync(row.id)}
+                            onConfirm={() =>
+                              remove.mutateAsync({ session: adminSession, input: row.id })
+                            }
                           />
                         </>
                       )}
@@ -443,7 +500,7 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
         </div>
       )}
 
-      {draft !== null && (
+      {canAdmin && draft !== null && (
         <TriggerDialog
           draft={draft}
           endpoints={endpoints.data ?? []}
@@ -454,11 +511,11 @@ export function TriggersPanel({ isAdmin = false }: { isAdmin?: boolean } = {}) {
             setDraft(nextDraft)
           }}
           onClose={() => setDraft(null)}
-          onSave={() => save.mutate(draft)}
+          onSave={() => save.mutate({ session: adminSession, input: draft })}
         />
       )}
       {firesFor !== null && (
-        <FiresDialog trigger={firesFor} isAdmin={isAdmin} onClose={() => setFiresFor(null)} />
+        <FiresDialog trigger={firesFor} isAdmin={canAdmin} onClose={() => setFiresFor(null)} />
       )}
     </section>
   )
@@ -1103,6 +1160,8 @@ type FireRow = {
 function FiresDialog(props: { trigger: WebhookTrigger; isAdmin: boolean; onClose: () => void }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const adminSessionRef = useRef(0)
+  const previousIsAdminRef = useRef(props.isAdmin)
   const fires = useQuery({
     queryKey: ['webhook-trigger-fires', props.trigger.id],
     queryFn: ({ signal }) =>
@@ -1112,14 +1171,33 @@ function FiresDialog(props: { trigger: WebhookTrigger; isAdmin: boolean; onClose
         signal,
       ),
   })
+  const requestIsCurrent = (session: number): boolean =>
+    session === adminSessionRef.current && isAdminAtRequest(qc)
   const reset = useMutation({
-    mutationFn: (streamKey: string) =>
-      api.post(`/api/webhook-triggers/${encodeURIComponent(props.trigger.id)}/streams/reset`, {
-        streamKey,
-      }),
-    onSuccess: () =>
-      void qc.invalidateQueries({ queryKey: ['webhook-trigger-fires', props.trigger.id] }),
+    mutationFn: ({ input: streamKey, session }: AdminRequest<string>) => {
+      if (!requestIsCurrent(session)) throw new Error('Webhook admin session ended')
+      return api.post(
+        `/api/webhook-triggers/${encodeURIComponent(props.trigger.id)}/streams/reset`,
+        {
+          streamKey,
+        },
+      )
+    },
+    onSuccess: (_result, request) => {
+      if (requestIsCurrent(request.session)) {
+        void qc.invalidateQueries({ queryKey: ['webhook-trigger-fires', props.trigger.id] })
+      }
+    },
   })
+  useLayoutEffect(() => {
+    const lostAdmin = previousIsAdminRef.current && !props.isAdmin
+    previousIsAdminRef.current = props.isAdmin
+    if (lostAdmin) {
+      adminSessionRef.current += 1
+      reset.reset()
+    }
+  }, [props.isAdmin, reset])
+  const adminSession = adminSessionRef.current
   const chipKind = (outcome: string) =>
     outcome === 'launched' ? 'success' : outcome === 'launch-failed' ? 'danger' : 'warn'
   return (
@@ -1160,7 +1238,9 @@ function FiresDialog(props: { trigger: WebhookTrigger; isAdmin: boolean; onClose
                         <button
                           type="button"
                           className="btn btn--xs"
-                          onClick={() => reset.mutate(f.streamKey)}
+                          onClick={() =>
+                            reset.mutate({ session: adminSession, input: f.streamKey })
+                          }
                           data-testid={`wt-reset-${f.id}`}
                         >
                           {t('webhookTriggers.resetCircuit')}

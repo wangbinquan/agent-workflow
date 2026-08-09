@@ -86,6 +86,8 @@ function renderPane(props: Partial<Parameters<typeof RepoGroupsPane>[0]> = {}) {
         onDelete={onDelete}
         deleteError={null}
         newAction={<button type="button">new</button>}
+        canUpdate
+        canDelete
         search=""
         onSearchChange={vi.fn()}
         {...props}

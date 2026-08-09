@@ -57,7 +57,20 @@ function installFetch(items: CachedRepo[]): RecordedCall[] {
       const url = request.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       calls.push({ url, method })
-      return new Response(JSON.stringify(method === 'GET' ? { items } : { ok: true }), {
+      const body = url.endsWith('/api/auth/me')
+        ? {
+            permissions: [
+              'repos:read',
+              'repos:create',
+              'repos:update',
+              'repos:delete',
+              'repos:execute',
+            ],
+          }
+        : method === 'GET'
+          ? { items }
+          : { ok: true }
+      return new Response(JSON.stringify(body), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })

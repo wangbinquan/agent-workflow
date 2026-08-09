@@ -82,7 +82,7 @@ import {
   withTaskDetailTab,
 } from '@/lib/task-detail-route-tabs'
 import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-room'
-import { useActor, usePermission } from '@/hooks/useActor'
+import { hasPermissionAtRequest, useActor, usePermission } from '@/hooks/useActor'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useTaskChildren } from '@/hooks/useTaskChildren'
@@ -254,9 +254,18 @@ function TaskDetailPage() {
   // tasks:delete permission; the server re-checks name + terminality.
   const canDeleteTask = usePermission('tasks:delete')
   const [deleteOpen, setDeleteOpen] = useState(false)
+  useEffect(() => {
+    if (!canDeleteTask) setDeleteOpen(false)
+  }, [canDeleteTask])
   const del = useMutation({
-    mutationFn: (confirm: string) =>
-      api.deleteJson<{ taskId: string }>(`/api/tasks/${encodeURIComponent(id)}`, { confirm }),
+    mutationFn: (confirm: string) => {
+      if (!hasPermissionAtRequest(qc, 'tasks:delete')) {
+        throw new Error('Task deletion permission is not currently available')
+      }
+      return api.deleteJson<{ taskId: string }>(`/api/tasks/${encodeURIComponent(id)}`, {
+        confirm,
+      })
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['tasks'] })
       void navigateTaskRoute({ to: '/tasks' })
@@ -315,7 +324,8 @@ function TaskDetailPage() {
   // deep-link with the default tab and make a transient outage look like a
   // durable access decision.  Keep resolution pending until we have data; the
   // rendered error state below preserves the raw URL and offers a retry.
-  const permissionsReady = actor.data !== undefined
+  const permissionsReady =
+    actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
   const taskCapabilities =
     task.data === undefined
       ? {
@@ -333,7 +343,10 @@ function TaskDetailPage() {
           // The questions GET endpoint inherits the task-view gate and has no
           // additional global permission. Writes remain member-gated server-side.
           canReadQuestions: true,
-          canReadFeedback: actor.data?.permissions.includes('memory:read') ?? false,
+          canReadFeedback:
+            permissionsReady && Array.isArray(actor.data?.permissions)
+              ? actor.data.permissions.includes('memory:read')
+              : false,
         })
   const tabResolution = resolveTaskDetailTabs({
     taskLoaded: task.data !== undefined,
@@ -431,7 +444,7 @@ function TaskDetailPage() {
     )
   }
   if (task.data === undefined) return null
-  if (actor.data === undefined && actor.error !== null && actor.error !== undefined) {
+  if (actor.error !== null && actor.error !== undefined) {
     return (
       <div className="page page--task-detail">
         <PageHeader title={task.data.name} />
@@ -600,7 +613,7 @@ function TaskDetailPage() {
         }
       />
       <ConfirmDialog
-        open={deleteOpen}
+        open={canDeleteTask && deleteOpen}
         title={t('common.deleteConfirm.title', { name: tk.name })}
         description={t('common.deleteConfirm.body')}
         confirmLabel={t('common.delete')}

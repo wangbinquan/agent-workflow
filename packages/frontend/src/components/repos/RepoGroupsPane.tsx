@@ -7,7 +7,7 @@
 // 展开一行显示 `RepoLayoutTree` —— 与编辑器的实时预览、任务详情的布局块是
 // **同一个组件**，三处的树长得一模一样。
 
-import { Fragment, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
@@ -28,6 +28,8 @@ export interface RepoGroupsPaneProps {
   onDelete: (group: RepoGroup) => void
   deleteError: unknown
   newAction: ReactNode
+  canUpdate: boolean
+  canDelete: boolean
   /** RFC-248: 名称 / 描述子串过滤（大小写不敏感）。 */
   search: string
   onSearchChange: (v: string) => void
@@ -66,11 +68,15 @@ export function RepoGroupsPane({
   onDelete,
   deleteError,
   newAction,
+  canUpdate,
+  canDelete,
   search,
   onSearchChange,
 }: RepoGroupsPaneProps) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState<string | null>(null)
+  const permissionRef = useRef({ update: false, delete: false })
+  permissionRef.current = { update: canUpdate, delete: canDelete }
   const all = list.data?.items ?? []
   const q = search.trim().toLowerCase()
   const items =
@@ -161,22 +167,31 @@ export function RepoGroupsPane({
                       <td>{g.boundMemories}</td>
                       <td>
                         <div className="data-table__actions">
-                          <button
-                            type="button"
-                            className="btn btn--sm"
-                            onClick={() => onEdit(g)}
-                            data-testid={`repo-group-edit-${g.id}`}
-                          >
-                            {t('common.edit')}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn--sm btn--danger"
-                            onClick={() => onDelete(g)}
-                            data-testid={`repo-group-delete-${g.id}`}
-                          >
-                            {t('common.delete')}
-                          </button>
+                          {canUpdate && (
+                            <button
+                              type="button"
+                              className="btn btn--sm"
+                              onClick={() => {
+                                if (permissionRef.current.update) onEdit(g)
+                              }}
+                              data-testid={`repo-group-edit-${g.id}`}
+                            >
+                              {t('common.edit')}
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              className="btn btn--sm btn--danger"
+                              onClick={() => {
+                                if (permissionRef.current.delete) onDelete(g)
+                              }}
+                              data-testid={`repo-group-delete-${g.id}`}
+                            >
+                              {t('common.delete')}
+                            </button>
+                          )}
+                          {!canUpdate && !canDelete && t('common.emDash')}
                         </div>
                       </td>
                     </tr>

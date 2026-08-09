@@ -25,7 +25,21 @@ vi.mock('../src/api/client', async () => {
     ...actual,
     api: {
       ...actual.api,
-      get: vi.fn().mockResolvedValue({ items: [] }),
+      get: vi.fn().mockImplementation((path: string) =>
+        Promise.resolve(
+          path === '/api/auth/me'
+            ? {
+                permissions: [
+                  'repos:read',
+                  'repos:create',
+                  'repos:update',
+                  'repos:delete',
+                  'repos:execute',
+                ],
+              }
+            : { items: [] },
+        ),
+      ),
       post: vi.fn(),
       delete: vi.fn(),
       put: vi.fn(),
@@ -99,8 +113,7 @@ describe('/repos page batch import button (RFC-033)', () => {
 
   test('clicking the button mounts the dialog', async () => {
     renderPage()
-    await new Promise((r) => setTimeout(r, 10))
-    fireEvent.click(screen.getByTestId('repos-batch-import-button'))
+    fireEvent.click(await screen.findByTestId('repos-batch-import-button'))
     expect(screen.getByTestId('batch-import-dialog')).toBeTruthy()
   })
 

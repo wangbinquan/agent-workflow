@@ -29,7 +29,7 @@ import { api } from '../src/api/client'
 import { AclDialogButton, AclPanel } from '../src/components/AclPanel'
 import { AttributionChip } from '../src/components/AttributionChip'
 import { UserPicker } from '../src/components/UserPicker'
-import { setToken } from '../src/stores/auth'
+import { getAuthSessionRevision, setToken } from '../src/stores/auth'
 import '../src/i18n'
 
 const mockedGet = vi.mocked(api.get)
@@ -281,7 +281,7 @@ describe('AclPanel', () => {
     await waitFor(() => expect(screen.queryByTestId('acl-transfer-dialog')).toBeTruthy())
 
     act(() => {
-      qc.setQueryData(['acl', '/api/agents/x/acl'], {
+      qc.setQueryData(['acl', '/api/agents/x/acl', getAuthSessionRevision()], {
         resourceType: 'agent',
         resourceId: 'a1',
         ownerUserId: 'owner-1',
@@ -325,7 +325,7 @@ describe('AclPanel', () => {
     fireEvent.click(screen.getByTestId('acl-visibility-private'))
 
     act(() => {
-      qc.setQueryData(['acl', '/api/agents/x/acl'], {
+      qc.setQueryData(['acl', '/api/agents/x/acl', getAuthSessionRevision()], {
         resourceType: 'agent',
         resourceId: 'a1',
         ownerUserId: 'owner-1',

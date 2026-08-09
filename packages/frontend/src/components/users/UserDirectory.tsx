@@ -28,6 +28,7 @@ export interface UserDirectoryProps {
   onStatusChange: (status: UserStatusFilter) => void
   onRoleChange: (role: UserRoleFilter) => void
   onClearFilters: () => void
+  canManage: boolean
   onCreate: (trigger: HTMLButtonElement) => void
   onManage: (user: AdminUserView, trigger: HTMLButtonElement) => void
 }
@@ -49,13 +50,15 @@ export function UserDirectory(props: UserDirectoryProps): ReactElement {
           description={t('users.emptyDescription')}
           icon={USER_ICON}
           action={
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={(event) => props.onCreate(event.currentTarget)}
-            >
-              {t('users.new')}
-            </button>
+            props.canManage ? (
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={(event) => props.onCreate(event.currentTarget)}
+              >
+                {t('users.new')}
+              </button>
+            ) : undefined
           }
           data-testid="users-empty"
         />
@@ -124,6 +127,7 @@ export function UserDirectory(props: UserDirectoryProps): ReactElement {
                   key={user.id}
                   user={user}
                   isSelf={user.id === props.currentUserId}
+                  canManage={props.canManage}
                   onManage={props.onManage}
                 />
               ))}
@@ -140,10 +144,12 @@ export function UserDirectory(props: UserDirectoryProps): ReactElement {
 function UserDirectoryRow({
   user,
   isSelf,
+  canManage,
   onManage,
 }: {
   user: AdminUserView
   isSelf: boolean
+  canManage: boolean
   onManage: (user: AdminUserView, trigger: HTMLButtonElement) => void
 }): ReactElement {
   const { t } = useTranslation()
@@ -189,14 +195,16 @@ function UserDirectoryRow({
           )}
         </span>
       </div>
-      <button
-        type="button"
-        className="btn btn--ghost user-directory__manage"
-        onClick={(event) => onManage(user, event.currentTarget)}
-        data-testid={`user-manage-${user.id}`}
-      >
-        {t('users.manage')}
-      </button>
+      {canManage && (
+        <button
+          type="button"
+          className="btn btn--ghost user-directory__manage"
+          onClick={(event) => onManage(user, event.currentTarget)}
+          data-testid={`user-manage-${user.id}`}
+        >
+          {t('users.manage')}
+        </button>
+      )}
     </li>
   )
 }

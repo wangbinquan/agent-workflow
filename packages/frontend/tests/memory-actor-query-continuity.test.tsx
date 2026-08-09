@@ -190,7 +190,7 @@ describe('/memory actor query continuity', () => {
     expect(actorRequests).toBe(2)
   })
 
-  test('stale admin actor error preserves admin content and recovers in place', async () => {
+  test('stale admin actor error hides admin content and recovers in place', async () => {
     let failActorRefresh = true
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
       const path = new URL(request.toString()).pathname
@@ -209,15 +209,17 @@ describe('/memory actor query continuity', () => {
     client.setQueryData(['auth', 'me', 'tok'], adminActor)
     client.setQueryData(['memory-distill-jobs', 'list'], { items: [distillJob] })
 
-    renderMemory(client)
+    const router = renderMemory(client)
 
     expect(await screen.findByTestId('memory-distill-jobs')).toBeTruthy()
     await act(async () => {
       await client.refetchQueries({ queryKey: ['auth', 'me', 'tok'], exact: true })
     })
     expect((await screen.findByRole('alert')).textContent).toContain('Actor refresh failed')
-    expect(screen.getByTestId('memory-distill-jobs')).toBeTruthy()
+    expect(screen.queryByTestId('memory-distill-jobs')).toBeNull()
     expect(screen.queryByTestId('memory-distill-jobs-admin-only')).toBeNull()
+    expect(screen.queryByRole('navigation', { name: enUS.memory.sectionNavLabel })).toBeNull()
+    expect(router.state.location.search.tab).toBe('distill-jobs')
 
     failActorRefresh = false
     fireEvent.click(
@@ -225,5 +227,6 @@ describe('/memory actor query continuity', () => {
     )
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
     expect(screen.getByTestId('memory-distill-jobs')).toBeTruthy()
+    expect(router.state.location.search.tab).toBe('distill-jobs')
   })
 })

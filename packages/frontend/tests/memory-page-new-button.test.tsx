@@ -22,6 +22,7 @@ import '../src/i18n'
 // Flip admin vs non-admin via this mock. RFC-099: the page keys off the
 // actor's ROLE (memory:approve moved into the user baseline).
 vi.mock('../src/hooks/useActor', () => ({
+  useIsAdmin: () => mockIsAdmin,
   usePermission: (perm: string) =>
     perm === 'memory:create' ? mockIsAdmin : perm === 'memory:update' ? mockIsAdmin : false,
   useActor: () => ({
@@ -38,6 +39,11 @@ vi.mock('../src/hooks/useActor', () => ({
       linkedIdentities: [],
       pats: [],
     },
+    error: null,
+    fetchStatus: 'idle',
+    isLoading: false,
+    refetch: vi.fn(),
+    status: 'success',
   }),
 }))
 let mockIsAdmin = true

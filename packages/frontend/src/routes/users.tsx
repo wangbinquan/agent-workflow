@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
-import { useRef, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   AdminUserView,
@@ -26,7 +26,13 @@ import { CreateUserDialog } from '@/components/users/CreateUserDialog'
 import { EditUserDialog } from '@/components/users/EditUserDialog'
 import { ResetUserPasswordDialog } from '@/components/users/ResetUserPasswordDialog'
 import { UserDirectory } from '@/components/users/UserDirectory'
-import { useActor, usePermission } from '@/hooks/useActor'
+import {
+  hasPermissionAtRequest,
+  useActor,
+  useAuthSessionRevision,
+  usePermission,
+} from '@/hooks/useActor'
+import { getAuthSessionRevision } from '@/stores/auth'
 import {
   deriveUserDirectory,
   filtersFromUsersSearch,
@@ -82,6 +88,12 @@ type SuccessNotice =
   | 'disabled'
   | 'enabled'
 
+interface UserWriteRequest<T> {
+  session: number
+  authRevision: number
+  input: T
+}
+
 export function UsersPage(
   props: {
     search?: UsersSearch
@@ -90,74 +102,156 @@ export function UsersPage(
 ) {
   const { t, i18n } = useTranslation()
   const allowed = usePermission('users:read')
+  const canWrite = usePermission('users:write')
   const actor = useActor()
+  const authRevision = useAuthSessionRevision()
   const qc = useQueryClient()
   const headerCreateRef = useRef<HTMLButtonElement>(null)
   const [localSearch, setLocalSearch] = useState<UsersSearch>({})
   const [dialog, setDialog] = useState<UsersDialogState>(null)
   const [notice, setNotice] = useState<SuccessNotice | null>(null)
+  const writeSessionRef = useRef(0)
+  const previousCanWriteRef = useRef(canWrite)
+  const activeAuthRevisionRef = useRef(authRevision)
+  const resetMutationsRef = useRef<() => void>(() => {})
   const search = props.search ?? localSearch
   const filters = filtersFromUsersSearch(search)
 
   const list = useQuery<AdminUserView[]>({
-    queryKey: ['users'],
+    queryKey: ['users', authRevision],
     queryFn: ({ signal }) => api.get('/api/users', undefined, signal),
     enabled: allowed,
   })
   const loginPolicy = useQuery<AuthLoginPolicy>({
-    queryKey: ['oidc-login-policy'],
+    queryKey: ['oidc-login-policy', authRevision],
     queryFn: ({ signal }) => api.get('/api/oidc/login-policy', undefined, signal),
     enabled: allowed,
   })
   const model = deriveUserDirectory(list.data ?? [], filters, i18n.language)
 
   const closeDialog = () => setDialog(null)
-  const refreshUsers = async () => {
-    await qc.invalidateQueries({ queryKey: ['users'], exact: true })
+  const refreshUsers = async (expectedAuthRevision: number) => {
+    await qc.invalidateQueries({ queryKey: ['users', expectedAuthRevision], exact: true })
   }
+  const requestIsCurrent = (session: number, expectedAuthRevision: number): boolean =>
+    expectedAuthRevision === getAuthSessionRevision() &&
+    session === writeSessionRef.current &&
+    hasPermissionAtRequest(qc, 'users:write')
   const create = useMutation({
-    mutationFn: (variables: { body: CreateUserBody; mode: CreateUserMode }) =>
-      api.post<AdminUserView>('/api/users', variables.body),
-    onSuccess: async (_created, variables) => {
-      await refreshUsers()
+    mutationFn: ({
+      input,
+      session,
+      authRevision: requestAuthRevision,
+    }: UserWriteRequest<{ body: CreateUserBody; mode: CreateUserMode }>) => {
+      if (!requestIsCurrent(session, requestAuthRevision)) {
+        throw new Error('User management session ended')
+      }
+      return api.post<AdminUserView>('/api/users', input.body)
+    },
+    onSuccess: async (_created, request) => {
+      if (!requestIsCurrent(request.session, request.authRevision)) return
+      await refreshUsers(request.authRevision)
+      if (!requestIsCurrent(request.session, request.authRevision)) return
       closeDialog()
-      setNotice(variables.mode === 'sso' ? 'created-sso' : 'created-password')
+      setNotice(request.input.mode === 'sso' ? 'created-sso' : 'created-password')
     },
   })
   const update = useMutation({
-    mutationFn: (variables: { id: string; patch: PatchUserBody }) =>
-      api.patch<AdminUserView>(`/api/users/${variables.id}`, variables.patch),
-    onSuccess: async () => {
-      await refreshUsers()
+    mutationFn: ({
+      input,
+      session,
+      authRevision: requestAuthRevision,
+    }: UserWriteRequest<{ id: string; patch: PatchUserBody }>) => {
+      if (!requestIsCurrent(session, requestAuthRevision)) {
+        throw new Error('User management session ended')
+      }
+      return api.patch<AdminUserView>(`/api/users/${input.id}`, input.patch)
+    },
+    onSuccess: async (_updated, request) => {
+      if (!requestIsCurrent(request.session, request.authRevision)) return
+      await refreshUsers(request.authRevision)
+      if (!requestIsCurrent(request.session, request.authRevision)) return
       closeDialog()
       setNotice('updated')
     },
   })
   const reset = useMutation({
-    mutationFn: (variables: { id: string; body: ResetPasswordBody }) =>
-      api.post(`/api/users/${variables.id}/reset-password`, variables.body),
-    onSuccess: async () => {
-      await refreshUsers()
+    mutationFn: ({
+      input,
+      session,
+      authRevision: requestAuthRevision,
+    }: UserWriteRequest<{ id: string; body: ResetPasswordBody }>) => {
+      if (!requestIsCurrent(session, requestAuthRevision)) {
+        throw new Error('User management session ended')
+      }
+      return api.post(`/api/users/${input.id}/reset-password`, input.body)
+    },
+    onSuccess: async (_reset, request) => {
+      if (!requestIsCurrent(request.session, request.authRevision)) return
+      await refreshUsers(request.authRevision)
+      if (!requestIsCurrent(request.session, request.authRevision)) return
       closeDialog()
       setNotice('reset')
     },
   })
   const disable = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/users/${id}`),
-    onSuccess: async () => {
-      await refreshUsers()
+    mutationFn: ({
+      input: id,
+      session,
+      authRevision: requestAuthRevision,
+    }: UserWriteRequest<string>) => {
+      if (!requestIsCurrent(session, requestAuthRevision)) {
+        throw new Error('User management session ended')
+      }
+      return api.delete(`/api/users/${id}`)
+    },
+    onSuccess: async (_disabled, request) => {
+      if (!requestIsCurrent(request.session, request.authRevision)) return
+      await refreshUsers(request.authRevision)
+      if (!requestIsCurrent(request.session, request.authRevision)) return
       closeDialog()
       setNotice('disabled')
     },
   })
   const enable = useMutation({
-    mutationFn: (id: string) => api.patch(`/api/users/${id}`, { status: 'active' }),
-    onSuccess: async () => {
-      await refreshUsers()
+    mutationFn: ({
+      input: id,
+      session,
+      authRevision: requestAuthRevision,
+    }: UserWriteRequest<string>) => {
+      if (!requestIsCurrent(session, requestAuthRevision)) {
+        throw new Error('User management session ended')
+      }
+      return api.patch(`/api/users/${id}`, { status: 'active' })
+    },
+    onSuccess: async (_enabled, request) => {
+      if (!requestIsCurrent(request.session, request.authRevision)) return
+      await refreshUsers(request.authRevision)
+      if (!requestIsCurrent(request.session, request.authRevision)) return
       closeDialog()
       setNotice('enabled')
     },
   })
+  resetMutationsRef.current = () => {
+    create.reset()
+    update.reset()
+    reset.reset()
+    disable.reset()
+    enable.reset()
+  }
+  useLayoutEffect(() => {
+    const lostWrite = previousCanWriteRef.current && !canWrite
+    previousCanWriteRef.current = canWrite
+    const authChanged = activeAuthRevisionRef.current !== authRevision
+    activeAuthRevisionRef.current = authRevision
+    if (lostWrite || authChanged || (!canWrite && dialog !== null)) {
+      writeSessionRef.current += 1
+      setDialog(null)
+      setNotice(null)
+      resetMutationsRef.current()
+    }
+  }, [authRevision, canWrite, dialog])
+  const writeSession = writeSessionRef.current
 
   const updateFilters = (next: UserDirectoryFilters, replace: boolean) => {
     const nextSearch = searchFromUserFilters(next)
@@ -165,10 +259,12 @@ export function UsersPage(
     else setLocalSearch(nextSearch)
   }
   const openCreate = (trigger: HTMLButtonElement) => {
+    if (!requestIsCurrent(writeSession, authRevision)) return
     create.reset()
     setDialog({ kind: 'create', triggerRef: { current: trigger } })
   }
   const openEdit = (user: AdminUserView, trigger: HTMLButtonElement) => {
+    if (!requestIsCurrent(writeSession, authRevision)) return
     update.reset()
     setDialog({ kind: 'edit', userId: user.id, triggerRef: { current: trigger } })
   }
@@ -203,10 +299,10 @@ export function UsersPage(
               })
             : undefined
         }
-        actions={hasHumanData ? createAction : undefined}
+        actions={hasHumanData && canWrite ? createAction : undefined}
       />
 
-      {actor.data === undefined ? (
+      {actor.status !== 'success' || actor.fetchStatus !== 'idle' || actor.data === undefined ? (
         actor.error !== null && actor.error !== undefined ? (
           <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />
         ) : (
@@ -245,6 +341,7 @@ export function UsersPage(
                   model={directory}
                   filters={filters}
                   currentUserId={actor.data?.user.id}
+                  canManage={canWrite}
                   onQueryChange={(q) => updateFilters({ ...filters, q }, true)}
                   onStatusChange={(status) => updateFilters({ ...filters, status }, false)}
                   onRoleChange={(role) => updateFilters({ ...filters, role }, false)}
@@ -258,7 +355,7 @@ export function UsersPage(
         </>
       )}
 
-      {dialog?.kind === 'create' && (
+      {canWrite && dialog?.kind === 'create' && (
         <CreateUserDialog
           triggerRef={dialog.triggerRef}
           restoreFocusFallbackRef={headerCreateRef}
@@ -266,10 +363,12 @@ export function UsersPage(
           busy={create.isPending}
           error={create.error}
           onClose={closeDialog}
-          onSubmit={(body, mode) => create.mutate({ body, mode })}
+          onSubmit={(body, mode) =>
+            create.mutate({ session: writeSession, authRevision, input: { body, mode } })
+          }
         />
       )}
-      {dialog?.kind === 'edit' && target !== null && (
+      {canWrite && dialog?.kind === 'edit' && target !== null && (
         <EditUserDialog
           user={target}
           isSelf={target.id === actor.data?.user.id}
@@ -278,22 +377,31 @@ export function UsersPage(
           busy={update.isPending}
           error={update.error}
           onClose={closeDialog}
-          onSubmit={(patch) => update.mutate({ id: target.id, patch })}
+          onSubmit={(patch) =>
+            update.mutate({
+              session: writeSession,
+              authRevision,
+              input: { id: target.id, patch },
+            })
+          }
           onResetPassword={() => {
+            if (!requestIsCurrent(writeSession, authRevision)) return
             reset.reset()
             setDialog({ ...dialog, kind: 'reset' })
           }}
           onDisable={() => {
+            if (!requestIsCurrent(writeSession, authRevision)) return
             disable.reset()
             setDialog({ ...dialog, kind: 'disable' })
           }}
           onEnable={() => {
+            if (!requestIsCurrent(writeSession, authRevision)) return
             enable.reset()
             setDialog({ ...dialog, kind: 'enable' })
           }}
         />
       )}
-      {dialog?.kind === 'reset' && target !== null && !target.hasOidcIdentity && (
+      {canWrite && dialog?.kind === 'reset' && target !== null && !target.hasOidcIdentity && (
         <ResetUserPasswordDialog
           user={target}
           triggerRef={dialog.triggerRef}
@@ -302,11 +410,17 @@ export function UsersPage(
           busy={reset.isPending}
           error={reset.error}
           onClose={closeDialog}
-          onSubmit={(body) => reset.mutate({ id: target.id, body })}
+          onSubmit={(body) =>
+            reset.mutate({
+              session: writeSession,
+              authRevision,
+              input: { id: target.id, body },
+            })
+          }
         />
       )}
       <ConfirmDialog
-        open={dialog?.kind === 'disable' && target !== null}
+        open={canWrite && dialog?.kind === 'disable' && target !== null}
         title={t('users.disableTitle', { name: target?.displayName ?? '' })}
         description={t('users.disableConfirm', { name: target?.displayName ?? '' })}
         confirmLabel={t('users.disable')}
@@ -315,11 +429,13 @@ export function UsersPage(
         restoreFocusFallbackRef={headerCreateRef}
         onClose={closeDialog}
         onConfirm={async () => {
-          if (target !== null) await disable.mutateAsync(target.id)
+          if (target !== null) {
+            await disable.mutateAsync({ session: writeSession, authRevision, input: target.id })
+          }
         }}
       />
       <ConfirmDialog
-        open={dialog?.kind === 'enable' && target !== null}
+        open={canWrite && dialog?.kind === 'enable' && target !== null}
         title={t('users.enableTitle', { name: target?.displayName ?? '' })}
         description={t('users.enableConfirm', { name: target?.displayName ?? '' })}
         confirmLabel={t('users.enable')}
@@ -327,7 +443,9 @@ export function UsersPage(
         restoreFocusFallbackRef={headerCreateRef}
         onClose={closeDialog}
         onConfirm={async () => {
-          if (target !== null) await enable.mutateAsync(target.id)
+          if (target !== null) {
+            await enable.mutateAsync({ session: writeSession, authRevision, input: target.id })
+          }
         }}
       />
     </div>

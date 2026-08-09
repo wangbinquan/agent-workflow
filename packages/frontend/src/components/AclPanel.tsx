@@ -13,12 +13,13 @@
 // the daemon token (single-user mode — D19).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ResourceAcl, ResourceVisibility, UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
-import { useActor } from '@/hooks/useActor'
+import { meQueryOptions, useActor, useAuthSessionRevision, type MeResponse } from '@/hooks/useActor'
+import { getAuthSessionRevision, getToken } from '@/stores/auth'
 import { Dialog } from './Dialog'
 import { Segmented } from './Segmented'
 import { UserPicker } from './UserPicker'
@@ -41,6 +42,19 @@ interface AclPanelProps {
   canTransferOwner?: boolean
 }
 
+type AclSaveBody = {
+  visibility?: ResourceVisibility
+  userIds?: string[]
+  ownerUserId?: string
+}
+
+interface AclSaveRequest {
+  /** Permission/edit-session generation captured by the rendered control. */
+  session: number
+  authRevision: number
+  body: AclSaveBody
+}
+
 /**
  * Uniform top-right entry point: header button → Dialog → AclPanel.
  * `size` matches the neighboring header buttons (detail pages use full-size
@@ -56,8 +70,21 @@ export function AclDialogButton({
 }) {
   const { t } = useTranslation()
   const actor = useActor()
+  const authRevision = useAuthSessionRevision()
   const [open, setOpen] = useState(false)
-  if (actor.data === null || actor.data === undefined || actor.data.source === 'daemon') {
+  const actorIsSettledHuman =
+    actor.status === 'success' &&
+    actor.fetchStatus === 'idle' &&
+    actor.data !== null &&
+    actor.data !== undefined &&
+    actor.data.source !== 'daemon'
+  useLayoutEffect(() => {
+    if (!actorIsSettledHuman) setOpen(false)
+  }, [actorIsSettledHuman])
+  useLayoutEffect(() => {
+    setOpen(false)
+  }, [authRevision])
+  if (!actorIsSettledHuman) {
     return null
   }
   return (
@@ -93,13 +120,20 @@ export function AclPanel({
   const { t } = useTranslation()
   const qc = useQueryClient()
   const actor = useActor()
+  const authRevision = useAuthSessionRevision()
   const aclUrl = `${resourceBaseUrl}/acl`
+  const aclQueryKey = ['acl', aclUrl, authRevision] as const
 
   const query = useQuery<ResourceAcl>({
-    queryKey: ['acl', aclUrl],
+    queryKey: aclQueryKey,
     queryFn: ({ signal }) => api.get(aclUrl, undefined, signal),
     // Single-user daemon mode (D19): no humans, no panel, no fetch.
-    enabled: actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon',
+    enabled:
+      actor.status === 'success' &&
+      actor.fetchStatus === 'idle' &&
+      actor.data !== null &&
+      actor.data !== undefined &&
+      actor.data.source !== 'daemon',
   })
 
   const [visibility, setVisibility] = useState<ResourceVisibility>('public')
@@ -112,6 +146,43 @@ export function AclPanel({
   // Keep it frozen while either ACL editor is open/dirty so a background
   // refetch cannot silently rebase a stale full-replace draft.
   const draftBaselineRef = useRef<Pick<ResourceAcl, 'resourceId' | 'aclRevision'> | null>(null)
+  // `canManage` is live authorization, not a mount-time UI choice. Every
+  // true→false transition ends the current editing generation so detached DOM
+  // handlers and already-started mutations cannot act on a later session.
+  const manageSessionRef = useRef(0)
+  const previousCanManageRef = useRef(false)
+  const activeAclUrlRef = useRef(aclUrl)
+  const activeAuthRevisionRef = useRef(authRevision)
+  const editSessionIdentityRef = useRef<string | null>(null)
+  const resetSaveRef = useRef<() => void>(() => {})
+  const liveCanManage =
+    actor.status === 'success' &&
+    actor.fetchStatus === 'idle' &&
+    query.status === 'success' &&
+    query.fetchStatus === 'idle' &&
+    actor.data !== null &&
+    actor.data !== undefined &&
+    actor.data.source !== 'daemon' &&
+    query.data?.canManage === true
+  const hasCurrentManageAuthority = (expectedAuthRevision: number): boolean => {
+    if (getAuthSessionRevision() !== expectedAuthRevision) return false
+    const actorKey = meQueryOptions(getToken()).queryKey
+    const actorState = qc.getQueryState(actorKey)
+    const liveActor = qc.getQueryData<MeResponse | null>(actorKey)
+    const aclKey = ['acl', aclUrl, expectedAuthRevision] as const
+    const aclState = qc.getQueryState(aclKey)
+    const liveAcl = qc.getQueryData<ResourceAcl>(aclKey)
+    return (
+      actorState?.status === 'success' &&
+      actorState.fetchStatus === 'idle' &&
+      aclState?.status === 'success' &&
+      aclState.fetchStatus === 'idle' &&
+      liveActor !== null &&
+      liveActor !== undefined &&
+      liveActor.source !== 'daemon' &&
+      liveAcl?.canManage === true
+    )
+  }
   // WebKit doesn't focus a <button> on mouse click, so the transfer Dialog's
   // auto-captured `document.activeElement` at open time is <body> and its
   // close-time focus-restore becomes a no-op. Hand the Dialog this explicit
@@ -120,30 +191,13 @@ export function AclPanel({
   // Locked by e2e/rfc099-ownership-acl.spec.ts (Escape→focus-restore, webkit).
   const transferBtnRef = useRef<HTMLButtonElement | null>(null)
 
-  useEffect(() => {
-    if (query.data !== undefined && !dirty && !transferOpen) {
-      setVisibility(query.data.visibility)
-      setMembers(query.data.users)
-      draftBaselineRef.current = {
-        resourceId: query.data.resourceId,
-        aclRevision: query.data.aclRevision,
-      }
-    }
-    if (query.data !== undefined && !query.data.canManage) {
-      // A live permission downgrade must also dismiss the nested mutation UI.
-      // The Dialog's `open` prop is gated below for the first render; clearing
-      // the state here prevents it from reopening if access is later restored.
-      setTransferOpen(false)
-      setTransferTo([])
-    }
-  }, [query.data, dirty, transferOpen])
-
   const save = useMutation({
-    mutationFn: (body: {
-      visibility?: ResourceVisibility
-      userIds?: string[]
-      ownerUserId?: string
-    }) => {
+    mutationFn: ({ body, session, authRevision: requestAuthRevision }: AclSaveRequest) => {
+      // A stale rendered handler may outlive the control that created it. The
+      // backend remains authoritative, but fail closed before issuing a PUT.
+      if (!hasCurrentManageAuthority(requestAuthRevision) || session !== manageSessionRef.current) {
+        throw new Error('ACL management session ended; reload before saving')
+      }
       // RFC-170 §8: echo the composite OCC precondition the panel currently holds
       // so the server CAS-rejects (409) a write racing another writer's change.
       const baseline = draftBaselineRef.current
@@ -156,8 +210,17 @@ export function AclPanel({
         expectedAclRevision: baseline.aclRevision,
       })
     },
-    onSuccess: (next, body) => {
-      qc.setQueryData(['acl', aclUrl], next)
+    onSuccess: (next, request) => {
+      // A request can already be on the wire when access is revoked. Never let
+      // its late result overwrite the authoritative downgrade cache, resurrect
+      // a draft, or close a newly restored clean session.
+      if (
+        !hasCurrentManageAuthority(request.authRevision) ||
+        request.session !== manageSessionRef.current
+      ) {
+        return
+      }
+      qc.setQueryData(['acl', aclUrl, request.authRevision], next)
       draftBaselineRef.current = {
         resourceId: next.resourceId,
         aclRevision: next.aclRevision,
@@ -168,19 +231,81 @@ export function AclPanel({
       void qc.invalidateQueries({ queryKey: invalidateKey })
       // Owner transfer keeps the main dialog open (the panel just changed
       // under you and is worth a glance); a plain save closes it.
-      if (body.ownerUserId === undefined) onSaved?.()
+      if (request.body.ownerUserId === undefined) onSaved?.()
     },
-    onError: () => {
+    onError: (_error, request) => {
+      if (
+        !hasCurrentManageAuthority(request.authRevision) ||
+        request.session !== manageSessionRef.current
+      ) {
+        return
+      }
       // RFC-170 §8: a failed save (esp. a 409 revision conflict) means the panel's
       // held revision is stale — refetch the authoritative owner/grants/revision.
       // The draft fence deliberately stays frozen: retrying the same stale draft
       // must keep conflicting until the user closes/reopens and reviews a fresh
       // snapshot. The error text shows via describeApiError.
-      void qc.invalidateQueries({ queryKey: ['acl', aclUrl] })
+      void qc.invalidateQueries({ queryKey: ['acl', aclUrl, request.authRevision] })
     },
   })
+  resetSaveRef.current = save.reset
 
-  if (actor.data === null || actor.data === undefined || actor.data.source === 'daemon') {
+  useLayoutEffect(() => {
+    const acl = query.data
+    const lostManage = previousCanManageRef.current && !liveCanManage
+    previousCanManageRef.current = liveCanManage
+    const aclUrlChanged = activeAclUrlRef.current !== aclUrl
+    activeAclUrlRef.current = aclUrl
+    const authChanged = activeAuthRevisionRef.current !== authRevision
+    activeAuthRevisionRef.current = authRevision
+    const nextIdentity = acl === undefined ? null : acl.resourceId
+    const resourceChanged =
+      nextIdentity !== null &&
+      editSessionIdentityRef.current !== null &&
+      editSessionIdentityRef.current !== nextIdentity
+    if (nextIdentity !== null) editSessionIdentityRef.current = nextIdentity
+
+    if (lostManage || aclUrlChanged || authChanged || resourceChanged) {
+      // Permission loss and resource identity changes are hard edit-session
+      // boundaries. Clear every mutable surface and the frozen OCC baseline
+      // before a later grant or cached sibling resource can render.
+      manageSessionRef.current += 1
+      draftBaselineRef.current = null
+      setDirty(false)
+      setTransferOpen(false)
+      setTransferTo([])
+      resetSaveRef.current()
+    }
+
+    if (acl === undefined) return
+    if (!liveCanManage) {
+      // Keep the hidden draft state authoritative too, so false→true cannot
+      // flash or revive the values from the ended manager session.
+      draftBaselineRef.current = null
+      setVisibility(acl.visibility)
+      setMembers(acl.users)
+      setDirty(false)
+      setTransferOpen(false)
+      setTransferTo([])
+      return
+    }
+    if (!dirty && !transferOpen) {
+      setVisibility(acl.visibility)
+      setMembers(acl.users)
+      draftBaselineRef.current = {
+        resourceId: acl.resourceId,
+        aclRevision: acl.aclRevision,
+      }
+    }
+  }, [aclUrl, authRevision, dirty, liveCanManage, query.data, transferOpen])
+
+  if (
+    actor.status !== 'success' ||
+    actor.fetchStatus !== 'idle' ||
+    actor.data === null ||
+    actor.data === undefined ||
+    actor.data.source === 'daemon'
+  ) {
     return null
   }
   if (query.isLoading) return null
@@ -188,7 +313,22 @@ export function AclPanel({
   const acl = query.data
   if (acl === undefined) return null
 
-  const canManage = acl.canManage
+  const canManage = liveCanManage
+  const manageSession = manageSessionRef.current
+  const mutationBelongsToSession = save.variables?.session === manageSession
+  const savePending = save.isPending && mutationBelongsToSession
+  const sessionIsCurrent = (): boolean =>
+    hasCurrentManageAuthority(authRevision) && manageSessionRef.current === manageSession
+  const beginManagedDraft = (): boolean => {
+    if (!sessionIsCurrent()) return false
+    if (!dirty) {
+      draftBaselineRef.current = {
+        resourceId: acl.resourceId,
+        aclRevision: acl.aclRevision,
+      }
+    }
+    return true
+  }
 
   return (
     <div className="acl-panel" data-testid="acl-panel">
@@ -209,12 +349,7 @@ export function AclPanel({
               type="button"
               className="btn btn--sm"
               onClick={() => {
-                if (!dirty) {
-                  draftBaselineRef.current = {
-                    resourceId: acl.resourceId,
-                    aclRevision: acl.aclRevision,
-                  }
-                }
+                if (!beginManagedDraft()) return
                 setTransferOpen(true)
               }}
               data-testid="acl-transfer-owner"
@@ -233,12 +368,7 @@ export function AclPanel({
           <Segmented<ResourceVisibility>
             value={visibility}
             onChange={(v) => {
-              if (!dirty) {
-                draftBaselineRef.current = {
-                  resourceId: acl.resourceId,
-                  aclRevision: acl.aclRevision,
-                }
-              }
+              if (!beginManagedDraft()) return
               setVisibility(v)
               setDirty(true)
             }}
@@ -260,12 +390,7 @@ export function AclPanel({
           <UserPicker
             value={members}
             onChange={(next) => {
-              if (!dirty) {
-                draftBaselineRef.current = {
-                  resourceId: acl.resourceId,
-                  aclRevision: acl.aclRevision,
-                }
-              }
+              if (!beginManagedDraft()) return
               setMembers(next)
               setDirty(true)
             }}
@@ -289,7 +414,7 @@ export function AclPanel({
         <p className="acl-panel__hint page__hint">{t('acl.privateHint')}</p>
       )}
 
-      {save.error !== null && save.error !== undefined && (
+      {canManage && mutationBelongsToSession && save.error !== null && save.error !== undefined && (
         <p className="form-actions__error">{describeApiError(save.error)}</p>
       )}
 
@@ -301,11 +426,18 @@ export function AclPanel({
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!dirty || save.isPending}
+            disabled={!dirty || savePending}
             data-testid="acl-save"
-            onClick={() => save.mutate({ visibility, userIds: members.map((u) => u.id) })}
+            onClick={() => {
+              if (!sessionIsCurrent()) return
+              save.mutate({
+                session: manageSession,
+                authRevision,
+                body: { visibility, userIds: members.map((u) => u.id) },
+              })
+            }}
           >
-            {save.isPending ? t('common.saving') : t('acl.save')}
+            {savePending ? t('common.saving') : t('acl.save')}
           </button>
         )}
       </div>
@@ -325,11 +457,18 @@ export function AclPanel({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={transferTo.length === 0 || save.isPending}
+              disabled={transferTo.length === 0 || savePending}
               data-testid="acl-transfer-confirm"
               onClick={() => {
+                if (!sessionIsCurrent()) return
                 const target = transferTo[0]
-                if (target !== undefined) save.mutate({ ownerUserId: target.id })
+                if (target !== undefined) {
+                  save.mutate({
+                    session: manageSession,
+                    authRevision,
+                    body: { ownerUserId: target.id },
+                  })
+                }
               }}
             >
               {t('acl.transferConfirm')}
@@ -340,7 +479,9 @@ export function AclPanel({
         <p className="page__hint">{t('acl.transferHint')}</p>
         <UserPicker
           value={transferTo}
-          onChange={setTransferTo}
+          onChange={(next) => {
+            if (sessionIsCurrent()) setTransferTo(next)
+          }}
           single
           excludeIds={acl.ownerUserId !== null ? [acl.ownerUserId] : []}
           testidPrefix="acl-transfer"

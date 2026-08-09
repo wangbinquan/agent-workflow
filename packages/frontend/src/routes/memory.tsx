@@ -20,7 +20,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
 import { useMemoryPendingCounts } from '@/components/shell/MemoryPendingBadge'
-import { useActor } from '@/hooks/useActor'
+import { useActor, useIsAdmin } from '@/hooks/useActor'
 import { useMemoryWs } from '@/hooks/useMemoryWs'
 import { useMemoryDistillJobWs } from '@/hooks/useMemoryDistillJobWs'
 
@@ -82,7 +82,9 @@ function MemoryPage() {
   // gate is per-row canManage), so the ADMIN surfaces here key off the
   // actor's role instead of the permission point.
   const actor = useActor()
-  const isAdmin = actor.data?.user.role === 'admin'
+  const isAdmin = useIsAdmin()
+  const actorReady =
+    actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
   const actorError = actor.error !== null && actor.error !== undefined
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
@@ -95,7 +97,7 @@ function MemoryPage() {
   const [allView, setAllView] = useState<'approved' | 'archived'>('approved')
   const [showUnavailableNotice, setShowUnavailableNotice] = useState(false)
   const sectionHeadingRef = useRef<HTMLHeadingElement | null>(null)
-  const pendingCounts = useMemoryPendingCounts({ enabled: actor.data !== undefined })
+  const pendingCounts = useMemoryPendingCounts({ enabled: actorReady })
 
   const selectTab = (next: MemoryTab) => {
     if (next === tab) return
@@ -113,14 +115,14 @@ function MemoryPage() {
   }, [hash, navigate, rawTab])
 
   useEffect(() => {
-    if (actor.data === undefined || isAdmin || search.tab !== 'distill-jobs') return
+    if (!actorReady || isAdmin || search.tab !== 'distill-jobs') return
     setShowUnavailableNotice(true)
     void navigate({
       search: (previous) => withMemoryTab(previous, 'all'),
       hash,
       replace: true,
     })
-  }, [actor.data, hash, isAdmin, navigate, search.tab])
+  }, [actorReady, hash, isAdmin, navigate, search.tab])
 
   // Live updates for the entire surface.
   useMemoryWs()
@@ -155,18 +157,17 @@ function MemoryPage() {
         />
       )}
 
-      {actor.data === undefined ? (
-        actor.isLoading ? (
-          <LoadingState />
-        ) : actorError ? (
+      {!actorReady ? (
+        actorError ? (
           <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />
+        ) : actor.isLoading || actor.fetchStatus !== 'idle' ? (
+          <LoadingState />
         ) : (
           <LoadingState />
         )
       ) : (
         <>
           <FeedbackStack variant="section">
-            {actorError && <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />}
             {showUnavailableNotice && (
               <NoticeBanner tone="info" size="compact">
                 {t('memory.sectionUnavailable')}

@@ -99,6 +99,9 @@ function renderProgress(batchId: string) {
         onClose={() => {}}
         activeBatchId={batchId}
         onActiveBatchIdChange={() => {}}
+        canCreate
+        canExecute
+        hasPermission={() => true}
       />
     </QueryClientProvider>,
   )
@@ -177,6 +180,9 @@ describe('RFC-152 — BatchImportDialog subscribes via WS_PATHS.repoImport', () 
           onClose={() => {}}
           activeBatchId="b1"
           onActiveBatchIdChange={() => {}}
+          canCreate
+          canExecute
+          hasPermission={() => true}
         />
       </QueryClientProvider>,
     )

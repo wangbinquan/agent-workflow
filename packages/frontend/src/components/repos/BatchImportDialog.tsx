@@ -12,7 +12,15 @@
 import type { BatchImportRow, BatchImportSnapshot } from '@agent-workflow/shared'
 import { WS_PATHS } from '@agent-workflow/shared'
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { describeApiError } from '@/i18n'
@@ -20,13 +28,18 @@ import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { TableViewport } from '@/components/TableViewport'
+import { useAuthSessionRevision } from '@/hooks/useActor'
 import { useWebSocket } from '@/hooks/useWebSocket'
+import { getAuthSessionRevision } from '@/stores/auth'
 
 interface BatchImportDialogProps {
   open: boolean
   onClose: () => void
   activeBatchId: string | null
   onActiveBatchIdChange: (id: string | null) => void
+  canCreate: boolean
+  canExecute: boolean
+  hasPermission: (permission: 'repos:create' | 'repos:execute') => boolean
   /** Forwarded to <Dialog triggerRef> so close restores focus to the trigger. */
   triggerRef?: RefObject<HTMLElement | null>
 }
@@ -38,10 +51,14 @@ export function BatchImportDialog({
   onClose,
   activeBatchId,
   onActiveBatchIdChange,
+  canCreate,
+  canExecute,
+  hasPermission,
   triggerRef,
 }: BatchImportDialogProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const authRevision = useAuthSessionRevision()
   const [view, setView] = useState<View>(activeBatchId !== null ? 'progress' : 'input')
   const [text, setText] = useState('')
   const [snapshot, setSnapshot] = useState<BatchImportSnapshot | null>(null)
@@ -54,13 +71,58 @@ export function BatchImportDialog({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const overrideInputRef = useRef<HTMLInputElement | null>(null)
   const retryInFlightRef = useRef(false)
+  const hasPermissionRef = useRef(hasPermission)
+  hasPermissionRef.current = hasPermission
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
   const retryRefs = useRef(new Map<string, HTMLButtonElement>())
   const editRefs = useRef(new Map<string, HTMLButtonElement>())
+  const canAccessBatch = canCreate || (canExecute && activeBatchId !== null)
+  const permissionSessionRef = useRef(0)
+  const activeAuthRevisionRef = useRef(authRevision)
+  const hasCurrentPermission = useCallback(
+    (permission: 'repos:create' | 'repos:execute'): boolean =>
+      getAuthSessionRevision() === authRevision && hasPermissionRef.current(permission),
+    [authRevision],
+  )
+
+  useLayoutEffect(() => {
+    // Opening/closing, capability changes and batch identity changes are all
+    // async-continuation boundaries. Old responses may finish, but they cannot
+    // populate a later dialog session.
+    permissionSessionRef.current += 1
+    const authChanged = activeAuthRevisionRef.current !== authRevision
+    activeAuthRevisionRef.current = authRevision
+    retryInFlightRef.current = false
+    setSubmitting(false)
+    setRetryPending(false)
+    setErrorMsg(null)
+    setRetryError(null)
+    if (!canExecute) {
+      setEditingRowId(null)
+      setDraftUrl('')
+    }
+    if (authChanged || !open || !canAccessBatch) {
+      setEditingRowId(null)
+      setDraftUrl('')
+      setText('')
+      setSnapshot(null)
+      setView(activeBatchId !== null ? 'progress' : 'input')
+    }
+  }, [activeBatchId, authRevision, canAccessBatch, canCreate, canExecute, open])
+
+  useEffect(() => {
+    if (open && !canAccessBatch) onClose()
+    if (!canExecute) {
+      setEditingRowId(null)
+      setDraftUrl('')
+      setRetryError(null)
+    }
+  }, [canAccessBatch, canExecute, onClose, open])
 
   // Initial fetch when reopening with an active batchId.
   useEffect(() => {
-    if (!open) return
+    if (!open || !canAccessBatch) return
+    const session = permissionSessionRef.current
     setEditingRowId(null)
     setDraftUrl('')
     setRetryError(null)
@@ -72,8 +134,22 @@ export function BatchImportDialog({
     setView('progress')
     api
       .get<BatchImportSnapshot>(`/api/cached-repos/imports/${encodeURIComponent(activeBatchId)}`)
-      .then((snap) => setSnapshot(snap))
+      .then((snap) => {
+        if (
+          session !== permissionSessionRef.current ||
+          (!hasCurrentPermission('repos:create') && !hasCurrentPermission('repos:execute'))
+        ) {
+          return
+        }
+        setSnapshot(snap)
+      })
       .catch((err) => {
+        if (
+          session !== permissionSessionRef.current ||
+          (!hasCurrentPermission('repos:create') && !hasCurrentPermission('repos:execute'))
+        ) {
+          return
+        }
         if (err instanceof ApiError && err.status === 404) {
           // Stale localStorage; reset to input view.
           onActiveBatchIdChange(null)
@@ -83,23 +159,24 @@ export function BatchImportDialog({
         }
         setErrorMsg(describeApiError(err))
       })
-  }, [open, activeBatchId, onActiveBatchIdChange])
+  }, [activeBatchId, canAccessBatch, hasCurrentPermission, onActiveBatchIdChange, open])
 
   useEffect(() => {
-    if (open && view === 'input' && textareaRef.current) {
+    if (open && canCreate && view === 'input' && textareaRef.current) {
       textareaRef.current.focus()
     }
-  }, [open, view])
+  }, [canCreate, open, view])
 
   useEffect(() => {
-    if (!open || editingRowId === null) return
+    if (!open || !canAccessBatch || !canExecute || editingRowId === null) return
     const id = window.setTimeout(() => overrideInputRef.current?.focus(), 0)
     return () => window.clearTimeout(id)
-  }, [editingRowId, open])
+  }, [canAccessBatch, canExecute, editingRowId, open])
 
   // Live progress over WS.
   const onWsMessage = useCallback(
     (msg: unknown) => {
+      if (!hasCurrentPermission('repos:create') && !hasCurrentPermission('repos:execute')) return
       if (msg === null || typeof msg !== 'object') return
       const m = msg as { type?: string }
       if (m.type === 'row.update') {
@@ -127,29 +204,33 @@ export function BatchImportDialog({
         )
       }
     },
-    [qc],
+    [hasCurrentPermission, qc],
   )
 
   // RFC-152 — the subscription path comes from the shared WS_PATHS constant
   // (double-ended single source; the backend registry's pathRe is
   // interlock-tested against it).
   useWebSocket({
-    path: activeBatchId !== null && open ? WS_PATHS.repoImport(activeBatchId) : '',
+    path:
+      activeBatchId !== null && open && canAccessBatch ? WS_PATHS.repoImport(activeBatchId) : '',
     onMessage: onWsMessage,
-    enabled: activeBatchId !== null && open,
+    enabled: activeBatchId !== null && open && canAccessBatch,
   })
 
   const parsedUrls = useMemo(() => parseTextarea(text), [text])
 
-  if (!open) return null
+  if (!open || !canAccessBatch) return null
 
   async function handleStart(): Promise<void> {
+    if (!hasCurrentPermission('repos:create')) return
+    const session = permissionSessionRef.current
     setSubmitting(true)
     setErrorMsg(null)
     try {
       const snap = await api.post<BatchImportSnapshot>('/api/cached-repos/batch-import', {
         urls: parsedUrls,
       })
+      if (session !== permissionSessionRef.current || !hasCurrentPermission('repos:create')) return
       setSnapshot(snap)
       onActiveBatchIdChange(snap.batchId)
       setView('progress')
@@ -158,9 +239,10 @@ export function BatchImportDialog({
       // cached-repos query.
       qc.invalidateQueries({ queryKey: ['cached-repos'] })
     } catch (err) {
+      if (session !== permissionSessionRef.current || !hasCurrentPermission('repos:create')) return
       setErrorMsg(describeApiError(err))
     } finally {
-      setSubmitting(false)
+      if (session === permissionSessionRef.current) setSubmitting(false)
     }
   }
 
@@ -174,7 +256,12 @@ export function BatchImportDialog({
   }
 
   function beginOverride(rowId: string): void {
-    if (retryPending || (editingRowId !== null && editingRowId !== rowId)) return
+    if (
+      !hasCurrentPermission('repos:execute') ||
+      retryPending ||
+      (editingRowId !== null && editingRowId !== rowId)
+    )
+      return
     setEditingRowId(rowId)
     setDraftUrl('')
     setRetryError(null)
@@ -194,7 +281,13 @@ export function BatchImportDialog({
     body: Record<string, never> | { url: string },
     fromEditor: boolean,
   ): Promise<void> {
-    if (activeBatchId === null || retryInFlightRef.current) return
+    if (
+      !hasCurrentPermission('repos:execute') ||
+      activeBatchId === null ||
+      retryInFlightRef.current
+    )
+      return
+    const session = permissionSessionRef.current
     retryInFlightRef.current = true
     const batchId = activeBatchId
     setRetryPending(true)
@@ -207,6 +300,7 @@ export function BatchImportDialog({
         )}/rows/${encodeURIComponent(rowId)}/retry`,
         body,
       )
+      if (session !== permissionSessionRef.current || !hasCurrentPermission('repos:execute')) return
       setSnapshot(snap)
       if (fromEditor) {
         setEditingRowId(null)
@@ -215,22 +309,26 @@ export function BatchImportDialog({
       }
       restoreRowFocus(rowId, 'retry')
     } catch (err) {
+      if (session !== permissionSessionRef.current || !hasCurrentPermission('repos:execute')) return
       if (fromEditor) setRetryError(err)
       else setErrorMsg(describeApiError(err))
     } finally {
-      retryInFlightRef.current = false
-      setRetryPending(false)
+      if (session === permissionSessionRef.current) {
+        retryInFlightRef.current = false
+        setRetryPending(false)
+      }
     }
   }
 
   function submitOverride(): void {
-    if (editingRowId === null || retryPending) return
+    if (!hasCurrentPermission('repos:execute') || editingRowId === null || retryPending) return
     const rowId = editingRowId
     const trimmed = draftUrl.trim()
     void handleRetry(rowId, trimmed.length === 0 ? {} : { url: trimmed }, true)
   }
 
   function handleAgain(): void {
+    if (!hasCurrentPermission('repos:create')) return
     onActiveBatchIdChange(null)
     setSnapshot(null)
     setText('')
@@ -276,7 +374,7 @@ export function BatchImportDialog({
         <button
           type="button"
           className="btn btn--sm btn--primary"
-          disabled={submitting || parsedUrls.length === 0 || parsedUrls.length > 100}
+          disabled={!canCreate || submitting || parsedUrls.length === 0 || parsedUrls.length > 100}
           onClick={() => void handleStart()}
           data-testid="batch-import-start"
         >
@@ -285,7 +383,7 @@ export function BatchImportDialog({
       </>
     ) : (
       <>
-        {snapshot?.state === 'completed' && (
+        {canCreate && snapshot?.state === 'completed' && (
           <button
             type="button"
             className="btn btn--sm"
@@ -372,7 +470,7 @@ export function BatchImportDialog({
                       <td>{describeStatus(row)}</td>
                       <td className="batch-import-table__detail">{row.message ?? ''}</td>
                       <td>
-                        {editingRowId === row.rowId ? (
+                        {canExecute && editingRowId === row.rowId ? (
                           <div
                             className="stack--sm"
                             data-testid={`batch-import-override-${row.rowId}`}
@@ -412,6 +510,7 @@ export function BatchImportDialog({
                             </div>
                           </div>
                         ) : (
+                          canExecute &&
                           (row.status === 'failed' || row.status === 'done') && (
                             <div className="batch-import-table__actions">
                               <button

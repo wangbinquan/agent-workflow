@@ -29,7 +29,8 @@
 //      shared oracles the executor obeys and are pure display state: they never
 //      enter `node.script`, the history stack, or a save.
 
-import { useRef, useState } from 'react'
+import { QueryClientContext } from '@tanstack/react-query'
+import { useCallback, useContext, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   buildScriptEnvelopeSnippet,
@@ -55,8 +56,9 @@ import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { Segmented } from '@/components/Segmented'
-import { usePermission } from '@/hooks/useActor'
+import { meQueryOptions, usePermission, type MeResponse } from '@/hooks/useActor'
 import { copyText } from '@/lib/clipboard'
+import { getToken } from '@/stores/auth'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -77,8 +79,50 @@ const EDITOR_LANGUAGE: Record<ScriptLanguage, CodeEditorLanguage> = {
 export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
   const { t } = useTranslation()
   const canAuthor = usePermission('scripts:author')
+  const queryClient = useContext(QueryClientContext)
   const [fullscreenOpen, setFullscreenOpen] = useState(false)
   const fullscreenTriggerRef = useRef<HTMLButtonElement | null>(null)
+  // Permission loss ends the whole authoring session, not just the current
+  // render. CodeMirror keeps an imperative EditorView and an already-detached
+  // view can still dispatch its old onChange closure after the no-permission
+  // placeholder has committed (or after access is restored). Fence every
+  // authoring callback by the generation in which its control was rendered.
+  const authoringSessionRef = useRef(0)
+  const authoringAuthorityInvalidatedRef = useRef(false)
+  const canAuthorRef = useRef(canAuthor)
+  const previousCanAuthorRef = useRef(canAuthor)
+  const authoringSession = authoringSessionRef.current
+
+  const hasCurrentAuthoringAuthority = useCallback((): boolean => {
+    // Provider-free inspector unit suites predate the canvas query provider;
+    // retain their hook-driven contract. Production reads the live cache so a
+    // same-act /me downgrade or refetch cannot slip through before React paints.
+    if (queryClient === undefined) return canAuthorRef.current
+    const queryKey = meQueryOptions(getToken()).queryKey
+    const state = queryClient.getQueryState(queryKey)
+    const actor = queryClient.getQueryData<MeResponse | null>(queryKey)
+    return (
+      state?.status === 'success' &&
+      state.fetchStatus === 'idle' &&
+      actor !== null &&
+      actor !== undefined &&
+      Array.isArray(actor.permissions) &&
+      actor.permissions.includes('scripts:author')
+    )
+  }, [queryClient])
+
+  useLayoutEffect(() => {
+    const lostAuthoring = previousCanAuthorRef.current && !canAuthor
+    previousCanAuthorRef.current = canAuthor
+    canAuthorRef.current = canAuthor
+    const liveAuthority = hasCurrentAuthoringAuthority()
+    if ((lostAuthoring || !liveAuthority) && !authoringAuthorityInvalidatedRef.current) {
+      authoringSessionRef.current += 1
+      authoringAuthorityInvalidatedRef.current = true
+    }
+    if (!canAuthor) setFullscreenOpen(false)
+    if (canAuthor && liveAuthority) authoringAuthorityInvalidatedRef.current = false
+  }, [canAuthor, hasCurrentAuthoringAuthority])
 
   const language = readScriptLanguage(node) ?? 'python'
   const body =
@@ -103,7 +147,34 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
     ),
   ].sort()
 
+  function authoringSessionIsCurrent(): boolean {
+    if (!hasCurrentAuthoringAuthority()) {
+      // Query observers notify React asynchronously. End the generation at the
+      // request boundary too, so an already-connected CodeMirror callback in
+      // that render-lag window cannot mutate the workflow draft.
+      if (!authoringAuthorityInvalidatedRef.current) {
+        authoringSessionRef.current += 1
+        authoringAuthorityInvalidatedRef.current = true
+      }
+      return false
+    }
+    return (
+      !authoringAuthorityInvalidatedRef.current &&
+      canAuthorRef.current &&
+      authoringSessionRef.current === authoringSession
+    )
+  }
+
+  function guardedPatch(next: WorkflowNode, meta: InspectorChangeMeta): void {
+    if (authoringSessionIsCurrent()) onPatch(next, meta)
+  }
+
+  function guardedHistoryBoundary(meta: InspectorChangeMeta): void {
+    if (authoringSessionIsCurrent()) onHistoryBoundary(meta)
+  }
+
   function update(patch: Record<string, unknown>, meta: InspectorChangeMeta) {
+    if (!authoringSessionIsCurrent()) return
     onPatch({ ...(node as Record<string, unknown>), ...patch } as unknown as WorkflowNode, meta)
   }
 
@@ -135,7 +206,11 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
   return (
     <div className="inspector-sections">
       <InspectorSection title={t('inspector.sectionBasics')}>
-        <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
+        <NodeTitleField
+          node={node}
+          onPatch={guardedPatch}
+          onHistoryBoundary={guardedHistoryBoundary}
+        />
         <Field label={t('scriptInspector.language')} hint={t('scriptInspector.languageHint')} group>
           <Segmented<ScriptLanguage>
             value={language}
@@ -177,7 +252,9 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
                 aria-haspopup="dialog"
                 aria-expanded={fullscreenOpen}
                 data-testid="script-body-fullscreen-trigger"
-                onClick={() => setFullscreenOpen(true)}
+                onClick={() => {
+                  if (authoringSessionIsCurrent()) setFullscreenOpen(true)
+                }}
               >
                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <path

@@ -44,6 +44,13 @@ export interface RepoGroupEditorProps {
   open: boolean
   onClose: () => void
   group?: RepoGroup
+  canWrite: boolean
+  hasWritePermission: () => boolean
+}
+
+interface RepoGroupSaveRequest {
+  session: number
+  nodes: RepoGroupNodeInput[]
 }
 
 function fromGroup(group: RepoGroup | undefined): RepoGroupNodeInput[] {
@@ -95,7 +102,13 @@ function previewNodeError(error: unknown): RepoTreeNodeError | null {
   return path === undefined ? null : { path, message: error.message }
 }
 
-export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) {
+export function RepoGroupEditor({
+  open,
+  onClose,
+  group,
+  canWrite,
+  hasWritePermission,
+}: RepoGroupEditorProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [name, setName] = useState(group?.name ?? '')
@@ -122,6 +135,27 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
   )
   const dirtyRef = useRef<string | null>(null)
   const busyRef = useRef(false)
+  const editorSessionRef = useRef(0)
+  const editorIdentityRef = useRef(`${open}:${canWrite}:${group?.id ?? 'new'}`)
+  const resetSaveRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    const identity = `${open}:${canWrite}:${group?.id ?? 'new'}`
+    if (editorIdentityRef.current !== identity) {
+      editorIdentityRef.current = identity
+      editorSessionRef.current += 1
+      resetSaveRef.current()
+    }
+    if (!open || canWrite) return
+    // Permission loss is stronger than the ordinary unsaved-changes flow: no
+    // stale editor or nested confirmation may remain actionable.
+    dirtyRef.current = null
+    busyRef.current = false
+    setBulkMode(null)
+    setBulkDraftDirty(false)
+    setDeleteIntent(null)
+    setDiscardOpen(false)
+    onClose()
+  }, [canWrite, group?.id, onClose, open])
 
   useEffect(() => {
     if (!open) return
@@ -154,12 +188,12 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
   const repos = useQuery<{ items: CachedRepo[] }>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
-    enabled: open,
+    enabled: open && canWrite,
   })
   const groups = useQuery<{ items: RepoGroup[] }>({
     queryKey: ['repo-groups'],
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
-    enabled: open,
+    enabled: open && canWrite,
   })
   const repoById = useMemo(
     () => new Map((repos.data?.items ?? []).map((repo) => [repo.id, repo])),
@@ -197,18 +231,22 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
     queryKey: ['repo-group-preview-v2', JSON.stringify(debouncedNodes)],
     queryFn: ({ signal }) =>
       api.post('/api/repo-groups/preview', { nodes: debouncedNodes }, signal),
-    enabled: open,
+    enabled: open && canWrite,
     retry: false,
   })
 
   const save = useMutation({
-    mutationFn: async (submittedNodes: RepoGroupNodeInput[]) => {
+    mutationFn: async ({ nodes: submittedNodes, session }: RepoGroupSaveRequest) => {
+      if (session !== editorSessionRef.current) throw new Error('repo editor session ended')
+      if (!hasWritePermission()) throw new Error('repo write permission required')
       const body = { name, description, nodes: submittedNodes }
       if (group === undefined) return api.post('/api/repo-groups', body)
       return api.put(`/api/repo-groups/${group.id}`, { ...body, expectedVersion: group.version })
     },
-    onSuccess: async () => {
+    onSuccess: async (_saved, request) => {
+      if (request.session !== editorSessionRef.current || !hasWritePermission()) return
       await qc.invalidateQueries({ queryKey: ['repo-groups'] })
+      if (request.session !== editorSessionRef.current || !hasWritePermission()) return
       if (group !== undefined) {
         await qc.invalidateQueries({ queryKey: ['repo-group-layout', group.id] })
       }
@@ -217,6 +255,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
       onClose()
     },
   })
+  resetSaveRef.current = save.reset
 
   const selected = nodes.find((node) => node.path === selectedPath) ?? nodes[0]!
   const selectedAttachment = selected.attachment
@@ -349,6 +388,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
   const hasUnappliedDraft =
     newDirectory !== '' || directoryNameDraft !== nodeName(selectedPath) || bulkDraftDirty
   const canSave =
+    canWrite &&
     name.trim().length > 0 &&
     (preview.data?.totalRepos ?? 0) > 0 &&
     !preview.isError &&
@@ -360,8 +400,8 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
     .map((node) => node.path)
   const materialDirty =
     draftFingerprint(name, description, nodes) !== initialDraftRef.current || hasUnappliedDraft
-  dirtyRef.current = open && materialDirty ? `repo-group:${group?.id ?? 'new'}` : null
-  busyRef.current = open && save.isPending
+  dirtyRef.current = open && canWrite && materialDirty ? `repo-group:${group?.id ?? 'new'}` : null
+  busyRef.current = open && canWrite && save.isPending
 
   const discardAndClose = (): boolean => {
     if (busyRef.current) return false
@@ -386,7 +426,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
   return (
     <>
       <Dialog
-        open={open}
+        open={open && canWrite}
         onClose={requestClose}
         title={
           group === undefined
@@ -411,7 +451,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
               type="button"
               className="btn btn--primary"
               disabled={!canSave}
-              onClick={() => save.mutate(nodes)}
+              onClick={() => save.mutate({ session: editorSessionRef.current, nodes })}
               data-testid="repo-group-save"
             >
               {t('common.save')}
@@ -422,7 +462,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
         {save.error !== null && save.error !== undefined && <ErrorBanner error={save.error} />}
         {localError !== null && <ErrorBanner error={new Error(localError)} />}
 
-        <fieldset className="repo-group-editor__fields" disabled={save.isPending}>
+        <fieldset className="repo-group-editor__fields" disabled={save.isPending || !canWrite}>
           <div
             className={`repo-group-editor__meta${showDescription ? '' : ' repo-group-editor__meta--compact'}`}
           >
@@ -574,7 +614,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
               previewNodes={preview.data?.nodes}
               previewRepos={preview.data?.repos}
               nodeError={previewNodeError(preview.error)}
-              disabled={save.isPending}
+              disabled={save.isPending || !canWrite}
               onSelect={setSelectedPath}
               onCheck={(path, value) =>
                 setChecked((current) => {
@@ -806,7 +846,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
         </fieldset>
       </Dialog>
       <RepoBulkAddDialog
-        open={bulkMode !== null}
+        open={canWrite && bulkMode !== null}
         initialMode={bulkMode ?? 'repos'}
         repos={repos.data?.items ?? []}
         targetLabel={selectedPath === '' ? t('repoGroups.layout.rootMount') : selectedPath}
@@ -818,7 +858,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
         onDraftDirtyChange={setBulkDraftDirty}
       />
       <ConfirmDialog
-        open={deleteIntent !== null}
+        open={canWrite && deleteIntent !== null}
         title={t('repoGroups.editor.deleteSubtreeTitle')}
         description={t('repoGroups.editor.deleteSubtreeDescription', {
           nodes: deleteIntent?.nodeCount ?? 0,
@@ -832,7 +872,7 @@ export function RepoGroupEditor({ open, onClose, group }: RepoGroupEditorProps) 
         }}
       />
       <ConfirmDialog
-        open={discardOpen}
+        open={canWrite && discardOpen}
         title={t('splitPage.unsavedTitle')}
         description={t('splitPage.unsavedBody')}
         cancelLabel={t('splitPage.unsavedStay')}

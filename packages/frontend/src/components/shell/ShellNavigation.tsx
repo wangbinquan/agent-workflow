@@ -4,7 +4,7 @@ import { Link } from '@tanstack/react-router'
 import { useLayoutEffect, useRef, type MouseEvent, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ResourceIcon } from '@/components/icons/resourceIcons'
-import { useActor } from '@/hooks/useActor'
+import { useIsAdmin } from '@/hooks/useActor'
 import type { ActiveNav, SubNavItem } from '@/lib/nav'
 import { NAV_GROUPS } from '@/lib/nav'
 import { NavGroup } from './NavGroup'
@@ -31,8 +31,7 @@ export function ShellNavigation({
   const navRef = useRef<HTMLElement | null>(null)
   // RFC-257 UI 修订：adminOnly 项（/webhooks）只对 admin 渲染。actor 加载中
   // 保守隐藏（不闪现）；非 admin 直输 URL 由页面自身守卫兜底。
-  const actor = useActor()
-  const isAdmin = actor.data?.user.role === 'admin'
+  const isAdmin = useIsAdmin()
   const visibleGroups = NAV_GROUPS.map((group) => ({
     ...group,
     subnav: group.subnav.filter((item) => item.adminOnly !== true || isAdmin),

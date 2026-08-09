@@ -7,11 +7,11 @@
 // until the 30-s staleTime elapses). A null token short-circuits the
 // fetch and returns null.
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
 import type { PatPublic, Permission, UserIdentity, UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { getToken, subscribeAuth } from '@/stores/auth'
+import { getAuthSessionRevision, getToken, subscribeAuth } from '@/stores/auth'
 
 export interface MeResponse {
   user: UserPublic
@@ -27,6 +27,16 @@ export const ACTOR_QUERY_KEY = ['auth', 'me'] as const
 
 export function useAuthTokenSnapshot(): string | null {
   return useSyncExternalStore(subscribeAuth, getToken, () => null)
+}
+
+/**
+ * Opaque, non-secret credential identity. It changes synchronously whenever
+ * setToken/clearToken installs a different credential, so resource caches and
+ * stale event handlers can be bound to the actor that created them without
+ * retaining another copy of the token.
+ */
+export function useAuthSessionRevision(): number {
+  return useSyncExternalStore(subscribeAuth, getAuthSessionRevision, () => 0)
 }
 
 /**
@@ -70,15 +80,51 @@ export function useActor() {
   return useQuery<MeResponse | null>(meQueryOptions(token))
 }
 
+/**
+ * Return the actor only while the token-scoped `/me` query is a settled,
+ * successful snapshot. React Query deliberately retains successful data while
+ * a background refetch is pending or has failed; authorization must never use
+ * that retained payload as current authority.
+ */
+export function currentActorAtRequest(client: QueryClient): MeResponse | null | undefined {
+  const key = meQueryOptions(getToken()).queryKey
+  const state = client.getQueryState(key)
+  if (state?.status !== 'success' || state.fetchStatus !== 'idle') return undefined
+  return client.getQueryData<MeResponse | null>(key)
+}
+
+/** Final request-boundary permission check for detached/stale event handlers. */
+export function hasPermissionAtRequest(client: QueryClient, perm: Permission): boolean {
+  const actor = currentActorAtRequest(client)
+  return (
+    actor !== null &&
+    actor !== undefined &&
+    Array.isArray(actor.permissions) &&
+    actor.permissions.includes(perm)
+  )
+}
+
+/** Final request-boundary admin identity check for detached/stale handlers. */
+export function isAdminAtRequest(client: QueryClient): boolean {
+  return currentActorAtRequest(client)?.user?.role === 'admin'
+}
+
 export function usePermission(perm: Permission): boolean {
-  const { data } = useActor()
+  const actor = useActor()
   // Fails closed on anything that is not a permission array: loading, logged
-  // out, and a malformed/partial /me payload all answer "no". RFC-270 made this
-  // explicit because the hook moved into the canvas render path, where a
-  // payload missing `permissions` used to throw and take the whole editor down
-  // instead of merely hiding a control.
-  if (!data || !Array.isArray(data.permissions)) return false
-  return data.permissions.includes(perm)
+  // out, a malformed/partial /me payload, or a refetch error all answer "no".
+  // React Query deliberately retains the last successful data after a
+  // background error; consulting data alone would keep stale write capability
+  // visible indefinitely while `/me` is failing.
+  if (
+    actor.status !== 'success' ||
+    actor.fetchStatus !== 'idle' ||
+    !actor.data ||
+    !Array.isArray(actor.data.permissions)
+  ) {
+    return false
+  }
+  return actor.data.permissions.includes(perm)
 }
 
 /**
@@ -88,5 +134,8 @@ export function usePermission(perm: Permission): boolean {
  * such a permission would make the gate a no-op for every logged-in user.
  */
 export function useIsAdmin(): boolean {
-  return useActor().data?.user.role === 'admin'
+  const actor = useActor()
+  return (
+    actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data?.user?.role === 'admin'
+  )
 }

@@ -13,7 +13,7 @@ import { TabBar } from '@/components/TabBar'
 import { WebhookEndpointCard } from '@/components/WebhookEndpointCard'
 import { DeliveriesPanel } from '@/components/webhooks/DeliveriesPanel'
 import { TriggersPanel } from '@/components/webhooks/TriggersPanel'
-import { useActor } from '@/hooks/useActor'
+import { useActor, useIsAdmin } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
 export type WebhooksTab = 'endpoints' | 'triggers' | 'deliveries'
@@ -43,6 +43,7 @@ function WebhooksPage() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const actor = useActor()
+  const isAdmin = useIsAdmin()
   const tab: WebhooksTab = search.tab ?? 'endpoints'
 
   // RFC-260：页面全员可见。加载中给 Loading；isAdmin 决定配置动作是否渲染
@@ -54,8 +55,6 @@ function WebhooksPage() {
       </div>
     )
   }
-  const isAdmin = actor.data?.user.role === 'admin'
-
   const selectTab = (next: WebhooksTab) =>
     void navigate({ search: (previous) => ({ ...previous, tab: next }) })
 

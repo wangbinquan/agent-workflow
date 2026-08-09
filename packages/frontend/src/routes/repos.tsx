@@ -7,7 +7,7 @@ import type {
   ListCachedReposResponse,
   RepoGroup,
 } from '@agent-workflow/shared'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { createRoute, useRouterState } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -31,6 +31,8 @@ import { RepoGroupEditor } from '@/components/repos/RepoGroupEditor'
 import { RepoGroupsPane } from '@/components/repos/RepoGroupsPane'
 import { TableViewport } from '@/components/TableViewport'
 import { FOLDER_ICON, REPO_ICON } from '@/components/icons/resourceIcons'
+import { ACTOR_QUERY_KEY, useActor, type MeResponse } from '@/hooks/useActor'
+import { getToken } from '@/stores/auth'
 import {
   REPO_OPERATIONS_VIEWS,
   filterRepoOperations,
@@ -44,6 +46,22 @@ import { Route as RootRoute } from './__root'
 const BATCH_ID_LS_KEY = 'repo-import-batch-id'
 const REPO_SUBMODULE_FILTERS = ['all', 'with', 'without'] as const
 const REPO_AUTO_REFRESH_FILTERS = ['all', 'refreshed', 'never'] as const
+
+type RepoWritePermission = 'repos:create' | 'repos:update' | 'repos:delete' | 'repos:execute'
+
+/** Final request-boundary authorization; never trusts a render-time snapshot. */
+export function hasRepoPermissionAtRequest(
+  queryClient: QueryClient,
+  permission: RepoWritePermission,
+): boolean {
+  const queryKey = [...ACTOR_QUERY_KEY, getToken() ?? 'no-token'] as const
+  const state = queryClient.getQueryState(queryKey)
+  if (state?.status !== 'success' || state.fetchStatus !== 'idle') return false
+  const data = queryClient.getQueryData<MeResponse | null>(queryKey)
+  return data !== null && data !== undefined && Array.isArray(data.permissions)
+    ? data.permissions.includes(permission)
+    : false
+}
 
 interface RepoFilterDraft {
   submodules: RepoSubmoduleFilter
@@ -102,6 +120,22 @@ export const ReposRoute = createRoute({
 function ReposPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const actor = useActor()
+  // Permission data is an untrusted network payload. Keep every capability
+  // false until /me has returned a settled, successful permission array. A
+  // failed/background refetch can retain old data, which must not stay usable.
+  const actorPermissions =
+    actor.status === 'success' &&
+    actor.fetchStatus === 'idle' &&
+    Array.isArray(actor.data?.permissions)
+      ? actor.data.permissions
+      : []
+  const canCreate = actorPermissions.includes('repos:create')
+  const canUpdate = actorPermissions.includes('repos:update')
+  const canDelete = actorPermissions.includes('repos:delete')
+  const canExecute = actorPermissions.includes('repos:execute')
+  const hasRepoPermission = (permission: RepoWritePermission): boolean =>
+    hasRepoPermissionAtRequest(qc, permission)
   const routeSearch = ReposRoute.useSearch()
   const navigateRepos = ReposRoute.useNavigate()
   const routeLocation = useRouterState({
@@ -113,14 +147,20 @@ function ReposPage() {
   })
 
   const refresh = useMutation({
-    mutationFn: (id: string) => api.post(`/api/cached-repos/${encodeURIComponent(id)}/refresh`, {}),
+    mutationFn: async (id: string) => {
+      if (!hasRepoPermission('repos:execute')) throw new Error('repos:execute permission required')
+      return api.post(`/api/cached-repos/${encodeURIComponent(id)}/refresh`, {})
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cached-repos'] }),
   })
   const remove = useMutation({
-    mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
-      api.delete(`/api/cached-repos/${encodeURIComponent(id)}${force ? '?force=1' : ''}`),
+    mutationFn: async ({ id, force }: { id: string; force?: boolean }) => {
+      if (!hasRepoPermission('repos:delete')) throw new Error('repos:delete permission required')
+      return api.delete(`/api/cached-repos/${encodeURIComponent(id)}${force ? '?force=1' : ''}`)
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cached-repos'] }),
   })
+  const resetRemoveMutation = remove.reset
 
   const [pendingDelete, setPendingDelete] = useState<CachedRepo | null>(null)
   const [batchImportOpen, setBatchImportOpen] = useState(false)
@@ -218,11 +258,20 @@ function ReposPage() {
   const [pendingGroupDelete, setPendingGroupDelete] = useState<RepoGroup | null>(null)
   const [deleteConflict, setDeleteConflict] = useState<string | null>(null)
   const [deleteReport, setDeleteReport] = useState<string | null>(null)
+  const [groupDeleteSession, setGroupDeleteSession] = useState(0)
+  const suppressNextGroupDeleteCloseRef = useRef(false)
+  useEffect(() => {
+    // If the failed session was unmounted before it could request a close,
+    // do not let the suppression leak into the replacement session.
+    suppressNextGroupDeleteCloseRef.current = false
+  }, [groupDeleteSession])
   const removeGroup = useMutation({
-    mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
-      api.delete<DeleteRepoGroupResponse>(
+    mutationFn: async ({ id, force }: { id: string; force?: boolean }) => {
+      if (!hasRepoPermission('repos:delete')) throw new Error('repos:delete permission required')
+      return api.delete<DeleteRepoGroupResponse>(
         `/api/repo-groups/${encodeURIComponent(id)}${force === true ? '?force=1' : ''}`,
-      ),
+      )
+    },
     onSuccess: async (res) => {
       await qc.invalidateQueries({ queryKey: ['repo-groups'] })
       setPendingGroupDelete(null)
@@ -241,32 +290,75 @@ function ReposPage() {
       setDeleteConflict(code === 'repo-group-has-references' ? 'references' : null)
     },
   })
+  const resetRemoveGroupMutation = removeGroup.reset
 
-  const newGroupAction = (
+  // A permission refresh may downgrade the actor while a destructive surface
+  // is already open. Tear down every stale surface instead of leaving a live
+  // control backed by an obsolete render-time decision.
+  useEffect(() => {
+    if (!canCreate) {
+      setBatchImportOpen(false)
+      if (editorOpen && editing === undefined) setEditorOpen(false)
+    }
+    if (!canUpdate && editorOpen && editing !== undefined) setEditorOpen(false)
+    if (!canDelete) {
+      setPendingDelete(null)
+      setPendingGroupDelete(null)
+      setDeleteConflict(null)
+      // Detach this view from any mutation that was authorized before the
+      // downgrade. Its late failure must not leak a stale destructive error
+      // back into the read-only surface (or reappear after a later upgrade).
+      resetRemoveMutation()
+      resetRemoveGroupMutation()
+    }
+  }, [
+    canCreate,
+    canDelete,
+    canUpdate,
+    editing,
+    editorOpen,
+    resetRemoveGroupMutation,
+    resetRemoveMutation,
+  ])
+
+  const newGroupAction = canCreate ? (
     <button
       type="button"
       className="btn btn--primary"
       data-testid="repo-groups-new"
       onClick={() => {
+        if (!hasRepoPermission('repos:create')) return
         setEditing(undefined)
         setEditorOpen(true)
       }}
     >
       {t('repoGroups.newButton')}
     </button>
-  )
+  ) : undefined
 
-  const batchImportAction = (
+  const canOpenBatchDialog = canCreate || (canExecute && activeBatchId !== null)
+  useEffect(() => {
+    if (!canOpenBatchDialog) setBatchImportOpen(false)
+  }, [canOpenBatchDialog])
+  const batchImportAction = canOpenBatchDialog ? (
     <button
       ref={batchImportTriggerRef}
       type="button"
       className="btn btn--primary"
       data-testid="repos-batch-import-button"
-      onClick={() => setBatchImportOpen(true)}
+      data-repo-action={canCreate ? 'create' : 'retry'}
+      onClick={() => {
+        if (
+          hasRepoPermission('repos:create') ||
+          (hasRepoPermission('repos:execute') && activeBatchId !== null)
+        ) {
+          setBatchImportOpen(true)
+        }
+      }}
     >
-      {t('repos.batchImport.button')}
+      {t(canCreate ? 'repos.batchImport.button' : 'repos.batchImport.retry')}
     </button>
-  )
+  ) : undefined
   const reposPanelIds = tabDomIds('repos-resource', 'repos')
   const groupsPanelIds = tabDomIds('repos-resource', 'groups')
 
@@ -327,16 +419,20 @@ function ReposPage() {
             search={groupSearch}
             onSearchChange={setGroupSearch}
             onEdit={(g) => {
+              if (!hasRepoPermission('repos:update')) return
               setEditing(g)
               setEditorOpen(true)
             }}
             onDelete={(g) => {
+              if (!hasRepoPermission('repos:delete')) return
               setDeleteConflict(null)
               setDeleteReport(null)
               setPendingGroupDelete(g)
             }}
-            deleteError={removeGroup.error}
+            deleteError={canDelete && pendingGroupDelete === null ? removeGroup.error : null}
             newAction={newGroupAction}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
           />
           {deleteReport !== null && (
             <div className="info-box" role="status" data-testid="repo-group-delete-report">
@@ -345,7 +441,8 @@ function ReposPage() {
           )}
         </div>
         <ConfirmDialog
-          open={pendingGroupDelete !== null}
+          key={groupDeleteSession}
+          open={canDelete && pendingGroupDelete !== null}
           title={t('repoGroups.deleteTitle')}
           description={
             deleteConflict === 'references'
@@ -359,14 +456,39 @@ function ReposPage() {
             deleteConflict === 'references' ? t('repoGroups.deleteForce') : t('common.delete')
           }
           tone="danger"
-          onConfirm={() => {
-            if (pendingGroupDelete === null) return
-            removeGroup.mutate({
-              id: pendingGroupDelete.id,
-              ...(deleteConflict === 'references' ? { force: true } : {}),
-            })
+          onConfirm={async () => {
+            if (!hasRepoPermission('repos:delete') || pendingGroupDelete === null) return
+            const target = pendingGroupDelete
+            try {
+              await removeGroup.mutateAsync({
+                id: target.id,
+                ...(deleteConflict === 'references' ? { force: true } : {}),
+              })
+            } catch (error) {
+              if (
+                (error as { code?: string }).code === 'repo-group-has-references' &&
+                hasRepoPermission('repos:delete')
+              ) {
+                // ConfirmDialog normally closes after a fulfilled callback.
+                // Remount its local operation session so pending resets while
+                // this same named target remains available for the explicit
+                // force retry, without rendering the 409 a second time.
+                resetRemoveGroupMutation()
+                suppressNextGroupDeleteCloseRef.current = true
+                setGroupDeleteSession((session) => session + 1)
+                return
+              }
+              throw error
+            }
           }}
           onClose={() => {
+            // A handled 409 fulfills ConfirmDialog's callback, which normally
+            // closes the dialog. Keep this one close tied to the failed
+            // session suppressed; the keyed replacement resets pending state.
+            if (suppressNextGroupDeleteCloseRef.current) {
+              suppressNextGroupDeleteCloseRef.current = false
+              return
+            }
             setPendingGroupDelete(null)
             setDeleteConflict(null)
           }}
@@ -374,6 +496,10 @@ function ReposPage() {
         {editorOpen && (
           <RepoGroupEditor
             open
+            canWrite={editing === undefined ? canCreate : canUpdate}
+            hasWritePermission={() =>
+              hasRepoPermission(editing === undefined ? 'repos:create' : 'repos:update')
+            }
             onClose={() => setEditorOpen(false)}
             {...(editing !== undefined ? { group: editing } : {})}
           />
@@ -524,25 +650,34 @@ function ReposPage() {
                             {t('common.ariaActions')}：
                           </span>
                           <div className="data-table__actions">
-                            <button
-                              type="button"
-                              className="btn btn--sm"
-                              disabled={refresh.isPending}
-                              onClick={() => refresh.mutate(item.id)}
-                            >
-                              {t('repos.refresh')}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn--sm btn--danger"
-                              onClick={() =>
-                                item.referencingTaskCount > 0
-                                  ? setPendingDelete(item)
-                                  : remove.mutate({ id: item.id })
-                              }
-                            >
-                              {t('repos.delete')}
-                            </button>
+                            {canExecute && (
+                              <button
+                                type="button"
+                                className="btn btn--sm"
+                                data-testid={`repos-refresh-${item.id}`}
+                                disabled={refresh.isPending}
+                                onClick={() => {
+                                  if (hasRepoPermission('repos:execute')) refresh.mutate(item.id)
+                                }}
+                              >
+                                {t('repos.refresh')}
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                className="btn btn--sm btn--danger"
+                                data-testid={`repos-delete-${item.id}`}
+                                onClick={() => {
+                                  if (!hasRepoPermission('repos:delete')) return
+                                  if (item.referencingTaskCount > 0) setPendingDelete(item)
+                                  else remove.mutate({ id: item.id })
+                                }}
+                              >
+                                {t('repos.delete')}
+                              </button>
+                            )}
+                            {!canExecute && !canDelete && t('common.emDash')}
                           </div>
                         </td>
                       </tr>
@@ -556,11 +691,14 @@ function ReposPage() {
       </div>
 
       <BatchImportDialog
-        open={batchImportOpen}
+        open={batchImportOpen && canOpenBatchDialog}
         onClose={() => setBatchImportOpen(false)}
         activeBatchId={activeBatchId}
         onActiveBatchIdChange={setActiveBatchId}
         triggerRef={batchImportTriggerRef}
+        canCreate={canCreate}
+        canExecute={canExecute}
+        hasPermission={hasRepoPermission}
       />
 
       <RepoFilterDialog
@@ -574,7 +712,7 @@ function ReposPage() {
       />
 
       <Dialog
-        open={pendingDelete !== null}
+        open={canDelete && pendingDelete !== null}
         onClose={() => setPendingDelete(null)}
         title={t('repos.deleteConfirmTitle')}
         size="sm"
@@ -589,7 +727,7 @@ function ReposPage() {
               className="btn btn--sm btn--danger"
               data-testid="repos-delete-confirm-action"
               onClick={() => {
-                if (pendingDelete !== null) {
+                if (hasRepoPermission('repos:delete') && pendingDelete !== null) {
                   remove.mutate({ id: pendingDelete.id, force: true })
                   setPendingDelete(null)
                 }

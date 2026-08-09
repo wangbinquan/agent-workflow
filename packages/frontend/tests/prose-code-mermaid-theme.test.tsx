@@ -9,13 +9,46 @@
 //      baked into the existing SVG.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, render } from '@testing-library/react'
 
 const renderSpy = vi.fn()
+interface MermaidRenderEvent {
+  mount: HTMLElement
+  source: string
+  theme: 'light' | 'dark' | undefined
+}
+
+let renderEvents: MermaidRenderEvent[] = []
+let renderWaiters: Array<{
+  theme: 'light' | 'dark'
+  resolve: (event: MermaidRenderEvent) => void
+}> = []
+
+function publishRender(event: MermaidRenderEvent): void {
+  const waiterIndex = renderWaiters.findIndex((waiter) => waiter.theme === event.theme)
+  if (waiterIndex === -1) {
+    renderEvents.push(event)
+    return
+  }
+  const [waiter] = renderWaiters.splice(waiterIndex, 1)
+  waiter?.resolve(event)
+}
+
+/** Arm before render/theme mutation so even a same-turn passive effect is observed. */
+function nextRenderWithTheme(theme: 'light' | 'dark'): Promise<MermaidRenderEvent> {
+  const queuedIndex = renderEvents.findIndex((event) => event.theme === theme)
+  if (queuedIndex !== -1) {
+    const [event] = renderEvents.splice(queuedIndex, 1)
+    return Promise.resolve(event!)
+  }
+  return new Promise((resolve) => renderWaiters.push({ theme, resolve }))
+}
+
 vi.mock('@/components/review/MermaidBlock', () => ({
   MermaidBlock: {
     render: (mount: HTMLElement, source: string, theme?: 'light' | 'dark') => {
       renderSpy(source, theme)
+      publishRender({ mount, source, theme })
       mount.innerHTML = '<svg data-mocked="mermaid"/>'
       return Promise.resolve()
     },
@@ -44,6 +77,8 @@ function installMatchMedia(matches: boolean) {
 describe('Prose mermaid → MermaidBlock theme wiring', () => {
   beforeEach(() => {
     renderSpy.mockClear()
+    renderEvents = []
+    renderWaiters = []
     document.documentElement.removeAttribute('data-theme')
     installMatchMedia(false)
   })
@@ -51,53 +86,57 @@ describe('Prose mermaid → MermaidBlock theme wiring', () => {
     document.documentElement.removeAttribute('data-theme')
   })
 
-  test('forwards "dark" when <html data-theme="dark">', () => {
+  test('forwards "dark" when <html data-theme="dark">', async () => {
     document.documentElement.setAttribute('data-theme', 'dark')
     const md = '```mermaid\nflowchart TD\nA-->B\n```'
-    render(<Prose body={md} />)
-    return waitFor(() => {
-      expect(renderSpy).toHaveBeenCalled()
-      const call = renderSpy.mock.calls.at(-1)
-      expect(call?.[0]).toContain('flowchart TD')
-      expect(call?.[1]).toBe('dark')
-    })
+    const rendered = nextRenderWithTheme('dark')
+    const { container } = render(<Prose body={md} />)
+    const event = await rendered
+    const diagram = container.querySelector('[data-prose-diagram="mermaid"]')
+    expect(event.mount).toBe(diagram)
+    expect(event.source).toContain('flowchart TD')
+    expect(event.theme).toBe('dark')
+    expect(diagram?.getAttribute('data-prose-diagram-theme')).toBe('dark')
   })
 
-  test('forwards "light" when <html data-theme="light">', () => {
+  test('forwards "light" when <html data-theme="light">', async () => {
     document.documentElement.setAttribute('data-theme', 'light')
     const md = '```mermaid\nflowchart TD\nA-->B\n```'
-    render(<Prose body={md} />)
-    return waitFor(() => {
-      expect(renderSpy.mock.calls.at(-1)?.[1]).toBe('light')
-    })
+    const rendered = nextRenderWithTheme('light')
+    const { container } = render(<Prose body={md} />)
+    const event = await rendered
+    const diagram = container.querySelector('[data-prose-diagram="mermaid"]')
+    expect(event.mount).toBe(diagram)
+    expect(event.source).toContain('flowchart TD')
+    expect(event.theme).toBe('light')
+    expect(diagram?.getAttribute('data-prose-diagram-theme')).toBe('light')
   })
 
   test('toggling <html data-theme> dark→light re-invokes MermaidBlock.render with new theme', async () => {
     document.documentElement.setAttribute('data-theme', 'dark')
     const md = '```mermaid\nflowchart TD\nA-->B\n```'
-    render(<Prose body={md} />)
-
-    // Explicit 5s waitFor timeouts (default is 1s). useResolvedTheme
-    // observes `<html data-theme>` via MutationObserver; on slow CI
-    // runners (macos GHA in particular) the effect chain
-    // mutation → observer fire → setState → useEffect → renderSpy can
-    // miss the 1s budget. Confirmed environmental flake on 2026-05-22
-    // CI run 26297919707; bumping the explicit timeout keeps the test
-    // catching real regressions while not relying on default-budget
-    // luck. Local fast path: still finishes in <50ms.
-    await waitFor(() => expect(renderSpy.mock.calls.at(-1)?.[1]).toBe('dark'), { timeout: 5000 })
+    const initialRender = nextRenderWithTheme('dark')
+    const { container } = render(<Prose body={md} />)
+    const darkEvent = await initialRender
+    const diagram = container.querySelector('[data-prose-diagram="mermaid"]')
+    expect(darkEvent.mount).toBe(diagram)
+    expect(diagram?.getAttribute('data-prose-diagram-theme')).toBe('dark')
     const darkCalls = renderSpy.mock.calls.length
 
+    // Wait on the exact mocked render call rather than polling across the
+    // MutationObserver → state → effect chain. Arm first so a same-turn effect
+    // cannot be missed; the final DOM + call-count assertions remain intact.
+    const lightRender = nextRenderWithTheme('light')
     act(() => {
       document.documentElement.setAttribute('data-theme', 'light')
     })
 
-    await waitFor(
-      () => {
-        expect(renderSpy.mock.calls.length).toBeGreaterThan(darkCalls)
-        expect(renderSpy.mock.calls.at(-1)?.[1]).toBe('light')
-      },
-      { timeout: 5000 },
-    )
+    const lightEvent = await lightRender
+    expect(lightEvent.mount).toBe(diagram)
+    expect(lightEvent.source).toContain('flowchart TD')
+    expect(lightEvent.theme).toBe('light')
+    expect(renderSpy.mock.calls.length).toBeGreaterThan(darkCalls)
+    expect(renderSpy.mock.calls.at(-1)?.[1]).toBe('light')
+    expect(diagram?.getAttribute('data-prose-diagram-theme')).toBe('light')
   })
 })

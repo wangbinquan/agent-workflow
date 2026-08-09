@@ -15,7 +15,14 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  waitForElementToBeRemoved,
+} from '@testing-library/react'
 import {
   Link,
   Outlet,
@@ -326,20 +333,31 @@ describe('UnsavedChangesGuard', () => {
   })
 
   test.each([
-    ['ESC', () => fireEvent.keyDown(document.body, { key: 'Escape' })],
-    ['×', () => fireEvent.click(document.querySelector('.dialog__close') as Element)],
-    ['overlay', () => fireEvent.mouseDown(document.querySelector('.dialog__overlay') as Element)],
+    ['ESC', (_dialog: HTMLElement) => fireEvent.keyDown(document.body, { key: 'Escape' })],
+    [
+      '×',
+      (dialog: HTMLElement) =>
+        fireEvent.click(dialog.querySelector('.dialog__close') as HTMLButtonElement),
+    ],
+    ['overlay', (dialog: HTMLElement) => fireEvent.mouseDown(dialog)],
   ])('dismiss via %s = stay, then a later nav blocks again', async (_label, dismiss) => {
     const router = renderGuard({ initial: '/agents/a', Detail: AlwaysDirtyDetail })
     await waitFor(() => screen.getByText('detail:a'))
     fireEvent.click(screen.getByTestId('split-card-b'))
-    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
-    dismiss()
-    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    const firstDialog = await screen.findByTestId('unsaved-guard-dialog')
+    // Arm the observer before dismissing: resolver.reset() may remove this portal
+    // in the same React turn. Waiting for the exact instance avoids polling a
+    // global query and cannot accidentally accept a replacement dialog.
+    const firstRemoval = waitForElementToBeRemoved(firstDialog)
+    dismiss(firstDialog)
+    await firstRemoval
+    expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
     expect(router.state.location.pathname).toBe('/agents/a')
     // not stuck: navigation blocks again
     fireEvent.click(screen.getByTestId('split-card-b'))
-    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    const secondDialog = await screen.findByTestId('unsaved-guard-dialog')
+    expect(secondDialog).not.toBe(firstDialog)
+    expect(router.state.location.pathname).toBe('/agents/a')
   })
 
   test('a clean draft never blocks', async () => {

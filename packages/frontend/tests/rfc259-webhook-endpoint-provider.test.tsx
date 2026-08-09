@@ -81,6 +81,15 @@ beforeEach(async () => {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     const method = init?.method ?? 'GET'
+    if (url.includes('/api/auth/me')) {
+      return jsonResponse({
+        user: { id: 'u1', username: 'root', displayName: 'root', role: 'admin', status: 'active' },
+        source: 'session',
+        permissions: [],
+        linkedIdentities: [],
+        pats: [],
+      })
+    }
     if (url.includes('/api/webhook-endpoints') && method === 'GET') {
       return jsonResponse(endpoints)
     }

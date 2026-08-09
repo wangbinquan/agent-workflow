@@ -11,7 +11,12 @@
 // 两处方向不同是刻意的：这里遮多了只是少看见几个字段，那里拦错了会把管理员挡在
 // 配置页外面。
 
-import { QueryClientContext, QueryObserver } from '@tanstack/react-query'
+import {
+  QueryClientContext,
+  QueryObserver,
+  type QueryClient,
+  type QueryObserverResult,
+} from '@tanstack/react-query'
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -89,16 +94,47 @@ function usePermissionsSnapshot(): readonly Permission[] {
   const client = useContext(QueryClientContext)
   const token = useAuthTokenSnapshot()
   const options = useMemo(() => meQueryOptions(token), [token])
-  const [me, setMe] = useState<MeResponse | null | undefined>(() =>
-    client?.getQueryData<MeResponse | null>(options.queryKey),
-  )
+
+  type Snapshot = {
+    client: QueryClient | undefined
+    token: string | null
+    result: Pick<QueryObserverResult<MeResponse | null>, 'data' | 'fetchStatus' | 'status'> | null
+  }
+  const [snapshot, setSnapshot] = useState<Snapshot>(() => {
+    if (client === undefined) return { client, token, result: null }
+    const state = client.getQueryState(options.queryKey)
+    return {
+      client,
+      token,
+      result:
+        state === undefined
+          ? null
+          : {
+              data: client.getQueryData<MeResponse | null>(options.queryKey),
+              fetchStatus: state.fetchStatus,
+              status: state.status,
+            },
+    }
+  })
   useEffect(() => {
-    if (client === undefined) return
+    if (client === undefined) {
+      setSnapshot({ client, token, result: null })
+      return
+    }
     const observer = new QueryObserver<MeResponse | null>(client, options)
-    setMe(observer.getCurrentResult().data)
-    return observer.subscribe((result) => setMe(result.data))
-  }, [client, options])
-  return Array.isArray(me?.permissions) ? me.permissions : []
+    const update = (result: QueryObserverResult<MeResponse | null>) =>
+      setSnapshot({ client, token, result })
+    update(observer.getCurrentResult())
+    return observer.subscribe(update)
+  }, [client, options, token])
+
+  // A provider/client or auth-token switch renders before the effect above can
+  // subscribe to the new cache entry. Tagging the snapshot identity prevents a
+  // one-frame grant leak from the previous actor/client.
+  if (snapshot.client !== client || snapshot.token !== token) return []
+  const result = snapshot.result
+  if (result?.status !== 'success' || result.fetchStatus !== 'idle') return []
+  return Array.isArray(result.data?.permissions) ? result.data.permissions : []
 }
 
 export function usePrivilegedNodes(): PrivilegedNodeAccess {

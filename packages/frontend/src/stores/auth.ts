@@ -19,6 +19,10 @@ function defaultBaseUrl(): string {
 
 type Listener = () => void
 const listeners = new Set<Listener>()
+// Non-secret identity for the currently installed credential. Components use
+// this to fence cached resource data and async continuations across account
+// switches without copying the credential itself into additional caches.
+let authSessionRevision = 0
 
 function emit(): void {
   for (const l of listeners) l()
@@ -62,18 +66,26 @@ export function getToken(): string | null {
   return safeStorage()?.getItem(TOKEN_KEY) ?? null
 }
 
+export function getAuthSessionRevision(): number {
+  return authSessionRevision
+}
+
 export function setToken(token: string): void {
   const trimmed = token.trim()
   if (trimmed === '') {
     clearToken()
     return
   }
+  const changed = getToken() !== trimmed
   safeStorage()?.setItem(TOKEN_KEY, trimmed)
+  if (changed) authSessionRevision += 1
   emit()
 }
 
 export function clearToken(): void {
+  const changed = getToken() !== null
   safeStorage()?.removeItem(TOKEN_KEY)
+  if (changed) authSessionRevision += 1
   emit()
 }
 

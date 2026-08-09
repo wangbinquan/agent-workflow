@@ -159,6 +159,42 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+/**
+ * Wait for React to commit an observable mutation on one exact element.
+ *
+ * These keyboard tests exercise a native keydown listener which schedules a
+ * controlled-input commit outside React's synthetic-event path. Polling the
+ * radio's `checked` property made the tests wall-clock-sensitive under loaded
+ * CI. The submit button is a later, user-visible projection of the same answer
+ * state, and React reflects `disabled` in the DOM attribute, so a one-shot
+ * MutationObserver gives us a deterministic commit boundary. Final assertions
+ * still verify the exact radio and focus target.
+ */
+function waitForDisabledState(button: HTMLButtonElement, disabled: boolean): Promise<void> {
+  if (button.disabled === disabled) return Promise.resolve()
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      if (button.disabled !== disabled) return
+      observer.disconnect()
+      resolve()
+    })
+    observer.observe(button, { attributes: true, attributeFilter: ['disabled'] })
+  })
+}
+
+/** The filled-answer count is rendered inside the same stable submit button. */
+function waitForTextChange(element: HTMLElement, previous: string): Promise<void> {
+  if (element.textContent !== previous) return Promise.resolve()
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      if (element.textContent === previous) return
+      observer.disconnect()
+      resolve()
+    })
+    observer.observe(element, { childList: true, characterData: true, subtree: true })
+  })
+}
+
 describe('groupAnswerableQuestions (oracle)', () => {
   test('keeps clarify-backed pending questions — self AND cross (RFC-128 P5-BC), grouped by round; RFC-136: sealed pending 纳入为重答', () => {
     const groups = groupAnswerableQuestions([
@@ -820,11 +856,13 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     // 自动聚焦经 rAF 异步落焦 → waitFor。全局第一题=第一轮的 q1（非 q2/q3）。
     await waitFor(() => expect(document.activeElement).toBe(q1))
     // 快捷键即刻可用：数字 1 直接选中第一个选项（无需先点击/Tab）。
+    const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
+    expect(submit.disabled).toBe(true)
+    const answerCommitted = waitForDisabledState(submit, false)
     fireEvent.keyDown(q1, { key: '1' })
-    await waitFor(
-      () => expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
-      { timeout: 10_000 },
-    )
+    await answerCommitted
+    expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true)
+    expect(submit.disabled).toBe(false)
   })
 
   test('Enter advances focus across rounds; the LAST question is a NO-OP (submit NOT auto-focused)', async () => {
@@ -879,16 +917,16 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     await waitFor(() => screen.getByTestId('clarify-question-q1'))
     const q1 = screen.getByTestId('clarify-question-q1')
     const q2 = screen.getByTestId('clarify-question-q2')
+    const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
 
     q1.focus()
     // Digit '1' picks option 0 of the single-choice question AND advances (QuestionForm contract).
+    expect(submit.disabled).toBe(true)
+    const answerCommitted = waitForDisabledState(submit, false)
     fireEvent.keyDown(q1, { key: '1' })
-    // The key handler is a native listener; the controlled radio's React
-    // commit may land on the next turn under a loaded CI runner.
-    await waitFor(
-      () => expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
-      { timeout: 10_000 },
-    )
+    await answerCommitted
+    expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true)
+    expect(submit.disabled).toBe(false)
     expect(document.activeElement).toBe(q2)
   })
 
@@ -915,11 +953,12 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
 
     // Digit-pick the LAST question → it gets checked, but focus stays on q2 (NO-OP), not submit.
     q2.focus()
+    const previousSubmitText = submit.textContent ?? ''
+    const secondAnswerCommitted = waitForTextChange(submit, previousSubmitText)
     fireEvent.keyDown(q2, { key: '1' })
-    await waitFor(
-      () => expect((within(q2).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
-      { timeout: 10_000 },
-    )
+    await secondAnswerCommitted
+    expect((within(q2).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true)
+    expect(submit.textContent).not.toBe(previousSubmitText)
     expect(document.activeElement).toBe(q2)
     expect(document.activeElement).not.toBe(submit)
   })
@@ -940,13 +979,12 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     expect(submit.disabled).toBe(true) // nothing filled yet → disabled
 
     q1.focus()
+    const answerCommitted = waitForDisabledState(submit, false)
     fireEvent.keyDown(q1, { key: '1' }) // picks (first filled answer) + advances past the last question
-    await waitFor(
-      () => expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
-      { timeout: 10_000 },
-    )
+    await answerCommitted
+    expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true)
     // The submit button enables (filledTotal 0→1) but NO deferred flush focuses it — focus stays put.
-    await waitFor(() => expect(submit.disabled).toBe(false))
+    expect(submit.disabled).toBe(false)
     expect(document.activeElement).toBe(q1)
     expect(document.activeElement).not.toBe(submit)
   })

@@ -14,10 +14,10 @@
 //   2. first Escape closes only the inner dialog, second closes the outer;
 //   3. closing the inner hands focus restoration back without re-freezing.
 
-import { useRef, useState } from 'react'
+import { StrictMode, useRef, useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, test } from 'vitest'
-import { Dialog } from '../src/components/Dialog'
+import { Dialog, __testAcquireDialogBodyScrollLock } from '../src/components/Dialog'
 import '../src/i18n'
 
 afterEach(() => cleanup())
@@ -41,6 +41,19 @@ function NestedHarness() {
         <input ref={innerInputRef} data-testid="inner-input" />
       </Dialog>
     </Dialog>
+  )
+}
+
+function ConcurrentHarness({ firstOpen, secondOpen }: { firstOpen: boolean; secondOpen: boolean }) {
+  return (
+    <>
+      <Dialog open={firstOpen} onClose={() => {}} title="first">
+        <button type="button">first action</button>
+      </Dialog>
+      <Dialog open={secondOpen} onClose={() => {}} title="second">
+        <button type="button">second action</button>
+      </Dialog>
+    </>
   )
 }
 
@@ -101,5 +114,71 @@ describe('nested Dialog — open-dialog stack (RFC-099 freeze regression)', () =
     const active = document.activeElement
     expect(active).not.toBe(outsider)
     outsider.remove()
+  })
+})
+
+describe('concurrent Dialog — shared body scroll lock', () => {
+  test('closing the older dialog first stays locked until the final owner restores the first value', () => {
+    const beforeTest = document.body.style.overflow
+    document.body.style.overflow = 'clip'
+    try {
+      const { rerender } = render(<ConcurrentHarness firstOpen secondOpen />)
+      expect(document.body.style.overflow).toBe('hidden')
+
+      // A closes out of order while B remains open: the page must stay locked.
+      rerender(<ConcurrentHarness firstOpen={false} secondOpen />)
+      expect(document.body.style.overflow).toBe('hidden')
+
+      // The final owner restores the value captured before A opened, not the
+      // `hidden` value B observed when it joined the shared lock.
+      rerender(<ConcurrentHarness firstOpen={false} secondOpen={false} />)
+      expect(document.body.style.overflow).toBe('clip')
+    } finally {
+      cleanup()
+      document.body.style.overflow = beforeTest
+    }
+  })
+
+  test('StrictMode replay and a repeated stale cleanup never release a live owner', () => {
+    const beforeTest = document.body.style.overflow
+    let releaseFirst: (() => void) | undefined
+    let releaseSecond: (() => void) | undefined
+    document.body.style.overflow = 'scroll'
+    try {
+      const { rerender, unmount } = render(
+        <StrictMode>
+          <ConcurrentHarness firstOpen secondOpen />
+        </StrictMode>,
+      )
+      expect(document.body.style.overflow).toBe('hidden')
+
+      rerender(
+        <StrictMode>
+          <ConcurrentHarness firstOpen={false} secondOpen />
+        </StrictMode>,
+      )
+      expect(document.body.style.overflow).toBe('hidden')
+      unmount()
+      expect(document.body.style.overflow).toBe('scroll')
+
+      // Exercise the release token itself across lock sessions: once the first
+      // owner fully releases, a late duplicate cleanup cannot decrement the
+      // new session's owner.
+      releaseFirst = __testAcquireDialogBodyScrollLock()
+      expect(document.body.style.overflow).toBe('hidden')
+      releaseFirst()
+      expect(document.body.style.overflow).toBe('scroll')
+      releaseSecond = __testAcquireDialogBodyScrollLock()
+      expect(document.body.style.overflow).toBe('hidden')
+      releaseFirst()
+      expect(document.body.style.overflow).toBe('hidden')
+      releaseSecond()
+      expect(document.body.style.overflow).toBe('scroll')
+    } finally {
+      releaseFirst?.()
+      releaseSecond?.()
+      cleanup()
+      document.body.style.overflow = beforeTest
+    }
   })
 })

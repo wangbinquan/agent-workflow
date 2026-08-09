@@ -9,10 +9,11 @@ import {
   createRootRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import i18n from '../src/i18n'
+import { meQueryOptions } from '../src/hooks/useActor'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 function jsonResponse(body: unknown): Response {
@@ -26,6 +27,7 @@ let role: 'admin' | 'user' = 'admin'
 let triggers: unknown[] = []
 let deliveries: unknown[] = []
 let endpoints: unknown[] = []
+let triggerWriteCount = 0
 
 function meResponse() {
   return {
@@ -62,6 +64,7 @@ async function renderWebhooks(initialSearch = '') {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  return qc
 }
 
 beforeEach(async () => {
@@ -87,10 +90,15 @@ beforeEach(async () => {
       ingressUrl: 'https://aw.example.com/webhooks/gitlab/aw_whk_tok1',
     },
   ]
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+  triggerWriteCount = 0
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
+    const method = init?.method ?? 'GET'
     if (url.includes('/api/auth/me')) return jsonResponse(meResponse())
-    if (url.includes('/api/webhook-triggers')) return jsonResponse(triggers)
+    if (url.includes('/api/webhook-triggers')) {
+      if (method !== 'GET') triggerWriteCount += 1
+      return jsonResponse(triggers)
+    }
     if (url.includes('/api/webhook-endpoints')) return jsonResponse(endpoints)
     // RFC-261：列表响应封套化；/repos 是仓库过滤下拉的选项源。
     if (url.includes('/api/webhook-deliveries/repos')) return jsonResponse([])
@@ -257,6 +265,66 @@ describe('RFC-257 · /webhooks page (admin)', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(await screen.findByRole('heading', { name: 'Discard unsaved changes?' })).toBeTruthy()
     expect(screen.getByTestId('webhook-trigger-dialog')).toBeTruthy()
+  })
+
+  test('downgrade clears an admin draft and an invoked connected stale toggle sends zero write', async () => {
+    triggers = [
+      {
+        id: 'tr1',
+        name: 'rule',
+        endpointId: 'ep1',
+        ownerUserId: 'u1',
+        enabled: true,
+        repoScope: { kind: 'all' },
+        eventTypes: ['push'],
+        branchFilter: null,
+        commandPrefix: null,
+        ignoreUsernames: [],
+        launchKind: 'workflow',
+        launchRefId: 'wf1',
+        launchPayload: { inputs: {} },
+        migrationError: null,
+        maxConsecutiveFires: 3,
+        autoRegisterRepos: true,
+        lastFiredAt: null,
+        lastStatus: null,
+        lastError: null,
+        lastTaskId: null,
+        consecutiveFailures: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]
+    const client = await renderWebhooks('?tab=triggers')
+    const newTrigger = (await screen.findByTestId('webhook-trigger-new')) as HTMLButtonElement
+    await waitFor(() => expect(newTrigger.disabled).toBe(false))
+    fireEvent.click(newTrigger)
+    expect(await screen.findByTestId('webhook-trigger-dialog')).toBeTruthy()
+
+    act(() => {
+      role = 'user'
+      client.setQueryData(meQueryOptions('tok').queryKey, meResponse())
+    })
+    await waitFor(() => expect(screen.queryByTestId('webhook-trigger-dialog')).toBeNull())
+    expect(screen.queryByTestId('webhook-trigger-new')).toBeNull()
+
+    act(() => {
+      role = 'admin'
+      client.setQueryData(meQueryOptions('tok').queryKey, meResponse())
+    })
+    const staleToggle = (await screen.findByTestId('webhook-trigger-enable-tr1')) as HTMLElement
+    let invocations = 0
+    staleToggle.addEventListener('click', () => {
+      invocations += 1
+    })
+    act(() => {
+      role = 'user'
+      client.setQueryData(meQueryOptions('tok').queryKey, meResponse())
+      fireEvent.click(staleToggle)
+    })
+    expect(invocations).toBe(1)
+    expect(triggerWriteCount).toBe(0)
+    await waitFor(() => expect(screen.queryByTestId('webhook-trigger-enable-tr1')).toBeNull())
   })
 })
 

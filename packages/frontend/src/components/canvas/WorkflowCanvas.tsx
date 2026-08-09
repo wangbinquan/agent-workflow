@@ -41,7 +41,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { ComponentType } from 'react'
+import type { ComponentType, PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Agent,
@@ -1307,6 +1307,24 @@ function CanvasInner({
   // the gesture this drag. onConnectEnd reads it to decide whether a body drop
   // (no handle snapped → onConnect never fired) still needs a new-input edge.
   const connectHandledRef = useRef(false)
+  // xyflow installs one document listener closure per started drag. A canceled
+  // closure can survive blur/pointercancel until the next mouseup/touchend, so
+  // later drags can temporarily overlap it. Track the FIFO number of live
+  // starts and how many oldest ends belong to canceled gestures: a single
+  // boolean is insufficient when a second blur happens before the first stale
+  // end drains.
+  const activeConnectCountRef = useRef(0)
+  const canceledConnectEndDebtRef = useRef(0)
+  // xyflow installs its document closure on handle mousedown, but only emits
+  // onConnectStart after the pointer crosses dragThreshold. Observe the earlier
+  // pointerdown in capture phase so a blur in that gap can quarantine a start
+  // that arrives late from the still-installed xyflow closure.
+  const preThresholdConnectStartCountRef = useRef(0)
+  const canceledConnectStartDebtRef = useRef(0)
+  // A handle can be pressed before xyflow crosses its drag threshold (and thus
+  // before onConnectStart). Its document closure may call us after unmount;
+  // this fence keeps that late start from re-arming our listener or writing.
+  const connectMountedRef = useRef(false)
   // RFC-106: latest pointer (screen px) during a connection drag. onConnect has
   // no event, but the build needs the precise drop point to resolve new-vs-reuse
   // — so we track pointermove from onConnectStart..onConnectEnd. The last move
@@ -1315,10 +1333,47 @@ function CanvasInner({
   const trackConnectPointer = useCallback((e: PointerEvent) => {
     connectPointer.current = { x: e.clientX, y: e.clientY }
   }, [])
+  const stopConnectPointerTracking = useCallback(() => {
+    document.removeEventListener('pointermove', trackConnectPointer)
+    connectPointer.current = null
+  }, [trackConnectPointer])
+
+  const handleConnectionPointerDownCapture = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        !connectMountedRef.current ||
+        readOnly === true ||
+        onChange === undefined ||
+        (event.pointerType === 'mouse' && event.button !== 0)
+      ) {
+        return
+      }
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const handle = target.closest('.react-flow__handle')
+      if (
+        handle === null ||
+        !event.currentTarget.contains(handle) ||
+        !handle.classList.contains('connectable') ||
+        !handle.classList.contains('connectablestart')
+      ) {
+        return
+      }
+      preThresholdConnectStartCountRef.current += 1
+    },
+    [onChange, readOnly],
+  )
 
   const handleConnect = useCallback(
     (conn: Connection) => {
-      if (readOnly === true || onChange === undefined) return
+      if (
+        !connectMountedRef.current ||
+        canceledConnectEndDebtRef.current > 0 ||
+        readOnly === true ||
+        onChange === undefined
+      ) {
+        return
+      }
       // RFC-106: xyflow fired onConnect ⇒ it snapped to a real handle; the
       // body-drop fallback in onConnectEnd must NOT also fire.
       connectHandledRef.current = true
@@ -1423,10 +1478,27 @@ function CanvasInner({
   // snaps to a real handle. Track the pointer for the whole drag (see
   // connectPointer).
   const handleConnectStart = useCallback(() => {
+    if (!connectMountedRef.current) return
+    const canceledBeforeStart = canceledConnectStartDebtRef.current > 0
+    if (canceledBeforeStart) canceledConnectStartDebtRef.current -= 1
+    else if (preThresholdConnectStartCountRef.current > 0) {
+      preThresholdConnectStartCountRef.current -= 1
+    }
+    activeConnectCountRef.current += 1
     connectHandledRef.current = false
-    connectPointer.current = null
+    if (canceledBeforeStart) {
+      // This old closure was pending when blur/pointercancel ended its gesture.
+      // Its matching end must consume a FIFO cancellation slot, and it must not
+      // replace the pointer tracker owned by a newer valid gesture.
+      canceledConnectEndDebtRef.current += 1
+      return
+    }
+    // Do not clear canceledConnectEndDebtRef here. xyflow's older canceled
+    // listener is registered first and must consume its debt before this fresh
+    // gesture is allowed to persist.
+    stopConnectPointerTracking()
     document.addEventListener('pointermove', trackConnectPointer)
-  }, [trackConnectPointer])
+  }, [stopConnectPointerTracking, trackConnectPointer])
 
   // RFC-106: body-drop fallback. When the drag ends over a node BODY (not near
   // any handle), xyflow never fires onConnect — so we resolve the drop pointer
@@ -1435,13 +1507,36 @@ function CanvasInner({
   // ports) are already handled by onConnect, guarded by connectHandledRef.
   const handleConnectEnd = useCallback<OnConnectEnd>(
     (event, connState) => {
-      document.removeEventListener('pointermove', trackConnectPointer)
+      if (!connectMountedRef.current) {
+        stopConnectPointerTracking()
+        return
+      }
+
+      // A direct pointercancel end may reach us even when the document-level
+      // cancel observer did not. Mark every currently-live FIFO closure so none
+      // can persist from the canceled pointer sequence.
+      if (event.type === 'pointercancel') {
+        canceledConnectEndDebtRef.current = Math.max(
+          canceledConnectEndDebtRef.current,
+          activeConnectCountRef.current,
+        )
+      }
+      const canceled = canceledConnectEndDebtRef.current > 0
+      if (canceled) canceledConnectEndDebtRef.current -= 1
+      if (activeConnectCountRef.current > 0) activeConnectCountRef.current -= 1
+      // A stale canceled end can run while a newer gesture is still active.
+      // Its cleanup must not detach/clear the newer gesture's pointer tracker.
+      if (activeConnectCountRef.current === 0) stopConnectPointerTracking()
+
+      if (canceled) {
+        connectHandledRef.current = false
+        return
+      }
       // Drop the tracked pointer so it can't leak into the NEXT gesture. ReactFlow's
       // click-to-connect never fires onConnectStart, so a stale point from a prior
       // drag could otherwise push a later catch-all CLICK into the reuse branch and
       // rebind an existing input instead of adding a new one (Codex P2). onConnect
       // for THIS drag already ran (and consumed connectPointer) before this fires.
-      connectPointer.current = null
       if (readOnly === true || onChange === undefined) return
       if (connectHandledRef.current) {
         connectHandledRef.current = false
@@ -1480,7 +1575,16 @@ function CanvasInner({
       if (!plan.ok) return
       commitTransition({ kind: 'connection', plan }, { label: t('editor.history.connect') })
     },
-    [commitTransition, definition, onChange, readOnly, rf, semanticContext, t, trackConnectPointer],
+    [
+      commitTransition,
+      definition,
+      onChange,
+      readOnly,
+      rf,
+      semanticContext,
+      stopConnectPointerTracking,
+      t,
+    ],
   )
 
   // RFC-106: inject (or clear) the live preview input port on the hovered node.
@@ -1506,6 +1610,66 @@ function CanvasInner({
       return changed ? next : prev
     })
   }, [])
+
+  // xyflow normally pairs onConnectStart/onConnectEnd, but navigation,
+  // pointercancel, or a window blur can abort the component/gesture before the
+  // end callback. Always release the document listener and transient preview;
+  // otherwise every later pointer move retains this canvas closure after
+  // unmount and can leave a stale NEW/REUSE hint visible.
+  useEffect(() => {
+    connectMountedRef.current = true
+    const settlePreThresholdConnect = (event: MouseEvent | TouchEvent) => {
+      // Match xyflow's own multi-touch guard: a touchend with another finger
+      // still down does not remove that handle's document closure.
+      if ('touches' in event && event.touches.length > 0) return
+      // Document listeners run in registration order. This listener is mounted
+      // before xyflow's per-handle closure, so a terminal event can retire the
+      // oldest press that genuinely ended without ever emitting onConnectStart.
+      if (canceledConnectStartDebtRef.current > 0) {
+        canceledConnectStartDebtRef.current -= 1
+      } else if (preThresholdConnectStartCountRef.current > 0) {
+        preThresholdConnectStartCountRef.current -= 1
+      }
+    }
+    const cancelConnectGesture = () => {
+      stopConnectPointerTracking()
+      connectHandledRef.current = false
+      if (preThresholdConnectStartCountRef.current > 0) {
+        canceledConnectStartDebtRef.current += preThresholdConnectStartCountRef.current
+        preThresholdConnectStartCountRef.current = 0
+      }
+      // No live drag means blur/pointercancel is unrelated to wiring. Do not
+      // poison the next valid drag (click-to-connect is disabled below).
+      if (activeConnectCountRef.current > 0) {
+        canceledConnectEndDebtRef.current = Math.max(
+          canceledConnectEndDebtRef.current,
+          activeConnectCountRef.current,
+        )
+      }
+      handlePreviewChange(null)
+    }
+    window.addEventListener('blur', cancelConnectGesture)
+    document.addEventListener('pointercancel', cancelConnectGesture)
+    // These are the exact terminal events used by xyflow's installed closure.
+    // A bare pointerup is deliberately insufficient: if its compatibility
+    // mouseup/touchend never arrives, xyflow's old closure is still live and
+    // its canceled-start debt must remain fenced.
+    document.addEventListener('mouseup', settlePreThresholdConnect)
+    document.addEventListener('touchend', settlePreThresholdConnect)
+    return () => {
+      window.removeEventListener('blur', cancelConnectGesture)
+      document.removeEventListener('pointercancel', cancelConnectGesture)
+      document.removeEventListener('mouseup', settlePreThresholdConnect)
+      document.removeEventListener('touchend', settlePreThresholdConnect)
+      connectMountedRef.current = false
+      stopConnectPointerTracking()
+      connectHandledRef.current = false
+      activeConnectCountRef.current = 0
+      canceledConnectEndDebtRef.current = 0
+      preThresholdConnectStartCountRef.current = 0
+      canceledConnectStartDebtRef.current = 0
+    }
+  }, [handlePreviewChange, stopConnectPointerTracking])
 
   // RFC-106: custom connection line. When the drag is over a node that will get
   // a NEW input (or REUSE an existing one), end the line exactly on that resolved
@@ -2686,6 +2850,7 @@ function CanvasInner({
       tabIndex={0}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
+      onPointerDownCapture={handleConnectionPointerDownCapture}
     >
       <p id={canvasDescriptionId} className="sr-only">
         {t('canvas.accessibleDescription')}

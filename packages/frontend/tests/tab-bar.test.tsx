@@ -331,23 +331,104 @@ describe('<TabBar> — panel ids and scrolling', () => {
     expect(edit.getAttribute('aria-controls')).toBe('agent-editor-panel-edit')
   })
 
-  test('scrolls a newly active tab into view and honors reduced motion', () => {
-    const scrollIntoView = vi.fn()
-    const original = HTMLElement.prototype.scrollIntoView
-    HTMLElement.prototype.scrollIntoView = scrollIntoView
+  test('reveals a hidden newly active tab exactly once and honors reduced motion', () => {
+    const scrollIntoView = vi
+      .spyOn(HTMLElement.prototype, 'scrollIntoView')
+      .mockImplementation(() => {})
     vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }))
     const { rerender } = render(
       <TabBar tabs={TABS} active="edit" onSelect={() => {}} ariaLabel="Test tabs" />,
     )
+
+    const tablist = screen.getByRole('tablist')
+    const edit = screen.getByRole('tab', { name: 'Edit' })
+    const preview = screen.getByRole('tab', { name: 'Preview' })
+    Object.defineProperty(tablist, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, right: 100 }) as DOMRect,
+    })
+    Object.defineProperty(edit, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, right: 50 }) as DOMRect,
+    })
+    Object.defineProperty(preview, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 150, right: 200 }) as DOMRect,
+    })
+    act(() => latestObserver().trigger())
     scrollIntoView.mockClear()
     rerender(<TabBar tabs={TABS} active="preview" onSelect={() => {}} ariaLabel="Test tabs" />)
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
     expect(scrollIntoView).toHaveBeenCalledWith({
       block: 'nearest',
       inline: 'nearest',
       behavior: 'auto',
     })
-    HTMLElement.prototype.scrollIntoView = original
-    vi.unstubAllGlobals()
+  })
+
+  test('reveals an active tab hidden by resize without overriding prior manual scroll', () => {
+    const scrollIntoView = vi
+      .spyOn(HTMLElement.prototype, 'scrollIntoView')
+      .mockImplementation(() => {})
+    const { rerender } = render(
+      <TabBar tabs={TABS} active="preview" onSelect={() => {}} ariaLabel="Test tabs" />,
+    )
+
+    const tablist = screen.getByRole('tablist')
+    const activeTab = screen.getByRole('tab', { name: 'Preview' })
+    let viewportRight = 320
+    let tabLeft = 220
+    let tabRight = 300
+    Object.defineProperty(tablist, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, right: viewportRight }) as DOMRect,
+    })
+    Object.defineProperty(activeTab, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: tabLeft, right: tabRight }) as DOMRect,
+    })
+
+    // Seed the observer's prior-visibility snapshot with the active tab fully
+    // visible, then shrink the viewport while the active key stays unchanged.
+    act(() => latestObserver().trigger())
+    scrollIntoView.mockClear()
+    viewportRight = 260
+    act(() => latestObserver().trigger())
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: 'smooth',
+    })
+
+    // A user can intentionally browse away from the selected tab. A scroll
+    // event records that state; a later label/badge resize must not steal the
+    // viewport back until the active tab has become visible again.
+    scrollIntoView.mockClear()
+    tabLeft = 340
+    tabRight = 420
+    fireEvent.scroll(tablist)
+    viewportRight = 240
+    act(() => latestObserver().trigger())
+    expect(scrollIntoView).not.toHaveBeenCalled()
+
+    // A badge/label can grow while the container width is unchanged. The tabs
+    // prop change recreates the observer effect, so that setup path must honor
+    // the same visible→hidden transition rather than overwrite its snapshot.
+    tabLeft = 150
+    tabRight = 220
+    fireEvent.scroll(tablist)
+    scrollIntoView.mockClear()
+    tabRight = 310
+    rerender(
+      <TabBar
+        tabs={[TABS[0]!, { ...TABS[1]!, label: 'Preview with a long badge label' }]}
+        active="preview"
+        onSelect={() => {}}
+        ariaLabel="Test tabs"
+      />,
+    )
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
   })
 })
 

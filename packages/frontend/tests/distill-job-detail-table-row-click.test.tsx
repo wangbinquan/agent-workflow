@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -16,6 +16,7 @@ import {
 import type { MemoryDistillJob } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { MemoryDistillJobsTable } from '../src/components/memory/MemoryDistillJobsTable'
+import { meQueryOptions } from '../src/hooks/useActor'
 import '../src/i18n'
 
 function mkJob(overrides: Partial<MemoryDistillJob> = {}): MemoryDistillJob {
@@ -48,9 +49,27 @@ afterEach(() => {
 })
 
 async function renderTable(rows: MemoryDistillJob[], onPathChange: (p: string) => void) {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+  const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = init?.method ?? 'GET'
+    if (method === 'GET' && url.endsWith('/api/auth/me')) {
+      return new Response(
+        JSON.stringify({
+          user: {
+            id: 'u1',
+            username: 'root',
+            displayName: 'root',
+            role: 'admin',
+            status: 'active',
+          },
+          source: 'session',
+          permissions: [],
+          linkedIdentities: [],
+          pats: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
     if (method === 'GET' && url.endsWith('/api/memory-distill-jobs')) {
       return new Response(JSON.stringify({ items: rows }), {
         status: 200,
@@ -88,6 +107,7 @@ async function renderTable(rows: MemoryDistillJob[], onPathChange: (p: string) =
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return { qc, fetchSpy }
 }
 
 describe('MemoryDistillJobsTable row interactions (RFC-043)', () => {
@@ -114,5 +134,36 @@ describe('MemoryDistillJobsTable row interactions (RFC-043)', () => {
       // POST was issued (state-changed) but path stays at /.
       expect(path).toBe('/')
     })
+  })
+
+  test('an invoked connected stale retry handler sends zero POST after admin downgrade', async () => {
+    let path = '/'
+    const { qc, fetchSpy } = await renderTable([mkJob({ status: 'failed' })], (next) => {
+      path = next
+    })
+    const staleRetry = await screen.findByTestId('distill-job-row-job-row-1-retry')
+    let invocations = 0
+    staleRetry.addEventListener('click', () => {
+      invocations += 1
+    })
+    act(() => {
+      qc.setQueryData(meQueryOptions('tok').queryKey, {
+        user: { id: 'u1', username: 'dev', displayName: 'dev', role: 'user', status: 'active' },
+        source: 'session',
+        permissions: [],
+        linkedIdentities: [],
+        pats: [],
+      })
+      fireEvent.click(staleRetry)
+    })
+    expect(invocations).toBe(1)
+    expect(
+      fetchSpy.mock.calls.filter(
+        ([input, init]) =>
+          init?.method === 'POST' && input.toString().includes('/api/memory-distill-jobs/'),
+      ),
+    ).toHaveLength(0)
+    expect(path).toBe('/')
+    await waitFor(() => expect(screen.queryByTestId('distill-job-row-job-row-1-retry')).toBeNull())
   })
 })

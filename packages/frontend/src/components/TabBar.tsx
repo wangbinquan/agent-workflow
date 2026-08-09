@@ -167,6 +167,12 @@ export function TabBar<K extends string>({
   const previousActiveRef = useRef(active)
   const tabRefs = useRef(new Map<K, HTMLButtonElement>())
   const tablistRef = useRef<HTMLDivElement>(null)
+  // Preserve the user's manual exploration of an overflowing strip: a resize
+  // should reveal the active tab only when it was visible immediately before
+  // the layout change and the new geometry hid it. If the user deliberately
+  // scrolled the active tab away, later badge/label ResizeObserver deliveries
+  // must not yank the strip back.
+  const activeWasFullyVisibleRef = useRef<boolean | null>(null)
   const [overflow, setOverflow] = useState<TabOverflowState>(INITIAL_OVERFLOW_STATE)
 
   const measureOverflow = useCallback(() => {
@@ -182,6 +188,19 @@ export function TabBar<K extends string>({
     )
   }, [])
 
+  const activeTabIsFullyVisible = useCallback(() => {
+    if (!activeIsEnabled) return false
+    const tablist = tablistRef.current
+    const activeTab = tabRefs.current.get(active)
+    if (tablist === null || activeTab === undefined) return false
+    const viewport = tablist.getBoundingClientRect()
+    const tab = activeTab.getBoundingClientRect()
+    return (
+      tab.left >= viewport.left - SCROLL_EDGE_TOLERANCE &&
+      tab.right <= viewport.right + SCROLL_EDGE_TOLERANCE
+    )
+  }, [active, activeIsEnabled])
+
   useLayoutEffect(() => {
     const tablist = tablistRef.current
     if (tablist === null) return
@@ -189,15 +208,36 @@ export function TabBar<K extends string>({
     // The first paint should already know whether affordances are needed;
     // ResizeObserver delivery is intentionally not the initial measurement.
     measureOverflow()
+    const activeChanged = previousActiveRef.current !== active
+    const wasFullyVisible = activeWasFullyVisibleRef.current
+    const isFullyVisible = activeTabIsFullyVisible()
+    // An active-key change is revealed by the dedicated passive effect below.
+    // Running the resize transition path in this same commit would request the
+    // identical smooth scroll twice (layout effect + effect), which can jitter
+    // narrow tab strips. Same-key geometry changes still use this path.
+    if (!activeChanged && wasFullyVisible === true && !isFullyVisible) {
+      const activeTab = tabRefs.current.get(active)
+      if (activeTab !== undefined) scrollTabIntoView(activeTab)
+    }
+    activeWasFullyVisibleRef.current = isFullyVisible
     if (typeof ResizeObserver === 'undefined') return
 
-    const observer = new ResizeObserver(measureOverflow)
+    const observer = new ResizeObserver(() => {
+      const wasFullyVisible = activeWasFullyVisibleRef.current
+      measureOverflow()
+      const isFullyVisible = activeTabIsFullyVisible()
+      if (wasFullyVisible === true && !isFullyVisible) {
+        const activeTab = tabRefs.current.get(active)
+        if (activeTab !== undefined) scrollTabIntoView(activeTab)
+      }
+      activeWasFullyVisibleRef.current = isFullyVisible
+    })
     observer.observe(tablist)
     // A label or badge can grow without changing the tablist's own content
     // box, so observe each direct tab as well as the scroll container.
     for (const tab of tabRefs.current.values()) observer.observe(tab)
     return () => observer.disconnect()
-  }, [measureOverflow, tabs])
+  }, [active, activeTabIsFullyVisible, measureOverflow, tabs])
 
   useEffect(() => {
     const activeChanged = previousActiveRef.current !== active
@@ -213,7 +253,13 @@ export function TabBar<K extends string>({
     if (!activeIsEnabled) return
     const activeTab = tabRefs.current.get(active)
     if (activeTab !== undefined) scrollTabIntoView(activeTab)
-  }, [active, activeIsEnabled])
+    activeWasFullyVisibleRef.current = activeTabIsFullyVisible()
+  }, [active, activeIsEnabled, activeTabIsFullyVisible])
+
+  const handleTablistScroll = useCallback(() => {
+    measureOverflow()
+    activeWasFullyVisibleRef.current = activeTabIsFullyVisible()
+  }, [activeTabIsFullyVisible, measureOverflow])
 
   const moveFocus = (from: K, direction: 'previous' | 'next' | 'first' | 'last') => {
     if (enabledKeys.length === 0) return
@@ -311,7 +357,7 @@ export function TabBar<K extends string>({
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
         data-testid={rootTestid}
-        onScroll={measureOverflow}
+        onScroll={handleTablistScroll}
       >
         {tabs.map((tab) => {
           const isActive = tab.key === active

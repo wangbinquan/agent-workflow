@@ -37,6 +37,8 @@ vi.mock('../src/api/client', async () => {
 
 vi.mock('../src/hooks/useActor', () => ({
   useActor: () => ({ data: { user: { role: 'admin' } } }),
+  useIsAdmin: () => true,
+  isAdminAtRequest: () => true,
 }))
 
 import { api } from '../src/api/client'

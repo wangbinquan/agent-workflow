@@ -298,6 +298,12 @@ export function NodeInspector({
             >
               {active && key === 'edit' && (
                 <EditForm
+                  // Inspector branches own transient UI (for example the
+                  // script full-screen Dialog). A same-kind selection change
+                  // would otherwise reuse that state while every callback now
+                  // points at the newly selected node, silently retargeting an
+                  // already-open editor. Node identity is the session boundary.
+                  key={node.id}
                   node={node}
                   agents={agents}
                   definition={definition}

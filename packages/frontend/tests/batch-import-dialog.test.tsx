@@ -114,6 +114,9 @@ function renderDialog(
     activeBatchId?: string | null
     onClose?: () => void
     onActiveBatchIdChange?: (id: string | null) => void
+    canCreate?: boolean
+    canExecute?: boolean
+    hasPermission?: (permission: 'repos:create' | 'repos:execute') => boolean
   } = {},
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
@@ -124,6 +127,15 @@ function renderDialog(
         onClose={overrides.onClose ?? (() => {})}
         activeBatchId={overrides.activeBatchId ?? null}
         onActiveBatchIdChange={overrides.onActiveBatchIdChange ?? (() => {})}
+        canCreate={overrides.canCreate ?? true}
+        canExecute={overrides.canExecute ?? true}
+        hasPermission={
+          overrides.hasPermission ??
+          ((permission) =>
+            permission === 'repos:create'
+              ? (overrides.canCreate ?? true)
+              : (overrides.canExecute ?? true))
+        }
       />
     </QueryClientProvider>,
   )
@@ -168,6 +180,107 @@ describe('BatchImportDialog (RFC-033)', () => {
     expect(start.disabled).toBe(true)
     fireEvent.change(ta, { target: { value: 'https://h/a.git' } })
     expect(start.disabled).toBe(false)
+  })
+
+  test('create downgrade closes the dialog and a stale Start handler cannot post', async () => {
+    const onClose = vi.fn()
+    const onActiveBatchIdChange = vi.fn()
+    let createAllowed = true
+    const { qc, rerender } = renderDialog({
+      onClose,
+      onActiveBatchIdChange,
+      hasPermission: () => createAllowed,
+    })
+    fireEvent.change(screen.getByTestId('batch-import-textarea'), {
+      target: { value: 'https://h/a.git' },
+    })
+    const staleStart = screen.getByTestId('batch-import-start')
+    const startClick = vi.fn()
+    staleStart.addEventListener('click', startClick)
+    act(() => {
+      createAllowed = false
+      expect(staleStart.isConnected).toBe(true)
+      fireEvent.click(staleStart)
+    })
+    expect(startClick).toHaveBeenCalledTimes(1)
+    expect(api.post).not.toHaveBeenCalled()
+
+    rerender(
+      <QueryClientProvider client={qc}>
+        <BatchImportDialog
+          open
+          onClose={onClose}
+          activeBatchId={null}
+          onActiveBatchIdChange={onActiveBatchIdChange}
+          canCreate={false}
+          canExecute
+          hasPermission={() => false}
+        />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(screen.queryByTestId('batch-import-dialog')).toBeNull()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  test('a late Start response cannot repopulate a reopened permission session', async () => {
+    const pending = deferred<BatchImportSnapshot>()
+    const onClose = vi.fn()
+    const onActiveBatchIdChange = vi.fn()
+    let createAllowed = true
+    ;(api.post as ReturnType<typeof vi.fn>).mockReturnValue(pending.promise)
+    const { qc, rerender } = renderDialog({
+      onClose,
+      onActiveBatchIdChange,
+      hasPermission: () => createAllowed,
+    })
+    fireEvent.change(screen.getByTestId('batch-import-textarea'), {
+      target: { value: 'https://h/late.git' },
+    })
+    fireEvent.click(screen.getByTestId('batch-import-start'))
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+
+    createAllowed = false
+    rerender(
+      <QueryClientProvider client={qc}>
+        <BatchImportDialog
+          open
+          onClose={onClose}
+          activeBatchId={null}
+          onActiveBatchIdChange={onActiveBatchIdChange}
+          canCreate={false}
+          canExecute
+          hasPermission={() => false}
+        />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.queryByTestId('batch-import-dialog')).toBeNull())
+
+    createAllowed = true
+    rerender(
+      <QueryClientProvider client={qc}>
+        <BatchImportDialog
+          open
+          onClose={onClose}
+          activeBatchId={null}
+          onActiveBatchIdChange={onActiveBatchIdChange}
+          canCreate
+          canExecute
+          hasPermission={() => createAllowed}
+        />
+      </QueryClientProvider>,
+    )
+    expect(
+      ((await screen.findByTestId('batch-import-textarea')) as HTMLTextAreaElement).value,
+    ).toBe('')
+
+    await act(async () => {
+      pending.resolve(mkSnap({ batchId: 'late-batch' }))
+      await pending.promise
+    })
+    expect(screen.queryByTestId('batch-import-table')).toBeNull()
+    expect(onActiveBatchIdChange).not.toHaveBeenCalled()
   })
 
   // Regression: opening the dialog must land focus IN the URL textarea so the
@@ -299,6 +412,132 @@ describe('BatchImportDialog (RFC-033)', () => {
       expect(document.activeElement).toBe(screen.getByTestId('batch-import-edit-r1'))
     })
     expect(api.post).not.toHaveBeenCalled()
+  })
+
+  test('execute-only actors can reopen an active batch and retry without create', async () => {
+    const snap = mkSnap({ rows: [failedRow('r1', 'https://h/one.git')] })
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(snap)
+    renderDialog({ activeBatchId: 'b1', canCreate: false, canExecute: true })
+
+    expect(await screen.findByTestId('batch-import-retry-r1')).toBeTruthy()
+    expect(screen.queryByTestId('batch-import-start')).toBeNull()
+  })
+
+  test('execute downgrade removes retry + override controls and stale handlers cannot post', async () => {
+    const snap = mkSnap({ rows: [failedRow('r1', 'https://h/one.git')] })
+    const onClose = vi.fn()
+    const onActiveBatchIdChange = vi.fn()
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue(snap)
+    let executeAllowed = true
+    const { qc, rerender } = renderDialog({
+      activeBatchId: 'b1',
+      onClose,
+      onActiveBatchIdChange,
+      hasPermission: (permission) => permission === 'repos:create' || executeAllowed,
+    })
+
+    const staleRetry = await screen.findByTestId('batch-import-retry-r1')
+    const retryClick = vi.fn()
+    staleRetry.addEventListener('click', retryClick)
+    act(() => {
+      executeAllowed = false
+      expect(staleRetry.isConnected).toBe(true)
+      fireEvent.click(staleRetry)
+    })
+    expect(retryClick).toHaveBeenCalledTimes(1)
+    expect(api.post).not.toHaveBeenCalled()
+
+    executeAllowed = true
+    fireEvent.click(screen.getByTestId('batch-import-edit-r1'))
+    const staleOverrideSubmit = await screen.findByTestId('batch-import-override-submit')
+    const overrideClick = vi.fn()
+    staleOverrideSubmit.addEventListener('click', overrideClick)
+    act(() => {
+      executeAllowed = false
+      expect(staleOverrideSubmit.isConnected).toBe(true)
+      fireEvent.click(staleOverrideSubmit)
+    })
+    expect(overrideClick).toHaveBeenCalledTimes(1)
+    expect(api.post).not.toHaveBeenCalled()
+
+    rerender(
+      <QueryClientProvider client={qc}>
+        <BatchImportDialog
+          open
+          onClose={onClose}
+          activeBatchId="b1"
+          onActiveBatchIdChange={onActiveBatchIdChange}
+          canCreate
+          canExecute={false}
+          hasPermission={(permission) => permission === 'repos:create'}
+        />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('batch-import-override-r1')).toBeNull()
+      expect(screen.queryByTestId('batch-import-retry-r1')).toBeNull()
+      expect(screen.queryByTestId('batch-import-edit-r1')).toBeNull()
+    })
+    expect(api.post).not.toHaveBeenCalled()
+    expect(screen.getByTestId('batch-import-dialog')).toBeTruthy()
+  })
+
+  test('a late Retry response cannot overwrite the restored execute session', async () => {
+    const initial = mkSnap({ rows: [failedRow('r1', 'https://h/one.git')] })
+    const completed = mkSnap({
+      state: 'completed',
+      rows: [{ ...initial.rows[0]!, status: 'done', cachedRepoId: 'repo-late' }],
+    })
+    const pending = deferred<BatchImportSnapshot>()
+    let executeAllowed = true
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue(initial)
+    ;(api.post as ReturnType<typeof vi.fn>).mockReturnValue(pending.promise)
+    const { qc, rerender } = renderDialog({
+      activeBatchId: 'b1',
+      hasPermission: (permission) => permission === 'repos:create' || executeAllowed,
+    })
+    fireEvent.click(await screen.findByTestId('batch-import-retry-r1'))
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+
+    executeAllowed = false
+    rerender(
+      <QueryClientProvider client={qc}>
+        <BatchImportDialog
+          open
+          onClose={() => {}}
+          activeBatchId="b1"
+          onActiveBatchIdChange={() => {}}
+          canCreate
+          canExecute={false}
+          hasPermission={(permission) => permission === 'repos:create'}
+        />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.queryByTestId('batch-import-retry-r1')).toBeNull())
+
+    executeAllowed = true
+    rerender(
+      <QueryClientProvider client={qc}>
+        <BatchImportDialog
+          open
+          onClose={() => {}}
+          activeBatchId="b1"
+          onActiveBatchIdChange={() => {}}
+          canCreate
+          canExecute
+          hasPermission={(permission) => permission === 'repos:create' || executeAllowed}
+        />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByTestId('batch-import-retry-r1')).toBeTruthy()
+
+    await act(async () => {
+      pending.resolve(completed)
+      await pending.promise
+    })
+    expect(screen.getByTestId('batch-import-retry-r1')).toBeTruthy()
+    expect(screen.queryByText('repo-late')).toBeNull()
   })
 
   test('failed-row editor sends {} for whitespace and a trimmed {url}, then returns focus', async () => {

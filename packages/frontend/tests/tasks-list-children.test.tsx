@@ -16,7 +16,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import '../src/i18n'
@@ -305,6 +305,36 @@ describe('/tasks — bounded child branches (RFC-244)', () => {
     const chip = await screen.findByTestId('task-parent-unavailable-t_orphan')
     expect(chip.tagName).toBe('SPAN')
     expect(urls.some((url) => new URL(url).pathname === '/api/tasks/t_hidden')).toBe(false)
+  })
+
+  test('cached filter changes reset the result scroll while pagination preserves it', async () => {
+    const page = rootPage([item('scroll-anchor')])
+    page.nextCursor = 'next-root'
+    const urls = installFetch(page, (url) => childPage(url.searchParams.get('parent_id')!, []))
+    const router = await renderPage()
+    await screen.findByTestId('task-row-t_scroll-anchor')
+
+    // Populate the second filter's cache first. Returning to the already-cached
+    // all view reuses the same <ol>, which is the production failure mode.
+    await router.navigate({ to: '/tasks', search: { view: 'active' } })
+    await waitFor(() =>
+      expect(urls.some((url) => new URL(url).searchParams.get('view') === 'active')).toBe(true),
+    )
+    const list = document.querySelector<HTMLOListElement>('.task-operations__list')!
+    list.scrollTop = 480
+    await router.navigate({ to: '/tasks', search: {} })
+    await waitFor(() => expect(list.scrollTop).toBe(0))
+
+    // Appending another page is the same result set and must not throw the
+    // reader back to the beginning.
+    list.scrollTop = 275
+    fireEvent.click(screen.getByRole('button', { name: /load more tasks/i }))
+    await waitFor(() =>
+      expect(urls.some((url) => new URL(url).searchParams.get('cursor') === 'next-root')).toBe(
+        true,
+      ),
+    )
+    expect(list.scrollTop).toBe(275)
   })
 
   test('desktop density stays at 56px for roots and 48px for children', () => {

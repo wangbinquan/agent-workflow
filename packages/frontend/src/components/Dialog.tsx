@@ -72,6 +72,45 @@ const FOCUSABLE =
 // Locked by tests/dialog-nested.test.tsx.
 const openDialogStack: Array<RefObject<HTMLDivElement | null>> = []
 
+// Body scroll is shared by every open Dialog, so its lock must be shared too.
+// Per-instance "remember previous overflow, then restore it" breaks as soon as
+// dialogs overlap and close out of order: the older dialog can unlock the page
+// under the newer one, and the newer one can later restore `hidden` forever.
+// Snapshot only when the first owner arrives and restore only after the last
+// owner leaves. Each release is idempotent so StrictMode effect replay (or any
+// late/repeated cleanup) cannot decrement a later lock session.
+let bodyScrollLockCount = 0
+let bodyOverflowBeforeFirstLock: string | null = null
+
+function acquireDialogBodyScrollLock(): () => void {
+  if (bodyScrollLockCount === 0) {
+    bodyOverflowBeforeFirstLock = document.body.style.overflow
+  }
+  bodyScrollLockCount += 1
+  document.body.style.overflow = 'hidden'
+
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    // Defensive only: a release closure owns exactly one successful acquire,
+    // but never let an unexpected duplicate drive the module count negative.
+    if (bodyScrollLockCount === 0) return
+    bodyScrollLockCount -= 1
+    if (bodyScrollLockCount !== 0) {
+      // A live Dialog always wins even if another owner changed inline style.
+      document.body.style.overflow = 'hidden'
+      return
+    }
+    const previous = bodyOverflowBeforeFirstLock ?? ''
+    bodyOverflowBeforeFirstLock = null
+    document.body.style.overflow = previous
+  }
+}
+
+/** Focused regression seam for idempotent/out-of-order lock ownership. */
+export const __testAcquireDialogBodyScrollLock = acquireDialogBodyScrollLock
+
 // Focus is "inside the dialog" if it's in the panel itself OR inside a
 // popover that a control *within* the panel owns via `aria-controls`. The
 // latter covers floating layers that are intentionally portaled to
@@ -132,16 +171,11 @@ export function Dialog(props: DialogProps): ReactElement | null {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const titleId = useId()
 
-  // Lock body scroll, restore on close. We track the previous overflow
-  // value so this cooperates with any other component that might also
-  // be locking it (extremely unlikely, but cheap to be correct).
+  // Scroll locking is a module-level ownership contract: every live Dialog
+  // shares one first-value snapshot and the final owner performs restoration.
   useEffect(() => {
     if (!props.open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
+    return acquireDialogBodyScrollLock()
   }, [props.open])
 
   // Register on the open-dialog stack (see openDialogStack above). This

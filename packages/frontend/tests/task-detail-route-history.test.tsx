@@ -14,13 +14,15 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { NodeRun, Task } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 const actorState = vi.hoisted(() => ({
   permissions: ['memory:read'] as string[],
   error: null as Error | null,
+  fetchStatus: 'idle' as 'idle' | 'fetching',
+  requestAllowed: true,
   refetch: vi.fn(),
 }))
 
@@ -29,11 +31,19 @@ vi.mock('@/hooks/useActor', () => ({
   useActor: () => ({
     data: actorState.error === null ? { permissions: actorState.permissions } : undefined,
     error: actorState.error,
+    status: actorState.error === null ? 'success' : 'error',
+    fetchStatus: actorState.fetchStatus,
     isError: actorState.error !== null,
+    isLoading: false,
     refetch: actorState.refetch,
   }),
   // RFC-222 — tasks.detail now gates its delete button on usePermission.
-  usePermission: (perm: string) => actorState.permissions.includes(perm),
+  usePermission: (perm: string) =>
+    actorState.error === null &&
+    actorState.fetchStatus === 'idle' &&
+    actorState.permissions.includes(perm),
+  hasPermissionAtRequest: (_client: unknown, perm: string) =>
+    actorState.requestAllowed && actorState.permissions.includes(perm),
 }))
 vi.mock('@/components/tasks/RecoverySection', () => ({ RecoverySection: () => null }))
 vi.mock('@/components/tasks/StuckTaskBanner', () => ({ StuckTaskBanner: () => null }))
@@ -349,6 +359,8 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', DesktopResizeObserver)
   actorState.permissions = ['memory:read']
   actorState.error = null
+  actorState.fetchStatus = 'idle'
+  actorState.requestAllowed = true
   actorState.refetch.mockReset()
   setBaseUrl('http://daemon.test')
   setToken('tok')
@@ -361,6 +373,68 @@ afterEach(() => {
 })
 
 describe('/tasks/$id rendered URL-backed panels', () => {
+  test('delete dialog closes on fetching/error and connected stale confirms send zero DELETE', async () => {
+    actorState.permissions = ['memory:read', 'tasks:delete']
+    const row = task('deletable', { name: 'Delete me', spaceKind: 'remote' })
+    const fetchSpy = installFetch((path) =>
+      path === '/api/tasks/deletable' ? json({ taskId: 'deletable' }) : undefined,
+    )
+    const { router } = renderTaskRoute('/tasks/deletable?tab=details', [row])
+    fireEvent.click(await screen.findByTestId('task-detail-delete'))
+    let dialog = await screen.findByRole('dialog', { name: 'Delete Delete me?' })
+    fireEvent.change(within(dialog).getByTestId('confirm-input'), {
+      target: { value: 'Delete me' },
+    })
+    let staleConfirm = within(dialog).getByRole('button', { name: 'Delete' })
+    let invocations = 0
+    staleConfirm.addEventListener('click', () => {
+      invocations += 1
+    })
+    await act(async () => {
+      actorState.fetchStatus = 'fetching'
+      actorState.requestAllowed = false
+      fireEvent.click(staleConfirm)
+      await router.invalidate()
+    })
+    expect(invocations).toBe(1)
+    expect(
+      fetchSpy.mock.calls.filter(
+        (call: [RequestInfo | URL, RequestInit?]) => call[1]?.method === 'DELETE',
+      ),
+    ).toHaveLength(0)
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Delete Delete me?' })).toBeNull(),
+    )
+
+    actorState.fetchStatus = 'idle'
+    actorState.requestAllowed = true
+    await router.invalidate()
+    fireEvent.click(await screen.findByTestId('task-detail-delete'))
+    dialog = await screen.findByRole('dialog', { name: 'Delete Delete me?' })
+    fireEvent.change(within(dialog).getByTestId('confirm-input'), {
+      target: { value: 'Delete me' },
+    })
+    staleConfirm = within(dialog).getByRole('button', { name: 'Delete' })
+    staleConfirm.addEventListener('click', () => {
+      invocations += 1
+    })
+    await act(async () => {
+      actorState.error = new Error('me refresh failed')
+      actorState.requestAllowed = false
+      fireEvent.click(staleConfirm)
+      await router.invalidate()
+    })
+    expect(invocations).toBe(2)
+    expect(
+      fetchSpy.mock.calls.filter(
+        (call: [RequestInfo | URL, RequestInit?]) => call[1]?.method === 'DELETE',
+      ),
+    ).toHaveLength(0)
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Delete Delete me?' })).toBeNull(),
+    )
+  })
+
   test('a reachable call node jumps directly to its child task', async () => {
     installFetch(() => undefined)
     const parent = task('parent', {

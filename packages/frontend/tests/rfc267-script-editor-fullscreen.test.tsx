@@ -4,7 +4,8 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { EditorView } from '@codemirror/view'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { useState } from 'react'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -12,11 +13,13 @@ import path from 'node:path'
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import i18n from '../src/i18n'
 import { ScriptEdit } from '../src/components/canvas/inspector/ScriptEdit'
-import type { InspectorChangeMeta } from '../src/components/canvas/NodeInspector'
+import { NodeInspector, type InspectorChangeMeta } from '../src/components/canvas/NodeInspector'
+import { clearToken, setToken } from '../src/stores/auth'
 
-const permissionState = vi.hoisted(() => ({ canAuthor: true }))
+const permissionState = vi.hoisted(() => ({ canAuthor: true, isError: false }))
 vi.mock('../src/hooks/useActor', () => ({
   useActor: () => ({
+    isError: permissionState.isError,
     data: {
       user: { id: 'me', username: 'me', displayName: 'Me', role: 'admin', status: 'active' },
       source: 'session',
@@ -25,16 +28,23 @@ vi.mock('../src/hooks/useActor', () => ({
       pats: [],
     },
   }),
-  usePermission: () => permissionState.canAuthor,
+  usePermission: () => !permissionState.isError && permissionState.canAuthor,
+  meQueryOptions: (token: string | null) => ({
+    queryKey: ['auth', 'me', token ?? 'no-token'] as const,
+  }),
 }))
 
 const onPatch = vi.fn<(node: WorkflowNode, meta: InspectorChangeMeta) => void>()
 
 beforeEach(async () => {
+  setToken('script-fullscreen-test-token')
   permissionState.canAuthor = true
+  permissionState.isError = false
   onPatch.mockClear()
   await i18n.changeLanguage('zh-CN')
 })
+
+afterEach(() => clearToken())
 
 function scriptNode(extra: Record<string, unknown> = {}): WorkflowNode {
   return {
@@ -130,6 +140,128 @@ describe('RFC-267 script full-screen editor', () => {
     await waitFor(() => expect(screen.queryByTestId('script-body-fullscreen-dialog')).toBeNull())
     expect(document.activeElement).toBe(trigger)
     expect(viewOf('script-body-editor').state.doc.toString()).toBe('print("full screen")')
+  })
+
+  test('changing to another script node closes the old full-screen editing session', () => {
+    const first = scriptNode({ id: 's1', script: 'print("first")' })
+    const second = scriptNode({ id: 's2', script: 'print("second")' })
+    const definition = {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [first, second],
+      edges: [],
+    } as unknown as WorkflowDefinition
+    const props = {
+      definition,
+      agents: [] as Agent[],
+      onChange: vi.fn(),
+      onClose: vi.fn(),
+    }
+    const { rerender } = render(<NodeInspector {...props} selectedNodeId="s1" />)
+
+    fireEvent.click(screen.getByTestId('script-body-fullscreen-trigger'))
+    expect(viewOf('script-body-editor-fullscreen').state.doc.toString()).toBe('print("first")')
+
+    rerender(<NodeInspector {...props} selectedNodeId="s2" />)
+    expect(screen.queryByTestId('script-body-fullscreen-dialog')).toBeNull()
+    expect(viewOf('script-body-editor').state.doc.toString()).toBe('print("second")')
+    expect(props.onChange).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    {
+      reason: 'scripts:author downgrade',
+      lose: () => {
+        permissionState.canAuthor = false
+      },
+      recover: () => {
+        permissionState.canAuthor = true
+      },
+    },
+    {
+      reason: '/me error',
+      lose: () => {
+        permissionState.isError = true
+      },
+      recover: () => {
+        permissionState.isError = false
+      },
+    },
+  ])('$reason ends fullscreen and old callbacks cannot write after recovery', async (scenario) => {
+    const initialNode = scriptNode()
+    const view = render(<Harness initialNode={initialNode} />)
+    fireEvent.click(screen.getByTestId('script-body-fullscreen-trigger'))
+    const staleView = viewOf('script-body-editor-fullscreen')
+
+    scenario.lose()
+    view.rerender(<Harness initialNode={initialNode} />)
+    expect(screen.getByTestId('script-inspector-no-view-permission')).toBeTruthy()
+    expect(screen.queryByTestId('script-body-fullscreen-dialog')).toBeNull()
+    expect(document.body.style.overflow).toBe('')
+
+    scenario.recover()
+    view.rerender(<Harness initialNode={initialNode} />)
+    expect(screen.queryByTestId('script-inspector-no-view-permission')).toBeNull()
+    expect(screen.queryByTestId('script-body-fullscreen-dialog')).toBeNull()
+
+    // Recovery starts a closed, current generation. Its editor remains fully
+    // usable, while the detached EditorView from before the loss cannot write
+    // through its old onChange closure into this new session.
+    fireEvent.click(screen.getByTestId('script-body-fullscreen-trigger'))
+    const currentView = viewOf('script-body-editor-fullscreen')
+    act(() => {
+      currentView.dispatch({
+        changes: { from: 0, to: currentView.state.doc.length, insert: 'print("fresh")' },
+      })
+    })
+    await waitFor(() => {
+      expect(viewOf('script-body-editor').state.doc.toString()).toBe('print("fresh")')
+    })
+    expect(onPatch).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      staleView.dispatch({
+        changes: { from: 0, to: staleView.state.doc.length, insert: 'print("stale")' },
+      })
+    })
+    expect(staleView.state.doc.toString()).toBe('print("stale")')
+    expect(onPatch).toHaveBeenCalledTimes(1)
+    expect(viewOf('script-body-editor').state.doc.toString()).toBe('print("fresh")')
+  })
+
+  test('same-act cached permission loss fences a still-connected EditorView before React renders', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    })
+    const actorKey = ['auth', 'me', 'script-fullscreen-test-token'] as const
+    const actor = (permissions: string[]) => ({
+      user: { id: 'me', username: 'me', displayName: 'Me', role: 'admin', status: 'active' },
+      source: 'session',
+      permissions,
+      linkedIdentities: [],
+      pats: [],
+    })
+    queryClient.setQueryData(actorKey, actor(['scripts:author']))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness initialNode={scriptNode()} />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByTestId('script-body-fullscreen-trigger'))
+    const staleView = viewOf('script-body-editor-fullscreen')
+
+    act(() => {
+      queryClient.setQueryData(actorKey, actor([]))
+      expect(staleView.dom.isConnected).toBe(true)
+      staleView.dispatch({
+        changes: { from: 0, to: staleView.state.doc.length, insert: 'print("blocked")' },
+      })
+    })
+
+    // The imperative editor really dispatched; only the live authority fence
+    // prevented that old callback from publishing a workflow mutation.
+    expect(staleView.state.doc.toString()).toBe('print("blocked")')
+    expect(onPatch).not.toHaveBeenCalled()
   })
 
   // RFC-270 显式改判（原断言：无 `scripts:author` 时得到一个「诚实的全屏只读

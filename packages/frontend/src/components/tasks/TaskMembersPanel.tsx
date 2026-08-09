@@ -10,12 +10,13 @@
 // closes the dialog.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TaskMembers, UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
-import { useActor } from '@/hooks/useActor'
+import { currentActorAtRequest, useActor, useAuthSessionRevision } from '@/hooks/useActor'
+import { getAuthSessionRevision } from '@/stores/auth'
 import { Dialog } from '../Dialog'
 import { UserPicker } from '../UserPicker'
 
@@ -27,6 +28,12 @@ interface TaskMembersPanelProps {
   onCancel?: () => void
 }
 
+interface MembersSaveRequest {
+  session: number
+  authRevision: number
+  body: { userIds?: string[]; ownerUserId?: string }
+}
+
 /**
  * Uniform top-right entry point for task members: header button → Dialog →
  * panel. Hidden under the daemon token (single-user mode).
@@ -34,8 +41,21 @@ interface TaskMembersPanelProps {
 export function TaskMembersDialogButton({ taskId }: { taskId: string }) {
   const { t } = useTranslation()
   const actor = useActor()
+  const authRevision = useAuthSessionRevision()
   const [open, setOpen] = useState(false)
-  if (actor.data === null || actor.data === undefined || actor.data.source === 'daemon') {
+  const actorIsSettledHuman =
+    actor.status === 'success' &&
+    actor.fetchStatus === 'idle' &&
+    actor.data !== null &&
+    actor.data !== undefined &&
+    actor.data.source !== 'daemon'
+  useLayoutEffect(() => {
+    if (!actorIsSettledHuman) setOpen(false)
+  }, [actorIsSettledHuman])
+  useLayoutEffect(() => {
+    setOpen(false)
+  }, [authRevision])
+  if (!actorIsSettledHuman) {
     return null
   }
   return (
@@ -63,41 +83,122 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
   const { t } = useTranslation()
   const qc = useQueryClient()
   const actor = useActor()
+  const authRevision = useAuthSessionRevision()
   const url = `/api/tasks/${encodeURIComponent(taskId)}/members`
+  const queryKey = ['tasks', taskId, 'members', authRevision] as const
+  const actorIsSettledHuman =
+    actor.status === 'success' &&
+    actor.fetchStatus === 'idle' &&
+    actor.data !== null &&
+    actor.data !== undefined &&
+    actor.data.source !== 'daemon'
 
   const query = useQuery<TaskMembers>({
-    queryKey: ['tasks', taskId, 'members'],
+    queryKey,
     queryFn: ({ signal }) => api.get(url, undefined, signal),
-    enabled: actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon',
+    enabled: actorIsSettledHuman,
   })
 
   const [members, setMembers] = useState<UserPublic[]>([])
   const [dirty, setDirty] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferTo, setTransferTo] = useState<UserPublic[]>([])
-
-  useEffect(() => {
-    if (query.data !== undefined && !dirty) setMembers(query.data.users)
-  }, [query.data, dirty])
+  const manageSessionRef = useRef(0)
+  const previousCanManageRef = useRef(false)
+  const activeTaskIdRef = useRef(taskId)
+  const activeAuthRevisionRef = useRef(authRevision)
+  const responseTaskIdRef = useRef<string | null>(null)
+  const resetSaveRef = useRef<() => void>(() => {})
+  const liveCanManage =
+    actorIsSettledHuman &&
+    query.status === 'success' &&
+    query.fetchStatus === 'idle' &&
+    query.data?.taskId === taskId &&
+    query.data?.canManage === true
+  const hasCurrentManageAuthority = (expectedAuthRevision: number): boolean => {
+    if (getAuthSessionRevision() !== expectedAuthRevision) return false
+    const liveActor = currentActorAtRequest(qc)
+    const expectedQueryKey = ['tasks', taskId, 'members', expectedAuthRevision] as const
+    const membersState = qc.getQueryState(expectedQueryKey)
+    const liveMembers = qc.getQueryData<TaskMembers>(expectedQueryKey)
+    return (
+      liveActor !== null &&
+      liveActor !== undefined &&
+      liveActor.source !== 'daemon' &&
+      membersState?.status === 'success' &&
+      membersState.fetchStatus === 'idle' &&
+      liveMembers?.taskId === taskId &&
+      liveMembers?.canManage === true
+    )
+  }
 
   const save = useMutation({
-    mutationFn: (body: { userIds?: string[]; ownerUserId?: string }) =>
-      api.put<TaskMembers>(url, body),
-    onSuccess: (next, body) => {
-      qc.setQueryData(['tasks', taskId, 'members'], next)
+    mutationFn: ({ body, session, authRevision: requestAuthRevision }: MembersSaveRequest) => {
+      if (!hasCurrentManageAuthority(requestAuthRevision) || session !== manageSessionRef.current) {
+        throw new Error('Task member management session ended')
+      }
+      return api.put<TaskMembers>(url, body)
+    },
+    onSuccess: (next, request) => {
+      if (
+        !hasCurrentManageAuthority(request.authRevision) ||
+        request.session !== manageSessionRef.current
+      ) {
+        return
+      }
+      qc.setQueryData(queryKey, next)
       setDirty(false)
       setTransferOpen(false)
       setTransferTo([])
       void qc.invalidateQueries({ queryKey: ['tasks'] })
-      if (body.ownerUserId === undefined) onSaved?.()
+      if (request.body.ownerUserId === undefined) onSaved?.()
     },
   })
+  resetSaveRef.current = save.reset
 
-  if (actor.data === null || actor.data === undefined || actor.data.source === 'daemon') {
+  useLayoutEffect(() => {
+    const data = query.data
+    const lostManage = previousCanManageRef.current && !liveCanManage
+    previousCanManageRef.current = liveCanManage
+    const taskChanged = activeTaskIdRef.current !== taskId
+    activeTaskIdRef.current = taskId
+    const authChanged = activeAuthRevisionRef.current !== authRevision
+    activeAuthRevisionRef.current = authRevision
+    const responseTaskChanged =
+      data !== undefined &&
+      responseTaskIdRef.current !== null &&
+      responseTaskIdRef.current !== data.taskId
+    if (data !== undefined) responseTaskIdRef.current = data.taskId
+    if (lostManage || taskChanged || authChanged || responseTaskChanged) {
+      manageSessionRef.current += 1
+      if (data !== undefined) setMembers(data.users)
+      setDirty(false)
+      setTransferOpen(false)
+      setTransferTo([])
+      resetSaveRef.current()
+    }
+    if (data === undefined) return
+    if (!liveCanManage) {
+      setMembers(data.users)
+      setDirty(false)
+      setTransferOpen(false)
+      setTransferTo([])
+      return
+    }
+    if (!dirty && !transferOpen) setMembers(data.users)
+  }, [authRevision, dirty, liveCanManage, query.data, taskId, transferOpen])
+
+  if (!actorIsSettledHuman) {
     return null
   }
-  if (query.isLoading || query.error !== null || query.data === undefined) return null
+  if (query.data === undefined) return null
   const data = query.data
+  const canManage = liveCanManage
+  const manageSession = manageSessionRef.current
+  const mutationBelongsToSession = save.variables?.session === manageSession
+  const savePending = save.isPending && mutationBelongsToSession
+  const sessionIsCurrent = (): boolean =>
+    manageSession === manageSessionRef.current && hasCurrentManageAuthority(authRevision)
 
   return (
     <div className="acl-panel" data-testid="task-members-panel">
@@ -112,11 +213,13 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
           ) : (
             <span className="muted">{t('acl.systemOwner')}</span>
           )}
-          {data.canManage && (
+          {canManage && (
             <button
               type="button"
               className="btn btn--sm"
-              onClick={() => setTransferOpen(true)}
+              onClick={() => {
+                if (sessionIsCurrent()) setTransferOpen(true)
+              }}
               data-testid="members-transfer-owner"
             >
               {t('acl.transferOwner')}
@@ -127,21 +230,22 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
 
       <div className="acl-panel__row acl-panel__row--members">
         <span className="acl-panel__label">{t('members.users')}</span>
-        {data.canManage ? (
+        {canManage ? (
           <UserPicker
             value={members}
             onChange={(next) => {
+              if (!sessionIsCurrent()) return
               setMembers(next)
               setDirty(true)
             }}
             excludeIds={data.ownerUserId !== null ? [data.ownerUserId] : []}
             testidPrefix="members-users"
           />
-        ) : members.length === 0 ? (
+        ) : data.users.length === 0 ? (
           <span className="muted">{t('members.noUsers')}</span>
         ) : (
           <span className="acl-panel__value">
-            {members.map((u) => (
+            {data.users.map((u) => (
               <span key={u.id} className="chip">
                 {u.displayName}
               </span>
@@ -152,29 +256,36 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
 
       <p className="acl-panel__hint page__hint">{t('members.hint')}</p>
 
-      {save.error !== null && save.error !== undefined && (
+      {canManage && mutationBelongsToSession && save.error !== null && save.error !== undefined && (
         <p className="form-actions__error">{describeApiError(save.error)}</p>
       )}
 
       <div className="acl-panel__footer">
         <button type="button" className="btn" onClick={() => onCancel?.()}>
-          {data.canManage ? t('common.cancel') : t('common.close')}
+          {canManage ? t('common.cancel') : t('common.close')}
         </button>
-        {data.canManage && (
+        {canManage && (
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!dirty || save.isPending}
+            disabled={!dirty || savePending}
             data-testid="members-save"
-            onClick={() => save.mutate({ userIds: members.map((u) => u.id) })}
+            onClick={() => {
+              if (!sessionIsCurrent()) return
+              save.mutate({
+                session: manageSession,
+                authRevision,
+                body: { userIds: members.map((u) => u.id) },
+              })
+            }}
           >
-            {save.isPending ? t('common.saving') : t('acl.save')}
+            {savePending ? t('common.saving') : t('acl.save')}
           </button>
         )}
       </div>
 
       <Dialog
-        open={transferOpen}
+        open={canManage && transferOpen}
         onClose={() => setTransferOpen(false)}
         title={t('acl.transferTitle')}
         size="sm"
@@ -186,11 +297,18 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
             <button
               type="button"
               className="btn btn--primary"
-              disabled={transferTo.length === 0 || save.isPending}
+              disabled={transferTo.length === 0 || savePending}
               data-testid="members-transfer-confirm"
               onClick={() => {
+                if (!sessionIsCurrent()) return
                 const target = transferTo[0]
-                if (target !== undefined) save.mutate({ ownerUserId: target.id })
+                if (target !== undefined) {
+                  save.mutate({
+                    session: manageSession,
+                    authRevision,
+                    body: { ownerUserId: target.id },
+                  })
+                }
               }}
             >
               {t('acl.transferConfirm')}
@@ -201,7 +319,9 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
         <p className="page__hint">{t('members.transferHint')}</p>
         <UserPicker
           value={transferTo}
-          onChange={setTransferTo}
+          onChange={(next) => {
+            if (sessionIsCurrent()) setTransferTo(next)
+          }}
           single
           excludeIds={data.ownerUserId !== null ? [data.ownerUserId] : []}
           testidPrefix="members-transfer"

@@ -10,11 +10,15 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+vi.mock('../src/lib/clipboard', () => ({ copyText: vi.fn().mockResolvedValue(true) }))
+
 import { WebhookEndpointCard } from '../src/components/WebhookEndpointCard'
+import { meQueryOptions, type MeResponse } from '../src/hooks/useActor'
 import i18n from '../src/i18n'
+import { copyText } from '../src/lib/clipboard'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 const LISTED = {
@@ -41,6 +45,28 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 let endpoints: unknown[] = []
 let rotateCalls = 0
+let rotateFailuresRemaining = 0
+let createCalls = 0
+let meRefreshGate: ReturnType<typeof deferred<Response>> | null = null
+let rotateGate: ReturnType<typeof deferred<Response>> | null = null
+
+const ADMIN_ACTOR: MeResponse = {
+  user: { id: 'u1', username: 'root', displayName: 'root', role: 'admin', status: 'active' },
+  source: 'session',
+  permissions: [],
+  linkedIdentities: [],
+  pats: [],
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
 
 function renderCard() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -70,6 +96,7 @@ function renderCard() {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  return qc
 }
 
 beforeEach(async () => {
@@ -78,14 +105,27 @@ beforeEach(async () => {
   setToken('tok')
   endpoints = [LISTED]
   rotateCalls = 0
+  rotateFailuresRemaining = 0
+  createCalls = 0
+  meRefreshGate = null
+  rotateGate = null
+  vi.mocked(copyText).mockClear()
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     const method = init?.method ?? 'GET'
+    if (url.includes('/api/auth/me')) {
+      return meRefreshGate?.promise ?? jsonResponse(ADMIN_ACTOR)
+    }
     if (url.includes('/api/webhook-endpoints') && method === 'GET') {
       return jsonResponse(endpoints)
     }
     if (url.includes('/rotate-secret') && method === 'POST') {
       rotateCalls += 1
+      if (rotateGate !== null) return rotateGate.promise
+      if (rotateFailuresRemaining > 0) {
+        rotateFailuresRemaining -= 1
+        return jsonResponse({ code: 'rotate-failed', message: 'temporary rotation failure' }, 500)
+      }
       return jsonResponse({
         ...LISTED,
         secretHint: 'rt99',
@@ -93,6 +133,7 @@ beforeEach(async () => {
       })
     }
     if (url.includes('/api/webhook-endpoints') && method === 'POST') {
+      createCalls += 1
       // 创建响应：一次性明文 secret（列表 GET 永远没有这个字段）
       const created = {
         ...LISTED,
@@ -125,7 +166,7 @@ describe('RFC-257 · WebhookEndpointCard', () => {
   })
 
   test('创建 → 一次性 secret Dialog 展示明文；关闭后明文从页面消失', async () => {
-    renderCard()
+    const client = renderCard()
     await waitFor(() => expect(screen.getByTestId('webhook-endpoint-add')).toBeTruthy())
     fireEvent.click(screen.getByTestId('webhook-endpoint-add'))
     const nameInput = await screen.findByTestId('webhook-endpoint-name')
@@ -133,6 +174,14 @@ describe('RFC-257 · WebhookEndpointCard', () => {
     fireEvent.click(screen.getByTestId('webhook-endpoint-create-submit'))
     const secretEl = await screen.findByTestId('webhook-endpoint-secret-value')
     expect(secretEl.textContent).toBe('one-time-secret-value-zz99')
+    expect(
+      JSON.stringify(
+        client
+          .getMutationCache()
+          .getAll()
+          .map((entry) => entry.state),
+      ),
+    ).not.toContain('one-time-secret-value-zz99')
     // 一次性密钥不能被 Escape 或遮罩误关掉。
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.getByTestId('webhook-endpoint-secret-value')).toBeTruthy()
@@ -146,20 +195,184 @@ describe('RFC-257 · WebhookEndpointCard', () => {
 
   test('轮换 secret 必须先确认破坏性后果，确认前后端零写入', async () => {
     renderCard()
-    await waitFor(() => expect(screen.getByTestId('webhook-endpoint-rotate-ep1')).toBeTruthy())
+    const trigger = await screen.findByTestId('webhook-endpoint-rotate-ep1')
+    trigger.focus()
 
-    fireEvent.click(screen.getByTestId('webhook-endpoint-rotate-ep1'))
+    fireEvent.click(trigger)
 
     expect(await screen.findByRole('heading', { name: 'Rotate this secret?' })).toBeTruthy()
     expect(screen.getByText(/old secret.*stop working immediately/i)).toBeTruthy()
     expect(rotateCalls).toBe(0)
 
     const confirmDialog = screen.getByRole('dialog', { name: 'Rotate this secret?' })
-    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Rotate secret' }))
+    const confirm = within(confirmDialog).getByRole('button', { name: 'Rotate secret' })
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
 
     await waitFor(() => expect(rotateCalls).toBe(1))
     expect((await screen.findByTestId('webhook-endpoint-secret-value')).textContent).toBe(
       'rotated-one-time-secret-rt99',
     )
+    fireEvent.click(screen.getByRole('button', { name: /I saved it/i }))
+    await waitFor(() => expect(screen.queryByTestId('webhook-endpoint-secret-value')).toBeNull())
+    expect(document.activeElement).toBe(trigger)
+    expect(document.body.style.overflow).toBe('')
+  })
+
+  test('取消或 Escape 关闭轮换确认时零写入并回焦原按钮', async () => {
+    renderCard()
+    const trigger = await screen.findByTestId('webhook-endpoint-rotate-ep1')
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = await screen.findByRole('dialog', { name: 'Rotate this secret?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Rotate this secret?' })).toBeNull(),
+    )
+    expect(rotateCalls).toBe(0)
+    expect(document.activeElement).toBe(trigger)
+
+    fireEvent.click(trigger)
+    await screen.findByRole('dialog', { name: 'Rotate this secret?' })
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Rotate this secret?' })).toBeNull(),
+    )
+    expect(rotateCalls).toBe(0)
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  test('轮换失败保留同一确认会话，显式重试才发第二次写入', async () => {
+    rotateFailuresRemaining = 1
+    renderCard()
+    fireEvent.click(await screen.findByTestId('webhook-endpoint-rotate-ep1'))
+    const dialog = await screen.findByRole('dialog', { name: 'Rotate this secret?' })
+    const confirm = within(dialog).getByRole('button', { name: 'Rotate secret' })
+
+    fireEvent.click(confirm)
+    await waitFor(() => expect(rotateCalls).toBe(1))
+    expect(await within(dialog).findByText(/temporary rotation failure/i)).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Rotate this secret?' })).toBe(dialog)
+    expect(screen.queryByTestId('webhook-endpoint-secret-value')).toBeNull()
+
+    fireEvent.click(confirm)
+    await waitFor(() => expect(rotateCalls).toBe(2))
+    expect((await screen.findByTestId('webhook-endpoint-secret-value')).textContent).toBe(
+      'rotated-one-time-secret-rt99',
+    )
+  })
+
+  test('cached admin refetch fetching/error closes the draft and an invoked connected stale submit sends zero POST', async () => {
+    const client = renderCard()
+    fireEvent.click(await screen.findByTestId('webhook-endpoint-add'))
+    fireEvent.change(await screen.findByTestId('webhook-endpoint-name'), {
+      target: { value: 'stale endpoint' },
+    })
+    const staleSubmit = screen.getByTestId('webhook-endpoint-create-submit') as HTMLButtonElement
+    let invocations = 0
+    staleSubmit.addEventListener('click', () => {
+      invocations += 1
+    })
+    meRefreshGate = deferred<Response>()
+    let refresh!: Promise<void>
+    act(() => {
+      refresh = client.refetchQueries({ queryKey: meQueryOptions('tok').queryKey })
+      fireEvent.click(staleSubmit)
+    })
+    expect(invocations).toBe(1)
+    expect(createCalls).toBe(0)
+    await waitFor(() => expect(screen.queryByTestId('webhook-endpoint-create-dialog')).toBeNull())
+
+    await act(async () => {
+      meRefreshGate?.reject(new Error('me unavailable'))
+      await refresh
+    })
+    expect(client.getQueryData(meQueryOptions('tok').queryKey)).toEqual(ADMIN_ACTOR)
+    expect(screen.queryByTestId('webhook-endpoint-add')).toBeNull()
+    expect(createCalls).toBe(0)
+  })
+
+  test('late rotate response after downgrade never reaches DOM or MutationCache and never resurrects', async () => {
+    const client = renderCard()
+    rotateGate = deferred<Response>()
+    const staleCopy = await screen.findByTestId('webhook-endpoint-copy-url-ep1')
+    let copyInvocations = 0
+    staleCopy.addEventListener('click', () => {
+      copyInvocations += 1
+    })
+    fireEvent.click(await screen.findByTestId('webhook-endpoint-rotate-ep1'))
+    const dialog = await screen.findByRole('dialog', { name: 'Rotate this secret?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rotate secret' }))
+    await waitFor(() => expect(rotateCalls).toBe(1))
+
+    act(() => {
+      client.setQueryData(meQueryOptions('tok').queryKey, {
+        ...ADMIN_ACTOR,
+        user: { ...ADMIN_ACTOR.user, role: 'user' },
+      })
+      fireEvent.click(staleCopy)
+    })
+    expect(copyInvocations).toBe(1)
+    expect(copyText).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Rotate this secret?' })).toBeNull(),
+    )
+    expect(document.body.textContent).not.toContain(LISTED.ingressUrl)
+    expect(screen.queryByTestId('webhook-endpoint-copy-url-ep1')).toBeNull()
+
+    const sentinel = 'late-rotated-secret-must-not-survive'
+    await act(async () => {
+      rotateGate?.resolve(jsonResponse({ ...LISTED, secret: sentinel }))
+      await rotateGate?.promise
+    })
+    expect(document.body.textContent).not.toContain(sentinel)
+    expect(
+      JSON.stringify(
+        client
+          .getMutationCache()
+          .getAll()
+          .map((entry) => entry.state),
+      ),
+    ).not.toContain(sentinel)
+
+    act(() => client.setQueryData(meQueryOptions('tok').queryKey, ADMIN_ACTOR))
+    await screen.findByTestId('webhook-endpoint-rotate-ep1')
+    expect(document.body.textContent).not.toContain(sentinel)
+  })
+
+  test('token A late secret cannot enter cached-admin token B session or MutationCache', async () => {
+    const client = renderCard()
+    rotateGate = deferred<Response>()
+    fireEvent.click(await screen.findByTestId('webhook-endpoint-rotate-ep1'))
+    const dialog = await screen.findByRole('dialog', { name: 'Rotate this secret?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rotate secret' }))
+    await waitFor(() => expect(rotateCalls).toBe(1))
+
+    const actorB: MeResponse = {
+      ...ADMIN_ACTOR,
+      user: { ...ADMIN_ACTOR.user, id: 'u2', username: 'admin-b' },
+    }
+    act(() => {
+      setToken('tok-b')
+      client.setQueryData(meQueryOptions('tok-b').queryKey, actorB)
+    })
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Rotate this secret?' })).toBeNull(),
+    )
+
+    const sentinel = 'token-a-secret-must-not-enter-token-b'
+    await act(async () => {
+      rotateGate?.resolve(jsonResponse({ ...LISTED, secret: sentinel }))
+      await rotateGate?.promise
+    })
+    expect(document.body.textContent).not.toContain(sentinel)
+    expect(
+      JSON.stringify(
+        client
+          .getMutationCache()
+          .getAll()
+          .map((entry) => entry.state),
+      ),
+    ).not.toContain(sentinel)
   })
 })

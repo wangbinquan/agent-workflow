@@ -21,6 +21,7 @@ import { Link, createRoute, useNavigate, useRouterState } from '@tanstack/react-
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -51,7 +52,7 @@ import { StatusChip } from '@/components/StatusChip'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { TASK_ICON } from '@/components/icons/resourceIcons'
-import { useActor } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
 import { useNowTick } from '@/hooks/useNowTick'
 import { useTaskOperationsPage } from '@/hooks/useTaskOperationsPage'
 import { useTaskOperationsSync } from '@/hooks/useTaskOperationsSync'
@@ -190,13 +191,15 @@ function TasksPage() {
     [routeSearch],
   )
   const actor = useActor()
-  const canReadAll = actor.data?.permissions?.includes('tasks:read:all') ?? false
+  const canReadAll = usePermission('tasks:read:all')
+  const actorReady =
+    actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
   const defaultScope: TaskListScope = canReadAll ? 'all' : 'mine'
   const effectiveScope: TaskListScope =
     search.scope === 'all' && !canReadAll ? 'mine' : (search.scope ?? defaultScope)
 
   useEffect(() => {
-    if (actor.data === undefined || actor.data === null) return
+    if (!actorReady || actor.data === null) return
     const hrefSearch = taskSearchFromHref(href)
     const canonical: TasksSearch = {
       ...hrefSearch,
@@ -212,7 +215,7 @@ function TasksPage() {
         replace: true,
       })
     }
-  }, [actor.data, canReadAll, defaultScope, href, navigate])
+  }, [actor.data, actorReady, canReadAll, defaultScope, href, navigate])
 
   const statuses = useMemo(
     () => (search.statuses === undefined ? [] : (parseTaskStatusList(search.statuses) ?? [])),
@@ -230,7 +233,7 @@ function TasksPage() {
     [effectiveScope, search.origin, search.q, search.subject, search.view, statuses],
   )
   const filterFingerprint = JSON.stringify(filters)
-  const query = useTaskOperationsPage(filters, undefined, actor.data != null)
+  const query = useTaskOperationsPage(filters, undefined, actorReady && actor.data !== null)
   const sync = useTaskOperationsSync()
   const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
   const rootPage = query.data?.pages.find((page) => page.kind === 'root')
@@ -434,6 +437,7 @@ function TasksPage() {
           <TaskOperationsList
             items={items}
             filters={filters}
+            scrollResetKey={filterFingerprint}
             expanded={expanded}
             collapsed={collapsed}
             onToggle={toggleBranch}
@@ -550,6 +554,8 @@ function TaskListFilterDialog(props: {
 function TaskOperationsList(props: {
   items: TaskOperationsListItem[]
   filters: TaskOperationsFilters
+  /** Changes only when the result set's filter identity changes. */
+  scrollResetKey: string
   expanded: ReadonlySet<string>
   collapsed: ReadonlySet<string>
   onToggle: (id: string, currentlyOpen: boolean) => void
@@ -558,6 +564,14 @@ function TaskOperationsList(props: {
   loadingMore: boolean
 }) {
   const { t } = useTranslation()
+  const listRef = useRef<HTMLOListElement>(null)
+  useLayoutEffect(() => {
+    // React Query can switch immediately to an already-cached filter result,
+    // preserving this exact <ol> node. Reset the result viewport at that
+    // boundary; pagination keeps the same key and therefore the reader's
+    // position.
+    if (listRef.current !== null) listRef.current.scrollTop = 0
+  }, [props.scrollResetKey])
   return (
     <section
       className="task-operations"
@@ -571,7 +585,7 @@ function TaskOperationsList(props: {
         <span>{t('acl.owner')}</span>
         <span />
       </div>
-      <ol className="task-operations__list" aria-label={t('tasks.title')}>
+      <ol className="task-operations__list" ref={listRef} aria-label={t('tasks.title')}>
         {props.items.map((item) => (
           <TaskBranch key={item.id} item={item} depth={0} {...props} />
         ))}

@@ -3,11 +3,12 @@
 // exact write payloads while retaining the historic self-lockout guards.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { AdminUserView } from '@agent-workflow/shared'
 import i18n from '../src/i18n'
 import { enUS } from '../src/i18n/en-US'
+import { meQueryOptions, type MeResponse } from '../src/hooks/useActor'
 import { UsersPage } from '../src/routes/users'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
@@ -46,7 +47,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-const ME = {
+const ME: MeResponse = {
   user: { id: 'me-admin', username: 'root', displayName: 'Root', role: 'admin', status: 'active' },
   source: 'session',
   permissions: ['users:read', 'users:write'],
@@ -113,11 +114,12 @@ function route(call: FetchCall): Response {
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
       <UsersPage />
     </QueryClientProvider>,
   )
+  return { ...view, qc }
 }
 
 beforeEach(async () => {
@@ -132,6 +134,66 @@ afterEach(() => {
 })
 
 describe('/users responsive directory actions', () => {
+  test('permission loss and token switch close a connected create dialog and issue zero writes', async () => {
+    const calls = installFetch(route)
+    const { qc } = renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'New user' }))
+    let dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /Username/ }), {
+      target: { value: 'stale-user' },
+    })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /Display name/ }), {
+      target: { value: 'Stale User' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^Password/), {
+      target: { value: 'password-123' },
+    })
+    let staleCreate = within(dialog).getByRole('button', { name: 'Create' })
+    let invocations = 0
+    staleCreate.addEventListener('click', () => {
+      invocations += 1
+    })
+    act(() => {
+      qc.setQueryData(meQueryOptions('tok').queryKey, {
+        ...ME,
+        permissions: ['users:read'],
+      })
+      fireEvent.click(staleCreate)
+    })
+    expect(invocations).toBe(1)
+    expect(calls.filter((call) => call.method !== 'GET')).toHaveLength(0)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    act(() => qc.setQueryData(meQueryOptions('tok').queryKey, ME))
+    fireEvent.click(await screen.findByRole('button', { name: 'New user' }))
+    dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /Username/ }), {
+      target: { value: 'actor-a-user' },
+    })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /Display name/ }), {
+      target: { value: 'Actor A User' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^Password/), {
+      target: { value: 'password-123' },
+    })
+    staleCreate = within(dialog).getByRole('button', { name: 'Create' })
+    staleCreate.addEventListener('click', () => {
+      invocations += 1
+    })
+    const actorB: MeResponse = {
+      ...ME,
+      user: { ...ME.user, id: 'admin-b', username: 'admin-b' },
+    }
+    act(() => {
+      setToken('tok-b')
+      qc.setQueryData(meQueryOptions('tok-b').queryKey, actorB)
+      fireEvent.click(staleCreate)
+    })
+    expect(invocations).toBe(2)
+    expect(calls.filter((call) => call.method !== 'GET')).toHaveLength(0)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
   test('has one page-header action, a semantic human list, and a separate system principal', async () => {
     installFetch(route)
     const { container } = renderPage()
