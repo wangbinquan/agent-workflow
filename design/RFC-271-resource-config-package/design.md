@@ -89,7 +89,7 @@ type ResourceRef =
 | 域                                    | wire 编码                                                      | 逐字保留                              |
 | ------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
 | `IntentRef`                           | `res#<type>#<n>` / **`$new:<slug>`**                           | ✅ `intentChangeset.ts:42-56` 不动    |
-| `BundleIdentityRef` / `BundleCallRef` | **`local:<slug>`** / `external:<token>` / `name:<type>/<name>` | ✅ 本 RFC 新定                        |
+| `BundleIdentityRef` / `BundleCallRef` | **`local:<slug>`** / `external:<token>` / `name:<type>/<name>` / **`builtin:<type>/<name>`** | ✅ 本 RFC 新定                        |
 | `ImportSelectorRef`                   | `{type, name, ownerUsername?}` **对象**（`type` 必留）         | ✅ `importRef.ts` 不动                |
 | `RuntimeRef`                          | 裸 ULID / 判别联合对象（见 1.1b'）                             | ✅ 存量 definition 与 `agents.*` 不动 |
 | `CallRef`                             | `{nodeId, workflowName, workflowId?}` **复合记录**             | ✅ 见 1.1b                            |
@@ -436,10 +436,18 @@ export const BundleSchema = z
 
 | 子 schema                       | 允许形态                                  | 用在                                                                    |
 | ------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- |
-| `BundleIdentityRefSchema`       | `local:` \| `external:`                   | agent 的 `dependsOn` / `mcp` / `plugins`，工作组成员，工作流 `agentRef` |
+| `BundleIdentityRefSchema`       | `local:` \| `external:` \| **`builtin:`** | agent 的 `dependsOn` / `mcp` / `plugins`，工作组成员，工作流 `agentRef` |
 | **`BundleAgentSkillRefSchema`** | `local:` \| `external:` \| **`project:`** | **仅** agent 的 `skills` 槽（§1.1b'）                                   |
-| `BundleCallRefSchema`           | `local:` \| `external:` \| **`name:`**    | 仅 `call-workflow` / `call-workgroup` 的目标槽                          |
+| `BundleCallRefSchema`           | `local:` \| `external:` \| **`name:`** \| **`builtin:`** | 仅 `call-workflow` / `call-workgroup` 的目标槽                          |
 | `BundleExternalRefSchema`       | 仅 `external:`                            | update op 的 `target`                                                   |
+
+**`builtin:` 必须走统一 AST**（实现期教训）：它最初只加进了 `bundle/payload.ts` 的私有
+regex，没进 `ResourceRefAst` / 域 codec。于是 serializer 生成它、而 `RootRefSchema` 与
+`parse.ts` 不认它——**导出的包被自己的 parser 判 `package-invalid`**。每加一处私有解析
+就是在还这笔债；新增形态时的清单是：AST 变体 + `resourceRefKey` + 域 codec 双向 +
+`RootRefSchema` + `parse.ts` 的 root 分支 + 闭合性校验分支。锁在
+`rfc271-builtin-ref-wire.test.ts` / `rfc271-builtin-resolve.test.ts` /
+`rfc271-roundtrip.test.ts`（真往返）。
 
 ⚠️ 正式 `WorkflowNodeSchema` 是 `.passthrough()` 的宽松形态（`schemas/workflow.ts:105-131`），
 **靠它自动得不到 call-slot 限制**——必须显式 walker/refine，并配负例测试
@@ -724,7 +732,7 @@ loadRoot(actor, type, id) → assertExactRevision（AC-12，仅根）
   → walkClosure（纯函数，BFS + visited 去重去环）
   → 三道门（§4.1）
   → 序列化成 ResourceBundle（分配 local slug）+ 收集 requirements / builtins / secrets
-  → buildManifest + buildReadme → assertWithinLimits → encodeZip
+  → buildManifest + buildReadme → encodeZip
 ```
 
 ### 4.1 三道门
@@ -1019,7 +1027,8 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 - `rfc271-skill-update.test.ts`：AC-25b——两个技能覆盖 + 第三个 op 失败，断言**两个技能都
   没被改**；导入后技能过 `skillBootVerify`。
 - `rfc271-export-gates.test.ts`：AC-7 / AC-34 / **AC-7b 逐字节对照** / AC-7c（cache 优先，
-  不是总选最老）/ **AC-7d 反向锁** / AC-8 分轴正反例 / AC-11。
+  不是总选最老）/ **AC-7d 反向锁** / AC-8 分轴正反例。（AC-11 已改判取消，无对应用例；
+  AC-12 的六类完整 fence 形态在 `rfc271-export-fence.test.ts`。）
 - `rfc271-import-preview.test.ts`：AC-14 / AC-14b / AC-15 / AC-17 / AC-19 / **AC-24b
   token 下发与回传**。
 - `rfc271-import-commit.test.ts`：AC-20 / AC-20b / AC-21 / AC-22 / AC-24 / AC-24c。

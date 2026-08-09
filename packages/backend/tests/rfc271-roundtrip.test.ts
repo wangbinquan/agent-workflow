@@ -18,7 +18,7 @@
 // fake row 的单测。
 
 //
-// 覆盖验收条款：AC-5（技能带整棵文件树）/ AC-9（builtin 不入 resources，只入 builtins 声明）/ AC-19（工作组人类席位按 username 映射）
+// 覆盖验收条款：AC-5（技能带整棵文件树）/ AC-9（builtin 不入 resources，只入 builtins 声明）/ AC-19（工作组人类席位逐个显式映射，无按 username 自动绑定）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { describe, expect, test } from 'bun:test'

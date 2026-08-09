@@ -29,7 +29,11 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps, resourceBundleApplies, users, workgroups } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { buildPackagePreview } from '../src/services/resourcePackage/preview'
+import {
+  buildPackagePreview,
+  signPreviewToken,
+  verifyPreviewToken,
+} from '../src/services/resourcePackage/preview'
 import { commitResourcePackage } from '../src/services/resourcePackage/commit'
 import { removeTempDirSync } from './fixtures/tempDir'
 
@@ -822,6 +826,94 @@ describe('⑤ human 映射只属于会落地的 workgroup', () => {
       (e: unknown) => e as { code?: string },
     )
     expect(err?.code).toBe('package-human-mapping-unconfirmed')
+  })
+
+  // 下面两条补的是 `resolveHumanMemberMappings` 里**只有拒绝分支、此前无用例**的两支。
+  // 仓规（RFC-224 事故沉淀）把「禁用 / 拒绝分支」与正向功能同等对待：一条没有测试的
+  // 拒绝分支，被改成 `continue` 也没人会发现。
+
+  test('同一席位给两条映射 ⇒ 拒绝（不能靠「后写覆盖」偷换目标）', async () => {
+    // 没有这道门时，`given.set(key, m)` 的后写覆盖语义会让客户端把同一席位提交两次、
+    // 由**最后一条**生效。UI 上只显示一次选择，用户以为自己绑的是第一条。
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, 'u2', 'active')
+    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const err = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+      humanMemberMappings: [
+        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'u1' },
+        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'u2' },
+      ],
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('package-human-mapping-duplicate')
+  })
+
+  test('正常路径不误伤：同工作组的**不同** username 各给一条映射 ⇒ 成功', async () => {
+    // 上一条的去重键必须是 `(workgroupSlug, username)` 而不是 `workgroupSlug`——
+    // 否则一个有两个人类席位的工作组永远导不进来。
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, 'u2', 'active')
+    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+    const baseline = verifyPreviewToken(box, preview.previewToken).humanBaseline
+
+    const receipt = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+      humanMemberMappings: baseline.map((slot) => ({
+        workgroupSlug: slot.workgroupSlug,
+        username: slot.username,
+        userId: 'u2',
+      })),
+    })
+    expect(receipt.root).toMatchObject({ resourceType: 'workgroup', action: 'create' })
+  })
+
+  test('TTL 内旧 token 的 required 席位不能映射成 null（兼容分支也要有门）', async () => {
+    // 这一支**新 preview 已经产不出来**了（canonical schema 只允许 agent 当 leader，
+    // 于是不再产生 required human 槽），它保留是为了兼容「改判前签出、还在 TTL 内」
+    // 的 token。正因为正常路径打不到它，它更需要一条直接构造签名的测试——否则它被
+    // 删掉、或者条件写反，都要等到一个真实用户拿着旧 token 提交时才暴露。
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+    const verified = verifyPreviewToken(box, preview.previewToken)
+
+    // 复刻一个 required=true 的旧 token：其余字段逐字沿用，只把席位标成必填。
+    const legacyToken = signPreviewToken(box, {
+      importId: verified.importId,
+      actorUserId: verified.actorUserId,
+      packageDigest: verified.packageDigest,
+      expiresAt: verified.expiresAt,
+      baseline: verified.baseline,
+      humanBaseline: verified.humanBaseline.map((slot) => ({ ...slot, required: true })),
+    })
+
+    const err = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: legacyToken,
+      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+      humanMemberMappings: verified.humanBaseline.map((slot) => ({
+        workgroupSlug: slot.workgroupSlug,
+        username: slot.username,
+        userId: null,
+      })),
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('package-human-mapping-required')
   })
 })
 

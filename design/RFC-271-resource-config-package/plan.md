@@ -159,8 +159,9 @@ I3（replay 三态）、I8（post-commit 绝不补偿）此前完全没写。
 - **T19** `services/resourcePackage/closure.ts`：批量装载器 + `walkClosure`。
 - **T20** **name 域解析与 `freezeCallClosure` 逐字一致**（AC-7c：cache 优先、其次最老可见），
   且「零匹配」与「全不可见」逐字节同形（AC-7b）。
-- **T21** `serialize.ts`：闭包 → `ResourceBundle`（分配 local slug）+ requirements 五段 +
-  builtins + secrets 索引 + `ambiguousCallRefs`。
+- **T21** `serialize.ts`：闭包 → `ResourceBundle`（分配 local slug）+ requirements **七段**
+  （五段 + 实现期补的诊断项 `mcpKinds` / `humanMembers`，见 AC-10）+ builtins +
+  secrets 索引 + `ambiguousCallRefs`。
 - **T22** **三道门**：行级可见性（含传递）/ 分轴特权 / **同名重复**（原第四道「体积」已随 AC-11 改判取消——用户拍板技能整棵树进包、不设上限）
   （闭包内两个同 `(类型,名字)` 资源 → 422 并点名各自被谁引用；包不带 owner，这种包
   语义上不可表示）。

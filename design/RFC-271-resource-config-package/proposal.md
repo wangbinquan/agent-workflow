@@ -266,8 +266,12 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **AC-8** 特权节点按轴判定：`lens.scripts && 含脚本节点` / `lens.codeHost && 含代码平台节点`
   各自独立。
 - **AC-9** builtin / `__system__` 资源不入 `resources`，只入 `builtins` 声明。
-- **AC-10** `requirements` 五段（runtimes / codeHosts / executables / pluginSources /
-  projectSkills），**不含任何密钥**（插件 spec 在此处同样脱敏）。
+- **AC-10** `requirements` **七段**（runtimes / codeHosts / executables / pluginSources /
+  projectSkills / mcpKinds / humanMembers），**不含任何密钥**（插件 spec 在此处同样脱敏）。
+  后两段是实现期补的**诊断项**：`mcpKinds` 让接收方在预检前就知道包里有无 local MCP
+  （它要落到容器化子进程边界，与 remote 的落地条件完全不同）；`humanMembers` 是
+  **包级别的席位清单**，与 AC-19 的**逐席位映射**不是一回事——前者答「这个包需要哪些
+  人」，后者答「每个席位具体绑到本实例的哪个 userId」，后者才是提交所依据的输入。
 - ~~**AC-11**~~ **【已改判 2026-08-09，用户决策】** 原文：「超 `SKILL_ZIP_LIMITS` 任一维度
   → 422 并点名资源与维度」。**取消**：用户就技能文件树导出明确拍板「整棵树进包，
   **不设任何上限**」——一个技能带多大的辅助文件是作者的事，平台替他截断会产出一个
@@ -292,7 +296,19 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **AC-16** 「新建副本」默认名不冲突且可现场改。
 - **AC-17** 任一条目权限不满足 → 标红，整包不可提交。
 - **AC-18** 待填密钥逐条给输入框；留空则跳过并进导入报告。
-- **AC-19** 工作组人类席位带 `username`，自动匹配；匹配不上须手动指派或删除该席位。
+- **AC-19** **【已改判 2026-08-09，用户决策】** 原文：「自动匹配；匹配不上须手动指派
+  或删除该席位」。改为**逐个显式映射**：导入方对每个人类席位**明确选定**本实例的
+  哪个用户（或明确跳过），没有按 `username` 的自动绑定。
+  **为什么**：`username` 在两个实例间**不是同一个人**的可靠标识——源实例的 `alice`
+  与目标实例的 `alice` 可以是完全不相干的两个人，自动匹配会把一个陌生人静默塞进
+  工作组、并连带给他该工作组的可见面。导入是**跨信任域**的操作，这里的沉默默认值
+  代价过高，所以要求人来确认。
+  **签名面覆盖的是「席位集合」，不是「席位→userId」**：`previewToken` 签
+  `(workgroupSlug, username, required)`，目标 `userId` 由导入方在提交时选定。这是
+  设计意图而非缺口——导入方本就是新工作组的 owner，给自己的工作组加成员与界面上
+  新建工作组同权；签名要挡的是**凭空多出一个席位**。四条拒绝分支各有用例（基线外
+  `unconfirmed` / 同席位重复 `duplicate` / 漏给 `missing` / 旧 token 的 required 槽
+  置空 `required`），见 `packages/backend/tests/rfc271-import-commit.test.ts` §⑤。
 - **AC-20** 导入可收敛：任一步失败或进程被 `SIGKILL` → 启动收敛能**证明**该前滚还是回滚。
 - **AC-20b** 正式资源行在 journal 到达 `committed` 前对读 / 启动路径不可见。
 - **AC-21** 新建一律 `owner = 导入者` + `private` + 零 grants；覆盖不改动 owner / visibility /
