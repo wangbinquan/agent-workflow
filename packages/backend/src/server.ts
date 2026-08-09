@@ -56,6 +56,8 @@ import { mountWebhookTriggerRoutes } from '@/routes/webhookTriggers'
 import { mountWebhookDeliveryRoutes } from '@/routes/webhookDeliveries'
 import { mountWorkflowRoutes } from '@/routes/workflows'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
+import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
+import { Paths } from '@/util/paths'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
@@ -323,6 +325,16 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountRepoGroupRoutes(app, deps)
   mountWorkflowRoutes(app, deps)
   mountWorkgroupRoutes(app, deps) // RFC-164
+  // RFC-271 配置包：导出六条 + 导入两条。需要 secretBox 来签 previewToken——
+  // 缺它时**整组不挂**（与 OIDC 路由同姿势），而不是退化成一个不签名的版本：
+  // 不签名的 preview→commit 绑定等于没有绑定。
+  if (deps.secretBox !== undefined) {
+    registerResourcePackageRoutes(app, {
+      db: deps.db,
+      appHome: Paths.root,
+      box: deps.secretBox,
+    })
+  }
   mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
   mountTaskRoutes(app, deps)
   mountScheduledTaskRoutes(app, deps) // RFC-159

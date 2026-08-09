@@ -411,6 +411,17 @@ export const ENDPOINTS: EndpointSpec[] = [
       }),
     },
   },
+  // RFC-271 配置包：六条导出 + 两条导入。
+  // 导出返回 `application/zip`（不是 JSON），所以不带 `happy` schema —— 覆盖守卫
+  // 与 401 用例仍然生效，那正是这份注册表存在的理由。
+  { method: 'GET', path: '/api/agents/:id/export-package' },
+  { method: 'GET', path: '/api/skills/:id/export-package' },
+  { method: 'GET', path: '/api/mcps/:id/export-package' },
+  { method: 'GET', path: '/api/plugins/:id/export-package' },
+  { method: 'GET', path: '/api/workflows/:id/export-package' },
+  { method: 'GET', path: '/api/workgroups/:id/export-package' },
+  { method: 'POST', path: '/api/resource-packages/preview' },
+  { method: 'POST', path: '/api/resource-packages/commit' },
   { method: 'POST', path: '/api/workgroups' },
   { method: 'POST', path: '/api/workgroups/:id/copy' },
   { method: 'PUT', path: '/api/workgroups/:id' },
