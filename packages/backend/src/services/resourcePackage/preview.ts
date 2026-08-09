@@ -207,6 +207,34 @@ export function verifyPreviewToken(box: SecretBox, token: string): VerifiedPrevi
   return parsed.data
 }
 
+/**
+ * **导出 fence** 专用的 revision token —— 与 `expectTokenOf` 是两件事，别合并。
+ *
+ * · `expectTokenOf` 回答的是「引擎能拿什么做 CAS」，字段受 `BundleExpectTokenSchema`
+ *   与各域服务 update 的能力约束（工作流/工作组只能 CAS `version`）；
+ * · 这里回答的是「我在页面上看过它之后，这一行有没有**任何**变化」。
+ *
+ * 两者对工作流/工作组分叉：`version` 只被**内容**写路径推进（definition / 成员 /
+ * 设置），而 ACL 写路径（`updateResourceAcl`）改 `visibility` / grants 时只推
+ * `aclRevision` 与 `updatedAt`、**不动 version**。于是「把工作流从 private 改成
+ * public」对只比 version 的 fence 完全不可见：页面上是 v3、导出的也是 v3，但它的
+ * 可见面已经换了一个——而可见面恰恰决定这个包该不该被导出、导出给谁。
+ *
+ * 曾经把这一维直接加进 `expectTokenOf`，结果 bundle 的 `expect` schema 不认新字段，
+ * 导入侧整条 overwrite 链路报 `unrecognized_keys`。那次失败本身就说明这两个 token
+ * 服务于不同的消费者，不该共用一个定义。
+ */
+export function exportFenceTokenOf(
+  type: AclResourceType,
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const base = expectTokenOf(type, row)
+  if (type === 'workflow' || type === 'workgroup') {
+    return { ...base, expectedAclRevision: Number(row.aclRevision ?? 0) }
+  }
+  return base
+}
+
 /** 各类型的内容级 CAS token —— 与 `BundleExpectToken` 的形态一一对应。 */
 export function expectTokenOf(
   type: AclResourceType,
@@ -230,15 +258,7 @@ export function expectTokenOf(
       return { expectedConfigHash: pluginOperationConfigHashOf(rowToPluginLike(row)) }
     case 'workflow':
     case 'workgroup':
-      // `version` 只被**内容**写路径推进（definition / 成员 / 设置）。ACL 写路径
-      // （`updateResourceAcl`）改的是 `visibility` / grants，只推 `aclRevision` 与
-      // `updatedAt`，**不动 version** —— 少了下面这一维，「把工作流从 private 改成
-      // public」这类改动对 fence 完全不可见：页面上看到的还是 v3，导出的也是 v3，
-      // 但它的可见面已经换了一个。
-      return {
-        expectedVersion: Number(row.version ?? 1),
-        expectedAclRevision: Number(row.aclRevision ?? 0),
-      }
+      return { expectedVersion: Number(row.version ?? 1) }
   }
 }
 
@@ -262,6 +282,34 @@ function rowToPluginLike(
   } as never
 }
 
+/**
+ * 包声明的 built-in 依赖里，本实例**没有**的那些。
+ *
+ * 判据与导入期 `resolveIdentityRef` 的 built-in 分支**必须一致**：同名 + `builtin = true`。
+ * 只按名字查会把用户自建的同名资源当成内置件——那一行 owner 不是 `__system__`、
+ * `builtin` 是 false，绑上去等于把别人的资源当框架件用。
+ */
+async function findMissingBuiltins(
+  db: DbClient,
+  declared: readonly { type: string; name: string }[],
+): Promise<Array<{ type: string; name: string }>> {
+  const missing: Array<{ type: string; name: string }> = []
+  for (const want of declared) {
+    // schema 已把 type 收窄到 agent | workflow，这里只是把它接回 ACL_TABLES 的键。
+    if (want.type !== 'agent' && want.type !== 'workflow') {
+      missing.push(want)
+      continue
+    }
+    const table = ACL_TABLES[want.type]
+    const rows = (await db
+      .select()
+      .from(table)
+      .where(eq(table.name, want.name))) as unknown as Array<Record<string, unknown>>
+    if (!rows.some((row) => row.builtin === true)) missing.push(want)
+  }
+  return missing
+}
+
 export async function buildPackagePreview(
   db: DbClient,
   actor: Actor,
@@ -275,6 +323,25 @@ export async function buildPackagePreview(
 ): Promise<PackagePreview> {
   const now = opts.now ?? Date.now()
   const entries: PreviewEntry[] = []
+
+  // AC-9：包里声明的 built-in 依赖，**本实例必须都有**，而且必须在**预检**就报出来。
+  //
+  // 这些 built-in 不产 op、不入 entries，导入时按名字绑到对端自己 seed 的那一个。绑不上
+  // 是一个**环境前提不满足**，不是数据冲突——用户能做的只有升级/修复对端实例，不是在
+  // 这个包里改点什么。所以它必须出现在「要不要导入」这个决策之前。
+  //
+  // 在此之前它要到 commit 才由 `resolveIdentityRef` 抛 `bundle-builtin-missing`：用户
+  // 已经逐条选完动作、填完凭据、点了提交，才被告知这个包在本实例根本装不了。
+  const missingBuiltins = await findMissingBuiltins(db, pkg.manifest.builtins)
+  if (missingBuiltins.length > 0) {
+    throw new ValidationError(
+      'package-builtin-missing',
+      `this instance is missing ${missingBuiltins.length} framework built-in(s) required by the package: ${missingBuiltins
+        .map((b) => `${b.type}/${b.name}`)
+        .join(', ')}`,
+      { missingBuiltins },
+    )
+  }
 
   for (const op of pkg.bundle.ops) {
     const slug = opSlug(op)

@@ -19,7 +19,7 @@ import { ACL_TABLES } from '@/services/resourceAcl'
 import { encodeZip, type ZipFile } from '@/util/zip'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { assertPrivilegedNodesExportable, walkExportClosure, type ExportClosure } from './closure'
-import { expectTokenOf } from './preview'
+import { exportFenceTokenOf } from './preview'
 import { serializeClosure, type SerializedPackage } from './serialize'
 import { packagedSkillFileRef, readSkillTree, type SkillTree } from './skillTree'
 import { collectPackageRequirements } from './requirements'
@@ -206,14 +206,23 @@ export async function exportResourcePackage(
 /**
  * 只对 **root** 生效的 exact-revision fence（旧 YAML 导出的那条保障）。
  *
- * 字段是**六类各自的完整形态**（AC-12），复用 `expectTokenOf` 那一份定义 —— 不能
- * 只给 `expectedVersion`：那只覆盖 workflow / workgroup，另一标签把 agent 的
- * `network` 从 deny 改成 allow 后，原标签点导出会**静默导出新版本**而不是 409。
+ * 字段是**六类各自的完整形态**（AC-12），取自 `exportFenceTokenOf`：
  *
- * · workflow / workgroup → `expectedVersion`
+ * · workflow / workgroup → `expectedVersion` + `expectedAclRevision`
  * · agent                → `expectedUpdatedAt` + `expectedAclRevision`
  * · skill                → `expectedContentVersion` + `expectedMetaRevision` + `expectedAclRevision`
  * · mcp / plugin         → `expectedConfigHash`
+ *
+ * 两条不能省的理由：
+ *  · 只给 `expectedVersion` 只覆盖 workflow / workgroup —— 另一标签把 agent 的
+ *    `network` 从 deny 改成 allow 后，原标签点导出会**静默导出新版本**而不是 409；
+ *  · workflow / workgroup 还要 `expectedAclRevision` —— ACL 写路径改 visibility /
+ *    grants 时**不推 version**，只比 version 就看不见「private 变 public」。
+ *
+ * ⚠️ `exportFenceTokenOf` 与引擎的 `expectTokenOf` 是**两件事**，别合并：后者的字段
+ * 受 `BundleExpectTokenSchema` 与各域服务 update 的 CAS 能力约束（工作流/工作组只能
+ * CAS `version`）。曾把 ACL 维直接加进 `expectTokenOf`，导入侧整条 overwrite 链路
+ * 立刻报 `unrecognized_keys`。
  */
 export type RootExportFence = Record<string, unknown>
 
@@ -230,7 +239,7 @@ function assertRootUnchanged(
   expect: RootExportFence | undefined,
 ): void {
   if (expect === undefined || Object.keys(expect).length === 0) return
-  const actual = expectTokenOf(type, row)
+  const actual = exportFenceTokenOf(type, row)
 
   // ⚠️ **给了就必须给全**：该类型要求的每个字段都要出现。少给一个就等于放过那一维
   // 的漂移（技能只改 description 会推进 metaRevision 而 contentVersion 不变——只带
@@ -309,8 +318,8 @@ async function assertClosureStillCurrent(db: DbClient, closure: ExportClosure): 
           `${type} '${resource.id}' vanished during export; retry from a fresh snapshot`,
         )
       }
-      const before = JSON.stringify(expectTokenOf(type, resource.row))
-      const after = JSON.stringify(expectTokenOf(type, current))
+      const before = JSON.stringify(exportFenceTokenOf(type, resource.row))
+      const after = JSON.stringify(exportFenceTokenOf(type, current))
       if (before !== after) {
         throw new ConflictError(
           changeCode,

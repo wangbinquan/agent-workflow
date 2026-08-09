@@ -192,7 +192,12 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     }
     const exportSrc = read('src/services/resourcePackage/export.ts')
     // 形态取自 `expectTokenOf` 那一份定义，不另抄一套。
-    expect(exportSrc).toContain('const actual = expectTokenOf(type, row)')
+    // 导出 fence 必须**派生自共享的 token 定义**，不能在 export.ts 里手写一份字段表
+    // ——手写的那份永远会落后于 schema。同时它用的是 `exportFenceTokenOf` 而不是引擎的
+    // `expectTokenOf`：后者受 CAS 能力约束（工作流/工作组只能 CAS version），前者要覆盖
+    // 完整漂移面（多一维 aclRevision）。两者混用过一次，导入侧当场 `unrecognized_keys`。
+    expect(exportSrc).toContain('const actual = exportFenceTokenOf(type, row)')
+    expect(exportSrc).not.toContain('expectedUpdatedAt:')
     // 给了就必须给全 —— 少给一维等于放过那一维的漂移。
     expect(exportSrc).toContain('needs all of:')
   })

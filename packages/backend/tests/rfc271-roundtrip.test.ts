@@ -713,55 +713,23 @@ describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动�
   })
 })
 
-describe('AC-9 · built-in 的两种位置：作**依赖**支持，作**根**拒绝', () => {
+describe('AC-9 · built-in 作**依赖**：完整链路 + 绑到对端自己的那一个', () => {
   // 这一段的历史值得留着。`builtin:` 这第五种 wire 形态最初只加进了 `bundle/payload.ts`
   // 的私有 regex，没进统一的 `ResourceRefAst` / 域 codec，于是 serializer 生成它、而
   // `RootRefSchema` 与 `parse.ts` 不认它——导出一个 built-in 根，产物被**自己的 parser**
   // 判 `package-invalid`。
   //
   // 我第一次"修好"它时只跑了 `export → parse` 就宣布通了。实现门随后指出：后面还有
-  // `preview` 只遍历 ops（零 op ⇒ 零 entry）、`commit` 的 `translatedBundle` 硬要求
-  // `local:` 根、`finalizeInTx` 第二道 local-only 守卫、前端要求 entries 非空——**整条
-  // 导入链根本走不通**。而我为那个修复写的"真实往返"用例，恰好也停在 parse，盲区与缺陷
-  // 完全重合。
+  // `preview` 只遍历 ops、`commit` 的 `translatedBundle`、`finalizeInTx` 三道 `local:`
+  // 硬门——**整条导入链根本走不通**。而我为那个修复写的"真实往返"用例，恰好也停在
+  // parse，盲区与缺陷完全重合。
   //
-  // 教训写在这里，因为它比这条 AC 本身更通用：**一个只覆盖到你改动那一层的往返测试，
-  // 不叫往返测试**。同文件其他往返用例都跑到 commit，唯独这条没有。
+  // 教训比这条 AC 本身更通用：**一个只覆盖到你改动那一层的往返测试，不叫往返测试**。
+  // 同文件其他往返用例都跑到 commit，唯独那条没有。
   //
-  // 最终语义由用户拍板：built-in 作根 → 导出侧 422 拒绝（消灭「零资源空包」这一整类
-  // 边界，而不是让四层各长一个特例）；built-in 作**依赖**照旧完整支持。
-  test('built-in 作为**根** ⇒ 导出侧 422 拒绝，且给出可操作的下一步', async () => {
-    const src = await makeInstance()
-    try {
-      const builtinId = ulid()
-      await src.db.insert(workflows).values({
-        id: builtinId,
-        name: 'aw-builtin-probe',
-        description: '',
-        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
-        ownerUserId: '__system__',
-        visibility: 'public',
-        builtin: true,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-
-      const err = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workflow', id: builtinId },
-        { appHome: src.appHome },
-      ).then(
-        () => null,
-        (e: unknown) => e as { code?: string; message?: string; status?: number },
-      )
-      expect(err?.code).toBe('package-builtin-root-not-exportable')
-      // 文案要告诉用户**下一步做什么**，否则 422 只是一堵墙。
-      expect(err?.message).toContain('export that workflow instead')
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
+  // （built-in 作**根**的完整跨实例导入由 `rfc271-resource-package-hardening.test.ts`
+  // 覆盖——preview 空 entries、commit `action: 'reuse'` 绑对端真 built-in、重放幂等、
+  // 同名非-builtin 行 fail-closed。这里补的是它的另一半：built-in 作**依赖**。）
 
   test('built-in 作为**依赖** ⇒ 完整走通 export → parse → preview → commit，并绑到对端自己的 built-in', async () => {
     // 这条是上面那个教训的正面兑现：跑完**整条链**，而且用**两个实例**——目标实例的
@@ -870,6 +838,158 @@ describe('AC-9 · built-in 的两种位置：作**依赖**支持，作**根**拒
       }
       expect(def.nodes?.[0]?.agentId).toBe(dstBuiltin)
       expect(def.nodes?.[0]?.agentId).not.toBe(srcBuiltin)
+    } finally {
+      removeTempDirSync(dst.appHome)
+      removeTempDirSync(src.appHome)
+    }
+  })
+})
+
+describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**就报错', () => {
+  // AC-9 原文要求「本地没有 → 预检页报错」。此前要到 commit 才由 `resolveIdentityRef`
+  // 抛 `bundle-builtin-missing`——用户已经逐条选完动作、填完凭据、点了提交，才被告知
+  // 这个包在本实例根本装不了。
+  //
+  // 这个区别不是「早点报错更友好」而已：built-in 缺失是**环境前提不满足**，用户能做的
+  // 只有升级/修复对端实例，在这个包里改什么都没用。所以它必须出现在「要不要导入」这个
+  // 决策之前，而不是决策之后。
+  const exportPkgUsingBuiltin = async (src: {
+    db: DbClient
+    appHome: string
+  }): Promise<Uint8Array> => {
+    const builtinId = ulid()
+    await src.db.insert(agents).values({
+      id: builtinId,
+      name: 'aw-skill-merger',
+      description: '',
+      outputs: '[]',
+      permission: '{}',
+      skills: '[]',
+      dependsOn: '[]',
+      mcp: '[]',
+      plugins: '[]',
+      frontmatterExtra: '{}',
+      bodyMd: '',
+      ownerUserId: '__system__',
+      visibility: 'public',
+      builtin: true,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    const wfId = ulid()
+    await src.db.insert(workflows).values({
+      id: wfId,
+      name: 'needs-builtin',
+      description: '',
+      definition: JSON.stringify({
+        $schema_version: 4,
+        inputs: [],
+        edges: [],
+        nodes: [{ id: 'n1', kind: 'agent-single', agentId: builtinId }],
+      }),
+      ownerUserId: 'u1',
+      visibility: 'private',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    const pkg = await exportResourcePackage(
+      src.db,
+      actorOf('u1'),
+      { type: 'workflow', id: wfId },
+      { appHome: src.appHome },
+    )
+    return pkg.zip
+  }
+
+  test('对端没有该 built-in ⇒ preview 即 422，并点名缺了哪一个', async () => {
+    const src = await makeInstance()
+    const dst = await makeInstance() // 目标实例**没有** seed 任何 built-in
+    try {
+      const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
+      const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+        box,
+        importId: ulid(),
+      }).then(
+        () => null,
+        (e: unknown) => e as { code?: string; message?: string },
+      )
+      expect(err?.code).toBe('package-builtin-missing')
+      expect(err?.message).toContain('agent/aw-skill-merger')
+    } finally {
+      removeTempDirSync(dst.appHome)
+      removeTempDirSync(src.appHome)
+    }
+  })
+
+  test('同名但 **builtin=false** 的用户自建资源不算数（否则等于把别人的资源当框架件）', async () => {
+    // 判据必须与导入期 `resolveIdentityRef` 的 built-in 分支一致：同名 + builtin=true。
+    // 只按名字查会绑到一行 owner 不是 __system__、builtin 为 false 的普通 agent 上。
+    const src = await makeInstance()
+    const dst = await makeInstance()
+    try {
+      await dst.db.insert(agents).values({
+        id: ulid(),
+        name: 'aw-skill-merger', // 同名
+        description: '',
+        outputs: '[]',
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
+        ownerUserId: 'u1', // 但是用户自建的
+        visibility: 'public',
+        builtin: false,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+
+      const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
+      const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+        box,
+        importId: ulid(),
+      }).then(
+        () => null,
+        (e: unknown) => e as { code?: string },
+      )
+      expect(err?.code).toBe('package-builtin-missing')
+    } finally {
+      removeTempDirSync(dst.appHome)
+      removeTempDirSync(src.appHome)
+    }
+  })
+
+  test('对端有该 built-in ⇒ preview 正常通过（不误伤）', async () => {
+    const src = await makeInstance()
+    const dst = await makeInstance()
+    try {
+      await dst.db.insert(agents).values({
+        id: ulid(),
+        name: 'aw-skill-merger',
+        description: '',
+        outputs: '[]',
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
+        ownerUserId: '__system__',
+        visibility: 'public',
+        builtin: true,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+
+      const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
+      const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+        box,
+        importId: ulid(),
+      })
+      expect(preview.entries.map((e) => e.name)).toEqual(['needs-builtin'])
     } finally {
       removeTempDirSync(dst.appHome)
       removeTempDirSync(src.appHome)

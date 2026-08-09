@@ -27,7 +27,6 @@ export interface BundleRefIssue {
     | 'bundle-dangling-local-ref'
     | 'bundle-local-ref-type-mismatch'
     | 'bundle-dangling-root'
-    | 'bundle-builtin-root-not-supported'
     | 'bundle-root-type-missing'
     | 'bundle-too-many-ops'
   message: string
@@ -198,17 +197,9 @@ export function collectBundleRefIssues(bundle: {
         })
       }
     } else if (bundle.rootRef.startsWith('builtin:')) {
-      // built-in **不能自己当根**。导出侧已在 `walkExportClosure` 422 拦下，所以诚实
-      // 产出的包不会有这种根；这里挡的是手工构造 / 被篡改的包。
-      //
-      // 必须给它一个**自己的** code：落进下面「external root 缺 rootType」那支会报出
-      // 一条与病因无关的错（builtin 自带类型，加 rootType 也修不好），让人往错的方向查。
-      issues.push({
-        code: 'bundle-builtin-root-not-supported',
-        message:
-          'a builtin resource cannot be the package root; export a resource that references it instead',
-        pointer: bundle.rootRef,
-      })
+      // `builtin:<type>/<name>` **自带类型**，不需要 rootType；它也不指向任何 op
+      // （built-in 不产 create op），所以既不算悬空、也不缺类型。导入侧按名字绑到
+      // 对端自己 seed 的那一个（`action: 'reuse'`，不复制）。
     } else if (bundle.rootType === undefined) {
       // external root 不自带类型；receipt 报不出根是什么就等于没有根。
       issues.push({

@@ -18,7 +18,11 @@ import { agents, mcps, runtimes, users, workflows } from '../src/db/schema'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { commitResourcePackage, translateDecisions } from '../src/services/resourcePackage/commit'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { buildPackagePreview, verifyPreviewToken } from '../src/services/resourcePackage/preview'
+import {
+  buildPackagePreview,
+  signPreviewToken,
+  verifyPreviewToken,
+} from '../src/services/resourcePackage/preview'
 import { assignSlugs, serializeClosure } from '../src/services/resourcePackage/serialize'
 import { encodeZip } from '../src/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -180,15 +184,36 @@ secrets: []
         },
       ])
       const pkg = await parseResourcePackage(zip)
-      const preview = await buildPackagePreview(db, actorOf('u1'), pkg, {
-        box,
-        importId: ulid(),
+
+      // ① AC-9 要求「本地没有 → **预检页**报错」。built-in 绑不上是一个**环境前提
+      // 不满足**，用户能做的只有升级/修复对端实例，不是在这个包里改点什么——所以它
+      // 必须出现在「要不要导入」这个决策**之前**，而不是等用户逐条选完、填完凭据、
+      // 点了提交才被告知这个包在本实例根本装不了。
+      //
+      // 判据是「同名 **且** builtin=true」：这里目标实例只有一行同名的**用户自建**
+      // 资源（owner=u-attacker、builtin=false）。只按名字查会绑上去，等于把别人的
+      // 资源当框架内置件用。
+      expect(
+        await codeOf(buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: ulid() })),
+      ).toBe('package-builtin-missing')
+
+      // ② 引擎兜底仍在：绕开预检（手工签一个 token）直接提交，`resolveIdentityRef`
+      // 照样 fail closed。两层都要有——预检那层是**产品要求**（早点告诉用户），引擎
+      // 这层是**安全要求**（不信任何绕过预检的调用方）。
+      const importId = ulid()
+      const forgedToken = signPreviewToken(box, {
+        importId,
+        actorUserId: 'u1',
+        packageDigest: pkg.digest,
+        expiresAt: Date.now() + 60_000,
+        baseline: [],
+        humanBaseline: [],
       })
       expect(
         await codeOf(
           commitResourcePackage({ db, appHome, box }, actorOf('u1'), {
             pkg,
-            previewToken: preview.previewToken,
+            previewToken: forgedToken,
             decisions: [],
           }),
         ),
@@ -589,7 +614,10 @@ describe('exact root fence 覆盖闭包之后的 live 读取窗口', () => {
             racedDb,
             actorOf('u1'),
             { type: 'workflow', id: 'WF1' },
-            { appHome, expect: { expectedVersion: 1 } },
+            // workflow 的导出 fence 是**两维**（version + aclRevision）：ACL 写路径
+            // 不推 version，只比 version 会看不见 private→public。少给一维会先被
+            // 「给了就必须给全」判 package-invalid，测不到这里要测的 TOCTOU。
+            { appHome, expect: { expectedVersion: 1, expectedAclRevision: 0 } },
           ),
         ),
       ).toBe('package-root-changed')

@@ -21,7 +21,7 @@ import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, plugins, skills, users, workflows, workgroups } from '../src/db/schema'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
-import { expectTokenOf } from '../src/services/resourcePackage/preview'
+import { exportFenceTokenOf } from '../src/services/resourcePackage/preview'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const actorOf = (id: string): Actor =>
@@ -436,7 +436,7 @@ describe('AC-12 · plugin 用 configHash（含安装态，不只是配置文本�
     const { db, appHome } = await seed()
     const id = await seedPlugin(db)
     // 先拿到当前 hash（用一次成功导出证明它是对的）。
-    const before = expectTokenOf('plugin', {
+    const before = exportFenceTokenOf('plugin', {
       ...(db
         .select()
         .from(plugins)
