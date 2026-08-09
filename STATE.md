@@ -163,6 +163,22 @@
 > 同一个提交」。**教训**：多人工作树下 `git add` 前要逐个确认文件归属，`mine.txt`
 > 那种「按 `git status` 全量筛」的做法会连带别人的中间态。
 >
+> 🔴 **交接给 UX session：批次 G 引入的前端 UI 回归，CI 的 e2e 腿因此持续红**
+> （`a3cc99ca` run 31297879784；**用户已拍板由做 UX 重构的那个 session 一并处理**，
+> 我不碰 `packages/frontend/**`）。此前一直被掩盖——`focus-ring-clip.spec.ts` 在
+> 「找不到 `Import YAML` 按钮」上提前失败，那个对话框与相关页面**从未真正被扫到**；
+> 选择器修好后 18 处裁剪一次性暴露。精确诊断在 `docs/audit-backlog.md`：
+>
+> - `/workgroups/{id}` 5 处 —— 我加的 `Export config package` 按钮所在的
+>   `.page__meta` / `.page__heading` 四边 `0px of room`，**容器缺
+>   `var(--focus-ring-gutter)` 的 padding**（这一处可能不在重构范围内，需单独确认）。
+> - `/workflows/{id}(editor)` 4 处 —— header 加按钮后 `Launch task` 只剩 `0.8px`；
+>   同根因让 `rfc250-workflow-camera` 报 `workflow-more-actions` 在 1280px 溢出。
+> - `/workflows(import-dialog)` 9 处 —— `.dialog__panel` 的 `[focus-within]` 环
+>   `paints 40–60px out, only 24px of room`；`ux-consistency` 的 1280 light 也卡这里。
+>   规则**无豁免通道**（测试原话 "There is NO waiver channel"）。前两类会被那次重构
+>   （导入入口移进创建流程 + 重写 `ResourcePackageImportDialog`）直接覆盖。
+>
 > ⏳ **未完成收尾（已登记 backlog）**：`visual-regression-nightly` 自 `ea27d81f`
 > （批次 G「六类列表页接入导入入口」）起持续红 —— 新增视觉场景后**基线未更新**。
 > 那不是缺陷而是流程没走完（该 workflow 文件头写明：首次 hosted run 故意红并产出
