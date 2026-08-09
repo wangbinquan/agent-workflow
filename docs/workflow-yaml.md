@@ -1,9 +1,23 @@
-# Workflow YAML reference
+# Workflow definition reference
 
-Workflows are stored in SQLite as a JSON `definition` blob; the UI lets you
-**Export YAML** / **Import YAML** for version-control or sharing. This page
-documents that YAML shape. The authoritative zod schemas are in
+A workflow is stored in SQLite as a JSON `definition` blob. This page documents
+that structure — nodes, edges, launcher inputs and the validation rules — using
+YAML for readability. The authoritative zod schemas are in
 [`packages/shared/src/schemas/workflow.ts`](../packages/shared/src/schemas/workflow.ts).
+
+> **Moving workflows between instances: use a configuration package, not this
+> file.** RFC-271 retired single-file YAML export/import
+> (`GET /api/workflows/:id/export`, `POST /api/workflows/import`) because a YAML
+> file carries only the workflow's own `definition` — the skills, MCPs, plugins
+> and `dependsOn` closure behind its agents are not in it, so importing one into
+> another instance reliably produces dangling references. Configuration packages
+> ship the whole closure; see [`resource-packages.md`](./resource-packages.md)
+> for the format and [`resource-bundles.md`](./resource-bundles.md) for the
+> expression layer underneath it.
+>
+> What follows still describes the live `definition` — it is what the canvas
+> edits, what a package's `bundle.json` carries, and what the intent builder
+> emits.
 
 ## Top-level shape
 
@@ -22,46 +36,15 @@ definition:
 `name` is an ordinary human-readable name — Chinese and mixed scripts are fine
 (`代码审计流水线`, `审计 Pipeline v2`). It must not start with `_` (that shape is
 reserved for framework-internal rows), must not contain control characters or
-line breaks, and is at most 128 characters. It is normalized on import (NFC,
-spaces folded, edges trimmed). An import always mints a NEW name, so a YAML
-whose `name` breaks those rules is rejected with `workflow-name-invalid` rather
-than silently rewritten (RFC-264).
+line breaks, and is at most 128 characters. Every write path normalizes it (NFC,
+spaces folded, edges trimmed) and rejects a non-conforming name with
+`workflow-name-invalid` rather than silently rewriting it (RFC-264).
 
-Import uses a structured JSON request to `POST /api/workflows/import`:
-
-```json
-{ "yamlText": "name: ...", "mode": "fail" }
-```
-
-| `mode`      | Behavior                                                                  |
-| ----------- | ------------------------------------------------------------------------- |
-| `fail`      | 409 on an id collision; `details.current` carries the exact revision      |
-| `overwrite` | Replace only the confirmed revision; requires the `overwrite` fence below |
-| `new`       | Strip the YAML id and create a fresh workflow                             |
-
-An overwrite confirmation must reuse the revision returned by the collision and
-generate one canonical ULID for that submitted intent (transport retries reuse
-the same id):
-
-```json
-{
-  "yamlText": "id: 01J...\nname: ...",
-  "mode": "overwrite",
-  "overwrite": {
-    "workflowId": "01J...",
-    "expectedVersion": 3,
-    "clientMutationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
-  }
-}
-```
-
-Created imports return `{ "outcome": "created", "workflow": ... }`; overwrites
-return `{ "outcome": "overwritten", "receipt": ... }`. Raw YAML request bodies
-and the former `?onConflict=` query parameter are intentionally rejected.
-
-Portable YAML uses `agentName` (and, only when needed to disambiguate,
-`agentOwnerUsername`). Import resolves that selector to the installation-local
-stable `agentId`; export strips `agentId` again.
+Inside a stored definition an `agent-single` node carries the
+installation-local stable `agentId`. Portable forms carry a selector instead —
+`agentName` plus, only when needed to disambiguate, `agentOwnerUsername` — and
+the resource-bundle layer resolves it to `agentId` on the way in
+([`resource-bundles.md`](./resource-bundles.md) §1).
 
 ## `inputs[]` — launcher form
 
@@ -101,12 +84,12 @@ inputs:
     onConflict: rename # rename (default) | overwrite
 ```
 
-| `kind`   | Extra fields                                  | Packed value sent to backend              |
-| -------- | --------------------------------------------- | ----------------------------------------- |
-| `text`   | `multiline`, `maxLength`                      | Raw string                                |
-| `files`  | `minCount`, `maxCount`, `accept`              | Newline-joined repo-relative paths        |
-| `enum`   | `choices`, `multiSelect`, `allowOther`        | Bare string (single) / JSON array (multi) |
-| `git`    | `gitKind: 'branch' \| 'commit-range' \| 'pr'` | `{kind, ...}` JSON object                 |
+| `kind`   | Extra fields                                           | Packed value sent to backend              |
+| -------- | ------------------------------------------------------ | ----------------------------------------- |
+| `text`   | `multiline`, `maxLength`                               | Raw string                                |
+| `files`  | `minCount`, `maxCount`, `accept`                       | Newline-joined repo-relative paths        |
+| `enum`   | `choices`, `multiSelect`, `allowOther`                 | Bare string (single) / JSON array (multi) |
+| `git`    | `gitKind: 'branch' \| 'commit-range' \| 'pr'`          | `{kind, ...}` JSON object                 |
 | `upload` | `targetDir`, `accept`, size/count limits, `onConflict` | Newline-joined staged repo-relative paths |
 
 `upload.onConflict` (RFC-262) decides what happens when a file lands on a name that
@@ -115,9 +98,9 @@ behavior) writes `report (1).pdf` and leaves the existing file alone, while
 `overwrite` replaces it so the packed path keeps the original name — which is what
 repo-internal references to that path resolve to. Two uploaded files that would land
 on the same path are rejected at launch (`upload-duplicate-filename`) under either
-policy. Unrelated to the retired `?onConflict=` import query parameter above.
+policy.
 
-## `nodes[]` — nine kinds
+## `nodes[]` — the thirteen kinds
 
 Every node has `id`, `kind`, `position: {x, y}`. The rest depends on `kind`.
 
@@ -282,6 +265,119 @@ The questioner writes `__clarify__` to `questions`. `to_questioner` returns the
 answer to its `__clarify_response__`; `to_designer` may target an upstream
 agent's `__external_feedback__`. A normal answer submission reruns the asker by
 default; revising another agent is an explicit reassign operation.
+
+### `call-workflow`
+
+```yaml
+- id: c_child
+  kind: call-workflow
+  position: { x: 520, y: 300 }
+  workflowName: nightly-audit # the target's exact display name
+  limits: # optional caps on the child task
+    maxDurationMs: 1800000
+    maxTotalTokens: 400000
+```
+
+Runs another workflow as an **independent child task**. Its ports mirror the
+child's declared `inputs[]` (in-ports) and `outputs` (out-ports), so the caller's
+wiring depends on the child's definition.
+
+`workflowName` is the authoritative selector and is resolved **late, at launch**
+— two consequences follow. Renaming the target breaks every caller
+(`call-workflow-ref-missing`), and `workflows.name` is **not** unique, so when
+several visible rows share the name the launch binds the oldest one the launching
+user can see. Two launch-time rules the definition alone will not reveal: every
+one of the child's declared inputs needs its own ordinary incoming edge targeting
+that exact input key — **including optional ones**, else
+`call-workflow-input-unwired`; and a child declaring any `upload` input cannot be
+called at all (`call-workflow-upload-input-unsupported`).
+
+### `call-workgroup`
+
+```yaml
+- id: c_squad
+  kind: call-workgroup
+  position: { x: 520, y: 380 }
+  workgroupName: audit-squad
+  goalTemplate: |
+    Review {{git_diff}} and report blocking issues.
+  limits:
+    maxDurationMs: 1800000
+```
+
+Hands this stage to a workgroup running as an independent child task. Inbound
+ports are edge-derived (each incoming edge's target `portName` **is** the
+variable name) and readable inside `goalTemplate` as `{{port_name}}`. The single
+output port is `result`. `workgroupName` has the same late-bound, non-unique
+semantics as `call-workflow`.
+
+### `script`
+
+```yaml
+- id: s_report
+  kind: script
+  position: { x: 520, y: 460 }
+  language: python # python | bash | node
+  script: |
+    import os, json
+    findings = os.environ['AW_PORT_FINDINGS']
+    print(json.dumps({'count': len(findings.splitlines())}))
+  outputs: # optional; absent/empty ⇒ one implicit `stdout` port
+    - name: summary
+  dependencies: ['requests==2.32.3'] # exact pins only; bash declares none
+  env: { TOKEN: '' } # closed secret carrier — see below
+  network: deny # allow (default) | deny
+  readonly: true
+```
+
+Runs inline in the task worktree — no agent, no model process. Inbound port
+values arrive as environment variables `AW_PORT_<PORT>` (port name uppercased,
+characters outside `[A-Z0-9_]` folded to `_`); they are **never** substituted
+into the body, so read them from the environment. With `outputs` absent or empty
+the raw stdout becomes one implicit `stdout` port; with `outputs` declared the
+script must print
+`<workflow-output nonce="$AW_ENVELOPE_NONCE"><port name="…">…</port></workflow-output>`.
+`dependencies` must pin exact versions (pip `pkg==1.2.3` / npm `pkg@1.2.3`).
+Script nodes cannot sit inside `wrapper-fanout`.
+
+`env` values are a **closed secret carrier**: real values are collected through
+the confirm UI / configuration-package import and never travel in a definition
+document. Authoring or changing a script node requires the `scripts:author`
+permission (admin + manager); everyone else may still move the node and edit
+unrelated parts of the same workflow.
+
+### `code-host-call`
+
+```yaml
+- id: h_comment
+  kind: code-host-call
+  position: { x: 520, y: 560 }
+  provider: gitlab # gitlab | github
+  action: comment.create # key from the shared action registry
+  params:
+    mr: '{{trigger.mr_iid}}'
+    body: |
+      Audit found {{findings}}.
+  timeoutMs: 30000
+  # allowDestructive: true   # required for any DELETE
+  # request: { method: POST, path: /projects/1/x, body: '{"k":"v"}' }  # action: custom only
+```
+
+The **platform itself** issues one REST call to GitLab/GitHub using the base URL
+and token an administrator configured in settings — no agent, no model, no
+subprocess, and that token never enters a prompt or a port. Fixed output ports
+are `response` (raw body) and `status` (HTTP status code); the node declares no
+input ports. Every `params` value is a template: `{{port_name}}` reads an inbound
+edge's port and `{{trigger.<var>}}` reads the webhook event that started the task
+(no edge needed). Leaving `project` empty targets the task's own repository. A
+non-2xx response fails the node.
+
+`action: custom` is the escape hatch and its `request` is stricter than it looks:
+`path` must start with a single `/`, is relative to the configured base URL (no
+scheme, no `//` prefix, no `?`, `#`, `..` segment or whitespace — query
+parameters go in `query`), and `body` is a **string** holding JSON in which every
+`{{var}}` sits inside a JSON string value. Authoring one requires the
+`code-host-calls:author` permission (admin + manager).
 
 ## `edges[]`
 

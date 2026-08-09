@@ -354,7 +354,9 @@ unreadable.
 - [Architecture](./docs/architecture.md) — process model and data flow
 - [Agent reference](./docs/agent.md) — agent frontmatter and fields
 - [Skill reference](./docs/skill.md) — `SKILL.md` and managed file layout
-- [Workflow YAML](./docs/workflow-yaml.md) — import/export schema
+- [Workflow definition](./docs/workflow-yaml.md) — nodes, edges and launcher inputs
+- [Configuration packages](./docs/resource-packages.md) — move resources between
+  instances with their whole dependency closure
 - [Runtime config layering](./docs/OPENCODE_CONFIG.md) — injected and discovered
   opencode configuration
 - [Troubleshooting](./docs/troubleshooting.md) — startup and runtime problems

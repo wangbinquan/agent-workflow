@@ -290,7 +290,8 @@ daemon 默认绑定 `127.0.0.1`，并使用操作系统分配的端口。修改�
 - [架构](./docs/architecture.md) — 进程模型与数据流
 - [代理参考](./docs/agent.md) — agent frontmatter 与字段
 - [技能参考](./docs/skill.md) — `SKILL.md` 与托管文件布局
-- [工作流 YAML](./docs/workflow-yaml.md) — 导入/导出 schema
+- [工作流定义](./docs/workflow-yaml.md) — 节点、边与启动表单输入
+- [配置包](./docs/resource-packages.md) — 连同整棵依赖闭包在实例之间搬运资源
 - [运行时配置分层](./docs/OPENCODE_CONFIG.md) — opencode 配置的注入与发现
 - [故障排查](./docs/troubleshooting.md) — 启动与运行时问题
 - [性能说明](./docs/performance-notes.md) — 调优与 benchmark
