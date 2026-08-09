@@ -201,8 +201,9 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   // (3b) NESTED dialog smoke — the owner-transfer dialog opens INSIDE the
   // permissions dialog. Pre-fix the two focus traps locked the page solid
   // (user report: "转让所有者的弹窗弹出来后，界面必死"), so every
-  // interaction below would time out. Type into the picker, then Escape:
-  // only the INNER dialog closes; the permissions dialog must survive.
+  // interaction below would time out. The picker follows combobox keyboard
+  // semantics: the first Escape closes its portaled listbox; the second closes
+  // only the INNER dialog. The permissions dialog must survive.
   await openAgentAcl(alicePage)
   await alicePage.getByTestId('acl-transfer-owner').click()
   const transferInput = alicePage.getByTestId('acl-transfer-input')
@@ -210,8 +211,12 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   await transferInput.fill('carol')
   await expect(alicePage.getByTestId('acl-transfer-option-carol99')).toBeVisible()
   await alicePage.keyboard.press('Escape')
+  await expect(alicePage.getByTestId('acl-transfer-option-carol99')).toHaveCount(0)
+  await expect(transferInput).toBeVisible()
+  await alicePage.keyboard.press('Escape')
   await expect(transferInput).toHaveCount(0)
   await expect(alicePage.getByTestId('acl-panel')).toBeVisible()
+  await expect(alicePage.getByTestId('acl-transfer-owner')).toBeFocused()
 
   // (4) carol sees it again; her panel (behind the same header button) is
   // read-only (no save / transfer).
@@ -256,6 +261,9 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   await expect(transferDialog).toBeVisible()
   await expect(alicePage.getByRole('dialog')).toHaveCount(2)
   await expect(transferDialog.getByRole('heading', { name: 'Transfer ownership' })).toBeVisible()
+  const workflowTransferInput = transferDialog.getByTestId('acl-transfer-input')
+  await expect(workflowTransferInput).toBeFocused()
+  await expect(workflowTransferInput).toHaveAttribute('aria-expanded', 'true')
   await expect
     .poll(() =>
       transferDialog.evaluate((element) => element.contains(element.ownerDocument.activeElement)),
@@ -266,6 +274,9 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
     'workflow owner-transfer dialog',
     '[data-testid="acl-transfer-dialog"]',
   )
+  await alicePage.keyboard.press('Escape')
+  await expect(workflowTransferInput).toHaveAttribute('aria-expanded', 'false')
+  await expect(transferDialog).toBeVisible()
   await alicePage.keyboard.press('Escape')
   await expect(transferDialog).toHaveCount(0)
   await expect(workflowAcl).toBeVisible()
