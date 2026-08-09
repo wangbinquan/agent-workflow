@@ -20,6 +20,7 @@ import { sandboxCommand } from './cli/sandbox'
 import { startCommand } from './cli/start'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
+import { packageCommand } from './cli/package'
 import { userCommand } from './cli/user'
 import { authCommand } from './cli/auth'
 import {
@@ -229,6 +230,13 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'package': {
+      const result = await packageCommand(Bun.argv.slice(3))
+      process.stdout.write(result.output)
+      if (result.status !== 'ok') process.exit(1)
+      break
+    }
+
     case 'user': {
       const rest = Bun.argv.slice(3)
       const result = await userCommand(rest)
@@ -275,6 +283,11 @@ async function main(): Promise<void> {
       )
       console.log(
         '  restore <tarball> [--yes]         restore state from a backup (daemon must be stopped)',
+      )
+      console.log('  package export|import --as-user U  export/import a config package (RFC-271;')
+      console.log('                                     runs AS a real user — same visibility and')
+      console.log(
+        '                                     ownership rules as the HTTP API, not a way around them)',
       )
       console.log(
         '  user create --username <name>     create a user (RFC-036; --admin to set role=admin)',

@@ -132,6 +132,7 @@ const EXACT_ALLOWANCE_ROWS = [
   // deterministic oldest-ULID selector rule as the workflow side).
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fNewExpression:0580e9b46ee19382f709\u001f1\u001fportable-selector\u001fnew Set(rows.map((r) => String(r.name)))',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
+  'sql-name-selector\u001fpackages/backend/src/cli/package.ts\u001frunExport\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:613b1a0045d8d1a4940b\u001f1\u001fportable-selector\u001fvisible.find((r) => r.id === idHint && rowName(r) === name)',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:a83c2a9bf56ed96e8233\u001f1\u001fportable-selector\u001finArray(table.name, [name])',
   'collection-name-identity\u001fpackages/backend/src/services/execution/closure.ts\u001ffreezeCallClosure\u001fNewExpression:018216e6416c703e0a7a\u001f1\u001fportable-selector\u001fnew Set(workgroupEdges.map((e) => e.ref.workgroupName))',
@@ -426,7 +427,10 @@ describe('RFC-223 T15 structural identity guard', () => {
     //   · `new Set(rows.map(… r.name))` —— 建议名要避开的已占用名字集合。
     // 两处都**不解析身份**：候选是列给用户选的，选中哪一个由用户的 decision 决定，
     // 且 commit 段还要拿它与签名基线里的 candidateIds 逐条比对。
-    expect(findings.length).toBe(136)
+    // RFC-271 T40 显式改判：136 → 137。CLI 导出允许 `--name` 选目标，所以必然按
+    // 名字查一次。**它恰恰不是**「按名字解析身份」：命中多行时**报错并列出候选
+    // id**，要求用户改用 `--id`——`workflows.name` 非唯一，猜一行就是选错资源。
+    expect(findings.length).toBe(137)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three
