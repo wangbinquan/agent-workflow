@@ -19,11 +19,12 @@
 //   7. runIsoWorktreeGc P0-2 tightening: interrupted parents and parents with
 //      live/interrupted children keep their iso containers.
 import { describe, expect, test } from 'bun:test'
-import { mkdirSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
+import type { StartTask } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
@@ -31,13 +32,14 @@ import {
   resumeTask,
   retryNode,
   selectResumeRollbackTargets,
+  startTask,
 } from '../src/services/task'
 import { deleteTask } from '../src/services/taskDelete'
 import { enforceLimits, parseCallHumanWait } from '../src/services/limits'
 import { runIsoWorktreeGc } from '../src/services/gc'
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { resolveRunLiveness } from '../src/services/runLiveness'
-import type { StartTaskDeps } from '../src/services/task'
+import type { MaterializedSpace, StartTaskDeps } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -135,6 +137,82 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
     const row = (await db.select().from(tasks).where(eq(tasks.id, child)))[0]
     expect(row?.status).toBe('canceled')
     expect(row?.errorMessage).not.toBe('canceled-by-parent-cascade')
+  })
+
+  test('a canceled parent transaction-fences a late child task insert', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const wf = await seedWorkflow(db)
+    const parent = await seedTask(db, wf, { status: 'running' })
+    const callRun = await seedRun(db, parent, 'call', { status: 'running' })
+    await cancelTask(db, parent)
+
+    const childId = ulid()
+    const childRoot = mkdtempSync(join(tmpdir(), 'aw-rfc243-late-child-'))
+    const space: MaterializedSpace = {
+      kind: 'single',
+      spaceKind: 'inherited',
+      taskId: childId,
+      worktreePath: childRoot,
+      branch: `agent-workflow/${childId}`,
+      baseCommit: null,
+      earlyError: null,
+      resolvedSources: [
+        {
+          repoPath: childRoot,
+          baseBranch: 'main',
+          repoUrl: null,
+          cachedRepoId: null,
+          pathFetchError: null,
+          ffWarnings: [],
+        },
+      ],
+      repos: [
+        {
+          repoIndex: 0,
+          repoPath: childRoot,
+          repoUrl: null,
+          cachedRepoId: null,
+          baseBranch: 'main',
+          branch: `agent-workflow/${childId}`,
+          baseCommit: null,
+          worktreePath: childRoot,
+          worktreeDirName: '',
+          mountPath: '',
+          subdir: '',
+          readonly: false,
+          gitignoreCommit: null,
+          submoduleInitOk: true,
+          submoduleInitError: null,
+          hasSubmodules: false,
+        },
+      ],
+      nodePaths: [],
+      cleanup: {
+        taskId: childId,
+        ownedRoot: null,
+        worktrees: [],
+        state: 'owned',
+        report: null,
+      },
+    }
+    try {
+      await expect(
+        startTask({ workflowId: wf, name: 'late child', inputs: {} } as StartTask, {
+          db,
+          materializedSpace: space,
+          callLaunch: {
+            parentTaskId: parent,
+            parentNodeRunId: callRun,
+            invocationDepth: 1,
+            frozenSnapshotJson: EMPTY_DEF,
+            refClosureJson: null,
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'parent-task-not-running' })
+      expect(await db.select().from(tasks).where(eq(tasks.id, childId))).toHaveLength(0)
+    } finally {
+      rmSync(childRoot, { recursive: true, force: true })
+    }
   })
 })
 

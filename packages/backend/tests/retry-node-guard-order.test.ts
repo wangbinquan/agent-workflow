@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, workflows } from '../src/db/schema'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { retryNode } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -78,5 +78,86 @@ describe('retryNode validates nodeRunId before mutating task state (RFC-099 audi
     const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(rows[0]?.status).toBe('done')
     expect(rows[0]?.finishedAt).toBe(finishedAt)
+  })
+
+  test("cross-task call row → 404 without canceling that row's live child", async () => {
+    const workflowId = ulid()
+    await db.insert(workflows).values({
+      id: workflowId,
+      name: 'wf-cross-task',
+      description: '',
+      definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+      version: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+
+    const targetTaskId = ulid()
+    const foreignTaskId = ulid()
+    const foreignCallRunId = ulid()
+    const foreignChildId = ulid()
+    const common = {
+      workflowId,
+      workflowSnapshot: '{}',
+      repoPath: appHome,
+      worktreePath: appHome,
+      baseBranch: 'main',
+      inputs: '{}',
+      startedAt: Date.now() - 100,
+    }
+    await db.insert(tasks).values([
+      {
+        ...common,
+        id: targetTaskId,
+        name: 'target-task',
+        branch: `agent-workflow/${targetTaskId}`,
+        status: 'done',
+        finishedAt: Date.now(),
+      },
+      {
+        ...common,
+        id: foreignTaskId,
+        name: 'foreign-parent',
+        branch: `agent-workflow/${foreignTaskId}`,
+        status: 'failed',
+        finishedAt: Date.now(),
+      },
+    ])
+    await db.insert(nodeRuns).values({
+      id: foreignCallRunId,
+      taskId: foreignTaskId,
+      nodeId: 'call_foreign',
+      status: 'running',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 50,
+    })
+    await db.insert(tasks).values({
+      ...common,
+      id: foreignChildId,
+      name: 'foreign-live-child',
+      branch: `agent-workflow/${foreignChildId}`,
+      status: 'awaiting_human',
+      parentTaskId: foreignTaskId,
+      parentNodeRunId: foreignCallRunId,
+      invocationDepth: 1,
+    })
+    await db
+      .update(nodeRuns)
+      .set({ childTaskId: foreignChildId })
+      .where(eq(nodeRuns.id, foreignCallRunId))
+
+    await expect(
+      retryNode(db, targetTaskId, foreignCallRunId, {
+        cascade: true,
+        deps: { db, appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      }),
+    ).rejects.toMatchObject({ code: 'node-run-not-found' })
+
+    const target = (await db.select().from(tasks).where(eq(tasks.id, targetTaskId)))[0]
+    const child = (await db.select().from(tasks).where(eq(tasks.id, foreignChildId)))[0]
+    expect(target?.status).toBe('done')
+    expect(child?.status).toBe('awaiting_human')
+    expect(child?.errorMessage).toBeNull()
   })
 })

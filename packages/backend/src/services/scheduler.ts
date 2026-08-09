@@ -164,6 +164,7 @@ import {
   type ManagedInjectionIdentity,
 } from '@/services/runtime/injectionIdentity'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
+import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
@@ -9183,6 +9184,17 @@ async function failTask(
 }
 
 async function cancelTaskRow(
+  db: DbClient,
+  taskId: string,
+  failedNodeId?: string,
+  abortReason?: unknown,
+): Promise<void> {
+  return withTaskReviewMutationLock(taskId, () =>
+    cancelTaskRowUnlocked(db, taskId, failedNodeId, abortReason),
+  )
+}
+
+async function cancelTaskRowUnlocked(
   db: DbClient,
   taskId: string,
   failedNodeId?: string,

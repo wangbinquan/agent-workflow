@@ -6,6 +6,8 @@ import { eq } from 'drizzle-orm'
 
 import { docVersions, nodeRunOutputs } from '../src/db/schema'
 import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
+import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
+import { cancelTask } from '../src/services/task'
 import {
   buildHarness,
   insertAlert,
@@ -97,6 +99,74 @@ describe('RFC-057 — S1.recreate-doc-version', () => {
     const opt = list.options.find((o) => o.id === 'S1.recreate-doc-version')
     expect(opt?.available).toBe(false)
     expect(opt?.unavailableReasonKey).toBe('diagnose.repair.S1.unavailable.taskNotAwaitingReview')
+  })
+
+  test('cancel first makes queued recreate-doc repair a zero-write stale loser', async () => {
+    h = await buildHarness({
+      taskStatus: 'awaiting_review',
+      workflow: {
+        $schema_version: 4,
+        inputs: [],
+        nodes: [
+          { id: 'src', kind: 'agent-single', agentName: 'doc' } as never,
+          {
+            id: 'rev_1',
+            kind: 'review',
+            inputSource: { nodeId: 'src', portName: 'docpath' },
+          } as never,
+        ],
+        edges: [],
+      },
+    })
+    const srcRunId = await insertNodeRun(h.db, h.taskId, {
+      nodeId: 'src',
+      status: 'done',
+      finishedAt: Date.now(),
+    })
+    await h.db.insert(nodeRunOutputs).values({
+      nodeRunId: srcRunId,
+      portName: 'docpath',
+      content: '# must not be recreated',
+    })
+    const reviewRunId = await insertNodeRun(h.db, h.taskId, {
+      nodeId: 'rev_1',
+      status: 'awaiting_review',
+    })
+    const alertId = await insertAlert(h.db, h.taskId, {
+      rule: 'S1',
+      detail: { rule: 'S1', repairHint: { kind: 'review', nodeRunId: reviewRunId } },
+    })
+    let releaseHolder: () => void = () => {}
+    let holderEntered: () => void = () => {}
+    const blocked = new Promise<void>((resolveBlocked) => {
+      releaseHolder = resolveBlocked
+    })
+    const entered = new Promise<void>((resolveEntered) => {
+      holderEntered = resolveEntered
+    })
+    const holder = withTaskReviewMutationLock(h.taskId, async () => {
+      holderEntered()
+      await blocked
+    })
+    await entered
+
+    const cancel = cancelTask(h.db, h.taskId)
+    const repair = applyRepairOption({
+      db: h.db,
+      taskId: h.taskId,
+      alertId,
+      optionId: 'S1.recreate-doc-version',
+      actorUserId: 'u-1',
+      appHome: h.tmpDir,
+      deps: h.deps,
+    })
+    releaseHolder()
+    await holder
+    await cancel
+    await expect(repair).rejects.toMatchObject({ code: 'repair-preflight-stale' })
+    expect(
+      await h.db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, reviewRunId)),
+    ).toHaveLength(0)
   })
 
   test('preflight-stale: workflow has no review nodes', async () => {

@@ -20,7 +20,9 @@ import { nodeRuns, tasks } from '@/db/schema'
 import { setTaskStatus } from '@/services/lifecycle'
 import { isoWorktreePathFor } from '@/services/nodeIsolation'
 import { dispatchReviewNode } from '@/services/review'
+import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { buildContainerMap } from '@/services/scheduler'
+import { ConflictError } from '@/util/errors'
 
 import { schedulerLivenessGate } from './helpers'
 import type { ApplyResult, PreflightResult, RepairContext, RepairOptionDef } from './types'
@@ -190,6 +192,12 @@ const S1_RECREATE_DOC: RepairOptionDef = {
     if (result.kind === 'failed') {
       throw new Error(`dispatchReviewNode failed: ${result.message} — ${result.summary}`)
     }
+    if (result.kind === 'canceled') {
+      throw new ConflictError(
+        'repair-preflight-stale',
+        `task ${rc.task.id} was canceled before S1 could recreate its review document`,
+      )
+    }
     return {
       beforeSnapshot: { reviewNode: prep.reviewNode.id, iteration: prep.iteration },
       afterSnapshot: { dispatchResult: result.kind, message: result.message },
@@ -227,27 +235,30 @@ const S1_DEMOTE_TASK: RepairOptionDef = {
     }
   },
   async apply(rc): Promise<ApplyResult> {
-    const before = { task: { status: rc.task.status } }
-    // RFC-097: CAS write mirroring the preflight status gate. A lost race
-    // surfaces as repair-preflight-stale via the engine's apply catch.
-    await setTaskStatus({
-      db: rc.db,
-      taskId: rc.task.id,
-      to: 'interrupted',
-      allowedFrom: ['awaiting_review'],
-      extra: {
-        finishedAt: rc.now(),
-        errorSummary: 'manual-repair-S1',
-        errorMessage: `RFC-057 repair S1.demote-task via alert ${rc.alert.id}`,
-        failedNodeId: null,
-      },
-      reason: 'S1.demote-task',
+    return withTaskReviewMutationLock(rc.task.id, async () => {
+      const before = { task: { status: rc.task.status } }
+      // RFC-097: CAS write mirroring the preflight status gate. Serialize the
+      // demotion with review writers/cancel; do not wrap recreate-doc above,
+      // because dispatchReviewNode owns this same coordinator itself.
+      await setTaskStatus({
+        db: rc.db,
+        taskId: rc.task.id,
+        to: 'interrupted',
+        allowedFrom: ['awaiting_review'],
+        extra: {
+          finishedAt: rc.now(),
+          errorSummary: 'manual-repair-S1',
+          errorMessage: `RFC-057 repair S1.demote-task via alert ${rc.alert.id}`,
+          failedNodeId: null,
+        },
+        reason: 'S1.demote-task',
+      })
+      return {
+        beforeSnapshot: before,
+        afterSnapshot: { task: { status: 'interrupted' } },
+        resumeAfterApply: true,
+      }
     })
-    return {
-      beforeSnapshot: before,
-      afterSnapshot: { task: { status: 'interrupted' } },
-      resumeAfterApply: true,
-    }
   },
 }
 

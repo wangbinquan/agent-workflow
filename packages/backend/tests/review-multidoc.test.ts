@@ -284,6 +284,98 @@ describe('RFC-079 — review multi-document mode', () => {
     expect(run.status).toBe('done')
   })
 
+  test('decision winning against a concurrent selection keeps output and audit selection consistent', async () => {
+    const { reviewNodeRunId, docs } = await dispatchRound()
+    for (const doc of docs) {
+      await setDocumentSelection({
+        db,
+        nodeRunId: reviewNodeRunId,
+        docVersionId: doc.id,
+        selection: 'accepted',
+      })
+    }
+
+    const results = await Promise.allSettled([
+      submitReviewDecision({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+      setDocumentSelection({
+        db,
+        nodeRunId: reviewNodeRunId,
+        docVersionId: docs[0]!.id,
+        selection: 'not_accepted',
+      }),
+    ])
+    expect(results[0]!.status).toBe('fulfilled')
+    expect(results[1]!.status).toBe('rejected')
+    if (results[1]!.status === 'rejected') {
+      expect((results[1]!.reason as { code?: string }).code).toBe('review-not-awaiting')
+    }
+
+    const first = (await db.select().from(docVersions).where(eq(docVersions.id, docs[0]!.id)))[0]!
+    expect(first.selection).toBe('accepted')
+    const accepted = (
+      await db
+        .select()
+        .from(nodeRunOutputs)
+        .where(
+          and(
+            eq(nodeRunOutputs.nodeRunId, reviewNodeRunId),
+            eq(nodeRunOutputs.portName, 'accepted'),
+          ),
+        )
+    )[0]!
+    expect(accepted.content).toBe(PATHS.join('\n'))
+  })
+
+  test('selection winning against a concurrent decision is included in the approved subset', async () => {
+    const { reviewNodeRunId, docs } = await dispatchRound()
+    for (const doc of docs) {
+      await setDocumentSelection({
+        db,
+        nodeRunId: reviewNodeRunId,
+        docVersionId: doc.id,
+        selection: 'accepted',
+      })
+    }
+
+    const results = await Promise.allSettled([
+      setDocumentSelection({
+        db,
+        nodeRunId: reviewNodeRunId,
+        docVersionId: docs[1]!.id,
+        selection: 'not_accepted',
+      }),
+      submitReviewDecision({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    ])
+    expect(results.every((result) => result.status === 'fulfilled')).toBe(true)
+
+    const second = (await db.select().from(docVersions).where(eq(docVersions.id, docs[1]!.id)))[0]!
+    expect(second.selection).toBe('not_accepted')
+    const accepted = (
+      await db
+        .select()
+        .from(nodeRunOutputs)
+        .where(
+          and(
+            eq(nodeRunOutputs.nodeRunId, reviewNodeRunId),
+            eq(nodeRunOutputs.portName, 'accepted'),
+          ),
+        )
+    )[0]!
+    expect(accepted.content).toBe('cases/a.md\ncases/c.md')
+  })
+
   test('approve with an undecided document → 409 review-selection-incomplete — A5', async () => {
     const { reviewNodeRunId, docs } = await dispatchRound()
     await setDocumentSelection({

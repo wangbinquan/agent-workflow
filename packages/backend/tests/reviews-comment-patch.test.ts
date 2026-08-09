@@ -20,7 +20,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
-import { updateReviewCommentText } from '../src/services/review'
+import { deleteReviewComment, updateReviewCommentText } from '../src/services/review'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 
@@ -159,6 +159,73 @@ describe('RFC-009-T1 updateReviewCommentText service', () => {
     ).rejects.toBeInstanceOf(ConflictError)
 
     // Original commentText untouched.
+    const stored = await s.db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.id, s.commentId))
+    expect(stored[0]?.commentText).toBe('original')
+  })
+})
+
+describe('review comment ownership and terminal guards', () => {
+  test('delete refuses a comment owned by a different review and preserves it', async () => {
+    const s = await seed()
+    await s.db.insert(nodeRuns).values({
+      id: 'run_other',
+      taskId: s.taskId,
+      nodeId: 'rev_2',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'awaiting_review',
+    })
+    await s.db.insert(docVersions).values({
+      id: 'dv_other',
+      taskId: s.taskId,
+      reviewNodeId: 'rev_2',
+      reviewNodeRunId: 'run_other',
+      sourceNodeId: 'designer',
+      sourcePortName: 'other',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: 'irrelevant',
+      commentsJson: '[]',
+      decision: 'pending',
+      createdAt: 1,
+    })
+    await s.db.insert(reviewComments).values({
+      id: 'cmt_other',
+      docVersionId: 'dv_other',
+      anchorSectionPath: '# Other',
+      anchorParagraphIdx: 0,
+      anchorOffsetStart: 0,
+      anchorOffsetEnd: 5,
+      selectedText: 'Other',
+      contextBefore: '',
+      contextAfter: '',
+      occurrenceIndex: 1,
+      commentText: 'belongs elsewhere',
+      author: 'local',
+      createdAt: 1,
+    })
+
+    await expect(deleteReviewComment(s.db, s.nodeRunId, 'cmt_other')).rejects.toMatchObject({
+      code: 'review-comment-not-found',
+    })
+    const preserved = await s.db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.id, 'cmt_other'))
+    expect(preserved).toHaveLength(1)
+  })
+
+  test('terminal task rejects comment edits before touching the row', async () => {
+    const s = await seed()
+    await s.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, s.taskId))
+
+    await expect(
+      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late'),
+    ).rejects.toMatchObject({ code: 'task-terminal' })
     const stored = await s.db
       .select()
       .from(reviewComments)

@@ -93,6 +93,10 @@ import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
+import {
+  withReviewNodeMutationLock,
+  withTaskReviewMutationLock,
+} from '@/services/reviewMutationCoordinator'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -422,8 +426,43 @@ export interface DispatchReviewResult {
  *   5. Otherwise transition into awaiting_review, write a new doc_version
  *      file + row at versionIndex = max+1, broadcast review.created.
  */
-export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<DispatchReviewResult> {
+export function dispatchReviewNode(args: DispatchReviewArgs): Promise<DispatchReviewResult> {
+  // Scheduler dispatch, repair dispatch and every user review mutation share
+  // one task-scoped linearization point. Register by the already-authoritative
+  // taskId (rather than resolving a review row that may not exist yet).
+  return withTaskReviewMutationLock(args.taskId, () => dispatchReviewNodeUnlocked(args))
+}
+
+async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<DispatchReviewResult> {
   const { db, taskId, appHome, definition, node, iteration, scopeRoot, repoDirName } = args
+
+  // Re-read only after acquiring the coordinator. A cancel that linearized
+  // first must make dispatch a zero-write loser; S1 repair legitimately calls
+  // this while the task is already parked awaiting_review.
+  const taskRow = (
+    await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+  )[0]
+  if (taskRow === undefined) {
+    return {
+      kind: 'failed',
+      summary: `review node ${node.id}: task '${taskId}' no longer exists`,
+      message: 'task-not-found',
+    }
+  }
+  if (taskRow.status === 'canceled') {
+    return {
+      kind: 'canceled',
+      summary: `review node ${node.id}: task '${taskId}' was canceled before dispatch`,
+      message: 'task-canceled',
+    }
+  }
+  if (taskRow.status !== 'running' && taskRow.status !== 'awaiting_review') {
+    return {
+      kind: 'failed',
+      summary: `review node ${node.id}: task '${taskId}' is not dispatchable (${taskRow.status})`,
+      message: 'review-task-not-dispatchable',
+    }
+  }
 
   const inputSource = readPortRef(node, 'inputSource')
   if (inputSource === null) {
@@ -1770,7 +1809,45 @@ export interface AddReviewCommentArgs {
   docVersionId?: string
 }
 
+async function assertReviewRoundWritable(
+  db: DbClient,
+  nodeRunId: string,
+): Promise<typeof nodeRuns.$inferSelect> {
+  const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1))[0]
+  if (run === undefined) {
+    throw new NotFoundError('review-not-found', `review run ${nodeRunId} not found`)
+  }
+  const task = (
+    await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, run.taskId)).limit(1)
+  )[0]
+  if (task === undefined) {
+    throw new NotFoundError('task-not-found', `task ${run.taskId} not found`)
+  }
+  // RFC-202's hard seal is deliberately the UNREVIVABLE pair only. failed /
+  // interrupted tasks can be resumed and their still-awaiting review remains
+  // writable; treating all four lifecycle-terminal values alike here would
+  // make the review impossible to prepare before recovery.
+  if (task.status === 'done' || task.status === 'canceled') {
+    throw new ConflictError(
+      'task-terminal',
+      `task ${run.taskId} is '${task.status}'; this review round is closed`,
+    )
+  }
+  if (run.status !== 'awaiting_review') {
+    throw new ConflictError(
+      'review-not-awaiting',
+      `review ${nodeRunId} is not awaiting_review (status=${run.status})`,
+    )
+  }
+  return run
+}
+
 export async function addReviewComment(args: AddReviewCommentArgs): Promise<ReviewComment> {
+  return withReviewNodeMutationLock(args.db, args.nodeRunId, () => addReviewCommentUnlocked(args))
+}
+
+async function addReviewCommentUnlocked(args: AddReviewCommentArgs): Promise<ReviewComment> {
+  await assertReviewRoundWritable(args.db, args.nodeRunId)
   // Pending doc_version for this review run. RFC-079: when docVersionId is given
   // (multi-document), scope to that exact pending member.
   const dvRows = await args.db
@@ -1839,6 +1916,18 @@ export async function updateReviewCommentText(
   commentId: string,
   commentText: string,
 ): Promise<ReviewComment> {
+  return withReviewNodeMutationLock(db, nodeRunId, () =>
+    updateReviewCommentTextUnlocked(db, nodeRunId, commentId, commentText),
+  )
+}
+
+async function updateReviewCommentTextUnlocked(
+  db: DbClient,
+  nodeRunId: string,
+  commentId: string,
+  commentText: string,
+): Promise<ReviewComment> {
+  await assertReviewRoundWritable(db, nodeRunId)
   const rows = await db
     .select()
     .from(reviewComments)
@@ -1901,6 +1990,17 @@ export async function deleteReviewComment(
   nodeRunId: string,
   commentId: string,
 ): Promise<void> {
+  return withReviewNodeMutationLock(db, nodeRunId, () =>
+    deleteReviewCommentUnlocked(db, nodeRunId, commentId),
+  )
+}
+
+async function deleteReviewCommentUnlocked(
+  db: DbClient,
+  nodeRunId: string,
+  commentId: string,
+): Promise<void> {
+  await assertReviewRoundWritable(db, nodeRunId)
   const rows = await db
     .select()
     .from(reviewComments)
@@ -1910,16 +2010,26 @@ export async function deleteReviewComment(
     throw new NotFoundError('review-comment-not-found', `review_comment ${commentId} not found`)
   }
   const row = rows[0]!
-  await db.delete(reviewComments).where(eq(reviewComments.id, commentId))
-  // Look up the taskId via the doc_version so we can scope the broadcast.
   const dvRow = await db
-    .select({ taskId: docVersions.taskId })
+    .select()
     .from(docVersions)
     .where(eq(docVersions.id, row.docVersionId))
     .limit(1)
-  if (dvRow[0] !== undefined) {
-    emitReviewCommentDeletedEvent(dvRow[0].taskId, nodeRunId, row.docVersionId, commentId)
+  const dv = dvRow[0]
+  if (dv === undefined || dv.reviewNodeRunId !== nodeRunId) {
+    throw new NotFoundError(
+      'review-comment-not-found',
+      `review_comment ${commentId} does not belong to review ${nodeRunId}`,
+    )
   }
+  if (dv.decision !== 'pending') {
+    throw new ConflictError(
+      'review-not-awaiting',
+      `review ${nodeRunId} is not awaiting a decision; comments are immutable`,
+    )
+  }
+  await db.delete(reviewComments).where(eq(reviewComments.id, commentId))
+  emitReviewCommentDeletedEvent(dv.taskId, nodeRunId, row.docVersionId, commentId)
 }
 
 // ---------------------------------------------------------------------------
@@ -2140,6 +2250,14 @@ async function approveMultiDocReview(args: {
 export async function submitReviewDecision(
   args: SubmitReviewDecisionArgs,
 ): Promise<SubmitReviewDecisionResult> {
+  return withReviewNodeMutationLock(args.db, args.nodeRunId, () =>
+    submitReviewDecisionUnlocked(args),
+  )
+}
+
+async function submitReviewDecisionUnlocked(
+  args: SubmitReviewDecisionArgs,
+): Promise<SubmitReviewDecisionResult> {
   // Re-read the review node_run + pending doc_version.
   const runRows = await args.db
     .select()
@@ -2250,7 +2368,7 @@ export async function submitReviewDecision(
       .where(eq(reviewComments.docVersionId, d.id))
       .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
     const commentsArr = commentRows.map(rowToReviewComment)
-    await args.db
+    const claimed = await args.db
       .update(docVersions)
       .set({
         decision: args.decision,
@@ -2267,25 +2385,26 @@ export async function submitReviewDecision(
         decidedByRole: args.authorRole ?? null,
         commentsJson: JSON.stringify(commentsArr),
       })
-      .where(eq(docVersions.id, d.id))
+      .where(and(eq(docVersions.id, d.id), eq(docVersions.decision, 'pending')))
+      .returning({ id: docVersions.id })
+    if (claimed.length === 0) {
+      throw new ConflictError(
+        'review-decision-conflict',
+        `doc_version ${d.id} was decided concurrently; review ${args.nodeRunId} decision claim lost`,
+      )
+    }
     await args.db.delete(reviewComments).where(eq(reviewComments.docVersionId, d.id))
   }
 
-  // 2. Broadcast decision.
-  emitReviewDecisionEvent(
-    dv.taskId,
-    args.nodeRunId,
-    args.decision,
-    run.reviewIteration + (policy.bumpsIteration ? 1 : 0),
-    args.decision,
-  )
-
-  // 3. Per-decision state mutation.
+  // 2. Per-decision state mutation. The decision WS event is deliberately
+  // deferred until the branch's outputs/rerun rows and final lifecycle CAS are
+  // complete. Broadcasting here used to expose a success fact before a later
+  // filesystem/output/status failure returned an HTTP error.
   if (args.decision === 'approved') {
     if (isMultiDoc) {
       // RFC-079: multi-document approve emits the curated subset (accepted
       // items, in item order) on the `accepted` port instead of approved_doc.
-      return approveMultiDocReview({
+      const result = await approveMultiDocReview({
         db: args.db,
         appHome: args.appHome,
         nodeRunId: args.nodeRunId,
@@ -2293,6 +2412,14 @@ export async function submitReviewDecision(
         dvs,
         author: args.author,
       })
+      emitReviewDecisionEvent(
+        dv.taskId,
+        args.nodeRunId,
+        args.decision,
+        run.reviewIteration,
+        args.decision,
+      )
+      return result
     }
     // Publish the two declared output ports (`approved_doc`, `approval_meta`)
     // into node_run_outputs so downstream output bindings + the task-detail
@@ -2391,6 +2518,13 @@ export async function submitReviewDecision(
     }).catch(() => {
       /* swallow — distill is async, downstream broken queue must not affect decision */
     })
+    emitReviewDecisionEvent(
+      dv.taskId,
+      args.nodeRunId,
+      args.decision,
+      run.reviewIteration,
+      args.decision,
+    )
     return { taskId: dv.taskId, reviewIteration: run.reviewIteration, resumeRequired: true }
   }
 
@@ -2596,6 +2730,8 @@ export async function submitReviewDecision(
     /* swallow — see comment above */
   })
 
+  emitReviewDecisionEvent(dv.taskId, args.nodeRunId, args.decision, nextIter, args.decision)
+
   return { taskId: dv.taskId, reviewIteration: nextIter, resumeRequired: true }
 }
 
@@ -2612,20 +2748,18 @@ export async function setDocumentSelection(args: {
   docVersionId: string
   selection: 'accepted' | 'not_accepted'
 }): Promise<{ taskId: string; docVersionId: string; selection: 'accepted' | 'not_accepted' }> {
-  const runRows = await args.db
-    .select()
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, args.nodeRunId))
-    .limit(1)
-  if (runRows.length === 0) {
-    throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
-  }
-  if (runRows[0]!.status !== 'awaiting_review') {
-    throw new ConflictError(
-      'review-not-awaiting',
-      `review ${args.nodeRunId} is not awaiting_review (status=${runRows[0]!.status})`,
-    )
-  }
+  return withReviewNodeMutationLock(args.db, args.nodeRunId, () =>
+    setDocumentSelectionUnlocked(args),
+  )
+}
+
+async function setDocumentSelectionUnlocked(args: {
+  db: DbClient
+  nodeRunId: string
+  docVersionId: string
+  selection: 'accepted' | 'not_accepted'
+}): Promise<{ taskId: string; docVersionId: string; selection: 'accepted' | 'not_accepted' }> {
+  await assertReviewRoundWritable(args.db, args.nodeRunId)
   const dvRows = await args.db
     .select()
     .from(docVersions)

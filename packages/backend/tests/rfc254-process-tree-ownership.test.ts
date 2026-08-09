@@ -194,12 +194,29 @@ describe('RFC-254 T4 — process tree ownership', () => {
 
   test.skipIf(process.platform === 'win32')(
     'the question is about a GROUP LEADER, not any live pid',
-    () => {
+    async () => {
+      const child = Bun.spawn({
+        cmd: [process.execPath, '-e', 'setTimeout(() => {}, 30_000)'],
+        stdout: 'ignore',
+        stderr: 'ignore',
+        stdin: 'ignore',
+      })
       // Worth pinning because it is easy to misread the name: a pid that leads
       // no process group has no tree, so POSIX answers `false` even though the
-      // process itself is very much alive (this test runner). Callers only ever
-      // pass pids of `detached` children, which ARE leaders.
-      expect(isProcessTreeAlive(process.pid)).toBe(false)
+      // process itself is very much alive. Use an explicitly non-detached child
+      // rather than the test runner: the sharded local gate intentionally makes
+      // each test runner a detached process-group leader.
+      try {
+        expect(isProcessAliveOnHost(child.pid)).toBe(true)
+        expect(isProcessTreeAlive(child.pid)).toBe(false)
+      } finally {
+        try {
+          child.kill(9)
+        } catch {
+          // Already gone.
+        }
+        await child.exited
+      }
     },
   )
 

@@ -25,14 +25,42 @@ const PLAN = readFileSync(resolve(ROOT, 'design', 'plan.md'), 'utf8')
 const STATE = readFileSync(resolve(ROOT, 'STATE.md'), 'utf8')
 const MIGRATIONS = readdirSync(resolve(ROOT, 'packages', 'backend', 'db', 'migrations'))
 
-/** RFC 编号 → 索引状态格（Draft / In Progress / Done / Superseded）。 */
-function indexStatuses(): Map<string, string> {
-  const out = new Map<string, string>()
-  const re = /^\| \[RFC-(\d+)\]\(\.\/RFC-[^)]+\).*?\| ([A-Za-z ]+) \|\s*$/gm
-  for (const m of PLAN.matchAll(re)) out.set(m[1] as string, (m[2] as string).trim())
+/** 索引表的全部 RFC 行（编号 + 原始状态格）。 */
+function indexRows(): { num: string; cell: string }[] {
+  const out: { num: string; cell: string }[] = []
+  for (const line of PLAN.split('\n')) {
+    if (!/^\| \[RFC-\d+\]\(\.\/RFC-/.test(line)) continue
+    // 表格列以**未转义**的 `|` 分隔；正文里的竖线写作 `\|`（见 plan.md 索引小节的登记格式）。
+    const cells = line.split(/(?<!\\)\|/)
+    if (cells.length !== 5) continue // 列数不对的行由下面「表格结构完好」单独报错
+    out.push({ num: /RFC-(\d+)/.exec(cells[1] as string)![1] as string, cell: cells[3] as string })
+  }
   return out
 }
 
+/**
+ * RFC 编号 → 索引状态（Draft / In Progress / Done / Superseded）。
+ *
+ * 2026-08-09 重写解析器。旧实现是 `/\| ([A-Za-z ]+) \|\s*$/`——要求整个状态格
+ * **只有 ASCII 字母和空格**，于是凡是写成 `**Done**（2026-07-02 交付…）` 这种带
+ * 证据的行全被静默跳过：实测 268 行只解析出 140 行（52%），且 RFC-249…271 一条
+ * 都没覆盖。守卫的 test #1 本意就是「解析不出来必须响，而不是零违规蒙混过关」，
+ * 而它自己正是那个假绿。放宽后立刻抓到三条真漂移：RFC-230（`a2b32196` 已全量
+ * 交付却挂 Draft 两周）、RFC-235（migration 已上库却挂 Draft）、RFC-239
+ * （STATE.md 记 ✅ 已完成、索引却是 In Progress）。
+ *
+ * 现在只要求状态格**以四个词之一打头**，后面爱写多少证据写多少。
+ */
+function indexStatuses(): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const { num, cell } of indexRows()) {
+    const m = /^(Done|Draft|In Progress|Superseded)/.exec(cell.trim().replace(/\*/g, ''))
+    if (m) out.set(num, m[1] as string)
+  }
+  return out
+}
+
+const ROWS = indexRows()
 const STATUSES = indexStatuses()
 /** 未完工的（本守卫只关心这些是否其实已经落地）。 */
 const OPEN = [...STATUSES].filter(([, s]) => s !== 'Done' && s !== 'Superseded').map(([n]) => n)
@@ -40,12 +68,51 @@ const OPEN = [...STATUSES].filter(([, s]) => s !== 'Done' && s !== 'Superseded')
 describe('RFC 索引状态漂移守卫', () => {
   test('索引本身可解析（防止表格被改坏后守卫静默失效）', () => {
     // 守卫的前提是能读出状态格；解析不出来时必须响，而不是「零违规」蒙混过关。
-    expect(STATUSES.size).toBeGreaterThan(100)
-    for (const [n, s] of STATUSES) {
-      expect(['Draft', 'In Progress', 'Done', 'Superseded'], `RFC-${n} 状态格非法：${s}`).toContain(
-        s,
-      )
+    expect(ROWS.length).toBeGreaterThan(100)
+    const unparsed = ROWS.filter(({ num }) => !STATUSES.has(num)).map(({ num, cell }) => {
+      return `RFC-${num} 状态格未以 Draft / In Progress / Done / Superseded 打头：${cell.trim().slice(0, 60)}`
+    })
+    expect(
+      unparsed,
+      `状态格必须以四个词之一**打头**（后面接日期与证据随意）。\n` +
+        `解析不出来的行会被本文件所有漂移检查静默跳过：\n  ` +
+        unparsed.join('\n  '),
+    ).toEqual([])
+    // 覆盖率必须是 100%——旧解析器只认纯 ASCII 状态格，静默跳过 48% 的行。
+    expect(STATUSES.size).toBe(ROWS.length)
+  })
+
+  // 2026-08-09 加：RFC-249…271 共 22 条曾以**表外散文段落**登记（`**[RFC-NNN](…) · 标题**：…`），
+  // 于是「哪些 RFC 没收口」一次扫不出来，本文件的漂移检查对它们也完全失明。回填进表后加这三条
+  // 结构锁，防止再漂。
+  test('表格结构完好：每行三列、无表外散文条目、每个 RFC 目录都已登记', () => {
+    const badCols: string[] = []
+    for (const line of PLAN.split('\n')) {
+      if (!/^\| \[RFC-\d+\]\(\.\/RFC-/.test(line)) continue
+      const n = line.split(/(?<!\\)\|/).length - 2
+      if (n !== 3) badCols.push(`${/RFC-\d+/.exec(line)?.[0]} 解析出 ${n} 列`)
     }
+    expect(
+      badCols,
+      `正文里的 \`|\` 必须转义成 \`\\|\`（行内代码里的也要，GFM 照样按它切列），否则整行错列：\n  ` +
+        badCols.join('\n  '),
+    ).toEqual([])
+
+    const prose = [...PLAN.matchAll(/^\*\*\[?RFC-(\d+)\]?/gm)].map((m) => `RFC-${m[1]}`)
+    expect(
+      prose,
+      `RFC 必须登记为索引表的一行，不要在表外另起散文条目（表外条目扫不出状态）：\n  ` +
+        prose.join(', '),
+    ).toEqual([])
+
+    const dirs = readdirSync(resolve(ROOT, 'design'))
+      .filter((d) => /^RFC-\d+-/.test(d))
+      .map((d) => /^RFC-(\d+)-/.exec(d)![1] as string)
+    const unregistered = dirs.filter((n) => !STATUSES.has(n)).map((n) => `RFC-${n}`)
+    expect(
+      unregistered,
+      `以下 RFC 有 design/ 目录却没在索引表里登记：\n  ${unregistered.join(', ')}`,
+    ).toEqual([])
   })
 
   // 硬信号 1：schema 都上库了，不可能还是 Draft。
@@ -77,18 +144,24 @@ describe('RFC 索引状态漂移守卫', () => {
 
   // 硬信号 2：文档里已有人白纸黑字说它落地了，状态格却没跟上。
   // 校准：RFC-182 写过 RFC-179「已落库」、RFC-181 写过「承接已落地 RFC-180」——两条都会被抓到。
-  test('已被文档断言「已落地/已落库」的 RFC，状态不得仍是 Draft/In Progress', () => {
+  // 2026-08-09 校准（随解析器放宽同批）：与信号 1 的 RFC-217 校准同理，本信号也只抓 **Draft**。
+  // 「已落地 / 已上库」只证明**有代码进去了**——对 Draft 是硬矛盾（Draft = 一行没落），对分期
+  // 交付的 In Progress 则完全自洽。首例是 RFC-235：STATE.md 写着「首版实现切片…已落地」，而完整
+  // 设计仍是 Draft v21 待第 21 轮设计门 + 用户批准，此时 In Progress 正是准确回填。
+  // 「In Progress 其实早该 Done」那一类由信号 3 覆盖——它读的是强得多的「✅ 已完成 RFC」。
+  test('已被文档断言「已落地/已落库」的 RFC，状态不得仍是 Draft', () => {
+    const draftOnly = new Set([...STATUSES].filter(([, s]) => s === 'Draft').map(([n]) => n))
     const docs = `${PLAN}\n${STATE}`
     const CLAIM =
       /(?:已落地|承接已落地|已落库|已落 HEAD|全部落地|已上库)[^。\n]{0,40}RFC-(\d+)|RFC-(\d+)[^。\n]{0,60}(?:已落地|已落库|已落 HEAD|全部落地|已上库)/g
     const drift = new Set<string>()
     for (const m of docs.matchAll(CLAIM)) {
       const n = (m[1] ?? m[2]) as string
-      if (OPEN.includes(n)) drift.add(`RFC-${n}（状态 ${STATUSES.get(n)}）`)
+      if (draftOnly.has(n)) drift.add(`RFC-${n}（状态 ${STATUSES.get(n)}）`)
     }
     expect(
       [...drift],
-      `以下 RFC 已被 design/plan.md 或 STATE.md 描述为「已落地/已落库」，状态格却仍未回填` +
+      `以下 RFC 已被 design/plan.md 或 STATE.md 描述为「已落地/已落库」，状态格却仍是 Draft` +
         `（RFC-179 就是这样：RFC-182 早已注明它「索引状态陈旧」，但没人改）：\n  ` +
         [...drift].join('\n  '),
     ).toEqual([])

@@ -128,6 +128,7 @@ import {
   defaultTaskAuthorizationRef,
   taskOwnershipScopeCondition,
 } from '@/services/taskAuthorization'
+import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 
 /**
  * RFC-243 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
@@ -175,6 +176,12 @@ export function isTaskActive(taskId: string): boolean {
 export function __setActiveTaskForTesting(taskId: string | undefined): void {
   activeTasks.clear()
   if (taskId !== undefined) activeTasks.set(taskId, new AbortController())
+}
+
+/** Test-only: register one specific controller without clearing sibling task
+ *  drivers, so parent/child cancellation lock ordering can be exercised. */
+export function __registerActiveTaskForTesting(taskId: string, controller: AbortController): void {
+  activeTasks.set(taskId, controller)
 }
 
 /**
@@ -2185,6 +2192,31 @@ async function startTaskImpl(
         )
       }
 
+      // RFC-243 child-launch fence: cancellation can abort a controller after
+      // startTask materialized the inherited space but before this final task
+      // INSERT. Check the parent inside the SAME synchronous transaction as
+      // the child row: child-first commits before cancel's child-set freeze;
+      // cancel-first makes this launch fail with no post-terminal child.
+      if (deps.callLaunch !== undefined) {
+        const parent = tx
+          .select({ status: tasks.status })
+          .from(tasks)
+          .where(eq(tasks.id, deps.callLaunch.parentTaskId))
+          .get()
+        if (parent === undefined) {
+          throw new NotFoundError(
+            'parent-task-not-found',
+            `parent task '${deps.callLaunch.parentTaskId}' disappeared during child launch`,
+          )
+        }
+        if (parent.status !== 'running') {
+          throw new ConflictError(
+            'parent-task-not-running',
+            `parent task '${deps.callLaunch.parentTaskId}' is '${parent.status}'; refusing to mint child '${taskId}'`,
+          )
+        }
+      }
+
       // F17: a concurrent agent delete between the service-level 404 gate and
       // this insert must fail the launch — never mint a task for a ghost.
       //
@@ -2663,25 +2695,32 @@ export async function cancelTask(
     cascadeFromParent?: boolean
   } = {},
 ): Promise<Task> {
-  const task = await getTask(db, id)
-  if (task === null) {
+  // Bun SQLite can do this preflight synchronously, preserving the legacy
+  // rejected-Promise API while allowing the no-controller path to register
+  // its FIFO mutation slot before this function first yields.
+  const initial = db
+    .select({ status: tasks.status })
+    .from(tasks)
+    .where(eq(tasks.id, id))
+    .limit(1)
+    .all()[0]
+  if (initial === undefined) {
     throw new NotFoundError('task-not-found', `task '${id}' not found`)
   }
-  if (!(CANCELABLE_TASK_STATUSES as readonly string[]).includes(task.status)) {
+  if (!(CANCELABLE_TASK_STATUSES as readonly string[]).includes(initial.status)) {
     throw new ConflictError(
       'task-not-cancelable',
-      `task '${id}' is already terminal (${task.status}); nothing to cancel`,
+      `task '${id}' is already terminal (${initial.status}); nothing to cancel`,
     )
   }
 
   const controller = activeTasks.get(id)
-  let settledEarly: Task | null = null
   if (controller !== undefined) {
     controller.abort()
-    // Wait for the scheduler to record the canceled state (best-effort 5s
-    // poll). If the daemon was restarted, no controller exists; we just mark
-    // the row canceled directly. NOTE (RFC-243 §4.3): do NOT return here —
-    // the cascade stamp + child enumeration below must run on BOTH paths.
+    // Wait OUTSIDE the review/cancel coordinator. The scheduler may currently
+    // be inside dispatchReviewNode and must be allowed to finish that critical
+    // section before its cancelTaskRow can acquire the same coordinator and
+    // land the terminal CAS + synchronous human-gate sweep.
     const deadline = Date.now() + 5000
     while (Date.now() < deadline) {
       const reread = await getTask(db, id)
@@ -2689,63 +2728,107 @@ export async function cancelTask(
         reread !== null &&
         !(CANCELABLE_TASK_STATUSES as readonly string[]).includes(reread.status)
       ) {
-        settledEarly = reread
         break
       }
+      // The registered driver settled without a terminal write (for example,
+      // it parked just before seeing abort). There is nothing left to wait for;
+      // the locked fallback below is now the authoritative closer.
+      if (activeTasks.get(id) !== controller) break
       await Bun.sleep(50)
     }
   }
 
-  // Fallback: scheduler didn't notice or no controller — flip the row.
-  // RFC-097: CAS from the cancelable set; a loss means the scheduler (or a
-  // racing failTask) landed a terminal status first — return the winner
-  // instead of overwriting it. Parked tasks (awaiting_*) have no controller
-  // and always take this path; the terminal-task hook (RFC-202 T2) then
-  // seals their open clarify/review rounds.
-  if (settledEarly === null)
-    await trySetTaskStatus({
-      db,
-      taskId: id,
-      to: 'canceled',
-      allowedFrom: CANCELABLE_TASK_STATUSES,
-      extra: {
-        finishedAt: Date.now(),
-        errorSummary: 'canceled by user',
-        errorMessage:
-          opts.cascadeFromParent === true
-            ? 'canceled-by-parent-cascade'
-            : 'no active scheduler at cancel time',
-      },
-      reason: 'cancelTask-fallback',
-    })
-  // RFC-243 §4.3 — the scheduler path can also have landed the terminal write
-  // (abort → cancelTaskRow). Stamp the cascade marker idempotently AFTER the
-  // row is terminal so the durable judgement survives either path. errorMessage
-  // is the machine-code column (summary stays the human line).
-  if (opts.cascadeFromParent === true) {
-    await db
-      .update(tasks)
-      .set({ errorMessage: 'canceled-by-parent-cascade' })
-      .where(and(eq(tasks.id, id), eq(tasks.status, 'canceled')))
-  }
-  // RFC-243 §4.3 — recursively cascade into active child executions. Depth is
-  // bounded by maxInvocationDepth at launch; `task-not-cancelable` (already
-  // terminal) is skipped silently — cascade is idempotent by construction.
-  const children = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(and(eq(tasks.parentTaskId, id), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES])))
-  for (const child of children) {
+  const committed = await withTaskReviewMutationLock(id, async () => {
+    // Re-read only after acquiring the linearization point. A decision,
+    // dispatch, scheduler cancel or competing terminal writer may have won
+    // while the controller was settling; never overwrite that winner.
+    let current = await getTask(db, id)
+    if (current === null) {
+      throw new NotFoundError('task-not-found', `task '${id}' not found`)
+    }
+    if ((CANCELABLE_TASK_STATUSES as readonly string[]).includes(current.status)) {
+      // A controller can be attached after the lock-external snapshot (for
+      // example decision-resume racing cancel). Abort it, but do not wait while
+      // holding the coordinator: the terminal CAS makes its later writes lose.
+      activeTasks.get(id)?.abort()
+      // A non-coordinator lifecycle writer can still move between two
+      // cancelable states in setTaskStatus's read→CAS window. Do not interpret
+      // that CAS loss as cancellation success: re-read and retry until the row
+      // is terminal, or fail explicitly under pathological continuous churn.
+      let attempts = 0
+      while ((CANCELABLE_TASK_STATUSES as readonly string[]).includes(current.status)) {
+        if (attempts++ >= 8) {
+          throw new ConflictError(
+            'cancel-transition-starved',
+            `task '${id}' kept changing between cancelable states while canceling; retry`,
+          )
+        }
+        await trySetTaskStatus({
+          db,
+          taskId: id,
+          to: 'canceled',
+          allowedFrom: CANCELABLE_TASK_STATUSES,
+          extra: {
+            finishedAt: Date.now(),
+            errorSummary: 'canceled by user',
+            errorMessage:
+              opts.cascadeFromParent === true
+                ? 'canceled-by-parent-cascade'
+                : 'no active scheduler at cancel time',
+          },
+          reason: 'cancelTask-fallback',
+        })
+        current = await getTask(db, id)
+        if (current === null) {
+          throw new NotFoundError('task-not-found', `task '${id}' not found`)
+        }
+      }
+    }
+    // RFC-243 §4.3 — scheduler settlement can also have landed canceled.
+    // Stamp the cascade provenance inside the same critical section.
+    if (opts.cascadeFromParent === true && current.status === 'canceled') {
+      await db
+        .update(tasks)
+        .set({ errorMessage: 'canceled-by-parent-cascade' })
+        .where(and(eq(tasks.id, id), eq(tasks.status, 'canceled')))
+      current = (await getTask(db, id)) as Task
+    }
+    // Freeze the direct-child impact set while the parent transition and its
+    // terminal sweep are still isolated. Recursion happens only after this
+    // parent lock is released, so an active child can settle through its own
+    // coordinator without an ancestor/descendant wait cycle.
+    const childIds = (
+      await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          and(eq(tasks.parentTaskId, id), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES])),
+        )
+    ).map((child) => child.id)
+    return { task: current, childIds }
+  })
+
+  // Broadcasters invoke listeners synchronously. Emit only after releasing
+  // the task mutation coordinator so a listener that starts a same-task
+  // review/cancel mutation cannot re-enter (or extend) this critical section.
+  emitTaskStatus(committed.task)
+
+  // RFC-243 §4.3 — recursively cascade into the frozen child set. Depth is
+  // bounded by maxInvocationDepth; already-terminal children are idempotent.
+  for (const childId of committed.childIds) {
     try {
-      await cancelTask(db, child.id, { cascadeFromParent: true })
+      await cancelTask(db, childId, { cascadeFromParent: true })
     } catch (err) {
-      if (err instanceof ConflictError || err instanceof NotFoundError) continue
+      if (
+        (err instanceof ConflictError && err.code === 'task-not-cancelable') ||
+        err instanceof NotFoundError
+      ) {
+        continue
+      }
       throw err
     }
   }
-  const final = (await getTask(db, id)) as Task
-  emitTaskStatus(final)
-  return final
+  return committed.task
 }
 
 /**
@@ -3412,26 +3495,6 @@ export async function retryNode(
   }
   // RFC-243 §4.2 — child-side gate (same rule as resumeKick).
   await assertChildTaskDrivable(db, task, 'retry')
-  // RFC-243 D12 / 实现门 P2-2 — retrying a CALL ROW supersedes its invocation:
-  // a still-live child (parent failed while the child kept running) must be
-  // cascade-canceled BEFORE the ownership CAS mints the next generation, or
-  // two children could write the same inherited workspace.
-  {
-    const targetRun = await db
-      .select({ childTaskId: nodeRuns.childTaskId })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
-      .get()
-    const childId = targetRun?.childTaskId ?? null
-    if (childId !== null) {
-      try {
-        await cancelTask(db, childId, { cascadeFromParent: true })
-      } catch (err) {
-        if (!(err instanceof ConflictError) && !(err instanceof NotFoundError)) throw err
-        // already terminal / deleted — nothing to supersede
-      }
-    }
-  }
   // RFC-099 audit (2026-07-15): validate the nodeRunId belongs to THIS task
   // BEFORE the CAS below. The CAS clears finishedAt/errorSummary/errorMessage/
   // failedNodeId and flips the task to pending, so a bogus / cross-task
@@ -3447,6 +3510,78 @@ export async function retryNode(
       `node_run '${nodeRunId}' not found under task '${taskId}'`,
     )
   }
+
+  // Freeze the retry impact set BEFORE taking the task ownership CAS. Besides
+  // making the placeholder plan stable, this lets us collect every child task
+  // anchored by a superseded CALL row (the target plus every cascaded
+  // downstream node). No child is touched yet: a bad nodeRunId, preflight
+  // failure, or concurrent CAS loser therefore has zero cancellation effects.
+  const downstream = new Set<string>()
+  const snap = parseSnapshot(task.workflowSnapshot)
+  const kindOf = new Map<string, NodeKind>()
+  {
+    const nodes = Array.isArray(snap?.nodes) ? snap.nodes : []
+    for (const n of nodes as Array<{ id?: string; kind?: string }>) {
+      if (typeof n?.id === 'string' && typeof n?.kind === 'string') {
+        kindOf.set(n.id, n.kind as NodeKind)
+      }
+    }
+  }
+  if (cascade) {
+    const edges = Array.isArray(snap?.edges) ? snap.edges : []
+    const adj = new Map<string, string[]>()
+    for (const e of edges as Array<{
+      source?: { nodeId?: string }
+      target?: { nodeId?: string }
+    }>) {
+      const s = e?.source?.nodeId
+      const t = e?.target?.nodeId
+      if (typeof s !== 'string' || typeof t !== 'string') continue
+      const list = adj.get(s) ?? []
+      if (!list.includes(t)) list.push(t)
+      adj.set(s, list)
+    }
+    const stack: string[] = [runRow.nodeId]
+    while (stack.length > 0) {
+      const cur = stack.pop()!
+      for (const next of adj.get(cur) ?? []) {
+        if (downstream.has(next)) continue
+        downstream.add(next)
+        stack.push(next)
+      }
+    }
+  }
+
+  // RFC-052 / RFC-053 PR-C: freeze the placeholder-mint subset from the same
+  // snapshot. The affected-child set below is deliberately wider: every row
+  // on target+downstream with a childTaskId is superseded, even if an old or
+  // malformed snapshot no longer identifies that node as a call kind.
+  const targetKind = kindOf.get(runRow.nodeId)
+  const wrapperRevivalTarget =
+    targetKind !== undefined &&
+    WRAPPER_KINDS.has(targetKind) &&
+    (runRow.status === 'canceled' || runRow.status === 'interrupted')
+  const targets = new Set<string>()
+  if (!wrapperRevivalTarget) targets.add(runRow.nodeId)
+  for (const id of downstream) {
+    if (wrapperRevivalTarget && id === runRow.nodeId) continue
+    const k = kindOf.get(id)
+    const behavior = k === undefined ? 'mint-placeholder' : NODE_KIND_BEHAVIORS[k].retryCascade
+    if (behavior === 'mint-placeholder') targets.add(id)
+  }
+
+  const affectedNodeIds = new Set([runRow.nodeId, ...downstream])
+  const affectedChildTaskIds = new Set<string>()
+  const affectedRows = await db
+    .select({ nodeId: nodeRuns.nodeId, childTaskId: nodeRuns.childTaskId })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
+  for (const row of affectedRows) {
+    if (affectedNodeIds.has(row.nodeId) && row.childTaskId !== null) {
+      affectedChildTaskIds.add(row.childTaskId)
+    }
+  }
+
   // RFC-097: ownership lock — CAS the task to pending BEFORE the rollback and
   // placeholder minting so a concurrent retry/resume loses with zero side
   // effects (the old order let the loser pollute node_runs and the worktree).
@@ -3480,49 +3615,51 @@ export async function retryNode(
     throw err
   }
 
-  // Identify downstream nodeIds from the workflow snapshot's edges.
-  // RFC-052: also build a nodeId → kind map so the cascade can skip non-process
-  // kinds (input/output/review/clarify) when minting `retryIndex+1` placeholders.
-  // Those kinds have no per-attempt process state — their runOneNode paths
-  // are either no-ops or driven by external events — and the stale placeholder
-  // rows were the source of dispatchReviewNode picking the wrong latest row
-  // and resetting approved reviews back to awaiting_review.
-  const downstream = new Set<string>()
-  // RFC-098 B3 (audit ⑥-11): kindOf is built UNCONDITIONALLY (it used to live
-  // inside the cascade branch) — the wrapper-revival carve-out below consults
-  // the TARGET's kind even when cascade=false.
-  const snap = parseSnapshot(task.workflowSnapshot)
-  const kindOf = new Map<string, NodeKind>()
-  {
-    const nodes = Array.isArray(snap?.nodes) ? snap.nodes : []
-    for (const n of nodes as Array<{ id?: string; kind?: string }>) {
-      if (typeof n?.id === 'string' && typeof n?.kind === 'string') {
-        kindOf.set(n.id, n.kind as NodeKind)
+  // RFC-243 D12 — only the retry CAS winner may supersede child invocations.
+  // Cancel every frozen target/downstream child before rollback or placeholder
+  // minting, so no old child can keep writing the inherited workspace while a
+  // new generation starts. Terminal/deleted children are already settled and
+  // therefore idempotent no-ops. An unexpected cancellation failure closes the
+  // owned task back to failed and aborts the retry: never leave a scheduler-less
+  // pending row and never reset/mint after a partially failed cancellation set.
+  for (const childTaskId of affectedChildTaskIds) {
+    try {
+      await cancelTask(db, childTaskId, { cascadeFromParent: true })
+    } catch (err) {
+      if (
+        (err instanceof ConflictError && err.code === 'task-not-cancelable') ||
+        err instanceof NotFoundError
+      ) {
+        continue
       }
-    }
-  }
-  if (cascade) {
-    const edges = Array.isArray(snap?.edges) ? snap.edges : []
-    const adj = new Map<string, string[]>()
-    for (const e of edges as Array<{
-      source?: { nodeId?: string }
-      target?: { nodeId?: string }
-    }>) {
-      const s = e?.source?.nodeId
-      const t = e?.target?.nodeId
-      if (typeof s !== 'string' || typeof t !== 'string') continue
-      const list = adj.get(s) ?? []
-      if (!list.includes(t)) list.push(t)
-      adj.set(s, list)
-    }
-    const stack: string[] = [runRow.nodeId]
-    while (stack.length > 0) {
-      const cur = stack.pop()!
-      for (const next of adj.get(cur) ?? []) {
-        if (downstream.has(next)) continue
-        downstream.add(next)
-        stack.push(next)
+      const detail = err instanceof Error ? err.message : String(err)
+      try {
+        await setTaskStatus({
+          db,
+          taskId,
+          to: 'failed',
+          allowedFrom: ['pending'],
+          extra: {
+            finishedAt: Date.now(),
+            errorSummary: 'retry-child-cancel-failed',
+            errorMessage: `failed to cancel superseded child task '${childTaskId}': ${detail}`,
+            failedNodeId: runRow.nodeId,
+          },
+          reason: 'retryNode:child-cancel-failed',
+        })
+      } catch (closeErr) {
+        const current = await getTask(db, taskId)
+        // A concurrent terminal winner is also fail-closed. If the row somehow
+        // remains pending, surface the close failure because it is the stronger
+        // invariant violation and must not be mistaken for a clean child error.
+        if (current?.status === 'pending') throw closeErr
       }
+      const failed = await getTask(db, taskId)
+      if (failed !== null) emitTaskStatus(failed)
+      throw new ConflictError(
+        'retry-child-cancel-failed',
+        `cannot retry node '${runRow.nodeId}': superseded child task '${childTaskId}' could not be canceled (${detail})`,
+      )
     }
   }
 
@@ -3585,21 +3722,6 @@ export async function retryNode(
   // findResumableWrapperRun treats done/failed as terminal, so the placeholder
   // is what re-arms dispatch there. See rfc095-wrapper-canceled-revival /
   // retry-cascade-kind-matrix.
-  const targetKind = kindOf.get(runRow.nodeId)
-  const wrapperRevivalTarget =
-    targetKind !== undefined &&
-    WRAPPER_KINDS.has(targetKind) &&
-    (runRow.status === 'canceled' || runRow.status === 'interrupted')
-  const targets = new Set<string>()
-  if (!wrapperRevivalTarget) targets.add(runRow.nodeId)
-  for (const id of downstream) {
-    if (wrapperRevivalTarget && id === runRow.nodeId) continue // defensive: never placeholder the revival row's node
-    const k = kindOf.get(id)
-    const cascade = k === undefined ? 'mint-placeholder' : NODE_KIND_BEHAVIORS[k].retryCascade
-    if (cascade === 'mint-placeholder') {
-      targets.add(id)
-    }
-  }
   for (const nodeId of targets) {
     // RFC-096 (audit S-13 / 附录 C #2): the inheritance source is the freshest
     // TOP-LEVEL row by pure id — the old `desc(retryIndex)` pick had no

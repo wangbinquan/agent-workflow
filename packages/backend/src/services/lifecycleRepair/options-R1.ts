@@ -19,8 +19,10 @@ import { eq } from 'drizzle-orm'
 import { isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { TaskStatus } from '@agent-workflow/shared'
 
-import { docVersions, nodeRunOutputs, nodeRuns } from '@/db/schema'
+import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
+import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+import { ConflictError } from '@/util/errors'
 
 import type { ApplyResult, PreflightResult, RepairContext, RepairOptionDef } from './types'
 
@@ -51,7 +53,8 @@ interface R1State {
   docReviewIteration: number
   docSourceFilePath: string | null
   runStatus: string
-  hasApprovedOutput: boolean
+  hasApprovedDocOutput: boolean
+  hasApprovalMetaOutput: boolean
 }
 
 async function loadR1State(rc: RepairContext): Promise<R1State | null> {
@@ -64,17 +67,20 @@ async function loadR1State(rc: RepairContext): Promise<R1State | null> {
     .limit(1)
   if (dvRows.length === 0) return null
   const dv = dvRows[0]!
+  if (dv.taskId !== rc.task.id || dv.reviewNodeRunId !== detail.reviewNodeRunId) return null
   const nrRows = await rc.db
-    .select({ id: nodeRuns.id, status: nodeRuns.status })
+    .select({ id: nodeRuns.id, taskId: nodeRuns.taskId, status: nodeRuns.status })
     .from(nodeRuns)
     .where(eq(nodeRuns.id, detail.reviewNodeRunId))
     .limit(1)
   if (nrRows.length === 0) return null
+  if (nrRows[0]!.taskId !== rc.task.id) return null
   const outRows = await rc.db
     .select({ portName: nodeRunOutputs.portName })
     .from(nodeRunOutputs)
     .where(eq(nodeRunOutputs.nodeRunId, detail.reviewNodeRunId))
-  const hasApprovedOutput = outRows.some((r) => r.portName === 'approved_doc')
+  const hasApprovedDocOutput = outRows.some((r) => r.portName === 'approved_doc')
+  const hasApprovalMetaOutput = outRows.some((r) => r.portName === 'approval_meta')
   return {
     detail,
     docDecision: dv.decision,
@@ -82,8 +88,47 @@ async function loadR1State(rc: RepairContext): Promise<R1State | null> {
     docReviewIteration: dv.reviewIteration,
     docSourceFilePath: dv.sourceFilePath,
     runStatus: nrRows[0]!.status,
-    hasApprovedOutput,
+    hasApprovedDocOutput,
+    hasApprovalMetaOutput,
   }
+}
+
+function isR1TaskHardSealed(status: string): boolean {
+  // RFC-202 keeps failed/interrupted repairable. done/canceled are the hard
+  // seal: neither R1 writer may reopen review facts after terminal sweep.
+  return status === 'done' || status === 'canceled'
+}
+
+function throwR1PreflightStale(optionId: string, detail: string): never {
+  throw new ConflictError(
+    'repair-preflight-stale',
+    `apply for '${optionId}' is stale (${detail}); re-diagnose to refresh`,
+  )
+}
+
+/** Revalidate every R1 invariant after acquiring the task mutation lock. */
+async function loadWritableR1State(
+  rc: RepairContext,
+  optionId: 'R1.approve-run' | 'R1.unapprove-doc',
+): Promise<{ state: R1State; taskStatus: string }> {
+  const taskRow = (
+    await rc.db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, rc.task.id))
+      .limit(1)
+  )[0]
+  if (taskRow === undefined) throwR1PreflightStale(optionId, 'task disappeared')
+  if (isR1TaskHardSealed(taskRow.status)) {
+    throwR1PreflightStale(optionId, `task is ${taskRow.status}`)
+  }
+  const state = await loadR1State(rc)
+  if (state === null) throwR1PreflightStale(optionId, 'doc/run ownership or detail drifted')
+  if (state.docDecision !== 'approved') {
+    throwR1PreflightStale(optionId, `doc decision is ${state.docDecision}`)
+  }
+  if (state.runStatus === 'done') throwR1PreflightStale(optionId, 'review run is already done')
+  return { state, taskStatus: taskRow.status }
 }
 
 const R1_APPROVE_RUN: RepairOptionDef = {
@@ -95,6 +140,14 @@ const R1_APPROVE_RUN: RepairOptionDef = {
   destructive: false,
   revivesExecution: true, // RFC-165 F13-r4: refused for workgroup tasks
   async preflight(rc): Promise<PreflightResult> {
+    if (isR1TaskHardSealed(rc.task.status)) {
+      return {
+        available: false,
+        unavailableReasonKey: 'diagnose.repair.R1.unavailable.taskTerminal',
+        previewSteps: [],
+        ctx: {},
+      }
+    }
     const st = await loadR1State(rc)
     if (st === null) {
       return {
@@ -121,9 +174,14 @@ const R1_APPROVE_RUN: RepairOptionDef = {
       }
     }
     const steps: string[] = []
-    if (!st.hasApprovedOutput) {
+    if (!st.hasApprovedDocOutput) {
       steps.push(
         `INSERT INTO node_run_outputs (approved_doc) — populate missing port (idempotent upsert)`,
+      )
+    }
+    if (!st.hasApprovalMetaOutput) {
+      steps.push(
+        `INSERT INTO node_run_outputs (approval_meta) — populate missing port (idempotent upsert)`,
       )
     }
     steps.push(
@@ -132,19 +190,21 @@ const R1_APPROVE_RUN: RepairOptionDef = {
     return { available: true, previewSteps: steps, ctx: { state: st } }
   },
   async apply(rc, pre): Promise<ApplyResult> {
-    const st = pre.ctx['state'] as R1State
-    const before = {
-      nodeRun: { id: st.detail.reviewNodeRunId, status: st.runStatus },
-      hasApprovedOutput: st.hasApprovedOutput,
-    }
-    // Idempotent upsert of approved_doc port if missing. Mirror review.ts:1186-1196.
-    // We can't reconstruct the original body without the appHome + dv, so the
-    // approved_doc content is best-effort: the sourceFilePath when present
-    // (the markdown_file case — downstream re-reads it), else a marker pointing
-    // to the doc_version id so downstream agents fail loudly rather than
-    // silently consuming '' (and so the audit row makes it obvious this was a
-    // manual recovery, not a real approve).
-    if (!st.hasApprovedOutput) {
+    void pre
+    return withTaskReviewMutationLock(rc.task.id, async () => {
+      const { state: st, taskStatus } = await loadWritableR1State(rc, 'R1.approve-run')
+      const before = {
+        nodeRun: { id: st.detail.reviewNodeRunId, status: st.runStatus },
+        hasApprovedDocOutput: st.hasApprovedDocOutput,
+        hasApprovalMetaOutput: st.hasApprovalMetaOutput,
+      }
+      // Idempotent upsert of approved_doc port if missing. Mirror review.ts:1186-1196.
+      // We can't reconstruct the original body without the appHome + dv, so the
+      // approved_doc content is best-effort: the sourceFilePath when present
+      // (the markdown_file case — downstream re-reads it), else a marker pointing
+      // to the doc_version id so downstream agents fail loudly rather than
+      // silently consuming '' (and so the audit row makes it obvious this was a
+      // manual recovery, not a real approve).
       const content =
         st.docSourceFilePath !== null && st.docSourceFilePath.trim().length > 0
           ? st.docSourceFilePath
@@ -156,65 +216,69 @@ const R1_APPROVE_RUN: RepairOptionDef = {
         reviewIteration: st.docReviewIteration,
         versionIndex: st.docVersionIndex,
       })
-      await rc.db
-        .insert(nodeRunOutputs)
-        .values({
-          nodeRunId: st.detail.reviewNodeRunId,
-          portName: 'approved_doc',
-          content,
-        })
-        .onConflictDoUpdate({
-          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-          set: { content },
-        })
-      await rc.db
-        .insert(nodeRunOutputs)
-        .values({
-          nodeRunId: st.detail.reviewNodeRunId,
-          portName: 'approval_meta',
-          content: meta,
-        })
-        .onConflictDoUpdate({
-          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-          set: { content: meta },
-        })
-    }
-    await setNodeRunStatus({
-      db: rc.db,
-      nodeRunId: st.detail.reviewNodeRunId,
-      to: 'done',
-      allowedFrom: [
-        'awaiting_review',
-        'pending',
-        'running',
-        'failed',
-        'canceled',
-        'interrupted',
-        'exhausted',
-      ],
-      allowTerminal: true,
-      extra: { finishedAt: rc.now() },
-      reason: 'R1.approve-run',
+      // Check the two ports independently. A daemon/DB failure after the first
+      // upsert must leave the next repair able to fill approval_meta instead of
+      // mistaking approved_doc alone for a complete approval fact set.
+      if (!st.hasApprovedDocOutput) {
+        await rc.db
+          .insert(nodeRunOutputs)
+          .values({
+            nodeRunId: st.detail.reviewNodeRunId,
+            portName: 'approved_doc',
+            content,
+          })
+          .onConflictDoUpdate({
+            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+            set: { content },
+          })
+      }
+      if (!st.hasApprovalMetaOutput) {
+        await rc.db
+          .insert(nodeRunOutputs)
+          .values({
+            nodeRunId: st.detail.reviewNodeRunId,
+            portName: 'approval_meta',
+            content: meta,
+          })
+          .onConflictDoUpdate({
+            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+            set: { content: meta },
+          })
+      }
+      await setNodeRunStatus({
+        db: rc.db,
+        nodeRunId: st.detail.reviewNodeRunId,
+        to: 'done',
+        allowedFrom: [
+          'awaiting_review',
+          'pending',
+          'running',
+          'failed',
+          'canceled',
+          'interrupted',
+          'exhausted',
+        ],
+        allowTerminal: true,
+        extra: { finishedAt: rc.now() },
+        reason: 'R1.approve-run',
+      })
+      return {
+        beforeSnapshot: before,
+        afterSnapshot: {
+          nodeRun: { id: st.detail.reviewNodeRunId, status: 'done' },
+          hasApprovedDocOutput: true,
+          hasApprovalMetaOutput: true,
+        },
+        // Calling resumeTask on done/running is rejected; failed/interrupted/
+        // awaiting_* remain the RFC-202 repairable states. Use the lock-fresh
+        // task row, never the stale engine snapshot.
+        resumeAfterApply:
+          taskStatus === 'awaiting_review' ||
+          taskStatus === 'failed' ||
+          taskStatus === 'interrupted' ||
+          taskStatus === 'awaiting_human',
+      }
     })
-    return {
-      beforeSnapshot: before,
-      afterSnapshot: {
-        nodeRun: { id: st.detail.reviewNodeRunId, status: 'done' },
-        hasApprovedOutput: true,
-      },
-      // resumeAfterApply: true unless task is already terminal — but R1 is
-      // a data-shape invariant violation, not necessarily a stuck task.
-      // Calling resumeTask on a `done` task is rejected; on a running task
-      // it's also rejected; only failed/interrupted/awaiting_* succeed.
-      // The downstream scheduler picks up the now-done review on the next
-      // task lifecycle event anyway, so we DON'T blanket-resume here. The
-      // operator can hit the task's Resume button if needed.
-      resumeAfterApply:
-        rc.task.status === 'awaiting_review' ||
-        rc.task.status === 'failed' ||
-        rc.task.status === 'interrupted' ||
-        rc.task.status === 'awaiting_human',
-    }
   },
 }
 
@@ -226,6 +290,14 @@ const R1_UNAPPROVE_DOC: RepairOptionDef = {
   risk: 'medium',
   destructive: false,
   async preflight(rc): Promise<PreflightResult> {
+    if (isR1TaskHardSealed(rc.task.status)) {
+      return {
+        available: false,
+        unavailableReasonKey: 'diagnose.repair.R1.unavailable.taskTerminal',
+        previewSteps: [],
+        ctx: {},
+      }
+    }
     const st = await loadR1State(rc)
     if (st === null) {
       return {
@@ -243,6 +315,14 @@ const R1_UNAPPROVE_DOC: RepairOptionDef = {
         ctx: {},
       }
     }
+    if (st.runStatus === 'done') {
+      return {
+        available: false,
+        unavailableReasonKey: 'diagnose.repair.R1.unavailable.runAlreadyDone',
+        previewSteps: [],
+        ctx: {},
+      }
+    }
     return {
       available: true,
       previewSteps: [
@@ -253,16 +333,19 @@ const R1_UNAPPROVE_DOC: RepairOptionDef = {
     }
   },
   async apply(rc, pre): Promise<ApplyResult> {
-    const st = pre.ctx['state'] as R1State
-    const before = { doc: { id: st.detail.docVersionId, decision: st.docDecision } }
-    await rc.db
-      .update(docVersions)
-      .set({ decision: 'pending', decidedAt: null, decidedBy: null })
-      .where(eq(docVersions.id, st.detail.docVersionId))
-    return {
-      beforeSnapshot: before,
-      afterSnapshot: { doc: { id: st.detail.docVersionId, decision: 'pending' } },
-    }
+    void pre
+    return withTaskReviewMutationLock(rc.task.id, async () => {
+      const { state: st } = await loadWritableR1State(rc, 'R1.unapprove-doc')
+      const before = { doc: { id: st.detail.docVersionId, decision: st.docDecision } }
+      await rc.db
+        .update(docVersions)
+        .set({ decision: 'pending', decidedAt: null, decidedBy: null })
+        .where(eq(docVersions.id, st.detail.docVersionId))
+      return {
+        beforeSnapshot: before,
+        afterSnapshot: { doc: { id: st.detail.docVersionId, decision: 'pending' } },
+      }
+    })
   },
 }
 

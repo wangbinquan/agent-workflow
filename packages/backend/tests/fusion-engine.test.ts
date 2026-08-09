@@ -26,7 +26,15 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { fusions, memories, skills, skillVersions, tasks } from '../src/db/schema'
+import {
+  docVersions,
+  fusions,
+  memories,
+  nodeRuns,
+  skills,
+  skillVersions,
+  tasks,
+} from '../src/db/schema'
 import {
   approveFusion,
   cancelFusion,
@@ -39,6 +47,9 @@ import {
   type FusionDeps,
 } from '../src/services/fusion'
 import { getTask } from '../src/services/task'
+import { registerTerminalTaskHook } from '../src/services/lifecycle'
+import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
+import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
 import { getSkillVersionContent } from '../src/services/skillVersion'
@@ -941,6 +952,109 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     // The parked engine task was terminalized (not orphaned in the clarify inbox).
     const task = await getTask(h.db, taskId)
     expect(task!.status).toBe('canceled')
+  })
+
+  test('awaiting_review engine cancel queues behind the shared review/cancel coordinator', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'review-lock',
+      description: 'd',
+      bodyMd: 'b',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'review-lock-memory')
+    const fusion = await createFusion(
+      { skillId: skillIdOf(h.db, 'review-lock'), memoryIds: [mem], intent: '' },
+      h.deps,
+      adminActor,
+    )
+    const taskId = fusion.currentTaskId!
+    const reviewRunId = ulid()
+    const docVersionId = ulid()
+    await h.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
+    await h.db.insert(nodeRuns).values({
+      id: reviewRunId,
+      taskId,
+      nodeId: 'review-lock-gate',
+      status: 'awaiting_review',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+    })
+    await h.db.insert(docVersions).values({
+      id: docVersionId,
+      taskId,
+      reviewNodeId: 'review-lock-gate',
+      reviewNodeRunId: reviewRunId,
+      sourceNodeId: 'writer',
+      sourcePortName: 'doc',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: 'review-lock.md',
+      commentsJson: '[]',
+      decision: 'pending',
+      createdAt: Date.now(),
+    })
+    registerTerminalTaskHook((hookDb, hookTaskId, to) => {
+      sealOpenHumanGatesForTask(hookDb, hookTaskId, `task-${to}`)
+    })
+
+    let releaseHolder: () => void = () => {}
+    let markEntered: () => void = () => {}
+    const entered = new Promise<void>((resolveEntered) => {
+      markEntered = resolveEntered
+    })
+    const blocked = new Promise<void>((resolveBlocked) => {
+      releaseHolder = resolveBlocked
+    })
+    const holder = withTaskReviewMutationLock(taskId, async () => {
+      markEntered()
+      await blocked
+    })
+    await entered
+
+    let settled = false
+    const cancelPromise = cancelFusion(h.deps, fusion.id, adminActor).finally(() => {
+      settled = true
+    })
+    try {
+      // The fusion CAS lands before engine-task cancellation. Once it is
+      // canceled, the only reason cancelFusion remains pending is the occupied
+      // task coordinator. The legacy direct trySetTaskStatus bypass completed
+      // here and makes this assertion fail.
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const status = h.db
+          .select({ status: fusions.status })
+          .from(fusions)
+          .where(eq(fusions.id, fusion.id))
+          .limit(1)
+          .all()[0]?.status
+        if (status === 'canceled') break
+        await Bun.sleep(1)
+      }
+      expect(
+        h.db
+          .select({ status: fusions.status })
+          .from(fusions)
+          .where(eq(fusions.id, fusion.id))
+          .limit(1)
+          .all()[0]?.status,
+      ).toBe('canceled')
+      await Bun.sleep(10)
+      expect(settled).toBe(false)
+      releaseHolder()
+
+      const result = await cancelPromise
+      expect(result.status).toBe('canceled')
+      expect((await getTask(h.db, taskId))?.status).toBe('canceled')
+      expect(
+        (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]?.status,
+      ).toBe('canceled')
+    } finally {
+      releaseHolder()
+      await holder
+      registerTerminalTaskHook(null)
+    }
   })
 
   test('cancel claim captures currentTaskId in the CAS (source lock)', () => {

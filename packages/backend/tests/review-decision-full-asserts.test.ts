@@ -23,7 +23,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { submitReviewDecision } from '../src/services/review'
+import { addReviewComment, submitReviewDecision } from '../src/services/review'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -448,5 +448,382 @@ describe('RFC-053 PR-A T1g — review decision full-field assertions', () => {
       .from(memoryDistillJobs)
       .where(eq(memoryDistillJobs.taskId, h.taskId))
     expect(jobs.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('review decision concurrency — one complete winner, zero loser side effects', () => {
+  let h: Harness
+  afterEach(() => h?.cleanup())
+
+  function expectRejectedWithCode(result: PromiseSettledResult<unknown>, code: string): void {
+    expect(result.status).toBe('rejected')
+    if (result.status === 'rejected') {
+      expect((result.reason as { code?: string }).code).toBe(code)
+    }
+  }
+
+  async function taskDistillJobs(): Promise<Array<typeof memoryDistillJobs.$inferSelect>> {
+    return h.db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.taskId, h.taskId))
+  }
+
+  test('concurrent approve then reject commits only the approval fact set', async () => {
+    h = await buildHarness({ withInlineComments: true })
+
+    const results = await Promise.allSettled([
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'approver',
+      }),
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'rejected',
+        rejectReason: 'reject must lose',
+        expectedReviewIteration: 0,
+        author: 'rejecter',
+      }),
+    ])
+
+    expect(results[0]!.status).toBe('fulfilled')
+    expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+
+    const reviewRun = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
+    expect(reviewRun.status).toBe('done')
+    expect(reviewRun.reviewIteration).toBe(0)
+    const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
+    expect(doc.decision).toBe('approved')
+    expect(doc.decidedBy).toBe('approver')
+    expect(doc.decisionReason).toBeNull()
+    expect(doc.commentsJson).toContain('change this')
+    expect(await h.db.select().from(reviewComments)).toHaveLength(0)
+
+    const upstream = await h.db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
+    expect(upstream).toHaveLength(1)
+    expect(upstream[0]!.status).toBe('done')
+    const outputs = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+    expect(outputs.map((row) => row.portName).sort()).toEqual(['approval_meta', 'approved_doc'])
+    expect(await taskDistillJobs()).toHaveLength(1)
+  })
+
+  test('concurrent reject then approve commits only the rejection fact set', async () => {
+    h = await buildHarness({ withInlineComments: true })
+
+    const results = await Promise.allSettled([
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'rejected',
+        rejectReason: 'redo the document',
+        expectedReviewIteration: 0,
+        author: 'rejecter',
+      }),
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'approver',
+      }),
+    ])
+
+    expect(results[0]!.status).toBe('fulfilled')
+    expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+
+    const reviewRun = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
+    expect(reviewRun.status).toBe('pending')
+    expect(reviewRun.reviewIteration).toBe(1)
+    const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
+    expect(doc.decision).toBe('rejected')
+    expect(doc.decidedBy).toBe('rejecter')
+    expect(doc.decisionReason).toBe('redo the document')
+
+    const upstream = await h.db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
+    expect(upstream).toHaveLength(2)
+    expect(upstream.filter((row) => row.status === 'canceled')).toHaveLength(1)
+    expect(upstream.filter((row) => row.status === 'pending')).toHaveLength(1)
+    const outputs = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+    expect(outputs).toHaveLength(0)
+    expect(await taskDistillJobs()).toHaveLength(1)
+  })
+
+  test('concurrent iterate then reject cannot mix two rerun reasons', async () => {
+    h = await buildHarness({ withInlineComments: true })
+
+    const results = await Promise.allSettled([
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+        author: 'iterator',
+      }),
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'rejected',
+        rejectReason: 'reject must lose',
+        expectedReviewIteration: 0,
+        author: 'rejecter',
+      }),
+    ])
+
+    expect(results[0]!.status).toBe('fulfilled')
+    expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+    const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
+    expect(doc.decision).toBe('iterated')
+    expect(doc.decidedBy).toBe('iterator')
+    expect(doc.decisionReason).toContain('change this')
+    expect(doc.decisionReason).not.toContain('reject must lose')
+
+    const upstream = await h.db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
+    expect(upstream).toHaveLength(2)
+    expect(upstream.filter((row) => row.status === 'canceled')).toHaveLength(1)
+    expect(upstream.filter((row) => row.status === 'pending')).toHaveLength(1)
+    expect(await taskDistillJobs()).toHaveLength(1)
+  })
+
+  test('concurrent double approve writes one output pair and one distill job', async () => {
+    h = await buildHarness()
+
+    const results = await Promise.allSettled([
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'first',
+      }),
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'second',
+      }),
+    ])
+
+    expect(results[0]!.status).toBe('fulfilled')
+    expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+    const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
+    expect(doc.decision).toBe('approved')
+    expect(doc.decidedBy).toBe('first')
+    const outputs = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+    expect(outputs).toHaveLength(2)
+    expect(await taskDistillJobs()).toHaveLength(1)
+  })
+
+  test('a failing lock holder releases the queue so the next valid decision completes', async () => {
+    h = await buildHarness()
+
+    const results = await Promise.allSettled([
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 99,
+        author: 'stale-client',
+      }),
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'valid-client',
+      }),
+    ])
+
+    expectRejectedWithCode(results[0]!, 'review-iteration-mismatch')
+    expect(results[1]!.status).toBe('fulfilled')
+    const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
+    expect(doc.decision).toBe('approved')
+    expect(doc.decidedBy).toBe('valid-client')
+  })
+
+  test('decision winning against a concurrent comment leaves no live comment on a decided doc', async () => {
+    h = await buildHarness()
+    const results = await Promise.allSettled([
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'approver',
+      }),
+      addReviewComment({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        anchor: {
+          sectionPath: 'body',
+          paragraphIdx: 0,
+          offsetStart: 2,
+          offsetEnd: 6,
+          selectedText: 'body',
+          contextBefore: '# ',
+          contextAfter: ' inline',
+          occurrenceIndex: 1,
+        },
+        commentText: 'too late',
+        author: 'commenter',
+      }),
+    ])
+
+    expect(results[0]!.status).toBe('fulfilled')
+    expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+    expect(await h.db.select().from(reviewComments)).toHaveLength(0)
+    const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
+    expect(doc.decision).toBe('approved')
+    expect(doc.commentsJson).toBe('[]')
+  })
+
+  test('comment winning against a concurrent decision is archived exactly once', async () => {
+    h = await buildHarness()
+    const results = await Promise.allSettled([
+      addReviewComment({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        anchor: {
+          sectionPath: 'body',
+          paragraphIdx: 0,
+          offsetStart: 2,
+          offsetEnd: 6,
+          selectedText: 'body',
+          contextBefore: '# ',
+          contextAfter: ' inline',
+          occurrenceIndex: 1,
+        },
+        commentText: 'archive me',
+        author: 'commenter',
+      }),
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'approver',
+      }),
+    ])
+
+    expect(results[0]!.status).toBe('fulfilled')
+    expect(results[1]!.status).toBe('fulfilled')
+    expect(await h.db.select().from(reviewComments)).toHaveLength(0)
+    const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
+    const archived = JSON.parse(doc.commentsJson ?? '[]') as Array<{ commentText?: string }>
+    expect(archived).toHaveLength(1)
+    expect(archived[0]?.commentText).toBe('archive me')
+  })
+
+  test('reject cascade and sibling approve serialize at task scope', async () => {
+    h = await buildHarness()
+    const siblingNode = {
+      id: 'rev_2',
+      kind: 'review',
+      inputSource: { nodeId: 'doc', portName: 'docpath' },
+    } as unknown as WorkflowNode
+    const definition: WorkflowDefinition = {
+      ...h.definition,
+      nodes: [...h.definition.nodes, siblingNode],
+    }
+    await h.db
+      .update(tasks)
+      .set({ workflowSnapshot: JSON.stringify(definition) })
+      .where(eq(tasks.id, h.taskId))
+
+    const siblingRunId = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: siblingRunId,
+      taskId: h.taskId,
+      nodeId: 'rev_2',
+      status: 'awaiting_review',
+      retryIndex: 0,
+      iteration: 0,
+      reviewIteration: 0,
+      startedAt: Date.now() - 40,
+    })
+    const siblingBodyPath = 'doc_versions/sibling.md'
+    writeFileSync(join(h.appHome, siblingBodyPath), '# sibling body')
+    const siblingDocId = ulid()
+    await h.db.insert(docVersions).values({
+      id: siblingDocId,
+      taskId: h.taskId,
+      reviewNodeId: 'rev_2',
+      reviewNodeRunId: siblingRunId,
+      sourceNodeId: 'doc',
+      sourcePortName: 'docpath',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: siblingBodyPath,
+      decision: 'pending',
+    })
+
+    const results = await Promise.allSettled([
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewRunId,
+        decision: 'rejected',
+        rejectReason: 'invalidate every sibling',
+        expectedReviewIteration: 0,
+        author: 'rejecter',
+      }),
+      submitReviewDecision({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: siblingRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'sibling-approver',
+      }),
+    ])
+
+    expect(results[0]!.status).toBe('fulfilled')
+    expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+    const siblingRun = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, siblingRunId)))[0]!
+    expect(siblingRun.status).toBe('pending')
+    expect(siblingRun.reviewIteration).toBe(1)
+    const siblingDoc = (
+      await h.db.select().from(docVersions).where(eq(docVersions.id, siblingDocId))
+    )[0]!
+    expect(siblingDoc.decision).toBe('rejected')
+    expect(siblingDoc.decisionReason).toContain('invalidated by sibling reject')
+    const siblingOutputs = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, siblingRunId))
+    expect(siblingOutputs).toHaveLength(0)
   })
 })

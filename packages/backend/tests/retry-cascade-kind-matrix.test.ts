@@ -2,7 +2,7 @@
 //
 // For every NodeKind, verify retryNode's cascade behavior when that kind is
 // DOWNSTREAM of the user-clicked target:
-//   - agent-single / wrapper-git / wrapper-loop / wrapper-fanout → mint placeholder
+//   - agent-single / wrappers / calls / script / code-host-call → mint placeholder
 //     (RFC-060 PR-E: agent-multi removed)
 //   - review / clarify / output / input                       → SKIP
 //
@@ -34,6 +34,10 @@ const DOWNSTREAM_KINDS_MINT = [
   'wrapper-git',
   'wrapper-loop',
   'wrapper-fanout',
+  'call-workflow',
+  'call-workgroup',
+  'script',
+  'code-host-call',
 ] as const satisfies readonly NodeKind[]
 
 const DOWNSTREAM_KINDS_SKIP = [
@@ -232,6 +236,85 @@ async function seedTaskWithEdge(
   return { taskId, agentRunId }
 }
 
+async function seedLiveChildForCallRow(
+  h: Harness,
+  parentTaskId: string,
+  callRunId: string,
+): Promise<string> {
+  const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+  const childId = ulid()
+  await h.db.insert(tasks).values({
+    id: childId,
+    name: `child-${childId.slice(-6).toLowerCase()}`,
+    workflowId: parent.workflowId,
+    workflowSnapshot: parent.workflowSnapshot,
+    repoPath: parent.repoPath,
+    worktreePath: parent.worktreePath,
+    baseBranch: parent.baseBranch,
+    branch: `agent-workflow/${childId}`,
+    status: 'awaiting_human',
+    inputs: '{}',
+    startedAt: Date.now() - 50,
+    parentTaskId,
+    parentNodeRunId: callRunId,
+    invocationDepth: 1,
+  })
+  await h.db.update(nodeRuns).set({ childTaskId: childId }).where(eq(nodeRuns.id, callRunId))
+  return childId
+}
+
+/** Keep one task moving between cancelable states before every task-cancel CAS. */
+function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): DbClient {
+  let nextStatus: 'awaiting_human' | 'awaiting_review' = 'awaiting_review'
+  const wrapBuilder = (builder: object, taskUpdate: boolean, cancelUpdate: boolean): object => {
+    const proxy: object = new Proxy(builder, {
+      get(target, property) {
+        if (property === 'then' && taskUpdate && cancelUpdate) {
+          return (
+            onFulfilled?: ((value: unknown) => unknown) | null,
+            onRejected?: ((reason: unknown) => unknown) | null,
+          ) => {
+            onAttempt()
+            const status = nextStatus
+            nextStatus = status === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
+            return db
+              .update(tasks)
+              .set({ status })
+              .where(eq(tasks.id, taskId))
+              .then(() => Promise.resolve(target as unknown as PromiseLike<unknown>))
+              .then(onFulfilled, onRejected)
+          }
+        }
+        const value = Reflect.get(target, property, target)
+        if (typeof value !== 'function') return value
+        return (...args: unknown[]) => {
+          const next = Reflect.apply(value, target, args) as unknown
+          const armsCancel =
+            property === 'set' &&
+            typeof args[0] === 'object' &&
+            args[0] !== null &&
+            (args[0] as { status?: unknown }).status === 'canceled'
+          return typeof next === 'object' && next !== null
+            ? wrapBuilder(next, taskUpdate, cancelUpdate || armsCancel)
+            : next
+        }
+      },
+    })
+    return proxy
+  }
+
+  return new Proxy(db, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target)
+      if (property !== 'update' || typeof value !== 'function') return value
+      return (...args: unknown[]) => {
+        const builder = Reflect.apply(value, target, args) as object
+        return wrapBuilder(builder, args[0] === tasks, false)
+      }
+    },
+  }) as DbClient
+}
+
 describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
   let h: Harness
 
@@ -276,6 +359,151 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       expect(placeholders.find((r) => r.nodeId === downId)).toBeUndefined()
     })
   }
+
+  test('CALL target — CAS winner cancels its live child before minting the next generation', async () => {
+    const downId = 'down_call_workflow'
+    const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
+    const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
+      (r) => r.nodeId === downId,
+    )!
+    // rfc053-allow-direct-status-write -- realistic failed-parent/live-call test seeding
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'running', finishedAt: null })
+      .where(eq(nodeRuns.id, callRow.id))
+    const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
+
+    await retryNode(h.db, taskId, callRow.id, {
+      cascade: false,
+      deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+    })
+
+    const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
+    expect(child.status).toBe('canceled')
+    expect(child.errorMessage).toBe('canceled-by-parent-cascade')
+    const callRows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+      (r) => r.nodeId === downId,
+    )
+    expect(callRows.some((r) => r.retryIndex === 1 && r.errorMessage === 'queued for retry')).toBe(
+      true,
+    )
+  })
+
+  test('upstream cascade — cancels the downstream CALL row live child before minting', async () => {
+    const downId = 'down_call_workgroup'
+    const { taskId, agentRunId } = await seedTaskWithEdge(h, downId, 'call-workgroup')
+    const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
+      (r) => r.nodeId === downId,
+    )!
+    // rfc053-allow-direct-status-write -- realistic failed-parent/live-call test seeding
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'running', finishedAt: null })
+      .where(eq(nodeRuns.id, callRow.id))
+    const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
+
+    await retryNode(h.db, taskId, agentRunId, {
+      cascade: true,
+      deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+    })
+
+    const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
+    expect(child.status).toBe('canceled')
+    expect(child.errorMessage).toBe('canceled-by-parent-cascade')
+    const callRows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+      (r) => r.nodeId === downId,
+    )
+    expect(callRows.some((r) => r.retryIndex === 1 && r.errorMessage === 'queued for retry')).toBe(
+      true,
+    )
+  })
+
+  test('unexpected child cancellation error fails closed without rollback/mint or pending task', async () => {
+    const downId = 'down_call_workflow'
+    const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
+    const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
+      (r) => r.nodeId === downId,
+    )!
+    // rfc053-allow-direct-status-write -- realistic failed-parent/live-call test seeding
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'running', finishedAt: null })
+      .where(eq(nodeRuns.id, callRow.id))
+    const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
+
+    let taskUpdateCount = 0
+    const flakyDb = new Proxy(h.db, {
+      get(target, prop) {
+        if (prop === 'update') {
+          return ((table: unknown) => {
+            if (table === tasks) {
+              taskUpdateCount += 1
+              // #1 = retry ownership CAS; #2 = child cancellation; #3 = fail-close.
+              if (taskUpdateCount === 2) throw new Error('injected child cancel write failure')
+            }
+            return (target.update as (t: unknown) => unknown)(table)
+          }) as DbClient['update']
+        }
+        const value = Reflect.get(target, prop, target) as unknown
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as DbClient
+
+    await expect(
+      retryNode(flakyDb, taskId, callRow.id, {
+        cascade: false,
+        deps: { db: flakyDb, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      }),
+    ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
+
+    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
+    expect(parent.status).toBe('failed')
+    expect(parent.errorSummary).toBe('retry-child-cancel-failed')
+    expect(child.status).toBe('awaiting_human')
+    expect(
+      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+        (r) => r.errorMessage === 'queued for retry',
+      ),
+    ).toHaveLength(0)
+  })
+
+  test('child cancel CAS starvation fails retry closed without rollback or mint', async () => {
+    const downId = 'down_call_workflow'
+    const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
+    const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
+      (r) => r.nodeId === downId,
+    )!
+    // rfc053-allow-direct-status-write -- realistic failed-parent/live-call test seeding
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'running', finishedAt: null })
+      .where(eq(nodeRuns.id, callRow.id))
+    const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
+    let cancelCasAttempts = 0
+    const starvingDb = starveTaskCancelCas(h.db, childId, () => {
+      cancelCasAttempts += 1
+    })
+
+    await expect(
+      retryNode(starvingDb, taskId, callRow.id, {
+        cascade: false,
+        deps: { db: starvingDb, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      }),
+    ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
+
+    expect(cancelCasAttempts).toBe(8)
+    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
+    expect(parent.status).toBe('failed')
+    expect(parent.errorSummary).toBe('retry-child-cancel-failed')
+    expect(child.status).not.toBe('canceled')
+    expect(
+      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+        (r) => r.errorMessage === 'queued for retry',
+      ),
+    ).toHaveLength(0)
+  })
 
   test('TARGET — even non-process target gets minted (current behavior, may change in PR-C)', async () => {
     // The user-clicked target is unconditionally added to `targets` in
