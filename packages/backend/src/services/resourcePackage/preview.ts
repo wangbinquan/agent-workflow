@@ -21,6 +21,8 @@ import type { DbClient } from '@/db/client'
 import { canonicalJson, type AclResourceType, type BundleOp } from '@agent-workflow/shared'
 import { ACL_TABLES, isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { ValidationError } from '@/util/errors'
+import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
+import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
 import { resourceTypeOfOp, opSlug } from '@/services/bundle/provider'
 import type { ParsedPackage } from './parse'
 
@@ -134,14 +136,33 @@ export function expectTokenOf(
         expectedAclRevision: Number(row.aclRevision ?? 0),
       }
     case 'mcp':
+      return { expectedConfigHash: mcpOperationConfigHashOf(rowToMcpLike(row)) }
     case 'plugin':
-      // hash 由各自的 operationRevision 模块算；预检下发的是**当前**值，commit 时
-      // 由引擎在事务内复核。
-      return { expectedConfigHash: String(row.__configHash ?? '') }
+      return { expectedConfigHash: pluginOperationConfigHashOf(rowToPluginLike(row)) }
     case 'workflow':
     case 'workgroup':
       return { expectedVersion: Number(row.version ?? 1) }
   }
+}
+
+/** hash 函数吃的是领域对象，不是原始行——把 JSON 列解开即可。 */
+function rowToMcpLike(
+  row: Record<string, unknown>,
+): Parameters<typeof mcpOperationConfigHashOf>[0] {
+  return {
+    ...row,
+    config: typeof row.config === 'string' ? JSON.parse(row.config) : (row.config ?? {}),
+  } as never
+}
+
+function rowToPluginLike(
+  row: Record<string, unknown>,
+): Parameters<typeof pluginOperationConfigHashOf>[0] {
+  return {
+    ...row,
+    options:
+      typeof row.optionsJson === 'string' ? JSON.parse(row.optionsJson) : (row.options ?? {}),
+  } as never
 }
 
 export async function buildPackagePreview(
@@ -172,10 +193,7 @@ export async function buildPackagePreview(
     const candidates: PreviewCandidate[] = visible.map((r) => ({
       id: String(r.id),
       name: String(r.name),
-      expect: expectTokenOf(type, {
-        ...r,
-        __configHash: opts.configHashOf?.(type, r) ?? '',
-      }),
+      expect: expectTokenOf(type, r),
       // 「只能覆盖自己的，别人的不给覆盖选项」——归属在这里就定死，commit 再算一遍。
       owned: r.ownerUserId === actor.user.id,
     }))
