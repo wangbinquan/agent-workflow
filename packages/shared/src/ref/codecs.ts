@@ -153,17 +153,25 @@ export function encodeCallRef(ref: ResourceRefAst): CallRefWire | null {
 const BUNDLE_LOCAL_RE = /^local:([a-z0-9][a-z0-9_-]{0,63})$/
 const BUNDLE_EXTERNAL_RE = /^external:([A-Za-z0-9._:#/-]{1,128})$/
 
+/** `builtin:<type>/<name>` —— 只有 agent / workflow 两张表有 `builtin` 列。 */
+const BUNDLE_BUILTIN_RE = /^builtin:(agent|workflow)\/(\S{1,256})$/
+
 export function decodeBundleIdentityRef(wire: string): ResourceRefAst | null {
   const local = BUNDLE_LOCAL_RE.exec(wire)
   if (local !== null) return { k: 'local', slug: local[1]! }
   const external = BUNDLE_EXTERNAL_RE.exec(wire)
   if (external !== null) return { k: 'external', token: external[1]! }
+  const builtin = BUNDLE_BUILTIN_RE.exec(wire)
+  if (builtin !== null) {
+    return { k: 'builtin', type: builtin[1] as AclResourceType, name: builtin[2]! }
+  }
   return null
 }
 
 export function encodeBundleIdentityRef(ref: ResourceRefAst): string | null {
   if (ref.k === 'local') return `local:${ref.slug}`
   if (ref.k === 'external') return `external:${ref.token}`
+  if (ref.k === 'builtin') return `builtin:${ref.type}/${ref.name}`
   return null
 }
 

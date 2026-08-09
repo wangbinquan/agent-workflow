@@ -40,7 +40,9 @@ import {
   workgroupMembers,
   workgroups,
 } from '../src/db/schema'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { decodeZip } from '../src/services/skill-zip'
+import { encodeZip, type ZipFile } from '../src/util/zip'
 import { createManagedSkillWithFiles } from '../src/services/skill'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
@@ -78,6 +80,31 @@ async function makeInstance(): Promise<{ db: DbClient; appHome: string }> {
     updatedAt: Date.now(),
   } as never)
   return { db, appHome }
+}
+
+/** 改写包内 manifest.yaml 后重新打包（只用于构造 tampered 输入）。 */
+function repackWithManifest(
+  zip: Uint8Array,
+  mutate: (m: Record<string, unknown>) => Record<string, unknown>,
+): Uint8Array {
+  const files: ZipFile[] = []
+  for (const entry of decodeZip(zip)) {
+    if (entry.isDir) continue
+    files.push({
+      path: entry.path,
+      bytes:
+        entry.path === 'manifest.yaml'
+          ? new TextEncoder().encode(
+              stringifyYaml(
+                mutate(
+                  parseYaml(new TextDecoder().decode(entry.bytes())) as Record<string, unknown>,
+                ),
+              ),
+            )
+          : entry.bytes(),
+    })
+  }
+  return encodeZip(files)
 }
 
 // 二进制辅助文件：utf-8 解码会破坏它，所以它同时锁住「字节原样」。
@@ -707,6 +734,87 @@ describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动�
       } finally {
         removeTempDirSync(dst.appHome)
       }
+    } finally {
+      removeTempDirSync(src.appHome)
+    }
+  })
+})
+
+describe('AC-9 · **built-in 作为导出根**：产物必须能被自己的 parser 接受', () => {
+  // 这条锁的是一次真实缺陷（设计门 P1）。`builtin:` 这第五种 wire 形态最初只加进了
+  // `bundle/payload.ts` 的私有 regex，没进统一的 `ResourceRefAst` / 域 codec。于是
+  // 三处各说各话：serializer **生成** `builtin:` 根（写 `local:` 会判 dangling-root），
+  // 而 `RootRefSchema` 只认 `local:` / `external:`、`parse.ts` 又硬要求根 `local:` 且
+  // 出现在 `manifest.resources` 里。实测导出一个 built-in 工作流，产物被**自己的
+  // parser** 判 `package-invalid`。
+  //
+  // 用往返而不是源码断言：源码里有没有 `builtin` 这几个字母，挡不住「四处 regex 各
+  // 认各的」——只有真跑一遍 export→parse 才会暴露。
+  test('导出 built-in 工作流 → 解析成功，rootRef 是 builtin: 且不入 resources', async () => {
+    const src = await makeInstance()
+    try {
+      const builtinId = ulid()
+      await src.db.insert(workflows).values({
+        id: builtinId,
+        name: 'aw-builtin-probe',
+        description: '',
+        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+        ownerUserId: '__system__',
+        visibility: 'public',
+        builtin: true,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+
+      const pkg = await exportResourcePackage(
+        src.db,
+        actorOf('u1'),
+        { type: 'workflow', id: builtinId },
+        { appHome: src.appHome },
+      )
+      const parsed = await parseResourcePackage(pkg.zip)
+
+      expect(parsed.bundle.rootRef).toBe('builtin:workflow/aw-builtin-probe')
+      // built-in 不产 create op、不入 resources —— 导入侧「自动忽略」靠的正是这一点。
+      expect(parsed.bundle.ops).toHaveLength(0)
+      expect(parsed.manifest.resources).toHaveLength(0)
+      expect(parsed.manifest.builtins).toEqual([{ type: 'workflow', name: 'aw-builtin-probe' }])
+      // 根仍要能报出类型/名字（receipt 要用）。
+      expect(parsed.manifest.root).toMatchObject({ type: 'workflow', name: 'aw-builtin-probe' })
+    } finally {
+      removeTempDirSync(src.appHome)
+    }
+  })
+
+  test('manifest.root 与 builtin rootRef 不一致 ⇒ 拒绝（不能只信其中一处）', async () => {
+    const src = await makeInstance()
+    try {
+      const builtinId = ulid()
+      await src.db.insert(workflows).values({
+        id: builtinId,
+        name: 'aw-builtin-probe2',
+        description: '',
+        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+        ownerUserId: '__system__',
+        visibility: 'public',
+        builtin: true,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      const pkg = await exportResourcePackage(
+        src.db,
+        actorOf('u1'),
+        { type: 'workflow', id: builtinId },
+        { appHome: src.appHome },
+      )
+      // 篡改 manifest.root.name，让它与 bundle.rootRef 指向不同的 built-in。
+      const tampered = repackWithManifest(pkg.zip, (m) => {
+        ;(m.root as { name: string }).name = 'aw-something-else'
+        return m
+      })
+      await expect(parseResourcePackage(tampered)).rejects.toMatchObject({
+        code: 'package-invalid',
+      })
     } finally {
       removeTempDirSync(src.appHome)
     }

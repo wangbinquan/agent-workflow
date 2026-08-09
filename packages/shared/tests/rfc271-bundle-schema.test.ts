@@ -293,3 +293,90 @@ describe('payload 逐字段对照正式 schema（AC-B3b）', () => {
     expect(BundleOpSchema.safeParse(mk('/abs.md')).success).toBe(false)
   })
 })
+
+describe('闭合性扫描必须扫**真实字段名** —— call 槽的 local: 引用', () => {
+  // 这条锁的是一次真实缺陷：`collectLocalRefs` 扫的是 `rec.targetRef`，一个**根本
+  // 不存在的字段**（call 目标的实际字段是 `workflowRef` / `workgroupRef`，见 serialize
+  // 的 lifting）。于是 call 槽的 `local:` 引用从来没被闭合性校验扫到过 —— 一个引用了
+  // 包内子工作流、而该子工作流又没有 create op 的包，能一路过 schema，到 apply 才炸。
+  //
+  // 「字段名写错」这类缺陷的隐蔽之处在于**它永远不报错**：扫一个 undefined 字段的结果
+  // 就是「没有引用」，与「引用都合法」的观测完全一样。只有构造一个**本该被拒**的包才
+  // 能区分这两者。
+  const wfOp = (nodes: unknown[]) => ({
+    opId: 'op-1',
+    kind: 'workflow-create' as const,
+    slug: 'wf-root',
+    payload: {
+      name: 'root',
+      description: '',
+      definition: { $schema_version: 4, inputs: [], edges: [], nodes },
+    },
+  })
+
+  test('call 目标指向包内不存在的子工作流 ⇒ bundle-dangling-local-ref', () => {
+    const codes = collectBundleRefIssues({
+      ops: [wfOp([{ id: 'n1', type: 'call', workflowRef: 'local:no-such-wf' }])] as never,
+    }).map((i) => i.code)
+    expect(codes).toContain('bundle-dangling-local-ref')
+  })
+
+  test('call 目标指向包内不存在的工作组 ⇒ 同样拒绝', () => {
+    const codes = collectBundleRefIssues({
+      ops: [wfOp([{ id: 'n1', type: 'call', workgroupRef: 'local:no-such-wg' }])] as never,
+    }).map((i) => i.code)
+    expect(codes).toContain('bundle-dangling-local-ref')
+  })
+
+  test('正常场景不误伤：目标由包内 create op 声明 ⇒ 无 issue', () => {
+    const codes = collectBundleRefIssues({
+      ops: [
+        wfOp([{ id: 'n1', type: 'call', workflowRef: 'local:wf-child' }]),
+        {
+          opId: 'op-2',
+          kind: 'workflow-create',
+          slug: 'wf-child',
+          payload: {
+            name: 'child',
+            description: '',
+            definition: { $schema_version: 4, inputs: [], edges: [], nodes: [] },
+          },
+        },
+      ] as never,
+    }).map((i) => i.code)
+    expect(codes).not.toContain('bundle-dangling-local-ref')
+  })
+})
+
+describe('builtin: 形态的 rootRef', () => {
+  // built-in 根不指向任何 op（built-in 不产 create op），也**自带类型**，所以既不算
+  // 悬空、也不需要 rootType。少了这一支，导出的包自己的 parser 都解析不了。
+  test('builtin 根：无 op、无 rootType ⇒ 无 issue', () => {
+    expect(
+      collectBundleRefIssues({ ops: [], rootRef: 'builtin:workflow/aw-skill-fusion' }),
+    ).toEqual([])
+  })
+
+  test('external 根缺 rootType 仍要报错（builtin 分支不得顺手放过 external）', () => {
+    const codes = collectBundleRefIssues({ ops: [], rootRef: 'external:agent/x' }).map(
+      (i) => i.code,
+    )
+    expect(codes).toContain('bundle-root-type-missing')
+  })
+
+  test('BundleSchema 接受 builtin 根；不认识的前缀仍拒绝', () => {
+    expect(
+      BundleSchema.safeParse({
+        bundleVersion: 1,
+        ops: [],
+        rootRef: 'builtin:workflow/aw-skill-fusion',
+      }).success,
+    ).toBe(true)
+    expect(
+      BundleSchema.safeParse({ bundleVersion: 1, ops: [], rootRef: 'builtin:skill/x' }).success,
+    ).toBe(false)
+    expect(BundleSchema.safeParse({ bundleVersion: 1, ops: [], rootRef: 'bogus:x' }).success).toBe(
+      false,
+    )
+  })
+})

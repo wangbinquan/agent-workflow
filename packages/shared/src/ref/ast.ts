@@ -73,6 +73,19 @@ export type ResourceRefAst =
    * 组装路径上留 special-case；但它**不入闭包遍历队列、不查 row、不进资源去重门**。
    */
   | { readonly k: 'project-skill'; readonly name: string }
+  /**
+   * 框架 built-in（`agents` / `workflows` 有 `builtin` 列，owner 通常 `__system__`）。
+   *
+   * 它**按名字跨实例绑定**：源库的 id 在对端没有意义，而复制一份只会得到 owner 错、
+   * `builtin=false` 的同名副本。所以它既不是 `id`（跨实例无效）也不是 `local`
+   * （包里不产 create op），需要自己的变体。
+   *
+   * ⚠️ 它必须**在这里**定义。第一版把 `builtin:` 只加进了 `bundle/payload.ts` 的
+   * 私有 regex，于是出现两套解析：正式 codec 拒绝它、payload schema 接受它，而
+   * `RootRefSchema` 又两者都不认 —— 导出一个 built-in 根会产出**自己的 parser 都
+   * 解析不了**的包。RFC 的核心主张就是「引用身份只有一处定义」，破坏它的代价就是这个。
+   */
+  | { readonly k: 'builtin'; readonly type: AclResourceType; readonly name: string }
 
 // --- schema（用于跨进程/落盘时的校验；域 codec 见 ./codecs.ts） ---
 
@@ -128,6 +141,8 @@ export function resourceRefKey(ref: ResourceRefAst): string {
         ref.authoritativeName,
         ref.idHint ?? null,
       ])
+    case 'builtin':
+      return JSON.stringify(['builtin', ref.type, ref.name])
     case 'project-skill':
       return JSON.stringify(['project-skill', ref.name])
   }

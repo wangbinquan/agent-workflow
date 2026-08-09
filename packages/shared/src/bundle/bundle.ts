@@ -16,7 +16,12 @@ export const BUNDLE_VERSION = 1
 
 const RootRefSchema = z
   .string()
-  .regex(/^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128})$/)
+  // ⚠️ 必须接受 `builtin:` —— 导出一个 built-in 根时 serializer 就是这么写的
+  // （built-in 不产 op，写 `local:` 会让 parser 判 `bundle-dangling-root`）。
+  // 少了这一支，导出的包**自己的 parser 都解析不了**（实测 `package-invalid`）。
+  .regex(
+    /^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128}|builtin:(agent|workflow)\/\S{1,256})$/,
+  )
 
 export interface BundleRefIssue {
   code:
@@ -57,7 +62,12 @@ function collectLocalRefs(op: BundleOp): string[] {
         if (typeof n !== 'object' || n === null) continue
         const rec = n as Record<string, unknown>
         push(rec.agentRef)
-        push(rec.targetRef)
+        // ⚠️ call 目标的实际字段是 `workflowRef` / `workgroupRef`（见 serialize 的
+        // lifting）。这里曾写 `targetRef` —— 一个**根本不存在的字段**，于是 call 槽的
+        // `local:` 引用从来没被闭合性校验扫到过：一个引用了包内子工作流、而该子工作流
+        // 又没有 create op 的包，能一路过 schema 到 apply 才炸。
+        push(rec.workflowRef)
+        push(rec.workgroupRef)
       }
     }
   }
@@ -135,6 +145,9 @@ export function collectBundleRefIssues(bundle: {
           pointer: bundle.rootRef,
         })
       }
+    } else if (bundle.rootRef.startsWith('builtin:')) {
+      // `builtin:<type>/<name>` **自带类型**，不需要 rootType；它也不指向任何 op
+      // （built-in 不产 create op），所以既不算悬空、也不缺类型。
     } else if (bundle.rootType === undefined) {
       // external root 不自带类型；receipt 报不出根是什么就等于没有根。
       issues.push({

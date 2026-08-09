@@ -194,7 +194,26 @@ function assertManifestMatchesBundle(manifest: PackageManifest, bundle: Resource
     )
   }
 
-  if (bundle.rootRef === undefined || !bundle.rootRef.startsWith('local:')) {
+  if (bundle.rootRef === undefined) {
+    throw new ValidationError('package-invalid', 'a config package must declare a rootRef')
+  }
+  // 框架 built-in 作为根：它**不产 create op、也不进 `manifest.resources`**（导入侧
+  // 自动忽略、按名字绑对端自己那一个），所以下面「root 必须出现在 resources 里」的
+  // 对照对它不适用。只核对 manifest.root 与 rootRef 声明的是同一个 (type, name)。
+  if (bundle.rootRef.startsWith('builtin:')) {
+    const spec = bundle.rootRef.slice('builtin:'.length)
+    const slash = spec.indexOf('/')
+    const type = slash < 0 ? '' : spec.slice(0, slash)
+    const name = slash < 0 ? '' : spec.slice(slash + 1)
+    if (manifest.root.type !== type || manifest.root.name !== name) {
+      throw new ValidationError(
+        'package-invalid',
+        'manifest.root does not match the builtin rootRef in bundle.json',
+      )
+    }
+    return
+  }
+  if (!bundle.rootRef.startsWith('local:')) {
     throw new ValidationError('package-invalid', 'a config package must declare a local rootRef')
   }
   const rootSlug = bundle.rootRef.slice('local:'.length)

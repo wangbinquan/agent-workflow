@@ -14,6 +14,7 @@
 // 指向自己的 agent。
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
 import { agents } from '../src/db/schema'
@@ -139,5 +140,45 @@ describe('builtin: 语义层 —— fail closed', () => {
         }),
       ),
     ).toBe('bundle-builtin-missing')
+  })
+})
+
+describe('builtin 作为**导出根**：产物必须能被自己的 parser 接受', () => {
+  test('统一 AST 少一个变体的代价 —— 导出的包自己解析不了', () => {
+    // 这条锁的是一次真实缺陷：`builtin:` 最初只加进了 `bundle/payload.ts` 的私有
+    // regex，没进统一的 `ResourceRefAst` / 域 codec。于是三处各说各话 ——
+    //   · serializer 给 built-in 根写 `builtin:`（写 `local:` 会判 dangling-root）
+    //   · `RootRefSchema` 只认 `local:` / `external:`
+    //   · `parse.ts` 要求 rootRef 必须 `local:` 且出现在 manifest.resources 里
+    // 实测导出一个 built-in 工作流，产物被自己的 parser 判 `package-invalid`。
+    //
+    // 修法不是再加一处 regex，而是**把 builtin 并进统一抽象**：AST 变体 + 域 codec
+    // + RootRefSchema + parse 的 root 分支。RFC 的核心主张就是「引用身份只有一处
+    // 定义」，每加一处私有解析就是在还这笔债。
+    const ast = readFileSync(
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'ref', 'ast.ts'),
+      'utf8',
+    )
+    expect(ast).toContain("k: 'builtin'")
+    expect(ast).toContain("JSON.stringify(['builtin', ref.type, ref.name])")
+
+    const codecs = readFileSync(
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'ref', 'codecs.ts'),
+      'utf8',
+    )
+    expect(codecs).toContain('BUNDLE_BUILTIN_RE')
+    expect(codecs).toContain("if (ref.k === 'builtin')")
+
+    const bundle = readFileSync(
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'bundle', 'bundle.ts'),
+      'utf8',
+    )
+    // RootRefSchema 必须认 builtin:
+    expect(bundle).toContain('builtin:(agent|workflow)')
+    // 闭合性扫描扫的是**真实字段名**：曾写 `targetRef`（不存在的字段），于是 call
+    // 槽的 local: 引用从来没被校验过。
+    expect(bundle).toContain('push(rec.workflowRef)')
+    expect(bundle).toContain('push(rec.workgroupRef)')
+    expect(bundle).not.toContain('push(rec.targetRef)')
   })
 })
