@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-📝 **进行中 RFC（Draft v4，2026-08-08）：[RFC-271 统一资源表达（Resource Bundle）与配置包](design/RFC-271-resource-config-package/proposal.md)** —— 起于「导出 YAML 改成导出配置包」，经**三轮 Codex 设计门（共 39 条 findings，逐条核实全部属实）**定型。至少五条同一根因：自造了仓里已有且已调试过的机制，每次自造都恰好踩中那个机制当初为之而生的坑。**交付三层**：shared `ResourceBundle` 表达（`BundleRef` 三形态，第三种 `name:` late-bound 是必须的——`call-workflow` 的权威引用是名字且允许 dangling）/ backend `BundleApply` 引擎（泛化自 `applyIntentChangeset`，**开工前先列它 ~13 条承重不变量逐条对照**）/ 配置包导出导入 + CLI。**范围决策**：本 RFC 只接配置包一个消费者，**intent 不迁移**（provider 已预留事务钩子供后续 RFC）；顺带解开 intent 的 skill/plugin 原地更新欠账（能力扩张）。**一条真实越权已定位**：`commitMcpUpdateInTx` 只校验 hash 不校验 owner（owner 门在路由层），导入提交是新写路径 —— 伪造 `overwrite + 他人公开资源 id` 可改写别人那一行的内容。**权限模型**：导出要整棵树可见（含传递）× 分轴特权，但**可见即有读权限**（AC-7d 是反向锁）；导入谁导入归谁。能力清单六条已获用户逐条确认。一张新表 + 一个迁移、不新增权限点。
+✅ **已完成 RFC（2026-08-09）：[RFC-271 统一资源表达（Resource Bundle）与配置包](design/RFC-271-resource-config-package/proposal.md)** —— 起于「导出 YAML 改成导出配置包」，经**三轮 Codex 设计门（共 39 条 findings，逐条核实全部属实）**定型。至少五条同一根因：自造了仓里已有且已调试过的机制，每次自造都恰好踩中那个机制当初为之而生的坑。**交付三层**：shared `ResourceBundle` 表达（`BundleRef` 三形态，第三种 `name:` late-bound 是必须的——`call-workflow` 的权威引用是名字且允许 dangling）/ backend `BundleApply` 引擎（泛化自 `applyIntentChangeset`，**开工前先列它 ~13 条承重不变量逐条对照**）/ 配置包导出导入 + CLI。**范围决策**：本 RFC 只接配置包一个消费者，**intent 不迁移**（provider 已预留事务钩子供后续 RFC）；顺带解开 intent 的 skill/plugin 原地更新欠账（能力扩张）。**一条真实越权已定位**：`commitMcpUpdateInTx` 只校验 hash 不校验 owner（owner 门在路由层），导入提交是新写路径 —— 伪造 `overwrite + 他人公开资源 id` 可改写别人那一行的内容。**权限模型**：导出要整棵树可见（含传递）× 分轴特权，但**可见即有读权限**（AC-7d 是反向锁）；导入谁导入归谁。能力清单六条已获用户逐条确认。一张新表 + 一个迁移、不新增权限点。
 > **实施进度（2026-08-09）**：**批次 A（shared 基座）与批次 A′（统一引用模型 wiring）已完工并全部 CI 绿**；下一步是批次 B（`BundleApply` 引擎）。
 > A′ 把「引用」从散在各处的字符串收成一套 AST + 每域一个 codec + 一条解析契约，五个提交：
 > - `T6b/T6c`（`48f92f5a`）—— intent 与 import 的 ref lexicon 归到单一定义，wire 拼写字节级不变。
@@ -87,38 +87,19 @@
 > 救援态 UI 与四个测试文件。**半拆会让编辑页导出按钮运行时 404，比不拆更糟**，故已
 > 回滚 C1，树保持一致、门禁全绿。
 >
-> **批次 I 的接手指南**（2026-08-09 完整走过一遍后回滚，以下是实测结论，不是估计）：
+> **批次 I 完工**（`0cf30f87`）—— 能力下线 C1–C6。两条旧端点 + `WorkflowImportDialog`
+> + `postYaml` + 本地草稿导出 + 救援态导出按钮全部退场；`parseExactPositiveInteger`
+> 这个只服务旧路由的 helper 一并删掉（不留死码）。
 >
-> **拆除本身不难，难的是改判面**。生产代码的改动很小且已验证可行：
-> ① 前端 C2：删 `WorkflowImportDialog.tsx` + `workflows.tsx` 里的 `importOpen`/
->    `importTriggerRef`/`importWorkflow`/`refreshImportConflict`/`importActions`/
->    **`postYaml`**（它是那条 wire 的唯一入口，留着是死码）。
->    ⚠️ 别忘了 `emptyHeaderActions` —— 空列表走的是它而不是 `headerActions`，
->    只改后者会让 gallery 的空态测试红。
-> ② 前端 C3：删 `lib/workflow-draft-export.ts` + `workflows.edit.tsx` 的 `handleExport`
->    整个函数、More 菜单里那个按钮、`exportPending` state，以及 `WorkflowDraftStatus`
->    的 `onExportLocal` prop 与**两处**救援态按钮（inaccessible / deleted 各一）。
-> ③ 后端 C1：删两条 `registerRoute`，并连带删掉只服务它们的
->    `parseExactPositiveInteger`（全仓唯一使用者就是那条导出路由）。
->    ⚠️ `workflowDefinitionToSelectors` / `stripCallWorkflowNodeIds` **保留**。
-> ④ 契约注册表删对应两条。
+> **7 处既有断言显式改判**，每处都写明「守卫意图一字未改、只是出口真的少了」：
+> `rfc247` 投影出口 6→4 / 2→1、`rfc270` 镜头出口 8→5、`rfc199` 的 Export describe 与
+> source-lock 半边、`rfc104` 的 YAML-import 内置只读用例、`rfc099` 的 404 断言、
+> `workflow-yaml.test.ts` 整份（全文件只服务这两个端点）。新增 14 条不复辟守卫。
 >
-> **真正的工作量在这里**：删完之后后端有 **8 个测试文件**与被删端点绑定，需要逐文件
-> 判断「哪些断言是关于 HTTP 端点（随之退场）、哪些是关于底层服务（仍然有效，只是
-> 要改成直接调服务）」——
-> `workflow-yaml.test.ts` / `rfc199-workflow-exact-operations.test.ts` /
-> `rfc104-builtin-readonly.test.ts` / `rfc099-resource-routes.test.ts` /
-> `rfc223-import-refs.test.ts` / `rfc243-call-refs-yaml.test.ts` /
-> `rfc223-reference-write-fence.test.ts` / `backup.test.ts`。
-> 前端另有 4 处已验证的改判点（overlay 清单、gallery 空态、编辑页 More 菜单、
-> 编辑页导出用例），改法已在本轮试过、可直接照做。
+> ⚠️ 两个实测踩点已写进 commit：空列表走 `emptyHeaderActions` 而非 `headerActions`；
+> 删路由要连带删只服务它的 helper，否则 `--max-warnings 0` 直接红。
 >
-> **给接手的建议**：单开一轮、只做批次 I，从后端那 8 个文件先读起再动手删——本轮
-> 是先删后发现改判面，导致中途必须回滚（半拆状态会让编辑页导出按钮运行时 404，
-> 比不拆更糟）。`rfc271-capability-removal.test.ts` 的**不复辟守卫**已写好并跑通
-> 13 条，可从本轮 git 历史里取回（未提交，但内容见本条目下方的 commit 描述）。
->
-> **再往后**：H（CLI，T40–42> 拆完 I 之后：收尾完整门禁 + Codex 实现门。
+> **RFC-271 全部批次（A–J）完工**，`gate:local` 全绿。余下：Codex 实现门。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 
