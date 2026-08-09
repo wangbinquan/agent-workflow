@@ -253,8 +253,15 @@ packages/backend/src/db/schema.ts` 把真实列读一遍，别信自己对形状
 
 `e2e/` **不在任何 package 的 `tsconfig.json` `include` 里**（backend 是
 `src|tests|db`，frontend 是 `src|tests|vite/vitest.config`），而 `gate:local`
-**不跑 Playwright**。两件事叠加的后果很具体：删掉一条路由后，e2e 里对它的调用
-**typecheck 看不见、lint 看不见、`gate:local` 全绿**，只有 CI 的 Playwright 腿会红。
+**不跑 Playwright**。删掉一条路由后，e2e 里对它的调用 **typecheck 看不见、
+`gate:local` 全绿**，只有 CI 的 Playwright 腿会红。
+
+⚠️ **lint 是覆盖 e2e 的**（我第一版把它一并写成「看不见」，是错的）：根级脚本
+`lint:repo-ui` 跑 `eslint playwright.config.ts "e2e/**/*.ts" scripts/*.ts
+--max-warnings=0`。所以**只跑 `bun run --filter <pkg> lint` 会漏掉 e2e**——
+改完 e2e 必须跑根级 `bun run lint`（它 = 各 package lint + `lint:repo-ui`）或直接
+`bun run lint:repo-ui`。RFC-271 的 e2e 修复第一版就栽在这里：把 YAML 读取移进 helper
+后，两个 spec 的 `readFileSync` 成了未使用 import，`--max-warnings 0` 直接红。
 
 RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id/export`，
 三个 spec 仍在打前者（两个只是拿它当 fixture 装载手段，一个整文件测的就是这个能力），

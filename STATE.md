@@ -118,12 +118,13 @@
 > - **P1-4 工作组导出恒为空**：开关是各自独立的 boolean 列、成员在 `workgroup_members` 表，
 >   而序列化器读的是并不存在的 `switchesJson` / `membersJson`。装载层统一补 `row.members`
 >   （下游三处只有一个来源）。**human 成员按用户决策改成「导入时逐个选映射」**：预检列槽 +
->   候选，映射基线一并进 `previewToken` 签名面）。⚠️ 我最初写的「leader 槽不许跳过」是
+>   候选，映射基线一并进 `previewToken` 签名面。⚠️ 我最初写的「leader 槽不许跳过」是
 >   **事实错误**：canonical 工作组要求 leader 必须是 agent 成员，human 槽不可能是 leader；
 >   该约束现作为兼容旧 token 的遗留位保留，文档已更正。
 > - **P1-1 导入没有写权限门**：与用户定的「令牌有写权限才能导入，和界面操作一致」不符。
 >   `new` 要 `*:create`、`overwrite` 要 `*:update`、`reuse` 不需要（它一个字节都不写）；
->   一个动作都不剩 ⇒ 整包拒绝。权限点用 `Record<AclResourceType, {create,update}>` 穷尽表。
+>   一个动作都不剩时 preview 仍返回完整条目并列 `missingPermissions`，UI 标红且禁止提交；
+>   commit 对首次 claim 按当前 Actor 重算，权限在预检后撤销也会拒绝。
 > - **P1-2 脱敏三件套写好了没调**：`redactArgv` / `redactUrlKeepingShape` / `redactPluginSpec`
 >   在 shared 里齐全且有单测，`serialize.ts` 一个没调；`requirements.pluginSources` 也重读了
 >   原行。**加 helper 时同一个 PR 里 grep 一次调用点**。
@@ -150,6 +151,23 @@
 > ⚠️ **前端由另一个 session 并发做 UX 重构**（`ResourcePackageImportDialog` 等 26 文件），
 > 本轮**未碰任何 `packages/frontend/**`**。human 成员映射的**后端契约已就绪**
 （preview 返回 `humanMembers`、commit 收 `humanMemberMappings`、路由已接），**前端 UI 待接**。
+>
+> ⚠️ **`a71f5bed` 的 CI 红过一次，两处都是我的**（已由 `9d7cb91b` 修复）：
+> ① **批次 I 只扫了前端源码、漏了 `e2e/`** —— 删掉 `POST /api/workflows/import` 后三个
+> spec 还在打它。之所以一路绿到 push：**`e2e/` 不在任何 tsconfig 的 include 里，
+> `gate:local` 也不跑 Playwright**，typecheck / lint / 门禁三者都看不见那个目录。
+> 连实现门那条「查批次 I 有没有遗留死引用」也只扫了前端源码，两边漏在同一处。
+> 已沉淀进 `docs/dev-gotchas.md` §删端点 / 删能力时 e2e 不在本地门禁覆盖面内。
+> ② **提交时 `git add` 误把并发 session 改过的守卫 test 裹了进去**，却没提交对应前端
+> ⇒ HEAD 自相矛盾。已回滚；他们的新版在 `a71f5bed` 里可取回，注释写明「必须与前端
+> 同一个提交」。**教训**：多人工作树下 `git add` 前要逐个确认文件归属，`mine.txt`
+> 那种「按 `git status` 全量筛」的做法会连带别人的中间态。
+>
+> ⏳ **未完成收尾（已登记 backlog）**：`visual-regression-nightly` 自 `ea27d81f`
+> （批次 G「六类列表页接入导入入口」）起持续红 —— 新增视觉场景后**基线未更新**。
+> 那不是缺陷而是流程没走完（该 workflow 文件头写明：首次 hosted run 故意红并产出
+> 实际 PNG，人工审核后提交 Linux 基线）。**建议等并发的前端重构落地后一次性更新**，
+> 否则要更新两遍。它不是硬门禁，但挂着的每一天真正的视觉回归都发现不了。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 

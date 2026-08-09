@@ -1066,7 +1066,15 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   // Secondary dialogs reachable from list pages. Each is a .dialog__body
   // scroll box holding form controls + buttons.
   const DIALOGS: Array<{ route: string; open: RegExp; label: string }> = [
-    { route: '/workflows', open: /import yaml/i, label: '/workflows(import-dialog)' },
+    // RFC-271 批次 I 下线了「Import YAML」对话框，取代它的是配置包导入。正则写宽
+    // 一点覆盖两种文案，避免这条焦点环扫描因为一次纯文案调整就红。
+    // ⚠️ 并发 session 正把这个入口从列表页 header 移进创建流程；那次重构落地时，
+    // 这里的 `open` 与 `REQUIRED_SURFACES` 里的对应项要一起改成新的打开路径。
+    {
+      route: '/workflows',
+      open: /import (config package|yaml)/i,
+      label: '/workflows(import-dialog)',
+    },
     { route: '/memory', open: /new memory/i, label: '/memory(new-dialog)' },
   ]
   for (const d of DIALOGS) {
