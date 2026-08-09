@@ -215,6 +215,7 @@ function plantR1Violation(taskId: string): { nodeRunId: string; docVersionId: st
   const docVersionId = `dv_r1_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   const now = Date.now()
   runSql(`
+    UPDATE tasks SET status='running' WHERE id='${taskId}';
     INSERT INTO node_runs (id, task_id, node_id, parent_node_run_id, iteration,
       shard_key, retry_index, review_iteration, status,
       started_at, finished_at)
@@ -348,7 +349,9 @@ test('R1 happy: approve-run resolves the alert', async ({ page }) => {
   })
 
   // R1's default option is approve-run (low risk, first available).
-  await page.locator('[data-testid="repair-choice-next"]').click()
+  const next = page.locator('[data-testid="repair-choice-next"]')
+  await expect(next).toBeEnabled()
+  await next.click()
   await expect(page.locator('[data-testid="repair-confirm-modal"]')).toBeVisible()
   await page.locator('[data-testid="repair-confirm-apply"]').click()
 
