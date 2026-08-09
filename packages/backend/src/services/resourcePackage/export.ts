@@ -15,8 +15,9 @@ import type { AclResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { encodeZip, type ZipFile } from '@/util/zip'
-import { ConflictError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/util/errors'
 import { assertPrivilegedNodesExportable, walkExportClosure, type ExportClosure } from './closure'
+import { expectTokenOf } from './preview'
 import { serializeClosure, type SerializedPackage } from './serialize'
 import { packagedSkillFileRef, readSkillTree, type SkillTree } from './skillTree'
 
@@ -283,11 +284,19 @@ export async function exportResourcePackage(
   }
 }
 
-/** 只对 **root** 生效的 exact-revision fence（旧 YAML 导出的那条保障）。 */
-export interface RootExportFence {
-  expectedVersion?: number
-  expectedSnapshotHash?: string
-}
+/**
+ * 只对 **root** 生效的 exact-revision fence（旧 YAML 导出的那条保障）。
+ *
+ * 字段是**六类各自的完整形态**（AC-12），复用 `expectTokenOf` 那一份定义 —— 不能
+ * 只给 `expectedVersion`：那只覆盖 workflow / workgroup，另一标签把 agent 的
+ * `network` 从 deny 改成 allow 后，原标签点导出会**静默导出新版本**而不是 409。
+ *
+ * · workflow / workgroup → `expectedVersion`
+ * · agent                → `expectedUpdatedAt` + `expectedAclRevision`
+ * · skill                → `expectedContentVersion` + `expectedMetaRevision` + `expectedAclRevision`
+ * · mcp / plugin         → `expectedConfigHash`
+ */
+export type RootExportFence = Record<string, unknown>
 
 /**
  * 「所见非所得」防护：用户在界面上看着 v1 按了导出，另一个写者已经把它推到 v2。
@@ -297,21 +306,36 @@ export interface RootExportFence {
  * 而闭包正是导出这一步才算出来的。
  */
 function assertRootUnchanged(closure: ExportClosure, expect: RootExportFence | undefined): void {
-  if (expect === undefined) return
-  const row = closure.root.row
-  if (expect.expectedVersion !== undefined && Number(row.version ?? 1) !== expect.expectedVersion) {
-    throw new ConflictError(
-      'package-root-changed',
-      `this ${closure.root.type} changed since you loaded it (expected version ${expect.expectedVersion})`,
+  if (expect === undefined || Object.keys(expect).length === 0) return
+  const type = closure.root.type
+  const actual = expectTokenOf(type, closure.root.row)
+
+  // ⚠️ **给了就必须给全**：该类型要求的每个字段都要出现。少给一个就等于放过那一维
+  // 的漂移（技能只改 description 会推进 metaRevision 而 contentVersion 不变——只带
+  // 后者的 fence 完全看不见这次修改），而调用方会以为自己有保护。
+  const required = Object.keys(actual)
+  const missing = required.filter((k) => expect[k] === undefined)
+  if (missing.length > 0) {
+    throw new ValidationError(
+      'package-invalid',
+      `exact-revision fence for a ${type} needs all of: ${required.join(', ')} (missing ${missing.join(', ')})`,
     )
   }
-  if (
-    expect.expectedSnapshotHash !== undefined &&
-    String(row.snapshotHash ?? '') !== expect.expectedSnapshotHash
-  ) {
+  const unknown = Object.keys(expect).filter((k) => !required.includes(k))
+  if (unknown.length > 0) {
+    // 传了该类型不认识的字段，最可能是调用方拿错了类型的 fence —— 静默忽略会让
+    // 「我明明传了 expectedConfigHash」变成一次没有保护的导出。
+    throw new ValidationError(
+      'package-invalid',
+      `exact-revision fence for a ${type} does not accept: ${unknown.join(', ')}`,
+    )
+  }
+
+  for (const key of required) {
+    if (String(expect[key]) === String(actual[key])) continue
     throw new ConflictError(
       'package-root-changed',
-      `this ${closure.root.type} changed since you loaded it`,
+      `this ${type} changed since you loaded it (${key}: expected ${String(expect[key])}, now ${String(actual[key])})`,
     )
   }
 }

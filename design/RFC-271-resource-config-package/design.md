@@ -982,22 +982,22 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 
 ## 8. 失败模式
 
-| 场景                             | 行为                                                                                       |
-| -------------------------------- | ------------------------------------------------------------------------------------------ |
-| 闭包内 id 域资源不可见（含传递） | 422 + 明确提示                                                                             |
-| name 域零匹配 / 全不可见         | 逐字节相同的 dangling                                                                      |
-| name 域有可见候选                | 与 `freezeCallClosure` 逐字一致的解析                                                      |
-| 特权节点缺对应权限               | 422，分轴                                                                                  |
-| 超体积                           | 422 并点名                                                                                 |
-| pre-stage 失败                   | 各内核自补偿 + 插件 generation 精确删除 + journal → failed                                 |
-| big tx 失败                      | SQLite 回滚 + 逆序补偿                                                                     |
-| 进程被 SIGKILL                   | 启动收敛（带 active set + 10min 下限）                                                     |
-| 重复提交同 idempotencyKey        | **三态**（I3）：`committed` → 原 receipt；`failed` → 409；`prepared`/`applying` → 409 未结 |
-| 并发导入同目标                   | 内容 CAS 409 + 技能 op 锁 409                                                              |
-| **伪造 overwrite 他人资源**      | **最终事务内 owner 断言拒绝**（§5.4）                                                      |
-| `formatVersion` 更高             | 拒绝                                                                                       |
-| 包内未登记文件                   | 422 `package-unlisted-entry`                                                               |
-| 技能文件树里的硬编码密钥         | 不扫描、原样入包（决策 18，文档写明作者责任）                                              |
+| 场景                                | 行为                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| 闭包内 id 域资源不可见（含传递）    | 422 + 明确提示                                                                             |
+| name 域零匹配 / 全不可见            | 逐字节相同的 dangling                                                                      |
+| name 域有可见候选                   | 与 `freezeCallClosure` 逐字一致的解析                                                      |
+| 特权节点缺对应权限                  | 422，分轴                                                                                  |
+| ~~超体积~~ **【已改判，同 AC-11】** | ~~422 并点名~~ 不设上限，导出侧无体积门                                                    |
+| pre-stage 失败                      | 各内核自补偿 + 插件 generation 精确删除 + journal → failed                                 |
+| big tx 失败                         | SQLite 回滚 + 逆序补偿                                                                     |
+| 进程被 SIGKILL                      | 启动收敛（带 active set + 10min 下限）                                                     |
+| 重复提交同 idempotencyKey           | **三态**（I3）：`committed` → 原 receipt；`failed` → 409；`prepared`/`applying` → 409 未结 |
+| 并发导入同目标                      | 内容 CAS 409 + 技能 op 锁 409                                                              |
+| **伪造 overwrite 他人资源**         | **最终事务内 owner 断言拒绝**（§5.4）                                                      |
+| `formatVersion` 更高                | 拒绝                                                                                       |
+| 包内未登记文件                      | 422 `package-unlisted-entry`                                                               |
+| 技能文件树里的硬编码密钥            | 不扫描、原样入包（决策 18，文档写明作者责任）                                              |
 
 ## 9. 测试策略
 

@@ -155,17 +155,39 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     const routes = read('src/routes/resourcePackages.ts')
     expect(routes).toContain('parseRootFence(c)')
     expect(routes).toContain('expectedVersion')
-    expect(routes).toContain('expectedSnapshotHash')
     const exportSrc = read('src/services/resourcePackage/export.ts')
     // 只对 root 生效 —— 与任务执行同语义（执行期非 root 依赖同样取最新）。
     expect(exportSrc).toContain('assertRootUnchanged(closure, opts.expect)')
     expect(exportSrc).toContain('package-root-changed')
   })
 
-  test('写错的 expectedVersion 是拒绝，不是当没给', () => {
+  test('写错的数值是拒绝，不是当没给', () => {
     // 静默忽略一个写错的 fence，等于用户以为有保护而实际没有。
     const routes = read('src/routes/resourcePackages.ts')
-    expect(routes).toContain('expectedVersion must be a positive integer')
+    expect(routes).toContain('must be a non-negative integer')
+  })
+
+  test('AC-12：六类各自的**完整**形态，不是只给 expectedVersion', () => {
+    // ⚠️ 这条曾经被我在验收清单里勾成「已覆盖」，实际只实现了 expectedVersion +
+    // expectedSnapshotHash —— 即只覆盖 workflow / workgroup。AC-12 的警告写的正是
+    // 这个状态：「另一标签把 agent 的 network 从 deny 改成 allow 后，原标签点导出会
+    // 静默导出新版本而不是 409」。
+    const routes = read('src/routes/resourcePackages.ts')
+    for (const key of [
+      'expectedVersion',
+      'expectedUpdatedAt',
+      'expectedAclRevision',
+      'expectedContentVersion',
+      'expectedMetaRevision',
+      'expectedConfigHash',
+    ]) {
+      expect({ key, present: routes.includes(key) }).toEqual({ key, present: true })
+    }
+    const exportSrc = read('src/services/resourcePackage/export.ts')
+    // 形态取自 `expectTokenOf` 那一份定义，不另抄一套。
+    expect(exportSrc).toContain('expectTokenOf(type, closure.root.row)')
+    // 给了就必须给全 —— 少给一维等于放过那一维的漂移。
+    expect(exportSrc).toContain('needs all of:')
   })
 })
 

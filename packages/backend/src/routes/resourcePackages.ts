@@ -70,22 +70,36 @@ export interface ResourcePackageRouteDeps {
  * `exportHandler` 里，重复的只是声明本身，那正是要被守卫看见的部分。
  */
 /**
- * `?expectedVersion=` / `?expectedSnapshotHash=` —— 两者都可选，给了就必须对上。
- * 非法的 `expectedVersion`（`0` / `abc` / 小数）是**拒绝**而不是当没给：静默忽略
- * 一个写错的 fence，等于用户以为有保护而实际没有。
+ * exact-revision fence 的 query 参数 —— **六类各自的完整形态**（AC-12）。
+ *
+ * 数值型（version / updatedAt / aclRevision / contentVersion / metaRevision）必须是
+ * 非负整数；写错的值是**拒绝**而不是当没给：静默忽略一个写错的 fence，等于用户以为
+ * 有保护而实际没有。服务端还会校验「给了就必须给全该类型的所有字段」。
  */
-function parseRootFence(c: Context): { expectedVersion?: number; expectedSnapshotHash?: string } {
-  const out: { expectedVersion?: number; expectedSnapshotHash?: string } = {}
-  const rawVersion = c.req.query('expectedVersion')
-  if (rawVersion !== undefined) {
-    const parsed = z.coerce.number().int().positive().safeParse(rawVersion)
+const FENCE_NUMERIC = [
+  'expectedVersion',
+  'expectedUpdatedAt',
+  'expectedAclRevision',
+  'expectedContentVersion',
+  'expectedMetaRevision',
+] as const
+const FENCE_STRING = ['expectedConfigHash'] as const
+
+function parseRootFence(c: Context): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of FENCE_NUMERIC) {
+    const raw = c.req.query(key)
+    if (raw === undefined) continue
+    const parsed = z.coerce.number().int().nonnegative().safeParse(raw)
     if (!parsed.success) {
-      throw new ValidationError('package-invalid', 'expectedVersion must be a positive integer')
+      throw new ValidationError('package-invalid', `${key} must be a non-negative integer`)
     }
-    out.expectedVersion = parsed.data
+    out[key] = parsed.data
   }
-  const hash = c.req.query('expectedSnapshotHash')
-  if (hash !== undefined && hash !== '') out.expectedSnapshotHash = hash
+  for (const key of FENCE_STRING) {
+    const raw = c.req.query(key)
+    if (raw !== undefined && raw !== '') out[key] = raw
+  }
   return out
 }
 
