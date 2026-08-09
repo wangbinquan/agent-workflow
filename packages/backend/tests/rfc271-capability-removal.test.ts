@@ -15,7 +15,7 @@
 // 悬空。那不是「功能少一点」，是一个会稳定产出坏结果的出口。
 
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const BACKEND = resolve(import.meta.dir, '..')
@@ -57,12 +57,51 @@ describe('C2 · 裸 YAML 导入已下线', () => {
     expect(list).not.toContain('WorkflowImportDialog')
   })
 
-  test('取代它的入口融入创建流程，列表页不再挂独立导入按钮', () => {
+  // ⚠️ 这条断言锚在**已提交的**前端源码上，CI 是权威。
+  //
+  // 2026-08-09 的中间态：并发 session 正在把导入入口重构进创建流程
+  // （`ResourcePackageImportDialog` + `alternativeAction`，去掉独立按钮 +
+  // `emptyHeaderActions`）。他们改好的**这个 test 的新版**一度被误提交进
+  // `a71f5bed`（前端本身没跟着提交），于是 HEAD 自相矛盾、CI 红。这里已回滚成与
+  // HEAD 前端一致的形态；新版可以取回：
+  //   git show a71f5bed:packages/backend/tests/rfc271-capability-removal.test.ts
+  // **提交那次前端重构时，把这个 test 一并换回去**（两者必须同一个提交）。
+  //
+  // 副作用：在那次重构落地之前，谁的工作树里带着那份未提交的前端，这条就会在本地
+  // 红——那是工作树混了两人中间态，不是回归。以 CI 为准。
+  test('取代它的入口在，且**两个** header 槽都挂了（空列表走的是另一个）', () => {
     const list = read(resolve(FRONTEND, 'src', 'routes', 'workflows.tsx'))
-    expect(list).toContain('ResourcePackageImportDialog')
-    expect(list).toContain('alternativeAction=')
-    expect(list).not.toContain('ResourcePackageImportEntry')
-    expect(list).not.toContain('emptyHeaderActions=')
+    expect(list).toContain('ResourcePackageImportEntry')
+    expect(list).toContain('emptyHeaderActions=')
+  })
+})
+
+describe('C1/C2 · 已下线的端点不得有任何调用方（含 e2e）', () => {
+  // 批次 I 只扫了前端源码，**漏了 e2e** —— 于是三个 spec 还在打
+  // `POST /api/workflows/import`，而 `gate:local` 不跑 Playwright，本地全绿、CI 才红。
+  // 这条守卫把 e2e 一并纳入扫描面，让「删端点」与「清调用方」不能再脱节。
+  const E2E = resolve(BACKEND, '..', '..', 'e2e')
+
+  test('e2e 里没有任何文件调用已删的两条端点', () => {
+    const offenders: string[] = []
+    for (const name of readdirSync(E2E)) {
+      if (!name.endsWith('.ts')) continue
+      const src = read(resolve(E2E, name))
+      // 注释里提到端点名是允许的（解释为什么不能用它）；这里只抓真实调用。
+      if (/apiFetch\(\s*['"`][^'"`]*\/api\/workflows\/import/.test(src)) offenders.push(name)
+      if (/fetch\(\s*[^)]*\/api\/workflows\/import/.test(src)) offenders.push(name)
+    }
+    expect(offenders).toEqual([])
+  })
+
+  test('被它取代的 fixture 装载 helper 在，且走的是公开端点', () => {
+    const helper = read(resolve(E2E, 'workflow-fixtures.ts'))
+    expect(helper).toContain("apiFetch('/api/workflows'")
+    // 不许绕回那条已下线的服务函数——那会让 e2e 依赖一条产品上不存在的路径。
+    // ⚠️ 断言的是 **import 语句**，不是裸文本：这个文件的注释里正当地提到了那个
+    // 函数名（解释为什么不用它），扫裸文本会匹配到自己的注释而恒红。
+    expect(helper).not.toMatch(/^\s*import[^\n]*workflow\.yaml/m)
+    expect(helper).not.toMatch(/importWorkflowYaml\s*\(/)
   })
 })
 

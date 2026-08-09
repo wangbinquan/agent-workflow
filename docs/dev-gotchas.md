@@ -249,6 +249,31 @@ packages/backend/src/db/schema.ts` 把真实列读一遍，别信自己对形状
   （`#`），不要用空格或不可见控制字符。提交前扫一遍：
   `rg -n $'[\x00-\x08\x0b\x0c\x0e-\x1f]' packages/*/src --binary`。
 
+## 删端点 / 删能力时，`e2e/` 不在任何本地门禁的覆盖面内（RFC-271 批次 I 实测）
+
+`e2e/` **不在任何 package 的 `tsconfig.json` `include` 里**（backend 是
+`src|tests|db`，frontend 是 `src|tests|vite/vitest.config`），而 `gate:local`
+**不跑 Playwright**。两件事叠加的后果很具体：删掉一条路由后，e2e 里对它的调用
+**typecheck 看不见、lint 看不见、`gate:local` 全绿**，只有 CI 的 Playwright 腿会红。
+
+RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id/export`，
+三个 spec 仍在打前者（两个只是拿它当 fixture 装载手段，一个整文件测的就是这个能力），
+本地门禁一路绿到 push，CI 才炸。连实现门的「查批次 I 有没有遗留死引用」也只扫了前端
+源码，两边都漏了同一处。
+
+**定式**：删任何 HTTP 端点前，扫描面必须包含 `e2e/`：
+`grep -rn "<被删路径>" --include="*.ts" --include="*.tsx" . | grep -v node_modules`
+（别只 grep `packages/`）。删除对应的守卫测试也应把 e2e 纳入扫描（范例：
+`rfc271-capability-removal.test.ts` 的「已下线的端点不得有任何调用方（含 e2e）」）。
+
+顺带两条：
+
+- e2e 只能用**根** `package.json` 的依赖（它在仓库根运行，不属于任何 workspace
+  package）。要用 `yaml` 这类库得先加到根 `devDependencies`，否则运行时 resolve 失败
+  而本地 typecheck 完全不报（因为根本没检查 e2e）。
+- e2e 里装载 fixture 应走**公开 API**，不要 import backend 的服务函数——那会让 e2e
+  依赖一条产品上可能已不存在的路径，下次删它时 e2e 又红在与被测行为无关的地方。
+
 ## 给模型的 prompt 就是生产代码（RFC-234 intentDoc 实测）
 
 - **prompt 要过实现门，理由和代码一样硬**：2026-08-08 那轮 Codex 实现门报的 7 条里，两条 P1 **都在 doc 里**，不在代码里——INTENT.md 不是文档，是生成模型唯一读到的规格，一句措辞不当等价于一个 API 契约写错。

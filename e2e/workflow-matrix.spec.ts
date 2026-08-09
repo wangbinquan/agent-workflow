@@ -1,8 +1,9 @@
 // End-to-end workflow catalog.
 //
-// Every definition under examples/workflows/e2e is imported through the
-// public YAML endpoint, validated at an exact revision, and (except for the
-// intentional static-invalid fixture) launched through POST /api/tasks.
+// Every definition under examples/workflows/e2e is loaded through the public
+// POST /api/workflows endpoint (see workflow-fixtures.ts — the bare-YAML import
+// endpoint was retired by RFC-271 batch I), validated at an exact revision, and
+// (except for the intentional static-invalid fixture) launched via POST /api/tasks.
 // Execution uses the real daemon, SQLite, scheduler, wrapper scopes, git
 // worktrees and output parser. Only the external model is replaced by the
 // deterministic MATRIX_* OpenCode stub.
@@ -15,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { initGitRepo } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
+import { loadWorkflowFixture } from './workflow-fixtures'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const CATALOG_DIR = join(HERE, '..', 'examples', 'workflows', 'e2e')
@@ -298,18 +300,9 @@ test.beforeAll(async () => {
   }
 
   for (const file of CATALOG_FILES) {
-    const yamlText = readFileSync(join(CATALOG_DIR, file), 'utf-8')
-    const res = await apiFetch('/api/workflows/import', {
-      method: 'POST',
-      body: JSON.stringify({ yamlText, mode: 'fail' }),
-    })
-    await expectHttp(res, 201, `import ${file}`)
-    const result = (await res.json()) as {
-      outcome: 'created'
-      workflow: WorkflowRow
-    }
-    expect(result.outcome).toBe('created')
-    workflows.set(file, result.workflow)
+    // RFC-271 批次 I 下线了 `POST /api/workflows/import`；fixture 装载改走公开的
+    // `POST /api/workflows`，见 `workflow-fixtures.ts` 的说明。
+    workflows.set(file, await loadWorkflowFixture<WorkflowRow>(apiFetch, join(CATALOG_DIR, file)))
   }
 })
 

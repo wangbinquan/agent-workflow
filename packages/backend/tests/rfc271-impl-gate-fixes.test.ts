@@ -240,13 +240,52 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
 })
 
 describe('P1-1 · 写权限点表两头受检', () => {
+  // ⚠️ 断言锚在**契约**上，不锚文件路径。这张表最初写在 `preview.ts`，并发 session
+  // 正把它抽成共享的 `importPermissions.ts`（preview 与 commit 共用同一个预言——路由
+  // 中间件无从知道一个包会碰哪几类资源，而 commit 必须拿它当时的 Actor 再算一遍）。
+  // 抽取是对的，守卫不该因为「文件搬了家」而红。
+  const PERMISSION_SOURCES = [
+    'src/services/resourcePackage/preview.ts',
+    'src/services/resourcePackage/importPermissions.ts',
+  ]
+  const permissionSource = (): string =>
+    PERMISSION_SOURCES.map((p) => {
+      try {
+        return read(p)
+      } catch {
+        return ''
+      }
+    }).join('\n')
+
   test('六类齐全且点位名字来自 Permission 联合（打错字编译失败）', () => {
-    const src = read('src/services/resourcePackage/preview.ts')
-    expect(src).toContain('Record<AclResourceType, { create: Permission; update: Permission }>')
+    const src = permissionSource()
+    // `Record<AclResourceType, …>` 保证六类一个不漏；值标 `Permission` 保证点位真存在。
+    expect(src).toContain('AclResourceType')
+    expect(src).toContain('{ create: Permission; update: Permission }')
     for (const t of ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups']) {
       expect(src).toContain(`create: '${t}:create'`)
       expect(src).toContain(`update: '${t}:update'`)
     }
+  })
+
+  test('缺写权限时有硬拒（不是静默跳过那一条）', () => {
+    // 同样不锚位置：硬拒最初在预检整包抛出，现正被移到提交期（预检改成逐条标注
+    // `missingPermissions`，让用户先看到缺什么全貌）。两种形态都满足用户定的
+    // 「令牌有写权限才能导入」，守卫要的是**这条拒绝存在**。
+    const sources = [
+      'src/services/resourcePackage/preview.ts',
+      'src/services/resourcePackage/commit.ts',
+      'src/services/resourcePackage/importPermissions.ts',
+    ]
+      .map((p) => {
+        try {
+          return read(p)
+        } catch {
+          return ''
+        }
+      })
+      .join('\n')
+    expect(sources).toContain('package-write-forbidden')
   })
 })
 

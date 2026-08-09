@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { initGitRepo, runGit } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
+import { loadWorkflowFixture } from './workflow-fixtures'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BUSINESS_DIR = join(HERE, '..', 'examples', 'workflows', 'business')
@@ -210,20 +211,9 @@ test.beforeAll(async () => {
   }
 
   for (const file of WORKFLOW_FILES) {
-    const response = await apiFetch('/api/workflows/import', {
-      method: 'POST',
-      body: JSON.stringify({
-        yamlText: readFileSync(join(BUSINESS_DIR, file), 'utf-8'),
-        mode: 'fail',
-      }),
-    })
-    await expectHttp(response, 201, `import ${file}`)
-    const result = (await response.json()) as {
-      outcome: 'created'
-      workflow: WorkflowRow
-    }
-    expect(result.outcome).toBe('created')
-    workflows.set(file, result.workflow)
+    // RFC-271 批次 I 下线了 `POST /api/workflows/import`（裸 YAML 导入）；fixture
+    // 装载改走公开的 `POST /api/workflows`，见 `workflow-fixtures.ts` 的说明。
+    workflows.set(file, await loadWorkflowFixture<WorkflowRow>(apiFetch, join(BUSINESS_DIR, file)))
   }
 })
 

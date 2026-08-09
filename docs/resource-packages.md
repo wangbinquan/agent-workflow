@@ -135,8 +135,13 @@ symlink 逃逸在导出这条路径上被挡住：技能目录里一个 `secret 
 预检把每个 human 成员列成一个待映射的槽，导入方逐个选绑到哪个本地用户，或选**不加入**。
 本地恰好有同名 active 用户时预填为建议值，但仍要用户拍板——同名不等于同一个人。
 
-例外：`leader_worker` 模式的 leader 槽**不允许跳过**（没有 leader 的组根本起不了），
-留空提交会被 `package-human-mapping-required` 拒。
+映射**只对真正会落地的工作组要求**：选了 `reuse` 的工作组不产 op、不写任何成员行，
+所以既不要求映射、也不消费客户端附带的映射。
+
+槽位上的 `required` 字段是**兼容既有 wire 契约**的遗留位，当前合法包里恒为 `false`：
+canonical 工作组要求 leader 必须是 **agent 成员**（`schemas/workgroup.ts` 的
+`leader must be an agent member`），所以 human 槽不可能是 leader。读旧 preview token 时
+仍按其中的值执行必填约束（`package-human-mapping-required`）。
 
 映射的**候选基线**同样进 `previewToken` 签名面。不签它，客户端就能把某个成员映射到一个
 预检里从未列为候选的 user id——与下面 `expect` 那一版绕法同构。
@@ -214,7 +219,7 @@ agent-workflow package import --as-user <u> --file <f.zip>
 | `package-decision-duplicate`        | 同一条目给了多条决策（不靠「后写覆盖」收场）                        |
 | `package-root-changed`              | root 在你加载之后变了（`expectedVersion` / `expectedSnapshotHash`） |
 | `package-human-mapping-missing`     | 有 human 成员没给映射                                               |
-| `package-human-mapping-required`    | leader 槽不允许选「不加入」                                         |
+| `package-human-mapping-required`    | 槽位标了 `required` 却选了「不加入」（仅旧 token 可能触发）         |
 | `package-human-mapping-invalid`     | 映射目标不是 active 用户                                            |
 | `package-human-mapping-unconfirmed` | 映射的成员不在确认过的槽位里                                        |
 | `bundle-apply-unsettled`            | 同一 importId 有一次未结的尝试                                      |

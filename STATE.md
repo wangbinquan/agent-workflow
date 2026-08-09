@@ -118,7 +118,9 @@
 > - **P1-4 工作组导出恒为空**：开关是各自独立的 boolean 列、成员在 `workgroup_members` 表，
 >   而序列化器读的是并不存在的 `switchesJson` / `membersJson`。装载层统一补 `row.members`
 >   （下游三处只有一个来源）。**human 成员按用户决策改成「导入时逐个选映射」**：预检列槽 +
->   候选，映射基线一并进 `previewToken` 签名面，`leader_worker` 的 leader 槽不许跳过。
+>   候选，映射基线一并进 `previewToken` 签名面）。⚠️ 我最初写的「leader 槽不许跳过」是
+>   **事实错误**：canonical 工作组要求 leader 必须是 agent 成员，human 槽不可能是 leader；
+>   该约束现作为兼容旧 token 的遗留位保留，文档已更正。
 > - **P1-1 导入没有写权限门**：与用户定的「令牌有写权限才能导入，和界面操作一致」不符。
 >   `new` 要 `*:create`、`overwrite` 要 `*:update`、`reuse` 不需要（它一个字节都不写）；
 >   一个动作都不剩 ⇒ 整包拒绝。权限点用 `Record<AclResourceType, {create,update}>` 穷尽表。
