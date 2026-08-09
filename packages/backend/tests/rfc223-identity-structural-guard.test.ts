@@ -141,7 +141,15 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fNewExpression:be5e5774c05b6d80827e\u001f1\u001fowner-uniqueness\u001fnew Set( rows.filter((row) => row.ownerUserId === actor.user.id).map((row) => String(row.name)), )',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/commit.ts\u001fmakePackageProvider\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fbuiltin-binding\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/commit.ts\u001fmakePackageProvider\u001fCallExpression:6d6e7b35a37449eaae8f\u001f1\u001fbuiltin-binding\u001feq(table.name, ref.name)',
-  'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001ffindMissingBuiltins\u001fCallExpression:4043b162e7d295c80c13\u001f1\u001fbuiltin-binding\u001feq(table.name, want.name)',
+  // RFC-271 实现门第四轮 P2-3：`findMissingBuiltins` 从「逐个 built-in 一条 SQL」改成
+  // 「按类型批量查一次」。预检是**未认证内容驱动**的路径，逐项串行会让一个合法包
+  // （20000 个不同的 `builtin:agent/bN` 引用）跑出 20000 次串行查询。
+  // 身份判据**没有放宽**：仍是「同名 **且** `builtin = true`」，与导入期
+  // `resolveIdentityRef` 的 built-in 分支逐字一致；名字在这里是**跨实例可移植的身份**
+  // （源 id 在对端毫无意义），`builtin=true` 是额外的围栏，挡住用户自建的同名资源。
+  'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001ffindMissingBuiltins\u001fCallExpression:6713de1467924f734ae6\u001f1\u001fbuiltin-binding\u001finArray(table.name, [...names])',
+  // 同上：批量查回来之后按名字建集合做命中判定，`builtin === true` 的过滤就在表达式里。
+  'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001ffindMissingBuiltins\u001fNewExpression:dba7558a50eabb5aa94b\u001f1\u001fbuiltin-binding\u001fnew Set(rows.filter((row) => row.builtin === true).map((row) => String(row.name)))',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/cli/package.ts\u001frunExport\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:613b1a0045d8d1a4940b\u001f1\u001fportable-selector\u001fvisible.find((r) => r.id === idHint && rowName(r) === name)',
@@ -463,7 +471,11 @@ describe('RFC-223 T15 structural identity guard', () => {
     // RFC-271 built-in 预检：140 → 141。与 commit 的最终绑定使用同一判据，按
     // wire `(type,name)` 查找后仍要求 `builtin=true`；这里只把缺失提前到 preview，
     // commit 的 fail-closed 兜底不变。
-    expect(findings.length).toBe(141)
+    // RFC-271 实现门第四轮 P2-3：141 → 142。`findMissingBuiltins` 从「逐项串行查询」
+    // 改成「按类型批量查一次 + 按名字建命中集合」，于是**同一个身份判定拆成了两处
+    // sink**（`inArray(table.name, …)` 与 `new Set(rows.filter(builtin).map(name))`）。
+    // 数量加一**不代表放宽**：判据仍是「同名 **且** builtin=true」，与导入期逐字一致。
+    expect(findings.length).toBe(142)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three
