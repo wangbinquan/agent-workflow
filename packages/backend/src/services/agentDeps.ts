@@ -34,6 +34,7 @@ import type { DbClient } from '@/db/client'
 import { agents } from '@/db/schema'
 import { DomainError } from '@/util/errors'
 import { getAgentById } from './agent'
+import { runtimeIdRef, runtimeRefKey } from './ref/runtimeRef'
 
 export type DependsClosureResult =
   | { ok: true; agents: Agent[] }
@@ -71,7 +72,19 @@ export async function resolveDependsClosure(
   // (getAgentById) and the cycle path is expressed in ids. A rename never
   // re-routes a closure because ids are stable.
   const allowMissing = opts.call.onMissing === 'skip'
-  const visited = new Map<string, Agent>([[root.id, root]])
+  // RFC-271 决策 29（T6f 的**第四处**）：去重键走 `runtimeRefKey`，与 skills /
+  // mcp / plugins 三处同源。
+  //
+  // 收益不在「今天会撞键」——`dependsOn` 数组里只有 agent 一种类型，跨类型碰撞在
+  // 这里不可能发生。收益在于 `runtimeIdRef` 的注释本来就把 dependsOn 算进「同一条
+  // 读取点」，而这个 BFS 却自带一套裸 id 去重：**注释声称覆盖、实际没接**，正是
+  // RFC-271 自己总结的那条根因（机制在 N 处各写一遍）的下一个复发位。接上之后
+  // 「引用身份只有一处定义」才真的成立。
+  //
+  // ⚠️ 只有**去重键**换成 canonical 形态；`path` / `cyclePath` 保持**裸 id**——
+  // 它们会进 HTTP 响应（`routes/agents.ts:459/564`）给人读。
+  const keyOf = (id: string): string => runtimeRefKey(runtimeIdRef('agent', id))
+  const visited = new Map<string, Agent>([[keyOf(root.id), root]])
   const order: Agent[] = [root]
   const queue: Array<{ id: string; path: string[] }> = []
   for (const dep of root.dependsOn) {
@@ -88,7 +101,7 @@ export async function resolveDependsClosure(
     if (cycleIdx >= 0) {
       return { ok: false, cyclePath: [...path.slice(cycleIdx), id] }
     }
-    if (visited.has(id)) continue
+    if (visited.has(keyOf(id))) continue
     const agent = await getAgentById(db, id)
     if (agent === null) {
       if (allowMissing) continue
@@ -96,7 +109,7 @@ export async function resolveDependsClosure(
         notFound: [id],
       })
     }
-    visited.set(id, agent)
+    visited.set(keyOf(id), agent)
     order.push(agent)
     for (const next of agent.dependsOn) {
       queue.push({ id: next, path: [...path, id] })

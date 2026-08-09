@@ -108,6 +108,11 @@ export interface BundleApplyProvider {
    * 不写 roster，因此既不要求也不消费映射。
    */
   resolveHumanMember?(workgroupSlug: string, username: string): string | null
+  /**
+   * 框架 built-in 按**名字**绑到本实例自己 seed 的那一个。包里的 built-in 没有
+   * create op（导入侧自动忽略），引用靠这条解析；返回 null ⇒ 环境前提缺失。
+   */
+  resolveBuiltin?(type: AclResourceType, name: string): Promise<string | null>
 
   // ── 事务钩子。三个都在**同一个** big tx 内被调用（I7 / I13）。 ──
   /** claim 事务内的场景特有校验（intent 的 draft revision/hash）。 */

@@ -4,6 +4,10 @@
 // manifest-fenced operation and prove that an omitted credential cannot persist the package's
 // `<REDACTED:SECRET>` marker as if it were a real credential.
 
+//
+// 覆盖验收条款：AC-18（待填密钥逐条输入，留空则跳过并进导入报告）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import {
   BundleSchema,

@@ -5,6 +5,10 @@
 // 「那个名字到底存不存在」）。而只要 zip 里带了当前时间、或者条目顺序随 Map 遍历
 // 序漂移，这条断言就永远写不出来。所以时间戳与条目序都钉死。
 
+//
+// 覆盖验收条款：AC-23（formatVersion 高于本二进制 ⇒ 拒绝）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { decodeZip } from '../src/services/skill-zip'
 import { encodeZip } from '../src/util/zip'

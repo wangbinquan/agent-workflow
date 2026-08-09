@@ -11,7 +11,8 @@
 //     「复用**这一版**」——`revalidateInTx` 就是为这条存在的；留空则全 reuse 的包完全免检。
 
 //
-// 覆盖验收条款：AC-21（新建归导入者 + private + 零 grants）/ AC-24（内容级 exact token CAS） / AC-24e（稳定 importId 进 wire）/ AC-24h（reuse 目标在 big tx 内复核）
+// 覆盖验收条款：AC-21（新建归导入者 + private + 零 grants）/ AC-24（内容级 exact token CAS） / AC-24e（稳定 importId 进 wire）/ AC-24h（reuse 目标在 big tx 内复核） / AC-17（权限不满足 ⇒ 整包不可提交）/ AC-22（跨资源引用绑到本次导入结果）
+// 覆盖不变量：I6（CAS prepared→applying 之后、任何 commit 内核之前的二次校验 —— reuse 目标的 revalidateInTx）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { describe, expect, test } from 'bun:test'

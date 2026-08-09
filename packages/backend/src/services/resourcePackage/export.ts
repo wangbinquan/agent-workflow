@@ -146,7 +146,16 @@ export function buildManifest(
     // ⚠️ 清单里**没有** owner / visibility / grant —— 决策 4/12：包不带任何权属
     // 信息，导入后一切归导入者。带上它们只会诱导导入侧去「还原」一个在本实例上
     // 根本不存在的主体。
-    resources: closure.resources.map(bySlug),
+    // built-in **不入 resources**：它不产 op、导入侧自动忽略。列在下面的
+    // `builtins` 里，让导入方一眼看到「这个包依赖对端也有这几个框架内置」。
+    resources: closure.resources.filter((r) => r.builtin !== true).map(bySlug),
+    /** 框架内置依赖：导入时按**名字**绑到对端自己 seed 的那一个，不会被复制。 */
+    builtins: closure.resources
+      .filter((r) => r.builtin === true)
+      .map((r) => ({ type: r.type, name: r.name }))
+      .sort((a, b) =>
+        a.type === b.type ? a.name.localeCompare(b.name) : a.type.localeCompare(b.type),
+      ),
     requirements: collectRequirements(closure, serialized),
     /** 被脱敏的字段清单：**只有位置，没有值**。导入方据此知道要补哪些凭据。 */
     secrets: serialized.secrets,

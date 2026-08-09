@@ -41,7 +41,21 @@ export interface ClosureResource {
   row: Record<string, unknown>
   /** 谁把它拉进闭包的（`<type>:<id>`）。同名冲突的报错要点名这个。 */
   referencedBy: string[]
+  /**
+   * 框架 built-in（`agents` / `workflows` 两张表有这一列；owner 通常是 `__system__`）。
+   *
+   * **照常导出、标记出来、导入时自动忽略**：它在每个实例上都由框架自己 seed，
+   * 复制一份的结果是对端多出一个 owner 错、`builtin=false` 的同名副本，而真正的
+   * built-in 仍在那儿。所以它进包只为了**让引用能被解释**，不产 create op。
+   *
+   * 可选：缺省 = 不是 built-in。只有 `agents` / `workflows` 两张表有这一列，
+   * 其余四类永远走缺省。
+   */
+  builtin?: boolean
 }
+
+/** 只有 agents / workflows 两张表有 `builtin` 列；其余四类恒为 false。 */
+export const isBuiltinRow = (row: Record<string, unknown>): boolean => row.builtin === true
 
 export interface ClosureCallRef {
   /** 引用方 */
@@ -315,6 +329,7 @@ export async function walkExportClosure(
           name: rowName(row),
           row,
           referencedBy: [],
+          builtin: isBuiltinRow(row),
         }
         const from = frontier.find((f) => f.type === type && f.id === id)?.from
         if (from !== null && from !== undefined) resource.referencedBy.push(from)

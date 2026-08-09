@@ -57,6 +57,9 @@ export async function lowerBundlePayloads(
   const ctx: RefResolveCtx = {
     idOfSlug,
     resolveExternal: (ref, type) => provider.resolveExternal(ref, type),
+    ...(provider.resolveBuiltin === undefined
+      ? {}
+      : { resolveBuiltin: (type, name) => provider.resolveBuiltin!(type, name) }),
   }
 
   // call 目标要写「权威名字 + id hint」，所以需要 id → name。同包目标从 payload

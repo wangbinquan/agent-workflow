@@ -7,6 +7,10 @@
 //  ② **凭据的位置在包里、值不在包里**。
 //  ③ **同一份闭包导出两次逐字节相同**（AC-7b 的前提，见 `encodeZip`）。
 
+//
+// 覆盖验收条款：AC-10（requirements 分段列出导入方需自备的东西）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'

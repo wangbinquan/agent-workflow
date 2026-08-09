@@ -17,6 +17,10 @@
 // 新增资源类型 / 新增字段时，请在这里补一条对应的往返断言——而不是只补一个喂
 // fake row 的单测。
 
+//
+// 覆盖验收条款：AC-5（技能带整棵文件树）/ AC-9（builtin 不入 resources，只入 builtins 声明）/ AC-19（工作组人类席位按 username 映射）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -27,7 +31,15 @@ import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, mcps, skills, users, workgroupMembers, workgroups } from '../src/db/schema'
+import {
+  agents,
+  mcps,
+  skills,
+  users,
+  workflows,
+  workgroupMembers,
+  workgroups,
+} from '../src/db/schema'
 import { decodeZip } from '../src/services/skill-zip'
 import { createManagedSkillWithFiles } from '../src/services/skill'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
@@ -419,6 +431,207 @@ describe('R0 · 写权限（用户规则：令牌有写权限才能导入，和�
             decisions: [{ localSlug: preview.entries[0]!.localSlug, action: 'new' }],
           }),
         ).rejects.toThrow(/new/)
+      } finally {
+        removeTempDirSync(dst.appHome)
+      }
+    } finally {
+      removeTempDirSync(src.appHome)
+    }
+  })
+})
+
+describe('R0 · 导出产物与源系统 id 无关（导入后由新实例重建 id）', () => {
+  test('完整闭包导出：bundle.json 里既无 `external:` 也无任何源 ULID', async () => {
+    // 这是包能跨实例搬运的**前提**：包内身份只用 `local:<slug>`，源库的 ULID 在另一
+    // 台机器上没有任何意义。
+    //
+    // ⚠️ 守的是一条**静默**失败：`refWire` 在「引用不在闭包里」时会退回
+    // `external:<源 id>`（serialize.ts）。闭包完整时它永远走不到，可一旦
+    // `directRefsOf` 将来漏掉某类引用出边，导出就会**不报错地**产出一个带源库 id
+    // 的包——导入侧解析那个 id 要么失败、要么撞上同 id 的无关资源。
+    const src = await makeInstance()
+    const { skillId, wg } = await seedSource(src.db, src.appHome)
+    try {
+      const agentRow = src.db.select().from(agents).where(eq(agents.name, 'auditor')).get()
+      const wfRow = { id: wg } // workgroup 也走同一条断言
+      for (const root of [
+        { type: 'agent' as const, id: agentRow!.id },
+        { type: 'skill' as const, id: skillId },
+        { type: 'workgroup' as const, id: wfRow.id },
+      ]) {
+        const pkg = await exportResourcePackage(src.db, actorOf('u1'), root, {
+          appHome: src.appHome,
+        })
+        const bundle = new TextDecoder().decode(
+          decodeZip(pkg.zip)
+            .find((e) => e.path === 'bundle.json')!
+            .bytes(),
+        )
+        expect({ root: root.type, hasExternal: bundle.includes('external:') }).toEqual({
+          root: root.type,
+          hasExternal: false,
+        })
+        // 闭包里每个资源的**源 id** 都不得出现在包里。
+        for (const r of src.db.select().from(agents).all()) {
+          expect({ root: root.type, leaked: bundle.includes(r.id) }).toEqual({
+            root: root.type,
+            leaked: false,
+          })
+        }
+      }
+    } finally {
+      removeTempDirSync(src.appHome)
+    }
+  })
+})
+
+describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动忽略', () => {
+  // 用户拍板的语义。反面是**复制一份**：对端会多出一个 owner 是导入者、
+  // `builtin=false` 的同名副本，而真正的 built-in 仍在那儿 —— 两个同名资源共存，
+  // 正好撞上运行时「执行闭包内不得同名」那条约束。
+  const seedBuiltin = async (db: DbClient): Promise<void> => {
+    await db.insert(agents).values({
+      id: 'BUILTIN_AGENT',
+      name: '__skill_merger__',
+      description: '',
+      outputs: '[]',
+      permission: '{}',
+      skills: '[]',
+      dependsOn: '[]',
+      mcp: '[]',
+      plugins: '[]',
+      frontmatterExtra: '{}',
+      bodyMd: '',
+      ownerUserId: '__system__',
+      visibility: 'public',
+      builtin: true,
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+  }
+
+  test('导出：built-in 不入 ops / resources，只入 manifest.builtins，引用改写成 builtin:', async () => {
+    const src = await makeInstance()
+    await seedBuiltin(src.db)
+    await src.db.insert(workflows).values({
+      id: 'WF',
+      name: 'mine',
+      description: '',
+      definition: JSON.stringify({
+        $schema_version: 4,
+        inputs: [],
+        edges: [],
+        nodes: [{ id: 'n1', kind: 'agent-single', agentId: 'BUILTIN_AGENT' }],
+      }),
+      ownerUserId: 'u1',
+      visibility: 'private',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    try {
+      const pkg = await exportResourcePackage(
+        src.db,
+        actorOf('u1'),
+        { type: 'workflow', id: 'WF' },
+        { appHome: src.appHome },
+      )
+      const entry = (p: string): string =>
+        new TextDecoder().decode(
+          decodeZip(pkg.zip)
+            .find((e) => e.path === p)!
+            .bytes(),
+        )
+      const bundle = entry('bundle.json')
+      const manifest = entry('manifest.yaml')
+
+      // built-in 没有 create op —— 导入侧因此「自动忽略」它。
+      expect(bundle).not.toContain('agent-create')
+      // 引用改写成按名字，而不是 local:（会复制）或 external:<源 id>（对端无意义）。
+      expect(bundle).toContain('builtin:agent/__skill_merger__')
+      expect(bundle).not.toContain('BUILTIN_AGENT')
+      // manifest：不在 resources、在 builtins。
+      expect(manifest).toContain('builtins')
+      const resourcesSection = manifest.slice(
+        manifest.indexOf('resources:'),
+        manifest.indexOf('builtins:'),
+      )
+      expect(resourcesSection).not.toContain('__skill_merger__')
+    } finally {
+      removeTempDirSync(src.appHome)
+    }
+  })
+
+  test('导入：绑到对端自己 seed 的 built-in，不新建副本', async () => {
+    const src = await makeInstance()
+    await seedBuiltin(src.db)
+    await src.db.insert(workflows).values({
+      id: 'WF',
+      name: 'mine',
+      description: '',
+      definition: JSON.stringify({
+        $schema_version: 4,
+        inputs: [],
+        edges: [],
+        nodes: [{ id: 'n1', kind: 'agent-single', agentId: 'BUILTIN_AGENT' }],
+      }),
+      ownerUserId: 'u1',
+      visibility: 'private',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    try {
+      const pkg = await exportResourcePackage(
+        src.db,
+        actorOf('u1'),
+        { type: 'workflow', id: 'WF' },
+        { appHome: src.appHome },
+      )
+      const dst = await makeInstance()
+      // 对端有它**自己的** built-in，id 与源库完全不同。
+      await dst.db.insert(agents).values({
+        id: 'DST_BUILTIN',
+        name: '__skill_merger__',
+        description: '',
+        outputs: '[]',
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
+        ownerUserId: '__system__',
+        visibility: 'public',
+        builtin: true,
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      try {
+        const parsed = await parseResourcePackage(pkg.zip)
+        const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+          box,
+          importId: ulid(),
+        })
+        // built-in 不产 op ⇒ 它根本不出现在需要用户决策的条目里（「自动忽略」）。
+        expect(preview.entries.map((e) => e.name)).not.toContain('__skill_merger__')
+
+        await commitResourcePackage({ db: dst.db, appHome: dst.appHome, box }, actorOf('u1'), {
+          pkg: parsed,
+          previewToken: preview.previewToken,
+          decisions: preview.entries.map((e) => ({
+            localSlug: e.localSlug,
+            action: 'new' as const,
+            finalName: e.suggestedName,
+          })),
+        })
+
+        // 没有多出副本：仍然只有对端那一个 built-in。
+        const merged = dst.db.select().from(agents).all()
+        expect(merged).toHaveLength(1)
+        expect(merged[0]!.id).toBe('DST_BUILTIN')
+        // 工作流的节点绑到了**对端**的 id。
+        const wf = dst.db.select().from(workflows).where(eq(workflows.name, 'mine')).get()
+        expect(JSON.stringify(wf!.definition)).toContain('DST_BUILTIN')
       } finally {
         removeTempDirSync(dst.appHome)
       }

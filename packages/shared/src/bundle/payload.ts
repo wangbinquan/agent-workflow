@@ -29,12 +29,20 @@ import { WorkgroupModeSchema, WorkgroupSwitchesSchema } from '../schemas/workgro
 
 // --- 引用槽的 wire 形态（词法校验；语义解码在 ../ref/codecs） ---
 
-/** `local:<slug>` | `external:<token>` */
+/**
+ * `local:<slug>` | `external:<token>` | `builtin:<type>/<name>`
+ *
+ * 第三种是框架 built-in（`agents` / `workflows` 有 `builtin` 列，owner 通常
+ * `__system__`）。它**照常进包**（否则引用无从解释）但**不产 create op**，导入时
+ * 按名字绑到对端自己 seed 的那一个 —— 复制一份只会在对端多出 owner 错、
+ * `builtin=false` 的同名副本，而真正的 built-in 仍在原处。
+ */
 export const BundleIdentityRefWireSchema = z
   .string()
-  .regex(/^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128})$/, {
-    message: 'must be local:<slug> or external:<token>',
-  })
+  .regex(
+    /^(local:[a-z0-9][a-z0-9_-]{0,63}|external:[A-Za-z0-9._:#/-]{1,128}|builtin:(agent|workflow)\/.{1,256})$/,
+    { message: 'must be local:<slug>, external:<token> or builtin:<type>/<name>' },
+  )
 
 /** 上面两种 + `project:<name>`。**仅** agent 的 `skills` 槽（R8-P1-1）。 */
 export const BundleAgentSkillRefWireSchema = z

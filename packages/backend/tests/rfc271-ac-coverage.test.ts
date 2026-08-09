@@ -43,10 +43,30 @@ function declaredAcs(): string[] {
     for (const m of src.matchAll(/\*\*(AC-(?:[0-9]+|B[0-9]+|K[0-9]+)[a-z]?)\*\*/g)) {
       found.add(m[1]!)
     }
+    // **显式改判**的条款不再要求覆盖：`~~**AC-11**~~ 【已改判…】`。
+    // 这条出口是必要的——产品决策会取消某条 AC（AC-11 就是用户拍板「技能整棵树进包、
+    // 不设上限」取消的），逼着为一个**故意不实现**的行为写测试才是真的坏。
+    // ⚠️ 但它必须**显式**：删掉 AC 或悄悄改文案都不算，必须留下删除线 + 改判说明，
+    // 让下一个人看得见「这条为什么不见了」。
+    for (const m of src.matchAll(/~~\*\*(AC-[0-9A-Za-z]+)\*\*~~\s*\*\*【已改判/g)) {
+      found.delete(m[1]!)
+    }
   }
   return [...found].sort()
 }
 
+/**
+ * ⚠️ **语料必须限定在本 RFC 的测试内**，否则整条守卫是假绿的。
+ *
+ * AC 编号是**每个 RFC 各自的命名空间**：`rfc257-webhook-dispatch.test.ts` 里有
+ * `AC-14`，`rfc109-sync-task-workflow.test.ts` 里有 `AC-7`……全仓 `AC-1`…`AC-47`
+ * 被十几个 RFC 用过。第一版守卫扫了**所有**测试文件，于是 RFC-271 的 AC-1…AC-30
+ * 几乎全被别的 RFC 的同名编号顶替 —— 它报「62 条全部点名」，而限定语料后实测有
+ * **22 条根本没被点名**。跨 RFC 顶替比前缀顶替更隐蔽：编号完全相同，肉眼查不出来。
+ *
+ * 判据：文件名带 `rfc271`，或文件内容里出现 `RFC-271`（后者让前端 / e2e 里明确
+ * 声明服务于本 RFC 的测试也能算数）。
+ */
 function testCorpus(): string {
   const chunks: string[] = []
   for (const dir of TEST_DIRS) {
@@ -54,7 +74,9 @@ function testCorpus(): string {
     for (const name of readdirSync(dir)) {
       if (!name.endsWith('.ts') && !name.endsWith('.tsx')) continue
       if (name === SELF) continue // 自身不算证据，否则错误信息里的编号会自匹配
-      chunks.push(readFileSync(resolve(dir, name), 'utf8'))
+      const src = readFileSync(resolve(dir, name), 'utf8')
+      if (!name.includes('rfc271') && !src.includes('RFC-271')) continue
+      chunks.push(src)
     }
   }
   return chunks.join('\n')

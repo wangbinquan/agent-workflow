@@ -28,13 +28,13 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 **至少五条同一根因**：
 自造了仓里已有且已调试过的机制，且每次自造都恰好踩中那个机制当初为之而生的坑。
 
-| 我造的 | 仓里已有 | 自造版的缺陷 |
-|---|---|---|
-| 「FS 暂存 → DB 事务 → FS 入位」 | `stageManagedSkill` → `commitSkillReadyInTx` | 顺序反了，凭空造出「DB 已提交、FS 未发布」的不可收敛窗口 |
-| `packageResourceKey` 出现序号 | `IntentTempRefSchema`（`$new:<slug>`） | 序号随节点声明顺序漂移，manifest 又不拒重复 key |
-| 自建 import journal | `intentApplyJournal` | 无客户端幂等键、无 active lease，慢导入会被小时收敛器当成崩溃任务标 failed |
-| 预铸 id 解环 | `bundleCreatedNames` | 目标库存在不可见同名行时，环形包仍无首个可写入节点 |
-| 「复用 dump 脱敏函数」 | —— | `projectMcpForDump` 输出 `oauth:'‹redacted›'` 是**字符串**，直接违反 `McpRemoteConfigSchema` |
+| 我造的                          | 仓里已有                                     | 自造版的缺陷                                                                                 |
+| ------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 「FS 暂存 → DB 事务 → FS 入位」 | `stageManagedSkill` → `commitSkillReadyInTx` | 顺序反了，凭空造出「DB 已提交、FS 未发布」的不可收敛窗口                                     |
+| `packageResourceKey` 出现序号   | `IntentTempRefSchema`（`$new:<slug>`）       | 序号随节点声明顺序漂移，manifest 又不拒重复 key                                              |
+| 自建 import journal             | `intentApplyJournal`                         | 无客户端幂等键、无 active lease，慢导入会被小时收敛器当成崩溃任务标 failed                   |
+| 预铸 id 解环                    | `bundleCreatedNames`                         | 目标库存在不可见同名行时，环形包仍无首个可写入节点                                           |
+| 「复用 dump 脱敏函数」          | ——                                           | `projectMcpForDump` 输出 `oauth:'‹redacted›'` 是**字符串**，直接违反 `McpRemoteConfigSchema` |
 
 同时核实到：`applyIntentChangeset` 已经支持**六类资源 × create/update** 的绝大部分 op，且
 `IntentAgentPayloadSchema` / `IntentWorkflowPayloadSchema` 就是一份可移植资源表达——后者甚至
@@ -48,7 +48,7 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 
 1. **抽出一份平台级的资源 bundle 表达**（`ResourceBundle`）：六类资源的可移植 payload +
    引用域 + 操作集 + 落地引擎，与任何具体场景（intent / 配置包 / 未来的模板市场）解耦。
-1b. **统一引用模型**（决策 29）：把仓里**六套各自为政**的「怎么指向一个资源」合成一个
+   1b. **统一引用模型**（决策 29）：把仓里**六套各自为政**的「怎么指向一个资源」合成一个
    `ResourceRef`（形态集 + 域子集 + 解析契约）。**包括调度器的运行期解析**——用户观察
    「调度器的节点选择器和统一资源建模应该是一套东西」，核实属实。
 2. 在此之上交付**配置包**：六类资源皆可作根，递归闭包导出为 zip；导入走预检页逐条决策；
@@ -81,23 +81,23 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 2. 我把一个成熟审计代理分享给同事，包里自动带上它的技能与 `dependsOn` 子代理；同事导入时
    已有的同名 MCP 选「复用已有」，代理选「新建副本」。
 3. CI 里从 staging 同步到 prod：`export-package --as-user ci ...` → `import-package ...
-   --as-user deployer --plan > plan.yaml` → 人工复核 → `--apply plan.yaml`。
+--as-user deployer --plan > plan.yaml` → 人工复核 → `--apply plan.yaml`。
 4. 包里的 MCP 需要 `GITHUB_TOKEN`，那一项是脱敏占位，预检页在那条上直接给输入框，我当场填。
 
 ## 5. 能力影响清单（CLAUDE.md 规则 7 强制）
 
 沿用 v2 已获用户逐条确认的六条，**本版无新增收缩**：
 
-| # | 被关闭的能力 | 改后 | 受影响者 |
-|---|---|---|---|
-| **C1** | 工作流单文件 YAML 导出（`GET /api/workflows/:id/export`） | 端点下线，由 `export-package`（zip）取代 | curl 该端点解析 YAML 的自动化立即失效 |
-| **C2** | 裸 `.yaml` 导入（`POST /api/workflows/import` + 对话框） | 端点与对话框下线，导入只接受 zip | 手里只有旧 YAML 且源实例已不在的人没有导入路径 |
-| **C3** | 救援态「导出本地 YAML」（RFC-199 B2 纯浏览器端） | 删除 | 工作流被删后本地草稿只剩「另存副本」 |
-| **C4** | 无特权权限者导出含特权节点的工作流 | 422，**按节点类型分轴**判定 | 普通用户导不出含对应特权节点的工作流 |
-| **C5a** | 按 exact id 覆盖导入 | 改为按名字匹配 | 所有角色 |
-| **C5b** | 覆盖他人拥有的资源 | 仅对自己拥有的开放 | 仅 manager / admin |
-| **C6** | 导出传递不可见闭包的工作流 | 整体 422 并明确提示 | 代理可见但其 `dependsOn` 不可见者；这类工作流**仍可正常运行** |
-| **C7** 🆕 **（行为变更，非收缩）** | call 节点的启动目标解析 | ①工作组分支今天**只按名字**取最老可见行，`workgroupId` 存在却从不被读（`closure.ts:269-309`）→ 改为 id-cache 优先；②**冻结闭包从按名字键控改为按节点键控**（`FrozenCallClosure` 的两个 `Record<string,…>` 都是按 name，同名两节点因此落到同一条）→ 每节点各自冻结 | **两处变更**：(a) 无冲突时启动目标从「最老可见行」变成「你当初在下拉里选的那个」；(b) 同名两节点从「都跑同一个」变成「各跑各的」。二者都是用户存下 `workgroupId` 时的意图，但确实是变更，发布说明须点名。**存量任务零影响**：`parseCallClosure` 同时接受 v1 name-keyed 与 v2 node-keyed，零迁移 |
+| #                                  | 被关闭的能力                                              | 改后                                                                                                                                                                                                                                                              | 受影响者                                                                                                                                                                                                                                                                                        |
+| ---------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C1**                             | 工作流单文件 YAML 导出（`GET /api/workflows/:id/export`） | 端点下线，由 `export-package`（zip）取代                                                                                                                                                                                                                          | curl 该端点解析 YAML 的自动化立即失效                                                                                                                                                                                                                                                           |
+| **C2**                             | 裸 `.yaml` 导入（`POST /api/workflows/import` + 对话框）  | 端点与对话框下线，导入只接受 zip                                                                                                                                                                                                                                  | 手里只有旧 YAML 且源实例已不在的人没有导入路径                                                                                                                                                                                                                                                  |
+| **C3**                             | 救援态「导出本地 YAML」（RFC-199 B2 纯浏览器端）          | 删除                                                                                                                                                                                                                                                              | 工作流被删后本地草稿只剩「另存副本」                                                                                                                                                                                                                                                            |
+| **C4**                             | 无特权权限者导出含特权节点的工作流                        | 422，**按节点类型分轴**判定                                                                                                                                                                                                                                       | 普通用户导不出含对应特权节点的工作流                                                                                                                                                                                                                                                            |
+| **C5a**                            | 按 exact id 覆盖导入                                      | 改为按名字匹配                                                                                                                                                                                                                                                    | 所有角色                                                                                                                                                                                                                                                                                        |
+| **C5b**                            | 覆盖他人拥有的资源                                        | 仅对自己拥有的开放                                                                                                                                                                                                                                                | 仅 manager / admin                                                                                                                                                                                                                                                                              |
+| **C6**                             | 导出传递不可见闭包的工作流                                | 整体 422 并明确提示                                                                                                                                                                                                                                               | 代理可见但其 `dependsOn` 不可见者；这类工作流**仍可正常运行**                                                                                                                                                                                                                                   |
+| **C7** 🆕 **（行为变更，非收缩）** | call 节点的启动目标解析                                   | ①工作组分支今天**只按名字**取最老可见行，`workgroupId` 存在却从不被读（`closure.ts:269-309`）→ 改为 id-cache 优先；②**冻结闭包从按名字键控改为按节点键控**（`FrozenCallClosure` 的两个 `Record<string,…>` 都是按 name，同名两节点因此落到同一条）→ 每节点各自冻结 | **两处变更**：(a) 无冲突时启动目标从「最老可见行」变成「你当初在下拉里选的那个」；(b) 同名两节点从「都跑同一个」变成「各跑各的」。二者都是用户存下 `workgroupId` 时的意图，但确实是变更，发布说明须点名。**存量任务零影响**：`parseCallClosure` 同时接受 v1 name-keyed 与 v2 node-keyed，零迁移 |
 
 > **两条候选收缩经核实/决策后消解**：PAT 导入通道（是我把 `tokenAccess` 写成 `'never'` 写错
 > 了，`registry.ts:44-62` 写明该值只为 RFC-247 的 D5/D6 存在、创建资源不在其列，六类 create
@@ -169,8 +169,8 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
     - 受影响的运行期代码：`scheduler.ts` 的 `agentId` 裸读（`:5187` / `:6943` / `:6997`；
       ⚠️ v8 误列的 `:7226` 是 `markWrapperTerminal` 不是读取点）、`freezeCallClosure`、
       `detectCallCycles`、validator 闭包装载、runner 的技能/MCP/插件闭包组装。
-    ⚠️ **我明确提示过这是决策 23 那条已失败过一次的路**；用户在知悉后仍选择一次到位。
-    风险按 `plan.md` 的批次 A′ 独立成 commit 控制。
+      ⚠️ **我明确提示过这是决策 23 那条已失败过一次的路**；用户在知悉后仍选择一次到位。
+      风险按 `plan.md` 的批次 A′ 独立成 commit 控制。
 
 ### 6.4 范围决策（v4）
 
@@ -268,7 +268,11 @@ slot、finalName、session mutation 期间 409）。用户据此拍板**拆**：
 - **AC-9** builtin / `__system__` 资源不入 `resources`，只入 `builtins` 声明。
 - **AC-10** `requirements` 五段（runtimes / codeHosts / executables / pluginSources /
   projectSkills），**不含任何密钥**（插件 spec 在此处同样脱敏）。
-- **AC-11** 超 `SKILL_ZIP_LIMITS` 任一维度 → 422 并点名资源与维度。
+- ~~**AC-11**~~ **【已改判 2026-08-09，用户决策】** 原文：「超 `SKILL_ZIP_LIMITS` 任一维度
+  → 422 并点名资源与维度」。**取消**：用户就技能文件树导出明确拍板「整棵树进包，
+  **不设任何上限**」——一个技能带多大的辅助文件是作者的事，平台替他截断会产出一个
+  「看起来成功」的残包，比大包糟得多。导出侧因此**没有**体积门（`skillTree.ts` 一次
+  读完整棵树），本条不再作为验收条款。
 - **AC-12** 根资源沿用 exact-revision 保护，**六类都要且用各自的完整形态**（R4-P2-13）：
   工作流 / 工作组 `expectedVersion`；代理 `expectedUpdatedAt` **+ `expectedAclRevision`**
   （`agent.ts:414` 的正式 mutation revision 是这两个）；MCP / 插件 `expectedConfigHash`；

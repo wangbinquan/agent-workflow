@@ -63,6 +63,17 @@ export const PackageManifestSchema = z
     requirements: PackageRequirementsSchema,
     secrets: z.array(PackageSecretRefSchema),
     danglingCallRefs: z.array(z.unknown()).optional().default([]),
+    /**
+     * 框架 built-in 依赖（`builtin:<type>/<name>` 指向的那些）。它们**不入
+     * `resources`、不产 op**，导入时按名字绑到对端自己 seed 的那一个。
+     *
+     * `optional` 是为了**向后兼容**：这个字段之前的包没有它，那些包里也不会出现
+     * `builtin:` 引用，所以缺省空数组是安全的。
+     */
+    builtins: z
+      .array(z.object({ type: z.string(), name: z.string() }).strict())
+      .optional()
+      .default([]),
   })
   .strict()
 

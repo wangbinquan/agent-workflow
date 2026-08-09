@@ -71,7 +71,15 @@ const asRecord = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 
 /** 引用 wire：同包内 → `local:<slug>`；不在包里 → `external:<id>`。 */
-function refWire(slugOfId: ReadonlyMap<string, string>, id: string): string {
+function refWire(
+  slugOfId: ReadonlyMap<string, string>,
+  id: string,
+  builtinOfId: ReadonlyMap<string, { type: string; name: string }> = new Map(),
+): string {
+  // 框架 built-in：按**名字**指向对端自己 seed 的那一个。绝不能写成 `local:`
+  // （那会让导入侧复制一份）也不能写成 `external:<源 id>`（源库的 id 在对端无意义）。
+  const b = builtinOfId.get(id)
+  if (b !== undefined) return `builtin:${b.type}/${b.name}`
   const slug = slugOfId.get(id)
   return slug === undefined ? `external:${id}` : `local:${slug}`
 }
@@ -82,6 +90,11 @@ export function serializeClosure(
   skillTrees: ReadonlyMap<string, SkillTree> = new Map(),
 ): SerializedPackage {
   const slugOfId = assignSlugs(closure.resources)
+  // 框架 built-in：进包只为让引用可解释，**不产 create op**（导入侧自动忽略）。
+  const builtinOfId = new Map<string, { type: string; name: string }>()
+  for (const r of closure.resources) {
+    if (r.builtin === true) builtinOfId.set(r.id, { type: r.type, name: r.name })
+  }
   const secrets: PackageSecretRef[] = []
   // sink 按**资源**开一个（它带 resourceType / resourceName 上下文），产出汇总到
   // 同一个数组。⚠️ 只记**位置**，绝不记原值。
@@ -96,6 +109,9 @@ export function serializeClosure(
   const nextOpId = (): string => `op-${++opSeq}`
 
   for (const r of closure.resources) {
+    // built-in **不产 op**：每个实例上框架自己会 seed 它，复制一份只会在对端多出
+    // 一个 owner 错、`builtin=false` 的同名副本。引用方已改写成 `builtin:<type>/<name>`。
+    if (r.builtin === true) continue
     const slug = slugOfId.get(r.id)!
     const row = r.row
     switch (r.type) {
@@ -104,7 +120,7 @@ export function serializeClosure(
           const s = raw as { kind?: string; skillId?: string; name?: string }
           return s.kind === 'project'
             ? `project:${s.name ?? ''}`
-            : refWire(slugOfId, String(s.skillId ?? ''))
+            : refWire(slugOfId, String(s.skillId ?? ''), builtinOfId)
         })
         ops.push({
           opId: nextOpId(),
@@ -121,11 +137,13 @@ export function serializeClosure(
             ...(row.network === undefined || row.network === null ? {} : { network: row.network }),
             skills,
             dependsOn: (parseJson(row.dependsOn, []) as unknown[]).map((id) =>
-              refWire(slugOfId, String(id)),
+              refWire(slugOfId, String(id), builtinOfId),
             ),
-            mcp: (parseJson(row.mcp, []) as unknown[]).map((id) => refWire(slugOfId, String(id))),
+            mcp: (parseJson(row.mcp, []) as unknown[]).map((id) =>
+              refWire(slugOfId, String(id), builtinOfId),
+            ),
             plugins: (parseJson(row.plugins, []) as unknown[]).map((id) =>
-              refWire(slugOfId, String(id)),
+              refWire(slugOfId, String(id), builtinOfId),
             ),
             frontmatterExtra: redactFreeJson(
               parseJson(row.frontmatterExtra, {}),
@@ -218,6 +236,7 @@ export function serializeClosure(
               closure,
               r.id,
               sinkFor(r),
+              builtinOfId,
             ),
           },
         } as unknown as BundleOp)
@@ -236,7 +255,7 @@ export function serializeClosure(
           return m.memberType === 'agent'
             ? {
                 memberType: 'agent' as const,
-                agentRef: refWire(slugOfId, String(m.agentId ?? '')),
+                agentRef: refWire(slugOfId, String(m.agentId ?? ''), builtinOfId),
                 ...base,
               }
             : // human 成员带 **username**：本地 `user_id` 跨实例无意义，导入时由用户
@@ -335,12 +354,13 @@ function liftWorkflowDefinition(
   closure: ExportClosure,
   fromId: string,
   sink: RedactionSink,
+  builtinOfId: ReadonlyMap<string, { type: string; name: string }>,
 ): Record<string, unknown> {
   const nodes = Array.isArray(definition.nodes) ? definition.nodes : []
   const lifted = nodes.map((raw) => {
     const node = { ...asRecord(raw) }
     if (typeof node.agentId === 'string' && node.agentId.length > 0) {
-      node.agentRef = refWire(slugOfId, node.agentId)
+      node.agentRef = refWire(slugOfId, node.agentId, builtinOfId)
       delete node.agentId
     }
     for (const [kind, nameField, idField, refField] of [

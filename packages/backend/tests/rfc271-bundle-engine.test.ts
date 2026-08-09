@@ -12,7 +12,7 @@
 //   T12 每个 update 目标在事务内断言 owner ——— 「只能覆盖自己的」
 
 //
-// 覆盖验收条款：AC-15b（update 目标须归 actor 所有，最终事务拒伪造覆盖）/ AC-20b（pre-commit 失败零可见） / AC-24f（重放三态）/ AC-B4（承重不变量）/ AC-B4b（事务钩子）/ AC-B6（ops 可空）
+// 覆盖验收条款：AC-15b（update 目标须归 actor 所有，最终事务拒伪造覆盖）/ AC-20b（pre-commit 失败零可见） / AC-24f（重放三态）/ AC-B4（承重不变量）/ AC-B4b（事务钩子）/ AC-B6（ops 可空） / AC-20（任一步失败或 SIGKILL ⇒ 启动收敛能证明前滚还是回滚）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { afterEach, describe, expect, test } from 'bun:test'

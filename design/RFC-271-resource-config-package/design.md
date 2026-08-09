@@ -43,14 +43,14 @@ provider 接口预留事务钩子，使后续 RFC 迁 intent 时不必重构引�
 > **用户观察（2026-08-08）**：「调度器的节点选择器和统一资源建模应该是一套东西。」
 > 核实属实——「怎么指向一个资源」这一个概念，仓里有**六套各自为政的实现**：
 
-| # | 机制 | 用在 | 今天的形态 |
-|---|---|---|---|
-| 1 | `node.agentId` **裸字段读** | scheduler 派发：`scheduler.ts:5187` / `:6943` / `:6997` / `:7226` **四处各读各的** | id |
-| 2 | `workflowName` 权威 + `workflowId` cache | `freezeCallClosure` | name + id cache |
-| 3 | `agents.skills[] / mcp[] / plugins[] / dependsOn[]` | runner 组装 config | id 数组（skills 是判别联合） |
-| 4 | `IntentRef` | intent 的模型 wire | `res#<type>#<n>` handle / `$new:<slug>` tempRef |
-| 5 | `ImportRefSelector` | agent.md 导入边界 | name + ownerUsername |
-| 6 | `BundleRef` | 本 RFC 原方案 | local / external / name |
+| #   | 机制                                                | 用在                                                                               | 今天的形态                                      |
+| --- | --------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1   | `node.agentId` **裸字段读**                         | scheduler 派发：`scheduler.ts:5187` / `:6943` / `:6997` / `:7226` **四处各读各的** | id                                              |
+| 2   | `workflowName` 权威 + `workflowId` cache            | `freezeCallClosure`                                                                | name + id cache                                 |
+| 3   | `agents.skills[] / mcp[] / plugins[] / dependsOn[]` | runner 组装 config                                                                 | id 数组（skills 是判别联合）                    |
+| 4   | `IntentRef`                                         | intent 的模型 wire                                                                 | `res#<type>#<n>` handle / `$new:<slug>` tempRef |
+| 5   | `ImportRefSelector`                                 | agent.md 导入边界                                                                  | name + ownerUsername                            |
+| 6   | `BundleRef`                                         | 本 RFC 原方案                                                                      | local / external / name                         |
 
 **这个 session 查出的 bug 有一半根因就在这里**：机制 2 内部就不一致（工作流分支认 id cache、
 工作组分支压根不读 `workgroupId` —— 决策 28 修的正是它）；冻结闭包按 **name** 键控而节点带的是
@@ -86,20 +86,20 @@ type ResourceRef =
   | { k: 'project-skill'; name: string }   // 见 1.1b'
 ```
 
-| 域 | wire 编码 | 逐字保留 |
-|---|---|---|
-| `IntentRef` | `res#<type>#<n>` / **`$new:<slug>`** | ✅ `intentChangeset.ts:42-56` 不动 |
-| `BundleIdentityRef` / `BundleCallRef` | **`local:<slug>`** / `external:<token>` / `name:<type>/<name>` | ✅ 本 RFC 新定 |
-| `ImportSelectorRef` | `{type, name, ownerUsername?}` **对象**（`type` 必留） | ✅ `importRef.ts` 不动 |
-| `RuntimeRef` | 裸 ULID / 判别联合对象（见 1.1b'） | ✅ 存量 definition 与 `agents.*` 不动 |
-| `CallRef` | `{nodeId, workflowName, workflowId?}` **复合记录** | ✅ 见 1.1b |
+| 域                                    | wire 编码                                                      | 逐字保留                              |
+| ------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| `IntentRef`                           | `res#<type>#<n>` / **`$new:<slug>`**                           | ✅ `intentChangeset.ts:42-56` 不动    |
+| `BundleIdentityRef` / `BundleCallRef` | **`local:<slug>`** / `external:<token>` / `name:<type>/<name>` | ✅ 本 RFC 新定                        |
+| `ImportSelectorRef`                   | `{type, name, ownerUsername?}` **对象**（`type` 必留）         | ✅ `importRef.ts` 不动                |
+| `RuntimeRef`                          | 裸 ULID / 判别联合对象（见 1.1b'）                             | ✅ 存量 definition 与 `agents.*` 不动 |
+| `CallRef`                             | `{nodeId, workflowName, workflowId?}` **复合记录**             | ✅ 见 1.1b                            |
 
 **T6b/T6c 只能 alias 域 codec，不能 alias 单一字符串形态。**
 
 #### 1.1b `CallRef` 是**复合记录**，不是两种互斥形态（R7-P1-3 修正）
 
 `WorkflowCallRef` 的真实形状是 `{nodeId, workflowName, workflowId?}`，注释写着
-*name is authoritative, id is a cache*（`workflowCalls.ts:12-17`）。而 `freezeCallClosure`
+_name is authoritative, id is a cache_（`workflowCalls.ts:12-17`）。而 `freezeCallClosure`
 的判据是**一条复合行为**：id hint 命中**且该行仍带该名字**才用它，否则**回退到最老可见同名行**
 （`closure.ts:162-219`）。
 
@@ -141,10 +141,10 @@ W1**。name-only 一开始就错选 W1；id-only 会继续跟着已改名的 W2�
   ProjectSkillRef wire = "project:<name>"      // 与 local:/external:/name: 同族前缀
   ```
 
-  | 正式 `AgentSkillRef` | ↓ lowering（导出） | ↑ raising（导入） |
-  |---|---|---|
-  | `{kind:'managed', skillId}` | `local:<slug>`（闭包内）或 `external:<token>` | 解析出 id 后写回 **`{kind:'managed', skillId:<解析到的 id>}`** |
-  | `{kind:'project', name}` | **`project:<name>`** | **原样写回 `{kind:'project', name}`** ——**不走 `resolveExternal`、不查 ACL、不查 row**（它本来就没有行） |
+  | 正式 `AgentSkillRef`        | ↓ lowering（导出）                            | ↑ raising（导入）                                                                                        |
+  | --------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+  | `{kind:'managed', skillId}` | `local:<slug>`（闭包内）或 `external:<token>` | 解析出 id 后写回 **`{kind:'managed', skillId:<解析到的 id>}`**                                           |
+  | `{kind:'project', name}`    | **`project:<name>`**                          | **原样写回 `{kind:'project', name}`** ——**不走 `resolveExternal`、不查 ACL、不查 row**（它本来就没有行） |
 
   `project-skill` **只在这一个槽**合法（其余槽仍拒绝）。`requirements.projectSkills` 只是
   **环境要求声明**，**不能替代 payload 里的边**——两者都要有：边在 payload、要求在 manifest。
@@ -153,10 +153,10 @@ W1**。name-only 一开始就错选 W1；id-only 会继续跟着已改名的 W2�
 
   **`walkClosure` 对两个分支的规则（R10 补齐）**：
 
-  | 分支 | 入队遍历 | 查 row / ACL | 进 `(type,name)` 去重门 | 产出 |
-  |---|---|---|---|---|
-  | `managed` | ✅ | ✅ | ✅ | `resources` 条目 + payload 边 |
-  | **`project`** | ❌ **非资源叶子** | ❌ | ❌ | **payload 边** + `requirements.projectSkills`（**去重后**） |
+  | 分支          | 入队遍历          | 查 row / ACL | 进 `(type,name)` 去重门 | 产出                                                        |
+  | ------------- | ----------------- | ------------ | ----------------------- | ----------------------------------------------------------- |
+  | `managed`     | ✅                | ✅           | ✅                      | `resources` 条目 + payload 边                               |
+  | **`project`** | ❌ **非资源叶子** | ❌           | ❌                      | **payload 边** + `requirements.projectSkills`（**去重后**） |
 
   ⚠️ 不写死这条会出两种错（可复现）：代理 A 同时引用 managed `lint` 与 project `lint` ——
   若把 project 当普通技能边，要么查不到 row 误报 `package-export-ref-unavailable`，
@@ -165,13 +165,14 @@ W1**。name-only 一开始就错选 W1；id-only 会继续跟着已改名的 W2�
 
   **`managed` 的 `local:` / `external:` 选择规则（R10 补齐）**：
 
-  | 目标 | 编码 | 导入侧绑定 |
-  |---|---|---|
-  | 在本包闭包内 | `local:<slug>` | 绑到本次导入结果 |
-  | **builtin / `__system__`** | **`external:builtin/<type>/<name>`** | 按名字绑**目标实例的内置件**；本地没有 → 预检页报错（决策 6 已规定内置件只记依赖声明） |
-  | 闭包外且非 builtin | —— **不可能**：非 builtin 的可见依赖一定被 `walkClosure` 拉进闭包；不可见的在 §4.1 第一道门就 422 了 | —— |
+  | 目标                       | 编码                                                                                                 | 导入侧绑定                                                                             |
+  | -------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+  | 在本包闭包内               | `local:<slug>`                                                                                       | 绑到本次导入结果                                                                       |
+  | **builtin / `__system__`** | **`external:builtin/<type>/<name>`**                                                                 | 按名字绑**目标实例的内置件**；本地没有 → 预检页报错（决策 6 已规定内置件只记依赖声明） |
+  | 闭包外且非 builtin         | —— **不可能**：非 builtin 的可见依赖一定被 `walkClosure` 拉进闭包；不可见的在 §4.1 第一道门就 422 了 | ——                                                                                     |
 
   **并规定：T1 的 Bundle schema 是 T0a 域 codec 的 alias / re-export，不是第二套 parser。**（否则「归一化」在自己 RFC 内部就分叉了。）
+
 - ❌ 宣布 project 技能是「非资源 requirement」并退出「唯一 ResourceRef」承诺——那等于把
   归一化打了个洞，而洞正好在 runner 组装 config 的路径上。
 
@@ -180,11 +181,11 @@ W1**。name-only 一开始就错选 W1；id-only 会继续跟着已改名的 W2�
 只统一「引用长什么样」是个空壳——运行期的解析带着三条 authoring 侧没有的属性，必须一并进
 契约，否则合出来的东西表达不了 `freezeCallClosure`：
 
-| 属性 | 含义 | 谁需要 |
-|---|---|---|
-| **freeze** | 启动时快照，之后对该任务终身不变（`tasks.refClosureJson`） | CallRef |
-| **launch-ACL** | 可见性按**启动者**判定，而非保存者 | CallRef |
-| **dangle** | 保存时允许解析不到，启动才 fail closed | CallRef 的 `name` 形态 |
+| 属性           | 含义                                                       | 谁需要                 |
+| -------------- | ---------------------------------------------------------- | ---------------------- |
+| **freeze**     | 启动时快照，之后对该任务终身不变（`tasks.refClosureJson`） | CallRef                |
+| **launch-ACL** | 可见性按**启动者**判定，而非保存者                         | CallRef                |
+| **dangle**     | 保存时允许解析不到，启动才 fail closed                     | CallRef 的 `name` 形态 |
 
 **三条静态属性不够**（R7-P1-5）。同一个 ref、同一个域，行为仍随**调用目的**而变：
 
@@ -231,26 +232,26 @@ interface RefResolution<T> {
 
 **用户决策 28**：跑我选的那个，且同名两节点各自生效。落法：
 
-| 项 | 内容 |
-|---|---|
-| 判据 | 与工作流分支同构：id hint 命中**且该行仍带该选择器名字**才用，否则回退最老可见行。即 §1.1b 的复合 `CallRef` 语义，**不在别处再抄一份** |
-| 形状 | **`Record<sourceScopedKey, FrozenXxxRef>`**，key = `` `${sourceWorkflowId}#${nodeId}` ``。⚠️ **不能只用 nodeId**（R7-P1-4）：节点 id 只在**单份 definition 内**唯一（`workflow.validator.ts:574-588` 只查单份内重复），传递闭包里两个不同工作流都用 `call-1` 是合法的，扁平 `Record<nodeId,…>` 必有一条被覆盖 |
-| 消费者 | **五处**（R8-P1-2；v8 写两处、v9 写三处，都少了）——见下表 |
-| 存量兼容 | `parseCallClosure` 带 `closureVersion` 判别，无该字段即 v1 name-keyed；**三个消费者全部双读** v1/v2 ⇒ 存量任务零影响、零迁移 |
-| 快照 | grants + workgroup row + member rows 必须在**同一个 `dbTxSync`** 里读（R6-P2-1），否则「判据通过时它还叫 audit、冻结的却已改名」 |
-| **归属** | 完整落在**批次 A′ 的 T6e**。⚠️ v8 里 T17b 与回滚说明把它归批次 C，与「scheduler 热路径独立可回滚」自相矛盾，已移除重复所有权 |
+| 项       | 内容                                                                                                                                                                                                                                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 判据     | 与工作流分支同构：id hint 命中**且该行仍带该选择器名字**才用，否则回退最老可见行。即 §1.1b 的复合 `CallRef` 语义，**不在别处再抄一份**                                                                                                                                                                        |
+| 形状     | **`Record<sourceScopedKey, FrozenXxxRef>`**，key = `` `${sourceWorkflowId}#${nodeId}` ``。⚠️ **不能只用 nodeId**（R7-P1-4）：节点 id 只在**单份 definition 内**唯一（`workflow.validator.ts:574-588` 只查单份内重复），传递闭包里两个不同工作流都用 `call-1` 是合法的，扁平 `Record<nodeId,…>` 必有一条被覆盖 |
+| 消费者   | **五处**（R8-P1-2；v8 写两处、v9 写三处，都少了）——见下表                                                                                                                                                                                                                                                     |
+| 存量兼容 | `parseCallClosure` 带 `closureVersion` 判别，无该字段即 v1 name-keyed；**三个消费者全部双读** v1/v2 ⇒ 存量任务零影响、零迁移                                                                                                                                                                                  |
+| 快照     | grants + workgroup row + member rows 必须在**同一个 `dbTxSync`** 里读（R6-P2-1），否则「判据通过时它还叫 audit、冻结的却已改名」                                                                                                                                                                              |
+| **归属** | 完整落在**批次 A′ 的 T6e**。⚠️ v8 里 T17b 与回滚说明把它归批次 C，与「scheduler 热路径独立可回滚」自相矛盾，已移除重复所有权                                                                                                                                                                                  |
 
 #### 1.1c'' 边身份契约：`resolveEdge(sourceWorkflowId, CallRef)`（R8-P1-2）
 
 **只换 `Record` 的 key 兑现不了 C7。** 图上的每一条 call 边都要能被独立定位，而现在有两条
 生产路径仍在**按名字折叠**：
 
-| # | 消费者 | 现状 | 必须改成 |
-|---|---|---|---|
-| 1-2 | `scheduler.ts:2966-2968` 主消费 ×2 | 按 name 取 | 按 `sourceWorkflowId#nodeId` |
-| 3 | `childClosureSubset`（`closure.ts:103-131`） | 只收 definition、内部按 name BFS | 收 `sourceWorkflowId`，按边遍历。调用点已持有 `frozen.id` 却没传（`scheduler.ts:3732,3811,3851`） |
-| **4** | **`detectCallCycles`（`workflowCalls.ts:88-101`）** | resolver 签名是 **`(name: string)`**，把 `nodeId` 与 `workflowId` **整个丢掉** | 签名收完整 `CallRef` + source id——否则**表示不了「同名两条指向不同目标的边」** |
-| **5** | **`loadCallWorkflowClosure`（`workflow.validator.ts:207-255`）** + 其消费点（`:563-571` / `:830-840` / `:2709-2719`） | 按 name 取**最老行** | 采用与启动**同一条** id-hint-first 判据 |
+| #     | 消费者                                                                                                                | 现状                                                                           | 必须改成                                                                                          |
+| ----- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| 1-2   | `scheduler.ts:2966-2968` 主消费 ×2                                                                                    | 按 name 取                                                                     | 按 `sourceWorkflowId#nodeId`                                                                      |
+| 3     | `childClosureSubset`（`closure.ts:103-131`）                                                                          | 只收 definition、内部按 name BFS                                               | 收 `sourceWorkflowId`，按边遍历。调用点已持有 `frozen.id` 却没传（`scheduler.ts:3732,3811,3851`） |
+| **4** | **`detectCallCycles`（`workflowCalls.ts:88-101`）**                                                                   | resolver 签名是 **`(name: string)`**，把 `nodeId` 与 `workflowId` **整个丢掉** | 签名收完整 `CallRef` + source id——否则**表示不了「同名两条指向不同目标的边」**                    |
+| **5** | **`loadCallWorkflowClosure`（`workflow.validator.ts:207-255`）** + 其消费点（`:563-571` / `:830-840` / `:2709-2719`） | 按 name 取**最老行**                                                           | 采用与启动**同一条** id-hint-first 判据                                                           |
 
 #### 1.1c''' 三个验证语境，「同一行」不是无条件不变量（R9-P1-3）
 
@@ -261,11 +262,11 @@ interface RefResolution<T> {
 
 v10 只说「validator 改用同一条 id-hint-first 判据」是不够的。三个语境各自定死：
 
-| 语境 | Actor | 数据源 | 性质 |
-|---|---|---|---|
-| **编辑器 / 保存期校验** | **保存者** | live DB | **advisory**（明确写进文案）——它证明不了启动时会绑到哪一行 |
-| **根任务启动** | 启动者 | 由启动者**解析并冻结一次**，**再用同一份 frozen result 做校验** | 权威 |
-| **子任务启动** | 继承 | **直接用继承的 v1/v2 closure subset**，**不重查 live** | 权威 |
+| 语境                    | Actor      | 数据源                                                          | 性质                                                       |
+| ----------------------- | ---------- | --------------------------------------------------------------- | ---------------------------------------------------------- |
+| **编辑器 / 保存期校验** | **保存者** | live DB                                                         | **advisory**（明确写进文案）——它证明不了启动时会绑到哪一行 |
+| **根任务启动**          | 启动者     | 由启动者**解析并冻结一次**，**再用同一份 frozen result 做校验** | 权威                                                       |
+| **子任务启动**          | 继承       | **直接用继承的 v1/v2 closure subset**，**不重查 live**          | 权威                                                       |
 
 两条可复现（都是 v10 没处理的）：
 
@@ -282,8 +283,8 @@ v10 只说「validator 改用同一条 id-hint-first 判据」是不够的。三
 
 **第 5 条是硬约束，不是可选项。** 该函数的注释写明了一个不变量：
 
-> *Duplicate names resolve DETERMINISTICALLY: oldest row wins — **the exact rule
-> freezeCallClosure applies, so editor preview and launch bind the same row.***
+> \*Duplicate names resolve DETERMINISTICALLY: oldest row wins — **the exact rule
+> freezeCallClosure applies, so editor preview and launch bind the same row.\***
 
 决策 28 把启动改成 id 优先，**就破了这条不变量**——除非 validator 一起改（且按上表限定为
 **同 actor 同数据源**时才成立）。不改的后果可复现：
@@ -307,11 +308,11 @@ W1（旧）/ W2（新）都叫 `audit`，根 R 有 `c1={name:'audit',idHint:W1}`
 
 **dangling 在产物里的表示**（此前未定义）：
 
-| 位置 | 形态 |
-|---|---|
-| bundle payload | 保留 **`name:<type>/<name>`** late-bound 形态（不写 id cache） |
-| `manifest.ambiguousCallRefs` | `{fromKey, nodeId, name, candidateCount: 0, chosenKey: null}` |
-| `README.md` | 「以下 call 目标在本实例未解析，导入后需自行提供」警示段 |
+| 位置                         | 形态                                                           |
+| ---------------------------- | -------------------------------------------------------------- |
+| bundle payload               | 保留 **`name:<type>/<name>`** late-bound 形态（不写 id cache） |
+| `manifest.ambiguousCallRefs` | `{fromKey, nodeId, name, candidateCount: 0, chosenKey: null}`  |
+| `README.md`                  | 「以下 call 目标在本实例未解析，导入后需自行提供」警示段       |
 
 **第 6 条是本 RFC 自己造的**（R9-P1-2）：我在同一份设计里既加了
 `package-duplicate-resource-name` 去重门，又写了一个按名字折叠的闭包遍历器。可复现：W1/W2
@@ -338,22 +339,31 @@ slug 由**导出侧显式分配并写进 manifest**，不是从声明顺序派�
 
 从 `Intent*PayloadSchema` 泛化（去掉给模型看的约束文案与 session 概念，补上包需要的字段）：
 
-| payload | 泛化自 | 变更 |
-|---|---|---|
-| `BundleAgentPayload` | `IntentAgentPayloadSchema` | `dependsOn/mcp/plugins` 用 `BundleIdentityRef`；**`skills` 用专属 `BundleAgentSkillRef`**（含 `project:` 分支，见 §1.1b'） |
-| `BundleSkillPayload` | `IntentSkillPayloadSchema` | 文件树条目改为**外部载体引用**（`files: { path, ref }[]`，`ref` 指向包内路径 / intent 的内联内容），因为技能文件可能是二进制 |
-| `BundleMcpPayload` | `IntentMcpPayloadSchema` | 保留 `McpLocalConfig` / `McpRemoteConfig` **原结构**（见 §4.2 脱敏必须 schema-valid） |
-| `BundlePluginPayload` | `IntentPluginPayloadSchema` | 同上 |
-| `BundleWorkflowPayload` | `IntentWorkflowPayloadSchema` | `agentRef` / `call-*` 目标改为 `BundleRef` |
-| `BundleWorkgroupPayload` | `IntentWorkgroupPayloadSchema` | **人类成员补 `username`**（intent 版只有占位符，因为模型不许绑人；包必须能带跨实例的人类席位标识） |
+| payload                  | 泛化自                         | 变更                                                                                                                         |
+| ------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `BundleAgentPayload`     | `IntentAgentPayloadSchema`     | `dependsOn/mcp/plugins` 用 `BundleIdentityRef`；**`skills` 用专属 `BundleAgentSkillRef`**（含 `project:` 分支，见 §1.1b'）   |
+| `BundleSkillPayload`     | `IntentSkillPayloadSchema`     | 文件树条目改为**外部载体引用**（`files: { path, ref }[]`，`ref` 指向包内路径 / intent 的内联内容），因为技能文件可能是二进制 |
+| `BundleMcpPayload`       | `IntentMcpPayloadSchema`       | 保留 `McpLocalConfig` / `McpRemoteConfig` **原结构**（见 §4.2 脱敏必须 schema-valid）                                        |
+| `BundlePluginPayload`    | `IntentPluginPayloadSchema`    | 同上                                                                                                                         |
+| `BundleWorkflowPayload`  | `IntentWorkflowPayloadSchema`  | `agentRef` / `call-*` 目标改为 `BundleRef`                                                                                   |
+| `BundleWorkgroupPayload` | `IntentWorkgroupPayloadSchema` | **人类成员补 `username`**（intent 版只有占位符，因为模型不许绑人；包必须能带跨实例的人类席位标识）                           |
 
 ### 1.3 操作与顶层
 
 ```ts
 export const BUNDLE_OP_KINDS = [
-  'agent-create','agent-update','skill-create','skill-update',      // ← skill-update 新增
-  'mcp-create','mcp-update','plugin-create','plugin-update',
-  'workflow-create','workflow-update','workgroup-create','workgroup-update',
+  'agent-create',
+  'agent-update',
+  'skill-create',
+  'skill-update', // ← skill-update 新增
+  'mcp-create',
+  'mcp-update',
+  'plugin-create',
+  'plugin-update',
+  'workflow-create',
+  'workflow-update',
+  'workgroup-create',
+  'workgroup-update',
 ] as const
 
 // ⚠️ 这是**规范代码**（R4-P1-4）：必须是 12 分支 discriminated union，不能是一个
@@ -361,23 +371,32 @@ export const BUNDLE_OP_KINDS = [
 //    能通过宽松 schema，而 commitMcpUpdateInTx(mcp.ts:180) 只在 expect !== undefined
 //    时 CAS ⇒ 无栅栏覆盖。
 const createOp = <K extends string, P extends z.ZodTypeAny>(kind: K, payload: P) =>
-  z.object({
-    opId: OpIdSchema, kind: z.literal(kind),
-    slug: BundleSlugSchema,                       // 必需
-    target: z.never().optional(),                 // 禁止
-    expect: z.never().optional(),                 // 禁止
-    payload,
-  }).strict()
+  z
+    .object({
+      opId: OpIdSchema,
+      kind: z.literal(kind),
+      slug: BundleSlugSchema, // 必需
+      target: z.never().optional(), // 禁止
+      expect: z.never().optional(), // 禁止
+      payload,
+    })
+    .strict()
 
 const updateOp = <K extends string, P extends z.ZodTypeAny, E extends z.ZodTypeAny>(
-  kind: K, payload: P, expect: E) =>
-  z.object({
-    opId: OpIdSchema, kind: z.literal(kind),
-    slug: z.never().optional(),                   // 禁止
-    target: BundleExternalRefSchema,              // 必需，且只许 external
-    expect,                                       // 必需，且是该类型专属 token
-    payload,
-  }).strict()
+  kind: K,
+  payload: P,
+  expect: E,
+) =>
+  z
+    .object({
+      opId: OpIdSchema,
+      kind: z.literal(kind),
+      slug: z.never().optional(), // 禁止
+      target: BundleExternalRefSchema, // 必需，且只许 external
+      expect, // 必需，且是该类型专属 token
+      payload,
+    })
+    .strict()
 
 export const BundleOpSchema = z.discriminatedUnion('kind', [
   createOp('agent-create', BundleAgentPayloadSchema),
@@ -394,16 +413,19 @@ export const BundleOpSchema = z.discriminatedUnion('kind', [
   updateOp('workgroup-update', BundleWorkgroupPayloadSchema, WorkgroupExpectSchema),
 ])
 
-export const BundleSchema = z.object({
-  bundleVersion: z.literal(1),
-  /** ⚠️ **允许为空**（R4-P1-3）：全 reuse 的包翻译结果就是零 op。 */
-  ops: z.array(BundleOpSchema).max(BUNDLE_MAX_OPS),
-  /** 该 bundle 的「主角」。可以是 local slug（新建/副本），**也可以是 external**
-   *  （被 reuse / overwrite 时它没有 create slug）。 */
-  rootRef: BundleRefSchema.optional(),
-  /** rootRef 是 external 时，receipt 需要它才能报出根的类型（external token 不自带 type）。 */
-  rootType: AclResourceTypeSchema.optional(),
-}).strict().superRefine(assertBundleRefsClosed)
+export const BundleSchema = z
+  .object({
+    bundleVersion: z.literal(1),
+    /** ⚠️ **允许为空**（R4-P1-3）：全 reuse 的包翻译结果就是零 op。 */
+    ops: z.array(BundleOpSchema).max(BUNDLE_MAX_OPS),
+    /** 该 bundle 的「主角」。可以是 local slug（新建/副本），**也可以是 external**
+     *  （被 reuse / overwrite 时它没有 create slug）。 */
+    rootRef: BundleRefSchema.optional(),
+    /** rootRef 是 external 时，receipt 需要它才能报出根的类型（external token 不自带 type）。 */
+    rootType: AclResourceTypeSchema.optional(),
+  })
+  .strict()
+  .superRefine(assertBundleRefsClosed)
 ```
 
 `assertBundleRefsClosed` 拒绝：重复 slug、悬空 `local:` 引用、`rootRef` 指向不存在的 slug
@@ -412,12 +434,12 @@ export const BundleSchema = z.object({
 
 **槽位分层**（R4-P2-9 / R10 补第四个）：不存在一个「全局都能用」的 `BundleRefSchema`。**四个**子 schema：
 
-| 子 schema | 允许形态 | 用在 |
-|---|---|---|
-| `BundleIdentityRefSchema` | `local:` \| `external:` | agent 的 `dependsOn` / `mcp` / `plugins`，工作组成员，工作流 `agentRef` |
-| **`BundleAgentSkillRefSchema`** | `local:` \| `external:` \| **`project:`** | **仅** agent 的 `skills` 槽（§1.1b'） |
-| `BundleCallRefSchema` | `local:` \| `external:` \| **`name:`** | 仅 `call-workflow` / `call-workgroup` 的目标槽 |
-| `BundleExternalRefSchema` | 仅 `external:` | update op 的 `target` |
+| 子 schema                       | 允许形态                                  | 用在                                                                    |
+| ------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- |
+| `BundleIdentityRefSchema`       | `local:` \| `external:`                   | agent 的 `dependsOn` / `mcp` / `plugins`，工作组成员，工作流 `agentRef` |
+| **`BundleAgentSkillRefSchema`** | `local:` \| `external:` \| **`project:`** | **仅** agent 的 `skills` 槽（§1.1b'）                                   |
+| `BundleCallRefSchema`           | `local:` \| `external:` \| **`name:`**    | 仅 `call-workflow` / `call-workgroup` 的目标槽                          |
+| `BundleExternalRefSchema`       | 仅 `external:`                            | update op 的 `target`                                                   |
 
 ⚠️ 正式 `WorkflowNodeSchema` 是 `.passthrough()` 的宽松形态（`schemas/workflow.ts:105-131`），
 **靠它自动得不到 call-slot 限制**——必须显式 walker/refine，并配负例测试
@@ -425,12 +447,12 @@ export const BundleSchema = z.object({
 
 `BundleExpectTokenSchema` 是六类内容级 token 的联合（AC-24）：
 
-| 类型 | token |
-|---|---|
-| workflow / workgroup | `expectedVersion` |
-| agent | `expectedUpdatedAt` + `expectedAclRevision` |
-| mcp / plugin | `expectedConfigHash` |
-| skill | `contentVersion` + `metaRevision` + `aclRevision` |
+| 类型                 | token                                             |
+| -------------------- | ------------------------------------------------- |
+| workflow / workgroup | `expectedVersion`                                 |
+| agent                | `expectedUpdatedAt` + `expectedAclRevision`       |
+| mcp / plugin         | `expectedConfigHash`                              |
+| skill                | `contentVersion` + `metaRevision` + `aclRevision` |
 
 ---
 
@@ -513,7 +535,7 @@ I1 / I3 / I8 完全没写，I2 / I4 / I6 / I7 / I9 写了但缺关键细节。�
   而不是返回原 receipt。
 - **I3 replay 是三态**：`committed` → 返回**原 receipt**；`failed` → 409
   `bundle-apply-failed-replay`；`prepared`/`applying` → 409 `bundle-apply-unsettled`
-  （原文：*Refuse rather than guess*）。**本设计此前只写了三分之一。**
+  （原文：_Refuse rather than guess_）。**本设计此前只写了三分之一。**
 - **I6 CAS 之后必须二次校验**：`revalidateInTx` 的调用时机 = journal CAS
   `prepared→applying` **之后**、任何 commit kernel **之前**。pre-stage 窗口（npm 安装 /
   技能 staging）里外部状态可能已变。
@@ -527,20 +549,20 @@ I1 / I3 / I8 完全没写，I2 / I4 / I6 / I7 / I9 写了但缺关键细节。�
 
 下表是归属速查，完整证据见 `invariants.md`：
 
-| 不变量 | 锚点 | v4 归属 |
-|---|---|---|
-| 整个 apply 按 scope 串行 | `applyChangeset.ts:198` | 引擎（scope 由 provider 给） |
-| claim 同事务校验身份 / in-flight / draft hash，且 duplicate 查询先于这些校验 | `:277` | 引擎骨架 + `claimInTx` |
-| committed / failed / unsettled **三态** replay，不是统一「返回 receipt」 | `:357` | 引擎 |
-| slot / secret waiver / human binding / finalName / copy-only / typed ref / cycle 校验 | `resolveChangeset.ts:345` | **intent 特有**，留在 intent（本 RFC 不迁） |
-| 预铸 id、按类型与 agent `dependsOn` 排序 | `resolveChangeset.ts:651` | 引擎（§2.3b planner） |
-| `pendingIds` / `pendingAgentNames` 让 preflight 接受未落库的同 bundle 目标 | `:428` | 引擎（§2.3b） |
-| prepared→applying CAS **之后**再次校验身份 | `:695` | 引擎 + `revalidateInTx` |
-| commit kernel / 引用 ACL / 特权 principal / `bundleCreatedNames` 都在 big tx | `:727` | 引擎 |
-| provenance / commitSeq / context epoch / currentDraftId / receipt / journal committed **与资源写同事务** | `:865` | 引擎 + `finalizeInTx` |
-| DB 已提交后任何 tail 异常**都不得**补偿或把 journal 改 failed | `:922` | 引擎 |
-| session mutation 在 unsettled apply 期间必须 409 | `session.ts:195` | **intent 特有**，留在 intent |
-| active set + 10 分钟 freshness + 启动/小时收敛 | `:979` | 引擎 |
+| 不变量                                                                                                   | 锚点                      | v4 归属                                     |
+| -------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------- |
+| 整个 apply 按 scope 串行                                                                                 | `applyChangeset.ts:198`   | 引擎（scope 由 provider 给）                |
+| claim 同事务校验身份 / in-flight / draft hash，且 duplicate 查询先于这些校验                             | `:277`                    | 引擎骨架 + `claimInTx`                      |
+| committed / failed / unsettled **三态** replay，不是统一「返回 receipt」                                 | `:357`                    | 引擎                                        |
+| slot / secret waiver / human binding / finalName / copy-only / typed ref / cycle 校验                    | `resolveChangeset.ts:345` | **intent 特有**，留在 intent（本 RFC 不迁） |
+| 预铸 id、按类型与 agent `dependsOn` 排序                                                                 | `resolveChangeset.ts:651` | 引擎（§2.3b planner）                       |
+| `pendingIds` / `pendingAgentNames` 让 preflight 接受未落库的同 bundle 目标                               | `:428`                    | 引擎（§2.3b）                               |
+| prepared→applying CAS **之后**再次校验身份                                                               | `:695`                    | 引擎 + `revalidateInTx`                     |
+| commit kernel / 引用 ACL / 特权 principal / `bundleCreatedNames` 都在 big tx                             | `:727`                    | 引擎                                        |
+| provenance / commitSeq / context epoch / currentDraftId / receipt / journal committed **与资源写同事务** | `:865`                    | 引擎 + `finalizeInTx`                       |
+| DB 已提交后任何 tail 异常**都不得**补偿或把 journal 改 failed                                            | `:922`                    | 引擎                                        |
+| session mutation 在 unsettled apply 期间必须 409                                                         | `session.ts:195`          | **intent 特有**，留在 intent                |
+| active set + 10 分钟 freshness + 启动/小时收敛                                                           | `:979`                    | 引擎                                        |
 
 ### 2.3 `bundleCreatedNames`（设计门 B3）
 
@@ -574,12 +596,12 @@ bundle 同时新建 skill / MCP / plugin / agent / workgroup，agent 引用前�
 拆成**四段**（在 `skillVersion.ts` 内新增），既有 `commitSkillVersion` 退化为四段的顺序组合、
 其它调用方零改动：
 
-| 段 | 做什么 | 何时 |
-|---|---|---|
-| `stageSkillVersion(...)` | 开 version-write op（拿 `skill_operation_locks`）、产 op-scoped staging、归档 `versions/vN/files`（**永久权威快照**）、算 content hash。`fs-staged` → `fs-versioned` | pre-stage |
-| `commitSkillVersionInTx(tx, staged)` | 事务内写 `skill_versions` 行 + `skills.contentVersion` + 完整 composite precondition + `txExtra` / description / `versionState` + `advancePhase('db-committed')` | big tx |
-| `publishStagedSkillVersion(staged)` | `swapInStaged(filesDir, publishId)` **从 staging** 原子发布 live → 校验真实目录 + content hash → `cleanupOpDirs` → `advancePhase('fs-published')` + `finishOperation` 释放锁 → 重新 mark verified | ④ |
-| `abortStagedSkillVersion(staged)` 🆕 | **pre-commit 补偿**：删除未提交的候选 `versions/vN` 与 staging、释放 `skill_operation_locks`；清理无法证明时**保留 op 作 recovery oracle** | 补偿路径 |
+| 段                                   | 做什么                                                                                                                                                                                            | 何时      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `stageSkillVersion(...)`             | 开 version-write op（拿 `skill_operation_locks`）、产 op-scoped staging、归档 `versions/vN/files`（**永久权威快照**）、算 content hash。`fs-staged` → `fs-versioned`                              | pre-stage |
+| `commitSkillVersionInTx(tx, staged)` | 事务内写 `skill_versions` 行 + `skills.contentVersion` + 完整 composite precondition + `txExtra` / description / `versionState` + `advancePhase('db-committed')`                                  | big tx    |
+| `publishStagedSkillVersion(staged)`  | `swapInStaged(filesDir, publishId)` **从 staging** 原子发布 live → 校验真实目录 + content hash → `cleanupOpDirs` → `advancePhase('fs-published')` + `finishOperation` 释放锁 → 重新 mark verified | ④         |
+| `abortStagedSkillVersion(staged)` 🆕 | **pre-commit 补偿**：删除未提交的候选 `versions/vN` 与 staging、释放 `skill_operation_locks`；清理无法证明时**保留 op 作 recovery oracle**                                                        | 补偿路径  |
 
 ⚠️ **v3 在这里写错了**：v3 写的是「rename 候选目录到 live」。实测源码
 （`skillVersion.ts:555,608`）live 是**从 op-scoped staging** 经 `swapInStaged`（两次同父
@@ -667,15 +689,15 @@ intent 根本没有 plugin-update 接线；而 plugin 的发布协议与 skill *
 
 因此「删掉一个分支」是不够的，要补的是一条完整链路：
 
-| 步骤 | 内容 |
-|---|---|
-| resolve | `copyOnlyTargetsFor` 移除 plugin 分支；新增 `PreparedOp` kind `plugin-update` |
+| 步骤     | 内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| resolve  | `copyOnlyTargetsFor` 移除 plugin 分支；新增 `PreparedOp` kind `plugin-update`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | baseline | **先用 session manifest 的 `configHash` 验原始基线**，且**必须从同一次读到的完整 row 投影计算**（R6-P2-2：若先 `getPlugin` 读 H1、再第二次读 full row，两次之间变成 H2 ⇒ captured=H2、commit kernel 只防 capture 之后的漂移 ⇒ 原漏洞原样复现）。只读一次 row → 从它投影算 `configHash` 与 manifest H1 比 → **同一个 row** 交给 commit kernel。测试分别覆盖「capture 前变化 → baseline stale」与「capture 后变化 → full-row stale」（R5-P1-D）：`manifest.ts:22` 存的是 dump 时刻的 hash。只捕获当前 row 是不够的—— dump 得 H1、同 owner 在普通插件页改成 H2、intent apply 随后捕获 H2 并以 H2 为栅栏，**H1 从未参与判断**，用户确认的基线被静默跳过。PreparedOp 因此必须同时携带 manifest 的 `expectedConfigHash` 与授权时的 owner |
-| capture | 捕获**完整** plugin row（`commitPluginPublishInTx` 的栅栏靠它防 capture **之后**的漂移；与上一行是**两道**不同的门，缺一不可） |
-| prestage | **spec 变了才**预安装；**record-before-act**：调用方预铸 generation id、先写 artifact 再 `installPlugin` |
-| big tx | `commitPluginPublishInTx(tx, captured, set)` |
-| 补偿 | artifact 带**精确** generation 路径，逆序删除 |
-| 收敛 | `convergeIntentApplyJournal` 的 artifact 分支要能处理 `plugin-install` 的精确路径（现有实现对它**什么也不做**，注释写明「崩溃后拿不到 InstallResult，靠 GC 回收」——而 GC 会被任一非终态 node run 无限阻挡） |
+| capture  | 捕获**完整** plugin row（`commitPluginPublishInTx` 的栅栏靠它防 capture **之后**的漂移；与上一行是**两道**不同的门，缺一不可）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| prestage | **spec 变了才**预安装；**record-before-act**：调用方预铸 generation id、先写 artifact 再 `installPlugin`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| big tx   | `commitPluginPublishInTx(tx, captured, set)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 补偿     | artifact 带**精确** generation 路径，逆序删除                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 收敛     | `convergeIntentApplyJournal` 的 artifact 分支要能处理 `plugin-install` 的精确路径（现有实现对它**什么也不做**，注释写明「崩溃后拿不到 InstallResult，靠 GC 回收」——而 GC 会被任一非终态 node run 无限阻挡）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 **这条链路同时修好了 intent 侧一个既有缺口**：今天 intent 的 plugin-create 在崩溃后也只能
 靠被阻塞的 GC 回收孤儿 generation。record-before-act 一并解决。
@@ -707,12 +729,12 @@ loadRoot(actor, type, id) → assertExactRevision（AC-12，仅根）
 
 ### 4.1 三道门
 
-| 门 | 判据 | 失败 |
-|---|---|---|
-| **行级可见性**（读侧唯一） | 闭包内每个 id 域资源对 actor 可见，含传递依赖 | 422 `package-export-ref-unavailable`（AC-7 / AC-34） |
-| **特权节点**（内容侧，分轴） | `lens.scripts && 含脚本节点` / `lens.codeHost && 含代码平台节点` 各自独立 | 422 `package-privileged-node-forbidden`（AC-8） |
-| **体积** | `SKILL_ZIP_LIMITS` 四维 | 422 并点名资源与维度（AC-11） |
-| **同名重复** 🆕 | 闭包内出现两个同 `(类型, 名字)` 的资源 | 422 `package-duplicate-resource-name`，点名是哪两个、各自被谁引用（AC-2b） |
+| 门                           | 判据                                                                      | 失败                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **行级可见性**（读侧唯一）   | 闭包内每个 id 域资源对 actor 可见，含传递依赖                             | 422 `package-export-ref-unavailable`（AC-7 / AC-34）                       |
+| **特权节点**（内容侧，分轴） | `lens.scripts && 含脚本节点` / `lens.codeHost && 含代码平台节点` 各自独立 | 422 `package-privileged-node-forbidden`（AC-8）                            |
+| ~~**体积**~~                 | ~~`SKILL_ZIP_LIMITS` 四维~~                                               | **已改判**：用户拍板「整棵树进包、不设上限」，AC-11 取消                   |
+| **同名重复** 🆕              | 闭包内出现两个同 `(类型, 名字)` 的资源                                    | 422 `package-duplicate-resource-name`，点名是哪两个、各自被谁引用（AC-2b） |
 
 **为什么在导出侧拒绝**（R6-P1-2，用户点破）：包**不带任何权属信息**（决策 4 / 12）。源实例上
 两个同名资源之所以能共存，是因为名字是 `(owner, name)` 复合唯一；进了包，owner 没了，
@@ -738,26 +760,26 @@ loadRoot(actor, type, id) → assertExactRevision（AC-12，仅根）
 
 因此本 RFC 自建 `packages/shared/src/bundle/secrets.ts`，但**复用它的载体知识**：
 
-| 载体 | 处理 | 借用 |
-|---|---|---|
-| MCP `config.env.*` / `headers.*` | 值 → `PACKAGE_SECRET_PLACEHOLDER`，键保留 | — |
-| MCP `oauth.clientSecret` | 值 → 占位符，**`oauth` 仍是对象** | — |
-| MCP `command[1..]`（argv 内嵌 token） | 只替换命中 `SECRET_KEY_RE` / 高熵的**那一个 token**，argv 结构与长度不变 | `SECRET_KEY_RE` / `looksHighEntropy` |
-| MCP remote `url` 的 userinfo / 敏感 query 值 | 只替换值，**URL 仍是合法 http(s) URL** | `redactUrlForDump` 的 userinfo 判定逻辑 |
-| plugin `spec`（含凭据的 git URL）/ `options` | 同上；`requirements.pluginSources.spec` 走同一条 | 同上 |
-| agent `frontmatterExtra` / 工作流 passthrough | `SECRET_KEY_RE` 命中的值 → 占位符 | `maskFreeJsonSecrets` 的键判定 |
-| 脚本节点 `env` | 值 → 占位符 | — |
-| **兜底扫描** | `scanForCredentialPatterns` + `looksHighEntropy` 命中 → **同样替换成占位符**并记进 `manifest.secrets` | 该函数本体（v2 误以为它会改值，实际只返回 finding） |
+| 载体                                          | 处理                                                                                                  | 借用                                                |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| MCP `config.env.*` / `headers.*`              | 值 → `PACKAGE_SECRET_PLACEHOLDER`，键保留                                                             | —                                                   |
+| MCP `oauth.clientSecret`                      | 值 → 占位符，**`oauth` 仍是对象**                                                                     | —                                                   |
+| MCP `command[1..]`（argv 内嵌 token）         | 只替换命中 `SECRET_KEY_RE` / 高熵的**那一个 token**，argv 结构与长度不变                              | `SECRET_KEY_RE` / `looksHighEntropy`                |
+| MCP remote `url` 的 userinfo / 敏感 query 值  | 只替换值，**URL 仍是合法 http(s) URL**                                                                | `redactUrlForDump` 的 userinfo 判定逻辑             |
+| plugin `spec`（含凭据的 git URL）/ `options`  | 同上；`requirements.pluginSources.spec` 走同一条                                                      | 同上                                                |
+| agent `frontmatterExtra` / 工作流 passthrough | `SECRET_KEY_RE` 命中的值 → 占位符                                                                     | `maskFreeJsonSecrets` 的键判定                      |
+| 脚本节点 `env`                                | 值 → 占位符                                                                                           | —                                                   |
+| **兜底扫描**                                  | `scanForCredentialPatterns` + `looksHighEntropy` 命中 → **同样替换成占位符**并记进 `manifest.secrets` | 该函数本体（v2 误以为它会改值，实际只返回 finding） |
 
 **硬性回归**：每个 portable 文档在脱敏**之后**必须仍能通过它自己的严格 schema——测试对六类
 逐条断言（AC-6）。**枚举字段绝不脱敏**（RFC-270 教训）。
 
 ### 4.3 name 域引用（设计门 C1 已堵上，AC-7c 本轮修正）
 
-| 情况 | 行为 |
-|---|---|
-| 零匹配行 / 有行但全部不可见 | **逐字节相同**的 dangling 结果（堵预言机） |
-| 有可见候选 | **与 `freezeCallClosure`（`execution/closure.ts:142-219`）逐字一致**：`workflowId` cache 优先（且该行仍带该选择器名字），其次最老可见 ULID |
+| 情况                        | 行为                                                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 零匹配行 / 有行但全部不可见 | **逐字节相同**的 dangling 结果（堵预言机）                                                                                                 |
+| 有可见候选                  | **与 `freezeCallClosure`（`execution/closure.ts:142-219`）逐字一致**：`workflowId` cache 优先（且该行仍带该选择器名字），其次最老可见 ULID |
 
 ⚠️ v2 写的是「总选最老可见行」，**与运行时不符**（设计门 E1-1）：节点若指向同名新行 W2 而另有
 更老的 W1，现网启动的是 W2，v2 的导出却会导出 W1——包与实际执行的闭包不是同一个。
@@ -830,11 +852,11 @@ token；commit 若现场重读只会拿新值与新值自比，等于没有 CAS�
 
 决策表 → `ResourceBundle` 的**完整规则**（R3 指出 v3 这段有两个洞）：
 
-| 决策 | 产生 | 指向它的引用怎么改 |
-|---|---|---|
-| `reuse` | **不产生 op**，但**必须产生一条 `selectedExternalFence`** | 全部改写为 `external:<选定的本地 id>` |
-| `new` | create op（带 `local:<slug>`） | 保持 `local:<slug>` |
-| `overwrite` | update op（external `target` + `expect`） | **也要改写为 `external:<目标 id>`** —— v3 只写了 reuse 的改写，漏了这条：包里 agent A 被 overwrite、workflow W 引用 A 时，A 不再是 create op，W 的 `local:A` 没有 slug 可绑 |
+| 决策        | 产生                                                      | 指向它的引用怎么改                                                                                                                                                          |
+| ----------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reuse`     | **不产生 op**，但**必须产生一条 `selectedExternalFence`** | 全部改写为 `external:<选定的本地 id>`                                                                                                                                       |
+| `new`       | create op（带 `local:<slug>`）                            | 保持 `local:<slug>`                                                                                                                                                         |
+| `overwrite` | update op（external `target` + `expect`）                 | **也要改写为 `external:<目标 id>`** —— v3 只写了 reuse 的改写，漏了这条：包里 agent A 被 overwrite、workflow W 引用 A 时，A 不再是 create op，W 的 `local:A` 没有 slug 可绑 |
 
 #### `selectedExternalFence`（R6-P1-1）
 
@@ -854,7 +876,7 @@ interface SelectedExternalFence {
   localSlug: string
   type: AclResourceType
   resourceId: string
-  expect: BundleExpectToken     // 来自签名基线，不是现场重读
+  expect: BundleExpectToken // 来自签名基线，不是现场重读
 }
 ```
 
@@ -909,13 +931,13 @@ ACL fence」：
 
 ### 6.1 路由
 
-| 方法 | 路径 | 权限 | tokenAccess |
-|---|---|---|---|
-| GET | `/api/{六类}/:id/export-package` | 对应 `*:read` | `'allow'` |
-| POST | `/api/resource-packages/preview` | **仅身份准入**（无资源类型点） | `'allow'` |
-| POST | `/api/resource-packages/commit` | **仅身份准入** + §5.2 逐条动态判据 | `'allow'` |
-| ~~GET~~ | ~~`/api/workflows/:id/export`~~ | — | 下线（C1） |
-| ~~POST~~ | ~~`/api/workflows/import`~~ | — | 下线（C2） |
+| 方法     | 路径                             | 权限                               | tokenAccess |
+| -------- | -------------------------------- | ---------------------------------- | ----------- |
+| GET      | `/api/{六类}/:id/export-package` | 对应 `*:read`                      | `'allow'`   |
+| POST     | `/api/resource-packages/preview` | **仅身份准入**（无资源类型点）     | `'allow'`   |
+| POST     | `/api/resource-packages/commit`  | **仅身份准入** + §5.2 逐条动态判据 | `'allow'`   |
+| ~~GET~~  | ~~`/api/workflows/:id/export`~~  | —                                  | 下线（C1）  |
+| ~~POST~~ | ~~`/api/workflows/import`~~      | —                                  | 下线（C2）  |
 
 ⚠️ **路由门不能挂六类 `*:read` 的 AND**（R3）：那会与「逐条权限预检」自相矛盾——只有 agent
 读/建权限的用户导入一个无依赖的单 agent 包，会在 middleware 直接被拒、根本看不到
@@ -945,7 +967,8 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 导出：六类详情/编辑页「更多操作」各加一条；工作流那条由「导出 YAML」原地改名。
 导入：新 `components/ResourcePackageImportDialog.tsx`，`<Dialog size="full">` + `.segmented` +
 `<Select>` + `<Field>/<TextInput>` + `<StatusChip>`，**零自写 chrome**。六类列表页各一个入口
-+ 统一入口 + 类型不符自动跳转。
+
+- 统一入口 + 类型不符自动跳转。
 
 ---
 
@@ -959,26 +982,27 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 
 ## 8. 失败模式
 
-| 场景 | 行为 |
-|---|---|
-| 闭包内 id 域资源不可见（含传递） | 422 + 明确提示 |
-| name 域零匹配 / 全不可见 | 逐字节相同的 dangling |
-| name 域有可见候选 | 与 `freezeCallClosure` 逐字一致的解析 |
-| 特权节点缺对应权限 | 422，分轴 |
-| 超体积 | 422 并点名 |
-| pre-stage 失败 | 各内核自补偿 + 插件 generation 精确删除 + journal → failed |
-| big tx 失败 | SQLite 回滚 + 逆序补偿 |
-| 进程被 SIGKILL | 启动收敛（带 active set + 10min 下限） |
-| 重复提交同 idempotencyKey | **三态**（I3）：`committed` → 原 receipt；`failed` → 409；`prepared`/`applying` → 409 未结 |
-| 并发导入同目标 | 内容 CAS 409 + 技能 op 锁 409 |
-| **伪造 overwrite 他人资源** | **最终事务内 owner 断言拒绝**（§5.4） |
-| `formatVersion` 更高 | 拒绝 |
-| 包内未登记文件 | 422 `package-unlisted-entry` |
-| 技能文件树里的硬编码密钥 | 不扫描、原样入包（决策 18，文档写明作者责任） |
+| 场景                             | 行为                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------ |
+| 闭包内 id 域资源不可见（含传递） | 422 + 明确提示                                                                             |
+| name 域零匹配 / 全不可见         | 逐字节相同的 dangling                                                                      |
+| name 域有可见候选                | 与 `freezeCallClosure` 逐字一致的解析                                                      |
+| 特权节点缺对应权限               | 422，分轴                                                                                  |
+| 超体积                           | 422 并点名                                                                                 |
+| pre-stage 失败                   | 各内核自补偿 + 插件 generation 精确删除 + journal → failed                                 |
+| big tx 失败                      | SQLite 回滚 + 逆序补偿                                                                     |
+| 进程被 SIGKILL                   | 启动收敛（带 active set + 10min 下限）                                                     |
+| 重复提交同 idempotencyKey        | **三态**（I3）：`committed` → 原 receipt；`failed` → 409；`prepared`/`applying` → 409 未结 |
+| 并发导入同目标                   | 内容 CAS 409 + 技能 op 锁 409                                                              |
+| **伪造 overwrite 他人资源**      | **最终事务内 owner 断言拒绝**（§5.4）                                                      |
+| `formatVersion` 更高             | 拒绝                                                                                       |
+| 包内未登记文件                   | 422 `package-unlisted-entry`                                                               |
+| 技能文件树里的硬编码密钥         | 不扫描、原样入包（决策 18，文档写明作者责任）                                              |
 
 ## 9. 测试策略
 
 ### shared
+
 - `bundle-ref.test.ts`：`local:` / `external:` 正反例；裸 id / 裸 name 被拒。
 - `bundle-schema.test.ts`：重复 slug、悬空引用、悬空 `rootRef` 全拒（AC-4b）。
 - `bundle-payload.test.ts`：六类 payload round-trip。
@@ -987,10 +1011,11 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
 - `package-closure.test.ts`：六类根 × 九形态矩阵。
 
 ### backend
+
 - `rfc271-bundle-engine.test.ts`：AC-B4 全部不变量（幂等重放返回原 receipt、active
   lease、bundleCreatedNames、pre-stage 不可见、逆序补偿、启动收敛注入中断）。
 - `rfc271-bundle-owner-gate.test.ts`：**AC-15b 越权对照**——伪造 `overwrite + 他人 public
-  资源 id + 正确 hash`，断言最终事务拒绝；且服务端重算的 `allowedActions` 不含 overwrite。
+资源 id + 正确 hash`，断言最终事务拒绝；且服务端重算的 `allowedActions` 不含 overwrite。
 - `rfc271-skill-update.test.ts`：AC-25b——两个技能覆盖 + 第三个 op 失败，断言**两个技能都
   没被改**；导入后技能过 `skillBootVerify`。
 - `rfc271-export-gates.test.ts`：AC-7 / AC-34 / **AC-7b 逐字节对照** / AC-7c（cache 优先，
@@ -1005,51 +1030,52 @@ appHome / SQLite 的本机操作者本身就是 break-glass 管理员**，`--as-
   他人拥有的仍强制 copy（既有 copy 语义 slot/rewiring/finalName/`fromCopy` 逐条保持）。
 
 ### frontend
+
 - `rfc271-export-actions.test.tsx` / `rfc271-import-dialog.test.tsx` /
   `rfc271-capability-removal.test.ts`（C1–C3 源码层文本断言）。
 
 ### 显式改判的既有断言
 
-| 文件 | 改判 | 原因 |
-|---|---|---|
-| `workflow-draft-export.test.ts` | 删本地草稿导出用例 | C3 |
-| `workflow-import-dialog.test.tsx` | 整文件删除 | C2 |
-| `workflows-pages.test.tsx` | 「导出 YAML」文案 | C1 |
-| `rfc199-workflow-exact-operations.test.ts` | export hook 指向新端点 | C1 |
-| `rfc243-call-refs-yaml.test.ts` | 迁到包导出 | C1 |
-| RFC-270 的 export 出口用例 | 「遮蔽后可导出」→「按轴拒绝」 | C4 |
-| **intent 测试套** | 改判限定在 prestage 循环 / artifact / 收敛 / `copyOnlyTargetsFor` **四处**；其余零改判 | 决策 27「两个都开」（plugin 半边动到 prestage 与收敛） |
+| 文件                                       | 改判                                                                                   | 原因                                                   |
+| ------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `workflow-draft-export.test.ts`            | 删本地草稿导出用例                                                                     | C3                                                     |
+| `workflow-import-dialog.test.tsx`          | 整文件删除                                                                             | C2                                                     |
+| `workflows-pages.test.tsx`                 | 「导出 YAML」文案                                                                      | C1                                                     |
+| `rfc199-workflow-exact-operations.test.ts` | export hook 指向新端点                                                                 | C1                                                     |
+| `rfc243-call-refs-yaml.test.ts`            | 迁到包导出                                                                             | C1                                                     |
+| RFC-270 的 export 出口用例                 | 「遮蔽后可导出」→「按轴拒绝」                                                          | C4                                                     |
+| **intent 测试套**                          | 改判限定在 prestage 循环 / artifact / 收敛 / `copyOnlyTargetsFor` **四处**；其余零改判 | 决策 27「两个都开」（plugin 半边动到 prestage 与收敛） |
 
 ⚠️ `route-error-code-coverage` 用 `git ls-files` 枚举，未追踪的新文件对它是盲的——新增文件
 多，落地时先 `git add -N` 再跑门禁。
 
 ## 10. 风险
 
-| 风险 | 缓解 |
-|---|---|
-| 决策 27 误伤 intent 既有 copy 语义 | AC-K2 双向锁；`ownerUserId` 判据一字不动 |
-| 决策 27 的 plugin 半边动到 intent prestage / 收敛 | §3.2 完整链路 + 独立 commit + 改判范围显式限定四处 |
-| 泛化时丢掉某条既有不变量 | `rfc271-bundle-engine.test.ts` 逐条点名；泛化前把 `applyChangeset.ts` 的不变量列成清单对照 |
-| ~~新旧 journal 并存~~ | **不存在**：决策 26 下 `intent_apply_journal` 一字不动，intent 继续用它自己那张表 |
-| `skill-update` 拆分引入回归 | 既有 `commitSkillVersion` 退化为四段顺序组合、保留 `noop` 分支，其它调用方零改动 |
-| 盘子过大一次推不动 | `plan.md` 的「PR / commit 拆分」：表达层 → 引擎 → intent 迁移 → 导出 → 导入 → 前端/CLI → 下线，逐个独立可绿 |
+| 风险                                              | 缓解                                                                                                        |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 决策 27 误伤 intent 既有 copy 语义                | AC-K2 双向锁；`ownerUserId` 判据一字不动                                                                    |
+| 决策 27 的 plugin 半边动到 intent prestage / 收敛 | §3.2 完整链路 + 独立 commit + 改判范围显式限定四处                                                          |
+| 泛化时丢掉某条既有不变量                          | `rfc271-bundle-engine.test.ts` 逐条点名；泛化前把 `applyChangeset.ts` 的不变量列成清单对照                  |
+| ~~新旧 journal 并存~~                             | **不存在**：决策 26 下 `intent_apply_journal` 一字不动，intent 继续用它自己那张表                           |
+| `skill-update` 拆分引入回归                       | 既有 `commitSkillVersion` 退化为四段顺序组合、保留 `noop` 分支，其它调用方零改动                            |
+| 盘子过大一次推不动                                | `plan.md` 的「PR / commit 拆分」：表达层 → 引擎 → intent 迁移 → 导出 → 导入 → 前端/CLI → 下线，逐个独立可绿 |
 
 ## 11. 四轮设计门 findings 落点
 
-| 轮次·编号 | 落点 |
-|---|---|
-| R1-A1 / R2-A1 无可见性屏障、journal 不同构 | §2.2 复用既有生命周期 + 幂等键 + active lease |
-| R1-A2 / R2-A2 fence 只锁 ACL | §1.3 `BundleExpectToken` + §5.2 由 preview 下发回传（AC-24b） |
-| R1-A3 / R2-A3 绕过技能/插件持久化协议 | §2.4 `skill-update` 四段拆分 + §2.5 插件 record-before-act |
-| R1-B1 / R2-B1 包内无稳定身份 | §1.1 `BundleRef` + 显式分配 slug + schema 拒重复/悬空 |
-| R1-B2 project 技能无处承载 | `requirements.projectSkills` |
-| R1-B3 / R2-B3 环形与拓扑序 | §2.3 `bundleCreatedNames` |
-| R1-C1 存在性预言机 | §4.3（R2 确认已堵上） |
-| R1-C2 特权门未按轴 | §4.1（R2 确认已堵上） |
-| R1-C3 CLI 无 Actor | §6.2（R2 确认已堵上） |
-| R1-D1 / R2-D1 脱敏面与投影语义 | §4.2 自建 schema-valid 投影 + 复用载体知识 |
-| R1-D2 技能文件树密钥 | 决策 18 明确划出范围（R2 确认已堵上） |
-| R1-E1 能力清单 | `proposal.md §5` 六条 |
-| R2-E1-1 workflowId cache 优先 | §4.3 AC-7c 修正 |
-| **R2-E1-2 伪造 overwrite 越权** | **§5.4 服务端重算动作 + 事务内 owner 断言** |
-| R2 文档一致性（5 条） | v3 重写时统一：字段名、AC 编号、C 编号、条数 |
+| 轮次·编号                                  | 落点                                                          |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| R1-A1 / R2-A1 无可见性屏障、journal 不同构 | §2.2 复用既有生命周期 + 幂等键 + active lease                 |
+| R1-A2 / R2-A2 fence 只锁 ACL               | §1.3 `BundleExpectToken` + §5.2 由 preview 下发回传（AC-24b） |
+| R1-A3 / R2-A3 绕过技能/插件持久化协议      | §2.4 `skill-update` 四段拆分 + §2.5 插件 record-before-act    |
+| R1-B1 / R2-B1 包内无稳定身份               | §1.1 `BundleRef` + 显式分配 slug + schema 拒重复/悬空         |
+| R1-B2 project 技能无处承载                 | `requirements.projectSkills`                                  |
+| R1-B3 / R2-B3 环形与拓扑序                 | §2.3 `bundleCreatedNames`                                     |
+| R1-C1 存在性预言机                         | §4.3（R2 确认已堵上）                                         |
+| R1-C2 特权门未按轴                         | §4.1（R2 确认已堵上）                                         |
+| R1-C3 CLI 无 Actor                         | §6.2（R2 确认已堵上）                                         |
+| R1-D1 / R2-D1 脱敏面与投影语义             | §4.2 自建 schema-valid 投影 + 复用载体知识                    |
+| R1-D2 技能文件树密钥                       | 决策 18 明确划出范围（R2 确认已堵上）                         |
+| R1-E1 能力清单                             | `proposal.md §5` 六条                                         |
+| R2-E1-1 workflowId cache 优先              | §4.3 AC-7c 修正                                               |
+| **R2-E1-2 伪造 overwrite 越权**            | **§5.4 服务端重算动作 + 事务内 owner 断言**                   |
+| R2 文档一致性（5 条）                      | v3 重写时统一：字段名、AC 编号、C 编号、条数                  |

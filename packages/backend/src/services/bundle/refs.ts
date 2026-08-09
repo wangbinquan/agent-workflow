@@ -19,6 +19,11 @@ export interface RefResolveCtx {
   idOfSlug: ReadonlyMap<string, string>
   /** `external:<token>` → 本地资源 id（含类型校验）。 */
   resolveExternal(ref: string, expectType: AclResourceType): Promise<string>
+  /**
+   * `builtin:<type>/<name>` → **本实例自己 seed 的**那一个 built-in 的 id。
+   * 返回 null = 本实例没有同名 built-in（fail closed，见调用点）。
+   */
+  resolveBuiltin?(type: AclResourceType, name: string): Promise<string | null>
 }
 
 const PROJECT_PREFIX = 'project:'
@@ -44,9 +49,27 @@ export async function resolveIdentityRef(
     return id
   }
   if (ref.startsWith('external:')) return ctx.resolveExternal(ref, type)
+  // `builtin:<type>/<name>` —— 框架 built-in。它在包里**没有 create op**（导入侧
+  // 自动忽略），引用要绑到**本实例自己 seed 的那一个**：源库的 id 在这里没有意义，
+  // 而复制一份会得到 owner 错、`builtin=false` 的同名副本。
+  if (ref.startsWith('builtin:')) {
+    const spec = ref.slice('builtin:'.length)
+    const slash = spec.indexOf('/')
+    const name = slash < 0 ? '' : spec.slice(slash + 1)
+    const id = await ctx.resolveBuiltin?.(type, name)
+    if (id === undefined || id === null) {
+      // fail closed：本实例没有同名 built-in 是**环境前提缺失**（manifest 的
+      // `builtins` 段就是为了让导入方预先看到这件事），不能静默留一个悬空引用。
+      throw new ValidationError(
+        'bundle-builtin-missing',
+        `this instance has no builtin ${type} named '${name}'`,
+      )
+    }
+    return id
+  }
   throw new ValidationError(
     'bundle-ref-invalid',
-    `identity ref '${ref}' must be local: or external:`,
+    `identity ref '${ref}' must be local:, external: or builtin:`,
   )
 }
 

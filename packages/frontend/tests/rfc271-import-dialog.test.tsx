@@ -7,6 +7,10 @@
 //  ② 交互契约：预检默认「能复用就复用」，切到 `new` 才出改名框；**别人的候选会被
 //     标出来**（可复用但不可覆盖）；提交回传的是**原样的** previewToken。
 
+//
+// 覆盖验收条款：AC-13（各列表页与统一入口都能上传；rootRef 类型与当前页不符时的处理）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test, vi, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

@@ -530,6 +530,18 @@ function makePackageProvider(
     serializationKey: `package:${actor.user.id}:${targets}`,
     actor,
     // 仅 new / overwrite 工作组会带进来的 human 映射（已校验签名基线与 active 状态）。
+    // 包里的 built-in 没有 create op（导入侧自动忽略）；引用按**名字**绑到本实例
+    // 自己 seed 的那一个。只认 `builtin = true` 的行——同名的普通资源不算数，
+    // 否则「忽略 built-in」会退化成「绑到某个碰巧同名的用户资源」。
+    resolveBuiltin: async (type, name) => {
+      const table = ACL_TABLES[type]
+      const row = db
+        .select({ id: table.id })
+        .from(table)
+        .where(and(eq(table.name, name), eq((table as never as { builtin: never }).builtin, true)))
+        .get()
+      return row?.id ?? null
+    },
     resolveHumanMember: (workgroupSlug, username) =>
       humanMemberUserIds.get(humanMemberKey(workgroupSlug, username)) ?? null,
     resolveExternal: async (ref, expectType) => {

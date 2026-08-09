@@ -8,6 +8,10 @@
 // 错配、合法配置丢失、导入时 schema 解析失败。所以包走的是另一条：**只改值，不改
 // 结构**。这组测试就是那条区别的锁。
 
+//
+// 覆盖验收条款：AC-4b（包内身份用 local:<slug>，与声明顺序无关）
+//   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
+
 import { describe, expect, test } from 'bun:test'
 import {
   BundleOpSchema,

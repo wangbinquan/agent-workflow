@@ -4,7 +4,7 @@
 
 ✅ **已完成 RFC（2026-08-09）：[RFC-271 统一资源表达（Resource Bundle）与配置包](design/RFC-271-resource-config-package/proposal.md)** —— 起于「导出 YAML 改成导出配置包」，经**三轮 Codex 设计门（共 39 条 findings，逐条核实全部属实）**定型。至少五条同一根因：自造了仓里已有且已调试过的机制，每次自造都恰好踩中那个机制当初为之而生的坑。**交付三层**：shared `ResourceBundle` 表达（`BundleRef` 三形态，第三种 `name:` late-bound 是必须的——`call-workflow` 的权威引用是名字且允许 dangling）/ backend `BundleApply` 引擎（泛化自 `applyIntentChangeset`，**开工前先列它 ~13 条承重不变量逐条对照**）/ 配置包导出导入 + CLI。**范围决策**：本 RFC 只接配置包一个消费者，**intent 不迁移**（provider 已预留事务钩子供后续 RFC）；顺带解开 intent 的 skill/plugin 原地更新欠账（能力扩张）。**一条真实越权已定位**：`commitMcpUpdateInTx` 只校验 hash 不校验 owner（owner 门在路由层），导入提交是新写路径 —— 伪造 `overwrite + 他人公开资源 id` 可改写别人那一行的内容。**权限模型**：导出要整棵树可见（含传递）× 分轴特权，但**可见即有读权限**（AC-7d 是反向锁）；导入谁导入归谁。能力清单六条已获用户逐条确认。一张新表 + 一个迁移、不新增权限点。
 
-> **实施进度（2026-08-09）**：**批次 A（shared 基座）与批次 A′（统一引用模型 wiring）已完工并全部 CI 绿**；下一步是批次 B（`BundleApply` 引擎）。
+> **实施进度（2026-08-09 收尾）**：**批次 A–J 全部完工**，验收清单 17 条逐条核实已勾，CI 与 `visual-regression-nightly` 双绿。下面按批次记录的是**过程细节**（踩过的坑与判据），不是待办——早先「下一步是批次 B」的表述已过时，勿据此接手。
 > A′ 把「引用」从散在各处的字符串收成一套 AST + 每域一个 codec + 一条解析契约，五个提交：
 >
 > - `T6b/T6c`（`48f92f5a`）—— intent 与 import 的 ref lexicon 归到单一定义，wire 拼写字节级不变。
@@ -12,7 +12,7 @@
 > - `T6e`（`84c01ee1`）—— **决策 28**：冻结闭包改成按**边**键控（`${sourceWorkflowId}#${nodeId}`，v1/v2 双读、存量零迁移），修掉「同名两个 call 节点只有一个生效」和「同名双 id 时环检测看不见真实的环」；validator 与前端解析器一并改成 id-hint 优先 + **名字守卫**（该行仍带这个名字才采信），`WorkflowByRef` 从裸字符串改成收选择器，解析优先级归 resolver 自己。身份棘轮 144 → 132。
 > - `T6f`（`0877c82a`）—— runner 的技能/MCP/插件/dependsOn 闭包组装统一走 `runtimeRefKey`；project 技能给了专属非资源变体；`resolveDependsClosure` 的 `allowMissing` 换成必填的 `RefCallPolicy`（「解析不到怎么办」是调用级属性，不是域语义）。
 > - `T6f2 + T6g`（`9da5cc63` / 本次）—— 启动期校验改读**冻结闭包**：根启动先冻结再用同一份校验，子启动直接用继承子集、不重查 live（此前校验与执行是两次独立解析，父冻结 G1 而子校验 G2）；外加解析契约五属性与四处归属的锁。
->   **批次 B 进行中**（`BundleApply` 引擎）。已落：
+>   **批次 B**（`BundleApply` 引擎）—— 已完工，下列是落地要点：
 > - `T7`（`68673f56`）—— 迁移 0141 + `resource_bundle_applies`。不复用
 >   `intent_apply_journal`：它的 `session_id` 是指向 `intent_sessions` 的 NOT NULL 外键，
 >   而导入没有 session。两张表各自收敛 ⇒ 没有跨表幂等与 in-flight 排他的并存期问题。
