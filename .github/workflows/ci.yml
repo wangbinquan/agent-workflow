@@ -822,6 +822,11 @@ jobs:
           bun-version: '1.3.13'
 
       - name: Cache bun package downloads
+        # On windows-latest this ~313 MB archive consistently takes 41–105s
+        # to restore, while the following frozen install takes 7–11s with the
+        # cache. Skip only this download cache on Windows; dependency install,
+        # Playwright's browser cache, artifacts, and all four shards stay live.
+        if: runner.os != 'Windows'
         uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache

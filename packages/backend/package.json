@@ -11,7 +11,7 @@
     "dev": "bun run --watch src/main.ts start",
     "start": "bun run src/main.ts start",
     "build": "echo 'use scripts/build-binary.ts (M5)'",
-    "lint": "eslint src tests --max-warnings=0",
+    "lint": "eslint src tests --max-warnings=0 --cache --cache-strategy content --cache-location ../../node_modules/.cache/eslint/backend",
     "lint:fix": "eslint src tests --fix",
     "typecheck": "tsc --noEmit",
     "test": "bun test --isolate --randomize",

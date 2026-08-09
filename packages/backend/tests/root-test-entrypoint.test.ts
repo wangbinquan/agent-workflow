@@ -129,6 +129,14 @@ function workflowJob(source: string, name: string): string {
   return lines.slice(start, nextJob < 0 ? undefined : nextJob).join('\n')
 }
 
+function workflowStep(source: string, name: string): string {
+  const lines = source.split(/\r?\n/)
+  const start = lines.findIndex((line) => line === `      - name: ${name}`)
+  if (start < 0) throw new Error(`Missing workflow step: ${name}`)
+  const nextStep = lines.findIndex((line, index) => index > start && line.startsWith('      - '))
+  return lines.slice(start, nextStep < 0 ? undefined : nextStep).join('\n')
+}
+
 function workflowJobNames(source: string): string[] {
   const lines = source.split(/\r?\n/)
   const jobsStart = lines.findIndex((line) => line === 'jobs:')
@@ -174,6 +182,30 @@ describe('repository test entrypoint', () => {
     expect(pkg.scripts?.['test:shared']).toBe('bun run --filter @agent-workflow/shared test')
     expect(pkg.scripts?.['test:frontend']).toBe('bun run --filter @agent-workflow/frontend test')
     expect(pkg.scripts?.['gate:local']).toBe('bun run scripts/local-gate.ts')
+  })
+
+  test('local quality gates keep content caches under ignored dependency storage', () => {
+    const lintScripts = [
+      ['repo UI', pkg.scripts?.['lint:repo-ui'], 'node_modules/.cache/eslint/repo-ui'],
+      ['backend', backendPkg.scripts?.lint, '../../node_modules/.cache/eslint/backend'],
+      ['shared', sharedPkg.scripts?.lint, '../../node_modules/.cache/eslint/shared'],
+      ['frontend', frontendPkg.scripts?.lint, '../../node_modules/.cache/eslint/frontend'],
+    ] as const
+
+    for (const [name, script, cacheLocation] of lintScripts) {
+      expect(script, name).toContain('--cache --cache-strategy content')
+      expect(script, name).toContain(`--cache-location ${cacheLocation}`)
+    }
+
+    const formatScripts = [
+      ['packages', pkg.scripts?.['format:check'], 'node_modules/.cache/prettier/packages'],
+      ['repo UI', pkg.scripts?.['format:check:repo-ui'], 'node_modules/.cache/prettier/repo-ui'],
+    ] as const
+
+    for (const [name, script, cacheLocation] of formatScripts) {
+      expect(script, name).toContain('--cache --cache-strategy content')
+      expect(script, name).toContain(`--cache-location ${cacheLocation}`)
+    }
   })
 
   test('every backend gate isolates files and randomizes execution order', () => {
@@ -255,6 +287,19 @@ describe('repository test entrypoint', () => {
     // keep the shard denominator, which is what this count is really guarding.
     expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/4`)).toBe(2)
     expect(e2eJob).toContain('AW_E2E_WINDOWS_EXCLUDE')
+  })
+
+  test('Windows e2e skips only the slow Bun download cache', () => {
+    const e2eJob = workflowJob(ciWorkflow, 'e2e')
+    const bunCacheStep = workflowStep(e2eJob, 'Cache bun package downloads')
+    const installStep = workflowStep(e2eJob, 'Install dependencies')
+    const browserCacheStep = workflowStep(e2eJob, 'Cache Playwright browsers')
+
+    expect(bunCacheStep).toContain('uses: actions/cache@v6')
+    expect(bunCacheStep).toContain("if: runner.os != 'Windows'")
+    expect(installStep).not.toMatch(/^ {8}if:/m)
+    expect(installStep).toContain('run: bun install --frozen-lockfile')
+    expect(browserCacheStep).not.toMatch(/^ {8}if:/m)
   })
 
   test('the known sync-child regression has hard deadlines', () => {

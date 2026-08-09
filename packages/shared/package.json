@@ -9,7 +9,7 @@
     "./schemas/*": "./src/schemas/*.ts"
   },
   "scripts": {
-    "lint": "eslint src --max-warnings=0",
+    "lint": "eslint src --max-warnings=0 --cache --cache-strategy content --cache-location ../../node_modules/.cache/eslint/shared",
     "lint:fix": "eslint src --fix",
     "typecheck": "tsc --noEmit",
     "test": "bun test --isolate --randomize --dots"
