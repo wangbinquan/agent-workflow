@@ -135,32 +135,50 @@ export interface ResourcePackageRouteDeps {
  * 非负整数；写错的值是**拒绝**而不是当没给：静默忽略一个写错的 fence，等于用户以为
  * 有保护而实际没有。服务端还会校验「给了就必须给全该类型的所有字段」。
  */
-const FENCE_NUMERIC = [
-  'expectedVersion',
-  'expectedUpdatedAt',
-  'expectedAclRevision',
-  'expectedContentVersion',
-  'expectedMetaRevision',
-] as const
+/**
+ * 数值型 fence 逐字段的**取值域**——不能一刀切「非负整数」。
+ *
+ * `version` / `contentVersion` 是从 1 起的计数（正式 schema 就是
+ * `z.number().int().positive()`），0 是一个**不可能存在**的值；而 `aclRevision` /
+ * `metaRevision` 从 0 起，0 是合法初值。用同一条规则会两头错：要么把合法的 0 拒掉，
+ * 要么把不可能的 version 0 放进去，让它去比出一个假的 409。
+ */
+const FENCE_NUMERIC: ReadonlyArray<{ key: string; min: 0 | 1 }> = [
+  { key: 'expectedVersion', min: 1 },
+  { key: 'expectedContentVersion', min: 1 },
+  { key: 'expectedUpdatedAt', min: 0 },
+  { key: 'expectedAclRevision', min: 0 },
+  { key: 'expectedMetaRevision', min: 0 },
+]
 const FENCE_STRING = ['expectedConfigHash'] as const
 
 function parseRootFence(c: Context): Record<string, unknown> {
   const out: Record<string, unknown> = {}
-  for (const key of FENCE_NUMERIC) {
+  for (const { key, min } of FENCE_NUMERIC) {
     const raw = c.req.query(key)
     if (raw === undefined) continue
-    // ⚠️ 空串必须**显式**拒绝：`z.coerce.number()` 走的是 `Number('')`，结果是 **0**，
-    // 于是 `?expectedVersion=` 会被悄悄转成一个看起来完全合法的 fence 值 0，拿去比
-    // version 稳定不相等 ⇒ 409「资源已变更」。用户明明什么都没传，却收到一条说资源被
-    // 别人改了的错——比静默放行更难排查。
-    if (raw === '') {
-      throw new ValidationError('package-invalid', `${key} must not be empty`)
+    // ⚠️ **不能把解析交给 `z.coerce.number()`**：它走的是 `Number(raw)`，而
+    // `Number('')` 与 `Number(' ')` 都是 **0**。于是 `?expectedVersion=` 和
+    // `?expectedVersion=%20` 都会被悄悄转成一个看起来合法的 fence 值 0，拿去比 version
+    // 稳定不相等 ⇒ 409「资源已变更」。用户什么都没传，却收到一条说资源被别人改了的错
+    // ——比静默放行更难排查。
+    //
+    // 第一版只挡了逐字空串，`%20` 照样漏过（实现门第四轮实测）。所以这里改成**先按
+    // 字面量判**：只接受纯十进制数字串，任何空白 / 符号 / 小数点一律拒。
+    if (!/^\d+$/.test(raw)) {
+      throw new ValidationError(
+        'package-invalid',
+        `${key} must be a decimal integer (got ${JSON.stringify(raw)})`,
+      )
     }
-    const parsed = z.coerce.number().int().nonnegative().safeParse(raw)
-    if (!parsed.success) {
-      throw new ValidationError('package-invalid', `${key} must be a non-negative integer`)
+    const value = Number(raw)
+    if (!Number.isSafeInteger(value) || value < min) {
+      throw new ValidationError(
+        'package-invalid',
+        `${key} must be an integer >= ${min} (got ${raw})`,
+      )
     }
-    out[key] = parsed.data
+    out[key] = value
   }
   for (const key of FENCE_STRING) {
     const raw = c.req.query(key)

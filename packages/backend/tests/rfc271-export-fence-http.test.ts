@@ -24,7 +24,7 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { mcps, users, workflows } from '../src/db/schema'
+import { agents, mcps, users, workflows } from '../src/db/schema'
 import { errorHandler } from '../src/util/errors'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -149,6 +149,92 @@ describe('AC-12 · 空 fence 参数不得静默降级', () => {
     const bare = await app.request(`/api/mcps/${mcpId}/export-package`)
     expect(bare.status).toBe(200)
     expect(await bodyCodeOf(bare)).toBe('ZIP')
+    removeTempDirSync(appHome)
+  })
+
+  test("`%20`（空白）同样拒绝 —— `Number(' ')` 也是 0", async () => {
+    // 第一版只挡逐字空串，于是 `?expectedVersion=%20` 照样被 `Number(' ')` 变成 0，
+    // 再比出一个假的 409「资源已变更」（实现门第四轮实测）。判据改成「只收纯十进制
+    // 数字串」，任何空白 / 符号 / 小数点一律拒。
+    const { db, appHome, wfId } = await seed()
+    const app = makeApp(db, appHome)
+    const res = await app.request(`/api/workflows/${wfId}/export-package?expectedVersion=%20`)
+    expect(res.status).toBe(422)
+    expect(await bodyCodeOf(res)).toBe('package-invalid')
+    removeTempDirSync(appHome)
+  })
+
+  test('`expectedVersion=0` 拒绝，而 `expectedAclRevision=0` 合法 —— 逐字段的取值域', async () => {
+    // 一刀切「非负整数」两头错：`version` / `contentVersion` 从 1 起（正式 schema 就是
+    // positive），0 是不可能存在的值、放进去只会比出假 409；而 `aclRevision` /
+    // `metaRevision` 从 0 起，0 是合法初值、拒掉它等于让新建资源无法带 fence 导出。
+    const { db, appHome, wfId } = await seed()
+    const app = makeApp(db, appHome)
+
+    const zeroVersion = await app.request(`/api/workflows/${wfId}/export-package?expectedVersion=0`)
+    expect(zeroVersion.status).toBe(422)
+    expect(await bodyCodeOf(zeroVersion)).toBe('package-invalid')
+
+    // agent 的 fence 是 updatedAt + aclRevision，两者都可以是 0（刚建的资源）。
+    const agentId = ulid()
+    await db.insert(agents).values({
+      id: agentId,
+      name: 'fresh',
+      description: '',
+      outputs: '[]',
+      permission: '{}',
+      skills: '[]',
+      dependsOn: '[]',
+      mcp: '[]',
+      plugins: '[]',
+      frontmatterExtra: '{}',
+      bodyMd: '',
+      ownerUserId: 'u1',
+      visibility: 'private',
+      aclRevision: 0,
+      createdAt: 1,
+      updatedAt: 0,
+    } as never)
+    const zeroAcl = await app.request(
+      `/api/agents/${agentId}/export-package?expectedUpdatedAt=0&expectedAclRevision=0`,
+    )
+    expect(zeroAcl.status).toBe(200)
+    expect(await bodyCodeOf(zeroAcl)).toBe('ZIP')
+    removeTempDirSync(appHome)
+  })
+
+  test('`expectedAclRevision=%20` 也必须拒 —— min=0 的字段挡不住「空白变 0」', async () => {
+    // 反向验证逼出来的一条：把字面量判去掉时，`expectedVersion=%20` 仍然会红，因为它被
+    // `min=1` 那道门顺手捡了漏。真正只有字面量判能挡的是 **min=0 的字段**——`Number(' ')`
+    // 得到 0，而 0 对 aclRevision 是完全合法的初值，于是一个「什么都没填」的请求会被当成
+    // 「我确认它是第 0 版」放行，用户以为有保护而实际没有。
+    const { db, appHome } = await seed()
+    const app = makeApp(db, appHome)
+    const agentId = ulid()
+    await db.insert(agents).values({
+      id: agentId,
+      name: 'a2',
+      description: '',
+      outputs: '[]',
+      permission: '{}',
+      skills: '[]',
+      dependsOn: '[]',
+      mcp: '[]',
+      plugins: '[]',
+      frontmatterExtra: '{}',
+      bodyMd: '',
+      ownerUserId: 'u1',
+      visibility: 'private',
+      aclRevision: 0,
+      createdAt: 1,
+      updatedAt: 0,
+    } as never)
+
+    const res = await app.request(
+      `/api/agents/${agentId}/export-package?expectedUpdatedAt=0&expectedAclRevision=%20`,
+    )
+    expect(res.status).toBe(422)
+    expect(await bodyCodeOf(res)).toBe('package-invalid')
     removeTempDirSync(appHome)
   })
 

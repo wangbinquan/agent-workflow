@@ -176,7 +176,10 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
   test('写错的数值是拒绝，不是当没给', () => {
     // 静默忽略一个写错的 fence，等于用户以为有保护而实际没有。
     const routes = read('src/routes/resourcePackages.ts')
-    expect(routes).toContain('must be a non-negative integer')
+    // 判据是**逐字段的取值域**，不是一刀切「非负整数」：version / contentVersion 从 1
+    // 起（0 是不可能存在的值），aclRevision / metaRevision 从 0 起（0 是合法初值）。
+    expect(routes).toContain('must be a decimal integer')
+    expect(routes).toContain('must be an integer >=')
   })
 
   test('AC-12：六类各自的**完整**形态，不是只给 expectedVersion', () => {

@@ -379,8 +379,15 @@ export async function seedFusionResources(db: DbClient): Promise<void> {
       )
     }
     const repaired = repairFusionWorkflowAgentId(workflowById.definition)
-    // 同 agent 路径：归一改变导出语义，须推进 token；但 `version` 只在 definition 真被
-    // 修复时才加（它是**内容**维度），归属漂移走 `aclRevision` 那一维。
+    // 归一改变**导出语义**（归一前产 create op、导入方新建一个；归一后不产 op、导入方
+    // 绑自己那一个），所以它必须让在途 fence 失效。
+    //
+    // ⚠️ 这里要推的是 **`version`**，不能只推 `aclRevision`：工作流的导出 fence 只看
+    // `version`（`expectTokenOf`），只推 ACL 维等于没推——实现门第四轮实测「归一前后
+    // ZIP 字节不同，而同一个 `expectedVersion=1` 两次都放行」。
+    //
+    // 与「稳态重启逐字不变」不冲突：`workflowDrift` 只在**真的**还没归一时为真，归一后
+    // 三个字段都已就位，后续启动不再进这个分支。
     const workflowDrift =
       workflowById.ownerUserId !== SYSTEM_USER_ID ||
       workflowById.visibility !== 'public' ||
@@ -389,7 +396,7 @@ export async function seedFusionResources(db: DbClient): Promise<void> {
       db.update(workflows)
         .set({
           definition: repaired.definition,
-          ...(repaired.changed ? { version: workflowById.version + 1 } : {}),
+          ...(repaired.changed || workflowDrift ? { version: workflowById.version + 1 } : {}),
           ownerUserId: SYSTEM_USER_ID,
           visibility: 'public',
           builtin: true,

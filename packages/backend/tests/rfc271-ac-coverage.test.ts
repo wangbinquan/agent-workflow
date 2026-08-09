@@ -209,6 +209,15 @@ function testCorpus(): string {
   return chunks.join('\n')
 }
 
+/**
+ * 去掉行注释与块注释后的源码。**只用于「这里有没有真断言」这类判断**——它不是一个
+ * 正确的 TS 词法分析器（字符串字面量里的 `//` 会被误伤），但对本用途足够：我们要的是
+ * 「把注释掉的 `expect(` 排除掉」，误伤方向是更严格，安全。
+ */
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
 describe('RFC-271 验收条款的覆盖棘轮', () => {
   test('文档里定义的每条 AC 都在测试中被点名', () => {
     const acs = declaredAcs()
@@ -275,8 +284,15 @@ describe('RFC-271 验收条款的覆盖棘轮', () => {
         if (name === SELF) continue
         const src = readFileSync(resolve(dir, name), 'utf8')
         if (!src.includes('覆盖验收条款：')) continue
-        // `expect(` 是本仓所有测试的断言入口（bun:test 与 vitest 同名）。
-        if (!src.includes('expect(')) offenders.push(name)
+        // ⚠️ 必须**剔除注释后**再找断言。第一版写的是裸 `src.includes('expect(')`，
+        // 于是下面这个「删光了全部测试」的文件照样被判定有断言（实现门第四轮实测）：
+        //
+        //     // 覆盖验收条款：AC-12
+        //     // expect(
+        //
+        // 一条声称「注释不算覆盖」的守卫，自己被一行注释绕过——这比没有守卫更糟，因为
+        // 它会让人以为这一面已经被守住了。
+        if (!stripComments(src).includes('expect(')) offenders.push(name)
       }
     }
     expect(offenders).toEqual([])

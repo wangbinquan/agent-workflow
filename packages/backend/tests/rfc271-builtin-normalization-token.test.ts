@@ -26,7 +26,7 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, users } from '../src/db/schema'
+import { agents, users, workflows } from '../src/db/schema'
 import { seedFusionResources } from '../src/services/fusion'
 import { expectTokenOf } from '../src/services/resourcePackage/preview'
 
@@ -97,5 +97,63 @@ describe('AC-12 · built-in 归一改变导出语义 ⇒ 必须推进 token', ()
     expect(expectTokenOf('agent', third)).toEqual(firstToken)
     expect(third.updatedAt).toEqual(first.updatedAt)
     expect(third.aclRevision).toEqual(first.aclRevision)
+  })
+})
+
+describe('AC-12 · **workflow 路径同样要推 token**（第四轮 P2-1：只修对了 agent）', () => {
+  // 我上一轮给 agent 和 workflow 两条归一路径都加了「漂移才推」的判断，但**只给 agent
+  // 写了测试**。实现门第四轮实测 workflow 那半没生效：
+  //
+  //   归一前：version=1, builtin=false, rootRef=local:..., ops=1
+  //   归一后：version=1, builtin=true,  rootRef=builtin:..., ops=0
+  //   同一个 expectedVersion=1 → 两次都 200，而两次 ZIP 字节不同
+  //
+  // 原因是我让 workflow 的归一只推 `aclRevision`（想着「归属漂移走 ACL 维」），而工作流
+  // 的导出 fence **只看 `version`** —— 推了一个没人看的维度等于没推。
+  //
+  // 教训很具体：给两条路径写同一个修复时，**两条都要有自己的用例**。只测一条时，另一条
+  // 是否生效完全靠「它们看起来一样」这个假设，而这里恰恰不一样（两类的 fence 形态不同）。
+  const workflowRow = (db: DbClient): Record<string, unknown> | undefined =>
+    db.select().from(workflows).where(eq(workflows.name, 'aw-skill-fusion')).all()[0] as
+      | Record<string, unknown>
+      | undefined
+
+  test('把 workflow 归一成 built-in ⇒ `version` 必须推进（fence 只看它）', async () => {
+    const db = await freshDb()
+    await seedFusionResources(db)
+    const seeded = workflowRow(db)
+    expect(seeded?.builtin).toBe(true)
+
+    // 退回「普通用户资源」形态，模拟待归一的存量库。
+    await db
+      .update(workflows)
+      .set({ ownerUserId: 'u1', visibility: 'private', builtin: false } as never)
+      .where(eq(workflows.id, String(seeded?.id)))
+
+    const before = workflowRow(db)!
+    const beforeToken = expectTokenOf('workflow', before)
+
+    await seedFusionResources(db)
+
+    const after = workflowRow(db)!
+    expect(after.builtin).toBe(true)
+    expect(after.ownerUserId).toBe('__system__')
+    // 核心：**fence 实际比较的那个维度**必须变。
+    expect(expectTokenOf('workflow', after)).not.toEqual(beforeToken)
+    expect(Number(after.version)).toBeGreaterThan(Number(before.version))
+  })
+
+  test('workflow 的稳态重启同样逐字不变', async () => {
+    const db = await freshDb()
+    await seedFusionResources(db)
+    const first = workflowRow(db)!
+    const firstToken = expectTokenOf('workflow', first)
+
+    await seedFusionResources(db)
+    await seedFusionResources(db)
+
+    const third = workflowRow(db)!
+    expect(expectTokenOf('workflow', third)).toEqual(firstToken)
+    expect(third.version).toEqual(first.version)
   })
 })
