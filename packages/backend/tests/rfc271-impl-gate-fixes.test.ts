@@ -162,12 +162,12 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     )
     // 技能树/工作组 roster 等后续 live 读取也必须被末端复核包住。
     expect(exportSrc).toContain(
-      'assertRootStillCurrent(db, closure.root.type, closure.root.id, opts.expect)',
+      'assertRootStillCurrent(db, actor, closure.root.type, closure.root.id, opts.expect)',
     )
     // 末端复核现在要 actor —— 它不只比「产物变没变」，还要重新跑一次**授权复核**
     // （闭包成员的 grant 可能在导出中途被撤销；实现门第四轮的 P1-2 就是这条漏检）。
     expect(exportSrc).toContain(
-      'assertClosureStillCurrent(db, actor, closure, skillTrees, serialized)',
+      'assertClosureStillCurrent(db, actor, closure, skillTrees, serialized, opts.appHome)',
     )
     // 产物比较必须拿**序列化器自己的产出**比，不能拿「行」去近似「包」：
     //  · 用引擎 CAS token 会一边漏检（workflow/workgroup 漏 ACL）一边误拒（另四类把

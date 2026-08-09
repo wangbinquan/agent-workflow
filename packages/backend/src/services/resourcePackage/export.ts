@@ -21,6 +21,8 @@ import { ConflictError, ValidationError } from '@/util/errors'
 import {
   assertPrivilegedNodesExportable,
   attachWorkgroupMembers,
+  isBuiltinRow,
+  rowName,
   walkExportClosure,
   type ClosureResource,
   type ExportClosure,
@@ -187,10 +189,10 @@ export async function exportResourcePackage(
   // `package-root-changed ... now 2` —— 一个此刻**已经对你不可见**的资源，却把它的精确
   // revision 报了出来。不泄露 ZIP，但在竞态窗口里成了状态 oracle。
   const serialized = serializeClosure(closure, skillTrees)
-  await assertClosureStillCurrent(db, actor, closure, skillTrees, serialized)
+  await assertClosureStillCurrent(db, actor, closure, skillTrees, serialized, opts.appHome)
   // exact fence 必须包住所有 live 读取。旧实现只在 walkClosure 后比较一次，随后读取
   // 技能文件树/工作组 roster 的窗口里根仍可变化，最终却带着旧 expected 成功 200。
-  await assertRootStillCurrent(db, closure.root.type, closure.root.id, opts.expect)
+  await assertRootStillCurrent(db, actor, closure.root.type, closure.root.id, opts.expect)
   const manifest = buildManifest(closure, serialized, {
     // 调用方给时间戳（路由传 `Date.now()`）。留成参数是为了让测试能断言
     // 「同一份闭包导出两次字节相同」——见 `encodeZip` 的可复现要求。
@@ -279,8 +281,21 @@ function assertRootUnchanged(
   }
 }
 
+/**
+ * ⚠️ 这次查询**自己也要复查授权**，不能只靠前面那一轮。
+ *
+ * 第五轮我把闭包授权复核挪到了 root fence 之前，以为 oracle 就没了。第六轮实测**只是
+ * 把窗口挪后了**：授权复核用的是它自己那次读，而这里是**第三次**读 root——在这两次之间
+ * 撤权 + 推 v2，返回的仍是
+ * `package-root-changed ... (expectedVersion: expected 1, now 2)`，把一个此刻已对你不可见
+ * 的资源的精确 revision 报了出来。
+ *
+ * 「在 X 之前先检查一次」永远解决不了这类问题——只要 X 自己还要重新读一次库，它就必须
+ * 自己带上授权判断。授权与读取要在**同一次**观测里成对出现。
+ */
 async function assertRootStillCurrent(
   db: DbClient,
+  actor: Actor,
   type: AclResourceType,
   id: string,
   expect: RootExportFence | undefined,
@@ -292,6 +307,13 @@ async function assertRootStillCurrent(
     | undefined
   if (row === undefined) {
     throw new ConflictError('package-root-changed', `this ${type} vanished during export`)
+  }
+  const grants = new Set(await listGrantedResourceIds(db, actor, type))
+  if (!isVisibleRow(actor, row as never, grants)) {
+    throw new ValidationError(
+      'package-export-ref-unavailable',
+      `cannot export ${type} '${id}': it is no longer available to you`,
+    )
   }
   assertRootUnchanged(type, row, expect)
 }
@@ -318,12 +340,23 @@ async function assertRootStillCurrent(
  * 「ACL 不改变产物字节」这个实测结论是对的，但它只能推出①不该管 ACL，**推不出**
  * 「ACL 无关紧要」：产物等价 ≠ 授权仍然成立。
  */
+/** 技能文件树的内容摘要——路径 + 字节，两者任一变化都要能看出来。 */
+function skillTreeDigest(tree: SkillTree | undefined): string {
+  if (tree === undefined) return ''
+  return JSON.stringify(
+    [...tree.files]
+      .map((f) => [f.path, Buffer.from(f.bytes).toString('base64')])
+      .sort(([a], [b]) => String(a).localeCompare(String(b))),
+  )
+}
+
 async function assertClosureStillCurrent(
   db: DbClient,
   actor: Actor,
   closure: ExportClosure,
   skillTrees: ReadonlyMap<string, SkillTree>,
   captured: SerializedPackage,
+  appHome: string,
 ): Promise<void> {
   const byType = new Map<AclResourceType, Array<(typeof closure.resources)[number]>>()
   for (const resource of closure.resources) {
@@ -332,7 +365,7 @@ async function assertClosureStillCurrent(
     byType.set(resource.type, list)
   }
 
-  const fresh: ClosureResource[] = []
+  const currentRowById = new Map<string, Record<string, unknown>>()
   for (const [type, group] of byType) {
     const table = ACL_TABLES[type]
     const rows = (await db
@@ -368,7 +401,7 @@ async function assertClosureStillCurrent(
           `cannot export ${type} '${resource.id}': it is no longer available to you`,
         )
       }
-      fresh.push({ ...resource, row: current })
+      currentRowById.set(resource.id, current)
     }
   }
 
@@ -385,7 +418,41 @@ async function assertClosureStillCurrent(
   // 排除清单在累积例外，这是选错轴的信号。改成拿**同一个 `serializeClosure`** 跑一遍
   // 新行，逐 slug 比它产出的 op：这是「什么进包」的唯一事实源，对将来新增的列自动免疫，
   // 既不会把不进包的字段算进来，也不会漏掉进包的字段。
-  const refreshed = serializeClosure({ ...closure, resources: fresh }, skillTrees)
+  // ⚠️ **必须保持原顺序重建**，不能按类型分组后拼接。`serializeClosure` 的 `opId` 是按
+  // 遍历顺序递增的（`op-1` / `op-2` …），而下面比较的是整个 op 的 JSON。分组会打乱顺序
+  // ⇒ 同一批资源两次序列化得到不同的 opId ⇒ **零并发写的正常导出也确定性报 409**
+  // （实测：root workflow 同时含 agent 节点与 call-workflow 节点即触发）。
+  //
+  // ⚠️ 而且要重建**整个 ClosureResource**，不只是 `row`：序列化器读的是顶层的
+  // `r.name` / `r.builtin`（`{ ...resource, row: current }` 会把它们留在旧值上）。
+  // 后果是导出中途改名不被发现，manifest 仍写旧名字；built-in 被取消标记也观察不到。
+  const fresh: ClosureResource[] = closure.resources.map((resource) => {
+    const row = currentRowById.get(resource.id) ?? resource.row
+    return { ...resource, row, name: rowName(row), builtin: isBuiltinRow(row) }
+  })
+  // ⚠️ 技能树要**重读**，而且要单独比字节。
+  //
+  // 两个独立的漏洞叠在一起：①`skillTrees` 是导出早期读的，复核复用同一份 ⇒ 中途改文件
+  // 根本看不见；②即使重读，技能辅助文件的 op 里只有 `path` / `ref`，**不含字节或摘要**
+  // ⇒ 同一路径换内容，两个 op 逐字相同（实测把 `ref.bin` 从 [0x01] 换成 [0x02]，
+  // `bundleEqual=true`）。
+  // 所以 op 比较对技能内容天然失明，必须在它之外单独比一次树摘要。
+  const freshTrees = new Map<string, SkillTree>()
+  for (const r of fresh) {
+    if (r.type !== 'skill') continue
+    freshTrees.set(r.id, await readSkillTree(db, appHome, r.id))
+  }
+  for (const r of fresh) {
+    if (r.type !== 'skill') continue
+    if (skillTreeDigest(skillTrees.get(r.id)) === skillTreeDigest(freshTrees.get(r.id))) continue
+    const isRoot = r.type === closure.root.type && r.id === closure.root.id
+    throw new ConflictError(
+      isRoot ? 'package-root-changed' : 'package-closure-changed',
+      `skill '${r.id}' files changed during export; retry from a fresh snapshot`,
+    )
+  }
+
+  const refreshed = serializeClosure({ ...closure, resources: fresh }, freshTrees)
   const opBySlug = (pkg: SerializedPackage): Map<string, string> => {
     const out = new Map<string, string>()
     for (const op of pkg.bundle.ops) {

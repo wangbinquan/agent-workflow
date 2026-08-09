@@ -77,7 +77,7 @@ export interface ExportClosure {
   callRefs: ClosureCallRef[]
 }
 
-const rowName = (row: Record<string, unknown>): string =>
+export const rowName = (row: Record<string, unknown>): string =>
   typeof row.name === 'string' ? row.name : ''
 
 /** 一次装载一层。**只返回对 actor 可见的行**——不可见的由 ① 号门报错。 */

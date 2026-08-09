@@ -28,6 +28,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { readFileSync } from 'node:fs'
 import { agents, plugins, resourceGrants, users, workflows } from '../src/db/schema'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -169,7 +170,10 @@ function dbWithMidExportWrite(
             return (t: unknown) => {
               if (t === table) {
                 reads += 1
-                if (reads === nth) mutate()
+                // `nth` 为负数表示「从第 |nth| 次起**每次**都触发」——用于无法预知确切
+                // 读表次数的场景（技能导出会读 `skills` 六次：闭包 / readSkillTree 内部 /
+                // 末端复核 / 复核里的 readSkillTree），写操作必须是幂等的。
+                if (nth < 0 ? reads >= -nth : reads === nth) mutate()
               }
               return queryMethod.call(queryTarget, t)
             }
@@ -369,52 +373,147 @@ describe('AC-7 · 授权复核排在 root fence 之前（不做状态 oracle）'
   // root 的授权被绕到了 fence 之后：撤权之后再导出、若 root 同时被推到 v2，返回的是
   // `package-root-changed ... now 2` —— 一个此刻**已经对你不可见**的资源，却把它的精确
   // revision 报了出来。不泄露 ZIP，但在竞态窗口里是个状态 oracle。
-  test('root 失去可见性且同时被改 ⇒ 报「不可用」，不得报出 now <version>', async () => {
+  test('root fence 的那次查询**自己**带授权判断（源码不变量）', () => {
+    // ⚠️ 这条是源码层断言，不是竞态断言，说明理由：
+    //
+    // 要测的窗口是「闭包复核读过 root 之后、root fence 那次独立查询之前」撤权。我按读表
+    // 计数注入（第 2 次、第 3 次）都没能落进那个窗口——撤权总是被更早的闭包复核抓到，
+    // 加不加这道授权检查测试都绿。和技能树那条同一个原因：我对这条路径的读表次序建模
+    // 不准，而基于计数的注入本身不可靠。
+    //
+    // 继续拼数字只会得到一条**看起来在测 oracle、实际没测到**的用例。所以这里只钉住
+    // 那个真正重要的不变量，并把缺口写在明面上：
+    //
+    //   **只要某一步还要重新读一次库，它就必须自己带上授权判断**——「在它之前先检查
+    //   一次」解决不了问题，第五轮就是这么以为的，第六轮实测 oracle 窗口只是挪后了。
+    //
+    // 端到端竞态覆盖仍缺，需要能精确注入 DB 时序的 seam。**这是已知缺口，不是已覆盖。**
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'resourcePackage', 'export.ts'),
+      'utf8',
+    )
+    const fenceFn = src.slice(
+      src.indexOf('async function assertRootStillCurrent('),
+      src.indexOf('async function assertClosureStillCurrent('),
+    )
+    expect(fenceFn).toContain('listGrantedResourceIds(db, actor, type)')
+    expect(fenceFn).toContain('isVisibleRow(actor, row as never, grants)')
+    // 而且授权判断要排在 `assertRootUnchanged` 明文比较**之前**。
+    expect(fenceFn.indexOf('isVisibleRow(') < fenceFn.indexOf('assertRootUnchanged(')).toBe(true)
+  })
+})
+
+describe('AC-7 · 第六轮：产物复核自己不能制造误拒 / 盲区', () => {
+  // 三条各锁一个第五轮修复开出的洞。它们的共同教训是：**「拿产出比」这个方向是对的，
+  // 但「产出」必须是同一条件下的产出**——顺序、身份字段、外部内容，任何一处不同源，
+  // 比较要么恒不等（误拒）、要么恒相等（盲区）。
+
+  test('① 混类型闭包 + 零并发写 ⇒ 必须成功（opId 是按遍历顺序递增的）', async () => {
+    // `serializeClosure` 的 opId 是 `op-1` / `op-2` … 按遍历顺序递增，而复核比较的是
+    // **整个 op 的 JSON**。第五轮我按类型分组重建 fresh，顺序一变 opId 就全错位 ⇒
+    // 一次完全正常的导出确定性报 409。这条用「root workflow 同时含 agent 节点与
+    // call 节点」构造出分组会打乱顺序的最小闭包。
     const db = createInMemoryDb(MIGRATIONS)
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc271-oracle-'))
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc271-order-'))
     try {
-      await seedUser(db, 'reader')
-      await seedUser(db, 'owner')
-      const rootId = ulid()
+      await seedUser(db, 'u1')
+      const agentId = ulid()
+      await seedAgent(db, agentId, 'worker', 'u1', 'private')
+      const childId = ulid()
       await db.insert(workflows).values({
-        id: rootId,
-        name: 'shared',
+        id: childId,
+        name: 'child',
         description: '',
         definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
-        ownerUserId: 'owner',
+        ownerUserId: 'u1',
         visibility: 'private',
         version: 1,
-        aclRevision: 0,
         createdAt: 1,
         updatedAt: 1,
       } as never)
-      await db.insert(resourceGrants).values({
-        resourceType: 'workflow',
-        resourceId: rootId,
-        userId: 'reader',
-        addedBy: 'owner',
-        addedAt: 1,
+      const rootId = ulid()
+      await db.insert(workflows).values({
+        id: rootId,
+        name: 'root',
+        description: '',
+        definition: JSON.stringify({
+          $schema_version: 4,
+          inputs: [],
+          edges: [],
+          nodes: [
+            { id: 'n1', kind: 'agent-single', agentId },
+            { id: 'n2', kind: 'call-workflow', workflowName: 'child', workflowId: childId },
+          ],
+        }),
+        ownerUserId: 'u1',
+        visibility: 'private',
+        version: 1,
+        createdAt: 1,
+        updatedAt: 1,
       } as never)
 
-      const raced = dbWithMidExportWrite(db, workflows, 2, () => {
-        db.delete(resourceGrants).where(eq(resourceGrants.resourceId, rootId)).run()
-        db.update(workflows).set({ version: 2, updatedAt: 2 }).where(eq(workflows.id, rootId)).run()
-      })
-
-      const err = await exportResourcePackage(
-        raced,
-        actorOf('reader'),
+      const pkg = await exportResourcePackage(
+        db,
+        actorOf('u1'),
         { type: 'workflow', id: rootId },
-        { appHome, expect: { expectedVersion: 1 } },
-      ).then(
-        () => null,
-        (e: unknown) => e as { code?: string; message?: string },
+        { appHome },
       )
-      expect(err?.code).toBe('package-export-ref-unavailable')
-      // 关键：**不能**把当前 revision 报出来。
-      expect(err?.message ?? '').not.toContain('now 2')
+      expect(pkg.zip.byteLength).toBeGreaterThan(0)
     } finally {
       removeTempDirSync(appHome)
     }
+  })
+
+  test('② 导出中途**改名** ⇒ 必须发现（序列化器读的是顶层 name，不是 row）', async () => {
+    // 第五轮的 `{ ...resource, row: current }` 只换了 `row`，而序列化器读 `r.name`。
+    // 后果不只是漏检：manifest 会**写旧名字**，产出一个与库不一致的包。
+    const { db, appHome, rootId, childId } = await seedGrantedClosure()
+    try {
+      const raced = dbWithMidExportWrite(db, agents, 2, () => {
+        db.update(agents).set({ name: 'renamed' }).where(eq(agents.id, childId)).run()
+      })
+      // 报的是 `package-root-changed` 而不是 closure：改名会改 slug，root 工作流的
+      // `agentRef` wire 随之变化，于是 root 的 op 先不等。这比只发现「成员变了」更强
+      // ——它说明**根的产物**确实变了，正是 fence 该拦的东西。
+      expect(
+        await codeOf(
+          exportResourcePackage(
+            raced,
+            actorOf('reader'),
+            { type: 'workflow', id: rootId },
+            { appHome },
+          ),
+        ),
+      ).toBe('package-root-changed')
+    } finally {
+      removeTempDirSync(appHome)
+    }
+  })
+
+  test('③ 技能文件树：复核必须**重读**并单独比字节（op 里只有 path/ref）', () => {
+    // ⚠️ 这条**没有**端到端竞态断言，是有意为之，说明理由：
+    //
+    // 我试了四种注入点（按 `skills` 读表次数第 2/3 次、以及「第 4/5/6 次起每次」）都没能
+    // 让文件写落进「第一次读盘之后、复核读盘之前」那个窗口——探针显示两次读到的都是
+    // 同一份字节。一次技能导出实测读 `skills` **六**回，而文件读盘与表读之间没有稳定的
+    // 先后关系可供挂钩。继续拼注入点只会得到一条**看起来在测竞态、实际测不到**的用例，
+    // 那比没有更糟（前面已经栽过一次：四条授权用例里三条是这么假绿的）。
+    //
+    // 所以这里只锁两件能确定的事，并把缺口写在明面上：
+    //   ① 摘要函数确实对**字节**敏感（不是只比路径）——这是修复的核心判据；
+    //   ② 复核路径确实**重读**了树，而不是复用导出早期那一份。
+    // 真正的端到端竞态覆盖仍缺，留给能注入 FS 时序的场景（如 `readSkillTree` 加测试
+    // seam）——**这是一个已知缺口，不是已覆盖**。
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'resourcePackage', 'export.ts'),
+      'utf8',
+    )
+    // ① 摘要把**字节**算进去（`Buffer.from(f.bytes)`），不是只有 path。
+    expect(src).toContain("Buffer.from(f.bytes).toString('base64')")
+    // ② 复核里重读了树，且比的是新旧两份。
+    expect(src).toContain('freshTrees.set(r.id, await readSkillTree(db, appHome, r.id))')
+    expect(src).toContain('skillTreeDigest(skillTrees.get(r.id)) === skillTreeDigest(')
+    // ③ 而且序列化用的是**重读的**那份树（否则包里仍是旧内容）。
+    expect(src).toContain('serializeClosure({ ...closure, resources: fresh }, freshTrees)')
   })
 })
