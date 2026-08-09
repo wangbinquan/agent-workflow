@@ -147,9 +147,9 @@ const EXACT_ALLOWANCE_ROWS = [
   // 身份判据**没有放宽**：仍是「同名 **且** `builtin = true`」，与导入期
   // `resolveIdentityRef` 的 built-in 分支逐字一致；名字在这里是**跨实例可移植的身份**
   // （源 id 在对端毫无意义），`builtin=true` 是额外的围栏，挡住用户自建的同名资源。
-  'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001ffindMissingBuiltins\u001fCallExpression:6713de1467924f734ae6\u001f1\u001fbuiltin-binding\u001finArray(table.name, [...names])',
-  // 同上：批量查回来之后按名字建集合做命中判定，`builtin === true` 的过滤就在表达式里。
-  'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001ffindMissingBuiltins\u001fNewExpression:dba7558a50eabb5aa94b\u001f1\u001fbuiltin-binding\u001fnew Set(rows.filter((row) => row.builtin === true).map((row) => String(row.name)))',
+  // 实现门第五轮 P2-3：无分块的 `IN` 在 65536 项时让 SQLite 抛错、预检 500，改为按
+  // `BUILTIN_LOOKUP_CHUNK` 分块。判据仍是「同名 **且** builtin=true」，未放宽。
+  'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001ffindMissingBuiltins\u001fCallExpression:2e1bb8aaf60291b65c62\u001f1\u001fbuiltin-binding\u001finArray(table.name, all.slice(i, i + BUILTIN_LOOKUP_CHUNK))',
   'sql-name-selector\u001fpackages/backend/src/services/resourcePackage/preview.ts\u001fbuildPackagePreview\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'sql-name-selector\u001fpackages/backend/src/cli/package.ts\u001frunExport\u001fCallExpression:f1ceab5380eec3071a5f\u001f1\u001fportable-selector\u001feq(table.name, name)',
   'collection-name-identity\u001fpackages/backend/src/services/resourcePackage/closure.ts\u001fresolveCallTarget\u001fCallExpression:613b1a0045d8d1a4940b\u001f1\u001fportable-selector\u001fvisible.find((r) => r.id === idHint && rowName(r) === name)',
@@ -472,10 +472,12 @@ describe('RFC-223 T15 structural identity guard', () => {
     // wire `(type,name)` 查找后仍要求 `builtin=true`；这里只把缺失提前到 preview，
     // commit 的 fail-closed 兜底不变。
     // RFC-271 实现门第四轮 P2-3：141 → 142。`findMissingBuiltins` 从「逐项串行查询」
-    // 改成「按类型批量查一次 + 按名字建命中集合」，于是**同一个身份判定拆成了两处
-    // sink**（`inArray(table.name, …)` 与 `new Set(rows.filter(builtin).map(name))`）。
-    // 数量加一**不代表放宽**：判据仍是「同名 **且** builtin=true」，与导入期逐字一致。
-    expect(findings.length).toBe(142)
+    // 改成「按类型批量查一次 + 按名字建命中集合」，于是同一个身份判定拆成了两处 sink。
+    // 第五轮 P2-3：142 → 141。那条无分块的 `IN` 在 65536 项时让 SQLite 抛错、预检 500，
+    // 改为分块 + 直接 `present.add(...)`（不再新建集合表达式），于是又并回一处。
+    // 两次增减**都不代表判据放宽**：始终是「同名 **且** builtin=true」，与导入期
+    // `resolveIdentityRef` 逐字一致。
+    expect(findings.length).toBe(141)
     // An explicit budget, because bun's default 5 s is not a meaningful one for
     // this test: it parses and walks EVERY production source file, so its cost
     // grows with the repository, and it runs on a shared runner alongside three
