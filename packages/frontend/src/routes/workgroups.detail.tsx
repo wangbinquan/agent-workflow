@@ -1,6 +1,7 @@
 // RFC-225 — workgroup detail studio with one versioned autosave writer.
 
 import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
+import { ResourceActionList } from '@/components/ResourceActionList'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -624,6 +625,7 @@ export function WorkgroupEditor(props: {
   const [headerSurface, setHeaderSurface] = useState<
     'actions' | 'rename' | 'acl' | 'delete' | null
   >(null)
+  const [exportActionBusy, setExportActionBusy] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -690,11 +692,6 @@ export function WorkgroupEditor(props: {
             </span>
             <WorkgroupDraftStatusSummary state={controller.state} />
             <IntentProvenanceBadge resourceType="workgroup" resourceId={props.initial.id} />
-            <ResourcePackageExportButton
-              type="workgroup"
-              id={props.initial.id}
-              name={props.initial.name}
-            />
           </div>
         }
         actions={
@@ -718,7 +715,7 @@ export function WorkgroupEditor(props: {
               onClick={() => setHeaderSurface('actions')}
               data-testid="workgroup-more-actions"
             >
-              {t('editor.nodeActions.more')}
+              {t('common.more')}
             </button>
           </>
         }
@@ -870,15 +867,16 @@ export function WorkgroupEditor(props: {
         onClose={() => setHeaderSurface(null)}
         title={t('workgroups.actionsTitle')}
         triggerRef={moreTriggerRef}
+        dismissDisabled={exportActionBusy}
         data-testid="workgroup-actions-dialog"
       >
         {copyResource.error !== null && copyResource.error !== undefined && (
           <ErrorBanner error={copyResource.error} />
         )}
-        <div className="workflow-editor-action-list">
+        <ResourceActionList onBusyChange={setExportActionBusy}>
           <button
             type="button"
-            className="workflow-editor-action-list__item"
+            className="resource-action-list__item"
             disabled={
               blockReason !== null ||
               controller.state.transport === 'offline' ||
@@ -901,9 +899,17 @@ export function WorkgroupEditor(props: {
             <strong>{copyResource.isPending ? t('workgroups.copying') : t('common.copy')}</strong>
             <span>{t('workgroups.copyActionHint')}</span>
           </button>
+          <ResourcePackageExportButton
+            type="workgroup"
+            id={props.initial.id}
+            name={controller.state.server.name}
+            variant="action"
+            disabled={unsafe || busy}
+            disabledReason={t('resourcePackage.saveBeforeExport')}
+          />
           <button
             type="button"
-            className="workflow-editor-action-list__item"
+            className="resource-action-list__item"
             onClick={() => {
               setHeaderSurface(null)
               void navigate({
@@ -922,7 +928,7 @@ export function WorkgroupEditor(props: {
           </button>
           <button
             type="button"
-            className="workflow-editor-action-list__item"
+            className="resource-action-list__item"
             disabled={
               controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
             }
@@ -939,7 +945,7 @@ export function WorkgroupEditor(props: {
           {actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon' && (
             <button
               type="button"
-              className="workflow-editor-action-list__item"
+              className="resource-action-list__item"
               disabled={
                 controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
               }
@@ -952,7 +958,7 @@ export function WorkgroupEditor(props: {
           )}
           <button
             type="button"
-            className="workflow-editor-action-list__item workflow-editor-action-list__item--danger"
+            className="resource-action-list__item resource-action-list__item--danger"
             disabled={deleteDisabled}
             onClick={() => setHeaderSurface('delete')}
             data-testid="workgroup-delete-button"
@@ -960,7 +966,7 @@ export function WorkgroupEditor(props: {
             <strong>{t('common.delete')}</strong>
             <span>{t('workgroups.deleteActionHint')}</span>
           </button>
-        </div>
+        </ResourceActionList>
       </Dialog>
 
       <Dialog

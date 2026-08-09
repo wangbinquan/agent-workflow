@@ -3,6 +3,7 @@
 // every detail edit of the (initially empty) definition.
 
 import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
+import { ResourceActionList } from '@/components/ResourceActionList'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -292,6 +293,7 @@ export function WorkflowEditorLoaded({
   const hasPaletteRail = workspaceHasPaletteRail(workspaceMode)
   const hasInspectorRail = workspaceHasInspectorRail(workspaceMode)
   const [modalSurface, setModalSurface] = useState<EditorModalSurface>('none')
+  const [exportActionBusy, setExportActionBusy] = useState(false)
   const [connection, setConnection] = useState({ connected: false, connectionEpoch: 0 })
   const controller = useWorkflowEditorDraft({
     initial,
@@ -861,7 +863,6 @@ export function WorkflowEditorLoaded({
   const headerActions = (
     <>
       <IntentProvenanceBadge resourceType="workflow" resourceId={workflowId} />
-      <ResourcePackageExportButton type="workflow" id={workflowId} name={workflowId} />
       <IntentEntryButton
         variant="modify"
         size="sm"
@@ -924,7 +925,7 @@ export function WorkflowEditorLoaded({
         onClick={() => setModalSurface('actions')}
         data-testid="workflow-more-actions"
       >
-        {t('editor.nodeActions.more')}
+        {t('common.more')}
       </button>
     </>
   )
@@ -1142,15 +1143,16 @@ export function WorkflowEditorLoaded({
           onClose={() => setModalSurface('none')}
           title={t('editor.actionsTitle')}
           triggerRef={moreTriggerRef}
+          dismissDisabled={exportActionBusy}
           data-testid="workflow-actions-dialog"
         >
           {copyActionError !== null && copyActionError !== undefined && (
             <ErrorBanner error={copyActionError} />
           )}
-          <div className="workflow-editor-action-list">
+          <ResourceActionList onBusyChange={setExportActionBusy}>
             <button
               type="button"
-              className="workflow-editor-action-list__item"
+              className="resource-action-list__item"
               disabled={
                 exactActionRef.current !== null ||
                 controller.state.phase === 'error' ||
@@ -1164,9 +1166,17 @@ export function WorkflowEditorLoaded({
               <strong>{copyPending ? t('editor.copying') : t('common.copy')}</strong>
               <span>{t('editor.copyActionHint')}</span>
             </button>
+            <ResourcePackageExportButton
+              type="workflow"
+              id={workflowId}
+              name={controller.state.server.name || workflowId}
+              variant="action"
+              disabled={unsafe || exactActionRef.current !== null}
+              disabledReason={t('resourcePackage.saveBeforeExport')}
+            />
             <button
               type="button"
-              className="workflow-editor-action-list__item"
+              className="resource-action-list__item"
               onClick={() => {
                 setRenameName(controller.state.local.name)
                 setRenameDescription(controller.state.local.description)
@@ -1180,7 +1190,7 @@ export function WorkflowEditorLoaded({
             {actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon' ? (
               <button
                 type="button"
-                className="workflow-editor-action-list__item"
+                className="resource-action-list__item"
                 onClick={() => setModalSurface('acl')}
                 data-testid="workflow-acl-button"
               >
@@ -1190,7 +1200,7 @@ export function WorkflowEditorLoaded({
             ) : null}
             <button
               type="button"
-              className="workflow-editor-action-list__item workflow-editor-action-list__item--danger"
+              className="resource-action-list__item resource-action-list__item--danger"
               disabled={
                 controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
               }
@@ -1200,7 +1210,7 @@ export function WorkflowEditorLoaded({
               <strong>{t('common.delete')}</strong>
               <span>{t('editor.deleteActionHint')}</span>
             </button>
-          </div>
+          </ResourceActionList>
         </Dialog>
 
         <Dialog

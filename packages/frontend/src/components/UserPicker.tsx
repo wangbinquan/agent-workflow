@@ -16,7 +16,7 @@
 // "inside the dialog" (Dialog.tsx isFocusInsideDialog).
 
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type AriaAttributes } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
@@ -32,6 +32,13 @@ interface UserPickerProps {
   placeholder?: string
   /** Single-select mode (owner transfer): picking replaces the selection. */
   single?: boolean
+  /** Hide disabled accounts when the target must be an active principal. */
+  activeOnly?: boolean
+  'aria-label'?: AriaAttributes['aria-label']
+  'aria-labelledby'?: AriaAttributes['aria-labelledby']
+  'aria-describedby'?: AriaAttributes['aria-describedby']
+  'aria-required'?: AriaAttributes['aria-required']
+  'aria-invalid'?: AriaAttributes['aria-invalid']
   testidPrefix?: string
 }
 
@@ -42,6 +49,12 @@ export function UserPicker({
   disabled,
   placeholder,
   single,
+  activeOnly,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledby,
+  'aria-describedby': ariaDescribedby,
+  'aria-required': ariaRequired,
+  'aria-invalid': ariaInvalid,
   testidPrefix,
 }: UserPickerProps) {
   const { t } = useTranslation()
@@ -78,16 +91,27 @@ export function UserPicker({
   }, [open])
 
   const search = useQuery<UserPublic[]>({
-    queryKey: ['users', 'search', debounced],
+    queryKey: ['users', 'search', debounced, activeOnly === true ? 'active' : 'all'],
     queryFn: ({ signal }) =>
-      api.get('/api/users/search', { q: debounced || undefined, limit: 20 }, signal),
+      api.get(
+        '/api/users/search',
+        {
+          q: debounced || undefined,
+          limit: activeOnly === true ? 100 : 20,
+          status: activeOnly === true ? 'active' : undefined,
+        },
+        signal,
+      ),
     enabled: open && !disabled,
     staleTime: 30_000,
   })
 
   const selectedIds = new Set(value.map((u) => u.id))
   const hidden = new Set(excludeIds ?? [])
-  const results = (search.data ?? []).filter((u) => !selectedIds.has(u.id) && !hidden.has(u.id))
+  const results = (search.data ?? []).filter(
+    (u) =>
+      !selectedIds.has(u.id) && !hidden.has(u.id) && (activeOnly !== true || u.status === 'active'),
+  )
 
   function add(user: UserPublic) {
     onChange(single ? [user] : [...value, user])
@@ -147,6 +171,11 @@ export function UserPicker({
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledby}
+          aria-describedby={ariaDescribedby}
+          aria-required={ariaRequired}
+          aria-invalid={ariaInvalid}
           data-testid={testidPrefix ? `${testidPrefix}-input` : undefined}
           onFocus={() => setOpen(true)}
           onChange={(e) => {

@@ -125,6 +125,32 @@ describe('UserPicker', () => {
     expect(screen.queryByTestId('tp-option-alice')).toBeNull()
     expect(screen.queryByTestId('tp-option-carol')).toBeNull()
   })
+
+  test('activeOnly hides disabled accounts and exposes the required combobox semantics', async () => {
+    mockedGet.mockResolvedValue([
+      user('u1', 'alice'),
+      { ...user('u2', 'disabled-bob'), status: 'disabled' },
+    ])
+    wrap(
+      <UserPicker
+        value={[]}
+        onChange={() => {}}
+        activeOnly
+        aria-label="Required local user"
+        aria-required
+        aria-invalid
+        testidPrefix="active"
+      />,
+    )
+    const input = screen.getByTestId('active-input')
+    fireEvent.focus(input)
+    await waitFor(() => expect(screen.queryByTestId('active-option-alice')).toBeTruthy())
+    expect(screen.queryByTestId('active-option-disabled-bob')).toBeNull()
+    expect(input.getAttribute('aria-label')).toBe('Required local user')
+    expect(input.getAttribute('aria-required')).toBe('true')
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(mockedGet.mock.calls[0]?.[1]).toMatchObject({ limit: 100, status: 'active' })
+  })
 })
 
 describe('AclPanel', () => {

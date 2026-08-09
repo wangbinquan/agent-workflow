@@ -16,13 +16,14 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { registerRoute } from '@/routes/registry'
 import { exportResourcePackage } from '@/services/resourcePackage/export'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
+import { PackageSecretRefSchema, parseResourcePackage } from '@/services/resourcePackage/parse'
 import { buildPackagePreview } from '@/services/resourcePackage/preview'
 import {
   commitResourcePackage,
   type HumanMemberMapping,
   type ImportDecision,
 } from '@/services/resourcePackage/commit'
+import type { PackageSecretInput } from '@/services/resourcePackage/secretInputs'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
 
@@ -38,7 +39,7 @@ const ImportDecisionsSchema = z.array(
     .strict(),
 )
 
-/** human 成员映射：`userId: null` = 该成员不加入（leader 槽会在业务层被拒）。 */
+/** human 成员映射：每个 `(workgroupSlug, username)` 一条；`null` = 其全部 alias 不加入。 */
 const HumanMemberMappingsSchema = z.array(
   z
     .object({
@@ -47,6 +48,10 @@ const HumanMemberMappingsSchema = z.array(
       userId: z.string().min(1).max(64).nullable().optional(),
     })
     .strict(),
+)
+
+const PackageSecretInputsSchema = z.array(
+  PackageSecretRefSchema.extend({ value: z.string() }).strict(),
 )
 
 export interface ResourcePackageRouteDeps {
@@ -245,6 +250,19 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
         })
       }
       const humanMemberMappings: HumanMemberMapping[] = parsedMappings.data
+      let rawSecretInputs: unknown
+      try {
+        rawSecretInputs = JSON.parse(String(form.get('secretInputs') ?? '[]'))
+      } catch {
+        throw new ValidationError('package-invalid', '`secretInputs` is not valid JSON')
+      }
+      const parsedSecretInputs = PackageSecretInputsSchema.safeParse(rawSecretInputs)
+      if (!parsedSecretInputs.success) {
+        throw new ValidationError('package-invalid', '`secretInputs` has an invalid shape', {
+          issues: parsedSecretInputs.error.issues,
+        })
+      }
+      const secretInputs: PackageSecretInput[] = parsedSecretInputs.data
       const pkg = await parseResourcePackage(new Uint8Array(await file.arrayBuffer()))
       return c.json(
         await commitResourcePackage(
@@ -257,7 +275,7 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
               : { pluginInstallOpts: deps.pluginInstallOpts }),
           },
           actorOf(c),
-          { pkg, previewToken, decisions, humanMemberMappings },
+          { pkg, previewToken, decisions, humanMemberMappings, secretInputs },
         ),
       )
     },

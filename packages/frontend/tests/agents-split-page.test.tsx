@@ -16,6 +16,10 @@ import { Route as RootRoute } from '../src/routes/__root'
 import { IndexRoute as agentsIndexRoute, Route as agentsRoute } from '../src/routes/agents'
 import { Route as agentDetailRoute } from '../src/routes/agents.detail'
 import { Route as agentNewRoute } from '../src/routes/agents.new'
+import {
+  beginDeferredPackageCommit,
+  beginUnknownPackageCommit,
+} from './resource-package-create-busy.helpers'
 import '../src/i18n'
 
 interface AgentRow {
@@ -224,6 +228,11 @@ describe('/agents split page', () => {
     // The rail independently retains exactly one creation entry.
     expect(rail).not.toBeNull()
     expect(Array.from(rail?.querySelectorAll('.btn--primary') ?? [])).toEqual([newAgent])
+    expect(screen.queryByTestId('export-package-agent')).toBeNull()
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    expect(
+      screen.getByTestId('export-package-agent').closest('.resource-action-list'),
+    ).not.toBeNull()
   })
 
   test('empty pane at /agents; card click opens the detail form', async () => {
@@ -341,9 +350,7 @@ describe('/agents split page', () => {
 
     fireEvent.click(screen.getByTestId('agent-save-button'))
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: /^Delete$/ }) as HTMLButtonElement).disabled).toBe(
-        true,
-      ),
+      expect((screen.getByTestId('agent-save-button') as HTMLButtonElement).disabled).toBe(true),
     )
     fireEvent.click(screen.getByTestId('split-card-beta'))
 
@@ -370,7 +377,8 @@ describe('/agents split page', () => {
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
 
     // RFC-222 (D5): delete opens a type-to-confirm dialog — type the name.
-    fireEvent.click(screen.getByTestId('detail-delete-button'))
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    fireEvent.click(await screen.findByTestId('detail-delete-button'))
     const delDialog = await screen.findByRole('dialog')
     fireEvent.change(within(delDialog).getByTestId('confirm-input'), { target: { value: 'alpha' } })
     fireEvent.click(within(delDialog).getByRole('button', { name: /^Delete$/ }))
@@ -706,6 +714,15 @@ describe('/agents split page', () => {
     expect(
       screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
     ).toBe('detail')
+    const packageTab = screen.getByTestId('agents-create-package-tab')
+    const packagePanel = document.getElementById('agents-create-panel-package') as HTMLElement
+    expect(packageTab.getAttribute('aria-controls')).toBe(packagePanel.id)
+    expect(packagePanel.hidden).toBe(true)
+    fireEvent.click(packageTab)
+    expect(packagePanel.hidden).toBe(false)
+    expect(packagePanel.contains(screen.getByTestId('package-import-file'))).toBe(true)
+    expect(screen.queryByTestId('agent-create-button')).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'Create manually' }))
     const name = screen.getByRole('textbox', { name: /Name/ }) as HTMLInputElement
     fireEvent.change(name, { target: { value: 'gamma' } })
     fireEvent.click(screen.getByTestId('agent-create-button'))
@@ -742,6 +759,52 @@ describe('/agents split page', () => {
     releaseCreate()
     await waitFor(() => expect(router.state.location.pathname).toBe('/agents/frozen-create'))
     expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
+  })
+
+  test('package commit locks creation modes and the manual create scope until it settles', async () => {
+    renderAgents('/agents/new')
+    await waitFor(() => screen.getByTestId('agent-create-button'))
+    const scope = screen.getByTestId('agent-create-scope') as HTMLFieldSetElement
+    const manualTab = document.getElementById('agents-create-tab-manual') as HTMLButtonElement
+    const packageTab = screen.getByTestId('agents-create-package-tab') as HTMLButtonElement
+    const packagePanel = document.getElementById('agents-create-panel-package') as HTMLElement
+
+    const { finish } = await beginDeferredPackageCommit('agent', 'agents-create-package-tab')
+
+    await waitFor(() => expect(scope.disabled).toBe(true))
+    expect(manualTab.disabled).toBe(true)
+    expect(packageTab.disabled).toBe(true)
+    fireEvent.click(manualTab)
+    expect(packagePanel.hidden).toBe(false)
+
+    finish()
+    await waitFor(() => expect(scope.disabled).toBe(false))
+    expect(manualTab.disabled).toBe(false)
+    expect(packageTab.disabled).toBe(false)
+  })
+
+  test('unknown package outcome keeps the package retry mounted and blocks manual creation', async () => {
+    const router = renderAgents('/agents/new')
+    await waitFor(() => screen.getByTestId('agent-create-button'))
+    const packagePanel = document.getElementById('agents-create-panel-package') as HTMLElement
+    const scope = screen.getByTestId('agent-create-scope') as HTMLFieldSetElement
+    const manualTab = document.getElementById('agents-create-tab-manual') as HTMLButtonElement
+    const packageTab = screen.getByTestId('agents-create-package-tab') as HTMLButtonElement
+
+    await beginUnknownPackageCommit('agent', 'agents-create-package-tab')
+
+    await waitFor(() => expect(manualTab.disabled).toBe(true))
+    expect(scope.disabled).toBe(false)
+    expect(packageTab.disabled).toBe(false)
+    expect((screen.getByTestId('package-import-commit') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(manualTab)
+    expect(packagePanel.hidden).toBe(false)
+    expect(screen.queryByTestId('agent-create-button')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    fireEvent.click(await screen.findByTestId('unsaved-discard'))
+    expect(router.state.location.pathname).toBe('/agents/new')
+    expect(screen.getByTestId('package-import-retry-notice')).toBeTruthy()
   })
 
   test('new Agent invalid JSON blocks Create and arms the existing route guard', async () => {
@@ -849,7 +912,8 @@ describe('/agents split page', () => {
     const router = renderAgents('/agents/alpha')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
     // RFC-222 (D5): delete opens a type-to-confirm dialog — type the name.
-    fireEvent.click(screen.getByTestId('detail-delete-button'))
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    fireEvent.click(await screen.findByTestId('detail-delete-button'))
     const delDialog = await screen.findByRole('dialog')
     fireEvent.change(within(delDialog).getByTestId('confirm-input'), { target: { value: 'alpha' } })
     fireEvent.click(within(delDialog).getByRole('button', { name: /^Delete$/ }))

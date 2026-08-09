@@ -11,6 +11,13 @@
 import { api } from '@/api/client'
 
 export type ImportAction = 'new' | 'reuse' | 'overwrite'
+export type ResourcePackageType = 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
+
+export interface PackageSecretRef {
+  resourceType: ResourcePackageType
+  resourceName: string
+  field: string
+}
 
 export interface PackagePreviewCandidate {
   id: string
@@ -21,20 +28,46 @@ export interface PackagePreviewCandidate {
 
 export interface PackagePreviewEntry {
   localSlug: string
-  type: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
+  type: ResourcePackageType
   name: string
   candidates: PackagePreviewCandidate[]
   allowedActions: ImportAction[]
+  /** Server-selected safe default. Overwrite is never selected implicitly. */
+  defaultAction: ImportAction | null
+  /** Missing permission points when no write action is currently available. */
+  missingPermissions: string[]
+  /** Credential positions owned by this entry. */
+  secretFields: PackageSecretRef[]
   suggestedName: string
+}
+
+export interface HumanMemberSlot {
+  workgroupSlug: string
+  username: string
+  displayName: string
+  suggestedUserId: string | null
+  required: boolean
+}
+
+export interface PackageRequirements {
+  runtimes?: string[]
+  codeHosts?: string[]
+  executables?: string[]
+  pluginSources?: Array<{ name: string; spec: string; sourceKind: string }>
+  projectSkills?: string[]
+  mcpKinds?: string[]
+  humanMembers?: string[]
 }
 
 export interface PackagePreview {
   importId: string
+  root: { slug: string; type: ResourcePackageType; name: string }
   entries: PackagePreviewEntry[]
+  humanMembers: HumanMemberSlot[]
   previewToken: string
   expiresAt: number
-  secrets: Array<{ resourceType: string; resourceName: string; field: string }>
-  requirements: Record<string, unknown>
+  secrets: PackageSecretRef[]
+  requirements: PackageRequirements
 }
 
 export interface ImportDecision {
@@ -42,6 +75,16 @@ export interface ImportDecision {
   action: ImportAction
   targetId?: string
   finalName?: string
+}
+
+export interface HumanMemberMapping {
+  workgroupSlug: string
+  username: string
+  userId: string | null
+}
+
+export interface PackageSecretInput extends PackageSecretRef {
+  value: string
 }
 
 export interface PackageImportReceipt {
@@ -53,10 +96,17 @@ export interface PackageImportReceipt {
     action: 'create' | 'update'
     name: string
   }>
+  root?: {
+    resourceType: ResourcePackageType
+    resourceId: string
+    name: string
+    action: 'create' | 'update' | 'reuse'
+  }
+  skippedSecrets?: PackageSecretRef[]
 }
 
 /** 六类共用一条路径形状。 */
-export type ExportableType = PackagePreviewEntry['type']
+export type ExportableType = ResourcePackageType
 
 const SEGMENT: Record<ExportableType, string> = {
   agent: 'agents',
@@ -100,6 +150,8 @@ export async function commitResourcePackage(
   file: File,
   preview: Pick<PackagePreview, 'previewToken'>,
   decisions: readonly ImportDecision[],
+  humanMemberMappings: readonly HumanMemberMapping[] = [],
+  secretInputs: readonly PackageSecretInput[] = [],
   signal?: AbortSignal,
 ): Promise<PackageImportReceipt> {
   const form = new FormData()
@@ -108,6 +160,8 @@ export async function commitResourcePackage(
   // 都会在服务端对不上（那正是它存在的意义）。
   form.set('previewToken', preview.previewToken)
   form.set('decisions', JSON.stringify(decisions))
+  form.set('humanMemberMappings', JSON.stringify(humanMemberMappings))
+  form.set('secretInputs', JSON.stringify(secretInputs))
   return api.postMultipart<PackageImportReceipt>(
     '/api/resource-packages/commit',
     form,

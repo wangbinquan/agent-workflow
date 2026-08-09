@@ -46,11 +46,14 @@ describe('/skills/new — Upload ZIP tab wiring', () => {
     expect(src).not.toContain('<div role="tabpanel"')
   })
 
-  test('ZIP mode owns a dynamic import heading and no create action', () => {
+  test('all three modes own the correct dynamic heading and only managed can create', () => {
     const src = readFileSync(ROUTE_PATH, 'utf-8')
-    expect(src).toContain("tab === 'zip' ? t('skills.importTitle')")
+    expect(src).toContain("tab === 'zip'")
+    expect(src).toContain("t('skills.importTitle')")
+    expect(src).toContain("tab === 'package'")
+    expect(src).toContain("t('resourcePackage.importTitle')")
+    expect(src).toContain("tab === 'managed'")
     expect(src).toContain("t('skills.importSubtitle')")
-    expect(src).toContain("tab !== 'zip'")
   })
 
   test('panel uses shared primitives and no longer renders the RFC-019 table/raw rename input', () => {

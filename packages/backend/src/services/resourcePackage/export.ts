@@ -51,6 +51,8 @@ function collectRequirements(
   }
 
   const runtimes = new Set<string>()
+  const codeHosts = new Set<string>()
+  const executables = new Set<string>()
   const pluginSources: Array<{ name: string; spec: string; sourceKind: string }> = []
   const projectSkills = new Set<string>()
   const mcpKinds = new Set<string>()
@@ -69,6 +71,23 @@ function collectRequirements(
         /* 坏行由闭包段的 schema 校验负责 */
       }
     }
+    if (r.type === 'workflow') {
+      try {
+        const definition = JSON.parse(String(r.row.definition ?? '{}')) as { nodes?: unknown }
+        for (const raw of Array.isArray(definition.nodes) ? definition.nodes : []) {
+          const node = raw as { kind?: unknown; provider?: unknown }
+          if (
+            node.kind === 'code-host-call' &&
+            typeof node.provider === 'string' &&
+            node.provider.length > 0
+          ) {
+            codeHosts.add(node.provider)
+          }
+        }
+      } catch {
+        /* malformed rows are rejected by the closure/schema validation path */
+      }
+    }
     if (r.type === 'plugin') {
       pluginSources.push({
         name: r.name,
@@ -76,7 +95,16 @@ function collectRequirements(
         sourceKind: String(r.row.sourceKind ?? 'npm'),
       })
     }
-    if (r.type === 'mcp') mcpKinds.add(String(r.row.type ?? 'remote'))
+    if (r.type === 'mcp') {
+      mcpKinds.add(String(r.row.type ?? 'remote'))
+      try {
+        const config = JSON.parse(String(r.row.config ?? '{}')) as { command?: unknown }
+        const executable = Array.isArray(config.command) ? config.command[0] : undefined
+        if (typeof executable === 'string' && executable.length > 0) executables.add(executable)
+      } catch {
+        /* malformed rows are rejected by the closure/schema validation path */
+      }
+    }
     if (r.type === 'workgroup') {
       // `row.members` 由闭包装载层补上（成员是独立表）。human 成员带 **username**：
       // 跨实例标识。导入方要么本地有同名用户、要么在导入时逐个选映射——所以它是
@@ -92,6 +120,8 @@ function collectRequirements(
 
   return {
     runtimes: [...runtimes].sort(),
+    codeHosts: [...codeHosts].sort(),
+    executables: [...executables].sort(),
     pluginSources: pluginSources.sort((a, b) => a.name.localeCompare(b.name)),
     projectSkills: [...projectSkills].sort(),
     mcpKinds: [...mcpKinds].sort(),
@@ -160,6 +190,8 @@ Everything the root needs, exported transitively.
 | 项 / Item | 值 / Value |
 |---|---|
 | 执行档 / runtimes | ${req('runtimes')} |
+| 代码平台 / code hosts | ${req('codeHosts')} |
+| 本地可执行文件 / executables | ${req('executables')} |
 | 插件来源 / plugin sources | ${req('pluginSources')} |
 | 仓库自带技能 / project skills | ${req('projectSkills')} |
 | MCP 形态 / MCP kinds | ${req('mcpKinds')} |

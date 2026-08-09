@@ -84,10 +84,20 @@ describe('QuickCreateDialog (shared quick-create chrome)', () => {
   })
 
   test('pending disables confirm and swaps the label to common.creating', () => {
-    renderDialog({ canCreate: true, pending: true })
+    renderDialog({
+      canCreate: true,
+      pending: true,
+      alternativeAction: {
+        label: 'Import package',
+        description: 'Create from an exported package',
+        testid: 'thing-create-package',
+        onSelect: () => {},
+      },
+    })
     const confirm = screen.getByTestId('thing-create-confirm') as HTMLButtonElement
     expect(confirm.disabled).toBe(true)
     expect(confirm.textContent).toBe('Creating…')
+    expect((screen.getByTestId('thing-create-package') as HTMLButtonElement).disabled).toBe(true)
   })
 
   test('inline name error and footer submit error both render', () => {
@@ -100,5 +110,26 @@ describe('QuickCreateDialog (shared quick-create chrome)', () => {
     const { onClose } = renderDialog()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('optional alternative is a unified creation method and stays absent by default', () => {
+    const onSelect = vi.fn()
+    const first = renderDialog()
+    expect(screen.queryByTestId('thing-create-package')).toBeNull()
+    cleanup()
+
+    renderDialog({
+      alternativeAction: {
+        label: 'Import package',
+        description: 'Create from an exported package',
+        testid: 'thing-create-package',
+        onSelect,
+      },
+    })
+    const alternative = screen.getByTestId('thing-create-package')
+    expect(alternative.classList.contains('resource-action-list__item')).toBe(true)
+    fireEvent.click(alternative)
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(first.onClose).not.toHaveBeenCalled()
   })
 })

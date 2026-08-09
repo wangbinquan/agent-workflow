@@ -12,6 +12,10 @@ import { Route as RootRoute } from '../src/routes/__root'
 import { IndexRoute as mcpsIndexRoute, Route as mcpsRoute } from '../src/routes/mcps'
 import { Route as mcpDetailRoute } from '../src/routes/mcps.detail'
 import { Route as mcpNewRoute } from '../src/routes/mcps.new'
+import {
+  beginDeferredPackageCommit,
+  beginUnknownPackageCommit,
+} from './resource-package-create-busy.helpers'
 import '../src/i18n'
 
 function json(body: unknown, status = 200): Response {
@@ -206,6 +210,9 @@ describe('/mcps split page', () => {
     expect(
       screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
     ).toBe('detail')
+    expect(screen.queryByTestId('export-package-mcp')).toBeNull()
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    expect(screen.getByTestId('export-package-mcp').closest('.resource-action-list')).not.toBeNull()
   })
 
   test('new route uses the shared back and keeps the rail create CTA unique', async () => {
@@ -217,6 +224,55 @@ describe('/mcps split page', () => {
     expect(
       screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
     ).toBe('detail')
+    const packageTab = screen.getByTestId('mcps-create-package-tab')
+    const packagePanel = document.getElementById('mcps-create-panel-package') as HTMLElement
+    expect(packageTab.getAttribute('aria-controls')).toBe(packagePanel.id)
+    expect(packagePanel.hidden).toBe(true)
+    fireEvent.click(packageTab)
+    expect(packagePanel.hidden).toBe(false)
+    expect(packagePanel.contains(screen.getByTestId('package-import-file'))).toBe(true)
+    expect(screen.queryByTestId('mcp-save-button')).toBeNull()
+  })
+
+  test('package commit locks creation modes and the manual create scope until it settles', async () => {
+    renderMcps('/mcps/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New MCP/ }))
+    const packagePanel = document.getElementById('mcps-create-panel-package') as HTMLElement
+    const scope = packagePanel.closest('fieldset') as HTMLFieldSetElement
+    const manualTab = document.getElementById('mcps-create-tab-manual') as HTMLButtonElement
+    const packageTab = screen.getByTestId('mcps-create-package-tab') as HTMLButtonElement
+
+    const { finish } = await beginDeferredPackageCommit('mcp', 'mcps-create-package-tab')
+
+    await waitFor(() => expect(scope.disabled).toBe(true))
+    expect(manualTab.disabled).toBe(true)
+    expect(packageTab.disabled).toBe(true)
+    fireEvent.click(manualTab)
+    expect(packagePanel.hidden).toBe(false)
+
+    finish()
+    await waitFor(() => expect(scope.disabled).toBe(false))
+    expect(manualTab.disabled).toBe(false)
+    expect(packageTab.disabled).toBe(false)
+  })
+
+  test('unknown package outcome blocks manual creation but leaves retry enabled', async () => {
+    renderMcps('/mcps/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New MCP/ }))
+    const packagePanel = document.getElementById('mcps-create-panel-package') as HTMLElement
+    const scope = packagePanel.closest('fieldset') as HTMLFieldSetElement
+    const manualTab = document.getElementById('mcps-create-tab-manual') as HTMLButtonElement
+    const packageTab = screen.getByTestId('mcps-create-package-tab') as HTMLButtonElement
+
+    await beginUnknownPackageCommit('mcp', 'mcps-create-package-tab')
+
+    await waitFor(() => expect(manualTab.disabled).toBe(true))
+    expect(scope.disabled).toBe(false)
+    expect(packageTab.disabled).toBe(false)
+    expect((screen.getByTestId('package-import-commit') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(manualTab)
+    expect(packagePanel.hidden).toBe(false)
+    expect(screen.queryByTestId('mcp-save-button')).toBeNull()
   })
 
   test('Save stays in place, clears the dirty dot', async () => {
@@ -280,7 +336,8 @@ describe('/mcps split page', () => {
       ).toBe(true),
     )
 
-    fireEvent.click(screen.getByTestId('detail-delete-button'))
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    fireEvent.click(await screen.findByTestId('detail-delete-button'))
     const dialog = await screen.findByRole('dialog')
     fireEvent.change(within(dialog).getByTestId('confirm-input'), {
       target: { value: 'shared-mcp' },

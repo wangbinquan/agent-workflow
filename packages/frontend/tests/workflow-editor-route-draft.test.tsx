@@ -489,6 +489,7 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(screen.getByTestId('workflow-more-actions').classList.contains('btn--sm')).toBe(false)
     expect(screen.queryByRole('button', { name: /导出 YAML|Export YAML/ })).toBeNull()
     expect(screen.queryByTestId('workflow-rename-button')).toBeNull()
+    expect(screen.queryByTestId('export-package-workflow')).toBeNull()
     expect(meta?.querySelector('[data-testid="workflow-draft-phase"]')).not.toBeNull()
     expect(meta?.querySelector('[data-testid="workflow-draft-transport"]')).not.toBeNull()
     expect(screen.queryByTestId('workflow-draft-status-focus')).toBeNull()
@@ -500,6 +501,8 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     // 且里面有东西」，不是「必须有导出」。
     expect(screen.queryByRole('button', { name: /导出 YAML|Export YAML/ })).toBeNull()
     expect(screen.getByTestId('workflow-copy-action')).toBeTruthy()
+    const exportAction = screen.getByTestId('export-package-workflow')
+    expect(exportAction.closest('.resource-action-list')).not.toBeNull()
 
     fireEvent.click(screen.getByTestId('workflow-rename-button'))
     expect(screen.queryByTestId('workflow-actions-dialog')).toBeNull()

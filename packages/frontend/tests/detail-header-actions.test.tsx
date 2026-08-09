@@ -11,7 +11,8 @@
 //      principal-aware delete-reference lists the old span dropped).
 //   3. save is caller-owned: label / disabled / testid / onClick pass
 //      through; label falls back to common.save when omitted.
-//   4. extra slot renders ahead of Save inside the cluster.
+//   4. header keeps high-frequency actions; delete and other management actions
+//      live in the shared More dialog.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -146,7 +147,7 @@ describe('DetailHeaderActions', () => {
     expect(onClick).not.toHaveBeenCalled()
   })
 
-  test('extra slot renders ahead of Save inside the cluster; del label lands on the ConfirmButton', () => {
+  test('extra renders ahead of Save; delete moves into the shared More dialog', () => {
     wrap(
       <DetailHeaderActions
         {...BASE}
@@ -164,10 +165,13 @@ describe('DetailHeaderActions', () => {
     const buttons = [...cluster.querySelectorAll('button')]
     const extraIdx = buttons.findIndex((b) => b.dataset.testid === 'fuse-like-extra')
     const saveIdx = buttons.findIndex((b) => b.dataset.testid === 'save-here')
-    const delIdx = buttons.findIndex((b) => b.textContent === 'Delete it')
+    const moreIdx = buttons.findIndex((b) => b.dataset.testid === 'detail-more-actions')
     expect(extraIdx).toBeGreaterThanOrEqual(0)
     expect(saveIdx).toBeGreaterThan(extraIdx)
-    expect(delIdx).toBeGreaterThan(saveIdx)
+    expect(moreIdx).toBeGreaterThan(saveIdx)
+    expect(cluster.querySelector('[data-testid="detail-delete-button"]')).toBeNull()
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    expect(screen.getByTestId('detail-delete-button').textContent).toContain('Delete it')
   })
 
   test('defaults to h1 for non-split detail pages', () => {

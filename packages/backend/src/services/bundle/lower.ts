@@ -203,13 +203,15 @@ async function lowerPayload(
       )
       const kept = lowered.filter((m) => m !== null) as Record<string, unknown>[]
       payload.members = kept
-      // leader 被剔除时 `leaderDisplayName` 必须一并置空，否则指向一个不存在的成员。
-      // （配置包侧 leader 槽根本不允许选「不加入」，这里是防御。）
+      // Bundle wire uses null for "no leader" while the canonical create/save schemas use
+      // omission. Normalize that boundary here. A named leader whose member was removed (for
+      // example a defensive legacy human-leader payload) is omitted for the same reason.
       if (
-        typeof payload.leaderDisplayName === 'string' &&
-        !kept.some((m) => m.displayName === payload.leaderDisplayName)
+        payload.leaderDisplayName === null ||
+        (typeof payload.leaderDisplayName === 'string' &&
+          !kept.some((m) => m.displayName === payload.leaderDisplayName))
       ) {
-        payload.leaderDisplayName = null
+        delete payload.leaderDisplayName
       }
       return payload
     }

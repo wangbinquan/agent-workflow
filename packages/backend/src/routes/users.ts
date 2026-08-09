@@ -50,7 +50,16 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       const q = c.req.query('q') ?? undefined
       const limit = Math.min(Math.max(Number(c.req.query('limit') ?? '20'), 1), 100)
       const excludeIds = (c.req.query('excludeIds') ?? '').split(',').filter(Boolean)
-      const rows = await searchUsersPublic(deps.db, { q, limit, excludeIds })
+      const status = c.req.query('status')
+      if (status !== undefined && !['active', 'disabled', 'invited'].includes(status)) {
+        throw new ValidationError('user-invalid', `unknown user status '${status}'`)
+      }
+      const rows = await searchUsersPublic(deps.db, {
+        q,
+        limit,
+        excludeIds,
+        status: status as 'active' | 'disabled' | 'invited' | undefined,
+      })
       return c.json(rows)
     },
   )

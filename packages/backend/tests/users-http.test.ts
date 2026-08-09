@@ -320,6 +320,20 @@ describe('/api/users/search — admin + user (public 5-field view)', () => {
     expect(body.some((r) => r.id === aliceId)).toBe(false)
   })
 
+  test('status=active filters before the requested result limit', async () => {
+    await createUser(h.db, {
+      username: 'aaron-disabled',
+      displayName: 'Aaron Disabled',
+      role: 'user',
+      status: 'disabled',
+    })
+    const res = await reqAs(h.app, h.bobToken, '/api/users/search?q=a&status=active&limit=1')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Array<{ username: string; status: string }>
+    expect(body).toHaveLength(1)
+    expect(body[0]?.status).toBe('active')
+  })
+
   test('lookup accepts a mixed batch but returns each known user once with public fields only', async () => {
     const users = (await (await reqAs(h.app, DAEMON_TOKEN, '/api/users')).json()) as Array<{
       id: string

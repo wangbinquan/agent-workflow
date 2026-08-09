@@ -319,6 +319,16 @@ describe('users service', () => {
       'status',
       'username',
     ])
+
+    await createUser(db, {
+      username: 'archived',
+      displayName: 'Archived',
+      role: 'user',
+      status: 'disabled',
+    })
+    const activeOnly = await searchUsersPublic(db, { q: 'a', limit: 1, status: 'active' })
+    expect(activeOnly).toHaveLength(1)
+    expect(activeOnly[0]?.status).toBe('active')
   })
 
   test('listAllUsers includes __system__', async () => {

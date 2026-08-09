@@ -14,6 +14,14 @@ import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog } from '@/components/Dialog'
 import { NameDescriptionFields } from '@/components/NameDescriptionFields'
+import { ResourceActionItem, ResourceActionList } from '@/components/ResourceActionList'
+
+export interface QuickCreateAlternativeAction {
+  label: string
+  description: string
+  testid: string
+  onSelect: () => void
+}
 
 export interface QuickCreateDialogProps {
   open: boolean
@@ -42,6 +50,8 @@ export interface QuickCreateDialogProps {
   testidPrefix: string
   /** Optional cap for the description input (e.g. workgroups' schema max). */
   descriptionMaxLength?: number
+  /** Optional second creation method. Omitted for save-copy dialogs. */
+  alternativeAction?: QuickCreateAlternativeAction
 }
 
 export function QuickCreateDialog({
@@ -64,6 +74,7 @@ export function QuickCreateDialog({
   triggerRef,
   testidPrefix,
   descriptionMaxLength,
+  alternativeAction,
 }: QuickCreateDialogProps) {
   const { t } = useTranslation()
   return (
@@ -107,6 +118,19 @@ export function QuickCreateDialog({
         onDescriptionChange={onDescriptionChange}
         descriptionMaxLength={descriptionMaxLength}
       />
+      {alternativeAction !== undefined ? (
+        <div className="page__section">
+          <ResourceActionList>
+            <ResourceActionItem
+              label={alternativeAction.label}
+              description={alternativeAction.description}
+              disabled={pending}
+              data-testid={alternativeAction.testid}
+              onClick={alternativeAction.onSelect}
+            />
+          </ResourceActionList>
+        </div>
+      ) : null}
     </Dialog>
   )
 }

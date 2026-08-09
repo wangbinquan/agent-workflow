@@ -12,6 +12,10 @@ import { Route as RootRoute } from '../src/routes/__root'
 import { IndexRoute as pluginsIndexRoute, Route as pluginsRoute } from '../src/routes/plugins'
 import { Route as pluginDetailRoute } from '../src/routes/plugins.detail'
 import { Route as pluginNewRoute } from '../src/routes/plugins.new'
+import {
+  beginDeferredPackageCommit,
+  beginUnknownPackageCommit,
+} from './resource-package-create-busy.helpers'
 import '../src/i18n'
 
 function json(body: unknown, status = 200): Response {
@@ -231,6 +235,11 @@ describe('/plugins split page', () => {
     expect(
       screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
     ).toBe('detail')
+    expect(screen.queryByTestId('export-package-plugin')).toBeNull()
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    expect(
+      screen.getByTestId('export-package-plugin').closest('.resource-action-list'),
+    ).not.toBeNull()
   })
 
   test('new route uses the shared back and keeps the rail create CTA unique', async () => {
@@ -242,6 +251,55 @@ describe('/plugins split page', () => {
     expect(
       screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
     ).toBe('detail')
+    const packageTab = screen.getByTestId('plugins-create-package-tab')
+    const packagePanel = document.getElementById('plugins-create-panel-package') as HTMLElement
+    expect(packageTab.getAttribute('aria-controls')).toBe(packagePanel.id)
+    expect(packagePanel.hidden).toBe(true)
+    fireEvent.click(packageTab)
+    expect(packagePanel.hidden).toBe(false)
+    expect(packagePanel.contains(screen.getByTestId('package-import-file'))).toBe(true)
+    expect(screen.queryByTestId('plugin-save-button')).toBeNull()
+  })
+
+  test('package commit locks creation modes and the manual create scope until it settles', async () => {
+    renderPlugins('/plugins/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }))
+    const packagePanel = document.getElementById('plugins-create-panel-package') as HTMLElement
+    const scope = packagePanel.closest('fieldset') as HTMLFieldSetElement
+    const manualTab = document.getElementById('plugins-create-tab-manual') as HTMLButtonElement
+    const packageTab = screen.getByTestId('plugins-create-package-tab') as HTMLButtonElement
+
+    const { finish } = await beginDeferredPackageCommit('plugin', 'plugins-create-package-tab')
+
+    await waitFor(() => expect(scope.disabled).toBe(true))
+    expect(manualTab.disabled).toBe(true)
+    expect(packageTab.disabled).toBe(true)
+    fireEvent.click(manualTab)
+    expect(packagePanel.hidden).toBe(false)
+
+    finish()
+    await waitFor(() => expect(scope.disabled).toBe(false))
+    expect(manualTab.disabled).toBe(false)
+    expect(packageTab.disabled).toBe(false)
+  })
+
+  test('unknown package outcome blocks manual creation but leaves retry enabled', async () => {
+    renderPlugins('/plugins/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }))
+    const packagePanel = document.getElementById('plugins-create-panel-package') as HTMLElement
+    const scope = packagePanel.closest('fieldset') as HTMLFieldSetElement
+    const manualTab = document.getElementById('plugins-create-tab-manual') as HTMLButtonElement
+    const packageTab = screen.getByTestId('plugins-create-package-tab') as HTMLButtonElement
+
+    await beginUnknownPackageCommit('plugin', 'plugins-create-package-tab')
+
+    await waitFor(() => expect(manualTab.disabled).toBe(true))
+    expect(scope.disabled).toBe(false)
+    expect(packageTab.disabled).toBe(false)
+    expect((screen.getByTestId('package-import-commit') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(manualTab)
+    expect(packagePanel.hidden).toBe(false)
+    expect(screen.queryByTestId('plugin-save-button')).toBeNull()
   })
 
   test('check-update in the Updates tab lights up the list card chip (shared cache)', async () => {

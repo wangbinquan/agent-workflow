@@ -10,13 +10,66 @@
 //      结果是丢字段，最坏的是把新语义误解成旧语义。
 
 import { parse as parseYaml } from 'yaml'
-import { BundleSchema, collectBundleRefIssues, type ResourceBundle } from '@agent-workflow/shared'
+import { z } from 'zod'
+import {
+  AclResourceTypeSchema,
+  BundleSchema,
+  collectBundleRefIssues,
+  type ResourceBundle,
+} from '@agent-workflow/shared'
 import { decodeZip } from '@/services/skill-zip'
+import { resourceTypeOfOp } from '@/services/bundle/provider'
 import { ValidationError } from '@/util/errors'
 import { PACKAGE_FORMAT_VERSION } from './export'
 
+const ManifestResourceSchema = z
+  .object({
+    slug: z.string().min(1),
+    type: AclResourceTypeSchema,
+    name: z.string().min(1),
+  })
+  .strict()
+
+export const PackageSecretRefSchema = z
+  .object({
+    resourceType: AclResourceTypeSchema,
+    resourceName: z.string().min(1),
+    field: z.string().min(1),
+  })
+  .strict()
+
+const PackageRequirementsSchema = z
+  .object({
+    runtimes: z.array(z.string()).optional().default([]),
+    codeHosts: z.array(z.string()).optional().default([]),
+    executables: z.array(z.string()).optional().default([]),
+    pluginSources: z
+      .array(z.object({ name: z.string(), spec: z.string(), sourceKind: z.string() }).strict())
+      .optional()
+      .default([]),
+    projectSkills: z.array(z.string()).optional().default([]),
+    // Additive diagnostics already emitted by the implementation.
+    mcpKinds: z.array(z.string()).optional().default([]),
+    humanMembers: z.array(z.string()).optional().default([]),
+  })
+  .strict()
+
+export const PackageManifestSchema = z
+  .object({
+    formatVersion: z.number().int().positive(),
+    exportedAt: z.number().int().nonnegative(),
+    root: ManifestResourceSchema,
+    resources: z.array(ManifestResourceSchema),
+    requirements: PackageRequirementsSchema,
+    secrets: z.array(PackageSecretRefSchema),
+    danglingCallRefs: z.array(z.unknown()).optional().default([]),
+  })
+  .strict()
+
+export type PackageManifest = z.infer<typeof PackageManifestSchema>
+
 export interface ParsedPackage {
-  manifest: Record<string, unknown>
+  manifest: PackageManifest
   bundle: ResourceBundle
   /** 包内技能文件：`ref` → 字节。`readSkillFile` 从这里取。 */
   files: Map<string, Uint8Array>
@@ -38,14 +91,18 @@ export async function parseResourcePackage(zip: Uint8Array): Promise<ParsedPacka
     throw new ValidationError('package-invalid', `package must contain ${MANIFEST} and ${BUNDLE}`)
   }
 
-  const manifest = parseYaml(new TextDecoder().decode(manifestEntry.bytes())) as Record<
-    string,
-    unknown
-  >
-  if (typeof manifest !== 'object' || manifest === null) {
+  let rawManifest: unknown
+  try {
+    rawManifest = parseYaml(new TextDecoder().decode(manifestEntry.bytes()))
+  } catch {
+    // Upload syntax errors are caller input, not an internal server failure. Do not let the
+    // parser-specific YAMLParseError escape to the HTTP boundary where it would become a 500.
+    throw new ValidationError('package-invalid', 'manifest.yaml is not valid YAML')
+  }
+  if (typeof rawManifest !== 'object' || rawManifest === null) {
     throw new ValidationError('package-invalid', 'manifest.yaml is not a mapping')
   }
-  const formatVersion = manifest.formatVersion
+  const formatVersion = (rawManifest as { formatVersion?: unknown }).formatVersion
   if (typeof formatVersion !== 'number' || !Number.isInteger(formatVersion)) {
     throw new ValidationError('package-invalid', 'manifest.formatVersion is missing')
   }
@@ -55,6 +112,13 @@ export async function parseResourcePackage(zip: Uint8Array): Promise<ParsedPacka
       `package format version ${formatVersion} is newer than this instance supports (${PACKAGE_FORMAT_VERSION}); upgrade before importing`,
     )
   }
+  const parsedManifest = PackageManifestSchema.safeParse(rawManifest)
+  if (!parsedManifest.success) {
+    throw new ValidationError('package-invalid', 'manifest.yaml has an invalid shape', {
+      issues: parsedManifest.error.issues,
+    })
+  }
+  const manifest = parsedManifest.data
 
   let bundle: ResourceBundle
   try {
@@ -71,6 +135,8 @@ export async function parseResourcePackage(zip: Uint8Array): Promise<ParsedPacka
       issues,
     })
   }
+
+  assertManifestMatchesBundle(manifest, bundle)
 
   // ② 防夹带：登记面 = 三个固定条目 + bundle 里声明过的技能文件 ref。
   const declared = new Set<string>([MANIFEST, BUNDLE, README])
@@ -95,6 +161,44 @@ export async function parseResourcePackage(zip: Uint8Array): Promise<ParsedPacka
   }
 
   return { manifest, bundle, files, digest: await digestOf(zip) }
+}
+
+function assertManifestMatchesBundle(manifest: PackageManifest, bundle: ResourceBundle): void {
+  const declared = manifest.resources
+    .map((resource) => `${resource.type}\u0000${resource.slug}\u0000${resource.name}`)
+    .sort()
+  const actual = bundle.ops
+    .flatMap((op) => {
+      if (!('slug' in op)) return []
+      const name = (op.payload as { name?: unknown }).name
+      return typeof name === 'string'
+        ? [`${resourceTypeOfOp(op)}\u0000${op.slug}\u0000${name}`]
+        : []
+    })
+    .sort()
+  if (JSON.stringify(declared) !== JSON.stringify(actual)) {
+    throw new ValidationError(
+      'package-invalid',
+      'manifest.resources does not match the resources declared by bundle.json',
+    )
+  }
+
+  if (bundle.rootRef === undefined || !bundle.rootRef.startsWith('local:')) {
+    throw new ValidationError('package-invalid', 'a config package must declare a local rootRef')
+  }
+  const rootSlug = bundle.rootRef.slice('local:'.length)
+  const root = manifest.resources.find((resource) => resource.slug === rootSlug)
+  if (
+    root === undefined ||
+    root.slug !== manifest.root.slug ||
+    root.type !== manifest.root.type ||
+    root.name !== manifest.root.name
+  ) {
+    throw new ValidationError(
+      'package-invalid',
+      'manifest.root does not match bundle.json rootRef and resources',
+    )
+  }
 }
 
 async function digestOf(bytes: Uint8Array): Promise<string> {

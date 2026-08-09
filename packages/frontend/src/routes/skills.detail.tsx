@@ -901,7 +901,6 @@ function SkillDetailPage() {
         extra={
           <>
             <IntentProvenanceBadge resourceType="skill" resourceId={id} />
-            <ResourcePackageExportButton type="skill" id={id} name={skillName} />
             <IntentEntryButton
               variant="modify"
               mount={{ resourceType: 'skill', resourceId: id }}
@@ -916,6 +915,16 @@ function SkillDetailPage() {
               {t('fusion.launchFromSkillButton')}
             </button>
           </>
+        }
+        moreActions={
+          <ResourcePackageExportButton
+            type="skill"
+            id={id}
+            name={skillName}
+            variant="action"
+            disabled={del.isPending || aggregate.dirty || operationBusy || aggregate.outcomeUnknown}
+            disabledReason={t('resourcePackage.saveBeforeExport')}
+          />
         }
         errors={[saveError, del.error]}
       />

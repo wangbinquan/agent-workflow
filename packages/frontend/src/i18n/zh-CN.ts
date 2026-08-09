@@ -1589,17 +1589,96 @@ export interface Resources {
     importTitle: string
     file: string
     fileHint: string
+    dropTitle: string
+    chooseFile: string
+    replaceFile: string
+    removeFile: string
+    replaceConfirmTitle: string
+    replaceConfirmBody: string
+    removeConfirmBody: string
+    replaceAfterCommitConfirmBody: string
+    removeAfterCommitConfirmBody: string
+    replaceConfirmAction: string
+    invalidFile: string
+    reviewPackage: string
+    previewing: string
+    importing: string
+    retryCurrentTitle: string
+    retryCurrentBody: string
+    repreviewRequiredTitle: string
+    repreviewRequiredBody: string
+    previewExpiringTitle: string
+    previewExpiringBody: string
+    repreviewAction: string
+    reviewTitle: string
     working: string
     emptyPackage: string
     commit: string
     finalName: string
     target: string
     notYours: string
+    actionLabel: string
+    chooseTarget: string
+    chooseTargetHint: string
+    secretsTitle: string
+    secretFieldLabel: string
+    secretRequiredHint: string
+    secretOptionalHint: string
+    skippedSecretsTitle: string
+    rootMismatchTitle: string
+    rootMismatchBody: string
+    openImportedRoot: string
+    permissionBlockedTitle: string
+    permissionBlockedBody: string
+    requirementsTitle: string
+    requirementsHint: string
+    requirement: {
+      runtimes: string
+      codeHosts: string
+      executables: string
+      pluginSources: string
+      projectSkills: string
+      mcpKinds: string
+      humanMembers: string
+    }
+    humanMappingsTitle: string
+    humanMappingsHint: string
+    humanRequired: string
+    humanOptional: string
+    humanSource: string
+    humanMap: string
+    humanSkip: string
+    humanActionLabel: string
+    humanTarget: string
+    humanTargetPlaceholder: string
+    humanTargetRequired: string
+    humanSkipped: string
     secretsNotice_one: string
     secretsNotice_other: string
     importedCount_one: string
     importedCount_other: string
+    completeTitle: string
+    completeSummary: string
+    importAnother: string
+    createMethod: string
+    createManually: string
+    createMethodHint: string
     exportPackage: string
+    exporting: string
+    exportHint: string
+    saveBeforeExport: string
+    type: {
+      agent: string
+      skill: string
+      mcp: string
+      plugin: string
+      workflow: string
+      workgroup: string
+    }
+    appliedAction: {
+      create: string
+      update: string
+    }
     action: {
       new: string
       reuse: string
@@ -1625,6 +1704,7 @@ export interface Resources {
     open: string
     edit: string
     delete: string
+    deleteResourceActionHint: string
     save: string
     saved: string
     saving: string
@@ -1634,6 +1714,8 @@ export interface Resources {
     yes: string
     no: string
     details: string
+    more: string
+    moreActions: string
     emDash: string
     shaRangeLabel: string
     updated: string
@@ -6729,17 +6811,102 @@ export const zhCN: Resources = {
     importTitle: '导入配置包',
     file: '配置包文件',
     fileHint: '从本实例或其它 Agent Workflow 实例导出的 .zip。',
+    dropTitle: '将配置包拖到这里',
+    chooseFile: '选择配置包',
+    replaceFile: '替换',
+    removeFile: '移除',
+    replaceConfirmTitle: '放弃当前导入选择？',
+    replaceConfirmBody: '选择其它配置包会清空你已经确认的资源处理方式和用户映射。',
+    removeConfirmBody: '移除当前配置包会清空你已经确认的资源处理方式和用户映射。',
+    replaceAfterCommitConfirmBody:
+      '上次导入响应失败。如果结果可能不确定，请先重试当前选择；换包会开启新的幂等会话。',
+    removeAfterCommitConfirmBody:
+      '上次导入响应失败。如果结果可能不确定，请先重试当前选择；移除配置包会结束当前幂等会话。',
+    replaceConfirmAction: '放弃选择',
+    invalidFile: '请选择 .zip 格式的配置包。',
+    reviewPackage: '检查配置包',
+    previewing: '正在检查配置包…',
+    importing: '正在导入配置包…',
+    retryCurrentTitle: '重试这次已确认的导入',
+    retryCurrentBody: '重试时请保留当前配置包和选择，服务端才能安全重放同一次导入会话。',
+    repreviewRequiredTitle: '重新检查配置包',
+    repreviewRequiredBody:
+      '当前预检已过期，或已有资源发生了变化。请重新检查同一个包；仍然有效的选择会被保留。',
+    previewExpiringTitle: '当前预检即将过期',
+    previewExpiringBody: '现在重新检查可以刷新基线，并保留仍然有效的选择。',
+    repreviewAction: '重新检查',
+    reviewTitle: '确认导入方式',
     working: '处理中…',
     emptyPackage: '这个包里没有资源。',
     commit: '导入',
     finalName: '新名字',
     target: '已有资源',
     notYours: '属于他人',
-    secretsNotice_one: '有 {{count}} 处凭据字段已被脱敏，导入后需要重新填写。',
-    secretsNotice_other: '有 {{count}} 处凭据字段已被脱敏，导入后需要重新填写。',
+    actionLabel: '{{name}} 的导入方式',
+    chooseTarget: '选择资源',
+    chooseTargetHint: '找到多个匹配项，请明确选择要使用的资源。',
+    secretsTitle: '凭据需要补充',
+    secretFieldLabel: '{{type}} · {{name}} · {{field}}',
+    secretRequiredHint: '必须填写此项，才能创建有效资源。',
+    secretOptionalHint: '可以留空；该凭据不会导入，并会记录在导入报告中。',
+    skippedSecretsTitle: '未填写的凭据',
+    rootMismatchTitle: '这个配置包创建的是另一类资源',
+    rootMismatchBody:
+      '当前打开的是{{expected}}创建页，但配置包的根资源是{{actual}}“{{name}}”。导入完成后会自动打开实际根资源；若有留空凭据，则先保留导入报告供你确认。',
+    openImportedRoot: '打开 {{name}}',
+    permissionBlockedTitle: '你没有权限导入这个资源',
+    permissionBlockedBody: '缺少权限：{{permissions}}',
+    requirementsTitle: '本实例需要自备',
+    requirementsHint:
+      '这些前提只被配置包引用，并未打包在内。运行导入后的资源前，请确认本机已经具备。',
+    requirement: {
+      runtimes: '运行时',
+      codeHosts: '代码平台',
+      executables: '本地可执行文件',
+      pluginSources: '插件来源',
+      projectSkills: '项目技能',
+      mcpKinds: 'MCP 形态',
+      humanMembers: '人类账号',
+    },
+    humanMappingsTitle: '映射人类成员',
+    humanMappingsHint:
+      '用户名来自另一实例，可能不是本机的同一个人。导入前请逐一确认；同一来源账号承担的多个成员角色会一并映射。',
+    humanRequired: '必需组长',
+    humanOptional: '可选成员',
+    humanSource: '工作组 {{workgroup}} · 成员名称 {{names}}',
+    humanMap: '映射到本地用户',
+    humanSkip: '不导入此成员',
+    humanActionLabel: '@{{username}} 的导入选择',
+    humanTarget: '@{{username}} 对应的本地用户',
+    humanTargetPlaceholder: '搜索本地用户…',
+    humanTargetRequired: '请选择一个启用中的本地用户来对应 @{{username}}。',
+    humanSkipped: '导入后的工作组不会加入 @{{username}}。',
+    secretsNotice_one: '有 {{count}} 处凭据字段已被脱敏，请在导入前填写。',
+    secretsNotice_other: '有 {{count}} 处凭据字段已被脱敏，请在导入前填写。',
     importedCount_one: '已导入 {{count}} 个资源。',
     importedCount_other: '已导入 {{count}} 个资源。',
+    completeTitle: '配置包已导入',
+    completeSummary: '新建或更新 {{applied}} 个 · 复用 {{reused}} 个',
+    importAnother: '继续导入其它配置包',
+    createMethod: '创建方式',
+    createManually: '手动创建',
+    createMethodHint: '从导出的配置包导入资源及其引用的依赖。',
     exportPackage: '导出配置包',
+    exporting: '正在导出…',
+    exportHint: '将此资源及其引用的依赖打包下载。',
+    saveBeforeExport: '请先保存当前更改，再导出配置包。',
+    type: {
+      agent: '代理',
+      skill: '技能',
+      mcp: 'MCP',
+      plugin: '插件',
+      workflow: '工作流',
+      workgroup: '工作组',
+    },
+    appliedAction: {
+      create: '已新建',
+      update: '已更新',
+    },
     action: {
       new: '新建',
       reuse: '复用已有',
@@ -6770,6 +6937,7 @@ export const zhCN: Resources = {
     open: '打开',
     edit: '编辑',
     delete: '删除',
+    deleteResourceActionHint: '永久删除此资源。',
     save: '保存',
     saved: '已保存',
     saving: '保存中…',
@@ -6780,6 +6948,8 @@ export const zhCN: Resources = {
     yes: '是',
     no: '否',
     details: '详情',
+    more: '更多',
+    moreActions: '更多操作',
     emDash: '—',
     shaRangeLabel: '从 {{from}} 到 {{to}}',
     updated: '最近更新',

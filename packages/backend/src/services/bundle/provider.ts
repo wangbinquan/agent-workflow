@@ -24,9 +24,26 @@ export interface BundleAppliedOp {
   name: string
 }
 
+export interface BundleReceiptRoot {
+  resourceType: AclResourceType
+  resourceId: string
+  name: string
+  action: 'create' | 'update' | 'reuse'
+}
+
+export interface BundleSkippedSecret {
+  resourceType: string
+  resourceName: string
+  field: string
+}
+
 export interface BundleReceipt {
   journalId: string
   applied: BundleAppliedOp[]
+  /** Package adapters fill this in finalizeInTx; generic bundles may omit it. */
+  root?: BundleReceiptRoot
+  /** Credential positions intentionally left empty by the importer. */
+  skippedSecrets?: BundleSkippedSecret[]
 }
 
 /**
@@ -86,8 +103,9 @@ export interface BundleApplyProvider {
    * 工作组的 human 成员：包里带的是源实例的 **username**，本机的 `user_id` 与它
    * 没有任何关系。返回本地 user id，或 `null` = 该成员不加入。
    *
-   * 缺省实现（intent 场景没有这一步）等价于「全部不加入」——但配置包侧在 commit
-   * 期就已经强制用户逐个拍板，走不到缺省分支。
+   * 缺省实现（intent 场景没有这一步）等价于「全部不加入」。配置包侧只对最终
+   * new / overwrite 的工作组按 `(workgroupSlug, username)` 强制拍板并校验；reuse
+   * 不写 roster，因此既不要求也不消费映射。
    */
   resolveHumanMember?(workgroupSlug: string, username: string): string | null
 

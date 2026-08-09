@@ -210,13 +210,22 @@ function McpDetailPage() {
         extra={
           <>
             <IntentProvenanceBadge resourceType="mcp" resourceId={id} />
-            <ResourcePackageExportButton type="mcp" id={id} name={query.data?.name ?? id} />
             <IntentEntryButton
               variant="modify"
               mount={{ resourceType: 'mcp', resourceId: id }}
               data-testid="mcp-intent-entry"
             />
           </>
+        }
+        moreActions={
+          <ResourcePackageExportButton
+            type="mcp"
+            id={id}
+            name={query.data?.name ?? id}
+            variant="action"
+            disabled={dirty || save.isPending || del.isPending || !loaded}
+            disabledReason={t('resourcePackage.saveBeforeExport')}
+          />
         }
         errors={[save.error, del.error]}
       />

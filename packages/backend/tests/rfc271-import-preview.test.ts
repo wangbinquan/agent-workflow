@@ -16,14 +16,17 @@ import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
+import { stringify } from 'yaml'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { mcps } from '../src/db/schema'
+import { mcps, users } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import {
   buildPackagePreview,
+  groupHumanMemberSlots,
+  humanMemberBaselineOf,
   previewBaselineOf,
   signPreviewToken,
   verifyPreviewToken,
@@ -59,30 +62,90 @@ const mcpOp = (slug: string, name: string) => ({
   },
 })
 
+const workgroupOp = (
+  members: Array<{
+    memberType: 'human'
+    username: string
+    displayName: string
+    roleDesc: string
+    sortOrder: number
+  }>,
+  leaderDisplayName: string | null = null,
+) => ({
+  opId: 'op-1',
+  kind: 'workgroup-create',
+  slug: 'workgroup-squad',
+  payload: {
+    name: 'squad',
+    description: '',
+    instructions: '',
+    mode: leaderDisplayName === null ? 'free_collab' : 'leader_worker',
+    switches: { shareOutputs: true, directMessages: false, blackboard: false },
+    maxRounds: 20,
+    completionGate: false,
+    clarifyBudget: 3,
+    fanOut: false,
+    members,
+    leaderDisplayName,
+  },
+})
+
 const packageZip = (
   extra: {
     files?: Array<{ path: string; bytes: Uint8Array }>
     ops?: unknown[]
     formatVersion?: number
+    rootRef?: string
+    secrets?: Array<{ resourceType: string; resourceName: string; field: string }>
+    requirements?: Record<string, unknown>
+    manifestRoot?: { slug: string; type: string; name: string }
+    manifestResources?: Array<{ slug: string; type: string; name: string }>
   } = {},
-): Uint8Array =>
-  encodeZip([
+): Uint8Array => {
+  const ops = extra.ops ?? [mcpOp('mcp-tools', 'tools')]
+  const resources = ops.map((raw) => {
+    const op = raw as {
+      kind: string
+      slug: string
+      payload: { name: string }
+    }
+    return {
+      slug: op.slug,
+      type: op.kind.replace(/-(?:create|update)$/, ''),
+      name: op.payload.name,
+    }
+  })
+  const rootRef = extra.rootRef ?? `local:${resources[0]?.slug ?? ''}`
+  const root = resources.find((resource) => `local:${resource.slug}` === rootRef)
+
+  return encodeZip([
     {
       path: 'manifest.yaml',
-      bytes: utf8(`formatVersion: ${extra.formatVersion ?? 1}\nsecrets: []\nrequirements: {}\n`),
+      bytes: utf8(
+        stringify({
+          formatVersion: extra.formatVersion ?? 1,
+          exportedAt: 0,
+          root: extra.manifestRoot ?? root,
+          resources: extra.manifestResources ?? resources,
+          requirements: extra.requirements ?? {},
+          secrets: extra.secrets ?? [],
+          danglingCallRefs: [],
+        }),
+      ),
     },
     {
       path: 'bundle.json',
       bytes: utf8(
         JSON.stringify({
           bundleVersion: 1,
-          ops: extra.ops ?? [mcpOp('mcp-tools', 'tools')],
-          rootRef: 'local:mcp-tools',
+          ops,
+          rootRef,
         }),
       ),
     },
     ...(extra.files ?? []),
   ])
+}
 
 describe('① 解包与防夹带', () => {
   test('正常包：manifest + bundle 都解出来', async () => {
@@ -104,6 +167,22 @@ describe('① 解包与防夹带', () => {
   test('缺 manifest 或 bundle ⇒ 拒绝', async () => {
     const onlyManifest = encodeZip([{ path: 'manifest.yaml', bytes: utf8('formatVersion: 1\n') }])
     await expect(parseResourcePackage(onlyManifest)).rejects.toBeDefined()
+  })
+
+  test('损坏的 manifest YAML 是稳定 package-invalid，不泄成原生解析器异常', async () => {
+    const malformed = encodeZip([
+      { path: 'manifest.yaml', bytes: utf8('formatVersion: [') },
+      { path: 'bundle.json', bytes: utf8('{}') },
+    ])
+
+    const error = await parseResourcePackage(malformed).then(
+      () => null,
+      (value: unknown) => value as { code?: string; message?: string },
+    )
+    expect(error).toMatchObject({
+      code: 'package-invalid',
+      message: 'manifest.yaml is not valid YAML',
+    })
   })
 
   test('formatVersion 比本实例**高** ⇒ 拒绝（低版本解析器读高版本包只会误解语义）', async () => {
@@ -143,10 +222,45 @@ describe('① 解包与防夹带', () => {
     )
     expect(err?.code).toBe('package-invalid')
   })
+
+  test('manifest.root 不是 bundle.rootRef 指向的资源 ⇒ 拒绝', async () => {
+    const err = await parseResourcePackage(
+      packageZip({
+        manifestRoot: { slug: 'mcp-other', type: 'mcp', name: 'other' },
+      }),
+    ).then(
+      () => null,
+      (e: unknown) => e as { code?: string; message?: string },
+    )
+
+    expect(err?.code).toBe('package-invalid')
+    expect(err?.message).toContain('manifest.root does not match')
+  })
+
+  test('manifest.resources 与 bundle 资源身份不一致 ⇒ 拒绝', async () => {
+    const manifestResource = { slug: 'mcp-tools', type: 'mcp', name: 'renamed-only-in-manifest' }
+    const err = await parseResourcePackage(
+      packageZip({
+        manifestRoot: manifestResource,
+        manifestResources: [manifestResource],
+      }),
+    ).then(
+      () => null,
+      (e: unknown) => e as { code?: string; message?: string },
+    )
+
+    expect(err?.code).toBe('package-invalid')
+    expect(err?.message).toContain('manifest.resources does not match')
+  })
 })
 
 describe('② 预检：候选、可选动作、归属', () => {
-  const seedMcp = async (db: DbClient, owner: string, name: string): Promise<string> => {
+  const seedMcp = async (
+    db: DbClient,
+    owner: string,
+    name: string,
+    visibility: 'public' | 'private' = 'public',
+  ): Promise<string> => {
     const id = ulid()
     await db
       .insert(mcps)
@@ -158,7 +272,7 @@ describe('② 预检：候选、可选动作、归属', () => {
         config: '{}',
         enabled: true,
         ownerUserId: owner,
-        visibility: 'public',
+        visibility,
         createdAt: 1,
         updatedAt: 1,
       } as never)
@@ -174,6 +288,8 @@ describe('② 预检：候选、可选动作、归属', () => {
       importId: 'imp-1',
     })
     expect(preview.entries[0]?.allowedActions).toEqual(['new'])
+    expect(preview.entries[0]?.defaultAction).toBe('new')
+    expect(preview.entries[0]?.missingPermissions).toEqual([])
   })
 
   test('有自己的同名 ⇒ new / reuse / overwrite 三选', async () => {
@@ -182,6 +298,7 @@ describe('② 预检：候选、可选动作、归属', () => {
     const pkg = await parseResourcePackage(packageZip())
     const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: 'imp-1' })
     expect(preview.entries[0]?.allowedActions.sort()).toEqual(['new', 'overwrite', 'reuse'])
+    expect(preview.entries[0]?.defaultAction).toBe('reuse')
   })
 
   test('**只有别人的同名 ⇒ 没有 overwrite 选项**（「别人的不给覆盖选项」）', async () => {
@@ -210,6 +327,64 @@ describe('② 预检：候选、可选动作、归属', () => {
     const pkg = await parseResourcePackage(packageZip())
     const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: 'imp-1' })
     expect(preview.entries[0]?.suggestedName).toBe('tools-2')
+  })
+
+  test('隐藏的他人同名资源与不存在同形，不通过 suggestedName 泄漏名字', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(packageZip())
+    const actor = actorOf('u1')
+    const absent = await buildPackagePreview(db, actor, pkg, { box, importId: 'imp-absent' })
+
+    await seedMcp(db, 'u-other', 'tools', 'private')
+    const hidden = await buildPackagePreview(db, actor, pkg, { box, importId: 'imp-hidden' })
+
+    expect(hidden.entries[0]?.candidates).toEqual(absent.entries[0]?.candidates)
+    expect(hidden.entries[0]?.suggestedName).toBe(absent.entries[0]?.suggestedName)
+    expect(hidden.entries[0]?.suggestedName).toBe('tools')
+  })
+
+  test('没有任何写权限时仍返回完整预检，并列出 new 所缺权限', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(packageZip())
+    const preview = await buildPackagePreview(db, actorOf('u1', []), pkg, {
+      box,
+      importId: 'imp-no-write',
+    })
+
+    expect(preview.entries[0]).toMatchObject({
+      allowedActions: [],
+      defaultAction: null,
+      missingPermissions: ['mcps:create'],
+    })
+  })
+
+  test('root 与完整 secret 引用进入 wire，entry 只拿与自身 type/name 匹配的字段', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const matchingSecret = {
+      resourceType: 'mcp' as const,
+      resourceName: 'tools',
+      field: 'config.headers.Authorization',
+    }
+    const unrelatedSecret = {
+      resourceType: 'agent' as const,
+      resourceName: 'reviewer',
+      field: 'frontmatterExtra.API_TOKEN',
+    }
+    const pkg = await parseResourcePackage(
+      packageZip({
+        secrets: [matchingSecret, unrelatedSecret],
+        requirements: { runtimes: ['bun'] },
+      }),
+    )
+    const preview = await buildPackagePreview(db, actorOf('u1'), pkg, {
+      box,
+      importId: 'imp-contract',
+    })
+
+    expect(preview.root).toEqual({ slug: 'mcp-tools', type: 'mcp', name: 'tools' })
+    expect(preview.secrets).toEqual([matchingSecret, unrelatedSecret])
+    expect(preview.entries[0]?.secretFields).toEqual([matchingSecret])
+    expect(preview.requirements.runtimes).toEqual(['bun'])
   })
 })
 
@@ -282,5 +457,122 @@ describe('② previewToken —— 签死的是**基线**，不是包摘要', () 
       humanBaseline: [],
     })
     expect(() => verifyPreviewToken(box, t)).toThrow()
+  })
+})
+
+describe('③ human 成员：wire 保留 alias，签名按源用户收口', () => {
+  const aliases = [
+    {
+      memberType: 'human' as const,
+      username: 'alice',
+      displayName: 'reviewer',
+      roleDesc: 'reviews',
+      sortOrder: 0,
+    },
+    {
+      memberType: 'human' as const,
+      username: 'alice',
+      displayName: 'observer',
+      roleDesc: 'observes',
+      sortOrder: 1,
+    },
+  ]
+
+  test('无 users:search 的普通 actor 猜中 active username 也不泄漏内部 UUID', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    db.insert(users)
+      .values({
+        id: 'local-alice',
+        username: 'alice',
+        displayName: 'Alice',
+        role: 'user',
+        status: 'active',
+        passwordHash: 'test-only',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      .run()
+    const pkg = await parseResourcePackage(
+      packageZip({ ops: [workgroupOp([aliases[0]!])], rootRef: 'local:workgroup-squad' }),
+    )
+
+    const denied = await buildPackagePreview(db, actorOf('u1'), pkg, {
+      box,
+      importId: 'imp-human-no-search',
+    })
+    expect(denied.humanMembers[0]?.suggestedUserId).toBeNull()
+
+    const allowed = await buildPackagePreview(
+      db,
+      actorOf('u1', [...WRITE_ALL, 'users:search']),
+      pkg,
+      { box, importId: 'imp-human-with-search' },
+    )
+    expect(allowed.humanMembers[0]?.suggestedUserId).toBe('local-alice')
+  })
+
+  test('同一 username 的多 alias 逐行下发，但 token baseline 只有一个 tuple', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(
+      packageZip({ ops: [workgroupOp(aliases)], rootRef: 'local:workgroup-squad' }),
+    )
+    const preview = await buildPackagePreview(db, actorOf('u1'), pkg, {
+      box,
+      importId: 'imp-human-aliases',
+    })
+
+    expect(preview.humanMembers.map((m) => m.displayName)).toEqual(['reviewer', 'observer'])
+    expect(groupHumanMemberSlots(preview.humanMembers)).toEqual([
+      {
+        workgroupSlug: 'workgroup-squad',
+        username: 'alice',
+        displayNames: ['reviewer', 'observer'],
+        suggestedUserId: null,
+        required: false,
+      },
+    ])
+    expect(verifyPreviewToken(box, preview.previewToken).humanBaseline).toEqual([
+      { workgroupSlug: 'workgroup-squad', username: 'alice', required: false },
+    ])
+  })
+
+  test('旧 alias 基线的重复 tuple 按 key 去重，并对 required 做 OR', () => {
+    expect(
+      humanMemberBaselineOf([
+        {
+          workgroupSlug: 'workgroup-squad',
+          username: 'alice',
+          displayName: 'reviewer',
+          suggestedUserId: null,
+          required: false,
+        },
+        {
+          workgroupSlug: 'workgroup-squad',
+          username: 'alice',
+          displayName: 'observer',
+          suggestedUserId: null,
+          required: true,
+        },
+      ]),
+    ).toEqual([{ workgroupSlug: 'workgroup-squad', username: 'alice', required: true }])
+  })
+
+  test('human alias 被指定为 leader 时预检拒绝：canonical leader 必须是 agent', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(
+      packageZip({
+        ops: [workgroupOp([aliases[0]!], 'reviewer')],
+        rootRef: 'local:workgroup-squad',
+      }),
+    )
+    const err = await buildPackagePreview(db, actorOf('u1'), pkg, {
+      box,
+      importId: 'imp-human-leader',
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string; message?: string },
+    )
+    expect(err?.code).toBe('package-invalid')
+    expect(err?.message).toContain('leader must be an agent member')
   })
 })

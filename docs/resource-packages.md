@@ -126,8 +126,21 @@ symlink 逃逸在导出这条路径上被挡住：技能目录里一个 `secret 
 **别人的资源可以复用，但不给覆盖选项**——这是两条独立的规则，不是一条。
 
 写权限与界面完全一致：界面上没有 `agents:create` 就没有「新建」按钮，这里也不给 `new`。
-某个条目**一个动作都不剩**时整包拒绝（`package-write-forbidden`），而不是跳过它——少掉的
-那条是别人的传递依赖，装出来必然悬空。
+某个条目**一个动作都不剩**时，预检仍返回整包，但该条目的 `allowedActions=[]`、
+`defaultAction=null`，并在 `missingPermissions` 点名缺口；界面逐条标红并禁止提交，而不是
+把它静默跳过。commit 还会按**当时的 Actor**重新计算一次，防止预检之后权限被撤销。
+
+### 被脱敏凭据要逐字段确认
+
+预检把 `manifest.secrets[]` 逐条变成输入框。值只在 commit 请求里出现，不会写回 zip、
+preview token 或服务端暂存态。secret 只投影到最终选择 `new` / `overwrite` 的资源；选了
+`reuse` 的条目不落库，也不会要求重复填写。
+
+可选字段留空会安全删除对应 object leaf / command argv 项，并把准确位置写进持久化导入
+报告 `skippedSecrets[]`；绝不会把 `<REDACTED:SECRET>` 当真值落库。MCP URL、plugin spec
+这类严格 schema 必填的整字段不能留空，否则 fail-closed 返回
+`package-secret-input-required`。客户端只能提交 manifest 已声明的位置，额外、重复或任意
+路径都拒绝。
 
 ### human 成员要逐个选映射
 
@@ -165,7 +178,8 @@ exp ‖ canonical(每条目的候选 id / 各候选 expect / 允许动作)`）�
 
 ### 提交时的顺序
 
-① 验签 → ② **duplicate lookup 先于过期检查** → ③ 仅首次 claim 才查 `exp`。
+① 验签并核对 package digest → ② 按 `(scope, importId)` 做 **duplicate lookup，先于过期
+和任何易变校验** → ③ 仅首次 claim 才查 `exp`、当前权限、human 目标与候选可见性。
 
 ②③ 反过来写，「commit 成功但响应丢失、用户过了有效期再重试」会撞在过期上而
 **进不了 replay**——用户看到错误，而资源其实已经建好了。
@@ -214,13 +228,16 @@ agent-workflow package import --as-user <u> --file <f.zip>
 | `package-decision-not-allowed`      | 动作不在服务端重算的允许集合里                                      |
 | `package-decision-unconfirmed`      | 目标不在确认过的候选里                                              |
 | `package-selected-target-changed`   | reuse 目标在预检之后变了                                            |
+| `package-selected-target-gone`      | 选中的目标已不存在或不再对当前用户可见                              |
 | `package-overwrite-not-owned`       | 覆盖目标不归你所有                                                  |
-| `package-write-forbidden`           | 令牌缺该类写权限，且没有可复用的同名资源                            |
+| `package-write-forbidden`           | 首次 commit 时当前 Actor 已不具备所选写动作需要的权限               |
 | `package-decision-duplicate`        | 同一条目给了多条决策（不靠「后写覆盖」收场）                        |
 | `package-root-changed`              | root 在你加载之后变了（`expectedVersion` / `expectedSnapshotHash`） |
 | `package-human-mapping-missing`     | 有 human 成员没给映射                                               |
 | `package-human-mapping-required`    | 槽位标了 `required` 却选了「不加入」（仅旧 token 可能触发）         |
 | `package-human-mapping-invalid`     | 映射目标不是 active 用户                                            |
 | `package-human-mapping-unconfirmed` | 映射的成员不在确认过的槽位里                                        |
+| `package-secret-input-unconfirmed`  | 提交了 manifest 未声明的凭据位置                                    |
+| `package-secret-input-required`     | 留空后无法满足资源严格 schema 的必填凭据字段                        |
 | `bundle-apply-unsettled`            | 同一 importId 有一次未结的尝试                                      |
 | `bundle-apply-failed-replay`        | 同一 importId 上次失败了（不会静默重跑）                            |

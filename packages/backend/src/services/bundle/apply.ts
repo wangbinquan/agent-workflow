@@ -211,7 +211,7 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
     return null
   })
 
-  if (replay !== null) return replayOutcome(replay)
+  if (replay !== null) return replayBundleApplyOutcome(replay)
 
   // I9：claim 一成功**立刻**注册。晚于 pre-stage 会留下「本进程在跑、收敛器却
   // 看不见」的窗口，那正好是最长的一段（npm 安装 / 技能暂存）。
@@ -493,7 +493,14 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
 }
 
 /** I3 —— 重放是**三态**，不是「总是返回 receipt」。 */
-function replayOutcome(row: typeof resourceBundleApplies.$inferSelect): BundleReceipt {
+/**
+ * I3's single replay oracle. Scenario adapters may call it after authenticating
+ * their own envelope, before any mutable business validation, so a committed
+ * request can always return its original receipt.
+ */
+export function replayBundleApplyOutcome(
+  row: typeof resourceBundleApplies.$inferSelect,
+): BundleReceipt {
   if (row.state === 'committed' && row.receiptJson !== null) {
     return JSON.parse(row.receiptJson) as BundleReceipt
   }

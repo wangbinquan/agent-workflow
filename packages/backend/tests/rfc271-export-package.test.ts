@@ -16,6 +16,7 @@ import { parse as parseYaml } from 'yaml'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { eq } from 'drizzle-orm'
 import { agents, mcps, workflows } from '../src/db/schema'
 import { decodeZip } from '../src/services/skill-zip'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
@@ -235,5 +236,62 @@ describe('requirements —— 导入方需要自备的东西', () => {
       requirements: { mcpKinds: string[] }
     }
     expect(manifest.requirements.mcpKinds).toEqual(['remote'])
+  })
+
+  test('代码平台与本地 MCP 可执行文件进入预检前提清单', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { wf } = await seed(db)
+    const [agent] = await db.select().from(agents)
+    const localMcpId = ulid()
+    await db
+      .insert(mcps)
+      .values({
+        id: localMcpId,
+        name: 'local-tools',
+        description: '',
+        type: 'local',
+        config: JSON.stringify({ command: ['acme-tool', '--stdio'], env: {} }),
+        enabled: true,
+        ownerUserId: 'u1',
+        visibility: 'private',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      .run()
+    await db
+      .update(agents)
+      .set({ mcp: JSON.stringify([...JSON.parse(agent!.mcp), localMcpId]) })
+      .where(eq(agents.id, agent!.id))
+      .run()
+    await db
+      .update(workflows)
+      .set({
+        definition: JSON.stringify(
+          defn([
+            { id: 'n1', kind: 'agent-single', agentId: agent!.id },
+            {
+              id: 'host',
+              kind: 'code-host-call',
+              provider: 'gitlab',
+              action: 'comment.create',
+              params: { mr: '1', body: 'hi' },
+            },
+          ]),
+        ),
+      })
+      .where(eq(workflows.id, wf))
+      .run()
+
+    const pkg = await exportResourcePackage(
+      db,
+      actorOf('u1', ['scripts:author', 'code-host-calls:author']),
+      { type: 'workflow', id: wf },
+      { appHome: APP_HOME },
+    )
+    const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
+      requirements: { codeHosts: string[]; executables: string[] }
+    }
+    expect(manifest.requirements.codeHosts).toEqual(['gitlab'])
+    expect(manifest.requirements.executables).toEqual(['acme-tool'])
   })
 })

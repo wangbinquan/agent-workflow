@@ -33,13 +33,8 @@ export type {
 
 interface ResourceGalleryPageBaseProps {
   title: string
-  /** Header-right action cluster (import / new buttons, incl. testids/refs). */
+  /** Header-right action cluster (intent / new buttons, incl. testids/refs). */
   headerActions: ReactNode
-  /**
-   * Header actions retained for a genuine empty list when `emptyAction` moves
-   * the primary action into EmptyState (for example, keep Import but omit New).
-   */
-  emptyHeaderActions?: ReactNode
   /** Rendered under the header, before search + grid (import feedback …). */
   notice?: ReactNode
   items: GalleryCardItem[] | undefined
@@ -91,8 +86,7 @@ export function ResourceGalleryPage(props: ResourceGalleryPageProps): ReactEleme
   const hasEmptyAction =
     props.emptyAction !== undefined && props.emptyAction !== null && props.emptyAction !== false
   const visibleCount = filtered?.length ?? 0
-  const headerActions =
-    isGenuineEmpty && hasEmptyAction ? props.emptyHeaderActions : props.headerActions
+  const headerActions = isGenuineEmpty && hasEmptyAction ? null : props.headerActions
   const clearSearch = () => {
     setSearch('')
     props.onClearSearch?.()

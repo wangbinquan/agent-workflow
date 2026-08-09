@@ -263,6 +263,8 @@ export interface SearchInput {
   q?: string
   limit?: number
   excludeIds?: string[]
+  /** Apply before the result limit so an active-only picker cannot be starved by disabled rows. */
+  status?: UserPublic['status']
 }
 
 /**
@@ -304,7 +306,8 @@ export async function searchUsersPublic(db: DbClient, input: SearchInput): Promi
   const excluded = new Set(input.excludeIds ?? [])
   return rows
     .filter((r) => !excluded.has(r.id))
-    .filter((r) => r.status !== 'disabled' || excluded.size === 0)
+    .filter((r) => input.status === undefined || r.status === input.status)
+    .filter((r) => input.status !== undefined || r.status !== 'disabled' || excluded.size === 0)
     .slice(0, limit)
     .map(
       (r): UserPublic => ({

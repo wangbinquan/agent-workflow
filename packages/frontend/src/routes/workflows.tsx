@@ -5,7 +5,7 @@
 // editing happens on the editor page), mirroring the RFC-164 pattern.
 // Delete / export live in the EDITOR header (RFC-191: no list-level delete).
 
-import { ResourcePackageImportEntry } from '@/components/ResourcePackageImportEntry'
+import { ResourcePackageImportDialog } from '@/components/ResourcePackageImportDialog'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -73,7 +73,7 @@ function WorkflowsPage() {
 
   // Quick create — name + description only; navigate straight into the
   // editor (where the empty definition gets built out) on success.
-  const [createOpen, setCreateOpen] = useState(false)
+  const [createSurface, setCreateSurface] = useState<'none' | 'quick' | 'package'>('none')
   const [createName, setCreateName] = useState('')
   const [createDescription, setCreateDescription] = useState('')
   const createTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -81,9 +81,9 @@ function WorkflowsPage() {
   // a slow POST is in flight must NOT yank the user into the editor when the
   // response lands later (the card still appears via the list invalidation).
   const createOpenRef = useRef(false)
-  const setCreateOpenTracked = useCallback((open: boolean): void => {
-    createOpenRef.current = open
-    setCreateOpen(open)
+  const setCreateSurfaceTracked = useCallback((surface: 'none' | 'quick' | 'package'): void => {
+    createOpenRef.current = surface === 'quick'
+    setCreateSurface(surface)
   }, [])
   const create = useMutation({
     mutationFn: (body: CreateWorkflow): Promise<WorkflowDetail> => api.post('/api/workflows', body),
@@ -91,7 +91,7 @@ function WorkflowsPage() {
       void qc.invalidateQueries({ queryKey: ['workflows'] })
       qc.setQueryData(['workflows', created.id], created)
       if (!createOpenRef.current) return
-      setCreateOpenTracked(false)
+      setCreateSurfaceTracked('none')
       navigate({ to: '/workflows/$id', params: { id: created.id } })
     },
   })
@@ -105,8 +105,8 @@ function WorkflowsPage() {
     setCreateName('')
     setCreateDescription('')
     resetCreate()
-    setCreateOpenTracked(true)
-  }, [resetCreate, setCreateOpenTracked])
+    setCreateSurfaceTracked('quick')
+  }, [resetCreate, setCreateSurfaceTracked])
 
   // RFC-198 one-shot deep action. Replacing the flagged entry means closing,
   // refreshing the canonical URL, Back, and Forward cannot replay the dialog.
@@ -193,16 +193,6 @@ function WorkflowsPage() {
       title={t('workflows.title')}
       headerActions={
         <>
-          <ResourcePackageImportEntry
-            invalidateKeys={[
-              ['agents'],
-              ['skills'],
-              ['mcps'],
-              ['plugins'],
-              ['workflows'],
-              ['workgroups'],
-            ]}
-          />
           <IntentEntryButton
             variant="create"
             hint="workflow"
@@ -210,20 +200,6 @@ function WorkflowsPage() {
           />
           {createAction}
         </>
-      }
-      // 空列表时创建 CTA 移进 EmptyState，导入**留在 header**——一个空实例最常见的
-      // 下一步就是「把别处的配置搬过来」，藏进空状态里反而更难找。
-      emptyHeaderActions={
-        <ResourcePackageImportEntry
-          invalidateKeys={[
-            ['agents'],
-            ['skills'],
-            ['mcps'],
-            ['plugins'],
-            ['workflows'],
-            ['workgroups'],
-          ]}
-        />
       }
       emptyAction={createAction}
       emptyIcon={WORKFLOW_ICON}
@@ -240,8 +216,8 @@ function WorkflowsPage() {
       loadingTestid="workflows-loading"
     >
       <QuickCreateDialog
-        open={createOpen}
-        onClose={() => setCreateOpenTracked(false)}
+        open={createSurface === 'quick'}
+        onClose={() => setCreateSurfaceTracked('none')}
         title={t('editor.newTitle')}
         createLabel={t('workflows.createButton')}
         nameLabel={t('editor.fieldName')}
@@ -268,6 +244,20 @@ function WorkflowsPage() {
         }}
         triggerRef={createTriggerRef}
         testidPrefix="workflow"
+        alternativeAction={{
+          label: t('resourcePackage.importTitle'),
+          description: t('resourcePackage.createMethodHint'),
+          testid: 'workflow-create-package',
+          onSelect: () => {
+            setCreateSurfaceTracked('package')
+          },
+        }}
+      />
+      <ResourcePackageImportDialog
+        expectedRootType="workflow"
+        open={createSurface === 'package'}
+        onClose={() => setCreateSurfaceTracked('quick')}
+        triggerRef={createTriggerRef}
       />
     </ResourceGalleryPage>
   )

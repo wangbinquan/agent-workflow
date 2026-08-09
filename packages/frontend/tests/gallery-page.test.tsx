@@ -206,7 +206,7 @@ describe('ResourceGalleryPage shell', () => {
     expect(screen.queryByTestId('gallery-grid')).toBeNull()
   })
 
-  test('genuine empty list moves one primary CTA into EmptyState while retaining separate header actions', async () => {
+  test('genuine empty list moves its single create entry into EmptyState', async () => {
     const primaryAction = (
       <button type="button" className="btn btn--primary" data-testid="new-thing">
         New thing
@@ -222,7 +222,6 @@ describe('ResourceGalleryPage shell', () => {
               {primaryAction}
             </>
           }
-          emptyHeaderActions={<button type="button">Import</button>}
           emptyAction={primaryAction}
           emptyDescription="Create the first thing when you are ready."
           emptyIcon={<svg data-testid="things-empty-icon" />}
@@ -241,7 +240,7 @@ describe('ResourceGalleryPage shell', () => {
     expect(screen.getAllByTestId('new-thing')).toHaveLength(1)
     expect(within(empty).getByTestId('new-thing')).toBeTruthy()
     expect(within(screen.getByRole('banner')).queryByTestId('new-thing')).toBeNull()
-    expect(within(screen.getByRole('banner')).getByRole('button', { name: 'Import' })).toBeTruthy()
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Import' })).toBeNull()
     expect(empty.textContent).toContain('Create the first thing when you are ready.')
     expect(screen.getByTestId('things-empty-icon')).toBeTruthy()
   })
@@ -499,7 +498,7 @@ describe('ResourceGalleryPage shell', () => {
 })
 
 describe('/workflows gallery assembly (T3)', () => {
-  test('genuine empty list exposes one create CTA in EmptyState while package import stays in the header', async () => {
+  test('genuine empty list exposes one create CTA and keeps package import inside that flow', async () => {
     installFetch([])
     const list = await import('../src/routes/workflows')
     renderWithRouter(list.Route.options.component as () => React.ReactElement, '/workflows')
@@ -510,14 +509,28 @@ describe('/workflows gallery assembly (T3)', () => {
     expect(within(empty).getByTestId('workflow-new-button')).toBeTruthy()
     const header = screen.getByRole('banner')
     expect(within(header).queryByTestId('workflow-new-button')).toBeNull()
-    // RFC-271 C2 显式改判：header 里的入口从「导入 YAML」换成**配置包导入**。
-    // 意图不变（空列表时创建 CTA 在 EmptyState、导入留在 header），换的是入口背后
-    // 的东西——裸 YAML 会产出必然悬空的工作流，配置包带着整棵闭包。
-    expect(within(header).getByTestId('import-package-entry')).toBeTruthy()
+    expect(within(header).queryByTestId('import-package-entry')).toBeNull()
     expect(
       within(empty).getByTestId('workflow-new-button').classList.contains('btn--primary'),
     ).toBe(true)
     expect(empty.querySelector('[data-icon="workflow"]')).not.toBeNull()
+    fireEvent.click(within(empty).getByTestId('workflow-new-button'))
+    fireEvent.change(await screen.findByTestId('workflow-create-name'), {
+      target: { value: 'Keep this workflow draft' },
+    })
+    fireEvent.click(await screen.findByTestId('workflow-create-package'))
+    expect(screen.queryByTestId('workflow-create-dialog')).toBeNull()
+    expect(await screen.findByTestId('package-import-file')).toBeTruthy()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+
+    const packageDialog = screen.getByRole('dialog', { name: enUS.resourcePackage.importTitle })
+    fireEvent.click(
+      within(packageDialog).getAllByRole('button', { name: enUS.common.close }).at(-1)!,
+    )
+    expect(await screen.findByTestId('workflow-create-dialog')).toBeTruthy()
+    expect((screen.getByTestId('workflow-create-name') as HTMLInputElement).value).toBe(
+      'Keep this workflow draft',
+    )
   })
 
   test('cards carry vN + node-count chips, launch deep-link, and desc fallback', async () => {

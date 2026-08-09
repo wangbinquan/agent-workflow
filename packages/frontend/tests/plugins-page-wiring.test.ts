@@ -76,10 +76,12 @@ describe('RFC-031 /plugins wiring', () => {
     expect(src).toContain('PluginFields')
     expect(src).toContain('nameLocked')
     expect(src).toContain('plugin-save-button')
-    // RFC-151 PR-4: the delete ConfirmButton renders inside the shared
-    // <DetailHeaderActions> header shell now.
+    // Secondary administration now lives behind the shared More surface;
+    // destructive confirmation still uses the public ConfirmDialog.
     expect(src).toContain('DetailHeaderActions')
-    expect(read('components/DetailHeaderActions.tsx')).toContain('ConfirmButton')
+    const header = read('components/DetailHeaderActions.tsx')
+    expect(header).toContain('ConfirmDialog')
+    expect(header).toContain('detail-more-actions')
   })
 
   test('detail page renders save/del errors AFTER the header, NOT inside .page__actions', () => {

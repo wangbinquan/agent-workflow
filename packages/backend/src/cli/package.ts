@@ -18,7 +18,7 @@ import { and, eq } from 'drizzle-orm'
 import { writeFileSync, readFileSync } from 'node:fs'
 import { exportResourcePackage } from '@/services/resourcePackage/export'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
-import { buildPackagePreview } from '@/services/resourcePackage/preview'
+import { buildPackagePreview, groupHumanMemberSlots } from '@/services/resourcePackage/preview'
 import {
   commitResourcePackage,
   type HumanMemberMapping,
@@ -215,6 +215,7 @@ async function runImport(
   const pkg = await parseResourcePackage(new Uint8Array(readFileSync(file)))
   const box = createSecretBox(Paths.secretKeyFile)
   const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+  const humanMemberGroups = groupHumanMemberSlots(preview.humanMembers)
 
   // ── 阶段一：只产出计划，**不提交任何东西** ──
   if (planOut !== undefined) {
@@ -233,12 +234,14 @@ async function runImport(
         targetId: e.candidates[0]?.id,
         finalName: e.suggestedName,
       })),
-      // human 成员逐个选映射：`userId: null` = 不加入。leader 槽 `required: true`，
-      // 留 null 会在提交时被拒。
-      humanMemberMappings: preview.humanMembers.map((m) => ({
+      // 同一源用户可能以多个 alias 出现：映射按 `(workgroupSlug, username)` 只写一条，
+      // alias 全量保留在 `displayNames` 供人工复核；`userId: null` = 全部不加入。
+      humanMemberMappings: humanMemberGroups.map((m) => ({
         workgroupSlug: m.workgroupSlug,
         username: m.username,
-        displayName: m.displayName,
+        // 保留旧计划读取器用的单值字段，并新增不丢 alias 的完整列表。
+        displayName: m.displayNames[0],
+        displayNames: m.displayNames,
         required: m.required,
         userId: m.suggestedUserId,
       })),
@@ -254,7 +257,7 @@ async function runImport(
 
   let decisions: ImportDecision[]
   let previewToken = preview.previewToken
-  let humanMemberMappings: HumanMemberMapping[] = preview.humanMembers.map((m) => ({
+  let humanMemberMappings: HumanMemberMapping[] = humanMemberGroups.map((m) => ({
     workgroupSlug: m.workgroupSlug,
     username: m.username,
     userId: m.suggestedUserId,

@@ -7,7 +7,7 @@
 // QUICK-CREATE dialog (name + description only); members/config live on the
 // detail page, and delete lives in the detail header (no list-level delete).
 
-import { ResourcePackageImportEntry } from '@/components/ResourcePackageImportEntry'
+import { ResourcePackageImportDialog } from '@/components/ResourcePackageImportDialog'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useMemo, useRef, useState } from 'react'
@@ -50,7 +50,7 @@ function WorkgroupsPage() {
 
   // Quick create — name + description only; navigate to the detail page
   // (where members and the rest of the config are managed) on success.
-  const [createOpen, setCreateOpen] = useState(false)
+  const [createSurface, setCreateSurface] = useState<'none' | 'quick' | 'package'>('none')
   const [createName, setCreateName] = useState('')
   const [createDescription, setCreateDescription] = useState('')
   const createTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -58,9 +58,9 @@ function WorkgroupsPage() {
   // a slow POST is in flight must NOT yank the user to the detail page when
   // the response lands later (same guard as the workflows list page).
   const createOpenRef = useRef(false)
-  function setCreateOpenTracked(open: boolean): void {
-    createOpenRef.current = open
-    setCreateOpen(open)
+  function setCreateSurfaceTracked(surface: 'none' | 'quick' | 'package'): void {
+    createOpenRef.current = surface === 'quick'
+    setCreateSurface(surface)
   }
   const create = useMutation({
     mutationFn: (body: QuickCreateWorkgroupBody): Promise<Workgroup> =>
@@ -69,7 +69,7 @@ function WorkgroupsPage() {
       void qc.invalidateQueries({ queryKey: ['workgroups'] })
       qc.setQueryData(['workgroups', w.id], w)
       if (!createOpenRef.current) return
-      setCreateOpenTracked(false)
+      setCreateSurfaceTracked('none')
       navigate({ to: '/workgroups/$id', params: { id: w.id } })
     },
   })
@@ -82,7 +82,7 @@ function WorkgroupsPage() {
     setCreateName('')
     setCreateDescription('')
     create.reset()
-    setCreateOpenTracked(true)
+    setCreateSurfaceTracked('quick')
   }
 
   // Gallery items — updatedAt desc. The config summary that used to spread
@@ -192,16 +192,6 @@ function WorkgroupsPage() {
             hint="workgroup"
             data-testid="workgroups-intent-entry"
           />
-          <ResourcePackageImportEntry
-            invalidateKeys={[
-              ['agents'],
-              ['skills'],
-              ['mcps'],
-              ['plugins'],
-              ['workflows'],
-              ['workgroups'],
-            ]}
-          />
           {createAction}
         </>
       }
@@ -220,8 +210,8 @@ function WorkgroupsPage() {
       loadingTestid="workgroups-loading"
     >
       <QuickCreateDialog
-        open={createOpen}
-        onClose={() => setCreateOpenTracked(false)}
+        open={createSurface === 'quick'}
+        onClose={() => setCreateSurfaceTracked('none')}
         title={t('workgroups.newTitle')}
         createLabel={t('workgroups.createButton')}
         nameLabel={t('workgroups.fieldName')}
@@ -249,6 +239,20 @@ function WorkgroupsPage() {
         triggerRef={createTriggerRef}
         testidPrefix="workgroup"
         descriptionMaxLength={4096}
+        alternativeAction={{
+          label: t('resourcePackage.importTitle'),
+          description: t('resourcePackage.createMethodHint'),
+          testid: 'workgroup-create-package',
+          onSelect: () => {
+            setCreateSurfaceTracked('package')
+          },
+        }}
+      />
+      <ResourcePackageImportDialog
+        expectedRootType="workgroup"
+        open={createSurface === 'package'}
+        onClose={() => setCreateSurfaceTracked('quick')}
+        triggerRef={createTriggerRef}
       />
     </ResourceGalleryPage>
   )

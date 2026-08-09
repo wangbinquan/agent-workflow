@@ -17,10 +17,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { PACKAGE_SECRET_PLACEHOLDER } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { mcps, resourceBundleApplies } from '../src/db/schema'
+import { mcps, resourceBundleApplies, users, workgroups } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { buildPackagePreview } from '../src/services/resourcePackage/preview'
@@ -44,9 +45,24 @@ const actorOf = (id: string, permissions: readonly string[] = WRITE_ALL): Actor 
     permissions: new Set<string>(permissions),
   }) as unknown as Actor
 
+const mcpManifest = `formatVersion: 1
+exportedAt: 0
+root:
+  slug: mcp-tools
+  type: mcp
+  name: tools
+resources:
+  - slug: mcp-tools
+    type: mcp
+    name: tools
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`
+
 const packageZip = (): Uint8Array =>
   encodeZip([
-    { path: 'manifest.yaml', bytes: utf8('formatVersion: 1\nsecrets: []\nrequirements: {}\n') },
+    { path: 'manifest.yaml', bytes: utf8(mcpManifest) },
     {
       path: 'bundle.json',
       bytes: utf8(
@@ -67,6 +83,206 @@ const packageZip = (): Uint8Array =>
             },
           ],
           rootRef: 'local:mcp-tools',
+        }),
+      ),
+    },
+  ])
+
+const secretPackageZip = (): Uint8Array =>
+  encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: mcp-tools
+  type: mcp
+  name: tools
+resources:
+  - slug: mcp-tools
+    type: mcp
+    name: tools
+requirements: {}
+secrets:
+  - resourceType: mcp
+    resourceName: tools
+    field: config.env.TOKEN
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'mcp-create',
+              slug: 'mcp-tools',
+              payload: {
+                name: 'tools',
+                description: 'from package',
+                type: 'local',
+                config: {
+                  command: ['tool-server'],
+                  env: { TOKEN: PACKAGE_SECRET_PLACEHOLDER },
+                },
+                enabled: true,
+              },
+            },
+          ],
+          rootRef: 'local:mcp-tools',
+        }),
+      ),
+    },
+  ])
+
+const workgroupManifest = `formatVersion: 1
+exportedAt: 0
+root:
+  slug: workgroup-squad
+  type: workgroup
+  name: squad
+resources:
+  - slug: workgroup-squad
+    type: workgroup
+    name: squad
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`
+
+const workgroupPackageZip = (): Uint8Array =>
+  encodeZip([
+    { path: 'manifest.yaml', bytes: utf8(workgroupManifest) },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'workgroup-create',
+              slug: 'workgroup-squad',
+              payload: {
+                name: 'squad',
+                description: '',
+                instructions: '',
+                mode: 'free_collab',
+                switches: { shareOutputs: true, directMessages: false, blackboard: false },
+                maxRounds: 20,
+                completionGate: false,
+                clarifyBudget: 3,
+                fanOut: false,
+                members: [
+                  {
+                    memberType: 'human',
+                    username: 'alice',
+                    displayName: 'reviewer',
+                    roleDesc: 'reviews',
+                    sortOrder: 0,
+                  },
+                ],
+                leaderDisplayName: null,
+              },
+            },
+          ],
+          rootRef: 'local:workgroup-squad',
+        }),
+      ),
+    },
+  ])
+
+const workflowPackageZip = (): Uint8Array =>
+  encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: workflow-deploy
+  type: workflow
+  name: deploy
+resources:
+  - slug: workflow-deploy
+    type: workflow
+    name: deploy
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'workflow-create',
+              slug: 'workflow-deploy',
+              payload: {
+                name: 'deploy',
+                description: '',
+                // Permission inspection happens before the definition reaches the write kernel.
+                definition: { nodes: [{ id: 'run', kind: 'script' }] },
+              },
+            },
+          ],
+          rootRef: 'local:workflow-deploy',
+        }),
+      ),
+    },
+  ])
+
+const agentWithExternalMcpPackageZip = (mcpId: string): Uint8Array =>
+  encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: agent-worker
+  type: agent
+  name: worker
+resources:
+  - slug: agent-worker
+    type: agent
+    name: worker
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'agent-create',
+              slug: 'agent-worker',
+              payload: {
+                name: 'worker',
+                description: '',
+                outputs: [],
+                syncOutputsOnIterate: true,
+                permission: {},
+                skills: [],
+                dependsOn: [],
+                mcp: [`external:${mcpId}`],
+                plugins: [],
+                frontmatterExtra: {},
+                bodyMd: '',
+              },
+            },
+          ],
+          rootRef: 'local:agent-worker',
         }),
       ),
     },
@@ -99,6 +315,53 @@ const seedMcp = async (db: DbClient, owner: string, name: string): Promise<strin
   return id
 }
 
+const seedWorkgroup = async (db: DbClient, owner: string, name: string): Promise<string> => {
+  const id = ulid()
+  await db
+    .insert(workgroups)
+    .values({
+      id,
+      name,
+      description: 'local original',
+      instructions: '',
+      mode: 'free_collab',
+      leaderMemberId: null,
+      shareOutputs: true,
+      directMessages: false,
+      blackboard: false,
+      maxRounds: 20,
+      completionGate: false,
+      clarifyBudget: 3,
+      fanOut: false,
+      ownerUserId: owner,
+      visibility: 'public',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    .run()
+  return id
+}
+
+const seedUser = async (
+  db: DbClient,
+  id: string,
+  status: 'active' | 'disabled' | 'invited',
+): Promise<void> => {
+  await db
+    .insert(users)
+    .values({
+      id,
+      username: id,
+      displayName: id,
+      role: 'user',
+      status,
+      passwordHash: 'x',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
+    .run()
+}
+
 describe('基础：new 动作把包内资源建出来', () => {
   test('本地无同名 ⇒ new，落库且归导入者', async () => {
     const db = createInMemoryDb(MIGRATIONS)
@@ -112,10 +375,18 @@ describe('基础：new 动作把包内资源建出来', () => {
     })
     expect(receipt.applied).toHaveLength(1)
     const row = db.select().from(mcps).get()
+    if (row === undefined) throw new Error('expected imported MCP row')
     expect(row?.name).toBe('tools')
     // 「谁导入的整体所有资源权限就归谁」。
     expect(row?.ownerUserId).toBe('u1')
     expect(row?.visibility).toBe('private')
+    expect(receipt.root).toEqual({
+      resourceType: 'mcp',
+      resourceId: row.id,
+      name: 'tools',
+      action: 'create',
+    })
+    expect(JSON.parse(db.select().from(resourceBundleApplies).get()!.receiptJson!)).toEqual(receipt)
   })
 })
 
@@ -147,10 +418,11 @@ describe('① duplicate lookup **先于**过期检查', () => {
       } as never)
       .run()
 
-    const out = await commitResourcePackage(deps(db), actor, {
+    const out = await commitResourcePackage(deps(db), actorOf('u1', []), {
       pkg,
       previewToken: preview.previewToken,
-      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+      // Replay is before mutable permissions and even decision completeness.
+      decisions: [],
     })
     // 过期检查若排在前面，这里会抛 package-preview-expired，用户看到错误而资源已存在。
     expect(out).toEqual(receiptValue)
@@ -165,6 +437,41 @@ describe('① duplicate lookup **先于**过期检查', () => {
       importId: ulid(),
       now: Date.now() - 60 * 60 * 1000,
     })
+    const err = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('package-preview-expired')
+  })
+
+  test('相同 key 的其它 scope 不是 package 重放', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(packageZip())
+    const actor = actorOf('u1')
+    const importId = ulid()
+    const preview = await buildPackagePreview(db, actor, pkg, {
+      box,
+      importId,
+      now: Date.now() - 60 * 60 * 1000,
+    })
+    db.insert(resourceBundleApplies)
+      .values({
+        id: 'OTHER-SCOPE',
+        scope: 'intent',
+        key: importId,
+        actorUserId: 'u1',
+        state: 'committed',
+        receiptJson: JSON.stringify({ journalId: 'OTHER-SCOPE', applied: [] }),
+        preparedArtifactsJson: '[]',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
+      .run()
+
     const err = await commitResourcePackage(deps(db), actor, {
       pkg,
       previewToken: preview.previewToken,
@@ -233,6 +540,47 @@ describe('② / ③ 决策必须落在签名基线内，且服务端重算 allow
     )
     expect(err?.code).toBe('package-decision-missing')
   })
+
+  test('preview 后撤销资源写权限 ⇒ commit 按当前 actor 拒绝', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(packageZip())
+    const previewActor = actorOf('u1')
+    const preview = await buildPackagePreview(db, previewActor, pkg, { box, importId: ulid() })
+
+    const err = await commitResourcePackage(deps(db), actorOf('u1', []), {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string; details?: unknown },
+    )
+    expect(err).toMatchObject({
+      code: 'package-write-forbidden',
+      details: { missingPermissions: ['mcps:create'] },
+    })
+    expect(await db.select().from(resourceBundleApplies)).toHaveLength(0)
+  })
+
+  test('workflow author 权限在 preview 后被撤销 ⇒ commit 重新计算并拒绝', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(workflowPackageZip())
+    const previewActor = actorOf('u1', ['workflows:create', 'scripts:author'])
+    const preview = await buildPackagePreview(db, previewActor, pkg, { box, importId: ulid() })
+
+    const err = await commitResourcePackage(deps(db), actorOf('u1', ['workflows:create']), {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'workflow-deploy', action: 'new' }],
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string; details?: unknown },
+    )
+    expect(err).toMatchObject({
+      code: 'package-write-forbidden',
+      details: { missingPermissions: ['scripts:author'] },
+    })
+  })
 })
 
 describe('④ reuse 也要复核 —— 它不产 op，没有内核替它把关', () => {
@@ -275,9 +623,263 @@ describe('④ reuse 也要复核 —— 它不产 op，没有内核替它把关'
     })
     // reuse 不产 op ⇒ receipt 为空，但**这一次导入确实发生过**（journal 落了 committed）。
     expect(receipt.applied).toHaveLength(0)
+    expect(receipt.root).toEqual({
+      resourceType: 'mcp',
+      resourceId: target,
+      name: 'tools',
+      action: 'reuse',
+    })
     expect(db.select().from(resourceBundleApplies).get()?.state).toBe('committed')
     // 也没有多建一行。
     expect(await db.select().from(mcps)).toHaveLength(1)
+  })
+
+  test('预检后目标变为不可见 ⇒ 与不存在一样拒绝', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const target = await seedMcp(db, 'u-other', 'tools')
+    const pkg = await parseResourcePackage(packageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+    await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target)).run()
+
+    const err = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'mcp-tools', action: 'reuse', targetId: target }],
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('package-selected-target-gone')
+  })
+
+  test('root overwrite 改写为 external target，receipt 指向被更新行', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const target = await seedMcp(db, 'u1', 'tools')
+    const pkg = await parseResourcePackage(packageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const receipt = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'mcp-tools', action: 'overwrite', targetId: target }],
+    })
+    expect(receipt.root).toEqual({
+      resourceType: 'mcp',
+      resourceId: target,
+      name: 'tools',
+      action: 'update',
+    })
+    expect(db.select().from(mcps).where(eq(mcps.id, target)).get()?.description).toBe(
+      'from package',
+    )
+  })
+})
+
+describe('external 引用不提供隐藏资源存在性预言机', () => {
+  test('不存在与存在但不可见返回同形拒绝', async () => {
+    const hiddenDb = createInMemoryDb(MIGRATIONS)
+    const target = await seedMcp(hiddenDb, 'u-other', 'private-tools')
+    await hiddenDb.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target)).run()
+    const zip = agentWithExternalMcpPackageZip(target)
+    const actor = actorOf('u1')
+
+    const hiddenPkg = await parseResourcePackage(zip)
+    const hiddenPreview = await buildPackagePreview(hiddenDb, actor, hiddenPkg, {
+      box,
+      importId: ulid(),
+    })
+    const hiddenError = await commitResourcePackage(deps(hiddenDb), actor, {
+      pkg: hiddenPkg,
+      previewToken: hiddenPreview.previewToken,
+      decisions: [{ localSlug: 'agent-worker', action: 'new' }],
+    }).then(
+      () => null,
+      (error: unknown) => error as { code?: string; message?: string },
+    )
+
+    const absentDb = createInMemoryDb(MIGRATIONS)
+    const absentPkg = await parseResourcePackage(zip)
+    const absentPreview = await buildPackagePreview(absentDb, actor, absentPkg, {
+      box,
+      importId: ulid(),
+    })
+    const absentError = await commitResourcePackage(deps(absentDb), actor, {
+      pkg: absentPkg,
+      previewToken: absentPreview.previewToken,
+      decisions: [{ localSlug: 'agent-worker', action: 'new' }],
+    }).then(
+      () => null,
+      (error: unknown) => error as { code?: string; message?: string },
+    )
+
+    expect(hiddenError).toEqual(absentError)
+    expect(hiddenError?.code).toBe('package-external-unresolved')
+  })
+})
+
+describe('⑤ human 映射只属于会落地的 workgroup', () => {
+  test('reuse 不要求映射，也不消费附带的重复/无效映射', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const target = await seedWorkgroup(db, 'u1', 'squad')
+    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const receipt = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'workgroup-squad', action: 'reuse', targetId: target }],
+      // 旧计划可能仍附带这些行。reuse 不写 roster，因此不查 user、不报 duplicate。
+      humanMemberMappings: [
+        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'missing-user' },
+        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'also-missing' },
+      ],
+    })
+
+    expect(receipt.applied).toHaveLength(0)
+    expect(await db.select().from(workgroups)).toHaveLength(1)
+  })
+
+  test('new 工作组缺少已确认的映射 ⇒ 拒绝', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const err = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('package-human-mapping-missing')
+  })
+
+  test('free_collab 的 null leader 经 lowering 归一后可成功新建', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, 'active-user', 'active')
+    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const receipt = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'workgroup-squad', action: 'new' }],
+      humanMemberMappings: [
+        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'active-user' },
+      ],
+    })
+
+    expect(receipt.root).toMatchObject({ resourceType: 'workgroup', action: 'create' })
+    expect(db.select().from(workgroups).get()?.leaderMemberId).toBeNull()
+  })
+
+  test('overwrite 工作组仍拒绝映射到非 active 用户', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const target = await seedWorkgroup(db, 'u1', 'squad')
+    await seedUser(db, 'disabled-user', 'disabled')
+    const pkg = await parseResourcePackage(workgroupPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const err = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'workgroup-squad', action: 'overwrite', targetId: target }],
+      humanMemberMappings: [
+        { workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'disabled-user' },
+      ],
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('package-human-mapping-invalid')
+  })
+
+  test('基线外的映射即使没有任何 human 槽也不能凭空注入', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(packageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const err = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
+      humanMemberMappings: [{ workgroupSlug: 'workgroup-forged', username: 'alice', userId: null }],
+    }).then(
+      () => null,
+      (e: unknown) => e as { code?: string },
+    )
+    expect(err?.code).toBe('package-human-mapping-unconfirmed')
+  })
+})
+
+describe('⑥ secret inputs 只投影到会落地的资源', () => {
+  test('new 重命名后按 manifest 身份接收凭据，并写入实际目标', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(secretPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const receipt = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' }],
+      secretInputs: [
+        {
+          resourceType: 'mcp',
+          resourceName: 'tools',
+          field: 'config.env.TOKEN',
+          value: 'local-secret',
+        },
+      ],
+    })
+
+    const row = db.select().from(mcps).where(eq(mcps.name, 'tools-copy')).get()
+    expect(JSON.parse(row?.config ?? '{}')).toMatchObject({ env: { TOKEN: 'local-secret' } })
+    expect(receipt.skippedSecrets).toBeUndefined()
+    expect(receipt.root?.name).toBe('tools-copy')
+  })
+
+  test('optional credential left empty is omitted and recorded in the durable receipt', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const pkg = await parseResourcePackage(secretPackageZip())
+    const actor = actorOf('u1')
+    const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+
+    const receipt = await commitResourcePackage(deps(db), actor, {
+      pkg,
+      previewToken: preview.previewToken,
+      decisions: [{ localSlug: 'mcp-tools', action: 'new', finalName: 'tools-copy' }],
+      secretInputs: [
+        {
+          resourceType: 'mcp',
+          resourceName: 'tools',
+          field: 'config.env.TOKEN',
+          value: '',
+        },
+      ],
+    })
+
+    const row = db.select().from(mcps).where(eq(mcps.name, 'tools-copy')).get()
+    const stored = JSON.parse(row?.config ?? '{}') as { env?: Record<string, string> }
+    expect(stored.env?.TOKEN).toBeUndefined()
+    expect(JSON.stringify(stored)).not.toContain(PACKAGE_SECRET_PLACEHOLDER)
+    expect(receipt.skippedSecrets).toEqual([
+      { resourceType: 'mcp', resourceName: 'tools-copy', field: 'config.env.TOKEN' },
+    ])
+    const replayed = db
+      .select({ receiptJson: resourceBundleApplies.receiptJson })
+      .from(resourceBundleApplies)
+      .where(eq(resourceBundleApplies.id, receipt.journalId))
+      .get()
+    expect(JSON.parse(replayed?.receiptJson ?? '{}').skippedSecrets).toEqual(receipt.skippedSecrets)
   })
 })
 

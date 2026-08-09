@@ -9,6 +9,7 @@
 import { describe, expect, test, vi, afterEach } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ResourcePackageExportButton } from '../src/components/ResourcePackageExportButton'
+import { ResourceActionList } from '../src/components/ResourceActionList'
 import * as pkgApi from '../src/api/resourcePackages'
 import * as dl from '../src/lib/resource-package-download'
 import { resourcePackageFilename, safeDownloadBaseName } from '../src/lib/resource-package-download'
@@ -56,7 +57,10 @@ describe('② 行为', () => {
     const trigger = vi.spyOn(dl, 'triggerBlobDownload').mockImplementation(() => {})
     render(<ResourcePackageExportButton type="workflow" id="W1" name="audit" />)
     fireEvent.click(screen.getByTestId('export-package-workflow'))
-    await waitFor(() => expect(download).toHaveBeenCalledWith('workflow', 'W1'))
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    expect(download.mock.calls[0]?.[0]).toBe('workflow')
+    expect(download.mock.calls[0]?.[1]).toBe('W1')
+    expect(download.mock.calls[0]?.[2]).toBeInstanceOf(AbortSignal)
     await waitFor(() => expect(trigger).toHaveBeenCalledTimes(1))
     expect(trigger.mock.calls[0]?.[1]).toBe('workflow-audit.awpkg.zip')
   })
@@ -70,6 +74,70 @@ describe('② 行为', () => {
     fireEvent.click(screen.getByTestId('export-package-workflow'))
     await waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
     expect(String(onError.mock.calls[0]?.[0])).toContain('not available to you')
+    expect(await screen.findByText(/not available to you/)).toBeTruthy()
+  })
+
+  test('More 动作形态复用统一 action item；未保存时解释原因且不发请求', () => {
+    const download = vi.spyOn(pkgApi, 'downloadResourcePackage').mockResolvedValue(new Blob())
+    render(
+      <ResourcePackageExportButton
+        type="plugin"
+        id="P1"
+        name="formatter"
+        variant="action"
+        disabled
+        disabledReason="Save first"
+      />,
+    )
+    const button = screen.getByTestId('export-package-plugin') as HTMLButtonElement
+    expect(button.classList.contains('resource-action-list__item')).toBe(true)
+    expect(button.disabled).toBe(true)
+    expect(button.title).toBe('Save first')
+    expect(button.querySelector('span')?.textContent).toBe('Save first')
+    fireEvent.click(button)
+    expect(download).not.toHaveBeenCalled()
+  })
+
+  test('More 导出 pending 时锁住整组动作并上报 busy，settle 后完整恢复', async () => {
+    let release: (blob: Blob) => void = () => {}
+    const download = vi.spyOn(pkgApi, 'downloadResourcePackage').mockReturnValue(
+      new Promise<Blob>((resolve) => {
+        release = resolve
+      }),
+    )
+    vi.spyOn(dl, 'triggerBlobDownload').mockImplementation(() => {})
+    const onBusyChange = vi.fn()
+    render(
+      <ResourceActionList onBusyChange={onBusyChange}>
+        <ResourcePackageExportButton
+          type="workgroup"
+          id="WG1"
+          name="review-team"
+          variant="action"
+        />
+        <button type="button" data-testid="sibling-action">
+          Sibling action
+        </button>
+      </ResourceActionList>,
+    )
+
+    const exportButton = screen.getByTestId('export-package-workgroup') as HTMLButtonElement
+    const actionList = exportButton.closest('fieldset') as HTMLFieldSetElement
+    fireEvent.click(exportButton)
+
+    await waitFor(() => expect(actionList.disabled).toBe(true))
+    expect(actionList.classList.contains('resource-action-list')).toBe(true)
+    expect(actionList.getAttribute('aria-busy')).toBe('true')
+    expect(onBusyChange).toHaveBeenCalledWith(true)
+    expect(download).toHaveBeenCalledTimes(1)
+    expect(download.mock.calls[0]?.[0]).toBe('workgroup')
+    expect(download.mock.calls[0]?.[1]).toBe('WG1')
+    expect(download.mock.calls[0]?.[2]).toBeInstanceOf(AbortSignal)
+
+    release(new Blob([new Uint8Array([1])]))
+    await waitFor(() => expect(actionList.disabled).toBe(false))
+    expect(actionList.getAttribute('aria-busy')).toBeNull()
+    expect(onBusyChange).toHaveBeenLastCalledWith(false)
   })
 
   test('进行中禁用，避免连点产出多份下载', async () => {
@@ -84,6 +152,7 @@ describe('② 行为', () => {
     const btn = screen.getByTestId('export-package-agent') as HTMLButtonElement
     fireEvent.click(btn)
     await waitFor(() => expect(btn.disabled).toBe(true))
+    expect(btn.getAttribute('aria-busy')).toBe('true')
     release(new Blob([new Uint8Array([1])]))
     await waitFor(() => expect(btn.disabled).toBe(false))
   })

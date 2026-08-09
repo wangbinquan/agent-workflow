@@ -527,6 +527,30 @@ describe('/workgroups list page', () => {
 })
 
 describe('/workgroups quick-create dialog', () => {
+  test('package creation method replaces quick-create instead of nesting dialogs', async () => {
+    installFetch({ workgroups: [], calls: [] })
+    await renderPage('/workgroups')
+
+    fireEvent.click(await screen.findByTestId('workgroup-new-button'))
+    fireEvent.change(await screen.findByTestId('workgroup-create-name'), {
+      target: { value: 'Keep this workgroup draft' },
+    })
+    fireEvent.click(await screen.findByTestId('workgroup-create-package'))
+
+    expect(screen.queryByTestId('workgroup-create-dialog')).toBeNull()
+    expect(await screen.findByTestId('package-import-file')).toBeTruthy()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+
+    const packageDialog = screen.getByRole('dialog', { name: enUS.resourcePackage.importTitle })
+    fireEvent.click(
+      within(packageDialog).getAllByRole('button', { name: enUS.common.close }).at(-1)!,
+    )
+    expect(await screen.findByTestId('workgroup-create-dialog')).toBeTruthy()
+    expect((screen.getByTestId('workgroup-create-name') as HTMLInputElement).value).toBe(
+      'Keep this workgroup draft',
+    )
+  })
+
   test('invalid name disables Create; a valid draft POSTs {name, description} and navigates', async () => {
     const state = { workgroups: [], calls: [] as Recorded['calls'] }
     installFetch(state)
@@ -666,11 +690,14 @@ describe('/workgroups/$id — config editing', () => {
     expect(screen.getByTestId('workgroup-more-actions').classList.contains('btn--sm')).toBe(false)
     expect(screen.queryByTestId('workgroup-rename-button')).toBeNull()
     expect(screen.queryByTestId('workgroup-delete-button')).toBeNull()
+    expect(screen.queryByTestId('export-package-workgroup')).toBeNull()
 
     fireEvent.click(screen.getByTestId('workgroup-more-actions'))
     expect(await screen.findByTestId('workgroup-actions-dialog')).toBeTruthy()
     expect(screen.getByTestId('workgroup-rename-button')).toBeTruthy()
     expect(screen.getByTestId('workgroup-copy-action')).toBeTruthy()
+    const exportAction = screen.getByTestId('export-package-workgroup')
+    expect(exportAction.closest('.resource-action-list')).not.toBeNull()
     expect(screen.getByTestId('workgroup-delete-button')).toBeTruthy()
   })
 

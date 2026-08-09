@@ -111,9 +111,9 @@ const OVERLAY_CALLSITES = {
   'components/WebhookEndpointCard.tsx': { family: 'access-and-settings', count: 3 },
 
   'components/AgentImportDialog.tsx': { family: 'resource-management', count: 1 },
-  // RFC-222 (D5): the shared resource-detail header owns the type-to-confirm
-  // delete dialog for agents / skills / mcps / plugins / workgroups.
-  'components/DetailHeaderActions.tsx': { family: 'resource-management', count: 1 },
+  // RFC-222 (D5): the shared resource-detail header owns More, ACL, and the
+  // type-to-confirm delete dialog for agents / skills / mcps / plugins / workgroups.
+  'components/DetailHeaderActions.tsx': { family: 'resource-management', count: 3 },
   'components/QuickCreateDialog.tsx': { family: 'resource-management', count: 1 },
   'components/RenameDialog.tsx': { family: 'resource-management', count: 1 },
   'components/agent-ports/AgentPortDialog.tsx': { family: 'resource-management', count: 1 },
@@ -125,10 +125,9 @@ const OVERLAY_CALLSITES = {
   'components/mcps/McpRuntimeTestDialog.tsx': { family: 'resource-management', count: 2 },
   'components/repos/BatchImportDialog.tsx': { family: 'resource-management', count: 1 },
   // RFC-249: bulk-source dialog and its residual-draft confirmation.
-  // RFC-271：配置包导入是一次「选文件 → 预检 → 逐条决策 → 提交」的多步确认，
-  // 走**一个** full-size Dialog 而不是分几个弹窗——中途换弹窗会丢掉用户已经做出的
-  // 逐条选择（那些选择只在这个组件的 state 里）。
-  'components/ResourcePackageImportDialog.tsx': { family: 'resource-management', count: 1 },
+  // RFC-271：配置包导入的主流程走一个 full-size Dialog；已做出逐条决策后替换/移除
+  // 文件再走一个嵌套确认，避免误清空只存在组件 state 里的选择。
+  'components/ResourcePackageImportDialog.tsx': { family: 'resource-management', count: 2 },
   'components/repos/RepoBulkAddDialog.tsx': { family: 'resource-management', count: 2 },
   // RFC-249: editor dialog, residual-draft confirmation, and subtree-delete confirmation.
   'components/repos/RepoGroupEditor.tsx': { family: 'resource-management', count: 3 },

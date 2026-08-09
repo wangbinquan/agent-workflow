@@ -32,7 +32,7 @@ import { decodeZip } from '../src/services/skill-zip'
 import { createManagedSkillWithFiles } from '../src/services/skill'
 import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { buildPackagePreview } from '../src/services/resourcePackage/preview'
+import { buildPackagePreview, verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { commitResourcePackage } from '../src/services/resourcePackage/commit'
 import { removeTempDirSync } from './fixtures/tempDir'
 
@@ -42,8 +42,9 @@ const box = createSecretBoxFromKey(randomBytes(32))
 const WRITE_ALL = ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups'].flatMap(
   (t) => [`${t}:create`, `${t}:update`],
 )
+const SESSION_PERMISSIONS = [...WRITE_ALL, 'users:search']
 
-const actorOf = (id: string, permissions: readonly string[] = WRITE_ALL): Actor =>
+const actorOf = (id: string, permissions: readonly string[] = SESSION_PERMISSIONS): Actor =>
   ({
     user: { id, username: id, displayName: id, role: 'user', status: 'active' },
     source: 'daemon',
@@ -167,6 +168,16 @@ async function seedSource(db: DbClient, appHome: string): Promise<{ skillId: str
       sortOrder: 1,
       createdAt: Date.now(),
     },
+    {
+      id: ulid(),
+      workgroupId: wg,
+      memberType: 'human',
+      userId: 'u1',
+      displayName: 'observer',
+      roleDesc: 'observes',
+      sortOrder: 2,
+      createdAt: Date.now(),
+    },
   ] as never)
 
   return { skillId: skill.id, wg }
@@ -250,9 +261,17 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
         })
 
         // human 成员必须被列成待映射的槽（P1-4 复现 B：它曾经原样透传 username）。
-        expect(preview.humanMembers.map((m) => m.username)).toEqual(['alice'])
+        expect(preview.humanMembers.map((m) => m.username)).toEqual(['alice', 'alice'])
+        expect(preview.humanMembers.map((m) => m.displayName).sort()).toEqual([
+          'observer',
+          'reviewer',
+        ])
         // 目标实例上恰好有同名用户 ⇒ 预填，但仍要用户拍板。
         expect(preview.humanMembers[0]!.suggestedUserId).toBe('u1')
+        // 签名与提交按源用户 tuple 收口，不能因为两个 alias 要求/接受两条重复 mapping。
+        expect(verifyPreviewToken(box, preview.previewToken).humanBaseline).toEqual([
+          { workgroupSlug: 'workgroup-squad', username: 'alice', required: false },
+        ])
 
         await commitResourcePackage({ db: dst.db, appHome: dst.appHome, box }, actorOf('u1'), {
           pkg: parsed,
@@ -262,11 +281,13 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
             action: 'new' as const,
             finalName: e.suggestedName,
           })),
-          humanMemberMappings: preview.humanMembers.map((m) => ({
-            workgroupSlug: m.workgroupSlug,
-            username: m.username,
-            userId: m.suggestedUserId,
-          })),
+          humanMemberMappings: [
+            {
+              workgroupSlug: preview.humanMembers[0]!.workgroupSlug,
+              username: 'alice',
+              userId: 'u1',
+            },
+          ],
         })
 
         const landed = dst.db.select().from(workgroups).where(eq(workgroups.name, 'squad')).get()
@@ -284,11 +305,12 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
           .from(workgroupMembers)
           .where(eq(workgroupMembers.workgroupId, landed!.id))
           .all()
-        expect(members.map((m) => m.displayName).sort()).toEqual(['lead', 'reviewer'])
+        expect(members.map((m) => m.displayName).sort()).toEqual(['lead', 'observer', 'reviewer'])
 
-        const human = members.find((m) => m.memberType === 'human')!
+        const humans = members.filter((m) => m.memberType === 'human')
         // username 换成了**本地** user id，而不是原样带着源实例的字符串。
-        expect(human.userId).toBe('u1')
+        expect(humans).toHaveLength(2)
+        expect(humans.every((m) => m.userId === 'u1')).toBe(true)
 
         // leader 指向的仍是那个 agent 成员（leaderMemberId 是本地行 id，靠
         // displayName 这个组内稳定键重新绑定）。
@@ -302,7 +324,7 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
     }
   })
 
-  test('MCP 的凭据没进包，但结构完整、导入后仍是合法配置', async () => {
+  test('MCP 的凭据没进包；留空后安全省略并进入导入报告', async () => {
     const src = await makeInstance()
     await seedSource(src.db, src.appHome)
     const agentRow = src.db.select().from(agents).where(eq(agents.name, 'auditor')).get()
@@ -326,28 +348,37 @@ describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () =
           box,
           importId: ulid(),
         })
-        await commitResourcePackage({ db: dst.db, appHome: dst.appHome, box }, actorOf('u1'), {
-          pkg: parsed,
-          previewToken: preview.previewToken,
-          decisions: preview.entries.map((e) => ({
-            localSlug: e.localSlug,
-            action: 'new' as const,
-            finalName: e.suggestedName,
-          })),
-        })
+        const receipt = await commitResourcePackage(
+          { db: dst.db, appHome: dst.appHome, box },
+          actorOf('u1'),
+          {
+            pkg: parsed,
+            previewToken: preview.previewToken,
+            decisions: preview.entries.map((e) => ({
+              localSlug: e.localSlug,
+              action: 'new' as const,
+              finalName: e.suggestedName,
+            })),
+          },
+        )
 
-        // ② 结构仍完整：argv 长度不变、可执行档没被替换、env 的**键**还在。
+        // ② 留空不是把占位符当真值落库：可选 argv/env 槽被删除，可执行档保持不变，
+        // 且回执逐字段报告，方便用户知道还要去哪里补。
         const landed = dst.db.select().from(mcps).where(eq(mcps.name, 'gh')).get()
         const config = JSON.parse(landed!.config) as {
           command: string[]
           env: Record<string, string>
         }
-        expect(config.command).toHaveLength(3)
+        expect(config.command).toHaveLength(2)
         expect(config.command[0]).toBe('node')
         expect(config.command[1]).toBe('srv.js')
-        expect(config.command[2]).toContain('--token=')
-        expect(Object.keys(config.env)).toEqual(['GITHUB_TOKEN'])
-        expect(config.env.GITHUB_TOKEN).not.toContain('ghp_')
+        expect(Object.keys(config.env)).toEqual([])
+        expect(receipt.skippedSecrets).toEqual(
+          expect.arrayContaining([
+            { resourceType: 'mcp', resourceName: 'gh', field: 'config.command[2]' },
+            { resourceType: 'mcp', resourceName: 'gh', field: 'config.env.GITHUB_TOKEN' },
+          ]),
+        )
       } finally {
         removeTempDirSync(dst.appHome)
       }
@@ -371,11 +402,23 @@ describe('R0 · 写权限（用户规则：令牌有写权限才能导入，和�
       const dst = await makeInstance()
       try {
         const parsed = await parseResourcePackage(pkg.zip)
-        // 界面上没有 `skills:create` 就没有「新建技能」按钮；本地也没有可复用的
-        // 同名技能 ⇒ 一个动作都不剩 ⇒ 整体拒绝，而不是产出一个装了一半的实例。
+        // 预检仍完整返回，UI 才能逐条说明被什么权限挡住；真正 commit 仍服务端拒绝。
+        const preview = await buildPackagePreview(dst.db, actorOf('u1', []), parsed, {
+          box,
+          importId: ulid(),
+        })
+        expect(preview.entries[0]).toMatchObject({
+          allowedActions: [],
+          defaultAction: null,
+          missingPermissions: ['skills:create'],
+        })
         await expect(
-          buildPackagePreview(dst.db, actorOf('u1', []), parsed, { box, importId: ulid() }),
-        ).rejects.toThrow(/skills:create/)
+          commitResourcePackage({ db: dst.db, appHome: dst.appHome, box }, actorOf('u1', []), {
+            pkg: parsed,
+            previewToken: preview.previewToken,
+            decisions: [{ localSlug: preview.entries[0]!.localSlug, action: 'new' }],
+          }),
+        ).rejects.toThrow(/new/)
       } finally {
         removeTempDirSync(dst.appHome)
       }

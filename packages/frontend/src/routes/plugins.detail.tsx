@@ -533,13 +533,22 @@ function PluginDetailPage() {
         extra={
           <>
             <IntentProvenanceBadge resourceType="plugin" resourceId={id} />
-            <ResourcePackageExportButton type="plugin" id={id} name={displayName} />
             <IntentEntryButton
               variant="modify"
               mount={{ resourceType: 'plugin', resourceId: id }}
               data-testid="plugin-intent-entry"
             />
           </>
+        }
+        moreActions={
+          <ResourcePackageExportButton
+            type="plugin"
+            id={id}
+            name={displayName}
+            variant="action"
+            disabled={dirty || save.isPending || del.isPending || operationBusy || !loaded}
+            disabledReason={t('resourcePackage.saveBeforeExport')}
+          />
         }
         errors={[save.error, del.error]}
       />

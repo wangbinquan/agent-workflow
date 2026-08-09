@@ -101,4 +101,11 @@ describe('decisions 走 Zod，不用 `as T` 绕过校验', () => {
     expect(SRC).toContain('ImportDecisionsSchema.safeParse(')
     expect(SRC).not.toContain('as ImportDecision[]')
   })
+
+  test('human 与 secret 映射也逐字段严格校验后才进入 service', () => {
+    expect(SRC).toContain('HumanMemberMappingsSchema.safeParse(')
+    expect(SRC).toContain('PackageSecretInputsSchema.safeParse(')
+    expect(SRC).toContain('PackageSecretRefSchema.extend({ value: z.string() }).strict()')
+    expect(SRC).not.toContain('as PackageSecretInput[]')
+  })
 })

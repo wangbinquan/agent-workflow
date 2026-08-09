@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
+import { eq } from 'drizzle-orm'
 import {
   CreateWorkgroupSchema,
   resolveWorkgroupSwitches,
@@ -28,7 +29,7 @@ import {
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { agents } from '../src/db/schema'
+import { agents, users } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import {
@@ -391,6 +392,41 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     const human = ok.members.find((m) => m.memberType === 'human')
     expect(human?.userId).toBe(u.id)
     expect(human?.displayName).toBe('pm')
+  })
+
+  test('versioned save rechecks human status in the final transaction', async () => {
+    const u = await createUser(db, {
+      username: 'raceuser',
+      displayName: 'race user',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    const created = await createWorkgroup(db, {
+      ...groupInput({ name: 'human-race' }),
+      members: [
+        { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
+        { memberType: 'human', userId: u.id, displayName: 'reviewer', roleDesc: '' },
+      ],
+    })
+
+    const save = saveWorkgroup(
+      db,
+      created.id,
+      {
+        expectedVersion: created.version,
+        clientMutationId: ulid(),
+        snapshot: { ...workgroupDraftSnapshotOf(created), description: 'must not commit' },
+      },
+      { kind: 'actor', actor: T6_ACTOR },
+      {
+        beforeWriteTransaction: async () => {
+          await db.update(users).set({ status: 'disabled' }).where(eq(users.id, u.id)).run()
+        },
+      },
+    )
+
+    await expect(save).rejects.toMatchObject({ code: 'workgroup-member-user-invalid' })
+    expect((await getWorkgroupById(db, created.id))?.description).not.toBe('must not commit')
   })
 
   test('rename happy path + conflict + delete + not-found', async () => {

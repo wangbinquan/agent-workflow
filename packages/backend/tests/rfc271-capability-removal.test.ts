@@ -57,22 +57,13 @@ describe('C2 · 裸 YAML 导入已下线', () => {
     expect(list).not.toContain('WorkflowImportDialog')
   })
 
-  // ⚠️ 这条断言锚在**已提交的**前端源码上，CI 是权威。
-  //
-  // 2026-08-09 的中间态：并发 session 正在把导入入口重构进创建流程
-  // （`ResourcePackageImportDialog` + `alternativeAction`，去掉独立按钮 +
-  // `emptyHeaderActions`）。他们改好的**这个 test 的新版**一度被误提交进
-  // `a71f5bed`（前端本身没跟着提交），于是 HEAD 自相矛盾、CI 红。这里已回滚成与
-  // HEAD 前端一致的形态；新版可以取回：
-  //   git show a71f5bed:packages/backend/tests/rfc271-capability-removal.test.ts
-  // **提交那次前端重构时，把这个 test 一并换回去**（两者必须同一个提交）。
-  //
-  // 副作用：在那次重构落地之前，谁的工作树里带着那份未提交的前端，这条就会在本地
-  // 红——那是工作树混了两人中间态，不是回归。以 CI 为准。
-  test('取代它的入口在，且**两个** header 槽都挂了（空列表走的是另一个）', () => {
+  test('取代入口融入创建流程，列表 header 不再复辟独立导入按钮', () => {
     const list = read(resolve(FRONTEND, 'src', 'routes', 'workflows.tsx'))
-    expect(list).toContain('ResourcePackageImportEntry')
-    expect(list).toContain('emptyHeaderActions=')
+    expect(list).toContain('ResourcePackageImportDialog')
+    expect(list).toContain('alternativeAction={{')
+    expect(list).toContain("setCreateSurfaceTracked('package')")
+    expect(list).not.toContain('ResourcePackageImportEntry')
+    expect(list).not.toContain('emptyHeaderActions=')
   })
 })
 

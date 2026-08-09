@@ -13,6 +13,10 @@ import { Route as RootRoute } from '../src/routes/__root'
 import { IndexRoute as skillsIndexRoute, Route as skillsRoute } from '../src/routes/skills'
 import { Route as skillDetailRoute } from '../src/routes/skills.detail'
 import { Route as skillNewRoute } from '../src/routes/skills.new'
+import {
+  beginDeferredPackageCommit,
+  beginUnknownPackageCommit,
+} from './resource-package-create-busy.helpers'
 import '../src/i18n'
 
 function json(body: unknown, status = 200): Response {
@@ -238,6 +242,11 @@ describe('/skills split page', () => {
     expect(
       screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
     ).toBe('detail')
+    expect(screen.queryByTestId('export-package-skill')).toBeNull()
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    expect(
+      screen.getByTestId('export-package-skill').closest('.resource-action-list'),
+    ).not.toBeNull()
   })
 
   test('edit description → dirty dot; Save stays in place and clears it', async () => {
@@ -345,7 +354,8 @@ describe('/skills split page', () => {
   test('delete submits the captured composite token and ACL revision', async () => {
     const router = renderSkills('/skills/sk1')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'sk1' }))
-    fireEvent.click(screen.getByTestId('detail-delete-button'))
+    fireEvent.click(screen.getByTestId('detail-more-actions'))
+    fireEvent.click(await screen.findByTestId('detail-delete-button'))
     const dialog = await screen.findByRole('dialog')
     fireEvent.change(within(dialog).getByTestId('confirm-input'), { target: { value: 'sk1' } })
     fireEvent.click(within(dialog).getByRole('button', { name: /^Delete$/ }))
@@ -362,7 +372,7 @@ describe('/skills split page', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/skills'))
   })
 
-  test('the new view offers the managed + ZIP creation modes', async () => {
+  test('the new view offers managed, ZIP, and config-package creation modes', async () => {
     renderSkills('/skills/new')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
     const managedTab = screen.getByRole('tab', { name: 'Manual creation' })
@@ -382,6 +392,15 @@ describe('/skills split page', () => {
     expect(
       screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
     ).toBe('detail')
+    const packageTab = screen.getByTestId('skills-tab-package')
+    const packagePanel = document.getElementById('skills-new-panel-package') as HTMLElement
+    expect(packageTab.getAttribute('aria-controls')).toBe(packagePanel.id)
+    expect(packagePanel.getAttribute('aria-labelledby')).toBe(packageTab.id)
+    expect(packagePanel.hidden).toBe(true)
+    fireEvent.click(packageTab)
+    expect(packagePanel.hidden).toBe(false)
+    expect(packagePanel.contains(screen.getByTestId('package-import-file'))).toBe(true)
+    expect(screen.queryByTestId('skill-create-button')).toBeNull()
     fireEvent.click(screen.getByTestId('skills-tab-zip'))
     expect(screen.getByRole('heading', { level: 2, name: 'Import skills' })).toBeTruthy()
     const zipTab = screen.getByRole('tab', { name: 'Import ZIP' })
@@ -396,6 +415,53 @@ describe('/skills split page', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Manual creation' }))
     expect(screen.getByRole('heading', { level: 2, name: 'New skill' })).toBeTruthy()
     expect(screen.getByTestId('skill-create-button')).toBeTruthy()
+  })
+
+  test('package commit locks every creation mode and the manual create scope until it settles', async () => {
+    renderSkills('/skills/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
+    const packagePanel = document.getElementById('skills-new-panel-package') as HTMLElement
+    const scope = packagePanel.closest('fieldset') as HTMLFieldSetElement
+    const managedTab = document.getElementById('skills-new-tab-managed') as HTMLButtonElement
+    const zipTab = screen.getByTestId('skills-tab-zip') as HTMLButtonElement
+    const packageTab = screen.getByTestId('skills-tab-package') as HTMLButtonElement
+
+    const { finish } = await beginDeferredPackageCommit('skill', 'skills-tab-package')
+
+    await waitFor(() => expect(scope.disabled).toBe(true))
+    expect(managedTab.disabled).toBe(true)
+    expect(zipTab.disabled).toBe(true)
+    expect(packageTab.disabled).toBe(true)
+    fireEvent.click(managedTab)
+    expect(packagePanel.hidden).toBe(false)
+
+    finish()
+    await waitFor(() => expect(scope.disabled).toBe(false))
+    expect(managedTab.disabled).toBe(false)
+    expect(zipTab.disabled).toBe(false)
+    expect(packageTab.disabled).toBe(false)
+  })
+
+  test('unknown package outcome blocks managed/ZIP modes but leaves package retry enabled', async () => {
+    renderSkills('/skills/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
+    const packagePanel = document.getElementById('skills-new-panel-package') as HTMLElement
+    const scope = packagePanel.closest('fieldset') as HTMLFieldSetElement
+    const managedTab = document.getElementById('skills-new-tab-managed') as HTMLButtonElement
+    const zipTab = screen.getByTestId('skills-tab-zip') as HTMLButtonElement
+    const packageTab = screen.getByTestId('skills-tab-package') as HTMLButtonElement
+
+    await beginUnknownPackageCommit('skill', 'skills-tab-package')
+
+    await waitFor(() => expect(managedTab.disabled).toBe(true))
+    expect(zipTab.disabled).toBe(true)
+    expect(scope.disabled).toBe(false)
+    expect(packageTab.disabled).toBe(false)
+    expect((screen.getByTestId('package-import-commit') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(managedTab)
+    fireEvent.click(zipTab)
+    expect(packagePanel.hidden).toBe(false)
+    expect(screen.queryByTestId('skill-create-button')).toBeNull()
   })
 
   test('a selected ZIP participates in the route guard and Discard clears it', async () => {

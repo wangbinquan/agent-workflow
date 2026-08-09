@@ -191,10 +191,19 @@ function AgentDetailPage() {
           disabled: del.isPending || save.isPending,
         }}
         errors={[save.error, del.error]}
+        moreActions={
+          <ResourcePackageExportButton
+            type="agent"
+            id={id}
+            name={query.data?.name ?? id}
+            variant="action"
+            disabled={dirty || save.isPending || del.isPending || !loaded || !jsonValid}
+            disabledReason={t('resourcePackage.saveBeforeExport')}
+          />
+        }
         extra={
           <>
             <IntentProvenanceBadge resourceType="agent" resourceId={id} />
-            <ResourcePackageExportButton type="agent" id={id} name={query.data?.name ?? id} />
             <IntentEntryButton
               variant="modify"
               mount={{ resourceType: 'agent', resourceId: id }}

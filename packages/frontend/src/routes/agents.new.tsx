@@ -36,12 +36,19 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { PageHeader } from '@/components/PageHeader'
 import {
+  ResourcePackageImportPanel,
+  type ResourcePackageImportPanelHandle,
+} from '@/components/ResourcePackageImportDialog'
+import {
   NEW_CARD_KEY,
+  useRegisterSplitDiscard,
   useReportSplitDirty,
   useSplitDirty,
   type SplitBusyRelease,
 } from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
+import { TabBar } from '@/components/TabBar'
+import { TabPanels } from '@/components/split/TabPanels'
 import { mergeAgentImport } from '@/lib/agent-import-merge'
 import { validateAgentPortState } from '@/lib/agent-ports'
 import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
@@ -65,12 +72,19 @@ export function applyDefaults(draft: CreateAgent, cfg: Config): CreateAgent {
   return next
 }
 
+type CreateMode = 'manual' | 'package'
+
 function AgentCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
   const [draft, setDraft] = useState(emptyAgent)
+  const [createMode, setCreateMode] = useState<CreateMode>('manual')
+  const [packageDirty, setPackageDirty] = useState(false)
+  const [packageBusy, setPackageBusy] = useState(false)
+  const [packageOutcomeUnknown, setPackageOutcomeUnknown] = useState(false)
+  const packagePanelRef = useRef<ResourcePackageImportPanelHandle | null>(null)
   const [jsonDraft, setJsonDraft] = useState(() => createAgentJsonDraft(emptyAgent()))
   const [activeTab, setActiveTab] = useState<AgentTab>('basics')
   const [jsonFocusTarget, setJsonFocusTarget] = useState<AgentJsonFieldKey>()
@@ -80,7 +94,8 @@ function AgentCreatePage() {
   const { dirty, resetBaseline } = useDirtyBaseline(draft, draft)
   const invalidJsonFields = agentJsonInvalidFields(jsonDraft)
   const jsonValid = invalidJsonFields.length === 0
-  useReportSplitDirty(NEW_CARD_KEY, dirty || !jsonValid)
+  useReportSplitDirty(NEW_CARD_KEY, dirty || !jsonValid || packageDirty)
+  useRegisterSplitDiscard(NEW_CARD_KEY, () => packagePanelRef.current?.discard() ?? true)
 
   const configQueryKey = useConfigQueryKey()
   const config = useQuery<Config>({
@@ -141,77 +156,177 @@ function AgentCreatePage() {
   return (
     <fieldset
       className="agent-new detail-freeze"
-      disabled={create.isPending}
+      disabled={create.isPending || packageBusy}
       data-testid="agent-create-scope"
     >
       <PageHeader
-        title={t('agents.newTitle')}
+        title={createMode === 'package' ? t('resourcePackage.importTitle') : t('agents.newTitle')}
         headingLevel={2}
         actions={
-          <>
-            <button
-              ref={importTriggerRef}
-              type="button"
-              className="btn btn--sm"
-              data-testid="agent-import-open"
-              onClick={() => setImportOpen(true)}
-            >
-              {t('agentForm.importButton')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={
-                create.isPending || draft.name === '' || !portValidation.valid || !jsonValid
-              }
-              onClick={() => {
-                if (portValidation.valid && jsonValid && !create.isPending) {
-                  const ctl = new AbortController()
-                  create.mutate({
-                    submitted: draft,
-                    signal: ctl.signal,
-                    release: beginBusy(NEW_CARD_KEY, { abort: () => ctl.abort() }),
-                  })
+          createMode === 'manual' ? (
+            <>
+              <button
+                ref={importTriggerRef}
+                type="button"
+                className="btn btn--sm"
+                data-testid="agent-import-open"
+                disabled={packageBusy || packageOutcomeUnknown}
+                onClick={() => {
+                  if (!packageBusy && !packageOutcomeUnknown) setImportOpen(true)
+                }}
+              >
+                {t('agentForm.importButton')}
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={
+                  create.isPending ||
+                  packageBusy ||
+                  packageOutcomeUnknown ||
+                  draft.name === '' ||
+                  !portValidation.valid ||
+                  !jsonValid
                 }
-              }}
-              data-testid="agent-create-button"
-              data-tour="agent-save"
-            >
-              {create.isPending ? t('common.creating') : t('agents.createButton')}
-            </button>
-          </>
+                onClick={() => {
+                  if (
+                    portValidation.valid &&
+                    jsonValid &&
+                    !create.isPending &&
+                    !packageBusy &&
+                    !packageOutcomeUnknown
+                  ) {
+                    const ctl = new AbortController()
+                    create.mutate({
+                      submitted: draft,
+                      signal: ctl.signal,
+                      release: beginBusy(NEW_CARD_KEY, { abort: () => ctl.abort() }),
+                    })
+                  }
+                }}
+                data-testid="agent-create-button"
+                data-tour="agent-save"
+              >
+                {create.isPending ? t('common.creating') : t('agents.createButton')}
+              </button>
+            </>
+          ) : null
         }
       />
-      <AgentJsonValidationSummary
-        draft={jsonDraft}
-        onNavigate={(key) => {
-          setJsonFocusTarget(key)
-          setActiveTab('advanced')
+      <TabBar<CreateMode>
+        tabs={[
+          {
+            key: 'manual',
+            label: t('resourcePackage.createManually'),
+            disabled: packageBusy || packageOutcomeUnknown,
+            ...((create.error !== null && create.error !== undefined) || !jsonValid
+              ? {
+                  badge: '!',
+                  badgeTone: 'danger' as const,
+                  badgeAriaLabel: t('editor.draftStatus.phase.error'),
+                }
+              : dirty
+                ? {
+                    badge: '•',
+                    badgeTone: 'neutral' as const,
+                    badgeAriaLabel: t('editor.statusUnsaved'),
+                  }
+                : {}),
+          },
+          {
+            key: 'package',
+            label: t('resourcePackage.importTitle'),
+            testid: 'agents-create-package-tab',
+            disabled: packageBusy,
+            ...(packageDirty
+              ? {
+                  badge: '•',
+                  badgeTone: 'neutral' as const,
+                  badgeAriaLabel: t('editor.statusUnsaved'),
+                }
+              : {}),
+          },
+        ]}
+        active={createMode}
+        onSelect={(nextMode) => {
+          if (!packageBusy && (!packageOutcomeUnknown || nextMode === 'package')) {
+            setCreateMode(nextMode)
+          }
         }}
+        ariaLabel={t('resourcePackage.createMethod')}
+        idPrefix="agents-create"
       />
-      {blockingPortIssues.length > 0 && (
-        <AgentPortValidationSummary
-          issues={blockingPortIssues}
-          variant="compact"
-          onNavigate={setActiveTab}
-        />
-      )}
-      <FeedbackStack variant="section">
-        {create.error !== null && create.error !== undefined && (
-          <ErrorBanner error={create.error} />
-        )}
-      </FeedbackStack>
-      <AgentForm
-        value={draft}
-        onChange={setDraft}
-        idPrefix="agents-new"
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        hasExternalPortAlert={blockingPortIssues.length > 0}
-        jsonDraft={jsonDraft}
-        onJsonDraftChange={setJsonDraft}
-        focusJsonField={jsonFocusTarget}
-        onJsonFocusHandled={clearJsonFocusTarget}
+      <TabPanels<CreateMode>
+        active={createMode}
+        idPrefix="agents-create"
+        panels={[
+          {
+            key: 'manual',
+            className: 'agent-create-mode-panel',
+            content: (
+              <>
+                <AgentJsonValidationSummary
+                  draft={jsonDraft}
+                  onNavigate={(key) => {
+                    setJsonFocusTarget(key)
+                    setActiveTab('advanced')
+                  }}
+                />
+                {blockingPortIssues.length > 0 && (
+                  <AgentPortValidationSummary
+                    issues={blockingPortIssues}
+                    variant="compact"
+                    onNavigate={setActiveTab}
+                  />
+                )}
+                <FeedbackStack variant="section">
+                  {create.error !== null && create.error !== undefined && (
+                    <ErrorBanner error={create.error} />
+                  )}
+                </FeedbackStack>
+                <AgentForm
+                  value={draft}
+                  onChange={setDraft}
+                  idPrefix="agents-new"
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  hasExternalPortAlert={blockingPortIssues.length > 0}
+                  jsonDraft={jsonDraft}
+                  onJsonDraftChange={setJsonDraft}
+                  focusJsonField={jsonFocusTarget}
+                  onJsonFocusHandled={clearJsonFocusTarget}
+                />
+              </>
+            ),
+          },
+          {
+            key: 'package',
+            className: 'split__detail-body',
+            content: (
+              <ResourcePackageImportPanel
+                ref={packagePanelRef}
+                expectedRootType="agent"
+                onDirtyChange={setPackageDirty}
+                onBusyChange={setPackageBusy}
+                onOutcomeUnknownChange={setPackageOutcomeUnknown}
+                prepareAutoOpen={() => {
+                  setPackageDirty(false)
+                  const otherDirty = dirty || !jsonValid
+                  report(NEW_CARD_KEY, otherDirty)
+                  return !otherDirty
+                }}
+                beginCommitBusy={() => {
+                  setPackageBusy(true)
+                  const release = beginBusy(NEW_CARD_KEY)
+                  return () => {
+                    release()
+                    setPackageBusy(false)
+                  }
+                }}
+              />
+            ),
+          },
+        ]}
       />
       <AgentImportDialog
         open={importOpen}

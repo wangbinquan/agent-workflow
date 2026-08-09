@@ -376,6 +376,10 @@ export function commitWorkgroupSaveInTx(
   const currentRow = tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
   if (currentRow === undefined) throwWorkgroupNotFound(id)
   assertPrincipalCanWriteInTx(tx, principal, currentRow)
+  // The async preflight is not the authorization/validity linearization point: an administrator
+  // can disable a mapped human during a long package pre-stage. Recheck in the same transaction
+  // that writes the replacement roster, matching the create path's final fence.
+  assertHumanMembersActiveInTx(tx, snapshot.members)
   const memberRows = tx
     .select()
     .from(workgroupMembers)

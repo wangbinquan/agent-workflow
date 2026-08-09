@@ -1,8 +1,9 @@
 // RFC-151 PR-4 — detail-page header frame, single-sourced.
 //
 // The editable resource detail pages share the PageHeader skeleton whose
-// `page__actions` cluster keeps page-specific extras → AclDialogButton → Save →
-// delete ConfirmButton, followed — OUTSIDE the flex header, so long errors
+// `page__actions` cluster keeps page-specific extras → Save → More. Secondary
+// resource administration (export / ACL / delete) lives in that shared More
+// surface. Mutation feedback remains OUTSIDE the flex header, so long errors
 // never get squeezed into the top-right corner (plugins-page-wiring lock) —
 // by one <ErrorBanner> block per failed mutation channel (RFC-203 T5a: the
 // delete-refused errors carry principal-aware reference lists that only the
@@ -19,13 +20,16 @@
 //     the error row remains its sibling (one flex row for title + actions,
 //     errors on their own row below).
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AclDialogButton } from '@/components/AclPanel'
+import { AclPanel } from '@/components/AclPanel'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { PageHeader } from '@/components/PageHeader'
+import { ResourceActionItem, ResourceActionList } from '@/components/ResourceActionList'
+import { useActor } from '@/hooks/useActor'
 
 export interface DetailHeaderActionsProps {
   /** Resource name rendered by the shared PageHeader heading. */
@@ -68,6 +72,8 @@ export interface DetailHeaderActionsProps {
   }
   /** Page-specific leading actions (e.g. skills' Fuse button). */
   extra?: ReactNode
+  /** Resource-specific secondary actions rendered inside the shared More dialog. */
+  moreActions?: ReactNode
   /** Mutation error channels; each non-nullish entry renders its own
    *  <ErrorBanner> block (localized title + structured details + raw fold). */
   errors: ReadonlyArray<unknown>
@@ -75,9 +81,12 @@ export interface DetailHeaderActionsProps {
 
 export function DetailHeaderActions(props: DetailHeaderActionsProps) {
   const { t } = useTranslation()
+  const actor = useActor()
   const present = props.errors.filter((e) => e !== null && e !== undefined)
-  // RFC-222 (D5): destructive delete now opens a type-to-confirm modal.
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [surface, setSurface] = useState<'actions' | 'acl' | 'delete' | null>(null)
+  const [moreBusy, setMoreBusy] = useState(false)
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const hasAcl = actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon'
   return (
     <>
       <PageHeader
@@ -86,11 +95,6 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
         actions={
           <>
             {props.extra}
-            <AclDialogButton
-              resourceBaseUrl={props.acl.resourceBaseUrl}
-              invalidateKey={props.acl.invalidateKey}
-              canTransferOwner={props.acl.canTransferOwner}
-            />
             {props.save !== undefined && (
               <button
                 type="button"
@@ -104,19 +108,62 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
               </button>
             )}
             <button
+              ref={moreTriggerRef}
               type="button"
-              className="btn btn--danger"
-              disabled={props.del.disabled}
-              onClick={() => setConfirmOpen(true)}
-              data-testid="detail-delete-button"
+              className="btn"
+              onClick={() => setSurface('actions')}
+              data-testid="detail-more-actions"
             >
-              {props.del.label}
+              {t('common.more')}
             </button>
           </>
         }
       />
+      <Dialog
+        open={surface === 'actions'}
+        onClose={() => setSurface(null)}
+        title={t('common.moreActions')}
+        triggerRef={moreTriggerRef}
+        dismissDisabled={moreBusy}
+        data-testid="detail-actions-dialog"
+      >
+        <ResourceActionList onBusyChange={setMoreBusy}>
+          {props.moreActions}
+          {hasAcl ? (
+            <ResourceActionItem
+              label={t('acl.title')}
+              description={t('editor.aclActionHint')}
+              onClick={() => setSurface('acl')}
+              data-testid="acl-dialog-button"
+            />
+          ) : null}
+          <ResourceActionItem
+            label={props.del.label}
+            description={t('common.deleteResourceActionHint')}
+            tone="danger"
+            disabled={props.del.disabled}
+            onClick={() => setSurface('delete')}
+            data-testid="detail-delete-button"
+          />
+        </ResourceActionList>
+      </Dialog>
+      <Dialog
+        open={surface === 'acl'}
+        onClose={() => setSurface(null)}
+        title={t('acl.title')}
+        triggerRef={moreTriggerRef}
+        data-testid="detail-acl-dialog"
+      >
+        <AclPanel
+          resourceBaseUrl={props.acl.resourceBaseUrl}
+          invalidateKey={props.acl.invalidateKey}
+          canTransferOwner={props.acl.canTransferOwner}
+          onSaved={() => setSurface(null)}
+          onCancel={() => setSurface(null)}
+        />
+      </Dialog>
       <ConfirmDialog
-        open={confirmOpen}
+        open={surface === 'delete'}
         title={t('common.deleteConfirm.title', { name: props.del.confirmName })}
         description={t('common.deleteConfirm.body')}
         confirmLabel={props.del.label}
@@ -129,7 +176,8 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
         onConfirm={async (ctx) => {
           await props.del.onConfirm(ctx)
         }}
-        onClose={() => setConfirmOpen(false)}
+        onClose={() => setSurface(null)}
+        triggerRef={moreTriggerRef}
       />
       <FeedbackStack variant="section">
         {present.map((e, i) => (

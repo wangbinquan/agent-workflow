@@ -19,34 +19,17 @@ import { users } from '@/db/schema'
 import type { SecretBox } from '@/auth/secretBox'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import {
-  canonicalJson,
-  type AclResourceType,
-  type BundleOp,
-  type Permission,
-} from '@agent-workflow/shared'
+import { canonicalJson, type AclResourceType, type BundleOp } from '@agent-workflow/shared'
 import { ACL_TABLES, isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { ValidationError } from '@/util/errors'
 import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
 import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
 import { resourceTypeOfOp, opSlug } from '@/services/bundle/provider'
-import type { ParsedPackage } from './parse'
+import type { PackageManifest, ParsedPackage } from './parse'
+import { missingImportPermissions } from './importPermissions'
 
 /** 预检有效期。过期后必须重新 preview——基线可能已经变了。 */
 export const PREVIEW_TTL_MS = 30 * 60 * 1000
-
-/**
- * 资源类型 → 写权限点。**两头都受检**：`Record<AclResourceType, …>` 保证六类一个不漏，
- * 值标成 `Permission` 保证写出来的点位真的存在（打错字直接编译失败）。
- */
-const WRITE_POINTS: Record<AclResourceType, { create: Permission; update: Permission }> = {
-  agent: { create: 'agents:create', update: 'agents:update' },
-  skill: { create: 'skills:create', update: 'skills:update' },
-  mcp: { create: 'mcps:create', update: 'mcps:update' },
-  plugin: { create: 'plugins:create', update: 'plugins:update' },
-  workflow: { create: 'workflows:create', update: 'workflows:update' },
-  workgroup: { create: 'workgroups:create', update: 'workgroups:update' },
-}
 
 export type ImportAction = 'new' | 'reuse' | 'overwrite'
 
@@ -67,8 +50,14 @@ export interface PreviewEntry {
   candidates: PreviewCandidate[]
   /** 服务端算的允许动作。commit 时**重算**，不信客户端。 */
   allowedActions: ImportAction[]
+  /** 安全默认：优先复用，其次新建；覆盖永远需要用户主动选择。 */
+  defaultAction: ImportAction | null
+  /** 当前没有任何可用动作时，列出使 `new` 可用所缺的动态权限点。 */
+  missingPermissions: string[]
   /** 建议的新名字（`new` 时用，避开自己已占用的名字）。 */
   suggestedName: string
+  /** 此资源需要重新填写的完整 secret 引用；值永远不进 preview。 */
+  secretFields: PackageManifest['secrets']
 }
 
 /** 包里的一个 human 成员槽 —— 导入时由用户选映射到哪个本地用户。 */
@@ -80,20 +69,40 @@ export interface HumanMemberSlot {
   displayName: string
   /** 本地恰好有同名的 active 用户时预填，仅供参考——最终由用户拍板。 */
   suggestedUserId: string | null
-  /** leader_worker 的 leader：**不允许跳过**，否则导入出来的组起不了。 */
+  /**
+   * 兼容既有 wire 契约。canonical 工作组只允许 agent 当 leader，所以当前合法包里的
+   * human 槽恒为 false；读取旧 preview token 时仍按 OR 后的值执行必填约束。
+   */
+  required: boolean
+}
+
+/** 同一源用户可以用多个组内 alias 出现；UI / CLI 按这个形态展示一次、列出全部 alias。 */
+export interface HumanMemberSlotGroup {
+  workgroupSlug: string
+  username: string
+  displayNames: string[]
+  suggestedUserId: string | null
+  required: boolean
+}
+
+export interface HumanMemberBaselineEntry {
+  workgroupSlug: string
+  username: string
   required: boolean
 }
 
 export interface PackagePreview {
   importId: string
+  /** 包的权威根资源；成功导入后前端据此决定落到哪一类详情页。 */
+  root: PackageManifest['root']
   entries: PreviewEntry[]
   /** 需要逐个选映射的 human 成员槽（可能为空）。 */
   humanMembers: HumanMemberSlot[]
   previewToken: string
   expiresAt: number
   /** 需要重新填写的凭据字段（来自 manifest，只有位置）。 */
-  secrets: unknown[]
-  requirements: unknown
+  secrets: PackageManifest['secrets']
+  requirements: PackageManifest['requirements']
 }
 
 interface BundleHumanMember {
@@ -130,7 +139,7 @@ export function signPreviewToken(
     packageDigest: string
     expiresAt: number
     baseline: PreviewBaselineEntry[]
-    humanBaseline: Array<{ workgroupSlug: string; username: string; required: boolean }>
+    humanBaseline: HumanMemberBaselineEntry[]
   },
 ): string {
   return box.seal(canonicalJson(payload))
@@ -142,7 +151,7 @@ export interface VerifiedPreview {
   packageDigest: string
   expiresAt: number
   baseline: PreviewBaselineEntry[]
-  humanBaseline: Array<{ workgroupSlug: string; username: string; required: boolean }>
+  humanBaseline: HumanMemberBaselineEntry[]
 }
 
 export function verifyPreviewToken(box: SecretBox, token: string): VerifiedPreview {
@@ -238,23 +247,24 @@ export async function buildPackagePreview(
       // 「只能覆盖自己的，别人的不给覆盖选项」——归属在这里就定死，commit 再算一遍。
       owned: r.ownerUserId === actor.user.id,
     }))
-    // 「令牌有写权限才能导入，和界面操作一致」：界面上没有 `agents:create` 就没有
-    // 「新建」按钮，这里同样不给 `new`。**reuse 不需要写权限**——它只是引用一个你
-    // 本来就看得见的资源，一个字节都不写。
+    // 所有写能力都走与 commit 共用的动态 oracle；workflow 的 script / code-host-call
+    // author 轴也因此不会被 preview 漏掉。reuse 不写任何字节，只要求候选当前可见。
     const allowedActions: ImportAction[] = []
-    if (actor.permissions.has(WRITE_POINTS[type].create)) allowedActions.push('new')
+    if (missingImportPermissions(actor.permissions, op as BundleOp, 'new').length === 0) {
+      allowedActions.push('new')
+    }
     if (candidates.length > 0) allowedActions.push('reuse')
-    if (candidates.some((c) => c.owned) && actor.permissions.has(WRITE_POINTS[type].update)) {
+    if (
+      candidates.some((c) => c.owned) &&
+      missingImportPermissions(actor.permissions, op as BundleOp, 'overwrite').length === 0
+    ) {
       allowedActions.push('overwrite')
     }
-    if (allowedActions.length === 0) {
-      // 一个动作都不剩 ⇒ 这个包对这个令牌不可导入。**整体拒绝**而不是产出一个
-      // 「装了一半」的实例：少掉的那条是别人的传递依赖，跑起来必然悬空。
-      throw new ValidationError(
-        'package-write-forbidden',
-        `importing '${name}' needs ${WRITE_POINTS[type].create} (or an existing ${type} you may reuse)`,
-      )
-    }
+    const defaultAction: PreviewEntry['defaultAction'] = allowedActions.includes('reuse')
+      ? 'reuse'
+      : allowedActions.includes('new')
+        ? 'new'
+        : null
 
     entries.push({
       localSlug: slug,
@@ -262,16 +272,33 @@ export async function buildPackagePreview(
       name,
       candidates,
       allowedActions,
-      suggestedName: suggestName(name, new Set(rows.map((r) => String(r.name)))),
+      defaultAction,
+      missingPermissions:
+        defaultAction === null
+          ? missingImportPermissions(actor.permissions, op as BundleOp, 'new')
+          : [],
+      // Name conflicts are owner-scoped for the resource types that enforce them. Using every
+      // same-name row here would make a hidden private row observable as a `name-2` suggestion,
+      // even though another owner's row cannot conflict with this actor's create.
+      suggestedName: suggestName(
+        name,
+        new Set(
+          rows.filter((row) => row.ownerUserId === actor.user.id).map((row) => String(row.name)),
+        ),
+      ),
+      secretFields: pkg.manifest.secrets.filter(
+        (secret) => secret.resourceType === type && secret.resourceName === name,
+      ),
     })
   }
 
-  const humanMembers = await collectHumanMemberSlots(db, pkg)
+  const humanMembers = await collectHumanMemberSlots(db, pkg, actor.permissions.has('users:search'))
 
   const expiresAt = now + PREVIEW_TTL_MS
   const baseline = previewBaselineOf(entries)
   return {
     importId: opts.importId,
+    root: pkg.manifest.root,
     entries,
     humanMembers,
     previewToken: signPreviewToken(opts.box, {
@@ -285,84 +312,159 @@ export async function buildPackagePreview(
       humanBaseline: humanMemberBaselineOf(humanMembers),
     }),
     expiresAt,
-    secrets: Array.isArray(pkg.manifest.secrets) ? pkg.manifest.secrets : [],
-    requirements: pkg.manifest.requirements ?? {},
+    secrets: pkg.manifest.secrets,
+    requirements: pkg.manifest.requirements,
   }
 }
 
 /**
- * 包里的 human 成员槽 —— 每个都要用户在导入时**逐个选映射**。
+ * 包里的 human 成员 alias —— wire 层逐行保留，供 UI 展示组内寻址名。
  *
  * `username` 是源实例的标识，在这台机器上可能对应另一个人、或根本没有。所以平台
- * 不替用户猜：同名用户只作为 `suggestedUserId` 预填，最终由用户拍板。
+ * 不替用户猜：同名用户只作为 `suggestedUserId` 预填，最终由用户按
+ * `(workgroupSlug, username)` 拍板。同一用户的多个 alias 在签名基线里合成一个槽。
  *
- * `required` 的那一条是 leader：`leader_worker` 模式没有 leader 就不成立，所以
- * leader 槽**不允许跳过**（其余成员可以映射成 null = 不加入该成员）。
+ * canonical 工作组要求 leader 必须是 agent。若包把 human alias 指成 leader，这不是
+ * 一个可通过「必填 human 映射」修复的状态，预检直接拒绝；合法 human 槽均可跳过。
  */
 async function collectHumanMemberSlots(
   db: DbClient,
   pkg: ParsedPackage,
+  canSuggestUsers: boolean,
 ): Promise<HumanMemberSlot[]> {
   const slots: HumanMemberSlot[] = []
   const wanted = new Set<string>()
-  const raw: Array<{ slug: string; m: BundleHumanMember; leader: boolean; mode: string }> = []
+  const raw: Array<{ slug: string; m: BundleHumanMember }> = []
 
   for (const op of pkg.bundle.ops) {
     if (resourceTypeOfOp(op as BundleOp) !== 'workgroup') continue
     const slug = opSlug(op)
     if (slug === null) continue
     const payload = op.payload as {
-      mode?: unknown
       members?: unknown
       leaderDisplayName?: unknown
     }
     for (const member of Array.isArray(payload.members) ? payload.members : []) {
       const m = member as BundleHumanMember & { memberType?: string }
       if (m.memberType !== 'human') continue
+      if (m.displayName === payload.leaderDisplayName) {
+        throw new ValidationError(
+          'package-invalid',
+          `workgroup '${slug}' designates human member '${m.displayName}' as leader; leader must be an agent member`,
+        )
+      }
       wanted.add(m.username)
-      raw.push({
-        slug,
-        m,
-        leader: m.displayName === payload.leaderDisplayName,
-        mode: String(payload.mode ?? ''),
-      })
+      raw.push({ slug, m })
     }
   }
   if (raw.length === 0) return slots
 
   const localByUsername = new Map<string, string>()
-  const rows = await db
-    .select({ id: users.id, username: users.username, status: users.status })
-    .from(users)
-    .where(inArray(users.username, [...wanted]))
-  for (const u of rows) {
-    // 停用的人不是可选映射目标——把成员绑到一个不能登录的主体上毫无意义。
-    if (u.status === 'active') localByUsername.set(u.username, u.id)
+  // `suggestedUserId` is a user-directory lookup, not merely package metadata. PATs can reach
+  // preview but can never carry the system-domain `users:search` point; querying/returning the
+  // match here would turn guessed source usernames into an existence + internal UUID oracle.
+  // Skip the lookup entirely when the actor lacks that point so hit/miss have the same result.
+  if (canSuggestUsers) {
+    const rows = await db
+      .select({ id: users.id, username: users.username, status: users.status })
+      .from(users)
+      .where(inArray(users.username, [...wanted]))
+    for (const u of rows) {
+      // 停用的人不是可选映射目标——把成员绑到一个不能登录的主体上毫无意义。
+      if (u.status === 'active') localByUsername.set(u.username, u.id)
+    }
   }
 
-  for (const { slug, m, leader, mode } of raw) {
+  for (const { slug, m } of raw) {
     slots.push({
       workgroupSlug: slug,
       username: m.username,
       displayName: m.displayName,
       suggestedUserId: localByUsername.get(m.username) ?? null,
-      // leader_worker 的 leader 不能空缺，否则导入出来的组根本起不了。
-      required: leader && mode === 'leader_worker',
+      // canonical schema 要求 leader 是 agent；合法 human 槽不会承担 leader 必填语义。
+      required: false,
     })
   }
   return slots
 }
 
-export function humanMemberBaselineOf(
-  slots: readonly HumanMemberSlot[],
-): Array<{ workgroupSlug: string; username: string; required: boolean }> {
-  return slots
-    .map((s) => ({ workgroupSlug: s.workgroupSlug, username: s.username, required: s.required }))
+/**
+ * 展示层分组：保留全部 alias，同时把同一 `(workgroupSlug, username)` 的决定收成一条。
+ * `suggestedUserId` 理论上由同一个 username 查询而恒等；这里取首个非 null，兼容旧数据。
+ */
+export function groupHumanMemberSlots(slots: readonly HumanMemberSlot[]): HumanMemberSlotGroup[] {
+  const byWorkgroup = new Map<string, Map<string, HumanMemberSlotGroup>>()
+  for (const slot of slots) {
+    let byUsername = byWorkgroup.get(slot.workgroupSlug)
+    if (byUsername === undefined) {
+      byUsername = new Map()
+      byWorkgroup.set(slot.workgroupSlug, byUsername)
+    }
+    const existing = byUsername.get(slot.username)
+    if (existing === undefined) {
+      byUsername.set(slot.username, {
+        workgroupSlug: slot.workgroupSlug,
+        username: slot.username,
+        displayNames: [slot.displayName],
+        suggestedUserId: slot.suggestedUserId,
+        required: slot.required,
+      })
+      continue
+    }
+    if (!existing.displayNames.includes(slot.displayName)) {
+      existing.displayNames.push(slot.displayName)
+    }
+    existing.required ||= slot.required
+    if (existing.suggestedUserId === null && slot.suggestedUserId !== null) {
+      existing.suggestedUserId = slot.suggestedUserId
+    }
+  }
+  return [...byWorkgroup.values()]
+    .flatMap((byUsername) => [...byUsername.values()])
     .sort((a, b) =>
       a.workgroupSlug === b.workgroupSlug
         ? a.username.localeCompare(b.username)
         : a.workgroupSlug.localeCompare(b.workgroupSlug),
     )
+}
+
+/** 旧 token 可能含重复键；commit 也必须用同一套 OR 归一化，不能让「最后一行赢」。 */
+export function normalizeHumanMemberBaseline(
+  entries: readonly HumanMemberBaselineEntry[],
+): HumanMemberBaselineEntry[] {
+  const byWorkgroup = new Map<string, Map<string, HumanMemberBaselineEntry>>()
+  for (const entry of entries) {
+    let byUsername = byWorkgroup.get(entry.workgroupSlug)
+    if (byUsername === undefined) {
+      byUsername = new Map()
+      byWorkgroup.set(entry.workgroupSlug, byUsername)
+    }
+    const existing = byUsername.get(entry.username)
+    if (existing === undefined) {
+      byUsername.set(entry.username, { ...entry })
+    } else {
+      existing.required ||= entry.required
+    }
+  }
+  return [...byWorkgroup.values()]
+    .flatMap((byUsername) => [...byUsername.values()])
+    .sort((a, b) =>
+      a.workgroupSlug === b.workgroupSlug
+        ? a.username.localeCompare(b.username)
+        : a.workgroupSlug.localeCompare(b.workgroupSlug),
+    )
+}
+
+export function humanMemberBaselineOf(
+  slots: readonly HumanMemberSlot[],
+): HumanMemberBaselineEntry[] {
+  return normalizeHumanMemberBaseline(
+    slots.map((s) => ({
+      workgroupSlug: s.workgroupSlug,
+      username: s.username,
+      required: s.required,
+    })),
+  )
 }
 
 function suggestName(name: string, taken: ReadonlySet<string>): string {
