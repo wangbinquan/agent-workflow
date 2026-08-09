@@ -6,345 +6,280 @@
 [![CI](https://github.com/wangbinquan/agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/wangbinquan/agent-workflow/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
-**一个本地优先的编排平台，让 CLI 编码代理组成可靠、可检查的团队。**
+## 面向 AI 工程协作的 local-first 控制平面
 
-Agent Workflow 把代理作为独立 CLI 进程启动，并在由 Git 支撑的运行中用 Git worktree
-隔离其常规工作。一个确定性的 Bun daemon 统一管理协作、数据流、重试、人工决策与恢复。
-代理可以保持聚焦的小上下文，用户则通过可视化控制面管理整个执行过程，而不是把所有工作
-塞进一个不断膨胀的父会话。
+让 CLI coding agents 在独立进程中工作，以确定性工作流或自适应工作组组织协作，并让
+人工决策、Git 变更、恢复过程与受治理的知识在同一个控制面中保持连接。
 
-平台的代表性模式是 **编码 → 审计 → 修复**：先由一个代理实现，再把 diff 扇出给多个
-独立审计代理，聚合发现后交给修复代理。相同的基础能力也可用于文档流水线、测试生成、
-定时维护、自适应工作组和一次性代理任务。
+**AI 负责推理，框架负责协调，人负责治理。**
 
-> **项目状态：** 持续开发中。最新发布的二进制版本是
-> [v0.14.1](https://github.com/wangbinquan/agent-workflow/releases/tag/v0.14.1)
-> （2026-07-15）；`main` 上的 RFC 索引当前已到
-> [RFC-193](./design/plan.md)。本 README 描述的是 `main`，因此最新 tag 之后合入的
-> 功能可能需要从源码构建。
+[快速开始](#快速开始) · [产品导览](#产品导览从意图到证据) ·
+[文档](#文档) · [设计文章](#设计文章)
 
-## 选择代理协作方式
+![一条清晰的父工作流先调用可复用子工作流，再调用工作组，最后返回一个发布建议](./docs/images/readme-workflow.png)
 
-每次启动都会成为一个任务，并使用同一套执行底座：持久化历史、文件与 diff、恢复控制，
-以及访问控制检查。
+<sub>不以拥挤画布换取信息量：父工作流接收 release request，调用
+<strong>Focused Verification</strong>，把综合判断交给 <strong>Release Council</strong>，
+再返回一个 recommendation；每张卡片与每条连线都完整可见。</sub>
 
-| 执行模型   | 适用场景                           | 行为                                                    |
-| ---------- | ---------------------------------- | ------------------------------------------------------- |
-| **单代理** | 聚焦的一次性工作                   | 直接让一个已配置代理针对一个或多个仓库执行任务。        |
-| **工作流** | 可重复、可评审的自动化             | 执行带类型端口、wrapper 和人工门禁的版本化可视 DAG。    |
-| **工作组** | 需要在运行时动态调整计划的复杂目标 | 让代理与人类通过轮次、派单、消息或 AI 生成的 DAG 协作。 |
+> **项目状态：** Agent Workflow 正在持续开发。本文描述
+> <code>main</code>；[最新发布版](https://github.com/wangbinquan/agent-workflow/releases/latest)
+> 可能会暂时落后于主干。
 
-定时任务可以按间隔，或按每日、每周、每月日历启动上述任一种执行模型。
+## 为什么需要 Agent Workflow
 
-## 执行原理
+Coding agent 擅长在一个任务中推理，但跨 agent 的路由、重试、恢复和审批策略不应隐藏在
+某个模型会话里。Agent Workflow 把两类职责分开：
 
-```mermaid
-flowchart LR
-  Goal["目标 + 仓库"] --> Kind{"单代理<br/>工作流<br/>工作组"}
-  Kind --> Scheduler["Bun daemon<br/>调度器 + 状态机"]
-  Scheduler --> IsoA["隔离节点 worktree A"]
-  Scheduler --> IsoB["隔离节点 worktree B"]
-  IsoA --> RuntimeA["opencode / Claude Code"]
-  IsoB --> RuntimeB["opencode / Claude Code"]
-  RuntimeA --> Merge["串行三路 merge-back"]
-  RuntimeB --> Merge
-  Merge --> Canonical["任务 canonical worktree"]
-  Scheduler <--> Human["评审 · 反问 · 冲突处理"]
-  Scheduler --> Record["事件 · 输出 · 会话记录<br/>diff · 恢复审计"]
-```
+- **Agent 是工作流节点，不是工具栏按钮。** 每次 run 都拥有独立进程和聚焦上下文，
+  无需让一个父会话无限膨胀。
+- **模型负责推理，框架负责协调。** 带类型端口、持久状态、重试、wrapper 和恢复机制让
+  数据流显式、可检查。
+- **Fan-out 用于控制任务粒度。** 列表可以驱动聚焦的并行 run，再由 aggregator 收敛发现；
+  这是上下文和任务范围管理，不承诺并行本身必然提高准确率。
+- **人是第一等参与者。** Review 与 clarify 是显式 Workflow 节点；冲突处理与动态工作流
+  确认则是各自执行路径上的持久 gate，而不是失败后的人工救火。
+- **记忆受治理，不被当作真理。** Clarify 回答、review 决策和反馈先成为候选；只有批准后的
+  记忆才会按 scope 和预算作为 advisory context 注入。
 
-Git-backed 任务拥有一个 canonical worktree。由代理执行的 run 通常从该状态分支到临时
-节点 worktree，因此相互独立的 DAG 分支可以并行写入，而不共享工作目录。只有成功且完成
-settle 的增量才会在短暂加锁窗口中合回；失败尝试不会被自动合并。干净变更自动合并，真实
-冲突交给内置 merge agent，仍无法解决时停泊给人工处理。这里提供的是 Git/worktree
-隔离，不是操作系统沙箱：如果代理被明确提供了运行目录之外的绝对路径，它仍可在进程权限
-允许的范围内访问该路径。
+## 选择合适的执行模型
 
-daemon 把任务和节点状态持久化到 SQLite。重启后，它会对账孤儿进程并支持继续中断任务；
-可选的自动恢复由审计记录、次数窗口和熔断规则约束。
+每次启动都会成为一个 Task，并共享历史、产物、恢复控制和访问检查。
+
+| 模型          | 适合场景                       | 行为                                                                                                     |
+| ------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **单 Agent**  | 聚焦的一次性工作               | 让一个已配置 Agent 面向一个或多个仓库执行。                                                              |
+| **Workflow**  | 可重复交付和质量门禁           | 运行带类型端口、wrapper、call 和人工节点的版本化可视 DAG。                                               |
+| **Workgroup** | 计划需要在运行时调整的复杂目标 | 从 Task-owned 启动快照开始，支持受控的运行中调整，并运行 leader-worker、自由协作或经人工确认的生成 DAG。 |
+
+Scheduled launch 和 webhook 都可以启动这三种模型。
+
+## 执行如何保持可控
+
+> **一条典型的 Git-backed、受治理路径：**目标 + 仓库 → 执行模型 → 确定性 daemon
+> → 独立 Agent run → merge-back → 可选人工 gate → 持久结果
+
+对 Git-backed Task，Agent run 通常在隔离的节点 worktree 中工作。成功变更会在短锁窗口内
+三方合并回 Task 的 canonical worktree；失败尝试不会自动合入。因此，彼此独立的 DAG 分支
+可以并行写入而不共享工作目录。
+
+这属于保护任务状态与合并语义的 **Git 隔离**，并不是操作系统安全边界。OS containment
+是另一层经 capability probe 的机制：macOS 使用 Seatbelt，Linux 在可用时使用
+bubblewrap；Windows 当前没有 containment provider。详见
+[平台与安全](#平台与安全)。
+
+Daemon 把 Task 和节点状态持久化到 SQLite，记录事件与 runtime 对话，在重启后对账中断进程，
+并让 review 与 clarify 决策始终绑定到产生它们的那次执行。
+
+## 产品导览：从意图到证据
+
+下面选择的是当前产品中具有代表性的状态，每张图只解释一个核心任务；它们不暗示每次
+launch 都必须依次经过全部五个阶段。
+
+### 1. 从意图提出方案
+
+Intent Builder 把自然语言目标转成经过校验、可以逐项 review 的 changeset，覆盖 Agent、
+Skill、MCP、Plugin、Workflow 和 Workgroup。它先创建 draft；只有用户检查并 commit 精确
+版本后才会应用。Human、命名、secret 与 modify-versus-copy 决策保持显式，真实 secret 值
+在确认阶段绑定，不经过模型。
+
+![Intent Builder 已填写发布就绪目标、选择 Workflow 作为 artifact hint，并明确显示只创建 draft](./docs/images/readme-intent.png)
+
+### 2. 用嵌套调用完成组合
+
+README 顶部的 Workflow 同时展示两种 call。Workflow call 镜像被调用 Workflow 的端口
+契约；Workgroup call 把输入转成 goal，并返回一个 result。每个 call 都会启动独立 child
+Task，而不是把子图内联进父图。引用闭包在 launch 时冻结，并受到 cycle、depth、input 与
+concurrency gate 约束。
+
+### 3. 由仓库事件触发
+
+经过 GitHub HMAC 签名验证或 GitLab secret token 验证的 webhook delivery，可以按仓库
+scope、event、branch、command prefix 与 author rule 匹配，再启动 Agent、Workflow 或
+Workgroup。执行既可使用事件仓库，也可使用全新的 scratch Git 空间；delivery 与 fire
+都可审计。
+
+![一条已启用的 webhook rule，把 acme checkout 仓库范围和三类事件映射到带 child call 的发布就绪 Workflow](./docs/images/readme-webhook.png)
+
+### 4. 在计划需要调整时协作
+
+Workgroup 支持 Leader 派工、无 Leader 自由协作，以及先生成 DAG、经人工 review 后再交给
+普通 Workflow 引擎的动态模式。下图有意只展示一个合法的 Leader-Worker 资源：四名成员、
+明确的 coordinator 与显式 human participation。其他模式分别执行自己的 roster 和交互约束；
+动态模式要求兼容的纯 Agent roster。
+
+![Release Council Workgroup 资源卡展示 Leader-Worker 模式、四名成员、coordinator Leader 与 human participation](./docs/images/readme-workgroup.png)
+
+### 5. 用真实证据完成核验
+
+另一条受控发布 Task 展示控制面的 reviewer 一侧。Task 级 structural changes 把代码和
+文档分组，选中文件则展示真实 unified diff，让审批决策可以绑定到可检查的具体证据。
+
+![Structural changes 按代码和文档分组，并展示 checkout rounding 的 unified diff](./docs/images/readme-changes.png)
 
 ## 核心能力
 
-### 可视化工作流
+### 显式编排
 
-- 在 xyflow 编辑器中搭建版本化 DAG，支持拖放节点、校验、预览、自动保存、YAML
-  导入/导出和多标签页同步。
-- 使用 `string`、`markdown`、`signal`、`path<ext>` 与参数化
-  `list<T>` 端口（例如 `list<path<md>>`）；prompt 模板显式消费上游值。
-- 组合可嵌套 wrapper：
-  - **git**：对内部范围做前后快照并输出完整 diff；
-  - **loop**：在有界退出策略下重复执行内部范围；
-  - **fan-out**：把 `list<T>` 分片送入任意内部图，并可通过聚合代理收敛结果。
-- 加入 **review**、**clarify** 和 **cross-agent clarify** 门禁，而无需把人工协调逻辑
-  写入代理 prompt。
-- 根据 provenance 重跑过期下游：每个 node run 都记录它消费的上游 run，重试不会复用
-  已过期输出。
+- 可视化 Workflow 支持 <code>string</code>、<code>markdown</code>、
+  <code>signal</code>、<code>path&lt;ext&gt;</code> 和
+  <code>list&lt;T&gt;</code> 端口。
+- Git、loop 和 fan-out wrapper；fan-out 可以针对列表中的每一项运行受支持的 inner agent
+  worker，并由一个 aggregator 收敛。当前不支持 per-shard 链式子图。
+- Workflow / Workgroup call 节点会启动独立 child Task；另有可复用 launcher form 与
+  scheduled launch。
+- 经过 GitHub HMAC 签名验证或 GitLab secret token 验证的 webhook rule，可从受支持的
+  仓库事件启动 Agent、Workflow 或 Workgroup，并保留审计记录。
+- Intent Builder 在用户 commit 精确 draft 前，只提出并校验多资源变更。
 
-### 自适应工作组
+### 执行、观察与恢复
 
-工作组是可复用的成员花名册，包含代理或人类成员、共享目标、房间和任务级历史。支持三种
-执行模式：
+- 支持 OpenCode、Claude Code，以及实现其中一种协议的自定义 runtime profile。
+- 每节点 worktree、按 provenance 重试、Task resume/relaunch、带持久恢复状态的取消，
+  以及可选的框架托管 commit 和 push。
+- 查看实时节点状态、CLI 对话、工具调用、token 用量、输出、runtime inventory、
+  worktree 文件、unified diff 与 Task feedback。
+- 对 C++、Java、Python、Rust、Go、JavaScript、TypeScript 和 Scala 做结构化变更分析；
+  内置 tree-sitter 基线，可选 SCIP 提供更深的跨文件结果。C++ 与 Scala 分析为
+  best-effort。
 
-| 模式               | 协作方式                                                                                                 |
-| ------------------ | -------------------------------------------------------------------------------------------------------- |
-| `leader_worker`    | leader 按轮规划与派单，在 barrier 等待成员交付后继续；可选 fan-out 允许同一成员代理并发运行多个实例。    |
-| `free_collab`      | 成员共享任务板和房间，自主认领工作、交换产物并在无 leader 的情况下收敛。                                 |
-| `dynamic_workflow` | 内置 orchestrator 从代理池中选择成员、生成受约束 DAG，等待人工批准或重新生成后，再交给确定性工作流引擎。 |
+### 把人和策略放进执行链
 
-在 `leader_worker` 模式中，可见性开关分别控制共享输出、私信和黑板；
-`free_collab` 会把三个通道都视为开启。自治模式可以关闭常规人工打断和完成门禁，同时保留
-有界安全兜底。
+- Markdown 或多文档评审，支持选区锚定评论、选择性采纳、版本历史与
+  Approve / Revise / Reject 决策。
+- 结构化 clarify 问题、handler 路由与重新指派、延后与重新回答，以及
+  self / cross-agent clarify。
+- 统一 Inbox、本地用户、OIDC、Personal Access Token、角色、所有权、可见性和资源授权。
+- 从 clarify、review 与 feedback 蒸馏记忆候选，再按批准状态、scope 和预算注入。
 
-### 代理、运行时与工具
+### 搬运可移植的资源配置
 
-- 代理可配置 system prompt、输入输出、权限、运行时/模型、依赖代理、技能、MCP server
-  和插件。
-- 使用内置 `opencode`、`claude-code` 协议，或注册遵循其中一种协议的自定义 CLI
-  profile。运行时 profile 可配置二进制、模型、执行参数，以及 config 目录的环境变量名
-  和目录名映射。
-- 管理版本化、由框架托管的技能目录；可在 UI 中编辑文件，或从 ZIP 批量导入并显式处理
-  冲突。
-- 注册本地 stdio 或远程 HTTP/SSE MCP server，并配置远程 OAuth 与能力探测。
-- 一次安装 npm、文件或 Git 来源的 opencode 插件，缓存在本地，后续 run 通过
-  `file://` 引用注入，不必每次重新安装；插件自身在运行期仍可能访问网络。
-- 对 opencode run 可检查实际加载的运行时 inventory，而不只是配置上计划注入的资源。
+配置包可以导出 Agent、Skill、MCP、Plugin、Workflow 或 Workgroup，以及它能解析的递归资源
+依赖闭包；外部 requirements 与 dangling call reference 会显式保留。导入先预检，再显式选择
+create / reuse / overwrite。详见[配置包](./docs/resource-packages.md)。
 
-### 仓库与任务可靠性
-
-- 从本地路径、缓存的 SSH/HTTPS Git URL 或多个仓库启动任务；远程导入支持批量 clone
-  与递归 submodule。
-- 使用自动生成的任务分支或现有工作分支，并可为每个任务设置 Git identity。
-- 重试节点、恢复或重新启动任务、安全取消，并从任务 UI 诊断生命周期不变量错误。
-- 可选择由框架执行 commit 与 push。daemon 生成 commit message，从不 force-push，
-  并通过有界修复循环处理策略拒绝或 non-fast-forward。
-- 为单代理、工作流或工作组配置定时启动；可禁用、立即运行并查看连续失败次数。
-
-### 评审、反问与可观测性
-
-- 评审单个 Markdown 文档或文档集合，添加选区锚定评论、采纳部分意见，并使用
-  Approve / Iterate / Reject 驱动完整版本历史。
-- 代理可以提出结构化单选或多选问题；统一反问队列支持指派、延后、重新回答，以及
-  self/cross-agent clarify。
-- 查看实时节点状态、完整 CLI 会话、工具调用、token 用量、输出、运行时 inventory、
-  worktree 文件、统一 diff 和任务反馈。
-- 分析 C++、Java、Python、Rust、Go、JavaScript、TypeScript 与 Scala 的结构化代码
-  变化，包括符号树、依赖变化、影响分析、类图、正向调用链和时序图。内置 tree-sitter
-  基线无需构建索引；可选 SCIP indexer 可补充更深的跨文件结果。
-
-### 记忆、团队与访问控制
-
-- 把 clarify 回答、review 决策和任务反馈蒸馏为可复用记忆，作用域可绑定到代理、工作流、
-  仓库或整个安装实例。
-- 在各作用域预算内注入已批准记忆，并检查每个蒸馏任务与来源事件。
-- 从零配置单用户模式开始，再启用本地用户、OIDC SSO、Personal Access Token、角色、
-  资源所有权、可见性与授权。
-- 通过统一收件箱处理待评审、反问、工作组动作和记忆管理事项。
-
-## 界面
-
-发布二进制内置 SPA，支持中文与英文，以及浅色、深色和跟随系统主题。
-
-**工作流编辑器** — 在可视画布上编排代理、wrapper、端口和人工门禁。
-
-![工作流编辑器](./docs/images/05-workflow-editor.png)
-
-**任务 Diff** — 跟踪节点执行、查看 canonical worktree 并评审累计变更。
-
-![带 worktree diff 的任务详情](./docs/images/06b-task-diff.png)
-
-**Markdown 评审** — 对选区发表评论并驱动迭代生成。
-
-![Markdown 评审](./docs/images/08-review-detail.png)
-
-**反问** — 在任务执行历史内回答结构化问题。
-
-![反问详情](./docs/images/14-clarify-detail-selected.png)
-
-## 环境要求
-
-| 依赖            | 要求                                       | 说明                                                                                                                      |
-| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| **操作系统**    | Apple Silicon macOS，或 x86_64/arm64 Linux | 尚未发布 Windows 二进制；运行时隔离接口已支持扩展 provider。                                                              |
-| **git**         | **2.38.0 或更高**                          | 隔离 merge-back 依赖 `git merge-tree --write-tree`。                                                                      |
-| **opencode**    | 可选；不绑定版本                           | 版本字符串只作信息展示。实际使用时冻结所选可执行文件字节，并按 direct API 行为判定兼容；可用 `opencodePath` 覆盖 `PATH`。 |
-| **Claude Code** | **2.0.0 或更高**，可选                     | 额外运行时；可设置 `claudeCodePath` 或运行时 profile。                                                                    |
-| **Bun**         | **1.3.0 或更高**，仅从源码构建时需要       | 发布二进制已内置 Bun。                                                                                                    |
-
-可运行 `agent-workflow doctor` 做完整环境检查，覆盖 opencode、Git、数据目录、配置、
-token 文件权限、migration 和生命周期健康状态。OpenCode 检查失败只表示该可选运行时尚未
-就绪，不会阻止 daemon 启动。
-
-## 前置条件
-
-单二进制自带运行时；它会调用的外部工具如下：
-
-- **git —— 必装**（≥ 2.38，隔离 merge-back 依赖 `git merge-tree --write-tree`）。Windows 装
-  [Git for Windows](https://git-scm.com/download/win)，它同时提供 shell 脚本节点用的 `bash`。
-- **ssh —— 可选。** 仅 `ssh://` git 远端需要（https 远端走内置凭据 helper）。Windows 10+ 自带
-  OpenSSH 客户端 —— 在「设置 → 应用 → 可选功能 → OpenSSH 客户端」启用。
-- **bash —— 可选。** 仅 shell 脚本节点需要。Windows 上从 Git for Windows 安装解析（**绝不**用
-  System32 里的 WSL `bash.exe`）；可用 `AW_GIT_BASH_PATH` 覆盖。
-- **opencode —— 运行 agent 必装**（见配置 `opencodePath`）。
-
-`agent-workflow doctor` 会探测以上全部（git/opencode/sandbox 为通过-失败；ssh 为咨询式）——装完
-立即跑一次。
-
-## 安装发布二进制
-
-从 [GitHub Releases](https://github.com/wangbinquan/agent-workflow/releases/latest)
-下载对应平台资产：
-
-```bash
-# macOS，Apple Silicon
-curl -L https://github.com/wangbinquan/agent-workflow/releases/latest/download/agent-workflow-macos-arm64 -o agent-workflow
-
-# Linux，x86_64
-curl -L https://github.com/wangbinquan/agent-workflow/releases/latest/download/agent-workflow-linux-x86_64 -o agent-workflow
-
-# Linux，arm64
-curl -L https://github.com/wangbinquan/agent-workflow/releases/latest/download/agent-workflow-linux-arm64 -o agent-workflow
-
-chmod +x agent-workflow
-./agent-workflow doctor
-```
-
-每个 release 都是自包含可执行文件，包含 daemon、SPA、Bun runtime 和数据库 migration。
+已知的结构化凭据字段会被脱敏，并在导入时重新填写；managed Skill 文件树会按原样复制，
+不扫描其中硬编码的密钥。
 
 ## 快速开始
 
+启动 daemon 前：
+
+- 安装 **Git 2.38 或更高版本**。Git 缺失或版本过低时 daemon 会拒绝启动；Windows 必须
+  安装 Git for Windows。
+- Coding runtime 可以在 daemon 启动后配置，但启动 Agent 工作前至少需要一种受支持的
+  runtime。
+
+### 1. 安装发布二进制
+
+从[最新发布版](https://github.com/wangbinquan/agent-workflow/releases/latest)选择对应资产：
+
+| 平台                | Release asset                                  |
+| ------------------- | ---------------------------------------------- |
+| Apple Silicon macOS | <code>agent-workflow-macos-arm64</code>        |
+| Linux x86_64        | <code>agent-workflow-linux-x86_64</code>       |
+| Linux arm64         | <code>agent-workflow-linux-arm64</code>        |
+| Windows x86_64      | <code>agent-workflow-windows-x86_64.exe</code> |
+
+macOS 示例：
+
 ```bash
+curl -L https://github.com/wangbinquan/agent-workflow/releases/latest/download/agent-workflow-macos-arm64 -o agent-workflow
+chmod +x agent-workflow
 ./agent-workflow start
-
-# daemon 会输出类似地址：
-# http://127.0.0.1:51234/?token=...
 ```
 
-在浏览器中打开输出的 URL。首次运行时，daemon 会创建权限为 `0600` 的
-`~/.agent-workflow/token`；URL query 中的 token 用于认证内置单用户管理员。
+Windows PowerShell 示例：
 
-建议按以下顺序完成第一次运行：
-
-1. 打开 **Agents**，创建或导入一个代理，编写聚焦的 prompt，并声明它产生的端口。
-2. 绑定所需的托管技能、MCP server、插件或依赖代理。
-3. 直接运行该代理，或把它编入 **Workflows**，或加入 **Workgroup**。
-4. 针对本地仓库或 Git URL 启动任务，然后查看实时状态、会话、输出、文件和 diff。
-
-## CLI
-
-```text
-agent-workflow start [--port N] [--host H]   前台启动 daemon
-agent-workflow stop                          停止运行中的 daemon
-agent-workflow status                        输出 PID、地址与健康状态
-agent-workflow doctor                        不启动 daemon，执行环境检查
-agent-workflow config get [key]              输出全部配置或单个字段
-agent-workflow config set <key> <value>      更新字段；value 会尝试按 JSON 解析
-agent-workflow migrate                       应用待执行的数据库 migration
-agent-workflow backup                        在 backups/ 下创建状态归档
-agent-workflow version                       输出内置 CLI 版本字符串
-
-agent-workflow user create --username <name> [--admin] [--password <pw>]
-agent-workflow user reset-password --username <name> --new-password <pw>
-agent-workflow user list
-agent-workflow user disable --username <name>
-agent-workflow user enable --username <name>
+```powershell
+Invoke-WebRequest https://github.com/wangbinquan/agent-workflow/releases/latest/download/agent-workflow-windows-x86_64.exe -OutFile agent-workflow.exe
+.\agent-workflow.exe start
 ```
 
-daemon 启动时也会自动执行数据库 migration。
+Daemon 会输出 loopback URL。用浏览器打开即可；可执行文件已内置 SPA、daemon、数据库
+migration 和 Bun runtime。
 
-## 配置与数据
+### 2. 安装 Coding Runtime
 
-Settings UI 是首选配置入口。全局配置位于
-`~/.agent-workflow/config.json`；CLI 自动化可使用 `config get` 和
-`config set`，运行时 profile 与产品资源存储在 SQLite 中。主要配置组包括默认运行时、
-并发与重试上限、恢复策略、定时任务策略、Git/cache 行为、内部代理运行时、记忆预算、
-渲染、网络绑定、外观和 OIDC。
+启动 Agent 工作前，至少安装一种受支持的 runtime：
 
-daemon 默认绑定 `127.0.0.1`，并使用操作系统分配的端口。修改绑定地址应被视为部署
-决策：暴露到网络前，请启用多用户认证，并将服务放在合适的可信代理之后。
+- **OpenCode：** 不按版本字符串设 gate；兼容性由 direct API 行为判定。
+- **Claude Code：** 2.0.0 或更高版本。
 
-所有本地状态都位于 `~/.agent-workflow/`。可设置 `AGENT_WORKFLOW_HOME`
-切换目录。下面列出主要路径；daemon 还会按需创建临时 lock 和 runtime 条目。
+即使两者都未安装，daemon 也可以启动，以便先完成配置和诊断。Runtime profile 支持自定义
+执行档、模型与 config 目录映射；额外 argv 取决于 driver，当前可用于 Claude Code profile。
 
-```text
-~/.agent-workflow/
-├── db.sqlite          资源、任务、run、事件、用户和记忆
-├── config.json        全局配置
-├── token              单用户 daemon token
-├── secret.key         加密 OIDC client secret 的密钥
-├── skills/            托管技能内容与文件
-├── plugins/           已安装插件缓存
-├── repos/             远程 Git 仓库缓存
-├── worktrees/         任务 canonical worktree
-├── runs/              每个 run 的运行时配置与产物
-├── snapshots/         执行与恢复使用的 Git snapshot
-├── scratch/           临时上传与任务 staging
-├── logs/              daemon 日志与归档事件
-└── backups/           CLI 与 Settings 生成的备份
-```
+### 3. 运行第一个 Task
 
-内置 backup 归档不包含 `secret.key`。请把它与数据库备份分开复制保存；丢失该密钥后，
-已有加密 OIDC client secret 将无法读取。
+在 UI 中：
 
-## 文档
+1. 新建或导入 Agent。
+2. 直接启动，放入 Workflow，或加入 Workgroup。
+3. 选择本地仓库、缓存的 Git URL 或 scratch workspace。
+4. 在 Tasks 跟踪执行，在 Inbox 处理待办。
 
-- [架构](./docs/architecture.md) — 进程模型与数据流
-- [代理参考](./docs/agent.md) — agent frontmatter 与字段
-- [技能参考](./docs/skill.md) — `SKILL.md` 与托管文件布局
-- [工作流定义](./docs/workflow-yaml.md) — 节点、边与启动表单输入
-- [配置包](./docs/resource-packages.md) — 连同整棵依赖闭包在实例之间搬运资源
-- [运行时配置分层](./docs/OPENCODE_CONFIG.md) — opencode 配置的注入与发现
-- [故障排查](./docs/troubleshooting.md) — 启动与运行时问题
-- [性能说明](./docs/performance-notes.md) — 调优与 benchmark
-- [为什么需要 AI-native workflow](./docs/blog/01-ai-native-workflow-why.md)，以及
-  [Agent Workflow 如何构建](./docs/blog/02-agent-workflow-how.md)
+## 平台与安全
 
-产品规格、技术设计、路线图与已发布功能历史位于 [`design/`](./design/)：
+| 平台                 | 发布二进制 | OS containment                                                                                                                                   |
+| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Apple Silicon macOS  | 有         | 内置 Seatbelt provider，仍需通过 capability admission。                                                                                          |
+| x86_64 / arm64 Linux | 有         | 安装 bubblewrap 且宿主允许时启用。                                                                                                               |
+| x86_64 Windows       | 有         | 当前没有 provider：普通 profile 在 <code>warn</code>/<code>off</code> 下无隔离运行；<code>enforce</code> 与显式 fail-closed profile 会拒绝执行。 |
 
-- [产品提案](./design/proposal.md)
-- [技术设计](./design/design.md)
-- [路线图与 RFC 索引](./design/plan.md)
+- **Git 2.38 或更高版本**是 daemon 启动要求，并通过
+  <code>git merge-tree --write-tree</code> 提供隔离 merge-back。
+- 默认 containment policy 是 <code>warn</code>。普通 Agent profile 在 provider 不可用时可以
+  降级运行并记录告警；<code>enforce</code> fail closed。显式 fail-closed profile（包括
+  read-only 或 network-deny script profile）绝不降级。
+- 运行 <code>agent-workflow sandbox</code> 可做只读能力探测，并获得针对当前宿主的诊断与修复
+  指引；部分内核建议属于启发式判断。
+- Windows 必须安装 Git for Windows 才能启动 daemon。Verified OpenCode 还需要为 Agent
+  Workflow app home 配置 Windows Defender 排除目录，避免启动期出现间歇性 access denied；
+  部署前请先阅读 containment 文档。
 
-每个实质性产品变更都在 `design/RFC-NNN-*/` 目录中包含 proposal、design 和
-implementation plan。
+Containment 不是完整 jail：daemon 自身不在 sandbox 内，通用外层边界默认也不隔离网络。
+
+在把 Agent 执行视为可信之前，请先阅读[运行时 containment](./docs/sandbox.md)；部署长期实例
+前请阅读[灾难恢复](./docs/disaster-recovery.md)。
 
 ## 从源码构建
+
+源码构建需要 Bun 1.3.0 或更高版本。
 
 ```bash
 git clone https://github.com/wangbinquan/agent-workflow.git
 cd agent-workflow
-
 bun install --frozen-lockfile
-
-# 开发服务器
 bun run dev
-
-# 仓库门禁
-bun run typecheck
-bun run test
-bun run --filter @agent-workflow/frontend test
-bun run lint
-bun run format:check
-
-# 根目录 README 格式检查（仓库 format script 只覆盖 packages/）
-bunx prettier --check README.md README.zh-CN.md
-
-# Playwright 端到端测试（需安装浏览器依赖）
-bun run e2e:install
-bun run e2e
-
-# 在 dist/ 下生成自包含二进制
-bun run build:binary
 ```
 
-CI 在 macOS 与 Linux 上执行格式、lint、类型检查、backend/shared 测试、frontend
-测试、单二进制 smoke 和分片 Playwright。Nightly 任务额外覆盖真实 opencode 兼容性、
-WebKit、视觉回归，以及真实 SSH/HTTPS Git 协议。
+贡献前运行：
 
-Git tag 与 GitHub Release 是发布版本的事实源。workspace `package.json` 版本和当前
-CLI `version` 字符串仍是 `0.0.0` 占位值。
+```bash
+bun run gate:local
+```
 
-## 许可证
+<code>bun run test</code> 会运行 backend、shared 和 frontend 测试。当前协作规范见
+[CLAUDE.md](./CLAUDE.md) 与[开发踩坑记录](./docs/dev-gotchas.md)。
 
-项目使用 [Apache License, Version 2.0](./LICENSE)。
+## 文档
 
-Copyright 2026 WangBinquan.
+| 主题                | 指南                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| Workflow definition | [当前 Workflow schema](./docs/workflow-yaml.md)                                             |
+| 可移植资源          | [配置包](./docs/resource-packages.md) · [Resource Bundle](./docs/resource-bundles.md)       |
+| Runtime 安全        | [Containment](./docs/sandbox.md) · [灾难恢复](./docs/disaster-recovery.md)                  |
+| 集成                | [Webhook trigger](./docs/webhook-triggers.md) · [Code-host call](./docs/code-host-calls.md) |
+| 设计演进            | [RFC 索引与实施计划](./design/plan.md)                                                      |
+
+## 设计文章
+
+- [为什么 AI 时代需要原生的工作流平台](./docs/blog/01-ai-native-workflow-why.md)
+- [Agent Workflow 是如何构建出来的](./docs/blog/02-agent-workflow-how.md)
+
+这两篇文章解释产品理念和构建历史，其中的功能快照可能随版本变化；当前行为以本 README、
+最新文档和源码为准。
+
+## License
+
+[Apache License 2.0](./LICENSE)
