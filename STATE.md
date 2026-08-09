@@ -70,9 +70,26 @@
 > 免登录**（路径不在 `PUBLIC_PATH_PREFIXES` 里，身份仍由 multiAuth 强制）；六条导出
 > **必须字面量注册**，`for` 循环 + 模板路径会让它们绕开契约覆盖守卫。
 >
-> **下一步**：批次 G（前端：导出按钮 + 导入对话框，务必复用 `Dialog`/`Select`/`Form`
-> 等公共组件，见 CLAUDE.md 的前台风格强制原则）→ H（CLI）→ I（能力下线 C1–C6：**逐条
-> 对照 proposal 的能力影响清单**）→ J（文档与记档）→ 收尾门禁 + Codex 实现门。
+> **批次 G 进行中**（前端）：
+> - `T34/T36/T38/T39`（`6cf9370e`）—— `ResourcePackageImportDialog`（**零自写 chrome**，
+>   全走 `Dialog`/`Select`/`Form`/`StatusChip`/三个状态组件，源码层断言锁住）、
+>   `lib/resource-package-download.ts`（`safeDownloadBaseName` 从 `workflow-draft-export.ts`
+>   抽出——后者在批次 I 要整个删掉）、中英 i18n、6 条对话框测试。已登记进 RFC-198 的
+>   overlay 双向棘轮。
+> - `T35`（`8e38f81e`）—— `ResourcePackageExportButton`：六类共用的公共组件 + 8 条测试。
+>
+> **G 余下 = 把这两个组件接进页面**：
+> - `T35` 六类**详情/编辑页**挂导出按钮（`agents.detail` / `mcps.detail` /
+>   `plugins.detail` / `skills.*` / 工作流编辑页 / 工作组编辑页）。⚠️ 这些页用的是
+>   split + Tabs 布局，动作区位置各不相同，**需逐页确认**再挂，别硬塞。
+>   工作流那条是**原地改名**（既有「导出 YAML」→「导出配置包」，属能力下线 C1 的前置）。
+> - `T37` 六类**列表页**挂导入入口（复用同一个 `ResourcePackageImportDialog`）+ 导入后
+>   刷新列表。
+>
+> **再往后**：H（CLI，T40–42：两条命令都必须 `--as-user` 并构造与 HTTP 同构的 Actor；
+> 导出要支持 `--id`，因为同 owner 可有两个同名工作流）→ I（能力下线 C1–C6，**最后做**，
+> 前面全绿才拆旧的；逐条对照 proposal 的能力影响清单）→ J（文档与记档）→ 收尾门禁 +
+> Codex 实现门。
 >
 > ⚠️ **接手提醒**：`9da5cc63` 的 CI 在 macos shard 2/4 单点红了一条 `rfc108-resume-safety`，代码路径与本轮零交集、本机 24 次并发复跑全绿，机制未定；已把该用例改成能自证的形态并登记 `docs/audit-backlog.md`（第八条），**下次再红先看日志分流，别急着改产品代码**。
 
